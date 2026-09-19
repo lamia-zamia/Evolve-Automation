@@ -138,6 +138,12 @@ import type {
   SettingsInputOptions,
 } from "../ui/settings-inputs.ts";
 import { createTableSorter } from "../adapters/browser/table-sorter.ts";
+import {
+  writeDefaultPriorityOrder,
+  writeExplicitPriorityOrder,
+} from "../domain/settings-priority-order.ts";
+
+const jobPrioritySettingName = (jobId: string) => `job_p_${jobId}`;
 import { createCapturedOverrideEditorCatalog } from "./captured-override-editor-catalog.ts";
 import { createJobSettingsReadModel } from "../domain/civic/job-settings.ts";
 import { createJobSettingsIntentHandler } from "../application/job-settings.ts";
@@ -376,7 +382,7 @@ export interface CapturedSettingsPanelDependencies {
   /** The page's global object; the panel reads `document`, `navigator` and `location` from it. */
   readonly capturedPanelWindow: unknown;
   readonly settings: CapturedSettingsStore;
-  /** The captured raw/effective settings boundary; absent only for panel contract tests. */
+  /** The captured raw/effective settings boundary: the one authority for defaults and resets. */
   readonly settingsLifecycle: CapturedSettingsLifecycle;
   /** Recomputes the effective layer after a UI mutation of the raw record. */
   readonly refreshEffectiveSettings?: () => void;
@@ -498,6 +504,37 @@ function panelFileDownloadFor(
     schedule: (callback, delay) =>
       Reflect.apply(schedule, capturedPanelWindow, [callback, delay]),
   }).triggerFileDownload;
+}
+
+/** Every settings adapter the panel builds on first draw. */
+interface SettingsUi {
+  readonly general: GeneralSettings;
+  readonly achievementGuard: AchievementGuardSettings;
+  readonly challengeHelper: ChallengeHelperSettings;
+  readonly interface: InterfaceSettings;
+  readonly stateLog: StateLogSettings;
+  readonly authority: AuthoritySettings;
+  readonly hell: HellSettings;
+  readonly weighting: WeightingSettings;
+  readonly job: JobSettings;
+  readonly building: BuildingSettings | undefined;
+  readonly buildingToggles: BuildingToggles | undefined;
+  readonly project: ProjectSettings | undefined;
+  readonly arpaToggles: ArpaToggles | undefined;
+  readonly storage: StorageSettings | undefined;
+  readonly storageToggles: StorageToggles | undefined;
+  readonly market: MarketSettings | undefined;
+  readonly marketToggles: MarketToggles | undefined;
+  readonly ejector: EjectorSettings | undefined;
+  readonly ejectToggles: EjectToggles | undefined;
+  readonly supplyToggles: SupplyToggles | undefined;
+  readonly magic: MagicSettings | undefined;
+  readonly production: ProductionSettings | undefined;
+  readonly government: GovernmentSettings | undefined;
+  readonly fleet: FleetSettings | undefined;
+  readonly trait: TraitSettings | undefined;
+  readonly craftToggles: CraftToggles | undefined;
+  readonly shell: SettingsShell;
 }
 
 export function createCapturedSettingsPanel({
@@ -625,37 +662,7 @@ export function createCapturedSettingsPanel({
     });
   };
 
-  let settingsUi:
-    | {
-        readonly general: GeneralSettings;
-        readonly achievementGuard: AchievementGuardSettings;
-        readonly challengeHelper: ChallengeHelperSettings;
-        readonly interface: InterfaceSettings;
-        readonly stateLog: StateLogSettings;
-        readonly authority: AuthoritySettings;
-        readonly hell: HellSettings;
-        readonly weighting: WeightingSettings;
-        readonly job: JobSettings;
-        readonly building: BuildingSettings | undefined;
-        readonly buildingToggles: BuildingToggles | undefined;
-        readonly project: ProjectSettings | undefined;
-        readonly arpaToggles: ArpaToggles | undefined;
-        readonly storage: StorageSettings | undefined;
-        readonly storageToggles: StorageToggles | undefined;
-        readonly market: MarketSettings | undefined;
-        readonly marketToggles: MarketToggles | undefined;
-        readonly ejector: EjectorSettings | undefined;
-        readonly ejectToggles: EjectToggles | undefined;
-        readonly supplyToggles: SupplyToggles | undefined;
-        readonly magic: MagicSettings | undefined;
-        readonly production: ProductionSettings | undefined;
-        readonly government: GovernmentSettings | undefined;
-        readonly fleet: FleetSettings | undefined;
-        readonly trait: TraitSettings | undefined;
-        readonly craftToggles: CraftToggles | undefined;
-        readonly shell: SettingsShell;
-      }
-    | undefined;
+  let settingsUi: SettingsUi | undefined;
 
   const ensureSettingsUi = (dom: ReturnType<typeof createBrowserDomQuery>) => {
     if (settingsUi !== undefined) return settingsUi;
@@ -872,44 +879,39 @@ export function createCapturedSettingsPanel({
       getDocument: () => documentForUi,
       getJQuery: getJQuery as GeneralSettingsDependencies["getJQuery"],
       intents: { handle: (intent) => generalIntent.handle(intent) },
-      getActions: () => ({
-        buildSettingsSection: shell.buildSettingsSection,
-        addSettingsHeader1:
-          shell.addSettingsHeader1 as unknown as GeneralSettingsBrowserActions["addSettingsHeader1"],
-        addSettingsNumber: ((node, settingName, labelText, hintText) =>
-          controls.addSettingsNumber(
-            node as unknown as SettingsControlNode,
-            settingName,
-            labelText,
-            hintText,
-          )) as GeneralSettingsBrowserActions["addSettingsNumber"],
-        addSettingsSelect: ((node, settingName, labelText, hintText, options) =>
-          controls.addSettingsSelect(
-            node as unknown as SettingsControlNode,
-            settingName,
-            labelText,
-            hintText,
-            options,
-          )) as GeneralSettingsBrowserActions["addSettingsSelect"],
-        addSettingsString: ((node, settingName, labelText, hintText) =>
-          controls.addSettingsString(
-            node as unknown as SettingsControlNode,
-            settingName,
-            labelText,
-            hintText,
-          )) as GeneralSettingsBrowserActions["addSettingsString"],
-        addSettingsToggle: ((node, settingName, labelText, hintText) =>
-          controls.addSettingsToggle(
-            node as unknown as SettingsControlNode,
-            settingName,
-            labelText,
-            hintText,
-          )) as GeneralSettingsBrowserActions["addSettingsToggle"],
-      }),
+      getActions: () =>
+        panelActions as unknown as GeneralSettingsBrowserActions,
     });
-    const simpleActions = {
+    /**
+     * The control bridges every section builds its rows from. Each is the same one-line widening
+     * of the shared settings-control node; the per-section `Actions` interfaces differ only in
+     * how they spell that node, which is why each section still casts this object once to its
+     * own shape rather than each section rewriting the bridges.
+     */
+    const panelActions = {
       buildSettingsSection: shell.buildSettingsSection,
       addSettingsHeader1: shell.addSettingsHeader1,
+      addStandardHeading: (node: unknown, heading: string) =>
+        shell.addStandardHeading(
+          node as Parameters<typeof shell.addStandardHeading>[0],
+          heading,
+        ),
+      buildSettingsSection2: (
+        parentNode: unknown,
+        secondaryPrefix: string,
+        sectionId: string,
+        sectionName: string,
+        resetFunction: () => void,
+        updateSettingsContentFunction: (prefix: string) => void,
+      ) =>
+        shell.buildSettingsSection2(
+          parentNode as Parameters<SettingsShell["buildSettingsSection2"]>[0],
+          secondaryPrefix,
+          sectionId,
+          sectionName,
+          resetFunction,
+          updateSettingsContentFunction,
+        ),
       addSettingsNumber: (
         node: unknown,
         settingName: string,
@@ -934,8 +936,6 @@ export function createCapturedSettingsPanel({
           label,
           hint,
         ),
-      addTableInput: (node: unknown, settingName: string) =>
-        controls.addTableInput(node as SettingsControlNode, settingName),
       addSettingsString: (
         node: unknown,
         settingName: string,
@@ -948,6 +948,32 @@ export function createCapturedSettingsPanel({
           label,
           hint,
         ),
+      addSettingsSelect: (
+        node: unknown,
+        settingName: string,
+        label: string,
+        hint: string,
+        options: readonly unknown[],
+      ) =>
+        controls.addSettingsSelect(
+          node as SettingsControlNode,
+          settingName,
+          label,
+          hint,
+          options as BuildingSettingsSelectOptions,
+        ),
+      addTableInput: (node: unknown, settingName: string) =>
+        controls.addTableInput(node as SettingsControlNode, settingName),
+      addTableToggle: (node: unknown, settingName: string) =>
+        controls.addTableToggle(node as SettingsControlNode, settingName),
+      addToggleCallbacks: (node: unknown, settingName: string) =>
+        controls.addToggleCallbacks(node as SettingsControlNode, settingName),
+      buildTableLabel: (label: string, title?: string, color?: string) =>
+        controls.buildTableLabel(label, title, color),
+      getTableSorter: () => tableSorter,
+      tableSorter,
+      confirm: (message: string) =>
+        confirmInPanelWindow(capturedPanelWindow, message),
     };
     // Government options are static captured copy, so this section needs no game
     // draw and is always built. It renders into the secondary options modal.
@@ -962,50 +988,7 @@ export function createCapturedSettingsPanel({
       intents: { handle: (intent) => governmentIntent.handle(intent) },
       getActions: () =>
         ({
-          buildSettingsSection2: (
-            parentNode: unknown,
-            secondaryPrefix: string,
-            sectionId: string,
-            sectionName: string,
-            resetFunction: () => void,
-            updateSettingsContentFunction: (prefix: string) => void,
-          ) =>
-            shell.buildSettingsSection2(
-              parentNode as Parameters<
-                SettingsShell["buildSettingsSection2"]
-              >[0],
-              secondaryPrefix,
-              sectionId,
-              sectionName,
-              resetFunction,
-              updateSettingsContentFunction,
-            ),
-          addSettingsNumber: (
-            node: unknown,
-            settingName: string,
-            labelText: string,
-            hintText: string,
-          ) =>
-            controls.addSettingsNumber(
-              node as SettingsControlNode,
-              settingName,
-              labelText,
-              hintText,
-            ),
-          addSettingsSelect: (
-            node: unknown,
-            settingName: string,
-            labelText: string,
-            hintText: string,
-            options: readonly { val: string; label: string; hint: string }[],
-          ) =>
-            controls.addSettingsSelect(
-              node as SettingsControlNode,
-              settingName,
-              labelText,
-              hintText,
-              options,
-            ),
+          ...panelActions,
         }) as unknown as GovernmentSettingsBrowserActions,
     });
     governmentIntent = createGovernmentSettingsIntentHandler({
@@ -1038,7 +1021,7 @@ export function createCapturedSettingsPanel({
       intents: { handle: (intent) => triggerIntent.handle(intent) },
       getActions: () =>
         ({
-          buildSettingsSection: shell.buildSettingsSection,
+          ...panelActions,
           buildInputNode: (
             arg: string,
             options: unknown,
@@ -1051,7 +1034,6 @@ export function createCapturedSettingsPanel({
               value,
               onChange as SettingsInputCallback,
             ),
-          tableSorter,
         }) as unknown as TriggerSettingsBrowserActions,
     });
     triggerIntent = createTriggerSettingsIntentHandler({
@@ -1087,7 +1069,7 @@ export function createCapturedSettingsPanel({
       getJQuery: getJQuery as GeneralSettingsDependencies["getJQuery"],
       intents: achievementIntent,
       getActions: () =>
-        simpleActions as unknown as AchievementGuardSettingsBrowserActions,
+        panelActions as unknown as AchievementGuardSettingsBrowserActions,
     });
 
     let challengeIntent: ReturnType<
@@ -1103,7 +1085,7 @@ export function createCapturedSettingsPanel({
       getJQuery: getJQuery as GeneralSettingsDependencies["getJQuery"],
       intents: challengeIntent,
       getActions: () =>
-        simpleActions as unknown as ChallengeHelperSettingsBrowserActions,
+        panelActions as unknown as ChallengeHelperSettingsBrowserActions,
     });
 
     let interfaceIntent: ReturnType<
@@ -1132,7 +1114,7 @@ export function createCapturedSettingsPanel({
       intents: interfaceIntent,
       getActions: () =>
         ({
-          ...simpleActions,
+          ...panelActions,
           controlEffects: {},
         }) as unknown as InterfaceSettingsBrowserActions,
     });
@@ -1148,21 +1130,9 @@ export function createCapturedSettingsPanel({
         typeof createStateLogSettingsBrowserAdapter
       >[0]["getJQuery"],
       intents: stateLogIntent,
-      buildSettingsSection: shell.buildSettingsSection,
-      addSettingsToggle: (node, settingName, label, hint) =>
-        controls.addSettingsToggle(
-          node as unknown as SettingsControlNode,
-          settingName,
-          label,
-          hint,
-        ),
-      addSettingsNumber: (node, settingName, label, hint) =>
-        controls.addSettingsNumber(
-          node as unknown as SettingsControlNode,
-          settingName,
-          label,
-          hint,
-        ),
+      buildSettingsSection: panelActions.buildSettingsSection,
+      addSettingsToggle: panelActions.addSettingsToggle,
+      addSettingsNumber: panelActions.addSettingsNumber,
     });
 
     let authorityIntent: ReturnType<
@@ -1177,7 +1147,7 @@ export function createCapturedSettingsPanel({
       getJQuery: getJQuery as GeneralSettingsDependencies["getJQuery"],
       intents: authorityIntent,
       getActions: () =>
-        simpleActions as unknown as AuthoritySettingsBrowserActions,
+        panelActions as unknown as AuthoritySettingsBrowserActions,
     });
     let hell: HellSettings | undefined;
     const hellIntent = createHellSettingsIntentHandler({
@@ -1198,8 +1168,7 @@ export function createCapturedSettingsPanel({
       intents: hellIntent,
       getActions: () =>
         ({
-          ...simpleActions,
-          addSettingsHeader1: shell.addSettingsHeader1,
+          ...panelActions,
           buildSettingsSection2: (
             ...args: Parameters<
               HellSettingsBrowserActions["buildSettingsSection2"]
@@ -1240,9 +1209,7 @@ export function createCapturedSettingsPanel({
       intents: weightingIntent,
       getActions: () =>
         ({
-          ...simpleActions,
-          addTableInput: (node: unknown, settingName: string) =>
-            controls.addTableInput(node as SettingsControlNode, settingName),
+          ...panelActions,
         }) as unknown as WeightingSettingsBrowserActions,
       getReadModel: getWeightingSettingsReadModel,
     });
@@ -1251,18 +1218,19 @@ export function createCapturedSettingsPanel({
         resetToDefaults: resetSection("job"),
         persist: () => settings.persist(),
         resetPriorities: () => {
-          const catalog = capturedJobCatalogReader?.();
-          catalog?.jobs.forEach((entry, index) => {
-            settings.readRaw()[`job_p_${entry.id}`] = index;
-          });
+          writeDefaultPriorityOrder(
+            settings.readRaw(),
+            capturedJobCatalogReader?.()?.jobs.map((entry) => entry.id) ?? [],
+            jobPrioritySettingName,
+          );
         },
         reorderJobs: (jobIds) => {
-          const known = new Set(
-            capturedJobCatalogReader?.()?.jobs.map((entry) => entry.id),
+          writeExplicitPriorityOrder(
+            settings.readRaw(),
+            jobIds,
+            capturedJobCatalogReader?.()?.jobs.map((entry) => entry.id) ?? [],
+            jobPrioritySettingName,
           );
-          jobIds.forEach((jobId, index) => {
-            if (known.has(jobId)) settings.readRaw()[`job_p_${jobId}`] = index;
-          });
         },
       },
       renderSettingsContent: () => job?.updateJobSettingsContent(),
@@ -1285,19 +1253,7 @@ export function createCapturedSettingsPanel({
       intents: jobIntent,
       getActions: () =>
         ({
-          ...simpleActions,
-          addTableInput: (node: unknown, settingName: string) =>
-            controls.addTableInput(node as SettingsControlNode, settingName),
-          addTableToggle: (node: unknown, settingName: string) =>
-            controls.addTableToggle(node as SettingsControlNode, settingName),
-          addToggleCallbacks: (node: unknown, settingName: string) =>
-            controls.addToggleCallbacks(
-              node as SettingsControlNode,
-              settingName,
-            ),
-          getTableSorter: () => tableSorter,
-          confirm: (message: string) =>
-            confirmInPanelWindow(capturedPanelWindow, message),
+          ...panelActions,
         }) as unknown as Parameters<
           typeof createJobSettingsBrowserAdapter
         >[0]["getActions"] extends () => infer Actions
@@ -1333,33 +1289,12 @@ export function createCapturedSettingsPanel({
         intents: { handle: (intent) => buildingIntent.handle(intent) },
         getActions: () =>
           ({
-            ...simpleActions,
-            addSettingsSelect: (
-              node: unknown,
-              settingName: string,
-              label: string,
-              hint: string,
-              options: readonly unknown[],
-            ) =>
-              controls.addSettingsSelect(
-                node as SettingsControlNode,
-                settingName,
-                label,
-                hint,
-                options as BuildingSettingsSelectOptions,
-              ),
-            addTableToggle: (node: unknown, settingName: string) =>
-              controls.addTableToggle(node as SettingsControlNode, settingName),
+            ...panelActions,
             addToggleCallbacks: (node: unknown, settingName: string) =>
               controls.addToggleCallbacks(
                 node as SettingsControlNode,
                 settingName,
               ) as unknown as BuildingSettingsNode,
-            buildTableLabel: (label: string, title: string, color: string) =>
-              controls.buildTableLabel(label, title, color),
-            getTableSorter: () => tableSorter,
-            confirm: (message: string) =>
-              confirmInPanelWindow(capturedPanelWindow, message),
           }) as unknown as BuildingSettingsBrowserActions,
       });
       buildingIntent = createBuildingSettingsIntentHandler({
@@ -1413,21 +1348,7 @@ export function createCapturedSettingsPanel({
         intents: { handle: (intent) => researchIntent.handle(intent) },
         getActions: () =>
           ({
-            buildSettingsSection: shell.buildSettingsSection,
-            addSettingsSelect: (
-              node: unknown,
-              settingName: string,
-              labelText: string,
-              hintText: string,
-              options: readonly { val: string; label: string; hint: string }[],
-            ) =>
-              controls.addSettingsSelect(
-                node as SettingsControlNode,
-                settingName,
-                labelText,
-                hintText,
-                options,
-              ),
+            ...panelActions,
             addSettingsList: (
               node: unknown,
               settingName: string,
@@ -1468,78 +1389,11 @@ export function createCapturedSettingsPanel({
         intents: { handle: (intent) => fleetIntent.handle(intent) },
         getActions: () =>
           ({
-            buildSettingsSection2: (
-              parentNode: unknown,
-              secondaryPrefix: string,
-              sectionId: string,
-              sectionName: string,
-              resetFunction: () => void,
-              updateSettingsContentFunction: (prefix: string) => void,
-            ) =>
-              shell.buildSettingsSection2(
-                parentNode as Parameters<
-                  SettingsShell["buildSettingsSection2"]
-                >[0],
-                secondaryPrefix,
-                sectionId,
-                sectionName,
-                resetFunction,
-                updateSettingsContentFunction,
-              ),
-            addSettingsHeader1: shell.addSettingsHeader1,
-            addStandardHeading: (node: unknown, heading: string) =>
-              shell.addStandardHeading(
-                node as unknown as Parameters<
-                  typeof shell.addStandardHeading
-                >[0],
-                heading,
-              ),
-            addSettingsNumber: (
-              node: unknown,
-              settingName: string,
-              labelText: string,
-              hintText: string,
-            ) =>
-              controls.addSettingsNumber(
-                node as SettingsControlNode,
-                settingName,
-                labelText,
-                hintText,
-              ),
-            addSettingsSelect: (
-              node: unknown,
-              settingName: string,
-              labelText: string,
-              hintText: string,
-              options: readonly { val: string; label: string; hint: string }[],
-            ) =>
-              controls.addSettingsSelect(
-                node as SettingsControlNode,
-                settingName,
-                labelText,
-                hintText,
-                options,
-              ),
-            addSettingsToggle: (
-              node: unknown,
-              settingName: string,
-              labelText: string,
-              hintText: string,
-            ) =>
-              controls.addSettingsToggle(
-                node as SettingsControlNode,
-                settingName,
-                labelText,
-                hintText,
-              ),
-            addTableInput: (node: unknown, settingName: string) =>
-              controls.addTableInput(node as SettingsControlNode, settingName),
-            buildTableLabel: (label: string) => controls.buildTableLabel(label),
+            ...panelActions,
             openOverrideModal: (event: unknown) =>
               openOverrideModal(
                 event as unknown as Parameters<typeof openOverrideModal>[0],
               ),
-            tableSorter,
           }) as unknown as FleetSettingsBrowserActions,
       });
       fleetIntent = createFleetSettingsIntentHandler({
@@ -1568,59 +1422,18 @@ export function createCapturedSettingsPanel({
         getDocument: () => documentForUi as unknown as TraitSettingsDocument,
         getJQuery: () => getJQuery() as unknown as TraitSettingsJQuery,
         intents: { handle: (intent) => traitIntent.handle(intent) },
-        getTableSorter: () => tableSorter,
-        buildSettingsSection: shell.buildSettingsSection,
-        addStandardHeading: (node: unknown, heading: string) =>
-          shell.addStandardHeading(
-            node as unknown as Parameters<typeof shell.addStandardHeading>[0],
-            heading,
-          ),
-        addSettingsSelect: ((
-          node: unknown,
-          settingName: string,
-          labelText: string,
-          hintText: string,
-          options: readonly { val: string; label: string; hint: string }[],
-        ) =>
-          controls.addSettingsSelect(
-            node as SettingsControlNode,
-            settingName,
-            labelText,
-            hintText,
-            options,
-          )) as unknown as Parameters<
-          typeof createTraitSettingsBrowserAdapter
-        >[0]["addSettingsSelect"],
-        addSettingsNumber: (
-          node: unknown,
-          settingName: string,
-          labelText: string,
-          hintText: string,
-        ) =>
-          controls.addSettingsNumber(
-            node as SettingsControlNode,
-            settingName,
-            labelText,
-            hintText,
-          ),
-        addSettingsToggle: (
-          node: unknown,
-          settingName: string,
-          labelText: string,
-          hintText: string,
-        ) =>
-          controls.addSettingsToggle(
-            node as SettingsControlNode,
-            settingName,
-            labelText,
-            hintText,
-          ),
-        addTableToggle: (node: unknown, settingName: string) =>
-          controls.addTableToggle(node as SettingsControlNode, settingName),
-        addTableInput: (node: unknown, settingName: string) =>
-          controls.addTableInput(node as SettingsControlNode, settingName),
-        buildTableLabel: (label: string, title?: string, color?: string) =>
-          controls.buildTableLabel(label, title, color),
+        getTableSorter: panelActions.getTableSorter,
+        buildSettingsSection: panelActions.buildSettingsSection,
+        addStandardHeading: panelActions.addStandardHeading,
+        addSettingsSelect:
+          panelActions.addSettingsSelect as unknown as Parameters<
+            typeof createTraitSettingsBrowserAdapter
+          >[0]["addSettingsSelect"],
+        addSettingsNumber: panelActions.addSettingsNumber,
+        addSettingsToggle: panelActions.addSettingsToggle,
+        addTableToggle: panelActions.addTableToggle,
+        addTableInput: panelActions.addTableInput,
+        buildTableLabel: panelActions.buildTableLabel,
       });
       traitIntent = createTraitSettingsIntentHandler({
         writer: {
@@ -1665,11 +1478,7 @@ export function createCapturedSettingsPanel({
         intents: { handle: (intent) => projectIntent.handle(intent) },
         getActions: () =>
           ({
-            ...simpleActions,
-            addTableToggle: (node: unknown, settingName: string) =>
-              controls.addTableToggle(node as SettingsControlNode, settingName),
-            buildTableLabel: (label: string) => controls.buildTableLabel(label),
-            getTableSorter: () => tableSorter,
+            ...panelActions,
           }) as unknown as ProjectSettingsBrowserActions,
       });
       projectIntent = createProjectSettingsIntentHandler({
@@ -1721,11 +1530,7 @@ export function createCapturedSettingsPanel({
         intents: { handle: (intent) => storageIntent.handle(intent) },
         getActions: () =>
           ({
-            ...simpleActions,
-            addTableToggle: (node: unknown, settingName: string) =>
-              controls.addTableToggle(node as SettingsControlNode, settingName),
-            buildTableLabel: (label: string) => controls.buildTableLabel(label),
-            getTableSorter: () => tableSorter,
+            ...panelActions,
           }) as unknown as StorageSettingsBrowserActions,
       });
       storageIntent = createStorageSettingsIntentHandler({
@@ -1777,36 +1582,7 @@ export function createCapturedSettingsPanel({
         intents: { handle: (intent) => marketIntent.handle(intent) },
         getActions: () =>
           ({
-            ...simpleActions,
-            addSettingsNumber: (
-              node: unknown,
-              settingName: string,
-              label: string,
-              hint: string,
-            ) =>
-              controls.addSettingsNumber(
-                node as SettingsControlNode,
-                settingName,
-                label,
-                hint,
-              ),
-            addStandardHeading: (node: unknown, label: string) =>
-              shell.addStandardHeading(
-                node as unknown as Parameters<
-                  typeof shell.addStandardHeading
-                >[0],
-                label,
-              ),
-            addTableInput: (node: unknown, settingName: string) =>
-              controls.addTableInput(node as SettingsControlNode, settingName),
-            addTableToggle: (node: unknown, settingName: string) =>
-              controls.addTableToggle(node as SettingsControlNode, settingName),
-            buildTableLabel: (
-              label: string,
-              title?: string,
-              className?: string,
-            ) => controls.buildTableLabel(label, title, className),
-            getTableSorter: () => tableSorter,
+            ...panelActions,
           }) as unknown as MarketSettingsBrowserActions,
       });
       marketIntent = createMarketSettingsIntentHandler({
@@ -1860,25 +1636,7 @@ export function createCapturedSettingsPanel({
         intents: { handle: (intent) => ejectorIntent.handle(intent) },
         getActions: () =>
           ({
-            ...simpleActions,
-            addSettingsSelect: (
-              node: unknown,
-              settingName: string,
-              label: string,
-              hint: string,
-              options: readonly unknown[],
-            ) =>
-              controls.addSettingsSelect(
-                node as SettingsControlNode,
-                settingName,
-                label,
-                hint,
-                options as BuildingSettingsSelectOptions,
-              ),
-            addTableToggle: (node: unknown, settingName: string) =>
-              controls.addTableToggle(node as SettingsControlNode, settingName),
-            buildTableLabel: (label: string, title: string, color: string) =>
-              controls.buildTableLabel(label, title, color),
+            ...panelActions,
           }) as unknown as EjectorSettingsBrowserActions,
       });
       ejectorIntent = createEjectorSettingsIntentHandler({
@@ -1936,20 +1694,7 @@ export function createCapturedSettingsPanel({
         intents: { handle: (intent) => magicIntent.handle(intent) },
         getActions: () =>
           ({
-            ...simpleActions,
-            addStandardHeading: (node: unknown, label: string) =>
-              shell.addStandardHeading(
-                node as unknown as Parameters<
-                  typeof shell.addStandardHeading
-                >[0],
-                label,
-              ),
-            addTableInput: (node: unknown, settingName: string) =>
-              controls.addTableInput(node as SettingsControlNode, settingName),
-            addTableToggle: (node: unknown, settingName: string) =>
-              controls.addTableToggle(node as SettingsControlNode, settingName),
-            buildTableLabel: (label: string, title?: string, color?: string) =>
-              controls.buildTableLabel(label, title, color),
+            ...panelActions,
           }) as unknown as MagicSettingsBrowserActions,
       });
       magicIntent = createMagicSettingsIntentHandler({
@@ -1982,56 +1727,15 @@ export function createCapturedSettingsPanel({
         getJQuery: () => getJQuery() as unknown as ProductionSettingsJQuery,
         getReadModel: capturedAdapter.readProductionSettingsReadModel,
         intents: { handle: (intent) => productionIntent.handle(intent) },
-        buildSettingsSection: shell.buildSettingsSection,
-        addSettingsNumber: (
-          node: unknown,
-          settingName: string,
-          labelText: string,
-          hintText: string,
-        ) =>
-          controls.addSettingsNumber(
-            node as SettingsControlNode,
-            settingName,
-            labelText,
-            hintText,
-          ),
-        addSettingsToggle: (
-          node: unknown,
-          settingName: string,
-          labelText: string,
-          hintText: string,
-        ) =>
-          controls.addSettingsToggle(
-            node as SettingsControlNode,
-            settingName,
-            labelText,
-            hintText,
-          ),
-        addSettingsSelect: (
-          node: unknown,
-          settingName: string,
-          labelText: string,
-          hintText: string,
-          options: readonly { val: string; label: string; hint: string }[],
-        ) =>
-          controls.addSettingsSelect(
-            node as SettingsControlNode,
-            settingName,
-            labelText,
-            hintText,
-            options as BuildingSettingsSelectOptions,
-          ),
-        addStandardHeading: (node: unknown, heading: string) =>
-          shell.addStandardHeading(
-            node as unknown as Parameters<typeof shell.addStandardHeading>[0],
-            heading,
-          ),
-        addTableToggle: (node: unknown, settingName: string) =>
-          controls.addTableToggle(node as SettingsControlNode, settingName),
-        addTableInput: (node: unknown, settingName: string) =>
-          controls.addTableInput(node as SettingsControlNode, settingName),
-        buildTableLabel: (label: string) => controls.buildTableLabel(label),
-        getTableSorter: () => tableSorter,
+        buildSettingsSection: panelActions.buildSettingsSection,
+        addSettingsNumber: panelActions.addSettingsNumber,
+        addSettingsToggle: panelActions.addSettingsToggle,
+        addSettingsSelect: panelActions.addSettingsSelect,
+        addStandardHeading: panelActions.addStandardHeading,
+        addTableToggle: panelActions.addTableToggle,
+        addTableInput: panelActions.addTableInput,
+        buildTableLabel: panelActions.buildTableLabel,
+        getTableSorter: panelActions.getTableSorter,
       });
       productionIntent = createProductionSettingsIntentHandler({
         writer: {
@@ -2155,159 +1859,72 @@ export function createCapturedSettingsPanel({
     getQuery()?.("#script_settings").remove();
   };
 
-  const createArpaToggles = () => {
-    const dom = getQuery();
-    const adapter =
-      dom === undefined ? undefined : ensureSettingsUi(dom).arpaToggles;
-    if (adapter === undefined) {
-      unported("ARPA toggles")();
-      return;
-    }
-    adapter.createArpaToggles();
+  /**
+   * One inline toggle strip the automation container turns on and off. The adapter behind it is
+   * built lazily with the rest of the settings UI, and a strip whose section is not available
+   * names itself once rather than failing silently.
+   */
+  const inlineToggleStrip = <TAdapter>(
+    name: string,
+    select: (ui: SettingsUi) => TAdapter | undefined,
+    create: (adapter: TAdapter) => void,
+    remove: (adapter: TAdapter) => void,
+  ) => {
+    const run = (act: (adapter: TAdapter) => void) => () => {
+      const dom = getQuery();
+      const adapter =
+        dom === undefined ? undefined : select(ensureSettingsUi(dom));
+      if (adapter === undefined) {
+        unported(name)();
+        return;
+      }
+      act(adapter);
+    };
+    return { create: run(create), remove: run(remove) };
   };
 
-  const removeArpaToggles = () => {
-    const dom = getQuery();
-    const adapter =
-      dom === undefined ? undefined : ensureSettingsUi(dom).arpaToggles;
-    if (adapter === undefined) {
-      unported("ARPA toggles")();
-      return;
-    }
-    adapter.removeArpaToggles();
-  };
-
-  const createMarketToggles = () => {
-    const dom = getQuery();
-    const adapter =
-      dom === undefined ? undefined : ensureSettingsUi(dom).marketToggles;
-    if (adapter === undefined) {
-      unported("market toggles")();
-      return;
-    }
-    adapter.createMarketToggles();
-  };
-
-  const removeMarketToggles = () => {
-    const dom = getQuery();
-    const adapter =
-      dom === undefined ? undefined : ensureSettingsUi(dom).marketToggles;
-    if (adapter === undefined) {
-      unported("market toggles")();
-      return;
-    }
-    adapter.removeMarketToggles();
-  };
-
-  const createEjectToggles = () => {
-    const dom = getQuery();
-    const adapter =
-      dom === undefined ? undefined : ensureSettingsUi(dom).ejectToggles;
-    if (adapter === undefined) {
-      unported("eject toggles")();
-      return;
-    }
-    adapter.createEjectToggles();
-  };
-
-  const removeEjectToggles = () => {
-    const dom = getQuery();
-    const adapter =
-      dom === undefined ? undefined : ensureSettingsUi(dom).ejectToggles;
-    if (adapter === undefined) {
-      unported("eject toggles")();
-      return;
-    }
-    adapter.removeEjectToggles();
-  };
-
-  const createSupplyToggles = () => {
-    const dom = getQuery();
-    const adapter =
-      dom === undefined ? undefined : ensureSettingsUi(dom).supplyToggles;
-    if (adapter === undefined) {
-      unported("supply toggles")();
-      return;
-    }
-    adapter.createSupplyToggles();
-  };
-
-  const removeSupplyToggles = () => {
-    const dom = getQuery();
-    const adapter =
-      dom === undefined ? undefined : ensureSettingsUi(dom).supplyToggles;
-    if (adapter === undefined) {
-      unported("supply toggles")();
-      return;
-    }
-    adapter.removeSupplyToggles();
-  };
-
-  const createStorageToggles = () => {
-    const dom = getQuery();
-    const adapter =
-      dom === undefined ? undefined : ensureSettingsUi(dom).storageToggles;
-    if (adapter === undefined) {
-      unported("storage toggles")();
-      return;
-    }
-    adapter.createStorageToggles();
-  };
-
-  const removeStorageToggles = () => {
-    const dom = getQuery();
-    const adapter =
-      dom === undefined ? undefined : ensureSettingsUi(dom).storageToggles;
-    if (adapter === undefined) {
-      unported("storage toggles")();
-      return;
-    }
-    adapter.removeStorageToggles();
-  };
-
-  const createCraftToggles = () => {
-    const dom = getQuery();
-    const adapter =
-      dom === undefined ? undefined : ensureSettingsUi(dom).craftToggles;
-    if (adapter === undefined) {
-      unported("craft toggles")();
-      return;
-    }
-    adapter.createCraftToggles();
-  };
-
-  const removeCraftToggles = () => {
-    const dom = getQuery();
-    const adapter =
-      dom === undefined ? undefined : ensureSettingsUi(dom).craftToggles;
-    if (adapter === undefined) {
-      unported("craft toggles")();
-      return;
-    }
-    adapter.removeCraftToggles();
-  };
-
-  const createBuildingToggles = () => {
-    const dom = getQuery();
-    const adapter =
-      dom === undefined ? undefined : ensureSettingsUi(dom).buildingToggles;
-    if (adapter === undefined) {
-      unported("building toggles")();
-      return;
-    }
-    adapter.createBuildingToggles();
-  };
-
-  const removeBuildingToggles = () => {
-    const dom = getQuery();
-    const adapter =
-      dom === undefined ? undefined : ensureSettingsUi(dom).buildingToggles;
-    if (adapter === undefined) {
-      unported("building toggles")();
-      return;
-    }
-    adapter.removeBuildingToggles();
-  };
+  const arpaStrip = inlineToggleStrip(
+    "ARPA toggles",
+    (ui) => ui.arpaToggles,
+    (adapter) => adapter.createArpaToggles(),
+    (adapter) => adapter.removeArpaToggles(),
+  );
+  const marketStrip = inlineToggleStrip(
+    "market toggles",
+    (ui) => ui.marketToggles,
+    (adapter) => adapter.createMarketToggles(),
+    (adapter) => adapter.removeMarketToggles(),
+  );
+  const ejectStrip = inlineToggleStrip(
+    "eject toggles",
+    (ui) => ui.ejectToggles,
+    (adapter) => adapter.createEjectToggles(),
+    (adapter) => adapter.removeEjectToggles(),
+  );
+  const supplyStrip = inlineToggleStrip(
+    "supply toggles",
+    (ui) => ui.supplyToggles,
+    (adapter) => adapter.createSupplyToggles(),
+    (adapter) => adapter.removeSupplyToggles(),
+  );
+  const storageStrip = inlineToggleStrip(
+    "storage toggles",
+    (ui) => ui.storageToggles,
+    (adapter) => adapter.createStorageToggles(),
+    (adapter) => adapter.removeStorageToggles(),
+  );
+  const craftStrip = inlineToggleStrip(
+    "craft toggles",
+    (ui) => ui.craftToggles,
+    (adapter) => adapter.createCraftToggles(),
+    (adapter) => adapter.removeCraftToggles(),
+  );
+  const buildingStrip = inlineToggleStrip(
+    "building toggles",
+    (ui) => ui.buildingToggles,
+    (adapter) => adapter.createBuildingToggles(),
+    (adapter) => adapter.removeBuildingToggles(),
+  );
 
   let openOverrideModal: OptionsModalDependencies["openOverrideModal"] = (
     event,
@@ -2402,20 +2019,20 @@ export function createCapturedSettingsPanel({
       removeScriptSettings,
       createMechInfo: unported("mech info panel"),
       removeMechInfo: unported("mech info panel"),
-      createCraftToggles,
-      removeCraftToggles,
-      createBuildingToggles,
-      removeBuildingToggles,
-      createArpaToggles,
-      removeArpaToggles,
-      createStorageToggles,
-      removeStorageToggles,
-      createMarketToggles,
-      removeMarketToggles,
-      createEjectToggles,
-      removeEjectToggles,
-      createSupplyToggles,
-      removeSupplyToggles,
+      createCraftToggles: craftStrip.create,
+      removeCraftToggles: craftStrip.remove,
+      createBuildingToggles: buildingStrip.create,
+      removeBuildingToggles: buildingStrip.remove,
+      createArpaToggles: arpaStrip.create,
+      removeArpaToggles: arpaStrip.remove,
+      createStorageToggles: storageStrip.create,
+      removeStorageToggles: storageStrip.remove,
+      createMarketToggles: marketStrip.create,
+      removeMarketToggles: marketStrip.remove,
+      createEjectToggles: ejectStrip.create,
+      removeEjectToggles: ejectStrip.remove,
+      createSupplyToggles: supplyStrip.create,
+      removeSupplyToggles: supplyStrip.remove,
       updateScriptData: unported("script data readouts"),
       finalizeScriptData: unported("script data readouts"),
       autoMarket: unported("bulk sell button"),

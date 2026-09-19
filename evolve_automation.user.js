@@ -34166,6 +34166,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
   }
 
   // src/bootstrap/captured-settings-panel-control.ts
+  var jobPrioritySettingName = (jobId) => `job_p_${jobId}`;
   function overrideKeyLabelFor(capturedPanelWindow) {
     let platform = readProperty(
       readProperty(capturedPanelWindow, "navigator"),
@@ -34396,39 +34397,23 @@ If script is allowed to reassign non-empty storage it might waste time producing
         getDocument: () => documentForUi,
         getJQuery,
         intents: { handle: (intent) => generalIntent.handle(intent) },
-        getActions: () => ({
-          buildSettingsSection: shell.buildSettingsSection,
-          addSettingsHeader1: shell.addSettingsHeader1,
-          addSettingsNumber: ((node, settingName, labelText, hintText) => controls2.addSettingsNumber(
-            node,
-            settingName,
-            labelText,
-            hintText
-          )),
-          addSettingsSelect: ((node, settingName, labelText, hintText, options) => controls2.addSettingsSelect(
-            node,
-            settingName,
-            labelText,
-            hintText,
-            options
-          )),
-          addSettingsString: ((node, settingName, labelText, hintText) => controls2.addSettingsString(
-            node,
-            settingName,
-            labelText,
-            hintText
-          )),
-          addSettingsToggle: ((node, settingName, labelText, hintText) => controls2.addSettingsToggle(
-            node,
-            settingName,
-            labelText,
-            hintText
-          ))
-        })
+        getActions: () => panelActions
       });
-      let simpleActions = {
+      let panelActions = {
         buildSettingsSection: shell.buildSettingsSection,
         addSettingsHeader1: shell.addSettingsHeader1,
+        addStandardHeading: (node, heading) => shell.addStandardHeading(
+          node,
+          heading
+        ),
+        buildSettingsSection2: (parentNode, secondaryPrefix, sectionId, sectionName, resetFunction, updateSettingsContentFunction) => shell.buildSettingsSection2(
+          parentNode,
+          secondaryPrefix,
+          sectionId,
+          sectionName,
+          resetFunction,
+          updateSettingsContentFunction
+        ),
         addSettingsNumber: (node, settingName, label, hint) => controls2.addSettingsNumber(
           node,
           settingName,
@@ -34441,13 +34426,26 @@ If script is allowed to reassign non-empty storage it might waste time producing
           label,
           hint
         ),
-        addTableInput: (node, settingName) => controls2.addTableInput(node, settingName),
         addSettingsString: (node, settingName, label, hint) => controls2.addSettingsString(
           node,
           settingName,
           label,
           hint
-        )
+        ),
+        addSettingsSelect: (node, settingName, label, hint, options) => controls2.addSettingsSelect(
+          node,
+          settingName,
+          label,
+          hint,
+          options
+        ),
+        addTableInput: (node, settingName) => controls2.addTableInput(node, settingName),
+        addTableToggle: (node, settingName) => controls2.addTableToggle(node, settingName),
+        addToggleCallbacks: (node, settingName) => controls2.addToggleCallbacks(node, settingName),
+        buildTableLabel: (label, title, color) => controls2.buildTableLabel(label, title, color),
+        getTableSorter: () => tableSorter,
+        tableSorter,
+        confirm: (message) => confirmInPanelWindow(capturedPanelWindow, message)
       }, capturedGovernmentAdapter = createCapturedGovernmentSettingsAdapter(), governmentIntent;
       government = createGovernmentSettingsBrowserAdapter({
         getDocument: () => documentForUi,
@@ -34455,27 +34453,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
         getReadModel: capturedGovernmentAdapter.readGovernmentSettingsReadModel,
         intents: { handle: (intent) => governmentIntent.handle(intent) },
         getActions: () => ({
-          buildSettingsSection2: (parentNode, secondaryPrefix, sectionId, sectionName, resetFunction, updateSettingsContentFunction) => shell.buildSettingsSection2(
-            parentNode,
-            secondaryPrefix,
-            sectionId,
-            sectionName,
-            resetFunction,
-            updateSettingsContentFunction
-          ),
-          addSettingsNumber: (node, settingName, labelText, hintText) => controls2.addSettingsNumber(
-            node,
-            settingName,
-            labelText,
-            hintText
-          ),
-          addSettingsSelect: (node, settingName, labelText, hintText, options) => controls2.addSettingsSelect(
-            node,
-            settingName,
-            labelText,
-            hintText,
-            options
-          )
+          ...panelActions
         })
       }), governmentIntent = createGovernmentSettingsIntentHandler({
         writer: {
@@ -34500,14 +34478,13 @@ If script is allowed to reassign non-empty storage it might waste time producing
         reader: { read: capturedTriggerAdapter.readTriggerSettingsReadModel },
         intents: { handle: (intent) => triggerIntent.handle(intent) },
         getActions: () => ({
-          buildSettingsSection: shell.buildSettingsSection,
+          ...panelActions,
           buildInputNode: (arg, options, value, onChange) => controls2.buildInputNode(
             arg,
             options,
             value,
             onChange
-          ),
-          tableSorter
+          )
         })
       }), triggerIntent = createTriggerSettingsIntentHandler({
         writer: {
@@ -34536,7 +34513,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
         getDocument: () => documentForUi,
         getJQuery,
         intents: achievementIntent,
-        getActions: () => simpleActions
+        getActions: () => panelActions
       });
       let challengeIntent;
       challengeIntent = createChallengeHelperSettingsIntentHandler({
@@ -34546,7 +34523,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
         getDocument: () => documentForUi,
         getJQuery,
         intents: challengeIntent,
-        getActions: () => simpleActions
+        getActions: () => panelActions
       });
       let interfaceIntent;
       interfaceIntent = createInterfaceSettingsIntentHandler({
@@ -34573,7 +34550,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
         getJQuery,
         intents: interfaceIntent,
         getActions: () => ({
-          ...simpleActions,
+          ...panelActions,
           controlEffects: {}
         })
       });
@@ -34585,19 +34562,9 @@ If script is allowed to reassign non-empty storage it might waste time producing
         getDocument: () => documentForUi,
         getJQuery,
         intents: stateLogIntent,
-        buildSettingsSection: shell.buildSettingsSection,
-        addSettingsToggle: (node, settingName, label, hint) => controls2.addSettingsToggle(
-          node,
-          settingName,
-          label,
-          hint
-        ),
-        addSettingsNumber: (node, settingName, label, hint) => controls2.addSettingsNumber(
-          node,
-          settingName,
-          label,
-          hint
-        )
+        buildSettingsSection: panelActions.buildSettingsSection,
+        addSettingsToggle: panelActions.addSettingsToggle,
+        addSettingsNumber: panelActions.addSettingsNumber
       });
       let authorityIntent;
       authorityIntent = createAuthoritySettingsIntentHandler({
@@ -34607,7 +34574,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
         getDocument: () => documentForUi,
         getJQuery,
         intents: authorityIntent,
-        getActions: () => simpleActions
+        getActions: () => panelActions
       });
       let hell, hellIntent = createHellSettingsIntentHandler({
         writer: {
@@ -34623,8 +34590,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
         reader: { read: getHellSettingsReadModel },
         intents: hellIntent,
         getActions: () => ({
-          ...simpleActions,
-          addSettingsHeader1: shell.addSettingsHeader1,
+          ...panelActions,
           buildSettingsSection2: (...args) => {
             let [
               _parentNode,
@@ -34655,8 +34621,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
         getJQuery,
         intents: weightingIntent,
         getActions: () => ({
-          ...simpleActions,
-          addTableInput: (node, settingName) => controls2.addTableInput(node, settingName)
+          ...panelActions
         }),
         getReadModel: getWeightingSettingsReadModel
       });
@@ -34665,17 +34630,19 @@ If script is allowed to reassign non-empty storage it might waste time producing
           resetToDefaults: resetSection("job"),
           persist: () => settings.persist(),
           resetPriorities: () => {
-            capturedJobCatalogReader?.()?.jobs.forEach((entry, index) => {
-              settings.readRaw()[`job_p_${entry.id}`] = index;
-            });
+            writeDefaultPriorityOrder(
+              settings.readRaw(),
+              capturedJobCatalogReader?.()?.jobs.map((entry) => entry.id) ?? [],
+              jobPrioritySettingName
+            );
           },
           reorderJobs: (jobIds) => {
-            let known = new Set(
-              capturedJobCatalogReader?.()?.jobs.map((entry) => entry.id)
+            writeExplicitPriorityOrder(
+              settings.readRaw(),
+              jobIds,
+              capturedJobCatalogReader?.()?.jobs.map((entry) => entry.id) ?? [],
+              jobPrioritySettingName
             );
-            jobIds.forEach((jobId, index) => {
-              known.has(jobId) && (settings.readRaw()[`job_p_${jobId}`] = index);
-            });
           }
         },
         renderSettingsContent: () => job?.updateJobSettingsContent(),
@@ -34694,15 +34661,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
         getReadModel: readCapturedJobSettings,
         intents: jobIntent,
         getActions: () => ({
-          ...simpleActions,
-          addTableInput: (node, settingName) => controls2.addTableInput(node, settingName),
-          addTableToggle: (node, settingName) => controls2.addTableToggle(node, settingName),
-          addToggleCallbacks: (node, settingName) => controls2.addToggleCallbacks(
-            node,
-            settingName
-          ),
-          getTableSorter: () => tableSorter,
-          confirm: (message) => confirmInPanelWindow(capturedPanelWindow, message)
+          ...panelActions
         })
       }), capturedBuildingSettings !== void 0) {
         let capturedAdapter = createCapturedBuildingSettingsAdapter({
@@ -34722,22 +34681,11 @@ If script is allowed to reassign non-empty storage it might waste time producing
           getFilterMatches: capturedAdapter.filterBuildingSettings,
           intents: { handle: (intent) => buildingIntent.handle(intent) },
           getActions: () => ({
-            ...simpleActions,
-            addSettingsSelect: (node, settingName, label, hint, options) => controls2.addSettingsSelect(
-              node,
-              settingName,
-              label,
-              hint,
-              options
-            ),
-            addTableToggle: (node, settingName) => controls2.addTableToggle(node, settingName),
+            ...panelActions,
             addToggleCallbacks: (node, settingName) => controls2.addToggleCallbacks(
               node,
               settingName
-            ),
-            buildTableLabel: (label, title, color) => controls2.buildTableLabel(label, title, color),
-            getTableSorter: () => tableSorter,
-            confirm: (message) => confirmInPanelWindow(capturedPanelWindow, message)
+            )
           })
         }), buildingIntent = createBuildingSettingsIntentHandler({
           writer: {
@@ -34782,14 +34730,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
           getReadModel: capturedAdapter.readResearchSettingsReadModel,
           intents: { handle: (intent) => researchIntent.handle(intent) },
           getActions: () => ({
-            buildSettingsSection: shell.buildSettingsSection,
-            addSettingsSelect: (node, settingName, labelText, hintText, options) => controls2.addSettingsSelect(
-              node,
-              settingName,
-              labelText,
-              hintText,
-              options
-            ),
+            ...panelActions,
             addSettingsList: (node, settingName, labelText, hintText, list) => controls2.addSettingsList(
               node,
               settingName,
@@ -34820,44 +34761,10 @@ If script is allowed to reassign non-empty storage it might waste time producing
           reader: { read: capturedAdapter.readFleetSettingsReadModel },
           intents: { handle: (intent) => fleetIntent.handle(intent) },
           getActions: () => ({
-            buildSettingsSection2: (parentNode, secondaryPrefix, sectionId, sectionName, resetFunction, updateSettingsContentFunction) => shell.buildSettingsSection2(
-              parentNode,
-              secondaryPrefix,
-              sectionId,
-              sectionName,
-              resetFunction,
-              updateSettingsContentFunction
-            ),
-            addSettingsHeader1: shell.addSettingsHeader1,
-            addStandardHeading: (node, heading) => shell.addStandardHeading(
-              node,
-              heading
-            ),
-            addSettingsNumber: (node, settingName, labelText, hintText) => controls2.addSettingsNumber(
-              node,
-              settingName,
-              labelText,
-              hintText
-            ),
-            addSettingsSelect: (node, settingName, labelText, hintText, options) => controls2.addSettingsSelect(
-              node,
-              settingName,
-              labelText,
-              hintText,
-              options
-            ),
-            addSettingsToggle: (node, settingName, labelText, hintText) => controls2.addSettingsToggle(
-              node,
-              settingName,
-              labelText,
-              hintText
-            ),
-            addTableInput: (node, settingName) => controls2.addTableInput(node, settingName),
-            buildTableLabel: (label) => controls2.buildTableLabel(label),
+            ...panelActions,
             openOverrideModal: (event) => openOverrideModal(
               event
-            ),
-            tableSorter
+            )
           })
         }), fleetIntent = createFleetSettingsIntentHandler({
           writer: {
@@ -34883,34 +34790,15 @@ If script is allowed to reassign non-empty storage it might waste time producing
           getDocument: () => documentForUi,
           getJQuery: () => getJQuery(),
           intents: { handle: (intent) => traitIntent.handle(intent) },
-          getTableSorter: () => tableSorter,
-          buildSettingsSection: shell.buildSettingsSection,
-          addStandardHeading: (node, heading) => shell.addStandardHeading(
-            node,
-            heading
-          ),
-          addSettingsSelect: ((node, settingName, labelText, hintText, options) => controls2.addSettingsSelect(
-            node,
-            settingName,
-            labelText,
-            hintText,
-            options
-          )),
-          addSettingsNumber: (node, settingName, labelText, hintText) => controls2.addSettingsNumber(
-            node,
-            settingName,
-            labelText,
-            hintText
-          ),
-          addSettingsToggle: (node, settingName, labelText, hintText) => controls2.addSettingsToggle(
-            node,
-            settingName,
-            labelText,
-            hintText
-          ),
-          addTableToggle: (node, settingName) => controls2.addTableToggle(node, settingName),
-          addTableInput: (node, settingName) => controls2.addTableInput(node, settingName),
-          buildTableLabel: (label, title, color) => controls2.buildTableLabel(label, title, color)
+          getTableSorter: panelActions.getTableSorter,
+          buildSettingsSection: panelActions.buildSettingsSection,
+          addStandardHeading: panelActions.addStandardHeading,
+          addSettingsSelect: panelActions.addSettingsSelect,
+          addSettingsNumber: panelActions.addSettingsNumber,
+          addSettingsToggle: panelActions.addSettingsToggle,
+          addTableToggle: panelActions.addTableToggle,
+          addTableInput: panelActions.addTableInput,
+          buildTableLabel: panelActions.buildTableLabel
         }), traitIntent = createTraitSettingsIntentHandler({
           writer: {
             resetMinorTraits: resetSection("minortrait"),
@@ -34952,10 +34840,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
           getReadModel: capturedAdapter.readProjectSettingsReadModel,
           intents: { handle: (intent) => projectIntent.handle(intent) },
           getActions: () => ({
-            ...simpleActions,
-            addTableToggle: (node, settingName) => controls2.addTableToggle(node, settingName),
-            buildTableLabel: (label) => controls2.buildTableLabel(label),
-            getTableSorter: () => tableSorter
+            ...panelActions
           })
         }), projectIntent = createProjectSettingsIntentHandler({
           writer: {
@@ -34999,10 +34884,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
           getReadModel: capturedAdapter.readStorageSettingsReadModel,
           intents: { handle: (intent) => storageIntent.handle(intent) },
           getActions: () => ({
-            ...simpleActions,
-            addTableToggle: (node, settingName) => controls2.addTableToggle(node, settingName),
-            buildTableLabel: (label) => controls2.buildTableLabel(label),
-            getTableSorter: () => tableSorter
+            ...panelActions
           })
         }), storageIntent = createStorageSettingsIntentHandler({
           writer: {
@@ -35046,21 +34928,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
           reader: { read: capturedAdapter.readMarketSettingsReadModel },
           intents: { handle: (intent) => marketIntent.handle(intent) },
           getActions: () => ({
-            ...simpleActions,
-            addSettingsNumber: (node, settingName, label, hint) => controls2.addSettingsNumber(
-              node,
-              settingName,
-              label,
-              hint
-            ),
-            addStandardHeading: (node, label) => shell.addStandardHeading(
-              node,
-              label
-            ),
-            addTableInput: (node, settingName) => controls2.addTableInput(node, settingName),
-            addTableToggle: (node, settingName) => controls2.addTableToggle(node, settingName),
-            buildTableLabel: (label, title, className) => controls2.buildTableLabel(label, title, className),
-            getTableSorter: () => tableSorter
+            ...panelActions
           })
         }), marketIntent = createMarketSettingsIntentHandler({
           writer: {
@@ -35104,16 +34972,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
           reader: { read: capturedAdapter.readEjectorSettingsReadModel },
           intents: { handle: (intent) => ejectorIntent.handle(intent) },
           getActions: () => ({
-            ...simpleActions,
-            addSettingsSelect: (node, settingName, label, hint, options) => controls2.addSettingsSelect(
-              node,
-              settingName,
-              label,
-              hint,
-              options
-            ),
-            addTableToggle: (node, settingName) => controls2.addTableToggle(node, settingName),
-            buildTableLabel: (label, title, color) => controls2.buildTableLabel(label, title, color)
+            ...panelActions
           })
         }), ejectorIntent = createEjectorSettingsIntentHandler({
           writer: {
@@ -35163,14 +35022,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
           getReadModel: capturedAdapter.readMagicSettingsReadModel,
           intents: { handle: (intent) => magicIntent.handle(intent) },
           getActions: () => ({
-            ...simpleActions,
-            addStandardHeading: (node, label) => shell.addStandardHeading(
-              node,
-              label
-            ),
-            addTableInput: (node, settingName) => controls2.addTableInput(node, settingName),
-            addTableToggle: (node, settingName) => controls2.addTableToggle(node, settingName),
-            buildTableLabel: (label, title, color) => controls2.buildTableLabel(label, title, color)
+            ...panelActions
           })
         }), magicIntent = createMagicSettingsIntentHandler({
           writer: {
@@ -35197,34 +35049,15 @@ If script is allowed to reassign non-empty storage it might waste time producing
           getJQuery: () => getJQuery(),
           getReadModel: capturedAdapter.readProductionSettingsReadModel,
           intents: { handle: (intent) => productionIntent.handle(intent) },
-          buildSettingsSection: shell.buildSettingsSection,
-          addSettingsNumber: (node, settingName, labelText, hintText) => controls2.addSettingsNumber(
-            node,
-            settingName,
-            labelText,
-            hintText
-          ),
-          addSettingsToggle: (node, settingName, labelText, hintText) => controls2.addSettingsToggle(
-            node,
-            settingName,
-            labelText,
-            hintText
-          ),
-          addSettingsSelect: (node, settingName, labelText, hintText, options) => controls2.addSettingsSelect(
-            node,
-            settingName,
-            labelText,
-            hintText,
-            options
-          ),
-          addStandardHeading: (node, heading) => shell.addStandardHeading(
-            node,
-            heading
-          ),
-          addTableToggle: (node, settingName) => controls2.addTableToggle(node, settingName),
-          addTableInput: (node, settingName) => controls2.addTableInput(node, settingName),
-          buildTableLabel: (label) => controls2.buildTableLabel(label),
-          getTableSorter: () => tableSorter
+          buildSettingsSection: panelActions.buildSettingsSection,
+          addSettingsNumber: panelActions.addSettingsNumber,
+          addSettingsToggle: panelActions.addSettingsToggle,
+          addSettingsSelect: panelActions.addSettingsSelect,
+          addStandardHeading: panelActions.addStandardHeading,
+          addTableToggle: panelActions.addTableToggle,
+          addTableInput: panelActions.addTableInput,
+          buildTableLabel: panelActions.buildTableLabel,
+          getTableSorter: panelActions.getTableSorter
         }), productionIntent = createProductionSettingsIntentHandler({
           writer: {
             resetToDefaults: resetSection("production"),
@@ -35301,105 +35134,52 @@ Only continue if you trust the source. Injected code:
       ), dom("#script_generalSettings").length === 0 && (ui.general.buildGeneralSettings(), ui.interface.buildInterfaceSettings(), ui.stateLog.buildStateLogSettings(), ui.achievementGuard.buildAchievementGuardSettings(), ui.challengeHelper.buildChallengeHelperSettings(), ui.authority.buildAuthoritySettings(), ui.hell.buildHellSettings(dom("#script_settings"), ""), ui.weighting.buildWeightingSettings(), capturedJobCatalogReader?.() !== void 0 && ui.job.buildJobSettings(), ui.building?.buildBuildingSettings(), ui.project?.buildProjectSettings(), ui.storage?.buildStorageSettings(), ui.market?.buildMarketSettings(), ui.ejector?.buildEjectorSettings(), ui.magic?.buildMagicSettings(), ui.production?.buildProductionSettings(), ui.trait?.buildTraitSettings());
     }, removeScriptSettings = () => {
       getQuery()?.("#script_settings").remove();
-    }, createArpaToggles = () => {
-      let dom = getQuery(), adapter = dom === void 0 ? void 0 : ensureSettingsUi(dom).arpaToggles;
-      if (adapter === void 0) {
-        unported("ARPA toggles")();
-        return;
-      }
-      adapter.createArpaToggles();
-    }, removeArpaToggles = () => {
-      let dom = getQuery(), adapter = dom === void 0 ? void 0 : ensureSettingsUi(dom).arpaToggles;
-      if (adapter === void 0) {
-        unported("ARPA toggles")();
-        return;
-      }
-      adapter.removeArpaToggles();
-    }, createMarketToggles = () => {
-      let dom = getQuery(), adapter = dom === void 0 ? void 0 : ensureSettingsUi(dom).marketToggles;
-      if (adapter === void 0) {
-        unported("market toggles")();
-        return;
-      }
-      adapter.createMarketToggles();
-    }, removeMarketToggles = () => {
-      let dom = getQuery(), adapter = dom === void 0 ? void 0 : ensureSettingsUi(dom).marketToggles;
-      if (adapter === void 0) {
-        unported("market toggles")();
-        return;
-      }
-      adapter.removeMarketToggles();
-    }, createEjectToggles = () => {
-      let dom = getQuery(), adapter = dom === void 0 ? void 0 : ensureSettingsUi(dom).ejectToggles;
-      if (adapter === void 0) {
-        unported("eject toggles")();
-        return;
-      }
-      adapter.createEjectToggles();
-    }, removeEjectToggles = () => {
-      let dom = getQuery(), adapter = dom === void 0 ? void 0 : ensureSettingsUi(dom).ejectToggles;
-      if (adapter === void 0) {
-        unported("eject toggles")();
-        return;
-      }
-      adapter.removeEjectToggles();
-    }, createSupplyToggles = () => {
-      let dom = getQuery(), adapter = dom === void 0 ? void 0 : ensureSettingsUi(dom).supplyToggles;
-      if (adapter === void 0) {
-        unported("supply toggles")();
-        return;
-      }
-      adapter.createSupplyToggles();
-    }, removeSupplyToggles = () => {
-      let dom = getQuery(), adapter = dom === void 0 ? void 0 : ensureSettingsUi(dom).supplyToggles;
-      if (adapter === void 0) {
-        unported("supply toggles")();
-        return;
-      }
-      adapter.removeSupplyToggles();
-    }, createStorageToggles = () => {
-      let dom = getQuery(), adapter = dom === void 0 ? void 0 : ensureSettingsUi(dom).storageToggles;
-      if (adapter === void 0) {
-        unported("storage toggles")();
-        return;
-      }
-      adapter.createStorageToggles();
-    }, removeStorageToggles = () => {
-      let dom = getQuery(), adapter = dom === void 0 ? void 0 : ensureSettingsUi(dom).storageToggles;
-      if (adapter === void 0) {
-        unported("storage toggles")();
-        return;
-      }
-      adapter.removeStorageToggles();
-    }, createCraftToggles = () => {
-      let dom = getQuery(), adapter = dom === void 0 ? void 0 : ensureSettingsUi(dom).craftToggles;
-      if (adapter === void 0) {
-        unported("craft toggles")();
-        return;
-      }
-      adapter.createCraftToggles();
-    }, removeCraftToggles = () => {
-      let dom = getQuery(), adapter = dom === void 0 ? void 0 : ensureSettingsUi(dom).craftToggles;
-      if (adapter === void 0) {
-        unported("craft toggles")();
-        return;
-      }
-      adapter.removeCraftToggles();
-    }, createBuildingToggles = () => {
-      let dom = getQuery(), adapter = dom === void 0 ? void 0 : ensureSettingsUi(dom).buildingToggles;
-      if (adapter === void 0) {
-        unported("building toggles")();
-        return;
-      }
-      adapter.createBuildingToggles();
-    }, removeBuildingToggles = () => {
-      let dom = getQuery(), adapter = dom === void 0 ? void 0 : ensureSettingsUi(dom).buildingToggles;
-      if (adapter === void 0) {
-        unported("building toggles")();
-        return;
-      }
-      adapter.removeBuildingToggles();
-    }, openOverrideModal = (event) => {
+    }, inlineToggleStrip = (name, select, create, remove) => {
+      let run = (act) => () => {
+        let dom = getQuery(), adapter = dom === void 0 ? void 0 : select(ensureSettingsUi(dom));
+        if (adapter === void 0) {
+          unported(name)();
+          return;
+        }
+        act(adapter);
+      };
+      return { create: run(create), remove: run(remove) };
+    }, arpaStrip = inlineToggleStrip(
+      "ARPA toggles",
+      (ui) => ui.arpaToggles,
+      (adapter) => adapter.createArpaToggles(),
+      (adapter) => adapter.removeArpaToggles()
+    ), marketStrip = inlineToggleStrip(
+      "market toggles",
+      (ui) => ui.marketToggles,
+      (adapter) => adapter.createMarketToggles(),
+      (adapter) => adapter.removeMarketToggles()
+    ), ejectStrip = inlineToggleStrip(
+      "eject toggles",
+      (ui) => ui.ejectToggles,
+      (adapter) => adapter.createEjectToggles(),
+      (adapter) => adapter.removeEjectToggles()
+    ), supplyStrip = inlineToggleStrip(
+      "supply toggles",
+      (ui) => ui.supplyToggles,
+      (adapter) => adapter.createSupplyToggles(),
+      (adapter) => adapter.removeSupplyToggles()
+    ), storageStrip = inlineToggleStrip(
+      "storage toggles",
+      (ui) => ui.storageToggles,
+      (adapter) => adapter.createStorageToggles(),
+      (adapter) => adapter.removeStorageToggles()
+    ), craftStrip = inlineToggleStrip(
+      "craft toggles",
+      (ui) => ui.craftToggles,
+      (adapter) => adapter.createCraftToggles(),
+      (adapter) => adapter.removeCraftToggles()
+    ), buildingStrip = inlineToggleStrip(
+      "building toggles",
+      (ui) => ui.buildingToggles,
+      (adapter) => adapter.createBuildingToggles(),
+      (adapter) => adapter.removeBuildingToggles()
+    ), openOverrideModal = (event) => {
       let dom = getQuery();
       dom !== void 0 && (ensureSettingsUi(dom), openOverrideModal(event));
     }, optionsModal = createOptionsModalBrowserAdapter({
@@ -35471,20 +35251,20 @@ Only continue if you trust the source. Injected code:
         removeScriptSettings,
         createMechInfo: unported("mech info panel"),
         removeMechInfo: unported("mech info panel"),
-        createCraftToggles,
-        removeCraftToggles,
-        createBuildingToggles,
-        removeBuildingToggles,
-        createArpaToggles,
-        removeArpaToggles,
-        createStorageToggles,
-        removeStorageToggles,
-        createMarketToggles,
-        removeMarketToggles,
-        createEjectToggles,
-        removeEjectToggles,
-        createSupplyToggles,
-        removeSupplyToggles,
+        createCraftToggles: craftStrip.create,
+        removeCraftToggles: craftStrip.remove,
+        createBuildingToggles: buildingStrip.create,
+        removeBuildingToggles: buildingStrip.remove,
+        createArpaToggles: arpaStrip.create,
+        removeArpaToggles: arpaStrip.remove,
+        createStorageToggles: storageStrip.create,
+        removeStorageToggles: storageStrip.remove,
+        createMarketToggles: marketStrip.create,
+        removeMarketToggles: marketStrip.remove,
+        createEjectToggles: ejectStrip.create,
+        removeEjectToggles: ejectStrip.remove,
+        createSupplyToggles: supplyStrip.create,
+        removeSupplyToggles: supplyStrip.remove,
         updateScriptData: unported("script data readouts"),
         finalizeScriptData: unported("script data readouts"),
         autoMarket: unported("bulk sell button")

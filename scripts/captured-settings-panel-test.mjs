@@ -10,6 +10,39 @@ import { overrideComparisons } from "../src/settings/override-comparators.ts";
 import { settingsSections } from "../src/adapters/evolve/runtime-catalogs.ts";
 import { createTestDocument, element } from "./dom-fixture.mjs";
 
+/** A root carrying enough of each captured catalog for every settings section to draw a table. */
+function createFullGameRoot() {
+  const resource = (extra) => ({
+    display: true,
+    amount: 10,
+    max: 100,
+    diff: 0,
+    trade: 0,
+    stackable: true,
+    ...extra,
+  });
+  return {
+    race: { universe: "standard", governor: { tasks: {} }, species: "human" },
+    civic: {
+      d_job: "unemployed",
+      unemployed: { job: "unemployed", workers: 10, max: -1, display: true },
+      farmer: { job: "farmer", workers: 0, max: -1, display: true },
+    },
+    resource: {
+      Food: resource({ title: "Food", tradable: true }),
+      Lumber: resource({ title: "Lumber", tradable: true }),
+      Iron: resource({ title: "Iron", tradable: true }),
+      Plywood: resource({ title: "Plywood" }),
+      Elerium: resource({ title: "Elerium" }),
+    },
+    arpa: { launch_facility: { display: true } },
+    tech: {},
+    city: {},
+    space: {},
+    interstellar: {},
+  };
+}
+
 /**
  * The lifecycle's own defaults start every section collapsed, and a collapsed section does not
  * build its contents. These tests assert on the controls inside them, so the stored record opens
@@ -41,6 +74,7 @@ function createPage(
     url = "https://x/",
     confirmAnswer = true,
     collapsed = false,
+    allSections = false,
   } = {},
 ) {
   const storedText = collapsed
@@ -96,7 +130,35 @@ function createPage(
     storage,
     logError: (message) => logged.push(message),
   });
-  const gameRoot = { race: { governor: { tasks: {} } } };
+  const gameRoot = allSections
+    ? createFullGameRoot()
+    : { race: { governor: { tasks: {} } } };
+  const rootState = {
+    readRoot: () => gameRoot,
+    isReactivitySuppressed: () => false,
+    subscribeRootReplaced: () => () => {},
+  };
+  const sectionControls = {
+    resolve: () => undefined,
+    invoke: () => ({ ok: false, reason: "unknown-method" }),
+    capturedElementIds: () => [],
+  };
+  // Every game-backed section, wired to one minimal root. These sections are skipped entirely
+  // when their capture is absent, so without this the panel's whole lower half goes untested.
+  const gameBackedSections = !allSections
+    ? {}
+    : {
+        craftToggles: { rootState, controls: sectionControls },
+        buildingSettings: { rootState, controls: sectionControls },
+        projectSettings: { rootState, controls: sectionControls },
+        storageSettings: { rootState, controls: sectionControls },
+        marketSettings: { rootState, controls: sectionControls },
+        ejectorSettings: { rootState, controls: sectionControls },
+        magicSettings: { rootState, controls: sectionControls },
+        productionSettings: { rootState },
+        researchSettings: { rootState, controls: sectionControls },
+        fleetSettings: { controls: sectionControls },
+      };
   const settingsLifecycle = createCapturedSettingsLifecycle({
     settings,
     defaults: createCapturedSettingsDefaults({
@@ -126,13 +188,8 @@ function createPage(
     settings,
     settingsLifecycle,
     refreshEffectiveSettings,
-    traitSettings: {
-      rootState: {
-        readRoot: () => gameRoot,
-        isReactivitySuppressed: () => false,
-        subscribeRootReplaced: () => () => {},
-      },
-    },
+    ...gameBackedSections,
+    traitSettings: { rootState },
     onDiagnostic: (message) => diagnostics.push(message),
     logError: (message) => logged.push(message),
   });
@@ -821,3 +878,55 @@ function createPage(
 }
 
 console.log("captured settings panel tests passed");
+
+// --- every game-backed section renders when its capture is present ------------------------------
+
+{
+  const { panel, root, diagnostics, logged } = createPage(
+    JSON.stringify({
+      autoBuild: true,
+      autoARPA: true,
+      autoStorage: true,
+      autoMarket: true,
+      autoEject: true,
+      autoSupply: true,
+    }),
+    { allSections: true },
+  );
+  panel.ensurePanel();
+  for (const section of [
+    "general",
+    "interface",
+    "stateLog",
+    "achievementGuard",
+    "challengeHelper",
+    "authority",
+    "hell",
+    "weighting",
+    "building",
+    "project",
+    "storage",
+    "market",
+    "ejector",
+    "magic",
+    "production",
+    "trait",
+  ]) {
+    assert.equal(
+      root.querySelectorAll(`#script_${section}Settings`).length,
+      1,
+      `${section} settings should render once every capture is present`,
+    );
+  }
+  // Every section's reset button is drawn, and clicking one must not throw.
+  for (const section of ["building", "market", "storage", "production"]) {
+    const reset = root.querySelectorAll(`#script_reset${section}`)[0];
+    assert.ok(reset, `${section} should offer a reset button`);
+    reset.dispatch("click");
+  }
+  assert.deepEqual(logged, []);
+  // Sections that genuinely have no capture yet must still say so by name, and only those.
+  for (const message of diagnostics) {
+    assert.match(message, /not ported yet/);
+  }
+}
