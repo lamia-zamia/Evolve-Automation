@@ -109,8 +109,15 @@ import {
 } from "../adapters/browser/trigger-settings.ts";
 import { createTriggerSettingsIntentHandler } from "../application/trigger-settings.ts";
 import { createCapturedTriggerSettingsAdapter } from "../adapters/evolve/progression/build/captured-trigger-settings.ts";
+import {
+  createResearchSettingsBrowserAdapter,
+  type ResearchSettingsBrowserActions,
+} from "../adapters/browser/research-settings.ts";
+import { createResearchSettingsIntentHandler } from "../application/research-settings.ts";
+import { createCapturedResearchSettingsAdapter } from "../adapters/evolve/progression/research/captured-research-settings.ts";
 import type { TriggerValue } from "../domain/progression/build/trigger-settings.ts";
 import type {
+  ObjectList,
   SettingsInputCallback,
   SettingsInputOptions,
 } from "../ui/settings-inputs.ts";
@@ -327,6 +334,13 @@ type TriggerSettingsDocument = ReturnType<
 type TriggerSettingsJQuery = ReturnType<
   Parameters<typeof createTriggerSettingsBrowserAdapter>[0]["getJQuery"]
 >;
+type ResearchSettings = ReturnType<typeof createResearchSettingsBrowserAdapter>;
+type ResearchSettingsDocument = ReturnType<
+  Parameters<typeof createResearchSettingsBrowserAdapter>[0]["getDocument"]
+>;
+type ResearchSettingsJQuery = ReturnType<
+  Parameters<typeof createResearchSettingsBrowserAdapter>[0]["getJQuery"]
+>;
 
 export interface CapturedSettingsPanelDependencies {
   /** The page's global object; the panel reads `document`, `navigator` and `location` from it. */
@@ -368,6 +382,10 @@ export interface CapturedSettingsPanelDependencies {
   };
   readonly productionSettings?: {
     readonly rootState: GameRootStateSource;
+  };
+  readonly researchSettings?: {
+    readonly rootState: GameRootStateSource;
+    readonly controls: GameControlRegistry;
   };
   readonly onDiagnostic?: (message: string) => void;
   readonly logError?: (message: string) => void;
@@ -459,6 +477,7 @@ export function createCapturedSettingsPanel({
   ejectorSettings: capturedEjectorSettings,
   magicSettings: capturedMagicSettings,
   productionSettings: capturedProductionSettings,
+  researchSettings: capturedResearchSettings,
   onDiagnostic = () => {},
   logError = () => {},
 }: CapturedSettingsPanelDependencies): CapturedSettingsPanel {
@@ -754,6 +773,7 @@ export function createCapturedSettingsPanel({
     let supplyToggles: SupplyToggles | undefined;
     let magic: MagicSettings | undefined;
     let production: ProductionSettings | undefined;
+    let research: ResearchSettings | undefined;
     let trigger: TriggerSettings | undefined;
     const shell = createSettingsShell({
       $: getJQuery() as unknown as Parameters<
@@ -782,7 +802,7 @@ export function createCapturedSettingsPanel({
       buildPlanetSettings: () => {},
       buildTraitSettings: () => {},
       buildTriggerSettings: () => trigger?.buildTriggerSettings(),
-      buildResearchSettings: () => {},
+      buildResearchSettings: () => research?.buildResearchSettings(),
       buildWarSettings: () => {},
       buildHellSettings: (parentNode, secondaryPrefix) =>
         hell?.buildHellSettings(
@@ -1331,6 +1351,70 @@ export function createCapturedSettingsPanel({
             node as unknown as SettingsControlNode,
             settingName,
           ) as unknown as BuildingToggleNode,
+      });
+    }
+    if (capturedResearchSettings !== undefined) {
+      const capturedAdapter = createCapturedResearchSettingsAdapter({
+        rootState: capturedResearchSettings.rootState,
+        controls: capturedResearchSettings.controls,
+        getSettingsRaw: settings.readRaw,
+      });
+      let researchIntent: ReturnType<
+        typeof createResearchSettingsIntentHandler
+      >;
+      research = createResearchSettingsBrowserAdapter({
+        getDocument: () => documentForUi as unknown as ResearchSettingsDocument,
+        getJQuery: () => getJQuery() as unknown as ResearchSettingsJQuery,
+        getReadModel: capturedAdapter.readResearchSettingsReadModel,
+        intents: { handle: (intent) => researchIntent.handle(intent) },
+        getActions: () =>
+          ({
+            buildSettingsSection: shell.buildSettingsSection,
+            addSettingsSelect: (
+              node: unknown,
+              settingName: string,
+              labelText: string,
+              hintText: string,
+              options: readonly { val: string; label: string; hint: string }[],
+            ) =>
+              controls.addSettingsSelect(
+                node as SettingsControlNode,
+                settingName,
+                labelText,
+                hintText,
+                options,
+              ),
+            addSettingsList: (
+              node: unknown,
+              settingName: string,
+              labelText: string,
+              hintText: string,
+              list: ObjectList,
+            ) =>
+              controls.addSettingsList(
+                node as SettingsControlNode,
+                settingName,
+                labelText,
+                hintText,
+                list,
+              ),
+          }) as unknown as ResearchSettingsBrowserActions,
+      });
+      researchIntent = createResearchSettingsIntentHandler({
+        writer: {
+          resetToDefaults: () => {
+            if (settingsLifecycle !== undefined) {
+              settingsLifecycle.resetSection("research");
+            } else {
+              capturedAdapter.resetToDefaults();
+            }
+          },
+          persist: persistSettings,
+        },
+        renderSettingsContent: () => research?.updateResearchSettingsContent(),
+        effects: {
+          resetCheckbox: () => controls.resetCheckbox("autoResearch"),
+        },
       });
     }
     if (capturedProjectSettings !== undefined) {

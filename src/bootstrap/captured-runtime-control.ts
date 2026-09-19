@@ -371,6 +371,10 @@ export function startCapturedRuntime({
     productionSettings: {
       rootState: pageCapture.rootState,
     },
+    researchSettings: {
+      rootState: pageCapture.rootState,
+      controls: pageCapture.controls,
+    },
     onDiagnostic: (message) => reportDiagnostic(message),
     logError: (message) => logError(message),
   });

@@ -54,6 +54,7 @@ import {
   readCapturedBuildingBindingMap,
   readCapturedBuildingEntries,
 } from "./progression/build/captured-building-catalog.ts";
+import { readTechElementId } from "./progression/research/captured-research-settings-catalog.ts";
 
 export interface CapturedSettingsDefaultsDependencies {
   readonly rootState: GameRootStateSource;
@@ -186,7 +187,7 @@ function readTechIds(root: unknown): Record<string, unknown> {
   if (!isRecord(tech)) return {};
   const result: Record<string, unknown> = {};
   for (const id of Object.keys(tech)) {
-    result[id.startsWith("tech-") ? id : "tech-" + id] = true;
+    result[readTechElementId(id)] = true;
   }
   return result;
 }

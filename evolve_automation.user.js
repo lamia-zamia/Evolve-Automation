@@ -21555,6 +21555,48 @@
     return readBuildingBindingByKey(entries.map((entry) => entry.binding));
   }
 
+  // src/adapters/evolve/progression/research/captured-research-settings-catalog.ts
+  function readTechElementId(rootKey) {
+    return rootKey.startsWith("tech-") ? rootKey : `tech-${rootKey}`;
+  }
+  function readRootTechIds(root) {
+    let tech = readProperty(root, "tech");
+    return isRecord(tech) ? Object.freeze(Object.keys(tech).map(readTechElementId)) : Object.freeze([]);
+  }
+  function readCapturedTechControlIds(controls2) {
+    let seen = /* @__PURE__ */ new Set(), ids = [];
+    for (let id of controls2.capturedElementIds())
+      !id.startsWith("tech-") || id.length <= 5 || seen.has(id) || (seen.add(id), ids.push(id));
+    return Object.freeze(ids);
+  }
+  function readCapturedResearchTechnologies(rootState, controls2) {
+    let root = rootState.readRoot(), seen = /* @__PURE__ */ new Set(), technologies = {};
+    for (let elementId of [
+      ...readRootTechIds(root),
+      ...readCapturedTechControlIds(controls2)
+    ]) {
+      if (seen.has(elementId)) continue;
+      seen.add(elementId);
+      let handle = controls2.resolve(elementId);
+      technologies[elementId] = Object.freeze({
+        _vueBinding: elementId,
+        name: handle === void 0 ? elementId : readCapturedControlLabel(handle, elementId)
+      });
+    }
+    return Object.freeze(technologies);
+  }
+  var TECH_LOCALIZE_PATTERN = /^tech_(.+?)(_(effect|desc))?$/;
+  function createCapturedResearchLocalize(controls2) {
+    return (key) => {
+      let match = TECH_LOCALIZE_PATTERN.exec(key);
+      if (match === null) return key;
+      let elementId = readTechElementId(match[1] ?? "");
+      if (match[2] !== void 0) return "";
+      let handle = controls2.resolve(elementId);
+      return handle === void 0 ? elementId : readCapturedControlLabel(handle, elementId);
+    };
+  }
+
   // src/adapters/evolve/captured-settings-defaults.ts
   var CRAFTER_RESOURCE_KEYS = Object.freeze([
     "Plywood",
@@ -21624,7 +21666,7 @@
     if (!isRecord(tech)) return {};
     let result = {};
     for (let id of Object.keys(tech))
-      result[id.startsWith("tech-") ? id : "tech-" + id] = !0;
+      result[readTechElementId(id)] = !0;
     return result;
   }
   function readControlSuffixIds(controls2, prefix) {
@@ -28545,6 +28587,176 @@ If script is allowed to reassign non-empty storage it might waste time producing
     });
   }
 
+  // src/domain/progression/research/research-settings.ts
+  function freezeOption(option) {
+    return Object.freeze({ ...option });
+  }
+  function freezeTechnologyCatalog(technologies) {
+    let frozen = {};
+    for (let [key, technology] of Object.entries(technologies))
+      frozen[key] = Object.freeze({ ...technology });
+    return Object.freeze(frozen);
+  }
+  function createResearchSettingsReadModel({
+    localize,
+    technologies
+  }) {
+    let technologyCatalog = freezeTechnologyCatalog(technologies), theologyOneOptions = Object.freeze([
+      freezeOption({
+        val: "auto",
+        label: "Script Managed",
+        hint: "Picks Anthropology for MAD prestige, and Fanaticism for others. Achieve-worthy combos are exception, on such runs Fanaticism will be always picked."
+      }),
+      freezeOption({
+        val: "tech-anthropology",
+        label: localize("tech_anthropology"),
+        hint: localize("tech_anthropology_effect")
+      }),
+      freezeOption({
+        val: "tech-fanaticism",
+        label: localize("tech_fanaticism"),
+        hint: localize("tech_fanaticism_effect")
+      })
+    ]), theologyTwoOptions = Object.freeze([
+      freezeOption({
+        val: "auto",
+        label: "Script Managed",
+        hint: "Picks Deify for Ascension, Demonic Infusion, Apotheosis, AI Apocalypse, Terraform, Matrix, Retirement and Eden prestiges, or Study for others prestiges"
+      }),
+      freezeOption({
+        val: "tech-study",
+        label: localize("tech_study"),
+        hint: localize("tech_study_desc")
+      }),
+      freezeOption({
+        val: "tech-deify",
+        label: localize("tech_deify"),
+        hint: localize("tech_deify_desc")
+      })
+    ]);
+    return Object.freeze({
+      sectionId: "research",
+      sectionName: "Research",
+      controls: Object.freeze([
+        Object.freeze({
+          kind: "select",
+          settingName: "userResearchTheology_1",
+          label: "Target Theology 1",
+          hint: "Theology 1 technology to research, have no effect after getting Transcendence perk",
+          options: theologyOneOptions
+        }),
+        Object.freeze({
+          kind: "select",
+          settingName: "userResearchTheology_2",
+          label: "Target Theology 2",
+          hint: "Theology 2 technology to research",
+          options: theologyTwoOptions
+        }),
+        Object.freeze({
+          kind: "list",
+          settingName: "researchIgnore",
+          label: "Ignored researches",
+          hint: "Listed researches won't be purchased without manual input, or user defined trigger. On top of this list script will also ignore some other special techs, such as Limit Collider, Dark Energy Bomb, Exotic Infusion, etc.",
+          list: technologyCatalog
+        })
+      ])
+    });
+  }
+
+  // src/adapters/browser/research-settings.ts
+  function createResearchSettingsBrowserAdapter({
+    getDocument,
+    getJQuery,
+    getReadModel,
+    intents,
+    getActions
+  }) {
+    function renderControl(node, control, actions) {
+      if (control.kind === "select") {
+        actions.addSettingsSelect(
+          node,
+          control.settingName,
+          control.label,
+          control.hint,
+          control.options
+        );
+        return;
+      }
+      actions.addSettingsList(
+        node,
+        control.settingName,
+        control.label,
+        control.hint,
+        control.list
+      );
+    }
+    function buildResearchSettings() {
+      let readModel = getReadModel();
+      getActions().buildSettingsSection(
+        readModel.sectionId,
+        readModel.sectionName,
+        () => {
+          intents.handle({ type: "reset-research-settings" });
+        },
+        updateResearchSettingsContent
+      );
+    }
+    function updateResearchSettingsContent() {
+      let readModel = getReadModel(), actions = getActions();
+      renderSettingsSectionContent(
+        {
+          scrollDocument: getDocument(),
+          jquery: getJQuery(),
+          sectionId: readModel.sectionId
+        },
+        (currentNode) => {
+          for (let control of readModel.controls)
+            renderControl(currentNode, control, actions);
+        }
+      );
+    }
+    return Object.freeze({
+      buildResearchSettings,
+      updateResearchSettingsContent
+    });
+  }
+
+  // src/application/research-settings.ts
+  function createResearchSettingsIntentHandler({
+    writer,
+    renderSettingsContent,
+    effects
+  }) {
+    return Object.freeze({
+      handle(intent) {
+        if (intent.type === "reset-research-settings") {
+          writer.resetToDefaults(), writer.persist(), renderSettingsContent(), effects.resetCheckbox();
+          return;
+        }
+      }
+    });
+  }
+
+  // src/adapters/evolve/progression/research/captured-research-settings.ts
+  function createCapturedResearchSettingsAdapter({
+    rootState,
+    controls: controls2,
+    getSettingsRaw
+  }) {
+    return Object.freeze({
+      readResearchSettingsReadModel() {
+        return createResearchSettingsReadModel({
+          localize: createCapturedResearchLocalize(controls2),
+          technologies: readCapturedResearchTechnologies(rootState, controls2)
+        });
+      },
+      resetToDefaults() {
+        let raw = getSettingsRaw();
+        isRecord(raw) && Object.assign(raw, computeResearchDefaults().def);
+      }
+    });
+  }
+
   // src/adapters/browser/table-sorter.ts
   function readMembers(value) {
     return value === null || typeof value != "object" && typeof value != "function" ? null : value;
@@ -30399,6 +30611,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
     ejectorSettings: capturedEjectorSettings,
     magicSettings: capturedMagicSettings,
     productionSettings: capturedProductionSettings,
+    researchSettings: capturedResearchSettings,
     onDiagnostic = () => {
     },
     logError = () => {
@@ -30534,7 +30747,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
           node,
           settingKey
         )
-      }), general, achievementGuard, challengeHelper, interfaceSettings, stateLog, authority, job, building, buildingToggles, project, arpaToggles, storage, storageToggles, market, marketToggles, ejector, ejectToggles, supplyToggles, magic, production, trigger, shell = createSettingsShell({
+      }), general, achievementGuard, challengeHelper, interfaceSettings, stateLog, authority, job, building, buildingToggles, project, arpaToggles, storage, storageToggles, market, marketToggles, ejector, ejectToggles, supplyToggles, magic, production, research, trigger, shell = createSettingsShell({
         $: getJQuery(),
         getDocument: () => documentForUi,
         getSettingsRaw: () => settings.readRaw(),
@@ -30561,8 +30774,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
         buildTraitSettings: () => {
         },
         buildTriggerSettings: () => trigger?.buildTriggerSettings(),
-        buildResearchSettings: () => {
-        },
+        buildResearchSettings: () => research?.buildResearchSettings(),
         buildWarSettings: () => {
         },
         buildHellSettings: (parentNode, secondaryPrefix) => hell?.buildHellSettings(
@@ -30969,6 +31181,47 @@ If script is allowed to reassign non-empty storage it might waste time producing
             node,
             settingName
           )
+        });
+      }
+      if (capturedResearchSettings !== void 0) {
+        let capturedAdapter = createCapturedResearchSettingsAdapter({
+          rootState: capturedResearchSettings.rootState,
+          controls: capturedResearchSettings.controls,
+          getSettingsRaw: settings.readRaw
+        }), researchIntent;
+        research = createResearchSettingsBrowserAdapter({
+          getDocument: () => documentForUi,
+          getJQuery: () => getJQuery(),
+          getReadModel: capturedAdapter.readResearchSettingsReadModel,
+          intents: { handle: (intent) => researchIntent.handle(intent) },
+          getActions: () => ({
+            buildSettingsSection: shell.buildSettingsSection,
+            addSettingsSelect: (node, settingName, labelText, hintText, options) => controls2.addSettingsSelect(
+              node,
+              settingName,
+              labelText,
+              hintText,
+              options
+            ),
+            addSettingsList: (node, settingName, labelText, hintText, list) => controls2.addSettingsList(
+              node,
+              settingName,
+              labelText,
+              hintText,
+              list
+            )
+          })
+        }), researchIntent = createResearchSettingsIntentHandler({
+          writer: {
+            resetToDefaults: () => {
+              settingsLifecycle !== void 0 ? settingsLifecycle.resetSection("research") : capturedAdapter.resetToDefaults();
+            },
+            persist: persistSettings
+          },
+          renderSettingsContent: () => research?.updateResearchSettingsContent(),
+          effects: {
+            resetCheckbox: () => controls2.resetCheckbox("autoResearch")
+          }
         });
       }
       if (capturedProjectSettings !== void 0) {
@@ -34194,6 +34447,10 @@ Only continue if you trust the source. Injected code:
       },
       productionSettings: {
         rootState: pageCapture2.rootState
+      },
+      researchSettings: {
+        rootState: pageCapture2.rootState,
+        controls: pageCapture2.controls
       },
       onDiagnostic: (message) => reportDiagnostic(message),
       logError: (message) => logError(message)
