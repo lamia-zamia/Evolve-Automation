@@ -32,8 +32,33 @@ export type PrestigeSettingsIntent =
   | Readonly<{ type: "reset-prestige-settings"; secondaryPrefix: string }>
   | Readonly<{ type: "set-prestige-type"; value: string }>;
 
+/**
+ * Keeps only the named settings, and drops any header left describing nothing.
+ *
+ * The captured runtime consumes a strict subset of the historical Prestige controls. Filtering
+ * here rather than restating the surviving controls elsewhere keeps one owner for every label and
+ * hint, and makes the exposed set an explicit list a test can assert against.
+ */
+function keepExposedControls(
+  controls: readonly PrestigeSettingsControl[],
+  exposed: ReadonlySet<string>,
+): readonly PrestigeSettingsControl[] {
+  const kept = controls.filter(
+    (control) => control.kind === "header" || exposed.has(control.settingName),
+  );
+  return Object.freeze(
+    kept.filter(
+      (control, index) =>
+        control.kind !== "header" ||
+        (kept[index + 1] !== undefined && kept[index + 1]!.kind !== "header"),
+    ),
+  );
+}
+
 export function createPrestigeSettingsReadModel(input: {
   readonly prestigeOptions: readonly PrestigeSettingsOption[];
+  /** When given, only these setting names are offered. Omitted means every historical control. */
+  readonly exposedSettings?: ReadonlySet<string>;
 }): PrestigeSettingsReadModel {
   const options = Object.freeze(
     input.prestigeOptions.map((option) => Object.freeze({ ...option })),
@@ -173,7 +198,10 @@ export function createPrestigeSettingsReadModel(input: {
   return Object.freeze({
     sectionId: "prestige",
     sectionName: "Prestige",
-    controls,
+    controls:
+      input.exposedSettings === undefined
+        ? controls
+        : keepExposedControls(controls, input.exposedSettings),
     prestigeOptions: options,
   });
 }

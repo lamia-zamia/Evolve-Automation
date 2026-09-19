@@ -113,6 +113,11 @@ import {
 } from "../adapters/browser/planet-settings.ts";
 import { createCapturedPlanetSettingsAdapter } from "../adapters/evolve/progression/evolution/captured-planet-settings.ts";
 import {
+  createPrestigeSettingsBrowserAdapter,
+  type PrestigeSettingsBrowserActions,
+} from "../adapters/browser/prestige-settings.ts";
+import { createCapturedPrestigeSettingsAdapter } from "../adapters/evolve/progression/prestige/captured-prestige-settings.ts";
+import {
   createWeightingSettingsBrowserAdapter,
   type WeightingSettingsBrowserActions,
 } from "../adapters/browser/weighting-settings.ts";
@@ -181,6 +186,7 @@ import { createHellSettingsIntentHandler } from "../application/hell-settings.ts
 import { createWarSettingsIntentHandler } from "../application/war-settings.ts";
 import { createEvolutionSettingsIntentHandler } from "../application/evolution-settings.ts";
 import { createPlanetSettingsIntentHandler } from "../application/planet-settings.ts";
+import { createPrestigeSettingsIntentHandler } from "../application/prestige-settings.ts";
 import { createWeightingSettingsIntentHandler } from "../application/weighting-settings.ts";
 import {} from "../domain/settings-defaults.ts";
 import type { CapturedSettingsStore } from "../ports/captured-settings-store.ts";
@@ -390,6 +396,13 @@ type EvolutionSettingsDocument = ReturnType<
 type EvolutionSettingsJQuery = ReturnType<
   Parameters<typeof createEvolutionSettingsBrowserAdapter>[0]["getJQuery"]
 >;
+type PrestigeSettings = ReturnType<typeof createPrestigeSettingsBrowserAdapter>;
+type PrestigeSettingsDocument = ReturnType<
+  Parameters<typeof createPrestigeSettingsBrowserAdapter>[0]["getDocument"]
+>;
+type PrestigeSettingsJQuery = ReturnType<
+  Parameters<typeof createPrestigeSettingsBrowserAdapter>[0]["getJQuery"]
+>;
 type PlanetSettings = ReturnType<typeof createPlanetSettingsBrowserAdapter>;
 type PlanetSettingsDocument = ReturnType<
   Parameters<typeof createPlanetSettingsBrowserAdapter>[0]["getDocument"]
@@ -473,6 +486,10 @@ export interface CapturedSettingsPanelDependencies {
   };
   readonly traitSettings?: {
     readonly rootState: GameRootStateSource;
+  };
+  readonly prestigeSettings?: {
+    /** Clears the captured prestige goal handoff when the player changes the prestige type. */
+    readonly setGoalStandard: () => void;
   };
   readonly evolutionSettings?: {
     /** Drops the captured evolution runtime's committed target when the player picks another. */
@@ -566,6 +583,7 @@ interface SettingsUi {
   readonly hell: HellSettings;
   readonly evolution: EvolutionSettings;
   readonly planet: PlanetSettings;
+  readonly prestige: PrestigeSettings;
   readonly war: WarSettings;
   readonly weighting: WeightingSettings;
   readonly job: JobSettings;
@@ -594,6 +612,7 @@ export function createCapturedSettingsPanel({
   settings,
   settingsLifecycle,
   refreshEffectiveSettings,
+  prestigeSettings: capturedPrestigeSettings,
   evolutionSettings: capturedEvolutionSettings,
   craftToggles: capturedCraftToggles,
   buildingSettings: capturedBuildingSettings,
@@ -867,7 +886,13 @@ export function createCapturedSettingsPanel({
         ),
       }),
       getGame: () => ({ global: { settings: { civTabs: 7 } } }),
-      buildPrestigeSettings: () => {},
+      buildPrestigeSettings: (parentNode, secondaryPrefix) =>
+        prestige?.buildPrestigeSettings(
+          parentNode as unknown as Parameters<
+            PrestigeSettings["buildPrestigeSettings"]
+          >[0],
+          secondaryPrefix,
+        ),
       buildGeneralSettings: () => general?.buildGeneralSettings(),
       buildInterfaceSettings: () => interfaceSettings?.buildInterfaceSettings(),
       buildStateLogSettings: () => stateLog?.buildStateLogSettings(),
@@ -1287,6 +1312,42 @@ export function createCapturedSettingsPanel({
       render: () => evolution?.updateEvolutionSettingsContent(),
       effects: {
         resetCheckbox: () => controls.resetCheckbox("autoEvolution"),
+      },
+    });
+    // The prestige vocabulary and the exposed control set are static; only the goal handoff needs
+    // the runtime, and it is optional.
+    const capturedPrestigeAdapter = createCapturedPrestigeSettingsAdapter();
+    let prestige: PrestigeSettings | undefined;
+    let prestigeIntent: ReturnType<typeof createPrestigeSettingsIntentHandler>;
+    prestige = createPrestigeSettingsBrowserAdapter({
+      getDocument: () => documentForUi as unknown as PrestigeSettingsDocument,
+      getJQuery: () => getJQuery() as unknown as PrestigeSettingsJQuery,
+      reader: capturedPrestigeAdapter,
+      intents: { handle: (intent) => prestigeIntent.handle(intent) },
+      getActions: () =>
+        ({
+          ...panelActions,
+          // Only the withheld `prestigeCustomRaceMode` control reaches these, so they exist to
+          // satisfy the shared browser adapter rather than to be called.
+          openOptionsModal: () => unported("custom race preset editor")(),
+          buildCustomRacePresetEditor: undefined,
+        }) as unknown as PrestigeSettingsBrowserActions,
+    });
+    prestigeIntent = createPrestigeSettingsIntentHandler({
+      writer: {
+        resetToDefaults: resetSection("prestige"),
+        setPrestigeType: (value: string) => {
+          settings.readRaw()["prestigeType"] = value;
+        },
+        setGoalStandard: () => capturedPrestigeSettings?.setGoalStandard(),
+        persist: persistSettings,
+      },
+      reader: capturedPrestigeAdapter,
+      render: (secondaryPrefix) =>
+        prestige?.updatePrestigeSettingsContent(secondaryPrefix),
+      effects: {
+        confirm: (message) =>
+          confirmInPanelWindow(capturedPanelWindow, message),
       },
     });
     // Planet weights are static id lists plus settings-record data. Every cell is read by the
@@ -1906,6 +1967,7 @@ export function createCapturedSettingsPanel({
       hell,
       evolution,
       planet,
+      prestige,
       war,
       weighting,
       job,
@@ -1977,6 +2039,12 @@ export function createCapturedSettingsPanel({
     ui.achievementGuard.buildAchievementGuardSettings();
     ui.challengeHelper.buildChallengeHelperSettings();
     ui.authority.buildAuthoritySettings();
+    ui.prestige.buildPrestigeSettings(
+      dom("#script_settings") as unknown as Parameters<
+        PrestigeSettings["buildPrestigeSettings"]
+      >[0],
+      "",
+    );
     ui.evolution.buildEvolutionSettings();
     ui.planet.buildPlanetSettings();
     ui.hell.buildHellSettings(dom("#script_settings"), "");

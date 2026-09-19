@@ -379,7 +379,12 @@ export function startCapturedRuntime({
     fleetSettings: {
       controls: pageCapture.controls,
     },
-    // Called only from a settings-panel event, long after the constructor below has run.
+    // Both are called only from a settings-panel event, long after the constructors below run.
+    prestigeSettings: {
+      setGoalStandard: () => {
+        capturedPrestigeGoal = "Standard";
+      },
+    },
     evolutionSettings: {
       clearStoredTarget: () => capturedEvolution.clearStoredTarget(),
     },

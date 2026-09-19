@@ -31454,6 +31454,296 @@ If script is allowed to reassign non-empty storage it might waste time producing
     });
   }
 
+  // src/domain/progression/prestige/prestige-settings.ts
+  function keepExposedControls(controls2, exposed) {
+    let kept = controls2.filter(
+      (control) => control.kind === "header" || exposed.has(control.settingName)
+    );
+    return Object.freeze(
+      kept.filter(
+        (control, index) => control.kind !== "header" || kept[index + 1] !== void 0 && kept[index + 1].kind !== "header"
+      )
+    );
+  }
+  function createPrestigeSettingsReadModel(input) {
+    let options = Object.freeze(
+      input.prestigeOptions.map((option) => Object.freeze({ ...option }))
+    ), controls2 = Object.freeze([
+      {
+        kind: "select",
+        settingName: "prestigeType",
+        label: "Prestige Type",
+        hint: "",
+        options
+      },
+      {
+        kind: "toggle",
+        settingName: "prestigeWaitAT",
+        label: "Disable prestiging under Accelerated Time",
+        hint: "Delay reset until all accelerated time will be used, to avoid wasting it"
+      },
+      {
+        kind: "toggle",
+        settingName: "prestigeMADIgnoreArpa",
+        label: "Ignore early game A.R.P.A.",
+        hint: "Disables building any A.R.P.A. projects until MAD is researched, or rival have appeared"
+      },
+      {
+        kind: "toggle",
+        settingName: "prestigeBioseedConstruct",
+        label: "Ignore useless buildings",
+        hint: "Space Dock, Bioseeder Ship and Probes will be constructed only when Bioseed prestige enabled. World Collider won't be constructed during Bioseed. Jump Ship won't be constructed during Whitehole. Stellar Engine won't be constructed during Vacuum Collapse. Mana Syphon won't be constructed during Witch Hunter's Ascension and Demonic Infusion."
+      },
+      { kind: "header", label: "Mutual Assured Destruction" },
+      {
+        kind: "toggle",
+        settingName: "prestigeMADWait",
+        label: "Wait for maximum population",
+        hint: "Wait for maximum population and soldiers to maximize plasmids gain"
+      },
+      {
+        kind: "number",
+        settingName: "prestigeMADPopulation",
+        label: "Required population",
+        hint: "Required number of workers and soldiers before performing MAD reset"
+      },
+      { kind: "header", label: "Bioseed" },
+      {
+        kind: "number",
+        settingName: "prestigeBioseedProbes",
+        label: "Required probes",
+        hint: "Required number of probes before launching bioseeder ship"
+      },
+      {
+        kind: "number",
+        settingName: "prestigeGECK",
+        label: "Required G.E.C.K",
+        hint: "Required number of G.E.C.K. for Bioseed. Unlike any other buildings G.E.C.K. won't ever be constructed during inappropriate runs, or above this number. To prevent losing plasmids. It can, however, be built with triggers - you should not build G.E.C.K with triggers, unless you absolutely sure you know what you're doing."
+      },
+      { kind: "header", label: "Vacuum Collapse" },
+      {
+        kind: "number",
+        settingName: "prestigeVacuumMana",
+        label: "Required Mana regeneration",
+        hint: "Begin prioritizing Mana Syphons after net Mana regeneration reaches this value"
+      },
+      { kind: "header", label: "Whitehole" },
+      {
+        kind: "toggle",
+        settingName: "prestigeWhiteholeSaveGems",
+        label: "Save up Soul Gems for reset",
+        hint: "Save up enough Soul Gems for reset, only excess gems will be used. This option does not affect triggers."
+      },
+      {
+        kind: "number",
+        settingName: "prestigeWhiteholeMinMass",
+        label: "Minimum solar mass for reset",
+        hint: "Required minimum solar mass of blackhole before prestiging. Script do not stabilize on blackhole run, this number will need to be reached naturally"
+      },
+      { kind: "header", label: "Ascension" },
+      {
+        kind: "toggle",
+        settingName: "prestigeAscensionPillar",
+        label: "Wait for Pillar",
+        hint: "Wait for Pillar before ascending, unless it was done earlier"
+      },
+      {
+        kind: "select",
+        settingName: "prestigeCustomRaceMode",
+        label: "Custom race handling",
+        hint: "Controls every custom-race lab reached after Ascension, Terraform, or Apotheosis. Pause lets you edit challenge-specific races even when one is already saved. Import replaces the live design with the selected preset and continues only when the game accepts it.",
+        options: Object.freeze([
+          {
+            val: "reuse",
+            label: "Reuse saved",
+            hint: "Automatically reuse the saved custom; pause if none exists."
+          },
+          {
+            val: "pause",
+            label: "Pause in lab",
+            hint: "Always stop in the lab so the custom can be edited or imported manually."
+          },
+          {
+            val: "import",
+            label: "Import selected preset",
+            hint: "Apply the selected structured preset and continue automatically."
+          }
+        ])
+      },
+      { kind: "header", label: "Demonic Infusion" },
+      {
+        kind: "number",
+        settingName: "prestigeDemonicFloor",
+        label: "Minimum spire floor for reset",
+        hint: "Perform reset after climbing up to this spire floor"
+      },
+      {
+        kind: "number",
+        settingName: "prestigeDemonicPotential",
+        label: "Maximum mech potential for reset",
+        hint: "Perform reset only if current mech team potential at or below given amount. Full bay of best mechs will have `1` potential. This allows postponing reset if your team is still good after reaching target floor, and can quickly clear another floor"
+      },
+      {
+        kind: "toggle",
+        settingName: "prestigeDemonicBomb",
+        label: "Use Dark Energy Bomb",
+        hint: "Kill Demon Lord with Dark Energy Bomb"
+      },
+      { kind: "header", label: "Matrix" },
+      {
+        kind: "select",
+        settingName: "prestigeVaxStrat",
+        label: "Vaccination Strategy",
+        hint: "Alter script behaviour to speed up queued items, prioritizing missing resources.",
+        options: Object.freeze([
+          { val: "none", label: "None", hint: "Do not select strategy" }
+        ])
+      }
+    ]);
+    return Object.freeze({
+      sectionId: "prestige",
+      sectionName: "Prestige",
+      controls: input.exposedSettings === void 0 ? controls2 : keepExposedControls(controls2, input.exposedSettings),
+      prestigeOptions: options
+    });
+  }
+
+  // src/adapters/browser/prestige-settings.ts
+  function createPrestigeSettingsBrowserAdapter({
+    getDocument,
+    getJQuery,
+    reader,
+    intents,
+    getActions
+  }) {
+    function renderControl(node, control, actions) {
+      if (control.kind === "header")
+        return void actions.addSettingsHeader1(node, control.label);
+      if (control.kind === "number")
+        return void actions.addSettingsNumber(
+          node,
+          control.settingName,
+          control.label,
+          control.hint
+        );
+      if (control.kind === "toggle")
+        return void actions.addSettingsToggle(
+          node,
+          control.settingName,
+          control.label,
+          control.hint
+        );
+      if (control.kind === "select") {
+        if (actions.addSettingsSelect(
+          node,
+          control.settingName,
+          control.label,
+          control.hint,
+          control.options
+        ), control.settingName === "prestigeCustomRaceMode") {
+          let button = getJQuery()(
+            '<button class="button" type="button" style="margin:6px 0;">Edit custom race presets…</button>'
+          );
+          button.on(
+            "click",
+            () => actions.openOptionsModal(
+              "Custom Race Presets",
+              actions.buildCustomRacePresetEditor
+            )
+          ), node.append(button);
+        }
+        if (control.settingName === "prestigeType") {
+          let select = getJQuery()(`.script_${control.settingName}`).find(
+            "select"
+          );
+          select.on(
+            "change",
+            () => intents.handle({
+              type: "set-prestige-type",
+              value: String(select.val())
+            })
+          );
+        }
+      }
+    }
+    function buildPrestigeSettings(parent, prefix) {
+      let model = reader.read();
+      getActions().buildSettingsSection2(
+        parent,
+        prefix,
+        model.sectionId,
+        model.sectionName,
+        () => intents.handle({
+          type: "reset-prestige-settings",
+          secondaryPrefix: prefix
+        }),
+        updatePrestigeSettingsContent
+      );
+    }
+    function updatePrestigeSettingsContent(prefix) {
+      let model = reader.read(), actions = getActions();
+      renderSettingsSectionContent(
+        {
+          scrollDocument: getDocument(),
+          jquery: getJQuery(),
+          sectionId: `${prefix}${model.sectionId}`
+        },
+        (node) => {
+          renderPrestigeContent(node, model, actions);
+        }
+      );
+    }
+    function renderPrestigeContent(node, model, actions) {
+      for (let control of model.controls) renderControl(node, control, actions);
+      node.find(".script_bg_prestigeType").toggleClass("inactive-row", !1).on(
+        "click",
+        {
+          label: "Prestige Type (prestigeType)",
+          name: "prestigeType",
+          type: "select",
+          options: model.prestigeOptions
+        },
+        actions.openOverrideModal
+      );
+    }
+    return Object.freeze({
+      buildPrestigeSettings,
+      updatePrestigeSettingsContent
+    });
+  }
+
+  // src/adapters/evolve/progression/prestige/captured-prestige-settings.ts
+  var CAPTURED_PRESTIGE_SETTINGS = Object.freeze(
+    /* @__PURE__ */ new Set([
+      "prestigeType",
+      "prestigeMADIgnoreArpa",
+      "prestigeBioseedConstruct",
+      "prestigeMADWait",
+      "prestigeMADPopulation",
+      "prestigeBioseedProbes",
+      "prestigeGECK",
+      "prestigeVacuumMana",
+      "prestigeWhiteholeSaveGems",
+      "prestigeWhiteholeMinMass",
+      "prestigeAscensionPillar",
+      "prestigeDemonicFloor"
+    ])
+  ), capturedPrestigeOptions = Object.freeze(
+    PRESTIGE_TYPES.map(
+      (type) => Object.freeze({ val: type.val, label: type.label, hint: type.hint })
+    )
+  );
+  function createCapturedPrestigeSettingsAdapter() {
+    let readModel = createPrestigeSettingsReadModel({
+      prestigeOptions: capturedPrestigeOptions,
+      exposedSettings: CAPTURED_PRESTIGE_SETTINGS
+    });
+    return Object.freeze({
+      read: () => readModel,
+      getConfirmationText: () => ""
+    });
+  }
+
   // src/domain/economy/resources/weighting-settings.ts
   var weightingSettingsReadModel = Object.freeze({
     sectionId: "weighting",
@@ -34539,6 +34829,27 @@ If script is allowed to reassign non-empty storage it might waste time producing
     });
   }
 
+  // src/application/prestige-settings.ts
+  function createPrestigeSettingsIntentHandler({
+    writer,
+    reader,
+    render,
+    effects
+  }) {
+    return Object.freeze({
+      handle(intent) {
+        if (intent.type === "reset-prestige-settings") {
+          writer.resetToDefaults(), writer.persist(), render(intent.secondaryPrefix);
+          return;
+        }
+        let message = reader.getConfirmationText(intent.value);
+        message !== "" && !effects.confirm(
+          `${message} You may prestige immediately. Are you sure you want to toggle this prestige?`
+        ) ? writer.setPrestigeType("none") : writer.setPrestigeType(intent.value), writer.setGoalStandard(), writer.persist(), render("");
+      }
+    });
+  }
+
   // src/application/weighting-settings.ts
   function createWeightingSettingsIntentHandler({
     writer,
@@ -35605,6 +35916,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
     settings,
     settingsLifecycle,
     refreshEffectiveSettings,
+    prestigeSettings: capturedPrestigeSettings,
     evolutionSettings: capturedEvolutionSettings,
     craftToggles: capturedCraftToggles,
     buildingSettings: capturedBuildingSettings,
@@ -35741,8 +36053,10 @@ If script is allowed to reassign non-empty storage it might waste time producing
           )
         }),
         getGame: () => ({ global: { settings: { civTabs: 7 } } }),
-        buildPrestigeSettings: () => {
-        },
+        buildPrestigeSettings: (parentNode, secondaryPrefix) => prestige?.buildPrestigeSettings(
+          parentNode,
+          secondaryPrefix
+        ),
         buildGeneralSettings: () => general?.buildGeneralSettings(),
         buildInterfaceSettings: () => interfaceSettings?.buildInterfaceSettings(),
         buildStateLogSettings: () => stateLog?.buildStateLogSettings(),
@@ -36043,6 +36357,34 @@ If script is allowed to reassign non-empty storage it might waste time producing
         render: () => evolution?.updateEvolutionSettingsContent(),
         effects: {
           resetCheckbox: () => controls2.resetCheckbox("autoEvolution")
+        }
+      });
+      let capturedPrestigeAdapter = createCapturedPrestigeSettingsAdapter(), prestige, prestigeIntent;
+      prestige = createPrestigeSettingsBrowserAdapter({
+        getDocument: () => documentForUi,
+        getJQuery: () => getJQuery(),
+        reader: capturedPrestigeAdapter,
+        intents: { handle: (intent) => prestigeIntent.handle(intent) },
+        getActions: () => ({
+          ...panelActions,
+          // Only the withheld `prestigeCustomRaceMode` control reaches these, so they exist to
+          // satisfy the shared browser adapter rather than to be called.
+          openOptionsModal: () => unported("custom race preset editor")(),
+          buildCustomRacePresetEditor: void 0
+        })
+      }), prestigeIntent = createPrestigeSettingsIntentHandler({
+        writer: {
+          resetToDefaults: resetSection("prestige"),
+          setPrestigeType: (value) => {
+            settings.readRaw().prestigeType = value;
+          },
+          setGoalStandard: () => capturedPrestigeSettings?.setGoalStandard(),
+          persist: persistSettings
+        },
+        reader: capturedPrestigeAdapter,
+        render: (secondaryPrefix) => prestige?.updatePrestigeSettingsContent(secondaryPrefix),
+        effects: {
+          confirm: (message) => confirmInPanelWindow(capturedPanelWindow, message)
         }
       });
       let capturedPlanetAdapter = createCapturedPlanetSettingsAdapter(), planet, planetIntent = createPlanetSettingsIntentHandler({
@@ -36556,6 +36898,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
         hell,
         evolution,
         planet,
+        prestige,
         war,
         weighting,
         job,
@@ -36599,7 +36942,10 @@ Only continue if you trust the source. Injected code:
       let ui = ensureSettingsUi(dom);
       ui.shell.buildImportExport(), dom("#script_settings").length === 0 && dom(".settings").append(
         '<div id="script_settings" style="margin-top: 30px;"></div>'
-      ), dom("#script_generalSettings").length === 0 && (ui.general.buildGeneralSettings(), ui.interface.buildInterfaceSettings(), ui.stateLog.buildStateLogSettings(), ui.achievementGuard.buildAchievementGuardSettings(), ui.challengeHelper.buildChallengeHelperSettings(), ui.authority.buildAuthoritySettings(), ui.evolution.buildEvolutionSettings(), ui.planet.buildPlanetSettings(), ui.hell.buildHellSettings(dom("#script_settings"), ""), ui.war.buildWarSettings(
+      ), dom("#script_generalSettings").length === 0 && (ui.general.buildGeneralSettings(), ui.interface.buildInterfaceSettings(), ui.stateLog.buildStateLogSettings(), ui.achievementGuard.buildAchievementGuardSettings(), ui.challengeHelper.buildChallengeHelperSettings(), ui.authority.buildAuthoritySettings(), ui.prestige.buildPrestigeSettings(
+        dom("#script_settings"),
+        ""
+      ), ui.evolution.buildEvolutionSettings(), ui.planet.buildPlanetSettings(), ui.hell.buildHellSettings(dom("#script_settings"), ""), ui.war.buildWarSettings(
         dom("#script_settings"),
         ""
       ), ui.weighting.buildWeightingSettings(), capturedJobCatalogReader?.() !== void 0 && ui.job.buildJobSettings(), ui.building?.buildBuildingSettings(), ui.project?.buildProjectSettings(), ui.storage?.buildStorageSettings(), ui.market?.buildMarketSettings(), ui.ejector?.buildEjectorSettings(), ui.magic?.buildMagicSettings(), ui.production?.buildProductionSettings(), ui.trait?.buildTraitSettings());
@@ -39473,7 +39819,12 @@ Only continue if you trust the source. Injected code:
       fleetSettings: {
         controls: pageCapture2.controls
       },
-      // Called only from a settings-panel event, long after the constructor below has run.
+      // Both are called only from a settings-panel event, long after the constructors below run.
+      prestigeSettings: {
+        setGoalStandard: () => {
+          capturedPrestigeGoal = "Standard";
+        }
+      },
       evolutionSettings: {
         clearStoredTarget: () => capturedEvolution.clearStoredTarget()
       },
