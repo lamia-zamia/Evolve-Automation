@@ -52,6 +52,12 @@ export interface CapturedEvolutionAdapter {
   readonly reader: EvolutionReader;
   readonly executor: EvolutionExecutor;
   readonly runUniverseSelection: () => void;
+  /**
+   * Forgets the committed target so the next cycle re-runs selection. The settings panel calls
+   * this when the player picks a different Target Race mid-evolution; without it the run would
+   * keep evolving toward the race that was current when the target was committed.
+   */
+  readonly clearStoredTarget: () => void;
 }
 
 function capturedEvolutionRecord(
@@ -410,6 +416,9 @@ export function createCapturedEvolution(
   return Object.freeze({
     reader,
     executor,
+    clearStoredTarget: () => {
+      storedTarget = undefined;
+    },
     runUniverseSelection: () => {
       const race = readRace(dependencies.rootState);
       const settings = capturedEvolutionReadSettings(dependencies.readSettings);

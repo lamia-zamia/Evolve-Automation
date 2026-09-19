@@ -223,13 +223,14 @@ function createPage(
   assert.equal(toggles.length, 1);
   assert.equal(root.querySelectorAll("#script_settings").length, 1);
   assert.equal(root.querySelectorAll("#script_generalSettings").length, 1);
-  assert.equal(root.querySelectorAll("button.script-collapsible").length, 10);
+  assert.equal(root.querySelectorAll("button.script-collapsible").length, 11);
   for (const section of [
     "interface",
     "stateLog",
     "achievementGuard",
     "challengeHelper",
     "authority",
+    "evolution",
     "hell",
     "war",
     "weighting",
@@ -902,6 +903,7 @@ console.log("captured settings panel tests passed");
     "achievementGuard",
     "challengeHelper",
     "authority",
+    "evolution",
     "hell",
     "war",
     "weighting",

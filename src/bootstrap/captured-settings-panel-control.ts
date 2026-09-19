@@ -103,6 +103,11 @@ import {
 } from "../adapters/browser/war-settings.ts";
 import { createWarSettingsReadModel } from "../domain/combat/war-settings.ts";
 import {
+  createEvolutionSettingsBrowserAdapter,
+  type EvolutionSettingsBrowserActions,
+} from "../adapters/browser/evolution-settings.ts";
+import { createCapturedEvolutionSettingsAdapter } from "../adapters/evolve/progression/evolution/captured-evolution-settings.ts";
+import {
   createWeightingSettingsBrowserAdapter,
   type WeightingSettingsBrowserActions,
 } from "../adapters/browser/weighting-settings.ts";
@@ -169,6 +174,7 @@ import { createStateLogSettingsIntentHandler } from "../application/state-log-se
 import { createAuthoritySettingsIntentHandler } from "../application/authority-settings.ts";
 import { createHellSettingsIntentHandler } from "../application/hell-settings.ts";
 import { createWarSettingsIntentHandler } from "../application/war-settings.ts";
+import { createEvolutionSettingsIntentHandler } from "../application/evolution-settings.ts";
 import { createWeightingSettingsIntentHandler } from "../application/weighting-settings.ts";
 import {} from "../domain/settings-defaults.ts";
 import type { CapturedSettingsStore } from "../ports/captured-settings-store.ts";
@@ -369,6 +375,15 @@ type GovernmentSettingsDocument = ReturnType<
 type GovernmentSettingsJQuery = ReturnType<
   Parameters<typeof createGovernmentSettingsBrowserAdapter>[0]["getJQuery"]
 >;
+type EvolutionSettings = ReturnType<
+  typeof createEvolutionSettingsBrowserAdapter
+>;
+type EvolutionSettingsDocument = ReturnType<
+  Parameters<typeof createEvolutionSettingsBrowserAdapter>[0]["getDocument"]
+>;
+type EvolutionSettingsJQuery = ReturnType<
+  Parameters<typeof createEvolutionSettingsBrowserAdapter>[0]["getJQuery"]
+>;
 type WarSettings = ReturnType<typeof createWarSettingsBrowserAdapter>;
 type WarSettingsDocument = Parameters<
   typeof createWarSettingsBrowserAdapter
@@ -445,6 +460,10 @@ export interface CapturedSettingsPanelDependencies {
   };
   readonly traitSettings?: {
     readonly rootState: GameRootStateSource;
+  };
+  readonly evolutionSettings?: {
+    /** Drops the captured evolution runtime's committed target when the player picks another. */
+    readonly clearStoredTarget: () => void;
   };
   readonly onDiagnostic?: (message: string) => void;
   readonly logError?: (message: string) => void;
@@ -532,6 +551,7 @@ interface SettingsUi {
   readonly stateLog: StateLogSettings;
   readonly authority: AuthoritySettings;
   readonly hell: HellSettings;
+  readonly evolution: EvolutionSettings;
   readonly war: WarSettings;
   readonly weighting: WeightingSettings;
   readonly job: JobSettings;
@@ -560,6 +580,7 @@ export function createCapturedSettingsPanel({
   settings,
   settingsLifecycle,
   refreshEffectiveSettings,
+  evolutionSettings: capturedEvolutionSettings,
   craftToggles: capturedCraftToggles,
   buildingSettings: capturedBuildingSettings,
   projectSettings: capturedProjectSettings,
@@ -842,7 +863,7 @@ export function createCapturedSettingsPanel({
         challengeHelper?.buildChallengeHelperSettings(),
       buildGovernmentSettings: () => {},
       buildAuthoritySettings: () => authority?.buildAuthoritySettings(),
-      buildEvolutionSettings: () => {},
+      buildEvolutionSettings: () => evolution?.buildEvolutionSettings(),
       buildPlanetSettings: () => {},
       buildTraitSettings: () => trait?.buildTraitSettings(),
       buildTriggerSettings: () => trigger?.buildTriggerSettings(),
@@ -1216,6 +1237,43 @@ export function createCapturedSettingsPanel({
             }
           },
         }) as unknown as HellSettingsBrowserActions,
+    });
+    // Evolution targets, challenges and the queue are static captured copy plus settings-record
+    // data, so this section needs no game draw and is always built.
+    const capturedEvolutionAdapter = createCapturedEvolutionSettingsAdapter({
+      getSettingsRaw: settings.readRaw,
+      ...(capturedEvolutionSettings === undefined
+        ? {}
+        : { clearStoredTarget: capturedEvolutionSettings.clearStoredTarget }),
+    });
+    let evolution: EvolutionSettings | undefined;
+    let evolutionIntent: ReturnType<
+      typeof createEvolutionSettingsIntentHandler
+    >;
+    evolution = createEvolutionSettingsBrowserAdapter({
+      getDocument: () => documentForUi as unknown as EvolutionSettingsDocument,
+      getJQuery: () => getJQuery() as unknown as EvolutionSettingsJQuery,
+      reader: {
+        read: capturedEvolutionAdapter.readEvolutionSettingsReadModel,
+      },
+      intents: { handle: (intent) => evolutionIntent.handle(intent) },
+      getActions: () =>
+        panelActions as unknown as EvolutionSettingsBrowserActions,
+    });
+    evolutionIntent = createEvolutionSettingsIntentHandler({
+      writer: {
+        resetToDefaults: resetSection("evolution"),
+        setTarget: capturedEvolutionAdapter.setTarget,
+        addCurrent: capturedEvolutionAdapter.addCurrent,
+        remove: capturedEvolutionAdapter.remove,
+        edit: capturedEvolutionAdapter.edit,
+        reorder: capturedEvolutionAdapter.reorder,
+        persist: persistSettings,
+      },
+      render: () => evolution?.updateEvolutionSettingsContent(),
+      effects: {
+        resetCheckbox: () => controls.resetCheckbox("autoEvolution"),
+      },
     });
     // The Foreign Affairs vocabulary — policies, protect modes, labels — is static captured copy,
     // so this section needs no game draw and is always built. It renders both as an ordinary
@@ -1814,6 +1872,7 @@ export function createCapturedSettingsPanel({
       stateLog,
       authority,
       hell,
+      evolution,
       war,
       weighting,
       job,
@@ -1885,6 +1944,7 @@ export function createCapturedSettingsPanel({
     ui.achievementGuard.buildAchievementGuardSettings();
     ui.challengeHelper.buildChallengeHelperSettings();
     ui.authority.buildAuthoritySettings();
+    ui.evolution.buildEvolutionSettings();
     ui.hell.buildHellSettings(dom("#script_settings"), "");
     ui.war.buildWarSettings(
       dom("#script_settings") as unknown as Parameters<

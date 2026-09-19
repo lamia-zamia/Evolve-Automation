@@ -27,14 +27,10 @@ import {
   type OverrideReadScriptState,
   type OverrideReadSettingsRaw,
 } from "./override-operand-readers.ts";
-
-/** One prestige the script can be configured to aim for, as the settings select renders it. */
-interface PrestigeType {
-  readonly val: string;
-  readonly label: string;
-  readonly short_label?: string;
-  readonly hint: string;
-}
+import {
+  PRESTIGE_TYPES,
+  type PrestigeType,
+} from "../domain/progression/prestige/prestige-types.ts";
 
 /**
  * A live game bag as the whole catalog sees it: what the editor's operand inputs read, and what the
@@ -103,71 +99,7 @@ export function createOverrideCatalog({
   readFastEval,
   readGovernor,
 }: OverrideCatalogDependencies) {
-  const prestigeTypes = [
-    { val: "none", label: "None", hint: "Endless game" },
-    {
-      val: "mad",
-      short_label: "MAD",
-      label: "Mutual Assured Destruction",
-      hint: "MAD prestige once MAD has been researched and all soldiers are home",
-    },
-    {
-      val: "bioseed",
-      label: "Bioseed",
-      hint: "Launches the bioseeder ship to perform prestige when required probes have been constructed",
-    },
-    {
-      val: "cataclysm",
-      label: "Cataclysm",
-      hint: "Perform cataclysm reset by researching Dial It To 11 once available",
-    },
-    {
-      val: "whitehole",
-      label: "Whitehole",
-      hint: "Infuses the blackhole with exotic materials to perform prestige",
-    },
-    {
-      val: "vacuum",
-      short_label: "Vacuum",
-      label: "Vacuum Collapse",
-      hint: "Build Mana Syphons until the end",
-    },
-    {
-      val: "apocalypse",
-      label: "AI Apocalypse",
-      hint: "Perform AI Apocalypse reset by researching Protocol 66 once available",
-    },
-    {
-      val: "ascension",
-      label: "Ascension",
-      hint: "Allows research of Incorporeal Existence and Ascension. Ascension Machine is managed by autoPower. Use Custom race handling in Prestige settings to reuse, pause for editing, or automatically import a race at the post-reset lab.",
-    },
-    {
-      val: "demonic",
-      short_label: "DI",
-      label: "Demonic Infusion",
-      hint: "Sacrifice your entire civilization to absorb the essence of a greater demon lord",
-    },
-    {
-      val: "terraform",
-      label: "Terraform",
-      hint: "Create new planet by building and powering Terraformer. Atmosphere Terraformer is managed by autoPower. Disable autoPrestige if you want to change custom planet. Otherwise current one will be used , or default one if there's no current. ",
-    },
-    {
-      val: "matrix",
-      label: "Matrix",
-      hint: "Build a computer simulation and trap your entire civilization in it",
-    },
-    {
-      val: "retire",
-      label: "Retirement",
-      hint: "Retire and enjoy the easy life.",
-    },
-    { val: "eden", label: "Eden", hint: "Build Garden Of Eden." },
-    { val: "apotheosis", label: "Apotheosis", hint: "Kill the God." },
-  ] satisfies PrestigeType[];
-
-  const prestigeOptions = readBuildSelectOptions()(prestigeTypes);
+  const prestigeOptions = readBuildSelectOptions()(PRESTIGE_TYPES);
 
   const checkCompare = overrideComparisons;
   const checkCompareExpressions = overrideComparatorExpressions;
@@ -502,7 +434,7 @@ export function createOverrideCatalog({
   const overrideOnlyChecks = ["String", "Number", "RaceId"];
 
   return {
-    prestigeTypes,
+    prestigeTypes: PRESTIGE_TYPES,
     prestigeOptions,
     checkCompare,
     checkCompareExpressions,

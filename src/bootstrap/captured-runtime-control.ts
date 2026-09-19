@@ -378,6 +378,10 @@ export function startCapturedRuntime({
     fleetSettings: {
       controls: pageCapture.controls,
     },
+    // Called only from a settings-panel event, long after the constructor below has run.
+    evolutionSettings: {
+      clearStoredTarget: () => capturedEvolution.clearStoredTarget(),
+    },
     traitSettings: {
       rootState: pageCapture.rootState,
     },

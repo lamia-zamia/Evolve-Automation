@@ -101,6 +101,12 @@ export class TestElement {
 
   append(...nodes) {
     for (const node of nodes) {
+      // A browser keeps text nodes out of `children`, which is an element-only list. The script
+      // reaches this path whenever it appends an empty string — an empty settings table, say.
+      if (node.nodeType !== 1) {
+        this.textContent += String(node.textContent ?? "");
+        continue;
+      }
       node.parentElement = this;
       this.children.push(node);
     }

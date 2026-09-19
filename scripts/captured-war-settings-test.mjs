@@ -8,16 +8,6 @@
 
 import assert from "node:assert/strict";
 
-import { createCapturedSettingsPanel } from "../src/bootstrap/captured-settings-panel-control.ts";
-import { createSettingsStore } from "../src/adapters/browser/settings-store.ts";
-import { createCapturedSettingsDefaults } from "../src/adapters/evolve/captured-settings-defaults.ts";
-import { createCapturedSettingsLifecycle } from "../src/application/captured-settings-lifecycle.ts";
-import { createCapturedOverrideEvaluation } from "../src/adapters/evolve/captured-override-evaluation.ts";
-import { createOverrideSettings } from "../src/application/override-settings.ts";
-import { overrideComparisons } from "../src/settings/override-comparators.ts";
-import { settingsSections } from "../src/adapters/evolve/runtime-catalogs.ts";
-import { createTestDocument, element } from "./dom-fixture.mjs";
-
 import { capturedForeignPolicy } from "../src/adapters/evolve/combat/captured-foreign-state.ts";
 import { createCapturedSpyTraining } from "../src/adapters/evolve/combat/captured-spy-training.ts";
 import { runCapturedSpyTraining } from "../src/application/captured-spy-training.ts";
@@ -25,89 +15,12 @@ import { createCapturedMercenary } from "../src/adapters/evolve/combat/captured-
 import { runMercenaryAutomation } from "../src/application/mercenary.ts";
 import { runBattleAutomation } from "../src/application/battle.ts";
 import { makeAutomation, makeRoot } from "./captured-battle-fixture.mjs";
-
-/** A panel over an in-memory store, with the same raw/effective wiring the runtime composes. */
-function createPage(stored = {}) {
-  const expanded = {};
-  for (const id of settingsSections) expanded[`${id}SettingsCollapsed`] = false;
-  const items = new Map([
-    ["settings", JSON.stringify({ ...expanded, ...stored })],
-  ]);
-  const storage = {
-    getItem: (key) => (items.has(key) ? items.get(key) : null),
-    setItem: (key, value) => items.set(key, String(value)),
-    writes: () => items.get("settings"),
-  };
-  const root = element("div", { id: "root" });
-  const resources = element("div", { id: "resources" });
-  const settingsTab = element("div");
-  settingsTab.classList.add("settings");
-  root.appendChild(resources);
-  root.appendChild(settingsTab);
-  const document = createTestDocument(root);
-  const diagnostics = [];
-  const logged = [];
-  const pageWindow = {
-    document,
-    navigator: { platform: "Win32" },
-    location: "https://x/",
-    confirm: () => true,
-    setTimeout: (callback) => callback(),
-  };
-  const settings = createSettingsStore({
-    storage,
-    logError: (message) => logged.push(message),
-  });
-  const gameRoot = { race: { governor: { tasks: {} } } };
-  const settingsLifecycle = createCapturedSettingsLifecycle({
-    settings,
-    defaults: createCapturedSettingsDefaults({
-      rootState: { readRoot: () => gameRoot },
-      controls: { capturedElementIds: () => [] },
-    }),
-  });
-  const effective = settingsLifecycle.readEffective();
-  const overrideSettings = createOverrideSettings({
-    getSafeMode: () => false,
-    getSettings: () => effective,
-    getSettingsRaw: settingsLifecycle.readRaw,
-    source: createCapturedOverrideEvaluation({
-      rootState: { readRoot: () => gameRoot },
-      readSettings: settingsLifecycle.readRaw,
-      comparatorSource: {
-        comparisons: overrideComparisons,
-        rightOperandComparators: ["A?B", "!A?B"],
-      },
-    }),
-    reporter: { report: () => {} },
-    display: { publish: () => {} },
-  });
-  const panel = createCapturedSettingsPanel({
-    capturedPanelWindow: pageWindow,
-    settings,
-    settingsLifecycle,
-    refreshEffectiveSettings: () => overrideSettings.updateOverrides(),
-    onDiagnostic: (message) => diagnostics.push(message),
-    logError: (message) => logged.push(message),
-  });
-  panel.ensurePanel();
-  return { panel, root, settings, storage, effective, diagnostics, logged };
-}
-
-/** Sets one drawn control the way the player would, and returns the page. */
-function edit(page, settingName, value) {
-  const [control] = page.root.querySelectorAll(`.script_${settingName}`);
-  assert.ok(control, `${settingName} must be drawn by the captured panel`);
-  if (typeof value === "boolean") control.checked = value;
-  else control.value = String(value);
-  control.dispatch("change");
-  return page;
-}
+import { createCapturedSettingsPage, edit } from "./captured-settings-page.mjs";
 
 // --- the section renders from the capture alone, with no legacy manager -------------------------
 
 {
-  const page = createPage();
+  const page = createCapturedSettingsPage();
   assert.equal(
     page.root.querySelectorAll("#script_warSettings").length,
     1,
@@ -154,7 +67,7 @@ function edit(page, settingName, value) {
 // --- 1. the policy selects decide the captured espionage/battle policy --------------------------
 
 {
-  const page = createPage();
+  const page = createCapturedSettingsPage();
   edit(page, "foreignPolicyInferior", "Annex");
   assert.equal(page.settings.readRaw()["foreignPolicyInferior"], "Annex");
   assert.deepEqual(capturedForeignPolicy(page.effective, 0, 10), {
@@ -179,7 +92,7 @@ function edit(page, settingName, value) {
 // --- 2. foreignPowerRequired moves the Inferior/Superior boundary -------------------------------
 
 {
-  const page = createPage();
+  const page = createCapturedSettingsPage();
   edit(page, "foreignPolicyInferior", "Annex");
   edit(page, "foreignPolicySuperior", "Sabotage");
 
@@ -200,7 +113,10 @@ function edit(page, settingName, value) {
 {
   // The effective layer delegates to the raw record through its prototype, so the runtime is
   // handed that object itself; copying it would drop every value the player did not override.
-  const page = createPage({ achievementGuards: false, autoHell: false });
+  const page = createCapturedSettingsPage({
+    achievementGuards: false,
+    autoHell: false,
+  });
   edit(page, "foreignPolicyInferior", "Sabotage");
   edit(page, "foreignProtect", "never");
   edit(page, "foreignAttackHealthySoldiersPercent", 100);
@@ -289,7 +205,7 @@ function mercenaryFixture(settings, { money = 1_000 } = {}) {
 }
 
 {
-  const page = createPage({ storageAssignExtra: false });
+  const page = createCapturedSettingsPage({ storageAssignExtra: false });
   edit(page, "foreignHireMercDeadSoldiers", 0);
   edit(page, "foreignHireMercCostLowerThanIncome", 1);
   edit(page, "foreignHireMercMoneyStoragePercent", 0);
@@ -370,7 +286,7 @@ function spyTrainingFixture(settings) {
 }
 
 {
-  const page = createPage();
+  const page = createCapturedSettingsPage();
   edit(page, "foreignTrainSpy", true);
   edit(page, "foreignSpyMax", 2);
   const training = spyTrainingFixture(page.effective);
@@ -401,7 +317,7 @@ function spyTrainingFixture(settings) {
 // --- 6. an override changes behaviour without mutating raw storage ------------------------------
 
 {
-  const page = createPage();
+  const page = createCapturedSettingsPage();
   edit(page, "foreignPolicyInferior", "Annex");
   // The override editor writes here; this is the shape it persists.
   page.settings.readRaw()["overrides"]["foreignPolicyInferior"] = [
@@ -437,7 +353,7 @@ function spyTrainingFixture(settings) {
 // --- 7. the War reset restores defaults and leaves unrelated overrides alone --------------------
 
 {
-  const page = createPage();
+  const page = createCapturedSettingsPage();
   edit(page, "foreignMinAdvantage", 12);
   edit(page, "foreignPacifist", true);
   edit(page, "foreignPolicySuperior", "Incite");

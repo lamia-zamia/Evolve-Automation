@@ -11713,7 +11713,14 @@
     E: 1e18,
     Z: 1e21,
     Y: 1e24
-  };
+  }, universes = [
+    "standard",
+    "heavy",
+    "antimatter",
+    "evil",
+    "micro",
+    "magic"
+  ];
 
   // src/domain/economy/production/graphene.ts
   function planGraphene(input) {
@@ -26022,6 +26029,9 @@
     return Object.freeze({
       reader,
       executor,
+      clearStoredTarget: () => {
+        storedTarget = void 0;
+      },
       runUniverseSelection: () => {
         let race = readRace2(dependencies.rootState), targetName = capturedEvolutionReadSettings(dependencies.readSettings)?.userUniverseTargetName;
         if (typeof targetName != "string") return;
@@ -30413,6 +30423,637 @@ If script is allowed to reassign non-empty storage it might waste time producing
     });
   }
 
+  // src/domain/progression/evolution/evolution-settings.ts
+  function createEvolutionSettingsReadModel(input) {
+    let freezeOptions2 = (options) => Object.freeze(options.map((option) => Object.freeze({ ...option })));
+    return Object.freeze({
+      sectionId: "evolution",
+      sectionName: "Evolution",
+      controls: Object.freeze(
+        input.controls.map(
+          (control) => Object.freeze(
+            "options" in control ? { ...control, options: freezeOptions2(control.options) } : { ...control }
+          )
+        )
+      ),
+      prestigeOptions: freezeOptions2(input.prestigeOptions),
+      queue: Object.freeze(input.queue.map((item) => Object.freeze({ ...item }))),
+      raceWarning: input.raceWarning === void 0 ? void 0 : Object.freeze({ ...input.raceWarning })
+    });
+  }
+
+  // src/adapters/browser/evolution-settings.ts
+  function createEvolutionSettingsBrowserAdapter({
+    getDocument,
+    getJQuery,
+    reader,
+    intents,
+    getActions
+  }) {
+    function renderControl(node, control, actions) {
+      if (control.kind === "header")
+        return void actions.addStandardHeading(node, control.label);
+      if (control.kind === "toggle")
+        return void actions.addSettingsToggle(
+          node,
+          control.settingName,
+          control.label,
+          control.hint
+        );
+      actions.addSettingsSelect(
+        node,
+        control.settingName,
+        control.label,
+        control.hint,
+        control.options
+      ), control.settingName === "userEvolutionTarget" && getJQuery()(`.script_${control.settingName}`).find("select").on(
+        "change",
+        () => intents.handle({
+          type: "set-evolution-target",
+          value: String(
+            getJQuery()(`.script_${control.settingName}`).find("select").val()
+          )
+        })
+      );
+    }
+    function buildEvolutionSettings() {
+      let model = reader.read();
+      getActions().buildSettingsSection(
+        model.sectionId,
+        model.sectionName,
+        () => intents.handle({ type: "reset-evolution-settings" }),
+        updateEvolutionSettingsContent
+      );
+    }
+    function updateEvolutionSettingsContent() {
+      let model = reader.read(), actions = getActions();
+      renderSettingsSectionContent(
+        {
+          scrollDocument: getDocument(),
+          jquery: getJQuery(),
+          sectionId: model.sectionId
+        },
+        (node) => {
+          renderEvolutionContent(node, model, actions);
+        }
+      );
+    }
+    function renderEvolutionContent(node, model, actions) {
+      for (let control of model.controls) renderControl(node, control, actions);
+      node.append('<div><span id="script_race_warning"></span></div>'), model.raceWarning && getJQuery()("#script_race_warning").html(
+        `<span class="${model.raceWarning.className}">${model.raceWarning.text}</span>`
+      ), node.append(
+        '<div style="margin-top:5px"><label for="script_evolution_prestige">Prestige for new evolutions:</label><select id="script_evolution_prestige" style="height:18px;width:150px;float:right"></select></div><div style="margin-top:10px"><button id="script_evlution_add" class="button">Add New Evolution</button></div>'
+      );
+      let prestige = getJQuery()("#script_evolution_prestige");
+      prestige.append(
+        model.prestigeOptions.map(
+          (option) => `<option value="${option.val}">${option.label}</option>`
+        ).join("")
+      ), getJQuery()("#script_evlution_add").on(
+        "click",
+        () => intents.handle({
+          type: "add-evolution",
+          prestigeType: String(prestige.val())
+        })
+      ), node.append(
+        '<table style="width:100%"><tbody id="script_evolutionQueueTable"></tbody></table>'
+      );
+      let body = getJQuery()("#script_evolutionQueueTable");
+      body.append(
+        model.queue.map(
+          (item) => `<tr id="script_evolution_${item.index}" value="${item.index}" class="script-draggable"><td><span class="${item.raceClass}">${item.raceLabel}</span> <span class="${item.prestigeClass}">${item.prestigeLabel}</span> ${item.starLevel - 1}*</td><td><textarea class="textarea">${item.json}</textarea></td><td><a class="button is-dark is-small"><span>X</span></a></td></tr>`
+        ).join("")
+      );
+      for (let item of model.queue) {
+        let row = getJQuery()(`#script_evolution_${item.index}`);
+        row.find(".button").on(
+          "click",
+          () => intents.handle({ type: "remove-evolution", index: item.index })
+        ), row.find(".textarea").on(
+          "change",
+          () => intents.handle({
+            type: "edit-evolution",
+            index: item.index,
+            json: String(row.find(".textarea").val())
+          })
+        );
+      }
+      actions.tableSorter.attach(body[0], {
+        items: "tr:not(.unsortable)",
+        attribute: "value",
+        onOrderChanged: (ids) => {
+          intents.handle({
+            type: "reorder-evolutions",
+            indexes: ids.map((id) => Number(id))
+          });
+        }
+      });
+    }
+    return Object.freeze({
+      buildEvolutionSettings,
+      updateEvolutionSettingsContent
+    });
+  }
+
+  // src/domain/progression/prestige/prestige-types.ts
+  var PRESTIGE_TYPES = Object.freeze([
+    { val: "none", label: "None", hint: "Endless game" },
+    {
+      val: "mad",
+      short_label: "MAD",
+      label: "Mutual Assured Destruction",
+      hint: "MAD prestige once MAD has been researched and all soldiers are home"
+    },
+    {
+      val: "bioseed",
+      label: "Bioseed",
+      hint: "Launches the bioseeder ship to perform prestige when required probes have been constructed"
+    },
+    {
+      val: "cataclysm",
+      label: "Cataclysm",
+      hint: "Perform cataclysm reset by researching Dial It To 11 once available"
+    },
+    {
+      val: "whitehole",
+      label: "Whitehole",
+      hint: "Infuses the blackhole with exotic materials to perform prestige"
+    },
+    {
+      val: "vacuum",
+      short_label: "Vacuum",
+      label: "Vacuum Collapse",
+      hint: "Build Mana Syphons until the end"
+    },
+    {
+      val: "apocalypse",
+      label: "AI Apocalypse",
+      hint: "Perform AI Apocalypse reset by researching Protocol 66 once available"
+    },
+    {
+      val: "ascension",
+      label: "Ascension",
+      hint: "Allows research of Incorporeal Existence and Ascension. Ascension Machine is managed by autoPower. Use Custom race handling in Prestige settings to reuse, pause for editing, or automatically import a race at the post-reset lab."
+    },
+    {
+      val: "demonic",
+      short_label: "DI",
+      label: "Demonic Infusion",
+      hint: "Sacrifice your entire civilization to absorb the essence of a greater demon lord"
+    },
+    {
+      val: "terraform",
+      label: "Terraform",
+      hint: "Create new planet by building and powering Terraformer. Atmosphere Terraformer is managed by autoPower. Disable autoPrestige if you want to change custom planet. Otherwise current one will be used , or default one if there's no current. "
+    },
+    {
+      val: "matrix",
+      label: "Matrix",
+      hint: "Build a computer simulation and trap your entire civilization in it"
+    },
+    {
+      val: "retire",
+      label: "Retirement",
+      hint: "Retire and enjoy the easy life."
+    },
+    { val: "eden", label: "Eden", hint: "Build Garden Of Eden." },
+    { val: "apotheosis", label: "Apotheosis", hint: "Kill the God." }
+  ]);
+
+  // src/domain/progression/prestige/achievement-guards.ts
+  function calculateAchievementStarLevel(context) {
+    return 1 + Number(context.challengePlasmid) + Number(context.challengeTrade) + Number(context.challengeCraft) + Number(context.challengeCrispr);
+  }
+  function isAchievementGuardActive(input) {
+    if (!input.enabled || input.earnedStar >= input.targetStar) return !1;
+    switch (input.guard) {
+      case "guardPacifist":
+        return input.attacks === 0;
+      case "guardDreaded":
+        return input.prestigeType === "ascension" && input.dreadnoughts === 0;
+      case "guardCultOfPersonality":
+        return !isAchievementGuardActive(input.pacifist);
+      case "guardAnarchist":
+        return input.prestigeType === "mad" && input.government === "anarchy";
+      case "guardEnergetic":
+        return input.prestigeType === "ascension" && input.thermalCollectors === 0;
+      case "guardRedDead":
+        return (input.prestigeType === "whitehole" || input.prestigeType === "vacuum") && input.redSpaceports === 0;
+      case "guardSecondEvolution":
+        return input.gods === input.species;
+    }
+  }
+
+  // src/adapters/evolve/progression/prestige/achievement-guards.ts
+  function levelUnavailable(reason, field) {
+    return Object.freeze(
+      field === void 0 ? { status: "unavailable", reason } : { status: "unavailable", reason, field }
+    );
+  }
+  function readAchievementStarLevelContext(rawContext) {
+    if (!isNonArrayRecord(rawContext))
+      return levelUnavailable("invalid-settings");
+    let mapping = {
+      challengePlasmid: "challenge_plasmid",
+      challengeTrade: "challenge_trade",
+      challengeCraft: "challenge_craft",
+      challengeCrispr: "challenge_crispr"
+    }, context = {
+      challengePlasmid: !1,
+      challengeTrade: !1,
+      challengeCraft: !1,
+      challengeCrispr: !1
+    };
+    for (let [target, source] of Object.entries(mapping)) {
+      let value = rawContext[source];
+      if (value !== void 0 && typeof value != "boolean")
+        return levelUnavailable("invalid-settings", source);
+      context[target] = value === !0;
+    }
+    return Object.freeze({ status: "ready", context: Object.freeze(context) });
+  }
+
+  // src/adapters/evolve/progression/evolution/captured-evolution-catalog.ts
+  var CAPTURED_EVOLUTION_RACES = Object.freeze([
+    { id: "human", label: "Human", genus: "humanoid" },
+    { id: "elven", label: "Elf", genus: "humanoid" },
+    { id: "orc", label: "Orc", genus: "humanoid" },
+    { id: "cath", label: "Cath", genus: "carnivore" },
+    { id: "wolven", label: "Wolven", genus: "carnivore" },
+    { id: "vulpine", label: "Vulpine", genus: "carnivore" },
+    { id: "centaur", label: "Centaur", genus: "herbivore" },
+    { id: "rhinotaur", label: "Rhinotaur", genus: "herbivore" },
+    { id: "capybara", label: "Capybara", genus: "herbivore" },
+    { id: "porkenari", label: "Porkenari", genus: "omnivore" },
+    { id: "hedgeoken", label: "Hedgeoken", genus: "omnivore" },
+    { id: "kobold", label: "Kobold", genus: "small" },
+    { id: "goblin", label: "Goblin", genus: "small" },
+    { id: "gnome", label: "Gnome", genus: "small" },
+    { id: "ogre", label: "Ogre", genus: "giant" },
+    { id: "cyclops", label: "Cyclops", genus: "giant" },
+    { id: "troll", label: "Troll", genus: "giant" },
+    { id: "tortoisan", label: "Tortoisan", genus: "reptilian" },
+    { id: "gecko", label: "Gecko", genus: "reptilian" },
+    { id: "slitheryn", label: "Slitheryn", genus: "reptilian" },
+    { id: "arraak", label: "Arraak", genus: "avian" },
+    { id: "pterodacti", label: "Pterodacti", genus: "avian" },
+    { id: "dracnid", label: "Dracnid", genus: "avian" },
+    { id: "entish", label: "Ent", genus: "plant" },
+    { id: "cacti", label: "Cacti", genus: "plant" },
+    { id: "pinguicula", label: "Pinguicula", genus: "plant" },
+    { id: "sporgar", label: "Sporgar", genus: "fungi" },
+    { id: "shroomi", label: "Shroomi", genus: "fungi" },
+    { id: "moldling", label: "Moldling", genus: "fungi" },
+    { id: "mantis", label: "Mantis", genus: "insectoid" },
+    { id: "scorpid", label: "Scorpid", genus: "insectoid" },
+    { id: "antid", label: "Antid", genus: "insectoid" },
+    { id: "sharkin", label: "Sharkin", genus: "aquatic" },
+    { id: "octigoran", label: "Octigoran", genus: "aquatic" },
+    { id: "dryad", label: "Dryad", genus: "fey" },
+    { id: "satyr", label: "Satyr", genus: "fey" },
+    { id: "phoenix", label: "Phoenix", genus: "heat" },
+    { id: "salamander", label: "Salamander", genus: "heat" },
+    { id: "yeti", label: "Yeti", genus: "polar" },
+    { id: "wendigo", label: "Wendigo", genus: "polar" },
+    { id: "tuskin", label: "Tuskin", genus: "sand" },
+    { id: "kamel", label: "Kamel", genus: "sand" },
+    { id: "balorg", label: "Balorg", genus: "demonic" },
+    { id: "imp", label: "Imp", genus: "demonic" },
+    { id: "seraph", label: "Seraph", genus: "angelic" },
+    { id: "unicorn", label: "Unicorn", genus: "angelic" },
+    { id: "synth", label: "Synth", genus: "synthetic" },
+    { id: "nano", label: "Nano", genus: "synthetic" },
+    { id: "ghast", label: "Ghast", genus: "eldritch" },
+    { id: "shoggoth", label: "Shoggoth", genus: "eldritch" },
+    { id: "raptors", label: "Raptors", genus: "primordial" },
+    { id: "rexicus", label: "Rexicus", genus: "primordial" },
+    { id: "dwarf", label: "Dwarf", genus: "hybrid" },
+    { id: "raccoon", label: "Racconar", genus: "hybrid" },
+    { id: "lichen", label: "Lichen", genus: "hybrid" },
+    { id: "wyvern", label: "Wyvern", genus: "hybrid" },
+    { id: "beholder", label: "Eye-Spector", genus: "hybrid" },
+    { id: "djinn", label: "Djinn", genus: "hybrid" },
+    { id: "narwhal", label: "Narwhalus", genus: "hybrid" },
+    { id: "bombardier", label: "Bombardier", genus: "hybrid" },
+    { id: "nephilim", label: "Nephilim", genus: "hybrid" },
+    { id: "mammuth", label: "Mammuth", genus: "hybrid" },
+    { id: "hellspawn", label: "Hellspawn", genus: "demonic" },
+    { id: "junker", label: "Valdi", genus: "variable" },
+    { id: "sludge", label: "Sludge", genus: "variable" },
+    { id: "ultra_sludge", label: "Ultra Sludge", genus: "variable" }
+  ]), CAPTURED_EVOLUTION_UNIVERSE_LABELS = Object.freeze(
+    Object.fromEntries(
+      [
+        {
+          id: "standard",
+          label: "Standard",
+          hint: "A standard universe with normal laws of physics"
+        },
+        {
+          id: "heavy",
+          label: "Heavy Gravity",
+          hint: "The force of gravity in this universe is much stronger than normal"
+        },
+        {
+          id: "antimatter",
+          label: "Antimatter",
+          hint: "This universe consists primarily of antimatter"
+        },
+        {
+          id: "evil",
+          label: "Evil",
+          hint: "Everything in this universe is evil"
+        },
+        {
+          id: "micro",
+          label: "Micro",
+          hint: "Everything in this universe is small"
+        },
+        { id: "magic", label: "Magic", hint: "Magic is real in this universe" }
+      ].map((entry) => [entry.id, Object.freeze(entry)])
+    )
+  ), CAPTURED_EVOLUTION_CHALLENGE_LABELS = Object.freeze(
+    Object.fromEntries(
+      [
+        {
+          id: "plasmid",
+          label: "No Starting Plasmids | Weak Mastery | Weak Genes",
+          hint: "Starting Plasmids have no effect.&#xA;Mastery is much weaker than normal.&#xA;Mastery is reduced to %0, and plasmid and anti-plasmid production are reduced to %1 value. Plasmid and anti-plasmid storage bonus reduced to %2. Phage storage bonus reduced to %3."
+        },
+        {
+          id: "crispr",
+          label: "Junk Gene | Bad Genes",
+          hint: "Gain a random negative mutation. CRISPR cost creep discounts function at only 20%.&#xA;Gain %0 random empowered negative trait and %1 weak negative traits."
+        },
+        {
+          id: "trade",
+          label: "No Free Trade",
+          hint: "No marketplace trading. (Trade routes are still enabled.)"
+        },
+        {
+          id: "craft",
+          label: "No Manual Crafting",
+          hint: "No manual resource crafting."
+        },
+        {
+          id: "joyless",
+          label: "Joyless",
+          hint: "There will be no joy in your life: entertainers and broadcasting are disabled. Construct a Biodome to earn the achievement and remove the penalty."
+        },
+        {
+          id: "steelen",
+          label: "Steelen",
+          hint: "Your species cannot figure out how to smelt Steel. You have to resort to other means to get any of it. Have the mettle to Bioseed with this challenge active and your dedication will be rewarded."
+        },
+        {
+          id: "decay",
+          label: "Decay",
+          hint: "Resources decay at a rate determined by how much of it you are storing. Larger stores decay quicker. Destroy this universe to end the cycle of decay."
+        },
+        {
+          id: "emfield",
+          label: "EM Field",
+          hint: "Energy costs are higher and technology may fail you. You must ascend to win."
+        },
+        {
+          id: "inflation",
+          label: "Inflation",
+          hint: "Inflation is ruining your economy. The more you build, the more worthless your money becomes. Constructing anything devalues money, causing all money costs to increase."
+        },
+        {
+          id: "sludge",
+          label: "Failed Experiment",
+          hint: "You will be stacked with terrible junk traits. You suffer for no reason."
+        },
+        {
+          id: "ultra_sludge",
+          label: "Ultimate Failed Experiment",
+          hint: "You will be stacked with terrible junk traits. You suffer because the community wanted it."
+        },
+        {
+          id: "orbit_decay",
+          label: "Orbital Decay",
+          hint: "Your homeworld's moon is in a decaying orbit; it will impact the planet in %0 days."
+        },
+        {
+          id: "gravity_well",
+          label: "Gravity Well | Witch Hunter | Warlord",
+          hint: "Gravity is very strong, so leaving the planet will be very difficult. Find a new one that doesn't drag you down.&#xA;Magic effects are stronger, but using magic draws unwanted attention. Your goal is to perform the ultimate forbidden ritual.&#xA;Prove you are the most ruthless to ever exist."
+        },
+        {
+          id: "junker",
+          label: "Genetic Dead End",
+          hint: "This forces on all four challenge genes. You will be stacked with horrible junk traits. Reach MAD for a special perk."
+        },
+        {
+          id: "cataclysm",
+          label: "Cataclysm",
+          hint: "A massive earthquake has literally shaken your planet apart. Start with a space colony but no homeworld. Escape to a new world to win (Bioseed)."
+        },
+        {
+          id: "banana",
+          label: "Banana Republic",
+          hint: "You can only export one type of resource, your economy is bad, and your army is weak. Complete a checklist of objectives; unifying exits the scenario."
+        },
+        {
+          id: "truepath",
+          label: "The True Path",
+          hint: "Use an alternate progression path."
+        },
+        {
+          id: "lone_survivor",
+          label: "Lone Survivor",
+          hint: "You must survive and thrive alone on an alien world."
+        },
+        {
+          id: "fasting",
+          label: "Fasting",
+          hint: "Food production is disabled. Learn to survive without sustenance."
+        }
+      ].map((entry) => [entry.id, Object.freeze(entry)])
+    )
+  );
+
+  // src/adapters/evolve/progression/evolution/captured-evolution-settings.ts
+  var AUTO_TARGET_ID = "auto", universeOptions = Object.freeze([
+    Object.freeze({
+      val: "none",
+      label: "None",
+      hint: "Wait for user selection"
+    }),
+    ...universes.map((id) => {
+      let entry = CAPTURED_EVOLUTION_UNIVERSE_LABELS[id];
+      return Object.freeze({
+        val: id,
+        label: entry?.label ?? id,
+        hint: entry?.hint ?? ""
+      });
+    })
+  ]), planetOptions = Object.freeze([
+    Object.freeze({
+      val: "none",
+      label: "None",
+      hint: "Wait for user selection"
+    }),
+    Object.freeze({
+      val: "habitable",
+      label: "Most habitable",
+      hint: "Picks most habitable planet, based on biome and trait"
+    }),
+    Object.freeze({
+      val: "achieve",
+      label: "Most achievements",
+      hint: "Picks planet with most unearned achievements."
+    }),
+    Object.freeze({
+      val: "weighting",
+      label: "Highest weighting",
+      hint: "Picks planet with highest weighting."
+    })
+  ]), raceOptions = Object.freeze([
+    Object.freeze({
+      val: AUTO_TARGET_ID,
+      label: "Auto Achievements",
+      hint: "Picks the race giving most achievements upon completing the run. The captured runtime does not rank races yet, so this currently waits for an explicit race instead of choosing one."
+    }),
+    ...CAPTURED_EVOLUTION_RACES.map(
+      (race) => Object.freeze({
+        val: race.id,
+        label: race.label,
+        hint: race.genus === "variable" ? "Genus is chosen at the gene lab" : `Genus: ${race.genus}`
+      })
+    )
+  ]), prestigeOptions = Object.freeze(
+    PRESTIGE_TYPES.map(
+      (type) => Object.freeze({ val: type.val, label: type.label, hint: type.hint })
+    )
+  ), challengeControls = Object.freeze(
+    challenges.flatMap((group) => {
+      let id = group[0]?.id;
+      if (id === void 0) return [];
+      let labels = CAPTURED_EVOLUTION_CHALLENGE_LABELS[id];
+      return [
+        Object.freeze({
+          kind: "toggle",
+          settingName: `challenge_${id}`,
+          label: labels?.label ?? id,
+          hint: labels?.hint ?? ""
+        })
+      ];
+    })
+  ), evolutionControls = Object.freeze([
+    Object.freeze({
+      kind: "select",
+      settingName: "userUniverseTargetName",
+      label: "Target Universe",
+      hint: "Chosen universe will be automatically selected after appropriate reset",
+      options: universeOptions
+    }),
+    Object.freeze({
+      kind: "select",
+      settingName: "userPlanetTargetName",
+      label: "Target Planet",
+      hint: "Chosen planet will be automatically selected after appropriate reset. Warning! Script ignores changes made by G.E.C.K., you need to select planet manually after using it.",
+      options: planetOptions
+    }),
+    Object.freeze({
+      kind: "select",
+      settingName: "userEvolutionTarget",
+      label: "Target Race",
+      hint: "Chosen race will be automatically selected during next evolution",
+      options: raceOptions
+    }),
+    ...challengeControls,
+    Object.freeze({ kind: "header", label: "Evolution Queue" }),
+    Object.freeze({
+      kind: "toggle",
+      settingName: "evolutionQueueEnabled",
+      label: "Queue Enabled",
+      hint: "When enabled script will evolve with queued settings, from top to bottom."
+    }),
+    Object.freeze({
+      kind: "toggle",
+      settingName: "evolutionQueueRepeat",
+      label: "Repeat Queue",
+      hint: "When enabled applied evolution targets will be moved to the end of queue, instead of being removed"
+    })
+  ]), raceLabelById = new Map(
+    CAPTURED_EVOLUTION_RACES.map((race) => [race.id, race.label])
+  );
+  function capturedQueueRaceName(target) {
+    return target === AUTO_TARGET_ID ? { label: "Auto Achievements", className: "has-text-advanced" } : typeof target != "string" || !raceLabelById.has(target) ? { label: "Unrecognized race!", className: "has-text-danger" } : { label: raceLabelById.get(target), className: "has-text-info" };
+  }
+  function capturedQueueStarLevel(merged) {
+    let result = readAchievementStarLevelContext(merged);
+    return result.status === "ready" ? calculateAchievementStarLevel(result.context) : 1;
+  }
+  function createCapturedEvolutionSettingsAdapter({
+    getSettingsRaw,
+    clearStoredTarget
+  }) {
+    let raw = () => {
+      let value = getSettingsRaw();
+      return isRecord(value) ? value : {};
+    }, queueOf = () => {
+      let record = raw(), queue = record.evolutionQueue;
+      if (Array.isArray(queue)) return queue;
+      let created = [];
+      return record.evolutionQueue = created, created;
+    };
+    return Object.freeze({
+      readEvolutionSettingsReadModel() {
+        let settings = raw(), queue = queueOf().map((entry, index) => {
+          let merged = { ...isRecord(entry) ? entry : {} };
+          for (let name of evolutionSettingsToStore)
+            merged[name] = merged[name] ?? settings[name];
+          let race = capturedQueueRaceName(merged.userEvolutionTarget), prestige = prestigeOptions.find(
+            (option) => option.val === merged.prestigeType
+          );
+          return {
+            index,
+            raceLabel: race.label,
+            raceClass: race.className,
+            prestigeLabel: merged.prestigeType === "none" ? "" : prestige?.label ?? "Unrecognized prestige!",
+            prestigeClass: prestige === void 0 && merged.prestigeType !== "none" ? "has-text-danger" : "has-text-info",
+            starLevel: capturedQueueStarLevel(merged),
+            json: JSON.stringify(merged, null, 4)
+          };
+        });
+        return createEvolutionSettingsReadModel({
+          controls: evolutionControls,
+          prestigeOptions,
+          queue
+        });
+      },
+      setTarget(value) {
+        raw().userEvolutionTarget = value, clearStoredTarget?.();
+      },
+      addCurrent(prestigeType) {
+        let settings = raw(), queued = {};
+        for (let name of evolutionSettingsToStore)
+          queued[name] = settings[name];
+        prestigeType !== AUTO_TARGET_ID && (queued.prestigeType = prestigeType), queueOf().push(queued);
+      },
+      remove(index) {
+        queueOf().splice(index, 1);
+      },
+      edit(index, json) {
+        let value;
+        try {
+          value = JSON.parse(json);
+        } catch {
+          return;
+        }
+        isRecord(value) && (queueOf()[index] = value);
+      },
+      reorder(indexes) {
+        let queue = queueOf();
+        raw().evolutionQueue = indexes.map((index) => queue[index]);
+      }
+    });
+  }
+
   // src/domain/economy/resources/weighting-settings.ts
   var weightingSettingsReadModel = Object.freeze({
     sectionId: "weighting",
@@ -33451,6 +34092,38 @@ If script is allowed to reassign non-empty storage it might waste time producing
     });
   }
 
+  // src/application/evolution-settings.ts
+  function createEvolutionSettingsIntentHandler({
+    writer,
+    render,
+    effects
+  }) {
+    return Object.freeze({
+      handle(intent) {
+        switch (intent.type) {
+          case "reset-evolution-settings":
+            writer.resetToDefaults(), writer.persist(), render(), effects.resetCheckbox();
+            return;
+          case "set-evolution-target":
+            writer.setTarget(intent.value), writer.persist(), render();
+            return;
+          case "add-evolution":
+            writer.addCurrent(intent.prestigeType), writer.persist(), render();
+            return;
+          case "remove-evolution":
+            writer.remove(intent.index), writer.persist(), render();
+            return;
+          case "edit-evolution":
+            writer.edit(intent.index, intent.json), writer.persist(), render();
+            return;
+          case "reorder-evolutions":
+            writer.reorder(intent.indexes), writer.persist();
+            return;
+        }
+      }
+    });
+  }
+
   // src/application/weighting-settings.ts
   function createWeightingSettingsIntentHandler({
     writer,
@@ -34517,6 +35190,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
     settings,
     settingsLifecycle,
     refreshEffectiveSettings,
+    evolutionSettings: capturedEvolutionSettings,
     craftToggles: capturedCraftToggles,
     buildingSettings: capturedBuildingSettings,
     projectSettings: capturedProjectSettings,
@@ -34662,8 +35336,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
         buildGovernmentSettings: () => {
         },
         buildAuthoritySettings: () => authority?.buildAuthoritySettings(),
-        buildEvolutionSettings: () => {
-        },
+        buildEvolutionSettings: () => evolution?.buildEvolutionSettings(),
         buildPlanetSettings: () => {
         },
         buildTraitSettings: () => trait?.buildTraitSettings(),
@@ -34930,6 +35603,33 @@ If script is allowed to reassign non-empty storage it might waste time producing
             );
           }
         })
+      });
+      let capturedEvolutionAdapter = createCapturedEvolutionSettingsAdapter({
+        getSettingsRaw: settings.readRaw,
+        ...capturedEvolutionSettings === void 0 ? {} : { clearStoredTarget: capturedEvolutionSettings.clearStoredTarget }
+      }), evolution, evolutionIntent;
+      evolution = createEvolutionSettingsBrowserAdapter({
+        getDocument: () => documentForUi,
+        getJQuery: () => getJQuery(),
+        reader: {
+          read: capturedEvolutionAdapter.readEvolutionSettingsReadModel
+        },
+        intents: { handle: (intent) => evolutionIntent.handle(intent) },
+        getActions: () => panelActions
+      }), evolutionIntent = createEvolutionSettingsIntentHandler({
+        writer: {
+          resetToDefaults: resetSection("evolution"),
+          setTarget: capturedEvolutionAdapter.setTarget,
+          addCurrent: capturedEvolutionAdapter.addCurrent,
+          remove: capturedEvolutionAdapter.remove,
+          edit: capturedEvolutionAdapter.edit,
+          reorder: capturedEvolutionAdapter.reorder,
+          persist: persistSettings
+        },
+        render: () => evolution?.updateEvolutionSettingsContent(),
+        effects: {
+          resetCheckbox: () => controls2.resetCheckbox("autoEvolution")
+        }
       });
       let war, warIntent = createWarSettingsIntentHandler({
         writer: {
@@ -35426,6 +36126,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
         stateLog,
         authority,
         hell,
+        evolution,
         war,
         weighting,
         job,
@@ -35469,7 +36170,7 @@ Only continue if you trust the source. Injected code:
       let ui = ensureSettingsUi(dom);
       ui.shell.buildImportExport(), dom("#script_settings").length === 0 && dom(".settings").append(
         '<div id="script_settings" style="margin-top: 30px;"></div>'
-      ), dom("#script_generalSettings").length === 0 && (ui.general.buildGeneralSettings(), ui.interface.buildInterfaceSettings(), ui.stateLog.buildStateLogSettings(), ui.achievementGuard.buildAchievementGuardSettings(), ui.challengeHelper.buildChallengeHelperSettings(), ui.authority.buildAuthoritySettings(), ui.hell.buildHellSettings(dom("#script_settings"), ""), ui.war.buildWarSettings(
+      ), dom("#script_generalSettings").length === 0 && (ui.general.buildGeneralSettings(), ui.interface.buildInterfaceSettings(), ui.stateLog.buildStateLogSettings(), ui.achievementGuard.buildAchievementGuardSettings(), ui.challengeHelper.buildChallengeHelperSettings(), ui.authority.buildAuthoritySettings(), ui.evolution.buildEvolutionSettings(), ui.hell.buildHellSettings(dom("#script_settings"), ""), ui.war.buildWarSettings(
         dom("#script_settings"),
         ""
       ), ui.weighting.buildWeightingSettings(), capturedJobCatalogReader?.() !== void 0 && ui.job.buildJobSettings(), ui.building?.buildBuildingSettings(), ui.project?.buildProjectSettings(), ui.storage?.buildStorageSettings(), ui.market?.buildMarketSettings(), ui.ejector?.buildEjectorSettings(), ui.magic?.buildMagicSettings(), ui.production?.buildProductionSettings(), ui.trait?.buildTraitSettings());
@@ -36307,30 +37008,6 @@ Only continue if you trust the source. Injected code:
     if (input.foreignStates.length !== 3) return null;
     let worldPossible = input.guardWorldDomination && !input.pacifistGuardActive && !input.worldDominationUnlocked && input.foreignStates.every((state) => !state.annexed && !state.purchased), syndicatePossible = input.guardSyndicate && !input.syndicateUnlocked && input.foreignStates.every((state) => !state.annexed && !state.occupied);
     return !worldPossible && !syndicatePossible ? null : worldPossible && input.foreignStates.some((state) => state.occupied) ? "world-domination" : syndicatePossible && input.foreignStates.some((state) => state.purchased) ? "syndicate" : worldPossible ? "world-domination" : "syndicate";
-  }
-
-  // src/domain/progression/prestige/achievement-guards.ts
-  function calculateAchievementStarLevel(context) {
-    return 1 + Number(context.challengePlasmid) + Number(context.challengeTrade) + Number(context.challengeCraft) + Number(context.challengeCrispr);
-  }
-  function isAchievementGuardActive(input) {
-    if (!input.enabled || input.earnedStar >= input.targetStar) return !1;
-    switch (input.guard) {
-      case "guardPacifist":
-        return input.attacks === 0;
-      case "guardDreaded":
-        return input.prestigeType === "ascension" && input.dreadnoughts === 0;
-      case "guardCultOfPersonality":
-        return !isAchievementGuardActive(input.pacifist);
-      case "guardAnarchist":
-        return input.prestigeType === "mad" && input.government === "anarchy";
-      case "guardEnergetic":
-        return input.prestigeType === "ascension" && input.thermalCollectors === 0;
-      case "guardRedDead":
-        return (input.prestigeType === "whitehole" || input.prestigeType === "vacuum") && input.redSpaceports === 0;
-      case "guardSecondEvolution":
-        return input.gods === input.species;
-    }
   }
 
   // src/adapters/evolve/combat/captured-foreign-state.ts
@@ -38295,6 +38972,10 @@ Only continue if you trust the source. Injected code:
       },
       fleetSettings: {
         controls: pageCapture2.controls
+      },
+      // Called only from a settings-panel event, long after the constructor below has run.
+      evolutionSettings: {
+        clearStoredTarget: () => capturedEvolution.clearStoredTarget()
       },
       traitSettings: {
         rootState: pageCapture2.rootState
