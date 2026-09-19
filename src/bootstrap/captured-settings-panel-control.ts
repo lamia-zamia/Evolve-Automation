@@ -103,6 +103,17 @@ import {
 } from "../adapters/browser/weighting-settings.ts";
 import { getWeightingSettingsReadModel } from "../domain/economy/resources/weighting-settings.ts";
 import { createJobSettingsBrowserAdapter } from "../adapters/browser/job-settings.ts";
+import {
+  createTriggerSettingsBrowserAdapter,
+  type TriggerSettingsBrowserActions,
+} from "../adapters/browser/trigger-settings.ts";
+import { createTriggerSettingsIntentHandler } from "../application/trigger-settings.ts";
+import { createCapturedTriggerSettingsAdapter } from "../adapters/evolve/progression/build/captured-trigger-settings.ts";
+import type { TriggerValue } from "../domain/progression/build/trigger-settings.ts";
+import type {
+  SettingsInputCallback,
+  SettingsInputOptions,
+} from "../ui/settings-inputs.ts";
 import { createTableSorter } from "../adapters/browser/table-sorter.ts";
 import { createCapturedOverrideEditorCatalog } from "./captured-override-editor-catalog.ts";
 import { createJobSettingsReadModel } from "../domain/civic/job-settings.ts";
@@ -308,6 +319,13 @@ type ProductionSettingsDocument = ReturnType<
 >;
 type ProductionSettingsJQuery = ReturnType<
   Parameters<typeof createProductionSettingsBrowserAdapter>[0]["getJQuery"]
+>;
+type TriggerSettings = ReturnType<typeof createTriggerSettingsBrowserAdapter>;
+type TriggerSettingsDocument = ReturnType<
+  Parameters<typeof createTriggerSettingsBrowserAdapter>[0]["getDocument"]
+>;
+type TriggerSettingsJQuery = ReturnType<
+  Parameters<typeof createTriggerSettingsBrowserAdapter>[0]["getJQuery"]
 >;
 
 export interface CapturedSettingsPanelDependencies {
@@ -736,6 +754,7 @@ export function createCapturedSettingsPanel({
     let supplyToggles: SupplyToggles | undefined;
     let magic: MagicSettings | undefined;
     let production: ProductionSettings | undefined;
+    let trigger: TriggerSettings | undefined;
     const shell = createSettingsShell({
       $: getJQuery() as unknown as Parameters<
         typeof createSettingsShell
@@ -762,7 +781,7 @@ export function createCapturedSettingsPanel({
       buildEvolutionSettings: () => {},
       buildPlanetSettings: () => {},
       buildTraitSettings: () => {},
-      buildTriggerSettings: () => {},
+      buildTriggerSettings: () => trigger?.buildTriggerSettings(),
       buildResearchSettings: () => {},
       buildWarSettings: () => {},
       buildHellSettings: (parentNode, secondaryPrefix) =>
@@ -903,6 +922,62 @@ export function createCapturedSettingsPanel({
           hint,
         ),
     };
+    // Trigger rows and catalogs are settings-record data plus static captured
+    // operand copy, so this section needs no game draw and is always built.
+    const capturedTriggerAdapter = createCapturedTriggerSettingsAdapter({
+      getSettingsRaw: settings.readRaw,
+      promptEval: (message, value) => {
+        const prompt = readProperty(capturedPanelWindow, "prompt");
+        if (typeof prompt === "function")
+          Reflect.apply(prompt, capturedPanelWindow, [message, value]);
+      },
+    });
+    let triggerIntent: ReturnType<typeof createTriggerSettingsIntentHandler>;
+    trigger = createTriggerSettingsBrowserAdapter({
+      getDocument: () => documentForUi as unknown as TriggerSettingsDocument,
+      getJQuery: () => getJQuery() as unknown as TriggerSettingsJQuery,
+      reader: { read: capturedTriggerAdapter.readTriggerSettingsReadModel },
+      intents: { handle: (intent) => triggerIntent.handle(intent) },
+      getActions: () =>
+        ({
+          buildSettingsSection: shell.buildSettingsSection,
+          buildInputNode: (
+            arg: string,
+            options: unknown,
+            value: TriggerValue,
+            onChange: (value: unknown) => void,
+          ) =>
+            controls.buildInputNode(
+              arg,
+              options as SettingsInputOptions,
+              value,
+              onChange as SettingsInputCallback,
+            ),
+          tableSorter,
+        }) as unknown as TriggerSettingsBrowserActions,
+    });
+    triggerIntent = createTriggerSettingsIntentHandler({
+      writer: {
+        resetToDefaults: () => {
+          if (settingsLifecycle !== undefined) {
+            settingsLifecycle.resetSection("trigger");
+          } else {
+            capturedTriggerAdapter.resetToDefaults();
+          }
+        },
+        addDefault: capturedTriggerAdapter.addDefault,
+        update: capturedTriggerAdapter.update,
+        remove: capturedTriggerAdapter.remove,
+        duplicate: capturedTriggerAdapter.duplicate,
+        evalize: capturedTriggerAdapter.evalize,
+        reorder: capturedTriggerAdapter.reorder,
+        persist: persistSettings,
+      },
+      render: () => trigger?.updateTriggerSettingsContent(),
+      effects: {
+        resetCheckbox: () => controls.resetCheckbox("autoTrigger"),
+      },
+    });
     const createSimpleWriter = (
       defaults: Readonly<Record<string, unknown>>,
       section: string,

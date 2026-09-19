@@ -28086,6 +28086,465 @@ If script is allowed to reassign non-empty storage it might waste time producing
     return Object.freeze({ buildJobSettings, updateJobSettingsContent });
   }
 
+  // src/domain/progression/build/trigger-settings.ts
+  function normalizeTriggerValue(value, path) {
+    if (typeof value == "string" || typeof value == "number" || typeof value == "boolean")
+      return value;
+    throw new TypeError(`${path} must be a string, number, or boolean`);
+  }
+  function createTriggerSettingsReadModel(input) {
+    return Object.freeze({
+      sectionId: "trigger",
+      sectionName: "Trigger",
+      rows: Object.freeze(input.rows.map((row) => Object.freeze({ ...row }))),
+      checks: Object.freeze({ ...input.checks }),
+      actionInputs: Object.freeze({ ...input.actionInputs }),
+      booleanResultChecks: Object.freeze([...input.booleanResultChecks])
+    });
+  }
+
+  // src/adapters/browser/trigger-settings.ts
+  function optionsForChecks(model) {
+    return Object.entries(model.checks);
+  }
+  function createTriggerSettingsBrowserAdapter({
+    getDocument,
+    getJQuery,
+    reader,
+    intents,
+    getActions
+  }) {
+    function emitUpdate(seq, field, value) {
+      intents.handle({
+        type: "update-trigger",
+        seq,
+        field,
+        value: normalizeTriggerValue(value, `trigger ${seq}.${field}`)
+      });
+    }
+    function buildInput(node, check, value, onChange) {
+      check !== void 0 && node.append(
+        getActions().buildInputNode(check.arg, check.options, value, onChange)
+      );
+    }
+    function buildRequirementType(row, node, model) {
+      node.empty().off("*");
+      let options = optionsForChecks(model).map(
+        ([id, check]) => `<option value="${id}" title="${check.description}">${id.replace(/([A-Z])/g, " $1").trim()}</option>`
+      ).join(""), select = getJQuery()(
+        `<select style="width: 100%"><option value="chain" title="This condition is met when above trigger is complete, always true for first trigger in list">Chain</option>${options}</select>`
+      );
+      select.val(row.requirementType), node.append(select), select.on(
+        "change",
+        () => emitUpdate(row.seq, "requirementType", select.val())
+      );
+    }
+    function buildRequirementId(row, node, model) {
+      node.empty().off("*"), buildInput(
+        node,
+        model.checks[row.requirementType],
+        row.requirementId,
+        (value) => emitUpdate(row.seq, "requirementId", value)
+      );
+    }
+    function buildRequirementCount(row, node, model) {
+      node.empty().off("*");
+      let check = model.checks[row.requirementType];
+      if (row.requirementType !== "Boolean" && check !== void 0) {
+        let arg = model.booleanResultChecks.includes(row.requirementType) ? "boolean" : "number";
+        buildInput(
+          node,
+          { ...check, arg },
+          row.requirementCount,
+          (value) => emitUpdate(row.seq, "requirementCount", value)
+        );
+      }
+    }
+    function buildActionType(row, node) {
+      node.empty().off("*");
+      let select = getJQuery()(
+        `<select style="width: 100%"><option value="research" title="Research technology">Research</option><option value="build" title="Build buildings up to 'count' amount">Build</option><option value="arpa" title="Build projects up to 'count' amount">A.R.P.A.</option></select>`
+      );
+      select.val(row.actionType), node.append(select), select.on("change", () => emitUpdate(row.seq, "actionType", select.val()));
+    }
+    function buildActionId(row, node, model) {
+      node.empty().off("*");
+      let input = model.actionInputs[row.actionType === "research" ? "research" : row.actionType === "build" ? "building" : row.actionType === "arpa" ? "project" : ""];
+      buildInput(
+        node,
+        input,
+        row.actionId,
+        (value) => emitUpdate(row.seq, "actionId", value)
+      );
+    }
+    function buildActionCount(row, node, model) {
+      if (node.empty().off("*"), row.actionType === "build" || row.actionType === "arpa") {
+        let input = model.actionInputs[row.actionType === "build" ? "building" : "project"];
+        input !== void 0 && buildInput(
+          node,
+          { ...input, arg: "number" },
+          row.actionCount,
+          (value) => emitUpdate(row.seq, "actionCount", value)
+        );
+      }
+    }
+    function buildActions(row, node) {
+      node.empty().off("*");
+      let deleteButton = getJQuery()(
+        '<a class="button is-small" style="width: 26px; height: 26px"><span>X</span></a>'
+      ), duplicateButton = getJQuery()(
+        '<a class="button is-small" style="width: 26px; height: 26px"><span>&#9282;</span></a>'
+      ), evalizeButton = getJQuery()(
+        '<a class="button is-small" style="width: 26px; height: 26px"><span>E</span></a>'
+      );
+      deleteButton.on(
+        "click",
+        () => intents.handle({ type: "remove-trigger", seq: row.seq })
+      ), duplicateButton.on(
+        "click",
+        () => intents.handle({ type: "duplicate-trigger", seq: row.seq })
+      ), evalizeButton.on(
+        "click",
+        () => intents.handle({ type: "evalize-trigger", seq: row.seq })
+      ), node.append(deleteButton).append(duplicateButton).append(evalizeButton);
+    }
+    function buildRow(row, model) {
+      let cells = getJQuery()(`#script_trigger_${row.seq}`).children();
+      buildRequirementType(row, cells.eq(0), model), buildRequirementId(row, cells.eq(1), model), buildRequirementCount(row, cells.eq(2), model), buildActionType(row, cells.eq(3)), buildActionId(row, cells.eq(4), model), buildActionCount(row, cells.eq(5), model), buildActions(row, cells.eq(6));
+    }
+    function buildTriggerSettings() {
+      let model = reader.read();
+      getActions().buildSettingsSection(
+        model.sectionId,
+        model.sectionName,
+        () => intents.handle({ type: "reset-trigger-settings" }),
+        updateTriggerSettingsContent
+      );
+    }
+    function updateTriggerSettingsContent() {
+      let model = reader.read();
+      renderSettingsSectionContent(
+        {
+          scrollDocument: getDocument(),
+          jquery: getJQuery(),
+          sectionId: model.sectionId
+        },
+        (node) => {
+          renderTriggerContent(node, model);
+        }
+      );
+    }
+    function renderTriggerContent(node, model) {
+      node.append(
+        '<div style="margin-top: 10px;"><button id="script_trigger_add" class="button">Add New Trigger</button></div>'
+      ), getJQuery()("#script_trigger_add").on(
+        "click",
+        () => intents.handle({ type: "add-trigger" })
+      ), node.append(
+        '<table style="width:100%"><tr><th class="has-text-warning" colspan="3">Requirement</th><th class="has-text-warning" colspan="5">Action</th></tr><tr><th class="has-text-warning" style="width:16%">Type</th><th class="has-text-warning" style="width:18%">Value</th><th class="has-text-warning" style="width:6%" title="Numerical variables compared to this value using &gt;=, boolean variables - using &gt;=. String variables not currently supported by triggers.">Result</th><th class="has-text-warning" style="width:16%">Type</th><th class="has-text-warning" style="width:18%">Id</th><th class="has-text-warning" style="width:6%">Count</th><th style="width:20%"></th></tr><tbody id="script_triggerTableBody"></tbody></table>'
+      );
+      let body = getJQuery()("#script_triggerTableBody"), rows = model.rows.map(
+        (row) => `<tr id="script_trigger_${row.seq}" value="${row.seq}" class="script-draggable"><td style="width:16%"></td><td style="width:18%"></td><td style="width:6%"></td><td style="width:16%"></td><td style="width:18%"></td><td style="width:6%"></td><td style="width:20%"></td></tr>`
+      ).join("");
+      body.append(getJQuery()(rows));
+      for (let row of model.rows) buildRow(row, model);
+      getActions().tableSorter.attach(body[0], {
+        items: "tr:not(.unsortable)",
+        attribute: "value",
+        onOrderChanged: (ids) => {
+          intents.handle({
+            type: "reorder-triggers",
+            seqs: ids.map((id) => Number(id))
+          });
+        }
+      });
+    }
+    return Object.freeze({ buildTriggerSettings, updateTriggerSettingsContent });
+  }
+
+  // src/application/trigger-settings.ts
+  function createTriggerSettingsIntentHandler({
+    writer,
+    render,
+    effects
+  }) {
+    return Object.freeze({
+      handle(intent) {
+        switch (intent.type) {
+          case "reset-trigger-settings":
+            writer.resetToDefaults(), writer.persist(), render(), effects.resetCheckbox();
+            return;
+          case "add-trigger":
+            writer.addDefault(), writer.persist(), render();
+            return;
+          case "update-trigger":
+            writer.update(intent.seq, intent.field, intent.value), writer.persist(), render();
+            return;
+          case "remove-trigger":
+            writer.remove(intent.seq), writer.persist(), render();
+            return;
+          case "duplicate-trigger":
+            writer.duplicate(intent.seq), writer.persist(), render();
+            return;
+          case "evalize-trigger":
+            writer.evalize(intent.seq);
+            return;
+          case "reorder-triggers":
+            writer.reorder(intent.seqs), writer.persist();
+            return;
+        }
+      }
+    });
+  }
+
+  // src/adapters/evolve/progression/build/captured-trigger-settings-catalog.ts
+  function finitePriority(value, fallback) {
+    return typeof value == "number" && Number.isFinite(value) ? value : fallback;
+  }
+  function readRowValue(value, path) {
+    try {
+      return normalizeTriggerValue(value, path);
+    } catch {
+      return;
+    }
+  }
+  function readStoredRow(raw, index) {
+    if (!isRecord(raw)) return;
+    let requirementType = raw.requirementType, actionType = raw.actionType;
+    if (typeof requirementType != "string" || typeof actionType != "string")
+      return;
+    let requirementId = readRowValue(
+      raw.requirementId,
+      `triggers[${index}].requirementId`
+    ), requirementCount = readRowValue(
+      raw.requirementCount,
+      `triggers[${index}].requirementCount`
+    ), actionId = readRowValue(raw.actionId, `triggers[${index}].actionId`), actionCount = readRowValue(
+      raw.actionCount,
+      `triggers[${index}].actionCount`
+    );
+    if (requirementId === void 0 || requirementCount === void 0 || actionId === void 0 || actionCount === void 0)
+      return;
+    let seq = typeof raw.seq == "number" ? raw.seq : index;
+    return {
+      row: Object.freeze({
+        seq,
+        requirementType,
+        requirementId,
+        requirementCount,
+        actionType,
+        actionId,
+        actionCount
+      }),
+      priority: finitePriority(raw.priority, index),
+      index
+    };
+  }
+  function readCapturedTriggerRows(getSettingsRaw) {
+    let value = getSettingsRaw(), stored = (isRecord(value) ? value : {}).triggers;
+    if (!Array.isArray(stored)) return Object.freeze([]);
+    let ordered = [];
+    return stored.forEach((entry, index) => {
+      let row = readStoredRow(entry, index);
+      row !== void 0 && ordered.push(row);
+    }), ordered.sort(
+      (left, right) => left.priority - right.priority || left.index - right.index
+    ), Object.freeze(ordered.map(({ row }) => row));
+  }
+  var BOOLEAN_CHECK = "Boolean", CAPTURED_CHECK_DESCRIPTIONS = Object.freeze({
+    Boolean: "A fixed boolean value.",
+    BuildingAffordable: "True when the building is affordable: every cost below its storage cap. Value: <region>-<id>.",
+    BuildingClickable: "True when the building can be purchased right now. Value: <region>-<id>.",
+    BuildingCost: "Material cost of the building as a number. Value: <region>-<id>.<Resource>.",
+    BuildingCount: "Number of buildings. Value: <region>-<id>.",
+    BuildingDisabled: "Number of unpowered buildings. Value: <region>-<id>.",
+    BuildingEnabled: "Number of powered buildings. Value: <region>-<id>.",
+    BuildingQueued: "True when the building is in the game build queue. Value: <region>-<id>.",
+    BuildingUnlocked: "True when the building is unlocked. Value: <region>-<id>.",
+    Challenge: "True when the challenge is active. Value: challenge id.",
+    Date: "In-game date as a number. Value: date selector.",
+    Government: "True when the government is active. Value: government id.",
+    Governor: "True when the governor is active. Value: governor id.",
+    Industry: "Information about Industry buildings. Value: industry selector.",
+    JobCount: "Assigned employees (workers and servants). Value: job id.",
+    JobMax: "Maximum assignable workers. Value: job id.",
+    JobServants: "Assigned servants. Value: servant job id.",
+    JobUnlocked: "True when the job is unlocked. Value: job id.",
+    JobWorkers: "Assigned workers. Value: job id.",
+    MimicGenus: "True when mimicking the genus. Value: genus id.",
+    Other: "Other uncategorized variables. Value: variable name.",
+    PlanetBiome: "True when playing in the biome. Value: biome id.",
+    PlanetTrait: "True when the planet has the trait. Value: trait id.",
+    ProjectCount: "Completed rank of the project. Value: project element id.",
+    ProjectProgress: "Completion percent of the project. Value: project element id.",
+    ProjectUnlocked: "True when the project is offered. Value: project element id.",
+    Queue: "Number of items in the queue. Value: queue selector.",
+    RacePillared: "True when the race pillared at the current star level. Value: race id.",
+    ResearchComplete: "True when the research is complete. Value: technology id.",
+    ResearchUnlocked: "True when the research is offered. Value: technology id.",
+    ResetType: "True when the prestige type is active. Value: prestige id.",
+    ResourceDemanded: "True when something else is accumulating the resource. Value: resource id.",
+    ResourceIncome: "Current income of the resource. Value: resource id.",
+    ResourceMaxCost: "Maximum cost of the resource. Value: resource id.",
+    ResourceQuantity: "Current amount of the resource. Value: resource id.",
+    ResourceRatio: "Storage ratio of the resource: 0.5 means half full. Value: resource id.",
+    ResourceSatisfied: "True when the stored amount covers the maximum costs. Value: resource id.",
+    ResourceSatisfyRatio: "Stored amount over maximum costs as a ratio. Value: resource id.",
+    ResourceStorage: "Maximum amount of the resource. Value: resource id.",
+    ResourceUnlocked: "True when the resource is unlocked. Value: resource id.",
+    SettingCurrent: "Current value of the setting. Value: setting name.",
+    SettingDefault: "Default value of the setting. Value: setting name.",
+    Soldiers: "Number of soldiers. Value: soldier selector.",
+    TraitLevel: "Trait level as a number. Value: trait id.",
+    Universe: "True when playing in the universe. Value: universe id."
+  });
+  function readCapturedTriggerChecks() {
+    let checks = {};
+    for (let type of CAPTURED_OVERRIDE_OPERAND_TYPES) {
+      let description = CAPTURED_CHECK_DESCRIPTIONS[type];
+      description !== void 0 && (checks[type] = Object.freeze({
+        arg: type === BOOLEAN_CHECK ? "boolean" : "string",
+        options: null,
+        description
+      }));
+    }
+    return Object.freeze(checks);
+  }
+  var CAPTURED_TRIGGER_CHECKS = readCapturedTriggerChecks(), CAPTURED_TRIGGER_BOOLEAN_CHECKS = Object.freeze([
+    "Boolean",
+    "BuildingUnlocked",
+    "BuildingClickable",
+    "BuildingAffordable",
+    "BuildingQueued",
+    "ProjectUnlocked",
+    "JobUnlocked",
+    "ResearchUnlocked",
+    "ResearchComplete",
+    "ResourceUnlocked",
+    "ResourceSatisfied",
+    "ResourceDemanded",
+    "RacePillared",
+    "MimicGenus",
+    "ResetType",
+    "Challenge",
+    "Universe",
+    "Government",
+    "Governor",
+    "PlanetBiome",
+    "PlanetTrait"
+  ]), CAPTURED_TRIGGER_ACTION_INPUTS = Object.freeze({
+    research: Object.freeze({ arg: "string", options: null }),
+    building: Object.freeze({ arg: "string", options: null }),
+    project: Object.freeze({ arg: "string", options: null })
+  });
+  function readCapturedTriggerChecksCatalog() {
+    return CAPTURED_TRIGGER_CHECKS;
+  }
+  function readCapturedTriggerActionInputs() {
+    return CAPTURED_TRIGGER_ACTION_INPUTS;
+  }
+  function readCapturedTriggerBooleanChecks() {
+    return CAPTURED_TRIGGER_BOOLEAN_CHECKS;
+  }
+
+  // src/adapters/evolve/progression/build/captured-trigger-settings.ts
+  function readTriggerList(raw) {
+    if (isRecord(raw))
+      return Array.isArray(raw.triggers) ? raw.triggers : void 0;
+  }
+  function findTriggerIndex(list, seq) {
+    return list.findIndex((entry, index) => isRecord(entry) ? (typeof entry.seq == "number" ? entry.seq : index) === seq : !1);
+  }
+  function renumberTriggers(list) {
+    list.forEach((entry, index) => {
+      entry.seq = index, entry.priority = index;
+    });
+  }
+  function readEvalText(entry) {
+    let requirementType = entry.requirementType;
+    if (typeof requirementType == "string")
+      return requirementType === "Eval" ? typeof entry.requirementId == "string" ? entry.requirementId : void 0 : `_("${requirementType}",${JSON.stringify(entry.requirementId)})`;
+  }
+  function createCapturedTriggerSettingsAdapter({
+    getSettingsRaw,
+    promptEval = () => {
+    }
+  }) {
+    return Object.freeze({
+      readTriggerSettingsReadModel() {
+        return createTriggerSettingsReadModel({
+          rows: readCapturedTriggerRows(getSettingsRaw),
+          checks: readCapturedTriggerChecksCatalog(),
+          actionInputs: readCapturedTriggerActionInputs(),
+          booleanResultChecks: readCapturedTriggerBooleanChecks()
+        });
+      },
+      resetToDefaults() {
+        let value = getSettingsRaw();
+        isRecord(value) && (value.triggers = [], value.autoTrigger = !1);
+      },
+      addDefault() {
+        let list = readTriggerList(getSettingsRaw());
+        if (list === void 0) return;
+        let next = list.length;
+        list.push({
+          seq: next,
+          priority: next,
+          requirementType: "Boolean",
+          requirementId: !1,
+          requirementCount: 1,
+          actionType: "research",
+          actionId: "tech-club",
+          actionCount: 0,
+          complete: !1
+        });
+      },
+      update(seq, field, value) {
+        let list = readTriggerList(getSettingsRaw());
+        if (list === void 0) return;
+        let index = findTriggerIndex(list, seq), entry = list[index];
+        entry !== void 0 && (entry[field] = value, entry.complete = !1, field === "requirementType" && (entry.requirementId = !1, entry.requirementCount = 1), field === "actionType" && (entry.actionId = "", entry.actionCount = 0));
+      },
+      remove(seq) {
+        let list = readTriggerList(getSettingsRaw());
+        if (list === void 0) return;
+        let index = findTriggerIndex(list, seq);
+        index !== -1 && (list.splice(index, 1), renumberTriggers(list));
+      },
+      duplicate(seq) {
+        let list = readTriggerList(getSettingsRaw());
+        if (list === void 0) return;
+        let index = findTriggerIndex(list, seq), source = list[index];
+        source !== void 0 && (list.splice(index, 0, {
+          seq: 0,
+          priority: 0,
+          requirementType: source.requirementType,
+          requirementId: source.requirementId,
+          requirementCount: source.requirementCount,
+          actionType: source.actionType,
+          actionId: source.actionId,
+          actionCount: source.actionCount,
+          complete: !1
+        }), renumberTriggers(list));
+      },
+      evalize(seq) {
+        let list = readTriggerList(getSettingsRaw());
+        if (list === void 0) return;
+        let entry = list[findTriggerIndex(list, seq)];
+        if (entry === void 0) return;
+        let text = readEvalText(entry);
+        text !== void 0 && promptEval("Eval of this condition:", text);
+      },
+      reorder(seqs) {
+        let list = readTriggerList(getSettingsRaw());
+        list !== void 0 && seqs.forEach((seq, index) => {
+          let entry = list[findTriggerIndex(list, seq)];
+          entry !== void 0 && (entry.priority = index);
+        });
+      }
+    });
+  }
+
   // src/adapters/browser/table-sorter.ts
   function readMembers(value) {
     return value === null || typeof value != "object" && typeof value != "function" ? null : value;
@@ -30075,7 +30534,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
           node,
           settingKey
         )
-      }), general, achievementGuard, challengeHelper, interfaceSettings, stateLog, authority, job, building, buildingToggles, project, arpaToggles, storage, storageToggles, market, marketToggles, ejector, ejectToggles, supplyToggles, magic, production, shell = createSettingsShell({
+      }), general, achievementGuard, challengeHelper, interfaceSettings, stateLog, authority, job, building, buildingToggles, project, arpaToggles, storage, storageToggles, market, marketToggles, ejector, ejectToggles, supplyToggles, magic, production, trigger, shell = createSettingsShell({
         $: getJQuery(),
         getDocument: () => documentForUi,
         getSettingsRaw: () => settings.readRaw(),
@@ -30101,8 +30560,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
         },
         buildTraitSettings: () => {
         },
-        buildTriggerSettings: () => {
-        },
+        buildTriggerSettings: () => trigger?.buildTriggerSettings(),
         buildResearchSettings: () => {
         },
         buildWarSettings: () => {
@@ -30215,7 +30673,47 @@ If script is allowed to reassign non-empty storage it might waste time producing
           label,
           hint
         )
-      }, createSimpleWriter = (defaults, section) => ({
+      }, capturedTriggerAdapter = createCapturedTriggerSettingsAdapter({
+        getSettingsRaw: settings.readRaw,
+        promptEval: (message, value) => {
+          let prompt = readProperty(capturedPanelWindow, "prompt");
+          typeof prompt == "function" && Reflect.apply(prompt, capturedPanelWindow, [message, value]);
+        }
+      }), triggerIntent;
+      trigger = createTriggerSettingsBrowserAdapter({
+        getDocument: () => documentForUi,
+        getJQuery: () => getJQuery(),
+        reader: { read: capturedTriggerAdapter.readTriggerSettingsReadModel },
+        intents: { handle: (intent) => triggerIntent.handle(intent) },
+        getActions: () => ({
+          buildSettingsSection: shell.buildSettingsSection,
+          buildInputNode: (arg, options, value, onChange) => controls2.buildInputNode(
+            arg,
+            options,
+            value,
+            onChange
+          ),
+          tableSorter
+        })
+      }), triggerIntent = createTriggerSettingsIntentHandler({
+        writer: {
+          resetToDefaults: () => {
+            settingsLifecycle !== void 0 ? settingsLifecycle.resetSection("trigger") : capturedTriggerAdapter.resetToDefaults();
+          },
+          addDefault: capturedTriggerAdapter.addDefault,
+          update: capturedTriggerAdapter.update,
+          remove: capturedTriggerAdapter.remove,
+          duplicate: capturedTriggerAdapter.duplicate,
+          evalize: capturedTriggerAdapter.evalize,
+          reorder: capturedTriggerAdapter.reorder,
+          persist: persistSettings
+        },
+        render: () => trigger?.updateTriggerSettingsContent(),
+        effects: {
+          resetCheckbox: () => controls2.resetCheckbox("autoTrigger")
+        }
+      });
+      let createSimpleWriter = (defaults, section) => ({
         resetToDefaults: () => resetCapturedSectionRecord(defaults, section),
         persist: persistSettings
       }), achievementIntent;
