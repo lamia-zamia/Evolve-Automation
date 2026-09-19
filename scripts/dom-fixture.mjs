@@ -197,6 +197,16 @@ export class TestElement {
     if (index >= 0) this.listeners.splice(index, 1);
   }
 
+  /** The DOM spelling, for code that constructs an event object rather than naming a type. */
+  dispatchEvent(event) {
+    this.dispatch(String(event?.type ?? ""), this, event ?? {});
+    return true;
+  }
+
+  querySelector(selector) {
+    return this.querySelectorAll(selector)[0] ?? null;
+  }
+
   /** Dispatches to this element's own listeners, then bubbles the same event upward. */
   dispatch(type, target = this, properties = {}) {
     const event = { type, target, preventDefault() {}, ...properties };
@@ -313,6 +323,7 @@ export function createTestDocument(root) {
       });
     },
     getElementById: (id) => root.querySelectorAll(`#${id}`)[0] ?? null,
+    querySelector: (selector) => root.querySelectorAll(selector)[0] ?? null,
     querySelectorAll: (selector) => root.querySelectorAll(selector),
   };
 }

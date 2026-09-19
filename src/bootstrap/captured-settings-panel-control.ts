@@ -108,6 +108,11 @@ import {
 } from "../adapters/browser/evolution-settings.ts";
 import { createCapturedEvolutionSettingsAdapter } from "../adapters/evolve/progression/evolution/captured-evolution-settings.ts";
 import {
+  createPlanetSettingsBrowserAdapter,
+  type PlanetSettingsBrowserActions,
+} from "../adapters/browser/planet-settings.ts";
+import { createCapturedPlanetSettingsAdapter } from "../adapters/evolve/progression/evolution/captured-planet-settings.ts";
+import {
   createWeightingSettingsBrowserAdapter,
   type WeightingSettingsBrowserActions,
 } from "../adapters/browser/weighting-settings.ts";
@@ -175,6 +180,7 @@ import { createAuthoritySettingsIntentHandler } from "../application/authority-s
 import { createHellSettingsIntentHandler } from "../application/hell-settings.ts";
 import { createWarSettingsIntentHandler } from "../application/war-settings.ts";
 import { createEvolutionSettingsIntentHandler } from "../application/evolution-settings.ts";
+import { createPlanetSettingsIntentHandler } from "../application/planet-settings.ts";
 import { createWeightingSettingsIntentHandler } from "../application/weighting-settings.ts";
 import {} from "../domain/settings-defaults.ts";
 import type { CapturedSettingsStore } from "../ports/captured-settings-store.ts";
@@ -384,6 +390,13 @@ type EvolutionSettingsDocument = ReturnType<
 type EvolutionSettingsJQuery = ReturnType<
   Parameters<typeof createEvolutionSettingsBrowserAdapter>[0]["getJQuery"]
 >;
+type PlanetSettings = ReturnType<typeof createPlanetSettingsBrowserAdapter>;
+type PlanetSettingsDocument = ReturnType<
+  Parameters<typeof createPlanetSettingsBrowserAdapter>[0]["getDocument"]
+>;
+type PlanetSettingsJQuery = ReturnType<
+  Parameters<typeof createPlanetSettingsBrowserAdapter>[0]["getJQuery"]
+>;
 type WarSettings = ReturnType<typeof createWarSettingsBrowserAdapter>;
 type WarSettingsDocument = Parameters<
   typeof createWarSettingsBrowserAdapter
@@ -552,6 +565,7 @@ interface SettingsUi {
   readonly authority: AuthoritySettings;
   readonly hell: HellSettings;
   readonly evolution: EvolutionSettings;
+  readonly planet: PlanetSettings;
   readonly war: WarSettings;
   readonly weighting: WeightingSettings;
   readonly job: JobSettings;
@@ -864,7 +878,7 @@ export function createCapturedSettingsPanel({
       buildGovernmentSettings: () => {},
       buildAuthoritySettings: () => authority?.buildAuthoritySettings(),
       buildEvolutionSettings: () => evolution?.buildEvolutionSettings(),
-      buildPlanetSettings: () => {},
+      buildPlanetSettings: () => planet?.buildPlanetSettings(),
       buildTraitSettings: () => trait?.buildTraitSettings(),
       buildTriggerSettings: () => trigger?.buildTriggerSettings(),
       buildResearchSettings: () => research?.buildResearchSettings(),
@@ -1274,6 +1288,24 @@ export function createCapturedSettingsPanel({
       effects: {
         resetCheckbox: () => controls.resetCheckbox("autoEvolution"),
       },
+    });
+    // Planet weights are static id lists plus settings-record data. Every cell is read by the
+    // captured planet planner's ranking input, so the table is live rather than decorative.
+    const capturedPlanetAdapter = createCapturedPlanetSettingsAdapter();
+    let planet: PlanetSettings | undefined;
+    const planetIntent = createPlanetSettingsIntentHandler({
+      writer: {
+        resetToDefaults: resetSection("planet"),
+        persist: persistSettings,
+      },
+      renderSettingsContent: () => planet?.updatePlanetSettingsContent(),
+    });
+    planet = createPlanetSettingsBrowserAdapter({
+      getDocument: () => documentForUi as unknown as PlanetSettingsDocument,
+      getJQuery: () => getJQuery() as unknown as PlanetSettingsJQuery,
+      getReadModel: capturedPlanetAdapter.readPlanetSettingsReadModel,
+      intents: planetIntent,
+      getActions: () => panelActions as unknown as PlanetSettingsBrowserActions,
     });
     // The Foreign Affairs vocabulary — policies, protect modes, labels — is static captured copy,
     // so this section needs no game draw and is always built. It renders both as an ordinary
@@ -1873,6 +1905,7 @@ export function createCapturedSettingsPanel({
       authority,
       hell,
       evolution,
+      planet,
       war,
       weighting,
       job,
@@ -1945,6 +1978,7 @@ export function createCapturedSettingsPanel({
     ui.challengeHelper.buildChallengeHelperSettings();
     ui.authority.buildAuthoritySettings();
     ui.evolution.buildEvolutionSettings();
+    ui.planet.buildPlanetSettings();
     ui.hell.buildHellSettings(dom("#script_settings"), "");
     ui.war.buildWarSettings(
       dom("#script_settings") as unknown as Parameters<

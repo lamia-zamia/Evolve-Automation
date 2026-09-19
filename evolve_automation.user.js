@@ -16023,11 +16023,11 @@
         return !1;
       let rawStar = readProperty(wheelbarrow, affix), wheelbarrowStar = rawStar == null ? 0 : finite(rawStar);
       if (wheelbarrowStar === void 0 || wheelbarrowStar < 0) return !1;
-      let achievementLevel3 = 1;
+      let achievementLevel4 = 1;
       for (let trait of ACHIEVEMENT_LEVEL_TRAITS2)
-        race[trait] && (achievementLevel3 += 1);
-      return achievementLevel3 = Math.min(achievementLevel3, 5), shouldSaveInflationMoney({
-        active: wheelbarrowStar < achievementLevel3 && readProperty(race, "inflation") !== !1,
+        race[trait] && (achievementLevel4 += 1);
+      return achievementLevel4 = Math.min(achievementLevel4, 5), shouldSaveInflationMoney({
+        active: wheelbarrowStar < achievementLevel4 && readProperty(race, "inflation") !== !1,
         saveMinutes,
         money: {
           targetMoney: INFLATION_CHALLENGE_MONEY,
@@ -23936,7 +23936,15 @@
     "mellow",
     "flare",
     "kamikaze"
-  ];
+  ], planetBiomeGenus = {
+    hellscape: "demonic",
+    eden: "angelic",
+    oceanic: "aquatic",
+    forest: "fey",
+    desert: "sand",
+    volcanic: "heat",
+    tundra: "polar"
+  };
   var challenges = [
     [
       { id: "plasmid", trait: "no_plasmid" },
@@ -26055,9 +26063,437 @@
   function planSinglePlanetSelection(gate, candidateIds) {
     return !shouldSelectPlanet(gate) || candidateIds.length !== 1 ? null : Object.freeze({ elementId: candidateIds[0] });
   }
+  function planetSelectionAchievementIds(planets, raceGenusById, biomeGenus) {
+    let ids = /* @__PURE__ */ new Set();
+    for (let planet of planets) {
+      ids.add(`biome_${planet.biome}`);
+      for (let trait of planet.traits)
+        trait !== "none" && ids.add(`atmo_${trait}`);
+      let genus = biomeGenus[planet.biome];
+      if (genus) {
+        for (let raceId of Object.keys(raceGenusById))
+          raceGenusById[raceId] === genus && ids.add(`extinct_${raceId}`);
+        ids.add(`genus_${genus}`);
+      }
+      ids.add("madagascar_tree");
+    }
+    return Object.freeze([...ids]);
+  }
+  function planPlanetSelection(input) {
+    if (input.planets.length === 0)
+      throw new TypeError("planet selection requires at least one candidate");
+    let unlocked = (id) => input.achievementUnlocked[id] === !0, weightOf = (value) => value ?? NaN, scored = input.planets.map((planet) => {
+      let achieve = 0;
+      unlocked(`biome_${planet.biome}`) || achieve++;
+      for (let trait of planet.traits)
+        trait !== "none" && !unlocked(`atmo_${trait}`) && achieve++;
+      let genus = input.biomeGenus[planet.biome];
+      if (genus) {
+        for (let raceId of Object.keys(input.raceGenusById))
+          input.raceGenusById[raceId] === genus && !unlocked(`extinct_${raceId}`) && achieve++;
+        unlocked(`genus_${genus}`) || achieve++;
+      }
+      !unlocked("madagascar_tree") && planet.biome === "oceanic" && input.gods !== "sharkin" && achieve++;
+      let weighting = 0;
+      weighting += weightOf(input.biomeWeights[planet.biome]);
+      for (let trait of planet.traits)
+        weighting += weightOf(input.traitWeights[trait]);
+      weighting += achieve * weightOf(input.achievementWeight), weighting += planet.orbit * weightOf(input.orbitWeight);
+      let numShow = input.minersDreamLevel !== null ? input.minersDreamLevel >= 4 ? input.minersDreamLevel * 2 - 3 : input.minersDreamLevel : 0;
+      (input.lamentisLevel ?? NaN) >= 0 && numShow++;
+      for (let id of Object.keys(planet.geology)) {
+        let deposit = planet.geology[id];
+        deposit !== 0 && (numShow-- > 0 ? weighting += deposit / 0.01 * weightOf(input.geologyWeights[id]) : weighting += (deposit > 0 ? 1 : -1) * weightOf(input.geologyWeights[id]));
+      }
+      return { planet, achieve, weighting };
+    }), habitability = (entry) => {
+      let traitRanks = entry.planet.traits.map(
+        (trait) => input.planetTraitOrder.indexOf(trait)
+      ), bestTraitRank = traitRanks.length > 0 ? Math.min(...traitRanks) : -1;
+      return input.biomeOrder.indexOf(entry.planet.biome) + bestTraitRank;
+    }, ordered = [...scored];
+    return input.targetName === "weighting" && ordered.sort((a, b) => b.weighting - a.weighting), input.targetName === "habitable" && ordered.sort((a, b) => habitability(a) - habitability(b)), input.targetName === "achieve" && ordered.sort(
+      (a, b) => a.achieve !== b.achieve ? b.achieve - a.achieve : habitability(a) - habitability(b)
+    ), Object.freeze({ elementId: ordered[0].planet.id });
+  }
+
+  // src/domain/progression/prestige/achievement-guards.ts
+  function calculateAchievementStarLevel(context) {
+    return 1 + Number(context.challengePlasmid) + Number(context.challengeTrade) + Number(context.challengeCraft) + Number(context.challengeCrispr);
+  }
+  function isAchievementGuardActive(input) {
+    if (!input.enabled || input.earnedStar >= input.targetStar) return !1;
+    switch (input.guard) {
+      case "guardPacifist":
+        return input.attacks === 0;
+      case "guardDreaded":
+        return input.prestigeType === "ascension" && input.dreadnoughts === 0;
+      case "guardCultOfPersonality":
+        return !isAchievementGuardActive(input.pacifist);
+      case "guardAnarchist":
+        return input.prestigeType === "mad" && input.government === "anarchy";
+      case "guardEnergetic":
+        return input.prestigeType === "ascension" && input.thermalCollectors === 0;
+      case "guardRedDead":
+        return (input.prestigeType === "whitehole" || input.prestigeType === "vacuum") && input.redSpaceports === 0;
+      case "guardSecondEvolution":
+        return input.gods === input.species;
+    }
+  }
+
+  // src/adapters/evolve/progression/prestige/achievement-guards.ts
+  function levelUnavailable(reason, field) {
+    return Object.freeze(
+      field === void 0 ? { status: "unavailable", reason } : { status: "unavailable", reason, field }
+    );
+  }
+  function readAchievementStarLevelContext(rawContext) {
+    if (!isNonArrayRecord(rawContext))
+      return levelUnavailable("invalid-settings");
+    let mapping = {
+      challengePlasmid: "challenge_plasmid",
+      challengeTrade: "challenge_trade",
+      challengeCraft: "challenge_craft",
+      challengeCrispr: "challenge_crispr"
+    }, context = {
+      challengePlasmid: !1,
+      challengeTrade: !1,
+      challengeCraft: !1,
+      challengeCrispr: !1
+    };
+    for (let [target, source] of Object.entries(mapping)) {
+      let value = rawContext[source];
+      if (value !== void 0 && typeof value != "boolean")
+        return levelUnavailable("invalid-settings", source);
+      context[target] = value === !0;
+    }
+    return Object.freeze({ status: "ready", context: Object.freeze(context) });
+  }
+
+  // src/adapters/evolve/captured-achievements.ts
+  function finiteStar(value) {
+    return typeof value == "number" && Number.isFinite(value) ? value : void 0;
+  }
+  function readCapturedUniverseAffix(root) {
+    let universe = readProperty(readProperty(root, "race"), "universe");
+    if (typeof universe == "string")
+      switch (universe) {
+        case "evil":
+          return "e";
+        case "antimatter":
+          return "a";
+        case "heavy":
+          return "h";
+        case "micro":
+          return "m";
+        case "magic":
+          return "mg";
+        default:
+          return "l";
+      }
+  }
+  function readCapturedAchievementStar(root, achievementId) {
+    let achievement = readProperty(
+      readProperty(readProperty(root, "stats"), "achieve"),
+      achievementId
+    ), affix = readCapturedUniverseAffix(root);
+    if (achievement == null) return 0;
+    if (!isRecord(achievement) || affix === void 0) return;
+    let star = readProperty(achievement, affix);
+    return star == null ? 0 : finiteStar(star);
+  }
+  function isCapturedAchievementUnlocked(root, achievementId, starLevel) {
+    let star = readCapturedAchievementStar(root, achievementId);
+    return star === void 0 ? void 0 : star >= starLevel;
+  }
+
+  // src/adapters/evolve/progression/evolution/captured-evolution-catalog.ts
+  var CAPTURED_EVOLUTION_RACES = Object.freeze([
+    { id: "human", label: "Human", genus: "humanoid" },
+    { id: "elven", label: "Elf", genus: "humanoid" },
+    { id: "orc", label: "Orc", genus: "humanoid" },
+    { id: "cath", label: "Cath", genus: "carnivore" },
+    { id: "wolven", label: "Wolven", genus: "carnivore" },
+    { id: "vulpine", label: "Vulpine", genus: "carnivore" },
+    { id: "centaur", label: "Centaur", genus: "herbivore" },
+    { id: "rhinotaur", label: "Rhinotaur", genus: "herbivore" },
+    { id: "capybara", label: "Capybara", genus: "herbivore" },
+    { id: "porkenari", label: "Porkenari", genus: "omnivore" },
+    { id: "hedgeoken", label: "Hedgeoken", genus: "omnivore" },
+    { id: "kobold", label: "Kobold", genus: "small" },
+    { id: "goblin", label: "Goblin", genus: "small" },
+    { id: "gnome", label: "Gnome", genus: "small" },
+    { id: "ogre", label: "Ogre", genus: "giant" },
+    { id: "cyclops", label: "Cyclops", genus: "giant" },
+    { id: "troll", label: "Troll", genus: "giant" },
+    { id: "tortoisan", label: "Tortoisan", genus: "reptilian" },
+    { id: "gecko", label: "Gecko", genus: "reptilian" },
+    { id: "slitheryn", label: "Slitheryn", genus: "reptilian" },
+    { id: "arraak", label: "Arraak", genus: "avian" },
+    { id: "pterodacti", label: "Pterodacti", genus: "avian" },
+    { id: "dracnid", label: "Dracnid", genus: "avian" },
+    { id: "entish", label: "Ent", genus: "plant" },
+    { id: "cacti", label: "Cacti", genus: "plant" },
+    { id: "pinguicula", label: "Pinguicula", genus: "plant" },
+    { id: "sporgar", label: "Sporgar", genus: "fungi" },
+    { id: "shroomi", label: "Shroomi", genus: "fungi" },
+    { id: "moldling", label: "Moldling", genus: "fungi" },
+    { id: "mantis", label: "Mantis", genus: "insectoid" },
+    { id: "scorpid", label: "Scorpid", genus: "insectoid" },
+    { id: "antid", label: "Antid", genus: "insectoid" },
+    { id: "sharkin", label: "Sharkin", genus: "aquatic" },
+    { id: "octigoran", label: "Octigoran", genus: "aquatic" },
+    { id: "dryad", label: "Dryad", genus: "fey" },
+    { id: "satyr", label: "Satyr", genus: "fey" },
+    { id: "phoenix", label: "Phoenix", genus: "heat" },
+    { id: "salamander", label: "Salamander", genus: "heat" },
+    { id: "yeti", label: "Yeti", genus: "polar" },
+    { id: "wendigo", label: "Wendigo", genus: "polar" },
+    { id: "tuskin", label: "Tuskin", genus: "sand" },
+    { id: "kamel", label: "Kamel", genus: "sand" },
+    { id: "balorg", label: "Balorg", genus: "demonic" },
+    { id: "imp", label: "Imp", genus: "demonic" },
+    { id: "seraph", label: "Seraph", genus: "angelic" },
+    { id: "unicorn", label: "Unicorn", genus: "angelic" },
+    { id: "synth", label: "Synth", genus: "synthetic" },
+    { id: "nano", label: "Nano", genus: "synthetic" },
+    { id: "ghast", label: "Ghast", genus: "eldritch" },
+    { id: "shoggoth", label: "Shoggoth", genus: "eldritch" },
+    { id: "raptors", label: "Raptors", genus: "primordial" },
+    { id: "rexicus", label: "Rexicus", genus: "primordial" },
+    { id: "dwarf", label: "Dwarf", genus: "hybrid" },
+    { id: "raccoon", label: "Racconar", genus: "hybrid" },
+    { id: "lichen", label: "Lichen", genus: "hybrid" },
+    { id: "wyvern", label: "Wyvern", genus: "hybrid" },
+    { id: "beholder", label: "Eye-Spector", genus: "hybrid" },
+    { id: "djinn", label: "Djinn", genus: "hybrid" },
+    { id: "narwhal", label: "Narwhalus", genus: "hybrid" },
+    { id: "bombardier", label: "Bombardier", genus: "hybrid" },
+    { id: "nephilim", label: "Nephilim", genus: "hybrid" },
+    { id: "mammuth", label: "Mammuth", genus: "hybrid" },
+    { id: "hellspawn", label: "Hellspawn", genus: "demonic" },
+    { id: "junker", label: "Valdi", genus: "variable" },
+    { id: "sludge", label: "Sludge", genus: "variable" },
+    { id: "ultra_sludge", label: "Ultra Sludge", genus: "variable" }
+  ]), CAPTURED_EVOLUTION_UNIVERSE_LABELS = Object.freeze(
+    Object.fromEntries(
+      [
+        {
+          id: "standard",
+          label: "Standard",
+          hint: "A standard universe with normal laws of physics"
+        },
+        {
+          id: "heavy",
+          label: "Heavy Gravity",
+          hint: "The force of gravity in this universe is much stronger than normal"
+        },
+        {
+          id: "antimatter",
+          label: "Antimatter",
+          hint: "This universe consists primarily of antimatter"
+        },
+        {
+          id: "evil",
+          label: "Evil",
+          hint: "Everything in this universe is evil"
+        },
+        {
+          id: "micro",
+          label: "Micro",
+          hint: "Everything in this universe is small"
+        },
+        { id: "magic", label: "Magic", hint: "Magic is real in this universe" }
+      ].map((entry) => [entry.id, Object.freeze(entry)])
+    )
+  ), CAPTURED_EVOLUTION_CHALLENGE_LABELS = Object.freeze(
+    Object.fromEntries(
+      [
+        {
+          id: "plasmid",
+          label: "No Starting Plasmids | Weak Mastery | Weak Genes",
+          hint: "Starting Plasmids have no effect.&#xA;Mastery is much weaker than normal.&#xA;Mastery is reduced to %0, and plasmid and anti-plasmid production are reduced to %1 value. Plasmid and anti-plasmid storage bonus reduced to %2. Phage storage bonus reduced to %3."
+        },
+        {
+          id: "crispr",
+          label: "Junk Gene | Bad Genes",
+          hint: "Gain a random negative mutation. CRISPR cost creep discounts function at only 20%.&#xA;Gain %0 random empowered negative trait and %1 weak negative traits."
+        },
+        {
+          id: "trade",
+          label: "No Free Trade",
+          hint: "No marketplace trading. (Trade routes are still enabled.)"
+        },
+        {
+          id: "craft",
+          label: "No Manual Crafting",
+          hint: "No manual resource crafting."
+        },
+        {
+          id: "joyless",
+          label: "Joyless",
+          hint: "There will be no joy in your life: entertainers and broadcasting are disabled. Construct a Biodome to earn the achievement and remove the penalty."
+        },
+        {
+          id: "steelen",
+          label: "Steelen",
+          hint: "Your species cannot figure out how to smelt Steel. You have to resort to other means to get any of it. Have the mettle to Bioseed with this challenge active and your dedication will be rewarded."
+        },
+        {
+          id: "decay",
+          label: "Decay",
+          hint: "Resources decay at a rate determined by how much of it you are storing. Larger stores decay quicker. Destroy this universe to end the cycle of decay."
+        },
+        {
+          id: "emfield",
+          label: "EM Field",
+          hint: "Energy costs are higher and technology may fail you. You must ascend to win."
+        },
+        {
+          id: "inflation",
+          label: "Inflation",
+          hint: "Inflation is ruining your economy. The more you build, the more worthless your money becomes. Constructing anything devalues money, causing all money costs to increase."
+        },
+        {
+          id: "sludge",
+          label: "Failed Experiment",
+          hint: "You will be stacked with terrible junk traits. You suffer for no reason."
+        },
+        {
+          id: "ultra_sludge",
+          label: "Ultimate Failed Experiment",
+          hint: "You will be stacked with terrible junk traits. You suffer because the community wanted it."
+        },
+        {
+          id: "orbit_decay",
+          label: "Orbital Decay",
+          hint: "Your homeworld's moon is in a decaying orbit; it will impact the planet in %0 days."
+        },
+        {
+          id: "gravity_well",
+          label: "Gravity Well | Witch Hunter | Warlord",
+          hint: "Gravity is very strong, so leaving the planet will be very difficult. Find a new one that doesn't drag you down.&#xA;Magic effects are stronger, but using magic draws unwanted attention. Your goal is to perform the ultimate forbidden ritual.&#xA;Prove you are the most ruthless to ever exist."
+        },
+        {
+          id: "junker",
+          label: "Genetic Dead End",
+          hint: "This forces on all four challenge genes. You will be stacked with horrible junk traits. Reach MAD for a special perk."
+        },
+        {
+          id: "cataclysm",
+          label: "Cataclysm",
+          hint: "A massive earthquake has literally shaken your planet apart. Start with a space colony but no homeworld. Escape to a new world to win (Bioseed)."
+        },
+        {
+          id: "banana",
+          label: "Banana Republic",
+          hint: "You can only export one type of resource, your economy is bad, and your army is weak. Complete a checklist of objectives; unifying exits the scenario."
+        },
+        {
+          id: "truepath",
+          label: "The True Path",
+          hint: "Use an alternate progression path."
+        },
+        {
+          id: "lone_survivor",
+          label: "Lone Survivor",
+          hint: "You must survive and thrive alone on an alien world."
+        },
+        {
+          id: "fasting",
+          label: "Fasting",
+          hint: "Food production is disabled. Learn to survive without sustenance."
+        }
+      ].map((entry) => [entry.id, Object.freeze(entry)])
+    )
+  );
+
+  // src/adapters/evolve/progression/evolution/captured-planet-labels.ts
+  function capturedPlanetLabel(id) {
+    return id.charAt(0).toUpperCase() + id.slice(1);
+  }
+
+  // src/adapters/evolve/progression/evolution/captured-planet-metadata.ts
+  var TRAIT_BY_LABEL = new Map(
+    planetTraits.filter((trait) => trait !== "none").map((trait) => [capturedPlanetLabel(trait), trait])
+  ), GEOLOGY_BY_LABEL = new Map(
+    extraList.filter((id) => id !== "Achievement" && id !== "Orbit").map((id) => [id, id])
+  ), NO_TRAITS = Object.freeze(["none"]);
+  function splitElementId(elementId) {
+    let match = /^([A-Za-z]+)(\d+)$/.exec(elementId);
+    if (match === null) return;
+    let biome = match[1].toLowerCase();
+    return planetBiomes.includes(biome) ? { biome, num: match[2] } : void 0;
+  }
+  function readTraits(title, biome, num) {
+    let suffix = ` ${capturedPlanetLabel(biome)} ${num}`, exact = `${capturedPlanetLabel(biome)} ${num}`, head = title.endsWith(suffix) ? title.slice(0, title.length - suffix.length) : title === exact ? "" : void 0;
+    if (head === void 0) return;
+    let labels = head.split(/\s+/).filter((token) => token !== "");
+    if (labels.length === 0) return NO_TRAITS;
+    let traits = [];
+    for (let label of labels) {
+      let trait = TRAIT_BY_LABEL.get(label);
+      if (trait === void 0) return;
+      traits.push(trait);
+    }
+    return Object.freeze(traits);
+  }
+  function readOrbit(summary, title) {
+    if (!summary.startsWith(title)) return;
+    let numbers = summary.slice(title.length).match(/-?\d+/g);
+    if (numbers === null || numbers.length !== 1) return;
+    let orbit = Number(numbers[0]);
+    return Number.isFinite(orbit) ? orbit : void 0;
+  }
+  function readGeology(detail) {
+    let revealedEntries = [], hiddenEntries = [];
+    for (let row of detail.geology) {
+      let id = GEOLOGY_BY_LABEL.get(row.label);
+      if (id === void 0) return;
+      if (row.percent === void 0)
+        hiddenEntries.push([id, row.beneficial ? 0.01 : -0.01]);
+      else {
+        if (row.percent === 0 || row.percent > 0 !== row.beneficial) return;
+        revealedEntries.push([id, row.percent / 100]);
+      }
+    }
+    let geology = {};
+    for (let [id, value] of [...revealedEntries, ...hiddenEntries]) {
+      if (Object.prototype.hasOwnProperty.call(geology, id)) return;
+      geology[id] = value;
+    }
+    return { geology, revealed: revealedEntries.length };
+  }
+  function readCapturedPlanetMetadata(detail) {
+    let parts = splitElementId(detail.elementId);
+    if (parts === void 0) return;
+    let traits = readTraits(detail.title, parts.biome, parts.num);
+    if (traits === void 0) return;
+    let orbit = readOrbit(detail.summary, detail.title);
+    if (orbit === void 0) return;
+    let geology = readGeology(detail);
+    if (geology !== void 0)
+      return Object.freeze({
+        candidate: Object.freeze({
+          id: detail.elementId,
+          biome: parts.biome,
+          traits,
+          orbit,
+          geology: Object.freeze(geology.geology)
+        }),
+        revealedDeposits: geology.revealed
+      });
+  }
 
   // src/adapters/evolve/progression/evolution/captured-planet-selection.ts
-  var PLANET_ACTION_SELECTOR = "#evolution > .action";
+  var PLANET_ACTION_SELECTOR = "#evolution > .action", CAPTURED_RACE_GENUS_BY_ID = Object.freeze(
+    Object.fromEntries(
+      CAPTURED_EVOLUTION_RACES.map((race) => [
+        race.id,
+        race.genus === "variable" ? null : race.genus
+      ])
+    )
+  );
   function capturedPlanetRecord(value) {
     return isNonArrayRecord(value) ? value : void 0;
   }
@@ -26077,30 +26513,119 @@
       targetName: typeof targetName == "string" ? targetName : null
     });
   }
+  function achievementLevel3(value) {
+    if (value == null || value === !1) return null;
+    if (!isNonArrayRecord(value)) return NaN;
+    let level = value.l;
+    return typeof level == "number" ? level : NaN;
+  }
+  function settingNumber9(settings, key) {
+    let value = settings?.[key];
+    return typeof value == "number" ? value : void 0;
+  }
+  function revealBudget(minersDreamLevel, lamentisLevel) {
+    let budget = minersDreamLevel !== null ? minersDreamLevel >= 4 ? minersDreamLevel * 2 - 3 : minersDreamLevel : 0;
+    return (lamentisLevel ?? NaN) >= 0 && budget++, budget;
+  }
   function createCapturedPlanetSelection({
     rootState,
     drawnActions,
     readSettings,
-    controls: controls2
+    controls: controls2,
+    metadata
   }) {
+    function readRanking(gate, candidateIds) {
+      if (metadata === void 0 || candidateIds.length < 2 || !shouldSelectPlanet(gate)) return;
+      let root = capturedPlanetRecord(rootState.readRoot());
+      if (root === void 0) return;
+      let settings = capturedPlanetRecord(readSettings());
+      if (settings === void 0) return;
+      let achieve = capturedPlanetRecord(
+        readProperty(capturedPlanetRecord(root.stats), "achieve")
+      );
+      if (achieve === void 0) return;
+      let minersDreamLevel = achievementLevel3(achieve.miners_dream), lamentisLevel = achievementLevel3(achieve.lamentis), budget = revealBudget(minersDreamLevel, lamentisLevel), planets = [];
+      for (let elementId of candidateIds) {
+        let detail = metadata.readPlanetDetail(elementId);
+        if (detail === void 0) return;
+        let parsed = readCapturedPlanetMetadata(detail);
+        if (parsed === void 0) return;
+        let deposits = Object.keys(parsed.candidate.geology).length;
+        if (parsed.revealedDeposits !== Math.min(budget, deposits))
+          return;
+        planets.push(parsed.candidate);
+      }
+      let starContext = readAchievementStarLevelContext(settings);
+      if (starContext.status !== "ready") return;
+      let starLevel = calculateAchievementStarLevel(starContext.context), achievementUnlocked = {};
+      for (let id of planetSelectionAchievementIds(
+        planets,
+        CAPTURED_RACE_GENUS_BY_ID,
+        planetBiomeGenus
+      )) {
+        let unlocked = isCapturedAchievementUnlocked(root, id, starLevel);
+        if (unlocked === void 0) return;
+        achievementUnlocked[id] = unlocked;
+      }
+      let biomeWeights = {}, traitWeights = {}, geologyWeights = {};
+      for (let planet of planets) {
+        biomeWeights[planet.biome] = settingNumber9(
+          settings,
+          `biome_w_${planet.biome}`
+        );
+        for (let trait of planet.traits)
+          traitWeights[trait] = settingNumber9(settings, `trait_w_${trait}`);
+        for (let id of Object.keys(planet.geology))
+          geologyWeights[id] = settingNumber9(settings, `extra_w_${id}`);
+      }
+      let gods = readProperty(readRace3(rootState), "gods");
+      return Object.freeze({
+        planets: Object.freeze(planets),
+        targetName: gate.targetName,
+        gods: typeof gods == "string" ? gods : null,
+        raceGenusById: CAPTURED_RACE_GENUS_BY_ID,
+        biomeGenus: planetBiomeGenus,
+        achievementUnlocked: Object.freeze(achievementUnlocked),
+        minersDreamLevel,
+        lamentisLevel,
+        biomeWeights: Object.freeze(biomeWeights),
+        traitWeights: Object.freeze(traitWeights),
+        achievementWeight: settingNumber9(settings, "extra_w_Achievement"),
+        orbitWeight: settingNumber9(settings, "extra_w_Orbit"),
+        geologyWeights: Object.freeze(geologyWeights),
+        biomeOrder: planetBiomes,
+        planetTraitOrder: planetTraits
+      });
+    }
     let reader = Object.freeze({
       sample() {
-        let candidateIds = drawnActions.read(PLANET_ACTION_SELECTOR).map((action) => action.id);
+        let candidateIds = Object.freeze(
+          drawnActions.read(PLANET_ACTION_SELECTOR).map((action) => action.id)
+        ), gate = readGate(rootState, readSettings), ranking = readRanking(gate, candidateIds);
         return Object.freeze({
-          gate: readGate(rootState, readSettings),
-          candidateIds: Object.freeze(candidateIds)
+          gate,
+          candidateIds,
+          ...ranking === void 0 ? {} : { ranking }
         });
       }
     }), executor = Object.freeze({
       execute(decision) {
         let gate = readGate(rootState, readSettings);
-        return isPlanetSelectionAvailable(gate) ? controls2.selectPlanet(decision.elementId) ? SUCCEEDED : stale(
-          "planet-control-unavailable",
-          "planet selection control became unavailable"
-        ) : stale(
-          "planet-selection-unavailable",
-          "planet selection became unavailable"
-        );
+        if (!isPlanetSelectionAvailable(gate))
+          return stale(
+            "planet-selection-unavailable",
+            "planet selection became unavailable"
+          );
+        if (!controls2.selectPlanet(decision.elementId))
+          return stale(
+            "planet-control-unavailable",
+            "planet selection control became unavailable"
+          );
+        let chose = readProperty(readRace3(rootState), "chose");
+        return chose !== decision.elementId ? stale(
+          "planet-selection-uncommitted",
+          `planet ${decision.elementId} was clicked but the game committed ${String(chose)}`
+        ) : SUCCEEDED;
       }
     });
     return Object.freeze({ reader, executor });
@@ -30621,260 +31146,6 @@ If script is allowed to reassign non-empty storage it might waste time producing
     { val: "apotheosis", label: "Apotheosis", hint: "Kill the God." }
   ]);
 
-  // src/domain/progression/prestige/achievement-guards.ts
-  function calculateAchievementStarLevel(context) {
-    return 1 + Number(context.challengePlasmid) + Number(context.challengeTrade) + Number(context.challengeCraft) + Number(context.challengeCrispr);
-  }
-  function isAchievementGuardActive(input) {
-    if (!input.enabled || input.earnedStar >= input.targetStar) return !1;
-    switch (input.guard) {
-      case "guardPacifist":
-        return input.attacks === 0;
-      case "guardDreaded":
-        return input.prestigeType === "ascension" && input.dreadnoughts === 0;
-      case "guardCultOfPersonality":
-        return !isAchievementGuardActive(input.pacifist);
-      case "guardAnarchist":
-        return input.prestigeType === "mad" && input.government === "anarchy";
-      case "guardEnergetic":
-        return input.prestigeType === "ascension" && input.thermalCollectors === 0;
-      case "guardRedDead":
-        return (input.prestigeType === "whitehole" || input.prestigeType === "vacuum") && input.redSpaceports === 0;
-      case "guardSecondEvolution":
-        return input.gods === input.species;
-    }
-  }
-
-  // src/adapters/evolve/progression/prestige/achievement-guards.ts
-  function levelUnavailable(reason, field) {
-    return Object.freeze(
-      field === void 0 ? { status: "unavailable", reason } : { status: "unavailable", reason, field }
-    );
-  }
-  function readAchievementStarLevelContext(rawContext) {
-    if (!isNonArrayRecord(rawContext))
-      return levelUnavailable("invalid-settings");
-    let mapping = {
-      challengePlasmid: "challenge_plasmid",
-      challengeTrade: "challenge_trade",
-      challengeCraft: "challenge_craft",
-      challengeCrispr: "challenge_crispr"
-    }, context = {
-      challengePlasmid: !1,
-      challengeTrade: !1,
-      challengeCraft: !1,
-      challengeCrispr: !1
-    };
-    for (let [target, source] of Object.entries(mapping)) {
-      let value = rawContext[source];
-      if (value !== void 0 && typeof value != "boolean")
-        return levelUnavailable("invalid-settings", source);
-      context[target] = value === !0;
-    }
-    return Object.freeze({ status: "ready", context: Object.freeze(context) });
-  }
-
-  // src/adapters/evolve/progression/evolution/captured-evolution-catalog.ts
-  var CAPTURED_EVOLUTION_RACES = Object.freeze([
-    { id: "human", label: "Human", genus: "humanoid" },
-    { id: "elven", label: "Elf", genus: "humanoid" },
-    { id: "orc", label: "Orc", genus: "humanoid" },
-    { id: "cath", label: "Cath", genus: "carnivore" },
-    { id: "wolven", label: "Wolven", genus: "carnivore" },
-    { id: "vulpine", label: "Vulpine", genus: "carnivore" },
-    { id: "centaur", label: "Centaur", genus: "herbivore" },
-    { id: "rhinotaur", label: "Rhinotaur", genus: "herbivore" },
-    { id: "capybara", label: "Capybara", genus: "herbivore" },
-    { id: "porkenari", label: "Porkenari", genus: "omnivore" },
-    { id: "hedgeoken", label: "Hedgeoken", genus: "omnivore" },
-    { id: "kobold", label: "Kobold", genus: "small" },
-    { id: "goblin", label: "Goblin", genus: "small" },
-    { id: "gnome", label: "Gnome", genus: "small" },
-    { id: "ogre", label: "Ogre", genus: "giant" },
-    { id: "cyclops", label: "Cyclops", genus: "giant" },
-    { id: "troll", label: "Troll", genus: "giant" },
-    { id: "tortoisan", label: "Tortoisan", genus: "reptilian" },
-    { id: "gecko", label: "Gecko", genus: "reptilian" },
-    { id: "slitheryn", label: "Slitheryn", genus: "reptilian" },
-    { id: "arraak", label: "Arraak", genus: "avian" },
-    { id: "pterodacti", label: "Pterodacti", genus: "avian" },
-    { id: "dracnid", label: "Dracnid", genus: "avian" },
-    { id: "entish", label: "Ent", genus: "plant" },
-    { id: "cacti", label: "Cacti", genus: "plant" },
-    { id: "pinguicula", label: "Pinguicula", genus: "plant" },
-    { id: "sporgar", label: "Sporgar", genus: "fungi" },
-    { id: "shroomi", label: "Shroomi", genus: "fungi" },
-    { id: "moldling", label: "Moldling", genus: "fungi" },
-    { id: "mantis", label: "Mantis", genus: "insectoid" },
-    { id: "scorpid", label: "Scorpid", genus: "insectoid" },
-    { id: "antid", label: "Antid", genus: "insectoid" },
-    { id: "sharkin", label: "Sharkin", genus: "aquatic" },
-    { id: "octigoran", label: "Octigoran", genus: "aquatic" },
-    { id: "dryad", label: "Dryad", genus: "fey" },
-    { id: "satyr", label: "Satyr", genus: "fey" },
-    { id: "phoenix", label: "Phoenix", genus: "heat" },
-    { id: "salamander", label: "Salamander", genus: "heat" },
-    { id: "yeti", label: "Yeti", genus: "polar" },
-    { id: "wendigo", label: "Wendigo", genus: "polar" },
-    { id: "tuskin", label: "Tuskin", genus: "sand" },
-    { id: "kamel", label: "Kamel", genus: "sand" },
-    { id: "balorg", label: "Balorg", genus: "demonic" },
-    { id: "imp", label: "Imp", genus: "demonic" },
-    { id: "seraph", label: "Seraph", genus: "angelic" },
-    { id: "unicorn", label: "Unicorn", genus: "angelic" },
-    { id: "synth", label: "Synth", genus: "synthetic" },
-    { id: "nano", label: "Nano", genus: "synthetic" },
-    { id: "ghast", label: "Ghast", genus: "eldritch" },
-    { id: "shoggoth", label: "Shoggoth", genus: "eldritch" },
-    { id: "raptors", label: "Raptors", genus: "primordial" },
-    { id: "rexicus", label: "Rexicus", genus: "primordial" },
-    { id: "dwarf", label: "Dwarf", genus: "hybrid" },
-    { id: "raccoon", label: "Racconar", genus: "hybrid" },
-    { id: "lichen", label: "Lichen", genus: "hybrid" },
-    { id: "wyvern", label: "Wyvern", genus: "hybrid" },
-    { id: "beholder", label: "Eye-Spector", genus: "hybrid" },
-    { id: "djinn", label: "Djinn", genus: "hybrid" },
-    { id: "narwhal", label: "Narwhalus", genus: "hybrid" },
-    { id: "bombardier", label: "Bombardier", genus: "hybrid" },
-    { id: "nephilim", label: "Nephilim", genus: "hybrid" },
-    { id: "mammuth", label: "Mammuth", genus: "hybrid" },
-    { id: "hellspawn", label: "Hellspawn", genus: "demonic" },
-    { id: "junker", label: "Valdi", genus: "variable" },
-    { id: "sludge", label: "Sludge", genus: "variable" },
-    { id: "ultra_sludge", label: "Ultra Sludge", genus: "variable" }
-  ]), CAPTURED_EVOLUTION_UNIVERSE_LABELS = Object.freeze(
-    Object.fromEntries(
-      [
-        {
-          id: "standard",
-          label: "Standard",
-          hint: "A standard universe with normal laws of physics"
-        },
-        {
-          id: "heavy",
-          label: "Heavy Gravity",
-          hint: "The force of gravity in this universe is much stronger than normal"
-        },
-        {
-          id: "antimatter",
-          label: "Antimatter",
-          hint: "This universe consists primarily of antimatter"
-        },
-        {
-          id: "evil",
-          label: "Evil",
-          hint: "Everything in this universe is evil"
-        },
-        {
-          id: "micro",
-          label: "Micro",
-          hint: "Everything in this universe is small"
-        },
-        { id: "magic", label: "Magic", hint: "Magic is real in this universe" }
-      ].map((entry) => [entry.id, Object.freeze(entry)])
-    )
-  ), CAPTURED_EVOLUTION_CHALLENGE_LABELS = Object.freeze(
-    Object.fromEntries(
-      [
-        {
-          id: "plasmid",
-          label: "No Starting Plasmids | Weak Mastery | Weak Genes",
-          hint: "Starting Plasmids have no effect.&#xA;Mastery is much weaker than normal.&#xA;Mastery is reduced to %0, and plasmid and anti-plasmid production are reduced to %1 value. Plasmid and anti-plasmid storage bonus reduced to %2. Phage storage bonus reduced to %3."
-        },
-        {
-          id: "crispr",
-          label: "Junk Gene | Bad Genes",
-          hint: "Gain a random negative mutation. CRISPR cost creep discounts function at only 20%.&#xA;Gain %0 random empowered negative trait and %1 weak negative traits."
-        },
-        {
-          id: "trade",
-          label: "No Free Trade",
-          hint: "No marketplace trading. (Trade routes are still enabled.)"
-        },
-        {
-          id: "craft",
-          label: "No Manual Crafting",
-          hint: "No manual resource crafting."
-        },
-        {
-          id: "joyless",
-          label: "Joyless",
-          hint: "There will be no joy in your life: entertainers and broadcasting are disabled. Construct a Biodome to earn the achievement and remove the penalty."
-        },
-        {
-          id: "steelen",
-          label: "Steelen",
-          hint: "Your species cannot figure out how to smelt Steel. You have to resort to other means to get any of it. Have the mettle to Bioseed with this challenge active and your dedication will be rewarded."
-        },
-        {
-          id: "decay",
-          label: "Decay",
-          hint: "Resources decay at a rate determined by how much of it you are storing. Larger stores decay quicker. Destroy this universe to end the cycle of decay."
-        },
-        {
-          id: "emfield",
-          label: "EM Field",
-          hint: "Energy costs are higher and technology may fail you. You must ascend to win."
-        },
-        {
-          id: "inflation",
-          label: "Inflation",
-          hint: "Inflation is ruining your economy. The more you build, the more worthless your money becomes. Constructing anything devalues money, causing all money costs to increase."
-        },
-        {
-          id: "sludge",
-          label: "Failed Experiment",
-          hint: "You will be stacked with terrible junk traits. You suffer for no reason."
-        },
-        {
-          id: "ultra_sludge",
-          label: "Ultimate Failed Experiment",
-          hint: "You will be stacked with terrible junk traits. You suffer because the community wanted it."
-        },
-        {
-          id: "orbit_decay",
-          label: "Orbital Decay",
-          hint: "Your homeworld's moon is in a decaying orbit; it will impact the planet in %0 days."
-        },
-        {
-          id: "gravity_well",
-          label: "Gravity Well | Witch Hunter | Warlord",
-          hint: "Gravity is very strong, so leaving the planet will be very difficult. Find a new one that doesn't drag you down.&#xA;Magic effects are stronger, but using magic draws unwanted attention. Your goal is to perform the ultimate forbidden ritual.&#xA;Prove you are the most ruthless to ever exist."
-        },
-        {
-          id: "junker",
-          label: "Genetic Dead End",
-          hint: "This forces on all four challenge genes. You will be stacked with horrible junk traits. Reach MAD for a special perk."
-        },
-        {
-          id: "cataclysm",
-          label: "Cataclysm",
-          hint: "A massive earthquake has literally shaken your planet apart. Start with a space colony but no homeworld. Escape to a new world to win (Bioseed)."
-        },
-        {
-          id: "banana",
-          label: "Banana Republic",
-          hint: "You can only export one type of resource, your economy is bad, and your army is weak. Complete a checklist of objectives; unifying exits the scenario."
-        },
-        {
-          id: "truepath",
-          label: "The True Path",
-          hint: "Use an alternate progression path."
-        },
-        {
-          id: "lone_survivor",
-          label: "Lone Survivor",
-          hint: "You must survive and thrive alone on an alien world."
-        },
-        {
-          id: "fasting",
-          label: "Fasting",
-          hint: "Food production is disabled. Learn to survive without sustenance."
-        }
-      ].map((entry) => [entry.id, Object.freeze(entry)])
-    )
-  );
-
   // src/adapters/evolve/progression/evolution/captured-evolution-settings.ts
   var AUTO_TARGET_ID = "auto", universeOptions = Object.freeze([
     Object.freeze({
@@ -31051,6 +31322,135 @@ If script is allowed to reassign non-empty storage it might waste time producing
         let queue = queueOf();
         raw().evolutionQueue = indexes.map((index) => queue[index]);
       }
+    });
+  }
+
+  // src/domain/progression/evolution/planet-settings.ts
+  function freezeCell(cell) {
+    return Object.freeze({ ...cell });
+  }
+  function freezeCells(cells) {
+    return Object.freeze(cells.map(freezeCell));
+  }
+  function createPlanetSettingsReadModel({
+    biomes,
+    traits,
+    extras
+  }) {
+    let frozenBiomes = freezeCells(biomes), frozenTraits = freezeCells(traits), frozenExtras = freezeCells(extras), rowCount = Math.max(
+      frozenBiomes.length,
+      frozenTraits.length,
+      frozenExtras.length
+    ), rows = [];
+    for (let index = 0; index < rowCount; index += 1)
+      rows.push(
+        Object.freeze({
+          ...frozenBiomes[index] === void 0 ? {} : { biome: frozenBiomes[index] },
+          ...frozenTraits[index] === void 0 ? {} : { trait: frozenTraits[index] },
+          ...frozenExtras[index] === void 0 ? {} : { extra: frozenExtras[index] }
+        })
+      );
+    return Object.freeze({
+      sectionId: "planet",
+      sectionName: "Planet Weighting",
+      rows: Object.freeze(rows)
+    });
+  }
+
+  // src/adapters/browser/planet-settings.ts
+  function createPlanetSettingsBrowserAdapter({
+    getDocument,
+    getJQuery,
+    getReadModel,
+    intents,
+    getActions
+  }) {
+    function renderCell(tableElement, cell, actions, hasFollowingCell) {
+      let inputElement = tableElement.next();
+      return cell === void 0 || (tableElement.append(actions.buildTableLabel(cell.label)), actions.addTableInput(inputElement, cell.settingName)), hasFollowingCell ? inputElement.next() : inputElement;
+    }
+    function buildPlanetSettings() {
+      let readModel = getReadModel();
+      getActions().buildSettingsSection(
+        readModel.sectionId,
+        readModel.sectionName,
+        () => {
+          intents.handle({ type: "reset-planet-settings" });
+        },
+        updatePlanetSettingsContent
+      );
+    }
+    function updatePlanetSettingsContent() {
+      let readModel = getReadModel(), actions = getActions();
+      renderSettingsSectionContent(
+        {
+          scrollDocument: getDocument(),
+          jquery: getJQuery(),
+          sectionId: readModel.sectionId
+        },
+        (currentNode) => {
+          renderPlanetContent(currentNode, readModel, actions);
+        }
+      );
+    }
+    function renderPlanetContent(currentNode, readModel, actions) {
+      currentNode.append(`
+          <span>Planet Weighting = Biome Weighting + Trait Weighting + (Extras Intensity * Extras Weightings)</span>
+          <table style="width:100%">
+            <tr>
+              <th class="has-text-warning" style="width:20%">Biome</th>
+              <th class="has-text-warning" style="width:calc(40% / 3)">Weighting</th>
+              <th class="has-text-warning" style="width:20%">Trait</th>
+              <th class="has-text-warning" style="width:calc(40% / 3)">Weighting</th>
+              <th class="has-text-warning" style="width:20%">Extra</th>
+              <th class="has-text-warning" style="width:calc(40% / 3)">Weighting</th>
+            </tr>
+            <tbody id="script_planetTableBody"></tbody>
+          </table>`);
+      let tableBodyNode = getJQuery()("#script_planetTableBody"), newTableBodyText = "";
+      for (let index = 0; index < readModel.rows.length; index += 1)
+        newTableBodyText += `<tr><td id="script_planet_${index}" style="width:20%"></td><td style="width:calc(40% / 3);border-right-width:1px"></td><td style="width:20%"></td><td style="width:calc(40% / 3);border-right-width:1px"></td><td style="width:20%"></td><td style="width:calc(40% / 3)"></td>/tr>`;
+      tableBodyNode.append(getJQuery()(newTableBodyText)), readModel.rows.forEach((row, index) => {
+        renderRow(getJQuery()(`#script_planet_${index}`), row, actions);
+      });
+    }
+    function renderRow(tableElement, row, actions) {
+      tableElement = renderCell(tableElement, row.biome, actions, !0), tableElement = renderCell(tableElement, row.trait, actions, !0), renderCell(tableElement, row.extra, actions, !1);
+    }
+    return Object.freeze({
+      buildPlanetSettings,
+      updatePlanetSettingsContent
+    });
+  }
+
+  // src/adapters/evolve/progression/evolution/captured-planet-settings.ts
+  var capturedPlanetBiomeCells = Object.freeze(
+    biomeList.map(
+      (id) => Object.freeze({
+        label: capturedPlanetLabel(id),
+        settingName: `biome_w_${id}`
+      })
+    )
+  ), capturedPlanetTraitCells = Object.freeze(
+    traitList.map(
+      (id) => Object.freeze({
+        label: capturedPlanetLabel(id),
+        settingName: `trait_w_${id}`
+      })
+    )
+  ), capturedPlanetExtraCells = Object.freeze(
+    extraList.map(
+      (id) => Object.freeze({ label: id, settingName: `extra_w_${id}` })
+    )
+  );
+  function createCapturedPlanetSettingsAdapter() {
+    let readModel = createPlanetSettingsReadModel({
+      biomes: capturedPlanetBiomeCells,
+      traits: capturedPlanetTraitCells,
+      extras: capturedPlanetExtraCells
+    });
+    return Object.freeze({
+      readPlanetSettingsReadModel: () => readModel
     });
   }
 
@@ -34124,6 +34524,21 @@ If script is allowed to reassign non-empty storage it might waste time producing
     });
   }
 
+  // src/application/planet-settings.ts
+  function createPlanetSettingsIntentHandler({
+    writer,
+    renderSettingsContent
+  }) {
+    return Object.freeze({
+      handle(intent) {
+        if (intent.type === "reset-planet-settings") {
+          writer.resetToDefaults(), writer.persist(), renderSettingsContent();
+          return;
+        }
+      }
+    });
+  }
+
   // src/application/weighting-settings.ts
   function createWeightingSettingsIntentHandler({
     writer,
@@ -35337,8 +35752,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
         },
         buildAuthoritySettings: () => authority?.buildAuthoritySettings(),
         buildEvolutionSettings: () => evolution?.buildEvolutionSettings(),
-        buildPlanetSettings: () => {
-        },
+        buildPlanetSettings: () => planet?.buildPlanetSettings(),
         buildTraitSettings: () => trait?.buildTraitSettings(),
         buildTriggerSettings: () => trigger?.buildTriggerSettings(),
         buildResearchSettings: () => research?.buildResearchSettings(),
@@ -35630,6 +36044,20 @@ If script is allowed to reassign non-empty storage it might waste time producing
         effects: {
           resetCheckbox: () => controls2.resetCheckbox("autoEvolution")
         }
+      });
+      let capturedPlanetAdapter = createCapturedPlanetSettingsAdapter(), planet, planetIntent = createPlanetSettingsIntentHandler({
+        writer: {
+          resetToDefaults: resetSection("planet"),
+          persist: persistSettings
+        },
+        renderSettingsContent: () => planet?.updatePlanetSettingsContent()
+      });
+      planet = createPlanetSettingsBrowserAdapter({
+        getDocument: () => documentForUi,
+        getJQuery: () => getJQuery(),
+        getReadModel: capturedPlanetAdapter.readPlanetSettingsReadModel,
+        intents: planetIntent,
+        getActions: () => panelActions
       });
       let war, warIntent = createWarSettingsIntentHandler({
         writer: {
@@ -36127,6 +36555,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
         authority,
         hell,
         evolution,
+        planet,
         war,
         weighting,
         job,
@@ -36170,7 +36599,7 @@ Only continue if you trust the source. Injected code:
       let ui = ensureSettingsUi(dom);
       ui.shell.buildImportExport(), dom("#script_settings").length === 0 && dom(".settings").append(
         '<div id="script_settings" style="margin-top: 30px;"></div>'
-      ), dom("#script_generalSettings").length === 0 && (ui.general.buildGeneralSettings(), ui.interface.buildInterfaceSettings(), ui.stateLog.buildStateLogSettings(), ui.achievementGuard.buildAchievementGuardSettings(), ui.challengeHelper.buildChallengeHelperSettings(), ui.authority.buildAuthoritySettings(), ui.evolution.buildEvolutionSettings(), ui.hell.buildHellSettings(dom("#script_settings"), ""), ui.war.buildWarSettings(
+      ), dom("#script_generalSettings").length === 0 && (ui.general.buildGeneralSettings(), ui.interface.buildInterfaceSettings(), ui.stateLog.buildStateLogSettings(), ui.achievementGuard.buildAchievementGuardSettings(), ui.challengeHelper.buildChallengeHelperSettings(), ui.authority.buildAuthoritySettings(), ui.evolution.buildEvolutionSettings(), ui.planet.buildPlanetSettings(), ui.hell.buildHellSettings(dom("#script_settings"), ""), ui.war.buildWarSettings(
         dom("#script_settings"),
         ""
       ), ui.weighting.buildWeightingSettings(), capturedJobCatalogReader?.() !== void 0 && ui.job.buildJobSettings(), ui.building?.buildBuildingSettings(), ui.project?.buildProjectSettings(), ui.storage?.buildStorageSettings(), ui.market?.buildMarketSettings(), ui.ejector?.buildEjectorSettings(), ui.magic?.buildMagicSettings(), ui.production?.buildProductionSettings(), ui.trait?.buildTraitSettings());
@@ -36338,6 +36767,105 @@ Only continue if you trust the source. Injected code:
           } catch (error) {
             logError(`settings panel could not be refreshed: ${String(error)}`);
           }
+      }
+    });
+  }
+
+  // src/adapters/browser/planet-metadata.ts
+  var POPPER_SELECTOR2 = "#popper", TITLE_SELECTOR = ".aTitle", GEOLOGY_ROW_SELECTOR = ".pGeo";
+  function elementText(value) {
+    let text = readProperty(value, "textContent");
+    return typeof text == "string" ? text.trim() : void 0;
+  }
+  function queryAll2(node, selector) {
+    let query = readProperty(node, "querySelectorAll");
+    if (typeof query != "function") return [];
+    let result = Reflect.apply(query, node, [selector]);
+    if (!isRecord(result)) return [];
+    let length = readProperty(result, "length");
+    if (typeof length != "number") return [];
+    let nodes = [];
+    for (let index = 0; index < length; index += 1)
+      nodes.push(result[index]);
+    return nodes;
+  }
+  function queryOne2(node, selector) {
+    let query = readProperty(node, "querySelector");
+    if (typeof query == "function")
+      return Reflect.apply(query, node, [selector]) ?? void 0;
+  }
+  function hasClass(node, className) {
+    let list = readProperty(node, "classList"), contains = readProperty(list, "contains");
+    return typeof contains != "function" ? !1 : Reflect.apply(contains, list, [className]) === !0;
+  }
+  function readDataId(node) {
+    let fromDataset = readProperty(readProperty(node, "dataset"), "id");
+    if (typeof fromDataset == "string") return fromDataset;
+    let getAttribute = readProperty(node, "getAttribute");
+    if (typeof getAttribute != "function") return;
+    let value = Reflect.apply(getAttribute, node, ["data-id"]);
+    return typeof value == "string" ? value : void 0;
+  }
+  function readGeologyRow(node) {
+    let text = elementText(node);
+    if (text === void 0) return;
+    let colon = text.indexOf(":");
+    if (colon <= 0) return;
+    let label = text.slice(0, colon).trim(), value = text.slice(colon + 1).trim();
+    if (label === "") return;
+    let beneficial = hasClass(node, "has-text-advanced");
+    if (!beneficial && !hasClass(node, "has-text-caution")) return;
+    let percentMatch = /^([+-]?\d+)%$/.exec(value);
+    return Object.freeze({
+      label,
+      beneficial,
+      percent: percentMatch === null ? void 0 : Number(percentMatch[1])
+    });
+  }
+  function createPlanetMetadataReader({
+    getDocument,
+    getMouseEventConstructor
+  }) {
+    return Object.freeze({
+      readPlanetDetail(elementId) {
+        let document = getDocument(), getElementById = readProperty(document, "getElementById");
+        if (typeof getElementById != "function") return;
+        let row = Reflect.apply(getElementById, document, [elementId]);
+        if (!isRecord(row)) return;
+        let title = elementText(queryOne2(row, TITLE_SELECTOR));
+        if (title === void 0 || title === "") return;
+        let MouseEventConstructor = getMouseEventConstructor(), dispatchEvent = readProperty(row, "dispatchEvent");
+        if (typeof MouseEventConstructor != "function" || typeof dispatchEvent != "function")
+          return;
+        let dispatch = (type) => {
+          Reflect.apply(dispatchEvent, row, [
+            Reflect.construct(
+              MouseEventConstructor,
+              [type, {}]
+            )
+          ]);
+        };
+        dispatch("mouseover");
+        try {
+          let popper = queryOne2(document, POPPER_SELECTOR2), ownerId = readDataId(popper);
+          if (!isRecord(popper) || ownerId !== elementId) return;
+          let summary = elementText(queryOne2(popper, "div"));
+          if (summary === void 0) return;
+          let geology = [];
+          for (let node of queryAll2(popper, GEOLOGY_ROW_SELECTOR)) {
+            let parsed = readGeologyRow(node);
+            if (parsed === void 0) return;
+            geology.push(parsed);
+          }
+          return Object.freeze({
+            elementId,
+            title,
+            summary,
+            geology: Object.freeze(geology)
+          });
+        } finally {
+          dispatch("mouseout");
+        }
       }
     });
   }
@@ -36580,7 +37108,7 @@ Only continue if you trust the source. Injected code:
     reader,
     executor
   }) {
-    let sample = reader.sample(), decision = planSinglePlanetSelection(sample.gate, sample.candidateIds);
+    let sample = reader.sample(), decision = sample.ranking === void 0 ? planSinglePlanetSelection(sample.gate, sample.candidateIds) : planPlanetSelection(sample.ranking);
     return decision === null ? CAPTURED_PLANET_SELECTION_SUCCEEDED : executor.execute(decision);
   }
 
@@ -37086,38 +37614,10 @@ Only continue if you trust the source. Injected code:
   function capturedForeignGovernmentWithPolicy(target, policy, espionagePolicy = policy === "Ignore" ? target.espionagePolicy : policy) {
     return target.policy === policy && target.espionagePolicy === espionagePolicy ? target : Object.freeze({ ...target, policy, espionagePolicy });
   }
-  function capturedForeignAchievementAffix(root) {
-    let universe = readProperty(readProperty(root, "race"), "universe");
-    if (typeof universe == "string")
-      switch (universe) {
-        case "evil":
-          return "e";
-        case "antimatter":
-          return "a";
-        case "heavy":
-          return "h";
-        case "micro":
-          return "m";
-        case "magic":
-          return "mg";
-        default:
-          return "l";
-      }
-  }
-  function capturedForeignAchievementStar(root, achievementId) {
-    let achievements = readProperty(
-      readProperty(readProperty(root, "stats"), "achieve"),
-      achievementId
-    ), affix = capturedForeignAchievementAffix(root);
-    if (achievements == null) return 0;
-    if (!isRecord(achievements) || affix === void 0) return;
-    let star = readProperty(achievements, affix);
-    return star == null ? 0 : finite(star);
-  }
   function capturedForeignPacifistGuardActive(root, settings) {
     if (settings.achievementGuards !== !0 || settings.guardPacifist === !1)
       return !1;
-    let attacks = finite(readProperty(readProperty(root, "stats"), "attacks")), earnedStar = capturedForeignAchievementStar(root, "pacifist"), race = readProperty(root, "race"), targetStar = calculateAchievementStarLevel({
+    let attacks = finite(readProperty(readProperty(root, "stats"), "attacks")), earnedStar = readCapturedAchievementStar(root, "pacifist"), race = readProperty(root, "race"), targetStar = calculateAchievementStarLevel({
       challengePlasmid: !!readProperty(race, "no_plasmid"),
       challengeTrade: !!readProperty(race, "no_trade"),
       challengeCraft: !!readProperty(race, "no_craft"),
@@ -37155,7 +37655,7 @@ Only continue if you trust the source. Injected code:
         purchased: target.purchased
       });
     }
-    let worldDominationUnlocked = guardWorldDomination ? capturedForeignAchievementStar(root, "world_domination") : 0, syndicateUnlocked = guardSyndicate ? capturedForeignAchievementStar(root, "syndicate") : 0;
+    let worldDominationUnlocked = guardWorldDomination ? readCapturedAchievementStar(root, "world_domination") : 0, syndicateUnlocked = guardSyndicate ? readCapturedAchievementStar(root, "syndicate") : 0;
     return guardWorldDomination && worldDominationUnlocked === void 0 || guardSyndicate && syndicateUnlocked === void 0 ? null : planForeignAchievementGoal({
       guardWorldDomination,
       guardSyndicate,
@@ -39009,7 +39509,11 @@ Only continue if you trust the source. Injected code:
       controls: createPlanetSelectionControls(
         () => document,
         () => mouseEvent
-      )
+      ),
+      metadata: createPlanetMetadataReader({
+        getDocument: () => document,
+        getMouseEventConstructor: () => mouseEvent
+      })
     }), capturedSpyTraining = createCapturedSpyTraining({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,

@@ -5,6 +5,7 @@ import {
   type ForeignAchievementGoal,
   type ForeignAchievementState,
 } from "../../../domain/combat/foreign-achievements.ts";
+import { readCapturedAchievementStar } from "../captured-achievements.ts";
 import {
   calculateAchievementStarLevel,
   isAchievementGuardActive,
@@ -184,40 +185,6 @@ export function capturedForeignGovernmentWithPolicy(
   return Object.freeze({ ...target, policy, espionagePolicy });
 }
 
-function capturedForeignAchievementAffix(root: unknown): string | undefined {
-  const universe = readProperty(readProperty(root, "race"), "universe");
-  if (typeof universe !== "string") return undefined;
-  switch (universe) {
-    case "evil":
-      return "e";
-    case "antimatter":
-      return "a";
-    case "heavy":
-      return "h";
-    case "micro":
-      return "m";
-    case "magic":
-      return "mg";
-    default:
-      return "l";
-  }
-}
-
-function capturedForeignAchievementStar(
-  root: unknown,
-  achievementId: string,
-): number | undefined {
-  const achievements = readProperty(
-    readProperty(readProperty(root, "stats"), "achieve"),
-    achievementId,
-  );
-  const affix = capturedForeignAchievementAffix(root);
-  if (achievements === undefined || achievements === null) return 0;
-  if (!isRecord(achievements) || affix === undefined) return undefined;
-  const star = readProperty(achievements, affix);
-  return star === undefined || star === null ? 0 : finite(star);
-}
-
 export function capturedForeignPacifistGuardActive(
   root: unknown,
   settings: Record<string, unknown>,
@@ -229,7 +196,7 @@ export function capturedForeignPacifistGuardActive(
     return false;
   }
   const attacks = finite(readProperty(readProperty(root, "stats"), "attacks"));
-  const earnedStar = capturedForeignAchievementStar(root, "pacifist");
+  const earnedStar = readCapturedAchievementStar(root, "pacifist");
   const race = readProperty(root, "race");
   const targetStar = calculateAchievementStarLevel({
     challengePlasmid: Boolean(readProperty(race, "no_plasmid")),
@@ -277,10 +244,10 @@ function capturedForeignAchievementGoal(
     });
   }
   const worldDominationUnlocked = guardWorldDomination
-    ? capturedForeignAchievementStar(root, "world_domination")
+    ? readCapturedAchievementStar(root, "world_domination")
     : 0;
   const syndicateUnlocked = guardSyndicate
-    ? capturedForeignAchievementStar(root, "syndicate")
+    ? readCapturedAchievementStar(root, "syndicate")
     : 0;
   if (
     (guardWorldDomination && worldDominationUnlocked === undefined) ||

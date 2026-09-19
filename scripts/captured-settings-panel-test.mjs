@@ -223,7 +223,7 @@ function createPage(
   assert.equal(toggles.length, 1);
   assert.equal(root.querySelectorAll("#script_settings").length, 1);
   assert.equal(root.querySelectorAll("#script_generalSettings").length, 1);
-  assert.equal(root.querySelectorAll("button.script-collapsible").length, 11);
+  assert.equal(root.querySelectorAll("button.script-collapsible").length, 12);
   for (const section of [
     "interface",
     "stateLog",
@@ -231,6 +231,7 @@ function createPage(
     "challengeHelper",
     "authority",
     "evolution",
+    "planet",
     "hell",
     "war",
     "weighting",
@@ -904,6 +905,7 @@ console.log("captured settings panel tests passed");
     "challengeHelper",
     "authority",
     "evolution",
+    "planet",
     "hell",
     "war",
     "weighting",

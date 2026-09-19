@@ -141,6 +141,7 @@ import { createCapturedQueuedSettings } from "../adapters/evolve/progression/evo
 import { createCapturedEvolution } from "../adapters/evolve/progression/evolution/captured-evolution.ts";
 import { createCapturedPlanetSelection } from "../adapters/evolve/progression/evolution/captured-planet-selection.ts";
 import { createCapturedSettingsPanel } from "./captured-settings-panel-control.ts";
+import { createPlanetMetadataReader } from "../adapters/browser/planet-metadata.ts";
 import {
   createPlanetSelectionControls,
   createUniverseSelectionControls,
@@ -420,6 +421,10 @@ export function startCapturedRuntime({
       () => document,
       () => mouseEvent,
     ),
+    metadata: createPlanetMetadataReader({
+      getDocument: () => document,
+      getMouseEventConstructor: () => mouseEvent,
+    }),
   });
   const capturedSpyTraining = createCapturedSpyTraining({
     rootState: pageCapture.rootState,
