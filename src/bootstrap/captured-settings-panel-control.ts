@@ -121,6 +121,13 @@ import {
 } from "../adapters/browser/government-settings.ts";
 import { createGovernmentSettingsIntentHandler } from "../application/government-settings.ts";
 import { createCapturedGovernmentSettingsAdapter } from "../adapters/evolve/civic/captured-government-settings.ts";
+import {
+  createFleetSettingsBrowserAdapter,
+  type FleetSettingsBrowserActions,
+  type FleetSettingsBrowserAdapter,
+} from "../adapters/browser/fleet-settings.ts";
+import { createFleetSettingsIntentHandler } from "../application/fleet-settings.ts";
+import { createCapturedFleetSettingsAdapter } from "../adapters/evolve/combat/captured-fleet-settings.ts";
 import type { TriggerValue } from "../domain/progression/build/trigger-settings.ts";
 import type {
   ObjectList,
@@ -356,6 +363,13 @@ type GovernmentSettingsDocument = ReturnType<
 type GovernmentSettingsJQuery = ReturnType<
   Parameters<typeof createGovernmentSettingsBrowserAdapter>[0]["getJQuery"]
 >;
+type FleetSettings = ReturnType<typeof createFleetSettingsBrowserAdapter>;
+type FleetSettingsDocument = ReturnType<
+  Parameters<typeof createFleetSettingsBrowserAdapter>[0]["getDocument"]
+>;
+type FleetSettingsJQuery = ReturnType<
+  Parameters<typeof createFleetSettingsBrowserAdapter>[0]["getJQuery"]
+>;
 
 export interface CapturedSettingsPanelDependencies {
   /** The page's global object; the panel reads `document`, `navigator` and `location` from it. */
@@ -400,6 +414,9 @@ export interface CapturedSettingsPanelDependencies {
   };
   readonly researchSettings?: {
     readonly rootState: GameRootStateSource;
+    readonly controls: GameControlRegistry;
+  };
+  readonly fleetSettings?: {
     readonly controls: GameControlRegistry;
   };
   readonly onDiagnostic?: (message: string) => void;
@@ -493,6 +510,7 @@ export function createCapturedSettingsPanel({
   magicSettings: capturedMagicSettings,
   productionSettings: capturedProductionSettings,
   researchSettings: capturedResearchSettings,
+  fleetSettings: capturedFleetSettings,
   onDiagnostic = () => {},
   logError = () => {},
 }: CapturedSettingsPanelDependencies): CapturedSettingsPanel {
@@ -651,6 +669,7 @@ export function createCapturedSettingsPanel({
         readonly magic: MagicSettings | undefined;
         readonly production: ProductionSettings | undefined;
         readonly government: GovernmentSettings | undefined;
+        readonly fleet: FleetSettings | undefined;
         readonly craftToggles: CraftToggles | undefined;
         readonly shell: SettingsShell;
       }
@@ -790,6 +809,7 @@ export function createCapturedSettingsPanel({
     let magic: MagicSettings | undefined;
     let production: ProductionSettings | undefined;
     let government: GovernmentSettings | undefined;
+    let fleet: FleetSettings | undefined;
     let research: ResearchSettings | undefined;
     let trigger: TriggerSettings | undefined;
     const shell = createSettingsShell({
@@ -1513,6 +1533,114 @@ export function createCapturedSettingsPanel({
         },
       });
     }
+    if (capturedFleetSettings !== undefined) {
+      const capturedAdapter = createCapturedFleetSettingsAdapter({
+        controls: capturedFleetSettings.controls,
+        getSettingsRaw: settings.readRaw,
+      });
+      let fleetIntent: ReturnType<typeof createFleetSettingsIntentHandler>;
+      fleet = createFleetSettingsBrowserAdapter({
+        getDocument: () => documentForUi as unknown as FleetSettingsDocument,
+        getJQuery: () => getJQuery() as unknown as FleetSettingsJQuery,
+        reader: { read: capturedAdapter.readFleetSettingsReadModel },
+        intents: { handle: (intent) => fleetIntent.handle(intent) },
+        getActions: () =>
+          ({
+            buildSettingsSection2: (
+              parentNode: unknown,
+              secondaryPrefix: string,
+              sectionId: string,
+              sectionName: string,
+              resetFunction: () => void,
+              updateSettingsContentFunction: (prefix: string) => void,
+            ) =>
+              shell.buildSettingsSection2(
+                parentNode as Parameters<
+                  SettingsShell["buildSettingsSection2"]
+                >[0],
+                secondaryPrefix,
+                sectionId,
+                sectionName,
+                resetFunction,
+                updateSettingsContentFunction,
+              ),
+            addSettingsHeader1: shell.addSettingsHeader1,
+            addStandardHeading: (node: unknown, heading: string) =>
+              shell.addStandardHeading(
+                node as unknown as Parameters<
+                  typeof shell.addStandardHeading
+                >[0],
+                heading,
+              ),
+            addSettingsNumber: (
+              node: unknown,
+              settingName: string,
+              labelText: string,
+              hintText: string,
+            ) =>
+              controls.addSettingsNumber(
+                node as SettingsControlNode,
+                settingName,
+                labelText,
+                hintText,
+              ),
+            addSettingsSelect: (
+              node: unknown,
+              settingName: string,
+              labelText: string,
+              hintText: string,
+              options: readonly { val: string; label: string; hint: string }[],
+            ) =>
+              controls.addSettingsSelect(
+                node as SettingsControlNode,
+                settingName,
+                labelText,
+                hintText,
+                options,
+              ),
+            addSettingsToggle: (
+              node: unknown,
+              settingName: string,
+              labelText: string,
+              hintText: string,
+            ) =>
+              controls.addSettingsToggle(
+                node as SettingsControlNode,
+                settingName,
+                labelText,
+                hintText,
+              ),
+            addTableInput: (node: unknown, settingName: string) =>
+              controls.addTableInput(node as SettingsControlNode, settingName),
+            buildTableLabel: (label: string) => controls.buildTableLabel(label),
+            openOverrideModal: (event: unknown) =>
+              openOverrideModal(
+                event as unknown as Parameters<typeof openOverrideModal>[0],
+              ),
+            tableSorter,
+          }) as unknown as FleetSettingsBrowserActions,
+      });
+      fleetIntent = createFleetSettingsIntentHandler({
+        writer: {
+          resetToDefaults: () => {
+            if (settingsLifecycle !== undefined) {
+              settingsLifecycle.resetSection("fleet");
+            } else {
+              capturedAdapter.resetToDefaults();
+            }
+          },
+          reorderAndromeda: (regionIds) => {
+            capturedAdapter.reorderAndromeda(regionIds);
+          },
+          persist: persistSettings,
+        },
+        render: (secondaryPrefix) =>
+          fleet?.updateFleetSettingsContent(secondaryPrefix),
+        effects: {
+          resetCheckbox: () => controls.resetCheckbox("autoFleet"),
+        },
+      });
+    }
     if (capturedProjectSettings !== undefined) {
       const capturedAdapter = createCapturedProjectSettingsAdapter({
         rootState: capturedProjectSettings.rootState,
@@ -1981,6 +2109,7 @@ export function createCapturedSettingsPanel({
       magic,
       production,
       government,
+      fleet,
       craftToggles,
       shell,
     };
@@ -2262,7 +2391,21 @@ export function createCapturedSettingsPanel({
       },
       war: unported("Foreign Affairs options"),
       hell: unported("Hell options"),
-      fleet: unported("Fleet options"),
+      fleet: (node, prefix) => {
+        const dom = getQuery();
+        const adapter =
+          dom === undefined ? undefined : ensureSettingsUi(dom).fleet;
+        if (adapter === undefined) {
+          unported("Fleet options")();
+          return;
+        }
+        adapter.buildFleetSettings(
+          node as unknown as Parameters<
+            FleetSettingsBrowserAdapter["buildFleetSettings"]
+          >[0],
+          prefix,
+        );
+      },
     }),
     openOverrideModal: (event) => openOverrideModal(event),
   });

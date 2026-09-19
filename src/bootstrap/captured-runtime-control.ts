@@ -375,6 +375,9 @@ export function startCapturedRuntime({
       rootState: pageCapture.rootState,
       controls: pageCapture.controls,
     },
+    fleetSettings: {
+      controls: pageCapture.controls,
+    },
     onDiagnostic: (message) => reportDiagnostic(message),
     logError: (message) => logError(message),
   });

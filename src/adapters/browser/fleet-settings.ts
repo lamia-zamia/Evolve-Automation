@@ -70,7 +70,7 @@ export interface FleetSettingsBrowserAdapter {
   updateFleetSettingsContent(secondaryPrefix: string): void;
 }
 
-function renderControl(
+function renderFleetControl(
   node: JQueryNode,
   control: FleetSettingsControl,
   actions: FleetSettingsBrowserActions,
@@ -131,7 +131,7 @@ export function createFleetSettingsBrowserAdapter({
   ): void {
     actions.addStandardHeading(node, "Outer Solar");
     for (const control of model.outerControls)
-      renderControl(node, control, actions);
+      renderFleetControl(node, control, actions);
     node.append(
       '<div class="has-text-info">While the Eris Digsite is incomplete, its effective defense target is raised automatically from the configured scan/post-capture value so active Troopers and Tanks can overcome Digsite regeneration.</div>',
     );
@@ -186,7 +186,7 @@ export function createFleetSettingsBrowserAdapter({
   ): void {
     actions.addStandardHeading(node, "Andromeda");
     for (const control of model.andromedaControls)
-      renderControl(node, control, actions);
+      renderFleetControl(node, control, actions);
     node.append(
       `<table style="width:100%; text-align:left"><tbody id="script_${prefix}fleetTableBody"></tbody></table>`,
     );

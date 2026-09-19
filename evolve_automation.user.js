@@ -28981,6 +28981,465 @@ If script is allowed to reassign non-empty storage it might waste time producing
     });
   }
 
+  // src/domain/combat/fleet-settings.ts
+  function freezeOption3(option) {
+    return Object.freeze({ ...option });
+  }
+  function freezeControls(controls2) {
+    return Object.freeze(
+      controls2.map(
+        (control) => Object.freeze(
+          "options" in control ? {
+            ...control,
+            options: Object.freeze(control.options.map(freezeOption3))
+          } : { ...control }
+        )
+      )
+    );
+  }
+  function freezeRegions(regions) {
+    return Object.freeze(regions.map((region) => Object.freeze({ ...region })));
+  }
+  function createFleetSettingsReadModel(input) {
+    let components = {};
+    for (let [key, options] of Object.entries(input.outerComponents))
+      components[key] = Object.freeze(options.map(freezeOption3));
+    return Object.freeze({
+      sectionId: "fleet",
+      sectionName: "Fleet",
+      outerControls: freezeControls(input.outerControls),
+      outerComponents: Object.freeze(components),
+      outerRegions: freezeRegions(input.outerRegions),
+      andromedaControls: freezeControls(input.andromedaControls),
+      andromedaRegions: freezeRegions(input.andromedaRegions)
+    });
+  }
+
+  // src/adapters/browser/fleet-settings.ts
+  function renderFleetControl(node, control, actions) {
+    if (control.kind === "header")
+      return void actions.addSettingsHeader1(node, control.label);
+    if (control.kind === "number")
+      return void actions.addSettingsNumber(
+        node,
+        control.settingName,
+        control.label,
+        control.hint
+      );
+    if (control.kind === "toggle")
+      return void actions.addSettingsToggle(
+        node,
+        control.settingName,
+        control.label,
+        control.hint
+      );
+    control.kind === "select" && actions.addSettingsSelect(
+      node,
+      control.settingName,
+      control.label,
+      control.hint,
+      control.options
+    );
+  }
+  function createFleetSettingsBrowserAdapter({
+    getDocument,
+    getJQuery,
+    reader,
+    intents,
+    getActions
+  }) {
+    function buildFleetSettings(parent, secondaryPrefix) {
+      let model = reader.read();
+      getActions().buildSettingsSection2(
+        parent,
+        secondaryPrefix,
+        model.sectionId,
+        model.sectionName,
+        () => intents.handle({ type: "reset-fleet-settings", secondaryPrefix }),
+        updateFleetSettingsContent
+      );
+    }
+    function renderOuter(node, prefix, model, actions) {
+      actions.addStandardHeading(node, "Outer Solar");
+      for (let control of model.outerControls)
+        renderFleetControl(node, control, actions);
+      node.append(
+        '<div class="has-text-info">While the Eris Digsite is incomplete, its effective defense target is raised automatically from the configured scan/post-capture value so active Troopers and Tanks can overcome Digsite regeneration.</div>'
+      ), actions.addSettingsHeader1(node, "Fighter");
+      for (let [type, options] of Object.entries(model.outerComponents))
+        actions.addSettingsSelect(
+          node,
+          `fleet_outer_${type}`,
+          "",
+          "Preset ship component",
+          options
+        );
+      actions.addSettingsHeader1(node, "Scout");
+      for (let [type, options] of Object.entries(model.outerComponents))
+        actions.addSettingsSelect(
+          node,
+          `fleet_scout_${type}`,
+          "",
+          "Preset ship component",
+          options
+        );
+      node.append(
+        `<table style="width:100%; text-align: left"><tbody id="script_${prefix}fleetOuterTable"></tbody></table>`
+      ), getJQuery()(`#script_${prefix}fleetOuterTable`).append(
+        getJQuery()(
+          model.outerRegions.map(
+            (region) => `<tr><td id="script_${prefix}fleet_${region.id}"></td><td></td><td></td><td></td><td></td></tr>`
+          ).join("")
+        )
+      );
+      for (let region of model.outerRegions) {
+        let cell = getJQuery()(`#script_${prefix}fleet_${region.id}`);
+        cell.append(actions.buildTableLabel(region.label)), cell = cell.next(), actions.addTableInput(cell, `fleet_outer_pr_${region.id}`), cell = cell.next(), actions.addTableInput(cell, `fleet_outer_def_${region.id}`), cell = cell.next(), actions.addTableInput(cell, `fleet_outer_sc_${region.id}`);
+      }
+    }
+    function renderAndromeda(node, prefix, model, actions) {
+      actions.addStandardHeading(node, "Andromeda");
+      for (let control of model.andromedaControls)
+        renderFleetControl(node, control, actions);
+      node.append(
+        `<table style="width:100%; text-align:left"><tbody id="script_${prefix}fleetTableBody"></tbody></table>`
+      );
+      let body = getJQuery()(`#script_${prefix}fleetTableBody`);
+      for (let region of model.andromedaRegions) {
+        let row = getJQuery()(
+          `<tr value="${region.id}" class="script-draggable"><td id="script_${prefix}fleet_${region.id}"></td><td><span class="script-lastcolumn"></span></td></tr>`
+        );
+        row.toggleClass("inactive-row", !1).on(
+          "click",
+          {
+            label: `Andromeda region priority (${region.settingName})`,
+            name: region.settingName,
+            type: "number"
+          },
+          actions.openOverrideModal
+        ), body.append(row), getJQuery()(`#script_${prefix}fleet_${region.id}`).append(
+          actions.buildTableLabel(region.label)
+        );
+      }
+      actions.tableSorter.attach(body[0], {
+        items: "tr:not(.unsortable)",
+        attribute: "value",
+        onOrderChanged: (ids) => {
+          intents.handle({
+            type: "reorder-andromeda-regions",
+            secondaryPrefix: prefix,
+            regionIds: ids
+          });
+        }
+      });
+    }
+    function updateFleetSettingsContent(secondaryPrefix) {
+      let model = reader.read(), actions = getActions();
+      renderSettingsSectionContent(
+        {
+          scrollDocument: getDocument(),
+          jquery: getJQuery(),
+          sectionId: `${secondaryPrefix}${model.sectionId}`
+        },
+        (node) => {
+          renderOuter(node, secondaryPrefix, model, actions), renderAndromeda(node, secondaryPrefix, model, actions);
+        }
+      );
+    }
+    return Object.freeze({ buildFleetSettings, updateFleetSettingsContent });
+  }
+
+  // src/application/fleet-settings.ts
+  function createFleetSettingsIntentHandler({
+    writer,
+    render,
+    effects
+  }) {
+    return Object.freeze({
+      handle(intent) {
+        switch (intent.type) {
+          case "reset-fleet-settings":
+            writer.resetToDefaults(), writer.persist(), render(intent.secondaryPrefix), effects.resetCheckbox();
+            return;
+          case "reorder-andromeda-regions":
+            writer.reorderAndromeda(intent.regionIds), writer.persist(), intent.secondaryPrefix !== "" && render("");
+            return;
+        }
+      }
+    });
+  }
+
+  // src/adapters/evolve/combat/captured-fleet-settings-catalog.ts
+  function shipComponentOption(value, label) {
+    return Object.freeze({
+      val: value,
+      label,
+      hint: "Preset ship component"
+    });
+  }
+  var CAPTURED_FLEET_OUTER_CONTROLS = Object.freeze([
+    Object.freeze({
+      kind: "select",
+      settingName: "fleetOuterShips",
+      label: "Ships to build",
+      hint: "Once avalable and affordable script will build ship of selected design, and send it to region with most piracy * weighting",
+      options: Object.freeze([
+        Object.freeze({
+          val: "none",
+          label: "None",
+          hint: "Ship building disabled"
+        }),
+        Object.freeze({
+          val: "user",
+          label: "Current design",
+          hint: "Build whatever currently set in Ship Yard"
+        }),
+        Object.freeze({
+          val: "manual",
+          label: "Manual mode",
+          hint: "Assists accumulating resources needed for current blueprint, without building or deploying anything. It also might need tweaking prioritization settings to work."
+        }),
+        Object.freeze({
+          val: "custom",
+          label: "Presets",
+          hint: "Build ships with components configured below. All components need to be unlocked, and resulting design should have enough power"
+        })
+      ])
+    }),
+    Object.freeze({
+      kind: "number",
+      settingName: "fleetOuterCrew",
+      label: "Minimum idle soldiers",
+      hint: "Only build ships when the remaining idle soldiers exceed this number. In Evil, the configured Authority target can reserve more soldiers automatically."
+    }),
+    Object.freeze({
+      kind: "toggle",
+      settingName: "fleetExploreTau",
+      label: "Explore Tau Ceti",
+      hint: "Send explorer to Tau Ceti"
+    })
+  ]), CAPTURED_FLEET_ANDROMEDA_CONTROLS = Object.freeze([
+    Object.freeze({
+      kind: "toggle",
+      settingName: "fleetMaxCover",
+      label: "Maximize protection of prioritized systems",
+      hint: "Adjusts ships distribution to fully supress piracy in prioritized regions. Some potential defense will be wasted, as it will use big ships to cover small holes, when it doesn't have anything fitting better. This option is not required: all your dreadnoughts still will be used even without this option."
+    }),
+    Object.freeze({
+      kind: "toggle",
+      settingName: "fleetCrewReclaim",
+      label: "Crew combat ships only when useful",
+      hint: "Power combat ships only when reducing piracy improves a resource or knowledge output the automation currently needs, and release all other crews back to the workforce. Active trade routes are protected only while their purchased resource is useful. Inactive while fleet is being accumulated for an assault mission. Surplus ships won't be parked at Gorddon for the Symposium bonus while this is enabled."
+    }),
+    Object.freeze({
+      kind: "number",
+      settingName: "fleetEmbassyKnowledge",
+      label: "Minimum knowledge for Embassy",
+      hint: "Building Embassy increases maximum piracy up to 100, script won't Auto Build it until this knowledge cap is reached."
+    }),
+    Object.freeze({
+      kind: "number",
+      settingName: "fleetAlienGiftKnowledge",
+      label: "Minimum knowledge for Alien Gift",
+      hint: "Researching Alien Gift increases maximum piracy up to 250, script won't Auto Research it until this knowledge cap is reached."
+    }),
+    Object.freeze({
+      kind: "number",
+      settingName: "fleetAlien2Knowledge",
+      label: "Minimum knowledge for Alien 2 Assault",
+      hint: "Assaulting Alien 2 increases maximum piracy up to 500, script won't do it until this knowledge cap is reached. Regardless of set value it won't ever try to assault until you have big enough fleet to do it without loses."
+    }),
+    Object.freeze({
+      kind: "select",
+      settingName: "fleetAlien2Loses",
+      label: "Alien 2 Mission",
+      hint: "Assault Alien 2 when chosen outcome is achievable. You should really keep the default, unless you're speed running and want to take it out ASAP with losses.",
+      options: Object.freeze([
+        Object.freeze({
+          val: "none",
+          label: "No Losses",
+          hint: "Min fleet strength 650. No losses."
+        }),
+        Object.freeze({
+          val: "suicide",
+          label: "Suicide Mission",
+          hint: "Attack as soon as we hit 400 fleet rating. There will be losses."
+        })
+      ])
+    }),
+    Object.freeze({
+      kind: "select",
+      settingName: "fleetChthonianLoses",
+      label: "Chthonian Mission",
+      hint: "Assault Chthonian when chosen outcome is achievable. Mixed fleet formed to clear mission with minimum possible wasted ships, e.g. for low causlities it can sacriface 8 scouts, or 2 corvettes and 2 scouts, or frigate, and such. Whatever will be first available. It also takes in account perks and challenges, adjusting fleet accordingly.",
+      options: Object.freeze([
+        Object.freeze({
+          val: "ignore",
+          label: "Manual assault",
+          hint: "Won't ever launch assault mission on Chthonian"
+        }),
+        Object.freeze({
+          val: "high",
+          label: "High casualties",
+          hint: "Unlock Chthonian using mixed fleet, high casualties (1250+ total fleet power, 500 will be lost)"
+        }),
+        Object.freeze({
+          val: "avg",
+          label: "Average casualties",
+          hint: "Unlock Chthonian using mixed fleet, average casualties (2500+ total fleet power, 160 will be lost)"
+        }),
+        Object.freeze({
+          val: "low",
+          label: "Low casualties",
+          hint: "Unlock Chthonian using mixed fleet, low casualties (4500+ total fleet power, 80 will be lost)"
+        }),
+        Object.freeze({
+          val: "frigate",
+          label: "Frigate",
+          hint: "Unlock Chthonian loosing Frigate ship(s) (4500+ total fleet power, suboptimal for banana\\instinct runs)"
+        }),
+        Object.freeze({
+          val: "dread",
+          label: "Dreadnought",
+          hint: "Unlock Chthonian with Dreadnought suicide mission"
+        })
+      ])
+    })
+  ]), CAPTURED_SHIP_COMPONENTS = Object.freeze({
+    class: Object.freeze([
+      shipComponentOption("corvette", "Corvette"),
+      shipComponentOption("frigate", "Frigate"),
+      shipComponentOption("destroyer", "Destroyer"),
+      shipComponentOption("cruiser", "Cruiser"),
+      shipComponentOption("battlecruiser", "Battlecruiser"),
+      shipComponentOption("dreadnought", "Dreadnought"),
+      shipComponentOption("freighter", "Freighter"),
+      shipComponentOption("explorer", "Explorer"),
+      shipComponentOption("supply_ship", "Supply Ship")
+    ]),
+    power: Object.freeze([
+      shipComponentOption("solar", "Solar"),
+      shipComponentOption("diesel", "Diesel"),
+      shipComponentOption("fission", "Fission"),
+      shipComponentOption("fusion", "Fusion"),
+      shipComponentOption("elerium", "Elerium"),
+      shipComponentOption("antimatter", "Antimatter")
+    ]),
+    weapon: Object.freeze([
+      shipComponentOption("railgun", "Railguns"),
+      shipComponentOption("laser", "Lasers"),
+      shipComponentOption("p_laser", "Pulse Lasers"),
+      shipComponentOption("plasma", "Plasma Beams"),
+      shipComponentOption("phaser", "Phasers"),
+      shipComponentOption("disruptor", "Disruptors"),
+      shipComponentOption("gauss", "Gauss Cannons")
+    ]),
+    armor: Object.freeze([
+      shipComponentOption("steel", "Steel"),
+      shipComponentOption("alloy", "Alloy"),
+      shipComponentOption("neutronium", "Neutronium"),
+      shipComponentOption("aerographene", "Aerographene")
+    ]),
+    engine: Object.freeze([
+      shipComponentOption("ion", "Ion Engine"),
+      shipComponentOption("tie", "Twin Ion Engine"),
+      shipComponentOption("pulse", "Pulse Drive"),
+      shipComponentOption("photon", "Photon Drive"),
+      shipComponentOption("vacuum", "Vacuum Drive"),
+      shipComponentOption("emdrive", "EmDrive"),
+      shipComponentOption("electrokinetic", "Electrokinetic Thruster")
+    ]),
+    sensor: Object.freeze([
+      shipComponentOption("visual", "Visual Only"),
+      shipComponentOption("radar", "Radar"),
+      shipComponentOption("lidar", "Lidar"),
+      shipComponentOption("quantum", "Quantum Scanner")
+    ])
+  }), CAPTURED_OUTER_REGION_IDS = Object.freeze([
+    "spc_moon",
+    "spc_red",
+    "spc_gas",
+    "spc_gas_moon",
+    "spc_belt",
+    "spc_titan",
+    "spc_enceladus",
+    "spc_triton",
+    "spc_makemake",
+    "spc_eris"
+  ]), CAPTURED_ANDROMEDA_REGION_IDS = Object.freeze([
+    "gxy_gateway",
+    "gxy_stargate",
+    "gxy_gorddon",
+    "gxy_alien1",
+    "gxy_alien2",
+    "gxy_chthonian"
+  ]);
+  function readCapturedFleetRegionLabel(controls2, binding, regionId) {
+    let handle = controls2.resolve(binding);
+    return handle === void 0 ? regionId : readCapturedControlLabel(handle, regionId);
+  }
+
+  // src/adapters/evolve/combat/captured-fleet-settings.ts
+  function readFleetPriority(settings, name) {
+    let value = settings[name];
+    return typeof value == "number" ? value : 0;
+  }
+  function readOverriddenNames(settings) {
+    let overrides = settings.overrides;
+    return isRecord(overrides) ? new Set(Object.keys(overrides)) : /* @__PURE__ */ new Set();
+  }
+  function readAndromedaRegions(controls2, settings) {
+    let overridden = readOverriddenNames(settings);
+    return Object.freeze(
+      CAPTURED_ANDROMEDA_REGION_IDS.map((id) => ({
+        id,
+        label: readCapturedFleetRegionLabel(controls2, `galaxy-${id}`, id),
+        settingName: `fleet_pr_${id}`,
+        priority: readFleetPriority(settings, `fleet_pr_${id}`)
+      })).sort((a, b) => a.priority - b.priority).map(
+        (region) => Object.freeze({
+          id: region.id,
+          label: region.label,
+          ...overridden.has(region.settingName) ? { settingName: region.settingName } : {}
+        })
+      )
+    );
+  }
+  function createCapturedFleetSettingsAdapter({
+    controls: controls2,
+    getSettingsRaw
+  }) {
+    return Object.freeze({
+      readFleetSettingsReadModel() {
+        let raw = getSettingsRaw(), settings = isRecord(raw) ? raw : {};
+        return createFleetSettingsReadModel({
+          outerControls: CAPTURED_FLEET_OUTER_CONTROLS,
+          outerComponents: CAPTURED_SHIP_COMPONENTS,
+          outerRegions: Object.freeze(
+            CAPTURED_OUTER_REGION_IDS.map(
+              (id) => Object.freeze({
+                id,
+                label: readCapturedFleetRegionLabel(controls2, `space-${id}`, id)
+              })
+            )
+          ),
+          andromedaControls: CAPTURED_FLEET_ANDROMEDA_CONTROLS,
+          andromedaRegions: readAndromedaRegions(controls2, settings)
+        });
+      },
+      resetToDefaults() {
+        let raw = getSettingsRaw();
+        isRecord(raw) && Object.assign(raw, computeFleetDefaults().def);
+      },
+      reorderAndromeda(regionIds) {
+        let raw = getSettingsRaw();
+        isRecord(raw) && regionIds.forEach((regionId, index) => {
+          raw[`fleet_pr_${regionId}`] = index;
+        });
+      }
+    });
+  }
+
   // src/adapters/browser/table-sorter.ts
   function readMembers(value) {
     return value === null || typeof value != "object" && typeof value != "function" ? null : value;
@@ -30836,6 +31295,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
     magicSettings: capturedMagicSettings,
     productionSettings: capturedProductionSettings,
     researchSettings: capturedResearchSettings,
+    fleetSettings: capturedFleetSettings,
     onDiagnostic = () => {
     },
     logError = () => {
@@ -30971,7 +31431,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
           node,
           settingKey
         )
-      }), general, achievementGuard, challengeHelper, interfaceSettings, stateLog, authority, job, building, buildingToggles, project, arpaToggles, storage, storageToggles, market, marketToggles, ejector, ejectToggles, supplyToggles, magic, production, government, research, trigger, shell = createSettingsShell({
+      }), general, achievementGuard, challengeHelper, interfaceSettings, stateLog, authority, job, building, buildingToggles, project, arpaToggles, storage, storageToggles, market, marketToggles, ejector, ejectToggles, supplyToggles, magic, production, government, fleet, research, trigger, shell = createSettingsShell({
         $: getJQuery(),
         getDocument: () => documentForUi,
         getSettingsRaw: () => settings.readRaw(),
@@ -31491,6 +31951,72 @@ If script is allowed to reassign non-empty storage it might waste time producing
           }
         });
       }
+      if (capturedFleetSettings !== void 0) {
+        let capturedAdapter = createCapturedFleetSettingsAdapter({
+          controls: capturedFleetSettings.controls,
+          getSettingsRaw: settings.readRaw
+        }), fleetIntent;
+        fleet = createFleetSettingsBrowserAdapter({
+          getDocument: () => documentForUi,
+          getJQuery: () => getJQuery(),
+          reader: { read: capturedAdapter.readFleetSettingsReadModel },
+          intents: { handle: (intent) => fleetIntent.handle(intent) },
+          getActions: () => ({
+            buildSettingsSection2: (parentNode, secondaryPrefix, sectionId, sectionName, resetFunction, updateSettingsContentFunction) => shell.buildSettingsSection2(
+              parentNode,
+              secondaryPrefix,
+              sectionId,
+              sectionName,
+              resetFunction,
+              updateSettingsContentFunction
+            ),
+            addSettingsHeader1: shell.addSettingsHeader1,
+            addStandardHeading: (node, heading) => shell.addStandardHeading(
+              node,
+              heading
+            ),
+            addSettingsNumber: (node, settingName, labelText, hintText) => controls2.addSettingsNumber(
+              node,
+              settingName,
+              labelText,
+              hintText
+            ),
+            addSettingsSelect: (node, settingName, labelText, hintText, options) => controls2.addSettingsSelect(
+              node,
+              settingName,
+              labelText,
+              hintText,
+              options
+            ),
+            addSettingsToggle: (node, settingName, labelText, hintText) => controls2.addSettingsToggle(
+              node,
+              settingName,
+              labelText,
+              hintText
+            ),
+            addTableInput: (node, settingName) => controls2.addTableInput(node, settingName),
+            buildTableLabel: (label) => controls2.buildTableLabel(label),
+            openOverrideModal: (event) => openOverrideModal(
+              event
+            ),
+            tableSorter
+          })
+        }), fleetIntent = createFleetSettingsIntentHandler({
+          writer: {
+            resetToDefaults: () => {
+              settingsLifecycle !== void 0 ? settingsLifecycle.resetSection("fleet") : capturedAdapter.resetToDefaults();
+            },
+            reorderAndromeda: (regionIds) => {
+              capturedAdapter.reorderAndromeda(regionIds);
+            },
+            persist: persistSettings
+          },
+          render: (secondaryPrefix) => fleet?.updateFleetSettingsContent(secondaryPrefix),
+          effects: {
+            resetCheckbox: () => controls2.resetCheckbox("autoFleet")
+          }
+        });
+      }
       if (capturedProjectSettings !== void 0) {
         let capturedAdapter = createCapturedProjectSettingsAdapter({
           rootState: capturedProjectSettings.rootState,
@@ -31836,6 +32362,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
         magic,
         production,
         government,
+        fleet,
         craftToggles,
         shell
       }, settingsUi;
@@ -31999,7 +32526,17 @@ Only continue if you trust the source. Injected code:
         },
         war: unported("Foreign Affairs options"),
         hell: unported("Hell options"),
-        fleet: unported("Fleet options")
+        fleet: (node, prefix) => {
+          let dom = getQuery(), adapter = dom === void 0 ? void 0 : ensureSettingsUi(dom).fleet;
+          if (adapter === void 0) {
+            unported("Fleet options")();
+            return;
+          }
+          adapter.buildFleetSettings(
+            node,
+            prefix
+          );
+        }
       }),
       openOverrideModal: (event) => openOverrideModal(event)
     }), { ensureAutomationContainer } = createAutomationContainer({
@@ -34728,6 +35265,9 @@ Only continue if you trust the source. Injected code:
       },
       researchSettings: {
         rootState: pageCapture2.rootState,
+        controls: pageCapture2.controls
+      },
+      fleetSettings: {
         controls: pageCapture2.controls
       },
       onDiagnostic: (message) => reportDiagnostic(message),
