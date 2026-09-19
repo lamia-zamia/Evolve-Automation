@@ -74,8 +74,9 @@ export function createCapturedSettingsPage(stored = {}) {
     reporter: { report: () => {} },
     display: { publish: () => {} },
   });
-  // The one game-backed capture the secondary options surface needs. An empty control registry is
-  // enough: the Fleet read model is static copy plus settings-record priorities.
+  // The game-backed capture the Fleet and Research surfaces need. An empty control registry is
+  // enough: the Fleet read model is static copy plus settings-record priorities, and Research
+  // localizes through the registry and lists whatever technologies the captured root names.
   const sectionControls = {
     resolve: () => undefined,
     invoke: () => ({ ok: false, reason: "unknown-method" }),
@@ -86,6 +87,10 @@ export function createCapturedSettingsPage(stored = {}) {
     settings,
     settingsLifecycle,
     fleetSettings: { controls: sectionControls },
+    researchSettings: {
+      rootState: { readRoot: () => gameRoot },
+      controls: sectionControls,
+    },
     refreshEffectiveSettings: () => overrideSettings.updateOverrides(),
     onDiagnostic: (message) => diagnostics.push(message),
     logError: (message) => logged.push(message),

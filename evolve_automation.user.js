@@ -36091,8 +36091,10 @@ If script is allowed to reassign non-empty storage it might waste time producing
         buildStateLogSettings: () => stateLog?.buildStateLogSettings(),
         buildAchievementGuardSettings: () => achievementGuard?.buildAchievementGuardSettings(),
         buildChallengeHelperSettings: () => challengeHelper?.buildChallengeHelperSettings(),
-        buildGovernmentSettings: () => {
-        },
+        buildGovernmentSettings: (parentNode, secondaryPrefix) => government?.buildGovernmentSettings(
+          parentNode,
+          secondaryPrefix
+        ),
         buildAuthoritySettings: () => authority?.buildAuthoritySettings(),
         buildEvolutionSettings: () => evolution?.buildEvolutionSettings(),
         buildPlanetSettings: () => planet?.buildPlanetSettings(),
@@ -36109,8 +36111,10 @@ If script is allowed to reassign non-empty storage it might waste time producing
         ),
         buildMechSettings: () => {
         },
-        buildFleetSettings: () => {
-        },
+        buildFleetSettings: (parentNode, secondaryPrefix) => fleet?.buildFleetSettings(
+          parentNode,
+          secondaryPrefix
+        ),
         buildEjectorSettings: () => ejector?.buildEjectorSettings(),
         buildMarketSettings: () => market?.buildMarketSettings(),
         buildStorageSettings: () => storage?.buildStorageSettings(),
@@ -36931,6 +36935,8 @@ If script is allowed to reassign non-empty storage it might waste time producing
         production,
         government,
         fleet,
+        trigger,
+        research,
         trait,
         craftToggles,
         shell
@@ -36956,10 +36962,16 @@ Only continue if you trust the source. Injected code:
       let ui = ensureSettingsUi(dom);
       ui.shell.buildImportExport(), dom("#script_settings").length === 0 && dom(".settings").append(
         '<div id="script_settings" style="margin-top: 30px;"></div>'
-      ), dom("#script_generalSettings").length === 0 && (ui.general.buildGeneralSettings(), ui.interface.buildInterfaceSettings(), ui.stateLog.buildStateLogSettings(), ui.achievementGuard.buildAchievementGuardSettings(), ui.challengeHelper.buildChallengeHelperSettings(), ui.authority.buildAuthoritySettings(), ui.prestige.buildPrestigeSettings(
+      ), dom("#script_generalSettings").length === 0 && (ui.general.buildGeneralSettings(), ui.interface.buildInterfaceSettings(), ui.stateLog.buildStateLogSettings(), ui.achievementGuard.buildAchievementGuardSettings(), ui.challengeHelper.buildChallengeHelperSettings(), ui.government?.buildGovernmentSettings(
         dom("#script_settings"),
         ""
-      ), ui.evolution.buildEvolutionSettings(), ui.planet.buildPlanetSettings(), ui.hell.buildHellSettings(dom("#script_settings"), ""), ui.war.buildWarSettings(
+      ), ui.authority.buildAuthoritySettings(), ui.prestige.buildPrestigeSettings(
+        dom("#script_settings"),
+        ""
+      ), ui.evolution.buildEvolutionSettings(), ui.planet.buildPlanetSettings(), ui.trigger?.buildTriggerSettings(), ui.research?.buildResearchSettings(), ui.hell.buildHellSettings(dom("#script_settings"), ""), ui.war.buildWarSettings(
+        dom("#script_settings"),
+        ""
+      ), ui.fleet?.buildFleetSettings(
         dom("#script_settings"),
         ""
       ), ui.weighting.buildWeightingSettings(), capturedJobCatalogReader?.() !== void 0 && ui.job.buildJobSettings(), ui.building?.buildBuildingSettings(), ui.project?.buildProjectSettings(), ui.storage?.buildStorageSettings(), ui.market?.buildMarketSettings(), ui.ejector?.buildEjectorSettings(), ui.magic?.buildMagicSettings(), ui.production?.buildProductionSettings(), ui.trait?.buildTraitSettings());

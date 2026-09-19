@@ -602,6 +602,8 @@ interface SettingsUi {
   readonly production: ProductionSettings | undefined;
   readonly government: GovernmentSettings | undefined;
   readonly fleet: FleetSettings | undefined;
+  readonly trigger: TriggerSettings | undefined;
+  readonly research: ResearchSettings | undefined;
   readonly trait: TraitSettings | undefined;
   readonly craftToggles: CraftToggles | undefined;
   readonly shell: SettingsShell;
@@ -900,7 +902,13 @@ export function createCapturedSettingsPanel({
         achievementGuard?.buildAchievementGuardSettings(),
       buildChallengeHelperSettings: () =>
         challengeHelper?.buildChallengeHelperSettings(),
-      buildGovernmentSettings: () => {},
+      buildGovernmentSettings: (parentNode, secondaryPrefix) =>
+        government?.buildGovernmentSettings(
+          parentNode as unknown as Parameters<
+            GovernmentSettings["buildGovernmentSettings"]
+          >[0],
+          secondaryPrefix,
+        ),
       buildAuthoritySettings: () => authority?.buildAuthoritySettings(),
       buildEvolutionSettings: () => evolution?.buildEvolutionSettings(),
       buildPlanetSettings: () => planet?.buildPlanetSettings(),
@@ -922,7 +930,13 @@ export function createCapturedSettingsPanel({
           secondaryPrefix,
         ),
       buildMechSettings: () => {},
-      buildFleetSettings: () => {},
+      buildFleetSettings: (parentNode, secondaryPrefix) =>
+        fleet?.buildFleetSettings(
+          parentNode as unknown as Parameters<
+            FleetSettings["buildFleetSettings"]
+          >[0],
+          secondaryPrefix,
+        ),
       buildEjectorSettings: () => ejector?.buildEjectorSettings(),
       buildMarketSettings: () => market?.buildMarketSettings(),
       buildStorageSettings: () => storage?.buildStorageSettings(),
@@ -1964,6 +1978,8 @@ export function createCapturedSettingsPanel({
       production,
       government,
       fleet,
+      trigger,
+      research,
       trait,
       craftToggles,
       shell,
@@ -2016,6 +2032,12 @@ export function createCapturedSettingsPanel({
     ui.stateLog.buildStateLogSettings();
     ui.achievementGuard.buildAchievementGuardSettings();
     ui.challengeHelper.buildChallengeHelperSettings();
+    ui.government?.buildGovernmentSettings(
+      dom("#script_settings") as unknown as Parameters<
+        GovernmentSettings["buildGovernmentSettings"]
+      >[0],
+      "",
+    );
     ui.authority.buildAuthoritySettings();
     ui.prestige.buildPrestigeSettings(
       dom("#script_settings") as unknown as Parameters<
@@ -2025,10 +2047,18 @@ export function createCapturedSettingsPanel({
     );
     ui.evolution.buildEvolutionSettings();
     ui.planet.buildPlanetSettings();
+    ui.trigger?.buildTriggerSettings();
+    ui.research?.buildResearchSettings();
     ui.hell.buildHellSettings(dom("#script_settings"), "");
     ui.war.buildWarSettings(
       dom("#script_settings") as unknown as Parameters<
         WarSettings["buildWarSettings"]
+      >[0],
+      "",
+    );
+    ui.fleet?.buildFleetSettings(
+      dom("#script_settings") as unknown as Parameters<
+        FleetSettings["buildFleetSettings"]
       >[0],
       "",
     );
