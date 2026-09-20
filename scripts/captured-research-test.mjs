@@ -641,8 +641,41 @@ const ISOLATION = {
 }
 
 {
-  // A banana run needs the objective progress the capture cannot read, so unification is rejected
-  // rather than taken on a guess. Outside a banana run the same settings research it.
+  // A banana run is decided from the objective ledger the game keeps. An unfinished run guards
+  // unification; a finished one researches it; a banana run with no ledger at all is still
+  // rejected rather than taken on a guess. Outside a banana run the same settings research it.
+  const bananaObjectives = (complete) => {
+    const objective = () => ({ l: complete });
+    return {
+      b1: objective(),
+      b2: objective(),
+      b3: objective(),
+      b4: objective(),
+      b5: objective(),
+    };
+  };
+
+  const unfinished = makePage({
+    offered: [UNIFICATION],
+    resources: { Knowledge: { amount: 10000 } },
+    race: { banana: true },
+    stats: { banana: bananaObjectives(false) },
+  });
+  assert.equal(unfinished.control.runCycle().status, "succeeded");
+  assert.deepEqual(unfinished.clicks, []);
+  assert.deepEqual(unfinished.unavailable, [
+    "tech-unification2: research excluded (banana-republic-guard)",
+  ]);
+
+  const finished = makePage({
+    offered: [UNIFICATION],
+    resources: { Knowledge: { amount: 10000 } },
+    race: { banana: true },
+    stats: { banana: bananaObjectives(true), feat: { banana: 1 } },
+  });
+  assert.equal(finished.control.runCycle().status, "succeeded");
+  assert.deepEqual(finished.clicks, ["tech-unification2"]);
+
   const banana = makePage({
     offered: [UNIFICATION],
     resources: { Knowledge: { amount: 10000 } },
@@ -652,7 +685,7 @@ const ISOLATION = {
   assert.deepEqual(banana.clicks, []);
   assert.deepEqual(banana.unavailable, [
     "tech-unification2: research excluded " +
-      "(unavailable: banana-republic-progress (race.banana))",
+      "(unavailable: banana-republic-progress (stats.banana))",
   ]);
 
   const ordinary = makePage({
@@ -693,8 +726,9 @@ const ISOLATION = {
 }
 
 {
-  // A retirement run with the challenge assist on still owes its Tau build-out, and the shortfall
-  // list needs facts the capture does not sample: retiring early is irreversible, so it is rejected.
+  // A retirement run with the challenge assist on still owes its Tau build-out, which the captured
+  // regional counts and the Graphene ledger answer: it waits on the preparation rather than being
+  // rejected as unreadable.
   const page = makePage({
     offered: [ISOLATION],
     resources: { Knowledge: { amount: 10000 } },
@@ -704,8 +738,7 @@ const ISOLATION = {
   assert.equal(page.control.runCycle().status, "succeeded");
   assert.deepEqual(page.clicks, []);
   assert.deepEqual(page.unavailable, [
-    "tech-isolation_protocol: research excluded " +
-      "(unavailable: retirement-preparation (TauFusionGenerator))",
+    "tech-isolation_protocol: research excluded (retirement-preparation)",
   ]);
 
   // With the assist off, the same run researches it: the rule the capture cannot feed is the

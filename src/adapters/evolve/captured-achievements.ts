@@ -6,7 +6,7 @@
  * has to restate. It lives here and nowhere else: the pacifist guard and planet selection both
  * call this rather than carrying a switch each.
  *
- * Mirrors `universeAffix()` in `src/functions.js` at the port reference commit.
+ * Mirrors `universeAffix()` in `src/achieve.js` at the port reference commit.
  */
 
 import { isRecord, readProperty } from "../validation.ts";
@@ -17,10 +17,16 @@ function finiteStar(value: unknown): number | undefined {
     : undefined;
 }
 
-/** The per-universe key an achievement's star levels are stored under. */
-export function readCapturedUniverseAffix(root: unknown): string | undefined {
+/**
+ * The per-universe key an achievement's star levels are stored under.
+ *
+ * `universeAffix` reads `universe || global.race.universe` and falls through its `default:` for
+ * anything it does not name, so an absent `race.universe` is the standard universe rather than an
+ * unreadable state. Demanding a string here would make every standard-universe achievement
+ * unreadable on a save that never wrote the field.
+ */
+export function readCapturedUniverseAffix(root: unknown): string {
   const universe = readProperty(readProperty(root, "race"), "universe");
-  if (typeof universe !== "string") return undefined;
   switch (universe) {
     case "evil":
       return "e";

@@ -164,7 +164,12 @@ const authorityCapBuildings: readonly NamedBuilding[] = [
   "AsphodelBunker",
 ];
 const INFLATION_CHALLENGE_MONEY = 25e10;
-const RETIREMENT_PREP = {
+/**
+ * The Tau build-out a Retirement run owes before Isolation Protocol is worth taking. One owner:
+ * the build weighting that steers toward it and the research exclusion that waits for it read the
+ * same numbers.
+ */
+export const RETIREMENT_PREP = {
   fusionGenerators: 20,
   factories: 18,
   scienceLabs: 11,

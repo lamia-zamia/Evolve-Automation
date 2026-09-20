@@ -4560,6 +4560,35 @@
   function isRetirementAssistActive(input) {
     return input.assistEnabled && input.truepath && input.retirePrestige && !input.isolationResearched;
   }
+  function assessRetirementPreparation(input) {
+    let { thresholds } = input, missing = [];
+    return input.fusionGenerators.count < thresholds.fusionGenerators && missing.push({
+      kind: "building",
+      name: input.fusionGenerators.name,
+      current: input.fusionGenerators.count,
+      required: thresholds.fusionGenerators
+    }), input.factories.count < thresholds.factories && missing.push({
+      kind: "building",
+      name: input.factories.name,
+      current: input.factories.count,
+      required: thresholds.factories
+    }), input.scienceLabs.count < thresholds.scienceLabs && missing.push({
+      kind: "building",
+      name: input.scienceLabs.name,
+      current: input.scienceLabs.count,
+      required: thresholds.scienceLabs
+    }), input.graphene.maxQuantity < thresholds.graphene ? missing.push({
+      kind: "storage",
+      resource: input.graphene.name,
+      current: input.graphene.maxQuantity,
+      required: thresholds.graphene
+    }) : input.graphene.currentQuantity < thresholds.graphene && missing.push({
+      kind: "stockpile",
+      resource: input.graphene.name,
+      current: input.graphene.currentQuantity,
+      required: thresholds.graphene
+    }), missing;
+  }
 
   // src/adapters/evolve/ascension-level.ts
   var ASCENSION_CHALLENGE_FLAGS = Object.freeze([
@@ -4585,22 +4614,20 @@
     return typeof value == "number" && Number.isFinite(value) ? value : void 0;
   }
   function readCapturedUniverseAffix(root) {
-    let universe = readProperty(readProperty(root, "race"), "universe");
-    if (typeof universe == "string")
-      switch (universe) {
-        case "evil":
-          return "e";
-        case "antimatter":
-          return "a";
-        case "heavy":
-          return "h";
-        case "micro":
-          return "m";
-        case "magic":
-          return "mg";
-        default:
-          return "l";
-      }
+    switch (readProperty(readProperty(root, "race"), "universe")) {
+      case "evil":
+        return "e";
+      case "antimatter":
+        return "a";
+      case "heavy":
+        return "h";
+      case "micro":
+        return "m";
+      case "magic":
+        return "mg";
+      default:
+        return "l";
+    }
   }
   function readCapturedAchievementStar(root, achievementId) {
     let achievement = readProperty(
@@ -4859,6 +4886,95 @@
     "trigger"
   ];
 
+  // src/domain/civic/banana-republic.ts
+  var BANANA_OBJECTIVE_IDS = ["b1", "b2", "b3", "b4", "b5"];
+  function isBananaRepublicSmoothieComplete(input) {
+    if (input.featStar > 0) return !0;
+    let exportRoutes = 0, hasBigImport = !1;
+    for (let trade of input.tradeRoutes)
+      trade > 0 ? exportRoutes += trade : trade <= -500 && (hasBigImport = !0);
+    return hasBigImport && exportRoutes >= 500;
+  }
+  function isBananaRepublicReadyForUnification(progress) {
+    return BANANA_OBJECTIVE_IDS.every((objective) => progress.objectives[objective]) && isBananaRepublicSmoothieComplete(progress.smoothie);
+  }
+
+  // src/adapters/evolve/civic/captured-banana-republic.ts
+  function readCapturedBananaProgress(root) {
+    let affix = readCapturedUniverseAffix(root), stats = readProperty(root, "stats"), banana = readProperty(stats, "banana");
+    if (!isRecord(banana)) return;
+    let objectives = {};
+    for (let objective of BANANA_OBJECTIVE_IDS) {
+      let entry = readProperty(banana, objective);
+      if (!isRecord(entry)) return;
+      objectives[objective] = readProperty(entry, affix) === !0;
+    }
+    let rawStar = readProperty(readProperty(stats, "feat"), "banana"), featStar = rawStar === void 0 ? 0 : finiteNonNegative(rawStar);
+    if (featStar === void 0) return;
+    let resources = readProperty(root, "resource");
+    if (!isRecord(resources)) return;
+    let tradeRoutes = [];
+    for (let id of Object.keys(resources)) {
+      let resource = readProperty(resources, id);
+      if (!isRecord(resource)) return;
+      if (!Object.hasOwn(resource, "trade")) continue;
+      let trade = readProperty(resource, "trade");
+      if (typeof trade != "number" || !Number.isFinite(trade)) return;
+      tradeRoutes.push(trade);
+    }
+    return Object.freeze({
+      objectives: Object.freeze(objectives),
+      smoothie: Object.freeze({
+        featStar,
+        tradeRoutes: Object.freeze(tradeRoutes)
+      })
+    });
+  }
+
+  // src/adapters/evolve/progression/prestige/captured-retirement-prep.ts
+  var RETIREMENT_PREP_BUILDINGS = Object.freeze([
+    ["fusionGenerators", "tauceti", "fusion_generator"],
+    ["factories", "tauceti", "tau_factory"],
+    ["scienceLabs", "tauceti", "infectious_disease_lab"]
+  ]), GRAPHENE_ID = "Graphene";
+  function capturedCount(root, region, id) {
+    let entry = readProperty(readProperty(root, region), id);
+    if (entry === void 0) return 0;
+    if (isRecord(entry))
+      return finiteNonNegative(readProperty(entry, "count"));
+  }
+  function readCapturedRetirementShortfalls(root, resources, thresholds) {
+    let counts = {};
+    for (let [key, region, id] of RETIREMENT_PREP_BUILDINGS) {
+      let count2 = capturedCount(root, region, id);
+      if (count2 === void 0) return;
+      counts[key] = Object.freeze({ name: `${region}-${id}`, count: count2 });
+    }
+    let sample = resources.readResources([GRAPHENE_ID]);
+    if (sample === void 0) return;
+    let graphene = sample.resources.get(GRAPHENE_ID), currentQuantity2 = finiteNonNegative(graphene?.amount), maxQuantity = finiteNonNegative(graphene?.max);
+    if (!(currentQuantity2 === void 0 || maxQuantity === void 0))
+      return assessRetirementPreparation({
+        fusionGenerators: counts.fusionGenerators,
+        factories: counts.factories,
+        scienceLabs: counts.scienceLabs,
+        graphene: Object.freeze({
+          name: GRAPHENE_ID,
+          currentQuantity: currentQuantity2,
+          maxQuantity
+        }),
+        thresholds
+      });
+  }
+
+  // src/domain/progression/build/building-weighting-rules.ts
+  var RETIREMENT_PREP = {
+    fusionGenerators: 20,
+    factories: 18,
+    scienceLabs: 11,
+    graphene: 2e8
+  };
+
   // src/domain/progression/prestige/prestige.ts
   var WHITEHOLE_REPAIR_TECH_ID = "tech-stabilize_blackhole", WITCH_ASCENSION_ACT = [
     { kind: "reset-modifier-keys" },
@@ -5047,10 +5163,17 @@
         let needsSoulGems = settings.prestigeType === "whitehole" && settings.saveWhiteholeSoulGems && itemId !== SOUL_GEM_SENSITIVE && soulGemCost !== null, resourceFacts = readResourceFacts(itemId, needsSoulGems);
         if (resourceFacts === void 0)
           return conflictUnavailable("invalid-resource");
-        let cultOfPersonality = !1, pacifist = !1;
+        let bananaRepublic = !1, cultOfPersonality = !1, pacifist = !1;
         if (UNIFICATION_IDS.has(itemId)) {
-          if (readProperty(race, "banana") === !0)
-            return conflictUnavailable("banana-republic-progress", "race.banana");
+          if (readProperty(race, "banana") === !0) {
+            let progress = readCapturedBananaProgress(root);
+            if (progress === void 0)
+              return conflictUnavailable(
+                "banana-republic-progress",
+                "stats.banana"
+              );
+            bananaRepublic = !isBananaRepublicReadyForUnification(progress);
+          }
           for (let [guard, assign] of [
             [
               "guardCultOfPersonality",
@@ -5075,6 +5198,7 @@
             assign(result.status === "active");
           }
         }
+        let retirementAssist = !1, retirementMissing = EMPTY_SHORTFALL;
         if (itemId === ISOLATION_ID && settings.prestigeType === "retire") {
           let rawAssist = readProperty(
             readSettings(),
@@ -5093,11 +5217,23 @@
               readProperty(readProperty(root, "tech"), "isolation")
             ) ?? 0) >= 1
           });
-          if (isRetirementAssistActive(assistInput))
-            return conflictUnavailable(
-              "retirement-preparation",
-              "TauFusionGenerator"
+          if (isRetirementAssistActive(assistInput)) {
+            let shortfalls = readCapturedRetirementShortfalls(
+              root,
+              resources,
+              RETIREMENT_PREP
             );
+            if (shortfalls === void 0)
+              return conflictUnavailable(
+                "retirement-preparation",
+                "tauceti-fusion_generator"
+              );
+            retirementAssist = !0, retirementMissing = Object.freeze(
+              shortfalls.map(
+                (shortfall) => shortfall.kind === "building" ? shortfall.name : shortfall.resource
+              )
+            );
+          }
         }
         let secondEvolution = !1, species = ABSENT_RACE_NAME, gods = ABSENT_RACE_NAME, fanaticismAchievements = [];
         if (THEOLOGY_IDS.has(itemId)) {
@@ -5148,15 +5284,12 @@
           // what the one rule that reads them would conclude from them anyway.
           race: Object.freeze({ species, gods }),
           guards: Object.freeze({
-            // A banana run rejected the candidate above, so the policy only ever sees this guard off.
-            bananaRepublic: !1,
+            bananaRepublic,
             cultOfPersonality,
             pacifist,
             secondEvolution,
-            // An active assist rejected the candidate above, so the policy only ever sees it off and
-            // its shortfall list empty.
-            retirementAssist: !1,
-            retirementMissing: EMPTY_SHORTFALL
+            retirementAssist,
+            retirementMissing
           }),
           fanaticismAchievements: Object.freeze(fanaticismAchievements)
         }), exclusion = findTechConflict(input);

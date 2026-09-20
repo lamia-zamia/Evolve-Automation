@@ -33,6 +33,10 @@ import { readCapturedAscensionLevel } from "../../ascension-level.ts";
 import { isCapturedAchievementUnlocked } from "../../captured-achievements.ts";
 import { readCapturedAchievementGuard } from "../prestige/captured-achievement-guards.ts";
 import { fanatAchievements } from "../../runtime-catalogs.ts";
+import { readCapturedBananaProgress } from "../../civic/captured-banana-republic.ts";
+import { readCapturedRetirementShortfalls } from "../prestige/captured-retirement-prep.ts";
+import { isBananaRepublicReadyForUnification } from "../../../../domain/civic/banana-republic.ts";
+import { RETIREMENT_PREP } from "../../../../domain/progression/build/building-weighting-rules.ts";
 import { readTechConflictSettings } from "./tech-conflicts.ts";
 import { finiteNonNegative, readProperty } from "../../../validation.ts";
 
@@ -156,10 +160,20 @@ export function createCapturedTechConflictReader(
       }
       const settings = settingsRead.settings;
 
-      // Stabilizing the blackhole is the one rule that depends on script state the captured runtime
-      // does not keep — when the last stabilization happened, and whether a whitehole reset was
-      // started and interrupted. Both outcomes of the readable half of the rule are a rejection, so
-      // failing closed loses only the interrupted-reset recovery, which nothing here can detect.
+      // The one rule whose facts are genuinely absent from the capture rather than merely unwired.
+      // Both live in the legacy runtime's own session state (`adapters/evolve/runtime-state.ts`),
+      // written by the legacy stabilization action and prestige path, and the captured runtime keeps
+      // no equivalent:
+      //
+      //   `whiteholeLastStabilise`  — when THIS SCRIPT last stabilized, for the cooldown. Nothing in
+      //                               `global` records it; the game keeps no stabilization history.
+      //   `whiteholeResetStarted`   — whether this script began a whitehole reset. Its partner
+      //                               `global.tech.whitehole` IS captured, but the flag is what
+      //                               separates "reset in progress" from "reset grant interrupted",
+      //                               and guessing it wrong takes a one-way fork.
+      //
+      // Closing this needs the captured runtime to own those two facts, not a new read of `global`.
+      // Until then the candidate is rejected, which costs the interrupted-reset recovery.
       if (itemId === STABILIZE_ID) {
         return conflictUnavailable(
           "stabilization-state",
@@ -187,13 +201,22 @@ export function createCapturedTechConflictReader(
         return conflictUnavailable("invalid-resource");
       }
 
+      let bananaRepublic = false;
       let cultOfPersonality = false;
       let pacifist = false;
       if (UNIFICATION_IDS.has(itemId)) {
         // The Banana Republic guard is inactive outside a banana run, which the captured race
-        // answers. Inside one it needs the objective progress, which the capture cannot read.
+        // answers. Inside one it needs the objective progress, which the captured `stats.banana`
+        // and the trade ledger do answer.
         if (readProperty(race, "banana") === true) {
-          return conflictUnavailable("banana-republic-progress", "race.banana");
+          const progress = readCapturedBananaProgress(root);
+          if (progress === undefined) {
+            return conflictUnavailable(
+              "banana-republic-progress",
+              "stats.banana",
+            );
+          }
+          bananaRepublic = !isBananaRepublicReadyForUnification(progress);
         }
         for (const [guard, assign] of [
           [
@@ -221,6 +244,8 @@ export function createCapturedTechConflictReader(
         }
       }
 
+      let retirementAssist = false;
+      let retirementMissing: readonly string[] = EMPTY_SHORTFALL;
       if (itemId === ISOLATION_ID && settings.prestigeType === "retire") {
         const rawAssist = readProperty(
           readSettings(),
@@ -242,12 +267,27 @@ export function createCapturedTechConflictReader(
             ) ?? 0) >= 1,
         });
         if (isRetirementAssistActive(assistInput)) {
-          // Assist is on and the run still owes its Tau build-out, but the shortfall list needs Tau
-          // building counts and the Graphene ledger the capture does not sample. Retiring is
-          // irreversible, so the candidate is rejected rather than taken on an unread plan.
-          return conflictUnavailable(
-            "retirement-preparation",
-            "TauFusionGenerator",
+          // Assist is on, so the run owes its Tau build-out. The counts are ordinary captured
+          // regional entries and the Graphene ledger is the resource port, so the shortfall is
+          // read rather than assumed; only an unreadable one still rejects the candidate.
+          const shortfalls = readCapturedRetirementShortfalls(
+            root,
+            resources,
+            RETIREMENT_PREP,
+          );
+          if (shortfalls === undefined) {
+            return conflictUnavailable(
+              "retirement-preparation",
+              "tauceti-fusion_generator",
+            );
+          }
+          retirementAssist = true;
+          retirementMissing = Object.freeze(
+            shortfalls.map((shortfall) =>
+              shortfall.kind === "building"
+                ? shortfall.name
+                : shortfall.resource,
+            ),
           );
         }
       }
@@ -312,15 +352,12 @@ export function createCapturedTechConflictReader(
         // what the one rule that reads them would conclude from them anyway.
         race: Object.freeze({ species, gods }),
         guards: Object.freeze({
-          // A banana run rejected the candidate above, so the policy only ever sees this guard off.
-          bananaRepublic: false,
+          bananaRepublic,
           cultOfPersonality,
           pacifist,
           secondEvolution,
-          // An active assist rejected the candidate above, so the policy only ever sees it off and
-          // its shortfall list empty.
-          retirementAssist: false,
-          retirementMissing: EMPTY_SHORTFALL,
+          retirementAssist,
+          retirementMissing,
         }),
         fanaticismAchievements: Object.freeze(fanaticismAchievements),
       });
