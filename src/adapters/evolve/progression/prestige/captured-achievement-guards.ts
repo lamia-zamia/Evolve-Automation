@@ -19,7 +19,11 @@ import {
 } from "../../../../domain/progression/prestige/achievement-guards.ts";
 import { readCapturedAscensionLevel } from "../../ascension-level.ts";
 import { readCapturedAchievementStar } from "../../captured-achievements.ts";
-import { isRecord, readProperty } from "../../../validation.ts";
+import {
+  finiteNonNegative,
+  isRecord,
+  readProperty,
+} from "../../../validation.ts";
 
 export type CapturedAchievementGuardResult =
   | { readonly status: "active" }
@@ -89,10 +93,10 @@ function readPacifistInput(
         })
       : base;
   }
-  const attacks = readProperty(readProperty(root, "stats"), "attacks");
-  if (typeof attacks !== "number" || !Number.isFinite(attacks)) {
-    return unavailableGuard("stats.attacks");
-  }
+  const attacks = finiteNonNegative(
+    readProperty(readProperty(root, "stats"), "attacks"),
+  );
+  if (attacks === undefined) return unavailableGuard("stats.attacks");
   return Object.freeze({ ...base, guard: "guardPacifist", attacks });
 }
 

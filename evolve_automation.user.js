@@ -4677,8 +4677,10 @@
         targetStar: 0,
         attacks: 0
       }) : base;
-    let attacks = readProperty(readProperty(root, "stats"), "attacks");
-    return typeof attacks != "number" || !Number.isFinite(attacks) ? unavailableGuard("stats.attacks") : Object.freeze({ ...base, guard: "guardPacifist", attacks });
+    let attacks = finiteNonNegative(
+      readProperty(readProperty(root, "stats"), "attacks")
+    );
+    return attacks === void 0 ? unavailableGuard("stats.attacks") : Object.freeze({ ...base, guard: "guardPacifist", attacks });
   }
   function readCapturedAchievementGuard(root, settingsValue, guard) {
     let settings = isRecord(settingsValue) ? settingsValue : {};
@@ -5008,9 +5010,6 @@
       field === void 0 ? { status: "unavailable", reason } : { status: "unavailable", reason, field }
     );
   }
-  function finiteAmount(value) {
-    return typeof value == "number" && Number.isFinite(value) && value >= 0 ? value : void 0;
-  }
   function createCapturedTechConflictReader(dependencies) {
     let { rootState, readSettings, resources } = dependencies;
     function readResourceFacts(itemId, needsSoulGems) {
@@ -5021,7 +5020,7 @@
       needsSoulGems && ids.push("Soul_Gem"), needsKnowledge && ids.push("Knowledge");
       let sample = resources.readResources(ids);
       if (sample === void 0) return;
-      let soulGems = needsSoulGems ? finiteAmount(sample.resources.get("Soul_Gem")?.amount) : 0, maximumKnowledge = needsKnowledge ? finiteAmount(sample.resources.get("Knowledge")?.max) : 0;
+      let soulGems = needsSoulGems ? finiteNonNegative(sample.resources.get("Soul_Gem")?.amount) : 0, maximumKnowledge = needsKnowledge ? finiteNonNegative(sample.resources.get("Knowledge")?.max) : 0;
       if (!(soulGems === void 0 || maximumKnowledge === void 0))
         return Object.freeze({ soulGems, maximumKnowledge });
     }
@@ -5044,7 +5043,7 @@
         let guardStarLevel = readCapturedAscensionLevel(root);
         if (guardStarLevel === void 0)
           return conflictUnavailable("invalid-game-state", "race");
-        let rawSoulGemCost = readProperty(tech.cost, "Soul_Gem"), soulGemCost = rawSoulGemCost === void 0 ? null : finiteAmount(rawSoulGemCost);
+        let rawSoulGemCost = readProperty(tech.cost, "Soul_Gem"), soulGemCost = rawSoulGemCost === void 0 ? null : finiteNonNegative(rawSoulGemCost);
         if (soulGemCost === void 0)
           return conflictUnavailable("invalid-resource", "cost.Soul_Gem");
         let needsSoulGems = settings.prestigeType === "whitehole" && settings.saveWhiteholeSoulGems && itemId !== SOUL_GEM_SENSITIVE && soulGemCost !== null, resourceFacts = readResourceFacts(itemId, needsSoulGems);
@@ -5092,7 +5091,7 @@
             assistEnabled: rawAssist === !0,
             truepath: readProperty(race, "truepath") === !0,
             retirePrestige: !0,
-            isolationResearched: (finiteAmount(
+            isolationResearched: (finiteNonNegative(
               readProperty(readProperty(root, "tech"), "isolation")
             ) ?? 0) >= 1
           });

@@ -29,7 +29,7 @@ import { isCapturedAchievementUnlocked } from "../../captured-achievements.ts";
 import { readCapturedAchievementGuard } from "../prestige/captured-achievement-guards.ts";
 import { fanatAchievements } from "../../runtime-catalogs.ts";
 import { readTechConflictSettings } from "./tech-conflicts.ts";
-import { readProperty } from "../../../validation.ts";
+import { finiteNonNegative, readProperty } from "../../../validation.ts";
 
 /** Why the capture could not decide, in the caller's log. */
 export type CapturedTechConflictUnavailableReason =
@@ -93,12 +93,6 @@ function conflictUnavailable(
   );
 }
 
-function finiteAmount(value: unknown): number | undefined {
-  return typeof value === "number" && Number.isFinite(value) && value >= 0
-    ? value
-    : undefined;
-}
-
 export function createCapturedTechConflictReader(
   dependencies: CapturedTechConflictDependencies,
 ): CapturedTechConflictReader {
@@ -122,10 +116,10 @@ export function createCapturedTechConflictReader(
     const sample = resources.readResources(ids);
     if (sample === undefined) return undefined;
     const soulGems = needsSoulGems
-      ? finiteAmount(sample.resources.get("Soul_Gem")?.amount)
+      ? finiteNonNegative(sample.resources.get("Soul_Gem")?.amount)
       : 0;
     const maximumKnowledge = needsKnowledge
-      ? finiteAmount(sample.resources.get("Knowledge")?.max)
+      ? finiteNonNegative(sample.resources.get("Knowledge")?.max)
       : 0;
     if (soulGems === undefined || maximumKnowledge === undefined) {
       return undefined;
@@ -168,7 +162,7 @@ export function createCapturedTechConflictReader(
 
       const rawSoulGemCost = readProperty(tech.cost, "Soul_Gem");
       const soulGemCost =
-        rawSoulGemCost === undefined ? null : finiteAmount(rawSoulGemCost);
+        rawSoulGemCost === undefined ? null : finiteNonNegative(rawSoulGemCost);
       if (soulGemCost === undefined) {
         return conflictUnavailable("invalid-resource", "cost.Soul_Gem");
       }
@@ -232,7 +226,7 @@ export function createCapturedTechConflictReader(
           truepath: readProperty(race, "truepath") === true,
           retirePrestige: true,
           isolationResearched:
-            (finiteAmount(
+            (finiteNonNegative(
               readProperty(readProperty(root, "tech"), "isolation"),
             ) ?? 0) >= 1,
         });
