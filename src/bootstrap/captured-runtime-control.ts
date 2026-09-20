@@ -1180,6 +1180,16 @@ export function startCapturedRuntime({
   const ensureGalaxyFleetControls = () => {
     const satisfied = () => pageCapture.controls.resolve("fleet") !== undefined;
     if (satisfied()) return;
+    // `galaxySpace()` returns before `armada(parent,'fleet')` unless the game is showing the
+    // galactic tab, so without this gate the draw can only ever produce an empty panel.
+    if (
+      readProperty(
+        readProperty(pageCapture.rootState.readRoot(), "settings"),
+        "showGalactic",
+      ) !== true
+    ) {
+      return;
+    }
     if (pageCapture.controls.resolve(MAIN_TAB_CONTROL) === undefined) return;
     const spaceTabs = SUB_TAB_CONTROLS[SPACE_TABS_SETTING];
     if (spaceTabs === undefined) return;

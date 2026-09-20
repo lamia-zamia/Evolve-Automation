@@ -41072,7 +41072,10 @@ Only continue if you trust the source. Injected code:
       ]);
     }, ensureGalaxyFleetControls = () => {
       let satisfied = () => pageCapture2.controls.resolve("fleet") !== void 0;
-      if (satisfied() || pageCapture2.controls.resolve(MAIN_TAB_CONTROL) === void 0) return;
+      if (satisfied() || readProperty(
+        readProperty(pageCapture2.rootState.readRoot(), "settings"),
+        "showGalactic"
+      ) !== !0 || pageCapture2.controls.resolve(MAIN_TAB_CONTROL) === void 0) return;
       let spaceTabs = SUB_TAB_CONTROLS[SPACE_TABS_SETTING];
       spaceTabs !== void 0 && finishDiscovery("galaxy-fleet", "galaxy fleet", satisfied, void 0, [
         Object.freeze({
