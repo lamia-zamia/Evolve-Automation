@@ -167,8 +167,8 @@ export function createCapturedPowerProducerAutomation({
             `no captured power control for ${elementId}`,
           );
         }
-        // The game rebuilds a row it powers on, so the generation resolved here is the one every
-        // invocation of this pass must still see.
+        // The game's power_on() mutates the producer row's `on` field in place, so the generation
+        // resolved here is the one every invocation of this pass must still see.
         const generation = resolved.generation;
         // A semantic bound, not a safety counter: each verified activation raises `on` by at least
         // one, so the permitted headroom is the most invocations this producer can ever need.
