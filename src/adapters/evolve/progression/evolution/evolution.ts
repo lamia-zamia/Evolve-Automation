@@ -1,6 +1,7 @@
 import type {
   ChallengeGroup,
   EvolutionCellCounts,
+  EvolutionGenusSelectionInput,
   EvolutionLandingGate,
   EvolutionTreeAction,
   ImitationInput,
@@ -334,6 +335,22 @@ export function createEvolutionReader(
           });
         }),
       );
+    },
+
+    sampleEvolutionGenusSelection(
+      _targetId: string,
+    ): EvolutionGenusSelectionInput {
+      const settings = requireRecord(dependencies.getSettings(), "settings");
+      const preferred = settings["userEvolutionGenus"];
+      return Object.freeze({
+        available: true,
+        genusSelectionActive: false,
+        targetOffersChoice: false,
+        targetGenera: Object.freeze([]),
+        preferredGenus: typeof preferred === "string" ? preferred : null,
+        selectedGenus: null,
+        actions: Object.freeze([]),
+      });
     },
 
     sampleCells(): EvolutionCellCounts {

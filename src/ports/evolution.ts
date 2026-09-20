@@ -1,6 +1,7 @@
 import type {
   EvolutionCellCounts,
   EvolutionLandingGate,
+  EvolutionGenusSelectionInput,
   EvolutionTreeAction,
   ImitationInput,
   TargetSelectionInput,
@@ -38,6 +39,7 @@ export interface EvolutionReader {
   sampleRaceTrait(trait: string): number;
   sampleCosts(targetId: string): EvolutionCostsSample;
   sampleEvolutionTree(targetId: string): readonly EvolutionTreeAction[];
+  sampleEvolutionGenusSelection(targetId: string): EvolutionGenusSelectionInput;
   sampleCells(): EvolutionCellCounts;
   sampleImitation(): ImitationInput;
   /** settings.challenge_<id> for each group id, in one read. */

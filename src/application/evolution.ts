@@ -3,6 +3,7 @@ import {
   evolutionChallengeCandidates,
   hasLandedSomewhere,
   planEvolutionCells,
+  planEvolutionGenusSelection,
   planEvolutionTarget,
   planEvolutionTreeClick,
   planImitation,
@@ -102,6 +103,24 @@ export function runEvolution(dependencies: EvolutionCycleDependencies): void {
       dnaMax: costs.dnaMax,
     }),
   );
+
+  const genusPlan = planEvolutionGenusSelection(
+    reader.sampleEvolutionGenusSelection(targetId),
+  );
+  if (genusPlan.kind === "click") {
+    // A genus action changes the game-owned tech selection. Require that exact postcondition before
+    // the next action phase; a stale/redrawn control is never permission to try another genus.
+    if (!executor.clickEvolution(genusPlan.actionId)) {
+      return;
+    }
+    if (
+      reader.sampleEvolutionGenusSelection(targetId).selectedGenus !==
+      genusPlan.genus
+    ) {
+      return;
+    }
+    return;
+  }
 
   const treePlan = planEvolutionTreeClick(reader.sampleEvolutionTree(targetId));
   if (treePlan.kind === "click") {

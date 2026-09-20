@@ -8,16 +8,10 @@
  * - `userEvolutionTarget` → `captured-evolution.ts` target planner;
  * - `evolutionAutoUnbound` → captured race catalog weighting;
  * - `evolutionBackup` → captured result-check lifecycle;
+ * - `userEvolutionGenus` → captured Evolution's drawn genus action and tech postcondition;
  * - `challenge_<id>` → `captured-evolution.ts` challenge activation;
  * - `evolutionQueue`, `evolutionQueueEnabled`, `evolutionQueueRepeat` →
  *   `captured-queued-settings.ts` and the captured target sample.
- *
- * One compatibility-only control remains absent because the captured runtime has no consumer for
- * it, and offering it would be a control that silently does nothing:
- *
- * - `userEvolutionGenus` — read only by the compatibility evolution adapter, which picks a genus
- *   at the gene lab for the variable-genus challenge races. The captured runtime does not sample
- *   or click that menu.
  *
  * Race descriptions and the habitability warning are not restated: see the catalog module.
  */
@@ -40,6 +34,7 @@ import {
 import { isRecord } from "../../../validation.ts";
 import {
   CAPTURED_EVOLUTION_CHALLENGE_LABELS,
+  CAPTURED_EVOLUTION_GENERA,
   CAPTURED_EVOLUTION_RACES,
   CAPTURED_EVOLUTION_UNIVERSE_LABELS,
 } from "./captured-evolution-catalog.ts";
@@ -121,6 +116,16 @@ const raceOptions: readonly EvolutionSettingsOption[] = Object.freeze([
   ),
 ]);
 
+const genusOptions: readonly EvolutionSettingsOption[] = Object.freeze(
+  CAPTURED_EVOLUTION_GENERA.map((genus) =>
+    Object.freeze({
+      val: genus.id,
+      label: genus.label,
+      hint: "Used only when the current target offers this genus choice.",
+    }),
+  ),
+);
+
 const prestigeOptions: readonly EvolutionSettingsOption[] = Object.freeze(
   PRESTIGE_TYPES.map((type) =>
     Object.freeze({ val: type.val, label: type.label, hint: type.hint }),
@@ -166,6 +171,13 @@ const evolutionControls: readonly EvolutionSettingsControl[] = Object.freeze([
     label: "Target Race",
     hint: "Chosen race will be automatically selected during next evolution",
     options: raceOptions,
+  }),
+  Object.freeze({
+    kind: "select" as const,
+    settingName: "userEvolutionGenus",
+    label: "Preferred genus",
+    hint: "Chosen genus is selected when the target is a variable-genus challenge or hybrid and the game draws that choice.",
+    options: genusOptions,
   }),
   Object.freeze({
     kind: "toggle" as const,

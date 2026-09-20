@@ -279,6 +279,63 @@ export interface EvolutionTreeAction {
   readonly activeChallenge: boolean;
 }
 
+export interface EvolutionGenusAction {
+  readonly genus: string;
+  readonly actionId: string;
+  readonly unlocked: boolean;
+}
+
+export interface EvolutionGenusSelectionInput {
+  /** False when the captured target facts or genus action catalog are unavailable. */
+  readonly available: boolean;
+  /** The game has entered its genus-selection phase. */
+  readonly genusSelectionActive: boolean;
+  /** True for variable-genus challenges and hybrid target races. */
+  readonly targetOffersChoice: boolean;
+  readonly targetGenera: readonly string[];
+  readonly preferredGenus: string | null;
+  readonly selectedGenus: string | null;
+  readonly actions: readonly EvolutionGenusAction[];
+}
+
+export type EvolutionGenusSelectionPlan =
+  | { readonly kind: "skip" }
+  | {
+      readonly kind: "click";
+      readonly genus: string;
+      readonly actionId: string;
+    };
+
+/**
+ * Chooses only a configured genus that the current target offers and the game has drawn. If the
+ * preference is absent, stale, or unavailable, the ordinary game action order remains in charge.
+ */
+export function planEvolutionGenusSelection(
+  input: Readonly<EvolutionGenusSelectionInput>,
+): EvolutionGenusSelectionPlan {
+  if (
+    !input.available ||
+    !input.genusSelectionActive ||
+    !input.targetOffersChoice ||
+    input.preferredGenus === null ||
+    input.selectedGenus === input.preferredGenus ||
+    !input.targetGenera.includes(input.preferredGenus)
+  ) {
+    return Object.freeze({ kind: "skip" });
+  }
+  const action = input.actions.find(
+    (candidate) =>
+      candidate.genus === input.preferredGenus && candidate.unlocked,
+  );
+  return action === undefined
+    ? Object.freeze({ kind: "skip" })
+    : Object.freeze({
+        kind: "click",
+        genus: action.genus,
+        actionId: action.actionId,
+      });
+}
+
 export type EvolutionTreePlan =
   { readonly kind: "click"; readonly id: string } | { readonly kind: "none" };
 

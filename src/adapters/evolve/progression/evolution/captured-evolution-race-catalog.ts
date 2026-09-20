@@ -13,6 +13,7 @@ import { calculateAchievementStarLevel } from "../../../../domain/progression/pr
 import { readAchievementStarLevelContext } from "../../progression/prestige/achievement-guards.ts";
 import { finite, isNonArrayRecord, readProperty } from "../../../validation.ts";
 import {
+  CAPTURED_EVOLUTION_GENERA,
   CAPTURED_EVOLUTION_RACES,
   type CapturedEvolutionRaceEntry,
 } from "./captured-evolution-catalog.ts";
@@ -57,6 +58,11 @@ interface CapturedRaceRow {
   readonly genus: string;
   readonly hybrid: readonly string[] | undefined;
   readonly compact: boolean;
+}
+
+export interface CapturedEvolutionTargetGenus {
+  readonly targetOffersChoice: boolean;
+  readonly targetGenera: readonly string[];
 }
 
 const NO_MAD_RACES = new Set(["sludge", "ultra_sludge", "hellspawn"]);
@@ -265,6 +271,38 @@ function customRaceRow(
     genus,
     hybrid: hybrid === undefined ? undefined : Object.freeze(hybrid),
     compact: Array.isArray(traits) && traits.includes("compact"),
+  });
+}
+
+/** Returns the current target's genus choices from the same static/live race catalog as weighting. */
+export function readCapturedEvolutionTargetGenus(
+  rootValue: unknown,
+  targetId: string,
+): CapturedEvolutionTargetGenus | undefined {
+  const root = capturedEvolutionRecord(rootValue);
+  const entry = CAPTURED_EVOLUTION_RACES.find(
+    (candidate) => candidate.id === targetId,
+  );
+  if (root === undefined || entry === undefined) return undefined;
+  const row = customRaceRow(root, entry);
+  if (row === undefined) return undefined;
+  if (entry.genus === "variable") {
+    return Object.freeze({
+      targetOffersChoice: true,
+      targetGenera: Object.freeze(
+        CAPTURED_EVOLUTION_GENERA.map((genus) => genus.id),
+      ),
+    });
+  }
+  if (row.genus === "hybrid") {
+    return Object.freeze({
+      targetOffersChoice: row.hybrid !== undefined && row.hybrid.length > 0,
+      targetGenera: row.hybrid ?? Object.freeze([]),
+    });
+  }
+  return Object.freeze({
+    targetOffersChoice: false,
+    targetGenera: Object.freeze([]),
   });
 }
 

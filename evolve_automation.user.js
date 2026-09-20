@@ -26584,7 +26584,28 @@
   }
 
   // src/adapters/evolve/progression/evolution/captured-evolution-catalog.ts
-  var CAPTURED_EVOLUTION_RACES = Object.freeze([
+  var CAPTURED_EVOLUTION_GENERA = Object.freeze([
+    { id: "humanoid", actionId: "humanoid", label: "Humanoid" },
+    { id: "carnivore", actionId: "carnivore", label: "Carnivore" },
+    { id: "herbivore", actionId: "herbivore", label: "Herbivore" },
+    { id: "small", actionId: "dwarfism", label: "Small" },
+    { id: "giant", actionId: "gigantism", label: "Giant" },
+    { id: "reptilian", actionId: "ectothermic", label: "Reptilian" },
+    { id: "avian", actionId: "endothermic", label: "Avian" },
+    { id: "insectoid", actionId: "athropods", label: "Insectoid" },
+    { id: "plant", actionId: "chloroplasts", label: "Plant" },
+    { id: "fungi", actionId: "chitin", label: "Fungi" },
+    { id: "aquatic", actionId: "aquatic", label: "Aquatic" },
+    { id: "fey", actionId: "fey", label: "Fey" },
+    { id: "heat", actionId: "heat", label: "Heat" },
+    { id: "polar", actionId: "polar", label: "Polar" },
+    { id: "sand", actionId: "sand", label: "Sand" },
+    { id: "demonic", actionId: "demonic", label: "Demonic" },
+    { id: "angelic", actionId: "celestial", label: "Angelic" },
+    { id: "synthetic", actionId: "exterminate", label: "Synthetic" },
+    { id: "eldritch", actionId: "eldritch", label: "Eldritch" },
+    { id: "primordial", actionId: "primordial", label: "Primordial" }
+  ]), CAPTURED_EVOLUTION_RACES = Object.freeze([
     { id: "human", label: "Human", genus: "humanoid" },
     { id: "elven", label: "Elf", genus: "humanoid" },
     { id: "orc", label: "Orc", genus: "humanoid" },
@@ -26982,6 +27003,26 @@
         genus,
         hybrid: hybrid === void 0 ? void 0 : Object.freeze(hybrid),
         compact: Array.isArray(traits) && traits.includes("compact")
+      });
+  }
+  function readCapturedEvolutionTargetGenus(rootValue, targetId) {
+    let root = capturedEvolutionRecord(rootValue), entry = CAPTURED_EVOLUTION_RACES.find(
+      (candidate) => candidate.id === targetId
+    );
+    if (root === void 0 || entry === void 0) return;
+    let row = customRaceRow(root, entry);
+    if (row !== void 0)
+      return entry.genus === "variable" ? Object.freeze({
+        targetOffersChoice: !0,
+        targetGenera: Object.freeze(
+          CAPTURED_EVOLUTION_GENERA.map((genus) => genus.id)
+        )
+      }) : row.genus === "hybrid" ? Object.freeze({
+        targetOffersChoice: row.hybrid !== void 0 && row.hybrid.length > 0,
+        targetGenera: row.hybrid ?? Object.freeze([])
+      }) : Object.freeze({
+        targetOffersChoice: !1,
+        targetGenera: Object.freeze([])
       });
   }
   function readFacts(rootValue, settingsValue) {
@@ -27403,6 +27444,31 @@
             });
           })
         );
+      },
+      sampleEvolutionGenusSelection(targetId) {
+        let target = readCapturedEvolutionTargetGenus(
+          dependencies.rootState.readRoot(),
+          targetId
+        ), root = rootRecord2(dependencies.rootState), evolution = nestedRecord(root, "evolution"), tech = nestedRecord(root, "tech"), settings = capturedEvolutionReadSettings(dependencies.readSettings), availableActions = readActionRows(dependencies.drawnActions), actions = CAPTURED_EVOLUTION_GENERA.flatMap((genus) => availableActions.find(
+          (candidate) => capturedEvolutionActionId(candidate.id) === genus.actionId
+        ) === void 0 ? [] : [
+          Object.freeze({
+            genus: genus.id,
+            actionId: genus.actionId,
+            unlocked: !0
+          })
+        ]), selectedGenus = CAPTURED_EVOLUTION_GENERA.find(
+          (genus) => Number(readProperty(tech, `evo_${genus.id}`)) >= 2
+        )?.id;
+        return Object.freeze({
+          available: target !== void 0,
+          genusSelectionActive: readProperty(evolution, "gselect") === !0,
+          targetOffersChoice: target?.targetOffersChoice === !0,
+          targetGenera: target?.targetGenera ?? Object.freeze([]),
+          preferredGenus: typeof settings?.userEvolutionGenus == "string" ? settings.userEvolutionGenus : null,
+          selectedGenus: selectedGenus ?? null,
+          actions: Object.freeze(actions)
+        });
       },
       sampleCells() {
         return Object.freeze({
@@ -32471,7 +32537,15 @@ If script is allowed to reassign non-empty storage it might waste time producing
         hint: race.genus === "variable" ? "Genus is chosen at the gene lab" : `Genus: ${race.genus}`
       })
     )
-  ]), prestigeOptions = Object.freeze(
+  ]), genusOptions = Object.freeze(
+    CAPTURED_EVOLUTION_GENERA.map(
+      (genus) => Object.freeze({
+        val: genus.id,
+        label: genus.label,
+        hint: "Used only when the current target offers this genus choice."
+      })
+    )
+  ), prestigeOptions = Object.freeze(
     PRESTIGE_TYPES.map(
       (type) => Object.freeze({ val: type.val, label: type.label, hint: type.hint })
     )
@@ -32510,6 +32584,13 @@ If script is allowed to reassign non-empty storage it might waste time producing
       label: "Target Race",
       hint: "Chosen race will be automatically selected during next evolution",
       options: raceOptions
+    }),
+    Object.freeze({
+      kind: "select",
+      settingName: "userEvolutionGenus",
+      label: "Preferred genus",
+      hint: "Chosen genus is selected when the target is a variable-genus challenge or hybrid and the game draws that choice.",
+      options: genusOptions
     }),
     Object.freeze({
       kind: "toggle",
@@ -35193,12 +35274,12 @@ If script is allowed to reassign non-empty storage it might waste time producing
   }) {
     return Object.freeze({
       readTraitSettingsReadModel() {
-        let settings = readSettingsRecord2(getSettingsRaw), completed = readCompletedRaceIds(rootState), genusOptions = buildTraitGenusOptions(), imitateOptions = buildTraitImitateOptions(completed), psychicOptions = buildTraitPsychicOptions(), psychicBoostOptions = buildTraitBoostOptions(), imitateRaceId = typeof settings.imitateRace == "string" ? settings.imitateRace : "", imitateKnown = CAPTURED_TRAIT_RACES.some(
+        let settings = readSettingsRecord2(getSettingsRaw), completed = readCompletedRaceIds(rootState), genusOptions2 = buildTraitGenusOptions(), imitateOptions = buildTraitImitateOptions(completed), psychicOptions = buildTraitPsychicOptions(), psychicBoostOptions = buildTraitBoostOptions(), imitateRaceId = typeof settings.imitateRace == "string" ? settings.imitateRace : "", imitateKnown = CAPTURED_TRAIT_RACES.some(
           (race) => race.id === imitateRaceId
         );
         return createTraitSettingsReadModel({
           controls: Object.freeze([
-            ...genusSelect(genusOptions),
+            ...genusSelect(genusOptions2),
             ...imitateSelect(imitateOptions),
             ...CAPTURED_TRAIT_STATIC_CONTROLS.slice(0, 1),
             ...CAPTURED_TRAIT_STATIC_CONTROLS.slice(1, 2),
@@ -35218,7 +35299,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
             ),
             ...CAPTURED_TRAIT_STATIC_CONTROLS.slice(2)
           ]),
-          genusOptions,
+          genusOptions: genusOptions2,
           imitateOptions,
           imitateRaceId,
           imitateRaceCompleted: imitateKnown ? completed.has(imitateRaceId) : void 0,
@@ -38707,6 +38788,18 @@ Only continue if you trust the source. Injected code:
       newDna: levels.dnaCurrent + dnaForEvolution
     });
   }
+  function planEvolutionGenusSelection(input) {
+    if (!input.available || !input.genusSelectionActive || !input.targetOffersChoice || input.preferredGenus === null || input.selectedGenus === input.preferredGenus || !input.targetGenera.includes(input.preferredGenus))
+      return Object.freeze({ kind: "skip" });
+    let action = input.actions.find(
+      (candidate) => candidate.genus === input.preferredGenus && candidate.unlocked
+    );
+    return Object.freeze(action === void 0 ? { kind: "skip" } : {
+      kind: "click",
+      genus: action.genus,
+      actionId: action.actionId
+    });
+  }
   function planEvolutionTreeClick(tree) {
     for (let action of tree)
       if (action.unlocked && !action.activeChallenge)
@@ -38764,6 +38857,11 @@ Only continue if you trust the source. Injected code:
         dnaMax: costs.dnaMax
       })
     );
+    let genusPlan = planEvolutionGenusSelection(
+      reader.sampleEvolutionGenusSelection(targetId)
+    );
+    if (genusPlan.kind === "click")
+      return !executor.clickEvolution(genusPlan.actionId) || reader.sampleEvolutionGenusSelection(targetId).selectedGenus !== genusPlan.genus, void 0;
     let treePlan = planEvolutionTreeClick(reader.sampleEvolutionTree(targetId));
     if (treePlan.kind === "click" && executor.clickEvolution(treePlan.id))
       return;

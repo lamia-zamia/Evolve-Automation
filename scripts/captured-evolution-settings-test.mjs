@@ -76,6 +76,7 @@ function evolutionRuntime(readSettings, { species = "protoplasm" } = {}) {
     "userUniverseTargetName",
     "userPlanetTargetName",
     "userEvolutionTarget",
+    "userEvolutionGenus",
     "evolutionAutoUnbound",
     "evolutionBackup",
     "evolutionQueueEnabled",
@@ -94,14 +95,11 @@ function evolutionRuntime(readSettings, { species = "protoplasm" } = {}) {
       `challenge_${group[0].id} should be drawn once`,
     );
   }
-  // No captured consumer reads these, so drawing one would be an inert control.
-  for (const settingName of ["userEvolutionGenus"]) {
-    assert.equal(
-      page.root.querySelectorAll(`.script_${settingName}`).length,
-      0,
-      `${settingName} has no captured consumer and must not be drawn`,
-    );
-  }
+  assert.equal(
+    page.root.querySelectorAll(".script_userEvolutionGenus").length,
+    1,
+    "preferred genus should be drawn once",
+  );
 }
 
 // --- 1. the target universe select drives captured universe selection ---------------------------

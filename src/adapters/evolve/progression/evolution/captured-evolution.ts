@@ -13,6 +13,7 @@ import { planUniverseSelection } from "../../../../domain/progression/evolution/
 import type {
   ChallengeGroup,
   EvolutionCellCounts,
+  EvolutionGenusSelectionInput,
   EvolutionLandingGate,
   EvolutionTreeAction,
   ImitationInput,
@@ -31,7 +32,11 @@ import type { GameActivitySink } from "../../../../ports/game-message-log.ts";
 import type { GameRootStateSource } from "../../../../ports/game-root-state.ts";
 import type { UniverseSelectionControls } from "../../../../ports/progression-controls.ts";
 import { isNonArrayRecord, readProperty } from "../../../validation.ts";
-import { sampleCapturedEvolutionRaceCatalog } from "./captured-evolution-race-catalog.ts";
+import {
+  readCapturedEvolutionTargetGenus,
+  sampleCapturedEvolutionRaceCatalog,
+} from "./captured-evolution-race-catalog.ts";
+import { CAPTURED_EVOLUTION_GENERA } from "./captured-evolution-catalog.ts";
 import { readCapturedEvolutionResult } from "./captured-evolution-result.ts";
 
 const EVOLUTION_ACTION_PREFIX = "evolution-";
@@ -286,6 +291,50 @@ export function createCapturedEvolution(
           });
         }),
       );
+    },
+
+    sampleEvolutionGenusSelection(
+      targetId: string,
+    ): EvolutionGenusSelectionInput {
+      const target = readCapturedEvolutionTargetGenus(
+        dependencies.rootState.readRoot(),
+        targetId,
+      );
+      const root = rootRecord(dependencies.rootState);
+      const evolution = nestedRecord(root, "evolution");
+      const tech = nestedRecord(root, "tech");
+      const settings = capturedEvolutionReadSettings(dependencies.readSettings);
+      const availableActions = readActionRows(dependencies.drawnActions);
+      const actions = CAPTURED_EVOLUTION_GENERA.flatMap((genus) => {
+        const row = availableActions.find(
+          (candidate) =>
+            capturedEvolutionActionId(candidate.id) === genus.actionId,
+        );
+        return row === undefined
+          ? []
+          : [
+              Object.freeze({
+                genus: genus.id,
+                actionId: genus.actionId,
+                unlocked: true,
+              }),
+            ];
+      });
+      const selectedGenus = CAPTURED_EVOLUTION_GENERA.find(
+        (genus) => Number(readProperty(tech, `evo_${genus.id}`)) >= 2,
+      )?.id;
+      return Object.freeze({
+        available: target !== undefined,
+        genusSelectionActive: readProperty(evolution, "gselect") === true,
+        targetOffersChoice: target?.targetOffersChoice === true,
+        targetGenera: target?.targetGenera ?? Object.freeze([]),
+        preferredGenus:
+          typeof settings?.["userEvolutionGenus"] === "string"
+            ? (settings["userEvolutionGenus"] as string)
+            : null,
+        selectedGenus: selectedGenus ?? null,
+        actions: Object.freeze(actions),
+      });
     },
 
     sampleCells(): EvolutionCellCounts {

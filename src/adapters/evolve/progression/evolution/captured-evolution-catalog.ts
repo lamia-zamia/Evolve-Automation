@@ -31,6 +31,41 @@ export interface CapturedEvolutionLabelledEntry {
   readonly hint: string;
 }
 
+export interface CapturedEvolutionGenusEntry {
+  readonly id: string;
+  readonly actionId: string;
+  readonly label: string;
+}
+
+/**
+ * The genus actions exposed by DeadSpace while `global.evolution.gselect` is true. The action id
+ * is the game-owned id drawn in `#evolution`; keeping it beside the setting value gives settings
+ * and runtime validation one accepted-genus catalog.
+ */
+export const CAPTURED_EVOLUTION_GENERA: readonly CapturedEvolutionGenusEntry[] =
+  Object.freeze([
+    { id: "humanoid", actionId: "humanoid", label: "Humanoid" },
+    { id: "carnivore", actionId: "carnivore", label: "Carnivore" },
+    { id: "herbivore", actionId: "herbivore", label: "Herbivore" },
+    { id: "small", actionId: "dwarfism", label: "Small" },
+    { id: "giant", actionId: "gigantism", label: "Giant" },
+    { id: "reptilian", actionId: "ectothermic", label: "Reptilian" },
+    { id: "avian", actionId: "endothermic", label: "Avian" },
+    { id: "insectoid", actionId: "athropods", label: "Insectoid" },
+    { id: "plant", actionId: "chloroplasts", label: "Plant" },
+    { id: "fungi", actionId: "chitin", label: "Fungi" },
+    { id: "aquatic", actionId: "aquatic", label: "Aquatic" },
+    { id: "fey", actionId: "fey", label: "Fey" },
+    { id: "heat", actionId: "heat", label: "Heat" },
+    { id: "polar", actionId: "polar", label: "Polar" },
+    { id: "sand", actionId: "sand", label: "Sand" },
+    { id: "demonic", actionId: "demonic", label: "Demonic" },
+    { id: "angelic", actionId: "celestial", label: "Angelic" },
+    { id: "synthetic", actionId: "exterminate", label: "Synthetic" },
+    { id: "eldritch", actionId: "eldritch", label: "Eldritch" },
+    { id: "primordial", actionId: "primordial", label: "Primordial" },
+  ]);
+
 /** Every selectable race, in the game's own declaration order. `protoplasm` is not a target. */
 export const CAPTURED_EVOLUTION_RACES: readonly CapturedEvolutionRaceEntry[] =
   Object.freeze([

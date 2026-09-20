@@ -198,6 +198,50 @@ assert.deepEqual(
   { kind: "target", id: "sporgar", name: "Sporgar" },
 );
 
+// Deterministic captured replay: the real captured reader commits the auto-selected race and the
+// real captured executor invokes the drawn target action in the same application pass.
+root.race.species = "protoplasm";
+delete root.race.evoFinalMenu;
+settings.userEvolutionTarget = "auto";
+root.race.species = "human";
+evolution.reader.sampleSpecies();
+root.race.species = "protoplasm";
+evolution.reader.sampleSpecies();
+const expectedAutoTarget = planEvolutionTarget(
+  evolution.reader.sampleTargetSelection(),
+);
+assert.equal(expectedAutoTarget.kind, "target");
+const expectedActionId = `evolution-${expectedAutoTarget.id}`;
+actionRows.splice(0, actionRows.length, {
+  id: expectedActionId,
+  cost: { DNA: 1 },
+});
+handles.set(expectedActionId, {
+  elementId: expectedActionId,
+  generation: 1,
+  methods: ["action"],
+});
+controls.invoke = (handle, method) => {
+  assert.equal(method, "action");
+  trace.push(["invoke", expectedActionId]);
+  root.evolution[expectedAutoTarget.id] = 1;
+  return { ok: true, value: undefined };
+};
+trace.length = 0;
+runEvolution({
+  reader: evolution.reader,
+  executor: evolution.executor,
+  runUniverseSelection: evolution.runUniverseSelection,
+  runPlanetSelection: () => {},
+  challengeGroups: [],
+});
+assert.equal(evolution.reader.storedTargetId(), expectedAutoTarget.id);
+assert.deepEqual(trace, [
+  ["queue"],
+  ["activity", `Attempting evolution of ${expectedAutoTarget.name}.`],
+  ["invoke", expectedActionId],
+]);
+
 // A transition out of protoplasm clears the page-session target before the next evolution.
 root.race.species = "human";
 evolution.reader.sampleSpecies();
