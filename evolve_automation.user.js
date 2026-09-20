@@ -17202,12 +17202,6 @@
       producers: Object.freeze(producers)
     });
   }
-  function currentProducer(root, producer) {
-    let value = readProperty(readProperty(root, producer.region), producer.id);
-    if (!isRecord(value)) return;
-    let count2 = finite(value.count), on = finite(value.on);
-    return count2 !== void 0 && on !== void 0 ? Object.freeze({ count: count2, on }) : void 0;
-  }
   function producerLocation(id) {
     if (CAPTURED_POWER_PRODUCER_IDS.includes(id))
       return Object.freeze({ region: "city", id });
@@ -17215,6 +17209,12 @@
       ([, candidate]) => candidate === id
     );
     return regional === void 0 ? void 0 : Object.freeze({ region: regional[0], id: regional[1] });
+  }
+  function samplePowerState(root, producer) {
+    let value = readProperty(readProperty(root, producer.region), producer.id);
+    if (!isRecord(value)) return;
+    let count2 = finite(value.count), on = finite(value.on), surplus = finite(readProperty(readProperty(root, "city"), "power"));
+    return count2 === void 0 || on === void 0 || surplus === void 0 ? void 0 : Object.freeze({ on, count: count2, surplus });
   }
   function createCapturedPowerProducerAutomation({
     rootState,
@@ -17232,31 +17232,60 @@
               "captured-power-producer-missing",
               `captured producer ${decision.producerId} disappeared`
             );
-          let elementId = `${producer.region}-${decision.producerId}`, handle = controls2.resolve(elementId);
-          if (handle === void 0 || !handle.methods.includes("power_on"))
+          let elementId = `${producer.region}-${decision.producerId}`, resolved = controls2.resolve(elementId);
+          if (resolved === void 0 || !resolved.methods.includes("power_on"))
             return rejected(
               "captured-power-control-missing",
               `no captured power control for ${elementId}`
             );
+          let generation = resolved.generation, remaining;
           for (; ; ) {
             if (rootState.readRoot() !== session.root)
               return stale(
                 "captured-power-root-changed",
                 "captured game root changed"
               );
-            let current = currentProducer(session.root, producer), city = readProperty(session.root, "city"), surplus = finite(readProperty(city, "power"));
-            if (current === void 0 || surplus === void 0)
+            let before = samplePowerState(session.root, producer);
+            if (before === void 0)
               return stale(
                 "captured-power-state-changed",
                 "captured producer state changed"
               );
-            if (surplus >= 0 || current.on >= Math.min(current.count, decision.maximumOn))
-              break;
+            let limit = Math.min(before.count, decision.maximumOn);
+            if (before.surplus >= 0 || before.on >= limit) break;
+            if (remaining ??= Math.max(0, limit - before.on), remaining === 0)
+              return stale(
+                "captured-power-budget-exhausted",
+                `captured producer ${elementId} still short of power after its permitted activations`
+              );
+            remaining -= 1;
+            let handle = controls2.resolve(elementId);
+            if (handle === void 0 || handle.generation !== generation)
+              return stale(
+                "captured-power-control-redrawn",
+                `captured power control for ${elementId} was rebuilt mid-pass`
+              );
             let result = controls2.invoke(handle, "power_on");
             if (!result.ok)
               return rejected(
                 "captured-power-control-failed",
                 result.detail ?? result.reason
+              );
+            if (rootState.readRoot() !== session.root)
+              return stale(
+                "captured-power-root-changed",
+                "captured game root changed"
+              );
+            let after = samplePowerState(session.root, producer);
+            if (after === void 0)
+              return stale(
+                "captured-power-state-changed",
+                "captured producer state changed"
+              );
+            if (after.on <= before.on)
+              return stale(
+                "captured-power-activation-unverified",
+                `captured power_on for ${elementId} returned without powering one on`
               );
           }
         }

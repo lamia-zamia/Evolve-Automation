@@ -51,6 +51,17 @@ interface PowerSession {
   readonly input: Readonly<CapturedPowerInput>;
 }
 
+/**
+ * The authoritative state one activation has to move. A captured `power_on` that returns normally
+ * is not proof that the producer changed, so every invocation is bracketed by this sample and only
+ * an observed `on` increase counts as progress.
+ */
+interface PowerStateSample {
+  readonly on: number;
+  readonly count: number;
+  readonly surplus: number;
+}
+
 function readInput(root: unknown): Readonly<CapturedPowerInput> | undefined {
   const city = readProperty(root, "city");
   if (!isRecord(city)) return undefined;
@@ -100,19 +111,6 @@ function readInput(root: unknown): Readonly<CapturedPowerInput> | undefined {
   });
 }
 
-function currentProducer(
-  root: unknown,
-  producer: Readonly<CapturedPowerProducerLocation>,
-): { count: number; on: number } | undefined {
-  const value = readProperty(readProperty(root, producer.region), producer.id);
-  if (!isRecord(value)) return undefined;
-  const count = finite(value["count"]);
-  const on = finite(value["on"]);
-  return count !== undefined && on !== undefined
-    ? Object.freeze({ count, on })
-    : undefined;
-}
-
 function producerLocation(
   id: string,
 ): CapturedPowerProducerLocation | undefined {
@@ -125,6 +123,20 @@ function producerLocation(
   return regional === undefined
     ? undefined
     : Object.freeze({ region: regional[0], id: regional[1] });
+}
+
+function samplePowerState(
+  root: unknown,
+  producer: Readonly<CapturedPowerProducerLocation>,
+): PowerStateSample | undefined {
+  const value = readProperty(readProperty(root, producer.region), producer.id);
+  if (!isRecord(value)) return undefined;
+  const count = finite(value["count"]);
+  const on = finite(value["on"]);
+  const surplus = finite(readProperty(readProperty(root, "city"), "power"));
+  return count === undefined || on === undefined || surplus === undefined
+    ? undefined
+    : Object.freeze({ on, count, surplus });
 }
 
 export function createCapturedPowerProducerAutomation({
@@ -148,13 +160,19 @@ export function createCapturedPowerProducerAutomation({
           );
         }
         const elementId = `${producer.region}-${decision.producerId}`;
-        const handle = controls.resolve(elementId);
-        if (handle === undefined || !handle.methods.includes("power_on")) {
+        const resolved = controls.resolve(elementId);
+        if (resolved === undefined || !resolved.methods.includes("power_on")) {
           return rejected(
             "captured-power-control-missing",
             `no captured power control for ${elementId}`,
           );
         }
+        // The game rebuilds a row it powers on, so the generation resolved here is the one every
+        // invocation of this pass must still see.
+        const generation = resolved.generation;
+        // A semantic bound, not a safety counter: each verified activation raises `on` by at least
+        // one, so the permitted headroom is the most invocations this producer can ever need.
+        let remaining: number | undefined;
         for (;;) {
           if (rootState.readRoot() !== session.root) {
             return stale(
@@ -162,26 +180,58 @@ export function createCapturedPowerProducerAutomation({
               "captured game root changed",
             );
           }
-          const current = currentProducer(session.root, producer);
-          const city = readProperty(session.root, "city");
-          const surplus = finite(readProperty(city, "power"));
-          if (current === undefined || surplus === undefined) {
+          const before = samplePowerState(session.root, producer);
+          if (before === undefined) {
             return stale(
               "captured-power-state-changed",
               "captured producer state changed",
             );
           }
-          if (
-            surplus >= 0 ||
-            current.on >= Math.min(current.count, decision.maximumOn)
-          ) {
-            break;
+          const limit = Math.min(before.count, decision.maximumOn);
+          if (before.surplus >= 0 || before.on >= limit) break;
+          remaining ??= Math.max(0, limit - before.on);
+          if (remaining === 0) {
+            return stale(
+              "captured-power-budget-exhausted",
+              `captured producer ${elementId} still short of power after its permitted activations`,
+            );
+          }
+          remaining -= 1;
+
+          const handle = controls.resolve(elementId);
+          if (handle === undefined || handle.generation !== generation) {
+            return stale(
+              "captured-power-control-redrawn",
+              `captured power control for ${elementId} was rebuilt mid-pass`,
+            );
           }
           const result = controls.invoke(handle, "power_on");
           if (!result.ok) {
             return rejected(
               "captured-power-control-failed",
               result.detail ?? result.reason,
+            );
+          }
+
+          // Invoked. From here an unobserved mutation stops the whole pass: never fall through to
+          // another producer after an action whose effect could not be confirmed.
+          if (rootState.readRoot() !== session.root) {
+            return stale(
+              "captured-power-root-changed",
+              "captured game root changed",
+            );
+          }
+          const after = samplePowerState(session.root, producer);
+          if (after === undefined) {
+            return stale(
+              "captured-power-state-changed",
+              "captured producer state changed",
+            );
+          }
+          if (after.on <= before.on) {
+            return stale(
+              "captured-power-activation-unverified",
+              `captured power_on for ${elementId} returned without powering one on`,
             );
           }
         }
