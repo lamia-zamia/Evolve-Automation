@@ -19,7 +19,9 @@ function makePage({
 }) {
   const root = {
     settings: { civTabs: 4, animated: true, qAny: false },
-    race: { species: "human", gods: "none", ...race },
+    // No `gods`: upstream creates it lazily and carries it across a race replacement only
+    // conditionally, so the absent case is the default here and a test that needs one says so.
+    race: { species: "human", ...race },
     stats: { attacks: 0, achieve: {}, ...stats },
     tech,
     resource: {},
@@ -716,6 +718,105 @@ const ISOLATION = {
   });
   assert.equal(unassisted.control.runCycle().status, "succeeded");
   assert.deepEqual(unassisted.clicks, ["tech-isolation_protocol"]);
+}
+
+// --- a rule's facts are sampled only for the candidates that rule names -------------------------
+
+// `global.race.gods` and the achievement stars behind the fanaticism pairing belong to the theology
+// rule alone. A state that cannot answer them must still research everything else: the game creates
+// much of `global.race` lazily, so a hoisted validation here stops autoResearch dead.
+const NO_THEOLOGY_FACTS = Object.freeze({
+  // No `gods` at all, and an achievement entry the star reader cannot make sense of.
+  race: Object.freeze({ species: "human" }),
+  stats: Object.freeze({ attacks: 0, achieve: { madagascar_tree: 5 } }),
+});
+
+{
+  // The case that matters: ordinary research on a state with no `gods`.
+  const page = makePage({
+    offered: [MINING, THEOLOGY],
+    resources: { Knowledge: { amount: 10000 } },
+    ...NO_THEOLOGY_FACTS,
+  });
+  assert.equal(page.control.runCycle().status, "succeeded");
+  assert.deepEqual(
+    page.clicks,
+    ["tech-mining"],
+    "an ordinary technology must not wait on a fact only the theology rule reads",
+  );
+  assert.equal(page.root.tech.mining, 1);
+  assert.deepEqual(page.unavailable, []);
+}
+
+for (const [label, offered, resources, settings] of [
+  [
+    "the Demonic Bomb",
+    [DARK_BOMB],
+    { Knowledge: { amount: 10000 } },
+    { prestigeDemonicBomb: true, prestigeType: "demonic" },
+  ],
+  [
+    "the alien gift",
+    [XENO_GIFT],
+    { Knowledge: { amount: 10000, max: 7000000 } },
+    {},
+  ],
+  [
+    "an unrelated technology",
+    [SMELTING],
+    { Knowledge: { amount: 10000 }, Iron: { amount: 900 } },
+    {},
+  ],
+]) {
+  const page = makePage({
+    offered,
+    resources,
+    settings,
+    ...NO_THEOLOGY_FACTS,
+  });
+  assert.equal(page.control.runCycle().status, "succeeded");
+  assert.deepEqual(
+    page.clicks,
+    [offered[0].id],
+    `${label} must be decided without any theology or achievement fact`,
+  );
+  assert.deepEqual(page.unavailable, []);
+}
+
+{
+  // The theology rule still decides on a state with no `gods`: absence means "no gods", which is
+  // what the game stores at genesis and what the fanaticism comparison would conclude anyway.
+  // Rejecting instead would leave a run unable to ever take a theology, which is worse than either
+  // branch. Script-managed theology on a non-MAD run picks Fanaticism, so Anthropology is excluded.
+  const page = makePage({
+    offered: [ANTHROPOLOGY, FANATICISM],
+    resources: { Knowledge: { amount: 10000 } },
+    race: { species: "human" },
+    settings: { userResearchTheology_1: "auto", prestigeType: "none" },
+  });
+  assert.equal(page.control.runCycle().status, "succeeded");
+  assert.deepEqual(page.clicks, ["tech-fanaticism"]);
+  assert.deepEqual(page.unavailable, [
+    "tech-anthropology: research excluded (theology-path)",
+  ]);
+}
+
+{
+  // A fact the theology rule genuinely needs and cannot get: the achievement star behind the
+  // fanaticism pairing. Only the theology candidate is rejected; the ordinary one still researches.
+  const page = makePage({
+    offered: [ANTHROPOLOGY, MINING],
+    resources: { Knowledge: { amount: 10000 } },
+    settings: { userResearchTheology_1: "auto", prestigeType: "mad" },
+    ...NO_THEOLOGY_FACTS,
+  });
+  assert.equal(page.control.runCycle().status, "succeeded");
+  assert.deepEqual(page.clicks, ["tech-mining"]);
+  assert.equal(page.root.tech.anthropology, undefined);
+  assert.deepEqual(page.unavailable, [
+    "tech-anthropology: research excluded " +
+      "(unavailable: invalid-game-state (stats.achieve.madagascar_tree))",
+  ]);
 }
 
 console.log("captured-research ok");

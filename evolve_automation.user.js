@@ -5002,7 +5002,11 @@
   ]), THEOLOGY_IDS = /* @__PURE__ */ new Set([
     "tech-anthropology",
     "tech-fanaticism"
-  ]), ISOLATION_ID = "tech-isolation_protocol", STABILIZE_ID = "tech-stabilize_blackhole", NO_CONFLICT = Object.freeze({
+  ]), ISOLATION_ID = "tech-isolation_protocol", STABILIZE_ID = "tech-stabilize_blackhole", ABSENT_RACE_NAME = "none";
+  function raceName(value) {
+    return typeof value == "string" ? value : ABSENT_RACE_NAME;
+  }
+  var NO_CONFLICT = Object.freeze({
     status: "none"
   }), EMPTY_SHORTFALL = Object.freeze([]);
   function conflictUnavailable(reason, field) {
@@ -5037,13 +5041,7 @@
           );
         let root = rootState.readRoot();
         if (root === void 0) return conflictUnavailable("invalid-game-state");
-        let race = readProperty(root, "race"), species = readProperty(race, "species"), gods = readProperty(race, "gods");
-        if (typeof species != "string" || typeof gods != "string")
-          return conflictUnavailable("invalid-game-state", "race.species");
-        let guardStarLevel = readCapturedAscensionLevel(root);
-        if (guardStarLevel === void 0)
-          return conflictUnavailable("invalid-game-state", "race");
-        let rawSoulGemCost = readProperty(tech.cost, "Soul_Gem"), soulGemCost = rawSoulGemCost === void 0 ? null : finiteNonNegative(rawSoulGemCost);
+        let race = readProperty(root, "race"), rawSoulGemCost = readProperty(tech.cost, "Soul_Gem"), soulGemCost = rawSoulGemCost === void 0 ? null : finiteNonNegative(rawSoulGemCost);
         if (soulGemCost === void 0)
           return conflictUnavailable("invalid-resource", "cost.Soul_Gem");
         let needsSoulGems = settings.prestigeType === "whitehole" && settings.saveWhiteholeSoulGems && itemId !== SOUL_GEM_SENSITIVE && soulGemCost !== null, resourceFacts = readResourceFacts(itemId, needsSoulGems);
@@ -5101,7 +5099,7 @@
               "TauFusionGenerator"
             );
         }
-        let secondEvolution = !1, fanaticismAchievements = [];
+        let secondEvolution = !1, species = ABSENT_RACE_NAME, gods = ABSENT_RACE_NAME, fanaticismAchievements = [];
         if (THEOLOGY_IDS.has(itemId)) {
           let guard = readCapturedAchievementGuard(
             root,
@@ -5110,7 +5108,10 @@
           );
           if (guard.status === "unavailable")
             return conflictUnavailable("achievement-guard", guard.field);
-          if (secondEvolution = guard.status === "active", !secondEvolution)
+          if (secondEvolution = guard.status === "active", species = raceName(readProperty(race, "species")), gods = raceName(readProperty(race, "gods")), !secondEvolution) {
+            let guardStarLevel = readCapturedAscensionLevel(root);
+            if (guardStarLevel === void 0)
+              return conflictUnavailable("invalid-game-state", "race");
             for (let combination of fanatAchievements) {
               let unlocked = isCapturedAchievementUnlocked(
                 root,
@@ -5130,6 +5131,7 @@
                 })
               );
             }
+          }
         }
         let input = Object.freeze({
           itemId,
@@ -5142,11 +5144,9 @@
             nowMs: 0,
             whiteholeResetInterrupted: !1
           }),
-          race: Object.freeze({
-            species,
-            gods,
-            achievementLevel: guardStarLevel
-          }),
+          // Sampled by the theology branch alone; every other candidate leaves them absent, which is
+          // what the one rule that reads them would conclude from them anyway.
+          race: Object.freeze({ species, gods }),
           guards: Object.freeze({
             // A banana run rejected the candidate above, so the policy only ever sees this guard off.
             bananaRepublic: !1,

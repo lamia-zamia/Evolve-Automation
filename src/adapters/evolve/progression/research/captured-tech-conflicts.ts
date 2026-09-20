@@ -7,9 +7,14 @@
  * the shared `readTechConflictSettings`, so the keys a conflict depends on are still stated once.
  *
  * Every fact is sampled for the candidate that needs it and nothing else: a technology that no rule
- * mentions costs one settings read. Where the capture cannot answer a fact a rule needs, the
- * candidate is **rejected before invocation** rather than guessed at — not researching something is
- * recoverable on the next cycle, while taking the wrong side of a one-way fork is not.
+ * mentions costs one settings read. That is a correctness rule and not only a cost one — the game
+ * creates much of `global.race` lazily, so validating a field an unrelated rule happens to name
+ * would reject candidates over a fact their own rule never reads. Sample inside the branch that
+ * needs it.
+ *
+ * Where the capture cannot answer a fact a rule genuinely needs, the candidate is **rejected before
+ * invocation** rather than guessed at — not researching something is recoverable on the next cycle,
+ * while taking the wrong side of a one-way fork is not.
  */
 
 import {
@@ -76,6 +81,21 @@ const THEOLOGY_IDS: ReadonlySet<string> = new Set([
 ]);
 const ISOLATION_ID = "tech-isolation_protocol";
 const STABILIZE_ID = "tech-stabilize_blackhole";
+
+/**
+ * What the game itself stores for "no gods", and the value a lazily absent name reads as.
+ *
+ * `global.race.gods` is not guaranteed: upstream sets it at genesis but only carries it across a
+ * race replacement conditionally (`if (global.race['gods'])` in `src/vars.js`), and `src/achieve.js`
+ * tests `hasOwnProperty('gods')` before reading it. Demanding a string here would reject every
+ * theology candidate on a state that never set one, where the rule's own answer is simply that no
+ * fanaticism pairing matches. `species` is read the same way for the same comparison.
+ */
+const ABSENT_RACE_NAME = "none";
+
+function raceName(value: unknown): string {
+  return typeof value === "string" ? value : ABSENT_RACE_NAME;
+}
 
 const NO_CONFLICT: CapturedTechConflictDecision = Object.freeze({
   status: "none",
@@ -150,15 +170,6 @@ export function createCapturedTechConflictReader(
       const root = rootState.readRoot();
       if (root === undefined) return conflictUnavailable("invalid-game-state");
       const race = readProperty(root, "race");
-      const species = readProperty(race, "species");
-      const gods = readProperty(race, "gods");
-      if (typeof species !== "string" || typeof gods !== "string") {
-        return conflictUnavailable("invalid-game-state", "race.species");
-      }
-      const guardStarLevel = readCapturedAscensionLevel(root);
-      if (guardStarLevel === undefined) {
-        return conflictUnavailable("invalid-game-state", "race");
-      }
 
       const rawSoulGemCost = readProperty(tech.cost, "Soul_Gem");
       const soulGemCost =
@@ -242,6 +253,8 @@ export function createCapturedTechConflictReader(
       }
 
       let secondEvolution = false;
+      let species = ABSENT_RACE_NAME;
+      let gods = ABSENT_RACE_NAME;
       const fanaticismAchievements: TechConflictInput["fanaticismAchievements"][number][] =
         [];
       if (THEOLOGY_IDS.has(itemId)) {
@@ -254,7 +267,13 @@ export function createCapturedTechConflictReader(
           return conflictUnavailable("achievement-guard", guard.field);
         }
         secondEvolution = guard.status === "active";
+        species = raceName(readProperty(race, "species"));
+        gods = raceName(readProperty(race, "gods"));
         if (!secondEvolution) {
+          const guardStarLevel = readCapturedAscensionLevel(root);
+          if (guardStarLevel === undefined) {
+            return conflictUnavailable("invalid-game-state", "race");
+          }
           for (const combination of fanatAchievements) {
             const unlocked = isCapturedAchievementUnlocked(
               root,
@@ -289,11 +308,9 @@ export function createCapturedTechConflictReader(
           nowMs: 0,
           whiteholeResetInterrupted: false,
         }),
-        race: Object.freeze({
-          species,
-          gods,
-          achievementLevel: guardStarLevel,
-        }),
+        // Sampled by the theology branch alone; every other candidate leaves them absent, which is
+        // what the one rule that reads them would conclude from them anyway.
+        race: Object.freeze({ species, gods }),
         guards: Object.freeze({
           // A banana run rejected the candidate above, so the policy only ever sees this guard off.
           bananaRepublic: false,

@@ -334,7 +334,6 @@ export function readTechConflictInput(
       race: Object.freeze({
         species: race["species"],
         gods: race["gods"],
-        achievementLevel,
       }),
       guards: Object.freeze({
         bananaRepublic,

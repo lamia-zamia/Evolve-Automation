@@ -28,10 +28,13 @@ export interface TechConflictInput {
      */
     readonly whiteholeResetInterrupted: boolean;
   };
+  /**
+   * Read by the theology rule alone, to spot a race/god pairing whose Fanaticism achievement is
+   * still unearned. A reader that is deciding any other technology has no reason to sample these.
+   */
   readonly race: {
     readonly species: string;
     readonly gods: string;
-    readonly achievementLevel: number;
   };
   readonly guards: {
     readonly bananaRepublic: boolean;
