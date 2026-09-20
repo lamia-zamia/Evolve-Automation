@@ -11,6 +11,7 @@ import type {
   EvolutionCostsSample,
   EvolutionExecutor,
   EvolutionReader,
+  EvolutionResultSample,
   ResourceAccumulationCommand,
 } from "../../../../ports/evolution.ts";
 import {
@@ -259,6 +260,13 @@ export function createEvolutionReader(
           state["evolutionAttempts"],
           "state.evolutionAttempts",
         ),
+      });
+    },
+
+    sampleEvolutionResult(): EvolutionResultSample {
+      return Object.freeze({
+        status: "unavailable",
+        reason: "compatibility result check remains separately composed",
       });
     },
 

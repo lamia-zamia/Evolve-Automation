@@ -5,19 +5,19 @@
  *
  * - `userUniverseTargetName` → `captured-evolution.ts` universe selection;
  * - `userPlanetTargetName` → `captured-planet-selection.ts`;
- * - `userEvolutionTarget` → `captured-evolution.ts` `explicitTarget`;
+ * - `userEvolutionTarget` → `captured-evolution.ts` target planner;
+ * - `evolutionAutoUnbound` → captured race catalog weighting;
+ * - `evolutionBackup` → captured result-check lifecycle;
  * - `challenge_<id>` → `captured-evolution.ts` challenge activation;
  * - `evolutionQueue`, `evolutionQueueEnabled`, `evolutionQueueRepeat` →
  *   `captured-queued-settings.ts` and the captured target sample.
  *
- * Two compatibility-only controls remain absent because the captured runtime has no consumer for
- * them, and offering either would be a control that silently does nothing:
+ * One compatibility-only control remains absent because the captured runtime has no consumer for
+ * it, and offering it would be a control that silently does nothing:
  *
  * - `userEvolutionGenus` — read only by the compatibility evolution adapter, which picks a genus
  *   at the gene lab for the variable-genus challenge races. The captured runtime does not sample
  *   or click that menu.
- * - `evolutionBackup` — soft-reset-until-target, decided by `evolution-result-check.ts`, which
- *   only the compatibility runtime composes.
  *
  * Race descriptions and the habitability warning are not restated: see the catalog module.
  */
@@ -107,7 +107,7 @@ const raceOptions: readonly EvolutionSettingsOption[] = Object.freeze([
   Object.freeze({
     val: AUTO_TARGET_ID,
     label: "Auto Achievements",
-    hint: "Picks the race giving most achievements upon completing the run. The captured runtime does not rank races yet, so this currently waits for an explicit race instead of choosing one.",
+    hint: "Picks the reachable race/genus with the strongest current Auto Achievement weighting.",
   }),
   ...CAPTURED_EVOLUTION_RACES.map((race) =>
     Object.freeze({
@@ -172,6 +172,12 @@ const evolutionControls: readonly EvolutionSettingsControl[] = Object.freeze([
     settingName: "evolutionAutoUnbound",
     label: "Auto Unbound",
     hint: "Allow Auto Achievements to select races reachable through the current Unbound habitability threshold.",
+  }),
+  Object.freeze({
+    kind: "toggle" as const,
+    settingName: "evolutionBackup",
+    label: "Soft Reset",
+    hint: "Perform one soft reset when the captured result check rejects the evolved race.",
   }),
   ...challengeControls,
   Object.freeze({ kind: "header" as const, label: "Evolution Queue" }),

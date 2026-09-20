@@ -146,6 +146,8 @@ export const governors = [
 export const evolutionSettingsToStore = [
   "userEvolutionTarget",
   "userEvolutionGenus",
+  "evolutionAutoUnbound",
+  "evolutionBackup",
   "prestigeType",
   ...challenges.map((c) => "challenge_" + c[0]!.id),
 ];

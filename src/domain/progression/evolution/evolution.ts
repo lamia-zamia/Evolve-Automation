@@ -58,6 +58,8 @@ export interface RaceView {
   readonly genus: string;
   /** Race.name, used only for the log line. */
   readonly name: string;
+  /** Optional current Auto Achievement goals, when the adapter can capture them. */
+  readonly goals?: readonly string[];
 }
 
 export interface TargetSelectionInput {

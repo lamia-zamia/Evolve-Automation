@@ -5,6 +5,11 @@ import type {
   ImitationInput,
   TargetSelectionInput,
 } from "../domain/progression/evolution/evolution.ts";
+import type { EvolutionResultInput } from "../domain/progression/evolution/evolution-result.ts";
+
+export type EvolutionResultSample =
+  | { readonly status: "ready"; readonly input: Readonly<EvolutionResultInput> }
+  | { readonly status: "unavailable"; readonly reason: string };
 
 export interface EvolutionCostsSample {
   readonly maxRna: number;
@@ -27,6 +32,8 @@ export interface EvolutionReader {
   storedTargetId(): string | null;
   /** Sampled after loadQueuedSettings has reloaded the effective settings. */
   sampleTargetSelection(): TargetSelectionInput;
+  /** Captures the post-evolution result only after the lifecycle marks one pending. */
+  sampleEvolutionResult(): EvolutionResultSample;
   /** Live game.global.race[trait]; 1 marks the challenge already active. */
   sampleRaceTrait(trait: string): number;
   sampleCosts(targetId: string): EvolutionCostsSample;

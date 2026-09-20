@@ -342,7 +342,9 @@ function readFacts(
       starLevel: calculateAchievementStarLevel(settingsContext.context),
       currentAffix: universeAffix(universe),
     }),
-    massExtinction: readProperty(achieve, "mass_extinction") !== undefined,
+    massExtinction:
+      readProperty(achieve, "mass_extinction") !== undefined &&
+      readProperty(achieve, "mass_extinction") !== null,
   };
 }
 
@@ -410,13 +412,19 @@ function raceHabitability(
         ? 1
         : 0;
     case "ultra_sludge":
-      return readProperty(facts.achieve, "godslayer") !== undefined &&
+      return capturedEvolutionRecord(
+        readProperty(facts.achieve, "godslayer"),
+      ) !== undefined &&
         (achievementValue(facts.achieve, "extinct_sludge", "l") ?? -1) > 0
         ? 1
         : 0;
     default:
       if (row.genus === "hybrid") {
-        if (readProperty(facts.achieve, "godslayer") === undefined) return 0;
+        if (
+          capturedEvolutionRecord(readProperty(facts.achieve, "godslayer")) ===
+          undefined
+        )
+          return 0;
         return row.hybrid === undefined || row.hybrid.length === 0
           ? 1
           : Math.max(
@@ -452,7 +460,9 @@ function raceWeighting(
   habitability: number,
   rows: readonly CapturedRaceRow[],
   facts: CapturedRaceFacts,
-): number | undefined {
+):
+  | { readonly weighting: number; readonly goals: readonly string[] }
+  | undefined {
   const autoUnbound = settingBoolean(facts.settings, "evolutionAutoUnbound");
   const prestigeAscensionPillar = settingBoolean(
     facts.settings,
@@ -465,9 +475,12 @@ function raceWeighting(
     challengeEmfield === undefined
   )
     return undefined;
-  if (habitability < (autoUnbound ? 0.8 : 1)) return -1;
+  if (habitability < (autoUnbound ? 0.8 : 1)) {
+    return Object.freeze({ weighting: -1, goals: Object.freeze([]) });
+  }
 
   let weighting = 0;
+  const goals: string[] = [];
   const checkAchievement = (baseWeight: number, id: string): boolean => {
     const current = achievementValue(facts.achieve, id, facts.currentAffix);
     const standard = achievementValue(facts.achieve, id, "l");
@@ -475,6 +488,7 @@ function raceWeighting(
     const improve = facts.starLevel - current;
     if (improve > 0) {
       weighting += baseWeight * improve;
+      goals.push(`achieve_${id}_name`);
       if (facts.universe !== "micro" && facts.universe !== "standard") {
         weighting += baseWeight * Math.max(0, facts.starLevel - standard);
       }
@@ -496,6 +510,7 @@ function raceWeighting(
       weighting += 1000 * Math.max(0, facts.starLevel - speciesPillarLevel);
       if (speciesPillarLevel === 0 && !CHALLENGE_RACES.has(row.id))
         weighting += 100000;
+      goals.push("feat_equilibrium_name");
       if (!NO_PILLAR_RACES.has(row.id)) {
         const genusPillar = Math.max(
           0,
@@ -510,7 +525,10 @@ function raceWeighting(
             ),
         );
         const improve = facts.starLevel - genusPillar;
-        if (improve > 0) weighting += 10000 * improve;
+        if (improve > 0) {
+          weighting += 10000 * improve;
+          goals.push("achieve_enlightenment_name");
+        }
       }
     }
   }
@@ -519,6 +537,7 @@ function raceWeighting(
     const imitateUnlocked = Boolean(readProperty(facts.synth, row.id));
     if (!NO_IMITATES.has(row.id) && !imitateUnlocked) {
       weighting += 10000;
+      goals.push("feat_planned_obsolescence_name");
       const index = GOOD_IMITATES.indexOf(
         row.id as (typeof GOOD_IMITATES)[number],
       );
@@ -600,8 +619,10 @@ function raceWeighting(
   if (facts.universe !== "micro") {
     const checkFeat = (id: string): void => {
       const earned = optionalNumber(facts.feat, id);
-      if (earned !== undefined && facts.starLevel - earned > 0)
+      if (earned !== undefined && facts.starLevel - earned > 0) {
         weighting += facts.starLevel - earned;
+        goals.push(`feat_${id}_name`);
+      }
     };
     if (facts.biome === "hellscape" && row.genus !== "demonic") {
       if (facts.prestigeType === "mad" || facts.prestigeType === "cataclysm")
@@ -647,7 +668,10 @@ function raceWeighting(
   }
 
   if (CHALLENGE_RACES.has(row.id)) weighting *= facts.starLevel < 5 ? 0 : 0.01;
-  return weighting * habitability;
+  return Object.freeze({
+    weighting: weighting * habitability,
+    goals: Object.freeze(goals),
+  });
 }
 
 export function sampleCapturedEvolutionRaceCatalog(
@@ -692,7 +716,8 @@ export function sampleCapturedEvolutionRaceCatalog(
         name: row.name,
         genus: row.genus,
         habitability,
-        weighting,
+        weighting: weighting.weighting,
+        goals: weighting.goals,
       }),
     );
   }

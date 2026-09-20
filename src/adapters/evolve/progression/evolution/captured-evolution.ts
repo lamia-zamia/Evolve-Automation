@@ -22,6 +22,7 @@ import type {
   EvolutionCostsSample,
   EvolutionExecutor,
   EvolutionReader,
+  EvolutionResultSample,
   ResourceAccumulationCommand,
 } from "../../../../ports/evolution.ts";
 import type { GameControlRegistry } from "../../../../ports/game-control-registry.ts";
@@ -31,6 +32,7 @@ import type { GameRootStateSource } from "../../../../ports/game-root-state.ts";
 import type { UniverseSelectionControls } from "../../../../ports/progression-controls.ts";
 import { isNonArrayRecord, readProperty } from "../../../validation.ts";
 import { sampleCapturedEvolutionRaceCatalog } from "./captured-evolution-race-catalog.ts";
+import { readCapturedEvolutionResult } from "./captured-evolution-result.ts";
 
 const EVOLUTION_ACTION_PREFIX = "evolution-";
 const EVOLUTION_ACTION_SELECTOR = "#evolution > .action";
@@ -228,6 +230,13 @@ export function createCapturedEvolution(
         queueRepeat: settings?.["evolutionQueueRepeat"] === true,
         evolutionAttempts: dependencies.readEvolutionAttempts(),
       });
+    },
+
+    sampleEvolutionResult(): EvolutionResultSample {
+      return readCapturedEvolutionResult(
+        dependencies.rootState.readRoot(),
+        dependencies.readSettings(),
+      );
     },
 
     sampleRaceTrait(trait: string): number {

@@ -4856,6 +4856,8 @@
   var evolutionSettingsToStore = [
     "userEvolutionTarget",
     "userEvolutionGenus",
+    "evolutionAutoUnbound",
+    "evolutionBackup",
     "prestigeType",
     ...challenges.map((c) => "challenge_" + c[0].id)
   ];
@@ -26517,7 +26519,7 @@
     onWarning = () => {
     }
   }) {
-    let evolutionAttempts = 0;
+    let evolutionAttempts = 0, lastAppliedEvolution;
     return Object.freeze({
       loadQueuedSettings() {
         let settingsRaw = settings.readRaw(), rawQueue = settingsRaw.evolutionQueue, evolutionQueue = Array.isArray(rawQueue) ? rawQueue : void 0, queuedEvolution = evolutionQueue?.[0];
@@ -26531,7 +26533,17 @@
               `Type mismatch during loading queued settings: settingsRaw.${settingName} type: ${typeof currentValue2}, value: ${currentValue2}; queuedEvolution.${settingName} type: ${typeof queuedValue}, value: ${queuedValue};`
             );
           }
-        }) || (evolutionAttempts += 1, settings.persist(), settingsRaw.showSettings === !0 && refreshSettings?.());
+        }) || (lastAppliedEvolution = { ...queuedEvolution }, evolutionAttempts += 1, settings.persist(), settingsRaw.showSettings === !0 && refreshSettings?.());
+      },
+      restoreEvolutionAfterResult() {
+        let settingsRaw = settings.readRaw();
+        if (settingsRaw.evolutionQueueEnabled !== !0) return;
+        let rawQueue = settingsRaw.evolutionQueue;
+        if (!Array.isArray(rawQueue) || lastAppliedEvolution === void 0)
+          return;
+        settingsRaw.evolutionQueueRepeat !== !0 && rawQueue.push({ ...lastAppliedEvolution });
+        let current = rawQueue.pop();
+        current !== void 0 && rawQueue.unshift(current), settings.persist();
       },
       readEvolutionAttempts: () => evolutionAttempts
     });
@@ -27001,7 +27013,7 @@
           starLevel: calculateAchievementStarLevel(settingsContext.context),
           currentAffix: universeAffix2(universe)
         }),
-        massExtinction: readProperty(achieve, "mass_extinction") !== void 0
+        massExtinction: readProperty(achieve, "mass_extinction") !== void 0 && readProperty(achieve, "mass_extinction") !== null
       };
   }
   function genusHabitability(genus, facts) {
@@ -27040,9 +27052,11 @@
       case "sludge":
         return ((achievementValue(facts.achieve, "ascended", "l") ?? -1) > 0 || (achievementValue(facts.achieve, "corrupted", "l") ?? -1) > 0) && (achievementValue(facts.achieve, "extinct_junker", "l") ?? -1) > 0 ? 1 : 0;
       case "ultra_sludge":
-        return readProperty(facts.achieve, "godslayer") !== void 0 && (achievementValue(facts.achieve, "extinct_sludge", "l") ?? -1) > 0 ? 1 : 0;
+        return capturedEvolutionRecord(
+          readProperty(facts.achieve, "godslayer")
+        ) !== void 0 && (achievementValue(facts.achieve, "extinct_sludge", "l") ?? -1) > 0 ? 1 : 0;
       default:
-        return row.genus === "hybrid" ? readProperty(facts.achieve, "godslayer") === void 0 ? 0 : row.hybrid === void 0 || row.hybrid.length === 0 ? 1 : Math.max(
+        return row.genus === "hybrid" ? capturedEvolutionRecord(readProperty(facts.achieve, "godslayer")) === void 0 ? 0 : row.hybrid === void 0 || row.hybrid.length === 0 ? 1 : Math.max(
           ...row.hybrid.map((genus) => genusHabitability(genus, facts))
         ) : genusHabitability(row.genus, facts);
     }
@@ -27068,18 +27082,19 @@
     ), challengeEmfield = settingBoolean5(facts.settings, "challenge_emfield");
     if (autoUnbound === void 0 || prestigeAscensionPillar === void 0 || challengeEmfield === void 0)
       return;
-    if (habitability < (autoUnbound ? 0.8 : 1)) return -1;
-    let weighting = 0, checkAchievement = (baseWeight, id) => {
+    if (habitability < (autoUnbound ? 0.8 : 1))
+      return Object.freeze({ weighting: -1, goals: Object.freeze([]) });
+    let weighting = 0, goals = [], checkAchievement = (baseWeight, id) => {
       let current = achievementValue(facts.achieve, id, facts.currentAffix), standard = achievementValue(facts.achieve, id, "l");
       if (current === void 0 || standard === void 0) return !1;
       let improve = facts.starLevel - current;
-      return improve > 0 && (weighting += baseWeight * improve, facts.universe !== "micro" && facts.universe !== "standard" && (weighting += baseWeight * Math.max(0, facts.starLevel - standard))), !0;
+      return improve > 0 && (weighting += baseWeight * improve, goals.push(`achieve_${id}_name`), facts.universe !== "micro" && facts.universe !== "standard" && (weighting += baseWeight * Math.max(0, facts.starLevel - standard))), !0;
     };
     if ((facts.prestigeType === "ascension" && prestigeAscensionPillar || ["demonic", "apotheosis"].includes(facts.prestigeType)) && facts.universe !== "micro") {
       let speciesPillarLevel = optionalNumber(facts.pillars, row.id);
       if (speciesPillarLevel === void 0) return;
       let canPillar = speciesPillarLevel === 0 && facts.harmony >= 1, canUpgrade = speciesPillarLevel > 0 && speciesPillarLevel < facts.starLevel;
-      if ((canPillar || canUpgrade) && (weighting += 1e3 * Math.max(0, facts.starLevel - speciesPillarLevel), speciesPillarLevel === 0 && !CHALLENGE_RACES.has(row.id) && (weighting += 1e5), !NO_PILLAR_RACES.has(row.id))) {
+      if ((canPillar || canUpgrade) && (weighting += 1e3 * Math.max(0, facts.starLevel - speciesPillarLevel), speciesPillarLevel === 0 && !CHALLENGE_RACES.has(row.id) && (weighting += 1e5), goals.push("feat_equilibrium_name"), !NO_PILLAR_RACES.has(row.id))) {
         let genusPillar = Math.max(
           0,
           ...rows.filter(
@@ -27088,13 +27103,13 @@
             (candidate) => optionalNumber(facts.pillars, candidate.id) ?? 0
           )
         ), improve = facts.starLevel - genusPillar;
-        improve > 0 && (weighting += 1e4 * improve);
+        improve > 0 && (weighting += 1e4 * improve, goals.push("achieve_enlightenment_name"));
       }
     }
     if (facts.prestigeType === "apocalypse") {
       let imitateUnlocked = !!readProperty(facts.synth, row.id);
       if (!NO_IMITATES.has(row.id) && !imitateUnlocked) {
-        weighting += 1e4;
+        weighting += 1e4, goals.push("feat_planned_obsolescence_name");
         let index = GOOD_IMITATES.indexOf(
           row.id
         );
@@ -27120,7 +27135,7 @@
         if (facts.universe !== "micro") {
           let checkFeat = (id) => {
             let earned = optionalNumber(facts.feat, id);
-            earned !== void 0 && facts.starLevel - earned > 0 && (weighting += facts.starLevel - earned);
+            earned !== void 0 && facts.starLevel - earned > 0 && (weighting += facts.starLevel - earned, goals.push(`feat_${id}_name`));
           };
           facts.biome === "hellscape" && row.genus !== "demonic" && (facts.prestigeType === "mad" || facts.prestigeType === "cataclysm" ? checkFeat("take_no_advice") : facts.prestigeType === "bioseed" && checkFeat("ill_advised")), row.id === "junker" && (facts.prestigeType === "bioseed" && checkFeat("organ_harvester"), (facts.prestigeType === "ascension" || facts.prestigeType === "demonic") && checkFeat("garbage_pie"), [
             "ascension",
@@ -27131,7 +27146,10 @@
             "apocalypse"
           ].includes(facts.prestigeType) && checkFeat("the_misery")), facts.prestigeType === "whitehole" && facts.universe === "evil" && row.genus === "angelic" && checkFeat("nephilim"), facts.prestigeType === "demonic" && row.genus === "angelic" && checkFeat("twisted"), facts.prestigeType === "ascension" && challengeEmfield && row.genus === "artifical" && row.id !== "custom" && checkFeat("digital_ascension"), facts.prestigeType === "demonic" && row.id === "sludge" && checkFeat("slime_lord");
         }
-        return CHALLENGE_RACES.has(row.id) && (weighting *= facts.starLevel < 5 ? 0 : 0.01), weighting * habitability;
+        return CHALLENGE_RACES.has(row.id) && (weighting *= facts.starLevel < 5 ? 0 : 0.01), Object.freeze({
+          weighting: weighting * habitability,
+          goals: Object.freeze(goals)
+        });
       }
     }
   }
@@ -27170,7 +27188,8 @@
           name: row.name,
           genus: row.genus,
           habitability,
-          weighting
+          weighting: weighting.weighting,
+          goals: weighting.goals
         })
       );
     }
@@ -27181,16 +27200,75 @@
     });
   }
 
-  // src/adapters/evolve/progression/evolution/captured-evolution.ts
-  var EVOLUTION_ACTION_PREFIX = "evolution-", EVOLUTION_ACTION_SELECTOR = "#evolution > .action", RESOURCE_ACTION_IDS = /* @__PURE__ */ new Set(["rna", "dna"]);
+  // src/adapters/evolve/progression/evolution/captured-evolution-result.ts
   function capturedEvolutionRecord2(value) {
     return isNonArrayRecord(value) ? value : void 0;
   }
+  function readCapturedEvolutionResult(rootValue, settingsValue) {
+    let root = capturedEvolutionRecord2(rootValue), settings = capturedEvolutionRecord2(settingsValue), race = capturedEvolutionRecord2(readProperty(root, "race")), userEvolutionTarget = settings?.userEvolutionTarget, species = race?.species;
+    if (typeof userEvolutionTarget != "string")
+      return Object.freeze({
+        status: "unavailable",
+        reason: "userEvolutionTarget unavailable"
+      });
+    if (typeof species != "string")
+      return Object.freeze({
+        status: "unavailable",
+        reason: "race.species unavailable"
+      });
+    if (settings?.autoMutateTraits === !0)
+      return Object.freeze({
+        status: "unavailable",
+        reason: "captured mutation priority unavailable"
+      });
+    let catalog = sampleCapturedEvolutionRaceCatalog(rootValue, settingsValue);
+    if (catalog.status !== "ready")
+      return Object.freeze({ status: "unavailable", reason: catalog.reason });
+    let speciesRace = catalog.races.find(
+      (candidate) => candidate.id === species
+    );
+    if (speciesRace === void 0)
+      return Object.freeze({
+        status: "unavailable",
+        reason: `species ${species} unavailable`
+      });
+    let targetRace = userEvolutionTarget !== "auto" && userEvolutionTarget !== species ? catalog.races.find((candidate) => candidate.id === userEvolutionTarget) : void 0;
+    if (userEvolutionTarget !== "auto" && userEvolutionTarget !== species && targetRace === void 0)
+      return Object.freeze({
+        status: "unavailable",
+        reason: `target ${userEvolutionTarget} unavailable`
+      });
+    let input = Object.freeze({
+      autoEvolution: settings?.autoEvolution === !0,
+      evolutionBackup: settings?.evolutionBackup === !0,
+      autoMutateTraits: !1,
+      userEvolutionTarget,
+      species,
+      speciesRace: Object.freeze({
+        name: speciesRace.name,
+        weighting: speciesRace.weighting,
+        goals: Object.freeze([...speciesRace.goals ?? []])
+      }),
+      bestWeighting: catalog.races.reduce(
+        (best, candidate) => Math.max(best, candidate.weighting),
+        Number.NEGATIVE_INFINITY
+      ),
+      ...targetRace === void 0 ? {} : { targetHabitability: targetRace.habitability },
+      traits: Object.freeze([])
+    });
+    return Object.freeze({ status: "ready", input });
+  }
+
+  // src/adapters/evolve/progression/evolution/captured-evolution.ts
+  var EVOLUTION_ACTION_PREFIX = "evolution-", EVOLUTION_ACTION_SELECTOR = "#evolution > .action", RESOURCE_ACTION_IDS = /* @__PURE__ */ new Set(["rna", "dna"]);
+  function capturedEvolutionRecord3(value) {
+    return isNonArrayRecord(value) ? value : void 0;
+  }
   function rootRecord2(rootState) {
-    return capturedEvolutionRecord2(rootState.readRoot());
+    return capturedEvolutionRecord3(rootState.readRoot());
   }
   function nestedRecord(owner, key) {
-    return capturedEvolutionRecord2(readProperty(owner, key));
+    return capturedEvolutionRecord3(readProperty(owner, key));
   }
   function capturedEvolutionMutationFingerprint(rootState) {
     let root = rootRecord2(rootState);
@@ -27213,7 +27291,7 @@
     return nestedRecord(rootRecord2(rootState), "race");
   }
   function capturedEvolutionReadSettings(getSettings) {
-    return capturedEvolutionRecord2(getSettings());
+    return capturedEvolutionRecord3(getSettings());
   }
   function readActionRows(drawnActions) {
     return drawnActions.read(EVOLUTION_ACTION_SELECTOR).filter((action) => action.id.startsWith(EVOLUTION_ACTION_PREFIX));
@@ -27280,6 +27358,12 @@
           queueRepeat: settings?.evolutionQueueRepeat === !0,
           evolutionAttempts: dependencies.readEvolutionAttempts()
         });
+      },
+      sampleEvolutionResult() {
+        return readCapturedEvolutionResult(
+          dependencies.rootState.readRoot(),
+          dependencies.readSettings()
+        );
       },
       sampleRaceTrait(trait) {
         return Number(readProperty(readRace2(dependencies.rootState), trait));
@@ -27415,6 +27499,123 @@
           targetName
         });
         target !== null && dependencies.universeControls.selectUniverse(target);
+      }
+    });
+  }
+
+  // src/domain/progression/evolution/evolution-result.ts
+  var INTENTIONAL_SPECIES = [
+    "junker",
+    "sludge",
+    "ultra_sludge",
+    "hellspawn"
+  ];
+  function isIntentionalSpecies(species) {
+    return INTENTIONAL_SPECIES.includes(species);
+  }
+  function decideEvolutionResult(input) {
+    let logs = [], needReset = !1;
+    if (input.autoEvolution && input.evolutionBackup && !isIntentionalSpecies(input.species) && (input.userEvolutionTarget === "auto" ? input.speciesRace.weighting <= 0 && (input.bestWeighting > 0 ? (logs.push({
+      level: "danger",
+      code: "backup-no-achievements",
+      raceName: input.speciesRace.name
+    }), needReset = !0) : logs.push({
+      level: "warning",
+      code: "backup-no-race",
+      raceName: input.speciesRace.name
+    })) : input.userEvolutionTarget !== input.species && (input.targetHabitability ?? 0) > 0 && (logs.push({ level: "danger", code: "wrong-race" }), needReset = !0)), input.autoMutateTraits) {
+      for (let trait of input.traits)
+        if (trait.resetEnabled && trait.gained && !trait.inheritedFromBase) {
+          logs.push({
+            level: "danger",
+            code: "gained-trait",
+            traitName: trait.name
+          }), needReset = !0;
+          break;
+        }
+    }
+    return !needReset && input.autoEvolution && input.userEvolutionTarget === "auto" && logs.push(
+      input.speciesRace.goals.length > 0 ? { level: "info", code: "auto-goals", goals: input.speciesRace.goals } : { level: "info", code: "auto-goals-none" }
+    ), { logs, needReset };
+  }
+
+  // src/adapters/evolve/progression/evolution/captured-evolution-result-check.ts
+  function eventMessage(event) {
+    switch (event.code) {
+      case "backup-no-achievements":
+        return {
+          message: `Evolution backup rejected ${event.raceName}: no Auto Achievement progress.`,
+          color: "danger"
+        };
+      case "backup-no-race":
+        return {
+          message: `Evolution backup found no higher-weighted race than ${event.raceName}.`,
+          color: "warning"
+        };
+      case "wrong-race":
+        return {
+          message: "Evolution backup rejected the wrong race.",
+          color: "danger"
+        };
+      case "gained-trait":
+        return {
+          message: `Evolution backup rejected gained trait ${event.traitName}.`,
+          color: "danger"
+        };
+      case "auto-goals":
+        return {
+          message: `Auto Evolution goals: ${event.goals.join(", ")}.`,
+          color: "info"
+        };
+      case "auto-goals-none":
+        return {
+          message: "Auto Evolution completed with no remaining goals.",
+          color: "info"
+        };
+    }
+  }
+  function createCapturedEvolutionResultCheck({
+    reader,
+    softReset,
+    restoreEvolutionAfterResult,
+    onActivity = () => {
+    }
+  }) {
+    let state = "watching", previousSpecies, report = (event) => {
+      let formatted = eventMessage(event);
+      onActivity({
+        message: formatted.message,
+        color: formatted.color,
+        tags: Object.freeze(["progress", "achievements"])
+      });
+    };
+    return Object.freeze({
+      observeSpecies(species) {
+        if (state === "reset-issued") {
+          species === "protoplasm" && (state = "watching"), previousSpecies = species;
+          return;
+        }
+        previousSpecies === "protoplasm" && species !== "protoplasm" && (state = "pending"), previousSpecies = species;
+      },
+      check() {
+        if (state !== "pending")
+          return Object.freeze({ status: "idle", stopCycle: !1 });
+        state = "watching";
+        let sample = reader.sampleEvolutionResult();
+        if (sample.status !== "ready")
+          return Object.freeze({ status: "unavailable", stopCycle: !0 });
+        let decision = decideEvolutionResult(sample.input);
+        for (let event of decision.logs) report(event);
+        return decision.needReset ? (sample.input.autoEvolution && sample.input.evolutionBackup && restoreEvolutionAfterResult(), softReset.issueSoftReset() ? (state = "reset-issued", Object.freeze({ status: "reset-issued", stopCycle: !0 })) : Object.freeze({ status: "reset-unavailable", stopCycle: !0 })) : Object.freeze({ status: "checked", stopCycle: !1 });
+      }
+    });
+  }
+  var CAPTURED_SOFT_RESET_SELECTOR = ".reset .button:not(.right)";
+  function createCapturedSoftResetControl(getDocument) {
+    return Object.freeze({
+      issueSoftReset() {
+        let button = getDocument().querySelector(CAPTURED_SOFT_RESET_SELECTOR);
+        return button === null || button.disabled === !0 || typeof button.click != "function" ? !1 : (button.click(), !0);
       }
     });
   }
@@ -32261,7 +32462,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
     Object.freeze({
       val: AUTO_TARGET_ID,
       label: "Auto Achievements",
-      hint: "Picks the race giving most achievements upon completing the run. The captured runtime does not rank races yet, so this currently waits for an explicit race instead of choosing one."
+      hint: "Picks the reachable race/genus with the strongest current Auto Achievement weighting."
     }),
     ...CAPTURED_EVOLUTION_RACES.map(
       (race) => Object.freeze({
@@ -32315,6 +32516,12 @@ If script is allowed to reassign non-empty storage it might waste time producing
       settingName: "evolutionAutoUnbound",
       label: "Auto Unbound",
       hint: "Allow Auto Achievements to select races reachable through the current Unbound habitability threshold."
+    }),
+    Object.freeze({
+      kind: "toggle",
+      settingName: "evolutionBackup",
+      label: "Soft Reset",
+      hint: "Perform one soft reset when the captured result check rejects the evolved race."
     }),
     ...challengeControls,
     Object.freeze({ kind: "header", label: "Evolution Queue" }),
@@ -40984,6 +41191,11 @@ Only continue if you trust the source. Injected code:
       universeControls: createUniverseSelectionControls(() => document),
       challengeGroups: evolutionChallengeGroups,
       onActivity
+    }), capturedEvolutionResultCheck = createCapturedEvolutionResultCheck({
+      reader: capturedEvolution.reader,
+      softReset: createCapturedSoftResetControl(() => document),
+      restoreEvolutionAfterResult: queuedSettings.restoreEvolutionAfterResult,
+      onActivity
     }), capturedPlanetSelection = createCapturedPlanetSelection({
       rootState: pageCapture2.rootState,
       drawnActions,
@@ -41835,9 +42047,13 @@ Only continue if you trust the source. Injected code:
         return;
       let profiling = diagnostics?.readPerformanceEnabled() === !0 ? diagnostics : void 0, workStartedAtMs = profiling?.nowMs();
       try {
-        if (isEnabled(settings, "autoEvolution") && capturedEvolution.reader.sampleSpecies() === "protoplasm") {
-          runPhase("autoEvolution", runCapturedEvolution);
-          return;
+        if (isEnabled(settings, "autoEvolution")) {
+          let species = capturedEvolution.reader.sampleSpecies();
+          if (capturedEvolutionResultCheck.observeSpecies(species), capturedEvolutionResultCheck.check().stopCycle) return;
+          if (species === "protoplasm") {
+            runPhase("autoEvolution", runCapturedEvolution);
+            return;
+          }
         }
         isEnabled(settings, "autoTrigger") && runPhase("autoTrigger discovery", () => {
           progression.ensureBuildControls(), refreshDiscoveredSettings();

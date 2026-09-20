@@ -77,6 +77,7 @@ function evolutionRuntime(readSettings, { species = "protoplasm" } = {}) {
     "userPlanetTargetName",
     "userEvolutionTarget",
     "evolutionAutoUnbound",
+    "evolutionBackup",
     "evolutionQueueEnabled",
     "evolutionQueueRepeat",
   ]) {
@@ -94,7 +95,7 @@ function evolutionRuntime(readSettings, { species = "protoplasm" } = {}) {
     );
   }
   // No captured consumer reads these, so drawing one would be an inert control.
-  for (const settingName of ["userEvolutionGenus", "evolutionBackup"]) {
+  for (const settingName of ["userEvolutionGenus"]) {
     assert.equal(
       page.root.querySelectorAll(`.script_${settingName}`).length,
       0,

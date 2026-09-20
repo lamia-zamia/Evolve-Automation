@@ -140,6 +140,10 @@ import { createOverrideSettings } from "../application/override-settings.ts";
 import { createCapturedOverrideEvaluation } from "../adapters/evolve/captured-override-evaluation.ts";
 import { createCapturedQueuedSettings } from "../adapters/evolve/progression/evolution/captured-queued-settings.ts";
 import { createCapturedEvolution } from "../adapters/evolve/progression/evolution/captured-evolution.ts";
+import {
+  createCapturedEvolutionResultCheck,
+  createCapturedSoftResetControl,
+} from "../adapters/evolve/progression/evolution/captured-evolution-result-check.ts";
 import { createCapturedPlanetSelection } from "../adapters/evolve/progression/evolution/captured-planet-selection.ts";
 import { createCapturedSettingsPanel } from "./captured-settings-panel-control.ts";
 import { createPlanetMetadataReader } from "../adapters/browser/planet-metadata.ts";
@@ -431,6 +435,12 @@ export function startCapturedRuntime({
     loadQueuedSettings: queuedSettings.loadQueuedSettings,
     universeControls: createUniverseSelectionControls(() => document),
     challengeGroups: evolutionChallengeGroups,
+    onActivity,
+  });
+  const capturedEvolutionResultCheck = createCapturedEvolutionResultCheck({
+    reader: capturedEvolution.reader,
+    softReset: createCapturedSoftResetControl(() => document),
+    restoreEvolutionAfterResult: queuedSettings.restoreEvolutionAfterResult,
     onActivity,
   });
   const capturedPlanetSelection = createCapturedPlanetSelection({
@@ -1742,12 +1752,14 @@ export function startCapturedRuntime({
       // Evolution is a separate game phase: while the root still carries the protoplasm species,
       // do only its controls, matching the tick runner's Evolution-goal short circuit. A landed
       // evolution page can therefore progress without spending resources on ordinary automation.
-      if (
-        isEnabled(settings, "autoEvolution") &&
-        capturedEvolution.reader.sampleSpecies() === "protoplasm"
-      ) {
-        runPhase("autoEvolution", runCapturedEvolution);
-        return;
+      if (isEnabled(settings, "autoEvolution")) {
+        const species = capturedEvolution.reader.sampleSpecies();
+        capturedEvolutionResultCheck.observeSpecies(species);
+        if (capturedEvolutionResultCheck.check().stopCycle) return;
+        if (species === "protoplasm") {
+          runPhase("autoEvolution", runCapturedEvolution);
+          return;
+        }
       }
       if (isEnabled(settings, "autoTrigger")) {
         runPhase("autoTrigger discovery", () => {

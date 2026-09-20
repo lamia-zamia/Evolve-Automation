@@ -17,6 +17,8 @@ export interface CapturedQueuedSettingsDependencies {
 
 export interface CapturedQueuedSettings {
   readonly loadQueuedSettings: () => void;
+  /** Re-queues the just-applied row at the front after a failed result-check reset. */
+  readonly restoreEvolutionAfterResult: () => void;
   /** The page-session counter consumed by the future captured evolution reader. */
   readonly readEvolutionAttempts: () => number;
 }
@@ -27,6 +29,7 @@ export function createCapturedQueuedSettings({
   onWarning = () => {},
 }: CapturedQueuedSettingsDependencies): CapturedQueuedSettings {
   let evolutionAttempts = 0;
+  let lastAppliedEvolution: Record<string, unknown> | undefined;
 
   return Object.freeze({
     loadQueuedSettings() {
@@ -55,9 +58,23 @@ export function createCapturedQueuedSettings({
         },
       });
       if (!applied) return;
+      lastAppliedEvolution = { ...queuedEvolution };
       evolutionAttempts += 1;
       settings.persist();
       if (settingsRaw["showSettings"] === true) refreshSettings?.();
+    },
+    restoreEvolutionAfterResult() {
+      const settingsRaw = settings.readRaw();
+      if (settingsRaw["evolutionQueueEnabled"] !== true) return;
+      const rawQueue = settingsRaw["evolutionQueue"];
+      if (!Array.isArray(rawQueue) || lastAppliedEvolution === undefined)
+        return;
+      if (settingsRaw["evolutionQueueRepeat"] !== true) {
+        rawQueue.push({ ...lastAppliedEvolution });
+      }
+      const current = rawQueue.pop();
+      if (current !== undefined) rawQueue.unshift(current);
+      settings.persist();
     },
     readEvolutionAttempts: () => evolutionAttempts,
   });
