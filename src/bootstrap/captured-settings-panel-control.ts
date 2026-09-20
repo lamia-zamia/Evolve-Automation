@@ -1308,7 +1308,13 @@ export function createCapturedSettingsPanel({
     });
     // The prestige vocabulary and the exposed control set are static; only the goal handoff needs
     // the runtime, and it is optional.
-    const capturedPrestigeAdapter = createCapturedPrestigeSettingsAdapter();
+    const capturedPrestigeAdapter = createCapturedPrestigeSettingsAdapter(
+      capturedResearchSettings === undefined
+        ? {}
+        : // The vaccination strategies are technologies, so they are labeled from the same captured
+          // control registry the Research section reads.
+          { controls: capturedResearchSettings.controls },
+    );
     let prestige: PrestigeSettings | undefined;
     let prestigeIntent: ReturnType<typeof createPrestigeSettingsIntentHandler>;
     prestige = createPrestigeSettingsBrowserAdapter({

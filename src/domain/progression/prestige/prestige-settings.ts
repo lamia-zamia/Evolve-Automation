@@ -55,13 +55,43 @@ function keepExposedControls(
   );
 }
 
+/**
+ * The vaccination strategies the Matrix run can commit to, under the game's own discriminator.
+ *
+ * `findTechConflict` matches an offered `tech-vax_strat<n>` against the stored value with
+ * `includes`, so these are the ids both the control and the exclusion agree on.
+ */
+export const VACCINATION_STRATEGY_IDS: readonly string[] = Object.freeze([
+  "strat1",
+  "strat2",
+  "strat3",
+  "strat4",
+]);
+
+/** The stored value that commits to no strategy, which is also the record's default. */
+export const NO_VACCINATION_STRATEGY: PrestigeSettingsOption = Object.freeze({
+  val: "none",
+  label: "None",
+  hint: "Do not select strategy",
+});
+
 export function createPrestigeSettingsReadModel(input: {
   readonly prestigeOptions: readonly PrestigeSettingsOption[];
+  /**
+   * The vaccination strategies to offer, labeled by whatever localization the caller can reach.
+   * Omitted leaves only "none", which is what a surface with no localization can honestly show.
+   */
+  readonly vaccinationOptions?: readonly PrestigeSettingsOption[];
   /** When given, only these setting names are offered. Omitted means every historical control. */
   readonly exposedSettings?: ReadonlySet<string>;
 }): PrestigeSettingsReadModel {
   const options = Object.freeze(
     input.prestigeOptions.map((option) => Object.freeze({ ...option })),
+  );
+  const vaccinationOptions = Object.freeze(
+    (input.vaccinationOptions ?? [NO_VACCINATION_STRATEGY]).map((option) =>
+      Object.freeze({ ...option }),
+    ),
   );
   const controls: readonly PrestigeSettingsControl[] = Object.freeze([
     {
@@ -189,10 +219,8 @@ export function createPrestigeSettingsReadModel(input: {
       kind: "select",
       settingName: "prestigeVaxStrat",
       label: "Vaccination Strategy",
-      hint: "Alter script behaviour to speed up queued items, prioritizing missing resources.",
-      options: Object.freeze([
-        { val: "none", label: "None", hint: "Do not select strategy" },
-      ]),
+      hint: "Which vaccination technology the script researches on a Matrix run. Every other strategy is then excluded from research, because the choice is one-way.",
+      options: vaccinationOptions,
     },
   ]);
   return Object.freeze({

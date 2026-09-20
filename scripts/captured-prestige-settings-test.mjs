@@ -16,13 +16,12 @@ import { PRESTIGE_TYPES } from "../src/domain/progression/prestige/prestige-type
 import { createCapturedMadPrestige } from "../src/adapters/evolve/progression/prestige/captured-mad.ts";
 import { createCapturedProjectContextReader } from "../src/adapters/evolve/progression/research/captured-project-context.ts";
 import { createCapturedBuildPolicyReader } from "../src/adapters/evolve/progression/build/captured-build-policy.ts";
+import { createCapturedTechConflictReader } from "../src/adapters/evolve/progression/research/captured-tech-conflicts.ts";
 import { createCapturedSettingsPage, edit } from "./captured-settings-page.mjs";
 
 const WITHHELD = [
   "prestigeWaitAT",
   "prestigeDemonicPotential",
-  "prestigeDemonicBomb",
-  "prestigeVaxStrat",
   "prestigeCustomRaceMode",
 ];
 
@@ -42,12 +41,12 @@ const WITHHELD = [
     assert.ok(!drawn.includes(setting), `${setting} must stay withheld`);
   }
 
-  // A header is dropped when nothing survives under it. "Matrix" held only the vaccination
-  // strategy, so it must be gone; "Demonic Infusion" still holds the spire floor.
+  // A header is dropped only when nothing survives under it. "Matrix" holds the vaccination
+  // strategy the research exclusions now consume, so it is back.
   const headers = model.controls
     .filter((control) => control.kind === "header")
     .map((control) => control.label);
-  assert.ok(!headers.includes("Matrix"));
+  assert.ok(headers.includes("Matrix"));
   assert.ok(headers.includes("Demonic Infusion"));
   assert.ok(headers.includes("Mutual Assured Destruction"));
 
@@ -325,6 +324,79 @@ function projectContext(settings, { manaRate = 0, witchHunter = false } = {}) {
   assert.equal(raw["prestigeType"], "none");
   assert.notEqual(raw["prestigeBioseedProbes"], 99);
   assert.notEqual(raw["overrides"]["autoBuild"], undefined);
+}
+
+// --- the two controls the research exclusions brought back ---------------------------------------
+
+/**
+ * The owning subsystem for both: the captured research exclusions. A page edit must change what it
+ * decides about a real offered technology, which is what "consumed" means here.
+ */
+function conflictFor(page, elementId, root = {}) {
+  return createCapturedTechConflictReader({
+    rootState: {
+      readRoot: () => ({ race: { species: "human", gods: "none" }, ...root }),
+    },
+    readSettings: () => page.effective,
+    resources: {
+      readResources: (ids) =>
+        Object.freeze({
+          resources: new Map(
+            [...ids].map((id) => [
+              id,
+              {
+                unlocked: true,
+                amount: 0,
+                max: 0,
+                rateOfChange: 0,
+                storageRatio: 0,
+              },
+            ]),
+          ),
+        }),
+    },
+  }).evaluate({ elementId, cost: {}, generation: 1 });
+}
+
+{
+  // The Dark Energy Bomb is drawn, and turning it on is what stops the exclusion from rejecting it.
+  const page = createCapturedSettingsPage();
+  assert.equal(
+    page.root.querySelectorAll(".script_prestigeDemonicBomb").length,
+    1,
+    "the Demonic Bomb toggle must be drawn once",
+  );
+  edit(page, "prestigeType", "demonic");
+  page.refreshEffectiveSettings();
+  assert.deepEqual(conflictFor(page, "tech-dark_bomb"), {
+    status: "conflict",
+    conflict: { code: "dark-bomb-disabled" },
+  });
+
+  edit(page, "prestigeDemonicBomb", true);
+  page.refreshEffectiveSettings();
+  assert.deepEqual(conflictFor(page, "tech-dark_bomb"), { status: "none" });
+}
+
+{
+  // The vaccination select offers every strategy, and picking one excludes the others.
+  const page = createCapturedSettingsPage();
+  const [control] = page.root.querySelectorAll(".script_prestigeVaxStrat");
+  assert.ok(control, "the vaccination strategy select must be drawn");
+
+  assert.deepEqual(conflictFor(page, "tech-vax_strat2"), {
+    status: "conflict",
+    conflict: { code: "vaccination-strategy" },
+  });
+
+  edit(page, "prestigeVaxStrat", "strat2");
+  assert.equal(page.settings.readRaw()["prestigeVaxStrat"], "strat2");
+  page.refreshEffectiveSettings();
+  assert.deepEqual(conflictFor(page, "tech-vax_strat2"), { status: "none" });
+  assert.deepEqual(conflictFor(page, "tech-vax_strat3"), {
+    status: "conflict",
+    conflict: { code: "vaccination-strategy" },
+  });
 }
 
 console.log("captured Prestige settings checks passed");

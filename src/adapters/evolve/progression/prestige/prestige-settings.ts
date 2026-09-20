@@ -1,5 +1,7 @@
 import {
   createPrestigeSettingsReadModel,
+  NO_VACCINATION_STRATEGY,
+  VACCINATION_STRATEGY_IDS,
   type PrestigeSettingsOption,
   type PrestigeSettingsReadModel,
 } from "../../../../domain/progression/prestige/prestige-settings.ts";
@@ -77,10 +79,8 @@ export function createPrestigeSettingsEvolveAdapter(
     const rawLoc = game["loc"];
     if (typeof rawLoc !== "function")
       throw new TypeError("game.loc must be a function");
-    const vaxOptions: PrestigeSettingsOption[] = [
-      { val: "none", label: "None", hint: "Do not select strategy" },
-    ];
-    for (const id of ["strat1", "strat2", "strat3", "strat4"])
+    const vaxOptions: PrestigeSettingsOption[] = [NO_VACCINATION_STRATEGY];
+    for (const id of VACCINATION_STRATEGY_IDS)
       vaxOptions.push({
         val: id,
         label: requireString(
@@ -92,15 +92,10 @@ export function createPrestigeSettingsEvolveAdapter(
           `game.loc(tech_vax_${id}_effect)`,
         ),
       });
-    const model = createPrestigeSettingsReadModel({
+    return createPrestigeSettingsReadModel({
       prestigeOptions: readOptions(deps.getPrestigeTypes()),
+      vaccinationOptions: vaxOptions,
     });
-    const controls = model.controls.map((control) =>
-      control.kind === "select" && control.settingName === "prestigeVaxStrat"
-        ? Object.freeze({ ...control, options: Object.freeze(vaxOptions) })
-        : control,
-    );
-    return Object.freeze({ ...model, controls: Object.freeze(controls) });
   }
   function getConfirmationText(value: string): string {
     if (!deps.isPrestigeAllowed()) return "";

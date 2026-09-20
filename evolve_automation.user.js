@@ -31938,9 +31938,23 @@ If script is allowed to reassign non-empty storage it might waste time producing
       )
     );
   }
+  var VACCINATION_STRATEGY_IDS = Object.freeze([
+    "strat1",
+    "strat2",
+    "strat3",
+    "strat4"
+  ]), NO_VACCINATION_STRATEGY = Object.freeze({
+    val: "none",
+    label: "None",
+    hint: "Do not select strategy"
+  });
   function createPrestigeSettingsReadModel(input) {
     let options = Object.freeze(
       input.prestigeOptions.map((option) => Object.freeze({ ...option }))
+    ), vaccinationOptions = Object.freeze(
+      (input.vaccinationOptions ?? [NO_VACCINATION_STRATEGY]).map(
+        (option) => Object.freeze({ ...option })
+      )
     ), controls2 = Object.freeze([
       {
         kind: "select",
@@ -32067,10 +32081,8 @@ If script is allowed to reassign non-empty storage it might waste time producing
         kind: "select",
         settingName: "prestigeVaxStrat",
         label: "Vaccination Strategy",
-        hint: "Alter script behaviour to speed up queued items, prioritizing missing resources.",
-        options: Object.freeze([
-          { val: "none", label: "None", hint: "Do not select strategy" }
-        ])
+        hint: "Which vaccination technology the script researches on a Matrix run. Every other strategy is then excluded from research, because the choice is one-way.",
+        options: vaccinationOptions
       }
     ]);
     return Object.freeze({
@@ -32199,22 +32211,36 @@ If script is allowed to reassign non-empty storage it might waste time producing
       "prestigeWhiteholeSaveGems",
       "prestigeWhiteholeMinMass",
       "prestigeAscensionPillar",
-      "prestigeDemonicFloor"
+      "prestigeDemonicFloor",
+      "prestigeDemonicBomb",
+      "prestigeVaxStrat"
     ])
-  ), capturedPrestigeOptions = Object.freeze(
+  );
+  function readCapturedVaccinationOptions(controls2) {
+    if (controls2 === void 0) return Object.freeze([NO_VACCINATION_STRATEGY]);
+    let localize = createCapturedResearchLocalize(controls2);
+    return Object.freeze([
+      NO_VACCINATION_STRATEGY,
+      ...VACCINATION_STRATEGY_IDS.map(
+        (id) => Object.freeze({
+          val: id,
+          label: localize(`tech_vax_${id}`),
+          hint: localize(`tech_vax_${id}_effect`)
+        })
+      )
+    ]);
+  }
+  var capturedPrestigeOptions = Object.freeze(
     PRESTIGE_TYPES.map(
       (type) => Object.freeze({ val: type.val, label: type.label, hint: type.hint })
     )
   );
-  function createCapturedPrestigeSettingsAdapter() {
-    let readModel = createPrestigeSettingsReadModel({
+  function createCapturedPrestigeSettingsAdapter(dependencies = {}) {
+    return Object.freeze({ read: () => createPrestigeSettingsReadModel({
       prestigeOptions: capturedPrestigeOptions,
+      vaccinationOptions: readCapturedVaccinationOptions(dependencies.controls),
       exposedSettings: CAPTURED_PRESTIGE_SETTINGS
-    });
-    return Object.freeze({
-      read: () => readModel,
-      getConfirmationText: () => ""
-    });
+    }), getConfirmationText: () => "" });
   }
 
   // src/domain/economy/resources/weighting-settings.ts
@@ -36821,7 +36847,13 @@ If script is allowed to reassign non-empty storage it might waste time producing
           resetCheckbox: () => controls2.resetCheckbox("autoEvolution")
         }
       });
-      let capturedPrestigeAdapter = createCapturedPrestigeSettingsAdapter(), prestige, prestigeIntent;
+      let capturedPrestigeAdapter = createCapturedPrestigeSettingsAdapter(
+        capturedResearchSettings === void 0 ? {} : (
+          // The vaccination strategies are technologies, so they are labeled from the same captured
+          // control registry the Research section reads.
+          { controls: capturedResearchSettings.controls }
+        )
+      ), prestige, prestigeIntent;
       prestige = createPrestigeSettingsBrowserAdapter({
         getDocument: () => documentForUi,
         getJQuery: () => getJQuery(),

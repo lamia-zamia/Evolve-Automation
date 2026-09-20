@@ -16,14 +16,13 @@
  * | `prestigeMADIgnoreArpa`, `prestigeVacuumMana` | `captured-project-context.ts` |
  * | `prestigeBioseedConstruct` | `captured-factory.ts`, `captured-resource-demand.ts`, `captured-project-context.ts` |
  * | `prestigeWhiteholeSaveGems` | `captured-build-policy.ts`, `script-build-policy.ts` |
+ * | `prestigeDemonicBomb`, `prestigeVaxStrat` | `captured-tech-conflicts.ts` research exclusions |
  *
  * Withheld, with the feature each one waits on:
  *
  * - `prestigeWaitAT` — only `prestige-eligibility.ts`, which no captured composition imports.
  *   `captured-project-context.ts` already says in a comment that it does not consult it.
  * - `prestigeDemonicPotential` — same module; needs a captured mech-potential sample as well.
- * - `prestigeDemonicBomb`, `prestigeVaxStrat` — the tech-conflict feature
- *   (`src/adapters/evolve/tech-conflict.ts`) is entirely compatibility-only.
  * - `prestigeCustomRaceMode`, `prestigeCustomRacePreset` — read only by `src/ui/custom-race-ui.ts`,
  *   which the captured panel does not compose.
  *
@@ -34,10 +33,17 @@
 
 import {
   createPrestigeSettingsReadModel,
+  NO_VACCINATION_STRATEGY,
+  VACCINATION_STRATEGY_IDS,
   type PrestigeSettingsOption,
   type PrestigeSettingsReadModel,
 } from "../../../../domain/progression/prestige/prestige-settings.ts";
 import { PRESTIGE_TYPES } from "../../../../domain/progression/prestige/prestige-types.ts";
+import type { GameControlRegistry } from "../../../../ports/game-control-registry.ts";
+// The captured path's one way to turn a `tech_*` localization key into the label the game drew.
+// The vaccination strategies are technologies, so they read their labels through the same helper
+// the Research section uses rather than carrying a second copy of that rule.
+import { createCapturedResearchLocalize } from "../research/captured-research-settings-catalog.ts";
 
 /** The exposed set, in no particular order; the read model keeps the section's own ordering. */
 export const CAPTURED_PRESTIGE_SETTINGS: ReadonlySet<string> = Object.freeze(
@@ -54,8 +60,32 @@ export const CAPTURED_PRESTIGE_SETTINGS: ReadonlySet<string> = Object.freeze(
     "prestigeWhiteholeMinMass",
     "prestigeAscensionPillar",
     "prestigeDemonicFloor",
+    "prestigeDemonicBomb",
+    "prestigeVaxStrat",
   ]),
 );
+
+/**
+ * The vaccination strategies, labeled from the technologies the game has drawn. Without a control
+ * registry there is nothing to localize against, so only "none" is offered — an empty select is a
+ * truthful "this surface cannot name them", never a silently mislabeled one.
+ */
+function readCapturedVaccinationOptions(
+  controls: GameControlRegistry | undefined,
+): readonly PrestigeSettingsOption[] {
+  if (controls === undefined) return Object.freeze([NO_VACCINATION_STRATEGY]);
+  const localize = createCapturedResearchLocalize(controls);
+  return Object.freeze([
+    NO_VACCINATION_STRATEGY,
+    ...VACCINATION_STRATEGY_IDS.map((id) =>
+      Object.freeze({
+        val: id,
+        label: localize(`tech_vax_${id}`),
+        hint: localize(`tech_vax_${id}_effect`),
+      }),
+    ),
+  ]);
+}
 
 const capturedPrestigeOptions: readonly PrestigeSettingsOption[] =
   Object.freeze(
@@ -69,13 +99,19 @@ export interface CapturedPrestigeSettingsAdapter {
   getConfirmationText(value: string): string;
 }
 
-export function createCapturedPrestigeSettingsAdapter(): CapturedPrestigeSettingsAdapter {
-  const readModel = createPrestigeSettingsReadModel({
-    prestigeOptions: capturedPrestigeOptions,
-    exposedSettings: CAPTURED_PRESTIGE_SETTINGS,
-  });
-  return Object.freeze({
-    read: () => readModel,
-    getConfirmationText: () => "",
-  });
+export function createCapturedPrestigeSettingsAdapter(
+  dependencies: {
+    /** Labels the vaccination strategies from the technologies the game has drawn. */
+    readonly controls?: GameControlRegistry;
+  } = {},
+): CapturedPrestigeSettingsAdapter {
+  // The strategy labels come from drawn controls, so the model is rebuilt per read rather than
+  // frozen at construction: a technology the game draws later must be able to name itself.
+  const read = (): PrestigeSettingsReadModel =>
+    createPrestigeSettingsReadModel({
+      prestigeOptions: capturedPrestigeOptions,
+      vaccinationOptions: readCapturedVaccinationOptions(dependencies.controls),
+      exposedSettings: CAPTURED_PRESTIGE_SETTINGS,
+    });
+  return Object.freeze({ read, getConfirmationText: () => "" });
 }
