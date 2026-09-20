@@ -80,6 +80,7 @@ import {
   TITAN_MINE_CONTROL,
 } from "../adapters/evolve/economy/resources/captured-production-ratios.ts";
 import { createCapturedPowerProducerAutomation } from "../adapters/evolve/economy/production/captured-power-producers.ts";
+import { createDiscoveryAttempts } from "./discovery-attempts.ts";
 import { createCapturedPowerWarningAutomation } from "../adapters/evolve/economy/production/captured-power-warnings.ts";
 import {
   createCapturedSmelterAutomation,
@@ -273,8 +274,17 @@ export function startCapturedRuntime({
   settingsLifecycle.initialize();
   // The settings catalogs are read out of the game's root object, so a replacement can change
   // them without changing any count the lifecycle's own generation can see.
+  // Advances once per automation cycle. Discovery retries are rate-limited against it so a draw
+  // that keeps failing backs off instead of redrawing its tab on every phase call.
+  let automationCycle = 0;
+  const discoveryAttempts = createDiscoveryAttempts({
+    readCycle: () => automationCycle,
+  });
   pageCapture.rootState.subscribeRootReplaced(() => {
     settingsLifecycle.invalidateDynamicDefaults();
+    // Every captured control the recorded attempts describe belonged to the replaced page, so a
+    // success cached against it is no longer authoritative.
+    discoveryAttempts.invalidate();
   });
   const effectiveSettings = settingsLifecycle.readEffective();
   const reportedOverrideFailures = new Set<string>();
@@ -840,27 +850,66 @@ export function startCapturedRuntime({
     panels,
     diagnostics,
   });
-  let civicControlsDiscoveryAttempted = false;
-  let mercenaryDiscoveryAttempted = false;
-  let mechDiscoveryAttempted = false;
-  let hellGarrisonDiscoveryAttempted = false;
-  let madDiscoveryAttemptedEpoch: string | undefined;
+  /**
+   * The one place a captured feature spends a tab draw. Callers check their own eligibility first
+   * and pass `satisfied`: the authoritative answer to "does this feature now hold the control it
+   * came for". A draw that reports success while leaving that control absent is a failure here, so
+   * the feature stays eligible for a later cycle instead of latching itself off for the session.
+   *
+   * `epoch` names a feature-owned identity — a progression reset — that starts the attempts over.
+   */
+  const finishDiscovery = (
+    key: string,
+    label: string,
+    satisfied: (() => boolean) | undefined,
+    epoch: string | undefined,
+    steps: Parameters<typeof civicDiscovery.discover>[0],
+  ): boolean => {
+    if (!discoveryAttempts.shouldAttempt(key, epoch)) return false;
+    // A draw that throws is a failed attempt like any other. Without this the exception would
+    // escape before anything was recorded, and the phase runner's catch would leave the feature
+    // redrawing its tab on every cycle forever.
+    let result;
+    try {
+      result = civicDiscovery.discover(steps);
+    } catch (error) {
+      discoveryAttempts.recordFailure(key, epoch);
+      logError(
+        `${label} discovery threw: ${String(error)} (${discoveryAttempts.describe(key, epoch)})`,
+      );
+      return false;
+    }
+    if (result.outcome.status !== "succeeded") {
+      discoveryAttempts.recordFailure(key, epoch);
+      logError(
+        `${label} discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status} (${discoveryAttempts.describe(key, epoch)})`,
+      );
+      return false;
+    }
+    if (satisfied !== undefined && !satisfied()) {
+      discoveryAttempts.recordFailure(key, epoch);
+      logError(
+        `${label} discovery drew its tab without capturing its control (${discoveryAttempts.describe(key, epoch)})`,
+      );
+      return false;
+    }
+    discoveryAttempts.recordSuccess(key, epoch);
+    return true;
+  };
   /**
    * Draws the civics military sub-tab, where `index.js` calls `buildFortress($('#fortress'),false)`
    * and captures `gFort`. The same draw runs `defineGarrison()`, so a later slice that needs the
    * `garrison` controls reuses this helper instead of adding a second military-tab discovery.
    *
-   * Gates come before the latch, like the other conditional discoveries: the fortress is built
-   * mid-run, so a pre-fortress cycle must not spend the one attempt this run is allowed.
+   * Eligibility comes before the attempt, like the other conditional discoveries: the fortress is
+   * built mid-run, so a pre-fortress cycle must not spend a draw on a panel that cannot exist yet.
    */
   const ensureHellGarrisonControls = () => {
-    if (
+    const satisfied = () =>
       HELL_GARRISON_CONTROLS.some((id) =>
         pageCapture.controls.resolve(id)?.methods.includes("patrolling"),
-      )
-    ) {
-      return;
-    }
+      );
+    if (satisfied()) return;
     const root = pageCapture.rootState.readRoot();
     if (
       !isRecord(readProperty(readProperty(root, "portal"), "fortress")) ||
@@ -870,10 +919,8 @@ export function startCapturedRuntime({
     }
     const govTabs = SUB_TAB_CONTROLS[GOV_TABS_SETTING];
     if (govTabs === undefined) return;
-    if (hellGarrisonDiscoveryAttempted) return;
     if (pageCapture.controls.resolve(MAIN_TAB_CONTROL) === undefined) return;
-    hellGarrisonDiscoveryAttempted = true;
-    const result = civicDiscovery.discover([
+    finishDiscovery("hell-garrison", "Hell garrison", satisfied, undefined, [
       Object.freeze({
         setting: MAIN_TAB_SETTING,
         control: MAIN_TAB_CONTROL,
@@ -885,37 +932,28 @@ export function startCapturedRuntime({
         index: GOV_TAB_INDEX.military,
       }),
     ]);
-    if (result.outcome.status !== "succeeded") {
-      logError(
-        `Hell garrison discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`,
-      );
-    }
   };
   const ensureCivicControls = () => {
-    if (civicControlsDiscoveryAttempted) return;
     if (pageCapture.controls.resolve(MAIN_TAB_CONTROL) === undefined) return;
-    civicControlsDiscoveryAttempted = true;
-    const result = civicDiscovery.discover([
-      Object.freeze({
-        setting: MAIN_TAB_SETTING,
-        control: MAIN_TAB_CONTROL,
-        index: MAIN_TAB_INDEX.civic,
-      }),
-    ]);
-    if (result.outcome.status !== "succeeded") {
-      logError(
-        `civic discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`,
-      );
+    if (
+      !finishDiscovery("civic-controls", "civic", undefined, undefined, [
+        Object.freeze({
+          setting: MAIN_TAB_SETTING,
+          control: MAIN_TAB_CONTROL,
+          index: MAIN_TAB_INDEX.civic,
+        }),
+      ])
+    ) {
       return;
     }
     refreshDiscoveredSettings();
     settingsPanel.refreshSettings();
   };
-  let outerFleetDiscoveryAttempted = false;
   const ensureOuterFleetControls = () => {
-    if (pageCapture.controls.resolve("shipPlans")?.methods.includes("build")) {
-      return;
-    }
+    const satisfied = () =>
+      pageCapture.controls.resolve("shipPlans")?.methods.includes("build") ===
+      true;
+    if (satisfied()) return;
     const root = pageCapture.rootState.readRoot();
     const tech = readProperty(root, "tech");
     const settings = readProperty(root, "settings");
@@ -928,12 +966,10 @@ export function startCapturedRuntime({
     ) {
       return;
     }
-    if (outerFleetDiscoveryAttempted) return;
     if (pageCapture.controls.resolve(MAIN_TAB_CONTROL) === undefined) return;
     const govTabs = SUB_TAB_CONTROLS[GOV_TABS_SETTING];
     if (govTabs === undefined) return;
-    outerFleetDiscoveryAttempted = true;
-    const result = civicDiscovery.discover([
+    finishDiscovery("outer-fleet", "outer fleet", satisfied, undefined, [
       Object.freeze({
         setting: MAIN_TAB_SETTING,
         control: MAIN_TAB_CONTROL,
@@ -945,29 +981,20 @@ export function startCapturedRuntime({
         index: GOV_TAB_INDEX.dwarfShipYard,
       }),
     ]);
-    if (result.outcome.status !== "succeeded") {
-      logError(
-        `outer fleet discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`,
-      );
-    }
   };
   const ensureMercenaryControls = () => {
-    if (
+    const satisfied = () =>
       CAPTURED_MERCENARY_CONTROLS.some((id) =>
         pageCapture.controls.resolve(id)?.methods.includes("hire"),
-      )
-    ) {
-      return;
-    }
+      );
+    if (satisfied()) return;
     const root = pageCapture.rootState.readRoot();
     const garrison = readProperty(readProperty(root, "civic"), "garrison");
     if (!isRecord(garrison) || garrison["mercs"] !== true) return;
-    if (mercenaryDiscoveryAttempted) return;
     if (pageCapture.controls.resolve(MAIN_TAB_CONTROL) === undefined) return;
     const govTabs = SUB_TAB_CONTROLS[GOV_TABS_SETTING];
     if (govTabs === undefined) return;
-    mercenaryDiscoveryAttempted = true;
-    const result = civicDiscovery.discover([
+    finishDiscovery("mercenary", "Mercenary", satisfied, undefined, [
       Object.freeze({
         setting: MAIN_TAB_SETTING,
         control: MAIN_TAB_CONTROL,
@@ -979,11 +1006,6 @@ export function startCapturedRuntime({
         index: GOV_TAB_INDEX.military,
       }),
     ]);
-    if (result.outcome.status !== "succeeded") {
-      logError(
-        `Mercenary discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`,
-      );
-    }
   };
   openCapturedForeignModal = (governmentId) => {
     const govTabs = SUB_TAB_CONTROLS[GOV_TABS_SETTING];
@@ -1034,13 +1056,11 @@ export function startCapturedRuntime({
     return result.outcome.status === "succeeded" && clicked;
   };
   const ensureMechControls = () => {
-    if (
+    const satisfied = () =>
       pageCapture.controls
         .resolve(CAPTURED_MECH_ASSEMBLY_CONTROL)
-        ?.methods.includes("build")
-    ) {
-      return;
-    }
+        ?.methods.includes("build") === true;
+    if (satisfied()) return;
     const root = pageCapture.rootState.readRoot();
     const portal = readProperty(root, "portal");
     const mechbay = readProperty(portal, "mechbay");
@@ -1054,12 +1074,10 @@ export function startCapturedRuntime({
     ) {
       return;
     }
-    if (mechDiscoveryAttempted) return;
     if (pageCapture.controls.resolve(MAIN_TAB_CONTROL) === undefined) return;
     const govTabs = SUB_TAB_CONTROLS[GOV_TABS_SETTING];
     if (govTabs === undefined) return;
-    mechDiscoveryAttempted = true;
-    const result = civicDiscovery.discover([
+    finishDiscovery("mech", "mech", satisfied, undefined, [
       Object.freeze({
         setting: MAIN_TAB_SETTING,
         control: MAIN_TAB_CONTROL,
@@ -1071,28 +1089,22 @@ export function startCapturedRuntime({
         index: GOV_TAB_INDEX.mechLab,
       }),
     ]);
-    if (result.outcome.status !== "succeeded") {
-      logError(
-        `mech discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`,
-      );
-    }
   };
   /**
    * Draws the civics military sub-tab, where `defineGarrison()` also binds the game's `#mad`
    * control. The display flag is written by the game's `tech.mad` action, so it is the gate for
-   * spending a military discovery pass before the prestige route exists.
+   * spending a military discovery pass before the prestige route exists. Its attempts are scoped
+   * to the progression epoch: a reset rebuilds the page's controls and makes the draw useful again.
    */
   const ensureMadControls = () => {
-    if (
+    const satisfied = () =>
       pageCapture.controls
         .resolve(CAPTURED_MAD_CONTROL)
-        ?.methods.includes("arm") &&
+        ?.methods.includes("arm") === true &&
       pageCapture.controls
         .resolve(CAPTURED_MAD_CONTROL)
-        ?.methods.includes("launch")
-    ) {
-      return;
-    }
+        ?.methods.includes("launch") === true;
+    if (satisfied()) return;
     const root = pageCapture.rootState.readRoot();
     const mad = readProperty(readProperty(root, "civic"), "mad");
     if (!isRecord(mad) || readProperty(mad, "display") !== true) return;
@@ -1100,9 +1112,7 @@ export function startCapturedRuntime({
     const govTabs = SUB_TAB_CONTROLS[GOV_TABS_SETTING];
     if (govTabs === undefined) return;
     const progressionEpoch = progression.readProgressionEpoch();
-    if (madDiscoveryAttemptedEpoch === progressionEpoch) return;
-    madDiscoveryAttemptedEpoch = progressionEpoch;
-    const result = civicDiscovery.discover([
+    finishDiscovery("mad", "MAD", satisfied, progressionEpoch, [
       Object.freeze({
         setting: MAIN_TAB_SETTING,
         control: MAIN_TAB_CONTROL,
@@ -1114,11 +1124,6 @@ export function startCapturedRuntime({
         index: GOV_TAB_INDEX.military,
       }),
     ]);
-    if (result.outcome.status !== "succeeded") {
-      logError(
-        `MAD discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`,
-      );
-    }
   };
   const prestige = createCapturedPrestigeControl({
     rootState: pageCapture.rootState,
@@ -1135,7 +1140,6 @@ export function startCapturedRuntime({
     closeBioseedModal,
     loadQueuedSettings: queuedSettings.loadQueuedSettings,
   });
-  let geneticsDiscoveryAttempted = false;
   /**
    * Draws the A.R.P.A. tab, where `loadTab` calls `arpa('Genetics')` in the same pass that draws the
    * project panel, and `genetics()` binds `#arpaSequence` plus the Genetics 2.0 `#geneticBreakdown`.
@@ -1146,14 +1150,12 @@ export function startCapturedRuntime({
   const ensureGeneticsControls = () => {
     const root = pageCapture.rootState.readRoot();
     const level = readProperty(readProperty(root, "tech"), "genetics");
-    if (
+    const satisfied = () =>
       pageCapture.controls.resolve(GENETICS_CONTROL) !== undefined &&
       (typeof level !== "number" ||
         level <= 2 ||
-        pageCapture.controls.resolve(GENETICS_BREAKDOWN_CONTROL) !== undefined)
-    ) {
-      return;
-    }
+        pageCapture.controls.resolve(GENETICS_BREAKDOWN_CONTROL) !== undefined);
+    if (satisfied()) return;
     const panelOffered = readProperty(
       readProperty(readProperty(root, "settings"), "arpa"),
       "genetics",
@@ -1166,31 +1168,22 @@ export function startCapturedRuntime({
     ) {
       return;
     }
-    if (geneticsDiscoveryAttempted) return;
     if (pageCapture.controls.resolve(MAIN_TAB_CONTROL) === undefined) return;
-    geneticsDiscoveryAttempted = true;
-    const result = civicDiscovery.discover([
+    finishDiscovery("genetics", "genetics", satisfied, undefined, [
       Object.freeze({
         setting: MAIN_TAB_SETTING,
         control: MAIN_TAB_CONTROL,
         index: MAIN_TAB_INDEX.arpa,
       }),
     ]);
-    if (result.outcome.status !== "succeeded") {
-      logError(
-        `genetics discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`,
-      );
-    }
   };
-  let galaxyFleetDiscoveryAttempted = false;
   const ensureGalaxyFleetControls = () => {
-    if (pageCapture.controls.resolve("fleet") !== undefined) return;
-    if (galaxyFleetDiscoveryAttempted) return;
+    const satisfied = () => pageCapture.controls.resolve("fleet") !== undefined;
+    if (satisfied()) return;
     if (pageCapture.controls.resolve(MAIN_TAB_CONTROL) === undefined) return;
     const spaceTabs = SUB_TAB_CONTROLS[SPACE_TABS_SETTING];
     if (spaceTabs === undefined) return;
-    galaxyFleetDiscoveryAttempted = true;
-    const result = civicDiscovery.discover([
+    finishDiscovery("galaxy-fleet", "galaxy fleet", satisfied, undefined, [
       Object.freeze({
         setting: MAIN_TAB_SETTING,
         control: MAIN_TAB_CONTROL,
@@ -1202,82 +1195,58 @@ export function startCapturedRuntime({
         index: SPACE_TAB_INDEX.galaxy,
       }),
     ]);
-    if (result.outcome.status !== "succeeded") {
-      logError(
-        `galaxy fleet discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`,
-      );
-    }
   };
-  let cityControlsDiscoveryAttempted = false;
   const ensureCityControls = () => {
-    if (cityControlsDiscoveryAttempted) return;
     if (pageCapture.controls.resolve(MAIN_TAB_CONTROL) === undefined) return;
-    cityControlsDiscoveryAttempted = true;
-    const result = civicDiscovery.discover([
+    finishDiscovery("city-controls", "city", undefined, undefined, [
       Object.freeze({
         setting: MAIN_TAB_SETTING,
         control: MAIN_TAB_CONTROL,
         index: MAIN_TAB_INDEX.civilization,
       }),
     ]);
-    if (result.outcome.status !== "succeeded") {
-      logError(
-        `city discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`,
-      );
-    }
   };
-  let pylonDiscoveryAttempted = false;
   const ensurePylonControls = () => {
-    if (pageCapture.controls.resolve(PYLON_CONTROL) !== undefined) return;
+    const satisfied = () =>
+      pageCapture.controls.resolve(PYLON_CONTROL) !== undefined;
+    if (satisfied()) return;
     const root = pageCapture.rootState.readRoot();
     const tech = readProperty(root, "tech");
     const magic = readProperty(tech, "magic");
     if (typeof magic !== "number" || !Number.isFinite(magic) || magic < 3) {
       return;
     }
-    if (pylonDiscoveryAttempted) return;
     if (pageCapture.controls.resolve(MAIN_TAB_CONTROL) === undefined) {
       return;
     }
-    pylonDiscoveryAttempted = true;
-    const result = civicDiscovery.discover([
+    finishDiscovery("pylon", "pylon", satisfied, undefined, [
       Object.freeze({
         setting: MAIN_TAB_SETTING,
         control: MAIN_TAB_CONTROL,
         index: MAIN_TAB_INDEX.civilization,
       }),
     ]);
-    if (result.outcome.status !== "succeeded") {
-      logError(
-        `pylon discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`,
-      );
-    }
   };
-  let alchemyDiscoveryAttempted = false;
   const ensureAlchemyControls = () => {
-    if (
+    const satisfied = () =>
       pageCapture.controls
         .capturedElementIds()
-        .some((id) => id.startsWith(ALCHEMY_CONTROL_PREFIX))
-    ) {
-      return;
-    }
+        .some((id) => id.startsWith(ALCHEMY_CONTROL_PREFIX));
+    if (satisfied()) return;
     const root = pageCapture.rootState.readRoot();
     const tech = readProperty(root, "tech");
     const techLevel = readProperty(tech, "alchemy");
     if (
       typeof techLevel !== "number" ||
       !Number.isFinite(techLevel) ||
-      techLevel < 1 ||
-      alchemyDiscoveryAttempted
+      techLevel < 1
     ) {
       return;
     }
-    alchemyDiscoveryAttempted = true;
     if (pageCapture.controls.resolve(MAIN_TAB_CONTROL) === undefined) return;
     const marketTabs = SUB_TAB_CONTROLS[MARKET_TABS_SETTING];
     if (marketTabs === undefined) return;
-    const result = civicDiscovery.discover([
+    finishDiscovery("alchemy", "alchemy", satisfied, undefined, [
       Object.freeze({
         setting: MAIN_TAB_SETTING,
         control: MAIN_TAB_CONTROL,
@@ -1289,33 +1258,22 @@ export function startCapturedRuntime({
         index: MARKET_TAB_INDEX.alchemy,
       }),
     ]);
-    if (result.outcome.status !== "succeeded") {
-      logError(
-        `alchemy discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`,
-      );
-    }
   };
-  let miningDroidDiscoveryAttempted = false;
   const ensureMiningDroidControls = () => {
-    if (pageCapture.controls.resolve(MINING_DROID_CONTROL) !== undefined)
-      return;
+    const satisfied = () =>
+      pageCapture.controls.resolve(MINING_DROID_CONTROL) !== undefined;
+    if (satisfied()) return;
     const root = pageCapture.rootState.readRoot();
     const interstellar = readProperty(root, "interstellar");
     const droids = readProperty(interstellar, "mining_droid");
     const count = readProperty(droids, "count");
-    if (
-      typeof count !== "number" ||
-      !Number.isFinite(count) ||
-      count < 1 ||
-      miningDroidDiscoveryAttempted
-    ) {
+    if (typeof count !== "number" || !Number.isFinite(count) || count < 1) {
       return;
     }
-    miningDroidDiscoveryAttempted = true;
     if (pageCapture.controls.resolve(MAIN_TAB_CONTROL) === undefined) return;
     const govTabs = SUB_TAB_CONTROLS[GOV_TABS_SETTING];
     if (govTabs === undefined) return;
-    const result = civicDiscovery.discover([
+    finishDiscovery("mining-droid", "mining-droid", satisfied, undefined, [
       Object.freeze({
         setting: MAIN_TAB_SETTING,
         control: MAIN_TAB_CONTROL,
@@ -1327,15 +1285,11 @@ export function startCapturedRuntime({
         index: GOV_TAB_INDEX.industry,
       }),
     ]);
-    if (result.outcome.status !== "succeeded") {
-      logError(
-        `mining-droid discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`,
-      );
-    }
   };
-  let grapheneDiscoveryAttempted = false;
   const ensureGrapheneControls = () => {
-    if (pageCapture.controls.resolve(GRAPHENE_CONTROL) !== undefined) return;
+    const satisfied = () =>
+      pageCapture.controls.resolve(GRAPHENE_CONTROL) !== undefined;
+    if (satisfied()) return;
     const root = pageCapture.rootState.readRoot();
     const race = readProperty(root, "race");
     const interstellar = readProperty(root, "interstellar");
@@ -1346,16 +1300,14 @@ export function startCapturedRuntime({
       !Number.isFinite(count) ||
       count < 1 ||
       Boolean(readProperty(race, "truepath")) ||
-      Boolean(readProperty(race, "warlord")) ||
-      grapheneDiscoveryAttempted
+      Boolean(readProperty(race, "warlord"))
     ) {
       return;
     }
-    grapheneDiscoveryAttempted = true;
     if (pageCapture.controls.resolve(MAIN_TAB_CONTROL) === undefined) return;
     const govTabs = SUB_TAB_CONTROLS[GOV_TABS_SETTING];
     if (govTabs === undefined) return;
-    const result = civicDiscovery.discover([
+    finishDiscovery("graphene", "graphene", satisfied, undefined, [
       Object.freeze({
         setting: MAIN_TAB_SETTING,
         control: MAIN_TAB_CONTROL,
@@ -1367,20 +1319,13 @@ export function startCapturedRuntime({
         index: GOV_TAB_INDEX.industry,
       }),
     ]);
-    if (result.outcome.status !== "succeeded") {
-      logError(
-        `graphene discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`,
-      );
-    }
   };
 
-  let replicatorDiscoveryAttempted = false;
   const ensureReplicatorControls = () => {
-    if (
+    const satisfied = () =>
       pageCapture.controls.resolve(REPLICATOR_CONTROL) !== undefined &&
-      pageCapture.controls.resolve(GOVERNOR_CONTROL) !== undefined
-    )
-      return;
+      pageCapture.controls.resolve(GOVERNOR_CONTROL) !== undefined;
+    if (satisfied()) return;
     const root = pageCapture.rootState.readRoot();
     const race = readProperty(root, "race");
     const tech = readProperty(root, "tech");
@@ -1389,16 +1334,14 @@ export function startCapturedRuntime({
       !isRecord(readProperty(race, "replicator")) ||
       typeof techLevel !== "number" ||
       !Number.isFinite(techLevel) ||
-      techLevel < 1 ||
-      replicatorDiscoveryAttempted
+      techLevel < 1
     ) {
       return;
     }
-    replicatorDiscoveryAttempted = true;
     if (pageCapture.controls.resolve(MAIN_TAB_CONTROL) === undefined) return;
     const govTabs = SUB_TAB_CONTROLS[GOV_TABS_SETTING];
     if (govTabs === undefined) return;
-    const result = civicDiscovery.discover([
+    finishDiscovery("replicator", "replicator", satisfied, undefined, [
       Object.freeze({
         setting: MAIN_TAB_SETTING,
         control: MAIN_TAB_CONTROL,
@@ -1410,20 +1353,12 @@ export function startCapturedRuntime({
         index: GOV_TAB_INDEX.industry,
       }),
     ]);
-    if (result.outcome.status !== "succeeded") {
-      logError(
-        `replicator discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`,
-      );
-    }
   };
 
-  let factoryDiscoveryAttempted = false;
-  let smelterDiscoveryAttempted = false;
-  let storageDiscoveryAttempted = false;
-  let galaxyMarketDiscoveryAttempted = false;
-  let marketDiscoveryAttempted = false;
   const ensureSmelterControls = () => {
-    if (pageCapture.controls.resolve(SMELTER_CONTROL) !== undefined) return;
+    const satisfied = () =>
+      pageCapture.controls.resolve(SMELTER_CONTROL) !== undefined;
+    if (satisfied()) return;
     const city = readProperty(pageCapture.rootState.readRoot(), "city");
     const smelterState = readProperty(city, "smelter");
     const race = readProperty(pageCapture.rootState.readRoot(), "race");
@@ -1444,12 +1379,10 @@ export function startCapturedRuntime({
     ) {
       return;
     }
-    if (smelterDiscoveryAttempted) return;
-    smelterDiscoveryAttempted = true;
     if (pageCapture.controls.resolve(MAIN_TAB_CONTROL) === undefined) return;
     const govTabs = SUB_TAB_CONTROLS[GOV_TABS_SETTING];
     if (govTabs === undefined) return;
-    const result = civicDiscovery.discover([
+    finishDiscovery("smelter", "smelter", satisfied, undefined, [
       Object.freeze({
         setting: MAIN_TAB_SETTING,
         control: MAIN_TAB_CONTROL,
@@ -1461,34 +1394,25 @@ export function startCapturedRuntime({
         index: GOV_TAB_INDEX.industry,
       }),
     ]);
-    if (result.outcome.status !== "succeeded") {
-      logError(
-        `smelter discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`,
-      );
-    }
   };
 
-  let naniteDiscoveryAttempted = false;
   const ensureNaniteControls = () => {
-    if (pageCapture.controls.resolve(NANITE_CONTROL) !== undefined) return;
+    const satisfied = () =>
+      pageCapture.controls.resolve(NANITE_CONTROL) !== undefined;
+    if (satisfied()) return;
     const root = pageCapture.rootState.readRoot();
     const race = readProperty(root, "race");
     const naniteFactory = readProperty(
       readProperty(root, "city"),
       "nanite_factory",
     );
-    if (
-      !readProperty(race, "deconstructor") ||
-      !isRecord(naniteFactory) ||
-      naniteDiscoveryAttempted
-    ) {
+    if (!readProperty(race, "deconstructor") || !isRecord(naniteFactory)) {
       return;
     }
-    naniteDiscoveryAttempted = true;
     if (pageCapture.controls.resolve(MAIN_TAB_CONTROL) === undefined) return;
     const govTabs = SUB_TAB_CONTROLS[GOV_TABS_SETTING];
     if (govTabs === undefined) return;
-    const result = civicDiscovery.discover([
+    finishDiscovery("nanite", "nanite", satisfied, undefined, [
       Object.freeze({
         setting: MAIN_TAB_SETTING,
         control: MAIN_TAB_CONTROL,
@@ -1500,22 +1424,14 @@ export function startCapturedRuntime({
         index: GOV_TAB_INDEX.industry,
       }),
     ]);
-    if (result.outcome.status !== "succeeded") {
-      logError(
-        `nanite discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`,
-      );
-    }
   };
 
-  let ejectorDiscoveryAttempted = false;
   const ensureEjectorControls = () => {
-    if (
+    const satisfied = () =>
       pageCapture.controls
         .capturedElementIds()
-        .some((id) => id.startsWith("eject") && id !== EJECTOR_SUMMARY_CONTROL)
-    ) {
-      return;
-    }
+        .some((id) => id.startsWith("eject") && id !== EJECTOR_SUMMARY_CONTROL);
+    if (satisfied()) return;
     const root = pageCapture.rootState.readRoot();
     const ejector = readProperty(
       readProperty(root, "interstellar"),
@@ -1526,16 +1442,14 @@ export function startCapturedRuntime({
       !isRecord(ejector) ||
       typeof count !== "number" ||
       !Number.isFinite(count) ||
-      count < 1 ||
-      ejectorDiscoveryAttempted
+      count < 1
     ) {
       return;
     }
     if (pageCapture.controls.resolve(MAIN_TAB_CONTROL) === undefined) return;
     const marketTabs = SUB_TAB_CONTROLS[MARKET_TABS_SETTING];
     if (marketTabs === undefined) return;
-    ejectorDiscoveryAttempted = true;
-    const result = civicDiscovery.discover([
+    finishDiscovery("ejector", "ejector", satisfied, undefined, [
       Object.freeze({
         setting: MAIN_TAB_SETTING,
         control: MAIN_TAB_CONTROL,
@@ -1547,22 +1461,14 @@ export function startCapturedRuntime({
         index: MARKET_TAB_INDEX.ejector,
       }),
     ]);
-    if (result.outcome.status !== "succeeded") {
-      logError(
-        `ejector discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`,
-      );
-    }
   };
 
-  let supplyDiscoveryAttempted = false;
   const ensureSupplyControls = () => {
-    if (
+    const satisfied = () =>
       pageCapture.controls
         .capturedElementIds()
-        .some((id) => id.startsWith("supply") && id !== SUPPLY_SUMMARY_CONTROL)
-    ) {
-      return;
-    }
+        .some((id) => id.startsWith("supply") && id !== SUPPLY_SUMMARY_CONTROL);
+    if (satisfied()) return;
     const transport = readProperty(
       readProperty(pageCapture.rootState.readRoot(), "portal"),
       "transport",
@@ -1572,16 +1478,14 @@ export function startCapturedRuntime({
       !isRecord(transport) ||
       typeof count !== "number" ||
       !Number.isFinite(count) ||
-      count < 1 ||
-      supplyDiscoveryAttempted
+      count < 1
     ) {
       return;
     }
     if (pageCapture.controls.resolve(MAIN_TAB_CONTROL) === undefined) return;
     const marketTabs = SUB_TAB_CONTROLS[MARKET_TABS_SETTING];
     if (marketTabs === undefined) return;
-    supplyDiscoveryAttempted = true;
-    const result = civicDiscovery.discover([
+    finishDiscovery("supply", "supply", satisfied, undefined, [
       Object.freeze({
         setting: MAIN_TAB_SETTING,
         control: MAIN_TAB_CONTROL,
@@ -1593,20 +1497,12 @@ export function startCapturedRuntime({
         index: MARKET_TAB_INDEX.supply,
       }),
     ]);
-    if (result.outcome.status !== "succeeded") {
-      logError(
-        `supply discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`,
-      );
-    }
   };
 
   const ensureStorageControls = () => {
-    if (
-      pageCapture.controls.resolve(STORAGE_CONSTRUCTION_CONTROL) !== undefined
-    ) {
-      return;
-    }
-    if (storageDiscoveryAttempted) return;
+    const satisfied = () =>
+      pageCapture.controls.resolve(STORAGE_CONSTRUCTION_CONTROL) !== undefined;
+    if (satisfied()) return;
     if (pageCapture.controls.resolve(MAIN_TAB_CONTROL) === undefined) return;
     if (
       readProperty(
@@ -1618,8 +1514,7 @@ export function startCapturedRuntime({
     }
     const marketTabs = SUB_TAB_CONTROLS[MARKET_TABS_SETTING];
     if (marketTabs === undefined) return;
-    storageDiscoveryAttempted = true;
-    const result = civicDiscovery.discover([
+    finishDiscovery("storage", "storage", satisfied, undefined, [
       Object.freeze({
         setting: MAIN_TAB_SETTING,
         control: MAIN_TAB_CONTROL,
@@ -1631,18 +1526,12 @@ export function startCapturedRuntime({
         index: MARKET_TAB_INDEX.storage,
       }),
     ]);
-    if (result.outcome.status !== "succeeded") {
-      logError(
-        `storage discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`,
-      );
-    }
   };
 
   const ensureGalaxyMarketControls = () => {
-    if (pageCapture.controls.resolve(GALAXY_MARKET_CONTROL) !== undefined) {
-      return;
-    }
-    if (galaxyMarketDiscoveryAttempted) return;
+    const satisfied = () =>
+      pageCapture.controls.resolve(GALAXY_MARKET_CONTROL) !== undefined;
+    if (satisfied()) return;
     if (pageCapture.controls.resolve(MAIN_TAB_CONTROL) === undefined) return;
     const root = pageCapture.rootState.readRoot();
     if (!isRecord(readProperty(readProperty(root, "galaxy"), "trade"))) {
@@ -1653,8 +1542,7 @@ export function startCapturedRuntime({
     }
     const marketTabs = SUB_TAB_CONTROLS[MARKET_TABS_SETTING];
     if (marketTabs === undefined) return;
-    galaxyMarketDiscoveryAttempted = true;
-    const result = civicDiscovery.discover([
+    finishDiscovery("galaxy-market", "galaxy market", satisfied, undefined, [
       Object.freeze({
         setting: MAIN_TAB_SETTING,
         control: MAIN_TAB_CONTROL,
@@ -1666,18 +1554,12 @@ export function startCapturedRuntime({
         index: MARKET_TAB_INDEX.market,
       }),
     ]);
-    if (result.outcome.status !== "succeeded") {
-      logError(
-        `galaxy market discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`,
-      );
-    }
   };
 
   const ensureMarketControls = () => {
-    if (pageCapture.controls.resolve(MARKET_QUANTITY_CONTROL) !== undefined) {
-      return;
-    }
-    if (marketDiscoveryAttempted) return;
+    const satisfied = () =>
+      pageCapture.controls.resolve(MARKET_QUANTITY_CONTROL) !== undefined;
+    if (satisfied()) return;
     if (pageCapture.controls.resolve(MAIN_TAB_CONTROL) === undefined) return;
     const root = pageCapture.rootState.readRoot();
     if (readProperty(readProperty(root, "settings"), "showMarket") !== true) {
@@ -1685,8 +1567,7 @@ export function startCapturedRuntime({
     }
     const marketTabs = SUB_TAB_CONTROLS[MARKET_TABS_SETTING];
     if (marketTabs === undefined) return;
-    marketDiscoveryAttempted = true;
-    const result = civicDiscovery.discover([
+    finishDiscovery("market", "market", satisfied, undefined, [
       Object.freeze({
         setting: MAIN_TAB_SETTING,
         control: MAIN_TAB_CONTROL,
@@ -1698,31 +1579,22 @@ export function startCapturedRuntime({
         index: MARKET_TAB_INDEX.market,
       }),
     ]);
-    if (result.outcome.status !== "succeeded") {
-      logError(
-        `market discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`,
-      );
-    }
   };
 
   const ensureFactoryControls = () => {
-    if (pageCapture.controls.resolve(FACTORY_CONTROL) !== undefined) return;
+    const satisfied = () =>
+      pageCapture.controls.resolve(FACTORY_CONTROL) !== undefined;
+    if (satisfied()) return;
     const city = readProperty(pageCapture.rootState.readRoot(), "city");
     const factoryState = readProperty(city, "factory");
     const count = readProperty(factoryState, "count");
-    if (
-      typeof count !== "number" ||
-      !Number.isFinite(count) ||
-      count < 1 ||
-      factoryDiscoveryAttempted
-    ) {
+    if (typeof count !== "number" || !Number.isFinite(count) || count < 1) {
       return;
     }
-    factoryDiscoveryAttempted = true;
     if (pageCapture.controls.resolve(MAIN_TAB_CONTROL) === undefined) return;
     const govTabs = SUB_TAB_CONTROLS[GOV_TABS_SETTING];
     if (govTabs === undefined) return;
-    const result = civicDiscovery.discover([
+    finishDiscovery("factory", "factory", satisfied, undefined, [
       Object.freeze({
         setting: MAIN_TAB_SETTING,
         control: MAIN_TAB_CONTROL,
@@ -1734,44 +1606,38 @@ export function startCapturedRuntime({
         index: GOV_TAB_INDEX.industry,
       }),
     ]);
-    if (result.outcome.status !== "succeeded") {
-      logError(
-        `factory discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`,
-      );
-    }
   };
 
-  let ratioDiscoveryAttempted = false;
   /** The three ratio sliders share the industry panel the droid and graphene plants render into. */
   const ensureRatioControls = (control: string, unlocked: boolean) => {
+    const satisfied = () => pageCapture.controls.resolve(control) !== undefined;
     if (
       !unlocked ||
-      ratioDiscoveryAttempted ||
-      pageCapture.controls.resolve(control) !== undefined ||
+      satisfied() ||
       pageCapture.controls.resolve(MAIN_TAB_CONTROL) === undefined
     ) {
       return;
     }
     const govTabs = SUB_TAB_CONTROLS[GOV_TABS_SETTING];
     if (govTabs === undefined) return;
-    ratioDiscoveryAttempted = true;
-    const result = civicDiscovery.discover([
-      Object.freeze({
-        setting: MAIN_TAB_SETTING,
-        control: MAIN_TAB_CONTROL,
-        index: MAIN_TAB_INDEX.civic,
-      }),
-      Object.freeze({
-        setting: GOV_TABS_SETTING,
-        control: govTabs,
-        index: GOV_TAB_INDEX.industry,
-      }),
-    ]);
-    if (result.outcome.status !== "succeeded") {
-      logError(
-        `production-ratio discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`,
-      );
-    }
+    finishDiscovery(
+      "production-ratio",
+      "production-ratio",
+      satisfied,
+      undefined,
+      [
+        Object.freeze({
+          setting: MAIN_TAB_SETTING,
+          control: MAIN_TAB_CONTROL,
+          index: MAIN_TAB_INDEX.civic,
+        }),
+        Object.freeze({
+          setting: GOV_TABS_SETTING,
+          control: govTabs,
+          index: GOV_TAB_INDEX.industry,
+        }),
+      ],
+    );
   };
   const structureCount = (region: string, id: string): number => {
     const value = readProperty(
@@ -1837,6 +1703,7 @@ export function startCapturedRuntime({
   });
 
   const runCycle = () => {
+    automationCycle += 1;
     demandThisCycle = undefined;
     triggerTargetsThisCycle = undefined;
     triggerDemandThisCycle = undefined;

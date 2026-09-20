@@ -121,29 +121,35 @@ const firstDrawFailures = reported.filter((message) =>
 assert.equal(firstDrawFailures.length, 1);
 assert.equal(discoveryInvocations, 0);
 
-// A failed discovery is throttled for this progression epoch, so repeated ticks do not redraw
-// the same panel while waiting for the transient page condition to clear.
+// A failed discovery is no longer spent for the whole epoch. The transient page conditions that
+// refuse a draw — a stale sub-tab control, a panel a tick from being built — clear on their own,
+// so the next cycle retries. Repeated failure then backs off (cycles 1, 2, 4, 8) rather than
+// redrawing the same panel on every tick.
+const madFailures = () =>
+  reported.filter((message) => message.startsWith("MAD discovery skipped:"))
+    .length;
 cycle({ periods: 1 });
 assert.equal(discoveryInvocations, 0);
-assert.equal(
-  reported.filter((message) => message.startsWith("MAD discovery skipped:"))
-    .length,
-  1,
-);
+assert.equal(madFailures(), 2, "the next cycle retries a transient failure");
+cycle({ periods: 1 });
+assert.equal(madFailures(), 2, "the cycle after that backs off");
+cycle({ periods: 1 });
+assert.equal(madFailures(), 3, "the backed-off retry lands");
+cycle({ periods: 1 });
+assert.equal(madFailures(), 3);
 
-// A progression change opens one retry. The successful draw captures the control, which makes
-// later cycles permanently complete without another discovery pass.
+// A progression change resets the feature's attempts: the page it would rediscover is a different
+// one, so the retry opens immediately instead of waiting out the backoff.
 root.tech.retry = 1;
 cycle({ periods: 1 });
 assert.equal(discoveryInvocations, 1);
 assert.equal(controls.resolve(CAPTURED_MAD_CONTROL), madHandle);
+
+// The captured control makes later cycles complete without another discovery pass.
+cycle({ periods: 1 });
 cycle({ periods: 1 });
 assert.equal(discoveryInvocations, 1);
-assert.equal(
-  reported.filter((message) => message.startsWith("MAD discovery skipped:"))
-    .length,
-  1,
-);
+assert.equal(madFailures(), 3);
 
 stop();
 console.log("captured-mad-discovery ok");

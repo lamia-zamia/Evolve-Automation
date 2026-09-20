@@ -17294,6 +17294,46 @@
     });
   }
 
+  // src/bootstrap/discovery-attempts.ts
+  function discoveryRetryDelay(failures) {
+    return Math.min(2 ** Math.max(0, failures - 1), 32);
+  }
+  function createDiscoveryAttempts({
+    readCycle: readCycle2
+  }) {
+    let records = /* @__PURE__ */ new Map(), currentEpoch = (epoch) => epoch ?? "", read = (key, epoch) => {
+      let record = records.get(key);
+      return record !== void 0 && record.epoch === currentEpoch(epoch) ? record : void 0;
+    }, write = (key, epoch, satisfied) => {
+      let previous = read(key, epoch), failures = satisfied ? 0 : (previous?.failures ?? 0) + 1;
+      records.set(key, {
+        epoch: currentEpoch(epoch),
+        satisfied,
+        failures,
+        nextCycle: satisfied ? 0 : readCycle2() + discoveryRetryDelay(failures)
+      });
+    };
+    return Object.freeze({
+      shouldAttempt(key, epoch) {
+        let record = read(key, epoch);
+        return record === void 0 ? !0 : record.satisfied ? !1 : readCycle2() >= record.nextCycle;
+      },
+      recordSuccess(key, epoch) {
+        write(key, epoch, !0);
+      },
+      recordFailure(key, epoch) {
+        write(key, epoch, !1);
+      },
+      invalidate() {
+        records.clear();
+      },
+      describe(key, epoch) {
+        let record = read(key, epoch);
+        return record === void 0 ? "never-tried" : record.satisfied ? "satisfied" : `failed(${record.failures}) retry-at-${record.nextCycle}`;
+      }
+    });
+  }
+
   // src/domain/economy/production/power.ts
   function planPowerWarningShutdown(warnings) {
     for (let warning of warnings)
@@ -40275,8 +40315,12 @@ Only continue if you trust the source. Injected code:
         controls: pageCapture2.controls
       })
     });
-    settingsLifecycle.initialize(), pageCapture2.rootState.subscribeRootReplaced(() => {
-      settingsLifecycle.invalidateDynamicDefaults();
+    settingsLifecycle.initialize();
+    let automationCycle = 0, discoveryAttempts = createDiscoveryAttempts({
+      readCycle: () => automationCycle
+    });
+    pageCapture2.rootState.subscribeRootReplaced(() => {
+      settingsLifecycle.invalidateDynamicDefaults(), discoveryAttempts.invalidate();
     });
     let effectiveSettings = settingsLifecycle.readEffective(), reportedOverrideFailures = /* @__PURE__ */ new Set(), readSafeMode = () => {
       let location = readProperty(settingsHostWindow2, "location");
@@ -40707,18 +40751,31 @@ Only continue if you trust the source. Injected code:
       mountSuppression: pageCapture2.mountSuppression,
       panels,
       diagnostics
-    }), civicControlsDiscoveryAttempted = !1, mercenaryDiscoveryAttempted = !1, mechDiscoveryAttempted = !1, hellGarrisonDiscoveryAttempted = !1, madDiscoveryAttemptedEpoch, ensureHellGarrisonControls = () => {
-      if (HELL_GARRISON_CONTROLS.some(
+    }), finishDiscovery = (key, label, satisfied, epoch, steps) => {
+      if (!discoveryAttempts.shouldAttempt(key, epoch)) return !1;
+      let result;
+      try {
+        result = civicDiscovery.discover(steps);
+      } catch (error) {
+        return discoveryAttempts.recordFailure(key, epoch), logError(
+          `${label} discovery threw: ${String(error)} (${discoveryAttempts.describe(key, epoch)})`
+        ), !1;
+      }
+      return result.outcome.status !== "succeeded" ? (discoveryAttempts.recordFailure(key, epoch), logError(
+        `${label} discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status} (${discoveryAttempts.describe(key, epoch)})`
+      ), !1) : satisfied !== void 0 && !satisfied() ? (discoveryAttempts.recordFailure(key, epoch), logError(
+        `${label} discovery drew its tab without capturing its control (${discoveryAttempts.describe(key, epoch)})`
+      ), !1) : (discoveryAttempts.recordSuccess(key, epoch), !0);
+    }, ensureHellGarrisonControls = () => {
+      let satisfied = () => HELL_GARRISON_CONTROLS.some(
         (id) => pageCapture2.controls.resolve(id)?.methods.includes("patrolling")
-      ))
-        return;
+      );
+      if (satisfied()) return;
       let root = pageCapture2.rootState.readRoot();
       if (!isRecord(readProperty(readProperty(root, "portal"), "fortress")) || readProperty(readProperty(root, "race"), "warlord"))
         return;
       let govTabs = SUB_TAB_CONTROLS[GOV_TABS_SETTING];
-      if (govTabs === void 0 || hellGarrisonDiscoveryAttempted || pageCapture2.controls.resolve(MAIN_TAB_CONTROL) === void 0) return;
-      hellGarrisonDiscoveryAttempted = !0;
-      let result = civicDiscovery.discover([
+      govTabs !== void 0 && pageCapture2.controls.resolve(MAIN_TAB_CONTROL) !== void 0 && finishDiscovery("hell-garrison", "Hell garrison", satisfied, void 0, [
         Object.freeze({
           setting: MAIN_TAB_SETTING,
           control: MAIN_TAB_CONTROL,
@@ -40730,35 +40787,21 @@ Only continue if you trust the source. Injected code:
           index: GOV_TAB_INDEX.military
         })
       ]);
-      result.outcome.status !== "succeeded" && logError(
-        `Hell garrison discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`
-      );
     }, ensureCivicControls = () => {
-      if (civicControlsDiscoveryAttempted || pageCapture2.controls.resolve(MAIN_TAB_CONTROL) === void 0) return;
-      civicControlsDiscoveryAttempted = !0;
-      let result = civicDiscovery.discover([
+      pageCapture2.controls.resolve(MAIN_TAB_CONTROL) !== void 0 && finishDiscovery("civic-controls", "civic", void 0, void 0, [
         Object.freeze({
           setting: MAIN_TAB_SETTING,
           control: MAIN_TAB_CONTROL,
           index: MAIN_TAB_INDEX.civic
         })
-      ]);
-      if (result.outcome.status !== "succeeded") {
-        logError(
-          `civic discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`
-        );
-        return;
-      }
-      refreshDiscoveredSettings(), settingsPanel.refreshSettings();
-    }, outerFleetDiscoveryAttempted = !1, ensureOuterFleetControls = () => {
-      if (pageCapture2.controls.resolve("shipPlans")?.methods.includes("build"))
-        return;
+      ]) && (refreshDiscoveredSettings(), settingsPanel.refreshSettings());
+    }, ensureOuterFleetControls = () => {
+      let satisfied = () => pageCapture2.controls.resolve("shipPlans")?.methods.includes("build") === !0;
+      if (satisfied()) return;
       let root = pageCapture2.rootState.readRoot(), tech = readProperty(root, "tech"), settings = readProperty(root, "settings"), shipyard = readProperty(readProperty(root, "space"), "shipyard"), syndicate = readProperty(tech, "syndicate");
-      if (!isRecord(shipyard) || !(typeof syndicate == "number" && syndicate > 0) || readProperty(settings, "showShipYard") !== !0 || outerFleetDiscoveryAttempted || pageCapture2.controls.resolve(MAIN_TAB_CONTROL) === void 0) return;
+      if (!isRecord(shipyard) || !(typeof syndicate == "number" && syndicate > 0) || readProperty(settings, "showShipYard") !== !0 || pageCapture2.controls.resolve(MAIN_TAB_CONTROL) === void 0) return;
       let govTabs = SUB_TAB_CONTROLS[GOV_TABS_SETTING];
-      if (govTabs === void 0) return;
-      outerFleetDiscoveryAttempted = !0;
-      let result = civicDiscovery.discover([
+      govTabs !== void 0 && finishDiscovery("outer-fleet", "outer fleet", satisfied, void 0, [
         Object.freeze({
           setting: MAIN_TAB_SETTING,
           control: MAIN_TAB_CONTROL,
@@ -40770,20 +40813,15 @@ Only continue if you trust the source. Injected code:
           index: GOV_TAB_INDEX.dwarfShipYard
         })
       ]);
-      result.outcome.status !== "succeeded" && logError(
-        `outer fleet discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`
-      );
     }, ensureMercenaryControls = () => {
-      if (CAPTURED_MERCENARY_CONTROLS.some(
+      let satisfied = () => CAPTURED_MERCENARY_CONTROLS.some(
         (id) => pageCapture2.controls.resolve(id)?.methods.includes("hire")
-      ))
-        return;
+      );
+      if (satisfied()) return;
       let root = pageCapture2.rootState.readRoot(), garrison = readProperty(readProperty(root, "civic"), "garrison");
-      if (!isRecord(garrison) || garrison.mercs !== !0 || mercenaryDiscoveryAttempted || pageCapture2.controls.resolve(MAIN_TAB_CONTROL) === void 0) return;
+      if (!isRecord(garrison) || garrison.mercs !== !0 || pageCapture2.controls.resolve(MAIN_TAB_CONTROL) === void 0) return;
       let govTabs = SUB_TAB_CONTROLS[GOV_TABS_SETTING];
-      if (govTabs === void 0) return;
-      mercenaryDiscoveryAttempted = !0;
-      let result = civicDiscovery.discover([
+      govTabs !== void 0 && finishDiscovery("mercenary", "Mercenary", satisfied, void 0, [
         Object.freeze({
           setting: MAIN_TAB_SETTING,
           control: MAIN_TAB_CONTROL,
@@ -40795,9 +40833,6 @@ Only continue if you trust the source. Injected code:
           index: GOV_TAB_INDEX.military
         })
       ]);
-      result.outcome.status !== "succeeded" && logError(
-        `Mercenary discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`
-      );
     };
     openCapturedForeignModal = (governmentId) => {
       let govTabs = SUB_TAB_CONTROLS[GOV_TABS_SETTING];
@@ -40838,14 +40873,12 @@ Only continue if you trust the source. Injected code:
       ), result.outcome.status === "succeeded" && clicked;
     };
     let ensureMechControls = () => {
-      if (pageCapture2.controls.resolve(CAPTURED_MECH_ASSEMBLY_CONTROL)?.methods.includes("build"))
-        return;
+      let satisfied = () => pageCapture2.controls.resolve(CAPTURED_MECH_ASSEMBLY_CONTROL)?.methods.includes("build") === !0;
+      if (satisfied()) return;
       let root = pageCapture2.rootState.readRoot(), portal = readProperty(root, "portal"), mechbay = readProperty(portal, "mechbay"), gameSettings = readProperty(root, "settings"), race = readProperty(root, "race");
-      if (!isRecord(mechbay) || readProperty(gameSettings, "showMechLab") !== !0 || readProperty(race, "species") === "protoplasm" || readProperty(race, "start_cataclysm") === !0 || mechDiscoveryAttempted || pageCapture2.controls.resolve(MAIN_TAB_CONTROL) === void 0) return;
+      if (!isRecord(mechbay) || readProperty(gameSettings, "showMechLab") !== !0 || readProperty(race, "species") === "protoplasm" || readProperty(race, "start_cataclysm") === !0 || pageCapture2.controls.resolve(MAIN_TAB_CONTROL) === void 0) return;
       let govTabs = SUB_TAB_CONTROLS[GOV_TABS_SETTING];
-      if (govTabs === void 0) return;
-      mechDiscoveryAttempted = !0;
-      let result = civicDiscovery.discover([
+      govTabs !== void 0 && finishDiscovery("mech", "mech", satisfied, void 0, [
         Object.freeze({
           setting: MAIN_TAB_SETTING,
           control: MAIN_TAB_CONTROL,
@@ -40857,20 +40890,15 @@ Only continue if you trust the source. Injected code:
           index: GOV_TAB_INDEX.mechLab
         })
       ]);
-      result.outcome.status !== "succeeded" && logError(
-        `mech discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`
-      );
     }, ensureMadControls = () => {
-      if (pageCapture2.controls.resolve(CAPTURED_MAD_CONTROL)?.methods.includes("arm") && pageCapture2.controls.resolve(CAPTURED_MAD_CONTROL)?.methods.includes("launch"))
-        return;
+      let satisfied = () => pageCapture2.controls.resolve(CAPTURED_MAD_CONTROL)?.methods.includes("arm") === !0 && pageCapture2.controls.resolve(CAPTURED_MAD_CONTROL)?.methods.includes("launch") === !0;
+      if (satisfied()) return;
       let root = pageCapture2.rootState.readRoot(), mad = readProperty(readProperty(root, "civic"), "mad");
       if (!isRecord(mad) || readProperty(mad, "display") !== !0 || pageCapture2.controls.resolve(MAIN_TAB_CONTROL) === void 0) return;
       let govTabs = SUB_TAB_CONTROLS[GOV_TABS_SETTING];
       if (govTabs === void 0) return;
       let progressionEpoch = progression.readProgressionEpoch();
-      if (madDiscoveryAttemptedEpoch === progressionEpoch) return;
-      madDiscoveryAttemptedEpoch = progressionEpoch;
-      let result = civicDiscovery.discover([
+      finishDiscovery("mad", "MAD", satisfied, progressionEpoch, [
         Object.freeze({
           setting: MAIN_TAB_SETTING,
           control: MAIN_TAB_CONTROL,
@@ -40882,9 +40910,6 @@ Only continue if you trust the source. Injected code:
           index: GOV_TAB_INDEX.military
         })
       ]);
-      result.outcome.status !== "succeeded" && logError(
-        `MAD discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`
-      );
     }, prestige = createCapturedPrestigeControl({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
@@ -40898,32 +40923,25 @@ Only continue if you trust the source. Injected code:
       readBuildingResetActions: (regions) => progression.readBuildingUnlocks(new Set(regions))?.unlocked,
       closeBioseedModal,
       loadQueuedSettings: queuedSettings.loadQueuedSettings
-    }), geneticsDiscoveryAttempted = !1, ensureGeneticsControls = () => {
-      let root = pageCapture2.rootState.readRoot(), level = readProperty(readProperty(root, "tech"), "genetics");
-      if (pageCapture2.controls.resolve(GENETICS_CONTROL) !== void 0 && (typeof level != "number" || level <= 2 || pageCapture2.controls.resolve(GENETICS_BREAKDOWN_CONTROL) !== void 0))
-        return;
+    }), ensureGeneticsControls = () => {
+      let root = pageCapture2.rootState.readRoot(), level = readProperty(readProperty(root, "tech"), "genetics"), satisfied = () => pageCapture2.controls.resolve(GENETICS_CONTROL) !== void 0 && (typeof level != "number" || level <= 2 || pageCapture2.controls.resolve(GENETICS_BREAKDOWN_CONTROL) !== void 0);
+      if (satisfied()) return;
       let panelOffered = readProperty(
         readProperty(readProperty(root, "settings"), "arpa"),
         "genetics"
       );
-      if (typeof level != "number" || !Number.isFinite(level) || level < 2 || panelOffered !== !0 || geneticsDiscoveryAttempted || pageCapture2.controls.resolve(MAIN_TAB_CONTROL) === void 0) return;
-      geneticsDiscoveryAttempted = !0;
-      let result = civicDiscovery.discover([
+      typeof level != "number" || !Number.isFinite(level) || level < 2 || panelOffered !== !0 || pageCapture2.controls.resolve(MAIN_TAB_CONTROL) !== void 0 && finishDiscovery("genetics", "genetics", satisfied, void 0, [
         Object.freeze({
           setting: MAIN_TAB_SETTING,
           control: MAIN_TAB_CONTROL,
           index: MAIN_TAB_INDEX.arpa
         })
       ]);
-      result.outcome.status !== "succeeded" && logError(
-        `genetics discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`
-      );
-    }, galaxyFleetDiscoveryAttempted = !1, ensureGalaxyFleetControls = () => {
-      if (pageCapture2.controls.resolve("fleet") !== void 0 || galaxyFleetDiscoveryAttempted || pageCapture2.controls.resolve(MAIN_TAB_CONTROL) === void 0) return;
+    }, ensureGalaxyFleetControls = () => {
+      let satisfied = () => pageCapture2.controls.resolve("fleet") !== void 0;
+      if (satisfied() || pageCapture2.controls.resolve(MAIN_TAB_CONTROL) === void 0) return;
       let spaceTabs = SUB_TAB_CONTROLS[SPACE_TABS_SETTING];
-      if (spaceTabs === void 0) return;
-      galaxyFleetDiscoveryAttempted = !0;
-      let result = civicDiscovery.discover([
+      spaceTabs !== void 0 && finishDiscovery("galaxy-fleet", "galaxy fleet", satisfied, void 0, [
         Object.freeze({
           setting: MAIN_TAB_SETTING,
           control: MAIN_TAB_CONTROL,
@@ -40935,46 +40953,32 @@ Only continue if you trust the source. Injected code:
           index: SPACE_TAB_INDEX.galaxy
         })
       ]);
-      result.outcome.status !== "succeeded" && logError(
-        `galaxy fleet discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`
-      );
-    }, cityControlsDiscoveryAttempted = !1, ensureCityControls = () => {
-      if (cityControlsDiscoveryAttempted || pageCapture2.controls.resolve(MAIN_TAB_CONTROL) === void 0) return;
-      cityControlsDiscoveryAttempted = !0;
-      let result = civicDiscovery.discover([
+    }, ensureCityControls = () => {
+      pageCapture2.controls.resolve(MAIN_TAB_CONTROL) !== void 0 && finishDiscovery("city-controls", "city", void 0, void 0, [
         Object.freeze({
           setting: MAIN_TAB_SETTING,
           control: MAIN_TAB_CONTROL,
           index: MAIN_TAB_INDEX.civilization
         })
       ]);
-      result.outcome.status !== "succeeded" && logError(
-        `city discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`
-      );
-    }, pylonDiscoveryAttempted = !1, ensurePylonControls = () => {
-      if (pageCapture2.controls.resolve(PYLON_CONTROL) !== void 0) return;
+    }, ensurePylonControls = () => {
+      let satisfied = () => pageCapture2.controls.resolve(PYLON_CONTROL) !== void 0;
+      if (satisfied()) return;
       let root = pageCapture2.rootState.readRoot(), tech = readProperty(root, "tech"), magic = readProperty(tech, "magic");
-      if (typeof magic != "number" || !Number.isFinite(magic) || magic < 3 || pylonDiscoveryAttempted || pageCapture2.controls.resolve(MAIN_TAB_CONTROL) === void 0)
-        return;
-      pylonDiscoveryAttempted = !0;
-      let result = civicDiscovery.discover([
+      typeof magic != "number" || !Number.isFinite(magic) || magic < 3 || pageCapture2.controls.resolve(MAIN_TAB_CONTROL) !== void 0 && finishDiscovery("pylon", "pylon", satisfied, void 0, [
         Object.freeze({
           setting: MAIN_TAB_SETTING,
           control: MAIN_TAB_CONTROL,
           index: MAIN_TAB_INDEX.civilization
         })
       ]);
-      result.outcome.status !== "succeeded" && logError(
-        `pylon discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`
-      );
-    }, alchemyDiscoveryAttempted = !1, ensureAlchemyControls = () => {
-      if (pageCapture2.controls.capturedElementIds().some((id) => id.startsWith(ALCHEMY_CONTROL_PREFIX)))
-        return;
+    }, ensureAlchemyControls = () => {
+      let satisfied = () => pageCapture2.controls.capturedElementIds().some((id) => id.startsWith(ALCHEMY_CONTROL_PREFIX));
+      if (satisfied()) return;
       let root = pageCapture2.rootState.readRoot(), tech = readProperty(root, "tech"), techLevel3 = readProperty(tech, "alchemy");
-      if (typeof techLevel3 != "number" || !Number.isFinite(techLevel3) || techLevel3 < 1 || alchemyDiscoveryAttempted || (alchemyDiscoveryAttempted = !0, pageCapture2.controls.resolve(MAIN_TAB_CONTROL) === void 0)) return;
+      if (typeof techLevel3 != "number" || !Number.isFinite(techLevel3) || techLevel3 < 1 || pageCapture2.controls.resolve(MAIN_TAB_CONTROL) === void 0) return;
       let marketTabs = SUB_TAB_CONTROLS[MARKET_TABS_SETTING];
-      if (marketTabs === void 0) return;
-      let result = civicDiscovery.discover([
+      marketTabs !== void 0 && finishDiscovery("alchemy", "alchemy", satisfied, void 0, [
         Object.freeze({
           setting: MAIN_TAB_SETTING,
           control: MAIN_TAB_CONTROL,
@@ -40986,17 +40990,13 @@ Only continue if you trust the source. Injected code:
           index: MARKET_TAB_INDEX.alchemy
         })
       ]);
-      result.outcome.status !== "succeeded" && logError(
-        `alchemy discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`
-      );
-    }, miningDroidDiscoveryAttempted = !1, ensureMiningDroidControls = () => {
-      if (pageCapture2.controls.resolve(MINING_DROID_CONTROL) !== void 0)
-        return;
+    }, ensureMiningDroidControls = () => {
+      let satisfied = () => pageCapture2.controls.resolve(MINING_DROID_CONTROL) !== void 0;
+      if (satisfied()) return;
       let root = pageCapture2.rootState.readRoot(), interstellar = readProperty(root, "interstellar"), droids = readProperty(interstellar, "mining_droid"), count2 = readProperty(droids, "count");
-      if (typeof count2 != "number" || !Number.isFinite(count2) || count2 < 1 || miningDroidDiscoveryAttempted || (miningDroidDiscoveryAttempted = !0, pageCapture2.controls.resolve(MAIN_TAB_CONTROL) === void 0)) return;
+      if (typeof count2 != "number" || !Number.isFinite(count2) || count2 < 1 || pageCapture2.controls.resolve(MAIN_TAB_CONTROL) === void 0) return;
       let govTabs = SUB_TAB_CONTROLS[GOV_TABS_SETTING];
-      if (govTabs === void 0) return;
-      let result = civicDiscovery.discover([
+      govTabs !== void 0 && finishDiscovery("mining-droid", "mining-droid", satisfied, void 0, [
         Object.freeze({
           setting: MAIN_TAB_SETTING,
           control: MAIN_TAB_CONTROL,
@@ -41008,16 +41008,13 @@ Only continue if you trust the source. Injected code:
           index: GOV_TAB_INDEX.industry
         })
       ]);
-      result.outcome.status !== "succeeded" && logError(
-        `mining-droid discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`
-      );
-    }, grapheneDiscoveryAttempted = !1, ensureGrapheneControls = () => {
-      if (pageCapture2.controls.resolve(GRAPHENE_CONTROL) !== void 0) return;
+    }, ensureGrapheneControls = () => {
+      let satisfied = () => pageCapture2.controls.resolve(GRAPHENE_CONTROL) !== void 0;
+      if (satisfied()) return;
       let root = pageCapture2.rootState.readRoot(), race = readProperty(root, "race"), interstellar = readProperty(root, "interstellar"), plant = readProperty(interstellar, "g_factory"), count2 = readProperty(plant, "count");
-      if (typeof count2 != "number" || !Number.isFinite(count2) || count2 < 1 || readProperty(race, "truepath") || readProperty(race, "warlord") || grapheneDiscoveryAttempted || (grapheneDiscoveryAttempted = !0, pageCapture2.controls.resolve(MAIN_TAB_CONTROL) === void 0)) return;
+      if (typeof count2 != "number" || !Number.isFinite(count2) || count2 < 1 || readProperty(race, "truepath") || readProperty(race, "warlord") || pageCapture2.controls.resolve(MAIN_TAB_CONTROL) === void 0) return;
       let govTabs = SUB_TAB_CONTROLS[GOV_TABS_SETTING];
-      if (govTabs === void 0) return;
-      let result = civicDiscovery.discover([
+      govTabs !== void 0 && finishDiscovery("graphene", "graphene", satisfied, void 0, [
         Object.freeze({
           setting: MAIN_TAB_SETTING,
           control: MAIN_TAB_CONTROL,
@@ -41029,17 +41026,13 @@ Only continue if you trust the source. Injected code:
           index: GOV_TAB_INDEX.industry
         })
       ]);
-      result.outcome.status !== "succeeded" && logError(
-        `graphene discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`
-      );
-    }, replicatorDiscoveryAttempted = !1, ensureReplicatorControls = () => {
-      if (pageCapture2.controls.resolve(REPLICATOR_CONTROL) !== void 0 && pageCapture2.controls.resolve(GOVERNOR_CONTROL) !== void 0)
-        return;
+    }, ensureReplicatorControls = () => {
+      let satisfied = () => pageCapture2.controls.resolve(REPLICATOR_CONTROL) !== void 0 && pageCapture2.controls.resolve(GOVERNOR_CONTROL) !== void 0;
+      if (satisfied()) return;
       let root = pageCapture2.rootState.readRoot(), race = readProperty(root, "race"), tech = readProperty(root, "tech"), techLevel3 = readProperty(tech, "replicator");
-      if (!isRecord(readProperty(race, "replicator")) || typeof techLevel3 != "number" || !Number.isFinite(techLevel3) || techLevel3 < 1 || replicatorDiscoveryAttempted || (replicatorDiscoveryAttempted = !0, pageCapture2.controls.resolve(MAIN_TAB_CONTROL) === void 0)) return;
+      if (!isRecord(readProperty(race, "replicator")) || typeof techLevel3 != "number" || !Number.isFinite(techLevel3) || techLevel3 < 1 || pageCapture2.controls.resolve(MAIN_TAB_CONTROL) === void 0) return;
       let govTabs = SUB_TAB_CONTROLS[GOV_TABS_SETTING];
-      if (govTabs === void 0) return;
-      let result = civicDiscovery.discover([
+      govTabs !== void 0 && finishDiscovery("replicator", "replicator", satisfied, void 0, [
         Object.freeze({
           setting: MAIN_TAB_SETTING,
           control: MAIN_TAB_CONTROL,
@@ -41051,19 +41044,16 @@ Only continue if you trust the source. Injected code:
           index: GOV_TAB_INDEX.industry
         })
       ]);
-      result.outcome.status !== "succeeded" && logError(
-        `replicator discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`
-      );
-    }, factoryDiscoveryAttempted = !1, smelterDiscoveryAttempted = !1, storageDiscoveryAttempted = !1, galaxyMarketDiscoveryAttempted = !1, marketDiscoveryAttempted = !1, ensureSmelterControls = () => {
-      if (pageCapture2.controls.resolve(SMELTER_CONTROL) !== void 0) return;
+    }, ensureSmelterControls = () => {
+      let satisfied = () => pageCapture2.controls.resolve(SMELTER_CONTROL) !== void 0;
+      if (satisfied()) return;
       let city = readProperty(pageCapture2.rootState.readRoot(), "city"), smelterState = readProperty(city, "smelter"), race = readProperty(pageCapture2.rootState.readRoot(), "race"), count2 = readProperty(smelterState, "count"), exempt = !!readProperty(race, "cataclysm") || !!readProperty(race, "orbit_decayed") || !!readProperty(
         readProperty(pageCapture2.rootState.readRoot(), "tech"),
         "isolation"
       ) || !!readProperty(race, "warlord");
-      if ((typeof count2 != "number" || !Number.isFinite(count2) || count2 < 1) && !exempt || smelterDiscoveryAttempted || (smelterDiscoveryAttempted = !0, pageCapture2.controls.resolve(MAIN_TAB_CONTROL) === void 0)) return;
+      if ((typeof count2 != "number" || !Number.isFinite(count2) || count2 < 1) && !exempt || pageCapture2.controls.resolve(MAIN_TAB_CONTROL) === void 0) return;
       let govTabs = SUB_TAB_CONTROLS[GOV_TABS_SETTING];
-      if (govTabs === void 0) return;
-      let result = civicDiscovery.discover([
+      govTabs !== void 0 && finishDiscovery("smelter", "smelter", satisfied, void 0, [
         Object.freeze({
           setting: MAIN_TAB_SETTING,
           control: MAIN_TAB_CONTROL,
@@ -41075,19 +41065,16 @@ Only continue if you trust the source. Injected code:
           index: GOV_TAB_INDEX.industry
         })
       ]);
-      result.outcome.status !== "succeeded" && logError(
-        `smelter discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`
-      );
-    }, naniteDiscoveryAttempted = !1, ensureNaniteControls = () => {
-      if (pageCapture2.controls.resolve(NANITE_CONTROL) !== void 0) return;
+    }, ensureNaniteControls = () => {
+      let satisfied = () => pageCapture2.controls.resolve(NANITE_CONTROL) !== void 0;
+      if (satisfied()) return;
       let root = pageCapture2.rootState.readRoot(), race = readProperty(root, "race"), naniteFactory = readProperty(
         readProperty(root, "city"),
         "nanite_factory"
       );
-      if (!readProperty(race, "deconstructor") || !isRecord(naniteFactory) || naniteDiscoveryAttempted || (naniteDiscoveryAttempted = !0, pageCapture2.controls.resolve(MAIN_TAB_CONTROL) === void 0)) return;
+      if (!readProperty(race, "deconstructor") || !isRecord(naniteFactory) || pageCapture2.controls.resolve(MAIN_TAB_CONTROL) === void 0) return;
       let govTabs = SUB_TAB_CONTROLS[GOV_TABS_SETTING];
-      if (govTabs === void 0) return;
-      let result = civicDiscovery.discover([
+      govTabs !== void 0 && finishDiscovery("nanite", "nanite", satisfied, void 0, [
         Object.freeze({
           setting: MAIN_TAB_SETTING,
           control: MAIN_TAB_CONTROL,
@@ -41099,21 +41086,16 @@ Only continue if you trust the source. Injected code:
           index: GOV_TAB_INDEX.industry
         })
       ]);
-      result.outcome.status !== "succeeded" && logError(
-        `nanite discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`
-      );
-    }, ejectorDiscoveryAttempted = !1, ensureEjectorControls = () => {
-      if (pageCapture2.controls.capturedElementIds().some((id) => id.startsWith("eject") && id !== EJECTOR_SUMMARY_CONTROL))
-        return;
+    }, ensureEjectorControls = () => {
+      let satisfied = () => pageCapture2.controls.capturedElementIds().some((id) => id.startsWith("eject") && id !== EJECTOR_SUMMARY_CONTROL);
+      if (satisfied()) return;
       let root = pageCapture2.rootState.readRoot(), ejector2 = readProperty(
         readProperty(root, "interstellar"),
         "mass_ejector"
       ), count2 = readProperty(ejector2, "count");
-      if (!isRecord(ejector2) || typeof count2 != "number" || !Number.isFinite(count2) || count2 < 1 || ejectorDiscoveryAttempted || pageCapture2.controls.resolve(MAIN_TAB_CONTROL) === void 0) return;
+      if (!isRecord(ejector2) || typeof count2 != "number" || !Number.isFinite(count2) || count2 < 1 || pageCapture2.controls.resolve(MAIN_TAB_CONTROL) === void 0) return;
       let marketTabs = SUB_TAB_CONTROLS[MARKET_TABS_SETTING];
-      if (marketTabs === void 0) return;
-      ejectorDiscoveryAttempted = !0;
-      let result = civicDiscovery.discover([
+      marketTabs !== void 0 && finishDiscovery("ejector", "ejector", satisfied, void 0, [
         Object.freeze({
           setting: MAIN_TAB_SETTING,
           control: MAIN_TAB_CONTROL,
@@ -41125,21 +41107,16 @@ Only continue if you trust the source. Injected code:
           index: MARKET_TAB_INDEX.ejector
         })
       ]);
-      result.outcome.status !== "succeeded" && logError(
-        `ejector discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`
-      );
-    }, supplyDiscoveryAttempted = !1, ensureSupplyControls = () => {
-      if (pageCapture2.controls.capturedElementIds().some((id) => id.startsWith("supply") && id !== SUPPLY_SUMMARY_CONTROL))
-        return;
+    }, ensureSupplyControls = () => {
+      let satisfied = () => pageCapture2.controls.capturedElementIds().some((id) => id.startsWith("supply") && id !== SUPPLY_SUMMARY_CONTROL);
+      if (satisfied()) return;
       let transport = readProperty(
         readProperty(pageCapture2.rootState.readRoot(), "portal"),
         "transport"
       ), count2 = readProperty(transport, "count");
-      if (!isRecord(transport) || typeof count2 != "number" || !Number.isFinite(count2) || count2 < 1 || supplyDiscoveryAttempted || pageCapture2.controls.resolve(MAIN_TAB_CONTROL) === void 0) return;
+      if (!isRecord(transport) || typeof count2 != "number" || !Number.isFinite(count2) || count2 < 1 || pageCapture2.controls.resolve(MAIN_TAB_CONTROL) === void 0) return;
       let marketTabs = SUB_TAB_CONTROLS[MARKET_TABS_SETTING];
-      if (marketTabs === void 0) return;
-      supplyDiscoveryAttempted = !0;
-      let result = civicDiscovery.discover([
+      marketTabs !== void 0 && finishDiscovery("supply", "supply", satisfied, void 0, [
         Object.freeze({
           setting: MAIN_TAB_SETTING,
           control: MAIN_TAB_CONTROL,
@@ -41151,19 +41128,15 @@ Only continue if you trust the source. Injected code:
           index: MARKET_TAB_INDEX.supply
         })
       ]);
-      result.outcome.status !== "succeeded" && logError(
-        `supply discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`
-      );
     }, ensureStorageControls = () => {
-      if (pageCapture2.controls.resolve(STORAGE_CONSTRUCTION_CONTROL) !== void 0 || storageDiscoveryAttempted || pageCapture2.controls.resolve(MAIN_TAB_CONTROL) === void 0 || readProperty(
+      let satisfied = () => pageCapture2.controls.resolve(STORAGE_CONSTRUCTION_CONTROL) !== void 0;
+      if (satisfied() || pageCapture2.controls.resolve(MAIN_TAB_CONTROL) === void 0 || readProperty(
         readProperty(pageCapture2.rootState.readRoot(), "settings"),
         "showStorage"
       ) !== !0)
         return;
       let marketTabs = SUB_TAB_CONTROLS[MARKET_TABS_SETTING];
-      if (marketTabs === void 0) return;
-      storageDiscoveryAttempted = !0;
-      let result = civicDiscovery.discover([
+      marketTabs !== void 0 && finishDiscovery("storage", "storage", satisfied, void 0, [
         Object.freeze({
           setting: MAIN_TAB_SETTING,
           control: MAIN_TAB_CONTROL,
@@ -41175,18 +41148,14 @@ Only continue if you trust the source. Injected code:
           index: MARKET_TAB_INDEX.storage
         })
       ]);
-      result.outcome.status !== "succeeded" && logError(
-        `storage discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`
-      );
     }, ensureGalaxyMarketControls = () => {
-      if (pageCapture2.controls.resolve(GALAXY_MARKET_CONTROL) !== void 0 || galaxyMarketDiscoveryAttempted || pageCapture2.controls.resolve(MAIN_TAB_CONTROL) === void 0) return;
+      let satisfied = () => pageCapture2.controls.resolve(GALAXY_MARKET_CONTROL) !== void 0;
+      if (satisfied() || pageCapture2.controls.resolve(MAIN_TAB_CONTROL) === void 0) return;
       let root = pageCapture2.rootState.readRoot();
       if (!isRecord(readProperty(readProperty(root, "galaxy"), "trade")) || readProperty(readProperty(root, "settings"), "showMarket") !== !0)
         return;
       let marketTabs = SUB_TAB_CONTROLS[MARKET_TABS_SETTING];
-      if (marketTabs === void 0) return;
-      galaxyMarketDiscoveryAttempted = !0;
-      let result = civicDiscovery.discover([
+      marketTabs !== void 0 && finishDiscovery("galaxy-market", "galaxy market", satisfied, void 0, [
         Object.freeze({
           setting: MAIN_TAB_SETTING,
           control: MAIN_TAB_CONTROL,
@@ -41198,18 +41167,14 @@ Only continue if you trust the source. Injected code:
           index: MARKET_TAB_INDEX.market
         })
       ]);
-      result.outcome.status !== "succeeded" && logError(
-        `galaxy market discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`
-      );
     }, ensureMarketControls = () => {
-      if (pageCapture2.controls.resolve(MARKET_QUANTITY_CONTROL) !== void 0 || marketDiscoveryAttempted || pageCapture2.controls.resolve(MAIN_TAB_CONTROL) === void 0) return;
+      let satisfied = () => pageCapture2.controls.resolve(MARKET_QUANTITY_CONTROL) !== void 0;
+      if (satisfied() || pageCapture2.controls.resolve(MAIN_TAB_CONTROL) === void 0) return;
       let root = pageCapture2.rootState.readRoot();
       if (readProperty(readProperty(root, "settings"), "showMarket") !== !0)
         return;
       let marketTabs = SUB_TAB_CONTROLS[MARKET_TABS_SETTING];
-      if (marketTabs === void 0) return;
-      marketDiscoveryAttempted = !0;
-      let result = civicDiscovery.discover([
+      marketTabs !== void 0 && finishDiscovery("market", "market", satisfied, void 0, [
         Object.freeze({
           setting: MAIN_TAB_SETTING,
           control: MAIN_TAB_CONTROL,
@@ -41221,16 +41186,13 @@ Only continue if you trust the source. Injected code:
           index: MARKET_TAB_INDEX.market
         })
       ]);
-      result.outcome.status !== "succeeded" && logError(
-        `market discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`
-      );
     }, ensureFactoryControls = () => {
-      if (pageCapture2.controls.resolve(FACTORY_CONTROL) !== void 0) return;
+      let satisfied = () => pageCapture2.controls.resolve(FACTORY_CONTROL) !== void 0;
+      if (satisfied()) return;
       let city = readProperty(pageCapture2.rootState.readRoot(), "city"), factoryState = readProperty(city, "factory"), count2 = readProperty(factoryState, "count");
-      if (typeof count2 != "number" || !Number.isFinite(count2) || count2 < 1 || factoryDiscoveryAttempted || (factoryDiscoveryAttempted = !0, pageCapture2.controls.resolve(MAIN_TAB_CONTROL) === void 0)) return;
+      if (typeof count2 != "number" || !Number.isFinite(count2) || count2 < 1 || pageCapture2.controls.resolve(MAIN_TAB_CONTROL) === void 0) return;
       let govTabs = SUB_TAB_CONTROLS[GOV_TABS_SETTING];
-      if (govTabs === void 0) return;
-      let result = civicDiscovery.discover([
+      govTabs !== void 0 && finishDiscovery("factory", "factory", satisfied, void 0, [
         Object.freeze({
           setting: MAIN_TAB_SETTING,
           control: MAIN_TAB_CONTROL,
@@ -41242,29 +41204,28 @@ Only continue if you trust the source. Injected code:
           index: GOV_TAB_INDEX.industry
         })
       ]);
-      result.outcome.status !== "succeeded" && logError(
-        `factory discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`
-      );
-    }, ratioDiscoveryAttempted = !1, ensureRatioControls = (control, unlocked) => {
-      if (!unlocked || ratioDiscoveryAttempted || pageCapture2.controls.resolve(control) !== void 0 || pageCapture2.controls.resolve(MAIN_TAB_CONTROL) === void 0)
+    }, ensureRatioControls = (control, unlocked) => {
+      let satisfied = () => pageCapture2.controls.resolve(control) !== void 0;
+      if (!unlocked || satisfied() || pageCapture2.controls.resolve(MAIN_TAB_CONTROL) === void 0)
         return;
       let govTabs = SUB_TAB_CONTROLS[GOV_TABS_SETTING];
-      if (govTabs === void 0) return;
-      ratioDiscoveryAttempted = !0;
-      let result = civicDiscovery.discover([
-        Object.freeze({
-          setting: MAIN_TAB_SETTING,
-          control: MAIN_TAB_CONTROL,
-          index: MAIN_TAB_INDEX.civic
-        }),
-        Object.freeze({
-          setting: GOV_TABS_SETTING,
-          control: govTabs,
-          index: GOV_TAB_INDEX.industry
-        })
-      ]);
-      result.outcome.status !== "succeeded" && logError(
-        `production-ratio discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`
+      govTabs !== void 0 && finishDiscovery(
+        "production-ratio",
+        "production-ratio",
+        satisfied,
+        void 0,
+        [
+          Object.freeze({
+            setting: MAIN_TAB_SETTING,
+            control: MAIN_TAB_CONTROL,
+            index: MAIN_TAB_INDEX.civic
+          }),
+          Object.freeze({
+            setting: GOV_TABS_SETTING,
+            control: govTabs,
+            index: GOV_TAB_INDEX.industry
+          })
+        ]
       );
     }, structureCount3 = (region, id) => {
       let value = readProperty(
@@ -41319,7 +41280,7 @@ Only continue if you trust the source. Injected code:
       readSettings: () => settingsStore.readRaw(),
       onActivity
     }), runCycle = () => {
-      if (demandThisCycle = void 0, triggerTargetsThisCycle = void 0, triggerDemandThisCycle = void 0, progression.resetProjectSample(), progression.resetBuildingUnlockSample(), settingsPanel.ensurePanel(), !pageCapture2.isComplete()) return;
+      if (automationCycle += 1, demandThisCycle = void 0, triggerTargetsThisCycle = void 0, triggerDemandThisCycle = void 0, progression.resetProjectSample(), progression.resetBuildingUnlockSample(), settingsPanel.ensurePanel(), !pageCapture2.isComplete()) return;
       refreshDiscoveredSettings();
       let settings = settingsStore.readRaw();
       if (!pageCapture2.isComplete() || !isEnabled(settings, "masterScriptToggle"))
