@@ -11,8 +11,8 @@ function capturedEvolutionRecord(
 
 /**
  * Captures the result-check input from the same race catalog as target selection. The captured
- * runtime has no compatibility trait manager, so enabling Auto Mutate Traits is deliberately
- * unavailable here rather than silently pretending the priority list was observed.
+ * runtime has no compatibility trait manager or base-race trait export. Auto Mutate Traits is
+ * therefore withheld from this sample, but it must not suppress the independent backup decision.
  */
 export function readCapturedEvolutionResult(
   rootValue: unknown,
@@ -35,13 +35,6 @@ export function readCapturedEvolutionResult(
       reason: "race.species unavailable",
     });
   }
-  if (settings?.["autoMutateTraits"] === true) {
-    return Object.freeze({
-      status: "unavailable",
-      reason: "captured mutation priority unavailable",
-    });
-  }
-
   const catalog = sampleCapturedEvolutionRaceCatalog(rootValue, settingsValue);
   if (catalog.status !== "ready") {
     return Object.freeze({ status: "unavailable", reason: catalog.reason });
@@ -73,6 +66,8 @@ export function readCapturedEvolutionResult(
   const input: EvolutionResultInput = Object.freeze({
     autoEvolution: settings?.["autoEvolution"] === true,
     evolutionBackup: settings?.["evolutionBackup"] === true,
+    // The captured result path cannot distinguish inherited traits from mutations yet. Keep the
+    // pure policy's mutation input conservative while allowing evolutionBackup to run.
     autoMutateTraits: false,
     userEvolutionTarget,
     species,

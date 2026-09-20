@@ -138,6 +138,18 @@ for (const species of INTENTIONAL_SPECIES) {
   assert.equal(sample.input.species, "human");
 }
 
+// Auto Mutate Traits does not disable the independent captured backup decision while its
+// inherited-trait sample remains unavailable.
+{
+  const sample = readCapturedEvolutionResult(
+    root(),
+    settings({ autoMutateTraits: true }),
+  );
+  assert.equal(sample.status, "ready");
+  assert.equal(sample.input.autoMutateTraits, false);
+  assert.equal(sample.input.evolutionBackup, true);
+}
+
 // 8. An unreachable explicit target is sampled, but the pure result policy refuses to reset for it.
 {
   const sample = readCapturedEvolutionResult(
@@ -158,8 +170,12 @@ for (const species of INTENTIONAL_SPECIES) {
         samples += 1;
         return { status: "ready", input: input() };
       },
+      sampleSpecies: () => "protoplasm",
     },
-    softReset: { issueSoftReset: () => true },
+    softReset: {
+      canIssueSoftReset: () => true,
+      issueSoftReset: () => true,
+    },
     restoreEvolutionAfterResult: () => {},
   });
   lifecycle.observeSpecies("protoplasm");
@@ -175,9 +191,16 @@ for (const species of INTENTIONAL_SPECIES) {
   const lifecycle = createCapturedEvolutionResultCheck({
     reader: {
       sampleEvolutionResult: () => ({ status: "ready", input: input() }),
+      sampleSpecies: () => "protoplasm",
     },
-    softReset: { issueSoftReset: () => (++resets, true) },
-    restoreEvolutionAfterResult: () => restores++,
+    softReset: {
+      canIssueSoftReset: () => true,
+      issueSoftReset: () => (++resets, true),
+    },
+    restoreEvolutionAfterResult: () => {
+      restores++;
+      return undefined;
+    },
   });
   lifecycle.observeSpecies("protoplasm");
   lifecycle.observeSpecies("human");
@@ -196,8 +219,12 @@ for (const species of INTENTIONAL_SPECIES) {
   const lifecycle = createCapturedEvolutionResultCheck({
     reader: {
       sampleEvolutionResult: () => ({ status: "ready", input: input() }),
+      sampleSpecies: () => "human",
     },
-    softReset: { issueSoftReset: () => (++resets, false) },
+    softReset: {
+      canIssueSoftReset: () => false,
+      issueSoftReset: () => (++resets, false),
+    },
     restoreEvolutionAfterResult: () => {},
   });
   lifecycle.observeSpecies("protoplasm");
@@ -207,11 +234,74 @@ for (const species of INTENTIONAL_SPECIES) {
     stopCycle: true,
   });
   assert.deepEqual(lifecycle.check(), { status: "idle", stopCycle: false });
-  assert.equal(resets, 1);
+  assert.equal(resets, 0);
+}
+
+// A missing or disabled button is rejected before the queue transaction starts, so the raw
+// settings record remains byte-for-byte unchanged.
+for (const button of [null, { disabled: true, click: () => {} }]) {
+  const raw = {
+    autoEvolution: true,
+    evolutionBackup: true,
+    userEvolutionTarget: "human",
+    evolutionQueueEnabled: true,
+    evolutionQueueRepeat: false,
+    evolutionQueue: [{ userEvolutionTarget: "cath", prestigeType: "bioseed" }],
+  };
+  const queued = createCapturedQueuedSettings({
+    settings: { readRaw: () => raw, persist: () => {} },
+  });
+  queued.loadQueuedSettings();
+  const before = JSON.stringify(raw);
+  const lifecycle = createCapturedEvolutionResultCheck({
+    reader: {
+      sampleEvolutionResult: () => ({ status: "ready", input: input() }),
+      sampleSpecies: () => "human",
+    },
+    softReset: createCapturedSoftResetControl(() => ({
+      querySelector: () => button,
+    })),
+    restoreEvolutionAfterResult: queued.restoreEvolutionAfterResult,
+  });
+  lifecycle.observeSpecies("protoplasm");
+  lifecycle.observeSpecies("human");
+  assert.deepEqual(lifecycle.check(), {
+    status: "reset-unavailable",
+    stopCycle: true,
+  });
+  assert.equal(JSON.stringify(raw), before);
+}
+
+// A click that does not synchronously produce the upstream race postcondition is invoked but
+// unverified: its queue mutation is rolled back and the lifecycle never reports reset-issued.
+{
+  let rollbacks = 0;
+  let species = "human";
+  let clicks = 0;
+  const lifecycle = createCapturedEvolutionResultCheck({
+    reader: {
+      sampleEvolutionResult: () => ({ status: "ready", input: input() }),
+      sampleSpecies: () => species,
+    },
+    softReset: {
+      canIssueSoftReset: () => true,
+      issueSoftReset: () => (++clicks, true),
+    },
+    restoreEvolutionAfterResult: () => ({ rollback: () => rollbacks++ }),
+  });
+  lifecycle.observeSpecies("protoplasm");
+  lifecycle.observeSpecies(species);
+  assert.deepEqual(lifecycle.check(), {
+    status: "reset-unverified",
+    stopCycle: true,
+  });
+  assert.equal(clicks, 1);
+  assert.equal(rollbacks, 1);
+  assert.deepEqual(lifecycle.check(), { status: "idle", stopCycle: false });
 }
 
 // 12. The real settings control, captured reader, and rendered soft-reset selector compose into
-// the lifecycle. The DOM postcondition is the game's own button invocation, not a raw global call.
+// the lifecycle. The click fixture applies the same synchronous species postcondition as Evolve.
 {
   const page = createCapturedSettingsPage({ autoEvolution: true });
   edit(page, "evolutionBackup", true);
@@ -239,7 +329,13 @@ for (const species of INTENTIONAL_SPECIES) {
   const softReset = createCapturedSoftResetControl(() => ({
     querySelector: (selector) => {
       assert.equal(selector, ".reset .button:not(.right)");
-      return { disabled: false, click: () => clicked++ };
+      return {
+        disabled: false,
+        click: () => {
+          clicked++;
+          gameRoot.race.species = "protoplasm";
+        },
+      };
     },
   }));
   const lifecycle = createCapturedEvolutionResultCheck({

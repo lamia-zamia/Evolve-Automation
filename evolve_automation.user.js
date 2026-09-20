@@ -26541,9 +26541,16 @@
         let rawQueue = settingsRaw.evolutionQueue;
         if (!Array.isArray(rawQueue) || lastAppliedEvolution === void 0)
           return;
+        let originalQueue = [...rawQueue];
         settingsRaw.evolutionQueueRepeat !== !0 && rawQueue.push({ ...lastAppliedEvolution });
         let current = rawQueue.pop();
         current !== void 0 && rawQueue.unshift(current), settings.persist();
+        let rolledBack = !1;
+        return Object.freeze({
+          rollback() {
+            rolledBack || settings.readRaw().evolutionQueue !== rawQueue || (rolledBack = !0, rawQueue.splice(0, rawQueue.length, ...originalQueue), settings.persist());
+          }
+        });
       },
       readEvolutionAttempts: () => evolutionAttempts
     });
@@ -27257,11 +27264,6 @@
         status: "unavailable",
         reason: "race.species unavailable"
       });
-    if (settings?.autoMutateTraits === !0)
-      return Object.freeze({
-        status: "unavailable",
-        reason: "captured mutation priority unavailable"
-      });
     let catalog = sampleCapturedEvolutionRaceCatalog(rootValue, settingsValue);
     if (catalog.status !== "ready")
       return Object.freeze({ status: "unavailable", reason: catalog.reason });
@@ -27282,6 +27284,8 @@
     let input = Object.freeze({
       autoEvolution: settings?.autoEvolution === !0,
       evolutionBackup: settings?.evolutionBackup === !0,
+      // The captured result path cannot distinguish inherited traits from mutations yet. Keep the
+      // pure policy's mutation input conservative while allowing evolutionBackup to run.
       autoMutateTraits: !1,
       userEvolutionTarget,
       species,
@@ -27672,16 +27676,36 @@
           return Object.freeze({ status: "unavailable", stopCycle: !0 });
         let decision = decideEvolutionResult(sample.input);
         for (let event of decision.logs) report(event);
-        return decision.needReset ? (sample.input.autoEvolution && sample.input.evolutionBackup && restoreEvolutionAfterResult(), softReset.issueSoftReset() ? (state = "reset-issued", Object.freeze({ status: "reset-issued", stopCycle: !0 })) : Object.freeze({ status: "reset-unavailable", stopCycle: !0 })) : Object.freeze({ status: "checked", stopCycle: !1 });
+        if (!decision.needReset)
+          return Object.freeze({ status: "checked", stopCycle: !1 });
+        if (!softReset.canIssueSoftReset())
+          return Object.freeze({ status: "reset-unavailable", stopCycle: !0 });
+        let restoreTransaction;
+        return sample.input.autoEvolution && sample.input.evolutionBackup && (restoreTransaction = restoreEvolutionAfterResult()), softReset.issueSoftReset() ? reader.sampleSpecies() !== "protoplasm" ? (restoreTransaction?.rollback(), Object.freeze({ status: "reset-unverified", stopCycle: !0 })) : (state = "reset-issued", Object.freeze({ status: "reset-issued", stopCycle: !0 })) : (restoreTransaction?.rollback(), Object.freeze({ status: "reset-unavailable", stopCycle: !0 }));
       }
     });
   }
   var CAPTURED_SOFT_RESET_SELECTOR = ".reset .button:not(.right)";
   function createCapturedSoftResetControl(getDocument) {
+    let readActionableButton = () => {
+      let document = getDocument();
+      if (document === null || typeof document != "object" || !("querySelector" in document) || typeof document.querySelector != "function")
+        return;
+      let button = document.querySelector(CAPTURED_SOFT_RESET_SELECTOR);
+      return button !== null && button.disabled !== !0 && typeof button.click == "function" ? button : void 0;
+    };
     return Object.freeze({
+      canIssueSoftReset() {
+        return readActionableButton() !== void 0;
+      },
       issueSoftReset() {
-        let button = getDocument().querySelector(CAPTURED_SOFT_RESET_SELECTOR);
-        return button === null || button.disabled === !0 || typeof button.click != "function" ? !1 : (button.click(), !0);
+        let button = readActionableButton();
+        if (button === void 0) return !1;
+        try {
+          return button.click(), !0;
+        } catch {
+          return !1;
+        }
       }
     });
   }

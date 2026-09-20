@@ -1,23 +1,33 @@
 import { decideEvolutionResult } from "../../../../domain/progression/evolution/evolution-result.ts";
 import type { EvolutionReader } from "../../../../ports/evolution.ts";
 import type { GameActivitySink } from "../../../../ports/game-message-log.ts";
+import type { CapturedQueuedSettings } from "./captured-queued-settings.ts";
 
 export interface CapturedSoftResetControl {
+  /** Checks the game's rendered soft-reset button without invoking it. */
+  canIssueSoftReset(): boolean;
   /** Invokes the game's rendered soft-reset button once when it is actionable. */
   issueSoftReset(): boolean;
 }
 
 export interface CapturedEvolutionResultCheckDependencies {
-  readonly reader: Pick<EvolutionReader, "sampleEvolutionResult">;
+  readonly reader: Pick<
+    EvolutionReader,
+    "sampleEvolutionResult" | "sampleSpecies"
+  >;
   readonly softReset: CapturedSoftResetControl;
-  readonly restoreEvolutionAfterResult: () => void;
+  readonly restoreEvolutionAfterResult: CapturedQueuedSettings["restoreEvolutionAfterResult"];
   readonly onActivity?: GameActivitySink;
 }
 
 export type CapturedEvolutionResultCheckOutcome =
   | { readonly status: "idle" | "checked"; readonly stopCycle: false }
   | {
-      readonly status: "reset-issued" | "reset-unavailable" | "unavailable";
+      readonly status:
+        | "reset-issued"
+        | "reset-unavailable"
+        | "reset-unverified"
+        | "unavailable";
       readonly stopCycle: true;
     };
 
@@ -62,8 +72,8 @@ function eventMessage(
 
 /**
  * Watches the explicit protoplasm → evolved-species transition and consumes one result exactly
- * once. A failed reset control leaves the lifecycle in `watching`, so a stale species cannot cause
- * an unbounded click loop; the next genuine evolution transition is the only retry opportunity.
+ * once. Reset invocation is committed only after the game's synchronous species postcondition is
+ * observed; a failed or unverified invocation leaves the lifecycle in `watching`.
  */
 export function createCapturedEvolutionResultCheck({
   reader,
@@ -113,23 +123,28 @@ export function createCapturedEvolutionResultCheck({
         return Object.freeze({ status: "checked", stopCycle: false });
       }
 
+      if (!softReset.canIssueSoftReset()) {
+        return Object.freeze({ status: "reset-unavailable", stopCycle: true });
+      }
+
+      let restoreTransaction:
+        | ReturnType<CapturedQueuedSettings["restoreEvolutionAfterResult"]>
+        | undefined;
       if (sample.input.autoEvolution && sample.input.evolutionBackup) {
-        restoreEvolutionAfterResult();
+        restoreTransaction = restoreEvolutionAfterResult();
       }
       if (!softReset.issueSoftReset()) {
+        restoreTransaction?.rollback();
         return Object.freeze({ status: "reset-unavailable", stopCycle: true });
+      }
+      if (reader.sampleSpecies() !== "protoplasm") {
+        restoreTransaction?.rollback();
+        return Object.freeze({ status: "reset-unverified", stopCycle: true });
       }
       state = "reset-issued";
       return Object.freeze({ status: "reset-issued", stopCycle: true });
     },
   });
-}
-
-export interface CapturedSoftResetDocument {
-  querySelector(selector: string): {
-    readonly disabled?: boolean;
-    click?(): void;
-  } | null;
 }
 
 /** The upstream settings tab's left reset button; the right sibling is hard reset. */
@@ -138,19 +153,37 @@ export const CAPTURED_SOFT_RESET_SELECTOR = ".reset .button:not(.right)";
 export function createCapturedSoftResetControl(
   getDocument: () => unknown,
 ): CapturedSoftResetControl {
+  const readActionableButton = () => {
+    const document = getDocument();
+    if (
+      document === null ||
+      typeof document !== "object" ||
+      !("querySelector" in document) ||
+      typeof document.querySelector !== "function"
+    ) {
+      return undefined;
+    }
+    const button = document.querySelector(CAPTURED_SOFT_RESET_SELECTOR);
+    return button !== null &&
+      button.disabled !== true &&
+      typeof button.click === "function"
+      ? button
+      : undefined;
+  };
+
   return Object.freeze({
+    canIssueSoftReset(): boolean {
+      return readActionableButton() !== undefined;
+    },
     issueSoftReset(): boolean {
-      const document = getDocument() as CapturedSoftResetDocument;
-      const button = document.querySelector(CAPTURED_SOFT_RESET_SELECTOR);
-      if (
-        button === null ||
-        button.disabled === true ||
-        typeof button.click !== "function"
-      ) {
+      const button = readActionableButton();
+      if (button === undefined) return false;
+      try {
+        button.click();
+        return true;
+      } catch {
         return false;
       }
-      button.click();
-      return true;
     },
   });
 }

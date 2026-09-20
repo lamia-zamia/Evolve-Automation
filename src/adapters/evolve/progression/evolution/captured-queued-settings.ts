@@ -17,8 +17,9 @@ export interface CapturedQueuedSettingsDependencies {
 
 export interface CapturedQueuedSettings {
   readonly loadQueuedSettings: () => void;
-  /** Re-queues the just-applied row at the front after a failed result-check reset. */
-  readonly restoreEvolutionAfterResult: () => void;
+  /** Re-queues the just-applied row and returns a rollback for an uncommitted reset. */
+  readonly restoreEvolutionAfterResult: () =>
+    { readonly rollback: () => void } | undefined;
   /** The page-session counter consumed by the future captured evolution reader. */
   readonly readEvolutionAttempts: () => number;
 }
@@ -69,12 +70,23 @@ export function createCapturedQueuedSettings({
       const rawQueue = settingsRaw["evolutionQueue"];
       if (!Array.isArray(rawQueue) || lastAppliedEvolution === undefined)
         return;
+      const originalQueue = [...rawQueue];
       if (settingsRaw["evolutionQueueRepeat"] !== true) {
         rawQueue.push({ ...lastAppliedEvolution });
       }
       const current = rawQueue.pop();
       if (current !== undefined) rawQueue.unshift(current);
       settings.persist();
+      let rolledBack = false;
+      return Object.freeze({
+        rollback() {
+          if (rolledBack || settings.readRaw()["evolutionQueue"] !== rawQueue)
+            return;
+          rolledBack = true;
+          rawQueue.splice(0, rawQueue.length, ...originalQueue);
+          settings.persist();
+        },
+      });
     },
     readEvolutionAttempts: () => evolutionAttempts,
   });
