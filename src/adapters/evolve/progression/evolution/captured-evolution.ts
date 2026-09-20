@@ -16,7 +16,6 @@ import type {
   EvolutionLandingGate,
   EvolutionTreeAction,
   ImitationInput,
-  RaceView,
   TargetSelectionInput,
 } from "../../../../domain/progression/evolution/evolution.ts";
 import type {
@@ -31,6 +30,7 @@ import type { GameActivitySink } from "../../../../ports/game-message-log.ts";
 import type { GameRootStateSource } from "../../../../ports/game-root-state.ts";
 import type { UniverseSelectionControls } from "../../../../ports/progression-controls.ts";
 import { isNonArrayRecord, readProperty } from "../../../validation.ts";
+import { sampleCapturedEvolutionRaceCatalog } from "./captured-evolution-race-catalog.ts";
 
 const EVOLUTION_ACTION_PREFIX = "evolution-";
 const EVOLUTION_ACTION_SELECTOR = "#evolution > .action";
@@ -163,18 +163,6 @@ function actionRowsForTree(
   );
 }
 
-function explicitTarget(
-  settings: Record<string, unknown> | undefined,
-): string | undefined {
-  const target = settings?.["userEvolutionTarget"];
-  return typeof target === "string" &&
-    target.length > 0 &&
-    target !== "auto" &&
-    target !== "none"
-    ? target
-    : undefined;
-}
-
 export function createCapturedEvolution(
   dependencies: CapturedEvolutionDependencies,
 ): CapturedEvolutionAdapter {
@@ -222,28 +210,19 @@ export function createCapturedEvolution(
 
     sampleTargetSelection(): TargetSelectionInput {
       const settings = capturedEvolutionReadSettings(dependencies.readSettings);
-      const target = explicitTarget(settings);
-      const races: readonly RaceView[] = target
-        ? Object.freeze([
-            Object.freeze({
-              id: target,
-              weighting: 0,
-              habitability: 1,
-              genus: "captured",
-              name: target,
-            }),
-          ])
-        : Object.freeze([]);
-      const stats = nestedRecord(rootRecord(dependencies.rootState), "stats");
-      const achieve = nestedRecord(stats, "achieve");
+      const catalog = sampleCapturedEvolutionRaceCatalog(
+        dependencies.rootState.readRoot(),
+        settings,
+      );
       const queue = settings?.["evolutionQueue"];
       return Object.freeze({
-        races,
+        races: catalog.races,
+        catalogAvailable: catalog.status === "ready",
         userEvolutionTarget:
           typeof settings?.["userEvolutionTarget"] === "string"
             ? settings["userEvolutionTarget"]
             : "unreadable",
-        massExtinction: Boolean(achieve?.["mass_extinction"]),
+        massExtinction: catalog.massExtinction,
         queueEnabled: settings?.["evolutionQueueEnabled"] === true,
         queueLength: Array.isArray(queue) ? queue.length : 0,
         queueRepeat: settings?.["evolutionQueueRepeat"] === true,

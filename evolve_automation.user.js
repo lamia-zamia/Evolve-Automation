@@ -26542,16 +26542,655 @@
     return !input.hasBigbang || input.universe !== "bigbang" || input.targetName === "none" ? null : input.targetName;
   }
 
-  // src/adapters/evolve/progression/evolution/captured-evolution.ts
-  var EVOLUTION_ACTION_PREFIX = "evolution-", EVOLUTION_ACTION_SELECTOR = "#evolution > .action", RESOURCE_ACTION_IDS = /* @__PURE__ */ new Set(["rna", "dna"]);
+  // src/adapters/evolve/progression/prestige/achievement-guards.ts
+  function levelUnavailable(reason, field) {
+    return Object.freeze(
+      field === void 0 ? { status: "unavailable", reason } : { status: "unavailable", reason, field }
+    );
+  }
+  function readAchievementStarLevelContext(rawContext) {
+    if (!isNonArrayRecord(rawContext))
+      return levelUnavailable("invalid-settings");
+    let mapping = {
+      challengePlasmid: "challenge_plasmid",
+      challengeTrade: "challenge_trade",
+      challengeCraft: "challenge_craft",
+      challengeCrispr: "challenge_crispr"
+    }, context = {
+      challengePlasmid: !1,
+      challengeTrade: !1,
+      challengeCraft: !1,
+      challengeCrispr: !1
+    };
+    for (let [target, source] of Object.entries(mapping)) {
+      let value = rawContext[source];
+      if (value !== void 0 && typeof value != "boolean")
+        return levelUnavailable("invalid-settings", source);
+      context[target] = value === !0;
+    }
+    return Object.freeze({ status: "ready", context: Object.freeze(context) });
+  }
+
+  // src/adapters/evolve/progression/evolution/captured-evolution-catalog.ts
+  var CAPTURED_EVOLUTION_RACES = Object.freeze([
+    { id: "human", label: "Human", genus: "humanoid" },
+    { id: "elven", label: "Elf", genus: "humanoid" },
+    { id: "orc", label: "Orc", genus: "humanoid" },
+    { id: "cath", label: "Cath", genus: "carnivore" },
+    { id: "wolven", label: "Wolven", genus: "carnivore" },
+    { id: "vulpine", label: "Vulpine", genus: "carnivore" },
+    { id: "centaur", label: "Centaur", genus: "herbivore" },
+    { id: "rhinotaur", label: "Rhinotaur", genus: "herbivore" },
+    { id: "capybara", label: "Capybara", genus: "herbivore" },
+    { id: "kobold", label: "Kobold", genus: "small" },
+    { id: "goblin", label: "Goblin", genus: "small" },
+    { id: "gnome", label: "Gnome", genus: "small" },
+    { id: "ogre", label: "Ogre", genus: "giant" },
+    { id: "cyclops", label: "Cyclops", genus: "giant" },
+    { id: "troll", label: "Troll", genus: "giant" },
+    { id: "tortoisan", label: "Tortoisan", genus: "reptilian" },
+    { id: "gecko", label: "Gecko", genus: "reptilian" },
+    { id: "slitheryn", label: "Slitheryn", genus: "reptilian" },
+    { id: "arraak", label: "Arraak", genus: "avian" },
+    { id: "pterodacti", label: "Pterodacti", genus: "avian" },
+    { id: "dracnid", label: "Dracnid", genus: "avian" },
+    { id: "entish", label: "Ent", genus: "plant" },
+    { id: "cacti", label: "Cacti", genus: "plant" },
+    { id: "pinguicula", label: "Pinguicula", genus: "plant" },
+    { id: "sporgar", label: "Sporgar", genus: "fungi" },
+    { id: "shroomi", label: "Shroomi", genus: "fungi" },
+    { id: "moldling", label: "Moldling", genus: "fungi" },
+    { id: "mantis", label: "Mantis", genus: "insectoid" },
+    { id: "scorpid", label: "Scorpid", genus: "insectoid" },
+    { id: "antid", label: "Antid", genus: "insectoid" },
+    { id: "sharkin", label: "Sharkin", genus: "aquatic" },
+    { id: "octigoran", label: "Octigoran", genus: "aquatic" },
+    { id: "dryad", label: "Dryad", genus: "fey" },
+    { id: "satyr", label: "Satyr", genus: "fey" },
+    { id: "phoenix", label: "Phoenix", genus: "heat" },
+    { id: "salamander", label: "Salamander", genus: "heat" },
+    { id: "yeti", label: "Yeti", genus: "polar" },
+    { id: "wendigo", label: "Wendigo", genus: "polar" },
+    { id: "tuskin", label: "Tuskin", genus: "sand" },
+    { id: "kamel", label: "Kamel", genus: "sand" },
+    { id: "balorg", label: "Balorg", genus: "demonic" },
+    { id: "imp", label: "Imp", genus: "demonic" },
+    { id: "seraph", label: "Seraph", genus: "angelic" },
+    { id: "unicorn", label: "Unicorn", genus: "angelic" },
+    { id: "synth", label: "Synth", genus: "synthetic" },
+    { id: "nano", label: "Nano", genus: "synthetic" },
+    { id: "ghast", label: "Ghast", genus: "eldritch" },
+    { id: "shoggoth", label: "Shoggoth", genus: "eldritch" },
+    { id: "raptors", label: "Raptors", genus: "primordial" },
+    { id: "rexicus", label: "Rexicus", genus: "primordial" },
+    {
+      id: "dwarf",
+      label: "Dwarf",
+      genus: "hybrid",
+      hybrid: ["humanoid", "small"]
+    },
+    {
+      id: "raccoon",
+      label: "Racconar",
+      genus: "hybrid",
+      hybrid: ["carnivore", "herbivore"]
+    },
+    {
+      id: "lichen",
+      label: "Lichen",
+      genus: "hybrid",
+      hybrid: ["plant", "fungi"]
+    },
+    {
+      id: "wyvern",
+      label: "Wyvern",
+      genus: "hybrid",
+      hybrid: ["avian", "reptilian"]
+    },
+    {
+      id: "beholder",
+      label: "Eye-Spector",
+      genus: "hybrid",
+      hybrid: ["eldritch", "giant"]
+    },
+    { id: "djinn", label: "Djinn", genus: "hybrid", hybrid: ["sand", "fey"] },
+    {
+      id: "narwhal",
+      label: "Narwhalus",
+      genus: "hybrid",
+      hybrid: ["aquatic", "polar"]
+    },
+    {
+      id: "bombardier",
+      label: "Bombardier",
+      genus: "hybrid",
+      hybrid: ["insectoid", "heat"]
+    },
+    {
+      id: "nephilim",
+      label: "Nephilim",
+      genus: "hybrid",
+      hybrid: ["demonic", "angelic"]
+    },
+    {
+      id: "mammuth",
+      label: "Mammuth",
+      genus: "hybrid",
+      hybrid: ["primordial", "herbivore"]
+    },
+    { id: "hellspawn", label: "Hellspawn", genus: "demonic" },
+    { id: "junker", label: "Valdi", genus: "variable" },
+    { id: "sludge", label: "Sludge", genus: "variable" },
+    { id: "ultra_sludge", label: "Ultra Sludge", genus: "variable" },
+    { id: "custom", label: "Custom", genus: "custom" },
+    { id: "hybrid", label: "Custom Hybrid", genus: "hybrid" }
+  ]), CAPTURED_EVOLUTION_UNIVERSE_LABELS = Object.freeze(
+    Object.fromEntries(
+      [
+        {
+          id: "standard",
+          label: "Standard",
+          hint: "A standard universe with normal laws of physics"
+        },
+        {
+          id: "heavy",
+          label: "Heavy Gravity",
+          hint: "The force of gravity in this universe is much stronger than normal"
+        },
+        {
+          id: "antimatter",
+          label: "Antimatter",
+          hint: "This universe consists primarily of antimatter"
+        },
+        {
+          id: "evil",
+          label: "Evil",
+          hint: "Everything in this universe is evil"
+        },
+        {
+          id: "micro",
+          label: "Micro",
+          hint: "Everything in this universe is small"
+        },
+        { id: "magic", label: "Magic", hint: "Magic is real in this universe" }
+      ].map((entry) => [entry.id, Object.freeze(entry)])
+    )
+  ), CAPTURED_EVOLUTION_CHALLENGE_LABELS = Object.freeze(
+    Object.fromEntries(
+      [
+        {
+          id: "plasmid",
+          label: "No Starting Plasmids | Weak Mastery | Weak Genes",
+          hint: "Starting Plasmids have no effect.&#xA;Mastery is much weaker than normal.&#xA;Mastery is reduced to %0, and plasmid and anti-plasmid production are reduced to %1 value. Plasmid and anti-plasmid storage bonus reduced to %2. Phage storage bonus reduced to %3."
+        },
+        {
+          id: "crispr",
+          label: "Junk Gene | Bad Genes",
+          hint: "Gain a random negative mutation. CRISPR cost creep discounts function at only 20%.&#xA;Gain %0 random empowered negative trait and %1 weak negative traits."
+        },
+        {
+          id: "trade",
+          label: "No Free Trade",
+          hint: "No marketplace trading. (Trade routes are still enabled.)"
+        },
+        {
+          id: "craft",
+          label: "No Manual Crafting",
+          hint: "No manual resource crafting."
+        },
+        {
+          id: "joyless",
+          label: "Joyless",
+          hint: "There will be no joy in your life: entertainers and broadcasting are disabled. Construct a Biodome to earn the achievement and remove the penalty."
+        },
+        {
+          id: "steelen",
+          label: "Steelen",
+          hint: "Your species cannot figure out how to smelt Steel. You have to resort to other means to get any of it. Have the mettle to Bioseed with this challenge active and your dedication will be rewarded."
+        },
+        {
+          id: "decay",
+          label: "Decay",
+          hint: "Resources decay at a rate determined by how much of it you are storing. Larger stores decay quicker. Destroy this universe to end the cycle of decay."
+        },
+        {
+          id: "emfield",
+          label: "EM Field",
+          hint: "Energy costs are higher and technology may fail you. You must ascend to win."
+        },
+        {
+          id: "inflation",
+          label: "Inflation",
+          hint: "Inflation is ruining your economy. The more you build, the more worthless your money becomes. Constructing anything devalues money, causing all money costs to increase."
+        },
+        {
+          id: "sludge",
+          label: "Failed Experiment",
+          hint: "You will be stacked with terrible junk traits. You suffer for no reason."
+        },
+        {
+          id: "ultra_sludge",
+          label: "Ultimate Failed Experiment",
+          hint: "You will be stacked with terrible junk traits. You suffer because the community wanted it."
+        },
+        {
+          id: "orbit_decay",
+          label: "Orbital Decay",
+          hint: "Your homeworld's moon is in a decaying orbit; it will impact the planet in %0 days."
+        },
+        {
+          id: "gravity_well",
+          label: "Gravity Well | Witch Hunter | Warlord",
+          hint: "Gravity is very strong, so leaving the planet will be very difficult. Find a new one that doesn't drag you down.&#xA;Magic effects are stronger, but using magic draws unwanted attention. Your goal is to perform the ultimate forbidden ritual.&#xA;Prove you are the most ruthless to ever exist."
+        },
+        {
+          id: "junker",
+          label: "Genetic Dead End",
+          hint: "This forces on all four challenge genes. You will be stacked with horrible junk traits. Reach MAD for a special perk."
+        },
+        {
+          id: "cataclysm",
+          label: "Cataclysm",
+          hint: "A massive earthquake has literally shaken your planet apart. Start with a space colony but no homeworld. Escape to a new world to win (Bioseed)."
+        },
+        {
+          id: "banana",
+          label: "Banana Republic",
+          hint: "You can only export one type of resource, your economy is bad, and your army is weak. Complete a checklist of objectives; unifying exits the scenario."
+        },
+        {
+          id: "truepath",
+          label: "The True Path",
+          hint: "Use an alternate progression path."
+        },
+        {
+          id: "lone_survivor",
+          label: "Lone Survivor",
+          hint: "You must survive and thrive alone on an alien world."
+        },
+        {
+          id: "fasting",
+          label: "Fasting",
+          hint: "Food production is disabled. Learn to survive without sustenance."
+        }
+      ].map((entry) => [entry.id, Object.freeze(entry)])
+    )
+  );
+
+  // src/adapters/evolve/progression/evolution/captured-evolution-race-catalog.ts
+  var NO_MAD_RACES = /* @__PURE__ */ new Set(["sludge", "ultra_sludge", "hellspawn"]), NO_PILLAR_RACES = /* @__PURE__ */ new Set([
+    "custom",
+    "junker",
+    "sludge",
+    "ultra_sludge",
+    "hybrid",
+    "hellspawn"
+  ]), NO_GREATNESS_GENERA = /* @__PURE__ */ new Set(["hybrid"]), NO_GREATNESS_RACES = /* @__PURE__ */ new Set(["hellspawn"]), CHALLENGE_RACES = /* @__PURE__ */ new Set([
+    "junker",
+    "sludge",
+    "ultra_sludge",
+    "hellspawn"
+  ]), GREATNESS_RESETS = /* @__PURE__ */ new Set([
+    "bioseed",
+    "ascension",
+    "terraform",
+    "matrix",
+    "retire",
+    "eden",
+    "apotheosis"
+  ]), MID_TIER_RESETS = /* @__PURE__ */ new Set([
+    "bioseed",
+    "cataclysm",
+    "whitehole",
+    "vacuum",
+    "terraform"
+  ]), HIGH_TIER_RESETS = /* @__PURE__ */ new Set(["ascension", "demonic", "apotheosis"]), BEST_FOR_MID = /* @__PURE__ */ new Set([
+    "human",
+    "cath",
+    "capybara",
+    "gnome",
+    "cyclops",
+    "gecko",
+    "dracnid",
+    "entish",
+    "shroomi",
+    "antid",
+    "sharkin",
+    "dryad",
+    "salamander",
+    "yeti",
+    "kamel",
+    "imp",
+    "unicorn",
+    "synth",
+    "shoggoth"
+  ]), BEST_FOR_HIGH = /* @__PURE__ */ new Set([
+    "human",
+    "cath",
+    "capybara",
+    "gnome",
+    "cyclops",
+    "gecko",
+    "dracnid",
+    "entish",
+    "shroomi",
+    "scorpid",
+    "sharkin",
+    "dryad",
+    "salamander",
+    "wendigo",
+    "kamel",
+    "balorg",
+    "unicorn",
+    "nano",
+    "ghast"
+  ]), GOOD_IMITATES = [
+    "wyvern",
+    "dwarf",
+    "dracnid",
+    "octigoran",
+    "unicorn",
+    "salamander",
+    "cyclops",
+    "kamel",
+    "arraak",
+    "troll",
+    "custom"
+  ], NO_IMITATES = /* @__PURE__ */ new Set(["junker", "nano", "synth", "hellspawn"]), FANATIC_ACHIEVEMENTS = [
+    { god: "sharkin", race: "entish", achieve: "madagascar_tree" },
+    { god: "sporgar", race: "human", achieve: "infested" },
+    { god: "shroomi", race: "troll", achieve: "godwin" }
+  ];
   function capturedEvolutionRecord(value) {
     return isNonArrayRecord(value) ? value : void 0;
   }
+  function requiredRecord(owner, key) {
+    return capturedEvolutionRecord(readProperty(owner, key));
+  }
+  function optionalRecord(owner, key) {
+    let raw = readProperty(owner, key);
+    return raw == null ? {} : capturedEvolutionRecord(raw);
+  }
+  function optionalNumber(owner, key) {
+    let raw = readProperty(owner, key);
+    if (raw == null) return 0;
+    let value = finite(raw);
+    return value !== void 0 && value >= 0 ? value : void 0;
+  }
+  function settingBoolean5(settings, key) {
+    let raw = settings[key];
+    return raw === void 0 ? !1 : typeof raw == "boolean" ? raw : void 0;
+  }
+  function universeAffix2(universe) {
+    switch (universe) {
+      case "evil":
+        return "e";
+      case "antimatter":
+        return "a";
+      case "heavy":
+        return "h";
+      case "micro":
+        return "m";
+      case "magic":
+        return "mg";
+      default:
+        return "l";
+    }
+  }
+  function achievementValue(achievements, id, field) {
+    let achievement = readProperty(achievements, id);
+    if (achievement == null) return 0;
+    let record = capturedEvolutionRecord(achievement);
+    if (record !== void 0)
+      return optionalNumber(record, field);
+  }
+  function customRaceRow(root, entry) {
+    if (entry.id !== "custom" && entry.id !== "hybrid") {
+      let hybrid2 = entry.hybrid === void 0 ? void 0 : Object.freeze([...entry.hybrid]);
+      return Object.freeze({
+        entry,
+        id: entry.id,
+        name: entry.label,
+        genus: entry.genus === "variable" ? typeof readProperty(readProperty(root, "race"), "jtype") == "string" ? readProperty(readProperty(root, "race"), "jtype") : "humanoid" : entry.genus,
+        hybrid: hybrid2,
+        compact: entry.id === "imp"
+      });
+    }
+    let custom = requiredRecord(root, "custom"), slot = requiredRecord(
+      custom,
+      entry.id === "custom" ? "race0" : "race1"
+    ), genus = readProperty(slot, "genus");
+    if (typeof genus != "string" || genus.length === 0) return;
+    let name = readProperty(slot, "name"), traits = readProperty(slot, "traits"), hybridValue = readProperty(slot, "hybrid"), hybrid = Array.isArray(hybridValue) ? hybridValue.filter((value) => typeof value == "string") : void 0;
+    if (!(genus === "hybrid" && (hybrid === void 0 || hybrid.length === 0)))
+      return Object.freeze({
+        entry,
+        id: entry.id,
+        name: typeof name == "string" && name.length > 0 ? name : entry.label,
+        genus,
+        hybrid: hybrid === void 0 ? void 0 : Object.freeze(hybrid),
+        compact: Array.isArray(traits) && traits.includes("compact")
+      });
+  }
+  function readFacts(rootValue, settingsValue) {
+    let root = capturedEvolutionRecord(rootValue), settings = capturedEvolutionRecord(settingsValue), race = requiredRecord(root, "race"), genes = requiredRecord(root, "genes"), city = requiredRecord(root, "city"), stats = requiredRecord(root, "stats"), achieve = requiredRecord(stats, "achieve"), blood = requiredRecord(root, "blood"), universe = readProperty(race, "universe"), biome = readProperty(city, "biome"), prestigeType = settings?.prestigeType, feat = optionalRecord(stats, "feat"), synth = optionalRecord(stats, "synth"), pillars = optionalRecord(root, "pillars"), unbound = optionalNumber(blood, "unbound"), settingsContext = readAchievementStarLevelContext(settingsValue);
+    if (root === void 0 || settings === void 0 || race === void 0 || genes === void 0 || city === void 0 || stats === void 0 || achieve === void 0 || blood === void 0 || feat === void 0 || synth === void 0 || pillars === void 0 || typeof universe != "string" || typeof biome != "string" || typeof prestigeType != "string" || unbound === void 0 || settingsContext.status !== "ready")
+      return;
+    let harmonyRecord = requiredRecord(
+      requiredRecord(root, "prestige"),
+      "Harmony"
+    ), harmony = harmonyRecord === void 0 ? 0 : optionalNumber(harmonyRecord, "count");
+    if (harmony !== void 0)
+      return {
+        facts: Object.freeze({
+          root,
+          race,
+          genes,
+          city,
+          achieve,
+          feat,
+          synth,
+          pillars,
+          universe,
+          biome,
+          gods: typeof readProperty(race, "gods") == "string" ? readProperty(race, "gods") : void 0,
+          unbound,
+          harmony,
+          settings,
+          prestigeType,
+          starLevel: calculateAchievementStarLevel(settingsContext.context),
+          currentAffix: universeAffix2(universe)
+        }),
+        massExtinction: readProperty(achieve, "mass_extinction") !== void 0
+      };
+  }
+  function genusHabitability(genus, facts) {
+    let unboundMod = facts.unbound >= 4 ? 0.95 : facts.unbound >= 2 ? 0.9 : facts.unbound >= 1 ? 0.8 : 0, shadowMod = facts.unbound >= 3 ? unboundMod : 0;
+    switch (genus) {
+      case "aquatic":
+        return ["swamp", "oceanic"].includes(facts.biome) ? 1 : unboundMod;
+      case "fey":
+        return ["forest", "swamp", "taiga"].includes(facts.biome) ? 1 : unboundMod;
+      case "sand":
+        return ["ashland", "desert"].includes(facts.biome) ? 1 : unboundMod;
+      case "heat":
+        return ["ashland", "volcanic"].includes(facts.biome) ? 1 : unboundMod;
+      case "polar":
+        return ["tundra", "taiga"].includes(facts.biome) ? 1 : unboundMod;
+      case "demonic":
+        return facts.biome === "hellscape" ? 1 : shadowMod;
+      case "angelic":
+        return facts.biome === "eden" ? 1 : shadowMod;
+      case "synthetic":
+        return (achievementValue(facts.achieve, "obsolete", "l") ?? -1) >= 5 ? 1 : 0;
+      case "eldritch":
+        return (achievementValue(facts.achieve, "nightmare", "mg") ?? -1) > 0 ? 1 : 0;
+      case "primordial":
+        return (achievementValue(facts.achieve, "living_extinction", "l") ?? -1) > 0 ? 1 : 0;
+      default:
+        return 1;
+    }
+  }
+  function raceHabitability(row, facts) {
+    switch (row.id) {
+      case "hellspawn":
+        return facts.universe === "evil" && (achievementValue(facts.achieve, "godslayer", "e") ?? -1) > 0 ? 1 : 0;
+      case "junker":
+        return readProperty(facts.genes, "challenge") === !0 ? 1 : 0;
+      case "sludge":
+        return ((achievementValue(facts.achieve, "ascended", "l") ?? -1) > 0 || (achievementValue(facts.achieve, "corrupted", "l") ?? -1) > 0) && (achievementValue(facts.achieve, "extinct_junker", "l") ?? -1) > 0 ? 1 : 0;
+      case "ultra_sludge":
+        return readProperty(facts.achieve, "godslayer") !== void 0 && (achievementValue(facts.achieve, "extinct_sludge", "l") ?? -1) > 0 ? 1 : 0;
+      default:
+        return row.genus === "hybrid" ? readProperty(facts.achieve, "godslayer") === void 0 ? 0 : row.hybrid === void 0 || row.hybrid.length === 0 ? 1 : Math.max(
+          ...row.hybrid.map((genus) => genusHabitability(genus, facts))
+        ) : genusHabitability(row.genus, facts);
+    }
+  }
+  function raceConditionExists(row) {
+    return row.id === "custom" || row.id === "hybrid" || CHALLENGE_RACES.has(row.id) || [
+      "aquatic",
+      "fey",
+      "sand",
+      "heat",
+      "polar",
+      "demonic",
+      "angelic",
+      "synthetic",
+      "eldritch",
+      "primordial"
+    ].includes(row.genus);
+  }
+  function raceWeighting(row, habitability, rows, facts) {
+    let autoUnbound = settingBoolean5(facts.settings, "evolutionAutoUnbound"), prestigeAscensionPillar = settingBoolean5(
+      facts.settings,
+      "prestigeAscensionPillar"
+    ), challengeEmfield = settingBoolean5(facts.settings, "challenge_emfield");
+    if (autoUnbound === void 0 || prestigeAscensionPillar === void 0 || challengeEmfield === void 0)
+      return;
+    if (habitability < (autoUnbound ? 0.8 : 1)) return -1;
+    let weighting = 0, checkAchievement = (baseWeight, id) => {
+      let current = achievementValue(facts.achieve, id, facts.currentAffix), standard = achievementValue(facts.achieve, id, "l");
+      if (current === void 0 || standard === void 0) return !1;
+      let improve = facts.starLevel - current;
+      return improve > 0 && (weighting += baseWeight * improve, facts.universe !== "micro" && facts.universe !== "standard" && (weighting += baseWeight * Math.max(0, facts.starLevel - standard))), !0;
+    };
+    if ((facts.prestigeType === "ascension" && prestigeAscensionPillar || ["demonic", "apotheosis"].includes(facts.prestigeType)) && facts.universe !== "micro") {
+      let speciesPillarLevel = optionalNumber(facts.pillars, row.id);
+      if (speciesPillarLevel === void 0) return;
+      let canPillar = speciesPillarLevel === 0 && facts.harmony >= 1, canUpgrade = speciesPillarLevel > 0 && speciesPillarLevel < facts.starLevel;
+      if ((canPillar || canUpgrade) && (weighting += 1e3 * Math.max(0, facts.starLevel - speciesPillarLevel), speciesPillarLevel === 0 && !CHALLENGE_RACES.has(row.id) && (weighting += 1e5), !NO_PILLAR_RACES.has(row.id))) {
+        let genusPillar = Math.max(
+          0,
+          ...rows.filter(
+            (candidate) => candidate.genus === row.genus && !NO_PILLAR_RACES.has(candidate.id)
+          ).map(
+            (candidate) => optionalNumber(facts.pillars, candidate.id) ?? 0
+          )
+        ), improve = facts.starLevel - genusPillar;
+        improve > 0 && (weighting += 1e4 * improve);
+      }
+    }
+    if (facts.prestigeType === "apocalypse") {
+      let imitateUnlocked = !!readProperty(facts.synth, row.id);
+      if (!NO_IMITATES.has(row.id) && !imitateUnlocked) {
+        weighting += 1e4;
+        let index = GOOD_IMITATES.indexOf(
+          row.id
+        );
+        index >= 0 && (weighting += (GOOD_IMITATES.length - 1 - index) * 5e3);
+      }
+    }
+    if (GREATNESS_RESETS.has(facts.prestigeType)) {
+      if (!NO_GREATNESS_GENERA.has(row.genus) && !NO_GREATNESS_RACES.has(row.id) && !checkAchievement(100, `genus_${row.genus}`))
+        return;
+    } else if (!NO_GREATNESS_RACES.has(row.id) && (!NO_MAD_RACES.has(row.id) || facts.prestigeType !== "mad") && !checkAchievement(100, `extinct_${row.id}`))
+      return;
+    if (!(row.genus === "demonic" && facts.prestigeType !== "mad" && facts.prestigeType !== "bioseed" && !checkAchievement(50, "blood_war")) && !(row.id === "sharkin" && facts.prestigeType !== "mad" && !checkAchievement(50, "laser_shark")) && !(facts.universe === "micro" && facts.prestigeType === "bioseed" && !checkAchievement(
+      50,
+      row.compact || row.genus === "small" ? "macro" : "marble"
+    )) && !(row.id === "balorg" && facts.universe === "magic" && facts.prestigeType === "vacuum" && !checkAchievement(50, "pass"))) {
+      for (let set of FANATIC_ACHIEVEMENTS)
+        if (row.id === set.race && facts.gods === set.god && !checkAchievement(150, set.achieve))
+          return;
+      if (weighting > 0 && habitability === 1 && raceConditionExists(row) && !CHALLENGE_RACES.has(row.id) && (weighting += 500), (MID_TIER_RESETS.has(facts.prestigeType) && BEST_FOR_MID.has(row.id) || HIGH_TIER_RESETS.has(facts.prestigeType) && BEST_FOR_HIGH.has(row.id)) && (weighting += 1), !(row.id === facts.gods && !checkAchievement(10, "second_evolution"))) {
+        for (let set of FANATIC_ACHIEVEMENTS)
+          if (row.id === set.god && !checkAchievement(5, set.achieve))
+            return;
+        if (facts.universe !== "micro") {
+          let checkFeat = (id) => {
+            let earned = optionalNumber(facts.feat, id);
+            earned !== void 0 && facts.starLevel - earned > 0 && (weighting += facts.starLevel - earned);
+          };
+          facts.biome === "hellscape" && row.genus !== "demonic" && (facts.prestigeType === "mad" || facts.prestigeType === "cataclysm" ? checkFeat("take_no_advice") : facts.prestigeType === "bioseed" && checkFeat("ill_advised")), row.id === "junker" && (facts.prestigeType === "bioseed" && checkFeat("organ_harvester"), (facts.prestigeType === "ascension" || facts.prestigeType === "demonic") && checkFeat("garbage_pie"), [
+            "ascension",
+            "demonic",
+            "terraform",
+            "whitehole",
+            "vacuum",
+            "apocalypse"
+          ].includes(facts.prestigeType) && checkFeat("the_misery")), facts.prestigeType === "whitehole" && facts.universe === "evil" && row.genus === "angelic" && checkFeat("nephilim"), facts.prestigeType === "demonic" && row.genus === "angelic" && checkFeat("twisted"), facts.prestigeType === "ascension" && challengeEmfield && row.genus === "artifical" && row.id !== "custom" && checkFeat("digital_ascension"), facts.prestigeType === "demonic" && row.id === "sludge" && checkFeat("slime_lord");
+        }
+        return CHALLENGE_RACES.has(row.id) && (weighting *= facts.starLevel < 5 ? 0 : 0.01), weighting * habitability;
+      }
+    }
+  }
+  function sampleCapturedEvolutionRaceCatalog(rootValue, settingsValue) {
+    let read = readFacts(rootValue, settingsValue);
+    if (read === void 0)
+      return Object.freeze({
+        status: "unavailable",
+        races: [],
+        massExtinction: !1,
+        reason: "required evolution facts unavailable"
+      });
+    let rows = CAPTURED_EVOLUTION_RACES.map(
+      (entry) => customRaceRow(read.facts.root, entry)
+    ).filter((row) => row !== void 0), races = [];
+    for (let row of rows) {
+      let habitability = raceHabitability(row, read.facts);
+      if (habitability === void 0)
+        return Object.freeze({
+          status: "unavailable",
+          races: [],
+          massExtinction: read.massExtinction,
+          reason: `invalid facts for ${row.id}`
+        });
+      let weighting = raceWeighting(row, habitability, rows, read.facts);
+      if (weighting === void 0)
+        return Object.freeze({
+          status: "unavailable",
+          races: [],
+          massExtinction: read.massExtinction,
+          reason: `invalid weighting facts for ${row.id}`
+        });
+      races.push(
+        Object.freeze({
+          id: row.id,
+          name: row.name,
+          genus: row.genus,
+          habitability,
+          weighting
+        })
+      );
+    }
+    return Object.freeze({
+      status: "ready",
+      races: Object.freeze(races),
+      massExtinction: read.massExtinction
+    });
+  }
+
+  // src/adapters/evolve/progression/evolution/captured-evolution.ts
+  var EVOLUTION_ACTION_PREFIX = "evolution-", EVOLUTION_ACTION_SELECTOR = "#evolution > .action", RESOURCE_ACTION_IDS = /* @__PURE__ */ new Set(["rna", "dna"]);
+  function capturedEvolutionRecord2(value) {
+    return isNonArrayRecord(value) ? value : void 0;
+  }
   function rootRecord2(rootState) {
-    return capturedEvolutionRecord(rootState.readRoot());
+    return capturedEvolutionRecord2(rootState.readRoot());
   }
   function nestedRecord(owner, key) {
-    return capturedEvolutionRecord(readProperty(owner, key));
+    return capturedEvolutionRecord2(readProperty(owner, key));
   }
   function capturedEvolutionMutationFingerprint(rootState) {
     let root = rootRecord2(rootState);
@@ -26574,7 +27213,7 @@
     return nestedRecord(rootRecord2(rootState), "race");
   }
   function capturedEvolutionReadSettings(getSettings) {
-    return capturedEvolutionRecord(getSettings());
+    return capturedEvolutionRecord2(getSettings());
   }
   function readActionRows(drawnActions) {
     return drawnActions.read(EVOLUTION_ACTION_SELECTOR).filter((action) => action.id.startsWith(EVOLUTION_ACTION_PREFIX));
@@ -26600,10 +27239,6 @@
         return !challengeIds.has(id) && !RESOURCE_ACTION_IDS.has(id);
       })
     );
-  }
-  function explicitTarget(settings) {
-    let target = settings?.userEvolutionTarget;
-    return typeof target == "string" && target.length > 0 && target !== "auto" && target !== "none" ? target : void 0;
   }
   function createCapturedEvolution(dependencies) {
     let challengeTraitById = /* @__PURE__ */ new Map(), challengeIds = /* @__PURE__ */ new Set();
@@ -26631,19 +27266,15 @@
         return storedTarget?.id ?? null;
       },
       sampleTargetSelection() {
-        let settings = capturedEvolutionReadSettings(dependencies.readSettings), target = explicitTarget(settings), races = Object.freeze(target ? [
-          Object.freeze({
-            id: target,
-            weighting: 0,
-            habitability: 1,
-            genus: "captured",
-            name: target
-          })
-        ] : []), stats = nestedRecord(rootRecord2(dependencies.rootState), "stats"), achieve = nestedRecord(stats, "achieve"), queue = settings?.evolutionQueue;
+        let settings = capturedEvolutionReadSettings(dependencies.readSettings), catalog = sampleCapturedEvolutionRaceCatalog(
+          dependencies.rootState.readRoot(),
+          settings
+        ), queue = settings?.evolutionQueue;
         return Object.freeze({
-          races,
+          races: catalog.races,
+          catalogAvailable: catalog.status === "ready",
           userEvolutionTarget: typeof settings?.userEvolutionTarget == "string" ? settings.userEvolutionTarget : "unreadable",
-          massExtinction: !!achieve?.mass_extinction,
+          massExtinction: catalog.massExtinction,
           queueEnabled: settings?.evolutionQueueEnabled === !0,
           queueLength: Array.isArray(queue) ? queue.length : 0,
           queueRepeat: settings?.evolutionQueueRepeat === !0,
@@ -26851,236 +27482,6 @@
       (a, b) => a.achieve !== b.achieve ? b.achieve - a.achieve : habitability(a) - habitability(b)
     ), Object.freeze({ elementId: ordered[0].planet.id });
   }
-
-  // src/adapters/evolve/progression/prestige/achievement-guards.ts
-  function levelUnavailable(reason, field) {
-    return Object.freeze(
-      field === void 0 ? { status: "unavailable", reason } : { status: "unavailable", reason, field }
-    );
-  }
-  function readAchievementStarLevelContext(rawContext) {
-    if (!isNonArrayRecord(rawContext))
-      return levelUnavailable("invalid-settings");
-    let mapping = {
-      challengePlasmid: "challenge_plasmid",
-      challengeTrade: "challenge_trade",
-      challengeCraft: "challenge_craft",
-      challengeCrispr: "challenge_crispr"
-    }, context = {
-      challengePlasmid: !1,
-      challengeTrade: !1,
-      challengeCraft: !1,
-      challengeCrispr: !1
-    };
-    for (let [target, source] of Object.entries(mapping)) {
-      let value = rawContext[source];
-      if (value !== void 0 && typeof value != "boolean")
-        return levelUnavailable("invalid-settings", source);
-      context[target] = value === !0;
-    }
-    return Object.freeze({ status: "ready", context: Object.freeze(context) });
-  }
-
-  // src/adapters/evolve/progression/evolution/captured-evolution-catalog.ts
-  var CAPTURED_EVOLUTION_RACES = Object.freeze([
-    { id: "human", label: "Human", genus: "humanoid" },
-    { id: "elven", label: "Elf", genus: "humanoid" },
-    { id: "orc", label: "Orc", genus: "humanoid" },
-    { id: "cath", label: "Cath", genus: "carnivore" },
-    { id: "wolven", label: "Wolven", genus: "carnivore" },
-    { id: "vulpine", label: "Vulpine", genus: "carnivore" },
-    { id: "centaur", label: "Centaur", genus: "herbivore" },
-    { id: "rhinotaur", label: "Rhinotaur", genus: "herbivore" },
-    { id: "capybara", label: "Capybara", genus: "herbivore" },
-    { id: "porkenari", label: "Porkenari", genus: "omnivore" },
-    { id: "hedgeoken", label: "Hedgeoken", genus: "omnivore" },
-    { id: "kobold", label: "Kobold", genus: "small" },
-    { id: "goblin", label: "Goblin", genus: "small" },
-    { id: "gnome", label: "Gnome", genus: "small" },
-    { id: "ogre", label: "Ogre", genus: "giant" },
-    { id: "cyclops", label: "Cyclops", genus: "giant" },
-    { id: "troll", label: "Troll", genus: "giant" },
-    { id: "tortoisan", label: "Tortoisan", genus: "reptilian" },
-    { id: "gecko", label: "Gecko", genus: "reptilian" },
-    { id: "slitheryn", label: "Slitheryn", genus: "reptilian" },
-    { id: "arraak", label: "Arraak", genus: "avian" },
-    { id: "pterodacti", label: "Pterodacti", genus: "avian" },
-    { id: "dracnid", label: "Dracnid", genus: "avian" },
-    { id: "entish", label: "Ent", genus: "plant" },
-    { id: "cacti", label: "Cacti", genus: "plant" },
-    { id: "pinguicula", label: "Pinguicula", genus: "plant" },
-    { id: "sporgar", label: "Sporgar", genus: "fungi" },
-    { id: "shroomi", label: "Shroomi", genus: "fungi" },
-    { id: "moldling", label: "Moldling", genus: "fungi" },
-    { id: "mantis", label: "Mantis", genus: "insectoid" },
-    { id: "scorpid", label: "Scorpid", genus: "insectoid" },
-    { id: "antid", label: "Antid", genus: "insectoid" },
-    { id: "sharkin", label: "Sharkin", genus: "aquatic" },
-    { id: "octigoran", label: "Octigoran", genus: "aquatic" },
-    { id: "dryad", label: "Dryad", genus: "fey" },
-    { id: "satyr", label: "Satyr", genus: "fey" },
-    { id: "phoenix", label: "Phoenix", genus: "heat" },
-    { id: "salamander", label: "Salamander", genus: "heat" },
-    { id: "yeti", label: "Yeti", genus: "polar" },
-    { id: "wendigo", label: "Wendigo", genus: "polar" },
-    { id: "tuskin", label: "Tuskin", genus: "sand" },
-    { id: "kamel", label: "Kamel", genus: "sand" },
-    { id: "balorg", label: "Balorg", genus: "demonic" },
-    { id: "imp", label: "Imp", genus: "demonic" },
-    { id: "seraph", label: "Seraph", genus: "angelic" },
-    { id: "unicorn", label: "Unicorn", genus: "angelic" },
-    { id: "synth", label: "Synth", genus: "synthetic" },
-    { id: "nano", label: "Nano", genus: "synthetic" },
-    { id: "ghast", label: "Ghast", genus: "eldritch" },
-    { id: "shoggoth", label: "Shoggoth", genus: "eldritch" },
-    { id: "raptors", label: "Raptors", genus: "primordial" },
-    { id: "rexicus", label: "Rexicus", genus: "primordial" },
-    { id: "dwarf", label: "Dwarf", genus: "hybrid" },
-    { id: "raccoon", label: "Racconar", genus: "hybrid" },
-    { id: "lichen", label: "Lichen", genus: "hybrid" },
-    { id: "wyvern", label: "Wyvern", genus: "hybrid" },
-    { id: "beholder", label: "Eye-Spector", genus: "hybrid" },
-    { id: "djinn", label: "Djinn", genus: "hybrid" },
-    { id: "narwhal", label: "Narwhalus", genus: "hybrid" },
-    { id: "bombardier", label: "Bombardier", genus: "hybrid" },
-    { id: "nephilim", label: "Nephilim", genus: "hybrid" },
-    { id: "mammuth", label: "Mammuth", genus: "hybrid" },
-    { id: "hellspawn", label: "Hellspawn", genus: "demonic" },
-    { id: "junker", label: "Valdi", genus: "variable" },
-    { id: "sludge", label: "Sludge", genus: "variable" },
-    { id: "ultra_sludge", label: "Ultra Sludge", genus: "variable" }
-  ]), CAPTURED_EVOLUTION_UNIVERSE_LABELS = Object.freeze(
-    Object.fromEntries(
-      [
-        {
-          id: "standard",
-          label: "Standard",
-          hint: "A standard universe with normal laws of physics"
-        },
-        {
-          id: "heavy",
-          label: "Heavy Gravity",
-          hint: "The force of gravity in this universe is much stronger than normal"
-        },
-        {
-          id: "antimatter",
-          label: "Antimatter",
-          hint: "This universe consists primarily of antimatter"
-        },
-        {
-          id: "evil",
-          label: "Evil",
-          hint: "Everything in this universe is evil"
-        },
-        {
-          id: "micro",
-          label: "Micro",
-          hint: "Everything in this universe is small"
-        },
-        { id: "magic", label: "Magic", hint: "Magic is real in this universe" }
-      ].map((entry) => [entry.id, Object.freeze(entry)])
-    )
-  ), CAPTURED_EVOLUTION_CHALLENGE_LABELS = Object.freeze(
-    Object.fromEntries(
-      [
-        {
-          id: "plasmid",
-          label: "No Starting Plasmids | Weak Mastery | Weak Genes",
-          hint: "Starting Plasmids have no effect.&#xA;Mastery is much weaker than normal.&#xA;Mastery is reduced to %0, and plasmid and anti-plasmid production are reduced to %1 value. Plasmid and anti-plasmid storage bonus reduced to %2. Phage storage bonus reduced to %3."
-        },
-        {
-          id: "crispr",
-          label: "Junk Gene | Bad Genes",
-          hint: "Gain a random negative mutation. CRISPR cost creep discounts function at only 20%.&#xA;Gain %0 random empowered negative trait and %1 weak negative traits."
-        },
-        {
-          id: "trade",
-          label: "No Free Trade",
-          hint: "No marketplace trading. (Trade routes are still enabled.)"
-        },
-        {
-          id: "craft",
-          label: "No Manual Crafting",
-          hint: "No manual resource crafting."
-        },
-        {
-          id: "joyless",
-          label: "Joyless",
-          hint: "There will be no joy in your life: entertainers and broadcasting are disabled. Construct a Biodome to earn the achievement and remove the penalty."
-        },
-        {
-          id: "steelen",
-          label: "Steelen",
-          hint: "Your species cannot figure out how to smelt Steel. You have to resort to other means to get any of it. Have the mettle to Bioseed with this challenge active and your dedication will be rewarded."
-        },
-        {
-          id: "decay",
-          label: "Decay",
-          hint: "Resources decay at a rate determined by how much of it you are storing. Larger stores decay quicker. Destroy this universe to end the cycle of decay."
-        },
-        {
-          id: "emfield",
-          label: "EM Field",
-          hint: "Energy costs are higher and technology may fail you. You must ascend to win."
-        },
-        {
-          id: "inflation",
-          label: "Inflation",
-          hint: "Inflation is ruining your economy. The more you build, the more worthless your money becomes. Constructing anything devalues money, causing all money costs to increase."
-        },
-        {
-          id: "sludge",
-          label: "Failed Experiment",
-          hint: "You will be stacked with terrible junk traits. You suffer for no reason."
-        },
-        {
-          id: "ultra_sludge",
-          label: "Ultimate Failed Experiment",
-          hint: "You will be stacked with terrible junk traits. You suffer because the community wanted it."
-        },
-        {
-          id: "orbit_decay",
-          label: "Orbital Decay",
-          hint: "Your homeworld's moon is in a decaying orbit; it will impact the planet in %0 days."
-        },
-        {
-          id: "gravity_well",
-          label: "Gravity Well | Witch Hunter | Warlord",
-          hint: "Gravity is very strong, so leaving the planet will be very difficult. Find a new one that doesn't drag you down.&#xA;Magic effects are stronger, but using magic draws unwanted attention. Your goal is to perform the ultimate forbidden ritual.&#xA;Prove you are the most ruthless to ever exist."
-        },
-        {
-          id: "junker",
-          label: "Genetic Dead End",
-          hint: "This forces on all four challenge genes. You will be stacked with horrible junk traits. Reach MAD for a special perk."
-        },
-        {
-          id: "cataclysm",
-          label: "Cataclysm",
-          hint: "A massive earthquake has literally shaken your planet apart. Start with a space colony but no homeworld. Escape to a new world to win (Bioseed)."
-        },
-        {
-          id: "banana",
-          label: "Banana Republic",
-          hint: "You can only export one type of resource, your economy is bad, and your army is weak. Complete a checklist of objectives; unifying exits the scenario."
-        },
-        {
-          id: "truepath",
-          label: "The True Path",
-          hint: "Use an alternate progression path."
-        },
-        {
-          id: "lone_survivor",
-          label: "Lone Survivor",
-          hint: "You must survive and thrive alone on an alien world."
-        },
-        {
-          id: "fasting",
-          label: "Fasting",
-          hint: "Food production is disabled. Learn to survive without sustenance."
-        }
-      ].map((entry) => [entry.id, Object.freeze(entry)])
-    )
-  );
 
   // src/adapters/evolve/progression/evolution/captured-planet-labels.ts
   function capturedPlanetLabel(id) {
@@ -31908,6 +32309,12 @@ If script is allowed to reassign non-empty storage it might waste time producing
       label: "Target Race",
       hint: "Chosen race will be automatically selected during next evolution",
       options: raceOptions
+    }),
+    Object.freeze({
+      kind: "toggle",
+      settingName: "evolutionAutoUnbound",
+      label: "Auto Unbound",
+      hint: "Allow Auto Achievements to select races reachable through the current Unbound habitability threshold."
     }),
     ...challengeControls,
     Object.freeze({ kind: "header", label: "Evolution Queue" }),
@@ -38018,10 +38425,15 @@ Only continue if you trust the source. Injected code:
   function isReachable(race) {
     return race.habitability > 0;
   }
+  function isAutoCandidate(race) {
+    return isReachable(race) && race.weighting >= 0;
+  }
   function planEvolutionTarget(input) {
+    if (!input.catalogAvailable)
+      return Object.freeze({ kind: "wait" });
     let target;
     if (input.userEvolutionTarget === "auto") {
-      let byWeighting = input.races.filter(isReachable).sort((a, b) => b.weighting - a.weighting);
+      let byWeighting = input.races.filter(isAutoCandidate).sort((a, b) => b.weighting - a.weighting);
       if (byWeighting.length === 0)
         target = void 0;
       else if (input.massExtinction)

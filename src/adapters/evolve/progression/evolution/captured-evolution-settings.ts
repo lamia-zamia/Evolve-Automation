@@ -10,15 +10,12 @@
  * - `evolutionQueue`, `evolutionQueueEnabled`, `evolutionQueueRepeat` →
  *   `captured-queued-settings.ts` and the captured target sample.
  *
- * Three legacy controls are deliberately absent because the captured runtime has no consumer for
- * them, and offering them would be a control that silently does nothing:
+ * Two compatibility-only controls remain absent because the captured runtime has no consumer for
+ * them, and offering either would be a control that silently does nothing:
  *
  * - `userEvolutionGenus` — read only by the compatibility evolution adapter, which picks a genus
  *   at the gene lab for the variable-genus challenge races. The captured runtime does not sample
  *   or click that menu.
- * - `evolutionAutoUnbound` — a threshold inside `Race.getWeighting()`, which is the auto
- *   achievement ranking the captured runtime does not have at all (`planEvolutionTarget` is
- *   handed an empty race list for `"auto"` and waits).
  * - `evolutionBackup` — soft-reset-until-target, decided by `evolution-result-check.ts`, which
  *   only the compatibility runtime composes.
  *
@@ -169,6 +166,12 @@ const evolutionControls: readonly EvolutionSettingsControl[] = Object.freeze([
     label: "Target Race",
     hint: "Chosen race will be automatically selected during next evolution",
     options: raceOptions,
+  }),
+  Object.freeze({
+    kind: "toggle" as const,
+    settingName: "evolutionAutoUnbound",
+    label: "Auto Unbound",
+    hint: "Allow Auto Achievements to select races reachable through the current Unbound habitability threshold.",
   }),
   ...challengeControls,
   Object.freeze({ kind: "header" as const, label: "Evolution Queue" }),

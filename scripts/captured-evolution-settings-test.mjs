@@ -2,8 +2,8 @@
  * Evolution settings, end to end.
  *
  * Each exposed control is driven through the real captured panel and then observed in the
- * captured evolution runtime that consumes it. The three legacy controls with no captured
- * consumer are asserted absent, so re-adding one without its runtime semantics fails here.
+ * captured evolution runtime that consumes it. The two compatibility-only controls with no
+ * captured consumer are asserted absent, so re-adding one without its runtime semantics fails.
  */
 
 import assert from "node:assert/strict";
@@ -27,6 +27,10 @@ const challengeGroups = challenges.map((group) => ({
 function evolutionRuntime(readSettings, { species = "protoplasm" } = {}) {
   const root = {
     race: { species, universe: "standard", seeded: false, chose: true },
+    city: { biome: "grassland" },
+    genes: { challenge: false },
+    blood: { unbound: 0 },
+    prestige: { Harmony: { count: 0 } },
     stats: { achieve: {} },
     tech: {},
   };
@@ -72,6 +76,7 @@ function evolutionRuntime(readSettings, { species = "protoplasm" } = {}) {
     "userUniverseTargetName",
     "userPlanetTargetName",
     "userEvolutionTarget",
+    "evolutionAutoUnbound",
     "evolutionQueueEnabled",
     "evolutionQueueRepeat",
   ]) {
@@ -89,11 +94,7 @@ function evolutionRuntime(readSettings, { species = "protoplasm" } = {}) {
     );
   }
   // No captured consumer reads these, so drawing one would be an inert control.
-  for (const settingName of [
-    "userEvolutionGenus",
-    "evolutionAutoUnbound",
-    "evolutionBackup",
-  ]) {
+  for (const settingName of ["userEvolutionGenus", "evolutionBackup"]) {
     assert.equal(
       page.root.querySelectorAll(`.script_${settingName}`).length,
       0,
@@ -137,6 +138,7 @@ function evolutionRuntime(readSettings, { species = "protoplasm" } = {}) {
   assert.equal(decision.id, "cath");
 
   edit(page, "userEvolutionTarget", "balorg");
+  runtime.root.city.biome = "hellscape";
   assert.equal(
     planEvolutionTarget(runtime.adapter.reader.sampleTargetSelection()).id,
     "balorg",
@@ -274,6 +276,7 @@ function evolutionRuntime(readSettings, { species = "protoplasm" } = {}) {
   assert.equal(page.settings.readRaw()["userEvolutionTarget"], "cath");
   assert.equal(page.effective["userEvolutionTarget"], "balorg");
   const runtime = evolutionRuntime(() => page.effective);
+  runtime.root.city.biome = "hellscape";
   assert.equal(
     planEvolutionTarget(runtime.adapter.reader.sampleTargetSelection()).id,
     "balorg",

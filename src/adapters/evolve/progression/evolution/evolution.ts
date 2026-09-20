@@ -247,6 +247,7 @@ export function createEvolutionReader(
       const userTarget = settings["userEvolutionTarget"];
       return Object.freeze({
         races: Object.freeze(races),
+        catalogAvailable: true,
         userEvolutionTarget:
           typeof userTarget === "string" ? userTarget : String(userTarget),
         massExtinction: Boolean(achieve["mass_extinction"]),

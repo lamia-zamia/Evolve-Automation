@@ -63,6 +63,8 @@ export interface RaceView {
 export interface TargetSelectionInput {
   /** Races in the legacy Object.values(races) iteration order. */
   readonly races: readonly RaceView[];
+  /** False when the captured adapter could not validate the game-owned race facts. */
+  readonly catalogAvailable: boolean;
   readonly userEvolutionTarget: string;
   readonly massExtinction: boolean;
   readonly queueEnabled: boolean;
@@ -86,16 +88,24 @@ function isReachable(race: RaceView): boolean {
   return race.habitability > 0;
 }
 
+function isAutoCandidate(race: RaceView): boolean {
+  return isReachable(race) && race.weighting >= 0;
+}
+
 export function planEvolutionTarget(
   input: Readonly<TargetSelectionInput>,
 ): TargetSelectionDecision {
+  if (!input.catalogAvailable) {
+    return Object.freeze({ kind: "wait" });
+  }
+
   let target: RaceView | undefined;
 
   if (input.userEvolutionTarget === "auto") {
     // Weightings are stable within a cycle, so sorting the sampled values
     // reproduces the legacy repeated getWeighting() sort.
     const byWeighting = input.races
-      .filter(isReachable)
+      .filter(isAutoCandidate)
       .sort((a, b) => b.weighting - a.weighting);
     if (byWeighting.length === 0) {
       // A captured adapter may not be able to expose a module-lexical race

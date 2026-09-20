@@ -1,5 +1,5 @@
 /**
- * Static Evolution catalogs for the captured settings panel.
+ * Static Evolution catalogs for the captured settings panel and race sampler.
  *
  * The evolution vocabulary is not capture-reachable. `game.races` and `game.actions.evolution`
  * are module-lexical in the game bundle, and the settings panel has to list every race, universe
@@ -12,9 +12,8 @@
  * no static table can answer.
  *
  * Deliberately absent: race descriptions, `getHabitability()` and `getCondition()`. Those are
- * computed by the game from the current planet, and restating them here would be a second
- * implementation of a game rule rather than a label. The Target Race hint carries the genus
- * instead, and the read model's race warning stays undefined on the captured path.
+ * computed by the game from the current planet and captured facts; the race sampler owns their
+ * narrow port. This table owns only the static vocabulary and the named hybrid constituents.
  */
 
 export interface CapturedEvolutionRaceEntry {
@@ -22,6 +21,8 @@ export interface CapturedEvolutionRaceEntry {
   readonly label: string;
   /** The game's `races[id].type`, or `"variable"` where the player picks it at the gene lab. */
   readonly genus: string;
+  /** `races[id].hybrid` for named hybrids; custom hybrids are read from the current root. */
+  readonly hybrid?: readonly string[];
 }
 
 export interface CapturedEvolutionLabelledEntry {
@@ -42,8 +43,6 @@ export const CAPTURED_EVOLUTION_RACES: readonly CapturedEvolutionRaceEntry[] =
     { id: "centaur", label: "Centaur", genus: "herbivore" },
     { id: "rhinotaur", label: "Rhinotaur", genus: "herbivore" },
     { id: "capybara", label: "Capybara", genus: "herbivore" },
-    { id: "porkenari", label: "Porkenari", genus: "omnivore" },
-    { id: "hedgeoken", label: "Hedgeoken", genus: "omnivore" },
     { id: "kobold", label: "Kobold", genus: "small" },
     { id: "goblin", label: "Goblin", genus: "small" },
     { id: "gnome", label: "Gnome", genus: "small" },
@@ -85,20 +84,67 @@ export const CAPTURED_EVOLUTION_RACES: readonly CapturedEvolutionRaceEntry[] =
     { id: "shoggoth", label: "Shoggoth", genus: "eldritch" },
     { id: "raptors", label: "Raptors", genus: "primordial" },
     { id: "rexicus", label: "Rexicus", genus: "primordial" },
-    { id: "dwarf", label: "Dwarf", genus: "hybrid" },
-    { id: "raccoon", label: "Racconar", genus: "hybrid" },
-    { id: "lichen", label: "Lichen", genus: "hybrid" },
-    { id: "wyvern", label: "Wyvern", genus: "hybrid" },
-    { id: "beholder", label: "Eye-Spector", genus: "hybrid" },
-    { id: "djinn", label: "Djinn", genus: "hybrid" },
-    { id: "narwhal", label: "Narwhalus", genus: "hybrid" },
-    { id: "bombardier", label: "Bombardier", genus: "hybrid" },
-    { id: "nephilim", label: "Nephilim", genus: "hybrid" },
-    { id: "mammuth", label: "Mammuth", genus: "hybrid" },
+    {
+      id: "dwarf",
+      label: "Dwarf",
+      genus: "hybrid",
+      hybrid: ["humanoid", "small"],
+    },
+    {
+      id: "raccoon",
+      label: "Racconar",
+      genus: "hybrid",
+      hybrid: ["carnivore", "herbivore"],
+    },
+    {
+      id: "lichen",
+      label: "Lichen",
+      genus: "hybrid",
+      hybrid: ["plant", "fungi"],
+    },
+    {
+      id: "wyvern",
+      label: "Wyvern",
+      genus: "hybrid",
+      hybrid: ["avian", "reptilian"],
+    },
+    {
+      id: "beholder",
+      label: "Eye-Spector",
+      genus: "hybrid",
+      hybrid: ["eldritch", "giant"],
+    },
+    { id: "djinn", label: "Djinn", genus: "hybrid", hybrid: ["sand", "fey"] },
+    {
+      id: "narwhal",
+      label: "Narwhalus",
+      genus: "hybrid",
+      hybrid: ["aquatic", "polar"],
+    },
+    {
+      id: "bombardier",
+      label: "Bombardier",
+      genus: "hybrid",
+      hybrid: ["insectoid", "heat"],
+    },
+    {
+      id: "nephilim",
+      label: "Nephilim",
+      genus: "hybrid",
+      hybrid: ["demonic", "angelic"],
+    },
+    {
+      id: "mammuth",
+      label: "Mammuth",
+      genus: "hybrid",
+      hybrid: ["primordial", "herbivore"],
+    },
     { id: "hellspawn", label: "Hellspawn", genus: "demonic" },
     { id: "junker", label: "Valdi", genus: "variable" },
     { id: "sludge", label: "Sludge", genus: "variable" },
     { id: "ultra_sludge", label: "Ultra Sludge", genus: "variable" },
+    { id: "custom", label: "Custom", genus: "custom" },
+    { id: "hybrid", label: "Custom Hybrid", genus: "hybrid" },
   ]);
 
 /** `universe_<id>` / `universe_<id>_desc`, for the ids `src/config.ts` already owns. */

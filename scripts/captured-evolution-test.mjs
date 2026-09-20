@@ -11,6 +11,10 @@ const root = {
     seeded: true,
     chose: "Grassland42",
   },
+  city: { biome: "grassland" },
+  genes: { challenge: false },
+  blood: { unbound: 0 },
+  prestige: { Harmony: { count: 0 } },
   stats: { achieve: {} },
   resource: { RNA: { amount: 0, max: 0 }, DNA: { amount: 0, max: 0 } },
   evolution: {
@@ -29,6 +33,8 @@ const settings = {
   evolutionQueueEnabled: false,
   evolutionQueueRepeat: false,
   imitateRace: "human",
+  prestigeType: "none",
+  evolutionAutoUnbound: false,
 };
 
 const trace = [];
@@ -107,10 +113,13 @@ evolution.runUniverseSelection();
 assert.deepEqual(trace.shift(), ["universe", "magic"]);
 assert.equal(evolution.reader.sampleLandingGate().universe, "magic");
 
-// Explicit targets are supported without importing the module-lexical race catalog.
-assert.deepEqual(
-  evolution.reader.sampleTargetSelection().races.map((race) => race.id),
-  ["human"],
+// Explicit targets are validated against the captured catalog, which is shared with Auto
+// Achievements rather than fabricated from the setting.
+assert.equal(
+  evolution.reader
+    .sampleTargetSelection()
+    .races.some((race) => race.id === "human"),
+  true,
 );
 assert.deepEqual(evolution.reader.sampleCosts("human"), {
   maxRna: 2,
@@ -135,7 +144,7 @@ runEvolution({
 });
 assert.deepEqual(trace, [
   ["queue"],
-  ["activity", "Attempting evolution of human."],
+  ["activity", "Attempting evolution of Human."],
   ["invoke", "evolution-bunker"],
 ]);
 assert.equal(evolution.reader.storedTargetId(), "human");
@@ -182,12 +191,11 @@ runEvolution({
 });
 assert.deepEqual(trace, [["invoke", "evolution-s-human"]]);
 
-// Auto selection cannot be guessed from the root; the pure planner therefore waits rather than
-// importing or duplicating DeadSpace's private Race catalog.
+// Auto selection uses the captured race facts and chooses the strongest reachable genus.
 settings.userEvolutionTarget = "auto";
 assert.deepEqual(
   planEvolutionTarget(evolution.reader.sampleTargetSelection()),
-  { kind: "wait" },
+  { kind: "target", id: "sporgar", name: "Sporgar" },
 );
 
 // A transition out of protoplasm clears the page-session target before the next evolution.

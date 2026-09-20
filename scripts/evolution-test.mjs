@@ -107,6 +107,7 @@ assert.deepStrictEqual(
         name: "E",
       },
     ],
+    catalogAvailable: true,
     userEvolutionTarget: "missing",
     massExtinction: false,
     queueEnabled: true,
