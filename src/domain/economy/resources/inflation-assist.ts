@@ -1,3 +1,10 @@
+/**
+ * Money held at once that wins the Inflation challenge. Upstream's own gate in
+ * `achieve.js` (`global.resource.Money.amount >= 250000000000`), so every
+ * reserve and reachability check reads this owner rather than restating it.
+ */
+export const INFLATION_CHALLENGE_MONEY = 25e10;
+
 export interface InflationAssistActiveInput {
   /** Whether the user enabled Inflation-challenge assistance. */
   readonly assistEnabled: boolean;

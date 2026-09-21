@@ -4969,6 +4969,20 @@
       });
   }
 
+  // src/domain/economy/resources/inflation-assist.ts
+  function isInflationMoneyReachable(input) {
+    return input.maxMoney >= input.targetMoney;
+  }
+  function inflationSecondsToFinish(input) {
+    if (!isInflationMoneyReachable(input))
+      return Number.POSITIVE_INFINITY;
+    let remaining = input.targetMoney - input.currentMoney;
+    return remaining <= 0 ? 0 : input.moneyRate > 0 ? remaining / input.moneyRate : Number.POSITIVE_INFINITY;
+  }
+  function shouldSaveInflationMoney(input) {
+    return input.active && input.saveMinutes >= 0 && inflationSecondsToFinish(input.money) <= input.saveMinutes * 60;
+  }
+
   // src/domain/progression/build/building-weighting-rules.ts
   var RETIREMENT_PREP = {
     fusionGenerators: 20,
@@ -13180,6 +13194,326 @@
     return Number.isSafeInteger(maximum) && maximum >= 0 ? maximum : void 0;
   }
 
+  // src/adapters/evolve/economy/resources/captured-inflation-assist.ts
+  var ACHIEVEMENT_LEVEL_TRAITS2 = Object.freeze([
+    "no_plasmid",
+    "no_trade",
+    "no_craft",
+    "no_crispr",
+    "weak_mastery",
+    "nerfed",
+    "badgenes"
+  ]);
+  function achievementAffix(universe) {
+    if (typeof universe == "string")
+      switch (universe) {
+        case "evil":
+          return "e";
+        case "antimatter":
+          return "a";
+        case "heavy":
+          return "h";
+        case "micro":
+          return "m";
+        case "magic":
+          return "mg";
+        default:
+          return "l";
+      }
+  }
+  function readCapturedInflationSaveMoney(root, settings) {
+    try {
+      let assist = settings.inflationChallengeAssist;
+      if (assist !== void 0 && typeof assist != "boolean" || assist !== !0) return !1;
+      let race = readProperty(root, "race");
+      if (!isRecord(race)) return !1;
+      let inflation = race.inflation;
+      if (inflation === void 0 || inflation === !1 || typeof inflation != "number" || !Number.isFinite(inflation))
+        return !1;
+      let money = readProperty(readProperty(root, "resource"), "Money");
+      if (!isRecord(money)) return !1;
+      let saveMinutes = finite(settings.inflationChallengeSaveMinutes);
+      if (saveMinutes === void 0) return !1;
+      let currentMoney = finite(money.amount), maxMoney = finite(money.max), moneyRate = finite(money.diff);
+      if (currentMoney === void 0 || maxMoney === void 0 || moneyRate === void 0)
+        return !1;
+      let stats = readProperty(root, "stats"), achievements = readProperty(stats, "achieve"), wheelbarrow = readProperty(achievements, "wheelbarrow"), affix = achievementAffix(readProperty(race, "universe"));
+      if (!isRecord(stats) || !isRecord(achievements) || affix === void 0 || wheelbarrow != null && !isRecord(wheelbarrow))
+        return !1;
+      let rawStar = readProperty(wheelbarrow, affix), wheelbarrowStar = rawStar == null ? 0 : finite(rawStar);
+      if (wheelbarrowStar === void 0 || wheelbarrowStar < 0) return !1;
+      let achievementLevel4 = 1;
+      for (let trait of ACHIEVEMENT_LEVEL_TRAITS2)
+        race[trait] && (achievementLevel4 += 1);
+      return achievementLevel4 = Math.min(achievementLevel4, 5), shouldSaveInflationMoney({
+        active: wheelbarrowStar < achievementLevel4 && readProperty(race, "inflation") !== !1,
+        saveMinutes,
+        money: {
+          targetMoney: 25e10,
+          currentMoney,
+          maxMoney,
+          moneyRate
+        }
+      });
+    } catch {
+      return !1;
+    }
+  }
+
+  // src/domain/combat/foreign-achievements.ts
+  function planForeignAchievementGoal(input) {
+    if (input.foreignStates.length !== 3) return null;
+    let worldPossible = input.guardWorldDomination && !input.pacifistGuardActive && !input.worldDominationUnlocked && input.foreignStates.every((state) => !state.annexed && !state.purchased), syndicatePossible = input.guardSyndicate && !input.syndicateUnlocked && input.foreignStates.every((state) => !state.annexed && !state.occupied);
+    return !worldPossible && !syndicatePossible ? null : worldPossible && input.foreignStates.some((state) => state.occupied) ? "world-domination" : syndicatePossible && input.foreignStates.some((state) => state.purchased) ? "syndicate" : worldPossible ? "world-domination" : "syndicate";
+  }
+
+  // src/adapters/evolve/combat/captured-foreign-state.ts
+  var CAPTURED_FOREIGN_CONTROL = "foreign", CAPTURED_FOREIGN_PANEL_SELECTOR = "#foreign", CAPTURED_FOREIGN_MAX_INDEX = 4;
+  function capturedForeignSettingBoolean(settings, key, fallback) {
+    return typeof settings[key] == "boolean" ? settings[key] : fallback;
+  }
+  function capturedForeignSettingNumber(settings, key, fallback) {
+    return finite(settings[key]) ?? fallback;
+  }
+  function capturedForeignSettingString(settings, key, fallback) {
+    return typeof settings[key] == "string" ? settings[key] : fallback;
+  }
+  function capturedForeignInvokeBoolean(controls2, control, method, args = []) {
+    let result = controls2.invoke(control, method, args);
+    return result.ok && typeof result.value == "boolean" ? result.value : void 0;
+  }
+  function capturedForeignPolicy(settings, index, military) {
+    let threshold = capturedForeignSettingNumber(
+      settings,
+      "foreignPowerRequired",
+      75
+    ), rank = index === 3 ? "Rival" : military <= threshold ? "Inferior" : "Superior";
+    return Object.freeze({
+      rank,
+      policy: capturedForeignSettingString(
+        settings,
+        `foreignPolicy${rank}`,
+        "Ignore"
+      )
+    });
+  }
+  function readCapturedForeignGovernment(root, index, policy, rank, espionagePolicy = policy) {
+    let government = readProperty(
+      readProperty(readProperty(root, "civic"), "foreign"),
+      `gov${index}`
+    );
+    if (!isRecord(government) || Array.isArray(government)) return;
+    let military = finite(government.mil);
+    if (military !== void 0)
+      return Object.freeze({
+        governmentId: index,
+        rank,
+        espionagePolicy,
+        policy,
+        military,
+        spyCount: finite(government.spy) ?? 0,
+        sabotageProgress: finite(government.sab) ?? 0,
+        hostility: finite(government.hstl),
+        unrest: finite(government.unrest),
+        economy: finite(government.eco),
+        occupied: !!government.occ,
+        annexed: !!government.anx,
+        purchased: !!government.buy
+      });
+  }
+  function readCapturedForeignTargets(root, controls2, foreign, settings) {
+    let governments = [];
+    for (let index = 0; index <= CAPTURED_FOREIGN_MAX_INDEX; index += 1) {
+      let rawGovernment = readProperty(
+        readProperty(readProperty(root, "civic"), "foreign"),
+        `gov${index}`
+      ), military = isRecord(rawGovernment) ? finite(rawGovernment.mil) : void 0;
+      if (military === void 0 || capturedForeignInvokeBoolean(controls2, foreign, "gvis", [index]) !== !0)
+        continue;
+      let policy = capturedForeignPolicy(settings, index, military), target = readCapturedForeignGovernment(
+        root,
+        index,
+        policy.policy,
+        policy.rank
+      );
+      target !== void 0 && governments.push(target);
+    }
+    return Object.freeze(governments);
+  }
+  function capturedForeignGovernmentWithPolicy(target, policy, espionagePolicy = policy === "Ignore" ? target.espionagePolicy : policy) {
+    return target.policy === policy && target.espionagePolicy === espionagePolicy ? target : Object.freeze({ ...target, policy, espionagePolicy });
+  }
+  function capturedForeignPacifistGuardActive(root, settings) {
+    if (settings.achievementGuards !== !0 || settings.guardPacifist === !1)
+      return !1;
+    let attacks = finite(readProperty(readProperty(root, "stats"), "attacks")), earnedStar = readCapturedAchievementStar(root, "pacifist"), race = readProperty(root, "race"), targetStar = calculateAchievementStarLevel({
+      challengePlasmid: !!readProperty(race, "no_plasmid"),
+      challengeTrade: !!readProperty(race, "no_trade"),
+      challengeCraft: !!readProperty(race, "no_craft"),
+      challengeCrispr: !!readProperty(race, "no_crispr")
+    });
+    return attacks === void 0 || earnedStar === void 0 ? !0 : isAchievementGuardActive({
+      guard: "guardPacifist",
+      enabled: !0,
+      earnedStar,
+      targetStar,
+      attacks
+    });
+  }
+  function capturedForeignAchievementGoal(root, settings, governments) {
+    if (settings.achievementGuards !== !0) return null;
+    let guardWorldDomination = capturedForeignSettingBoolean(
+      settings,
+      "guardWorldDomination",
+      !0
+    ), guardSyndicate = capturedForeignSettingBoolean(
+      settings,
+      "guardSyndicate",
+      !0
+    );
+    if (!guardWorldDomination && !guardSyndicate) return null;
+    let states = [];
+    for (let index = 0; index < 3; index += 1) {
+      let target = governments.find(
+        (candidate) => candidate.governmentId === index
+      );
+      if (target === void 0) return null;
+      states.push({
+        occupied: target.occupied,
+        annexed: target.annexed,
+        purchased: target.purchased
+      });
+    }
+    let worldDominationUnlocked = guardWorldDomination ? readCapturedAchievementStar(root, "world_domination") : 0, syndicateUnlocked = guardSyndicate ? readCapturedAchievementStar(root, "syndicate") : 0;
+    return guardWorldDomination && worldDominationUnlocked === void 0 || guardSyndicate && syndicateUnlocked === void 0 ? null : planForeignAchievementGoal({
+      guardWorldDomination,
+      guardSyndicate,
+      worldDominationUnlocked: guardWorldDomination && worldDominationUnlocked !== void 0 ? worldDominationUnlocked >= 1 : !1,
+      syndicateUnlocked: guardSyndicate && syndicateUnlocked !== void 0 ? syndicateUnlocked >= 1 : !1,
+      pacifistGuardActive: capturedForeignPacifistGuardActive(root, settings),
+      foreignStates: states
+    });
+  }
+  function capturedForeignResourceAmount(root, resourceId) {
+    let resource = readProperty(readProperty(root, "resource"), resourceId);
+    return finite(readProperty(resource, "amount")) ?? finite(readProperty(resource, "currentQuantity"));
+  }
+  function capturedForeignGovernmentPrice(target) {
+    if (target.economy === void 0 || target.hostility === void 0 || target.unrest === void 0)
+      return;
+    let price = target.economy * 15384 * (1 + target.hostility * 1.6 / 100) * (1 - target.unrest * 0.25 / 100);
+    return Number.isFinite(price) ? Math.round(price) : void 0;
+  }
+  function capturedForeignEspionageUseful(root, target, espionage) {
+    let spies = target.spyCount;
+    switch (espionage) {
+      case "influence":
+        return target.hostility !== void 0 && target.hostility > (spies > 0 ? 0 : 10);
+      case "sabotage":
+        return target.sabotageProgress === 0 && target.military > (spies > 1 ? 50 : 74);
+      case "incite":
+        return target.governmentId < 3 && target.unrest !== void 0 && target.unrest < 100;
+      case "annex": {
+        let morale = finite(
+          readProperty(
+            readProperty(readProperty(root, "city"), "morale"),
+            "current"
+          )
+        );
+        return target.governmentId < 3 && target.hostility !== void 0 && target.unrest !== void 0 && target.hostility <= 50 && target.unrest >= 50 && morale !== void 0 && morale >= 200 + target.hostility - target.unrest;
+      }
+      case "purchase": {
+        let price = capturedForeignGovernmentPrice(target), money = capturedForeignResourceAmount(root, "Money");
+        return target.governmentId < 3 && spies >= 3 && price !== void 0 && money !== void 0 && money >= price;
+      }
+    }
+  }
+  function selectCapturedForeignStrategy(root, settings, governments) {
+    let achievementGoal = capturedForeignAchievementGoal(
+      root,
+      settings,
+      governments
+    ), achievementPolicy = achievementGoal === "world-domination" ? "Occupy" : achievementGoal === "syndicate" ? "Purchase" : null, active = governments.map(
+      (target) => target.governmentId < 3 && achievementPolicy !== null ? capturedForeignGovernmentWithPolicy(target, achievementPolicy) : target
+    ), unificationRequested = capturedForeignSettingBoolean(settings, "foreignUnification", !0) || achievementGoal !== null, controlledForeigns = active.filter(
+      (target) => target.annexed && target.policy === "Annex" || target.purchased && target.policy === "Purchase" || target.occupied && target.policy === "Occupy"
+    ).length, currentTarget = active.find(
+      (target) => target.rank === "Inferior" && !target.annexed && !target.purchased
+    );
+    if (currentTarget = currentTarget ?? active.find((target) => target.occupied) ?? active[0], currentTarget === void 0)
+      return Object.freeze({
+        governments: Object.freeze(active),
+        selectedTargetId: null,
+        battleTargetId: null
+      });
+    let readyToUnify = unificationRequested && controlledForeigns >= 2 && readProperty(readProperty(root, "tech"), "unify") === 1;
+    if (!readyToUnify && (currentTarget.policy === "Annex" || currentTarget.policy === "Purchase") && capturedForeignEspionageUseful(
+      root,
+      currentTarget,
+      currentTarget.policy === "Annex" ? "annex" : "purchase"
+    )) {
+      let replacement = capturedForeignGovernmentWithPolicy(
+        currentTarget,
+        "Ignore"
+      );
+      active.splice(
+        active.findIndex(
+          (candidate) => candidate.governmentId === replacement.governmentId
+        ),
+        1,
+        replacement
+      ), currentTarget = replacement;
+    }
+    if (!readyToUnify && capturedForeignSettingBoolean(settings, "foreignForceSabotage", !0) && currentTarget.governmentId !== 3 && capturedForeignEspionageUseful(root, currentTarget, "sabotage")) {
+      let replacement = capturedForeignGovernmentWithPolicy(
+        currentTarget,
+        "Sabotage"
+      );
+      active.splice(
+        active.findIndex(
+          (candidate) => candidate.governmentId === replacement.governmentId
+        ),
+        1,
+        replacement
+      ), currentTarget = replacement;
+    }
+    if (unificationRequested && capturedForeignSettingBoolean(settings, "foreignOccupyLast", !0) && !readProperty(readProperty(root, "tech"), "world_control")) {
+      let superiorPolicy = capturedForeignSettingString(
+        settings,
+        "foreignPolicySuperior",
+        "Ignore"
+      ), lastTargetId = ["Occupy", "Sabotage"].includes(superiorPolicy) ? 2 : currentTarget.governmentId, lastTargetIndex = active.findIndex(
+        (candidate) => candidate.governmentId === lastTargetId
+      );
+      lastTargetIndex >= 0 && active.splice(
+        lastTargetIndex,
+        1,
+        capturedForeignGovernmentWithPolicy(
+          active[lastTargetIndex],
+          readyToUnify ? achievementPolicy ?? "Occupy" : "Sabotage"
+        )
+      );
+    }
+    let refreshedTarget = active.find(
+      (candidate) => candidate.governmentId === currentTarget.governmentId
+    );
+    if (refreshedTarget === void 0)
+      return Object.freeze({
+        governments: Object.freeze(active),
+        selectedTargetId: null,
+        battleTargetId: null
+      });
+    let stopBattle = refreshedTarget.policy === "Influence" || readyToUnify && refreshedTarget.policy !== "Occupy" || refreshedTarget.policy === "Betrayal" && refreshedTarget.military > 75;
+    return Object.freeze({
+      governments: Object.freeze(active),
+      selectedTargetId: refreshedTarget.governmentId,
+      battleTargetId: stopBattle ? null : refreshedTarget.governmentId
+    });
+  }
+  function capturedForeignEspionageTriggerSelector(governmentId) {
+    return `#gov${governmentId} div span:nth-child(3) button`;
+  }
+
   // src/adapters/evolve/economy/resources/captured-resource-demand.ts
   var NO_STORAGE_REQUIREMENT = 1, EMPTY_DEMAND_SAMPLE = Object.freeze({
     requestedQuantity: () => 0,
@@ -13666,6 +14000,127 @@
         productions: Object.freeze(productions.map((production) => production))
       });
   }
+  function readDemandReservationInflationMoney(root, settings) {
+    return readCapturedInflationSaveMoney(root, settings) ? 25e10 : null;
+  }
+  function readDemandReservationRetirementGraphene(root, settings) {
+    let assistEnabled = settings.retirementChallengeAssist === !0, race = readProperty(root, "race"), truepath = isRecord(race) && readProperty(race, "truepath") === !0, retirePrestige = settings.prestigeType === "retire", tech = readProperty(root, "tech"), isolationLevel = isRecord(tech) ? finite(readProperty(tech, "isolation")) : void 0;
+    return isRetirementAssistActive({
+      assistEnabled,
+      truepath,
+      retirePrestige,
+      isolationResearched: (isolationLevel ?? 0) >= 1
+    }) ? RETIREMENT_PREP.graphene : null;
+  }
+  var DEMAND_RESERVATION_TRUEPATH_AI_ACTIONS = Object.freeze({
+    TitanDecoder: "space-decoder",
+    TitanAIColonist: "space-ai_colonist",
+    ErisTrooper: "space-shock_trooper",
+    ErisTank: "space-tank"
+  });
+  function readDemandReservationSpaceCount(root, key, field) {
+    let entry = readProperty(readProperty(root, "space"), key);
+    if (!isRecord(entry)) return;
+    let value = finite(readProperty(entry, field));
+    return value === void 0 || value < 0 ? void 0 : value;
+  }
+  function readDemandReservationSpaceMoney(costs, actionId) {
+    if (costs === void 0) return null;
+    let price = costs.readCost(actionId);
+    if (price === void 0) return null;
+    let money = finite(price.cost.Money);
+    return money === void 0 || money < 0 ? null : money;
+  }
+  function readDemandReservationTruepathAiTarget(root, settings, controls2, costs) {
+    let race = readProperty(root, "race");
+    if (!isRecord(race) || readProperty(race, "truepath") !== !0 || settings.prestigeType !== "apocalypse") return null;
+    let tech = readProperty(root, "tech"), aiCoreLevel = isRecord(tech) ? finite(readProperty(tech, "titan_ai_core")) : void 0;
+    if (aiCoreLevel === void 0 || aiCoreLevel < 3) return null;
+    let decoderCount = readDemandReservationSpaceCount(
+      root,
+      "decoder",
+      "count"
+    ), decoderOnCount = readDemandReservationSpaceCount(root, "decoder", "on"), colonistCount = readDemandReservationSpaceCount(
+      root,
+      "ai_colonist",
+      "count"
+    ), colonistOnCount = readDemandReservationSpaceCount(
+      root,
+      "ai_colonist",
+      "on"
+    ), trooperOnCount = readDemandReservationSpaceCount(
+      root,
+      "shock_trooper",
+      "on"
+    ), tankOnCount = readDemandReservationSpaceCount(root, "tank", "on");
+    if (decoderCount === void 0 || decoderOnCount === void 0 || colonistCount === void 0 || colonistOnCount === void 0 || trooperOnCount === void 0 || tankOnCount === void 0)
+      return null;
+    let target = planTruepathAiApocalypse({
+      enabled: !0,
+      aiCoreLevel,
+      decoderCount,
+      decoderOnCount,
+      colonistCount,
+      colonistOnCount,
+      trooperOnCount,
+      tankOnCount,
+      decoderMoneyCost: readDemandReservationSpaceMoney(costs, "space-decoder"),
+      colonistMoneyCost: readDemandReservationSpaceMoney(
+        costs,
+        "space-ai_colonist"
+      ),
+      trooperMoneyCost: readDemandReservationSpaceMoney(
+        costs,
+        "space-shock_trooper"
+      ),
+      tankMoneyCost: readDemandReservationSpaceMoney(costs, "space-tank")
+    }).target;
+    if (target === null || controls2 === void 0 || costs === void 0)
+      return null;
+    let actionId = DEMAND_RESERVATION_TRUEPATH_AI_ACTIONS[target];
+    if (controls2.resolve(actionId) === void 0) return null;
+    let price = costs.readCost(actionId);
+    if (price === void 0) return null;
+    let targetCosts = toCosts(price.cost, price.pool);
+    return targetCosts.length === 0 ? null : Object.freeze({
+      ...price.pool === void 0 ? {} : { pool: price.pool },
+      isProject: !1,
+      progress: null,
+      costs: targetCosts
+    });
+  }
+  function readDemandReservationSpyPurchaseMoney(root, settings, controls2) {
+    if (settings.autoFight !== !0) return 0;
+    let tech = readProperty(root, "tech");
+    if (!isRecord(tech) || readProperty(tech, "unify") !== 1 || controls2 === void 0) return 0;
+    let foreign = controls2.resolve("foreign");
+    if (foreign === void 0 || !foreign.methods.includes("gvis")) return 0;
+    let visible = readCapturedForeignTargets(root, controls2, foreign, settings);
+    if (visible.length === 0) return 0;
+    let strategy = selectCapturedForeignStrategy(root, settings, visible), race = readProperty(root, "race"), infiltrator = isRecord(race) && !!readProperty(race, "infiltrator"), moneyMax = finite(
+      readProperty(readProperty(readProperty(root, "resource"), "Money"), "max")
+    );
+    if (moneyMax === void 0) return 0;
+    let purchaseMoney = 0;
+    for (let target of strategy.governments) {
+      if (target.governmentId >= 3 || target.policy !== "Purchase" || target.purchased || target.occupied || target.annexed || target.military === void 0) continue;
+      let price = capturedForeignGovernmentPrice(target);
+      if (price === void 0) continue;
+      let moneyNeeded = price;
+      if (target.spyCount < 3) {
+        if (target.hostility === void 0 || target.unrest === void 0)
+          continue;
+        let base = Math.max(
+          50,
+          Math.round(target.military / 2 + target.hostility / 2 - target.unrest) + 10
+        ), discounted = infiltrator ? base / 3 : base, spyCost = Math.round(discounted ** 3) + 500;
+        if (!Number.isFinite(spyCost) || spyCost < 0) continue;
+        moneyNeeded = Math.max(moneyNeeded, spyCost);
+      }
+      moneyNeeded <= moneyMax && moneyNeeded > purchaseMoney && (purchaseMoney = moneyNeeded);
+    }
+    return purchaseMoney;
+  }
   function createCapturedResourceDemand(dependencies) {
     return Object.freeze({
       sample() {
@@ -13699,8 +14154,23 @@
           (production) => production.unlocked && production.enabled && production.weighting > 0
         ) ?? !1, hasCrafterDemand = (crafterDemand?.crafters.length ?? 0) > 0, hasFleetDemand = settingBoolean3(settings, "autoFleet", !1) && settingString(settings, "prioritizeOuterFleet", "ignore").includes(
           "req"
-        ) && fleet?.nextShipAffordable === !0 && fleet.nextShipCost.length > 0;
-        if (queued.length === 0 && triggerTargets.length === 0 && saving === null && (offered === void 0 || offered.length === 0) && !hasFactoryDemand && !hasCrafterDemand && missions.length === 0 && !hasFleetDemand)
+        ) && fleet?.nextShipAffordable === !0 && fleet.nextShipCost.length > 0, inflationMoney = readDemandReservationInflationMoney(
+          root,
+          settings
+        ), retirementGraphene = readDemandReservationRetirementGraphene(
+          root,
+          settings
+        ), truepathAiBuildingTarget = readDemandReservationTruepathAiTarget(
+          root,
+          settings,
+          dependencies.controls,
+          dependencies.costs
+        ), spyPurchaseMoney = readDemandReservationSpyPurchaseMoney(
+          root,
+          settings,
+          dependencies.controls
+        );
+        if (queued.length === 0 && triggerTargets.length === 0 && saving === null && (offered === void 0 || offered.length === 0) && !hasFactoryDemand && !hasCrafterDemand && missions.length === 0 && !hasFleetDemand && inflationMoney === null && retirementGraphene === null && truepathAiBuildingTarget === null && spyPurchaseMoney === 0)
           return EMPTY_DEMAND_SAMPLE;
         let savingCosts = saving === null ? null : toCosts(saving.cost, saving.pool), baseInput = Object.freeze({
           settings: readSettingsInput(settingsValue),
@@ -13708,9 +14178,9 @@
           // only recomputes affordability from current holdings; it never recreates tech gates.
           isEarlyGame: readCapturedIsEarlyGame(root),
           consumptionBalanceTarget: 120,
-          truepathAiBuildingTarget: null,
-          inflationMoney: null,
-          retirementGraphene: null,
+          truepathAiBuildingTarget,
+          inflationMoney,
+          retirementGraphene,
           queuedTargets: toTargets(queued),
           triggerTargets,
           savingTarget: saving === null || savingCosts === null ? null : Object.freeze({
@@ -13720,7 +14190,7 @@
           }),
           missions,
           unlockedTechs: toOfferedTechs(resources, offered),
-          spyPurchaseMoney: 0,
+          spyPurchaseMoney,
           fleet: fleet ?? Object.freeze({
             nextShipAffordable: !1,
             nextShipCost: Object.freeze([])
@@ -13808,8 +14278,8 @@
             buildCandidates: Object.freeze([])
           }),
           resources: readStorageResources(resources, root, settings),
-          inflationMoney: null,
-          retirementGraphene: null
+          inflationMoney,
+          retirementGraphene
         }), required = new Map(
           storage.resources.map((resource) => [
             storageRequirementScopeKey(resource.id, resource.pool),
@@ -16748,86 +17218,6 @@
         return Object.freeze(targets);
       }
     });
-  }
-
-  // src/domain/economy/resources/inflation-assist.ts
-  function isInflationMoneyReachable(input) {
-    return input.maxMoney >= input.targetMoney;
-  }
-  function inflationSecondsToFinish(input) {
-    if (!isInflationMoneyReachable(input))
-      return Number.POSITIVE_INFINITY;
-    let remaining = input.targetMoney - input.currentMoney;
-    return remaining <= 0 ? 0 : input.moneyRate > 0 ? remaining / input.moneyRate : Number.POSITIVE_INFINITY;
-  }
-  function shouldSaveInflationMoney(input) {
-    return input.active && input.saveMinutes >= 0 && inflationSecondsToFinish(input.money) <= input.saveMinutes * 60;
-  }
-
-  // src/adapters/evolve/economy/resources/captured-inflation-assist.ts
-  var INFLATION_CHALLENGE_MONEY = 25e10, ACHIEVEMENT_LEVEL_TRAITS2 = Object.freeze([
-    "no_plasmid",
-    "no_trade",
-    "no_craft",
-    "no_crispr",
-    "weak_mastery",
-    "nerfed",
-    "badgenes"
-  ]);
-  function achievementAffix(universe) {
-    if (typeof universe == "string")
-      switch (universe) {
-        case "evil":
-          return "e";
-        case "antimatter":
-          return "a";
-        case "heavy":
-          return "h";
-        case "micro":
-          return "m";
-        case "magic":
-          return "mg";
-        default:
-          return "l";
-      }
-  }
-  function readCapturedInflationSaveMoney(root, settings) {
-    try {
-      let assist = settings.inflationChallengeAssist;
-      if (assist !== void 0 && typeof assist != "boolean" || assist !== !0) return !1;
-      let race = readProperty(root, "race");
-      if (!isRecord(race)) return !1;
-      let inflation = race.inflation;
-      if (inflation === void 0 || inflation === !1 || typeof inflation != "number" || !Number.isFinite(inflation))
-        return !1;
-      let money = readProperty(readProperty(root, "resource"), "Money");
-      if (!isRecord(money)) return !1;
-      let saveMinutes = finite(settings.inflationChallengeSaveMinutes);
-      if (saveMinutes === void 0) return !1;
-      let currentMoney = finite(money.amount), maxMoney = finite(money.max), moneyRate = finite(money.diff);
-      if (currentMoney === void 0 || maxMoney === void 0 || moneyRate === void 0)
-        return !1;
-      let stats = readProperty(root, "stats"), achievements = readProperty(stats, "achieve"), wheelbarrow = readProperty(achievements, "wheelbarrow"), affix = achievementAffix(readProperty(race, "universe"));
-      if (!isRecord(stats) || !isRecord(achievements) || affix === void 0 || wheelbarrow != null && !isRecord(wheelbarrow))
-        return !1;
-      let rawStar = readProperty(wheelbarrow, affix), wheelbarrowStar = rawStar == null ? 0 : finite(rawStar);
-      if (wheelbarrowStar === void 0 || wheelbarrowStar < 0) return !1;
-      let achievementLevel4 = 1;
-      for (let trait of ACHIEVEMENT_LEVEL_TRAITS2)
-        race[trait] && (achievementLevel4 += 1);
-      return achievementLevel4 = Math.min(achievementLevel4, 5), shouldSaveInflationMoney({
-        active: wheelbarrowStar < achievementLevel4 && readProperty(race, "inflation") !== !1,
-        saveMinutes,
-        money: {
-          targetMoney: INFLATION_CHALLENGE_MONEY,
-          currentMoney,
-          maxMoney,
-          moneyRate
-        }
-      });
-    } catch {
-      return !1;
-    }
   }
 
   // src/adapters/evolve/progression/build/captured-trigger-actions.ts
@@ -39180,7 +39570,7 @@ Only continue if you trust the source. Injected code:
   }
 
   // src/adapters/evolve/combat/captured-spy-training.ts
-  var CAPTURED_FOREIGN_CONTROL = "foreign", MAX_CAPTURED_FOREIGN_INDEX = 4;
+  var CAPTURED_FOREIGN_CONTROL2 = "foreign", MAX_CAPTURED_FOREIGN_INDEX = 4;
   function emptyCapturedSpyTrainingInput(index) {
     return Object.freeze({
       enabled: !1,
@@ -39209,7 +39599,7 @@ Only continue if you trust the source. Injected code:
   function readCycleInput2(rootState, controls2, settingsValue) {
     let root = rootState.readRoot();
     if (!isRecord(root)) return;
-    let control = controls2.resolve(CAPTURED_FOREIGN_CONTROL);
+    let control = controls2.resolve(CAPTURED_FOREIGN_CONTROL2);
     if (control === void 0 || !control.methods.includes("vis") || !control.methods.includes("gvis") || !control.methods.includes("spy_disabled") || !control.methods.includes("spy") || readBooleanControl(controls2, control, "vis", []) !== !0)
       return;
     let tech = readProperty(root, "tech");
@@ -39292,7 +39682,7 @@ Only continue if you trust the source. Injected code:
             "captured game root changed"
           );
         let currentControl = dependencies.controls.resolve(
-          CAPTURED_FOREIGN_CONTROL
+          CAPTURED_FOREIGN_CONTROL2
         );
         if (currentControl === void 0 || currentControl.generation !== active.control.generation)
           return stale(
@@ -39329,260 +39719,6 @@ Only continue if you trust the source. Injected code:
       }
     });
     return Object.freeze({ reader, executor });
-  }
-
-  // src/domain/combat/foreign-achievements.ts
-  function planForeignAchievementGoal(input) {
-    if (input.foreignStates.length !== 3) return null;
-    let worldPossible = input.guardWorldDomination && !input.pacifistGuardActive && !input.worldDominationUnlocked && input.foreignStates.every((state) => !state.annexed && !state.purchased), syndicatePossible = input.guardSyndicate && !input.syndicateUnlocked && input.foreignStates.every((state) => !state.annexed && !state.occupied);
-    return !worldPossible && !syndicatePossible ? null : worldPossible && input.foreignStates.some((state) => state.occupied) ? "world-domination" : syndicatePossible && input.foreignStates.some((state) => state.purchased) ? "syndicate" : worldPossible ? "world-domination" : "syndicate";
-  }
-
-  // src/adapters/evolve/combat/captured-foreign-state.ts
-  var CAPTURED_FOREIGN_CONTROL2 = "foreign", CAPTURED_FOREIGN_PANEL_SELECTOR = "#foreign", CAPTURED_FOREIGN_MAX_INDEX = 4;
-  function capturedForeignSettingBoolean(settings, key, fallback) {
-    return typeof settings[key] == "boolean" ? settings[key] : fallback;
-  }
-  function capturedForeignSettingNumber(settings, key, fallback) {
-    return finite(settings[key]) ?? fallback;
-  }
-  function capturedForeignSettingString(settings, key, fallback) {
-    return typeof settings[key] == "string" ? settings[key] : fallback;
-  }
-  function capturedForeignInvokeBoolean(controls2, control, method, args = []) {
-    let result = controls2.invoke(control, method, args);
-    return result.ok && typeof result.value == "boolean" ? result.value : void 0;
-  }
-  function capturedForeignPolicy(settings, index, military) {
-    let threshold = capturedForeignSettingNumber(
-      settings,
-      "foreignPowerRequired",
-      75
-    ), rank = index === 3 ? "Rival" : military <= threshold ? "Inferior" : "Superior";
-    return Object.freeze({
-      rank,
-      policy: capturedForeignSettingString(
-        settings,
-        `foreignPolicy${rank}`,
-        "Ignore"
-      )
-    });
-  }
-  function readCapturedForeignGovernment(root, index, policy, rank, espionagePolicy = policy) {
-    let government = readProperty(
-      readProperty(readProperty(root, "civic"), "foreign"),
-      `gov${index}`
-    );
-    if (!isRecord(government) || Array.isArray(government)) return;
-    let military = finite(government.mil);
-    if (military !== void 0)
-      return Object.freeze({
-        governmentId: index,
-        rank,
-        espionagePolicy,
-        policy,
-        military,
-        spyCount: finite(government.spy) ?? 0,
-        sabotageProgress: finite(government.sab) ?? 0,
-        hostility: finite(government.hstl),
-        unrest: finite(government.unrest),
-        economy: finite(government.eco),
-        occupied: !!government.occ,
-        annexed: !!government.anx,
-        purchased: !!government.buy
-      });
-  }
-  function readCapturedForeignTargets(root, controls2, foreign, settings) {
-    let governments = [];
-    for (let index = 0; index <= CAPTURED_FOREIGN_MAX_INDEX; index += 1) {
-      let rawGovernment = readProperty(
-        readProperty(readProperty(root, "civic"), "foreign"),
-        `gov${index}`
-      ), military = isRecord(rawGovernment) ? finite(rawGovernment.mil) : void 0;
-      if (military === void 0 || capturedForeignInvokeBoolean(controls2, foreign, "gvis", [index]) !== !0)
-        continue;
-      let policy = capturedForeignPolicy(settings, index, military), target = readCapturedForeignGovernment(
-        root,
-        index,
-        policy.policy,
-        policy.rank
-      );
-      target !== void 0 && governments.push(target);
-    }
-    return Object.freeze(governments);
-  }
-  function capturedForeignGovernmentWithPolicy(target, policy, espionagePolicy = policy === "Ignore" ? target.espionagePolicy : policy) {
-    return target.policy === policy && target.espionagePolicy === espionagePolicy ? target : Object.freeze({ ...target, policy, espionagePolicy });
-  }
-  function capturedForeignPacifistGuardActive(root, settings) {
-    if (settings.achievementGuards !== !0 || settings.guardPacifist === !1)
-      return !1;
-    let attacks = finite(readProperty(readProperty(root, "stats"), "attacks")), earnedStar = readCapturedAchievementStar(root, "pacifist"), race = readProperty(root, "race"), targetStar = calculateAchievementStarLevel({
-      challengePlasmid: !!readProperty(race, "no_plasmid"),
-      challengeTrade: !!readProperty(race, "no_trade"),
-      challengeCraft: !!readProperty(race, "no_craft"),
-      challengeCrispr: !!readProperty(race, "no_crispr")
-    });
-    return attacks === void 0 || earnedStar === void 0 ? !0 : isAchievementGuardActive({
-      guard: "guardPacifist",
-      enabled: !0,
-      earnedStar,
-      targetStar,
-      attacks
-    });
-  }
-  function capturedForeignAchievementGoal(root, settings, governments) {
-    if (settings.achievementGuards !== !0) return null;
-    let guardWorldDomination = capturedForeignSettingBoolean(
-      settings,
-      "guardWorldDomination",
-      !0
-    ), guardSyndicate = capturedForeignSettingBoolean(
-      settings,
-      "guardSyndicate",
-      !0
-    );
-    if (!guardWorldDomination && !guardSyndicate) return null;
-    let states = [];
-    for (let index = 0; index < 3; index += 1) {
-      let target = governments.find(
-        (candidate) => candidate.governmentId === index
-      );
-      if (target === void 0) return null;
-      states.push({
-        occupied: target.occupied,
-        annexed: target.annexed,
-        purchased: target.purchased
-      });
-    }
-    let worldDominationUnlocked = guardWorldDomination ? readCapturedAchievementStar(root, "world_domination") : 0, syndicateUnlocked = guardSyndicate ? readCapturedAchievementStar(root, "syndicate") : 0;
-    return guardWorldDomination && worldDominationUnlocked === void 0 || guardSyndicate && syndicateUnlocked === void 0 ? null : planForeignAchievementGoal({
-      guardWorldDomination,
-      guardSyndicate,
-      worldDominationUnlocked: guardWorldDomination && worldDominationUnlocked !== void 0 ? worldDominationUnlocked >= 1 : !1,
-      syndicateUnlocked: guardSyndicate && syndicateUnlocked !== void 0 ? syndicateUnlocked >= 1 : !1,
-      pacifistGuardActive: capturedForeignPacifistGuardActive(root, settings),
-      foreignStates: states
-    });
-  }
-  function capturedForeignResourceAmount(root, resourceId) {
-    let resource = readProperty(readProperty(root, "resource"), resourceId);
-    return finite(readProperty(resource, "amount")) ?? finite(readProperty(resource, "currentQuantity"));
-  }
-  function capturedForeignGovernmentPrice(target) {
-    if (target.economy === void 0 || target.hostility === void 0 || target.unrest === void 0)
-      return;
-    let price = target.economy * 15384 * (1 + target.hostility * 1.6 / 100) * (1 - target.unrest * 0.25 / 100);
-    return Number.isFinite(price) ? Math.round(price) : void 0;
-  }
-  function capturedForeignEspionageUseful(root, target, espionage) {
-    let spies = target.spyCount;
-    switch (espionage) {
-      case "influence":
-        return target.hostility !== void 0 && target.hostility > (spies > 0 ? 0 : 10);
-      case "sabotage":
-        return target.sabotageProgress === 0 && target.military > (spies > 1 ? 50 : 74);
-      case "incite":
-        return target.governmentId < 3 && target.unrest !== void 0 && target.unrest < 100;
-      case "annex": {
-        let morale = finite(
-          readProperty(
-            readProperty(readProperty(root, "city"), "morale"),
-            "current"
-          )
-        );
-        return target.governmentId < 3 && target.hostility !== void 0 && target.unrest !== void 0 && target.hostility <= 50 && target.unrest >= 50 && morale !== void 0 && morale >= 200 + target.hostility - target.unrest;
-      }
-      case "purchase": {
-        let price = capturedForeignGovernmentPrice(target), money = capturedForeignResourceAmount(root, "Money");
-        return target.governmentId < 3 && spies >= 3 && price !== void 0 && money !== void 0 && money >= price;
-      }
-    }
-  }
-  function selectCapturedForeignStrategy(root, settings, governments) {
-    let achievementGoal = capturedForeignAchievementGoal(
-      root,
-      settings,
-      governments
-    ), achievementPolicy = achievementGoal === "world-domination" ? "Occupy" : achievementGoal === "syndicate" ? "Purchase" : null, active = governments.map(
-      (target) => target.governmentId < 3 && achievementPolicy !== null ? capturedForeignGovernmentWithPolicy(target, achievementPolicy) : target
-    ), unificationRequested = capturedForeignSettingBoolean(settings, "foreignUnification", !0) || achievementGoal !== null, controlledForeigns = active.filter(
-      (target) => target.annexed && target.policy === "Annex" || target.purchased && target.policy === "Purchase" || target.occupied && target.policy === "Occupy"
-    ).length, currentTarget = active.find(
-      (target) => target.rank === "Inferior" && !target.annexed && !target.purchased
-    );
-    if (currentTarget = currentTarget ?? active.find((target) => target.occupied) ?? active[0], currentTarget === void 0)
-      return Object.freeze({
-        governments: Object.freeze(active),
-        selectedTargetId: null,
-        battleTargetId: null
-      });
-    let readyToUnify = unificationRequested && controlledForeigns >= 2 && readProperty(readProperty(root, "tech"), "unify") === 1;
-    if (!readyToUnify && (currentTarget.policy === "Annex" || currentTarget.policy === "Purchase") && capturedForeignEspionageUseful(
-      root,
-      currentTarget,
-      currentTarget.policy === "Annex" ? "annex" : "purchase"
-    )) {
-      let replacement = capturedForeignGovernmentWithPolicy(
-        currentTarget,
-        "Ignore"
-      );
-      active.splice(
-        active.findIndex(
-          (candidate) => candidate.governmentId === replacement.governmentId
-        ),
-        1,
-        replacement
-      ), currentTarget = replacement;
-    }
-    if (!readyToUnify && capturedForeignSettingBoolean(settings, "foreignForceSabotage", !0) && currentTarget.governmentId !== 3 && capturedForeignEspionageUseful(root, currentTarget, "sabotage")) {
-      let replacement = capturedForeignGovernmentWithPolicy(
-        currentTarget,
-        "Sabotage"
-      );
-      active.splice(
-        active.findIndex(
-          (candidate) => candidate.governmentId === replacement.governmentId
-        ),
-        1,
-        replacement
-      ), currentTarget = replacement;
-    }
-    if (unificationRequested && capturedForeignSettingBoolean(settings, "foreignOccupyLast", !0) && !readProperty(readProperty(root, "tech"), "world_control")) {
-      let superiorPolicy = capturedForeignSettingString(
-        settings,
-        "foreignPolicySuperior",
-        "Ignore"
-      ), lastTargetId = ["Occupy", "Sabotage"].includes(superiorPolicy) ? 2 : currentTarget.governmentId, lastTargetIndex = active.findIndex(
-        (candidate) => candidate.governmentId === lastTargetId
-      );
-      lastTargetIndex >= 0 && active.splice(
-        lastTargetIndex,
-        1,
-        capturedForeignGovernmentWithPolicy(
-          active[lastTargetIndex],
-          readyToUnify ? achievementPolicy ?? "Occupy" : "Sabotage"
-        )
-      );
-    }
-    let refreshedTarget = active.find(
-      (candidate) => candidate.governmentId === currentTarget.governmentId
-    );
-    if (refreshedTarget === void 0)
-      return Object.freeze({
-        governments: Object.freeze(active),
-        selectedTargetId: null,
-        battleTargetId: null
-      });
-    let stopBattle = refreshedTarget.policy === "Influence" || readyToUnify && refreshedTarget.policy !== "Occupy" || refreshedTarget.policy === "Betrayal" && refreshedTarget.military > 75;
-    return Object.freeze({
-      governments: Object.freeze(active),
-      selectedTargetId: refreshedTarget.governmentId,
-      battleTargetId: stopBattle ? null : refreshedTarget.governmentId
-    });
-  }
-  function capturedForeignEspionageTriggerSelector(governmentId) {
-    return `#gov${governmentId} div span:nth-child(3) button`;
   }
 
   // src/adapters/evolve/combat/captured-espionage.ts
@@ -39786,7 +39922,7 @@ Only continue if you trust the source. Injected code:
       if (root !== active.root)
         return pending = void 0, !1;
       let currentForeign = dependencies.controls.resolve(
-        CAPTURED_FOREIGN_CONTROL2
+        CAPTURED_FOREIGN_CONTROL
       );
       if (currentForeign === void 0 || currentForeign.generation !== active.foreign.generation)
         return pending = void 0, !1;
@@ -39817,7 +39953,7 @@ Only continue if you trust the source. Injected code:
         try {
           if (opening !== void 0) {
             let activeOpening = opening;
-            if (activeOpening.root !== root || dependencies.controls.resolve(CAPTURED_FOREIGN_CONTROL2)?.generation !== activeOpening.foreign.generation)
+            if (activeOpening.root !== root || dependencies.controls.resolve(CAPTURED_FOREIGN_CONTROL)?.generation !== activeOpening.foreign.generation)
               return activeOpening.modalLifecycle?.cleanup(), opening = void 0, cycleAction = !0, capturedEspionageEmptyInput();
             {
               let currentModal = capturedEspionageControl(
@@ -39834,7 +39970,7 @@ Only continue if you trust the source. Injected code:
           }
           let settingsValue = dependencies.readSettings(), settings = isRecord(settingsValue) ? settingsValue : {}, foreign = capturedEspionageControl(
             dependencies.controls,
-            CAPTURED_FOREIGN_CONTROL2,
+            CAPTURED_FOREIGN_CONTROL,
             CAPTURED_ESPIONAGE_FOREIGN_METHODS
           );
           if (foreign === void 0) return capturedEspionageEmptyInput();
@@ -39890,7 +40026,7 @@ Only continue if you trust the source. Injected code:
             "captured game root changed"
           );
         let currentForeign = dependencies.controls.resolve(
-          CAPTURED_FOREIGN_CONTROL2
+          CAPTURED_FOREIGN_CONTROL
         );
         if (currentForeign === void 0 || currentForeign.generation !== active.foreign.generation)
           return stale(
@@ -39962,7 +40098,7 @@ Only continue if you trust the source. Injected code:
             previousModals
           );
           cycleAction = !0;
-          let openingForeign = dependencies.controls.resolve(CAPTURED_FOREIGN_CONTROL2) ?? active.foreign;
+          let openingForeign = dependencies.controls.resolve(CAPTURED_FOREIGN_CONTROL) ?? active.foreign;
           return opening = Object.freeze({
             root: active.root,
             foreign: openingForeign,
@@ -40518,7 +40654,7 @@ Only continue if you trust the source. Injected code:
       return;
     let foreign = capturedBattleResolveControl(
       dependencies.controls,
-      [CAPTURED_FOREIGN_CONTROL2],
+      [CAPTURED_FOREIGN_CONTROL],
       ["vis", "gvis"]
     ), garrison = capturedBattleResolveControl(
       dependencies.controls,

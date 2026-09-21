@@ -14,7 +14,12 @@
  * enabled and the game's own captured craft-cost renderer supplies every ingredient we use.
  * Factory material demand is included when its six-product catalog and validated regional capacity
  * are fully captured. The player's own triggers are carried when the captured trigger source can
- * say which of them the game could act on now.
+ * say which of them the game could act on now. The Inflation Money reserve applies while the
+ * shared captured save-money answer says to stop spending, the Retirement Graphene reserve while
+ * the captured assist gate says the Tau build-out is still owed, the True Path AI hardware
+ * target while its captured counts select one and the game's own cost reader prices it, and the
+ * spy-purchase Money reserve while a visible Purchase-policy government names a price within
+ * Money storage.
  *
  * A missing part of the model can only leave a resource looking undemanded, never demand something
  * nothing wants, so every consumer degrades the same way the bounded slices already do.
@@ -49,6 +54,19 @@ import type { CapturedTriggers } from "../../progression/build/captured-triggers
 import { readCapturedFactoryCapacity } from "../production/captured-factory-capacity.ts";
 import { isRegionalSupply } from "../../captured-affordability.ts";
 import { finite, isRecord, readProperty } from "../../../validation.ts";
+import { INFLATION_CHALLENGE_MONEY } from "../../../../domain/economy/resources/inflation-assist.ts";
+import { readCapturedInflationSaveMoney } from "./captured-inflation-assist.ts";
+import { isRetirementAssistActive } from "../../../../domain/progression/prestige/retirement-prep.ts";
+import { RETIREMENT_PREP } from "../../../../domain/progression/build/building-weighting-rules.ts";
+import {
+  planTruepathAiApocalypse,
+  type TruepathAiBuildingTarget,
+} from "../../../../domain/progression/truepath/ai-apocalypse.ts";
+import {
+  capturedForeignGovernmentPrice,
+  readCapturedForeignTargets,
+  selectCapturedForeignStrategy,
+} from "../../combat/captured-foreign-state.ts";
 
 export interface CapturedResourceDemandDependencies {
   readonly rootState: GameRootStateSource;
@@ -801,6 +819,227 @@ function readCapturedFactoryDemand(
   });
 }
 
+/**
+ * Money reserve while the Inflation assist is in its saving stretch, else null. The amount is
+ * the game's own win total (`achieve.js` holds 250e9); the timing is the shared captured
+ * save-money answer, so crafting, the market and storage all hold Money for the same stretch.
+ */
+function readDemandReservationInflationMoney(
+  root: unknown,
+  settings: Record<PropertyKey, unknown>,
+): number | null {
+  return readCapturedInflationSaveMoney(root, settings)
+    ? INFLATION_CHALLENGE_MONEY
+    : null;
+}
+
+/**
+ * Graphene reserve while a True Path Retirement run still owes its Tau build-out, else null.
+ * Mirrors the compatibility assist gate (`retirementChallengeAssistActive`): assist setting on,
+ * True Path run, `prestigeType === "retire"`, and Isolation Protocol not yet researched
+ * (`tech.isolation >= 1`, granted by `tech-isolation_protocol` in DeadSpace `tech.js`).
+ */
+function readDemandReservationRetirementGraphene(
+  root: unknown,
+  settings: Record<PropertyKey, unknown>,
+): number | null {
+  const assistEnabled = settings["retirementChallengeAssist"] === true;
+  const race = readProperty(root, "race");
+  const truepath = isRecord(race) && readProperty(race, "truepath") === true;
+  const retirePrestige = settings["prestigeType"] === "retire";
+  const tech = readProperty(root, "tech");
+  const isolationLevel = isRecord(tech)
+    ? finite(readProperty(tech, "isolation"))
+    : undefined;
+  const active = isRetirementAssistActive({
+    assistEnabled,
+    truepath,
+    retirePrestige,
+    isolationResearched: (isolationLevel ?? 0) >= 1,
+  });
+  return active ? RETIREMENT_PREP.graphene : null;
+}
+
+/** Captured action id for each True Path AI hardware target. */
+const DEMAND_RESERVATION_TRUEPATH_AI_ACTIONS: Readonly<
+  Record<TruepathAiBuildingTarget, string>
+> = Object.freeze({
+  TitanDecoder: "space-decoder",
+  TitanAIColonist: "space-ai_colonist",
+  ErisTrooper: "space-shock_trooper",
+  ErisTank: "space-tank",
+});
+
+function readDemandReservationSpaceCount(
+  root: unknown,
+  key: string,
+  field: "count" | "on",
+): number | undefined {
+  const entry = readProperty(readProperty(root, "space"), key);
+  if (!isRecord(entry)) return undefined;
+  const value = finite(readProperty(entry, field));
+  return value === undefined || value < 0 ? undefined : value;
+}
+
+function readDemandReservationSpaceMoney(
+  costs: GameActionCostReader | undefined,
+  actionId: string,
+): number | null {
+  if (costs === undefined) return null;
+  const price = costs.readCost(actionId);
+  if (price === undefined) return null;
+  const money = finite(price.cost["Money"]);
+  return money === undefined || money < 0 ? null : money;
+}
+
+/**
+ * The True Path AI hardware target as a demand target, or null outside that stage. Runs the
+ * shared pure planner over captured counts (`global.space.decoder`, `ai_colonist`,
+ * `shock_trooper`, `tank` each carry `{count, on}` in DeadSpace `truepath.js`) and prices the
+ * winner through the game's own cost reader, so the reservation is what the game would charge.
+ * A missing count, price, or control stands down rather than guessing.
+ */
+function readDemandReservationTruepathAiTarget(
+  root: unknown,
+  settings: Record<PropertyKey, unknown>,
+  controls: GameControlRegistry | undefined,
+  costs: GameActionCostReader | undefined,
+): DemandTarget | null {
+  const race = readProperty(root, "race");
+  if (!isRecord(race) || readProperty(race, "truepath") !== true) return null;
+  if (settings["prestigeType"] !== "apocalypse") return null;
+  const tech = readProperty(root, "tech");
+  const aiCoreLevel = isRecord(tech)
+    ? finite(readProperty(tech, "titan_ai_core"))
+    : undefined;
+  if (aiCoreLevel === undefined || aiCoreLevel < 3) return null;
+  const decoderCount = readDemandReservationSpaceCount(
+    root,
+    "decoder",
+    "count",
+  );
+  const decoderOnCount = readDemandReservationSpaceCount(root, "decoder", "on");
+  const colonistCount = readDemandReservationSpaceCount(
+    root,
+    "ai_colonist",
+    "count",
+  );
+  const colonistOnCount = readDemandReservationSpaceCount(
+    root,
+    "ai_colonist",
+    "on",
+  );
+  const trooperOnCount = readDemandReservationSpaceCount(
+    root,
+    "shock_trooper",
+    "on",
+  );
+  const tankOnCount = readDemandReservationSpaceCount(root, "tank", "on");
+  if (
+    decoderCount === undefined ||
+    decoderOnCount === undefined ||
+    colonistCount === undefined ||
+    colonistOnCount === undefined ||
+    trooperOnCount === undefined ||
+    tankOnCount === undefined
+  ) {
+    return null;
+  }
+  const target = planTruepathAiApocalypse({
+    enabled: true,
+    aiCoreLevel,
+    decoderCount,
+    decoderOnCount,
+    colonistCount,
+    colonistOnCount,
+    trooperOnCount,
+    tankOnCount,
+    decoderMoneyCost: readDemandReservationSpaceMoney(costs, "space-decoder"),
+    colonistMoneyCost: readDemandReservationSpaceMoney(
+      costs,
+      "space-ai_colonist",
+    ),
+    trooperMoneyCost: readDemandReservationSpaceMoney(
+      costs,
+      "space-shock_trooper",
+    ),
+    tankMoneyCost: readDemandReservationSpaceMoney(costs, "space-tank"),
+  }).target;
+  if (target === null || controls === undefined || costs === undefined)
+    return null;
+  const actionId = DEMAND_RESERVATION_TRUEPATH_AI_ACTIONS[target];
+  if (controls.resolve(actionId) === undefined) return null;
+  const price = costs.readCost(actionId);
+  if (price === undefined) return null;
+  const targetCosts = toCosts(price.cost, price.pool);
+  if (targetCosts.length === 0) return null;
+  return Object.freeze({
+    ...(price.pool === undefined ? {} : { pool: price.pool }),
+    isProject: false,
+    progress: null,
+    costs: targetCosts,
+  });
+}
+
+/**
+ * Money reserve for a configured foreign-government Purchase, or 0 when nothing qualifies.
+ * Mirrors the compatibility `SpyManager.purchaseMoney`: `tech.unify === 1`, `autoFight` on,
+ * unification wanted (`foreignUnification` or an achievement goal forcing Purchase), and a
+ * visible Purchase-policy government below `tech.world_control` that is not bought yet. Each
+ * candidate needs `max(govPrice, spy cost to 3 spies)` within Money storage; the government
+ * price is the shared captured mirror of upstream `govPrice`, and the spy cost restates
+ * upstream `spyCost` at level 3 except for the Scorpio discount, whose sign no capture
+ * reaches — ignoring it over-reserves slightly, which is the safe direction for a reserve.
+ */
+function readDemandReservationSpyPurchaseMoney(
+  root: unknown,
+  settings: Record<PropertyKey, unknown>,
+  controls: GameControlRegistry | undefined,
+): number {
+  if (settings["autoFight"] !== true) return 0;
+  const tech = readProperty(root, "tech");
+  if (!isRecord(tech) || readProperty(tech, "unify") !== 1) return 0;
+  if (controls === undefined) return 0;
+  const foreign = controls.resolve("foreign");
+  if (foreign === undefined || !foreign.methods.includes("gvis")) return 0;
+  const visible = readCapturedForeignTargets(root, controls, foreign, settings);
+  if (visible.length === 0) return 0;
+  const strategy = selectCapturedForeignStrategy(root, settings, visible);
+  const race = readProperty(root, "race");
+  const infiltrator =
+    isRecord(race) && Boolean(readProperty(race, "infiltrator"));
+  const moneyMax = finite(
+    readProperty(readProperty(readProperty(root, "resource"), "Money"), "max"),
+  );
+  if (moneyMax === undefined) return 0;
+  let purchaseMoney = 0;
+  for (const target of strategy.governments) {
+    if (target.governmentId >= 3 || target.policy !== "Purchase") continue;
+    if (target.purchased || target.occupied || target.annexed) continue;
+    if (target.military === undefined) continue;
+    const price = capturedForeignGovernmentPrice(target);
+    if (price === undefined) continue;
+    let moneyNeeded = price;
+    if (target.spyCount < 3) {
+      if (target.hostility === undefined || target.unrest === undefined)
+        continue;
+      const base = Math.max(
+        50,
+        Math.round(target.military / 2 + target.hostility / 2 - target.unrest) +
+          10,
+      );
+      const discounted = infiltrator ? base / 3 : base;
+      const spyCost = Math.round(discounted ** 3) + 500;
+      if (!Number.isFinite(spyCost) || spyCost < 0) continue;
+      moneyNeeded = Math.max(moneyNeeded, spyCost);
+    }
+    if (moneyNeeded <= moneyMax && moneyNeeded > purchaseMoney) {
+      purchaseMoney = moneyNeeded;
+    }
+  }
+  return purchaseMoney;
+}
+
 export function createCapturedResourceDemand(
   dependencies: CapturedResourceDemandDependencies,
 ): CapturedResourceDemand {
@@ -863,6 +1102,25 @@ export function createCapturedResourceDemand(
         ) &&
         fleet?.nextShipAffordable === true &&
         fleet.nextShipCost.length > 0;
+      const inflationMoney = readDemandReservationInflationMoney(
+        root,
+        settings,
+      );
+      const retirementGraphene = readDemandReservationRetirementGraphene(
+        root,
+        settings,
+      );
+      const truepathAiBuildingTarget = readDemandReservationTruepathAiTarget(
+        root,
+        settings,
+        dependencies.controls,
+        dependencies.costs,
+      );
+      const spyPurchaseMoney = readDemandReservationSpyPurchaseMoney(
+        root,
+        settings,
+        dependencies.controls,
+      );
       if (
         queued.length === 0 &&
         triggerTargets.length === 0 &&
@@ -871,7 +1129,11 @@ export function createCapturedResourceDemand(
         !hasFactoryDemand &&
         !hasCrafterDemand &&
         missions.length === 0 &&
-        !hasFleetDemand
+        !hasFleetDemand &&
+        inflationMoney === null &&
+        retirementGraphene === null &&
+        truepathAiBuildingTarget === null &&
+        spyPurchaseMoney === 0
       ) {
         return EMPTY_DEMAND_SAMPLE;
       }
@@ -884,9 +1146,9 @@ export function createCapturedResourceDemand(
         // only recomputes affordability from current holdings; it never recreates tech gates.
         isEarlyGame: readCapturedIsEarlyGame(root),
         consumptionBalanceTarget: CONSUMPTION_BALANCE_TARGET,
-        truepathAiBuildingTarget: null,
-        inflationMoney: null,
-        retirementGraphene: null,
+        truepathAiBuildingTarget,
+        inflationMoney,
+        retirementGraphene,
         queuedTargets: toTargets(queued),
         triggerTargets,
         savingTarget:
@@ -899,7 +1161,7 @@ export function createCapturedResourceDemand(
               }),
         missions,
         unlockedTechs: toOfferedTechs(resources, offered),
-        spyPurchaseMoney: 0,
+        spyPurchaseMoney,
         fleet:
           fleet ??
           Object.freeze({
@@ -1026,8 +1288,8 @@ export function createCapturedResourceDemand(
           buildCandidates: Object.freeze([]),
         }),
         resources: readStorageResources(resources, root, settings),
-        inflationMoney: null,
-        retirementGraphene: null,
+        inflationMoney,
+        retirementGraphene,
       });
       const required = new Map(
         storage.resources.map((resource) => [

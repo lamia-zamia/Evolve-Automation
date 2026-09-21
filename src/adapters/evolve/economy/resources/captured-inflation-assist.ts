@@ -11,10 +11,12 @@
  * bag — means "do not save", which is the behaviour of a run that is not on the challenge at all.
  */
 
-import { shouldSaveInflationMoney } from "../../../../domain/economy/resources/inflation-assist.ts";
+import {
+  INFLATION_CHALLENGE_MONEY,
+  shouldSaveInflationMoney,
+} from "../../../../domain/economy/resources/inflation-assist.ts";
 import { finite, isRecord, readProperty } from "../../../validation.ts";
 
-const INFLATION_CHALLENGE_MONEY = 25e10;
 const ACHIEVEMENT_LEVEL_TRAITS = Object.freeze([
   "no_plasmid",
   "no_trade",

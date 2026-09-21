@@ -6,6 +6,7 @@ import type {
   SacrificeBlockedReason,
 } from "./building-weighting.ts";
 import { isKnowledgeGated } from "./building-weighting.ts";
+import { INFLATION_CHALLENGE_MONEY } from "../../economy/resources/inflation-assist.ts";
 
 const SACRIFICE_BLOCKED_NOTES: Readonly<
   Record<SacrificeBlockedReason, string>
@@ -163,7 +164,6 @@ const authorityCapBuildings: readonly NamedBuilding[] = [
   "WastelandThrone",
   "AsphodelBunker",
 ];
-const INFLATION_CHALLENGE_MONEY = 25e10;
 /**
  * The Tau build-out a Retirement run owes before Isolation Protocol is worth taking. One owner:
  * the build weighting that steers toward it and the research exclusion that waits for it read the

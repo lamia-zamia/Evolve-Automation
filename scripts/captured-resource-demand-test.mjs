@@ -863,4 +863,150 @@ for (const [missionId, completionTech, completionLevel] of [
   assert.equal(sample.storageRequired("Iron"), 1);
 }
 
+// The Inflation assist reserves the game's own win total while the shared captured
+// save-money answer says to stop spending.
+{
+  const inflationRoot = {
+    race: { inflation: 1, universe: "standard" },
+    tech: {},
+    resource: {
+      Money: { amount: 0, max: 30e10, diff: 1e9, stackable: false },
+    },
+    stats: { achieve: { wheelbarrow: {} } },
+  };
+  const demand = (assist) =>
+    createCapturedResourceDemand({
+      rootState: { readRoot: () => inflationRoot },
+      reservations: {
+        readReservations: () => ({ targets: [], unavailable: false }),
+      },
+      readSettings: () => ({
+        inflationChallengeAssist: assist,
+        inflationChallengeSaveMinutes: 30,
+      }),
+    }).sample();
+  assert.equal(demand(true).requestedQuantity("Money"), 25e10);
+  assert.equal(demand(true).isDemanded("Money"), true);
+  assert.equal(demand(false).requestedQuantity("Money"), 0);
+}
+
+// The Retirement assist reserves the Tau Graphene plan while Isolation Protocol is unresearched.
+{
+  const retirementRoot = (isolation) => ({
+    race: { truepath: true },
+    tech: isolation > 0 ? { isolation } : {},
+    resource: {
+      Graphene: { amount: 0, max: 300e6, stackable: true },
+    },
+  });
+  const demand = (isolation) =>
+    createCapturedResourceDemand({
+      rootState: { readRoot: () => retirementRoot(isolation) },
+      reservations: {
+        readReservations: () => ({ targets: [], unavailable: false }),
+      },
+      readSettings: () => ({
+        retirementChallengeAssist: true,
+        prestigeType: "retire",
+      }),
+    }).sample();
+  assert.equal(demand(0).requestedQuantity("Graphene"), 200e6);
+  assert.equal(demand(0).isDemanded("Graphene"), true);
+  assert.equal(demand(1).requestedQuantity("Graphene"), 0);
+}
+
+// The True Path AI hardware target reserves the game's own price for the planned building.
+// Only the colonist carries a captured Money price here, so the pure planner names it.
+{
+  const aiRoot = {
+    race: { truepath: true },
+    tech: { titan_ai_core: 3 },
+    space: {
+      decoder: { count: 1, on: 1 },
+      ai_colonist: { count: 0, on: 0 },
+      shock_trooper: { count: 0, on: 0 },
+      tank: { count: 0, on: 0 },
+    },
+    resource: {
+      Money: { amount: 0, max: 1e12, stackable: true },
+    },
+  };
+  const aiDemand = (prestigeType) =>
+    createCapturedResourceDemand({
+      rootState: { readRoot: () => aiRoot },
+      reservations: {
+        readReservations: () => ({ targets: [], unavailable: false }),
+      },
+      controls: {
+        resolve: (elementId) =>
+          elementId === "space-ai_colonist"
+            ? { elementId, generation: 1, methods: ["setData"] }
+            : undefined,
+        invoke: () => ({ ok: true, value: undefined }),
+        capturedElementIds: () => ["space-ai_colonist"],
+      },
+      costs: {
+        readCost: (actionId) =>
+          actionId === "space-ai_colonist"
+            ? actionPrice({ Money: 112e6 })
+            : undefined,
+      },
+      readSettings: () => ({ prestigeType }),
+    }).sample();
+  assert.equal(aiDemand("apocalypse").requestedQuantity("Money"), 112e6);
+  assert.equal(aiDemand("apocalypse").isDemanded("Money"), true);
+  assert.equal(aiDemand("none").requestedQuantity("Money"), 0);
+}
+
+// A visible Purchase-policy government reserves its government price within Money storage.
+// Money holdings of zero keep the strategy's Purchase policy standing in this sample.
+{
+  const spyRoot = {
+    race: {},
+    tech: { unify: 1 },
+    civic: {
+      foreign: {
+        gov0: {
+          mil: 50,
+          hstl: 20,
+          unrest: 10,
+          eco: 10,
+          spy: 3,
+          sab: 0,
+          occ: false,
+          anx: false,
+          buy: false,
+        },
+      },
+    },
+    resource: {
+      Money: { amount: 0, max: 1e12, stackable: true },
+    },
+  };
+  const spyDemand = (autoFight) =>
+    createCapturedResourceDemand({
+      rootState: { readRoot: () => spyRoot },
+      reservations: {
+        readReservations: () => ({ targets: [], unavailable: false }),
+      },
+      controls: {
+        resolve: (elementId) =>
+          elementId === "foreign"
+            ? { elementId, generation: 1, methods: ["gvis"] }
+            : undefined,
+        invoke: () => ({ ok: true, value: true }),
+        capturedElementIds: () => ["foreign"],
+      },
+      readSettings: () => ({
+        autoFight,
+        foreignUnification: true,
+        foreignPolicyInferior: "Purchase",
+        foreignPolicySuperior: "Occupy",
+      }),
+    }).sample();
+  assert.equal(spyDemand(true).requestedQuantity("Money"), 197992);
+  assert.equal(spyDemand(true).isDemanded("Money"), true);
+  assert.equal(spyDemand(false).requestedQuantity("Money"), 0);
+}
+
 console.log("Captured resource-demand adapter tests passed");
