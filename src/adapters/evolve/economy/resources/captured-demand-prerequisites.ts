@@ -16,15 +16,16 @@
  * answer is exact), `not-needed` (the stage gate fails, nothing could be reserved), or
  * `unavailable` (a reservation could exist but its capture is not established). The
  * demand model fails closed on `unavailable` by holding Money rather than spending it.
- * A control still absent after a drawable sweep is a locked competitor rather than a
- * failed capture — the sweep draws every shown panel, so what never draws was never
- * offered — and reports `ready`, letting the reader rank the captured subset.
+ * AI eligibility is tech-derived and shared with the reader, so a missing eligible control
+ * is always an unestablished capture while a missing ineligible one is legitimately locked.
  */
 
 import type { GameControlRegistry } from "../../../../ports/game-control-registry.ts";
-import { DEMAND_RESERVATION_TRUEPATH_AI_ACTIONS } from "./truepath-ai-demand-actions.ts";
+import {
+  DEMAND_RESERVATION_TRUEPATH_AI_ACTIONS,
+  readEligibleTruepathAiTargets,
+} from "./truepath-ai-demand-actions.ts";
 import { CAPTURED_FOREIGN_CONTROL } from "../../combat/captured-foreign-state.ts";
-import { MAIN_TAB_CONTROL } from "../../captured-tab-discovery.ts";
 import { finite, isRecord, readProperty } from "../../../validation.ts";
 
 export type DemandPrerequisiteStatus = "ready" | "not-needed" | "unavailable";
@@ -90,20 +91,20 @@ function aiPrerequisiteStatus(
   if (!truepathAiReservationWanted(dependencies.root, dependencies.settings)) {
     return "not-needed";
   }
+  // Eligibility is tech-derived, so a still-missing eligible control is an unestablished
+  // capture, while a missing ineligible one is legitimately locked and irrelevant.
+  const eligible = readEligibleTruepathAiTargets(dependencies.root);
+  if (eligible.length === 0) return "not-needed";
   const missing = (): boolean =>
-    Object.values(DEMAND_RESERVATION_TRUEPATH_AI_ACTIONS).some(
-      (actionId) => dependencies.controls.resolve(actionId) === undefined,
+    eligible.some(
+      (target) =>
+        dependencies.controls.resolve(
+          DEMAND_RESERVATION_TRUEPATH_AI_ACTIONS[target],
+        ) === undefined,
     );
   if (!missing()) return "ready";
   dependencies.ensureBuildControls();
-  if (!missing()) return "ready";
-  // Still missing after the sweep. A locked competitor (Shock Trooper below eris 3, Tank
-  // below eris 4) never draws, so its absence is the game answer and the reader ranks the
-  // captured subset. But without the main-tab control no draw could run at all, so absence
-  // proves nothing and the reader must fail closed instead.
-  return dependencies.controls.resolve(MAIN_TAB_CONTROL) !== undefined
-    ? "ready"
-    : "unavailable";
+  return missing() ? "unavailable" : "ready";
 }
 
 export function ensureDemandPrerequisiteControls(

@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 
 import { createCapturedResourceDemand } from "../src/adapters/evolve/economy/resources/captured-resource-demand.ts";
 import { ensureDemandPrerequisiteControls } from "../src/adapters/evolve/economy/resources/captured-demand-prerequisites.ts";
-import { MAIN_TAB_CONTROL } from "../src/adapters/evolve/captured-tab-discovery.ts";
 import { actionPrice } from "./test-support/action-price.mjs";
 
 function fakeControls(ids = []) {
@@ -78,32 +77,106 @@ for (const [root, settings] of [
   assert.deepEqual(tracked.seen, []);
 }
 
-// The build sweep runs while the True Path AI hardware stage is active but some competing
-// target's control is missing. A sweep the main-tab control cannot support reports
-// unavailable; a drawable sweep that still misses a control has found a locked competitor
-// and reports ready for the eligible subset.
+// Eligibility is tech-derived: core 3 alone unlocks only the Colonist, titan 8 adds the
+// Decoder, eris 3 the Trooper, eris 4 the Tank. A missing eligible control sweeps and
+// reports unavailable while it stays missing; a missing ineligible one is legitimately
+// locked and irrelevant.
 {
-  const root = {
+  const stage = (tech) => ({
     race: { truepath: true },
-    tech: { titan_ai_core: 3 },
+    tech,
     resource: {},
     space: {},
-  };
+  });
   const settings = { prestigeType: "apocalypse" };
-  const undrawable = track();
+
+  // Core 3 alone: only the Colonist is required.
+  const colonistMissing = track();
   assert.deepEqual(
-    prerequisites(root, settings, fakeControls(["space-decoder"]), undrawable),
+    prerequisites(
+      stage({ titan_ai_core: 3 }),
+      settings,
+      fakeControls(),
+      colonistMissing,
+    ),
     { spy: "not-needed", ai: "unavailable" },
   );
-  assert.deepEqual(undrawable.seen, ["build"]);
+  assert.deepEqual(colonistMissing.seen, ["build"]);
+  const colonistReady = track();
+  assert.deepEqual(
+    prerequisites(
+      stage({ titan_ai_core: 3 }),
+      settings,
+      fakeControls(["space-ai_colonist"]),
+      colonistReady,
+    ),
+    { spy: "not-needed", ai: "ready" },
+  );
+  assert.deepEqual(colonistReady.seen, []);
 
-  const drawable = track();
-  const controls = fakeControls([MAIN_TAB_CONTROL, "space-decoder"]);
-  assert.deepEqual(prerequisites(root, settings, controls, drawable), {
-    spy: "not-needed",
-    ai: "ready",
-  });
-  assert.deepEqual(drawable.seen, ["build"]);
+  // Titan 8, core 3, eris 3: Decoder, Colonist and Trooper required; the Tank may be
+  // absent. An eligible Trooper missing after the sweep is unavailable.
+  const tripleTech = { titan: 8, titan_ai_core: 3, eris: 3 };
+  const tripleMissing = track();
+  assert.deepEqual(
+    prerequisites(
+      stage(tripleTech),
+      settings,
+      fakeControls(["space-decoder", "space-ai_colonist"]),
+      tripleMissing,
+    ),
+    { spy: "not-needed", ai: "unavailable" },
+  );
+  assert.deepEqual(tripleMissing.seen, ["build"]);
+  const tripleReady = track();
+  assert.deepEqual(
+    prerequisites(
+      stage(tripleTech),
+      settings,
+      fakeControls([
+        "space-decoder",
+        "space-ai_colonist",
+        "space-shock_trooper",
+      ]),
+      tripleReady,
+    ),
+    { spy: "not-needed", ai: "ready" },
+  );
+  assert.deepEqual(tripleReady.seen, []);
+
+  // Eris 4: all four required.
+  const fullTech = { titan: 8, titan_ai_core: 3, eris: 4 };
+  const tankMissing = track();
+  assert.deepEqual(
+    prerequisites(
+      stage(fullTech),
+      settings,
+      fakeControls([
+        "space-decoder",
+        "space-ai_colonist",
+        "space-shock_trooper",
+      ]),
+      tankMissing,
+    ),
+    { spy: "not-needed", ai: "unavailable" },
+  );
+  assert.deepEqual(tankMissing.seen, ["build"]);
+  const fullReady = track();
+  assert.deepEqual(
+    prerequisites(
+      stage(fullTech),
+      settings,
+      fakeControls([
+        "space-decoder",
+        "space-ai_colonist",
+        "space-shock_trooper",
+        "space-tank",
+      ]),
+      fullReady,
+    ),
+    { spy: "not-needed", ai: "ready" },
+  );
+  assert.deepEqual(fullReady.seen, []);
 }
 
 // No build sweep outside the hardware stage: the gate is root and settings reads only.
@@ -136,31 +209,6 @@ for (const [root, settings] of [
     spy: "not-needed",
     ai: "not-needed",
   });
-  assert.deepEqual(tracked.seen, []);
-}
-
-// Every competitor already captured is an established capture: ready with no sweep.
-{
-  const tracked = track();
-  assert.deepEqual(
-    prerequisites(
-      {
-        race: { truepath: true },
-        tech: { titan_ai_core: 3 },
-        resource: {},
-        space: {},
-      },
-      { prestigeType: "apocalypse" },
-      fakeControls([
-        "space-decoder",
-        "space-ai_colonist",
-        "space-shock_trooper",
-        "space-tank",
-      ]),
-      tracked,
-    ),
-    { spy: "not-needed", ai: "ready" },
-  );
   assert.deepEqual(tracked.seen, []);
 }
 
@@ -229,13 +277,13 @@ for (const [root, settings] of [
   assert.equal(exact.requestedQuantity("Money"), 197992);
 }
 
-// Production order, True Path AI half: a build sweep that cannot run holds Money, a
-// drawable sweep with a locked Tank reserves the eligible winner, and the complete field
-// reserves exactly.
+// Production order, True Path AI half: an eligible control missing after the sweep holds
+// Money, a locked Tank is irrelevant to the eligible winner, and the complete field
+// reserves exactly. Locked targets name no price, exactly as a missing control does.
 {
   const root = {
     race: { truepath: true },
-    tech: { titan_ai_core: 3 },
+    tech: { titan: 8, titan_ai_core: 3, eris: 3 },
     space: {
       decoder: { count: 1, on: 1 },
       ai_colonist: { count: 0, on: 0 },
@@ -253,16 +301,23 @@ for (const [root, settings] of [
     "space-tank": { Money: 8.5e6 },
   };
   const settings = { prestigeType: "apocalypse" };
-  const demand = (controls, report) =>
+  const demand = (
+    demandRoot,
+    controls,
+    report,
+    offered = Object.keys(prices),
+  ) =>
     createCapturedResourceDemand({
-      rootState: { readRoot: () => root },
+      rootState: { readRoot: () => demandRoot },
       reservations: {
         readReservations: () => ({ targets: [], unavailable: false }),
       },
       controls,
       costs: {
         readCost: (actionId) =>
-          actionId in prices ? actionPrice(prices[actionId]) : undefined,
+          offered.includes(actionId)
+            ? actionPrice(prices[actionId])
+            : undefined,
       },
       readSettings: () => settings,
       readPrerequisites: () => report,
@@ -272,14 +327,14 @@ for (const [root, settings] of [
   const missing = fakeControls();
   const failedReport = prerequisites(root, settings, missing, failed);
   assert.equal(failedReport.ai, "unavailable");
-  const held = demand(missing, failedReport);
+  const held = demand(root, missing, failedReport);
   assert.equal(held.requestedQuantity("Money"), 1e12);
   assert.equal(held.isDemanded("Money"), true);
 
   // The Tank stays locked (eris 4) while everything else draws: the eligible winner is
   // the Decoder, priced exactly.
   const drawable = track();
-  const partial = fakeControls([MAIN_TAB_CONTROL]);
+  const partial = fakeControls();
   const partialReport = ensureDemandPrerequisiteControls({
     root,
     settings,
@@ -292,13 +347,22 @@ for (const [root, settings] of [
     },
   });
   assert.equal(partialReport.ai, "ready");
-  const subset = demand(partial, partialReport);
+  const subset = demand(
+    root,
+    partial,
+    partialReport,
+    Object.keys(prices).filter((id) => id !== "space-tank"),
+  );
   assert.equal(subset.requestedQuantity("Money"), 12.5e6);
 
   const complete = track();
   const full = fakeControls();
+  const fullRoot = {
+    ...root,
+    tech: { titan: 8, titan_ai_core: 3, eris: 4 },
+  };
   const readyReport = ensureDemandPrerequisiteControls({
-    root,
+    root: fullRoot,
     settings,
     controls: full,
     ensureCivicControls: complete.civic,
@@ -307,7 +371,7 @@ for (const [root, settings] of [
     },
   });
   assert.equal(readyReport.ai, "ready");
-  const exact = demand(full, readyReport);
+  const exact = demand(fullRoot, full, readyReport);
   assert.equal(exact.requestedQuantity("Money"), 12.5e6);
 }
 

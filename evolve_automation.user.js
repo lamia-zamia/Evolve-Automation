@@ -13509,7 +13509,21 @@
     TitanAIColonist: "space-ai_colonist",
     ErisTrooper: "space-shock_trooper",
     ErisTank: "space-tank"
+  }), TRUEPATH_AI_UNLOCK_ORDER = Object.freeze(["TitanDecoder", "TitanAIColonist", "ErisTrooper", "ErisTank"]), TRUEPATH_AI_UNLOCKS = Object.freeze({
+    TitanDecoder: Object.freeze({ tech: "titan", level: 8 }),
+    TitanAIColonist: Object.freeze({ tech: "titan_ai_core", level: 3 }),
+    ErisTrooper: Object.freeze({ tech: "eris", level: 3 }),
+    ErisTank: Object.freeze({ tech: "eris", level: 4 })
   });
+  function readEligibleTruepathAiTargets(root) {
+    let tech = readProperty(root, "tech");
+    return isRecord(tech) ? Object.freeze(
+      TRUEPATH_AI_UNLOCK_ORDER.filter((target) => {
+        let unlock = TRUEPATH_AI_UNLOCKS[target];
+        return (finite(readProperty(tech, unlock.tech)) ?? 0) >= unlock.level;
+      })
+    ) : Object.freeze([]);
+  }
 
   // src/adapters/evolve/economy/resources/captured-resource-demand.ts
   var NO_STORAGE_REQUIREMENT = 1, EMPTY_DEMAND_SAMPLE = Object.freeze({
@@ -14011,6 +14025,7 @@
   }
   function readDemandReservationSpaceCount(root, key, field) {
     let entry = readProperty(readProperty(root, "space"), key);
+    if (entry === void 0) return 0;
     if (!isRecord(entry)) return;
     let value = finite(readProperty(entry, field));
     return value === void 0 || value < 0 ? void 0 : value;
@@ -14060,16 +14075,14 @@
     ), trooperMoneyCost = readDemandReservationSpaceMoney(
       costs,
       "space-shock_trooper"
-    ), tankMoneyCost = readDemandReservationSpaceMoney(costs, "space-tank"), pricedCount = [
-      decoderMoneyCost,
-      colonistMoneyCost,
-      trooperMoneyCost,
-      tankMoneyCost
-    ].filter((price2) => price2 !== null).length;
-    if (pricedCount === 0)
+    ), tankMoneyCost = readDemandReservationSpaceMoney(costs, "space-tank"), moneyCosts = Object.freeze({
+      TitanDecoder: decoderMoneyCost,
+      TitanAIColonist: colonistMoneyCost,
+      ErisTrooper: trooperMoneyCost,
+      ErisTank: tankMoneyCost
+    }), eligible = readEligibleTruepathAiTargets(root);
+    if (eligible.length === 0 || eligible.some((target2) => moneyCosts[target2] === null))
       return report === void 0 ? { status: "not-needed" } : { status: "unavailable" };
-    if (report === void 0 && pricedCount !== 4)
-      return { status: "not-needed" };
     let target = planTruepathAiApocalypse({
       enabled: !0,
       aiCoreLevel,
@@ -14354,10 +14367,14 @@
   function aiPrerequisiteStatus(dependencies) {
     if (!truepathAiReservationWanted(dependencies.root, dependencies.settings))
       return "not-needed";
-    let missing = () => Object.values(DEMAND_RESERVATION_TRUEPATH_AI_ACTIONS).some(
-      (actionId) => dependencies.controls.resolve(actionId) === void 0
+    let eligible = readEligibleTruepathAiTargets(dependencies.root);
+    if (eligible.length === 0) return "not-needed";
+    let missing = () => eligible.some(
+      (target) => dependencies.controls.resolve(
+        DEMAND_RESERVATION_TRUEPATH_AI_ACTIONS[target]
+      ) === void 0
     );
-    return !missing() || (dependencies.ensureBuildControls(), !missing()) || dependencies.controls.resolve(MAIN_TAB_CONTROL) !== void 0 ? "ready" : "unavailable";
+    return missing() ? (dependencies.ensureBuildControls(), missing() ? "unavailable" : "ready") : "ready";
   }
   function ensureDemandPrerequisiteControls(dependencies) {
     let spy = spyPrerequisiteStatus(dependencies), ai = aiPrerequisiteStatus(dependencies);

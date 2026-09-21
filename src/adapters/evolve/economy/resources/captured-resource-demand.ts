@@ -869,7 +869,10 @@ function readDemandReservationRetirementGraphene(
   return active ? RETIREMENT_PREP.graphene : null;
 }
 
-import { DEMAND_RESERVATION_TRUEPATH_AI_ACTIONS } from "./truepath-ai-demand-actions.ts";
+import {
+  DEMAND_RESERVATION_TRUEPATH_AI_ACTIONS,
+  readEligibleTruepathAiTargets,
+} from "./truepath-ai-demand-actions.ts";
 
 /**
  * What a reservation reader established: `ready` carries the exact answer, `not-needed`
@@ -888,6 +891,10 @@ function readDemandReservationSpaceCount(
   field: "count" | "on",
 ): number | undefined {
   const entry = readProperty(readProperty(root, "space"), key);
+  // A structure the run has never built has no entry at all, which is a count of zero
+  // rather than a gap: nothing unbuilt can be switched on. A present but malformed entry
+  // stands down instead.
+  if (entry === undefined) return 0;
   if (!isRecord(entry)) return undefined;
   const value = finite(readProperty(entry, field));
   return value === undefined || value < 0 ? undefined : value;
@@ -907,16 +914,15 @@ function readDemandReservationSpaceMoney(
 /**
  * The True Path AI hardware target as a demand outcome. Runs the shared pure planner over
  * captured counts (`global.space.decoder`, `ai_colonist`, `shock_trooper`, `tank` each carry
- * `{count, on}` in DeadSpace `truepath.js`) and prices the winner through the game's own
- * cost reader, so the reservation is what the game would charge.
+ * `{count, on}` in DeadSpace `truepath.js`; a never-built structure has no entry and reads
+ * as zero) and prices the winner through the game's own cost reader, so the reservation is
+ * what the game would charge.
  *
- * Only priced competitors rank: a locked target (Shock Trooper below eris 3, Tank below
- * eris 4) draws no control and names no price, so it is ineligible rather than cheapest
- * by absence. That ranking is sound only once discovery has established the capture,
- * which the prerequisite report answers: without it a missing price cannot be told apart
- * from an undiscovered panel, so the complete field is required instead. Either way a
- * missing count, an unpriceable winner, or a failed capture stands down rather than
- * guessing — failed capture as `unavailable`, so the sample holds Money.
+ * Only eligible competitors rank, eligibility coming from the tech bag both here and in
+ * the prerequisite phase: a locked target draws no control and is ineligible rather than
+ * cheapest by absence, while a missing eligible price is an unestablished capture. Either
+ * way a malformed count, an unpriceable eligible winner, or a failed capture stands down
+ * rather than guessing — failed capture as `unavailable`, so the sample holds Money.
  */
 function readDemandReservationTruepathAiTarget(
   root: unknown,
@@ -984,23 +990,24 @@ function readDemandReservationTruepathAiTarget(
     "space-shock_trooper",
   );
   const tankMoneyCost = readDemandReservationSpaceMoney(costs, "space-tank");
-  const pricedCount = [
-    decoderMoneyCost,
-    colonistMoneyCost,
-    trooperMoneyCost,
-    tankMoneyCost,
-  ].filter((price) => price !== null).length;
-  if (pricedCount === 0) {
+  // Every eligible competitor's Money price feeds the ranking; one uncaptured eligible
+  // price stands the target down, because a missing candidate must never win by absence
+  // the way a present one wins by price. Ineligible targets simply deal nulls, which the
+  // planner skips exactly as it skips any uncaptured price.
+  const moneyCosts = Object.freeze({
+    TitanDecoder: decoderMoneyCost,
+    TitanAIColonist: colonistMoneyCost,
+    ErisTrooper: trooperMoneyCost,
+    ErisTank: tankMoneyCost,
+  } as const);
+  const eligible = readEligibleTruepathAiTargets(root);
+  if (
+    eligible.length === 0 ||
+    eligible.some((target) => moneyCosts[target] === null)
+  ) {
     return report === undefined
       ? { status: "not-needed" }
       : { status: "unavailable" };
-  }
-  if (report === undefined && pricedCount !== 4) {
-    // Without discovery info a missing price cannot be told apart from an undiscovered
-    // panel, so the complete field is required: a missing candidate must never win by
-    // absence the way a present one wins by price. The compatibility reader always feeds
-    // all four wrapper costs.
-    return { status: "not-needed" };
   }
   const target = planTruepathAiApocalypse({
     enabled: true,

@@ -916,12 +916,12 @@ for (const [missionId, completionTech, completionLevel] of [
 }
 
 // The True Path AI hardware target reserves the game's own price for the planned building.
-// All four competitors carry captured Money prices, so the pure planner ranks the complete
-// field: the Decoder removes the most Colonists per Money here and wins.
+// Core 3 with titan 8 and eris 4 unlocks the complete field, so the pure planner ranks all
+// four: the Decoder removes the most Colonists per Money here and wins.
 {
   const aiRoot = {
     race: { truepath: true },
-    tech: { titan_ai_core: 3 },
+    tech: { titan: 8, titan_ai_core: 3, eris: 4 },
     space: {
       decoder: { count: 1, on: 1 },
       ai_colonist: { count: 0, on: 0 },
@@ -963,25 +963,22 @@ for (const [missionId, completionTech, completionLevel] of [
   assert.equal(aiDemand("none").requestedQuantity("Money"), 0);
 }
 
-// One uncaptured competitor price stands the AI target down when no prerequisite report can
-// tell a locked panel from an undiscovered one: a missing candidate must never win by
-// absence the way a present one wins by price.
+// Core 3 alone unlocks only the Colonist, so a lone captured Colonist price is the complete
+// eligible field rather than a partial one, and reserves exactly.
 {
-  const partialRoot = {
+  const singleRoot = {
     race: { truepath: true },
     tech: { titan_ai_core: 3 },
     space: {
       decoder: { count: 1, on: 1 },
       ai_colonist: { count: 0, on: 0 },
-      shock_trooper: { count: 0, on: 0 },
-      tank: { count: 0, on: 0 },
     },
     resource: {
       Money: { amount: 0, max: 1e12, stackable: true },
     },
   };
   const sample = createCapturedResourceDemand({
-    rootState: { readRoot: () => partialRoot },
+    rootState: { readRoot: () => singleRoot },
     reservations: {
       readReservations: () => ({ targets: [], unavailable: false }),
     },
@@ -1001,8 +998,58 @@ for (const [missionId, completionTech, completionLevel] of [
     },
     readSettings: () => ({ prestigeType: "apocalypse" }),
   }).sample();
-  assert.equal(sample.requestedQuantity("Money"), 0);
-  assert.equal(sample.isDemanded("Money"), false);
+  assert.equal(sample.requestedQuantity("Money"), 112e6);
+  assert.equal(sample.isDemanded("Money"), true);
+}
+
+// Titan 8 with core 3 but eris below 3 leaves the Trooper and Tank locked: the eligible
+// Decoder and Colonist rank alone. An eligible price gone missing instead stands the
+// target down, because a missing candidate must never win by absence.
+{
+  const unlockRoot = {
+    race: { truepath: true },
+    tech: { titan: 8, titan_ai_core: 3 },
+    space: {
+      decoder: { count: 1, on: 1 },
+      ai_colonist: { count: 0, on: 0 },
+    },
+    resource: {
+      Money: { amount: 0, max: 1e12, stackable: true },
+    },
+  };
+  const unlockDemand = (priced) =>
+    createCapturedResourceDemand({
+      rootState: { readRoot: () => unlockRoot },
+      reservations: {
+        readReservations: () => ({ targets: [], unavailable: false }),
+      },
+      controls: {
+        resolve: (elementId) =>
+          elementId in priced
+            ? { elementId, generation: 1, methods: ["setData"] }
+            : undefined,
+        invoke: () => ({ ok: true, value: undefined }),
+        capturedElementIds: () => Object.keys(priced),
+      },
+      costs: {
+        readCost: (actionId) =>
+          actionId in priced ? actionPrice(priced[actionId]) : undefined,
+      },
+      readSettings: () => ({ prestigeType: "apocalypse" }),
+    }).sample();
+  assert.equal(
+    unlockDemand({
+      "space-decoder": { Money: 12.5e6 },
+      "space-ai_colonist": { Money: 112e6 },
+    }).requestedQuantity("Money"),
+    12.5e6,
+  );
+  assert.equal(
+    unlockDemand({ "space-ai_colonist": { Money: 112e6 } }).requestedQuantity(
+      "Money",
+    ),
+    0,
+  );
 }
 
 // With a ready report the missing Tank is a locked competitor (eris 4), so the eligible
@@ -1011,7 +1058,7 @@ for (const [missionId, completionTech, completionLevel] of [
 {
   const reportedRoot = {
     race: { truepath: true },
-    tech: { titan_ai_core: 3 },
+    tech: { titan: 8, titan_ai_core: 3, eris: 3 },
     space: {
       decoder: { count: 1, on: 1 },
       ai_colonist: { count: 0, on: 0 },
