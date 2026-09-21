@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 
 import { createCapturedResourceDemand } from "../src/adapters/evolve/economy/resources/captured-resource-demand.ts";
 import { ensureDemandPrerequisiteControls } from "../src/adapters/evolve/economy/resources/captured-demand-prerequisites.ts";
+import { MAIN_TAB_CONTROL } from "../src/adapters/evolve/captured-tab-discovery.ts";
 import { actionPrice } from "./test-support/action-price.mjs";
 
 function fakeControls(ids = []) {
@@ -21,7 +22,7 @@ function fakeControls(ids = []) {
   };
 }
 
-function calls() {
+function track() {
   const seen = [];
   return {
     seen,
@@ -30,50 +31,57 @@ function calls() {
   };
 }
 
-// The civic discovery runs while a spy-purchase reservation is possible but its control is
-// not captured yet: unification researched and automation willing.
-{
-  const root = { race: {}, tech: { unify: 1 }, resource: {} };
-  const settings = { autoFight: true };
-  const tracked = calls();
-  ensureDemandPrerequisiteControls({
-    root,
-    settings,
-    controls: fakeControls(),
-    ensureCivicControls: tracked.civic,
-    ensureBuildControls: tracked.build,
-  });
-  assert.deepEqual(tracked.seen, ["civic"]);
-}
-
-// No discovery when the control is already captured, automation is off, or unification is
-// unresearched: the gate is root and settings reads only.
-for (const [root, settings, controls] of [
-  [
-    { race: {}, tech: { unify: 1 }, resource: {} },
-    { autoFight: true },
-    fakeControls(["foreign"]),
-  ],
-  [
-    { race: {}, tech: { unify: 1 }, resource: {} },
-    { autoFight: false },
-    fakeControls(),
-  ],
-  [{ race: {}, tech: {}, resource: {} }, { autoFight: true }, fakeControls()],
-]) {
-  const tracked = calls();
-  ensureDemandPrerequisiteControls({
+function prerequisites(root, settings, controls, tracked) {
+  return ensureDemandPrerequisiteControls({
     root,
     settings,
     controls,
     ensureCivicControls: tracked.civic,
     ensureBuildControls: tracked.build,
   });
+}
+
+// The civic discovery runs while a spy-purchase reservation is possible but its control is
+// not captured yet: unification researched and automation willing. A discovery that still
+// leaves the control absent reports unavailable rather than silently spending onward.
+{
+  const root = { race: {}, tech: { unify: 1 }, resource: {} };
+  const settings = { autoFight: true };
+  const tracked = track();
+  const controls = fakeControls();
+  assert.deepEqual(prerequisites(root, settings, controls, tracked), {
+    spy: "unavailable",
+    ai: "not-needed",
+  });
+  assert.deepEqual(tracked.seen, ["civic"]);
+
+  const discovered = track();
+  controls.add("foreign", ["gvis"]);
+  assert.deepEqual(prerequisites(root, settings, controls, discovered), {
+    spy: "ready",
+    ai: "not-needed",
+  });
+  assert.deepEqual(discovered.seen, []);
+}
+
+// No discovery when automation is off or unification is unresearched: the gate is root
+// and settings reads only.
+for (const [root, settings] of [
+  [{ race: {}, tech: { unify: 1 }, resource: {} }, { autoFight: false }],
+  [{ race: {}, tech: {}, resource: {} }, { autoFight: true }],
+]) {
+  const tracked = track();
+  assert.deepEqual(prerequisites(root, settings, fakeControls(), tracked), {
+    spy: "not-needed",
+    ai: "not-needed",
+  });
   assert.deepEqual(tracked.seen, []);
 }
 
 // The build sweep runs while the True Path AI hardware stage is active but some competing
-// target's control is missing.
+// target's control is missing. A sweep the main-tab control cannot support reports
+// unavailable; a drawable sweep that still misses a control has found a locked competitor
+// and reports ready for the eligible subset.
 {
   const root = {
     race: { truepath: true },
@@ -82,23 +90,27 @@ for (const [root, settings, controls] of [
     space: {},
   };
   const settings = { prestigeType: "apocalypse" };
-  const tracked = calls();
-  ensureDemandPrerequisiteControls({
-    root,
-    settings,
-    controls: fakeControls(["space-decoder"]),
-    ensureCivicControls: tracked.civic,
-    ensureBuildControls: tracked.build,
+  const undrawable = track();
+  assert.deepEqual(
+    prerequisites(root, settings, fakeControls(["space-decoder"]), undrawable),
+    { spy: "not-needed", ai: "unavailable" },
+  );
+  assert.deepEqual(undrawable.seen, ["build"]);
+
+  const drawable = track();
+  const controls = fakeControls([MAIN_TAB_CONTROL, "space-decoder"]);
+  assert.deepEqual(prerequisites(root, settings, controls, drawable), {
+    spy: "not-needed",
+    ai: "ready",
   });
-  assert.deepEqual(tracked.seen, ["build"]);
+  assert.deepEqual(drawable.seen, ["build"]);
 }
 
-// No build sweep outside the hardware stage or once every competitor is captured.
-for (const [root, settings, ids] of [
+// No build sweep outside the hardware stage: the gate is root and settings reads only.
+for (const [root, settings] of [
   [
     { race: {}, tech: { titan_ai_core: 3 }, resource: {}, space: {} },
     { prestigeType: "apocalypse" },
-    [],
   ],
   [
     {
@@ -108,7 +120,6 @@ for (const [root, settings, ids] of [
       space: {},
     },
     { prestigeType: "none" },
-    [],
   ],
   [
     {
@@ -118,33 +129,44 @@ for (const [root, settings, ids] of [
       space: {},
     },
     { prestigeType: "apocalypse" },
-    [],
-  ],
-  [
-    {
-      race: { truepath: true },
-      tech: { titan_ai_core: 3 },
-      resource: {},
-      space: {},
-    },
-    { prestigeType: "apocalypse" },
-    ["space-decoder", "space-ai_colonist", "space-shock_trooper", "space-tank"],
   ],
 ]) {
-  const tracked = calls();
-  ensureDemandPrerequisiteControls({
-    root,
-    settings,
-    controls: fakeControls(ids),
-    ensureCivicControls: tracked.civic,
-    ensureBuildControls: tracked.build,
+  const tracked = track();
+  assert.deepEqual(prerequisites(root, settings, fakeControls(), tracked), {
+    spy: "not-needed",
+    ai: "not-needed",
   });
   assert.deepEqual(tracked.seen, []);
 }
 
-// Production order: a demand sample taken before the foreign discovery omits the purchase
-// reservation, while the prerequisites-first order keeps it. The control materializes only
-// through the civic discovery the phase performs.
+// Every competitor already captured is an established capture: ready with no sweep.
+{
+  const tracked = track();
+  assert.deepEqual(
+    prerequisites(
+      {
+        race: { truepath: true },
+        tech: { titan_ai_core: 3 },
+        resource: {},
+        space: {},
+      },
+      { prestigeType: "apocalypse" },
+      fakeControls([
+        "space-decoder",
+        "space-ai_colonist",
+        "space-shock_trooper",
+        "space-tank",
+      ]),
+      tracked,
+    ),
+    { spy: "not-needed", ai: "ready" },
+  );
+  assert.deepEqual(tracked.seen, []);
+}
+
+// Production order, spy half: a civic discovery that fails to capture foreign must not
+// let consumers see Money as free. The failed prerequisite holds Money to its storage
+// envelope; the successful one reserves the exact government price.
 {
   const root = {
     race: {},
@@ -174,34 +196,42 @@ for (const [root, settings, ids] of [
     foreignPolicyInferior: "Purchase",
     foreignPolicySuperior: "Occupy",
   };
-  const dependencies = (controls) => ({
-    rootState: { readRoot: () => root },
-    reservations: {
-      readReservations: () => ({ targets: [], unavailable: false }),
-    },
-    controls,
-    readSettings: () => settings,
-  });
-  const early = createCapturedResourceDemand(
-    dependencies(fakeControls()),
-  ).sample();
-  assert.equal(early.requestedQuantity("Money"), 0);
+  const demand = (controls, report) =>
+    createCapturedResourceDemand({
+      rootState: { readRoot: () => root },
+      reservations: {
+        readReservations: () => ({ targets: [], unavailable: false }),
+      },
+      controls,
+      readSettings: () => settings,
+      readPrerequisites: () => report,
+    }).sample();
 
-  const controls = fakeControls();
-  ensureDemandPrerequisiteControls({
+  const failed = track();
+  const missing = fakeControls();
+  const failedReport = prerequisites(root, settings, missing, failed);
+  assert.equal(failedReport.spy, "unavailable");
+  const held = demand(missing, failedReport);
+  assert.equal(held.requestedQuantity("Money"), 1e12);
+  assert.equal(held.isDemanded("Money"), true);
+
+  const succeeded = track();
+  const captured = fakeControls();
+  const readyReport = ensureDemandPrerequisiteControls({
     root,
     settings,
-    controls,
-    ensureCivicControls: () => controls.add("foreign", ["gvis"]),
-    ensureBuildControls: () => {},
+    controls: captured,
+    ensureCivicControls: () => captured.add("foreign", ["gvis"]),
+    ensureBuildControls: succeeded.build,
   });
-  const late = createCapturedResourceDemand(dependencies(controls)).sample();
-  assert.equal(late.requestedQuantity("Money"), 197992);
-  assert.equal(late.isDemanded("Money"), true);
+  assert.equal(readyReport.spy, "ready");
+  const exact = demand(captured, readyReport);
+  assert.equal(exact.requestedQuantity("Money"), 197992);
 }
 
-// Production order, True Path AI half: the reservation stands down while the winner's
-// control is undiscovered and reserves once the build sweep captures it.
+// Production order, True Path AI half: a build sweep that cannot run holds Money, a
+// drawable sweep with a locked Tank reserves the eligible winner, and the complete field
+// reserves exactly.
 {
   const root = {
     race: { truepath: true },
@@ -223,35 +253,62 @@ for (const [root, settings, ids] of [
     "space-tank": { Money: 8.5e6 },
   };
   const settings = { prestigeType: "apocalypse" };
-  const dependencies = (controls) => ({
-    rootState: { readRoot: () => root },
-    reservations: {
-      readReservations: () => ({ targets: [], unavailable: false }),
-    },
-    controls,
-    costs: {
-      readCost: (actionId) =>
-        actionId in prices ? actionPrice(prices[actionId]) : undefined,
-    },
-    readSettings: () => settings,
-  });
-  const early = createCapturedResourceDemand(
-    dependencies(fakeControls()),
-  ).sample();
-  assert.equal(early.requestedQuantity("Money"), 0);
+  const demand = (controls, report) =>
+    createCapturedResourceDemand({
+      rootState: { readRoot: () => root },
+      reservations: {
+        readReservations: () => ({ targets: [], unavailable: false }),
+      },
+      controls,
+      costs: {
+        readCost: (actionId) =>
+          actionId in prices ? actionPrice(prices[actionId]) : undefined,
+      },
+      readSettings: () => settings,
+      readPrerequisites: () => report,
+    }).sample();
 
-  const controls = fakeControls();
-  ensureDemandPrerequisiteControls({
+  const failed = track();
+  const missing = fakeControls();
+  const failedReport = prerequisites(root, settings, missing, failed);
+  assert.equal(failedReport.ai, "unavailable");
+  const held = demand(missing, failedReport);
+  assert.equal(held.requestedQuantity("Money"), 1e12);
+  assert.equal(held.isDemanded("Money"), true);
+
+  // The Tank stays locked (eris 4) while everything else draws: the eligible winner is
+  // the Decoder, priced exactly.
+  const drawable = track();
+  const partial = fakeControls([MAIN_TAB_CONTROL]);
+  const partialReport = ensureDemandPrerequisiteControls({
     root,
     settings,
-    controls,
-    ensureCivicControls: () => {},
+    controls: partial,
+    ensureCivicControls: drawable.civic,
     ensureBuildControls: () => {
-      for (const id of Object.keys(prices)) controls.add(id, ["setData"]);
+      for (const id of Object.keys(prices)) {
+        if (id !== "space-tank") partial.add(id, ["setData"]);
+      }
     },
   });
-  const late = createCapturedResourceDemand(dependencies(controls)).sample();
-  assert.equal(late.requestedQuantity("Money"), 12.5e6);
+  assert.equal(partialReport.ai, "ready");
+  const subset = demand(partial, partialReport);
+  assert.equal(subset.requestedQuantity("Money"), 12.5e6);
+
+  const complete = track();
+  const full = fakeControls();
+  const readyReport = ensureDemandPrerequisiteControls({
+    root,
+    settings,
+    controls: full,
+    ensureCivicControls: complete.civic,
+    ensureBuildControls: () => {
+      for (const id of Object.keys(prices)) full.add(id, ["setData"]);
+    },
+  });
+  assert.equal(readyReport.ai, "ready");
+  const exact = demand(full, readyReport);
+  assert.equal(exact.requestedQuantity("Money"), 12.5e6);
 }
 
 console.log("Captured demand-prerequisites tests passed");

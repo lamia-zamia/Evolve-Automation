@@ -60,6 +60,7 @@ import {
   type CapturedDemandSample,
 } from "../adapters/evolve/economy/resources/captured-resource-demand.ts";
 import { ensureDemandPrerequisiteControls } from "../adapters/evolve/economy/resources/captured-demand-prerequisites.ts";
+import type { DemandPrerequisiteReport } from "../adapters/evolve/economy/resources/captured-demand-prerequisites.ts";
 import { createCapturedResourceSource } from "../adapters/evolve/captured-world-state.ts";
 import { createCapturedFleetDemand } from "../adapters/evolve/combat/captured-fleet-demand.ts";
 import { createCapturedFleetAutomation } from "../adapters/evolve/combat/captured-fleet.ts";
@@ -545,6 +546,10 @@ export function startCapturedRuntime({
   // question, so one of the two has to be late-bound. This one is, with a real empty sample until
   // the cycle exists, rather than a mutable object either side could hold a stale reference to.
   let readDemand: () => CapturedDemandSample = () => EMPTY_DEMAND_SAMPLE;
+  // The prerequisite report is written by the prerequisite phase before any demand consumer
+  // samples, and both demand plans read it back lazily. Reset with the samples every cycle.
+  let demandPrerequisitesThisCycle: DemandPrerequisiteReport | undefined;
+  const readDemandPrerequisites = () => demandPrerequisitesThisCycle;
   const progression = createCapturedProgressionControl({
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,
@@ -709,6 +714,7 @@ export function startCapturedRuntime({
     readOfferedTechs: progression.readOfferedTechs,
     reservations: queueReservations,
     readSettings: () => settingsStore.readRaw(),
+    readPrerequisites: readDemandPrerequisites,
     craftCosts: costs,
     fleet: fleetDemand,
   });
@@ -769,6 +775,7 @@ export function startCapturedRuntime({
     readOfferedTechs: progression.readOfferedTechs,
     reservations: queueReservations,
     readSettings: () => settingsStore.readRaw(),
+    readPrerequisites: readDemandPrerequisites,
     craftCosts: costs,
     fleet: fleetDemand,
   });
@@ -1728,6 +1735,7 @@ export function startCapturedRuntime({
     demandThisCycle = undefined;
     triggerTargetsThisCycle = undefined;
     triggerDemandThisCycle = undefined;
+    demandPrerequisitesThisCycle = undefined;
     progression.resetProjectSample();
     progression.resetBuildingUnlockSample();
     // Drawn before the master-toggle guard below, and before any automation runs: a fresh profile
@@ -1765,9 +1773,10 @@ export function startCapturedRuntime({
       // Two demand reservations need controls that are otherwise discovered later in the
       // cycle: the spy-purchase reserve needs the `foreign` panel control and the True Path AI
       // target needs the civilization build controls. The cycle caches its demand sample on
-      // first use, so this runs before any consumer (triggers, market, storage) can sample.
+      // first use, so this runs before any consumer (triggers, market, storage) can sample,
+      // and the report it writes is what the samples fail closed on when a capture is missing.
       runPhase("demand prerequisites", () => {
-        ensureDemandPrerequisiteControls({
+        demandPrerequisitesThisCycle = ensureDemandPrerequisiteControls({
           root: pageCapture.rootState.readRoot(),
           settings,
           controls: pageCapture.controls,

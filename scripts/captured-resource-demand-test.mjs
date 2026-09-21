@@ -963,8 +963,9 @@ for (const [missionId, completionTech, completionLevel] of [
   assert.equal(aiDemand("none").requestedQuantity("Money"), 0);
 }
 
-// One uncaptured competitor price stands the AI target down: a missing candidate must never
-// win by absence the way a present one wins by price.
+// One uncaptured competitor price stands the AI target down when no prerequisite report can
+// tell a locked panel from an undiscovered one: a missing candidate must never win by
+// absence the way a present one wins by price.
 {
   const partialRoot = {
     race: { truepath: true },
@@ -1002,6 +1003,59 @@ for (const [missionId, completionTech, completionLevel] of [
   }).sample();
   assert.equal(sample.requestedQuantity("Money"), 0);
   assert.equal(sample.isDemanded("Money"), false);
+}
+
+// With a ready report the missing Tank is a locked competitor (eris 4), so the eligible
+// subset ranks and the Decoder reserves exactly. A failed capture instead reports
+// unavailable, and the sample holds Money to its storage envelope rather than freeing it.
+{
+  const reportedRoot = {
+    race: { truepath: true },
+    tech: { titan_ai_core: 3 },
+    space: {
+      decoder: { count: 1, on: 1 },
+      ai_colonist: { count: 0, on: 0 },
+      shock_trooper: { count: 0, on: 0 },
+      tank: { count: 0, on: 0 },
+    },
+    resource: {
+      Money: { amount: 0, max: 1e12, stackable: true },
+    },
+  };
+  const reportedPrices = {
+    "space-decoder": { Money: 12.5e6 },
+    "space-ai_colonist": { Money: 112e6 },
+    "space-shock_trooper": { Money: 4.25e6 },
+  };
+  const reportedDemand = (report) =>
+    createCapturedResourceDemand({
+      rootState: { readRoot: () => reportedRoot },
+      reservations: {
+        readReservations: () => ({ targets: [], unavailable: false }),
+      },
+      controls: {
+        resolve: (elementId) =>
+          elementId in reportedPrices
+            ? { elementId, generation: 1, methods: ["setData"] }
+            : undefined,
+        invoke: () => ({ ok: true, value: undefined }),
+        capturedElementIds: () => Object.keys(reportedPrices),
+      },
+      costs: {
+        readCost: (actionId) =>
+          actionId in reportedPrices
+            ? actionPrice(reportedPrices[actionId])
+            : undefined,
+      },
+      readSettings: () => ({ prestigeType: "apocalypse" }),
+      readPrerequisites: () => report,
+    }).sample();
+  const subset = reportedDemand({ spy: "not-needed", ai: "ready" });
+  assert.equal(subset.requestedQuantity("Money"), 12.5e6);
+  assert.equal(subset.isDemanded("Money"), true);
+  const held = reportedDemand({ spy: "not-needed", ai: "unavailable" });
+  assert.equal(held.requestedQuantity("Money"), 1e12);
+  assert.equal(held.isDemanded("Money"), true);
 }
 
 // A visible Purchase-policy government reserves its government price within Money storage.

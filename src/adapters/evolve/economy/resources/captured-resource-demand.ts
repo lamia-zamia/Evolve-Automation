@@ -19,7 +19,11 @@
  * the captured assist gate says the Tau build-out is still owed, the True Path AI hardware
  * target while its captured counts select one and the game's own cost reader prices it, and the
  * spy-purchase Money reserve while a visible Purchase-policy government names a price within
- * Money storage.
+ * Money storage. Only priced AI competitors rank — a locked target draws no control and is
+ * ineligible rather than cheapest by absence. When the prerequisite report says a reservation
+ * could exist but its capture is not established, the sample holds Money up to its storage
+ * envelope instead of reporting it free; that envelope is anti-spend only and never invents
+ * a price.
  *
  * A missing part of the model can only leave a resource looking undemanded, never demand something
  * nothing wants, so every consumer degrades the same way the bounded slices already do.
@@ -58,16 +62,14 @@ import { INFLATION_CHALLENGE_MONEY } from "../../../../domain/economy/resources/
 import { readCapturedInflationSaveMoney } from "./captured-inflation-assist.ts";
 import { isRetirementAssistActive } from "../../../../domain/progression/prestige/retirement-prep.ts";
 import { RETIREMENT_PREP } from "../../../../domain/progression/build/building-weighting-rules.ts";
-import {
-  planTruepathAiApocalypse,
-  type TruepathAiBuildingTarget,
-} from "../../../../domain/progression/truepath/ai-apocalypse.ts";
+import { planTruepathAiApocalypse } from "../../../../domain/progression/truepath/ai-apocalypse.ts";
 import {
   capturedForeignGovernmentPrice,
   CAPTURED_FOREIGN_CONTROL,
   readCapturedForeignTargets,
   selectCapturedForeignStrategy,
 } from "../../combat/captured-foreign-state.ts";
+import type { DemandPrerequisiteReport } from "./captured-demand-prerequisites.ts";
 
 export interface CapturedResourceDemandDependencies {
   readonly rootState: GameRootStateSource;
@@ -90,6 +92,12 @@ export interface CapturedResourceDemandDependencies {
   readonly fleet?: CapturedFleetDemand;
   /** The player's own triggers, when the captured trigger source is composed. */
   readonly triggers?: CapturedTriggers;
+  /**
+   * The cycle's prerequisite report, when the composition runs the prerequisite phase before
+   * sampling. Absent for callers without that phase, which keep the old stand-down behavior:
+   * an uncaptured control reads as no reservation rather than as a failed capture.
+   */
+  readonly readPrerequisites?: () => DemandPrerequisiteReport | undefined;
 }
 
 export interface CapturedDemandSample {
@@ -861,15 +869,18 @@ function readDemandReservationRetirementGraphene(
   return active ? RETIREMENT_PREP.graphene : null;
 }
 
-/** Captured action id for each True Path AI hardware target. */
-export const DEMAND_RESERVATION_TRUEPATH_AI_ACTIONS: Readonly<
-  Record<TruepathAiBuildingTarget, string>
-> = Object.freeze({
-  TitanDecoder: "space-decoder",
-  TitanAIColonist: "space-ai_colonist",
-  ErisTrooper: "space-shock_trooper",
-  ErisTank: "space-tank",
-});
+import { DEMAND_RESERVATION_TRUEPATH_AI_ACTIONS } from "./truepath-ai-demand-actions.ts";
+
+/**
+ * What a reservation reader established: `ready` carries the exact answer, `not-needed`
+ * means the stage gate fails so nothing could be reserved, and `unavailable` means a
+ * reservation could exist but its capture is not established. The sample fails closed on
+ * `unavailable` by holding Money rather than reporting it free.
+ */
+type DemandReservationOutcome<T> =
+  | { readonly status: "ready"; readonly value: T }
+  | { readonly status: "not-needed" }
+  | { readonly status: "unavailable" };
 
 function readDemandReservationSpaceCount(
   root: unknown,
@@ -894,26 +905,38 @@ function readDemandReservationSpaceMoney(
 }
 
 /**
- * The True Path AI hardware target as a demand target, or null outside that stage. Runs the
- * shared pure planner over captured counts (`global.space.decoder`, `ai_colonist`,
- * `shock_trooper`, `tank` each carry `{count, on}` in DeadSpace `truepath.js`) and prices the
- * winner through the game's own cost reader, so the reservation is what the game would charge.
- * A missing count, price, or control stands down rather than guessing.
+ * The True Path AI hardware target as a demand outcome. Runs the shared pure planner over
+ * captured counts (`global.space.decoder`, `ai_colonist`, `shock_trooper`, `tank` each carry
+ * `{count, on}` in DeadSpace `truepath.js`) and prices the winner through the game's own
+ * cost reader, so the reservation is what the game would charge.
+ *
+ * Only priced competitors rank: a locked target (Shock Trooper below eris 3, Tank below
+ * eris 4) draws no control and names no price, so it is ineligible rather than cheapest
+ * by absence. That ranking is sound only once discovery has established the capture,
+ * which the prerequisite report answers: without it a missing price cannot be told apart
+ * from an undiscovered panel, so the complete field is required instead. Either way a
+ * missing count, an unpriceable winner, or a failed capture stands down rather than
+ * guessing — failed capture as `unavailable`, so the sample holds Money.
  */
 function readDemandReservationTruepathAiTarget(
   root: unknown,
   settings: Record<PropertyKey, unknown>,
   controls: GameControlRegistry | undefined,
   costs: GameActionCostReader | undefined,
-): DemandTarget | null {
+  report: DemandPrerequisiteReport | undefined,
+): DemandReservationOutcome<DemandTarget> {
   const race = readProperty(root, "race");
-  if (!isRecord(race) || readProperty(race, "truepath") !== true) return null;
-  if (settings["prestigeType"] !== "apocalypse") return null;
+  if (!isRecord(race) || readProperty(race, "truepath") !== true)
+    return { status: "not-needed" };
+  if (settings["prestigeType"] !== "apocalypse")
+    return { status: "not-needed" };
   const tech = readProperty(root, "tech");
   const aiCoreLevel = isRecord(tech)
     ? finite(readProperty(tech, "titan_ai_core"))
     : undefined;
-  if (aiCoreLevel === undefined || aiCoreLevel < 3) return null;
+  if (aiCoreLevel === undefined || aiCoreLevel < 3)
+    return { status: "not-needed" };
+  if (report?.ai === "unavailable") return { status: "unavailable" };
   const decoderCount = readDemandReservationSpaceCount(
     root,
     "decoder",
@@ -944,11 +967,10 @@ function readDemandReservationTruepathAiTarget(
     trooperOnCount === undefined ||
     tankOnCount === undefined
   ) {
-    return null;
+    return report === undefined
+      ? { status: "not-needed" }
+      : { status: "unavailable" };
   }
-  // Every competing target's Money price feeds the ranking, so one uncaptured price
-  // stands the whole target down: a missing candidate must never win by absence the way a
-  // present one wins by price. The compatibility reader always feeds all four wrapper costs.
   const decoderMoneyCost = readDemandReservationSpaceMoney(
     costs,
     "space-decoder",
@@ -962,13 +984,23 @@ function readDemandReservationTruepathAiTarget(
     "space-shock_trooper",
   );
   const tankMoneyCost = readDemandReservationSpaceMoney(costs, "space-tank");
-  if (
-    decoderMoneyCost === null ||
-    colonistMoneyCost === null ||
-    trooperMoneyCost === null ||
-    tankMoneyCost === null
-  ) {
-    return null;
+  const pricedCount = [
+    decoderMoneyCost,
+    colonistMoneyCost,
+    trooperMoneyCost,
+    tankMoneyCost,
+  ].filter((price) => price !== null).length;
+  if (pricedCount === 0) {
+    return report === undefined
+      ? { status: "not-needed" }
+      : { status: "unavailable" };
+  }
+  if (report === undefined && pricedCount !== 4) {
+    // Without discovery info a missing price cannot be told apart from an undiscovered
+    // panel, so the complete field is required: a missing candidate must never win by
+    // absence the way a present one wins by price. The compatibility reader always feeds
+    // all four wrapper costs.
+    return { status: "not-needed" };
   }
   const target = planTruepathAiApocalypse({
     enabled: true,
@@ -984,45 +1016,76 @@ function readDemandReservationTruepathAiTarget(
     trooperMoneyCost,
     tankMoneyCost,
   }).target;
-  if (target === null || controls === undefined || costs === undefined)
-    return null;
+  if (target === null) return { status: "not-needed" };
+  if (controls === undefined || costs === undefined) {
+    return report === undefined
+      ? { status: "not-needed" }
+      : { status: "unavailable" };
+  }
   const actionId = DEMAND_RESERVATION_TRUEPATH_AI_ACTIONS[target];
-  if (controls.resolve(actionId) === undefined) return null;
+  if (controls.resolve(actionId) === undefined) {
+    return report === undefined
+      ? { status: "not-needed" }
+      : { status: "unavailable" };
+  }
   const price = costs.readCost(actionId);
-  if (price === undefined) return null;
+  if (price === undefined) {
+    return report === undefined
+      ? { status: "not-needed" }
+      : { status: "unavailable" };
+  }
   const targetCosts = toCosts(price.cost, price.pool);
-  if (targetCosts.length === 0) return null;
-  return Object.freeze({
-    ...(price.pool === undefined ? {} : { pool: price.pool }),
-    isProject: false,
-    progress: null,
-    costs: targetCosts,
-  });
+  if (targetCosts.length === 0) {
+    return report === undefined
+      ? { status: "not-needed" }
+      : { status: "unavailable" };
+  }
+  return {
+    status: "ready",
+    value: Object.freeze({
+      ...(price.pool === undefined ? {} : { pool: price.pool }),
+      isProject: false,
+      progress: null,
+      costs: targetCosts,
+    }),
+  };
 }
 
 /**
- * Money reserve for a configured foreign-government Purchase, or 0 when nothing qualifies.
- * Mirrors the compatibility `SpyManager.purchaseMoney`: `tech.unify === 1`, `autoFight` on,
+ * Money reserve for a configured foreign-government Purchase, as an outcome. Mirrors the
+ * compatibility `SpyManager.purchaseMoney`: `tech.unify === 1`, `autoFight` on,
  * unification wanted (`foreignUnification` or an achievement goal forcing Purchase), and a
  * visible Purchase-policy government below `tech.world_control` that is not bought yet. Each
  * candidate needs `max(govPrice, spy cost to 3 spies)` within Money storage; the government
  * price is the shared captured mirror of upstream `govPrice`, and the spy cost restates
  * upstream `spyCost` at level 3 except for the Scorpio discount, whose sign no capture
  * reaches — ignoring it over-reserves slightly, which is the safe direction for a reserve.
+ * A failed capture reads as `unavailable` rather than zero, so the sample holds Money.
  */
 function readDemandReservationSpyPurchaseMoney(
   root: unknown,
   settings: Record<PropertyKey, unknown>,
   controls: GameControlRegistry | undefined,
-): number {
-  if (settings["autoFight"] !== true) return 0;
+  report: DemandPrerequisiteReport | undefined,
+): DemandReservationOutcome<number> {
+  if (settings["autoFight"] !== true) return { status: "not-needed" };
   const tech = readProperty(root, "tech");
-  if (!isRecord(tech) || readProperty(tech, "unify") !== 1) return 0;
-  if (controls === undefined) return 0;
+  if (!isRecord(tech) || readProperty(tech, "unify") !== 1)
+    return { status: "not-needed" };
+  if (report?.spy === "unavailable") return { status: "unavailable" };
+  if (controls === undefined) {
+    return report === undefined
+      ? { status: "not-needed" }
+      : { status: "unavailable" };
+  }
   const foreign = controls.resolve(CAPTURED_FOREIGN_CONTROL);
-  if (foreign === undefined || !foreign.methods.includes("gvis")) return 0;
+  if (foreign === undefined || !foreign.methods.includes("gvis")) {
+    return report === undefined
+      ? { status: "not-needed" }
+      : { status: "unavailable" };
+  }
   const visible = readCapturedForeignTargets(root, controls, foreign, settings);
-  if (visible.length === 0) return 0;
+  if (visible.length === 0) return { status: "not-needed" };
   const strategy = selectCapturedForeignStrategy(root, settings, visible);
   const race = readProperty(root, "race");
   const infiltrator =
@@ -1030,7 +1093,7 @@ function readDemandReservationSpyPurchaseMoney(
   const moneyMax = finite(
     readProperty(readProperty(readProperty(root, "resource"), "Money"), "max"),
   );
-  if (moneyMax === undefined) return 0;
+  if (moneyMax === undefined) return { status: "not-needed" };
   let purchaseMoney = 0;
   for (const target of strategy.governments) {
     if (target.governmentId >= 3 || target.policy !== "Purchase") continue;
@@ -1056,7 +1119,7 @@ function readDemandReservationSpyPurchaseMoney(
       purchaseMoney = moneyNeeded;
     }
   }
-  return purchaseMoney;
+  return { status: "ready", value: purchaseMoney };
 }
 
 export function createCapturedResourceDemand(
@@ -1129,17 +1192,32 @@ export function createCapturedResourceDemand(
         root,
         settings,
       );
-      const truepathAiBuildingTarget = readDemandReservationTruepathAiTarget(
+      const prerequisites = dependencies.readPrerequisites?.();
+      const truepathAiReservation = readDemandReservationTruepathAiTarget(
         root,
         settings,
         dependencies.controls,
         dependencies.costs,
+        prerequisites,
       );
-      const spyPurchaseMoney = readDemandReservationSpyPurchaseMoney(
+      const truepathAiBuildingTarget =
+        truepathAiReservation.status === "ready"
+          ? truepathAiReservation.value
+          : null;
+      const spyReservation = readDemandReservationSpyPurchaseMoney(
         root,
         settings,
         dependencies.controls,
+        prerequisites,
       );
+      const spyPurchaseMoney =
+        spyReservation.status === "ready" ? spyReservation.value : 0;
+      // A reservation that could exist but whose capture is not established must not read
+      // as free: hold Money up to its storage envelope instead. The price is unknown, so
+      // the envelope is anti-spend only and does not feed the storage requirements below.
+      const moneyEnvelope =
+        truepathAiReservation.status === "unavailable" ||
+        spyReservation.status === "unavailable";
       if (
         queued.length === 0 &&
         triggerTargets.length === 0 &&
@@ -1152,7 +1230,8 @@ export function createCapturedResourceDemand(
         inflationMoney === null &&
         retirementGraphene === null &&
         truepathAiBuildingTarget === null &&
-        spyPurchaseMoney === 0
+        spyPurchaseMoney === 0 &&
+        !moneyEnvelope
       ) {
         return EMPTY_DEMAND_SAMPLE;
       }
@@ -1254,6 +1333,16 @@ export function createCapturedResourceDemand(
             ? amount
             : Math.min(amount, maximum),
         );
+      }
+      if (moneyEnvelope) {
+        const maximum = finite(
+          readProperty(readProperty(resources, "Money"), "max"),
+        );
+        const envelope =
+          maximum === undefined || maximum < 0
+            ? Number.MAX_SAFE_INTEGER
+            : maximum;
+        requested.set("Money", Math.max(requested.get("Money") ?? 0, envelope));
       }
 
       const factoryStorageTargets = factoryProductions

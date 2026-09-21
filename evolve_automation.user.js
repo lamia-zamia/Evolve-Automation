@@ -13503,6 +13503,14 @@
     return `#gov${governmentId} div span:nth-child(3) button`;
   }
 
+  // src/adapters/evolve/economy/resources/truepath-ai-demand-actions.ts
+  var DEMAND_RESERVATION_TRUEPATH_AI_ACTIONS = Object.freeze({
+    TitanDecoder: "space-decoder",
+    TitanAIColonist: "space-ai_colonist",
+    ErisTrooper: "space-shock_trooper",
+    ErisTank: "space-tank"
+  });
+
   // src/adapters/evolve/economy/resources/captured-resource-demand.ts
   var NO_STORAGE_REQUIREMENT = 1, EMPTY_DEMAND_SAMPLE = Object.freeze({
     requestedQuantity: () => 0,
@@ -14001,12 +14009,6 @@
       isolationResearched: (isolationLevel ?? 0) >= 1
     }) ? RETIREMENT_PREP.graphene : null;
   }
-  var DEMAND_RESERVATION_TRUEPATH_AI_ACTIONS = Object.freeze({
-    TitanDecoder: "space-decoder",
-    TitanAIColonist: "space-ai_colonist",
-    ErisTrooper: "space-shock_trooper",
-    ErisTank: "space-tank"
-  });
   function readDemandReservationSpaceCount(root, key, field) {
     let entry = readProperty(readProperty(root, "space"), key);
     if (!isRecord(entry)) return;
@@ -14020,11 +14022,16 @@
     let money = finite(price.cost.Money);
     return money === void 0 || money < 0 ? null : money;
   }
-  function readDemandReservationTruepathAiTarget(root, settings, controls2, costs) {
+  function readDemandReservationTruepathAiTarget(root, settings, controls2, costs, report) {
     let race = readProperty(root, "race");
-    if (!isRecord(race) || readProperty(race, "truepath") !== !0 || settings.prestigeType !== "apocalypse") return null;
+    if (!isRecord(race) || readProperty(race, "truepath") !== !0)
+      return { status: "not-needed" };
+    if (settings.prestigeType !== "apocalypse")
+      return { status: "not-needed" };
     let tech = readProperty(root, "tech"), aiCoreLevel = isRecord(tech) ? finite(readProperty(tech, "titan_ai_core")) : void 0;
-    if (aiCoreLevel === void 0 || aiCoreLevel < 3) return null;
+    if (aiCoreLevel === void 0 || aiCoreLevel < 3)
+      return { status: "not-needed" };
+    if (report?.ai === "unavailable") return { status: "unavailable" };
     let decoderCount = readDemandReservationSpaceCount(
       root,
       "decoder",
@@ -14043,7 +14050,7 @@
       "on"
     ), tankOnCount = readDemandReservationSpaceCount(root, "tank", "on");
     if (decoderCount === void 0 || decoderOnCount === void 0 || colonistCount === void 0 || colonistOnCount === void 0 || trooperOnCount === void 0 || tankOnCount === void 0)
-      return null;
+      return report === void 0 ? { status: "not-needed" } : { status: "unavailable" };
     let decoderMoneyCost = readDemandReservationSpaceMoney(
       costs,
       "space-decoder"
@@ -14053,9 +14060,16 @@
     ), trooperMoneyCost = readDemandReservationSpaceMoney(
       costs,
       "space-shock_trooper"
-    ), tankMoneyCost = readDemandReservationSpaceMoney(costs, "space-tank");
-    if (decoderMoneyCost === null || colonistMoneyCost === null || trooperMoneyCost === null || tankMoneyCost === null)
-      return null;
+    ), tankMoneyCost = readDemandReservationSpaceMoney(costs, "space-tank"), pricedCount = [
+      decoderMoneyCost,
+      colonistMoneyCost,
+      trooperMoneyCost,
+      tankMoneyCost
+    ].filter((price2) => price2 !== null).length;
+    if (pricedCount === 0)
+      return report === void 0 ? { status: "not-needed" } : { status: "unavailable" };
+    if (report === void 0 && pricedCount !== 4)
+      return { status: "not-needed" };
     let target = planTruepathAiApocalypse({
       enabled: !0,
       aiCoreLevel,
@@ -14070,32 +14084,43 @@
       trooperMoneyCost,
       tankMoneyCost
     }).target;
-    if (target === null || controls2 === void 0 || costs === void 0)
-      return null;
+    if (target === null) return { status: "not-needed" };
+    if (controls2 === void 0 || costs === void 0)
+      return report === void 0 ? { status: "not-needed" } : { status: "unavailable" };
     let actionId = DEMAND_RESERVATION_TRUEPATH_AI_ACTIONS[target];
-    if (controls2.resolve(actionId) === void 0) return null;
+    if (controls2.resolve(actionId) === void 0)
+      return report === void 0 ? { status: "not-needed" } : { status: "unavailable" };
     let price = costs.readCost(actionId);
-    if (price === void 0) return null;
+    if (price === void 0)
+      return report === void 0 ? { status: "not-needed" } : { status: "unavailable" };
     let targetCosts = toCosts(price.cost, price.pool);
-    return targetCosts.length === 0 ? null : Object.freeze({
-      ...price.pool === void 0 ? {} : { pool: price.pool },
-      isProject: !1,
-      progress: null,
-      costs: targetCosts
-    });
+    return targetCosts.length === 0 ? report === void 0 ? { status: "not-needed" } : { status: "unavailable" } : {
+      status: "ready",
+      value: Object.freeze({
+        ...price.pool === void 0 ? {} : { pool: price.pool },
+        isProject: !1,
+        progress: null,
+        costs: targetCosts
+      })
+    };
   }
-  function readDemandReservationSpyPurchaseMoney(root, settings, controls2) {
-    if (settings.autoFight !== !0) return 0;
+  function readDemandReservationSpyPurchaseMoney(root, settings, controls2, report) {
+    if (settings.autoFight !== !0) return { status: "not-needed" };
     let tech = readProperty(root, "tech");
-    if (!isRecord(tech) || readProperty(tech, "unify") !== 1 || controls2 === void 0) return 0;
+    if (!isRecord(tech) || readProperty(tech, "unify") !== 1)
+      return { status: "not-needed" };
+    if (report?.spy === "unavailable") return { status: "unavailable" };
+    if (controls2 === void 0)
+      return report === void 0 ? { status: "not-needed" } : { status: "unavailable" };
     let foreign = controls2.resolve(CAPTURED_FOREIGN_CONTROL);
-    if (foreign === void 0 || !foreign.methods.includes("gvis")) return 0;
+    if (foreign === void 0 || !foreign.methods.includes("gvis"))
+      return report === void 0 ? { status: "not-needed" } : { status: "unavailable" };
     let visible = readCapturedForeignTargets(root, controls2, foreign, settings);
-    if (visible.length === 0) return 0;
+    if (visible.length === 0) return { status: "not-needed" };
     let strategy = selectCapturedForeignStrategy(root, settings, visible), race = readProperty(root, "race"), infiltrator = isRecord(race) && !!readProperty(race, "infiltrator"), moneyMax = finite(
       readProperty(readProperty(readProperty(root, "resource"), "Money"), "max")
     );
-    if (moneyMax === void 0) return 0;
+    if (moneyMax === void 0) return { status: "not-needed" };
     let purchaseMoney = 0;
     for (let target of strategy.governments) {
       if (target.governmentId >= 3 || target.policy !== "Purchase" || target.purchased || target.occupied || target.annexed || target.military === void 0) continue;
@@ -14114,7 +14139,7 @@
       }
       moneyNeeded <= moneyMax && moneyNeeded > purchaseMoney && (purchaseMoney = moneyNeeded);
     }
-    return purchaseMoney;
+    return { status: "ready", value: purchaseMoney };
   }
   function createCapturedResourceDemand(dependencies) {
     return Object.freeze({
@@ -14155,17 +14180,19 @@
         ), retirementGraphene = readDemandReservationRetirementGraphene(
           root,
           settings
-        ), truepathAiBuildingTarget = readDemandReservationTruepathAiTarget(
+        ), prerequisites = dependencies.readPrerequisites?.(), truepathAiReservation = readDemandReservationTruepathAiTarget(
           root,
           settings,
           dependencies.controls,
-          dependencies.costs
-        ), spyPurchaseMoney = readDemandReservationSpyPurchaseMoney(
+          dependencies.costs,
+          prerequisites
+        ), truepathAiBuildingTarget = truepathAiReservation.status === "ready" ? truepathAiReservation.value : null, spyReservation = readDemandReservationSpyPurchaseMoney(
           root,
           settings,
-          dependencies.controls
-        );
-        if (queued.length === 0 && triggerTargets.length === 0 && saving === null && (offered === void 0 || offered.length === 0) && !hasFactoryDemand && !hasCrafterDemand && missions.length === 0 && !hasFleetDemand && inflationMoney === null && retirementGraphene === null && truepathAiBuildingTarget === null && spyPurchaseMoney === 0)
+          dependencies.controls,
+          prerequisites
+        ), spyPurchaseMoney = spyReservation.status === "ready" ? spyReservation.value : 0, moneyEnvelope = truepathAiReservation.status === "unavailable" || spyReservation.status === "unavailable";
+        if (queued.length === 0 && triggerTargets.length === 0 && saving === null && (offered === void 0 || offered.length === 0) && !hasFactoryDemand && !hasCrafterDemand && missions.length === 0 && !hasFleetDemand && inflationMoney === null && retirementGraphene === null && truepathAiBuildingTarget === null && spyPurchaseMoney === 0 && !moneyEnvelope)
           return EMPTY_DEMAND_SAMPLE;
         let savingCosts = saving === null ? null : toCosts(saving.cost, saving.pool), baseInput = Object.freeze({
           settings: readSettingsInput(settingsValue),
@@ -14236,6 +14263,12 @@
             maximum === void 0 || maximum < 0 ? amount : Math.min(amount, maximum)
           );
         }
+        if (moneyEnvelope) {
+          let maximum = finite(
+            readProperty(readProperty(resources, "Money"), "max")
+          ), envelope = maximum === void 0 || maximum < 0 ? Number.MAX_SAFE_INTEGER : maximum;
+          requested.set("Money", Math.max(requested.get("Money") ?? 0, envelope));
+        }
         let factoryStorageTargets = factoryProductions.filter(
           (production) => production.unlocked && production.enabled && production.weighting > 0
         ).map(
@@ -14304,29 +14337,31 @@
   }
 
   // src/adapters/evolve/economy/resources/captured-demand-prerequisites.ts
-  function wantsSpyPurchaseReservation(root, settings, controls2) {
+  function spyReservationWanted(root, settings) {
     if (settings.autoFight !== !0) return !1;
     let tech = readProperty(root, "tech");
-    return !isRecord(tech) || readProperty(tech, "unify") !== 1 ? !1 : controls2.resolve(CAPTURED_FOREIGN_CONTROL) === void 0;
+    return isRecord(tech) && readProperty(tech, "unify") === 1;
   }
-  function wantsTruepathAiReservation(root, settings, controls2) {
+  function truepathAiReservationWanted(root, settings) {
     let race = readProperty(root, "race");
     if (!isRecord(race) || readProperty(race, "truepath") !== !0 || settings.prestigeType !== "apocalypse") return !1;
     let tech = readProperty(root, "tech"), aiCoreLevel = isRecord(tech) ? finite(readProperty(tech, "titan_ai_core")) : void 0;
-    return aiCoreLevel === void 0 || aiCoreLevel < 3 ? !1 : Object.values(DEMAND_RESERVATION_TRUEPATH_AI_ACTIONS).some(
-      (actionId) => controls2.resolve(actionId) === void 0
+    return aiCoreLevel !== void 0 && aiCoreLevel >= 3;
+  }
+  function spyPrerequisiteStatus(dependencies) {
+    return spyReservationWanted(dependencies.root, dependencies.settings) ? dependencies.controls.resolve(CAPTURED_FOREIGN_CONTROL) !== void 0 ? "ready" : (dependencies.ensureCivicControls(), dependencies.controls.resolve(CAPTURED_FOREIGN_CONTROL) !== void 0 ? "ready" : "unavailable") : "not-needed";
+  }
+  function aiPrerequisiteStatus(dependencies) {
+    if (!truepathAiReservationWanted(dependencies.root, dependencies.settings))
+      return "not-needed";
+    let missing = () => Object.values(DEMAND_RESERVATION_TRUEPATH_AI_ACTIONS).some(
+      (actionId) => dependencies.controls.resolve(actionId) === void 0
     );
+    return !missing() || (dependencies.ensureBuildControls(), !missing()) || dependencies.controls.resolve(MAIN_TAB_CONTROL) !== void 0 ? "ready" : "unavailable";
   }
   function ensureDemandPrerequisiteControls(dependencies) {
-    wantsSpyPurchaseReservation(
-      dependencies.root,
-      dependencies.settings,
-      dependencies.controls
-    ) && dependencies.ensureCivicControls(), wantsTruepathAiReservation(
-      dependencies.root,
-      dependencies.settings,
-      dependencies.controls
-    ) && dependencies.ensureBuildControls();
+    let spy = spyPrerequisiteStatus(dependencies), ai = aiPrerequisiteStatus(dependencies);
+    return Object.freeze({ spy, ai });
   }
 
   // src/adapters/evolve/combat/captured-fleet-demand.ts
@@ -41540,7 +41575,7 @@ Only continue if you trust the source. Injected code:
         reportOnce(`${name} stopped: ${String(error)}`);
         return;
       }
-    }, readDemand = () => EMPTY_DEMAND_SAMPLE, progression = createCapturedProgressionControl({
+    }, readDemand = () => EMPTY_DEMAND_SAMPLE, demandPrerequisitesThisCycle, readDemandPrerequisites = () => demandPrerequisitesThisCycle, progression = createCapturedProgressionControl({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
       mountSuppression: pageCapture2.mountSuppression,
@@ -41673,6 +41708,7 @@ Only continue if you trust the source. Injected code:
       readOfferedTechs: progression.readOfferedTechs,
       reservations: queueReservations,
       readSettings: () => settingsStore.readRaw(),
+      readPrerequisites: readDemandPrerequisites,
       craftCosts: costs,
       fleet: fleetDemand
     }), triggerDemandThisCycle, readTriggerDemand = () => triggerDemandThisCycle ??= triggerDemand.sample(), triggers = createCapturedTriggers({
@@ -41712,6 +41748,7 @@ Only continue if you trust the source. Injected code:
       readOfferedTechs: progression.readOfferedTechs,
       reservations: queueReservations,
       readSettings: () => settingsStore.readRaw(),
+      readPrerequisites: readDemandPrerequisites,
       craftCosts: costs,
       fleet: fleetDemand
     }), demandThisCycle;
@@ -42319,7 +42356,7 @@ Only continue if you trust the source. Injected code:
       readSettings: () => settingsStore.readRaw(),
       onActivity
     }), runCycle = () => {
-      if (automationCycle += 1, demandThisCycle = void 0, triggerTargetsThisCycle = void 0, triggerDemandThisCycle = void 0, progression.resetProjectSample(), progression.resetBuildingUnlockSample(), settingsPanel.ensurePanel(), !pageCapture2.isComplete()) return;
+      if (automationCycle += 1, demandThisCycle = void 0, triggerTargetsThisCycle = void 0, triggerDemandThisCycle = void 0, demandPrerequisitesThisCycle = void 0, progression.resetProjectSample(), progression.resetBuildingUnlockSample(), settingsPanel.ensurePanel(), !pageCapture2.isComplete()) return;
       refreshDiscoveredSettings();
       let settings = settingsStore.readRaw();
       if (!pageCapture2.isComplete() || !isEnabled(settings, "masterScriptToggle"))
@@ -42335,7 +42372,7 @@ Only continue if you trust the source. Injected code:
           }
         }
         runPhase("demand prerequisites", () => {
-          ensureDemandPrerequisiteControls({
+          demandPrerequisitesThisCycle = ensureDemandPrerequisiteControls({
             root: pageCapture2.rootState.readRoot(),
             settings,
             controls: pageCapture2.controls,
