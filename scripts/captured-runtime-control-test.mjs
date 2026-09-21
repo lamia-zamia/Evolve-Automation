@@ -1166,7 +1166,7 @@ assert.equal(unsubscribeCount, 1);
   // Tuned to the tick's own read schedule: the first reads of the tick throw so the earlier
   // phases report failures, and the next three succeed so the espionage and battle phases run.
   // Re-tune by sweeping this number if the tick changes how often it reads the root.
-  let remainingRootFailures = 12;
+  let remainingRootFailures = 13;
   let validCombatRootReads = 0;
   const root = {
     tech: { spy: 2 },
@@ -1338,6 +1338,9 @@ assert.equal(unsubscribeCount, 1);
       )
       .map((message) => message.slice(0, message.indexOf(" stopped: "))),
     [
+      // The demand-prerequisites phase reads the root first, so it is the first to report
+      // while the stub is still throwing.
+      "demand prerequisites",
       "autoResearch",
       "autoBuild",
       "autoFight.mercenary",

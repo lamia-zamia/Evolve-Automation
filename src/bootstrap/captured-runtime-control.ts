@@ -59,6 +59,7 @@ import {
   EMPTY_DEMAND_SAMPLE,
   type CapturedDemandSample,
 } from "../adapters/evolve/economy/resources/captured-resource-demand.ts";
+import { ensureDemandPrerequisiteControls } from "../adapters/evolve/economy/resources/captured-demand-prerequisites.ts";
 import { createCapturedResourceSource } from "../adapters/evolve/captured-world-state.ts";
 import { createCapturedFleetDemand } from "../adapters/evolve/combat/captured-fleet-demand.ts";
 import { createCapturedFleetAutomation } from "../adapters/evolve/combat/captured-fleet.ts";
@@ -1761,6 +1762,19 @@ export function startCapturedRuntime({
           return;
         }
       }
+      // Two demand reservations need controls that are otherwise discovered later in the
+      // cycle: the spy-purchase reserve needs the `foreign` panel control and the True Path AI
+      // target needs the civilization build controls. The cycle caches its demand sample on
+      // first use, so this runs before any consumer (triggers, market, storage) can sample.
+      runPhase("demand prerequisites", () => {
+        ensureDemandPrerequisiteControls({
+          root: pageCapture.rootState.readRoot(),
+          settings,
+          controls: pageCapture.controls,
+          ensureCivicControls,
+          ensureBuildControls: progression.ensureBuildControls,
+        });
+      });
       if (isEnabled(settings, "autoTrigger")) {
         runPhase("autoTrigger discovery", () => {
           // Trigger targets are only the actions whose controls were captured, so the sample the

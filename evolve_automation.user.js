@@ -13195,15 +13195,6 @@
   }
 
   // src/adapters/evolve/economy/resources/captured-inflation-assist.ts
-  var ACHIEVEMENT_LEVEL_TRAITS2 = Object.freeze([
-    "no_plasmid",
-    "no_trade",
-    "no_craft",
-    "no_crispr",
-    "weak_mastery",
-    "nerfed",
-    "badgenes"
-  ]);
   function achievementAffix(universe) {
     if (typeof universe == "string")
       switch (universe) {
@@ -13242,10 +13233,8 @@
         return !1;
       let rawStar = readProperty(wheelbarrow, affix), wheelbarrowStar = rawStar == null ? 0 : finite(rawStar);
       if (wheelbarrowStar === void 0 || wheelbarrowStar < 0) return !1;
-      let achievementLevel4 = 1;
-      for (let trait of ACHIEVEMENT_LEVEL_TRAITS2)
-        race[trait] && (achievementLevel4 += 1);
-      return achievementLevel4 = Math.min(achievementLevel4, 5), shouldSaveInflationMoney({
+      let achievementLevel4 = readCapturedAscensionLevel(root);
+      return achievementLevel4 === void 0 ? !1 : shouldSaveInflationMoney({
         active: wheelbarrowStar < achievementLevel4 && readProperty(race, "inflation") !== !1,
         saveMinutes,
         money: {
@@ -14055,6 +14044,18 @@
     ), tankOnCount = readDemandReservationSpaceCount(root, "tank", "on");
     if (decoderCount === void 0 || decoderOnCount === void 0 || colonistCount === void 0 || colonistOnCount === void 0 || trooperOnCount === void 0 || tankOnCount === void 0)
       return null;
+    let decoderMoneyCost = readDemandReservationSpaceMoney(
+      costs,
+      "space-decoder"
+    ), colonistMoneyCost = readDemandReservationSpaceMoney(
+      costs,
+      "space-ai_colonist"
+    ), trooperMoneyCost = readDemandReservationSpaceMoney(
+      costs,
+      "space-shock_trooper"
+    ), tankMoneyCost = readDemandReservationSpaceMoney(costs, "space-tank");
+    if (decoderMoneyCost === null || colonistMoneyCost === null || trooperMoneyCost === null || tankMoneyCost === null)
+      return null;
     let target = planTruepathAiApocalypse({
       enabled: !0,
       aiCoreLevel,
@@ -14064,16 +14065,10 @@
       colonistOnCount,
       trooperOnCount,
       tankOnCount,
-      decoderMoneyCost: readDemandReservationSpaceMoney(costs, "space-decoder"),
-      colonistMoneyCost: readDemandReservationSpaceMoney(
-        costs,
-        "space-ai_colonist"
-      ),
-      trooperMoneyCost: readDemandReservationSpaceMoney(
-        costs,
-        "space-shock_trooper"
-      ),
-      tankMoneyCost: readDemandReservationSpaceMoney(costs, "space-tank")
+      decoderMoneyCost,
+      colonistMoneyCost,
+      trooperMoneyCost,
+      tankMoneyCost
     }).target;
     if (target === null || controls2 === void 0 || costs === void 0)
       return null;
@@ -14093,7 +14088,7 @@
     if (settings.autoFight !== !0) return 0;
     let tech = readProperty(root, "tech");
     if (!isRecord(tech) || readProperty(tech, "unify") !== 1 || controls2 === void 0) return 0;
-    let foreign = controls2.resolve("foreign");
+    let foreign = controls2.resolve(CAPTURED_FOREIGN_CONTROL);
     if (foreign === void 0 || !foreign.methods.includes("gvis")) return 0;
     let visible = readCapturedForeignTargets(root, controls2, foreign, settings);
     if (visible.length === 0) return 0;
@@ -14306,6 +14301,32 @@
         });
       }
     });
+  }
+
+  // src/adapters/evolve/economy/resources/captured-demand-prerequisites.ts
+  function wantsSpyPurchaseReservation(root, settings, controls2) {
+    if (settings.autoFight !== !0) return !1;
+    let tech = readProperty(root, "tech");
+    return !isRecord(tech) || readProperty(tech, "unify") !== 1 ? !1 : controls2.resolve(CAPTURED_FOREIGN_CONTROL) === void 0;
+  }
+  function wantsTruepathAiReservation(root, settings, controls2) {
+    let race = readProperty(root, "race");
+    if (!isRecord(race) || readProperty(race, "truepath") !== !0 || settings.prestigeType !== "apocalypse") return !1;
+    let tech = readProperty(root, "tech"), aiCoreLevel = isRecord(tech) ? finite(readProperty(tech, "titan_ai_core")) : void 0;
+    return aiCoreLevel === void 0 || aiCoreLevel < 3 ? !1 : Object.values(DEMAND_RESERVATION_TRUEPATH_AI_ACTIONS).some(
+      (actionId) => controls2.resolve(actionId) === void 0
+    );
+  }
+  function ensureDemandPrerequisiteControls(dependencies) {
+    wantsSpyPurchaseReservation(
+      dependencies.root,
+      dependencies.settings,
+      dependencies.controls
+    ) && dependencies.ensureCivicControls(), wantsTruepathAiReservation(
+      dependencies.root,
+      dependencies.settings,
+      dependencies.controls
+    ) && dependencies.ensureBuildControls();
   }
 
   // src/adapters/evolve/combat/captured-fleet-demand.ts
@@ -42313,7 +42334,15 @@ Only continue if you trust the source. Injected code:
             return;
           }
         }
-        isEnabled(settings, "autoTrigger") && runPhase("autoTrigger discovery", () => {
+        runPhase("demand prerequisites", () => {
+          ensureDemandPrerequisiteControls({
+            root: pageCapture2.rootState.readRoot(),
+            settings,
+            controls: pageCapture2.controls,
+            ensureCivicControls,
+            ensureBuildControls: progression.ensureBuildControls
+          });
+        }), isEnabled(settings, "autoTrigger") && runPhase("autoTrigger discovery", () => {
           progression.ensureBuildControls(), refreshDiscoveredSettings();
         }), isEnabled(settings, "autoFleet") && runPhase("autoFleet discovery", () => {
           readProperty(

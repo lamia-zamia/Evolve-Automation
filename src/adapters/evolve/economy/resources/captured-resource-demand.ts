@@ -64,6 +64,7 @@ import {
 } from "../../../../domain/progression/truepath/ai-apocalypse.ts";
 import {
   capturedForeignGovernmentPrice,
+  CAPTURED_FOREIGN_CONTROL,
   readCapturedForeignTargets,
   selectCapturedForeignStrategy,
 } from "../../combat/captured-foreign-state.ts";
@@ -861,7 +862,7 @@ function readDemandReservationRetirementGraphene(
 }
 
 /** Captured action id for each True Path AI hardware target. */
-const DEMAND_RESERVATION_TRUEPATH_AI_ACTIONS: Readonly<
+export const DEMAND_RESERVATION_TRUEPATH_AI_ACTIONS: Readonly<
   Record<TruepathAiBuildingTarget, string>
 > = Object.freeze({
   TitanDecoder: "space-decoder",
@@ -945,6 +946,30 @@ function readDemandReservationTruepathAiTarget(
   ) {
     return null;
   }
+  // Every competing target's Money price feeds the ranking, so one uncaptured price
+  // stands the whole target down: a missing candidate must never win by absence the way a
+  // present one wins by price. The compatibility reader always feeds all four wrapper costs.
+  const decoderMoneyCost = readDemandReservationSpaceMoney(
+    costs,
+    "space-decoder",
+  );
+  const colonistMoneyCost = readDemandReservationSpaceMoney(
+    costs,
+    "space-ai_colonist",
+  );
+  const trooperMoneyCost = readDemandReservationSpaceMoney(
+    costs,
+    "space-shock_trooper",
+  );
+  const tankMoneyCost = readDemandReservationSpaceMoney(costs, "space-tank");
+  if (
+    decoderMoneyCost === null ||
+    colonistMoneyCost === null ||
+    trooperMoneyCost === null ||
+    tankMoneyCost === null
+  ) {
+    return null;
+  }
   const target = planTruepathAiApocalypse({
     enabled: true,
     aiCoreLevel,
@@ -954,16 +979,10 @@ function readDemandReservationTruepathAiTarget(
     colonistOnCount,
     trooperOnCount,
     tankOnCount,
-    decoderMoneyCost: readDemandReservationSpaceMoney(costs, "space-decoder"),
-    colonistMoneyCost: readDemandReservationSpaceMoney(
-      costs,
-      "space-ai_colonist",
-    ),
-    trooperMoneyCost: readDemandReservationSpaceMoney(
-      costs,
-      "space-shock_trooper",
-    ),
-    tankMoneyCost: readDemandReservationSpaceMoney(costs, "space-tank"),
+    decoderMoneyCost,
+    colonistMoneyCost,
+    trooperMoneyCost,
+    tankMoneyCost,
   }).target;
   if (target === null || controls === undefined || costs === undefined)
     return null;
@@ -1000,7 +1019,7 @@ function readDemandReservationSpyPurchaseMoney(
   const tech = readProperty(root, "tech");
   if (!isRecord(tech) || readProperty(tech, "unify") !== 1) return 0;
   if (controls === undefined) return 0;
-  const foreign = controls.resolve("foreign");
+  const foreign = controls.resolve(CAPTURED_FOREIGN_CONTROL);
   if (foreign === undefined || !foreign.methods.includes("gvis")) return 0;
   const visible = readCapturedForeignTargets(root, controls, foreign, settings);
   if (visible.length === 0) return 0;

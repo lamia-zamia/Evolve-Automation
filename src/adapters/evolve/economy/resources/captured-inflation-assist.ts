@@ -4,8 +4,8 @@
  *
  * The challenge is won by holding a fixed Money total at once, so the assist stops every Money
  * purchase for the last stretch before that total is reachable. Upstream decides the achievement
- * requirement in its own `alevel()`; it is reconstructed here from the captured race traits
- * because that method is not part of the captured surface.
+ * requirement in its own `alevel()`, answered here by the shared captured ascension-level
+ * reader because that method is not part of the captured surface.
  *
  * Anything the root cannot answer — no Inflation run, no Money resource, an unreadable achievement
  * bag — means "do not save", which is the behaviour of a run that is not on the challenge at all.
@@ -15,17 +15,8 @@ import {
   INFLATION_CHALLENGE_MONEY,
   shouldSaveInflationMoney,
 } from "../../../../domain/economy/resources/inflation-assist.ts";
+import { readCapturedAscensionLevel } from "../../ascension-level.ts";
 import { finite, isRecord, readProperty } from "../../../validation.ts";
-
-const ACHIEVEMENT_LEVEL_TRAITS = Object.freeze([
-  "no_plasmid",
-  "no_trade",
-  "no_craft",
-  "no_crispr",
-  "weak_mastery",
-  "nerfed",
-  "badgenes",
-]);
 
 /** The suffix upstream appends to an achievement key for the run's universe. */
 function achievementAffix(universe: unknown): string | undefined {
@@ -102,11 +93,8 @@ export function readCapturedInflationSaveMoney(
       rawStar === undefined || rawStar === null ? 0 : finite(rawStar);
     if (wheelbarrowStar === undefined || wheelbarrowStar < 0) return false;
 
-    let achievementLevel = 1;
-    for (const trait of ACHIEVEMENT_LEVEL_TRAITS) {
-      if (race[trait]) achievementLevel += 1;
-    }
-    achievementLevel = Math.min(achievementLevel, 5);
+    const achievementLevel = readCapturedAscensionLevel(root);
+    if (achievementLevel === undefined) return false;
 
     return shouldSaveInflationMoney({
       active:

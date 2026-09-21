@@ -916,7 +916,8 @@ for (const [missionId, completionTech, completionLevel] of [
 }
 
 // The True Path AI hardware target reserves the game's own price for the planned building.
-// Only the colonist carries a captured Money price here, so the pure planner names it.
+// All four competitors carry captured Money prices, so the pure planner ranks the complete
+// field: the Decoder removes the most Colonists per Money here and wins.
 {
   const aiRoot = {
     race: { truepath: true },
@@ -931,7 +932,13 @@ for (const [missionId, completionTech, completionLevel] of [
       Money: { amount: 0, max: 1e12, stackable: true },
     },
   };
-  const aiDemand = (prestigeType) =>
+  const aiPrices = {
+    "space-decoder": { Money: 12.5e6 },
+    "space-ai_colonist": { Money: 112e6 },
+    "space-shock_trooper": { Money: 4.25e6 },
+    "space-tank": { Money: 8.5e6 },
+  };
+  const aiDemand = (prestigeType, prices = aiPrices) =>
     createCapturedResourceDemand({
       rootState: { readRoot: () => aiRoot },
       reservations: {
@@ -939,23 +946,62 @@ for (const [missionId, completionTech, completionLevel] of [
       },
       controls: {
         resolve: (elementId) =>
-          elementId === "space-ai_colonist"
+          elementId in prices
             ? { elementId, generation: 1, methods: ["setData"] }
             : undefined,
         invoke: () => ({ ok: true, value: undefined }),
-        capturedElementIds: () => ["space-ai_colonist"],
+        capturedElementIds: () => Object.keys(prices),
       },
       costs: {
         readCost: (actionId) =>
-          actionId === "space-ai_colonist"
-            ? actionPrice({ Money: 112e6 })
-            : undefined,
+          actionId in prices ? actionPrice(prices[actionId]) : undefined,
       },
       readSettings: () => ({ prestigeType }),
     }).sample();
-  assert.equal(aiDemand("apocalypse").requestedQuantity("Money"), 112e6);
+  assert.equal(aiDemand("apocalypse").requestedQuantity("Money"), 12.5e6);
   assert.equal(aiDemand("apocalypse").isDemanded("Money"), true);
   assert.equal(aiDemand("none").requestedQuantity("Money"), 0);
+}
+
+// One uncaptured competitor price stands the AI target down: a missing candidate must never
+// win by absence the way a present one wins by price.
+{
+  const partialRoot = {
+    race: { truepath: true },
+    tech: { titan_ai_core: 3 },
+    space: {
+      decoder: { count: 1, on: 1 },
+      ai_colonist: { count: 0, on: 0 },
+      shock_trooper: { count: 0, on: 0 },
+      tank: { count: 0, on: 0 },
+    },
+    resource: {
+      Money: { amount: 0, max: 1e12, stackable: true },
+    },
+  };
+  const sample = createCapturedResourceDemand({
+    rootState: { readRoot: () => partialRoot },
+    reservations: {
+      readReservations: () => ({ targets: [], unavailable: false }),
+    },
+    controls: {
+      resolve: (elementId) =>
+        elementId === "space-ai_colonist"
+          ? { elementId, generation: 1, methods: ["setData"] }
+          : undefined,
+      invoke: () => ({ ok: true, value: undefined }),
+      capturedElementIds: () => ["space-ai_colonist"],
+    },
+    costs: {
+      readCost: (actionId) =>
+        actionId === "space-ai_colonist"
+          ? actionPrice({ Money: 112e6 })
+          : undefined,
+    },
+    readSettings: () => ({ prestigeType: "apocalypse" }),
+  }).sample();
+  assert.equal(sample.requestedQuantity("Money"), 0);
+  assert.equal(sample.isDemanded("Money"), false);
 }
 
 // A visible Purchase-policy government reserves its government price within Money storage.
