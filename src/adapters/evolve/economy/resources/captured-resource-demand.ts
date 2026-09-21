@@ -65,6 +65,7 @@ import { RETIREMENT_PREP } from "../../../../domain/progression/build/building-w
 import { planTruepathAiApocalypse } from "../../../../domain/progression/truepath/ai-apocalypse.ts";
 import {
   capturedForeignGovernmentPrice,
+  capturedForeignPacifistGuardActive,
   CAPTURED_FOREIGN_CONTROL,
   readCapturedForeignTargets,
   selectCapturedForeignStrategy,
@@ -1061,8 +1062,9 @@ function readDemandReservationTruepathAiTarget(
 /**
  * Money reserve for a configured foreign-government Purchase, as an outcome. Mirrors the
  * compatibility `SpyManager.purchaseMoney`: `tech.unify === 1`, `autoFight` on,
- * unification wanted (`foreignUnification` or an achievement goal forcing Purchase), and a
- * visible Purchase-policy government below `tech.world_control` that is not bought yet. Each
+ * unification wanted (`foreignUnification`, an achievement goal forcing Purchase, or the
+ * pacifist guard), a currently shown Foreign panel, and a visible Purchase-policy
+ * government that is not bought yet and has no Purchase operation already running. Each
  * candidate needs `max(govPrice, spy cost to 3 spies)` within Money storage; the government
  * price is the shared captured mirror of upstream `govPrice`, and the spy cost restates
  * upstream `spyCost` at level 3 except for the Scorpio discount, whose sign no capture
@@ -1086,14 +1088,30 @@ function readDemandReservationSpyPurchaseMoney(
       : { status: "unavailable" };
   }
   const foreign = controls.resolve(CAPTURED_FOREIGN_CONTROL);
-  if (foreign === undefined || !foreign.methods.includes("gvis")) {
+  if (
+    foreign === undefined ||
+    !foreign.methods.includes("vis") ||
+    !foreign.methods.includes("gvis")
+  ) {
     return report === undefined
       ? { status: "not-needed" }
       : { status: "unavailable" };
   }
+  // The panel-level `vis()` is the game's own show/hide answer: in a hidden-panel state a
+  // child `gvis()` may still answer true for a government the player cannot touch.
+  const panelShown = controls.invoke(foreign, "vis", []);
+  if (!panelShown.ok || panelShown.value !== true) {
+    return { status: "not-needed" };
+  }
   const visible = readCapturedForeignTargets(root, controls, foreign, settings);
   if (visible.length === 0) return { status: "not-needed" };
   const strategy = selectCapturedForeignStrategy(root, settings, visible);
+  if (
+    !strategy.unificationRequested &&
+    !capturedForeignPacifistGuardActive(root, settings)
+  ) {
+    return { status: "not-needed" };
+  }
   const race = readProperty(root, "race");
   const infiltrator =
     isRecord(race) && Boolean(readProperty(race, "infiltrator"));
@@ -1105,6 +1123,9 @@ function readDemandReservationSpyPurchaseMoney(
   for (const target of strategy.governments) {
     if (target.governmentId >= 3 || target.policy !== "Purchase") continue;
     if (target.purchased || target.occupied || target.annexed) continue;
+    // A Purchase operation already running owns its Money; the compatibility reader only
+    // reserves for governments whose `act` is not mid-purchase.
+    if (target.activeEspionage === "purchase") continue;
     if (target.military === undefined) continue;
     const price = capturedForeignGovernmentPrice(target);
     if (price === undefined) continue;

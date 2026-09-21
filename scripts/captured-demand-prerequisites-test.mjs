@@ -41,10 +41,16 @@ function prerequisites(root, settings, controls, tracked) {
 }
 
 // The civic discovery runs while a spy-purchase reservation is possible but its control is
-// not captured yet: unification researched and automation willing. A discovery that still
-// leaves the control absent reports unavailable rather than silently spending onward.
+// not captured yet: unification researched, unification wanted, the panel available, and
+// automation willing. A discovery that still leaves the control absent reports unavailable
+// rather than silently spending onward.
 {
-  const root = { race: {}, tech: { unify: 1 }, resource: {} };
+  const root = {
+    race: {},
+    tech: { unify: 1 },
+    civic: { garrison: { display: true } },
+    resource: {},
+  };
   const settings = { autoFight: true };
   const tracked = track();
   const controls = fakeControls();
@@ -55,7 +61,7 @@ function prerequisites(root, settings, controls, tracked) {
   assert.deepEqual(tracked.seen, ["civic"]);
 
   const discovered = track();
-  controls.add("foreign", ["gvis"]);
+  controls.add("foreign", ["vis", "gvis"]);
   assert.deepEqual(prerequisites(root, settings, controls, discovered), {
     spy: "ready",
     ai: "not-needed",
@@ -63,11 +69,95 @@ function prerequisites(root, settings, controls, tracked) {
   assert.deepEqual(discovered.seen, []);
 }
 
-// No discovery when automation is off or unification is unresearched: the gate is root
-// and settings reads only.
+// No discovery when automation is off, unification is unresearched, unification is
+// unwanted, or the panel cannot exist: the gate is root and settings reads only.
 for (const [root, settings] of [
-  [{ race: {}, tech: { unify: 1 }, resource: {} }, { autoFight: false }],
-  [{ race: {}, tech: {}, resource: {} }, { autoFight: true }],
+  [
+    {
+      race: {},
+      tech: { unify: 1 },
+      civic: { garrison: { display: true } },
+      resource: {},
+    },
+    { autoFight: false },
+  ],
+  [
+    {
+      race: {},
+      tech: {},
+      civic: { garrison: { display: true } },
+      resource: {},
+    },
+    { autoFight: true },
+  ],
+  // Isolation Protocol researched: espionage is over, so a missing control is
+  // not-needed rather than a Money-holding unavailable.
+  [
+    {
+      race: {},
+      tech: { unify: 1, isolation: 1 },
+      civic: { garrison: { display: true } },
+      resource: {},
+    },
+    { autoFight: true },
+  ],
+  // Cataclysm runs have no espionage either.
+  [
+    {
+      race: { cataclysm: true },
+      tech: { unify: 1 },
+      civic: { garrison: { display: true } },
+      resource: {},
+    },
+    { autoFight: true },
+  ],
+  // Hidden garrison: the panel's own `vis()` gate fails without a control to ask.
+  [
+    {
+      race: {},
+      tech: { unify: 1 },
+      civic: { garrison: { display: false } },
+      resource: {},
+    },
+    { autoFight: true },
+  ],
+  // Unified off the standard path: nobody left to purchase from.
+  [
+    {
+      race: {},
+      tech: { unify: 1, world_control: true },
+      civic: { garrison: { display: true } },
+      resource: {},
+    },
+    { autoFight: true },
+  ],
+  // Purchase configured but unification wanted by nothing: no setting, no achievement
+  // goal, pacifist guard off. The three governments are present and uncontrolled, so the
+  // gate genuinely evaluates rather than bailing on missing states.
+  [
+    {
+      race: {},
+      tech: { unify: 1 },
+      civic: {
+        garrison: { display: true },
+        foreign: {
+          gov0: { occ: false, anx: false, buy: false },
+          gov1: { occ: false, anx: false, buy: false },
+          gov2: { occ: false, anx: false, buy: false },
+        },
+      },
+      resource: {},
+      stats: { attacks: 0, achieve: { pacifist: { l: 9 } } },
+    },
+    {
+      autoFight: true,
+      foreignUnification: false,
+      achievementGuards: true,
+      guardWorldDomination: false,
+      guardSyndicate: false,
+      guardPacifist: true,
+    },
+  ],
 ]) {
   const tracked = track();
   assert.deepEqual(prerequisites(root, settings, fakeControls(), tracked), {
@@ -220,6 +310,7 @@ for (const [root, settings] of [
     race: {},
     tech: { unify: 1 },
     civic: {
+      garrison: { display: true },
       foreign: {
         gov0: {
           mil: 50,
@@ -269,7 +360,7 @@ for (const [root, settings] of [
     root,
     settings,
     controls: captured,
-    ensureCivicControls: () => captured.add("foreign", ["gvis"]),
+    ensureCivicControls: () => captured.add("foreign", ["vis", "gvis"]),
     ensureBuildControls: succeeded.build,
   });
   assert.equal(readyReport.spy, "ready");

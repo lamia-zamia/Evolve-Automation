@@ -1129,8 +1129,9 @@ for (const [missionId, completionTech, completionLevel] of [
     resource: {
       Money: { amount: 0, max: 1e12, stackable: true },
     },
+    stats: { attacks: 0, achieve: { pacifist: { l: 9 } } },
   };
-  const spyDemand = (autoFight) =>
+  const spyDemand = (autoFight, settingsOverride = {}, invokeOverride) =>
     createCapturedResourceDemand({
       rootState: { readRoot: () => spyRoot },
       reservations: {
@@ -1139,9 +1140,9 @@ for (const [missionId, completionTech, completionLevel] of [
       controls: {
         resolve: (elementId) =>
           elementId === "foreign"
-            ? { elementId, generation: 1, methods: ["gvis"] }
+            ? { elementId, generation: 1, methods: ["vis", "gvis"] }
             : undefined,
-        invoke: () => ({ ok: true, value: true }),
+        invoke: invokeOverride ?? (() => ({ ok: true, value: true })),
         capturedElementIds: () => ["foreign"],
       },
       readSettings: () => ({
@@ -1149,11 +1150,103 @@ for (const [missionId, completionTech, completionLevel] of [
         foreignUnification: true,
         foreignPolicyInferior: "Purchase",
         foreignPolicySuperior: "Occupy",
+        ...settingsOverride,
       }),
     }).sample();
   assert.equal(spyDemand(true).requestedQuantity("Money"), 197992);
   assert.equal(spyDemand(true).isDemanded("Money"), true);
   assert.equal(spyDemand(false).requestedQuantity("Money"), 0);
+  // Unification wanted by nothing — no setting, no achievement goal, pacifist guard off —
+  // reserves nothing, exactly like the compatibility purchaseMoney staying zero.
+  assert.equal(
+    spyDemand(true, {
+      foreignUnification: false,
+      achievementGuards: true,
+      guardWorldDomination: false,
+      guardSyndicate: false,
+      guardPacifist: true,
+    }).requestedQuantity("Money"),
+    0,
+  );
+  // A hidden panel answers no reservation even when a child gvis would still say true.
+  assert.equal(
+    createCapturedResourceDemand({
+      rootState: { readRoot: () => spyRoot },
+      reservations: {
+        readReservations: () => ({ targets: [], unavailable: false }),
+      },
+      controls: {
+        resolve: (elementId) =>
+          elementId === "foreign"
+            ? { elementId, generation: 1, methods: ["vis", "gvis"] }
+            : undefined,
+        invoke: (_handle, method) => ({
+          ok: true,
+          value: method !== "vis",
+        }),
+        capturedElementIds: () => ["foreign"],
+      },
+      readSettings: () => ({
+        autoFight: true,
+        foreignUnification: true,
+        foreignPolicyInferior: "Purchase",
+        foreignPolicySuperior: "Occupy",
+      }),
+    })
+      .sample()
+      .requestedQuantity("Money"),
+    0,
+  );
+}
+
+// A Purchase operation already running owns its Money: the government is excluded while
+// its `act` reads "purchase", matching the compatibility purchaseMoney filter.
+{
+  const runningRoot = {
+    race: {},
+    tech: { unify: 1 },
+    civic: {
+      foreign: {
+        gov0: {
+          mil: 50,
+          hstl: 20,
+          unrest: 10,
+          eco: 10,
+          spy: 3,
+          sab: 4,
+          act: "purchase",
+          occ: false,
+          anx: false,
+          buy: false,
+        },
+      },
+    },
+    resource: {
+      Money: { amount: 0, max: 1e12, stackable: true },
+    },
+  };
+  const sample = createCapturedResourceDemand({
+    rootState: { readRoot: () => runningRoot },
+    reservations: {
+      readReservations: () => ({ targets: [], unavailable: false }),
+    },
+    controls: {
+      resolve: (elementId) =>
+        elementId === "foreign"
+          ? { elementId, generation: 1, methods: ["vis", "gvis"] }
+          : undefined,
+      invoke: () => ({ ok: true, value: true }),
+      capturedElementIds: () => ["foreign"],
+    },
+    readSettings: () => ({
+      autoFight: true,
+      foreignUnification: true,
+      foreignPolicyInferior: "Purchase",
+      foreignPolicySuperior: "Occupy",
+    }),
+  }).sample();
+  assert.equal(sample.requestedQuantity("Money"), 0);
+  assert.equal(sample.isDemanded("Money"), false);
 }
 
 console.log("Captured resource-demand adapter tests passed");

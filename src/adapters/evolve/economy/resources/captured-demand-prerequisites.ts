@@ -25,7 +25,11 @@ import {
   DEMAND_RESERVATION_TRUEPATH_AI_ACTIONS,
   readEligibleTruepathAiTargets,
 } from "./truepath-ai-demand-actions.ts";
-import { CAPTURED_FOREIGN_CONTROL } from "../../combat/captured-foreign-state.ts";
+import {
+  capturedForeignPanelAvailable,
+  CAPTURED_FOREIGN_CONTROL,
+  readCapturedForeignUnificationWanted,
+} from "../../combat/captured-foreign-state.ts";
 import { finite, isRecord, readProperty } from "../../../validation.ts";
 
 export type DemandPrerequisiteStatus = "ready" | "not-needed" | "unavailable";
@@ -52,7 +56,13 @@ function spyReservationWanted(
 ): boolean {
   if (settings["autoFight"] !== true) return false;
   const tech = readProperty(root, "tech");
-  return isRecord(tech) && readProperty(tech, "unify") === 1;
+  if (!isRecord(tech) || readProperty(tech, "unify") !== 1) return false;
+  // A reservation needs unification to be wanted and the panel to be able to exist: on a
+  // True Path run past Isolation Protocol (or any other state upstream `spyActive()`
+  // closes) the panel is legitimately gone, which is not-needed rather than unavailable.
+  // Without this a permanently absent panel would hold all Money forever.
+  if (!readCapturedForeignUnificationWanted(root, settings)) return false;
+  return capturedForeignPanelAvailable(root);
 }
 
 /** The cheap, control-free half of the AI reader's gate: the hardware stage is active. */

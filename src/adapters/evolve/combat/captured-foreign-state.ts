@@ -33,6 +33,8 @@ export interface CapturedForeignGovernment {
   readonly military: number;
   readonly spyCount: number;
   readonly sabotageProgress: number;
+  /** The running espionage operation (`gov.act`: an operation id or `'none'`), if named. */
+  readonly activeEspionage: string | undefined;
   readonly hostility: number | undefined;
   readonly unrest: number | undefined;
   readonly economy: number | undefined;
@@ -47,6 +49,8 @@ export interface CapturedForeignStrategy {
   readonly selectedTargetId: number | null;
   /** The selected target if the battle planner is allowed to act this cycle. */
   readonly battleTargetId: number | null;
+  /** Whether unification is wanted: the `foreignUnification` setting or an achievement goal. */
+  readonly unificationRequested: boolean;
 }
 
 function capturedForeignSettingBoolean(
@@ -133,6 +137,8 @@ export function readCapturedForeignGovernment(
     military,
     spyCount: finite(government["spy"]) ?? 0,
     sabotageProgress: finite(government["sab"]) ?? 0,
+    activeEspionage:
+      typeof government["act"] === "string" ? government["act"] : undefined,
     hostility: finite(government["hstl"]),
     unrest: finite(government["unrest"]),
     economy: finite(government["eco"]),
@@ -219,18 +225,6 @@ function capturedForeignAchievementGoal(
   settings: Record<string, unknown>,
   governments: readonly CapturedForeignGovernment[],
 ): ForeignAchievementGoal | null {
-  if (settings["achievementGuards"] !== true) return null;
-  const guardWorldDomination = capturedForeignSettingBoolean(
-    settings,
-    "guardWorldDomination",
-    true,
-  );
-  const guardSyndicate = capturedForeignSettingBoolean(
-    settings,
-    "guardSyndicate",
-    true,
-  );
-  if (!guardWorldDomination && !guardSyndicate) return null;
   const states: ForeignAchievementState[] = [];
   for (let index = 0; index < 3; index += 1) {
     const target = governments.find(
@@ -243,6 +237,26 @@ function capturedForeignAchievementGoal(
       purchased: target.purchased,
     });
   }
+  return planCapturedForeignAchievementGoal(root, settings, states);
+}
+
+function planCapturedForeignAchievementGoal(
+  root: unknown,
+  settings: Record<string, unknown>,
+  states: readonly ForeignAchievementState[],
+): ForeignAchievementGoal | null {
+  if (settings["achievementGuards"] !== true) return null;
+  const guardWorldDomination = capturedForeignSettingBoolean(
+    settings,
+    "guardWorldDomination",
+    true,
+  );
+  const guardSyndicate = capturedForeignSettingBoolean(
+    settings,
+    "guardSyndicate",
+    true,
+  );
+  if (!guardWorldDomination && !guardSyndicate) return null;
   const worldDominationUnlocked = guardWorldDomination
     ? readCapturedAchievementStar(root, "world_domination")
     : 0;
@@ -280,6 +294,69 @@ export function capturedForeignResourceAmount(
     finite(readProperty(resource, "amount")) ??
     finite(readProperty(resource, "currentQuantity"))
   );
+}
+
+/**
+ * Mirrors upstream `spyActive()` (DeadSpace `civics.js`): espionage ends with cataclysm or
+ * isolation, with unification off the standard path, and with the rival collapse
+ * (`tech.shadow >= 3`) on True Path.
+ */
+export function capturedForeignSpyActive(root: unknown): boolean {
+  const race = readProperty(root, "race");
+  if (!isRecord(race)) return false;
+  if (readProperty(race, "cataclysm")) return false;
+  const tech = readProperty(root, "tech");
+  if (!isRecord(tech)) return false;
+  if (readProperty(tech, "isolation")) return false;
+  if (!readProperty(tech, "world_control")) return true;
+  if (!readProperty(race, "truepath")) return false;
+  return (finite(readProperty(tech, "shadow")) ?? 0) < 3;
+}
+
+/**
+ * Whether the game's Foreign panel can exist now. Upstream `vis()` is
+ * `garrison.display && spyActive()`, so this is the answer where no captured control can
+ * give it; prefer invoking the control's own `vis` once it exists.
+ */
+export function capturedForeignPanelAvailable(root: unknown): boolean {
+  const garrison = readProperty(readProperty(root, "civic"), "garrison");
+  return (
+    isRecord(garrison) &&
+    readProperty(garrison, "display") === true &&
+    capturedForeignSpyActive(root)
+  );
+}
+
+/**
+ * Whether a Purchase reservation could be wanted: the `foreignUnification` setting, an
+ * achievement goal forcing Purchase, or the pacifist guard — the compatibility
+ * `(unificationRequested || guardActive("guardPacifist"))` gate, read from the root and
+ * settings alone so the prerequisite phase can use it without a control.
+ */
+export function readCapturedForeignUnificationWanted(
+  root: unknown,
+  settings: Record<string, unknown>,
+): boolean {
+  if (capturedForeignSettingBoolean(settings, "foreignUnification", true)) {
+    return true;
+  }
+  const states: ForeignAchievementState[] = [];
+  for (let index = 0; index < 3; index += 1) {
+    const government = readProperty(
+      readProperty(readProperty(root, "civic"), "foreign"),
+      `gov${index}`,
+    );
+    if (!isRecord(government)) return false;
+    states.push({
+      occupied: Boolean(government["occ"]),
+      annexed: Boolean(government["anx"]),
+      purchased: Boolean(government["buy"]),
+    });
+  }
+  if (planCapturedForeignAchievementGoal(root, settings, states) !== null) {
+    return true;
+  }
+  return capturedForeignPacifistGuardActive(root, settings);
 }
 
 export function capturedForeignGovernmentPrice(
@@ -396,6 +473,7 @@ export function selectCapturedForeignStrategy(
       governments: Object.freeze(active),
       selectedTargetId: null,
       battleTargetId: null,
+      unificationRequested,
     });
   }
 
@@ -479,6 +557,7 @@ export function selectCapturedForeignStrategy(
       governments: Object.freeze(active),
       selectedTargetId: null,
       battleTargetId: null,
+      unificationRequested,
     });
   }
   const stopBattle =
@@ -489,6 +568,7 @@ export function selectCapturedForeignStrategy(
     governments: Object.freeze(active),
     selectedTargetId: refreshedTarget.governmentId,
     battleTargetId: stopBattle ? null : refreshedTarget.governmentId,
+    unificationRequested,
   });
 }
 
