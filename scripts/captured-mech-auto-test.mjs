@@ -47,7 +47,7 @@ function makeWorld(overrides = {}) {
           infernal: false,
         },
       },
-      purifier: { supply: 1_000_000, sup_max: 2_000_000 },
+      purifier: { supply: 1_000_000, sup_max: 2_000_000, count: 1, on: 1 },
       spire: {
         count: 1,
         type: "rocky",
@@ -300,6 +300,52 @@ const zeroRandom = { nextUnit: () => 0 };
   assert.deepEqual(full.calls, []);
 }
 
+// Bay pressure steps down to smaller frames when the bay allows them.
+{
+  const tight = makeWorld();
+  tight.root.portal.mechbay.bay = 20;
+  tight.settings.mechSize = "titan";
+  tight.settings.mechFillBay = true;
+  const plan = planAuto(tight.adapter.reader.readState(), () => 0);
+  assert.equal(plan !== null, true);
+  assert.equal(plan.design.size, "medium");
+  assert.equal(plan.space, 5);
+
+  const stubborn = makeWorld();
+  stubborn.root.portal.mechbay.bay = 20;
+  stubborn.settings.mechSize = "titan";
+  stubborn.settings.mechFillBay = false;
+  assert.equal(
+    planAuto(stubborn.adapter.reader.readState(), () => 0),
+    null,
+  );
+}
+
+// A small bay fills to its maximum, then stands down.
+{
+  const capped = makeWorld();
+  capped.root.portal.mechbay.max = 5;
+  const first = runCapturedMechAutomation({
+    ...capped.adapter,
+    random: zeroRandom,
+  });
+  assert.equal(first.status, "succeeded");
+  assert.equal(capped.root.portal.mechbay.mechs.length, 1);
+  assert.equal(capped.root.portal.mechbay.bay, 5);
+  const before = capped.calls.length;
+  const second = runCapturedMechAutomation({
+    ...capped.adapter,
+    random: zeroRandom,
+  });
+  assert.equal(second.status, "succeeded");
+  assert.equal(capped.root.portal.mechbay.mechs.length, 1);
+  assert.equal(
+    capped.calls.slice(before).filter((call) => call[0] === "build").length,
+    0,
+    "no build past the maximum",
+  );
+}
+
 // Saving for the next floor beats building when income is thin.
 {
   const poor = makeWorld();
@@ -335,6 +381,40 @@ const zeroRandom = { nextUnit: () => 0 };
   rich.settings.mechSaveSupplyRatio = 1;
   assert.notEqual(
     planAuto(rich.adapter.reader.readState(), () => 0),
+    null,
+  );
+
+  // Supply is only held back while every purifier is switched on and
+  // held-back building is enabled.
+  const darkPurifier = makeWorld();
+  darkPurifier.root.portal.mechbay.mechs = structuredClone(
+    poor.root.portal.mechbay.mechs,
+  );
+  darkPurifier.root.portal.mechbay.bay = 25 - 5;
+  darkPurifier.root.portal.mechbay.active = 1;
+  darkPurifier.root.portal.spire.progress = 99;
+  darkPurifier.root.portal.purifier.supply = 1_900_000;
+  darkPurifier.root.portal.purifier.on = 0;
+  darkPurifier.root.resource.Supply.rateOfChange = 100;
+  darkPurifier.settings.mechSaveSupplyRatio = 1;
+  assert.notEqual(
+    planAuto(darkPurifier.adapter.reader.readState(), () => 0),
+    null,
+  );
+
+  const noBaysFirst = makeWorld();
+  noBaysFirst.root.portal.mechbay.mechs = structuredClone(
+    poor.root.portal.mechbay.mechs,
+  );
+  noBaysFirst.root.portal.mechbay.bay = 25 - 5;
+  noBaysFirst.root.portal.mechbay.active = 1;
+  noBaysFirst.root.portal.spire.progress = 99;
+  noBaysFirst.root.portal.purifier.supply = 1_900_000;
+  noBaysFirst.root.resource.Supply.rateOfChange = 100;
+  noBaysFirst.settings.mechSaveSupplyRatio = 1;
+  noBaysFirst.settings.mechBaysFirst = false;
+  assert.notEqual(
+    planAuto(noBaysFirst.adapter.reader.readState(), () => 0),
     null,
   );
 }

@@ -41280,11 +41280,13 @@ Only continue if you trust the source. Injected code:
       maximumCollectorShare: mechSettingNumber("mechMaxCollectors"),
       saveSupplyRatio: mechSettingNumber("mechSaveSupplyRatio"),
       scoutsRatio: mechSettingNumber("mechScouts"),
-      infernalCollector: settings.mechInfernalCollector === !0,
+      // The shipped defaults for these four are true, so only an explicit
+      // false disables them; an absent key reads as the default.
+      infernalCollector: settings.mechInfernalCollector !== !1,
       rebuildScouts: settings.mechScoutsRebuild === !0,
-      fillBay: settings.mechFillBay === !0,
-      buildingsFirst: settings.buildingMechsFirst === !0,
-      baysFirst: settings.mechBaysFirst === !0
+      fillBay: settings.mechFillBay !== !1,
+      buildingsFirst: settings.buildingMechsFirst !== !1,
+      baysFirst: settings.mechBaysFirst !== !1
     });
   }
   function unavailableMechState(queueKeyHeld, warlord, settings) {
@@ -41300,7 +41302,8 @@ Only continue if you trust the source. Injected code:
         purifierSupply: 0,
         purifierMax: 0,
         soulGems: 0,
-        supplyRate: 0
+        supplyRate: 0,
+        purifierFullyOn: !1
       }),
       prepared: 0,
       wrath: 0,
@@ -41350,7 +41353,8 @@ Only continue if you trust the source. Injected code:
         purifierSupply,
         purifierMax,
         soulGems,
-        supplyRate: supplyRateRaw ?? 0
+        supplyRate: supplyRateRaw ?? 0,
+        purifierFullyOn: finiteQuantity(purifier.count) !== void 0 && finiteQuantity(purifier.on) !== void 0 && purifier.count > 0 && purifier.on >= purifier.count
       }),
       prepared: nonNegativeQuantity(blood.prepared) ?? 0,
       wrath: nonNegativeQuantity(blood.wrath) ?? 0,
@@ -42290,47 +42294,58 @@ Only continue if you trust the source. Injected code:
       rankByEff: combat("efficiency"),
       rankByGems: combat("gemsEff"),
       rankBySupply: combat("supplyEff")
-    }), design = chooseAutoDesign(
-      preferred.size,
-      floor,
-      pickIndex
-    ), cost = design === null ? void 0 : mechFrameCost(design.size, state.prepared);
-    if (design === null || cost === void 0 || bay.maximum - bay.occupied < cost.space || funds.purifierSupply < cost.supply || funds.soulGems < cost.gems)
-      return null;
-    if (!preferred.force && settings.saveSupplyRatio > 0) {
+    }), headroom = bay.maximum - bay.occupied, savingForNextFloor = (space) => {
+      if (preferred.force || settings.saveSupplyRatio <= 0 || !settings.baysFirst || !funds.purifierFullyOn) return !1;
       let teamPower = activeMechsPower(state, floor), refund = mechFrameRefund("titan", state.prepared);
-      if (teamPower !== null && refund !== void 0 && shouldSaveMechSupply({
+      return teamPower === null || refund === void 0 ? !1 : shouldSaveMechSupply({
         saveSupplyRatio: settings.saveSupplyRatio,
         lastFloor: !1,
         forceBuild: !1,
         supplyMaximum: funds.purifierMax,
         supplyCurrent: funds.purifierSupply,
         supplyRate: funds.supplyRate,
-        baySpace: bay.maximum - bay.occupied,
-        designSpace: cost.space,
-        titanSupplyRefund: bay.maximum - bay.occupied < cost.space ? refund.supply : 0,
+        baySpace: headroom,
+        designSpace: space,
+        titanSupplyRefund: headroom < space ? refund.supply : 0,
         timeToClear: teamPower > 0 ? (100 - state.spire.progress) / teamPower : Number.POSITIVE_INFINITY
-      }))
-        return null;
+      });
+    }, buildPlanFor = (size) => {
+      let design = chooseAutoDesign(
+        size,
+        floor,
+        pickIndex
+      ), cost = design === null ? void 0 : mechFrameCost(design.size, state.prepared);
+      return design === null || cost === void 0 || headroom < cost.space || funds.purifierMax < cost.supply || funds.purifierSupply < cost.supply || funds.soulGems < cost.gems || savingForNextFloor(cost.space) ? null : Object.freeze({
+        kind: "build-captured-mech-auto",
+        design: Object.freeze({
+          size: design.size,
+          chassis: design.chassis,
+          hardpoint: design.hardpoint,
+          equip: design.equip,
+          infernal: !1
+        }),
+        supply: cost.supply,
+        gems: cost.gems,
+        space: cost.space,
+        force: preferred.force,
+        expectedMechsLength: state.inventory.length,
+        expectedOccupied: bay.occupied,
+        expectedPurifierSupply: funds.purifierSupply,
+        expectedSoulGems: funds.soulGems
+      });
+    }, preferredPlan = buildPlanFor(preferred.size);
+    if (preferredPlan !== null || !settings.fillBay) return preferredPlan;
+    let preferredSpace = mechFrameCost(preferred.size, state.prepared)?.space;
+    for (let size of [...combat("efficiency")].map((candidate) => ({
+      candidate,
+      space: mechFrameCost(candidate, state.prepared)?.space ?? 1 / 0
+    })).filter(
+      (entry) => preferredSpace !== void 0 && entry.space < preferredSpace && entry.space <= headroom
+    ).sort((left, right) => right.space - left.space).map((entry) => entry.candidate)) {
+      let fallback = buildPlanFor(size);
+      if (fallback !== null) return fallback;
     }
-    return Object.freeze({
-      kind: "build-captured-mech-auto",
-      design: Object.freeze({
-        size: design.size,
-        chassis: design.chassis,
-        hardpoint: design.hardpoint,
-        equip: design.equip,
-        infernal: !1
-      }),
-      supply: cost.supply,
-      gems: cost.gems,
-      space: cost.space,
-      force: preferred.force,
-      expectedMechsLength: state.inventory.length,
-      expectedOccupied: bay.occupied,
-      expectedPurifierSupply: funds.purifierSupply,
-      expectedSoulGems: funds.soulGems
-    });
+    return null;
   }
 
   // src/application/captured-mech.ts

@@ -51,6 +51,8 @@ export interface CapturedMechFunds {
   readonly soulGems: number;
   /** `resource.Supply.rateOfChange`, 0 when the ledger names none. */
   readonly supplyRate: number;
+  /** Every built purifier is switched on; false when the count is unreadable. */
+  readonly purifierFullyOn: boolean;
 }
 
 export interface CapturedMechSettings {
@@ -176,11 +178,13 @@ function readMechSettings(value: unknown): CapturedMechSettings {
     maximumCollectorShare: mechSettingNumber("mechMaxCollectors"),
     saveSupplyRatio: mechSettingNumber("mechSaveSupplyRatio"),
     scoutsRatio: mechSettingNumber("mechScouts"),
-    infernalCollector: settings["mechInfernalCollector"] === true,
+    // The shipped defaults for these four are true, so only an explicit
+    // false disables them; an absent key reads as the default.
+    infernalCollector: settings["mechInfernalCollector"] !== false,
     rebuildScouts: settings["mechScoutsRebuild"] === true,
-    fillBay: settings["mechFillBay"] === true,
-    buildingsFirst: settings["buildingMechsFirst"] === true,
-    baysFirst: settings["mechBaysFirst"] === true,
+    fillBay: settings["mechFillBay"] !== false,
+    buildingsFirst: settings["buildingMechsFirst"] !== false,
+    baysFirst: settings["mechBaysFirst"] !== false,
   });
 }
 
@@ -202,6 +206,7 @@ function unavailableMechState(
       purifierMax: 0,
       soulGems: 0,
       supplyRate: 0,
+      purifierFullyOn: false,
     }),
     prepared: 0,
     wrath: 0,
@@ -340,6 +345,11 @@ export function readCapturedMechState(
       purifierMax,
       soulGems,
       supplyRate: supplyRateRaw ?? 0,
+      purifierFullyOn:
+        finiteQuantity(purifier["count"]) !== undefined &&
+        finiteQuantity(purifier["on"]) !== undefined &&
+        (purifier["count"] as number) > 0 &&
+        (purifier["on"] as number) >= (purifier["count"] as number),
     }),
     prepared: nonNegativeQuantity(blood["prepared"]) ?? 0,
     wrath: nonNegativeQuantity(blood["wrath"]) ?? 0,

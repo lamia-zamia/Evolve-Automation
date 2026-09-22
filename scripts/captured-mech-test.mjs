@@ -167,6 +167,7 @@ assert.equal(
     purifierMax: 100_000,
     soulGems: 1,
     supplyRate: 250,
+    purifierFullyOn: false,
   });
   assert.equal(state.settings.buildMode, "user");
   assert.equal(state.settings.scrapMode, "mixed");
