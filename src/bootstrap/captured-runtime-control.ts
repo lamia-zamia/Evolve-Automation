@@ -171,7 +171,8 @@ import {
   CAPTURED_MECH_ASSEMBLY_CONTROL,
   createCapturedMech,
 } from "../adapters/evolve/combat/captured-mech.ts";
-import { runCapturedMech } from "../application/captured-mech.ts";
+import { runCapturedMechAutomation } from "../application/captured-mech.ts";
+import { createBrowserRandomSource } from "../adapters/browser/random.ts";
 import {
   createCapturedTabDiscovery,
   GOV_TABS_SETTING,
@@ -499,6 +500,7 @@ export function startCapturedRuntime({
     readSettings: () => settingsStore.readRaw(),
     keyState: pageCapture.keyState,
   });
+  const capturedMechRandom = createBrowserRandomSource();
   const runCapturedEvolution = () =>
     runEvolution({
       reader: capturedEvolution.reader,
@@ -2045,7 +2047,10 @@ export function startCapturedRuntime({
       if (isEnabled(settings, "autoMech")) {
         runPhase("autoMech", () => {
           ensureMechControls();
-          const outcome = runCapturedMech(capturedMech);
+          const outcome = runCapturedMechAutomation({
+            ...capturedMech,
+            random: capturedMechRandom,
+          });
           if (outcome.status !== "succeeded") {
             reportOnce(
               `autoMech: ${outcome.failure.code}: ${outcome.failure.message}`,

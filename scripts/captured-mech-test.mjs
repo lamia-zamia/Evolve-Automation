@@ -23,7 +23,7 @@ const root = {
     },
     purifier: { supply: 75_000, sup_max: 100_000 },
   },
-  resource: { Soul_Gem: { amount: 1 } },
+  resource: { Soul_Gem: { amount: 1 }, Supply: { rateOfChange: 250 } },
 };
 const settings = { autoMech: true, mechBuild: "user" };
 const trace = [];
@@ -166,6 +166,7 @@ assert.equal(
     purifierSupply: 75_000,
     purifierMax: 100_000,
     soulGems: 1,
+    supplyRate: 250,
   });
   assert.equal(state.settings.buildMode, "user");
   assert.equal(state.settings.scrapMode, "mixed");

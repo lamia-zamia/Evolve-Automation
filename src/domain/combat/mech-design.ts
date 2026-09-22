@@ -188,97 +188,99 @@ function terrainFactor(
 }
 
 function statusFactor(
-  status: string,
+  effect: string,
   chassis: string,
   size: string,
   equip: ReadonlySet<string>,
 ): number | undefined {
-  const has = (name: string): boolean => equip.has(name);
-  switch (status) {
+  const hasEquip = (name: string): boolean => equip.has(name);
+  switch (effect) {
     case "freeze":
-      return has("radiator") ? 1 : has("ablative") ? 0.45 : 0.25;
+      return hasEquip("radiator") ? 1 : hasEquip("ablative") ? 0.45 : 0.25;
     case "hot":
-      return has("coolant") ? 1 : has("shields") ? 0.45 : 0.25;
+      return hasEquip("coolant") ? 1 : hasEquip("shields") ? 0.45 : 0.25;
     case "corrosive":
-      return has("ablative")
+      return hasEquip("ablative")
         ? 1
-        : has("shields")
+        : hasEquip("shields")
           ? 0.6
-          : has("seals")
+          : hasEquip("seals")
             ? 0.45
             : 0.25;
     case "hail":
-      return has("ablative") ? 1 : has("shields") ? 0.9 : 0.75;
+      return hasEquip("ablative") ? 1 : hasEquip("shields") ? 0.9 : 0.75;
     case "radioactive":
-      return has("shields") ? 1 : has("ablative") ? 0.75 : 0.5;
+      return hasEquip("shields") ? 1 : hasEquip("ablative") ? 0.75 : 0.5;
     case "static":
-      return has("shields")
+      return hasEquip("shields")
         ? 1
-        : has("ablative")
+        : hasEquip("ablative")
           ? 0.7
-          : has("stabilizer")
+          : hasEquip("stabilizer")
             ? 0.65
-            : has("coolant")
+            : hasEquip("coolant")
               ? 0.6
               : 0.4;
     case "humid":
-      return has("seals") ? 1 : has("radiator") ? 0.9 : 0.75;
+      return hasEquip("seals") ? 1 : hasEquip("radiator") ? 0.9 : 0.75;
     case "dust":
-      return has("seals")
+      return hasEquip("seals")
         ? 1
-        : has("infrared")
+        : hasEquip("infrared")
           ? 0.75
-          : has("sonar")
+          : hasEquip("sonar")
             ? 0.7
             : 0.5;
     case "ashfall":
-      return has("coolant")
+      return hasEquip("coolant")
         ? 1
-        : has("seals") || has("infrared")
+        : hasEquip("seals") || hasEquip("infrared")
           ? 0.7
-          : has("ablative")
+          : hasEquip("ablative")
             ? 0.6
             : 0.4;
     case "steam":
-      return has("coolant") || has("radiator") || has("shields") ? 0.9 : 0.75;
+      return hasEquip("coolant") || hasEquip("radiator") || hasEquip("shields")
+        ? 0.9
+        : 0.75;
     case "rain":
-      return has("seals") ? 0.95 : has("radiator") ? 0.9 : 0.75;
+      return hasEquip("seals") ? 0.95 : hasEquip("radiator") ? 0.9 : 0.75;
     case "quake":
-      return has("stabilizer") ? 1 : has("grapple") ? 0.45 : 0.25;
+      return hasEquip("stabilizer") ? 1 : hasEquip("grapple") ? 0.45 : 0.25;
     case "fog":
-      return has("sonar") ? 1 : has("infrared") ? 0.5 : 0.2;
+      return hasEquip("sonar") ? 1 : hasEquip("infrared") ? 0.5 : 0.2;
     case "dark":
-      return has("infrared") ? 1 : has("sonar") ? 0.35 : 0.1;
+      return hasEquip("infrared") ? 1 : hasEquip("sonar") ? 0.35 : 0.1;
     case "chasm":
-      return has("grapple") ? 1 : has("sonar") ? 0.3 : 0.1;
+      return hasEquip("grapple") ? 1 : hasEquip("sonar") ? 0.3 : 0.1;
     case "mountain":
-      return chassis === "spider" || has("grapple")
+      return chassis === "spider" || hasEquip("grapple")
         ? 1
-        : has("sonar")
+        : hasEquip("sonar")
           ? 0.7
           : 0.5;
     case "hilly":
       return chassis === "spider"
         ? 1
-        : has("grapple") || has("stabilizer")
+        : hasEquip("grapple") || hasEquip("stabilizer")
           ? 0.9
           : 0.75;
     case "flooded":
-      return chassis === "hover" || has("pontoon")
+      return chassis === "hover" || hasEquip("pontoon")
         ? 1
-        : has("seals")
+        : hasEquip("seals")
           ? 0.55
           : 0.35;
     case "river":
-      return chassis === "hover" ? 1 : has("pontoon") ? 0.9 : 0.65;
+      return chassis === "hover" ? 1 : hasEquip("pontoon") ? 0.9 : 0.65;
     case "tar":
       if (chassis === "quad") return 1;
       if (chassis === "tread" || chassis === "wheel") {
-        return has("pontoon") || has("stabilizer") ? 0.75 : 0.5;
+        return hasEquip("pontoon") || hasEquip("stabilizer") ? 0.75 : 0.5;
       }
-      return has("pontoon") ? 0.9 : has("stabilizer") ? 0.85 : 0.75;
+      return hasEquip("pontoon") ? 0.9 : hasEquip("stabilizer") ? 0.85 : 0.75;
     case "windy":
-      return chassis === "hover" ? (has("stabilizer") ? 0.75 : 0.5) : 1;
+      return chassis === "hover" ? (hasEquip("stabilizer") ? 0.75 : 0.5) : 1;
     case "gravity":
       if (size === "medium") return 0.8;
       if (size === "large") return 0.45;
@@ -423,8 +425,8 @@ function bodyScore(
     floor.scouts,
     equip,
   );
-  for (const status of floor.statuses) {
-    const mod = statusFactor(status, chassis, size, equip);
+  for (const effect of floor.statuses) {
+    const mod = statusFactor(effect, chassis, size, equip);
     if (mod === undefined) return undefined;
     rating *= mod;
   }
@@ -460,8 +462,11 @@ export function rateMechDesign(
   if (space === undefined || space <= 0) return null;
   if (design.size === "collector") {
     if (design.hardpoint.length !== 0 || floor.collectorValue <= 0) return null;
-    const power = (body * 25 * floor.collectorValue) / 20_000;
-    return Object.freeze({ power, efficiency: power / space });
+    const collectorPower = (body * 25 * floor.collectorValue) / 20_000;
+    return Object.freeze({
+      power: collectorPower,
+      efficiency: collectorPower / space,
+    });
   }
   const base = weaponBasePower(design.size);
   const ratings = BOSS_WEAPON_RATINGS[floor.boss];
@@ -569,8 +574,11 @@ export function chooseAutoDesign(
   ) {
     return null;
   }
-  const body = bodies[pickIndex(bodies.length)] as MechBodyChoice;
-  const weapon = weapons[pickIndex(weapons.length)] as string;
+  const bodyIndex = pickIndex(bodies.length);
+  const weaponIndex = pickIndex(weapons.length);
+  const body = bodies[bodyIndex];
+  const weapon = weapons[weaponIndex];
+  if (body === undefined || weapon === undefined) return null;
   const hardpoint = Object.freeze(new Array<string>(mounts).fill(weapon));
   const rated = rateMechDesign(
     { size, chassis: body.chassis, hardpoint, equip: body.equip },

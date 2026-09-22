@@ -41296,7 +41296,12 @@ Only continue if you trust the source. Injected code:
       inventory: Object.freeze([]),
       blueprint: null,
       spire: null,
-      funds: Object.freeze({ purifierSupply: 0, purifierMax: 0, soulGems: 0 }),
+      funds: Object.freeze({
+        purifierSupply: 0,
+        purifierMax: 0,
+        soulGems: 0,
+        supplyRate: 0
+      }),
       prepared: 0,
       wrath: 0,
       gladiatorLevel: 0,
@@ -41315,14 +41320,14 @@ Only continue if you trust the source. Injected code:
       return unavailableMechState(input.queueKeyHeld, warlord, settings);
     let inventory = Object.freeze(
       stored.map((entry, index) => {
-        let design = readMechDesign(entry) ?? {
+        let entryDesign = readMechDesign(entry) ?? {
           size: "",
           chassis: "",
           hardpoint: Object.freeze([]),
           equip: Object.freeze([]),
           infernal: !1
         };
-        return Object.freeze({ ...design, index });
+        return Object.freeze({ ...entryDesign, index });
       })
     ), spire = portal !== void 0 && isNonArrayRecord(portal.spire) ? portal.spire : void 0, spireCount = spire !== void 0 ? finiteQuantity(spire.count) : void 0, spireFacts = spire !== void 0 && spireCount !== void 0 && spireCount >= 1 && typeof spire.type == "string" && typeof spire.boss == "string" && finiteQuantity(spire.progress) !== void 0 ? Object.freeze({
       count: spireCount,
@@ -41332,7 +41337,7 @@ Only continue if you trust the source. Injected code:
         isNonArrayRecord(spire.status) ? Object.keys(spire.status) : []
       ),
       boss: spire.boss
-    }) : null, blood = isNonArrayRecord(root.blood) ? root.blood : {}, stats = isNonArrayRecord(root.stats) ? root.stats : {}, achieve = isNonArrayRecord(stats.achieve) ? stats.achieve : {}, gladiator = isNonArrayRecord(achieve.gladiator) && finiteQuantity(achieve.gladiator.l) !== void 0 && achieve.gladiator.l >= 0 ? achieve.gladiator.l : 0;
+    }) : null, supplyLedger = resources !== void 0 && isNonArrayRecord(resources.Supply) ? resources.Supply : {}, supplyRateRaw = finiteQuantity(supplyLedger.rateOfChange), blood = isNonArrayRecord(root.blood) ? root.blood : {}, stats = isNonArrayRecord(root.stats) ? root.stats : {}, achieve = isNonArrayRecord(stats.achieve) ? stats.achieve : {}, gladiator = isNonArrayRecord(achieve.gladiator) && finiteQuantity(achieve.gladiator.l) !== void 0 && achieve.gladiator.l >= 0 ? achieve.gladiator.l : 0;
     return Object.freeze({
       available: !0,
       queueKeyHeld: input.queueKeyHeld,
@@ -41341,7 +41346,12 @@ Only continue if you trust the source. Injected code:
       inventory,
       blueprint: readMechDesign(mechbay.blueprint),
       spire: spireFacts,
-      funds: Object.freeze({ purifierSupply, purifierMax, soulGems }),
+      funds: Object.freeze({
+        purifierSupply,
+        purifierMax,
+        soulGems,
+        supplyRate: supplyRateRaw ?? 0
+      }),
       prepared: nonNegativeQuantity(blood.prepared) ?? 0,
       wrath: nonNegativeQuantity(blood.wrath) ?? 0,
       gladiatorLevel: gladiator,
@@ -41358,8 +41368,46 @@ Only continue if you trust the source. Injected code:
       )
     ) : Object.freeze([]);
   }
-  function tailMatchesDesign(tail, design) {
-    return isNonArrayRecord(tail) ? tail.size === design.size && (tail.chassis ?? "") === design.chassis && JSON.stringify(readDesignStrings(tail.hardpoint)) === JSON.stringify(design.hardpoint) && JSON.stringify(readDesignStrings(tail.equip)) === JSON.stringify(design.equip) && !!tail.infernal === design.infernal : !1;
+  var AUTO_DESIGN_METHODS = Object.freeze([
+    "setSize",
+    "setType",
+    "setWep",
+    "setEquip",
+    "build",
+    "bay",
+    "price",
+    "soul"
+  ]);
+  function resolveAutoAssembly(registry) {
+    let control = registry.resolve(CAPTURED_MECH_ASSEMBLY_CONTROL);
+    if (control !== void 0) {
+      for (let method of AUTO_DESIGN_METHODS)
+        if (!control.methods.includes(method)) return;
+      return control;
+    }
+  }
+  function readBlueprintDesign(root) {
+    if (!isNonArrayRecord(root)) return null;
+    let mechbay = readProperty(readProperty(root, "portal"), "mechbay");
+    if (!isNonArrayRecord(mechbay)) return null;
+    let blueprint = mechbay.blueprint;
+    if (!isNonArrayRecord(blueprint)) return null;
+    let size = blueprint.size;
+    if (typeof size != "string" || size.length === 0) return null;
+    let chassis = blueprint.chassis;
+    return Object.freeze({
+      size,
+      chassis: typeof chassis == "string" ? chassis : "",
+      hardpoint: readDesignStrings(blueprint.hardpoint),
+      equip: readDesignStrings(blueprint.equip),
+      infernal: !!blueprint.infernal
+    });
+  }
+  function designsEqual(left, right) {
+    return left.size === right.size && left.chassis === right.chassis && JSON.stringify(left.hardpoint) === JSON.stringify(right.hardpoint) && JSON.stringify(left.equip) === JSON.stringify(right.equip) && left.infernal === right.infernal;
+  }
+  function tailMatchesDesign(tail, wanted) {
+    return isNonArrayRecord(tail) ? tail.size === wanted.size && (tail.chassis ?? "") === wanted.chassis && JSON.stringify(readDesignStrings(tail.hardpoint)) === JSON.stringify(wanted.hardpoint) && JSON.stringify(readDesignStrings(tail.equip)) === JSON.stringify(wanted.equip) && !!tail.infernal === wanted.infernal : !1;
   }
   function capturedMechUnavailable() {
     return Object.freeze({
@@ -41520,9 +41568,667 @@ Only continue if you trust the source. Injected code:
           "captured-mech-not-built",
           "the game did not commit the captured mech build"
         ) : (session = void 0, SUCCEEDED);
+      },
+      executeAutoBuild(decision) {
+        if (decision.kind !== "build-captured-mech-auto")
+          return rejected(
+            "invalid-captured-mech-decision",
+            "captured mech decision does not match the sample"
+          );
+        let rootRef = dependencies.rootState.readRoot(), unchanged = () => dependencies.rootState.readRoot() === rootRef, gameSettings = readProperty(rootRef, "settings"), queueKeyHeld = readCapturedMechQueueKeyHeld(
+          gameSettings,
+          dependencies.keyState
+        );
+        if (!unchanged() || queueKeyHeld !== !1)
+          return stale(
+            "captured-mech-auto-state-changed",
+            "captured mech state changed"
+          );
+        let fundsOf = (root) => {
+          if (!isNonArrayRecord(root)) return;
+          let mechbay = readProperty(readProperty(root, "portal"), "mechbay"), purifier = readProperty(readProperty(root, "portal"), "purifier"), soulGem = readProperty(
+            readProperty(root, "resource"),
+            "Soul_Gem"
+          );
+          if (!isNonArrayRecord(mechbay) || !isNonArrayRecord(purifier) || !isNonArrayRecord(soulGem) || !Array.isArray(mechbay.mechs))
+            return;
+          let bay = finite(mechbay.bay), max = finite(mechbay.max), supply = finite(purifier.supply), gems = finite(soulGem.amount);
+          if (!(bay === void 0 || max === void 0 || supply === void 0 || gems === void 0))
+            return { bay, max, supply, gems, stored: mechbay.mechs };
+        }, before = fundsOf(rootRef);
+        if (before === void 0 || before.stored.length !== decision.expectedMechsLength || before.bay !== decision.expectedOccupied || before.supply !== decision.expectedPurifierSupply || before.gems !== decision.expectedSoulGems)
+          return stale(
+            "captured-mech-auto-state-changed",
+            "captured mech state changed"
+          );
+        if (before.max - before.bay < decision.space || before.supply < decision.supply || before.gems < decision.gems)
+          return stale(
+            "captured-mech-auto-unaffordable",
+            "captured mech design is no longer affordable"
+          );
+        let applySetStep = (method, args, expect) => {
+          let stepHandle = resolveAutoAssembly(dependencies.controls);
+          if (stepHandle === void 0 || !unchanged())
+            return stale(
+              "captured-mech-auto-state-changed",
+              "captured mech state changed"
+            );
+          let result = dependencies.controls.invoke(stepHandle, method, args);
+          if (!result.ok)
+            return stale(
+              "captured-mech-auto-control-failed",
+              `captured mech design step failed: ${result.reason}`
+            );
+          let steppedDesign = readBlueprintDesign(rootRef);
+          return steppedDesign === null || !expect(steppedDesign) ? stale(
+            "captured-mech-design-not-set",
+            "the game did not take the captured mech design"
+          ) : null;
+        }, blueprintDesign = readBlueprintDesign(rootRef);
+        if (blueprintDesign === null || blueprintDesign.infernal)
+          return stale(
+            "captured-mech-auto-state-changed",
+            "captured mech state changed"
+          );
+        if (blueprintDesign.size !== decision.design.size) {
+          let stepped = applySetStep(
+            "setSize",
+            [decision.design.size],
+            (next) => next.size === decision.design.size
+          );
+          if (stepped !== null) return stepped;
+          if (blueprintDesign = readBlueprintDesign(rootRef), blueprintDesign === null)
+            return stale(
+              "captured-mech-design-not-set",
+              "the game did not take the captured mech design"
+            );
+        }
+        if (blueprintDesign.chassis !== decision.design.chassis) {
+          let stepped = applySetStep(
+            "setType",
+            [decision.design.chassis],
+            (next) => next.chassis === decision.design.chassis
+          );
+          if (stepped !== null) return stepped;
+          if (blueprintDesign = readBlueprintDesign(rootRef), blueprintDesign === null)
+            return stale(
+              "captured-mech-design-not-set",
+              "the game did not take the captured mech design"
+            );
+        }
+        for (let index = 0; index < decision.design.hardpoint.length; index++) {
+          let weapon = decision.design.hardpoint[index];
+          if (blueprintDesign.hardpoint[index] !== weapon) {
+            let stepped = applySetStep(
+              "setWep",
+              [weapon, index],
+              (next) => next.hardpoint[index] === weapon
+            );
+            if (stepped !== null) return stepped;
+            if (blueprintDesign = readBlueprintDesign(rootRef), blueprintDesign === null)
+              return stale(
+                "captured-mech-design-not-set",
+                "the game did not take the captured mech design"
+              );
+          }
+        }
+        for (let index = 0; index < decision.design.equip.length; index++) {
+          let equip = decision.design.equip[index];
+          if (blueprintDesign.equip[index] !== equip) {
+            let stepped = applySetStep(
+              "setEquip",
+              [equip, index],
+              (next) => next.equip[index] === equip
+            );
+            if (stepped !== null) return stepped;
+            if (blueprintDesign = readBlueprintDesign(rootRef), blueprintDesign === null)
+              return stale(
+                "captured-mech-design-not-set",
+                "the game did not take the captured mech design"
+              );
+          }
+        }
+        if (!designsEqual(blueprintDesign, decision.design))
+          return stale(
+            "captured-mech-design-not-set",
+            "the game did not take the captured mech design"
+          );
+        let autoHandle = resolveAutoAssembly(dependencies.controls);
+        if (autoHandle === void 0 || !unchanged())
+          return stale(
+            "captured-mech-auto-state-changed",
+            "captured mech state changed"
+          );
+        let rereadQueueKey = readCapturedMechQueueKeyHeld(
+          readProperty(rootRef, "settings"),
+          dependencies.keyState
+        ), designSpace = readControlNumber(
+          dependencies.controls,
+          autoHandle,
+          "bay",
+          [decision.design.size]
+        ), designSupply = readControlNumber(
+          dependencies.controls,
+          autoHandle,
+          "price",
+          [decision.design.size]
+        ), designSoul = readControlNumber(
+          dependencies.controls,
+          autoHandle,
+          "soul",
+          [decision.design.size]
+        );
+        if (rereadQueueKey !== !1 || designSpace !== decision.space || designSupply !== decision.supply || designSoul !== decision.gems)
+          return stale(
+            "captured-mech-auto-state-changed",
+            "captured mech state changed"
+          );
+        let buildResult = dependencies.controls.invoke(autoHandle, "build");
+        if (!buildResult.ok)
+          return stale(
+            "captured-mech-auto-control-failed",
+            `captured mech build failed: ${buildResult.reason}`
+          );
+        let after = fundsOf(rootRef);
+        return after === void 0 || after.stored.length !== decision.expectedMechsLength + 1 || after.bay !== decision.expectedOccupied + decision.space || after.supply !== decision.expectedPurifierSupply - decision.supply || after.gems !== decision.expectedSoulGems - decision.gems || !tailMatchesDesign(
+          after.stored[after.stored.length - 1],
+          decision.design
+        ) ? stale(
+          "captured-mech-not-built",
+          "the game did not commit the captured mech build"
+        ) : SUCCEEDED;
       }
     });
     return Object.freeze({ reader, executor });
+  }
+
+  // src/domain/combat/mech.ts
+  function shouldSaveMechSupply(input) {
+    if (input.saveSupplyRatio <= 0 || input.lastFloor || input.forceBuild)
+      return !1;
+    let missing = input.supplyMaximum * input.saveSupplyRatio - input.supplyCurrent;
+    return input.baySpace < input.designSpace && (missing -= input.titanSupplyRefund), input.timeToClear <= missing / input.supplyRate;
+  }
+
+  // src/domain/combat/mech-boss-armory.ts
+  var CLASSIC_MECH_WEAPONS = Object.freeze([
+    "laser",
+    "kinetic",
+    "shotgun",
+    "missile",
+    "flame",
+    "plasma",
+    "sonic",
+    "tesla"
+  ]), BOSS_WEAPON_RATINGS = Object.freeze({
+    fire_elm: [1.05, 0.55, 0.75, 0.5, 0, 0.1, 1, 0.7],
+    water_elm: [0.6, 0.25, 0.25, 0.5, 0.6, 1, 0.5, 0.8],
+    rock_golem: [1, 0.65, 0.35, 0.95, 0.6, 1, 0.8, 0],
+    bone_golem: [0.4, 1, 0.75, 1, 0.45, 0.35, 0.8, 0.2],
+    mech_dino: [0.8, 0.5, 0.35, 0.5, 0.1, 0.35, 0.4, 1],
+    plant: [0.35, 0.25, 0.25, 0.25, 1, 0.45, 0.8, 0.45],
+    crazed: [0.45, 1, 0.95, 0.35, 0.9, 0.45, 0.2, 0.65],
+    minotaur: [0.25, 0.45, 0.2, 1, 0.6, 0.7, 0.2, 0.45],
+    ooze: [0.15, 0, 0, 0, 0.7, 1, 0.9, 0.2],
+    zombie: [0.3, 0.1, 0.95, 0.8, 1, 0.25, 0.25, 0.1],
+    raptor: [0.65, 1, 0.3, 0.4, 0.6, 0.75, 0.3, 0.7],
+    frost_giant: [0.9, 0.3, 0.25, 0.05, 0.85, 1, 0.35, 0.55],
+    swarm: [0.02, 0.02, 1, 0.05, 1, 0, 0.65, 0.55],
+    dragon: [0.15, 0.4, 0.65, 1, 0, 0.02, 0.3, 0.2],
+    mech_dragon: [0.8, 0.2, 0.25, 0.75, 0.15, 0.5, 0.3, 1],
+    construct: [0.45, 0.35, 0.25, 0.9, 0.3, 0.4, 0.15, 1.15],
+    beholder: [0.7, 0.5, 0.1, 0.05, 0.25, 1, 0.02, 0.4],
+    worm: [0.5, 0.25, 0.02, 0.05, 0.45, 0.25, 1.15, 0.02],
+    hydra: [0.8, 0.3, 0.55, 0.4, 0.8, 0.75, 0.5, 0.7],
+    colossus: [1, 0.5, 0.25, 1, 0.1, 0.6, 0.45, 0.55],
+    lich: [0.05, 0.5, 0.75, 0.75, 0.15, 0.02, 0.45, 0.55],
+    ape: [1, 0.55, 0.35, 0.45, 0.95, 0.75, 0.1, 0.75],
+    bandit: [0.6, 1, 0.7, 0.5, 0.6, 0.75, 0.25, 0.35],
+    croc: [0.6, 0.55, 0.2, 0.45, 0.1, 0.4, 1, 0.8],
+    djinni: [0, 0.2, 0.2, 0, 0.45, 1, 0.65, 0.5],
+    snake: [0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5],
+    centipede: [0.45, 0.65, 0.45, 0.6, 0.9, 0.9, 0, 0.02],
+    spider: [0.6, 0.75, 0.9, 0.15, 1, 0.05, 0.45, 0.25],
+    manticore: [0.02, 0.55, 0.3, 0.15, 0.35, 0.9, 0.5, 0.65],
+    fiend: [0.7, 0.3, 0.5, 0.75, 0.35, 0.3, 0.3, 0.55],
+    bat: [0.1, 0.3, 0.9, 0.02, 0.25, 0.02, 1, 0.65],
+    medusa: [0.3, 0.95, 0.85, 1, 0.15, 0.1, 0.2, 0.35],
+    ettin: [0.45, 0.55, 0.6, 0.25, 0.45, 0.7, 0.25, 0.15],
+    faceless: [0.55, 0, 0.15, 0.05, 0.35, 0.4, 0.85, 1],
+    enchanted: [1, 0.25, 0.6, 0.7, 0.05, 0.9, 0.1, 0.02],
+    gargoyle: [0.1, 0.55, 1, 0.45, 0.5, 0.1, 0.9, 0.25],
+    chimera: [0.3, 0.85, 0.6, 0.35, 0.65, 0.2, 0.5, 0.85],
+    gorgon: [0.65, 0.65, 0.65, 0.66, 0.65, 0.64, 0.65, 0.65],
+    kraken: [0.7, 0.4, 0.05, 0.5, 0.45, 0.6, 0.95, 0.9],
+    homunculus: [0.02, 0.85, 0.75, 0.65, 1, 0.02, 0.5, 0.25],
+    giant_chicken: [0.95, 0.95, 0.95, 0.95, 0.95, 0.95, 0.95, 0.95],
+    skeleton_pack: [0.45, 1, 1.2, 1.2, 0.15, 0.3, 0.5, 0.25]
+  });
+
+  // src/domain/combat/mech-costs.ts
+  var CLASSIC_MECH_SIZES = Object.freeze([
+    "small",
+    "medium",
+    "large",
+    "titan",
+    "collector"
+  ]);
+  function mechFrameSpace(size, prepared) {
+    let veteran = prepared >= 2;
+    switch (size) {
+      case "small":
+        return 2;
+      case "medium":
+        return veteran ? 4 : 5;
+      case "large":
+        return veteran ? 8 : 10;
+      case "titan":
+        return veteran ? 20 : 25;
+      case "collector":
+        return 1;
+      default:
+        return;
+    }
+  }
+  function mechFrameSupplyCost(size, prepared) {
+    let veteran = prepared >= 2;
+    switch (size) {
+      case "small":
+        return veteran ? 5e4 : 75e3;
+      case "medium":
+        return 18e4;
+      case "large":
+        return 375e3;
+      case "titan":
+        return 75e4;
+      case "collector":
+        return veteran ? 8e3 : 1e4;
+      default:
+        return;
+    }
+  }
+  function mechFrameGemCost(size) {
+    switch (size) {
+      case "small":
+        return 1;
+      case "medium":
+        return 4;
+      case "large":
+        return 20;
+      case "titan":
+        return 75;
+      case "collector":
+        return 1;
+      default:
+        return;
+    }
+  }
+  function mechFrameCost(size, prepared) {
+    let supply = mechFrameSupplyCost(size, prepared), gems = mechFrameGemCost(size), space = mechFrameSpace(size, prepared);
+    if (!(supply === void 0 || gems === void 0 || space === void 0))
+      return Object.freeze({ supply, gems, space });
+  }
+  function mechFrameRefund(size, prepared) {
+    let cost = mechFrameCost(size, prepared);
+    if (cost !== void 0)
+      return Object.freeze({
+        supply: Math.floor(cost.supply / 3),
+        gems: Math.floor(cost.gems / 2)
+      });
+  }
+
+  // src/domain/combat/mech-design.ts
+  var CLASSIC_MECH_CHASSIS = Object.freeze([
+    "wheel",
+    "tread",
+    "biped",
+    "quad",
+    "spider",
+    "hover"
+  ]), CLASSIC_GENERAL_EQUIP = Object.freeze([
+    "shields",
+    "sonar",
+    "grapple",
+    "infrared",
+    "pontoon",
+    "radiator",
+    "coolant",
+    "ablative",
+    "stabilizer",
+    "seals"
+  ]), CLASSIC_EQUIP_SET = /* @__PURE__ */ new Set([
+    "special",
+    ...CLASSIC_GENERAL_EQUIP
+  ]), TERRAIN_MODS = {
+    wheel: {
+      sand: [0.9, 0.85],
+      swamp: [0.35, 0.18],
+      forest: [1, 1],
+      jungle: [0.92, 0.85],
+      rocky: [0.65, 0.5],
+      gravel: [1, 0.95],
+      muddy: [0.85, 0.58],
+      grass: [1.3, 1.2],
+      brush: [0.9, 0.8],
+      concrete: [1.1, 1]
+    },
+    tread: {
+      sand: [1.15, 1.1],
+      swamp: [0.55, 0.4],
+      forest: [1, 0.95],
+      jungle: [0.95, 0.9],
+      rocky: [0.65, 0.5],
+      gravel: [1.3, 1.2],
+      muddy: [0.88, 0.72],
+      grass: [1, 1],
+      brush: [1, 1],
+      concrete: [1, 1]
+    },
+    biped: {
+      sand: [0.78, 0.65],
+      swamp: [0.68, 0.5],
+      forest: [1, 0.95],
+      jungle: [0.82, 0.7],
+      rocky: [0.48, 0.4],
+      gravel: [1, 1],
+      muddy: [0.85, 0.7],
+      grass: [1.25, 1.2],
+      brush: [0.92, 0.85],
+      concrete: [1, 1]
+    },
+    quad: {
+      sand: [0.86, 0.75],
+      swamp: [0.58, 0.42],
+      forest: [1.25, 1.2],
+      jungle: [1, 1],
+      rocky: [0.95, 0.9],
+      gravel: [0.9, 0.8],
+      muddy: [0.68, 0.5],
+      grass: [1, 0.95],
+      brush: [0.95, 0.9],
+      concrete: [1, 1]
+    },
+    spider: {
+      sand: [0.75, 0.65],
+      swamp: [0.9, 0.78],
+      forest: [0.82, 0.75],
+      jungle: [0.77, 0.65],
+      rocky: [1.25, 1.2],
+      gravel: [0.86, 0.75],
+      muddy: [0.92, 0.82],
+      grass: [1, 1],
+      brush: [1, 0.95],
+      concrete: [1, 1]
+    },
+    hover: {
+      sand: [1, 1],
+      swamp: [1.35, 1.2],
+      forest: [0.65, 0.48],
+      jungle: [0.55, 0.35],
+      rocky: [0.82, 0.68],
+      gravel: [1, 1],
+      muddy: [1.15, 1.08],
+      grass: [1, 1],
+      brush: [0.78, 0.7],
+      concrete: [1, 1]
+    }
+  };
+  function terrainFactor(chassis, size, terrain) {
+    let table = TERRAIN_MODS[chassis];
+    if (table === void 0) return;
+    let pair = table[terrain];
+    if (pair !== void 0)
+      return size === "small" || size === "medium" ? pair[0] : pair[1];
+  }
+  function statusFactor(effect, chassis, size, equip) {
+    let hasEquip = (name) => equip.has(name);
+    switch (effect) {
+      case "freeze":
+        return hasEquip("radiator") ? 1 : hasEquip("ablative") ? 0.45 : 0.25;
+      case "hot":
+        return hasEquip("coolant") ? 1 : hasEquip("shields") ? 0.45 : 0.25;
+      case "corrosive":
+        return hasEquip("ablative") ? 1 : hasEquip("shields") ? 0.6 : hasEquip("seals") ? 0.45 : 0.25;
+      case "hail":
+        return hasEquip("ablative") ? 1 : hasEquip("shields") ? 0.9 : 0.75;
+      case "radioactive":
+        return hasEquip("shields") ? 1 : hasEquip("ablative") ? 0.75 : 0.5;
+      case "static":
+        return hasEquip("shields") ? 1 : hasEquip("ablative") ? 0.7 : hasEquip("stabilizer") ? 0.65 : hasEquip("coolant") ? 0.6 : 0.4;
+      case "humid":
+        return hasEquip("seals") ? 1 : hasEquip("radiator") ? 0.9 : 0.75;
+      case "dust":
+        return hasEquip("seals") ? 1 : hasEquip("infrared") ? 0.75 : hasEquip("sonar") ? 0.7 : 0.5;
+      case "ashfall":
+        return hasEquip("coolant") ? 1 : hasEquip("seals") || hasEquip("infrared") ? 0.7 : hasEquip("ablative") ? 0.6 : 0.4;
+      case "steam":
+        return hasEquip("coolant") || hasEquip("radiator") || hasEquip("shields") ? 0.9 : 0.75;
+      case "rain":
+        return hasEquip("seals") ? 0.95 : hasEquip("radiator") ? 0.9 : 0.75;
+      case "quake":
+        return hasEquip("stabilizer") ? 1 : hasEquip("grapple") ? 0.45 : 0.25;
+      case "fog":
+        return hasEquip("sonar") ? 1 : hasEquip("infrared") ? 0.5 : 0.2;
+      case "dark":
+        return hasEquip("infrared") ? 1 : hasEquip("sonar") ? 0.35 : 0.1;
+      case "chasm":
+        return hasEquip("grapple") ? 1 : hasEquip("sonar") ? 0.3 : 0.1;
+      case "mountain":
+        return chassis === "spider" || hasEquip("grapple") ? 1 : hasEquip("sonar") ? 0.7 : 0.5;
+      case "hilly":
+        return chassis === "spider" ? 1 : hasEquip("grapple") || hasEquip("stabilizer") ? 0.9 : 0.75;
+      case "flooded":
+        return chassis === "hover" || hasEquip("pontoon") ? 1 : hasEquip("seals") ? 0.55 : 0.35;
+      case "river":
+        return chassis === "hover" ? 1 : hasEquip("pontoon") ? 0.9 : 0.65;
+      case "tar":
+        return chassis === "quad" ? 1 : chassis === "tread" || chassis === "wheel" ? hasEquip("pontoon") || hasEquip("stabilizer") ? 0.75 : 0.5 : hasEquip("pontoon") ? 0.9 : hasEquip("stabilizer") ? 0.85 : 0.75;
+      case "windy":
+        return chassis === "hover" ? hasEquip("stabilizer") ? 0.75 : 0.5 : 1;
+      case "gravity":
+        return size === "medium" ? 0.8 : size === "large" ? 0.45 : size === "titan" ? 0.25 : 1;
+      default:
+        return;
+    }
+  }
+  function scoutTerrainBonus(size, factor, statuses, scouts, equip) {
+    let rating = factor;
+    return equip.has("special") && (size === "small" || size === "collector") && rating < 1 && (rating += (1 - rating) * (statuses.includes("gravity") ? 0.325 : 0.65)), equip.has("special") && size === "medium" && rating < 1 && !statuses.includes("gravity") && (rating += (1 - rating) * 0.75), size !== "small" && rating < 1 && (rating += (statuses.includes("fog") || statuses.includes("dark") ? 5e-3 : 0.01) * scouts, rating > 1 && (rating = 1)), rating;
+  }
+  function mountWeaponPower(size, equip, power) {
+    let adjusted = power;
+    return adjusted < 1 && adjusted !== 0 && equip.has("special") && size === "titan" && (adjusted += (1 - adjusted) * 0.1), equip.has("special") && size === "large" && (adjusted *= 1.1), adjusted;
+  }
+  function weaponBasePower(size) {
+    switch (size) {
+      case "small":
+        return 25e-4;
+      case "medium":
+        return 375e-5;
+      case "large":
+        return 0.01;
+      case "titan":
+        return 0.012;
+      default:
+        return;
+    }
+  }
+  function concreteMod(terrain, size) {
+    if (terrain !== "concrete") return 1;
+    switch (size) {
+      case "small":
+        return 0.92;
+      case "medium":
+        return 0.95;
+      case "titan":
+        return 1.25;
+      default:
+        return 1;
+    }
+  }
+  function mechHardpoints(size) {
+    switch (size) {
+      case "collector":
+        return 0;
+      case "small":
+        return 1;
+      case "medium":
+      case "large":
+        return 2;
+      case "titan":
+        return 4;
+      default:
+        return;
+    }
+  }
+  function mechGeneralSlotCount(size, prepared) {
+    let bonus = prepared > 0 ? 1 : 0;
+    switch (size) {
+      case "small":
+        return 1 + bonus;
+      case "medium":
+        return 2 + bonus;
+      case "large":
+      case "collector":
+        return 3 + bonus;
+      case "titan":
+        return 4 + bonus;
+      default:
+        return;
+    }
+  }
+  function bodyScore(size, chassis, equip, floor) {
+    if (!CLASSIC_MECH_SIZES.includes(size) || !CLASSIC_MECH_CHASSIS.includes(chassis))
+      return;
+    let factor = terrainFactor(chassis, size, floor.terrain);
+    if (factor === void 0) return;
+    let rating = scoutTerrainBonus(
+      size,
+      factor,
+      floor.statuses,
+      floor.scouts,
+      equip
+    );
+    for (let effect of floor.statuses) {
+      let mod = statusFactor(effect, chassis, size, equip);
+      if (mod === void 0) return;
+      rating *= mod;
+    }
+    return rating;
+  }
+  function rateMechDesign(design, floor) {
+    for (let part of [...design.hardpoint, ...design.equip])
+      if (!CLASSIC_EQUIP_SET.has(part) && !CLASSIC_MECH_WEAPONS.includes(part))
+        return null;
+    let equip = new Set(design.equip), body = bodyScore(design.size, design.chassis, equip, floor);
+    if (body === void 0) return null;
+    let space = mechFrameSpace(design.size, floor.prepared);
+    if (space === void 0 || space <= 0) return null;
+    if (design.size === "collector") {
+      if (design.hardpoint.length !== 0 || floor.collectorValue <= 0) return null;
+      let collectorPower = body * 25 * floor.collectorValue / 2e4;
+      return Object.freeze({
+        power: collectorPower,
+        efficiency: collectorPower / space
+      });
+    }
+    let base = weaponBasePower(design.size), ratings = BOSS_WEAPON_RATINGS[floor.boss];
+    if (base === void 0 || ratings === void 0) return null;
+    let rating = base * (1 + floor.wrath / 20) * (1 + floor.gladiatorLevel * 0.2) * concreteMod(floor.terrain, design.size) * body, damage = 0;
+    for (let weapon of design.hardpoint) {
+      let index = CLASSIC_MECH_WEAPONS.indexOf(weapon);
+      if (index < 0) return null;
+      damage += rating * mountWeaponPower(design.size, equip, ratings[index] ?? 0);
+    }
+    let power = damage / floor.spireCount;
+    return Object.freeze({ power, efficiency: power / space });
+  }
+  function mechEquipCombinations(pool, slots) {
+    if (slots < 0) return [];
+    if (slots === 0) return [[]];
+    let out = [], walk = (start, current) => {
+      if (current.length === slots) {
+        out.push([...current]);
+        return;
+      }
+      for (let index = start; index < pool.length; index++)
+        current.push(pool[index]), walk(index + 1, current), current.pop();
+    };
+    return walk(0, []), out;
+  }
+  function bestMechBodies(size, floor) {
+    let slots = mechGeneralSlotCount(size, floor.prepared);
+    if (slots === void 0) return null;
+    let best = -1 / 0, tied = [];
+    for (let chassis of CLASSIC_MECH_CHASSIS)
+      for (let combo of mechEquipCombinations(CLASSIC_GENERAL_EQUIP, slots)) {
+        let equip = Object.freeze(["special", ...combo]), score = bodyScore(size, chassis, new Set(equip), floor);
+        if (score === void 0) return null;
+        score > best ? (best = score, tied = [{ chassis, equip }]) : score === best && tied.push({ chassis, equip });
+      }
+    return tied;
+  }
+  function bestMechWeapons(boss) {
+    let ratings = BOSS_WEAPON_RATINGS[boss];
+    if (ratings === void 0) return null;
+    let best = -1 / 0, tied = [];
+    return CLASSIC_MECH_WEAPONS.forEach((weapon, index) => {
+      let rating = ratings[index];
+      rating > best ? (best = rating, tied = [weapon]) : rating === best && tied.push(weapon);
+    }), tied;
+  }
+  function chooseAutoDesign(size, floor, pickIndex) {
+    let bodies = bestMechBodies(size, floor), weapons = bestMechWeapons(floor.boss), mounts = mechHardpoints(size);
+    if (bodies === null || bodies.length === 0 || weapons === null || mounts === void 0)
+      return null;
+    let bodyIndex = pickIndex(bodies.length), weaponIndex = pickIndex(weapons.length), body = bodies[bodyIndex], weapon = weapons[weaponIndex];
+    if (body === void 0 || weapon === void 0) return null;
+    let hardpoint = Object.freeze(new Array(mounts).fill(weapon)), rated = rateMechDesign(
+      { size, chassis: body.chassis, hardpoint, equip: body.equip },
+      floor
+    );
+    return rated === null ? null : Object.freeze({
+      size,
+      chassis: body.chassis,
+      hardpoint,
+      equip: body.equip,
+      power: rated.power,
+      efficiency: rated.efficiency
+    });
+  }
+  function bestDesignFigures(floor, pickIndex) {
+    let figures = {};
+    for (let size of CLASSIC_MECH_SIZES) {
+      let design = chooseAutoDesign(size, floor, pickIndex), cost = mechFrameCost(size, floor.prepared), refund = mechFrameRefund(size, floor.prepared);
+      if (design === null || cost === void 0 || refund === void 0)
+        return null;
+      figures[size] = Object.freeze({
+        power: design.power,
+        efficiency: design.efficiency,
+        gemsEff: design.power / Math.max(cost.gems - refund.gems, 1e-9),
+        supplyEff: design.power / Math.max(cost.supply - refund.supply, 1e-9),
+        cost
+      });
+    }
+    return figures;
+  }
+  function choosePreferredSize(input) {
+    if (input.fillBay && Number.isInteger(input.bayMaximum) && (input.prepared >= 2 ? input.bayOccupied % 2 !== input.bayMaximum % 2 : input.bayMaximum - input.bayOccupied === 1))
+      return Object.freeze({ size: "collector", force: !0 });
+    if (input.supplyRatio < 0.9 && input.supplyRate < input.minimumSupplyRate && input.bayMaximum > 0 && input.bayScouts / input.bayMaximum < input.maximumCollectorShare)
+      return Object.freeze({ size: "collector", force: !0 });
+    if (input.bayMaximum > 0 && input.bayScouts * 2 / input.bayMaximum < input.scoutsRatio)
+      return Object.freeze({ size: "small", force: !0 });
+    let floorSize = input.gravityFloor ? input.gravitySize : input.preferredSize;
+    if (CLASSIC_MECH_SIZES.includes(floorSize) && (!input.fillBay || (mechFrameSupplyCost(floorSize, input.prepared) ?? 1 / 0) <= input.supplyMaximum))
+      return Object.freeze({ size: floorSize, force: !1 });
+    let ranking = floorSize === "gems" ? input.rankByGems : floorSize === "supply" ? input.rankBySupply : input.rankByEff;
+    for (let size of ranking) {
+      let cost = mechFrameCost(size, input.prepared);
+      if (cost !== void 0 && input.gemsSpare >= cost.gems && input.supplyMaximum >= cost.supply)
+        return Object.freeze({ size, force: !1 });
+    }
+    return Object.freeze({ size: "titan", force: !1 });
   }
 
   // src/domain/combat/captured-mech.ts
@@ -41535,6 +42241,97 @@ Only continue if you trust the source. Injected code:
       expectedSoulGems: input.soulGems
     });
   }
+  function autoFloor(state) {
+    return state.spire === null ? null : {
+      terrain: state.spire.type,
+      statuses: state.spire.statuses,
+      boss: state.spire.boss,
+      spireCount: state.spire.count,
+      scouts: state.bay.scouts,
+      prepared: state.prepared,
+      wrath: state.wrath,
+      gladiatorLevel: state.gladiatorLevel,
+      collectorValue: state.settings.collectorValue
+    };
+  }
+  function activeMechsPower(state, floor) {
+    let power = 0, active = state.inventory.slice(0, state.bay.active);
+    for (let mech of active) {
+      if (mech.size === "collector") continue;
+      let rated = rateMechDesign(mech, floor);
+      if (rated === null) return null;
+      power += rated.power;
+    }
+    return power;
+  }
+  function planCapturedMechAuto(state, pickIndex) {
+    if (!state.available || state.queueKeyHeld || state.warlord || state.settings.buildMode !== "random" || state.blueprint === null || state.blueprint.infernal)
+      return null;
+    let floor = autoFloor(state);
+    if (floor === null || floor.collectorValue <= 0) return null;
+    let figures = bestDesignFigures(floor, pickIndex);
+    if (figures === null) return null;
+    let combat = (key) => Object.keys(figures).filter((size) => size !== "collector").sort((left, right) => figures[right][key] - figures[left][key]), { settings, bay, funds } = state, preferred = choosePreferredSize({
+      bayMaximum: bay.maximum,
+      bayOccupied: bay.occupied,
+      bayScouts: bay.scouts,
+      supplyRate: funds.supplyRate,
+      supplyMaximum: funds.purifierMax,
+      supplyRatio: funds.purifierMax > 0 ? funds.purifierSupply / funds.purifierMax : 1,
+      gemsSpare: funds.soulGems,
+      prepared: state.prepared,
+      gravityFloor: state.spire.statuses.includes("gravity"),
+      preferredSize: settings.preferredSize,
+      gravitySize: settings.gravitySize,
+      fillBay: settings.fillBay,
+      minimumSupplyRate: settings.minimumSupplyRate,
+      maximumCollectorShare: settings.maximumCollectorShare,
+      scoutsRatio: settings.scoutsRatio,
+      rankByEff: combat("efficiency"),
+      rankByGems: combat("gemsEff"),
+      rankBySupply: combat("supplyEff")
+    }), design = chooseAutoDesign(
+      preferred.size,
+      floor,
+      pickIndex
+    ), cost = design === null ? void 0 : mechFrameCost(design.size, state.prepared);
+    if (design === null || cost === void 0 || bay.maximum - bay.occupied < cost.space || funds.purifierSupply < cost.supply || funds.soulGems < cost.gems)
+      return null;
+    if (!preferred.force && settings.saveSupplyRatio > 0) {
+      let teamPower = activeMechsPower(state, floor), refund = mechFrameRefund("titan", state.prepared);
+      if (teamPower !== null && refund !== void 0 && shouldSaveMechSupply({
+        saveSupplyRatio: settings.saveSupplyRatio,
+        lastFloor: !1,
+        forceBuild: !1,
+        supplyMaximum: funds.purifierMax,
+        supplyCurrent: funds.purifierSupply,
+        supplyRate: funds.supplyRate,
+        baySpace: bay.maximum - bay.occupied,
+        designSpace: cost.space,
+        titanSupplyRefund: bay.maximum - bay.occupied < cost.space ? refund.supply : 0,
+        timeToClear: teamPower > 0 ? (100 - state.spire.progress) / teamPower : Number.POSITIVE_INFINITY
+      }))
+        return null;
+    }
+    return Object.freeze({
+      kind: "build-captured-mech-auto",
+      design: Object.freeze({
+        size: design.size,
+        chassis: design.chassis,
+        hardpoint: design.hardpoint,
+        equip: design.equip,
+        infernal: !1
+      }),
+      supply: cost.supply,
+      gems: cost.gems,
+      space: cost.space,
+      force: preferred.force,
+      expectedMechsLength: state.inventory.length,
+      expectedOccupied: bay.occupied,
+      expectedPurifierSupply: funds.purifierSupply,
+      expectedSoulGems: funds.soulGems
+    });
+  }
 
   // src/application/captured-mech.ts
   var CAPTURED_MECH_SUCCEEDED = Object.freeze({
@@ -41543,6 +42340,23 @@ Only continue if you trust the source. Injected code:
   function runCapturedMech(dependencies) {
     let decision = planCapturedMechBuild(dependencies.reader.read());
     return decision === null ? CAPTURED_MECH_SUCCEEDED : dependencies.executor.execute(decision);
+  }
+  function runCapturedMechAutomation(dependencies) {
+    let built = runCapturedMech(dependencies);
+    if (built.status !== "succeeded") return built;
+    let state = dependencies.reader.readState();
+    if (!state.available || state.settings.buildMode !== "random")
+      return CAPTURED_MECH_SUCCEEDED;
+    let plan = planCapturedMechAuto(
+      state,
+      (choices) => Math.floor(dependencies.random.nextUnit() * choices)
+    );
+    return plan === null ? CAPTURED_MECH_SUCCEEDED : dependencies.executor.executeAutoBuild(plan);
+  }
+
+  // src/adapters/browser/random.ts
+  function createBrowserRandomSource() {
+    return Object.freeze({ nextUnit: () => Math.random() });
   }
 
   // src/adapters/browser/game-keyboard-handlers.ts
@@ -41782,7 +42596,7 @@ Only continue if you trust the source. Injected code:
       controls: pageCapture2.controls,
       readSettings: () => settingsStore.readRaw(),
       keyState: pageCapture2.keyState
-    }), runCapturedEvolution = () => runEvolution({
+    }), capturedMechRandom = createBrowserRandomSource(), runCapturedEvolution = () => runEvolution({
       reader: capturedEvolution.reader,
       executor: capturedEvolution.executor,
       runUniverseSelection: capturedEvolution.runUniverseSelection,
@@ -42706,7 +43520,10 @@ Only continue if you trust the source. Injected code:
           ensureCivicControls(), runCapturedGovernmentAutomation(government);
         }), isEnabled(settings, "autoMech") && runPhase("autoMech", () => {
           ensureMechControls();
-          let outcome = runCapturedMech(capturedMech);
+          let outcome = runCapturedMechAutomation({
+            ...capturedMech,
+            random: capturedMechRandom
+          });
           outcome.status !== "succeeded" && reportOnce(
             `autoMech: ${outcome.failure.code}: ${outcome.failure.message}`
           );

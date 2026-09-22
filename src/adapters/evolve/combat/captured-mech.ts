@@ -1,6 +1,7 @@
 /** Captured current-design mech construction for the independent runtime. */
 
 import type {
+  CapturedMechAutoPlan,
   CapturedMechBuildDecision,
   CapturedMechBuildInput,
 } from "../../../domain/combat/captured-mech.ts";
@@ -42,16 +43,69 @@ function readDesignStrings(value: unknown): readonly string[] {
   );
 }
 
-function tailMatchesDesign(tail: unknown, design: CapturedMechDesign): boolean {
+const AUTO_DESIGN_METHODS = Object.freeze([
+  "setSize",
+  "setType",
+  "setWep",
+  "setEquip",
+  "build",
+  "bay",
+  "price",
+  "soul",
+]);
+
+function resolveAutoAssembly(
+  registry: GameControlRegistry,
+): GameControlHandle | undefined {
+  const control = registry.resolve(CAPTURED_MECH_ASSEMBLY_CONTROL);
+  if (control === undefined) return undefined;
+  for (const method of AUTO_DESIGN_METHODS) {
+    if (!control.methods.includes(method)) return undefined;
+  }
+  return control;
+}
+
+function readBlueprintDesign(root: unknown): CapturedMechDesign | null {
+  if (!isNonArrayRecord(root)) return null;
+  const mechbay = readProperty(readProperty(root, "portal"), "mechbay");
+  if (!isNonArrayRecord(mechbay)) return null;
+  const blueprint = mechbay["blueprint"];
+  if (!isNonArrayRecord(blueprint)) return null;
+  const size = blueprint["size"];
+  if (typeof size !== "string" || size.length === 0) return null;
+  const chassis = blueprint["chassis"];
+  return Object.freeze({
+    size,
+    chassis: typeof chassis === "string" ? chassis : "",
+    hardpoint: readDesignStrings(blueprint["hardpoint"]),
+    equip: readDesignStrings(blueprint["equip"]),
+    infernal: Boolean(blueprint["infernal"]),
+  });
+}
+
+function designsEqual(
+  left: CapturedMechDesign,
+  right: CapturedMechDesign,
+): boolean {
+  return (
+    left.size === right.size &&
+    left.chassis === right.chassis &&
+    JSON.stringify(left.hardpoint) === JSON.stringify(right.hardpoint) &&
+    JSON.stringify(left.equip) === JSON.stringify(right.equip) &&
+    left.infernal === right.infernal
+  );
+}
+
+function tailMatchesDesign(tail: unknown, wanted: CapturedMechDesign): boolean {
   if (!isNonArrayRecord(tail)) return false;
   return (
-    tail["size"] === design.size &&
-    (tail["chassis"] ?? "") === design.chassis &&
+    tail["size"] === wanted.size &&
+    (tail["chassis"] ?? "") === wanted.chassis &&
     JSON.stringify(readDesignStrings(tail["hardpoint"])) ===
-      JSON.stringify(design.hardpoint) &&
+      JSON.stringify(wanted.hardpoint) &&
     JSON.stringify(readDesignStrings(tail["equip"])) ===
-      JSON.stringify(design.equip) &&
-    Boolean(tail["infernal"]) === design.infernal
+      JSON.stringify(wanted.equip) &&
+    Boolean(tail["infernal"]) === wanted.infernal
   );
 }
 
@@ -367,6 +421,269 @@ export function createCapturedMech(dependencies: CapturedMechDependencies): {
         );
       }
       session = undefined;
+      return SUCCEEDED;
+    },
+
+    executeAutoBuild(
+      decision: Readonly<CapturedMechAutoPlan>,
+    ): ReturnType<CapturedMechExecutor["executeAutoBuild"]> {
+      if (decision.kind !== "build-captured-mech-auto") {
+        return rejected(
+          "invalid-captured-mech-decision",
+          "captured mech decision does not match the sample",
+        );
+      }
+      // One working tick is one session: the root must stay identical while
+      // the design setters redraw the lab (each redraw bumps the control
+      // generation, so every step re-resolves and revalidates by content).
+      const rootRef = dependencies.rootState.readRoot();
+      const unchanged = (): boolean =>
+        dependencies.rootState.readRoot() === rootRef;
+      const gameSettings = readProperty(rootRef, "settings");
+      const queueKeyHeld = readCapturedMechQueueKeyHeld(
+        gameSettings,
+        dependencies.keyState,
+      );
+      if (!unchanged() || queueKeyHeld !== false) {
+        return stale(
+          "captured-mech-auto-state-changed",
+          "captured mech state changed",
+        );
+      }
+      const fundsOf = (
+        root: unknown,
+      ):
+        | {
+            bay: number;
+            max: number;
+            supply: number;
+            gems: number;
+            stored: readonly unknown[];
+          }
+        | undefined => {
+        if (!isNonArrayRecord(root)) return undefined;
+        const mechbay = readProperty(readProperty(root, "portal"), "mechbay");
+        const purifier = readProperty(readProperty(root, "portal"), "purifier");
+        const soulGem = readProperty(
+          readProperty(root, "resource"),
+          "Soul_Gem",
+        );
+        if (
+          !isNonArrayRecord(mechbay) ||
+          !isNonArrayRecord(purifier) ||
+          !isNonArrayRecord(soulGem) ||
+          !Array.isArray(mechbay["mechs"])
+        ) {
+          return undefined;
+        }
+        const bay = finite(mechbay["bay"]);
+        const max = finite(mechbay["max"]);
+        const supply = finite(purifier["supply"]);
+        const gems = finite(soulGem["amount"]);
+        if (
+          bay === undefined ||
+          max === undefined ||
+          supply === undefined ||
+          gems === undefined
+        ) {
+          return undefined;
+        }
+        return { bay, max, supply, gems, stored: mechbay["mechs"] };
+      };
+      const before = fundsOf(rootRef);
+      if (
+        before === undefined ||
+        before.stored.length !== decision.expectedMechsLength ||
+        before.bay !== decision.expectedOccupied ||
+        before.supply !== decision.expectedPurifierSupply ||
+        before.gems !== decision.expectedSoulGems
+      ) {
+        return stale(
+          "captured-mech-auto-state-changed",
+          "captured mech state changed",
+        );
+      }
+      if (
+        before.max - before.bay < decision.space ||
+        before.supply < decision.supply ||
+        before.gems < decision.gems
+      ) {
+        return stale(
+          "captured-mech-auto-unaffordable",
+          "captured mech design is no longer affordable",
+        );
+      }
+      const applySetStep = (
+        method: string,
+        args: readonly unknown[],
+        expect: (candidate: CapturedMechDesign) => boolean,
+      ): ReturnType<CapturedMechExecutor["executeAutoBuild"]> | null => {
+        const stepHandle = resolveAutoAssembly(dependencies.controls);
+        if (stepHandle === undefined || !unchanged()) {
+          return stale(
+            "captured-mech-auto-state-changed",
+            "captured mech state changed",
+          );
+        }
+        const result = dependencies.controls.invoke(stepHandle, method, args);
+        if (!result.ok) {
+          return stale(
+            "captured-mech-auto-control-failed",
+            `captured mech design step failed: ${result.reason}`,
+          );
+        }
+        const steppedDesign = readBlueprintDesign(rootRef);
+        if (steppedDesign === null || !expect(steppedDesign)) {
+          return stale(
+            "captured-mech-design-not-set",
+            "the game did not take the captured mech design",
+          );
+        }
+        return null;
+      };
+      let blueprintDesign = readBlueprintDesign(rootRef);
+      if (blueprintDesign === null || blueprintDesign.infernal) {
+        return stale(
+          "captured-mech-auto-state-changed",
+          "captured mech state changed",
+        );
+      }
+      if (blueprintDesign.size !== decision.design.size) {
+        const stepped = applySetStep(
+          "setSize",
+          [decision.design.size],
+          (next) => next.size === decision.design.size,
+        );
+        if (stepped !== null) return stepped;
+        blueprintDesign = readBlueprintDesign(rootRef);
+        if (blueprintDesign === null) {
+          return stale(
+            "captured-mech-design-not-set",
+            "the game did not take the captured mech design",
+          );
+        }
+      }
+      if (blueprintDesign.chassis !== decision.design.chassis) {
+        const stepped = applySetStep(
+          "setType",
+          [decision.design.chassis],
+          (next) => next.chassis === decision.design.chassis,
+        );
+        if (stepped !== null) return stepped;
+        blueprintDesign = readBlueprintDesign(rootRef);
+        if (blueprintDesign === null) {
+          return stale(
+            "captured-mech-design-not-set",
+            "the game did not take the captured mech design",
+          );
+        }
+      }
+      for (let index = 0; index < decision.design.hardpoint.length; index++) {
+        const weapon = decision.design.hardpoint[index] as string;
+        if (blueprintDesign.hardpoint[index] !== weapon) {
+          const stepped = applySetStep(
+            "setWep",
+            [weapon, index],
+            (next) => next.hardpoint[index] === weapon,
+          );
+          if (stepped !== null) return stepped;
+          blueprintDesign = readBlueprintDesign(rootRef);
+          if (blueprintDesign === null) {
+            return stale(
+              "captured-mech-design-not-set",
+              "the game did not take the captured mech design",
+            );
+          }
+        }
+      }
+      for (let index = 0; index < decision.design.equip.length; index++) {
+        const equip = decision.design.equip[index] as string;
+        if (blueprintDesign.equip[index] !== equip) {
+          const stepped = applySetStep(
+            "setEquip",
+            [equip, index],
+            (next) => next.equip[index] === equip,
+          );
+          if (stepped !== null) return stepped;
+          blueprintDesign = readBlueprintDesign(rootRef);
+          if (blueprintDesign === null) {
+            return stale(
+              "captured-mech-design-not-set",
+              "the game did not take the captured mech design",
+            );
+          }
+        }
+      }
+      if (!designsEqual(blueprintDesign, decision.design)) {
+        return stale(
+          "captured-mech-design-not-set",
+          "the game did not take the captured mech design",
+        );
+      }
+      const autoHandle = resolveAutoAssembly(dependencies.controls);
+      if (autoHandle === undefined || !unchanged()) {
+        return stale(
+          "captured-mech-auto-state-changed",
+          "captured mech state changed",
+        );
+      }
+      const rereadQueueKey = readCapturedMechQueueKeyHeld(
+        readProperty(rootRef, "settings"),
+        dependencies.keyState,
+      );
+      const designSpace = readControlNumber(
+        dependencies.controls,
+        autoHandle,
+        "bay",
+        [decision.design.size],
+      );
+      const designSupply = readControlNumber(
+        dependencies.controls,
+        autoHandle,
+        "price",
+        [decision.design.size],
+      );
+      const designSoul = readControlNumber(
+        dependencies.controls,
+        autoHandle,
+        "soul",
+        [decision.design.size],
+      );
+      if (
+        rereadQueueKey !== false ||
+        designSpace !== decision.space ||
+        designSupply !== decision.supply ||
+        designSoul !== decision.gems
+      ) {
+        return stale(
+          "captured-mech-auto-state-changed",
+          "captured mech state changed",
+        );
+      }
+      const buildResult = dependencies.controls.invoke(autoHandle, "build");
+      if (!buildResult.ok) {
+        return stale(
+          "captured-mech-auto-control-failed",
+          `captured mech build failed: ${buildResult.reason}`,
+        );
+      }
+      const after = fundsOf(rootRef);
+      if (
+        after === undefined ||
+        after.stored.length !== decision.expectedMechsLength + 1 ||
+        after.bay !== decision.expectedOccupied + decision.space ||
+        after.supply !== decision.expectedPurifierSupply - decision.supply ||
+        after.gems !== decision.expectedSoulGems - decision.gems ||
+        !tailMatchesDesign(
+          after.stored[after.stored.length - 1],
+          decision.design,
+        )
+      ) {
+        return stale(
+          "captured-mech-not-built",
+          "the game did not commit the captured mech build",
+        );
+      }
       return SUCCEEDED;
     },
   });

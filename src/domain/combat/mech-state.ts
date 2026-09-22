@@ -49,6 +49,8 @@ export interface CapturedMechFunds {
   readonly purifierSupply: number;
   readonly purifierMax: number;
   readonly soulGems: number;
+  /** `resource.Supply.rateOfChange`, 0 when the ledger names none. */
+  readonly supplyRate: number;
 }
 
 export interface CapturedMechSettings {
@@ -195,7 +197,12 @@ function unavailableMechState(
     inventory: Object.freeze([]),
     blueprint: null,
     spire: null,
-    funds: Object.freeze({ purifierSupply: 0, purifierMax: 0, soulGems: 0 }),
+    funds: Object.freeze({
+      purifierSupply: 0,
+      purifierMax: 0,
+      soulGems: 0,
+      supplyRate: 0,
+    }),
     prepared: 0,
     wrath: 0,
     gladiatorLevel: 0,
@@ -271,14 +278,14 @@ export function readCapturedMechState(
   }
   const inventory = Object.freeze(
     stored.map((entry, index) => {
-      const design = readMechDesign(entry) ?? {
+      const entryDesign = readMechDesign(entry) ?? {
         size: "",
         chassis: "",
         hardpoint: Object.freeze([]),
         equip: Object.freeze([]),
         infernal: false,
       };
-      return Object.freeze({ ...design, index });
+      return Object.freeze({ ...entryDesign, index });
     }),
   );
   const spire =
@@ -306,6 +313,11 @@ export function readCapturedMechState(
           boss: spire["boss"] as string,
         })
       : null;
+  const supplyLedger =
+    resources !== undefined && isNonArrayRecord(resources["Supply"])
+      ? resources["Supply"]
+      : {};
+  const supplyRateRaw = finiteQuantity(supplyLedger["rateOfChange"]);
   const blood = isNonArrayRecord(root["blood"]) ? root["blood"] : {};
   const stats = isNonArrayRecord(root["stats"]) ? root["stats"] : {};
   const achieve = isNonArrayRecord(stats["achieve"]) ? stats["achieve"] : {};
@@ -323,7 +335,12 @@ export function readCapturedMechState(
     inventory,
     blueprint: readMechDesign(mechbay["blueprint"]),
     spire: spireFacts,
-    funds: Object.freeze({ purifierSupply, purifierMax, soulGems }),
+    funds: Object.freeze({
+      purifierSupply,
+      purifierMax,
+      soulGems,
+      supplyRate: supplyRateRaw ?? 0,
+    }),
     prepared: nonNegativeQuantity(blood["prepared"]) ?? 0,
     wrath: nonNegativeQuantity(blood["wrath"]) ?? 0,
     gladiatorLevel: gladiator,
