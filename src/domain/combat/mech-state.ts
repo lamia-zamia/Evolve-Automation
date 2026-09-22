@@ -11,7 +11,10 @@
  */
 
 import { computeMechDefaults } from "../settings-defaults.ts";
-import { isNonArrayRecord } from "../../validation/records.ts";
+import {
+  isNonArrayRecord,
+  type UnknownRecord,
+} from "../../validation/records.ts";
 
 export type MechBuildMode = "none" | "random" | "user";
 export type MechScrapMode = "none" | "single" | "all" | "mixed";
@@ -84,6 +87,11 @@ export interface CapturedMechState {
   readonly warlord: boolean;
   /** The Spire waygate is switched on (`portal.waygate.on === 1`). */
   readonly waygateActive: boolean;
+  /**
+   * The governor runs its Mech Builder task, which assembles titans itself.
+   * Malformed task records read as active: standing down is the safe direction.
+   */
+  readonly governorMechTask: boolean;
   readonly bay: CapturedMechBay;
   readonly inventory: readonly CapturedMechInventoryItem[];
   readonly blueprint: CapturedMechDesign | null;
@@ -205,10 +213,34 @@ function waygateActive(root: Record<string, unknown> | undefined): boolean {
   return waygate["on"] === 1;
 }
 
+/**
+ * A governor task id assigned to any citizen slot (`race.governor.tasks`),
+ * the same membership DeadSpace's own `haveTask` answers. Absent governor or
+ * tasks reads as inactive; a malformed record reads as active.
+ */
+export function readGovernorTaskActive(
+  root: UnknownRecord | undefined,
+  task: string,
+): boolean {
+  if (root === undefined) return false;
+  const race = root["race"];
+  if (!isNonArrayRecord(race)) return false;
+  const governor = race["governor"];
+  if (governor === undefined) return false;
+  if (!isNonArrayRecord(governor)) return true;
+  const tasks = governor["tasks"];
+  if (tasks === undefined) return false;
+  if (!isNonArrayRecord(tasks)) return true;
+  const assigned = Object.values(tasks);
+  if (assigned.some((entry) => typeof entry !== "string")) return true;
+  return (assigned as string[]).includes(task);
+}
+
 function unavailableMechState(
   queueKeyHeld: boolean,
   warlord: boolean,
   gateActive: boolean,
+  mechTask: boolean,
   settings: CapturedMechSettings,
 ): CapturedMechState {
   return Object.freeze({
@@ -216,6 +248,7 @@ function unavailableMechState(
     queueKeyHeld,
     warlord,
     waygateActive: gateActive,
+    governorMechTask: mechTask,
     bay: Object.freeze({ maximum: 0, occupied: 0, active: 0, scouts: 0 }),
     inventory: Object.freeze([]),
     blueprint: null,
@@ -260,6 +293,7 @@ export function readCapturedMechState(
       input.queueKeyHeld === true,
       warlord,
       waygateActive(root),
+      readGovernorTaskActive(root, "mech"),
       settings,
     );
   }
@@ -288,6 +322,7 @@ export function readCapturedMechState(
       input.queueKeyHeld,
       warlord,
       waygateActive(root),
+      readGovernorTaskActive(root, "mech"),
       settings,
     );
   }
@@ -313,6 +348,7 @@ export function readCapturedMechState(
       input.queueKeyHeld,
       warlord,
       waygateActive(root),
+      readGovernorTaskActive(root, "mech"),
       settings,
     );
   }
@@ -373,6 +409,7 @@ export function readCapturedMechState(
     queueKeyHeld: input.queueKeyHeld,
     warlord,
     waygateActive: waygateActive(root),
+    governorMechTask: readGovernorTaskActive(root, "mech"),
     bay: Object.freeze({ maximum, occupied, active, scouts }),
     inventory,
     blueprint: readMechDesign(mechbay["blueprint"]),

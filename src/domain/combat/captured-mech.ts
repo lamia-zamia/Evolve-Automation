@@ -30,6 +30,8 @@ export interface CapturedMechBuildInput {
   readonly buildMode: string;
   /** The page's mapped queue key is currently held, changing `build()` into queue admission. */
   readonly queueKeyHeld: boolean;
+  /** The governor runs its Mech Builder task and assembles titans itself. */
+  readonly governorTask: boolean;
   readonly infernal: boolean;
   readonly designSize: string;
   /** Values returned by the game's captured `bay`, `price`, and `soul` methods. */
@@ -57,6 +59,7 @@ export function planCapturedMechBuild(
     !input.enabled ||
     input.buildMode !== "user" ||
     input.queueKeyHeld ||
+    input.governorTask ||
     input.infernal ||
     input.designSize.length === 0 ||
     !Number.isFinite(input.designSpace) ||

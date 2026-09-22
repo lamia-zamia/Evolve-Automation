@@ -7042,12 +7042,26 @@
     let waygate = portal.waygate;
     return isNonArrayRecord(waygate) ? waygate.on === 1 : !1;
   }
-  function unavailableMechState(queueKeyHeld, warlord, gateActive, settings) {
+  function readGovernorTaskActive(root, task) {
+    if (root === void 0) return !1;
+    let race = root.race;
+    if (!isNonArrayRecord(race)) return !1;
+    let governor = race.governor;
+    if (governor === void 0) return !1;
+    if (!isNonArrayRecord(governor)) return !0;
+    let tasks = governor.tasks;
+    if (tasks === void 0) return !1;
+    if (!isNonArrayRecord(tasks)) return !0;
+    let assigned = Object.values(tasks);
+    return assigned.some((entry) => typeof entry != "string") ? !0 : assigned.includes(task);
+  }
+  function unavailableMechState(queueKeyHeld, warlord, gateActive, mechTask, settings) {
     return Object.freeze({
       available: !1,
       queueKeyHeld,
       warlord,
       waygateActive: gateActive,
+      governorMechTask: mechTask,
       bay: Object.freeze({ maximum: 0, occupied: 0, active: 0, scouts: 0 }),
       inventory: Object.freeze([]),
       blueprint: null,
@@ -7073,6 +7087,7 @@
         input.queueKeyHeld === !0,
         warlord,
         waygateActive(root),
+        readGovernorTaskActive(root, "mech"),
         settings
       );
     let portal = isNonArrayRecord(root.portal) ? root.portal : void 0, mechbay = portal !== void 0 && isNonArrayRecord(portal.mechbay) ? portal.mechbay : void 0, purifier = portal !== void 0 && isNonArrayRecord(portal.purifier) ? portal.purifier : void 0, resources = isNonArrayRecord(root.resource) ? root.resource : void 0, soulGem = resources !== void 0 && isNonArrayRecord(resources.Soul_Gem) ? resources.Soul_Gem : void 0;
@@ -7081,6 +7096,7 @@
         input.queueKeyHeld,
         warlord,
         waygateActive(root),
+        readGovernorTaskActive(root, "mech"),
         settings
       );
     let maximum = nonNegativeQuantity(mechbay.max), occupied = nonNegativeQuantity(mechbay.bay), active = nonNegativeQuantity(mechbay.active), scouts = nonNegativeQuantity(mechbay.scouts), purifierSupply = nonNegativeQuantity(purifier.supply), purifierMax = nonNegativeQuantity(purifier.sup_max), soulGems = nonNegativeQuantity(soulGem.amount), stored = Array.isArray(mechbay.mechs) ? mechbay.mechs : void 0;
@@ -7089,6 +7105,7 @@
         input.queueKeyHeld,
         warlord,
         waygateActive(root),
+        readGovernorTaskActive(root, "mech"),
         settings
       );
     let inventory = Object.freeze(
@@ -7116,6 +7133,7 @@
       queueKeyHeld: input.queueKeyHeld,
       warlord,
       waygateActive: waygateActive(root),
+      governorMechTask: readGovernorTaskActive(root, "mech"),
       bay: Object.freeze({ maximum, occupied, active, scouts }),
       inventory,
       blueprint: readMechDesign(mechbay.blueprint),
@@ -7167,6 +7185,8 @@
   function designAutoChoice(state, pickIndex) {
     if (!state.available || state.queueKeyHeld || state.warlord || state.settings.buildMode !== "random" || state.blueprint === null || state.blueprint.infernal)
       return null;
+    let inactives = Math.max(0, state.inventory.length - state.bay.active);
+    if (state.governorMechTask && inactives === 0) return null;
     let floor = autoFloor(state);
     if (floor === null || floor.collectorValue <= 0) return null;
     let figures = bestDesignFigures(floor, pickIndex);
@@ -7206,7 +7226,10 @@
       settings: input.settings,
       queueKeyHeld: !1
     });
-    if (!state.available || state.settings.buildMode !== "random") return null;
+    if (!state.available) return null;
+    if (state.governorMechTask)
+      return Object.freeze({ supply: 75e4, gems: 75 });
+    if (state.settings.buildMode !== "random") return null;
     let choice = designAutoChoice(state, () => 0);
     return choice === null ? null : Object.freeze({ supply: choice.cost.supply, gems: choice.cost.gems });
   }
@@ -42040,6 +42063,7 @@ Only continue if you trust the source. Injected code:
       enabled: !1,
       buildMode: "none",
       queueKeyHeld: !1,
+      governorTask: !1,
       infernal: !1,
       designSize: "",
       designSpace: 0,
@@ -42095,6 +42119,10 @@ Only continue if you trust the source. Injected code:
       mechsLength: stored.length,
       occupied,
       input: Object.freeze({
+        governorTask: readGovernorTaskActive(
+          isNonArrayRecord(root) ? root : void 0,
+          "mech"
+        ),
         available: !0,
         enabled: !0,
         buildMode: "user",
@@ -42456,7 +42484,7 @@ Only continue if you trust the source. Injected code:
 
   // src/domain/combat/captured-mech.ts
   function planCapturedMechBuild(input) {
-    return !input.available || !input.enabled || input.buildMode !== "user" || input.queueKeyHeld || input.infernal || input.designSize.length === 0 || !Number.isFinite(input.designSpace) || input.designSpace <= 0 || !Number.isFinite(input.designSupply) || input.designSupply < 0 || !Number.isFinite(input.designSoul) || input.designSoul < 0 || !Number.isFinite(input.baySpace) || input.baySpace < input.designSpace || !Number.isFinite(input.purifierSupply) || input.purifierSupply < input.designSupply || !Number.isFinite(input.soulGems) || input.soulGems < input.designSoul ? null : Object.freeze({
+    return !input.available || !input.enabled || input.buildMode !== "user" || input.queueKeyHeld || input.governorTask || input.infernal || input.designSize.length === 0 || !Number.isFinite(input.designSpace) || input.designSpace <= 0 || !Number.isFinite(input.designSupply) || input.designSupply < 0 || !Number.isFinite(input.designSoul) || input.designSoul < 0 || !Number.isFinite(input.baySpace) || input.baySpace < input.designSpace || !Number.isFinite(input.purifierSupply) || input.purifierSupply < input.designSupply || !Number.isFinite(input.soulGems) || input.soulGems < input.designSoul ? null : Object.freeze({
       kind: "build-captured-mech",
       designSize: input.designSize,
       expectedBaySpace: input.baySpace,

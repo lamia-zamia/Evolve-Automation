@@ -614,4 +614,55 @@ const zeroRandom = { nextUnit: () => 0 };
   );
 }
 
+// A governor Mech Builder task stands the automation down — the governor
+// assembles titans itself — except while mechs sit inactive.
+{
+  const governed = makeWorld();
+  governed.root.race = { governor: { tasks: { slot1: "mech" } } };
+  assert.equal(governed.adapter.reader.readState().governorMechTask, true);
+  assert.equal(
+    planAuto(governed.adapter.reader.readState(), () => 0),
+    null,
+  );
+  assert.equal(
+    runCapturedMechAutomation({ ...governed.adapter, random: zeroRandom })
+      .status,
+    "succeeded",
+  );
+  assert.deepEqual(governed.calls, []);
+
+  const overflow = makeWorld();
+  overflow.root.race = { governor: { tasks: { slot1: "mech" } } };
+  overflow.root.portal.mechbay.mechs = [
+    {
+      size: "small",
+      chassis: "tread",
+      hardpoint: ["laser"],
+      equip: ["special", "shields"],
+      infernal: false,
+    },
+    {
+      size: "small",
+      chassis: "tread",
+      hardpoint: ["laser"],
+      equip: ["special", "shields"],
+      infernal: false,
+    },
+  ];
+  overflow.root.portal.mechbay.bay = 4;
+  overflow.root.portal.mechbay.active = 1;
+  assert.notEqual(
+    planAuto(overflow.adapter.reader.readState(), () => 0),
+    null,
+  );
+
+  const malformed = makeWorld();
+  malformed.root.race = { governor: { tasks: { slot1: 42 } } };
+  assert.equal(malformed.adapter.reader.readState().governorMechTask, true);
+  assert.equal(
+    planAuto(malformed.adapter.reader.readState(), () => 0),
+    null,
+  );
+}
+
 console.log("captured mech auto checks passed");

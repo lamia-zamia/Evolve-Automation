@@ -86,6 +86,10 @@ export function designAutoChoice(
   ) {
     return null;
   }
+  // The governor assembles titans itself; history samples the task only while
+  // nothing sits inactive, and stands the whole automation down while it does.
+  const inactives = Math.max(0, state.inventory.length - state.bay.active);
+  if (state.governorMechTask && inactives === 0) return null;
   const floor = autoFloor(state);
   if (floor === null || floor.collectorValue <= 0) return null;
   const figures = bestDesignFigures(floor, pickIndex);
@@ -142,7 +146,12 @@ export function planMechDemandCosts(
     settings: input.settings,
     queueKeyHeld: false,
   });
-  if (!state.available || state.settings.buildMode !== "random") return null;
+  if (!state.available) return null;
+  if (state.governorMechTask) {
+    // A governor titan costs the same at any prepared level, standard frame.
+    return Object.freeze({ supply: 750_000, gems: 75 });
+  }
+  if (state.settings.buildMode !== "random") return null;
   const choice = designAutoChoice(state, () => 0);
   if (choice === null) return null;
   return Object.freeze({ supply: choice.cost.supply, gems: choice.cost.gems });

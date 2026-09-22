@@ -8,6 +8,7 @@ import type {
 } from "../../../domain/combat/captured-mech.ts";
 import {
   readCapturedMechState,
+  readGovernorTaskActive,
   type CapturedMechDesign,
   type CapturedMechState,
 } from "../../../domain/combat/mech-state.ts";
@@ -119,6 +120,7 @@ function capturedMechUnavailable(): CapturedMechBuildInput {
     enabled: false,
     buildMode: "none",
     queueKeyHeld: false,
+    governorTask: false,
     infernal: false,
     designSize: "",
     designSpace: 0,
@@ -244,6 +246,10 @@ function readCapturedMechSample(
     mechsLength: stored.length,
     occupied,
     input: Object.freeze({
+      governorTask: readGovernorTaskActive(
+        isNonArrayRecord(root) ? root : undefined,
+        "mech",
+      ),
       available: true,
       enabled: true,
       buildMode: "user",

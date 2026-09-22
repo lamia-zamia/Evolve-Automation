@@ -70,6 +70,19 @@ const settings = {
   assert.equal(planMechDemandCosts({ root: warlord, settings }), null);
 }
 
+// A governor task holds titan cost even when the script builds by hand.
+{
+  const governed = makeRoot();
+  governed.race = { governor: { tasks: { slot1: "mech" } } };
+  assert.deepEqual(
+    planMechDemandCosts({
+      root: governed,
+      settings: { ...settings, mechBuild: "user" },
+    }),
+    { supply: 750_000, gems: 75 },
+  );
+}
+
 // The reservation source names the same target for the build loop.
 {
   const root = makeRoot();

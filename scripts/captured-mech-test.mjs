@@ -126,6 +126,7 @@ assert.equal(
     enabled: true,
     buildMode: "user",
     queueKeyHeld: false,
+    governorTask: false,
     infernal: false,
     designSize: "small",
     designSpace: 1,
@@ -134,6 +135,26 @@ assert.equal(
     baySpace: 1,
     purifierSupply: 0,
     soulGems: 1,
+  }),
+  null,
+);
+
+// A governor task stands down even the explicit blueprint path.
+assert.equal(
+  planCapturedMechBuild({
+    available: true,
+    enabled: true,
+    buildMode: "user",
+    queueKeyHeld: false,
+    governorTask: true,
+    infernal: false,
+    designSize: "small",
+    designSpace: 1,
+    designSupply: 10,
+    designSoul: 1,
+    baySpace: 10,
+    purifierSupply: 100,
+    soulGems: 10,
   }),
   null,
 );
