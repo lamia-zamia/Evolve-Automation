@@ -3,6 +3,7 @@ import type {
   CapturedMechAutoPlan,
   CapturedMechBuildDecision,
   CapturedMechBuildInput,
+  CapturedMechScrapPlan,
 } from "../domain/combat/captured-mech.ts";
 import type { CapturedMechState } from "../domain/combat/mech-state.ts";
 import type { RandomSource } from "./randomness.ts";
@@ -19,6 +20,9 @@ export interface CapturedMechExecutor {
   ): CommandExecutionOutcome;
   executeAutoBuild(
     decision: Readonly<CapturedMechAutoPlan>,
+  ): CommandExecutionOutcome;
+  executeAutoScrap(
+    decision: Readonly<CapturedMechScrapPlan>,
   ): CommandExecutionOutcome;
 }
 

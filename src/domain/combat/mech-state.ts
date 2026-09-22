@@ -51,6 +51,8 @@ export interface CapturedMechFunds {
   readonly soulGems: number;
   /** `resource.Supply.rateOfChange`, 0 when the ledger names none. */
   readonly supplyRate: number;
+  /** `resource.Soul_Gem.rateOfChange`, 0 when the ledger names none. */
+  readonly gemsRate: number;
   /** Every built purifier is switched on; false when the count is unreadable. */
   readonly purifierFullyOn: boolean;
 }
@@ -80,6 +82,8 @@ export interface CapturedMechState {
   readonly available: boolean;
   readonly queueKeyHeld: boolean;
   readonly warlord: boolean;
+  /** The Spire waygate is switched on (`portal.waygate.on === 1`). */
+  readonly waygateActive: boolean;
   readonly bay: CapturedMechBay;
   readonly inventory: readonly CapturedMechInventoryItem[];
   readonly blueprint: CapturedMechDesign | null;
@@ -188,15 +192,30 @@ function readMechSettings(value: unknown): CapturedMechSettings {
   });
 }
 
+/**
+ * The Spire waygate is switched on (`portal.waygate.on === 1`, the same field
+ * the fortress loop reads); false when the structure is unreadable.
+ */
+function waygateActive(root: Record<string, unknown> | undefined): boolean {
+  if (root === undefined) return false;
+  const portal = root["portal"];
+  if (!isNonArrayRecord(portal)) return false;
+  const waygate = portal["waygate"];
+  if (!isNonArrayRecord(waygate)) return false;
+  return waygate["on"] === 1;
+}
+
 function unavailableMechState(
   queueKeyHeld: boolean,
   warlord: boolean,
+  gateActive: boolean,
   settings: CapturedMechSettings,
 ): CapturedMechState {
   return Object.freeze({
     available: false,
     queueKeyHeld,
     warlord,
+    waygateActive: gateActive,
     bay: Object.freeze({ maximum: 0, occupied: 0, active: 0, scouts: 0 }),
     inventory: Object.freeze([]),
     blueprint: null,
@@ -206,6 +225,7 @@ function unavailableMechState(
       purifierMax: 0,
       soulGems: 0,
       supplyRate: 0,
+      gemsRate: 0,
       purifierFullyOn: false,
     }),
     prepared: 0,
@@ -236,7 +256,12 @@ export function readCapturedMechState(
     !settings.autoMech ||
     input.queueKeyHeld === undefined
   ) {
-    return unavailableMechState(input.queueKeyHeld === true, warlord, settings);
+    return unavailableMechState(
+      input.queueKeyHeld === true,
+      warlord,
+      waygateActive(root),
+      settings,
+    );
   }
   const portal = isNonArrayRecord(root["portal"]) ? root["portal"] : undefined;
   const mechbay =
@@ -259,7 +284,12 @@ export function readCapturedMechState(
     purifier === undefined ||
     soulGem === undefined
   ) {
-    return unavailableMechState(input.queueKeyHeld, warlord, settings);
+    return unavailableMechState(
+      input.queueKeyHeld,
+      warlord,
+      waygateActive(root),
+      settings,
+    );
   }
   const maximum = nonNegativeQuantity(mechbay["max"]);
   const occupied = nonNegativeQuantity(mechbay["bay"]);
@@ -279,7 +309,12 @@ export function readCapturedMechState(
     soulGems === undefined ||
     stored === undefined
   ) {
-    return unavailableMechState(input.queueKeyHeld, warlord, settings);
+    return unavailableMechState(
+      input.queueKeyHeld,
+      warlord,
+      waygateActive(root),
+      settings,
+    );
   }
   const inventory = Object.freeze(
     stored.map((entry, index) => {
@@ -323,6 +358,7 @@ export function readCapturedMechState(
       ? resources["Supply"]
       : {};
   const supplyRateRaw = finiteQuantity(supplyLedger["rateOfChange"]);
+  const gemsRateRaw = finiteQuantity(soulGem["rateOfChange"]);
   const blood = isNonArrayRecord(root["blood"]) ? root["blood"] : {};
   const stats = isNonArrayRecord(root["stats"]) ? root["stats"] : {};
   const achieve = isNonArrayRecord(stats["achieve"]) ? stats["achieve"] : {};
@@ -336,6 +372,7 @@ export function readCapturedMechState(
     available: true,
     queueKeyHeld: input.queueKeyHeld,
     warlord,
+    waygateActive: waygateActive(root),
     bay: Object.freeze({ maximum, occupied, active, scouts }),
     inventory,
     blueprint: readMechDesign(mechbay["blueprint"]),
@@ -345,6 +382,7 @@ export function readCapturedMechState(
       purifierMax,
       soulGems,
       supplyRate: supplyRateRaw ?? 0,
+      gemsRate: gemsRateRaw ?? 0,
       purifierFullyOn:
         finiteQuantity(purifier["count"]) !== undefined &&
         finiteQuantity(purifier["on"]) !== undefined &&

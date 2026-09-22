@@ -2,7 +2,10 @@ import assert from "node:assert/strict";
 
 import { createCapturedMech } from "../src/adapters/evolve/combat/captured-mech.ts";
 import { runCapturedMechAutomation } from "../src/application/captured-mech.ts";
-import { planCapturedMechAuto as planAuto } from "../src/domain/combat/captured-mech.ts";
+import {
+  planCapturedMechAuto as planAuto,
+  planCapturedMechScrap as planScrap,
+} from "../src/domain/combat/captured-mech.ts";
 
 // Game-owned figures, hardcoded from portal.js (mechCost/mechSize) so the
 // fake does not test our transcription against itself.
@@ -77,15 +80,21 @@ function makeWorld(overrides = {}) {
       "soul",
     ],
   };
+  const list = {
+    elementId: "mechList",
+    generation: 1,
+    methods: ["scrap"],
+  };
   const reshape = (blueprint) => {
     const figures = GAME_COST[blueprint.size];
     blueprint.hardpoint = new Array(figures.mounts).fill("laser");
     blueprint.equip = ["special", ...GENERAL_DEFAULTS.slice(0, figures.slots)];
   };
   const controls = {
-    resolve: (id) => (id === "mechAssembly" ? assembly : undefined),
+    resolve: (id) =>
+      id === "mechAssembly" ? assembly : id === "mechList" ? list : undefined,
     invoke: (handle, method, args = []) => {
-      assert.equal(handle, assembly);
+      assert.ok(handle === assembly || handle === list);
       calls.push([method, ...args]);
       const blueprint = root.portal.mechbay.blueprint;
       if (method === "bay")
@@ -136,6 +145,22 @@ function makeWorld(overrides = {}) {
           root.resource.Soul_Gem.amount -= figures.gems;
         } else {
           calls.push(["queued-instead"]);
+        }
+        return { ok: true, value: undefined };
+      }
+      if (method === "scrap") {
+        assert.equal(handle, list);
+        const removed = root.portal.mechbay.mechs[args[0]];
+        if (removed !== undefined) {
+          const figures = GAME_COST[removed.size];
+          root.portal.purifier.supply = Math.min(
+            root.portal.purifier.supply + Math.floor(figures.supply / 3),
+            root.portal.purifier.sup_max,
+          );
+          root.resource.Soul_Gem.amount += Math.floor(figures.gems / 2);
+          root.portal.mechbay.mechs.splice(args[0], 1);
+          root.portal.mechbay.bay -= figures.space;
+          root.portal.mechbay.active -= 1;
         }
         return { ok: true, value: undefined };
       }
@@ -416,6 +441,176 @@ const zeroRandom = { nextUnit: () => 0 };
   assert.notEqual(
     planAuto(noBaysFirst.adapter.reader.readState(), () => 0),
     null,
+  );
+}
+
+// One bad candidate is scrapped exactly once, with disappearance observed.
+{
+  const yard = makeWorld();
+  yard.root.portal.mechbay.max = 6;
+  yard.root.portal.mechbay.mechs = [
+    {
+      size: "small",
+      chassis: "wheel",
+      hardpoint: ["laser"],
+      equip: ["special", "shields"],
+      infernal: false,
+    },
+    {
+      size: "small",
+      chassis: "hover",
+      hardpoint: ["laser"],
+      equip: ["special", "grapple"],
+      infernal: false,
+    },
+    {
+      size: "small",
+      chassis: "tread",
+      hardpoint: ["laser"],
+      equip: ["special", "sonar"],
+      infernal: false,
+    },
+  ];
+  yard.root.portal.mechbay.bay = 6;
+  yard.root.portal.mechbay.active = 3;
+  yard.settings.mechSize = "small";
+  yard.settings.mechFillBay = true;
+  yard.settings.mechScrap = "all";
+  const scrap = planScrap(yard.adapter.reader.readState(), () => 0);
+  assert.equal(scrap !== null, true);
+  assert.equal(scrap.index, 0);
+  const supplyBefore = yard.root.portal.purifier.supply;
+  const outcome = runCapturedMechAutomation({
+    ...yard.adapter,
+    random: zeroRandom,
+  });
+  assert.equal(outcome.status, "succeeded");
+  const methods = yard.calls.map((call) => call[0]);
+  assert.equal(
+    methods.filter((method) => method === "scrap").length,
+    1,
+    "exactly one scrap",
+  );
+  assert.ok(!methods.includes("build"), "no replacement in the scrap tick");
+  assert.equal(yard.root.portal.mechbay.mechs.length, 2);
+  assert.equal(yard.root.portal.mechbay.bay, 4);
+  assert.equal(yard.root.portal.purifier.supply, supplyBefore + 25_000);
+
+  // Replacement is a fresh plan on the next tick, verified in turn.
+  const replan = planAuto(yard.adapter.reader.readState(), () => 0);
+  assert.equal(replan !== null, true);
+  const rebuilt = runCapturedMechAutomation({
+    ...yard.adapter,
+    random: zeroRandom,
+  });
+  assert.equal(rebuilt.status, "succeeded");
+  assert.equal(yard.root.portal.mechbay.mechs.length, 3);
+  const fresh = yard.root.portal.mechbay.mechs[2];
+  assert.equal(fresh.size, replan.design.size);
+  assert.deepEqual(fresh.hardpoint, [...replan.design.hardpoint]);
+}
+
+// Near-best mechs are not scrap candidates.
+{
+  const yard = makeWorld();
+  const state = yard.adapter.reader.readState();
+  const best = planAuto(state, () => 0);
+  assert.equal(best !== null, true);
+  yard.root.portal.mechbay.mechs = [
+    {
+      size: best.design.size,
+      chassis: best.design.chassis,
+      hardpoint: [...best.design.hardpoint],
+      equip: [...best.design.equip],
+      infernal: false,
+    },
+  ];
+  yard.root.portal.mechbay.bay = best.space;
+  yard.root.portal.mechbay.active = 1;
+  yard.settings.mechSize = best.design.size;
+  yard.settings.mechScrap = "all";
+  assert.equal(
+    planScrap(yard.adapter.reader.readState(), () => 0),
+    null,
+  );
+}
+
+// Invoked but still present: one scrap call, then STOP — no second scrap,
+// no replacement build.
+{
+  const yard = makeWorld();
+  yard.root.portal.mechbay.mechs = [
+    {
+      size: "small",
+      chassis: "hover",
+      hardpoint: ["laser"],
+      equip: ["special", "shields"],
+      infernal: false,
+    },
+  ];
+  yard.root.portal.mechbay.bay = 2;
+  yard.root.portal.mechbay.active = 1;
+  yard.root.portal.mechbay.max = 2;
+  yard.settings.mechSize = "small";
+  yard.settings.mechFillBay = true;
+  yard.settings.mechScrap = "all";
+  assert.notEqual(
+    planScrap(yard.adapter.reader.readState(), () => 0),
+    null,
+  );
+  const frozen = yard.controls.invoke;
+  let scraps = 0;
+  yard.controls.invoke = (handle, method, args = []) => {
+    if (method === "scrap") {
+      scraps += 1;
+      return { ok: true, value: undefined };
+    }
+    return frozen(handle, method, args);
+  };
+  const outcome = runCapturedMechAutomation({
+    ...yard.adapter,
+    random: zeroRandom,
+  });
+  assert.equal(outcome.status, "stale");
+  assert.equal(scraps, 1);
+  assert.equal(yard.root.portal.mechbay.mechs.length, 1);
+  assert.ok(
+    !yard.calls.some(
+      (call) => call[0] === "build" || call[0].startsWith("set"),
+    ),
+    "no replacement after an unverified scrap",
+  );
+}
+
+// Single mode only frees room: with headroom it builds instead of scrapping.
+{
+  const yard = makeWorld();
+  yard.root.portal.mechbay.mechs = [
+    {
+      size: "small",
+      chassis: "hover",
+      hardpoint: ["laser"],
+      equip: ["special", "shields"],
+      infernal: false,
+    },
+  ];
+  yard.root.portal.mechbay.bay = 2;
+  yard.root.portal.mechbay.active = 1;
+  yard.settings.mechSize = "small";
+  yard.settings.mechScrap = "single";
+  assert.equal(
+    planScrap(yard.adapter.reader.readState(), () => 0),
+    null,
+  );
+  const outcome = runCapturedMechAutomation({
+    ...yard.adapter,
+    random: zeroRandom,
+  });
+  assert.equal(outcome.status, "succeeded");
+  assert.ok(!yard.calls.some((call) => call[0] === "scrap"), "no scrap");
+  assert.ok(
+    yard.calls.some((call) => call[0] === "build"),
+    "builds into headroom",
   );
 }
 

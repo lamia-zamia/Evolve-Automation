@@ -167,6 +167,7 @@ assert.equal(
     purifierMax: 100_000,
     soulGems: 1,
     supplyRate: 250,
+    gemsRate: 0,
     purifierFullyOn: false,
   });
   assert.equal(state.settings.buildMode, "user");

@@ -2,6 +2,7 @@ import type { CommandExecutionOutcome } from "../domain/commands.ts";
 import {
   planCapturedMechAuto,
   planCapturedMechBuild,
+  planCapturedMechScrap,
 } from "../domain/combat/captured-mech.ts";
 import type {
   CapturedMechAutomation,
@@ -24,9 +25,11 @@ export function runCapturedMech(dependencies: {
 }
 
 /**
- * Full Mech pass: the user-blueprint path first, then one automatic design
- * build. Each path invokes at most one game action with its own verified
- * postcondition; the pass never retries a design the game did not commit.
+ * Full Mech pass: the user-blueprint path first, then at most one automatic
+ * action. A warranted scrap always goes first and ends the pass — the
+ * replacement is a fresh plan on the next tick, only after the disappearance
+ * postcondition. Each path invokes at most one game action with its own
+ * verified postcondition; the pass never retries what the game did not commit.
  */
 export function runCapturedMechAutomation(
   dependencies: CapturedMechAutomation,
@@ -37,9 +40,11 @@ export function runCapturedMechAutomation(
   if (!state.available || state.settings.buildMode !== "random") {
     return CAPTURED_MECH_SUCCEEDED;
   }
-  const plan = planCapturedMechAuto(state, (choices) =>
-    Math.floor(dependencies.random.nextUnit() * choices),
-  );
+  const pick = (choices: number): number =>
+    Math.floor(dependencies.random.nextUnit() * choices);
+  const scrap = planCapturedMechScrap(state, pick);
+  if (scrap !== null) return dependencies.executor.executeAutoScrap(scrap);
+  const plan = planCapturedMechAuto(state, pick);
   return plan === null
     ? CAPTURED_MECH_SUCCEEDED
     : dependencies.executor.executeAutoBuild(plan);

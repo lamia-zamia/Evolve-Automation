@@ -4,6 +4,7 @@ import type {
   CapturedMechAutoPlan,
   CapturedMechBuildDecision,
   CapturedMechBuildInput,
+  CapturedMechScrapPlan,
 } from "../../../domain/combat/captured-mech.ts";
 import {
   readCapturedMechState,
@@ -24,6 +25,7 @@ import { rejected, stale, SUCCEEDED } from "../../command-outcomes.ts";
 import { finite, isNonArrayRecord, readProperty } from "../../validation.ts";
 
 export const CAPTURED_MECH_ASSEMBLY_CONTROL = "mechAssembly";
+export const CAPTURED_MECH_LIST_CONTROL = "mechList";
 
 interface CapturedMechSample {
   readonly root: unknown;
@@ -682,6 +684,112 @@ export function createCapturedMech(dependencies: CapturedMechDependencies): {
         return stale(
           "captured-mech-not-built",
           "the game did not commit the captured mech build",
+        );
+      }
+      return SUCCEEDED;
+    },
+
+    executeAutoScrap(
+      decision: Readonly<CapturedMechScrapPlan>,
+    ): ReturnType<CapturedMechExecutor["executeAutoScrap"]> {
+      if (decision.kind !== "scrap-captured-mech") {
+        return rejected(
+          "invalid-captured-mech-decision",
+          "captured mech decision does not match the sample",
+        );
+      }
+      const rootRef = dependencies.rootState.readRoot();
+      const unchanged = (): boolean =>
+        dependencies.rootState.readRoot() === rootRef;
+      const control = dependencies.controls.resolve(CAPTURED_MECH_LIST_CONTROL);
+      if (
+        control === undefined ||
+        !control.methods.includes("scrap") ||
+        !unchanged()
+      ) {
+        return stale(
+          "captured-mech-scrap-unavailable",
+          "captured mech list is unavailable",
+        );
+      }
+      const bayOf = (root: unknown): number | undefined => {
+        if (!isNonArrayRecord(root)) return undefined;
+        const mechbay = readProperty(readProperty(root, "portal"), "mechbay");
+        return isNonArrayRecord(mechbay) ? finite(mechbay["bay"]) : undefined;
+      };
+      const fundsOf = (
+        root: unknown,
+      ): { supply: number; max: number; gems: number } | undefined => {
+        if (!isNonArrayRecord(root)) return undefined;
+        const purifier = readProperty(readProperty(root, "portal"), "purifier");
+        const soulGem = readProperty(
+          readProperty(root, "resource"),
+          "Soul_Gem",
+        );
+        if (!isNonArrayRecord(purifier) || !isNonArrayRecord(soulGem)) {
+          return undefined;
+        }
+        const supply = finite(purifier["supply"]);
+        const max = finite(purifier["sup_max"]);
+        const gems = finite(soulGem["amount"]);
+        if (supply === undefined || max === undefined || gems === undefined) {
+          return undefined;
+        }
+        return { supply, max, gems };
+      };
+      const storedOf = (root: unknown): readonly unknown[] | undefined => {
+        if (!isNonArrayRecord(root)) return undefined;
+        const mechbay = readProperty(readProperty(root, "portal"), "mechbay");
+        return isNonArrayRecord(mechbay) && Array.isArray(mechbay["mechs"])
+          ? mechbay["mechs"]
+          : undefined;
+      };
+      const stored = storedOf(rootRef);
+      const occupied = bayOf(rootRef);
+      const before = fundsOf(rootRef);
+      if (
+        stored === undefined ||
+        occupied === undefined ||
+        before === undefined ||
+        stored.length !== decision.expectedLength ||
+        occupied !== decision.expectedOccupied ||
+        !tailMatchesDesign(stored[decision.index], decision.design)
+      ) {
+        return stale(
+          "captured-mech-scrap-target-changed",
+          "captured mech scrap target changed",
+        );
+      }
+      const result = dependencies.controls.invoke(control, "scrap", [
+        decision.index,
+      ]);
+      if (!result.ok) {
+        return stale(
+          "captured-mech-scrap-control-failed",
+          `captured mech scrap failed: ${result.reason}`,
+        );
+      }
+      // The exact candidate must be gone: one fewer mech, none matching its
+      // design, bay freed, refunds paid (supply clamped to its maximum, as
+      // the game's own list `scrap` does). Anything else stops the pass —
+      // never a second candidate, never the replacement build.
+      const after = storedOf(rootRef);
+      const occupiedAfter = bayOf(rootRef);
+      const fundsAfter = fundsOf(rootRef);
+      if (
+        after === undefined ||
+        occupiedAfter === undefined ||
+        fundsAfter === undefined ||
+        after.length !== decision.expectedLength - 1 ||
+        after.some((entry) => tailMatchesDesign(entry, decision.design)) ||
+        occupiedAfter !== decision.expectedOccupied - decision.space ||
+        fundsAfter.supply !==
+          Math.min(before.supply + decision.supplyRefund, before.max) ||
+        fundsAfter.gems !== before.gems + decision.gemsRefund
+      ) {
+        return stale(
+          "captured-mech-not-scrapped",
+          "the game did not commit the captured mech scrap",
         );
       }
       return SUCCEEDED;
