@@ -11,11 +11,8 @@ import {
   type MechScrapCandidate,
 } from "./mech.ts";
 import {
-  bestDesignFigures,
   chooseAutoDesign,
-  choosePreferredSize,
   rateMechDesign,
-  type MechFloor,
   type ScoredMechDesign,
 } from "./mech-design.ts";
 import {
@@ -23,9 +20,9 @@ import {
   mechFrameCost,
   mechFrameRefund,
   mechFrameSpace,
-  type MechCostFigures,
 } from "./mech-costs.ts";
 import type { CapturedMechDesign, CapturedMechState } from "./mech-state.ts";
+import { combatRanking, designAutoChoice } from "./mech-auto-choice.ts";
 
 export interface CapturedMechBuildInput {
   readonly available: boolean;
@@ -97,117 +94,6 @@ export interface CapturedMechAutoPlan {
   readonly expectedOccupied: number;
   readonly expectedPurifierSupply: number;
   readonly expectedSoulGems: number;
-}
-
-function autoFloor(state: CapturedMechState): MechFloor | null {
-  if (state.spire === null) return null;
-  return {
-    terrain: state.spire.type,
-    statuses: state.spire.statuses,
-    boss: state.spire.boss,
-    spireCount: state.spire.count,
-    scouts: state.bay.scouts,
-    prepared: state.prepared,
-    wrath: state.wrath,
-    gladiatorLevel: state.gladiatorLevel,
-    collectorValue: state.settings.collectorValue,
-  };
-}
-
-/** Combat power over the first `active` bay entries; null if any is unratable. */
-function activeMechsPower(
-  state: CapturedMechState,
-  floor: MechFloor,
-): number | null {
-  let power = 0;
-  const active = state.inventory.slice(0, state.bay.active);
-  for (const mech of active) {
-    if (mech.size === "collector") continue;
-    const rated = rateMechDesign(mech, floor);
-    if (rated === null) return null;
-    power += rated.power;
-  }
-  return power;
-}
-
-/**
- * Shared automatic-design choice: floor facts, best figures, preferred size,
- * the deterministic design and its cost, and current team power. The build
- * and the scrap planner both start here, so a replacement is always planned
- * against the same design the scrap economics assumed.
- */
-export interface AutoDesignChoice {
-  readonly floor: MechFloor;
-  readonly figures: NonNullable<ReturnType<typeof bestDesignFigures>>;
-  readonly preferred: Readonly<{ size: string; force: boolean }>;
-  readonly design: ScoredMechDesign;
-  readonly cost: MechCostFigures;
-  readonly teamPower: number | null;
-}
-
-function combatRanking(
-  figures: AutoDesignChoice["figures"],
-  key: "efficiency" | "gemsEff" | "supplyEff",
-): readonly string[] {
-  return Object.freeze(
-    Object.keys(figures)
-      .filter((size) => size !== "collector")
-      .sort((left, right) => figures[right]![key] - figures[left]![key]),
-  );
-}
-
-function designAutoChoice(
-  state: CapturedMechState,
-  pickIndex: (count: number) => number,
-): AutoDesignChoice | null {
-  if (
-    !state.available ||
-    state.queueKeyHeld ||
-    state.warlord ||
-    state.settings.buildMode !== "random" ||
-    state.blueprint === null ||
-    state.blueprint.infernal
-  ) {
-    return null;
-  }
-  const floor = autoFloor(state);
-  if (floor === null || floor.collectorValue <= 0) return null;
-  const figures = bestDesignFigures(floor, pickIndex);
-  if (figures === null) return null;
-  const { settings, bay, funds } = state;
-  const preferred = choosePreferredSize({
-    bayMaximum: bay.maximum,
-    bayOccupied: bay.occupied,
-    bayScouts: bay.scouts,
-    supplyRate: funds.supplyRate,
-    supplyMaximum: funds.purifierMax,
-    supplyRatio:
-      funds.purifierMax > 0 ? funds.purifierSupply / funds.purifierMax : 1,
-    gemsSpare: funds.soulGems,
-    prepared: state.prepared,
-    gravityFloor: state.spire!.statuses.includes("gravity"),
-    preferredSize: settings.preferredSize,
-    gravitySize: settings.gravitySize,
-    fillBay: settings.fillBay,
-    minimumSupplyRate: settings.minimumSupplyRate,
-    maximumCollectorShare: settings.maximumCollectorShare,
-    scoutsRatio: settings.scoutsRatio,
-    rankByEff: combatRanking(figures, "efficiency"),
-    rankByGems: combatRanking(figures, "gemsEff"),
-    rankBySupply: combatRanking(figures, "supplyEff"),
-  });
-  const design = chooseAutoDesign(preferred.size, floor, pickIndex);
-  const cost =
-    design === null ? undefined : mechFrameCost(design.size, state.prepared);
-  if (design === null || cost === undefined) return null;
-  return Object.freeze({
-    floor,
-    figures,
-    preferred,
-    design,
-    cost,
-    teamPower: activeMechsPower(state, floor),
-  });
 }
 
 /**

@@ -66,6 +66,7 @@ import type { OfferedTech } from "../ports/game-tech-catalog.ts";
 import type { TickDiagnostics } from "../ports/tick.ts";
 import type { BuildResourceScope } from "../domain/progression/build/build.ts";
 import { createCapturedBuildCapacity } from "../adapters/evolve/captured-build-capacity.ts";
+import { createCapturedMechReservationSource } from "../adapters/evolve/combat/captured-mech-reservations.ts";
 
 export interface CapturedProgressionControlDependencies {
   readonly rootState: GameRootStateSource;
@@ -510,10 +511,20 @@ export function createCapturedProgressionControl(
     getState === undefined
       ? undefined
       : createScriptCostReservationSource({ getState });
-  const scriptReservations =
+  // The pursued Mech build reserves its Supply and Soul Gems like any other
+  // commitment, so cheaper construction candidates cannot spend them first.
+  const mechReservations = createCapturedMechReservationSource({
+    rootState,
+    readSettings,
+  });
+  const queuedAndSaving =
     stateReservations === undefined
       ? savingReservations
       : combineReservations(stateReservations, savingReservations);
+  const scriptReservations = combineReservations(
+    queuedAndSaving,
+    mechReservations,
+  );
   const readKnowledgeGate =
     getState === undefined
       ? () => readKnowledge().levels

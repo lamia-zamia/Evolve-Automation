@@ -410,6 +410,9 @@ export function readDemandPrioritizationInput(
     ),
     unlockedTechs: Object.freeze(readTechs(state["unlockedTechs"], isProject)),
     spyPurchaseMoney,
+    // The compatibility runtime gates Mech builds on its own reservations;
+    // captured Mech demand belongs to the captured runtime only.
+    mechCosts: Object.freeze([]),
     fleet: Object.freeze({
       nextShipAffordable: Boolean(fleet["nextShipAffordable"]),
       nextShipCost: Object.freeze(

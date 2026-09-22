@@ -33,6 +33,7 @@ const empty = {
   consumptionBalanceTarget: 120,
   truepathAiBuildingTarget: null,
   savingTarget: null,
+  mechCosts: [],
 };
 
 const aiTech = {
@@ -152,4 +153,23 @@ assert.equal(
     unlockedTechs: [],
   }).savingConflict,
   null,
+);
+
+// A pursued Mech build requests its Supply and Soul Gems unconditionally,
+// like the saving target and without any queue-priority toggle.
+assert.deepEqual(
+  planDemandPrioritization({
+    ...empty,
+    settings,
+    isEarlyGame: false,
+    unlockedTechs: [],
+    mechCosts: [
+      { resourceId: "Supply", amount: 180_000 },
+      { resourceId: "Soul_Gem", amount: 4 },
+    ],
+  }).requests,
+  [
+    { resourceId: "Supply", amount: 180_000 },
+    { resourceId: "Soul_Gem", amount: 4 },
+  ],
 );

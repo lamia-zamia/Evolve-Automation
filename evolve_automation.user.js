@@ -5843,6 +5843,1402 @@
     });
   }
 
+  // src/domain/combat/mech-boss-armory.ts
+  var CLASSIC_MECH_WEAPONS = Object.freeze([
+    "laser",
+    "kinetic",
+    "shotgun",
+    "missile",
+    "flame",
+    "plasma",
+    "sonic",
+    "tesla"
+  ]), BOSS_WEAPON_RATINGS = Object.freeze({
+    fire_elm: [1.05, 0.55, 0.75, 0.5, 0, 0.1, 1, 0.7],
+    water_elm: [0.6, 0.25, 0.25, 0.5, 0.6, 1, 0.5, 0.8],
+    rock_golem: [1, 0.65, 0.35, 0.95, 0.6, 1, 0.8, 0],
+    bone_golem: [0.4, 1, 0.75, 1, 0.45, 0.35, 0.8, 0.2],
+    mech_dino: [0.8, 0.5, 0.35, 0.5, 0.1, 0.35, 0.4, 1],
+    plant: [0.35, 0.25, 0.25, 0.25, 1, 0.45, 0.8, 0.45],
+    crazed: [0.45, 1, 0.95, 0.35, 0.9, 0.45, 0.2, 0.65],
+    minotaur: [0.25, 0.45, 0.2, 1, 0.6, 0.7, 0.2, 0.45],
+    ooze: [0.15, 0, 0, 0, 0.7, 1, 0.9, 0.2],
+    zombie: [0.3, 0.1, 0.95, 0.8, 1, 0.25, 0.25, 0.1],
+    raptor: [0.65, 1, 0.3, 0.4, 0.6, 0.75, 0.3, 0.7],
+    frost_giant: [0.9, 0.3, 0.25, 0.05, 0.85, 1, 0.35, 0.55],
+    swarm: [0.02, 0.02, 1, 0.05, 1, 0, 0.65, 0.55],
+    dragon: [0.15, 0.4, 0.65, 1, 0, 0.02, 0.3, 0.2],
+    mech_dragon: [0.8, 0.2, 0.25, 0.75, 0.15, 0.5, 0.3, 1],
+    construct: [0.45, 0.35, 0.25, 0.9, 0.3, 0.4, 0.15, 1.15],
+    beholder: [0.7, 0.5, 0.1, 0.05, 0.25, 1, 0.02, 0.4],
+    worm: [0.5, 0.25, 0.02, 0.05, 0.45, 0.25, 1.15, 0.02],
+    hydra: [0.8, 0.3, 0.55, 0.4, 0.8, 0.75, 0.5, 0.7],
+    colossus: [1, 0.5, 0.25, 1, 0.1, 0.6, 0.45, 0.55],
+    lich: [0.05, 0.5, 0.75, 0.75, 0.15, 0.02, 0.45, 0.55],
+    ape: [1, 0.55, 0.35, 0.45, 0.95, 0.75, 0.1, 0.75],
+    bandit: [0.6, 1, 0.7, 0.5, 0.6, 0.75, 0.25, 0.35],
+    croc: [0.6, 0.55, 0.2, 0.45, 0.1, 0.4, 1, 0.8],
+    djinni: [0, 0.2, 0.2, 0, 0.45, 1, 0.65, 0.5],
+    snake: [0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5],
+    centipede: [0.45, 0.65, 0.45, 0.6, 0.9, 0.9, 0, 0.02],
+    spider: [0.6, 0.75, 0.9, 0.15, 1, 0.05, 0.45, 0.25],
+    manticore: [0.02, 0.55, 0.3, 0.15, 0.35, 0.9, 0.5, 0.65],
+    fiend: [0.7, 0.3, 0.5, 0.75, 0.35, 0.3, 0.3, 0.55],
+    bat: [0.1, 0.3, 0.9, 0.02, 0.25, 0.02, 1, 0.65],
+    medusa: [0.3, 0.95, 0.85, 1, 0.15, 0.1, 0.2, 0.35],
+    ettin: [0.45, 0.55, 0.6, 0.25, 0.45, 0.7, 0.25, 0.15],
+    faceless: [0.55, 0, 0.15, 0.05, 0.35, 0.4, 0.85, 1],
+    enchanted: [1, 0.25, 0.6, 0.7, 0.05, 0.9, 0.1, 0.02],
+    gargoyle: [0.1, 0.55, 1, 0.45, 0.5, 0.1, 0.9, 0.25],
+    chimera: [0.3, 0.85, 0.6, 0.35, 0.65, 0.2, 0.5, 0.85],
+    gorgon: [0.65, 0.65, 0.65, 0.66, 0.65, 0.64, 0.65, 0.65],
+    kraken: [0.7, 0.4, 0.05, 0.5, 0.45, 0.6, 0.95, 0.9],
+    homunculus: [0.02, 0.85, 0.75, 0.65, 1, 0.02, 0.5, 0.25],
+    giant_chicken: [0.95, 0.95, 0.95, 0.95, 0.95, 0.95, 0.95, 0.95],
+    skeleton_pack: [0.45, 1, 1.2, 1.2, 0.15, 0.3, 0.5, 0.25]
+  });
+
+  // src/domain/combat/mech-costs.ts
+  var CLASSIC_MECH_SIZES = Object.freeze([
+    "small",
+    "medium",
+    "large",
+    "titan",
+    "collector"
+  ]);
+  function mechFrameSpace(size, prepared) {
+    let veteran = prepared >= 2;
+    switch (size) {
+      case "small":
+        return 2;
+      case "medium":
+        return veteran ? 4 : 5;
+      case "large":
+        return veteran ? 8 : 10;
+      case "titan":
+        return veteran ? 20 : 25;
+      case "collector":
+        return 1;
+      default:
+        return;
+    }
+  }
+  function mechFrameSupplyCost(size, prepared) {
+    let veteran = prepared >= 2;
+    switch (size) {
+      case "small":
+        return veteran ? 5e4 : 75e3;
+      case "medium":
+        return 18e4;
+      case "large":
+        return 375e3;
+      case "titan":
+        return 75e4;
+      case "collector":
+        return veteran ? 8e3 : 1e4;
+      default:
+        return;
+    }
+  }
+  function mechFrameGemCost(size) {
+    switch (size) {
+      case "small":
+        return 1;
+      case "medium":
+        return 4;
+      case "large":
+        return 20;
+      case "titan":
+        return 75;
+      case "collector":
+        return 1;
+      default:
+        return;
+    }
+  }
+  function mechFrameCost(size, prepared) {
+    let supply = mechFrameSupplyCost(size, prepared), gems = mechFrameGemCost(size), space = mechFrameSpace(size, prepared);
+    if (!(supply === void 0 || gems === void 0 || space === void 0))
+      return Object.freeze({ supply, gems, space });
+  }
+  function mechFrameRefund(size, prepared) {
+    let cost = mechFrameCost(size, prepared);
+    if (cost !== void 0)
+      return Object.freeze({
+        supply: Math.floor(cost.supply / 3),
+        gems: Math.floor(cost.gems / 2)
+      });
+  }
+
+  // src/domain/combat/mech-design.ts
+  var CLASSIC_MECH_CHASSIS = Object.freeze([
+    "wheel",
+    "tread",
+    "biped",
+    "quad",
+    "spider",
+    "hover"
+  ]), CLASSIC_GENERAL_EQUIP = Object.freeze([
+    "shields",
+    "sonar",
+    "grapple",
+    "infrared",
+    "pontoon",
+    "radiator",
+    "coolant",
+    "ablative",
+    "stabilizer",
+    "seals"
+  ]), CLASSIC_EQUIP_SET = /* @__PURE__ */ new Set([
+    "special",
+    ...CLASSIC_GENERAL_EQUIP
+  ]), TERRAIN_MODS = {
+    wheel: {
+      sand: [0.9, 0.85],
+      swamp: [0.35, 0.18],
+      forest: [1, 1],
+      jungle: [0.92, 0.85],
+      rocky: [0.65, 0.5],
+      gravel: [1, 0.95],
+      muddy: [0.85, 0.58],
+      grass: [1.3, 1.2],
+      brush: [0.9, 0.8],
+      concrete: [1.1, 1]
+    },
+    tread: {
+      sand: [1.15, 1.1],
+      swamp: [0.55, 0.4],
+      forest: [1, 0.95],
+      jungle: [0.95, 0.9],
+      rocky: [0.65, 0.5],
+      gravel: [1.3, 1.2],
+      muddy: [0.88, 0.72],
+      grass: [1, 1],
+      brush: [1, 1],
+      concrete: [1, 1]
+    },
+    biped: {
+      sand: [0.78, 0.65],
+      swamp: [0.68, 0.5],
+      forest: [1, 0.95],
+      jungle: [0.82, 0.7],
+      rocky: [0.48, 0.4],
+      gravel: [1, 1],
+      muddy: [0.85, 0.7],
+      grass: [1.25, 1.2],
+      brush: [0.92, 0.85],
+      concrete: [1, 1]
+    },
+    quad: {
+      sand: [0.86, 0.75],
+      swamp: [0.58, 0.42],
+      forest: [1.25, 1.2],
+      jungle: [1, 1],
+      rocky: [0.95, 0.9],
+      gravel: [0.9, 0.8],
+      muddy: [0.68, 0.5],
+      grass: [1, 0.95],
+      brush: [0.95, 0.9],
+      concrete: [1, 1]
+    },
+    spider: {
+      sand: [0.75, 0.65],
+      swamp: [0.9, 0.78],
+      forest: [0.82, 0.75],
+      jungle: [0.77, 0.65],
+      rocky: [1.25, 1.2],
+      gravel: [0.86, 0.75],
+      muddy: [0.92, 0.82],
+      grass: [1, 1],
+      brush: [1, 0.95],
+      concrete: [1, 1]
+    },
+    hover: {
+      sand: [1, 1],
+      swamp: [1.35, 1.2],
+      forest: [0.65, 0.48],
+      jungle: [0.55, 0.35],
+      rocky: [0.82, 0.68],
+      gravel: [1, 1],
+      muddy: [1.15, 1.08],
+      grass: [1, 1],
+      brush: [0.78, 0.7],
+      concrete: [1, 1]
+    }
+  };
+  function terrainFactor(chassis, size, terrain) {
+    let table = TERRAIN_MODS[chassis];
+    if (table === void 0) return;
+    let pair = table[terrain];
+    if (pair !== void 0)
+      return size === "small" || size === "medium" ? pair[0] : pair[1];
+  }
+  function statusFactor(effect, chassis, size, equip) {
+    let hasEquip = (name) => equip.has(name);
+    switch (effect) {
+      case "freeze":
+        return hasEquip("radiator") ? 1 : hasEquip("ablative") ? 0.45 : 0.25;
+      case "hot":
+        return hasEquip("coolant") ? 1 : hasEquip("shields") ? 0.45 : 0.25;
+      case "corrosive":
+        return hasEquip("ablative") ? 1 : hasEquip("shields") ? 0.6 : hasEquip("seals") ? 0.45 : 0.25;
+      case "hail":
+        return hasEquip("ablative") ? 1 : hasEquip("shields") ? 0.9 : 0.75;
+      case "radioactive":
+        return hasEquip("shields") ? 1 : hasEquip("ablative") ? 0.75 : 0.5;
+      case "static":
+        return hasEquip("shields") ? 1 : hasEquip("ablative") ? 0.7 : hasEquip("stabilizer") ? 0.65 : hasEquip("coolant") ? 0.6 : 0.4;
+      case "humid":
+        return hasEquip("seals") ? 1 : hasEquip("radiator") ? 0.9 : 0.75;
+      case "dust":
+        return hasEquip("seals") ? 1 : hasEquip("infrared") ? 0.75 : hasEquip("sonar") ? 0.7 : 0.5;
+      case "ashfall":
+        return hasEquip("coolant") ? 1 : hasEquip("seals") || hasEquip("infrared") ? 0.7 : hasEquip("ablative") ? 0.6 : 0.4;
+      case "steam":
+        return hasEquip("coolant") || hasEquip("radiator") || hasEquip("shields") ? 0.9 : 0.75;
+      case "rain":
+        return hasEquip("seals") ? 0.95 : hasEquip("radiator") ? 0.9 : 0.75;
+      case "quake":
+        return hasEquip("stabilizer") ? 1 : hasEquip("grapple") ? 0.45 : 0.25;
+      case "fog":
+        return hasEquip("sonar") ? 1 : hasEquip("infrared") ? 0.5 : 0.2;
+      case "dark":
+        return hasEquip("infrared") ? 1 : hasEquip("sonar") ? 0.35 : 0.1;
+      case "chasm":
+        return hasEquip("grapple") ? 1 : hasEquip("sonar") ? 0.3 : 0.1;
+      case "mountain":
+        return chassis === "spider" || hasEquip("grapple") ? 1 : hasEquip("sonar") ? 0.7 : 0.5;
+      case "hilly":
+        return chassis === "spider" ? 1 : hasEquip("grapple") || hasEquip("stabilizer") ? 0.9 : 0.75;
+      case "flooded":
+        return chassis === "hover" || hasEquip("pontoon") ? 1 : hasEquip("seals") ? 0.55 : 0.35;
+      case "river":
+        return chassis === "hover" ? 1 : hasEquip("pontoon") ? 0.9 : 0.65;
+      case "tar":
+        return chassis === "quad" ? 1 : chassis === "tread" || chassis === "wheel" ? hasEquip("pontoon") || hasEquip("stabilizer") ? 0.75 : 0.5 : hasEquip("pontoon") ? 0.9 : hasEquip("stabilizer") ? 0.85 : 0.75;
+      case "windy":
+        return chassis === "hover" ? hasEquip("stabilizer") ? 0.75 : 0.5 : 1;
+      case "gravity":
+        return size === "medium" ? 0.8 : size === "large" ? 0.45 : size === "titan" ? 0.25 : 1;
+      default:
+        return;
+    }
+  }
+  function scoutTerrainBonus(size, factor, statuses, scouts, equip) {
+    let rating = factor;
+    return equip.has("special") && (size === "small" || size === "collector") && rating < 1 && (rating += (1 - rating) * (statuses.includes("gravity") ? 0.325 : 0.65)), equip.has("special") && size === "medium" && rating < 1 && !statuses.includes("gravity") && (rating += (1 - rating) * 0.75), size !== "small" && rating < 1 && (rating += (statuses.includes("fog") || statuses.includes("dark") ? 5e-3 : 0.01) * scouts, rating > 1 && (rating = 1)), rating;
+  }
+  function mountWeaponPower(size, equip, power) {
+    let adjusted = power;
+    return adjusted < 1 && adjusted !== 0 && equip.has("special") && size === "titan" && (adjusted += (1 - adjusted) * 0.1), equip.has("special") && size === "large" && (adjusted *= 1.1), adjusted;
+  }
+  function weaponBasePower(size) {
+    switch (size) {
+      case "small":
+        return 25e-4;
+      case "medium":
+        return 375e-5;
+      case "large":
+        return 0.01;
+      case "titan":
+        return 0.012;
+      default:
+        return;
+    }
+  }
+  function concreteMod(terrain, size) {
+    if (terrain !== "concrete") return 1;
+    switch (size) {
+      case "small":
+        return 0.92;
+      case "medium":
+        return 0.95;
+      case "titan":
+        return 1.25;
+      default:
+        return 1;
+    }
+  }
+  function mechHardpoints(size) {
+    switch (size) {
+      case "collector":
+        return 0;
+      case "small":
+        return 1;
+      case "medium":
+      case "large":
+        return 2;
+      case "titan":
+        return 4;
+      default:
+        return;
+    }
+  }
+  function mechGeneralSlotCount(size, prepared) {
+    let bonus = prepared > 0 ? 1 : 0;
+    switch (size) {
+      case "small":
+        return 1 + bonus;
+      case "medium":
+        return 2 + bonus;
+      case "large":
+      case "collector":
+        return 3 + bonus;
+      case "titan":
+        return 4 + bonus;
+      default:
+        return;
+    }
+  }
+  function bodyScore(size, chassis, equip, floor) {
+    if (!CLASSIC_MECH_SIZES.includes(size) || !CLASSIC_MECH_CHASSIS.includes(chassis))
+      return;
+    let factor = terrainFactor(chassis, size, floor.terrain);
+    if (factor === void 0) return;
+    let rating = scoutTerrainBonus(
+      size,
+      factor,
+      floor.statuses,
+      floor.scouts,
+      equip
+    );
+    for (let effect of floor.statuses) {
+      let mod = statusFactor(effect, chassis, size, equip);
+      if (mod === void 0) return;
+      rating *= mod;
+    }
+    return rating;
+  }
+  function rateMechDesign(design, floor) {
+    for (let part of [...design.hardpoint, ...design.equip])
+      if (!CLASSIC_EQUIP_SET.has(part) && !CLASSIC_MECH_WEAPONS.includes(part))
+        return null;
+    let equip = new Set(design.equip), body = bodyScore(design.size, design.chassis, equip, floor);
+    if (body === void 0) return null;
+    let space = mechFrameSpace(design.size, floor.prepared);
+    if (space === void 0 || space <= 0) return null;
+    if (design.size === "collector") {
+      if (design.hardpoint.length !== 0 || floor.collectorValue <= 0) return null;
+      let collectorPower = body * 25 * floor.collectorValue / 2e4;
+      return Object.freeze({
+        power: collectorPower,
+        efficiency: collectorPower / space
+      });
+    }
+    let base = weaponBasePower(design.size), ratings = BOSS_WEAPON_RATINGS[floor.boss];
+    if (base === void 0 || ratings === void 0) return null;
+    let rating = base * (1 + floor.wrath / 20) * (1 + floor.gladiatorLevel * 0.2) * concreteMod(floor.terrain, design.size) * body, damage = 0;
+    for (let weapon of design.hardpoint) {
+      let index = CLASSIC_MECH_WEAPONS.indexOf(weapon);
+      if (index < 0) return null;
+      damage += rating * mountWeaponPower(design.size, equip, ratings[index] ?? 0);
+    }
+    let power = damage / floor.spireCount;
+    return Object.freeze({ power, efficiency: power / space });
+  }
+  function mechEquipCombinations(pool, slots) {
+    if (slots < 0) return [];
+    if (slots === 0) return [[]];
+    let out = [], walk = (start, current) => {
+      if (current.length === slots) {
+        out.push([...current]);
+        return;
+      }
+      for (let index = start; index < pool.length; index++)
+        current.push(pool[index]), walk(index + 1, current), current.pop();
+    };
+    return walk(0, []), out;
+  }
+  function bestMechBodies(size, floor) {
+    let slots = mechGeneralSlotCount(size, floor.prepared);
+    if (slots === void 0) return null;
+    let best = -1 / 0, tied = [];
+    for (let chassis of CLASSIC_MECH_CHASSIS)
+      for (let combo of mechEquipCombinations(CLASSIC_GENERAL_EQUIP, slots)) {
+        let equip = Object.freeze(["special", ...combo]), score = bodyScore(size, chassis, new Set(equip), floor);
+        if (score === void 0) return null;
+        score > best ? (best = score, tied = [{ chassis, equip }]) : score === best && tied.push({ chassis, equip });
+      }
+    return tied;
+  }
+  function bestMechWeapons(boss) {
+    let ratings = BOSS_WEAPON_RATINGS[boss];
+    if (ratings === void 0) return null;
+    let best = -1 / 0, tied = [];
+    return CLASSIC_MECH_WEAPONS.forEach((weapon, index) => {
+      let rating = ratings[index];
+      rating > best ? (best = rating, tied = [weapon]) : rating === best && tied.push(weapon);
+    }), tied;
+  }
+  function chooseAutoDesign(size, floor, pickIndex) {
+    let bodies = bestMechBodies(size, floor), weapons = bestMechWeapons(floor.boss), mounts = mechHardpoints(size);
+    if (bodies === null || bodies.length === 0 || weapons === null || mounts === void 0)
+      return null;
+    let bodyIndex = pickIndex(bodies.length), weaponIndex = pickIndex(weapons.length), body = bodies[bodyIndex], weapon = weapons[weaponIndex];
+    if (body === void 0 || weapon === void 0) return null;
+    let hardpoint = Object.freeze(new Array(mounts).fill(weapon)), rated = rateMechDesign(
+      { size, chassis: body.chassis, hardpoint, equip: body.equip },
+      floor
+    );
+    return rated === null ? null : Object.freeze({
+      size,
+      chassis: body.chassis,
+      hardpoint,
+      equip: body.equip,
+      power: rated.power,
+      efficiency: rated.efficiency
+    });
+  }
+  function bestDesignFigures(floor, pickIndex) {
+    let figures = {};
+    for (let size of CLASSIC_MECH_SIZES) {
+      let design = chooseAutoDesign(size, floor, pickIndex), cost = mechFrameCost(size, floor.prepared), refund = mechFrameRefund(size, floor.prepared);
+      if (design === null || cost === void 0 || refund === void 0)
+        return null;
+      figures[size] = Object.freeze({
+        power: design.power,
+        efficiency: design.efficiency,
+        gemsEff: design.power / Math.max(cost.gems - refund.gems, 1e-9),
+        supplyEff: design.power / Math.max(cost.supply - refund.supply, 1e-9),
+        cost
+      });
+    }
+    return figures;
+  }
+  function choosePreferredSize(input) {
+    if (input.fillBay && Number.isInteger(input.bayMaximum) && (input.prepared >= 2 ? input.bayOccupied % 2 !== input.bayMaximum % 2 : input.bayMaximum - input.bayOccupied === 1))
+      return Object.freeze({ size: "collector", force: !0 });
+    if (input.supplyRatio < 0.9 && input.supplyRate < input.minimumSupplyRate && input.bayMaximum > 0 && input.bayScouts / input.bayMaximum < input.maximumCollectorShare)
+      return Object.freeze({ size: "collector", force: !0 });
+    if (input.bayMaximum > 0 && input.bayScouts * 2 / input.bayMaximum < input.scoutsRatio)
+      return Object.freeze({ size: "small", force: !0 });
+    let floorSize = input.gravityFloor ? input.gravitySize : input.preferredSize;
+    if (CLASSIC_MECH_SIZES.includes(floorSize) && (!input.fillBay || (mechFrameSupplyCost(floorSize, input.prepared) ?? 1 / 0) <= input.supplyMaximum))
+      return Object.freeze({ size: floorSize, force: !1 });
+    let ranking = floorSize === "gems" ? input.rankByGems : floorSize === "supply" ? input.rankBySupply : input.rankByEff;
+    for (let size of ranking) {
+      let cost = mechFrameCost(size, input.prepared);
+      if (cost !== void 0 && input.gemsSpare >= cost.gems && input.supplyMaximum >= cost.supply)
+        return Object.freeze({ size, force: !1 });
+    }
+    return Object.freeze({ size: "titan", force: !1 });
+  }
+
+  // src/domain/economy/production/crafter-resources.ts
+  var CRAFTER_RESOURCE_KEYS = Object.freeze([
+    "Plywood",
+    "Brick",
+    "Wrought_Iron",
+    "Sheet_Metal",
+    "Mythril",
+    "Aerogel",
+    "Nanoweave",
+    "Scarletite",
+    "Quantium"
+  ]);
+
+  // src/domain/settings-defaults.ts
+  function computeWarDefaults() {
+    return {
+      def: {
+        autoFight: !1,
+        foreignAttackLivingSoldiersPercent: 90,
+        foreignAttackHealthySoldiersPercent: 90,
+        foreignHireMercMoneyStoragePercent: 90,
+        foreignHireMercCostLowerThanIncome: 1,
+        foreignHireMercDeadSoldiers: 1,
+        foreignMinAdvantage: 40,
+        foreignMaxAdvantage: 80,
+        foreignMaxSiegeBattalion: 10,
+        foreignProtect: "auto",
+        foreignPacifist: !1,
+        foreignUnification: !0,
+        foreignForceSabotage: !0,
+        foreignOccupyLast: !0,
+        foreignTrainSpy: !0,
+        foreignSpyMax: 2,
+        foreignPowerRequired: 75,
+        foreignPolicyInferior: "Annex",
+        foreignPolicySuperior: "Sabotage",
+        foreignPolicyRival: "Influence"
+      }
+    };
+  }
+  function computeHellDefaults() {
+    return {
+      def: {
+        autoHell: !1,
+        hellHomeGarrison: 10,
+        hellMinSoldiers: 20,
+        hellMinSoldiersPercent: 90,
+        hellAssaultReserve: !0,
+        hellTargetFortressDamage: 100,
+        hellLowWallsMulti: 3,
+        hellHandlePatrolSize: !0,
+        hellPatrolMinRating: 30,
+        hellPatrolThreatPercent: 8,
+        hellPatrolDroneMod: 5,
+        hellPatrolDroidMod: 5,
+        hellPatrolBootcampMod: 0,
+        hellBolsterPatrolPercentTop: 50,
+        hellBolsterPatrolPercentBottom: 20,
+        hellBolsterPatrolRating: 300,
+        hellAttractorTopThreat: 9e3,
+        hellAttractorBottomThreat: 6e3,
+        warlordHandleFortress: !0,
+        warlordMinimumMinions: 1e3
+      }
+    };
+  }
+  function computeGeneralDefaults() {
+    return {
+      def: {
+        masterScriptToggle: !0,
+        showSettings: !0,
+        autoPrestige: !1,
+        tickRate: 4,
+        tickSchedule: !1,
+        researchRequest: !0,
+        researchRequestSpace: !1,
+        missionRequest: !0,
+        useDemanded: !0,
+        prioritizeTriggers: "savereq",
+        prioritizeQueue: "savereq",
+        prioritizeUnify: "savereq",
+        prioritizeOuterFleet: "ignore",
+        buildingAlwaysClick: !1,
+        buildingClickPerTick: 50,
+        scriptSettingsExportFilename: "evolve-script-settings.json"
+      }
+    };
+  }
+  function computeInterfaceDefaults() {
+    return {
+      def: {
+        activeTargetsUI: !1,
+        buildPlannerUI: !0,
+        buildPlannerCollapsed: !1,
+        displayPrestigeTypeInTopBar: !0,
+        displayTotalDaysTypeInTopBar: !1,
+        performanceHackAvoidDrawTech: !1
+      }
+    };
+  }
+  function computeStateLogDefaults() {
+    return {
+      def: {
+        stateLogEnabled: !1,
+        stateLogAutoDownload: !1,
+        stateLogInterval: 20
+      }
+    };
+  }
+  function computeAchievementGuardDefaults() {
+    return {
+      def: {
+        achievementGuards: !1,
+        guardPacifist: !0,
+        guardDreaded: !0,
+        guardCultOfPersonality: !0,
+        guardAnarchist: !0,
+        guardEnergetic: !0,
+        guardRedDead: !0,
+        guardSecondEvolution: !0,
+        guardWorldDomination: !0,
+        guardSyndicate: !0,
+        guardTradeFederation: !0,
+        guardBananaRepublic: !0
+      }
+    };
+  }
+  function computeChallengeHelperDefaults() {
+    return {
+      def: {
+        inflationChallengeAssist: !0,
+        inflationChallengeSaveMinutes: 30,
+        retirementChallengeAssist: !0
+      }
+    };
+  }
+  function computePrestigeDefaults() {
+    return {
+      def: {
+        prestigeType: "none",
+        prestigeMADIgnoreArpa: !0,
+        prestigeMADWait: !0,
+        prestigeMADPopulation: 1,
+        prestigeWaitAT: !1,
+        prestigeGECK: 0,
+        prestigeBioseedConstruct: !0,
+        prestigeBioseedProbes: 3,
+        prestigeWhiteholeSaveGems: !0,
+        prestigeWhiteholeMinMass: 8,
+        prestigeAscensionPillar: !0,
+        prestigeCustomRaceMode: "reuse",
+        prestigeCustomRacePreset: "0",
+        prestigeCustomRacePresets: [
+          { name: "General", json: "" },
+          { name: "Banana + EMF", json: "" },
+          { name: "Cataclysm", json: "" }
+        ],
+        prestigeDemonicFloor: 100,
+        prestigeDemonicPotential: 0.6,
+        prestigeDemonicBomb: !1,
+        prestigeVaxStrat: "none",
+        prestigeVacuumMana: 10
+      }
+    };
+  }
+  function computeAuthorityDefaults() {
+    return {
+      def: {
+        authorityManage: !0,
+        generalMinimumAuthority: 100,
+        generalAuthorityMinPatrolPercent: 40,
+        buildingWeightingAuthority: 10
+      }
+    };
+  }
+  function computeResearchDefaults() {
+    return {
+      def: {
+        autoResearch: !1,
+        userResearchTheology_1: "auto",
+        userResearchTheology_2: "auto",
+        researchIgnore: ["tech-purify"]
+      }
+    };
+  }
+  function computeWeightingDefaults() {
+    return {
+      def: {
+        buildingBuildIfStorageFull: !1,
+        buildingWeightingNew: 3,
+        buildingWeightingVacuumCollapse: 10,
+        buildingWeightingUselessPowerPlant: 0.01,
+        buildingWeightingNeedfulPowerPlant: 3,
+        buildingWeightingUnderpowered: 0.8,
+        buildingWeightingUselessKnowledge: 0.01,
+        buildingWeightingNeedfulKnowledge: 5,
+        buildingWeightingMissingFuel: 10,
+        buildingWeightingNonOperatingCity: 0.2,
+        buildingWeightingNonOperating: 0,
+        buildingWeightingMissingSupply: 0,
+        buildingWeightingMissingSupport: 0,
+        buildingWeightingUselessSupport: 0.01,
+        buildingWeightingMADUseless: 0,
+        buildingWeightingUnusedEjectors: 0.1,
+        buildingWeightingCrateUseless: 0.01,
+        buildingWeightingHorseshoeUseless: 0.1,
+        buildingWeightingZenUseless: 0.01,
+        buildingWeightingGateTurret: 0.01,
+        buildingWeightingNeedStorage: 1,
+        buildingWeightingUselessHousing: 1,
+        buildingWeightingTemporal: 0.2,
+        buildingWeightingSolar: 0.2,
+        buildingWeightingOverlord: 0,
+        buildingWeightingBananaObjective: 2,
+        buildingWeightingInflationMoney: 2,
+        buildingWeightingRetirementPrep: 10,
+        buildingWeightingMatrixCure: 10,
+        buildingWeightingTruepathDigsite: 10
+      }
+    };
+  }
+  function computeFleetDefaults() {
+    let def = {
+      autoFleet: !1,
+      fleetOuterCrew: 30,
+      fleetOuterShips: "custom",
+      fleetExploreTau: !0,
+      fleetMaxCover: !0,
+      fleetCrewReclaim: !0,
+      fleetEmbassyKnowledge: 6e6,
+      fleetAlienGiftKnowledge: 65e5,
+      fleetAlien2Knowledge: 8e6,
+      fleetAlien2Loses: "none",
+      fleetChthonianLoses: "low",
+      // Default combat ship
+      fleet_outer_class: "destroyer",
+      fleet_outer_armor: "neutronium",
+      fleet_outer_weapon: "plasma",
+      fleet_outer_engine: "ion",
+      fleet_outer_power: "fission",
+      fleet_outer_sensor: "lidar",
+      // Default scout ship
+      fleet_scout_class: "corvette",
+      fleet_scout_armor: "neutronium",
+      fleet_scout_weapon: "plasma",
+      fleet_scout_engine: "tie",
+      fleet_scout_power: "fusion",
+      fleet_scout_sensor: "quantum",
+      // Default andromeda regions priority
+      fleet_pr_gxy_stargate: 0,
+      fleet_pr_gxy_alien2: 1,
+      fleet_pr_gxy_alien1: 2,
+      fleet_pr_gxy_chthonian: 3,
+      fleet_pr_gxy_gateway: 4,
+      fleet_pr_gxy_gorddon: 5
+    }, setOuterRegion = (id, weighting, protect, scouts) => {
+      def["fleet_outer_pr_" + id] = weighting, def["fleet_outer_def_" + id] = protect, def["fleet_outer_sc_" + id] = scouts;
+    };
+    return setOuterRegion("spc_moon", 1, 0.9, 0), setOuterRegion("spc_red", 3, 0.9, 0), setOuterRegion("spc_gas", 0, 0.9, 0), setOuterRegion("spc_gas_moon", 0, 0.9, 0), setOuterRegion("spc_belt", 1, 0.9, 0), setOuterRegion("spc_titan", 5, 0.9, 1), setOuterRegion("spc_enceladus", 3, 0.9, 1), setOuterRegion("spc_triton", 10, 0.95, 2), setOuterRegion("spc_makemake", 5, 0.9, 2), setOuterRegion("spc_eris", 100, 0.01, 1), { def };
+  }
+  function computeMechDefaults() {
+    return {
+      def: {
+        autoMech: !1,
+        mechScrap: "mixed",
+        mechScrapEfficiency: 1.5,
+        mechCollectorValue: 0.5,
+        mechBuild: "random",
+        mechSize: "titan",
+        mechSizeGravity: "auto",
+        mechFillBay: !0,
+        mechScouts: 0.05,
+        mechScoutsRebuild: !1,
+        mechMinSupply: 1e3,
+        mechMaxCollectors: 0.5,
+        mechInfernalCollector: !0,
+        mechSpecial: "prefered",
+        mechSaveSupplyRatio: 1,
+        buildingMechsFirst: !0,
+        mechBaysFirst: !0,
+        mechWaygatePotential: 0.4
+      }
+    };
+  }
+  function computeGovernmentDefaults(context) {
+    return {
+      def: {
+        autoTax: !1,
+        autoGovernment: !1,
+        generalRequestedTaxRate: -1,
+        generalMinimumTaxRate: 20,
+        generalMinimumMorale: 105,
+        generalMaximumMorale: 500,
+        govInterim: context.democracyId,
+        govFinal: context.technocracyId,
+        govSpace: context.corpocracyId,
+        govGovernor: "none"
+      }
+    };
+  }
+  function computeEvolutionDefaults(context) {
+    let def = {
+      autoEvolution: !1,
+      userUniverseTargetName: "none",
+      userPlanetTargetName: "none",
+      userEvolutionTarget: "auto",
+      userEvolutionGenus: "fungi",
+      evolutionQueue: [],
+      evolutionQueueEnabled: !1,
+      evolutionQueueRepeat: !1,
+      evolutionAutoUnbound: !0,
+      evolutionBackup: !1
+    };
+    return context.challengeIds.forEach((id) => def["challenge_" + id] = !1), { def };
+  }
+  function computeLoggingDefaults(context) {
+    let def = {
+      hellTurnOffLogMessages: !0,
+      logFilter: "",
+      logEnabled: !0
+    };
+    return context.gameLogTypeIds.forEach((id) => def["log_" + id] = !0), def.log_mercenary = !1, def.log_multi_construction = !1, def.log_prestige = !1, def.log_prestige_format = "Reset: {resetType}, Species: {species}, Duration: {timeStamp} days", { def };
+  }
+  function computePlanetDefaults(context) {
+    let { biomeList: biomeList2, planetBiomes: planetBiomes2, traitList: traitList2, planetTraits: planetTraits2, extraList: extraList2 } = context, def = {};
+    return biomeList2.forEach(
+      (biome) => def["biome_w_" + biome] = (planetBiomes2.length - planetBiomes2.indexOf(biome)) * 10
+    ), traitList2.forEach(
+      (trait) => def["trait_w_" + trait] = (planetTraits2.length - planetTraits2.indexOf(trait)) * 10
+    ), extraList2.forEach((extra) => def["extra_w_" + extra] = 0), def.extra_w_Achievement = 1e3, { def };
+  }
+  function computeMarketDefaults(context) {
+    let priorityIds = [...context.tradableResourceIds].reverse(), def = {
+      autoMarket: !1,
+      autoGalaxyMarket: !1,
+      tradeRouteMinimumMoneyPerSecond: 500,
+      tradeRouteMinimumMoneyPercentage: 50,
+      tradeRouteSellExcess: !0,
+      minimumMoney: 0,
+      minimumMoneyPercentage: 0,
+      marketMinIngredients: 0
+    };
+    priorityIds.forEach((id, i) => {
+      def["res_buy_p_" + id] = i, def["buy" + id] = !1, def["res_buy_r_" + id] = 0.5, def["sell" + id] = !1, def["res_sell_r_" + id] = 0.9, def["res_trade_buy_" + id] = !0, def["res_trade_sell_" + id] = !0, def["res_trade_w_" + id] = 1, def["res_trade_p_" + id] = 1;
+    });
+    let setTradePriority = (priority, items) => items.forEach((id) => def["res_trade_p_" + id] = priority);
+    return setTradePriority(1, ["Food"]), setTradePriority(2, ["Helium_3", "Uranium", "Oil", "Coal"]), setTradePriority(3, ["Stone", "Chrysotile", "Lumber"]), setTradePriority(4, ["Aluminium", "Iron", "Copper"]), setTradePriority(5, ["Furs"]), setTradePriority(6, ["Cement"]), setTradePriority(7, ["Steel"]), setTradePriority(8, ["Titanium"]), setTradePriority(9, ["Polymer", "Alloy"]), setTradePriority(10, ["Iridium"]), setTradePriority(-1, ["Crystal"]), context.galaxyOfferResourceIds.forEach((id, i) => {
+      def["res_galaxy_w_" + id] = 1, def["res_galaxy_p_" + id] = i + 1;
+    }), {
+      def,
+      priorityOrders: [{ manager: "market", ids: priorityIds, sort: !0 }]
+    };
+  }
+  function computeStorageDefaults(context) {
+    let priorityIds = [...context.storableResourceIds].reverse(), def = {
+      autoStorage: !1,
+      storageLimitPreMad: !0,
+      storageSafeReassign: !0,
+      storageAssignExtra: !0,
+      storageAssignPart: !1
+    };
+    priorityIds.forEach((id, i) => {
+      def["res_storage" + id] = !0, def["res_storage_p_" + id] = i, def["res_storage_o_" + id] = !1, def["res_min_store" + id] = 1, def["res_max_store" + id] = -1;
+    });
+    for (let id of [
+      context.orichalcumId,
+      context.vitreloyId,
+      context.bolognumId
+    ])
+      id.length > 0 && (def["res_storage_o_" + id] = !0);
+    return {
+      def,
+      priorityOrders: [{ manager: "storage", ids: priorityIds, sort: !0 }]
+    };
+  }
+  function computeMinorTraitDefaults(context) {
+    let def = {
+      autoMinorTrait: !1,
+      shifterGenus: "ignore",
+      imitateRace: "ignore",
+      buildingShrineType: "know",
+      slaveIncome: 25e3,
+      jobScalePop: !0,
+      psychicPower: "auto",
+      psychicBoostRes: "auto",
+      wishMinor: "none",
+      wishMajor: "none",
+      autoGenetics: !1,
+      geneticsSequence: "none",
+      geneticsBoost: "none",
+      geneticsAssemble: "auto"
+    };
+    return context.traitNames.forEach((id, i) => {
+      def["mTrait_" + id] = !0, def["mTrait_p_" + id] = i, def["mTrait_w_" + id] = 1;
+    }), context.ocularPowerIds.forEach((id) => {
+      def["ocularPower_" + id] = !0, def["ocularPower_p_" + id] = 100;
+    }), {
+      def,
+      priorityOrders: [
+        { manager: "minorTrait", ids: context.traitNames, sort: !0 }
+      ]
+    };
+  }
+  function computeMutableTraitDefaults(context) {
+    let { genusOrder } = context, sorted = [...context.traits].sort((a, b) => genusOrder.indexOf(a.genus) - genusOrder.indexOf(b.genus) || (a.type < b.type ? 1 : 0)), def = {
+      autoMutateTraits: !1,
+      doNotGoBelowPlasmidSoftcap: !0,
+      minimumPlasmidsToPreserve: 0
+    };
+    return sorted.forEach((trait, i) => {
+      let id = trait.traitName;
+      def["mutableTrait_p_" + id] = i, def["mutableTrait_purge_" + id] = !1, trait.isGainable && (def["mutableTrait_gain_" + id] = !1), trait.isNegRoll && (def["mutableTrait_reset_" + id] = !1);
+    }), {
+      def,
+      priorityOrders: [
+        {
+          manager: "mutableTrait",
+          ids: sorted.map((trait) => trait.traitName),
+          sort: !0
+        }
+      ]
+    };
+  }
+  function computeJobDefaults(context) {
+    let priorityIds = context.jobs.map((job) => job.originalId), originalIdByKey = {};
+    context.jobs.forEach((job) => originalIdByKey[job.key] = job.originalId);
+    let def = {
+      autoJobs: !1,
+      autoCraftsmen: !1,
+      jobSetDefault: !0,
+      jobManageServants: !0,
+      // Civilians kept out of ship crew and available for jobs. Absolute count
+      // ("800") or a percentage of population ("50%"). "0" = disabled.
+      crewReserve: "0",
+      jobLumberWeighting: 50,
+      jobQuarryWeighting: 50,
+      jobCrystalWeighting: 50,
+      jobScavengerWeighting: 5,
+      jobRaiderWeighting: 20,
+      jobForagerWeighting: 50,
+      jobDisableMiners: !0
+    };
+    context.jobs.forEach((job, i) => {
+      let id = job.originalId;
+      def["job_" + id] = !0, def["job_p_" + id] = i, job.isSmart && (def["job_s_" + id] = !0);
+    });
+    let setBreakpoints = (key, b1, b2, b3) => {
+      let originalId = originalIdByKey[key];
+      originalId !== void 0 && (def["job_b1_" + originalId] = b1, def["job_b2_" + originalId] = b2, def["job_b3_" + originalId] = b3);
+    };
+    return setBreakpoints("Colonist", -1, -1, -1), setBreakpoints("Teamster", 10, -1, -1), setBreakpoints("Meditator", -1, -1, -1), setBreakpoints("Hunter", -1, -1, -1), setBreakpoints("Farmer", -1, -1, -1), setBreakpoints("Forager", 4, 10, 0), setBreakpoints("Lumberjack", 4, 10, 0), setBreakpoints("QuarryWorker", 4, 10, 0), setBreakpoints("CrystalMiner", 2, 5, 0), setBreakpoints("Scavenger", 0, 0, 0), setBreakpoints("TitanColonist", -1, -1, -1), setBreakpoints("PitMiner", 1, 12, -1), setBreakpoints("Miner", 3, 5, -1), setBreakpoints("CoalMiner", 2, 4, -1), setBreakpoints("CementWorker", 4, 8, -1), setBreakpoints("Professor", 6, 10, -1), setBreakpoints("Scientist", 3, 6, -1), setBreakpoints("Entertainer", 2, 5, -1), setBreakpoints("HellSurveyor", 1, 1, -1), setBreakpoints("SpaceMiner", 1, 3, -1), setBreakpoints("Torturer", 1, 1, -1), setBreakpoints("Archaeologist", 1, 1, -1), setBreakpoints("GhostTrapper", 1, 1, -1), setBreakpoints("ElysiumMiner", 1, 1, -1), setBreakpoints("Banker", 3, 5, -1), setBreakpoints("Priest", 0, 0, -1), setBreakpoints("Unemployed", 0, 0, 0), {
+      def,
+      priorityOrders: [{ manager: "job", ids: priorityIds, sort: !0 }]
+    };
+  }
+  function computeBuildingDefaults(context) {
+    let { bindingByKey } = context, def = {
+      autoBuild: !1,
+      autoPower: !1,
+      buildingsIgnoreZeroRate: !1,
+      buildingsLimitPowered: !0,
+      buildingTowerSuppression: 100,
+      buildingConsumptionCheck: "perResource",
+      buildingsTransportGem: !1,
+      buildingsBestFreighter: !1,
+      buildingsUseMultiClick: !1,
+      buildingsBulkBuild: !1,
+      buildingsBulkBuildMax: 10,
+      buildingEnabledAll: !0,
+      buildingStateAll: !0
+    };
+    context.buildings.forEach((building, i) => {
+      let id = building.binding;
+      def["bat" + id] = !0, def["bld_p_" + id] = i, def["bld_m_" + id] = -1, def["bld_w_" + id] = 100, building.switchable && (def["bld_s_" + id] = !0), building.smart && (def["bld_s2_" + id] = !0);
+    }), def["bld_s2_space-iridium_mine"] = !1, def["bld_s2_space-helium_mine"] = !1, [
+      "RedVrCenter",
+      "NeutronCitadel",
+      "PortalWarDroid",
+      "BadlandsPredatorDrone",
+      "PortalRepairDroid",
+      "SpireWaygate",
+      "TauRedContact",
+      "TauRedIntroduce",
+      "TauRedSubjugate",
+      "TauGasName1",
+      "TauGasName2",
+      "TauGasName3",
+      "TauGasName4",
+      "TauGasName5",
+      "TauGasName6",
+      "TauGasName7",
+      "TauGasName8",
+      "TauGas2Name1",
+      "TauGas2Name2",
+      "TauGas2Name3",
+      "TauGas2Name4",
+      "TauGas2Name5",
+      "TauGas2Name6",
+      "TauGas2Name7",
+      "TauGas2Name8"
+    ].forEach((b) => {
+      let binding = bindingByKey[b];
+      binding !== void 0 && (def["bat" + binding] = !1);
+    });
+    let exoticZoo = bindingByKey.AlphaExoticZoo;
+    exoticZoo !== void 0 && (def["bat" + exoticZoo] = !0, def["bld_w_" + exoticZoo] = 50);
+    for (let [key, maximum] of [
+      ["ForgeHorseshoe", 20],
+      ["RedForgeHorseshoe", 20],
+      ["TauForgeHorseshoe", 20],
+      ["BeltEleriumShip", 15],
+      ["BeltIridiumShip", 15]
+    ]) {
+      let binding = bindingByKey[key];
+      binding !== void 0 && (def["bld_m_" + binding] = maximum);
+    }
+    return { def };
+  }
+  function computeProjectDefaults(context) {
+    let { idByKey } = context, def = {
+      autoARPA: !1,
+      arpaScaleWeighting: !0,
+      arpaStep: 5
+    }, projectPriority = 0, setProject = (key, autoBuildEnabled, autoMax, weighting) => {
+      let id = idByKey[key];
+      id !== void 0 && (def["arpa_" + id] = autoBuildEnabled, def["arpa_p_" + id] = projectPriority++, def["arpa_m_" + id] = autoMax, def["arpa_w_" + id] = weighting);
+    };
+    return setProject("LaunchFacility", !0, -1, 100), setProject("SuperCollider", !0, -1, 5), setProject("StockExchange", !0, -1, 0.5), setProject("Monument", !0, -1, 1), setProject("Railway", !0, -1, 0.1), setProject("Nexus", !0, -1, 1), setProject("RoidEject", !0, -1, 1), setProject("ManaSyphon", !1, 79, 1), setProject("Depot", !0, -1, 1), {
+      def,
+      priorityOrders: [
+        { manager: "project", ids: context.projectIds, sort: !0 }
+      ]
+    };
+  }
+  function computeMagicDefaults(context) {
+    let def = {
+      autoAlchemy: !1,
+      autoPylon: !1,
+      magicFullmetalHelper: !0,
+      magicAlchemyManaUse: 0.5,
+      productionRitualManaUse: 0.5,
+      productionRitualSafe: !0
+    };
+    return context.alchemyResourceIds.forEach((id) => {
+      def["res_alchemy_" + id] = !0, def["res_alchemy_w_" + id] = 0;
+    }), context.ritualProductionIds.forEach((id) => {
+      def["spell_w_" + id] = 100;
+    }), def.spell_w_hunting = 10, def.spell_w_farmer = 1, {
+      def,
+      priorityOrders: [
+        { manager: "alchemy", ids: context.alchemyResourceIds, sort: !1 }
+      ]
+    };
+  }
+  function computeProductionDefaults(context) {
+    let def = {
+      autoQuarry: !1,
+      autoMine: !1,
+      autoExtractor: !1,
+      autoGraphenePlant: !1,
+      autoSmelter: !1,
+      autoCraft: !1,
+      autoFactory: !1,
+      autoMiningDroid: !1,
+      autoReplicator: !1,
+      productionChrysotileWeight: 2,
+      productionAdamantiteWeight: 1,
+      productionExtWeight_common: 1,
+      productionExtWeight_uncommon: 1,
+      productionExtWeight_rare: 1,
+      productionFoundryWeighting: "demanded",
+      productionCraftsmen: "nocraft",
+      productionSmelting: "required",
+      productionSmeltingIridium: 0.5,
+      productionFactoryWeighting: "none",
+      productionFactoryMinIngredients: 0,
+      productionFactoryFocusMaterials: !1,
+      replicatorAssignGovernorTask: !0,
+      replicatorWeightingMode: "mass"
+    }, FOUNDRY_WEIGHTING = {
+      Plywood: 1,
+      Brick: 1,
+      Wrought_Iron: 1,
+      Sheet_Metal: 2,
+      Mythril: 3,
+      Aerogel: 3,
+      Nanoweave: 10,
+      Scarletite: 1,
+      Quantium: 1
+    };
+    CRAFTER_RESOURCE_KEYS.forEach((key) => {
+      let id = context.foundryResourceIdByKey[key];
+      id !== void 0 && (def["craft" + id] = !0, def["job_" + id] = !0, def["foundry_w_" + id] = FOUNDRY_WEIGHTING[key], def["foundry_p_" + id] = 0);
+    }), context.smelterFuelIds.forEach((id, i) => {
+      def["smelter_fuel_p_" + id] = i;
+    });
+    let setFactoryProduct = (key, enabled, weighting, priority) => {
+      let id = context.factoryResourceIdByKey[key];
+      id !== void 0 && (def["production_" + id] = enabled, def["production_w_" + id] = weighting, def["production_p_" + id] = priority);
+    };
+    setFactoryProduct("LuxuryGoods", !0, 1, 2), setFactoryProduct("Furs", !0, 1, 1), setFactoryProduct("Alloy", !0, 1, 3), setFactoryProduct("Polymer", !0, 1, 3), setFactoryProduct("NanoTube", !0, 4, 3), setFactoryProduct("Stanene", !0, 4, 3);
+    let setDroidProduct = (key, weighting, priority) => {
+      let id = context.droidResourceIdByKey[key];
+      id !== void 0 && (def["droid_w_" + id] = weighting, def["droid_pr_" + id] = priority);
+    };
+    return setDroidProduct("Adamantite", 15, 1), setDroidProduct("Aluminium", 1, 1), setDroidProduct("Uranium", 5, -1), setDroidProduct("Coal", 5, -1), context.replicatorProductionIds.forEach((id) => {
+      def["replicator_" + id] = !0, def["replicator_w_" + id] = 1, def["replicator_p_" + id] = 1;
+    }), { def };
+  }
+  function computeEjectorDefaults(context) {
+    let { resources, eleriumId, inferniteId } = context, byId = new Map(resources.map((r) => [r.id, r])), elerium = byId.get(eleriumId), infernite = byId.get(inferniteId), ejectList;
+    context.universe === "magic" ? ejectList = resources.filter((r) => r.ejectConsumable).sort((a, b) => b.atomicMass - a.atomicMass) : (ejectList = resources.filter(
+      (r) => r.ejectConsumable && r.id !== eleriumId && r.id !== inferniteId
+    ).sort((a, b) => b.atomicMass - a.atomicMass), infernite && ejectList.unshift(infernite), elerium && ejectList.unshift(elerium));
+    let supplyList = resources.filter((r) => r.supplyConsumable).sort((a, b) => b.supplyIn - a.supplyIn), naniteList = resources.filter((r) => r.naniteConsumable).sort((a, b) => b.atomicMass - a.atomicMass), def = {
+      autoEject: !1,
+      autoSupply: !1,
+      autoNanite: !1,
+      ejectMode: "cap",
+      supplyMode: "mixed",
+      naniteMode: "full",
+      prestigeWhiteholeStabiliseMass: !0,
+      prestigeWhiteholeStabiliseCooldown: 120
+    };
+    return ejectList.forEach((r) => def["res_eject" + r.id] = r.isTradable), supplyList.forEach((r) => def["res_supply" + r.id] = r.isTradable), naniteList.forEach((r) => def["res_nanite" + r.id] = r.isTradable), eleriumId.length > 0 && (def["res_eject" + eleriumId] = !0), inferniteId.length > 0 && (def["res_eject" + inferniteId] = !0), {
+      def,
+      priorityOrders: [
+        { manager: "eject", ids: ejectList.map((r) => r.id), sort: !1 },
+        { manager: "supply", ids: supplyList.map((r) => r.id), sort: !1 },
+        { manager: "nanite", ids: naniteList.map((r) => r.id), sort: !1 }
+      ]
+    };
+  }
+
+  // src/domain/combat/mech-state.ts
+  var MECH_DEFAULTS = computeMechDefaults().def;
+  function defaultNumber(key) {
+    let value = MECH_DEFAULTS[key];
+    return typeof value == "number" ? value : 0;
+  }
+  function defaultString(key) {
+    let value = MECH_DEFAULTS[key];
+    return typeof value == "string" ? value : "";
+  }
+  function finiteQuantity(value) {
+    return typeof value == "number" && Number.isFinite(value) ? value : void 0;
+  }
+  function nonNegativeQuantity(value) {
+    let amount = finiteQuantity(value);
+    return amount !== void 0 && amount >= 0 ? amount : void 0;
+  }
+  function stringArray(value) {
+    return Array.isArray(value) ? Object.freeze(
+      value.filter(
+        (entry) => typeof entry == "string" && entry.length > 0
+      )
+    ) : Object.freeze([]);
+  }
+  function readMechDesign(value) {
+    if (!isNonArrayRecord(value)) return null;
+    let size = value.size;
+    if (typeof size != "string" || size.length === 0) return null;
+    let chassis = value.chassis;
+    return Object.freeze({
+      size,
+      chassis: typeof chassis == "string" ? chassis : "",
+      hardpoint: stringArray(value.hardpoint),
+      equip: stringArray(value.equip),
+      // The game reads a missing infernal flag leniently (falsy in `mechCost`);
+      // the capture keeps that coercion and names it.
+      infernal: value.infernal === !0
+    });
+  }
+  function readMechSettings(value) {
+    let settings = isNonArrayRecord(value) ? value : {}, pick = (key, allowed, fallback) => {
+      let raw = settings[key];
+      return typeof raw == "string" && allowed.includes(raw) ? raw : fallback;
+    }, mechSettingNumber = (key) => {
+      let raw = finiteQuantity(settings[key]);
+      return raw === void 0 || raw < 0 ? defaultNumber(key) : raw;
+    }, mechSettingString = (key) => {
+      let raw = settings[key];
+      return typeof raw == "string" && raw.length > 0 ? raw : defaultString(key);
+    };
+    return Object.freeze({
+      autoMech: settings.autoMech === !0,
+      buildMode: pick("mechBuild", ["none", "random", "user"], "none"),
+      scrapMode: pick("mechScrap", ["none", "single", "all", "mixed"], "mixed"),
+      scrapEfficiency: mechSettingNumber("mechScrapEfficiency"),
+      collectorValue: mechSettingNumber("mechCollectorValue"),
+      preferredSize: mechSettingString("mechSize"),
+      gravitySize: mechSettingString("mechSizeGravity"),
+      specialMode: pick(
+        "mechSpecial",
+        ["always", "prefered", "random", "never"],
+        "prefered"
+      ),
+      waygatePotential: mechSettingNumber("mechWaygatePotential"),
+      minimumSupplyRate: mechSettingNumber("mechMinSupply"),
+      maximumCollectorShare: mechSettingNumber("mechMaxCollectors"),
+      saveSupplyRatio: mechSettingNumber("mechSaveSupplyRatio"),
+      scoutsRatio: mechSettingNumber("mechScouts"),
+      // The shipped defaults for these four are true, so only an explicit
+      // false disables them; an absent key reads as the default.
+      infernalCollector: settings.mechInfernalCollector !== !1,
+      rebuildScouts: settings.mechScoutsRebuild === !0,
+      fillBay: settings.mechFillBay !== !1,
+      buildingsFirst: settings.buildingMechsFirst !== !1,
+      baysFirst: settings.mechBaysFirst !== !1
+    });
+  }
+  function waygateActive(root) {
+    if (root === void 0) return !1;
+    let portal = root.portal;
+    if (!isNonArrayRecord(portal)) return !1;
+    let waygate = portal.waygate;
+    return isNonArrayRecord(waygate) ? waygate.on === 1 : !1;
+  }
+  function unavailableMechState(queueKeyHeld, warlord, gateActive, settings) {
+    return Object.freeze({
+      available: !1,
+      queueKeyHeld,
+      warlord,
+      waygateActive: gateActive,
+      bay: Object.freeze({ maximum: 0, occupied: 0, active: 0, scouts: 0 }),
+      inventory: Object.freeze([]),
+      blueprint: null,
+      spire: null,
+      funds: Object.freeze({
+        purifierSupply: 0,
+        purifierMax: 0,
+        soulGems: 0,
+        supplyRate: 0,
+        gemsRate: 0,
+        purifierFullyOn: !1
+      }),
+      prepared: 0,
+      wrath: 0,
+      gladiatorLevel: 0,
+      settings
+    });
+  }
+  function readCapturedMechState(input) {
+    let settings = readMechSettings(input.settings), root = isNonArrayRecord(input.root) ? input.root : void 0, warlord = (root !== void 0 && isNonArrayRecord(root.race) ? root.race : {}).warlord === !0;
+    if (root === void 0 || !settings.autoMech || input.queueKeyHeld === void 0)
+      return unavailableMechState(
+        input.queueKeyHeld === !0,
+        warlord,
+        waygateActive(root),
+        settings
+      );
+    let portal = isNonArrayRecord(root.portal) ? root.portal : void 0, mechbay = portal !== void 0 && isNonArrayRecord(portal.mechbay) ? portal.mechbay : void 0, purifier = portal !== void 0 && isNonArrayRecord(portal.purifier) ? portal.purifier : void 0, resources = isNonArrayRecord(root.resource) ? root.resource : void 0, soulGem = resources !== void 0 && isNonArrayRecord(resources.Soul_Gem) ? resources.Soul_Gem : void 0;
+    if (mechbay === void 0 || purifier === void 0 || soulGem === void 0)
+      return unavailableMechState(
+        input.queueKeyHeld,
+        warlord,
+        waygateActive(root),
+        settings
+      );
+    let maximum = nonNegativeQuantity(mechbay.max), occupied = nonNegativeQuantity(mechbay.bay), active = nonNegativeQuantity(mechbay.active), scouts = nonNegativeQuantity(mechbay.scouts), purifierSupply = nonNegativeQuantity(purifier.supply), purifierMax = nonNegativeQuantity(purifier.sup_max), soulGems = nonNegativeQuantity(soulGem.amount), stored = Array.isArray(mechbay.mechs) ? mechbay.mechs : void 0;
+    if (maximum === void 0 || occupied === void 0 || active === void 0 || scouts === void 0 || purifierSupply === void 0 || purifierMax === void 0 || soulGems === void 0 || stored === void 0)
+      return unavailableMechState(
+        input.queueKeyHeld,
+        warlord,
+        waygateActive(root),
+        settings
+      );
+    let inventory = Object.freeze(
+      stored.map((entry, index) => {
+        let entryDesign = readMechDesign(entry) ?? {
+          size: "",
+          chassis: "",
+          hardpoint: Object.freeze([]),
+          equip: Object.freeze([]),
+          infernal: !1
+        };
+        return Object.freeze({ ...entryDesign, index });
+      })
+    ), spire = portal !== void 0 && isNonArrayRecord(portal.spire) ? portal.spire : void 0, spireCount = spire !== void 0 ? finiteQuantity(spire.count) : void 0, spireFacts = spire !== void 0 && spireCount !== void 0 && spireCount >= 1 && typeof spire.type == "string" && typeof spire.boss == "string" && finiteQuantity(spire.progress) !== void 0 ? Object.freeze({
+      count: spireCount,
+      type: spire.type,
+      progress: spire.progress,
+      statuses: Object.freeze(
+        isNonArrayRecord(spire.status) ? Object.keys(spire.status) : []
+      ),
+      boss: spire.boss
+    }) : null, supplyLedger = resources !== void 0 && isNonArrayRecord(resources.Supply) ? resources.Supply : {}, supplyRateRaw = finiteQuantity(supplyLedger.rateOfChange), gemsRateRaw = finiteQuantity(soulGem.rateOfChange), blood = isNonArrayRecord(root.blood) ? root.blood : {}, stats = isNonArrayRecord(root.stats) ? root.stats : {}, achieve = isNonArrayRecord(stats.achieve) ? stats.achieve : {}, gladiator = isNonArrayRecord(achieve.gladiator) && finiteQuantity(achieve.gladiator.l) !== void 0 && achieve.gladiator.l >= 0 ? achieve.gladiator.l : 0;
+    return Object.freeze({
+      available: !0,
+      queueKeyHeld: input.queueKeyHeld,
+      warlord,
+      waygateActive: waygateActive(root),
+      bay: Object.freeze({ maximum, occupied, active, scouts }),
+      inventory,
+      blueprint: readMechDesign(mechbay.blueprint),
+      spire: spireFacts,
+      funds: Object.freeze({
+        purifierSupply,
+        purifierMax,
+        soulGems,
+        supplyRate: supplyRateRaw ?? 0,
+        gemsRate: gemsRateRaw ?? 0,
+        purifierFullyOn: finiteQuantity(purifier.count) !== void 0 && finiteQuantity(purifier.on) !== void 0 && purifier.count > 0 && purifier.on >= purifier.count
+      }),
+      prepared: nonNegativeQuantity(blood.prepared) ?? 0,
+      wrath: nonNegativeQuantity(blood.wrath) ?? 0,
+      gladiatorLevel: gladiator,
+      settings
+    });
+  }
+
+  // src/domain/combat/mech-auto-choice.ts
+  function combatRanking(figures, key) {
+    return Object.freeze(
+      Object.keys(figures).filter((size) => size !== "collector").sort((left, right) => figures[right][key] - figures[left][key])
+    );
+  }
+  function autoFloor(state) {
+    return state.spire === null ? null : {
+      terrain: state.spire.type,
+      statuses: state.spire.statuses,
+      boss: state.spire.boss,
+      spireCount: state.spire.count,
+      scouts: state.bay.scouts,
+      prepared: state.prepared,
+      wrath: state.wrath,
+      gladiatorLevel: state.gladiatorLevel,
+      collectorValue: state.settings.collectorValue
+    };
+  }
+  function activeMechsPower(state, floor) {
+    let power = 0, active = state.inventory.slice(0, state.bay.active);
+    for (let mech of active) {
+      if (mech.size === "collector") continue;
+      let rated = rateMechDesign(mech, floor);
+      if (rated === null) return null;
+      power += rated.power;
+    }
+    return power;
+  }
+  function designAutoChoice(state, pickIndex) {
+    if (!state.available || state.queueKeyHeld || state.warlord || state.settings.buildMode !== "random" || state.blueprint === null || state.blueprint.infernal)
+      return null;
+    let floor = autoFloor(state);
+    if (floor === null || floor.collectorValue <= 0) return null;
+    let figures = bestDesignFigures(floor, pickIndex);
+    if (figures === null) return null;
+    let { settings, bay, funds } = state, preferred = choosePreferredSize({
+      bayMaximum: bay.maximum,
+      bayOccupied: bay.occupied,
+      bayScouts: bay.scouts,
+      supplyRate: funds.supplyRate,
+      supplyMaximum: funds.purifierMax,
+      supplyRatio: funds.purifierMax > 0 ? funds.purifierSupply / funds.purifierMax : 1,
+      gemsSpare: funds.soulGems,
+      prepared: state.prepared,
+      gravityFloor: state.spire.statuses.includes("gravity"),
+      preferredSize: settings.preferredSize,
+      gravitySize: settings.gravitySize,
+      fillBay: settings.fillBay,
+      minimumSupplyRate: settings.minimumSupplyRate,
+      maximumCollectorShare: settings.maximumCollectorShare,
+      scoutsRatio: settings.scoutsRatio,
+      rankByEff: combatRanking(figures, "efficiency"),
+      rankByGems: combatRanking(figures, "gemsEff"),
+      rankBySupply: combatRanking(figures, "supplyEff")
+    }), design = chooseAutoDesign(preferred.size, floor, pickIndex), cost = design === null ? void 0 : mechFrameCost(design.size, state.prepared);
+    return design === null || cost === void 0 ? null : Object.freeze({
+      floor,
+      figures,
+      preferred,
+      design,
+      cost,
+      teamPower: activeMechsPower(state, floor)
+    });
+  }
+  function planMechDemandCosts(input) {
+    let state = readCapturedMechState({
+      root: input.root,
+      settings: input.settings,
+      queueKeyHeld: !1
+    });
+    if (!state.available || state.settings.buildMode !== "random") return null;
+    let choice = designAutoChoice(state, () => 0);
+    return choice === null ? null : Object.freeze({ supply: choice.cost.supply, gems: choice.cost.gems });
+  }
+
+  // src/adapters/evolve/combat/captured-mech-reservations.ts
+  function createCapturedMechReservationSource(dependencies) {
+    return Object.freeze({
+      readReservations() {
+        let demand = planMechDemandCosts({
+          root: dependencies.rootState.readRoot(),
+          settings: dependencies.readSettings()
+        });
+        return Object.freeze(demand === null ? {
+          unavailable: !1,
+          targets: Object.freeze([])
+        } : {
+          unavailable: !1,
+          targets: Object.freeze([
+            Object.freeze({
+              name: "mech",
+              cause: "autoMech",
+              cost: Object.freeze({
+                Supply: demand.supply,
+                Soul_Gem: demand.gems
+              })
+            })
+          ])
+        });
+      }
+    });
+  }
+
   // src/bootstrap/captured-progression-control.ts
   var RESEARCH_SCOPE = "research", RESEARCH_GRANTED_SCOPE = "research+granted", ARPA_SCOPE = "arpa", BUILDING_UNLOCK_SCOPE = "building-unlocks", BUILD_CONTROLS_SCOPE = "build-controls", NO_RESERVATIONS3 = Object.freeze({
     targets: Object.freeze([]),
@@ -6046,7 +7442,13 @@
           ])
         });
       }
-    }), stateReservations = getState === void 0 ? void 0 : createScriptCostReservationSource({ getState }), scriptReservations = stateReservations === void 0 ? savingReservations : combineReservations(stateReservations, savingReservations), readKnowledgeGate = getState === void 0 ? () => readKnowledge().levels : createScriptKnowledgeGateReader({
+    }), stateReservations = getState === void 0 ? void 0 : createScriptCostReservationSource({ getState }), mechReservations = createCapturedMechReservationSource({
+      rootState,
+      readSettings
+    }), queuedAndSaving = stateReservations === void 0 ? savingReservations : combineReservations(stateReservations, savingReservations), scriptReservations = combineReservations(
+      queuedAndSaving,
+      mechReservations
+    ), readKnowledgeGate = getState === void 0 ? () => readKnowledge().levels : createScriptKnowledgeGateReader({
       getState,
       resources,
       ...getResources === void 0 ? {} : { getResources }
@@ -13090,6 +14492,8 @@
     if (input.savingTarget !== null)
       for (let cost of input.savingTarget.costs)
         request(cost.resourceId, cost.amount), savingCost[cost.resourceId] = cost.amount;
+    for (let cost of input.mechCosts)
+      request(cost.resourceId, cost.amount);
     if (input.spyPurchaseMoney && settings.prioritizeUnify.includes("req") && request("Money", input.spyPurchaseMoney), settings.autoFleet && input.fleet.nextShipAffordable && settings.prioritizeOuterFleet.includes("req"))
       for (let cost of input.fleet.nextShipCost)
         request(cost.resourceId, cost.amount);
@@ -14245,8 +15649,8 @@
           settings,
           dependencies.controls,
           prerequisites
-        ), spyPurchaseMoney = spyReservation.status === "ready" ? spyReservation.value : 0, moneyEnvelope = truepathAiReservation.status === "unavailable" || spyReservation.status === "unavailable";
-        if (queued.length === 0 && triggerTargets.length === 0 && saving === null && (offered === void 0 || offered.length === 0) && !hasFactoryDemand && !hasCrafterDemand && missions.length === 0 && !hasFleetDemand && inflationMoney === null && retirementGraphene === null && truepathAiBuildingTarget === null && spyPurchaseMoney === 0 && !moneyEnvelope)
+        ), spyPurchaseMoney = spyReservation.status === "ready" ? spyReservation.value : 0, mechDemand = planMechDemandCosts({ root, settings: settingsValue }), mechCosts = mechDemand === null ? Object.freeze([]) : toCosts({ Supply: mechDemand.supply, Soul_Gem: mechDemand.gems }), moneyEnvelope = truepathAiReservation.status === "unavailable" || spyReservation.status === "unavailable";
+        if (queued.length === 0 && triggerTargets.length === 0 && saving === null && (offered === void 0 || offered.length === 0) && !hasFactoryDemand && !hasCrafterDemand && missions.length === 0 && !hasFleetDemand && inflationMoney === null && retirementGraphene === null && truepathAiBuildingTarget === null && spyPurchaseMoney === 0 && mechCosts.length === 0 && !moneyEnvelope)
           return EMPTY_DEMAND_SAMPLE;
         let savingCosts = saving === null ? null : toCosts(saving.cost, saving.pool), baseInput = Object.freeze({
           settings: readSettingsInput(settingsValue),
@@ -14267,6 +15671,7 @@
           missions,
           unlockedTechs: toOfferedTechs(resources, offered),
           spyPurchaseMoney,
+          mechCosts,
           fleet: fleet ?? Object.freeze({
             nextShipAffordable: !1,
             nextShipCost: Object.freeze([])
@@ -14350,7 +15755,8 @@
               })
             ]),
             triggerTargets,
-            factoryStorageTargets
+            factoryStorageTargets,
+            Object.freeze([Object.freeze({ costs: mechCosts })])
           ]),
           // The Knowledge half of this planner is owned by the captured Knowledge reader, which reads
           // the offered catalog; this pass would have to draw one of its own to answer it.
@@ -25326,19 +26732,6 @@
     };
   }
 
-  // src/domain/economy/production/crafter-resources.ts
-  var CRAFTER_RESOURCE_KEYS = Object.freeze([
-    "Plywood",
-    "Brick",
-    "Wrought_Iron",
-    "Sheet_Metal",
-    "Mythril",
-    "Aerogel",
-    "Nanoweave",
-    "Scarletite",
-    "Quantium"
-  ]);
-
   // src/adapters/evolve/captured-settings-defaults.ts
   function readRootSafely(rootState) {
     try {
@@ -25638,627 +27031,6 @@
       ],
       readMigrationCatalogs,
       readCatalogGeneration
-    };
-  }
-
-  // src/domain/settings-defaults.ts
-  function computeWarDefaults() {
-    return {
-      def: {
-        autoFight: !1,
-        foreignAttackLivingSoldiersPercent: 90,
-        foreignAttackHealthySoldiersPercent: 90,
-        foreignHireMercMoneyStoragePercent: 90,
-        foreignHireMercCostLowerThanIncome: 1,
-        foreignHireMercDeadSoldiers: 1,
-        foreignMinAdvantage: 40,
-        foreignMaxAdvantage: 80,
-        foreignMaxSiegeBattalion: 10,
-        foreignProtect: "auto",
-        foreignPacifist: !1,
-        foreignUnification: !0,
-        foreignForceSabotage: !0,
-        foreignOccupyLast: !0,
-        foreignTrainSpy: !0,
-        foreignSpyMax: 2,
-        foreignPowerRequired: 75,
-        foreignPolicyInferior: "Annex",
-        foreignPolicySuperior: "Sabotage",
-        foreignPolicyRival: "Influence"
-      }
-    };
-  }
-  function computeHellDefaults() {
-    return {
-      def: {
-        autoHell: !1,
-        hellHomeGarrison: 10,
-        hellMinSoldiers: 20,
-        hellMinSoldiersPercent: 90,
-        hellAssaultReserve: !0,
-        hellTargetFortressDamage: 100,
-        hellLowWallsMulti: 3,
-        hellHandlePatrolSize: !0,
-        hellPatrolMinRating: 30,
-        hellPatrolThreatPercent: 8,
-        hellPatrolDroneMod: 5,
-        hellPatrolDroidMod: 5,
-        hellPatrolBootcampMod: 0,
-        hellBolsterPatrolPercentTop: 50,
-        hellBolsterPatrolPercentBottom: 20,
-        hellBolsterPatrolRating: 300,
-        hellAttractorTopThreat: 9e3,
-        hellAttractorBottomThreat: 6e3,
-        warlordHandleFortress: !0,
-        warlordMinimumMinions: 1e3
-      }
-    };
-  }
-  function computeGeneralDefaults() {
-    return {
-      def: {
-        masterScriptToggle: !0,
-        showSettings: !0,
-        autoPrestige: !1,
-        tickRate: 4,
-        tickSchedule: !1,
-        researchRequest: !0,
-        researchRequestSpace: !1,
-        missionRequest: !0,
-        useDemanded: !0,
-        prioritizeTriggers: "savereq",
-        prioritizeQueue: "savereq",
-        prioritizeUnify: "savereq",
-        prioritizeOuterFleet: "ignore",
-        buildingAlwaysClick: !1,
-        buildingClickPerTick: 50,
-        scriptSettingsExportFilename: "evolve-script-settings.json"
-      }
-    };
-  }
-  function computeInterfaceDefaults() {
-    return {
-      def: {
-        activeTargetsUI: !1,
-        buildPlannerUI: !0,
-        buildPlannerCollapsed: !1,
-        displayPrestigeTypeInTopBar: !0,
-        displayTotalDaysTypeInTopBar: !1,
-        performanceHackAvoidDrawTech: !1
-      }
-    };
-  }
-  function computeStateLogDefaults() {
-    return {
-      def: {
-        stateLogEnabled: !1,
-        stateLogAutoDownload: !1,
-        stateLogInterval: 20
-      }
-    };
-  }
-  function computeAchievementGuardDefaults() {
-    return {
-      def: {
-        achievementGuards: !1,
-        guardPacifist: !0,
-        guardDreaded: !0,
-        guardCultOfPersonality: !0,
-        guardAnarchist: !0,
-        guardEnergetic: !0,
-        guardRedDead: !0,
-        guardSecondEvolution: !0,
-        guardWorldDomination: !0,
-        guardSyndicate: !0,
-        guardTradeFederation: !0,
-        guardBananaRepublic: !0
-      }
-    };
-  }
-  function computeChallengeHelperDefaults() {
-    return {
-      def: {
-        inflationChallengeAssist: !0,
-        inflationChallengeSaveMinutes: 30,
-        retirementChallengeAssist: !0
-      }
-    };
-  }
-  function computePrestigeDefaults() {
-    return {
-      def: {
-        prestigeType: "none",
-        prestigeMADIgnoreArpa: !0,
-        prestigeMADWait: !0,
-        prestigeMADPopulation: 1,
-        prestigeWaitAT: !1,
-        prestigeGECK: 0,
-        prestigeBioseedConstruct: !0,
-        prestigeBioseedProbes: 3,
-        prestigeWhiteholeSaveGems: !0,
-        prestigeWhiteholeMinMass: 8,
-        prestigeAscensionPillar: !0,
-        prestigeCustomRaceMode: "reuse",
-        prestigeCustomRacePreset: "0",
-        prestigeCustomRacePresets: [
-          { name: "General", json: "" },
-          { name: "Banana + EMF", json: "" },
-          { name: "Cataclysm", json: "" }
-        ],
-        prestigeDemonicFloor: 100,
-        prestigeDemonicPotential: 0.6,
-        prestigeDemonicBomb: !1,
-        prestigeVaxStrat: "none",
-        prestigeVacuumMana: 10
-      }
-    };
-  }
-  function computeAuthorityDefaults() {
-    return {
-      def: {
-        authorityManage: !0,
-        generalMinimumAuthority: 100,
-        generalAuthorityMinPatrolPercent: 40,
-        buildingWeightingAuthority: 10
-      }
-    };
-  }
-  function computeResearchDefaults() {
-    return {
-      def: {
-        autoResearch: !1,
-        userResearchTheology_1: "auto",
-        userResearchTheology_2: "auto",
-        researchIgnore: ["tech-purify"]
-      }
-    };
-  }
-  function computeWeightingDefaults() {
-    return {
-      def: {
-        buildingBuildIfStorageFull: !1,
-        buildingWeightingNew: 3,
-        buildingWeightingVacuumCollapse: 10,
-        buildingWeightingUselessPowerPlant: 0.01,
-        buildingWeightingNeedfulPowerPlant: 3,
-        buildingWeightingUnderpowered: 0.8,
-        buildingWeightingUselessKnowledge: 0.01,
-        buildingWeightingNeedfulKnowledge: 5,
-        buildingWeightingMissingFuel: 10,
-        buildingWeightingNonOperatingCity: 0.2,
-        buildingWeightingNonOperating: 0,
-        buildingWeightingMissingSupply: 0,
-        buildingWeightingMissingSupport: 0,
-        buildingWeightingUselessSupport: 0.01,
-        buildingWeightingMADUseless: 0,
-        buildingWeightingUnusedEjectors: 0.1,
-        buildingWeightingCrateUseless: 0.01,
-        buildingWeightingHorseshoeUseless: 0.1,
-        buildingWeightingZenUseless: 0.01,
-        buildingWeightingGateTurret: 0.01,
-        buildingWeightingNeedStorage: 1,
-        buildingWeightingUselessHousing: 1,
-        buildingWeightingTemporal: 0.2,
-        buildingWeightingSolar: 0.2,
-        buildingWeightingOverlord: 0,
-        buildingWeightingBananaObjective: 2,
-        buildingWeightingInflationMoney: 2,
-        buildingWeightingRetirementPrep: 10,
-        buildingWeightingMatrixCure: 10,
-        buildingWeightingTruepathDigsite: 10
-      }
-    };
-  }
-  function computeFleetDefaults() {
-    let def = {
-      autoFleet: !1,
-      fleetOuterCrew: 30,
-      fleetOuterShips: "custom",
-      fleetExploreTau: !0,
-      fleetMaxCover: !0,
-      fleetCrewReclaim: !0,
-      fleetEmbassyKnowledge: 6e6,
-      fleetAlienGiftKnowledge: 65e5,
-      fleetAlien2Knowledge: 8e6,
-      fleetAlien2Loses: "none",
-      fleetChthonianLoses: "low",
-      // Default combat ship
-      fleet_outer_class: "destroyer",
-      fleet_outer_armor: "neutronium",
-      fleet_outer_weapon: "plasma",
-      fleet_outer_engine: "ion",
-      fleet_outer_power: "fission",
-      fleet_outer_sensor: "lidar",
-      // Default scout ship
-      fleet_scout_class: "corvette",
-      fleet_scout_armor: "neutronium",
-      fleet_scout_weapon: "plasma",
-      fleet_scout_engine: "tie",
-      fleet_scout_power: "fusion",
-      fleet_scout_sensor: "quantum",
-      // Default andromeda regions priority
-      fleet_pr_gxy_stargate: 0,
-      fleet_pr_gxy_alien2: 1,
-      fleet_pr_gxy_alien1: 2,
-      fleet_pr_gxy_chthonian: 3,
-      fleet_pr_gxy_gateway: 4,
-      fleet_pr_gxy_gorddon: 5
-    }, setOuterRegion = (id, weighting, protect, scouts) => {
-      def["fleet_outer_pr_" + id] = weighting, def["fleet_outer_def_" + id] = protect, def["fleet_outer_sc_" + id] = scouts;
-    };
-    return setOuterRegion("spc_moon", 1, 0.9, 0), setOuterRegion("spc_red", 3, 0.9, 0), setOuterRegion("spc_gas", 0, 0.9, 0), setOuterRegion("spc_gas_moon", 0, 0.9, 0), setOuterRegion("spc_belt", 1, 0.9, 0), setOuterRegion("spc_titan", 5, 0.9, 1), setOuterRegion("spc_enceladus", 3, 0.9, 1), setOuterRegion("spc_triton", 10, 0.95, 2), setOuterRegion("spc_makemake", 5, 0.9, 2), setOuterRegion("spc_eris", 100, 0.01, 1), { def };
-  }
-  function computeMechDefaults() {
-    return {
-      def: {
-        autoMech: !1,
-        mechScrap: "mixed",
-        mechScrapEfficiency: 1.5,
-        mechCollectorValue: 0.5,
-        mechBuild: "random",
-        mechSize: "titan",
-        mechSizeGravity: "auto",
-        mechFillBay: !0,
-        mechScouts: 0.05,
-        mechScoutsRebuild: !1,
-        mechMinSupply: 1e3,
-        mechMaxCollectors: 0.5,
-        mechInfernalCollector: !0,
-        mechSpecial: "prefered",
-        mechSaveSupplyRatio: 1,
-        buildingMechsFirst: !0,
-        mechBaysFirst: !0,
-        mechWaygatePotential: 0.4
-      }
-    };
-  }
-  function computeGovernmentDefaults(context) {
-    return {
-      def: {
-        autoTax: !1,
-        autoGovernment: !1,
-        generalRequestedTaxRate: -1,
-        generalMinimumTaxRate: 20,
-        generalMinimumMorale: 105,
-        generalMaximumMorale: 500,
-        govInterim: context.democracyId,
-        govFinal: context.technocracyId,
-        govSpace: context.corpocracyId,
-        govGovernor: "none"
-      }
-    };
-  }
-  function computeEvolutionDefaults(context) {
-    let def = {
-      autoEvolution: !1,
-      userUniverseTargetName: "none",
-      userPlanetTargetName: "none",
-      userEvolutionTarget: "auto",
-      userEvolutionGenus: "fungi",
-      evolutionQueue: [],
-      evolutionQueueEnabled: !1,
-      evolutionQueueRepeat: !1,
-      evolutionAutoUnbound: !0,
-      evolutionBackup: !1
-    };
-    return context.challengeIds.forEach((id) => def["challenge_" + id] = !1), { def };
-  }
-  function computeLoggingDefaults(context) {
-    let def = {
-      hellTurnOffLogMessages: !0,
-      logFilter: "",
-      logEnabled: !0
-    };
-    return context.gameLogTypeIds.forEach((id) => def["log_" + id] = !0), def.log_mercenary = !1, def.log_multi_construction = !1, def.log_prestige = !1, def.log_prestige_format = "Reset: {resetType}, Species: {species}, Duration: {timeStamp} days", { def };
-  }
-  function computePlanetDefaults(context) {
-    let { biomeList: biomeList2, planetBiomes: planetBiomes2, traitList: traitList2, planetTraits: planetTraits2, extraList: extraList2 } = context, def = {};
-    return biomeList2.forEach(
-      (biome) => def["biome_w_" + biome] = (planetBiomes2.length - planetBiomes2.indexOf(biome)) * 10
-    ), traitList2.forEach(
-      (trait) => def["trait_w_" + trait] = (planetTraits2.length - planetTraits2.indexOf(trait)) * 10
-    ), extraList2.forEach((extra) => def["extra_w_" + extra] = 0), def.extra_w_Achievement = 1e3, { def };
-  }
-  function computeMarketDefaults(context) {
-    let priorityIds = [...context.tradableResourceIds].reverse(), def = {
-      autoMarket: !1,
-      autoGalaxyMarket: !1,
-      tradeRouteMinimumMoneyPerSecond: 500,
-      tradeRouteMinimumMoneyPercentage: 50,
-      tradeRouteSellExcess: !0,
-      minimumMoney: 0,
-      minimumMoneyPercentage: 0,
-      marketMinIngredients: 0
-    };
-    priorityIds.forEach((id, i) => {
-      def["res_buy_p_" + id] = i, def["buy" + id] = !1, def["res_buy_r_" + id] = 0.5, def["sell" + id] = !1, def["res_sell_r_" + id] = 0.9, def["res_trade_buy_" + id] = !0, def["res_trade_sell_" + id] = !0, def["res_trade_w_" + id] = 1, def["res_trade_p_" + id] = 1;
-    });
-    let setTradePriority = (priority, items) => items.forEach((id) => def["res_trade_p_" + id] = priority);
-    return setTradePriority(1, ["Food"]), setTradePriority(2, ["Helium_3", "Uranium", "Oil", "Coal"]), setTradePriority(3, ["Stone", "Chrysotile", "Lumber"]), setTradePriority(4, ["Aluminium", "Iron", "Copper"]), setTradePriority(5, ["Furs"]), setTradePriority(6, ["Cement"]), setTradePriority(7, ["Steel"]), setTradePriority(8, ["Titanium"]), setTradePriority(9, ["Polymer", "Alloy"]), setTradePriority(10, ["Iridium"]), setTradePriority(-1, ["Crystal"]), context.galaxyOfferResourceIds.forEach((id, i) => {
-      def["res_galaxy_w_" + id] = 1, def["res_galaxy_p_" + id] = i + 1;
-    }), {
-      def,
-      priorityOrders: [{ manager: "market", ids: priorityIds, sort: !0 }]
-    };
-  }
-  function computeStorageDefaults(context) {
-    let priorityIds = [...context.storableResourceIds].reverse(), def = {
-      autoStorage: !1,
-      storageLimitPreMad: !0,
-      storageSafeReassign: !0,
-      storageAssignExtra: !0,
-      storageAssignPart: !1
-    };
-    priorityIds.forEach((id, i) => {
-      def["res_storage" + id] = !0, def["res_storage_p_" + id] = i, def["res_storage_o_" + id] = !1, def["res_min_store" + id] = 1, def["res_max_store" + id] = -1;
-    });
-    for (let id of [
-      context.orichalcumId,
-      context.vitreloyId,
-      context.bolognumId
-    ])
-      id.length > 0 && (def["res_storage_o_" + id] = !0);
-    return {
-      def,
-      priorityOrders: [{ manager: "storage", ids: priorityIds, sort: !0 }]
-    };
-  }
-  function computeMinorTraitDefaults(context) {
-    let def = {
-      autoMinorTrait: !1,
-      shifterGenus: "ignore",
-      imitateRace: "ignore",
-      buildingShrineType: "know",
-      slaveIncome: 25e3,
-      jobScalePop: !0,
-      psychicPower: "auto",
-      psychicBoostRes: "auto",
-      wishMinor: "none",
-      wishMajor: "none",
-      autoGenetics: !1,
-      geneticsSequence: "none",
-      geneticsBoost: "none",
-      geneticsAssemble: "auto"
-    };
-    return context.traitNames.forEach((id, i) => {
-      def["mTrait_" + id] = !0, def["mTrait_p_" + id] = i, def["mTrait_w_" + id] = 1;
-    }), context.ocularPowerIds.forEach((id) => {
-      def["ocularPower_" + id] = !0, def["ocularPower_p_" + id] = 100;
-    }), {
-      def,
-      priorityOrders: [
-        { manager: "minorTrait", ids: context.traitNames, sort: !0 }
-      ]
-    };
-  }
-  function computeMutableTraitDefaults(context) {
-    let { genusOrder } = context, sorted = [...context.traits].sort((a, b) => genusOrder.indexOf(a.genus) - genusOrder.indexOf(b.genus) || (a.type < b.type ? 1 : 0)), def = {
-      autoMutateTraits: !1,
-      doNotGoBelowPlasmidSoftcap: !0,
-      minimumPlasmidsToPreserve: 0
-    };
-    return sorted.forEach((trait, i) => {
-      let id = trait.traitName;
-      def["mutableTrait_p_" + id] = i, def["mutableTrait_purge_" + id] = !1, trait.isGainable && (def["mutableTrait_gain_" + id] = !1), trait.isNegRoll && (def["mutableTrait_reset_" + id] = !1);
-    }), {
-      def,
-      priorityOrders: [
-        {
-          manager: "mutableTrait",
-          ids: sorted.map((trait) => trait.traitName),
-          sort: !0
-        }
-      ]
-    };
-  }
-  function computeJobDefaults(context) {
-    let priorityIds = context.jobs.map((job) => job.originalId), originalIdByKey = {};
-    context.jobs.forEach((job) => originalIdByKey[job.key] = job.originalId);
-    let def = {
-      autoJobs: !1,
-      autoCraftsmen: !1,
-      jobSetDefault: !0,
-      jobManageServants: !0,
-      // Civilians kept out of ship crew and available for jobs. Absolute count
-      // ("800") or a percentage of population ("50%"). "0" = disabled.
-      crewReserve: "0",
-      jobLumberWeighting: 50,
-      jobQuarryWeighting: 50,
-      jobCrystalWeighting: 50,
-      jobScavengerWeighting: 5,
-      jobRaiderWeighting: 20,
-      jobForagerWeighting: 50,
-      jobDisableMiners: !0
-    };
-    context.jobs.forEach((job, i) => {
-      let id = job.originalId;
-      def["job_" + id] = !0, def["job_p_" + id] = i, job.isSmart && (def["job_s_" + id] = !0);
-    });
-    let setBreakpoints = (key, b1, b2, b3) => {
-      let originalId = originalIdByKey[key];
-      originalId !== void 0 && (def["job_b1_" + originalId] = b1, def["job_b2_" + originalId] = b2, def["job_b3_" + originalId] = b3);
-    };
-    return setBreakpoints("Colonist", -1, -1, -1), setBreakpoints("Teamster", 10, -1, -1), setBreakpoints("Meditator", -1, -1, -1), setBreakpoints("Hunter", -1, -1, -1), setBreakpoints("Farmer", -1, -1, -1), setBreakpoints("Forager", 4, 10, 0), setBreakpoints("Lumberjack", 4, 10, 0), setBreakpoints("QuarryWorker", 4, 10, 0), setBreakpoints("CrystalMiner", 2, 5, 0), setBreakpoints("Scavenger", 0, 0, 0), setBreakpoints("TitanColonist", -1, -1, -1), setBreakpoints("PitMiner", 1, 12, -1), setBreakpoints("Miner", 3, 5, -1), setBreakpoints("CoalMiner", 2, 4, -1), setBreakpoints("CementWorker", 4, 8, -1), setBreakpoints("Professor", 6, 10, -1), setBreakpoints("Scientist", 3, 6, -1), setBreakpoints("Entertainer", 2, 5, -1), setBreakpoints("HellSurveyor", 1, 1, -1), setBreakpoints("SpaceMiner", 1, 3, -1), setBreakpoints("Torturer", 1, 1, -1), setBreakpoints("Archaeologist", 1, 1, -1), setBreakpoints("GhostTrapper", 1, 1, -1), setBreakpoints("ElysiumMiner", 1, 1, -1), setBreakpoints("Banker", 3, 5, -1), setBreakpoints("Priest", 0, 0, -1), setBreakpoints("Unemployed", 0, 0, 0), {
-      def,
-      priorityOrders: [{ manager: "job", ids: priorityIds, sort: !0 }]
-    };
-  }
-  function computeBuildingDefaults(context) {
-    let { bindingByKey } = context, def = {
-      autoBuild: !1,
-      autoPower: !1,
-      buildingsIgnoreZeroRate: !1,
-      buildingsLimitPowered: !0,
-      buildingTowerSuppression: 100,
-      buildingConsumptionCheck: "perResource",
-      buildingsTransportGem: !1,
-      buildingsBestFreighter: !1,
-      buildingsUseMultiClick: !1,
-      buildingsBulkBuild: !1,
-      buildingsBulkBuildMax: 10,
-      buildingEnabledAll: !0,
-      buildingStateAll: !0
-    };
-    context.buildings.forEach((building, i) => {
-      let id = building.binding;
-      def["bat" + id] = !0, def["bld_p_" + id] = i, def["bld_m_" + id] = -1, def["bld_w_" + id] = 100, building.switchable && (def["bld_s_" + id] = !0), building.smart && (def["bld_s2_" + id] = !0);
-    }), def["bld_s2_space-iridium_mine"] = !1, def["bld_s2_space-helium_mine"] = !1, [
-      "RedVrCenter",
-      "NeutronCitadel",
-      "PortalWarDroid",
-      "BadlandsPredatorDrone",
-      "PortalRepairDroid",
-      "SpireWaygate",
-      "TauRedContact",
-      "TauRedIntroduce",
-      "TauRedSubjugate",
-      "TauGasName1",
-      "TauGasName2",
-      "TauGasName3",
-      "TauGasName4",
-      "TauGasName5",
-      "TauGasName6",
-      "TauGasName7",
-      "TauGasName8",
-      "TauGas2Name1",
-      "TauGas2Name2",
-      "TauGas2Name3",
-      "TauGas2Name4",
-      "TauGas2Name5",
-      "TauGas2Name6",
-      "TauGas2Name7",
-      "TauGas2Name8"
-    ].forEach((b) => {
-      let binding = bindingByKey[b];
-      binding !== void 0 && (def["bat" + binding] = !1);
-    });
-    let exoticZoo = bindingByKey.AlphaExoticZoo;
-    exoticZoo !== void 0 && (def["bat" + exoticZoo] = !0, def["bld_w_" + exoticZoo] = 50);
-    for (let [key, maximum] of [
-      ["ForgeHorseshoe", 20],
-      ["RedForgeHorseshoe", 20],
-      ["TauForgeHorseshoe", 20],
-      ["BeltEleriumShip", 15],
-      ["BeltIridiumShip", 15]
-    ]) {
-      let binding = bindingByKey[key];
-      binding !== void 0 && (def["bld_m_" + binding] = maximum);
-    }
-    return { def };
-  }
-  function computeProjectDefaults(context) {
-    let { idByKey } = context, def = {
-      autoARPA: !1,
-      arpaScaleWeighting: !0,
-      arpaStep: 5
-    }, projectPriority = 0, setProject = (key, autoBuildEnabled, autoMax, weighting) => {
-      let id = idByKey[key];
-      id !== void 0 && (def["arpa_" + id] = autoBuildEnabled, def["arpa_p_" + id] = projectPriority++, def["arpa_m_" + id] = autoMax, def["arpa_w_" + id] = weighting);
-    };
-    return setProject("LaunchFacility", !0, -1, 100), setProject("SuperCollider", !0, -1, 5), setProject("StockExchange", !0, -1, 0.5), setProject("Monument", !0, -1, 1), setProject("Railway", !0, -1, 0.1), setProject("Nexus", !0, -1, 1), setProject("RoidEject", !0, -1, 1), setProject("ManaSyphon", !1, 79, 1), setProject("Depot", !0, -1, 1), {
-      def,
-      priorityOrders: [
-        { manager: "project", ids: context.projectIds, sort: !0 }
-      ]
-    };
-  }
-  function computeMagicDefaults(context) {
-    let def = {
-      autoAlchemy: !1,
-      autoPylon: !1,
-      magicFullmetalHelper: !0,
-      magicAlchemyManaUse: 0.5,
-      productionRitualManaUse: 0.5,
-      productionRitualSafe: !0
-    };
-    return context.alchemyResourceIds.forEach((id) => {
-      def["res_alchemy_" + id] = !0, def["res_alchemy_w_" + id] = 0;
-    }), context.ritualProductionIds.forEach((id) => {
-      def["spell_w_" + id] = 100;
-    }), def.spell_w_hunting = 10, def.spell_w_farmer = 1, {
-      def,
-      priorityOrders: [
-        { manager: "alchemy", ids: context.alchemyResourceIds, sort: !1 }
-      ]
-    };
-  }
-  function computeProductionDefaults(context) {
-    let def = {
-      autoQuarry: !1,
-      autoMine: !1,
-      autoExtractor: !1,
-      autoGraphenePlant: !1,
-      autoSmelter: !1,
-      autoCraft: !1,
-      autoFactory: !1,
-      autoMiningDroid: !1,
-      autoReplicator: !1,
-      productionChrysotileWeight: 2,
-      productionAdamantiteWeight: 1,
-      productionExtWeight_common: 1,
-      productionExtWeight_uncommon: 1,
-      productionExtWeight_rare: 1,
-      productionFoundryWeighting: "demanded",
-      productionCraftsmen: "nocraft",
-      productionSmelting: "required",
-      productionSmeltingIridium: 0.5,
-      productionFactoryWeighting: "none",
-      productionFactoryMinIngredients: 0,
-      productionFactoryFocusMaterials: !1,
-      replicatorAssignGovernorTask: !0,
-      replicatorWeightingMode: "mass"
-    }, FOUNDRY_WEIGHTING = {
-      Plywood: 1,
-      Brick: 1,
-      Wrought_Iron: 1,
-      Sheet_Metal: 2,
-      Mythril: 3,
-      Aerogel: 3,
-      Nanoweave: 10,
-      Scarletite: 1,
-      Quantium: 1
-    };
-    CRAFTER_RESOURCE_KEYS.forEach((key) => {
-      let id = context.foundryResourceIdByKey[key];
-      id !== void 0 && (def["craft" + id] = !0, def["job_" + id] = !0, def["foundry_w_" + id] = FOUNDRY_WEIGHTING[key], def["foundry_p_" + id] = 0);
-    }), context.smelterFuelIds.forEach((id, i) => {
-      def["smelter_fuel_p_" + id] = i;
-    });
-    let setFactoryProduct = (key, enabled, weighting, priority) => {
-      let id = context.factoryResourceIdByKey[key];
-      id !== void 0 && (def["production_" + id] = enabled, def["production_w_" + id] = weighting, def["production_p_" + id] = priority);
-    };
-    setFactoryProduct("LuxuryGoods", !0, 1, 2), setFactoryProduct("Furs", !0, 1, 1), setFactoryProduct("Alloy", !0, 1, 3), setFactoryProduct("Polymer", !0, 1, 3), setFactoryProduct("NanoTube", !0, 4, 3), setFactoryProduct("Stanene", !0, 4, 3);
-    let setDroidProduct = (key, weighting, priority) => {
-      let id = context.droidResourceIdByKey[key];
-      id !== void 0 && (def["droid_w_" + id] = weighting, def["droid_pr_" + id] = priority);
-    };
-    return setDroidProduct("Adamantite", 15, 1), setDroidProduct("Aluminium", 1, 1), setDroidProduct("Uranium", 5, -1), setDroidProduct("Coal", 5, -1), context.replicatorProductionIds.forEach((id) => {
-      def["replicator_" + id] = !0, def["replicator_w_" + id] = 1, def["replicator_p_" + id] = 1;
-    }), { def };
-  }
-  function computeEjectorDefaults(context) {
-    let { resources, eleriumId, inferniteId } = context, byId = new Map(resources.map((r) => [r.id, r])), elerium = byId.get(eleriumId), infernite = byId.get(inferniteId), ejectList;
-    context.universe === "magic" ? ejectList = resources.filter((r) => r.ejectConsumable).sort((a, b) => b.atomicMass - a.atomicMass) : (ejectList = resources.filter(
-      (r) => r.ejectConsumable && r.id !== eleriumId && r.id !== inferniteId
-    ).sort((a, b) => b.atomicMass - a.atomicMass), infernite && ejectList.unshift(infernite), elerium && ejectList.unshift(elerium));
-    let supplyList = resources.filter((r) => r.supplyConsumable).sort((a, b) => b.supplyIn - a.supplyIn), naniteList = resources.filter((r) => r.naniteConsumable).sort((a, b) => b.atomicMass - a.atomicMass), def = {
-      autoEject: !1,
-      autoSupply: !1,
-      autoNanite: !1,
-      ejectMode: "cap",
-      supplyMode: "mixed",
-      naniteMode: "full",
-      prestigeWhiteholeStabiliseMass: !0,
-      prestigeWhiteholeStabiliseCooldown: 120
-    };
-    return ejectList.forEach((r) => def["res_eject" + r.id] = r.isTradable), supplyList.forEach((r) => def["res_supply" + r.id] = r.isTradable), naniteList.forEach((r) => def["res_nanite" + r.id] = r.isTradable), eleriumId.length > 0 && (def["res_eject" + eleriumId] = !0), inferniteId.length > 0 && (def["res_eject" + inferniteId] = !0), {
-      def,
-      priorityOrders: [
-        { manager: "eject", ids: ejectList.map((r) => r.id), sort: !1 },
-        { manager: "supply", ids: supplyList.map((r) => r.id), sort: !1 },
-        { manager: "nanite", ids: naniteList.map((r) => r.id), sort: !1 }
-      ]
     };
   }
 
@@ -41212,183 +41984,6 @@ Only continue if you trust the source. Injected code:
     return Object.freeze({ reader, executor });
   }
 
-  // src/domain/combat/mech-state.ts
-  var MECH_DEFAULTS = computeMechDefaults().def;
-  function defaultNumber(key) {
-    let value = MECH_DEFAULTS[key];
-    return typeof value == "number" ? value : 0;
-  }
-  function defaultString(key) {
-    let value = MECH_DEFAULTS[key];
-    return typeof value == "string" ? value : "";
-  }
-  function finiteQuantity(value) {
-    return typeof value == "number" && Number.isFinite(value) ? value : void 0;
-  }
-  function nonNegativeQuantity(value) {
-    let amount = finiteQuantity(value);
-    return amount !== void 0 && amount >= 0 ? amount : void 0;
-  }
-  function stringArray(value) {
-    return Array.isArray(value) ? Object.freeze(
-      value.filter(
-        (entry) => typeof entry == "string" && entry.length > 0
-      )
-    ) : Object.freeze([]);
-  }
-  function readMechDesign(value) {
-    if (!isNonArrayRecord(value)) return null;
-    let size = value.size;
-    if (typeof size != "string" || size.length === 0) return null;
-    let chassis = value.chassis;
-    return Object.freeze({
-      size,
-      chassis: typeof chassis == "string" ? chassis : "",
-      hardpoint: stringArray(value.hardpoint),
-      equip: stringArray(value.equip),
-      // The game reads a missing infernal flag leniently (falsy in `mechCost`);
-      // the capture keeps that coercion and names it.
-      infernal: value.infernal === !0
-    });
-  }
-  function readMechSettings(value) {
-    let settings = isNonArrayRecord(value) ? value : {}, pick = (key, allowed, fallback) => {
-      let raw = settings[key];
-      return typeof raw == "string" && allowed.includes(raw) ? raw : fallback;
-    }, mechSettingNumber = (key) => {
-      let raw = finiteQuantity(settings[key]);
-      return raw === void 0 || raw < 0 ? defaultNumber(key) : raw;
-    }, mechSettingString = (key) => {
-      let raw = settings[key];
-      return typeof raw == "string" && raw.length > 0 ? raw : defaultString(key);
-    };
-    return Object.freeze({
-      autoMech: settings.autoMech === !0,
-      buildMode: pick("mechBuild", ["none", "random", "user"], "none"),
-      scrapMode: pick("mechScrap", ["none", "single", "all", "mixed"], "mixed"),
-      scrapEfficiency: mechSettingNumber("mechScrapEfficiency"),
-      collectorValue: mechSettingNumber("mechCollectorValue"),
-      preferredSize: mechSettingString("mechSize"),
-      gravitySize: mechSettingString("mechSizeGravity"),
-      specialMode: pick(
-        "mechSpecial",
-        ["always", "prefered", "random", "never"],
-        "prefered"
-      ),
-      waygatePotential: mechSettingNumber("mechWaygatePotential"),
-      minimumSupplyRate: mechSettingNumber("mechMinSupply"),
-      maximumCollectorShare: mechSettingNumber("mechMaxCollectors"),
-      saveSupplyRatio: mechSettingNumber("mechSaveSupplyRatio"),
-      scoutsRatio: mechSettingNumber("mechScouts"),
-      // The shipped defaults for these four are true, so only an explicit
-      // false disables them; an absent key reads as the default.
-      infernalCollector: settings.mechInfernalCollector !== !1,
-      rebuildScouts: settings.mechScoutsRebuild === !0,
-      fillBay: settings.mechFillBay !== !1,
-      buildingsFirst: settings.buildingMechsFirst !== !1,
-      baysFirst: settings.mechBaysFirst !== !1
-    });
-  }
-  function waygateActive(root) {
-    if (root === void 0) return !1;
-    let portal = root.portal;
-    if (!isNonArrayRecord(portal)) return !1;
-    let waygate = portal.waygate;
-    return isNonArrayRecord(waygate) ? waygate.on === 1 : !1;
-  }
-  function unavailableMechState(queueKeyHeld, warlord, gateActive, settings) {
-    return Object.freeze({
-      available: !1,
-      queueKeyHeld,
-      warlord,
-      waygateActive: gateActive,
-      bay: Object.freeze({ maximum: 0, occupied: 0, active: 0, scouts: 0 }),
-      inventory: Object.freeze([]),
-      blueprint: null,
-      spire: null,
-      funds: Object.freeze({
-        purifierSupply: 0,
-        purifierMax: 0,
-        soulGems: 0,
-        supplyRate: 0,
-        gemsRate: 0,
-        purifierFullyOn: !1
-      }),
-      prepared: 0,
-      wrath: 0,
-      gladiatorLevel: 0,
-      settings
-    });
-  }
-  function readCapturedMechState(input) {
-    let settings = readMechSettings(input.settings), root = isNonArrayRecord(input.root) ? input.root : void 0, warlord = (root !== void 0 && isNonArrayRecord(root.race) ? root.race : {}).warlord === !0;
-    if (root === void 0 || !settings.autoMech || input.queueKeyHeld === void 0)
-      return unavailableMechState(
-        input.queueKeyHeld === !0,
-        warlord,
-        waygateActive(root),
-        settings
-      );
-    let portal = isNonArrayRecord(root.portal) ? root.portal : void 0, mechbay = portal !== void 0 && isNonArrayRecord(portal.mechbay) ? portal.mechbay : void 0, purifier = portal !== void 0 && isNonArrayRecord(portal.purifier) ? portal.purifier : void 0, resources = isNonArrayRecord(root.resource) ? root.resource : void 0, soulGem = resources !== void 0 && isNonArrayRecord(resources.Soul_Gem) ? resources.Soul_Gem : void 0;
-    if (mechbay === void 0 || purifier === void 0 || soulGem === void 0)
-      return unavailableMechState(
-        input.queueKeyHeld,
-        warlord,
-        waygateActive(root),
-        settings
-      );
-    let maximum = nonNegativeQuantity(mechbay.max), occupied = nonNegativeQuantity(mechbay.bay), active = nonNegativeQuantity(mechbay.active), scouts = nonNegativeQuantity(mechbay.scouts), purifierSupply = nonNegativeQuantity(purifier.supply), purifierMax = nonNegativeQuantity(purifier.sup_max), soulGems = nonNegativeQuantity(soulGem.amount), stored = Array.isArray(mechbay.mechs) ? mechbay.mechs : void 0;
-    if (maximum === void 0 || occupied === void 0 || active === void 0 || scouts === void 0 || purifierSupply === void 0 || purifierMax === void 0 || soulGems === void 0 || stored === void 0)
-      return unavailableMechState(
-        input.queueKeyHeld,
-        warlord,
-        waygateActive(root),
-        settings
-      );
-    let inventory = Object.freeze(
-      stored.map((entry, index) => {
-        let entryDesign = readMechDesign(entry) ?? {
-          size: "",
-          chassis: "",
-          hardpoint: Object.freeze([]),
-          equip: Object.freeze([]),
-          infernal: !1
-        };
-        return Object.freeze({ ...entryDesign, index });
-      })
-    ), spire = portal !== void 0 && isNonArrayRecord(portal.spire) ? portal.spire : void 0, spireCount = spire !== void 0 ? finiteQuantity(spire.count) : void 0, spireFacts = spire !== void 0 && spireCount !== void 0 && spireCount >= 1 && typeof spire.type == "string" && typeof spire.boss == "string" && finiteQuantity(spire.progress) !== void 0 ? Object.freeze({
-      count: spireCount,
-      type: spire.type,
-      progress: spire.progress,
-      statuses: Object.freeze(
-        isNonArrayRecord(spire.status) ? Object.keys(spire.status) : []
-      ),
-      boss: spire.boss
-    }) : null, supplyLedger = resources !== void 0 && isNonArrayRecord(resources.Supply) ? resources.Supply : {}, supplyRateRaw = finiteQuantity(supplyLedger.rateOfChange), gemsRateRaw = finiteQuantity(soulGem.rateOfChange), blood = isNonArrayRecord(root.blood) ? root.blood : {}, stats = isNonArrayRecord(root.stats) ? root.stats : {}, achieve = isNonArrayRecord(stats.achieve) ? stats.achieve : {}, gladiator = isNonArrayRecord(achieve.gladiator) && finiteQuantity(achieve.gladiator.l) !== void 0 && achieve.gladiator.l >= 0 ? achieve.gladiator.l : 0;
-    return Object.freeze({
-      available: !0,
-      queueKeyHeld: input.queueKeyHeld,
-      warlord,
-      waygateActive: waygateActive(root),
-      bay: Object.freeze({ maximum, occupied, active, scouts }),
-      inventory,
-      blueprint: readMechDesign(mechbay.blueprint),
-      spire: spireFacts,
-      funds: Object.freeze({
-        purifierSupply,
-        purifierMax,
-        soulGems,
-        supplyRate: supplyRateRaw ?? 0,
-        gemsRate: gemsRateRaw ?? 0,
-        purifierFullyOn: finiteQuantity(purifier.count) !== void 0 && finiteQuantity(purifier.on) !== void 0 && purifier.count > 0 && purifier.on >= purifier.count
-      }),
-      prepared: nonNegativeQuantity(blood.prepared) ?? 0,
-      wrath: nonNegativeQuantity(blood.wrath) ?? 0,
-      gladiatorLevel: gladiator,
-      settings
-    });
-  }
-
   // src/adapters/evolve/combat/captured-mech.ts
   var CAPTURED_MECH_ASSEMBLY_CONTROL = "mechAssembly", CAPTURED_MECH_LIST_CONTROL = "mechList";
   function readDesignStrings(value) {
@@ -41859,487 +42454,6 @@ Only continue if you trust the source. Injected code:
     ) && (mode === "single" && input.baySpace < input.cost.space || mode === "all" && (input.baySpace < input.cost.space || !canSpendWithDistantReservation(input.supply, input.cost.supply) || !canSpendWithDistantReservation(input.gems, input.cost.gems)));
   }
 
-  // src/domain/combat/mech-boss-armory.ts
-  var CLASSIC_MECH_WEAPONS = Object.freeze([
-    "laser",
-    "kinetic",
-    "shotgun",
-    "missile",
-    "flame",
-    "plasma",
-    "sonic",
-    "tesla"
-  ]), BOSS_WEAPON_RATINGS = Object.freeze({
-    fire_elm: [1.05, 0.55, 0.75, 0.5, 0, 0.1, 1, 0.7],
-    water_elm: [0.6, 0.25, 0.25, 0.5, 0.6, 1, 0.5, 0.8],
-    rock_golem: [1, 0.65, 0.35, 0.95, 0.6, 1, 0.8, 0],
-    bone_golem: [0.4, 1, 0.75, 1, 0.45, 0.35, 0.8, 0.2],
-    mech_dino: [0.8, 0.5, 0.35, 0.5, 0.1, 0.35, 0.4, 1],
-    plant: [0.35, 0.25, 0.25, 0.25, 1, 0.45, 0.8, 0.45],
-    crazed: [0.45, 1, 0.95, 0.35, 0.9, 0.45, 0.2, 0.65],
-    minotaur: [0.25, 0.45, 0.2, 1, 0.6, 0.7, 0.2, 0.45],
-    ooze: [0.15, 0, 0, 0, 0.7, 1, 0.9, 0.2],
-    zombie: [0.3, 0.1, 0.95, 0.8, 1, 0.25, 0.25, 0.1],
-    raptor: [0.65, 1, 0.3, 0.4, 0.6, 0.75, 0.3, 0.7],
-    frost_giant: [0.9, 0.3, 0.25, 0.05, 0.85, 1, 0.35, 0.55],
-    swarm: [0.02, 0.02, 1, 0.05, 1, 0, 0.65, 0.55],
-    dragon: [0.15, 0.4, 0.65, 1, 0, 0.02, 0.3, 0.2],
-    mech_dragon: [0.8, 0.2, 0.25, 0.75, 0.15, 0.5, 0.3, 1],
-    construct: [0.45, 0.35, 0.25, 0.9, 0.3, 0.4, 0.15, 1.15],
-    beholder: [0.7, 0.5, 0.1, 0.05, 0.25, 1, 0.02, 0.4],
-    worm: [0.5, 0.25, 0.02, 0.05, 0.45, 0.25, 1.15, 0.02],
-    hydra: [0.8, 0.3, 0.55, 0.4, 0.8, 0.75, 0.5, 0.7],
-    colossus: [1, 0.5, 0.25, 1, 0.1, 0.6, 0.45, 0.55],
-    lich: [0.05, 0.5, 0.75, 0.75, 0.15, 0.02, 0.45, 0.55],
-    ape: [1, 0.55, 0.35, 0.45, 0.95, 0.75, 0.1, 0.75],
-    bandit: [0.6, 1, 0.7, 0.5, 0.6, 0.75, 0.25, 0.35],
-    croc: [0.6, 0.55, 0.2, 0.45, 0.1, 0.4, 1, 0.8],
-    djinni: [0, 0.2, 0.2, 0, 0.45, 1, 0.65, 0.5],
-    snake: [0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5],
-    centipede: [0.45, 0.65, 0.45, 0.6, 0.9, 0.9, 0, 0.02],
-    spider: [0.6, 0.75, 0.9, 0.15, 1, 0.05, 0.45, 0.25],
-    manticore: [0.02, 0.55, 0.3, 0.15, 0.35, 0.9, 0.5, 0.65],
-    fiend: [0.7, 0.3, 0.5, 0.75, 0.35, 0.3, 0.3, 0.55],
-    bat: [0.1, 0.3, 0.9, 0.02, 0.25, 0.02, 1, 0.65],
-    medusa: [0.3, 0.95, 0.85, 1, 0.15, 0.1, 0.2, 0.35],
-    ettin: [0.45, 0.55, 0.6, 0.25, 0.45, 0.7, 0.25, 0.15],
-    faceless: [0.55, 0, 0.15, 0.05, 0.35, 0.4, 0.85, 1],
-    enchanted: [1, 0.25, 0.6, 0.7, 0.05, 0.9, 0.1, 0.02],
-    gargoyle: [0.1, 0.55, 1, 0.45, 0.5, 0.1, 0.9, 0.25],
-    chimera: [0.3, 0.85, 0.6, 0.35, 0.65, 0.2, 0.5, 0.85],
-    gorgon: [0.65, 0.65, 0.65, 0.66, 0.65, 0.64, 0.65, 0.65],
-    kraken: [0.7, 0.4, 0.05, 0.5, 0.45, 0.6, 0.95, 0.9],
-    homunculus: [0.02, 0.85, 0.75, 0.65, 1, 0.02, 0.5, 0.25],
-    giant_chicken: [0.95, 0.95, 0.95, 0.95, 0.95, 0.95, 0.95, 0.95],
-    skeleton_pack: [0.45, 1, 1.2, 1.2, 0.15, 0.3, 0.5, 0.25]
-  });
-
-  // src/domain/combat/mech-costs.ts
-  var CLASSIC_MECH_SIZES = Object.freeze([
-    "small",
-    "medium",
-    "large",
-    "titan",
-    "collector"
-  ]);
-  function mechFrameSpace(size, prepared) {
-    let veteran = prepared >= 2;
-    switch (size) {
-      case "small":
-        return 2;
-      case "medium":
-        return veteran ? 4 : 5;
-      case "large":
-        return veteran ? 8 : 10;
-      case "titan":
-        return veteran ? 20 : 25;
-      case "collector":
-        return 1;
-      default:
-        return;
-    }
-  }
-  function mechFrameSupplyCost(size, prepared) {
-    let veteran = prepared >= 2;
-    switch (size) {
-      case "small":
-        return veteran ? 5e4 : 75e3;
-      case "medium":
-        return 18e4;
-      case "large":
-        return 375e3;
-      case "titan":
-        return 75e4;
-      case "collector":
-        return veteran ? 8e3 : 1e4;
-      default:
-        return;
-    }
-  }
-  function mechFrameGemCost(size) {
-    switch (size) {
-      case "small":
-        return 1;
-      case "medium":
-        return 4;
-      case "large":
-        return 20;
-      case "titan":
-        return 75;
-      case "collector":
-        return 1;
-      default:
-        return;
-    }
-  }
-  function mechFrameCost(size, prepared) {
-    let supply = mechFrameSupplyCost(size, prepared), gems = mechFrameGemCost(size), space = mechFrameSpace(size, prepared);
-    if (!(supply === void 0 || gems === void 0 || space === void 0))
-      return Object.freeze({ supply, gems, space });
-  }
-  function mechFrameRefund(size, prepared) {
-    let cost = mechFrameCost(size, prepared);
-    if (cost !== void 0)
-      return Object.freeze({
-        supply: Math.floor(cost.supply / 3),
-        gems: Math.floor(cost.gems / 2)
-      });
-  }
-
-  // src/domain/combat/mech-design.ts
-  var CLASSIC_MECH_CHASSIS = Object.freeze([
-    "wheel",
-    "tread",
-    "biped",
-    "quad",
-    "spider",
-    "hover"
-  ]), CLASSIC_GENERAL_EQUIP = Object.freeze([
-    "shields",
-    "sonar",
-    "grapple",
-    "infrared",
-    "pontoon",
-    "radiator",
-    "coolant",
-    "ablative",
-    "stabilizer",
-    "seals"
-  ]), CLASSIC_EQUIP_SET = /* @__PURE__ */ new Set([
-    "special",
-    ...CLASSIC_GENERAL_EQUIP
-  ]), TERRAIN_MODS = {
-    wheel: {
-      sand: [0.9, 0.85],
-      swamp: [0.35, 0.18],
-      forest: [1, 1],
-      jungle: [0.92, 0.85],
-      rocky: [0.65, 0.5],
-      gravel: [1, 0.95],
-      muddy: [0.85, 0.58],
-      grass: [1.3, 1.2],
-      brush: [0.9, 0.8],
-      concrete: [1.1, 1]
-    },
-    tread: {
-      sand: [1.15, 1.1],
-      swamp: [0.55, 0.4],
-      forest: [1, 0.95],
-      jungle: [0.95, 0.9],
-      rocky: [0.65, 0.5],
-      gravel: [1.3, 1.2],
-      muddy: [0.88, 0.72],
-      grass: [1, 1],
-      brush: [1, 1],
-      concrete: [1, 1]
-    },
-    biped: {
-      sand: [0.78, 0.65],
-      swamp: [0.68, 0.5],
-      forest: [1, 0.95],
-      jungle: [0.82, 0.7],
-      rocky: [0.48, 0.4],
-      gravel: [1, 1],
-      muddy: [0.85, 0.7],
-      grass: [1.25, 1.2],
-      brush: [0.92, 0.85],
-      concrete: [1, 1]
-    },
-    quad: {
-      sand: [0.86, 0.75],
-      swamp: [0.58, 0.42],
-      forest: [1.25, 1.2],
-      jungle: [1, 1],
-      rocky: [0.95, 0.9],
-      gravel: [0.9, 0.8],
-      muddy: [0.68, 0.5],
-      grass: [1, 0.95],
-      brush: [0.95, 0.9],
-      concrete: [1, 1]
-    },
-    spider: {
-      sand: [0.75, 0.65],
-      swamp: [0.9, 0.78],
-      forest: [0.82, 0.75],
-      jungle: [0.77, 0.65],
-      rocky: [1.25, 1.2],
-      gravel: [0.86, 0.75],
-      muddy: [0.92, 0.82],
-      grass: [1, 1],
-      brush: [1, 0.95],
-      concrete: [1, 1]
-    },
-    hover: {
-      sand: [1, 1],
-      swamp: [1.35, 1.2],
-      forest: [0.65, 0.48],
-      jungle: [0.55, 0.35],
-      rocky: [0.82, 0.68],
-      gravel: [1, 1],
-      muddy: [1.15, 1.08],
-      grass: [1, 1],
-      brush: [0.78, 0.7],
-      concrete: [1, 1]
-    }
-  };
-  function terrainFactor(chassis, size, terrain) {
-    let table = TERRAIN_MODS[chassis];
-    if (table === void 0) return;
-    let pair = table[terrain];
-    if (pair !== void 0)
-      return size === "small" || size === "medium" ? pair[0] : pair[1];
-  }
-  function statusFactor(effect, chassis, size, equip) {
-    let hasEquip = (name) => equip.has(name);
-    switch (effect) {
-      case "freeze":
-        return hasEquip("radiator") ? 1 : hasEquip("ablative") ? 0.45 : 0.25;
-      case "hot":
-        return hasEquip("coolant") ? 1 : hasEquip("shields") ? 0.45 : 0.25;
-      case "corrosive":
-        return hasEquip("ablative") ? 1 : hasEquip("shields") ? 0.6 : hasEquip("seals") ? 0.45 : 0.25;
-      case "hail":
-        return hasEquip("ablative") ? 1 : hasEquip("shields") ? 0.9 : 0.75;
-      case "radioactive":
-        return hasEquip("shields") ? 1 : hasEquip("ablative") ? 0.75 : 0.5;
-      case "static":
-        return hasEquip("shields") ? 1 : hasEquip("ablative") ? 0.7 : hasEquip("stabilizer") ? 0.65 : hasEquip("coolant") ? 0.6 : 0.4;
-      case "humid":
-        return hasEquip("seals") ? 1 : hasEquip("radiator") ? 0.9 : 0.75;
-      case "dust":
-        return hasEquip("seals") ? 1 : hasEquip("infrared") ? 0.75 : hasEquip("sonar") ? 0.7 : 0.5;
-      case "ashfall":
-        return hasEquip("coolant") ? 1 : hasEquip("seals") || hasEquip("infrared") ? 0.7 : hasEquip("ablative") ? 0.6 : 0.4;
-      case "steam":
-        return hasEquip("coolant") || hasEquip("radiator") || hasEquip("shields") ? 0.9 : 0.75;
-      case "rain":
-        return hasEquip("seals") ? 0.95 : hasEquip("radiator") ? 0.9 : 0.75;
-      case "quake":
-        return hasEquip("stabilizer") ? 1 : hasEquip("grapple") ? 0.45 : 0.25;
-      case "fog":
-        return hasEquip("sonar") ? 1 : hasEquip("infrared") ? 0.5 : 0.2;
-      case "dark":
-        return hasEquip("infrared") ? 1 : hasEquip("sonar") ? 0.35 : 0.1;
-      case "chasm":
-        return hasEquip("grapple") ? 1 : hasEquip("sonar") ? 0.3 : 0.1;
-      case "mountain":
-        return chassis === "spider" || hasEquip("grapple") ? 1 : hasEquip("sonar") ? 0.7 : 0.5;
-      case "hilly":
-        return chassis === "spider" ? 1 : hasEquip("grapple") || hasEquip("stabilizer") ? 0.9 : 0.75;
-      case "flooded":
-        return chassis === "hover" || hasEquip("pontoon") ? 1 : hasEquip("seals") ? 0.55 : 0.35;
-      case "river":
-        return chassis === "hover" ? 1 : hasEquip("pontoon") ? 0.9 : 0.65;
-      case "tar":
-        return chassis === "quad" ? 1 : chassis === "tread" || chassis === "wheel" ? hasEquip("pontoon") || hasEquip("stabilizer") ? 0.75 : 0.5 : hasEquip("pontoon") ? 0.9 : hasEquip("stabilizer") ? 0.85 : 0.75;
-      case "windy":
-        return chassis === "hover" ? hasEquip("stabilizer") ? 0.75 : 0.5 : 1;
-      case "gravity":
-        return size === "medium" ? 0.8 : size === "large" ? 0.45 : size === "titan" ? 0.25 : 1;
-      default:
-        return;
-    }
-  }
-  function scoutTerrainBonus(size, factor, statuses, scouts, equip) {
-    let rating = factor;
-    return equip.has("special") && (size === "small" || size === "collector") && rating < 1 && (rating += (1 - rating) * (statuses.includes("gravity") ? 0.325 : 0.65)), equip.has("special") && size === "medium" && rating < 1 && !statuses.includes("gravity") && (rating += (1 - rating) * 0.75), size !== "small" && rating < 1 && (rating += (statuses.includes("fog") || statuses.includes("dark") ? 5e-3 : 0.01) * scouts, rating > 1 && (rating = 1)), rating;
-  }
-  function mountWeaponPower(size, equip, power) {
-    let adjusted = power;
-    return adjusted < 1 && adjusted !== 0 && equip.has("special") && size === "titan" && (adjusted += (1 - adjusted) * 0.1), equip.has("special") && size === "large" && (adjusted *= 1.1), adjusted;
-  }
-  function weaponBasePower(size) {
-    switch (size) {
-      case "small":
-        return 25e-4;
-      case "medium":
-        return 375e-5;
-      case "large":
-        return 0.01;
-      case "titan":
-        return 0.012;
-      default:
-        return;
-    }
-  }
-  function concreteMod(terrain, size) {
-    if (terrain !== "concrete") return 1;
-    switch (size) {
-      case "small":
-        return 0.92;
-      case "medium":
-        return 0.95;
-      case "titan":
-        return 1.25;
-      default:
-        return 1;
-    }
-  }
-  function mechHardpoints(size) {
-    switch (size) {
-      case "collector":
-        return 0;
-      case "small":
-        return 1;
-      case "medium":
-      case "large":
-        return 2;
-      case "titan":
-        return 4;
-      default:
-        return;
-    }
-  }
-  function mechGeneralSlotCount(size, prepared) {
-    let bonus = prepared > 0 ? 1 : 0;
-    switch (size) {
-      case "small":
-        return 1 + bonus;
-      case "medium":
-        return 2 + bonus;
-      case "large":
-      case "collector":
-        return 3 + bonus;
-      case "titan":
-        return 4 + bonus;
-      default:
-        return;
-    }
-  }
-  function bodyScore(size, chassis, equip, floor) {
-    if (!CLASSIC_MECH_SIZES.includes(size) || !CLASSIC_MECH_CHASSIS.includes(chassis))
-      return;
-    let factor = terrainFactor(chassis, size, floor.terrain);
-    if (factor === void 0) return;
-    let rating = scoutTerrainBonus(
-      size,
-      factor,
-      floor.statuses,
-      floor.scouts,
-      equip
-    );
-    for (let effect of floor.statuses) {
-      let mod = statusFactor(effect, chassis, size, equip);
-      if (mod === void 0) return;
-      rating *= mod;
-    }
-    return rating;
-  }
-  function rateMechDesign(design, floor) {
-    for (let part of [...design.hardpoint, ...design.equip])
-      if (!CLASSIC_EQUIP_SET.has(part) && !CLASSIC_MECH_WEAPONS.includes(part))
-        return null;
-    let equip = new Set(design.equip), body = bodyScore(design.size, design.chassis, equip, floor);
-    if (body === void 0) return null;
-    let space = mechFrameSpace(design.size, floor.prepared);
-    if (space === void 0 || space <= 0) return null;
-    if (design.size === "collector") {
-      if (design.hardpoint.length !== 0 || floor.collectorValue <= 0) return null;
-      let collectorPower = body * 25 * floor.collectorValue / 2e4;
-      return Object.freeze({
-        power: collectorPower,
-        efficiency: collectorPower / space
-      });
-    }
-    let base = weaponBasePower(design.size), ratings = BOSS_WEAPON_RATINGS[floor.boss];
-    if (base === void 0 || ratings === void 0) return null;
-    let rating = base * (1 + floor.wrath / 20) * (1 + floor.gladiatorLevel * 0.2) * concreteMod(floor.terrain, design.size) * body, damage = 0;
-    for (let weapon of design.hardpoint) {
-      let index = CLASSIC_MECH_WEAPONS.indexOf(weapon);
-      if (index < 0) return null;
-      damage += rating * mountWeaponPower(design.size, equip, ratings[index] ?? 0);
-    }
-    let power = damage / floor.spireCount;
-    return Object.freeze({ power, efficiency: power / space });
-  }
-  function mechEquipCombinations(pool, slots) {
-    if (slots < 0) return [];
-    if (slots === 0) return [[]];
-    let out = [], walk = (start, current) => {
-      if (current.length === slots) {
-        out.push([...current]);
-        return;
-      }
-      for (let index = start; index < pool.length; index++)
-        current.push(pool[index]), walk(index + 1, current), current.pop();
-    };
-    return walk(0, []), out;
-  }
-  function bestMechBodies(size, floor) {
-    let slots = mechGeneralSlotCount(size, floor.prepared);
-    if (slots === void 0) return null;
-    let best = -1 / 0, tied = [];
-    for (let chassis of CLASSIC_MECH_CHASSIS)
-      for (let combo of mechEquipCombinations(CLASSIC_GENERAL_EQUIP, slots)) {
-        let equip = Object.freeze(["special", ...combo]), score = bodyScore(size, chassis, new Set(equip), floor);
-        if (score === void 0) return null;
-        score > best ? (best = score, tied = [{ chassis, equip }]) : score === best && tied.push({ chassis, equip });
-      }
-    return tied;
-  }
-  function bestMechWeapons(boss) {
-    let ratings = BOSS_WEAPON_RATINGS[boss];
-    if (ratings === void 0) return null;
-    let best = -1 / 0, tied = [];
-    return CLASSIC_MECH_WEAPONS.forEach((weapon, index) => {
-      let rating = ratings[index];
-      rating > best ? (best = rating, tied = [weapon]) : rating === best && tied.push(weapon);
-    }), tied;
-  }
-  function chooseAutoDesign(size, floor, pickIndex) {
-    let bodies = bestMechBodies(size, floor), weapons = bestMechWeapons(floor.boss), mounts = mechHardpoints(size);
-    if (bodies === null || bodies.length === 0 || weapons === null || mounts === void 0)
-      return null;
-    let bodyIndex = pickIndex(bodies.length), weaponIndex = pickIndex(weapons.length), body = bodies[bodyIndex], weapon = weapons[weaponIndex];
-    if (body === void 0 || weapon === void 0) return null;
-    let hardpoint = Object.freeze(new Array(mounts).fill(weapon)), rated = rateMechDesign(
-      { size, chassis: body.chassis, hardpoint, equip: body.equip },
-      floor
-    );
-    return rated === null ? null : Object.freeze({
-      size,
-      chassis: body.chassis,
-      hardpoint,
-      equip: body.equip,
-      power: rated.power,
-      efficiency: rated.efficiency
-    });
-  }
-  function bestDesignFigures(floor, pickIndex) {
-    let figures = {};
-    for (let size of CLASSIC_MECH_SIZES) {
-      let design = chooseAutoDesign(size, floor, pickIndex), cost = mechFrameCost(size, floor.prepared), refund = mechFrameRefund(size, floor.prepared);
-      if (design === null || cost === void 0 || refund === void 0)
-        return null;
-      figures[size] = Object.freeze({
-        power: design.power,
-        efficiency: design.efficiency,
-        gemsEff: design.power / Math.max(cost.gems - refund.gems, 1e-9),
-        supplyEff: design.power / Math.max(cost.supply - refund.supply, 1e-9),
-        cost
-      });
-    }
-    return figures;
-  }
-  function choosePreferredSize(input) {
-    if (input.fillBay && Number.isInteger(input.bayMaximum) && (input.prepared >= 2 ? input.bayOccupied % 2 !== input.bayMaximum % 2 : input.bayMaximum - input.bayOccupied === 1))
-      return Object.freeze({ size: "collector", force: !0 });
-    if (input.supplyRatio < 0.9 && input.supplyRate < input.minimumSupplyRate && input.bayMaximum > 0 && input.bayScouts / input.bayMaximum < input.maximumCollectorShare)
-      return Object.freeze({ size: "collector", force: !0 });
-    if (input.bayMaximum > 0 && input.bayScouts * 2 / input.bayMaximum < input.scoutsRatio)
-      return Object.freeze({ size: "small", force: !0 });
-    let floorSize = input.gravityFloor ? input.gravitySize : input.preferredSize;
-    if (CLASSIC_MECH_SIZES.includes(floorSize) && (!input.fillBay || (mechFrameSupplyCost(floorSize, input.prepared) ?? 1 / 0) <= input.supplyMaximum))
-      return Object.freeze({ size: floorSize, force: !1 });
-    let ranking = floorSize === "gems" ? input.rankByGems : floorSize === "supply" ? input.rankBySupply : input.rankByEff;
-    for (let size of ranking) {
-      let cost = mechFrameCost(size, input.prepared);
-      if (cost !== void 0 && input.gemsSpare >= cost.gems && input.supplyMaximum >= cost.supply)
-        return Object.freeze({ size, force: !1 });
-    }
-    return Object.freeze({ size: "titan", force: !1 });
-  }
-
   // src/domain/combat/captured-mech.ts
   function planCapturedMechBuild(input) {
     return !input.available || !input.enabled || input.buildMode !== "user" || input.queueKeyHeld || input.infernal || input.designSize.length === 0 || !Number.isFinite(input.designSpace) || input.designSpace <= 0 || !Number.isFinite(input.designSupply) || input.designSupply < 0 || !Number.isFinite(input.designSoul) || input.designSoul < 0 || !Number.isFinite(input.baySpace) || input.baySpace < input.designSpace || !Number.isFinite(input.purifierSupply) || input.purifierSupply < input.designSupply || !Number.isFinite(input.soulGems) || input.soulGems < input.designSoul ? null : Object.freeze({
@@ -42348,70 +42462,6 @@ Only continue if you trust the source. Injected code:
       expectedBaySpace: input.baySpace,
       expectedPurifierSupply: input.purifierSupply,
       expectedSoulGems: input.soulGems
-    });
-  }
-  function autoFloor(state) {
-    return state.spire === null ? null : {
-      terrain: state.spire.type,
-      statuses: state.spire.statuses,
-      boss: state.spire.boss,
-      spireCount: state.spire.count,
-      scouts: state.bay.scouts,
-      prepared: state.prepared,
-      wrath: state.wrath,
-      gladiatorLevel: state.gladiatorLevel,
-      collectorValue: state.settings.collectorValue
-    };
-  }
-  function activeMechsPower(state, floor) {
-    let power = 0, active = state.inventory.slice(0, state.bay.active);
-    for (let mech of active) {
-      if (mech.size === "collector") continue;
-      let rated = rateMechDesign(mech, floor);
-      if (rated === null) return null;
-      power += rated.power;
-    }
-    return power;
-  }
-  function combatRanking(figures, key) {
-    return Object.freeze(
-      Object.keys(figures).filter((size) => size !== "collector").sort((left, right) => figures[right][key] - figures[left][key])
-    );
-  }
-  function designAutoChoice(state, pickIndex) {
-    if (!state.available || state.queueKeyHeld || state.warlord || state.settings.buildMode !== "random" || state.blueprint === null || state.blueprint.infernal)
-      return null;
-    let floor = autoFloor(state);
-    if (floor === null || floor.collectorValue <= 0) return null;
-    let figures = bestDesignFigures(floor, pickIndex);
-    if (figures === null) return null;
-    let { settings, bay, funds } = state, preferred = choosePreferredSize({
-      bayMaximum: bay.maximum,
-      bayOccupied: bay.occupied,
-      bayScouts: bay.scouts,
-      supplyRate: funds.supplyRate,
-      supplyMaximum: funds.purifierMax,
-      supplyRatio: funds.purifierMax > 0 ? funds.purifierSupply / funds.purifierMax : 1,
-      gemsSpare: funds.soulGems,
-      prepared: state.prepared,
-      gravityFloor: state.spire.statuses.includes("gravity"),
-      preferredSize: settings.preferredSize,
-      gravitySize: settings.gravitySize,
-      fillBay: settings.fillBay,
-      minimumSupplyRate: settings.minimumSupplyRate,
-      maximumCollectorShare: settings.maximumCollectorShare,
-      scoutsRatio: settings.scoutsRatio,
-      rankByEff: combatRanking(figures, "efficiency"),
-      rankByGems: combatRanking(figures, "gemsEff"),
-      rankBySupply: combatRanking(figures, "supplyEff")
-    }), design = chooseAutoDesign(preferred.size, floor, pickIndex), cost = design === null ? void 0 : mechFrameCost(design.size, state.prepared);
-    return design === null || cost === void 0 ? null : Object.freeze({
-      floor,
-      figures,
-      preferred,
-      design,
-      cost,
-      teamPower: activeMechsPower(state, floor)
     });
   }
   function savingSupplyHold(state, force, teamPower, space) {

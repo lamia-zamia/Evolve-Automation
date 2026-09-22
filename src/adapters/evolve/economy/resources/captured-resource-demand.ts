@@ -71,6 +71,7 @@ import {
   selectCapturedForeignStrategy,
 } from "../../combat/captured-foreign-state.ts";
 import type { DemandPrerequisiteReport } from "./captured-demand-prerequisites.ts";
+import { planMechDemandCosts } from "../../../../domain/combat/mech-auto-choice.ts";
 
 export interface CapturedResourceDemandDependencies {
   readonly rootState: GameRootStateSource;
@@ -1240,6 +1241,14 @@ export function createCapturedResourceDemand(
       );
       const spyPurchaseMoney =
         spyReservation.status === "ready" ? spyReservation.value : 0;
+      // The pursued automatic Mech build's Supply and Soul Gem cost, derived
+      // from the same pure choice the Mech pass plans from — no ordering
+      // coupling with the autoMech phase, which may run later in the tick.
+      const mechDemand = planMechDemandCosts({ root, settings: settingsValue });
+      const mechCosts: readonly DemandCost[] =
+        mechDemand === null
+          ? Object.freeze([])
+          : toCosts({ Supply: mechDemand.supply, Soul_Gem: mechDemand.gems });
       // A reservation that could exist but whose capture is not established must not read
       // as free: hold Money up to its storage envelope instead. The price is unknown, so
       // the envelope is anti-spend only and does not feed the storage requirements below.
@@ -1259,6 +1268,7 @@ export function createCapturedResourceDemand(
         retirementGraphene === null &&
         truepathAiBuildingTarget === null &&
         spyPurchaseMoney === 0 &&
+        mechCosts.length === 0 &&
         !moneyEnvelope
       ) {
         return EMPTY_DEMAND_SAMPLE;
@@ -1288,6 +1298,7 @@ export function createCapturedResourceDemand(
         missions,
         unlockedTechs: toOfferedTechs(resources, offered),
         spyPurchaseMoney,
+        mechCosts,
         fleet:
           fleet ??
           Object.freeze({
@@ -1415,6 +1426,7 @@ export function createCapturedResourceDemand(
               ]),
           triggerTargets,
           factoryStorageTargets,
+          Object.freeze([Object.freeze({ costs: mechCosts })]),
         ]),
         // The Knowledge half of this planner is owned by the captured Knowledge reader, which reads
         // the offered catalog; this pass would have to draw one of its own to answer it.

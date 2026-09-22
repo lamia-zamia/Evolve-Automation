@@ -126,6 +126,13 @@ export interface DemandPrioritizationInput {
    * Null when every wanted candidate is affordable.
    */
   readonly savingTarget: DemandSavingTarget | null;
+  /**
+   * The pursued automatic Mech build's Supply and Soul Gem cost. Requested
+   * unconditionally like the saving target: enabling the automation is the
+   * intent gate, and requests combine by maximum, so holding for the build
+   * can only raise a demand, never lower one.
+   */
+  readonly mechCosts: readonly DemandCost[];
   /** In `missionBuildingList` order; indices in the result align with this. */
   readonly missions: readonly DemandMission[];
   readonly unlockedTechs: readonly DemandTech[];
@@ -247,6 +254,10 @@ export function planDemandPrioritization(
       request(cost.resourceId, cost.amount);
       savingCost[cost.resourceId] = cost.amount;
     }
+  }
+
+  for (const cost of input.mechCosts) {
+    request(cost.resourceId, cost.amount);
   }
 
   if (input.spyPurchaseMoney && settings.prioritizeUnify.includes("req")) {
