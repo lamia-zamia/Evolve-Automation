@@ -10,9 +10,18 @@ const root = {
     mechbay: {
       max: 10,
       bay: 0,
-      blueprint: { size: "small", infernal: false },
+      active: 0,
+      scouts: 0,
+      mechs: [],
+      blueprint: {
+        size: "small",
+        chassis: "tread",
+        hardpoint: ["laser"],
+        equip: [],
+        infernal: false,
+      },
     },
-    purifier: { supply: 75_000 },
+    purifier: { supply: 75_000, sup_max: 100_000 },
   },
   resource: { Soul_Gem: { amount: 1 } },
 };
@@ -33,7 +42,16 @@ const controls = {
     if (method === "soul") return { ok: true, value: 1 };
     if (method === "build") {
       trace.push(method);
+      const blueprint = root.portal.mechbay.blueprint;
+      root.portal.mechbay.mechs.push({
+        size: blueprint.size,
+        chassis: blueprint.chassis,
+        hardpoint: [...blueprint.hardpoint],
+        equip: [...blueprint.equip],
+        infernal: blueprint.infernal,
+      });
       root.portal.mechbay.bay += 1;
+      root.portal.mechbay.active += 1;
       root.portal.purifier.supply -= 75_000;
       root.resource.Soul_Gem.amount -= 1;
       return { ok: true, value: undefined };
@@ -70,6 +88,14 @@ assert.deepEqual(planCapturedMechBuild(adapter.reader.read()), {
 assert.equal(runCapturedMech(adapter).status, "succeeded");
 assert.deepEqual(trace, ["build"]);
 assert.equal(root.portal.mechbay.bay, 1);
+assert.equal(root.portal.mechbay.mechs.length, 1);
+assert.deepEqual(root.portal.mechbay.mechs[0], {
+  size: "small",
+  chassis: "tread",
+  hardpoint: ["laser"],
+  equip: [],
+  infernal: false,
+});
 assert.equal(root.portal.purifier.supply, 0);
 assert.equal(root.resource.Soul_Gem.amount, 0);
 
@@ -111,5 +137,117 @@ assert.equal(
   }),
   null,
 );
+
+// Shared state model: inventory, bay, blueprint, funds, and typed settings.
+{
+  root.portal.mechbay.mechs = [];
+  root.portal.mechbay.bay = 0;
+  root.portal.mechbay.active = 0;
+  root.portal.mechbay.blueprint.infernal = false;
+  const state = adapter.reader.readState();
+  assert.equal(state.available, true);
+  assert.equal(state.queueKeyHeld, false);
+  assert.equal(state.warlord, false);
+  assert.deepEqual(state.bay, {
+    maximum: 10,
+    occupied: 0,
+    active: 0,
+    scouts: 0,
+  });
+  assert.equal(state.inventory.length, 0);
+  assert.deepEqual(state.blueprint, {
+    size: "small",
+    chassis: "tread",
+    hardpoint: ["laser"],
+    equip: [],
+    infernal: false,
+  });
+  assert.deepEqual(state.funds, {
+    purifierSupply: 75_000,
+    purifierMax: 100_000,
+    soulGems: 1,
+  });
+  assert.equal(state.settings.buildMode, "user");
+  assert.equal(state.settings.scrapMode, "mixed");
+  assert.equal(state.settings.scrapEfficiency, 1.5);
+}
+
+// Malformed bay stands down instead of guessing.
+{
+  const badRoot = structuredClone(root);
+  badRoot.portal.mechbay.max = "ten";
+  const badAdapter = createCapturedMech({
+    rootState: {
+      readRoot: () => badRoot,
+      isReactivitySuppressed: () => false,
+      subscribeRootReplaced: () => () => {},
+    },
+    controls,
+    readSettings: () => settings,
+    keyState: { readPressed: () => false },
+  });
+  assert.equal(badAdapter.reader.readState().available, false);
+  assert.equal(badAdapter.reader.read().available, false);
+}
+
+// Unknown build mode fails closed to "none"; negative numbers fall back.
+{
+  const oddAdapter = createCapturedMech({
+    rootState: {
+      readRoot: () => root,
+      isReactivitySuppressed: () => false,
+      subscribeRootReplaced: () => () => {},
+    },
+    controls,
+    readSettings: () => ({
+      autoMech: true,
+      mechBuild: "warp",
+      mechScrapEfficiency: -2,
+    }),
+    keyState: { readPressed: () => false },
+  });
+  const state = oddAdapter.reader.readState();
+  assert.equal(state.available, true);
+  assert.equal(state.settings.buildMode, "none");
+  assert.equal(state.settings.scrapEfficiency, 1.5);
+}
+
+// Build invoked but nothing appeared: one invocation, then STOP.
+{
+  const stuckRoot = structuredClone(root);
+  stuckRoot.portal.mechbay.bay = 0;
+  stuckRoot.portal.mechbay.mechs = [];
+  stuckRoot.portal.purifier.supply = 75_000;
+  stuckRoot.resource.Soul_Gem.amount = 1;
+  let invocations = 0;
+  const stuckControls = {
+    resolve: (id) => (id === "mechAssembly" ? assembly : undefined),
+    invoke: (handle, method) => {
+      if (method === "bay") return { ok: true, value: 1 };
+      if (method === "price") return { ok: true, value: 75_000 };
+      if (method === "soul") return { ok: true, value: 1 };
+      if (method === "build") {
+        invocations += 1;
+        return { ok: true, value: undefined };
+      }
+      return { ok: false, reason: "unknown-method" };
+    },
+    capturedElementIds: () => ["mechAssembly"],
+  };
+  const stuck = createCapturedMech({
+    rootState: {
+      readRoot: () => stuckRoot,
+      isReactivitySuppressed: () => false,
+      subscribeRootReplaced: () => () => {},
+    },
+    controls: stuckControls,
+    readSettings: () => ({ autoMech: true, mechBuild: "user" }),
+    keyState: { readPressed: () => false },
+  });
+  const outcome = runCapturedMech(stuck);
+  assert.equal(outcome.status, "stale");
+  assert.equal(invocations, 1);
+  assert.equal(stuckRoot.portal.mechbay.mechs.length, 0);
+}
 
 console.log("captured mech checks passed");

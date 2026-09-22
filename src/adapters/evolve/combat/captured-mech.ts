@@ -4,6 +4,11 @@ import type {
   CapturedMechBuildDecision,
   CapturedMechBuildInput,
 } from "../../../domain/combat/captured-mech.ts";
+import {
+  readCapturedMechState,
+  type CapturedMechDesign,
+  type CapturedMechState,
+} from "../../../domain/combat/mech-state.ts";
 import type {
   CapturedMechExecutor,
   CapturedMechReader,
@@ -23,6 +28,31 @@ interface CapturedMechSample {
   readonly root: unknown;
   readonly control: GameControlHandle;
   readonly input: CapturedMechBuildInput;
+  readonly design: CapturedMechDesign;
+  readonly mechsLength: number;
+  readonly occupied: number;
+}
+
+function readDesignStrings(value: unknown): readonly string[] {
+  if (!Array.isArray(value)) return Object.freeze([]);
+  return Object.freeze(
+    value.filter(
+      (entry): entry is string => typeof entry === "string" && entry.length > 0,
+    ),
+  );
+}
+
+function tailMatchesDesign(tail: unknown, design: CapturedMechDesign): boolean {
+  if (!isNonArrayRecord(tail)) return false;
+  return (
+    tail["size"] === design.size &&
+    (tail["chassis"] ?? "") === design.chassis &&
+    JSON.stringify(readDesignStrings(tail["hardpoint"])) ===
+      JSON.stringify(design.hardpoint) &&
+    JSON.stringify(readDesignStrings(tail["equip"])) ===
+      JSON.stringify(design.equip) &&
+    Boolean(tail["infernal"]) === design.infernal
+  );
 }
 
 type CapturedMechSession = CapturedMechSample;
@@ -127,6 +157,8 @@ function readCapturedMechSample(
     designSize,
   ]);
   const designSoul = readControlNumber(controls, control, "soul", [designSize]);
+  const stored = Array.isArray(mechbay["mechs"]) ? mechbay["mechs"] : undefined;
+  const chassis = blueprint["chassis"];
   if (
     maximum === undefined ||
     occupied === undefined ||
@@ -135,14 +167,26 @@ function readCapturedMechSample(
     designSpace === undefined ||
     designSupply === undefined ||
     designSoul === undefined ||
-    maximum < occupied
+    maximum < occupied ||
+    stored === undefined
   ) {
     return undefined;
   }
 
+  const design: CapturedMechDesign = Object.freeze({
+    size: designSize,
+    chassis: typeof chassis === "string" ? chassis : "",
+    hardpoint: readDesignStrings(blueprint["hardpoint"]),
+    equip: readDesignStrings(blueprint["equip"]),
+    infernal: Boolean(blueprint["infernal"]),
+  });
+
   return Object.freeze({
     root,
     control,
+    design,
+    mechsLength: stored.length,
+    occupied,
     input: Object.freeze({
       available: true,
       enabled: true,
@@ -207,6 +251,18 @@ export function createCapturedMech(dependencies: CapturedMechDependencies): {
       if (sample === undefined) return capturedMechUnavailable();
       session = sample;
       return sample.input;
+    },
+    readState(): CapturedMechState {
+      const root = dependencies.rootState.readRoot();
+      const gameSettings = readProperty(root, "settings");
+      return readCapturedMechState({
+        root,
+        settings: dependencies.readSettings(),
+        queueKeyHeld: readCapturedMechQueueKeyHeld(
+          gameSettings,
+          dependencies.keyState,
+        ),
+      });
     },
   });
 
@@ -282,13 +338,28 @@ export function createCapturedMech(dependencies: CapturedMechDependencies): {
         dependencies.readSettings(),
         dependencies.keyState,
       );
+      const afterMechs =
+        after === undefined
+          ? undefined
+          : readProperty(readProperty(after.root, "portal"), "mechbay");
+      const afterStored =
+        isNonArrayRecord(afterMechs) && Array.isArray(afterMechs["mechs"])
+          ? (afterMechs["mechs"] as readonly unknown[])
+          : undefined;
       if (
         after === undefined ||
+        afterStored === undefined ||
         after.input.baySpace !==
           active.input.baySpace - active.input.designSpace ||
         after.input.purifierSupply !==
           active.input.purifierSupply - active.input.designSupply ||
-        after.input.soulGems !== active.input.soulGems - active.input.designSoul
+        after.input.soulGems !==
+          active.input.soulGems - active.input.designSoul ||
+        // A wrapper return is not success: the bay must hold one more mech
+        // with the expected design.
+        after.mechsLength !== active.mechsLength + 1 ||
+        after.occupied !== active.occupied + active.input.designSpace ||
+        !tailMatchesDesign(afterStored[afterStored.length - 1], active.design)
       ) {
         return stale(
           "captured-mech-not-built",

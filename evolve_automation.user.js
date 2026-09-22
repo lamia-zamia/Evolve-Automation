@@ -41212,8 +41212,155 @@ Only continue if you trust the source. Injected code:
     return Object.freeze({ reader, executor });
   }
 
+  // src/domain/combat/mech-state.ts
+  var MECH_DEFAULTS = computeMechDefaults().def;
+  function defaultNumber(key) {
+    let value = MECH_DEFAULTS[key];
+    return typeof value == "number" ? value : 0;
+  }
+  function defaultString(key) {
+    let value = MECH_DEFAULTS[key];
+    return typeof value == "string" ? value : "";
+  }
+  function finiteQuantity(value) {
+    return typeof value == "number" && Number.isFinite(value) ? value : void 0;
+  }
+  function nonNegativeQuantity(value) {
+    let amount = finiteQuantity(value);
+    return amount !== void 0 && amount >= 0 ? amount : void 0;
+  }
+  function stringArray(value) {
+    return Array.isArray(value) ? Object.freeze(
+      value.filter(
+        (entry) => typeof entry == "string" && entry.length > 0
+      )
+    ) : Object.freeze([]);
+  }
+  function readMechDesign(value) {
+    if (!isNonArrayRecord(value)) return null;
+    let size = value.size;
+    if (typeof size != "string" || size.length === 0) return null;
+    let chassis = value.chassis;
+    return Object.freeze({
+      size,
+      chassis: typeof chassis == "string" ? chassis : "",
+      hardpoint: stringArray(value.hardpoint),
+      equip: stringArray(value.equip),
+      // The game reads a missing infernal flag leniently (falsy in `mechCost`);
+      // the capture keeps that coercion and names it.
+      infernal: value.infernal === !0
+    });
+  }
+  function readMechSettings(value) {
+    let settings = isNonArrayRecord(value) ? value : {}, pick = (key, allowed, fallback) => {
+      let raw = settings[key];
+      return typeof raw == "string" && allowed.includes(raw) ? raw : fallback;
+    }, mechSettingNumber = (key) => {
+      let raw = finiteQuantity(settings[key]);
+      return raw === void 0 || raw < 0 ? defaultNumber(key) : raw;
+    }, mechSettingString = (key) => {
+      let raw = settings[key];
+      return typeof raw == "string" && raw.length > 0 ? raw : defaultString(key);
+    };
+    return Object.freeze({
+      autoMech: settings.autoMech === !0,
+      buildMode: pick("mechBuild", ["none", "random", "user"], "none"),
+      scrapMode: pick("mechScrap", ["none", "single", "all", "mixed"], "mixed"),
+      scrapEfficiency: mechSettingNumber("mechScrapEfficiency"),
+      collectorValue: mechSettingNumber("mechCollectorValue"),
+      preferredSize: mechSettingString("mechSize"),
+      gravitySize: mechSettingString("mechSizeGravity"),
+      specialMode: pick(
+        "mechSpecial",
+        ["always", "prefered", "random", "never"],
+        "prefered"
+      ),
+      waygatePotential: mechSettingNumber("mechWaygatePotential"),
+      minimumSupplyRate: mechSettingNumber("mechMinSupply"),
+      maximumCollectorShare: mechSettingNumber("mechMaxCollectors"),
+      saveSupplyRatio: mechSettingNumber("mechSaveSupplyRatio"),
+      scoutsRatio: mechSettingNumber("mechScouts"),
+      infernalCollector: settings.mechInfernalCollector === !0,
+      rebuildScouts: settings.mechScoutsRebuild === !0,
+      fillBay: settings.mechFillBay === !0,
+      buildingsFirst: settings.buildingMechsFirst === !0,
+      baysFirst: settings.mechBaysFirst === !0
+    });
+  }
+  function unavailableMechState(queueKeyHeld, warlord, settings) {
+    return Object.freeze({
+      available: !1,
+      queueKeyHeld,
+      warlord,
+      bay: Object.freeze({ maximum: 0, occupied: 0, active: 0, scouts: 0 }),
+      inventory: Object.freeze([]),
+      blueprint: null,
+      spire: null,
+      funds: Object.freeze({ purifierSupply: 0, purifierMax: 0, soulGems: 0 }),
+      prepared: 0,
+      wrath: 0,
+      gladiatorLevel: 0,
+      settings
+    });
+  }
+  function readCapturedMechState(input) {
+    let settings = readMechSettings(input.settings), root = isNonArrayRecord(input.root) ? input.root : void 0, warlord = (root !== void 0 && isNonArrayRecord(root.race) ? root.race : {}).warlord === !0;
+    if (root === void 0 || !settings.autoMech || input.queueKeyHeld === void 0)
+      return unavailableMechState(input.queueKeyHeld === !0, warlord, settings);
+    let portal = isNonArrayRecord(root.portal) ? root.portal : void 0, mechbay = portal !== void 0 && isNonArrayRecord(portal.mechbay) ? portal.mechbay : void 0, purifier = portal !== void 0 && isNonArrayRecord(portal.purifier) ? portal.purifier : void 0, resources = isNonArrayRecord(root.resource) ? root.resource : void 0, soulGem = resources !== void 0 && isNonArrayRecord(resources.Soul_Gem) ? resources.Soul_Gem : void 0;
+    if (mechbay === void 0 || purifier === void 0 || soulGem === void 0)
+      return unavailableMechState(input.queueKeyHeld, warlord, settings);
+    let maximum = nonNegativeQuantity(mechbay.max), occupied = nonNegativeQuantity(mechbay.bay), active = nonNegativeQuantity(mechbay.active), scouts = nonNegativeQuantity(mechbay.scouts), purifierSupply = nonNegativeQuantity(purifier.supply), purifierMax = nonNegativeQuantity(purifier.sup_max), soulGems = nonNegativeQuantity(soulGem.amount), stored = Array.isArray(mechbay.mechs) ? mechbay.mechs : void 0;
+    if (maximum === void 0 || occupied === void 0 || active === void 0 || scouts === void 0 || purifierSupply === void 0 || purifierMax === void 0 || soulGems === void 0 || stored === void 0)
+      return unavailableMechState(input.queueKeyHeld, warlord, settings);
+    let inventory = Object.freeze(
+      stored.map((entry, index) => {
+        let design = readMechDesign(entry) ?? {
+          size: "",
+          chassis: "",
+          hardpoint: Object.freeze([]),
+          equip: Object.freeze([]),
+          infernal: !1
+        };
+        return Object.freeze({ ...design, index });
+      })
+    ), spire = portal !== void 0 && isNonArrayRecord(portal.spire) ? portal.spire : void 0, spireCount = spire !== void 0 ? finiteQuantity(spire.count) : void 0, spireFacts = spire !== void 0 && spireCount !== void 0 && spireCount >= 1 && typeof spire.type == "string" && typeof spire.boss == "string" && finiteQuantity(spire.progress) !== void 0 ? Object.freeze({
+      count: spireCount,
+      type: spire.type,
+      progress: spire.progress,
+      statuses: Object.freeze(
+        isNonArrayRecord(spire.status) ? Object.keys(spire.status) : []
+      ),
+      boss: spire.boss
+    }) : null, blood = isNonArrayRecord(root.blood) ? root.blood : {}, stats = isNonArrayRecord(root.stats) ? root.stats : {}, achieve = isNonArrayRecord(stats.achieve) ? stats.achieve : {}, gladiator = isNonArrayRecord(achieve.gladiator) && finiteQuantity(achieve.gladiator.l) !== void 0 && achieve.gladiator.l >= 0 ? achieve.gladiator.l : 0;
+    return Object.freeze({
+      available: !0,
+      queueKeyHeld: input.queueKeyHeld,
+      warlord,
+      bay: Object.freeze({ maximum, occupied, active, scouts }),
+      inventory,
+      blueprint: readMechDesign(mechbay.blueprint),
+      spire: spireFacts,
+      funds: Object.freeze({ purifierSupply, purifierMax, soulGems }),
+      prepared: nonNegativeQuantity(blood.prepared) ?? 0,
+      wrath: nonNegativeQuantity(blood.wrath) ?? 0,
+      gladiatorLevel: gladiator,
+      settings
+    });
+  }
+
   // src/adapters/evolve/combat/captured-mech.ts
   var CAPTURED_MECH_ASSEMBLY_CONTROL = "mechAssembly";
+  function readDesignStrings(value) {
+    return Array.isArray(value) ? Object.freeze(
+      value.filter(
+        (entry) => typeof entry == "string" && entry.length > 0
+      )
+    ) : Object.freeze([]);
+  }
+  function tailMatchesDesign(tail, design) {
+    return isNonArrayRecord(tail) ? tail.size === design.size && (tail.chassis ?? "") === design.chassis && JSON.stringify(readDesignStrings(tail.hardpoint)) === JSON.stringify(design.hardpoint) && JSON.stringify(readDesignStrings(tail.equip)) === JSON.stringify(design.equip) && !!tail.infernal === design.infernal : !1;
+  }
   function capturedMechUnavailable() {
     return Object.freeze({
       available: !1,
@@ -41258,28 +41405,39 @@ Only continue if you trust the source. Injected code:
       return;
     let maximum = finite(mechbay.max), occupied = finite(mechbay.bay), purifierSupply = finite(purifier.supply), soulGems = finite(soulGem.amount), designSpace = readControlNumber(controls2, control, "bay", [designSize]), designSupply = readControlNumber(controls2, control, "price", [
       designSize
-    ]), designSoul = readControlNumber(controls2, control, "soul", [designSize]);
-    if (!(maximum === void 0 || occupied === void 0 || purifierSupply === void 0 || soulGems === void 0 || designSpace === void 0 || designSupply === void 0 || designSoul === void 0 || maximum < occupied))
-      return Object.freeze({
-        root,
-        control,
-        input: Object.freeze({
-          available: !0,
-          enabled: !0,
-          buildMode: "user",
-          queueKeyHeld,
-          // The settings hint says infernal designs are never automatic. A missing legacy field is
-          // falsy in the game's own `mechCost` call, so the capture keeps that lazy coercion.
-          infernal: !!blueprint.infernal,
-          designSize,
-          designSpace,
-          designSupply,
-          designSoul,
-          baySpace: maximum - occupied,
-          purifierSupply,
-          soulGems
-        })
-      });
+    ]), designSoul = readControlNumber(controls2, control, "soul", [designSize]), stored = Array.isArray(mechbay.mechs) ? mechbay.mechs : void 0, chassis = blueprint.chassis;
+    if (maximum === void 0 || occupied === void 0 || purifierSupply === void 0 || soulGems === void 0 || designSpace === void 0 || designSupply === void 0 || designSoul === void 0 || maximum < occupied || stored === void 0)
+      return;
+    let design = Object.freeze({
+      size: designSize,
+      chassis: typeof chassis == "string" ? chassis : "",
+      hardpoint: readDesignStrings(blueprint.hardpoint),
+      equip: readDesignStrings(blueprint.equip),
+      infernal: !!blueprint.infernal
+    });
+    return Object.freeze({
+      root,
+      control,
+      design,
+      mechsLength: stored.length,
+      occupied,
+      input: Object.freeze({
+        available: !0,
+        enabled: !0,
+        buildMode: "user",
+        queueKeyHeld,
+        // The settings hint says infernal designs are never automatic. A missing legacy field is
+        // falsy in the game's own `mechCost` call, so the capture keeps that lazy coercion.
+        infernal: !!blueprint.infernal,
+        designSize,
+        designSpace,
+        designSupply,
+        designSoul,
+        baySpace: maximum - occupied,
+        purifierSupply,
+        soulGems
+      })
+    });
   }
   function sameCapturedMechInput(left, right) {
     return left.available === right.available && left.enabled === right.enabled && left.buildMode === right.buildMode && left.queueKeyHeld === right.queueKeyHeld && left.infernal === right.infernal && left.designSize === right.designSize && left.designSpace === right.designSpace && left.designSupply === right.designSupply && left.designSoul === right.designSoul && left.baySpace === right.baySpace && left.purifierSupply === right.purifierSupply && left.soulGems === right.soulGems;
@@ -41295,6 +41453,17 @@ Only continue if you trust the source. Injected code:
           dependencies.keyState
         );
         return sample === void 0 ? capturedMechUnavailable() : (session = sample, sample.input);
+      },
+      readState() {
+        let root = dependencies.rootState.readRoot(), gameSettings = readProperty(root, "settings");
+        return readCapturedMechState({
+          root,
+          settings: dependencies.readSettings(),
+          queueKeyHeld: readCapturedMechQueueKeyHeld(
+            gameSettings,
+            dependencies.keyState
+          )
+        });
       }
     }), executor = Object.freeze({
       execute(decision) {
@@ -41344,8 +41513,10 @@ Only continue if you trust the source. Injected code:
           dependencies.controls,
           dependencies.readSettings(),
           dependencies.keyState
-        );
-        return after === void 0 || after.input.baySpace !== active.input.baySpace - active.input.designSpace || after.input.purifierSupply !== active.input.purifierSupply - active.input.designSupply || after.input.soulGems !== active.input.soulGems - active.input.designSoul ? stale(
+        ), afterMechs = after === void 0 ? void 0 : readProperty(readProperty(after.root, "portal"), "mechbay"), afterStored = isNonArrayRecord(afterMechs) && Array.isArray(afterMechs.mechs) ? afterMechs.mechs : void 0;
+        return after === void 0 || afterStored === void 0 || after.input.baySpace !== active.input.baySpace - active.input.designSpace || after.input.purifierSupply !== active.input.purifierSupply - active.input.designSupply || after.input.soulGems !== active.input.soulGems - active.input.designSoul || // A wrapper return is not success: the bay must hold one more mech
+        // with the expected design.
+        after.mechsLength !== active.mechsLength + 1 || after.occupied !== active.occupied + active.input.designSpace || !tailMatchesDesign(afterStored[afterStored.length - 1], active.design) ? stale(
           "captured-mech-not-built",
           "the game did not commit the captured mech build"
         ) : (session = void 0, SUCCEEDED);
