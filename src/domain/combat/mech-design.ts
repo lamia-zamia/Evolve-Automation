@@ -468,6 +468,8 @@ export function rateMechDesign(
       efficiency: collectorPower / space,
     });
   }
+  const mounts = mechHardpoints(design.size);
+  if (mounts === undefined || design.hardpoint.length !== mounts) return null;
   const base = weaponBasePower(design.size);
   const ratings = BOSS_WEAPON_RATINGS[floor.boss];
   if (base === undefined || ratings === undefined) return null;
@@ -641,6 +643,7 @@ export interface PreferredSizeInput {
   readonly bayMaximum: number;
   readonly bayOccupied: number;
   readonly bayScouts: number;
+  readonly activeCollectors: number;
   readonly supplyRate: number;
   readonly supplyMaximum: number;
   readonly supplyRatio: number;
@@ -679,7 +682,7 @@ export function choosePreferredSize(
     input.supplyRatio < 0.9 &&
     input.supplyRate < input.minimumSupplyRate &&
     input.bayMaximum > 0 &&
-    input.bayScouts / input.bayMaximum < input.maximumCollectorShare
+    input.activeCollectors / input.bayMaximum < input.maximumCollectorShare
   ) {
     return Object.freeze({ size: "collector", force: true });
   }

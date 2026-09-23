@@ -205,12 +205,20 @@ for (const size of ["small", "medium", "large", "titan", "collector"]) {
   assert.equal(figures[size].power > 0, true, size);
 }
 assert.equal(bestDesignFigures({ ...floor, boss: "abyssal" }, first), null);
+assert.equal(
+  rateMechDesign(
+    { size: "small", chassis: "wheel", hardpoint: [], equip: [] },
+    floor,
+  ),
+  null,
+);
 
 // Preferred size: the historical policy branches.
 const base = {
   bayMaximum: 25,
   bayOccupied: 0,
   bayScouts: 2,
+  activeCollectors: 0,
   supplyRate: 5_000,
   supplyMaximum: 200_000,
   supplyRatio: 1,
@@ -239,9 +247,21 @@ assert.deepEqual(
     ...base,
     supplyRatio: 0.5,
     supplyRate: 100,
-    bayScouts: 0,
+    bayScouts: 20,
+    activeCollectors: 0,
   }),
   { size: "collector", force: true },
+);
+assert.notEqual(
+  choosePreferredSize({
+    ...base,
+    supplyRatio: 0.5,
+    supplyRate: 100,
+    bayScouts: 0,
+    activeCollectors: 13,
+    scoutsRatio: 0,
+  }).size,
+  "collector",
 );
 assert.deepEqual(choosePreferredSize({ ...base, bayScouts: 0 }), {
   size: "small",

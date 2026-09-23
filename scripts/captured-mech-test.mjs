@@ -21,9 +21,15 @@ const root = {
         infernal: false,
       },
     },
-    purifier: { supply: 75_000, sup_max: 100_000 },
+    purifier: {
+      supply: 75_000,
+      sup_max: 100_000,
+      count: 0,
+      on: 0,
+      diff: 250,
+    },
   },
-  resource: { Soul_Gem: { amount: 1 }, Supply: { rateOfChange: 250 } },
+  resource: { Soul_Gem: { amount: 1, diff: 0 } },
 };
 const settings = { autoMech: true, mechBuild: "user" };
 const trace = [];
@@ -194,6 +200,24 @@ assert.equal(
   assert.equal(state.settings.buildMode, "user");
   assert.equal(state.settings.scrapMode, "mixed");
   assert.equal(state.settings.scrapEfficiency, 1.5);
+}
+
+// DeadSpace initializes purifier.diff and resource diffs to zero; without the
+// authoritative purifier rate, Mech decisions must stand down.
+{
+  const badRoot = structuredClone(root);
+  delete badRoot.portal.purifier.diff;
+  const badAdapter = createCapturedMech({
+    rootState: {
+      readRoot: () => badRoot,
+      isReactivitySuppressed: () => false,
+      subscribeRootReplaced: () => () => {},
+    },
+    controls,
+    readSettings: () => settings,
+    keyState: { readPressed: () => false },
+  });
+  assert.equal(badAdapter.reader.readState().available, false);
 }
 
 // Malformed bay stands down instead of guessing.

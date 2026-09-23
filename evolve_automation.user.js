@@ -6225,6 +6225,8 @@
         efficiency: collectorPower / space
       });
     }
+    let mounts = mechHardpoints(design.size);
+    if (mounts === void 0 || design.hardpoint.length !== mounts) return null;
     let base = weaponBasePower(design.size), ratings = BOSS_WEAPON_RATINGS[floor.boss];
     if (base === void 0 || ratings === void 0) return null;
     let rating = base * (1 + floor.wrath / 20) * (1 + floor.gladiatorLevel * 0.2) * concreteMod(floor.terrain, design.size) * body, damage = 0;
@@ -6308,7 +6310,7 @@
   function choosePreferredSize(input) {
     if (input.fillBay && Number.isInteger(input.bayMaximum) && (input.prepared >= 2 ? input.bayOccupied % 2 !== input.bayMaximum % 2 : input.bayMaximum - input.bayOccupied === 1))
       return Object.freeze({ size: "collector", force: !0 });
-    if (input.supplyRatio < 0.9 && input.supplyRate < input.minimumSupplyRate && input.bayMaximum > 0 && input.bayScouts / input.bayMaximum < input.maximumCollectorShare)
+    if (input.supplyRatio < 0.9 && input.supplyRate < input.minimumSupplyRate && input.bayMaximum > 0 && input.activeCollectors / input.bayMaximum < input.maximumCollectorShare)
       return Object.freeze({ size: "collector", force: !0 });
     if (input.bayMaximum > 0 && input.bayScouts * 2 / input.bayMaximum < input.scoutsRatio)
       return Object.freeze({ size: "small", force: !0 });
@@ -6997,6 +6999,15 @@
       infernal: value.infernal === !0
     });
   }
+  function readMechInventoryItem(value, index) {
+    if (!isNonArrayRecord(value)) return null;
+    let design = readMechDesign(value), mounts = design === null ? void 0 : mechHardpoints(design.size);
+    return design === null || design.chassis.length === 0 || mounts === void 0 || design.hardpoint.length !== mounts || !Array.isArray(value.hardpoint) || value.hardpoint.some(
+      (part) => typeof part != "string" || part.length === 0
+    ) || !Array.isArray(value.equip) || value.equip.some(
+      (part) => typeof part != "string" || part.length === 0
+    ) || value.infernal !== void 0 && typeof value.infernal != "boolean" ? null : Object.freeze({ ...design, index });
+  }
   function readMechSettings(value) {
     let settings = isNonArrayRecord(value) ? value : {}, pick = (key, allowed, fallback) => {
       let raw = settings[key];
@@ -7099,8 +7110,17 @@
         readGovernorTaskActive(root, "mech"),
         settings
       );
-    let maximum = nonNegativeQuantity(mechbay.max), occupied = nonNegativeQuantity(mechbay.bay), active = nonNegativeQuantity(mechbay.active), scouts = nonNegativeQuantity(mechbay.scouts), purifierSupply = nonNegativeQuantity(purifier.supply), purifierMax = nonNegativeQuantity(purifier.sup_max), soulGems = nonNegativeQuantity(soulGem.amount), stored = Array.isArray(mechbay.mechs) ? mechbay.mechs : void 0;
-    if (maximum === void 0 || occupied === void 0 || active === void 0 || scouts === void 0 || purifierSupply === void 0 || purifierMax === void 0 || soulGems === void 0 || stored === void 0)
+    let maximum = nonNegativeQuantity(mechbay.max), occupied = nonNegativeQuantity(mechbay.bay), active = nonNegativeQuantity(mechbay.active), scouts = nonNegativeQuantity(mechbay.scouts), purifierSupply = nonNegativeQuantity(purifier.supply), purifierMax = nonNegativeQuantity(purifier.sup_max), soulGems = nonNegativeQuantity(soulGem.amount), supplyRate = finiteQuantity(purifier.diff), gemsRate = finiteQuantity(soulGem.diff), purifierCount = nonNegativeQuantity(purifier.count), purifierOn = nonNegativeQuantity(purifier.on), stored = Array.isArray(mechbay.mechs) ? mechbay.mechs : void 0;
+    if (maximum === void 0 || occupied === void 0 || active === void 0 || scouts === void 0 || purifierSupply === void 0 || purifierMax === void 0 || soulGems === void 0 || supplyRate === void 0 || gemsRate === void 0 || purifierCount === void 0 || purifierOn === void 0 || stored === void 0)
+      return unavailableMechState(
+        input.queueKeyHeld,
+        warlord,
+        waygateActive(root),
+        readGovernorTaskActive(root, "mech"),
+        settings
+      );
+    let inventoryEntries = stored.map(readMechInventoryItem);
+    if (inventoryEntries.some((entry) => entry === null))
       return unavailableMechState(
         input.queueKeyHeld,
         warlord,
@@ -7109,16 +7129,9 @@
         settings
       );
     let inventory = Object.freeze(
-      stored.map((entry, index) => {
-        let entryDesign = readMechDesign(entry) ?? {
-          size: "",
-          chassis: "",
-          hardpoint: Object.freeze([]),
-          equip: Object.freeze([]),
-          infernal: !1
-        };
-        return Object.freeze({ ...entryDesign, index });
-      })
+      inventoryEntries.filter(
+        (entry) => entry !== null
+      )
     ), spire = portal !== void 0 && isNonArrayRecord(portal.spire) ? portal.spire : void 0, spireCount = spire !== void 0 ? finiteQuantity(spire.count) : void 0, spireFacts = spire !== void 0 && spireCount !== void 0 && spireCount >= 1 && typeof spire.type == "string" && typeof spire.boss == "string" && finiteQuantity(spire.progress) !== void 0 ? Object.freeze({
       count: spireCount,
       type: spire.type,
@@ -7127,7 +7140,7 @@
         isNonArrayRecord(spire.status) ? Object.keys(spire.status) : []
       ),
       boss: spire.boss
-    }) : null, supplyLedger = resources !== void 0 && isNonArrayRecord(resources.Supply) ? resources.Supply : {}, supplyRateRaw = finiteQuantity(supplyLedger.rateOfChange), gemsRateRaw = finiteQuantity(soulGem.rateOfChange), blood = isNonArrayRecord(root.blood) ? root.blood : {}, stats = isNonArrayRecord(root.stats) ? root.stats : {}, achieve = isNonArrayRecord(stats.achieve) ? stats.achieve : {}, gladiator = isNonArrayRecord(achieve.gladiator) && finiteQuantity(achieve.gladiator.l) !== void 0 && achieve.gladiator.l >= 0 ? achieve.gladiator.l : 0;
+    }) : null, blood = isNonArrayRecord(root.blood) ? root.blood : {}, stats = isNonArrayRecord(root.stats) ? root.stats : {}, achieve = isNonArrayRecord(stats.achieve) ? stats.achieve : {}, gladiator = isNonArrayRecord(achieve.gladiator) && finiteQuantity(achieve.gladiator.l) !== void 0 && achieve.gladiator.l >= 0 ? achieve.gladiator.l : 0;
     return Object.freeze({
       available: !0,
       queueKeyHeld: input.queueKeyHeld,
@@ -7142,9 +7155,9 @@
         purifierSupply,
         purifierMax,
         soulGems,
-        supplyRate: supplyRateRaw ?? 0,
-        gemsRate: gemsRateRaw ?? 0,
-        purifierFullyOn: finiteQuantity(purifier.count) !== void 0 && finiteQuantity(purifier.on) !== void 0 && purifier.count > 0 && purifier.on >= purifier.count
+        supplyRate,
+        gemsRate,
+        purifierFullyOn: purifierCount > 0 && purifierOn >= purifierCount
       }),
       prepared: nonNegativeQuantity(blood.prepared) ?? 0,
       wrath: nonNegativeQuantity(blood.wrath) ?? 0,
@@ -7191,10 +7204,11 @@
     if (floor === null || floor.collectorValue <= 0) return null;
     let figures = bestDesignFigures(floor, pickIndex);
     if (figures === null) return null;
-    let { settings, bay, funds } = state, preferred = choosePreferredSize({
+    let { settings, bay, funds } = state, activeCollectors = state.inventory.slice(0, bay.active).filter((mech) => mech.size === "collector").length, preferred = choosePreferredSize({
       bayMaximum: bay.maximum,
       bayOccupied: bay.occupied,
       bayScouts: bay.scouts,
+      activeCollectors,
       supplyRate: funds.supplyRate,
       supplyMaximum: funds.purifierMax,
       supplyRatio: funds.purifierMax > 0 ? funds.purifierSupply / funds.purifierMax : 1,
@@ -7211,13 +7225,15 @@
       rankByGems: combatRanking(figures, "gemsEff"),
       rankBySupply: combatRanking(figures, "supplyEff")
     }), design = chooseAutoDesign(preferred.size, floor, pickIndex), cost = design === null ? void 0 : mechFrameCost(design.size, state.prepared);
-    return design === null || cost === void 0 ? null : Object.freeze({
+    if (design === null || cost === void 0) return null;
+    let teamPower = activeMechsPower(state, floor);
+    return teamPower === null ? null : Object.freeze({
       floor,
       figures,
       preferred,
       design,
       cost,
-      teamPower: activeMechsPower(state, floor)
+      teamPower
     });
   }
   function planMechDemandCosts(input) {

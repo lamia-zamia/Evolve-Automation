@@ -50,7 +50,13 @@ function makeWorld(overrides = {}) {
           infernal: false,
         },
       },
-      purifier: { supply: 1_000_000, sup_max: 2_000_000, count: 1, on: 1 },
+      purifier: {
+        supply: 1_000_000,
+        sup_max: 2_000_000,
+        count: 1,
+        on: 1,
+        diff: 5_000,
+      },
       spire: {
         count: 1,
         type: "rocky",
@@ -60,8 +66,8 @@ function makeWorld(overrides = {}) {
       },
     },
     resource: {
-      Soul_Gem: { amount: 500 },
-      Supply: { rateOfChange: 5_000, maxQuantity: 2_000_000 },
+      Soul_Gem: { amount: 500, diff: 0 },
+      Supply: { diff: 5_000, max: 2_000_000 },
     },
     ...overrides,
   };
@@ -190,6 +196,55 @@ function makeWorld(overrides = {}) {
 }
 
 const zeroRandom = { nextUnit: () => 0 };
+
+// An active combat frame with missing weapons cannot be ranked as a zero-power
+// Mech or enter destructive replacement planning.
+{
+  const world = makeWorld();
+  world.root.portal.mechbay.mechs.push({
+    size: "small",
+    chassis: "wheel",
+    hardpoint: [],
+    equip: [],
+    infernal: false,
+  });
+  world.root.portal.mechbay.active = 1;
+  world.root.portal.mechbay.occupied = 2;
+  assert.equal(world.adapter.reader.readState().available, false);
+  const outcome = runCapturedMechAutomation({
+    ...world.adapter,
+    random: zeroRandom,
+  });
+  assert.equal(outcome.status, "succeeded");
+  assert.equal(
+    world.calls.some(([method]) => method === "build"),
+    false,
+  );
+  assert.equal(
+    world.calls.some(([method]) => method === "scrap"),
+    false,
+  );
+}
+
+// Missing authoritative Supply production data suppresses automation.
+{
+  const world = makeWorld();
+  delete world.root.portal.purifier.diff;
+  assert.equal(world.adapter.reader.readState().available, false);
+  const outcome = runCapturedMechAutomation({
+    ...world.adapter,
+    random: zeroRandom,
+  });
+  assert.equal(outcome.status, "succeeded");
+  assert.equal(
+    world.calls.some(([method]) => method === "build"),
+    false,
+  );
+  assert.equal(
+    world.calls.some(([method]) => method === "scrap"),
+    false,
+  );
+}
 
 // Full automatic cycle: medium design is set through game methods, then one
 // verified build lands a matching mech.
@@ -387,7 +442,7 @@ const zeroRandom = { nextUnit: () => 0 };
   poor.root.portal.mechbay.active = 1;
   poor.root.portal.spire.progress = 99;
   poor.root.portal.purifier.supply = 1_900_000;
-  poor.root.resource.Supply.rateOfChange = 100;
+  poor.root.portal.purifier.diff = 100;
   poor.settings.mechSaveSupplyRatio = 1;
   assert.equal(
     planAuto(poor.adapter.reader.readState(), () => 0),
@@ -402,7 +457,7 @@ const zeroRandom = { nextUnit: () => 0 };
   rich.root.portal.mechbay.active = 1;
   rich.root.portal.spire.progress = 99;
   rich.root.portal.purifier.supply = 1_900_000;
-  rich.root.resource.Supply.rateOfChange = 100_000;
+  rich.root.portal.purifier.diff = 100_000;
   rich.settings.mechSaveSupplyRatio = 1;
   assert.notEqual(
     planAuto(rich.adapter.reader.readState(), () => 0),
@@ -420,7 +475,7 @@ const zeroRandom = { nextUnit: () => 0 };
   darkPurifier.root.portal.spire.progress = 99;
   darkPurifier.root.portal.purifier.supply = 1_900_000;
   darkPurifier.root.portal.purifier.on = 0;
-  darkPurifier.root.resource.Supply.rateOfChange = 100;
+  darkPurifier.root.portal.purifier.diff = 100;
   darkPurifier.settings.mechSaveSupplyRatio = 1;
   assert.notEqual(
     planAuto(darkPurifier.adapter.reader.readState(), () => 0),
@@ -435,7 +490,7 @@ const zeroRandom = { nextUnit: () => 0 };
   noBaysFirst.root.portal.mechbay.active = 1;
   noBaysFirst.root.portal.spire.progress = 99;
   noBaysFirst.root.portal.purifier.supply = 1_900_000;
-  noBaysFirst.root.resource.Supply.rateOfChange = 100;
+  noBaysFirst.root.portal.purifier.diff = 100;
   noBaysFirst.settings.mechSaveSupplyRatio = 1;
   noBaysFirst.settings.mechBaysFirst = false;
   assert.notEqual(

@@ -95,10 +95,14 @@ export function designAutoChoice(
   const figures = bestDesignFigures(floor, pickIndex);
   if (figures === null) return null;
   const { settings, bay, funds } = state;
+  const activeCollectors = state.inventory
+    .slice(0, bay.active)
+    .filter((mech) => mech.size === "collector").length;
   const preferred = choosePreferredSize({
     bayMaximum: bay.maximum,
     bayOccupied: bay.occupied,
     bayScouts: bay.scouts,
+    activeCollectors,
     supplyRate: funds.supplyRate,
     supplyMaximum: funds.purifierMax,
     supplyRatio:
@@ -120,13 +124,15 @@ export function designAutoChoice(
   const cost =
     design === null ? undefined : mechFrameCost(design.size, state.prepared);
   if (design === null || cost === undefined) return null;
+  const teamPower = activeMechsPower(state, floor);
+  if (teamPower === null) return null;
   return Object.freeze({
     floor,
     figures,
     preferred,
     design,
     cost,
-    teamPower: activeMechsPower(state, floor),
+    teamPower,
   });
 }
 

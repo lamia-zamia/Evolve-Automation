@@ -15,6 +15,7 @@ import {
   isNonArrayRecord,
   type UnknownRecord,
 } from "../../validation/records.ts";
+import { mechHardpoints } from "./mech-design.ts";
 
 export type MechBuildMode = "none" | "random" | "user";
 export type MechScrapMode = "none" | "single" | "all" | "mixed";
@@ -52,9 +53,9 @@ export interface CapturedMechFunds {
   readonly purifierSupply: number;
   readonly purifierMax: number;
   readonly soulGems: number;
-  /** `resource.Supply.rateOfChange`, 0 when the ledger names none. */
+  /** Game-owned `portal.purifier.diff` supply production rate. */
   readonly supplyRate: number;
-  /** `resource.Soul_Gem.rateOfChange`, 0 when the ledger names none. */
+  /** Game-owned `resource.Soul_Gem.diff` production rate. */
   readonly gemsRate: number;
   /** Every built purifier is switched on; false when the count is unreadable. */
   readonly purifierFullyOn: boolean;
@@ -149,6 +150,33 @@ function readMechDesign(value: unknown): CapturedMechDesign | null {
     // the capture keeps that coercion and names it.
     infernal: value["infernal"] === true,
   });
+}
+
+function readMechInventoryItem(
+  value: unknown,
+  index: number,
+): CapturedMechInventoryItem | null {
+  if (!isNonArrayRecord(value)) return null;
+  const design = readMechDesign(value);
+  const mounts = design === null ? undefined : mechHardpoints(design.size);
+  if (
+    design === null ||
+    design.chassis.length === 0 ||
+    mounts === undefined ||
+    design.hardpoint.length !== mounts ||
+    !Array.isArray(value["hardpoint"]) ||
+    value["hardpoint"].some(
+      (part) => typeof part !== "string" || part.length === 0,
+    ) ||
+    !Array.isArray(value["equip"]) ||
+    value["equip"].some(
+      (part) => typeof part !== "string" || part.length === 0,
+    ) ||
+    (value["infernal"] !== undefined && typeof value["infernal"] !== "boolean")
+  ) {
+    return null;
+  }
+  return Object.freeze({ ...design, index });
 }
 
 function readMechSettings(value: unknown): CapturedMechSettings {
@@ -333,6 +361,10 @@ export function readCapturedMechState(
   const purifierSupply = nonNegativeQuantity(purifier["supply"]);
   const purifierMax = nonNegativeQuantity(purifier["sup_max"]);
   const soulGems = nonNegativeQuantity(soulGem["amount"]);
+  const supplyRate = finiteQuantity(purifier["diff"]);
+  const gemsRate = finiteQuantity(soulGem["diff"]);
+  const purifierCount = nonNegativeQuantity(purifier["count"]);
+  const purifierOn = nonNegativeQuantity(purifier["on"]);
   const stored = Array.isArray(mechbay["mechs"]) ? mechbay["mechs"] : undefined;
   if (
     maximum === undefined ||
@@ -342,6 +374,10 @@ export function readCapturedMechState(
     purifierSupply === undefined ||
     purifierMax === undefined ||
     soulGems === undefined ||
+    supplyRate === undefined ||
+    gemsRate === undefined ||
+    purifierCount === undefined ||
+    purifierOn === undefined ||
     stored === undefined
   ) {
     return unavailableMechState(
@@ -352,17 +388,20 @@ export function readCapturedMechState(
       settings,
     );
   }
+  const inventoryEntries = stored.map(readMechInventoryItem);
+  if (inventoryEntries.some((entry) => entry === null)) {
+    return unavailableMechState(
+      input.queueKeyHeld,
+      warlord,
+      waygateActive(root),
+      readGovernorTaskActive(root, "mech"),
+      settings,
+    );
+  }
   const inventory = Object.freeze(
-    stored.map((entry, index) => {
-      const entryDesign = readMechDesign(entry) ?? {
-        size: "",
-        chassis: "",
-        hardpoint: Object.freeze([]),
-        equip: Object.freeze([]),
-        infernal: false,
-      };
-      return Object.freeze({ ...entryDesign, index });
-    }),
+    inventoryEntries.filter(
+      (entry): entry is CapturedMechInventoryItem => entry !== null,
+    ),
   );
   const spire =
     portal !== undefined && isNonArrayRecord(portal["spire"])
@@ -389,12 +428,6 @@ export function readCapturedMechState(
           boss: spire["boss"] as string,
         })
       : null;
-  const supplyLedger =
-    resources !== undefined && isNonArrayRecord(resources["Supply"])
-      ? resources["Supply"]
-      : {};
-  const supplyRateRaw = finiteQuantity(supplyLedger["rateOfChange"]);
-  const gemsRateRaw = finiteQuantity(soulGem["rateOfChange"]);
   const blood = isNonArrayRecord(root["blood"]) ? root["blood"] : {};
   const stats = isNonArrayRecord(root["stats"]) ? root["stats"] : {};
   const achieve = isNonArrayRecord(stats["achieve"]) ? stats["achieve"] : {};
@@ -418,13 +451,9 @@ export function readCapturedMechState(
       purifierSupply,
       purifierMax,
       soulGems,
-      supplyRate: supplyRateRaw ?? 0,
-      gemsRate: gemsRateRaw ?? 0,
-      purifierFullyOn:
-        finiteQuantity(purifier["count"]) !== undefined &&
-        finiteQuantity(purifier["on"]) !== undefined &&
-        (purifier["count"] as number) > 0 &&
-        (purifier["on"] as number) >= (purifier["count"] as number),
+      supplyRate,
+      gemsRate,
+      purifierFullyOn: purifierCount > 0 && purifierOn >= purifierCount,
     }),
     prepared: nonNegativeQuantity(blood["prepared"]) ?? 0,
     wrath: nonNegativeQuantity(blood["wrath"]) ?? 0,
