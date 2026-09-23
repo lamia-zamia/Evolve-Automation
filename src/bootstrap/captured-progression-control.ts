@@ -86,8 +86,8 @@ export interface CapturedProgressionControlDependencies {
   readonly costs?: GameActionCostReader;
   /** Persisted script settings. Required: without them nothing is managed and nothing is built. */
   readonly readSettings: () => unknown;
-  /** Shared resource targets excluding the Mech's own target, for construction priority checks. */
-  readonly readReservedQuantityExcludingMech?: (resourceId: string) => number;
+  /** Commitments that outrank Mech-first construction, excluding the previous saving target. */
+  readonly readReservedQuantityForMechPriority?: (resourceId: string) => number;
   /**
    * Whether this cycle's research pass has to keep the already-granted half of the draw, which is
    * the larger part of it. Omitted means no caller needs it, so the pass drops that half.
@@ -530,11 +530,11 @@ export function createCapturedProgressionControl(
   });
   const mechReservations = createCapturedMechReservationSource({
     demand: mechDemand,
-    ...(dependencies.readReservedQuantityExcludingMech === undefined
+    ...(dependencies.readReservedQuantityForMechPriority === undefined
       ? {}
       : {
-          readReservedQuantityExcludingMech:
-            dependencies.readReservedQuantityExcludingMech,
+          readReservedQuantityForMechPriority:
+            dependencies.readReservedQuantityForMechPriority,
         }),
   });
   const queuedAndSaving =

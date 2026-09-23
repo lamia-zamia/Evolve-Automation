@@ -116,6 +116,11 @@ export interface CapturedDemandSample {
   requestedQuantity(resourceId: string): number;
   /** Other automation's resource target, excluding the Mech target when it is priceable. */
   requestedQuantityExcludingMech(resourceId: string): number;
+  /**
+   * Other automation's commitments that outrank Mech-first construction, excluding both the Mech
+   * target and the construction cycle's previous saving target that Mech-first preempts.
+   */
+  requestedQuantityForMechPriority(resourceId: string): number;
   /** The script's `isDemanded`: something wants more of this than the player currently has. */
   isDemanded(resourceId: string): boolean;
   /**
@@ -143,6 +148,7 @@ const NO_STORAGE_REQUIREMENT = 1;
 export const EMPTY_DEMAND_SAMPLE: CapturedDemandSample = Object.freeze({
   requestedQuantity: () => 0,
   requestedQuantityExcludingMech: () => 0,
+  requestedQuantityForMechPriority: () => 0,
   isDemanded: () => false,
   storageRequired: () => NO_STORAGE_REQUIREMENT,
   maxCost: () => 0,
@@ -1327,7 +1333,24 @@ export function createCapturedResourceDemand(
         baseResult.requests,
         resources,
       );
-      const factoryProductions =
+      const inputWithoutConstructionSaving =
+        saving === null
+          ? baseInput
+          : Object.freeze({ ...baseInput, savingTarget: null });
+      const resultWithoutConstructionSaving =
+        saving === null
+          ? baseResult
+          : planDemandPrioritization(inputWithoutConstructionSaving);
+      const requestedWithoutConstructionSaving =
+        saving === null
+          ? baseRequested
+          : capturedResourceRequestQuantities(
+              resultWithoutConstructionSaving.requests,
+              resources,
+            );
+      const capturedFactoryProductionsForRequests = (
+        requestedBase: ReadonlyMap<string, number>,
+      ) =>
         factoryCatalog === undefined
           ? Object.freeze([])
           : Object.freeze(
@@ -1342,11 +1365,13 @@ export function createCapturedResourceDemand(
                   ...production,
                   isDemanded:
                     amount !== undefined &&
-                    (baseRequested.get(production.outputResourceId) ?? 0) >
+                    (requestedBase.get(production.outputResourceId) ?? 0) >
                       amount,
                 });
               }),
             );
+      const factoryProductions =
+        capturedFactoryProductionsForRequests(baseRequested);
       const nonMechResult =
         factoryCatalog !== undefined && hasFactoryDemand
           ? planDemandPrioritization({
@@ -1357,6 +1382,20 @@ export function createCapturedResourceDemand(
           : baseResult;
       const otherRequested = capturedResourceRequestQuantities(
         nonMechResult.requests,
+        resources,
+      );
+      const otherResultForMechPriority =
+        factoryCatalog !== undefined && hasFactoryDemand
+          ? planDemandPrioritization({
+              ...inputWithoutConstructionSaving,
+              factoryCount: factoryCatalog.count,
+              factoryProductions: capturedFactoryProductionsForRequests(
+                requestedWithoutConstructionSaving,
+              ),
+            })
+          : resultWithoutConstructionSaving;
+      const requestedForMechPriority = capturedResourceRequestQuantities(
+        otherResultForMechPriority.requests,
         resources,
       );
       const reservedForOthers: CapturedMechReservedResources = Object.freeze({
@@ -1535,6 +1574,8 @@ export function createCapturedResourceDemand(
           requested.get(resourceId) ?? 0,
         requestedQuantityExcludingMech: (resourceId: string) =>
           requestedExcludingMech.get(resourceId) ?? 0,
+        requestedQuantityForMechPriority: (resourceId: string) =>
+          requestedForMechPriority.get(resourceId) ?? 0,
         maxCost: (resourceId: string) =>
           maxCosts.get(storageRequirementScopeKey(resourceId)) ?? 0,
         isDemanded: (resourceId: string) => {

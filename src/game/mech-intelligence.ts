@@ -1,4 +1,4 @@
-import { isMechConstructionPriorityEligible } from "../domain/combat/mech-auto-choice.ts";
+import { canSpendWithDistantReservation } from "../domain/economy/resources/reservation.ts";
 import type { MechSupplySavingReason } from "../domain/progression/build/building-weighting.ts";
 
 type MechBay = {
@@ -78,20 +78,17 @@ export function createMechIntelligence({
         : mechbay.blueprint.size;
     const [gems, supply, space] = manager.getMechCost({ size });
     const resources = getResources();
-    const affordable = isMechConstructionPriorityEligible({
-      headroom: mechbay.max - mechbay.bay,
-      cost: { space, supply, gems },
-      supply: {
-        current: resources.Supply.currentQuantity,
-        maximum: resources.Supply.maxQuantity,
-        spare: resources.Supply.spareQuantity,
-      },
-      soulGems: {
-        current: resources.Soul_Gem.currentQuantity,
-        spare: resources.Soul_Gem.spareQuantity,
-        rate: resources.Soul_Gem.rateOfChange,
-      },
-    });
+    const affordable =
+      space <= mechbay.max - mechbay.bay &&
+      supply <= resources.Supply.maxQuantity &&
+      canSpendWithDistantReservation(
+        {
+          current: resources.Soul_Gem.currentQuantity,
+          spare: resources.Soul_Gem.spareQuantity,
+          rate: resources.Soul_Gem.rateOfChange,
+        },
+        gems,
+      );
     return affordable ? "saving" : null;
   }
 

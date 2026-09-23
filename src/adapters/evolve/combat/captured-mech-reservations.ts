@@ -4,16 +4,16 @@ import type { CostReservationSource } from "../../../ports/game-cost-reservation
 
 export interface CapturedMechReservationDependencies {
   readonly demand: CapturedMechDemandSource;
-  /** Shared automation demand excluding the Mech's own target. */
-  readonly readReservedQuantityExcludingMech?: (resourceId: string) => number;
+  /** Commitments that outrank Mech-first construction, excluding its previous saving target. */
+  readonly readReservedQuantityForMechPriority?: (resourceId: string) => number;
 }
 
 function readCapturedMechReservationBudget(
-  readReservedQuantityExcludingMech:
+  readReservedQuantityForMechPriority:
     ((resourceId: string) => number) | undefined,
 ): CapturedMechReservedResources {
   const readQuantity = (resourceId: string): number => {
-    const quantity = readReservedQuantityExcludingMech?.(resourceId);
+    const quantity = readReservedQuantityForMechPriority?.(resourceId);
     return quantity === undefined
       ? 0
       : typeof quantity === "number" &&
@@ -36,7 +36,7 @@ export function createCapturedMechReservationSource(
     readReservations() {
       const sample = dependencies.demand.read(
         readCapturedMechReservationBudget(
-          dependencies.readReservedQuantityExcludingMech,
+          dependencies.readReservedQuantityForMechPriority,
         ),
       );
       if (!sample.buildingMechsFirst) {

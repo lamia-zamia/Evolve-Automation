@@ -3,7 +3,10 @@ import assert from "node:assert/strict";
 import { createCapturedMechReservationSource } from "../src/adapters/evolve/combat/captured-mech-reservations.ts";
 import { createCapturedMechDemandSource } from "../src/adapters/evolve/combat/captured-mech-demand.ts";
 import { createCapturedProgressionControl } from "../src/bootstrap/captured-progression-control.ts";
-import { createCapturedResourceDemand } from "../src/adapters/evolve/economy/resources/captured-resource-demand.ts";
+import {
+  createCapturedResourceDemand,
+  EMPTY_DEMAND_SAMPLE,
+} from "../src/adapters/evolve/economy/resources/captured-resource-demand.ts";
 import { planMechDemandCosts } from "../src/domain/combat/mech-auto-choice.ts";
 import { planCapturedMechAuto } from "../src/domain/combat/captured-mech.ts";
 import { readCapturedMechState } from "../src/domain/combat/mech-state.ts";
@@ -94,6 +97,9 @@ function makeDemandSource(root, scriptSettings = settings, methods) {
 
 function runConstructionWithMechPriority(buildingMechsFirst) {
   const root = makeRoot();
+  let buildingMechsFirstSetting = buildingMechsFirst;
+  let readDemand = () => EMPTY_DEMAND_SAMPLE;
+  const mechPriorityBudget = new Map();
   root.settings = { qKey: false, qAny: false };
   root.city = { factory: { count: 0, on: 0 } };
   root.resource.Supply.amount = 100_000;
@@ -190,11 +196,40 @@ function runConstructionWithMechPriority(buildingMechsFirst) {
     readSettings: () => ({
       autoMech: true,
       mechBuild: "user",
-      buildingMechsFirst,
+      buildingMechsFirst: buildingMechsFirstSetting,
     }),
+    readReservedQuantityForMechPriority: (resourceId) => {
+      const requested =
+        readDemand().requestedQuantityForMechPriority(resourceId);
+      mechPriorityBudget.set(resourceId, requested);
+      return requested;
+    },
     nowMs: () => 0,
   });
-  return { progression, root, actionCalls: () => actionCalls };
+  const resourceDemand = createCapturedResourceDemand({
+    rootState: { readRoot: () => root },
+    reservations: {
+      readReservations: () => ({ targets: [], unavailable: false }),
+    },
+    readSettings: () => ({
+      autoMech: true,
+      mechBuild: "user",
+      buildingMechsFirst: buildingMechsFirstSetting,
+    }),
+    construction: progression.observations,
+    mechDemand: progression.mechDemand,
+  });
+  readDemand = () => resourceDemand.sample();
+  return {
+    progression,
+    resourceDemand,
+    root,
+    actionCalls: () => actionCalls,
+    setBuildingMechsFirst: (value) => {
+      buildingMechsFirstSetting = value;
+    },
+    mechPriorityBudget: (resourceId) => mechPriorityBudget.get(resourceId),
+  };
 }
 
 // The pursued build's cost is one shared answer for demand and reservations.
@@ -276,7 +311,7 @@ function runConstructionWithMechPriority(buildingMechsFirst) {
   gemRoot.resource.Soul_Gem.amount = 4;
   const reservedGems = createCapturedMechReservationSource({
     demand: makeDemandSource(gemRoot, { ...settings, mechBuild: "user" }),
-    readReservedQuantityExcludingMech: (id) => (id === "Soul_Gem" ? 4 : 0),
+    readReservedQuantityForMechPriority: (id) => (id === "Soul_Gem" ? 4 : 0),
   });
   assert.deepEqual(reservedGems.readReservations(), {
     unavailable: false,
@@ -291,7 +326,7 @@ function runConstructionWithMechPriority(buildingMechsFirst) {
       ...settings,
       mechBuild: "user",
     }),
-    readReservedQuantityExcludingMech: (id) =>
+    readReservedQuantityForMechPriority: (id) =>
       id === "Supply" ? 1_800_000 : 0,
   });
   assert.deepEqual(reservedSupply.readReservations(), {
@@ -378,6 +413,44 @@ function runConstructionWithMechPriority(buildingMechsFirst) {
   });
   assert.equal(allowedBuild.actionCalls(), 1);
   assert.equal(allowedBuild.root.city.factory.count, 1);
+}
+
+// Mech-first priority excludes the construction cycle's own previous saving target.
+{
+  const noPriority = runConstructionWithMechPriority(false);
+  noPriority.root.portal.purifier.supply = 25_000;
+  noPriority.progression.runConstructionCycle();
+  noPriority.root.portal.purifier.supply = 50_000;
+  noPriority.progression.runConstructionCycle();
+  assert.equal(noPriority.actionCalls(), 1);
+
+  const cycle = runConstructionWithMechPriority(false);
+  cycle.root.portal.purifier.supply = 25_000;
+  assert.deepEqual(cycle.progression.runConstructionCycle(), {
+    status: "succeeded",
+  });
+  assert.equal(cycle.actionCalls(), 0);
+
+  cycle.root.portal.purifier.supply = 50_000;
+  cycle.setBuildingMechsFirst(true);
+  assert.deepEqual(cycle.progression.runConstructionCycle(), {
+    status: "succeeded",
+  });
+  assert.deepEqual(cycle.progression.observations.readSavingTarget(), {
+    name: "factory",
+    cost: { Supply: 50_000 },
+  });
+  const demandSample = cycle.resourceDemand.sample();
+  assert.equal(demandSample.requestedQuantityExcludingMech("Supply"), 50_000);
+  assert.equal(demandSample.requestedQuantityForMechPriority("Supply"), 0);
+  assert.equal(cycle.mechPriorityBudget("Supply"), 0);
+  assert.equal(
+    cycle.progression.mechDemand.read({ supply: 0, soulGems: 0 }).immediatePlan
+      .status,
+    "ready",
+  );
+  assert.equal(cycle.actionCalls(), 0);
+  assert.equal(cycle.root.city.factory.count, 0);
 }
 
 // A full bay with scrap disabled cannot have a pending random build target.
@@ -611,6 +684,8 @@ function runConstructionWithMechPriority(buildingMechsFirst) {
   assert.deepEqual(mechBudget, { supply: 400_000, soulGems: 20 });
   assert.equal(sample.requestedQuantityExcludingMech("Supply"), 400_000);
   assert.equal(sample.requestedQuantityExcludingMech("Soul_Gem"), 20);
+  assert.equal(sample.requestedQuantityForMechPriority("Supply"), 400_000);
+  assert.equal(sample.requestedQuantityForMechPriority("Soul_Gem"), 20);
 }
 
 // The demand sample reports the planned build to every spending subsystem.

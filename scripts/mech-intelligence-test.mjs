@@ -6,12 +6,7 @@ let settings = { autoMech: true, mechBuild: "user", buildingMechsFirst: true };
 let spireMechBay = { count: 1, stateOffCount: 0 };
 let mechbay = { max: 10, bay: 0, blueprint: { size: "small" } };
 let resources = {
-  Supply: {
-    currentQuantity: 500,
-    maxQuantity: 1_000,
-    spareQuantity: 500,
-    rateOfChange: 0,
-  },
+  Supply: { maxQuantity: 1_000 },
   Soul_Gem: { currentQuantity: 41, spareQuantity: -209, rateOfChange: 0.01 },
 };
 let isActive = false;

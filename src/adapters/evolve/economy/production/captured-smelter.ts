@@ -254,6 +254,7 @@ function readInput(dependencies: CapturedSmelterDependencies): SmelterSession {
   const demand = dependencies.readDemand?.() ?? {
     requestedQuantity: () => 0,
     requestedQuantityExcludingMech: () => 0,
+    requestedQuantityForMechPriority: () => 0,
     isDemanded: () => false,
     storageRequired: () => 1,
   };

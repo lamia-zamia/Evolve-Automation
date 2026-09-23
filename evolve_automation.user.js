@@ -5868,9 +5868,9 @@
   }
 
   // src/adapters/evolve/combat/captured-mech-reservations.ts
-  function readCapturedMechReservationBudget(readReservedQuantityExcludingMech) {
+  function readCapturedMechReservationBudget(readReservedQuantityForMechPriority) {
     let readQuantity = (resourceId) => {
-      let quantity = readReservedQuantityExcludingMech?.(resourceId);
+      let quantity = readReservedQuantityForMechPriority?.(resourceId);
       return quantity === void 0 ? 0 : typeof quantity == "number" && Number.isFinite(quantity) && quantity >= 0 ? quantity : Number.MAX_SAFE_INTEGER;
     };
     return Object.freeze({
@@ -5883,7 +5883,7 @@
       readReservations() {
         let sample = dependencies.demand.read(
           readCapturedMechReservationBudget(
-            dependencies.readReservedQuantityExcludingMech
+            dependencies.readReservedQuantityForMechPriority
           )
         );
         return sample.buildingMechsFirst ? sample.immediatePlan.status === "unavailable" ? Object.freeze({
@@ -7978,8 +7978,8 @@
       readCanExpandBay: () => readCanExpandMechBay()
     }), mechReservations = createCapturedMechReservationSource({
       demand: mechDemand,
-      ...dependencies.readReservedQuantityExcludingMech === void 0 ? {} : {
-        readReservedQuantityExcludingMech: dependencies.readReservedQuantityExcludingMech
+      ...dependencies.readReservedQuantityForMechPriority === void 0 ? {} : {
+        readReservedQuantityForMechPriority: dependencies.readReservedQuantityForMechPriority
       }
     }), queuedAndSaving = stateReservations === void 0 ? savingReservations : combineReservations(stateReservations, savingReservations), scriptReservations = combineReservations(
       queuedAndSaving,
@@ -15559,6 +15559,7 @@
   var NO_STORAGE_REQUIREMENT = 1, EMPTY_DEMAND_SAMPLE = Object.freeze({
     requestedQuantity: () => 0,
     requestedQuantityExcludingMech: () => 0,
+    requestedQuantityForMechPriority: () => 0,
     isDemanded: () => !1,
     storageRequired: () => NO_STORAGE_REQUIREMENT,
     maxCost: () => 0
@@ -16294,7 +16295,10 @@
         }), baseResult = planDemandPrioritization(baseInput), baseRequested = capturedResourceRequestQuantities(
           baseResult.requests,
           resources
-        ), factoryProductions = Object.freeze(factoryCatalog === void 0 ? [] : factoryCatalog.productions.map((production) => {
+        ), inputWithoutConstructionSaving = saving === null ? baseInput : Object.freeze({ ...baseInput, savingTarget: null }), resultWithoutConstructionSaving = saving === null ? baseResult : planDemandPrioritization(inputWithoutConstructionSaving), requestedWithoutConstructionSaving = saving === null ? baseRequested : capturedResourceRequestQuantities(
+          resultWithoutConstructionSaving.requests,
+          resources
+        ), capturedFactoryProductionsForRequests = (requestedBase) => Object.freeze(factoryCatalog === void 0 ? [] : factoryCatalog.productions.map((production) => {
           let amount = finite(
             readProperty(
               readProperty(resources, production.outputResourceId),
@@ -16303,14 +16307,23 @@
           );
           return Object.freeze({
             ...production,
-            isDemanded: amount !== void 0 && (baseRequested.get(production.outputResourceId) ?? 0) > amount
+            isDemanded: amount !== void 0 && (requestedBase.get(production.outputResourceId) ?? 0) > amount
           });
-        })), nonMechResult = factoryCatalog !== void 0 && hasFactoryDemand ? planDemandPrioritization({
+        })), factoryProductions = capturedFactoryProductionsForRequests(baseRequested), nonMechResult = factoryCatalog !== void 0 && hasFactoryDemand ? planDemandPrioritization({
           ...baseInput,
           factoryCount: factoryCatalog.count,
           factoryProductions
         }) : baseResult, otherRequested = capturedResourceRequestQuantities(
           nonMechResult.requests,
+          resources
+        ), otherResultForMechPriority = factoryCatalog !== void 0 && hasFactoryDemand ? planDemandPrioritization({
+          ...inputWithoutConstructionSaving,
+          factoryCount: factoryCatalog.count,
+          factoryProductions: capturedFactoryProductionsForRequests(
+            requestedWithoutConstructionSaving
+          )
+        }) : resultWithoutConstructionSaving, requestedForMechPriority = capturedResourceRequestQuantities(
+          otherResultForMechPriority.requests,
           resources
         ), reservedForOthers = Object.freeze({
           supply: otherRequested.get("Supply") ?? 0,
@@ -16416,6 +16429,7 @@
           storageRequired: (resourceId, pool) => required.get(storageRequirementScopeKey(resourceId, pool)) ?? NO_STORAGE_REQUIREMENT,
           requestedQuantity: (resourceId) => requested.get(resourceId) ?? 0,
           requestedQuantityExcludingMech: (resourceId) => requestedExcludingMech.get(resourceId) ?? 0,
+          requestedQuantityForMechPriority: (resourceId) => requestedForMechPriority.get(resourceId) ?? 0,
           maxCost: (resourceId) => maxCosts.get(storageRequirementScopeKey(resourceId)) ?? 0,
           isDemanded: (resourceId) => {
             let wanted = requested.get(resourceId);
@@ -20386,6 +20400,7 @@
     let root = dependencies.rootState.readRoot(), city = readProperty(root, "city"), smelter = readProperty(city, "smelter"), resources = readProperty(root, "resource"), race = readProperty(root, "race"), tech = readProperty(root, "tech"), settings = readSettingRecord(dependencies.readSettings()), demand = dependencies.readDemand?.() ?? {
       requestedQuantity: () => 0,
       requestedQuantityExcludingMech: () => 0,
+      requestedQuantityForMechPriority: () => 0,
       isDemanded: () => !1,
       storageRequired: () => 1
     };
@@ -43849,7 +43864,7 @@ Only continue if you trust the source. Injected code:
       }),
       costs: buildCosts,
       readSettings: () => settingsStore.readRaw(),
-      readReservedQuantityExcludingMech: (resourceId) => readDemand().requestedQuantityExcludingMech(resourceId),
+      readReservedQuantityForMechPriority: (resourceId) => readDemand().requestedQuantityForMechPriority(resourceId),
       // The already-granted half of the research draw is only worth its cost to a configured
       // trigger, so the trigger settings decide whether each cycle's pass keeps it.
       needGrantedTechs: () => triggersNeedGrantedTechs(settingsStore.readRaw()),

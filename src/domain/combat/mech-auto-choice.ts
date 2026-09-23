@@ -49,7 +49,10 @@ export interface MechConstructionPriorityInput {
   >;
 }
 
-/** One owner for the historical Mech-first construction gate and its captured reservations. */
+/**
+ * Captured Mech-first eligibility over capacity and commitments that outrank Mech. Its `spare`
+ * Supply input excludes the previous construction saving target, which this setting preempts.
+ */
 export function isMechConstructionPriorityEligible(
   input: Readonly<MechConstructionPriorityInput>,
 ): boolean {
