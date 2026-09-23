@@ -43,6 +43,7 @@ import {
   type DemandMission,
   type DemandTech,
   type DemandPrioritizationSettings,
+  type DemandRequest,
   type DemandTarget,
 } from "../../../../domain/economy/resources/demand-prioritization.ts";
 import type { ReservedCostTarget } from "../../../../domain/cost-conflicts.ts";
@@ -72,7 +73,11 @@ import {
 } from "../../combat/captured-foreign-state.ts";
 import type { DemandPrerequisiteReport } from "./captured-demand-prerequisites.ts";
 import { planMechDemandCosts } from "../../../../domain/combat/mech-auto-choice.ts";
-import { readCapturedMechState } from "../../../../domain/combat/mech-state.ts";
+import {
+  readCapturedMechState,
+  withCapturedMechReservations,
+  type CapturedMechReservedResources,
+} from "../../../../domain/combat/mech-state.ts";
 import type { CapturedMechDemandSource } from "../../../../ports/captured-mech.ts";
 
 export interface CapturedResourceDemandDependencies {
@@ -109,6 +114,8 @@ export interface CapturedResourceDemandDependencies {
 export interface CapturedDemandSample {
   /** How much of a resource the queues are accumulating, clamped to what storage can hold. */
   requestedQuantity(resourceId: string): number;
+  /** Other automation's resource target, excluding the Mech target when it is priceable. */
+  requestedQuantityExcludingMech(resourceId: string): number;
   /** The script's `isDemanded`: something wants more of this than the player currently has. */
   isDemanded(resourceId: string): boolean;
   /**
@@ -135,10 +142,32 @@ const NO_STORAGE_REQUIREMENT = 1;
 /** Nothing is committed, so nothing is demanded and one unit of storage is required. */
 export const EMPTY_DEMAND_SAMPLE: CapturedDemandSample = Object.freeze({
   requestedQuantity: () => 0,
+  requestedQuantityExcludingMech: () => 0,
   isDemanded: () => false,
   storageRequired: () => NO_STORAGE_REQUIREMENT,
   maxCost: () => 0,
 });
+
+function capturedResourceRequestQuantities(
+  requests: readonly DemandRequest[],
+  resources: unknown,
+): Map<string, number> {
+  const requested = new Map<string, number>();
+  for (const request of requests) {
+    const amount = finite(request.amount);
+    if (amount === undefined) continue;
+    const current = requested.get(request.resourceId) ?? 0;
+    if (amount <= current) continue;
+    const maximum = finite(
+      readProperty(readProperty(resources, request.resourceId), "max"),
+    );
+    requested.set(
+      request.resourceId,
+      maximum === undefined || maximum < 0 ? amount : Math.min(amount, maximum),
+    );
+  }
+  return requested;
+}
 
 function settingString(
   settings: Record<PropertyKey, unknown>,
@@ -1245,49 +1274,12 @@ export function createCapturedResourceDemand(
       );
       const spyPurchaseMoney =
         spyReservation.status === "ready" ? spyReservation.value : 0;
-      // The pursued automatic Mech build's Supply and Soul Gem cost, derived
-      // from the same pure choice the Mech pass plans from — no ordering
-      // coupling with the autoMech phase, which may run later in the tick.
-      const mechDemandPlan =
-        dependencies.mechDemand?.read().plan ??
-        planMechDemandCosts({
-          state: readCapturedMechState({
-            root,
-            settings: settingsValue,
-            queueKeyHeld: false,
-          }),
-        });
-      const mechCosts: readonly DemandCost[] =
-        mechDemandPlan.status !== "ready"
-          ? Object.freeze([])
-          : toCosts({
-              Supply: mechDemandPlan.cost.supply,
-              Soul_Gem: mechDemandPlan.cost.gems,
-            });
       // A reservation that could exist but whose capture is not established must not read
       // as free: hold Money up to its storage envelope instead. The price is unknown, so
       // the envelope is anti-spend only and does not feed the storage requirements below.
       const moneyEnvelope =
         truepathAiReservation.status === "unavailable" ||
         spyReservation.status === "unavailable";
-      if (
-        queued.length === 0 &&
-        triggerTargets.length === 0 &&
-        saving === null &&
-        (offered === undefined || offered.length === 0) &&
-        !hasFactoryDemand &&
-        !hasCrafterDemand &&
-        missions.length === 0 &&
-        !hasFleetDemand &&
-        inflationMoney === null &&
-        retirementGraphene === null &&
-        truepathAiBuildingTarget === null &&
-        spyPurchaseMoney === 0 &&
-        mechCosts.length === 0 &&
-        !moneyEnvelope
-      ) {
-        return EMPTY_DEMAND_SAMPLE;
-      }
       const savingCosts =
         saving === null ? null : toCosts(saving.cost, saving.pool);
 
@@ -1313,7 +1305,7 @@ export function createCapturedResourceDemand(
         missions,
         unlockedTechs: toOfferedTechs(resources, offered),
         spyPurchaseMoney,
-        mechCosts,
+        mechCosts: Object.freeze([]),
         fleet:
           fleet ??
           Object.freeze({
@@ -1331,16 +1323,10 @@ export function createCapturedResourceDemand(
         factoryProductions: Object.freeze([]),
       });
       const baseResult = planDemandPrioritization(baseInput);
-      const baseRequested = new Map<string, number>();
-      for (const request of baseResult.requests) {
-        const amount = finite(request.amount);
-        if (amount !== undefined) {
-          baseRequested.set(
-            request.resourceId,
-            Math.max(baseRequested.get(request.resourceId) ?? 0, amount),
-          );
-        }
-      }
+      const baseRequested = capturedResourceRequestQuantities(
+        baseResult.requests,
+        resources,
+      );
       const factoryProductions =
         factoryCatalog === undefined
           ? Object.freeze([])
@@ -1361,7 +1347,7 @@ export function createCapturedResourceDemand(
                 });
               }),
             );
-      const result =
+      const nonMechResult =
         factoryCatalog !== undefined && hasFactoryDemand
           ? planDemandPrioritization({
               ...baseInput,
@@ -1369,24 +1355,91 @@ export function createCapturedResourceDemand(
               factoryProductions,
             })
           : baseResult;
+      const otherRequested = capturedResourceRequestQuantities(
+        nonMechResult.requests,
+        resources,
+      );
+      const reservedForOthers: CapturedMechReservedResources = Object.freeze({
+        supply: otherRequested.get("Supply") ?? 0,
+        soulGems: otherRequested.get("Soul_Gem") ?? 0,
+      });
+      // The Mech planner receives the same max-combined targets the rest of the
+      // cycle shares, with its own target excluded from this budget.
+      const capturedMechDemand =
+        dependencies.mechDemand?.read(reservedForOthers);
+      const mechDemandPlan =
+        capturedMechDemand?.plan ??
+        planMechDemandCosts({
+          state: withCapturedMechReservations(
+            readCapturedMechState({
+              root,
+              settings: settingsValue,
+              queueKeyHeld: false,
+            }),
+            reservedForOthers,
+          ),
+        });
+      const mechCosts: readonly DemandCost[] =
+        mechDemandPlan.status === "ready"
+          ? toCosts({
+              Supply: mechDemandPlan.cost.supply,
+              Soul_Gem: mechDemandPlan.cost.gems,
+            })
+          : mechDemandPlan.status === "unavailable"
+            ? toCosts({
+                Supply: Number.MAX_SAFE_INTEGER,
+                Soul_Gem: Number.MAX_SAFE_INTEGER,
+              })
+            : Object.freeze([]);
+      if (
+        queued.length === 0 &&
+        triggerTargets.length === 0 &&
+        saving === null &&
+        (offered === undefined || offered.length === 0) &&
+        !hasFactoryDemand &&
+        !hasCrafterDemand &&
+        missions.length === 0 &&
+        !hasFleetDemand &&
+        inflationMoney === null &&
+        retirementGraphene === null &&
+        truepathAiBuildingTarget === null &&
+        spyPurchaseMoney === 0 &&
+        mechCosts.length === 0 &&
+        !moneyEnvelope
+      ) {
+        return EMPTY_DEMAND_SAMPLE;
+      }
+      const finalInput = Object.freeze({ ...baseInput, mechCosts });
+      const result =
+        factoryCatalog !== undefined && hasFactoryDemand
+          ? planDemandPrioritization({
+              ...finalInput,
+              factoryCount: factoryCatalog.count,
+              factoryProductions,
+            })
+          : planDemandPrioritization(finalInput);
 
       // The script's own `requestQuantity`: requests combine by maximum, and none can exceed what
       // the resource's storage holds.
-      const requested = new Map<string, number>();
-      for (const request of result.requests) {
-        const amount = finite(request.amount);
-        if (amount === undefined) continue;
-        const current = requested.get(request.resourceId) ?? 0;
-        if (amount <= current) continue;
-        const maximum = finite(
-          readProperty(readProperty(resources, request.resourceId), "max"),
-        );
-        requested.set(
-          request.resourceId,
-          maximum === undefined || maximum < 0
-            ? amount
-            : Math.min(amount, maximum),
-        );
+      const requested = capturedResourceRequestQuantities(
+        result.requests,
+        resources,
+      );
+      const requestedExcludingMech = new Map(otherRequested);
+      if (mechDemandPlan.status === "unavailable") {
+        for (const resourceId of ["Supply", "Soul_Gem"]) {
+          const maximum = finite(
+            readProperty(readProperty(resources, resourceId), "max"),
+          );
+          const envelope =
+            maximum === undefined || maximum < 0
+              ? Number.MAX_SAFE_INTEGER
+              : maximum;
+          requestedExcludingMech.set(
+            resourceId,
+            Math.max(requestedExcludingMech.get(resourceId) ?? 0, envelope),
+          );
+        }
       }
       if (moneyEnvelope) {
         const maximum = finite(
@@ -1441,7 +1494,14 @@ export function createCapturedResourceDemand(
               ]),
           triggerTargets,
           factoryStorageTargets,
-          Object.freeze([Object.freeze({ costs: mechCosts })]),
+          Object.freeze([
+            Object.freeze({
+              costs:
+                mechDemandPlan.status === "ready"
+                  ? mechCosts
+                  : Object.freeze([]),
+            }),
+          ]),
         ]),
         // The Knowledge half of this planner is owned by the captured Knowledge reader, which reads
         // the offered catalog; this pass would have to draw one of its own to answer it.
@@ -1473,6 +1533,8 @@ export function createCapturedResourceDemand(
           NO_STORAGE_REQUIREMENT,
         requestedQuantity: (resourceId: string) =>
           requested.get(resourceId) ?? 0,
+        requestedQuantityExcludingMech: (resourceId: string) =>
+          requestedExcludingMech.get(resourceId) ?? 0,
         maxCost: (resourceId: string) =>
           maxCosts.get(storageRequirementScopeKey(resourceId)) ?? 0,
         isDemanded: (resourceId: string) => {

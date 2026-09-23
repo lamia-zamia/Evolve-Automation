@@ -5872,11 +5872,8 @@
     return Object.freeze({
       readReservations() {
         let sample = dependencies.demand.read();
-        return !sample.buildingMechsFirst || sample.plan.status === "none" ? Object.freeze({
+        return !sample.buildingMechsFirst || sample.immediatePlan.status !== "ready" ? Object.freeze({
           unavailable: !1,
-          targets: Object.freeze([])
-        }) : sample.plan.status === "unavailable" ? Object.freeze({
-          unavailable: !0,
           targets: Object.freeze([])
         }) : Object.freeze({
           unavailable: !1,
@@ -5885,13 +5882,114 @@
               name: "mech",
               cause: "autoMech",
               cost: Object.freeze({
-                Supply: sample.plan.cost.supply,
-                Soul_Gem: sample.plan.cost.gems
+                Supply: sample.immediatePlan.cost.supply,
+                Soul_Gem: sample.immediatePlan.cost.gems
               })
             })
           ])
         });
       }
+    });
+  }
+
+  // src/domain/economy/resources/reservation.ts
+  function canSpendWithDistantReservation(resource, cost, horizonSeconds = 14400) {
+    return cost <= 0 || resource.spare >= cost ? !0 : resource.current < cost || resource.rate <= 0 ? !1 : (cost - resource.spare) / resource.rate > horizonSeconds;
+  }
+
+  // src/domain/combat/mech-supply-saving.ts
+  function shouldSaveMechSupply(input) {
+    if (input.saveSupplyRatio <= 0 || input.lastFloor || input.forceBuild)
+      return !1;
+    let missing = input.supplyMaximum * input.saveSupplyRatio - input.supplyCurrent;
+    return input.baySpace < input.designSpace && (missing -= input.titanSupplyRefund), input.timeToClear <= missing / input.supplyRate;
+  }
+
+  // src/domain/combat/mech.ts
+  function resolveMechScrapMode(input) {
+    if (input.canExpandBay && input.supply.current < input.supply.maximum && !input.prolongActive && input.supply.rate >= input.minimumSupplyRate)
+      return "none";
+    if (input.configuredScrapMode !== "mixed")
+      return input.configuredScrapMode;
+    if (input.waygateActiveCount === 1) return "single";
+    let mechToBuild = Math.floor(input.baySpace / input.cost.space), supplyCost = mechToBuild * input.cost.supply + input.supply.maximum * input.saveSupplyRatio, timeToFullBay = Math.max(
+      (supplyCost - input.supply.current) / input.supply.rate,
+      (mechToBuild * input.cost.gems - input.gems.current) / input.gems.rate
+    ), estimatedTotalPower = input.mechsPower + mechToBuild * input.design.power, estimatedTimeToClear = input.timeToClear * (input.mechsPower / estimatedTotalPower);
+    return timeToFullBay > estimatedTimeToClear && !input.lastFloor ? "single" : "all";
+  }
+  function shouldReadMechScrapCandidates(input) {
+    let mode = resolveMechScrapMode(input);
+    return canSpendWithDistantReservation(
+      {
+        current: input.supply.current,
+        spare: input.supply.spareMaximum,
+        rate: input.supply.rate
+      },
+      input.cost.supply
+    ) && (mode === "single" && input.baySpace < input.cost.space || mode === "all" && (input.baySpace < input.cost.space || !canSpendWithDistantReservation(input.supply, input.cost.supply) || !canSpendWithDistantReservation(input.gems, input.cost.gems)));
+  }
+  function planMechContinuation(input) {
+    let scrapMode = resolveMechScrapMode(input), scrap = null, waitForReplacement = !1, spaceGained = 0, supplyGained = 0, gemsGained = 0;
+    if (shouldReadMechScrapCandidates(input)) {
+      let threshold = (input.fillBay ? input.baySpace === 0 : input.baySpace < input.cost.space) && input.supply.storageRatio > 0.9 && !input.savingSupply ? 0 : input.lastFloor ? Math.min(input.scrapEfficiency, 1) : input.scrapEfficiency, candidates = input.activeMechs.filter((mech) => mech.infernal && mech.size !== "collector" || mech.power >= mech.bestPower ? !1 : input.forceBuild ? !0 : Math.min(
+        (mech.gemRefund || 0.5) / input.cost.gems,
+        mech.supplyRefund / input.cost.supply
+      ) / (mech.power / input.design.power) > threshold).sort((left, right) => left.efficiency - right.efficiency), extraScouts = input.rebuildScouts ? Number.MAX_SAFE_INTEGER : input.scouts - input.bayMaximum * input.scoutsRatio / 2, trash = [], powerLost = 0, canReplaceWithRefunds = () => canSpendWithDistantReservation(
+        {
+          current: input.supply.current + supplyGained,
+          spare: input.supply.spare + supplyGained,
+          rate: input.supply.rate
+        },
+        input.cost.supply
+      ) && canSpendWithDistantReservation(
+        {
+          current: input.gems.current + gemsGained,
+          spare: input.gems.spare + gemsGained,
+          rate: input.gems.rate
+        },
+        input.cost.gems
+      );
+      for (let index = 0; index < candidates.length && (input.baySpace + spaceGained < input.cost.space || scrapMode === "all" && !canReplaceWithRefunds()); index++) {
+        let mech = candidates[index];
+        if (mech !== void 0) {
+          if (mech.size === "small") {
+            if (extraScouts < 1) continue;
+            extraScouts--;
+          }
+          spaceGained += mech.space, supplyGained += mech.supplyRefund, gemsGained += mech.gemRefund, powerLost += mech.power, trash.push(mech);
+        }
+      }
+      let enoughForReplacement = input.baySpace + spaceGained >= input.cost.space && canReplaceWithRefunds();
+      if (trash.length > 0 && (input.forceBuild || powerLost / spaceGained < input.design.efficiency) && enoughForReplacement) {
+        let sorted = [...trash].sort((left, right) => right.id - left.id);
+        scrap = Object.freeze({
+          ids: Object.freeze(sorted.map((mech) => mech.id)),
+          supplyGained,
+          gemsGained,
+          spaceGained,
+          averageRating: sorted.reduce((sum, mech) => sum + mech.power / mech.bestPower, 0) / sorted.length
+        });
+      } else input.baySpace + spaceGained >= input.cost.space ? (waitForReplacement = !0, spaceGained = 0, supplyGained = 0, gemsGained = 0) : (spaceGained = 0, supplyGained = 0, gemsGained = 0);
+    }
+    let baySpace = input.baySpace + spaceGained;
+    return Object.freeze({
+      kind: "continue-mech-cycle",
+      scrap,
+      halt: waitForReplacement,
+      trySmaller: !waitForReplacement && input.fillBay && !input.savingSupply && (!input.canExpandBay && baySpace < input.cost.space || input.supply.maximum < input.cost.supply),
+      baySpace,
+      supplyCurrent: Math.min(
+        input.supply.current + supplyGained,
+        input.supply.maximum
+      ),
+      supplySpare: input.supply.spare + supplyGained,
+      supplyRate: input.supply.rate,
+      gemsCurrent: input.gems.current + gemsGained,
+      gemsSpare: input.gems.spare + gemsGained,
+      gemsRate: input.gems.rate,
+      supplyMaximum: input.supply.maximum,
+      prolongActive: input.prolongActive
     });
   }
 
@@ -6378,14 +6476,6 @@
     return Object.freeze({ size: "titan", force: !1 });
   }
 
-  // src/domain/combat/mech-supply-saving.ts
-  function shouldSaveMechSupply(input) {
-    if (input.saveSupplyRatio <= 0 || input.lastFloor || input.forceBuild)
-      return !1;
-    let missing = input.supplyMaximum * input.saveSupplyRatio - input.supplyCurrent;
-    return input.baySpace < input.designSpace && (missing -= input.titanSupplyRefund), input.timeToClear <= missing / input.supplyRate;
-  }
-
   // src/domain/combat/mech-auto-choice.ts
   var NO_MECH_DEMAND = Object.freeze({ status: "none" }), UNKNOWN_MECH_DEMAND = Object.freeze({
     status: "unavailable"
@@ -6393,7 +6483,11 @@
   function readyMechDemandCost(cost) {
     return Object.freeze({
       status: "ready",
-      cost: Object.freeze({ supply: cost.supply, gems: cost.gems })
+      cost: Object.freeze({
+        supply: cost.supply,
+        gems: cost.gems,
+        space: cost.space
+      })
     });
   }
   function combatRanking(figures, key) {
@@ -6501,7 +6595,11 @@
     if (!state.available) return UNKNOWN_MECH_DEMAND;
     if (state.warlord) return NO_MECH_DEMAND;
     if (state.governorMechTask)
-      return readyMechDemandCost({ supply: 75e4, gems: 75 });
+      return readyMechDemandCost({
+        supply: 75e4,
+        gems: 75,
+        space: mechFrameSpace("titan", state.prepared) ?? Number.MAX_SAFE_INTEGER
+      });
     if (state.settings.buildMode === "user") {
       if (state.blueprint === null) return UNKNOWN_MECH_DEMAND;
       if (state.blueprint.infernal) return NO_MECH_DEMAND;
@@ -6517,6 +6615,157 @@
       choice.teamPower,
       choice.cost.space
     ) || state.bay.maximum - state.bay.occupied < choice.cost.space && (state.settings.scrapMode === "none" || state.inventory.length === 0 || state.bay.active === 0) ? NO_MECH_DEMAND : readyMechDemandCost(choice.cost);
+  }
+
+  // src/domain/combat/captured-mech.ts
+  function planCapturedMechBuild(input) {
+    return !input.available || !input.enabled || input.buildMode !== "user" || input.queueKeyHeld || input.governorTask || input.infernal || input.designSize.length === 0 || !Number.isFinite(input.designSpace) || input.designSpace <= 0 || !Number.isFinite(input.designSupply) || input.designSupply < 0 || !Number.isFinite(input.designSoul) || input.designSoul < 0 || !Number.isFinite(input.baySpace) || input.baySpace < input.designSpace || !Number.isFinite(input.purifierSupply) || !Number.isFinite(input.spendablePurifierSupply) || input.spendablePurifierSupply < input.designSupply || !Number.isFinite(input.soulGems) || !Number.isFinite(input.spendableSoulGems) || input.spendableSoulGems < input.designSoul ? null : Object.freeze({
+      kind: "build-captured-mech",
+      designSize: input.designSize,
+      expectedBaySpace: input.baySpace,
+      expectedPurifierSupply: input.purifierSupply,
+      expectedSoulGems: input.soulGems
+    });
+  }
+  function planCapturedMechAuto(state, pickIndex) {
+    let choice = designAutoChoice(state, pickIndex);
+    if (choice === null) return null;
+    let { settings, bay, funds } = state, { floor, figures, preferred, teamPower } = choice, combat = (key) => combatRanking(figures, key), headroom = bay.maximum - bay.occupied, savingForNextFloor = (space) => capturedMechSupplyHold(state, preferred.force, teamPower, space), buildPlanFor = (size) => {
+      let preset = size === preferred.size ? choice : null, design = preset?.design ?? chooseAutoDesign(size, floor, pickIndex), cost = preset?.cost ?? (design === null ? void 0 : mechFrameCost(design.size, state.prepared));
+      return design === null || cost === void 0 || headroom < cost.space || funds.purifierMax < cost.supply || state.spendable.purifierSupply < cost.supply || state.spendable.soulGems < cost.gems || savingForNextFloor(cost.space) ? null : Object.freeze({
+        kind: "build-captured-mech-auto",
+        design: Object.freeze({
+          size: design.size,
+          chassis: design.chassis,
+          hardpoint: design.hardpoint,
+          equip: design.equip,
+          infernal: !1
+        }),
+        supply: cost.supply,
+        gems: cost.gems,
+        space: cost.space,
+        force: preferred.force,
+        expectedMechsLength: state.inventory.length,
+        expectedOccupied: bay.occupied,
+        expectedPurifierSupply: funds.purifierSupply,
+        expectedSoulGems: funds.soulGems
+      });
+    }, preferredPlan = buildPlanFor(preferred.size);
+    if (preferredPlan !== null || !settings.fillBay) return preferredPlan;
+    let preferredSpace = mechFrameCost(preferred.size, state.prepared)?.space;
+    for (let size of [...combat("efficiency")].map((candidate) => ({
+      candidate,
+      space: mechFrameCost(candidate, state.prepared)?.space ?? 1 / 0
+    })).filter(
+      (entry) => preferredSpace !== void 0 && entry.space < preferredSpace && entry.space <= headroom
+    ).sort((left, right) => right.space - left.space).map((entry) => entry.candidate)) {
+      let fallback = buildPlanFor(size);
+      if (fallback !== null) return fallback;
+    }
+    return null;
+  }
+  function mechSupplyInput(state) {
+    let { funds } = state;
+    return {
+      current: funds.purifierSupply,
+      maximum: funds.purifierMax,
+      spare: state.spendable.purifierSupply,
+      spareMaximum: state.spendable.purifierMaximum,
+      rate: funds.supplyRate,
+      storageRatio: funds.purifierMax > 0 ? funds.purifierSupply / funds.purifierMax : 1
+    };
+  }
+  function mechGemsInput(state) {
+    let gems = state.funds.soulGems;
+    return {
+      current: gems,
+      maximum: gems,
+      spare: state.spendable.soulGems,
+      spareMaximum: state.spendable.soulGems,
+      rate: state.funds.gemsRate,
+      storageRatio: 1
+    };
+  }
+  function planCapturedMechScrap(state, pickIndex, canExpandBay) {
+    if (!state.available || state.queueKeyHeld || state.warlord || state.settings.buildMode !== "random" || state.settings.scrapMode === "none" || state.spire === null || canExpandBay === void 0)
+      return null;
+    let choice = designAutoChoice(state, pickIndex);
+    if (choice === null) return null;
+    let { settings, bay } = state, { floor, figures, preferred, design, cost, teamPower } = choice, headroom = bay.maximum - bay.occupied, supply = mechSupplyInput(state), gems = mechGemsInput(state), designPolicy = {
+      token: "scrap-replacement",
+      size: design.size,
+      power: design.power,
+      efficiency: design.efficiency
+    }, costPolicy = {
+      gems: cost.gems,
+      supply: cost.supply,
+      space: cost.space
+    }, actives = state.inventory.slice(0, bay.active), rated = [];
+    for (let mech of actives) {
+      let best = figures[mech.size]?.power, refund = best === void 0 ? void 0 : mechFrameRefund(mech.size, state.prepared), space = best === void 0 ? void 0 : mechFrameSpace(mech.size, state.prepared), power = best === void 0 || refund === void 0 || space === void 0 ? void 0 : rateMechDesign(mech, floor)?.power;
+      if (best === void 0 || refund === void 0 || space === void 0 || space <= 0 || power === void 0)
+        return null;
+      rated.push({
+        id: mech.index,
+        size: mech.size,
+        infernal: mech.infernal,
+        power,
+        efficiency: power / space,
+        bestPower: best,
+        gemRefund: refund.gems,
+        supplyRefund: refund.supply,
+        space
+      });
+    }
+    let saving = capturedMechSupplyHold(
+      state,
+      preferred.force,
+      teamPower,
+      cost.space
+    ), planning = {
+      design: designPolicy,
+      cost: costPolicy,
+      forceBuild: preferred.force,
+      prolongActive: !1,
+      savingSupply: saving,
+      fillBay: settings.fillBay,
+      baySpace: headroom,
+      bayMaximum: bay.maximum,
+      scouts: bay.scouts,
+      sizeOrder: Object.freeze([...CLASSIC_MECH_SIZES]),
+      supply,
+      gems,
+      lastFloor: state.lastFloor,
+      canExpandBay,
+      configuredScrapMode: settings.scrapMode,
+      waygateActiveCount: state.waygateActive ? 1 : 0,
+      minimumSupplyRate: settings.minimumSupplyRate,
+      saveSupplyRatio: settings.saveSupplyRatio,
+      scrapEfficiency: settings.scrapEfficiency,
+      scoutsRatio: settings.scoutsRatio,
+      rebuildScouts: settings.rebuildScouts,
+      mechsPower: teamPower ?? 0,
+      timeToClear: teamPower !== null && teamPower > 0 ? (100 - state.spire.progress) / teamPower : Number.MAX_SAFE_INTEGER,
+      activeMechs: Object.freeze(rated)
+    }, index = planMechContinuation(planning).scrap?.ids[0];
+    if (index === void 0) return null;
+    let candidate = rated.find((mech) => mech.id === index), identity = state.inventory[index];
+    return candidate === void 0 || identity === void 0 ? null : Object.freeze({
+      kind: "scrap-captured-mech",
+      index,
+      design: Object.freeze({
+        size: identity.size,
+        chassis: identity.chassis,
+        hardpoint: identity.hardpoint,
+        equip: identity.equip,
+        infernal: identity.infernal
+      }),
+      space: candidate.space,
+      supplyRefund: candidate.supplyRefund,
+      gemsRefund: candidate.gemRefund,
+      expectedLength: state.inventory.length,
+      expectedOccupied: bay.occupied
+    });
   }
 
   // src/domain/economy/production/crafter-resources.ts
@@ -7285,6 +7534,11 @@
         gemsRate: 0,
         purifierFullyOn: !1
       }),
+      spendable: Object.freeze({
+        purifierSupply: 0,
+        purifierMaximum: 0,
+        soulGems: 0
+      }),
       prepared: 0,
       wrath: 0,
       gladiatorLevel: 0,
@@ -7360,6 +7614,11 @@
         gemsRate,
         purifierFullyOn: purifierCount > 0 && purifierOn >= purifierCount
       }),
+      spendable: Object.freeze({
+        purifierSupply,
+        purifierMaximum: purifierMax,
+        soulGems
+      }),
       prepared: nonNegativeQuantity(blood.prepared) ?? 0,
       wrath: nonNegativeQuantity(blood.wrath) ?? 0,
       gladiatorLevel: gladiator,
@@ -7369,6 +7628,17 @@
         spireFacts?.count
       ),
       settings
+    });
+  }
+  function withCapturedMechReservations(state, reserved) {
+    let reservedSupply = Number.isFinite(reserved.supply) ? Math.max(0, reserved.supply) : Number.MAX_SAFE_INTEGER, reservedGems = Number.isFinite(reserved.soulGems) ? Math.max(0, reserved.soulGems) : Number.MAX_SAFE_INTEGER;
+    return Object.freeze({
+      ...state,
+      spendable: Object.freeze({
+        purifierSupply: Math.max(0, state.funds.purifierSupply - reservedSupply),
+        purifierMaximum: Math.max(0, state.funds.purifierMax - reservedSupply),
+        soulGems: Math.max(0, state.funds.soulGems - reservedGems)
+      })
     });
   }
 
@@ -7393,18 +7663,29 @@
   function createCapturedMechDemandSource(dependencies) {
     let { rootState, controls: controls2, readSettings } = dependencies;
     return Object.freeze({
-      read() {
-        let root = rootState.readRoot(), settings = readSettings(), state = readCapturedMechState({
-          root,
-          settings,
-          queueKeyHeld: !1
-        }), userBuildCost = readCapturedUserMechCost(state, controls2);
+      read(reserved = {
+        supply: 0,
+        soulGems: 0
+      }) {
+        let root = rootState.readRoot(), settings = readSettings(), state = withCapturedMechReservations(
+          readCapturedMechState({
+            root,
+            settings,
+            queueKeyHeld: !1
+          }),
+          reserved
+        ), userBuildCost = readCapturedUserMechCost(state, controls2), candidatePlan = planMechDemandCosts({
+          state,
+          ...userBuildCost === void 0 ? {} : { userBuildCost }
+        }), headroom = state.bay.maximum - state.bay.occupied, immediatePlan = candidatePlan.status === "ready" && candidatePlan.cost.space <= headroom ? candidatePlan : Object.freeze({ status: "none" }), plan = candidatePlan;
+        if (candidatePlan.status === "ready" && candidatePlan.cost.space > headroom) {
+          let canExpandBay = dependencies.readCanExpandBay?.();
+          (state.settings.buildMode === "random" && canExpandBay === !1 ? planCapturedMechScrap(state, () => 0, canExpandBay) : null) === null && (plan = Object.freeze({ status: "none" }));
+        }
         return Object.freeze({
           buildingMechsFirst: state.settings.buildingsFirst,
-          plan: planMechDemandCosts({
-            state,
-            ...userBuildCost === void 0 ? {} : { userBuildCost }
-          })
+          plan,
+          immediatePlan
         });
       }
     });
@@ -7616,7 +7897,8 @@
     }), stateReservations = getState === void 0 ? void 0 : createScriptCostReservationSource({ getState }), mechDemand = createCapturedMechDemandSource({
       rootState,
       controls: controls2,
-      readSettings
+      readSettings,
+      readCanExpandBay: () => readCanExpandMechBay()
     }), mechReservations = createCapturedMechReservationSource({
       demand: mechDemand
     }), queuedAndSaving = stateReservations === void 0 ? savingReservations : combineReservations(stateReservations, savingReservations), scriptReservations = combineReservations(
@@ -7657,7 +7939,8 @@
       diagnostics
     });
     readObservations = () => construction.observations;
-    let readManagedBuildTargets = () => (ensureBuildControls(), readPolicy().buildings), readCanExpandMechBay = () => {
+    let readManagedBuildTargets = () => (ensureBuildControls(), readPolicy().buildings);
+    function readCanExpandMechBay() {
       let settings = readSettings();
       if (!isRecord(settings)) return;
       if (settings.autoBuild !== !0 || settings.mechBaysFirst !== !0)
@@ -7699,7 +7982,7 @@
       if (purifierFits !== !0) return purifierFits;
       let purifierSwitch = offers.states.get(CAPTURED_MECH_BUILDINGS.purifier);
       return purifierSwitch === void 0 ? void 0 : purifierSwitch.off === 0;
-    };
+    }
     return Object.freeze({
       readProgressionEpoch: epoch.read,
       runConstructionCycle: () => {
@@ -8473,24 +8756,23 @@
       confirmReady: capturedTechIsAffordable(confirmOffer, resources)
     };
   }
-  function readCapturedDemonicBranch(root, settings, offered, resources, controls2) {
+  function readCapturedDemonicBranch(root, settings, offered, resources, mechCycleActive) {
     let race = readProperty(root, "race"), fasting = !!readProperty(race, "fasting"), witchHunter = !!readProperty(race, "witch_hunter"), targetId = fasting ? CAPTURED_DEMONIC_TECHS.final : CAPTURED_DEMONIC_TECHS.demonic, target = offered.find((entry) => entry.elementId === targetId), portal = readProperty(root, "portal"), spireFloor = finite(readProperty(readProperty(portal, "spire"), "count")) ?? Number.NaN, minimumSpireFloor = finite(settings.prestigeDemonicFloor) ?? Number.NaN, mechReady = !0;
     if (capturedMadSettingBoolean(settings, "autoMech", !1)) {
       let mechState = readCapturedMechState({
         root,
         settings,
         queueKeyHeld: !1
-      }), mechPotential = readCapturedMechPotential(mechState), mechActive = !mechState.warlord && mechState.bay.maximum > 0 && mechState.spire !== null && controls2.resolve(CAPTURED_MECH_ASSEMBLY_CONTROL) !== void 0 && controls2.resolve(CAPTURED_MECH_LIST_CONTROL) !== void 0, maximumMechPotential = finite(settings.prestigeDemonicPotential) ?? 0.6;
-      mechReady = mechPotential !== null && !(mechActive && maximumMechPotential < 1 || mechPotential > maximumMechPotential);
+      }), mechPotential = readCapturedMechPotential(mechState), maximumMechPotential = finite(settings.prestigeDemonicPotential) ?? 0.6;
+      mechReady = mechPotential !== null && !(mechCycleActive && maximumMechPotential < 1 || mechPotential > maximumMechPotential);
     }
     let input = {
       spireFloor,
       minimumSpireFloor,
       resetTechUnlocked: target !== void 0,
       resetTechAffordable: capturedTechIsAffordable(target, resources),
-      // A missing or unratable state fails closed while automation is enabled. The active condition
-      // mirrors the captured lab's prerequisites; potential uses the normalized current team and
-      // best current design rather than the compatibility manager.
+      // A missing or unratable state fails closed while automation is enabled. Cycle activity comes
+      // from the Mech application pass; persistent captured controls do not imply pending work.
       mechReady
     };
     return {
@@ -8672,7 +8954,7 @@
               settings,
               offered,
               dependencies.resources,
-              dependencies.controls
+              dependencies.readMechCycleActivity?.() === !0
             ), targetId = demonicBranch.fasting ? CAPTURED_DEMONIC_TECHS.final : CAPTURED_DEMONIC_TECHS.demonic, tech = offered.find((entry) => entry.elementId === targetId);
             tech !== void 0 && sampledPrestigeTechs.set(tech.elementId, tech), branch = demonicBranch;
           }
@@ -15196,10 +15478,28 @@
   // src/adapters/evolve/economy/resources/captured-resource-demand.ts
   var NO_STORAGE_REQUIREMENT = 1, EMPTY_DEMAND_SAMPLE = Object.freeze({
     requestedQuantity: () => 0,
+    requestedQuantityExcludingMech: () => 0,
     isDemanded: () => !1,
     storageRequired: () => NO_STORAGE_REQUIREMENT,
     maxCost: () => 0
   });
+  function capturedResourceRequestQuantities(requests, resources) {
+    let requested = /* @__PURE__ */ new Map();
+    for (let request of requests) {
+      let amount = finite(request.amount);
+      if (amount === void 0) continue;
+      let current = requested.get(request.resourceId) ?? 0;
+      if (amount <= current) continue;
+      let maximum = finite(
+        readProperty(readProperty(resources, request.resourceId), "max")
+      );
+      requested.set(
+        request.resourceId,
+        maximum === void 0 || maximum < 0 ? amount : Math.min(amount, maximum)
+      );
+    }
+    return requested;
+  }
   function settingString(settings, key, fallback) {
     let value = settings[key];
     return typeof value == "string" ? value : fallback;
@@ -15878,19 +16178,7 @@
           settings,
           dependencies.controls,
           prerequisites
-        ), spyPurchaseMoney = spyReservation.status === "ready" ? spyReservation.value : 0, mechDemandPlan = dependencies.mechDemand?.read().plan ?? planMechDemandCosts({
-          state: readCapturedMechState({
-            root,
-            settings: settingsValue,
-            queueKeyHeld: !1
-          })
-        }), mechCosts = mechDemandPlan.status !== "ready" ? Object.freeze([]) : toCosts({
-          Supply: mechDemandPlan.cost.supply,
-          Soul_Gem: mechDemandPlan.cost.gems
-        }), moneyEnvelope = truepathAiReservation.status === "unavailable" || spyReservation.status === "unavailable";
-        if (queued.length === 0 && triggerTargets.length === 0 && saving === null && (offered === void 0 || offered.length === 0) && !hasFactoryDemand && !hasCrafterDemand && missions.length === 0 && !hasFleetDemand && inflationMoney === null && retirementGraphene === null && truepathAiBuildingTarget === null && spyPurchaseMoney === 0 && mechCosts.length === 0 && !moneyEnvelope)
-          return EMPTY_DEMAND_SAMPLE;
-        let savingCosts = saving === null ? null : toCosts(saving.cost, saving.pool), baseInput = Object.freeze({
+        ), spyPurchaseMoney = spyReservation.status === "ready" ? spyReservation.value : 0, moneyEnvelope = truepathAiReservation.status === "unavailable" || spyReservation.status === "unavailable", savingCosts = saving === null ? null : toCosts(saving.cost, saving.pool), baseInput = Object.freeze({
           settings: readSettingsInput(settingsValue),
           // The captured offer list is the game's own technology qualification result. The reader
           // only recomputes affordability from current holdings; it never recreates tech gates.
@@ -15909,7 +16197,7 @@
           missions,
           unlockedTechs: toOfferedTechs(resources, offered),
           spyPurchaseMoney,
-          mechCosts,
+          mechCosts: Object.freeze([]),
           fleet: fleet ?? Object.freeze({
             nextShipAffordable: !1,
             nextShipCost: Object.freeze([])
@@ -15923,15 +16211,10 @@
           }),
           factoryCount: 0,
           factoryProductions: Object.freeze([])
-        }), baseResult = planDemandPrioritization(baseInput), baseRequested = /* @__PURE__ */ new Map();
-        for (let request of baseResult.requests) {
-          let amount = finite(request.amount);
-          amount !== void 0 && baseRequested.set(
-            request.resourceId,
-            Math.max(baseRequested.get(request.resourceId) ?? 0, amount)
-          );
-        }
-        let factoryProductions = Object.freeze(factoryCatalog === void 0 ? [] : factoryCatalog.productions.map((production) => {
+        }), baseResult = planDemandPrioritization(baseInput), baseRequested = capturedResourceRequestQuantities(
+          baseResult.requests,
+          resources
+        ), factoryProductions = Object.freeze(factoryCatalog === void 0 ? [] : factoryCatalog.productions.map((production) => {
           let amount = finite(
             readProperty(
               readProperty(resources, production.outputResourceId),
@@ -15942,24 +16225,52 @@
             ...production,
             isDemanded: amount !== void 0 && (baseRequested.get(production.outputResourceId) ?? 0) > amount
           });
-        })), result = factoryCatalog !== void 0 && hasFactoryDemand ? planDemandPrioritization({
+        })), nonMechResult = factoryCatalog !== void 0 && hasFactoryDemand ? planDemandPrioritization({
           ...baseInput,
           factoryCount: factoryCatalog.count,
           factoryProductions
-        }) : baseResult, requested = /* @__PURE__ */ new Map();
-        for (let request of result.requests) {
-          let amount = finite(request.amount);
-          if (amount === void 0) continue;
-          let current = requested.get(request.resourceId) ?? 0;
-          if (amount <= current) continue;
-          let maximum = finite(
-            readProperty(readProperty(resources, request.resourceId), "max")
-          );
-          requested.set(
-            request.resourceId,
-            maximum === void 0 || maximum < 0 ? amount : Math.min(amount, maximum)
-          );
-        }
+        }) : baseResult, otherRequested = capturedResourceRequestQuantities(
+          nonMechResult.requests,
+          resources
+        ), reservedForOthers = Object.freeze({
+          supply: otherRequested.get("Supply") ?? 0,
+          soulGems: otherRequested.get("Soul_Gem") ?? 0
+        }), mechDemandPlan = dependencies.mechDemand?.read(reservedForOthers)?.plan ?? planMechDemandCosts({
+          state: withCapturedMechReservations(
+            readCapturedMechState({
+              root,
+              settings: settingsValue,
+              queueKeyHeld: !1
+            }),
+            reservedForOthers
+          )
+        }), mechCosts = mechDemandPlan.status === "ready" ? toCosts({
+          Supply: mechDemandPlan.cost.supply,
+          Soul_Gem: mechDemandPlan.cost.gems
+        }) : mechDemandPlan.status === "unavailable" ? toCosts({
+          Supply: Number.MAX_SAFE_INTEGER,
+          Soul_Gem: Number.MAX_SAFE_INTEGER
+        }) : Object.freeze([]);
+        if (queued.length === 0 && triggerTargets.length === 0 && saving === null && (offered === void 0 || offered.length === 0) && !hasFactoryDemand && !hasCrafterDemand && missions.length === 0 && !hasFleetDemand && inflationMoney === null && retirementGraphene === null && truepathAiBuildingTarget === null && spyPurchaseMoney === 0 && mechCosts.length === 0 && !moneyEnvelope)
+          return EMPTY_DEMAND_SAMPLE;
+        let finalInput = Object.freeze({ ...baseInput, mechCosts }), result = factoryCatalog !== void 0 && hasFactoryDemand ? planDemandPrioritization({
+          ...finalInput,
+          factoryCount: factoryCatalog.count,
+          factoryProductions
+        }) : planDemandPrioritization(finalInput), requested = capturedResourceRequestQuantities(
+          result.requests,
+          resources
+        ), requestedExcludingMech = new Map(otherRequested);
+        if (mechDemandPlan.status === "unavailable")
+          for (let resourceId of ["Supply", "Soul_Gem"]) {
+            let maximum = finite(
+              readProperty(readProperty(resources, resourceId), "max")
+            ), envelope = maximum === void 0 || maximum < 0 ? Number.MAX_SAFE_INTEGER : maximum;
+            requestedExcludingMech.set(
+              resourceId,
+              Math.max(requestedExcludingMech.get(resourceId) ?? 0, envelope)
+            );
+          }
         if (moneyEnvelope) {
           let maximum = finite(
             readProperty(readProperty(resources, "Money"), "max")
@@ -15994,7 +16305,11 @@
             ]),
             triggerTargets,
             factoryStorageTargets,
-            Object.freeze([Object.freeze({ costs: mechCosts })])
+            Object.freeze([
+              Object.freeze({
+                costs: mechDemandPlan.status === "ready" ? mechCosts : Object.freeze([])
+              })
+            ])
           ]),
           // The Knowledge half of this planner is owned by the captured Knowledge reader, which reads
           // the offered catalog; this pass would have to draw one of its own to answer it.
@@ -16020,6 +16335,7 @@
         return Object.freeze({
           storageRequired: (resourceId, pool) => required.get(storageRequirementScopeKey(resourceId, pool)) ?? NO_STORAGE_REQUIREMENT,
           requestedQuantity: (resourceId) => requested.get(resourceId) ?? 0,
+          requestedQuantityExcludingMech: (resourceId) => requestedExcludingMech.get(resourceId) ?? 0,
           maxCost: (resourceId) => maxCosts.get(storageRequirementScopeKey(resourceId)) ?? 0,
           isDemanded: (resourceId) => {
             let wanted = requested.get(resourceId);
@@ -19989,6 +20305,7 @@
   function readInput6(dependencies) {
     let root = dependencies.rootState.readRoot(), city = readProperty(root, "city"), smelter = readProperty(city, "smelter"), resources = readProperty(root, "resource"), race = readProperty(root, "race"), tech = readProperty(root, "tech"), settings = readSettingRecord(dependencies.readSettings()), demand = dependencies.readDemand?.() ?? {
       requestedQuantity: () => 0,
+      requestedQuantityExcludingMech: () => 0,
       isDemanded: () => !1,
       storageRequired: () => 1
     };
@@ -37956,6 +38273,21 @@ If script is allowed to reassign non-empty storage it might waste time producing
       label: "Never",
       hint: "Never add special equipment"
     })
+  ]), CAPTURED_MECH_SETTING_NAMES = /* @__PURE__ */ new Set([
+    "mechScrap",
+    "mechScrapEfficiency",
+    "mechCollectorValue",
+    "mechBuild",
+    "mechSize",
+    "mechSizeGravity",
+    "mechMinSupply",
+    "mechMaxCollectors",
+    "mechSaveSupplyRatio",
+    "mechScouts",
+    "mechScoutsRebuild",
+    "mechFillBay",
+    "buildingMechsFirst",
+    "mechBaysFirst"
   ]);
   function createMechSettingsReadModel(sizeOptions) {
     let controls2 = Object.freeze([
@@ -38086,14 +38418,31 @@ Efficiency above '1' is useful to save resources for more desperate times, or to
           hint: `Use ${size} frames when choosing an automatic design`
         })
       )
-    ), compatibilityModel = createMechSettingsReadModel(sizeOptions);
+    ), gravitySizeOptions = Object.freeze([
+      Object.freeze({
+        val: "auto",
+        label: "Auto",
+        hint: "Choose a gravity-floor frame using the automatic policy"
+      }),
+      Object.freeze({
+        val: "gems",
+        label: "Soul Gems",
+        hint: "Rank gravity-floor frames by Soul Gem efficiency"
+      }),
+      Object.freeze({
+        val: "supply",
+        label: "Supply",
+        hint: "Rank gravity-floor frames by Supply efficiency"
+      }),
+      ...sizeOptions
+    ]), compatibilityModel = createMechSettingsReadModel(sizeOptions);
     return Object.freeze({
       sectionId: compatibilityModel.sectionId,
       sectionName: compatibilityModel.sectionName,
       controls: Object.freeze(
-        compatibilityModel.controls.filter(
-          (control) => control.kind !== "header" || control.label !== "Mech Stats"
-        )
+        compatibilityModel.controls.flatMap((control) => control.kind === "header" || !CAPTURED_MECH_SETTING_NAMES.has(control.settingName) ? [] : [
+          control.settingName === "mechSizeGravity" ? Object.freeze({ ...control, options: gravitySizeOptions }) : control
+        ])
       )
     });
   }
@@ -42659,7 +43008,19 @@ Only continue if you trust the source. Injected code:
       designSoul: 0,
       baySpace: 0,
       purifierSupply: 0,
-      soulGems: 0
+      soulGems: 0,
+      spendablePurifierSupply: 0,
+      spendableSoulGems: 0
+    });
+  }
+  function readCapturedMechReservedResources(readReservedQuantityExcludingMech) {
+    let readReserve = (resourceId) => {
+      let amount = readReservedQuantityExcludingMech?.(resourceId);
+      return typeof amount == "number" && Number.isFinite(amount) && amount >= 0 ? amount : amount === void 0 ? 0 : Number.MAX_SAFE_INTEGER;
+    };
+    return Object.freeze({
+      supply: readReserve("Supply"),
+      soulGems: readReserve("Soul_Gem")
     });
   }
   function readControlNumber(controls2, control, method, args) {
@@ -42671,7 +43032,7 @@ Only continue if you trust the source. Injected code:
     let mappedKey = readProperty(readProperty(gameSettings, "keyMap"), "q");
     return typeof mappedKey == "string" && mappedKey.length > 0 || typeof mappedKey == "number" && Number.isFinite(mappedKey) ? keyState.readPressed(mappedKey) : !1;
   }
-  function readCapturedMechSample(rootState, controls2, settingsValue, keyState) {
+  function readCapturedMechSample(rootState, controls2, settingsValue, keyState, reserved) {
     let root = rootState.readRoot();
     if (!isNonArrayRecord(root)) return;
     let settings = isNonArrayRecord(settingsValue) ? settingsValue : void 0;
@@ -42737,35 +43098,43 @@ Only continue if you trust the source. Injected code:
         designSoul,
         baySpace: maximum - occupied,
         purifierSupply,
-        soulGems
+        soulGems,
+        spendablePurifierSupply: Math.max(0, purifierSupply - reserved.supply),
+        spendableSoulGems: Math.max(0, soulGems - reserved.soulGems)
       })
     });
   }
   function sameCapturedMechInput(left, right) {
-    return left.available === right.available && left.enabled === right.enabled && left.buildMode === right.buildMode && left.queueKeyHeld === right.queueKeyHeld && left.infernal === right.infernal && left.designSize === right.designSize && left.designSpace === right.designSpace && left.designSupply === right.designSupply && left.designSoul === right.designSoul && left.baySpace === right.baySpace && left.purifierSupply === right.purifierSupply && left.soulGems === right.soulGems;
+    return left.available === right.available && left.enabled === right.enabled && left.buildMode === right.buildMode && left.queueKeyHeld === right.queueKeyHeld && left.infernal === right.infernal && left.designSize === right.designSize && left.designSpace === right.designSpace && left.designSupply === right.designSupply && left.designSoul === right.designSoul && left.baySpace === right.baySpace && left.purifierSupply === right.purifierSupply && left.soulGems === right.soulGems && left.spendablePurifierSupply === right.spendablePurifierSupply && left.spendableSoulGems === right.spendableSoulGems;
   }
   function createCapturedMech(dependencies) {
-    let session, reader = Object.freeze({
+    let session, readReserved = () => readCapturedMechReservedResources(
+      dependencies.readReservedQuantityExcludingMech
+    ), reader = Object.freeze({
       read() {
         session = void 0;
         let sample = readCapturedMechSample(
           dependencies.rootState,
           dependencies.controls,
           dependencies.readSettings(),
-          dependencies.keyState
+          dependencies.keyState,
+          readReserved()
         );
         return sample === void 0 ? capturedMechUnavailable() : (session = sample, sample.input);
       },
       readState() {
         let root = dependencies.rootState.readRoot(), gameSettings = readProperty(root, "settings");
-        return readCapturedMechState({
-          root,
-          settings: dependencies.readSettings(),
-          queueKeyHeld: readCapturedMechQueueKeyHeld(
-            gameSettings,
-            dependencies.keyState
-          )
-        });
+        return withCapturedMechReservations(
+          readCapturedMechState({
+            root,
+            settings: dependencies.readSettings(),
+            queueKeyHeld: readCapturedMechQueueKeyHeld(
+              gameSettings,
+              dependencies.keyState
+            )
+          }),
+          readReserved()
+        );
       },
       readCanExpandBay() {
         return dependencies.readCanExpandBay?.();
@@ -42800,7 +43169,8 @@ Only continue if you trust the source. Injected code:
           dependencies.rootState,
           dependencies.controls,
           dependencies.readSettings(),
-          dependencies.keyState
+          dependencies.keyState,
+          readReserved()
         );
         if (current === void 0 || current.control.generation !== active.control.generation || !sameCapturedMechInput(current.input, active.input))
           return stale(
@@ -42820,7 +43190,8 @@ Only continue if you trust the source. Injected code:
           dependencies.rootState,
           dependencies.controls,
           dependencies.readSettings(),
-          dependencies.keyState
+          dependencies.keyState,
+          readReserved()
         ), afterMechs = after === void 0 ? void 0 : readProperty(readProperty(after.root, "portal"), "mechbay"), afterStored = isNonArrayRecord(afterMechs) && Array.isArray(afterMechs.mechs) ? afterMechs.mechs : void 0;
         return after === void 0 || afterStored === void 0 || after.input.baySpace !== active.input.baySpace - active.input.designSpace || after.input.purifierSupply !== active.input.purifierSupply - active.input.designSupply || after.input.soulGems !== active.input.soulGems - active.input.designSoul || // A wrapper return is not success: the bay must hold one more mech
         // with the expected design.
@@ -42861,7 +43232,8 @@ Only continue if you trust the source. Injected code:
             "captured-mech-auto-state-changed",
             "captured mech state changed"
           );
-        if (before.max - before.bay < decision.space || before.supply < decision.supply || before.gems < decision.gems)
+        let reserved = readReserved();
+        if (before.max - before.bay < decision.space || Math.max(0, before.supply - reserved.supply) < decision.supply || Math.max(0, before.gems - reserved.soulGems) < decision.gems)
           return stale(
             "captured-mech-auto-unaffordable",
             "captured mech design is no longer affordable"
@@ -43061,275 +43433,50 @@ Only continue if you trust the source. Injected code:
     return Object.freeze({ reader, executor });
   }
 
-  // src/domain/economy/resources/reservation.ts
-  function canSpendWithDistantReservation(resource, cost, horizonSeconds = 14400) {
-    return cost <= 0 || resource.spare >= cost ? !0 : resource.current < cost || resource.rate <= 0 ? !1 : (cost - resource.spare) / resource.rate > horizonSeconds;
-  }
-
-  // src/domain/combat/mech.ts
-  function resolveMechScrapMode(input) {
-    if (input.canExpandBay && input.supply.current < input.supply.maximum && !input.prolongActive && input.supply.rate >= input.minimumSupplyRate)
-      return "none";
-    if (input.configuredScrapMode !== "mixed")
-      return input.configuredScrapMode;
-    if (input.waygateActiveCount === 1) return "single";
-    let mechToBuild = Math.floor(input.baySpace / input.cost.space), supplyCost = mechToBuild * input.cost.supply + input.supply.maximum * input.saveSupplyRatio, timeToFullBay = Math.max(
-      (supplyCost - input.supply.current) / input.supply.rate,
-      (mechToBuild * input.cost.gems - input.gems.current) / input.gems.rate
-    ), estimatedTotalPower = input.mechsPower + mechToBuild * input.design.power, estimatedTimeToClear = input.timeToClear * (input.mechsPower / estimatedTotalPower);
-    return timeToFullBay > estimatedTimeToClear && !input.lastFloor ? "single" : "all";
-  }
-  function shouldReadMechScrapCandidates(input) {
-    let mode = resolveMechScrapMode(input);
-    return canSpendWithDistantReservation(
-      {
-        current: input.supply.current,
-        spare: input.supply.spareMaximum,
-        rate: input.supply.rate
-      },
-      input.cost.supply
-    ) && (mode === "single" && input.baySpace < input.cost.space || mode === "all" && (input.baySpace < input.cost.space || !canSpendWithDistantReservation(input.supply, input.cost.supply) || !canSpendWithDistantReservation(input.gems, input.cost.gems)));
-  }
-  function planMechContinuation(input) {
-    let scrapMode = resolveMechScrapMode(input), scrap = null, waitForReplacement = !1, spaceGained = 0, supplyGained = 0, gemsGained = 0;
-    if (shouldReadMechScrapCandidates(input)) {
-      let threshold = (input.fillBay ? input.baySpace === 0 : input.baySpace < input.cost.space) && input.supply.storageRatio > 0.9 && !input.savingSupply ? 0 : input.lastFloor ? Math.min(input.scrapEfficiency, 1) : input.scrapEfficiency, candidates = input.activeMechs.filter((mech) => mech.infernal && mech.size !== "collector" || mech.power >= mech.bestPower ? !1 : input.forceBuild ? !0 : Math.min(
-        (mech.gemRefund || 0.5) / input.cost.gems,
-        mech.supplyRefund / input.cost.supply
-      ) / (mech.power / input.design.power) > threshold).sort((left, right) => left.efficiency - right.efficiency), extraScouts = input.rebuildScouts ? Number.MAX_SAFE_INTEGER : input.scouts - input.bayMaximum * input.scoutsRatio / 2, trash = [], powerLost = 0, canReplaceWithRefunds = () => canSpendWithDistantReservation(
-        {
-          current: input.supply.current + supplyGained,
-          spare: input.supply.spare + supplyGained,
-          rate: input.supply.rate
-        },
-        input.cost.supply
-      ) && canSpendWithDistantReservation(
-        {
-          current: input.gems.current + gemsGained,
-          spare: input.gems.spare + gemsGained,
-          rate: input.gems.rate
-        },
-        input.cost.gems
-      );
-      for (let index = 0; index < candidates.length && (input.baySpace + spaceGained < input.cost.space || scrapMode === "all" && !canReplaceWithRefunds()); index++) {
-        let mech = candidates[index];
-        if (mech !== void 0) {
-          if (mech.size === "small") {
-            if (extraScouts < 1) continue;
-            extraScouts--;
-          }
-          spaceGained += mech.space, supplyGained += mech.supplyRefund, gemsGained += mech.gemRefund, powerLost += mech.power, trash.push(mech);
-        }
-      }
-      let enoughForReplacement = input.baySpace + spaceGained >= input.cost.space && canReplaceWithRefunds();
-      if (trash.length > 0 && (input.forceBuild || powerLost / spaceGained < input.design.efficiency) && enoughForReplacement) {
-        let sorted = [...trash].sort((left, right) => right.id - left.id);
-        scrap = Object.freeze({
-          ids: Object.freeze(sorted.map((mech) => mech.id)),
-          supplyGained,
-          gemsGained,
-          spaceGained,
-          averageRating: sorted.reduce((sum, mech) => sum + mech.power / mech.bestPower, 0) / sorted.length
-        });
-      } else input.baySpace + spaceGained >= input.cost.space ? (waitForReplacement = !0, spaceGained = 0, supplyGained = 0, gemsGained = 0) : (spaceGained = 0, supplyGained = 0, gemsGained = 0);
-    }
-    let baySpace = input.baySpace + spaceGained;
-    return Object.freeze({
-      kind: "continue-mech-cycle",
-      scrap,
-      halt: waitForReplacement,
-      trySmaller: !waitForReplacement && input.fillBay && !input.savingSupply && (!input.canExpandBay && baySpace < input.cost.space || input.supply.maximum < input.cost.supply),
-      baySpace,
-      supplyCurrent: Math.min(
-        input.supply.current + supplyGained,
-        input.supply.maximum
-      ),
-      supplySpare: input.supply.spare + supplyGained,
-      supplyRate: input.supply.rate,
-      gemsCurrent: input.gems.current + gemsGained,
-      gemsSpare: input.gems.spare + gemsGained,
-      gemsRate: input.gems.rate,
-      supplyMaximum: input.supply.maximum,
-      prolongActive: input.prolongActive
-    });
-  }
-
-  // src/domain/combat/captured-mech.ts
-  function planCapturedMechBuild(input) {
-    return !input.available || !input.enabled || input.buildMode !== "user" || input.queueKeyHeld || input.governorTask || input.infernal || input.designSize.length === 0 || !Number.isFinite(input.designSpace) || input.designSpace <= 0 || !Number.isFinite(input.designSupply) || input.designSupply < 0 || !Number.isFinite(input.designSoul) || input.designSoul < 0 || !Number.isFinite(input.baySpace) || input.baySpace < input.designSpace || !Number.isFinite(input.purifierSupply) || input.purifierSupply < input.designSupply || !Number.isFinite(input.soulGems) || input.soulGems < input.designSoul ? null : Object.freeze({
-      kind: "build-captured-mech",
-      designSize: input.designSize,
-      expectedBaySpace: input.baySpace,
-      expectedPurifierSupply: input.purifierSupply,
-      expectedSoulGems: input.soulGems
-    });
-  }
-  function planCapturedMechAuto(state, pickIndex) {
-    let choice = designAutoChoice(state, pickIndex);
-    if (choice === null) return null;
-    let { settings, bay, funds } = state, { floor, figures, preferred, teamPower } = choice, combat = (key) => combatRanking(figures, key), headroom = bay.maximum - bay.occupied, savingForNextFloor = (space) => capturedMechSupplyHold(state, preferred.force, teamPower, space), buildPlanFor = (size) => {
-      let preset = size === preferred.size ? choice : null, design = preset?.design ?? chooseAutoDesign(size, floor, pickIndex), cost = preset?.cost ?? (design === null ? void 0 : mechFrameCost(design.size, state.prepared));
-      return design === null || cost === void 0 || headroom < cost.space || funds.purifierMax < cost.supply || funds.purifierSupply < cost.supply || funds.soulGems < cost.gems || savingForNextFloor(cost.space) ? null : Object.freeze({
-        kind: "build-captured-mech-auto",
-        design: Object.freeze({
-          size: design.size,
-          chassis: design.chassis,
-          hardpoint: design.hardpoint,
-          equip: design.equip,
-          infernal: !1
-        }),
-        supply: cost.supply,
-        gems: cost.gems,
-        space: cost.space,
-        force: preferred.force,
-        expectedMechsLength: state.inventory.length,
-        expectedOccupied: bay.occupied,
-        expectedPurifierSupply: funds.purifierSupply,
-        expectedSoulGems: funds.soulGems
-      });
-    }, preferredPlan = buildPlanFor(preferred.size);
-    if (preferredPlan !== null || !settings.fillBay) return preferredPlan;
-    let preferredSpace = mechFrameCost(preferred.size, state.prepared)?.space;
-    for (let size of [...combat("efficiency")].map((candidate) => ({
-      candidate,
-      space: mechFrameCost(candidate, state.prepared)?.space ?? 1 / 0
-    })).filter(
-      (entry) => preferredSpace !== void 0 && entry.space < preferredSpace && entry.space <= headroom
-    ).sort((left, right) => right.space - left.space).map((entry) => entry.candidate)) {
-      let fallback = buildPlanFor(size);
-      if (fallback !== null) return fallback;
-    }
-    return null;
-  }
-  function mechSupplyInput(state) {
-    let { funds } = state;
-    return {
-      current: funds.purifierSupply,
-      maximum: funds.purifierMax,
-      spare: funds.purifierSupply,
-      spareMaximum: funds.purifierMax,
-      rate: funds.supplyRate,
-      storageRatio: funds.purifierMax > 0 ? funds.purifierSupply / funds.purifierMax : 1
-    };
-  }
-  function mechGemsInput(state) {
-    let gems = state.funds.soulGems;
-    return {
-      current: gems,
-      maximum: gems,
-      spare: gems,
-      spareMaximum: gems,
-      rate: state.funds.gemsRate,
-      storageRatio: 1
-    };
-  }
-  function planCapturedMechScrap(state, pickIndex, canExpandBay) {
-    if (!state.available || state.queueKeyHeld || state.warlord || state.settings.buildMode !== "random" || state.settings.scrapMode === "none" || state.spire === null || canExpandBay === void 0)
-      return null;
-    let choice = designAutoChoice(state, pickIndex);
-    if (choice === null) return null;
-    let { settings, bay } = state, { floor, figures, preferred, design, cost, teamPower } = choice, headroom = bay.maximum - bay.occupied, supply = mechSupplyInput(state), gems = mechGemsInput(state), designPolicy = {
-      token: "scrap-replacement",
-      size: design.size,
-      power: design.power,
-      efficiency: design.efficiency
-    }, costPolicy = {
-      gems: cost.gems,
-      supply: cost.supply,
-      space: cost.space
-    }, actives = state.inventory.slice(0, bay.active), rated = [];
-    for (let mech of actives) {
-      let best = figures[mech.size]?.power, refund = best === void 0 ? void 0 : mechFrameRefund(mech.size, state.prepared), space = best === void 0 ? void 0 : mechFrameSpace(mech.size, state.prepared), power = best === void 0 || refund === void 0 || space === void 0 ? void 0 : rateMechDesign(mech, floor)?.power;
-      if (best === void 0 || refund === void 0 || space === void 0 || space <= 0 || power === void 0)
-        return null;
-      rated.push({
-        id: mech.index,
-        size: mech.size,
-        infernal: mech.infernal,
-        power,
-        efficiency: power / space,
-        bestPower: best,
-        gemRefund: refund.gems,
-        supplyRefund: refund.supply,
-        space
-      });
-    }
-    let saving = capturedMechSupplyHold(
-      state,
-      preferred.force,
-      teamPower,
-      cost.space
-    ), planning = {
-      design: designPolicy,
-      cost: costPolicy,
-      forceBuild: preferred.force,
-      prolongActive: !1,
-      savingSupply: saving,
-      fillBay: settings.fillBay,
-      baySpace: headroom,
-      bayMaximum: bay.maximum,
-      scouts: bay.scouts,
-      sizeOrder: Object.freeze([...CLASSIC_MECH_SIZES]),
-      supply,
-      gems,
-      lastFloor: state.lastFloor,
-      canExpandBay,
-      configuredScrapMode: settings.scrapMode,
-      waygateActiveCount: state.waygateActive ? 1 : 0,
-      minimumSupplyRate: settings.minimumSupplyRate,
-      saveSupplyRatio: settings.saveSupplyRatio,
-      scrapEfficiency: settings.scrapEfficiency,
-      scoutsRatio: settings.scoutsRatio,
-      rebuildScouts: settings.rebuildScouts,
-      mechsPower: teamPower ?? 0,
-      timeToClear: teamPower !== null && teamPower > 0 ? (100 - state.spire.progress) / teamPower : Number.MAX_SAFE_INTEGER,
-      activeMechs: Object.freeze(rated)
-    }, index = planMechContinuation(planning).scrap?.ids[0];
-    if (index === void 0) return null;
-    let candidate = rated.find((mech) => mech.id === index), identity = state.inventory[index];
-    return candidate === void 0 || identity === void 0 ? null : Object.freeze({
-      kind: "scrap-captured-mech",
-      index,
-      design: Object.freeze({
-        size: identity.size,
-        chassis: identity.chassis,
-        hardpoint: identity.hardpoint,
-        equip: identity.equip,
-        infernal: identity.infernal
-      }),
-      space: candidate.space,
-      supplyRefund: candidate.supplyRefund,
-      gemsRefund: candidate.gemRefund,
-      expectedLength: state.inventory.length,
-      expectedOccupied: bay.occupied
-    });
-  }
-
   // src/application/captured-mech.ts
   var CAPTURED_MECH_SUCCEEDED = Object.freeze({
     status: "succeeded"
   });
-  function runCapturedMech(dependencies) {
+  function runCapturedMechBuildWithActivity(dependencies) {
     let decision = planCapturedMechBuild(dependencies.reader.read());
-    return decision === null ? CAPTURED_MECH_SUCCEEDED : dependencies.executor.execute(decision);
+    return Object.freeze({
+      outcome: decision === null ? CAPTURED_MECH_SUCCEEDED : dependencies.executor.execute(decision),
+      hasPendingWork: decision !== null
+    });
   }
-  function runCapturedMechAutomation(dependencies) {
+  function runCapturedMechAutomationWithActivity(dependencies) {
     let initialState = dependencies.reader.readState();
     if (!initialState.available || initialState.inventory.length > initialState.bay.active)
-      return CAPTURED_MECH_SUCCEEDED;
-    let built = runCapturedMech(dependencies);
-    if (built.status !== "succeeded") return built;
+      return Object.freeze({
+        outcome: CAPTURED_MECH_SUCCEEDED,
+        hasPendingWork: !1
+      });
+    let userBuildResult = runCapturedMechBuildWithActivity(dependencies);
+    if (userBuildResult.outcome.status !== "succeeded") return userBuildResult;
     let state = dependencies.reader.readState();
     if (!state.available || state.inventory.length > state.bay.active || state.settings.buildMode !== "random")
-      return CAPTURED_MECH_SUCCEEDED;
+      return Object.freeze({
+        outcome: CAPTURED_MECH_SUCCEEDED,
+        hasPendingWork: userBuildResult.hasPendingWork
+      });
     let pick = (choices) => Math.floor(dependencies.random.nextUnit() * choices), scrap = planCapturedMechScrap(
       state,
       pick,
       dependencies.reader.readCanExpandBay()
     );
-    if (scrap !== null) return dependencies.executor.executeAutoScrap(scrap);
+    if (scrap !== null)
+      return Object.freeze({
+        outcome: dependencies.executor.executeAutoScrap(scrap),
+        hasPendingWork: !0
+      });
     let plan = planCapturedMechAuto(state, pick);
-    return plan === null ? CAPTURED_MECH_SUCCEEDED : dependencies.executor.executeAutoBuild(plan);
+    return Object.freeze(plan === null ? {
+      outcome: CAPTURED_MECH_SUCCEEDED,
+      hasPendingWork: userBuildResult.hasPendingWork
+    } : {
+      outcome: dependencies.executor.executeAutoBuild(plan),
+      hasPendingWork: !0
+    });
   }
 
   // src/adapters/browser/random.ts
@@ -43560,7 +43707,7 @@ Only continue if you trust the source. Injected code:
       keyState: pageCapture2.keyState,
       readSettings: () => settingsStore.readRaw(),
       onActivity
-    }), capturedPrestigeGoal = "Standard", capturedMercenary = createCapturedMercenary({
+    }), capturedPrestigeGoal = "Standard", capturedMechCycleHasPendingWork = !1, capturedMercenary = createCapturedMercenary({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
       readSettings: () => settingsStore.readRaw(),
@@ -43634,7 +43781,8 @@ Only continue if you trust the source. Injected code:
       controls: pageCapture2.controls,
       readSettings: () => settingsStore.readRaw(),
       keyState: pageCapture2.keyState,
-      readCanExpandBay: progression.readCanExpandMechBay
+      readCanExpandBay: progression.readCanExpandMechBay,
+      readReservedQuantityExcludingMech: (resourceId) => readDemand().requestedQuantityExcludingMech(resourceId)
     }), capturedMechRandom = createBrowserRandomSource();
     ensureCapturedBuildingControls = progression.ensureBuildControls;
     let gatherResources = createCapturedGatherResourcesControl({
@@ -44021,6 +44169,7 @@ Only continue if you trust the source. Injected code:
       controls: pageCapture2.controls,
       readSettings: () => settingsStore.readRaw(),
       readGoal: () => capturedPrestigeGoal,
+      readMechCycleActivity: () => capturedMechCycleHasPendingWork,
       setGoal: (goal) => {
         capturedPrestigeGoal = goal;
       },
@@ -44389,7 +44538,7 @@ Only continue if you trust the source. Injected code:
       readSettings: () => settingsStore.readRaw(),
       onActivity
     }), runCycle = () => {
-      if (automationCycle += 1, demandThisCycle = void 0, triggerTargetsThisCycle = void 0, triggerDemandThisCycle = void 0, demandPrerequisitesThisCycle = void 0, progression.resetProjectSample(), progression.resetBuildingUnlockSample(), settingsPanel.ensurePanel(), !pageCapture2.isComplete()) return;
+      if (automationCycle += 1, capturedMechCycleHasPendingWork = !1, demandThisCycle = void 0, triggerTargetsThisCycle = void 0, triggerDemandThisCycle = void 0, demandPrerequisitesThisCycle = void 0, progression.resetProjectSample(), progression.resetBuildingUnlockSample(), settingsPanel.ensurePanel(), !pageCapture2.isComplete()) return;
       refreshDiscoveredSettings();
       let settings = settingsStore.readRaw();
       if (!pageCapture2.isComplete() || !isEnabled(settings, "masterScriptToggle"))
@@ -44510,10 +44659,12 @@ Only continue if you trust the source. Injected code:
           ensureCivicControls(), runCapturedGovernmentAutomation(government);
         }), isEnabled(settings, "autoMech") && runPhase("autoMech", () => {
           ensureMechControls();
-          let outcome = runCapturedMechAutomation({
+          let result = runCapturedMechAutomationWithActivity({
             ...capturedMech,
             random: capturedMechRandom
           });
+          capturedMechCycleHasPendingWork = result.hasPendingWork;
+          let outcome = result.outcome;
           outcome.status !== "succeeded" && reportOnce(
             `autoMech: ${outcome.failure.code}: ${outcome.failure.message}`
           );

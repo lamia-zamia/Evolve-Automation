@@ -284,6 +284,15 @@ function createPage(
   assert.equal(page.root.querySelectorAll("#script_mechSettings").length, 1);
   const buildMode = page.root.querySelectorAll(".script_mechBuild")[0];
   assert.ok(buildMode, "the captured Mech settings section exposes build mode");
+  const gravitySize = page.root.querySelectorAll(".script_mechSizeGravity")[0];
+  assert.ok(
+    gravitySize,
+    "the captured Mech settings section exposes gravity size",
+  );
+  assert.equal(gravitySize.value, "auto");
+  gravitySize.value = "large";
+  gravitySize.dispatch("change");
+  assert.equal(page.settings.readRaw().mechSizeGravity, "large");
   buildMode.value = "user";
   buildMode.dispatch("change");
   assert.equal(page.settings.readRaw().mechBuild, "user");
@@ -380,6 +389,7 @@ function createPage(
     JSON.stringify({
       autoMech: true,
       mechBuild: "none",
+      mechSizeGravity: "large",
       overrides: {
         mechBuild: [
           {
@@ -398,9 +408,15 @@ function createPage(
   page.root.querySelectorAll("#script_resetmech")[0].dispatch("click");
   assert.equal(page.settings.readRaw().autoMech, false);
   assert.equal(page.settings.readRaw().mechBuild, "random");
+  assert.equal(page.settings.readRaw().mechSizeGravity, "auto");
+  assert.equal(
+    page.root.querySelectorAll(".script_mechSizeGravity")[0].value,
+    "auto",
+  );
   assert.equal(page.settings.readRaw().overrides.mechBuild, undefined);
   const persisted = JSON.parse(page.storage.writes());
   assert.equal(persisted.mechBuild, "random");
+  assert.equal(persisted.mechSizeGravity, "auto");
   assert.equal(persisted.overrides.mechBuild, undefined);
   assert.equal(
     page.root.querySelectorAll(".script_autoMech")[0].checked,

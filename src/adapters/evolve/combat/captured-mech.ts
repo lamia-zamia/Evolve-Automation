@@ -9,6 +9,8 @@ import type {
 import {
   readCapturedMechState,
   readGovernorTaskActive,
+  withCapturedMechReservations,
+  type CapturedMechReservedResources,
   type CapturedMechDesign,
   type CapturedMechState,
 } from "../../../domain/combat/mech-state.ts";
@@ -238,6 +240,26 @@ function capturedMechUnavailable(): CapturedMechBuildInput {
     baySpace: 0,
     purifierSupply: 0,
     soulGems: 0,
+    spendablePurifierSupply: 0,
+    spendableSoulGems: 0,
+  });
+}
+
+function readCapturedMechReservedResources(
+  readReservedQuantityExcludingMech:
+    ((resourceId: string) => number) | undefined,
+): CapturedMechReservedResources {
+  const readReserve = (resourceId: string): number => {
+    const amount = readReservedQuantityExcludingMech?.(resourceId);
+    return typeof amount === "number" && Number.isFinite(amount) && amount >= 0
+      ? amount
+      : amount === undefined
+        ? 0
+        : Number.MAX_SAFE_INTEGER;
+  };
+  return Object.freeze({
+    supply: readReserve("Supply"),
+    soulGems: readReserve("Soul_Gem"),
   });
 }
 
@@ -272,6 +294,7 @@ function readCapturedMechSample(
   controls: GameControlRegistry,
   settingsValue: unknown,
   keyState: GameKeyStateReader,
+  reserved: Readonly<CapturedMechReservedResources>,
 ): CapturedMechSample | undefined {
   const root = rootState.readRoot();
   if (!isNonArrayRecord(root)) return undefined;
@@ -380,6 +403,8 @@ function readCapturedMechSample(
       baySpace: maximum - occupied,
       purifierSupply,
       soulGems,
+      spendablePurifierSupply: Math.max(0, purifierSupply - reserved.supply),
+      spendableSoulGems: Math.max(0, soulGems - reserved.soulGems),
     }),
   });
 }
@@ -400,7 +425,9 @@ function sameCapturedMechInput(
     left.designSoul === right.designSoul &&
     left.baySpace === right.baySpace &&
     left.purifierSupply === right.purifierSupply &&
-    left.soulGems === right.soulGems
+    left.soulGems === right.soulGems &&
+    left.spendablePurifierSupply === right.spendablePurifierSupply &&
+    left.spendableSoulGems === right.spendableSoulGems
   );
 }
 
@@ -410,6 +437,8 @@ export interface CapturedMechDependencies {
   readonly readSettings: () => unknown;
   readonly keyState: GameKeyStateReader;
   readonly readCanExpandBay?: () => boolean | undefined;
+  /** Demand targets from other automation, excluding this Mech's own target. */
+  readonly readReservedQuantityExcludingMech?: (resourceId: string) => number;
 }
 
 export function createCapturedMech(dependencies: CapturedMechDependencies): {
@@ -417,6 +446,10 @@ export function createCapturedMech(dependencies: CapturedMechDependencies): {
   readonly executor: CapturedMechExecutor;
 } {
   let session: CapturedMechSession | undefined;
+  const readReserved = () =>
+    readCapturedMechReservedResources(
+      dependencies.readReservedQuantityExcludingMech,
+    );
 
   const reader: CapturedMechReader = Object.freeze({
     read(): CapturedMechBuildInput {
@@ -426,6 +459,7 @@ export function createCapturedMech(dependencies: CapturedMechDependencies): {
         dependencies.controls,
         dependencies.readSettings(),
         dependencies.keyState,
+        readReserved(),
       );
       if (sample === undefined) return capturedMechUnavailable();
       session = sample;
@@ -434,14 +468,17 @@ export function createCapturedMech(dependencies: CapturedMechDependencies): {
     readState(): CapturedMechState {
       const root = dependencies.rootState.readRoot();
       const gameSettings = readProperty(root, "settings");
-      return readCapturedMechState({
-        root,
-        settings: dependencies.readSettings(),
-        queueKeyHeld: readCapturedMechQueueKeyHeld(
-          gameSettings,
-          dependencies.keyState,
-        ),
-      });
+      return withCapturedMechReservations(
+        readCapturedMechState({
+          root,
+          settings: dependencies.readSettings(),
+          queueKeyHeld: readCapturedMechQueueKeyHeld(
+            gameSettings,
+            dependencies.keyState,
+          ),
+        }),
+        readReserved(),
+      );
     },
     readCanExpandBay(): boolean | undefined {
       return dependencies.readCanExpandBay?.();
@@ -495,6 +532,7 @@ export function createCapturedMech(dependencies: CapturedMechDependencies): {
         dependencies.controls,
         dependencies.readSettings(),
         dependencies.keyState,
+        readReserved(),
       );
       if (
         current === undefined ||
@@ -522,6 +560,7 @@ export function createCapturedMech(dependencies: CapturedMechDependencies): {
         dependencies.controls,
         dependencies.readSettings(),
         dependencies.keyState,
+        readReserved(),
       );
       const afterMechs =
         after === undefined
@@ -634,10 +673,11 @@ export function createCapturedMech(dependencies: CapturedMechDependencies): {
           "captured mech state changed",
         );
       }
+      const reserved = readReserved();
       if (
         before.max - before.bay < decision.space ||
-        before.supply < decision.supply ||
-        before.gems < decision.gems
+        Math.max(0, before.supply - reserved.supply) < decision.supply ||
+        Math.max(0, before.gems - reserved.soulGems) < decision.gems
       ) {
         return stale(
           "captured-mech-auto-unaffordable",

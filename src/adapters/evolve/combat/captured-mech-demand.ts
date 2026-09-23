@@ -1,7 +1,12 @@
 /** Captures the next Mech resource target, including the game's current user blueprint price. */
 
+import { planCapturedMechScrap } from "../../../domain/combat/captured-mech.ts";
 import { planMechDemandCosts } from "../../../domain/combat/mech-auto-choice.ts";
-import { readCapturedMechState } from "../../../domain/combat/mech-state.ts";
+import {
+  readCapturedMechState,
+  withCapturedMechReservations,
+  type CapturedMechReservedResources,
+} from "../../../domain/combat/mech-state.ts";
 import type { CapturedMechDemandSource } from "../../../ports/captured-mech.ts";
 import type { GameControlRegistry } from "../../../ports/game-control-registry.ts";
 import type { GameRootStateSource } from "../../../ports/game-root-state.ts";
@@ -12,6 +17,7 @@ export interface CapturedMechDemandDependencies {
   readonly rootState: GameRootStateSource;
   readonly controls: GameControlRegistry;
   readonly readSettings: () => unknown;
+  readonly readCanExpandBay?: () => boolean | undefined;
 }
 
 function readCapturedUserMechCost(
@@ -63,24 +69,53 @@ export function createCapturedMechDemandSource(
 ): CapturedMechDemandSource {
   const { rootState, controls, readSettings } = dependencies;
   return Object.freeze({
-    read() {
+    read(
+      reserved: Readonly<CapturedMechReservedResources> = {
+        supply: 0,
+        soulGems: 0,
+      },
+    ) {
       const root = rootState.readRoot();
       const settings = readSettings();
       // The queued-build reservation covers a build admitted with the queue key held. This target
       // describes the next automatic build regardless of that transient, matching the old demand
       // sample's explicit unheld queue-key assumption.
-      const state = readCapturedMechState({
-        root,
-        settings,
-        queueKeyHeld: false,
-      });
+      const state = withCapturedMechReservations(
+        readCapturedMechState({
+          root,
+          settings,
+          queueKeyHeld: false,
+        }),
+        reserved,
+      );
       const userBuildCost = readCapturedUserMechCost(state, controls);
+      const candidatePlan = planMechDemandCosts({
+        state,
+        ...(userBuildCost === undefined ? {} : { userBuildCost }),
+      });
+      const headroom = state.bay.maximum - state.bay.occupied;
+      const immediatePlan =
+        candidatePlan.status === "ready" && candidatePlan.cost.space <= headroom
+          ? candidatePlan
+          : Object.freeze({ status: "none" as const });
+      let plan = candidatePlan;
+      if (
+        candidatePlan.status === "ready" &&
+        candidatePlan.cost.space > headroom
+      ) {
+        const canExpandBay = dependencies.readCanExpandBay?.();
+        const replacement =
+          state.settings.buildMode === "random" && canExpandBay === false
+            ? planCapturedMechScrap(state, () => 0, canExpandBay)
+            : null;
+        if (replacement === null) {
+          plan = Object.freeze({ status: "none" });
+        }
+      }
       return Object.freeze({
         buildingMechsFirst: state.settings.buildingsFirst,
-        plan: planMechDemandCosts({
-          state,
-          ...(userBuildCost === undefined ? {} : { userBuildCost }),
-        }),
+        plan,
+        immediatePlan,
       });
     },
   });

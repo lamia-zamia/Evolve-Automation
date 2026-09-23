@@ -42,6 +42,9 @@ export interface CapturedMechBuildInput {
   readonly baySpace: number;
   readonly purifierSupply: number;
   readonly soulGems: number;
+  /** Raw holdings less resources committed to other automation targets. */
+  readonly spendablePurifierSupply: number;
+  readonly spendableSoulGems: number;
 }
 
 export interface CapturedMechBuildDecision {
@@ -72,9 +75,11 @@ export function planCapturedMechBuild(
     !Number.isFinite(input.baySpace) ||
     input.baySpace < input.designSpace ||
     !Number.isFinite(input.purifierSupply) ||
-    input.purifierSupply < input.designSupply ||
+    !Number.isFinite(input.spendablePurifierSupply) ||
+    input.spendablePurifierSupply < input.designSupply ||
     !Number.isFinite(input.soulGems) ||
-    input.soulGems < input.designSoul
+    !Number.isFinite(input.spendableSoulGems) ||
+    input.spendableSoulGems < input.designSoul
   ) {
     return null;
   }
@@ -140,8 +145,8 @@ export function planCapturedMechAuto(
     if (
       headroom < cost.space ||
       funds.purifierMax < cost.supply ||
-      funds.purifierSupply < cost.supply ||
-      funds.soulGems < cost.gems ||
+      state.spendable.purifierSupply < cost.supply ||
+      state.spendable.soulGems < cost.gems ||
       savingForNextFloor(cost.space)
     ) {
       return null;
@@ -204,8 +209,8 @@ function mechSupplyInput(state: CapturedMechState): MechResourceInput {
   return {
     current: funds.purifierSupply,
     maximum: funds.purifierMax,
-    spare: funds.purifierSupply,
-    spareMaximum: funds.purifierMax,
+    spare: state.spendable.purifierSupply,
+    spareMaximum: state.spendable.purifierMaximum,
     rate: funds.supplyRate,
     storageRatio:
       funds.purifierMax > 0 ? funds.purifierSupply / funds.purifierMax : 1,
@@ -217,8 +222,8 @@ function mechGemsInput(state: CapturedMechState): MechResourceInput {
   return {
     current: gems,
     maximum: gems,
-    spare: gems,
-    spareMaximum: gems,
+    spare: state.spendable.soulGems,
+    spareMaximum: state.spendable.soulGems,
     rate: state.funds.gemsRate,
     storageRatio: 1,
   };

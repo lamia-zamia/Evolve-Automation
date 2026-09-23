@@ -21,6 +21,7 @@ import {
 import {
   mechFrameCost,
   mechFrameRefund,
+  mechFrameSpace,
   type MechCostFigures,
 } from "./mech-costs.ts";
 import { shouldSaveMechSupply } from "./mech-supply-saving.ts";
@@ -40,7 +41,7 @@ export type MechDemandCostPlan =
   | Readonly<{ status: "unavailable" }>
   | Readonly<{
       status: "ready";
-      cost: Readonly<Pick<MechCostFigures, "supply" | "gems">>;
+      cost: Readonly<Pick<MechCostFigures, "supply" | "gems" | "space">>;
     }>;
 
 const NO_MECH_DEMAND: MechDemandCostPlan = Object.freeze({ status: "none" });
@@ -49,11 +50,15 @@ const UNKNOWN_MECH_DEMAND: MechDemandCostPlan = Object.freeze({
 });
 
 function readyMechDemandCost(
-  cost: Readonly<Pick<MechCostFigures, "supply" | "gems">>,
+  cost: Readonly<Pick<MechCostFigures, "supply" | "gems" | "space">>,
 ): MechDemandCostPlan {
   return Object.freeze({
     status: "ready",
-    cost: Object.freeze({ supply: cost.supply, gems: cost.gems }),
+    cost: Object.freeze({
+      supply: cost.supply,
+      gems: cost.gems,
+      space: cost.space,
+    }),
   });
 }
 
@@ -248,7 +253,11 @@ export function planMechDemandCosts(
   if (state.warlord) return NO_MECH_DEMAND;
   if (state.governorMechTask) {
     // A governor titan costs the same at any prepared level, standard frame.
-    return readyMechDemandCost({ supply: 750_000, gems: 75 });
+    return readyMechDemandCost({
+      supply: 750_000,
+      gems: 75,
+      space: mechFrameSpace("titan", state.prepared) ?? Number.MAX_SAFE_INTEGER,
+    });
   }
 
   if (state.settings.buildMode === "user") {

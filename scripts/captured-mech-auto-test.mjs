@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 
 import { createCapturedMech } from "../src/adapters/evolve/combat/captured-mech.ts";
-import { runCapturedMechAutomation } from "../src/application/captured-mech.ts";
+import {
+  runCapturedMechAutomation,
+  runCapturedMechAutomationWithActivity,
+} from "../src/application/captured-mech.ts";
 import {
   planCapturedMechAuto as planAuto,
   planCapturedMechScrap as planScrap,
@@ -29,7 +32,7 @@ const GENERAL_DEFAULTS = [
   "seals",
 ];
 
-function makeWorld(overrides = {}) {
+function makeWorld(overrides = {}, reservedResources = { supply: 0, gems: 0 }) {
   const root = {
     settings: { qKey: false, keyMap: { q: "q" } },
     race: {},
@@ -193,6 +196,10 @@ function makeWorld(overrides = {}) {
     readSettings: () => settings,
     keyState: { readPressed: () => false },
     readCanExpandBay: () => canExpandBay,
+    readReservedQuantityExcludingMech: (resourceId) =>
+      resourceId === "Supply"
+        ? reservedResources.supply
+        : reservedResources.gems,
   });
   return {
     root,
@@ -208,6 +215,29 @@ function makeWorld(overrides = {}) {
 
 const zeroRandom = { nextUnit: () => 0 };
 
+// Automatic builds must leave other commitments aside from both Mech resource pools.
+{
+  const world = makeWorld({}, { supply: 900_000, gems: 499 });
+  const state = world.adapter.reader.readState();
+  assert.equal(state.spendable.purifierSupply, 100_000);
+  assert.equal(state.spendable.soulGems, 1);
+  assert.equal(
+    planAuto(state, () => 0),
+    null,
+  );
+  const result = runCapturedMechAutomationWithActivity({
+    ...world.adapter,
+    random: zeroRandom,
+  });
+  const outcome = result.outcome;
+  assert.equal(outcome.status, "succeeded");
+  assert.equal(result.hasPendingWork, false);
+  assert.equal(
+    world.calls.some(([method]) => method === "build"),
+    false,
+  );
+}
+
 // An active combat frame with missing weapons cannot be ranked as a zero-power
 // Mech or enter destructive replacement planning.
 {
@@ -222,11 +252,13 @@ const zeroRandom = { nextUnit: () => 0 };
   world.root.portal.mechbay.active = 1;
   world.root.portal.mechbay.occupied = 2;
   assert.equal(world.adapter.reader.readState().available, false);
-  const outcome = runCapturedMechAutomation({
+  const result = runCapturedMechAutomationWithActivity({
     ...world.adapter,
     random: zeroRandom,
   });
+  const outcome = result.outcome;
   assert.equal(outcome.status, "succeeded");
+  assert.equal(result.hasPendingWork, false);
   assert.equal(
     world.calls.some(([method]) => method === "build"),
     false,
@@ -266,11 +298,13 @@ const zeroRandom = { nextUnit: () => 0 };
   const plan = planAuto(state, () => 0);
   assert.equal(plan !== null, true);
   assert.equal(plan.design.size, "medium");
-  const outcome = runCapturedMechAutomation({
+  const result = runCapturedMechAutomationWithActivity({
     ...world.adapter,
     random: zeroRandom,
   });
+  const outcome = result.outcome;
   assert.equal(outcome.status, "succeeded");
+  assert.equal(result.hasPendingWork, true);
   const methods = world.calls.map((call) => call[0]);
   for (const step of ["setSize", "setType", "setWep", "setEquip"]) {
     assert.ok(methods.includes(step), `expected ${step}`);
@@ -554,6 +588,14 @@ const zeroRandom = { nextUnit: () => 0 };
   const scrap = planScrap(yard.adapter.reader.readState(), () => 0, false);
   assert.equal(scrap !== null, true);
   assert.equal(scrap.index, 0);
+  const reservedYard = makeWorld({}, { supply: 1_000_000, gems: 500 });
+  reservedYard.root.portal.mechbay = structuredClone(yard.root.portal.mechbay);
+  Object.assign(reservedYard.settings, yard.settings);
+  assert.equal(
+    planScrap(reservedYard.adapter.reader.readState(), () => 0, false),
+    null,
+    "replacement planning must honor reserved Supply and Soul Gems",
+  );
   const supplyBefore = yard.root.portal.purifier.supply;
   const outcome = runCapturedMechAutomation({
     ...yard.adapter,

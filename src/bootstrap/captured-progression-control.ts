@@ -525,6 +525,7 @@ export function createCapturedProgressionControl(
     rootState,
     controls,
     readSettings,
+    readCanExpandBay: () => readCanExpandMechBay(),
   });
   const mechReservations = createCapturedMechReservationSource({
     demand: mechDemand,
@@ -594,7 +595,7 @@ export function createCapturedProgressionControl(
    * and cap, `checkAffordable(..., true)` is shared as `costFitsStorage`, and purifier switch state
    * comes from the game's drawn row.
    */
-  const readCanExpandMechBay = (): boolean | undefined => {
+  function readCanExpandMechBay(): boolean | undefined {
     const settings = readSettings();
     if (!isRecord(settings)) return undefined;
     if (settings["autoBuild"] !== true || settings["mechBaysFirst"] !== true) {
@@ -646,7 +647,7 @@ export function createCapturedProgressionControl(
     if (purifierFits !== true) return purifierFits;
     const purifierSwitch = offers.states.get(CAPTURED_MECH_BUILDINGS.purifier);
     return purifierSwitch === undefined ? undefined : purifierSwitch.off === 0;
-  };
+  }
 
   return Object.freeze({
     readProgressionEpoch: epoch.read,

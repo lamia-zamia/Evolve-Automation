@@ -559,10 +559,21 @@ for (const scenario of [
 }
 
 // Demonic Prestige uses the captured current team potential when Mech automation is enabled.
-// Reaching the configured ceiling allows the reset; a lower ceiling with an active lab holds it.
+// Readiness follows current Mech work, not the persistent controls left mounted in the lab.
 for (const scenario of [
   { maximumPotential: 1, omitSoulGem: false, expectedEligible: true },
-  { maximumPotential: 0.6, omitSoulGem: false, expectedEligible: false },
+  {
+    maximumPotential: 0.6,
+    omitSoulGem: false,
+    mechCycleActive: false,
+    expectedEligible: true,
+  },
+  {
+    maximumPotential: 0.6,
+    omitSoulGem: false,
+    mechCycleActive: true,
+    expectedEligible: false,
+  },
   { maximumPotential: 1, omitSoulGem: true, expectedEligible: false },
 ]) {
   const trace = [];
@@ -632,6 +643,7 @@ for (const scenario of [
       prestigeDemonicPotential: scenario.maximumPotential,
       autoMech: true,
     }),
+    readMechCycleActivity: () => scenario.mechCycleActive === true,
     readGoal: () => goal,
     setGoal: (next) => {
       goal = next;

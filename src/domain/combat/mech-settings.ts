@@ -96,6 +96,23 @@ const specialOptions: readonly MechSettingsOption[] = Object.freeze([
   }),
 ]);
 
+const CAPTURED_MECH_SETTING_NAMES: ReadonlySet<string> = new Set([
+  "mechScrap",
+  "mechScrapEfficiency",
+  "mechCollectorValue",
+  "mechBuild",
+  "mechSize",
+  "mechSizeGravity",
+  "mechMinSupply",
+  "mechMaxCollectors",
+  "mechSaveSupplyRatio",
+  "mechScouts",
+  "mechScoutsRebuild",
+  "mechFillBay",
+  "buildingMechsFirst",
+  "mechBaysFirst",
+]);
+
 export function createMechSettingsReadModel(
   sizeOptions: readonly MechSettingsOption[],
 ): MechSettingsReadModel {
@@ -227,15 +244,42 @@ export function createCapturedMechSettingsReadModel(): MechSettingsReadModel {
       }),
     ),
   );
+  const gravitySizeOptions: readonly MechSettingsOption[] = Object.freeze([
+    Object.freeze({
+      val: "auto",
+      label: "Auto",
+      hint: "Choose a gravity-floor frame using the automatic policy",
+    }),
+    Object.freeze({
+      val: "gems",
+      label: "Soul Gems",
+      hint: "Rank gravity-floor frames by Soul Gem efficiency",
+    }),
+    Object.freeze({
+      val: "supply",
+      label: "Supply",
+      hint: "Rank gravity-floor frames by Supply efficiency",
+    }),
+    ...sizeOptions,
+  ]);
   const compatibilityModel = createMechSettingsReadModel(sizeOptions);
   return Object.freeze({
     sectionId: compatibilityModel.sectionId,
     sectionName: compatibilityModel.sectionName,
     controls: Object.freeze(
-      compatibilityModel.controls.filter(
-        (control) =>
-          control.kind !== "header" || control.label !== "Mech Stats",
-      ),
+      compatibilityModel.controls.flatMap((control) => {
+        if (
+          control.kind === "header" ||
+          !CAPTURED_MECH_SETTING_NAMES.has(control.settingName)
+        ) {
+          return [];
+        }
+        return [
+          control.settingName === "mechSizeGravity"
+            ? Object.freeze({ ...control, options: gravitySizeOptions })
+            : control,
+        ];
+      }),
     ),
   });
 }

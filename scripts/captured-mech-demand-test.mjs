@@ -5,7 +5,14 @@ import { createCapturedMechDemandSource } from "../src/adapters/evolve/combat/ca
 import { createCapturedProgressionControl } from "../src/bootstrap/captured-progression-control.ts";
 import { createCapturedResourceDemand } from "../src/adapters/evolve/economy/resources/captured-resource-demand.ts";
 import { planMechDemandCosts } from "../src/domain/combat/mech-auto-choice.ts";
+import { planCapturedMechAuto } from "../src/domain/combat/captured-mech.ts";
 import { readCapturedMechState } from "../src/domain/combat/mech-state.ts";
+import { runCraftAutomation } from "../src/application/craft.ts";
+import {
+  createCapturedCraftExecutor,
+  createCapturedCraftReader,
+} from "../src/adapters/evolve/economy/production/captured-crafting.ts";
+import { createCapturedCraftCosts } from "../src/adapters/evolve/economy/production/captured-craft-costs.ts";
 
 function makeRoot() {
   return {
@@ -194,7 +201,7 @@ function runConstructionWithMechPriority(buildingMechsFirst) {
   const demand = plan(makeRoot());
   assert.deepEqual(demand, {
     status: "ready",
-    cost: { supply: 180_000, gems: 4 },
+    cost: { supply: 180_000, gems: 4, space: 5 },
   });
 
   assert.deepEqual(plan(makeRoot(), { ...settings, mechBuild: "user" }), {
@@ -214,7 +221,7 @@ function runConstructionWithMechPriority(buildingMechsFirst) {
   governed.race = { governor: { tasks: { slot1: "mech" } } };
   assert.deepEqual(plan(governed, { ...settings, mechBuild: "user" }), {
     status: "ready",
-    cost: { supply: 750_000, gems: 75 },
+    cost: { supply: 750_000, gems: 75, space: 25 },
   });
 }
 
@@ -225,7 +232,7 @@ function runConstructionWithMechPriority(buildingMechsFirst) {
   const demand = makeDemandSource(root, userSettings);
   assert.deepEqual(demand.read().plan, {
     status: "ready",
-    cost: { supply: 180_000, gems: 4 },
+    cost: { supply: 180_000, gems: 4, space: 5 },
   });
   assert.deepEqual(
     makeDemandSource(root, userSettings, ["build", "bay", "soul"]).read().plan,
@@ -235,7 +242,7 @@ function runConstructionWithMechPriority(buildingMechsFirst) {
     createCapturedMechReservationSource({
       demand: makeDemandSource(root, userSettings, ["build", "bay", "soul"]),
     }).readReservations(),
-    { unavailable: true, targets: [] },
+    { unavailable: false, targets: [] },
   );
   assert.deepEqual(
     createCapturedMechReservationSource({
@@ -347,6 +354,219 @@ function runConstructionWithMechPriority(buildingMechsFirst) {
   root.portal.purifier.supply = 0;
   root.resource.Soul_Gem.amount = 0;
   assert.equal(plan(root).status, "ready");
+}
+
+// A full bay does not reserve a replacement while an affordable bay expansion can satisfy it.
+{
+  const root = makeRoot();
+  root.portal.mechbay.max = 2;
+  root.portal.mechbay.bay = 2;
+  root.portal.mechbay.active = 1;
+  root.portal.mechbay.mechs = [
+    {
+      size: "small",
+      chassis: "tread",
+      hardpoint: ["laser"],
+      equip: ["special", "shields"],
+      infernal: false,
+    },
+  ];
+  root.portal.purifier.diff = 1_000;
+  const demand = createCapturedMechDemandSource({
+    rootState: { readRoot: () => root },
+    readSettings: () => ({
+      ...settings,
+      mechMinSupply: 0,
+      buildingMechsFirst: true,
+    }),
+    controls: {
+      resolve: () => ({
+        elementId: "mechAssembly",
+        generation: 1,
+        methods: ["build", "bay", "price", "soul"],
+      }),
+      invoke: (_handle, method) => ({
+        ok: true,
+        value: { bay: 5, price: 180_000, soul: 4 }[method],
+      }),
+    },
+    readCanExpandBay: () => true,
+  });
+  assert.deepEqual(demand.read().plan, { status: "none" });
+  assert.deepEqual(
+    createCapturedMechReservationSource({ demand }).readReservations(),
+    { unavailable: false, targets: [] },
+  );
+}
+
+// Global replacement demand exists only when the shared cumulative planner can scrap a real target.
+{
+  const root = makeRoot();
+  root.portal.mechbay.max = 5;
+  root.resource.Soul_Gem.amount = 100;
+  const state = readCapturedMechState({
+    root,
+    settings: { ...settings, mechFillBay: false },
+    queueKeyHeld: false,
+  });
+  const best = planCapturedMechAuto(state, () => 0);
+  assert.ok(best);
+  root.portal.mechbay.bay = 5;
+  root.portal.mechbay.active = 1;
+  root.portal.mechbay.mechs = [best.design];
+  const demand = createCapturedMechDemandSource({
+    rootState: { readRoot: () => root },
+    readSettings: () => ({
+      ...settings,
+      mechFillBay: false,
+      mechScrap: "all",
+    }),
+    controls: {
+      resolve: () => ({
+        elementId: "mechAssembly",
+        generation: 1,
+        methods: ["build", "bay", "price", "soul"],
+      }),
+      invoke: (_handle, method) => ({
+        ok: true,
+        value: { bay: 5, price: 180_000, soul: 4 }[method],
+      }),
+    },
+    readCanExpandBay: () => false,
+  });
+  assert.deepEqual(demand.read().plan, { status: "none" });
+}
+
+// An unpriceable enabled Mech holds both resource pools until the cost is capturable.
+{
+  const root = makeRoot();
+  const sample = createCapturedResourceDemand({
+    rootState: { readRoot: () => root },
+    reservations: {
+      readReservations: () => ({ targets: [], unavailable: false }),
+    },
+    readSettings: () => ({ ...settings, mechBuild: "user" }),
+    mechDemand: {
+      read: () => ({
+        buildingMechsFirst: true,
+        plan: { status: "unavailable" },
+        constructionPlan: { status: "none" },
+      }),
+    },
+  }).sample();
+  assert.equal(sample.requestedQuantity("Supply"), Number.MAX_SAFE_INTEGER);
+  assert.equal(sample.requestedQuantity("Soul_Gem"), 100);
+  assert.equal(sample.isDemanded("Supply"), true);
+  assert.equal(sample.isDemanded("Soul_Gem"), true);
+
+  // The real captured crafting reader consumes this sample and must stand down before spending
+  // the protected Supply, not just report a demand target in isolation.
+  root.race = { species: "human" };
+  root.resource.human = { name: "Human", display: true, amount: 10, max: 20 };
+  root.resource.Supply = {
+    name: "Supply",
+    display: true,
+    amount: 500,
+    max: -1,
+    diff: 10,
+  };
+  root.resource.SupplyParts = {
+    name: "Supply Parts",
+    display: true,
+    amount: 0,
+    max: -1,
+    diff: 0,
+  };
+  const craftRow = {
+    elementId: "resSupplyParts",
+    generation: 1,
+    methods: ["craft", "craftCost"],
+  };
+  let craftCalls = 0;
+  const craftControls = {
+    capturedElementIds: () => [craftRow.elementId],
+    resolve: (elementId) =>
+      elementId === craftRow.elementId ? craftRow : undefined,
+    invoke: (_handle, method, args = []) => {
+      if (method === "craftCost") {
+        return { ok: true, value: "<div>Supply 10</div>" };
+      }
+      if (method === "craft") {
+        const count = Number(args[1]);
+        craftCalls += 1;
+        root.resource.Supply.amount -= count * 10;
+        root.resource.SupplyParts.amount += count;
+        return { ok: true, value: undefined };
+      }
+      return { ok: false, reason: "missing-method" };
+    },
+  };
+  const craftDependencies = {
+    rootState: { readRoot: () => root },
+    controls: craftControls,
+    costs: createCapturedCraftCosts({
+      rootState: { readRoot: () => root },
+      controls: craftControls,
+    }),
+    getDocument: () => ({
+      getElementById: (id) => (id === "incSupplyPartsA" ? { id } : null),
+    }),
+    readSettings: () => ({ tickRate: 1 }),
+    readDemand: () => sample,
+  };
+  assert.deepEqual(
+    runCraftAutomation({
+      reader: createCapturedCraftReader(craftDependencies),
+      executor: createCapturedCraftExecutor(craftDependencies),
+    }),
+    { status: "succeeded" },
+  );
+  assert.equal(craftCalls, 0);
+  assert.equal(root.resource.Supply.amount, 500);
+}
+
+// The Mech budget receives other max-combined demand targets without reserving its own cost.
+{
+  const root = makeRoot();
+  let mechBudget;
+  const sample = createCapturedResourceDemand({
+    rootState: { readRoot: () => root },
+    reservations: {
+      readReservations: () => ({
+        unavailable: false,
+        targets: [
+          {
+            name: "queued factory",
+            cause: "queue",
+            cost: { Supply: 400_000, Soul_Gem: 20 },
+          },
+        ],
+      }),
+    },
+    readSettings: () => ({
+      ...settings,
+      prioritizeQueue: "req",
+    }),
+    mechDemand: {
+      read: (reserved) => {
+        mechBudget = reserved;
+        return {
+          buildingMechsFirst: true,
+          plan: {
+            status: "ready",
+            cost: { supply: 180_000, gems: 4, space: 5 },
+          },
+          immediatePlan: {
+            status: "ready",
+            cost: { supply: 180_000, gems: 4, space: 5 },
+          },
+        };
+      },
+    },
+  }).sample();
+  assert.deepEqual(mechBudget, { supply: 400_000, soulGems: 20 });
+  assert.equal(sample.requestedQuantityExcludingMech("Supply"), 400_000);
+  assert.equal(sample.requestedQuantityExcludingMech("Soul_Gem"), 20);
 }
 
 // The demand sample reports the planned build to every spending subsystem.

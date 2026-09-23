@@ -5,7 +5,10 @@ import type {
   CapturedMechBuildInput,
   CapturedMechScrapPlan,
 } from "../domain/combat/captured-mech.ts";
-import type { CapturedMechState } from "../domain/combat/mech-state.ts";
+import type {
+  CapturedMechReservedResources,
+  CapturedMechState,
+} from "../domain/combat/mech-state.ts";
 import type { MechDemandCostPlan } from "../domain/combat/mech-auto-choice.ts";
 import type { RandomSource } from "./randomness.ts";
 
@@ -19,9 +22,12 @@ export interface CapturedMechReader {
 
 /** One captured read shared by global resource demand and construction reservations. */
 export interface CapturedMechDemandSource {
-  read(): Readonly<{
+  read(reserved?: Readonly<CapturedMechReservedResources>): Readonly<{
     readonly buildingMechsFirst: boolean;
+    /** Next target for global resource demand. */
     readonly plan: MechDemandCostPlan;
+    /** Target that fits the current bay headroom, for construction priority only. */
+    readonly immediatePlan: MechDemandCostPlan;
   }>;
 }
 

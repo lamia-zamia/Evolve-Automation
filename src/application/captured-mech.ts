@@ -14,14 +14,31 @@ const CAPTURED_MECH_SUCCEEDED: CommandExecutionOutcome = Object.freeze({
   status: "succeeded",
 });
 
+export interface CapturedMechAutomationResult {
+  readonly outcome: CommandExecutionOutcome;
+  /** A build or scrap plan was issued during this pass. */
+  readonly hasPendingWork: boolean;
+}
+
+function runCapturedMechBuildWithActivity(dependencies: {
+  readonly reader: CapturedMechReader;
+  readonly executor: CapturedMechExecutor;
+}): CapturedMechAutomationResult {
+  const decision = planCapturedMechBuild(dependencies.reader.read());
+  return Object.freeze({
+    outcome:
+      decision === null
+        ? CAPTURED_MECH_SUCCEEDED
+        : dependencies.executor.execute(decision),
+    hasPendingWork: decision !== null,
+  });
+}
+
 export function runCapturedMech(dependencies: {
   readonly reader: CapturedMechReader;
   readonly executor: CapturedMechExecutor;
 }): CommandExecutionOutcome {
-  const decision = planCapturedMechBuild(dependencies.reader.read());
-  return decision === null
-    ? CAPTURED_MECH_SUCCEEDED
-    : dependencies.executor.execute(decision);
+  return runCapturedMechBuildWithActivity(dependencies).outcome;
 }
 
 /**
@@ -34,22 +51,35 @@ export function runCapturedMech(dependencies: {
 export function runCapturedMechAutomation(
   dependencies: CapturedMechAutomation,
 ): CommandExecutionOutcome {
+  return runCapturedMechAutomationWithActivity(dependencies).outcome;
+}
+
+export function runCapturedMechAutomationWithActivity(
+  dependencies: CapturedMechAutomation,
+): CapturedMechAutomationResult {
   const initialState = dependencies.reader.readState();
   if (
     !initialState.available ||
     initialState.inventory.length > initialState.bay.active
   ) {
-    return CAPTURED_MECH_SUCCEEDED;
+    return Object.freeze({
+      outcome: CAPTURED_MECH_SUCCEEDED,
+      hasPendingWork: false,
+    });
   }
-  const built = runCapturedMech(dependencies);
-  if (built.status !== "succeeded") return built;
+  const userBuildResult = runCapturedMechBuildWithActivity(dependencies);
+  const built = userBuildResult.outcome;
+  if (built.status !== "succeeded") return userBuildResult;
   const state = dependencies.reader.readState();
   if (
     !state.available ||
     state.inventory.length > state.bay.active ||
     state.settings.buildMode !== "random"
   ) {
-    return CAPTURED_MECH_SUCCEEDED;
+    return Object.freeze({
+      outcome: CAPTURED_MECH_SUCCEEDED,
+      hasPendingWork: userBuildResult.hasPendingWork,
+    });
   }
   const pick = (choices: number): number =>
     Math.floor(dependencies.random.nextUnit() * choices);
@@ -58,9 +88,20 @@ export function runCapturedMechAutomation(
     pick,
     dependencies.reader.readCanExpandBay(),
   );
-  if (scrap !== null) return dependencies.executor.executeAutoScrap(scrap);
+  if (scrap !== null) {
+    return Object.freeze({
+      outcome: dependencies.executor.executeAutoScrap(scrap),
+      hasPendingWork: true,
+    });
+  }
   const plan = planCapturedMechAuto(state, pick);
   return plan === null
-    ? CAPTURED_MECH_SUCCEEDED
-    : dependencies.executor.executeAutoBuild(plan);
+    ? Object.freeze({
+        outcome: CAPTURED_MECH_SUCCEEDED,
+        hasPendingWork: userBuildResult.hasPendingWork,
+      })
+    : Object.freeze({
+        outcome: dependencies.executor.executeAutoBuild(plan),
+        hasPendingWork: true,
+      });
 }

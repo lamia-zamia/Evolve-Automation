@@ -48,10 +48,6 @@ import {
   readProperty,
 } from "../../../validation.ts";
 import { readCapturedControlLabel } from "../../captured-control-label.ts";
-import {
-  CAPTURED_MECH_ASSEMBLY_CONTROL,
-  CAPTURED_MECH_LIST_CONTROL,
-} from "../../combat/captured-mech-control-ids.ts";
 
 export const CAPTURED_MAD_CONTROL = "mad";
 
@@ -180,6 +176,8 @@ export interface CapturedMadPrestigeDependencies {
   readonly readSettings: () => unknown;
   readonly readGoal: () => string;
   readonly setGoal: (goal: string) => void;
+  /** Whether the Mech automation pass issued build or scrap work this game tick. */
+  readonly readMechCycleActivity?: () => boolean;
   /** The current research draw, including the game's own price and control generation. */
   readonly readOfferedTechs?: () =>
     readonly Readonly<OfferedTech>[] | undefined;
@@ -465,7 +463,7 @@ function readCapturedDemonicBranch(
   settings: Record<PropertyKey, unknown>,
   offered: readonly Readonly<OfferedTech>[],
   resources: GameResourceSource | undefined,
-  controls: GameControlRegistry,
+  mechCycleActive: boolean,
 ): Extract<PrestigeBranch, { readonly type: "demonic" }> {
   const race = readProperty(root, "race");
   const fasting = Boolean(readProperty(race, "fasting"));
@@ -487,18 +485,12 @@ function readCapturedDemonicBranch(
       queueKeyHeld: false,
     });
     const mechPotential = readCapturedMechPotential(mechState);
-    const mechActive =
-      !mechState.warlord &&
-      mechState.bay.maximum > 0 &&
-      mechState.spire !== null &&
-      controls.resolve(CAPTURED_MECH_ASSEMBLY_CONTROL) !== undefined &&
-      controls.resolve(CAPTURED_MECH_LIST_CONTROL) !== undefined;
     const maximumMechPotential =
       finite(settings["prestigeDemonicPotential"]) ?? 0.6;
     mechReady =
       mechPotential !== null &&
       !(
-        (mechActive && maximumMechPotential < 1) ||
+        (mechCycleActive && maximumMechPotential < 1) ||
         mechPotential > maximumMechPotential
       );
   }
@@ -507,9 +499,8 @@ function readCapturedDemonicBranch(
     minimumSpireFloor,
     resetTechUnlocked: target !== undefined,
     resetTechAffordable: capturedTechIsAffordable(target, resources),
-    // A missing or unratable state fails closed while automation is enabled. The active condition
-    // mirrors the captured lab's prerequisites; potential uses the normalized current team and
-    // best current design rather than the compatibility manager.
+    // A missing or unratable state fails closed while automation is enabled. Cycle activity comes
+    // from the Mech application pass; persistent captured controls do not imply pending work.
     mechReady,
   };
 
@@ -834,7 +825,7 @@ export function createCapturedMadPrestige(
             settings,
             offered,
             dependencies.resources,
-            dependencies.controls,
+            dependencies.readMechCycleActivity?.() === true,
           );
           const targetId = demonicBranch.fasting
             ? CAPTURED_DEMONIC_TECHS.final

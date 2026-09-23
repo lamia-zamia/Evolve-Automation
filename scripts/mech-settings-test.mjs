@@ -3,6 +3,40 @@ import assert from "node:assert/strict";
 import { createMechSettingsIntentHandler } from "../src/application/mech-settings.ts";
 import { createMechSettingsBrowserAdapter } from "../src/adapters/browser/mech-settings.ts";
 import { createMechSettingsEvolveAdapter } from "../src/adapters/evolve/combat/mech-settings.ts";
+import { createCapturedMechSettingsReadModel } from "../src/domain/combat/mech-settings.ts";
+
+const capturedModel = createCapturedMechSettingsReadModel();
+const capturedSettingNames = capturedModel.controls.map(
+  ({ settingName }) => settingName,
+);
+assert.deepEqual(capturedSettingNames, [
+  "mechScrap",
+  "mechScrapEfficiency",
+  "mechCollectorValue",
+  "mechBuild",
+  "mechSize",
+  "mechSizeGravity",
+  "mechMinSupply",
+  "mechMaxCollectors",
+  "mechSaveSupplyRatio",
+  "mechScouts",
+  "mechScoutsRebuild",
+  "mechFillBay",
+  "buildingMechsFirst",
+  "mechBaysFirst",
+]);
+const gravitySize = capturedModel.controls.find(
+  (control) =>
+    control.kind === "select" && control.settingName === "mechSizeGravity",
+);
+assert.deepEqual(
+  gravitySize.options.slice(0, 3).map(({ val }) => val),
+  ["auto", "gems", "supply"],
+);
+assert.deepEqual(
+  gravitySize.options.slice(3).map(({ val }) => val),
+  ["small", "medium", "large", "titan", "collector"],
+);
 
 const reader = createMechSettingsEvolveAdapter({
   getMechManager: () => ({ Size: ["small", "large"] }),

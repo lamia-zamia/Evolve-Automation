@@ -12,15 +12,12 @@ export function createCapturedMechReservationSource(
   return Object.freeze({
     readReservations() {
       const sample = dependencies.demand.read();
-      if (!sample.buildingMechsFirst || sample.plan.status === "none") {
+      if (
+        !sample.buildingMechsFirst ||
+        sample.immediatePlan.status !== "ready"
+      ) {
         return Object.freeze({
           unavailable: false,
-          targets: Object.freeze([]),
-        });
-      }
-      if (sample.plan.status === "unavailable") {
-        return Object.freeze({
-          unavailable: true,
           targets: Object.freeze([]),
         });
       }
@@ -31,8 +28,8 @@ export function createCapturedMechReservationSource(
             name: "mech",
             cause: "autoMech",
             cost: Object.freeze({
-              Supply: sample.plan.cost.supply,
-              Soul_Gem: sample.plan.cost.gems,
+              Supply: sample.immediatePlan.cost.supply,
+              Soul_Gem: sample.immediatePlan.cost.gems,
             }),
           }),
         ]),

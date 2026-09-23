@@ -91,6 +91,23 @@ assert.deepEqual(planCapturedMechBuild(adapter.reader.read()), {
   expectedPurifierSupply: 75_000,
   expectedSoulGems: 1,
 });
+const heldAdapter = createCapturedMech({
+  rootState: {
+    readRoot: () => root,
+    isReactivitySuppressed: () => false,
+    subscribeRootReplaced: () => () => {},
+  },
+  controls,
+  readSettings: () => settings,
+  keyState: { readPressed: () => false },
+  readReservedQuantityExcludingMech: (resourceId) =>
+    resourceId === "Supply" ? 75_000 : 1,
+});
+assert.equal(
+  planCapturedMechBuild(heldAdapter.reader.read()),
+  null,
+  "user blueprint build must leave other commitments aside",
+);
 assert.equal(runCapturedMech(adapter).status, "succeeded");
 assert.deepEqual(trace, ["build"]);
 assert.equal(root.portal.mechbay.bay, 1);
@@ -141,6 +158,8 @@ assert.equal(
     baySpace: 1,
     purifierSupply: 0,
     soulGems: 1,
+    spendablePurifierSupply: 0,
+    spendableSoulGems: 1,
   }),
   null,
 );
@@ -161,6 +180,8 @@ assert.equal(
     baySpace: 10,
     purifierSupply: 100,
     soulGems: 10,
+    spendablePurifierSupply: 100,
+    spendableSoulGems: 10,
   }),
   null,
 );
@@ -196,6 +217,11 @@ assert.equal(
     supplyRate: 250,
     gemsRate: 0,
     purifierFullyOn: false,
+  });
+  assert.deepEqual(state.spendable, {
+    purifierSupply: 75_000,
+    purifierMaximum: 100_000,
+    soulGems: 1,
   });
   assert.equal(state.settings.buildMode, "user");
   assert.equal(state.settings.scrapMode, "mixed");

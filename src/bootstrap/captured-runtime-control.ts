@@ -172,7 +172,7 @@ import {
   capturedMechControlsSatisfied,
   createCapturedMech,
 } from "../adapters/evolve/combat/captured-mech.ts";
-import { runCapturedMechAutomation } from "../application/captured-mech.ts";
+import { runCapturedMechAutomationWithActivity } from "../application/captured-mech.ts";
 import { createBrowserRandomSource } from "../adapters/browser/random.ts";
 import {
   createCapturedTabDiscovery,
@@ -485,6 +485,7 @@ export function startCapturedRuntime({
   // The captured runtime has no compatibility state object. This application-instance goal is
   // only the one-tick handoff used by the captured prestige planner and is discarded on reload.
   let capturedPrestigeGoal = "Standard";
+  let capturedMechCycleHasPendingWork = false;
   const capturedMercenary = createCapturedMercenary({
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,
@@ -596,6 +597,8 @@ export function startCapturedRuntime({
     readSettings: () => settingsStore.readRaw(),
     keyState: pageCapture.keyState,
     readCanExpandBay: progression.readCanExpandMechBay,
+    readReservedQuantityExcludingMech: (resourceId) =>
+      readDemand().requestedQuantityExcludingMech(resourceId),
   });
   const capturedMechRandom = createBrowserRandomSource();
   ensureCapturedBuildingControls = progression.ensureBuildControls;
@@ -1161,6 +1164,7 @@ export function startCapturedRuntime({
     controls: pageCapture.controls,
     readSettings: () => settingsStore.readRaw(),
     readGoal: () => capturedPrestigeGoal,
+    readMechCycleActivity: () => capturedMechCycleHasPendingWork,
     setGoal: (goal) => {
       capturedPrestigeGoal = goal;
     },
@@ -1745,6 +1749,7 @@ export function startCapturedRuntime({
 
   const runCycle = () => {
     automationCycle += 1;
+    capturedMechCycleHasPendingWork = false;
     demandThisCycle = undefined;
     triggerTargetsThisCycle = undefined;
     triggerDemandThisCycle = undefined;
@@ -2058,10 +2063,12 @@ export function startCapturedRuntime({
       if (isEnabled(settings, "autoMech")) {
         runPhase("autoMech", () => {
           ensureMechControls();
-          const outcome = runCapturedMechAutomation({
+          const result = runCapturedMechAutomationWithActivity({
             ...capturedMech,
             random: capturedMechRandom,
           });
+          capturedMechCycleHasPendingWork = result.hasPendingWork;
+          const outcome = result.outcome;
           if (outcome.status !== "succeeded") {
             reportOnce(
               `autoMech: ${outcome.failure.code}: ${outcome.failure.message}`,

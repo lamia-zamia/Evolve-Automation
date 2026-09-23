@@ -61,6 +61,17 @@ export interface CapturedMechFunds {
   readonly purifierFullyOn: boolean;
 }
 
+export interface CapturedMechSpendableFunds {
+  readonly purifierSupply: number;
+  readonly purifierMaximum: number;
+  readonly soulGems: number;
+}
+
+export interface CapturedMechReservedResources {
+  readonly supply: number;
+  readonly soulGems: number;
+}
+
 export interface CapturedMechSettings {
   readonly autoMech: boolean;
   readonly buildMode: MechBuildMode;
@@ -98,6 +109,8 @@ export interface CapturedMechState {
   readonly blueprint: CapturedMechDesign | null;
   readonly spire: CapturedSpireFacts | null;
   readonly funds: CapturedMechFunds;
+  /** Balances remaining after other automation commitments are held aside. */
+  readonly spendable: CapturedMechSpendableFunds;
   readonly prepared: number;
   readonly wrath: number;
   readonly gladiatorLevel: number;
@@ -316,6 +329,11 @@ function unavailableMechState(
       gemsRate: 0,
       purifierFullyOn: false,
     }),
+    spendable: Object.freeze({
+      purifierSupply: 0,
+      purifierMaximum: 0,
+      soulGems: 0,
+    }),
     prepared: 0,
     wrath: 0,
     gladiatorLevel: 0,
@@ -483,6 +501,11 @@ export function readCapturedMechState(
       gemsRate,
       purifierFullyOn: purifierCount > 0 && purifierOn >= purifierCount,
     }),
+    spendable: Object.freeze({
+      purifierSupply,
+      purifierMaximum: purifierMax,
+      soulGems,
+    }),
     prepared: nonNegativeQuantity(blood["prepared"]) ?? 0,
     wrath: nonNegativeQuantity(blood["wrath"]) ?? 0,
     gladiatorLevel: gladiator,
@@ -492,5 +515,26 @@ export function readCapturedMechState(
       spireFacts?.count,
     ),
     settings,
+  });
+}
+
+/** Applies the other automation commitments while preserving the captured raw balances. */
+export function withCapturedMechReservations(
+  state: CapturedMechState,
+  reserved: Readonly<CapturedMechReservedResources>,
+): CapturedMechState {
+  const reservedSupply = Number.isFinite(reserved.supply)
+    ? Math.max(0, reserved.supply)
+    : Number.MAX_SAFE_INTEGER;
+  const reservedGems = Number.isFinite(reserved.soulGems)
+    ? Math.max(0, reserved.soulGems)
+    : Number.MAX_SAFE_INTEGER;
+  return Object.freeze({
+    ...state,
+    spendable: Object.freeze({
+      purifierSupply: Math.max(0, state.funds.purifierSupply - reservedSupply),
+      purifierMaximum: Math.max(0, state.funds.purifierMax - reservedSupply),
+      soulGems: Math.max(0, state.funds.soulGems - reservedGems),
+    }),
   });
 }
