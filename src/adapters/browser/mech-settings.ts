@@ -43,7 +43,7 @@ export interface MechSettingsBrowserActions {
     hintText: string,
   ) => unknown;
   readonly addStandardHeading: (node: JQueryNode, label: string) => unknown;
-  readonly calculateMechStats: () => void;
+  readonly calculateMechStats?: () => void;
 }
 interface MechSettingsBrowserDependencies {
   readonly getDocument: () => ScrollDocument;
@@ -130,7 +130,11 @@ export function createMechSettingsBrowserAdapter({
   ): void {
     for (const control of model.controls) {
       renderControl(node, control, actions);
-      if (control.kind === "header") {
+      if (
+        control.kind === "header" &&
+        control.label === "Mech Stats" &&
+        actions.calculateMechStats !== undefined
+      ) {
         const statsControls = getJQuery()(
           `<div style="margin-top: 5px; display: inline-flex;"></div>`,
         );

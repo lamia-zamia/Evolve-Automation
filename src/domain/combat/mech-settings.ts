@@ -1,4 +1,6 @@
 /** Immutable description of the Mech & Spire settings panel. */
+import { CLASSIC_MECH_SIZES } from "./mech-costs.ts";
+
 export interface MechSettingsOption {
   readonly val: string;
   readonly label: string;
@@ -211,5 +213,29 @@ export function createMechSettingsReadModel(
     sectionId: "mech",
     sectionName: "Mech & Spire",
     controls,
+  });
+}
+
+/** Captured-path controls use the supported frame vocabulary and omit the legacy calculator. */
+export function createCapturedMechSettingsReadModel(): MechSettingsReadModel {
+  const sizeOptions: readonly MechSettingsOption[] = Object.freeze(
+    CLASSIC_MECH_SIZES.map((size) =>
+      Object.freeze({
+        val: size,
+        label: `${size.charAt(0).toUpperCase()}${size.slice(1)}`,
+        hint: `Use ${size} frames when choosing an automatic design`,
+      }),
+    ),
+  );
+  const compatibilityModel = createMechSettingsReadModel(sizeOptions);
+  return Object.freeze({
+    sectionId: compatibilityModel.sectionId,
+    sectionName: compatibilityModel.sectionName,
+    controls: Object.freeze(
+      compatibilityModel.controls.filter(
+        (control) =>
+          control.kind !== "header" || control.label !== "Mech Stats",
+      ),
+    ),
   });
 }

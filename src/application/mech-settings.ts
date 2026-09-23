@@ -21,7 +21,7 @@ export function createMechSettingsIntentHandler({
       writer.persist();
       renderSettingsContent();
       effects.resetCheckboxes();
-      effects.removeMechInfo();
+      effects.removeMechInfo?.();
     },
   });
 }

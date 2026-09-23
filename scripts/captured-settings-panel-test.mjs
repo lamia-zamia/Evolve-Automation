@@ -1,12 +1,14 @@
 import assert from "node:assert/strict";
 
 import { createCapturedSettingsPanel } from "../src/bootstrap/captured-settings-panel-control.ts";
+import { createCapturedMech } from "../src/adapters/evolve/combat/captured-mech.ts";
 import { createSettingsStore } from "../src/adapters/browser/settings-store.ts";
 import { createCapturedSettingsDefaults } from "../src/adapters/evolve/captured-settings-defaults.ts";
 import { createCapturedSettingsLifecycle } from "../src/application/captured-settings-lifecycle.ts";
 import { createCapturedOverrideEvaluation } from "../src/adapters/evolve/captured-override-evaluation.ts";
 import { createOverrideSettings } from "../src/application/override-settings.ts";
 import { overrideComparisons } from "../src/settings/override-comparators.ts";
+import { planCapturedMechBuild } from "../src/domain/combat/captured-mech.ts";
 import { settingsSections } from "../src/adapters/evolve/runtime-catalogs.ts";
 import { createTestDocument, element } from "./dom-fixture.mjs";
 
@@ -223,7 +225,7 @@ function createPage(
   assert.equal(toggles.length, 1);
   assert.equal(root.querySelectorAll("#script_settings").length, 1);
   assert.equal(root.querySelectorAll("#script_generalSettings").length, 1);
-  assert.equal(root.querySelectorAll("button.script-collapsible").length, 15);
+  assert.equal(root.querySelectorAll("button.script-collapsible").length, 16);
   for (const section of [
     "interface",
     "stateLog",
@@ -236,6 +238,7 @@ function createPage(
     "planet",
     "trigger",
     "hell",
+    "mech",
     "war",
     "weighting",
     "trait",
@@ -269,6 +272,140 @@ function createPage(
   generalHeading.dispatch("click");
   assert.equal(settings.readRaw()["generalSettingsCollapsed"], false);
   assert.equal(generalContent.style.display, "block");
+}
+
+// --- captured Mech settings render once and persist through the shared lifecycle ----------------
+
+{
+  const page = createPage(
+    JSON.stringify({ autoMech: false, mechBuild: "none" }),
+  );
+  page.panel.ensurePanel();
+  assert.equal(page.root.querySelectorAll("#script_mechSettings").length, 1);
+  const buildMode = page.root.querySelectorAll(".script_mechBuild")[0];
+  assert.ok(buildMode, "the captured Mech settings section exposes build mode");
+  buildMode.value = "user";
+  buildMode.dispatch("change");
+  assert.equal(page.settings.readRaw().mechBuild, "user");
+  assert.equal(JSON.parse(page.storage.writes()).mechBuild, "user");
+  page.panel.ensurePanel();
+  assert.equal(
+    page.root.querySelectorAll("#script_mechSettings").length,
+    1,
+    "repeated panel discovery must not add another Mech section",
+  );
+}
+
+// --- active Mech overrides reach the captured Mech planner --------------------------------------
+
+{
+  const page = createPage(
+    JSON.stringify({
+      autoMech: true,
+      mechBuild: "random",
+      overrides: {
+        mechBuild: [
+          {
+            type1: "Boolean",
+            arg1: false,
+            type2: "Boolean",
+            arg2: false,
+            cmp: "==",
+            ret: "user",
+          },
+        ],
+      },
+    }),
+  );
+  page.panel.ensurePanel();
+  assert.equal(page.settings.readRaw().mechBuild, "random");
+  assert.equal(page.effectiveSettings.mechBuild, "user");
+  page.gameRoot.settings = { qKey: false, keyMap: { q: "q" } };
+  page.gameRoot.portal = {
+    mechbay: {
+      max: 10,
+      bay: 0,
+      active: 0,
+      scouts: 0,
+      mechs: [],
+      blueprint: {
+        size: "small",
+        chassis: "tread",
+        hardpoint: ["laser"],
+        equip: [],
+        infernal: false,
+      },
+    },
+    purifier: { supply: 75_000, sup_max: 100_000 },
+  };
+  page.gameRoot.resource = { Soul_Gem: { amount: 1 } };
+  const assembly = {
+    elementId: "mechAssembly",
+    generation: 1,
+    methods: ["build", "bay", "price", "soul"],
+  };
+  const controls = {
+    resolve: (id) => (id === "mechAssembly" ? assembly : undefined),
+    invoke: (_handle, method) => {
+      if (method === "bay") return { ok: true, value: 1 };
+      if (method === "price") return { ok: true, value: 75_000 };
+      if (method === "soul") return { ok: true, value: 1 };
+      return { ok: false, reason: "unknown-method" };
+    },
+    capturedElementIds: () => ["mechAssembly"],
+  };
+  const mech = createCapturedMech({
+    rootState: {
+      readRoot: () => page.gameRoot,
+      isReactivitySuppressed: () => false,
+      subscribeRootReplaced: () => () => {},
+    },
+    controls,
+    readSettings: () => page.effectiveSettings,
+    keyState: { readPressed: () => false },
+  });
+  assert.deepEqual(planCapturedMechBuild(mech.reader.read()), {
+    kind: "build-captured-mech",
+    designSize: "small",
+    expectedBaySpace: 10,
+    expectedPurifierSupply: 75_000,
+    expectedSoulGems: 1,
+  });
+}
+
+// --- the captured Mech reset uses lifecycle defaults and removes its overrides ------------------
+
+{
+  const page = createPage(
+    JSON.stringify({
+      autoMech: true,
+      mechBuild: "none",
+      overrides: {
+        mechBuild: [
+          {
+            type1: "Boolean",
+            arg1: false,
+            type2: "Boolean",
+            arg2: false,
+            cmp: "==",
+            ret: "user",
+          },
+        ],
+      },
+    }),
+  );
+  page.panel.ensurePanel();
+  page.root.querySelectorAll("#script_resetmech")[0].dispatch("click");
+  assert.equal(page.settings.readRaw().autoMech, false);
+  assert.equal(page.settings.readRaw().mechBuild, "random");
+  assert.equal(page.settings.readRaw().overrides.mechBuild, undefined);
+  const persisted = JSON.parse(page.storage.writes());
+  assert.equal(persisted.mechBuild, "random");
+  assert.equal(persisted.overrides.mechBuild, undefined);
+  assert.equal(
+    page.root.querySelectorAll(".script_autoMech")[0].checked,
+    false,
+  );
 }
 
 // --- section resets use the host confirmation and update the shared record ----------------------
@@ -912,6 +1049,7 @@ console.log("captured settings panel tests passed");
     "evolution",
     "planet",
     "hell",
+    "mech",
     "war",
     "weighting",
     "building",

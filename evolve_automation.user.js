@@ -36918,6 +36918,91 @@ If script is allowed to reassign non-empty storage it might waste time producing
     return selectControl(settingName, label, hint, buildTraitWishOptions(kind));
   }
 
+  // src/adapters/browser/mech-settings.ts
+  function createMechSettingsBrowserAdapter({
+    getDocument,
+    getJQuery,
+    reader,
+    intents,
+    getActions
+  }) {
+    function renderControl(node, control, actions) {
+      if (control.kind === "header") {
+        actions.addStandardHeading(node, control.label);
+        return;
+      }
+      if (control.kind === "number") {
+        actions.addSettingsNumber(
+          node,
+          control.settingName,
+          control.label,
+          control.hint
+        );
+        return;
+      }
+      if (control.kind === "toggle") {
+        actions.addSettingsToggle(
+          node,
+          control.settingName,
+          control.label,
+          control.hint
+        );
+        return;
+      }
+      actions.addSettingsSelect(
+        node,
+        control.settingName,
+        control.label,
+        control.hint,
+        control.options
+      );
+    }
+    function buildMechSettings() {
+      let model = reader.read();
+      getActions().buildSettingsSection(
+        model.sectionId,
+        model.sectionName,
+        () => intents.handle({ type: "reset-mech-settings" }),
+        updateMechSettingsContent
+      );
+    }
+    function updateMechSettingsContent() {
+      let model = reader.read(), actions = getActions();
+      renderSettingsSectionContent(
+        {
+          scrollDocument: getDocument(),
+          jquery: getJQuery(),
+          sectionId: model.sectionId
+        },
+        (node) => {
+          renderMechContent(node, model, actions);
+        }
+      );
+    }
+    function renderMechContent(node, model, actions) {
+      for (let control of model.controls)
+        if (renderControl(node, control, actions), control.kind === "header" && control.label === "Mech Stats" && actions.calculateMechStats !== void 0) {
+          let statsControls = getJQuery()(
+            '<div style="margin-top: 5px; display: inline-flex;"></div>'
+          );
+          statsControls.append(
+            '<label class="switch" title="This switch have no ingame effect, and used to configure calculator below"><input id="script_mechStatsCompact" type="checkbox" checked><span class="check"></span><span style="margin-left: 10px;">Compact</span></label>'
+          ), statsControls.append(
+            '<label class="switch" title="This switch have no ingame effect, and used to configure calculator below"><input id="script_mechStatsEfficient" type="checkbox" checked><span class="check"></span><span style="margin-left: 10px;">Efficient</span></label>'
+          ), statsControls.append(
+            '<label class="switch" title="This switch have no ingame effect, and used to configure calculator below"><input id="script_mechStatsSpecial" type="checkbox" checked><span class="check"></span><span style="margin-left: 10px;">Special</span></label>'
+          ), statsControls.append(
+            '<label class="switch" title="This switch have no ingame effect, and used to configure calculator below"><input id="script_mechStatsGravity" type="checkbox"><span class="check"></span><span style="margin-left: 10px;">Gravity</span></label>'
+          ), statsControls.append(
+            '<label class="switch" title="This input have no ingame effect, and used to configure calculator below"><input id="script_mechStatsScouts" class="input is-small" style="height: 25px; width: 50px" type="text" value="0"><span style="margin-left: 10px;">Scouts</span></label>'
+          ), statsControls.on("input", actions.calculateMechStats), node.append(statsControls), node.append(
+            '<table class="selectable"><tbody id="script_mechStatsTable"><tbody></table>'
+          ), actions.calculateMechStats();
+        }
+    }
+    return Object.freeze({ buildMechSettings, updateMechSettingsContent });
+  }
+
   // src/adapters/browser/table-sorter.ts
   function readMembers(value) {
     return value === null || typeof value != "object" && typeof value != "function" ? null : value;
@@ -37796,6 +37881,220 @@ If script is allowed to reassign non-empty storage it might waste time producing
           return;
         }
       }
+    });
+  }
+
+  // src/application/mech-settings.ts
+  function createMechSettingsIntentHandler({
+    writer,
+    renderSettingsContent,
+    effects
+  }) {
+    return Object.freeze({
+      handle(intent) {
+        intent.type === "reset-mech-settings" && (writer.resetToDefaults(), writer.persist(), renderSettingsContent(), effects.resetCheckboxes(), effects.removeMechInfo?.());
+      }
+    });
+  }
+
+  // src/domain/combat/mech-settings.ts
+  var scrapOptions = Object.freeze([
+    Object.freeze({
+      val: "none",
+      label: "None",
+      hint: "Nothing will be scrapped automatically"
+    }),
+    Object.freeze({
+      val: "single",
+      label: "Full bay",
+      hint: "Scrap mechs only when mech bay is full, and script need more room to build mechs"
+    }),
+    Object.freeze({
+      val: "all",
+      label: "All inefficient",
+      hint: "Scrap all inefficient mechs immediately, using refounded resources to build better ones"
+    }),
+    Object.freeze({
+      val: "mixed",
+      label: "Excess inefficient",
+      hint: "Scrap as much inefficient mechs as possible, trying to preserve just enough of old mechs to fill bay to max by the time when next floor will be reached, calculating threshold based on progress speed and resources incomes"
+    })
+  ]), buildOptions = Object.freeze([
+    Object.freeze({
+      val: "none",
+      label: "None",
+      hint: "Nothing will be build automatically"
+    }),
+    Object.freeze({
+      val: "random",
+      label: "Random good",
+      hint: "Build random mech with size chosen below, and best possible efficiency"
+    }),
+    Object.freeze({
+      val: "user",
+      label: "Current design",
+      hint: "Build whatever currently set in Mech Lab"
+    })
+  ]), specialOptions = Object.freeze([
+    Object.freeze({
+      val: "always",
+      label: "Always",
+      hint: "Add special equipment to all mechs"
+    }),
+    Object.freeze({
+      val: "prefered",
+      label: "Preferred",
+      hint: "Add special equipment when it doesn't reduce efficiency for current floor"
+    }),
+    Object.freeze({
+      val: "random",
+      label: "Random",
+      hint: "Special equipment will have same chance to be added as all others"
+    }),
+    Object.freeze({
+      val: "never",
+      label: "Never",
+      hint: "Never add special equipment"
+    })
+  ]);
+  function createMechSettingsReadModel(sizeOptions) {
+    let controls2 = Object.freeze([
+      Object.freeze({
+        kind: "select",
+        settingName: "mechScrap",
+        label: "Scrap mechs",
+        hint: "Configures what will be scrapped. Infernal mechs won't ever be scrapped.",
+        options: scrapOptions
+      }),
+      Object.freeze({
+        kind: "number",
+        settingName: "mechScrapEfficiency",
+        label: "Scrap efficiency",
+        hint: `Scrap mechs only when '((OldMechRefund / NewMechCost) / (OldMechDamage / NewMechDamage))' more than given number.
+For the cases when exchanged mechs have same size(1/3 refund) it means that with 1 eff. script allowed to scrap mechs under 33.3%. 1.5 eff. - under 22.2%, 2 eff. - under 16.6%, 0.5 eff. - under 66.6%, 0 eff. - under 100%, etc.
+Efficiency below '1' is not recommended, unless scrap set to 'Full bay', as it's a breakpoint when refunded resources can immidiately compensate lost damage, resulting with best damage growth rate.
+Efficiency above '1' is useful to save resources for more desperate times, or to compensate low soul gems income.`
+      }),
+      Object.freeze({
+        kind: "number",
+        settingName: "mechCollectorValue",
+        label: "Collector value",
+        hint: "Collectors can't be directly compared with combat mechs, having no firepower. Script will assume that one collector/size is equal to this amount of scout/size. If you feel that script is too reluctant to scrap old collectors - you can decrease this value. Or increase, to make them more persistant. 1 value - 50% collector equial to 50% scout, 0.5 value - 50% collector equial to 25% scout, 2 value - 50% collector equial to 100% scout, etc."
+      }),
+      Object.freeze({
+        kind: "select",
+        settingName: "mechBuild",
+        label: "Build mechs",
+        hint: "Configures what will be built. Infernal mechs won't ever be built.",
+        options: buildOptions
+      }),
+      Object.freeze({
+        kind: "select",
+        settingName: "mechSize",
+        label: "Preferred mech size",
+        hint: "Size of random mechs",
+        options: sizeOptions
+      }),
+      Object.freeze({
+        kind: "select",
+        settingName: "mechSizeGravity",
+        label: "Gravity mech size",
+        hint: "Override preferred size with this on floors with high gravity",
+        options: sizeOptions
+      }),
+      Object.freeze({
+        kind: "select",
+        settingName: "mechSpecial",
+        label: "Special mechs",
+        hint: "Configures special equip",
+        options: specialOptions
+      }),
+      Object.freeze({
+        kind: "number",
+        settingName: "mechWaygatePotential",
+        label: "Maximum mech potential for Waygate",
+        hint: "Fight Demon Lord only when current mech team potential below given amount. Full bay of best mechs will have `1` potential. Damage against Demon Lord does not affected by floor modifiers, all mechs always does 100% damage to him. Thus it's most time-efficient to fight him at times when mechs can't make good progress against regular monsters, and waiting for rebuilding. Auto Power needs to be on for this to work."
+      }),
+      Object.freeze({
+        kind: "number",
+        settingName: "mechMinSupply",
+        label: "Minimum supply income",
+        hint: "Build collectors if current supply income below given number"
+      }),
+      Object.freeze({
+        kind: "number",
+        settingName: "mechMaxCollectors",
+        label: "Maximum collectors ratio",
+        hint: "Limiter for above option, maximum space used by collectors. 0.5 means up to 50% of total bay capacity will be dedicated to collectors, and such."
+      }),
+      Object.freeze({
+        kind: "number",
+        settingName: "mechSaveSupplyRatio",
+        label: "Save up supplies for next floor",
+        hint: "Ratio of supplies to save up for next floor. Script will stop spending supplies on new mechs when it estimates that by the time when floor will be cleared you'll be under this supply ratio. That allows build bunch of new mechs suited for next enemy right after entering new floor. With 1 value script will try to start new floors with full supplies, 0.5 - with half, 0 - any, effectively disabling this option, etc."
+      }),
+      Object.freeze({
+        kind: "number",
+        settingName: "mechScouts",
+        label: "Minimum scouts ratio",
+        hint: "Scouts compensate terrain penalty of suboptimal mechs. Build them up to this ratio."
+      }),
+      Object.freeze({
+        kind: "toggle",
+        settingName: "mechInfernalCollector",
+        label: "Build infernal collectors",
+        hint: "Infernal collectors have incresed supply cost, and payback time, but becomes more profitable after ~30 minutes of uptime."
+      }),
+      Object.freeze({
+        kind: "toggle",
+        settingName: "mechScoutsRebuild",
+        label: "Rebuild scouts",
+        hint: "Scouts provides full bonus to other mechs even being infficient, this option prevent rebuilding them saving resources."
+      }),
+      Object.freeze({
+        kind: "toggle",
+        settingName: "mechFillBay",
+        label: "Build smaller mechs when preferred not available",
+        hint: "Build smaller mechs when preferred size can't be used due to low remaining bay space, or supplies cap"
+      }),
+      Object.freeze({
+        kind: "toggle",
+        settingName: "buildingMechsFirst",
+        label: "Build spire buildings only with full bay",
+        hint: "Fill mech bays up to current limit before spending resources on additional spire buildings"
+      }),
+      Object.freeze({
+        kind: "toggle",
+        settingName: "mechBaysFirst",
+        label: "Scrap mechs only after building maximum bays",
+        hint: "Scrap old mechs only when no new bays and purifiers can be builded"
+      }),
+      Object.freeze({ kind: "header", label: "Mech Stats" })
+    ]);
+    return Object.freeze({
+      sectionId: "mech",
+      sectionName: "Mech & Spire",
+      controls: controls2
+    });
+  }
+  function createCapturedMechSettingsReadModel() {
+    let sizeOptions = Object.freeze(
+      CLASSIC_MECH_SIZES.map(
+        (size) => Object.freeze({
+          val: size,
+          label: `${size.charAt(0).toUpperCase()}${size.slice(1)}`,
+          hint: `Use ${size} frames when choosing an automatic design`
+        })
+      )
+    ), compatibilityModel = createMechSettingsReadModel(sizeOptions);
+    return Object.freeze({
+      sectionId: compatibilityModel.sectionId,
+      sectionName: compatibilityModel.sectionName,
+      controls: Object.freeze(
+        compatibilityModel.controls.filter(
+          (control) => control.kind !== "header" || control.label !== "Mech Stats"
+        )
+      )
     });
   }
 
@@ -38948,9 +39247,9 @@ If script is allowed to reassign non-empty storage it might waste time producing
           getTechIds: () => ({}),
           getCheckCustom: () => overrideCatalog.checkCustom,
           getOverrideKey: () => overrideKeyLabelFor(capturedPanelWindow) === "Alt" ? "altKey" : "ctrlKey",
-          getOpenOptionsModal: () => (title, buildOptions) => optionsModal.openOptionsModal(
+          getOpenOptionsModal: () => (title, buildOptions2) => optionsModal.openOptionsModal(
             title,
-            (modal) => buildOptions(modal)
+            (modal) => buildOptions2(modal)
           ),
           getTableSorter: () => tableSorter
         },
@@ -38977,7 +39276,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
           node,
           settingKey
         )
-      }), general, achievementGuard, challengeHelper, interfaceSettings, stateLog, authority, job, building, buildingToggles, project, arpaToggles, storage, storageToggles, market, marketToggles, ejector, ejectToggles, supplyToggles, magic, production, government, fleet, trait, research, trigger, shell = createSettingsShell({
+      }), general, achievementGuard, challengeHelper, interfaceSettings, stateLog, authority, job, building, buildingToggles, project, arpaToggles, storage, storageToggles, market, marketToggles, ejector, ejectToggles, supplyToggles, magic, production, government, fleet, trait, research, trigger, mech, shell = createSettingsShell({
         $: getJQuery(),
         getDocument: () => documentForUi,
         getSettingsRaw: () => settings.readRaw(),
@@ -39014,8 +39313,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
           parentNode,
           secondaryPrefix
         ),
-        buildMechSettings: () => {
-        },
+        buildMechSettings: () => mech?.buildMechSettings(),
         buildFleetSettings: (parentNode, secondaryPrefix) => fleet?.buildFleetSettings(
           parentNode,
           secondaryPrefix
@@ -39107,7 +39405,24 @@ If script is allowed to reassign non-empty storage it might waste time producing
         getTableSorter: () => tableSorter,
         tableSorter,
         confirm: (message) => confirmInPanelWindow(capturedPanelWindow, message)
-      }, capturedGovernmentAdapter = createCapturedGovernmentSettingsAdapter(), governmentIntent;
+      }, mechIntent = createMechSettingsIntentHandler({
+        writer: {
+          resetToDefaults: resetSection("mech"),
+          persist: persistSettings
+        },
+        renderSettingsContent: () => mech?.updateMechSettingsContent(),
+        effects: {
+          resetCheckboxes: () => controls2.resetCheckbox("autoMech")
+        }
+      });
+      mech = createMechSettingsBrowserAdapter({
+        getDocument: () => documentForUi,
+        getJQuery: () => getJQuery(),
+        reader: { read: createCapturedMechSettingsReadModel },
+        intents: mechIntent,
+        getActions: () => panelActions
+      });
+      let capturedGovernmentAdapter = createCapturedGovernmentSettingsAdapter(), governmentIntent;
       government = createGovernmentSettingsBrowserAdapter({
         getDocument: () => documentForUi,
         getJQuery: () => getJQuery(),
@@ -39829,6 +40144,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
         planet,
         prestige,
         war,
+        mech,
         weighting,
         job,
         building,
@@ -39879,7 +40195,7 @@ Only continue if you trust the source. Injected code:
       ), ui.authority.buildAuthoritySettings(), ui.prestige.buildPrestigeSettings(
         dom("#script_settings"),
         ""
-      ), ui.evolution.buildEvolutionSettings(), ui.planet.buildPlanetSettings(), ui.trigger?.buildTriggerSettings(), ui.research?.buildResearchSettings(), ui.hell.buildHellSettings(dom("#script_settings"), ""), ui.war.buildWarSettings(
+      ), ui.evolution.buildEvolutionSettings(), ui.planet.buildPlanetSettings(), ui.trigger?.buildTriggerSettings(), ui.research?.buildResearchSettings(), ui.hell.buildHellSettings(dom("#script_settings"), ""), ui.mech.buildMechSettings(), ui.war.buildWarSettings(
         dom("#script_settings"),
         ""
       ), ui.fleet?.buildFleetSettings(

@@ -14,5 +14,5 @@ export interface MechSettingsWriter {
 }
 export interface MechSettingsEffects {
   resetCheckboxes(): void;
-  removeMechInfo(): void;
+  removeMechInfo?(): void;
 }

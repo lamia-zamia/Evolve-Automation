@@ -5,9 +5,9 @@
  * This control wires those existing typed browser builders to the captured settings record instead
  * of to the legacy closure; game-backed sections remain outside this slice until their captures exist.
  *
- * TRANSITIONAL: the remaining per-section builders (the Settings tab) are still unavailable on
- * the captured path. They are diagnosed once by name rather than silently doing nothing. Automation
- * itself does not depend on any of them — it reads the same settings record this panel writes.
+ * TRANSITIONAL: settings sections without captured readers remain unavailable on this path. They
+ * are diagnosed once by name rather than silently doing nothing. Automation reads the same layered
+ * settings record this panel writes.
  */
 
 import { createAutomationContainer } from "../ui/automation-container.ts";
@@ -151,6 +151,11 @@ import { createCapturedFleetSettingsAdapter } from "../adapters/evolve/combat/ca
 import { createTraitSettingsBrowserAdapter } from "../adapters/browser/trait-settings.ts";
 import { createTraitSettingsIntentHandler } from "../application/trait-settings.ts";
 import { createCapturedTraitSettingsAdapter } from "../adapters/evolve/traits/captured-trait-settings.ts";
+import {
+  createMechSettingsBrowserAdapter,
+  type MechSettingsBrowserActions,
+  type MechSettingsBrowserAdapter,
+} from "../adapters/browser/mech-settings.ts";
 import type { TriggerValue } from "../domain/progression/build/trigger-settings.ts";
 import type {
   ObjectList,
@@ -188,6 +193,8 @@ import { createEvolutionSettingsIntentHandler } from "../application/evolution-s
 import { createPlanetSettingsIntentHandler } from "../application/planet-settings.ts";
 import { createPrestigeSettingsIntentHandler } from "../application/prestige-settings.ts";
 import { createWeightingSettingsIntentHandler } from "../application/weighting-settings.ts";
+import { createMechSettingsIntentHandler } from "../application/mech-settings.ts";
+import { createCapturedMechSettingsReadModel } from "../domain/combat/mech-settings.ts";
 import {} from "../domain/settings-defaults.ts";
 import type { CapturedSettingsStore } from "../ports/captured-settings-store.ts";
 import { inspectImportedSettings } from "../adapters/browser/settings-import.ts";
@@ -585,6 +592,7 @@ interface SettingsUi {
   readonly planet: PlanetSettings;
   readonly prestige: PrestigeSettings;
   readonly war: WarSettings;
+  readonly mech: MechSettingsBrowserAdapter;
   readonly weighting: WeightingSettings;
   readonly job: JobSettings;
   readonly building: BuildingSettings | undefined;
@@ -875,6 +883,7 @@ export function createCapturedSettingsPanel({
     let trait: TraitSettings | undefined;
     let research: ResearchSettings | undefined;
     let trigger: TriggerSettings | undefined;
+    let mech: MechSettingsBrowserAdapter | undefined;
     const shell = createSettingsShell({
       $: getJQuery() as unknown as Parameters<
         typeof createSettingsShell
@@ -929,7 +938,7 @@ export function createCapturedSettingsPanel({
           >[0],
           secondaryPrefix,
         ),
-      buildMechSettings: () => {},
+      buildMechSettings: () => mech?.buildMechSettings(),
       buildFleetSettings: (parentNode, secondaryPrefix) =>
         fleet?.buildFleetSettings(
           parentNode as unknown as Parameters<
@@ -1073,6 +1082,29 @@ export function createCapturedSettingsPanel({
       confirm: (message: string) =>
         confirmInPanelWindow(capturedPanelWindow, message),
     };
+    const mechIntent = createMechSettingsIntentHandler({
+      writer: {
+        resetToDefaults: resetSection("mech"),
+        persist: persistSettings,
+      },
+      renderSettingsContent: () => mech?.updateMechSettingsContent(),
+      effects: {
+        resetCheckboxes: () => controls.resetCheckbox("autoMech"),
+      },
+    });
+    mech = createMechSettingsBrowserAdapter({
+      getDocument: () =>
+        documentForUi as ReturnType<
+          Parameters<typeof createMechSettingsBrowserAdapter>[0]["getDocument"]
+        >,
+      getJQuery: () =>
+        getJQuery() as ReturnType<
+          Parameters<typeof createMechSettingsBrowserAdapter>[0]["getJQuery"]
+        >,
+      reader: { read: createCapturedMechSettingsReadModel },
+      intents: mechIntent,
+      getActions: () => panelActions as unknown as MechSettingsBrowserActions,
+    });
     // Government options are static captured copy, so this section needs no game
     // draw and is always built. It renders into the secondary options modal.
     const capturedGovernmentAdapter = createCapturedGovernmentSettingsAdapter();
@@ -1967,6 +1999,7 @@ export function createCapturedSettingsPanel({
       planet,
       prestige,
       war,
+      mech,
       weighting,
       job,
       building,
@@ -2056,6 +2089,7 @@ export function createCapturedSettingsPanel({
     ui.trigger?.buildTriggerSettings();
     ui.research?.buildResearchSettings();
     ui.hell.buildHellSettings(dom("#script_settings"), "");
+    ui.mech.buildMechSettings();
     ui.war.buildWarSettings(
       dom("#script_settings") as unknown as Parameters<
         WarSettings["buildWarSettings"]
