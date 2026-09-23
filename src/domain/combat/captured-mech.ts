@@ -1,9 +1,7 @@
 /** Pure policy for the captured current-design mech-build slice. */
 
-import { canSpendWithDistantReservation } from "../economy/resources/reservation.ts";
 import {
-  resolveMechScrapMode,
-  shouldReadMechScrapCandidates,
+  planMechContinuation,
   shouldSaveMechSupply,
   type MechDesign,
   type MechPlanningInput,
@@ -121,7 +119,7 @@ function savingSupplyHold(
   const headroom = bay.maximum - bay.occupied;
   return shouldSaveMechSupply({
     saveSupplyRatio: settings.saveSupplyRatio,
-    lastFloor: false,
+    lastFloor: state.lastFloor,
     forceBuild: false,
     supplyMaximum: funds.purifierMax,
     supplyCurrent: funds.purifierSupply,
@@ -261,13 +259,9 @@ function mechGemsInput(state: CapturedMechState): MechResourceInput {
 }
 
 /**
- * One scrapped mech: the worst-efficiency bay entry the replacement economics
- * justify, verified alone. The mode resolution, read gates, and efficiency
- * threshold reuse the historical pure policy (`resolveMechScrapMode`,
- * `shouldReadMechScrapCandidates`); the batch loop does not carry over —
- * replacement is always a fresh plan on the next tick, after the disappearance
- * postcondition. An unratable team resolves `mixed` to `single`, mirroring the
- * powerless history rather than guessing.
+ * One scrapped mech from the viable cumulative replacement set. The shared
+ * policy plans the full set; this pass executes its first index and replans
+ * only after the game confirms the removal.
  */
 export function planCapturedMechScrap(
   state: CapturedMechState,
@@ -285,7 +279,7 @@ export function planCapturedMechScrap(
   }
   const choice = designAutoChoice(state, pickIndex);
   if (choice === null) return null;
-  const { settings, bay, funds } = state;
+  const { settings, bay } = state;
   const { floor, figures, preferred, design, cost, teamPower } = choice;
   const headroom = bay.maximum - bay.occupied;
   const supply = mechSupplyInput(state);
@@ -357,7 +351,7 @@ export function planCapturedMechScrap(
     sizeOrder: Object.freeze([...CLASSIC_MECH_SIZES]),
     supply,
     gems,
-    lastFloor: false,
+    lastFloor: state.lastFloor,
     canExpandBay: false,
     configuredScrapMode: settings.scrapMode,
     waygateActiveCount: state.waygateActive ? 1 : 0,
@@ -373,86 +367,26 @@ export function planCapturedMechScrap(
         : Number.MAX_SAFE_INTEGER,
     activeMechs: Object.freeze(rated),
   };
-  const mode =
-    settings.scrapMode === "mixed" && !state.waygateActive && teamPower === null
-      ? "single"
-      : resolveMechScrapMode(planning);
-  if (mode === "none" || !shouldReadMechScrapCandidates(planning)) {
-    return null;
-  }
-  const threshold =
-    (settings.fillBay ? headroom === 0 : headroom < cost.space) &&
-    supply.storageRatio > 0.9 &&
-    !saving
-      ? 0
-      : settings.scrapEfficiency;
-  const candidates = rated
-    .filter((mech) => {
-      if (
-        (mech.infernal && mech.size !== "collector") ||
-        mech.power >= mech.bestPower
-      ) {
-        return false;
-      }
-      if (preferred.force) return true;
-      // A gemless refund still counts half a gem, exactly as history did:
-      // otherwise frames cheaper than one gem could never be replaced.
-      const costRatio = Math.min(
-        (mech.gemRefund || 0.5) / cost.gems,
-        mech.supplyRefund / cost.supply,
-      );
-      return costRatio / (mech.power / design.power) > threshold;
-    })
-    .sort((left, right) => left.efficiency - right.efficiency);
-  let extraScouts = settings.rebuildScouts
-    ? Number.MAX_SAFE_INTEGER
-    : bay.scouts - (bay.maximum * settings.scoutsRatio) / 2;
-  for (const mech of candidates) {
-    if (mech.size === "small") {
-      if (extraScouts < 1) continue;
-      extraScouts -= 1;
-    }
-    const supplyOk = canSpendWithDistantReservation(
-      {
-        current: funds.purifierSupply + mech.supplyRefund,
-        spare: funds.purifierSupply + mech.supplyRefund,
-        rate: funds.supplyRate,
-      },
-      cost.supply,
-    );
-    const gemsOk = canSpendWithDistantReservation(
-      {
-        current: funds.soulGems + mech.gemRefund,
-        spare: funds.soulGems + mech.gemRefund,
-        rate: funds.gemsRate,
-      },
-      cost.gems,
-    );
-    if (
-      headroom + mech.space >= cost.space &&
-      supplyOk &&
-      gemsOk &&
-      (preferred.force || mech.power / mech.space < design.efficiency)
-    ) {
-      const identity = state.inventory[mech.id];
-      if (identity === undefined) return null;
-      return Object.freeze({
-        kind: "scrap-captured-mech" as const,
-        index: mech.id,
-        design: Object.freeze({
-          size: identity.size,
-          chassis: identity.chassis,
-          hardpoint: identity.hardpoint,
-          equip: identity.equip,
-          infernal: identity.infernal,
-        }),
-        space: mech.space,
-        supplyRefund: mech.supplyRefund,
-        gemsRefund: mech.gemRefund,
-        expectedLength: state.inventory.length,
-        expectedOccupied: bay.occupied,
-      });
-    }
-  }
-  return null;
+  const continuation = planMechContinuation(planning);
+  const index = continuation.scrap?.ids[0];
+  if (index === undefined) return null;
+  const candidate = rated.find((mech) => mech.id === index);
+  const identity = state.inventory[index];
+  if (candidate === undefined || identity === undefined) return null;
+  return Object.freeze({
+    kind: "scrap-captured-mech" as const,
+    index,
+    design: Object.freeze({
+      size: identity.size,
+      chassis: identity.chassis,
+      hardpoint: identity.hardpoint,
+      equip: identity.equip,
+      infernal: identity.infernal,
+    }),
+    space: candidate.space,
+    supplyRefund: candidate.supplyRefund,
+    gemsRefund: candidate.gemRefund,
+    expectedLength: state.inventory.length,
+    expectedOccupied: bay.occupied,
+  });
 }

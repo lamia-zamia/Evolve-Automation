@@ -112,6 +112,20 @@ function tailMatchesDesign(tail: unknown, wanted: CapturedMechDesign): boolean {
   );
 }
 
+function readStoredMechDesign(value: unknown): CapturedMechDesign | null {
+  if (!isNonArrayRecord(value)) return null;
+  const size = value["size"];
+  const chassis = value["chassis"];
+  if (typeof size !== "string" || typeof chassis !== "string") return null;
+  return Object.freeze({
+    size,
+    chassis,
+    hardpoint: readDesignStrings(value["hardpoint"]),
+    equip: readDesignStrings(value["equip"]),
+    infernal: Boolean(value["infernal"]),
+  });
+}
+
 type CapturedMechSession = CapturedMechSample;
 
 function capturedMechUnavailable(): CapturedMechBuildInput {
@@ -753,10 +767,13 @@ export function createCapturedMech(dependencies: CapturedMechDependencies): {
       const stored = storedOf(rootRef);
       const occupied = bayOf(rootRef);
       const before = fundsOf(rootRef);
+      const beforeDesigns = stored?.map(readStoredMechDesign);
       if (
         stored === undefined ||
         occupied === undefined ||
         before === undefined ||
+        beforeDesigns === undefined ||
+        beforeDesigns.some((entry) => entry === null) ||
         stored.length !== decision.expectedLength ||
         occupied !== decision.expectedOccupied ||
         !tailMatchesDesign(stored[decision.index], decision.design)
@@ -775,10 +792,8 @@ export function createCapturedMech(dependencies: CapturedMechDependencies): {
           `captured mech scrap failed: ${result.reason}`,
         );
       }
-      // The exact candidate must be gone: one fewer mech, none matching its
-      // design, bay freed, refunds paid (supply clamped to its maximum, as
-      // the game's own list `scrap` does). Anything else stops the pass —
-      // never a second candidate, never the replacement build.
+      // The post-scrap sequence must equal the pre-scrap sequence without the
+      // selected index; identical designs may legitimately remain.
       const after = storedOf(rootRef);
       const occupiedAfter = bayOf(rootRef);
       const fundsAfter = fundsOf(rootRef);
@@ -787,7 +802,19 @@ export function createCapturedMech(dependencies: CapturedMechDependencies): {
         occupiedAfter === undefined ||
         fundsAfter === undefined ||
         after.length !== decision.expectedLength - 1 ||
-        after.some((entry) => tailMatchesDesign(entry, decision.design)) ||
+        beforeDesigns === undefined ||
+        beforeDesigns.some((entry) => entry === null) ||
+        after.some((entry, index) => {
+          const expectedIndex = index < decision.index ? index : index + 1;
+          const expected = beforeDesigns[expectedIndex];
+          const actual = readStoredMechDesign(entry);
+          return (
+            expected === undefined ||
+            expected === null ||
+            actual === null ||
+            !designsEqual(actual, expected)
+          );
+        }) ||
         occupiedAfter !== decision.expectedOccupied - decision.space ||
         fundsAfter.supply !==
           Math.min(before.supply + decision.supplyRefund, before.max) ||

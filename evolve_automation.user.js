@@ -7046,6 +7046,13 @@
       baysFirst: settings.mechBaysFirst !== !1
     });
   }
+  function readMechFinalDemonicFloor(root, settingsValue, spireCount) {
+    let settings = isNonArrayRecord(settingsValue) ? settingsValue : {};
+    if (root === void 0 || spireCount === void 0 || settings.autoPrestige !== !0 || settings.prestigeType !== "demonic")
+      return !1;
+    let finalFloor = nonNegativeQuantity(settings.prestigeDemonicFloor), tech = isNonArrayRecord(root.tech) ? root.tech : void 0, waygate = tech === void 0 ? void 0 : nonNegativeQuantity(tech.waygate);
+    return finalFloor !== void 0 && waygate !== void 0 && spireCount >= finalFloor && waygate >= 3;
+  }
   function waygateActive(root) {
     if (root === void 0) return !1;
     let portal = root.portal;
@@ -7088,6 +7095,7 @@
       prepared: 0,
       wrath: 0,
       gladiatorLevel: 0,
+      lastFloor: !1,
       settings
     });
   }
@@ -7162,6 +7170,11 @@
       prepared: nonNegativeQuantity(blood.prepared) ?? 0,
       wrath: nonNegativeQuantity(blood.wrath) ?? 0,
       gladiatorLevel: gladiator,
+      lastFloor: readMechFinalDemonicFloor(
+        root,
+        input.settings,
+        spireFacts?.count
+      ),
       settings
     });
   }
@@ -7196,10 +7209,7 @@
     return power;
   }
   function designAutoChoice(state, pickIndex) {
-    if (!state.available || state.queueKeyHeld || state.warlord || state.settings.buildMode !== "random" || state.blueprint === null || state.blueprint.infernal)
-      return null;
-    let inactives = Math.max(0, state.inventory.length - state.bay.active);
-    if (state.governorMechTask && inactives === 0) return null;
+    if (!state.available || state.queueKeyHeld || state.warlord || state.settings.buildMode !== "random" || state.blueprint === null || state.blueprint.infernal || Math.max(0, state.inventory.length - state.bay.active) > 0 || state.governorMechTask) return null;
     let floor = autoFloor(state);
     if (floor === null || floor.collectorValue <= 0) return null;
     let figures = bestDesignFigures(floor, pickIndex);
@@ -42073,6 +42083,17 @@ Only continue if you trust the source. Injected code:
   function tailMatchesDesign(tail, wanted) {
     return isNonArrayRecord(tail) ? tail.size === wanted.size && (tail.chassis ?? "") === wanted.chassis && JSON.stringify(readDesignStrings(tail.hardpoint)) === JSON.stringify(wanted.hardpoint) && JSON.stringify(readDesignStrings(tail.equip)) === JSON.stringify(wanted.equip) && !!tail.infernal === wanted.infernal : !1;
   }
+  function readStoredMechDesign(value) {
+    if (!isNonArrayRecord(value)) return null;
+    let size = value.size, chassis = value.chassis;
+    return typeof size != "string" || typeof chassis != "string" ? null : Object.freeze({
+      size,
+      chassis,
+      hardpoint: readDesignStrings(value.hardpoint),
+      equip: readDesignStrings(value.equip),
+      infernal: !!value.infernal
+    });
+  }
   function capturedMechUnavailable() {
     return Object.freeze({
       available: !1,
@@ -42438,8 +42459,8 @@ Only continue if you trust the source. Injected code:
           if (!isNonArrayRecord(root)) return;
           let mechbay = readProperty(readProperty(root, "portal"), "mechbay");
           return isNonArrayRecord(mechbay) && Array.isArray(mechbay.mechs) ? mechbay.mechs : void 0;
-        }, stored = storedOf(rootRef), occupied = bayOf(rootRef), before = fundsOf(rootRef);
-        if (stored === void 0 || occupied === void 0 || before === void 0 || stored.length !== decision.expectedLength || occupied !== decision.expectedOccupied || !tailMatchesDesign(stored[decision.index], decision.design))
+        }, stored = storedOf(rootRef), occupied = bayOf(rootRef), before = fundsOf(rootRef), beforeDesigns = stored?.map(readStoredMechDesign);
+        if (stored === void 0 || occupied === void 0 || before === void 0 || beforeDesigns === void 0 || beforeDesigns.some((entry) => entry === null) || stored.length !== decision.expectedLength || occupied !== decision.expectedOccupied || !tailMatchesDesign(stored[decision.index], decision.design))
           return stale(
             "captured-mech-scrap-target-changed",
             "captured mech scrap target changed"
@@ -42453,7 +42474,10 @@ Only continue if you trust the source. Injected code:
             `captured mech scrap failed: ${result.reason}`
           );
         let after = storedOf(rootRef), occupiedAfter = bayOf(rootRef), fundsAfter = fundsOf(rootRef);
-        return after === void 0 || occupiedAfter === void 0 || fundsAfter === void 0 || after.length !== decision.expectedLength - 1 || after.some((entry) => tailMatchesDesign(entry, decision.design)) || occupiedAfter !== decision.expectedOccupied - decision.space || fundsAfter.supply !== Math.min(before.supply + decision.supplyRefund, before.max) || fundsAfter.gems !== before.gems + decision.gemsRefund ? stale(
+        return after === void 0 || occupiedAfter === void 0 || fundsAfter === void 0 || after.length !== decision.expectedLength - 1 || beforeDesigns === void 0 || beforeDesigns.some((entry) => entry === null) || after.some((entry, index) => {
+          let expectedIndex = index < decision.index ? index : index + 1, expected = beforeDesigns[expectedIndex], actual = readStoredMechDesign(entry);
+          return expected == null || actual === null || !designsEqual(actual, expected);
+        }) || occupiedAfter !== decision.expectedOccupied - decision.space || fundsAfter.supply !== Math.min(before.supply + decision.supplyRefund, before.max) || fundsAfter.gems !== before.gems + decision.gemsRefund ? stale(
           "captured-mech-not-scrapped",
           "the game did not commit the captured mech scrap"
         ) : SUCCEEDED;
@@ -42497,6 +42521,69 @@ Only continue if you trust the source. Injected code:
       input.cost.supply
     ) && (mode === "single" && input.baySpace < input.cost.space || mode === "all" && (input.baySpace < input.cost.space || !canSpendWithDistantReservation(input.supply, input.cost.supply) || !canSpendWithDistantReservation(input.gems, input.cost.gems)));
   }
+  function planMechContinuation(input) {
+    let scrapMode = resolveMechScrapMode(input), scrap = null, waitForReplacement = !1, spaceGained = 0, supplyGained = 0, gemsGained = 0;
+    if (shouldReadMechScrapCandidates(input)) {
+      let threshold = (input.fillBay ? input.baySpace === 0 : input.baySpace < input.cost.space) && input.supply.storageRatio > 0.9 && !input.savingSupply ? 0 : input.lastFloor ? Math.min(input.scrapEfficiency, 1) : input.scrapEfficiency, candidates = input.activeMechs.filter((mech) => mech.infernal && mech.size !== "collector" || mech.power >= mech.bestPower ? !1 : input.forceBuild ? !0 : Math.min(
+        (mech.gemRefund || 0.5) / input.cost.gems,
+        mech.supplyRefund / input.cost.supply
+      ) / (mech.power / input.design.power) > threshold).sort((left, right) => left.efficiency - right.efficiency), extraScouts = input.rebuildScouts ? Number.MAX_SAFE_INTEGER : input.scouts - input.bayMaximum * input.scoutsRatio / 2, trash = [], powerLost = 0, canReplaceWithRefunds = () => canSpendWithDistantReservation(
+        {
+          current: input.supply.current + supplyGained,
+          spare: input.supply.spare + supplyGained,
+          rate: input.supply.rate
+        },
+        input.cost.supply
+      ) && canSpendWithDistantReservation(
+        {
+          current: input.gems.current + gemsGained,
+          spare: input.gems.spare + gemsGained,
+          rate: input.gems.rate
+        },
+        input.cost.gems
+      );
+      for (let index = 0; index < candidates.length && (input.baySpace + spaceGained < input.cost.space || scrapMode === "all" && !canReplaceWithRefunds()); index++) {
+        let mech = candidates[index];
+        if (mech !== void 0) {
+          if (mech.size === "small") {
+            if (extraScouts < 1) continue;
+            extraScouts--;
+          }
+          spaceGained += mech.space, supplyGained += mech.supplyRefund, gemsGained += mech.gemRefund, powerLost += mech.power, trash.push(mech);
+        }
+      }
+      let enoughForReplacement = input.baySpace + spaceGained >= input.cost.space && canReplaceWithRefunds();
+      if (trash.length > 0 && (input.forceBuild || powerLost / spaceGained < input.design.efficiency) && enoughForReplacement) {
+        let sorted = [...trash].sort((left, right) => right.id - left.id);
+        scrap = Object.freeze({
+          ids: Object.freeze(sorted.map((mech) => mech.id)),
+          supplyGained,
+          gemsGained,
+          spaceGained,
+          averageRating: sorted.reduce((sum, mech) => sum + mech.power / mech.bestPower, 0) / sorted.length
+        });
+      } else input.baySpace + spaceGained >= input.cost.space ? (waitForReplacement = !0, spaceGained = 0, supplyGained = 0, gemsGained = 0) : (spaceGained = 0, supplyGained = 0, gemsGained = 0);
+    }
+    let baySpace = input.baySpace + spaceGained;
+    return Object.freeze({
+      kind: "continue-mech-cycle",
+      scrap,
+      halt: waitForReplacement,
+      trySmaller: !waitForReplacement && input.fillBay && !input.savingSupply && (!input.canExpandBay && baySpace < input.cost.space || input.supply.maximum < input.cost.supply),
+      baySpace,
+      supplyCurrent: Math.min(
+        input.supply.current + supplyGained,
+        input.supply.maximum
+      ),
+      supplySpare: input.supply.spare + supplyGained,
+      supplyRate: input.supply.rate,
+      gemsCurrent: input.gems.current + gemsGained,
+      gemsSpare: input.gems.spare + gemsGained,
+      gemsRate: input.gems.rate,
+      supplyMaximum: input.supply.maximum,
+      prolongActive: input.prolongActive
+    });
+  }
 
   // src/domain/combat/captured-mech.ts
   function planCapturedMechBuild(input) {
@@ -42516,7 +42603,7 @@ Only continue if you trust the source. Injected code:
     let headroom = bay.maximum - bay.occupied;
     return shouldSaveMechSupply({
       saveSupplyRatio: settings.saveSupplyRatio,
-      lastFloor: !1,
+      lastFloor: state.lastFloor,
       forceBuild: !1,
       supplyMaximum: funds.purifierMax,
       supplyCurrent: funds.purifierSupply,
@@ -42591,7 +42678,7 @@ Only continue if you trust the source. Injected code:
       return null;
     let choice = designAutoChoice(state, pickIndex);
     if (choice === null) return null;
-    let { settings, bay, funds } = state, { floor, figures, preferred, design, cost, teamPower } = choice, headroom = bay.maximum - bay.occupied, supply = mechSupplyInput(state), gems = mechGemsInput(state), designPolicy = {
+    let { settings, bay } = state, { floor, figures, preferred, design, cost, teamPower } = choice, headroom = bay.maximum - bay.occupied, supply = mechSupplyInput(state), gems = mechGemsInput(state), designPolicy = {
       token: "scrap-replacement",
       size: design.size,
       power: design.power,
@@ -42635,7 +42722,7 @@ Only continue if you trust the source. Injected code:
       sizeOrder: Object.freeze([...CLASSIC_MECH_SIZES]),
       supply,
       gems,
-      lastFloor: !1,
+      lastFloor: state.lastFloor,
       canExpandBay: !1,
       configuredScrapMode: settings.scrapMode,
       waygateActiveCount: state.waygateActive ? 1 : 0,
@@ -42647,54 +42734,25 @@ Only continue if you trust the source. Injected code:
       mechsPower: teamPower ?? 0,
       timeToClear: teamPower !== null && teamPower > 0 ? (100 - state.spire.progress) / teamPower : Number.MAX_SAFE_INTEGER,
       activeMechs: Object.freeze(rated)
-    };
-    if ((settings.scrapMode === "mixed" && !state.waygateActive && teamPower === null ? "single" : resolveMechScrapMode(planning)) === "none" || !shouldReadMechScrapCandidates(planning))
-      return null;
-    let threshold = (settings.fillBay ? headroom === 0 : headroom < cost.space) && supply.storageRatio > 0.9 && !saving ? 0 : settings.scrapEfficiency, candidates = rated.filter((mech) => mech.infernal && mech.size !== "collector" || mech.power >= mech.bestPower ? !1 : preferred.force ? !0 : Math.min(
-      (mech.gemRefund || 0.5) / cost.gems,
-      mech.supplyRefund / cost.supply
-    ) / (mech.power / design.power) > threshold).sort((left, right) => left.efficiency - right.efficiency), extraScouts = settings.rebuildScouts ? Number.MAX_SAFE_INTEGER : bay.scouts - bay.maximum * settings.scoutsRatio / 2;
-    for (let mech of candidates) {
-      if (mech.size === "small") {
-        if (extraScouts < 1) continue;
-        extraScouts -= 1;
-      }
-      let supplyOk = canSpendWithDistantReservation(
-        {
-          current: funds.purifierSupply + mech.supplyRefund,
-          spare: funds.purifierSupply + mech.supplyRefund,
-          rate: funds.supplyRate
-        },
-        cost.supply
-      ), gemsOk = canSpendWithDistantReservation(
-        {
-          current: funds.soulGems + mech.gemRefund,
-          spare: funds.soulGems + mech.gemRefund,
-          rate: funds.gemsRate
-        },
-        cost.gems
-      );
-      if (headroom + mech.space >= cost.space && supplyOk && gemsOk && (preferred.force || mech.power / mech.space < design.efficiency)) {
-        let identity = state.inventory[mech.id];
-        return identity === void 0 ? null : Object.freeze({
-          kind: "scrap-captured-mech",
-          index: mech.id,
-          design: Object.freeze({
-            size: identity.size,
-            chassis: identity.chassis,
-            hardpoint: identity.hardpoint,
-            equip: identity.equip,
-            infernal: identity.infernal
-          }),
-          space: mech.space,
-          supplyRefund: mech.supplyRefund,
-          gemsRefund: mech.gemRefund,
-          expectedLength: state.inventory.length,
-          expectedOccupied: bay.occupied
-        });
-      }
-    }
-    return null;
+    }, index = planMechContinuation(planning).scrap?.ids[0];
+    if (index === void 0) return null;
+    let candidate = rated.find((mech) => mech.id === index), identity = state.inventory[index];
+    return candidate === void 0 || identity === void 0 ? null : Object.freeze({
+      kind: "scrap-captured-mech",
+      index,
+      design: Object.freeze({
+        size: identity.size,
+        chassis: identity.chassis,
+        hardpoint: identity.hardpoint,
+        equip: identity.equip,
+        infernal: identity.infernal
+      }),
+      space: candidate.space,
+      supplyRefund: candidate.supplyRefund,
+      gemsRefund: candidate.gemRefund,
+      expectedLength: state.inventory.length,
+      expectedOccupied: bay.occupied
+    });
   }
 
   // src/application/captured-mech.ts
@@ -42706,10 +42764,13 @@ Only continue if you trust the source. Injected code:
     return decision === null ? CAPTURED_MECH_SUCCEEDED : dependencies.executor.execute(decision);
   }
   function runCapturedMechAutomation(dependencies) {
+    let initialState = dependencies.reader.readState();
+    if (!initialState.available || initialState.inventory.length > initialState.bay.active)
+      return CAPTURED_MECH_SUCCEEDED;
     let built = runCapturedMech(dependencies);
     if (built.status !== "succeeded") return built;
     let state = dependencies.reader.readState();
-    if (!state.available || state.settings.buildMode !== "random")
+    if (!state.available || state.inventory.length > state.bay.active || state.settings.buildMode !== "random")
       return CAPTURED_MECH_SUCCEEDED;
     let pick = (choices) => Math.floor(dependencies.random.nextUnit() * choices), scrap = planCapturedMechScrap(state, pick);
     if (scrap !== null) return dependencies.executor.executeAutoScrap(scrap);

@@ -448,6 +448,15 @@ const zeroRandom = { nextUnit: () => 0 };
     planAuto(poor.adapter.reader.readState(), () => 0),
     null,
   );
+  poor.settings.autoPrestige = true;
+  poor.settings.prestigeType = "demonic";
+  poor.settings.prestigeDemonicFloor = 1;
+  poor.root.tech = { waygate: 3 };
+  assert.equal(poor.adapter.reader.readState().lastFloor, true);
+  assert.notEqual(
+    planAuto(poor.adapter.reader.readState(), () => 0),
+    null,
+  );
 
   const rich = makeWorld();
   rich.root.portal.mechbay.mechs = structuredClone(
@@ -590,6 +599,82 @@ const zeroRandom = { nextUnit: () => 0 };
   );
 }
 
+// Scrapping one of two identical designs proves the selected array position
+// disappeared even though the other copy remains.
+{
+  const duplicates = makeWorld();
+  const design = {
+    size: "small",
+    chassis: "wheel",
+    hardpoint: ["laser"],
+    equip: ["special", "shields"],
+    infernal: false,
+  };
+  duplicates.root.portal.mechbay.mechs = [
+    structuredClone(design),
+    structuredClone(design),
+  ];
+  duplicates.root.portal.mechbay.max = 4;
+  duplicates.root.portal.mechbay.bay = 4;
+  duplicates.root.portal.mechbay.active = 2;
+  duplicates.settings.mechSize = "small";
+  duplicates.settings.mechFillBay = true;
+  duplicates.settings.mechScrap = "all";
+  const outcome = runCapturedMechAutomation({
+    ...duplicates.adapter,
+    random: zeroRandom,
+  });
+  assert.equal(outcome.status, "succeeded");
+  assert.equal(
+    duplicates.calls.filter(([method]) => method === "scrap").length,
+    1,
+  );
+  assert.equal(duplicates.root.portal.mechbay.mechs.length, 1);
+  assert.deepEqual(duplicates.root.portal.mechbay.mechs[0], design);
+}
+
+// A replacement needing several small frames can start with one verified
+// scrap, then replan from the changed bay on the next tick.
+{
+  const crowded = makeWorld();
+  const poorSmall = {
+    size: "small",
+    chassis: "wheel",
+    hardpoint: ["laser"],
+    equip: ["special", "shields"],
+    infernal: false,
+  };
+  crowded.root.portal.mechbay.mechs = Array.from({ length: 12 }, () =>
+    structuredClone(poorSmall),
+  );
+  crowded.root.portal.mechbay.max = 25;
+  crowded.root.portal.mechbay.bay = 24;
+  crowded.root.portal.mechbay.active = 12;
+  crowded.root.portal.mechbay.scouts = 24;
+  crowded.settings.mechSize = "titan";
+  crowded.settings.mechFillBay = false;
+  crowded.settings.mechScrap = "all";
+  crowded.settings.mechScoutsRebuild = true;
+  crowded.settings.mechScrapEfficiency = 0;
+  const firstPlan = planScrap(crowded.adapter.reader.readState(), () => 0);
+  assert.notEqual(firstPlan, null);
+  assert.equal(firstPlan.space, 2);
+  const firstTick = runCapturedMechAutomation({
+    ...crowded.adapter,
+    random: zeroRandom,
+  });
+  assert.equal(firstTick.status, "succeeded");
+  assert.equal(crowded.root.portal.mechbay.mechs.length, 11);
+  assert.equal(
+    crowded.calls.filter(([method]) => method === "scrap").length,
+    1,
+  );
+  assert.equal(
+    crowded.calls.some(([method]) => method === "build"),
+    false,
+  );
+}
+
 // Invoked but still present: one scrap call, then STOP — no second scrap,
 // no replacement build.
 {
@@ -669,8 +754,7 @@ const zeroRandom = { nextUnit: () => 0 };
   );
 }
 
-// A governor Mech Builder task stands the automation down — the governor
-// assembles titans itself — except while mechs sit inactive.
+// A governor Mech Builder task and any inactive Mechs stand automation down.
 {
   const governed = makeWorld();
   governed.root.race = { governor: { tasks: { slot1: "mech" } } };
@@ -706,10 +790,33 @@ const zeroRandom = { nextUnit: () => 0 };
   ];
   overflow.root.portal.mechbay.bay = 4;
   overflow.root.portal.mechbay.active = 1;
-  assert.notEqual(
+  assert.equal(
     planAuto(overflow.adapter.reader.readState(), () => 0),
     null,
   );
+  assert.equal(
+    runCapturedMechAutomation({ ...overflow.adapter, random: zeroRandom })
+      .status,
+    "succeeded",
+  );
+  assert.deepEqual(overflow.calls, []);
+
+  // The same gate runs before a user-blueprint build.
+  const overflowUserBuild = makeWorld();
+  overflowUserBuild.settings.mechBuild = "user";
+  overflowUserBuild.root.portal.mechbay.mechs = structuredClone(
+    overflow.root.portal.mechbay.mechs,
+  );
+  overflowUserBuild.root.portal.mechbay.bay = 4;
+  overflowUserBuild.root.portal.mechbay.active = 1;
+  assert.equal(
+    runCapturedMechAutomation({
+      ...overflowUserBuild.adapter,
+      random: zeroRandom,
+    }).status,
+    "succeeded",
+  );
+  assert.deepEqual(overflowUserBuild.calls, []);
 
   const malformed = makeWorld();
   malformed.root.race = { governor: { tasks: { slot1: 42 } } };

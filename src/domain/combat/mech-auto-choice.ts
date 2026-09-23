@@ -87,9 +87,10 @@ export function designAutoChoice(
     return null;
   }
   // The governor assembles titans itself; history samples the task only while
-  // nothing sits inactive, and stands the whole automation down while it does.
+  // nothing sits inactive. Captured automation stands down while any Mech is
+  // inactive so neither planning path acts on a partial active team.
   const inactives = Math.max(0, state.inventory.length - state.bay.active);
-  if (state.governorMechTask && inactives === 0) return null;
+  if (inactives > 0 || state.governorMechTask) return null;
   const floor = autoFloor(state);
   if (floor === null || floor.collectorValue <= 0) return null;
   const figures = bestDesignFigures(floor, pickIndex);

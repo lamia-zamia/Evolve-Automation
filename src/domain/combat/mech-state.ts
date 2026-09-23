@@ -101,6 +101,7 @@ export interface CapturedMechState {
   readonly prepared: number;
   readonly wrath: number;
   readonly gladiatorLevel: number;
+  readonly lastFloor: boolean;
   readonly settings: CapturedMechSettings;
 }
 
@@ -228,6 +229,32 @@ function readMechSettings(value: unknown): CapturedMechSettings {
   });
 }
 
+function readMechFinalDemonicFloor(
+  root: UnknownRecord | undefined,
+  settingsValue: unknown,
+  spireCount: number | undefined,
+): boolean {
+  const settings = isNonArrayRecord(settingsValue) ? settingsValue : {};
+  if (
+    root === undefined ||
+    spireCount === undefined ||
+    settings["autoPrestige"] !== true ||
+    settings["prestigeType"] !== "demonic"
+  ) {
+    return false;
+  }
+  const finalFloor = nonNegativeQuantity(settings["prestigeDemonicFloor"]);
+  const tech = isNonArrayRecord(root["tech"]) ? root["tech"] : undefined;
+  const waygate =
+    tech === undefined ? undefined : nonNegativeQuantity(tech["waygate"]);
+  return (
+    finalFloor !== undefined &&
+    waygate !== undefined &&
+    spireCount >= finalFloor &&
+    waygate >= 3
+  );
+}
+
 /**
  * The Spire waygate is switched on (`portal.waygate.on === 1`, the same field
  * the fortress loop reads); false when the structure is unreadable.
@@ -292,6 +319,7 @@ function unavailableMechState(
     prepared: 0,
     wrath: 0,
     gladiatorLevel: 0,
+    lastFloor: false,
     settings,
   });
 }
@@ -458,6 +486,11 @@ export function readCapturedMechState(
     prepared: nonNegativeQuantity(blood["prepared"]) ?? 0,
     wrath: nonNegativeQuantity(blood["wrath"]) ?? 0,
     gladiatorLevel: gladiator,
+    lastFloor: readMechFinalDemonicFloor(
+      root,
+      input.settings,
+      spireFacts?.count,
+    ),
     settings,
   });
 }

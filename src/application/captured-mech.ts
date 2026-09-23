@@ -34,10 +34,21 @@ export function runCapturedMech(dependencies: {
 export function runCapturedMechAutomation(
   dependencies: CapturedMechAutomation,
 ): CommandExecutionOutcome {
+  const initialState = dependencies.reader.readState();
+  if (
+    !initialState.available ||
+    initialState.inventory.length > initialState.bay.active
+  ) {
+    return CAPTURED_MECH_SUCCEEDED;
+  }
   const built = runCapturedMech(dependencies);
   if (built.status !== "succeeded") return built;
   const state = dependencies.reader.readState();
-  if (!state.available || state.settings.buildMode !== "random") {
+  if (
+    !state.available ||
+    state.inventory.length > state.bay.active ||
+    state.settings.buildMode !== "random"
+  ) {
     return CAPTURED_MECH_SUCCEEDED;
   }
   const pick = (choices: number): number =>
