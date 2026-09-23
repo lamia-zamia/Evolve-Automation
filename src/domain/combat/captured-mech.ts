@@ -2,7 +2,6 @@
 
 import {
   planMechContinuation,
-  shouldSaveMechSupply,
   type MechDesign,
   type MechPlanningInput,
   type MechResourceInput,
@@ -20,7 +19,11 @@ import {
   mechFrameSpace,
 } from "./mech-costs.ts";
 import type { CapturedMechDesign, CapturedMechState } from "./mech-state.ts";
-import { combatRanking, designAutoChoice } from "./mech-auto-choice.ts";
+import {
+  capturedMechSupplyHold,
+  combatRanking,
+  designAutoChoice,
+} from "./mech-auto-choice.ts";
 
 export interface CapturedMechBuildInput {
   readonly available: boolean;
@@ -98,43 +101,6 @@ export interface CapturedMechAutoPlan {
 }
 
 /**
- * Supply held back for the next floor: only while the build is unforced, the
- * ratio is positive, held-back building is enabled, and every purifier is
- * switched on. Shared by the build and the scrap planners.
- */
-function savingSupplyHold(
-  state: CapturedMechState,
-  force: boolean,
-  teamPower: number | null,
-  space: number,
-): boolean {
-  const { settings, bay, funds } = state;
-  if (force || settings.saveSupplyRatio <= 0) return false;
-  // Mirrors the compatibility gate: supply is only held back while every
-  // purifier is switched on and held-back building is enabled.
-  if (!settings.baysFirst || !funds.purifierFullyOn) return false;
-  if (teamPower === null) return false;
-  const refund = mechFrameRefund("titan", state.prepared);
-  if (refund === undefined) return false;
-  const headroom = bay.maximum - bay.occupied;
-  return shouldSaveMechSupply({
-    saveSupplyRatio: settings.saveSupplyRatio,
-    lastFloor: state.lastFloor,
-    forceBuild: false,
-    supplyMaximum: funds.purifierMax,
-    supplyCurrent: funds.purifierSupply,
-    supplyRate: funds.supplyRate,
-    baySpace: headroom,
-    designSpace: space,
-    titanSupplyRefund: headroom < space ? refund.supply : 0,
-    timeToClear:
-      teamPower > 0
-        ? (100 - state.spire!.progress) / teamPower
-        : Number.POSITIVE_INFINITY,
-  });
-}
-
-/**
  * One automatic build: preferred size, deterministic semantic design, fresh
  * affordability against bay headroom and current funds, with a smaller-frame
  * fallback when `fillBay` is set and supply held back for the next floor.
@@ -160,7 +126,7 @@ export function planCapturedMechAuto(
   // it: with `fillBay` it steps down to smaller frames instead.
   const headroom = bay.maximum - bay.occupied;
   const savingForNextFloor = (space: number): boolean =>
-    savingSupplyHold(state, preferred.force, teamPower, space);
+    capturedMechSupplyHold(state, preferred.force, teamPower, space);
   const buildPlanFor = (size: string): CapturedMechAutoPlan | null => {
     const preset = size === preferred.size ? choice : null;
     const design: ScoredMechDesign | null =
@@ -334,7 +300,7 @@ export function planCapturedMechScrap(
       space,
     });
   }
-  const saving = savingSupplyHold(
+  const saving = capturedMechSupplyHold(
     state,
     preferred.force,
     teamPower,

@@ -1,30 +1,26 @@
-import { planMechDemandCosts } from "../../../domain/combat/mech-auto-choice.ts";
+import type { CapturedMechDemandSource } from "../../../ports/captured-mech.ts";
 import type { CostReservationSource } from "../../../ports/game-cost-reservations.ts";
-import type { GameRootStateSource } from "../../../ports/game-root-state.ts";
 
 export interface CapturedMechReservationDependencies {
-  readonly rootState: GameRootStateSource;
-  readonly readSettings: () => unknown;
+  readonly demand: CapturedMechDemandSource;
 }
 
-/**
- * The pursued automatic Mech build as a cost reservation, so the build loop
- * does not spend its Supply or Soul Gems on something cheaper that arrives
- * first. Derived from the same pure choice as the demand requests, keeping
- * one target behind both channels.
- */
+/** Construction reservation over the shared Mech demand plan. */
 export function createCapturedMechReservationSource(
   dependencies: CapturedMechReservationDependencies,
 ): CostReservationSource {
   return Object.freeze({
     readReservations() {
-      const demand = planMechDemandCosts({
-        root: dependencies.rootState.readRoot(),
-        settings: dependencies.readSettings(),
-      });
-      if (demand === null) {
+      const sample = dependencies.demand.read();
+      if (!sample.buildingMechsFirst || sample.plan.status === "none") {
         return Object.freeze({
           unavailable: false,
+          targets: Object.freeze([]),
+        });
+      }
+      if (sample.plan.status === "unavailable") {
+        return Object.freeze({
+          unavailable: true,
           targets: Object.freeze([]),
         });
       }
@@ -35,8 +31,8 @@ export function createCapturedMechReservationSource(
             name: "mech",
             cause: "autoMech",
             cost: Object.freeze({
-              Supply: demand.supply,
-              Soul_Gem: demand.gems,
+              Supply: sample.plan.cost.supply,
+              Soul_Gem: sample.plan.cost.gems,
             }),
           }),
         ]),

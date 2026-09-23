@@ -72,6 +72,8 @@ import {
 } from "../../combat/captured-foreign-state.ts";
 import type { DemandPrerequisiteReport } from "./captured-demand-prerequisites.ts";
 import { planMechDemandCosts } from "../../../../domain/combat/mech-auto-choice.ts";
+import { readCapturedMechState } from "../../../../domain/combat/mech-state.ts";
+import type { CapturedMechDemandSource } from "../../../../ports/captured-mech.ts";
 
 export interface CapturedResourceDemandDependencies {
   readonly rootState: GameRootStateSource;
@@ -100,6 +102,8 @@ export interface CapturedResourceDemandDependencies {
    * an uncaptured control reads as no reservation rather than as a failed capture.
    */
   readonly readPrerequisites?: () => DemandPrerequisiteReport | undefined;
+  /** The shared captured Mech target; absent only for isolated legacy characterization callers. */
+  readonly mechDemand?: CapturedMechDemandSource;
 }
 
 export interface CapturedDemandSample {
@@ -1244,11 +1248,22 @@ export function createCapturedResourceDemand(
       // The pursued automatic Mech build's Supply and Soul Gem cost, derived
       // from the same pure choice the Mech pass plans from — no ordering
       // coupling with the autoMech phase, which may run later in the tick.
-      const mechDemand = planMechDemandCosts({ root, settings: settingsValue });
+      const mechDemandPlan =
+        dependencies.mechDemand?.read().plan ??
+        planMechDemandCosts({
+          state: readCapturedMechState({
+            root,
+            settings: settingsValue,
+            queueKeyHeld: false,
+          }),
+        });
       const mechCosts: readonly DemandCost[] =
-        mechDemand === null
+        mechDemandPlan.status !== "ready"
           ? Object.freeze([])
-          : toCosts({ Supply: mechDemand.supply, Soul_Gem: mechDemand.gems });
+          : toCosts({
+              Supply: mechDemandPlan.cost.supply,
+              Soul_Gem: mechDemandPlan.cost.gems,
+            });
       // A reservation that could exist but whose capture is not established must not read
       // as free: hold Money up to its storage envelope instead. The price is unknown, so
       // the envelope is anti-spend only and does not feed the storage requirements below.

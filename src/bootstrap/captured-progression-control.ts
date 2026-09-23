@@ -68,6 +68,8 @@ import type { TickDiagnostics } from "../ports/tick.ts";
 import type { BuildResourceScope } from "../domain/progression/build/build.ts";
 import { createCapturedBuildCapacity } from "../adapters/evolve/captured-build-capacity.ts";
 import { createCapturedMechReservationSource } from "../adapters/evolve/combat/captured-mech-reservations.ts";
+import { createCapturedMechDemandSource } from "../adapters/evolve/combat/captured-mech-demand.ts";
+import type { CapturedMechDemandSource } from "../ports/captured-mech.ts";
 import { CAPTURED_MECH_BUILDINGS } from "../adapters/evolve/progression/build/captured-building-metadata.ts";
 
 export interface CapturedProgressionControlDependencies {
@@ -154,6 +156,8 @@ export interface CapturedProgressionControl {
   readonly readManagedBuildTargets: () => readonly Readonly<GameBuildTarget>[];
   /** Whether the compatibility Mech loop would wait for a bay or purifier expansion. */
   readonly readCanExpandMechBay: () => boolean | undefined;
+  /** Shared target used by global resource demand and construction reservations. */
+  readonly mechDemand: CapturedMechDemandSource;
   /**
    * The Knowledge the most expensive offered technology costs, from the knowledge gate's own
    * sample. 0 when no catalog has been read.
@@ -517,9 +521,13 @@ export function createCapturedProgressionControl(
       : createScriptCostReservationSource({ getState });
   // The pursued Mech build reserves its Supply and Soul Gems like any other
   // commitment, so cheaper construction candidates cannot spend them first.
-  const mechReservations = createCapturedMechReservationSource({
+  const mechDemand = createCapturedMechDemandSource({
     rootState,
+    controls,
     readSettings,
+  });
+  const mechReservations = createCapturedMechReservationSource({
+    demand: mechDemand,
   });
   const queuedAndSaving =
     stateReservations === undefined
@@ -660,6 +668,7 @@ export function createCapturedProgressionControl(
     observations: construction.observations,
     readManagedBuildTargets,
     readCanExpandMechBay,
+    mechDemand,
     ensureBuildControls,
     // The Tech Knowledge figure behind the trigger operand of the same name: the knowledge
     // gate's own sample, which shares the cycle's already-captured research catalog.

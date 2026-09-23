@@ -18,8 +18,13 @@ import {
   type MechFloor,
   type ScoredMechDesign,
 } from "./mech-design.ts";
-import { mechFrameCost, type MechCostFigures } from "./mech-costs.ts";
-import { readCapturedMechState, type CapturedMechState } from "./mech-state.ts";
+import {
+  mechFrameCost,
+  mechFrameRefund,
+  type MechCostFigures,
+} from "./mech-costs.ts";
+import { shouldSaveMechSupply } from "./mech-supply-saving.ts";
+import type { CapturedMechState } from "./mech-state.ts";
 
 export interface AutoDesignChoice {
   readonly floor: MechFloor;
@@ -28,6 +33,28 @@ export interface AutoDesignChoice {
   readonly design: ScoredMechDesign;
   readonly cost: MechCostFigures;
   readonly teamPower: number | null;
+}
+
+export type MechDemandCostPlan =
+  | Readonly<{ status: "none" }>
+  | Readonly<{ status: "unavailable" }>
+  | Readonly<{
+      status: "ready";
+      cost: Readonly<Pick<MechCostFigures, "supply" | "gems">>;
+    }>;
+
+const NO_MECH_DEMAND: MechDemandCostPlan = Object.freeze({ status: "none" });
+const UNKNOWN_MECH_DEMAND: MechDemandCostPlan = Object.freeze({
+  status: "unavailable",
+});
+
+function readyMechDemandCost(
+  cost: Readonly<Pick<MechCostFigures, "supply" | "gems">>,
+): MechDemandCostPlan {
+  return Object.freeze({
+    status: "ready",
+    cost: Object.freeze({ supply: cost.supply, gems: cost.gems }),
+  });
 }
 
 export function combatRanking(
@@ -70,6 +97,37 @@ function activeMechsPower(
     power += rated.power;
   }
   return power;
+}
+
+/** Shared supply hold used by both the build/scrap planners and resource demand. */
+export function capturedMechSupplyHold(
+  state: CapturedMechState,
+  force: boolean,
+  teamPower: number | null,
+  space: number,
+): boolean {
+  const { settings, bay, funds, spire } = state;
+  if (force || settings.saveSupplyRatio <= 0) return false;
+  if (!settings.baysFirst || !funds.purifierFullyOn) return false;
+  if (teamPower === null || spire === null) return false;
+  const refund = mechFrameRefund("titan", state.prepared);
+  if (refund === undefined) return false;
+  const headroom = bay.maximum - bay.occupied;
+  return shouldSaveMechSupply({
+    saveSupplyRatio: settings.saveSupplyRatio,
+    lastFloor: state.lastFloor,
+    forceBuild: false,
+    supplyMaximum: funds.purifierMax,
+    supplyCurrent: funds.purifierSupply,
+    supplyRate: funds.supplyRate,
+    baySpace: headroom,
+    designSpace: space,
+    titanSupplyRefund: headroom < space ? refund.supply : 0,
+    timeToClear:
+      teamPower > 0
+        ? (100 - spire.progress) / teamPower
+        : Number.POSITIVE_INFINITY,
+  });
 }
 
 /**
@@ -170,28 +228,71 @@ export function designAutoChoice(
 }
 
 /**
- * Shared Mech demand: the pursued automatic build's Supply and Soul Gem cost.
- * Both the demand requests and the cost reservations derive from this one
- * answer, so market, storage, crafting, and the build loop respect the same
- * target. Null when no automatic build is being pursued. The queue key reads
- * as unheld: a queued build carries its own queue reservation, and holding
- * the key is a transient tick-local fact the demand sample cannot observe.
+ * Shared Mech demand: the next build's Supply and Soul Gem cost. Resource
+ * demand and construction reservations derive from this one target. Missing
+ * costs stay distinguishable from a deliberate stand-down; affordability is
+ * intentionally left to the resource accumulators and build executor.
  */
 export function planMechDemandCosts(
-  input: Readonly<{ root: unknown; settings: unknown }>,
-): Readonly<{ supply: number; gems: number }> | null {
-  const state = readCapturedMechState({
-    root: input.root,
-    settings: input.settings,
-    queueKeyHeld: false,
-  });
-  if (!state.available) return null;
+  input: Readonly<{
+    state: CapturedMechState;
+    /** Game-owned `bay`, `price`, and `soul` results for the current user blueprint. */
+    userBuildCost?: Readonly<MechCostFigures>;
+  }>,
+): MechDemandCostPlan {
+  const { state } = input;
+  if (!state.settings.autoMech || state.settings.buildMode === "none") {
+    return NO_MECH_DEMAND;
+  }
+  if (!state.available) return UNKNOWN_MECH_DEMAND;
+  if (state.warlord) return NO_MECH_DEMAND;
   if (state.governorMechTask) {
     // A governor titan costs the same at any prepared level, standard frame.
-    return Object.freeze({ supply: 750_000, gems: 75 });
+    return readyMechDemandCost({ supply: 750_000, gems: 75 });
   }
-  if (state.settings.buildMode !== "random") return null;
+
+  if (state.settings.buildMode === "user") {
+    if (state.blueprint === null) return UNKNOWN_MECH_DEMAND;
+    if (state.blueprint.infernal) return NO_MECH_DEMAND;
+    const cost = input.userBuildCost;
+    if (cost === undefined) return UNKNOWN_MECH_DEMAND;
+    if (state.bay.maximum - state.bay.occupied < cost.space) {
+      return NO_MECH_DEMAND;
+    }
+    return readyMechDemandCost(cost);
+  }
+
+  // These are deliberate stand-down gates in `designAutoChoice`, not missing captures.
+  if (
+    state.blueprint === null ||
+    state.blueprint.infernal ||
+    state.spire === null ||
+    state.settings.collectorValue <= 0 ||
+    state.inventory.length > state.bay.active
+  ) {
+    return NO_MECH_DEMAND;
+  }
   const choice = designAutoChoice(state, () => 0);
-  if (choice === null) return null;
-  return Object.freeze({ supply: choice.cost.supply, gems: choice.cost.gems });
+  if (choice === null) return UNKNOWN_MECH_DEMAND;
+  if (
+    capturedMechSupplyHold(
+      state,
+      choice.preferred.force,
+      choice.teamPower,
+      choice.cost.space,
+    )
+  ) {
+    return NO_MECH_DEMAND;
+  }
+  const headroom = state.bay.maximum - state.bay.occupied;
+  if (
+    headroom < choice.cost.space &&
+    (state.settings.scrapMode === "none" ||
+      state.inventory.length === 0 ||
+      state.bay.active === 0)
+  ) {
+    return NO_MECH_DEMAND;
+  }
+  // Funds are intentionally not a gate: demand must be able to accumulate an affordable build.
+  return readyMechDemandCost(choice.cost);
 }

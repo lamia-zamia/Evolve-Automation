@@ -1,9 +1,11 @@
 import assert from "node:assert/strict";
 
 import { createCapturedMechReservationSource } from "../src/adapters/evolve/combat/captured-mech-reservations.ts";
+import { createCapturedMechDemandSource } from "../src/adapters/evolve/combat/captured-mech-demand.ts";
+import { createCapturedProgressionControl } from "../src/bootstrap/captured-progression-control.ts";
 import { createCapturedResourceDemand } from "../src/adapters/evolve/economy/resources/captured-resource-demand.ts";
 import { planMechDemandCosts } from "../src/domain/combat/mech-auto-choice.ts";
-import { findCostConflict } from "../src/domain/cost-conflicts.ts";
+import { readCapturedMechState } from "../src/domain/combat/mech-state.ts";
 
 function makeRoot() {
   return {
@@ -52,49 +54,208 @@ const settings = {
   mechSaveSupplyRatio: 0,
 };
 
+function plan(root, scriptSettings = settings, userBuildCost) {
+  return planMechDemandCosts({
+    state: readCapturedMechState({
+      root,
+      settings: scriptSettings,
+      queueKeyHeld: false,
+    }),
+    ...(userBuildCost === undefined ? {} : { userBuildCost }),
+  });
+}
+
+function makeDemandSource(root, scriptSettings = settings, methods) {
+  const availableMethods = methods ?? ["build", "bay", "price", "soul"];
+  const control = {
+    elementId: "mechAssembly",
+    generation: 1,
+    methods: availableMethods,
+  };
+  return createCapturedMechDemandSource({
+    rootState: { readRoot: () => root },
+    readSettings: () => scriptSettings,
+    controls: {
+      resolve: () => control,
+      invoke: (_handle, method) => ({
+        ok: true,
+        value: { bay: 5, price: 180_000, soul: 4 }[method],
+      }),
+    },
+  });
+}
+
+function runConstructionWithMechPriority(buildingMechsFirst) {
+  const root = makeRoot();
+  root.settings = { qKey: false, qAny: false };
+  root.city = { factory: { count: 0, on: 0 } };
+  root.resource.Supply.amount = 100_000;
+  root.resource.Supply.max = -1;
+  root.resource.Supply.stackable = false;
+  root.resource.Soul_Gem.max = 100;
+  root.resource.Soul_Gem.stackable = false;
+  root.queue = { display: false, queue: [], max: 10 };
+  const target = {
+    catalogKey: "factory",
+    name: "Factory",
+    _id: "factory",
+    _tab: "city",
+    _location: "city",
+    _weighting: 1,
+    weighting: 1,
+    elementId: "city-factory",
+    definition: { region: "city" },
+    is: {},
+    autoBuildEnabled: true,
+    isUnlocked: () => true,
+    isSmartManaged: () => false,
+    count: 0,
+    autoMax: 1,
+    stateOffCount: 0,
+    isAffordable: () => true,
+    powered: 0,
+    cost: { Supply: 50_000 },
+    getMissingConsumption: () => null,
+    getMissingSupport: () => null,
+    getUselessSupport: () => null,
+    consumption: [],
+  };
+  const controlGenerations = new Map([
+    ["city-factory", 1],
+    ["buildQueue", 1],
+    ["mechAssembly", 1],
+  ]);
+  let actionCalls = 0;
+  const controls = {
+    resolve(elementId) {
+      const generation = controlGenerations.get(elementId);
+      if (generation === undefined) return undefined;
+      const methods =
+        elementId === "city-factory"
+          ? ["action"]
+          : elementId === "buildQueue"
+            ? ["setData"]
+            : ["build", "bay", "price", "soul"];
+      return {
+        elementId,
+        generation,
+        methods,
+        data:
+          elementId === "city-factory"
+            ? { act: { name: "Factory" } }
+            : undefined,
+      };
+    },
+    invoke(handle, method) {
+      if (controlGenerations.get(handle.elementId) !== handle.generation) {
+        return { ok: false, reason: "stale-control" };
+      }
+      if (method === "setData") {
+        return { ok: true, value: { "data-Supply": 50_000 } };
+      }
+      if (handle.elementId === "mechAssembly") {
+        return {
+          ok: true,
+          value: { bay: 5, price: 180_000, soul: 4 }[method],
+        };
+      }
+      if (method === "action") {
+        actionCalls += 1;
+        root.city.factory.count += 1;
+        return { ok: true, value: undefined };
+      }
+      return { ok: false, reason: "unknown-method" };
+    },
+    capturedElementIds: () => [...controlGenerations.keys()],
+  };
+  const progression = createCapturedProgressionControl({
+    rootState: { readRoot: () => root, subscribeRootReplaced: () => () => {} },
+    controls,
+    mountSuppression: { available: true, withoutMounting: (draw) => draw() },
+    panels: { open: () => undefined },
+    drawnActions: { read: () => [], exists: () => false },
+    drawnProjects: { read: () => undefined, exists: () => false },
+    getBuildingManager: () => ({
+      updateWeighting: () => {},
+      managedPriorityList: () => [target],
+    }),
+    readSettings: () => ({
+      autoMech: true,
+      mechBuild: "user",
+      buildingMechsFirst,
+    }),
+    nowMs: () => 0,
+  });
+  return { progression, root, actionCalls: () => actionCalls };
+}
+
 // The pursued build's cost is one shared answer for demand and reservations.
 {
-  const demand = planMechDemandCosts({ root: makeRoot(), settings });
-  assert.deepEqual(demand, { supply: 180_000, gems: 4 });
+  const demand = plan(makeRoot());
+  assert.deepEqual(demand, {
+    status: "ready",
+    cost: { supply: 180_000, gems: 4 },
+  });
 
-  assert.equal(
-    planMechDemandCosts({
-      root: makeRoot(),
-      settings: { ...settings, mechBuild: "user" },
-    }),
-    null,
-  );
-  assert.equal(
-    planMechDemandCosts({
-      root: makeRoot(),
-      settings: { ...settings, autoMech: false },
-    }),
-    null,
-  );
+  assert.deepEqual(plan(makeRoot(), { ...settings, mechBuild: "user" }), {
+    status: "unavailable",
+  });
+  assert.deepEqual(plan(makeRoot(), { ...settings, autoMech: false }), {
+    status: "none",
+  });
   const warlord = makeRoot();
   warlord.race = { warlord: true };
-  assert.equal(planMechDemandCosts({ root: warlord, settings }), null);
+  assert.deepEqual(plan(warlord), { status: "none" });
 }
 
 // A governor task holds titan cost even when the script builds by hand.
 {
   const governed = makeRoot();
   governed.race = { governor: { tasks: { slot1: "mech" } } };
+  assert.deepEqual(plan(governed, { ...settings, mechBuild: "user" }), {
+    status: "ready",
+    cost: { supply: 750_000, gems: 75 },
+  });
+}
+
+// User-blueprint prices come from the captured assembly methods, not a copied cost formula.
+{
+  const root = makeRoot();
+  const userSettings = { ...settings, mechBuild: "user" };
+  const demand = makeDemandSource(root, userSettings);
+  assert.deepEqual(demand.read().plan, {
+    status: "ready",
+    cost: { supply: 180_000, gems: 4 },
+  });
   assert.deepEqual(
-    planMechDemandCosts({
-      root: governed,
-      settings: { ...settings, mechBuild: "user" },
-    }),
-    { supply: 750_000, gems: 75 },
+    makeDemandSource(root, userSettings, ["build", "bay", "soul"]).read().plan,
+    { status: "unavailable" },
   );
+  assert.deepEqual(
+    createCapturedMechReservationSource({
+      demand: makeDemandSource(root, userSettings, ["build", "bay", "soul"]),
+    }).readReservations(),
+    { unavailable: true, targets: [] },
+  );
+  assert.deepEqual(
+    createCapturedMechReservationSource({
+      demand: makeDemandSource(
+        root,
+        { ...userSettings, buildingMechsFirst: false },
+        ["build", "bay", "soul"],
+      ),
+    }).readReservations(),
+    { unavailable: false, targets: [] },
+  );
+  root.portal.mechbay.max = 4;
+  assert.deepEqual(demand.read().plan, { status: "none" });
 }
 
 // The reservation source names the same target for the build loop.
 {
   const root = makeRoot();
   const source = createCapturedMechReservationSource({
-    rootState: { readRoot: () => root },
-    readSettings: () => settings,
+    demand: makeDemandSource(root),
   });
   assert.deepEqual(source.readReservations(), {
     unavailable: false,
@@ -108,13 +269,84 @@ const settings = {
   });
 
   const off = createCapturedMechReservationSource({
-    rootState: { readRoot: () => root },
-    readSettings: () => ({ ...settings, mechBuild: "none" }),
+    demand: makeDemandSource(root, { ...settings, mechBuild: "none" }),
   });
   assert.deepEqual(off.readReservations(), {
     unavailable: false,
     targets: [],
   });
+}
+
+// Construction honors only the Mech-first preference; global demand above stays independent.
+{
+  const root = makeRoot();
+  const userSettings = { ...settings, mechBuild: "user" };
+  const demand = makeDemandSource(root, userSettings);
+  const enabled = createCapturedMechReservationSource({ demand });
+  assert.deepEqual(enabled.readReservations().targets[0]?.cost, {
+    Supply: 180_000,
+    Soul_Gem: 4,
+  });
+  assert.deepEqual(
+    createCapturedMechReservationSource({
+      demand: makeDemandSource(root, {
+        ...userSettings,
+        buildingMechsFirst: false,
+      }),
+    }).readReservations(),
+    { unavailable: false, targets: [] },
+  );
+}
+
+// The reservation is wired through captured progression into the actual construction cycle.
+{
+  const protectedBuild = runConstructionWithMechPriority(true);
+  assert.deepEqual(protectedBuild.progression.runConstructionCycle(), {
+    status: "succeeded",
+  });
+  assert.equal(protectedBuild.actionCalls(), 0);
+  assert.equal(protectedBuild.root.city.factory.count, 0);
+
+  const allowedBuild = runConstructionWithMechPriority(false);
+  const globalDemand = createCapturedResourceDemand({
+    rootState: { readRoot: () => allowedBuild.root },
+    reservations: {
+      readReservations: () => ({ targets: [], unavailable: false }),
+    },
+    readSettings: () => ({
+      autoMech: true,
+      mechBuild: "user",
+      buildingMechsFirst: false,
+    }),
+    mechDemand: allowedBuild.progression.mechDemand,
+  }).sample();
+  assert.equal(globalDemand.requestedQuantity("Supply"), 180_000);
+  assert.equal(globalDemand.requestedQuantity("Soul_Gem"), 4);
+  assert.deepEqual(allowedBuild.progression.runConstructionCycle(), {
+    status: "succeeded",
+  });
+  assert.equal(allowedBuild.actionCalls(), 1);
+  assert.equal(allowedBuild.root.city.factory.count, 1);
+}
+
+// A full bay with scrap disabled cannot have a pending random build target.
+{
+  const root = makeRoot();
+  root.portal.mechbay.bay = 25;
+  assert.deepEqual(plan(root, { ...settings, mechScrap: "none" }), {
+    status: "none",
+  });
+  assert.deepEqual(
+    createCapturedMechReservationSource({
+      demand: makeDemandSource(root, { ...settings, mechScrap: "none" }),
+    }).readReservations(),
+    { unavailable: false, targets: [] },
+  );
+  // Lack of funds alone keeps an aspirational design demanded.
+  root.portal.mechbay.bay = 0;
+  root.portal.purifier.supply = 0;
+  root.resource.Soul_Gem.amount = 0;
+  assert.equal(plan(root).status, "ready");
 }
 
 // The demand sample reports the planned build to every spending subsystem.
@@ -132,45 +364,6 @@ const settings = {
   assert.equal(sample.isDemanded("Supply"), true);
   assert.equal(sample.isDemanded("Soul_Gem"), true);
   assert.equal(sample.isDemanded("Money"), false);
-}
-
-// A Supply-cost build conflicts with the pursued Mech while stock is short:
-// the same shared policy the construction loop reads.
-{
-  const root = makeRoot();
-  const targets = createCapturedMechReservationSource({
-    rootState: { readRoot: () => root },
-    readSettings: () => settings,
-  }).readReservations().targets;
-  assert.deepEqual(
-    findCostConflict({
-      actionCost: { Supply: 50_000 },
-      reservedTargets: targets,
-      resources: {
-        Supply: { name: "Supply", currentQuantity: 100_000 },
-        Soul_Gem: { name: "Soul_Gem", currentQuantity: 0 },
-      },
-    }),
-    {
-      status: "conflict",
-      resourceId: "Supply",
-      targetName: "mech",
-      targetCause: "autoMech",
-      resourceNames: ["Supply"],
-      targetNames: ["mech"],
-    },
-  );
-  assert.equal(
-    findCostConflict({
-      actionCost: { Supply: 50_000 },
-      reservedTargets: targets,
-      resources: {
-        Supply: { name: "Supply", currentQuantity: 500_000 },
-        Soul_Gem: { name: "Soul_Gem", currentQuantity: 500 },
-      },
-    }),
-    null,
-  );
 }
 
 console.log("captured mech demand checks passed");

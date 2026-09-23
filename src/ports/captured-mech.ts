@@ -6,6 +6,7 @@ import type {
   CapturedMechScrapPlan,
 } from "../domain/combat/captured-mech.ts";
 import type { CapturedMechState } from "../domain/combat/mech-state.ts";
+import type { MechDemandCostPlan } from "../domain/combat/mech-auto-choice.ts";
 import type { RandomSource } from "./randomness.ts";
 
 export interface CapturedMechReader {
@@ -14,6 +15,14 @@ export interface CapturedMechReader {
   readState(): CapturedMechState;
   /** Captured construction and game facts for the legacy bay-expansion scrap guard. */
   readCanExpandBay(): boolean | undefined;
+}
+
+/** One captured read shared by global resource demand and construction reservations. */
+export interface CapturedMechDemandSource {
+  read(): Readonly<{
+    readonly buildingMechsFirst: boolean;
+    readonly plan: MechDemandCostPlan;
+  }>;
 }
 
 export interface CapturedMechExecutor {

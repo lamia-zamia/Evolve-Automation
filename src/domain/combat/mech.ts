@@ -152,28 +152,7 @@ export function planMechCycle(
   });
 }
 
-export function shouldSaveMechSupply(input: {
-  readonly saveSupplyRatio: number;
-  readonly lastFloor: boolean;
-  readonly forceBuild: boolean;
-  readonly supplyMaximum: number;
-  readonly supplyCurrent: number;
-  readonly supplyRate: number;
-  readonly baySpace: number;
-  readonly designSpace: number;
-  readonly titanSupplyRefund: number;
-  readonly timeToClear: number;
-}): boolean {
-  if (input.saveSupplyRatio <= 0 || input.lastFloor || input.forceBuild) {
-    return false;
-  }
-  let missing =
-    input.supplyMaximum * input.saveSupplyRatio - input.supplyCurrent;
-  if (input.baySpace < input.designSpace) {
-    missing -= input.titanSupplyRefund;
-  }
-  return input.timeToClear <= missing / input.supplyRate;
-}
+export { shouldSaveMechSupply } from "./mech-supply-saving.ts";
 
 export function resolveMechScrapMode(
   input: Pick<
