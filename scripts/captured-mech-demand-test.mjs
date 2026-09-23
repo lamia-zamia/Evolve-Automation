@@ -99,6 +99,7 @@ function runConstructionWithMechPriority(buildingMechsFirst) {
   root.resource.Supply.amount = 100_000;
   root.resource.Supply.max = -1;
   root.resource.Supply.stackable = false;
+  root.resource.Soul_Gem.amount = 4;
   root.resource.Soul_Gem.max = 100;
   root.resource.Soul_Gem.stackable = false;
   root.queue = { display: false, queue: [], max: 10 };
@@ -242,7 +243,7 @@ function runConstructionWithMechPriority(buildingMechsFirst) {
     createCapturedMechReservationSource({
       demand: makeDemandSource(root, userSettings, ["build", "bay", "soul"]),
     }).readReservations(),
-    { unavailable: false, targets: [] },
+    { unavailable: true, targets: [] },
   );
   assert.deepEqual(
     createCapturedMechReservationSource({
@@ -258,9 +259,51 @@ function runConstructionWithMechPriority(buildingMechsFirst) {
   assert.deepEqual(demand.read().plan, { status: "none" });
 }
 
+// Construction priority only reserves a Mech target when it can fit and pass the historical
+// Supply-capacity and Soul-Gem reservation gates.
+{
+  const root = makeRoot();
+  root.portal.purifier.sup_max = 100_000;
+  const source = createCapturedMechReservationSource({
+    demand: makeDemandSource(root, { ...settings, mechBuild: "user" }),
+  });
+  assert.deepEqual(source.readReservations(), {
+    unavailable: false,
+    targets: [],
+  });
+
+  const gemRoot = makeRoot();
+  gemRoot.resource.Soul_Gem.amount = 4;
+  const reservedGems = createCapturedMechReservationSource({
+    demand: makeDemandSource(gemRoot, { ...settings, mechBuild: "user" }),
+    readReservedQuantityExcludingMech: (id) => (id === "Soul_Gem" ? 4 : 0),
+  });
+  assert.deepEqual(reservedGems.readReservations(), {
+    unavailable: false,
+    targets: [],
+  });
+
+  const reservedSupplyRoot = makeRoot();
+  reservedSupplyRoot.resource.Soul_Gem.amount = 4;
+  reservedSupplyRoot.resource.Supply.amount = 100_000;
+  const reservedSupply = createCapturedMechReservationSource({
+    demand: makeDemandSource(reservedSupplyRoot, {
+      ...settings,
+      mechBuild: "user",
+    }),
+    readReservedQuantityExcludingMech: (id) =>
+      id === "Supply" ? 1_800_000 : 0,
+  });
+  assert.deepEqual(reservedSupply.readReservations(), {
+    unavailable: false,
+    targets: [],
+  });
+}
+
 // The reservation source names the same target for the build loop.
 {
   const root = makeRoot();
+  root.resource.Soul_Gem.amount = 4;
   const source = createCapturedMechReservationSource({
     demand: makeDemandSource(root),
   });
@@ -287,6 +330,7 @@ function runConstructionWithMechPriority(buildingMechsFirst) {
 // Construction honors only the Mech-first preference; global demand above stays independent.
 {
   const root = makeRoot();
+  root.resource.Soul_Gem.amount = 4;
   const userSettings = { ...settings, mechBuild: "user" };
   const demand = makeDemandSource(root, userSettings);
   const enabled = createCapturedMechReservationSource({ demand });
@@ -450,7 +494,7 @@ function runConstructionWithMechPriority(buildingMechsFirst) {
       read: () => ({
         buildingMechsFirst: true,
         plan: { status: "unavailable" },
-        constructionPlan: { status: "none" },
+        immediatePlan: { status: "unavailable" },
       }),
     },
   }).sample();

@@ -1,7 +1,10 @@
 /** Captures the next Mech resource target, including the game's current user blueprint price. */
 
 import { planCapturedMechScrap } from "../../../domain/combat/captured-mech.ts";
-import { planMechDemandCosts } from "../../../domain/combat/mech-auto-choice.ts";
+import {
+  isMechConstructionPriorityEligible,
+  planMechDemandCosts,
+} from "../../../domain/combat/mech-auto-choice.ts";
 import {
   readCapturedMechState,
   withCapturedMechReservations,
@@ -94,10 +97,33 @@ export function createCapturedMechDemandSource(
         ...(userBuildCost === undefined ? {} : { userBuildCost }),
       });
       const headroom = state.bay.maximum - state.bay.occupied;
+      const hasUnknownImmediateTarget =
+        candidatePlan.status === "unavailable" &&
+        state.settings.autoMech &&
+        state.settings.buildMode !== "none" &&
+        !state.warlord &&
+        (!state.available || headroom > 0);
       const immediatePlan =
-        candidatePlan.status === "ready" && candidatePlan.cost.space <= headroom
-          ? candidatePlan
-          : Object.freeze({ status: "none" as const });
+        candidatePlan.status === "ready"
+          ? isMechConstructionPriorityEligible({
+              headroom,
+              cost: candidatePlan.cost,
+              supply: {
+                current: state.funds.purifierSupply,
+                maximum: state.funds.purifierMax,
+                spare: state.spendable.purifierSupply,
+              },
+              soulGems: {
+                current: state.funds.soulGems,
+                spare: state.spendable.soulGems,
+                rate: state.funds.gemsRate,
+              },
+            })
+            ? candidatePlan
+            : Object.freeze({ status: "none" as const })
+          : hasUnknownImmediateTarget
+            ? Object.freeze({ status: "unavailable" as const })
+            : Object.freeze({ status: "none" as const });
       let plan = candidatePlan;
       if (
         candidatePlan.status === "ready" &&
@@ -105,8 +131,21 @@ export function createCapturedMechDemandSource(
       ) {
         const canExpandBay = dependencies.readCanExpandBay?.();
         const replacement =
-          state.settings.buildMode === "random" && canExpandBay === false
-            ? planCapturedMechScrap(state, () => 0, canExpandBay)
+          (state.settings.buildMode === "random" ||
+            state.settings.buildMode === "user") &&
+          canExpandBay === false
+            ? planCapturedMechScrap(
+                state,
+                () => 0,
+                canExpandBay,
+                userBuildCost === undefined
+                  ? undefined
+                  : Object.freeze({
+                      supply: userBuildCost.supply,
+                      gems: userBuildCost.gems,
+                      space: userBuildCost.space,
+                    }),
+              )
             : null;
         if (replacement === null) {
           plan = Object.freeze({ status: "none" });

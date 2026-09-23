@@ -7,6 +7,7 @@ import {
   type MechResourceInput,
   type MechScrapCandidate,
 } from "./mech.ts";
+import type { MechCostFigures } from "./mech-costs.ts";
 import {
   chooseAutoDesign,
   rateMechDesign,
@@ -23,6 +24,7 @@ import {
   capturedMechSupplyHold,
   combatRanking,
   designAutoChoice,
+  designUserMechChoice,
 } from "./mech-auto-choice.ts";
 
 export interface CapturedMechBuildInput {
@@ -238,19 +240,24 @@ export function planCapturedMechScrap(
   state: CapturedMechState,
   pickIndex: (count: number) => number,
   canExpandBay: boolean | undefined,
+  userBuildCost?: Readonly<MechCostFigures>,
 ): CapturedMechScrapPlan | null {
   if (
     !state.available ||
     state.queueKeyHeld ||
     state.warlord ||
-    state.settings.buildMode !== "random" ||
+    (state.settings.buildMode !== "random" &&
+      state.settings.buildMode !== "user") ||
     state.settings.scrapMode === "none" ||
     state.spire === null ||
     canExpandBay === undefined
   ) {
     return null;
   }
-  const choice = designAutoChoice(state, pickIndex);
+  const choice =
+    state.settings.buildMode === "random"
+      ? designAutoChoice(state, pickIndex)
+      : designUserMechChoice(state, pickIndex, userBuildCost);
   if (choice === null) return null;
   const { settings, bay } = state;
   const { floor, figures, preferred, design, cost, teamPower } = choice;

@@ -26,7 +26,7 @@ export interface CapturedMechDemandSource {
     readonly buildingMechsFirst: boolean;
     /** Next target for global resource demand. */
     readonly plan: MechDemandCostPlan;
-    /** Target that fits the current bay headroom, for construction priority only. */
+    /** Mech-first target: ready when viable now, unavailable when a possible cost cannot be read. */
     readonly immediatePlan: MechDemandCostPlan;
   }>;
 }

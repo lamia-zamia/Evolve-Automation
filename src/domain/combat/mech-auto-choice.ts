@@ -24,7 +24,9 @@ import {
   mechFrameSpace,
   type MechCostFigures,
 } from "./mech-costs.ts";
+import { canSpendWithDistantReservation } from "../economy/resources/reservation.ts";
 import { shouldSaveMechSupply } from "./mech-supply-saving.ts";
+import type { MechResourceInput } from "./mech.ts";
 import type { CapturedMechState } from "./mech-state.ts";
 
 export interface AutoDesignChoice {
@@ -34,6 +36,37 @@ export interface AutoDesignChoice {
   readonly design: ScoredMechDesign;
   readonly cost: MechCostFigures;
   readonly teamPower: number | null;
+}
+
+export interface MechConstructionPriorityInput {
+  readonly headroom: number;
+  readonly cost: Readonly<Pick<MechCostFigures, "supply" | "gems" | "space">>;
+  readonly supply: Readonly<
+    Pick<MechResourceInput, "current" | "maximum" | "spare">
+  >;
+  readonly soulGems: Readonly<
+    Pick<MechResourceInput, "current" | "spare" | "rate">
+  >;
+}
+
+/** One owner for the historical Mech-first construction gate and its captured reservations. */
+export function isMechConstructionPriorityEligible(
+  input: Readonly<MechConstructionPriorityInput>,
+): boolean {
+  const uncommittedSupply = Math.min(input.cost.supply, input.supply.current);
+  return (
+    input.headroom >= input.cost.space &&
+    input.cost.supply <= input.supply.maximum &&
+    input.supply.spare >= uncommittedSupply &&
+    canSpendWithDistantReservation(
+      {
+        current: input.soulGems.current,
+        spare: input.soulGems.spare,
+        rate: input.soulGems.rate,
+      },
+      input.cost.gems,
+    )
+  );
 }
 
 export type MechDemandCostPlan =
@@ -232,6 +265,51 @@ export function designAutoChoice(
   });
 }
 
+/** The user-selected blueprint as a replacement target, priced by the game adapter. */
+export function designUserMechChoice(
+  state: CapturedMechState,
+  pickIndex: (count: number) => number,
+  userBuildCost: Readonly<MechCostFigures> | undefined,
+): AutoDesignChoice | null {
+  if (
+    !state.available ||
+    state.queueKeyHeld ||
+    state.warlord ||
+    state.settings.buildMode !== "user" ||
+    state.blueprint === null ||
+    state.blueprint.infernal ||
+    userBuildCost === undefined
+  ) {
+    return null;
+  }
+  const inactives = Math.max(0, state.inventory.length - state.bay.active);
+  if (inactives > 0 || state.governorMechTask) return null;
+  const floor = autoFloor(state);
+  if (floor === null) return null;
+  const figures = bestDesignFigures(floor, pickIndex);
+  const ratedDesign = rateMechDesign(state.blueprint, floor);
+  const teamPower = activeMechsPower(state, floor);
+  if (figures === null || ratedDesign === null || teamPower === null) {
+    return null;
+  }
+  const design = Object.freeze({
+    size: state.blueprint.size,
+    chassis: state.blueprint.chassis,
+    hardpoint: state.blueprint.hardpoint,
+    equip: state.blueprint.equip,
+    power: ratedDesign.power,
+    efficiency: ratedDesign.efficiency,
+  });
+  return Object.freeze({
+    floor,
+    figures,
+    preferred: Object.freeze({ size: design.size, force: false }),
+    design,
+    cost: userBuildCost,
+    teamPower,
+  });
+}
+
 /**
  * Shared Mech demand: the next build's Supply and Soul Gem cost. Resource
  * demand and construction reservations derive from this one target. Missing
@@ -265,9 +343,6 @@ export function planMechDemandCosts(
     if (state.blueprint.infernal) return NO_MECH_DEMAND;
     const cost = input.userBuildCost;
     if (cost === undefined) return UNKNOWN_MECH_DEMAND;
-    if (state.bay.maximum - state.bay.occupied < cost.space) {
-      return NO_MECH_DEMAND;
-    }
     return readyMechDemandCost(cost);
   }
 

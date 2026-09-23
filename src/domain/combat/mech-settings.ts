@@ -244,24 +244,25 @@ export function createCapturedMechSettingsReadModel(): MechSettingsReadModel {
       }),
     ),
   );
-  const gravitySizeOptions: readonly MechSettingsOption[] = Object.freeze([
-    Object.freeze({
-      val: "auto",
-      label: "Auto",
-      hint: "Choose a gravity-floor frame using the automatic policy",
-    }),
-    Object.freeze({
-      val: "gems",
-      label: "Soul Gems",
-      hint: "Rank gravity-floor frames by Soul Gem efficiency",
-    }),
-    Object.freeze({
-      val: "supply",
-      label: "Supply",
-      hint: "Rank gravity-floor frames by Supply efficiency",
-    }),
-    ...sizeOptions,
-  ]);
+  const capturedMechSizeStrategyOptions: readonly MechSettingsOption[] =
+    Object.freeze([
+      Object.freeze({
+        val: "auto",
+        label: "Auto",
+        hint: "Choose frames by overall efficiency",
+      }),
+      Object.freeze({
+        val: "gems",
+        label: "Soul Gems",
+        hint: "Rank frames by Soul Gem efficiency",
+      }),
+      Object.freeze({
+        val: "supply",
+        label: "Supply",
+        hint: "Rank frames by Supply efficiency",
+      }),
+      ...sizeOptions,
+    ]);
   const compatibilityModel = createMechSettingsReadModel(sizeOptions);
   return Object.freeze({
     sectionId: compatibilityModel.sectionId,
@@ -275,8 +276,12 @@ export function createCapturedMechSettingsReadModel(): MechSettingsReadModel {
           return [];
         }
         return [
+          control.settingName === "mechSize" ||
           control.settingName === "mechSizeGravity"
-            ? Object.freeze({ ...control, options: gravitySizeOptions })
+            ? Object.freeze({
+                ...control,
+                options: capturedMechSizeStrategyOptions,
+              })
             : control,
         ];
       }),

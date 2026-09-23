@@ -1,8 +1,31 @@
 import type { CapturedMechDemandSource } from "../../../ports/captured-mech.ts";
+import type { CapturedMechReservedResources } from "../../../domain/combat/mech-state.ts";
 import type { CostReservationSource } from "../../../ports/game-cost-reservations.ts";
 
 export interface CapturedMechReservationDependencies {
   readonly demand: CapturedMechDemandSource;
+  /** Shared automation demand excluding the Mech's own target. */
+  readonly readReservedQuantityExcludingMech?: (resourceId: string) => number;
+}
+
+function readCapturedMechReservationBudget(
+  readReservedQuantityExcludingMech:
+    ((resourceId: string) => number) | undefined,
+): CapturedMechReservedResources {
+  const readQuantity = (resourceId: string): number => {
+    const quantity = readReservedQuantityExcludingMech?.(resourceId);
+    return quantity === undefined
+      ? 0
+      : typeof quantity === "number" &&
+          Number.isFinite(quantity) &&
+          quantity >= 0
+        ? quantity
+        : Number.MAX_SAFE_INTEGER;
+  };
+  return Object.freeze({
+    supply: readQuantity("Supply"),
+    soulGems: readQuantity("Soul_Gem"),
+  });
 }
 
 /** Construction reservation over the shared Mech demand plan. */
@@ -11,11 +34,24 @@ export function createCapturedMechReservationSource(
 ): CostReservationSource {
   return Object.freeze({
     readReservations() {
-      const sample = dependencies.demand.read();
-      if (
-        !sample.buildingMechsFirst ||
-        sample.immediatePlan.status !== "ready"
-      ) {
+      const sample = dependencies.demand.read(
+        readCapturedMechReservationBudget(
+          dependencies.readReservedQuantityExcludingMech,
+        ),
+      );
+      if (!sample.buildingMechsFirst) {
+        return Object.freeze({
+          unavailable: false,
+          targets: Object.freeze([]),
+        });
+      }
+      if (sample.immediatePlan.status === "unavailable") {
+        return Object.freeze({
+          unavailable: true,
+          targets: Object.freeze([]),
+        });
+      }
+      if (sample.immediatePlan.status !== "ready") {
         return Object.freeze({
           unavailable: false,
           targets: Object.freeze([]),

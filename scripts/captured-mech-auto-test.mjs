@@ -627,6 +627,60 @@ const zeroRandom = { nextUnit: () => 0 };
   assert.deepEqual(fresh.hardpoint, [...replan.design.hardpoint]);
 }
 
+// User-blueprint mode shares the one-scrap, next-tick replacement transaction.
+{
+  const yard = makeWorld();
+  yard.settings.mechSize = "small";
+  const best = planAuto(yard.adapter.reader.readState(), () => 0);
+  assert.ok(best);
+  yard.root.portal.mechbay.blueprint = structuredClone(best.design);
+  yard.root.portal.mechbay.max = 2;
+  yard.root.portal.mechbay.bay = 2;
+  yard.root.portal.mechbay.active = 1;
+  yard.root.portal.mechbay.mechs = [
+    {
+      size: "small",
+      chassis: "hover",
+      hardpoint: ["laser"],
+      equip: ["special", "shields"],
+      infernal: false,
+    },
+  ];
+  yard.settings.mechBuild = "user";
+  yard.settings.mechScrap = "all";
+
+  const first = runCapturedMechAutomationWithActivity({
+    ...yard.adapter,
+    random: zeroRandom,
+  });
+  assert.equal(first.outcome.status, "succeeded");
+  assert.equal(first.hasPendingWork, true);
+  assert.equal(yard.calls.filter(([method]) => method === "scrap").length, 1);
+  assert.equal(
+    yard.calls.some(([method]) => method === "build"),
+    false,
+  );
+  assert.equal(yard.root.portal.mechbay.mechs.length, 0);
+
+  yard.calls.length = 0;
+  const second = runCapturedMechAutomationWithActivity({
+    ...yard.adapter,
+    random: zeroRandom,
+  });
+  assert.equal(second.outcome.status, "succeeded");
+  assert.equal(second.hasPendingWork, true);
+  assert.equal(yard.calls.filter(([method]) => method === "build").length, 1);
+  assert.equal(
+    yard.calls.some(([method]) => method === "scrap"),
+    false,
+  );
+  assert.equal(yard.root.portal.mechbay.mechs.length, 1);
+  assert.deepEqual(
+    yard.root.portal.mechbay.mechs[0],
+    yard.root.portal.mechbay.blueprint,
+  );
+}
+
 // The compatibility expansion hold suppresses scrap while either bay or purifier expansion is
 // viable, and normal replacement resumes once that captured answer turns false.
 {

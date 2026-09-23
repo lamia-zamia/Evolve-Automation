@@ -29,6 +29,13 @@ const gravitySize = capturedModel.controls.find(
   (control) =>
     control.kind === "select" && control.settingName === "mechSizeGravity",
 );
+const preferredSize = capturedModel.controls.find(
+  (control) => control.kind === "select" && control.settingName === "mechSize",
+);
+assert.deepEqual(
+  preferredSize.options.map(({ val }) => val),
+  ["auto", "gems", "supply", "small", "medium", "large", "titan", "collector"],
+);
 assert.deepEqual(
   gravitySize.options.slice(0, 3).map(({ val }) => val),
   ["auto", "gems", "supply"],

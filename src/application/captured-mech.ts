@@ -4,6 +4,7 @@ import {
   planCapturedMechBuild,
   planCapturedMechScrap,
 } from "../domain/combat/captured-mech.ts";
+import type { CapturedMechBuildInput } from "../domain/combat/captured-mech.ts";
 import type {
   CapturedMechAutomation,
   CapturedMechExecutor,
@@ -20,12 +21,18 @@ export interface CapturedMechAutomationResult {
   readonly hasPendingWork: boolean;
 }
 
+interface CapturedMechBuildPassResult extends CapturedMechAutomationResult {
+  readonly input: Readonly<CapturedMechBuildInput>;
+}
+
 function runCapturedMechBuildWithActivity(dependencies: {
   readonly reader: CapturedMechReader;
   readonly executor: CapturedMechExecutor;
-}): CapturedMechAutomationResult {
-  const decision = planCapturedMechBuild(dependencies.reader.read());
+}): CapturedMechBuildPassResult {
+  const input = dependencies.reader.read();
+  const decision = planCapturedMechBuild(input);
   return Object.freeze({
+    input,
     outcome:
       decision === null
         ? CAPTURED_MECH_SUCCEEDED
@@ -39,6 +46,15 @@ export function runCapturedMech(dependencies: {
   readonly executor: CapturedMechExecutor;
 }): CommandExecutionOutcome {
   return runCapturedMechBuildWithActivity(dependencies).outcome;
+}
+
+function capturedMechAutomationResult(
+  result: Readonly<CapturedMechAutomationResult>,
+): CapturedMechAutomationResult {
+  return Object.freeze({
+    outcome: result.outcome,
+    hasPendingWork: result.hasPendingWork,
+  });
 }
 
 /**
@@ -69,30 +85,46 @@ export function runCapturedMechAutomationWithActivity(
   }
   const userBuildResult = runCapturedMechBuildWithActivity(dependencies);
   const built = userBuildResult.outcome;
-  if (built.status !== "succeeded") return userBuildResult;
+  if (built.status !== "succeeded") {
+    return capturedMechAutomationResult(userBuildResult);
+  }
   const state = dependencies.reader.readState();
-  if (
-    !state.available ||
-    state.inventory.length > state.bay.active ||
-    state.settings.buildMode !== "random"
-  ) {
-    return Object.freeze({
-      outcome: CAPTURED_MECH_SUCCEEDED,
-      hasPendingWork: userBuildResult.hasPendingWork,
-    });
+  if (!state.available || state.inventory.length > state.bay.active) {
+    return capturedMechAutomationResult(userBuildResult);
+  }
+  // A successful direct blueprint build is the one action for this tick.
+  if (userBuildResult.hasPendingWork) {
+    return capturedMechAutomationResult(userBuildResult);
   }
   const pick = (choices: number): number =>
     Math.floor(dependencies.random.nextUnit() * choices);
+  const userBuildCost =
+    state.settings.buildMode === "user" &&
+    userBuildResult.input.available &&
+    userBuildResult.input.buildMode === "user" &&
+    !userBuildResult.input.infernal &&
+    state.blueprint !== null &&
+    state.blueprint.size === userBuildResult.input.designSize
+      ? Object.freeze({
+          supply: userBuildResult.input.designSupply,
+          gems: userBuildResult.input.designSoul,
+          space: userBuildResult.input.designSpace,
+        })
+      : undefined;
   const scrap = planCapturedMechScrap(
     state,
     pick,
     dependencies.reader.readCanExpandBay(),
+    userBuildCost,
   );
   if (scrap !== null) {
     return Object.freeze({
       outcome: dependencies.executor.executeAutoScrap(scrap),
       hasPendingWork: true,
     });
+  }
+  if (state.settings.buildMode !== "random") {
+    return capturedMechAutomationResult(userBuildResult);
   }
   const plan = planCapturedMechAuto(state, pick);
   return plan === null

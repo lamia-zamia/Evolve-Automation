@@ -86,16 +86,17 @@ export interface CapturedProgressionControlDependencies {
   readonly costs?: GameActionCostReader;
   /** Persisted script settings. Required: without them nothing is managed and nothing is built. */
   readonly readSettings: () => unknown;
+  /** Shared resource targets excluding the Mech's own target, for construction priority checks. */
+  readonly readReservedQuantityExcludingMech?: (resourceId: string) => number;
   /**
    * Whether this cycle's research pass has to keep the already-granted half of the draw, which is
    * the larger part of it. Omitted means no caller needs it, so the pass drops that half.
    */
   readonly needGrantedTechs?: () => boolean;
   /**
-   * Legacy script inputs. The captured path deliberately runs without all three: it plans its own
-   * build policy, has no script cost reservations, leaves the Knowledge gate ungated and leaves
-   * storage requirements unknown. Each absence is the conservative direction, and each is a feature
-   * still to migrate rather than missing wiring.
+   * Compatibility script inputs. The captured path plans its own build policy and uses its typed
+   * Mech-first reservation; absent legacy state/resource access still leaves the Knowledge gate
+   * ungated and storage requirements unknown.
    */
   readonly getBuildingManager?: () => unknown;
   readonly getState?: () => unknown;
@@ -529,6 +530,12 @@ export function createCapturedProgressionControl(
   });
   const mechReservations = createCapturedMechReservationSource({
     demand: mechDemand,
+    ...(dependencies.readReservedQuantityExcludingMech === undefined
+      ? {}
+      : {
+          readReservedQuantityExcludingMech:
+            dependencies.readReservedQuantityExcludingMech,
+        }),
   });
   const queuedAndSaving =
     stateReservations === undefined

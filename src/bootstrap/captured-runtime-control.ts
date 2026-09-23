@@ -563,6 +563,8 @@ export function startCapturedRuntime({
     }),
     costs: buildCosts,
     readSettings: () => settingsStore.readRaw(),
+    readReservedQuantityExcludingMech: (resourceId) =>
+      readDemand().requestedQuantityExcludingMech(resourceId),
     // The already-granted half of the research draw is only worth its cost to a configured
     // trigger, so the trigger settings decide whether each cycle's pass keeps it.
     needGrantedTechs: () => triggersNeedGrantedTechs(settingsStore.readRaw()),
