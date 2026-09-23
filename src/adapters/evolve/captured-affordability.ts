@@ -8,7 +8,7 @@
  * build-queue probe and the drawn `data-<Resource>` attributes both produce.
  *
  * A cost map can name things that are not ordinary resources — `Morale`, `Army`, `HellArmy`,
- * `Troops`, `Structs`, `Supply`, `Custom`, `Bool`, `Spent_Fossil` and the prestige
+ * `Troops`, `Structs`, `Custom`, `Bool`, `Spent_Fossil` and the prestige
  * currencies each have their own branch upstream, most of them behind a function no capture
  * reaches. Rather than guess at those, a cost naming anything the captured root does not hold as a
  * resource is reported as unjudgeable.
@@ -180,6 +180,16 @@ export function costFitsStorage(
     if (!Number.isFinite(amount)) return undefined;
     // A zero cost is never refused, whatever the resource's state.
     if (amount === 0) continue;
+    if (key === "Supply") {
+      const portal = readProperty(root, "portal");
+      if (!isRecord(portal)) return undefined;
+      const purifier = readProperty(portal, "purifier");
+      if (!isRecord(purifier)) return false;
+      const capacity = finite(readProperty(purifier, "sup_max"));
+      if (capacity === undefined) return undefined;
+      if (capacity < amount) return false;
+      continue;
+    }
     const entry = costResource(root, key);
     if (!isRecord(entry)) return undefined;
     if (amount > 0 && readProperty(entry, "display") !== true) return false;
@@ -194,8 +204,9 @@ export function costFitsStorage(
 /**
  * The game's `checkCosts`: every positive cost must be on hand in its paying pool and still fit
  * under that pool's capacity. Unlike `checkMaxCosts`, this branch does not consult `display`.
- * Special costs remain unanswered because their upstream
- * branches do not read an ordinary captured resource record.
+ * The game's special `Supply` branch reads the purifier's current balance directly. Other special
+ * costs remain unanswered because their upstream branches do not read an ordinary captured
+ * resource record.
  */
 export function costFitsNow(
   root: unknown,
@@ -206,6 +217,16 @@ export function costFitsNow(
   for (const [key, amount] of Object.entries(cost)) {
     if (!Number.isFinite(amount)) return undefined;
     if (amount === 0) continue;
+    if (key === "Supply") {
+      const portal = readProperty(root, "portal");
+      if (!isRecord(portal)) return undefined;
+      const purifier = readProperty(portal, "purifier");
+      if (!isRecord(purifier)) return false;
+      const held = finite(readProperty(purifier, "supply"));
+      if (held === undefined) return undefined;
+      if (amount > held) return false;
+      continue;
+    }
     const entry = costResource(root, key);
     if (!isRecord(entry)) return undefined;
     const held = capturedPoolAmount(entry, options?.pool, regional);

@@ -1044,6 +1044,16 @@
     for (let [key, amount] of Object.entries(cost)) {
       if (!Number.isFinite(amount)) return;
       if (amount === 0) continue;
+      if (key === "Supply") {
+        let portal = readProperty(root, "portal");
+        if (!isRecord(portal)) return;
+        let purifier = readProperty(portal, "purifier");
+        if (!isRecord(purifier)) return !1;
+        let capacity2 = finite(readProperty(purifier, "sup_max"));
+        if (capacity2 === void 0) return;
+        if (capacity2 < amount) return !1;
+        continue;
+      }
       let entry = costResource(root, key);
       if (!isRecord(entry)) return;
       if (amount > 0 && readProperty(entry, "display") !== !0) return !1;
@@ -1058,6 +1068,16 @@
     for (let [key, amount] of Object.entries(cost)) {
       if (!Number.isFinite(amount)) return;
       if (amount === 0) continue;
+      if (key === "Supply") {
+        let portal = readProperty(root, "portal");
+        if (!isRecord(portal)) return;
+        let purifier = readProperty(portal, "purifier");
+        if (!isRecord(purifier)) return !1;
+        let held2 = finite(readProperty(purifier, "supply"));
+        if (held2 === void 0) return;
+        if (amount > held2) return !1;
+        continue;
+      }
       let entry = costResource(root, key);
       if (!isRecord(entry)) return;
       let held = capturedPoolAmount(entry, options?.pool, regional);
@@ -2043,7 +2063,11 @@
     "surface",
     "tauceti",
     "underground"
-  ]), CITY_ELEMENT_BINDING_ALIASES = Object.freeze({
+  ]), CAPTURED_MECH_BUILDINGS = Object.freeze({
+    region: "portal",
+    bay: "portal-mechbay",
+    purifier: "portal-purifier"
+  }), CITY_ELEMENT_BINDING_ALIASES = Object.freeze({
     "undefined-food": "city-food",
     "undefined-stone": "city-stone"
   }), SMART_BUILDING_BINDINGS = /* @__PURE__ */ new Set([
@@ -7545,7 +7569,49 @@
       diagnostics
     });
     readObservations = () => construction.observations;
-    let readManagedBuildTargets = () => (ensureBuildControls(), readPolicy().buildings);
+    let readManagedBuildTargets = () => (ensureBuildControls(), readPolicy().buildings), readCanExpandMechBay = () => {
+      let settings = readSettings();
+      if (!isRecord(settings)) return;
+      if (settings.autoBuild !== !0 || settings.mechBaysFirst !== !0)
+        return !1;
+      let targets = readManagedBuildTargets(), offers = readBuildingUnlocks(
+        /* @__PURE__ */ new Set([CAPTURED_MECH_BUILDINGS.region])
+      );
+      if (offers === void 0 || !offers.regions.has(CAPTURED_MECH_BUILDINGS.region))
+        return;
+      let root = rootState.readRoot();
+      if (!isRecord(root)) return;
+      let targetCanBuild = (elementId) => {
+        if (settings[`bat${elementId}`] === !1 || !offers.unlocked.has(elementId)) return !1;
+        let target = targets.find((entry) => entry.elementId === elementId);
+        if (target === void 0) return;
+        let structure = readProperty(
+          readProperty(root, target.region),
+          target.id
+        ), count2 = finite(readProperty(structure, "count"));
+        if (!(count2 === void 0 || count2 < 0))
+          return count2 < target.maximum;
+      }, bayCanBuild = targetCanBuild(CAPTURED_MECH_BUILDINGS.bay);
+      if (bayCanBuild !== !0) return bayCanBuild;
+      let bayPrice = dependencies.costs?.readCost(CAPTURED_MECH_BUILDINGS.bay);
+      if (bayPrice === void 0) return;
+      let bayFits = costFitsStorage(root, bayPrice.cost, {
+        pool: bayPrice.pool
+      });
+      if (bayFits !== !1) return bayFits;
+      let purifierCanBuild = targetCanBuild(CAPTURED_MECH_BUILDINGS.purifier);
+      if (purifierCanBuild !== !0) return purifierCanBuild;
+      let purifierPrice = dependencies.costs?.readCost(
+        CAPTURED_MECH_BUILDINGS.purifier
+      );
+      if (purifierPrice === void 0) return;
+      let purifierFits = costFitsStorage(root, purifierPrice.cost, {
+        pool: purifierPrice.pool
+      });
+      if (purifierFits !== !0) return purifierFits;
+      let purifierSwitch = offers.states.get(CAPTURED_MECH_BUILDINGS.purifier);
+      return purifierSwitch === void 0 ? void 0 : purifierSwitch.off === 0;
+    };
     return Object.freeze({
       readProgressionEpoch: epoch.read,
       runConstructionCycle: () => {
@@ -7565,6 +7631,7 @@
       resetBuildingUnlockSample,
       observations: construction.observations,
       readManagedBuildTargets,
+      readCanExpandMechBay,
       ensureBuildControls,
       // The Tech Knowledge figure behind the trigger operand of the same name: the knowledge
       // gate's own sample, which shares the cycle's already-captured research catalog.
@@ -42229,6 +42296,9 @@ Only continue if you trust the source. Injected code:
             dependencies.keyState
           )
         });
+      },
+      readCanExpandBay() {
+        return dependencies.readCanExpandBay?.();
       }
     }), executor = Object.freeze({
       execute(decision) {
@@ -42700,8 +42770,8 @@ Only continue if you trust the source. Injected code:
       storageRatio: 1
     };
   }
-  function planCapturedMechScrap(state, pickIndex) {
-    if (!state.available || state.queueKeyHeld || state.warlord || state.settings.buildMode !== "random" || state.settings.scrapMode === "none" || state.spire === null)
+  function planCapturedMechScrap(state, pickIndex, canExpandBay) {
+    if (!state.available || state.queueKeyHeld || state.warlord || state.settings.buildMode !== "random" || state.settings.scrapMode === "none" || state.spire === null || canExpandBay === void 0)
       return null;
     let choice = designAutoChoice(state, pickIndex);
     if (choice === null) return null;
@@ -42750,7 +42820,7 @@ Only continue if you trust the source. Injected code:
       supply,
       gems,
       lastFloor: state.lastFloor,
-      canExpandBay: !1,
+      canExpandBay,
       configuredScrapMode: settings.scrapMode,
       waygateActiveCount: state.waygateActive ? 1 : 0,
       minimumSupplyRate: settings.minimumSupplyRate,
@@ -42799,7 +42869,11 @@ Only continue if you trust the source. Injected code:
     let state = dependencies.reader.readState();
     if (!state.available || state.inventory.length > state.bay.active || state.settings.buildMode !== "random")
       return CAPTURED_MECH_SUCCEEDED;
-    let pick = (choices) => Math.floor(dependencies.random.nextUnit() * choices), scrap = planCapturedMechScrap(state, pick);
+    let pick = (choices) => Math.floor(dependencies.random.nextUnit() * choices), scrap = planCapturedMechScrap(
+      state,
+      pick,
+      dependencies.reader.readCanExpandBay()
+    );
     if (scrap !== null) return dependencies.executor.executeAutoScrap(scrap);
     let plan = planCapturedMechAuto(state, pick);
     return plan === null ? CAPTURED_MECH_SUCCEEDED : dependencies.executor.executeAutoBuild(plan);
@@ -43042,12 +43116,7 @@ Only continue if you trust the source. Injected code:
       readMoneyStorageRequired: () => readDemand().storageRequired("Money"),
       keyState: pageCapture2.keyState,
       onActivity
-    }), capturedMech = createCapturedMech({
-      rootState: pageCapture2.rootState,
-      controls: pageCapture2.controls,
-      readSettings: () => settingsStore.readRaw(),
-      keyState: pageCapture2.keyState
-    }), capturedMechRandom = createBrowserRandomSource(), runCapturedEvolution = () => runEvolution({
+    }), runCapturedEvolution = () => runEvolution({
       reader: capturedEvolution.reader,
       executor: capturedEvolution.executor,
       runUniverseSelection: capturedEvolution.runUniverseSelection,
@@ -43107,7 +43176,13 @@ Only continue if you trust the source. Injected code:
       diagnostics,
       onDiagnostic: reportDiagnostic,
       onActivity
-    });
+    }), capturedMech = createCapturedMech({
+      rootState: pageCapture2.rootState,
+      controls: pageCapture2.controls,
+      readSettings: () => settingsStore.readRaw(),
+      keyState: pageCapture2.keyState,
+      readCanExpandBay: progression.readCanExpandMechBay
+    }), capturedMechRandom = createBrowserRandomSource();
     ensureCapturedBuildingControls = progression.ensureBuildControls;
     let gatherResources = createCapturedGatherResourcesControl({
       rootState: pageCapture2.rootState,

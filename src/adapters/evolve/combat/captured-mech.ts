@@ -308,6 +308,7 @@ export interface CapturedMechDependencies {
   readonly controls: GameControlRegistry;
   readonly readSettings: () => unknown;
   readonly keyState: GameKeyStateReader;
+  readonly readCanExpandBay?: () => boolean | undefined;
 }
 
 export function createCapturedMech(dependencies: CapturedMechDependencies): {
@@ -340,6 +341,9 @@ export function createCapturedMech(dependencies: CapturedMechDependencies): {
           dependencies.keyState,
         ),
       });
+    },
+    readCanExpandBay(): boolean | undefined {
+      return dependencies.readCanExpandBay?.();
     },
   });
 

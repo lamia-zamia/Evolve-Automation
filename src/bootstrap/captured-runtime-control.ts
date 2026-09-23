@@ -492,13 +492,6 @@ export function startCapturedRuntime({
     keyState: pageCapture.keyState,
     onActivity,
   });
-  const capturedMech = createCapturedMech({
-    rootState: pageCapture.rootState,
-    controls: pageCapture.controls,
-    readSettings: () => settingsStore.readRaw(),
-    keyState: pageCapture.keyState,
-  });
-  const capturedMechRandom = createBrowserRandomSource();
   const runCapturedEvolution = () =>
     runEvolution({
       reader: capturedEvolution.reader,
@@ -594,6 +587,14 @@ export function startCapturedRuntime({
     onDiagnostic: reportDiagnostic,
     onActivity,
   });
+  const capturedMech = createCapturedMech({
+    rootState: pageCapture.rootState,
+    controls: pageCapture.controls,
+    readSettings: () => settingsStore.readRaw(),
+    keyState: pageCapture.keyState,
+    readCanExpandBay: progression.readCanExpandMechBay,
+  });
+  const capturedMechRandom = createBrowserRandomSource();
   ensureCapturedBuildingControls = progression.ensureBuildControls;
   const gatherResources = createCapturedGatherResourcesControl({
     rootState: pageCapture.rootState,

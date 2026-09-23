@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { createCapturedProgressionControl } from "../src/bootstrap/captured-progression-control.ts";
 import { createGameDrawnActionsReader } from "../src/adapters/browser/game-drawn-actions.ts";
 import { MIN_SAMPLE_AGE_MS } from "../src/adapters/evolve/discovery-scope-cache.ts";
+import { CAPTURED_MECH_BUILDINGS } from "../src/adapters/evolve/progression/build/captured-building-metadata.ts";
 import {
   MAIN_TAB_CONTROL,
   SPACE_TAB_INDEX,
@@ -18,7 +19,13 @@ import {
  * rows are a function of live state, so unlocking one later is a change to this fixture's data and
  * not to the harness.
  */
-function makeGame({ regions, tech = { primitive: 1 } } = {}) {
+function makeGame({
+  regions,
+  tech = { primitive: 1 },
+  scriptSettings = {},
+  costs,
+  capturedBuildPolicy = false,
+} = {}) {
   const root = {
     // The player is looking at Research, so every civilization panel this reads has to be drawn
     // for it. A path the player is already on is answered from what the game keeps current itself,
@@ -154,10 +161,15 @@ function makeGame({ regions, tech = { primitive: 1 } } = {}) {
     },
     drawnActions: createGameDrawnActionsReader({ getDocument: () => page }),
     drawnProjects: { read: () => undefined, exists: () => false },
-    getBuildingManager: () => {
-      throw new Error("must not read the manager");
-    },
-    readSettings: () => ({}),
+    costs,
+    ...(capturedBuildPolicy
+      ? {}
+      : {
+          getBuildingManager: () => {
+            throw new Error("must not read the manager");
+          },
+        }),
+    readSettings: () => scriptSettings,
     getState: () => ({}),
     getResources: () => ({}),
     nowMs: () => now,
@@ -166,6 +178,7 @@ function makeGame({ regions, tech = { primitive: 1 } } = {}) {
   return {
     root,
     control,
+    readCanExpandMechBay: () => control.readCanExpandMechBay(),
     draws,
     capturedElementIds: () => controls.capturedElementIds(),
     replaceRoot: () => {
@@ -364,6 +377,76 @@ const cityOnly = {
     "a stale generation is not a reason to draw",
   );
   assert.ok(drawn > 0);
+}
+
+// Mech scrap protection asks captured managed targets, the portal's drawn offer, game-owned
+// adjusted prices, purifier capacity and the purifier's switch state as one question.
+{
+  const portalRegions = {
+    [SPACE_TAB_INDEX.portal]: () => [
+      [CAPTURED_MECH_BUILDINGS.bay, "portal", "mechbay"],
+      [CAPTURED_MECH_BUILDINGS.purifier, "portal", "purifier"],
+    ],
+  };
+  const prices = new Map([
+    [CAPTURED_MECH_BUILDINGS.bay, { cost: { Money: 100, Supply: 50 } }],
+    [CAPTURED_MECH_BUILDINGS.purifier, { cost: { Money: 50, Supply: 20 } }],
+  ]);
+  const costs = { readCost: (id) => prices.get(id) };
+  const createExpansionSample = () =>
+    makeGame({
+      regions: portalRegions,
+      scriptSettings: { autoBuild: true, mechBaysFirst: true },
+      costs,
+      capturedBuildPolicy: true,
+    });
+  const setupPortal = (game) => {
+    game.root.settings.showPortal = true;
+    game.root.portal.mechbay = { count: 0, on: 0 };
+    game.root.portal.purifier = { count: 1, on: 1, supply: 0, sup_max: 100 };
+    game.root.resource.Money = { amount: 0, max: 100, display: true };
+  };
+
+  // The MechBay cost fits the game's captured storage ceilings, regardless of present holdings.
+  {
+    const game = createExpansionSample();
+    setupPortal(game);
+    assert.equal(game.readCanExpandMechBay(), true);
+  }
+
+  // When the bay price cannot fit, an affordable purifier protects the team only while every
+  // purifier is on.
+  {
+    const game = createExpansionSample();
+    setupPortal(game);
+    game.root.resource.Money.max = 60;
+    game.root.portal.purifier.sup_max = 25;
+    assert.equal(game.readCanExpandMechBay(), true);
+    game.root.portal.purifier.on = 0;
+    game.control.resetBuildingUnlockSample();
+    assert.equal(game.readCanExpandMechBay(), false);
+  }
+
+  // When neither expansion's stored cost fits, the scrap planner receives the unblocked answer.
+  {
+    const game = createExpansionSample();
+    setupPortal(game);
+    game.root.resource.Money.max = 10;
+    game.root.portal.purifier.sup_max = 10;
+    assert.equal(game.readCanExpandMechBay(), false);
+  }
+
+  // An expected bay target whose game price is unreadable stays unknown so scrap stands down.
+  {
+    const game = makeGame({
+      regions: portalRegions,
+      scriptSettings: { autoBuild: true, mechBaysFirst: true },
+      costs: { readCost: () => undefined },
+      capturedBuildPolicy: true,
+    });
+    setupPortal(game);
+    assert.equal(game.readCanExpandMechBay(), undefined);
+  }
 }
 
 console.log("captured-building-discovery ok");

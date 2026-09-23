@@ -53,7 +53,11 @@ export function runCapturedMechAutomation(
   }
   const pick = (choices: number): number =>
     Math.floor(dependencies.random.nextUnit() * choices);
-  const scrap = planCapturedMechScrap(state, pick);
+  const scrap = planCapturedMechScrap(
+    state,
+    pick,
+    dependencies.reader.readCanExpandBay(),
+  );
   if (scrap !== null) return dependencies.executor.executeAutoScrap(scrap);
   const plan = planCapturedMechAuto(state, pick);
   return plan === null

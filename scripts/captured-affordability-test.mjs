@@ -25,6 +25,29 @@ assert.equal(costFitsStorage(root, { Money: 1000 }), true);
 assert.equal(costFitsStorage(root, { Money: 1001 }), false);
 assert.equal(costFitsStorage(root, { Money: 900, Lumber: 4000 }), true);
 assert.equal(costFitsStorage(root, { Money: 900, Lumber: 6000 }), false);
+// Evolve's special Supply branch prices capacity and holdings from the purifier, not resource.Supply.
+const spireSupply = {
+  portal: { purifier: { supply: 500, sup_max: 1200 } },
+  resource: { Supply: { amount: 1, max: 2, display: false } },
+};
+assert.equal(costFitsStorage(spireSupply, { Supply: 1200 }), true);
+assert.equal(costFitsStorage(spireSupply, { Supply: 1201 }), false);
+assert.equal(costFitsNow(spireSupply, { Supply: 500 }), true);
+assert.equal(costFitsNow(spireSupply, { Supply: 501 }), false);
+assert.equal(
+  costFitsStorage(
+    { portal: { purifier: { supply: 0, sup_max: 0 } } },
+    { Supply: 1 },
+    { zeroCapIsCeiling: false },
+  ),
+  false,
+  "the purifier's special capacity branch keeps the game's zero-cap ceiling",
+);
+assert.equal(costFitsStorage({ portal: {} }, { Supply: 1 }), false);
+assert.equal(
+  costFitsStorage({ portal: { purifier: {} } }, { Supply: 1 }),
+  undefined,
+);
 // Capacity, not holdings: a cost far above the current amount still fits.
 assert.equal(costFitsStorage(root, { Lumber: 4000 }), true);
 // A negative capacity is the game's "unlimited".

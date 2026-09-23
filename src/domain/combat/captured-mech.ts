@@ -266,6 +266,7 @@ function mechGemsInput(state: CapturedMechState): MechResourceInput {
 export function planCapturedMechScrap(
   state: CapturedMechState,
   pickIndex: (count: number) => number,
+  canExpandBay: boolean | undefined,
 ): CapturedMechScrapPlan | null {
   if (
     !state.available ||
@@ -273,7 +274,8 @@ export function planCapturedMechScrap(
     state.warlord ||
     state.settings.buildMode !== "random" ||
     state.settings.scrapMode === "none" ||
-    state.spire === null
+    state.spire === null ||
+    canExpandBay === undefined
   ) {
     return null;
   }
@@ -352,7 +354,7 @@ export function planCapturedMechScrap(
     supply,
     gems,
     lastFloor: state.lastFloor,
-    canExpandBay: false,
+    canExpandBay,
     configuredScrapMode: settings.scrapMode,
     waygateActiveCount: state.waygateActive ? 1 : 0,
     minimumSupplyRate: settings.minimumSupplyRate,

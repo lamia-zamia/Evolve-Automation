@@ -12,6 +12,8 @@ export interface CapturedMechReader {
   read(): CapturedMechBuildInput;
   /** The shared normalized Mech model for planner, settings UI, and executors. */
   readState(): CapturedMechState;
+  /** Captured construction and game facts for the legacy bay-expansion scrap guard. */
+  readCanExpandBay(): boolean | undefined;
 }
 
 export interface CapturedMechExecutor {

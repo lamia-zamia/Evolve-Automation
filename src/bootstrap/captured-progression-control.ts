@@ -13,7 +13,8 @@ import {
   sameOfferPrices,
 } from "../adapters/evolve/discovery-scope-cache.ts";
 import { createProgressionEpochReader } from "../adapters/evolve/progression-epoch.ts";
-import { readProperty } from "../adapters/validation.ts";
+import { finite, isRecord, readProperty } from "../adapters/validation.ts";
+import { costFitsStorage } from "../adapters/evolve/captured-affordability.ts";
 import {
   createCapturedTabDiscovery,
   MAIN_TAB_CONTROL,
@@ -67,6 +68,7 @@ import type { TickDiagnostics } from "../ports/tick.ts";
 import type { BuildResourceScope } from "../domain/progression/build/build.ts";
 import { createCapturedBuildCapacity } from "../adapters/evolve/captured-build-capacity.ts";
 import { createCapturedMechReservationSource } from "../adapters/evolve/combat/captured-mech-reservations.ts";
+import { CAPTURED_MECH_BUILDINGS } from "../adapters/evolve/progression/build/captured-building-metadata.ts";
 
 export interface CapturedProgressionControlDependencies {
   readonly rootState: GameRootStateSource;
@@ -150,6 +152,8 @@ export interface CapturedProgressionControl {
   readonly observations: ConstructionObservations;
   /** Managed captured construction targets, used by production modes that weight against builds. */
   readonly readManagedBuildTargets: () => readonly Readonly<GameBuildTarget>[];
+  /** Whether the compatibility Mech loop would wait for a bay or purifier expansion. */
+  readonly readCanExpandMechBay: () => boolean | undefined;
   /**
    * The Knowledge the most expensive offered technology costs, from the knowledge gate's own
    * sample. 0 when no catalog has been read.
@@ -576,6 +580,66 @@ export function createCapturedProgressionControl(
     return readPolicy().buildings;
   };
 
+  /**
+   * Mirrors `src/adapters/evolve/combat/mech.ts`'s `canExpandBay` gate using captured facts. The
+   * game owns the offer and adjusted price; managed targets own the script's auto-build switches
+   * and cap, `checkAffordable(..., true)` is shared as `costFitsStorage`, and purifier switch state
+   * comes from the game's drawn row.
+   */
+  const readCanExpandMechBay = (): boolean | undefined => {
+    const settings = readSettings();
+    if (!isRecord(settings)) return undefined;
+    if (settings["autoBuild"] !== true || settings["mechBaysFirst"] !== true) {
+      return false;
+    }
+    const targets = readManagedBuildTargets();
+    const offers = readBuildingUnlocks(
+      new Set([CAPTURED_MECH_BUILDINGS.region]),
+    );
+    if (
+      offers === undefined ||
+      !offers.regions.has(CAPTURED_MECH_BUILDINGS.region)
+    ) {
+      return undefined;
+    }
+    const root = rootState.readRoot();
+    if (!isRecord(root)) return undefined;
+    const targetCanBuild = (elementId: string): boolean | undefined => {
+      if (settings[`bat${elementId}`] === false) return false;
+      if (!offers.unlocked.has(elementId)) return false;
+      const target = targets.find((entry) => entry.elementId === elementId);
+      if (target === undefined) return undefined;
+      const structure = readProperty(
+        readProperty(root, target.region),
+        target.id,
+      );
+      const count = finite(readProperty(structure, "count"));
+      if (count === undefined || count < 0) return undefined;
+      return count < target.maximum;
+    };
+    const bayCanBuild = targetCanBuild(CAPTURED_MECH_BUILDINGS.bay);
+    if (bayCanBuild !== true) return bayCanBuild;
+    const bayPrice = dependencies.costs?.readCost(CAPTURED_MECH_BUILDINGS.bay);
+    if (bayPrice === undefined) return undefined;
+    const bayFits = costFitsStorage(root, bayPrice.cost, {
+      pool: bayPrice.pool,
+    });
+    if (bayFits !== false) return bayFits;
+
+    const purifierCanBuild = targetCanBuild(CAPTURED_MECH_BUILDINGS.purifier);
+    if (purifierCanBuild !== true) return purifierCanBuild;
+    const purifierPrice = dependencies.costs?.readCost(
+      CAPTURED_MECH_BUILDINGS.purifier,
+    );
+    if (purifierPrice === undefined) return undefined;
+    const purifierFits = costFitsStorage(root, purifierPrice.cost, {
+      pool: purifierPrice.pool,
+    });
+    if (purifierFits !== true) return purifierFits;
+    const purifierSwitch = offers.states.get(CAPTURED_MECH_BUILDINGS.purifier);
+    return purifierSwitch === undefined ? undefined : purifierSwitch.off === 0;
+  };
+
   return Object.freeze({
     readProgressionEpoch: epoch.read,
     runConstructionCycle: () => {
@@ -595,6 +659,7 @@ export function createCapturedProgressionControl(
     resetBuildingUnlockSample,
     observations: construction.observations,
     readManagedBuildTargets,
+    readCanExpandMechBay,
     ensureBuildControls,
     // The Tech Knowledge figure behind the trigger operand of the same name: the knowledge
     // gate's own sample, which shares the cycle's already-captured research catalog.

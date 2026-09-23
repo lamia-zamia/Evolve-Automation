@@ -21,6 +21,13 @@ export const CAPTURED_BUILD_REGIONS: ReadonlySet<string> = new Set([
   "underground",
 ]);
 
+/** The portal buildings the captured Mech expansion guard asks the game about. */
+export const CAPTURED_MECH_BUILDINGS = Object.freeze({
+  region: "portal",
+  bay: "portal-mechbay",
+  purifier: "portal-purifier",
+});
+
 /** DeadSpace 1.5.0's two city gather controls have an incorrect live element prefix. */
 export const CITY_ELEMENT_BINDING_ALIASES: Readonly<Record<string, string>> =
   Object.freeze({

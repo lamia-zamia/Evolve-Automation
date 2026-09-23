@@ -72,6 +72,7 @@ function makeWorld(overrides = {}) {
     ...overrides,
   };
   const calls = [];
+  let canExpandBay = false;
   const assembly = {
     elementId: "mechAssembly",
     generation: 1,
@@ -191,8 +192,18 @@ function makeWorld(overrides = {}) {
     controls,
     readSettings: () => settings,
     keyState: { readPressed: () => false },
+    readCanExpandBay: () => canExpandBay,
   });
-  return { root, settings, controls, calls, adapter };
+  return {
+    root,
+    settings,
+    controls,
+    calls,
+    adapter,
+    setCanExpandBay: (value) => {
+      canExpandBay = value;
+    },
+  };
 }
 
 const zeroRandom = { nextUnit: () => 0 };
@@ -540,7 +551,7 @@ const zeroRandom = { nextUnit: () => 0 };
   yard.settings.mechSize = "small";
   yard.settings.mechFillBay = true;
   yard.settings.mechScrap = "all";
-  const scrap = planScrap(yard.adapter.reader.readState(), () => 0);
+  const scrap = planScrap(yard.adapter.reader.readState(), () => 0, false);
   assert.equal(scrap !== null, true);
   assert.equal(scrap.index, 0);
   const supplyBefore = yard.root.portal.purifier.supply;
@@ -574,6 +585,37 @@ const zeroRandom = { nextUnit: () => 0 };
   assert.deepEqual(fresh.hardpoint, [...replan.design.hardpoint]);
 }
 
+// The compatibility expansion hold suppresses scrap while either bay or purifier expansion is
+// viable, and normal replacement resumes once that captured answer turns false.
+{
+  const yard = makeWorld();
+  const poorSmall = {
+    size: "small",
+    chassis: "wheel",
+    hardpoint: ["laser"],
+    equip: ["special", "shields"],
+    infernal: false,
+  };
+  yard.root.portal.mechbay.max = 6;
+  yard.root.portal.mechbay.mechs = Array.from({ length: 3 }, () =>
+    structuredClone(poorSmall),
+  );
+  yard.root.portal.mechbay.bay = 6;
+  yard.root.portal.mechbay.active = 3;
+  yard.settings.mechSize = "small";
+  yard.settings.mechFillBay = true;
+  yard.settings.mechScrap = "all";
+  yard.setCanExpandBay(true);
+  runCapturedMechAutomation({ ...yard.adapter, random: zeroRandom });
+  assert.equal(
+    yard.calls.some(([method]) => method === "scrap"),
+    false,
+  );
+  yard.setCanExpandBay(false);
+  runCapturedMechAutomation({ ...yard.adapter, random: zeroRandom });
+  assert.equal(yard.calls.filter(([method]) => method === "scrap").length, 1);
+}
+
 // Near-best mechs are not scrap candidates.
 {
   const yard = makeWorld();
@@ -594,7 +636,7 @@ const zeroRandom = { nextUnit: () => 0 };
   yard.settings.mechSize = best.design.size;
   yard.settings.mechScrap = "all";
   assert.equal(
-    planScrap(yard.adapter.reader.readState(), () => 0),
+    planScrap(yard.adapter.reader.readState(), () => 0, false),
     null,
   );
 }
@@ -656,7 +698,11 @@ const zeroRandom = { nextUnit: () => 0 };
   crowded.settings.mechScrap = "all";
   crowded.settings.mechScoutsRebuild = true;
   crowded.settings.mechScrapEfficiency = 0;
-  const firstPlan = planScrap(crowded.adapter.reader.readState(), () => 0);
+  const firstPlan = planScrap(
+    crowded.adapter.reader.readState(),
+    () => 0,
+    false,
+  );
   assert.notEqual(firstPlan, null);
   assert.equal(firstPlan.space, 2);
   const firstTick = runCapturedMechAutomation({
@@ -695,7 +741,7 @@ const zeroRandom = { nextUnit: () => 0 };
   yard.settings.mechFillBay = true;
   yard.settings.mechScrap = "all";
   assert.notEqual(
-    planScrap(yard.adapter.reader.readState(), () => 0),
+    planScrap(yard.adapter.reader.readState(), () => 0, false),
     null,
   );
   const frozen = yard.controls.invoke;
@@ -739,7 +785,7 @@ const zeroRandom = { nextUnit: () => 0 };
   yard.settings.mechSize = "small";
   yard.settings.mechScrap = "single";
   assert.equal(
-    planScrap(yard.adapter.reader.readState(), () => 0),
+    planScrap(yard.adapter.reader.readState(), () => 0, false),
     null,
   );
   const outcome = runCapturedMechAutomation({
