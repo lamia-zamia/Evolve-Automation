@@ -470,7 +470,7 @@ for (const [region, container, subTab] of [
     ],
     [
       ["civTabs", MAIN_TAB_CONTROL, 2],
-      ["govTabs", "mTabCivic", 4],
+      ["govTabs", "mTabCivic", 6],
     ],
   ]);
 }
@@ -486,7 +486,7 @@ for (const [region, container, subTab] of [
   assert.deepEqual(paths, [
     [
       ["civTabs", MAIN_TAB_CONTROL, 2],
-      ["govTabs", "mTabCivic", 4],
+      ["govTabs", "mTabCivic", 6],
     ],
   ]);
 }

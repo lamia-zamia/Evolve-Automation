@@ -47,26 +47,120 @@ function readDesignStrings(value: unknown): readonly string[] {
   );
 }
 
-const AUTO_DESIGN_METHODS = Object.freeze([
-  "setSize",
-  "setType",
-  "setWep",
-  "setEquip",
-  "build",
-  "bay",
-  "price",
-  "soul",
+/*
+ * DeadSpace's user blueprint path calls build/bay/price/soul; automatic design
+ * additionally invokes each setter before building. Discovery and execution
+ * share these method sets so they agree about the capture surface.
+ */
+const MECH_ASSEMBLY_METHOD = Object.freeze({
+  setSize: "setSize",
+  setType: "setType",
+  setWep: "setWep",
+  setEquip: "setEquip",
+  build: "build",
+  bay: "bay",
+  price: "price",
+  soul: "soul",
+});
+const MECH_LIST_SCRAP_METHOD = "scrap";
+const USER_DESIGN_METHODS = Object.freeze([
+  MECH_ASSEMBLY_METHOD.build,
+  MECH_ASSEMBLY_METHOD.bay,
+  MECH_ASSEMBLY_METHOD.price,
+  MECH_ASSEMBLY_METHOD.soul,
 ]);
+const AUTO_DESIGN_METHODS = Object.freeze([
+  MECH_ASSEMBLY_METHOD.setSize,
+  MECH_ASSEMBLY_METHOD.setType,
+  MECH_ASSEMBLY_METHOD.setWep,
+  MECH_ASSEMBLY_METHOD.setEquip,
+  ...USER_DESIGN_METHODS,
+]);
+const AUTO_SCRAP_METHODS = Object.freeze([MECH_LIST_SCRAP_METHOD]);
+const NO_CAPTURED_MECH_METHODS: readonly string[] = Object.freeze([]);
+
+interface CapturedMechControlRequirements {
+  readonly epoch: string;
+  readonly assemblyMethods: readonly string[];
+  readonly listMethods: readonly string[];
+}
+
+function readCapturedMechControlRequirements(
+  settingsValue: unknown,
+): CapturedMechControlRequirements | undefined {
+  if (!isNonArrayRecord(settingsValue)) return undefined;
+  const buildMode = settingsValue["mechBuild"];
+  if (buildMode === "user") {
+    return Object.freeze({
+      epoch: `user:${USER_DESIGN_METHODS.join(",")}`,
+      assemblyMethods: USER_DESIGN_METHODS,
+      listMethods: NO_CAPTURED_MECH_METHODS,
+    });
+  }
+  if (buildMode === "random") {
+    const listMethods =
+      settingsValue["mechScrap"] === "none"
+        ? NO_CAPTURED_MECH_METHODS
+        : AUTO_SCRAP_METHODS;
+    return Object.freeze({
+      epoch: `random:${AUTO_DESIGN_METHODS.join(",")}:${listMethods.join(",")}`,
+      assemblyMethods: AUTO_DESIGN_METHODS,
+      listMethods,
+    });
+  }
+  return Object.freeze({
+    epoch: "inactive",
+    assemblyMethods: NO_CAPTURED_MECH_METHODS,
+    listMethods: NO_CAPTURED_MECH_METHODS,
+  });
+}
+
+function supportsControlMethods(
+  control: GameControlHandle | undefined,
+  requiredMethods: readonly string[],
+): control is GameControlHandle {
+  return (
+    control !== undefined &&
+    requiredMethods.every((method) => control.methods.includes(method))
+  );
+}
+
+export function capturedMechControlsSatisfied(
+  controls: GameControlRegistry,
+  settingsValue: unknown,
+): boolean {
+  const requirements = readCapturedMechControlRequirements(settingsValue);
+  if (requirements === undefined) return false;
+  return (
+    (requirements.assemblyMethods.length === 0 ||
+      supportsControlMethods(
+        controls.resolve(CAPTURED_MECH_ASSEMBLY_CONTROL),
+        requirements.assemblyMethods,
+      )) &&
+    (requirements.listMethods.length === 0 ||
+      supportsControlMethods(
+        controls.resolve(CAPTURED_MECH_LIST_CONTROL),
+        requirements.listMethods,
+      ))
+  );
+}
+
+export function capturedMechControlRequirementEpoch(
+  settingsValue: unknown,
+): string {
+  return (
+    readCapturedMechControlRequirements(settingsValue)?.epoch ??
+    "settings-unavailable"
+  );
+}
 
 function resolveAutoAssembly(
   registry: GameControlRegistry,
 ): GameControlHandle | undefined {
   const control = registry.resolve(CAPTURED_MECH_ASSEMBLY_CONTROL);
-  if (control === undefined) return undefined;
-  for (const method of AUTO_DESIGN_METHODS) {
-    if (!control.methods.includes(method)) return undefined;
-  }
-  return control;
+  return supportsControlMethods(control, AUTO_DESIGN_METHODS)
+    ? control
+    : undefined;
 }
 
 function readBlueprintDesign(root: unknown): CapturedMechDesign | null {
@@ -211,13 +305,7 @@ function readCapturedMechSample(
     return undefined;
   }
   const control = controls.resolve(CAPTURED_MECH_ASSEMBLY_CONTROL);
-  if (
-    control === undefined ||
-    !control.methods.includes("build") ||
-    !control.methods.includes("bay") ||
-    !control.methods.includes("price") ||
-    !control.methods.includes("soul")
-  ) {
+  if (!supportsControlMethods(control, USER_DESIGN_METHODS)) {
     return undefined;
   }
 
@@ -225,11 +313,24 @@ function readCapturedMechSample(
   const occupied = finite(mechbay["bay"]);
   const purifierSupply = finite(purifier["supply"]);
   const soulGems = finite(soulGem["amount"]);
-  const designSpace = readControlNumber(controls, control, "bay", [designSize]);
-  const designSupply = readControlNumber(controls, control, "price", [
-    designSize,
-  ]);
-  const designSoul = readControlNumber(controls, control, "soul", [designSize]);
+  const designSpace = readControlNumber(
+    controls,
+    control,
+    MECH_ASSEMBLY_METHOD.bay,
+    [designSize],
+  );
+  const designSupply = readControlNumber(
+    controls,
+    control,
+    MECH_ASSEMBLY_METHOD.price,
+    [designSize],
+  );
+  const designSoul = readControlNumber(
+    controls,
+    control,
+    MECH_ASSEMBLY_METHOD.soul,
+    [designSize],
+  );
   const stored = Array.isArray(mechbay["mechs"]) ? mechbay["mechs"] : undefined;
   const chassis = blueprint["chassis"];
   if (
@@ -406,7 +507,10 @@ export function createCapturedMech(dependencies: CapturedMechDependencies): {
         );
       }
 
-      const result = dependencies.controls.invoke(active.control, "build");
+      const result = dependencies.controls.invoke(
+        active.control,
+        MECH_ASSEMBLY_METHOD.build,
+      );
       if (!result.ok) {
         return stale(
           "captured-mech-control-failed",
@@ -577,7 +681,7 @@ export function createCapturedMech(dependencies: CapturedMechDependencies): {
       }
       if (blueprintDesign.size !== decision.design.size) {
         const stepped = applySetStep(
-          "setSize",
+          MECH_ASSEMBLY_METHOD.setSize,
           [decision.design.size],
           (next) => next.size === decision.design.size,
         );
@@ -592,7 +696,7 @@ export function createCapturedMech(dependencies: CapturedMechDependencies): {
       }
       if (blueprintDesign.chassis !== decision.design.chassis) {
         const stepped = applySetStep(
-          "setType",
+          MECH_ASSEMBLY_METHOD.setType,
           [decision.design.chassis],
           (next) => next.chassis === decision.design.chassis,
         );
@@ -609,7 +713,7 @@ export function createCapturedMech(dependencies: CapturedMechDependencies): {
         const weapon = decision.design.hardpoint[index] as string;
         if (blueprintDesign.hardpoint[index] !== weapon) {
           const stepped = applySetStep(
-            "setWep",
+            MECH_ASSEMBLY_METHOD.setWep,
             [weapon, index],
             (next) => next.hardpoint[index] === weapon,
           );
@@ -627,7 +731,7 @@ export function createCapturedMech(dependencies: CapturedMechDependencies): {
         const equip = decision.design.equip[index] as string;
         if (blueprintDesign.equip[index] !== equip) {
           const stepped = applySetStep(
-            "setEquip",
+            MECH_ASSEMBLY_METHOD.setEquip,
             [equip, index],
             (next) => next.equip[index] === equip,
           );
@@ -661,19 +765,19 @@ export function createCapturedMech(dependencies: CapturedMechDependencies): {
       const designSpace = readControlNumber(
         dependencies.controls,
         autoHandle,
-        "bay",
+        MECH_ASSEMBLY_METHOD.bay,
         [decision.design.size],
       );
       const designSupply = readControlNumber(
         dependencies.controls,
         autoHandle,
-        "price",
+        MECH_ASSEMBLY_METHOD.price,
         [decision.design.size],
       );
       const designSoul = readControlNumber(
         dependencies.controls,
         autoHandle,
-        "soul",
+        MECH_ASSEMBLY_METHOD.soul,
         [decision.design.size],
       );
       if (
@@ -687,7 +791,10 @@ export function createCapturedMech(dependencies: CapturedMechDependencies): {
           "captured mech state changed",
         );
       }
-      const buildResult = dependencies.controls.invoke(autoHandle, "build");
+      const buildResult = dependencies.controls.invoke(
+        autoHandle,
+        MECH_ASSEMBLY_METHOD.build,
+      );
       if (!buildResult.ok) {
         return stale(
           "captured-mech-auto-control-failed",
@@ -728,8 +835,7 @@ export function createCapturedMech(dependencies: CapturedMechDependencies): {
         dependencies.rootState.readRoot() === rootRef;
       const control = dependencies.controls.resolve(CAPTURED_MECH_LIST_CONTROL);
       if (
-        control === undefined ||
-        !control.methods.includes("scrap") ||
+        !supportsControlMethods(control, AUTO_SCRAP_METHODS) ||
         !unchanged()
       ) {
         return stale(
@@ -788,9 +894,11 @@ export function createCapturedMech(dependencies: CapturedMechDependencies): {
           "captured mech scrap target changed",
         );
       }
-      const result = dependencies.controls.invoke(control, "scrap", [
-        decision.index,
-      ]);
+      const result = dependencies.controls.invoke(
+        control,
+        MECH_LIST_SCRAP_METHOD,
+        [decision.index],
+      );
       if (!result.ok) {
         return stale(
           "captured-mech-scrap-control-failed",

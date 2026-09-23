@@ -1353,9 +1353,9 @@
     industry: 1,
     powerGrid: 2,
     military: 3,
-    perkUnderground: 4,
-    mechLab: 5,
-    dwarfShipYard: 6,
+    mechLab: 4,
+    dwarfShipYard: 5,
+    perkUnderground: 6,
     psychicPowers: 7,
     supernatural: 8
   }), MARKET_TAB_INDEX = Object.freeze({
@@ -42547,23 +42547,69 @@ Only continue if you trust the source. Injected code:
       )
     ) : Object.freeze([]);
   }
-  var AUTO_DESIGN_METHODS = Object.freeze([
-    "setSize",
-    "setType",
-    "setWep",
-    "setEquip",
-    "build",
-    "bay",
-    "price",
-    "soul"
-  ]);
+  var MECH_ASSEMBLY_METHOD = Object.freeze({
+    setSize: "setSize",
+    setType: "setType",
+    setWep: "setWep",
+    setEquip: "setEquip",
+    build: "build",
+    bay: "bay",
+    price: "price",
+    soul: "soul"
+  }), MECH_LIST_SCRAP_METHOD = "scrap", USER_DESIGN_METHODS = Object.freeze([
+    MECH_ASSEMBLY_METHOD.build,
+    MECH_ASSEMBLY_METHOD.bay,
+    MECH_ASSEMBLY_METHOD.price,
+    MECH_ASSEMBLY_METHOD.soul
+  ]), AUTO_DESIGN_METHODS = Object.freeze([
+    MECH_ASSEMBLY_METHOD.setSize,
+    MECH_ASSEMBLY_METHOD.setType,
+    MECH_ASSEMBLY_METHOD.setWep,
+    MECH_ASSEMBLY_METHOD.setEquip,
+    ...USER_DESIGN_METHODS
+  ]), AUTO_SCRAP_METHODS = Object.freeze([MECH_LIST_SCRAP_METHOD]), NO_CAPTURED_MECH_METHODS = Object.freeze([]);
+  function readCapturedMechControlRequirements(settingsValue) {
+    if (!isNonArrayRecord(settingsValue)) return;
+    let buildMode = settingsValue.mechBuild;
+    if (buildMode === "user")
+      return Object.freeze({
+        epoch: `user:${USER_DESIGN_METHODS.join(",")}`,
+        assemblyMethods: USER_DESIGN_METHODS,
+        listMethods: NO_CAPTURED_MECH_METHODS
+      });
+    if (buildMode === "random") {
+      let listMethods = settingsValue.mechScrap === "none" ? NO_CAPTURED_MECH_METHODS : AUTO_SCRAP_METHODS;
+      return Object.freeze({
+        epoch: `random:${AUTO_DESIGN_METHODS.join(",")}:${listMethods.join(",")}`,
+        assemblyMethods: AUTO_DESIGN_METHODS,
+        listMethods
+      });
+    }
+    return Object.freeze({
+      epoch: "inactive",
+      assemblyMethods: NO_CAPTURED_MECH_METHODS,
+      listMethods: NO_CAPTURED_MECH_METHODS
+    });
+  }
+  function supportsControlMethods(control, requiredMethods) {
+    return control !== void 0 && requiredMethods.every((method) => control.methods.includes(method));
+  }
+  function capturedMechControlsSatisfied(controls2, settingsValue) {
+    let requirements = readCapturedMechControlRequirements(settingsValue);
+    return requirements === void 0 ? !1 : (requirements.assemblyMethods.length === 0 || supportsControlMethods(
+      controls2.resolve(CAPTURED_MECH_ASSEMBLY_CONTROL),
+      requirements.assemblyMethods
+    )) && (requirements.listMethods.length === 0 || supportsControlMethods(
+      controls2.resolve(CAPTURED_MECH_LIST_CONTROL),
+      requirements.listMethods
+    ));
+  }
+  function capturedMechControlRequirementEpoch(settingsValue) {
+    return readCapturedMechControlRequirements(settingsValue)?.epoch ?? "settings-unavailable";
+  }
   function resolveAutoAssembly(registry) {
     let control = registry.resolve(CAPTURED_MECH_ASSEMBLY_CONTROL);
-    if (control !== void 0) {
-      for (let method of AUTO_DESIGN_METHODS)
-        if (!control.methods.includes(method)) return;
-      return control;
-    }
+    return supportsControlMethods(control, AUTO_DESIGN_METHODS) ? control : void 0;
   }
   function readBlueprintDesign(root) {
     if (!isNonArrayRecord(root)) return null;
@@ -42640,11 +42686,24 @@ Only continue if you trust the source. Injected code:
     if (typeof designSize != "string" || designSize.length === 0)
       return;
     let control = controls2.resolve(CAPTURED_MECH_ASSEMBLY_CONTROL);
-    if (control === void 0 || !control.methods.includes("build") || !control.methods.includes("bay") || !control.methods.includes("price") || !control.methods.includes("soul"))
+    if (!supportsControlMethods(control, USER_DESIGN_METHODS))
       return;
-    let maximum = finite(mechbay.max), occupied = finite(mechbay.bay), purifierSupply = finite(purifier.supply), soulGems = finite(soulGem.amount), designSpace = readControlNumber(controls2, control, "bay", [designSize]), designSupply = readControlNumber(controls2, control, "price", [
-      designSize
-    ]), designSoul = readControlNumber(controls2, control, "soul", [designSize]), stored = Array.isArray(mechbay.mechs) ? mechbay.mechs : void 0, chassis = blueprint.chassis;
+    let maximum = finite(mechbay.max), occupied = finite(mechbay.bay), purifierSupply = finite(purifier.supply), soulGems = finite(soulGem.amount), designSpace = readControlNumber(
+      controls2,
+      control,
+      MECH_ASSEMBLY_METHOD.bay,
+      [designSize]
+    ), designSupply = readControlNumber(
+      controls2,
+      control,
+      MECH_ASSEMBLY_METHOD.price,
+      [designSize]
+    ), designSoul = readControlNumber(
+      controls2,
+      control,
+      MECH_ASSEMBLY_METHOD.soul,
+      [designSize]
+    ), stored = Array.isArray(mechbay.mechs) ? mechbay.mechs : void 0, chassis = blueprint.chassis;
     if (maximum === void 0 || occupied === void 0 || purifierSupply === void 0 || soulGems === void 0 || designSpace === void 0 || designSupply === void 0 || designSoul === void 0 || maximum < occupied || stored === void 0)
       return;
     let design = Object.freeze({
@@ -42748,7 +42807,10 @@ Only continue if you trust the source. Injected code:
             "captured-mech-state-changed",
             "captured mech state changed"
           );
-        let result = dependencies.controls.invoke(active.control, "build");
+        let result = dependencies.controls.invoke(
+          active.control,
+          MECH_ASSEMBLY_METHOD.build
+        );
         if (!result.ok)
           return stale(
             "captured-mech-control-failed",
@@ -42830,7 +42892,7 @@ Only continue if you trust the source. Injected code:
           );
         if (blueprintDesign.size !== decision.design.size) {
           let stepped = applySetStep(
-            "setSize",
+            MECH_ASSEMBLY_METHOD.setSize,
             [decision.design.size],
             (next) => next.size === decision.design.size
           );
@@ -42843,7 +42905,7 @@ Only continue if you trust the source. Injected code:
         }
         if (blueprintDesign.chassis !== decision.design.chassis) {
           let stepped = applySetStep(
-            "setType",
+            MECH_ASSEMBLY_METHOD.setType,
             [decision.design.chassis],
             (next) => next.chassis === decision.design.chassis
           );
@@ -42858,7 +42920,7 @@ Only continue if you trust the source. Injected code:
           let weapon = decision.design.hardpoint[index];
           if (blueprintDesign.hardpoint[index] !== weapon) {
             let stepped = applySetStep(
-              "setWep",
+              MECH_ASSEMBLY_METHOD.setWep,
               [weapon, index],
               (next) => next.hardpoint[index] === weapon
             );
@@ -42874,7 +42936,7 @@ Only continue if you trust the source. Injected code:
           let equip = decision.design.equip[index];
           if (blueprintDesign.equip[index] !== equip) {
             let stepped = applySetStep(
-              "setEquip",
+              MECH_ASSEMBLY_METHOD.setEquip,
               [equip, index],
               (next) => next.equip[index] === equip
             );
@@ -42903,17 +42965,17 @@ Only continue if you trust the source. Injected code:
         ), designSpace = readControlNumber(
           dependencies.controls,
           autoHandle,
-          "bay",
+          MECH_ASSEMBLY_METHOD.bay,
           [decision.design.size]
         ), designSupply = readControlNumber(
           dependencies.controls,
           autoHandle,
-          "price",
+          MECH_ASSEMBLY_METHOD.price,
           [decision.design.size]
         ), designSoul = readControlNumber(
           dependencies.controls,
           autoHandle,
-          "soul",
+          MECH_ASSEMBLY_METHOD.soul,
           [decision.design.size]
         );
         if (rereadQueueKey !== !1 || designSpace !== decision.space || designSupply !== decision.supply || designSoul !== decision.gems)
@@ -42921,7 +42983,10 @@ Only continue if you trust the source. Injected code:
             "captured-mech-auto-state-changed",
             "captured mech state changed"
           );
-        let buildResult = dependencies.controls.invoke(autoHandle, "build");
+        let buildResult = dependencies.controls.invoke(
+          autoHandle,
+          MECH_ASSEMBLY_METHOD.build
+        );
         if (!buildResult.ok)
           return stale(
             "captured-mech-auto-control-failed",
@@ -42943,7 +43008,7 @@ Only continue if you trust the source. Injected code:
             "captured mech decision does not match the sample"
           );
         let rootRef = dependencies.rootState.readRoot(), unchanged = () => dependencies.rootState.readRoot() === rootRef, control = dependencies.controls.resolve(CAPTURED_MECH_LIST_CONTROL);
-        if (control === void 0 || !control.methods.includes("scrap") || !unchanged())
+        if (!supportsControlMethods(control, AUTO_SCRAP_METHODS) || !unchanged())
           return stale(
             "captured-mech-scrap-unavailable",
             "captured mech list is unavailable"
@@ -42973,9 +43038,11 @@ Only continue if you trust the source. Injected code:
             "captured-mech-scrap-target-changed",
             "captured mech scrap target changed"
           );
-        let result = dependencies.controls.invoke(control, "scrap", [
-          decision.index
-        ]);
+        let result = dependencies.controls.invoke(
+          control,
+          MECH_LIST_SCRAP_METHOD,
+          [decision.index]
+        );
         if (!result.ok)
           return stale(
             "captured-mech-scrap-control-failed",
@@ -43903,23 +43970,32 @@ Only continue if you trust the source. Injected code:
       ), result.outcome.status === "succeeded" && clicked;
     };
     let ensureMechControls = () => {
-      let satisfied = () => pageCapture2.controls.resolve(CAPTURED_MECH_ASSEMBLY_CONTROL)?.methods.includes("build") === !0;
+      let satisfied = () => capturedMechControlsSatisfied(
+        pageCapture2.controls,
+        settingsStore.readRaw()
+      );
       if (satisfied()) return;
       let root = pageCapture2.rootState.readRoot(), portal = readProperty(root, "portal"), mechbay = readProperty(portal, "mechbay"), gameSettings = readProperty(root, "settings"), race = readProperty(root, "race");
       if (!isRecord(mechbay) || readProperty(gameSettings, "showMechLab") !== !0 || readProperty(race, "species") === "protoplasm" || readProperty(race, "start_cataclysm") === !0 || pageCapture2.controls.resolve(MAIN_TAB_CONTROL) === void 0) return;
       let govTabs = SUB_TAB_CONTROLS[GOV_TABS_SETTING];
-      govTabs !== void 0 && finishDiscovery("mech", "mech", satisfied, void 0, [
-        Object.freeze({
-          setting: MAIN_TAB_SETTING,
-          control: MAIN_TAB_CONTROL,
-          index: MAIN_TAB_INDEX.civic
-        }),
-        Object.freeze({
-          setting: GOV_TABS_SETTING,
-          control: govTabs,
-          index: GOV_TAB_INDEX.mechLab
-        })
-      ]);
+      govTabs !== void 0 && finishDiscovery(
+        "mech",
+        "mech",
+        satisfied,
+        capturedMechControlRequirementEpoch(settingsStore.readRaw()),
+        [
+          Object.freeze({
+            setting: MAIN_TAB_SETTING,
+            control: MAIN_TAB_CONTROL,
+            index: MAIN_TAB_INDEX.civic
+          }),
+          Object.freeze({
+            setting: GOV_TABS_SETTING,
+            control: govTabs,
+            index: GOV_TAB_INDEX.mechLab
+          })
+        ]
+      );
     }, ensureMadControls = () => {
       let satisfied = () => pageCapture2.controls.resolve(CAPTURED_MAD_CONTROL)?.methods.includes("arm") === !0 && pageCapture2.controls.resolve(CAPTURED_MAD_CONTROL)?.methods.includes("launch") === !0;
       if (satisfied()) return;

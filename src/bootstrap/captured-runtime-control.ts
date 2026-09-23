@@ -167,8 +167,11 @@ import {
   createCapturedMercenary,
 } from "../adapters/evolve/combat/captured-mercenary.ts";
 import { createCapturedBattle } from "../adapters/evolve/combat/battle.ts";
-import { createCapturedMech } from "../adapters/evolve/combat/captured-mech.ts";
-import { CAPTURED_MECH_ASSEMBLY_CONTROL } from "../adapters/evolve/combat/captured-mech-control-ids.ts";
+import {
+  capturedMechControlRequirementEpoch,
+  capturedMechControlsSatisfied,
+  createCapturedMech,
+} from "../adapters/evolve/combat/captured-mech.ts";
 import { runCapturedMechAutomation } from "../application/captured-mech.ts";
 import { createBrowserRandomSource } from "../adapters/browser/random.ts";
 import {
@@ -1078,9 +1081,10 @@ export function startCapturedRuntime({
   };
   const ensureMechControls = () => {
     const satisfied = () =>
-      pageCapture.controls
-        .resolve(CAPTURED_MECH_ASSEMBLY_CONTROL)
-        ?.methods.includes("build") === true;
+      capturedMechControlsSatisfied(
+        pageCapture.controls,
+        settingsStore.readRaw(),
+      );
     if (satisfied()) return;
     const root = pageCapture.rootState.readRoot();
     const portal = readProperty(root, "portal");
@@ -1098,18 +1102,24 @@ export function startCapturedRuntime({
     if (pageCapture.controls.resolve(MAIN_TAB_CONTROL) === undefined) return;
     const govTabs = SUB_TAB_CONTROLS[GOV_TABS_SETTING];
     if (govTabs === undefined) return;
-    finishDiscovery("mech", "mech", satisfied, undefined, [
-      Object.freeze({
-        setting: MAIN_TAB_SETTING,
-        control: MAIN_TAB_CONTROL,
-        index: MAIN_TAB_INDEX.civic,
-      }),
-      Object.freeze({
-        setting: GOV_TABS_SETTING,
-        control: govTabs,
-        index: GOV_TAB_INDEX.mechLab,
-      }),
-    ]);
+    finishDiscovery(
+      "mech",
+      "mech",
+      satisfied,
+      capturedMechControlRequirementEpoch(settingsStore.readRaw()),
+      [
+        Object.freeze({
+          setting: MAIN_TAB_SETTING,
+          control: MAIN_TAB_CONTROL,
+          index: MAIN_TAB_INDEX.civic,
+        }),
+        Object.freeze({
+          setting: GOV_TABS_SETTING,
+          control: govTabs,
+          index: GOV_TAB_INDEX.mechLab,
+        }),
+      ],
+    );
   };
   /**
    * Draws the civics military sub-tab, where `defineGarrison()` also binds the game's `#mad`

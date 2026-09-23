@@ -181,17 +181,17 @@ export const SPACE_TAB_SWEEP: readonly number[] = Object.freeze(
 );
 
 /**
- * `govTabs` selections in `b-tab-item` order (the civics tab in `index.js`): 0 government,
- * 1 industry, 2 power grid, 3 military, and the gated perk tabs after it.
+ * `govTabs` selections in `b-tab-item` order (the civics tab in DeadSpace `index.js`): 0 government,
+ * 1 industry, 2 power grid, 3 military, 4 Mech Lab, 5 Dwarf Shipyard, and the later perk tabs.
  */
 export const GOV_TAB_INDEX = Object.freeze({
   civic: 0,
   industry: 1,
   powerGrid: 2,
   military: 3,
-  perkUnderground: 4,
-  mechLab: 5,
-  dwarfShipYard: 6,
+  mechLab: 4,
+  dwarfShipYard: 5,
+  perkUnderground: 6,
   psychicPowers: 7,
   supernatural: 8,
 });

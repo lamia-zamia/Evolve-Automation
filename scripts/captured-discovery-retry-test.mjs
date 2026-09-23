@@ -2,6 +2,23 @@ import assert from "node:assert/strict";
 
 import { createDiscoveryAttempts } from "../src/bootstrap/discovery-attempts.ts";
 import { startCapturedRuntime } from "../src/bootstrap/captured-runtime-control.ts";
+import {
+  capturedMechControlRequirementEpoch,
+  capturedMechControlsSatisfied,
+} from "../src/adapters/evolve/combat/captured-mech.ts";
+import {
+  CAPTURED_MECH_ASSEMBLY_CONTROL,
+  CAPTURED_MECH_LIST_CONTROL,
+} from "../src/adapters/evolve/combat/captured-mech-control-ids.ts";
+import {
+  GOV_TAB_INDEX,
+  GOV_TABS_SETTING,
+  MAIN_TAB_CONTROL,
+  MAIN_TAB_SETTING,
+  MARKET_TABS_SETTING,
+  SUB_TAB_CONTROLS,
+} from "../src/adapters/evolve/captured-tab-discovery.ts";
+import { MARKET_QUANTITY_CONTROL } from "../src/adapters/evolve/economy/market/captured-market.ts";
 
 /* ---------------------------------------------------------------- shared semantics */
 
@@ -59,11 +76,38 @@ import { startCapturedRuntime } from "../src/bootstrap/captured-runtime-control.
   assert.equal(attempts.shouldAttempt("mad", "epoch-1"), true);
 }
 
+{
+  const userEpoch = capturedMechControlRequirementEpoch({ mechBuild: "user" });
+  const randomEpoch = capturedMechControlRequirementEpoch({
+    mechBuild: "random",
+    mechScrap: "none",
+  });
+  const randomWithScrapEpoch = capturedMechControlRequirementEpoch({
+    mechBuild: "random",
+    mechScrap: "mech",
+  });
+  assert.notEqual(userEpoch, randomEpoch);
+  assert.notEqual(randomEpoch, randomWithScrapEpoch);
+
+  const attempts = createDiscoveryAttempts({ readCycle: () => 0 });
+  attempts.recordSuccess("mech", userEpoch);
+  assert.equal(attempts.shouldAttempt("mech", userEpoch), false);
+  assert.equal(
+    attempts.shouldAttempt("mech", randomEpoch),
+    true,
+    "changing to random designs starts discovery for its setter methods",
+  );
+  attempts.recordSuccess("mech", randomEpoch);
+  assert.equal(
+    attempts.shouldAttempt("mech", randomWithScrapEpoch),
+    true,
+    "enabling Mech scrap starts discovery for the list scrap control",
+  );
+}
+
 /* ------------------------------------------- a representative real feature: the market panel */
 
-const MAIN_TAB_CONTROL = "#mainColumn div.content";
-const MARKET_SUB_TAB_CONTROL = "mTabResource";
-const MARKET_QUANTITY_CONTROL = "market-qty";
+const MARKET_SUB_TAB_CONTROL = SUB_TAB_CONTROLS[MARKET_TABS_SETTING];
 
 function stubDocument() {
   return {
@@ -357,6 +401,182 @@ function runMarketFixture({
   for (const notify of rootListeners) notify();
   listener({ periods: 4 });
   assert.equal(swaps.length, 2, "the replaced page is discovered again");
+}
+
+{
+  // A Mech Lab draw can first expose only the old user-build method. Random
+  // design and enabled scrap must keep discovery eligible until their complete
+  // assembly and list methods arrive on a later draw.
+  let listener;
+  let mechLabDraws = 0;
+  let completeMechSurface = false;
+  const errors = [];
+  const root = {
+    settings: {
+      masterScriptToggle: true,
+      autoMech: true,
+      mechBuild: "random",
+      mechScrap: "all",
+      showMechLab: true,
+      [MAIN_TAB_SETTING]: 0,
+      [GOV_TABS_SETTING]: 0,
+      animated: false,
+      qKey: false,
+      keyMap: { q: "q" },
+    },
+    race: { species: "human", governor: { tasks: {} } },
+    portal: {
+      mechbay: {
+        max: 0,
+        bay: 0,
+        active: 0,
+        scouts: 0,
+        mechs: [],
+        blueprint: {
+          size: "small",
+          chassis: "tread",
+          hardpoint: ["laser"],
+          equip: [],
+          infernal: false,
+        },
+      },
+      purifier: {
+        supply: 0,
+        sup_max: 0,
+        count: 0,
+        on: 0,
+        diff: 0,
+      },
+    },
+    resource: { Soul_Gem: { amount: 0, diff: 0 } },
+  };
+  const mechAssembly = {
+    elementId: CAPTURED_MECH_ASSEMBLY_CONTROL,
+    generation: 1,
+    methods: ["build"],
+  };
+  const mechList = {
+    elementId: CAPTURED_MECH_LIST_CONTROL,
+    generation: 1,
+    methods: ["scrap"],
+  };
+  const controls = {
+    resolve(elementId) {
+      if (elementId === MAIN_TAB_CONTROL) {
+        return { elementId, generation: 1, methods: ["swapTab"] };
+      }
+      if (elementId === SUB_TAB_CONTROLS[GOV_TABS_SETTING]) {
+        return { elementId, generation: 1, methods: ["swapTab"] };
+      }
+      if (elementId === CAPTURED_MECH_ASSEMBLY_CONTROL) {
+        return mechAssembly;
+      }
+      if (elementId === CAPTURED_MECH_LIST_CONTROL && completeMechSurface) {
+        return mechList;
+      }
+      return undefined;
+    },
+    invoke(handle, method, args) {
+      if (method !== "swapTab") {
+        return { ok: false, reason: "unknown-method" };
+      }
+      if (
+        handle.elementId === SUB_TAB_CONTROLS[GOV_TABS_SETTING] &&
+        args[0] === GOV_TAB_INDEX.mechLab
+      ) {
+        mechLabDraws += 1;
+        if (mechLabDraws === 2) {
+          mechAssembly.methods = [
+            "setSize",
+            "setType",
+            "setWep",
+            "setEquip",
+            "build",
+            "bay",
+            "price",
+            "soul",
+          ];
+          completeMechSurface = true;
+        }
+      }
+      return { ok: true, value: undefined };
+    },
+    capturedElementIds() {
+      return [
+        MAIN_TAB_CONTROL,
+        SUB_TAB_CONTROLS[GOV_TABS_SETTING],
+        CAPTURED_MECH_ASSEMBLY_CONTROL,
+        ...(completeMechSurface ? [CAPTURED_MECH_LIST_CONTROL] : []),
+      ];
+    },
+  };
+  assert.equal(
+    capturedMechControlsSatisfied(controls, root.settings),
+    false,
+    "a build-only Mech capture cannot satisfy random design and scrap",
+  );
+  const stop = startCapturedRuntime({
+    pageCapture: {
+      isComplete: () => true,
+      rootState: {
+        readRoot: () => root,
+        isReactivitySuppressed: () => false,
+        subscribeRootReplaced: () => () => {},
+      },
+      controls,
+      controlUsage: { readUsage: () => [] },
+      keyState: { readPressed: () => false },
+      periods: {
+        subscribe(next) {
+          listener = next;
+          return () => {};
+        },
+      },
+      mountSuppression: {
+        available: true,
+        withoutMounting: (draw) => draw(),
+        withMountingEnabled: (draw) => draw(),
+      },
+      uninstall: () => {},
+    },
+    document: stubDocument(),
+    keyboardEvent: class {},
+    mouseEvent: class {},
+    storage: {
+      getItem: () => JSON.stringify(root.settings),
+      setItem: () => {},
+    },
+    logError: (message) => errors.push(message),
+  });
+  for (let i = 0; i < 4 && mechLabDraws === 0; i += 1) {
+    listener({ periods: 4 });
+  }
+  assert.equal(mechLabDraws, 1, "the first eligible tick draws the Mech Lab");
+  assert.equal(
+    capturedMechControlsSatisfied(controls, root.settings),
+    false,
+    "the first draw's partial capture remains unsatisfied",
+  );
+  for (let i = 0; i < 8 && mechLabDraws < 2; i += 1) {
+    listener({ periods: 4 });
+  }
+  assert.equal(
+    mechLabDraws,
+    2,
+    "discovery retries and captures the full surface",
+  );
+  assert.equal(capturedMechControlsSatisfied(controls, root.settings), true);
+  assert.ok(
+    errors.some((message) =>
+      message.includes(
+        "mech discovery drew its tab without capturing its control",
+      ),
+    ),
+    "the incomplete capture is reported before the later successful retry",
+  );
+  for (let i = 0; i < 4; i += 1) listener({ periods: 4 });
+  assert.equal(mechLabDraws, 2, "complete discovery is cached");
+  stop?.();
 }
 
 console.log("captured-discovery-retry ok");
