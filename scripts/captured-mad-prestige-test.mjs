@@ -13,6 +13,10 @@ import {
   createCapturedMadPrestige,
   readCapturedMadBranch,
 } from "../src/adapters/evolve/progression/prestige/captured-mad.ts";
+import {
+  CAPTURED_MECH_ASSEMBLY_CONTROL,
+  CAPTURED_MECH_LIST_CONTROL,
+} from "../src/adapters/evolve/combat/captured-mech-control-ids.ts";
 import { runPrestige } from "../src/application/prestige.ts";
 
 function buildRoot(overrides = {}) {
@@ -554,29 +558,78 @@ for (const scenario of [
   assert.deepEqual(trace, []);
 }
 
-// The independent runtime cannot answer manager-owned mech potential, so autoMech conservatively
-// blocks the reset even when the research row and all other gates are ready.
-{
+// Demonic Prestige uses the captured current team potential when Mech automation is enabled.
+// Reaching the configured ceiling allows the reset; a lower ceiling with an active lab holds it.
+for (const scenario of [
+  { maximumPotential: 1, omitSoulGem: false, expectedEligible: true },
+  { maximumPotential: 0.6, omitSoulGem: false, expectedEligible: false },
+  { maximumPotential: 1, omitSoulGem: true, expectedEligible: false },
+]) {
   const trace = [];
   let goal = "Normal";
   const root = buildRoot({
     race: { fasting: false, witch_hunter: false },
-    portal: { spire: { count: 75 } },
+    portal: {
+      spire: {
+        count: 75,
+        type: "rocky",
+        progress: 0,
+        status: { dark: true },
+        boss: "water_elm",
+      },
+      mechbay: {
+        max: 25,
+        bay: 0,
+        active: 0,
+        scouts: 0,
+        mechs: [],
+        blueprint: {
+          size: "small",
+          chassis: "tread",
+          hardpoint: ["laser"],
+          equip: ["special", "shields"],
+          infernal: false,
+        },
+      },
+      purifier: {
+        supply: 1_000_000,
+        sup_max: 2_000_000,
+        count: 1,
+        on: 1,
+        diff: 5_000,
+      },
+    },
+    resource: {
+      Population: { amount: 30, max: 30 },
+      ...(scenario.omitSoulGem ? {} : { Soul_Gem: { amount: 100, diff: 0 } }),
+    },
   });
+  const controls = {
+    resolve(id) {
+      if (id === CAPTURED_MECH_ASSEMBLY_CONTROL) {
+        return { elementId: id, generation: 1, methods: ["build"] };
+      }
+      if (id === CAPTURED_MECH_LIST_CONTROL) {
+        return { elementId: id, generation: 1, methods: ["scrap"] };
+      }
+      return id === CAPTURED_DEMONIC_TECHS.demonic
+        ? { elementId: id, generation: 1, methods: ["action"] }
+        : undefined;
+    },
+    invoke: () => ({ ok: true, value: undefined }),
+    capturedElementIds: () => [
+      CAPTURED_MECH_ASSEMBLY_CONTROL,
+      CAPTURED_MECH_LIST_CONTROL,
+      CAPTURED_DEMONIC_TECHS.demonic,
+    ],
+  };
   const prestige = createCapturedMadPrestige({
     rootState: { readRoot: () => root },
-    controls: {
-      resolve: () => ({
-        elementId: CAPTURED_DEMONIC_TECHS.demonic,
-        generation: 1,
-        methods: ["action"],
-      }),
-      invoke: () => ({ ok: true, value: undefined }),
-      capturedElementIds: () => [CAPTURED_DEMONIC_TECHS.demonic],
-    },
+    controls,
     readSettings: () => ({
       prestigeType: "demonic",
       prestigeDemonicFloor: 75,
+      prestigeDemonicPotential: scenario.maximumPotential,
       autoMech: true,
     }),
     readGoal: () => goal,
@@ -599,7 +652,7 @@ for (const scenario of [
   });
 
   runPrestige(prestige);
-  assert.deepEqual(trace, []);
+  assert.deepEqual(trace, scenario.expectedEligible ? [["goal", "Reset"]] : []);
 }
 
 // Witch-Hunter Ascension and Demonic share the captured absorption-chamber action. The pure

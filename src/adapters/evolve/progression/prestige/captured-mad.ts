@@ -36,6 +36,8 @@ import type {
 } from "../../../../ports/prestige.ts";
 import type { GameRootStateSource } from "../../../../ports/game-root-state.ts";
 import { canAfford } from "../../../../domain/game-world.ts";
+import { readCapturedMechPotential } from "../../../../domain/combat/mech-auto-choice.ts";
+import { readCapturedMechState } from "../../../../domain/combat/mech-state.ts";
 import type { GameResourceSource } from "../../../../ports/game-world-state.ts";
 import type { OfferedTech } from "../../../../ports/game-tech-catalog.ts";
 import { readCapturedAscensionLevel } from "../../ascension-level.ts";
@@ -46,6 +48,10 @@ import {
   readProperty,
 } from "../../../validation.ts";
 import { readCapturedControlLabel } from "../../captured-control-label.ts";
+import {
+  CAPTURED_MECH_ASSEMBLY_CONTROL,
+  CAPTURED_MECH_LIST_CONTROL,
+} from "../../combat/captured-mech-control-ids.ts";
 
 export const CAPTURED_MAD_CONTROL = "mad";
 
@@ -459,6 +465,7 @@ function readCapturedDemonicBranch(
   settings: Record<PropertyKey, unknown>,
   offered: readonly Readonly<OfferedTech>[],
   resources: GameResourceSource | undefined,
+  controls: GameControlRegistry,
 ): Extract<PrestigeBranch, { readonly type: "demonic" }> {
   const race = readProperty(root, "race");
   const fasting = Boolean(readProperty(race, "fasting"));
@@ -472,14 +479,38 @@ function readCapturedDemonicBranch(
     finite(readProperty(readProperty(portal, "spire"), "count")) ?? Number.NaN;
   const minimumSpireFloor =
     finite(settings["prestigeDemonicFloor"]) ?? Number.NaN;
+  let mechReady = true;
+  if (capturedMadSettingBoolean(settings, "autoMech", false)) {
+    const mechState = readCapturedMechState({
+      root,
+      settings,
+      queueKeyHeld: false,
+    });
+    const mechPotential = readCapturedMechPotential(mechState);
+    const mechActive =
+      !mechState.warlord &&
+      mechState.bay.maximum > 0 &&
+      mechState.spire !== null &&
+      controls.resolve(CAPTURED_MECH_ASSEMBLY_CONTROL) !== undefined &&
+      controls.resolve(CAPTURED_MECH_LIST_CONTROL) !== undefined;
+    const maximumMechPotential =
+      finite(settings["prestigeDemonicPotential"]) ?? 0.6;
+    mechReady =
+      mechPotential !== null &&
+      !(
+        (mechActive && maximumMechPotential < 1) ||
+        mechPotential > maximumMechPotential
+      );
+  }
   const input: DemonicPrestigeInput = {
     spireFloor,
     minimumSpireFloor,
     resetTechUnlocked: target !== undefined,
     resetTechAffordable: capturedTechIsAffordable(target, resources),
-    // The independent runtime cannot answer the manager-owned mech potential yet. Stand down
-    // whenever its automation is enabled instead of reconstructing that live formula here.
-    mechReady: !capturedMadSettingBoolean(settings, "autoMech", false),
+    // A missing or unratable state fails closed while automation is enabled. The active condition
+    // mirrors the captured lab's prerequisites; potential uses the normalized current team and
+    // best current design rather than the compatibility manager.
+    mechReady,
   };
 
   return {
@@ -803,6 +834,7 @@ export function createCapturedMadPrestige(
             settings,
             offered,
             dependencies.resources,
+            dependencies.controls,
           );
           const targetId = demonicBranch.fasting
             ? CAPTURED_DEMONIC_TECHS.final

@@ -13,6 +13,7 @@
  * | `prestigeWhiteholeMinMass` | `captured-mad.ts` whitehole branch |
  * | `prestigeAscensionPillar` | `captured-mad.ts` ascension branch |
  * | `prestigeDemonicFloor` | `captured-mad.ts` demonic branch |
+ * | `prestigeDemonicPotential` | `captured-mad.ts` demonic Mech readiness |
  * | `prestigeMADIgnoreArpa`, `prestigeVacuumMana` | `captured-project-context.ts` |
  * | `prestigeBioseedConstruct` | `captured-factory.ts`, `captured-resource-demand.ts`, `captured-project-context.ts` |
  * | `prestigeWhiteholeSaveGems` | `captured-build-policy.ts`, `script-build-policy.ts` |
@@ -22,7 +23,6 @@
  *
  * - `prestigeWaitAT` — only `prestige-eligibility.ts`, which no captured composition imports.
  *   `captured-project-context.ts` already says in a comment that it does not consult it.
- * - `prestigeDemonicPotential` — same module; needs a captured mech-potential sample as well.
  * - `prestigeCustomRaceMode`, `prestigeCustomRacePreset` — read only by `src/ui/custom-race-ui.ts`,
  *   which the captured panel does not compose.
  *
@@ -60,6 +60,7 @@ export const CAPTURED_PRESTIGE_SETTINGS: ReadonlySet<string> = Object.freeze(
     "prestigeWhiteholeMinMass",
     "prestigeAscensionPillar",
     "prestigeDemonicFloor",
+    "prestigeDemonicPotential",
     "prestigeDemonicBomb",
     "prestigeVaxStrat",
   ]),

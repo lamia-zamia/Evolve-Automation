@@ -167,10 +167,8 @@ import {
   createCapturedMercenary,
 } from "../adapters/evolve/combat/captured-mercenary.ts";
 import { createCapturedBattle } from "../adapters/evolve/combat/battle.ts";
-import {
-  CAPTURED_MECH_ASSEMBLY_CONTROL,
-  createCapturedMech,
-} from "../adapters/evolve/combat/captured-mech.ts";
+import { createCapturedMech } from "../adapters/evolve/combat/captured-mech.ts";
+import { CAPTURED_MECH_ASSEMBLY_CONTROL } from "../adapters/evolve/combat/captured-mech-control-ids.ts";
 import { runCapturedMechAutomation } from "../application/captured-mech.ts";
 import { createBrowserRandomSource } from "../adapters/browser/random.ts";
 import {

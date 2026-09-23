@@ -7208,6 +7208,19 @@
     }
     return power;
   }
+  function readCapturedMechPotential(state) {
+    if (!state.available || state.spire === null) return null;
+    if (state.warlord || state.bay.maximum === 0) return 0;
+    let floor = autoFloor(state);
+    if (floor === null) return null;
+    let figures = bestDesignFigures({ ...floor, collectorValue: 1 }, () => 0);
+    if (figures === null) return null;
+    let bestSize = combatRanking(figures, "efficiency")[0], bestEfficiency = bestSize === void 0 ? void 0 : figures[bestSize]?.efficiency, teamPower = activeMechsPower(state, floor);
+    if (bestEfficiency === void 0 || !Number.isFinite(bestEfficiency) || bestEfficiency <= 0 || teamPower === null)
+      return null;
+    let potential = teamPower / (state.bay.maximum * bestEfficiency);
+    return Number.isFinite(potential) && potential >= 0 ? potential : null;
+  }
   function designAutoChoice(state, pickIndex) {
     if (!state.available || state.queueKeyHeld || state.warlord || state.settings.buildMode !== "random" || state.blueprint === null || state.blueprint.infernal || Math.max(0, state.inventory.length - state.bay.active) > 0 || state.governorMechTask) return null;
     let floor = autoFloor(state);
@@ -8110,6 +8123,9 @@
     return demonic && (!view.tech.forbiddenLevelFive || view.game.fasting && !view.tech.dishLevelTwo) ? !1 : view.buildings.absorptionChambers >= 100 && view.buildings.soulCapacitorEnergy >= 1e8 && isPillarFinished(view);
   }
 
+  // src/adapters/evolve/combat/captured-mech-control-ids.ts
+  var CAPTURED_MECH_ASSEMBLY_CONTROL = "mechAssembly", CAPTURED_MECH_LIST_CONTROL = "mechList";
+
   // src/adapters/evolve/progression/prestige/captured-mad.ts
   var CAPTURED_MAD_CONTROL = "mad", CAPTURED_CATACLYSM_TECH = "tech-dial_it_to_11", CAPTURED_APOCALYPSE_TECHS = Object.freeze({
     first: "tech-protocol66",
@@ -8304,15 +8320,25 @@
       confirmReady: capturedTechIsAffordable(confirmOffer, resources)
     };
   }
-  function readCapturedDemonicBranch(root, settings, offered, resources) {
-    let race = readProperty(root, "race"), fasting = !!readProperty(race, "fasting"), witchHunter = !!readProperty(race, "witch_hunter"), targetId = fasting ? CAPTURED_DEMONIC_TECHS.final : CAPTURED_DEMONIC_TECHS.demonic, target = offered.find((entry) => entry.elementId === targetId), portal = readProperty(root, "portal"), spireFloor = finite(readProperty(readProperty(portal, "spire"), "count")) ?? Number.NaN, minimumSpireFloor = finite(settings.prestigeDemonicFloor) ?? Number.NaN, input = {
+  function readCapturedDemonicBranch(root, settings, offered, resources, controls2) {
+    let race = readProperty(root, "race"), fasting = !!readProperty(race, "fasting"), witchHunter = !!readProperty(race, "witch_hunter"), targetId = fasting ? CAPTURED_DEMONIC_TECHS.final : CAPTURED_DEMONIC_TECHS.demonic, target = offered.find((entry) => entry.elementId === targetId), portal = readProperty(root, "portal"), spireFloor = finite(readProperty(readProperty(portal, "spire"), "count")) ?? Number.NaN, minimumSpireFloor = finite(settings.prestigeDemonicFloor) ?? Number.NaN, mechReady = !0;
+    if (capturedMadSettingBoolean(settings, "autoMech", !1)) {
+      let mechState = readCapturedMechState({
+        root,
+        settings,
+        queueKeyHeld: !1
+      }), mechPotential = readCapturedMechPotential(mechState), mechActive = !mechState.warlord && mechState.bay.maximum > 0 && mechState.spire !== null && controls2.resolve(CAPTURED_MECH_ASSEMBLY_CONTROL) !== void 0 && controls2.resolve(CAPTURED_MECH_LIST_CONTROL) !== void 0, maximumMechPotential = finite(settings.prestigeDemonicPotential) ?? 0.6;
+      mechReady = mechPotential !== null && !(mechActive && maximumMechPotential < 1 || mechPotential > maximumMechPotential);
+    }
+    let input = {
       spireFloor,
       minimumSpireFloor,
       resetTechUnlocked: target !== void 0,
       resetTechAffordable: capturedTechIsAffordable(target, resources),
-      // The independent runtime cannot answer the manager-owned mech potential yet. Stand down
-      // whenever its automation is enabled instead of reconstructing that live formula here.
-      mechReady: !capturedMadSettingBoolean(settings, "autoMech", !1)
+      // A missing or unratable state fails closed while automation is enabled. The active condition
+      // mirrors the captured lab's prerequisites; potential uses the normalized current team and
+      // best current design rather than the compatibility manager.
+      mechReady
     };
     return {
       type: "demonic",
@@ -8492,7 +8518,8 @@
               root,
               settings,
               offered,
-              dependencies.resources
+              dependencies.resources,
+              dependencies.controls
             ), targetId = demonicBranch.fasting ? CAPTURED_DEMONIC_TECHS.final : CAPTURED_DEMONIC_TECHS.demonic, tech = offered.find((entry) => entry.elementId === targetId);
             tech !== void 0 && sampledPrestigeTechs.set(tech.elementId, tech), branch = demonicBranch;
           }
@@ -34457,6 +34484,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
       "prestigeWhiteholeMinMass",
       "prestigeAscensionPillar",
       "prestigeDemonicFloor",
+      "prestigeDemonicPotential",
       "prestigeDemonicBomb",
       "prestigeVaxStrat"
     ])
@@ -42034,7 +42062,6 @@ Only continue if you trust the source. Injected code:
   }
 
   // src/adapters/evolve/combat/captured-mech.ts
-  var CAPTURED_MECH_ASSEMBLY_CONTROL = "mechAssembly", CAPTURED_MECH_LIST_CONTROL = "mechList";
   function readDesignStrings(value) {
     return Array.isArray(value) ? Object.freeze(
       value.filter(

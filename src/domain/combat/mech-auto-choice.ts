@@ -72,6 +72,38 @@ function activeMechsPower(
   return power;
 }
 
+/**
+ * Mirrors legacy `MechManager.initLab`'s `mechsPotential` normalization: team power divided by a
+ * full bay at the best current design's power per space.
+ */
+export function readCapturedMechPotential(
+  state: CapturedMechState,
+): number | null {
+  if (!state.available || state.spire === null) return null;
+  // Warlord frames and a zero-capacity bay keep the historical Mech manager inactive.
+  if (state.warlord || state.bay.maximum === 0) return 0;
+  const floor = autoFloor(state);
+  if (floor === null) return null;
+  // The collector setting affects only collector rating; use a positive value so this sample can
+  // still produce the combat designs the potential denominator needs.
+  const figures = bestDesignFigures({ ...floor, collectorValue: 1 }, () => 0);
+  if (figures === null) return null;
+  const bestSize = combatRanking(figures, "efficiency")[0];
+  const bestEfficiency =
+    bestSize === undefined ? undefined : figures[bestSize]?.efficiency;
+  const teamPower = activeMechsPower(state, floor);
+  if (
+    bestEfficiency === undefined ||
+    !Number.isFinite(bestEfficiency) ||
+    bestEfficiency <= 0 ||
+    teamPower === null
+  ) {
+    return null;
+  }
+  const potential = teamPower / (state.bay.maximum * bestEfficiency);
+  return Number.isFinite(potential) && potential >= 0 ? potential : null;
+}
+
 export function designAutoChoice(
   state: CapturedMechState,
   pickIndex: (count: number) => number,

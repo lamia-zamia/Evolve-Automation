@@ -19,11 +19,7 @@ import { createCapturedBuildPolicyReader } from "../src/adapters/evolve/progress
 import { createCapturedTechConflictReader } from "../src/adapters/evolve/progression/research/captured-tech-conflicts.ts";
 import { createCapturedSettingsPage, edit } from "./captured-settings-page.mjs";
 
-const WITHHELD = [
-  "prestigeWaitAT",
-  "prestigeDemonicPotential",
-  "prestigeCustomRaceMode",
-];
+const WITHHELD = ["prestigeWaitAT", "prestigeCustomRaceMode"];
 
 // --- the read model offers exactly the exposed set, with no empty headers -----------------------
 

@@ -22,11 +22,12 @@ import type {
 } from "../../../ports/game-control-registry.ts";
 import type { GameRootStateSource } from "../../../ports/game-root-state.ts";
 import type { GameKeyStateReader } from "../../../ports/game-key-state.ts";
+import {
+  CAPTURED_MECH_ASSEMBLY_CONTROL,
+  CAPTURED_MECH_LIST_CONTROL,
+} from "./captured-mech-control-ids.ts";
 import { rejected, stale, SUCCEEDED } from "../../command-outcomes.ts";
 import { finite, isNonArrayRecord, readProperty } from "../../validation.ts";
-
-export const CAPTURED_MECH_ASSEMBLY_CONTROL = "mechAssembly";
-export const CAPTURED_MECH_LIST_CONTROL = "mechList";
 
 interface CapturedMechSample {
   readonly root: unknown;
