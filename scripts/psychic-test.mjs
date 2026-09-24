@@ -1,6 +1,5 @@
 import assert from "node:assert/strict";
 
-import { createPsychicControls } from "../src/adapters/browser/psychic-controls.ts";
 import { createPsychicAdapter } from "../src/adapters/evolve/traits/psychic.ts";
 import { runPsychicAutomation } from "../src/application/psychic.ts";
 import { planPsychic } from "../src/domain/traits/psychic.ts";
@@ -77,74 +76,16 @@ function createFixture(scenario) {
       unlocked: scenario.lumberUnlocked ?? true,
     }),
   };
-  const recordPower = (power, mutation) => {
-    trace.managerCall("psychic-view", { power });
-    trace.command("use-psychic-power", { power });
-    mutation?.();
-  };
-  const views = {
-    psychicKill: {
-      murder: () =>
-        recordPower("murder", () => {
-          game.global.stats.psykill++;
-          trace.stateChange("psychic-kills", {
-            count: game.global.stats.psykill,
-          });
-        }),
-    },
-    psychicMindBreak: {
-      breakMind: () => recordPower("mind_break"),
-    },
-    psychicCapture: { stun: () => recordPower("stun") },
-    psychicFinance: {
-      boostVal: () =>
-        recordPower("profit", () => {
-          powers.cash = 1;
-          trace.stateChange("psychic-power", { power: "profit", active: true });
-        }),
-    },
-    psychicBoost: {
-      boostVal: () =>
-        recordPower("boost", () => {
-          powers.boostTime = 1;
-          trace.stateChange("psychic-power", { power: "boost", active: true });
-        }),
-    },
-    psychicAssault: {
-      boostVal: () =>
-        recordPower("assault", () => {
-          powers.assaultTime = 1;
-          trace.stateChange("psychic-power", {
-            power: "assault",
-            active: true,
-          });
-        }),
-    },
-  };
-  const getVueById = (id) => {
-    trace.managerCall("getVueById", { id });
-    if (scenario.missingPanels?.includes(id)) return undefined;
-    return views[id];
-  };
-  const clickSelector = (selector) => {
-    trace.managerCall("clickSelector", { selector });
-    trace.command("select-psychic-boost", { selector });
-  };
   return {
     trace,
     game,
     settings,
     resources,
-    getVueById,
-    clickSelector,
   };
 }
 
 function createAutomation(fixture, overrides = {}) {
-  const controls = createPsychicControls({
-    getVueById: fixture.getVueById,
-    clickSelector: fixture.clickSelector,
-  });
+  const controls = { activate: () => true };
   const adapter = createPsychicAdapter({
     getGame: overrides.getGame ?? (() => fixture.game),
     getSettings: overrides.getSettings ?? (() => fixture.settings),
@@ -234,23 +175,4 @@ staleFixture.resources.Energy.currentQuantity--;
 assert.equal(staleAutomation.executor.execute(staleDecision).status, "stale");
 assert.deepEqual(staleFixture.trace.snapshot(), []);
 
-const fallbackFixture = createFixture({
-  level: 2,
-  missingPanels: ["psychicBoost"],
-});
-const fallbackAutomation = createAutomation(fallbackFixture);
-assert.equal(runPsychicAutomation(fallbackAutomation).status, "succeeded");
-assert.deepEqual(
-  fallbackFixture.trace
-    .snapshot()
-    .filter(
-      (event) =>
-        event.category === "manager-call" && event.name === "getVueById",
-    )
-    .map((event) => event.details.id),
-  ["psychicBoost", "psychicAssault"],
-);
-
-console.log(
-  "Psychic domain, Evolve/browser adapters, and application tests passed",
-);
+console.log("Psychic domain, Evolve adapter, and application tests passed");

@@ -7,8 +7,9 @@ export type {
 /**
  * The jQuery surface the settings UI uses, as narrow structural types.
  *
- * TRANSITIONAL: the implementation is the game's jQuery today. Keeping the contract this small is
- * what lets the DOM implementation be replaced without touching the controls that use it.
+ * TRANSITIONAL: UI modules keep a jQuery-shaped contract, implemented by the script's own narrow
+ * `DomList` helper rather than Evolve's jQuery. Replace that facade module by module as those UIs
+ * move to direct DOM ports.
  */
 
 /** The raw element a change handler runs against. */

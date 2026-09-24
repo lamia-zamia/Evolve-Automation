@@ -5,8 +5,8 @@ import type { GameUiSurfacePort } from "../ports/game-ui-surface.ts";
 /**
  * The DOM surface the tooltips use, as narrow structural types.
  *
- * TRANSITIONAL: the implementation is the game's jQuery and MutationObserver today. Keeping the
- * contract this small is what lets the DOM implementation be replaced without touching the notes.
+ * TRANSITIONAL: the implementation uses the script's `DomList` helper and a page MutationObserver.
+ * Keeping the contract small lets the tooltip renderer move to direct DOM operations independently.
  */
 interface TooltipNode {
   append(content: string): TooltipNode;

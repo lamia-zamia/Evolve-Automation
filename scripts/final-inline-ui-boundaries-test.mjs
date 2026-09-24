@@ -1,9 +1,7 @@
 import assert from "node:assert/strict";
 
 import { createMechInfoBrowserAdapter } from "../src/adapters/browser/mech-info.ts";
-import { createMechInfoEvolveAdapter } from "../src/adapters/evolve/combat/mech-info.ts";
 import { createResourceToggleBrowserAdapter } from "../src/adapters/browser/resource-toggles.ts";
-import { createResourceToggleEvolveAdapter } from "../src/adapters/evolve/economy/resources/resource-toggles.ts";
 import { createQueuePanels } from "../src/ui/queue-panels.ts";
 
 const trace = [];
@@ -146,25 +144,14 @@ const mechNode = {
   insertBefore: (note) => inserted.push(note),
 };
 const mechTrace = [];
-const mechManager = {
-  isActive: true,
-  initLab: () => false,
-  mechObserver: {
-    disconnect: () => mechTrace.push("disconnect"),
-    observe: (...args) => mechTrace.push(`observe:${args.length}`),
-  },
-  bestMech: { collector: { power: 10 } },
-  collectorValue: 2,
-  getMechStats: () => ({ power: 5, efficiency: 0.25 }),
+const mechInfoReader = {
+  ensureLabActive: () => true,
+  readItems: () => [{ text: "50%, nice:10 /s | " }],
 };
-const { reader: mechInfoReader, observer: mechInfoObserver } =
-  createMechInfoEvolveAdapter({
-    getGame: () => ({
-      global: { portal: { mechbay: { mechs: [{ size: "collector" }] } } },
-    }),
-    getMechManager: () => mechManager,
-    getNiceNumber: (value) => `nice:${value}`,
-  });
+const mechInfoObserver = {
+  disconnect: () => mechTrace.push("disconnect"),
+  observe: (...args) => mechTrace.push(`observe:${args.length}`),
+};
 const mechUI = createMechInfoBrowserAdapter({
   getDocument: () => ({
     createElement: () => ({}),
@@ -187,20 +174,47 @@ mechUI.removeMechInfo();
 assert.equal(mechTrace.at(-1), "disconnect");
 
 const toggleKeys = [];
-let liveGame = {
-  global: { race: {} },
-  loc: (key) => `loc:${key}`,
+const marketReader = {
+  readMarket: () => ({
+    noTrade: false,
+    labels: {
+      buy: "Buy",
+      sell: "Sell",
+      routes: "Routes",
+      cancelRoutes: "Cancel",
+    },
+    items: [
+      {
+        resourceId: "Iron",
+        buyKey: "buyIron",
+        sellKey: "sellIron",
+        tradeBuyKey: "res_trade_buy_Iron",
+        tradeSellKey: "res_trade_sell_Iron",
+        buyEnabled: true,
+        sellEnabled: false,
+        tradeBuyEnabled: true,
+        tradeSellEnabled: false,
+      },
+    ],
+  }),
 };
-const toggleReader = createResourceToggleEvolveAdapter({
-  getGame: () => liveGame,
-  getSettingsRaw: () => ({ buyIron: true, res_storageIron: true }),
-  getMarketManager: () => ({ priorityList: [{ id: "Iron" }] }),
-  getStorageManager: () => ({ priorityList: [{ id: "Iron" }] }),
-});
+const storageReader = {
+  readStorage: () => ({
+    items: [
+      {
+        resourceId: "Iron",
+        storeKey: "res_storageIron",
+        overKey: "res_storage_o_Iron",
+        storeEnabled: true,
+        overEnabled: false,
+      },
+    ],
+  }),
+};
 const toggleUI = createResourceToggleBrowserAdapter({
   getJQuery: () => jquery,
-  marketReader: toggleReader,
-  storageReader: toggleReader,
+  marketReader,
+  storageReader,
   addToggleCallbacks: (node, key) => {
     toggleKeys.push(key);
     return node;
@@ -218,8 +232,15 @@ assert.deepEqual(toggleKeys, [
 ]);
 
 trace.length = 0;
-liveGame = { global: { race: { no_trade: true } }, loc: () => "unused" };
-toggleUI.removeMarketToggles();
+const noTradeUI = createResourceToggleBrowserAdapter({
+  getJQuery: () => jquery,
+  marketReader: {
+    readMarket: () => ({ ...marketReader.readMarket(), noTrade: true }),
+  },
+  storageReader,
+  addToggleCallbacks: (node) => node,
+});
+noTradeUI.createMarketToggles();
 assert.equal(
   trace.some((entry) => entry.startsWith("width:")),
   false,

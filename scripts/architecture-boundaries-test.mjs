@@ -232,10 +232,6 @@ for (const [from, to] of [
   ["domain/planner-analysis.ts", "ports/build.ts"],
   ["ports/build.ts", "application/build.ts"],
   ["domain/progression/build/building-weighting-rules.ts", "ports/build.ts"],
-  [
-    "domain/progression/build/building-weighting-rules.ts",
-    "adapters/browser/vue.ts",
-  ],
   ["domain/override-resolution.ts", "adapters/evolve/override-evaluation.ts"],
   [
     "application/override-settings.ts",
@@ -245,10 +241,6 @@ for (const [from, to] of [
   ["ui/settings-controls.ts", "application/override-editing.ts"],
   ["planning/build-planner.ts", "application/build.ts"],
   ["settings/state.ts", "ui/settings-shell.ts"],
-  ["observability/state-log.ts", "adapters/browser/vue.ts"],
-  ["application/build.ts", "adapters/browser/vue.ts"],
-  ["adapters/browser/vue.ts", "application/build.ts"],
-  ["adapters/browser/vue.ts", "bootstrap/tick-runner.ts"],
   ["ui/settings-shell.ts", "settings/state.ts"],
 ]) {
   assert.notEqual(
@@ -263,9 +255,7 @@ for (const [from, to] of [
   ["application/override-settings.ts", "ports/override-settings.ts"],
   ["ui/settings-controls.ts", "ports/override-editing.ts"],
   ["adapters/evolve/override-failure-log.ts", "domain/override-resolution.ts"],
-  ["bootstrap/tick-runner.ts", "adapters/browser/vue.ts"],
   ["main.ts", "settings/state.ts"],
-  ["main.ts", "adapters/browser/vue.ts"],
 ]) {
   assert.equal(
     importViolation(from, to),

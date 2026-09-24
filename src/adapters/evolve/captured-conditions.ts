@@ -721,19 +721,17 @@ function readBoolean(
       return context?.offeredTechs?.has(argument);
     }
     case "ResearchComplete": {
-      // The game renders every granted technology under its own action id, which is the only
-      // captured route to completion: the grant keys are private to its action catalog. A
-      // technology the current path never draws at all reads as incomplete, exactly as the
-      // compatibility runtime's DOM read did.
+      // The grant keys are private to the game's action catalog, so captured panel membership is
+      // the available completion fact. A technology the current path never draws reads as
+      // incomplete.
       if (typeof argument !== "string") return undefined;
       return context?.grantedTechs?.has(argument);
     }
     case "ProjectUnlocked": {
       // The A.R.P.A. panel draws exactly the projects the game is offering: one whose
       // requirements are unmet, whose tech path excludes it, or which has reached its rank cap is
-      // drawn nowhere. That is the same thing the compatibility runtime's Vue-binding read
-      // reported, so panel membership is the whole answer — and a panel with no rows at all is a
-      // real "nothing unlocked", not an absent one.
+      // drawn nowhere. Panel membership is the whole answer, and a panel with no rows at all is a
+      // real "nothing unlocked" result rather than an absent sample.
       if (typeof argument !== "string") return undefined;
       return context?.unlockedProjects?.has(argument);
     }

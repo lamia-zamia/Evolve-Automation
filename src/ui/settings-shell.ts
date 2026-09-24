@@ -2,8 +2,8 @@
  * The settings tab shell: the script's settings container, the import/export buttons, and the
  * collapsible section and heading builders every settings adapter renders into.
  *
- * TRANSITIONAL: the node and document surfaces below are the game's jQuery and DOM today. They are
- * declared as narrow structural types so replacing that surface is a local change.
+ * TRANSITIONAL: this shell uses the script's jQuery-shaped `DomList` helper over native DOM. Its
+ * structural surface stays narrow while individual settings controls migrate to direct DOM ports.
  */
 
 /** The single node operation the section and heading builders need from their caller. */

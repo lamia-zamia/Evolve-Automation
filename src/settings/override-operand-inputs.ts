@@ -6,8 +6,9 @@
  * mixes two unrelated concerns — what the automation reads, and what the editor shows — and only the
  * first of them is on the path to a pure evaluation input.
  *
- * TRANSITIONAL: the option callbacks read live game bags when the editor builds a control. The
- * override work package decides whether they should share one immutable snapshot per render.
+ * TRANSITIONAL: option callbacks read game catalogs through adapter-owned dependencies when the
+ * editor builds a control. A future settings-editor snapshot can replace those reads without changing
+ * the operand catalog contract.
  */
 
 /** One entry of a `list_cb` input, keyed by the value the condition stores. */

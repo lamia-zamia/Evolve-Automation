@@ -1,9 +1,9 @@
 /**
  * The custom-race preset editor and the lab automation that submits a preset.
  *
- * TRANSITIONAL: the node and document surfaces below are the game's jQuery and DOM today. They are
- * declared as narrow structural types so replacing that surface is a local change. The lab itself
- * is reached through a port.
+ * TRANSITIONAL: the editor uses the script's `DomList` helper for its own UI and a narrow port for
+ * the mounted game lab. Keep the unported feature isolated until its data and command surface joins
+ * captured runtime composition.
  */
 
 import type {

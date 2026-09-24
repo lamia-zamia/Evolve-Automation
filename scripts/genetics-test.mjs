@@ -1,7 +1,5 @@
 import assert from "node:assert/strict";
 
-import { createGameClickMultipliers } from "../src/adapters/browser/game-click-multipliers.ts";
-import { createGeneticsControls } from "../src/adapters/browser/genetics-controls.ts";
 import { createGeneticsAdapter } from "../src/adapters/evolve/traits/genetics.ts";
 import { runGeneticsAutomation } from "../src/application/genetics.ts";
 import { planGenetics } from "../src/domain/traits/genetics.ts";
@@ -58,66 +56,22 @@ function createFixture(scenario) {
       current: scenario.genesCurrent ?? 0,
     }),
   };
-  const vue = {
-    toggle() {
-      trace.managerCall("toggle", {});
-      trace.command("set-genetics-toggle", { toggle: "sequence" });
-      sequence.on = !sequence.on;
-      trace.stateChange("genetics-toggle", {
-        toggle: "sequence",
-        enabled: sequence.on,
-      });
-    },
-    booster() {
-      trace.managerCall("booster", {});
-      trace.command("set-genetics-toggle", { toggle: "boost" });
-      sequence.boost = !sequence.boost;
-      trace.stateChange("genetics-toggle", {
-        toggle: "boost",
-        enabled: sequence.boost,
-      });
-    },
-    auto_seq() {
-      trace.managerCall("auto_seq", {});
-      trace.command("set-genetics-toggle", { toggle: "auto" });
-      sequence.auto = !sequence.auto;
-      trace.stateChange("genetics-toggle", {
-        toggle: "auto",
-        enabled: sequence.auto,
-      });
-    },
-    novo() {
-      trace.managerCall("novo", {});
-      trace.command("assemble-genes", {});
-    },
-  };
-  const KeyManager = {
-    *click(count) {
-      trace.managerCall("KeyManager.click", { count });
-      while (count > 0) yield --count;
-    },
-  };
   return {
     trace,
     game,
     settings,
     resources,
     sequence,
-    vue,
-    KeyManager,
-    getVueById: (id) =>
-      id === "arpaSequence" && scenario.panel !== false ? vue : undefined,
     ticksPerSecond: scenario.ticksPerSecond ?? 4,
   };
 }
 
 function createAutomation(fixture, overrides = {}) {
-  const controls = createGeneticsControls({
-    getVueById: fixture.getVueById,
-    clickMultipliers: createGameClickMultipliers({
-      getKeyManager: () => fixture.KeyManager,
-    }),
-  });
+  const controls = {
+    capture: () => true,
+    toggle: () => true,
+    assemble: () => true,
+  };
   const adapter = createGeneticsAdapter({
     getGame: () => fixture.game,
     getSettings: overrides.getSettings ?? (() => fixture.settings),
@@ -229,6 +183,4 @@ assert.equal(
 );
 assert.deepEqual(phases, ["gate", "capture", "plan-input"]);
 
-console.log(
-  "Genetics domain, Evolve/browser adapters, and application tests passed",
-);
+console.log("Genetics domain, Evolve adapter, and application tests passed");

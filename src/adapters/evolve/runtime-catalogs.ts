@@ -1,6 +1,5 @@
-// Static compatibility catalogs used by the Vue 2 runtime adapters. Keeping
-// these values outside the composition closure leaves the runtime responsible
-// only for wiring and mutable session state.
+// Shared static catalogs used by captured settings and evolution adapters.
+// Keep game-facing labels and ids in one owner so those adapters stay data-driven.
 
 export const biomeList = [
   "grassland",

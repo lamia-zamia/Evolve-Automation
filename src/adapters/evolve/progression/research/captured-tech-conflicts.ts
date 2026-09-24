@@ -2,9 +2,9 @@
  * Research exclusions over the captured page surface.
  *
  * The decision is the existing pure policy in `domain/progression/research/tech-conflicts.ts`; this
- * module samples its input from the captured root, the effective settings and the captured resource
- * source instead of the legacy manager bags the compatibility runtime hands it. The settings half is
- * the shared `readTechConflictSettings`, so the keys a conflict depends on are still stated once.
+ * module samples its input from the captured root, effective settings, and captured resource
+ * source. The settings half is the shared `readTechConflictSettings`, so the keys a conflict
+ * depends on are still stated once.
  *
  * Every fact is sampled for the candidate that needs it and nothing else: a technology that no rule
  * mentions costs one settings read. That is a correctness rule and not only a cost one — the game
@@ -161,9 +161,8 @@ export function createCapturedTechConflictReader(
       const settings = settingsRead.settings;
 
       // The one rule whose facts are genuinely absent from the capture rather than merely unwired.
-      // Both live in the legacy runtime's own session state (`adapters/evolve/runtime-state.ts`),
-      // written by the legacy stabilization action and prestige path, and the captured runtime keeps
-      // no equivalent:
+      // These script-owned flags are absent from the captured game state and have no current
+      // session-store owner:
       //
       //   `whiteholeLastStabilise`  — when THIS SCRIPT last stabilized, for the cooldown. Nothing in
       //                               `global` records it; the game keeps no stabilization history.

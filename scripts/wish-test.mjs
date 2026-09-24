@@ -1,6 +1,5 @@
 import assert from "node:assert/strict";
 
-import { createWishControls } from "../src/adapters/browser/wish-controls.ts";
 import {
   createWishCommandExecutor,
   createWishReader,
@@ -28,29 +27,13 @@ function createFixture(scenario) {
     wishMinor: scenario.minorSelection ?? "Know",
     wishMajor: scenario.majorSelection ?? "Power",
   };
-  const panels = {
-    minorWish: scenario.minorPanel === false ? undefined : {},
-    majorWish: scenario.majorPanel === false ? undefined : {},
-  };
-  const getVueById = (id) => {
-    trace.managerCall("getVueById", { id });
-    return panels[id];
-  };
-  const clickSelector = (selector) => {
-    trace.managerCall("clickSelector", { selector });
-    trace.command("select-wish", { selector });
-    if (scenario.mutateOnClick) {
-      if (selector === `#wish${settings.wishMinor}`) wishStats.minor = 10;
-      if (selector === `#wish${settings.wishMajor}`) wishStats.major = 20;
-    }
-  };
   return {
     trace,
     game,
     settings,
     wishStats,
-    getVueById,
-    clickSelector,
+    minorControlAvailable: scenario.minorPanel !== false,
+    majorControlAvailable: scenario.majorPanel !== false,
   };
 }
 
@@ -62,10 +45,12 @@ function createAutomation(fixture) {
     }),
     executor: createWishCommandExecutor({
       getGame: () => fixture.game,
-      controls: createWishControls({
-        getVueById: fixture.getVueById,
-        clickSelector: fixture.clickSelector,
-      }),
+      controls: {
+        select: (tier) =>
+          tier === "minor"
+            ? fixture.minorControlAvailable
+            : fixture.majorControlAvailable,
+      },
     }),
   };
 }
@@ -124,13 +109,7 @@ assert.deepEqual(staleFixture.trace.snapshot(), []);
 const missingFixture = createFixture({ minorPanel: false });
 const missingOutcome = runWishAutomation(createAutomation(missingFixture));
 assert.equal(missingOutcome.status, "stale");
-assert.deepEqual(missingFixture.trace.snapshot(), [
-  {
-    category: "manager-call",
-    name: "getVueById",
-    details: { id: "minorWish" },
-  },
-]);
+assert.deepEqual(missingFixture.trace.snapshot(), []);
 
 const phaseFixture = createFixture({ majorSelection: "none" });
 const phaseAutomation = createAutomation(phaseFixture);
@@ -154,6 +133,4 @@ assert.equal(
 );
 assert.deepEqual(phases, ["read", "execute:minor"]);
 
-console.log(
-  "Wish domain, Evolve/browser adapters, and application tests passed",
-);
+console.log("Wish domain, Evolve adapter, and application tests passed");

@@ -1,8 +1,7 @@
-// TRANSITIONAL: the Vue 2 ascension lab mounts as `celestialLab`, holds the
-// design being built on its component's `g`, and recosts it only when its
-// `geneEdit()` runs. Which traits the lab offers is not on the component at
-// all — it is whichever `.t<trait>` buttons the panel rendered. Replace all
-// three when the Vue 3 update exposes the lab's design as state.
+// TRANSITIONAL: custom-race editing still reads the active design from the
+// mounted `celestialLab`, asks the game to recost through `geneEdit()`, and
+// discovers trait options from rendered `.t<trait>` buttons. Keep this detail
+// inside the lab adapter until the feature has a captured data and command port.
 
 import type {
   CustomRaceLabDesign,

@@ -1,8 +1,6 @@
-// TRANSITIONAL: the current Vue 2 shell mounts one `.modal` at a time and fills
-// `#modalBoxTitle` only after the shell exists, so a script-opened modal is hidden
-// and its subtree watched until the title identifies it. Replace this selector
-// knowledge and the mutation watch when the Vue 3 update provides a stable
-// modal-content lifecycle hook.
+// TRANSITIONAL: the current Buefy modal lifecycle mounts modal content under the
+// app container and fills `#modalBoxTitle` after mounting. Keep the selector and
+// mutation watch here; re-check them if upstream changes modal ownership or markup.
 
 import type {
   GameModalElement,

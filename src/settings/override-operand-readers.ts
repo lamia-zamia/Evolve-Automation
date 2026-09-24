@@ -12,9 +12,9 @@
  * input over all consumers would have to sample roughly 400 buildings and 80 resources to serve the
  * handful of conditions a player configures, so it is not built.
  *
- * TRANSITIONAL: every reader still traverses a live game bag through its `read*` dependency, which is
- * the Vue 2 mirror the isolation work replaces. The interfaces below are the typed contract those
- * capability ports have to satisfy; they are already narrow enough that only the suppliers change.
+ * TRANSITIONAL: readers still sample game state through their adapter-owned `read*` dependencies
+ * while the override pass evaluates each configured operand. The interfaces stay narrow; a future
+ * snapshot migration should replace the suppliers without moving this policy into an adapter.
  */
 
 /** One operand read. The argument is whatever the editor's input for that operand type stored. */

@@ -1,6 +1,5 @@
 import assert from "node:assert/strict";
 
-import { createOcularPowerControls } from "../src/adapters/browser/ocular-power-controls.ts";
 import { createOcularPowerAdapter } from "../src/adapters/evolve/traits/ocular-power.ts";
 import { runOcularPowerAutomation } from "../src/application/ocular-power.ts";
 import { planOcularPowers } from "../src/domain/traits/ocular-power.ts";
@@ -14,8 +13,6 @@ const CATALOG = [
   { key: "f", id: "fear" },
   { key: "c", id: "charm" },
 ];
-const CANONICAL_KEYS = CATALOG.map((power) => power.key);
-
 function createFixture(scenario) {
   const trace = createTraceRecorder();
   const capacity = scenario.capacity ?? 2;
@@ -38,73 +35,28 @@ function createFixture(scenario) {
     settings[`ocularPower_p_${power.id}`] =
       scenario.priorities?.[power.key] ?? 0;
   }
-  const enforceCapacity = (clickedKey) => {
-    let active = 0;
-    for (const key of CANONICAL_KEYS) {
-      if (config[key]) active++;
-      if (active > capacity && key !== clickedKey) {
-        config[key] = false;
-        trace.stateChange("ocular-power", { key, enabled: false });
-      }
-    }
-    if (active > capacity) {
-      active = 0;
-      for (const key of [...CANONICAL_KEYS].reverse()) {
-        if (config[key]) active++;
-        if (active > capacity && key !== clickedKey) {
-          config[key] = false;
-          trace.stateChange("ocular-power", { key, enabled: false });
-        }
-      }
-    }
-  };
-  const elements = Object.fromEntries(
-    CATALOG.map((power) => [
-      `ocular${power.id}`,
-      {
-        querySelector(selector) {
-          assert.equal(selector, "input");
-          return {
-            click() {
-              trace.managerCall("click", { id: power.id });
-              trace.command("toggle-ocular-power", {
-                key: power.key,
-                id: power.id,
-              });
-              config[power.key] = !config[power.key];
-              trace.stateChange("ocular-power", {
-                key: power.key,
-                enabled: config[power.key],
-              });
-              enforceCapacity(power.key);
-            },
-          };
-        },
-      },
-    ]),
-  );
-  const document = {
-    getElementById(id) {
-      return elements[id] ?? null;
-    },
-  };
   return {
     trace,
     game,
     settings,
     config,
-    document,
-    getVueById: (id) =>
-      id === "ocularPower" && scenario.panel !== false ? config : undefined,
+    controlsAvailable: scenario.controlsAvailable !== false,
     traitVal: () => capacity,
   };
 }
 
 function createAutomation(fixture, overrides = {}) {
-  const controls = createOcularPowerControls({
-    getVueById: fixture.getVueById,
-    getDocument: () => fixture.document,
-  });
+  const controls = {
+    capture: () => true,
+    current: (key) => fixture.config[key] ?? false,
+    toggle: (id) => {
+      if (fixture.controlsAvailable === false) return false;
+      const power = CATALOG.find((candidate) => candidate.id === id);
+      if (!power) return false;
+      fixture.config[power.key] = !fixture.config[power.key];
+      return true;
+    },
+  };
   const adapter = createOcularPowerAdapter({
     getGame: () => fixture.game,
     getSettings: overrides.getSettings ?? (() => fixture.settings),
@@ -175,8 +127,8 @@ assert.deepEqual(staleFixture.trace.snapshot(), []);
 const missingToggleFixture = createFixture({
   capacity: 1,
   enabled: { d: true },
+  controlsAvailable: false,
 });
-missingToggleFixture.document.getElementById = () => null;
 const missingToggleOutcome = runOcularPowerAutomation(
   createAutomation(missingToggleFixture),
 );
@@ -222,5 +174,5 @@ assert.equal(
 assert.deepEqual(phases.slice(0, 3), ["gate", "capture", "plan-input"]);
 
 console.log(
-  "Ocular-power domain, Evolve/browser adapters, and application tests passed",
+  "Ocular-power domain, Evolve adapter, and application tests passed",
 );

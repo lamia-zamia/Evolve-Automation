@@ -1,9 +1,5 @@
 import assert from "node:assert/strict";
 
-import {
-  createBrowserTaxControls,
-  createKeyModifierController,
-} from "../src/adapters/browser/tax-controls.ts";
 import { createTaxCommandExecutor } from "../src/adapters/evolve/civic/tax-command-executor.ts";
 import { createEvolveTaxReader } from "../src/adapters/evolve/civic/tax-reader.ts";
 import { createTaxSettingsReader } from "../src/adapters/storage/tax-settings-reader.ts";
@@ -110,25 +106,6 @@ assert.deepEqual(settingsReader.readSettings(), {
 context.settings.generalMaximumMorale = Number.NaN;
 assert.throws(() => settingsReader.readSettings(), /finite number/);
 
-let vue;
-const browserControls = createBrowserTaxControls(() => vue);
-assert.equal(browserControls.isAvailable(), false);
-vue = {
-  add() {
-    this.added = true;
-  },
-  sub() {
-    this.subtracted = true;
-  },
-};
-assert.equal(browserControls.isAvailable(), true);
-assert.equal(browserControls.adjust("increase"), true);
-assert.equal(vue.added, true);
-assert.equal(browserControls.adjust("decrease"), true);
-assert.equal(vue.subtracted, true);
-vue = { add() {} };
-assert.throws(() => browserControls.isAvailable(), /tax controls.sub/);
-
 context = makeContext();
 const executionTrace = [];
 let executorControlsAvailable = true;
@@ -142,9 +119,7 @@ const executor = createTaxCommandExecutor({
       return true;
     },
   },
-  keyModifiers: createKeyModifierController(() =>
-    executionTrace.push("clear-keys"),
-  ),
+  keyModifiers: { clear: () => executionTrace.push("clear-keys") },
   getGame: () => context.game,
   getResources: () => context.resources,
 });

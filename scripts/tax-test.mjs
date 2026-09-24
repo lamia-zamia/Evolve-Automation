@@ -1,10 +1,8 @@
 import assert from "node:assert/strict";
 
-import { createBrowserTaxControls } from "../src/adapters/browser/tax-controls.ts";
 import { createTaxCommandExecutor } from "../src/adapters/evolve/civic/tax-command-executor.ts";
 import { createEvolveTaxReader } from "../src/adapters/evolve/civic/tax-reader.ts";
 import { createTaxSettingsReader } from "../src/adapters/storage/tax-settings-reader.ts";
-import { createKeyModifierController } from "../src/adapters/browser/tax-controls.ts";
 import { createTaxAutomation } from "../src/application/tax.ts";
 
 function runTaxCase({
@@ -54,16 +52,14 @@ function runTaxCase({
   };
   let now = 100;
   const clock = Object.freeze({ nowMs: () => now++ });
-  const controls = createBrowserTaxControls(() => ({
-    add: () => {
-      actions.push(["add"]);
-      game.global.civic.taxes.tax_rate += 1;
+  const controls = {
+    isAvailable: () => true,
+    adjust: (direction) => {
+      actions.push([direction === "increase" ? "add" : "sub"]);
+      game.global.civic.taxes.tax_rate += direction === "increase" ? 1 : -1;
+      return true;
     },
-    sub: () => {
-      actions.push(["sub"]);
-      game.global.civic.taxes.tax_rate -= 1;
-    },
-  }));
+  };
   const automation = createTaxAutomation({
     clock,
     gameReader: createEvolveTaxReader({
@@ -76,9 +72,9 @@ function runTaxCase({
     settingsReader: createTaxSettingsReader(() => settings),
     commandExecutor: createTaxCommandExecutor({
       controls,
-      keyModifiers: createKeyModifierController(() =>
-        actions.push(["keys", false, false, false]),
-      ),
+      keyModifiers: {
+        clear: () => actions.push(["keys", false, false, false]),
+      },
       getGame: () => game,
       getResources: () => resources,
     }),

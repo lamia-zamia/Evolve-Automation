@@ -1,9 +1,7 @@
-// TRANSITIONAL: the page's shared surfaces are the Vue 2 page's
-// `documentElement`/`body` scrollport, its `hidden` visibility flag, the
-// script's own `script_mechStats*` input skeleton, and the celestial lab's
-// `#celestialLab .create button`. The Vue 3 page renders the scrollport and
-// the script's forms through its own components; replace this adapter with
-// the new surface contract when it does.
+// TRANSITIONAL: this adapter still reaches a few shared surfaces by document
+// selector: page visibility/scroll, the script-owned mech-stats inputs, and the
+// celestial lab create button. Keep each selector here and re-verify it against
+// the upstream page when that feature's captured surface changes.
 
 import type {
   GameMechStatsInput,

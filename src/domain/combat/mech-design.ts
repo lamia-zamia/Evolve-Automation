@@ -2,7 +2,7 @@
  * Automatic Mech design: pure chassis/weapon/size choice over captured facts.
  *
  * Historical intent (legacy `MechManager.updateBestBody`/`updateBestWeapon`/
- * `getRandomMech`/`getPreferredSize` in `src/game/mech-manager.ts`): score every
+ * `getRandomMech`/`getPreferredSize`): score every
  * chassis/equipment combination by body survivability for the current floor,
  * score weapons against the current Spire boss, keep all ties, and pick
  * uniformly at random. Size comes from the collector/scout/gravity policy with

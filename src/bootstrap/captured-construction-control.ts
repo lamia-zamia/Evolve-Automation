@@ -3,9 +3,8 @@
  * weighting order, sharing one set of holdings and one set of queue reservations.
  *
  * This is the whole vertical — validated input from the captured root, the existing pure planners,
- * captured game commands — with no dependency on the compatibility runtime. The runtime selects it
- * only after document-start capture is complete; callers that cannot provide that capture reject
- * before touching the game-facing readers.
+ * captured game commands. The captured runtime selects it only after document-start capture is
+ * complete; callers that cannot provide that capture reject before touching game-facing readers.
  */
 
 import { createCapturedActionCostReader } from "../adapters/evolve/captured-action-costs.ts";

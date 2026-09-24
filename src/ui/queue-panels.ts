@@ -2,8 +2,8 @@
  * The two queue panels: the detailed active-targets readout beside the build queue, and the build
  * planner wrapper.
  *
- * TRANSITIONAL: the DOM implementation is the game's jQuery today. The structural types below are
- * the whole surface these panels need, so the implementation can be replaced without touching them.
+ * TRANSITIONAL: the panels use the script's jQuery-shaped `DomList` helper over native DOM. Keep
+ * this surface narrow as the panel rendering moves to direct DOM operations.
  */
 
 interface QueuePanelNode {

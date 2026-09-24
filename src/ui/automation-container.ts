@@ -1,8 +1,8 @@
 /**
  * The DOM surface this panel uses, as narrow structural types.
  *
- * TRANSITIONAL: the implementation is the game's jQuery today. Keeping the contract this small is
- * what lets the DOM implementation be replaced without touching the panel.
+ * TRANSITIONAL: the panel uses the script's jQuery-shaped `DomList` helper over native DOM. Keep
+ * the surface narrow as its rendering moves to direct DOM operations.
  */
 interface AutomationContainerNode {
   readonly length: number;
