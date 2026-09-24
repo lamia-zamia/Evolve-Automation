@@ -19,7 +19,15 @@ export type PrestigeCommand =
   | { readonly kind: "arm-mad" }
   | { readonly kind: "launch-mad" }
   | { readonly kind: "click-building"; readonly id: string }
+  | {
+      readonly kind: "apply-celestial-lab-design";
+      readonly mode: CelestialLabMode;
+    }
   | { readonly kind: "complete-celestial-lab"; readonly mode: CelestialLabMode }
+  | {
+      readonly kind: "confirm-celestial-lab-reset";
+      readonly mode: CelestialLabMode;
+    }
   | { readonly kind: "cache-building-options"; readonly id: string }
   | { readonly kind: "click-tech"; readonly id: string }
   | { readonly kind: "reset-modifier-keys" }
@@ -94,6 +102,10 @@ export type PrestigeBranch =
       readonly type: "celestial-lab";
       readonly mode: CelestialLabMode;
       readonly eligible: boolean;
+      /** The captured Custom Race transaction state; omitted legacy fixtures mean a ready lab. */
+      readonly labAction?: "pause" | "wait" | "apply" | "submit";
+      /** A manual lab submit was observed through the game's own reset counter. */
+      readonly resetObserved?: boolean;
     };
 
 export interface PrestigeInput {
@@ -264,9 +276,22 @@ export function planPrestige(input: PrestigeInput): readonly PrestigeCommand[] {
         { kind: "click-building", id: branch.building },
       ]);
 
-    case "celestial-lab":
-      return tryReset(goal, branch.eligible, [
-        { kind: "complete-celestial-lab", mode: branch.mode },
-      ]);
+    case "celestial-lab": {
+      if (branch.resetObserved === true) {
+        return [{ kind: "confirm-celestial-lab-reset", mode: branch.mode }];
+      }
+      const labAction = branch.labAction ?? "submit";
+      if (labAction === "apply") {
+        return tryReset(goal, branch.eligible, [
+          { kind: "apply-celestial-lab-design", mode: branch.mode },
+        ]);
+      }
+      if (labAction === "submit") {
+        return tryReset(goal, branch.eligible, [
+          { kind: "complete-celestial-lab", mode: branch.mode },
+        ]);
+      }
+      return [];
+    }
   }
 }

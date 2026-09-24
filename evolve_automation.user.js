@@ -4861,6 +4861,9 @@
     "evolutionAutoUnbound",
     "evolutionBackup",
     "prestigeType",
+    "prestigeCustomRaceMode",
+    "prestigeCustomRacePreset",
+    "prestigeCustomRacePresets",
     ...challenges.map((c) => "challenge_" + c[0].id)
   ];
   var settingsSections = [
@@ -5070,10 +5073,16 @@
           { kind: "reset-modifier-keys" },
           { kind: "click-building", id: branch.building }
         ]);
-      case "celestial-lab":
-        return tryReset(goal, branch.eligible, [
+      case "celestial-lab": {
+        if (branch.resetObserved === !0)
+          return [{ kind: "confirm-celestial-lab-reset", mode: branch.mode }];
+        let labAction = branch.labAction ?? "submit";
+        return labAction === "apply" ? tryReset(goal, branch.eligible, [
+          { kind: "apply-celestial-lab-design", mode: branch.mode }
+        ]) : labAction === "submit" ? tryReset(goal, branch.eligible, [
           { kind: "complete-celestial-lab", mode: branch.mode }
-        ]);
+        ]) : [];
+      }
     }
   }
 
@@ -8620,6 +8629,202 @@
     return demonic && (!view.tech.forbiddenLevelFive || view.game.fasting && !view.tech.dishLevelTwo) ? !1 : view.buildings.absorptionChambers >= 100 && view.buildings.soulCapacitorEnergy >= 1e8 && isPillarFinished(view);
   }
 
+  // src/domain/progression/prestige/custom-race.ts
+  var CUSTOM_RACE_TEXT_LIMITS = Object.freeze({
+    name: 20,
+    desc: 255,
+    entity: 40,
+    home: 20,
+    red: 20,
+    hell: 20,
+    gas: 20,
+    gas_moon: 20,
+    dwarf: 20,
+    titan: 20,
+    enceladus: 20,
+    triton: 20,
+    makemake: 20,
+    eris: 20
+  }), CUSTOM_RACE_REQUIRED_TEXT_FIELDS = Object.freeze([
+    "name",
+    "desc",
+    "entity",
+    "home",
+    "red",
+    "hell",
+    "gas",
+    "gas_moon",
+    "dwarf"
+  ]);
+  function customRaceTextIsComplete(text) {
+    return CUSTOM_RACE_REQUIRED_TEXT_FIELDS.every(
+      (field) => typeof text[field] == "string" && text[field].length > 0
+    );
+  }
+  function customRaceGenesAreAffordable(genes) {
+    return Number.isFinite(genes) && genes >= 0;
+  }
+  function isCustomRaceRecord(value) {
+    return typeof value == "object" && value !== null && !Array.isArray(value);
+  }
+  function customRaceStringArray(value) {
+    if (!Array.isArray(value)) return;
+    let items = [];
+    for (let entry of value) {
+      if (typeof entry != "string" || !/^[a-z0-9_]+$/.test(entry))
+        return;
+      items.push(entry);
+    }
+    return items;
+  }
+  function normalizeLegacyCustomRaceRank(rank) {
+    return rank === 2 ? 1.33 : rank === 3 ? 1.67 : rank === 4 ? 2 : rank;
+  }
+  function normalizeCustomRacePresetList(rawSettings) {
+    let rawPresets = (isCustomRaceRecord(rawSettings) ? rawSettings : {}).prestigeCustomRacePresets, presets = Array.isArray(rawPresets) ? rawPresets.flatMap((raw) => isCustomRaceRecord(raw) ? [
+      Object.freeze({
+        name: typeof raw.name == "string" && raw.name.trim() !== "" ? raw.name.trim().slice(0, 60) : "Custom Race",
+        json: typeof raw.json == "string" ? raw.json : ""
+      })
+    ] : []) : [];
+    return Object.freeze(
+      presets.length > 0 ? presets : [Object.freeze({ name: "General", json: "" })]
+    );
+  }
+  function readCustomRacePresetSelection(rawSettings) {
+    let settings = isCustomRaceRecord(rawSettings) ? rawSettings : {}, available = normalizeCustomRacePresetList(rawSettings), parsedIndex = Number.parseInt(
+      String(settings.prestigeCustomRacePreset ?? "0"),
+      10
+    ), index = Number.isInteger(parsedIndex) && parsedIndex >= 0 && parsedIndex < available.length ? parsedIndex : 0;
+    return Object.freeze({ index, preset: available[index] });
+  }
+  function customRacePresetOptions(rawSettings) {
+    return Object.freeze(
+      normalizeCustomRacePresetList(rawSettings).map(
+        (preset, index) => Object.freeze({
+          val: String(index),
+          label: preset.name || `Preset ${index + 1}`,
+          hint: "Custom race preset"
+        })
+      )
+    );
+  }
+  function parseCustomRacePreset(rawJson, facts) {
+    if (typeof rawJson != "string" || rawJson.trim() === "")
+      return Object.freeze({ ok: !1, reason: "preset is empty" });
+    let parsed;
+    try {
+      parsed = JSON.parse(rawJson);
+    } catch {
+      return Object.freeze({ ok: !1, reason: "preset is not valid JSON" });
+    }
+    if (!isCustomRaceRecord(parsed))
+      return Object.freeze({ ok: !1, reason: "preset must be a race object" });
+    let traits = customRaceStringArray(parsed.traitlist ?? parsed.traits);
+    if (traits === void 0)
+      return Object.freeze({
+        ok: !1,
+        reason: "preset has no valid trait list"
+      });
+    if (new Set(traits).size !== traits.length)
+      return Object.freeze({
+        ok: !1,
+        reason: "preset contains duplicate traits"
+      });
+    let offeredTraits = new Set(facts.availableTraits);
+    if (traits.some((trait) => !offeredTraits.has(trait)))
+      return Object.freeze({
+        ok: !1,
+        reason: "preset contains traits unavailable in this lab"
+      });
+    let text = {};
+    for (let field of Object.keys(
+      CUSTOM_RACE_TEXT_LIMITS
+    )) {
+      let value = parsed[field];
+      typeof value == "string" && (text[field] = value.slice(0, CUSTOM_RACE_TEXT_LIMITS[field]));
+    }
+    if (!customRaceTextIsComplete(text))
+      return Object.freeze({
+        ok: !1,
+        reason: "preset is missing required race names or description"
+      });
+    let hybrid, rawHybrid = customRaceStringArray(parsed.hybrid);
+    rawHybrid !== void 0 && rawHybrid.length === 2 && (hybrid = Object.freeze([rawHybrid[0], rawHybrid[1]]));
+    let rawGenus = parsed.genus;
+    if (typeof rawGenus != "string" || !/^[a-z0-9_]+$/.test(rawGenus))
+      return Object.freeze({ ok: !1, reason: "preset has no valid genus" });
+    let genus = rawGenus;
+    if (facts.hybridLab && rawGenus !== "hybrid")
+      hybrid = Object.freeze([
+        rawGenus,
+        rawGenus === "humanoid" ? "small" : "humanoid"
+      ]), genus = "hybrid";
+    else if (!facts.hybridLab && rawGenus === "hybrid") {
+      if (hybrid === void 0)
+        return Object.freeze({
+          ok: !1,
+          reason: "hybrid preset is missing its genus pair"
+        });
+      genus = hybrid[0], hybrid = void 0;
+    } else if (rawGenus === "hybrid" && hybrid === void 0)
+      return Object.freeze({
+        ok: !1,
+        reason: "hybrid preset is missing its genus pair"
+      });
+    let availableGenera = new Set(facts.availableGenera);
+    if (genus !== "hybrid" && !availableGenera.has(genus) || hybrid !== void 0 && hybrid.some((entry) => !availableGenera.has(entry)))
+      return Object.freeze({
+        ok: !1,
+        reason: "preset contains a genus unavailable in this lab"
+      });
+    let rawRanks = parsed.ranks;
+    if (rawRanks !== void 0 && !isCustomRaceRecord(rawRanks))
+      return Object.freeze({ ok: !1, reason: "preset ranks are malformed" });
+    let ranks = {}, isCurrentRankVersion = parsed.rankVersion === 2;
+    if (isCustomRaceRecord(rawRanks))
+      for (let [trait, rank] of Object.entries(rawRanks)) {
+        let normalizedRank = typeof rank == "number" && !isCurrentRankVersion ? normalizeLegacyCustomRaceRank(rank) : rank;
+        if (!traits.includes(trait) || typeof normalizedRank != "number" || !Number.isFinite(normalizedRank) || normalizedRank < 0.1 || normalizedRank > 2 || normalizedRank !== 1.33 && normalizedRank !== 1.67 && Math.abs(normalizedRank * 20 - Math.round(normalizedRank * 20)) > 1e-8)
+          return Object.freeze({
+            ok: !1,
+            reason: "preset ranks must use the lab's 0.05 steps from 0.1 through 2"
+          });
+        ranks[trait] = normalizedRank;
+      }
+    for (let trait of traits) ranks[trait] ??= 1;
+    let rawFanaticism = parsed.fanaticism, fanaticism = typeof rawFanaticism == "string" && rawFanaticism !== "" ? rawFanaticism : !1;
+    return fanaticism !== !1 && !traits.includes(fanaticism) ? Object.freeze({
+      ok: !1,
+      reason: "Fanaticism must target a selected trait"
+    }) : Object.freeze({
+      ok: !0,
+      design: Object.freeze({
+        text: Object.freeze(text),
+        genus,
+        traits: Object.freeze(traits),
+        ranks: Object.freeze(ranks),
+        fanaticism,
+        ...hybrid === void 0 ? {} : { hybrid }
+      })
+    });
+  }
+  function customRaceDraftMatches(current, wanted) {
+    let wantedTraits = new Set(wanted.traits);
+    if (current.genus !== wanted.genus || current.fanaticism !== wanted.fanaticism || current.traits.length !== wanted.traits.length || current.traits.some((trait) => !wantedTraits.has(trait)))
+      return !1;
+    for (let [field, value] of Object.entries(wanted.text))
+      if (current.text[field] !== value) return !1;
+    let wantedRanks = Object.keys(wanted.ranks), currentRanks = Object.keys(current.ranks);
+    return wantedRanks.length !== currentRanks.length || wantedRanks.some((trait) => current.ranks[trait] !== wanted.ranks[trait]) ? !1 : (current.hybrid?.[0] ?? void 0) === (wanted.hybrid?.[0] ?? void 0) && (current.hybrid?.[1] ?? void 0) === (wanted.hybrid?.[1] ?? void 0);
+  }
+  function planCustomRaceLab(input) {
+    return input.mode === "pause" ? Object.freeze({ kind: "pause" }) : input.recalculation === "pending" ? Object.freeze({ kind: "wait" }) : input.mode === "reuse" ? input.savedCustomRaceExists && input.canSubmit && input.recalculation !== "failed" && customRaceGenesAreAffordable(input.genes) ? Object.freeze({ kind: "submit" }) : Object.freeze({ kind: "pause" }) : !input.preset.ok || input.recalculation === "failed" ? Object.freeze({ kind: "pause" }) : input.draftMatchesPreset ? input.canSubmit && customRaceGenesAreAffordable(input.genes) ? Object.freeze({ kind: "submit" }) : Object.freeze({ kind: "pause" }) : Object.freeze({ kind: "apply", design: input.preset.design });
+  }
+
+  // src/ports/game-custom-race-lab.ts
+  var CUSTOM_RACE_LAB_CONTROL_ID = "celestialLab", CUSTOM_RACE_LAB_PANEL_SELECTOR = "#celestialLab";
+
   // src/adapters/evolve/progression/prestige/captured-mad.ts
   var CAPTURED_MAD_CONTROL = "mad", CAPTURED_CATACLYSM_TECH = "tech-dial_it_to_11", CAPTURED_APOCALYPSE_TECHS = Object.freeze({
     first: "tech-protocol66",
@@ -8651,7 +8856,8 @@
     ...CAPTURED_DEMONIC_TECH_IDS,
     ...CAPTURED_WHITEHOLE_TECH_IDS,
     CAPTURED_WHITEHOLE_REPAIR_TECH
-  ]), CAPTURED_CELESTIAL_LAB = "celestialLab", CAPTURED_BUILDING_PRESTIGE_ACTIONS = Object.freeze({
+  ]);
+  var CAPTURED_BUILDING_PRESTIGE_ACTIONS = Object.freeze({
     terraform: Object.freeze({ elementId: "space-terraform", region: "space" }),
     ascension: Object.freeze({
       elementId: "interstellar-ascend",
@@ -8693,6 +8899,26 @@
   function capturedMadSettingNumber(settings, key, fallback) {
     return finite(settings[key]) ?? fallback;
   }
+  function capturedCustomRaceMode(settings) {
+    let mode = settings.prestigeCustomRaceMode;
+    return mode === "pause" || mode === "import" ? mode : "reuse";
+  }
+  function capturedCustomRaceDecision(settings, lab) {
+    let mode = capturedCustomRaceMode(settings), selection = readCustomRacePresetSelection(settings), preset = mode === "import" ? parseCustomRacePreset(selection.preset.json, {
+      availableTraits: lab.availableTraits,
+      availableGenera: lab.availableGenera,
+      hybridLab: lab.hybridLab
+    }) : Object.freeze({ ok: !1, reason: "preset not selected" }), matches = preset.ok && customRaceDraftMatches(lab.draft, preset.design);
+    return planCustomRaceLab({
+      mode,
+      savedCustomRaceExists: lab.savedCustomRaceExists,
+      canSubmit: lab.canSubmit,
+      preset,
+      draftMatchesPreset: matches,
+      recalculation: lab.recalculation,
+      genes: lab.genes
+    });
+  }
   function readCapturedResetCount(root, type) {
     return finite(
       readProperty(
@@ -8703,12 +8929,6 @@
   }
   function readCapturedWitchResetStat(root) {
     return finite(readProperty(readProperty(root, "tech"), "forbidden")) === 5 ? "descend" : "ascension";
-  }
-  function celestialLabMethod(mode) {
-    return mode === "terraform" ? "setPlanet" : "setRace";
-  }
-  function readCapturedCelestialLabMode(controls2, pending) {
-    return pending === void 0 ? void 0 : controls2.resolve(CAPTURED_CELESTIAL_LAB)?.methods.includes(celestialLabMethod(pending)) ? pending : void 0;
   }
   function invokeCapturedPrestigeAction(rootState, controls2, handle) {
     let settings = readProperty(rootState.readRoot(), "settings");
@@ -8912,20 +9132,46 @@
       );
   }
   function createCapturedMadPrestige(dependencies) {
-    let sampledRoot, sampledPrestigeTechs = /* @__PURE__ */ new Map(), sampledBioseedControls = /* @__PURE__ */ new Map(), sampledWitchControl, sampledEdenCount, sampledBuildingType, sampledBuildingResetCount, pendingCelestialLabMode, pendingWitchCelestialLab = !1, pendingWitchDirectReset = !1, resetCommitted = !1, apocalypseFirstActionDone = !1, bioseedModalRequested = !1, reader = Object.freeze({
+    let sampledRoot, sampledPrestigeTechs = /* @__PURE__ */ new Map(), sampledBioseedControls = /* @__PURE__ */ new Map(), sampledWitchControl, sampledEdenCount, sampledBuildingType, sampledBuildingResetCount, sampledCustomRaceLab, sampledCustomRaceDesign, sampledCustomRaceAction = "pause", sampledCustomRaceKey = "", failedCustomRaceKey, pendingCelestialLabMode, pendingCelestialLabRoot, pendingCelestialLabResetCount, pendingCelestialLabSubmitted = !1, pendingWitchCelestialLab = !1, pendingWitchDirectReset = !1, resetCommitted = !1, apocalypseFirstActionDone = !1, bioseedModalRequested = !1, reader = Object.freeze({
       samplePrestige() {
         let settings = capturedMadSettingsRecord(dependencies.readSettings()), root = dependencies.rootState.readRoot();
-        sampledRoot = root, sampledPrestigeTechs = /* @__PURE__ */ new Map(), sampledBioseedControls = /* @__PURE__ */ new Map(), sampledWitchControl = void 0, sampledEdenCount = void 0, sampledBuildingType = void 0, sampledBuildingResetCount = void 0, apocalypseFirstActionDone = !1;
+        sampledRoot = root, sampledPrestigeTechs = /* @__PURE__ */ new Map(), sampledBioseedControls = /* @__PURE__ */ new Map(), sampledWitchControl = void 0, sampledEdenCount = void 0, sampledBuildingType = void 0, sampledBuildingResetCount = void 0, sampledCustomRaceLab = void 0, sampledCustomRaceDesign = void 0, sampledCustomRaceAction = "pause", apocalypseFirstActionDone = !1;
         let prestigeType = typeof settings.prestigeType == "string" ? settings.prestigeType : "none", branch = { type: "noop" };
         if (!resetCommitted && pendingCelestialLabMode !== void 0) {
           let mode = pendingCelestialLabMode;
-          sampledBuildingResetCount = readCapturedResetCount(root, mode), branch = {
+          if (sampledBuildingResetCount = readCapturedResetCount(root, mode), root !== pendingCelestialLabRoot)
+            return pendingCelestialLabMode = void 0, pendingCelestialLabRoot = void 0, pendingCelestialLabResetCount = void 0, pendingWitchCelestialLab = !1, pendingCelestialLabSubmitted = !1, pendingWitchDirectReset = !1, resetCommitted = !0, Object.freeze({
+              goal: dependencies.readGoal(),
+              branch: Object.freeze({ type: "noop" })
+            });
+          if (pendingCelestialLabResetCount !== void 0 && sampledBuildingResetCount !== void 0 && sampledBuildingResetCount > pendingCelestialLabResetCount)
+            return branch = {
+              type: "celestial-lab",
+              mode,
+              eligible: !1,
+              labAction: "pause",
+              resetObserved: !0
+            }, Object.freeze({
+              goal: dependencies.readGoal(),
+              branch: Object.freeze(branch)
+            });
+          let lab = dependencies.customRaceLab?.read(mode);
+          if (lab !== void 0) {
+            sampledCustomRaceLab = lab;
+            let selection = readCustomRacePresetSelection(settings);
+            if (sampledCustomRaceKey = `${mode}:${selection.index}:${selection.preset.json}`, failedCustomRaceKey !== void 0 && failedCustomRaceKey !== sampledCustomRaceKey && (failedCustomRaceKey = void 0), pendingCelestialLabSubmitted || failedCustomRaceKey === sampledCustomRaceKey)
+              sampledCustomRaceAction = "wait";
+            else {
+              let decision = capturedCustomRaceDecision(settings, lab);
+              sampledCustomRaceAction = decision.kind, sampledCustomRaceDesign = decision.design;
+            }
+          }
+          branch = {
             type: "celestial-lab",
             mode,
-            eligible: readCapturedCelestialLabMode(
-              dependencies.controls,
-              pendingCelestialLabMode
-            ) !== void 0 && sampledBuildingResetCount !== void 0
+            eligible: lab !== void 0 && lab.canSubmit && sampledBuildingResetCount !== void 0 && (sampledCustomRaceAction === "apply" || sampledCustomRaceAction === "submit"),
+            labAction: sampledCustomRaceAction,
+            resetObserved: !1
           };
         } else if (!resetCommitted && prestigeType === "mad")
           branch = readCapturedMadBranch(root, settings);
@@ -9121,7 +9367,24 @@
               message: "Prestiged",
               color: "info",
               tags: Object.freeze(["achievements"])
-            })) : resetStat === "ascension" ? (pendingCelestialLabMode = "ascension", pendingWitchCelestialLab = !0) : pendingWitchDirectReset = !0;
+            })) : resetStat === "ascension" ? (pendingCelestialLabMode = "ascension", pendingCelestialLabRoot = sampledRoot, pendingCelestialLabResetCount = resetCountBefore, pendingCelestialLabSubmitted = !1, failedCustomRaceKey = void 0, pendingWitchCelestialLab = !0) : pendingWitchDirectReset = !0;
+            return;
+          }
+          case "apply-celestial-lab-design": {
+            if (dependencies.rootState.readRoot() !== sampledRoot)
+              throw new Error(
+                "captured celestial lab root changed after sampling"
+              );
+            if (pendingCelestialLabMode !== command.mode || sampledCustomRaceLab === void 0 || sampledCustomRaceDesign === void 0 || dependencies.customRaceLab === void 0)
+              return;
+            let result = dependencies.customRaceLab.applyDesign(
+              sampledCustomRaceLab.session,
+              sampledCustomRaceDesign
+            );
+            if (result.status !== "applied")
+              throw failedCustomRaceKey = sampledCustomRaceKey, new Error(
+                `captured Custom Race apply ${result.status}: ${result.reason}`
+              );
             return;
           }
           case "complete-celestial-lab": {
@@ -9129,13 +9392,17 @@
               throw new Error(
                 "captured celestial lab root changed after sampling"
               );
-            if (pendingCelestialLabMode !== command.mode) return;
-            let handle = dependencies.controls.resolve(CAPTURED_CELESTIAL_LAB), method = celestialLabMethod(command.mode);
-            if (handle === void 0 || !handle.methods.includes(method)) return;
-            let resetCountBefore = sampledBuildingResetCount, result = dependencies.controls.invoke(handle, method);
-            if (!result.ok)
-              throw new Error(
-                `captured celestial lab ${method} failed: ${result.detail ?? result.reason}`
+            if (pendingCelestialLabMode !== command.mode || sampledCustomRaceLab === void 0 || dependencies.customRaceLab === void 0)
+              return;
+            let resetCountBefore = sampledBuildingResetCount;
+            pendingCelestialLabSubmitted = !0;
+            let result = dependencies.customRaceLab.submit(
+              sampledCustomRaceLab.session,
+              command.mode
+            );
+            if (result.status !== "applied")
+              throw failedCustomRaceKey = sampledCustomRaceKey, new Error(
+                `captured celestial lab submit ${result.status}: ${result.reason}`
               );
             let resetCountAfter = readCapturedResetCount(
               dependencies.rootState.readRoot(),
@@ -9144,7 +9411,18 @@
             if (resetCountBefore === void 0 || resetCountAfter === void 0 || resetCountAfter <= resetCountBefore)
               return;
             let completeWitchCelestialLab = pendingWitchCelestialLab;
-            pendingCelestialLabMode = void 0, pendingWitchCelestialLab = !1, resetCommitted = !0, dependencies.onActivity?.({
+            pendingCelestialLabMode = void 0, pendingCelestialLabRoot = void 0, pendingCelestialLabResetCount = void 0, pendingCelestialLabSubmitted = !1, pendingWitchCelestialLab = !1, resetCommitted = !0, dependencies.onActivity?.({
+              message: "Prestiged",
+              color: "info",
+              tags: Object.freeze(["achievements"])
+            }), completeWitchCelestialLab && dependencies.setGoal("GameOverMan");
+            return;
+          }
+          case "confirm-celestial-lab-reset": {
+            if (dependencies.rootState.readRoot() !== sampledRoot || pendingCelestialLabMode !== command.mode || pendingCelestialLabRoot !== sampledRoot || pendingCelestialLabResetCount === void 0 || sampledBuildingResetCount === void 0 || sampledBuildingResetCount <= pendingCelestialLabResetCount)
+              return;
+            let completeWitchCelestialLab = pendingWitchCelestialLab;
+            pendingCelestialLabMode = void 0, pendingCelestialLabRoot = void 0, pendingCelestialLabResetCount = void 0, pendingCelestialLabSubmitted = !1, pendingWitchCelestialLab = !1, resetCommitted = !0, dependencies.onActivity?.({
               message: "Prestiged",
               color: "info",
               tags: Object.freeze(["achievements"])
@@ -9236,7 +9514,7 @@
                 });
                 return;
               }
-              (sampledBuildingType === "terraform" || sampledBuildingType === "ascension" || sampledBuildingType === "apotheosis") && (pendingCelestialLabMode = sampledBuildingType === "terraform" ? "terraform" : sampledBuildingType);
+              (sampledBuildingType === "terraform" || sampledBuildingType === "ascension" || sampledBuildingType === "apotheosis") && (pendingCelestialLabMode = sampledBuildingType === "terraform" ? "terraform" : sampledBuildingType, pendingCelestialLabRoot = sampledRoot, pendingCelestialLabResetCount = sampledBuildingResetCount, pendingCelestialLabSubmitted = !1, failedCustomRaceKey = void 0);
             }
             return;
           }
@@ -34256,6 +34534,10 @@ If script is allowed to reassign non-empty storage it might waste time producing
       (input.vaccinationOptions ?? [NO_VACCINATION_STRATEGY]).map(
         (option) => Object.freeze({ ...option })
       )
+    ), customRacePresetOptions2 = Object.freeze(
+      (input.customRacePresetOptions ?? [
+        { val: "0", label: "General", hint: "Custom race preset" }
+      ]).map((option) => Object.freeze({ ...option }))
     ), controls2 = Object.freeze([
       {
         kind: "select",
@@ -34358,6 +34640,13 @@ If script is allowed to reassign non-empty storage it might waste time producing
           }
         ])
       },
+      {
+        kind: "select",
+        settingName: "prestigeCustomRacePreset",
+        label: "Selected custom race preset",
+        hint: "Preset used when Custom race handling is set to Import selected preset.",
+        options: customRacePresetOptions2
+      },
       { kind: "header", label: "Demonic Infusion" },
       {
         kind: "number",
@@ -34402,6 +34691,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
     intents,
     getActions
   }) {
+    let currentPrefix;
     function renderControl(node, control, actions) {
       if (control.kind === "header")
         return void actions.addSettingsHeader1(node, control.label);
@@ -34467,6 +34757,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
       );
     }
     function updatePrestigeSettingsContent(prefix) {
+      currentPrefix = prefix;
       let model = reader.read(), actions = getActions();
       renderSettingsSectionContent(
         {
@@ -34494,7 +34785,10 @@ If script is allowed to reassign non-empty storage it might waste time producing
     }
     return Object.freeze({
       buildPrestigeSettings,
-      updatePrestigeSettingsContent
+      updatePrestigeSettingsContent,
+      refresh() {
+        currentPrefix !== void 0 && updatePrestigeSettingsContent(currentPrefix);
+      }
     });
   }
 
@@ -34502,6 +34796,8 @@ If script is allowed to reassign non-empty storage it might waste time producing
   var CAPTURED_PRESTIGE_SETTINGS = Object.freeze(
     /* @__PURE__ */ new Set([
       "prestigeType",
+      "prestigeCustomRaceMode",
+      "prestigeCustomRacePreset",
       "prestigeMADIgnoreArpa",
       "prestigeBioseedConstruct",
       "prestigeMADWait",
@@ -34541,8 +34837,93 @@ If script is allowed to reassign non-empty storage it might waste time producing
     return Object.freeze({ read: () => createPrestigeSettingsReadModel({
       prestigeOptions: capturedPrestigeOptions,
       vaccinationOptions: readCapturedVaccinationOptions(dependencies.controls),
+      customRacePresetOptions: customRacePresetOptions(
+        dependencies.readSettings?.()
+      ),
       exposedSettings: CAPTURED_PRESTIGE_SETTINGS
     }), getConfirmationText: () => "" });
+  }
+
+  // src/ui/custom-race-ui.ts
+  function createCustomRacePresetEditor({
+    getJQuery,
+    getSettingsRaw,
+    persist,
+    customRaceLab,
+    onSettingsChanged = () => {
+    }
+  }) {
+    function settingsRecord4() {
+      let settings = getSettingsRaw();
+      return typeof settings != "object" || settings === null || Array.isArray(settings) ? {} : settings;
+    }
+    function storePresets(presets, selected) {
+      let settings = settingsRecord4();
+      settings.prestigeCustomRacePresets = presets.map((preset) => ({
+        name: preset.name,
+        json: preset.json
+      })), settings.prestigeCustomRacePreset = String(selected), persist(), onSettingsChanged();
+    }
+    function buildCustomRacePresetEditor(modal) {
+      let $ = getJQuery(), settings = settingsRecord4(), presets = normalizeCustomRacePresetList(settings).map((preset2) => ({
+        name: preset2.name,
+        json: preset2.json
+      })), requestedIndex = Number.parseInt(
+        String(settings.prestigeCustomRacePreset ?? "0"),
+        10
+      ), selected = Number.isInteger(requestedIndex) && requestedIndex >= 0 && requestedIndex < presets.length ? requestedIndex : 0, preset = presets[selected];
+      modal.empty().off("*").append(`
+      <h3>Custom Race Presets</h3>
+      <p>Edit named game exports here. Use the game's Export control in the Ascension Lab to create a preset; the game owns the race editor and its gene calculation.</p>
+      <div class="fields script-custom-race-presets">
+        <select class="script-custom-race-preset-list"></select>
+        <input class="script-custom-race-preset-name" type="text" maxlength="60" aria-label="Preset name">
+        <button class="button script-custom-race-preset-add" type="button">Add</button>
+        <button class="button script-custom-race-preset-clone" type="button">Clone</button>
+        <button class="button script-custom-race-preset-delete" type="button">Delete</button>
+        <button class="button script-custom-race-capture-race0" type="button">Capture saved custom</button>
+        <button class="button script-custom-race-capture-race1" type="button">Capture saved hybrid</button>
+      </div>
+      <textarea class="textarea script-custom-race-preset-json" rows="24" spellcheck="false" aria-label="Game custom race JSON"></textarea>
+      <p class="script-custom-race-preset-status" role="status"></p>
+    `);
+      let select = modal.find(".script-custom-race-preset-list").empty();
+      presets.forEach((item, index) => {
+        $("<option></option>").val(String(index)).text(item.name || `Preset ${index + 1}`).appendTo(select);
+      }), select.val(String(selected));
+      let nameInput = modal.find(".script-custom-race-preset-name").val(preset.name), jsonInput = modal.find(".script-custom-race-preset-json").val(preset.json), status2 = modal.find(".script-custom-race-preset-status"), saveCurrent = () => {
+        preset.name = nameInput.val().trim().slice(0, 60) || `Preset ${selected + 1}`, preset.json = jsonInput.val(), storePresets(presets, selected);
+      };
+      nameInput.on("change", function() {
+        preset.name = this.value.trim().slice(0, 60) || `Preset ${selected + 1}`, storePresets(presets, selected), buildCustomRacePresetEditor(modal);
+      }), jsonInput.on("change", function() {
+        preset.json = this.value, storePresets(presets, selected), status2.text("Preset saved.");
+      }), select.on("change", function() {
+        saveCurrent(), settingsRecord4().prestigeCustomRacePreset = this.value, persist(), onSettingsChanged(), buildCustomRacePresetEditor(modal);
+      }), modal.find(".script-custom-race-preset-add").on("click", function() {
+        presets.push({ name: `Preset ${presets.length + 1}`, json: "" }), storePresets(presets, presets.length - 1), buildCustomRacePresetEditor(modal);
+      }), modal.find(".script-custom-race-preset-clone").on("click", function() {
+        saveCurrent(), presets.push({ name: `${preset.name} copy`, json: preset.json }), storePresets(presets, presets.length - 1), buildCustomRacePresetEditor(modal);
+      }), modal.find(".script-custom-race-preset-delete").on("click", function() {
+        presets.length > 1 ? presets.splice(selected, 1) : presets[0] = { name: "General", json: "" }, storePresets(presets, 0), buildCustomRacePresetEditor(modal);
+      });
+      let captureSaved = (slot) => {
+        let json = customRaceLab.readSavedRaceJson(slot);
+        if (json === void 0) {
+          status2.text(
+            slot === "race0" ? "There is no saved custom race to capture." : "There is no saved hybrid race to capture."
+          );
+          return;
+        }
+        preset.json = json, jsonInput.val(json), storePresets(presets, selected), status2.text("Saved race copied into this preset.");
+      };
+      modal.find(".script-custom-race-capture-race0").on("click", function() {
+        captureSaved("race0");
+      }), modal.find(".script-custom-race-capture-race1").on("click", function() {
+        captureSaved("race1");
+      });
+    }
+    return Object.freeze({ buildCustomRacePresetEditor });
   }
 
   // src/domain/economy/resources/weighting-settings.ts
@@ -39050,6 +39431,7 @@ Efficiency above '1' is useful to save resources for more desperate times, or to
     capturedPanelWindow,
     settings,
     settingsLifecycle,
+    customRaceLab,
     refreshEffectiveSettings,
     prestigeSettings: capturedPrestigeSettings,
     evolutionSettings: capturedEvolutionSettings,
@@ -39499,13 +39881,20 @@ Efficiency above '1' is useful to save resources for more desperate times, or to
           resetCheckbox: () => controls2.resetCheckbox("autoEvolution")
         }
       });
-      let capturedPrestigeAdapter = createCapturedPrestigeSettingsAdapter(
-        capturedResearchSettings === void 0 ? {} : (
+      let capturedPrestigeAdapter = createCapturedPrestigeSettingsAdapter({
+        ...capturedResearchSettings === void 0 ? {} : (
           // The vaccination strategies are technologies, so they are labeled from the same captured
           // control registry the Research section reads.
           { controls: capturedResearchSettings.controls }
-        )
-      ), prestige, prestigeIntent;
+        ),
+        readSettings: () => settings.readRaw()
+      }), customRacePresetEditor = customRaceLab === void 0 ? void 0 : createCustomRacePresetEditor({
+        getJQuery,
+        getSettingsRaw: () => (prepareSettingsForUi(), settings.readRaw()),
+        persist: persistSettings,
+        customRaceLab,
+        onSettingsChanged: () => prestige?.refresh()
+      }), prestige, prestigeIntent;
       prestige = createPrestigeSettingsBrowserAdapter({
         getDocument: () => documentForUi,
         getJQuery: () => getJQuery(),
@@ -39513,10 +39902,13 @@ Efficiency above '1' is useful to save resources for more desperate times, or to
         intents: { handle: (intent) => prestigeIntent.handle(intent) },
         getActions: () => ({
           ...panelActions,
-          // Only the withheld `prestigeCustomRaceMode` control reaches these, so they exist to
-          // satisfy the shared browser adapter rather than to be called.
-          openOptionsModal: () => unported("custom race preset editor")(),
-          buildCustomRacePresetEditor: void 0
+          openOptionsModal: (title, _editor) => optionsModal.openOptionsModal(
+            title,
+            (modal) => customRacePresetEditor?.buildCustomRacePresetEditor(
+              modal
+            )
+          ),
+          buildCustomRacePresetEditor: customRacePresetEditor?.buildCustomRacePresetEditor
         })
       }), prestigeIntent = createPrestigeSettingsIntentHandler({
         writer: {
@@ -43075,6 +43467,362 @@ Only continue if you trust the source. Injected code:
     });
   }
 
+  // src/adapters/browser/game-custom-race-lab.ts
+  var CUSTOM_RACE_TRAIT_ROWS_SELECTOR = "#celestialLab .trait_selection .field", CUSTOM_RACE_LAB_SUMMARY_CONTROL_ID = "#traitSummary .trait_selection", CUSTOM_RACE_TRAIT_CLASS_PREFIX = "t", CUSTOM_RACE_GENUS_ACHIEVEMENT_PREFIX = "genus_", CUSTOM_RACE_RANKS_PROPERTY = "ranks";
+  function customRaceSubmitMethod(mode) {
+    return mode === "terraform" ? "setPlanet" : "setRace";
+  }
+  function customRaceDocument(value) {
+    if (!isRecord(value)) return;
+    let querySelector = readProperty(value, "querySelector"), querySelectorAll = readProperty(value, "querySelectorAll");
+    return typeof querySelector == "function" && typeof querySelectorAll == "function" ? value : void 0;
+  }
+  function customRaceRecord(value) {
+    return isRecord(value) ? value : void 0;
+  }
+  function customRaceTraitsFromDom(doc) {
+    let found = doc.querySelectorAll(CUSTOM_RACE_TRAIT_ROWS_SELECTOR), traits = /* @__PURE__ */ new Set();
+    for (let index = 0; index < found.length; index += 1) {
+      let row = customRaceRecord(found[index]), classValue = readProperty(row, "className");
+      if (typeof classValue == "string")
+        for (let className of classValue.split(/\s+/)) {
+          if (!className.startsWith(CUSTOM_RACE_TRAIT_CLASS_PREFIX)) continue;
+          let trait = className.slice(CUSTOM_RACE_TRAIT_CLASS_PREFIX.length);
+          /^[a-z0-9_]+$/.test(trait) && traits.add(trait);
+        }
+    }
+    return Object.freeze([...traits]);
+  }
+  function customRaceDraftFromLive(genome, controls2) {
+    let genus = genome.genus, rawTraits = genome.traitlist, rawRanks = genome[CUSTOM_RACE_RANKS_PROPERTY];
+    if (typeof genus != "string" || !Array.isArray(rawTraits) || !isRecord(rawRanks))
+      return;
+    let traits = [];
+    for (let trait of rawTraits) {
+      if (typeof trait != "string") return;
+      traits.push(trait);
+    }
+    let ranks = {}, summary = controls2.resolve(CUSTOM_RACE_LAB_SUMMARY_CONTROL_ID), summaryData = summary === void 0 ? void 0 : customRaceRecord(summary.data), hasCurrentSummary = summaryData !== void 0 && summaryData.g === genome;
+    for (let trait of traits) {
+      let rank = rawRanks[trait];
+      if (hasCurrentSummary && summary?.methods.includes("tRank")) {
+        let result = controls2.invoke(summary, "tRank", [trait]);
+        if (!result.ok) return;
+        rank = result.value;
+      }
+      let numericRank = rank === void 0 ? 1 : finite(rank);
+      if (numericRank === void 0) return;
+      ranks[trait] = numericRank;
+    }
+    let text = {};
+    for (let field of Object.keys(CUSTOM_RACE_TEXT_LIMITS)) {
+      let value = genome[field];
+      typeof value == "string" && (text[field] = value);
+    }
+    let rawFanaticism = genome.fanaticism;
+    if (rawFanaticism !== !1 && typeof rawFanaticism != "string")
+      return;
+    let hybrid, rawHybrid = genome.hybrid;
+    if (Array.isArray(rawHybrid) && rawHybrid.length === 2) {
+      if (typeof rawHybrid[0] != "string" || typeof rawHybrid[1] != "string")
+        return;
+      hybrid = Object.freeze([rawHybrid[0], rawHybrid[1]]);
+    }
+    return Object.freeze({
+      text: Object.freeze(text),
+      genus,
+      traits: Object.freeze(traits),
+      ranks: Object.freeze(ranks),
+      fanaticism: rawFanaticism,
+      ...hybrid === void 0 ? {} : { hybrid }
+    });
+  }
+  function customRaceAvailableGenera(root, currentDraft) {
+    let stats = readProperty(root, "stats"), achievements = readProperty(stats, "achieve"), genera = /* @__PURE__ */ new Set();
+    if (isRecord(achievements)) {
+      for (let [key, value] of Object.entries(achievements))
+        if (key.startsWith(CUSTOM_RACE_GENUS_ACHIEVEMENT_PREFIX) && finite(readProperty(value, "l")) !== void 0 && (finite(readProperty(value, "l")) ?? 0) > 0) {
+          let genus = key.slice(CUSTOM_RACE_GENUS_ACHIEVEMENT_PREFIX.length);
+          /^[a-z0-9_]+$/.test(genus) && genera.add(genus);
+        }
+    }
+    currentDraft.genus !== "hybrid" && genera.add(currentDraft.genus);
+    for (let genus of currentDraft.hybrid ?? []) genera.add(genus);
+    return Object.freeze([...genera]);
+  }
+  function customRaceSavedRecord(root, slot) {
+    return customRaceRecord(readProperty(readProperty(root, "custom"), slot));
+  }
+  function customRaceSavedJson(root, slot) {
+    let saved = customRaceSavedRecord(root, slot);
+    if (saved === void 0) return;
+    let traits = Array.isArray(saved.traits) ? saved.traits : Array.isArray(saved.traitlist) ? saved.traitlist : void 0;
+    if (traits !== void 0)
+      try {
+        return JSON.stringify({
+          ...saved,
+          genes: 0,
+          traitlist: traits,
+          traits: void 0,
+          rankVersion: 2
+        });
+      } catch {
+        return;
+      }
+  }
+  function createGameCustomRaceLab({
+    rootState,
+    controls: controls2,
+    getDocument
+  }) {
+    let mounted, recalculation;
+    function mountedLab(mode) {
+      let root = rootState.readRoot();
+      if (root === void 0 || rootState.isReactivitySuppressed())
+        return;
+      let doc = customRaceDocument(getDocument());
+      if (doc === void 0 || doc.querySelector(CUSTOM_RACE_LAB_PANEL_SELECTOR) == null)
+        return;
+      let handle = controls2.resolve(CUSTOM_RACE_LAB_CONTROL_ID);
+      if (handle === void 0 || mode !== void 0 && !handle.methods.includes(customRaceSubmitMethod(mode)) || !handle.methods.includes("geneEdit"))
+        return;
+      let view = customRaceRecord(handle.data), genome = customRaceRecord(readProperty(view, "g"));
+      if (!(view === void 0 || genome === void 0)) {
+        if (mounted === void 0 || mounted.root !== root || mounted.handle.generation !== handle.generation) {
+          let identity = Object.freeze({});
+          mounted = Object.freeze({
+            root,
+            handle,
+            view,
+            genome,
+            session: Object.freeze({ identity })
+          }), recalculation = void 0;
+        } else
+          mounted = Object.freeze({ ...mounted, handle, view, genome });
+        return mounted;
+      }
+    }
+    function sessionMatches(session) {
+      let current = mountedLab();
+      return current !== void 0 && current.session.identity === session.identity && rootState.readRoot() === current.root ? current : void 0;
+    }
+    function read(mode) {
+      let current = mountedLab(mode);
+      if (current === void 0) return;
+      let draft = customRaceDraftFromLive(current.genome, controls2);
+      if (draft === void 0) return;
+      let doc = customRaceDocument(getDocument());
+      if (doc === void 0) return;
+      let genes = finite(current.genome.genes), status2 = "idle";
+      recalculation !== void 0 && (recalculation.identity !== current.session.identity ? recalculation = void 0 : customRaceDraftMatches(draft, recalculation.expected) ? genes === void 0 ? status2 = "failed" : recalculation.lastGenes === genes ? (status2 = "settled", recalculation = void 0) : (recalculation.lastGenes = genes, status2 = "pending") : recalculation = void 0);
+      let hybridLab = draft.genus === "hybrid", savedSlot = hybridLab ? "race1" : "race0", handle = current.handle, submitMethod = customRaceSubmitMethod(mode);
+      return Object.freeze({
+        session: current.session,
+        draft,
+        availableTraits: customRaceTraitsFromDom(doc),
+        availableGenera: customRaceAvailableGenera(current.root, draft),
+        hybridLab,
+        savedCustomRaceExists: customRaceSavedRecord(current.root, savedSlot) !== void 0,
+        canSubmit: handle.methods.includes(submitMethod) && doc.querySelector(`${CUSTOM_RACE_LAB_PANEL_SELECTOR} .create button`) != null,
+        genes: genes ?? Number.NaN,
+        recalculation: status2
+      });
+    }
+    function applyDesign(session, design) {
+      let current = sessionMatches(session);
+      if (current === void 0)
+        return Object.freeze({
+          status: "stale",
+          reason: "lab session was replaced"
+        });
+      let doc = customRaceDocument(getDocument());
+      if (doc === void 0)
+        return Object.freeze({
+          status: "unavailable",
+          reason: "lab document is unavailable"
+        });
+      let offered = new Set(customRaceTraitsFromDom(doc));
+      if (design.traits.some((trait) => !offered.has(trait)))
+        return Object.freeze({
+          status: "rejected",
+          reason: "preset contains an unavailable trait"
+        });
+      let currentDraft = customRaceDraftFromLive(current.genome, controls2);
+      if (currentDraft === void 0)
+        return Object.freeze({
+          status: "unavailable",
+          reason: "live race draft is unavailable"
+        });
+      let availableGenera = new Set(
+        customRaceAvailableGenera(current.root, currentDraft)
+      );
+      if (design.genus !== "hybrid" && !availableGenera.has(design.genus) || design.hybrid !== void 0 && design.hybrid.some((genus) => !availableGenera.has(genus)))
+        return Object.freeze({
+          status: "rejected",
+          reason: "preset contains an unavailable genus"
+        });
+      if (customRaceRecord(current.genome[CUSTOM_RACE_RANKS_PROPERTY]) === void 0)
+        return Object.freeze({
+          status: "rejected",
+          reason: "live rank map is unavailable"
+        });
+      if (!controls2.invoke(current.handle, "swapTab", [4]).ok)
+        return Object.freeze({
+          status: "unavailable",
+          reason: "game rank controls are unavailable"
+        });
+      let originalSummary = controls2.resolve(
+        CUSTOM_RACE_LAB_SUMMARY_CONTROL_ID
+      ), originalSummaryData = originalSummary === void 0 ? void 0 : customRaceRecord(originalSummary.data), originalRanks = customRaceRecord(
+        readProperty(originalSummaryData, "t")
+      ), liveLab = current;
+      if (originalSummaryData?.g !== current.genome || originalRanks === void 0 || !originalSummary?.methods.includes("tRank"))
+        return Object.freeze({
+          status: "unavailable",
+          reason: "game rank controls are unavailable"
+        });
+      let rankValuesBefore = Object.freeze({ ...originalRanks }), previousDesign = customRaceDraftFromLive(current.genome, controls2);
+      if (previousDesign === void 0)
+        return Object.freeze({
+          status: "unavailable",
+          reason: "live race draft changed while preparing rank controls"
+        });
+      let rollbackDesign = previousDesign, textValuesBefore = Object.freeze(
+        Object.fromEntries(
+          Object.keys(design.text).map((field) => [
+            field,
+            readProperty(current.genome, field)
+          ])
+        )
+      );
+      function restorePreviousDesign(status2, reason) {
+        for (let [field, value] of Object.entries(textValuesBefore))
+          value === void 0 ? delete liveLab.genome[field] : liveLab.genome[field] = value;
+        liveLab.genome.genus = rollbackDesign.genus, liveLab.genome.traitlist = [...rollbackDesign.traits], liveLab.genome.fanaticism = rollbackDesign.fanaticism, rollbackDesign.hybrid === void 0 ? delete liveLab.genome.hybrid : liveLab.genome.hybrid = [...rollbackDesign.hybrid];
+        let latestSummary = controls2.resolve(
+          CUSTOM_RACE_LAB_SUMMARY_CONTROL_ID
+        ), latestData = latestSummary === void 0 ? void 0 : customRaceRecord(latestSummary.data), latestRanks = customRaceRecord(readProperty(latestData, "t"));
+        if (latestRanks === void 0 || latestData?.g !== liveLab.genome)
+          return Object.freeze({
+            status: "stale",
+            reason: "failed apply could not restore the live rank map"
+          });
+        for (let key of Object.keys(latestRanks)) delete latestRanks[key];
+        Object.assign(latestRanks, rankValuesBefore);
+        let refreshed = controls2.resolve(CUSTOM_RACE_LAB_CONTROL_ID);
+        if (refreshed === void 0 || refreshed.generation !== liveLab.handle.generation)
+          return Object.freeze({
+            status: "stale",
+            reason: "lab was redrawn before the failed apply could be restored"
+          });
+        if (!controls2.invoke(refreshed, "geneEdit").ok)
+          return Object.freeze({
+            status: "stale",
+            reason: "failed apply could not recalculate the restored design"
+          });
+        let restored = customRaceDraftFromLive(liveLab.genome, controls2);
+        return restored === void 0 || !customRaceDraftMatches(restored, rollbackDesign) ? Object.freeze({
+          status: "stale",
+          reason: "failed apply did not restore the previous design"
+        }) : (recalculation = {
+          identity: liveLab.session.identity,
+          expected: rollbackDesign,
+          lastGenes: void 0
+        }, Object.freeze({ status: status2, reason }));
+      }
+      for (let [field, value] of Object.entries(design.text))
+        current.genome[field] = value;
+      if (current.genome.genus = design.genus, current.genome.traitlist = [...design.traits], current.genome.fanaticism = design.fanaticism, design.hybrid === void 0 ? delete current.genome.hybrid : current.genome.hybrid = [...design.hybrid], !controls2.invoke(current.handle, "swapTab", [4]).ok)
+        return restorePreviousDesign(
+          "stale",
+          "game rank controls became unavailable"
+        );
+      let summary = controls2.resolve(CUSTOM_RACE_LAB_SUMMARY_CONTROL_ID), summaryData = summary === void 0 ? void 0 : customRaceRecord(summary.data), currentRanks = customRaceRecord(readProperty(summaryData, "t"));
+      if (summary === void 0 || summaryData?.g !== current.genome || currentRanks === void 0 || !summary.methods.includes("tRank"))
+        return restorePreviousDesign(
+          "stale",
+          "game rank controls became unavailable"
+        );
+      for (let trait of design.traits) {
+        currentRanks[trait] = design.ranks[trait];
+        let rankResult = controls2.invoke(summary, "tRank", [trait]);
+        if (!rankResult.ok || finite(rankResult.value) !== design.ranks[trait])
+          return restorePreviousDesign(
+            "stale",
+            "lab did not retain the requested trait rank"
+          );
+      }
+      let refreshedHandle = controls2.resolve(CUSTOM_RACE_LAB_CONTROL_ID);
+      if (refreshedHandle === void 0 || refreshedHandle.generation !== current.handle.generation)
+        return Object.freeze({
+          status: "stale",
+          reason: "lab was redrawn while applying the preset"
+        });
+      let liveDraft = customRaceDraftFromLive(current.genome, controls2);
+      if (liveDraft === void 0 || !customRaceDraftMatches(liveDraft, design))
+        return restorePreviousDesign(
+          "rejected",
+          "lab did not retain the requested design"
+        );
+      let result = controls2.invoke(refreshedHandle, "geneEdit");
+      return result.ok ? (recalculation = {
+        identity: current.session.identity,
+        expected: design,
+        lastGenes: void 0
+      }, Object.freeze({ status: "applied" })) : restorePreviousDesign("stale", result.detail ?? result.reason);
+    }
+    function submit(session, mode) {
+      let current = sessionMatches(session);
+      if (current === void 0)
+        return Object.freeze({
+          status: "stale",
+          reason: "lab session was replaced"
+        });
+      let snapshot2 = read(mode);
+      if (snapshot2 === void 0 || snapshot2.session.identity !== session.identity)
+        return Object.freeze({
+          status: "stale",
+          reason: "lab snapshot is unavailable"
+        });
+      if (snapshot2.recalculation === "pending" || snapshot2.recalculation === "failed")
+        return Object.freeze({
+          status: "unavailable",
+          reason: "lab recost has not settled"
+        });
+      if (!snapshot2.canSubmit)
+        return Object.freeze({
+          status: "unavailable",
+          reason: "lab submit control is unavailable"
+        });
+      if (!customRaceGenesAreAffordable(snapshot2.genes))
+        return Object.freeze({
+          status: "rejected",
+          reason: "game gene balance is not affordable"
+        });
+      if (!customRaceTextIsComplete(snapshot2.draft.text))
+        return Object.freeze({
+          status: "rejected",
+          reason: "required race text is empty"
+        });
+      let result = controls2.invoke(
+        current.handle,
+        customRaceSubmitMethod(mode)
+      );
+      return result.ok ? Object.freeze({ status: "applied" }) : Object.freeze({
+        status: "stale",
+        reason: result.detail ?? result.reason
+      });
+    }
+    return Object.freeze({
+      read,
+      applyDesign,
+      submit,
+      readSavedRaceJson(slot) {
+        return customRaceSavedJson(rootState.readRoot(), slot);
+      }
+    });
+  }
+
   // src/bootstrap/captured-runtime-control.ts
   function isEnabled(settings, key) {
     return settings[key] === !0;
@@ -43094,7 +43842,11 @@ Only continue if you trust the source. Injected code:
     logError = () => {
     }
   }) {
-    let document = documentValue, closeBioseedModal = createGameModalCloser({
+    let document = documentValue, customRaceLab = createGameCustomRaceLab({
+      rootState: pageCapture2.rootState,
+      controls: pageCapture2.controls,
+      getDocument: () => document
+    }), closeBioseedModal = createGameModalCloser({
       getDocument: () => document
     }), keyboard = typeof keyboardEventValue == "function" && typeof readProperty(document, "dispatchEvent") == "function" ? createGameKeyboardHandlers({
       getDocument: () => document,
@@ -43161,6 +43913,7 @@ Only continue if you trust the source. Injected code:
       capturedPanelWindow: settingsHostWindow2,
       settings: settingsStorage,
       settingsLifecycle,
+      customRaceLab,
       refreshEffectiveSettings,
       craftToggles: {
         rootState: pageCapture2.rootState,
@@ -43737,6 +44490,7 @@ Only continue if you trust the source. Injected code:
     }, prestige = createCapturedPrestigeControl({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
+      customRaceLab,
       readSettings: () => settingsStore.readRaw(),
       readGoal: () => capturedPrestigeGoal,
       readMechCycleActivity: () => capturedMechCycleHasPendingWork,

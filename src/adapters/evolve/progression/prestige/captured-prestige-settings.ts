@@ -12,6 +12,7 @@
  * | `prestigeBioseedProbes`, `prestigeGECK` | `captured-mad.ts` bioseed branch |
  * | `prestigeWhiteholeMinMass` | `captured-mad.ts` whitehole branch |
  * | `prestigeAscensionPillar` | `captured-mad.ts` ascension branch |
+ * | `prestigeCustomRaceMode`, `prestigeCustomRacePreset` | `captured-mad.ts` and Custom Race preset editor |
  * | `prestigeDemonicFloor` | `captured-mad.ts` demonic branch |
  * | `prestigeDemonicPotential` | `captured-mad.ts` demonic Mech readiness |
  * | `prestigeMADIgnoreArpa`, `prestigeVacuumMana` | `captured-project-context.ts` |
@@ -23,8 +24,6 @@
  *
  * - `prestigeWaitAT` — only `prestige-eligibility.ts`, which no captured composition imports.
  *   `captured-project-context.ts` already says in a comment that it does not consult it.
- * - `prestigeCustomRaceMode`, `prestigeCustomRacePreset` — read only by `src/ui/custom-race-ui.ts`,
- *   which the captured panel does not compose.
  *
  * The prestige-type confirmation ("you may prestige immediately") needs the compatibility
  * building/tech surface to answer, so the captured reader returns no warning. That is a lost
@@ -38,6 +37,7 @@ import {
   type PrestigeSettingsOption,
   type PrestigeSettingsReadModel,
 } from "../../../../domain/progression/prestige/prestige-settings.ts";
+import { customRacePresetOptions as getCustomRacePresetOptions } from "../../../../domain/progression/prestige/custom-race.ts";
 import { PRESTIGE_TYPES } from "../../../../domain/progression/prestige/prestige-types.ts";
 import type { GameControlRegistry } from "../../../../ports/game-control-registry.ts";
 // The captured path's one way to turn a `tech_*` localization key into the label the game drew.
@@ -49,6 +49,8 @@ import { createCapturedResearchLocalize } from "../research/captured-research-se
 export const CAPTURED_PRESTIGE_SETTINGS: ReadonlySet<string> = Object.freeze(
   new Set([
     "prestigeType",
+    "prestigeCustomRaceMode",
+    "prestigeCustomRacePreset",
     "prestigeMADIgnoreArpa",
     "prestigeBioseedConstruct",
     "prestigeMADWait",
@@ -104,6 +106,8 @@ export function createCapturedPrestigeSettingsAdapter(
   dependencies: {
     /** Labels the vaccination strategies from the technologies the game has drawn. */
     readonly controls?: GameControlRegistry;
+    /** Raw settings are validated before preset names become select options. */
+    readonly readSettings?: () => unknown;
   } = {},
 ): CapturedPrestigeSettingsAdapter {
   // The strategy labels come from drawn controls, so the model is rebuilt per read rather than
@@ -112,6 +116,9 @@ export function createCapturedPrestigeSettingsAdapter(
     createPrestigeSettingsReadModel({
       prestigeOptions: capturedPrestigeOptions,
       vaccinationOptions: readCapturedVaccinationOptions(dependencies.controls),
+      customRacePresetOptions: getCustomRacePresetOptions(
+        dependencies.readSettings?.(),
+      ),
       exposedSettings: CAPTURED_PRESTIGE_SETTINGS,
     });
   return Object.freeze({ read, getConfirmationText: () => "" });

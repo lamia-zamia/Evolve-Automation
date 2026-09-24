@@ -46,6 +46,47 @@ const settings = {
   prestigeMADPopulation: 28,
 };
 
+function reusableCustomRaceLab(root, trace) {
+  const session = { identity: {} };
+  const methods = (mode) => (mode === "terraform" ? "setPlanet" : "setRace");
+  return {
+    read: () => ({
+      session,
+      draft: {
+        text: {
+          name: "Saved",
+          desc: "A saved custom race",
+          entity: "bipeds",
+          home: "Home",
+          red: "Red",
+          hell: "Hell",
+          gas: "Gas",
+          gas_moon: "Moon",
+          dwarf: "Dwarf",
+        },
+        genus: "humanoid",
+        traits: [],
+        ranks: {},
+        fanaticism: false,
+      },
+      availableTraits: [],
+      availableGenera: ["humanoid"],
+      hybridLab: false,
+      savedCustomRaceExists: true,
+      canSubmit: true,
+      genes: 10,
+      recalculation: "idle",
+    }),
+    applyDesign: () => ({ status: "applied" }),
+    submit: (_session, mode) => {
+      trace.push([CAPTURED_CELESTIAL_LAB, methods(mode)]);
+      root.stats[mode === "ascension" ? "ascend" : mode] += 1;
+      return { status: "applied" };
+    },
+    readSavedRaceJson: () => undefined,
+  };
+}
+
 // The captured values are the exact root fields DeadSpace's MAD gate reads through the
 // compatibility WarManager/resource wrappers: garrison workers minus crew, and Population amount
 // and max. No numeric cap or private reset calculation is reconstructed here.
@@ -252,6 +293,7 @@ const settings = {
       rootState: { readRoot: () => root },
       controls,
       readSettings: () => ({ prestigeType: expected.prestigeType }),
+      customRaceLab: reusableCustomRaceLab(root, trace),
       readGoal: () => goal,
       setGoal: (next) => {
         goal = next;
@@ -734,6 +776,7 @@ for (const scenario of [
       prestigeType: scenario.prestigeType,
       prestigeAscensionPillar: true,
     }),
+    customRaceLab: reusableCustomRaceLab(root, trace),
     readGoal: () => goal,
     setGoal: (next) => {
       goal = next;

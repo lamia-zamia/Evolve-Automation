@@ -1,190 +1,141 @@
 import assert from "node:assert/strict";
 
-import { createGameCustomRaceLab } from "../src/adapters/browser/game-custom-race-lab.ts";
-import { createGameUiSurface } from "../src/adapters/browser/game-ui-surface.ts";
-import { createCustomRaceUI } from "../src/ui/custom-race-ui.ts";
+import { createCustomRacePresetEditor } from "../src/ui/custom-race-ui.ts";
 
-const trace = [];
-let labButton = null;
-const statusMessages = [];
-
-function makeNode(label, length = 1) {
-  return {
-    length,
-    empty() {
-      return this;
-    },
-    each(callback) {
-      callback.call(this);
-      return this;
-    },
-    val(value) {
-      if (arguments.length === 0) return this.value ?? "";
-      this.value = value;
-      return this;
-    },
-    text(value) {
-      if (arguments.length === 0) return this.textValue ?? "";
-      this.textValue = value;
-      if (label.includes("ImportStatus")) statusMessages.push(value);
-      return this;
-    },
-    toggleClass() {
-      return this;
-    },
-    before() {
-      trace.push(`before:${label}`);
-      return this;
-    },
-    appendTo() {
-      return this;
-    },
-  };
+class Node {
+  constructor(selector = "") {
+    this.selector = selector;
+    this.value = "";
+    this.textContent = "";
+    this.html = "";
+    this.children = [];
+    this.events = new Map();
+    this.nodes = new Map();
+  }
+  append(content) {
+    if (content instanceof Node) this.children.push(content);
+    else this.html += String(content);
+    if (this === modal) {
+      for (const selector of selectors)
+        this.nodes.set(selector, new Node(selector));
+    }
+    return this;
+  }
+  appendTo(target) {
+    target.append(this);
+    return this;
+  }
+  empty() {
+    this.children = [];
+    this.value = "";
+    this.textContent = "";
+    this.html = "";
+    return this;
+  }
+  find(selector) {
+    if (!this.nodes.has(selector)) this.nodes.set(selector, new Node(selector));
+    return this.nodes.get(selector);
+  }
+  off() {
+    this.events.clear();
+    return this;
+  }
+  on(event, handler) {
+    this.events.set(event, handler);
+    return this;
+  }
+  text(value) {
+    this.textContent = value;
+    return this;
+  }
+  val(value) {
+    if (value === undefined) return this.value;
+    this.value = String(value);
+    return this;
+  }
+  trigger(event, value = this.value) {
+    const handler = this.events.get(event);
+    if (handler) handler.call({ value }, { type: event });
+  }
 }
 
-function jquery(value) {
-  const label = String(value);
-  if (label === "#scriptCustomRaceImportStatus") return makeNode(label, 0);
-  return makeNode(label);
-}
-
-const validTemplate = {
-  name: "Automata",
-  desc: "A test race",
-  entity: "machines",
-  home: "Origin",
-  red: "Rust",
-  hell: "Furnace",
-  gas: "Cloud",
-  gas_moon: "Moon",
-  dwarf: "Dwarf",
-  titan: "Titan X",
-  genus: "humanoid",
-  traitlist: ["smart"],
-  ranks: { smart: 2 },
-  fanaticism: "smart",
-};
-const settingsRaw = {
-  prestigeCustomRacePresets: [
-    { name: "Imported", json: JSON.stringify(validTemplate) },
-  ],
+const selectors = [
+  ".script-custom-race-preset-list",
+  ".script-custom-race-preset-name",
+  ".script-custom-race-preset-json",
+  ".script-custom-race-preset-status",
+  ".script-custom-race-preset-add",
+  ".script-custom-race-preset-clone",
+  ".script-custom-race-preset-delete",
+  ".script-custom-race-capture-race0",
+  ".script-custom-race-capture-race1",
+];
+const modal = new Node("modal");
+const $ = (selector) => new Node(selector);
+const settings = {
   prestigeCustomRacePreset: "0",
+  prestigeCustomRacePresets: [
+    { name: "General", json: '{"name":"A"}' },
+    { name: "Cataclysm", json: '{"name":"B"}' },
+  ],
 };
-let settings = {
-  ...settingsRaw,
-  masterScriptToggle: true,
-  autoPrestige: true,
-  prestigeType: "ascension",
-  prestigeCustomRaceMode: "import",
-};
-const state = { customRaceImportAttempt: null, goal: "" };
-const lab = {
-  g: { genus: "humanoid", ranks: { old: 3 }, genes: 0 },
-  geneEdit() {
-    trace.push("geneEdit");
-    this.g.genes = 2;
+let saves = 0;
+let refreshes = 0;
+const editor = createCustomRacePresetEditor({
+  getJQuery: () => $,
+  getSettingsRaw: () => settings,
+  persist: () => saves++,
+  customRaceLab: {
+    readSavedRaceJson: (slot) =>
+      slot === "race0" ? '{"name":"Saved","traitlist":[]}' : undefined,
   },
-};
-const game = {
-  global: {
-    stats: { achieve: {} },
-    custom: {},
-  },
-};
-const document = {
-  querySelector(selector) {
-    if (selector === "#celestialLab .create button") return labButton;
-    if (selector === "#celestialLab .tsmart") return {};
-    return null;
-  },
-};
-
-const ui = createCustomRaceUI({
-  getJQuery: () => jquery,
-  getUiSurface: () => createGameUiSurface({ getDocument: () => document }),
-  getSettingsRaw: () => settingsRaw,
-  getSettings: () => settings,
-  getState: () => state,
-  getGame: () => game,
-  getPoly: () => ({ genus_traits: {} }),
-  getCustomRaceDraftFromPreset: () => ({}),
-  getCustomRaceEditorTraits: () => [],
-  getCustomRaceRankOptions: () => [1, 2],
-  getCustomRaceTraitEffect: () => "",
-  getCustomRaceGeneBalance: () => 0,
-  getUpdateSettingsFromState: () => () => trace.push("persist"),
-  getUpdateOverrides: () => () => trace.push("overrides"),
-  customRaceLab: createGameCustomRaceLab({
-    getVueById: () => lab,
-    getDocument: () => document,
-  }),
-  getAlert: () => (message) => trace.push(`alert:${message}`),
+  onSettingsChanged: () => refreshes++,
 });
 
-assert.deepEqual(ui.getCustomRacePreset(), {
-  name: "Imported",
-  json: JSON.stringify(validTemplate),
+editor.buildCustomRacePresetEditor(modal);
+const find = (selector) => modal.find(selector);
+assert.match(modal.html, /game's Export control in the Ascension Lab/);
+assert.equal(find(".script-custom-race-preset-list").children.length, 2);
+assert.equal(find(".script-custom-race-preset-name").val(), "General");
+
+find(".script-custom-race-preset-add").trigger("click");
+assert.equal(settings.prestigeCustomRacePresets.length, 3);
+assert.equal(settings.prestigeCustomRacePreset, "2");
+assert.equal(find(".script-custom-race-preset-name").val(), "Preset 3");
+
+find(".script-custom-race-preset-name")
+  .val("Manual race")
+  .trigger("change", "Manual race");
+find(".script-custom-race-preset-json")
+  .val('{"traitlist":[]}')
+  .trigger("change", '{"traitlist":[]}');
+assert.equal(settings.prestigeCustomRacePresets[2].name, "Manual race");
+assert.equal(settings.prestigeCustomRacePresets[2].json, '{"traitlist":[]}');
+
+find(".script-custom-race-preset-clone").trigger("click");
+assert.equal(settings.prestigeCustomRacePresets.length, 4);
+assert.equal(settings.prestigeCustomRacePreset, "3");
+assert.equal(settings.prestigeCustomRacePresets[3].name, "Manual race copy");
+assert.equal(settings.prestigeCustomRacePresets[3].json, '{"traitlist":[]}');
+
+find(".script-custom-race-capture-race0").trigger("click");
+assert.deepEqual(JSON.parse(settings.prestigeCustomRacePresets[3].json), {
+  name: "Saved",
+  traitlist: [],
 });
-const labRanks = lab.g.ranks;
-assert.equal(ui.importCustomRaceIntoLab(), true);
-// The lab keeps the rank object it made reactive; the import refills it in place.
-assert.equal(lab.g.ranks, labRanks);
-assert.equal(lab.g.name, "Automata");
-assert.equal(lab.g.desc, "A test race");
-assert.deepEqual(lab.g.traitlist, ["smart"]);
-assert.deepEqual(lab.g.ranks, { smart: 2 });
-assert.equal(lab.g.fanaticism, "smart");
-assert.ok(trace.includes("geneEdit"));
+assert.equal(
+  find(".script-custom-race-preset-status").textContent,
+  "Saved race copied into this preset.",
+);
 
-settingsRaw.prestigeCustomRacePresets[0].json = JSON.stringify({
-  ...validTemplate,
-  traitlist: ["smart", "smart"],
-});
-state.customRaceImportAttempt = null;
-assert.equal(ui.importCustomRaceIntoLab(), false);
-assert.match(statusMessages.at(-1), /duplicates/);
+find(".script-custom-race-preset-delete").trigger("click");
+assert.equal(settings.prestigeCustomRacePresets.length, 3);
+assert.equal(settings.prestigeCustomRacePreset, "0");
+assert.ok(saves >= 5);
+assert.ok(refreshes >= 5);
 
-for (const json of ["null", "5", '"text"', "[]"]) {
-  settingsRaw.prestigeCustomRacePresets[0].json = json;
-  state.customRaceImportAttempt = null;
-  assert.equal(ui.importCustomRaceIntoLab(), false, `${json} imported`);
-  assert.match(statusMessages.at(-1), /expected a game custom-race export/);
-}
+editor.buildCustomRacePresetEditor(modal);
+find(".script-custom-race-preset-list").trigger("change", "1");
+assert.equal(settings.prestigeCustomRacePreset, "1");
 
-settingsRaw.prestigeCustomRacePresets[0].json = JSON.stringify({
-  ...validTemplate,
-  fanaticism: 7,
-});
-state.customRaceImportAttempt = null;
-assert.equal(ui.importCustomRaceIntoLab(), false);
-assert.match(statusMessages.at(-1), /Fanaticism trait 7 is not selected/);
-
-settingsRaw.prestigeCustomRacePresets[0].json = JSON.stringify({
-  ...validTemplate,
-  ranks: [],
-});
-state.customRaceImportAttempt = null;
-assert.equal(ui.importCustomRaceIntoLab(), false);
-assert.match(statusMessages.at(-1), /ranks must contain positive numeric/);
-
-settingsRaw.prestigeCustomRacePresets[0].json = JSON.stringify(validTemplate);
-state.customRaceImportAttempt = null;
-labButton = { click: () => trace.push("click") };
-ui.automateLab();
-assert.equal(state.goal, "GameOverMan");
-assert.ok(trace.includes("overrides"));
-assert.ok(trace.includes("click"));
-
-trace.length = 0;
-settings = { ...settings, prestigeCustomRaceMode: "pause" };
-ui.automateLab();
-assert.equal(trace.includes("click"), false);
-assert.match(statusMessages.at(-1), /Pause in lab/);
-
-trace.length = 0;
-settings = { ...settings, prestigeCustomRaceMode: "reuse" };
-ui.automateLab();
-assert.equal(trace.includes("click"), false);
-assert.match(statusMessages.at(-1), /no saved custom race/);
-
-console.log("Custom race UI module tests passed");
+console.log("Custom race preset editor checks passed");

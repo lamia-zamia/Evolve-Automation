@@ -6,7 +6,6 @@ const listeners = [];
 let hidden = false;
 const documentElement = { scrollTop: 0 };
 const body = { scrollTop: 0 };
-let labButton = null;
 const documentStub = {
   get hidden() {
     return hidden;
@@ -15,8 +14,6 @@ const documentStub = {
   addEventListener: (type, handler, options) => {
     listeners.push({ type, handler, options });
   },
-  querySelector: (selector) =>
-    selector === "#celestialLab .create button" ? labButton : null,
   documentElement,
   body,
 };
@@ -93,21 +90,8 @@ assert.deepEqual(surface.readMechStatsInputs(), {
   scouts: "",
 });
 
-// The lab create button's presence gate and its click when the module decides.
-let clicked = 0;
-labButton = { click: () => clicked++ };
-assert.equal(surface.isLabCreateAvailable(), true);
-surface.clickLabCreate();
-assert.equal(clicked, 1);
-labButton = null;
-assert.equal(surface.isLabCreateAvailable(), false);
-surface.clickLabCreate();
-assert.equal(clicked, 1);
-
-// A document without querySelector or the button reports false, never throws.
+// A document without DOM element lookup still supports this port's page and script-owned surfaces.
 const bare = createGameUiSurface({ getDocument: () => ({}) });
-assert.equal(bare.isLabCreateAvailable(), false);
-bare.clickLabCreate();
 
 // Counting the script's own nodes goes through the container's class lookup,
 // not a descendant selector, and reports 0 rather than throwing when the

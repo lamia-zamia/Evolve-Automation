@@ -117,6 +117,8 @@ import {
   type PrestigeSettingsBrowserActions,
 } from "../adapters/browser/prestige-settings.ts";
 import { createCapturedPrestigeSettingsAdapter } from "../adapters/evolve/progression/prestige/captured-prestige-settings.ts";
+import { createCustomRacePresetEditor } from "../ui/custom-race-ui.ts";
+import type { GameCustomRaceLabPort } from "../ports/game-custom-race-lab.ts";
 import {
   createWeightingSettingsBrowserAdapter,
   type WeightingSettingsBrowserActions,
@@ -449,6 +451,8 @@ export interface CapturedSettingsPanelDependencies {
   readonly settings: CapturedSettingsStore;
   /** The captured raw/effective settings boundary: the one authority for defaults and resets. */
   readonly settingsLifecycle: CapturedSettingsLifecycle;
+  /** Captured game-owned lab access used to copy a saved race into a named preset. */
+  readonly customRaceLab?: GameCustomRaceLabPort;
   /** Recomputes the effective layer after a UI mutation of the raw record. */
   readonly refreshEffectiveSettings?: () => void;
   readonly craftToggles?: {
@@ -621,6 +625,7 @@ export function createCapturedSettingsPanel({
   capturedPanelWindow,
   settings,
   settingsLifecycle,
+  customRaceLab,
   refreshEffectiveSettings,
   prestigeSettings: capturedPrestigeSettings,
   evolutionSettings: capturedEvolutionSettings,
@@ -1338,15 +1343,30 @@ export function createCapturedSettingsPanel({
         resetCheckbox: () => controls.resetCheckbox("autoEvolution"),
       },
     });
-    // The prestige vocabulary and the exposed control set are static; only the goal handoff needs
-    // the runtime, and it is optional.
-    const capturedPrestigeAdapter = createCapturedPrestigeSettingsAdapter(
-      capturedResearchSettings === undefined
+    // Preset labels and current selection are read from the settings record on each panel render.
+    const capturedPrestigeAdapter = createCapturedPrestigeSettingsAdapter({
+      ...(capturedResearchSettings === undefined
         ? {}
         : // The vaccination strategies are technologies, so they are labeled from the same captured
           // control registry the Research section reads.
-          { controls: capturedResearchSettings.controls },
-    );
+          { controls: capturedResearchSettings.controls }),
+      readSettings: () => settings.readRaw(),
+    });
+    const customRacePresetEditor =
+      customRaceLab === undefined
+        ? undefined
+        : createCustomRacePresetEditor({
+            getJQuery: getJQuery as unknown as Parameters<
+              typeof createCustomRacePresetEditor
+            >[0]["getJQuery"],
+            getSettingsRaw: () => {
+              prepareSettingsForUi();
+              return settings.readRaw();
+            },
+            persist: persistSettings,
+            customRaceLab,
+            onSettingsChanged: () => prestige?.refresh(),
+          });
     let prestige: PrestigeSettings | undefined;
     let prestigeIntent: ReturnType<typeof createPrestigeSettingsIntentHandler>;
     prestige = createPrestigeSettingsBrowserAdapter({
@@ -1357,10 +1377,18 @@ export function createCapturedSettingsPanel({
       getActions: () =>
         ({
           ...panelActions,
-          // Only the withheld `prestigeCustomRaceMode` control reaches these, so they exist to
-          // satisfy the shared browser adapter rather than to be called.
-          openOptionsModal: () => unported("custom race preset editor")(),
-          buildCustomRacePresetEditor: undefined,
+          openOptionsModal: (title: string, _editor: unknown) =>
+            optionsModal.openOptionsModal(title, (modal) =>
+              customRacePresetEditor?.buildCustomRacePresetEditor(
+                modal as unknown as Parameters<
+                  NonNullable<
+                    typeof customRacePresetEditor
+                  >["buildCustomRacePresetEditor"]
+                >[0],
+              ),
+            ),
+          buildCustomRacePresetEditor:
+            customRacePresetEditor?.buildCustomRacePresetEditor,
         }) as unknown as PrestigeSettingsBrowserActions,
     });
     prestigeIntent = createPrestigeSettingsIntentHandler({

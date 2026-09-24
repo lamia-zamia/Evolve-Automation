@@ -62,6 +62,7 @@ interface PrestigeSettingsBrowserDependencies {
 export interface PrestigeSettingsBrowserAdapter {
   buildPrestigeSettings(parent: JQueryNode, prefix: string): void;
   updatePrestigeSettingsContent(prefix: string): void;
+  refresh(): void;
 }
 export function createPrestigeSettingsBrowserAdapter({
   getDocument,
@@ -70,6 +71,7 @@ export function createPrestigeSettingsBrowserAdapter({
   intents,
   getActions,
 }: PrestigeSettingsBrowserDependencies): PrestigeSettingsBrowserAdapter {
+  let currentPrefix: string | undefined;
   function renderControl(
     node: JQueryNode,
     control: PrestigeSettingsControl,
@@ -139,6 +141,7 @@ export function createPrestigeSettingsBrowserAdapter({
     );
   }
   function updatePrestigeSettingsContent(prefix: string): void {
+    currentPrefix = prefix;
     const model = reader.read();
     const actions = getActions();
     renderSettingsSectionContent(
@@ -174,5 +177,10 @@ export function createPrestigeSettingsBrowserAdapter({
   return Object.freeze({
     buildPrestigeSettings,
     updatePrestigeSettingsContent,
+    refresh(): void {
+      if (currentPrefix !== undefined) {
+        updatePrestigeSettingsContent(currentPrefix);
+      }
+    },
   });
 }

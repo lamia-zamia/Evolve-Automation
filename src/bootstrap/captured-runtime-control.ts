@@ -193,6 +193,7 @@ import {
 } from "../adapters/evolve/combat/captured-foreign-state.ts";
 import type { PageCapture } from "../adapters/evolve/page-capture.ts";
 import { createGameKeyboardHandlers } from "../adapters/browser/game-keyboard-handlers.ts";
+import { createGameCustomRaceLab } from "../adapters/browser/game-custom-race-lab.ts";
 import type { TickDiagnostics } from "../ports/tick.ts";
 import type { GameActivitySink } from "../ports/game-message-log.ts";
 import { isRecord, readProperty } from "../adapters/validation.ts";
@@ -249,6 +250,11 @@ export function startCapturedRuntime({
   logError = () => {},
 }: CapturedRuntimeControlDependencies): () => void {
   const document = documentValue as CapturedDocument;
+  const customRaceLab = createGameCustomRaceLab({
+    rootState: pageCapture.rootState,
+    controls: pageCapture.controls,
+    getDocument: () => document,
+  });
   const closeBioseedModal = createGameModalCloser({
     getDocument: () => document,
   });
@@ -361,6 +367,7 @@ export function startCapturedRuntime({
     capturedPanelWindow: settingsHostWindow,
     settings: settingsStorage,
     settingsLifecycle,
+    customRaceLab,
     refreshEffectiveSettings,
     craftToggles: {
       rootState: pageCapture.rootState,
@@ -1178,6 +1185,7 @@ export function startCapturedRuntime({
   const prestige = createCapturedPrestigeControl({
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,
+    customRaceLab,
     readSettings: () => settingsStore.readRaw(),
     readGoal: () => capturedPrestigeGoal,
     readMechCycleActivity: () => capturedMechCycleHasPendingWork,

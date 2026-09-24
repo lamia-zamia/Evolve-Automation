@@ -23,9 +23,51 @@ assert.deepEqual(
 assert.deepEqual(
   planPrestige({
     goal: "Reset",
-    branch: { type: "celestial-lab", mode: "ascension", eligible: true },
+    branch: {
+      type: "celestial-lab",
+      mode: "ascension",
+      eligible: true,
+      labAction: "apply",
+    },
+  }),
+  [{ kind: "apply-celestial-lab-design", mode: "ascension" }],
+);
+assert.deepEqual(
+  planPrestige({
+    goal: "Reset",
+    branch: {
+      type: "celestial-lab",
+      mode: "ascension",
+      eligible: true,
+      labAction: "submit",
+    },
   }),
   [{ kind: "complete-celestial-lab", mode: "ascension" }],
+);
+assert.deepEqual(
+  planPrestige({
+    goal: "Reset",
+    branch: {
+      type: "celestial-lab",
+      mode: "ascension",
+      eligible: false,
+      labAction: "pause",
+    },
+  }),
+  [],
+);
+assert.deepEqual(
+  planPrestige({
+    goal: "Normal",
+    branch: {
+      type: "celestial-lab",
+      mode: "ascension",
+      eligible: false,
+      labAction: "pause",
+      resetObserved: true,
+    },
+  }),
+  [{ kind: "confirm-celestial-lab-reset", mode: "ascension" }],
 );
 assert.deepEqual(
   planPrestige({

@@ -1,12 +1,11 @@
 /**
  * The page's shared surfaces the script's own UI touches: the document's
- * visibility and scroll position, the mech-stats panel inputs the script
- * renders, and the celestial lab's create button.
+ * visibility and scroll position, and the mech-stats panel inputs the script
+ * renders.
  *
  * This is page surface rather than a game capability. Callers above this port
- * know what they want ("is the tab visible?", "click the lab's create
- * button"); they do not know which element id a checkbox has or how a button
- * is clicked.
+ * know what they want ("is the tab visible?"); they do not know which element
+ * id a checkbox has.
  */
 
 /** The mech-stats panel's toggle row, sampled for one calculation. */
@@ -37,8 +36,4 @@ export interface GameUiSurfacePort {
    * dearer than a class lookup scoped to the container.
    */
   countByClassIn(containerId: string, className: string): number;
-  /** True when the celestial lab has rendered its create button. */
-  isLabCreateAvailable(): boolean;
-  /** Click the celestial lab's create button. No-op when it is absent. */
-  clickLabCreate(): void;
 }

@@ -184,6 +184,12 @@ function evolutionRuntime(readSettings, { species = "protoplasm" } = {}) {
   edit(page, "userEvolutionTarget", "cath");
   edit(page, "challenge_plasmid", true);
   edit(page, "evolutionQueueEnabled", true);
+  edit(page, "prestigeCustomRaceMode", "import");
+  edit(page, "prestigeCustomRacePreset", "1");
+  page.settings.readRaw()["prestigeCustomRacePresets"][1] = {
+    name: "Queued Avian",
+    json: '{"genus":"avian"}',
+  };
 
   // "Add New Evolution" captures the current settings into the queue.
   const prestige = page.root.querySelectorAll("#script_evolution_prestige")[0];
@@ -194,6 +200,9 @@ function evolutionRuntime(readSettings, { species = "protoplasm" } = {}) {
   assert.equal(queue.length, 1);
   assert.equal(queue[0].userEvolutionTarget, "cath");
   assert.equal(queue[0].prestigeType, "bioseed");
+  assert.equal(queue[0].prestigeCustomRaceMode, "import");
+  assert.equal(queue[0].prestigeCustomRacePreset, "1");
+  assert.equal(queue[0].prestigeCustomRacePresets[1].name, "Queued Avian");
   assert.equal(
     JSON.parse(page.storage.writes())["evolutionQueue"].length,
     1,
@@ -212,9 +221,17 @@ function evolutionRuntime(readSettings, { species = "protoplasm" } = {}) {
 
   // The captured queue loader applies it, the one authority for queue application.
   edit(page, "userEvolutionTarget", "balorg");
+  edit(page, "prestigeCustomRaceMode", "reuse");
+  edit(page, "prestigeCustomRacePreset", "0");
   const queued = createCapturedQueuedSettings({ settings: page.settings });
   queued.loadQueuedSettings();
   assert.equal(page.settings.readRaw()["userEvolutionTarget"], "cath");
+  assert.equal(page.settings.readRaw()["prestigeCustomRaceMode"], "import");
+  assert.equal(page.settings.readRaw()["prestigeCustomRacePreset"], "1");
+  assert.equal(
+    page.settings.readRaw()["prestigeCustomRacePresets"][1].name,
+    "Queued Avian",
+  );
   assert.equal(queued.readEvolutionAttempts(), 1);
   assert.equal(page.settings.readRaw()["evolutionQueue"].length, 0);
 }

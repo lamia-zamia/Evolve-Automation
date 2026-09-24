@@ -1,4 +1,6 @@
 /** Immutable description of the Prestige settings panel. */
+import type { CustomRacePresetOption } from "./custom-race.ts";
+
 export interface PrestigeSettingsOption {
   readonly val: string;
   readonly label: string;
@@ -77,6 +79,7 @@ export const NO_VACCINATION_STRATEGY: PrestigeSettingsOption = Object.freeze({
 
 export function createPrestigeSettingsReadModel(input: {
   readonly prestigeOptions: readonly PrestigeSettingsOption[];
+  readonly customRacePresetOptions?: readonly CustomRacePresetOption[];
   /**
    * The vaccination strategies to offer, labeled by whatever localization the caller can reach.
    * Omitted leaves only "none", which is what a surface with no localization can honestly show.
@@ -92,6 +95,13 @@ export function createPrestigeSettingsReadModel(input: {
     (input.vaccinationOptions ?? [NO_VACCINATION_STRATEGY]).map((option) =>
       Object.freeze({ ...option }),
     ),
+  );
+  const customRacePresetOptions = Object.freeze(
+    (
+      input.customRacePresetOptions ?? [
+        { val: "0", label: "General", hint: "Custom race preset" },
+      ]
+    ).map((option) => Object.freeze({ ...option })),
   );
   const controls: readonly PrestigeSettingsControl[] = Object.freeze([
     {
@@ -194,6 +204,13 @@ export function createPrestigeSettingsReadModel(input: {
           hint: "Apply the selected structured preset and continue automatically.",
         },
       ]),
+    },
+    {
+      kind: "select",
+      settingName: "prestigeCustomRacePreset",
+      label: "Selected custom race preset",
+      hint: "Preset used when Custom race handling is set to Import selected preset.",
+      options: customRacePresetOptions,
     },
     { kind: "header", label: "Demonic Infusion" },
     {

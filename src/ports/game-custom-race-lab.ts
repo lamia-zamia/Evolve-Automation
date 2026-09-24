@@ -1,36 +1,56 @@
+import type {
+  CustomRaceDesign,
+  CustomRaceTextField,
+} from "../domain/progression/prestige/custom-race.ts";
+import type { CelestialLabMode } from "../domain/progression/prestige/prestige.ts";
+
+/** DeadSpace's captured Vue control and panel coordinates, shared by its callers. */
+export const CUSTOM_RACE_LAB_CONTROL_ID = "celestialLab";
+export const CUSTOM_RACE_LAB_PANEL_SELECTOR = "#celestialLab";
+
+/** Opaque identity for one mounted lab on one captured game root. */
+export type CustomRaceLabSession = Readonly<{ readonly identity: object }>;
+
+export interface CustomRaceLabSnapshot {
+  readonly session: CustomRaceLabSession;
+  readonly draft: CustomRaceDesign;
+  readonly availableTraits: readonly string[];
+  readonly availableGenera: readonly string[];
+  readonly hybridLab: boolean;
+  readonly savedCustomRaceExists: boolean;
+  readonly canSubmit: boolean;
+  /** The game's own `g.genes`, recalculated by `calcGenomeScore` in `space.js`. */
+  readonly genes: number;
+  readonly recalculation: "idle" | "pending" | "settled" | "failed";
+}
+
+export type CustomRaceLabMutationResult =
+  | { readonly status: "applied" }
+  | {
+      readonly status: "stale" | "unavailable" | "rejected";
+      readonly reason: string;
+    };
+
+export type CustomRaceSavedSlot = "race0" | "race1";
+
 /**
- * The game's own custom-race lab.
- *
- * A custom race is designed in the lab the ascension prestige opens, and the
- * lab is the only place the design exists before it is created. Callers above
- * this port decide what design they want and whether it is legal; how the lab
- * holds a design, and whether the lab is open at all, is this port's business.
+ * Narrow captured capability for the mounted game-owned lab. It never exposes the Vue view, live
+ * root, DOM element, trait definition catalog, or the lab's closure variables.
  */
-export interface CustomRaceLabDesign {
-  /** The identity fields, already trimmed to what the caller wants stored. */
-  readonly text: Readonly<Record<string, string>>;
-  readonly genus: string;
-  readonly traits: readonly string[];
-  /** Rank per selected trait; traits absent from the map keep no rank. */
-  readonly ranks: Readonly<Record<string, number>>;
-  /** The trait Fanaticism is aimed at, or false when it is unused. */
-  readonly fanaticism: unknown;
-}
-
 export interface GameCustomRaceLabPort {
-  /**
-   * The genus the open lab currently holds. Null means no lab is open, so
-   * nothing can be designed.
-   */
-  currentGenus(): string | null;
-
-  /** Whether the open lab offers a trait for selection. */
-  offersTrait(traitId: string): boolean;
-
-  /**
-   * Writes a design into the open lab and lets it recost the design. Answers
-   * the genes left over, which is negative when the design overspends the
-   * budget, or null when there was no lab to write to.
-   */
-  applyDesign(design: CustomRaceLabDesign): number | null;
+  read(mode: CelestialLabMode): CustomRaceLabSnapshot | undefined;
+  applyDesign(
+    session: CustomRaceLabSession,
+    design: CustomRaceDesign,
+  ): CustomRaceLabMutationResult;
+  submit(
+    session: CustomRaceLabSession,
+    mode: CelestialLabMode,
+  ): CustomRaceLabMutationResult;
+  readSavedRaceJson(slot: CustomRaceSavedSlot): string | undefined;
 }
+
+/** Restricts text keys to the fields the game stores on its custom race record. */
+export type CustomRaceLabText = Readonly<
+  Partial<Record<CustomRaceTextField, string>>
+>;

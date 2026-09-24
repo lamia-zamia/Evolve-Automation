@@ -1,7 +1,4 @@
-// TRANSITIONAL: this adapter still reaches a few shared surfaces by document
-// selector: page visibility/scroll, the script-owned mech-stats inputs, and the
-// celestial lab create button. Keep each selector here and re-verify it against
-// the upstream page when that feature's captured surface changes.
+// Page visibility/scroll and the script-owned mech-stats inputs remain document surfaces here.
 
 import type {
   GameMechStatsInput,
@@ -22,7 +19,6 @@ const MECH_CHECKBOX_IDS = [
 ] as const;
 
 const MECH_STATS_SCOUTS_ID = "script_mechStatsScouts";
-const LAB_CREATE_BUTTON = "#celestialLab .create button";
 
 export function createGameUiSurface({
   getDocument,
@@ -94,15 +90,6 @@ export function createGameUiSurface({
     ]);
   }
 
-  function queryLabButton(): unknown {
-    const doc = documentSurface();
-    const querySelector = readProperty(doc, "querySelector");
-    if (typeof querySelector !== "function") {
-      return null;
-    }
-    return Reflect.apply(querySelector, doc, [LAB_CREATE_BUTTON]);
-  }
-
   return Object.freeze({
     isPageVisible(): boolean {
       return readProperty(documentSurface(), "hidden") !== true;
@@ -160,21 +147,6 @@ export function createGameUiSurface({
       ]);
       const length = isRecord(found) ? readProperty(found, "length") : 0;
       return typeof length === "number" ? length : 0;
-    },
-
-    isLabCreateAvailable(): boolean {
-      return isRecord(queryLabButton());
-    },
-
-    clickLabCreate(): void {
-      const button = queryLabButton();
-      if (!isRecord(button)) {
-        return;
-      }
-      const click = readProperty(button, "click");
-      if (typeof click === "function") {
-        Reflect.apply(click, button, []);
-      }
     },
   });
 }

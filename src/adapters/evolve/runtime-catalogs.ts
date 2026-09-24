@@ -148,6 +148,9 @@ export const evolutionSettingsToStore = [
   "evolutionAutoUnbound",
   "evolutionBackup",
   "prestigeType",
+  "prestigeCustomRaceMode",
+  "prestigeCustomRacePreset",
+  "prestigeCustomRacePresets",
   ...challenges.map((c) => "challenge_" + c[0]!.id),
 ];
 

@@ -19,12 +19,19 @@ import { createCapturedBuildPolicyReader } from "../src/adapters/evolve/progress
 import { createCapturedTechConflictReader } from "../src/adapters/evolve/progression/research/captured-tech-conflicts.ts";
 import { createCapturedSettingsPage, edit } from "./captured-settings-page.mjs";
 
-const WITHHELD = ["prestigeWaitAT", "prestigeCustomRaceMode"];
+const WITHHELD = ["prestigeWaitAT"];
 
 // --- the read model offers exactly the exposed set, with no empty headers -----------------------
 
 {
-  const model = createCapturedPrestigeSettingsAdapter().read();
+  const model = createCapturedPrestigeSettingsAdapter({
+    readSettings: () => ({
+      prestigeCustomRacePresets: [
+        { name: "General", json: "" },
+        { name: "Saved race", json: "{}" },
+      ],
+    }),
+  }).read();
   const drawn = model.controls
     .filter((control) => control.kind !== "header")
     .map((control) => control.settingName);
@@ -66,6 +73,16 @@ const WITHHELD = ["prestigeWaitAT", "prestigeCustomRaceMode"];
   assert.deepEqual(
     type.options.map((option) => option.val),
     PRESTIGE_TYPES.map((entry) => entry.val),
+  );
+
+  const preset = model.controls.find(
+    (control) =>
+      control.kind === "select" &&
+      control.settingName === "prestigeCustomRacePreset",
+  );
+  assert.deepEqual(
+    preset.options.map((option) => option.label),
+    ["General", "Saved race"],
   );
 }
 
@@ -302,6 +319,12 @@ function projectContext(settings, { manaRate = 0, witchHunter = false } = {}) {
   edit(page, "prestigeType", "bioseed");
   edit(page, "prestigeBioseedProbes", 99);
   edit(page, "prestigeMADWait", false);
+  edit(page, "prestigeCustomRaceMode", "import");
+  edit(page, "prestigeCustomRacePreset", "2");
+  page.settings.readRaw()["prestigeCustomRacePresets"][2] = {
+    name: "Changed",
+    json: "{}",
+  };
   const overrides = page.settings.readRaw()["overrides"];
   overrides["autoBuild"] = [
     {
@@ -319,6 +342,9 @@ function projectContext(settings, { manaRate = 0, witchHunter = false } = {}) {
   const raw = page.settings.readRaw();
   assert.equal(raw["prestigeType"], "none");
   assert.notEqual(raw["prestigeBioseedProbes"], 99);
+  assert.equal(raw["prestigeCustomRaceMode"], "reuse");
+  assert.equal(raw["prestigeCustomRacePreset"], "0");
+  assert.equal(raw["prestigeCustomRacePresets"][2].name, "Cataclysm");
   assert.notEqual(raw["overrides"]["autoBuild"], undefined);
 }
 
