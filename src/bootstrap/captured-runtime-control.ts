@@ -593,14 +593,28 @@ export function startCapturedRuntime({
     onDiagnostic: reportDiagnostic,
     onActivity,
   });
+  const readCapturedMechReservation = (resourceId: string): number => {
+    const demandSample = readDemand();
+    // Re-evaluate Mech-first with the priority budget: the normal sample still contains the
+    // construction saving target that this priority is meant to preempt.
+    const priorityDemand = progression.mechDemand.read({
+      supply: demandSample.requestedQuantityForMechPriority("Supply"),
+      soulGems: demandSample.requestedQuantityForMechPriority("Soul_Gem"),
+    });
+    return (
+      priorityDemand.buildingMechsFirst &&
+        priorityDemand.immediatePlan.status === "ready"
+        ? demandSample.requestedQuantityForMechPriority
+        : demandSample.requestedQuantityExcludingMech
+    )(resourceId);
+  };
   const capturedMech = createCapturedMech({
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,
     readSettings: () => settingsStore.readRaw(),
     keyState: pageCapture.keyState,
     readCanExpandBay: progression.readCanExpandMechBay,
-    readReservedQuantityExcludingMech: (resourceId) =>
-      readDemand().requestedQuantityExcludingMech(resourceId),
+    readReservedQuantityExcludingMech: readCapturedMechReservation,
   });
   const capturedMechRandom = createBrowserRandomSource();
   ensureCapturedBuildingControls = progression.ensureBuildControls;

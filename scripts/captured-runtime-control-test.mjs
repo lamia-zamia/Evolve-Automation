@@ -1478,4 +1478,189 @@ function runCombatRuntime(autoFight) {
   assert.equal(enabled.activities.length, 1);
 }
 
+// Mech-first construction priority also changes the budget used by the actual Mech transaction.
+// Cycle one establishes an unaffordable Factory saving target while Mech is unavailable; cycle
+// two makes the same target and Mech affordable, then the construction phase must yield and the
+// later production autoMech phase must spend the formerly reserved Supply.
+{
+  const invoked = [];
+  const errors = [];
+  const root = {
+    race: { species: "human", warlord: true },
+    blood: {},
+    stats: { achieve: {} },
+    tech: {},
+    city: { factory: { count: 0, on: 0 } },
+    space: {},
+    civic: {},
+    portal: {
+      mechbay: {
+        max: 25,
+        bay: 0,
+        active: 0,
+        scouts: 0,
+        mechs: [],
+        blueprint: {
+          size: "small",
+          chassis: "tread",
+          hardpoint: ["laser"],
+          equip: ["special", "shields"],
+          infernal: false,
+        },
+      },
+      purifier: {
+        supply: 25_000,
+        sup_max: 2_000_000,
+        count: 1,
+        on: 1,
+        diff: 0,
+      },
+      spire: { count: 1, type: "sand", progress: 0, status: {}, boss: "snake" },
+    },
+    resource: {
+      Supply: { amount: 25_000, max: -1, stackable: false, display: true },
+      Soul_Gem: {
+        amount: 4,
+        max: 100,
+        stackable: false,
+        diff: 0,
+        display: true,
+      },
+      Money: { amount: 0, max: 10_000, stackable: false, display: true },
+    },
+    queue: { display: true, pause: false, queue: [] },
+    settings: { qKey: false, qAny: false, showMechLab: true },
+  };
+  const handles = new Map([
+    [
+      "buildQueue",
+      { elementId: "buildQueue", generation: 1, methods: ["setData"] },
+    ],
+    [
+      "city-factory",
+      {
+        elementId: "city-factory",
+        generation: 1,
+        methods: ["action"],
+        data: { act: { name: "Factory" } },
+      },
+    ],
+    [
+      "mechAssembly",
+      {
+        elementId: "mechAssembly",
+        generation: 1,
+        methods: ["build", "bay", "price", "soul"],
+      },
+    ],
+  ]);
+  let cycle;
+  const stop = startCapturedRuntime({
+    pageCapture: {
+      isComplete: () => true,
+      rootState: {
+        readRoot: () => root,
+        isReactivitySuppressed: () => false,
+        subscribeRootReplaced: () => () => {},
+      },
+      keyState: { readPressed: () => false },
+      controls: {
+        resolve: (elementId) => handles.get(elementId),
+        invoke: (handle, method) => {
+          invoked.push(`${handle.elementId}.${method}`);
+          if (handle.elementId === "buildQueue") {
+            return { ok: true, value: { "data-Supply": 50_000 } };
+          }
+          if (handle.elementId === "city-factory") {
+            root.city.factory.count += 1;
+            return { ok: true, value: undefined };
+          }
+          if (method === "bay") return { ok: true, value: 5 };
+          if (method === "price") return { ok: true, value: 180_000 };
+          if (method === "soul") return { ok: true, value: 4 };
+          if (method === "build") {
+            const blueprint = root.portal.mechbay.blueprint;
+            root.portal.mechbay.mechs.push({
+              size: blueprint.size,
+              chassis: blueprint.chassis,
+              hardpoint: [...blueprint.hardpoint],
+              equip: [...blueprint.equip],
+              infernal: blueprint.infernal,
+            });
+            root.portal.mechbay.bay += 5;
+            root.portal.mechbay.active += 1;
+            root.portal.purifier.supply -= 180_000;
+            root.resource.Supply.amount -= 180_000;
+            root.resource.Soul_Gem.amount -= 4;
+            return { ok: true, value: undefined };
+          }
+          return { ok: false, reason: "unknown-method" };
+        },
+        capturedElementIds: () => [...handles.keys()],
+      },
+      controlUsage: { readUsage: () => [] },
+      periods: {
+        subscribe(next) {
+          cycle = next;
+          return () => {};
+        },
+      },
+      mountSuppression: { available: false, withoutMounting: () => undefined },
+      uninstall: () => {},
+    },
+    document: {
+      getElementById: () => null,
+      querySelector: () => null,
+      querySelectorAll: () => [],
+    },
+    mouseEvent: class {},
+    storage: {
+      getItem: () =>
+        JSON.stringify({
+          masterScriptToggle: true,
+          tickRate: 1,
+          autoBuild: true,
+          autoMech: true,
+          mechBuild: "user",
+          mechScrap: "none",
+          buildingMechsFirst: true,
+          "batcity-factory": true,
+          "bld_w_city-factory": 100,
+          "bld_m_city-factory": 1,
+        }),
+      setItem: () => {},
+    },
+    logError: (message) => errors.push(message),
+  });
+
+  cycle({ periods: 1 });
+  assert.equal(root.city.factory.count, 0);
+  assert.equal(root.portal.mechbay.mechs.length, 0);
+
+  root.race.warlord = false;
+  root.portal.purifier.supply = 180_000;
+  root.resource.Supply.amount = 180_000;
+  cycle({ periods: 1 });
+  stop();
+
+  assert.deepEqual(
+    errors.filter((message) => message.startsWith("auto")),
+    [],
+  );
+  assert.equal(root.city.factory.count, 0);
+  assert.equal(
+    invoked.filter((entry) => entry === "city-factory.action").length,
+    0,
+    `construction spent the Mech-priority Supply: ${JSON.stringify(invoked)}`,
+  );
+  assert.equal(
+    invoked.filter((entry) => entry === "mechAssembly.build").length,
+    1,
+    `actual autoMech did not use the priority budget: ${JSON.stringify(invoked)}`,
+  );
+  assert.equal(root.portal.mechbay.mechs.length, 1);
+  assert.equal(root.portal.purifier.supply, 0);
+  assert.equal(root.resource.Soul_Gem.amount, 0);
+}
+
 console.log("captured-runtime-control ok");

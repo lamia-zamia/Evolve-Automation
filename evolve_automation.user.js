@@ -43887,13 +43887,19 @@ Only continue if you trust the source. Injected code:
       diagnostics,
       onDiagnostic: reportDiagnostic,
       onActivity
-    }), capturedMech = createCapturedMech({
+    }), readCapturedMechReservation = (resourceId) => {
+      let demandSample = readDemand(), priorityDemand = progression.mechDemand.read({
+        supply: demandSample.requestedQuantityForMechPriority("Supply"),
+        soulGems: demandSample.requestedQuantityForMechPriority("Soul_Gem")
+      });
+      return (priorityDemand.buildingMechsFirst && priorityDemand.immediatePlan.status === "ready" ? demandSample.requestedQuantityForMechPriority : demandSample.requestedQuantityExcludingMech)(resourceId);
+    }, capturedMech = createCapturedMech({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
       readSettings: () => settingsStore.readRaw(),
       keyState: pageCapture2.keyState,
       readCanExpandBay: progression.readCanExpandMechBay,
-      readReservedQuantityExcludingMech: (resourceId) => readDemand().requestedQuantityExcludingMech(resourceId)
+      readReservedQuantityExcludingMech: readCapturedMechReservation
     }), capturedMechRandom = createBrowserRandomSource();
     ensureCapturedBuildingControls = progression.ensureBuildControls;
     let gatherResources = createCapturedGatherResourcesControl({
