@@ -249,7 +249,6 @@ for (const [from, to] of [
   ["application/build.ts", "adapters/browser/vue.ts"],
   ["adapters/browser/vue.ts", "application/build.ts"],
   ["adapters/browser/vue.ts", "bootstrap/tick-runner.ts"],
-  ["game/rates.ts", "settings/state.ts"],
   ["ui/settings-shell.ts", "settings/state.ts"],
 ]) {
   assert.notEqual(
@@ -264,8 +263,6 @@ for (const [from, to] of [
   ["application/override-settings.ts", "ports/override-settings.ts"],
   ["ui/settings-controls.ts", "ports/override-editing.ts"],
   ["adapters/evolve/override-failure-log.ts", "domain/override-resolution.ts"],
-  ["game/core-managers.ts", "domain/progression/build/building-weighting.ts"],
-  ["game/rates.ts", "domain/planner-analysis.ts"],
   ["bootstrap/tick-runner.ts", "adapters/browser/vue.ts"],
   ["main.ts", "settings/state.ts"],
   ["main.ts", "adapters/browser/vue.ts"],

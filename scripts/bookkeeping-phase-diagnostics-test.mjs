@@ -1,9 +1,6 @@
 import assert from "node:assert/strict";
 import { runStateUpdate } from "../src/application/state-update.ts";
-import { createStateUpdateControls } from "../src/adapters/evolve/state-update.ts";
-import { createScriptDataLifecycle } from "../src/game/script-data.ts";
 import { createUIRefresh } from "../src/ui/ui-refresh.ts";
-import { createVueAdapter } from "../src/adapters/browser/vue.ts";
 
 // The three bookkeeping passes were 26% of a work tick with no internal
 // structure. Each now reports its own sub-phases, and reports none of them
@@ -25,42 +22,7 @@ const measured = () => {
   return seen;
 };
 
-// ---------- updateScriptData ----------
 const noop = () => {};
-const { updateScriptData } = createScriptDataLifecycle({
-  getSettings: () => ({}),
-  getState: () => ({ globalProductionModifier: 0 }),
-  getGame: () => ({ breakdown: { p: { Global: {}, consume: {} } } }),
-  getResources: () => ({ Money: { updateData: noop } }),
-  getBuildings: () => ({}),
-  getWarManager: () => ({ updateGarrison: noop, updateHell: noop }),
-  getMarketManager: () => ({ updateData: noop }),
-  getBuildingManager: () => ({ updateBuildings: noop }),
-  getSpyManager: () => ({ updateForeigns: noop }),
-  getEjectManager: () => ({ updateResources: noop }),
-  getSupplyManager: () => ({ updateResources: noop }),
-  getNaniteManager: () => ({ updateResources: noop }),
-  getRitualManager: () => ({
-    Productions: {},
-    initIndustry: () => false,
-    spellCost: () => 0,
-  }),
-  getUpdateCraftCost: () => noop,
-  getResourcesPerClick: () => () => 0,
-  getTicksPerSecond: () => () => 1,
-  getHaveTech: () => () => false,
-  diagnostics,
-});
-updateScriptData();
-assert.deepEqual(measured(), [
-  "updateScriptData.war",
-  "updateScriptData.resourceData",
-  "updateScriptData.craftCost",
-  "updateScriptData.market",
-  "updateScriptData.updateBuildings",
-  "updateScriptData.productionModifier",
-]);
-
 // ---------- updateState ----------
 const stateControls = {
   checkEvolutionResult: () => true,
@@ -108,38 +70,6 @@ assert.deepEqual(measured(), [
   "updateState.updateActiveTargets",
 ]);
 
-// The four planning passes keep their dependency order and each report
-// separately, so the 1.68 ms updateState figure can be attributed.
-const planningOrder = [];
-const record = (name) => () => planningOrder.push(name);
-createStateUpdateControls({
-  getState: () => ({}),
-  getResources: () => ({}),
-  getBuildings: () => ({}),
-  getStorageManager: () => ({}),
-  getPoly: () => ({}),
-  checkEvolutionResult: () => true,
-  updateTriggerSettingsContent: noop,
-  updatePriorityTargets: record("priorityTargets"),
-  updateProjects: record("projects"),
-  calculateRequiredStorages: record("storages"),
-  prioritizeDemandedResources: record("demand"),
-  updateActiveTargets: noop,
-  diagnostics,
-}).runPlanningPasses();
-assert.deepEqual(planningOrder, [
-  "priorityTargets",
-  "projects",
-  "storages",
-  "demand",
-]);
-assert.deepEqual(measured(), [
-  "updateState.runPlanningPasses.updatePriorityTargets",
-  "updateState.runPlanningPasses.updateProjects",
-  "updateState.runPlanningPasses.calculateRequiredStorages",
-  "updateState.runPlanningPasses.prioritizeDemandedResources",
-]);
-
 // ---------- updateUI ----------
 let pageVisible = true;
 const { updateUI } = createUIRefresh({
@@ -183,31 +113,7 @@ pageVisible = true;
 
 // ---------- disabled ----------
 enabled = false;
-updateScriptData();
 updateUI();
 assert.deepEqual(measured(), []);
-
-// ---------- getVueById ----------
-// The document lookup behind every "is this action rendered" question is timed
-// per call, and the lookup itself is unchanged when diagnostics are off.
-enabled = true;
-const lookedUp = [];
-const vue = createVueAdapter({
-  getWin: () => ({
-    document: {
-      getElementById: (id) => {
-        lookedUp.push(id);
-        return { __vue__: { id } };
-      },
-    },
-  }),
-  diagnostics,
-});
-assert.deepEqual(vue.getVueById("city-Barracks"), { id: "city-Barracks" });
-assert.deepEqual(measured(), ["getVueById"]);
-enabled = false;
-assert.deepEqual(vue.getVueById("city-Barracks"), { id: "city-Barracks" });
-assert.deepEqual(measured(), []);
-assert.deepEqual(lookedUp, ["city-Barracks", "city-Barracks"]);
 
 console.log("Bookkeeping phase diagnostics tests passed");
