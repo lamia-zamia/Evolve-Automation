@@ -312,57 +312,30 @@
     };
   }
 
-  // src/adapters/browser/legacy-runtime-environment.ts
-  function bindFunction(owner, key, fallback) {
+  // src/adapters/browser/captured-runtime-browser-environment.ts
+  function bindCapturedBrowserFunction(owner, key, fallback) {
     let candidate = readProperty(owner, key);
     return typeof candidate == "function" ? (...args) => Reflect.apply(candidate, owner, args) : fallback;
   }
-  var noOperation = () => {
-  }, confirmByDefault = () => !0, unavailableUrlApi = Object.freeze({
-    createObjectURL: () => {
-      throw new Error("URL.createObjectURL is unavailable");
-    },
-    revokeObjectURL: () => {
-    }
-  }), UnavailableBlob = class {
-    constructor(_parts) {
-      throw new Error("Blob is unavailable");
-    }
+  var noCapturedBrowserLog = () => {
   };
-  function readUrlApi(globalObject) {
-    let candidate = readProperty(globalObject, "URL"), createObjectURL = readProperty(candidate, "createObjectURL"), revokeObjectURL = readProperty(candidate, "revokeObjectURL");
-    return typeof createObjectURL != "function" || typeof revokeObjectURL != "function" ? unavailableUrlApi : Object.freeze({
-      createObjectURL: (blob) => Reflect.apply(createObjectURL, candidate, [blob]),
-      revokeObjectURL: (url) => {
-        Reflect.apply(revokeObjectURL, candidate, [url]);
-      }
-    });
-  }
-  function readBlobConstructor(globalObject) {
-    let candidate = readProperty(globalObject, "Blob");
-    return typeof candidate == "function" ? candidate : UnavailableBlob;
-  }
-  function createLegacyRuntimeEnvironment(globalObject) {
-    let window = readProperty(globalObject, "window") ?? globalObject, document = readProperty(globalObject, "document"), consoleObject = readProperty(globalObject, "console");
+  function createCapturedRuntimeBrowserEnvironment(globalObject) {
+    let consoleObject = readProperty(globalObject, "console");
     return Object.freeze({
-      document,
-      window,
+      document: readProperty(globalObject, "document"),
+      keyboardEvent: readProperty(globalObject, "KeyboardEvent"),
+      mouseEvent: readProperty(globalObject, "MouseEvent"),
       storage: readProperty(globalObject, "localStorage"),
-      createDate: () => /* @__PURE__ */ new Date(),
-      urlApi: readUrlApi(globalObject),
-      BlobConstructor: readBlobConstructor(globalObject),
-      schedule: bindFunction(globalObject, "setTimeout", noOperation),
-      repeat: bindFunction(globalObject, "setInterval", noOperation),
-      MutationObserver: readProperty(globalObject, "MutationObserver"),
-      ResizeObserver: readProperty(globalObject, "ResizeObserver"),
-      KeyboardEvent: readProperty(globalObject, "KeyboardEvent"),
-      MouseEvent: readProperty(globalObject, "MouseEvent"),
-      Node: readProperty(globalObject, "Node"),
-      Sortable: readProperty(globalObject, "Sortable"),
-      alert: bindFunction(globalObject, "alert", noOperation),
-      confirm: bindFunction(globalObject, "confirm", confirmByDefault),
-      log: bindFunction(consoleObject, "log", noOperation),
-      error: bindFunction(consoleObject, "error", noOperation)
+      log: bindCapturedBrowserFunction(
+        consoleObject,
+        "log",
+        noCapturedBrowserLog
+      ),
+      logError: bindCapturedBrowserFunction(
+        consoleObject,
+        "error",
+        noCapturedBrowserLog
+      )
     });
   }
 
@@ -44333,13 +44306,13 @@ Only continue if you trust the source. Injected code:
   // src/main.ts
   var settingsHostWindow = createUserscriptEnvironment(globalThis).pageWindow, pageCapture = installPageCapture(settingsHostWindow);
   whenDocumentReady(globalThis, () => {
-    let environment = createLegacyRuntimeEnvironment(globalThis);
+    let environment = createCapturedRuntimeBrowserEnvironment(globalThis);
     startCapturedRuntime({
       pageCapture,
       settingsHostWindow,
       document: environment.document,
-      keyboardEvent: environment.KeyboardEvent,
-      mouseEvent: environment.MouseEvent,
+      keyboardEvent: environment.keyboardEvent,
+      mouseEvent: environment.mouseEvent,
       storage: environment.storage,
       diagnostics: createBrowserDiagnostics(globalThis),
       onActivity: createGameMessageLog(
@@ -44347,7 +44320,7 @@ Only continue if you trust the source. Injected code:
         pageCapture.controls
       ),
       log: environment.log,
-      logError: environment.error
+      logError: environment.logError
     });
   });
 })();

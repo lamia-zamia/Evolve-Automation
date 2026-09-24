@@ -1,6 +1,6 @@
 import { createBrowserDiagnostics } from "./adapters/browser/diagnostics.ts";
 import { createGameMessageLog } from "./adapters/browser/game-message-log.ts";
-import { createLegacyRuntimeEnvironment } from "./adapters/browser/legacy-runtime-environment.ts";
+import { createCapturedRuntimeBrowserEnvironment } from "./adapters/browser/captured-runtime-browser-environment.ts";
 import { whenDocumentReady } from "./adapters/browser/document-ready.ts";
 import { installPageCapture } from "./adapters/evolve/page-capture.ts";
 import { createUserscriptEnvironment } from "./adapters/userscript/environment.ts";
@@ -11,13 +11,13 @@ const settingsHostWindow = createUserscriptEnvironment(globalThis).pageWindow;
 const pageCapture = installPageCapture(settingsHostWindow);
 
 whenDocumentReady(globalThis, () => {
-  const environment = createLegacyRuntimeEnvironment(globalThis);
+  const environment = createCapturedRuntimeBrowserEnvironment(globalThis);
   startCapturedRuntime({
     pageCapture,
     settingsHostWindow,
     document: environment.document,
-    keyboardEvent: environment.KeyboardEvent,
-    mouseEvent: environment.MouseEvent,
+    keyboardEvent: environment.keyboardEvent,
+    mouseEvent: environment.mouseEvent,
     storage: environment.storage,
     diagnostics: createBrowserDiagnostics(globalThis),
     onActivity: createGameMessageLog(
@@ -25,6 +25,6 @@ whenDocumentReady(globalThis, () => {
       pageCapture.controls,
     ),
     log: environment.log,
-    logError: environment.error,
+    logError: environment.logError,
   });
 });
