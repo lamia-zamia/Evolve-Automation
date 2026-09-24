@@ -367,4 +367,61 @@ assert.equal(stalledModalShip, null);
 assert.equal(yard.ships[1].location, "spc_red");
 assert.equal(stalledControl.autoFleetOuter().status, "succeeded");
 
+// Missing root capture must stand down without touching the shipyard.
+capturedSettings.fleetOuterShips = "custom";
+const buildsBeforeMissingRoot = capturedBuilds;
+const missingRootControl = createCapturedOuterFleetControl({
+  rootState: {
+    readRoot: () => undefined,
+    isReactivitySuppressed: () => false,
+    subscribeRootReplaced: () => () => {},
+  },
+  controls: capturedRegistry,
+  getDocument: () => capturedDocument,
+  readSettings: () => effectiveSettings,
+});
+assert.equal(missingRootControl.autoFleetOuter().status, "succeeded");
+assert.equal(capturedBuilds, buildsBeforeMissingRoot);
+
+// A control click that appends no ship is not a successful construction.
+yard.ships.length = 0;
+let noTransitionBuilds = 0;
+const noTransitionMethods = {
+  ...capturedMethods,
+  build: () => {
+    noTransitionBuilds += 1;
+  },
+};
+const noTransitionHandle = {
+  elementId: "shipPlans",
+  generation: 1,
+  methods: Object.keys(noTransitionMethods),
+  data: { s: yard },
+};
+const noTransitionRegistry = {
+  resolve: (elementId) =>
+    elementId === "shipPlans" ? noTransitionHandle : undefined,
+  invoke: (handle, method, args = []) => {
+    const fn = noTransitionMethods[method];
+    if (handle !== noTransitionHandle || fn === undefined) {
+      return { ok: false, reason: "unknown-method" };
+    }
+    return { ok: true, value: fn(...args) };
+  },
+  capturedElementIds: () => ["shipPlans"],
+};
+const noTransitionControl = createCapturedOuterFleetControl({
+  rootState: {
+    readRoot: () => root,
+    isReactivitySuppressed: () => false,
+    subscribeRootReplaced: () => () => {},
+  },
+  controls: noTransitionRegistry,
+  getDocument: () => capturedDocument,
+  readSettings: () => effectiveSettings,
+});
+assert.equal(noTransitionControl.autoFleetOuter().status, "stale");
+assert.equal(noTransitionBuilds, 1);
+assert.equal(yard.ships.length, 0);
+
 console.log("Captured outer-fleet control postcondition tests passed");
