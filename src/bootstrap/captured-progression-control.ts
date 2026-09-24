@@ -1,10 +1,9 @@
 /**
  * Production composition for the captured build and research families.
  *
- * This seam owns the adapter assembly for the captured tick path. The runtime selects it only after
- * document-start capture is complete. The legacy composition remains available to characterization
- * callers, but the normal entry point does not use it. The composition deliberately shares the offered technology reader so a construction
- * reservation sample and a research plan describe one draw.
+ * This seam owns adapter assembly for the captured tick path. The runtime selects it only after
+ * document-start capture is complete. It deliberately shares the offered technology reader so a
+ * construction reservation sample and a research plan describe one draw.
  */
 
 import { createCapturedResourceSource } from "../adapters/evolve/captured-world-state.ts";

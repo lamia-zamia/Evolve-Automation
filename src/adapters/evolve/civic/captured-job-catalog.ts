@@ -3,7 +3,7 @@
  *
  * The catalog is deliberately smaller than the full job planner input. Workers, caps, visibility,
  * default-job identity, split preferences, and game-owned control methods are stable captured facts;
- * smart-job rules, storage floors, and special race behavior still need their own characterization.
+ * smart-job rules, storage floors, and special race behavior still need their own captured inputs.
  */
 
 import type { GameControlRegistry } from "../../../ports/game-control-registry.ts";
@@ -1537,12 +1537,10 @@ function readCatalog(
   }
 
   if (!jobs.some((job) => job.id === defaultJobId)) return undefined;
-  // `computeJobDefaults` writes `job_b1..3_<id>`, `job_p_<id>` and `job_s_<id>` for every job, and
-  // it is still only reachable from the compatibility runtime. A blob that has never been through
-  // a job settings reset carries none of them, and every one of those absences would otherwise be
-  // read as a decision — a zero target, no priority, no smart rule. The catalog decides that here
-  // and says so once; only the ordinary planner projection refuses to act on it, because the
-  // foundry reader shares this catalog and crafting does not depend on job breakpoints.
+  // `computeJobDefaults` writes `job_b1..3_<id>`, `job_p_<id>` and `job_s_<id>` for every job. A
+  // profile without those values has no target, priority, or smart rule to act on. Report that
+  // state here; the ordinary planner projection stands down, while the foundry reader shares this
+  // catalog and crafting does not depend on job breakpoints.
   const jobSettingsConfigured = jobs.some(
     (job) => job.configuredBreakpoints !== null,
   );

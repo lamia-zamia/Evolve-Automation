@@ -2,9 +2,8 @@
  * Settings defaults for the captured runtime.
  *
  * This adapter deliberately exposes only facts that can be read from the captured root/control
- * ports. It does not reach through the Vue 2 managers used by the compatibility runtime. A
- * section whose live catalog is not captured yet still receives its record defaults, while
- * dynamic keys are added only when the upstream page has exposed the corresponding items.
+ * ports. A section whose live catalog is not captured yet still receives its record defaults,
+ * while dynamic keys are added only when the upstream page has exposed the corresponding items.
  */
 
 import type {

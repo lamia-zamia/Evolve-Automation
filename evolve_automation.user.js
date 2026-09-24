@@ -40173,8 +40173,6 @@ Only continue if you trust the source. Injected code:
         },
         persist: persistSettings
       }),
-      // TRANSITIONAL: the four secondary-option modals (Government, Foreign Affairs, Hell, Fleet)
-      // build their contents from legacy managers.
       getBuilders: () => ({
         government: (node, prefix) => {
           let dom = getQuery(), adapter = dom === void 0 ? void 0 : ensureSettingsUi(dom).government;

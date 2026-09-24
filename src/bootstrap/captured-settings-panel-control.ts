@@ -1,13 +1,13 @@
 /**
  * The script's settings panel, composed for the captured runtime.
  *
- * The captured runtime owns the top-level automation toggles and the captured settings sections.
- * This control wires those existing typed browser builders to the captured settings record instead
- * of to the legacy closure; game-backed sections remain outside this slice until their captures exist.
+ * The captured runtime owns the top-level automation toggles and the settings sections whose game
+ * controls have been captured. This control wires those typed browser builders to the captured
+ * settings record.
  *
- * TRANSITIONAL: settings sections without captured readers remain unavailable on this path. They
- * are diagnosed once by name rather than silently doing nothing. Automation reads the same layered
- * settings record this panel writes.
+ * TRANSITIONAL: sections without captured readers remain unavailable until their controls are
+ * captured. They are diagnosed once by name rather than silently doing nothing. Automation reads
+ * the same layered settings record this panel writes.
  */
 
 import { createAutomationContainer } from "../ui/automation-container.ts";
@@ -2219,8 +2219,6 @@ export function createCapturedSettingsPanel({
       },
       persist: persistSettings,
     }),
-    // TRANSITIONAL: the four secondary-option modals (Government, Foreign Affairs, Hell, Fleet)
-    // build their contents from legacy managers.
     getBuilders: () => ({
       government: (node, prefix) => {
         const dom = getQuery();

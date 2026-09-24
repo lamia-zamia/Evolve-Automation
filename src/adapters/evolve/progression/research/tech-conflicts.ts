@@ -86,9 +86,8 @@ export type TechConflictSettingsReadResult =
 /**
  * The one reader of the settings a research conflict decides on.
  *
- * Every consumer of the conflict policy — the compatibility runtime and the captured research
- * cycle — normalizes the player's record through this, so the set of keys a conflict depends on
- * and the strictness applied to them are stated once.
+ * The captured research cycle normalizes the player's record through this, so the set of keys a
+ * conflict depends on and the strictness applied to them are stated once.
  */
 export function readTechConflictSettings(
   rawSettings: unknown,

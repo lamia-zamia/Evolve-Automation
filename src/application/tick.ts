@@ -130,7 +130,7 @@ export function runTick({
   if (!s.autoTrigger || !controls.autoTrigger()) {
     // Only go to autoResearch and autoBuild if triggers not building anything at this very moment, to ensure they won't steal reasources from triggers
     if (s.autoResearch) {
-      // Legacy-sensitive order: research spends Knowledge before construction can compete for it.
+      // Research spends Knowledge before construction can compete for it.
       measure("autoResearch", () => controls.autoResearch());
     }
     if (s.autoBuild || s.autoARPA) {
@@ -165,7 +165,7 @@ export function runTick({
   if (s.autoCraft) {
     measure("autoCraft", () => controls.autoCraft()); // Invalidates quantities of craftables, missing exposed craftingRatio to calculate craft result on script side
   }
-  // Legacy-sensitive combat/civic tail: each civic decision observes the completed combat pass.
+  // Each civic decision observes the completed combat pass.
   if (s.autoFight) {
     measure("autoFight", () => {
       controls.autoMerc();

@@ -1,10 +1,9 @@
 /**
  * Handing the page's user a generated file.
  *
- * Single owner of the anchor-plus-object-URL gesture: the compatibility runtime reaches it through
- * `createBrowserRuntime`, and the captured settings panel uses it directly for "Script Settings as
- * File". The object URL is revoked on a schedule rather than immediately because a click started in
- * this turn is still reading it when the call returns.
+ * Single owner of the anchor-plus-object-URL gesture used by the captured settings panel for
+ * "Script Settings as File". The object URL is revoked on a schedule rather than immediately
+ * because a click started in this turn is still reading it when the call returns.
  */
 
 export interface FileDownloadDependencies {

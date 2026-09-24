@@ -107,7 +107,7 @@ export interface CapturedResourceDemandDependencies {
    * an uncaptured control reads as no reservation rather than as a failed capture.
    */
   readonly readPrerequisites?: () => DemandPrerequisiteReport | undefined;
-  /** The shared captured Mech target; absent only for isolated legacy characterization callers. */
+  /** The shared captured Mech target, when that demand phase is available. */
   readonly mechDemand?: CapturedMechDemandSource;
 }
 

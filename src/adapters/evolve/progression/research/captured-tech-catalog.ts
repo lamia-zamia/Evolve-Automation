@@ -8,7 +8,7 @@
  * pass: draw main tab 3, read `#tech .action` while it is there, restore the player's view. The
  * elements carry the game's own `adjustCosts` output as `data-<Resource>` attributes and are in
  * the game's own offer order — era, then ascending Knowledge cost — which is the same source of
- * truth the compatibility runtime reads, only without needing the tab to stay open.
+ * truth the game offers, without needing the tab to stay open.
  *
  * The already-researched half is drawn under `#oldTech` and is the captured answer to whether a
  * technology is complete, so a caller that needs that asks for it and pays for it; every other

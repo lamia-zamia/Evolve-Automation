@@ -1968,7 +1968,7 @@ export function startCapturedRuntime({
         });
       }
 
-      // Keep the legacy-sensitive progression order: research precedes construction, and both
+      // Keep this progression order: research precedes construction, and both
       // complete before combat. The trigger gate stays immediately before them because a trigger
       // that acted this cycle owns the resources they would otherwise spend.
       let triggerActive = false;
