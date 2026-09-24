@@ -60,4 +60,15 @@ assert.deepEqual(
   ],
 );
 
+const preMadSteelGate = planStorageExpansion(
+  snapshot({
+    steel: { storageRatio: 0.7, maxQuantity: 50, storageRequired: 50 },
+  }),
+  { storageLimitPreMad: true },
+);
+assert.deepEqual(
+  preMadSteelGate.map(({ unit, count }) => ({ unit, count })),
+  [{ unit: "crate", count: 1 }],
+);
+
 console.log("Storage expansion policy tests passed");
