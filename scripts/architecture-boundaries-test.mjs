@@ -37,14 +37,6 @@ const layerOfRootFile = new Map([
   ["main.ts", "composition"],
 ]);
 
-// The Vue 2 compatibility runtime assembles features the same way the bootstrap seams do.
-// TRANSITIONAL: it loses this classification once its remaining feature logic moves behind
-// ports and it imports adapters only.
-const compositionFiles = new Set([
-  "adapters/evolve/evolve-runtime.js",
-  "adapters/evolve/evolve-runtime-test.js",
-]);
-
 // Not production source: userscript release metadata consumed by the build.
 const excludedFiles = new Set(["userscript.meta.js"]);
 
@@ -77,7 +69,6 @@ function toRelative(file) {
 }
 
 function layerOf(relativePath) {
-  if (compositionFiles.has(relativePath)) return "composition";
   const separator = relativePath.indexOf("/");
   if (separator === -1) {
     return excludedFiles.has(relativePath)
@@ -276,7 +267,7 @@ for (const [from, to] of [
   ["game/core-managers.ts", "domain/progression/build/building-weighting.ts"],
   ["game/rates.ts", "domain/planner-analysis.ts"],
   ["bootstrap/tick-runner.ts", "adapters/browser/vue.ts"],
-  ["adapters/evolve/evolve-runtime.js", "settings/state.ts"],
+  ["main.ts", "settings/state.ts"],
   ["main.ts", "adapters/browser/vue.ts"],
 ]) {
   assert.equal(

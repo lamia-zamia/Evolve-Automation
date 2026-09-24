@@ -9,10 +9,26 @@ const read = (relativePath) =>
   fs.readFileSync(path.join(root, relativePath), "utf8");
 
 const main = read("src/main.ts");
-assert.doesNotMatch(main, /__EA_TEST_HOOKS__/);
-assert.doesNotMatch(main, /captureTestSurface/);
+assert.doesNotMatch(main, /TestHooks|TestSurface/);
 assert.match(main, /startCapturedRuntime\(/);
 assert.doesNotMatch(main, /evolve-runtime/);
+
+for (const retiredRuntimeFile of [
+  "src/adapters/evolve/evolve-runtime-test.js",
+  "src/adapters/evolve/evolve-runtime-test.d.ts",
+  "src/adapters/evolve/evolve-runtime.js",
+  "src/adapters/evolve/evolve-runtime.d.ts",
+  "src/adapters/evolve/runtime-test-surface.js",
+  "src/adapters/userscript/test-hooks.ts",
+  "scripts/test-entry.ts",
+  "scripts/build-test-bundle.mjs",
+]) {
+  assert.equal(
+    fs.existsSync(path.join(root, retiredRuntimeFile)),
+    false,
+    `${retiredRuntimeFile} must stay retired`,
+  );
+}
 
 assert.equal(
   fs.existsSync(path.join(sourceRoot, "automation", "dependencies.ts")),
@@ -37,19 +53,7 @@ const sourceJavaScript = sourceFiles
   .filter((file) => file.endsWith(".js"))
   .map((file) => path.relative(root, file).replaceAll(path.sep, "/"))
   .sort();
-assert.deepEqual(sourceJavaScript, [
-  "src/adapters/evolve/evolve-runtime-test.js",
-  "src/adapters/evolve/evolve-runtime.js",
-  "src/adapters/evolve/runtime-test-surface.js",
-  "src/userscript.meta.js",
-]);
-
-const compatibilityRuntime = read("src/adapters/evolve/evolve-runtime.js");
-assert.doesNotMatch(
-  compatibilityRuntime,
-  /testSurface\?\.(?:add|addContext)/,
-  "characterization registration activation must stay in the test-only surface",
-);
+assert.deepEqual(sourceJavaScript, ["src/userscript.meta.js"]);
 
 const customExpressionPath = path.join(
   sourceRoot,

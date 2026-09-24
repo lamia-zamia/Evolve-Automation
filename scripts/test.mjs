@@ -1,7 +1,6 @@
-import { readdirSync, writeFileSync } from "node:fs";
-import { readFile } from "node:fs/promises";
+import { readdirSync } from "node:fs";
 import { spawn, spawnSync } from "node:child_process";
-import { availableParallelism, tmpdir } from "node:os";
+import { availableParallelism } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -88,74 +87,9 @@ async function runTestFiles() {
   return failures;
 }
 
-runNode(["scripts/build-test-bundle.mjs"], "test bundle build");
-
-const productionBundlePath = join(projectDir, "evolve_automation.user.js");
-const testBundlePath = join(tmpdir(), "evolve-automation-test-bundle.js");
-const productionBundle = await readFile(productionBundlePath, "utf8");
-const testBundle = await readFile(testBundlePath, "utf8");
-
-const characterizationSymbols = [
-  "__EA_TEST_HOOKS__",
-  "testSurface.add",
-  "testSurface.addContext",
-  "setAuthorityPolicyTestContext",
-  "setMechStatsTestContext",
-  "setUIRefreshTestContext",
-];
-for (const symbol of characterizationSymbols) {
-  if (productionBundle.includes(symbol)) {
-    throw new Error(`Production bundle must not contain ${symbol}`);
-  }
-  if (!testBundle.includes(symbol)) {
-    throw new Error(`Test bundle must retain ${symbol}`);
-  }
-}
-
-// Virus scanners and editors briefly hold this file open on Windows, which
-// surfaces as EBUSY/EPERM/UNKNOWN on an otherwise valid write.
-function writeBundle(contents) {
-  for (let attempt = 0; ; attempt += 1) {
-    try {
-      writeFileSync(productionBundlePath, contents, "utf8");
-      return;
-    } catch (error) {
-      const locked = ["EBUSY", "EPERM", "EACCES", "UNKNOWN"].includes(
-        error.code,
-      );
-      if (!locked || attempt >= 20) {
-        throw error;
-      }
-      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 50);
-    }
-  }
-}
-
-writeBundle(testBundle);
-
-// The swapped-in bundle must never survive the run, including an interrupt.
-let restored = false;
-const restoreBundle = () => {
-  if (!restored) {
-    restored = true;
-    writeBundle(productionBundle);
-  }
-};
-for (const signal of ["SIGINT", "SIGTERM"]) {
-  process.once(signal, () => {
-    restoreBundle();
-    process.exit(1);
-  });
-}
-
 const started = Date.now();
-let failures;
-try {
-  runNode(["--check", productionBundlePath], "userscript syntax");
-  failures = await runTestFiles();
-} finally {
-  restoreBundle();
-}
+runNode(["--check", "evolve_automation.user.js"], "userscript syntax");
+const failures = await runTestFiles();
 
 const elapsed = ((Date.now() - started) / 1000).toFixed(1);
 if (failures.length) {
