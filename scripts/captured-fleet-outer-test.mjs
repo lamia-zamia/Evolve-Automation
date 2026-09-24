@@ -246,6 +246,21 @@ const capturedDocument = {
   },
   getElementById: (id) => (id === "modalBox" && modalOpen ? {} : null),
 };
+function createOuterControl(
+  controls = capturedRegistry,
+  document = capturedDocument,
+) {
+  return createCapturedOuterFleetControl({
+    rootState: {
+      readRoot: () => root,
+      isReactivitySuppressed: () => false,
+      subscribeRootReplaced: () => () => {},
+    },
+    controls,
+    getDocument: () => document,
+    readSettings: () => effectiveSettings,
+  });
+}
 const outerControl = createCapturedOuterFleetControl({
   rootState: {
     readRoot: () => root,
@@ -423,5 +438,94 @@ const noTransitionControl = createCapturedOuterFleetControl({
 assert.equal(noTransitionControl.autoFleetOuter().status, "stale");
 assert.equal(noTransitionBuilds, 1);
 assert.equal(yard.ships.length, 0);
+
+// Normal corvettes reserve two soldiers; Grenadier corvettes reserve one.
+capturedSettings.authorityManage = false;
+capturedSettings.generalMinimumAuthority = 0;
+capturedSettings.fleetOuterCrew = 99;
+delete root.race.high_pop;
+root.race.grenadier = false;
+yard.ships.length = 0;
+let buildsBeforeCrewGate = capturedBuilds;
+createOuterControl().autoFleetOuter();
+assert.equal(capturedBuilds, buildsBeforeCrewGate);
+assert.equal(yard.ships.length, 0);
+
+root.race.grenadier = true;
+buildsBeforeCrewGate = capturedBuilds;
+createOuterControl().autoFleetOuter();
+assert.equal(capturedBuilds, buildsBeforeCrewGate + 1);
+assert.equal(yard.ships.length, 1);
+
+// Rank-one high_pop makes jobStack(2) equal eight, so the minimum-garrison gate
+// must include the upstream citizen-cap multiplier.
+yard.ships.length = 0;
+root.race.grenadier = false;
+root.race.high_pop = 1;
+capturedSettings.fleetOuterCrew = 93;
+buildsBeforeCrewGate = capturedBuilds;
+createOuterControl().autoFleetOuter();
+assert.equal(capturedBuilds, buildsBeforeCrewGate);
+assert.equal(yard.ships.length, 0);
+
+// The same rank-one crew value feeds the Authority prediction. Eight crew at a
+// 26% high_pop authority factor lowers 100 to 98, crossing a target of 99.
+capturedSettings.fleetOuterCrew = 0;
+capturedSettings.authorityManage = true;
+capturedSettings.generalMinimumAuthority = 99;
+buildsBeforeCrewGate = capturedBuilds;
+createOuterControl().autoFleetOuter();
+assert.equal(capturedBuilds, buildsBeforeCrewGate);
+assert.equal(yard.ships.length, 0);
+
+// A successful setVal invocation is not evidence that the live blueprint
+// changed. A stale laser blueprint must not be built as the configured railgun.
+root.race.high_pop = undefined;
+capturedSettings.authorityManage = false;
+capturedSettings.generalMinimumAuthority = 0;
+yard.blueprint.weapon = "laser";
+yard.ships.length = 0;
+const originalSetVal = capturedMethods.setVal;
+const originalBuild = capturedMethods.build;
+capturedMethods.setVal = () => {};
+const buildsBeforeStaleBlueprint = capturedBuilds;
+capturedMethods.build = () => {
+  capturedBuilds++;
+  yard.ships.push({ ...yard.blueprint, location: "spc_dwarf" });
+};
+const staleBlueprintResult = createOuterControl().autoFleetOuter();
+assert.notEqual(staleBlueprintResult.status, "succeeded");
+assert.equal(capturedBuilds, buildsBeforeStaleBlueprint);
+assert.equal(yard.ships.length, 0);
+capturedMethods.setVal = originalSetVal;
+capturedMethods.build = originalBuild;
+yard.blueprint.weapon = "railgun";
+
+// Even with the requested blueprint selected, a new row that does not copy it
+// cannot be accepted or queued for dispatch.
+yard.ships.length = 0;
+modalOpen = false;
+const buildsBeforeWrongShip = capturedBuilds;
+capturedMethods.build = () => {
+  capturedBuilds++;
+  yard.ships.push({
+    ...yard.blueprint,
+    class: "frigate",
+    location: "spc_dwarf",
+  });
+};
+const wrongShipControl = createOuterControl();
+const wrongShipResult = wrongShipControl.autoFleetOuter();
+assert.equal(wrongShipResult.status, "stale");
+assert.equal(capturedBuilds, buildsBeforeWrongShip + 1);
+assert.equal(yard.ships.length, 1);
+assert.equal(yard.ships[0].class, "frigate");
+assert.equal(modalOpen, false);
+capturedSettings.fleetOuterShips = "none";
+wrongShipControl.autoFleetOuter();
+assert.equal(modalOpen, false);
+assert.equal(yard.ships.length, 1);
+capturedSettings.fleetOuterShips = "custom";
+capturedMethods.build = originalBuild;
 
 console.log("Captured outer-fleet control postcondition tests passed");

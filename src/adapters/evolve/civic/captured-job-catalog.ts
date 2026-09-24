@@ -422,6 +422,14 @@ function readHighPopulationWorkerEffect(root: unknown): number | undefined {
   return factors === undefined ? undefined : (factors?.workerEffect ?? 1);
 }
 
+/** Mirrors jobs.js jobScale for captured roots; jobStack rounds the result. */
+export function readCapturedJobStackMultiplier(
+  root: unknown,
+): number | undefined {
+  const factors = readHighPopulationFactors(readProperty(root, "race"));
+  return factors === undefined ? undefined : (factors?.breakpointScale ?? 1);
+}
+
 export function readCapturedHighPopulationPercent(
   root: unknown,
 ): number | undefined {

@@ -36,7 +36,10 @@ import type {
   OuterFleetReader,
 } from "../../../ports/fleet-outer.ts";
 import { rejected, stale, SUCCEEDED } from "../../command-outcomes.ts";
-import { readCapturedHighPopulationPercent } from "../civic/captured-job-catalog.ts";
+import {
+  readCapturedHighPopulationPercent,
+  readCapturedJobStackMultiplier,
+} from "../civic/captured-job-catalog.ts";
 import {
   finite,
   isRecord,
@@ -113,7 +116,9 @@ const CAPTURED_OUTER_FLEET_EXPLORER = Object.freeze({
   power: "elerium",
   sensor: "quantum",
 });
-const CAPTURED_OUTER_FLEET_CREW: Readonly<Record<string, number>> =
+// Mirrors the class bases in DeadSpace ships.js shipCrewSize; jobStack scaling
+// comes from captured-job-catalog and rounds as jobs.js jobStack does.
+const CAPTURED_OUTER_FLEET_CLASS_CREW: Readonly<Record<string, number>> =
   Object.freeze({
     corvette: 2,
     frigate: 3,
@@ -122,6 +127,16 @@ const CAPTURED_OUTER_FLEET_CREW: Readonly<Record<string, number>> =
     battlecruiser: 8,
     dreadnought: 10,
     explorer: 10,
+  });
+const CAPTURED_OUTER_FLEET_GRENADIER_CREW: Readonly<Record<string, number>> =
+  Object.freeze({
+    corvette: 1,
+    frigate: 2,
+    destroyer: 3,
+    cruiser: 4,
+    battlecruiser: 5,
+    dreadnought: 6,
+    explorer: 6,
   });
 const CAPTURED_OUTER_FLEET_WEAPON_POWER: Readonly<Record<string, number>> =
   Object.freeze({
@@ -663,6 +678,18 @@ function capturedOuterFleetBlueprintMatches(
   );
 }
 
+function capturedOuterFleetExpectedBlueprint(
+  blueprint: UnknownRecord,
+): Readonly<Record<string, string>> | undefined {
+  const expected: Record<string, string> = {};
+  for (const type of Object.keys(CAPTURED_OUTER_FLEET_PARTS)) {
+    const part = blueprint[type];
+    if (typeof part !== "string") return undefined;
+    expected[type] = part;
+  }
+  return Object.freeze(expected);
+}
+
 function capturedOuterFleetShipCount(
   root: UnknownRecord,
   region: string,
@@ -1079,7 +1106,18 @@ export function createCapturedOuterFleetAdapter(
           `captured ${candidate.blueprint} blueprint.class must be a string`,
         );
       const shipName = capturedOuterFleetShipName(blueprint);
-      const shipCrew = (CAPTURED_OUTER_FLEET_CREW[shipClass] ?? 0) * 1;
+      const race = readProperty(active.root, "race");
+      const crewByClass =
+        readProperty(race, "grenadier") === true
+          ? CAPTURED_OUTER_FLEET_GRENADIER_CREW
+          : CAPTURED_OUTER_FLEET_CLASS_CREW;
+      const baseCrew = crewByClass[shipClass] ?? 0;
+      const jobStackMultiplier = readCapturedJobStackMultiplier(active.root);
+      if (baseCrew <= 0 || jobStackMultiplier === undefined)
+        throw new TypeError(
+          `captured crew data is unavailable for ${shipClass}`,
+        );
+      const shipCrew = Math.round(baseCrew * jobStackMultiplier);
       if (shipCrew <= 0)
         throw new TypeError(`unknown outer fleet class ${shipClass}`);
       let authority: OuterFleetAuthorityAssessment = { status: "not-required" };
@@ -1175,6 +1213,12 @@ export function createCapturedOuterFleetAdapter(
           "captured-outer-fleet-blueprint-changed",
           "captured outer fleet blueprint changed",
         );
+      const expectedBlueprint = capturedOuterFleetExpectedBlueprint(blueprint);
+      if (expectedBlueprint === undefined)
+        return stale(
+          "captured-outer-fleet-blueprint-invalid",
+          "captured outer fleet blueprint is incomplete",
+        );
       for (const [type, part] of Object.entries(blueprint)) {
         if (type === "name" || typeof part !== "string") continue;
         const index = CAPTURED_OUTER_FLEET_PARTS[type]?.indexOf(part) ?? -1;
@@ -1200,6 +1244,7 @@ export function createCapturedOuterFleetAdapter(
         );
       const build = dependencies.controls.buildShip({
         elementId: CAPTURED_OUTER_FLEET_ELEMENT,
+        expectedBlueprint,
       });
       if (!build.actionable)
         return rejected(
@@ -1208,8 +1253,8 @@ export function createCapturedOuterFleetAdapter(
         );
       if (build.builtIndex === null)
         return stale(
-          "captured-outer-fleet-build-no-transition",
-          "outer fleet build returned without adding a ship",
+          "captured-outer-fleet-build-postcondition-failed",
+          "captured outer fleet build did not append the intended ship",
         );
       pendingDispatch = {
         index: build.builtIndex,

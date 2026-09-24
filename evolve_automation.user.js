@@ -63,6 +63,11 @@
         return Array.isArray(value) ? `array(${value.length})` : describeObject(value);
     }
   }
+  function matchesStringRecordFields(value, expected) {
+    return isRecord(value) && Object.entries(expected).every(
+      ([key, expectedValue]) => Object.hasOwn(value, key) && value[key] === expectedValue
+    );
+  }
   function splitActionId(value) {
     let separator = value.indexOf("-");
     if (!(separator <= 0))
@@ -11940,6 +11945,10 @@
     let factors = readHighPopulationFactors(readProperty(root, "race"));
     return factors === void 0 ? void 0 : factors?.workerEffect ?? 1;
   }
+  function readCapturedJobStackMultiplier(root) {
+    let factors = readHighPopulationFactors(readProperty(root, "race"));
+    return factors === void 0 ? void 0 : factors?.breakpointScale ?? 1;
+  }
   function readCapturedHighPopulationPercent(root) {
     let factors = readHighPopulationFactors(readProperty(root, "race"));
     return factors === void 0 ? void 0 : (factors?.workerEffect ?? 1) * 100;
@@ -17233,7 +17242,10 @@
       },
       buildShip(request) {
         let handle = dependencies.controls.resolve(request.elementId);
-        if (handle === void 0 || !handle.methods.includes("build"))
+        if (handle === void 0 || !handle.methods.includes("build") || request.expectedBlueprint !== void 0 && !matchesStringRecordFields(
+          readProperty(readProperty(handle.data, "s"), "blueprint"),
+          request.expectedBlueprint
+        ))
           return NOT_ACTIONABLE;
         let beforeList = liveShipList(handle);
         if (beforeList === null) return NOT_ACTIONABLE;
@@ -17242,10 +17254,12 @@
         let after = liveShipList(handle);
         if (after === null || after.length <= before.length)
           return { actionable: !0, builtIndex: null };
-        let newIndex = after.findIndex((ship) => !before.includes(ship));
+        let newIndex = after.findIndex(
+          (ship) => !before.includes(ship) && (request.expectedBlueprint === void 0 || matchesStringRecordFields(ship, request.expectedBlueprint))
+        );
         return {
           actionable: !0,
-          builtIndex: newIndex >= 0 ? newIndex : after.length - 1
+          builtIndex: newIndex >= 0 ? newIndex : request.expectedBlueprint === void 0 ? after.length - 1 : null
         };
       },
       dispatchTrigger(index) {
@@ -17460,7 +17474,7 @@
     engine: "emdrive",
     power: "elerium",
     sensor: "quantum"
-  }), CAPTURED_OUTER_FLEET_CREW = Object.freeze({
+  }), CAPTURED_OUTER_FLEET_CLASS_CREW = Object.freeze({
     corvette: 2,
     frigate: 3,
     destroyer: 4,
@@ -17468,6 +17482,14 @@
     battlecruiser: 8,
     dreadnought: 10,
     explorer: 10
+  }), CAPTURED_OUTER_FLEET_GRENADIER_CREW = Object.freeze({
+    corvette: 1,
+    frigate: 2,
+    destroyer: 3,
+    cruiser: 4,
+    battlecruiser: 5,
+    dreadnought: 6,
+    explorer: 6
   }), CAPTURED_OUTER_FLEET_WEAPON_POWER = Object.freeze({
     railgun: 36,
     laser: 64,
@@ -17766,6 +17788,15 @@
       (type) => left[type] === right[type]
     );
   }
+  function capturedOuterFleetExpectedBlueprint(blueprint) {
+    let expected = {};
+    for (let type of Object.keys(CAPTURED_OUTER_FLEET_PARTS)) {
+      let part = blueprint[type];
+      if (typeof part != "string") return;
+      expected[type] = part;
+    }
+    return Object.freeze(expected);
+  }
   function capturedOuterFleetShipCount(root, region, blueprint) {
     return capturedOuterFleetShips(root).filter((ship) => !isRecord(ship) || ship.location !== region ? !1 : capturedOuterFleetBlueprintMatches(ship, blueprint)).length;
   }
@@ -18004,7 +18035,12 @@
           throw new TypeError(
             `captured ${candidate.blueprint} blueprint.class must be a string`
           );
-        let shipName = capturedOuterFleetShipName(blueprint), shipCrew = (CAPTURED_OUTER_FLEET_CREW[shipClass] ?? 0) * 1;
+        let shipName = capturedOuterFleetShipName(blueprint), race = readProperty(active.root, "race"), baseCrew = (readProperty(race, "grenadier") === !0 ? CAPTURED_OUTER_FLEET_GRENADIER_CREW : CAPTURED_OUTER_FLEET_CLASS_CREW)[shipClass] ?? 0, jobStackMultiplier = readCapturedJobStackMultiplier(active.root);
+        if (baseCrew <= 0 || jobStackMultiplier === void 0)
+          throw new TypeError(
+            `captured crew data is unavailable for ${shipClass}`
+          );
+        let shipCrew = Math.round(baseCrew * jobStackMultiplier);
         if (shipCrew <= 0)
           throw new TypeError(`unknown outer fleet class ${shipClass}`);
         let authority = { status: "not-required" }, authorityResource = readProperty(
@@ -18075,6 +18111,12 @@
             "captured-outer-fleet-blueprint-changed",
             "captured outer fleet blueprint changed"
           );
+        let expectedBlueprint = capturedOuterFleetExpectedBlueprint(blueprint);
+        if (expectedBlueprint === void 0)
+          return stale(
+            "captured-outer-fleet-blueprint-invalid",
+            "captured outer fleet blueprint is incomplete"
+          );
         for (let [type, part] of Object.entries(blueprint)) {
           if (type === "name" || typeof part != "string") continue;
           let index = CAPTURED_OUTER_FLEET_PARTS[type]?.indexOf(part) ?? -1;
@@ -18095,11 +18137,12 @@
             "outer fleet blueprint has insufficient power"
           );
         let build = dependencies.controls.buildShip({
-          elementId: CAPTURED_OUTER_FLEET_ELEMENT
+          elementId: CAPTURED_OUTER_FLEET_ELEMENT,
+          expectedBlueprint
         });
         return build.actionable ? build.builtIndex === null ? stale(
-          "captured-outer-fleet-build-no-transition",
-          "outer fleet build returned without adding a ship"
+          "captured-outer-fleet-build-postcondition-failed",
+          "captured outer fleet build did not append the intended ship"
         ) : (pendingDispatch = {
           index: build.builtIndex,
           region: decision.targetRegion,

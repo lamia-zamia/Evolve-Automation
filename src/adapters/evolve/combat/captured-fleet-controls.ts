@@ -15,7 +15,11 @@ import type {
   GameFleetStepRequest,
 } from "../../../ports/game-fleet-controls.ts";
 import type { GameControlRegistry } from "../../../ports/game-control-registry.ts";
-import { isRecord, readProperty } from "../../validation.ts";
+import {
+  isRecord,
+  matchesStringRecordFields,
+  readProperty,
+} from "../../validation.ts";
 
 interface FleetDocument {
   querySelector(selector: string): { click?(): void } | null;
@@ -108,6 +112,15 @@ export function createCapturedFleetControls(
       if (handle === undefined || !handle.methods.includes("build")) {
         return NOT_ACTIONABLE;
       }
+      if (
+        request.expectedBlueprint !== undefined &&
+        !matchesStringRecordFields(
+          readProperty(readProperty(handle.data, "s"), "blueprint"),
+          request.expectedBlueprint,
+        )
+      ) {
+        return NOT_ACTIONABLE;
+      }
       const beforeList = liveShipList(handle);
       if (beforeList === null) return NOT_ACTIONABLE;
       const before = [...beforeList];
@@ -119,10 +132,20 @@ export function createCapturedFleetControls(
         // outer-fleet action yet, so the caller must not report a dispatched fleet.
         return { actionable: true, builtIndex: null };
       }
-      const newIndex = after.findIndex((ship) => !before.includes(ship));
+      const newIndex = after.findIndex(
+        (ship) =>
+          !before.includes(ship) &&
+          (request.expectedBlueprint === undefined ||
+            matchesStringRecordFields(ship, request.expectedBlueprint)),
+      );
       return {
         actionable: true,
-        builtIndex: newIndex >= 0 ? newIndex : after.length - 1,
+        builtIndex:
+          newIndex >= 0
+            ? newIndex
+            : request.expectedBlueprint === undefined
+              ? after.length - 1
+              : null,
       };
     },
 

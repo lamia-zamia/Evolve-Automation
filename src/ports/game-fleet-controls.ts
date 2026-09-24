@@ -45,6 +45,8 @@ export interface GameFleetStepRequest {
 export interface GameFleetBuildRequest {
   /** The element the game gives this panel's control. */
   readonly elementId: string;
+  /** When supplied, require the live blueprint and appended ship to match it. */
+  readonly expectedBlueprint?: Readonly<Record<string, string>>;
 }
 
 /** What a build attempt did. */
@@ -54,8 +56,8 @@ export interface GameFleetBuildResult {
 
   /**
    * The new ship's position in the shipyard's own list, or null when no ship
-   * was appended. A cost the yard cannot pay queues the order instead of
-   * building, and a queued order appends nothing.
+   * matching `expectedBlueprint` was appended. A cost the yard cannot pay
+   * queues the order instead of building, and a queued order appends nothing.
    */
   readonly builtIndex: number | null;
 }

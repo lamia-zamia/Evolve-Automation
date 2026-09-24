@@ -20,7 +20,11 @@ import type {
   GameFleetPartRequest,
   GameFleetStepRequest,
 } from "../../ports/game-fleet-controls.ts";
-import { isRecord, requireFunction } from "../validation.ts";
+import {
+  isRecord,
+  matchesStringRecordFields,
+  requireFunction,
+} from "../validation.ts";
 
 const NOT_ACTIONABLE: GameFleetBuildResult = Object.freeze({
   actionable: false,
@@ -159,6 +163,15 @@ export function createGameFleetControls({
         `${request.elementId} Vue view.build`,
       );
       const yard = readShipyard(view);
+      if (
+        request.expectedBlueprint !== undefined &&
+        !matchesStringRecordFields(
+          yard === null ? undefined : yard["blueprint"],
+          request.expectedBlueprint,
+        )
+      ) {
+        return NOT_ACTIONABLE;
+      }
       const sort = yard !== null && yard["sort"] === true;
       if (sort) {
         toggleSort(request.elementId);
@@ -172,9 +185,23 @@ export function createGameFleetControls({
       // A cost the yard cannot pay at the click queues the order instead of
       // appending a ship, so the count is what says a build happened. Reading
       // past the end of the list would dispatch a ship that does not exist.
-      const built =
-        countBefore !== null && countAfter !== null && countAfter > countBefore;
-      return { actionable: true, builtIndex: built ? countAfter! - 1 : null };
+      const ships = yard === null ? undefined : yard["ships"];
+      const builtIndex =
+        countBefore !== null &&
+        countAfter !== null &&
+        countAfter > countBefore &&
+        Array.isArray(ships)
+          ? ships.findIndex(
+              (ship, index) =>
+                index >= countBefore &&
+                (request.expectedBlueprint === undefined ||
+                  matchesStringRecordFields(ship, request.expectedBlueprint)),
+            )
+          : -1;
+      return {
+        actionable: true,
+        builtIndex: builtIndex >= 0 ? builtIndex : null,
+      };
     },
 
     dispatchTrigger(index: number): string {

@@ -72,6 +72,20 @@ export function readRecord(
   return isRecord(value) ? value : undefined;
 }
 
+/** Checks the requested string fields against an untrusted captured record. */
+export function matchesStringRecordFields(
+  value: unknown,
+  expected: Readonly<Record<string, string>>,
+): boolean {
+  return (
+    isRecord(value) &&
+    Object.entries(expected).every(
+      ([key, expectedValue]) =>
+        Object.hasOwn(value, key) && value[key] === expectedValue,
+    )
+  );
+}
+
 /**
  * An action id's two halves: `city-farm` is region `city`, id `farm`. Every tabbed structure,
  * queue entry and trigger row names its game object this way, so an upstream id-shape change is
