@@ -18,6 +18,7 @@ import {
   CAPTURED_MECH_LIST_CONTROL,
 } from "../src/adapters/evolve/combat/captured-mech-control-ids.ts";
 import { runPrestige } from "../src/application/prestige.ts";
+import { CELESTIAL_LAB_CONTROL_ID } from "../src/ports/game-celestial-lab.ts";
 
 function buildRoot(overrides = {}) {
   return {
@@ -46,11 +47,20 @@ const settings = {
   prestigeMADPopulation: 28,
 };
 
-function reusableCustomRaceLab(root, trace) {
+function reusableCustomRaceLab(root, trace, resetStat = "ascend") {
   const session = { identity: {} };
-  const methods = (mode) => (mode === "terraform" ? "setPlanet" : "setRace");
+  const savedCustomRaceJson = JSON.stringify({
+    genus: "humanoid",
+    traits: [],
+    ranks: {},
+    slots: {},
+    recessive: 0,
+    span: 12,
+    v: 2,
+  });
+  let appliedPresetIdentity;
   return {
-    read: () => ({
+    read: (requestIdentity) => ({
       session,
       draft: {
         text: {
@@ -63,27 +73,54 @@ function reusableCustomRaceLab(root, trace) {
           gas: "Gas",
           gas_moon: "Moon",
           dwarf: "Dwarf",
+          titan: "Titan",
+          enceladus: "Moon 2",
+          triton: "Moon 3",
+          makemake: "Dwarf 2",
+          eris: "Dwarf 3",
         },
         genus: "humanoid",
         traits: [],
         ranks: {},
         fanaticism: false,
+        slots: {},
+        recessive: 0,
+        span: 12,
       },
-      availableTraits: [],
-      availableGenera: ["humanoid"],
       hybridLab: false,
       savedCustomRaceExists: true,
+      savedCustomRaceReady: true,
+      savedCustomRaceJson,
       canSubmit: true,
-      genes: 10,
-      recalculation: "idle",
+      recalculation:
+        appliedPresetIdentity === requestIdentity ? "settled" : "idle",
+      ...(appliedPresetIdentity === requestIdentity
+        ? { appliedPresetIdentity }
+        : {}),
     }),
-    applyDesign: () => ({ status: "applied" }),
-    submit: (_session, mode) => {
-      trace.push([CAPTURED_CELESTIAL_LAB, methods(mode)]);
-      root.stats[mode === "ascension" ? "ascend" : mode] += 1;
-      return { status: "applied" };
+    applyDesign: (_session, _request, requestIdentity) => {
+      appliedPresetIdentity = requestIdentity;
+      return { status: "pending" };
+    },
+    submit: () => {
+      trace.push([CAPTURED_CELESTIAL_LAB, "setRace"]);
+      root.stats[resetStat] += 1;
+      return { status: "requested" };
     },
     readSavedRaceJson: () => undefined,
+    readCurrentSavedRaceJson: () => savedCustomRaceJson,
+  };
+}
+
+function reusableTerraformLab(root, trace) {
+  const session = { identity: {} };
+  return {
+    read: () => ({ session, canSubmit: true }),
+    submit: () => {
+      trace.push([CELESTIAL_LAB_CONTROL_ID, "setPlanet"]);
+      root.stats.terraform += 1;
+      return { status: "requested" };
+    },
   };
 }
 
@@ -229,7 +266,6 @@ function reusableCustomRaceLab(root, trace) {
   ]) {
     const trace = [];
     let goal = "Normal";
-    let modalOpen = false;
     const root = buildRoot();
     if (expected.prestigeType === "matrix") {
       root.settings.qKey = true;
@@ -239,21 +275,6 @@ function reusableCustomRaceLab(root, trace) {
       resolve(id) {
         if (id === expected.elementId) {
           return { elementId: id, generation: 1, methods: ["action"] };
-        }
-        if (
-          modalOpen &&
-          id === CAPTURED_CELESTIAL_LAB &&
-          ["terraform", "ascension", "apotheosis"].includes(
-            expected.prestigeType,
-          )
-        ) {
-          return {
-            elementId: id,
-            generation: 2,
-            methods: [
-              expected.prestigeType === "terraform" ? "setPlanet" : "setRace",
-            ],
-          };
         }
         return undefined;
       },
@@ -267,21 +288,7 @@ function reusableCustomRaceLab(root, trace) {
             root.stats.eden += 1;
           } else if (expected.prestigeType === "retire") {
             root.stats.retired += 1;
-          } else if (
-            ["terraform", "ascension", "apotheosis"].includes(
-              expected.prestigeType,
-            )
-          ) {
-            modalOpen = true;
           }
-        } else {
-          assert.equal(handle.elementId, CAPTURED_CELESTIAL_LAB);
-          trace.push([handle.elementId, method]);
-          root.stats[
-            expected.prestigeType === "ascension"
-              ? "ascend"
-              : expected.prestigeType
-          ] += 1;
         }
         return { ok: true, value: undefined };
       },
@@ -293,7 +300,20 @@ function reusableCustomRaceLab(root, trace) {
       rootState: { readRoot: () => root },
       controls,
       readSettings: () => ({ prestigeType: expected.prestigeType }),
-      customRaceLab: reusableCustomRaceLab(root, trace),
+      customRaceLab:
+        expected.prestigeType === "terraform"
+          ? undefined
+          : reusableCustomRaceLab(
+              root,
+              trace,
+              expected.prestigeType === "ascension"
+                ? "ascend"
+                : expected.prestigeType,
+            ),
+      terraformLab:
+        expected.prestigeType === "terraform"
+          ? reusableTerraformLab(root, trace)
+          : undefined,
       readGoal: () => goal,
       setGoal: (next) => {
         goal = next;
@@ -797,6 +817,7 @@ for (const scenario of [
   runPrestige(prestige);
   assert.deepEqual(trace, [["goal", "Reset"]]);
   goal = "Reset";
+  runPrestige(prestige);
   runPrestige(prestige);
   runPrestige(prestige);
   assert.deepEqual(trace, [

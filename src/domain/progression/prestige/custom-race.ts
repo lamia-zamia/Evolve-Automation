@@ -8,6 +8,7 @@
  * that upstream method is a FileReader event handler, not a callable record-normalization API.
  */
 
+/** Text lengths mirrored only for checking the result of `customImport()` in DeadSpace `space.js`. */
 export const CUSTOM_RACE_TEXT_LIMITS = Object.freeze({
   name: 20,
   desc: 255,
@@ -34,6 +35,17 @@ export interface CustomRaceDesign {
   readonly ranks: Readonly<Record<string, number>>;
   readonly fanaticism: string | false;
   readonly hybrid?: readonly [string, string];
+  /** Current DeadSpace placement map: trait name to gene-slot index. */
+  readonly slots: Readonly<Record<string, number>>;
+  readonly recessive: number;
+  readonly span: number;
+}
+
+export interface CustomRacePresetRequest {
+  /** Exact selected settings value, used to invalidate work when selection changes. */
+  readonly sourceJson: string;
+  /** JSON handed to DeadSpace's native file importer, with saved-race field aliases filled in. */
+  readonly importJson: string;
 }
 
 export interface CustomRacePreset {
@@ -48,84 +60,37 @@ export interface CustomRacePresetOption {
 }
 
 export type CustomRacePresetParseResult =
-  | { readonly ok: true; readonly design: CustomRaceDesign }
+  | { readonly ok: true; readonly request: CustomRacePresetRequest }
   | { readonly ok: false; readonly reason: string };
-
-export interface CustomRacePresetFacts {
-  readonly availableTraits: readonly string[];
-  readonly availableGenera: readonly string[];
-  readonly hybridLab: boolean;
-}
 
 export type CustomRaceLabDecision =
   | { readonly kind: "pause" }
   | { readonly kind: "wait" }
-  | { readonly kind: "apply"; readonly design: CustomRaceDesign }
+  | { readonly kind: "apply"; readonly request: CustomRacePresetRequest }
   | { readonly kind: "submit" };
 
 export interface CustomRaceLabDecisionInput {
   readonly mode: "reuse" | "pause" | "import";
-  readonly savedCustomRaceExists: boolean;
+  readonly savedCustomRaceReady: boolean;
   readonly canSubmit: boolean;
   readonly preset: CustomRacePresetParseResult;
   readonly draftMatchesPreset: boolean;
-  readonly recalculation: "idle" | "pending" | "settled" | "failed";
-  readonly genes: number;
-}
-
-const CUSTOM_RACE_REQUIRED_TEXT_FIELDS: readonly CustomRaceTextField[] =
-  Object.freeze([
-    "name",
-    "desc",
-    "entity",
-    "home",
-    "red",
-    "hell",
-    "gas",
-    "gas_moon",
-    "dwarf",
-  ]);
-
-/** Mirrors `setRace()`'s required-text check over the fields captured from the live genome. */
-export function customRaceTextIsComplete(
-  text: Readonly<Partial<Record<CustomRaceTextField, string>>>,
-): boolean {
-  return CUSTOM_RACE_REQUIRED_TEXT_FIELDS.every(
-    (field) => typeof text[field] === "string" && text[field]!.length > 0,
-  );
-}
-
-/** Mirrors DeadSpace `setRace()`'s nonnegative `calcGenomeScore()` submit gate. */
-export function customRaceGenesAreAffordable(genes: number): boolean {
-  return Number.isFinite(genes) && genes >= 0;
+  readonly recalculation: "idle" | "pending" | "settled" | "failed" | "stale";
 }
 
 function isCustomRaceRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function customRaceStringArray(value: unknown): string[] | undefined {
-  if (!Array.isArray(value)) return undefined;
-  const items: string[] = [];
-  for (const entry of value) {
-    if (typeof entry !== "string" || !/^[a-z0-9_]+$/.test(entry)) {
-      return undefined;
-    }
-    items.push(entry);
-  }
-  return items;
-}
-
-/**
- * Mirrors upstream `legacyTraitRank` in `races.js` for presets predating rankVersion 2. The helper
- * is lexical to the game module and the captured lab exposes no rank-normalization method; its
- * native `customImport()` requires a file input, so named JSON presets need this small format shim.
- */
-function normalizeLegacyCustomRaceRank(rank: number): number {
-  if (rank === 2) return 1.33;
-  if (rank === 3) return 1.67;
-  if (rank === 4) return 2;
-  return rank;
+function isCustomRaceNumericMap(
+  value: unknown,
+): value is Record<string, unknown> {
+  return (
+    isCustomRaceRecord(value) &&
+    Object.values(value).every(
+      (entry) => typeof entry === "number" && Number.isFinite(entry),
+    )
+  );
 }
 
 /** Reads and normalizes the named preset list without exposing the settings record itself. */
@@ -189,14 +154,9 @@ export function customRacePresetOptions(
   );
 }
 
-/**
- * Validates and normalizes an exported race against facts read from the mounted lab. The text
- * limits and missing-rank default mirror DeadSpace `customImport()` and `repriceGenome()` in
- * `space.js`; score and rank unlock rules remain game-owned.
- */
+/** Validates JSON transport shape; DeadSpace owns all race and strand normalization. */
 export function parseCustomRacePreset(
   rawJson: unknown,
-  facts: CustomRacePresetFacts,
 ): CustomRacePresetParseResult {
   if (typeof rawJson !== "string" || rawJson.trim() === "") {
     return Object.freeze({ ok: false, reason: "preset is empty" });
@@ -210,177 +170,310 @@ export function parseCustomRacePreset(
   if (!isCustomRaceRecord(parsed)) {
     return Object.freeze({ ok: false, reason: "preset must be a race object" });
   }
-
-  const traits = customRaceStringArray(parsed["traitlist"] ?? parsed["traits"]);
-  if (traits === undefined) {
-    return Object.freeze({
-      ok: false,
-      reason: "preset has no valid trait list",
-    });
-  }
-  if (new Set(traits).size !== traits.length) {
-    return Object.freeze({
-      ok: false,
-      reason: "preset contains duplicate traits",
-    });
-  }
-  const offeredTraits = new Set(facts.availableTraits);
-  if (traits.some((trait) => !offeredTraits.has(trait))) {
-    return Object.freeze({
-      ok: false,
-      reason: "preset contains traits unavailable in this lab",
-    });
-  }
-
-  const text: Partial<Record<CustomRaceTextField, string>> = {};
-  for (const field of Object.keys(
-    CUSTOM_RACE_TEXT_LIMITS,
-  ) as CustomRaceTextField[]) {
-    const value = parsed[field];
-    if (typeof value === "string") {
-      text[field] = value.slice(0, CUSTOM_RACE_TEXT_LIMITS[field]);
-    }
-  }
-  if (!customRaceTextIsComplete(text)) {
-    return Object.freeze({
-      ok: false,
-      reason: "preset is missing required race names or description",
-    });
-  }
-
-  let hybrid: readonly [string, string] | undefined;
-  const rawHybrid = customRaceStringArray(parsed["hybrid"]);
-  if (rawHybrid !== undefined && rawHybrid.length === 2) {
-    hybrid = Object.freeze([rawHybrid[0]!, rawHybrid[1]!]);
-  }
-  const rawGenus = parsed["genus"];
-  if (typeof rawGenus !== "string" || !/^[a-z0-9_]+$/.test(rawGenus)) {
-    return Object.freeze({ ok: false, reason: "preset has no valid genus" });
-  }
-
-  // DeadSpace `customImport()` applies these format conversions for a preset created in the other
-  // lab mode. The native function cannot accept structured JSON through the captured port because
-  // it is bound to the file input, so keep only this cross-mode JSON normalization here.
-  let genus = rawGenus;
-  if (facts.hybridLab && rawGenus !== "hybrid") {
-    hybrid = Object.freeze([
-      rawGenus,
-      rawGenus === "humanoid" ? "small" : "humanoid",
-    ]);
-    genus = "hybrid";
-  } else if (!facts.hybridLab && rawGenus === "hybrid") {
-    if (hybrid === undefined) {
-      return Object.freeze({
-        ok: false,
-        reason: "hybrid preset is missing its genus pair",
-      });
-    }
-    genus = hybrid[0];
-    hybrid = undefined;
-  } else if (rawGenus === "hybrid" && hybrid === undefined) {
-    return Object.freeze({
-      ok: false,
-      reason: "hybrid preset is missing its genus pair",
-    });
-  }
-  const availableGenera = new Set(facts.availableGenera);
+  const rawTraits = parsed["traitlist"] ?? parsed["traits"];
   if (
-    (genus !== "hybrid" && !availableGenera.has(genus)) ||
-    (hybrid !== undefined &&
-      hybrid.some((entry) => !availableGenera.has(entry)))
+    !Array.isArray(rawTraits) ||
+    rawTraits.some((trait) => typeof trait !== "string")
   ) {
     return Object.freeze({
       ok: false,
-      reason: "preset contains a genus unavailable in this lab",
+      reason: "preset must include a valid trait list",
     });
   }
-
-  const rawRanks = parsed["ranks"];
-  if (rawRanks !== undefined && !isCustomRaceRecord(rawRanks)) {
-    return Object.freeze({ ok: false, reason: "preset ranks are malformed" });
-  }
-  const ranks: Record<string, number> = {};
-  const isCurrentRankVersion = parsed["rankVersion"] === 2;
-  if (isCustomRaceRecord(rawRanks)) {
-    for (const [trait, rank] of Object.entries(rawRanks)) {
-      const normalizedRank =
-        typeof rank === "number" && !isCurrentRankVersion
-          ? normalizeLegacyCustomRaceRank(rank)
-          : rank;
-      if (
-        !traits.includes(trait) ||
-        typeof normalizedRank !== "number" ||
-        !Number.isFinite(normalizedRank) ||
-        normalizedRank < 0.1 ||
-        normalizedRank > 2 ||
-        (normalizedRank !== 1.33 &&
-          normalizedRank !== 1.67 &&
-          Math.abs(normalizedRank * 20 - Math.round(normalizedRank * 20)) >
-            1e-8)
-      ) {
-        return Object.freeze({
-          ok: false,
-          reason:
-            "preset ranks must use the lab's 0.05 steps from 0.1 through 2",
-        });
-      }
-      ranks[trait] = normalizedRank;
-    }
-  }
-  for (const trait of traits) ranks[trait] ??= 1;
-
-  const rawFanaticism = parsed["fanaticism"];
-  const fanaticism =
-    typeof rawFanaticism === "string" && rawFanaticism !== ""
-      ? rawFanaticism
-      : false;
-  if (fanaticism !== false && !traits.includes(fanaticism)) {
+  if (typeof parsed["genus"] !== "string") {
     return Object.freeze({
       ok: false,
-      reason: "Fanaticism must target a selected trait",
+      reason: "preset must include a valid genus",
     });
+  }
+  const rawHybrid = parsed["hybrid"];
+  if (
+    rawHybrid !== undefined &&
+    (!Array.isArray(rawHybrid) ||
+      rawHybrid.length !== 2 ||
+      rawHybrid.some((genus) => typeof genus !== "string"))
+  ) {
+    return Object.freeze({
+      ok: false,
+      reason: "preset hybrid data has an invalid JSON shape",
+    });
+  }
+  if (parsed["genus"] === "hybrid" && rawHybrid === undefined) {
+    return Object.freeze({
+      ok: false,
+      reason: "hybrid preset must include its lineage pair",
+    });
+  }
+  if (
+    parsed["ranks"] !== undefined &&
+    !isCustomRaceNumericMap(parsed["ranks"])
+  ) {
+    return Object.freeze({
+      ok: false,
+      reason: "preset rank map has an invalid JSON shape",
+    });
+  }
+  if (
+    parsed["slots"] !== undefined &&
+    !isCustomRaceNumericMap(parsed["slots"])
+  ) {
+    return Object.freeze({
+      ok: false,
+      reason: "preset slot map has an invalid JSON shape",
+    });
+  }
+  for (const field of ["span", "slotSpan", "recessive"] as const) {
+    if (
+      parsed[field] !== undefined &&
+      (typeof parsed[field] !== "number" || !Number.isFinite(parsed[field]))
+    ) {
+      return Object.freeze({
+        ok: false,
+        reason: `preset ${field} has an invalid JSON shape`,
+      });
+    }
+  }
+  if (parsed["genus"] !== undefined && typeof parsed["genus"] !== "string") {
+    return Object.freeze({
+      ok: false,
+      reason: "preset genus has an invalid JSON shape",
+    });
+  }
+  if (
+    parsed["fanaticism"] !== undefined &&
+    parsed["fanaticism"] !== false &&
+    typeof parsed["fanaticism"] !== "string"
+  ) {
+    return Object.freeze({
+      ok: false,
+      reason: "preset fanaticism has an invalid JSON shape",
+    });
+  }
+  for (const field of Object.keys(
+    CUSTOM_RACE_TEXT_LIMITS,
+  ) as CustomRaceTextField[]) {
+    if (parsed[field] !== undefined && typeof parsed[field] !== "string") {
+      return Object.freeze({
+        ok: false,
+        reason: `preset ${field} has an invalid JSON shape`,
+      });
+    }
+  }
+  const nativeInput: Record<string, unknown> = { ...parsed };
+  if (nativeInput["traitlist"] === undefined && rawTraits !== undefined) {
+    nativeInput["traitlist"] = rawTraits;
+  }
+  if (
+    nativeInput["slotSpan"] === undefined &&
+    typeof nativeInput["span"] === "number"
+  ) {
+    nativeInput["slotSpan"] = nativeInput["span"];
+  }
+  if (nativeInput["rankVersion"] === undefined && nativeInput["v"] === 2) {
+    nativeInput["rankVersion"] = 2;
+  }
+  let importJson: string;
+  try {
+    importJson = JSON.stringify(nativeInput);
+  } catch {
+    return Object.freeze({ ok: false, reason: "preset cannot be serialized" });
   }
   return Object.freeze({
     ok: true,
-    design: Object.freeze({
-      text: Object.freeze(text),
-      genus,
-      traits: Object.freeze(traits),
-      ranks: Object.freeze(ranks),
-      fanaticism,
-      ...(hybrid === undefined ? {} : { hybrid }),
+    request: Object.freeze({
+      sourceJson: rawJson,
+      importJson,
     }),
   });
 }
 
-/** Compares only the intended design fields, including the in-place game-owned rank map. */
+/** Compares only complete native exports; legacy layouts must be normalized by the game first. */
 export function customRaceDraftMatches(
   current: CustomRaceDesign,
-  wanted: CustomRaceDesign,
+  request: CustomRacePresetRequest,
 ): boolean {
-  const wantedTraits = new Set(wanted.traits);
+  let wanted: unknown;
+  try {
+    wanted = JSON.parse(request.sourceJson);
+  } catch {
+    return false;
+  }
+  if (!isCustomRaceRecord(wanted)) return false;
+  const rawTraits = wanted["traitlist"] ?? wanted["traits"];
+  const rawRanks = wanted["ranks"];
+  const rawSlots = wanted["slots"];
+  const rawSpan = wanted["slotSpan"] ?? wanted["span"];
+  const hybrid = wanted["hybrid"];
+  // Without the saved slot map and span the preset says nothing about effective strand layout.
   if (
-    current.genus !== wanted.genus ||
-    current.fanaticism !== wanted.fanaticism ||
-    current.traits.length !== wanted.traits.length ||
-    current.traits.some((trait) => !wantedTraits.has(trait))
+    !Array.isArray(rawTraits) ||
+    !rawTraits.every((trait) => typeof trait === "string") ||
+    !isCustomRaceRecord(rawRanks) ||
+    !isCustomRaceRecord(rawSlots) ||
+    typeof rawSpan !== "number" ||
+    typeof wanted["recessive"] !== "number" ||
+    typeof wanted["genus"] !== "string"
   ) {
     return false;
   }
-  for (const [field, value] of Object.entries(wanted.text)) {
-    if (current.text[field as CustomRaceTextField] !== value) return false;
+  const slots: Record<string, number> = {};
+  for (const [trait, slot] of Object.entries(rawSlots)) {
+    if (typeof slot !== "number" || !Number.isFinite(slot)) return false;
+    slots[trait] = slot;
   }
-  const wantedRanks = Object.keys(wanted.ranks);
-  const currentRanks = Object.keys(current.ranks);
+  const ranks: Record<string, number> = {};
+  for (const [trait, rank] of Object.entries(rawRanks)) {
+    if (typeof rank !== "number" || !Number.isFinite(rank)) return false;
+    ranks[trait] = rank;
+  }
+  if (!customRacePresetTextMatches(current, request)) return false;
   if (
-    wantedRanks.length !== currentRanks.length ||
-    wantedRanks.some((trait) => current.ranks[trait] !== wanted.ranks[trait])
+    wanted["genus"] !== current.genus ||
+    wanted["recessive"] !== current.recessive ||
+    rawSpan !== current.span ||
+    (wanted["fanaticism"] ?? false) !== current.fanaticism ||
+    rawTraits.length !== current.traits.length ||
+    rawTraits.some((trait) => !current.traits.includes(trait)) ||
+    Object.keys(ranks).length !== Object.keys(current.ranks).length ||
+    Object.entries(ranks).some(
+      ([trait, rank]) => current.ranks[trait] !== rank,
+    ) ||
+    Object.keys(slots).length !== Object.keys(current.slots).length ||
+    Object.entries(slots).some(([trait, slot]) => current.slots[trait] !== slot)
+  ) {
+    return false;
+  }
+  if (Array.isArray(hybrid)) {
+    return (
+      hybrid.length === 2 &&
+      hybrid[0] === current.hybrid?.[0] &&
+      hybrid[1] === current.hybrid?.[1]
+    );
+  }
+  return current.hybrid === undefined;
+}
+
+/** Current-format exports carry enough state to require an exact normalized strand comparison. */
+export function customRacePresetHasStrandState(
+  request: CustomRacePresetRequest,
+): boolean {
+  let wanted: unknown;
+  try {
+    wanted = JSON.parse(request.sourceJson);
+  } catch {
+    return false;
+  }
+  if (!isCustomRaceRecord(wanted)) return false;
+  const traits = wanted["traitlist"] ?? wanted["traits"];
+  const span = wanted["slotSpan"] ?? wanted["span"];
+  return (
+    Array.isArray(traits) &&
+    isCustomRaceRecord(wanted["ranks"]) &&
+    isCustomRaceRecord(wanted["slots"]) &&
+    typeof wanted["recessive"] === "number" &&
+    Number.isFinite(wanted["recessive"]) &&
+    typeof span === "number" &&
+    Number.isFinite(span)
+  );
+}
+
+/** Native import may normalize a legacy strand, but it must retain every requested trait. */
+export function customRacePresetTraitsMatch(
+  current: CustomRaceDesign,
+  request: CustomRacePresetRequest,
+): boolean {
+  let wanted: unknown;
+  try {
+    wanted = JSON.parse(request.sourceJson);
+  } catch {
+    return false;
+  }
+  if (!isCustomRaceRecord(wanted)) return false;
+  const rawTraits = wanted["traitlist"] ?? wanted["traits"];
+  if (
+    !Array.isArray(rawTraits) ||
+    !rawTraits.every((trait) => typeof trait === "string")
+  ) {
+    return false;
+  }
+  const expected = new Set(rawTraits);
+  return (
+    expected.size === rawTraits.length &&
+    current.traits.length === expected.size &&
+    current.traits.every((trait) => expected.has(trait))
+  );
+}
+
+/**
+ * Mirrors customImport()'s truthy text assignment and field truncation for live-state checks.
+ * Empty strings are not assigned by the native importer, so they make no text postcondition.
+ */
+export function customRacePresetTextMatches(
+  current: CustomRaceDesign,
+  request: CustomRacePresetRequest,
+): boolean {
+  let wanted: unknown;
+  try {
+    wanted = JSON.parse(request.sourceJson);
+  } catch {
+    return false;
+  }
+  if (!isCustomRaceRecord(wanted)) return false;
+  for (const field of Object.keys(
+    CUSTOM_RACE_TEXT_LIMITS,
+  ) as CustomRaceTextField[]) {
+    const value = wanted[field];
+    if (value === undefined || value === "") continue;
+    if (
+      typeof value !== "string" ||
+      current.text[field] !== value.slice(0, CUSTOM_RACE_TEXT_LIMITS[field])
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/** Checks imported strand state while leaving cross-lab genus conversion to DeadSpace. */
+export function customRacePresetStrandStateMatches(
+  current: CustomRaceDesign,
+  request: CustomRacePresetRequest,
+): boolean {
+  let wanted: unknown;
+  try {
+    wanted = JSON.parse(request.sourceJson);
+  } catch {
+    return false;
+  }
+  if (!isCustomRaceRecord(wanted)) return false;
+  const rawTraits = wanted["traitlist"] ?? wanted["traits"];
+  const rawRanks = wanted["ranks"];
+  const rawSlots = wanted["slots"];
+  const rawSpan = wanted["slotSpan"] ?? wanted["span"];
+  if (
+    !Array.isArray(rawTraits) ||
+    !rawTraits.every((trait) => typeof trait === "string") ||
+    !isCustomRaceNumericMap(rawRanks) ||
+    !isCustomRaceNumericMap(rawSlots) ||
+    typeof wanted["recessive"] !== "number" ||
+    typeof rawSpan !== "number"
   ) {
     return false;
   }
   return (
-    (current.hybrid?.[0] ?? undefined) === (wanted.hybrid?.[0] ?? undefined) &&
-    (current.hybrid?.[1] ?? undefined) === (wanted.hybrid?.[1] ?? undefined)
+    rawTraits.length === current.traits.length &&
+    rawTraits.every((trait) => current.traits.includes(trait)) &&
+    Object.keys(rawRanks).length === Object.keys(current.ranks).length &&
+    Object.entries(rawRanks).every(
+      ([trait, rank]) => current.ranks[trait] === rank,
+    ) &&
+    Object.keys(rawSlots).length === Object.keys(current.slots).length &&
+    Object.entries(rawSlots).every(
+      ([trait, slot]) => current.slots[trait] === slot,
+    ) &&
+    wanted["recessive"] === current.recessive &&
+    rawSpan === current.span &&
+    (wanted["fanaticism"] ?? false) === current.fanaticism
   );
 }
 
@@ -391,20 +484,31 @@ export function planCustomRaceLab(
   if (input.mode === "pause") return Object.freeze({ kind: "pause" });
   if (input.recalculation === "pending") return Object.freeze({ kind: "wait" });
   if (input.mode === "reuse") {
-    return input.savedCustomRaceExists &&
-      input.canSubmit &&
-      input.recalculation !== "failed" &&
-      customRaceGenesAreAffordable(input.genes)
+    if (
+      !input.preset.ok ||
+      input.recalculation === "failed" ||
+      input.recalculation === "stale"
+    ) {
+      return Object.freeze({ kind: "pause" });
+    }
+    if (!input.canSubmit) {
+      return Object.freeze({ kind: "pause" });
+    }
+    return input.savedCustomRaceReady || input.draftMatchesPreset
       ? Object.freeze({ kind: "submit" })
-      : Object.freeze({ kind: "pause" });
+      : Object.freeze({ kind: "apply", request: input.preset.request });
   }
-  if (!input.preset.ok || input.recalculation === "failed") {
+  if (
+    !input.preset.ok ||
+    input.recalculation === "failed" ||
+    input.recalculation === "stale"
+  ) {
     return Object.freeze({ kind: "pause" });
   }
   if (!input.draftMatchesPreset) {
-    return Object.freeze({ kind: "apply", design: input.preset.design });
+    return Object.freeze({ kind: "apply", request: input.preset.request });
   }
-  return input.canSubmit && customRaceGenesAreAffordable(input.genes)
+  return input.canSubmit
     ? Object.freeze({ kind: "submit" })
     : Object.freeze({ kind: "pause" });
 }

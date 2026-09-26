@@ -1,31 +1,44 @@
 import type {
   CustomRaceDesign,
-  CustomRaceTextField,
+  CustomRacePresetRequest,
 } from "../domain/progression/prestige/custom-race.ts";
-import type { CelestialLabMode } from "../domain/progression/prestige/prestige.ts";
+import {
+  CELESTIAL_LAB_CONTROL_ID,
+  CELESTIAL_LAB_PANEL_SELECTOR,
+  type CelestialLabSession,
+} from "./game-celestial-lab.ts";
 
-/** DeadSpace's captured Vue control and panel coordinates, shared by its callers. */
-export const CUSTOM_RACE_LAB_CONTROL_ID = "celestialLab";
-export const CUSTOM_RACE_LAB_PANEL_SELECTOR = "#celestialLab";
+export const CUSTOM_RACE_LAB_CONTROL_ID = CELESTIAL_LAB_CONTROL_ID;
+export const CUSTOM_RACE_LAB_PANEL_SELECTOR = CELESTIAL_LAB_PANEL_SELECTOR;
+export const CUSTOM_RACE_LAB_STRAND_ID = "#traitSlots .labStrand";
+export const CUSTOM_RACE_FILE_INPUT_ID = "customFile";
 
-/** Opaque identity for one mounted lab on one captured game root. */
-export type CustomRaceLabSession = Readonly<{ readonly identity: object }>;
+export type CustomRaceLabSession = CelestialLabSession;
 
 export interface CustomRaceLabSnapshot {
   readonly session: CustomRaceLabSession;
   readonly draft: CustomRaceDesign;
-  readonly availableTraits: readonly string[];
-  readonly availableGenera: readonly string[];
   readonly hybridLab: boolean;
   readonly savedCustomRaceExists: boolean;
+  /** True when the full current-format saved race matches the live draft. */
+  readonly savedCustomRaceReady: boolean;
+  /** Saved race JSON from the slot mounted by this native lab, if present. */
+  readonly savedCustomRaceJson?: string;
   readonly canSubmit: boolean;
-  /** The game's own `g.genes`, recalculated by `calcGenomeScore` in `space.js`. */
-  readonly genes: number;
-  readonly recalculation: "idle" | "pending" | "settled" | "failed";
+  readonly recalculation: "idle" | "pending" | "settled" | "failed" | "stale";
+  /** Identity of a preset whose native import and slot redraw completed in this session. */
+  readonly appliedPresetIdentity?: string;
 }
 
 export type CustomRaceLabMutationResult =
-  | { readonly status: "applied" }
+  | { readonly status: "pending" | "requested" }
+  | {
+      readonly status: "stale" | "unavailable" | "rejected";
+      readonly reason: string;
+    };
+
+export type CustomRaceLabSubmitResult =
+  | { readonly status: "requested" }
   | {
       readonly status: "stale" | "unavailable" | "rejected";
       readonly reason: string;
@@ -38,19 +51,17 @@ export type CustomRaceSavedSlot = "race0" | "race1";
  * root, DOM element, trait definition catalog, or the lab's closure variables.
  */
 export interface GameCustomRaceLabPort {
-  read(mode: CelestialLabMode): CustomRaceLabSnapshot | undefined;
+  read(requestIdentity: string): CustomRaceLabSnapshot | undefined;
   applyDesign(
     session: CustomRaceLabSession,
-    design: CustomRaceDesign,
+    request: CustomRacePresetRequest,
+    requestIdentity: string,
   ): CustomRaceLabMutationResult;
   submit(
     session: CustomRaceLabSession,
-    mode: CelestialLabMode,
-  ): CustomRaceLabMutationResult;
+    requestIdentity: string,
+  ): CustomRaceLabSubmitResult;
+  /** Reads the saved race selected by the currently mounted lab's native genome. */
+  readCurrentSavedRaceJson(): string | undefined;
   readSavedRaceJson(slot: CustomRaceSavedSlot): string | undefined;
 }
-
-/** Restricts text keys to the fields the game stores on its custom race record. */
-export type CustomRaceLabText = Readonly<
-  Partial<Record<CustomRaceTextField, string>>
->;

@@ -1,287 +1,551 @@
 import assert from "node:assert/strict";
 
 import { createCapturedPrestigeControl } from "../src/bootstrap/captured-prestige-control.ts";
-import { createGameCustomRaceLab } from "../src/adapters/browser/game-custom-race-lab.ts";
-import { CAPTURED_BUILDING_PRESTIGE_ACTIONS } from "../src/adapters/evolve/progression/prestige/captured-mad.ts";
-import { CUSTOM_RACE_LAB_CONTROL_ID } from "../src/ports/game-custom-race-lab.ts";
+import {
+  CAPTURED_BUILDING_PRESTIGE_ACTIONS,
+  CAPTURED_WITCH_ASCENSION_ACTION,
+} from "../src/adapters/evolve/progression/prestige/captured-mad.ts";
+import {
+  createDeadSpaceCustomLabFixture,
+  createDeadSpaceTerraformLabFixture,
+} from "./deadspace-lab-fixture.mjs";
 
-const presetJson = JSON.stringify({
-  name: "Avians",
-  desc: "A race from a named preset",
-  entity: "winged bipeds",
-  home: "Aerie",
-  red: "Ember",
-  hell: "Cinder",
-  gas: "Cloud",
-  gas_moon: "Nest",
-  dwarf: "Perch",
-  genus: "avian",
-  traitlist: ["smart"],
-  ranks: { smart: 1 },
-  fanaticism: false,
-  rankVersion: 2,
-});
+function presetJson({ name = "Avians", hybrid = false } = {}) {
+  return JSON.stringify({
+    name,
+    desc: `${name} from a named preset`,
+    entity: "winged bipeds",
+    home: "Aerie",
+    red: "Ember",
+    hell: "Cinder",
+    gas: "Cloud",
+    gas_moon: "Nest",
+    dwarf: "Perch",
+    titan: "Titan II",
+    enceladus: "Moon II",
+    triton: "Moon III",
+    makemake: "Perch II",
+    eris: "Perch III",
+    genus: hybrid ? "hybrid" : "avian",
+    ...(hybrid ? { hybrid: ["avian", "small"] } : {}),
+    traitlist: ["smart", "tough"],
+    ranks: { smart: 1.25, tough: 1 },
+    rankVersion: 2,
+    slots: { smart: 1, tough: 7 },
+    recessive: 2,
+    slotSpan: 24,
+    span: 24,
+    v: 2,
+    fanaticism: false,
+  });
+}
 
-function scenario({ mode, savedRace = false, preset = presetJson }) {
-  const trace = [];
-  const settings = {
-    prestigeType: "ascension",
-    prestigeCustomRaceMode: mode,
-    prestigeCustomRacePreset: "0",
-    prestigeCustomRacePresets: [{ name: "Avians", json: preset }],
-  };
-  const root = {
+function makeRoot({ witchHunter = false } = {}) {
+  return {
     settings: { qKey: false, touch: false },
-    race: { species: "human", universe: "standard" },
+    race: {
+      species: "human",
+      universe: witchHunter ? "magic" : "standard",
+      ...(witchHunter ? { witch_hunter: true, fasting: false } : {}),
+    },
+    tech: { forbidden: 4, dish_reset: 2 },
     stats: {
       terraform: 0,
       ascend: 0,
       apotheosis: 0,
-      achieve: { genus_humanoid: { l: 1 }, genus_avian: { l: 1 } },
+      descend: 0,
+      achieve: {
+        genus_humanoid: { l: 1 },
+        genus_avian: { l: 1 },
+        lamentis: { l: 1 },
+      },
     },
-    custom: savedRace
+    portal: witchHunter
       ? {
-          race0: {
-            name: "Saved",
-            desc: "Saved design",
-            entity: "bipeds",
-            home: "Home",
-            red: "Red",
-            hell: "Hell",
-            gas: "Gas",
-            gas_moon: "Moon",
-            dwarf: "Dwarf",
-            genus: "humanoid",
-            traits: ["smart"],
-            ranks: { smart: 1 },
-            fanaticism: false,
-          },
+          absorption_chamber: { count: 100 },
+          soul_capacitor: { energy: 100000000 },
         }
-      : {},
+      : undefined,
+    pillars: witchHunter ? { human: 1 } : undefined,
+    custom: {},
   };
-  const genome = savedRace
-    ? {
-        name: "Saved",
-        desc: "Saved design",
-        entity: "bipeds",
-        home: "Home",
-        red: "Red",
-        hell: "Hell",
-        gas: "Gas",
-        gas_moon: "Moon",
-        dwarf: "Dwarf",
-        titan: "Titan",
-        enceladus: "Moon 2",
-        triton: "Moon 3",
-        makemake: "Dwarf 2",
-        eris: "Dwarf 3",
-        genus: "humanoid",
-        traitlist: ["smart"],
-        ranks: { smart: 1 },
-        fanaticism: false,
-        genes: 10,
-      }
-    : {
-        name: "Zombie",
-        desc: "Undead",
-        entity: "undead",
-        home: "Grave",
-        red: "Brains",
-        hell: "Rigor",
-        gas: "Decompose",
-        gas_moon: "Bones",
-        dwarf: "Double Tap",
-        titan: "Necromancer",
-        enceladus: "Skeleton",
-        triton: "Rot",
-        makemake: "Shamble",
-        eris: "Zombieland",
-        genus: "humanoid",
-        traitlist: [],
-        ranks: {},
-        fanaticism: false,
-        genes: 10,
-      };
-  let tRanks = genome.ranks;
-  let labOpen = false;
-  let summaryGeneration = 0;
-  let submitted = 0;
-  const openerId = CAPTURED_BUILDING_PRESTIGE_ACTIONS.ascension.elementId;
-  const mainHandle = () => ({
-    elementId: CUSTOM_RACE_LAB_CONTROL_ID,
-    generation: 1,
-    methods: ["geneEdit", "swapTab", "setRace"],
-    data: { g: genome },
+}
+
+function scenario({
+  prestigeType = "ascension",
+  mode = "reuse",
+  saved = true,
+  hybrid = prestigeType === "apotheosis",
+  labInitiallyOpen = false,
+  mutateDraftBeforePrestige = false,
+  witchHunter = false,
+  presets = [{ name: "Avians", json: presetJson() }],
+  behavior = {},
+  autoReset = true,
+  customPortTransform,
+} = {}) {
+  let root = makeRoot({ witchHunter });
+  let goal = "Standard";
+  let submissions = 0;
+  const activities = [];
+  const trace = [];
+  const settings = {
+    prestigeType,
+    prestigeCustomRaceMode: mode,
+    prestigeCustomRacePreset: "0",
+    prestigeCustomRacePresets: presets,
+    prestigeAscensionPillar: true,
+  };
+  const stat =
+    prestigeType === "terraform"
+      ? "terraform"
+      : prestigeType === "apotheosis"
+        ? "apotheosis"
+        : "ascend";
+  const customLab = createDeadSpaceCustomLabFixture({
+    root,
+    hybrid,
+    saved,
+    open: labInitiallyOpen,
+    behavior,
+    onSetRace: ({ root: targetRoot }) => {
+      submissions += 1;
+      if (autoReset) targetRoot.stats[stat] += 1;
+    },
   });
-  const summaryHandle = () => ({
-    elementId: "#traitSummary .trait_selection",
-    generation: summaryGeneration,
-    methods: ["tRank", "increase", "reduce"],
-    data: { g: genome, t: tRanks },
+  if (mutateDraftBeforePrestige) customLab.genome.slots.smart = 3;
+  const terraformLab = createDeadSpaceTerraformLabFixture({
+    root,
+    open: false,
+    score: 2,
+    onSetPlanet: ({ root: targetRoot }) => {
+      submissions += 1;
+      if (autoReset) targetRoot.stats.terraform += 1;
+    },
   });
+  const customRaceLab =
+    customPortTransform === undefined
+      ? customLab.port
+      : customPortTransform(customLab);
+  const actionId = witchHunter
+    ? CAPTURED_WITCH_ASCENSION_ACTION
+    : CAPTURED_BUILDING_PRESTIGE_ACTIONS[prestigeType].elementId;
+  const actionRegion = witchHunter
+    ? "portal"
+    : CAPTURED_BUILDING_PRESTIGE_ACTIONS[prestigeType].region;
   const controls = {
     resolve(id) {
-      if (id === openerId)
-        return { elementId: id, generation: 1, methods: ["action"] };
-      if (id === CUSTOM_RACE_LAB_CONTROL_ID && labOpen) return mainHandle();
-      if (id === "#traitSummary .trait_selection" && summaryGeneration > 0)
-        return summaryHandle();
-      return undefined;
+      return id === actionId
+        ? { elementId: id, generation: 1, methods: ["action"] }
+        : undefined;
     },
-    invoke(handle, method, args = []) {
-      const current = this.resolve(handle.elementId);
-      if (!current) return { ok: false, reason: "unknown-control" };
-      if (current.generation !== handle.generation)
-        return { ok: false, reason: "stale-control" };
-      if (handle.elementId === openerId) {
-        labOpen = true;
-        trace.push("open-lab");
-        return { ok: true, value: undefined };
+    invoke(handle, method) {
+      if (handle.elementId !== actionId || method !== "action") {
+        return { ok: false, reason: "unknown-control" };
       }
-      if (handle.elementId === CUSTOM_RACE_LAB_CONTROL_ID) {
-        if (method === "geneEdit") {
-          const next = {};
-          for (const trait of genome.traitlist)
-            next[trait] = tRanks[trait] || 1;
-          tRanks = next;
-          genome.genes = 10;
-          trace.push("geneEdit");
-          return { ok: true, value: undefined };
-        }
-        if (method === "swapTab") {
-          summaryGeneration += 1;
-          return { ok: true, value: undefined };
-        }
-        if (method === "setRace") {
-          submitted += 1;
-          root.stats.ascend += 1;
-          root.custom.race0 = {
-            ...genome,
-            traits: [...genome.traitlist],
-            ranks: { ...tRanks },
-          };
-          labOpen = false;
-          trace.push("setRace");
-          return { ok: true, value: undefined };
-        }
-      }
-      const trait = args[0];
-      if (method === "tRank") return { ok: true, value: tRanks[trait] };
-      if (method === "increase") {
-        tRanks[trait] = Math.round(((tRanks[trait] || 1) + 0.05) * 100) / 100;
-        return { ok: true, value: undefined };
-      }
-      if (method === "reduce") {
-        tRanks[trait] = Math.round(((tRanks[trait] || 1) - 0.05) * 100) / 100;
-        return { ok: true, value: undefined };
-      }
-      return { ok: false, reason: "unknown-method" };
+      trace.push([handle.elementId, method]);
+      if (prestigeType === "terraform") terraformLab.setOpen(true);
+      else customLab.setOpen(true);
+      return { ok: true, value: undefined };
     },
-    capturedElementIds: () => [openerId],
+    capturedElementIds: () => [actionId],
   };
-  const customRaceLab = createGameCustomRaceLab({
-    rootState: {
-      readRoot: () => root,
-      isReactivitySuppressed: () => false,
-      subscribeRootReplaced: () => () => {},
-    },
-    controls,
-    getDocument: () => ({
-      querySelector: (selector) =>
-        labOpen &&
-        (selector === "#celestialLab" ||
-          selector === "#celestialLab .create button")
-          ? {}
-          : null,
-      querySelectorAll: () => [{ className: "field tsmart" }],
-    }),
-  });
-  let goal = "Standard";
-  const activities = [];
   const prestige = createCapturedPrestigeControl({
-    rootState: {
-      readRoot: () => root,
-      isReactivitySuppressed: () => false,
-      subscribeRootReplaced: () => () => {},
-    },
+    rootState: customLab.rootState,
     controls,
     customRaceLab,
+    terraformLab: terraformLab.port,
     readSettings: () => settings,
     readGoal: () => goal,
     setGoal: (next) => {
       goal = next;
+      trace.push(["goal", next]);
     },
     readBuildingResetActions: (regions) => {
-      assert.deepEqual(regions, ["interstellar"]);
-      return new Set([openerId]);
+      assert.deepEqual(regions, [actionRegion]);
+      return new Set([actionId]);
+    },
+    resources: {
+      readResources: () => ({
+        resources: new Map([["Harmony", { amount: 1 }]]),
+      }),
     },
     onActivity: (entry) => activities.push(entry.message),
   });
+
   return {
     root,
-    genome,
-    trace,
+    settings,
+    customLab,
+    terraformLab,
     activities,
-    run: () => prestige.run(),
+    trace,
+    run() {
+      prestige.run();
+      customLab.finishNativeReprice();
+    },
+    repeat(count) {
+      for (let index = 0; index < count; index += 1) this.run();
+    },
+    manualSubmit() {
+      root.stats[stat] += 1;
+      customLab.setOpen(false);
+    },
+    replaceRoot(next) {
+      root = next;
+      customLab.setRoot(next);
+    },
     get goal() {
       return goal;
     },
-    get labOpen() {
-      return labOpen;
+    get submissions() {
+      return submissions;
     },
-    get submitted() {
-      return submitted;
-    },
-    manualSubmit: () => {
-      root.stats.ascend += 1;
-      labOpen = false;
+    get actionId() {
+      return actionId;
     },
   };
 }
 
-// Production bootstrap path: Ascension opens the game lab, imported design is applied, game-owned
-// recost settles over two runtime samples, and only then does the captured setRace control submit.
+// Ascension reuses the saved race loaded into the mounted genome and submits through setRace.
 {
-  const flow = scenario({ mode: "import" });
-  flow.run();
-  assert.equal(flow.goal, "Reset");
-  flow.run();
-  assert.equal(flow.labOpen, true);
-  flow.run();
-  assert.equal(flow.trace.includes("geneEdit"), true);
-  flow.run();
-  assert.equal(flow.submitted, 0, "pending game recost cannot submit");
-  flow.run();
-  assert.equal(flow.submitted, 1);
+  const flow = scenario({
+    prestigeType: "ascension",
+    mode: "reuse",
+    saved: true,
+  });
+  flow.repeat(4);
+  assert.equal(flow.submissions, 1);
   assert.equal(flow.root.stats.ascend, 1);
-  assert.deepEqual(flow.root.custom.race0.traits, ["smart"]);
-  assert.equal(flow.root.custom.race0.genus, "avian");
-  assert.equal(flow.root.custom.race0.name, "Avians");
+  assert.deepEqual(flow.activities, ["Prestiged"]);
+  assert.deepEqual(flow.trace, [
+    ["goal", "Reset"],
+    [flow.actionId, "action"],
+  ]);
+}
+
+// An already-open lab can be manually edited before its first automation sample. Reuse restores
+// the actual saved race through customImport() before setRace, rather than blessing that draft.
+{
+  const flow = scenario({
+    prestigeType: "ascension",
+    mode: "reuse",
+    saved: true,
+    labInitiallyOpen: true,
+    mutateDraftBeforePrestige: true,
+  });
+  flow.repeat(7);
+  assert.equal(flow.submissions, 1);
+  assert.equal(flow.root.stats.ascend, 1);
+  assert.deepEqual(flow.customLab.genome.slots, { smart: 2, tough: 7 });
+  assert.deepEqual(flow.customLab.nativeCalls.slice(0, 3), [
+    "customImport",
+    "geneEdit",
+    "setRace",
+  ]);
+}
+
+// Without a saved custom the game shows its default Zombie. Reuse does not submit that draft.
+{
+  const flow = scenario({
+    prestigeType: "ascension",
+    mode: "reuse",
+    saved: false,
+  });
+  assert.equal(flow.customLab.genome.name, "Zombie");
+  flow.repeat(10);
+  assert.equal(flow.submissions, 0);
+  assert.equal(flow.root.stats.ascend, 0);
+}
+
+// Import calls the native file importer, waits for the native reprice/redraw, then submits.
+{
+  const flow = scenario({
+    prestigeType: "ascension",
+    mode: "import",
+    saved: false,
+  });
+  flow.repeat(6);
+  assert.equal(flow.submissions, 1);
+  assert.equal(flow.root.stats.ascend, 1);
+  assert.equal(flow.customLab.genome.name, "Avians");
+  assert.deepEqual(flow.customLab.genome.slots, { smart: 1, tough: 7 });
+  assert.equal(flow.customLab.genome.recessive, 2);
+  assert.equal(flow.customLab.genome.span, 24);
   assert.deepEqual(flow.activities, ["Prestiged"]);
 }
 
-// Reuse mode pauses if the correct saved custom does not exist; it never submits the initial Zombie.
+// Pause leaves the game-owned lab open for manual editing and submission. The captured runtime
+// observes the native reset counter and never calls setRace itself.
 {
-  const flow = scenario({ mode: "reuse", savedRace: false });
-  flow.run();
-  flow.run();
-  flow.run();
-  assert.equal(flow.labOpen, true);
-  assert.equal(flow.submitted, 0);
-}
-
-// Pause mode leaves the native lab available. A manual submit is recognized from the game's reset
-// counter and terminates the pending transaction without the automation submitting a second time.
-{
-  const flow = scenario({ mode: "pause", savedRace: true });
-  flow.run();
-  flow.run();
-  flow.run();
-  assert.equal(flow.submitted, 0);
+  const flow = scenario({
+    prestigeType: "ascension",
+    mode: "pause",
+    saved: true,
+  });
+  flow.repeat(4);
+  assert.equal(flow.submissions, 0);
+  flow.customLab.genome.name = "Manually edited";
   flow.manualSubmit();
   flow.run();
-  assert.equal(flow.submitted, 0);
+  assert.equal(flow.submissions, 0);
   assert.deepEqual(flow.activities, ["Prestiged"]);
 }
 
-console.log("Custom race production composition checks passed");
+// The same transaction routes Apotheosis through race1 and preserves the hybrid slot data.
+{
+  const flow = scenario({
+    prestigeType: "apotheosis",
+    mode: "reuse",
+    saved: true,
+  });
+  flow.repeat(4);
+  assert.equal(flow.submissions, 1);
+  assert.equal(flow.root.stats.apotheosis, 1);
+  assert.equal(flow.customLab.savedSlot, "race1");
+  assert.deepEqual(flow.customLab.genome.hybrid, ["avian", "small"]);
+}
+
+{
+  const flow = scenario({
+    prestigeType: "apotheosis",
+    mode: "import",
+    saved: false,
+    hybrid: true,
+    presets: [{ name: "Hybrid Avians", json: presetJson({ hybrid: true }) }],
+  });
+  flow.repeat(6);
+  assert.equal(flow.submissions, 1);
+  assert.equal(flow.root.stats.apotheosis, 1);
+  assert.equal(flow.customLab.savedSlot, "race1");
+  assert.deepEqual(flow.customLab.genome.hybrid, ["avian", "small"]);
+  assert.deepEqual(flow.customLab.genome.slots, { smart: 1, tough: 7 });
+}
+
+// A race0-style preset can also enter race1; the game performs its native genus-to-hybrid
+// conversion while the adapter verifies that its strand state survived the import.
+{
+  const flow = scenario({
+    prestigeType: "apotheosis",
+    mode: "import",
+    saved: false,
+    hybrid: true,
+    presets: [
+      { name: "Race0 preset", json: presetJson({ name: "Race0 preset" }) },
+    ],
+  });
+  flow.repeat(6);
+  assert.equal(flow.submissions, 1);
+  assert.equal(flow.root.stats.apotheosis, 1);
+  assert.deepEqual(flow.customLab.genome.hybrid, ["avian", "humanoid"]);
+  assert.equal(flow.customLab.genome.genus, "hybrid");
+}
+
+// Terraform's same #celestialLab id is routed to data.p / setPlanet, never through Custom Race.
+{
+  const flow = scenario({ prestigeType: "terraform", mode: "import" });
+  flow.repeat(4);
+  assert.equal(flow.submissions, 1);
+  assert.equal(flow.root.stats.terraform, 1);
+  assert.deepEqual(flow.customLab.nativeCalls, []);
+  assert.deepEqual(flow.terraformLab.nativeCalls, ["pEdit", "setPlanet"]);
+  assert.deepEqual(flow.activities, ["Prestiged"]);
+}
+
+// A successful setPlanet call remains an unconfirmed request until terraform's counter changes,
+// and the captured transaction invokes it only once while waiting.
+{
+  const flow = scenario({
+    prestigeType: "terraform",
+    mode: "reuse",
+    autoReset: false,
+  });
+  flow.repeat(3);
+  assert.equal(flow.submissions, 1);
+  flow.repeat(10);
+  assert.equal(flow.submissions, 1);
+  assert.equal(flow.root.stats.terraform, 0);
+  flow.root.stats.terraform += 1;
+  flow.run();
+  assert.deepEqual(flow.activities, ["Prestiged"]);
+}
+
+// Witch-Hunter's absorption chamber opens the same Custom Race transaction and only advances the
+// goal after the ascension reset is observed.
+{
+  const flow = scenario({
+    prestigeType: "ascension",
+    mode: "reuse",
+    saved: true,
+    witchHunter: true,
+  });
+  flow.repeat(4);
+  assert.equal(flow.submissions, 1);
+  assert.equal(flow.root.stats.ascend, 1);
+  assert.equal(flow.goal, "GameOverMan");
+  assert.deepEqual(flow.activities, ["Prestiged"]);
+}
+
+// An invoked setRace without a reset is not success and is not spammed. A fresh Vue generation
+// clears the session-local failure, reloading the saved race makes reuse safe again.
+{
+  const behavior = {};
+  const flow = scenario({
+    prestigeType: "ascension",
+    mode: "reuse",
+    saved: true,
+    behavior,
+    autoReset: false,
+  });
+  flow.repeat(3);
+  assert.equal(flow.submissions, 1);
+  flow.repeat(10);
+  assert.equal(flow.submissions, 1);
+  flow.customLab.reloadMountedLabFromSavedRace();
+  flow.repeat(3);
+  assert.equal(flow.submissions, 2, "a new session allows a deliberate retry");
+}
+
+// Native setRace rejection is terminal for that session; a new generation recovers after the
+// transient native rejection clears.
+{
+  const behavior = { rejectSubmission: true };
+  const flow = scenario({ prestigeType: "ascension", mode: "reuse", behavior });
+  flow.repeat(3);
+  assert.equal(flow.submissions, 0);
+  flow.repeat(5);
+  assert.equal(
+    flow.customLab.nativeCalls.filter((name) => name === "setRace").length,
+    1,
+  );
+  behavior.rejectSubmission = false;
+  flow.customLab.reloadMountedLabFromSavedRace();
+  flow.repeat(3);
+  assert.equal(flow.submissions, 1);
+}
+
+// A control redraw between sample and apply returns stale once. The transaction notices the new
+// session and retries the same selected preset without carrying the old sampled design forward.
+{
+  const flow = scenario({
+    prestigeType: "ascension",
+    mode: "import",
+    saved: false,
+    customPortTransform(customLab) {
+      let redrawAfterRead = true;
+      return {
+        read: (identity) => {
+          const sample = customLab.port.read(identity);
+          if (sample !== undefined && redrawAfterRead) {
+            redrawAfterRead = false;
+            customLab.redrawMain();
+          }
+          return sample;
+        },
+        applyDesign: (...args) => customLab.port.applyDesign(...args),
+        submit: (...args) => customLab.port.submit(...args),
+        readCurrentSavedRaceJson: () =>
+          customLab.port.readCurrentSavedRaceJson(),
+        readSavedRaceJson: (...args) =>
+          customLab.port.readSavedRaceJson(...args),
+      };
+    },
+  });
+  flow.repeat(7);
+  assert.equal(flow.submissions, 1);
+  assert.equal(flow.root.stats.ascend, 1);
+  assert.equal(
+    flow.customLab.nativeCalls.filter((name) => name === "customImport").length,
+    1,
+  );
+}
+
+// A settings mode change to pause during async import prevents submission even though the native
+// FileReader/reprice operation is allowed to finish in its original mounted session.
+{
+  const flow = scenario({
+    prestigeType: "ascension",
+    mode: "import",
+    saved: false,
+  });
+  flow.repeat(3);
+  flow.settings.prestigeCustomRaceMode = "pause";
+  flow.repeat(10);
+  assert.equal(flow.customLab.genome.name, "Avians");
+  assert.equal(flow.submissions, 0);
+  assert.equal(flow.root.stats.ascend, 0);
+}
+
+// Changing the selected prestige type aborts an unsubmitted Celestial Lab transaction; an old
+// Ascension preset may finish its native import, but it cannot submit after the setting changes.
+{
+  const flow = scenario({
+    prestigeType: "ascension",
+    mode: "import",
+    saved: false,
+  });
+  flow.repeat(3);
+  flow.settings.prestigeType = "mad";
+  flow.repeat(8);
+  assert.equal(flow.submissions, 0);
+  assert.equal(flow.root.stats.ascend, 0);
+  assert.equal(flow.customLab.nativeCalls.includes("setRace"), false);
+}
+
+// Switching import to reuse drains the old import and then applies the actual saved race before
+// submitting; the selected preset's imported design does not leak across the mode change.
+{
+  const flow = scenario({
+    prestigeType: "ascension",
+    mode: "import",
+    saved: true,
+  });
+  flow.repeat(3);
+  flow.settings.prestigeCustomRaceMode = "reuse";
+  flow.repeat(10);
+  assert.equal(flow.submissions, 1);
+  assert.equal(flow.customLab.genome.name, "Saved");
+  assert.deepEqual(flow.customLab.genome.slots, { smart: 2, tough: 7 });
+}
+
+// Changing the selected preset while A is importing drains A's native import, applies B, and
+// submits only B's normalized live draft.
+{
+  const flow = scenario({
+    prestigeType: "ascension",
+    mode: "import",
+    saved: false,
+    presets: [
+      { name: "A", json: presetJson({ name: "Race A" }) },
+      { name: "B", json: presetJson({ name: "Race B" }) },
+    ],
+  });
+  flow.repeat(3);
+  flow.settings.prestigeCustomRacePreset = "1";
+  flow.repeat(10);
+  assert.equal(flow.submissions, 1);
+  assert.equal(flow.customLab.genome.name, "Race B");
+  assert.equal(
+    flow.customLab.nativeCalls.filter((name) => name === "customImport").length,
+    2,
+  );
+}
+
+// Replacing the root while the opener transaction is pending aborts it as stale. A reset counter
+// from the old transaction is not fabricated, and the fresh root is re-evaluated on later ticks.
+{
+  const flow = scenario({
+    prestigeType: "ascension",
+    mode: "reuse",
+    saved: true,
+  });
+  flow.repeat(2);
+  const replacement = makeRoot();
+  flow.replaceRoot(replacement);
+  flow.run();
+  assert.equal(flow.submissions, 0);
+  assert.equal(replacement.stats.ascend, 0);
+  assert.deepEqual(flow.activities, []);
+}
+
+console.log("Custom Race and Terraform production composition checks passed");

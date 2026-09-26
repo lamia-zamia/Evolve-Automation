@@ -194,6 +194,7 @@ import {
 import type { PageCapture } from "../adapters/evolve/page-capture.ts";
 import { createGameKeyboardHandlers } from "../adapters/browser/game-keyboard-handlers.ts";
 import { createGameCustomRaceLab } from "../adapters/browser/game-custom-race-lab.ts";
+import { createGameTerraformLab } from "../adapters/browser/game-terraform-lab.ts";
 import type { TickDiagnostics } from "../ports/tick.ts";
 import type { GameActivitySink } from "../ports/game-message-log.ts";
 import { isRecord, readProperty } from "../adapters/validation.ts";
@@ -251,6 +252,11 @@ export function startCapturedRuntime({
 }: CapturedRuntimeControlDependencies): () => void {
   const document = documentValue as CapturedDocument;
   const customRaceLab = createGameCustomRaceLab({
+    rootState: pageCapture.rootState,
+    controls: pageCapture.controls,
+    getDocument: () => document,
+  });
+  const terraformLab = createGameTerraformLab({
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,
     getDocument: () => document,
@@ -1186,6 +1192,7 @@ export function startCapturedRuntime({
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,
     customRaceLab,
+    terraformLab,
     readSettings: () => settingsStore.readRaw(),
     readGoal: () => capturedPrestigeGoal,
     readMechCycleActivity: () => capturedMechCycleHasPendingWork,

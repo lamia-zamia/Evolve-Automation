@@ -1,29 +1,34 @@
 /**
- * Captured boundary for DeadSpace `ascendLab()` in `src/space.js`.
- *
- * It reads the materialized `#celestialLab` binding data, calls its captured `geneEdit`/submit
- * methods, and scans the game's rendered `.field.t<trait-id>` rows. Genome score, trait cost and
- * trait descriptions stay with the game.
+ * Captured boundary for DeadSpace `ascendLab()` in `src/space.js` at fdda93b5.
+ * Presets go through the game's file-based `customImport()` and `geneEdit()` path; this adapter
+ * only observes the normalized live draft and never reproduces strand rules.
  */
 
 import {
-  CUSTOM_RACE_TEXT_LIMITS,
-  customRaceGenesAreAffordable,
   customRaceDraftMatches,
-  customRaceTextIsComplete,
+  CUSTOM_RACE_TEXT_LIMITS,
+  customRacePresetHasStrandState,
+  customRacePresetStrandStateMatches,
+  customRacePresetTraitsMatch,
+  customRacePresetTextMatches,
+  parseCustomRacePreset,
   type CustomRaceDesign,
+  type CustomRaceTextField,
+  type CustomRacePresetRequest,
 } from "../../domain/progression/prestige/custom-race.ts";
-import type { CelestialLabMode } from "../../domain/progression/prestige/prestige.ts";
 import type {
   CustomRaceLabMutationResult,
+  CustomRaceLabSubmitResult,
   CustomRaceLabSession,
   CustomRaceSavedSlot,
   CustomRaceLabSnapshot,
   GameCustomRaceLabPort,
 } from "../../ports/game-custom-race-lab.ts";
 import {
+  CUSTOM_RACE_FILE_INPUT_ID,
   CUSTOM_RACE_LAB_CONTROL_ID,
   CUSTOM_RACE_LAB_PANEL_SELECTOR,
+  CUSTOM_RACE_LAB_STRAND_ID,
 } from "../../ports/game-custom-race-lab.ts";
 import type {
   GameControlHandle,
@@ -32,18 +37,16 @@ import type {
 import type { GameRootStateSource } from "../../ports/game-root-state.ts";
 import { finite, isRecord, readProperty } from "../validation.ts";
 
-const CUSTOM_RACE_TRAIT_ROWS_SELECTOR = "#celestialLab .trait_selection .field";
-const CUSTOM_RACE_LAB_SUMMARY_CONTROL_ID = "#traitSummary .trait_selection";
-const CUSTOM_RACE_TRAIT_CLASS_PREFIX = "t";
-const CUSTOM_RACE_GENUS_ACHIEVEMENT_PREFIX = "genus_";
-const CUSTOM_RACE_RANKS_PROPERTY = "ranks";
+const CUSTOM_RACE_IMPORT_OBSERVATION_LIMIT = 8;
+const CUSTOM_RACE_REPRICE_OBSERVATION_LIMIT = 8;
 
 interface CustomRaceLabDocument {
   querySelector(selector: string): unknown;
-  querySelectorAll(selector: string): ArrayLike<unknown>;
+  getElementById(id: string): unknown;
+  readonly defaultView?: unknown;
 }
 
-export interface GameCustomRaceLabDependencies {
+interface CustomRaceLabDependencies {
   readonly rootState: GameRootStateSource;
   readonly controls: GameControlRegistry;
   readonly getDocument: () => unknown;
@@ -57,100 +60,117 @@ interface MountedCustomRaceLab {
   readonly session: CustomRaceLabSession;
 }
 
-interface PendingCustomRaceRecalculation {
-  readonly identity: object;
-  readonly expected: CustomRaceDesign;
-  lastGenes: number | undefined;
+interface PendingCustomRaceImport {
+  readonly root: unknown;
+  readonly sessionIdentity: object;
+  readonly requestIdentity: string;
+  readonly request: CustomRacePresetRequest;
+  readonly input: Record<string, unknown>;
+  readonly previousFiles: unknown;
+  readonly previousGenomeRanks: unknown;
+  readonly previousError: unknown;
+  stage: "native-import" | "native-reprice";
+  observations: number;
+  baselineStrand: unknown;
+  baselineStrandGeneration: number;
+  baselineStrandRanks: unknown;
 }
 
-function customRaceSubmitMethod(mode: CelestialLabMode): string {
-  return mode === "terraform" ? "setPlanet" : "setRace";
+interface CompletedCustomRaceImport {
+  readonly sessionIdentity: object;
+  readonly requestIdentity: string;
+  readonly normalizedDraftFingerprint: string;
 }
 
-function customRaceDocument(value: unknown): CustomRaceLabDocument | undefined {
+interface FailedCustomRaceImport {
+  readonly sessionIdentity: object;
+  readonly requestIdentity: string;
+  readonly status: "failed" | "stale";
+}
+
+interface CustomRaceLabFileConstructor {
+  new (
+    parts: readonly string[],
+    name: string,
+    options: Readonly<{ type: string }>,
+  ): unknown;
+}
+
+interface CustomRaceLabDataTransferConstructor {
+  new (): unknown;
+}
+
+function customRaceLabDocument(
+  value: unknown,
+): CustomRaceLabDocument | undefined {
   if (!isRecord(value)) return undefined;
-  const querySelector = readProperty(value, "querySelector");
-  const querySelectorAll = readProperty(value, "querySelectorAll");
-  return typeof querySelector === "function" &&
-    typeof querySelectorAll === "function"
+  return typeof readProperty(value, "querySelector") === "function" &&
+    typeof readProperty(value, "getElementById") === "function"
     ? (value as unknown as CustomRaceLabDocument)
     : undefined;
 }
 
-function customRaceRecord(value: unknown): Record<string, unknown> | undefined {
+function customRaceLabRecord(
+  value: unknown,
+): Record<string, unknown> | undefined {
   return isRecord(value) ? (value as Record<string, unknown>) : undefined;
 }
 
-function customRaceTraitsFromDom(
-  doc: CustomRaceLabDocument,
-): readonly string[] {
-  const found = doc.querySelectorAll(CUSTOM_RACE_TRAIT_ROWS_SELECTOR);
-  const traits = new Set<string>();
-  for (let index = 0; index < found.length; index += 1) {
-    const row = customRaceRecord(found[index]);
-    const classValue = readProperty(row, "className");
-    if (typeof classValue !== "string") continue;
-    for (const className of classValue.split(/\s+/)) {
-      if (!className.startsWith(CUSTOM_RACE_TRAIT_CLASS_PREFIX)) continue;
-      const trait = className.slice(CUSTOM_RACE_TRAIT_CLASS_PREFIX.length);
-      if (/^[a-z0-9_]+$/.test(trait)) traits.add(trait);
-    }
+function customRaceLabMap(
+  value: unknown,
+): Readonly<Record<string, number>> | undefined {
+  const record = customRaceLabRecord(value);
+  if (record === undefined) return undefined;
+  const result: Record<string, number> = {};
+  for (const [key, entry] of Object.entries(record)) {
+    const numeric = finite(entry);
+    if (numeric === undefined) return undefined;
+    result[key] = numeric;
   }
-  return Object.freeze([...traits]);
+  return Object.freeze(result);
 }
 
-function customRaceDraftFromLive(
+function customRaceLabDraft(
   genome: Record<string, unknown>,
-  controls: GameControlRegistry,
+  ranksValue: unknown,
 ): CustomRaceDesign | undefined {
   const genus = genome["genus"];
   const rawTraits = genome["traitlist"];
-  const rawRanks = genome[CUSTOM_RACE_RANKS_PROPERTY];
+  if (typeof genus !== "string" || !Array.isArray(rawTraits)) return undefined;
+  const traitList: string[] = [];
+  for (const trait of rawTraits) {
+    if (typeof trait !== "string") return undefined;
+    traitList.push(trait);
+  }
+  const ranks = customRaceLabMap(ranksValue);
+  const slots = customRaceLabMap(genome["slots"]);
+  const recessive = finite(genome["recessive"]);
+  const span = finite(genome["span"]);
   if (
-    typeof genus !== "string" ||
-    !Array.isArray(rawTraits) ||
-    !isRecord(rawRanks)
+    ranks === undefined ||
+    slots === undefined ||
+    recessive === undefined ||
+    span === undefined
   ) {
     return undefined;
   }
-  const traits: string[] = [];
-  for (const trait of rawTraits) {
-    if (typeof trait !== "string") return undefined;
-    traits.push(trait);
-  }
-  const ranks: Record<string, number> = {};
-  const summary = controls.resolve(CUSTOM_RACE_LAB_SUMMARY_CONTROL_ID);
-  const summaryData =
-    summary === undefined ? undefined : customRaceRecord(summary.data);
-  const hasCurrentSummary =
-    summaryData !== undefined && summaryData["g"] === genome;
-  for (const trait of traits) {
-    let rank = rawRanks[trait];
-    if (hasCurrentSummary && summary?.methods.includes("tRank")) {
-      const result = controls.invoke(summary, "tRank", [trait]);
-      if (!result.ok) return undefined;
-      rank = result.value;
-    }
-    const numericRank = rank === undefined ? 1 : finite(rank);
-    if (numericRank === undefined) return undefined;
-    ranks[trait] = numericRank;
-  }
-  const text: Partial<Record<keyof typeof CUSTOM_RACE_TEXT_LIMITS, string>> =
-    {};
-  for (const field of Object.keys(CUSTOM_RACE_TEXT_LIMITS) as Array<
-    keyof typeof CUSTOM_RACE_TEXT_LIMITS
-  >) {
+  const text: Partial<Record<CustomRaceTextField, string>> = {};
+  for (const field of Object.keys(
+    CUSTOM_RACE_TEXT_LIMITS,
+  ) as CustomRaceTextField[]) {
     const value = genome[field];
     if (typeof value === "string") text[field] = value;
   }
-  const rawFanaticism = genome["fanaticism"];
-  if (rawFanaticism !== false && typeof rawFanaticism !== "string") {
-    return undefined;
-  }
+  const fanaticism = genome["fanaticism"];
+  if (fanaticism !== false && typeof fanaticism !== "string") return undefined;
   let hybrid: readonly [string, string] | undefined;
   const rawHybrid = genome["hybrid"];
-  if (Array.isArray(rawHybrid) && rawHybrid.length === 2) {
-    if (typeof rawHybrid[0] !== "string" || typeof rawHybrid[1] !== "string") {
+  if (Array.isArray(rawHybrid)) {
+    if (
+      rawHybrid.length !== 2 ||
+      typeof rawHybrid[0] !== "string" ||
+      typeof rawHybrid[1] !== "string"
+    ) {
       return undefined;
     }
     hybrid = Object.freeze([rawHybrid[0], rawHybrid[1]]);
@@ -158,84 +178,122 @@ function customRaceDraftFromLive(
   return Object.freeze({
     text: Object.freeze(text),
     genus,
-    traits: Object.freeze(traits),
-    ranks: Object.freeze(ranks),
-    fanaticism: rawFanaticism,
+    traits: Object.freeze(traitList),
+    ranks,
+    fanaticism,
+    slots,
+    recessive,
+    span,
     ...(hybrid === undefined ? {} : { hybrid }),
   });
 }
 
-function customRaceAvailableGenera(
-  root: unknown,
-  currentDraft: CustomRaceDesign,
-): readonly string[] {
-  const stats = readProperty(root, "stats");
-  const achievements = readProperty(stats, "achieve");
-  const genera = new Set<string>();
-  if (isRecord(achievements)) {
-    for (const [key, value] of Object.entries(achievements)) {
-      if (
-        key.startsWith(CUSTOM_RACE_GENUS_ACHIEVEMENT_PREFIX) &&
-        finite(readProperty(value, "l")) !== undefined &&
-        (finite(readProperty(value, "l")) ?? 0) > 0
-      ) {
-        const genus = key.slice(CUSTOM_RACE_GENUS_ACHIEVEMENT_PREFIX.length);
-        if (/^[a-z0-9_]+$/.test(genus)) genera.add(genus);
-      }
-    }
-  }
-  if (currentDraft.genus !== "hybrid") genera.add(currentDraft.genus);
-  for (const genus of currentDraft.hybrid ?? []) genera.add(genus);
-  return Object.freeze([...genera]);
+function customRaceLabFingerprint(draft: CustomRaceDesign): string {
+  return JSON.stringify([
+    Object.entries(draft.text).sort(([left], [right]) =>
+      left.localeCompare(right),
+    ),
+    draft.genus,
+    [...draft.traits].sort(),
+    Object.entries(draft.ranks).sort(([left], [right]) =>
+      left.localeCompare(right),
+    ),
+    draft.fanaticism,
+    draft.hybrid ?? null,
+    Object.entries(draft.slots).sort(([left], [right]) =>
+      left.localeCompare(right),
+    ),
+    draft.recessive,
+    draft.span,
+  ]);
 }
 
-function customRaceSavedRecord(
+function customRaceLabSavedRecord(
   root: unknown,
   slot: CustomRaceSavedSlot,
 ): Record<string, unknown> | undefined {
-  return customRaceRecord(readProperty(readProperty(root, "custom"), slot));
+  return customRaceLabRecord(readProperty(readProperty(root, "custom"), slot));
 }
 
-function customRaceSavedJson(
-  root: unknown,
-  slot: CustomRaceSavedSlot,
+function customRaceLabSavedJson(
+  saved: Record<string, unknown> | undefined,
 ): string | undefined {
-  const saved = customRaceSavedRecord(root, slot);
   if (saved === undefined) return undefined;
-  const traits = Array.isArray(saved["traits"])
+  const rawTraits = Array.isArray(saved["traits"])
     ? saved["traits"]
     : Array.isArray(saved["traitlist"])
       ? saved["traitlist"]
       : undefined;
-  if (traits === undefined) return undefined;
+  if (rawTraits === undefined) return undefined;
+  const nativeExport: Record<string, unknown> = {
+    ...saved,
+    traitlist: rawTraits,
+  };
+  delete nativeExport["traits"];
+  if (
+    nativeExport["slotSpan"] === undefined &&
+    typeof saved["span"] === "number"
+  ) {
+    nativeExport["slotSpan"] = saved["span"];
+  }
+  if (nativeExport["rankVersion"] === undefined && finite(saved["v"]) === 2) {
+    nativeExport["rankVersion"] = 2;
+  }
   try {
-    return JSON.stringify({
-      ...saved,
-      genes: 0,
-      traitlist: traits,
-      traits: undefined,
-      rankVersion: 2,
-    });
+    return JSON.stringify(nativeExport);
   } catch {
     return undefined;
   }
 }
 
-export function createGameCustomRaceLab({
-  rootState,
-  controls,
-  getDocument,
-}: GameCustomRaceLabDependencies): GameCustomRaceLabPort {
-  let mounted: MountedCustomRaceLab | undefined;
-  let recalculation: PendingCustomRaceRecalculation | undefined;
+function customRaceLabImportFileList(
+  doc: CustomRaceLabDocument,
+  json: string,
+): unknown {
+  const pageWindow = customRaceLabRecord(doc.defaultView);
+  const FileConstructor = readProperty(pageWindow, "File");
+  const DataTransferConstructor = readProperty(pageWindow, "DataTransfer");
+  if (
+    typeof FileConstructor !== "function" ||
+    typeof DataTransferConstructor !== "function"
+  ) {
+    return undefined;
+  }
+  const file = Reflect.construct(
+    FileConstructor as CustomRaceLabFileConstructor,
+    [[json], "evolve-custom-race.txt", { type: "text/plain" }],
+  );
+  const transfer = Reflect.construct(
+    DataTransferConstructor as CustomRaceLabDataTransferConstructor,
+    [],
+  );
+  const items = customRaceLabRecord(readProperty(transfer, "items"));
+  const add = readProperty(items, "add");
+  if (items === undefined || typeof add !== "function") return undefined;
+  Reflect.apply(add, items, [file]);
+  return readProperty(transfer, "files");
+}
 
-  function mountedLab(
-    mode?: CelestialLabMode,
-  ): MountedCustomRaceLab | undefined {
+function customRaceLabFileInput(
+  doc: CustomRaceLabDocument,
+): Record<string, unknown> | undefined {
+  return customRaceLabRecord(doc.getElementById(CUSTOM_RACE_FILE_INPUT_ID));
+}
+
+export function createGameCustomRaceLab(
+  dependencies: CustomRaceLabDependencies,
+): GameCustomRaceLabPort {
+  const { rootState, controls, getDocument } = dependencies;
+  let mounted: MountedCustomRaceLab | undefined;
+  let pendingImport: PendingCustomRaceImport | undefined;
+  let completedImport: CompletedCustomRaceImport | undefined;
+  let failedImport: FailedCustomRaceImport | undefined;
+
+  function mountedRaceLab(): MountedCustomRaceLab | undefined {
     const root = rootState.readRoot();
     if (root === undefined || rootState.isReactivitySuppressed())
       return undefined;
-    const doc = customRaceDocument(getDocument());
+    const doc = customRaceLabDocument(getDocument());
     if (
       doc === undefined ||
       doc.querySelector(CUSTOM_RACE_LAB_PANEL_SELECTOR) == null
@@ -243,398 +301,449 @@ export function createGameCustomRaceLab({
       return undefined;
     }
     const handle = controls.resolve(CUSTOM_RACE_LAB_CONTROL_ID);
+    const view =
+      handle === undefined ? undefined : customRaceLabRecord(handle.data);
+    const genome = customRaceLabRecord(readProperty(view, "g"));
     if (
       handle === undefined ||
-      (mode !== undefined &&
-        !handle.methods.includes(customRaceSubmitMethod(mode))) ||
-      !handle.methods.includes("geneEdit")
+      view === undefined ||
+      genome === undefined ||
+      !handle.methods.includes("customImport") ||
+      !handle.methods.includes("geneEdit") ||
+      !handle.methods.includes("setRace")
     ) {
       return undefined;
     }
-    const view = customRaceRecord(handle.data);
-    const genome = customRaceRecord(readProperty(view, "g"));
-    if (view === undefined || genome === undefined) return undefined;
     if (
       mounted === undefined ||
       mounted.root !== root ||
       mounted.handle.generation !== handle.generation
     ) {
-      const identity = Object.freeze({});
       mounted = Object.freeze({
         root,
         handle,
         view,
         genome,
-        session: Object.freeze({ identity }),
+        session: Object.freeze({ identity: Object.freeze({}) }),
       });
-      recalculation = undefined;
+      pendingImport = undefined;
+      completedImport = undefined;
+      failedImport = undefined;
     } else {
       mounted = Object.freeze({ ...mounted, handle, view, genome });
     }
     return mounted;
   }
 
-  function sessionMatches(
+  function currentRaceSession(
     session: CustomRaceLabSession,
   ): MountedCustomRaceLab | undefined {
-    const current = mountedLab();
+    const current = mountedRaceLab();
     return current !== undefined &&
       current.session.identity === session.identity &&
-      rootState.readRoot() === current.root
+      current.root === rootState.readRoot()
       ? current
       : undefined;
   }
 
-  function read(mode: CelestialLabMode): CustomRaceLabSnapshot | undefined {
-    const current = mountedLab(mode);
-    if (current === undefined) return undefined;
-    const draft = customRaceDraftFromLive(current.genome, controls);
-    if (draft === undefined) return undefined;
-    const doc = customRaceDocument(getDocument());
-    if (doc === undefined) return undefined;
-    const genes = finite(current.genome["genes"]);
-    let status: CustomRaceLabSnapshot["recalculation"] = "idle";
-    if (recalculation !== undefined) {
-      if (recalculation.identity !== current.session.identity) {
-        recalculation = undefined;
-      } else if (!customRaceDraftMatches(draft, recalculation.expected)) {
-        recalculation = undefined;
-      } else if (genes === undefined) {
-        status = "failed";
-      } else if (recalculation.lastGenes === genes) {
-        status = "settled";
-        recalculation = undefined;
-      } else {
-        recalculation.lastGenes = genes;
-        status = "pending";
-      }
+  function readLiveDraft(
+    current: MountedCustomRaceLab,
+    doc: CustomRaceLabDocument,
+  ):
+    | Readonly<{
+        draft: CustomRaceDesign;
+        strandHandle: Readonly<GameControlHandle>;
+        strandRanks: Record<string, unknown>;
+        strandSurface: unknown;
+        savedSlot: CustomRaceSavedSlot;
+      }>
+    | undefined {
+    const strandHandle = controls.resolve(CUSTOM_RACE_LAB_STRAND_ID);
+    const strandData =
+      strandHandle === undefined
+        ? undefined
+        : customRaceLabRecord(strandHandle.data);
+    const strandRanks = customRaceLabRecord(readProperty(strandData, "t"));
+    if (
+      strandHandle === undefined ||
+      strandData === undefined ||
+      readProperty(strandData, "g") !== current.genome ||
+      strandRanks === undefined
+    ) {
+      return undefined;
     }
-    const hybridLab = draft.genus === "hybrid";
-    const savedSlot: CustomRaceSavedSlot = hybridLab ? "race1" : "race0";
-    const handle = current.handle;
-    const submitMethod = customRaceSubmitMethod(mode);
+    const savedSlot: CustomRaceSavedSlot = Array.isArray(
+      current.genome["hybrid"],
+    )
+      ? "race1"
+      : "race0";
+    const draft = customRaceLabDraft(current.genome, strandRanks);
+    const strandSurface = doc.querySelector(CUSTOM_RACE_LAB_STRAND_ID);
+    if (draft === undefined || strandSurface == null) return undefined;
+    return Object.freeze({
+      draft,
+      strandHandle,
+      strandRanks,
+      strandSurface,
+      savedSlot,
+    });
+  }
+
+  function restoreImportFile(
+    pending: PendingCustomRaceImport,
+    doc: CustomRaceLabDocument,
+  ): void {
+    if (doc.getElementById(CUSTOM_RACE_FILE_INPUT_ID) !== pending.input) return;
+    try {
+      pending.input["files"] = pending.previousFiles;
+    } catch {
+      // FileList restoration is cosmetic; native FileReader already owns its File reference.
+    }
+  }
+
+  function failPendingImport(
+    current: MountedCustomRaceLab,
+    requestIdentity: string,
+    status: "failed" | "stale",
+    doc: CustomRaceLabDocument,
+  ): void {
+    if (pendingImport !== undefined) restoreImportFile(pendingImport, doc);
+    pendingImport = undefined;
+    completedImport = undefined;
+    failedImport = Object.freeze({
+      sessionIdentity: current.session.identity,
+      requestIdentity,
+      status,
+    });
+  }
+
+  function observeImport(
+    current: MountedCustomRaceLab,
+    doc: CustomRaceLabDocument,
+    live: NonNullable<ReturnType<typeof readLiveDraft>>,
+  ): CustomRaceLabSnapshot["recalculation"] {
+    const pending = pendingImport;
+    if (pending === undefined) return "idle";
+    if (
+      pending.root !== current.root ||
+      pending.sessionIdentity !== current.session.identity
+    ) {
+      return "pending";
+    }
+    const observedRequestIdentity = pending.requestIdentity;
+    pending.observations += 1;
+    if (pending.stage === "native-import") {
+      const gameError = readProperty(readProperty(current.view, "err"), "msg");
+      if (
+        typeof gameError === "string" &&
+        gameError !== "" &&
+        gameError !== pending.previousError
+      ) {
+        failPendingImport(current, observedRequestIdentity, "failed", doc);
+        return "failed";
+      }
+      if (current.genome["ranks"] !== pending.previousGenomeRanks) {
+        const currentHandle = controls.resolve(CUSTOM_RACE_LAB_CONTROL_ID);
+        if (
+          currentHandle === undefined ||
+          currentHandle.generation !== current.handle.generation
+        ) {
+          failPendingImport(current, observedRequestIdentity, "stale", doc);
+          return "stale";
+        }
+        pending.stage = "native-reprice";
+        pending.observations = 0;
+        pending.baselineStrand = live.strandSurface;
+        pending.baselineStrandGeneration = live.strandHandle.generation;
+        pending.baselineStrandRanks = live.strandRanks;
+        restoreImportFile(pending, doc);
+        const result = controls.invoke(currentHandle, "geneEdit");
+        if (!result.ok) {
+          failPendingImport(current, observedRequestIdentity, "stale", doc);
+          return "stale";
+        }
+        return "pending";
+      }
+      if (pending.observations >= CUSTOM_RACE_IMPORT_OBSERVATION_LIMIT) {
+        failPendingImport(current, observedRequestIdentity, "failed", doc);
+        return "failed";
+      }
+      return "pending";
+    }
+    if (
+      live.strandSurface !== pending.baselineStrand &&
+      live.strandHandle.generation > pending.baselineStrandGeneration &&
+      live.strandRanks !== pending.baselineStrandRanks
+    ) {
+      const fingerprint = customRaceLabFingerprint(live.draft);
+      if (
+        !customRacePresetTraitsMatch(live.draft, pending.request) ||
+        !customRacePresetTextMatches(live.draft, pending.request) ||
+        (customRacePresetHasStrandState(pending.request) &&
+          !customRacePresetStrandStateMatches(live.draft, pending.request))
+      ) {
+        failPendingImport(current, observedRequestIdentity, "failed", doc);
+        return "failed";
+      }
+      completedImport = Object.freeze({
+        sessionIdentity: current.session.identity,
+        requestIdentity: observedRequestIdentity,
+        normalizedDraftFingerprint: fingerprint,
+      });
+      restoreImportFile(pending, doc);
+      pendingImport = undefined;
+      failedImport = undefined;
+      return "settled";
+    }
+    if (pending.observations >= CUSTOM_RACE_REPRICE_OBSERVATION_LIMIT) {
+      failPendingImport(current, observedRequestIdentity, "failed", doc);
+      return "failed";
+    }
+    return "pending";
+  }
+
+  function read(requestIdentity: string): CustomRaceLabSnapshot | undefined {
+    const current = mountedRaceLab();
+    const doc = customRaceLabDocument(getDocument());
+    if (current === undefined || doc === undefined) return undefined;
+    const live = readLiveDraft(current, doc);
+    if (live === undefined) return undefined;
+    if (
+      failedImport !== undefined &&
+      (failedImport.sessionIdentity !== current.session.identity ||
+        failedImport.requestIdentity !== requestIdentity)
+    ) {
+      failedImport = undefined;
+    }
+    let recalculation: CustomRaceLabSnapshot["recalculation"] = observeImport(
+      current,
+      doc,
+      live,
+    );
+    if (failedImport?.requestIdentity === requestIdentity) {
+      recalculation = failedImport.status;
+    } else if (
+      pendingImport === undefined &&
+      completedImport?.sessionIdentity === current.session.identity &&
+      completedImport.requestIdentity === requestIdentity
+    ) {
+      const currentFingerprint = customRaceLabFingerprint(live.draft);
+      if (currentFingerprint === completedImport.normalizedDraftFingerprint) {
+        recalculation = "settled";
+      } else {
+        completedImport = undefined;
+        recalculation = "idle";
+      }
+    } else if (
+      completedImport?.sessionIdentity === current.session.identity ||
+      failedImport?.sessionIdentity === current.session.identity
+    ) {
+      recalculation = "idle";
+    }
+    const currentHandle = current.handle;
+    const savedRace = customRaceLabSavedRecord(current.root, live.savedSlot);
+    const savedCustomRaceJson = customRaceLabSavedJson(savedRace);
+    const savedPreset =
+      savedCustomRaceJson === undefined
+        ? undefined
+        : parseCustomRacePreset(savedCustomRaceJson);
     return Object.freeze({
       session: current.session,
-      draft,
-      availableTraits: customRaceTraitsFromDom(doc),
-      availableGenera: customRaceAvailableGenera(current.root, draft),
-      hybridLab,
-      savedCustomRaceExists:
-        customRaceSavedRecord(current.root, savedSlot) !== undefined,
+      draft: live.draft,
+      hybridLab: live.savedSlot === "race1",
+      savedCustomRaceExists: savedRace !== undefined,
+      ...(savedCustomRaceJson === undefined ? {} : { savedCustomRaceJson }),
+      savedCustomRaceReady:
+        savedPreset?.ok === true &&
+        customRacePresetHasStrandState(savedPreset.request) &&
+        customRaceDraftMatches(live.draft, savedPreset.request),
       canSubmit:
-        handle.methods.includes(submitMethod) &&
+        currentHandle.methods.includes("setRace") &&
         doc.querySelector(`${CUSTOM_RACE_LAB_PANEL_SELECTOR} .create button`) !=
           null,
-      genes: genes ?? Number.NaN,
-      recalculation: status,
+      recalculation,
+      ...(completedImport?.sessionIdentity === current.session.identity
+        ? { appliedPresetIdentity: completedImport.requestIdentity }
+        : {}),
     });
   }
 
   function applyDesign(
     session: CustomRaceLabSession,
-    design: CustomRaceDesign,
+    request: CustomRacePresetRequest,
+    requestIdentity: string,
   ): CustomRaceLabMutationResult {
-    const current = sessionMatches(session);
+    const current = currentRaceSession(session);
     if (current === undefined) {
       return Object.freeze({
         status: "stale",
-        reason: "lab session was replaced",
+        reason: "Custom Race lab session was replaced",
       });
     }
-    const doc = customRaceDocument(getDocument());
-    if (doc === undefined) {
+    if (pendingImport !== undefined) {
       return Object.freeze({
         status: "unavailable",
-        reason: "lab document is unavailable",
+        reason: "a native preset import is still pending",
       });
     }
-    const offered = new Set(customRaceTraitsFromDom(doc));
-    if (design.traits.some((trait) => !offered.has(trait))) {
-      return Object.freeze({
-        status: "rejected",
-        reason: "preset contains an unavailable trait",
-      });
-    }
-    const currentDraft = customRaceDraftFromLive(current.genome, controls);
-    if (currentDraft === undefined) {
-      return Object.freeze({
-        status: "unavailable",
-        reason: "live race draft is unavailable",
-      });
-    }
-    const availableGenera = new Set(
-      customRaceAvailableGenera(current.root, currentDraft),
-    );
     if (
-      (design.genus !== "hybrid" && !availableGenera.has(design.genus)) ||
-      (design.hybrid !== undefined &&
-        design.hybrid.some((genus) => !availableGenera.has(genus)))
+      failedImport?.sessionIdentity === current.session.identity &&
+      failedImport.requestIdentity === requestIdentity
     ) {
       return Object.freeze({
         status: "rejected",
-        reason: "preset contains an unavailable genus",
+        reason: "native preset application already failed",
       });
     }
-    const ranks = customRaceRecord(current.genome[CUSTOM_RACE_RANKS_PROPERTY]);
-    if (ranks === undefined) {
-      return Object.freeze({
-        status: "rejected",
-        reason: "live rank map is unavailable",
-      });
-    }
-    const preparedSummary = controls.invoke(current.handle, "swapTab", [4]);
-    if (!preparedSummary.ok) {
+    const doc = customRaceLabDocument(getDocument());
+    const input = doc === undefined ? undefined : customRaceLabFileInput(doc);
+    const live = doc === undefined ? undefined : readLiveDraft(current, doc);
+    if (doc === undefined || input === undefined || live === undefined) {
       return Object.freeze({
         status: "unavailable",
-        reason: "game rank controls are unavailable",
+        reason: "native Custom Race import surface is unavailable",
       });
     }
-    const originalSummary = controls.resolve(
-      CUSTOM_RACE_LAB_SUMMARY_CONTROL_ID,
-    );
-    const originalSummaryData =
-      originalSummary === undefined
-        ? undefined
-        : customRaceRecord(originalSummary.data);
-    const originalRanks = customRaceRecord(
-      readProperty(originalSummaryData, "t"),
-    );
-    const liveLab = current;
-    if (
-      originalSummaryData?.["g"] !== current.genome ||
-      originalRanks === undefined ||
-      !originalSummary?.methods.includes("tRank")
-    ) {
+    const fileList = customRaceLabImportFileList(doc, request.importJson);
+    if (fileList === undefined) {
       return Object.freeze({
         status: "unavailable",
-        reason: "game rank controls are unavailable",
+        reason: "page File and DataTransfer APIs are unavailable",
       });
     }
-    const rankValuesBefore = Object.freeze({ ...originalRanks });
-    const previousDesign = customRaceDraftFromLive(current.genome, controls);
-    if (previousDesign === undefined) {
+    const previousFiles = input["files"];
+    const pending: PendingCustomRaceImport = {
+      root: current.root,
+      sessionIdentity: current.session.identity,
+      requestIdentity,
+      request,
+      input,
+      previousFiles,
+      previousGenomeRanks: current.genome["ranks"],
+      previousError: readProperty(readProperty(current.view, "err"), "msg"),
+      stage: "native-import",
+      observations: 0,
+      baselineStrand: live.strandSurface,
+      baselineStrandGeneration: live.strandHandle.generation,
+      baselineStrandRanks: live.strandRanks,
+    };
+    try {
+      input["files"] = fileList;
+    } catch {
       return Object.freeze({
         status: "unavailable",
-        reason: "live race draft changed while preparing rank controls",
+        reason: "native Custom Race file input rejected the preset",
       });
     }
-    const rollbackDesign = previousDesign;
-    const textValuesBefore = Object.freeze(
-      Object.fromEntries(
-        Object.keys(design.text).map((field) => [
-          field,
-          readProperty(current.genome, field),
-        ]),
-      ),
-    );
-
-    function restorePreviousDesign(
-      status: "stale" | "rejected",
-      reason: string,
-    ): CustomRaceLabMutationResult {
-      for (const [field, value] of Object.entries(textValuesBefore)) {
-        if (value === undefined) delete liveLab.genome[field];
-        else liveLab.genome[field] = value;
-      }
-      liveLab.genome["genus"] = rollbackDesign.genus;
-      liveLab.genome["traitlist"] = [...rollbackDesign.traits];
-      liveLab.genome["fanaticism"] = rollbackDesign.fanaticism;
-      if (rollbackDesign.hybrid === undefined) delete liveLab.genome["hybrid"];
-      else liveLab.genome["hybrid"] = [...rollbackDesign.hybrid];
-
-      const latestSummary = controls.resolve(
-        CUSTOM_RACE_LAB_SUMMARY_CONTROL_ID,
-      );
-      const latestData =
-        latestSummary === undefined
-          ? undefined
-          : customRaceRecord(latestSummary.data);
-      const latestRanks = customRaceRecord(readProperty(latestData, "t"));
-      if (latestRanks === undefined || latestData?.["g"] !== liveLab.genome) {
-        return Object.freeze({
-          status: "stale",
-          reason: "failed apply could not restore the live rank map",
-        });
-      }
-      for (const key of Object.keys(latestRanks)) delete latestRanks[key];
-      Object.assign(latestRanks, rankValuesBefore);
-
-      const refreshed = controls.resolve(CUSTOM_RACE_LAB_CONTROL_ID);
-      if (
-        refreshed === undefined ||
-        refreshed.generation !== liveLab.handle.generation
-      ) {
-        return Object.freeze({
-          status: "stale",
-          reason: "lab was redrawn before the failed apply could be restored",
-        });
-      }
-      const recost = controls.invoke(refreshed, "geneEdit");
-      if (!recost.ok) {
-        return Object.freeze({
-          status: "stale",
-          reason: "failed apply could not recalculate the restored design",
-        });
-      }
-      const restored = customRaceDraftFromLive(liveLab.genome, controls);
-      if (
-        restored === undefined ||
-        !customRaceDraftMatches(restored, rollbackDesign)
-      ) {
-        return Object.freeze({
-          status: "stale",
-          reason: "failed apply did not restore the previous design",
-        });
-      }
-      recalculation = {
-        identity: liveLab.session.identity,
-        expected: rollbackDesign,
-        lastGenes: undefined,
-      };
-      return Object.freeze({ status, reason });
-    }
-
-    for (const [field, value] of Object.entries(design.text)) {
-      current.genome[field] = value;
-    }
-    current.genome["genus"] = design.genus;
-    current.genome["traitlist"] = [...design.traits];
-    current.genome["fanaticism"] = design.fanaticism;
-    if (design.hybrid === undefined) {
-      delete current.genome["hybrid"];
-    } else {
-      current.genome["hybrid"] = [...design.hybrid];
-    }
-    // DeadSpace's native customImport assigns its lexical `tRanks` map directly, then calls
-    // geneEdit(). The captured summary binding exposes that same map as `t`; use the game method
-    // for recalculation because increase/reduce cannot reach imported legacy tiers 1.33/1.67.
-    const swapSummary = controls.invoke(current.handle, "swapTab", [4]);
-    if (!swapSummary.ok) {
-      return restorePreviousDesign(
-        "stale",
-        "game rank controls became unavailable",
-      );
-    }
-    const summary = controls.resolve(CUSTOM_RACE_LAB_SUMMARY_CONTROL_ID);
-    const summaryData =
-      summary === undefined ? undefined : customRaceRecord(summary.data);
-    const currentRanks = customRaceRecord(readProperty(summaryData, "t"));
+    pendingImport = pending;
+    failedImport = undefined;
+    completedImport = undefined;
+    const currentHandle = controls.resolve(CUSTOM_RACE_LAB_CONTROL_ID);
     if (
-      summary === undefined ||
-      summaryData?.["g"] !== current.genome ||
-      currentRanks === undefined ||
-      !summary.methods.includes("tRank")
+      currentHandle === undefined ||
+      currentHandle.generation !== current.handle.generation ||
+      currentHandle.data !== current.handle.data
     ) {
-      return restorePreviousDesign(
-        "stale",
-        "game rank controls became unavailable",
-      );
-    }
-    for (const trait of design.traits) {
-      currentRanks[trait] = design.ranks[trait]!;
-      const rankResult = controls.invoke(summary, "tRank", [trait]);
-      if (!rankResult.ok || finite(rankResult.value) !== design.ranks[trait]) {
-        return restorePreviousDesign(
-          "stale",
-          "lab did not retain the requested trait rank",
-        );
-      }
-    }
-    const refreshedHandle = controls.resolve(CUSTOM_RACE_LAB_CONTROL_ID);
-    if (
-      refreshedHandle === undefined ||
-      refreshedHandle.generation !== current.handle.generation
-    ) {
+      restoreImportFile(pending, doc);
+      pendingImport = undefined;
       return Object.freeze({
         status: "stale",
-        reason: "lab was redrawn while applying the preset",
+        reason: "Custom Race lab changed before native import",
       });
     }
-    const liveDraft = customRaceDraftFromLive(current.genome, controls);
-    if (liveDraft === undefined || !customRaceDraftMatches(liveDraft, design)) {
-      return restorePreviousDesign(
-        "rejected",
-        "lab did not retain the requested design",
-      );
-    }
-    const result = controls.invoke(refreshedHandle, "geneEdit");
+    const result = controls.invoke(currentHandle, "customImport");
     if (!result.ok) {
-      return restorePreviousDesign("stale", result.detail ?? result.reason);
+      restoreImportFile(pending, doc);
+      pendingImport = undefined;
+      return Object.freeze({
+        status: "stale",
+        reason: result.detail ?? result.reason,
+      });
     }
-    recalculation = {
-      identity: current.session.identity,
-      expected: design,
-      lastGenes: undefined,
-    };
-    return Object.freeze({ status: "applied" });
+    return Object.freeze({ status: "pending" });
   }
 
   function submit(
     session: CustomRaceLabSession,
-    mode: CelestialLabMode,
-  ): CustomRaceLabMutationResult {
-    const current = sessionMatches(session);
+    requestIdentity: string,
+  ): CustomRaceLabSubmitResult {
+    const current = currentRaceSession(session);
     if (current === undefined) {
       return Object.freeze({
         status: "stale",
-        reason: "lab session was replaced",
+        reason: "Custom Race lab session was replaced",
       });
     }
-    const snapshot = read(mode);
+    const snapshot = read(requestIdentity);
     if (
       snapshot === undefined ||
       snapshot.session.identity !== session.identity
     ) {
       return Object.freeze({
         status: "stale",
-        reason: "lab snapshot is unavailable",
+        reason: "Custom Race draft is unavailable",
       });
     }
     if (
       snapshot.recalculation === "pending" ||
-      snapshot.recalculation === "failed"
+      snapshot.recalculation === "failed" ||
+      snapshot.recalculation === "stale"
     ) {
       return Object.freeze({
         status: "unavailable",
-        reason: "lab recost has not settled",
+        reason: "native Custom Race recalculation is not settled",
       });
     }
     if (!snapshot.canSubmit) {
       return Object.freeze({
         status: "unavailable",
-        reason: "lab submit control is unavailable",
+        reason: "native setRace control is unavailable",
       });
     }
-    if (!customRaceGenesAreAffordable(snapshot.genes)) {
+    const handle = controls.resolve(CUSTOM_RACE_LAB_CONTROL_ID);
+    if (
+      handle === undefined ||
+      handle.generation !== current.handle.generation
+    ) {
+      return Object.freeze({
+        status: "stale",
+        reason: "Custom Race lab changed before setRace",
+      });
+    }
+    const result = controls.invoke(handle, "setRace");
+    if (!result.ok) {
+      return Object.freeze({
+        status: "stale",
+        reason: result.detail ?? result.reason,
+      });
+    }
+    if (result.value === false) {
       return Object.freeze({
         status: "rejected",
-        reason: "game gene balance is not affordable",
+        reason: "DeadSpace setRace rejected the live design",
       });
     }
-    if (!customRaceTextIsComplete(snapshot.draft.text)) {
-      return Object.freeze({
-        status: "rejected",
-        reason: "required race text is empty",
-      });
-    }
-    const result = controls.invoke(
-      current.handle,
-      customRaceSubmitMethod(mode),
-    );
-    return result.ok
-      ? Object.freeze({ status: "applied" })
-      : Object.freeze({
-          status: "stale",
-          reason: result.detail ?? result.reason,
-        });
+    return Object.freeze({ status: "requested" });
   }
 
   return Object.freeze({
     read,
     applyDesign,
     submit,
+    readCurrentSavedRaceJson(): string | undefined {
+      const current = mountedRaceLab();
+      if (current === undefined) return undefined;
+      const slot: CustomRaceSavedSlot = Array.isArray(current.genome["hybrid"])
+        ? "race1"
+        : "race0";
+      return customRaceLabSavedJson(
+        customRaceLabSavedRecord(current.root, slot),
+      );
+    },
     readSavedRaceJson(slot: CustomRaceSavedSlot): string | undefined {
-      return customRaceSavedJson(rootState.readRoot(), slot);
+      return customRaceLabSavedJson(
+        customRaceLabSavedRecord(rootState.readRoot(), slot),
+      );
     },
   });
 }

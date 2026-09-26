@@ -29,13 +29,17 @@ import {
   parseCustomRacePreset,
   planCustomRaceLab,
   readCustomRacePresetSelection,
-  type CustomRaceDesign,
+  type CustomRacePresetRequest,
 } from "../../../../domain/progression/prestige/custom-race.ts";
 import type {
   CustomRaceLabSnapshot,
   GameCustomRaceLabPort,
 } from "../../../../ports/game-custom-race-lab.ts";
 import { CUSTOM_RACE_LAB_CONTROL_ID } from "../../../../ports/game-custom-race-lab.ts";
+import type {
+  GameTerraformLabPort,
+  TerraformLabSnapshot,
+} from "../../../../ports/game-terraform-lab.ts";
 import type {
   GameControlResult,
   GameControlHandle,
@@ -62,6 +66,35 @@ import {
 import { readCapturedControlLabel } from "../../captured-control-label.ts";
 
 export const CAPTURED_MAD_CONTROL = "mad";
+
+type CapturedCelestialLabOutcome =
+  | "waiting-lab"
+  | "applying-preset"
+  | "semantic-rejection"
+  | "temporary-unavailable"
+  | "recalculation-failed"
+  | "stale-session"
+  | "submission-requested"
+  | "native-submission-rejection"
+  | "submission-unconfirmed"
+  | "reset-observed"
+  | "aborted-stale-root"
+  | "aborted-settings-change";
+
+interface CapturedCelestialLabTransaction {
+  readonly mode: CelestialLabMode;
+  readonly resetCountBefore: number | undefined;
+  readonly witchHunter: boolean;
+  readonly root: unknown;
+  submitted: boolean;
+  waitTicks: number;
+  submittedRequestIdentity: string | undefined;
+  requestIdentity: string | undefined;
+  sessionIdentity: object | undefined;
+  outcome: CapturedCelestialLabOutcome;
+}
+
+const CAPTURED_CELESTIAL_LAB_SUBMISSION_OBSERVATION_LIMIT = 8;
 
 /** The captured research action that commits the cataclysm reset. */
 export const CAPTURED_CATACLYSM_TECH = "tech-dial_it_to_11";
@@ -207,6 +240,8 @@ export interface CapturedMadPrestigeDependencies {
   readonly onActivity?: GameActivitySink;
   /** Mounted Ascension Lab boundary; absent means the lab path fails closed. */
   readonly customRaceLab?: GameCustomRaceLabPort;
+  /** Mounted Terraform Planet Lab boundary; absent means the path fails closed. */
+  readonly terraformLab?: GameTerraformLabPort;
 }
 
 function capturedMadSettingsRecord(raw: unknown): Record<PropertyKey, unknown> {
@@ -240,30 +275,62 @@ function capturedCustomRaceMode(
 function capturedCustomRaceDecision(
   settings: Record<PropertyKey, unknown>,
   lab: CustomRaceLabSnapshot,
+  requestIdentity: string,
 ): {
   readonly kind: "pause" | "wait" | "apply" | "submit";
-  readonly design?: CustomRaceDesign;
+  readonly request?: CustomRacePresetRequest;
 } {
   const mode = capturedCustomRaceMode(settings);
   const selection = readCustomRacePresetSelection(settings);
   const preset =
     mode === "import"
-      ? parseCustomRacePreset(selection.preset.json, {
-          availableTraits: lab.availableTraits,
-          availableGenera: lab.availableGenera,
-          hybridLab: lab.hybridLab,
-        })
-      : Object.freeze({ ok: false as const, reason: "preset not selected" });
-  const matches = preset.ok && customRaceDraftMatches(lab.draft, preset.design);
-  return planCustomRaceLab({
+      ? parseCustomRacePreset(selection.preset.json)
+      : mode === "reuse" && lab.savedCustomRaceJson !== undefined
+        ? parseCustomRacePreset(lab.savedCustomRaceJson)
+        : Object.freeze({ ok: false as const, reason: "preset not selected" });
+  const matches =
+    preset.ok &&
+    (lab.appliedPresetIdentity === requestIdentity ||
+      customRaceDraftMatches(lab.draft, preset.request));
+  const decision = planCustomRaceLab({
     mode,
-    savedCustomRaceExists: lab.savedCustomRaceExists,
+    savedCustomRaceReady: lab.savedCustomRaceReady,
     canSubmit: lab.canSubmit,
     preset,
     draftMatchesPreset: matches,
     recalculation: lab.recalculation,
-    genes: lab.genes,
   });
+  return decision.kind === "apply"
+    ? Object.freeze({ kind: decision.kind, request: decision.request })
+    : decision;
+}
+
+function capturedCustomRaceRequestIdentity(
+  settings: Record<PropertyKey, unknown>,
+  mode: Exclude<CelestialLabMode, "terraform">,
+  savedCustomRaceJson: string | undefined,
+): string {
+  const handlingMode = capturedCustomRaceMode(settings);
+  const selection = readCustomRacePresetSelection(settings);
+  return JSON.stringify([
+    mode,
+    handlingMode,
+    handlingMode === "import" ? selection.index : null,
+    handlingMode === "import" ? selection.preset.json : null,
+    handlingMode === "reuse" ? savedCustomRaceJson : null,
+  ]);
+}
+
+function celestialLabOutcomeIsTerminal(
+  outcome: CapturedCelestialLabOutcome,
+): boolean {
+  return (
+    outcome === "semantic-rejection" ||
+    outcome === "recalculation-failed" ||
+    outcome === "stale-session" ||
+    outcome === "native-submission-rejection" ||
+    outcome === "submission-unconfirmed"
+  );
 }
 
 function readCapturedResetCount(
@@ -700,19 +767,50 @@ export function createCapturedMadPrestige(
   let sampledBuildingType: CapturedBuildingPrestigeType | undefined;
   let sampledBuildingResetCount: number | undefined;
   let sampledCustomRaceLab: CustomRaceLabSnapshot | undefined;
-  let sampledCustomRaceDesign: CustomRaceDesign | undefined;
-  let sampledCustomRaceAction: "pause" | "wait" | "apply" | "submit" = "pause";
-  let sampledCustomRaceKey = "";
-  let failedCustomRaceKey: string | undefined;
-  let pendingCelestialLabMode: CelestialLabMode | undefined;
-  let pendingCelestialLabRoot: unknown;
-  let pendingCelestialLabResetCount: number | undefined;
-  let pendingCelestialLabSubmitted = false;
-  let pendingWitchCelestialLab = false;
+  let sampledTerraformLab: TerraformLabSnapshot | undefined;
+  let sampledCustomRaceRequest: CustomRacePresetRequest | undefined;
+  let sampledCelestialLabAction: "pause" | "wait" | "apply" | "submit" =
+    "pause";
+  let pendingCelestialLab: CapturedCelestialLabTransaction | undefined;
   let pendingWitchDirectReset = false;
   let resetCommitted = false;
   let apocalypseFirstActionDone = false;
   let bioseedModalRequested = false;
+
+  function beginCelestialLabTransaction(
+    mode: CelestialLabMode,
+    resetCountBefore: number | undefined,
+    witchHunter = false,
+  ): void {
+    pendingCelestialLab = {
+      mode,
+      resetCountBefore,
+      witchHunter,
+      root: sampledRoot,
+      submitted: false,
+      waitTicks: 0,
+      submittedRequestIdentity: undefined,
+      requestIdentity: undefined,
+      sessionIdentity: undefined,
+      outcome: "waiting-lab",
+    };
+  }
+
+  function commitCelestialLabReset(): void {
+    const transaction = pendingCelestialLab;
+    if (transaction === undefined) return;
+    transaction.outcome = "reset-observed";
+    pendingCelestialLab = undefined;
+    pendingWitchDirectReset = false;
+    resetCommitted = true;
+    dependencies.onActivity?.({
+      message: "Prestiged",
+      color: "info",
+      tags: Object.freeze(["achievements"]),
+    });
+    if (transaction.witchHunter) dependencies.setGoal("GameOverMan");
+  }
+
   const reader: PrestigeReader = Object.freeze({
     samplePrestige(): PrestigeInput {
       const settings = capturedMadSettingsRecord(dependencies.readSettings());
@@ -725,37 +823,52 @@ export function createCapturedMadPrestige(
       sampledBuildingType = undefined;
       sampledBuildingResetCount = undefined;
       sampledCustomRaceLab = undefined;
-      sampledCustomRaceDesign = undefined;
-      sampledCustomRaceAction = "pause";
+      sampledTerraformLab = undefined;
+      sampledCustomRaceRequest = undefined;
+      sampledCelestialLabAction = "pause";
       apocalypseFirstActionDone = false;
       const prestigeType =
         typeof settings["prestigeType"] === "string"
           ? settings["prestigeType"]
           : "none";
       let branch: PrestigeBranch = { type: "noop" };
-      if (!resetCommitted && pendingCelestialLabMode !== undefined) {
-        const mode = pendingCelestialLabMode;
+      if (!resetCommitted && pendingCelestialLab !== undefined) {
+        const transaction = pendingCelestialLab;
+        const mode = transaction.mode;
         sampledBuildingResetCount = readCapturedResetCount(root, mode);
-        if (root !== pendingCelestialLabRoot) {
-          // A captured session cannot survive replacement of its game root. Do not infer a
-          // successful reset from counters belonging to a different save object.
-          pendingCelestialLabMode = undefined;
-          pendingCelestialLabRoot = undefined;
-          pendingCelestialLabResetCount = undefined;
-          pendingWitchCelestialLab = false;
-          pendingCelestialLabSubmitted = false;
+        if (root !== transaction.root) {
+          if (
+            transaction.resetCountBefore !== undefined &&
+            sampledBuildingResetCount !== undefined &&
+            sampledBuildingResetCount > transaction.resetCountBefore
+          ) {
+            transaction.outcome = "reset-observed";
+            branch = {
+              type: "celestial-lab",
+              mode,
+              eligible: false,
+              labAction: "pause",
+              resetObserved: true,
+            };
+            return Object.freeze({
+              goal: dependencies.readGoal(),
+              branch: Object.freeze(branch),
+            });
+          }
+          transaction.outcome = "aborted-stale-root";
+          pendingCelestialLab = undefined;
           pendingWitchDirectReset = false;
-          resetCommitted = true;
           return Object.freeze({
             goal: dependencies.readGoal(),
             branch: Object.freeze({ type: "noop" }),
           });
         }
         if (
-          pendingCelestialLabResetCount !== undefined &&
+          transaction.resetCountBefore !== undefined &&
           sampledBuildingResetCount !== undefined &&
-          sampledBuildingResetCount > pendingCelestialLabResetCount
+          sampledBuildingResetCount > transaction.resetCountBefore
         ) {
+          transaction.outcome = "reset-observed";
           branch = {
             type: "celestial-lab",
             mode,
@@ -768,38 +881,152 @@ export function createCapturedMadPrestige(
             branch: Object.freeze(branch),
           });
         }
-        const lab = dependencies.customRaceLab?.read(mode);
-        if (lab !== undefined) {
-          sampledCustomRaceLab = lab;
-          const selection = readCustomRacePresetSelection(settings);
-          sampledCustomRaceKey = `${mode}:${selection.index}:${selection.preset.json}`;
+        if (
+          prestigeType !== mode &&
+          !transaction.submitted &&
+          transaction.outcome !== "submission-unconfirmed"
+        ) {
+          transaction.outcome = "aborted-settings-change";
+          pendingCelestialLab = undefined;
+          pendingWitchDirectReset = false;
+          return Object.freeze({
+            goal: dependencies.readGoal(),
+            branch: Object.freeze({ type: "noop" }),
+          });
+        }
+        if (transaction.submitted) {
+          transaction.waitTicks += 1;
           if (
-            failedCustomRaceKey !== undefined &&
-            failedCustomRaceKey !== sampledCustomRaceKey
+            transaction.waitTicks >=
+            CAPTURED_CELESTIAL_LAB_SUBMISSION_OBSERVATION_LIMIT
           ) {
-            failedCustomRaceKey = undefined;
+            transaction.submitted = false;
+            transaction.outcome =
+              mode !== "terraform" &&
+              transaction.submittedRequestIdentity !==
+                transaction.requestIdentity
+                ? "waiting-lab"
+                : "submission-unconfirmed";
+          }
+        }
+        let labAvailable = false;
+        if (mode === "terraform") {
+          const lab = dependencies.terraformLab?.read();
+          if (lab !== undefined) {
+            sampledTerraformLab = lab;
+            labAvailable = lab.canSubmit;
+            if (
+              transaction.sessionIdentity !== undefined &&
+              transaction.sessionIdentity !== lab.session.identity &&
+              !transaction.submitted
+            ) {
+              transaction.outcome = "waiting-lab";
+            }
+            transaction.sessionIdentity = lab.session.identity;
+          } else if (!celestialLabOutcomeIsTerminal(transaction.outcome)) {
+            transaction.outcome = "temporary-unavailable";
+            sampledCelestialLabAction = "wait";
           }
           if (
-            pendingCelestialLabSubmitted ||
-            failedCustomRaceKey === sampledCustomRaceKey
+            !transaction.submitted &&
+            !celestialLabOutcomeIsTerminal(transaction.outcome)
           ) {
-            sampledCustomRaceAction = "wait";
-          } else {
-            const decision = capturedCustomRaceDecision(settings, lab);
-            sampledCustomRaceAction = decision.kind;
-            sampledCustomRaceDesign = decision.design;
+            transaction.outcome = labAvailable
+              ? "waiting-lab"
+              : "temporary-unavailable";
+          }
+          sampledCelestialLabAction = transaction.submitted
+            ? "wait"
+            : celestialLabOutcomeIsTerminal(transaction.outcome)
+              ? "pause"
+              : labAvailable
+                ? "submit"
+                : "wait";
+        } else {
+          const savedCustomRaceJson =
+            dependencies.customRaceLab?.readCurrentSavedRaceJson();
+          const requestIdentity = capturedCustomRaceRequestIdentity(
+            settings,
+            mode,
+            savedCustomRaceJson,
+          );
+          if (transaction.requestIdentity !== requestIdentity) {
+            transaction.requestIdentity = requestIdentity;
+            if (!transaction.submitted) transaction.outcome = "waiting-lab";
+          }
+          const lab = dependencies.customRaceLab?.read(requestIdentity);
+          if (lab !== undefined) {
+            sampledCustomRaceLab = lab;
+            labAvailable = lab.canSubmit;
+            if (
+              transaction.sessionIdentity !== undefined &&
+              transaction.sessionIdentity !== lab.session.identity &&
+              !transaction.submitted
+            ) {
+              transaction.outcome = "waiting-lab";
+            }
+            transaction.sessionIdentity = lab.session.identity;
+            if (
+              transaction.submitted ||
+              celestialLabOutcomeIsTerminal(transaction.outcome)
+            ) {
+              sampledCelestialLabAction = transaction.submitted
+                ? "wait"
+                : "pause";
+            } else if (!lab.canSubmit) {
+              transaction.outcome = "temporary-unavailable";
+              sampledCelestialLabAction = "wait";
+            } else {
+              const decision = capturedCustomRaceDecision(
+                settings,
+                lab,
+                requestIdentity,
+              );
+              sampledCelestialLabAction = decision.kind;
+              sampledCustomRaceRequest = decision.request;
+              const customRaceMode = capturedCustomRaceMode(settings);
+              if (customRaceMode === "pause") {
+                transaction.outcome = "waiting-lab";
+                sampledCelestialLabAction = "pause";
+              } else if (lab.recalculation === "failed") {
+                transaction.outcome = "recalculation-failed";
+              } else if (lab.recalculation === "stale") {
+                transaction.outcome = "stale-session";
+              } else if (
+                customRaceMode === "import" &&
+                !parseCustomRacePreset(
+                  readCustomRacePresetSelection(settings).preset.json,
+                ).ok
+              ) {
+                transaction.outcome = "semantic-rejection";
+                sampledCelestialLabAction = "pause";
+              } else if (decision.kind === "wait") {
+                transaction.outcome = "applying-preset";
+              } else if (decision.kind === "pause") {
+                transaction.outcome = lab.canSubmit
+                  ? "semantic-rejection"
+                  : "temporary-unavailable";
+                if (transaction.outcome === "temporary-unavailable") {
+                  sampledCelestialLabAction = "wait";
+                }
+              } else {
+                transaction.outcome = "waiting-lab";
+              }
+            }
+          } else if (!celestialLabOutcomeIsTerminal(transaction.outcome)) {
+            transaction.outcome = "temporary-unavailable";
+            sampledCelestialLabAction = "wait";
           }
         }
         branch = {
           type: "celestial-lab",
           mode,
           eligible:
-            lab !== undefined &&
-            lab.canSubmit &&
+            labAvailable &&
             sampledBuildingResetCount !== undefined &&
-            (sampledCustomRaceAction === "apply" ||
-              sampledCustomRaceAction === "submit"),
-          labAction: sampledCustomRaceAction,
+            (sampledCelestialLabAction === "apply" ||
+              sampledCelestialLabAction === "submit"),
+          labAction: sampledCelestialLabAction,
           resetObserved: false,
         };
       } else if (!resetCommitted && prestigeType === "mad") {
@@ -1019,7 +1246,7 @@ export function createCapturedMadPrestige(
           // reaching the captured `setRace()` completion method.
           if (
             command.goal === "GameOverMan" &&
-            (pendingCelestialLabMode !== undefined || pendingWitchDirectReset)
+            (pendingCelestialLab !== undefined || pendingWitchDirectReset)
           ) {
             return;
           }
@@ -1105,12 +1332,7 @@ export function createCapturedMadPrestige(
               tags: Object.freeze(["achievements"]),
             });
           } else if (resetStat === "ascension") {
-            pendingCelestialLabMode = "ascension";
-            pendingCelestialLabRoot = sampledRoot;
-            pendingCelestialLabResetCount = resetCountBefore;
-            pendingCelestialLabSubmitted = false;
-            failedCustomRaceKey = undefined;
-            pendingWitchCelestialLab = true;
+            beginCelestialLabTransaction("ascension", resetCountBefore, true);
           } else {
             pendingWitchDirectReset = true;
           }
@@ -1122,24 +1344,34 @@ export function createCapturedMadPrestige(
               "captured celestial lab root changed after sampling",
             );
           }
+          const transaction = pendingCelestialLab;
+          const request = sampledCustomRaceRequest;
+          const lab = sampledCustomRaceLab;
           if (
-            pendingCelestialLabMode !== command.mode ||
-            sampledCustomRaceLab === undefined ||
-            sampledCustomRaceDesign === undefined ||
+            transaction === undefined ||
+            transaction.mode !== command.mode ||
+            transaction.submitted ||
+            lab === undefined ||
+            request === undefined ||
+            transaction.requestIdentity === undefined ||
             dependencies.customRaceLab === undefined
           ) {
             return;
           }
           const result = dependencies.customRaceLab.applyDesign(
-            sampledCustomRaceLab.session,
-            sampledCustomRaceDesign,
+            lab.session,
+            request,
+            transaction.requestIdentity,
           );
-          if (result.status !== "applied") {
-            failedCustomRaceKey = sampledCustomRaceKey;
-            throw new Error(
-              `captured Custom Race apply ${result.status}: ${result.reason}`,
-            );
-          }
+          transaction.sessionIdentity = lab.session.identity;
+          transaction.outcome =
+            result.status === "pending"
+              ? "applying-preset"
+              : result.status === "stale"
+                ? "stale-session"
+                : result.status === "unavailable"
+                  ? "temporary-unavailable"
+                  : "semantic-rejection";
           return;
         }
         case "complete-celestial-lab": {
@@ -1148,75 +1380,65 @@ export function createCapturedMadPrestige(
               "captured celestial lab root changed after sampling",
             );
           }
+          const transaction = pendingCelestialLab;
           if (
-            pendingCelestialLabMode !== command.mode ||
-            sampledCustomRaceLab === undefined ||
-            dependencies.customRaceLab === undefined
+            transaction === undefined ||
+            transaction.mode !== command.mode ||
+            transaction.submitted
           )
             return;
-          const resetCountBefore = sampledBuildingResetCount;
-          pendingCelestialLabSubmitted = true;
-          const result = dependencies.customRaceLab.submit(
-            sampledCustomRaceLab.session,
-            command.mode,
-          );
-          if (result.status !== "applied") {
-            failedCustomRaceKey = sampledCustomRaceKey;
-            throw new Error(
-              `captured celestial lab submit ${result.status}: ${result.reason}`,
+          let result:
+            | ReturnType<GameCustomRaceLabPort["submit"]>
+            | ReturnType<GameTerraformLabPort["submit"]>
+            | undefined;
+          if (command.mode === "terraform") {
+            const lab = sampledTerraformLab;
+            if (lab === undefined || dependencies.terraformLab === undefined)
+              return;
+            result = dependencies.terraformLab.submit(lab.session);
+            transaction.sessionIdentity = lab.session.identity;
+          } else {
+            const lab = sampledCustomRaceLab;
+            if (
+              lab === undefined ||
+              transaction.requestIdentity === undefined ||
+              dependencies.customRaceLab === undefined
+            )
+              return;
+            result = dependencies.customRaceLab.submit(
+              lab.session,
+              transaction.requestIdentity,
             );
+            transaction.sessionIdentity = lab.session.identity;
           }
-          const resetCountAfter = readCapturedResetCount(
-            dependencies.rootState.readRoot(),
-            command.mode,
-          );
-          if (
-            resetCountBefore === undefined ||
-            resetCountAfter === undefined ||
-            resetCountAfter <= resetCountBefore
-          ) {
-            return;
-          }
-          const completeWitchCelestialLab = pendingWitchCelestialLab;
-          pendingCelestialLabMode = undefined;
-          pendingCelestialLabRoot = undefined;
-          pendingCelestialLabResetCount = undefined;
-          pendingCelestialLabSubmitted = false;
-          pendingWitchCelestialLab = false;
-          resetCommitted = true;
-          dependencies.onActivity?.({
-            message: "Prestiged",
-            color: "info",
-            tags: Object.freeze(["achievements"]),
-          });
-          if (completeWitchCelestialLab) {
-            dependencies.setGoal("GameOverMan");
+          if (result === undefined) return;
+          if (result.status === "requested") {
+            transaction.submitted = true;
+            transaction.waitTicks = 0;
+            transaction.submittedRequestIdentity = transaction.requestIdentity;
+            transaction.outcome = "submission-requested";
+          } else {
+            transaction.outcome =
+              result.status === "stale"
+                ? "stale-session"
+                : result.status === "unavailable"
+                  ? "temporary-unavailable"
+                  : "native-submission-rejection";
           }
           return;
         }
         case "confirm-celestial-lab-reset": {
+          const transaction = pendingCelestialLab;
           if (
             dependencies.rootState.readRoot() !== sampledRoot ||
-            pendingCelestialLabMode !== command.mode ||
-            pendingCelestialLabRoot !== sampledRoot ||
-            pendingCelestialLabResetCount === undefined ||
+            transaction === undefined ||
+            transaction.mode !== command.mode ||
+            transaction.resetCountBefore === undefined ||
             sampledBuildingResetCount === undefined ||
-            sampledBuildingResetCount <= pendingCelestialLabResetCount
+            sampledBuildingResetCount <= transaction.resetCountBefore
           )
             return;
-          const completeWitchCelestialLab = pendingWitchCelestialLab;
-          pendingCelestialLabMode = undefined;
-          pendingCelestialLabRoot = undefined;
-          pendingCelestialLabResetCount = undefined;
-          pendingCelestialLabSubmitted = false;
-          pendingWitchCelestialLab = false;
-          resetCommitted = true;
-          dependencies.onActivity?.({
-            message: "Prestiged",
-            color: "info",
-            tags: Object.freeze(["achievements"]),
-          });
-          if (completeWitchCelestialLab) dependencies.setGoal("GameOverMan");
+          commitCelestialLabReset();
           return;
         }
         case "cache-building-options": {
@@ -1353,14 +1575,12 @@ export function createCapturedMadPrestige(
               sampledBuildingType === "ascension" ||
               sampledBuildingType === "apotheosis"
             ) {
-              pendingCelestialLabMode =
+              beginCelestialLabTransaction(
                 sampledBuildingType === "terraform"
                   ? "terraform"
-                  : sampledBuildingType;
-              pendingCelestialLabRoot = sampledRoot;
-              pendingCelestialLabResetCount = sampledBuildingResetCount;
-              pendingCelestialLabSubmitted = false;
-              failedCustomRaceKey = undefined;
+                  : sampledBuildingType,
+                sampledBuildingResetCount,
+              );
             }
           }
           return;
