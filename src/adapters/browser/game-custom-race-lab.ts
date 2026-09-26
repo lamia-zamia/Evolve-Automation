@@ -1,7 +1,7 @@
 /**
  * Captured boundary for DeadSpace `ascendLab()` in `src/space.js` at fdda93b5.
- * Presets go through the game's file-based `customImport()` and `geneEdit()` path; this adapter
- * only observes the normalized live draft and never reproduces strand rules.
+ * Presets go through the game's `reset()`, file-based `customImport()`, and `geneEdit()` path; this
+ * adapter only observes the normalized live draft and never reproduces strand rules.
  */
 
 import {
@@ -66,10 +66,11 @@ interface PendingCustomRaceImport {
   readonly requestIdentity: string;
   readonly request: CustomRacePresetRequest;
   readonly input: Record<string, unknown>;
+  readonly fileList: unknown;
   readonly previousFiles: unknown;
-  readonly previousGenomeRanks: unknown;
-  readonly previousError: unknown;
-  stage: "native-import" | "native-reprice";
+  previousGenomeRanks: unknown;
+  previousError: unknown;
+  stage: "native-reset" | "native-import" | "native-reprice";
   observations: number;
   baselineStrand: unknown;
   baselineStrandGeneration: number;
@@ -308,6 +309,7 @@ export function createGameCustomRaceLab(
       handle === undefined ||
       view === undefined ||
       genome === undefined ||
+      !handle.methods.includes("reset") ||
       !handle.methods.includes("customImport") ||
       !handle.methods.includes("geneEdit") ||
       !handle.methods.includes("setRace")
@@ -432,6 +434,48 @@ export function createGameCustomRaceLab(
     }
     const observedRequestIdentity = pending.requestIdentity;
     pending.observations += 1;
+    if (pending.stage === "native-reset") {
+      if (
+        live.strandSurface !== pending.baselineStrand &&
+        live.strandHandle.generation > pending.baselineStrandGeneration &&
+        live.strandRanks !== pending.baselineStrandRanks
+      ) {
+        const currentHandle = controls.resolve(CUSTOM_RACE_LAB_CONTROL_ID);
+        if (
+          currentHandle === undefined ||
+          currentHandle.generation !== current.handle.generation ||
+          currentHandle.data !== current.handle.data ||
+          doc.getElementById(CUSTOM_RACE_FILE_INPUT_ID) !== pending.input
+        ) {
+          failPendingImport(current, observedRequestIdentity, "stale", doc);
+          return "stale";
+        }
+        pending.previousGenomeRanks = current.genome["ranks"];
+        pending.previousError = readProperty(
+          readProperty(current.view, "err"),
+          "msg",
+        );
+        pending.stage = "native-import";
+        pending.observations = 0;
+        try {
+          pending.input["files"] = pending.fileList;
+        } catch {
+          failPendingImport(current, observedRequestIdentity, "failed", doc);
+          return "failed";
+        }
+        const result = controls.invoke(currentHandle, "customImport");
+        if (!result.ok) {
+          failPendingImport(current, observedRequestIdentity, "stale", doc);
+          return "stale";
+        }
+        return "pending";
+      }
+      if (pending.observations >= CUSTOM_RACE_REPRICE_OBSERVATION_LIMIT) {
+        failPendingImport(current, observedRequestIdentity, "failed", doc);
+        return "failed";
+      }
+      return "pending";
+    }
     if (pending.stage === "native-import") {
       const gameError = readProperty(readProperty(current.view, "err"), "msg");
       if (
@@ -618,23 +662,16 @@ export function createGameCustomRaceLab(
       requestIdentity,
       request,
       input,
+      fileList,
       previousFiles,
-      previousGenomeRanks: current.genome["ranks"],
-      previousError: readProperty(readProperty(current.view, "err"), "msg"),
-      stage: "native-import",
+      previousGenomeRanks: undefined,
+      previousError: undefined,
+      stage: "native-reset",
       observations: 0,
       baselineStrand: live.strandSurface,
       baselineStrandGeneration: live.strandHandle.generation,
       baselineStrandRanks: live.strandRanks,
     };
-    try {
-      input["files"] = fileList;
-    } catch {
-      return Object.freeze({
-        status: "unavailable",
-        reason: "native Custom Race file input rejected the preset",
-      });
-    }
     pendingImport = pending;
     failedImport = undefined;
     completedImport = undefined;
@@ -642,18 +679,17 @@ export function createGameCustomRaceLab(
     if (
       currentHandle === undefined ||
       currentHandle.generation !== current.handle.generation ||
-      currentHandle.data !== current.handle.data
+      currentHandle.data !== current.handle.data ||
+      !currentHandle.methods.includes("reset")
     ) {
-      restoreImportFile(pending, doc);
       pendingImport = undefined;
       return Object.freeze({
         status: "stale",
-        reason: "Custom Race lab changed before native import",
+        reason: "Custom Race lab changed before native reset",
       });
     }
-    const result = controls.invoke(currentHandle, "customImport");
+    const result = controls.invoke(currentHandle, "reset");
     if (!result.ok) {
-      restoreImportFile(pending, doc);
       pendingImport = undefined;
       return Object.freeze({
         status: "stale",

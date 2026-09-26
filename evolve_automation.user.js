@@ -43682,7 +43682,7 @@ Only continue if you trust the source. Injected code:
       if (doc === void 0 || doc.querySelector(CUSTOM_RACE_LAB_PANEL_SELECTOR) == null)
         return;
       let handle = controls2.resolve(CUSTOM_RACE_LAB_CONTROL_ID), view = handle === void 0 ? void 0 : customRaceLabRecord(handle.data), genome = customRaceLabRecord(readProperty(view, "g"));
-      if (!(handle === void 0 || view === void 0 || genome === void 0 || !handle.methods.includes("customImport") || !handle.methods.includes("geneEdit") || !handle.methods.includes("setRace")))
+      if (!(handle === void 0 || view === void 0 || genome === void 0 || !handle.methods.includes("reset") || !handle.methods.includes("customImport") || !handle.methods.includes("geneEdit") || !handle.methods.includes("setRace")))
         return mounted === void 0 || mounted.root !== root || mounted.handle.generation !== handle.generation ? (mounted = Object.freeze({
           root,
           handle,
@@ -43731,7 +43731,25 @@ Only continue if you trust the source. Injected code:
       if (pending.root !== current.root || pending.sessionIdentity !== current.session.identity)
         return "pending";
       let observedRequestIdentity = pending.requestIdentity;
-      if (pending.observations += 1, pending.stage === "native-import") {
+      if (pending.observations += 1, pending.stage === "native-reset") {
+        if (live.strandSurface !== pending.baselineStrand && live.strandHandle.generation > pending.baselineStrandGeneration && live.strandRanks !== pending.baselineStrandRanks) {
+          let currentHandle = controls2.resolve(CUSTOM_RACE_LAB_CONTROL_ID);
+          if (currentHandle === void 0 || currentHandle.generation !== current.handle.generation || currentHandle.data !== current.handle.data || doc.getElementById(CUSTOM_RACE_FILE_INPUT_ID) !== pending.input)
+            return failPendingImport(current, observedRequestIdentity, "stale", doc), "stale";
+          pending.previousGenomeRanks = current.genome.ranks, pending.previousError = readProperty(
+            readProperty(current.view, "err"),
+            "msg"
+          ), pending.stage = "native-import", pending.observations = 0;
+          try {
+            pending.input.files = pending.fileList;
+          } catch {
+            return failPendingImport(current, observedRequestIdentity, "failed", doc), "failed";
+          }
+          return controls2.invoke(currentHandle, "customImport").ok ? "pending" : (failPendingImport(current, observedRequestIdentity, "stale", doc), "stale");
+        }
+        return pending.observations >= CUSTOM_RACE_REPRICE_OBSERVATION_LIMIT ? (failPendingImport(current, observedRequestIdentity, "failed", doc), "failed") : "pending";
+      }
+      if (pending.stage === "native-import") {
         let gameError = readProperty(readProperty(current.view, "err"), "msg");
         if (typeof gameError == "string" && gameError !== "" && gameError !== pending.previousError)
           return failPendingImport(current, observedRequestIdentity, "failed", doc), "failed";
@@ -43805,38 +43823,31 @@ Only continue if you trust the source. Injected code:
           status: "unavailable",
           reason: "page File and DataTransfer APIs are unavailable"
         });
-      let previousFiles = input.files, pending = {
+      let previousFiles = input.files;
+      pendingImport = {
         root: current.root,
         sessionIdentity: current.session.identity,
         requestIdentity,
         request,
         input,
+        fileList,
         previousFiles,
-        previousGenomeRanks: current.genome.ranks,
-        previousError: readProperty(readProperty(current.view, "err"), "msg"),
-        stage: "native-import",
+        previousGenomeRanks: void 0,
+        previousError: void 0,
+        stage: "native-reset",
         observations: 0,
         baselineStrand: live.strandSurface,
         baselineStrandGeneration: live.strandHandle.generation,
         baselineStrandRanks: live.strandRanks
-      };
-      try {
-        input.files = fileList;
-      } catch {
-        return Object.freeze({
-          status: "unavailable",
-          reason: "native Custom Race file input rejected the preset"
-        });
-      }
-      pendingImport = pending, failedImport = void 0, completedImport = void 0;
+      }, failedImport = void 0, completedImport = void 0;
       let currentHandle = controls2.resolve(CUSTOM_RACE_LAB_CONTROL_ID);
-      if (currentHandle === void 0 || currentHandle.generation !== current.handle.generation || currentHandle.data !== current.handle.data)
-        return restoreImportFile(pending, doc), pendingImport = void 0, Object.freeze({
+      if (currentHandle === void 0 || currentHandle.generation !== current.handle.generation || currentHandle.data !== current.handle.data || !currentHandle.methods.includes("reset"))
+        return pendingImport = void 0, Object.freeze({
           status: "stale",
-          reason: "Custom Race lab changed before native import"
+          reason: "Custom Race lab changed before native reset"
         });
-      let result = controls2.invoke(currentHandle, "customImport");
-      return result.ok ? Object.freeze({ status: "pending" }) : (restoreImportFile(pending, doc), pendingImport = void 0, Object.freeze({
+      let result = controls2.invoke(currentHandle, "reset");
+      return result.ok ? Object.freeze({ status: "pending" }) : (pendingImport = void 0, Object.freeze({
         status: "stale",
         reason: result.detail ?? result.reason
       }));

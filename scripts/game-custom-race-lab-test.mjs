@@ -40,6 +40,27 @@ function requestFrom(json) {
   return result.request;
 }
 
+function startPresetApplication(fixture, session, request, identity) {
+  const firstCall = fixture.nativeCalls.length;
+  assert.equal(
+    fixture.port.applyDesign(session, request, identity).status,
+    "pending",
+  );
+  const calls = () => fixture.nativeCalls.slice(firstCall);
+  assert.deepEqual(calls(), ["reset"]);
+  assert.equal(fixture.fileInput.files, null);
+  assert.equal(fixture.port.read(identity)?.recalculation, "pending");
+  assert.deepEqual(
+    calls(),
+    ["reset"],
+    "the importer waits until reset's deferred reprice redraws the strand",
+  );
+  assert.equal(fixture.finishNativeReprice(), true);
+  assert.equal(fixture.genome.recessive, 0);
+  assert.equal(fixture.port.read(identity)?.recalculation, "pending");
+  assert.deepEqual(calls(), ["reset", "customImport"]);
+}
+
 const root = {
   stats: { ascend: 0 },
   custom: {},
@@ -86,18 +107,14 @@ const currentJson = makePreset();
 const request = requestFrom(currentJson);
 assert.deepEqual(JSON.parse(request.importJson).traitlist, ["smart", "tough"]);
 assert.equal(JSON.parse(request.importJson).rankVersion, 2);
-assert.deepEqual(
-  fixture.port.applyDesign(initial.session, request, identity),
-  { status: "pending" },
-  "preset application requests DeadSpace customImport() rather than editing the genome directly",
-);
-assert.deepEqual(fixture.nativeCalls, ["customImport"]);
+startPresetApplication(fixture, initial.session, request, identity);
+assert.deepEqual(fixture.nativeCalls, ["reset", "customImport"]);
 assert.equal(fixture.fileInput.files[0].name, "evolve-custom-race.txt");
 assert.equal(fixture.fileInput.files[0].type, "text/plain");
 
 const repricing = fixture.port.read(identity);
 assert.equal(repricing?.recalculation, "pending");
-assert.deepEqual(fixture.nativeCalls, ["customImport", "geneEdit"]);
+assert.deepEqual(fixture.nativeCalls, ["reset", "customImport", "geneEdit"]);
 assert.equal(fixture.port.read(identity)?.recalculation, "pending");
 assert.equal(
   fixture.finishNativeReprice(),
@@ -114,6 +131,32 @@ assert.deepEqual(settled?.draft.slots, { smart: 1, tough: 7 });
 assert.equal(settled?.draft.recessive, 2);
 assert.equal(settled?.draft.span, 24);
 
+// DeadSpace's truthy import assignment cannot clear a zero recessive count over an existing draft.
+// Keep this regression against the real importer behavior; the adapter must clear it through a
+// native operation before it applies the preset.
+{
+  const sample = createDeadSpaceCustomLabFixture({
+    root: { stats: { ascend: 0 }, custom: {} },
+  });
+  const before = sample.port.read("zero-recessive");
+  assert.ok(before);
+  assert.equal(before.draft.recessive, 2);
+  startPresetApplication(
+    sample,
+    before.session,
+    requestFrom(makePreset({ recessive: 0 })),
+    "zero-recessive",
+  );
+  assert.equal(sample.genome.recessive, 0);
+  sample.port.read("zero-recessive");
+  assert.equal(sample.finishNativeReprice(), true);
+  assert.equal(
+    sample.port.read("zero-recessive")?.recalculation,
+    "settled",
+    "a current-format recessive: 0 preset clears the existing pair",
+  );
+}
+
 // DeadSpace truncates imported text fields while the native import remains successful.
 const longNameFixture = createDeadSpaceCustomLabFixture({
   root: { custom: {} },
@@ -122,13 +165,11 @@ const longNameRequest = requestFrom(makePreset({ name: "A".repeat(25) }));
 const longNameIdentity = "ascension:import:long-name";
 const longNameSnapshot = longNameFixture.port.read(longNameIdentity);
 assert.ok(longNameSnapshot);
-assert.deepEqual(
-  longNameFixture.port.applyDesign(
-    longNameSnapshot.session,
-    longNameRequest,
-    longNameIdentity,
-  ),
-  { status: "pending" },
+startPresetApplication(
+  longNameFixture,
+  longNameSnapshot.session,
+  longNameRequest,
+  longNameIdentity,
 );
 longNameFixture.port.read(longNameIdentity);
 assert.equal(longNameFixture.finishNativeReprice(), true);
@@ -158,24 +199,29 @@ const oldJson = JSON.stringify({
 const oldRequest = requestFrom(oldJson);
 const replacementSession = fixture.port.read("ascension:import:0:old")?.session;
 assert.ok(replacementSession);
+assert.equal(fixture.genome.recessive, 2);
 assert.equal(JSON.parse(oldRequest.importJson).traitlist[0], "smart");
-assert.deepEqual(
-  fixture.port.applyDesign(
-    replacementSession,
-    oldRequest,
-    "ascension:import:0:old",
-  ),
-  { status: "pending" },
+startPresetApplication(
+  fixture,
+  replacementSession,
+  oldRequest,
+  "ascension:import:0:old",
 );
 assert.equal(
   fixture.port.read("ascension:import:0:old")?.recalculation,
   "pending",
 );
+assert.equal(fixture.genome.recessive, 0);
 assert.equal(fixture.finishNativeReprice(), true);
 const oldSettled = fixture.port.read("ascension:import:0:old");
 assert.equal(oldSettled?.recalculation, "settled");
 assert.deepEqual(oldSettled?.draft.slots, { smart: 0 });
 assert.equal(oldSettled?.draft.span, 12);
+assert.equal(
+  oldSettled?.draft.recessive,
+  0,
+  "a legacy preset without recessive does not inherit the loaded race's pair",
+);
 assert.equal(
   oldSettled?.draft.ranks.smart,
   1.33,
@@ -199,13 +245,11 @@ assert.equal(
       ranks: { smart: 2, locked: 1 },
     }),
   );
-  assert.equal(
-    filtered.port.applyDesign(
-      filteredInitial.session,
-      filteredRequest,
-      "legacy-filtered",
-    ).status,
-    "pending",
+  startPresetApplication(
+    filtered,
+    filteredInitial.session,
+    filteredRequest,
+    "legacy-filtered",
   );
   filtered.port.read("legacy-filtered");
   assert.equal(filtered.finishNativeReprice(), true);
@@ -214,7 +258,7 @@ assert.equal(
     filtered.port.submit(filteredInitial.session, "legacy-filtered").status,
     "unavailable",
   );
-  assert.deepEqual(filtered.nativeCalls, ["customImport", "geneEdit"]);
+  assert.deepEqual(filtered.nativeCalls, ["reset", "customImport", "geneEdit"]);
 }
 
 // The game's strand redraw is part of the completion signal. Calling geneEdit successfully but
@@ -227,18 +271,16 @@ assert.equal(
   });
   const before = sample.port.read("same-request");
   assert.ok(before);
-  assert.equal(
-    sample.port.applyDesign(
-      before.session,
-      requestFrom(currentJson),
-      "same-request",
-    ).status,
-    "pending",
+  startPresetApplication(
+    sample,
+    before.session,
+    requestFrom(currentJson),
+    "same-request",
   );
   assert.equal(sample.port.read("same-request")?.recalculation, "pending");
   for (let index = 0; index < 8; index += 1) sample.port.read("same-request");
   assert.equal(sample.port.read("same-request")?.recalculation, "failed");
-  assert.deepEqual(sample.nativeCalls, ["customImport", "geneEdit"]);
+  assert.deepEqual(sample.nativeCalls, ["reset", "customImport", "geneEdit"]);
 }
 
 // A native customImport no-op does not replace genome.ranks, so it times out as failed.
@@ -250,10 +292,15 @@ assert.equal(
   });
   const before = sample.port.read("no-op");
   assert.ok(before);
-  sample.port.applyDesign(before.session, requestFrom(currentJson), "no-op");
+  startPresetApplication(
+    sample,
+    before.session,
+    requestFrom(currentJson),
+    "no-op",
+  );
   for (let index = 0; index < 8; index += 1) sample.port.read("no-op");
   assert.equal(sample.port.read("no-op")?.recalculation, "failed");
-  assert.deepEqual(sample.nativeCalls, ["customImport"]);
+  assert.deepEqual(sample.nativeCalls, ["reset", "customImport"]);
 }
 
 // Full current-format imports must agree with the live normalized slots/ranks before they settle.
@@ -264,7 +311,8 @@ assert.equal(
   });
   const before = sample.port.read("normalized");
   assert.ok(before);
-  sample.port.applyDesign(
+  startPresetApplication(
+    sample,
     before.session,
     requestFrom(currentJson),
     "normalized",
@@ -285,7 +333,8 @@ assert.equal(
   });
   const before = sample.port.read("same-preset");
   assert.ok(before);
-  sample.port.applyDesign(
+  startPresetApplication(
+    sample,
     before.session,
     requestFrom(currentJson),
     "same-preset",

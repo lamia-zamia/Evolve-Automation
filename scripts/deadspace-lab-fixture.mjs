@@ -144,7 +144,7 @@ export function createDeadSpaceCustomLabFixture({
     return {
       elementId: CUSTOM_RACE_LAB_CONTROL_ID,
       generation: mainGeneration,
-      methods: ["customImport", "geneEdit", "setRace"],
+      methods: ["reset", "customImport", "geneEdit", "setRace"],
       data: mainData,
     };
   }
@@ -176,6 +176,34 @@ export function createDeadSpaceCustomLabFixture({
       if (handle.elementId !== CUSTOM_RACE_LAB_CONTROL_ID) {
         return { ok: false, reason: "unknown-method" };
       }
+      // Native reset clears the draft synchronously, then reprices it on the next tick.
+      if (method === "reset") {
+        for (const field of ["name", "desc", "entity", "home"]) {
+          genome[field] = "";
+        }
+        for (const field of [
+          "red",
+          "hell",
+          "gas",
+          "gas_moon",
+          "dwarf",
+          "titan",
+          "enceladus",
+          "triton",
+          "makemake",
+          "eris",
+        ]) {
+          genome[field] = fallback[field] ?? "";
+        }
+        genome.traitlist = [];
+        genome.ranks = {};
+        genome.slots = {};
+        genome.recessive = 0;
+        genome.span = 24;
+        genome.fanaticism = false;
+        queuedReprice = true;
+        return { ok: true, value: undefined };
+      }
       if (method === "customImport") {
         const file = fileInput.files?.[0];
         if (file === undefined || behavior.ignoreImport === true) {
@@ -188,6 +216,7 @@ export function createDeadSpaceCustomLabFixture({
           error.msg = "invalid import";
           return { ok: true, value: undefined };
         }
+        // Upstream customImport() assigns only truthy values; zero must leave the reset value in place.
         for (const [field, value] of Object.entries(imported)) {
           if (Object.hasOwn(genome, field) && value) genome[field] = value;
         }
@@ -228,7 +257,6 @@ export function createDeadSpaceCustomLabFixture({
         if (typeof imported.slotSpan === "number" && imported.slotSpan >= 12) {
           genome.span = imported.slotSpan;
         }
-        genome.recessive = imported.recessive || 0;
         genome.fanaticism = Object.hasOwn(imported, "fanaticism")
           ? imported.fanaticism
           : false;

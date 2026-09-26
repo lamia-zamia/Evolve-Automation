@@ -224,8 +224,8 @@ function scenario({
   ]);
 }
 
-// An already-open lab can be manually edited before its first automation sample. Reuse restores
-// the actual saved race through customImport() before setRace, rather than blessing that draft.
+// An already-open lab can be manually edited before its first automation sample. Reuse resets the
+// native draft, waits for its deferred repricing, and restores the actual saved race before setRace.
 {
   const flow = scenario({
     prestigeType: "ascension",
@@ -238,7 +238,8 @@ function scenario({
   assert.equal(flow.submissions, 1);
   assert.equal(flow.root.stats.ascend, 1);
   assert.deepEqual(flow.customLab.genome.slots, { smart: 2, tough: 7 });
-  assert.deepEqual(flow.customLab.nativeCalls.slice(0, 3), [
+  assert.deepEqual(flow.customLab.nativeCalls.slice(0, 4), [
+    "reset",
     "customImport",
     "geneEdit",
     "setRace",
@@ -258,14 +259,14 @@ function scenario({
   assert.equal(flow.root.stats.ascend, 0);
 }
 
-// Import calls the native file importer, waits for the native reprice/redraw, then submits.
+// Import waits for native reset/reprice, calls the file importer, then waits for its reprice/redraw before submit.
 {
   const flow = scenario({
     prestigeType: "ascension",
     mode: "import",
     saved: false,
   });
-  flow.repeat(6);
+  flow.repeat(7);
   assert.equal(flow.submissions, 1);
   assert.equal(flow.root.stats.ascend, 1);
   assert.equal(flow.customLab.genome.name, "Avians");
