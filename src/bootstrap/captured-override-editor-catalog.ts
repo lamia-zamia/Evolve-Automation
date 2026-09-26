@@ -1,4 +1,4 @@
-import { overrideComparatorExpressions } from "../settings/override-comparators.ts";
+import { overrideComparatorExpressions } from "../domain/override-comparators.ts";
 import { CAPTURED_OVERRIDE_OPERAND_TYPES } from "../adapters/evolve/captured-override-evaluation.ts";
 import type { OverrideOperandType } from "../ui/override-condition-controls.ts";
 

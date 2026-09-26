@@ -7,7 +7,7 @@ import { createCapturedSettingsDefaults } from "../src/adapters/evolve/captured-
 import { createCapturedSettingsLifecycle } from "../src/application/captured-settings-lifecycle.ts";
 import { createCapturedOverrideEvaluation } from "../src/adapters/evolve/captured-override-evaluation.ts";
 import { createOverrideSettings } from "../src/application/override-settings.ts";
-import { overrideComparisons } from "../src/settings/override-comparators.ts";
+import { overrideComparisons } from "../src/domain/override-comparators.ts";
 import { planCapturedMechBuild } from "../src/domain/combat/captured-mech.ts";
 import { settingsSections } from "../src/adapters/evolve/runtime-catalogs.ts";
 import { createTestDocument, element } from "./dom-fixture.mjs";
@@ -910,9 +910,15 @@ function createPage(
 // --- import/export buttons: the player's way to configure every ported feature ------------------
 
 {
-  const { panel, root, saveText, settings, storage, downloads } = createPage(
-    JSON.stringify({ autoBuild: true }),
-  );
+  const {
+    panel,
+    root,
+    saveText,
+    settings,
+    storage,
+    downloads,
+    effectiveSettings,
+  } = createPage(JSON.stringify({ autoBuild: true }));
   panel.ensurePanel();
   const buttons = root.querySelectorAll("#script_importExportButtons");
   assert.equal(buttons.length, 1, "the script's buttons should be drawn once");
@@ -929,17 +935,26 @@ function createPage(
   assert.deepEqual(JSON.parse(saveText.value), settings.readRaw());
 
   // Import replaces the record, persists it, and clears the field.
-  saveText.value = JSON.stringify({ autoBuild: false, autoResearch: true });
+  saveText.value = JSON.stringify({
+    autoBuild: false,
+    autoResearch: true,
+    prestigeWhiteholeEjectEnabled: true,
+  });
   root.querySelectorAll("#script_settingsImport")[0].dispatch("click");
   assert.equal(saveText.value, "");
   assert.equal(settings.readRaw()["autoBuild"], false);
   assert.equal(settings.readRaw()["autoResearch"], true);
+  assert.equal(settings.readRaw()["autoEject"], true);
+  assert.equal(settings.readRaw()["prestigeWhiteholeEjectEnabled"], undefined);
+  assert.equal(effectiveSettings.autoBuild, false);
   assert.equal(settings.readRaw()["autoJobs"], false);
   assert.equal(settings.readRaw()["tickRate"], 4);
   assert.equal(JSON.parse(storage.writes())["autoResearch"], true);
   // The panel drawn from the replaced record is gone, and the next tick rebuilds it.
+  assert.equal(root.querySelectorAll("#script_settings").length, 0);
   assert.equal(root.querySelectorAll("#autoScriptContainer").length, 0);
   panel.ensurePanel();
+  assert.equal(root.querySelectorAll("#script_settings").length, 1);
   assert.equal(root.querySelectorAll("#autoScriptContainer").length, 1);
 
   // The file button hands the page a pretty-printed copy.

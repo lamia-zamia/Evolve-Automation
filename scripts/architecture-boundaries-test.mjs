@@ -8,24 +8,22 @@ import ts from "typescript";
 const root = fileURLToPath(new URL("..", import.meta.url));
 const sourceRoot = path.join(root, "src");
 
-// Every top-level entry under src/ is classified. An unclassified entry fails this test, so a
-// new folder cannot silently escape the layer model.
+// Every top-level source entry under src/ is classified. Empty directories carry no source and
+// are ignored; an unclassified source entry fails this test.
 const layerOfDirectory = new Map([
   ["domain", "domain"],
   ["ports", "ports"],
   ["application", "application"],
   ["adapters", "adapters"],
   ["bootstrap", "composition"],
-  // TRANSITIONAL: src/game and src/ui hold the Vue 2 game-model and DOM bridges. They are
-  // adapter-owned today and move under src/adapters as each capability gains a narrow port.
-  ["game", "adapters"],
+  // TRANSITIONAL: src/ui holds the remaining UI/DOM helpers. Keep them adapter-owned while each
+  // capability moves to a named platform adapter.
   ["ui", "adapters"],
   // TRANSITIONAL: pure decision code that has not moved under src/domain yet. The policy layer
   // exists only so these folders cannot gain adapter, application, or composition dependencies
   // while they are migrated; remove it once each folder lands in domain or application.
   ["observability", "policy"],
   ["planning", "policy"],
-  ["settings", "policy"],
   // Dependency-free shared foundation. Must not import feature or platform code.
   ["formatting", "shared"],
   ["utils", "shared"],
@@ -122,6 +120,12 @@ const graph = new Map(productionFiles.map((file) => [file, []]));
 const failures = [];
 
 for (const entry of fs.readdirSync(sourceRoot, { withFileTypes: true })) {
+  if (
+    entry.isDirectory() &&
+    collectSourceFiles(path.join(sourceRoot, entry.name)).length === 0
+  ) {
+    continue;
+  }
   const classified = entry.isDirectory()
     ? layerOfDirectory.has(entry.name)
     : layerOfRootFile.has(entry.name) || excludedFiles.has(entry.name);
@@ -240,8 +244,6 @@ for (const [from, to] of [
   ["domain/override-editing.ts", "ports/override-editing.ts"],
   ["ui/settings-controls.ts", "application/override-editing.ts"],
   ["planning/build-planner.ts", "application/build.ts"],
-  ["settings/state.ts", "ui/settings-shell.ts"],
-  ["ui/settings-shell.ts", "settings/state.ts"],
 ]) {
   assert.notEqual(
     importViolation(from, to),
@@ -251,11 +253,10 @@ for (const [from, to] of [
 }
 for (const [from, to] of [
   ["domain/planner-analysis.ts", "utils/math.ts"],
-  ["settings/state.ts", "ports/build.ts"],
   ["application/override-settings.ts", "ports/override-settings.ts"],
   ["ui/settings-controls.ts", "ports/override-editing.ts"],
   ["adapters/evolve/override-failure-log.ts", "domain/override-resolution.ts"],
-  ["main.ts", "settings/state.ts"],
+  ["main.ts", "domain/override-resolution.ts"],
 ]) {
   assert.equal(
     importViolation(from, to),
@@ -267,6 +268,11 @@ assert.equal(
   layerOf("nonexistent-folder/file.ts"),
   null,
   "an unknown folder must not resolve to a layer",
+);
+assert.equal(
+  layerOf("settings/state.ts"),
+  null,
+  "the retired settings folder must not resolve to a layer",
 );
 
 console.log(

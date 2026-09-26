@@ -7,11 +7,10 @@
  * operates on the raw array directly. The runtime (`./captured-triggers.ts`) reads the same
  * array, so what the panel shows and what the tick evaluates are the same rows.
  *
- * The check catalog lists exactly the condition operands the captured evaluator answers
- * (`CAPTURED_OVERRIDE_OPERAND_TYPES`), minus nothing: the legacy override-only checks
- * (`String`, `Number`, `RaceId`) are not captured-answered and so are absent. Values stay
- * free text — the captured path has no live option lists — except `Boolean`, which keeps
- * its checkbox so an edited value cannot decay into the string `"false"`. The boolean list
+ * The check catalog lists captured operands usable with trigger thresholds. `RaceId` is captured
+ * for overrides, but a string id has no numeric trigger threshold. Values stay free text — the
+ * captured path has no live option lists — except `Boolean`, which keeps its checkbox so an edited
+ * value cannot decay into the string `"false"`. The boolean list
  * mirrors the legacy `retBools` subset the captured evaluator answers as equality checks;
  * it owns the requirement-count widget (boolean switch versus number input).
  *
@@ -201,10 +200,8 @@ const CAPTURED_TRIGGER_CHECKS: Readonly<Record<string, TriggerSettingsCheck>> =
   readCapturedTriggerChecks();
 
 /**
- * The boolean operands: compared for equality against the stored count, so the panel renders
- * a switch for the count instead of a number input. This is the legacy `retBools`
- * (`src/settings/override-catalog.ts`) subset the captured evaluator answers; keep the two
- * in agreement when either changes.
+ * The boolean operands compare for equality against the stored count, so the panel renders a
+ * switch instead of a number input. Keep the list aligned with the captured condition values.
  */
 const CAPTURED_TRIGGER_BOOLEAN_CHECKS: readonly string[] = Object.freeze([
   "Boolean",

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 
 import { createCapturedBuildingSettingsAdapter } from "../src/adapters/evolve/progression/build/captured-building-settings.ts";
 import { createCapturedBuildingToggleReader } from "../src/adapters/evolve/progression/build/captured-building-toggles.ts";
-import { overrideComparisons } from "../src/settings/override-comparators.ts";
+import { overrideComparisons } from "../src/domain/override-comparators.ts";
 import {
   createCapturedControls,
   createCapturedRootState,

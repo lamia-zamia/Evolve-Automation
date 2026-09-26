@@ -100,17 +100,17 @@ assert.deepEqual(
 );
 assert.ok(Object.isFrozen(viewed));
 
-// Every condition the captured evaluator answers is offered; the legacy
-// override-only checks are not captured-answered and stay absent.
+// Every captured operand usable with trigger thresholds is offered; override-only conditions stay absent.
 const checks = readCapturedTriggerChecksCatalog();
 assert.deepEqual(
   Object.keys(checks).sort(),
-  [...CAPTURED_OVERRIDE_OPERAND_TYPES].sort(),
+  CAPTURED_OVERRIDE_OPERAND_TYPES.filter((type) => type !== "RaceId").sort(),
 );
 assert.equal(checks["chain"], undefined);
 assert.equal(checks["String"], undefined);
 assert.equal(checks["Number"], undefined);
 assert.equal(checks["Eval"], undefined);
+assert.equal(checks["RaceId"], undefined);
 for (const check of Object.values(checks)) {
   assert.equal(check.options, null);
   assert.ok(check.description.length > 0);

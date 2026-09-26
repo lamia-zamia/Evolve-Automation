@@ -69,7 +69,7 @@ import { createCapturedProductionSettingsAdapter } from "../adapters/evolve/econ
 import type { GameActionCostReader } from "../ports/game-action-costs.ts";
 import type { GameControlRegistry } from "../ports/game-control-registry.ts";
 import type { GameRootStateSource } from "../ports/game-root-state.ts";
-import { overrideComparisons } from "../settings/override-comparators.ts";
+import { overrideComparisons } from "../domain/override-comparators.ts";
 import { createAutocomplete } from "../adapters/browser/autocomplete.ts";
 import {
   createGeneralSettingsBrowserAdapter,

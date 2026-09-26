@@ -1376,6 +1376,15 @@ assert.equal(
   12,
 );
 
+// Race ids are directly capturable override operands, including the Sludge default and literal ids.
+assert.equal(readCapturedOperand(root, "RaceId", "species"), "human");
+assert.equal(readCapturedOperand(root, "RaceId", "srace"), "protoplasm");
+assert.equal(readCapturedOperand(root, "RaceId", "human"), "human");
+assert.equal(readCapturedOperand(root, "RaceId", "old_gods"), undefined);
+assert.equal(
+  evaluateCapturedCondition(root, "RaceId", "species", "human"),
+  undefined,
+);
 // Nothing the capture does not hold is guessed at.
 assert.equal(readCapturedOperand(root, "Eval", "1 + 1"), undefined);
 assert.equal(

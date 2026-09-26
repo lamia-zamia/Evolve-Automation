@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { createOverrideSettings } from "../src/application/override-settings.ts";
 import { createCapturedOverrideEvaluation } from "../src/adapters/evolve/captured-override-evaluation.ts";
-import { overrideComparisons } from "../src/settings/override-comparators.ts";
+import { overrideComparisons } from "../src/domain/override-comparators.ts";
 import { inspectImportedSettings } from "../src/adapters/browser/settings-import.ts";
 import {
   createSettingsFixture,

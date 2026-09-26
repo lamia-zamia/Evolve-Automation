@@ -15,7 +15,7 @@ import { createCapturedSettingsDefaults } from "../src/adapters/evolve/captured-
 import { createCapturedSettingsLifecycle } from "../src/application/captured-settings-lifecycle.ts";
 import { createCapturedOverrideEvaluation } from "../src/adapters/evolve/captured-override-evaluation.ts";
 import { createOverrideSettings } from "../src/application/override-settings.ts";
-import { overrideComparisons } from "../src/settings/override-comparators.ts";
+import { overrideComparisons } from "../src/domain/override-comparators.ts";
 import { settingsSections } from "../src/adapters/evolve/runtime-catalogs.ts";
 import { createTestDocument, element } from "./dom-fixture.mjs";
 

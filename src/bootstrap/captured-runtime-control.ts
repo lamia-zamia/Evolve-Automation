@@ -198,7 +198,7 @@ import { createGameTerraformLab } from "../adapters/browser/game-terraform-lab.t
 import type { TickDiagnostics } from "../ports/tick.ts";
 import type { GameActivitySink } from "../ports/game-message-log.ts";
 import { isRecord, readProperty } from "../adapters/validation.ts";
-import { overrideComparisons } from "../settings/override-comparators.ts";
+import { overrideComparisons } from "../domain/override-comparators.ts";
 
 type WorkspaceDocument = ReturnType<
   Parameters<typeof createGamePanelWorkspace>[0]["getDocument"]

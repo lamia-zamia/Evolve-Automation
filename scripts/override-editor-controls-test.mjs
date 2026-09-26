@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 
-import { overrideComparatorExpressions } from "../src/settings/override-comparators.ts";
+import { overrideComparatorExpressions } from "../src/domain/override-comparators.ts";
 import { createOverrideConditionControls } from "../src/ui/override-condition-controls.ts";
 import { createOverrideEditorControls } from "../src/ui/override-editor.ts";
 import { createSettingsInputs } from "../src/ui/settings-inputs.ts";

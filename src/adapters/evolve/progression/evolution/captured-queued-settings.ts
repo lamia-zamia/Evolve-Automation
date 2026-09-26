@@ -1,12 +1,11 @@
 /**
- * Captured replacement for the script's queue load used immediately before cataclysm. It mutates
- * only the browser-owned settings record and leaves compatibility-only override/state managers out
- * of the captured runtime. The queue mutation itself is shared with the compatibility helper.
+ * Captured replacement for the script's queue load used immediately before cataclysm. The adapter
+ * applies the pure Evolution policy's commands and owns persistence, warnings and UI refresh.
  */
 
 import type { CapturedSettingsStore } from "../../../../ports/captured-settings-store.ts";
 import { isNonArrayRecord } from "../../../validation.ts";
-import { applyQueuedSettings } from "../../../../utils/queued-settings.ts";
+import { planQueuedSettings } from "../../../../domain/progression/evolution/queued-settings.ts";
 
 export interface CapturedQueuedSettingsDependencies {
   readonly settings: CapturedSettingsStore;
@@ -39,7 +38,6 @@ export function createCapturedQueuedSettings({
       const evolutionQueue = Array.isArray(rawQueue) ? rawQueue : undefined;
       const queuedEvolution = evolutionQueue?.[0];
       if (
-        settingsRaw["evolutionQueueEnabled"] !== true ||
         evolutionQueue === undefined ||
         queuedEvolution === undefined ||
         !isNonArrayRecord(queuedEvolution)
@@ -47,18 +45,32 @@ export function createCapturedQueuedSettings({
         return;
       }
 
-      const applied = applyQueuedSettings({
-        enabled: true,
+      const plan = planQueuedSettings({
+        enabled: settingsRaw["evolutionQueueEnabled"] === true,
         repeat: settingsRaw["evolutionQueueRepeat"] === true,
         settingsRaw,
-        evolutionQueue: evolutionQueue as Record<string, unknown>[],
-        onTypeMismatch: (settingName, currentValue, queuedValue) => {
-          onWarning(
-            `Type mismatch during loading queued settings: settingsRaw.${settingName} type: ${typeof currentValue}, value: ${currentValue}; queuedEvolution.${settingName} type: ${typeof queuedValue}, value: ${queuedValue};`,
-          );
-        },
+        queuedSettings: queuedEvolution,
+        hasQueuedSettings: true,
       });
-      if (!applied) return;
+      if (plan === undefined) return;
+      for (const command of plan.commands) {
+        switch (command.kind) {
+          case "consume-first":
+            evolutionQueue.shift();
+            break;
+          case "write-setting":
+            settingsRaw[command.settingName] = command.value;
+            break;
+          case "type-mismatch":
+            onWarning(
+              `Type mismatch during loading queued settings: settingsRaw.${command.settingName} type: ${typeof command.currentValue}, value: ${command.currentValue}; queuedEvolution.${command.settingName} type: ${typeof command.queuedValue}, value: ${command.queuedValue};`,
+            );
+            break;
+          case "repeat-first":
+            evolutionQueue.push(queuedEvolution);
+            break;
+        }
+      }
       lastAppliedEvolution = { ...queuedEvolution };
       evolutionAttempts += 1;
       settings.persist();

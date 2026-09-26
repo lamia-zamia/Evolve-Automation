@@ -18970,12 +18970,17 @@
     }
   }
   function readCapturedOperand(root, type, argument, context) {
-    if (typeof type == "string")
+    if (typeof type == "string") {
+      if (type === "RaceId") {
+        let raceId = resolveRaceId(root, argument);
+        return typeof raceId == "string" ? raceId : void 0;
+      }
       return BOOLEAN_OPERANDS.has(type) ? readBoolean(root, type, argument, context) : readNumber2(root, type, argument, context);
+    }
   }
   function evaluateCapturedCondition(root, type, argument, count2, context) {
     let value = readCapturedOperand(root, type, argument, context);
-    if (value === void 0) return;
+    if (value === void 0 || typeof value == "string") return;
     let target = Number(count2);
     if (Number.isFinite(target))
       return typeof value == "boolean" ? Number(value) === target : value >= target;
@@ -28146,6 +28151,7 @@
     "ProjectProgress",
     "ProjectUnlocked",
     "Queue",
+    "RaceId",
     "RacePillared",
     "ResearchComplete",
     "ResearchUnlocked",
@@ -28248,20 +28254,26 @@
     });
   }
 
-  // src/utils/queued-settings.ts
-  function applyQueuedSettings({
+  // src/domain/progression/evolution/queued-settings.ts
+  function planQueuedSettings({
     enabled,
     repeat,
     settingsRaw,
-    evolutionQueue,
-    onTypeMismatch
+    queuedSettings,
+    hasQueuedSettings
   }) {
-    if (!enabled || evolutionQueue.length === 0) return !1;
-    let queuedEvolution = evolutionQueue.shift();
-    if (queuedEvolution === void 0) return !1;
-    for (let [settingName, settingValue] of Object.entries(queuedEvolution))
-      typeof settingsRaw[settingName] == typeof settingValue ? settingsRaw[settingName] = settingValue : onTypeMismatch(settingName, settingsRaw[settingName], settingValue);
-    return repeat && evolutionQueue.push(queuedEvolution), !0;
+    if (!enabled || !hasQueuedSettings) return;
+    let commands = [{ kind: "consume-first" }];
+    for (let [settingName, queuedValue] of Object.entries(queuedSettings)) {
+      let storedSettingValue = settingsRaw[settingName];
+      typeof storedSettingValue == typeof queuedValue ? commands.push({ kind: "write-setting", settingName, value: queuedValue }) : commands.push({
+        kind: "type-mismatch",
+        settingName,
+        currentValue: storedSettingValue,
+        queuedValue
+      });
+    }
+    return repeat && commands.push({ kind: "repeat-first" }), { commands };
   }
 
   // src/adapters/evolve/progression/evolution/captured-queued-settings.ts
@@ -28275,17 +28287,35 @@
     return Object.freeze({
       loadQueuedSettings() {
         let settingsRaw = settings.readRaw(), rawQueue = settingsRaw.evolutionQueue, evolutionQueue = Array.isArray(rawQueue) ? rawQueue : void 0, queuedEvolution = evolutionQueue?.[0];
-        settingsRaw.evolutionQueueEnabled !== !0 || evolutionQueue === void 0 || queuedEvolution === void 0 || !isNonArrayRecord(queuedEvolution) || !applyQueuedSettings({
-          enabled: !0,
+        if (evolutionQueue === void 0 || queuedEvolution === void 0 || !isNonArrayRecord(queuedEvolution))
+          return;
+        let plan = planQueuedSettings({
+          enabled: settingsRaw.evolutionQueueEnabled === !0,
           repeat: settingsRaw.evolutionQueueRepeat === !0,
           settingsRaw,
-          evolutionQueue,
-          onTypeMismatch: (settingName, currentValue2, queuedValue) => {
-            onWarning(
-              `Type mismatch during loading queued settings: settingsRaw.${settingName} type: ${typeof currentValue2}, value: ${currentValue2}; queuedEvolution.${settingName} type: ${typeof queuedValue}, value: ${queuedValue};`
-            );
-          }
-        }) || (lastAppliedEvolution = { ...queuedEvolution }, evolutionAttempts += 1, settings.persist(), settingsRaw.showSettings === !0 && refreshSettings?.());
+          queuedSettings: queuedEvolution,
+          hasQueuedSettings: !0
+        });
+        if (plan !== void 0) {
+          for (let command of plan.commands)
+            switch (command.kind) {
+              case "consume-first":
+                evolutionQueue.shift();
+                break;
+              case "write-setting":
+                settingsRaw[command.settingName] = command.value;
+                break;
+              case "type-mismatch":
+                onWarning(
+                  `Type mismatch during loading queued settings: settingsRaw.${command.settingName} type: ${typeof command.currentValue}, value: ${command.currentValue}; queuedEvolution.${command.settingName} type: ${typeof command.queuedValue}, value: ${command.queuedValue};`
+                );
+                break;
+              case "repeat-first":
+                evolutionQueue.push(queuedEvolution);
+                break;
+            }
+          lastAppliedEvolution = { ...queuedEvolution }, evolutionAttempts += 1, settings.persist(), settingsRaw.showSettings === !0 && refreshSettings?.();
+        }
       },
       restoreEvolutionAfterResult() {
         let settingsRaw = settings.readRaw();
@@ -32750,7 +32780,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
     });
   }
 
-  // src/settings/override-comparators.ts
+  // src/domain/override-comparators.ts
   function asNumber(value) {
     return typeof value == "symbol" ? Number.NaN : Number(value);
   }

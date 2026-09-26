@@ -49,6 +49,7 @@ export const CAPTURED_OVERRIDE_OPERAND_TYPES = [
   "ProjectProgress",
   "ProjectUnlocked",
   "Queue",
+  "RaceId",
   "RacePillared",
   "ResearchComplete",
   "ResearchUnlocked",

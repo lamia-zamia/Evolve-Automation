@@ -4,7 +4,7 @@ import {
   overrideComparatorExpressions,
   overrideComparators,
   overrideComparisons,
-} from "../src/settings/override-comparators.ts";
+} from "../src/domain/override-comparators.ts";
 
 const compare = (id, left, right) => overrideComparisons[id](left, right);
 

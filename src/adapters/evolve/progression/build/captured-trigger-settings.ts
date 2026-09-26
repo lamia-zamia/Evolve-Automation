@@ -1,14 +1,12 @@
 /**
  * Captured read/write adapter for the Trigger settings surface.
  *
- * Rows live in the raw settings record (`triggers`), so every mutation here edits that array
- * directly — no TriggerManager mirror, no compatibility object. The semantics mirror the
- * compatibility panel writer (`src/bootstrap/settings/trigger-settings-control.ts`), which is
- * the panel contract both runtimes share: adds append the same default row, edits reset the
- * dependent fields (`requirementId`/`requirementCount` on a type change, `actionId`/`actionCount`
- * on an action change) and clear completion, and remove/duplicate/reorder renumber
- * `seq`/`priority` by position. Reset restores the captured defaults — an empty list with the
- * toggle off — the same record `resetSection("trigger")` writes through the lifecycle.
+ * Rows live in the raw settings record (`triggers`), the one authority for trigger settings.
+ * Adds append the default row; edits reset dependent fields (`requirementId`/`requirementCount` on
+ * a type change, `actionId`/`actionCount` on an action change) and clear completion; removal,
+ * duplication and reordering renumber `seq`/`priority` by position. Reset restores the captured
+ * defaults — an empty list with the toggle off — the same record `resetSection("trigger")` writes
+ * through the lifecycle.
  *
  * Persistence belongs to composition: the panel intent handler persists after each mutation.
  * The eval prompt is injected for the same reason — a panel-window effect, not settings state.

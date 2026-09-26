@@ -1,8 +1,7 @@
 /**
  * The comparators of the override and trigger condition language. Each one decides whether a
  * condition matches, and writes itself as the custom expression the editor shows — in the comparator
- * select's tooltip, and as the text the evalize button hands the player. `override-catalog.ts` joins
- * the two halves for the consumers that need only one of them.
+ * select's tooltip, and as the text the evalize button hands the player.
  *
  * A condition compares two operand reads, and an operand read is `unknown`: a building count, a
  * setting of whichever type it happens to store, a literal the editor stored, or the result of a

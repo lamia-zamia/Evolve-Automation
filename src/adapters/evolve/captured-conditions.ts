@@ -1,7 +1,7 @@
 /**
- * Stored condition operands answered entirely from the captured game root.
+ * Override and trigger operands answered from captured game and cycle samples.
  *
- * A stored trigger condition names an operand type, an argument and a count. This module answers
+ * A stored condition names an operand type, an argument and sometimes a count. This module answers
  * the operand types whose whole input is the game's own root state: building and project counts,
  * civic job assignments, resource holdings, the appointed governor, the race and planet bags, the
  * calendar, the two build queues and build-queue membership, the ascension level and pillar ranks, the True Path fleet,
@@ -54,8 +54,8 @@ import type { GameActionPrice } from "../../ports/game-action-costs.ts";
 import { readCapturedAscensionLevel } from "./ascension-level.ts";
 import { readCapturedFactoryCapacity } from "./economy/production/captured-factory-capacity.ts";
 
-/** A condition compares an operand's value against its stored count. */
-export type CapturedOperandValue = boolean | number;
+/** A captured condition operand value. */
+export type CapturedOperandValue = boolean | number | string;
 
 /**
  * What a cycle captured beyond the root, for the operands the root cannot answer. Every field is
@@ -889,6 +889,10 @@ export function readCapturedOperand(
   context?: Readonly<CapturedConditionContext>,
 ): CapturedOperandValue | undefined {
   if (typeof type !== "string") return undefined;
+  if (type === "RaceId") {
+    const raceId = resolveRaceId(root, argument);
+    return typeof raceId === "string" ? raceId : undefined;
+  }
   return BOOLEAN_OPERANDS.has(type)
     ? readBoolean(root, type, argument, context)
     : readNumber(root, type, argument, context);
@@ -911,6 +915,7 @@ export function evaluateCapturedCondition(
 ): boolean | undefined {
   const value = readCapturedOperand(root, type, argument, context);
   if (value === undefined) return undefined;
+  if (typeof value === "string") return undefined;
   const target = Number(count);
   if (!Number.isFinite(target)) return undefined;
   return typeof value === "boolean"

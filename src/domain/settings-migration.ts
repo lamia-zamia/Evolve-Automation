@@ -6,9 +6,8 @@ import {
 
 // Pure settings schema/migration over the raw persisted record.
 //
-// These functions replace the getter-bag `createSettingsMigration`/`createSettingsState`
-// primitives: every input the migration reads (game catalogs, evaluated flags, the default
-// resets) is passed explicitly, and every write lands on the `settingsRaw` record handed in.
+// Every input the migration reads (game catalogs, evaluated flags, the default resets) is passed
+// explicitly, and every write lands on the `settingsRaw` record handed in.
 // No ambient globals, no live getters.
 
 export type SettingOverride = StoredOverrideCondition;
