@@ -666,6 +666,14 @@ export function createCapturedSettingsPanel({
     observer: createBrowserMechInfoObserver(() => capturedPanelWindow),
   });
 
+  const syncMechInfo = () => {
+    if (settingsLifecycle.readEffective()["autoMech"] === true) {
+      mechInfo.createMechInfo();
+    } else {
+      mechInfo.removeMechInfo();
+    }
+  };
+
   const reportNoFileDownload = () => {
     if (reportedSections.has("settings file download")) return;
     reportedSections.add("settings file download");
@@ -2352,8 +2360,8 @@ export function createCapturedSettingsPanel({
       persistSettings: persistSettings,
       buildScriptSettings,
       removeScriptSettings,
-      showMechInfo: () => mechInfo.createMechInfo(),
-      hideMechInfo: () => mechInfo.removeMechInfo(),
+      showMechInfo: syncMechInfo,
+      hideMechInfo: syncMechInfo,
       createCraftToggles: craftStrip.create,
       removeCraftToggles: craftStrip.remove,
       createBuildingToggles: buildingStrip.create,
@@ -2378,11 +2386,7 @@ export function createCapturedSettingsPanel({
       try {
         prepareSettingsForUi();
         ensureAutomationContainer();
-        if (settings.readRaw()["autoMech"] === true) {
-          mechInfo.createMechInfo();
-        } else {
-          mechInfo.removeMechInfo();
-        }
+        syncMechInfo();
         if (settings.readRaw()["autoBuild"] === true) {
           settingsUi?.buildingToggles?.ensureBuildingToggles();
         } else {

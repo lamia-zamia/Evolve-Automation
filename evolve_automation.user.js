@@ -41251,7 +41251,9 @@ Efficiency above '1' is useful to save resources for more desperate times, or to
         readItems: () => Object.freeze([])
       }),
       observer: createBrowserMechInfoObserver(() => capturedPanelWindow)
-    }), reportNoFileDownload = () => {
+    }), syncMechInfo = () => {
+      settingsLifecycle.readEffective().autoMech === !0 ? mechInfo.createMechInfo() : mechInfo.removeMechInfo();
+    }, reportNoFileDownload = () => {
       reportedSections.has("settings file download") || (reportedSections.add("settings file download"), logError("this page cannot offer a settings file download"));
     }, persistSettings = () => {
       settings.persist(), refreshEffectiveSettings?.();
@@ -42440,8 +42442,8 @@ Only continue if you trust the source. Injected code:
         persistSettings,
         buildScriptSettings,
         removeScriptSettings,
-        showMechInfo: () => mechInfo.createMechInfo(),
-        hideMechInfo: () => mechInfo.removeMechInfo(),
+        showMechInfo: syncMechInfo,
+        hideMechInfo: syncMechInfo,
         createCraftToggles: craftStrip.create,
         removeCraftToggles: craftStrip.remove,
         createBuildingToggles: buildingStrip.create,
@@ -42463,7 +42465,7 @@ Only continue if you trust the source. Injected code:
       ensurePanel() {
         if (getQuery() !== void 0)
           try {
-            prepareSettingsForUi(), ensureAutomationContainer(), settings.readRaw().autoMech === !0 ? mechInfo.createMechInfo() : mechInfo.removeMechInfo(), settings.readRaw().autoBuild === !0 ? settingsUi?.buildingToggles?.ensureBuildingToggles() : settingsUi?.buildingToggles?.removeBuildingToggles(), settings.readRaw().autoARPA === !0 ? settingsUi?.arpaToggles?.ensureArpaToggles() : settingsUi?.arpaToggles?.removeArpaToggles(), settings.readRaw().autoStorage === !0 ? settingsUi?.storageToggles?.ensureStorageToggles() : settingsUi?.storageToggles?.removeStorageToggles(), settings.readRaw().autoMarket === !0 ? settingsUi?.marketToggles?.ensureMarketToggles() : settingsUi?.marketToggles?.removeMarketToggles(), settings.readRaw().autoEject === !0 ? settingsUi?.ejectToggles?.ensureEjectToggles() : settingsUi?.ejectToggles?.removeEjectToggles(), settings.readRaw().autoSupply === !0 ? settingsUi?.supplyToggles?.ensureSupplyToggles() : settingsUi?.supplyToggles?.removeSupplyToggles(), optionsModal.createOptionsModal(), optionsModal.updateOptionsUI(), settings.readRaw().showSettings === !0 && buildScriptSettings();
+            prepareSettingsForUi(), ensureAutomationContainer(), syncMechInfo(), settings.readRaw().autoBuild === !0 ? settingsUi?.buildingToggles?.ensureBuildingToggles() : settingsUi?.buildingToggles?.removeBuildingToggles(), settings.readRaw().autoARPA === !0 ? settingsUi?.arpaToggles?.ensureArpaToggles() : settingsUi?.arpaToggles?.removeArpaToggles(), settings.readRaw().autoStorage === !0 ? settingsUi?.storageToggles?.ensureStorageToggles() : settingsUi?.storageToggles?.removeStorageToggles(), settings.readRaw().autoMarket === !0 ? settingsUi?.marketToggles?.ensureMarketToggles() : settingsUi?.marketToggles?.removeMarketToggles(), settings.readRaw().autoEject === !0 ? settingsUi?.ejectToggles?.ensureEjectToggles() : settingsUi?.ejectToggles?.removeEjectToggles(), settings.readRaw().autoSupply === !0 ? settingsUi?.supplyToggles?.ensureSupplyToggles() : settingsUi?.supplyToggles?.removeSupplyToggles(), optionsModal.createOptionsModal(), optionsModal.updateOptionsUI(), settings.readRaw().showSettings === !0 && buildScriptSettings();
           } catch (error) {
             logError(`settings panel could not be drawn: ${String(error)}`);
           }

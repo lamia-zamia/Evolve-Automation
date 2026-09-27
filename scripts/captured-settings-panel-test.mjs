@@ -79,6 +79,7 @@ function createPage(
     collapsed = false,
     allSections = false,
     interfaceEffects,
+    mechInfoReader,
   } = {},
 ) {
   const storedText = collapsed
@@ -194,6 +195,7 @@ function createPage(
     settingsLifecycle,
     refreshEffectiveSettings,
     interfaceEffects,
+    mechInfoReader,
     ...gameBackedSections,
     traitSettings: { rootState },
     onDiagnostic: (message) => diagnostics.push(message),
@@ -209,10 +211,200 @@ function createPage(
     confirmed,
     downloads,
     saveText,
+    pageWindow,
+    document,
     effectiveSettings,
     gameRoot,
     refreshEffectiveSettings,
   };
+}
+
+function createMechInfoPanel(settingsRecord, species) {
+  const page = createPage(JSON.stringify(settingsRecord), {
+    mechInfoReader: {
+      ensureLabActive: () => true,
+      readItems: (count) =>
+        Array.from({ length: count }, (_, index) => ({
+          text: `Mech info ${index}`,
+        })),
+    },
+  });
+  page.gameRoot.race.species = species;
+
+  const list = element("div", { id: "mechList" });
+  const row = element("div");
+  Object.defineProperties(row, {
+    childNodes: { get: () => row.children },
+    firstChild: { get: () => row.children[0] ?? null },
+  });
+  row.appendChild(element("span"));
+  list.appendChild(row);
+  page.root.appendChild(list);
+
+  const createElement = page.document.createElement.bind(page.document);
+  page.document.createElement = (tagName) => {
+    const node = createElement(tagName);
+    let className = "";
+    Object.defineProperty(node, "className", {
+      get: () => className,
+      set: (value) => {
+        className = String(value);
+        for (const token of className.split(/\s+/).filter(Boolean)) {
+          node.classList.add(token);
+        }
+      },
+    });
+    return node;
+  };
+
+  let observer;
+  class MechInfoTestObserver {
+    constructor(callback) {
+      this.callback = callback;
+      this.targets = [];
+      this.disconnectCount = 0;
+      observer = this;
+    }
+    observe(target, options) {
+      this.targets.push([target, options]);
+    }
+    disconnect() {
+      this.disconnectCount += 1;
+    }
+  }
+  page.pageWindow.MutationObserver = MechInfoTestObserver;
+
+  return {
+    ...page,
+    list,
+    mechObserver: () => observer,
+    notes: () => page.document.querySelectorAll("#mechList .ea-mech-info"),
+  };
+}
+
+const mechInfoOverride = (result) => ({
+  type1: "RaceId",
+  arg1: "species",
+  type2: "String",
+  arg2: "human",
+  cmp: "==",
+  ret: result,
+});
+
+// --- Mech Info visibility follows the effective setting layer -------------------------------
+
+{
+  const page = createMechInfoPanel(
+    { autoMech: false, overrides: { autoMech: [mechInfoOverride(true)] } },
+    "human",
+  );
+  page.panel.ensurePanel();
+  assert.equal(page.settings.readRaw().autoMech, false);
+  assert.equal(page.effectiveSettings.autoMech, true);
+  assert.equal(
+    Boolean(page.root.querySelector(".script_autoMech").checked),
+    false,
+  );
+  assert.equal(
+    page.notes().length,
+    1,
+    "an effective autoMech override enables Mech Info while the raw checkbox stays unchecked",
+  );
+}
+
+{
+  const page = createMechInfoPanel(
+    { autoMech: true, overrides: { autoMech: [mechInfoOverride(false)] } },
+    "human",
+  );
+  page.panel.ensurePanel();
+  assert.equal(page.settings.readRaw().autoMech, true);
+  assert.equal(page.effectiveSettings.autoMech, false);
+  assert.equal(page.root.querySelector(".script_autoMech").checked, true);
+  assert.equal(
+    page.notes().length,
+    0,
+    "an effective autoMech override disables Mech Info while the raw checkbox stays checked",
+  );
+}
+
+{
+  const page = createMechInfoPanel(
+    { autoMech: false, overrides: { autoMech: [mechInfoOverride(false)] } },
+    "human",
+  );
+  page.panel.ensurePanel();
+  const toggle = page.root.querySelector(".script_autoMech");
+  toggle.checked = true;
+  toggle.dispatch("change");
+  assert.equal(page.settings.readRaw().autoMech, true);
+  assert.equal(page.effectiveSettings.autoMech, false);
+  assert.equal(
+    page.notes().length,
+    0,
+    "the raw enable callback leaves Mech Info hidden when the effective value stays false",
+  );
+}
+
+{
+  const page = createMechInfoPanel(
+    { autoMech: true, overrides: { autoMech: [mechInfoOverride(true)] } },
+    "human",
+  );
+  page.panel.ensurePanel();
+  assert.equal(page.notes().length, 1);
+  const toggle = page.root.querySelector(".script_autoMech");
+  toggle.checked = false;
+  toggle.dispatch("change");
+  assert.equal(page.settings.readRaw().autoMech, false);
+  assert.equal(page.effectiveSettings.autoMech, true);
+  assert.equal(
+    page.notes().length,
+    1,
+    "the raw disable callback keeps Mech Info visible when the effective value stays true",
+  );
+}
+
+{
+  const page = createMechInfoPanel(
+    { autoMech: true, overrides: { autoMech: [mechInfoOverride(false)] } },
+    "elf",
+  );
+  page.panel.ensurePanel();
+  assert.equal(page.notes().length, 1);
+
+  page.gameRoot.race.species = "human";
+  page.panel.ensurePanel();
+  assert.equal(page.settings.readRaw().autoMech, true);
+  assert.equal(page.effectiveSettings.autoMech, false);
+  assert.equal(
+    page.notes().length,
+    0,
+    "a dynamic effective true-to-false transition removes Mech Info rows",
+  );
+  assert.ok(page.mechObserver().disconnectCount > 0);
+}
+
+{
+  const page = createMechInfoPanel(
+    { autoMech: true, overrides: { autoMech: [mechInfoOverride(false)] } },
+    "human",
+  );
+  page.panel.ensurePanel();
+  assert.equal(page.effectiveSettings.autoMech, false);
+  assert.equal(page.notes().length, 0);
+  const originalRows = [...page.list.children];
+
+  page.gameRoot.race.species = "elf";
+  page.panel.ensurePanel();
+  assert.equal(page.settings.readRaw().autoMech, true);
+  assert.equal(page.effectiveSettings.autoMech, true);
+  assert.equal(page.notes().length, 1);
+  assert.deepEqual(
+    [...page.list.children],
+    originalRows,
+    "Mech Info appears on effective false-to-true without a mech-list redraw",
+  );
 }
 
 // --- the panel appears, and appears once ---------------------------------------------------------
