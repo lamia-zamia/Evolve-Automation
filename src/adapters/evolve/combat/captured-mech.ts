@@ -273,7 +273,7 @@ function readControlNumber(
   return result.ok ? finite(result.value) : undefined;
 }
 
-function readCapturedMechQueueKeyHeld(
+export function readCapturedMechQueueKeyHeld(
   gameSettings: unknown,
   keyState: GameKeyStateReader,
 ): boolean | undefined {

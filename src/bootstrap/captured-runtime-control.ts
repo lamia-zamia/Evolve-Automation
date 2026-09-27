@@ -143,7 +143,9 @@ import {
   runTriggerAutomation,
   triggerPhaseActive,
 } from "../application/trigger.ts";
-import { runMarketTradesAutomation } from "../application/market.ts";
+import { runMarketAutomation } from "../application/market.ts";
+import { createCapturedMechInfoReader } from "../adapters/evolve/combat/captured-mech-info.ts";
+import { CAPTURED_MECH_LIST_CONTROL } from "../adapters/evolve/combat/captured-mech-control-ids.ts";
 import { createStorageAllocationAutomation } from "../application/storage-allocation.ts";
 import { createCapturedCraftCosts } from "../adapters/evolve/economy/production/captured-craft-costs.ts";
 import {
@@ -517,6 +519,14 @@ export function startCapturedRuntime({
   const reportDiagnostic = (message: string) => {
     if (diagnostics?.readPerformanceEnabled() === true) log(message);
   };
+  let ensureMechInfoLabActive: () => boolean = () => false;
+  const mechInfoReader = createCapturedMechInfoReader({
+    rootState: pageCapture.rootState,
+    readSettings: () => settingsStore.readRaw(),
+    keyState: pageCapture.keyState,
+    ensureLabActive: () => ensureMechInfoLabActive(),
+  });
+  let runBulkSellFromPanel: () => void = () => {};
   const settingsPanel = createCapturedSettingsPanel({
     capturedPanelWindow: settingsHostWindow,
     fileDownload,
@@ -581,6 +591,8 @@ export function startCapturedRuntime({
     traitSettings: {
       rootState: pageCapture.rootState,
     },
+    mechInfoReader,
+    onBulkSell: () => runBulkSellFromPanel(),
     onDiagnostic: (message) => reportDiagnostic(message),
     logError: (message) => logError(message),
   });
@@ -1142,17 +1154,16 @@ export function startCapturedRuntime({
       reportOnce(`trade routes unavailable: ${reason}`),
   });
   const marketAutomation = Object.freeze({
-    run: () =>
-      runMarketTradesAutomation(
+    run: (bulkSell = false, ignoreSellRatio = false) =>
+      runMarketAutomation(
         {
           reader: marketPorts.reader,
           executor: marketPorts.executor,
           tradeRoutes,
           diagnostics,
         },
-        false,
-        false,
-        true,
+        bulkSell,
+        ignoreSellRatio,
       ),
   });
   const ratios = createCapturedProductionRatios({
@@ -1425,6 +1436,12 @@ export function startCapturedRuntime({
           index: GOV_TAB_INDEX.mechLab,
         }),
       ],
+    );
+  };
+  ensureMechInfoLabActive = () => {
+    ensureMechControls();
+    return (
+      pageCapture.controls.resolve(CAPTURED_MECH_LIST_CONTROL) !== undefined
     );
   };
   /**
@@ -1949,6 +1966,29 @@ export function startCapturedRuntime({
         index: MARKET_TAB_INDEX.market,
       }),
     ]);
+  };
+
+  runBulkSellFromPanel = () => {
+    try {
+      ensureMarketControls();
+      refreshDiscoveredSettings();
+      const outcome = marketAutomation.run(true, true);
+      if (outcome.status !== "succeeded") {
+        try {
+          logError(
+            `Bulk Sell failed: ${outcome.failure?.message ?? outcome.status}`,
+          );
+        } catch {
+          // Reporting a failed manual action cannot throw back through the page event.
+        }
+      }
+    } catch (error) {
+      try {
+        logError(`Bulk Sell failed: ${String(error)}`);
+      } catch {
+        // Reporting a failed manual action cannot throw back through the page event.
+      }
+    }
   };
 
   const ensureFactoryControls = () => {

@@ -1,6 +1,5 @@
 import assert from "node:assert/strict";
 import { runStateUpdate } from "../src/application/state-update.ts";
-import { createUIRefresh } from "../src/ui/ui-refresh.ts";
 
 // The three bookkeeping passes were 26% of a work tick with no internal
 // structure. Each now reports its own sub-phases, and reports none of them
@@ -69,51 +68,5 @@ assert.deepEqual(measured(), [
   "updateState.cacheSpaceDockOptions",
   "updateState.updateActiveTargets",
 ]);
-
-// ---------- updateUI ----------
-let pageVisible = true;
-const { updateUI } = createUIRefresh({
-  getUiSurface: () => ({
-    isPageVisible: () => pageVisible,
-    readScrollTop: () => 0,
-    resetScrollTop: noop,
-  }),
-  getActions: () => ({
-    createOptionsModal: noop,
-    updateOptionsUI: noop,
-    updatePrestigeInTopBar: noop,
-    updateTotalDaysInTopBar: noop,
-  }),
-  getPhases: () => ({
-    ensureAutomationContainer: () => ({ scriptNode: null, created: false }),
-    repairRuntimeAdapters: () => false,
-    updateSoulGemRate: noop,
-    renderPreviousGameStats: noop,
-  }),
-  diagnostics,
-});
-updateUI();
-assert.deepEqual(measured(), [
-  "updateUI.readScrollTop",
-  "updateUI.createOptionsModal",
-  "updateUI.updateOptionsUI",
-  "updateUI.updatePrestigeInTopBar",
-  "updateUI.ensureAutomationContainer",
-  "updateUI.repairRuntimeAdapters",
-  "updateUI.updateSoulGemRate",
-  "updateUI.renderPreviousGameStats",
-  "updateUI.updateTotalDaysInTopBar",
-]);
-
-// A hidden tab still leaves updateUI early, before any sub-phase.
-pageVisible = false;
-updateUI();
-assert.deepEqual(measured(), []);
-pageVisible = true;
-
-// ---------- disabled ----------
-enabled = false;
-updateUI();
-assert.deepEqual(measured(), []);
 
 console.log("Bookkeeping phase diagnostics tests passed");

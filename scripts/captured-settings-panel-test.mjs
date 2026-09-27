@@ -885,20 +885,18 @@ function createPage(
   assert.equal(page.settings.readRaw().overrides.Shared, undefined);
 }
 
-// --- an enable callback for an unported section is reported by name, once ------------------------
+// --- the captured Mech Info callback safely handles an absent lab list --------------------------
 
 {
   const { panel, logged, diagnostics } = createPage(
     JSON.stringify({ autoMech: true }),
   );
   panel.ensurePanel();
-  const mech = diagnostics.filter((line) => line.includes("mech info panel"));
   assert.equal(
-    mech.length,
-    1,
-    `expected one diagnostic, got ${diagnostics.length}`,
+    diagnostics.some((line) => line.includes("mech info panel")),
+    false,
+    "the captured Mech Info section is no longer an unported placeholder",
   );
-  assert.match(mech[0], /not ported yet/);
   assert.deepEqual(logged, []);
 }
 

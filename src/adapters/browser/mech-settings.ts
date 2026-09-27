@@ -43,7 +43,6 @@ export interface MechSettingsBrowserActions {
     hintText: string,
   ) => unknown;
   readonly addStandardHeading: (node: JQueryNode, label: string) => unknown;
-  readonly calculateMechStats?: () => void;
 }
 interface MechSettingsBrowserDependencies {
   readonly getDocument: () => ScrollDocument;
@@ -130,36 +129,6 @@ export function createMechSettingsBrowserAdapter({
   ): void {
     for (const control of model.controls) {
       renderControl(node, control, actions);
-      if (
-        control.kind === "header" &&
-        control.label === "Mech Stats" &&
-        actions.calculateMechStats !== undefined
-      ) {
-        const statsControls = getJQuery()(
-          `<div style="margin-top: 5px; display: inline-flex;"></div>`,
-        );
-        statsControls.append(
-          `<label class="switch" title="This switch have no ingame effect, and used to configure calculator below"><input id="script_mechStatsCompact" type="checkbox" checked><span class="check"></span><span style="margin-left: 10px;">Compact</span></label>`,
-        );
-        statsControls.append(
-          `<label class="switch" title="This switch have no ingame effect, and used to configure calculator below"><input id="script_mechStatsEfficient" type="checkbox" checked><span class="check"></span><span style="margin-left: 10px;">Efficient</span></label>`,
-        );
-        statsControls.append(
-          `<label class="switch" title="This switch have no ingame effect, and used to configure calculator below"><input id="script_mechStatsSpecial" type="checkbox" checked><span class="check"></span><span style="margin-left: 10px;">Special</span></label>`,
-        );
-        statsControls.append(
-          `<label class="switch" title="This switch have no ingame effect, and used to configure calculator below"><input id="script_mechStatsGravity" type="checkbox"><span class="check"></span><span style="margin-left: 10px;">Gravity</span></label>`,
-        );
-        statsControls.append(
-          `<label class="switch" title="This input have no ingame effect, and used to configure calculator below"><input id="script_mechStatsScouts" class="input is-small" style="height: 25px; width: 50px" type="text" value="0"><span style="margin-left: 10px;">Scouts</span></label>`,
-        );
-        statsControls.on("input", actions.calculateMechStats);
-        node.append(statsControls);
-        node.append(
-          `<table class="selectable"><tbody id="script_mechStatsTable"><tbody></table>`,
-        );
-        actions.calculateMechStats();
-      }
     }
   }
   return Object.freeze({ buildMechSettings, updateMechSettingsContent });

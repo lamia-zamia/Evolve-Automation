@@ -110,12 +110,65 @@ function readMechList(value: unknown): MechList {
   });
 }
 
+export function createBrowserMechInfoObserver(
+  getWindow: () => unknown,
+): MechInfoObserver {
+  let observer: Record<PropertyKey, unknown> | undefined;
+  let onMutation: () => void = () => {};
+
+  function ensureObserver(): void {
+    if (observer !== undefined) return;
+    const pageWindow = getWindow();
+    if (
+      pageWindow === null ||
+      (typeof pageWindow !== "object" && typeof pageWindow !== "function")
+    ) {
+      return;
+    }
+    const constructor = requireObjectLike(pageWindow, "window")[
+      "MutationObserver"
+    ];
+    if (typeof constructor !== "function") return;
+    try {
+      observer = requireObjectLike(
+        Reflect.construct(constructor, [() => onMutation()]),
+        "MutationObserver instance",
+      );
+    } catch {
+      // A host without a usable MutationObserver can still render static notes.
+      observer = undefined;
+    }
+  }
+
+  return Object.freeze({
+    disconnect(): void {
+      if (observer !== undefined) {
+        callVoid(observer, "disconnect", "MutationObserver");
+      }
+    },
+    observe(
+      target: unknown,
+      options: Readonly<{ readonly childList: true }>,
+      refresh: () => void,
+    ): void {
+      onMutation = refresh;
+      ensureObserver();
+      if (observer !== undefined) {
+        callVoid(observer, "observe", "MutationObserver", target, options);
+      }
+    },
+  });
+}
+
 export function createMechInfoBrowserAdapter({
   getDocument,
   getJQuery,
   reader,
   observer,
 }: MechInfoBrowserDependencies): MechInfoBrowserAdapter {
+  let enabled = false;
+  let observedList: unknown;
+
   function query(value: unknown): JQueryNode {
     const jquery = requireFunction(getJQuery(), "jQuery");
     return readJQueryNode(
@@ -124,29 +177,45 @@ export function createMechInfoBrowserAdapter({
     );
   }
 
-  function createMechInfo(): void {
-    if (query("#mechList .mechRow[draggable=true]").length > 0) return;
-    if (!reader.ensureLabActive()) return;
-
-    observer.disconnect();
+  function refreshMechInfo(force: boolean): void {
+    if (!enabled) return;
     const document = requireRecord(getDocument(), "document");
     const getElementById = requireFunction(
       document["getElementById"],
       "document.getElementById",
     );
+    let listElement = Reflect.apply(getElementById, document, ["mechList"]);
+    if (!force && listElement !== null && listElement === observedList) return;
+    if (!reader.ensureLabActive()) {
+      observer.disconnect();
+      observedList = undefined;
+      return;
+    }
+
+    observer.disconnect();
+    // Control discovery can draw the lab while enabling Mech Info. Read the list again after it
+    // runs so the adapter observes the newly mounted Vue 3 panel on the next available render.
+    listElement = Reflect.apply(getElementById, document, ["mechList"]);
+    if (listElement === null || listElement === undefined) {
+      observedList = undefined;
+      return;
+    }
     const createElement = requireFunction(
       document["createElement"],
       "document.createElement",
     );
-    const listElement = Reflect.apply(getElementById, document, ["mechList"]);
     const list = readMechList(listElement);
     const items = reader.readItems(list.children.length);
 
     for (let index = 0; index < list.children.length; index += 1) {
       const node = list.children[index];
       const item: MechInfoItem | undefined = items[index];
-      if (!node || !item) continue;
+      if (!node) continue;
       const firstNode = query(node.childNodes[0]);
+      if (item === undefined) {
+        if (firstNode.hasClass("ea-mech-info")) firstNode.remove();
+        continue;
+      }
       if (firstNode.hasClass("ea-mech-info")) {
         firstNode.text(item.text);
       } else {
@@ -160,11 +229,22 @@ export function createMechInfoBrowserAdapter({
       }
     }
 
-    observer.observe(listElement, Object.freeze({ childList: true }));
+    observer.observe(listElement, Object.freeze({ childList: true }), () =>
+      refreshMechInfo(true),
+    );
+    observedList = listElement;
+  }
+
+  function createMechInfo(): void {
+    enabled = true;
+    refreshMechInfo(false);
   }
 
   function removeMechInfo(): void {
+    if (!enabled) return;
+    enabled = false;
     observer.disconnect();
+    observedList = undefined;
     query("#mechList .ea-mech-info").remove();
   }
 

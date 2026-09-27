@@ -30,8 +30,8 @@ type AutomationContainerActions = {
   persistSettings: () => void;
   buildScriptSettings: () => void;
   removeScriptSettings: () => void;
-  createMechInfo: () => void;
-  removeMechInfo: () => void;
+  showMechInfo: () => void;
+  hideMechInfo: () => void;
   createCraftToggles: () => void;
   removeCraftToggles: () => void;
   createBuildingToggles: () => void;
@@ -46,9 +46,7 @@ type AutomationContainerActions = {
   removeEjectToggles: () => void;
   createSupplyToggles: () => void;
   removeSupplyToggles: () => void;
-  updateScriptData: () => void;
-  finalizeScriptData: () => void;
-  autoMarket: (bulkSell?: boolean, ignoreSellRatio?: boolean) => void;
+  bulkSell: () => void;
 };
 
 type AutomationContainerDependencies = {
@@ -76,8 +74,8 @@ export function createAutomationContainer({
       persistSettings,
       buildScriptSettings,
       removeScriptSettings,
-      createMechInfo,
-      removeMechInfo,
+      showMechInfo,
+      hideMechInfo,
       createCraftToggles,
       removeCraftToggles,
       createBuildingToggles,
@@ -92,9 +90,7 @@ export function createAutomationContainer({
       removeEjectToggles,
       createSupplyToggles,
       removeSupplyToggles,
-      updateScriptData,
-      finalizeScriptData,
-      autoMarket,
+      bulkSell,
     } = getActions();
     let created = false;
     const scriptNode = $("#autoScriptContainer");
@@ -180,8 +176,8 @@ export function createAutomationContainer({
         togglesNode,
         "autoMech",
         "Builds most effective large mechs for current spire floor. Least effective will be scrapped to make room for new ones. Will not build or scrap anything when Mech Constructor governor task is active.",
-        createMechInfo,
-        removeMechInfo,
+        showMechInfo,
+        hideMechInfo,
       );
       createSettingToggle(
         togglesNode,
@@ -347,11 +343,7 @@ export function createAutomationContainer({
       togglesNode.append(
         '<a class="button is-dark is-small" id="bulk-sell"><span>Bulk Sell</span></a>',
       );
-      $("#bulk-sell").on("mouseup", function () {
-        updateScriptData();
-        finalizeScriptData();
-        autoMarket(true, true);
-      });
+      $("#bulk-sell").on("mouseup", bulkSell);
     }
 
     return { scriptNode, created };

@@ -109,7 +109,9 @@ export function combatRanking(
   );
 }
 
-function autoFloor(state: CapturedMechState): MechFloor | null {
+export function readCapturedMechRatingFloor(
+  state: CapturedMechState,
+): MechFloor | null {
   if (state.spire === null) return null;
   return {
     terrain: state.spire.type,
@@ -181,7 +183,7 @@ export function readCapturedMechPotential(
   if (!state.available || state.spire === null) return null;
   // Warlord frames and a zero-capacity bay keep the historical Mech manager inactive.
   if (state.warlord || state.bay.maximum === 0) return 0;
-  const floor = autoFloor(state);
+  const floor = readCapturedMechRatingFloor(state);
   if (floor === null) return null;
   // The collector setting affects only collector rating; use a positive value so this sample can
   // still produce the combat designs the potential denominator needs.
@@ -222,7 +224,7 @@ export function designAutoChoice(
   // inactive so neither planning path acts on a partial active team.
   const inactives = Math.max(0, state.inventory.length - state.bay.active);
   if (inactives > 0 || state.governorMechTask) return null;
-  const floor = autoFloor(state);
+  const floor = readCapturedMechRatingFloor(state);
   if (floor === null || floor.collectorValue <= 0) return null;
   const figures = bestDesignFigures(floor, pickIndex);
   if (figures === null) return null;
@@ -287,7 +289,7 @@ export function designUserMechChoice(
   }
   const inactives = Math.max(0, state.inventory.length - state.bay.active);
   if (inactives > 0 || state.governorMechTask) return null;
-  const floor = autoFloor(state);
+  const floor = readCapturedMechRatingFloor(state);
   if (floor === null) return null;
   const figures = bestDesignFigures(floor, pickIndex);
   const ratedDesign = rateMechDesign(state.blueprint, floor);

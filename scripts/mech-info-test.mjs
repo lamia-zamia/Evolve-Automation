@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 
-import { createMechInfoBrowserAdapter } from "../src/adapters/browser/mech-info.ts";
+import {
+  createBrowserMechInfoObserver,
+  createMechInfoBrowserAdapter,
+} from "../src/adapters/browser/mech-info.ts";
 import { formatMechInfo } from "../src/domain/combat/mech-info.ts";
 
 assert.equal(
@@ -19,6 +22,7 @@ assert.equal(
 
 const browserTrace = [];
 let firstHasInfo = false;
+let refreshObservedList;
 const firstNode = {};
 const mechNode = {
   childNodes: [firstNode],
@@ -56,10 +60,12 @@ const adapter = createMechInfoBrowserAdapter({
   },
   observer: {
     disconnect: () => browserTrace.push("disconnect"),
-    observe: (target, options) =>
+    observe: (target, options, refresh) => {
+      refreshObservedList = refresh;
       browserTrace.push(
         `observe:${target === listElement}:${options.childList}`,
-      ),
+      );
+    },
   },
 });
 
@@ -67,9 +73,50 @@ adapter.createMechInfo();
 assert.ok(browserTrace.includes("insert:typed note"));
 assert.ok(browserTrace.includes("observe:true:true"));
 firstHasInfo = true;
-adapter.createMechInfo();
+refreshObservedList();
 assert.ok(browserTrace.includes("text:typed note"));
+assert.equal(
+  browserTrace.filter((entry) => entry.startsWith("insert:")).length,
+  1,
+);
 adapter.removeMechInfo();
 assert.equal(browserTrace.at(-1), "remove");
+
+const missingList = createMechInfoBrowserAdapter({
+  getDocument: () => ({ getElementById: () => null }),
+  getJQuery: () => jquery,
+  reader: { ensureLabActive: () => true, readItems: () => [] },
+  observer: { disconnect: () => {}, observe: () => {} },
+});
+assert.doesNotThrow(() => missingList.createMechInfo());
+
+let nativeObserverCallback;
+let nativeObserverTarget;
+let nativeDisconnects = 0;
+class TestMutationObserver {
+  constructor(callback) {
+    nativeObserverCallback = callback;
+  }
+  observe(target, options) {
+    nativeObserverTarget = [target, options];
+  }
+  disconnect() {
+    nativeDisconnects += 1;
+  }
+}
+let observedMutations = 0;
+const pageObserver = createBrowserMechInfoObserver(() => ({
+  MutationObserver: TestMutationObserver,
+}));
+pageObserver.observe(
+  listElement,
+  { childList: true },
+  () => observedMutations++,
+);
+assert.deepEqual(nativeObserverTarget, [listElement, { childList: true }]);
+nativeObserverCallback();
+assert.equal(observedMutations, 1);
+pageObserver.disconnect();
+assert.equal(nativeDisconnects, 1);
 
 console.log("Mech-info domain and browser adapter tests passed");

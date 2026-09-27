@@ -113,7 +113,7 @@ const mechUI = createMechInfoBrowserAdapter({
 });
 mechUI.createMechInfo();
 assert.equal(inserted[0].innerHTML, "50%, nice:10 /s | ");
-assert.deepEqual(mechTrace, ["disconnect", "observe:2"]);
+assert.deepEqual(mechTrace, ["disconnect", "observe:3"]);
 mechUI.removeMechInfo();
 assert.equal(mechTrace.at(-1), "disconnect");
 

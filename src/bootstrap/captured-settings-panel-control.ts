@@ -10,7 +10,12 @@
  * the same layered settings record this panel writes.
  */
 
-import { createAutomationContainer } from "../ui/automation-container.ts";
+import { createAutomationContainer } from "../adapters/browser/automation-container.ts";
+import {
+  createMechInfoBrowserAdapter,
+  createBrowserMechInfoObserver,
+} from "../adapters/browser/mech-info.ts";
+import type { MechInfoReader } from "../ports/mech-info.ts";
 import {
   createCraftToggleBrowserAdapter,
   type CraftToggleBrowserDependencies,
@@ -503,6 +508,8 @@ export interface CapturedSettingsPanelDependencies {
   readonly traitSettings?: {
     readonly rootState: GameRootStateSource;
   };
+  readonly mechInfoReader?: MechInfoReader;
+  readonly onBulkSell?: () => void;
   readonly prestigeSettings?: {
     /** Clears the captured prestige goal handoff when the player changes the prestige type. */
     readonly setGoalStandard: () => void;
@@ -614,6 +621,8 @@ export function createCapturedSettingsPanel({
   researchSettings: capturedResearchSettings,
   fleetSettings: capturedFleetSettings,
   traitSettings: capturedTraitSettings,
+  mechInfoReader,
+  onBulkSell = () => {},
   onDiagnostic = () => {},
   logError = () => {},
 }: CapturedSettingsPanelDependencies): CapturedSettingsPanel {
@@ -644,6 +653,18 @@ export function createCapturedSettingsPanel({
     reportedSections.add(section);
     onDiagnostic(`settings panel section not ported yet: ${section}`);
   };
+
+  const mechInfo = createMechInfoBrowserAdapter({
+    getDocument: () => documentValue,
+    getJQuery: getQuery,
+    reader:
+      mechInfoReader ??
+      Object.freeze({
+        ensureLabActive: () => false,
+        readItems: () => Object.freeze([]),
+      }),
+    observer: createBrowserMechInfoObserver(() => capturedPanelWindow),
+  });
 
   const reportNoFileDownload = () => {
     if (reportedSections.has("settings file download")) return;
@@ -2331,8 +2352,8 @@ export function createCapturedSettingsPanel({
       persistSettings: persistSettings,
       buildScriptSettings,
       removeScriptSettings,
-      createMechInfo: unported("mech info panel"),
-      removeMechInfo: unported("mech info panel"),
+      showMechInfo: () => mechInfo.createMechInfo(),
+      hideMechInfo: () => mechInfo.removeMechInfo(),
       createCraftToggles: craftStrip.create,
       removeCraftToggles: craftStrip.remove,
       createBuildingToggles: buildingStrip.create,
@@ -2347,9 +2368,7 @@ export function createCapturedSettingsPanel({
       removeEjectToggles: ejectStrip.remove,
       createSupplyToggles: supplyStrip.create,
       removeSupplyToggles: supplyStrip.remove,
-      updateScriptData: unported("script data readouts"),
-      finalizeScriptData: unported("script data readouts"),
-      autoMarket: unported("bulk sell button"),
+      bulkSell: onBulkSell,
     }),
   });
 
@@ -2359,6 +2378,11 @@ export function createCapturedSettingsPanel({
       try {
         prepareSettingsForUi();
         ensureAutomationContainer();
+        if (settings.readRaw()["autoMech"] === true) {
+          mechInfo.createMechInfo();
+        } else {
+          mechInfo.removeMechInfo();
+        }
         if (settings.readRaw()["autoBuild"] === true) {
           settingsUi?.buildingToggles?.ensureBuildingToggles();
         } else {
