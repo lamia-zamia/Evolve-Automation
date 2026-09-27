@@ -20,6 +20,7 @@ import {
 import { createCapturedBuildSource } from "../adapters/evolve/progression/build/captured-build.ts";
 import type { CapturedBuildTarget } from "../adapters/evolve/progression/build/captured-build.ts";
 import { createCapturedConstructionAdapter } from "../adapters/evolve/progression/construction/captured-construction.ts";
+import { readProperty } from "../adapters/validation.ts";
 import { createCapturedProjectCatalog } from "../adapters/evolve/progression/research/captured-project-catalog.ts";
 import { createCapturedProjectContextReader } from "../adapters/evolve/progression/research/captured-project-context.ts";
 import { createCapturedProjectSource } from "../adapters/evolve/progression/research/captured-project.ts";
@@ -220,6 +221,13 @@ export function createCapturedConstructionControl(
     readOptions: readPolicy,
     ...(readKnowledgeGate === undefined ? {} : { readKnowledgeGate }),
     ...(readStorageRequired === undefined ? {} : { readStorageRequired }),
+    readPresentationSettings: () => {
+      const settings = readSettings();
+      return Object.freeze({
+        activeTargetsUI: readProperty(settings, "activeTargetsUI") === true,
+        buildPlannerUI: readProperty(settings, "buildPlannerUI") === true,
+      });
+    },
   });
 
   return Object.freeze({

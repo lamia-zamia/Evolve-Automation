@@ -81,6 +81,7 @@ export interface BuildConflictSample {
 }
 
 export interface BuildResourceView {
+  readonly resourcePresent: boolean;
   readonly unlocked: boolean;
   /**
    * Numeric fields use plain JS number coercion at the adapter boundary, so
@@ -88,6 +89,7 @@ export interface BuildResourceView {
    * comparison exactly as they did in the legacy loop.
    */
   readonly currentQuantity: number;
+  readonly maximumQuantity: number;
   readonly rateOfChange: number;
   readonly storageRatio: number;
   readonly storageRequired: number;

@@ -58,6 +58,25 @@ const cases = [
     },
   },
   {
+    name: "storage cap blocks a cost even when current holdings meet it",
+    input: {
+      affordable: false,
+      requirements: [
+        requirement("Iron", {
+          currentQuantity: 150,
+          requiredQuantity: 100,
+          maximumQuantity: 50,
+        }),
+      ],
+    },
+    expected: {
+      resourceId: "Iron",
+      resourceTitle: "Iron",
+      time: Number.MAX_SAFE_INTEGER,
+      blocker: "storage",
+    },
+  },
+  {
     name: "locked requirement is a blocker even when another cost is satisfied",
     input: {
       affordable: false,
@@ -91,6 +110,21 @@ const cases = [
       resourceId: "First",
       resourceTitle: "First",
       time: 10,
+      blocker: "income",
+    },
+  },
+  {
+    name: "the game's -1 maximum means an uncapped resource",
+    input: {
+      affordable: false,
+      requirements: [
+        requirement("Money", { maximumQuantity: -1, currentQuantity: 10 }),
+      ],
+    },
+    expected: {
+      resourceId: "Money",
+      resourceTitle: "Money",
+      time: 9,
       blocker: "income",
     },
   },

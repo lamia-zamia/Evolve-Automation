@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 
 import { createMechInfoBrowserAdapter } from "../src/adapters/browser/mech-info.ts";
 import { createResourceToggleBrowserAdapter } from "../src/adapters/browser/resource-toggles.ts";
-import { createQueuePanels } from "../src/ui/queue-panels.ts";
 
 const trace = [];
 const handlers = new Map();
@@ -81,61 +80,6 @@ function jquery(value) {
   return makeNode(label, label === "#missing" ? 0 : 1);
 }
 jquery.isEmptyObject = (value) => Object.keys(value).length === 0;
-
-const settingsRaw = { buildPlannerCollapsed: false };
-const state = { plannerStats: { old: true } };
-const resources = {
-  Iron: {
-    currentQuantity: 5,
-    maxQuantity: 20,
-    income: 3,
-    title: "Iron",
-  },
-  Soul_Gem: {},
-};
-const technology = {
-  kind: "technology",
-  name: "Tech",
-  id: "tech",
-  cost: { Iron: 11 },
-};
-const panels = createQueuePanels({
-  getJQuery: () => jquery,
-  getGame: () => ({
-    global: { resource: { Knowledge: { max: 100 } }, race: {} },
-  }),
-  getResources: () => resources,
-  getPoly: () => ({ timeFormat: (value) => `time:${value}` }),
-  getSettingsRaw: () => settingsRaw,
-  getState: () => state,
-  getMultiSegmentedTimeLeft: () => ({ timeLeft: "soon", resource: "Iron" }),
-  isProject: (target) => target.kind === "project",
-  isTechnology: (target) => target.kind === "technology",
-  getResizeObserver: () => undefined,
-  persistSettings: () => trace.push("persist"),
-  makePlannerStats: () => ({ reset: true }),
-  savePlannerStats: () => trace.push("save-planner"),
-});
-
-panels.updateActiveTargetsUI([], "research");
-panels.updateActiveTargetsUI([technology], "research");
-const researchHtml = htmlBySelector.get(
-  "#active_targets ul.active_targets-list.research",
-);
-assert.match(researchHtml[0], /Tech/);
-assert.match(researchHtml[0], /time:2/);
-assert.match(researchHtml[0], /data-queueid="tech"/);
-
-panels.buildActiveTargetsUI();
-panels.removeActiveTargetsUI();
-panels.buildBuildPlannerUI();
-handlers.get("#script_planner-header:click")();
-handlers.get("#script_planner-reset:click")();
-panels.removeBuildPlannerUI();
-assert.equal(settingsRaw.buildPlannerCollapsed, true);
-assert.deepEqual(state.plannerStats, { reset: true });
-assert.ok(trace.includes("persist"));
-assert.ok(trace.includes("save-planner"));
 
 const inserted = [];
 const mechNode = {

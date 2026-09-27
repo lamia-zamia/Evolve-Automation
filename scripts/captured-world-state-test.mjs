@@ -214,6 +214,7 @@ assert.equal(
     rootSource(fullRoot()),
   ).readResources(["Money", "Lumber", "Plywood", "Morale"]);
   assert.deepEqual(resourceView(sample, "Money"), {
+    present: true,
     unlocked: true,
     amount: 5000,
     max: 25000,
@@ -225,6 +226,7 @@ assert.equal(
   assert.equal(resourceView(sample, "Plywood").unlocked, false);
   // A cost key that names no stored resource reports as absent rather than throwing.
   assert.deepEqual(resourceView(sample, "Morale"), {
+    present: false,
     unlocked: false,
     amount: 0,
     max: 0,
@@ -264,6 +266,7 @@ assert.equal(
     }),
   ).readResources(["Money"], { pool: "spc_home" });
   assert.deepEqual(resourceView(sample, "Money"), {
+    present: true,
     unlocked: true,
     amount: 50,
     max: 100,

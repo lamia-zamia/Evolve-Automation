@@ -61,7 +61,22 @@ import {
 } from "../adapters/evolve/economy/resources/captured-resource-demand.ts";
 import { ensureDemandPrerequisiteControls } from "../adapters/evolve/economy/resources/captured-demand-prerequisites.ts";
 import type { DemandPrerequisiteReport } from "../adapters/evolve/economy/resources/captured-demand-prerequisites.ts";
-import { createCapturedResourceSource } from "../adapters/evolve/captured-world-state.ts";
+import {
+  createCapturedIdentitySource,
+  createCapturedResourceSource,
+} from "../adapters/evolve/captured-world-state.ts";
+import { createCapturedPlanningPanels } from "../adapters/browser/captured-planning-panels.ts";
+import type {
+  CapturedPlanningPanels,
+  CapturedPlanningPanelsModel,
+} from "../adapters/browser/captured-planning-panels.ts";
+import { createPlannerStatsStore } from "../adapters/storage/planner-stats.ts";
+import {
+  createPlannerStatsLifecycle,
+  plannerStatsBucket,
+} from "../application/planner-stats.ts";
+import type { PlannerRun, PlannerStats } from "../domain/planner-analysis.ts";
+import type { ConstructionReadoutSnapshot } from "../ports/game-construction-observations.ts";
 import { createCapturedFleetDemand } from "../adapters/evolve/combat/captured-fleet-demand.ts";
 import { createCapturedFleetAutomation } from "../adapters/evolve/combat/captured-fleet.ts";
 import { createCapturedOuterFleetControl } from "./captured-fleet-outer-control.ts";
@@ -312,6 +327,97 @@ export function startCapturedRuntime({
     discoveryAttempts.invalidate();
   });
   const effectiveSettings = settingsLifecycle.readEffective();
+  const capturedIdentity = createCapturedIdentitySource(pageCapture.rootState);
+  const plannerStats = createPlannerStatsLifecycle(
+    createPlannerStatsStore(storage),
+  );
+  let currentPlannerStats: Readonly<PlannerStats> | undefined;
+  let latestConstructionSnapshot: Readonly<ConstructionReadoutSnapshot> | null =
+    null;
+  let latestConstructionRun: Readonly<PlannerRun> | undefined;
+  let constructionFreshness: CapturedPlanningPanelsModel["freshness"] = "none";
+  let planningPanels: CapturedPlanningPanels | undefined;
+  let refreshCapturedPlanningPanels: () => void = () => {};
+  const reportedPlanningUiErrors = new Set<string>();
+
+  function reportPlanningUiError(error: unknown): void {
+    const message = String(error);
+    if (reportedPlanningUiErrors.has(message)) return;
+    reportedPlanningUiErrors.add(message);
+    try {
+      logError(
+        message.startsWith("captured planning UI:")
+          ? message
+          : `captured planning UI: ${message}`,
+      );
+    } catch {
+      // UI diagnostics cannot stop an automation cycle.
+    }
+  }
+
+  function readCapturedPlannerRun(): Readonly<PlannerRun> | undefined {
+    try {
+      const identity = capturedIdentity.readIdentity();
+      if (
+        identity === undefined ||
+        !Number.isSafeInteger(identity.days) ||
+        identity.days < 0 ||
+        !Number.isSafeInteger(identity.resets) ||
+        identity.resets < 0
+      ) {
+        return undefined;
+      }
+      return Object.freeze({ day: identity.days, reset: identity.resets });
+    } catch {
+      // A run identity is presentation metadata; its absence cannot affect automation.
+      return undefined;
+    }
+  }
+
+  function ensureCapturedPlannerStats(): Readonly<PlannerStats> | undefined {
+    const run = readCapturedPlannerRun();
+    if (run === undefined) return undefined;
+    if (
+      currentPlannerStats === undefined ||
+      currentPlannerStats.reset !== run.reset ||
+      currentPlannerStats.day > run.day
+    ) {
+      currentPlannerStats = plannerStats.load(run);
+      plannerStats.save(currentPlannerStats);
+    }
+    return currentPlannerStats;
+  }
+
+  function resetCapturedPlannerStats(): void {
+    try {
+      const run = readCapturedPlannerRun();
+      if (run === undefined) return;
+      currentPlannerStats = plannerStats.make(run);
+      plannerStats.save(currentPlannerStats);
+      refreshCapturedPlanningPanels();
+    } catch (error) {
+      reportPlanningUiError(
+        `planner statistics reset failed: ${String(error)}`,
+      );
+    }
+  }
+
+  function recordCapturedPlannerSample(
+    snapshot: Readonly<ConstructionReadoutSnapshot>,
+  ): void {
+    try {
+      if (settingsLifecycle.readRaw()["buildPlannerUI"] !== true) return;
+      const run = readCapturedPlannerRun();
+      const current = ensureCapturedPlannerStats();
+      if (run === undefined || current === undefined) return;
+      const bucket = plannerStatsBucket(snapshot);
+      currentPlannerStats = plannerStats.record(current, bucket, run.day);
+    } catch (error) {
+      reportPlanningUiError(
+        `planner statistics sample failed: ${String(error)}`,
+      );
+    }
+  }
   const reportedOverrideFailures = new Set<string>();
   const readSafeMode = () => {
     const location = readProperty(settingsHostWindow, "location");
@@ -394,6 +500,10 @@ export function startCapturedRuntime({
     settingsLifecycle,
     customRaceLab,
     refreshEffectiveSettings,
+    interfaceEffects: {
+      syncActiveTargetsUI: () => refreshCapturedPlanningPanels(),
+      syncBuildPlannerUI: () => refreshCapturedPlanningPanels(),
+    },
     craftToggles: {
       rootState: pageCapture.rootState,
       controls: pageCapture.controls,
@@ -853,6 +963,72 @@ export function startCapturedRuntime({
     readonly Readonly<CapturedTriggerTarget>[] | undefined;
   const readTriggerTargets = () =>
     (triggerTargetsThisCycle ??= triggers.read());
+  planningPanels = createCapturedPlanningPanels({
+    getDocument: () => document as unknown as Document,
+    readSettings: settingsLifecycle.readRaw,
+    onResetPlannerStats: resetCapturedPlannerStats,
+    onCollapsedChange: (collapsed) => {
+      settingsLifecycle.readRaw()["buildPlannerCollapsed"] = collapsed;
+      settingsStorage.persist();
+      refreshEffectiveSettings();
+      refreshCapturedPlanningPanels();
+    },
+    onError: reportPlanningUiError,
+  });
+  refreshCapturedPlanningPanels = () => {
+    try {
+      const rawSettings = settingsLifecycle.readRaw();
+      const activeTargetsEnabled = rawSettings["activeTargetsUI"] === true;
+      const plannerEnabled = rawSettings["buildPlannerUI"] === true;
+      const currentRun =
+        latestConstructionSnapshot !== null &&
+        (activeTargetsEnabled || plannerEnabled)
+          ? readCapturedPlannerRun()
+          : undefined;
+      if (
+        latestConstructionSnapshot !== null &&
+        latestConstructionRun !== undefined &&
+        currentRun !== undefined &&
+        (latestConstructionRun.reset !== currentRun.reset ||
+          latestConstructionRun.day > currentRun.day)
+      ) {
+        latestConstructionSnapshot = null;
+        latestConstructionRun = undefined;
+        constructionFreshness = "none";
+      }
+      planningPanels?.syncActiveTargetsUI(activeTargetsEnabled);
+      planningPanels?.syncBuildPlannerUI(plannerEnabled);
+      if (!activeTargetsEnabled && !plannerEnabled) return;
+      const triggers =
+        activeTargetsEnabled || plannerEnabled
+          ? triggerTargetsThisCycle?.map((target) =>
+              Object.freeze({
+                id: target.actionId,
+                kind: target.actionType,
+                ...(target.actionType === "arpa"
+                  ? { projectId: target.projectId }
+                  : {}),
+              }),
+            )
+          : undefined;
+      planningPanels?.update(
+        Object.freeze({
+          construction: latestConstructionSnapshot,
+          freshness:
+            latestConstructionSnapshot === null
+              ? "none"
+              : constructionFreshness,
+          queues: activeTargetsEnabled ? queueReservations.read() : undefined,
+          triggers,
+          stats: plannerEnabled ? ensureCapturedPlannerStats() : undefined,
+          collapsed: rawSettings["buildPlannerCollapsed"] === true,
+        }),
+      );
+    } catch (error) {
+      reportPlanningUiError(error);
+    }
+  };
+  refreshCapturedPlanningPanels();
   const triggerActions = createCapturedTriggerActions({
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,
@@ -1839,6 +2015,8 @@ export function startCapturedRuntime({
 
   const runCycle = () => {
     automationCycle += 1;
+    constructionFreshness =
+      latestConstructionSnapshot === null ? "none" : "stale";
     capturedMechCycleHasPendingWork = false;
     demandThisCycle = undefined;
     triggerTargetsThisCycle = undefined;
@@ -1848,13 +2026,17 @@ export function startCapturedRuntime({
     // carries no settings at all, so a script that only drew its interface while already enabled
     // could never be switched on.
     settingsPanel.ensurePanel();
-    if (!pageCapture.isComplete()) return;
+    if (!pageCapture.isComplete()) {
+      refreshCapturedPlanningPanels();
+      return;
+    }
     refreshDiscoveredSettings();
     const settings = settingsStore.readRaw();
     if (
       !pageCapture.isComplete() ||
       !isEnabled(settings, "masterScriptToggle")
     ) {
+      refreshCapturedPlanningPanels();
       return;
     }
     // The captured runtime is its own tick loop, so it owns the `tick` phase and the flush the
@@ -2075,6 +2257,25 @@ export function startCapturedRuntime({
             `autoBuild: ${outcome.failure.code}: ${outcome.failure.message}`,
           );
         }
+        if (outcome?.status === "succeeded") {
+          try {
+            const snapshot = progression.observations.readPlannerSnapshot();
+            if (
+              snapshot !== null &&
+              (latestConstructionSnapshot === null ||
+                snapshot.cycleId > latestConstructionSnapshot.cycleId)
+            ) {
+              latestConstructionSnapshot = snapshot;
+              latestConstructionRun = readCapturedPlannerRun();
+              constructionFreshness = "fresh";
+              recordCapturedPlannerSample(snapshot);
+            }
+          } catch (error) {
+            reportPlanningUiError(
+              `planner observation failed: ${String(error)}`,
+            );
+          }
+        }
       }
       if (isEnabled(settings, "autoFight")) {
         const mercenaryOutcome = runPhase("autoFight.mercenary", () => {
@@ -2292,6 +2493,7 @@ export function startCapturedRuntime({
       // reaching here means the cycle's own scaffolding failed and there is no one feature to blame.
       logError(String(error));
     } finally {
+      refreshCapturedPlanningPanels();
       if (profiling !== undefined && workStartedAtMs !== undefined) {
         profiling.recordPerformance(
           "tick",

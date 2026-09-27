@@ -37,13 +37,13 @@ const interfaceSettingsReadModel: InterfaceSettingsReadModel = Object.freeze({
       kind: "toggle",
       settingName: "activeTargetsUI",
       label: "Display detailed queue",
-      hint: "Add UI in right column to display currently active queued buildings, technologies, and triggers and their resources.",
+      hint: "Show the current build and research queues, captured trigger targets, and available A.R.P.A. targets above the build queue.",
     }),
     Object.freeze({
       kind: "toggle",
       settingName: "buildPlannerUI",
       label: "Display script planner",
-      hint: "Add UI below the message log showing the top buildings/projects autoBuild wants next, their weights, what's blocking them, and cumulative bottleneck statistics for the current run.",
+      hint: "Show the top construction targets in automation order, their weights and blockers or ETAs, and bottleneck statistics for this run.",
     }),
     Object.freeze({
       kind: "toggle",

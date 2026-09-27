@@ -99,6 +99,10 @@ export class TestElement {
     return siblings[siblings.indexOf(this) + 1] ?? null;
   }
 
+  get nextSibling() {
+    return this.nextElementSibling;
+  }
+
   append(...nodes) {
     for (const node of nodes) {
       // A browser keeps text nodes out of `children`, which is an element-only list. The script
@@ -133,6 +137,27 @@ export class TestElement {
 
   appendChild(node) {
     this.append(node);
+    return node;
+  }
+
+  insertBefore(node, reference) {
+    if (node.parentElement !== null) node.remove();
+    const index =
+      reference === null
+        ? this.children.length
+        : this.children.indexOf(reference);
+    if (index < 0) throw new Error("reference node is not a child");
+    node.parentElement = this;
+    this.children.splice(index, 0, node);
+    return node;
+  }
+
+  removeChild(node) {
+    const index = this.children.indexOf(node);
+    if (index < 0) throw new Error("node is not a child");
+    this.children.splice(index, 1);
+    node.parentElement = null;
+    return node;
   }
 
   remove() {
@@ -141,9 +166,10 @@ export class TestElement {
     this.parentElement = null;
   }
 
-  replaceChildren() {
+  replaceChildren(...nodes) {
     for (const child of this.children) child.parentElement = null;
     this.children = [];
+    this.append(...nodes);
   }
 
   matches(selector) {
@@ -304,6 +330,8 @@ export function parseTestMarkup(markup) {
 export function createTestDocument(root) {
   return {
     readyState: "complete",
+    hidden: false,
+    visibilityState: "visible",
     documentElement: { scrollTop: 0 },
     body: root,
     addEventListener() {},

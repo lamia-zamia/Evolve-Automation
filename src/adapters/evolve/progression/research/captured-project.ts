@@ -179,6 +179,7 @@ export function createCapturedProjectSource(
           project,
           candidate: Object.freeze({
             key: project.elementId,
+            projectId: project.projectId,
             weighting: project.weighting,
             cost: project.cost,
             ignored: queued.has(project.elementId),

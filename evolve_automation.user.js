@@ -941,6 +941,7 @@
 
   // src/domain/game-world.ts
   var ABSENT_RESOURCE = Object.freeze({
+    present: !1,
     unlocked: !1,
     amount: 0,
     max: 0,
@@ -1072,6 +1073,7 @@
     if (!isRecord(resource)) return ABSENT_RESOURCE;
     let regional = isRegionalSupply(root), amount = capturedPoolAmount(resource, pool, regional) ?? Number.NaN, max = capturedPoolCap(resource, pool, regional) ?? Number.NaN, rateOfChange = capturedPoolRate(resource, pool, regional) ?? Number.NaN;
     return Object.freeze({
+      present: !0,
       unlocked: !!readProperty(resource, "display"),
       amount,
       max,
@@ -1081,12 +1083,36 @@
   }
 
   // src/adapters/evolve/captured-world-state.ts
+  function readString(owner, key) {
+    let value = readProperty(owner, key);
+    return typeof value == "string" ? value : "";
+  }
   function readCounter(owner, key) {
     let value = Number(readProperty(owner, key));
     return Number.isFinite(value) ? value : 0;
   }
   function readRank(value) {
     return typeof value == "number" ? Number.isFinite(value) ? value : 0 : value === !0 ? 1 : 0;
+  }
+  function createCapturedIdentitySource(rootState) {
+    return Object.freeze({
+      readIdentity() {
+        let root = rootState.readRoot();
+        if (root === void 0) return;
+        let race = readProperty(root, "race"), city = readProperty(root, "city"), stats = readProperty(root, "stats"), ptrait = readProperty(city, "ptrait"), planetTraits2 = Array.isArray(ptrait) ? Object.freeze(ptrait.filter((entry) => typeof entry == "string")) : Object.freeze([]);
+        return Object.freeze({
+          species: readString(race, "species"),
+          universe: readString(race, "universe"),
+          biome: readString(city, "biome"),
+          planetTraits: planetTraits2,
+          gods: readString(race, "gods"),
+          oldGods: readString(race, "old_gods"),
+          resets: readCounter(stats, "reset"),
+          days: readCounter(stats, "days"),
+          totalDays: readCounter(stats, "tdays")
+        });
+      }
+    });
   }
   function createCapturedTechSource(rootState) {
     return Object.freeze({
@@ -3040,6 +3066,18 @@
     }
     return items;
   }
+  function readPresentationQueueEntries(root, name) {
+    let entries = readProperty(readProperty(root, name), "queue");
+    if (!Array.isArray(entries)) return Object.freeze([]);
+    let result = [];
+    for (let entry of entries) {
+      let id = readProperty(entry, "id");
+      if (typeof id != "string" || id.length === 0) continue;
+      let label = readProperty(entry, "label");
+      result.push({ id, label: typeof label == "string" ? label : id });
+    }
+    return Object.freeze(result.map((item) => Object.freeze(item)));
+  }
   function couldBeStored(root, price) {
     return costFitsStorage(root, price.cost, {
       zeroCapIsCeiling: !1,
@@ -3054,6 +3092,13 @@
       return buyAnyQueued ? eligible : eligible.slice(0, 1);
     }
     return Object.freeze({
+      read() {
+        let root = rootState.readRoot();
+        return Object.freeze({
+          build: readPresentationQueueEntries(root, "queue"),
+          research: readPresentationQueueEntries(root, "r_queue")
+        });
+      },
       readReservations() {
         let root = rootState.readRoot();
         if (root === void 0) return NO_RESERVATIONS2;
@@ -3179,6 +3224,7 @@
             target,
             candidate: Object.freeze({
               key: target.key,
+              actionId: target.elementId,
               weighting: target.weighting,
               cost: price.cost,
               ignored: !1,
@@ -3343,6 +3389,98 @@
     });
   }
 
+  // src/domain/planner-analysis.ts
+  function isRecord2(value) {
+    return typeof value == "object" && value !== null && !Array.isArray(value);
+  }
+  function isNonNegativeSafeInteger(value) {
+    return Number.isSafeInteger(value) && value >= 0;
+  }
+  function freezeStats(stats) {
+    return Object.freeze({
+      ...stats,
+      samples: Object.freeze({ ...stats.samples })
+    });
+  }
+  function findPlannerLimit(input) {
+    if (input.affordable) return null;
+    let worst = null, locked = null;
+    for (let requirement of input.requirements) {
+      if (!requirement.unlocked) {
+        locked === null && requirement.currentQuantity < requirement.requiredQuantity && (locked = {
+          resourceId: requirement.resourceId,
+          resourceTitle: requirement.resourceTitle,
+          time: Number.MAX_SAFE_INTEGER,
+          blocker: "locked"
+        });
+        continue;
+      }
+      let time, blocker;
+      if (requirement.maximumQuantity >= 0 && requirement.maximumQuantity < requirement.requiredQuantity)
+        time = Number.MAX_SAFE_INTEGER, blocker = "storage";
+      else {
+        if (requirement.currentQuantity >= requirement.requiredQuantity)
+          continue;
+        requirement.income > 0 ? (time = (requirement.requiredQuantity - requirement.currentQuantity) / requirement.income, blocker = "income") : (time = Number.MAX_SAFE_INTEGER / 2, blocker = "stalled");
+      }
+      (worst === null || time > worst.time) && (worst = {
+        resourceId: requirement.resourceId,
+        resourceTitle: requirement.resourceTitle,
+        time,
+        blocker
+      });
+    }
+    let result = locked ?? worst;
+    return result === null ? null : Object.freeze(result);
+  }
+  function createPlannerStats(run) {
+    if (!isNonNegativeSafeInteger(run.day) || !isNonNegativeSafeInteger(run.reset))
+      throw new TypeError(
+        "planner run values must be non-negative safe integers"
+      );
+    return freezeStats({
+      startDay: run.day,
+      day: run.day,
+      reset: run.reset,
+      samples: {},
+      total: 0
+    });
+  }
+  function parsePlannerStats(value) {
+    if (!isRecord2(value)) return null;
+    let { startDay, day, reset, samples, total } = value;
+    if (!isNonNegativeSafeInteger(startDay) || !isNonNegativeSafeInteger(day) || !isNonNegativeSafeInteger(reset) || !isNonNegativeSafeInteger(total) || startDay > day || !isRecord2(samples))
+      return null;
+    let validatedSamples = {}, sampleTotal = 0;
+    for (let [bucket, count2] of Object.entries(samples)) {
+      if (!isNonNegativeSafeInteger(count2)) return null;
+      validatedSamples[bucket] = count2, sampleTotal += count2;
+    }
+    return !Number.isSafeInteger(sampleTotal) || sampleTotal !== total ? null : freezeStats({
+      startDay,
+      day,
+      reset,
+      samples: validatedSamples,
+      total
+    });
+  }
+  function selectPlannerStats(saved, run) {
+    return saved !== null && saved.reset === run.reset && saved.day <= run.day ? saved : createPlannerStats(run);
+  }
+  function recordPlannerSample(stats, bucket, currentDay) {
+    if (!isNonNegativeSafeInteger(currentDay))
+      throw new TypeError("currentDay must be a non-negative safe integer");
+    return freezeStats({
+      ...stats,
+      day: currentDay,
+      samples: {
+        ...stats.samples,
+        [bucket]: (stats.samples[bucket] ?? 0) + 1
+      },
+      total: stats.total + 1
+    });
+  }
+
   // src/adapters/evolve/progression/construction/captured-construction.ts
   var NO_CONSUMPTION2 = Object.freeze(
     []
@@ -3351,23 +3489,115 @@
     knowledgeRequiredByBuildTargets: 0,
     knowledgeCapacity: 0
   }), LOCKED_RESOURCE = Object.freeze({
+    resourcePresent: !1,
     unlocked: !1,
     currentQuantity: 0,
+    maximumQuantity: 0,
     rateOfChange: 0,
     storageRatio: 0,
     storageRequired: Number.NaN
   });
   function toBuildResourceView(view, storageRequired) {
     return Object.freeze({
+      resourcePresent: view.present,
       unlocked: view.unlocked,
       currentQuantity: view.amount,
+      maximumQuantity: view.max,
       rateOfChange: view.rateOfChange,
       storageRatio: view.storageRatio,
       storageRequired
     });
   }
   function createCapturedConstructionAdapter(dependencies) {
-    let { sources, resources, rootState, conflicts, readOptions: readOptions3 } = dependencies, readKnowledgeGate = dependencies.readKnowledgeGate, readStorageRequired = dependencies.readStorageRequired, cycle = Object.freeze([]), respectReservations = !0, savingTarget = null, cycleSavingTarget = null, knowledgeRequirement = 0;
+    let { sources, resources, rootState, conflicts, readOptions: readOptions3 } = dependencies, readKnowledgeGate = dependencies.readKnowledgeGate, readStorageRequired = dependencies.readStorageRequired, cycle = Object.freeze([]), respectReservations = !0, savingTarget = null, cycleSavingTarget = null, knowledgeRequirement = 0, constructionCycleId = 0, presentationMode = "off", plannerAffordability = /* @__PURE__ */ new Map(), plannerResources = /* @__PURE__ */ new Map();
+    function capturePlannerResources(index, candidate) {
+      try {
+        let resourceIds = Object.keys(candidate.cost), sample = resources.readResources(
+          resourceIds,
+          candidate.pool === void 0 ? void 0 : { pool: candidate.pool }
+        );
+        plannerResources.set(
+          index,
+          Object.freeze(
+            resourceIds.map(
+              (resourceId) => Object.freeze({
+                resourceId,
+                ...candidate.pool === void 0 ? {} : { pool: candidate.pool },
+                view: sample === void 0 ? LOCKED_RESOURCE : toBuildResourceView(
+                  resourceView(sample, resourceId),
+                  Number.NaN
+                )
+              })
+            )
+          )
+        );
+      } catch {
+        plannerResources.set(index, Object.freeze([]));
+      }
+    }
+    function readPlannerSnapshot() {
+      if (presentationMode === "off") return null;
+      let targets = cycle.map((entry, index) => {
+        let { candidate } = entry, blocker = "unavailable", resourceId, timeSeconds;
+        if (presentationMode === "planner") {
+          let affordable2 = plannerAffordability.get(index);
+          if (affordable2 === !0)
+            blocker = "ready";
+          else if (affordable2 === !1) {
+            let sampled3 = plannerResources.get(index) ?? [], requirements = [], available = !0;
+            for (let [id, requiredQuantity] of Object.entries(candidate.cost)) {
+              let resource = sampled3.find(
+                (item) => item.resourceId === id && item.pool === candidate.pool
+              );
+              if (resource === void 0 || !Number.isFinite(requiredQuantity)) {
+                available = !1;
+                break;
+              }
+              let view = resource.view;
+              if (view.resourcePresent !== !0 || !Number.isFinite(view.currentQuantity) || view.unlocked && (!Number.isFinite(view.maximumQuantity) || !Number.isFinite(view.rateOfChange))) {
+                available = !1;
+                break;
+              }
+              requirements.push(
+                Object.freeze({
+                  resourceId: id,
+                  resourceTitle: id,
+                  requiredQuantity,
+                  currentQuantity: view.currentQuantity,
+                  maximumQuantity: view.maximumQuantity,
+                  income: view.rateOfChange,
+                  unlocked: view.unlocked
+                })
+              );
+            }
+            if (available) {
+              let limit = findPlannerLimit({
+                affordable: !1,
+                requirements: Object.freeze(requirements)
+              });
+              limit !== null && (blocker = limit.blocker, resourceId = limit.resourceId, limit.blocker === "income" && (timeSeconds = limit.time));
+            }
+          }
+        }
+        return Object.freeze({
+          key: candidate.key,
+          family: entry.source.family,
+          ...candidate.actionId === void 0 ? {} : { actionId: candidate.actionId },
+          ...candidate.projectId === void 0 ? {} : { projectId: candidate.projectId },
+          weighting: candidate.weighting,
+          cost: Object.freeze({ ...candidate.cost }),
+          ...candidate.pool === void 0 ? {} : { pool: candidate.pool },
+          queued: candidate.ignored,
+          blocker,
+          ...resourceId === void 0 ? {} : { resourceId },
+          ...timeSeconds === void 0 ? {} : { timeSeconds }
+        });
+      });
+      return Object.freeze({
+        cycleId: constructionCycleId,
+        targets: Object.freeze(targets)
+      });
+    }
     function entryAt(index) {
       let entry = cycle[index];
       if (entry === void 0)
@@ -3392,7 +3622,9 @@
     let reader = Object.freeze({
       beginCycle() {
         let options = readOptions3();
-        respectReservations = options.respectReservations;
+        constructionCycleId++;
+        let presentationSettings = dependencies.readPresentationSettings?.();
+        presentationMode = presentationSettings?.buildPlannerUI === !0 ? "planner" : presentationSettings?.activeTargetsUI === !0 ? "targets" : "off", plannerAffordability = /* @__PURE__ */ new Map(), plannerResources = /* @__PURE__ */ new Map(), respectReservations = options.respectReservations;
         let entries = [], owners = /* @__PURE__ */ new Map();
         for (let source of sources)
           for (let candidate of source.beginCycle()) {
@@ -3421,7 +3653,7 @@
       },
       sampleCandidate(index, request) {
         let { candidate } = entryAt(index), sample = {};
-        return request.needAffordability && (sample.affordable = affordable(candidate)), request.needConsumption && (sample.consumption = candidate.consumption ?? NO_CONSUMPTION2), Object.freeze(sample);
+        return request.needAffordability && (sample.affordable = affordable(candidate), presentationMode === "planner" && (plannerAffordability.set(index, sample.affordable), sample.affordable || capturePlannerResources(index, candidate))), request.needConsumption && (sample.consumption = candidate.consumption ?? NO_CONSUMPTION2), Object.freeze(sample);
       },
       sampleConflict(index) {
         let { candidate } = entryAt(index), important = candidate.important;
@@ -3469,6 +3701,11 @@
           affordability[entry.key] = root !== void 0 && costFitsNow(root, entry.candidate.cost, {
             pool: entry.candidate.pool
           }) === !0;
+        if (presentationMode === "planner")
+          for (let [candidateIndex, cycleEntry] of cycle.entries()) {
+            let sampledAffordability = affordability[cycleEntry.candidate.key];
+            sampledAffordability !== void 0 && plannerAffordability.set(candidateIndex, sampledAffordability);
+          }
         let resourceViews = {}, scopedResources = [], scopesByPool = /* @__PURE__ */ new Map();
         for (let scope of scopes) {
           let ids = scopesByPool.get(scope.pool);
@@ -3491,6 +3728,13 @@
             }), pool === void 0 && (resourceViews[id] = view);
           }
         }
+        if (presentationMode === "planner")
+          for (let [candidateIndex, cycleEntry] of cycle.entries()) {
+            let cost = cycleEntry.candidate.cost, relevant = scopedResources.filter(
+              (sample) => sample.pool === cycleEntry.candidate.pool && Object.hasOwn(cost, sample.resourceId)
+            );
+            relevant.length === Object.keys(cost).length && plannerResources.set(candidateIndex, Object.freeze(relevant));
+          }
         return Object.freeze({
           affordability: Object.freeze(affordability),
           resources: Object.freeze(resourceViews),
@@ -3525,7 +3769,8 @@
       executor,
       observations: Object.freeze({
         readSavingTarget: () => savingTarget,
-        readKnowledgeRequirement: () => knowledgeRequirement
+        readKnowledgeRequirement: () => knowledgeRequirement,
+        readPlannerSnapshot
       })
     });
   }
@@ -3778,6 +4023,7 @@
             project,
             candidate: Object.freeze({
               key: project.elementId,
+              projectId: project.projectId,
               weighting: project.weighting,
               cost: project.cost,
               ignored: queued.has(project.elementId),
@@ -4275,7 +4521,14 @@
       conflicts,
       readOptions: readPolicy,
       ...readKnowledgeGate === void 0 ? {} : { readKnowledgeGate },
-      ...readStorageRequired === void 0 ? {} : { readStorageRequired }
+      ...readStorageRequired === void 0 ? {} : { readStorageRequired },
+      readPresentationSettings: () => {
+        let settings = readSettings();
+        return Object.freeze({
+          activeTargetsUI: readProperty(settings, "activeTargetsUI") === !0,
+          buildPlannerUI: readProperty(settings, "buildPlannerUI") === !0
+        });
+      }
     });
     return Object.freeze({
       runCycle() {
@@ -7761,7 +8014,8 @@
     unavailable: !1
   }), NO_OBSERVATIONS = Object.freeze({
     readSavingTarget: () => null,
-    readKnowledgeRequirement: () => 0
+    readKnowledgeRequirement: () => 0,
+    readPlannerSnapshot: () => null
   });
   function combineReservations(first, second) {
     return Object.freeze({
@@ -16829,6 +17083,303 @@
   function ensureDemandPrerequisiteControls(dependencies) {
     let spy = spyPrerequisiteStatus(dependencies), ai = aiPrerequisiteStatus(dependencies);
     return Object.freeze({ spy, ai });
+  }
+
+  // src/formatting/game-duration.ts
+  function formatGameDuration(seconds) {
+    if (!Number.isFinite(seconds))
+      return seconds === Number.POSITIVE_INFINITY ? "∞" : "Unavailable";
+    if (seconds < 0) return "Never";
+    let wholeSeconds = Math.round(seconds);
+    if (wholeSeconds < 60) return `${wholeSeconds}s`;
+    let minutes = Math.floor(wholeSeconds / 60), remainingSeconds = wholeSeconds % 60;
+    if (wholeSeconds < 3600)
+      return remainingSeconds === 0 ? `${minutes}m` : `${minutes}m ${remainingSeconds}s`;
+    let hours = Math.floor(wholeSeconds / 3600), remainingMinutes = minutes % 60;
+    if (wholeSeconds < 86400)
+      return remainingMinutes === 0 ? `${hours}h` : `${hours}h ${remainingMinutes}m`;
+    let days = Math.floor(wholeSeconds / 86400), remainingHours = hours % 24;
+    return remainingHours === 0 ? `${days}d` : `${days}d ${remainingHours}h`;
+  }
+
+  // src/adapters/browser/captured-planning-panels.ts
+  var BUILD_QUEUE_ANCHOR_ID = "buildQueue", ACTIVE_TARGETS_PANEL_ID = "ea-active-targets", SCRIPT_PLANNER_PANEL_ID = "ea-script-planner", PLANNER_TARGET_LIMIT = 5, PLANNER_BUCKETS = Object.freeze([
+    "ready",
+    "income",
+    "storage",
+    "stalled",
+    "locked",
+    "unavailable"
+  ]);
+  function createText(document, tag, value) {
+    let node = document.createElement(tag);
+    return node.textContent = value, node;
+  }
+  function appendCategory(document, root, title, rows) {
+    if (rows.length === 0) return;
+    let section = document.createElement("section");
+    section.appendChild(createText(document, "h4", title));
+    let list = document.createElement("ul");
+    for (let row of rows) list.appendChild(createText(document, "li", row));
+    section.appendChild(list), root.appendChild(section);
+  }
+  function triggerMatchesTarget(target, triggers) {
+    return triggers.some(
+      (trigger) => trigger.kind === "arpa" ? target.projectId !== void 0 && target.projectId === trigger.projectId : trigger.kind === "build" && target.actionId !== void 0 && target.actionId === trigger.id
+    );
+  }
+  function blockerLabel(target) {
+    let resource = target.resourceId === void 0 ? "" : ` (${target.resourceId})`;
+    switch (target.blocker) {
+      case "ready":
+        return "Ready";
+      case "income":
+        return `Income · ETA ${formatGameDuration(target.timeSeconds ?? Number.NaN)}${resource}`;
+      case "storage":
+        return `Storage${resource}`;
+      case "stalled":
+        return `Stalled${resource}`;
+      case "locked":
+        return `Locked${resource}`;
+      case "unavailable":
+        return "Unavailable";
+    }
+  }
+  function createCapturedPlanningPanels({
+    getDocument,
+    readSettings,
+    onResetPlannerStats,
+    onCollapsedChange,
+    onError = () => {
+    }
+  }) {
+    let activeEnabled = !1, plannerEnabled = !1, model = Object.freeze({
+      construction: null,
+      freshness: "none",
+      queues: void 0,
+      triggers: void 0,
+      stats: void 0,
+      collapsed: !1
+    }), activeSignature, plannerSignature, pendingReconcile = !1, reportedErrors = /* @__PURE__ */ new Set();
+    function report(error) {
+      let message = String(error);
+      if (!reportedErrors.has(message)) {
+        reportedErrors.add(message);
+        try {
+          onError(`captured planning UI: ${message}`);
+        } catch {
+        }
+      }
+    }
+    function documentIsVisible(document) {
+      return document.hidden !== !0 && document.visibilityState !== "hidden";
+    }
+    function placePanel(document, id, before) {
+      let existing = document.getElementById(id), panel = existing ?? document.createElement("section");
+      return existing === null && (panel.id = id), panel.className = "ea-captured-planning-panel", (panel.parentNode !== before.parentNode || panel.nextSibling !== before) && before.parentNode?.insertBefore(panel, before), panel;
+    }
+    function removePanel(document, id) {
+      let panel = document.getElementById(id);
+      panel?.parentNode?.removeChild(panel);
+    }
+    function reconcilePanels() {
+      try {
+        let document = getDocument();
+        if (!documentIsVisible(document)) return;
+        let anchor = document.getElementById(BUILD_QUEUE_ANCHOR_ID);
+        if (activeEnabled || removePanel(document, ACTIVE_TARGETS_PANEL_ID), plannerEnabled || removePanel(document, SCRIPT_PLANNER_PANEL_ID), anchor === null) return;
+        if (plannerEnabled && placePanel(document, SCRIPT_PLANNER_PANEL_ID, anchor), activeEnabled) {
+          let planner = document.getElementById(SCRIPT_PLANNER_PANEL_ID);
+          placePanel(document, ACTIVE_TARGETS_PANEL_ID, planner ?? anchor);
+        }
+      } catch (error) {
+        report(error);
+      }
+    }
+    function renderActiveTargets(document) {
+      let panel = document.getElementById(
+        ACTIVE_TARGETS_PANEL_ID
+      );
+      if (!activeEnabled || panel === null) return;
+      let queues = model.queues, triggers = model.triggers ?? [], projects = model.construction?.targets.filter(
+        (target) => target.family === "arpa"
+      ) ?? [], signature = JSON.stringify({ queues, triggers, projects });
+      signature !== activeSignature && (activeSignature = signature, panel.replaceChildren(createText(document, "h3", "Detailed Queue")), appendCategory(
+        document,
+        panel,
+        "Triggers",
+        triggers.map(
+          (trigger) => trigger.projectId === void 0 ? `${trigger.id} · ${trigger.kind}` : `${trigger.id} · ${trigger.projectId}`
+        )
+      ), appendCategory(
+        document,
+        panel,
+        "Build queue",
+        (queues?.build ?? []).map((entry) => entry.label)
+      ), appendCategory(
+        document,
+        panel,
+        "Research queue",
+        (queues?.research ?? []).map((entry) => entry.label)
+      ), appendCategory(
+        document,
+        panel,
+        "A.R.P.A. project targets",
+        projects.map((project) => project.key)
+      ));
+    }
+    function renderPlanner(document) {
+      let panel = document.getElementById(
+        SCRIPT_PLANNER_PANEL_ID
+      );
+      if (!plannerEnabled || panel === null) return;
+      let signature = JSON.stringify({
+        construction: model.construction,
+        freshness: model.freshness,
+        stats: model.stats,
+        collapsed: model.collapsed,
+        triggers: model.triggers
+      });
+      if (signature === plannerSignature) return;
+      plannerSignature = signature;
+      let title = document.createElement("button");
+      if (title.type = "button", title.textContent = model.collapsed ? "Script Planner ▸" : "Script Planner ▾", title.setAttribute("aria-expanded", String(!model.collapsed)), title.addEventListener("click", () => {
+        let collapsed = readSettings().buildPlannerCollapsed === !0;
+        onCollapsedChange(!collapsed), model = Object.freeze({ ...model, collapsed: !collapsed }), plannerSignature = void 0, renderPlanner(document);
+      }), panel.replaceChildren(title), model.collapsed) return;
+      let freshness = model.construction === null ? "Waiting for a captured construction cycle" : model.freshness === "fresh" ? `Fresh construction cycle ${model.construction.cycleId}` : `Previous construction cycle ${model.construction.cycleId} · idle`;
+      panel.appendChild(createText(document, "p", freshness));
+      let list = document.createElement("ol");
+      for (let target of model.construction?.targets.slice(
+        0,
+        PLANNER_TARGET_LIMIT
+      ) ?? []) {
+        let category = target.family === "arpa" ? "A.R.P.A." : target.family, annotations = [
+          blockerLabel(target),
+          ...target.queued ? ["queued"] : [],
+          ...model.triggers !== void 0 && triggerMatchesTarget(target, model.triggers) ? ["trigger target"] : []
+        ];
+        list.appendChild(
+          createText(
+            document,
+            "li",
+            `${category} · ${target.key} · weight ${target.weighting} · ${annotations.join(" · ")}`
+          )
+        );
+      }
+      panel.appendChild(list);
+      let stats = model.stats;
+      if (panel.appendChild(
+        createText(
+          document,
+          "p",
+          stats === void 0 ? "Bottleneck statistics unavailable" : `Bottleneck samples: ${stats.total}`
+        )
+      ), stats !== void 0) {
+        let buckets = document.createElement("ul");
+        for (let bucket of PLANNER_BUCKETS)
+          buckets.appendChild(
+            createText(
+              document,
+              "li",
+              `${bucket}: ${stats.samples[bucket] ?? 0}`
+            )
+          );
+        panel.appendChild(buckets);
+      }
+      let reset = document.createElement("button");
+      reset.type = "button", reset.textContent = "Reset planner statistics", reset.disabled = stats === void 0, reset.addEventListener("click", onResetPlannerStats), panel.appendChild(reset);
+    }
+    function render() {
+      try {
+        let document = getDocument();
+        if (typeof document.getElementById != "function" || typeof document.createElement != "function") {
+          pendingReconcile = !0;
+          return;
+        }
+        if (!documentIsVisible(document)) {
+          pendingReconcile = !0;
+          return;
+        }
+        reconcilePanels(), pendingReconcile = !1, renderActiveTargets(document), renderPlanner(document);
+      } catch (error) {
+        report(error);
+      }
+    }
+    return Object.freeze({
+      syncActiveTargetsUI(enabled) {
+        if (!(activeEnabled === enabled && !enabled && !pendingReconcile)) {
+          if (activeEnabled === enabled) {
+            render();
+            return;
+          }
+          activeEnabled = enabled, activeSignature = void 0, render();
+        }
+      },
+      syncBuildPlannerUI(enabled) {
+        if (!(plannerEnabled === enabled && !enabled && !pendingReconcile)) {
+          if (plannerEnabled === enabled) {
+            render();
+            return;
+          }
+          plannerEnabled = enabled, plannerSignature = void 0, render();
+        }
+      },
+      update(nextModel) {
+        model = nextModel, !(!activeEnabled && !plannerEnabled && !pendingReconcile) && render();
+      }
+    });
+  }
+
+  // src/adapters/storage/planner-stats.ts
+  var PLANNER_STATS_KEY = "ea_planner_stats";
+  function createPlannerStatsStore(storage) {
+    return Object.freeze({
+      load() {
+        try {
+          let getItem = readProperty(storage, "getItem");
+          if (typeof getItem != "function") return null;
+          let serialized = Reflect.apply(getItem, storage, [
+            PLANNER_STATS_KEY
+          ]);
+          return typeof serialized != "string" ? null : parsePlannerStats(JSON.parse(serialized));
+        } catch {
+          return null;
+        }
+      },
+      save(stats) {
+        try {
+          let setItem = readProperty(storage, "setItem");
+          return typeof setItem != "function" ? !1 : (Reflect.apply(setItem, storage, [
+            PLANNER_STATS_KEY,
+            JSON.stringify(stats)
+          ]), !0);
+        } catch {
+          return !1;
+        }
+      }
+    });
+  }
+
+  // src/application/planner-stats.ts
+  function plannerStatsBucket(snapshot2) {
+    return snapshot2.targets.find((target) => !target.queued)?.blocker ?? "unavailable";
+  }
+  function createPlannerStatsLifecycle(store) {
+    return Object.freeze({
+      make: createPlannerStats,
+      load(run) {
+        return selectPlannerStats(store.load(), run);
+      },
+      save(stats) {
+        let validated = parsePlannerStats(stats);
+        return validated !== null && store.save(validated);
+      },
+      record(stats, bucket, currentDay) {
+        let next = recordPlannerSample(stats, bucket, currentDay);
+        return next.total % 25 === 0 && store.save(next), next;
+      }
+    });
   }
 
   // src/adapters/evolve/combat/captured-fleet-demand.ts
@@ -33453,13 +34004,13 @@ If script is allowed to reassign non-empty storage it might waste time producing
         kind: "toggle",
         settingName: "activeTargetsUI",
         label: "Display detailed queue",
-        hint: "Add UI in right column to display currently active queued buildings, technologies, and triggers and their resources."
+        hint: "Show the current build and research queues, captured trigger targets, and available A.R.P.A. targets above the build queue."
       }),
       Object.freeze({
         kind: "toggle",
         settingName: "buildPlannerUI",
         label: "Display script planner",
-        hint: "Add UI below the message log showing the top buildings/projects autoBuild wants next, their weights, what's blocking them, and cumulative bottleneck statistics for the current run."
+        hint: "Show the top construction targets in automation order, their weights and blockers or ETAs, and bottleneck statistics for this run."
       }),
       Object.freeze({
         kind: "toggle",
@@ -39651,6 +40202,7 @@ Efficiency above '1' is useful to save resources for more desperate times, or to
     refreshEffectiveSettings,
     prestigeSettings: capturedPrestigeSettings,
     evolutionSettings: capturedEvolutionSettings,
+    interfaceEffects,
     craftToggles: capturedCraftToggles,
     buildingSettings: capturedBuildingSettings,
     projectSettings: capturedProjectSettings,
@@ -39879,11 +40431,13 @@ Efficiency above '1' is useful to save resources for more desperate times, or to
           label,
           hint
         ),
-        addSettingsToggle: (node, settingName, label, hint) => controls2.addSettingsToggle(
+        addSettingsToggle: (node, settingName, label, hint, enabledCallBack, disabledCallBack) => controls2.addSettingsToggle(
           node,
           settingName,
           label,
-          hint
+          hint,
+          enabledCallBack,
+          disabledCallBack
         ),
         addSettingsString: (node, settingName, label, hint) => controls2.addSettingsString(
           node,
@@ -40012,10 +40566,8 @@ Efficiency above '1' is useful to save resources for more desperate times, or to
         },
         effects: {
           renderSettingsContent: () => interfaceSettings?.updateInterfaceSettingsContent(),
-          syncActiveTargetsUI: () => {
-          },
-          syncBuildPlannerUI: () => {
-          },
+          syncActiveTargetsUI: (enabled) => interfaceEffects?.syncActiveTargetsUI(enabled),
+          syncBuildPlannerUI: (enabled) => interfaceEffects?.syncBuildPlannerUI(enabled),
           updatePrestigeInTopBar: () => {
           },
           updateTotalDaysInTopBar: () => {
@@ -40027,7 +40579,16 @@ Efficiency above '1' is useful to save resources for more desperate times, or to
         intents: interfaceIntent,
         getActions: () => ({
           ...panelActions,
-          controlEffects: {}
+          controlEffects: {
+            activeTargetsUI: {
+              enabled: () => interfaceEffects?.syncActiveTargetsUI(!0),
+              disabled: () => interfaceEffects?.syncActiveTargetsUI(!1)
+            },
+            buildPlannerUI: {
+              enabled: () => interfaceEffects?.syncBuildPlannerUI(!0),
+              disabled: () => interfaceEffects?.syncBuildPlannerUI(!1)
+            }
+          }
         })
       });
       let stateLogIntent;
@@ -44180,7 +44741,60 @@ Only continue if you trust the source. Injected code:
     pageCapture2.rootState.subscribeRootReplaced(() => {
       settingsLifecycle.invalidateDynamicDefaults(), discoveryAttempts.invalidate();
     });
-    let effectiveSettings = settingsLifecycle.readEffective(), reportedOverrideFailures = /* @__PURE__ */ new Set(), readSafeMode = () => {
+    let effectiveSettings = settingsLifecycle.readEffective(), capturedIdentity = createCapturedIdentitySource(pageCapture2.rootState), plannerStats = createPlannerStatsLifecycle(
+      createPlannerStatsStore(storage)
+    ), currentPlannerStats, latestConstructionSnapshot = null, latestConstructionRun, constructionFreshness = "none", planningPanels, refreshCapturedPlanningPanels = () => {
+    }, reportedPlanningUiErrors = /* @__PURE__ */ new Set();
+    function reportPlanningUiError(error) {
+      let message = String(error);
+      if (!reportedPlanningUiErrors.has(message)) {
+        reportedPlanningUiErrors.add(message);
+        try {
+          logError(
+            message.startsWith("captured planning UI:") ? message : `captured planning UI: ${message}`
+          );
+        } catch {
+        }
+      }
+    }
+    function readCapturedPlannerRun() {
+      try {
+        let identity = capturedIdentity.readIdentity();
+        return identity === void 0 || !Number.isSafeInteger(identity.days) || identity.days < 0 || !Number.isSafeInteger(identity.resets) || identity.resets < 0 ? void 0 : Object.freeze({ day: identity.days, reset: identity.resets });
+      } catch {
+        return;
+      }
+    }
+    function ensureCapturedPlannerStats() {
+      let run = readCapturedPlannerRun();
+      if (run !== void 0)
+        return (currentPlannerStats === void 0 || currentPlannerStats.reset !== run.reset || currentPlannerStats.day > run.day) && (currentPlannerStats = plannerStats.load(run), plannerStats.save(currentPlannerStats)), currentPlannerStats;
+    }
+    function resetCapturedPlannerStats() {
+      try {
+        let run = readCapturedPlannerRun();
+        if (run === void 0) return;
+        currentPlannerStats = plannerStats.make(run), plannerStats.save(currentPlannerStats), refreshCapturedPlanningPanels();
+      } catch (error) {
+        reportPlanningUiError(
+          `planner statistics reset failed: ${String(error)}`
+        );
+      }
+    }
+    function recordCapturedPlannerSample(snapshot2) {
+      try {
+        if (settingsLifecycle.readRaw().buildPlannerUI !== !0) return;
+        let run = readCapturedPlannerRun(), current = ensureCapturedPlannerStats();
+        if (run === void 0 || current === void 0) return;
+        let bucket = plannerStatsBucket(snapshot2);
+        currentPlannerStats = plannerStats.record(current, bucket, run.day);
+      } catch (error) {
+        reportPlanningUiError(
+          `planner statistics sample failed: ${String(error)}`
+        );
+      }
+    }
+    let reportedOverrideFailures = /* @__PURE__ */ new Set(), readSafeMode = () => {
       let location = readProperty(settingsHostWindow2, "location");
       return String(location ?? "").toLowerCase().includes("safemode");
     }, readOverrideConditionContext, overrideSettings = createOverrideSettings({
@@ -44229,6 +44843,10 @@ Only continue if you trust the source. Injected code:
       settingsLifecycle,
       customRaceLab,
       refreshEffectiveSettings,
+      interfaceEffects: {
+        syncActiveTargetsUI: () => refreshCapturedPlanningPanels(),
+        syncBuildPlannerUI: () => refreshCapturedPlanningPanels()
+      },
       craftToggles: {
         rootState: pageCapture2.rootState,
         controls: pageCapture2.controls
@@ -44569,7 +45187,41 @@ Only continue if you trust the source. Injected code:
       // pass, so other runs never pay for the second demand plan.
       readDemandSample: () => triggersNeedDemandSample(settingsStore.readRaw()) ? readTriggerDemand() : void 0,
       readTechKnowledge: progression.readKnowledgeRequiredByTechs
-    }), triggerTargetsThisCycle, readTriggerTargets = () => triggerTargetsThisCycle ??= triggers.read(), triggerActions = createCapturedTriggerActions({
+    }), triggerTargetsThisCycle, readTriggerTargets = () => triggerTargetsThisCycle ??= triggers.read();
+    planningPanels = createCapturedPlanningPanels({
+      getDocument: () => document,
+      readSettings: settingsLifecycle.readRaw,
+      onResetPlannerStats: resetCapturedPlannerStats,
+      onCollapsedChange: (collapsed) => {
+        settingsLifecycle.readRaw().buildPlannerCollapsed = collapsed, settingsStorage.persist(), refreshEffectiveSettings(), refreshCapturedPlanningPanels();
+      },
+      onError: reportPlanningUiError
+    }), refreshCapturedPlanningPanels = () => {
+      try {
+        let rawSettings = settingsLifecycle.readRaw(), activeTargetsEnabled = rawSettings.activeTargetsUI === !0, plannerEnabled = rawSettings.buildPlannerUI === !0, currentRun = latestConstructionSnapshot !== null && (activeTargetsEnabled || plannerEnabled) ? readCapturedPlannerRun() : void 0;
+        if (latestConstructionSnapshot !== null && latestConstructionRun !== void 0 && currentRun !== void 0 && (latestConstructionRun.reset !== currentRun.reset || latestConstructionRun.day > currentRun.day) && (latestConstructionSnapshot = null, latestConstructionRun = void 0, constructionFreshness = "none"), planningPanels?.syncActiveTargetsUI(activeTargetsEnabled), planningPanels?.syncBuildPlannerUI(plannerEnabled), !activeTargetsEnabled && !plannerEnabled) return;
+        let triggers2 = activeTargetsEnabled || plannerEnabled ? triggerTargetsThisCycle?.map(
+          (target) => Object.freeze({
+            id: target.actionId,
+            kind: target.actionType,
+            ...target.actionType === "arpa" ? { projectId: target.projectId } : {}
+          })
+        ) : void 0;
+        planningPanels?.update(
+          Object.freeze({
+            construction: latestConstructionSnapshot,
+            freshness: latestConstructionSnapshot === null ? "none" : constructionFreshness,
+            queues: activeTargetsEnabled ? queueReservations.read() : void 0,
+            triggers: triggers2,
+            stats: plannerEnabled ? ensureCapturedPlannerStats() : void 0,
+            collapsed: rawSettings.buildPlannerCollapsed === !0
+          })
+        );
+      } catch (error) {
+        reportPlanningUiError(error);
+      }
+    }, refreshCapturedPlanningPanels();
+    let triggerActions = createCapturedTriggerActions({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
       resources: createCapturedResourceSource(pageCapture2.rootState),
@@ -45207,11 +45859,16 @@ Only continue if you trust the source. Injected code:
       readSettings: () => settingsStore.readRaw(),
       onActivity
     }), runCycle = () => {
-      if (automationCycle += 1, capturedMechCycleHasPendingWork = !1, demandThisCycle = void 0, triggerTargetsThisCycle = void 0, triggerDemandThisCycle = void 0, demandPrerequisitesThisCycle = void 0, settingsPanel.ensurePanel(), !pageCapture2.isComplete()) return;
+      if (automationCycle += 1, constructionFreshness = latestConstructionSnapshot === null ? "none" : "stale", capturedMechCycleHasPendingWork = !1, demandThisCycle = void 0, triggerTargetsThisCycle = void 0, triggerDemandThisCycle = void 0, demandPrerequisitesThisCycle = void 0, settingsPanel.ensurePanel(), !pageCapture2.isComplete()) {
+        refreshCapturedPlanningPanels();
+        return;
+      }
       refreshDiscoveredSettings();
       let settings = settingsStore.readRaw();
-      if (!pageCapture2.isComplete() || !isEnabled(settings, "masterScriptToggle"))
+      if (!pageCapture2.isComplete() || !isEnabled(settings, "masterScriptToggle")) {
+        refreshCapturedPlanningPanels();
         return;
+      }
       let profiling = diagnostics?.readPerformanceEnabled() === !0 ? diagnostics : void 0, workStartedAtMs = profiling?.nowMs();
       try {
         if (isEnabled(settings, "autoEvolution")) {
@@ -45295,9 +45952,17 @@ Only continue if you trust the source. Injected code:
             "autoBuild",
             () => progression.runConstructionCycle()
           );
-          outcome !== void 0 && outcome.status !== "succeeded" && reportOnce(
+          if (outcome !== void 0 && outcome.status !== "succeeded" && reportOnce(
             `autoBuild: ${outcome.failure.code}: ${outcome.failure.message}`
-          );
+          ), outcome?.status === "succeeded")
+            try {
+              let snapshot2 = progression.observations.readPlannerSnapshot();
+              snapshot2 !== null && (latestConstructionSnapshot === null || snapshot2.cycleId > latestConstructionSnapshot.cycleId) && (latestConstructionSnapshot = snapshot2, latestConstructionRun = readCapturedPlannerRun(), constructionFreshness = "fresh", recordCapturedPlannerSample(snapshot2));
+            } catch (error) {
+              reportPlanningUiError(
+                `planner observation failed: ${String(error)}`
+              );
+            }
         }
         if (isEnabled(settings, "autoFight")) {
           let mercenaryOutcome = runPhase("autoFight.mercenary", () => (ensureMercenaryControls(), runMercenaryAutomation(capturedMercenary)));
@@ -45383,7 +46048,7 @@ Only continue if you trust the source. Injected code:
       } catch (error) {
         logError(String(error));
       } finally {
-        profiling !== void 0 && workStartedAtMs !== void 0 && (profiling.recordPerformance(
+        refreshCapturedPlanningPanels(), profiling !== void 0 && workStartedAtMs !== void 0 && (profiling.recordPerformance(
           "tick",
           profiling.nowMs() - workStartedAtMs
         ), profiling.flushPerformance());

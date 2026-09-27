@@ -21,6 +21,7 @@ import type {
   BuildCompetitionSample,
   BuildConflictSample,
   BuildCycleSetup,
+  BuildScopedResourceSample,
   BuildResourceView,
   BuildResourceScope,
   BuildSampleRequest,
@@ -28,6 +29,11 @@ import type {
 import { storageRequirementScopeKey } from "../../../../domain/economy/storage/storage-requirements.ts";
 import { resourceView } from "../../../../domain/game-world.ts";
 import type { ResourceView } from "../../../../domain/game-world.ts";
+import {
+  findPlannerLimit,
+  type PlannerRequirement,
+  type PlannerReadoutBlocker,
+} from "../../../../domain/planner-analysis.ts";
 import type {
   BuildClickResult,
   BuildExecutor,
@@ -40,6 +46,8 @@ import type {
 } from "../../../../ports/construction-candidates.ts";
 import type { GameResourceSource } from "../../../../ports/game-world-state.ts";
 import type {
+  ConstructionReadoutSnapshot,
+  ConstructionTargetReadout,
   SavingTarget,
   ConstructionObservations,
 } from "../../../../ports/game-construction-observations.ts";
@@ -63,6 +71,11 @@ export interface CapturedConstructionDependencies {
     resourceIds: readonly string[],
     resourceScopes?: readonly BuildResourceScope[],
   ) => Readonly<Record<string, number>> | undefined;
+  /** Enables the planner's read-only resource sample; disabled panels add no planner sampling. */
+  readonly readPresentationSettings?: () => Readonly<{
+    activeTargetsUI: boolean;
+    buildPlannerUI: boolean;
+  }>;
 }
 
 export interface CapturedConstructionAdapter {
@@ -91,8 +104,10 @@ const ZERO_KNOWLEDGE_GATE = Object.freeze({
 
 /** A cost key that names no stored resource (`Morale`, `Army`) has nothing to report. */
 const LOCKED_RESOURCE: BuildResourceView = Object.freeze({
+  resourcePresent: false,
   unlocked: false,
   currentQuantity: 0,
+  maximumQuantity: 0,
   rateOfChange: 0,
   storageRatio: 0,
   storageRequired: Number.NaN,
@@ -103,8 +118,10 @@ function toBuildResourceView(
   storageRequired: number,
 ): BuildResourceView {
   return Object.freeze({
+    resourcePresent: view.present,
     unlocked: view.unlocked,
     currentQuantity: view.amount,
+    maximumQuantity: view.max,
     rateOfChange: view.rateOfChange,
     storageRatio: view.storageRatio,
     storageRequired,
@@ -123,6 +140,136 @@ export function createCapturedConstructionAdapter(
   let savingTarget: SavingTarget | null = null;
   let cycleSavingTarget: SavingTarget | null = null;
   let knowledgeRequirement = 0;
+  let constructionCycleId = 0;
+  let presentationMode: "off" | "targets" | "planner" = "off";
+  let plannerAffordability = new Map<number, boolean>();
+  let plannerResources = new Map<
+    number,
+    readonly Readonly<BuildScopedResourceSample>[]
+  >();
+
+  function capturePlannerResources(
+    index: number,
+    candidate: Readonly<ConstructionCandidate>,
+  ): void {
+    try {
+      const resourceIds = Object.keys(candidate.cost);
+      const sample = resources.readResources(
+        resourceIds,
+        candidate.pool === undefined ? undefined : { pool: candidate.pool },
+      );
+      plannerResources.set(
+        index,
+        Object.freeze(
+          resourceIds.map((resourceId) =>
+            Object.freeze({
+              resourceId,
+              ...(candidate.pool === undefined ? {} : { pool: candidate.pool }),
+              view:
+                sample === undefined
+                  ? LOCKED_RESOURCE
+                  : toBuildResourceView(
+                      resourceView(sample, resourceId),
+                      Number.NaN,
+                    ),
+            }),
+          ),
+        ),
+      );
+    } catch {
+      // Planner-only resource sampling is read-only; malformed or missing samples must not stop
+      // the construction decision that this observation accompanies.
+      plannerResources.set(index, Object.freeze([]));
+    }
+  }
+
+  function readPlannerSnapshot(): Readonly<ConstructionReadoutSnapshot> | null {
+    if (presentationMode === "off") return null;
+
+    const targets = cycle.map((entry, index) => {
+      const { candidate } = entry;
+      let blocker: PlannerReadoutBlocker = "unavailable";
+      let resourceId: string | undefined;
+      let timeSeconds: number | undefined;
+
+      if (presentationMode === "planner") {
+        const affordable = plannerAffordability.get(index);
+        if (affordable === true) {
+          blocker = "ready";
+        } else if (affordable === false) {
+          const sampled = plannerResources.get(index) ?? [];
+          const requirements: PlannerRequirement[] = [];
+          let available = true;
+          for (const [id, requiredQuantity] of Object.entries(candidate.cost)) {
+            const resource = sampled.find(
+              (item) => item.resourceId === id && item.pool === candidate.pool,
+            );
+            if (resource === undefined || !Number.isFinite(requiredQuantity)) {
+              available = false;
+              break;
+            }
+            const view = resource.view;
+            if (
+              view.resourcePresent !== true ||
+              !Number.isFinite(view.currentQuantity) ||
+              (view.unlocked &&
+                (!Number.isFinite(view.maximumQuantity) ||
+                  !Number.isFinite(view.rateOfChange)))
+            ) {
+              available = false;
+              break;
+            }
+            requirements.push(
+              Object.freeze({
+                resourceId: id,
+                resourceTitle: id,
+                requiredQuantity,
+                currentQuantity: view.currentQuantity,
+                maximumQuantity: view.maximumQuantity,
+                income: view.rateOfChange,
+                unlocked: view.unlocked,
+              }),
+            );
+          }
+
+          if (available) {
+            const limit = findPlannerLimit({
+              affordable: false,
+              requirements: Object.freeze(requirements),
+            });
+            if (limit !== null) {
+              blocker = limit.blocker;
+              resourceId = limit.resourceId;
+              if (limit.blocker === "income") timeSeconds = limit.time;
+            }
+          }
+        }
+      }
+
+      return Object.freeze({
+        key: candidate.key,
+        family: entry.source.family,
+        ...(candidate.actionId === undefined
+          ? {}
+          : { actionId: candidate.actionId }),
+        ...(candidate.projectId === undefined
+          ? {}
+          : { projectId: candidate.projectId }),
+        weighting: candidate.weighting,
+        cost: Object.freeze({ ...candidate.cost }),
+        ...(candidate.pool === undefined ? {} : { pool: candidate.pool }),
+        queued: candidate.ignored,
+        blocker,
+        ...(resourceId === undefined ? {} : { resourceId }),
+        ...(timeSeconds === undefined ? {} : { timeSeconds }),
+      }) satisfies Readonly<ConstructionTargetReadout>;
+    });
+
+    return Object.freeze({
+      cycleId: constructionCycleId,
+      targets: Object.freeze(targets),
+    });
+  }
 
   function entryAt(index: number): CycleEntry {
     const entry = cycle[index];
@@ -172,6 +319,16 @@ export function createCapturedConstructionAdapter(
   const reader: BuildReader = Object.freeze({
     beginCycle(): BuildCycleSetup {
       const options = readOptions();
+      constructionCycleId++;
+      const presentationSettings = dependencies.readPresentationSettings?.();
+      presentationMode =
+        presentationSettings?.buildPlannerUI === true
+          ? "planner"
+          : presentationSettings?.activeTargetsUI === true
+            ? "targets"
+            : "off";
+      plannerAffordability = new Map();
+      plannerResources = new Map();
       respectReservations = options.respectReservations;
       const entries: CycleEntry[] = [];
       const owners = new Map<string, string>();
@@ -226,6 +383,10 @@ export function createCapturedConstructionAdapter(
       } = {};
       if (request.needAffordability) {
         sample.affordable = affordable(candidate);
+        if (presentationMode === "planner") {
+          plannerAffordability.set(index, sample.affordable);
+          if (!sample.affordable) capturePlannerResources(index, candidate);
+        }
       }
       if (request.needConsumption) {
         sample.consumption = candidate.consumption ?? NO_CONSUMPTION;
@@ -307,6 +468,14 @@ export function createCapturedConstructionAdapter(
             pool: entry.candidate.pool,
           }) === true;
       }
+      if (presentationMode === "planner") {
+        for (const [candidateIndex, cycleEntry] of cycle.entries()) {
+          const sampledAffordability = affordability[cycleEntry.candidate.key];
+          if (sampledAffordability !== undefined) {
+            plannerAffordability.set(candidateIndex, sampledAffordability);
+          }
+        }
+      }
       const resourceViews: Record<string, BuildResourceView> = {};
       const scopedResources: {
         readonly resourceId: string;
@@ -340,6 +509,19 @@ export function createCapturedConstructionAdapter(
             view,
           });
           if (pool === undefined) resourceViews[id] = view;
+        }
+      }
+      if (presentationMode === "planner") {
+        for (const [candidateIndex, cycleEntry] of cycle.entries()) {
+          const cost = cycleEntry.candidate.cost;
+          const relevant = scopedResources.filter(
+            (sample) =>
+              sample.pool === cycleEntry.candidate.pool &&
+              Object.hasOwn(cost, sample.resourceId),
+          );
+          if (relevant.length === Object.keys(cost).length) {
+            plannerResources.set(candidateIndex, Object.freeze(relevant));
+          }
         }
       }
       return Object.freeze({
@@ -388,6 +570,7 @@ export function createCapturedConstructionAdapter(
     observations: Object.freeze({
       readSavingTarget: (): SavingTarget | null => savingTarget,
       readKnowledgeRequirement: (): number => knowledgeRequirement,
+      readPlannerSnapshot,
     }),
   });
 }

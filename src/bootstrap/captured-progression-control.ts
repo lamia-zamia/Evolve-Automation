@@ -202,6 +202,7 @@ const NO_RESERVATIONS = Object.freeze({
 const NO_OBSERVATIONS: ConstructionObservations = Object.freeze({
   readSavingTarget: () => null,
   readKnowledgeRequirement: () => 0,
+  readPlannerSnapshot: () => null,
 });
 
 /** Both sets are in force at once; either being unpriceable makes the whole set incomplete. */

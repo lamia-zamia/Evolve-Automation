@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { startCapturedRuntime } from "../src/bootstrap/captured-runtime-control.ts";
+import { createTestDocument, element } from "./dom-fixture.mjs";
 
 // The captured runtime gates its cycles on the script's own `tickRate`, which defaults to four game
 // periods. These fixtures therefore deliver a four-period batch per intended cycle; the gate itself
@@ -527,6 +528,7 @@ assert.equal(unsubscribeCount, 1);
   const root = {
     race: {},
     tech: {},
+    stats: { days: 12, reset: 2, tdays: 30 },
     city: { bank: { count: 0 }, farm: { count: 0 } },
     space: {},
     queue: { display: true, pause: false, queue: [] },
@@ -542,6 +544,36 @@ assert.equal(unsubscribeCount, 1);
       { elementId: id, generation: 1, methods: ["setData", "action"] },
     ]),
   );
+  const page = element("main");
+  const resourcesPanel = element("div", { id: "resources" });
+  const queueAnchor = element("div", { id: "buildQueue" });
+  const settingsTab = element("div");
+  settingsTab.classList.add("settings");
+  const saveTransfer = element("div");
+  saveTransfer.classList.add("importExport");
+  const saveField = element("div", { id: "importExport" });
+  saveField.appendChild(element("textarea"));
+  saveTransfer.appendChild(saveField);
+  settingsTab.appendChild(saveTransfer);
+  page.appendChild(resourcesPanel);
+  page.appendChild(settingsTab);
+  page.appendChild(queueAnchor);
+  const document = createTestDocument(page);
+  const stored = new Map([
+    [
+      "settings",
+      JSON.stringify({
+        masterScriptToggle: true,
+        autoBuild: true,
+        activeTargetsUI: true,
+        buildPlannerUI: true,
+        "batcity-bank": true,
+        "bld_w_city-bank": 300,
+        "batcity-farm": true,
+        "bld_w_city-farm": 100,
+      }),
+    ],
+  ]);
   let cycle;
   const stopCycle = startCapturedRuntime({
     pageCapture: {
@@ -576,26 +608,111 @@ assert.equal(unsubscribeCount, 1);
       mountSuppression: { available: false, withoutMounting: () => undefined },
       uninstall: () => {},
     },
-    document: { getElementById: () => null, querySelectorAll: () => [] },
+    document,
+    settingsHostWindow: {
+      document,
+      navigator: { platform: "Win32" },
+      location: "https://evolve.test/",
+      confirm: () => true,
+    },
     mouseEvent: class {},
     storage: {
-      getItem: () =>
-        JSON.stringify({
-          masterScriptToggle: true,
-          autoBuild: true,
-          "batcity-bank": true,
-          "bld_w_city-bank": 300,
-          "batcity-farm": true,
-          "bld_w_city-farm": 100,
-        }),
+      getItem: (key) => stored.get(key) ?? null,
+      setItem: (key, value) => stored.set(key, String(value)),
     },
     logError: () => {},
   });
+  assert.equal(page.querySelectorAll("#ea-active-targets").length, 1);
+  assert.equal(page.querySelectorAll("#ea-script-planner").length, 1);
+  assert.match(
+    page.querySelectorAll("#ea-script-planner")[0].querySelectorAll("p")[0]
+      .textContent,
+    /Waiting for a captured construction cycle/,
+  );
   // The first cycle has no reservation in force yet, so the cheap candidate is still bought.
   cycle({ periods: 4 });
   assert.deepEqual(invoked, ["city-farm"]);
+  assert.equal(page.querySelectorAll("#ea-script-planner").length, 1);
+  const plannerRows = page
+    .querySelectorAll("#ea-script-planner")[0]
+    .querySelectorAll("ol")[0]
+    .children.map((row) => row.textContent);
+  assert.match(plannerRows[0], /city-bank · weight 900 · Stalled \(Money\)/);
+  assert.match(plannerRows[1], /city-farm · weight 300 · Ready/);
+  const plannerPanel = page.querySelectorAll("#ea-script-planner")[0];
+  assert.match(
+    plannerPanel.querySelectorAll("p").at(-1).textContent,
+    /Bottleneck samples: 1/,
+  );
+  assert.ok(
+    plannerPanel
+      .querySelectorAll("li")
+      .some(({ textContent }) => textContent === "stalled: 1"),
+  );
+  const resetStats = page
+    .querySelectorAll("#ea-script-planner")[0]
+    .querySelectorAll("button")
+    .at(-1);
+  assert.equal(resetStats.disabled, false);
+  resetStats.dispatch("click");
+  assert.equal(JSON.parse(stored.get("ea_planner_stats")).total, 0);
+  assert.match(
+    page.querySelectorAll("#ea-script-planner")[0].querySelectorAll("p").at(-1)
+      .textContent,
+    /Bottleneck samples: 0/,
+  );
+  assert.ok(
+    page
+      .querySelectorAll("#ea-script-planner")[0]
+      .querySelectorAll("li")
+      .some(({ textContent }) => textContent === "stalled: 0"),
+  );
+  assert.equal(page.querySelectorAll("#ea-script-planner").length, 1);
+
+  const collapseButton = page
+    .querySelectorAll("#ea-script-planner")[0]
+    .querySelectorAll("button")[0];
+  collapseButton.dispatch("click");
+  assert.equal(JSON.parse(stored.get("settings")).buildPlannerCollapsed, true);
+  page
+    .querySelectorAll("#ea-script-planner")[0]
+    .querySelectorAll("button")[0]
+    .dispatch("click");
+  assert.equal(JSON.parse(stored.get("settings")).buildPlannerCollapsed, false);
+
+  const activeToggle = page.querySelectorAll(".script_activeTargetsUI")[0];
+  activeToggle.checked = false;
+  activeToggle.dispatch("change");
+  assert.equal(page.querySelectorAll("#ea-active-targets").length, 0);
+  activeToggle.checked = true;
+  activeToggle.dispatch("change");
+  assert.equal(page.querySelectorAll("#ea-active-targets").length, 1);
+
+  const plannerToggle = page.querySelectorAll(".script_buildPlannerUI")[0];
+  plannerToggle.checked = false;
+  plannerToggle.dispatch("change");
+  assert.equal(page.querySelectorAll("#ea-script-planner").length, 0);
+  plannerToggle.checked = true;
+  plannerToggle.dispatch("change");
+  assert.equal(page.querySelectorAll("#ea-script-planner").length, 1);
+
+  page.querySelectorAll("#script_resetinterface")[0].dispatch("click");
+  assert.equal(JSON.parse(stored.get("settings")).activeTargetsUI, false);
+  assert.equal(JSON.parse(stored.get("settings")).buildPlannerUI, true);
+  assert.equal(JSON.parse(stored.get("settings")).buildPlannerCollapsed, false);
+  assert.equal(page.querySelectorAll("#ea-active-targets").length, 0);
+  assert.equal(page.querySelectorAll("#ea-script-planner").length, 1);
+
   // The bank is now the published saving target, and its cost holds the farm back.
+  root.stats.reset = 3;
+  root.stats.days = 0;
   cycle({ periods: 4 });
+  assert.equal(JSON.parse(stored.get("ea_planner_stats")).reset, 3);
+  assert.match(
+    page.querySelectorAll("#ea-script-planner")[0].querySelectorAll("p").at(-1)
+      .textContent,
+    /Bottleneck samples: 1/,
+  );
   cycle({ periods: 4 });
   stopCycle();
   assert.deepEqual(invoked, ["city-farm"]);

@@ -77,6 +77,7 @@ function createPage(
     confirmAnswer = true,
     collapsed = false,
     allSections = false,
+    interfaceEffects,
   } = {},
 ) {
   const storedText = collapsed
@@ -190,6 +191,7 @@ function createPage(
     settings,
     settingsLifecycle,
     refreshEffectiveSettings,
+    interfaceEffects,
     ...gameBackedSections,
     traitSettings: { rootState },
     onDiagnostic: (message) => diagnostics.push(message),
@@ -427,13 +429,56 @@ function createPage(
 // --- section resets use the host confirmation and update the shared record ----------------------
 
 {
+  const synchronized = [];
   const { panel, settings, root } = createPage(
     JSON.stringify({ autoBuild: true, activeTargetsUI: true }),
+    {
+      interfaceEffects: {
+        syncActiveTargetsUI: (enabled) =>
+          synchronized.push(["active", enabled]),
+        syncBuildPlannerUI: (enabled) =>
+          synchronized.push(["planner", enabled]),
+      },
+    },
   );
   panel.ensurePanel();
   root.querySelectorAll("#script_resetinterface")[0].dispatch("click");
   assert.equal(settings.readRaw()["activeTargetsUI"], false);
   assert.equal(settings.readRaw()["buildPlannerUI"], true);
+  assert.deepEqual(synchronized, [
+    ["active", false],
+    ["planner", true],
+  ]);
+}
+
+// Interface toggle callbacks reach the live panel synchronizer without a settings-panel reopen.
+{
+  const synchronized = [];
+  const { panel, root } = createPage(
+    JSON.stringify({ activeTargetsUI: false, buildPlannerUI: false }),
+    {
+      interfaceEffects: {
+        syncActiveTargetsUI: (enabled) =>
+          synchronized.push(["active", enabled]),
+        syncBuildPlannerUI: (enabled) =>
+          synchronized.push(["planner", enabled]),
+      },
+    },
+  );
+  panel.ensurePanel();
+  const active = root.querySelectorAll(".script_activeTargetsUI")[0];
+  active.checked = true;
+  active.dispatch("change");
+  const planner = root.querySelectorAll(".script_buildPlannerUI")[0];
+  planner.checked = true;
+  planner.dispatch("change");
+  planner.checked = false;
+  planner.dispatch("change");
+  assert.deepEqual(synchronized, [
+    ["active", true],
+    ["planner", true],
+    ["planner", false],
+  ]);
 }
 
 // --- show settings has a usable caption and removes the panel when disabled ---------------------

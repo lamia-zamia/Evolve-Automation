@@ -135,7 +135,7 @@ assert.deepEqual(trace, ["intent:reset-interface-settings"]);
 assert.equal(controls[0].label, "Display detailed queue");
 assert.equal(
   controls[0].hint,
-  "Add UI in right column to display currently active queued buildings, technologies, and triggers and their resources.",
+  "Show the current build and research queues, captured trigger targets, and available A.R.P.A. targets above the build queue.",
 );
 
 console.log("Interface settings browser adapter tests passed");

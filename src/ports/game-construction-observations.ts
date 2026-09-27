@@ -1,9 +1,11 @@
+import type { PlannerReadoutBlocker } from "../domain/planner-analysis.ts";
+
 /**
  * What the construction cycle observed while it ran, published for the features that need it.
  *
- * These are observations, not decisions. Everything here is a by-product of work the cycle already
- * does — the affordability it samples and the candidate list it sorts — so reading it costs nothing
- * and describes the cycle that produced it.
+ * These are observations, not decisions. Candidate order and costs come from work the cycle
+ * already does. When the planner is enabled, the adapter may take one additional read-only
+ * resource sample for blocker details; reading this published snapshot performs no live reads.
  */
 
 /**
@@ -26,6 +28,25 @@ export interface SavingTarget {
   readonly cost: Readonly<Record<string, number>>;
 }
 
+export interface ConstructionTargetReadout {
+  readonly key: string;
+  readonly family: string;
+  readonly actionId?: string;
+  readonly projectId?: string;
+  readonly weighting: number;
+  readonly cost: Readonly<Record<string, number>>;
+  readonly pool?: string;
+  readonly queued: boolean;
+  readonly blocker: PlannerReadoutBlocker;
+  readonly resourceId?: string;
+  readonly timeSeconds?: number;
+}
+
+export interface ConstructionReadoutSnapshot {
+  readonly cycleId: number;
+  readonly targets: readonly Readonly<ConstructionTargetReadout>[];
+}
+
 export interface ConstructionObservations {
   /**
    * The current saving target, or null when everything wanted is affordable. It is the last
@@ -39,4 +60,6 @@ export interface ConstructionObservations {
    * candidate list alone, so it describes the current cycle.
    */
   readKnowledgeRequirement(): number;
+  /** The last paid construction cycle's ordered planner observations, or `null` when not sampled. */
+  readPlannerSnapshot(): Readonly<ConstructionReadoutSnapshot> | null;
 }

@@ -31,6 +31,10 @@ import type {
   CostReservationSample,
   CostReservationSource,
 } from "../../ports/game-cost-reservations.ts";
+import type {
+  GameQueueReadout,
+  GameQueueReadoutSample,
+} from "../../ports/game-queue-readout.ts";
 import type { OfferedTech } from "../../ports/game-tech-catalog.ts";
 import type { GameRootStateSource } from "../../ports/game-root-state.ts";
 import { costFitsStorage } from "./captured-affordability.ts";
@@ -139,6 +143,22 @@ function readQueuedResearch(root: unknown): readonly QueuedItem[] | undefined {
   return items;
 }
 
+function readPresentationQueueEntries(
+  root: unknown,
+  name: "queue" | "r_queue",
+) {
+  const entries = readProperty(readProperty(root, name), "queue");
+  if (!Array.isArray(entries)) return Object.freeze([]);
+  const result: { id: string; label: string }[] = [];
+  for (const entry of entries) {
+    const id = readProperty(entry, "id");
+    if (typeof id !== "string" || id.length === 0) continue;
+    const label = readProperty(entry, "label");
+    result.push({ id, label: typeof label === "string" ? label : id });
+  }
+  return Object.freeze(result.map((item) => Object.freeze(item)));
+}
+
 /**
  * Whether storage could ever hold this cost, which is the game's own `checkMaxCosts` judgement:
  * the game refuses to save for a queued item it can never pay for (writing `cna` on the entry),
@@ -160,7 +180,7 @@ function couldBeStored(root: unknown, price: GameActionPrice): boolean {
 
 export function createCapturedQueueReservationSource(
   dependencies: CapturedQueueReservationDependencies,
-): CostReservationSource {
+): CostReservationSource & GameQueueReadout {
   const { rootState, costs } = dependencies;
   const readOfferedTechs = dependencies.readOfferedTechs;
   const reportUnavailable = dependencies.onUnavailable ?? (() => {});
@@ -179,6 +199,13 @@ export function createCapturedQueueReservationSource(
   }
 
   return Object.freeze({
+    read(): Readonly<GameQueueReadoutSample> {
+      const root = rootState.readRoot();
+      return Object.freeze({
+        build: readPresentationQueueEntries(root, "queue"),
+        research: readPresentationQueueEntries(root, "r_queue"),
+      });
+    },
     readReservations(): CostReservationSample {
       const root = rootState.readRoot();
       if (root === undefined) return NO_RESERVATIONS;

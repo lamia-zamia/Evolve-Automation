@@ -259,6 +259,7 @@ export function readCapturedResourceView(
   const max = capturedPoolCap(resource, pool, regional) ?? Number.NaN;
   const rateOfChange = capturedPoolRate(resource, pool, regional) ?? Number.NaN;
   return Object.freeze({
+    present: true,
     unlocked: Boolean(readProperty(resource, "display")),
     amount,
     max,

@@ -16,6 +16,8 @@
 
 /** The one resource view every reader produces, whether or not the game has the resource yet. */
 export interface ResourceView {
+  /** Whether the captured root contains a resource record for this id. */
+  readonly present: boolean;
   /** `resource.display` — the game is offering this resource to the player. */
   readonly unlocked: boolean;
   readonly amount: number;
@@ -29,6 +31,7 @@ export interface ResourceView {
 
 /** A resource the game has not created, or a cost key that names no resource at all. */
 export const ABSENT_RESOURCE: ResourceView = Object.freeze({
+  present: false,
   unlocked: false,
   amount: 0,
   max: 0,

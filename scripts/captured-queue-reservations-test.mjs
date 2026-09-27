@@ -30,6 +30,7 @@ function makeSource(root, prices = {}, onUnavailable, research, pools = {}) {
   });
   return {
     readReservations: () => source.readReservations(),
+    readQueue: () => source.read(),
     catalogReads: reads,
   };
 }
@@ -78,6 +79,34 @@ const PRICES = {
   "city-warehouse": { Money: 400 },
   "city-mine": { Money: 450 },
 };
+
+// Detailed Queue reads the raw captured commitment lists without pricing them or discovering
+// research offers as a side effect of presentation.
+{
+  const source = makeSource(
+    makeRoot({
+      queue: [
+        { id: "city-warehouse", label: "Warehouse" },
+        { id: "city-mine" },
+        { id: "", label: "invalid" },
+      ],
+      research: {
+        queue: [queuedTech("mining"), { type: "unidentified" }],
+      },
+    }),
+    PRICES,
+    undefined,
+    { offered: undefined },
+  );
+  assert.deepEqual(source.readQueue(), {
+    build: [
+      { id: "city-warehouse", label: "Warehouse" },
+      { id: "city-mine", label: "city-mine" },
+    ],
+    research: [{ id: "tech-mining", label: "mining" }],
+  });
+  assert.equal(source.catalogReads.length, 0);
+}
 
 // --- nothing to reserve ----------------------------------------------------
 

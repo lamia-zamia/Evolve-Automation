@@ -20,6 +20,9 @@ export interface PlannerLimit {
   readonly blocker: "storage" | "income" | "stalled" | "locked";
 }
 
+export type PlannerReadoutBlocker =
+  PlannerLimit["blocker"] | "ready" | "unavailable";
+
 export interface PlannerRun {
   readonly day: number;
   readonly reset: number;
@@ -71,15 +74,17 @@ export function findPlannerLimit(
       }
       continue;
     }
-    if (requirement.currentQuantity >= requirement.requiredQuantity) {
-      continue;
-    }
 
     let time: number;
     let blocker: PlannerLimit["blocker"];
-    if (requirement.maximumQuantity < requirement.requiredQuantity) {
+    if (
+      requirement.maximumQuantity >= 0 &&
+      requirement.maximumQuantity < requirement.requiredQuantity
+    ) {
       time = Number.MAX_SAFE_INTEGER;
       blocker = "storage";
+    } else if (requirement.currentQuantity >= requirement.requiredQuantity) {
+      continue;
     } else if (requirement.income > 0) {
       time =
         (requirement.requiredQuantity - requirement.currentQuantity) /

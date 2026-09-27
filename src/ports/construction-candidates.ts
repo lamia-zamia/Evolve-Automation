@@ -15,6 +15,10 @@ import type { BuildClickResult } from "./build.ts";
 
 /** One purchasable target a family offers this cycle. */
 export interface ConstructionCandidate extends BuildCandidateView {
+  /** Current game action identity when this target came from an action row. */
+  readonly actionId?: string;
+  /** Current A.R.P.A. project identity when this target came from a project row. */
+  readonly projectId?: string;
   /** The caller's "build this regardless" setting; it bypasses the cost-conflict gate. */
   readonly important: boolean;
 }

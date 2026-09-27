@@ -19,11 +19,9 @@ const layerOfDirectory = new Map([
   // TRANSITIONAL: src/ui holds the remaining UI/DOM helpers. Keep them adapter-owned while each
   // capability moves to a named platform adapter.
   ["ui", "adapters"],
-  // TRANSITIONAL: pure decision code that has not moved under src/domain yet. The policy layer
-  // exists only so these folders cannot gain adapter, application, or composition dependencies
-  // while they are migrated; remove it once each folder lands in domain or application.
+  // TRANSITIONAL: pure decision code that has not moved under src/domain yet. Keep observability
+  // from gaining adapter, application, or composition dependencies while it is migrated.
   ["observability", "policy"],
-  ["planning", "policy"],
   // Dependency-free shared foundation. Must not import feature or platform code.
   ["formatting", "shared"],
   ["utils", "shared"],
@@ -255,7 +253,6 @@ for (const [from, to] of [
   ],
   ["domain/override-editing.ts", "ports/override-editing.ts"],
   ["ui/settings-controls.ts", "application/override-editing.ts"],
-  ["planning/build-planner.ts", "application/build.ts"],
 ]) {
   assert.notEqual(
     importViolation(from, to),

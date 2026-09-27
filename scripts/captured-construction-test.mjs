@@ -51,15 +51,25 @@ function makeSource(family, candidates, holdings, bought) {
   };
 }
 
-function makeResources(holdings) {
+function makeResources(
+  holdings,
+  {
+    maximum = 100000,
+    rateOfChange = 10,
+    unlocked = true,
+    unavailable = false,
+  } = {},
+) {
   return {
     readResources(ids) {
+      if (unavailable) return undefined;
       return {
         resources: new Map(
           [...ids].map((id) => [
             id,
             holdings[id] === undefined
               ? {
+                  present: false,
                   unlocked: false,
                   amount: 0,
                   max: 0,
@@ -67,11 +77,12 @@ function makeResources(holdings) {
                   storageRatio: 0,
                 }
               : {
-                  unlocked: true,
+                  present: true,
+                  unlocked,
                   amount: holdings[id],
-                  max: 100000,
-                  rateOfChange: 10,
-                  storageRatio: holdings[id] / 100000,
+                  max: maximum,
+                  rateOfChange,
+                  storageRatio: maximum > 0 ? holdings[id] / maximum : 0,
                 },
           ]),
         ),
@@ -90,6 +101,12 @@ function makeCycle({
   storageRequired,
   consumptionMode = "unlimited",
   rootState: suppliedRootState,
+  resourceSource,
+  resourceOptions,
+  presentationSettings = {
+    activeTargetsUI: false,
+    buildPlannerUI: false,
+  },
 } = {}) {
   const bought = [];
   const evaluatedPools = [];
@@ -114,7 +131,7 @@ function makeCycle({
       makeSource("city", () => city, holdings, bought),
       makeSource("arpa", () => arpa, holdings, bought),
     ],
-    resources: makeResources(holdings),
+    resources: resourceSource ?? makeResources(holdings, resourceOptions),
     rootState,
     conflicts: {
       evaluate: (_cost, pool) => {
@@ -135,6 +152,7 @@ function makeCycle({
       respectReservations,
       saveWhiteholeGems: false,
     }),
+    readPresentationSettings: () => presentationSettings,
   });
   return { adapter, bought, holdings, evaluatedPools };
 }
@@ -537,6 +555,210 @@ function runCycle(cycle) {
   });
   cycle.adapter.reader.beginCycle();
   assert.equal(cycle.adapter.observations.readKnowledgeRequirement(), 0);
+}
+
+// The presentation snapshot publishes the same merged stable weighting order and keeps queue
+// membership from the captured candidate annotation.
+{
+  const cycle = makeCycle({
+    city: [
+      {
+        key: "city-tie",
+        weighting: 100,
+        cost: { Money: 1 },
+        actionId: "city-tie-action",
+      },
+      { key: "city-lower", weighting: 20, cost: { Money: 1 } },
+      { key: "city-queued", weighting: 10, cost: { Money: 1 }, ignored: true },
+    ],
+    arpa: [
+      {
+        key: "arpa-tie",
+        projectId: "siphon",
+        weighting: 100,
+        cost: { Money: 1 },
+      },
+    ],
+    holdings: { Money: 100 },
+    presentationSettings: { activeTargetsUI: true, buildPlannerUI: true },
+  });
+  runCycle(cycle);
+  const snapshot = cycle.adapter.observations.readPlannerSnapshot();
+  assert.ok(Object.isFrozen(snapshot));
+  assert.deepEqual(
+    snapshot.targets.map(({ key }) => key),
+    ["city-tie", "arpa-tie", "city-lower", "city-queued"],
+  );
+  assert.equal(snapshot.targets[0].actionId, "city-tie-action");
+  assert.equal(snapshot.targets[1].projectId, "siphon");
+  assert.equal(snapshot.targets[3].queued, true);
+}
+
+// Blocker details come from captured resource values and remain distinct in the readout.
+{
+  const readTarget = (candidate, holdings, resourceOptions = {}) => {
+    const cycle = makeCycle({
+      city: [candidate],
+      holdings,
+      resourceOptions,
+      presentationSettings: { activeTargetsUI: false, buildPlannerUI: true },
+    });
+    runCycle(cycle);
+    return cycle.adapter.observations.readPlannerSnapshot().targets[0];
+  };
+  const candidate = (key, cost = { Money: 100 }) => ({
+    key,
+    weighting: 100,
+    cost,
+  });
+
+  assert.deepEqual(
+    {
+      blocker: readTarget(candidate("income"), { Money: 10 }).blocker,
+      resourceId: readTarget(candidate("income-again"), { Money: 10 })
+        .resourceId,
+      timeSeconds: readTarget(candidate("income-time"), { Money: 10 })
+        .timeSeconds,
+    },
+    { blocker: "income", resourceId: "Money", timeSeconds: 9 },
+  );
+  assert.equal(
+    readTarget(candidate("storage"), { Money: 10 }, { maximum: 50 }).blocker,
+    "storage",
+  );
+  assert.equal(
+    readTarget(candidate("stalled"), { Money: 10 }, { rateOfChange: 0 })
+      .blocker,
+    "stalled",
+  );
+  assert.equal(
+    readTarget(candidate("locked"), { Money: 10 }, { unlocked: false }).blocker,
+    "locked",
+  );
+  assert.equal(
+    readTarget(candidate("unavailable"), { Money: 10 }, { unavailable: true })
+      .blocker,
+    "unavailable",
+  );
+}
+
+// A pooled target is measured from its exact captured resource pool, never from global holdings.
+{
+  const requestedPools = [];
+  const root = {
+    tech: { shadow: 5 },
+    race: { supplySplit: true },
+    resource: {
+      Money: {
+        amount: 100,
+        max: 1000,
+        reg: { spc_home: 10 },
+        regMax: { spc_home: 100 },
+        regDiff: { spc_home: 10 },
+      },
+    },
+  };
+  const cycle = makeCycle({
+    city: [
+      {
+        key: "regional-target",
+        weighting: 100,
+        cost: { Money: 50 },
+        pool: "spc_home",
+      },
+    ],
+    holdings: {},
+    rootState: {
+      readRoot: () => root,
+      isReactivitySuppressed: () => false,
+      subscribeRootReplaced: () => () => {},
+    },
+    resourceSource: {
+      readResources(ids, options) {
+        requestedPools.push(options?.pool);
+        return {
+          resources: new Map(
+            [...ids].map((id) => [
+              id,
+              {
+                present: true,
+                unlocked: true,
+                amount: 10,
+                max: 100,
+                rateOfChange: 10,
+                storageRatio: 0.1,
+              },
+            ]),
+          ),
+        };
+      },
+    },
+    presentationSettings: { activeTargetsUI: false, buildPlannerUI: true },
+  });
+  runCycle(cycle);
+  const target = cycle.adapter.observations.readPlannerSnapshot().targets[0];
+  assert.equal(target.pool, "spc_home");
+  assert.equal(target.blocker, "income");
+  assert.equal(target.timeSeconds, 4);
+  assert.deepEqual(requestedPools, ["spc_home"]);
+}
+
+// Disabled planner UI does not make an extra resource read or change automation execution.
+{
+  const run = (buildPlannerUI) => {
+    const bought = [];
+    const source = {
+      family: "city",
+      beginCycle: () => [
+        { key: "wait", weighting: 20, cost: { Money: 200 }, important: false },
+        { key: "buy", weighting: 10, cost: { Money: 50 }, important: false },
+      ],
+      execute(key) {
+        bought.push(key);
+        return {
+          outcome: { status: "succeeded" },
+          disposition: "verified-success",
+          clicked: true,
+          mission: false,
+          consumption: [],
+        };
+      },
+    };
+    let resourceReads = 0;
+    const configured = createCapturedConstructionAdapter({
+      sources: [source],
+      resources: {
+        readResources(ids) {
+          resourceReads += 1;
+          return makeResources({ Money: 100 }).readResources(ids);
+        },
+      },
+      rootState: {
+        readRoot: () => ({ resource: { Money: { amount: 100, max: 1000 } } }),
+        isReactivitySuppressed: () => false,
+        subscribeRootReplaced: () => () => {},
+      },
+      conflicts: { evaluate: () => ({ status: "none" }) },
+      readOptions: () => ({
+        consumptionMode: "unlimited",
+        buildIfStorageFull: false,
+        ignoreZeroRate: false,
+        respectReservations: false,
+        saveWhiteholeGems: false,
+      }),
+      readPresentationSettings: () => ({
+        activeTargetsUI: false,
+        buildPlannerUI,
+      }),
+    });
+    const outcome = runBuildAutomation(configured);
+    return { bought, resourceReads, outcome };
+  };
+  const withoutPlanner = run(false);
+  const withPlanner = run(true);
+  assert.deepEqual(withPlanner.bought, withoutPlanner.bought);
+  assert.equal(withPlanner.outcome.status, withoutPlanner.outcome.status);
+  assert.equal(withPlanner.resourceReads, withoutPlanner.resourceReads + 1);
 }
 
 console.log("captured construction ok");

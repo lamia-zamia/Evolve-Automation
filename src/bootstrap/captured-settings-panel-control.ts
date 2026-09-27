@@ -455,6 +455,10 @@ export interface CapturedSettingsPanelDependencies {
   readonly customRaceLab?: GameCustomRaceLabPort;
   /** Recomputes the effective layer after a UI mutation of the raw record. */
   readonly refreshEffectiveSettings?: () => void;
+  readonly interfaceEffects?: Readonly<{
+    syncActiveTargetsUI(enabled: boolean): void;
+    syncBuildPlannerUI(enabled: boolean): void;
+  }>;
   readonly craftToggles?: {
     readonly rootState: GameRootStateSource;
     readonly controls: GameControlRegistry;
@@ -629,6 +633,7 @@ export function createCapturedSettingsPanel({
   refreshEffectiveSettings,
   prestigeSettings: capturedPrestigeSettings,
   evolutionSettings: capturedEvolutionSettings,
+  interfaceEffects,
   craftToggles: capturedCraftToggles,
   buildingSettings: capturedBuildingSettings,
   projectSettings: capturedProjectSettings,
@@ -1041,12 +1046,16 @@ export function createCapturedSettingsPanel({
         settingName: string,
         label: string,
         hint: string,
+        enabledCallBack?: () => void,
+        disabledCallBack?: () => void,
       ) =>
         controls.addSettingsToggle(
           node as SettingsControlNode,
           settingName,
           label,
           hint,
+          enabledCallBack,
+          disabledCallBack,
         ),
       addSettingsString: (
         node: unknown,
@@ -1237,8 +1246,10 @@ export function createCapturedSettingsPanel({
       effects: {
         renderSettingsContent: () =>
           interfaceSettings?.updateInterfaceSettingsContent(),
-        syncActiveTargetsUI: () => {},
-        syncBuildPlannerUI: () => {},
+        syncActiveTargetsUI: (enabled) =>
+          interfaceEffects?.syncActiveTargetsUI(enabled),
+        syncBuildPlannerUI: (enabled) =>
+          interfaceEffects?.syncBuildPlannerUI(enabled),
         updatePrestigeInTopBar: () => {},
         updateTotalDaysInTopBar: () => {},
       },
@@ -1250,7 +1261,16 @@ export function createCapturedSettingsPanel({
       getActions: () =>
         ({
           ...panelActions,
-          controlEffects: {},
+          controlEffects: {
+            activeTargetsUI: {
+              enabled: () => interfaceEffects?.syncActiveTargetsUI(true),
+              disabled: () => interfaceEffects?.syncActiveTargetsUI(false),
+            },
+            buildPlannerUI: {
+              enabled: () => interfaceEffects?.syncBuildPlannerUI(true),
+              disabled: () => interfaceEffects?.syncBuildPlannerUI(false),
+            },
+          },
         }) as unknown as InterfaceSettingsBrowserActions,
     });
 

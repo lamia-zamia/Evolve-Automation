@@ -150,6 +150,7 @@ export function createCapturedBuildSource(
           target,
           candidate: Object.freeze({
             key: target.key,
+            actionId: target.elementId,
             weighting: target.weighting,
             cost: price.cost,
             ignored: false,
