@@ -783,16 +783,40 @@ export function createCapturedMadPrestige(
     "pause";
   let pendingCelestialLab: CapturedCelestialLabTransaction | undefined;
   let pendingWitchDirectReset = false;
-  let resetCommitted = false;
+  const committedEndingResets = new Set<number>();
+  const committedEndingRoots = new WeakSet<object>();
+  let sampledResetCommitted = false;
   let apocalypseFirstActionDone = false;
   let bioseedModalRequested = false;
+
+  function capturedResetRootObject(root: unknown): object | undefined {
+    return typeof root === "object" && root !== null ? root : undefined;
+  }
 
   function notifyConfirmedReset(
     endingReset = sampledEndingReset,
     endingDay = sampledEndingDay,
+    endingRoot = sampledRoot,
   ): void {
-    if (resetCommitted) return;
-    resetCommitted = true;
+    const endingRootObject = capturedResetRootObject(endingRoot);
+    if (
+      endingReset !== undefined
+        ? committedEndingResets.has(endingReset)
+        : endingRootObject !== undefined &&
+          committedEndingRoots.has(endingRootObject)
+    ) {
+      return;
+    }
+    if (endingReset !== undefined) committedEndingResets.add(endingReset);
+    else if (endingRootObject !== undefined) {
+      committedEndingRoots.add(endingRootObject);
+    }
+    if (
+      endingReset === sampledEndingReset ||
+      (endingReset === undefined && endingRoot === sampledRoot)
+    ) {
+      sampledResetCommitted = true;
+    }
     dependencies.onActivity?.({
       message: "Prestiged",
       color: "info",
@@ -828,7 +852,11 @@ export function createCapturedMadPrestige(
     transaction.outcome = "reset-observed";
     pendingCelestialLab = undefined;
     pendingWitchDirectReset = false;
-    notifyConfirmedReset(transaction.endingReset, transaction.endingDay);
+    notifyConfirmedReset(
+      transaction.endingReset,
+      transaction.endingDay,
+      transaction.root,
+    );
     if (transaction.witchHunter) dependencies.setGoal("GameOverMan");
   }
 
@@ -840,6 +868,12 @@ export function createCapturedMadPrestige(
       sampledRoot = root;
       sampledEndingReset = endingIdentity?.resets;
       sampledEndingDay = endingIdentity?.days;
+      const sampledRootObject = capturedResetRootObject(root);
+      sampledResetCommitted =
+        sampledEndingReset !== undefined
+          ? committedEndingResets.has(sampledEndingReset)
+          : sampledRootObject !== undefined &&
+            committedEndingRoots.has(sampledRootObject);
       sampledPrestigeTechs = new Map();
       sampledBioseedControls = new Map();
       sampledWitchControl = undefined;
@@ -856,7 +890,7 @@ export function createCapturedMadPrestige(
           ? settings["prestigeType"]
           : "none";
       let branch: PrestigeBranch = { type: "noop" };
-      if (!resetCommitted && pendingCelestialLab !== undefined) {
+      if (!sampledResetCommitted && pendingCelestialLab !== undefined) {
         const transaction = pendingCelestialLab;
         const mode = transaction.mode;
         sampledBuildingResetCount = readCapturedResetCount(root, mode);
@@ -1053,10 +1087,10 @@ export function createCapturedMadPrestige(
           labAction: sampledCelestialLabAction,
           resetObserved: false,
         };
-      } else if (!resetCommitted && prestigeType === "mad") {
+      } else if (!sampledResetCommitted && prestigeType === "mad") {
         branch = readCapturedMadBranch(root, settings);
       } else if (
-        !resetCommitted &&
+        !sampledResetCommitted &&
         prestigeType === "ascension" &&
         Boolean(readProperty(readProperty(root, "race"), "witch_hunter"))
       ) {
@@ -1078,7 +1112,7 @@ export function createCapturedMadPrestige(
           }
         }
       } else if (
-        !resetCommitted &&
+        !sampledResetCommitted &&
         isCapturedBuildingPrestigeType(prestigeType)
       ) {
         const action = CAPTURED_BUILDING_PRESTIGE_ACTIONS[prestigeType];
@@ -1109,7 +1143,7 @@ export function createCapturedMadPrestige(
                 sampledEdenCount !== undefined),
           };
         }
-      } else if (!resetCommitted && prestigeType === "cataclysm") {
+      } else if (!sampledResetCommitted && prestigeType === "cataclysm") {
         const offered = dependencies.readOfferedTechs?.();
         if (offered !== undefined) {
           const tech = offered.find(
@@ -1129,7 +1163,7 @@ export function createCapturedMadPrestige(
               capturedTechIsAffordable(tech, dependencies.resources),
           };
         }
-      } else if (!resetCommitted && prestigeType === "apocalypse") {
+      } else if (!sampledResetCommitted && prestigeType === "apocalypse") {
         const offered = dependencies.readOfferedTechs?.();
         if (offered !== undefined) {
           for (const tech of offered) {
@@ -1150,7 +1184,7 @@ export function createCapturedMadPrestige(
           };
         }
       } else if (
-        !resetCommitted &&
+        !sampledResetCommitted &&
         prestigeType === "demonic" &&
         Boolean(readProperty(readProperty(root, "race"), "witch_hunter"))
       ) {
@@ -1171,7 +1205,7 @@ export function createCapturedMadPrestige(
             sampledWitchControl = control;
           }
         }
-      } else if (!resetCommitted && prestigeType === "demonic") {
+      } else if (!sampledResetCommitted && prestigeType === "demonic") {
         const offered = dependencies.readOfferedTechs?.();
         if (offered !== undefined) {
           const demonicBranch = readCapturedDemonicBranch(
@@ -1192,7 +1226,7 @@ export function createCapturedMadPrestige(
           // remains fully answered by the drawn row and root floor above.
           branch = demonicBranch;
         }
-      } else if (!resetCommitted && prestigeType === "whitehole") {
+      } else if (!sampledResetCommitted && prestigeType === "whitehole") {
         const offered = dependencies.readOfferedTechs?.();
         if (offered !== undefined) {
           const repairBranch = readCapturedWhiteholeRepairBranch(
@@ -1224,7 +1258,7 @@ export function createCapturedMadPrestige(
             );
           }
         }
-      } else if (!resetCommitted && prestigeType === "bioseed") {
+      } else if (!sampledResetCommitted && prestigeType === "bioseed") {
         const offered = dependencies.readBuildingResetActions?.(["space"]);
         if (
           offered !== undefined &&

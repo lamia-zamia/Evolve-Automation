@@ -1217,11 +1217,12 @@ for (const scenario of [
   const trace = [];
   let goal = "Normal";
   let queueLoads = 0;
-  const root = buildRoot({
+  let root = buildRoot({
     settings: { qKey: true, touch: true },
     stats: { reset: 11, days: 31 },
   });
   const committedIdentities = [];
+  let actionCommitted = false;
   const controls = {
     resolve(id) {
       return id === CAPTURED_CATACLYSM_TECH
@@ -1234,8 +1235,11 @@ for (const scenario of [
       assert.equal(root.settings.qKey, false);
       assert.equal(root.settings.touch, false);
       trace.push(method);
-      root.stats.reset += 1;
-      root.stats.days = 0;
+      if (!actionCommitted) {
+        root.stats.reset += 1;
+        root.stats.days = 0;
+        actionCommitted = true;
+      }
       return { ok: true, value: undefined };
     },
     capturedElementIds() {
@@ -1275,7 +1279,6 @@ for (const scenario of [
   assert.deepEqual(trace, [["goal", "Reset"]]);
   goal = "Reset";
   runPrestige(prestige);
-  runPrestige(prestige);
   assert.deepEqual(trace, [
     ["goal", "Reset"],
     "load queued settings",
@@ -1286,6 +1289,30 @@ for (const scenario of [
   assert.equal(root.settings.qKey, true);
   assert.equal(root.settings.touch, true);
   assert.deepEqual(committedIdentities, [[11, 31]]);
+
+  // A repeated confirmation for the sampled ending run is deduped before the next root sample.
+  prestige.executor.execute({
+    kind: "click-tech",
+    id: CAPTURED_CATACLYSM_TECH,
+  });
+  assert.equal(committedIdentities.length, 1);
+  assert.equal(trace.filter((entry) => entry === "Prestiged").length, 1);
+
+  root = buildRoot({
+    settings: { qKey: true, touch: true },
+    stats: { reset: 12, days: 0 },
+  });
+  goal = "Normal";
+  runPrestige(prestige);
+  assert.equal(goal, "Reset");
+  goal = "Reset";
+  actionCommitted = false;
+  runPrestige(prestige);
+  assert.deepEqual(committedIdentities, [
+    [11, 31],
+    [12, 0],
+  ]);
+  assert.equal(trace.filter((entry) => entry === "Prestiged").length, 2);
 }
 
 // A missing research draw is unknown, not a locked cataclysm. The captured branch must not set

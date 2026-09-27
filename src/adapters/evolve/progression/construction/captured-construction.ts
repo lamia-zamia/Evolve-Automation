@@ -76,6 +76,8 @@ export interface CapturedConstructionDependencies {
     activeTargetsUI: boolean;
     buildPlannerUI: boolean;
   }>;
+  /** A due State Log sample needs the same planner-detail observations as Script Planner. */
+  readonly readStateLogPlannerDetailsDue?: () => boolean;
 }
 
 export interface CapturedConstructionAdapter {
@@ -141,7 +143,9 @@ export function createCapturedConstructionAdapter(
   let cycleSavingTarget: SavingTarget | null = null;
   let knowledgeRequirement = 0;
   let constructionCycleId = 0;
-  let presentationMode: "off" | "targets" | "planner" = "off";
+  let uiPresentationMode: "off" | "targets" | "planner" = "off";
+  let capturePlannerDetails = false;
+  let stateLogDetailsDue = false;
   let plannerAffordability = new Map<number, boolean>();
   let plannerResources = new Map<
     number,
@@ -183,16 +187,16 @@ export function createCapturedConstructionAdapter(
     }
   }
 
-  function readPlannerSnapshot(): Readonly<ConstructionReadoutSnapshot> | null {
-    if (presentationMode === "off") return null;
-
+  function buildConstructionReadoutSnapshot(
+    detailLevel: "targets" | "planner",
+  ): Readonly<ConstructionReadoutSnapshot> {
     const targets = cycle.map((entry, index) => {
       const { candidate } = entry;
       let blocker: PlannerReadoutBlocker = "unavailable";
       let resourceId: string | undefined;
       let timeSeconds: number | undefined;
 
-      if (presentationMode === "planner") {
+      if (detailLevel === "planner") {
         const affordable = plannerAffordability.get(index);
         if (affordable === true) {
           blocker = "ready";
@@ -267,9 +271,21 @@ export function createCapturedConstructionAdapter(
 
     return Object.freeze({
       cycleId: constructionCycleId,
-      detailLevel: presentationMode === "planner" ? "planner" : "targets",
+      detailLevel,
       targets: Object.freeze(targets),
     });
+  }
+
+  function readPlannerSnapshot(): Readonly<ConstructionReadoutSnapshot> | null {
+    return uiPresentationMode === "off"
+      ? null
+      : buildConstructionReadoutSnapshot(uiPresentationMode);
+  }
+
+  function readStateLogSnapshot(): Readonly<ConstructionReadoutSnapshot> | null {
+    return stateLogDetailsDue
+      ? buildConstructionReadoutSnapshot("planner")
+      : null;
   }
 
   function entryAt(index: number): CycleEntry {
@@ -322,12 +338,17 @@ export function createCapturedConstructionAdapter(
       const options = readOptions();
       constructionCycleId++;
       const presentationSettings = dependencies.readPresentationSettings?.();
-      presentationMode =
+      const stateLogPlannerDetailsDue =
+        dependencies.readStateLogPlannerDetailsDue?.() === true;
+      uiPresentationMode =
         presentationSettings?.buildPlannerUI === true
           ? "planner"
           : presentationSettings?.activeTargetsUI === true
             ? "targets"
             : "off";
+      stateLogDetailsDue = stateLogPlannerDetailsDue;
+      capturePlannerDetails =
+        uiPresentationMode === "planner" || stateLogDetailsDue;
       plannerAffordability = new Map();
       plannerResources = new Map();
       respectReservations = options.respectReservations;
@@ -384,7 +405,7 @@ export function createCapturedConstructionAdapter(
       } = {};
       if (request.needAffordability) {
         sample.affordable = affordable(candidate);
-        if (presentationMode === "planner") {
+        if (capturePlannerDetails) {
           plannerAffordability.set(index, sample.affordable);
           if (!sample.affordable) capturePlannerResources(index, candidate);
         }
@@ -469,7 +490,7 @@ export function createCapturedConstructionAdapter(
             pool: entry.candidate.pool,
           }) === true;
       }
-      if (presentationMode === "planner") {
+      if (capturePlannerDetails) {
         for (const [candidateIndex, cycleEntry] of cycle.entries()) {
           const sampledAffordability = affordability[cycleEntry.candidate.key];
           if (sampledAffordability !== undefined) {
@@ -512,7 +533,7 @@ export function createCapturedConstructionAdapter(
           if (pool === undefined) resourceViews[id] = view;
         }
       }
-      if (presentationMode === "planner") {
+      if (capturePlannerDetails) {
         for (const [candidateIndex, cycleEntry] of cycle.entries()) {
           const cost = cycleEntry.candidate.cost;
           const relevant = scopedResources.filter(
@@ -572,6 +593,7 @@ export function createCapturedConstructionAdapter(
       readSavingTarget: (): SavingTarget | null => savingTarget,
       readKnowledgeRequirement: (): number => knowledgeRequirement,
       readPlannerSnapshot,
+      readStateLogSnapshot,
     }),
   });
 }

@@ -88,6 +88,8 @@ export interface CapturedProgressionControlDependencies {
   readonly readSettings: () => unknown;
   /** Optional shared authority for construction presentation; omitted callers use readSettings. */
   readonly readInterfacePresentationSettings?: () => Readonly<InterfaceSettingsState>;
+  /** Whether the current processed cycle is due for State Log planner details. */
+  readonly readStateLogPlannerDetailsDue?: () => boolean;
   /** Commitments that outrank Mech-first construction, excluding the previous saving target. */
   readonly readReservedQuantityForMechPriority?: (resourceId: string) => number;
   /**
@@ -206,6 +208,7 @@ const NO_OBSERVATIONS: ConstructionObservations = Object.freeze({
   readSavingTarget: () => null,
   readKnowledgeRequirement: () => 0,
   readPlannerSnapshot: () => null,
+  readStateLogSnapshot: () => null,
 });
 
 /** Both sets are in force at once; either being unpriceable makes the whole set incomplete. */
@@ -585,6 +588,12 @@ export function createCapturedProgressionControl(
     readPolicy,
     readSettings,
     readPresentationSettings: readFallbackInterfacePresentation,
+    ...(dependencies.readStateLogPlannerDetailsDue === undefined
+      ? {}
+      : {
+          readStateLogPlannerDetailsDue:
+            dependencies.readStateLogPlannerDetailsDue,
+        }),
     ensureBuildControls,
     scriptReservations,
     readKnowledgeGate,

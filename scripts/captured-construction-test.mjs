@@ -103,6 +103,7 @@ function makeCycle({
   rootState: suppliedRootState,
   resourceSource,
   resourceOptions,
+  readStateLogPlannerDetailsDue,
   presentationSettings = {
     activeTargetsUI: false,
     buildPlannerUI: false,
@@ -153,6 +154,9 @@ function makeCycle({
       saveWhiteholeGems: false,
     }),
     readPresentationSettings: () => presentationSettings,
+    ...(readStateLogPlannerDetailsDue === undefined
+      ? {}
+      : { readStateLogPlannerDetailsDue }),
   });
   return { adapter, bought, holdings, evaluatedPools };
 }
@@ -593,6 +597,46 @@ function runCycle(cycle) {
   assert.equal(snapshot.targets[0].actionId, "city-tie-action");
   assert.equal(snapshot.targets[1].projectId, "siphon");
   assert.equal(snapshot.targets[3].queued, true);
+}
+
+// A due State Log sample requests blocker detail without promoting that sample into UI state.
+{
+  let stateLogDue = false;
+  const resourceReads = [];
+  const baseResources = makeResources({ Money: 0 });
+  const cycle = makeCycle({
+    city: [{ key: "city-bank", weighting: 100, cost: { Money: 20 } }],
+    holdings: { Money: 0 },
+    presentationSettings: { activeTargetsUI: false, buildPlannerUI: false },
+    readStateLogPlannerDetailsDue: () => stateLogDue,
+    resourceSource: {
+      readResources(ids, options) {
+        resourceReads.push([...ids]);
+        return baseResources.readResources(ids, options);
+      },
+    },
+  });
+  const sampleCandidate = () =>
+    cycle.adapter.reader.sampleCandidate(0, {
+      needAffordability: true,
+      needConsumption: false,
+    });
+
+  cycle.adapter.reader.beginCycle();
+  sampleCandidate();
+  assert.deepEqual(resourceReads, []);
+  assert.equal(cycle.adapter.observations.readPlannerSnapshot(), null);
+  assert.equal(cycle.adapter.observations.readStateLogSnapshot(), null);
+
+  stateLogDue = true;
+  cycle.adapter.reader.beginCycle();
+  sampleCandidate();
+  assert.equal(resourceReads.length, 1);
+  assert.equal(cycle.adapter.observations.readPlannerSnapshot(), null);
+  assert.equal(
+    cycle.adapter.observations.readStateLogSnapshot().detailLevel,
+    "planner",
+  );
 }
 
 // Blocker details come from captured resource values and remain distinct in the readout.

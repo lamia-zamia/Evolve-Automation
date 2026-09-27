@@ -349,6 +349,9 @@ export function startCapturedRuntime({
   let currentPlannerStats: Readonly<PlannerStats> | undefined;
   let latestConstructionSnapshot: Readonly<ConstructionReadoutSnapshot> | null =
     null;
+  let currentStateLogConstructionSnapshot: Readonly<ConstructionReadoutSnapshot> | null =
+    null;
+  let stateLogPlannerDetailsDue = false;
   let latestConstructionRun: Readonly<PlannerRun> | undefined;
   let constructionFreshness: CapturedPlanningPanelsModel["freshness"] = "none";
   let planningPanels: CapturedPlanningPanels | undefined;
@@ -728,6 +731,7 @@ export function startCapturedRuntime({
     costs: buildCosts,
     readSettings: () => settingsStore.readRaw(),
     readInterfacePresentationSettings: readEffectiveInterfacePresentation,
+    readStateLogPlannerDetailsDue: () => stateLogPlannerDetailsDue,
     readReservedQuantityForMechPriority: (resourceId) =>
       readDemand().requestedQuantityForMechPriority(resourceId),
     // The already-granted half of the research draw is only worth its cost to a configured
@@ -1463,7 +1467,7 @@ export function startCapturedRuntime({
     reader: createCapturedStateLogReader({
       identity: capturedIdentity,
       resources: createCapturedResourceSource(pageCapture.rootState),
-      readConstruction: () => latestConstructionSnapshot,
+      readConstruction: () => currentStateLogConstructionSnapshot,
     }),
     ...(fileDownload === undefined ? {} : { download: fileDownload }),
   });
@@ -2076,6 +2080,8 @@ export function startCapturedRuntime({
 
   const runCycle = () => {
     automationCycle += 1;
+    currentStateLogConstructionSnapshot = null;
+    stateLogPlannerDetailsDue = false;
     constructionFreshness =
       latestConstructionSnapshot === null ? "none" : "stale";
     capturedMechCycleHasPendingWork = false;
@@ -2100,6 +2106,7 @@ export function startCapturedRuntime({
       refreshCapturedPlanningPanels();
       return;
     }
+    stateLogPlannerDetailsDue = stateLogRecorder.isNextSampleDue(settings);
     // The captured runtime is its own tick loop, so it owns the `tick` phase and the flush the
     // diagnostics adapter counts work ticks against. Without them `window.eaPerformance` records
     // samples on the production path and never emits a single summary.
@@ -2320,16 +2327,25 @@ export function startCapturedRuntime({
         }
         if (outcome?.status === "succeeded") {
           try {
+            if (stateLogPlannerDetailsDue) {
+              currentStateLogConstructionSnapshot =
+                progression.observations.readStateLogSnapshot();
+            }
             const snapshot = progression.observations.readPlannerSnapshot();
-            if (
-              snapshot !== null &&
-              (latestConstructionSnapshot === null ||
-                snapshot.cycleId > latestConstructionSnapshot.cycleId)
-            ) {
-              latestConstructionSnapshot = snapshot;
-              latestConstructionRun = readCapturedPlannerRun();
-              constructionFreshness = "fresh";
-              recordCapturedPlannerSample(snapshot);
+            if (snapshot !== null) {
+              const presentation = readEffectiveInterfacePresentation();
+              if (
+                (presentation.activeTargetsUI || presentation.buildPlannerUI) &&
+                (latestConstructionSnapshot === null ||
+                  snapshot.cycleId > latestConstructionSnapshot.cycleId)
+              ) {
+                latestConstructionSnapshot = snapshot;
+                latestConstructionRun = readCapturedPlannerRun();
+                constructionFreshness = "fresh";
+                if (presentation.buildPlannerUI) {
+                  recordCapturedPlannerSample(snapshot);
+                }
+              }
             }
           } catch (error) {
             reportPlanningUiError(
@@ -2555,10 +2571,9 @@ export function startCapturedRuntime({
       logError(String(error));
     } finally {
       refreshCapturedPlanningPanels();
-      stateLogRecorder.recordProcessedCycle(
-        automationCycle,
-        settingsStore.readRaw(),
-      );
+      stateLogRecorder.recordProcessedCycle(automationCycle, settings);
+      currentStateLogConstructionSnapshot = null;
+      stateLogPlannerDetailsDue = false;
       if (profiling !== undefined && workStartedAtMs !== undefined) {
         profiling.recordPerformance(
           "tick",

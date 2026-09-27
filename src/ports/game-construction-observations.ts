@@ -63,4 +63,6 @@ export interface ConstructionObservations {
   readKnowledgeRequirement(): number;
   /** The last paid construction cycle's ordered planner observations, or `null` when not sampled. */
   readPlannerSnapshot(): Readonly<ConstructionReadoutSnapshot> | null;
+  /** Planner detail for a State Log sample due on the current processed cycle only. */
+  readStateLogSnapshot(): Readonly<ConstructionReadoutSnapshot> | null;
 }

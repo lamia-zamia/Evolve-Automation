@@ -11,6 +11,7 @@ import type { StateLogStore } from "../ports/state-log-store.ts";
 import type { StateLogObservationReader } from "../ports/state-log.ts";
 
 export interface StateLogRecorder {
+  isNextSampleDue(settings: unknown): boolean;
   recordProcessedCycle(tick: number, settings: unknown): void;
   prestigeCommitted(
     settings: unknown,
@@ -73,15 +74,23 @@ export function createStateLogRecorder({
 
   const readCurrent = (): Readonly<StateLogRecord> | null =>
     activeRecord ?? loadPersistedRecord();
+  const sampleIsDue = (cycles: number, settings: unknown): boolean =>
+    stateLogSetting(settings, "stateLogEnabled") === true &&
+    cycles %
+      normalizeStateLogInterval(
+        stateLogSetting(settings, "stateLogInterval"),
+      ) ===
+      0;
 
   return Object.freeze({
+    isNextSampleDue(settings: unknown): boolean {
+      return sampleIsDue(processedCycles + 1, settings);
+    },
+
     recordProcessedCycle(tick: number, settings: unknown): void {
       if (stateLogSetting(settings, "stateLogEnabled") !== true) return;
       processedCycles += 1;
-      const interval = normalizeStateLogInterval(
-        stateLogSetting(settings, "stateLogInterval"),
-      );
-      if (processedCycles % interval !== 0) return;
+      if (!sampleIsDue(processedCycles, settings)) return;
 
       let observation;
       try {

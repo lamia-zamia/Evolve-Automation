@@ -3509,7 +3509,7 @@
     });
   }
   function createCapturedConstructionAdapter(dependencies) {
-    let { sources, resources, rootState, conflicts, readOptions: readOptions3 } = dependencies, readKnowledgeGate = dependencies.readKnowledgeGate, readStorageRequired = dependencies.readStorageRequired, cycle = Object.freeze([]), respectReservations = !0, savingTarget = null, cycleSavingTarget = null, knowledgeRequirement = 0, constructionCycleId = 0, presentationMode = "off", plannerAffordability = /* @__PURE__ */ new Map(), plannerResources = /* @__PURE__ */ new Map();
+    let { sources, resources, rootState, conflicts, readOptions: readOptions3 } = dependencies, readKnowledgeGate = dependencies.readKnowledgeGate, readStorageRequired = dependencies.readStorageRequired, cycle = Object.freeze([]), respectReservations = !0, savingTarget = null, cycleSavingTarget = null, knowledgeRequirement = 0, constructionCycleId = 0, uiPresentationMode = "off", capturePlannerDetails = !1, stateLogDetailsDue = !1, plannerAffordability = /* @__PURE__ */ new Map(), plannerResources = /* @__PURE__ */ new Map();
     function capturePlannerResources(index, candidate) {
       try {
         let resourceIds = Object.keys(candidate.cost), sample = resources.readResources(
@@ -3535,11 +3535,10 @@
         plannerResources.set(index, Object.freeze([]));
       }
     }
-    function readPlannerSnapshot() {
-      if (presentationMode === "off") return null;
+    function buildConstructionReadoutSnapshot(detailLevel) {
       let targets = cycle.map((entry, index) => {
         let { candidate } = entry, blocker = "unavailable", resourceId, timeSeconds;
-        if (presentationMode === "planner") {
+        if (detailLevel === "planner") {
           let affordable2 = plannerAffordability.get(index);
           if (affordable2 === !0)
             blocker = "ready";
@@ -3595,9 +3594,15 @@
       });
       return Object.freeze({
         cycleId: constructionCycleId,
-        detailLevel: presentationMode === "planner" ? "planner" : "targets",
+        detailLevel,
         targets: Object.freeze(targets)
       });
+    }
+    function readPlannerSnapshot() {
+      return uiPresentationMode === "off" ? null : buildConstructionReadoutSnapshot(uiPresentationMode);
+    }
+    function readStateLogSnapshot() {
+      return stateLogDetailsDue ? buildConstructionReadoutSnapshot("planner") : null;
     }
     function entryAt(index) {
       let entry = cycle[index];
@@ -3624,8 +3629,8 @@
       beginCycle() {
         let options = readOptions3();
         constructionCycleId++;
-        let presentationSettings = dependencies.readPresentationSettings?.();
-        presentationMode = presentationSettings?.buildPlannerUI === !0 ? "planner" : presentationSettings?.activeTargetsUI === !0 ? "targets" : "off", plannerAffordability = /* @__PURE__ */ new Map(), plannerResources = /* @__PURE__ */ new Map(), respectReservations = options.respectReservations;
+        let presentationSettings = dependencies.readPresentationSettings?.(), stateLogPlannerDetailsDue = dependencies.readStateLogPlannerDetailsDue?.() === !0;
+        uiPresentationMode = presentationSettings?.buildPlannerUI === !0 ? "planner" : presentationSettings?.activeTargetsUI === !0 ? "targets" : "off", stateLogDetailsDue = stateLogPlannerDetailsDue, capturePlannerDetails = uiPresentationMode === "planner" || stateLogDetailsDue, plannerAffordability = /* @__PURE__ */ new Map(), plannerResources = /* @__PURE__ */ new Map(), respectReservations = options.respectReservations;
         let entries = [], owners = /* @__PURE__ */ new Map();
         for (let source of sources)
           for (let candidate of source.beginCycle()) {
@@ -3654,7 +3659,7 @@
       },
       sampleCandidate(index, request) {
         let { candidate } = entryAt(index), sample = {};
-        return request.needAffordability && (sample.affordable = affordable(candidate), presentationMode === "planner" && (plannerAffordability.set(index, sample.affordable), sample.affordable || capturePlannerResources(index, candidate))), request.needConsumption && (sample.consumption = candidate.consumption ?? NO_CONSUMPTION2), Object.freeze(sample);
+        return request.needAffordability && (sample.affordable = affordable(candidate), capturePlannerDetails && (plannerAffordability.set(index, sample.affordable), sample.affordable || capturePlannerResources(index, candidate))), request.needConsumption && (sample.consumption = candidate.consumption ?? NO_CONSUMPTION2), Object.freeze(sample);
       },
       sampleConflict(index) {
         let { candidate } = entryAt(index), important = candidate.important;
@@ -3702,7 +3707,7 @@
           affordability[entry.key] = root !== void 0 && costFitsNow(root, entry.candidate.cost, {
             pool: entry.candidate.pool
           }) === !0;
-        if (presentationMode === "planner")
+        if (capturePlannerDetails)
           for (let [candidateIndex, cycleEntry] of cycle.entries()) {
             let sampledAffordability = affordability[cycleEntry.candidate.key];
             sampledAffordability !== void 0 && plannerAffordability.set(candidateIndex, sampledAffordability);
@@ -3729,7 +3734,7 @@
             }), pool === void 0 && (resourceViews[id] = view);
           }
         }
-        if (presentationMode === "planner")
+        if (capturePlannerDetails)
           for (let [candidateIndex, cycleEntry] of cycle.entries()) {
             let cost = cycleEntry.candidate.cost, relevant = scopedResources.filter(
               (sample) => sample.pool === cycleEntry.candidate.pool && Object.hasOwn(cost, sample.resourceId)
@@ -3771,7 +3776,8 @@
       observations: Object.freeze({
         readSavingTarget: () => savingTarget,
         readKnowledgeRequirement: () => knowledgeRequirement,
-        readPlannerSnapshot
+        readPlannerSnapshot,
+        readStateLogSnapshot
       })
     });
   }
@@ -4524,7 +4530,10 @@
       readOptions: readPolicy,
       ...readKnowledgeGate === void 0 ? {} : { readKnowledgeGate },
       ...readStorageRequired === void 0 ? {} : { readStorageRequired },
-      readPresentationSettings
+      readPresentationSettings,
+      ...dependencies.readStateLogPlannerDetailsDue === void 0 ? {} : {
+        readStateLogPlannerDetailsDue: dependencies.readStateLogPlannerDetailsDue
+      }
     });
     return Object.freeze({
       runCycle() {
@@ -8099,7 +8108,8 @@
   }), NO_OBSERVATIONS = Object.freeze({
     readSavingTarget: () => null,
     readKnowledgeRequirement: () => 0,
-    readPlannerSnapshot: () => null
+    readPlannerSnapshot: () => null,
+    readStateLogSnapshot: () => null
   });
   function combineReservations(first, second) {
     return Object.freeze({
@@ -8330,6 +8340,9 @@
       readPolicy,
       readSettings,
       readPresentationSettings: readFallbackInterfacePresentation,
+      ...dependencies.readStateLogPlannerDetailsDue === void 0 ? {} : {
+        readStateLogPlannerDetailsDue: dependencies.readStateLogPlannerDetailsDue
+      },
       ensureBuildControls,
       scriptReservations,
       readKnowledgeGate,
@@ -8459,15 +8472,15 @@
         store.save(record);
       } catch {
       }
-    };
+    }, readCurrent = () => activeRecord ?? loadPersistedRecord(), sampleIsDue = (cycles, settings) => stateLogSetting(settings, "stateLogEnabled") === !0 && cycles % normalizeStateLogInterval(
+      stateLogSetting(settings, "stateLogInterval")
+    ) === 0;
     return Object.freeze({
+      isNextSampleDue(settings) {
+        return sampleIsDue(processedCycles + 1, settings);
+      },
       recordProcessedCycle(tick, settings) {
-        if (stateLogSetting(settings, "stateLogEnabled") !== !0) return;
-        processedCycles += 1;
-        let interval = normalizeStateLogInterval(
-          stateLogSetting(settings, "stateLogInterval")
-        );
-        if (processedCycles % interval !== 0) return;
+        if (stateLogSetting(settings, "stateLogEnabled") !== !0 || (processedCycles += 1, !sampleIsDue(processedCycles, settings))) return;
         let observation;
         try {
           observation = reader.read(tick);
@@ -8504,7 +8517,7 @@
           } catch {
           }
       },
-      readCurrent: () => activeRecord ?? loadPersistedRecord()
+      readCurrent
     });
   }
 
@@ -9593,9 +9606,13 @@
       );
   }
   function createCapturedMadPrestige(dependencies) {
-    let sampledRoot, sampledEndingReset, sampledEndingDay, sampledPrestigeTechs = /* @__PURE__ */ new Map(), sampledBioseedControls = /* @__PURE__ */ new Map(), sampledWitchControl, sampledEdenCount, sampledBuildingType, sampledBuildingResetCount, sampledCustomRaceLab, sampledTerraformLab, sampledCustomRaceRequest, sampledCelestialLabAction = "pause", pendingCelestialLab, pendingWitchDirectReset = !1, resetCommitted = !1, apocalypseFirstActionDone = !1, bioseedModalRequested = !1;
-    function notifyConfirmedReset(endingReset = sampledEndingReset, endingDay = sampledEndingDay) {
-      resetCommitted || (resetCommitted = !0, dependencies.onActivity?.({
+    let sampledRoot, sampledEndingReset, sampledEndingDay, sampledPrestigeTechs = /* @__PURE__ */ new Map(), sampledBioseedControls = /* @__PURE__ */ new Map(), sampledWitchControl, sampledEdenCount, sampledBuildingType, sampledBuildingResetCount, sampledCustomRaceLab, sampledTerraformLab, sampledCustomRaceRequest, sampledCelestialLabAction = "pause", pendingCelestialLab, pendingWitchDirectReset = !1, committedEndingResets = /* @__PURE__ */ new Set(), committedEndingRoots = /* @__PURE__ */ new WeakSet(), sampledResetCommitted = !1, apocalypseFirstActionDone = !1, bioseedModalRequested = !1;
+    function capturedResetRootObject(root) {
+      return typeof root == "object" && root !== null ? root : void 0;
+    }
+    function notifyConfirmedReset(endingReset = sampledEndingReset, endingDay = sampledEndingDay, endingRoot = sampledRoot) {
+      let endingRootObject = capturedResetRootObject(endingRoot);
+      (endingReset !== void 0 ? committedEndingResets.has(endingReset) : endingRootObject !== void 0 && committedEndingRoots.has(endingRootObject)) || (endingReset !== void 0 ? committedEndingResets.add(endingReset) : endingRootObject !== void 0 && committedEndingRoots.add(endingRootObject), (endingReset === sampledEndingReset || endingReset === void 0 && endingRoot === sampledRoot) && (sampledResetCommitted = !0), dependencies.onActivity?.({
         message: "Prestiged",
         color: "info",
         tags: Object.freeze(["achievements"])
@@ -9619,14 +9636,20 @@
     }
     function commitCelestialLabReset() {
       let transaction = pendingCelestialLab;
-      transaction !== void 0 && (transaction.outcome = "reset-observed", pendingCelestialLab = void 0, pendingWitchDirectReset = !1, notifyConfirmedReset(transaction.endingReset, transaction.endingDay), transaction.witchHunter && dependencies.setGoal("GameOverMan"));
+      transaction !== void 0 && (transaction.outcome = "reset-observed", pendingCelestialLab = void 0, pendingWitchDirectReset = !1, notifyConfirmedReset(
+        transaction.endingReset,
+        transaction.endingDay,
+        transaction.root
+      ), transaction.witchHunter && dependencies.setGoal("GameOverMan"));
     }
     let reader = Object.freeze({
       samplePrestige() {
         let settings = capturedMadSettingsRecord(dependencies.readSettings()), root = dependencies.rootState.readRoot(), endingIdentity = readCapturedIdentitySnapshot(root);
-        sampledRoot = root, sampledEndingReset = endingIdentity?.resets, sampledEndingDay = endingIdentity?.days, sampledPrestigeTechs = /* @__PURE__ */ new Map(), sampledBioseedControls = /* @__PURE__ */ new Map(), sampledWitchControl = void 0, sampledEdenCount = void 0, sampledBuildingType = void 0, sampledBuildingResetCount = void 0, sampledCustomRaceLab = void 0, sampledTerraformLab = void 0, sampledCustomRaceRequest = void 0, sampledCelestialLabAction = "pause", apocalypseFirstActionDone = !1;
+        sampledRoot = root, sampledEndingReset = endingIdentity?.resets, sampledEndingDay = endingIdentity?.days;
+        let sampledRootObject = capturedResetRootObject(root);
+        sampledResetCommitted = sampledEndingReset !== void 0 ? committedEndingResets.has(sampledEndingReset) : sampledRootObject !== void 0 && committedEndingRoots.has(sampledRootObject), sampledPrestigeTechs = /* @__PURE__ */ new Map(), sampledBioseedControls = /* @__PURE__ */ new Map(), sampledWitchControl = void 0, sampledEdenCount = void 0, sampledBuildingType = void 0, sampledBuildingResetCount = void 0, sampledCustomRaceLab = void 0, sampledTerraformLab = void 0, sampledCustomRaceRequest = void 0, sampledCelestialLabAction = "pause", apocalypseFirstActionDone = !1;
         let prestigeType = typeof settings.prestigeType == "string" ? settings.prestigeType : "none", branch = { type: "noop" };
-        if (!resetCommitted && pendingCelestialLab !== void 0) {
+        if (!sampledResetCommitted && pendingCelestialLab !== void 0) {
           let transaction = pendingCelestialLab, mode = transaction.mode;
           if (sampledBuildingResetCount = readCapturedResetCount(root, mode), root !== transaction.root)
             return transaction.resetCountBefore !== void 0 && sampledBuildingResetCount !== void 0 && sampledBuildingResetCount > transaction.resetCountBefore ? (transaction.outcome = "reset-observed", branch = {
@@ -9697,9 +9720,9 @@
             labAction: sampledCelestialLabAction,
             resetObserved: !1
           };
-        } else if (!resetCommitted && prestigeType === "mad")
+        } else if (!sampledResetCommitted && prestigeType === "mad")
           branch = readCapturedMadBranch(root, settings);
-        else if (!resetCommitted && prestigeType === "ascension" && readProperty(readProperty(root, "race"), "witch_hunter")) {
+        else if (!sampledResetCommitted && prestigeType === "ascension" && readProperty(readProperty(root, "race"), "witch_hunter")) {
           let offered = dependencies.readBuildingResetActions?.(["portal"]);
           if (offered !== void 0) {
             branch = readCapturedWitchBranch(
@@ -9715,7 +9738,7 @@
             );
             control !== void 0 && control.methods.includes("action") && (sampledWitchControl = control);
           }
-        } else if (!resetCommitted && isCapturedBuildingPrestigeType(prestigeType)) {
+        } else if (!sampledResetCommitted && isCapturedBuildingPrestigeType(prestigeType)) {
           let action = CAPTURED_BUILDING_PRESTIGE_ACTIONS[prestigeType], offered = dependencies.readBuildingResetActions?.([
             action.region
           ]);
@@ -9727,7 +9750,7 @@
             building: action.elementId,
             unlocked: offered.has(action.elementId) && (action.elementId !== CAPTURED_BUILDING_PRESTIGE_ACTIONS.eden.elementId || sampledEdenCount !== void 0)
           });
-        } else if (!resetCommitted && prestigeType === "cataclysm") {
+        } else if (!sampledResetCommitted && prestigeType === "cataclysm") {
           let offered = dependencies.readOfferedTechs?.();
           if (offered !== void 0) {
             let tech = offered.find(
@@ -9743,7 +9766,7 @@
               dialClickable: tech !== void 0 && capturedTechIsAffordable(tech, dependencies.resources)
             };
           }
-        } else if (!resetCommitted && prestigeType === "apocalypse") {
+        } else if (!sampledResetCommitted && prestigeType === "apocalypse") {
           let offered = dependencies.readOfferedTechs?.();
           if (offered !== void 0) {
             for (let tech of offered)
@@ -9758,7 +9781,7 @@
               )
             };
           }
-        } else if (!resetCommitted && prestigeType === "demonic" && readProperty(readProperty(root, "race"), "witch_hunter")) {
+        } else if (!sampledResetCommitted && prestigeType === "demonic" && readProperty(readProperty(root, "race"), "witch_hunter")) {
           let offered = dependencies.readBuildingResetActions?.(["portal"]);
           if (offered !== void 0) {
             branch = readCapturedWitchBranch(
@@ -9774,7 +9797,7 @@
             );
             control !== void 0 && control.methods.includes("action") && (sampledWitchControl = control);
           }
-        } else if (!resetCommitted && prestigeType === "demonic") {
+        } else if (!sampledResetCommitted && prestigeType === "demonic") {
           let offered = dependencies.readOfferedTechs?.();
           if (offered !== void 0) {
             let demonicBranch = readCapturedDemonicBranch(
@@ -9786,7 +9809,7 @@
             ), targetId = demonicBranch.fasting ? CAPTURED_DEMONIC_TECHS.final : CAPTURED_DEMONIC_TECHS.demonic, tech = offered.find((entry) => entry.elementId === targetId);
             tech !== void 0 && sampledPrestigeTechs.set(tech.elementId, tech), branch = demonicBranch;
           }
-        } else if (!resetCommitted && prestigeType === "whitehole") {
+        } else if (!sampledResetCommitted && prestigeType === "whitehole") {
           let offered = dependencies.readOfferedTechs?.();
           if (offered !== void 0) {
             let repairBranch = readCapturedWhiteholeRepairBranch(
@@ -9810,7 +9833,7 @@
               );
             }
           }
-        } else if (!resetCommitted && prestigeType === "bioseed") {
+        } else if (!sampledResetCommitted && prestigeType === "bioseed") {
           let offered = dependencies.readBuildingResetActions?.(["space"]);
           if (offered !== void 0 && offered.has(CAPTURED_BIOSEED_ACTIONS.opener)) {
             branch = readCapturedBioseedBranch(
@@ -45002,7 +45025,7 @@ Only continue if you trust the source. Injected code:
       readCycle: () => automationCycle
     }), effectiveSettings = settingsLifecycle.readEffective(), capturedIdentity = createCapturedIdentitySource(pageCapture2.rootState), plannerStats = createPlannerStatsLifecycle(
       createPlannerStatsStore(storage)
-    ), currentPlannerStats, latestConstructionSnapshot = null, latestConstructionRun, constructionFreshness = "none", planningPanels, refreshCapturedPlanningPanels = () => {
+    ), currentPlannerStats, latestConstructionSnapshot = null, currentStateLogConstructionSnapshot = null, stateLogPlannerDetailsDue = !1, latestConstructionRun, constructionFreshness = "none", planningPanels, refreshCapturedPlanningPanels = () => {
     }, reportedPlanningUiErrors = /* @__PURE__ */ new Set();
     function reportPlanningUiError(error) {
       let message = String(error);
@@ -45269,6 +45292,7 @@ Only continue if you trust the source. Injected code:
       costs: buildCosts,
       readSettings: () => settingsStore.readRaw(),
       readInterfacePresentationSettings: readEffectiveInterfacePresentation,
+      readStateLogPlannerDetailsDue: () => stateLogPlannerDetailsDue,
       readReservedQuantityForMechPriority: (resourceId) => readDemand().requestedQuantityForMechPriority(resourceId),
       // The already-granted half of the research draw is only worth its cost to a configured
       // trigger or override, so those stored conditions decide whether the pass keeps it.
@@ -45757,7 +45781,7 @@ Only continue if you trust the source. Injected code:
       reader: createCapturedStateLogReader({
         identity: capturedIdentity,
         resources: createCapturedResourceSource(pageCapture2.rootState),
-        readConstruction: () => latestConstructionSnapshot
+        readConstruction: () => currentStateLogConstructionSnapshot
       }),
       ...fileDownload === void 0 ? {} : { download: fileDownload }
     }), removeStateLogExport = createStateLogExportHook({
@@ -46147,7 +46171,7 @@ Only continue if you trust the source. Injected code:
     });
     refreshEffectiveSettings(), refreshCapturedPlanningPanels();
     let runCycle = () => {
-      if (automationCycle += 1, constructionFreshness = latestConstructionSnapshot === null ? "none" : "stale", capturedMechCycleHasPendingWork = !1, demandThisCycle = void 0, triggerTargetsThisCycle = void 0, triggerDemandThisCycle = void 0, demandPrerequisitesThisCycle = void 0, settingsPanel.ensurePanel(), !pageCapture2.isComplete()) {
+      if (automationCycle += 1, currentStateLogConstructionSnapshot = null, stateLogPlannerDetailsDue = !1, constructionFreshness = latestConstructionSnapshot === null ? "none" : "stale", capturedMechCycleHasPendingWork = !1, demandThisCycle = void 0, triggerTargetsThisCycle = void 0, triggerDemandThisCycle = void 0, demandPrerequisitesThisCycle = void 0, settingsPanel.ensurePanel(), !pageCapture2.isComplete()) {
         refreshCapturedPlanningPanels();
         return;
       }
@@ -46157,6 +46181,7 @@ Only continue if you trust the source. Injected code:
         refreshCapturedPlanningPanels();
         return;
       }
+      stateLogPlannerDetailsDue = stateLogRecorder.isNextSampleDue(settings);
       let profiling = diagnostics?.readPerformanceEnabled() === !0 ? diagnostics : void 0, workStartedAtMs = profiling?.nowMs();
       try {
         if (isEnabled(settings, "autoEvolution")) {
@@ -46244,8 +46269,12 @@ Only continue if you trust the source. Injected code:
             `autoBuild: ${outcome.failure.code}: ${outcome.failure.message}`
           ), outcome?.status === "succeeded")
             try {
+              stateLogPlannerDetailsDue && (currentStateLogConstructionSnapshot = progression.observations.readStateLogSnapshot());
               let snapshot2 = progression.observations.readPlannerSnapshot();
-              snapshot2 !== null && (latestConstructionSnapshot === null || snapshot2.cycleId > latestConstructionSnapshot.cycleId) && (latestConstructionSnapshot = snapshot2, latestConstructionRun = readCapturedPlannerRun(), constructionFreshness = "fresh", recordCapturedPlannerSample(snapshot2));
+              if (snapshot2 !== null) {
+                let presentation = readEffectiveInterfacePresentation();
+                (presentation.activeTargetsUI || presentation.buildPlannerUI) && (latestConstructionSnapshot === null || snapshot2.cycleId > latestConstructionSnapshot.cycleId) && (latestConstructionSnapshot = snapshot2, latestConstructionRun = readCapturedPlannerRun(), constructionFreshness = "fresh", presentation.buildPlannerUI && recordCapturedPlannerSample(snapshot2));
+              }
             } catch (error) {
               reportPlanningUiError(
                 `planner observation failed: ${String(error)}`
@@ -46336,10 +46365,7 @@ Only continue if you trust the source. Injected code:
       } catch (error) {
         logError(String(error));
       } finally {
-        refreshCapturedPlanningPanels(), stateLogRecorder.recordProcessedCycle(
-          automationCycle,
-          settingsStore.readRaw()
-        ), profiling !== void 0 && workStartedAtMs !== void 0 && (profiling.recordPerformance(
+        refreshCapturedPlanningPanels(), stateLogRecorder.recordProcessedCycle(automationCycle, settings), currentStateLogConstructionSnapshot = null, stateLogPlannerDetailsDue = !1, profiling !== void 0 && workStartedAtMs !== void 0 && (profiling.recordPerformance(
           "tick",
           profiling.nowMs() - workStartedAtMs
         ), profiling.flushPerformance());

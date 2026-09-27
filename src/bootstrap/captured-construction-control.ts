@@ -68,6 +68,8 @@ export interface CapturedConstructionControlDependencies {
   readonly readSettings: () => unknown;
   /** Resolved Interface presentation settings shared with panel reconciliation. */
   readonly readPresentationSettings: () => Readonly<InterfaceSettingsState>;
+  /** Planner-only details requested for a State Log sample due on this processed cycle. */
+  readonly readStateLogPlannerDetailsDue?: () => boolean;
   /** Script-derived commitments outside the captured game root. */
   readonly scriptReservations?: CostReservationSource;
   /** Script-computed Knowledge requirements combined with captured capacity. */
@@ -225,6 +227,12 @@ export function createCapturedConstructionControl(
     ...(readKnowledgeGate === undefined ? {} : { readKnowledgeGate }),
     ...(readStorageRequired === undefined ? {} : { readStorageRequired }),
     readPresentationSettings,
+    ...(dependencies.readStateLogPlannerDetailsDue === undefined
+      ? {}
+      : {
+          readStateLogPlannerDetailsDue:
+            dependencies.readStateLogPlannerDetailsDue,
+        }),
   });
 
   return Object.freeze({

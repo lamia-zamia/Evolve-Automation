@@ -659,13 +659,24 @@ assert.equal(unsubscribeCount, 1);
   });
   assert.equal(page.querySelectorAll("#ea-active-targets").length, 1);
   assert.equal(page.querySelectorAll("#ea-script-planner").length, 1);
+  const activeToggle = page.querySelectorAll(".script_activeTargetsUI")[0];
   const plannerToggle = page.querySelectorAll(".script_buildPlannerUI")[0];
+  activeToggle.checked = false;
+  activeToggle.dispatch("change");
   plannerToggle.checked = false;
   plannerToggle.dispatch("change");
+  assert.equal(page.querySelectorAll("#ea-active-targets").length, 0);
   assert.equal(page.querySelectorAll("#ea-script-planner").length, 0);
   // The first cycle has no reservation in force yet, so the cheap candidate is still bought.
   cycle({ periods: 4 });
   assert.deepEqual(invoked, ["city-farm"]);
+  stateLogSettingsHostWindow.eaExportStateLog();
+  const noUiStateLogBlob = stateLogBlobs.get(stateLogLinks.at(-1).href);
+  const noUiStateLog = JSON.parse(noUiStateLogBlob.parts[0]);
+  assert.equal(noUiStateLog.samples[0].construction.cycleId, 1);
+  assert.equal(noUiStateLog.samples[0].construction.detailLevel, "planner");
+  assert.equal(noUiStateLog.samples[0].construction.target.blocker, "income");
+
   assert.equal(page.querySelectorAll("#ea-script-planner").length, 0);
   plannerToggle.checked = true;
   plannerToggle.dispatch("change");
@@ -673,7 +684,7 @@ assert.equal(unsubscribeCount, 1);
   assert.match(
     page.querySelectorAll("#ea-script-planner")[0].querySelectorAll("p")[0]
       .textContent,
-    /Awaiting a planner-enabled construction cycle/,
+    /Waiting for a captured construction cycle/,
   );
   assert.equal(JSON.parse(stored.get("ea_planner_stats")).total, 0);
   cycle({ periods: 4 });
@@ -740,7 +751,6 @@ assert.equal(unsubscribeCount, 1);
     .dispatch("click");
   assert.equal(JSON.parse(stored.get("settings")).buildPlannerCollapsed, false);
 
-  const activeToggle = page.querySelectorAll(".script_activeTargetsUI")[0];
   activeToggle.checked = false;
   activeToggle.dispatch("change");
   assert.equal(page.querySelectorAll("#ea-active-targets").length, 0);
@@ -751,6 +761,34 @@ assert.equal(unsubscribeCount, 1);
   plannerToggle.checked = false;
   plannerToggle.dispatch("change");
   assert.equal(page.querySelectorAll("#ea-script-planner").length, 0);
+  root.resource.Money.diff = 0;
+  cycle({ periods: 4 });
+  stateLogSettingsHostWindow.eaExportStateLog();
+  const changedStateLogBlob = stateLogBlobs.get(stateLogLinks.at(-1).href);
+  const changedStateLog = JSON.parse(changedStateLogBlob.parts[0]);
+  assert.equal(changedStateLog.samples.at(-2).construction.cycleId, 2);
+  assert.equal(
+    changedStateLog.samples.at(-2).construction.target.blocker,
+    "income",
+  );
+  assert.equal(changedStateLog.samples.at(-1).construction.cycleId, 3);
+  assert.equal(
+    changedStateLog.samples.at(-1).construction.target.blocker,
+    "stalled",
+  );
+  root.resource.Money.diff = 100;
+
+  const autoBuildToggle = page.querySelectorAll(".script_autoBuild")[0];
+  autoBuildToggle.checked = false;
+  autoBuildToggle.dispatch("change");
+  cycle({ periods: 4 });
+  stateLogSettingsHostWindow.eaExportStateLog();
+  const skippedConstructionBlob = stateLogBlobs.get(stateLogLinks.at(-1).href);
+  const skippedConstructionLog = JSON.parse(skippedConstructionBlob.parts[0]);
+  assert.equal(skippedConstructionLog.samples.at(-1).construction, undefined);
+  autoBuildToggle.checked = true;
+  autoBuildToggle.dispatch("change");
+
   plannerToggle.checked = true;
   plannerToggle.dispatch("change");
   assert.equal(page.querySelectorAll("#ea-script-planner").length, 1);
