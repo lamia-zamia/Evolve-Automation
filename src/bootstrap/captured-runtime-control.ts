@@ -1051,7 +1051,6 @@ export function startCapturedRuntime({
     // when the game restores reactivity around the same raw run.
     refreshCapturedPlanningPanels();
   });
-  refreshCapturedPlanningPanels();
   const triggerActions = createCapturedTriggerActions({
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,
@@ -2035,6 +2034,12 @@ export function startCapturedRuntime({
     readSettings: () => settingsStore.readRaw(),
     onActivity,
   });
+
+  // The settings panel prepares the raw layer before this composition has an override context.
+  // Resolve it after all condition readers and their lazy control helpers are ready, before the
+  // first planning-panel reconciliation or period callback.
+  refreshEffectiveSettings();
+  refreshCapturedPlanningPanels();
 
   const runCycle = () => {
     automationCycle += 1;

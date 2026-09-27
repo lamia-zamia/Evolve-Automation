@@ -45251,7 +45251,7 @@ Only continue if you trust the source. Injected code:
       }
     }, pageCapture2.rootState.subscribeRootReplaced(() => {
       settingsLifecycle.invalidateDynamicDefaults(), discoveryAttempts.invalidate(), latestConstructionSnapshot = null, latestConstructionRun = void 0, constructionFreshness = "none", triggerTargetsThisCycle = void 0, refreshCapturedPlanningPanels();
-    }), refreshCapturedPlanningPanels();
+    });
     let triggerActions = createCapturedTriggerActions({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
@@ -45889,7 +45889,9 @@ Only continue if you trust the source. Injected code:
       getDocument: () => document,
       readSettings: () => settingsStore.readRaw(),
       onActivity
-    }), runCycle = () => {
+    });
+    refreshEffectiveSettings(), refreshCapturedPlanningPanels();
+    let runCycle = () => {
       if (automationCycle += 1, constructionFreshness = latestConstructionSnapshot === null ? "none" : "stale", capturedMechCycleHasPendingWork = !1, demandThisCycle = void 0, triggerTargetsThisCycle = void 0, triggerDemandThisCycle = void 0, demandPrerequisitesThisCycle = void 0, settingsPanel.ensurePanel(), !pageCapture2.isComplete()) {
         refreshCapturedPlanningPanels();
         return;

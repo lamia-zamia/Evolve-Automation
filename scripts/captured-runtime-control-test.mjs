@@ -570,7 +570,7 @@ assert.equal(unsubscribeCount, 1);
         masterScriptToggle: true,
         autoBuild: true,
         activeTargetsUI: true,
-        buildPlannerUI: false,
+        buildPlannerUI: true,
         "batcity-bank": true,
         "bld_w_city-bank": 300,
         "batcity-farm": true,
@@ -631,12 +631,15 @@ assert.equal(unsubscribeCount, 1);
     logError: () => {},
   });
   assert.equal(page.querySelectorAll("#ea-active-targets").length, 1);
+  assert.equal(page.querySelectorAll("#ea-script-planner").length, 1);
+  const plannerToggle = page.querySelectorAll(".script_buildPlannerUI")[0];
+  plannerToggle.checked = false;
+  plannerToggle.dispatch("change");
   assert.equal(page.querySelectorAll("#ea-script-planner").length, 0);
   // The first cycle has no reservation in force yet, so the cheap candidate is still bought.
   cycle({ periods: 4 });
   assert.deepEqual(invoked, ["city-farm"]);
   assert.equal(page.querySelectorAll("#ea-script-planner").length, 0);
-  const plannerToggle = page.querySelectorAll(".script_buildPlannerUI")[0];
   plannerToggle.checked = true;
   plannerToggle.dispatch("change");
   assert.equal(page.querySelectorAll("#ea-script-planner").length, 1);
@@ -826,6 +829,103 @@ assert.equal(unsubscribeCount, 1);
   cycle({ periods: 4 });
   stopCycle();
   assert.deepEqual(invoked, ["city-farm"]);
+}
+
+// Startup evaluates Interface overrides before its first captured panel reconciliation, without
+// waiting for a period callback. Raw values deliberately disagree with both resolved values.
+{
+  const root = {
+    race: {},
+    tech: {},
+    stats: { days: 1, reset: 0, tdays: 1 },
+    city: {},
+    space: {},
+    queue: { display: true, pause: false, queue: [] },
+    settings: {},
+    resource: {},
+  };
+  const handles = new Map([
+    ["buildQueue", { elementId: "buildQueue", generation: 1, methods: [] }],
+  ]);
+  const page = element("main");
+  const queueAnchor = element("div", { id: "buildQueue" });
+  page.appendChild(queueAnchor);
+  const document = createTestDocument(page);
+  const settings = {
+    masterScriptToggle: true,
+    activeTargetsUI: false,
+    buildPlannerUI: true,
+    overrides: {
+      activeTargetsUI: [
+        {
+          type1: "Boolean",
+          arg1: true,
+          type2: "Boolean",
+          arg2: true,
+          cmp: "==",
+          ret: true,
+        },
+      ],
+      buildPlannerUI: [
+        {
+          type1: "Boolean",
+          arg1: true,
+          type2: "Boolean",
+          arg2: true,
+          cmp: "==",
+          ret: false,
+        },
+      ],
+    },
+  };
+  const stored = new Map([["settings", JSON.stringify(settings)]]);
+  let periodListener;
+  const stopRuntime = startCapturedRuntime({
+    pageCapture: {
+      isComplete: () => true,
+      rootState: {
+        readRoot: () => root,
+        isReactivitySuppressed: () => false,
+        subscribeRootReplaced: () => () => {},
+      },
+      controls: {
+        resolve: (id) => handles.get(id),
+        invoke: () => ({ ok: false, reason: "unknown-control" }),
+        capturedElementIds: () => [...handles.keys()],
+      },
+      controlUsage: { readUsage: () => [] },
+      periods: {
+        subscribe(next) {
+          periodListener = next;
+          return () => {};
+        },
+      },
+      mountSuppression: { available: false, withoutMounting: () => undefined },
+      uninstall: () => {},
+    },
+    document,
+    settingsHostWindow: {
+      document,
+      navigator: { platform: "Win32" },
+      location: "https://evolve.test/",
+      confirm: () => true,
+    },
+    mouseEvent: class {},
+    storage: {
+      getItem: (key) => stored.get(key) ?? null,
+      setItem: (key, value) => stored.set(key, String(value)),
+    },
+    logError: () => {},
+  });
+  assert.equal(typeof periodListener, "function");
+  assert.equal(page.querySelectorAll("#ea-active-targets").length, 1);
+  assert.equal(
+    page.querySelectorAll("#ea-active-targets")[0].querySelectorAll("h3")[0]
+      .textContent,
+    "Detailed Queue",
+  );
+  assert.equal(page.querySelectorAll("#ea-script-planner").length, 0);
+  stopRuntime();
 }
 
 // autoPower reaches the captured city producer control without requiring the legacy manager.
