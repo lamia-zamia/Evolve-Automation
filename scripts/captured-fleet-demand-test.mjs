@@ -46,6 +46,7 @@ function demand(resourceMaximums = root.resource, documentValue = costs) {
 
 assert.deepEqual(demand().read(), {
   nextShipAffordable: true,
+  nextShipExpandable: true,
   nextShipCost: [
     { resourceId: "Money", amount: 2500000 },
     { resourceId: "Aluminium", amount: 500000 },
@@ -53,9 +54,32 @@ assert.deepEqual(demand().read(), {
 });
 assert.equal(
   demand({ ...root.resource, Money: { max: 2499999 } }).read()
-    .nextShipAffordable,
+    ?.nextShipAffordable,
+  false,
+);
+assert.equal(
+  demand({ ...root.resource, Money: { max: 2499999 } }).read()
+    ?.nextShipExpandable,
+  false,
+);
+assert.equal(
+  demand({
+    ...root.resource,
+    Money: { max: 2499999, stackable: true },
+  }).read().nextShipExpandable,
+  true,
+);
+assert.equal(
+  demand({
+    ...root.resource,
+    Money: { max: 2499999, stackable: false },
+  }).read().nextShipExpandable,
   false,
 );
 assert.equal(demand(root.resource, null).read(), undefined);
 assert.equal(demand(root.resource, element({}, [])).read(), undefined);
+assert.equal(
+  demand(root.resource, element({}, [element({ class: "res-Iron" })])).read(),
+  undefined,
+);
 console.log("Captured fleet demand adapter tests passed");

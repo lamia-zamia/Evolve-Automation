@@ -1096,6 +1096,8 @@ export function startCapturedRuntime({
     triggers: Object.freeze({ read: readTriggerTargets }),
     construction: progression.observations,
     readOfferedTechs: progression.readOfferedTechs,
+    readBuildTargets: progression.readUnlockedStorageBuildTargets,
+    readProjects: progression.readProjects,
     reservations: queueReservations,
     readSettings: () => settingsStore.readRaw(),
     mechDemand: progression.mechDemand,
@@ -1104,7 +1106,21 @@ export function startCapturedRuntime({
     fleet: fleetDemand,
   });
   let demandThisCycle: CapturedDemandSample | undefined;
-  readDemand = () => (demandThisCycle ??= demand.sample());
+  readDemand = () => {
+    if (demandThisCycle === undefined) {
+      const currentSettings = settingsStore.readRaw();
+      if (
+        isEnabled(currentSettings, "autoStorage") ||
+        isEnabled(currentSettings, "autoResearch")
+      ) {
+        // This is the observation phase for Storage and every later demand consumer when Storage
+        // or Research is active. Research reuses the held offer set after its action-order position.
+        progression.sampleOfferedTechs();
+      }
+      demandThisCycle = demand.sample();
+    }
+    return demandThisCycle;
+  };
   const storagePorts = createCapturedStoragePorts({
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,
@@ -1113,7 +1129,7 @@ export function startCapturedRuntime({
       readDemand().storageRequired(resourceId, pool),
     reservations: queueReservations,
     construction: progression.observations,
-    readBuildTargets: progression.readManagedBuildTargets,
+    readBuildTargets: progression.readUnlockedStorageBuildTargets,
     readOfferedTechs: progression.readOfferedTechs,
     readProjects: progression.readProjects,
     costs: buildCosts,
@@ -2154,6 +2170,7 @@ export function startCapturedRuntime({
       diagnostics?.readPerformanceEnabled() === true ? diagnostics : undefined;
     const workStartedAtMs = profiling?.nowMs();
     try {
+      progression.beginProcessedCycle();
       // Evolution is a separate game phase: while the root still carries the protoplasm species,
       // do only its controls, matching the tick runner's Evolution-goal short circuit. A landed
       // evolution page can therefore progress without spending resources on ordinary automation.

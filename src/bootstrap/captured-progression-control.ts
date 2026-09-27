@@ -63,7 +63,10 @@ import type {
   GameProjectCatalog,
   OfferedProject,
 } from "../ports/game-project-catalog.ts";
-import type { OfferedTech } from "../ports/game-tech-catalog.ts";
+import type {
+  OfferedTech,
+  TechCatalogSnapshot,
+} from "../ports/game-tech-catalog.ts";
 import type { TickDiagnostics } from "../ports/tick.ts";
 import type { BuildResourceScope } from "../domain/progression/build/build.ts";
 import { createCapturedBuildCapacity } from "../adapters/evolve/captured-build-capacity.ts";
@@ -128,6 +131,8 @@ export interface CapturedProgressionControlDependencies {
 export interface CapturedProgressionControl {
   /** Current progression epoch, for retrying conditional discoveries after a game-state change. */
   readonly readProgressionEpoch: () => string;
+  /** Clears the prior offer observation and panel scopes for one enabled, processed cycle. */
+  readonly beginProcessedCycle: () => void;
   readonly runConstructionCycle: () => CommandExecutionOutcome;
   readonly runResearchCycle: () => CommandExecutionOutcome;
   /** The most recently captured offered-technology snapshot, if one exists. */
@@ -162,6 +167,8 @@ export interface CapturedProgressionControl {
   readonly observations: ConstructionObservations;
   /** Managed captured construction targets, used by production modes that weight against builds. */
   readonly readManagedBuildTargets: () => readonly Readonly<GameBuildTarget>[];
+  /** Currently offered and managed construction targets used by Storage capacity planning. */
+  readonly readUnlockedStorageBuildTargets: () => readonly Readonly<GameBuildTarget>[];
   /** Whether the compatibility Mech loop would wait for a bay or purifier expansion. */
   readonly readCanExpandMechBay: () => boolean | undefined;
   /** Shared target used by global resource demand and construction reservations. */
@@ -302,9 +309,6 @@ export function createCapturedProgressionControl(
       );
     });
   };
-  rootState.subscribeRootReplaced(() => {
-    scopes.invalidateAll();
-  });
   /** One explicit pass over a shown space tab. */
   const sweepBuildControls = (index: number): string => {
     const spaceTabControl = SUB_TAB_CONTROLS[SPACE_TABS_SETTING];
@@ -357,13 +361,73 @@ export function createCapturedProgressionControl(
     }
   };
   // The catalog a discovery pass already paid for, shared with the Knowledge gate so it never buys
-  // one of its own. It is the last catalog read, which may be the previous cycle's.
+  // one of its own. It is cleared at the start of every processed cycle.
   let lastOffered: readonly Readonly<OfferedTech>[] | undefined;
   // The already-granted half is only drawn when a configured trigger needs it, so this stays
   // undefined — "not read" — for every player who has not configured one.
   let lastGranted: ReadonlySet<string> | undefined;
+  let offeredSampleAttempted = false;
+  let grantedSampleAttempted = false;
+  let offeredSampleEpoch: string | undefined;
+  let heldOfferedSnapshot: Readonly<TechCatalogSnapshot> | undefined;
+  const clearResearchSample = () => {
+    lastOffered = undefined;
+    lastGranted = undefined;
+    offeredSampleAttempted = false;
+    grantedSampleAttempted = false;
+    offeredSampleEpoch = undefined;
+    heldOfferedSnapshot = undefined;
+  };
+  const heldOfferBindingsAreCurrent = (
+    snapshot: Readonly<TechCatalogSnapshot>,
+  ): boolean =>
+    snapshot.offered.every(
+      (offer) =>
+        (controls.resolve(offer.elementId)?.generation ?? 0) ===
+        offer.generation,
+    );
+  const beginProcessedCycle = () => {
+    clearResearchSample();
+    scopes.invalidate(RESEARCH_SCOPE);
+    scopes.invalidate(RESEARCH_GRANTED_SCOPE);
+  };
+  const invalidateStaleCapturedResearchObservation = (currentEpoch: string) => {
+    // Research completion changes the progression epoch; a redraw can also rebind an offer row
+    // without a detectable epoch change. Either means the held catalog no longer names live offers.
+    const epochChanged =
+      offeredSampleEpoch !== undefined && offeredSampleEpoch !== currentEpoch;
+    const rowBindingsChanged =
+      heldOfferedSnapshot !== undefined &&
+      !heldOfferBindingsAreCurrent(heldOfferedSnapshot);
+    if (!epochChanged && !rowBindingsChanged) return;
+    clearResearchSample();
+    offeredSampleEpoch = currentEpoch;
+    scopes.invalidate(RESEARCH_SCOPE);
+    scopes.invalidate(RESEARCH_GRANTED_SCOPE);
+  };
+  const readCurrentOfferedTechs = () => {
+    invalidateStaleCapturedResearchObservation(epoch.read());
+    return lastOffered;
+  };
   const sampleOfferedTechs = () => {
     const includeGranted = dependencies.needGrantedTechs?.() === true;
+    const currentEpoch = epoch.read();
+    invalidateStaleCapturedResearchObservation(currentEpoch);
+    if (offeredSampleEpoch === undefined) offeredSampleEpoch = currentEpoch;
+    // A later caller may need the granted half after the first offer-only read. It is a separate
+    // sample by design; never repeat it once that attempt (including a failed one) has happened.
+    const needsGrantedSample = includeGranted && !grantedSampleAttempted;
+    if (offeredSampleAttempted && !needsGrantedSample) {
+      if (heldOfferedSnapshot === undefined) {
+        lastOffered = undefined;
+        lastGranted = undefined;
+        return undefined;
+      }
+      const value = offered.restate(heldOfferedSnapshot);
+      lastOffered = value.offered;
+      lastGranted = value.granted;
+      return value.offered;
+    }
     // The granted half is a different sample, so it is a different scope: a pass that dropped it
     // must never answer the caller that asked for it.
     const held = scopes.read(
@@ -371,16 +435,21 @@ export function createCapturedProgressionControl(
       () => offered.read(includeGranted ? { includeGranted } : undefined),
       (previous, next) => sameOfferPrices(previous.offered, next.offered),
     );
+    offeredSampleAttempted = true;
+    offeredSampleEpoch = currentEpoch;
+    if (includeGranted) grantedSampleAttempted = true;
     if (held !== undefined) {
       // The only part of a held snapshot that goes stale on its own: the game rebinds an action
       // whenever it redraws the panel — the player opening the Research tab is enough — and the
       // capture records that without being asked. Re-resolving beats re-drawing.
       const value = offered.restate(held);
+      heldOfferedSnapshot = held;
       lastOffered = value.offered;
       lastGranted = value.granted;
       return value.offered;
     }
     // A failed current sample must not let the previous pass answer a context-dependent condition.
+    heldOfferedSnapshot = undefined;
     lastOffered = undefined;
     lastGranted = undefined;
     return undefined;
@@ -459,6 +528,12 @@ export function createCapturedProgressionControl(
     buildingUnlockKey = undefined;
     lastBuildingUnlocks = undefined;
   };
+  rootState.subscribeRootReplaced(() => {
+    scopes.invalidateAll();
+    clearResearchSample();
+    resetProjectSample();
+    resetBuildingUnlockSample();
+  });
   const readBuildingUnlocks = (regions: ReadonlySet<string>) => {
     const key = [...regions].sort().join(",");
     if (buildingUnlockKey !== key) {
@@ -623,6 +698,30 @@ export function createCapturedProgressionControl(
     ensureBuildControls();
     return readPolicy().buildings;
   };
+  const readUnlockedStorageBuildTargets = () => {
+    const gameSettings = readProperty(rootState.readRoot(), "settings");
+    // Lazy game starts have no selected main tab yet, so no region's drawn unlock state can be
+    // trusted. The storage candidate sample is empty until `settings.civTabs` exists.
+    if (
+      !isRecord(gameSettings) ||
+      typeof gameSettings[MAIN_TAB_SETTING] !== "number"
+    ) {
+      return Object.freeze([]);
+    }
+    ensureBuildControls();
+    const targets = readPolicy().buildings;
+    if (targets.length === 0) return targets;
+    const regions = new Set(targets.map((target) => target.region));
+    const offers = readBuildingUnlocks(regions);
+    if (offers === undefined) return Object.freeze([]);
+    return Object.freeze(
+      targets.filter(
+        (target) =>
+          offers.regions.has(target.region) &&
+          offers.unlocked.has(target.elementId),
+      ),
+    );
+  };
 
   /**
    * Mirrors `src/adapters/evolve/combat/mech.ts`'s `canExpandBay` gate using captured facts. The
@@ -686,6 +785,7 @@ export function createCapturedProgressionControl(
 
   return Object.freeze({
     readProgressionEpoch: epoch.read,
+    beginProcessedCycle,
     runConstructionCycle: () => {
       try {
         return construction.runCycle();
@@ -694,7 +794,7 @@ export function createCapturedProgressionControl(
       }
     },
     runResearchCycle: () => research.runCycle(),
-    readOfferedTechs: () => lastOffered,
+    readOfferedTechs: readCurrentOfferedTechs,
     sampleOfferedTechs,
     readGrantedTechs: () => lastGranted,
     readProjects,
@@ -704,6 +804,7 @@ export function createCapturedProgressionControl(
     resetBuildingUnlockSample,
     observations: construction.observations,
     readManagedBuildTargets,
+    readUnlockedStorageBuildTargets,
     readCanExpandMechBay,
     mechDemand,
     ensureBuildControls,

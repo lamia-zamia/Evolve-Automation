@@ -25,7 +25,12 @@ export interface CapturedFleetDemandDependencies {
 
 export interface CapturedFleetDemand {
   /** Returns undefined until the game has rendered and captured the shipyard. */
-  read(): DemandFleet | undefined;
+  read(): CapturedFleetDemandSample | undefined;
+}
+
+export interface CapturedFleetDemandSample extends DemandFleet {
+  /** Whether every cost fits now or each over-capacity resource can gain storage. */
+  readonly nextShipExpandable: boolean;
 }
 
 function fleetDocument(value: unknown): FleetCostDocument | undefined {
@@ -34,7 +39,9 @@ function fleetDocument(value: unknown): FleetCostDocument | undefined {
     : undefined;
 }
 
-function readCost(element: FleetCostElement): Readonly<Record<string, number>> {
+function readCost(
+  element: FleetCostElement,
+): Readonly<Record<string, number>> | undefined {
   const names = new Set<string>();
   const amounts = new Map<string, string>();
   const collect = (candidate: FleetCostElement): void => {
@@ -56,33 +63,47 @@ function readCost(element: FleetCostElement): Readonly<Record<string, number>> {
   }
   const cost: Record<string, number> = {};
   for (const name of names) {
-    const amount = Number(amounts.get(name.toLowerCase()));
-    if (Number.isFinite(amount) && amount > 0) cost[name] = amount;
+    const rawAmount = amounts.get(name.toLowerCase());
+    if (rawAmount === undefined) return undefined;
+    const amount = Number(rawAmount);
+    if (!Number.isFinite(amount) || amount <= 0) return undefined;
+    cost[name] = amount;
   }
   return Object.freeze(cost);
 }
 
-function readResourceMaximums(
+function readShipCapacityState(
   root: unknown,
   cost: Readonly<Record<string, number>>,
-): boolean {
+): Readonly<{ affordable: boolean; expandable: boolean }> {
   const resources = readProperty(root, "resource");
-  if (!isRecord(resources)) return false;
-  return Object.entries(cost).every(([resourceId, amount]) => {
-    const maximum = readProperty(readProperty(resources, resourceId), "max");
-    return (
-      typeof maximum === "number" &&
-      Number.isFinite(maximum) &&
-      maximum >= amount
-    );
-  });
+  if (!isRecord(resources)) {
+    return Object.freeze({ affordable: false, expandable: false });
+  }
+  let affordable = true;
+  let expandable = true;
+  for (const [resourceId, amount] of Object.entries(cost)) {
+    const resource = readProperty(resources, resourceId);
+    const maximum = readProperty(resource, "max");
+    if (typeof maximum !== "number" || !Number.isFinite(maximum)) {
+      affordable = false;
+      expandable = false;
+      continue;
+    }
+    if (maximum >= amount) continue;
+    affordable = false;
+    // DeadSpace preserves Resource.hasStorage() as the `stackable` bit. If it is not initialized
+    // or true, an over-capacity ship cost cannot be made payable with a crate/container expansion.
+    if (readProperty(resource, "stackable") !== true) expandable = false;
+  }
+  return Object.freeze({ affordable, expandable });
 }
 
 export function createCapturedFleetDemand(
   dependencies: CapturedFleetDemandDependencies,
 ): CapturedFleetDemand {
   return Object.freeze({
-    read(): DemandFleet | undefined {
+    read(): CapturedFleetDemandSample | undefined {
       const root = dependencies.rootState.readRoot();
       const tech = readProperty(root, "tech");
       const race = readProperty(root, "race");
@@ -103,9 +124,12 @@ export function createCapturedFleetDemand(
       const costsElement = document?.querySelector("#shipYardCosts");
       if (costsElement === null || costsElement === undefined) return undefined;
       const cost = readCost(costsElement);
-      if (Object.keys(cost).length === 0) return undefined;
+      if (cost === undefined || Object.keys(cost).length === 0)
+        return undefined;
+      const capacity = readShipCapacityState(root, cost);
       return Object.freeze({
-        nextShipAffordable: readResourceMaximums(root, cost),
+        nextShipAffordable: capacity.affordable,
+        nextShipExpandable: capacity.expandable,
         nextShipCost: Object.freeze(
           Object.entries(cost).map(([resourceId, amount]) =>
             Object.freeze({ resourceId, amount }),

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { startCapturedRuntime } from "../src/bootstrap/captured-runtime-control.ts";
+import { createGameDrawnActionsReader } from "../src/adapters/browser/game-drawn-actions.ts";
 import { createTestDocument, element } from "./dom-fixture.mjs";
 
 // The captured runtime gates its cycles on the script's own `tickRate`, which defaults to four game
@@ -2158,6 +2159,185 @@ function runCombatRuntime(autoFight) {
   assert.equal(root.portal.mechbay.mechs.length, 1);
   assert.equal(root.portal.purifier.supply, 0);
   assert.equal(root.resource.Soul_Gem.amount, 0);
+}
+
+// The production entry path samples current offers before Storage. A Storage action then changes
+// the visible offer row, but the later Research phase must keep using that one cycle's snapshot.
+{
+  const documentRoot = element("div", { id: "runtime-root" });
+  const researchPanel = element("div", { id: "tech" });
+  const researchRow = (id, amount) => {
+    const row = element("div");
+    row.classList.add("action");
+    Object.defineProperty(row, "id", { value: id });
+    row.attributes = [
+      { name: "id", value: id },
+      { name: "class", value: "action" },
+    ];
+    const price = element("button");
+    Object.defineProperty(price, "id", { value: "" });
+    price.attributes = [
+      { name: "class", value: "button res-Polymer" },
+      { name: "data-polymer", value: String(amount) },
+    ];
+    row.appendChild(price);
+    return row;
+  };
+  researchPanel.appendChild(researchRow("tech-polymer-heavy", 700));
+  documentRoot.appendChild(researchPanel);
+  const document = createTestDocument(documentRoot);
+  let researchOfferReads = 0;
+  const queryAll = document.querySelectorAll;
+  document.querySelectorAll = (selector) => {
+    if (selector === "#tech .action") researchOfferReads += 1;
+    return queryAll(selector);
+  };
+  assert.deepEqual(
+    createGameDrawnActionsReader({ getDocument: () => document }).read(
+      "#tech .action",
+    )[0]?.cost,
+    { Polymer: 700 },
+  );
+  researchOfferReads = 0;
+  const root = {
+    settings: { civTabs: 3, showStorage: true },
+    race: {},
+    tech: { "polymer-heavy": 0 },
+    civic: {},
+    resource: {
+      Crates: { amount: 5, max: 5, display: true, stackable: false },
+      Containers: { amount: 0, max: 5, display: true, stackable: false },
+      Plywood: { amount: 100, max: 1000, display: true, stackable: false },
+      Steel: { amount: 100, max: 1000, display: true, stackable: false },
+      Knowledge: { amount: 100, max: 100, display: true, stackable: false },
+      Polymer: {
+        amount: 0,
+        max: 100,
+        display: true,
+        stackable: true,
+        crates: 0,
+        containers: 0,
+      },
+    },
+  };
+  const storageCalls = [];
+  const researchActions = [];
+  const errors = [];
+  const handles = new Map([
+    [
+      "createHead",
+      {
+        elementId: "createHead",
+        generation: 1,
+        methods: ["buildCrateDesc", "buildContainerDesc", "crate", "container"],
+      },
+    ],
+    [
+      "stack-Polymer",
+      {
+        elementId: "stack-Polymer",
+        generation: 1,
+        methods: ["addCrate", "subCrate", "addCon", "subCon"],
+      },
+    ],
+    [
+      "tech-polymer-heavy",
+      {
+        elementId: "tech-polymer-heavy",
+        generation: 1,
+        methods: ["action"],
+      },
+    ],
+  ]);
+  const controls = {
+    resolve: (id) => handles.get(id),
+    invoke: (handle, method) => {
+      storageCalls.push([handle.elementId, method]);
+      if (method === "buildCrateDesc") {
+        return { ok: true, value: "Build 1 Plywood crate for 350 storage" };
+      }
+      if (method === "buildContainerDesc") {
+        return { ok: true, value: "Build 125 Steel container for 800 storage" };
+      }
+      if (handle.elementId === "stack-Polymer" && method === "addCrate") {
+        root.resource.Crates.amount -= 1;
+        root.resource.Polymer.crates += 1;
+        root.resource.Polymer.max += 350;
+        if (root.resource.Polymer.max >= 700) {
+          root.resource.Polymer.amount = 700;
+        }
+        researchPanel.replaceChildren(
+          researchRow("tech-redrawn-after-storage", 900),
+        );
+        return { ok: true, value: undefined };
+      }
+      if (handle.elementId === "tech-polymer-heavy" && method === "action") {
+        researchActions.push(handle.elementId);
+        root.tech["polymer-heavy"] = 1;
+        return { ok: true, value: undefined };
+      }
+      return { ok: true, value: undefined };
+    },
+    capturedElementIds: () => [...handles.keys()],
+  };
+  let cycle;
+  const stop = startCapturedRuntime({
+    pageCapture: {
+      isComplete: () => true,
+      rootState: {
+        readRoot: () => root,
+        isReactivitySuppressed: () => false,
+        subscribeRootReplaced: () => () => {},
+      },
+      controls,
+      keyState: { readPressed: () => false },
+      controlUsage: { readUsage: () => [] },
+      periods: {
+        subscribe(next) {
+          cycle = next;
+          return () => {};
+        },
+      },
+      mountSuppression: { available: false, withoutMounting: () => undefined },
+      uninstall: () => {},
+    },
+    document,
+    mouseEvent: class {},
+    storage: {
+      getItem: () =>
+        JSON.stringify({
+          masterScriptToggle: true,
+          tickRate: 1,
+          autoStorage: true,
+          autoResearch: true,
+          storageAssignExtra: false,
+          res_storagePolymer: true,
+          res_storage_p_Polymer: 0,
+          res_min_storePolymer: 1,
+          res_max_storePolymer: -1,
+        }),
+      setItem: () => {},
+    },
+    logError: (message) => errors.push(message),
+  });
+  const offerReadsPerCycle = [];
+  for (let index = 0; index < 3; index += 1) {
+    const readsBefore = researchOfferReads;
+    cycle({ periods: 1 });
+    offerReadsPerCycle.push(researchOfferReads - readsBefore);
+  }
+  stop();
+
+  assert.deepEqual(offerReadsPerCycle, [1, 1, 1]);
+  assert.deepEqual(errors, []);
+  assert.ok(
+    storageCalls.some(
+      ([elementId, method]) =>
+        elementId === "stack-Polymer" && method === "addCrate",
+    ),
+    `Storage did not allocate Polymer capacity from the current offer: ${JSON.stringify(storageCalls)}`,
+  );
+  assert.deepEqual(researchActions, ["tech-polymer-heavy"]);
 }
 
 console.log("captured-runtime-control ok");

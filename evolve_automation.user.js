@@ -8172,11 +8172,7 @@
         let shownBy = SPACE_TAB_SHOWN_BY[index];
         return shownBy !== void 0 && readProperty(gameSettings, shownBy) === !0;
       });
-    };
-    rootState.subscribeRootReplaced(() => {
-      scopes.invalidateAll();
-    });
-    let sweepBuildControls = (index) => {
+    }, sweepBuildControls = (index) => {
       let spaceTabControl = SUB_TAB_CONTROLS[SPACE_TABS_SETTING];
       if (spaceTabControl === void 0)
         return onSkipped?.("build-discovery", "space-tab control is unavailable"), "unavailable";
@@ -8210,17 +8206,35 @@
             () => sweepBuildControls(index),
             (previous, next) => previous === next
           );
-    }, lastOffered, lastGranted, sampleOfferedTechs = () => {
-      let includeGranted = dependencies.needGrantedTechs?.() === !0, held = scopes.read(
+    }, lastOffered, lastGranted, offeredSampleAttempted = !1, grantedSampleAttempted = !1, offeredSampleEpoch, heldOfferedSnapshot, clearResearchSample = () => {
+      lastOffered = void 0, lastGranted = void 0, offeredSampleAttempted = !1, grantedSampleAttempted = !1, offeredSampleEpoch = void 0, heldOfferedSnapshot = void 0;
+    }, heldOfferBindingsAreCurrent = (snapshot2) => snapshot2.offered.every(
+      (offer) => (controls2.resolve(offer.elementId)?.generation ?? 0) === offer.generation
+    ), beginProcessedCycle = () => {
+      clearResearchSample(), scopes.invalidate(RESEARCH_SCOPE), scopes.invalidate(RESEARCH_GRANTED_SCOPE);
+    }, invalidateStaleCapturedResearchObservation = (currentEpoch) => {
+      let epochChanged = offeredSampleEpoch !== void 0 && offeredSampleEpoch !== currentEpoch, rowBindingsChanged = heldOfferedSnapshot !== void 0 && !heldOfferBindingsAreCurrent(heldOfferedSnapshot);
+      !epochChanged && !rowBindingsChanged || (clearResearchSample(), offeredSampleEpoch = currentEpoch, scopes.invalidate(RESEARCH_SCOPE), scopes.invalidate(RESEARCH_GRANTED_SCOPE));
+    }, readCurrentOfferedTechs = () => (invalidateStaleCapturedResearchObservation(epoch.read()), lastOffered), sampleOfferedTechs = () => {
+      let includeGranted = dependencies.needGrantedTechs?.() === !0, currentEpoch = epoch.read();
+      if (invalidateStaleCapturedResearchObservation(currentEpoch), offeredSampleEpoch === void 0 && (offeredSampleEpoch = currentEpoch), offeredSampleAttempted && !(includeGranted && !grantedSampleAttempted)) {
+        if (heldOfferedSnapshot === void 0) {
+          lastOffered = void 0, lastGranted = void 0;
+          return;
+        }
+        let value = offered.restate(heldOfferedSnapshot);
+        return lastOffered = value.offered, lastGranted = value.granted, value.offered;
+      }
+      let held = scopes.read(
         includeGranted ? RESEARCH_GRANTED_SCOPE : RESEARCH_SCOPE,
         () => offered.read(includeGranted ? { includeGranted } : void 0),
         (previous, next) => sameOfferPrices(previous.offered, next.offered)
       );
-      if (held !== void 0) {
+      if (offeredSampleAttempted = !0, offeredSampleEpoch = currentEpoch, includeGranted && (grantedSampleAttempted = !0), held !== void 0) {
         let value = offered.restate(held);
-        return lastOffered = value.offered, lastGranted = value.granted, value.offered;
+        return heldOfferedSnapshot = held, lastOffered = value.offered, lastGranted = value.granted, value.offered;
       }
-      lastOffered = void 0, lastGranted = void 0;
+      heldOfferedSnapshot = void 0, lastOffered = void 0, lastGranted = void 0;
     }, offered = createCapturedTechCatalog({
       rootState,
       discovery,
@@ -8265,7 +8279,11 @@
       diagnostics
     }), buildingUnlockKey, lastBuildingUnlocks, resetBuildingUnlockSample = () => {
       buildingUnlockKey = void 0, lastBuildingUnlocks = void 0;
-    }, readBuildingUnlocks = (regions) => {
+    };
+    rootState.subscribeRootReplaced(() => {
+      scopes.invalidateAll(), clearResearchSample(), resetProjectSample(), resetBuildingUnlockSample();
+    });
+    let readBuildingUnlocks = (regions) => {
       let key = [...regions].sort().join(",");
       if (buildingUnlockKey !== key) {
         buildingUnlockKey = key;
@@ -8369,7 +8387,18 @@
       diagnostics
     });
     readObservations = () => construction.observations;
-    let readManagedBuildTargets = () => (ensureBuildControls(), readPolicy().buildings);
+    let readManagedBuildTargets = () => (ensureBuildControls(), readPolicy().buildings), readUnlockedStorageBuildTargets = () => {
+      let gameSettings = readProperty(rootState.readRoot(), "settings");
+      if (!isRecord(gameSettings) || typeof gameSettings[MAIN_TAB_SETTING] != "number")
+        return Object.freeze([]);
+      ensureBuildControls();
+      let targets = readPolicy().buildings;
+      if (targets.length === 0) return targets;
+      let regions = new Set(targets.map((target) => target.region)), offers = readBuildingUnlocks(regions);
+      return Object.freeze(offers === void 0 ? [] : targets.filter(
+        (target) => offers.regions.has(target.region) && offers.unlocked.has(target.elementId)
+      ));
+    };
     function readCanExpandMechBay() {
       let settings = readSettings();
       if (!isRecord(settings)) return;
@@ -8415,6 +8444,7 @@
     }
     return Object.freeze({
       readProgressionEpoch: epoch.read,
+      beginProcessedCycle,
       runConstructionCycle: () => {
         try {
           return construction.runCycle();
@@ -8423,7 +8453,7 @@
         }
       },
       runResearchCycle: () => research.runCycle(),
-      readOfferedTechs: () => lastOffered,
+      readOfferedTechs: readCurrentOfferedTechs,
       sampleOfferedTechs,
       readGrantedTechs: () => lastGranted,
       readProjects: readProjects2,
@@ -8433,6 +8463,7 @@
       resetBuildingUnlockSample,
       observations: construction.observations,
       readManagedBuildTargets,
+      readUnlockedStorageBuildTargets,
       readCanExpandMechBay,
       mechDemand,
       ensureBuildControls,
@@ -17115,8 +17146,33 @@
         }) : mechDemandPlan.status === "unavailable" ? toCosts({
           Supply: Number.MAX_SAFE_INTEGER,
           Soul_Gem: Number.MAX_SAFE_INTEGER
-        }) : Object.freeze([]);
-        if (queued.length === 0 && triggerTargets.length === 0 && saving === null && (offered === void 0 || offered.length === 0) && !hasFactoryDemand && !hasCrafterDemand && missions.length === 0 && !hasFleetDemand && inflationMoney === null && retirementGraphene === null && truepathAiBuildingTarget === null && spyPurchaseMoney === 0 && mechCosts.length === 0 && !moneyEnvelope)
+        }) : Object.freeze([]), technologyStorageTargets = Object.freeze(
+          (offered ?? []).flatMap((technology) => {
+            let costs = toCosts(technology.cost);
+            return costs.length === 0 ? [] : [Object.freeze({ costs })];
+          })
+        ), buildingStorageTargets = Object.freeze(
+          (dependencies.readBuildTargets?.() ?? []).flatMap((target) => {
+            let price = dependencies.costs?.readCost(target.elementId);
+            if (price === void 0) return [];
+            let costs = toCosts(price.cost, price.pool);
+            return costs.length === 0 ? [] : [
+              Object.freeze({
+                ...price.pool === void 0 ? {} : { pool: price.pool },
+                costs
+              })
+            ];
+          })
+        ), projects = Object.keys(settings).some(
+          (key) => key.startsWith("arpa_") && settings[key] === !0
+        ) ? dependencies.readProjects?.() ?? [] : [], projectStorageTargets = Object.freeze(
+          projects.flatMap((project) => {
+            if (settings[`arpa_${project.projectId}`] !== !0) return [];
+            let costs = toCosts(project.cost);
+            return costs.length === 0 ? [] : [Object.freeze({ costs })];
+          })
+        ), fleetStorageTargets = settingBoolean3(settings, "autoFleet", !1) && settingString(settings, "prioritizeOuterFleet", "ignore") !== "ignore" && fleet?.nextShipExpandable === !0 && fleet.nextShipCost.length > 0 ? Object.freeze([Object.freeze({ costs: fleet.nextShipCost })]) : Object.freeze([]);
+        if (queued.length === 0 && triggerTargets.length === 0 && saving === null && (offered === void 0 || offered.length === 0) && !hasFactoryDemand && !hasCrafterDemand && missions.length === 0 && !hasFleetDemand && inflationMoney === null && retirementGraphene === null && truepathAiBuildingTarget === null && spyPurchaseMoney === 0 && mechCosts.length === 0 && technologyStorageTargets.length === 0 && buildingStorageTargets.length === 0 && projectStorageTargets.length === 0 && fleetStorageTargets.length === 0 && !moneyEnvelope)
           return EMPTY_DEMAND_SAMPLE;
         let finalInput = Object.freeze({ ...baseInput, mechCosts }), result = factoryCatalog !== void 0 && hasFactoryDemand ? planDemandPrioritization({
           ...finalInput,
@@ -17159,8 +17215,11 @@
           storageAssignExtra: settings.storageAssignExtra !== !1,
           autoMarket: settings.autoMarket === !0,
           noTrade: !!readProperty(readProperty(root, "race"), "no_trade"),
-          // The same commitments the demand pass just used, in the same order.
+          // Restore the old fleet / research / queue / managed-target inputs, then retain the
+          // additional captured commitments this demand slice already supported.
           requestLists: Object.freeze([
+            fleetStorageTargets,
+            technologyStorageTargets,
             toTargets(queued),
             Object.freeze(savingCosts === null ? [] : [
               Object.freeze({
@@ -17169,6 +17228,8 @@
               })
             ]),
             triggerTargets,
+            buildingStorageTargets,
+            projectStorageTargets,
             factoryStorageTargets,
             Object.freeze([
               Object.freeze({
@@ -17176,8 +17237,8 @@
               })
             ])
           ]),
-          // The Knowledge half of this planner is owned by the captured Knowledge reader, which reads
-          // the offered catalog; this pass would have to draw one of its own to answer it.
+          // Per-resource research prices above use the shared current-cycle offer sample. The
+          // separate Knowledge-level estimate remains owned by its captured Knowledge reader.
           knowledge: Object.freeze({
             techKnowledgeCosts: Object.freeze([]),
             reservedTargets: Object.freeze([]),
@@ -17701,17 +17762,28 @@
       collect2(descendant);
     let cost = {};
     for (let name of names) {
-      let amount = Number(amounts.get(name.toLowerCase()));
-      Number.isFinite(amount) && amount > 0 && (cost[name] = amount);
+      let rawAmount = amounts.get(name.toLowerCase());
+      if (rawAmount === void 0) return;
+      let amount = Number(rawAmount);
+      if (!Number.isFinite(amount) || amount <= 0) return;
+      cost[name] = amount;
     }
     return Object.freeze(cost);
   }
-  function readResourceMaximums(root, cost) {
+  function readShipCapacityState(root, cost) {
     let resources = readProperty(root, "resource");
-    return isRecord(resources) ? Object.entries(cost).every(([resourceId, amount]) => {
-      let maximum = readProperty(readProperty(resources, resourceId), "max");
-      return typeof maximum == "number" && Number.isFinite(maximum) && maximum >= amount;
-    }) : !1;
+    if (!isRecord(resources))
+      return Object.freeze({ affordable: !1, expandable: !1 });
+    let affordable = !0, expandable = !0;
+    for (let [resourceId, amount] of Object.entries(cost)) {
+      let resource = readProperty(resources, resourceId), maximum = readProperty(resource, "max");
+      if (typeof maximum != "number" || !Number.isFinite(maximum)) {
+        affordable = !1, expandable = !1;
+        continue;
+      }
+      maximum >= amount || (affordable = !1, readProperty(resource, "stackable") !== !0 && (expandable = !1));
+    }
+    return Object.freeze({ affordable, expandable });
   }
   function createCapturedFleetDemand(dependencies) {
     return Object.freeze({
@@ -17722,15 +17794,18 @@
         let costsElement = fleetDocument(dependencies.getDocument())?.querySelector("#shipYardCosts");
         if (costsElement == null) return;
         let cost = readCost3(costsElement);
-        if (Object.keys(cost).length !== 0)
-          return Object.freeze({
-            nextShipAffordable: readResourceMaximums(root, cost),
-            nextShipCost: Object.freeze(
-              Object.entries(cost).map(
-                ([resourceId, amount]) => Object.freeze({ resourceId, amount })
-              )
+        if (cost === void 0 || Object.keys(cost).length === 0)
+          return;
+        let capacity = readShipCapacityState(root, cost);
+        return Object.freeze({
+          nextShipAffordable: capacity.affordable,
+          nextShipExpandable: capacity.expandable,
+          nextShipCost: Object.freeze(
+            Object.entries(cost).map(
+              ([resourceId, amount]) => Object.freeze({ resourceId, amount })
             )
-          });
+          )
+        });
       }
     });
   }
@@ -45748,6 +45823,8 @@ Only continue if you trust the source. Injected code:
       triggers: Object.freeze({ read: readTriggerTargets }),
       construction: progression.observations,
       readOfferedTechs: progression.readOfferedTechs,
+      readBuildTargets: progression.readUnlockedStorageBuildTargets,
+      readProjects: progression.readProjects,
       reservations: queueReservations,
       readSettings: () => settingsStore.readRaw(),
       mechDemand: progression.mechDemand,
@@ -45755,7 +45832,13 @@ Only continue if you trust the source. Injected code:
       craftCosts: costs,
       fleet: fleetDemand
     }), demandThisCycle;
-    readDemand = () => demandThisCycle ??= demand.sample();
+    readDemand = () => {
+      if (demandThisCycle === void 0) {
+        let currentSettings = settingsStore.readRaw();
+        (isEnabled(currentSettings, "autoStorage") || isEnabled(currentSettings, "autoResearch")) && progression.sampleOfferedTechs(), demandThisCycle = demand.sample();
+      }
+      return demandThisCycle;
+    };
     let storagePorts = createCapturedStoragePorts({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
@@ -45763,7 +45846,7 @@ Only continue if you trust the source. Injected code:
       readStorageRequired: (resourceId, pool) => readDemand().storageRequired(resourceId, pool),
       reservations: queueReservations,
       construction: progression.observations,
-      readBuildTargets: progression.readManagedBuildTargets,
+      readBuildTargets: progression.readUnlockedStorageBuildTargets,
       readOfferedTechs: progression.readOfferedTechs,
       readProjects: progression.readProjects,
       costs: buildCosts,
@@ -46423,7 +46506,7 @@ Only continue if you trust the source. Injected code:
       stateLogPlannerDetailsDue = stateLogRecorder.isNextSampleDue(settings);
       let profiling = diagnostics?.readPerformanceEnabled() === !0 ? diagnostics : void 0, workStartedAtMs = profiling?.nowMs();
       try {
-        if (isEnabled(settings, "autoEvolution")) {
+        if (progression.beginProcessedCycle(), isEnabled(settings, "autoEvolution")) {
           let species = capturedEvolution.reader.sampleSpecies();
           if (capturedEvolutionResultCheck.observeSpecies(species), capturedEvolutionResultCheck.check().stopCycle) return;
           if (species === "protoplasm") {

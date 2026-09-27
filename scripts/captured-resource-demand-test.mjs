@@ -1249,4 +1249,205 @@ for (const [missionId, completionTech, completionLevel] of [
   assert.equal(sample.isDemanded("Money"), false);
 }
 
+// Research offers are storage-capacity targets even when their non-Knowledge cost is not
+// currently affordable. Requested quantity and storage requirement stay separate.
+{
+  const sample = createCapturedResourceDemand({
+    rootState: {
+      readRoot: () => ({
+        race: {},
+        resource: {
+          Polymer: { amount: 0, max: 100, stackable: true },
+        },
+      }),
+    },
+    reservations: {
+      readReservations: () => ({ targets: [], unavailable: false }),
+    },
+    readOfferedTechs: () => [
+      { elementId: "tech-polymer-heavy", cost: { Polymer: 700 } },
+    ],
+    readSettings: () => ({ researchRequest: true }),
+  }).sample();
+  assert.equal(sample.requestedQuantity("Polymer"), 0);
+  assert.equal(sample.storageRequired("Polymer"), 721);
+}
+
+// Every managed building candidate contributes its current game price, even when another
+// candidate is the construction cycle's saving target. An unavailable price drops only that row.
+{
+  const priced = [];
+  const sample = createCapturedResourceDemand({
+    rootState: {
+      readRoot: () => ({
+        race: {},
+        resource: {
+          Alloy: { amount: 0, max: 100, stackable: true },
+        },
+      }),
+    },
+    reservations: {
+      readReservations: () => ({ targets: [], unavailable: false }),
+    },
+    readSettings: () => ({ autoBuild: true }),
+    construction: { readSavingTarget: () => null },
+    readBuildTargets: () => [
+      { key: "city-foundry", elementId: "city-foundry", weighting: 10 },
+      { key: "city-refinery", elementId: "city-refinery", weighting: 5 },
+      { key: "city-unpriced", elementId: "city-unpriced", weighting: 1 },
+    ],
+    costs: {
+      readCost: (elementId) => {
+        priced.push(elementId);
+        if (elementId === "city-unpriced") return undefined;
+        return {
+          cost: { Alloy: elementId === "city-foundry" ? 500 : 650 },
+          pool: undefined,
+        };
+      },
+    },
+  }).sample();
+  assert.deepEqual(priced, ["city-foundry", "city-refinery", "city-unpriced"]);
+  assert.equal(sample.storageRequired("Alloy"), 669.5);
+}
+
+// A currently offered, per-project enabled A.R.P.A. entry contributes its one-percent price even
+// with the global action gate off, matching the old storage candidate filter. Disabled projects
+// are ignored, and a project absent from the current catalog cannot reserve capacity.
+{
+  const sample = createCapturedResourceDemand({
+    rootState: {
+      readRoot: () => ({
+        race: {},
+        resource: {
+          Iron: { amount: 0, max: 100, stackable: true },
+        },
+      }),
+    },
+    reservations: {
+      readReservations: () => ({ targets: [], unavailable: false }),
+    },
+    readSettings: () => ({
+      autoARPA: false,
+      arpa_enabled: true,
+      arpa_disabled: false,
+    }),
+    readProjects: () => [
+      {
+        elementId: "arpaenabled",
+        projectId: "enabled",
+        rank: 0,
+        progress: 0,
+        cost: { Iron: 600 },
+        generation: 1,
+      },
+      {
+        elementId: "arpadisabled",
+        projectId: "disabled",
+        rank: 0,
+        progress: 0,
+        cost: { Iron: 2000 },
+        generation: 1,
+      },
+      // Locked projects are absent from the game's current offered catalog.
+    ],
+  }).sample();
+  assert.equal(sample.storageRequired("Iron"), 618);
+}
+
+// Outer-fleet capacity uses expandability and the old non-ignore priority gate, not the
+// stricter "request" gate used for spending demand.
+{
+  const demand = (settings, nextShipExpandable) =>
+    createCapturedResourceDemand({
+      rootState: {
+        readRoot: () => ({
+          race: {},
+          resource: {
+            Iron: { amount: 0, max: 100, stackable: true },
+          },
+        }),
+      },
+      reservations: {
+        readReservations: () => ({ targets: [], unavailable: false }),
+      },
+      readSettings: () => settings,
+      fleet: {
+        read: () => ({
+          nextShipAffordable: false,
+          nextShipExpandable,
+          nextShipCost: [{ resourceId: "Iron", amount: 700 }],
+        }),
+      },
+    }).sample();
+  assert.equal(
+    demand(
+      { autoFleet: true, prioritizeOuterFleet: "save" },
+      true,
+    ).storageRequired("Iron"),
+    721,
+  );
+  assert.equal(
+    demand(
+      { autoFleet: false, prioritizeOuterFleet: "save" },
+      true,
+    ).storageRequired("Iron"),
+    1,
+  );
+  assert.equal(
+    demand(
+      { autoFleet: true, prioritizeOuterFleet: "ignore" },
+      true,
+    ).storageRequired("Iron"),
+    1,
+  );
+  assert.equal(
+    demand(
+      { autoFleet: true, prioritizeOuterFleet: "save" },
+      false,
+    ).storageRequired("Iron"),
+    1,
+  );
+}
+
+// The storage inputs this slice extends remain additive: existing queued, trigger, and Mech costs
+// still reserve capacity alongside the separately covered factory recipe targets.
+{
+  const sample = createCapturedResourceDemand({
+    rootState: {
+      readRoot: () => ({
+        race: {},
+        resource: {
+          Stone: { amount: 0, max: 1000, stackable: true },
+          Copper: { amount: 0, max: 1000, stackable: true },
+          Supply: { amount: 0, max: 1000, stackable: true },
+          Soul_Gem: { amount: 0, max: 1000, stackable: true },
+        },
+      }),
+    },
+    reservations: {
+      readReservations: () => ({
+        targets: [{ name: "queued", cause: "Queue", cost: { Stone: 400 } }],
+        unavailable: false,
+      }),
+    },
+    triggers: {
+      read: () => [
+        { actionId: "city-mine", actionType: "build", cost: { Copper: 350 } },
+      ],
+    },
+    mechDemand: {
+      read: () => ({
+        plan: { status: "ready", cost: { supply: 500, gems: 300, space: 1 } },
+        immediatePlan: { status: "none" },
+      }),
+    },
+    readSettings: () => ({}),
+  }).sample();
+  assert.equal(sample.storageRequired("Stone"), 412);
+  assert.equal(sample.storageRequired("Copper"), 360.5);
+  assert.equal(sample.storageRequired("Supply"), 515);
+  assert.equal(sample.storageRequired("Soul_Gem"), 309);
+}
+
 console.log("Captured resource-demand adapter tests passed");

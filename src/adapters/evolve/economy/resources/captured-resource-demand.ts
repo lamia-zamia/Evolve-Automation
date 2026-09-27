@@ -23,7 +23,9 @@
  * ineligible rather than cheapest by absence. When the prerequisite report says a reservation
  * could exist but its capture is not established, the sample holds Money up to its storage
  * envelope instead of reporting it free; that envelope is anti-spend only and never invents
- * a price.
+ * a price. Storage requirements separately use current research offers, unlocked and enabled
+ * managed builds and projects, and the expandable outer-fleet blueprint; these targets do not
+ * become spending requests.
  *
  * A missing part of the model can only leave a resource looking undemanded, never demand something
  * nothing wants, so every consumer degrades the same way the bounded slices already do.
@@ -50,9 +52,11 @@ import type { ReservedCostTarget } from "../../../../domain/cost-conflicts.ts";
 import type { CostReservationSource } from "../../../../ports/game-cost-reservations.ts";
 import type { GameActionCostReader } from "../../../../ports/game-action-costs.ts";
 import type { GameControlRegistry } from "../../../../ports/game-control-registry.ts";
+import type { GameBuildTarget } from "../../../../ports/game-build-targets.ts";
 import type { ConstructionObservations } from "../../../../ports/game-construction-observations.ts";
 import type { GameRootStateSource } from "../../../../ports/game-root-state.ts";
 import type { OfferedTech } from "../../../../ports/game-tech-catalog.ts";
+import type { OfferedProject } from "../../../../ports/game-project-catalog.ts";
 import type { CapturedCraftCosts } from "../production/captured-craft-costs.ts";
 import type { CapturedFleetDemand } from "../../combat/captured-fleet-demand.ts";
 import type { CapturedTriggers } from "../../progression/build/captured-triggers.ts";
@@ -94,6 +98,10 @@ export interface CapturedResourceDemandDependencies {
   /** The last offered-technology snapshot already captured by progression, if any. */
   readonly readOfferedTechs?: () =>
     readonly Readonly<OfferedTech>[] | undefined;
+  /** Current enabled and unlocked managed build candidates from the build-policy authority. */
+  readonly readBuildTargets?: () => readonly Readonly<GameBuildTarget>[];
+  /** Current game-offered A.R.P.A. candidates; absent when project discovery is unavailable. */
+  readonly readProjects?: () => readonly Readonly<OfferedProject>[] | undefined;
   readonly readSettings: () => unknown;
   /** The game's own per-volume Foundry recipe reader, when the control surface is available. */
   readonly craftCosts?: CapturedCraftCosts;
@@ -1430,6 +1438,47 @@ export function createCapturedResourceDemand(
                 Soul_Gem: Number.MAX_SAFE_INTEGER,
               })
             : Object.freeze([]);
+      const technologyStorageTargets = Object.freeze(
+        (offered ?? []).flatMap((technology) => {
+          const costs = toCosts(technology.cost);
+          return costs.length === 0 ? [] : [Object.freeze({ costs })];
+        }),
+      );
+      const buildingStorageTargets = Object.freeze(
+        (dependencies.readBuildTargets?.() ?? []).flatMap((target) => {
+          const price = dependencies.costs?.readCost(target.elementId);
+          if (price === undefined) return [];
+          const costs = toCosts(price.cost, price.pool);
+          if (costs.length === 0) return [];
+          return [
+            Object.freeze({
+              ...(price.pool === undefined ? {} : { pool: price.pool }),
+              costs,
+            }),
+          ];
+        }),
+      );
+      const hasEnabledProjectStorageSetting = Object.keys(settings).some(
+        (key) => key.startsWith("arpa_") && settings[key] === true,
+      );
+      const projects = hasEnabledProjectStorageSetting
+        ? (dependencies.readProjects?.() ?? [])
+        : [];
+      const projectStorageTargets = Object.freeze(
+        projects.flatMap((project) => {
+          if (settings[`arpa_${project.projectId}`] !== true) return [];
+          const costs = toCosts(project.cost);
+          return costs.length === 0 ? [] : [Object.freeze({ costs })];
+        }),
+      );
+      const fleetStorageTargets =
+        settingBoolean(settings, "autoFleet", false) &&
+        settingString(settings, "prioritizeOuterFleet", "ignore") !==
+          "ignore" &&
+        fleet?.nextShipExpandable === true &&
+        fleet.nextShipCost.length > 0
+          ? Object.freeze([Object.freeze({ costs: fleet.nextShipCost })])
+          : Object.freeze([]);
       if (
         queued.length === 0 &&
         triggerTargets.length === 0 &&
@@ -1444,6 +1493,10 @@ export function createCapturedResourceDemand(
         truepathAiBuildingTarget === null &&
         spyPurchaseMoney === 0 &&
         mechCosts.length === 0 &&
+        technologyStorageTargets.length === 0 &&
+        buildingStorageTargets.length === 0 &&
+        projectStorageTargets.length === 0 &&
+        fleetStorageTargets.length === 0 &&
         !moneyEnvelope
       ) {
         return EMPTY_DEMAND_SAMPLE;
@@ -1513,13 +1566,15 @@ export function createCapturedResourceDemand(
             ),
           }),
         );
-
       const storage = planStorageRequirements({
         storageAssignExtra: settings["storageAssignExtra"] !== false,
         autoMarket: settings["autoMarket"] === true,
         noTrade: Boolean(readProperty(readProperty(root, "race"), "no_trade")),
-        // The same commitments the demand pass just used, in the same order.
+        // Restore the old fleet / research / queue / managed-target inputs, then retain the
+        // additional captured commitments this demand slice already supported.
         requestLists: Object.freeze([
+          fleetStorageTargets,
+          technologyStorageTargets,
           toTargets(queued),
           savingCosts === null
             ? Object.freeze([])
@@ -1532,6 +1587,8 @@ export function createCapturedResourceDemand(
                 }),
               ]),
           triggerTargets,
+          buildingStorageTargets,
+          projectStorageTargets,
           factoryStorageTargets,
           Object.freeze([
             Object.freeze({
@@ -1542,8 +1599,8 @@ export function createCapturedResourceDemand(
             }),
           ]),
         ]),
-        // The Knowledge half of this planner is owned by the captured Knowledge reader, which reads
-        // the offered catalog; this pass would have to draw one of its own to answer it.
+        // Per-resource research prices above use the shared current-cycle offer sample. The
+        // separate Knowledge-level estimate remains owned by its captured Knowledge reader.
         knowledge: Object.freeze({
           techKnowledgeCosts: Object.freeze([]),
           reservedTargets: Object.freeze([]),
