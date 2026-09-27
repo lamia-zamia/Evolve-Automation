@@ -40220,7 +40220,7 @@ Efficiency above '1' is useful to save resources for more desperate times, or to
     return collectOverrideEvalSources(readProperty(parsed, "overrides"), evalSources), collectTriggerEvalSources(readProperty(parsed, "triggers"), evalSources), { ok: !0, settings: parsed, evalSources };
   }
 
-  // src/ui/override-condition-controls.ts
+  // src/adapters/browser/settings-editor/override-condition-controls.ts
   function readOperandType(condition, slot) {
     return slot === 1 ? condition.type1 : condition.type2;
   }
@@ -40243,7 +40243,7 @@ Efficiency above '1' is useful to save resources for more desperate times, or to
   }
   function createOverrideConditionControls({
     overrideEditor,
-    getJQuery,
+    getDomQuery,
     getSettingsRaw,
     getWin,
     getCheckCompareExpressions,
@@ -40251,7 +40251,7 @@ Efficiency above '1' is useful to save resources for more desperate times, or to
     getCheckTypes,
     buildInputNode
   }) {
-    let $ = getJQuery();
+    let $ = getDomQuery();
     function evaluateCheck(operandTypeId, argument) {
       return getCheckTypes()[operandTypeId]?.fn(argument);
     }
@@ -40360,14 +40360,14 @@ Efficiency above '1' is useful to save resources for more desperate times, or to
     };
   }
 
-  // src/ui/override-editor.ts
+  // src/adapters/browser/settings-editor/override-editor.ts
   function listNames(value, nameOf) {
     return Array.isArray(value) ? value.map((item) => nameOf(item) ?? "[Invalid item]").join(", ") : "";
   }
   function createOverrideEditorControls({
     overrideEditor,
     conditionControls,
-    getJQuery,
+    getDomQuery,
     getSettingsRaw,
     getSettings,
     getTechIds,
@@ -40377,7 +40377,7 @@ Efficiency above '1' is useful to save resources for more desperate times, or to
     getTableSorter,
     buildInputNode
   }) {
-    let $ = getJQuery();
+    let $ = getDomQuery();
     function openOverrideModal(event) {
       event[getOverrideKey()] && (event.preventDefault(), getOpenOptionsModal()(event.data.label, (modal) => {
         modal.append(
@@ -40568,17 +40568,17 @@ Efficiency above '1' is useful to save resources for more desperate times, or to
     };
   }
 
-  // src/ui/settings-controls.ts
+  // src/adapters/browser/settings-editor/settings-controls.ts
   function createSettingsControls({
     getAutocomplete,
-    getJQuery,
+    getDomQuery,
     getSettingsRaw,
     getRealNumber,
     getPersistSettings,
     openOverrideModal,
     buildSelectOptions
   }) {
-    let $ = getJQuery(), getRealNumberValue = (amountText) => getRealNumber()(amountText), persistSettings = () => getPersistSettings()(), readListSetting = (settingName) => getSettingsRaw()[settingName];
+    let $ = getDomQuery(), getRealNumberValue = (amountText) => getRealNumber()(amountText), persistSettings = () => getPersistSettings()(), readListSetting = (settingName) => getSettingsRaw()[settingName];
     function addSettingsToggle(node, settingName, labelText, hintText, enabledCallBack, disabledCallBack) {
       return $(`
           <div class="script_bg_${settingName}" style="margin-top: 5px; width: 90%; display: inline-block; text-align: left;">
@@ -40812,13 +40812,13 @@ Efficiency above '1' is useful to save resources for more desperate times, or to
     };
   }
 
-  // src/ui/settings-inputs.ts
+  // src/adapters/browser/settings-editor/settings-inputs.ts
   function createSettingsInputs({
     getAutocomplete,
-    getJQuery,
+    getDomQuery,
     getRealNumber
   }) {
-    let $ = getJQuery();
+    let $ = getDomQuery();
     function buildSelectOptions(optionsList) {
       return optionsList.map(
         (item) => `<option value="${item.val}" title="${item.hint ?? ""}">${item.label}</option>`
@@ -41291,7 +41291,7 @@ Efficiency above '1' is useful to save resources for more desperate times, or to
         getDocument: () => documentValue
       }), formatting = createNumberFormatting({
         numberSuffix
-      }), getJQuery = () => dom, tableSorter = createTableSorter({
+      }), getDomQuery = () => dom, getJQuery = () => dom, tableSorter = createTableSorter({
         getSortable: () => readProperty(capturedPanelWindow, "Sortable")
       }), overrideCatalog = createCapturedOverrideEditorCatalog(), settingsEditor = createSettingsEditorControl({
         overrideEditor: {
@@ -41300,11 +41300,11 @@ Efficiency above '1' is useful to save resources for more desperate times, or to
         },
         settingsInputs: {
           getAutocomplete: () => autocomplete,
-          getJQuery,
+          getDomQuery,
           getRealNumber: () => formatting.getRealNumber
         },
         conditionControls: {
-          getJQuery,
+          getDomQuery,
           getSettingsRaw: () => (prepareSettingsForUi(), settings.readRaw()),
           getWin: () => ({
             prompt: (message, value) => {
@@ -41317,7 +41317,7 @@ Efficiency above '1' is useful to save resources for more desperate times, or to
           getCheckTypes: () => overrideCatalog.checkTypes
         },
         overrideControls: {
-          getJQuery,
+          getDomQuery,
           getSettingsRaw: () => (prepareSettingsForUi(), settings.readRaw()),
           getSettings: () => settingsLifecycle.readEffective(),
           getTechIds: () => ({}),
@@ -41331,7 +41331,7 @@ Efficiency above '1' is useful to save resources for more desperate times, or to
         },
         settingsControls: {
           getAutocomplete: () => autocomplete,
-          getJQuery,
+          getDomQuery,
           getSettingsRaw: () => (prepareSettingsForUi(), settings.readRaw()),
           getRealNumber: () => formatting.getRealNumber,
           getPersistSettings: () => persistSettings

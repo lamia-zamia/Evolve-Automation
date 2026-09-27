@@ -253,7 +253,10 @@ for (const [from, to] of [
     "adapters/evolve/override-failure-log.ts",
   ],
   ["domain/override-editing.ts", "ports/override-editing.ts"],
-  ["ui/settings-controls.ts", "application/override-editing.ts"],
+  [
+    "adapters/browser/settings-editor/settings-controls.ts",
+    "application/override-editing.ts",
+  ],
 ]) {
   assert.notEqual(
     importViolation(from, to),
@@ -264,7 +267,10 @@ for (const [from, to] of [
 for (const [from, to] of [
   ["domain/planner-analysis.ts", "utils/math.ts"],
   ["application/override-settings.ts", "ports/override-settings.ts"],
-  ["ui/settings-controls.ts", "ports/override-editing.ts"],
+  [
+    "adapters/browser/settings-editor/settings-controls.ts",
+    "ports/override-editing.ts",
+  ],
   ["adapters/evolve/override-failure-log.ts", "domain/override-resolution.ts"],
   ["main.ts", "domain/override-resolution.ts"],
 ]) {

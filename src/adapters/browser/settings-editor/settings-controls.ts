@@ -1,25 +1,21 @@
 import type {
   Autocomplete,
   AutocompleteInput,
-} from "../adapters/browser/autocomplete.ts";
-// The controls a settings page is built from. Each writes its setting through the raw settings bag
-// and reports a modifier-held click to the override editor.
-
-import type {
   AutocompleteEvent,
   AutocompleteItem,
   AutocompleteUi,
-  EditableInput,
-  JQuery,
-  JQueryNode,
-} from "./jquery.ts";
+} from "../autocomplete.ts";
+// The controls a settings page is built from. Each writes its setting through the raw settings bag
+// and reports a modifier-held click to the override editor.
+
+import type { DomList, DomQuery } from "../dom.ts";
 import type { StoredSettings } from "./override-condition-controls.ts";
 import type { OverrideModalEvent } from "./override-editor.ts";
 import type { ObjectList, SelectOptionSource } from "./settings-inputs.ts";
 
 interface SettingsControlsDependencies {
   readonly getAutocomplete: () => Autocomplete;
-  readonly getJQuery: () => JQuery;
+  readonly getDomQuery: () => DomQuery;
   readonly getSettingsRaw: () => StoredSettings;
   readonly getRealNumber: () => (amountText: string) => number;
   readonly getPersistSettings: () => () => void;
@@ -32,57 +28,57 @@ interface SettingsControlsDependencies {
 
 export interface SettingsControls {
   addSettingsToggle(
-    node: JQueryNode,
+    node: DomList,
     settingName: string,
     labelText: string,
     hintText: string,
     enabledCallBack?: () => void,
     disabledCallBack?: () => void,
-  ): JQueryNode;
+  ): DomList;
   addSettingsNumber(
-    node: JQueryNode,
+    node: DomList,
     settingName: string,
     labelText: string,
     hintText: string,
-  ): JQueryNode;
+  ): DomList;
   addSettingsString(
-    node: JQueryNode,
+    node: DomList,
     settingName: string,
     labelText: string,
     hintText: string,
-  ): JQueryNode;
+  ): DomList;
   addSettingsSelect(
-    node: JQueryNode,
+    node: DomList,
     settingName: string,
     labelText: string,
     hintText: string,
     optionsList: readonly SelectOptionSource[],
-  ): JQueryNode;
+  ): DomList;
   addSettingsList(
-    node: JQueryNode,
+    node: DomList,
     settingName: string,
     labelText: string,
     hintText: string,
     list: ObjectList,
   ): void;
-  addInputCallbacks(node: JQueryNode, settingKey: string): JQueryNode;
-  addTableInput(node: JQueryNode, settingKey: string): void;
-  addToggleCallbacks(node: JQueryNode, settingKey: string): JQueryNode;
-  addTableToggle(node: JQueryNode, settingKey: string): void;
-  buildTableLabel(note: unknown, title?: unknown, color?: string): JQueryNode;
+  addInputCallbacks(node: DomList, settingKey: string): DomList;
+  addTableInput(node: DomList, settingKey: string): void;
+  addToggleCallbacks(node: DomList, settingKey: string): DomList;
+  addTableToggle(node: DomList, settingKey: string): void;
+  buildTableLabel(note: unknown, title?: unknown, color?: string): DomList;
   resetCheckbox(...items: string[]): void;
 }
 
 export function createSettingsControls({
   getAutocomplete,
-  getJQuery,
+  getDomQuery,
   getSettingsRaw,
   getRealNumber,
   getPersistSettings,
   openOverrideModal,
   buildSelectOptions,
 }: SettingsControlsDependencies): SettingsControls {
-  const $ = getJQuery();
+  const $ = getDomQuery();
   const getRealNumberValue = (amountText: string): number =>
     getRealNumber()(amountText);
   const persistSettings = (): void => getPersistSettings()();
@@ -92,13 +88,13 @@ export function createSettingsControls({
     getSettingsRaw()[settingName] as string[];
 
   function addSettingsToggle(
-    node: JQueryNode,
+    node: DomList,
     settingName: string,
     labelText: string,
     hintText: string,
     enabledCallBack?: () => void,
     disabledCallBack?: () => void,
-  ): JQueryNode {
+  ): DomList {
     return $(`
           <div class="script_bg_${settingName}" style="margin-top: 5px; width: 90%; display: inline-block; text-align: left;">
             <label title="${hintText}" tabindex="0" class="switch">
@@ -112,7 +108,7 @@ export function createSettingsControls({
         "inactive-row",
         Boolean(getSettingsRaw().overrides[settingName]),
       )
-      .on("change", "input", function (this: EditableInput) {
+      .on("change", "input", function (this: HTMLInputElement) {
         getSettingsRaw()[settingName] = this.checked;
         persistSettings();
 
@@ -141,11 +137,11 @@ export function createSettingsControls({
   }
 
   function addSettingsNumber(
-    node: JQueryNode,
+    node: DomList,
     settingName: string,
     labelText: string,
     hintText: string,
-  ): JQueryNode {
+  ): DomList {
     return $(`
           <div class="script_bg_${settingName}" style="margin-top: 5px; display: inline-block; width: 90%; text-align: left;">
             <label title="${hintText}" tabindex="0">
@@ -157,7 +153,7 @@ export function createSettingsControls({
         "inactive-row",
         Boolean(getSettingsRaw().overrides[settingName]),
       )
-      .on("change", "input", function (this: EditableInput) {
+      .on("change", "input", function (this: HTMLInputElement) {
         const parsedValue = getRealNumberValue(this.value);
         if (!Number.isNaN(parsedValue)) {
           getSettingsRaw()[settingName] = parsedValue;
@@ -178,11 +174,11 @@ export function createSettingsControls({
   }
 
   function addSettingsString(
-    node: JQueryNode,
+    node: DomList,
     settingName: string,
     labelText: string,
     hintText: string,
-  ): JQueryNode {
+  ): DomList {
     return $(`
           <div class="script_bg_${settingName}" style="margin-top: 5px; display: inline-block; width: 90%; text-align: left;">
             <label title="${hintText}" tabindex="0">
@@ -194,7 +190,7 @@ export function createSettingsControls({
         "inactive-row",
         Boolean(getSettingsRaw().overrides[settingName]),
       )
-      .on("change", "input", function (this: EditableInput) {
+      .on("change", "input", function (this: HTMLInputElement) {
         getSettingsRaw()[settingName] = this.value;
         persistSettings();
         $(".script_" + settingName).val(getSettingsRaw()[settingName]);
@@ -212,12 +208,12 @@ export function createSettingsControls({
   }
 
   function addSettingsSelect(
-    node: JQueryNode,
+    node: DomList,
     settingName: string,
     labelText: string,
     hintText: string,
     optionsList: readonly SelectOptionSource[],
-  ): JQueryNode {
+  ): DomList {
     const options = buildSelectOptions(optionsList);
     return $(`
           <div class="script_bg_${settingName}" style="margin-top: 5px; display: inline-block; width: 90%; text-align: left;">
@@ -234,7 +230,7 @@ export function createSettingsControls({
       )
       .find("select")
       .val(getSettingsRaw()[settingName])
-      .on("change", function (this: EditableInput) {
+      .on("change", function (this: HTMLSelectElement) {
         getSettingsRaw()[settingName] = this.value;
         persistSettings();
 
@@ -255,7 +251,7 @@ export function createSettingsControls({
   }
 
   function addSettingsList(
-    node: JQueryNode,
+    node: DomList,
     settingName: string,
     labelText: string,
     hintText: string,
@@ -373,9 +369,9 @@ export function createSettingsControls({
     updateList();
   }
 
-  function addInputCallbacks(node: JQueryNode, settingKey: string): JQueryNode {
+  function addInputCallbacks(node: DomList, settingKey: string): DomList {
     return node
-      .on("change", function (this: EditableInput) {
+      .on("change", function (this: HTMLInputElement) {
         const parsedValue = getRealNumberValue(this.value);
         if (!Number.isNaN(parsedValue)) {
           getSettingsRaw()[settingKey] = parsedValue;
@@ -390,7 +386,7 @@ export function createSettingsControls({
       );
   }
 
-  function addTableInput(node: JQueryNode, settingKey: string): void {
+  function addTableInput(node: DomList, settingKey: string): void {
     node
       .addClass(
         "script_bg_" +
@@ -407,12 +403,9 @@ export function createSettingsControls({
       );
   }
 
-  function addToggleCallbacks(
-    node: JQueryNode,
-    settingKey: string,
-  ): JQueryNode {
+  function addToggleCallbacks(node: DomList, settingKey: string): DomList {
     return node
-      .on("change", "input", function (this: EditableInput) {
+      .on("change", "input", function (this: HTMLInputElement) {
         getSettingsRaw()[settingKey] = this.checked;
         persistSettings();
 
@@ -428,7 +421,7 @@ export function createSettingsControls({
       );
   }
 
-  function addTableToggle(node: JQueryNode, settingKey: string): void {
+  function addTableToggle(node: DomList, settingKey: string): void {
     node
       .addClass(
         "script_bg_" +
@@ -454,7 +447,7 @@ export function createSettingsControls({
     note: unknown,
     title: unknown = "",
     color = "has-text-info",
-  ): JQueryNode {
+  ): DomList {
     return $(`<span class="${color}" title="${title}" >${note}</span>`);
   }
 

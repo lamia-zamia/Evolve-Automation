@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 
 import { overrideComparatorExpressions } from "../src/domain/override-comparators.ts";
-import { createOverrideConditionControls } from "../src/ui/override-condition-controls.ts";
-import { createOverrideEditorControls } from "../src/ui/override-editor.ts";
-import { createSettingsInputs } from "../src/ui/settings-inputs.ts";
+import { createOverrideConditionControls } from "../src/adapters/browser/settings-editor/override-condition-controls.ts";
+import { createOverrideEditorControls } from "../src/adapters/browser/settings-editor/override-editor.ts";
+import { createSettingsInputs } from "../src/adapters/browser/settings-editor/settings-inputs.ts";
 
 const tableSorter = {
   attach(_element, options) {
@@ -125,12 +125,12 @@ const context = {
 };
 
 const { buildInputNode } = createSettingsInputs({
-  getJQuery: () => jquery,
+  getDomQuery: () => jquery,
   getRealNumber: () => Number,
 });
 const conditionControls = createOverrideConditionControls({
   overrideEditor,
-  getJQuery: () => jquery,
+  getDomQuery: () => jquery,
   getSettingsRaw: () => context.settingsRaw,
   getWin: () => ({
     prompt: (message, value) => prompts.push({ message, value }),
@@ -143,7 +143,7 @@ const conditionControls = createOverrideConditionControls({
 const editor = createOverrideEditorControls({
   overrideEditor,
   conditionControls,
-  getJQuery: () => jquery,
+  getDomQuery: () => jquery,
   getSettingsRaw: () => context.settingsRaw,
   getSettings: () => context.settings,
   getTechIds: () => context.techIds,

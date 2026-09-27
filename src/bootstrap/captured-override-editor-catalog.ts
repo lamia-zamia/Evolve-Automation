@@ -1,6 +1,6 @@
 import { overrideComparatorExpressions } from "../domain/override-comparators.ts";
 import { CAPTURED_OVERRIDE_OPERAND_TYPES } from "../adapters/evolve/captured-override-evaluation.ts";
-import type { OverrideOperandType } from "../ui/override-condition-controls.ts";
+import type { OverrideOperandType } from "../adapters/browser/settings-editor/override-condition-controls.ts";
 
 const BOOLEAN_OPERAND = {
   fn: (argument: unknown) => argument,

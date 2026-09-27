@@ -1,7 +1,7 @@
-import { createOverrideConditionControls } from "../ui/override-condition-controls.ts";
-import { createOverrideEditorControls } from "../ui/override-editor.ts";
-import { createSettingsControls } from "../ui/settings-controls.ts";
-import { createSettingsInputs } from "../ui/settings-inputs.ts";
+import { createOverrideConditionControls } from "../adapters/browser/settings-editor/override-condition-controls.ts";
+import { createOverrideEditorControls } from "../adapters/browser/settings-editor/override-editor.ts";
+import { createSettingsControls } from "../adapters/browser/settings-editor/settings-controls.ts";
+import { createSettingsInputs } from "../adapters/browser/settings-editor/settings-inputs.ts";
 import { createOverrideEditor } from "../application/override-editing.ts";
 
 type OverrideEditorDependencies = Parameters<typeof createOverrideEditor>[0];

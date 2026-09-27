@@ -35,6 +35,7 @@ export class TestElement {
   constructor(tagName) {
     this.nodeType = 1;
     this.tagName = tagName;
+    if (tagName === "input") this.value = "";
     this.children = [];
     this.parentElement = null;
     this.attributes = new Map();
@@ -210,6 +211,10 @@ export class TestElement {
 
   getClientRects() {
     return this.offsetWidth === 0 && this.offsetHeight === 0 ? [] : [{}];
+  }
+
+  getBoundingClientRect() {
+    return { left: 0, bottom: 10, width: 100 };
   }
 
   addEventListener(type, listener) {

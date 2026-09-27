@@ -1,11 +1,11 @@
-import type { TableSorter } from "../adapters/browser/table-sorter.ts";
+import type { TableSorter } from "../table-sorter.ts";
 // The override editor: the modal a setting opens, the condition table inside it, the drag order,
 // and the disabled inputs that show the setting's effective value. Every change it makes to stored
 // settings is a typed intent handled elsewhere.
 
-import { parseOverrideCondition } from "../domain/override-resolution.ts";
-import type { OverrideEditor } from "../ports/override-editing.ts";
-import type { DelegatedEvent, JQuery, JQueryNode } from "./jquery.ts";
+import { parseOverrideCondition } from "../../../domain/override-resolution.ts";
+import type { OverrideEditor } from "../../../ports/override-editing.ts";
+import type { DomList, DomQuery } from "../dom.ts";
 import type {
   OverrideConditionControls,
   StoredSettings,
@@ -24,22 +24,27 @@ export interface OverrideModalData {
 }
 
 /** The click a settings control reports so a modifier-held click opens the override editor. */
-export type OverrideModalEvent = DelegatedEvent<OverrideModalData>;
+export interface OverrideModalEvent {
+  readonly ctrlKey?: boolean;
+  readonly altKey?: boolean;
+  readonly data: OverrideModalData;
+  preventDefault(): void;
+}
 
 interface OverrideEditorControlsDependencies {
   /** Every stored change the editor makes. This module never writes settings itself. */
   readonly overrideEditor: OverrideEditor;
   readonly conditionControls: OverrideConditionControls;
-  readonly getJQuery: () => JQuery;
+  readonly getDomQuery: () => DomQuery;
   readonly getSettingsRaw: () => StoredSettings;
   readonly getSettings: () => Record<string, unknown>;
   readonly getTechIds: () => Record<string, { name?: unknown } | undefined>;
   readonly getCheckCustom: () => Record<string, string | undefined>;
   /** The modifier key that turns a click on a settings control into an override edit. */
-  readonly getOverrideKey: () => string;
+  readonly getOverrideKey: () => "ctrlKey" | "altKey";
   readonly getOpenOptionsModal: () => (
     title: string,
-    buildOptions: (modal: JQueryNode) => void,
+    buildOptions: (modal: DomList) => void,
   ) => void;
   readonly getTableSorter: () => TableSorter;
   readonly buildInputNode: (
@@ -47,7 +52,7 @@ interface OverrideEditorControlsDependencies {
     options: SettingsInputOptions,
     value: unknown,
     callback: (value: unknown) => void,
-  ) => JQueryNode | string;
+  ) => DomList | string;
 }
 
 export interface OverrideEditorControls {
@@ -61,8 +66,8 @@ export interface OverrideEditorControls {
     type: string,
     options: SettingsInputOptions,
     value: unknown,
-  ): JQueryNode;
-  changeDisplayInputNode(currentNode: JQueryNode): JQueryNode;
+  ): DomList;
+  changeDisplayInputNode(currentNode: DomList): DomList;
 }
 
 function listNames(value: unknown, nameOf: (item: unknown) => unknown): string {
@@ -74,7 +79,7 @@ function listNames(value: unknown, nameOf: (item: unknown) => unknown): string {
 export function createOverrideEditorControls({
   overrideEditor,
   conditionControls,
-  getJQuery,
+  getDomQuery,
   getSettingsRaw,
   getSettings,
   getTechIds,
@@ -84,7 +89,7 @@ export function createOverrideEditorControls({
   getTableSorter,
   buildInputNode,
 }: OverrideEditorControlsDependencies): OverrideEditorControls {
-  const $ = getJQuery();
+  const $ = getDomQuery();
 
   function openOverrideModal(event: OverrideModalEvent): void {
     if (event[getOverrideKey()]) {
@@ -287,7 +292,7 @@ export function createOverrideEditorControls({
     type: string,
     options: SettingsInputOptions,
     value: unknown,
-  ): JQueryNode {
+  ): DomList {
     switch (type) {
       case "string":
       case "number":
@@ -322,7 +327,7 @@ export function createOverrideEditorControls({
     }
   }
 
-  function changeDisplayInputNode(currentNode: JQueryNode): JQueryNode {
+  function changeDisplayInputNode(currentNode: DomList): DomList {
     const type = currentNode.attr("type");
     const id = currentNode.attr("value");
     const value = getSettings()[String(id)];

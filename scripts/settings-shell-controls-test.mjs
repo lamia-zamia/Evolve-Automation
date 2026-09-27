@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 
-import { createSettingsControls } from "../src/ui/settings-controls.ts";
+import { createSettingsControls } from "../src/adapters/browser/settings-editor/settings-controls.ts";
 import { createSettingsShell } from "../src/ui/settings-shell.ts";
 
 const trace = [];
@@ -125,7 +125,7 @@ const controls = createSettingsControls({
     },
     escapeRegex: (value) => value,
   }),
-  getJQuery: () => controlContext.$,
+  getDomQuery: () => controlContext.$,
   getSettingsRaw: () => controlContext.settingsRaw,
   getRealNumber: () => controlContext.getRealNumber,
   getPersistSettings: () => controlContext.persistSettings,

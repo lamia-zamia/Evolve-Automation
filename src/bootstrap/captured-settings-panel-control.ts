@@ -168,7 +168,7 @@ import type {
   ObjectList,
   SettingsInputCallback,
   SettingsInputOptions,
-} from "../ui/settings-inputs.ts";
+} from "../adapters/browser/settings-editor/settings-inputs.ts";
 import { createTableSorter } from "../adapters/browser/table-sorter.ts";
 import {
   writeDefaultPriorityOrder,
@@ -207,7 +207,7 @@ import type { CapturedSettingsStore } from "../ports/captured-settings-store.ts"
 import { inspectImportedSettings } from "../adapters/browser/settings-import.ts";
 import type { FileDownloadPort } from "../ports/file-download.ts";
 import { createSettingsEditorControl } from "./settings-editor-control.ts";
-import type { JQueryNode } from "../ui/jquery.ts";
+import type { DomList } from "../adapters/browser/dom.ts";
 import { createSettingsShell } from "../ui/settings-shell.ts";
 import { isRecord, readProperty } from "../adapters/validation.ts";
 import type { CapturedSettingsLifecycle } from "../application/captured-settings-lifecycle.ts";
@@ -233,7 +233,6 @@ type SettingsEditorDependencies = Parameters<
 >[0];
 type SettingsControlsDependencies =
   SettingsEditorDependencies["settingsControls"];
-type SettingsInputsDependencies = SettingsEditorDependencies["settingsInputs"];
 type SettingsShell = ReturnType<typeof createSettingsShell>;
 type GeneralSettings = ReturnType<typeof createGeneralSettingsBrowserAdapter>;
 type AchievementGuardSettings = ReturnType<
@@ -764,8 +763,8 @@ export function createCapturedSettingsPanel({
     const formatting = createNumberFormatting({
       numberSuffix: generalSettingsNumberSuffix,
     });
-    const getJQuery = () =>
-      dom as unknown as ReturnType<SettingsControlsDependencies["getJQuery"]>;
+    const getDomQuery = () => dom;
+    const getJQuery = () => dom as unknown as OptionsModalQuery;
     const tableSorter = createTableSorter({
       getSortable: () => readProperty(capturedPanelWindow, "Sortable"),
     });
@@ -777,11 +776,11 @@ export function createCapturedSettingsPanel({
       },
       settingsInputs: {
         getAutocomplete: () => autocomplete,
-        getJQuery: getJQuery as SettingsInputsDependencies["getJQuery"],
+        getDomQuery,
         getRealNumber: () => formatting.getRealNumber,
       },
       conditionControls: {
-        getJQuery: getJQuery as SettingsControlsDependencies["getJQuery"],
+        getDomQuery,
         getSettingsRaw: () => {
           prepareSettingsForUi();
           return settings.readRaw() as ReturnType<
@@ -804,7 +803,7 @@ export function createCapturedSettingsPanel({
         getCheckTypes: () => overrideCatalog.checkTypes,
       },
       overrideControls: {
-        getJQuery: getJQuery as SettingsControlsDependencies["getJQuery"],
+        getDomQuery,
         getSettingsRaw: () => {
           prepareSettingsForUi();
           return settings.readRaw() as ReturnType<
@@ -822,13 +821,13 @@ export function createCapturedSettingsPanel({
             : "ctrlKey",
         getOpenOptionsModal: () => (title, buildOptions) =>
           optionsModal.openOptionsModal(title, (modal) =>
-            buildOptions(modal as unknown as JQueryNode),
+            buildOptions(modal as unknown as DomList),
           ),
         getTableSorter: () => tableSorter,
       },
       settingsControls: {
         getAutocomplete: () => autocomplete,
-        getJQuery: getJQuery as SettingsControlsDependencies["getJQuery"],
+        getDomQuery,
         getSettingsRaw: () => {
           prepareSettingsForUi();
           return settings.readRaw() as ReturnType<
@@ -1516,7 +1515,7 @@ export function createCapturedSettingsPanel({
     });
     job = createJobSettingsBrowserAdapter({
       getDocument: () => documentForUi,
-      getJQuery: getJQuery as Parameters<
+      getJQuery: getJQuery as unknown as Parameters<
         typeof createJobSettingsBrowserAdapter
       >[0]["getJQuery"],
       getReadModel: readCapturedJobSettings,

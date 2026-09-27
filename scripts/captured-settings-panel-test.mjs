@@ -734,6 +734,15 @@ const mechInfoOverride = (result) => ({
   tickRate.dispatch("change");
   assert.equal(settings.readRaw()["tickRate"], 7);
   assert.equal(JSON.parse(storage.writes())["tickRate"], 7);
+  tickRate.value = "not-a-number";
+  tickRate.dispatch("change");
+  assert.equal(settings.readRaw()["tickRate"], 7);
+  assert.equal(JSON.parse(storage.writes())["tickRate"], 7);
+  assert.equal(
+    tickRate.value,
+    "7",
+    "invalid raw number edits restore the last valid value",
+  );
 
   // Dispatch on the input itself, the same native event path used by the browser control.
   checkbox.checked = true;
@@ -819,6 +828,117 @@ const mechInfoOverride = (result) => ({
   );
 }
 
+// --- real settings editor composition ----------------------------------------------------------
+
+// The production modal routes duplicate and drag reorder through the same application editor.
+{
+  const page = createPage(JSON.stringify({ autoBuild: false }));
+  const sortableInstances = new WeakMap();
+  let latestSortable;
+  page.pageWindow.Sortable = {
+    create(container, options) {
+      const instance = { options, destroy() {} };
+      sortableInstances.set(container, instance);
+      latestSortable = instance;
+    },
+    get(container) {
+      return sortableInstances.get(container) ?? null;
+    },
+  };
+  page.panel.ensurePanel();
+  const target = page.root.querySelectorAll(".script_autoBuild")[0];
+  target.parentElement.dispatch("click", target, { ctrlKey: true });
+  page.root
+    .querySelectorAll("#script_autoBuild_d")[0]
+    .querySelectorAll("a")[0]
+    .dispatch("click");
+
+  let duplicate = page.root.querySelectorAll("#script_autoBuild_o0")[0];
+  duplicate.querySelectorAll("a")[1].dispatch("click");
+  assert.equal(page.settings.readRaw().overrides.autoBuild.length, 2);
+  const secondResult = page.root
+    .querySelectorAll("#script_autoBuild_o1")[0]
+    .querySelectorAll("input")
+    .at(-1);
+  secondResult.checked = true;
+  secondResult.dispatch("change");
+
+  const table = page.root.querySelectorAll("#script_autoBuildModalTable")[0];
+  const first = page.root.querySelectorAll("#script_autoBuild_o0")[0];
+  const second = page.root.querySelectorAll("#script_autoBuild_o1")[0];
+  for (const row of table.children) {
+    row.matches = (selector) =>
+      selector === "tr:not(.unsortable)" &&
+      !row.classList.contains("unsortable");
+  }
+  table.insertBefore(second, first);
+  latestSortable.options.onUpdate();
+  assert.deepEqual(
+    page.settings.readRaw().overrides.autoBuild.map(({ ret }) => ret),
+    [true, false],
+  );
+  assert.deepEqual(
+    JSON.parse(page.storage.writes()).overrides.autoBuild.map(({ ret }) => ret),
+    [true, false],
+    "duplicate and reorder edits persist through the application service",
+  );
+
+  const reorderedFirst = page.root.querySelectorAll("#script_autoBuild_o0")[0];
+  reorderedFirst.querySelectorAll("a")[0].dispatch("click");
+  assert.deepEqual(
+    page.settings.readRaw().overrides.autoBuild.map(({ ret }) => ret),
+    [false],
+  );
+}
+
+// The real Research panel's autocomplete selects, adds, and removes a technology id.
+{
+  const page = createPage(
+    JSON.stringify({ researchIgnore: ["retired-tech"] }),
+    { allSections: true },
+  );
+  page.gameRoot.tech["physics"] = {};
+  page.panel.ensurePanel();
+  const search = page.root.querySelectorAll(
+    ".script_bg_researchIgnore input",
+  )[0];
+  assert.ok(
+    search,
+    "the captured Research panel renders its object-list input",
+  );
+  search.dispatch("focus");
+  search.value = "tech-physics";
+  search.dispatch("input");
+  const suggestion = page.root.querySelectorAll("ul li")[0];
+  assert.ok(
+    suggestion,
+    "the production autocomplete offers captured technology ids",
+  );
+  suggestion.dispatch("mousedown");
+  const buttons = page.root.querySelectorAll(
+    ".script_bg_researchIgnore button",
+  );
+  buttons[1].dispatch("click");
+  assert.deepEqual(page.settings.readRaw().researchIgnore, [
+    "retired-tech",
+    "tech-physics",
+  ]);
+  assert.deepEqual(JSON.parse(page.storage.writes()).researchIgnore, [
+    "retired-tech",
+    "tech-physics",
+  ]);
+  buttons[0].dispatch("click");
+  assert.deepEqual(page.settings.readRaw().researchIgnore, ["retired-tech"]);
+  assert.deepEqual(JSON.parse(page.storage.writes()).researchIgnore, [
+    "retired-tech",
+  ]);
+  assert.equal(
+    page.root.querySelectorAll(".script_researchIgnore")[0].value,
+    "retired-tech",
+    "stale stored ids remain visible and removable items do not erase them",
+  );
+}
+
 // --- the complete raw A -> active override B -> raw C -> fallback C path survives reload ------
 
 {
@@ -851,6 +971,14 @@ const mechInfoOverride = (result) => ({
     page.effectiveSettings.tickRate,
     7,
     "active override supplies B",
+  );
+  target.parentElement.dispatch("click", target, { ctrlKey: true });
+  assert.equal(
+    page.root
+      .querySelectorAll("#script_override_true_value")[0]
+      .querySelectorAll("input")[0].value,
+    "7",
+    "the modal reads the effective value while raw still holds A",
   );
 
   target.value = "9";
@@ -993,6 +1121,16 @@ const mechInfoOverride = (result) => ({
   const target = page.root.querySelectorAll(
     ".script_scriptSettingsExportFilename",
   )[0];
+  target.value = "current-settings.json";
+  target.dispatch("change");
+  assert.equal(
+    page.settings.readRaw().scriptSettingsExportFilename,
+    "current-settings.json",
+  );
+  assert.equal(
+    JSON.parse(page.storage.writes()).scriptSettingsExportFilename,
+    "current-settings.json",
+  );
   target.parentElement.dispatch("click", target, { ctrlKey: true });
   page.root
     .querySelectorAll("#script_scriptSettingsExportFilename_d")[0]
@@ -1009,7 +1147,7 @@ const mechInfoOverride = (result) => ({
   result.dispatch("change");
   assert.equal(
     page.settings.readRaw().scriptSettingsExportFilename,
-    "base-settings.json",
+    "current-settings.json",
   );
   assert.equal(
     page.settings.readRaw().overrides.scriptSettingsExportFilename[0].ret,
@@ -1095,15 +1233,24 @@ const mechInfoOverride = (result) => ({
 // --- platform and safe mode -----------------------------------------------------------------------
 
 {
-  const { panel, root } = createPage(JSON.stringify({}), {
-    platform: "MacIntel",
-  });
+  const { panel, root, settings } = createPage(
+    JSON.stringify({ autoBuild: false }),
+    { platform: "MacIntel" },
+  );
   panel.ensurePanel();
   const label = root
     .querySelectorAll("label")
     .map((node) => node.textContent)
     .join(" ");
   assert.match(label, /Alt\+click/, "macOS uses Alt for the override chord");
+  const target = root.querySelectorAll(".script_autoBuild")[0];
+  target.parentElement.dispatch("click", target, { altKey: true });
+  assert.equal(root.querySelectorAll("#script_autoBuildModal").length, 1);
+  root
+    .querySelectorAll("#script_autoBuild_d")[0]
+    .querySelectorAll("a")[0]
+    .dispatch("click");
+  assert.equal(settings.readRaw().overrides.autoBuild.length, 1);
 }
 
 {

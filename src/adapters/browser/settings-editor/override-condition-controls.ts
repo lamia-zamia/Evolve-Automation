@@ -1,13 +1,13 @@
 // The controls of one override condition row. Each names the setting and stored position it edits
 // and emits a typed intent; none of them writes a setting or persists.
 
-import type { OverrideOperandSlot } from "../domain/override-editing.ts";
+import type { OverrideOperandSlot } from "../../../domain/override-editing.ts";
 import {
   parseOverrideCondition,
   type OverrideCondition,
-} from "../domain/override-resolution.ts";
-import type { OverrideEditor } from "../ports/override-editing.ts";
-import type { EditableInput, JQuery, JQueryNode } from "./jquery.ts";
+} from "../../../domain/override-resolution.ts";
+import type { OverrideEditor } from "../../../ports/override-editing.ts";
+import type { DomList, DomQuery } from "../dom.ts";
 import type { SettingsInputOptions } from "./settings-inputs.ts";
 
 /** One operand type as the catalog publishes it to the editor. */
@@ -33,7 +33,7 @@ export interface StoredSettings extends Record<string, unknown> {
 interface OverrideConditionControlsDependencies {
   /** Every stored change the row makes. This module never writes settings itself. */
   readonly overrideEditor: OverrideEditor;
-  readonly getJQuery: () => JQuery;
+  readonly getDomQuery: () => DomQuery;
   readonly getSettingsRaw: () => StoredSettings;
   readonly getWin: () => { prompt(message: string, value: string): unknown };
   readonly getCheckCompareExpressions: () => Record<
@@ -47,7 +47,7 @@ interface OverrideConditionControlsDependencies {
     options: SettingsInputOptions,
     value: unknown,
     callback: (value: unknown) => void,
-  ) => JQueryNode | string;
+  ) => DomList | string;
 }
 
 export interface OverrideConditionControls {
@@ -58,37 +58,37 @@ export interface OverrideConditionControls {
     condition: OverrideCondition,
     slot: OverrideOperandSlot,
     rebuild: () => void,
-  ): JQueryNode;
+  ): DomList;
   buildConditionArg(
     settingName: string,
     index: number,
     condition: OverrideCondition,
     slot: OverrideOperandSlot,
-  ): JQueryNode | string;
+  ): DomList | string;
   buildConditionComparator(
     settingName: string,
     index: number,
     condition: OverrideCondition,
     rebuild: () => void,
-  ): JQueryNode;
+  ): DomList;
   buildConditionRemove(
     settingName: string,
     index: number,
     rebuild: () => void,
-  ): JQueryNode;
+  ): DomList;
   buildConditionDuplicate(
     settingName: string,
     index: number,
     rebuild: () => void,
-  ): JQueryNode;
-  buildConditionEvalize(settingName: string, index: number): JQueryNode;
+  ): DomList;
+  buildConditionEvalize(settingName: string, index: number): DomList;
   buildConditionRet(
     settingName: string,
     index: number,
     condition: OverrideCondition,
     type: string,
     options: SettingsInputOptions,
-  ): JQueryNode | string;
+  ): DomList | string;
 }
 
 function readOperandType(
@@ -127,7 +127,7 @@ function operandExpression(
 
 export function createOverrideConditionControls({
   overrideEditor,
-  getJQuery,
+  getDomQuery,
   getSettingsRaw,
   getWin,
   getCheckCompareExpressions,
@@ -135,7 +135,7 @@ export function createOverrideConditionControls({
   getCheckTypes,
   buildInputNode,
 }: OverrideConditionControlsDependencies): OverrideConditionControls {
-  const $ = getJQuery();
+  const $ = getDomQuery();
 
   function evaluateCheck(operandTypeId: string, argument: unknown): unknown {
     return getCheckTypes()[operandTypeId]?.fn(argument);
@@ -147,7 +147,7 @@ export function createOverrideConditionControls({
     condition: OverrideCondition,
     slot: OverrideOperandSlot,
     rebuild: () => void,
-  ): JQueryNode {
+  ): DomList {
     const types = Object.entries(getCheckTypes())
       .map(
         ([id, type]) =>
@@ -158,7 +158,7 @@ export function createOverrideConditionControls({
       .join();
     return $(`<select style="width: 100%">${types}</select>`)
       .val(readOperandType(condition, slot))
-      .on("change", function (this: EditableInput) {
+      .on("change", function (this: HTMLSelectElement) {
         overrideEditor.applyEdit({
           kind: "set-operand",
           settingKey: settingName,
@@ -176,7 +176,7 @@ export function createOverrideConditionControls({
     index: number,
     condition: OverrideCondition,
     slot: OverrideOperandSlot,
-  ): JQueryNode | string {
+  ): DomList | string {
     const check = getCheckTypes()[readOperandType(condition, slot)];
     return check
       ? buildInputNode(
@@ -201,7 +201,7 @@ export function createOverrideConditionControls({
     index: number,
     condition: OverrideCondition,
     rebuild: () => void,
-  ): JQueryNode {
+  ): DomList {
     const types = Object.entries(getCheckCompareExpressions())
       .map(
         ([id, express]) =>
@@ -212,7 +212,7 @@ export function createOverrideConditionControls({
       .join();
     return $(`<select style="width: 100%">${types}</select>`)
       .val(condition.comparator)
-      .on("change", function (this: EditableInput) {
+      .on("change", function (this: HTMLSelectElement) {
         overrideEditor.applyEdit({
           kind: "set-comparator",
           settingKey: settingName,
@@ -227,7 +227,7 @@ export function createOverrideConditionControls({
     settingName: string,
     index: number,
     rebuild: () => void,
-  ): JQueryNode {
+  ): DomList {
     return $(
       `<a class="button is-small" style="width: 26px; height: 26px"><span>-</span></a>`,
     ).on("click", () => {
@@ -247,7 +247,7 @@ export function createOverrideConditionControls({
     settingName: string,
     index: number,
     rebuild: () => void,
-  ): JQueryNode {
+  ): DomList {
     return $(
       `<a class="button is-small" style="width: 26px; height: 26px"><span style="font-size: 1.2rem;">&#9282;</span></a>`,
     ).on("click", () => {
@@ -264,10 +264,7 @@ export function createOverrideConditionControls({
    * Renders the condition as the custom expression that would evaluate it. The stored condition is
    * re-read on click because an argument edit does not re-render the row.
    */
-  function buildConditionEvalize(
-    settingName: string,
-    index: number,
-  ): JQueryNode {
+  function buildConditionEvalize(settingName: string, index: number): DomList {
     return $(
       `<a class="button is-small" style="width: 26px; height: 26px"><span style="font-size: 0.9rem;">E</span></a>`,
     ).on("click", () => {
@@ -295,7 +292,7 @@ export function createOverrideConditionControls({
     condition: OverrideCondition,
     type: string,
     options: SettingsInputOptions,
-  ): JQueryNode | string {
+  ): DomList | string {
     return buildInputNode(type, options, condition.result, (result) => {
       overrideEditor.applyEdit({
         kind: "set-result",

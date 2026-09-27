@@ -1,18 +1,14 @@
 import type {
   Autocomplete,
   AutocompleteInput,
-} from "../adapters/browser/autocomplete.ts";
-// The value inputs shared by the settings pages, the override editor, and the trigger editor.
-// Each builds one node and reports an edit through its callback; nothing here writes settings.
-
-import type {
   AutocompleteEvent,
   AutocompleteItem,
   AutocompleteUi,
-  EditableInput,
-  JQuery,
-  JQueryNode,
-} from "./jquery.ts";
+} from "../autocomplete.ts";
+// The value inputs shared by the settings pages, the override editor, and the trigger editor.
+// Each builds one node and reports an edit through its callback; nothing here writes settings.
+
+import type { DomList, DomQuery } from "../dom.ts";
 
 /** One entry of a `<select>` built from a list rather than from prepared markup. */
 export interface SelectOptionSource {
@@ -47,7 +43,7 @@ export type SettingsInputCallback = (value: unknown) => void;
 
 interface SettingsInputsDependencies {
   readonly getAutocomplete: () => Autocomplete;
-  readonly getJQuery: () => JQuery;
+  readonly getDomQuery: () => DomQuery;
   readonly getRealNumber: () => (amountText: string) => number;
 }
 
@@ -58,22 +54,22 @@ export interface SettingsInputs {
     options: SettingsInputOptions,
     value: unknown,
     callback: SettingsInputCallback,
-  ): JQueryNode | string;
+  ): DomList | string;
   buildObjectListInput(
     list: ObjectList,
     name: string,
     id: string,
     value: unknown,
     callback: SettingsInputCallback,
-  ): JQueryNode;
+  ): DomList;
 }
 
 export function createSettingsInputs({
   getAutocomplete,
-  getJQuery,
+  getDomQuery,
   getRealNumber,
 }: SettingsInputsDependencies): SettingsInputs {
-  const $ = getJQuery();
+  const $ = getDomQuery();
 
   function buildSelectOptions(
     optionsList: readonly SelectOptionSource[],
@@ -93,20 +89,20 @@ export function createSettingsInputs({
     options: SettingsInputOptions,
     value: unknown,
     callback: SettingsInputCallback,
-  ): JQueryNode | string {
+  ): DomList | string {
     switch (type) {
       case "string":
         return $(`
                   <input type="text" class="input is-small" style="height: 22px; width:100%"/>`)
           .val(value)
-          .on("change", function (this: EditableInput) {
+          .on("change", function (this: HTMLInputElement) {
             callback(this.value);
           });
       case "number":
         return $(`
                   <input type="text" class="input is-small" style="height: 22px; width:100%"/>`)
           .val(value)
-          .on("change", function (this: EditableInput) {
+          .on("change", function (this: HTMLInputElement) {
             const parsed = getRealNumber()(this.value);
             // An unparsable entry falls back to the value the input was built with.
             const result: unknown = Number.isNaN(parsed) ? value : parsed;
@@ -121,7 +117,7 @@ export function createSettingsInputs({
                   </label>`)
           .find("input")
           .prop("checked", value)
-          .on("change", function (this: EditableInput) {
+          .on("change", function (this: HTMLInputElement) {
             callback(this.checked);
           })
           .end();
@@ -129,7 +125,7 @@ export function createSettingsInputs({
         return $(`
                   <select style="width: 100%">${options}</select>`)
           .val(value)
-          .on("change", function (this: EditableInput) {
+          .on("change", function (this: HTMLSelectElement) {
             callback(this.value);
           });
       case "select_cb":
@@ -138,7 +134,7 @@ export function createSettingsInputs({
                     (options as () => readonly SelectOptionSource[])(),
                   )}</select>`)
           .val(value)
-          .on("change", function (this: EditableInput) {
+          .on("change", function (this: HTMLSelectElement) {
             callback(this.value);
           });
       case "list": {
@@ -170,7 +166,7 @@ export function createSettingsInputs({
     id: string,
     value: unknown,
     callback: SettingsInputCallback,
-  ): JQueryNode {
+  ): DomList {
     const listNode = $(`<input type="text" style="width:100%"></input>`);
 
     // Event handler

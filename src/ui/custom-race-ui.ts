@@ -11,7 +11,10 @@ import type {
   CustomRaceSavedSlot,
   GameCustomRaceLabPort,
 } from "../ports/game-custom-race-lab.ts";
-import type { EditableInput } from "./jquery.ts";
+
+interface CustomRacePresetEventTarget {
+  value: string;
+}
 
 interface PresetEditorNode {
   append(content: string | PresetEditorNode): PresetEditorNode;
@@ -19,7 +22,10 @@ interface PresetEditorNode {
   empty(): PresetEditorNode;
   find(selector: string): PresetEditorNode;
   off(events: string): PresetEditorNode;
-  on(events: string, handler: (this: EditableInput) => void): PresetEditorNode;
+  on(
+    events: string,
+    handler: (this: CustomRacePresetEventTarget) => void,
+  ): PresetEditorNode;
   text(value: string): PresetEditorNode;
   val(): string;
   val(value: string): PresetEditorNode;
