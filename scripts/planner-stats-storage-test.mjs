@@ -4,6 +4,7 @@ import { createPlannerStatsStore } from "../src/adapters/storage/planner-stats.t
 import {
   createPlannerStatsLifecycle,
   plannerStatsBucket,
+  recordPlannerReadoutSample,
 } from "../src/application/planner-stats.ts";
 
 const values = new Map();
@@ -31,8 +32,13 @@ assert.equal(
     cycleId: 2,
     targets: [{ queued: true, blocker: "unavailable" }],
   }),
-  "unavailable",
-  "a sample with no evaluated candidate is unavailable",
+  null,
+  "a cycle with only queued targets is not a planner sample",
+);
+assert.equal(
+  plannerStatsBucket({ cycleId: 3, targets: [] }),
+  null,
+  "an empty candidate list is not a planner sample",
 );
 
 assert.deepEqual(lifecycle.load(run), {
@@ -42,6 +48,26 @@ assert.deepEqual(lifecycle.load(run), {
   samples: {},
   total: 0,
 });
+
+const initialStats = lifecycle.make(run);
+for (const snapshot of [
+  { cycleId: 4, targets: [] },
+  { cycleId: 5, targets: [{ queued: true, blocker: "unavailable" }] },
+]) {
+  assert.equal(
+    recordPlannerReadoutSample(lifecycle, initialStats, snapshot, run.day),
+    null,
+  );
+}
+assert.equal(initialStats.total, 0);
+const unavailableStats = recordPlannerReadoutSample(
+  lifecycle,
+  initialStats,
+  { cycleId: 6, targets: [{ queued: false, blocker: "unavailable" }] },
+  run.day,
+);
+assert.equal(unavailableStats.total, 1);
+assert.deepEqual(unavailableStats.samples, { unavailable: 1 });
 
 const valid = {
   startDay: 10,

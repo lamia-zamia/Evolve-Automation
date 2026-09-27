@@ -266,9 +266,11 @@ export function createCapturedPlanningPanels({
     const freshness =
       model.construction === null
         ? "Waiting for a captured construction cycle"
-        : model.freshness === "fresh"
-          ? `Fresh construction cycle ${model.construction.cycleId}`
-          : `Previous construction cycle ${model.construction.cycleId} · idle`;
+        : model.construction.detailLevel !== "planner"
+          ? "Awaiting a planner-enabled construction cycle"
+          : model.freshness === "fresh"
+            ? `Fresh construction cycle ${model.construction.cycleId}`
+            : `Previous construction cycle ${model.construction.cycleId} · idle`;
     panel.appendChild(createText(document, "p", freshness));
     const list = document.createElement("ol");
     for (const target of model.construction?.targets.slice(

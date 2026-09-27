@@ -20,6 +20,7 @@ function makeModel(overrides = {}) {
   return Object.freeze({
     construction: Object.freeze({
       cycleId: 1,
+      detailLevel: "planner",
       targets: Object.freeze([makeTarget("city-house")]),
     }),
     freshness: "fresh",
@@ -150,7 +151,11 @@ function textOf(node) {
   panels.syncBuildPlannerUI(true);
   panels.update(
     makeModel({
-      construction: Object.freeze({ cycleId: 8, targets }),
+      construction: Object.freeze({
+        cycleId: 8,
+        detailLevel: "planner",
+        targets,
+      }),
       triggers: Object.freeze([
         Object.freeze({ id: "city-top", kind: "build" }),
         Object.freeze({
@@ -219,6 +224,7 @@ function textOf(node) {
     makeModel({
       construction: Object.freeze({
         cycleId: 2,
+        detailLevel: "planner",
         targets: Object.freeze([
           makeTarget("project-catalyst", {
             family: "arpa",
@@ -277,6 +283,7 @@ function textOf(node) {
     makeModel({
       construction: Object.freeze({
         cycleId: 2,
+        detailLevel: "planner",
         targets: Object.freeze([makeTarget("new-target")]),
       }),
     }),
@@ -288,11 +295,53 @@ function textOf(node) {
     makeModel({
       construction: Object.freeze({
         cycleId: 2,
+        detailLevel: "planner",
         targets: Object.freeze([makeTarget("new-target")]),
       }),
     }),
   );
   assert.match(textOf(planner), /new-target/);
+}
+
+{
+  const root = element("main");
+  root.appendChild(element("div", { id: "buildQueue" }));
+  const document = createTestDocument(root);
+  const panels = createCapturedPlanningPanels({
+    getDocument: () => document,
+    readSettings: () => ({}),
+    onResetPlannerStats: () => {},
+    onCollapsedChange: () => {},
+  });
+  panels.syncBuildPlannerUI(true);
+  panels.update(
+    makeModel({
+      construction: Object.freeze({
+        cycleId: 5,
+        detailLevel: "targets",
+        targets: Object.freeze([
+          makeTarget("city-candidate", { blocker: "unavailable" }),
+        ]),
+      }),
+    }),
+  );
+  const planner = root.querySelectorAll("#ea-script-planner")[0];
+  assert.match(
+    textOf(planner),
+    /Awaiting a planner-enabled construction cycle/,
+  );
+  assert.doesNotMatch(textOf(planner), /Fresh construction cycle 5/);
+
+  panels.update(
+    makeModel({
+      construction: Object.freeze({
+        cycleId: 6,
+        detailLevel: "planner",
+        targets: Object.freeze([makeTarget("city-candidate")]),
+      }),
+    }),
+  );
+  assert.match(textOf(planner), /Fresh construction cycle 6/);
 }
 
 console.log("Captured planning panel tests passed");

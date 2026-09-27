@@ -44,6 +44,7 @@ export interface ConstructionTargetReadout {
 
 export interface ConstructionReadoutSnapshot {
   readonly cycleId: number;
+  readonly detailLevel: "targets" | "planner";
   readonly targets: readonly Readonly<ConstructionTargetReadout>[];
 }
 

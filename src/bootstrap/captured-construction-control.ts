@@ -20,7 +20,6 @@ import {
 import { createCapturedBuildSource } from "../adapters/evolve/progression/build/captured-build.ts";
 import type { CapturedBuildTarget } from "../adapters/evolve/progression/build/captured-build.ts";
 import { createCapturedConstructionAdapter } from "../adapters/evolve/progression/construction/captured-construction.ts";
-import { readProperty } from "../adapters/validation.ts";
 import { createCapturedProjectCatalog } from "../adapters/evolve/progression/research/captured-project-catalog.ts";
 import { createCapturedProjectContextReader } from "../adapters/evolve/progression/research/captured-project-context.ts";
 import { createCapturedProjectSource } from "../adapters/evolve/progression/research/captured-project.ts";
@@ -28,6 +27,7 @@ import { runBuildAutomation } from "../application/build.ts";
 import type { CommandExecutionOutcome } from "../domain/commands.ts";
 import type { ConstructionObservations } from "../ports/game-construction-observations.ts";
 import type { ConstructionCycleOptions } from "../ports/construction-candidates.ts";
+import type { InterfaceSettingsState } from "../domain/interface-settings.ts";
 import type { BuildResourceScope } from "../domain/progression/build/build.ts";
 import type { GameControlRegistry } from "../ports/game-control-registry.ts";
 import type { GameActivitySink } from "../ports/game-message-log.ts";
@@ -66,6 +66,8 @@ export interface CapturedConstructionControlDependencies {
   readonly readPolicy: () => CapturedConstructionPolicy;
   /** Persisted A.R.P.A. settings, normalized at the adapter boundary. */
   readonly readSettings: () => unknown;
+  /** Resolved Interface presentation settings shared with panel reconciliation. */
+  readonly readPresentationSettings: () => Readonly<InterfaceSettingsState>;
   /** Script-derived commitments outside the captured game root. */
   readonly scriptReservations?: CostReservationSource;
   /** Script-computed Knowledge requirements combined with captured capacity. */
@@ -120,6 +122,7 @@ export function createCapturedConstructionControl(
     drawnProjects,
     readPolicy,
     readSettings,
+    readPresentationSettings,
     diagnostics,
   } = dependencies;
   const onSkipped = dependencies.onSkipped;
@@ -221,13 +224,7 @@ export function createCapturedConstructionControl(
     readOptions: readPolicy,
     ...(readKnowledgeGate === undefined ? {} : { readKnowledgeGate }),
     ...(readStorageRequired === undefined ? {} : { readStorageRequired }),
-    readPresentationSettings: () => {
-      const settings = readSettings();
-      return Object.freeze({
-        activeTargetsUI: readProperty(settings, "activeTargetsUI") === true,
-        buildPlannerUI: readProperty(settings, "buildPlannerUI") === true,
-      });
-    },
+    readPresentationSettings,
   });
 
   return Object.freeze({

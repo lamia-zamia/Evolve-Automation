@@ -3595,6 +3595,7 @@
       });
       return Object.freeze({
         cycleId: constructionCycleId,
+        detailLevel: presentationMode === "planner" ? "planner" : "targets",
         targets: Object.freeze(targets)
       });
     }
@@ -4458,6 +4459,7 @@
       drawnProjects,
       readPolicy,
       readSettings,
+      readPresentationSettings,
       diagnostics
     } = dependencies, onSkipped = dependencies.onSkipped, readOfferedTechs = dependencies.readOfferedTechs, scriptReservations = dependencies.scriptReservations, readKnowledgeGate = dependencies.readKnowledgeGate, readStorageRequired = dependencies.readStorageRequired, onDiagnostic = dependencies.onDiagnostic, onActivity = dependencies.onActivity, offeredThisCycle, readOfferedTechsOnce = () => (offeredThisCycle ??= { value: readOfferedTechs?.() }, offeredThisCycle.value), resources = createCapturedResourceSource(rootState), costs = createCapturedActionCostReader({
       rootState,
@@ -4522,13 +4524,7 @@
       readOptions: readPolicy,
       ...readKnowledgeGate === void 0 ? {} : { readKnowledgeGate },
       ...readStorageRequired === void 0 ? {} : { readStorageRequired },
-      readPresentationSettings: () => {
-        let settings = readSettings();
-        return Object.freeze({
-          activeTargetsUI: readProperty(settings, "activeTargetsUI") === !0,
-          buildPlannerUI: readProperty(settings, "buildPlannerUI") === !0
-        });
-      }
+      readPresentationSettings
     });
     return Object.freeze({
       runCycle() {
@@ -8042,7 +8038,13 @@
       getResources,
       nowMs,
       diagnostics
-    } = dependencies, onDiagnostic = dependencies.onDiagnostic, onActivity = dependencies.onActivity, onSkipped = dependencies.onSkipped, onUnavailable = dependencies.onUnavailable, resources = createCapturedResourceSource(rootState), discovery = createCapturedTabDiscovery({
+    } = dependencies, readFallbackInterfacePresentation = dependencies.readInterfacePresentationSettings ?? (() => {
+      let settings = readSettings();
+      return Object.freeze({
+        activeTargetsUI: readProperty(settings, "activeTargetsUI") === !0,
+        buildPlannerUI: readProperty(settings, "buildPlannerUI") === !0
+      });
+    }), onDiagnostic = dependencies.onDiagnostic, onActivity = dependencies.onActivity, onSkipped = dependencies.onSkipped, onUnavailable = dependencies.onUnavailable, resources = createCapturedResourceSource(rootState), discovery = createCapturedTabDiscovery({
       rootState,
       controls: controls2,
       mountSuppression,
@@ -8239,6 +8241,7 @@
       projectCatalog: Object.freeze({ readProjects: readProjects2 }),
       readPolicy,
       readSettings,
+      readPresentationSettings: readFallbackInterfacePresentation,
       ensureBuildControls,
       scriptReservations,
       readKnowledgeGate,
@@ -17247,7 +17250,7 @@
         let collapsed = readSettings().buildPlannerCollapsed === !0;
         onCollapsedChange(!collapsed), model = Object.freeze({ ...model, collapsed: !collapsed }), plannerSignature = void 0, renderPlanner(document);
       }), panel.replaceChildren(title), model.collapsed) return;
-      let freshness = model.construction === null ? "Waiting for a captured construction cycle" : model.freshness === "fresh" ? `Fresh construction cycle ${model.construction.cycleId}` : `Previous construction cycle ${model.construction.cycleId} · idle`;
+      let freshness = model.construction === null ? "Waiting for a captured construction cycle" : model.construction.detailLevel !== "planner" ? "Awaiting a planner-enabled construction cycle" : model.freshness === "fresh" ? `Fresh construction cycle ${model.construction.cycleId}` : `Previous construction cycle ${model.construction.cycleId} · idle`;
       panel.appendChild(createText(document, "p", freshness));
       let list = document.createElement("ol");
       for (let target of model.construction?.targets.slice(
@@ -17363,7 +17366,11 @@
 
   // src/application/planner-stats.ts
   function plannerStatsBucket(snapshot2) {
-    return snapshot2.targets.find((target) => !target.queued)?.blocker ?? "unavailable";
+    return snapshot2.targets.find((target) => !target.queued)?.blocker ?? null;
+  }
+  function recordPlannerReadoutSample(lifecycle, stats, snapshot2, currentDay) {
+    let bucket = plannerStatsBucket(snapshot2);
+    return bucket === null ? null : lifecycle.record(stats, bucket, currentDay);
   }
   function createPlannerStatsLifecycle(store) {
     return Object.freeze({
@@ -40200,6 +40207,7 @@ Efficiency above '1' is useful to save resources for more desperate times, or to
     settingsLifecycle,
     customRaceLab,
     refreshEffectiveSettings,
+    readInterfacePresentationSettings,
     prestigeSettings: capturedPrestigeSettings,
     evolutionSettings: capturedEvolutionSettings,
     interfaceEffects,
@@ -41252,6 +41260,18 @@ Only continue if you trust the source. Injected code:
       ))
         return !1;
       settingsLifecycle.replaceAndInitialize(inspection.settings), refreshEffectiveSettings?.();
+      let importedInterfaceSettings = readInterfacePresentationSettings?.() ?? (() => {
+        let effective = settingsLifecycle.readEffective();
+        return {
+          activeTargetsUI: effective.activeTargetsUI === !0,
+          buildPlannerUI: effective.buildPlannerUI === !0
+        };
+      })();
+      interfaceEffects?.syncActiveTargetsUI(
+        importedInterfaceSettings.activeTargetsUI
+      ), interfaceEffects?.syncBuildPlannerUI(
+        importedInterfaceSettings.buildPlannerUI
+      );
       let dom = getQuery();
       return dom?.("#script_settings").remove(), dom?.("#autoScriptContainer").remove(), !0;
     }, buildScriptSettings = () => {
@@ -44735,13 +44755,15 @@ Only continue if you trust the source. Injected code:
       })
     });
     settingsLifecycle.initialize();
-    let automationCycle = 0, discoveryAttempts = createDiscoveryAttempts({
+    let readEffectiveInterfacePresentation = () => {
+      let settings = settingsLifecycle.readEffective();
+      return Object.freeze({
+        activeTargetsUI: settings.activeTargetsUI === !0,
+        buildPlannerUI: settings.buildPlannerUI === !0
+      });
+    }, automationCycle = 0, discoveryAttempts = createDiscoveryAttempts({
       readCycle: () => automationCycle
-    });
-    pageCapture2.rootState.subscribeRootReplaced(() => {
-      settingsLifecycle.invalidateDynamicDefaults(), discoveryAttempts.invalidate();
-    });
-    let effectiveSettings = settingsLifecycle.readEffective(), capturedIdentity = createCapturedIdentitySource(pageCapture2.rootState), plannerStats = createPlannerStatsLifecycle(
+    }), effectiveSettings = settingsLifecycle.readEffective(), capturedIdentity = createCapturedIdentitySource(pageCapture2.rootState), plannerStats = createPlannerStatsLifecycle(
       createPlannerStatsStore(storage)
     ), currentPlannerStats, latestConstructionSnapshot = null, latestConstructionRun, constructionFreshness = "none", planningPanels, refreshCapturedPlanningPanels = () => {
     }, reportedPlanningUiErrors = /* @__PURE__ */ new Set();
@@ -44783,11 +44805,16 @@ Only continue if you trust the source. Injected code:
     }
     function recordCapturedPlannerSample(snapshot2) {
       try {
-        if (settingsLifecycle.readRaw().buildPlannerUI !== !0) return;
+        if (snapshot2.detailLevel !== "planner") return;
         let run = readCapturedPlannerRun(), current = ensureCapturedPlannerStats();
         if (run === void 0 || current === void 0) return;
-        let bucket = plannerStatsBucket(snapshot2);
-        currentPlannerStats = plannerStats.record(current, bucket, run.day);
+        let next = recordPlannerReadoutSample(
+          plannerStats,
+          current,
+          snapshot2,
+          run.day
+        );
+        next !== null && (currentPlannerStats = next);
       } catch (error) {
         reportPlanningUiError(
           `planner statistics sample failed: ${String(error)}`
@@ -44843,6 +44870,7 @@ Only continue if you trust the source. Injected code:
       settingsLifecycle,
       customRaceLab,
       refreshEffectiveSettings,
+      readInterfacePresentationSettings: readEffectiveInterfacePresentation,
       interfaceEffects: {
         syncActiveTargetsUI: () => refreshCapturedPlanningPanels(),
         syncBuildPlannerUI: () => refreshCapturedPlanningPanels()
@@ -45002,6 +45030,7 @@ Only continue if you trust the source. Injected code:
       }),
       costs: buildCosts,
       readSettings: () => settingsStore.readRaw(),
+      readInterfacePresentationSettings: readEffectiveInterfacePresentation,
       readReservedQuantityForMechPriority: (resourceId) => readDemand().requestedQuantityForMechPriority(resourceId),
       // The already-granted half of the research draw is only worth its cost to a configured
       // trigger or override, so those stored conditions decide whether the pass keeps it.
@@ -45198,7 +45227,7 @@ Only continue if you trust the source. Injected code:
       onError: reportPlanningUiError
     }), refreshCapturedPlanningPanels = () => {
       try {
-        let rawSettings = settingsLifecycle.readRaw(), activeTargetsEnabled = rawSettings.activeTargetsUI === !0, plannerEnabled = rawSettings.buildPlannerUI === !0, currentRun = latestConstructionSnapshot !== null && (activeTargetsEnabled || plannerEnabled) ? readCapturedPlannerRun() : void 0;
+        let rawSettings = settingsLifecycle.readRaw(), presentation = readEffectiveInterfacePresentation(), activeTargetsEnabled = presentation.activeTargetsUI, plannerEnabled = presentation.buildPlannerUI, currentRun = latestConstructionSnapshot !== null && (activeTargetsEnabled || plannerEnabled) ? readCapturedPlannerRun() : void 0;
         if (latestConstructionSnapshot !== null && latestConstructionRun !== void 0 && currentRun !== void 0 && (latestConstructionRun.reset !== currentRun.reset || latestConstructionRun.day > currentRun.day) && (latestConstructionSnapshot = null, latestConstructionRun = void 0, constructionFreshness = "none"), planningPanels?.syncActiveTargetsUI(activeTargetsEnabled), planningPanels?.syncBuildPlannerUI(plannerEnabled), !activeTargetsEnabled && !plannerEnabled) return;
         let triggers2 = activeTargetsEnabled || plannerEnabled ? triggerTargetsThisCycle?.map(
           (target) => Object.freeze({
@@ -45220,7 +45249,9 @@ Only continue if you trust the source. Injected code:
       } catch (error) {
         reportPlanningUiError(error);
       }
-    }, refreshCapturedPlanningPanels();
+    }, pageCapture2.rootState.subscribeRootReplaced(() => {
+      settingsLifecycle.invalidateDynamicDefaults(), discoveryAttempts.invalidate(), latestConstructionSnapshot = null, latestConstructionRun = void 0, constructionFreshness = "none", triggerTargetsThisCycle = void 0, refreshCapturedPlanningPanels();
+    }), refreshCapturedPlanningPanels();
     let triggerActions = createCapturedTriggerActions({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,

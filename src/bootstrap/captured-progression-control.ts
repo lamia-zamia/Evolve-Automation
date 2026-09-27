@@ -42,6 +42,7 @@ import type { CommandExecutionOutcome } from "../domain/commands.ts";
 import type { CostReservationSource } from "../ports/game-cost-reservations.ts";
 import type { GameActionCostReader } from "../ports/game-action-costs.ts";
 import type { ConstructionObservations } from "../ports/game-construction-observations.ts";
+import type { InterfaceSettingsState } from "../domain/interface-settings.ts";
 import type { GameControlRegistry } from "../ports/game-control-registry.ts";
 import type { GameActivitySink } from "../ports/game-message-log.ts";
 import type { GameBuildTarget } from "../ports/game-build-targets.ts";
@@ -85,6 +86,8 @@ export interface CapturedProgressionControlDependencies {
   readonly costs?: GameActionCostReader;
   /** Persisted script settings. Required: without them nothing is managed and nothing is built. */
   readonly readSettings: () => unknown;
+  /** Optional shared authority for construction presentation; omitted callers use readSettings. */
+  readonly readInterfacePresentationSettings?: () => Readonly<InterfaceSettingsState>;
   /** Commitments that outrank Mech-first construction, excluding the previous saving target. */
   readonly readReservedQuantityForMechPriority?: (resourceId: string) => number;
   /**
@@ -239,6 +242,15 @@ export function createCapturedProgressionControl(
     nowMs,
     diagnostics,
   } = dependencies;
+  const readFallbackInterfacePresentation =
+    dependencies.readInterfacePresentationSettings ??
+    (() => {
+      const settings = readSettings();
+      return Object.freeze({
+        activeTargetsUI: readProperty(settings, "activeTargetsUI") === true,
+        buildPlannerUI: readProperty(settings, "buildPlannerUI") === true,
+      });
+    });
   const onDiagnostic = dependencies.onDiagnostic;
   const onActivity = dependencies.onActivity;
   const onSkipped = dependencies.onSkipped;
@@ -572,6 +584,7 @@ export function createCapturedProgressionControl(
     projectCatalog: Object.freeze({ readProjects }),
     readPolicy,
     readSettings,
+    readPresentationSettings: readFallbackInterfacePresentation,
     ensureBuildControls,
     scriptReservations,
     readKnowledgeGate,

@@ -267,6 +267,7 @@ export function createCapturedConstructionAdapter(
 
     return Object.freeze({
       cycleId: constructionCycleId,
+      detailLevel: presentationMode === "planner" ? "planner" : "targets",
       targets: Object.freeze(targets),
     });
   }

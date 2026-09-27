@@ -585,6 +585,7 @@ function runCycle(cycle) {
   runCycle(cycle);
   const snapshot = cycle.adapter.observations.readPlannerSnapshot();
   assert.ok(Object.isFrozen(snapshot));
+  assert.equal(snapshot.detailLevel, "planner");
   assert.deepEqual(
     snapshot.targets.map(({ key }) => key),
     ["city-tie", "arpa-tie", "city-lower", "city-queued"],
@@ -747,18 +748,25 @@ function runCycle(cycle) {
         saveWhiteholeGems: false,
       }),
       readPresentationSettings: () => ({
-        activeTargetsUI: false,
+        activeTargetsUI: true,
         buildPlannerUI,
       }),
     });
     const outcome = runBuildAutomation(configured);
-    return { bought, resourceReads, outcome };
+    return {
+      bought,
+      resourceReads,
+      outcome,
+      snapshot: configured.observations.readPlannerSnapshot(),
+    };
   };
   const withoutPlanner = run(false);
   const withPlanner = run(true);
   assert.deepEqual(withPlanner.bought, withoutPlanner.bought);
   assert.equal(withPlanner.outcome.status, withoutPlanner.outcome.status);
   assert.equal(withPlanner.resourceReads, withoutPlanner.resourceReads + 1);
+  assert.equal(withPlanner.snapshot.detailLevel, "planner");
+  assert.equal(withoutPlanner.snapshot.detailLevel, "targets");
 }
 
 console.log("captured construction ok");

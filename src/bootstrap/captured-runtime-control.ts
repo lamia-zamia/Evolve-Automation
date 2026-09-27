@@ -73,9 +73,10 @@ import type {
 import { createPlannerStatsStore } from "../adapters/storage/planner-stats.ts";
 import {
   createPlannerStatsLifecycle,
-  plannerStatsBucket,
+  recordPlannerReadoutSample,
 } from "../application/planner-stats.ts";
 import type { PlannerRun, PlannerStats } from "../domain/planner-analysis.ts";
+import type { InterfaceSettingsState } from "../domain/interface-settings.ts";
 import type { ConstructionReadoutSnapshot } from "../ports/game-construction-observations.ts";
 import { createCapturedFleetDemand } from "../adapters/evolve/combat/captured-fleet-demand.ts";
 import { createCapturedFleetAutomation } from "../adapters/evolve/combat/captured-fleet.ts";
@@ -312,6 +313,14 @@ export function startCapturedRuntime({
     }),
   });
   settingsLifecycle.initialize();
+  const readEffectiveInterfacePresentation =
+    (): Readonly<InterfaceSettingsState> => {
+      const settings = settingsLifecycle.readEffective();
+      return Object.freeze({
+        activeTargetsUI: settings["activeTargetsUI"] === true,
+        buildPlannerUI: settings["buildPlannerUI"] === true,
+      });
+    };
   // The settings catalogs are read out of the game's root object, so a replacement can change
   // them without changing any count the lifecycle's own generation can see.
   // Advances once per automation cycle. Discovery retries are rate-limited against it so a draw
@@ -319,12 +328,6 @@ export function startCapturedRuntime({
   let automationCycle = 0;
   const discoveryAttempts = createDiscoveryAttempts({
     readCycle: () => automationCycle,
-  });
-  pageCapture.rootState.subscribeRootReplaced(() => {
-    settingsLifecycle.invalidateDynamicDefaults();
-    // Every captured control the recorded attempts describe belonged to the replaced page, so a
-    // success cached against it is no longer authoritative.
-    discoveryAttempts.invalidate();
   });
   const effectiveSettings = settingsLifecycle.readEffective();
   const capturedIdentity = createCapturedIdentitySource(pageCapture.rootState);
@@ -406,12 +409,17 @@ export function startCapturedRuntime({
     snapshot: Readonly<ConstructionReadoutSnapshot>,
   ): void {
     try {
-      if (settingsLifecycle.readRaw()["buildPlannerUI"] !== true) return;
+      if (snapshot.detailLevel !== "planner") return;
       const run = readCapturedPlannerRun();
       const current = ensureCapturedPlannerStats();
       if (run === undefined || current === undefined) return;
-      const bucket = plannerStatsBucket(snapshot);
-      currentPlannerStats = plannerStats.record(current, bucket, run.day);
+      const next = recordPlannerReadoutSample(
+        plannerStats,
+        current,
+        snapshot,
+        run.day,
+      );
+      if (next !== null) currentPlannerStats = next;
     } catch (error) {
       reportPlanningUiError(
         `planner statistics sample failed: ${String(error)}`,
@@ -500,6 +508,7 @@ export function startCapturedRuntime({
     settingsLifecycle,
     customRaceLab,
     refreshEffectiveSettings,
+    readInterfacePresentationSettings: readEffectiveInterfacePresentation,
     interfaceEffects: {
       syncActiveTargetsUI: () => refreshCapturedPlanningPanels(),
       syncBuildPlannerUI: () => refreshCapturedPlanningPanels(),
@@ -705,6 +714,7 @@ export function startCapturedRuntime({
     }),
     costs: buildCosts,
     readSettings: () => settingsStore.readRaw(),
+    readInterfacePresentationSettings: readEffectiveInterfacePresentation,
     readReservedQuantityForMechPriority: (resourceId) =>
       readDemand().requestedQuantityForMechPriority(resourceId),
     // The already-granted half of the research draw is only worth its cost to a configured
@@ -978,8 +988,9 @@ export function startCapturedRuntime({
   refreshCapturedPlanningPanels = () => {
     try {
       const rawSettings = settingsLifecycle.readRaw();
-      const activeTargetsEnabled = rawSettings["activeTargetsUI"] === true;
-      const plannerEnabled = rawSettings["buildPlannerUI"] === true;
+      const presentation = readEffectiveInterfacePresentation();
+      const activeTargetsEnabled = presentation.activeTargetsUI;
+      const plannerEnabled = presentation.buildPlannerUI;
       const currentRun =
         latestConstructionSnapshot !== null &&
         (activeTargetsEnabled || plannerEnabled)
@@ -1028,6 +1039,18 @@ export function startCapturedRuntime({
       reportPlanningUiError(error);
     }
   };
+  pageCapture.rootState.subscribeRootReplaced(() => {
+    settingsLifecycle.invalidateDynamicDefaults();
+    // Attempts and readouts belong to the replaced root, even when its day/reset are unchanged.
+    discoveryAttempts.invalidate();
+    latestConstructionSnapshot = null;
+    latestConstructionRun = undefined;
+    constructionFreshness = "none";
+    triggerTargetsThisCycle = undefined;
+    // Planner statistics stay keyed to the captured day/reset identity; this event also fires
+    // when the game restores reactivity around the same raw run.
+    refreshCapturedPlanningPanels();
+  });
   refreshCapturedPlanningPanels();
   const triggerActions = createCapturedTriggerActions({
     rootState: pageCapture.rootState,

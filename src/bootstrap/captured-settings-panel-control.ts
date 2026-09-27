@@ -209,6 +209,7 @@ import type { JQueryNode } from "../ui/jquery.ts";
 import { createSettingsShell } from "../ui/settings-shell.ts";
 import { isRecord, readProperty } from "../adapters/validation.ts";
 import type { CapturedSettingsLifecycle } from "../application/captured-settings-lifecycle.ts";
+import type { InterfaceSettingsState } from "../domain/interface-settings.ts";
 import type { SettingsRecord } from "../domain/settings-migration.ts";
 
 type OptionsModalDependencies = Parameters<
@@ -455,6 +456,8 @@ export interface CapturedSettingsPanelDependencies {
   readonly customRaceLab?: GameCustomRaceLabPort;
   /** Recomputes the effective layer after a UI mutation of the raw record. */
   readonly refreshEffectiveSettings?: () => void;
+  /** Shared resolved Interface values used by the runtime's planning panels. */
+  readonly readInterfacePresentationSettings?: () => Readonly<InterfaceSettingsState>;
   readonly interfaceEffects?: Readonly<{
     syncActiveTargetsUI(enabled: boolean): void;
     syncBuildPlannerUI(enabled: boolean): void;
@@ -631,6 +634,7 @@ export function createCapturedSettingsPanel({
   settingsLifecycle,
   customRaceLab,
   refreshEffectiveSettings,
+  readInterfacePresentationSettings,
   prestigeSettings: capturedPrestigeSettings,
   evolutionSettings: capturedEvolutionSettings,
   interfaceEffects,
@@ -2094,6 +2098,21 @@ export function createCapturedSettingsPanel({
     }
     settingsLifecycle.replaceAndInitialize(inspection.settings);
     refreshEffectiveSettings?.();
+    const importedInterfaceSettings =
+      readInterfacePresentationSettings?.() ??
+      (() => {
+        const effective = settingsLifecycle.readEffective();
+        return {
+          activeTargetsUI: effective["activeTargetsUI"] === true,
+          buildPlannerUI: effective["buildPlannerUI"] === true,
+        };
+      })();
+    interfaceEffects?.syncActiveTargetsUI(
+      importedInterfaceSettings.activeTargetsUI,
+    );
+    interfaceEffects?.syncBuildPlannerUI(
+      importedInterfaceSettings.buildPlannerUI,
+    );
     // Everything drawn from the replaced record goes, so the next `ensurePanel` rebuilds the
     // container and every section from the imported one. The import/export buttons sit outside
     // both and keep working. Automation needs no signal: it reads the store on every cycle.

@@ -23,10 +23,19 @@ export interface PlannerStatsLifecycle {
 /** Select the first candidate whose gate was evaluated for this planner sample. */
 export function plannerStatsBucket(
   snapshot: Readonly<ConstructionReadoutSnapshot>,
-): string {
-  return (
-    snapshot.targets.find((target) => !target.queued)?.blocker ?? "unavailable"
-  );
+): string | null {
+  return snapshot.targets.find((target) => !target.queued)?.blocker ?? null;
+}
+
+/** Record a planner sample only when the cycle evaluated a non-queued target. */
+export function recordPlannerReadoutSample(
+  lifecycle: PlannerStatsLifecycle,
+  stats: Readonly<PlannerStats>,
+  snapshot: Readonly<ConstructionReadoutSnapshot>,
+  currentDay: number,
+): Readonly<PlannerStats> | null {
+  const bucket = plannerStatsBucket(snapshot);
+  return bucket === null ? null : lifecycle.record(stats, bucket, currentDay);
 }
 
 export function createPlannerStatsLifecycle(
