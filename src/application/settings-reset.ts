@@ -19,7 +19,6 @@ import {
   computeHellDefaults,
   computeInterfaceDefaults,
   computeJobDefaults,
-  computeLoggingDefaults,
   computeMagicDefaults,
   computeMarketDefaults,
   computeMechDefaults,
@@ -103,8 +102,6 @@ export function createSettingsResets({
       applyPlan(computeGovernmentDefaults(reader.readGovernment()), reset),
     resetEvolutionSettings: (reset: boolean) =>
       applyPlan(computeEvolutionDefaults(reader.readEvolution()), reset),
-    resetLoggingSettings: (reset: boolean) =>
-      applyPlan(computeLoggingDefaults(reader.readLogging()), reset),
     resetPlanetSettings: (reset: boolean) =>
       applyPlan(computePlanetDefaults(reader.readPlanet()), reset),
     resetProductionSettings: (reset: boolean) =>

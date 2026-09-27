@@ -194,12 +194,6 @@ export const SETTINGS_SECTION_POLICIES: readonly SettingsSectionPolicy[] =
       ownsDynamicKey: ownsPrefix("biome_w_", "trait_w_", "extra_w_"),
     },
     {
-      id: "logging",
-      resetName: "resetLoggingSettings",
-      // One toggle per game log type, plus the script's own log settings under the same prefix.
-      ownsDynamicKey: ownsPrefix("log_"),
-    },
-    {
       id: "trigger",
       resetName: "resetTriggerSettings",
       ownsDynamicKey: OWNS_NOTHING_DYNAMIC,

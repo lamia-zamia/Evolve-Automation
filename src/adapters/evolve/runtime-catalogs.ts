@@ -196,7 +196,6 @@ export const settingsSections = [
   "project",
   "government",
   "authority",
-  "logging",
   "trait",
   "weighting",
   "ejector",

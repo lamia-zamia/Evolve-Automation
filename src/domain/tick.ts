@@ -52,18 +52,6 @@ export function isThrottledTick(
   return scriptTick % effectiveTickRate(tickRate, accelerated) !== 0;
 }
 
-/**
- * Advances the state-log counter and reports whether a snapshot is due. The counter is in processed
- * ticks (this runs once per working cycle), so the interval does not drift with tickRate.
- */
-export function advanceStateLog(
-  current: number,
-  interval: number,
-): { readonly next: number; readonly record: boolean } {
-  const next = current + 1;
-  return { next, record: next % interval === 0 };
-}
-
 /** What the period gate is told about one batch of completed game periods. */
 export interface PeriodGateInput {
   /** Periods counted since the last working cycle, carried from the previous call. */

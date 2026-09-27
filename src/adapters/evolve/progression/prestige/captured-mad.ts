@@ -24,6 +24,7 @@ import {
   type PrestigeCommand,
   type PrestigeInput,
 } from "../../../../domain/progression/prestige/prestige.ts";
+import { readCapturedIdentitySnapshot } from "../../captured-world-state.ts";
 import {
   customRaceDraftMatches,
   parseCustomRacePreset,
@@ -84,6 +85,8 @@ type CapturedCelestialLabOutcome =
 interface CapturedCelestialLabTransaction {
   readonly mode: CelestialLabMode;
   readonly resetCountBefore: number | undefined;
+  readonly endingReset: number | undefined;
+  readonly endingDay: number | undefined;
   readonly witchHunter: boolean;
   readonly root: unknown;
   submitted: boolean;
@@ -238,6 +241,11 @@ export interface CapturedMadPrestigeDependencies {
   readonly loadQueuedSettings?: () => void;
   /** Reports a prestige after the launch replaced the captured game root. */
   readonly onActivity?: GameActivitySink;
+  /** Notifies lifecycle observers only after this adapter confirms a reset commit. */
+  readonly onResetCommitted?: (
+    endingReset: number | undefined,
+    endingDay: number | undefined,
+  ) => void;
   /** Mounted Ascension Lab boundary; absent means the lab path fails closed. */
   readonly customRaceLab?: GameCustomRaceLabPort;
   /** Mounted Terraform Planet Lab boundary; absent means the path fails closed. */
@@ -760,6 +768,8 @@ export function createCapturedMadPrestige(
   dependencies: CapturedMadPrestigeDependencies,
 ): { readonly reader: PrestigeReader; readonly executor: PrestigeExecutor } {
   let sampledRoot: unknown;
+  let sampledEndingReset: number | undefined;
+  let sampledEndingDay: number | undefined;
   let sampledPrestigeTechs = new Map<string, Readonly<OfferedTech>>();
   let sampledBioseedControls = new Map<string, Readonly<GameControlHandle>>();
   let sampledWitchControl: Readonly<GameControlHandle> | undefined;
@@ -777,6 +787,20 @@ export function createCapturedMadPrestige(
   let apocalypseFirstActionDone = false;
   let bioseedModalRequested = false;
 
+  function notifyConfirmedReset(
+    endingReset = sampledEndingReset,
+    endingDay = sampledEndingDay,
+  ): void {
+    if (resetCommitted) return;
+    resetCommitted = true;
+    dependencies.onActivity?.({
+      message: "Prestiged",
+      color: "info",
+      tags: Object.freeze(["achievements"]),
+    });
+    dependencies.onResetCommitted?.(endingReset, endingDay);
+  }
+
   function beginCelestialLabTransaction(
     mode: CelestialLabMode,
     resetCountBefore: number | undefined,
@@ -785,6 +809,8 @@ export function createCapturedMadPrestige(
     pendingCelestialLab = {
       mode,
       resetCountBefore,
+      endingReset: sampledEndingReset,
+      endingDay: sampledEndingDay,
       witchHunter,
       root: sampledRoot,
       submitted: false,
@@ -802,12 +828,7 @@ export function createCapturedMadPrestige(
     transaction.outcome = "reset-observed";
     pendingCelestialLab = undefined;
     pendingWitchDirectReset = false;
-    resetCommitted = true;
-    dependencies.onActivity?.({
-      message: "Prestiged",
-      color: "info",
-      tags: Object.freeze(["achievements"]),
-    });
+    notifyConfirmedReset(transaction.endingReset, transaction.endingDay);
     if (transaction.witchHunter) dependencies.setGoal("GameOverMan");
   }
 
@@ -815,7 +836,10 @@ export function createCapturedMadPrestige(
     samplePrestige(): PrestigeInput {
       const settings = capturedMadSettingsRecord(dependencies.readSettings());
       const root = dependencies.rootState.readRoot();
+      const endingIdentity = readCapturedIdentitySnapshot(root);
       sampledRoot = root;
+      sampledEndingReset = endingIdentity?.resets;
+      sampledEndingDay = endingIdentity?.days;
       sampledPrestigeTechs = new Map();
       sampledBioseedControls = new Map();
       sampledWitchControl = undefined;
@@ -1265,16 +1289,8 @@ export function createCapturedMadPrestige(
             command.kind === "launch-mad" &&
             dependencies.rootState.readRoot() !== sampledRoot
           ) {
-            dependencies.onActivity?.({
-              message: "Prestiged",
-              color: "info",
-              tags: Object.freeze(["achievements"]),
-            });
+            notifyConfirmedReset();
           }
-          return;
-        case "log-prestige":
-          // The activity sink observes the root transition after launch; logging this planner
-          // command would report an attempted prestige before the game actually reset.
           return;
         case "reset-modifier-keys":
           // Action transactions disable the game-owned q/touch gates around their own invocation.
@@ -1325,12 +1341,7 @@ export function createCapturedMadPrestige(
             resetCountAfter > resetCountBefore
           ) {
             pendingWitchDirectReset = false;
-            resetCommitted = true;
-            dependencies.onActivity?.({
-              message: "Prestiged",
-              color: "info",
-              tags: Object.freeze(["achievements"]),
-            });
+            notifyConfirmedReset();
           } else if (resetStat === "ascension") {
             beginCelestialLabTransaction("ascension", resetCountBefore, true);
           } else {
@@ -1503,12 +1514,7 @@ export function createCapturedMadPrestige(
             );
           }
           if (command.id === CAPTURED_BIOSEED_COMMANDS.launch) {
-            resetCommitted = true;
-            dependencies.onActivity?.({
-              message: "Prestiged",
-              color: "info",
-              tags: Object.freeze(["achievements"]),
-            });
+            notifyConfirmedReset();
             return;
           }
           if (command.id === CAPTURED_BIOSEED_COMMANDS.prep) {
@@ -1532,12 +1538,7 @@ export function createCapturedMadPrestige(
             ) {
               return;
             }
-            resetCommitted = true;
-            dependencies.onActivity?.({
-              message: "Prestiged",
-              color: "info",
-              tags: Object.freeze(["achievements"]),
-            });
+            notifyConfirmedReset();
             return;
           }
           if (sampledBuildingType !== undefined) {
@@ -1550,24 +1551,14 @@ export function createCapturedMadPrestige(
               resetCountAfter !== undefined &&
               resetCountAfter > sampledBuildingResetCount
             ) {
-              resetCommitted = true;
-              dependencies.onActivity?.({
-                message: "Prestiged",
-                color: "info",
-                tags: Object.freeze(["achievements"]),
-              });
+              notifyConfirmedReset();
               return;
             }
             if (sampledBuildingType === "matrix") {
               // Matrix installs its overlay and schedules `matrix()` five seconds later. The
               // successful modifier-neutralized wrapper call is the commit; never click it again
               // while that delayed reset is pending.
-              resetCommitted = true;
-              dependencies.onActivity?.({
-                message: "Prestiged",
-                color: "info",
-                tags: Object.freeze(["achievements"]),
-              });
+              notifyConfirmedReset();
               return;
             }
             if (
@@ -1689,7 +1680,7 @@ export function createCapturedMadPrestige(
             CAPTURED_DEMONIC_TECH_IDS.some((id) => id === command.id) ||
             command.id === CAPTURED_APOCALYPSE_TECHS.final
           ) {
-            resetCommitted = true;
+            notifyConfirmedReset();
           }
           if (command.id === CAPTURED_WHITEHOLE_TECHS.confirm) {
             const whiteholeLevelAfter =
@@ -1700,7 +1691,7 @@ export function createCapturedMadPrestige(
                 ),
               ) ?? 0;
             if (whiteholeLevelAfter <= whiteholeLevelBefore) return;
-            resetCommitted = true;
+            notifyConfirmedReset();
           }
           if (command.id === CAPTURED_WHITEHOLE_REPAIR_TECH) {
             if (
@@ -1733,11 +1724,6 @@ export function createCapturedMadPrestige(
           // drawn row and live affordability already gated this call, so a
           // successful wrapper invocation is the only synchronous commit fact
           // available before the game's delayed reset.
-          dependencies.onActivity?.({
-            message: "Prestiged",
-            color: "info",
-            tags: Object.freeze(["achievements"]),
-          });
           return;
         }
         case "load-queued-settings":

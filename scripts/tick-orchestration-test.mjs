@@ -6,7 +6,6 @@ import {
   effectiveTickRate,
   isThrottledTick,
   advancePeriodGate,
-  advanceStateLog,
 } from "../src/domain/tick.ts";
 import {
   readPeriodsPerScriptCycle,
@@ -29,7 +28,6 @@ assert.equal(advanceScriptTick(0), 1);
 assert.equal(advanceScriptTick(Number.MAX_SAFE_INTEGER), 1);
 assert.equal(effectiveTickRate(3, true), 6);
 assert.equal(isThrottledTick(4, 3, false), true);
-assert.deepEqual(advanceStateLog(1, 2), { next: 2, record: true });
 assert.deepEqual(
   advancePeriodGate({
     pendingPeriods: 1,

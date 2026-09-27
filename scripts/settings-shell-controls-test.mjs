@@ -265,7 +265,6 @@ const buildNames = [
   "buildBuildingSettings",
   "buildWeightingSettings",
   "buildProjectSettings",
-  "buildLoggingSettings",
 ];
 /** A `.script-collapsible` heading and the `.script-content` div that follows it. */
 function makeHeading(id, display, searchInputs = []) {

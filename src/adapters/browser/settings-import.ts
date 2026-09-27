@@ -79,12 +79,5 @@ export function inspectImportedSettings(
   const evalSources: string[] = [];
   collectOverrideEvalSources(readProperty(parsed, "overrides"), evalSources);
   collectTriggerEvalSources(readProperty(parsed, "triggers"), evalSources);
-  const prestigeFormat = readProperty(parsed, "log_prestige_format");
-  if (
-    typeof prestigeFormat === "string" &&
-    prestigeFormat.includes(EMBEDDED_EVAL_MARKER)
-  ) {
-    evalSources.push(prestigeFormat);
-  }
   return { ok: true, settings: parsed, evalSources };
 }

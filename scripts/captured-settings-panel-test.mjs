@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 
 import { createCapturedSettingsPanel } from "../src/bootstrap/captured-settings-panel-control.ts";
 import { createCapturedMech } from "../src/adapters/evolve/combat/captured-mech.ts";
+import { createPageFileDownload } from "../src/adapters/browser/file-download.ts";
 import { createSettingsStore } from "../src/adapters/browser/settings-store.ts";
 import { createCapturedSettingsDefaults } from "../src/adapters/evolve/captured-settings-defaults.ts";
 import { createCapturedSettingsLifecycle } from "../src/application/captured-settings-lifecycle.ts";
@@ -188,6 +189,7 @@ function createPage(
   const refreshEffectiveSettings = () => overrideSettings.updateOverrides();
   const panel = createCapturedSettingsPanel({
     capturedPanelWindow: pageWindow,
+    fileDownload: createPageFileDownload(pageWindow, document),
     settings,
     settingsLifecycle,
     refreshEffectiveSettings,
@@ -1042,9 +1044,9 @@ function createPage(
   const withEval = JSON.stringify({
     autoBuild: false,
     triggers: [{ requirementType: "Eval", requirementId: "fetch('/x')" }],
+    log_prestige_format: "{eval:document.cookie}",
     overrides: {
       autoResearch: [{ type1: "Eval", arg1: "alert(1)", type2: "Number" }],
-      log_prestige_format: [{ ret: "{eval:document.cookie}" }],
     },
   });
 
@@ -1056,9 +1058,10 @@ function createPage(
   refused.root.querySelectorAll("#script_settingsImport")[0].dispatch("click");
   assert.equal(refused.settings.readRaw()["autoBuild"], true);
   const warning = refused.confirmed.at(-1);
-  for (const source of ["alert(1)", "fetch('/x')", "{eval:document.cookie}"]) {
+  for (const source of ["alert(1)", "fetch('/x')"]) {
     assert.ok(warning.includes(source), `${source} should be shown`);
   }
+  assert.equal(warning.includes("{eval:document.cookie}"), false);
 
   const accepted = createPage(JSON.stringify({ autoBuild: true }));
   accepted.panel.ensurePanel();

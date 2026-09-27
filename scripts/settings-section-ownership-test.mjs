@@ -65,7 +65,6 @@ import {
     "biome_w_forest",
     "trait_w_smart",
     "extra_w_Achievement",
-    "log_mercenary",
     "mTrait_hardy",
     "mTrait_p_hardy",
     "mTrait_w_hardy",
@@ -166,11 +165,6 @@ const RESET_CASES = [
     section: "planet",
     own: ["biome_w_old_biome", "trait_w_old_trait", "extra_w_old_extra"],
     other: ["challenge_old_challenge", "mTrait_old_trait", "job_p_farmer"],
-  },
-  {
-    section: "logging",
-    own: ["log_old_type"],
-    other: ["challenge_old_challenge", "biome_w_old_biome", "job_p_farmer"],
   },
 ];
 

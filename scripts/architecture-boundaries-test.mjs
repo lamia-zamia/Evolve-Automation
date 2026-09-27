@@ -8,6 +8,12 @@ import ts from "typescript";
 const root = fileURLToPath(new URL("..", import.meta.url));
 const sourceRoot = path.join(root, "src");
 
+assert.equal(
+  fs.existsSync(path.join(sourceRoot, "observability")),
+  false,
+  "the retired transitional observability source tree must not return",
+);
+
 // Every top-level source entry under src/ is classified. Empty directories carry no source and
 // are ignored; an unclassified source entry fails this test.
 const layerOfDirectory = new Map([
@@ -19,9 +25,6 @@ const layerOfDirectory = new Map([
   // TRANSITIONAL: src/ui holds the remaining UI/DOM helpers. Keep them adapter-owned while each
   // capability moves to a named platform adapter.
   ["ui", "adapters"],
-  // TRANSITIONAL: pure decision code that has not moved under src/domain yet. Keep observability
-  // from gaining adapter, application, or composition dependencies while it is migrated.
-  ["observability", "policy"],
   // Dependency-free shared foundation. Must not import feature or platform code.
   ["formatting", "shared"],
   ["utils", "shared"],
@@ -40,7 +43,6 @@ const allowedImports = new Map([
   ["shared", new Set(["shared"])],
   ["domain", new Set(["domain", "shared"])],
   ["ports", new Set(["domain", "ports", "shared"])],
-  ["policy", new Set(["domain", "ports", "policy", "shared"])],
   ["application", new Set(["application", "domain", "ports", "shared"])],
   ["adapters", new Set(["adapters", "domain", "ports", "shared"])],
   [
@@ -50,7 +52,6 @@ const allowedImports = new Map([
       "application",
       "composition",
       "domain",
-      "policy",
       "ports",
       "shared",
     ]),

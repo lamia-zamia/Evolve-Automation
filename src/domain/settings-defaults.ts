@@ -13,6 +13,7 @@ import {
   DEFAULT_VACUUM_MANA_REQUIREMENT,
   DEFAULT_VACUUM_WEIGHTING_MULTIPLIER,
 } from "./progression/prestige/vacuum.ts";
+import { DEFAULT_STATE_LOG_INTERVAL } from "./state-log.ts";
 import {
   CRAFTER_RESOURCE_KEYS,
   type CrafterResourceKey,
@@ -143,7 +144,7 @@ export function computeStateLogDefaults(): ResetPlan {
     def: {
       stateLogEnabled: false,
       stateLogAutoDownload: false,
-      stateLogInterval: 20,
+      stateLogInterval: DEFAULT_STATE_LOG_INTERVAL,
     },
   };
 }
@@ -402,28 +403,6 @@ export function computeEvolutionDefaults(
     evolutionBackup: false,
   };
   context.challengeIds.forEach((id) => (def["challenge_" + id] = false));
-  return { def };
-}
-
-export interface LoggingResetContext {
-  /** `Object.keys(GameLog.Types)`. */
-  readonly gameLogTypeIds: readonly string[];
-}
-
-export function computeLoggingDefaults(
-  context: LoggingResetContext,
-): ResetPlan {
-  const def: Record<string, unknown> = {
-    hellTurnOffLogMessages: true,
-    logFilter: "",
-    logEnabled: true,
-  };
-  context.gameLogTypeIds.forEach((id) => (def["log_" + id] = true));
-  def["log_mercenary"] = false;
-  def["log_multi_construction"] = false;
-  def["log_prestige"] = false;
-  def["log_prestige_format"] =
-    "Reset: {resetType}, Species: {species}, Duration: {timeStamp} days";
   return { def };
 }
 

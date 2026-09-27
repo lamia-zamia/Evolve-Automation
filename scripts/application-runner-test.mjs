@@ -19,7 +19,6 @@ const controls = {
   markGameTickConsumed: () => calls.push("consume"),
   setScriptTick: () => calls.push("script-tick"),
   setPlannerFreshTick: () => calls.push("planner-fresh"),
-  setStateLogTick: () => calls.push("state-log"),
   recordSoulGem: () => calls.push("soul-gem"),
   updateScriptData: () => calls.push("script-data"),
   updateOverrides: () => calls.push("overrides"),

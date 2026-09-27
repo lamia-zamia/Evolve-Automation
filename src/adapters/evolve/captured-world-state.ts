@@ -63,30 +63,34 @@ export function createCapturedIdentitySource(
   rootState: GameRootStateSource,
 ): GameIdentitySource {
   return Object.freeze({
-    readIdentity(): GameIdentitySample | undefined {
-      const root = rootState.readRoot();
-      if (root === undefined) return undefined;
-      const race = readProperty(root, "race");
-      const city = readProperty(root, "city");
-      const stats = readProperty(root, "stats");
-      // `city.ptrait` has been an array since the 1.2.12 save migration; anything else is a shape
-      // this build does not produce, and reports no planet traits rather than one bogus entry.
-      const ptrait = readProperty(city, "ptrait");
-      const planetTraits = Array.isArray(ptrait)
-        ? Object.freeze(ptrait.filter((entry) => typeof entry === "string"))
-        : Object.freeze([]);
-      return Object.freeze({
-        species: readString(race, "species"),
-        universe: readString(race, "universe"),
-        biome: readString(city, "biome"),
-        planetTraits,
-        gods: readString(race, "gods"),
-        oldGods: readString(race, "old_gods"),
-        resets: readCounter(stats, "reset"),
-        days: readCounter(stats, "days"),
-        totalDays: readCounter(stats, "tdays"),
-      });
-    },
+    readIdentity: () => readCapturedIdentitySnapshot(rootState.readRoot()),
+  });
+}
+
+/** Reads the same run identity fields from a sampled root that the live identity port owns. */
+export function readCapturedIdentitySnapshot(
+  root: unknown,
+): GameIdentitySample | undefined {
+  if (root === undefined) return undefined;
+  const race = readProperty(root, "race");
+  const city = readProperty(root, "city");
+  const stats = readProperty(root, "stats");
+  // `city.ptrait` has been an array since the 1.2.12 save migration; anything else is a shape
+  // this build does not produce, and reports no planet traits rather than one bogus entry.
+  const ptrait = readProperty(city, "ptrait");
+  const planetTraits = Array.isArray(ptrait)
+    ? Object.freeze(ptrait.filter((entry) => typeof entry === "string"))
+    : Object.freeze([]);
+  return Object.freeze({
+    species: readString(race, "species"),
+    universe: readString(race, "universe"),
+    biome: readString(city, "biome"),
+    planetTraits,
+    gods: readString(race, "gods"),
+    oldGods: readString(race, "old_gods"),
+    resets: readCounter(stats, "reset"),
+    days: readCounter(stats, "days"),
+    totalDays: readCounter(stats, "tdays"),
   });
 }
 

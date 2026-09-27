@@ -103,7 +103,6 @@ interface SettingsShellDependencies {
   readonly buildBuildingSettings: SectionBuilder;
   readonly buildWeightingSettings: SectionBuilder;
   readonly buildProjectSettings: SectionBuilder;
-  readonly buildLoggingSettings: PrefixedSectionBuilder;
   readonly filterBuildingSettingsTable: () => void;
   readonly persistSettings: () => void;
   readonly importSettings: (serialized: string) => boolean;
@@ -144,7 +143,6 @@ export function createSettingsShell({
   buildBuildingSettings,
   buildWeightingSettings,
   buildProjectSettings,
-  buildLoggingSettings,
   filterBuildingSettingsTable,
   persistSettings,
   importSettings,
@@ -201,7 +199,6 @@ export function createSettingsShell({
     buildBuildingSettings();
     buildWeightingSettings();
     buildProjectSettings();
-    buildLoggingSettings(scriptContentNode, "");
 
     getDocument().documentElement.scrollTop = getDocument().body.scrollTop =
       currentScrollPosition;

@@ -1096,22 +1096,22 @@
   }
   function createCapturedIdentitySource(rootState) {
     return Object.freeze({
-      readIdentity() {
-        let root = rootState.readRoot();
-        if (root === void 0) return;
-        let race = readProperty(root, "race"), city = readProperty(root, "city"), stats = readProperty(root, "stats"), ptrait = readProperty(city, "ptrait"), planetTraits2 = Array.isArray(ptrait) ? Object.freeze(ptrait.filter((entry) => typeof entry == "string")) : Object.freeze([]);
-        return Object.freeze({
-          species: readString(race, "species"),
-          universe: readString(race, "universe"),
-          biome: readString(city, "biome"),
-          planetTraits: planetTraits2,
-          gods: readString(race, "gods"),
-          oldGods: readString(race, "old_gods"),
-          resets: readCounter(stats, "reset"),
-          days: readCounter(stats, "days"),
-          totalDays: readCounter(stats, "tdays")
-        });
-      }
+      readIdentity: () => readCapturedIdentitySnapshot(rootState.readRoot())
+    });
+  }
+  function readCapturedIdentitySnapshot(root) {
+    if (root === void 0) return;
+    let race = readProperty(root, "race"), city = readProperty(root, "city"), stats = readProperty(root, "stats"), ptrait = readProperty(city, "ptrait"), planetTraits2 = Array.isArray(ptrait) ? Object.freeze(ptrait.filter((entry) => typeof entry == "string")) : Object.freeze([]);
+    return Object.freeze({
+      species: readString(race, "species"),
+      universe: readString(race, "universe"),
+      biome: readString(city, "biome"),
+      planetTraits: planetTraits2,
+      gods: readString(race, "gods"),
+      oldGods: readString(race, "old_gods"),
+      resets: readCounter(stats, "reset"),
+      days: readCounter(stats, "days"),
+      totalDays: readCounter(stats, "tdays")
     });
   }
   function createCapturedTechSource(rootState) {
@@ -5132,7 +5132,6 @@
     "project",
     "government",
     "authority",
-    "logging",
     "trait",
     "weighting",
     "ejector",
@@ -5248,7 +5247,6 @@
   // src/domain/progression/prestige/prestige.ts
   var WHITEHOLE_REPAIR_TECH_ID = "tech-stabilize_blackhole", WITCH_ASCENSION_ACT = [
     { kind: "reset-modifier-keys" },
-    { kind: "log-prestige" },
     { kind: "absorption-chamber-action" },
     { kind: "set-goal", goal: "GameOverMan" }
   ];
@@ -5264,7 +5262,6 @@
         let act = [];
         return branch.armed && act.push({ kind: "arm-mad" }), (!branch.waitForPopulation || branch.currentSoldiers >= branch.maxSoldiers && branch.currentPopulation >= branch.maxPopulation && branch.currentSoldiers + branch.currentPopulation >= branch.requiredPopulation) && act.push(
           { kind: "set-goal", goal: "GameOverMan" },
-          { kind: "log-prestige" },
           { kind: "launch-mad" }
         ), tryReset(goal, branch.eligible, act);
       }
@@ -5274,16 +5271,12 @@
       }
       case "cataclysm": {
         let act = [];
-        return branch.loadQueuedSettings && act.push({ kind: "load-queued-settings" }), branch.dialClickable && act.push(
-          { kind: "log-prestige" },
-          { kind: "click-tech", id: "tech-dial_it_to_11" }
-        ), tryReset(goal, branch.eligible, act);
+        return branch.loadQueuedSettings && act.push({ kind: "load-queued-settings" }), branch.dialClickable && act.push({ kind: "click-tech", id: "tech-dial_it_to_11" }), tryReset(goal, branch.eligible, act);
       }
       case "whitehole": {
         if (branch.whiteholeLevel >= 4)
           return [];
         let act = [];
-        branch.exoticInfusionReady && act.push({ kind: "log-prestige" });
         for (let id of [
           "tech-infusion_confirm",
           "tech-infusion_check",
@@ -5300,7 +5293,6 @@
         );
       case "apocalypse":
         return tryReset(goal, branch.eligible, [
-          { kind: "log-prestige" },
           { kind: "click-tech", id: "tech-protocol66" },
           { kind: "click-tech", id: "tech-protocol66a" }
         ]);
@@ -5311,7 +5303,6 @@
         ]);
       case "demonic":
         return branch.witchHunter ? tryReset(goal, branch.eligible, WITCH_ASCENSION_ACT) : tryReset(goal, branch.eligible, [
-          { kind: "log-prestige" },
           {
             kind: "click-tech",
             id: branch.fasting ? "tech-final_ingredient" : "tech-demonic_infusion"
@@ -7059,6 +7050,111 @@
     });
   }
 
+  // src/domain/state-log.ts
+  function freezeStateLogResource(view) {
+    return Object.freeze({
+      present: view.present,
+      unlocked: view.unlocked,
+      amount: view.amount,
+      max: view.max,
+      rateOfChange: view.rateOfChange,
+      storageRatio: view.storageRatio
+    });
+  }
+  function normalizeStateLogInterval(value) {
+    if (typeof value != "number" || !Number.isFinite(value) || value < 1)
+      return 20;
+    let interval = Math.floor(value);
+    return Number.isSafeInteger(interval) ? interval : 20;
+  }
+  function freezeStateLogSample(observation) {
+    return Object.freeze({
+      tick: observation.tick,
+      day: observation.day,
+      resources: Object.freeze({
+        Money: freezeStateLogResource(observation.resources.Money),
+        Knowledge: freezeStateLogResource(observation.resources.Knowledge)
+      }),
+      ...observation.construction === void 0 ? {} : {
+        construction: Object.freeze({
+          ...observation.construction,
+          ...observation.construction.target === void 0 ? {} : {
+            target: Object.freeze({
+              ...observation.construction.target
+            })
+          }
+        })
+      }
+    });
+  }
+  function freezeStateLogObservation(observation) {
+    return Object.freeze({
+      reset: observation.reset,
+      species: observation.species,
+      ...freezeStateLogSample(observation)
+    });
+  }
+  function createStateLogRecord(observation) {
+    let sample = freezeStateLogSample(observation);
+    return Object.freeze({
+      version: 3,
+      reset: observation.reset,
+      startDay: sample.day,
+      species: observation.species,
+      sampleCount: 1,
+      samples: Object.freeze([sample])
+    });
+  }
+  function appendStateLogRecord(current, observation) {
+    let sample = freezeStateLogSample(observation), samples = [...current.samples, sample];
+    return samples.length > 2e4 && samples.splice(0, samples.length - 2e4), Object.freeze({
+      ...current,
+      sampleCount: current.sampleCount + 1,
+      samples: Object.freeze(samples)
+    });
+  }
+  function stateLogRecordValue(value) {
+    return typeof value == "object" && value !== null && !Array.isArray(value);
+  }
+  function stateLogNonNegativeInteger(value) {
+    return Number.isSafeInteger(value) && value >= 0;
+  }
+  function stateLogResourceValue(value) {
+    return stateLogRecordValue(value) ? typeof value.present == "boolean" && typeof value.unlocked == "boolean" && typeof value.amount == "number" && Number.isFinite(value.amount) && typeof value.max == "number" && Number.isFinite(value.max) && typeof value.rateOfChange == "number" && Number.isFinite(value.rateOfChange) && typeof value.storageRatio == "number" && Number.isFinite(value.storageRatio) : !1;
+  }
+  function stateLogSampleValue(value) {
+    if (!stateLogRecordValue(value)) return !1;
+    let resources = value.resources;
+    if (!stateLogRecordValue(resources) || !stateLogNonNegativeInteger(value.tick) || !stateLogNonNegativeInteger(value.day) || !stateLogResourceValue(resources.Money) || !stateLogResourceValue(resources.Knowledge))
+      return !1;
+    let construction = value.construction;
+    if (construction !== void 0) {
+      if (!stateLogRecordValue(construction) || !stateLogNonNegativeInteger(construction.cycleId) || construction.detailLevel !== "targets" && construction.detailLevel !== "planner")
+        return !1;
+      let target = construction.target;
+      if (target !== void 0 && (!stateLogRecordValue(target) || typeof target.key != "string" || typeof target.family != "string" || typeof target.blocker != "string" || target.resourceId !== void 0 && typeof target.resourceId != "string" || target.timeSeconds !== void 0 && (typeof target.timeSeconds != "number" || !Number.isFinite(target.timeSeconds))))
+        return !1;
+    }
+    return !0;
+  }
+  function parseStateLogRecord(value) {
+    if (!stateLogRecordValue(value)) return null;
+    let samples = value.samples;
+    if (value.version !== 3 || !stateLogNonNegativeInteger(value.reset) || !stateLogNonNegativeInteger(value.startDay) || typeof value.species != "string" || !stateLogNonNegativeInteger(value.sampleCount) || !Array.isArray(samples) || samples.length === 0 || samples.length > 2e4 || value.sampleCount < samples.length || !samples.every(stateLogSampleValue))
+      return null;
+    let normalizedSamples = samples.map(
+      (sample) => freezeStateLogSample(sample)
+    );
+    return Object.freeze({
+      version: 3,
+      reset: value.reset,
+      startDay: value.startDay,
+      species: value.species,
+      sampleCount: value.sampleCount,
+      samples: Object.freeze(normalizedSamples)
+    });
+  }
+
   // src/domain/economy/production/crafter-resources.ts
   var CRAFTER_RESOURCE_KEYS = Object.freeze([
     "Plywood",
@@ -7373,14 +7469,6 @@
       evolutionBackup: !1
     };
     return context.challengeIds.forEach((id) => def["challenge_" + id] = !1), { def };
-  }
-  function computeLoggingDefaults(context) {
-    let def = {
-      hellTurnOffLogMessages: !0,
-      logFilter: "",
-      logEnabled: !0
-    };
-    return context.gameLogTypeIds.forEach((id) => def["log_" + id] = !0), def.log_mercenary = !1, def.log_multi_construction = !1, def.log_prestige = !1, def.log_prestige_format = "Reset: {resetType}, Species: {species}, Duration: {timeStamp} days", { def };
   }
   function computePlanetDefaults(context) {
     let { biomeList: biomeList2, planetBiomes: planetBiomes2, traitList: traitList2, planetTraits: planetTraits2, extraList: extraList2 } = context, def = {};
@@ -8345,6 +8433,79 @@
   }) {
     let counted = pendingPeriods + Math.max(0, completedPeriods);
     return counted < periodsPerCycle ? { run: !1, pendingPeriods: counted } : { run: !0, pendingPeriods: counted % periodsPerCycle };
+  }
+
+  // src/application/state-log.ts
+  function stateLogSetting(settings, key) {
+    if (!(typeof settings != "object" || settings === null))
+      return Reflect.get(settings, key);
+  }
+  function stateLogRecordDay(record, endingDay) {
+    return endingDay !== void 0 && Number.isSafeInteger(endingDay) && endingDay >= 0 ? endingDay : record.samples.at(-1)?.day ?? record.startDay;
+  }
+  function createStateLogRecorder({
+    store,
+    reader,
+    download
+  }) {
+    let activeRecord, processedCycles = 0, endedReset, loadPersistedRecord = () => {
+      try {
+        return parseStateLogRecord(store.load());
+      } catch {
+        return null;
+      }
+    }, persistRecord = (record) => {
+      try {
+        store.save(record);
+      } catch {
+      }
+    };
+    return Object.freeze({
+      recordProcessedCycle(tick, settings) {
+        if (stateLogSetting(settings, "stateLogEnabled") !== !0) return;
+        processedCycles += 1;
+        let interval = normalizeStateLogInterval(
+          stateLogSetting(settings, "stateLogInterval")
+        );
+        if (processedCycles % interval !== 0) return;
+        let observation;
+        try {
+          observation = reader.read(tick);
+        } catch {
+          return;
+        }
+        if (observation === void 0 || observation.reset === endedReset) return;
+        let next;
+        if (activeRecord?.reset === observation.reset)
+          next = appendStateLogRecord(activeRecord, observation);
+        else {
+          let persisted = loadPersistedRecord();
+          next = persisted?.reset === observation.reset ? appendStateLogRecord(persisted, observation) : createStateLogRecord(observation);
+        }
+        activeRecord = next, next.sampleCount % 25 === 0 && persistRecord(next);
+      },
+      prestigeCommitted(settings, endingReset, endingDay) {
+        if (stateLogSetting(settings, "stateLogEnabled") !== !0) return;
+        let endingRecord;
+        if (endingReset === void 0)
+          endingRecord = activeRecord;
+        else if (activeRecord?.reset === endingReset)
+          endingRecord = activeRecord;
+        else {
+          let persisted = loadPersistedRecord();
+          persisted?.reset === endingReset && (endingRecord = persisted);
+        }
+        if (endingRecord !== void 0 && endedReset !== endingRecord.reset && (endedReset = endingRecord.reset, activeRecord = void 0, persistRecord(endingRecord), !(stateLogSetting(settings, "stateLogAutoDownload") !== !0 || download === void 0)))
+          try {
+            download.triggerFileDownload(
+              JSON.stringify(endingRecord),
+              `evolve-statelog-${endingRecord.species}-r${endingRecord.reset}-d${stateLogRecordDay(endingRecord, endingDay)}.json`
+            );
+          } catch {
+          }
+      },
+      readCurrent: () => activeRecord ?? loadPersistedRecord()
+    });
   }
 
   // src/domain/override-resolution.ts
@@ -9432,11 +9593,20 @@
       );
   }
   function createCapturedMadPrestige(dependencies) {
-    let sampledRoot, sampledPrestigeTechs = /* @__PURE__ */ new Map(), sampledBioseedControls = /* @__PURE__ */ new Map(), sampledWitchControl, sampledEdenCount, sampledBuildingType, sampledBuildingResetCount, sampledCustomRaceLab, sampledTerraformLab, sampledCustomRaceRequest, sampledCelestialLabAction = "pause", pendingCelestialLab, pendingWitchDirectReset = !1, resetCommitted = !1, apocalypseFirstActionDone = !1, bioseedModalRequested = !1;
+    let sampledRoot, sampledEndingReset, sampledEndingDay, sampledPrestigeTechs = /* @__PURE__ */ new Map(), sampledBioseedControls = /* @__PURE__ */ new Map(), sampledWitchControl, sampledEdenCount, sampledBuildingType, sampledBuildingResetCount, sampledCustomRaceLab, sampledTerraformLab, sampledCustomRaceRequest, sampledCelestialLabAction = "pause", pendingCelestialLab, pendingWitchDirectReset = !1, resetCommitted = !1, apocalypseFirstActionDone = !1, bioseedModalRequested = !1;
+    function notifyConfirmedReset(endingReset = sampledEndingReset, endingDay = sampledEndingDay) {
+      resetCommitted || (resetCommitted = !0, dependencies.onActivity?.({
+        message: "Prestiged",
+        color: "info",
+        tags: Object.freeze(["achievements"])
+      }), dependencies.onResetCommitted?.(endingReset, endingDay));
+    }
     function beginCelestialLabTransaction(mode, resetCountBefore, witchHunter = !1) {
       pendingCelestialLab = {
         mode,
         resetCountBefore,
+        endingReset: sampledEndingReset,
+        endingDay: sampledEndingDay,
         witchHunter,
         root: sampledRoot,
         submitted: !1,
@@ -9449,16 +9619,12 @@
     }
     function commitCelestialLabReset() {
       let transaction = pendingCelestialLab;
-      transaction !== void 0 && (transaction.outcome = "reset-observed", pendingCelestialLab = void 0, pendingWitchDirectReset = !1, resetCommitted = !0, dependencies.onActivity?.({
-        message: "Prestiged",
-        color: "info",
-        tags: Object.freeze(["achievements"])
-      }), transaction.witchHunter && dependencies.setGoal("GameOverMan"));
+      transaction !== void 0 && (transaction.outcome = "reset-observed", pendingCelestialLab = void 0, pendingWitchDirectReset = !1, notifyConfirmedReset(transaction.endingReset, transaction.endingDay), transaction.witchHunter && dependencies.setGoal("GameOverMan"));
     }
     let reader = Object.freeze({
       samplePrestige() {
-        let settings = capturedMadSettingsRecord(dependencies.readSettings()), root = dependencies.rootState.readRoot();
-        sampledRoot = root, sampledPrestigeTechs = /* @__PURE__ */ new Map(), sampledBioseedControls = /* @__PURE__ */ new Map(), sampledWitchControl = void 0, sampledEdenCount = void 0, sampledBuildingType = void 0, sampledBuildingResetCount = void 0, sampledCustomRaceLab = void 0, sampledTerraformLab = void 0, sampledCustomRaceRequest = void 0, sampledCelestialLabAction = "pause", apocalypseFirstActionDone = !1;
+        let settings = capturedMadSettingsRecord(dependencies.readSettings()), root = dependencies.rootState.readRoot(), endingIdentity = readCapturedIdentitySnapshot(root);
+        sampledRoot = root, sampledEndingReset = endingIdentity?.resets, sampledEndingDay = endingIdentity?.days, sampledPrestigeTechs = /* @__PURE__ */ new Map(), sampledBioseedControls = /* @__PURE__ */ new Map(), sampledWitchControl = void 0, sampledEdenCount = void 0, sampledBuildingType = void 0, sampledBuildingResetCount = void 0, sampledCustomRaceLab = void 0, sampledTerraformLab = void 0, sampledCustomRaceRequest = void 0, sampledCelestialLabAction = "pause", apocalypseFirstActionDone = !1;
         let prestigeType = typeof settings.prestigeType == "string" ? settings.prestigeType : "none", branch = { type: "noop" };
         if (!resetCommitted && pendingCelestialLab !== void 0) {
           let transaction = pendingCelestialLab, mode = transaction.mode;
@@ -9682,13 +9848,7 @@
             invokeMadControl(
               dependencies.controls,
               command.kind === "arm-mad" ? "arm" : "launch"
-            ), command.kind === "launch-mad" && dependencies.rootState.readRoot() !== sampledRoot && dependencies.onActivity?.({
-              message: "Prestiged",
-              color: "info",
-              tags: Object.freeze(["achievements"])
-            });
-            return;
-          case "log-prestige":
+            ), command.kind === "launch-mad" && dependencies.rootState.readRoot() !== sampledRoot && notifyConfirmedReset();
             return;
           case "reset-modifier-keys":
             return;
@@ -9721,11 +9881,7 @@
               dependencies.rootState.readRoot(),
               resetStat
             );
-            resetCountBefore !== void 0 && resetCountAfter !== void 0 && resetCountAfter > resetCountBefore ? (pendingWitchDirectReset = !1, resetCommitted = !0, dependencies.onActivity?.({
-              message: "Prestiged",
-              color: "info",
-              tags: Object.freeze(["achievements"])
-            })) : resetStat === "ascension" ? beginCelestialLabTransaction("ascension", resetCountBefore, !0) : pendingWitchDirectReset = !0;
+            resetCountBefore !== void 0 && resetCountAfter !== void 0 && resetCountAfter > resetCountBefore ? (pendingWitchDirectReset = !1, notifyConfirmedReset()) : resetStat === "ascension" ? beginCelestialLabTransaction("ascension", resetCountBefore, !0) : pendingWitchDirectReset = !0;
             return;
           }
           case "apply-celestial-lab-design": {
@@ -9818,11 +9974,7 @@
                 `captured prestige action ${command.id} failed: ${result.detail ?? result.reason}`
               );
             if (command.id === CAPTURED_BIOSEED_COMMANDS.launch) {
-              resetCommitted = !0, dependencies.onActivity?.({
-                message: "Prestiged",
-                color: "info",
-                tags: Object.freeze(["achievements"])
-              });
+              notifyConfirmedReset();
               return;
             }
             if (command.id === CAPTURED_BIOSEED_COMMANDS.prep) {
@@ -9835,11 +9987,7 @@
               );
               if (sampledEdenCount === void 0 || edenCountAfter === void 0 || edenCountAfter <= sampledEdenCount)
                 return;
-              resetCommitted = !0, dependencies.onActivity?.({
-                message: "Prestiged",
-                color: "info",
-                tags: Object.freeze(["achievements"])
-              });
+              notifyConfirmedReset();
               return;
             }
             if (sampledBuildingType !== void 0) {
@@ -9848,19 +9996,11 @@
                 sampledBuildingType
               );
               if (sampledBuildingResetCount !== void 0 && resetCountAfter !== void 0 && resetCountAfter > sampledBuildingResetCount) {
-                resetCommitted = !0, dependencies.onActivity?.({
-                  message: "Prestiged",
-                  color: "info",
-                  tags: Object.freeze(["achievements"])
-                });
+                notifyConfirmedReset();
                 return;
               }
               if (sampledBuildingType === "matrix") {
-                resetCommitted = !0, dependencies.onActivity?.({
-                  message: "Prestiged",
-                  color: "info",
-                  tags: Object.freeze(["achievements"])
-                });
+                notifyConfirmedReset();
                 return;
               }
               (sampledBuildingType === "terraform" || sampledBuildingType === "ascension" || sampledBuildingType === "apotheosis") && beginCelestialLabTransaction(
@@ -9928,14 +10068,14 @@
               ) !== corruptedAiBefore;
               return;
             }
-            if ((command.id === CAPTURED_CATACLYSM_TECH || CAPTURED_DEMONIC_TECH_IDS.some((id) => id === command.id) || command.id === CAPTURED_APOCALYPSE_TECHS.final) && (resetCommitted = !0), command.id === CAPTURED_WHITEHOLE_TECHS.confirm) {
+            if ((command.id === CAPTURED_CATACLYSM_TECH || CAPTURED_DEMONIC_TECH_IDS.some((id) => id === command.id) || command.id === CAPTURED_APOCALYPSE_TECHS.final) && notifyConfirmedReset(), command.id === CAPTURED_WHITEHOLE_TECHS.confirm) {
               if ((finite(
                 readProperty(
                   readProperty(dependencies.rootState.readRoot(), "tech"),
                   "whitehole"
                 )
               ) ?? 0) <= whiteholeLevelBefore) return;
-              resetCommitted = !0;
+              notifyConfirmedReset();
             }
             if (command.id === CAPTURED_WHITEHOLE_REPAIR_TECH) {
               if (!capturedWhiteholeRepairSucceeded(
@@ -9953,14 +10093,7 @@
               });
               return;
             }
-            if (command.id !== CAPTURED_CATACLYSM_TECH && !CAPTURED_DEMONIC_TECH_IDS.some((id) => id === command.id) && command.id !== CAPTURED_APOCALYPSE_TECHS.final && command.id !== CAPTURED_WHITEHOLE_TECHS.confirm)
-              return;
-            dependencies.onActivity?.({
-              message: "Prestiged",
-              color: "info",
-              tags: Object.freeze(["achievements"])
-            });
-            return;
+            return command.id !== CAPTURED_CATACLYSM_TECH && !CAPTURED_DEMONIC_TECH_IDS.some((id) => id === command.id) && command.id !== CAPTURED_APOCALYPSE_TECHS.final && command.id !== CAPTURED_WHITEHOLE_TECHS.confirm, void 0;
           }
           case "load-queued-settings":
             dependencies.loadQueuedSettings?.();
@@ -17086,6 +17219,141 @@
   function ensureDemandPrerequisiteControls(dependencies) {
     let spy = spyPrerequisiteStatus(dependencies), ai = aiPrerequisiteStatus(dependencies);
     return Object.freeze({ spy, ai });
+  }
+
+  // src/adapters/evolve/captured-state-log.ts
+  function capturedStateLogConstruction(snapshot2) {
+    if (snapshot2 === null) return;
+    let target = snapshot2.detailLevel === "planner" ? snapshot2.targets.find((candidate) => !candidate.queued) : void 0;
+    return Object.freeze({
+      cycleId: snapshot2.cycleId,
+      detailLevel: snapshot2.detailLevel,
+      ...target === void 0 ? {} : {
+        target: Object.freeze({
+          key: target.key,
+          family: target.family,
+          blocker: target.blocker,
+          ...target.resourceId === void 0 ? {} : { resourceId: target.resourceId },
+          ...target.timeSeconds === void 0 ? {} : { timeSeconds: target.timeSeconds }
+        })
+      }
+    });
+  }
+  function createCapturedStateLogReader({
+    identity,
+    resources,
+    readConstruction
+  }) {
+    return Object.freeze({
+      read(tick) {
+        let identitySample = identity.readIdentity(), resourceSample = resources.readResources(["Money", "Knowledge"]);
+        if (identitySample === void 0 || resourceSample === void 0 || !Number.isSafeInteger(identitySample.resets) || identitySample.resets < 0 || !Number.isSafeInteger(identitySample.days) || identitySample.days < 0)
+          return;
+        let money = resourceSample.resources.get("Money"), knowledge = resourceSample.resources.get("Knowledge");
+        if (money === void 0 || knowledge === void 0) return;
+        let constructionSnapshot = readConstruction(), construction = capturedStateLogConstruction(constructionSnapshot);
+        return freezeStateLogObservation({
+          reset: identitySample.resets,
+          species: identitySample.species,
+          tick,
+          day: identitySample.days,
+          resources: Object.freeze({ Money: money, Knowledge: knowledge }),
+          ...construction === void 0 ? {} : { construction }
+        });
+      }
+    });
+  }
+
+  // src/adapters/storage/state-log-store.ts
+  var STATE_LOG_KEY = "ea_state_log";
+  function createStateLogStore(storage) {
+    return Object.freeze({
+      load() {
+        let getItem = readProperty(storage, "getItem");
+        if (typeof getItem != "function") return null;
+        let serialized = Reflect.apply(getItem, storage, [
+          STATE_LOG_KEY
+        ]);
+        return JSON.parse(typeof serialized == "string" ? serialized : "null");
+      },
+      save(record) {
+        let setItem = readProperty(storage, "setItem");
+        typeof setItem == "function" && Reflect.apply(setItem, storage, [STATE_LOG_KEY, JSON.stringify(record)]);
+      }
+    });
+  }
+
+  // src/adapters/browser/file-download.ts
+  function createFileDownload({
+    getDocument,
+    getUrlApi,
+    getBlobConstructor,
+    schedule
+  }) {
+    return {
+      triggerFileDownload(contents, filename) {
+        let urlApi = getUrlApi(), BlobConstructor = getBlobConstructor(), url = urlApi.createObjectURL(new BlobConstructor([contents])), anchor = getDocument().createElement("a");
+        anchor.download = filename, anchor.href = url, anchor.click(), schedule(() => {
+          urlApi.revokeObjectURL(url);
+        }, 60 * 1e3);
+      }
+    };
+  }
+  function createPageFileDownload(pageWindow, documentValue) {
+    let urlApi = readProperty(pageWindow, "URL"), blobConstructor = readProperty(pageWindow, "Blob"), schedule = readProperty(pageWindow, "setTimeout");
+    if (!(typeof readProperty(urlApi, "createObjectURL") != "function" || typeof readProperty(urlApi, "revokeObjectURL") != "function" || typeof blobConstructor != "function" || typeof schedule != "function" || typeof readProperty(documentValue, "createElement") != "function"))
+      return createFileDownload({
+        getDocument: () => documentValue,
+        getUrlApi: () => urlApi,
+        getBlobConstructor: () => blobConstructor,
+        schedule: (callback, delay) => Reflect.apply(schedule, pageWindow, [callback, delay])
+      });
+  }
+
+  // src/adapters/browser/state-log-export.ts
+  function stateLogExportDay(record) {
+    return record.samples.at(-1)?.day ?? record.startDay;
+  }
+  function createStateLogExportHook({
+    pageWindow,
+    exportToPage,
+    download
+  }) {
+    return Object.freeze({
+      install(readCurrent) {
+        let host = pageWindow;
+        if (host === null || typeof host != "object" && typeof host != "function")
+          return () => {
+          };
+        let rawHook = () => {
+          let current = readCurrent();
+          if (download === void 0 || typeof current != "object" || current === null || !Array.isArray(readProperty(current, "samples")))
+            return;
+          let record = current;
+          try {
+            download.triggerFileDownload(
+              JSON.stringify(record),
+              `evolve-statelog-manual-d${stateLogExportDay(record)}.json`
+            );
+          } catch {
+          }
+        }, exposedHook = rawHook;
+        try {
+          if (exposedHook = exportToPage?.(rawHook) ?? rawHook, !Reflect.set(host, "eaExportStateLog", exposedHook))
+            return () => {
+            };
+        } catch {
+          return () => {
+          };
+        }
+        return () => {
+          try {
+            readProperty(host, "eaExportStateLog") === exposedHook && Reflect.deleteProperty(host, "eaExportStateLog");
+          } catch {
+          }
+        };
+      }
+    });
   }
 
   // src/formatting/game-duration.ts
@@ -28002,7 +28270,6 @@
     let reader = {
       readGovernment,
       readEvolution,
-      readLogging: () => ({ gameLogTypeIds: [] }),
       readPlanet: () => ({
         biomeList,
         planetBiomes,
@@ -28223,7 +28490,11 @@
       "productionWaitMana",
       "arpa",
       "autoLogging"
-    ].forEach((id) => delete settingsRaw[id]), [
+    ].forEach((id) => delete settingsRaw[id]), ["logEnabled", "logFilter", "hellTurnOffLogMessages"].forEach((id) => {
+      delete settingsRaw[id], delete settingsRaw.overrides[id];
+    }), Object.keys(settingsRaw).filter((id) => id.startsWith("log_")).forEach((id) => {
+      delete settingsRaw[id], delete settingsRaw.overrides[id];
+    }), [
       "foreignAttack",
       "foreignOccupy",
       "foreignSpy",
@@ -28405,7 +28676,6 @@
       // Sections reading a narrow live catalog.
       resetGovernmentSettings: (reset) => applyPlan(computeGovernmentDefaults(reader.readGovernment()), reset),
       resetEvolutionSettings: (reset) => applyPlan(computeEvolutionDefaults(reader.readEvolution()), reset),
-      resetLoggingSettings: (reset) => applyPlan(computeLoggingDefaults(reader.readLogging()), reset),
       resetPlanetSettings: (reset) => applyPlan(computePlanetDefaults(reader.readPlanet()), reset),
       resetProductionSettings: (reset) => applyPlan(computeProductionDefaults(reader.readProduction()), reset),
       // Sections owning a manager priority list.
@@ -28601,12 +28871,6 @@
       resetName: "resetPlanetSettings",
       // Per-biome, per-genus-trait and per-extra weightings for planet scoring.
       ownsDynamicKey: ownsPrefix("biome_w_", "trait_w_", "extra_w_")
-    },
-    {
-      id: "logging",
-      resetName: "resetLoggingSettings",
-      // One toggle per game log type, plus the script's own log settings under the same prefix.
-      ownsDynamicKey: ownsPrefix("log_")
     },
     {
       id: "trigger",
@@ -39185,26 +39449,7 @@ Efficiency above '1' is useful to save resources for more desperate times, or to
     if (!isNonArrayRecord(parsed))
       return { ok: !1, reason: "not a settings object" };
     let evalSources = [];
-    collectOverrideEvalSources(readProperty(parsed, "overrides"), evalSources), collectTriggerEvalSources(readProperty(parsed, "triggers"), evalSources);
-    let prestigeFormat = readProperty(parsed, "log_prestige_format");
-    return typeof prestigeFormat == "string" && prestigeFormat.includes(EMBEDDED_EVAL_MARKER) && evalSources.push(prestigeFormat), { ok: !0, settings: parsed, evalSources };
-  }
-
-  // src/adapters/browser/file-download.ts
-  function createFileDownload({
-    getDocument,
-    getUrlApi,
-    getBlobConstructor,
-    schedule
-  }) {
-    return {
-      triggerFileDownload(contents, filename) {
-        let urlApi = getUrlApi(), BlobConstructor = getBlobConstructor(), url = urlApi.createObjectURL(new BlobConstructor([contents])), anchor = getDocument().createElement("a");
-        anchor.download = filename, anchor.href = url, anchor.click(), schedule(() => {
-          urlApi.revokeObjectURL(url);
-        }, 60 * 1e3);
-      }
-    };
+    return collectOverrideEvalSources(readProperty(parsed, "overrides"), evalSources), collectTriggerEvalSources(readProperty(parsed, "triggers"), evalSources), { ok: !0, settings: parsed, evalSources };
   }
 
   // src/ui/override-condition-controls.ts
@@ -40049,7 +40294,6 @@ Efficiency above '1' is useful to save resources for more desperate times, or to
     buildBuildingSettings,
     buildWeightingSettings,
     buildProjectSettings,
-    buildLoggingSettings,
     filterBuildingSettingsTable,
     persistSettings,
     importSettings,
@@ -40066,7 +40310,7 @@ Efficiency above '1' is useful to save resources for more desperate times, or to
       let currentScrollPosition = getDocument().documentElement.scrollTop || getDocument().body.scrollTop, scriptContentNode = $(
         '<div id="script_settings" style="margin-top: 30px;"></div>'
       );
-      $(".settings").append(scriptContentNode), buildImportExport(), buildPrestigeSettings(scriptContentNode, ""), buildGeneralSettings(), buildInterfaceSettings(), buildStateLogSettings(), buildAchievementGuardSettings(), buildChallengeHelperSettings(), buildGovernmentSettings(scriptContentNode, ""), buildAuthoritySettings(), buildEvolutionSettings(), buildPlanetSettings(), buildTraitSettings(), buildTriggerSettings(), buildResearchSettings(), buildWarSettings(scriptContentNode, ""), buildHellSettings(scriptContentNode, ""), buildMechSettings(), buildFleetSettings(scriptContentNode, ""), buildEjectorSettings(), buildMarketSettings(), buildStorageSettings(), buildMagicSettings(), buildProductionSettings(), buildJobSettings(), buildBuildingSettings(), buildWeightingSettings(), buildProjectSettings(), buildLoggingSettings(scriptContentNode, ""), getDocument().documentElement.scrollTop = getDocument().body.scrollTop = currentScrollPosition;
+      $(".settings").append(scriptContentNode), buildImportExport(), buildPrestigeSettings(scriptContentNode, ""), buildGeneralSettings(), buildInterfaceSettings(), buildStateLogSettings(), buildAchievementGuardSettings(), buildChallengeHelperSettings(), buildGovernmentSettings(scriptContentNode, ""), buildAuthoritySettings(), buildEvolutionSettings(), buildPlanetSettings(), buildTraitSettings(), buildTriggerSettings(), buildResearchSettings(), buildWarSettings(scriptContentNode, ""), buildHellSettings(scriptContentNode, ""), buildMechSettings(), buildFleetSettings(scriptContentNode, ""), buildEjectorSettings(), buildMarketSettings(), buildStorageSettings(), buildMagicSettings(), buildProductionSettings(), buildJobSettings(), buildBuildingSettings(), buildWeightingSettings(), buildProjectSettings(), getDocument().documentElement.scrollTop = getDocument().body.scrollTop = currentScrollPosition;
     }
     function buildImportExport() {
       let importExportBase = $("#importExport").closest(".importExport");
@@ -40191,18 +40435,9 @@ Efficiency above '1' is useful to save resources for more desperate times, or to
     let confirm = readProperty(capturedPanelWindow, "confirm");
     return typeof confirm == "function" ? !!Reflect.apply(confirm, capturedPanelWindow, [message]) : !1;
   }
-  function panelFileDownloadFor(capturedPanelWindow, documentValue) {
-    let urlApi = readProperty(capturedPanelWindow, "URL"), blobConstructor = readProperty(capturedPanelWindow, "Blob"), schedule = readProperty(capturedPanelWindow, "setTimeout");
-    if (!(typeof readProperty(urlApi, "createObjectURL") != "function" || typeof readProperty(urlApi, "revokeObjectURL") != "function" || typeof blobConstructor != "function" || typeof schedule != "function" || typeof readProperty(documentValue, "createElement") != "function"))
-      return createFileDownload({
-        getDocument: () => documentValue,
-        getUrlApi: () => urlApi,
-        getBlobConstructor: () => blobConstructor,
-        schedule: (callback, delay) => Reflect.apply(schedule, capturedPanelWindow, [callback, delay])
-      }).triggerFileDownload;
-  }
   function createCapturedSettingsPanel({
     capturedPanelWindow,
+    fileDownload,
     settings,
     settingsLifecycle,
     customRaceLab,
@@ -40237,7 +40472,7 @@ Efficiency above '1' is useful to save resources for more desperate times, or to
       return query;
     }, unported = (section) => () => {
       reportedSections.has(section) || (reportedSections.add(section), onDiagnostic(`settings panel section not ported yet: ${section}`));
-    }, fileDownload = panelFileDownloadFor(capturedPanelWindow, documentValue), reportNoFileDownload = () => {
+    }, reportNoFileDownload = () => {
       reportedSections.has("settings file download") || (reportedSections.add("settings file download"), logError("this page cannot offer a settings file download"));
     }, persistSettings = () => {
       settings.persist(), refreshEffectiveSettings?.();
@@ -40387,13 +40622,11 @@ Efficiency above '1' is useful to save resources for more desperate times, or to
         buildBuildingSettings: () => building?.buildBuildingSettings(),
         buildWeightingSettings: () => weighting?.buildWeightingSettings(),
         buildProjectSettings: () => project?.buildProjectSettings(),
-        buildLoggingSettings: () => {
-        },
         filterBuildingSettingsTable: () => building?.filterBuildingSettingsTable(),
         persistSettings,
         importSettings: importScriptSettings,
         exportSettings: () => JSON.stringify(settings.readRaw()),
-        triggerFileDownload: fileDownload ?? reportNoFileDownload,
+        triggerFileDownload: fileDownload?.triggerFileDownload ?? reportNoFileDownload,
         confirm: (message) => confirmInPanelWindow(capturedPanelWindow, message)
       }), generalIntent = createGeneralSettingsIntentHandler({
         writer: {
@@ -44720,6 +44953,7 @@ Only continue if you trust the source. Injected code:
     mouseEvent: mouseEventValue,
     storage,
     settingsHostWindow: settingsHostWindow2,
+    exportToPage,
     diagnostics,
     onActivity = () => {
     },
@@ -44728,7 +44962,10 @@ Only continue if you trust the source. Injected code:
     logError = () => {
     }
   }) {
-    let document = documentValue, customRaceLab = createGameCustomRaceLab({
+    let document = documentValue, fileDownload = createPageFileDownload(
+      settingsHostWindow2,
+      documentValue
+    ), customRaceLab = createGameCustomRaceLab({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
       getDocument: () => document
@@ -44866,6 +45103,7 @@ Only continue if you trust the source. Injected code:
       diagnostics?.readPerformanceEnabled() === !0 && log(message);
     }, settingsPanel = createCapturedSettingsPanel({
       capturedPanelWindow: settingsHostWindow2,
+      fileDownload,
       settings: settingsStorage,
       settingsLifecycle,
       customRaceLab,
@@ -45514,7 +45752,19 @@ Only continue if you trust the source. Injected code:
           index: GOV_TAB_INDEX.military
         })
       ]);
-    }, prestige = createCapturedPrestigeControl({
+    }, stateLogRecorder = createStateLogRecorder({
+      store: createStateLogStore(storage),
+      reader: createCapturedStateLogReader({
+        identity: capturedIdentity,
+        resources: createCapturedResourceSource(pageCapture2.rootState),
+        readConstruction: () => latestConstructionSnapshot
+      }),
+      ...fileDownload === void 0 ? {} : { download: fileDownload }
+    }), removeStateLogExport = createStateLogExportHook({
+      pageWindow: settingsHostWindow2,
+      exportToPage,
+      download: fileDownload
+    }).install(() => stateLogRecorder.readCurrent()), prestige = createCapturedPrestigeControl({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
       customRaceLab,
@@ -45527,6 +45777,11 @@ Only continue if you trust the source. Injected code:
       },
       readOfferedTechs: progression.readOfferedTechs,
       resources: createCapturedResourceSource(pageCapture2.rootState),
+      onResetCommitted: (endingReset, endingDay) => stateLogRecorder.prestigeCommitted(
+        settingsStore.readRaw(),
+        endingReset,
+        endingDay
+      ),
       readBuildingResetActions: (regions) => progression.readBuildingUnlocks(new Set(regions))?.unlocked,
       closeBioseedModal,
       loadQueuedSettings: queuedSettings.loadQueuedSettings
@@ -46081,13 +46336,15 @@ Only continue if you trust the source. Injected code:
       } catch (error) {
         logError(String(error));
       } finally {
-        refreshCapturedPlanningPanels(), profiling !== void 0 && workStartedAtMs !== void 0 && (profiling.recordPerformance(
+        refreshCapturedPlanningPanels(), stateLogRecorder.recordProcessedCycle(
+          automationCycle,
+          settingsStore.readRaw()
+        ), profiling !== void 0 && workStartedAtMs !== void 0 && (profiling.recordPerformance(
           "tick",
           profiling.nowMs() - workStartedAtMs
         ), profiling.flushPerformance());
       }
-    }, pendingPeriods = 0;
-    return pageCapture2.periods.subscribe((period) => {
+    }, pendingPeriods = 0, unsubscribePeriods = pageCapture2.periods.subscribe((period) => {
       progression.resetProjectSample(), progression.resetBuildingUnlockSample(), refreshEffectiveSettings();
       let gate = advancePeriodGate({
         pendingPeriods,
@@ -46096,15 +46353,19 @@ Only continue if you trust the source. Injected code:
       });
       pendingPeriods = gate.pendingPeriods, gate.run && runCycle();
     });
+    return () => {
+      unsubscribePeriods(), removeStateLogExport();
+    };
   }
 
   // src/main.ts
-  var settingsHostWindow = createUserscriptEnvironment(globalThis).pageWindow, pageCapture = installPageCapture(settingsHostWindow);
+  var userscriptEnvironment = createUserscriptEnvironment(globalThis), settingsHostWindow = userscriptEnvironment.pageWindow, pageCapture = installPageCapture(settingsHostWindow);
   whenDocumentReady(globalThis, () => {
     let environment = createCapturedRuntimeBrowserEnvironment(globalThis);
     startCapturedRuntime({
       pageCapture,
       settingsHostWindow,
+      exportToPage: userscriptEnvironment.exportToPage,
       document: environment.document,
       keyboardEvent: environment.keyboardEvent,
       mouseEvent: environment.mouseEvent,

@@ -1,6 +1,5 @@
 import {
   advanceScriptTick,
-  advanceStateLog,
   isThrottledTick,
   shouldStartTick,
 } from "../domain/tick.ts";
@@ -206,17 +205,6 @@ export function runTick({
   }
 
   measure("updateBuildPlanner", () => controls.updateBuildPlanner());
-
-  if (s.stateLogEnabled) {
-    const { next, record } = advanceStateLog(
-      s.stateLogTick,
-      s.stateLogInterval,
-    );
-    controls.setStateLogTick(next);
-    if (record) {
-      controls.recordStateSnapshot();
-    }
-  }
 
   controls.keyManagerFinish();
   controls.recordSoulGem();

@@ -563,6 +563,36 @@ assert.equal(unsubscribeCount, 1);
   page.appendChild(settingsTab);
   page.appendChild(queueAnchor);
   const document = createTestDocument(page);
+  const stateLogLinks = [];
+  const stateLogBlobs = new Map();
+  let stateLogObjectUrlId = 0;
+  class StateLogBlobFixture {
+    constructor(parts) {
+      this.parts = parts;
+    }
+  }
+  const createFixtureElement = document.createElement;
+  document.createElement = (tag) => {
+    const created = createFixtureElement(tag);
+    if (tag === "a") stateLogLinks.push(created);
+    return created;
+  };
+  const stateLogSettingsHostWindow = {
+    document,
+    navigator: { platform: "Win32" },
+    location: "https://evolve.test/",
+    confirm: () => true,
+    Blob: StateLogBlobFixture,
+    URL: {
+      createObjectURL(blob) {
+        const url = `blob:planner-state-log-${++stateLogObjectUrlId}`;
+        stateLogBlobs.set(url, blob);
+        return url;
+      },
+      revokeObjectURL() {},
+    },
+    setTimeout: () => 1,
+  };
   const stored = new Map([
     [
       "settings",
@@ -571,6 +601,8 @@ assert.equal(unsubscribeCount, 1);
         autoBuild: true,
         activeTargetsUI: true,
         buildPlannerUI: true,
+        stateLogEnabled: true,
+        stateLogInterval: 1,
         "batcity-bank": true,
         "bld_w_city-bank": 300,
         "batcity-farm": true,
@@ -617,12 +649,7 @@ assert.equal(unsubscribeCount, 1);
       uninstall: () => {},
     },
     document,
-    settingsHostWindow: {
-      document,
-      navigator: { platform: "Win32" },
-      location: "https://evolve.test/",
-      confirm: () => true,
-    },
+    settingsHostWindow: stateLogSettingsHostWindow,
     mouseEvent: class {},
     storage: {
       getItem: (key) => stored.get(key) ?? null,
@@ -664,6 +691,15 @@ assert.equal(unsubscribeCount, 1);
     plannerPanel.querySelectorAll("p")[0].textContent,
     /Fresh construction cycle 2/,
   );
+  stateLogSettingsHostWindow.eaExportStateLog();
+  const stateLogLink = stateLogLinks.at(-1);
+  const stateLogBlob = stateLogBlobs.get(stateLogLink.href);
+  const stateLogRecord = JSON.parse(stateLogBlob.parts[0]);
+  const loggedConstruction = stateLogRecord.samples.at(-1).construction;
+  assert.equal(loggedConstruction.cycleId, 2);
+  assert.equal(loggedConstruction.detailLevel, "planner");
+  assert.equal(loggedConstruction.target.key, "city-bank");
+  assert.equal(loggedConstruction.target.blocker, "income");
   assert.match(
     plannerPanel.querySelectorAll("p").at(-1).textContent,
     /Bottleneck samples: 1/,

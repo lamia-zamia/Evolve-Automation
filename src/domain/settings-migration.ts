@@ -294,6 +294,17 @@ export function migrateSettingsRecord(
     "arpa",
     "autoLogging",
   ].forEach((id) => delete settingsRaw[id]);
+  // These script-generated logging preferences no longer have a production UI or consumer.
+  ["logEnabled", "logFilter", "hellTurnOffLogMessages"].forEach((id) => {
+    delete settingsRaw[id];
+    delete settingsRaw.overrides[id];
+  });
+  Object.keys(settingsRaw)
+    .filter((id) => id.startsWith("log_"))
+    .forEach((id) => {
+      delete settingsRaw[id];
+      delete settingsRaw.overrides[id];
+    });
   [
     "foreignAttack",
     "foreignOccupy",

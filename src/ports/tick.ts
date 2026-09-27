@@ -54,9 +54,6 @@ export interface TickAutomationSnapshot {
   readonly autoEject: boolean;
   readonly autoPower: boolean;
   readonly autoMutateTraits: boolean;
-  readonly stateLogEnabled: boolean;
-  readonly stateLogInterval: number;
-  readonly stateLogTick: number;
 }
 
 export interface TickReader {
@@ -79,7 +76,6 @@ export interface TickControls {
   markGameTickConsumed(): void;
   setScriptTick(scriptTick: number): void;
   setPlannerFreshTick(scriptTick: number): void;
-  setStateLogTick(stateLogTick: number): void;
   /** Reads the current Soul Gem count and carries it to the next tick for gain attribution. */
   recordSoulGem(): void;
 
@@ -135,5 +131,4 @@ export interface TickControls {
   autoWish(): void;
   autoMutateTrait(): void;
   updateBuildPlanner(): void;
-  recordStateSnapshot(): void;
 }

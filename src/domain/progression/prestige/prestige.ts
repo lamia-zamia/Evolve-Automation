@@ -15,7 +15,6 @@ export type CelestialLabMode = "terraform" | "ascension" | "apotheosis";
 
 export type PrestigeCommand =
   | { readonly kind: "set-goal"; readonly goal: PrestigeGoal }
-  | { readonly kind: "log-prestige" }
   | { readonly kind: "arm-mad" }
   | { readonly kind: "launch-mad" }
   | { readonly kind: "click-building"; readonly id: string }
@@ -123,7 +122,6 @@ export const WHITEHOLE_REPAIR_TECH_ID = "tech-stabilize_blackhole";
 /** The witch-hunter ascension/demonic act is identical for both types. */
 const WITCH_ASCENSION_ACT: readonly PrestigeCommand[] = [
   { kind: "reset-modifier-keys" },
-  { kind: "log-prestige" },
   { kind: "absorption-chamber-action" },
   { kind: "set-goal", goal: "GameOverMan" },
 ];
@@ -166,7 +164,6 @@ export function planPrestige(input: PrestigeInput): readonly PrestigeCommand[] {
       ) {
         act.push(
           { kind: "set-goal", goal: "GameOverMan" },
-          { kind: "log-prestige" },
           { kind: "launch-mad" },
         );
       }
@@ -188,10 +185,7 @@ export function planPrestige(input: PrestigeInput): readonly PrestigeCommand[] {
         act.push({ kind: "load-queued-settings" });
       }
       if (branch.dialClickable) {
-        act.push(
-          { kind: "log-prestige" },
-          { kind: "click-tech", id: "tech-dial_it_to_11" },
-        );
+        act.push({ kind: "click-tech", id: "tech-dial_it_to_11" });
       }
       return tryReset(goal, branch.eligible, act);
     }
@@ -217,9 +211,6 @@ export function planPrestige(input: PrestigeInput): readonly PrestigeCommand[] {
         return [];
       }
       const act: PrestigeCommand[] = [];
-      if (branch.exoticInfusionReady) {
-        act.push({ kind: "log-prestige" });
-      }
       for (const id of [
         "tech-infusion_confirm",
         "tech-infusion_check",
@@ -244,7 +235,6 @@ export function planPrestige(input: PrestigeInput): readonly PrestigeCommand[] {
 
     case "apocalypse":
       return tryReset(goal, branch.eligible, [
-        { kind: "log-prestige" },
         { kind: "click-tech", id: "tech-protocol66" },
         { kind: "click-tech", id: "tech-protocol66a" },
       ]);
@@ -261,7 +251,6 @@ export function planPrestige(input: PrestigeInput): readonly PrestigeCommand[] {
       return branch.witchHunter
         ? tryReset(goal, branch.eligible, WITCH_ASCENSION_ACT)
         : tryReset(goal, branch.eligible, [
-            { kind: "log-prestige" },
             {
               kind: "click-tech",
               id: branch.fasting

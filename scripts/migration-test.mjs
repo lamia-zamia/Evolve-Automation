@@ -31,7 +31,6 @@ const resetNames = [
   "resetPrestigeSettings",
   "resetEjectorSettings",
   "resetPlanetSettings",
-  "resetLoggingSettings",
   "resetTriggerSettings",
   "resetMinorTraitSettings",
   "resetMutableTraitSettings",
@@ -60,6 +59,9 @@ function makeFixture() {
       // number setting with string ret -> coerced to number
       numberSetting: [condition({ ret: "7" })],
       tickTimeout: [condition({ ret: 1 })],
+      log_old_type: [condition({ ret: false })],
+      log_prestige_format: [condition({ ret: "old" })],
+      logFilter: [condition({ ret: "native" })],
       // dropped at the storage boundary: no operand types, and not a condition list
       brokenSetting: [condition(), { ret: 1 }, "nonsense"],
       unusableSetting: { ret: 1 },
@@ -103,6 +105,12 @@ function makeFixture() {
     // typed override sources
     stringSetting: "hello",
     numberSetting: 3,
+    logEnabled: true,
+    logFilter: "native",
+    log_old_type: true,
+    log_prestige: true,
+    log_prestige_format: "Reset {resetType}",
+    hellTurnOffLogMessages: false,
     // list/checkbox migrations
     productionPrioritizeDemanded: true,
     challenge_mastery: true,
@@ -236,6 +244,15 @@ assert.equal(settingsRaw.arpa_launch_facility, false);
 
 // Deprecated pre-overrides removal.
 assert.ok(!("autoAchievements" in settingsRaw));
+assert.ok(!("logEnabled" in settingsRaw));
+assert.ok(!("logFilter" in settingsRaw));
+assert.ok(!("log_old_type" in settingsRaw));
+assert.ok(!("log_prestige" in settingsRaw));
+assert.ok(!("log_prestige_format" in settingsRaw));
+assert.ok(!("hellTurnOffLogMessages" in settingsRaw));
+assert.ok(!("log_old_type" in settingsRaw.overrides));
+assert.ok(!("log_prestige_format" in settingsRaw.overrides));
+assert.ok(!("logFilter" in settingsRaw.overrides));
 assert.ok(!("foreignAttack0" in settingsRaw));
 assert.ok(!("res_storage_w_Food" in settingsRaw));
 assert.ok(!("arpa_ignore_money_lhc" in settingsRaw));

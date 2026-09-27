@@ -84,11 +84,7 @@ assert.deepEqual(
       requiredPopulation: 0,
     },
   }),
-  [
-    { kind: "set-goal", goal: "GameOverMan" },
-    { kind: "log-prestige" },
-    { kind: "launch-mad" },
-  ],
+  [{ kind: "set-goal", goal: "GameOverMan" }, { kind: "launch-mad" }],
 );
 
 console.log("Prestige domain policy tests passed");

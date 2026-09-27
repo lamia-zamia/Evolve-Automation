@@ -200,10 +200,7 @@ import { createCapturedMechSettingsReadModel } from "../domain/combat/mech-setti
 import {} from "../domain/settings-defaults.ts";
 import type { CapturedSettingsStore } from "../ports/captured-settings-store.ts";
 import { inspectImportedSettings } from "../adapters/browser/settings-import.ts";
-import {
-  createFileDownload,
-  type FileDownloadDependencies,
-} from "../adapters/browser/file-download.ts";
+import type { FileDownloadPort } from "../ports/file-download.ts";
 import { createSettingsEditorControl } from "./settings-editor-control.ts";
 import type { JQueryNode } from "../ui/jquery.ts";
 import { createSettingsShell } from "../ui/settings-shell.ts";
@@ -449,6 +446,7 @@ type TraitSettingsJQuery = ReturnType<
 export interface CapturedSettingsPanelDependencies {
   /** The page's global object; the panel reads `document`, `navigator` and `location` from it. */
   readonly capturedPanelWindow: unknown;
+  readonly fileDownload?: FileDownloadPort | undefined;
   readonly settings: CapturedSettingsStore;
   /** The captured raw/effective settings boundary: the one authority for defaults and resets. */
   readonly settingsLifecycle: CapturedSettingsLifecycle;
@@ -556,40 +554,6 @@ function confirmInPanelWindow(
     : false;
 }
 
-/**
- * The page's own "save this text as a file" gesture, or `undefined` when the page does not offer
- * the pieces it needs. A test page without `URL`/`Blob` gets the absent case rather than a throw.
- */
-function panelFileDownloadFor(
-  capturedPanelWindow: unknown,
-  documentValue: unknown,
-): ((contents: string, filename: string) => void) | undefined {
-  const urlApi = readProperty(capturedPanelWindow, "URL");
-  const blobConstructor = readProperty(capturedPanelWindow, "Blob");
-  const schedule = readProperty(capturedPanelWindow, "setTimeout");
-  if (
-    typeof readProperty(urlApi, "createObjectURL") !== "function" ||
-    typeof readProperty(urlApi, "revokeObjectURL") !== "function" ||
-    typeof blobConstructor !== "function" ||
-    typeof schedule !== "function" ||
-    typeof readProperty(documentValue, "createElement") !== "function"
-  ) {
-    return undefined;
-  }
-  return createFileDownload({
-    getDocument: () =>
-      documentValue as ReturnType<FileDownloadDependencies["getDocument"]>,
-    getUrlApi: () =>
-      urlApi as ReturnType<FileDownloadDependencies["getUrlApi"]>,
-    getBlobConstructor: () =>
-      blobConstructor as ReturnType<
-        FileDownloadDependencies["getBlobConstructor"]
-      >,
-    schedule: (callback, delay) =>
-      Reflect.apply(schedule, capturedPanelWindow, [callback, delay]),
-  }).triggerFileDownload;
-}
-
 /** Every settings adapter the panel builds on first draw. */
 interface SettingsUi {
   readonly general: GeneralSettings;
@@ -630,6 +594,7 @@ interface SettingsUi {
 
 export function createCapturedSettingsPanel({
   capturedPanelWindow,
+  fileDownload,
   settings,
   settingsLifecycle,
   customRaceLab,
@@ -680,7 +645,6 @@ export function createCapturedSettingsPanel({
     onDiagnostic(`settings panel section not ported yet: ${section}`);
   };
 
-  const fileDownload = panelFileDownloadFor(capturedPanelWindow, documentValue);
   const reportNoFileDownload = () => {
     if (reportedSections.has("settings file download")) return;
     reportedSections.add("settings file download");
@@ -969,13 +933,13 @@ export function createCapturedSettingsPanel({
       buildBuildingSettings: () => building?.buildBuildingSettings(),
       buildWeightingSettings: () => weighting?.buildWeightingSettings(),
       buildProjectSettings: () => project?.buildProjectSettings(),
-      buildLoggingSettings: () => {},
       filterBuildingSettingsTable: () =>
         building?.filterBuildingSettingsTable(),
       persistSettings: persistSettings,
       importSettings: importScriptSettings,
       exportSettings: () => JSON.stringify(settings.readRaw()),
-      triggerFileDownload: fileDownload ?? reportNoFileDownload,
+      triggerFileDownload:
+        fileDownload?.triggerFileDownload ?? reportNoFileDownload,
       confirm: (message) => confirmInPanelWindow(capturedPanelWindow, message),
     });
     const generalIntent = createGeneralSettingsIntentHandler({

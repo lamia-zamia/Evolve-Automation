@@ -13,6 +13,7 @@ import {
 import {
   createCapturedGameSettingsSource,
   createCapturedIdentitySource,
+  readCapturedIdentitySnapshot,
   createCapturedRaceTraitSource,
   createCapturedResourceSource,
   createCapturedTechSource,
@@ -67,6 +68,7 @@ function fullRoot() {
   const identity = createCapturedIdentitySource(
     rootSource(fullRoot()),
   ).readIdentity();
+  assert.deepEqual(readCapturedIdentitySnapshot(fullRoot()), identity);
   assert.equal(identity.species, "sharkin");
   assert.equal(identity.universe, "antimatter");
   assert.equal(identity.biome, "oceanic");

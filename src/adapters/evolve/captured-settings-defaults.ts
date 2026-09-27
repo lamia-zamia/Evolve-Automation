@@ -12,7 +12,6 @@ import type {
   EvolutionResetContext,
   GovernmentResetContext,
   JobResetContext,
-  LoggingResetContext,
   MagicResetContext,
   MarketResetContext,
   MinorTraitResetContext,
@@ -384,7 +383,6 @@ export function createCapturedSettingsDefaults({
   const reader: SettingsResetReader = {
     readGovernment,
     readEvolution,
-    readLogging: (): LoggingResetContext => ({ gameLogTypeIds: [] }),
     readPlanet: (): PlanetResetContext => ({
       biomeList,
       planetBiomes,

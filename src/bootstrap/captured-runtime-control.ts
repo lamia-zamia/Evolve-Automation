@@ -1,5 +1,6 @@
 import { createCapturedProgressionControl } from "./captured-progression-control.ts";
 import { advancePeriodGate } from "../domain/tick.ts";
+import { createStateLogRecorder } from "../application/state-log.ts";
 import type { BuildResourceScope } from "../domain/progression/build/build.ts";
 import { storageRequirementScopeKey } from "../domain/economy/storage/storage-requirements.ts";
 import { readPeriodsPerScriptCycle } from "../adapters/evolve/captured-tick-rate.ts";
@@ -65,6 +66,10 @@ import {
   createCapturedIdentitySource,
   createCapturedResourceSource,
 } from "../adapters/evolve/captured-world-state.ts";
+import { createCapturedStateLogReader } from "../adapters/evolve/captured-state-log.ts";
+import { createStateLogStore } from "../adapters/storage/state-log-store.ts";
+import { createPageFileDownload } from "../adapters/browser/file-download.ts";
+import { createStateLogExportHook } from "../adapters/browser/state-log-export.ts";
 import { createCapturedPlanningPanels } from "../adapters/browser/captured-planning-panels.ts";
 import type {
   CapturedPlanningPanels,
@@ -247,6 +252,8 @@ export interface CapturedRuntimeControlDependencies {
   readonly storage: unknown;
   /** The page's global object. The settings panel reads `document`, `navigator` and `location`. */
   readonly settingsHostWindow: unknown;
+  /** Userscript bridge for the single advertised page-global State Log export hook. */
+  readonly exportToPage?: ((value: unknown) => unknown) | undefined;
   readonly diagnostics?: TickDiagnostics | undefined;
   /** User-visible activity emitted after a captured state transition. */
   readonly onActivity?: GameActivitySink;
@@ -266,12 +273,17 @@ export function startCapturedRuntime({
   mouseEvent: mouseEventValue,
   storage,
   settingsHostWindow,
+  exportToPage,
   diagnostics,
   onActivity = () => {},
   log = () => {},
   logError = () => {},
 }: CapturedRuntimeControlDependencies): () => void {
   const document = documentValue as CapturedDocument;
+  const fileDownload = createPageFileDownload(
+    settingsHostWindow,
+    documentValue,
+  );
   const customRaceLab = createGameCustomRaceLab({
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,
@@ -504,6 +516,7 @@ export function startCapturedRuntime({
   };
   const settingsPanel = createCapturedSettingsPanel({
     capturedPanelWindow: settingsHostWindow,
+    fileDownload,
     settings: settingsStorage,
     settingsLifecycle,
     customRaceLab,
@@ -1445,6 +1458,20 @@ export function startCapturedRuntime({
       }),
     ]);
   };
+  const stateLogRecorder = createStateLogRecorder({
+    store: createStateLogStore(storage),
+    reader: createCapturedStateLogReader({
+      identity: capturedIdentity,
+      resources: createCapturedResourceSource(pageCapture.rootState),
+      readConstruction: () => latestConstructionSnapshot,
+    }),
+    ...(fileDownload === undefined ? {} : { download: fileDownload }),
+  });
+  const removeStateLogExport = createStateLogExportHook({
+    pageWindow: settingsHostWindow,
+    exportToPage,
+    download: fileDownload,
+  }).install(() => stateLogRecorder.readCurrent());
   const prestige = createCapturedPrestigeControl({
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,
@@ -1458,6 +1485,12 @@ export function startCapturedRuntime({
     },
     readOfferedTechs: progression.readOfferedTechs,
     resources: createCapturedResourceSource(pageCapture.rootState),
+    onResetCommitted: (endingReset, endingDay) =>
+      stateLogRecorder.prestigeCommitted(
+        settingsStore.readRaw(),
+        endingReset,
+        endingDay,
+      ),
     readBuildingResetActions: (regions) =>
       progression.readBuildingUnlocks(new Set(regions))?.unlocked,
     closeBioseedModal,
@@ -2522,6 +2555,10 @@ export function startCapturedRuntime({
       logError(String(error));
     } finally {
       refreshCapturedPlanningPanels();
+      stateLogRecorder.recordProcessedCycle(
+        automationCycle,
+        settingsStore.readRaw(),
+      );
       if (profiling !== undefined && workStartedAtMs !== undefined) {
         profiling.recordPerformance(
           "tick",
@@ -2536,7 +2573,7 @@ export function startCapturedRuntime({
   // working cycle covers. Without this gate every automation decision, and every panel draw a cycle
   // pays for, was re-made four times more often than the setting asks for.
   let pendingPeriods = 0;
-  return pageCapture.periods.subscribe((period) => {
+  const unsubscribePeriods = pageCapture.periods.subscribe((period) => {
     // Overrides need their context before this gate. Reset the cycle-held panel samples here so
     // an override never answers from the previous cycle, and let a cycle that runs reuse this
     // same point-in-time sample for its trigger and progression work.
@@ -2554,4 +2591,8 @@ export function startCapturedRuntime({
     if (!gate.run) return;
     runCycle();
   });
+  return () => {
+    unsubscribePeriods();
+    removeStateLogExport();
+  };
 }

@@ -4,7 +4,6 @@ import type {
   EvolutionResetContext,
   GovernmentResetContext,
   JobResetContext,
-  LoggingResetContext,
   MagicResetContext,
   MarketResetContext,
   MinorTraitResetContext,
@@ -24,7 +23,6 @@ import type {
 export interface SettingsResetReader {
   readGovernment(): GovernmentResetContext;
   readEvolution(): EvolutionResetContext;
-  readLogging(): LoggingResetContext;
   readPlanet(): PlanetResetContext;
   readMarket(): MarketResetContext;
   readStorage(): StorageResetContext;
