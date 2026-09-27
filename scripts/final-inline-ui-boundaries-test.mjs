@@ -112,7 +112,7 @@ const panels = createQueuePanels({
   isProject: (target) => target.kind === "project",
   isTechnology: (target) => target.kind === "technology",
   getResizeObserver: () => undefined,
-  updateSettingsFromState: () => trace.push("persist"),
+  persistSettings: () => trace.push("persist"),
   makePlannerStats: () => ({ reset: true }),
   savePlannerStats: () => trace.push("save-planner"),
 });

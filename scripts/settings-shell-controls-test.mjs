@@ -116,7 +116,7 @@ const controlContext = {
   $: jquery,
   settingsRaw,
   getRealNumber: (value) => Number(value),
-  updateSettingsFromState: () => trace.push("persist"),
+  persistSettings: () => trace.push("persist"),
 };
 const controls = createSettingsControls({
   getAutocomplete: () => ({
@@ -128,7 +128,7 @@ const controls = createSettingsControls({
   getJQuery: () => controlContext.$,
   getSettingsRaw: () => controlContext.settingsRaw,
   getRealNumber: () => controlContext.getRealNumber,
-  getUpdateSettingsFromState: () => controlContext.updateSettingsFromState,
+  getPersistSettings: () => controlContext.persistSettings,
   openOverrideModal: (event) => overrideModalClicks.push(event),
   buildSelectOptions: (optionsList) =>
     optionsList.map((item) => `<option value="${item.val}"></option>`).join(),
@@ -303,7 +303,7 @@ const shellContext = {
   settings: { scriptSettingsExportFilename: "settings.json" },
   game: { global: { settings: { civTabs: 7 } } },
   filterBuildingSettingsTable: () => trace.push("filter"),
-  updateSettingsFromState: () => trace.push("persist-shell"),
+  persistSettings: () => trace.push("persist-shell"),
   importSettings: () => true,
   exportSettings: () => "{}",
   triggerFileDownload: () => trace.push("download"),

@@ -22,7 +22,7 @@ interface SettingsControlsDependencies {
   readonly getJQuery: () => JQuery;
   readonly getSettingsRaw: () => StoredSettings;
   readonly getRealNumber: () => (amountText: string) => number;
-  readonly getUpdateSettingsFromState: () => () => void;
+  readonly getPersistSettings: () => () => void;
   /** Opens the override editor for the clicked setting when the modifier key is held. */
   readonly openOverrideModal: (event: OverrideModalEvent) => void;
   readonly buildSelectOptions: (
@@ -78,14 +78,14 @@ export function createSettingsControls({
   getJQuery,
   getSettingsRaw,
   getRealNumber,
-  getUpdateSettingsFromState,
+  getPersistSettings,
   openOverrideModal,
   buildSelectOptions,
 }: SettingsControlsDependencies): SettingsControls {
   const $ = getJQuery();
   const getRealNumberValue = (amountText: string): number =>
     getRealNumber()(amountText);
-  const updateSettingsFromState = (): void => getUpdateSettingsFromState()();
+  const persistSettings = (): void => getPersistSettings()();
 
   /** Migration guarantees a list setting stores an array of ids. */
   const readListSetting = (settingName: string): string[] =>
@@ -114,7 +114,7 @@ export function createSettingsControls({
       )
       .on("change", "input", function (this: EditableInput) {
         getSettingsRaw()[settingName] = this.checked;
-        updateSettingsFromState();
+        persistSettings();
 
         $(".script_" + settingName).prop(
           "checked",
@@ -161,7 +161,7 @@ export function createSettingsControls({
         const parsedValue = getRealNumberValue(this.value);
         if (!Number.isNaN(parsedValue)) {
           getSettingsRaw()[settingName] = parsedValue;
-          updateSettingsFromState();
+          persistSettings();
         }
         $(".script_" + settingName).val(getSettingsRaw()[settingName]);
       })
@@ -196,7 +196,7 @@ export function createSettingsControls({
       )
       .on("change", "input", function (this: EditableInput) {
         getSettingsRaw()[settingName] = this.value;
-        updateSettingsFromState();
+        persistSettings();
         $(".script_" + settingName).val(getSettingsRaw()[settingName]);
       })
       .on(
@@ -236,7 +236,7 @@ export function createSettingsControls({
       .val(getSettingsRaw()[settingName])
       .on("change", function (this: EditableInput) {
         getSettingsRaw()[settingName] = this.value;
-        updateSettingsFromState();
+        persistSettings();
 
         $(".script_" + settingName).val(getSettingsRaw()[settingName]);
       })
@@ -355,7 +355,7 @@ export function createSettingsControls({
       if (selectedItem && !selected.includes(selectedItem)) {
         selected.push(selectedItem);
         selected.sort();
-        updateSettingsFromState();
+        persistSettings();
         updateList();
       }
     });
@@ -365,7 +365,7 @@ export function createSettingsControls({
       if (selectedItem && selected.includes(selectedItem)) {
         selected.splice(selected.indexOf(selectedItem), 1);
         selected.sort();
-        updateSettingsFromState();
+        persistSettings();
         updateList();
       }
     });
@@ -379,7 +379,7 @@ export function createSettingsControls({
         const parsedValue = getRealNumberValue(this.value);
         if (!Number.isNaN(parsedValue)) {
           getSettingsRaw()[settingKey] = parsedValue;
-          updateSettingsFromState();
+          persistSettings();
         }
         $(".script_" + settingKey).val(getSettingsRaw()[settingKey]);
       })
@@ -414,7 +414,7 @@ export function createSettingsControls({
     return node
       .on("change", "input", function (this: EditableInput) {
         getSettingsRaw()[settingKey] = this.checked;
-        updateSettingsFromState();
+        persistSettings();
 
         $(".script_" + settingKey).prop(
           "checked",

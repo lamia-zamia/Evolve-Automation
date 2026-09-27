@@ -39,9 +39,15 @@ import type { OfferedTech } from "../../../../ports/game-tech-catalog.ts";
 import {
   type CapturedConditionDemand,
   evaluateCapturedCondition,
-  SWARM_SATELLITE_ACTION_ID,
 } from "../../captured-conditions.ts";
 import { costFitsStorage } from "../../captured-affordability.ts";
+import {
+  capturedConditionsNeedDemand,
+  capturedConditionsNeedGrantedTechs,
+  capturedConditionsNeedTechKnowledge,
+  createCapturedConditionContextReader,
+  type CapturedConditionContextRequirement,
+} from "../../captured-condition-context.ts";
 import {
   finite,
   isRecord,
@@ -142,45 +148,6 @@ const NO_TARGETS: readonly Readonly<CapturedTriggerTarget>[] = Object.freeze(
 const ARPA_PREFIX = "arpa";
 
 /**
- * The condition operands answered from a drawn building region. Each one names a `<region>-<id>`
- * building and is answered by that row: its presence for the unlock, its on/off spans for the
- * switch counts.
- */
-const REGION_PANEL_CONDITIONS: ReadonlySet<string> = Object.freeze(
-  new Set([
-    "BuildingUnlocked",
-    "BuildingClickable",
-    "BuildingEnabled",
-    "BuildingDisabled",
-  ]),
-);
-
-/**
- * The building whose current cost a condition needs priced: the named building itself for
- * `BuildingAffordable`, the dotted pair's building half for `BuildingCost`, and the swarm
- * satellite for `Other/satcost`. Anything else needs no price.
- */
-function costConditionBuildingId(row: TriggerRow): string | undefined {
-  if (
-    row.requirementType === "BuildingAffordable" ||
-    row.requirementType === "BuildingClickable"
-  ) {
-    return typeof row.requirementId === "string"
-      ? row.requirementId
-      : undefined;
-  }
-  if (row.requirementType === "BuildingCost") {
-    if (typeof row.requirementId !== "string") return undefined;
-    const dot = row.requirementId.indexOf(".");
-    return dot > 0 ? row.requirementId.slice(0, dot) : undefined;
-  }
-  if (row.requirementType === "Other" && row.requirementId === "satcost") {
-    return SWARM_SATELLITE_ACTION_ID;
-  }
-  return undefined;
-}
-
-/**
  * Validates one stored trigger. The editor writes every field, so a row missing one is a broken
  * setting rather than a game state this has to tolerate: it is dropped.
  */
@@ -223,6 +190,15 @@ function readRows(settings: unknown): readonly TriggerRow[] {
   return Object.freeze(rows.sort((a, b) => a.priority - b.priority));
 }
 
+function triggerConditionContextRequirements(
+  rows: readonly TriggerRow[],
+): readonly CapturedConditionContextRequirement[] {
+  return rows.map(({ requirementType, requirementId }) => ({
+    type: requirementType,
+    argument: requirementId,
+  }));
+}
+
 /**
  * Whether this cycle's research pass has to keep the already-granted half of the draw.
  *
@@ -233,20 +209,14 @@ function readRows(settings: unknown): readonly TriggerRow[] {
  */
 export function triggersNeedGrantedTechs(settings: unknown): boolean {
   if (readProperty(settings, "autoTrigger") !== true) return false;
-  return readRows(settings).some(
-    (row) =>
-      row.actionType === "research" ||
-      row.requirementType === "ResearchComplete",
+  const rows = readRows(settings);
+  return (
+    rows.some((row) => row.actionType === "research") ||
+    capturedConditionsNeedGrantedTechs(
+      triggerConditionContextRequirements(rows),
+    )
   );
 }
-
-/** The operand types whose answer needs the cycle's demand commitments. */
-const DEMAND_CONDITION_TYPES: ReadonlySet<string> = new Set([
-  "ResourceDemanded",
-  "ResourceSatisfied",
-  "ResourceSatisfyRatio",
-  "ResourceMaxCost",
-]);
 
 /**
  * Whether this cycle's trigger sample has to carry the trigger-excluding demand commitments.
@@ -257,8 +227,8 @@ const DEMAND_CONDITION_TYPES: ReadonlySet<string> = new Set([
  */
 export function triggersNeedDemandSample(settings: unknown): boolean {
   if (readProperty(settings, "autoTrigger") !== true) return false;
-  return readRows(settings).some((row) =>
-    DEMAND_CONDITION_TYPES.has(row.requirementType),
+  return capturedConditionsNeedDemand(
+    triggerConditionContextRequirements(readRows(settings)),
   );
 }
 
@@ -269,8 +239,8 @@ export function triggersNeedDemandSample(settings: unknown): boolean {
  */
 export function triggersNeedTechKnowledge(settings: unknown): boolean {
   if (readProperty(settings, "autoTrigger") !== true) return false;
-  return readRows(settings).some(
-    (row) => row.requirementType === "Other" && row.requirementId === "tknow",
+  return capturedConditionsNeedTechKnowledge(
+    triggerConditionContextRequirements(readRows(settings)),
   );
 }
 
@@ -301,6 +271,17 @@ export function createCapturedTriggers(
   dependencies: CapturedTriggersDependencies,
 ): CapturedTriggers {
   const { rootState, controls, costs, readSettings } = dependencies;
+  const conditionContextReader = createCapturedConditionContextReader({
+    costs,
+    readOfferedTechs: dependencies.readOfferedTechs,
+    readGrantedTechs: dependencies.readGrantedTechs,
+    readProjects: dependencies.readOfferedProjects,
+    readBuildingUnlocks: dependencies.readBuildingUnlocks,
+    readBuildingCapacity: dependencies.readBuildingCapacity,
+    readDemandSample: dependencies.readDemandSample,
+    readTechKnowledge: dependencies.readTechKnowledge,
+    readHellGarrison: dependencies.readHellGarrison,
+  });
 
   return Object.freeze({
     read(): readonly Readonly<CapturedTriggerTarget>[] {
@@ -310,114 +291,34 @@ export function createCapturedTriggers(
       if (rows.length === 0) return NO_TARGETS;
 
       const root = rootState.readRoot();
-      const offered = dependencies.readOfferedTechs?.();
-      const offeredTechs =
-        offered === undefined
-          ? undefined
-          : new Map(offered.map((tech) => [tech.elementId, tech]));
-      const grantedTechs = dependencies.readGrantedTechs?.();
-      // The project panel is the most expensive read on this path, so it is only drawn when a
-      // configured trigger actually needs it: an A.R.P.A. action to price, or a `ProjectUnlocked`
-      // condition to answer. The sample is the cycle's shared one, so a construction cycle later
-      // in the tick reuses these prices.
-      const needProjects = rows.some(
-        (row) =>
-          row.actionType === "arpa" ||
-          row.requirementType === "ProjectUnlocked",
+      const conditionSamples = conditionContextReader.read(
+        triggerConditionContextRequirements(rows),
+        settings,
+        {
+          includeTechCatalog: rows.some((row) => row.actionType === "research"),
+          includeProjectCatalog: rows.some((row) => row.actionType === "arpa"),
+        },
       );
-      // An unreadable panel stays `undefined` rather than collapsing to an empty sample: a panel
-      // that drew no projects is a real answer to `ProjectUnlocked`, and one that could not be
-      // read is not.
-      const drawnProjects =
-        dependencies.readOfferedProjects === undefined || !needProjects
-          ? undefined
-          : dependencies.readOfferedProjects();
-      const offeredProjectsById =
-        drawnProjects === undefined
+      const offeredTechs =
+        conditionSamples.offeredTechs === undefined
           ? undefined
           : new Map(
-              drawnProjects.map((project) => [project.elementId, project]),
+              conditionSamples.offeredTechs.map((tech) => [
+                tech.elementId,
+                tech,
+              ]),
             );
-      // Each building region is behind its own sub-tab and costs a pass to draw, so only the
-      // regions a configured condition actually names are sampled. The same draw answers all
-      // four panel operands: `BuildingUnlocked`/`BuildingClickable` from a row's presence, and
-      // the two switch counts from the on/off spans that row carries. A row whose argument is not
-      // a `<region>-<id>` pair names no panel and is left to go unanswered.
-      const buildingRegions = new Set<string>();
-      for (const row of rows) {
-        if (!REGION_PANEL_CONDITIONS.has(row.requirementType)) continue;
-        if (typeof row.requirementId !== "string") continue;
-        const parts = splitActionId(row.requirementId);
-        if (parts === undefined) continue;
-        buildingRegions.add(parts.region);
-      }
-      const buildingUnlocks =
-        dependencies.readBuildingUnlocks === undefined ||
-        buildingRegions.size === 0
+      const grantedTechs = conditionSamples.grantedTechs;
+      const offeredProjectsById =
+        conditionSamples.offeredProjects === undefined
           ? undefined
-          : dependencies.readBuildingUnlocks(buildingRegions);
-      // A cost operand is answered from the same prices the targets are chosen with. Only the
-      // buildings a condition actually names are priced, and a control the game never bound is
-      // not one the cost reader can probe, so it stays unanswered.
-      const buildingCosts = new Map<string, GameActionPrice>();
-      for (const row of rows) {
-        const buildingId = costConditionBuildingId(row);
-        if (buildingId === undefined || buildingCosts.has(buildingId)) {
-          continue;
-        }
-        if (controls.resolve(buildingId) === undefined) continue;
-        const price = costs.readCost(buildingId);
-        if (price !== undefined) buildingCosts.set(buildingId, price);
-      }
-      const buildingCapacityIds = new Set<string>();
-      for (const row of rows) {
-        if (
-          row.requirementType === "BuildingClickable" &&
-          typeof row.requirementId === "string"
-        ) {
-          buildingCapacityIds.add(row.requirementId);
-        }
-      }
-      const buildingCapacity =
-        dependencies.readBuildingCapacity === undefined ||
-        buildingCapacityIds.size === 0
-          ? undefined
-          : dependencies.readBuildingCapacity(buildingCapacityIds);
-      // The condition evaluator answers the research, project and building operands from the same
-      // passes the actions are priced from, so a trigger's requirement and its target describe one
-      // moment. The stored settings travel with them for the operands that read the player's own
-      // configuration rather than game state.
-      const storedSettings = isRecord(settings) ? settings : undefined;
-      // The demand commitments travel only when the supplier carries them: the sample excludes
-      // the trigger targets, which the cycle's own trigger-including sample cannot supply here.
-      // The Tech Knowledge figure travels the same way, from the knowledge gate's own sample.
-      const demandSample = dependencies.readDemandSample?.();
-      const techKnowledge = dependencies.readTechKnowledge?.();
-      const hellGarrison = rows.some(
-        (row) =>
-          row.requirementType === "Soldiers" &&
-          row.requirementId === "hellGarrison",
-      )
-        ? dependencies.readHellGarrison?.()
-        : undefined;
-      const conditionContext = Object.freeze({
-        ...(offeredTechs === undefined
-          ? {}
-          : { offeredTechs: new Set(offeredTechs.keys()) }),
-        ...(grantedTechs === undefined ? {} : { grantedTechs }),
-        ...(offeredProjectsById === undefined
-          ? {}
-          : { unlockedProjects: new Set(offeredProjectsById.keys()) }),
-        ...(buildingUnlocks === undefined ? {} : { buildingUnlocks }),
-        ...(buildingCosts.size === 0 ? {} : { buildingCosts }),
-        ...(buildingCapacity === undefined ? {} : { buildingCapacity }),
-        ...(storedSettings === undefined ? {} : { settings: storedSettings }),
-        ...(demandSample === undefined ? {} : { demand: demandSample }),
-        ...(techKnowledge === undefined
-          ? {}
-          : { knowledgeRequiredByTechs: techKnowledge }),
-        ...(hellGarrison === undefined ? {} : { hellGarrison }),
-      });
+          : new Map(
+              conditionSamples.offeredProjects.map((project) => [
+                project.elementId,
+                project,
+              ]),
+            );
+      const conditionContext = conditionSamples.context;
       const byPriority = new Map(rows.map((row) => [row.priority, row]));
 
       /** Whether the trigger's action has already been carried out, if that is knowable. */

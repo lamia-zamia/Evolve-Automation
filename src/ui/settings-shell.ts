@@ -105,7 +105,7 @@ interface SettingsShellDependencies {
   readonly buildProjectSettings: SectionBuilder;
   readonly buildLoggingSettings: PrefixedSectionBuilder;
   readonly filterBuildingSettingsTable: () => void;
-  readonly updateSettingsFromState: () => void;
+  readonly persistSettings: () => void;
   readonly importSettings: (serialized: string) => boolean;
   readonly exportSettings: () => string;
   readonly triggerFileDownload: (content: string, filename: string) => void;
@@ -146,7 +146,7 @@ export function createSettingsShell({
   buildProjectSettings,
   buildLoggingSettings,
   filterBuildingSettingsTable,
-  updateSettingsFromState,
+  persistSettings,
   importSettings,
   exportSettings,
   triggerFileDownload,
@@ -322,7 +322,7 @@ export function createSettingsShell({
           content.style.display = "block";
         }
 
-        updateSettingsFromState();
+        persistSettings();
       });
     }
 

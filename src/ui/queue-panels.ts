@@ -91,7 +91,7 @@ export interface QueuePanelsDependencies {
   isProject: (target: unknown) => boolean;
   isTechnology: (target: unknown) => boolean;
   getResizeObserver: () => ResizeObserverConstructor | undefined;
-  updateSettingsFromState: () => void;
+  persistSettings: () => void;
   makePlannerStats: () => Record<string, unknown> | null;
   savePlannerStats: (stats: unknown) => boolean;
 }
@@ -129,7 +129,7 @@ export function createQueuePanels({
   isProject,
   isTechnology,
   getResizeObserver,
-  updateSettingsFromState,
+  persistSettings,
   makePlannerStats,
   savePlannerStats,
 }: QueuePanelsDependencies) {
@@ -365,7 +365,7 @@ export function createQueuePanels({
     $("#script_planner-header").on("click", function () {
       settingsRaw.buildPlannerCollapsed = !settingsRaw.buildPlannerCollapsed;
       $("#script_planner").toggle(!settingsRaw.buildPlannerCollapsed);
-      updateSettingsFromState();
+      persistSettings();
     });
     $("#script_planner-reset").on("click", function () {
       const stats = makePlannerStats();

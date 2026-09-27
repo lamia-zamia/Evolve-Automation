@@ -11,14 +11,19 @@ import {
   type CapturedConditionContext,
 } from "./captured-conditions.ts";
 import type { GameRootStateSource } from "../../ports/game-root-state.ts";
-import type {
-  ForcedTaskState,
-  OverrideConditionEvaluator,
+import {
+  parseOverrideCondition,
+  type ForcedTaskState,
+  type OverrideConditionEvaluator,
 } from "../../domain/override-resolution.ts";
 import type {
   OverrideComparatorSource,
   OverrideEvaluationSource,
 } from "../../ports/override-settings.ts";
+import {
+  capturedConditionsNeedGrantedTechs,
+  type CapturedConditionContextRequirement,
+} from "./captured-condition-context.ts";
 import { isRecord, readProperty } from "../validation.ts";
 
 export const CAPTURED_OVERRIDE_OPERAND_TYPES = [
@@ -111,7 +116,35 @@ export interface CapturedOverrideEvaluationDependencies {
   readonly rootState: GameRootStateSource;
   readonly readSettings: () => Readonly<Record<string, unknown>>;
   readonly comparatorSource: OverrideComparatorSource;
-  readonly readConditionContext?: () => Readonly<CapturedConditionContext>;
+  readonly readConditionContext?: (
+    settings: Readonly<Record<string, unknown>>,
+  ) => Readonly<CapturedConditionContext> | undefined;
+}
+
+export function readCapturedOverrideConditionRequirements(
+  settings: unknown,
+): readonly CapturedConditionContextRequirement[] {
+  const overrides = readProperty(settings, "overrides");
+  if (!isRecord(overrides)) return [];
+  const requirements: CapturedConditionContextRequirement[] = [];
+  for (const conditions of Object.values(overrides)) {
+    if (!Array.isArray(conditions)) continue;
+    for (const stored of conditions) {
+      const condition = parseOverrideCondition(stored);
+      if (condition === undefined) continue;
+      requirements.push(
+        { type: condition.type1, argument: condition.arg1 },
+        { type: condition.type2, argument: condition.arg2 },
+      );
+    }
+  }
+  return requirements;
+}
+
+export function capturedOverridesNeedGrantedTechs(settings: unknown): boolean {
+  return capturedConditionsNeedGrantedTechs(
+    readCapturedOverrideConditionRequirements(settings),
+  );
 }
 
 export function createCapturedOverrideEvaluation({
@@ -124,7 +157,7 @@ export function createCapturedOverrideEvaluation({
     sampleEvaluator(): OverrideConditionEvaluator {
       const root = readRootSafely(rootState);
       const settings = readSettings();
-      const context = readConditionContext?.();
+      const context = readConditionContext?.(settings);
       return {
         hasOperandType: (operandType) =>
           CAPTURED_OPERAND_TYPES.has(operandType) ||

@@ -115,6 +115,18 @@ const allSourceFiles = collectSourceFiles(sourceRoot);
 const productionFiles = allSourceFiles.filter(
   (file) => !excludedFiles.has(toRelative(file)),
 );
+const staleSettingsPersistenceNames = productionFiles.filter((file) => {
+  const source = fs.readFileSync(file, "utf8");
+  return (
+    source.includes("updateSettingsFromState") ||
+    source.includes("getUpdateSettingsFromState")
+  );
+});
+assert.deepEqual(
+  staleSettingsPersistenceNames.map(toRelative),
+  [],
+  "Settings UI persistence callbacks must describe persistence, not state synchronization",
+);
 const productionFileSet = new Set(productionFiles);
 const graph = new Map(productionFiles.map((file) => [file, []]));
 const failures = [];

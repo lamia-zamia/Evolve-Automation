@@ -47,4 +47,47 @@ assert.deepEqual(control.runResearchCycle(), {
   },
 });
 
+let root = { settings: { civTabs: 3 } };
+let nowMs = 0;
+const unavailable = [];
+const techHandles = new Map([
+  ["tech-mining", { elementId: "tech-mining", generation: 1 }],
+]);
+const researchControl = createCapturedProgressionControl({
+  rootState: {
+    readRoot: () => root,
+    subscribeRootReplaced: () => () => {},
+  },
+  controls: {
+    resolve: (id) => techHandles.get(id),
+    invoke: () => ({ ok: false, reason: "unknown-control" }),
+    capturedElementIds: () => [...techHandles.keys()],
+  },
+  mountSuppression: { available: false, withoutMounting: () => undefined },
+  panels: { open: () => ({ close: () => {} }) },
+  drawnActions: {
+    exists: (selector) => selector === "#tech",
+    read: (selector) =>
+      selector === "#tech .action"
+        ? [{ id: "tech-mining", cost: { Knowledge: 5 } }]
+        : [{ id: "tech-old-mining", cost: {} }],
+  },
+  drawnProjects: { read: () => undefined, exists: () => false },
+  readSettings: () => ({}),
+  needGrantedTechs: () => true,
+  onUnavailable: (reason) => unavailable.push(reason),
+  nowMs: () => nowMs,
+});
+
+assert.deepEqual(
+  researchControl.sampleOfferedTechs()?.map(({ elementId }) => elementId),
+  ["tech-mining"],
+  unavailable.join("; "),
+);
+assert.deepEqual([...researchControl.readGrantedTechs()], ["tech-old-mining"]);
+nowMs = 20_000;
+root = undefined;
+assert.equal(researchControl.sampleOfferedTechs(), undefined);
+assert.equal(researchControl.readGrantedTechs(), undefined);
+
 console.log("captured-progression-control ok");

@@ -127,6 +127,9 @@ export interface CapturedProgressionControl {
   readonly runResearchCycle: () => CommandExecutionOutcome;
   /** The most recently captured offered-technology snapshot, if one exists. */
   readonly readOfferedTechs: () => readonly Readonly<OfferedTech>[] | undefined;
+  /** Take or reuse the current offer snapshot, running a grant pass when one is required. */
+  readonly sampleOfferedTechs: () =>
+    readonly Readonly<OfferedTech>[] | undefined;
   /**
    * The granted-technology set from the last catalog pass, or `undefined` when that pass did not
    * keep it. Absent is "not read", never "nothing granted".
@@ -343,7 +346,7 @@ export function createCapturedProgressionControl(
   // The already-granted half is only drawn when a configured trigger needs it, so this stays
   // undefined — "not read" — for every player who has not configured one.
   let lastGranted: ReadonlySet<string> | undefined;
-  const readOfferedTechs = () => {
+  const sampleOfferedTechs = () => {
     const includeGranted = dependencies.needGrantedTechs?.() === true;
     // The granted half is a different sample, so it is a different scope: a pass that dropped it
     // must never answer the caller that asked for it.
@@ -361,6 +364,9 @@ export function createCapturedProgressionControl(
       lastGranted = value.granted;
       return value.offered;
     }
+    // A failed current sample must not let the previous pass answer a context-dependent condition.
+    lastOffered = undefined;
+    lastGranted = undefined;
     return undefined;
   };
   const offered = createCapturedTechCatalog({
@@ -569,7 +575,7 @@ export function createCapturedProgressionControl(
     scriptReservations,
     readKnowledgeGate,
     ...(readStorageRequired === undefined ? {} : { readStorageRequired }),
-    readOfferedTechs,
+    readOfferedTechs: sampleOfferedTechs,
     ...(onDiagnostic === undefined ? {} : { onDiagnostic }),
     ...(onActivity === undefined ? {} : { onActivity }),
     ...(onSkipped === undefined ? {} : { onSkipped }),
@@ -582,7 +588,7 @@ export function createCapturedProgressionControl(
     drawnActions,
     mountSuppression,
     panels,
-    readOfferedTechs,
+    readOfferedTechs: sampleOfferedTechs,
     ...(onUnavailable === undefined ? {} : { onUnavailable }),
     ...(onActivity === undefined ? {} : { onActivity }),
     diagnostics,
@@ -666,6 +672,7 @@ export function createCapturedProgressionControl(
     },
     runResearchCycle: () => research.runCycle(),
     readOfferedTechs: () => lastOffered,
+    sampleOfferedTechs,
     readGrantedTechs: () => lastGranted,
     readProjects,
     resetProjectSample,

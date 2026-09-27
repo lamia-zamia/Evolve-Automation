@@ -127,7 +127,7 @@ function createPanels(overrides = {}) {
             }
           }
         : overrides.resizeObserver,
-    updateSettingsFromState: () => dom.trace.push("persist"),
+    persistSettings: () => dom.trace.push("persist"),
     makePlannerStats: () => overrides.plannerStats ?? null,
     savePlannerStats: (stats) => {
       saved.push(stats);

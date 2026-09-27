@@ -70,7 +70,6 @@ import {
   createCapturedTriggers,
   triggersNeedDemandSample,
   triggersNeedGrantedTechs,
-  triggersNeedTechKnowledge,
   type CapturedTriggerTarget,
 } from "../adapters/evolve/progression/build/captured-triggers.ts";
 import { createCapturedTriggerActions } from "../adapters/evolve/progression/build/captured-trigger-actions.ts";
@@ -139,7 +138,13 @@ import { createSettingsStore } from "../adapters/browser/settings-store.ts";
 import { createCapturedSettingsDefaults } from "../adapters/evolve/captured-settings-defaults.ts";
 import { createCapturedSettingsLifecycle } from "../application/captured-settings-lifecycle.ts";
 import { createOverrideSettings } from "../application/override-settings.ts";
-import { createCapturedOverrideEvaluation } from "../adapters/evolve/captured-override-evaluation.ts";
+import {
+  capturedOverridesNeedGrantedTechs,
+  createCapturedOverrideEvaluation,
+  readCapturedOverrideConditionRequirements,
+} from "../adapters/evolve/captured-override-evaluation.ts";
+import { createCapturedConditionContextReader } from "../adapters/evolve/captured-condition-context.ts";
+import type { CapturedConditionContext } from "../adapters/evolve/captured-conditions.ts";
 import { createCapturedQueuedSettings } from "../adapters/evolve/progression/evolution/captured-queued-settings.ts";
 import { createCapturedEvolution } from "../adapters/evolve/progression/evolution/captured-evolution.ts";
 import {
@@ -314,6 +319,11 @@ export function startCapturedRuntime({
       .toLowerCase()
       .includes("safemode");
   };
+  let readOverrideConditionContext:
+    | ((
+        settings: Readonly<Record<string, unknown>>,
+      ) => Readonly<CapturedConditionContext> | undefined)
+    | undefined;
   const overrideSettings = createOverrideSettings({
     getSafeMode: readSafeMode,
     getSettings: () => effectiveSettings,
@@ -325,6 +335,8 @@ export function startCapturedRuntime({
         comparisons: overrideComparisons,
         rightOperandComparators: ["A?B", "!A?B"],
       },
+      readConditionContext: (settings) =>
+        readOverrideConditionContext?.(settings),
     }),
     reporter: {
       report: (failures) =>
@@ -338,6 +350,13 @@ export function startCapturedRuntime({
     display: { publish: () => {} },
   });
   const refreshEffectiveSettings = () => {
+    // A few discoveries can refresh settings while the composition is still being assembled.
+    // Until the condition sampler exists, keep the stored layer visible and defer overrides to
+    // the next refresh instead of reporting context-dependent operands as unavailable.
+    if (readOverrideConditionContext === undefined) {
+      overrideSettings.syncStoredSettings();
+      return;
+    }
     const raw = settingsLifecycle.readRaw();
     const overrides = raw.overrides;
     if (
@@ -556,8 +575,8 @@ export function startCapturedRuntime({
   // question, so one of the two has to be late-bound. This one is, with a real empty sample until
   // the cycle exists, rather than a mutable object either side could hold a stale reference to.
   let readDemand: () => CapturedDemandSample = () => EMPTY_DEMAND_SAMPLE;
-  // The prerequisite report is written by the prerequisite phase before any demand consumer
-  // samples, and both demand plans read it back lazily. Reset with the samples every cycle.
+  // Overrides may need the prerequisite report before the period gate; the cycle then keeps and
+  // reuses it for its demand consumers. Reset it with the cycle's other samples.
   let demandPrerequisitesThisCycle: DemandPrerequisiteReport | undefined;
   const readDemandPrerequisites = () => demandPrerequisitesThisCycle;
   const progression = createCapturedProgressionControl({
@@ -579,8 +598,14 @@ export function startCapturedRuntime({
     readReservedQuantityForMechPriority: (resourceId) =>
       readDemand().requestedQuantityForMechPriority(resourceId),
     // The already-granted half of the research draw is only worth its cost to a configured
-    // trigger, so the trigger settings decide whether each cycle's pass keeps it.
-    needGrantedTechs: () => triggersNeedGrantedTechs(settingsStore.readRaw()),
+    // trigger or override, so those stored conditions decide whether the pass keeps it.
+    needGrantedTechs: () => {
+      const settings = settingsStore.readRaw();
+      return (
+        triggersNeedGrantedTechs(settings) ||
+        capturedOverridesNeedGrantedTechs(settings)
+      );
+    },
     readCapturedStorageRequired: (_resourceIds, resourceScopes = []) => {
       const sample = readDemand();
       const scopes: readonly BuildResourceScope[] =
@@ -758,6 +783,43 @@ export function startCapturedRuntime({
   let triggerDemandThisCycle: CapturedDemandSample | undefined;
   const readTriggerDemand = () =>
     (triggerDemandThisCycle ??= triggerDemand.sample());
+  const conditionContextReader = createCapturedConditionContextReader({
+    costs: buildCosts,
+    readOfferedTechs: progression.sampleOfferedTechs,
+    readGrantedTechs: progression.readGrantedTechs,
+    readProjects: progression.readProjects,
+    readBuildingUnlocks: progression.readBuildingUnlocks,
+    readBuildingCapacity: progression.readBuildingCapacity,
+    readDemandSample: () =>
+      triggersNeedDemandSample(settingsStore.readRaw())
+        ? readTriggerDemand()
+        : undefined,
+    readTechKnowledge: progression.readKnowledgeRequiredByTechs,
+    readHellGarrison: () => {
+      ensureHellGarrisonControls();
+      return readCapturedHellGarrison(
+        pageCapture.rootState,
+        pageCapture.controls,
+      );
+    },
+  });
+  readOverrideConditionContext = (settings) =>
+    conditionContextReader.read(
+      readCapturedOverrideConditionRequirements(settings),
+      settings,
+      {
+        readDemandSample: () => {
+          demandPrerequisitesThisCycle = ensureDemandPrerequisiteControls({
+            root: pageCapture.rootState.readRoot(),
+            settings: settingsStore.readRaw(),
+            controls: pageCapture.controls,
+            ensureCivicControls,
+            ensureBuildControls: progression.ensureBuildControls,
+          });
+          return triggerDemand.sample();
+        },
+      },
+    ).context;
   const triggers = createCapturedTriggers({
     readHellGarrison: () => {
       ensureHellGarrisonControls();
@@ -770,7 +832,7 @@ export function startCapturedRuntime({
     controls: pageCapture.controls,
     costs: buildCosts,
     readSettings: () => settingsStore.readRaw(),
-    readOfferedTechs: progression.readOfferedTechs,
+    readOfferedTechs: progression.sampleOfferedTechs,
     readGrantedTechs: progression.readGrantedTechs,
     readOfferedProjects: progression.readProjects,
     readBuildingUnlocks: progression.readBuildingUnlocks,
@@ -783,10 +845,7 @@ export function startCapturedRuntime({
       triggersNeedDemandSample(settingsStore.readRaw())
         ? readTriggerDemand()
         : undefined,
-    readTechKnowledge: () =>
-      triggersNeedTechKnowledge(settingsStore.readRaw())
-        ? progression.readKnowledgeRequiredByTechs()
-        : undefined,
+    readTechKnowledge: progression.readKnowledgeRequiredByTechs,
   });
   // One trigger sample per cycle, shared by the demand model and the trigger phase: what the
   // script saves for and what it clicks must be the same list.
@@ -1785,8 +1844,6 @@ export function startCapturedRuntime({
     triggerTargetsThisCycle = undefined;
     triggerDemandThisCycle = undefined;
     demandPrerequisitesThisCycle = undefined;
-    progression.resetProjectSample();
-    progression.resetBuildingUnlockSample();
     // Drawn before the master-toggle guard below, and before any automation runs: a fresh profile
     // carries no settings at all, so a script that only drew its interface while already enabled
     // could never be switched on.
@@ -1825,7 +1882,7 @@ export function startCapturedRuntime({
       // first use, so this runs before any consumer (triggers, market, storage) can sample,
       // and the report it writes is what the samples fail closed on when a capture is missing.
       runPhase("demand prerequisites", () => {
-        demandPrerequisitesThisCycle = ensureDemandPrerequisiteControls({
+        demandPrerequisitesThisCycle ??= ensureDemandPrerequisiteControls({
           root: pageCapture.rootState.readRoot(),
           settings,
           controls: pageCapture.controls,
@@ -2250,6 +2307,11 @@ export function startCapturedRuntime({
   // pays for, was re-made four times more often than the setting asks for.
   let pendingPeriods = 0;
   return pageCapture.periods.subscribe((period) => {
+    // Overrides need their context before this gate. Reset the cycle-held panel samples here so
+    // an override never answers from the previous cycle, and let a cycle that runs reuse this
+    // same point-in-time sample for its trigger and progression work.
+    progression.resetProjectSample();
+    progression.resetBuildingUnlockSample();
     // The gate is the first effective-settings consumer after a browser wake. Refresh before it
     // reads tickRate so an override can change cadence without waiting for a completed cycle.
     refreshEffectiveSettings();

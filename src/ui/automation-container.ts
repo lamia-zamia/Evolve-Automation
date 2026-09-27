@@ -27,7 +27,7 @@ type AutomationContainerActions = {
     enabledCallback?: () => void,
     disabledCallback?: () => void,
   ) => void;
-  updateSettingsFromState: () => void;
+  persistSettings: () => void;
   buildScriptSettings: () => void;
   removeScriptSettings: () => void;
   createMechInfo: () => void;
@@ -73,7 +73,7 @@ export function createAutomationContainer({
     const overrideKeyLabel = getOverrideKeyLabel();
     const {
       createSettingToggle,
-      updateSettingsFromState,
+      persistSettings,
       buildScriptSettings,
       removeScriptSettings,
       createMechInfo,
@@ -137,7 +137,7 @@ export function createAutomationContainer({
           "display",
           settingsRaw["toggleSettingsCollapsed"] ? "none" : "block",
         );
-        updateSettingsFromState();
+        persistSettings();
       });
 
       createSettingToggle(

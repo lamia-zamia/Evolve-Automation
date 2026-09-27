@@ -7852,7 +7852,7 @@
             () => sweepBuildControls(index),
             (previous, next) => previous === next
           );
-    }, lastOffered, lastGranted, readOfferedTechs = () => {
+    }, lastOffered, lastGranted, sampleOfferedTechs = () => {
       let includeGranted = dependencies.needGrantedTechs?.() === !0, held = scopes.read(
         includeGranted ? RESEARCH_GRANTED_SCOPE : RESEARCH_SCOPE,
         () => offered.read(includeGranted ? { includeGranted } : void 0),
@@ -7862,6 +7862,7 @@
         let value = offered.restate(held);
         return lastOffered = value.offered, lastGranted = value.granted, value.offered;
       }
+      lastOffered = void 0, lastGranted = void 0;
     }, offered = createCapturedTechCatalog({
       rootState,
       discovery,
@@ -7988,7 +7989,7 @@
       scriptReservations,
       readKnowledgeGate,
       ...readStorageRequired === void 0 ? {} : { readStorageRequired },
-      readOfferedTechs,
+      readOfferedTechs: sampleOfferedTechs,
       ...onDiagnostic === void 0 ? {} : { onDiagnostic },
       ...onActivity === void 0 ? {} : { onActivity },
       ...onSkipped === void 0 ? {} : { onSkipped },
@@ -8000,7 +8001,7 @@
       drawnActions,
       mountSuppression,
       panels,
-      readOfferedTechs,
+      readOfferedTechs: sampleOfferedTechs,
       ...onUnavailable === void 0 ? {} : { onUnavailable },
       ...onActivity === void 0 ? {} : { onActivity },
       diagnostics
@@ -8061,6 +8062,7 @@
       },
       runResearchCycle: () => research.runCycle(),
       readOfferedTechs: () => lastOffered,
+      sampleOfferedTechs,
       readGrantedTechs: () => lastGranted,
       readProjects: readProjects2,
       resetProjectSample,
@@ -18747,13 +18749,18 @@
     let value = context?.settings?.[argument];
     return typeof value == "boolean" ? Number(value) : finite(value);
   }
+  function splitCapturedBuildingCostArgument(argument) {
+    let [buildingId, resourceId] = argument.split(".");
+    if (!(buildingId === void 0 || resourceId === void 0))
+      return Object.freeze({ buildingId, resourceId });
+  }
   function buildingCostAmount(context, argument) {
     if (typeof argument != "string") return;
-    let [buildingId, resourceId] = argument.split(".");
-    if (buildingId === void 0 || resourceId === void 0) return;
-    let price = context?.buildingCosts?.get(buildingId);
+    let parts = splitCapturedBuildingCostArgument(argument);
+    if (parts === void 0) return;
+    let price = context?.buildingCosts?.get(parts.buildingId);
     if (price !== void 0)
-      return finite(price.cost[resourceId]) ?? 0;
+      return finite(price.cost[parts.resourceId]) ?? 0;
   }
   function readDate(root, argument) {
     let days = finite(readProperty(readProperty(root, "stats"), "days"));
@@ -18986,28 +18993,103 @@
       return typeof value == "boolean" ? Number(value) === target : value >= target;
   }
 
+  // src/adapters/evolve/captured-condition-context.ts
+  var CAPTURED_CONDITION_DEMAND_TYPES = /* @__PURE__ */ new Set([
+    "ResourceDemanded",
+    "ResourceSatisfied",
+    "ResourceSatisfyRatio",
+    "ResourceMaxCost"
+  ]), CAPTURED_CONDITION_REGION_TYPES = /* @__PURE__ */ new Set([
+    "BuildingUnlocked",
+    "BuildingClickable",
+    "BuildingEnabled",
+    "BuildingDisabled"
+  ]);
+  function capturedConditionsNeedDemand(requirements) {
+    return requirements.some(
+      ({ type }) => CAPTURED_CONDITION_DEMAND_TYPES.has(type)
+    );
+  }
+  function capturedConditionsNeedGrantedTechs(requirements) {
+    return requirements.some(({ type }) => type === "ResearchComplete");
+  }
+  function capturedConditionsNeedTechKnowledge(requirements) {
+    return requirements.some(
+      ({ type, argument }) => type === "Other" && argument === "tknow"
+    );
+  }
+  function capturedConditionCostBuildingId(requirement) {
+    if (requirement.type === "BuildingAffordable" || requirement.type === "BuildingClickable")
+      return typeof requirement.argument == "string" ? requirement.argument : void 0;
+    if (requirement.type === "BuildingCost")
+      return typeof requirement.argument != "string" ? void 0 : splitCapturedBuildingCostArgument(requirement.argument)?.buildingId;
+    if (requirement.type === "Other" && requirement.argument === "satcost")
+      return SWARM_SATELLITE_ACTION_ID;
+  }
+  function createCapturedConditionContextReader({
+    costs: conditionContextCosts,
+    readOfferedTechs: readConditionOfferedTechs,
+    readGrantedTechs: readConditionGrantedTechs,
+    readProjects: readConditionProjects,
+    readBuildingUnlocks: readConditionBuildingUnlocks,
+    readBuildingCapacity: readConditionBuildingCapacity,
+    readDemandSample: readConditionDemandSample,
+    readTechKnowledge: readConditionTechKnowledge,
+    readHellGarrison: readConditionHellGarrison
+  }) {
+    return Object.freeze({
+      read(requirements, settings, options = {}) {
+        let needsOfferedTechs = options.includeTechCatalog === !0 || requirements.some(
+          ({ type }) => type === "ResearchUnlocked" || type === "ResearchComplete"
+        ), needsOfferedTechKnowledge = requirements.some(
+          ({ type, argument }) => type === "Other" && argument === "tknow"
+        ), offeredTechs = needsOfferedTechs || needsOfferedTechKnowledge ? readConditionOfferedTechs?.() : void 0, grantedTechs = needsOfferedTechs ? readConditionGrantedTechs?.() : void 0, offeredProjects = options.includeProjectCatalog === !0 || requirements.some(({ type }) => type === "ProjectUnlocked") ? readConditionProjects?.() : void 0, buildingRegions = /* @__PURE__ */ new Set();
+        for (let requirement of requirements) {
+          if (!CAPTURED_CONDITION_REGION_TYPES.has(requirement.type) || typeof requirement.argument != "string") continue;
+          let parts = splitActionId(requirement.argument);
+          parts !== void 0 && buildingRegions.add(parts.region);
+        }
+        let buildingUnlocks = buildingRegions.size === 0 ? void 0 : readConditionBuildingUnlocks?.(buildingRegions), buildingCosts = /* @__PURE__ */ new Map();
+        for (let requirement of requirements) {
+          let buildingId = capturedConditionCostBuildingId(requirement);
+          if (buildingId === void 0 || buildingCosts.has(buildingId))
+            continue;
+          let price = conditionContextCosts.readCost(buildingId);
+          price !== void 0 && buildingCosts.set(buildingId, price);
+        }
+        let buildingCapacityIds = /* @__PURE__ */ new Set();
+        for (let requirement of requirements)
+          requirement.type === "BuildingClickable" && typeof requirement.argument == "string" && buildingCapacityIds.add(requirement.argument);
+        let buildingCapacity = buildingCapacityIds.size === 0 ? void 0 : readConditionBuildingCapacity?.(buildingCapacityIds), demand = capturedConditionsNeedDemand(requirements) ? (options.readDemandSample ?? readConditionDemandSample)?.() : void 0, knowledgeRequiredByTechs = capturedConditionsNeedTechKnowledge(
+          requirements
+        ) ? readConditionTechKnowledge?.() : void 0, hellGarrison = requirements.some(
+          ({ type, argument }) => type === "Soldiers" && argument === "hellGarrison"
+        ) ? readConditionHellGarrison?.() : void 0, offeredTechIds = offeredTechs === void 0 ? void 0 : new Set(offeredTechs.map((tech) => tech.elementId)), unlockedProjectIds = offeredProjects === void 0 ? void 0 : new Set(offeredProjects.map((project) => project.elementId)), storedSettings = isRecord(settings) ? settings : void 0, context = Object.freeze({
+          ...offeredTechIds === void 0 ? {} : { offeredTechs: offeredTechIds },
+          ...grantedTechs === void 0 ? {} : { grantedTechs },
+          ...unlockedProjectIds === void 0 ? {} : { unlockedProjects: unlockedProjectIds },
+          ...buildingUnlocks === void 0 ? {} : { buildingUnlocks },
+          ...buildingCosts.size === 0 ? {} : { buildingCosts },
+          ...buildingCapacity === void 0 ? {} : { buildingCapacity },
+          ...storedSettings === void 0 ? {} : { settings: storedSettings },
+          ...demand === void 0 ? {} : { demand },
+          ...knowledgeRequiredByTechs === void 0 ? {} : { knowledgeRequiredByTechs },
+          ...hellGarrison === void 0 ? {} : { hellGarrison }
+        });
+        return Object.freeze({
+          context,
+          ...offeredTechs === void 0 ? {} : { offeredTechs },
+          ...grantedTechs === void 0 ? {} : { grantedTechs },
+          ...offeredProjects === void 0 ? {} : { offeredProjects }
+        });
+      }
+    });
+  }
+
   // src/adapters/evolve/progression/build/captured-triggers.ts
   var NO_TARGETS = Object.freeze(
     []
-  ), ARPA_PREFIX = "arpa", REGION_PANEL_CONDITIONS = Object.freeze(
-    /* @__PURE__ */ new Set([
-      "BuildingUnlocked",
-      "BuildingClickable",
-      "BuildingEnabled",
-      "BuildingDisabled"
-    ])
-  );
-  function costConditionBuildingId(row) {
-    if (row.requirementType === "BuildingAffordable" || row.requirementType === "BuildingClickable")
-      return typeof row.requirementId == "string" ? row.requirementId : void 0;
-    if (row.requirementType === "BuildingCost") {
-      if (typeof row.requirementId != "string") return;
-      let dot = row.requirementId.indexOf(".");
-      return dot > 0 ? row.requirementId.slice(0, dot) : void 0;
-    }
-    if (row.requirementType === "Other" && row.requirementId === "satcost")
-      return SWARM_SATELLITE_ACTION_ID;
-  }
+  ), ARPA_PREFIX = "arpa";
   function readRow(raw) {
     if (!isRecord(raw)) return;
     let priority = finite(readProperty(raw, "priority")), requirementType = readProperty(raw, "requirementType"), actionType = readProperty(raw, "actionType"), actionId = readProperty(raw, "actionId"), actionCount = finite(readProperty(raw, "actionCount"));
@@ -19032,25 +19114,22 @@
     }
     return Object.freeze(rows.sort((a, b) => a.priority - b.priority));
   }
+  function triggerConditionContextRequirements(rows) {
+    return rows.map(({ requirementType, requirementId }) => ({
+      type: requirementType,
+      argument: requirementId
+    }));
+  }
   function triggersNeedGrantedTechs(settings) {
-    return readProperty(settings, "autoTrigger") !== !0 ? !1 : readRows(settings).some(
-      (row) => row.actionType === "research" || row.requirementType === "ResearchComplete"
+    if (readProperty(settings, "autoTrigger") !== !0) return !1;
+    let rows = readRows(settings);
+    return rows.some((row) => row.actionType === "research") || capturedConditionsNeedGrantedTechs(
+      triggerConditionContextRequirements(rows)
     );
   }
-  var DEMAND_CONDITION_TYPES = /* @__PURE__ */ new Set([
-    "ResourceDemanded",
-    "ResourceSatisfied",
-    "ResourceSatisfyRatio",
-    "ResourceMaxCost"
-  ]);
   function triggersNeedDemandSample(settings) {
-    return readProperty(settings, "autoTrigger") !== !0 ? !1 : readRows(settings).some(
-      (row) => DEMAND_CONDITION_TYPES.has(row.requirementType)
-    );
-  }
-  function triggersNeedTechKnowledge(settings) {
-    return readProperty(settings, "autoTrigger") !== !0 ? !1 : readRows(settings).some(
-      (row) => row.requirementType === "Other" && row.requirementId === "tknow"
+    return readProperty(settings, "autoTrigger") !== !0 ? !1 : capturedConditionsNeedDemand(
+      triggerConditionContextRequirements(readRows(settings))
     );
   }
   function readTriggerActionStructure(root, actionId) {
@@ -19063,47 +19142,41 @@
     return costFitsStorage(root, price.cost, { pool: price.pool }) === !0;
   }
   function createCapturedTriggers(dependencies) {
-    let { rootState, controls: controls2, costs, readSettings } = dependencies;
+    let { rootState, controls: controls2, costs, readSettings } = dependencies, conditionContextReader = createCapturedConditionContextReader({
+      costs,
+      readOfferedTechs: dependencies.readOfferedTechs,
+      readGrantedTechs: dependencies.readGrantedTechs,
+      readProjects: dependencies.readOfferedProjects,
+      readBuildingUnlocks: dependencies.readBuildingUnlocks,
+      readBuildingCapacity: dependencies.readBuildingCapacity,
+      readDemandSample: dependencies.readDemandSample,
+      readTechKnowledge: dependencies.readTechKnowledge,
+      readHellGarrison: dependencies.readHellGarrison
+    });
     return Object.freeze({
       read() {
         let settings = readSettings();
         if (readProperty(settings, "autoTrigger") !== !0) return NO_TARGETS;
         let rows = readRows(settings);
         if (rows.length === 0) return NO_TARGETS;
-        let root = rootState.readRoot(), offered = dependencies.readOfferedTechs?.(), offeredTechs = offered === void 0 ? void 0 : new Map(offered.map((tech) => [tech.elementId, tech])), grantedTechs = dependencies.readGrantedTechs?.(), needProjects = rows.some(
-          (row) => row.actionType === "arpa" || row.requirementType === "ProjectUnlocked"
-        ), drawnProjects = dependencies.readOfferedProjects === void 0 || !needProjects ? void 0 : dependencies.readOfferedProjects(), offeredProjectsById = drawnProjects === void 0 ? void 0 : new Map(
-          drawnProjects.map((project) => [project.elementId, project])
-        ), buildingRegions = /* @__PURE__ */ new Set();
-        for (let row of rows) {
-          if (!REGION_PANEL_CONDITIONS.has(row.requirementType) || typeof row.requirementId != "string") continue;
-          let parts = splitActionId(row.requirementId);
-          parts !== void 0 && buildingRegions.add(parts.region);
-        }
-        let buildingUnlocks = dependencies.readBuildingUnlocks === void 0 || buildingRegions.size === 0 ? void 0 : dependencies.readBuildingUnlocks(buildingRegions), buildingCosts = /* @__PURE__ */ new Map();
-        for (let row of rows) {
-          let buildingId = costConditionBuildingId(row);
-          if (buildingId === void 0 || buildingCosts.has(buildingId) || controls2.resolve(buildingId) === void 0) continue;
-          let price2 = costs.readCost(buildingId);
-          price2 !== void 0 && buildingCosts.set(buildingId, price2);
-        }
-        let buildingCapacityIds = /* @__PURE__ */ new Set();
-        for (let row of rows)
-          row.requirementType === "BuildingClickable" && typeof row.requirementId == "string" && buildingCapacityIds.add(row.requirementId);
-        let buildingCapacity = dependencies.readBuildingCapacity === void 0 || buildingCapacityIds.size === 0 ? void 0 : dependencies.readBuildingCapacity(buildingCapacityIds), storedSettings = isRecord(settings) ? settings : void 0, demandSample = dependencies.readDemandSample?.(), techKnowledge = dependencies.readTechKnowledge?.(), hellGarrison = rows.some(
-          (row) => row.requirementType === "Soldiers" && row.requirementId === "hellGarrison"
-        ) ? dependencies.readHellGarrison?.() : void 0, conditionContext = Object.freeze({
-          ...offeredTechs === void 0 ? {} : { offeredTechs: new Set(offeredTechs.keys()) },
-          ...grantedTechs === void 0 ? {} : { grantedTechs },
-          ...offeredProjectsById === void 0 ? {} : { unlockedProjects: new Set(offeredProjectsById.keys()) },
-          ...buildingUnlocks === void 0 ? {} : { buildingUnlocks },
-          ...buildingCosts.size === 0 ? {} : { buildingCosts },
-          ...buildingCapacity === void 0 ? {} : { buildingCapacity },
-          ...storedSettings === void 0 ? {} : { settings: storedSettings },
-          ...demandSample === void 0 ? {} : { demand: demandSample },
-          ...techKnowledge === void 0 ? {} : { knowledgeRequiredByTechs: techKnowledge },
-          ...hellGarrison === void 0 ? {} : { hellGarrison }
-        }), byPriority = new Map(rows.map((row) => [row.priority, row])), isComplete = (row) => {
+        let root = rootState.readRoot(), conditionSamples = conditionContextReader.read(
+          triggerConditionContextRequirements(rows),
+          settings,
+          {
+            includeTechCatalog: rows.some((row) => row.actionType === "research"),
+            includeProjectCatalog: rows.some((row) => row.actionType === "arpa")
+          }
+        ), offeredTechs = conditionSamples.offeredTechs === void 0 ? void 0 : new Map(
+          conditionSamples.offeredTechs.map((tech) => [
+            tech.elementId,
+            tech
+          ])
+        ), grantedTechs = conditionSamples.grantedTechs, offeredProjectsById = conditionSamples.offeredProjects === void 0 ? void 0 : new Map(
+          conditionSamples.offeredProjects.map((project) => [
+            project.elementId,
+            project
+          ])
+        ), conditionContext = conditionSamples.context, byPriority = new Map(rows.map((row) => [row.priority, row])), isComplete = (row) => {
           if (row.actionType === "build") {
             let count2 = finite(
               readProperty(
@@ -28193,6 +28266,26 @@
       (task) => typeof task == "string" && ids.includes(task)
     );
   }
+  function readCapturedOverrideConditionRequirements(settings) {
+    let overrides = readProperty(settings, "overrides");
+    if (!isRecord(overrides)) return [];
+    let requirements = [];
+    for (let conditions of Object.values(overrides))
+      if (Array.isArray(conditions))
+        for (let stored of conditions) {
+          let condition = parseOverrideCondition(stored);
+          condition !== void 0 && requirements.push(
+            { type: condition.type1, argument: condition.arg1 },
+            { type: condition.type2, argument: condition.arg2 }
+          );
+        }
+    return requirements;
+  }
+  function capturedOverridesNeedGrantedTechs(settings) {
+    return capturedConditionsNeedGrantedTechs(
+      readCapturedOverrideConditionRequirements(settings)
+    );
+  }
   function createCapturedOverrideEvaluation({
     rootState,
     readSettings,
@@ -28201,7 +28294,7 @@
   }) {
     return Object.freeze({
       sampleEvaluator() {
-        let root = readRootSafely2(rootState), settings = readSettings(), context = readConditionContext?.();
+        let root = readRootSafely2(rootState), settings = readSettings(), context = readConditionContext?.(settings);
         return {
           hasOperandType: (operandType) => CAPTURED_OPERAND_TYPES.has(operandType) || operandType === "String" || operandType === "Number",
           readOperand: (operandType, argument) => {
@@ -29790,7 +29883,7 @@
     function ensureAutomationContainer() {
       let settingsRaw = getSettingsRaw(), $ = getJQuery(), safeMode = getSafeMode(), overrideKeyLabel = getOverrideKeyLabel(), {
         createSettingToggle,
-        updateSettingsFromState,
+        persistSettings,
         buildScriptSettings,
         removeScriptSettings,
         createMechInfo,
@@ -29837,7 +29930,7 @@
           ), togglesNode.css(
             "display",
             settingsRaw.toggleSettingsCollapsed ? "none" : "block"
-          ), updateSettingsFromState();
+          ), persistSettings();
         }), createSettingToggle(
           togglesNode,
           "masterScriptToggle",
@@ -38910,11 +39003,11 @@ Efficiency above '1' is useful to save resources for more desperate times, or to
     getJQuery,
     getSettingsRaw,
     getRealNumber,
-    getUpdateSettingsFromState,
+    getPersistSettings,
     openOverrideModal,
     buildSelectOptions
   }) {
-    let $ = getJQuery(), getRealNumberValue = (amountText) => getRealNumber()(amountText), updateSettingsFromState = () => getUpdateSettingsFromState()(), readListSetting = (settingName) => getSettingsRaw()[settingName];
+    let $ = getJQuery(), getRealNumberValue = (amountText) => getRealNumber()(amountText), persistSettings = () => getPersistSettings()(), readListSetting = (settingName) => getSettingsRaw()[settingName];
     function addSettingsToggle(node, settingName, labelText, hintText, enabledCallBack, disabledCallBack) {
       return $(`
           <div class="script_bg_${settingName}" style="margin-top: 5px; width: 90%; display: inline-block; text-align: left;">
@@ -38926,7 +39019,7 @@ Efficiency above '1' is useful to save resources for more desperate times, or to
         "inactive-row",
         !!getSettingsRaw().overrides[settingName]
       ).on("change", "input", function() {
-        getSettingsRaw()[settingName] = this.checked, updateSettingsFromState(), $(".script_" + settingName).prop(
+        getSettingsRaw()[settingName] = this.checked, persistSettings(), $(".script_" + settingName).prop(
           "checked",
           getSettingsRaw()[settingName]
         ), getSettingsRaw()[settingName] && enabledCallBack && enabledCallBack(), !getSettingsRaw()[settingName] && disabledCallBack && disabledCallBack();
@@ -38952,7 +39045,7 @@ Efficiency above '1' is useful to save resources for more desperate times, or to
         !!getSettingsRaw().overrides[settingName]
       ).on("change", "input", function() {
         let parsedValue = getRealNumberValue(this.value);
-        Number.isNaN(parsedValue) || (getSettingsRaw()[settingName] = parsedValue, updateSettingsFromState()), $(".script_" + settingName).val(getSettingsRaw()[settingName]);
+        Number.isNaN(parsedValue) || (getSettingsRaw()[settingName] = parsedValue, persistSettings()), $(".script_" + settingName).val(getSettingsRaw()[settingName]);
       }).on(
         "click",
         {
@@ -38974,7 +39067,7 @@ Efficiency above '1' is useful to save resources for more desperate times, or to
         "inactive-row",
         !!getSettingsRaw().overrides[settingName]
       ).on("change", "input", function() {
-        getSettingsRaw()[settingName] = this.value, updateSettingsFromState(), $(".script_" + settingName).val(getSettingsRaw()[settingName]);
+        getSettingsRaw()[settingName] = this.value, persistSettings(), $(".script_" + settingName).val(getSettingsRaw()[settingName]);
       }).on(
         "click",
         {
@@ -38999,7 +39092,7 @@ Efficiency above '1' is useful to save resources for more desperate times, or to
         "inactive-row",
         !!getSettingsRaw().overrides[settingName]
       ).find("select").val(getSettingsRaw()[settingName]).on("change", function() {
-        getSettingsRaw()[settingName] = this.value, updateSettingsFromState(), $(".script_" + settingName).val(getSettingsRaw()[settingName]);
+        getSettingsRaw()[settingName] = this.value, persistSettings(), $(".script_" + settingName).val(getSettingsRaw()[settingName]);
       }).end().on(
         "click",
         {
@@ -39070,16 +39163,16 @@ Efficiency above '1' is useful to save resources for more desperate times, or to
         // Keyboard type
       }), listBlock.on("click", "button:eq(1)", function() {
         let selected = readListSetting(settingName);
-        selectedItem && !selected.includes(selectedItem) && (selected.push(selectedItem), selected.sort(), updateSettingsFromState(), updateList());
+        selectedItem && !selected.includes(selectedItem) && (selected.push(selectedItem), selected.sort(), persistSettings(), updateList());
       }), listBlock.on("click", "button:eq(0)", function() {
         let selected = readListSetting(settingName);
-        selectedItem && selected.includes(selectedItem) && (selected.splice(selected.indexOf(selectedItem), 1), selected.sort(), updateSettingsFromState(), updateList());
+        selectedItem && selected.includes(selectedItem) && (selected.splice(selected.indexOf(selectedItem), 1), selected.sort(), persistSettings(), updateList());
       }), updateList();
     }
     function addInputCallbacks(node, settingKey) {
       return node.on("change", function() {
         let parsedValue = getRealNumberValue(this.value);
-        Number.isNaN(parsedValue) || (getSettingsRaw()[settingKey] = parsedValue, updateSettingsFromState()), $(".script_" + settingKey).val(getSettingsRaw()[settingKey]);
+        Number.isNaN(parsedValue) || (getSettingsRaw()[settingKey] = parsedValue, persistSettings()), $(".script_" + settingKey).val(getSettingsRaw()[settingKey]);
       }).on(
         "click",
         { label: `Number (${settingKey})`, name: settingKey, type: "number" },
@@ -39100,7 +39193,7 @@ Efficiency above '1' is useful to save resources for more desperate times, or to
     }
     function addToggleCallbacks(node, settingKey) {
       return node.on("change", "input", function() {
-        getSettingsRaw()[settingKey] = this.checked, updateSettingsFromState(), $(".script_" + settingKey).prop(
+        getSettingsRaw()[settingKey] = this.checked, persistSettings(), $(".script_" + settingKey).prop(
           "checked",
           getSettingsRaw()[settingKey]
         );
@@ -39400,7 +39493,7 @@ Efficiency above '1' is useful to save resources for more desperate times, or to
     buildProjectSettings,
     buildLoggingSettings,
     filterBuildingSettingsTable,
-    updateSettingsFromState,
+    persistSettings,
     importSettings,
     exportSettings,
     triggerFileDownload,
@@ -39466,7 +39559,7 @@ Efficiency above '1' is useful to save resources for more desperate times, or to
             search2 !== void 0 && (search2.value = "", filterBuildingSettingsTable());
           } else
             getSettingsRaw()[element.id] = !1, section.find(`#${contentID}`).is(":empty") && updateSettingsContentFunction(), content.style.display = "block";
-          updateSettingsFromState();
+          persistSettings();
         });
       }
       section.find(`#${resetID}`).on("click", () => genericResetFunction(resetFunction, sectionName));
@@ -39665,7 +39758,7 @@ Efficiency above '1' is useful to save resources for more desperate times, or to
           getJQuery,
           getSettingsRaw: () => (prepareSettingsForUi(), settings.readRaw()),
           getRealNumber: () => formatting.getRealNumber,
-          getUpdateSettingsFromState: () => persistSettings
+          getPersistSettings: () => persistSettings
         }
       }), controls2 = settingsEditor;
       openOverrideModal = (event) => settingsEditor.openOverrideModal(
@@ -39737,7 +39830,7 @@ Efficiency above '1' is useful to save resources for more desperate times, or to
         buildLoggingSettings: () => {
         },
         filterBuildingSettingsTable: () => building?.filterBuildingSettingsTable(),
-        updateSettingsFromState: persistSettings,
+        persistSettings,
         importSettings: importScriptSettings,
         exportSettings: () => JSON.stringify(settings.readRaw()),
         triggerFileDownload: fileDownload ?? reportNoFileDownload,
@@ -40751,7 +40844,7 @@ Only continue if you trust the source. Injected code:
           onEnable,
           onDisable
         ),
-        updateSettingsFromState: persistSettings,
+        persistSettings,
         buildScriptSettings,
         removeScriptSettings,
         createMechInfo: unported("mech info panel"),
@@ -44090,7 +44183,7 @@ Only continue if you trust the source. Injected code:
     let effectiveSettings = settingsLifecycle.readEffective(), reportedOverrideFailures = /* @__PURE__ */ new Set(), readSafeMode = () => {
       let location = readProperty(settingsHostWindow2, "location");
       return String(location ?? "").toLowerCase().includes("safemode");
-    }, overrideSettings = createOverrideSettings({
+    }, readOverrideConditionContext, overrideSettings = createOverrideSettings({
       getSafeMode: readSafeMode,
       getSettings: () => effectiveSettings,
       getSettingsRaw: settingsLifecycle.readRaw,
@@ -44100,7 +44193,8 @@ Only continue if you trust the source. Injected code:
         comparatorSource: {
           comparisons: overrideComparisons,
           rightOperandComparators: ["A?B", "!A?B"]
-        }
+        },
+        readConditionContext: (settings) => readOverrideConditionContext?.(settings)
       }),
       reporter: {
         report: (failures) => failures.forEach((failure2) => {
@@ -44111,6 +44205,10 @@ Only continue if you trust the source. Injected code:
       display: { publish: () => {
       } }
     }), refreshEffectiveSettings = () => {
+      if (readOverrideConditionContext === void 0) {
+        overrideSettings.syncStoredSettings();
+        return;
+      }
       let overrides = settingsLifecycle.readRaw().overrides;
       readSafeMode() || isRecord(overrides) && Object.keys(overrides).length > 0 ? overrideSettings.updateOverrides() : overrideSettings.syncStoredSettings();
     }, refreshDiscoveredSettings = () => {
@@ -44288,8 +44386,11 @@ Only continue if you trust the source. Injected code:
       readSettings: () => settingsStore.readRaw(),
       readReservedQuantityForMechPriority: (resourceId) => readDemand().requestedQuantityForMechPriority(resourceId),
       // The already-granted half of the research draw is only worth its cost to a configured
-      // trigger, so the trigger settings decide whether each cycle's pass keeps it.
-      needGrantedTechs: () => triggersNeedGrantedTechs(settingsStore.readRaw()),
+      // trigger or override, so those stored conditions decide whether the pass keeps it.
+      needGrantedTechs: () => {
+        let settings = settingsStore.readRaw();
+        return triggersNeedGrantedTechs(settings) || capturedOverridesNeedGrantedTechs(settings);
+      },
       readCapturedStorageRequired: (_resourceIds, resourceScopes = []) => {
         let sample = readDemand(), scopes = resourceScopes.length > 0 ? resourceScopes : _resourceIds.map((resourceId) => ({ resourceId }));
         return Object.freeze(
@@ -44421,7 +44522,34 @@ Only continue if you trust the source. Injected code:
       readPrerequisites: readDemandPrerequisites,
       craftCosts: costs,
       fleet: fleetDemand
-    }), triggerDemandThisCycle, readTriggerDemand = () => triggerDemandThisCycle ??= triggerDemand.sample(), triggers = createCapturedTriggers({
+    }), triggerDemandThisCycle, readTriggerDemand = () => triggerDemandThisCycle ??= triggerDemand.sample(), conditionContextReader = createCapturedConditionContextReader({
+      costs: buildCosts,
+      readOfferedTechs: progression.sampleOfferedTechs,
+      readGrantedTechs: progression.readGrantedTechs,
+      readProjects: progression.readProjects,
+      readBuildingUnlocks: progression.readBuildingUnlocks,
+      readBuildingCapacity: progression.readBuildingCapacity,
+      readDemandSample: () => triggersNeedDemandSample(settingsStore.readRaw()) ? readTriggerDemand() : void 0,
+      readTechKnowledge: progression.readKnowledgeRequiredByTechs,
+      readHellGarrison: () => (ensureHellGarrisonControls(), readCapturedHellGarrison(
+        pageCapture2.rootState,
+        pageCapture2.controls
+      ))
+    });
+    readOverrideConditionContext = (settings) => conditionContextReader.read(
+      readCapturedOverrideConditionRequirements(settings),
+      settings,
+      {
+        readDemandSample: () => (demandPrerequisitesThisCycle = ensureDemandPrerequisiteControls({
+          root: pageCapture2.rootState.readRoot(),
+          settings: settingsStore.readRaw(),
+          controls: pageCapture2.controls,
+          ensureCivicControls,
+          ensureBuildControls: progression.ensureBuildControls
+        }), triggerDemand.sample())
+      }
+    ).context;
+    let triggers = createCapturedTriggers({
       readHellGarrison: () => (ensureHellGarrisonControls(), readCapturedHellGarrison(
         pageCapture2.rootState,
         pageCapture2.controls
@@ -44430,7 +44558,7 @@ Only continue if you trust the source. Injected code:
       controls: pageCapture2.controls,
       costs: buildCosts,
       readSettings: () => settingsStore.readRaw(),
-      readOfferedTechs: progression.readOfferedTechs,
+      readOfferedTechs: progression.sampleOfferedTechs,
       readGrantedTechs: progression.readGrantedTechs,
       readOfferedProjects: progression.readProjects,
       readBuildingUnlocks: progression.readBuildingUnlocks,
@@ -44440,7 +44568,7 @@ Only continue if you trust the source. Injected code:
       // it pulls in. Sampled lazily and only for a configured condition, like the granted-techs
       // pass, so other runs never pay for the second demand plan.
       readDemandSample: () => triggersNeedDemandSample(settingsStore.readRaw()) ? readTriggerDemand() : void 0,
-      readTechKnowledge: () => triggersNeedTechKnowledge(settingsStore.readRaw()) ? progression.readKnowledgeRequiredByTechs() : void 0
+      readTechKnowledge: progression.readKnowledgeRequiredByTechs
     }), triggerTargetsThisCycle, readTriggerTargets = () => triggerTargetsThisCycle ??= triggers.read(), triggerActions = createCapturedTriggerActions({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
@@ -45079,7 +45207,7 @@ Only continue if you trust the source. Injected code:
       readSettings: () => settingsStore.readRaw(),
       onActivity
     }), runCycle = () => {
-      if (automationCycle += 1, capturedMechCycleHasPendingWork = !1, demandThisCycle = void 0, triggerTargetsThisCycle = void 0, triggerDemandThisCycle = void 0, demandPrerequisitesThisCycle = void 0, progression.resetProjectSample(), progression.resetBuildingUnlockSample(), settingsPanel.ensurePanel(), !pageCapture2.isComplete()) return;
+      if (automationCycle += 1, capturedMechCycleHasPendingWork = !1, demandThisCycle = void 0, triggerTargetsThisCycle = void 0, triggerDemandThisCycle = void 0, demandPrerequisitesThisCycle = void 0, settingsPanel.ensurePanel(), !pageCapture2.isComplete()) return;
       refreshDiscoveredSettings();
       let settings = settingsStore.readRaw();
       if (!pageCapture2.isComplete() || !isEnabled(settings, "masterScriptToggle"))
@@ -45095,7 +45223,7 @@ Only continue if you trust the source. Injected code:
           }
         }
         runPhase("demand prerequisites", () => {
-          demandPrerequisitesThisCycle = ensureDemandPrerequisiteControls({
+          demandPrerequisitesThisCycle ??= ensureDemandPrerequisiteControls({
             root: pageCapture2.rootState.readRoot(),
             settings,
             controls: pageCapture2.controls,
@@ -45262,7 +45390,7 @@ Only continue if you trust the source. Injected code:
       }
     }, pendingPeriods = 0;
     return pageCapture2.periods.subscribe((period) => {
-      refreshEffectiveSettings();
+      progression.resetProjectSample(), progression.resetBuildingUnlockSample(), refreshEffectiveSettings();
       let gate = advancePeriodGate({
         pendingPeriods,
         completedPeriods: period.periods,

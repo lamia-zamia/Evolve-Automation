@@ -530,6 +530,20 @@ function storedSettingNumber(
   return finite(value);
 }
 
+interface CapturedBuildingCostParts {
+  readonly buildingId: string;
+  readonly resourceId: string;
+}
+
+/** The condition argument shape `<building>.<resource>`, shared by sampling and reading it. */
+export function splitCapturedBuildingCostArgument(
+  argument: string,
+): CapturedBuildingCostParts | undefined {
+  const [buildingId, resourceId] = argument.split(".");
+  if (buildingId === undefined || resourceId === undefined) return undefined;
+  return Object.freeze({ buildingId, resourceId });
+}
+
 /**
  * One entry of the cycle's own adjusted price for a building, stored as
  * `<building>.<resource>`. A priced building missing the named resource costs nothing in it,
@@ -541,11 +555,11 @@ function buildingCostAmount(
   argument: unknown,
 ): number | undefined {
   if (typeof argument !== "string") return undefined;
-  const [buildingId, resourceId] = argument.split(".");
-  if (buildingId === undefined || resourceId === undefined) return undefined;
-  const price = context?.buildingCosts?.get(buildingId);
+  const parts = splitCapturedBuildingCostArgument(argument);
+  if (parts === undefined) return undefined;
+  const price = context?.buildingCosts?.get(parts.buildingId);
   if (price === undefined) return undefined;
-  return finite(price.cost[resourceId]) ?? 0;
+  return finite(price.cost[parts.resourceId]) ?? 0;
 }
 
 function readDate(root: unknown, argument: unknown): number | undefined {

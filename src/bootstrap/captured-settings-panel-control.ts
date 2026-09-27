@@ -834,7 +834,7 @@ export function createCapturedSettingsPanel({
           >;
         },
         getRealNumber: () => formatting.getRealNumber,
-        getUpdateSettingsFromState: () => persistSettings,
+        getPersistSettings: () => persistSettings,
       },
     });
     const controls = settingsEditor;
@@ -963,7 +963,7 @@ export function createCapturedSettingsPanel({
       buildLoggingSettings: () => {},
       filterBuildingSettingsTable: () =>
         building?.filterBuildingSettingsTable(),
-      updateSettingsFromState: persistSettings,
+      persistSettings: persistSettings,
       importSettings: importScriptSettings,
       exportSettings: () => JSON.stringify(settings.readRaw()),
       triggerFileDownload: fileDownload ?? reportNoFileDownload,
@@ -2325,7 +2325,7 @@ export function createCapturedSettingsPanel({
           onEnable,
           onDisable,
         ),
-      updateSettingsFromState: persistSettings,
+      persistSettings: persistSettings,
       buildScriptSettings,
       removeScriptSettings,
       createMechInfo: unported("mech info panel"),
