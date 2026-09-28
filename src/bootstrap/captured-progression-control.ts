@@ -493,10 +493,20 @@ export function createCapturedProgressionControl(
         () => projectCatalog.readProjects(),
         sameOfferPrices,
       );
-      // Rank, progress and generation live in `game.arpa` and the control registry; only the
-      // per-percent price came from the popover, and that moves with rank alone.
-      lastProjects =
-        held === undefined ? undefined : projectCatalog.restate(held);
+      if (held === undefined) {
+        lastProjects = undefined;
+      } else {
+        // Rank, progress and generation live in `game.arpa` and the control registry; only the
+        // per-percent price came from the popover, and that moves with rank alone.
+        try {
+          lastProjects = projectCatalog.restate(held);
+        } finally {
+          // A held row that cannot be restated is no longer a usable answer. Drop the raw offer
+          // whether the catalog reports it unavailable or validation throws, so a later cycle
+          // draws again instead of carrying a stale price forward.
+          if (lastProjects === undefined) scopes.invalidate(ARPA_SCOPE);
+        }
+      }
     }
     return lastProjects;
   };

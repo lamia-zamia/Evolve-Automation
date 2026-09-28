@@ -10,6 +10,7 @@ import { runBuildAutomation } from "../src/application/build.ts";
 import {
   NO_PROJECT_CONTEXT,
   planProjects,
+  planProjectsWithRejections,
 } from "../src/domain/progression/research/project.ts";
 import { createCapturedProjectContextReader } from "../src/adapters/evolve/progression/research/captured-project-context.ts";
 
@@ -116,6 +117,61 @@ const offered = (id, overrides = {}) => ({
   );
 }
 
+// The same pure planner decision that feeds candidate generation exposes each named gate to the
+// explicitly enabled diagnostics path.
+{
+  const projectIds = ["disabled", "zero", "maximum", "capacity", "ready"];
+  const result = planProjectsWithRejections({
+    settings: {
+      enabled: true,
+      stepPercent: 5,
+      scaleWeighting: false,
+      targets: projectIds.map((projectId) => ({
+        projectId,
+        enabled: projectId !== "disabled",
+        priority: 0,
+        maximum: projectId === "maximum" ? 2 : -1,
+        weighting: projectId === "zero" ? 0 : 1,
+      })),
+    },
+    projects: projectIds.map((projectId) =>
+      offered(projectId, {
+        rank: projectId === "maximum" ? 2 : 0,
+        cost: { Money: projectId === "capacity" ? 10 : 1 },
+      }),
+    ),
+    capacities: { Money: { unlocked: true, maximum: 5 } },
+    context: NO_PROJECT_CONTEXT,
+  });
+  assert.deepEqual(
+    result.rejections.map(({ projectId, reason }) => [projectId, reason]),
+    [
+      ["disabled", "disabled"],
+      ["zero", "zero-weighting"],
+      ["maximum", "maximum-reached"],
+      ["capacity", "capacity-rejected"],
+    ],
+  );
+  assert.deepEqual(
+    result.candidates.map((project) => project.projectId),
+    ["ready"],
+  );
+  const suppressed = planProjectsWithRejections({
+    settings: {
+      enabled: true,
+      stepPercent: 5,
+      scaleWeighting: false,
+      targets: [],
+    },
+    projects: [offered("ready")],
+    capacities: {},
+    context: { suppressed: true, overrides: {} },
+  });
+  assert.deepEqual(suppressed.rejections, [
+    { projectId: "ready", reason: "run-context-suppressed" },
+  ]);
+}
+
 function makeAdapter({
   progress = 20,
   generation = 2,
@@ -125,6 +181,7 @@ function makeAdapter({
   settings = undefined,
   context = NO_PROJECT_CONTEXT,
   actionModes = {},
+  onDiagnostic = undefined,
 } = {}) {
   if (catalog === undefined) {
     catalog = [offered("lhc", { rank: 1, progress, generation: 2 })];
@@ -233,6 +290,7 @@ function makeAdapter({
         context: { readContext: () => context },
         readSettings: () => settings,
         onActivity: (activityEntry) => activity.push(activityEntry.message),
+        ...(onDiagnostic === undefined ? {} : { onDiagnostic }),
       }),
     ],
     resources,
@@ -246,6 +304,80 @@ function makeAdapter({
     }),
   });
   return { adapter, root, calls, activity, reads: () => catalogReads };
+}
+
+// Explicit diagnostics identify each project-planning gate without requiring a synthetic planner
+// candidate to reach the shared construction runner.
+{
+  const targetSettings = {
+    autoARPA: true,
+    arpaStep: 5,
+    arpaScaleWeighting: false,
+    arpa_lhc: true,
+    arpa_p_lhc: 0,
+    arpa_m_lhc: -1,
+    arpa_w_lhc: 2,
+  };
+  const cases = [
+    [
+      "disabled",
+      { settings: { ...targetSettings, arpa_lhc: false } },
+      "ARPA project disabled: lhc",
+    ],
+    [
+      "zero weighting",
+      { settings: { ...targetSettings, arpa_w_lhc: 0 } },
+      "ARPA project zero weighting: lhc",
+    ],
+    [
+      "maximum reached",
+      {
+        catalog: [offered("lhc", { rank: 2 })],
+        settings: { ...targetSettings, arpa_m_lhc: 2 },
+      },
+      "ARPA maximum reached: lhc",
+    ],
+    [
+      "suppressed run context",
+      { context: { suppressed: true, overrides: {} } },
+      "ARPA suppressed by run context: lhc",
+    ],
+    [
+      "excluded run context",
+      {
+        context: { suppressed: false, overrides: { lhc: { excluded: true } } },
+      },
+      "ARPA excluded by run context: lhc",
+    ],
+    [
+      "capacity",
+      {
+        catalog: [offered("lhc", { cost: { Money: 1001 } })],
+      },
+      "ARPA capacity rejected: lhc",
+    ],
+  ];
+  for (const [label, overrides, expectedDiagnostic] of cases) {
+    const diagnostics = [];
+    const page = makeAdapter({
+      settings: targetSettings,
+      ...overrides,
+      onDiagnostic: (message) => diagnostics.push(message),
+    });
+    assert.equal(
+      runBuildAutomation({
+        ...page.adapter,
+        onDiagnostic: (message) => diagnostics.push(message),
+      }).status,
+      "succeeded",
+      `${label} gate should be a normal skipped candidate`,
+    );
+    assert.deepEqual(page.calls, [], `${label} gate must not invoke build`);
+    assert.ok(
+      diagnostics.includes(expectedDiagnostic),
+      `missing diagnostic ${expectedDiagnostic}: ${diagnostics.join(" | ")}`,
+    );
+  }
 }
 
 // A successful project invocation that leaves both project progress and the expected queue entry
@@ -279,20 +411,53 @@ function makeAdapter({
 
 // The captured row's build method advances the sampled project and no redraw method is involved.
 {
-  const page = makeAdapter();
-  assert.equal(runBuildAutomation(page.adapter).status, "succeeded");
+  const sourceDiagnostics = [];
+  const plannerDiagnostics = [];
+  const page = makeAdapter({
+    onDiagnostic: (message) => sourceDiagnostics.push(message),
+  });
+  assert.equal(
+    runBuildAutomation({
+      ...page.adapter,
+      onDiagnostic: (message) => plannerDiagnostics.push(message),
+    }).status,
+    "succeeded",
+  );
   assert.deepEqual(page.calls, [["arpalhc", "build", "lhc", 5]]);
   assert.deepEqual(page.activity, ["Built Large Hadron Collider (1:25%)"]);
   assert.equal(page.root.arpa.lhc.complete, 25);
   assert.equal(page.root.resource.Money.amount, 950);
+  assert.ok(
+    sourceDiagnostics.some((message) =>
+      message.includes("ARPA candidate produced: lhc 5%"),
+    ),
+  );
+  assert.ok(
+    sourceDiagnostics.some((message) =>
+      message.includes("ARPA action invoked: lhc 5%"),
+    ),
+  );
 }
 
 // A queue owns the same project, and a reservation owns overlapping resources: neither is spent.
 {
+  const queueDiagnostics = [];
   const queued = makeAdapter({ queue: [{ id: "arpalhc" }] });
-  assert.equal(runBuildAutomation(queued.adapter).status, "succeeded");
+  assert.equal(
+    runBuildAutomation({
+      ...queued.adapter,
+      onDiagnostic: (message) => queueDiagnostics.push(message),
+    }).status,
+    "succeeded",
+  );
   assert.deepEqual(queued.calls, []);
+  assert.ok(
+    queueDiagnostics.some((message) =>
+      message.includes("ARPA candidate blocked by reservation/planner"),
+    ),
+  );
 
+  const reservationDiagnostics = [];
   const reserved = makeAdapter({
     conflict: {
       status: "conflict",
@@ -303,12 +468,24 @@ function makeAdapter({
       },
     },
   });
-  assert.equal(runBuildAutomation(reserved.adapter).status, "succeeded");
+  assert.equal(
+    runBuildAutomation({
+      ...reserved.adapter,
+      onDiagnostic: (message) => reservationDiagnostics.push(message),
+    }).status,
+    "succeeded",
+  );
   assert.deepEqual(reserved.calls, []);
+  assert.ok(
+    reservationDiagnostics.some((message) =>
+      message.includes("ARPA candidate blocked by reservation/planner"),
+    ),
+  );
 }
 
 // The executor refuses a redrawn closure and a project whose rank/progress moved after planning.
 {
+  const actionDiagnostics = [];
   const redrawn = makeAdapter({
     generation: 3,
     catalog: [
@@ -328,11 +505,17 @@ function makeAdapter({
       arpa_m_monument: -1,
       arpa_w_monument: 1,
     },
+    onDiagnostic: (message) => actionDiagnostics.push(message),
   });
   const redrawnOutcome = runBuildAutomation(redrawn.adapter);
   assert.equal(redrawnOutcome.status, "stale");
   assert.equal(redrawnOutcome.failure.code, "stale-project-control");
   assert.deepEqual(redrawn.calls, []);
+  assert.ok(
+    actionDiagnostics.some((message) =>
+      message.includes("ARPA action failed/stale"),
+    ),
+  );
 
   const moved = makeAdapter();
   moved.adapter.reader.beginCycle();
@@ -360,10 +543,23 @@ function makeAdapter({
 // A discovery pass that failed leaves no catalog: nothing is offered, and nothing is planned from
 // the previous cycle's offers.
 {
-  const failed = makeAdapter({ catalog: null });
-  assert.equal(runBuildAutomation(failed.adapter).status, "succeeded");
+  const diagnostics = [];
+  const failed = makeAdapter({
+    catalog: null,
+    onDiagnostic: (message) => diagnostics.push(message),
+  });
+  assert.equal(
+    runBuildAutomation({
+      ...failed.adapter,
+      onDiagnostic: (message) => diagnostics.push(message),
+    }).status,
+    "succeeded",
+  );
   assert.deepEqual(failed.calls, []);
   assert.equal(failed.reads(), 1);
+  assert.ok(
+    diagnostics.some((message) => message.includes("ARPA catalog unavailable")),
+  );
 }
 
 // --- the run context: gates that are about the run, not about one project ------------------------

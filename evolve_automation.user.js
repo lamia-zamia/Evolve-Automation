@@ -1022,6 +1022,9 @@
     let rate = readProperty(ledger, pool);
     return rate === void 0 ? 0 : finite(rate);
   }
+  function missingGlobalCapacityPasses(resource, pool, regional) {
+    return readProperty(resource, "max") === void 0 && (!regional || pool === void 0 || pool === ANYWHERE_POOL || !hasRegionalLedger(resource));
+  }
   function costFitsStorage(root, cost, options) {
     let zeroCapIsCeiling = options?.zeroCapIsCeiling ?? !0, regional = isRegionalSupply(root);
     for (let [key, amount] of Object.entries(cost)) {
@@ -1041,7 +1044,9 @@
       if (!isRecord(entry)) return;
       if (amount > 0 && readProperty(entry, "display") !== !0) return !1;
       let capacity = capturedPoolCap(entry, options?.pool, regional);
-      if (capacity === void 0) return;
+      if (capacity === void 0 && !missingGlobalCapacityPasses(entry, options?.pool, regional))
+        return;
+      if (capacity === void 0) continue;
       if ((zeroCapIsCeiling ? capacity >= 0 : capacity > 0) && amount > capacity && !(options?.allowExpandableStorage === !0 && readProperty(entry, "stackable") === !0))
         return !1;
     }
@@ -1068,8 +1073,10 @@
       if (held === void 0) return;
       if (amount > held) return !1;
       let capacity = capturedPoolCap(entry, options?.pool, regional);
-      if (capacity === void 0) return;
-      if (capacity >= 0 && amount > capacity) return !1;
+      if (capacity === void 0 && !missingGlobalCapacityPasses(entry, options?.pool, regional))
+        return;
+      if (capacity !== void 0 && capacity >= 0 && amount > capacity)
+        return !1;
     }
     return !0;
   }
@@ -1833,13 +1840,17 @@
     })
   ]);
   function priceProjectRows(rows, arpa, controls2) {
-    return Object.freeze(
-      rows.map((project) => {
-        let state = requireNonArrayRecord(
-          arpa[project.projectId],
-          `game.arpa.${project.projectId}`
-        );
-        return Object.freeze({
+    let priced = [];
+    for (let project of rows) {
+      let handle = controls2.resolve(project.elementId);
+      if (handle === void 0 || !handle.methods.includes("build"))
+        return;
+      let state = requireNonArrayRecord(
+        arpa[project.projectId],
+        `game.arpa.${project.projectId}`
+      );
+      priced.push(
+        Object.freeze({
           elementId: project.elementId,
           projectId: project.projectId,
           cost: project.cost,
@@ -1851,10 +1862,11 @@
             state.complete,
             `game.arpa.${project.projectId}.complete`
           ),
-          generation: controls2.resolve(project.elementId)?.generation ?? 0
-        });
-      })
-    );
+          generation: handle.generation
+        })
+      );
+    }
+    return Object.freeze(priced);
   }
   function createCapturedProjectCatalog(dependencies) {
     let { rootState, discovery, drawnProjects, controls: controls2 } = dependencies, reportUnavailable = dependencies.onUnavailable ?? (() => {
@@ -1875,14 +1887,19 @@
         let game = requireNonArrayRecord(root, "game root"), resources = requireNonArrayRecord(
           game.resource,
           "game.resource"
-        ), arpa = requireNonArrayRecord(game.arpa, "game.arpa"), projects, result = discovery.discover(ARPA_TAB_PATH, {
+        );
+        requireNonArrayRecord(game.arpa, "game.arpa");
+        let projects, result = discovery.discover(ARPA_TAB_PATH, {
           isPanelDrawn: () => drawnProjects.exists(ARPA_PANEL_SELECTOR),
           whileDrawn: () => {
+            if (!drawnProjects.exists(ARPA_PANEL_SELECTOR)) return;
             let drawn = drawnProjects.read(
               PROJECT_SELECTOR,
               Object.keys(resources)
             );
-            drawn !== void 0 && (projects = priceProjectRows(drawn, arpa, controls2));
+            if (drawn === void 0) return;
+            let current = readProjectState2();
+            current !== void 0 && (projects = priceProjectRows(drawn, current, controls2));
           }
         });
         if (result.outcome.status !== "succeeded") {
@@ -1892,7 +1909,9 @@
           return;
         }
         if (projects === void 0) {
-          reportUnavailable("the project panel could not supply exact costs");
+          reportUnavailable(
+            "the project panel, project rows, or captured build controls were unavailable"
+          );
           return;
         }
         return projects;
@@ -1903,7 +1922,10 @@
           reportUnavailable("the game root has not been captured yet");
           return;
         }
-        return priceProjectRows(projects, arpa, controls2);
+        let restated = priceProjectRows(projects, arpa, controls2);
+        return restated === void 0 && reportUnavailable(
+          "a cached project no longer has a captured build control"
+        ), restated;
       }
     });
   }
@@ -3687,7 +3709,14 @@
           break;
         }
         return Object.freeze({
-          candidates: Object.freeze(entries.map((entry) => entry.candidate)),
+          candidates: Object.freeze(
+            entries.map(
+              (entry) => Object.freeze({
+                ...entry.candidate,
+                family: entry.source.family
+              })
+            )
+          ),
           consumptionMode: options.consumptionMode,
           buildIfStorageFull: options.buildIfStorageFull,
           ignoreZeroRate: options.ignoreZeroRate,
@@ -3945,26 +3974,84 @@
     }
     return capacity;
   }
-  function planProjects(input) {
-    if (!input.settings.enabled || input.context.suppressed)
-      return Object.freeze([]);
+  function planProjectsWithRejections(input) {
+    let rejections = [];
+    if (!input.settings.enabled || input.context.suppressed) {
+      let reason = input.context.suppressed ? "run-context-suppressed" : "disabled";
+      return Object.freeze({
+        candidates: Object.freeze([]),
+        rejections: Object.freeze(
+          input.projects.map(
+            (project) => Object.freeze({ projectId: project.projectId, reason })
+          )
+        )
+      });
+    }
     let targets = new Map(
       input.settings.targets.map((target) => [target.projectId, target])
     ), planned = [];
     for (let [order, offered] of input.projects.entries()) {
       let target = targets.get(offered.projectId), override = input.context.overrides[offered.projectId];
-      if (target === void 0 || !target.enabled || target.weighting <= 0 || override?.excluded === !0 || target.maximum >= 0 && offered.rank >= target.maximum && override?.ignoreMaximum !== !0)
+      if (target === void 0 || !target.enabled) {
+        rejections.push(
+          Object.freeze({ projectId: offered.projectId, reason: "disabled" })
+        );
         continue;
+      }
+      if (target.weighting <= 0) {
+        rejections.push(
+          Object.freeze({
+            projectId: offered.projectId,
+            reason: "zero-weighting"
+          })
+        );
+        continue;
+      }
+      if (override?.excluded === !0) {
+        rejections.push(
+          Object.freeze({
+            projectId: offered.projectId,
+            reason: "run-context-excluded"
+          })
+        );
+        continue;
+      }
+      if (target.maximum >= 0 && offered.rank >= target.maximum && override?.ignoreMaximum !== !0) {
+        rejections.push(
+          Object.freeze({
+            projectId: offered.projectId,
+            reason: "maximum-reached"
+          })
+        );
+        continue;
+      }
       let desired = Math.min(
         input.settings.stepPercent,
         100 - offered.progress
       ), steps = Math.min(desired, stepCapacity(offered, input.capacities));
-      if (!Number.isSafeInteger(steps) || steps < 1) continue;
+      if (!Number.isSafeInteger(steps) || steps < 1) {
+        rejections.push(
+          Object.freeze({
+            projectId: offered.projectId,
+            reason: "capacity-rejected"
+          })
+        );
+        continue;
+      }
       let cost = {};
       for (let [resourceId, price] of Object.entries(offered.cost))
         cost[resourceId] = price * steps;
       let weighting = target.weighting * steps, multiplier = override?.weightMultiplier;
-      multiplier !== void 0 && Number.isFinite(multiplier) && (weighting *= multiplier), !(weighting <= 0) && (input.settings.scaleWeighting && (weighting /= 1 - offered.progress / 100), planned.push({
+      if (multiplier !== void 0 && Number.isFinite(multiplier) && (weighting *= multiplier), weighting <= 0) {
+        rejections.push(
+          Object.freeze({
+            projectId: offered.projectId,
+            reason: "zero-weighting"
+          })
+        );
+        continue;
+      }
+      input.settings.scaleWeighting && (weighting /= 1 - offered.progress / 100), planned.push({
         order,
         project: Object.freeze({
           elementId: offered.elementId,
@@ -3976,14 +4063,17 @@
           weighting,
           cost: Object.freeze(cost)
         })
-      }));
+      });
     }
     return planned.sort((left, right) => {
       let weight = right.project.weighting - left.project.weighting;
       if (weight !== 0) return weight;
       let leftPriority = targets.get(left.project.projectId)?.priority ?? left.order, rightPriority = targets.get(right.project.projectId)?.priority ?? right.order;
       return leftPriority - rightPriority || left.order - right.order;
-    }), Object.freeze(planned.map((entry) => entry.project));
+    }), Object.freeze({
+      candidates: Object.freeze(planned.map((entry) => entry.project)),
+      rejections: Object.freeze(rejections)
+    });
   }
 
   // src/adapters/evolve/progression/research/captured-project.ts
@@ -4036,7 +4126,7 @@
   }
   function createCapturedProjectSource(dependencies) {
     let { rootState, catalog, resources, controls: controls2, context, readSettings } = dependencies, reportActivity = dependencies.onActivity ?? (() => {
-    }), cycle = /* @__PURE__ */ new Map();
+    }), reportDiagnostic = dependencies.onDiagnostic, cycle = /* @__PURE__ */ new Map();
     return Object.freeze({
       family: "arpa",
       beginCycle() {
@@ -4045,7 +4135,7 @@
           return cycle = /* @__PURE__ */ new Map(), Object.freeze([]);
         let offered = catalog.readProjects();
         if (offered === void 0)
-          return cycle = /* @__PURE__ */ new Map(), Object.freeze([]);
+          return cycle = /* @__PURE__ */ new Map(), reportDiagnostic?.("ARPA catalog unavailable: no current offer sample"), Object.freeze([]);
         let resourceIds = new Set(
           offered.flatMap((project) => Object.keys(project.cost))
         ), sample = resources.readResources(resourceIds), capacities = {};
@@ -4057,13 +4147,27 @@
               maximum: view.max
             });
           }
-        let queued = queuedIds(rootState.readRoot()), entries = /* @__PURE__ */ new Map();
-        for (let project of planProjects({
+        let queued = queuedIds(rootState.readRoot()), entries = /* @__PURE__ */ new Map(), plan = planProjectsWithRejections({
           settings: readCapturedProjectSettings(settings, offered),
           projects: offered,
           capacities: Object.freeze(capacities),
           context: context.readContext()
-        }))
+        });
+        if (reportDiagnostic !== void 0) {
+          let reasonLabel = {
+            disabled: "project disabled",
+            "zero-weighting": "project zero weighting",
+            "maximum-reached": "maximum reached",
+            "run-context-suppressed": "suppressed by run context",
+            "run-context-excluded": "excluded by run context",
+            "capacity-rejected": "capacity rejected"
+          };
+          for (let rejection of plan.rejections)
+            reportDiagnostic(
+              `ARPA ${reasonLabel[rejection.reason]}: ${rejection.projectId}`
+            );
+        }
+        for (let project of plan.candidates)
           entries.set(project.elementId, {
             project,
             candidate: Object.freeze({
@@ -4075,7 +4179,9 @@
               knowledge: !1,
               important: !1
             })
-          });
+          }), reportDiagnostic?.(
+            `ARPA candidate produced: ${project.projectId} ${project.steps}%`
+          );
         return cycle = entries, Object.freeze(
           [...entries.values()].map((entry) => entry.candidate)
         );
@@ -4087,7 +4193,7 @@
           consumption: NO_CONSUMPTION3
         }, candidate = cycle.get(key);
         if (candidate === void 0)
-          return Object.freeze({
+          return reportDiagnostic?.(`ARPA action failed/stale: stale candidate ${key}`), Object.freeze({
             outcome: stale(
               "stale-project-target",
               "project candidate list changed"
@@ -4097,7 +4203,9 @@
           });
         let handle = controls2.resolve(candidate.project.elementId);
         if (handle === void 0)
-          return Object.freeze({
+          return reportDiagnostic?.(
+            `ARPA action failed/stale: missing control ${candidate.project.projectId}`
+          ), Object.freeze({
             outcome: rejected(
               "project-control-missing",
               `no captured control for ${candidate.project.elementId}`
@@ -4106,7 +4214,9 @@
             ...base
           });
         if (handle.generation !== candidate.project.generation)
-          return Object.freeze({
+          return reportDiagnostic?.(
+            `ARPA action failed/stale: redrawn control ${candidate.project.projectId}`
+          ), Object.freeze({
             outcome: stale(
               "stale-project-control",
               `${candidate.project.elementId} was redrawn`
@@ -4119,7 +4229,9 @@
           candidate.project.projectId
         );
         if (before === void 0 || before.rank !== candidate.project.rank || before.progress !== candidate.project.progress)
-          return Object.freeze({
+          return reportDiagnostic?.(
+            `ARPA action failed/stale: project state changed ${candidate.project.projectId}`
+          ), Object.freeze({
             outcome: stale(
               "stale-project-state",
               `${candidate.project.projectId} moved after sampling`
@@ -4130,7 +4242,11 @@
         let rootBefore = rootState.readRoot(), queueBefore = readCapturedBuildQueueEntryCount(
           rootBefore,
           candidate.project.elementId
-        ), result = controls2.invoke(handle, "build", [
+        );
+        reportDiagnostic?.(
+          `ARPA action invoked: ${candidate.project.projectId} ${candidate.project.steps}%`
+        );
+        let result = controls2.invoke(handle, "build", [
           candidate.project.projectId,
           candidate.project.steps
         ]), rootAfter = rootState.readRoot(), after = projectState(rootAfter, candidate.project.projectId), progressed = after !== void 0 && (after.rank > before.rank || after.progress > before.progress), queued = readCapturedBuildQueueEntryCount(
@@ -4138,7 +4254,9 @@
           candidate.project.elementId
         ) > queueBefore;
         if (!result.ok)
-          return Object.freeze({
+          return reportDiagnostic?.(
+            `ARPA action failed/stale: ${candidate.project.projectId} ${result.reason}`
+          ), Object.freeze({
             outcome: result.reason === "stale-control" ? stale("stale-project-control", result.detail ?? result.reason) : rejected(
               "project-build-failed",
               result.detail ?? result.reason
@@ -4147,7 +4265,9 @@
             ...base
           });
         let clicked = progressed || queued;
-        if (progressed) {
+        if (clicked || reportDiagnostic?.(
+          `ARPA action failed/stale: no verified progress ${candidate.project.projectId}`
+        ), progressed) {
           let label = readCapturedControlLabel(
             handle,
             candidate.project.projectId
@@ -4409,12 +4529,20 @@
     for (let index = 0; index < setup.candidates.length; index++) {
       let candidate = setup.candidates[index];
       if (candidate === void 0) continue;
-      let needs = measure(
+      let reportArpaBuildDiagnostic = (detail) => {
+        candidate.family === "arpa" && reportDiagnostic(
+          `ARPA candidate blocked by reservation/planner: ${detail}`
+        );
+      }, needs = measure(
         "autoBuild.sampleNeeds",
         () => candidateSampleNeeds(setup, state, index)
       );
-      if (needs.kind === "skip")
+      if (needs.kind === "skip") {
+        reportArpaBuildDiagnostic(
+          `${candidate.key} is queued or already unaffordable`
+        );
         continue;
+      }
       let request = needs.request, sample = request.needAffordability || request.needConsumption ? measure(
         "autoBuild.sampleCandidate",
         () => reader.sampleCandidate(index, request)
@@ -4422,8 +4550,12 @@
         "autoBuild.planGate",
         () => planBuildGate(setup, index, sample, state)
       );
-      if (state = gate.state, state.affordable[candidate.key] === !0 && reportDiagnostic(`autoBuild.affordable ${candidate.key}`), gate.kind === "skip")
+      if (state = gate.state, state.affordable[candidate.key] === !0 && reportDiagnostic(`autoBuild.affordable ${candidate.key}`), gate.kind === "skip") {
+        reportArpaBuildDiagnostic(
+          `${candidate.key} is unaffordable or blocked by consumption`
+        );
         continue;
+      }
       let conflict = measure(
         "autoBuild.planConflict",
         () => planBuildConflict(
@@ -4433,6 +4565,9 @@
         )
       );
       if (conflict.kind === "skip") {
+        reportArpaBuildDiagnostic(
+          `${candidate.key} conflicts with a resource reservation`
+        );
         let outcome = measure(
           "autoBuild.annotate",
           () => executor.annotate(conflict.annotation)
@@ -4457,6 +4592,7 @@
         )
       );
       if (state = competition.state, competition.kind === "delay") {
+        reportArpaBuildDiagnostic(`${candidate.key} lost resource competition`);
         let outcome = measure(
           "autoBuild.annotate",
           () => executor.annotate(competition.annotation)
@@ -4559,7 +4695,8 @@
             readSettings
           }),
           readSettings,
-          ...onActivity === void 0 ? {} : { onActivity }
+          ...onActivity === void 0 ? {} : { onActivity },
+          ...onDiagnostic === void 0 ? {} : { onDiagnostic }
         })
       ]),
       resources,
@@ -7717,7 +7854,10 @@
       autoARPA: !1,
       arpaScaleWeighting: !0,
       arpaStep: 5
-    }, projectPriority = 0, setProject = (key, autoBuildEnabled, autoMax, weighting) => {
+    }, projectPriority = 0;
+    for (let [index, id] of context.projectIds.entries())
+      def["arpa_" + id] = !0, def["arpa_p_" + id] = 9 + index, def["arpa_m_" + id] = -1, def["arpa_w_" + id] = 1;
+    let setProject = (key, autoBuildEnabled, autoMax, weighting) => {
       let id = idByKey[key];
       id !== void 0 && (def["arpa_" + id] = autoBuildEnabled, def["arpa_p_" + id] = projectPriority++, def["arpa_m_" + id] = autoMax, def["arpa_w_" + id] = weighting);
     };
@@ -8294,7 +8434,14 @@
           () => projectCatalog.readProjects(),
           sameOfferPrices
         );
-        lastProjects = held === void 0 ? void 0 : projectCatalog.restate(held);
+        if (held === void 0)
+          lastProjects = void 0;
+        else
+          try {
+            lastProjects = projectCatalog.restate(held);
+          } finally {
+            lastProjects === void 0 && scopes.invalidate(ARPA_SCOPE);
+          }
       }
       return lastProjects;
     }, buildingUnlocks = createCapturedBuildingUnlocks({
@@ -28905,6 +29052,12 @@
     };
   }
 
+  // src/adapters/evolve/progression/research/arpa-project-identity.ts
+  var NON_PROJECT_ARPA_KEYS = Object.freeze(["sequence", "m_type"]);
+  function isBuildableArpaProjectId(projectId) {
+    return projectId.length > 0 && !NON_PROJECT_ARPA_KEYS.some((key) => key === projectId);
+  }
+
   // src/adapters/evolve/captured-settings-defaults.ts
   function readRootSafely(rootState) {
     try {
@@ -29009,7 +29162,7 @@
     return { challengeIds: challenges.map((set) => set[0].id) };
   }
   function readProjects(root) {
-    let projects = readProperty(root, "arpa"), projectIds = isRecord(projects) ? Object.keys(projects).filter((id) => id !== "sequence") : [];
+    let projects = readProperty(root, "arpa"), projectIds = isRecord(projects) ? Object.keys(projects).filter(isBuildableArpaProjectId) : [];
     return { projectIds, idByKey: projectIdByKey(projectIds) };
   }
   function readBuildingContext(root, controls2) {
@@ -32623,13 +32776,12 @@
   }
 
   // src/adapters/evolve/progression/research/captured-project-settings-catalog.ts
-  var NON_PROJECT_ARPA_KEY = "sequence";
   function readCapturedProjectSettingsEntries(root, controls2) {
     let arpa = readProperty(root, "arpa");
     if (!isRecord(arpa)) return Object.freeze([]);
     let entries = [];
     for (let projectId of Object.keys(arpa)) {
-      if (projectId === NON_PROJECT_ARPA_KEY || projectId.length === 0) continue;
+      if (!isBuildableArpaProjectId(projectId)) continue;
       let elementId = `arpa${projectId}`, handle = controls2.resolve(elementId);
       entries.push(
         Object.freeze({

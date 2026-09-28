@@ -124,7 +124,14 @@ function createLifecycle(rawText = null, ids = DEFAULT_CONTROL_IDS) {
       stackable: true,
     },
   };
-  gameRoot.arpa = { launch_facility: { display: true } };
+  gameRoot.arpa = {
+    launch_facility: { display: true },
+    surface_elevator: { rank: 0, complete: 0 },
+    extra_vault: { rank: 0, complete: 0 },
+    guard_station: { rank: 0, complete: 0 },
+    sequence: { on: false },
+    m_type: "Monolith",
+  };
   const { lifecycle, settings } = createSettingsFixture({
     gameRoot,
     controlIds: [
@@ -142,6 +149,43 @@ function createLifecycle(rawText = null, ids = DEFAULT_CONTROL_IDS) {
   assert.equal(raw.res_storageFood, true);
   assert.equal(raw.craftPlywood, true);
   assert.equal(raw.arpa_launch_facility, true);
+  for (const projectId of [
+    "surface_elevator",
+    "extra_vault",
+    "guard_station",
+  ]) {
+    assert.equal(raw[`arpa_${projectId}`], true);
+    assert.equal(raw[`arpa_m_${projectId}`], -1);
+    assert.equal(raw[`arpa_w_${projectId}`], 1);
+    assert.ok(Number.isFinite(raw[`arpa_p_${projectId}`]));
+  }
+  assert.equal(raw.arpa_sequence, undefined);
+  assert.equal(raw.arpa_m_type, undefined);
+}
+
+// Dynamic defaults add missing keys while leaving explicitly persisted project choices intact.
+{
+  const gameRoot = root();
+  gameRoot.arpa = { surface_elevator: { rank: 0, complete: 0 } };
+  const persisted = JSON.stringify({
+    masterScriptToggle: true,
+    autoARPA: true,
+    arpa_surface_elevator: false,
+    arpa_p_surface_elevator: 42,
+    arpa_m_surface_elevator: 3,
+  });
+  const { lifecycle, settings } = createSettingsFixture({
+    rawText: persisted,
+    gameRoot,
+  });
+  lifecycle.initialize();
+  lifecycle.ensureDynamicDefaults();
+  const raw = settings.readRaw();
+  assert.equal(raw.arpa_surface_elevator, false);
+  assert.equal(raw.arpa_p_surface_elevator, 42);
+  assert.equal(raw.arpa_m_surface_elevator, 3);
+  assert.equal(raw.arpa_w_surface_elevator, 1);
+  assert.equal(raw.autoARPA, true);
 }
 
 // A tech-dependent trigger remains in its old form until a real captured tech catalog is present.

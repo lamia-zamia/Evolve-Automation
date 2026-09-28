@@ -58,6 +58,7 @@ import {
 } from "./progression/build/captured-building-catalog.ts";
 import { readTechElementId } from "./progression/research/captured-research-settings-catalog.ts";
 import { CRAFTER_RESOURCE_KEYS } from "../../domain/economy/production/crafter-resources.ts";
+import { isBuildableArpaProjectId } from "./progression/research/arpa-project-identity.ts";
 
 export interface CapturedSettingsDefaultsDependencies {
   readonly rootState: GameRootStateSource;
@@ -269,7 +270,7 @@ function readEvolution(): EvolutionResetContext {
 function readProjects(root: unknown): ProjectResetContext {
   const projects = readProperty(root, "arpa");
   const projectIds = isRecord(projects)
-    ? Object.keys(projects).filter((id) => id !== "sequence")
+    ? Object.keys(projects).filter(isBuildableArpaProjectId)
     : [];
   return { projectIds, idByKey: projectIdByKey(projectIds) };
 }

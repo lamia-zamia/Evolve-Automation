@@ -1,7 +1,7 @@
 /**
- * Reads exact A.R.P.A. costs through the hover popovers the game installs on every project button.
- * The row itself carries no price: `arpaProjectCosts` writes exact `data-<Resource>` attributes
- * only when that popover opens. A player's existing popover is never displaced for a sample.
+ * Reads the A.R.P.A. cost figures the game exposes through project-button hover popovers. The row
+ * itself carries no price; the game fills the `data-<Resource>` attributes when that popover opens.
+ * A player's existing popover is never displaced for a sample.
  */
 
 import type {

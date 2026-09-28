@@ -50,14 +50,19 @@ function priceProjectRows(
   rows: readonly DrawnProjectRow[],
   arpa: Readonly<Record<string, unknown>>,
   controls: GameControlRegistry,
-): readonly Readonly<OfferedProject>[] {
-  return Object.freeze(
-    rows.map((project) => {
-      const state = requireNonArrayRecord(
-        arpa[project.projectId],
-        `game.arpa.${project.projectId}`,
-      );
-      return Object.freeze({
+): readonly Readonly<OfferedProject>[] | undefined {
+  const priced: OfferedProject[] = [];
+  for (const project of rows) {
+    const handle = controls.resolve(project.elementId);
+    if (handle === undefined || !handle.methods.includes("build")) {
+      return undefined;
+    }
+    const state = requireNonArrayRecord(
+      arpa[project.projectId],
+      `game.arpa.${project.projectId}`,
+    );
+    priced.push(
+      Object.freeze({
         elementId: project.elementId,
         projectId: project.projectId,
         cost: project.cost,
@@ -69,10 +74,11 @@ function priceProjectRows(
           state["complete"],
           `game.arpa.${project.projectId}.complete`,
         ),
-        generation: controls.resolve(project.elementId)?.generation ?? 0,
-      });
-    }),
-  );
+        generation: handle.generation,
+      }),
+    );
+  }
+  return Object.freeze(priced);
 }
 
 export function createCapturedProjectCatalog(
@@ -103,17 +109,23 @@ export function createCapturedProjectCatalog(
         game["resource"],
         "game.resource",
       );
-      const arpa = requireNonArrayRecord(game["arpa"], "game.arpa");
+      requireNonArrayRecord(game["arpa"], "game.arpa");
       let projects: readonly Readonly<OfferedProject>[] | undefined;
       const result = discovery.discover(ARPA_TAB_PATH, {
         isPanelDrawn: () => drawnProjects.exists(ARPA_PANEL_SELECTOR),
         whileDrawn: () => {
+          // A completed tab swap is not proof that the game produced the panel this catalog
+          // names. In particular, accepting the reader's empty result here would cache a failed
+          // off-tab draw as a legitimate empty offer list.
+          if (!drawnProjects.exists(ARPA_PANEL_SELECTOR)) return;
           const drawn = drawnProjects.read(
             PROJECT_SELECTOR,
             Object.keys(resources),
           );
           if (drawn === undefined) return;
-          projects = priceProjectRows(drawn, arpa, controls);
+          const current = readProjectState();
+          if (current === undefined) return;
+          projects = priceProjectRows(drawn, current, controls);
         },
       });
       if (result.outcome.status !== "succeeded") {
@@ -123,7 +135,9 @@ export function createCapturedProjectCatalog(
         return undefined;
       }
       if (projects === undefined) {
-        reportUnavailable("the project panel could not supply exact costs");
+        reportUnavailable(
+          "the project panel, project rows, or captured build controls were unavailable",
+        );
         return undefined;
       }
       return projects;
@@ -138,7 +152,13 @@ export function createCapturedProjectCatalog(
       }
       // The cached price is the only part of a row the draw owns, so it is carried through
       // unchanged and everything else is taken from the game again.
-      return priceProjectRows(projects, arpa, controls);
+      const restated = priceProjectRows(projects, arpa, controls);
+      if (restated === undefined) {
+        reportUnavailable(
+          "a cached project no longer has a captured build control",
+        );
+      }
+      return restated;
     },
   });
 }

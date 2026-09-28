@@ -23,6 +23,8 @@ export type BuildConsumptionMode = "perResource" | "unlimited" | "onePerTick";
 export interface BuildCandidateView {
   /** Unique legacy `_vueBinding` identifier. */
   readonly key: string;
+  /** Candidate source family, added by the construction adapter for diagnostics. */
+  readonly family?: string;
   readonly weighting: number;
   /** Cost per resource id; key order matches the legacy cost object. */
   readonly cost: Readonly<Record<string, number>>;

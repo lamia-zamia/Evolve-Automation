@@ -846,6 +846,16 @@ export function computeProjectDefaults(
   };
 
   let projectPriority = 0;
+  // DeadSpace can add projects without changing the old named defaults below. Give every live
+  // project a usable, conservative baseline first; the named entries then retain their tuned
+  // weights, maxima, and order. `applySettings(..., false)` only fills absent keys, so persisted
+  // player choices remain authoritative.
+  for (const [index, id] of context.projectIds.entries()) {
+    def["arpa_" + id] = true;
+    def["arpa_p_" + id] = 9 + index;
+    def["arpa_m_" + id] = -1;
+    def["arpa_w_" + id] = 1;
+  }
   const setProject = (
     key: string,
     autoBuildEnabled: boolean,

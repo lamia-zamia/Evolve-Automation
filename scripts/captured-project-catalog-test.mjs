@@ -129,7 +129,12 @@ const mouseEvent = (type) => ({ type });
   );
 }
 
-function makeCatalogPage({ projects = [], generations = {} } = {}) {
+function makeCatalogPage({
+  projects = [],
+  generations = {},
+  methodsByElement = {},
+  panelAvailable = true,
+} = {}) {
   const root = {
     settings: { civTabs: 4 },
     resource: { Money: { amount: 1 }, Knowledge: { amount: 1 } },
@@ -164,7 +169,7 @@ function makeCatalogPage({ projects = [], generations = {} } = {}) {
       },
     },
     drawnProjects: {
-      exists: () => true,
+      exists: () => panelAvailable,
       read: (_selector, resourceNames) => {
         assert.deepEqual(resourceNames, ["Money", "Knowledge"]);
         return unavailable
@@ -180,7 +185,11 @@ function makeCatalogPage({ projects = [], generations = {} } = {}) {
       resolve: (elementId) =>
         generations[elementId] === undefined
           ? undefined
-          : { elementId, generation: generations[elementId], methods: [] },
+          : {
+              elementId,
+              generation: generations[elementId],
+              methods: methodsByElement[elementId] ?? ["build"],
+            },
       invoke: () => ({ ok: false, reason: "unknown-control" }),
       capturedElementIds: () => Object.keys(generations),
     },
@@ -241,7 +250,7 @@ function makeCatalogPage({ projects = [], generations = {} } = {}) {
   page.unavailable();
   assert.equal(page.catalog.readProjects(), undefined);
   assert.deepEqual(page.reasons, [
-    "the project panel could not supply exact costs",
+    "the project panel, project rows, or captured build controls were unavailable",
   ]);
   page.fail({
     status: "rejected",
@@ -249,9 +258,47 @@ function makeCatalogPage({ projects = [], generations = {} } = {}) {
   });
   assert.equal(page.catalog.readProjects(), undefined);
   assert.deepEqual(page.reasons, [
-    "the project panel could not supply exact costs",
+    "the project panel, project rows, or captured build controls were unavailable",
   ]);
   assert.deepEqual(page.diagnostics, ["no captured control"]);
+}
+
+{
+  const missingPanel = makeCatalogPage({
+    projects: [
+      {
+        elementId: "arpalhc",
+        projectId: "lhc",
+        rank: 0,
+        progress: 0,
+        cost: { Money: 10, Knowledge: 5 },
+      },
+    ],
+    generations: { arpalhc: 7 },
+    panelAvailable: false,
+  });
+  assert.equal(missingPanel.catalog.readProjects(), undefined);
+  assert.deepEqual(missingPanel.reasons, [
+    "the project panel, project rows, or captured build controls were unavailable",
+  ]);
+
+  const missingBuild = makeCatalogPage({
+    projects: [
+      {
+        elementId: "arpalhc",
+        projectId: "lhc",
+        rank: 0,
+        progress: 0,
+        cost: { Money: 10, Knowledge: 5 },
+      },
+    ],
+    generations: { arpalhc: 7 },
+    methodsByElement: { arpalhc: [] },
+  });
+  assert.equal(missingBuild.catalog.readProjects(), undefined);
+  assert.deepEqual(missingBuild.reasons, [
+    "the project panel, project rows, or captured build controls were unavailable",
+  ]);
 }
 
 {
@@ -311,7 +358,11 @@ function makeCatalogPage({ projects = [], generations = {} } = {}) {
       createMouseEvent: mouseEvent,
     }),
     controls: {
-      resolve: (elementId) => ({ elementId, generation: 1, methods: [] }),
+      resolve: (elementId) => ({
+        elementId,
+        generation: 1,
+        methods: ["build"],
+      }),
       invoke: () => ({ ok: false, reason: "unknown-control" }),
       capturedElementIds: () => [],
     },

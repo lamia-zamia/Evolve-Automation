@@ -1,7 +1,7 @@
 /**
  * A small DOM, because Node has none and the adapters under test are only interesting against real
  * nodes. It implements the slice the script touches: parentage, classes, attributes, text, events,
- * and the simple selectors the DOM helper's staged queries emit (`tag`, `#id`, `.class`,
+ * and the simple selectors the DOM helper's staged queries emit (`tag`, `#id`, `.class`, `[id]`,
  * `:scope >tag`).
  *
  * Shared by `dom-test.mjs`, which exercises the helper itself, and by the panel tests, which need a
@@ -21,6 +21,7 @@ export function parseSimple(token) {
 }
 
 function matchesSimple(element, token) {
+  if (token === "[id]") return element.id !== "";
   const { tag, id, classes } = parseSimple(token);
   if (tag !== null && element.tagName !== tag) return false;
   if (id !== null && element.id !== id) return false;
@@ -79,6 +80,12 @@ export class TestElement {
     return this.parentElement;
   }
 
+  get isConnected() {
+    let node = this;
+    while (node.parentElement !== null) node = node.parentElement;
+    return node.__testDocumentRoot === true;
+  }
+
   get id() {
     return this.attributes.get("id") ?? "";
   }
@@ -102,6 +109,13 @@ export class TestElement {
 
   get nextSibling() {
     return this.nextElementSibling;
+  }
+
+  contains(other) {
+    return (
+      other === this ||
+      descendants(this).some((descendant) => descendant === other)
+    );
   }
 
   append(...nodes) {
@@ -333,6 +347,7 @@ export function parseTestMarkup(markup) {
 }
 
 export function createTestDocument(root) {
+  root.__testDocumentRoot = true;
   return {
     readyState: "complete",
     hidden: false,

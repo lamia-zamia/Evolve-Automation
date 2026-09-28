@@ -45,10 +45,20 @@ export function runBuildAutomation(
   for (let index = 0; index < setup.candidates.length; index++) {
     const candidate = setup.candidates[index];
     if (candidate === undefined) continue;
+    const reportArpaBuildDiagnostic = (detail: string) => {
+      if (candidate.family === "arpa") {
+        reportDiagnostic(
+          `ARPA candidate blocked by reservation/planner: ${detail}`,
+        );
+      }
+    };
     const needs = measure("autoBuild.sampleNeeds", () =>
       candidateSampleNeeds(setup, state, index),
     );
     if (needs.kind === "skip") {
+      reportArpaBuildDiagnostic(
+        `${candidate.key} is queued or already unaffordable`,
+      );
       continue;
     }
     const request = needs.request;
@@ -66,6 +76,9 @@ export function runBuildAutomation(
       reportDiagnostic(`autoBuild.affordable ${candidate.key}`);
     }
     if (gate.kind === "skip") {
+      reportArpaBuildDiagnostic(
+        `${candidate.key} is unaffordable or blocked by consumption`,
+      );
       continue;
     }
 
@@ -77,6 +90,9 @@ export function runBuildAutomation(
       ),
     );
     if (conflict.kind === "skip") {
+      reportArpaBuildDiagnostic(
+        `${candidate.key} conflicts with a resource reservation`,
+      );
       const outcome = measure("autoBuild.annotate", () =>
         executor.annotate(conflict.annotation),
       );
@@ -101,6 +117,7 @@ export function runBuildAutomation(
     );
     state = competition.state;
     if (competition.kind === "delay") {
+      reportArpaBuildDiagnostic(`${candidate.key} lost resource competition`);
       const outcome = measure("autoBuild.annotate", () =>
         executor.annotate(competition.annotation),
       );

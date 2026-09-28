@@ -14,15 +14,13 @@
 import type { GameControlRegistry } from "../../../../ports/game-control-registry.ts";
 import { readCapturedControlLabel } from "../../captured-control-label.ts";
 import { isRecord, readProperty } from "../../../validation.ts";
+import { isBuildableArpaProjectId } from "./arpa-project-identity.ts";
 
 export interface CapturedProjectSettingsEntry {
   readonly projectId: string;
   readonly elementId: string;
   readonly label: string;
 }
-
-/** The `sequence` key is a subsystem flag, not a buildable project. */
-const NON_PROJECT_ARPA_KEY = "sequence";
 
 export function readCapturedProjectSettingsEntries(
   root: unknown,
@@ -32,7 +30,7 @@ export function readCapturedProjectSettingsEntries(
   if (!isRecord(arpa)) return Object.freeze([]);
   const entries: CapturedProjectSettingsEntry[] = [];
   for (const projectId of Object.keys(arpa)) {
-    if (projectId === NON_PROJECT_ARPA_KEY || projectId.length === 0) continue;
+    if (!isBuildableArpaProjectId(projectId)) continue;
     const elementId = `arpa${projectId}`;
     const handle = controls.resolve(elementId);
     entries.push(

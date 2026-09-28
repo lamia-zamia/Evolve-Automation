@@ -218,6 +218,7 @@ export function createCapturedConstructionControl(
         }),
         readSettings,
         ...(onActivity === undefined ? {} : { onActivity }),
+        ...(onDiagnostic === undefined ? {} : { onDiagnostic }),
       }),
     ]),
     resources,

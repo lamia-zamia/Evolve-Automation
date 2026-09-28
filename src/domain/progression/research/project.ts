@@ -72,6 +72,24 @@ export interface PlannedProject {
   readonly cost: Readonly<Record<string, number>>;
 }
 
+export type ProjectPlanningRejectionReason =
+  | "disabled"
+  | "zero-weighting"
+  | "maximum-reached"
+  | "run-context-suppressed"
+  | "run-context-excluded"
+  | "capacity-rejected";
+
+export interface ProjectPlanningRejection {
+  readonly projectId: string;
+  readonly reason: ProjectPlanningRejectionReason;
+}
+
+export interface ProjectPlanningResult {
+  readonly candidates: readonly Readonly<PlannedProject>[];
+  readonly rejections: readonly Readonly<ProjectPlanningRejection>[];
+}
+
 function stepCapacity(
   project: Readonly<ProjectOffer>,
   capacities: ProjectPlanningInput["capacities"],
@@ -99,11 +117,22 @@ function stepCapacity(
  * generic build planner. The project's price is for 1%; a command never crosses a rank boundary,
  * so the upstream game keeps that price constant for every requested step.
  */
-export function planProjects(
+export function planProjectsWithRejections(
   input: Readonly<ProjectPlanningInput>,
-): readonly Readonly<PlannedProject>[] {
+): Readonly<ProjectPlanningResult> {
+  const rejections: ProjectPlanningRejection[] = [];
   if (!input.settings.enabled || input.context.suppressed) {
-    return Object.freeze([]);
+    const reason = input.context.suppressed
+      ? "run-context-suppressed"
+      : "disabled";
+    return Object.freeze({
+      candidates: Object.freeze([]),
+      rejections: Object.freeze(
+        input.projects.map((project) =>
+          Object.freeze({ projectId: project.projectId, reason }),
+        ),
+      ),
+    });
   }
 
   const targets = new Map(
@@ -116,15 +145,41 @@ export function planProjects(
   for (const [order, offered] of input.projects.entries()) {
     const target = targets.get(offered.projectId);
     const override = input.context.overrides[offered.projectId];
+    if (target === undefined || !target.enabled) {
+      rejections.push(
+        Object.freeze({ projectId: offered.projectId, reason: "disabled" }),
+      );
+      continue;
+    }
+    if (target.weighting <= 0) {
+      rejections.push(
+        Object.freeze({
+          projectId: offered.projectId,
+          reason: "zero-weighting",
+        }),
+      );
+      continue;
+    }
+    if (override?.excluded === true) {
+      rejections.push(
+        Object.freeze({
+          projectId: offered.projectId,
+          reason: "run-context-excluded",
+        }),
+      );
+      continue;
+    }
     if (
-      target === undefined ||
-      !target.enabled ||
-      target.weighting <= 0 ||
-      override?.excluded === true ||
-      (target.maximum >= 0 &&
-        offered.rank >= target.maximum &&
-        override?.ignoreMaximum !== true)
+      target.maximum >= 0 &&
+      offered.rank >= target.maximum &&
+      override?.ignoreMaximum !== true
     ) {
+      rejections.push(
+        Object.freeze({
+          projectId: offered.projectId,
+          reason: "maximum-reached",
+        }),
+      );
       continue;
     }
 
@@ -133,7 +188,15 @@ export function planProjects(
       100 - offered.progress,
     );
     const steps = Math.min(desired, stepCapacity(offered, input.capacities));
-    if (!Number.isSafeInteger(steps) || steps < 1) continue;
+    if (!Number.isSafeInteger(steps) || steps < 1) {
+      rejections.push(
+        Object.freeze({
+          projectId: offered.projectId,
+          reason: "capacity-rejected",
+        }),
+      );
+      continue;
+    }
 
     const cost: Record<string, number> = {};
     for (const [resourceId, price] of Object.entries(offered.cost)) {
@@ -144,7 +207,15 @@ export function planProjects(
     if (multiplier !== undefined && Number.isFinite(multiplier)) {
       weighting *= multiplier;
     }
-    if (weighting <= 0) continue;
+    if (weighting <= 0) {
+      rejections.push(
+        Object.freeze({
+          projectId: offered.projectId,
+          reason: "zero-weighting",
+        }),
+      );
+      continue;
+    }
     if (input.settings.scaleWeighting) {
       weighting /= 1 - offered.progress / 100;
     }
@@ -172,5 +243,14 @@ export function planProjects(
       targets.get(right.project.projectId)?.priority ?? right.order;
     return leftPriority - rightPriority || left.order - right.order;
   });
-  return Object.freeze(planned.map((entry) => entry.project));
+  return Object.freeze({
+    candidates: Object.freeze(planned.map((entry) => entry.project)),
+    rejections: Object.freeze(rejections),
+  });
+}
+
+export function planProjects(
+  input: Readonly<ProjectPlanningInput>,
+): readonly Readonly<PlannedProject>[] {
+  return planProjectsWithRejections(input).candidates;
 }

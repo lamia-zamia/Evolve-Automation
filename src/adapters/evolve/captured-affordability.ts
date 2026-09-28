@@ -163,6 +163,20 @@ export interface StorageFitOptions {
   readonly allowExpandableStorage?: boolean;
 }
 
+function missingGlobalCapacityPasses(
+  resource: Record<PropertyKey, unknown>,
+  pool: string | undefined,
+  regional: boolean,
+): boolean {
+  return (
+    readProperty(resource, "max") === undefined &&
+    (!regional ||
+      pool === undefined ||
+      pool === ANYWHERE_POOL ||
+      !hasRegionalLedger(resource))
+  );
+}
+
 /**
  * The game's `checkMaxCosts`: every positive cost must name a resource the game is displaying, and
  * must fit under the capacity of the pool that would pay for it. A negative capacity is the game's
@@ -197,7 +211,13 @@ export function costFitsStorage(
     if (!isRecord(entry)) return undefined;
     if (amount > 0 && readProperty(entry, "display") !== true) return false;
     const capacity = capturedPoolCap(entry, options?.pool, regional);
-    if (capacity === undefined) return undefined;
+    if (
+      capacity === undefined &&
+      !missingGlobalCapacityPasses(entry, options?.pool, regional)
+    ) {
+      return undefined;
+    }
+    if (capacity === undefined) continue;
     const isCeiling = zeroCapIsCeiling ? capacity >= 0 : capacity > 0;
     if (
       isCeiling &&
@@ -245,7 +265,13 @@ export function costFitsNow(
     if (held === undefined) return undefined;
     if (amount > held) return false;
     const capacity = capturedPoolCap(entry, options?.pool, regional);
-    if (capacity === undefined) return undefined;
+    if (
+      capacity === undefined &&
+      !missingGlobalCapacityPasses(entry, options?.pool, regional)
+    ) {
+      return undefined;
+    }
+    if (capacity === undefined) continue;
     if (capacity >= 0 && amount > capacity) return false;
   }
   return true;
@@ -265,8 +291,8 @@ export function readCapturedResourceView(
   if (!isRecord(resource)) return ABSENT_RESOURCE;
   const regional = isRegionalSupply(root);
   // Resource records are created before all of their numeric fields are initialized. Keep the
-  // world's lenient Number(undefined) behavior for that state; affordability itself remains
-  // strict and reports an unjudgeable comparison for the same fields.
+  // world's lenient Number(undefined) behavior: the game's `room >= 0` capacity check treats a
+  // missing `resource.max` as no ceiling, while a missing amount still cannot prove affordability.
   const amount = capturedPoolAmount(resource, pool, regional) ?? Number.NaN;
   const max = capturedPoolCap(resource, pool, regional) ?? Number.NaN;
   const rateOfChange = capturedPoolRate(resource, pool, regional) ?? Number.NaN;

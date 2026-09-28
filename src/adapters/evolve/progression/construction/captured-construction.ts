@@ -385,7 +385,14 @@ export function createCapturedConstructionAdapter(
         break;
       }
       return Object.freeze({
-        candidates: Object.freeze(entries.map((entry) => entry.candidate)),
+        candidates: Object.freeze(
+          entries.map((entry) =>
+            Object.freeze({
+              ...entry.candidate,
+              family: entry.source.family,
+            }),
+          ),
+        ),
         consumptionMode: options.consumptionMode,
         buildIfStorageFull: options.buildIfStorageFull,
         ignoreZeroRate: options.ignoreZeroRate,

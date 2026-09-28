@@ -108,6 +108,15 @@ assert.equal(costFitsStorage(root, { Money: 10, Structs: 1 }), undefined);
 // A resource the root has no entry for cannot be judged either.
 assert.equal(costFitsStorage(root, { Elerium: 1 }), undefined);
 assert.equal(costFitsStorage(root, { Money: Number.NaN }), undefined);
+// Evolve's `room >= 0` check treats a missing `resource.max` as no ceiling while the displayed
+// resource's holdings are still read normally.
+assert.equal(
+  costFitsStorage(
+    { resource: { Money: { amount: 25, display: true } } },
+    { Money: 100 },
+  ),
+  true,
+);
 // A refusal is reported even when another key in the same cost is unjudgeable, only when the
 // refusal is reached first — the walk stops at whichever it meets, so order decides.
 assert.equal(costFitsStorage({ resource: {} }, { Money: 1 }), undefined);
@@ -115,6 +124,19 @@ assert.equal(costFitsStorage({ resource: {} }, { Money: 1 }), undefined);
 // `checkCosts` adds on-hand holdings to the same capacity comparison.
 assert.equal(costFitsNow(root, { Money: 250 }), true);
 assert.equal(costFitsNow(root, { Money: 251 }), false);
+assert.equal(
+  costFitsNow(
+    { resource: { Money: { amount: 100, display: true } } },
+    { Money: 100 },
+  ),
+  true,
+  "a visible resource with no initialized max still passes the game's no-ceiling comparison",
+);
+assert.equal(
+  costFitsNow({ resource: { Money: { display: true } } }, { Money: 1 }),
+  undefined,
+  "missing resource.amount remains unjudgeable",
+);
 assert.equal(costFitsNow(root, { Lumber: 101 }), false);
 assert.equal(costFitsNow(root, { Lumber: 5000 }), false);
 assert.equal(costFitsNow(root, { Soul_Gem: 0 }), true);

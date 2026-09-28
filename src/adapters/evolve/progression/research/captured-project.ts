@@ -8,8 +8,9 @@
  */
 
 import {
-  planProjects,
+  planProjectsWithRejections,
   type PlannedProject,
+  type ProjectPlanningRejectionReason,
   type ProjectAutomationSettings,
   type ProjectCapacityView,
 } from "../../../../domain/progression/research/project.ts";
@@ -45,6 +46,8 @@ export interface CapturedProjectDependencies {
   readonly readSettings: () => unknown;
   /** Reports a successful project build after rank or progress changed. */
   readonly onActivity?: GameActivitySink;
+  /** Reports project gates and captured actions when diagnostics are explicitly enabled. */
+  readonly onDiagnostic?: (message: string) => void;
 }
 
 interface CycleProject {
@@ -135,6 +138,7 @@ export function createCapturedProjectSource(
   const { rootState, catalog, resources, controls, context, readSettings } =
     dependencies;
   const reportActivity = dependencies.onActivity ?? (() => {});
+  const reportDiagnostic = dependencies.onDiagnostic;
   let cycle: ReadonlyMap<string, CycleProject> = new Map();
 
   return Object.freeze({
@@ -151,6 +155,7 @@ export function createCapturedProjectSource(
         // A discovery pass that failed leaves no catalog. Planning from the previous one would
         // spend against prices and offers the game may already have moved past.
         cycle = new Map();
+        reportDiagnostic?.("ARPA catalog unavailable: no current offer sample");
         return Object.freeze([]);
       }
       const resourceIds = new Set(
@@ -169,12 +174,30 @@ export function createCapturedProjectSource(
       }
       const queued = queuedIds(rootState.readRoot());
       const entries = new Map<string, CycleProject>();
-      for (const project of planProjects({
+      const plan = planProjectsWithRejections({
         settings: readCapturedProjectSettings(settings, offered),
         projects: offered,
         capacities: Object.freeze(capacities),
         context: context.readContext(),
-      })) {
+      });
+      if (reportDiagnostic !== undefined) {
+        const reasonLabel: Readonly<
+          Record<ProjectPlanningRejectionReason, string>
+        > = {
+          disabled: "project disabled",
+          "zero-weighting": "project zero weighting",
+          "maximum-reached": "maximum reached",
+          "run-context-suppressed": "suppressed by run context",
+          "run-context-excluded": "excluded by run context",
+          "capacity-rejected": "capacity rejected",
+        };
+        for (const rejection of plan.rejections) {
+          reportDiagnostic(
+            `ARPA ${reasonLabel[rejection.reason]}: ${rejection.projectId}`,
+          );
+        }
+      }
+      for (const project of plan.candidates) {
         entries.set(project.elementId, {
           project,
           candidate: Object.freeze({
@@ -187,6 +210,9 @@ export function createCapturedProjectSource(
             important: false,
           }),
         });
+        reportDiagnostic?.(
+          `ARPA candidate produced: ${project.projectId} ${project.steps}%`,
+        );
       }
       cycle = entries;
       return Object.freeze(
@@ -202,6 +228,7 @@ export function createCapturedProjectSource(
       } as const;
       const candidate = cycle.get(key);
       if (candidate === undefined) {
+        reportDiagnostic?.(`ARPA action failed/stale: stale candidate ${key}`);
         return Object.freeze({
           outcome: stale(
             "stale-project-target",
@@ -213,6 +240,9 @@ export function createCapturedProjectSource(
       }
       const handle = controls.resolve(candidate.project.elementId);
       if (handle === undefined) {
+        reportDiagnostic?.(
+          `ARPA action failed/stale: missing control ${candidate.project.projectId}`,
+        );
         return Object.freeze({
           outcome: rejected(
             "project-control-missing",
@@ -223,6 +253,9 @@ export function createCapturedProjectSource(
         });
       }
       if (handle.generation !== candidate.project.generation) {
+        reportDiagnostic?.(
+          `ARPA action failed/stale: redrawn control ${candidate.project.projectId}`,
+        );
         return Object.freeze({
           outcome: stale(
             "stale-project-control",
@@ -241,6 +274,9 @@ export function createCapturedProjectSource(
         before.rank !== candidate.project.rank ||
         before.progress !== candidate.project.progress
       ) {
+        reportDiagnostic?.(
+          `ARPA action failed/stale: project state changed ${candidate.project.projectId}`,
+        );
         return Object.freeze({
           outcome: stale(
             "stale-project-state",
@@ -254,6 +290,9 @@ export function createCapturedProjectSource(
       const queueBefore = readCapturedBuildQueueEntryCount(
         rootBefore,
         candidate.project.elementId,
+      );
+      reportDiagnostic?.(
+        `ARPA action invoked: ${candidate.project.projectId} ${candidate.project.steps}%`,
       );
       const result = controls.invoke(handle, "build", [
         candidate.project.projectId,
@@ -270,6 +309,9 @@ export function createCapturedProjectSource(
       );
       const queued = queueAfter > queueBefore;
       if (!result.ok) {
+        reportDiagnostic?.(
+          `ARPA action failed/stale: ${candidate.project.projectId} ${result.reason}`,
+        );
         return Object.freeze({
           outcome:
             result.reason === "stale-control"
@@ -283,6 +325,11 @@ export function createCapturedProjectSource(
         });
       }
       const clicked = progressed || queued;
+      if (!clicked) {
+        reportDiagnostic?.(
+          `ARPA action failed/stale: no verified progress ${candidate.project.projectId}`,
+        );
+      }
       if (progressed) {
         const label = readCapturedControlLabel(
           handle,

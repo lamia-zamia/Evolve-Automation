@@ -18,6 +18,7 @@ function makeCapturedGame() {
       launch_facility: { rank: 1, complete: 0 },
       railway: { rank: 0, complete: 25 },
       sequence: { on: false },
+      m_type: "Monolith",
     },
   };
   const controlsById = new Map([
@@ -47,7 +48,7 @@ function makeCapturedGame() {
 
 const game = makeCapturedGame();
 
-// The `sequence` subsystem flag is not a buildable project.
+// The `sequence` subsystem flag and `m_type` monument selection are not projects.
 assert.deepEqual(
   readCapturedProjectSettingsEntries(game.root, game.controls).map((entry) => [
     entry.projectId,
