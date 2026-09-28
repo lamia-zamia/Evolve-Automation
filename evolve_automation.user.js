@@ -1022,8 +1022,9 @@
     let rate = readProperty(ledger, pool);
     return rate === void 0 ? 0 : finite(rate);
   }
-  function missingGlobalCapacityPasses(resource, pool, regional) {
-    return readProperty(resource, "max") === void 0 && (!regional || pool === void 0 || pool === ANYWHERE_POOL || !hasRegionalLedger(resource));
+  function globalCapacityHasNoCeiling(resource, pool, regional) {
+    let maximum = readProperty(resource, "max");
+    return (maximum === void 0 || typeof maximum == "number" && !Number.isFinite(maximum)) && (!regional || pool === void 0 || pool === ANYWHERE_POOL || !hasRegionalLedger(resource));
   }
   function costFitsStorage(root, cost, options) {
     let zeroCapIsCeiling = options?.zeroCapIsCeiling ?? !0, regional = isRegionalSupply(root);
@@ -1044,7 +1045,7 @@
       if (!isRecord(entry)) return;
       if (amount > 0 && readProperty(entry, "display") !== !0) return !1;
       let capacity = capturedPoolCap(entry, options?.pool, regional);
-      if (capacity === void 0 && !missingGlobalCapacityPasses(entry, options?.pool, regional))
+      if (capacity === void 0 && !globalCapacityHasNoCeiling(entry, options?.pool, regional))
         return;
       if (capacity === void 0) continue;
       if ((zeroCapIsCeiling ? capacity >= 0 : capacity > 0) && amount > capacity && !(options?.allowExpandableStorage === !0 && readProperty(entry, "stackable") === !0))
@@ -1073,7 +1074,7 @@
       if (held === void 0) return;
       if (amount > held) return !1;
       let capacity = capturedPoolCap(entry, options?.pool, regional);
-      if (capacity === void 0 && !missingGlobalCapacityPasses(entry, options?.pool, regional))
+      if (capacity === void 0 && !globalCapacityHasNoCeiling(entry, options?.pool, regional))
         return;
       if (capacity !== void 0 && capacity >= 0 && amount > capacity)
         return !1;

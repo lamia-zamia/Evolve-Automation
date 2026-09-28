@@ -133,6 +133,21 @@ assert.equal(
   "a visible resource with no initialized max still passes the game's no-ceiling comparison",
 );
 assert.equal(
+  costFitsNow(
+    { resource: { Money: { amount: 100, max: Number.NaN, display: true } } },
+    { Money: 100 },
+  ),
+  true,
+  "a numeric NaN max also leaves the game's room comparison without a ceiling",
+);
+assert.equal(
+  costFitsStorage(
+    { resource: { Money: { max: Number.NaN, display: true } } },
+    { Money: 100 },
+  ),
+  true,
+);
+assert.equal(
   costFitsNow({ resource: { Money: { display: true } } }, { Money: 1 }),
   undefined,
   "missing resource.amount remains unjudgeable",

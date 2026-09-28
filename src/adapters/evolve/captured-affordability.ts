@@ -163,13 +163,15 @@ export interface StorageFitOptions {
   readonly allowExpandableStorage?: boolean;
 }
 
-function missingGlobalCapacityPasses(
+function globalCapacityHasNoCeiling(
   resource: Record<PropertyKey, unknown>,
   pool: string | undefined,
   regional: boolean,
 ): boolean {
+  const maximum = readProperty(resource, "max");
   return (
-    readProperty(resource, "max") === undefined &&
+    (maximum === undefined ||
+      (typeof maximum === "number" && !Number.isFinite(maximum))) &&
     (!regional ||
       pool === undefined ||
       pool === ANYWHERE_POOL ||
@@ -213,7 +215,7 @@ export function costFitsStorage(
     const capacity = capturedPoolCap(entry, options?.pool, regional);
     if (
       capacity === undefined &&
-      !missingGlobalCapacityPasses(entry, options?.pool, regional)
+      !globalCapacityHasNoCeiling(entry, options?.pool, regional)
     ) {
       return undefined;
     }
@@ -267,7 +269,7 @@ export function costFitsNow(
     const capacity = capturedPoolCap(entry, options?.pool, regional);
     if (
       capacity === undefined &&
-      !missingGlobalCapacityPasses(entry, options?.pool, regional)
+      !globalCapacityHasNoCeiling(entry, options?.pool, regional)
     ) {
       return undefined;
     }
@@ -291,8 +293,8 @@ export function readCapturedResourceView(
   if (!isRecord(resource)) return ABSENT_RESOURCE;
   const regional = isRegionalSupply(root);
   // Resource records are created before all of their numeric fields are initialized. Keep the
-  // world's lenient Number(undefined) behavior: the game's `room >= 0` capacity check treats a
-  // missing `resource.max` as no ceiling, while a missing amount still cannot prove affordability.
+  // game's `room >= 0` result: missing or numeric non-finite `resource.max` adds no ceiling, while
+  // a missing amount still cannot prove affordability.
   const amount = capturedPoolAmount(resource, pool, regional) ?? Number.NaN;
   const max = capturedPoolCap(resource, pool, regional) ?? Number.NaN;
   const rateOfChange = capturedPoolRate(resource, pool, regional) ?? Number.NaN;
