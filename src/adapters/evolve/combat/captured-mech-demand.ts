@@ -14,7 +14,7 @@ import type { CapturedMechDemandSource } from "../../../ports/captured-mech.ts";
 import type { GameControlRegistry } from "../../../ports/game-control-registry.ts";
 import type { GameRootStateSource } from "../../../ports/game-root-state.ts";
 import { CAPTURED_MECH_ASSEMBLY_CONTROL } from "./captured-mech-control-ids.ts";
-import { finite } from "../../validation.ts";
+import { finite, isRecord, readProperty } from "../../validation.ts";
 
 export interface CapturedMechDemandDependencies {
   readonly rootState: GameRootStateSource;
@@ -92,10 +92,18 @@ export function createCapturedMechDemandSource(
         reserved,
       );
       const userBuildCost = readCapturedUserMechCost(state, controls);
-      const candidatePlan = planMechDemandCosts({
-        state,
-        ...(userBuildCost === undefined ? {} : { userBuildCost }),
-      });
+      const portal = readProperty(root, "portal");
+      // DeadSpace src/portal.js creates portal.mechbay only when its hell_spire-gated
+      // building is purchased, and drawMechLab only exposes assembly while that key exists.
+      // An enabled script setting cannot create an immediate Mech target before then.
+      const mechbayNotBuilt =
+        isRecord(portal) && !Object.hasOwn(portal, "mechbay");
+      const candidatePlan = mechbayNotBuilt
+        ? Object.freeze({ status: "none" as const })
+        : planMechDemandCosts({
+            state,
+            ...(userBuildCost === undefined ? {} : { userBuildCost }),
+          });
       const headroom = state.bay.maximum - state.bay.occupied;
       const hasUnknownImmediateTarget =
         candidatePlan.status === "unavailable" &&

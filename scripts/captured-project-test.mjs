@@ -477,8 +477,12 @@ function makeAdapter({
   );
   assert.deepEqual(reserved.calls, []);
   assert.ok(
-    reservationDiagnostics.some((message) =>
-      message.includes("ARPA candidate blocked by reservation/planner"),
+    reservationDiagnostics.some(
+      (message) =>
+        message.includes("ARPA candidate blocked by reservation/planner") &&
+        message.includes("Queued Farm") &&
+        message.includes("Money") &&
+        message.includes("Queue"),
     ),
   );
 }

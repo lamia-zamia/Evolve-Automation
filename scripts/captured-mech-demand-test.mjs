@@ -95,6 +95,21 @@ function makeDemandSource(root, scriptSettings = settings, methods) {
   });
 }
 
+// The game initializes portal as an empty object and only adds mechbay when its
+// hell_spire-gated structure is purchased. An enabled autoMech setting cannot
+// reserve an unbuildable target before that structure exists.
+{
+  const root = makeRoot();
+  root.portal = {};
+  const demand = makeDemandSource(root);
+  assert.deepEqual(demand.read().plan, { status: "none" });
+  assert.deepEqual(demand.read().immediatePlan, { status: "none" });
+  assert.deepEqual(
+    createCapturedMechReservationSource({ demand }).readReservations(),
+    { unavailable: false, targets: [] },
+  );
+}
+
 function runConstructionWithMechPriority(buildingMechsFirst) {
   const root = makeRoot();
   let buildingMechsFirstSetting = buildingMechsFirst;

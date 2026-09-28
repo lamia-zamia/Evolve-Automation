@@ -90,9 +90,11 @@ export function runBuildAutomation(
       ),
     );
     if (conflict.kind === "skip") {
-      reportArpaBuildDiagnostic(
-        `${candidate.key} conflicts with a resource reservation`,
-      );
+      const detail =
+        conflict.annotation.kind === "text"
+          ? conflict.annotation.text.replaceAll(/<[^>]*>/g, "")
+          : `${candidate.key} is delayed by ${conflict.annotation.otherKey} for ${conflict.annotation.resourceId}`;
+      reportArpaBuildDiagnostic(`${candidate.key}: ${detail}`);
       const outcome = measure("autoBuild.annotate", () =>
         executor.annotate(conflict.annotation),
       );

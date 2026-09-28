@@ -4566,9 +4566,8 @@
         )
       );
       if (conflict.kind === "skip") {
-        reportArpaBuildDiagnostic(
-          `${candidate.key} conflicts with a resource reservation`
-        );
+        let detail = conflict.annotation.kind === "text" ? conflict.annotation.text.replaceAll(/<[^>]*>/g, "") : `${candidate.key} is delayed by ${conflict.annotation.otherKey} for ${conflict.annotation.resourceId}`;
+        reportArpaBuildDiagnostic(`${candidate.key}: ${detail}`);
         let outcome = measure(
           "autoBuild.annotate",
           () => executor.annotate(conflict.annotation)
@@ -8241,7 +8240,7 @@
             queueKeyHeld: !1
           }),
           reserved
-        ), userBuildCost = readCapturedUserMechCost(state, controls2), candidatePlan = planMechDemandCosts({
+        ), userBuildCost = readCapturedUserMechCost(state, controls2), portal = readProperty(root, "portal"), candidatePlan = isRecord(portal) && !Object.hasOwn(portal, "mechbay") ? Object.freeze({ status: "none" }) : planMechDemandCosts({
           state,
           ...userBuildCost === void 0 ? {} : { userBuildCost }
         }), headroom = state.bay.maximum - state.bay.occupied, hasUnknownImmediateTarget = candidatePlan.status === "unavailable" && state.settings.autoMech && state.settings.buildMode !== "none" && !state.warlord && (!state.available || headroom > 0), immediatePlan = candidatePlan.status === "ready" ? isMechConstructionPriorityEligible({
