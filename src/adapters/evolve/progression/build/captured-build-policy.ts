@@ -40,6 +40,10 @@ import {
   CAPTURED_BUILD_REGIONS,
   CITY_ELEMENT_BINDING_ALIASES,
 } from "./captured-building-metadata.ts";
+import {
+  CAPTURED_TEST_LAUNCH,
+  readCapturedTestLaunchCount,
+} from "./captured-test-launch.ts";
 
 export interface CapturedBuildPolicyDependencies {
   readonly rootState: GameRootStateSource;
@@ -753,17 +757,26 @@ function readNonCityTarget(
     return undefined;
   }
   const id = parts.id;
+  const testLaunch = elementId === CAPTURED_TEST_LAUNCH.elementId;
   const owner = readProperty(root, region);
   const state = readProperty(owner, id);
-  if (!isRecord(state)) {
+  if (!testLaunch && !isRecord(state)) {
     onSkipped(binding, `captured ${region} state is unavailable`);
     return undefined;
   }
-  const count = readProperty(state, "count");
+  const count = testLaunch
+    ? readCapturedTestLaunchCount(root)
+    : readProperty(state, "count");
   if (typeof count !== "number" || !Number.isFinite(count)) {
-    onSkipped(binding, `captured ${region} count is not finite`);
+    onSkipped(
+      binding,
+      testLaunch
+        ? "captured Test Launch completion state is unavailable"
+        : `captured ${region} count is not finite`,
+    );
     return undefined;
   }
+  if (testLaunch && count >= 1) return undefined;
   const weighting = readFiniteSetting(settings, `bld_w_${binding}`, 100);
   if (weighting === undefined) {
     onSkipped(binding, "configured weighting is not finite");
@@ -779,7 +792,9 @@ function readNonCityTarget(
   // private `powered()` method, so consumer-underpower weighting remains unavailable here too.
   const powered = undefined;
   const underpoweredWeighting = 1;
-  const maximum = readFiniteSetting(settings, `bld_m_${binding}`, UNLIMITED);
+  const maximum = testLaunch
+    ? 1
+    : readFiniteSetting(settings, `bld_m_${binding}`, UNLIMITED);
   if (maximum === undefined) {
     onSkipped(binding, "configured maximum is not finite");
     return undefined;
@@ -854,6 +869,7 @@ function readNonCityTarget(
     elementId,
     region,
     id,
+    ...(testLaunch ? { readCount: readCapturedTestLaunchCount } : {}),
     weighting: applyUnderpoweredWeighting(
       applyAuthorityCapWeighting(
         dynamicWeight,

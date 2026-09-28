@@ -2242,6 +2242,17 @@
     return result;
   }
 
+  // src/adapters/evolve/progression/build/captured-test-launch.ts
+  var CAPTURED_TEST_LAUNCH = Object.freeze({
+    elementId: "space-test_launch",
+    completedAtSpaceLevel: 2
+  });
+  function readCapturedTestLaunchCount(root) {
+    let spaceLevel = readProperty(readProperty(root, "tech"), "space");
+    if (!(typeof spaceLevel != "number" || !Number.isFinite(spaceLevel) || spaceLevel < 1))
+      return spaceLevel >= CAPTURED_TEST_LAUNCH.completedAtSpaceLevel ? 1 : 0;
+  }
+
   // src/adapters/evolve/progression/build/captured-build-policy.ts
   var UNLIMITED = Number.MAX_SAFE_INTEGER, KNOWLEDGE_BUILDINGS = /* @__PURE__ */ new Set([
     "university",
@@ -2608,16 +2619,20 @@
     let binding = elementId;
     if (settings[`bat${binding}`] === !1 || settings[`bat${binding}`] === void 0 && settings.autoBuild !== !0)
       return;
-    let id = parts.id, owner = readProperty(root, region), state = readProperty(owner, id);
-    if (!isRecord(state)) {
+    let id = parts.id, testLaunch = elementId === CAPTURED_TEST_LAUNCH.elementId, owner = readProperty(root, region), state = readProperty(owner, id);
+    if (!testLaunch && !isRecord(state)) {
       onSkipped(binding, `captured ${region} state is unavailable`);
       return;
     }
-    let count2 = readProperty(state, "count");
+    let count2 = testLaunch ? readCapturedTestLaunchCount(root) : readProperty(state, "count");
     if (typeof count2 != "number" || !Number.isFinite(count2)) {
-      onSkipped(binding, `captured ${region} count is not finite`);
+      onSkipped(
+        binding,
+        testLaunch ? "captured Test Launch completion state is unavailable" : `captured ${region} count is not finite`
+      );
       return;
     }
+    if (testLaunch && count2 >= 1) return;
     let weighting = readFiniteSetting(settings, `bld_w_${binding}`, 100);
     if (weighting === void 0) {
       onSkipped(binding, "configured weighting is not finite");
@@ -2628,7 +2643,7 @@
       onSkipped(binding, "new-building weighting is not finite");
       return;
     }
-    let powered = void 0, underpoweredWeighting = 1, maximum = readFiniteSetting(settings, `bld_m_${binding}`, UNLIMITED);
+    let powered = void 0, underpoweredWeighting = 1, maximum = testLaunch ? 1 : readFiniteSetting(settings, `bld_m_${binding}`, UNLIMITED);
     if (maximum === void 0) {
       onSkipped(binding, "configured maximum is not finite");
       return;
@@ -2683,6 +2698,7 @@
       elementId,
       region,
       id,
+      ...testLaunch ? { readCount: readCapturedTestLaunchCount } : {},
       weighting: applyUnderpoweredWeighting(
         applyAuthorityCapWeighting(
           dynamicWeight,
@@ -3207,6 +3223,10 @@
   // src/adapters/evolve/progression/build/captured-build.ts
   var NO_CONSUMPTION = Object.freeze([]);
   function readBuilding(root, target) {
+    if (target.readCount !== void 0) {
+      let count2 = target.readCount(root);
+      return typeof count2 == "number" && Number.isFinite(count2) ? { count: count2 } : void 0;
+    }
     let region = readProperty(root, target.region), building = readProperty(region, target.id);
     return isRecord(building) ? building : void 0;
   }

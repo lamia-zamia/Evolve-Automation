@@ -40,6 +40,8 @@ export interface CapturedBuildTarget {
   readonly region: string;
   /** The building's own key inside that container, e.g. `basic_housing`. */
   readonly id: string;
+  /** Reads one-shot action completion when upstream stores progress outside a region count. */
+  readonly readCount?: (root: unknown) => number | undefined;
   readonly weighting: number;
   /** Stop building at this count. `Number.MAX_SAFE_INTEGER` for no limit. */
   readonly maximum: number;
@@ -77,6 +79,12 @@ function readBuilding(
   root: unknown,
   target: Readonly<CapturedBuildTarget>,
 ): Record<PropertyKey, unknown> | undefined {
+  if (target.readCount !== undefined) {
+    const count = target.readCount(root);
+    return typeof count === "number" && Number.isFinite(count)
+      ? { count }
+      : undefined;
+  }
   const region = readProperty(root, target.region);
   const building = readProperty(region, target.id);
   return isRecord(building) ? building : undefined;
