@@ -896,6 +896,75 @@ runOne("Purchase", { hstl: 0, unrest: 0, spy: 3 }, undefined);
 
 {
   const root = makeRoot("Influence", { hstl: 30 });
+  const testCase = makeAutomationModalCase(root, () => {});
+  openAutomationModal(testCase);
+  const input = testCase.adapter.reader.read();
+  const decision = planCapturedEspionage(input);
+  testCase.setRoot(makeRoot("Influence", { hstl: 30 }));
+
+  const stale = testCase.adapter.executor.execute(decision);
+  assert.equal(stale.status, "stale");
+  assert.equal(stale.failure.code, "captured-espionage-root-changed");
+  assert.equal(testCase.automationModal.closed, true);
+  assert.equal(testCase.activeModals.length, 0);
+  assert.equal(testCase.adapter.isBusy(), false);
+}
+
+{
+  const root = makeRoot("Influence", { hstl: 30 });
+  const testCase = makeAutomationModalCase(root, () => {});
+  openAutomationModal(testCase);
+  const input = testCase.adapter.reader.read();
+  const decision = planCapturedEspionage(input);
+  testCase.controls.current.set("foreign", {
+    ...testCase.controls.current.get("foreign"),
+    generation: 2,
+  });
+
+  const stale = testCase.adapter.executor.execute(decision);
+  assert.equal(stale.status, "stale");
+  assert.equal(stale.failure.code, "captured-espionage-foreign-changed");
+  assert.equal(testCase.automationModal.closed, true);
+  assert.equal(testCase.activeModals.length, 0);
+  assert.equal(testCase.adapter.isBusy(), false);
+}
+
+{
+  const root = makeRoot("Influence", { hstl: 30 });
+  const testCase = makeAutomationModalCase(root, () => {});
+  openAutomationModal(testCase);
+  const input = testCase.adapter.reader.read();
+  const decision = planCapturedEspionage(input);
+  root.civic.foreign.gov0.hstl += 1;
+
+  const stale = testCase.adapter.executor.execute(decision);
+  assert.equal(stale.status, "stale");
+  assert.equal(stale.failure.code, "captured-espionage-state-changed");
+  assert.equal(testCase.automationModal.closed, true);
+  assert.equal(testCase.activeModals.length, 0);
+  assert.equal(testCase.adapter.isBusy(), false);
+}
+
+{
+  const root = makeRoot("Influence", { hstl: 30 });
+  const testCase = makeAutomationModalCase(root, () => {});
+  openAutomationModal(testCase);
+  const input = testCase.adapter.reader.read();
+  const decision = planCapturedEspionage(input);
+
+  const rejected = testCase.adapter.executor.execute({
+    ...decision,
+    expectedMilitary: decision.expectedMilitary + 1,
+  });
+  assert.equal(rejected.status, "rejected");
+  assert.equal(rejected.failure.code, "invalid-captured-espionage-decision");
+  assert.equal(testCase.automationModal.closed, true);
+  assert.equal(testCase.activeModals.length, 0);
+  assert.equal(testCase.adapter.isBusy(), false);
+}
+
+{
+  const root = makeRoot("Influence", { hstl: 30 });
   const testCase = makeAutomationModalCase(root, (currentRoot) => {
     currentRoot.civic.foreign.gov0.hstl -= 5;
   });

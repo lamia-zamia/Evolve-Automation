@@ -605,6 +605,7 @@ export function createCapturedEspionage(
         );
       }
       if (dependencies.rootState.readRoot() !== active.root) {
+        discardCapturedEspionageSample();
         return stale(
           "captured-espionage-root-changed",
           "captured game root changed",
@@ -617,6 +618,7 @@ export function createCapturedEspionage(
         currentForeign === undefined ||
         currentForeign.generation !== active.foreign.generation
       ) {
+        discardCapturedEspionageSample();
         return stale(
           "captured-espionage-foreign-changed",
           "captured foreign control changed",
@@ -626,6 +628,7 @@ export function createCapturedEspionage(
         active.modal !== undefined &&
         active.modalGovernmentId !== decision.governmentId
       ) {
+        discardCapturedEspionageSample();
         return stale(
           "captured-espionage-modal-target-changed",
           "captured espionage modal targets a different government",
@@ -643,6 +646,7 @@ export function createCapturedEspionage(
         decision.expectedAnnexed !== active.input.annexed ||
         decision.expectedPurchased !== active.input.purchased
       ) {
+        discardCapturedEspionageSample();
         return rejected(
           "invalid-captured-espionage-decision",
           "captured espionage decision does not match the sample",
@@ -694,6 +698,7 @@ export function createCapturedEspionage(
         currentState.annexed !== active.input.annexed ||
         currentState.purchased !== active.input.purchased
       ) {
+        discardCapturedEspionageSample();
         return stale(
           "captured-espionage-state-changed",
           "captured foreign espionage state changed",
@@ -705,6 +710,7 @@ export function createCapturedEspionage(
         active.input.hostility,
       );
       if (expected !== decision.operation || !active.input.useful) {
+        discardCapturedEspionageSample();
         return rejected(
           "invalid-captured-espionage-plan",
           "captured espionage plan is no longer useful",

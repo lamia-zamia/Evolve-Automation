@@ -43697,7 +43697,7 @@ Only continue if you trust the source. Injected code:
             "captured espionage session is missing"
           );
         if (dependencies.rootState.readRoot() !== active.root)
-          return stale(
+          return discardCapturedEspionageSample(), stale(
             "captured-espionage-root-changed",
             "captured game root changed"
           );
@@ -43705,17 +43705,17 @@ Only continue if you trust the source. Injected code:
           CAPTURED_FOREIGN_CONTROL
         );
         if (currentForeign === void 0 || currentForeign.generation !== active.foreign.generation)
-          return stale(
+          return discardCapturedEspionageSample(), stale(
             "captured-espionage-foreign-changed",
             "captured foreign control changed"
           );
         if (active.modal !== void 0 && active.modalGovernmentId !== decision.governmentId)
-          return stale(
+          return discardCapturedEspionageSample(), stale(
             "captured-espionage-modal-target-changed",
             "captured espionage modal targets a different government"
           );
         if (decision.kind !== "captured-espionage" || decision.governmentId !== active.input.governmentId || decision.expectedSpyCount !== active.input.spyCount || decision.expectedSabotageProgress !== active.input.sabotageProgress || decision.expectedMilitary !== active.input.military || decision.expectedHostility !== active.input.hostility || decision.expectedUnrest !== active.input.unrest || decision.expectedOccupied !== active.input.occupied || decision.expectedAnnexed !== active.input.annexed || decision.expectedPurchased !== active.input.purchased)
-          return rejected(
+          return discardCapturedEspionageSample(), rejected(
             "invalid-captured-espionage-decision",
             "captured espionage decision does not match the sample"
           );
@@ -43735,7 +43735,7 @@ Only continue if you trust the source. Injected code:
           (candidate) => candidate.governmentId === currentStrategy.selectedTargetId
         ), currentInput = currentStrategyTarget === void 0 ? void 0 : capturedEspionageInput(active.root, currentStrategyTarget);
         if (currentTarget === void 0 || currentState === void 0 || currentStrategyTarget === void 0 || currentInput === void 0 || currentStrategy.selectedTargetId !== active.target.governmentId || currentStrategyTarget.governmentId !== active.target.governmentId || currentTarget.governmentId !== active.target.governmentId || currentTarget.policy !== active.target.policy || currentTarget.espionagePolicy !== active.target.espionagePolicy || currentInput.policy !== active.input.policy || currentInput.useful !== active.input.useful || currentState.spyCount !== active.input.spyCount || currentState.sabotageProgress !== active.input.sabotageProgress || currentState.military !== active.input.military || currentState.hostility !== active.input.hostility || currentState.unrest !== active.input.unrest || currentState.annexed !== active.input.annexed || currentState.purchased !== active.input.purchased)
-          return stale(
+          return discardCapturedEspionageSample(), stale(
             "captured-espionage-state-changed",
             "captured foreign espionage state changed"
           );
@@ -43744,7 +43744,7 @@ Only continue if you trust the source. Injected code:
           active.input.military,
           active.input.hostility
         ) !== decision.operation || !active.input.useful)
-          return rejected(
+          return discardCapturedEspionageSample(), rejected(
             "invalid-captured-espionage-plan",
             "captured espionage plan is no longer useful"
           );
