@@ -110,6 +110,36 @@ function makeDemandSource(root, scriptSettings = settings, methods) {
   );
 }
 
+// Only the absent, game-defined Mech Bay property means there is no current target. Missing or
+// malformed state after Mech data becomes reachable stays unavailable and fails closed.
+{
+  const missingPortal = makeRoot();
+  delete missingPortal.portal;
+  const missingPortalDemand = makeDemandSource(missingPortal);
+  assert.deepEqual(missingPortalDemand.read().immediatePlan, {
+    status: "unavailable",
+  });
+  assert.deepEqual(
+    createCapturedMechReservationSource({
+      demand: missingPortalDemand,
+    }).readReservations(),
+    { unavailable: true, targets: [] },
+  );
+
+  const malformedMechbay = makeRoot();
+  malformedMechbay.portal.mechbay = {};
+  const malformedDemand = makeDemandSource(malformedMechbay);
+  assert.deepEqual(malformedDemand.read().immediatePlan, {
+    status: "unavailable",
+  });
+  assert.deepEqual(
+    createCapturedMechReservationSource({
+      demand: malformedDemand,
+    }).readReservations(),
+    { unavailable: true, targets: [] },
+  );
+}
+
 function runConstructionWithMechPriority(buildingMechsFirst) {
   const root = makeRoot();
   let buildingMechsFirstSetting = buildingMechsFirst;
@@ -366,6 +396,14 @@ function runConstructionWithMechPriority(buildingMechsFirst) {
         cost: { Supply: 180_000, Soul_Gem: 4 },
       },
     ],
+  });
+
+  const disabled = createCapturedMechReservationSource({
+    demand: makeDemandSource(root, { ...settings, autoMech: false }),
+  });
+  assert.deepEqual(disabled.readReservations(), {
+    unavailable: false,
+    targets: [],
   });
 
   const off = createCapturedMechReservationSource({

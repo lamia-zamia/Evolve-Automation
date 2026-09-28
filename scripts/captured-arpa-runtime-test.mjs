@@ -211,6 +211,7 @@ function makeScenario({
     tech: { mad: 1, high_tech: 7 },
     city: {},
     civic: {},
+    portal: {},
     arpa: initialProject ? { [projectId]: { rank, complete: progress } } : {},
     queue: { queue },
   };
@@ -395,21 +396,27 @@ function withScenario(options, run) {
   }
 }
 
-// A normal post-MAD LHC run succeeds through page capture, off-tab discovery, the real drawn
-// tooltip reader, settings lifecycle, project planning, the merged construction runner, and the
-// captured Vue build closure. The player's main tab is restored after discovery.
+// This is the reported blocker in its production composition: the actual game starts with an
+// empty portal record before Mech Bay is built. Mech-first demand must not suppress the LHC build.
 withScenario(
   {
     progress: 20,
     scriptSettings: {
+      autoBuild: true,
+      autoARPA: true,
+      autoMech: true,
       prestigeMADIgnoreArpa: true,
       arpa_lhc: true,
       arpa_p_lhc: 0,
       arpa_m_lhc: -1,
       arpa_w_lhc: 2,
+      arpaStep: 5,
+      mechBuild: "random",
+      buildingMechsFirst: true,
     },
   },
   (scenario) => {
+    assert.deepEqual(scenario.gameRoot.portal, {});
     scenario.tick();
     assert.deepEqual(
       scenario.calls,
