@@ -1,18 +1,25 @@
 /** Pure policy for the captured foreign-panel spy-training slice. */
 
-export interface CapturedSpyTrainingInput {
+import { shouldTrainSpyUnderPolicy, type SpyTrainingInput } from "./spy.ts";
+
+export interface CapturedSpyTrainingInput extends Pick<
+  SpyTrainingInput,
+  | "disabled"
+  | "occupied"
+  | "annexed"
+  | "purchased"
+  | "policy"
+  | "spyCount"
+  | "spyMaximumSetting"
+  | "purchaseMoney"
+  | "moneyMaximum"
+  | "purchasePrice"
+> {
   readonly enabled: boolean;
-  /** A finite non-negative cap; negative/unbounded settings stay outside this slice. */
-  readonly maximum: number;
   readonly governmentIndex: number;
   readonly visible: boolean;
   /** The game-owned disabled answer includes its live cost and training state. */
-  readonly disabled: boolean;
-  readonly spyCount: number;
   readonly training: number;
-  readonly occupied: boolean;
-  readonly annexed: boolean;
-  readonly purchased: boolean;
 }
 
 export interface CapturedSpyTrainingDecision {
@@ -27,16 +34,11 @@ export function planCapturedSpyTraining(
 ): Readonly<CapturedSpyTrainingDecision> | null {
   if (
     !input.enabled ||
-    !Number.isFinite(input.maximum) ||
-    input.maximum < 1 ||
+    !Number.isFinite(input.spyMaximumSetting) ||
     !Number.isSafeInteger(input.governmentIndex) ||
     !input.visible ||
-    input.disabled ||
     input.training > 0 ||
-    input.occupied ||
-    input.annexed ||
-    input.purchased ||
-    input.spyCount >= input.maximum
+    !shouldTrainSpyUnderPolicy(input)
   ) {
     return null;
   }

@@ -16459,7 +16459,7 @@
       }
     }
   }
-  function selectCapturedForeignStrategy(root, settings, governments) {
+  function selectCapturedForeignStrategy(root, settings, governments, policyMode = "captured") {
     let achievementGoal = capturedForeignAchievementGoal(
       root,
       settings,
@@ -16468,10 +16468,15 @@
       (target) => target.governmentId < 3 && achievementPolicy !== null ? capturedForeignGovernmentWithPolicy(target, achievementPolicy) : target
     ), unificationRequested = capturedForeignSettingBoolean(settings, "foreignUnification", !0) || achievementGoal !== null, controlledForeigns = active.filter(
       (target) => target.annexed && target.policy === "Annex" || target.purchased && target.policy === "Purchase" || target.occupied && target.policy === "Occupy"
-    ).length, currentTarget = active.find(
-      (target) => target.rank === "Inferior" && !target.annexed && !target.purchased
-    );
-    if (currentTarget = currentTarget ?? active.find((target) => target.occupied) ?? active[0], currentTarget === void 0)
+    ).length, spyManagerPolicyMode = policyMode === "spy-manager", policyAdjustmentsEnabled = !spyManagerPolicyMode || !capturedForeignSettingBoolean(settings, "foreignPacifist", !1) && !capturedForeignPacifistGuardActive(root, settings), currentTarget;
+    if (spyManagerPolicyMode)
+      for (let target of active)
+        target.rank === "Inferior" && !target.annexed && !target.purchased && (currentTarget = target);
+    else
+      currentTarget = active.find(
+        (target) => target.rank === "Inferior" && !target.annexed && !target.purchased
+      );
+    if (currentTarget = policyAdjustmentsEnabled ? currentTarget ?? active.find((target) => target.occupied) ?? active[0] : void 0, currentTarget === void 0)
       return Object.freeze({
         governments: Object.freeze(active),
         selectedTargetId: null,
@@ -16479,7 +16484,7 @@
         unificationRequested
       });
     let readyToUnify = unificationRequested && controlledForeigns >= 2 && readProperty(readProperty(root, "tech"), "unify") === 1;
-    if (!readyToUnify && (currentTarget.policy === "Annex" || currentTarget.policy === "Purchase") && capturedForeignEspionageUseful(
+    if (policyAdjustmentsEnabled && !readyToUnify && (currentTarget.policy === "Annex" || currentTarget.policy === "Purchase") && capturedForeignEspionageUseful(
       root,
       currentTarget,
       currentTarget.policy === "Annex" ? "annex" : "purchase"
@@ -16496,7 +16501,7 @@
         replacement
       ), currentTarget = replacement;
     }
-    if (!readyToUnify && capturedForeignSettingBoolean(settings, "foreignForceSabotage", !0) && currentTarget.governmentId !== 3 && capturedForeignEspionageUseful(root, currentTarget, "sabotage")) {
+    if (policyAdjustmentsEnabled && !readyToUnify && capturedForeignSettingBoolean(settings, "foreignForceSabotage", !0) && currentTarget.governmentId !== 3 && capturedForeignEspionageUseful(root, currentTarget, "sabotage")) {
       let replacement = capturedForeignGovernmentWithPolicy(
         currentTarget,
         "Sabotage"
@@ -16509,7 +16514,7 @@
         replacement
       ), currentTarget = replacement;
     }
-    if (unificationRequested && capturedForeignSettingBoolean(settings, "foreignOccupyLast", !0) && !readProperty(readProperty(root, "tech"), "world_control")) {
+    if (policyAdjustmentsEnabled && unificationRequested && capturedForeignSettingBoolean(settings, "foreignOccupyLast", !0) && !readProperty(readProperty(root, "tech"), "world_control")) {
       let superiorPolicy = capturedForeignSettingString(
         settings,
         "foreignPolicySuperior",
@@ -16572,6 +16577,7 @@
 
   // src/adapters/evolve/economy/resources/captured-resource-demand.ts
   var NO_STORAGE_REQUIREMENT = 1, EMPTY_DEMAND_SAMPLE = Object.freeze({
+    spyPurchaseMoney: 0,
     requestedQuantity: () => 0,
     requestedQuantityExcludingMech: () => 0,
     requestedQuantityForMechPriority: () => 0,
@@ -17197,7 +17203,12 @@
       return { status: "not-needed" };
     let visible = readCapturedForeignTargets(root, controls2, foreign, settings);
     if (visible.length === 0) return { status: "not-needed" };
-    let strategy = selectCapturedForeignStrategy(root, settings, visible);
+    let strategy = selectCapturedForeignStrategy(
+      root,
+      settings,
+      visible,
+      "spy-manager"
+    );
     if (!strategy.unificationRequested && !capturedForeignPacifistGuardActive(root, settings))
       return { status: "not-needed" };
     let race = readProperty(root, "race"), infiltrator = isRecord(race) && !!readProperty(race, "infiltrator"), moneyMax = finite(
@@ -17274,7 +17285,7 @@
           settings,
           dependencies.controls,
           prerequisites
-        ), spyPurchaseMoney = spyReservation.status === "ready" ? spyReservation.value : 0, moneyEnvelope = truepathAiReservation.status === "unavailable" || spyReservation.status === "unavailable", savingCosts = saving === null ? null : toCosts(saving.cost, saving.pool), baseInput = Object.freeze({
+        ), spyPurchaseMoney = spyReservation.status === "ready" ? spyReservation.value : 0, sampledSpyPurchaseMoney = spyReservation.status === "unavailable" ? void 0 : spyPurchaseMoney, moneyEnvelope = truepathAiReservation.status === "unavailable" || spyReservation.status === "unavailable", savingCosts = saving === null ? null : toCosts(saving.cost, saving.pool), baseInput = Object.freeze({
           settings: readSettingsInput(settingsValue),
           // The captured offer list is the game's own technology qualification result. The reader
           // only recomputes affordability from current holdings; it never recreates tech gates.
@@ -17479,6 +17490,7 @@
           ])
         );
         return Object.freeze({
+          spyPurchaseMoney: sampledSpyPurchaseMoney,
           storageRequired: (resourceId, pool) => required.get(storageRequirementScopeKey(resourceId, pool)) ?? NO_STORAGE_REQUIREMENT,
           requestedQuantity: (resourceId) => requested.get(resourceId) ?? 0,
           requestedQuantityExcludingMech: (resourceId) => requestedExcludingMech.get(resourceId) ?? 0,
@@ -43159,9 +43171,17 @@ Only continue if you trust the source. Injected code:
     return decision === null ? CAPTURED_PLANET_SELECTION_SUCCEEDED : executor.execute(decision);
   }
 
+  // src/domain/combat/spy.ts
+  function shouldTrainSpyUnderPolicy(input) {
+    if (input.disabled || input.occupied || input.annexed || input.purchased)
+      return !1;
+    let spiesRequired = input.spyMaximumSetting >= 0 ? input.spyMaximumSetting : Number.MAX_SAFE_INTEGER;
+    return spiesRequired < 1 && input.policy !== "Occupy" && input.policy !== "Ignore" && (spiesRequired = 1), spiesRequired < 3 && input.policy === "Purchase" && input.purchasePrice !== null && input.moneyMaximum >= input.purchasePrice && (spiesRequired = 3), !(input.spyCount >= spiesRequired || (input.purchaseMoney === void 0 || input.purchaseMoney > 0) && input.policy !== "Purchase" && input.spyCount > 0);
+  }
+
   // src/domain/combat/captured-spy-training.ts
   function planCapturedSpyTraining(input) {
-    return !input.enabled || !Number.isFinite(input.maximum) || input.maximum < 1 || !Number.isSafeInteger(input.governmentIndex) || !input.visible || input.disabled || input.training > 0 || input.occupied || input.annexed || input.purchased || input.spyCount >= input.maximum ? null : Object.freeze({
+    return !input.enabled || !Number.isFinite(input.spyMaximumSetting) || !Number.isSafeInteger(input.governmentIndex) || !input.visible || input.training > 0 || !shouldTrainSpyUnderPolicy(input) ? null : Object.freeze({
       kind: "train-spy",
       governmentIndex: input.governmentIndex,
       expectedSpyCount: input.spyCount,
@@ -43442,16 +43462,19 @@ Only continue if you trust the source. Injected code:
   }
 
   // src/adapters/evolve/combat/captured-spy-training.ts
-  var CAPTURED_FOREIGN_CONTROL2 = "foreign", MAX_CAPTURED_FOREIGN_INDEX = 4;
   function emptyCapturedSpyTrainingInput(index) {
     return Object.freeze({
       enabled: !1,
-      maximum: 0,
+      spyMaximumSetting: 0,
       governmentIndex: index,
       visible: !1,
       disabled: !0,
+      policy: "Ignore",
       spyCount: 0,
       training: 0,
+      purchaseMoney: void 0,
+      moneyMaximum: 0,
+      purchasePrice: null,
       occupied: !1,
       annexed: !1,
       purchased: !1
@@ -43468,25 +43491,46 @@ Only continue if you trust the source. Injected code:
   function readTrainingValue(government, key) {
     return finite(government[key]) ?? 0;
   }
-  function readCycleInput2(rootState, controls2, settingsValue) {
+  function readCycleInput2(rootState, controls2, settingsValue, readPurchaseMoney) {
     let root = rootState.readRoot();
     if (!isRecord(root)) return;
-    let control = controls2.resolve(CAPTURED_FOREIGN_CONTROL2);
+    let control = controls2.resolve(CAPTURED_FOREIGN_CONTROL);
     if (control === void 0 || !control.methods.includes("vis") || !control.methods.includes("gvis") || !control.methods.includes("spy_disabled") || !control.methods.includes("spy") || readBooleanControl(controls2, control, "vis", []) !== !0)
       return;
     let tech = readProperty(root, "tech");
     if ((finite(readProperty(tech, "spy")) ?? 0) < 1) return;
     let settings = isRecord(settingsValue) ? settingsValue : {};
     if (settings.foreignTrainSpy !== !0) return;
-    let maximum = finite(settings.foreignSpyMax);
-    if (maximum === void 0 || maximum < 1) return;
+    let spyMaximumSetting = finite(settings.foreignSpyMax);
+    if (spyMaximumSetting === void 0) return;
     let governmentCount = 0;
-    for (let index = 0; index <= MAX_CAPTURED_FOREIGN_INDEX; index += 1) {
+    for (let index = 0; index <= CAPTURED_FOREIGN_MAX_INDEX; index += 1) {
       let visible = readBooleanControl(controls2, control, "gvis", [index]);
       if (visible === void 0) return;
       visible && (governmentCount = index + 1);
     }
-    return Object.freeze({ root, control, maximum, governmentCount });
+    let targets = readCapturedForeignTargets(root, controls2, control, settings), strategy = selectCapturedForeignStrategy(
+      root,
+      settings,
+      targets,
+      "spy-manager"
+    ), purchaseMoney = settings.autoFight === !0 && readProperty(tech, "unify") === 1 && strategy.governments.some(
+      (government) => government.policy !== "Purchase" && government.spyCount > 0
+    ) ? finite(readPurchaseMoney()) : 0, moneyMaximum = finite(
+      readProperty(
+        readProperty(readProperty(root, "resource"), "Money"),
+        "max"
+      )
+    ) ?? 0;
+    return Object.freeze({
+      root,
+      control,
+      spyMaximumSetting,
+      purchaseMoney,
+      moneyMaximum,
+      governments: strategy.governments,
+      governmentCount
+    });
   }
   function createCapturedSpyTraining(dependencies) {
     let session, lastInput;
@@ -43495,6 +43539,11 @@ Only continue if you trust the source. Injected code:
         return emptyCapturedSpyTrainingInput(index);
       let government = readForeignGovernment(active.root, index);
       if (government === void 0) return emptyCapturedSpyTrainingInput(index);
+      let policyGovernment = active.governments.find(
+        (candidate) => candidate.governmentId === index
+      );
+      if (policyGovernment === void 0)
+        return emptyCapturedSpyTrainingInput(index);
       let visible = readBooleanControl(
         dependencies.controls,
         active.control,
@@ -43506,14 +43555,21 @@ Only continue if you trust the source. Injected code:
         "spy_disabled",
         [index]
       ) : !0;
-      return visible === void 0 || disabled === void 0 ? emptyCapturedSpyTrainingInput(index) : Object.freeze({
+      if (visible === void 0 || disabled === void 0)
+        return emptyCapturedSpyTrainingInput(index);
+      let purchasePrice = policyGovernment.policy === "Purchase" ? capturedForeignGovernmentPrice(policyGovernment) ?? null : null;
+      return Object.freeze({
         enabled: !0,
-        maximum: active.maximum,
+        spyMaximumSetting: active.spyMaximumSetting,
         governmentIndex: index,
         visible,
         disabled,
+        policy: policyGovernment.policy,
         spyCount: readTrainingValue(government, "spy"),
         training: readTrainingValue(government, "trn"),
+        purchaseMoney: active.purchaseMoney,
+        moneyMaximum: purchasePrice === null ? 0 : active.moneyMaximum,
+        purchasePrice,
         occupied: !!government.occ,
         annexed: !!government.anx,
         purchased: !!government.buy
@@ -43525,7 +43581,8 @@ Only continue if you trust the source. Injected code:
         let sample = readCycleInput2(
           dependencies.rootState,
           dependencies.controls,
-          dependencies.readSettings()
+          dependencies.readSettings(),
+          dependencies.readPurchaseMoney
         );
         return sample === void 0 ? Object.freeze({ available: !1, governmentCount: 0 }) : (session = Object.freeze(sample), Object.freeze({
           available: !0,
@@ -43554,7 +43611,7 @@ Only continue if you trust the source. Injected code:
             "captured game root changed"
           );
         let currentControl = dependencies.controls.resolve(
-          CAPTURED_FOREIGN_CONTROL2
+          CAPTURED_FOREIGN_CONTROL
         );
         if (currentControl === void 0 || currentControl.generation !== active.control.generation)
           return stale(
@@ -43567,7 +43624,7 @@ Only continue if you trust the source. Injected code:
             "captured spy-training decision does not match the sample"
           );
         let current = readGovernment2(active, decision.governmentIndex);
-        if (current.governmentIndex !== sampled3.governmentIndex || current.visible !== sampled3.visible || current.disabled !== sampled3.disabled || current.spyCount !== sampled3.spyCount || current.training !== sampled3.training || current.occupied !== sampled3.occupied || current.annexed !== sampled3.annexed || current.purchased !== sampled3.purchased)
+        if (current.governmentIndex !== sampled3.governmentIndex || current.visible !== sampled3.visible || current.disabled !== sampled3.disabled || current.policy !== sampled3.policy || current.spyCount !== sampled3.spyCount || current.training !== sampled3.training || current.spyMaximumSetting !== sampled3.spyMaximumSetting || current.purchaseMoney !== sampled3.purchaseMoney || current.moneyMaximum !== sampled3.moneyMaximum || current.purchasePrice !== sampled3.purchasePrice || current.occupied !== sampled3.occupied || current.annexed !== sampled3.annexed || current.purchased !== sampled3.purchased)
           return stale(
             "captured-spy-training-state-changed",
             "captured foreign government state changed"
@@ -45855,7 +45912,8 @@ Only continue if you trust the source. Injected code:
     }), capturedSpyTraining = createCapturedSpyTraining({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
-      readSettings: () => settingsStore.readRaw()
+      readSettings: () => settingsStore.readRaw(),
+      readPurchaseMoney: () => readDemand().spyPurchaseMoney
     }), openCapturedForeignModal = () => !1, capturedEspionage = createCapturedEspionage({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,

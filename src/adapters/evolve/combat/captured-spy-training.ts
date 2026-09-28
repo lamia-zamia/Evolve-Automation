@@ -16,14 +16,22 @@ import type {
 import type { GameRootStateSource } from "../../../ports/game-root-state.ts";
 import { rejected, stale, SUCCEEDED } from "../../command-outcomes.ts";
 import { finite, isRecord, readProperty } from "../../validation.ts";
-
-const CAPTURED_FOREIGN_CONTROL = "foreign";
-const MAX_CAPTURED_FOREIGN_INDEX = 4;
+import {
+  CAPTURED_FOREIGN_CONTROL,
+  CAPTURED_FOREIGN_MAX_INDEX,
+  capturedForeignGovernmentPrice,
+  readCapturedForeignTargets,
+  selectCapturedForeignStrategy,
+  type CapturedForeignGovernment,
+} from "./captured-foreign-state.ts";
 
 interface CapturedSpyTrainingSession {
   readonly root: unknown;
   readonly control: GameControlHandle;
-  readonly maximum: number;
+  readonly spyMaximumSetting: number;
+  readonly purchaseMoney: number | undefined;
+  readonly moneyMaximum: number;
+  readonly governments: readonly CapturedForeignGovernment[];
   readonly governmentCount: number;
 }
 
@@ -32,12 +40,16 @@ function emptyCapturedSpyTrainingInput(
 ): CapturedSpyTrainingInput {
   return Object.freeze({
     enabled: false,
-    maximum: 0,
+    spyMaximumSetting: 0,
     governmentIndex: index,
     visible: false,
     disabled: true,
+    policy: "Ignore",
     spyCount: 0,
     training: 0,
+    purchaseMoney: undefined,
+    moneyMaximum: 0,
+    purchasePrice: null,
     occupied: false,
     annexed: false,
     purchased: false,
@@ -79,11 +91,15 @@ function readCycleInput(
   rootState: GameRootStateSource,
   controls: GameControlRegistry,
   settingsValue: unknown,
+  readPurchaseMoney: () => number | undefined,
 ):
   | {
       readonly root: unknown;
       readonly control: GameControlHandle;
-      readonly maximum: number;
+      readonly spyMaximumSetting: number;
+      readonly purchaseMoney: number | undefined;
+      readonly moneyMaximum: number;
+      readonly governments: readonly CapturedForeignGovernment[];
       readonly governmentCount: number;
     }
   | undefined {
@@ -106,25 +122,55 @@ function readCycleInput(
   if ((finite(readProperty(tech, "spy")) ?? 0) < 1) return undefined;
   const settings = isRecord(settingsValue) ? settingsValue : {};
   if (settings["foreignTrainSpy"] !== true) return undefined;
-  const maximum = finite(settings["foreignSpyMax"]);
-  // The compatibility policy can make a zero/negative cap train one or three spies depending on
-  // the private foreign-policy target. Until that target is captured, a finite positive cap is the
-  // only answer this adapter can apply without guessing.
-  if (maximum === undefined || maximum < 1) return undefined;
+  const spyMaximumSetting = finite(settings["foreignSpyMax"]);
+  if (spyMaximumSetting === undefined) return undefined;
 
   let governmentCount = 0;
-  for (let index = 0; index <= MAX_CAPTURED_FOREIGN_INDEX; index += 1) {
+  for (let index = 0; index <= CAPTURED_FOREIGN_MAX_INDEX; index += 1) {
     const visible = readBooleanControl(controls, control, "gvis", [index]);
     if (visible === undefined) return undefined;
     if (visible) governmentCount = index + 1;
   }
-  return Object.freeze({ root, control, maximum, governmentCount });
+  const targets = readCapturedForeignTargets(root, controls, control, settings);
+  const strategy = selectCapturedForeignStrategy(
+    root,
+    settings,
+    targets,
+    "spy-manager",
+  );
+  const needsPurchaseReservation =
+    settings["autoFight"] === true &&
+    readProperty(tech, "unify") === 1 &&
+    strategy.governments.some(
+      (government) =>
+        government.policy !== "Purchase" && government.spyCount > 0,
+    );
+  const purchaseMoney = needsPurchaseReservation
+    ? finite(readPurchaseMoney())
+    : 0;
+  const moneyMaximum =
+    finite(
+      readProperty(
+        readProperty(readProperty(root, "resource"), "Money"),
+        "max",
+      ),
+    ) ?? 0;
+  return Object.freeze({
+    root,
+    control,
+    spyMaximumSetting,
+    purchaseMoney,
+    moneyMaximum,
+    governments: strategy.governments,
+    governmentCount,
+  });
 }
 
 export interface CapturedSpyTrainingDependencies {
   readonly rootState: GameRootStateSource;
   readonly controls: GameControlRegistry;
   readonly readSettings: () => unknown;
+  readonly readPurchaseMoney: () => number | undefined;
 }
 
 export function createCapturedSpyTraining(
@@ -149,6 +195,12 @@ export function createCapturedSpyTraining(
     }
     const government = readForeignGovernment(active.root, index);
     if (government === undefined) return emptyCapturedSpyTrainingInput(index);
+    const policyGovernment = active.governments.find(
+      (candidate) => candidate.governmentId === index,
+    );
+    if (policyGovernment === undefined) {
+      return emptyCapturedSpyTrainingInput(index);
+    }
     const visible = readBooleanControl(
       dependencies.controls,
       active.control,
@@ -167,14 +219,24 @@ export function createCapturedSpyTraining(
     if (visible === undefined || disabled === undefined) {
       return emptyCapturedSpyTrainingInput(index);
     }
+    // Old SpyManager training read the final `foreign.policy`; the shared strategy's policy
+    // carries its achievement and target adjustments without re-deriving them here.
+    const purchasePrice =
+      policyGovernment.policy === "Purchase"
+        ? (capturedForeignGovernmentPrice(policyGovernment) ?? null)
+        : null;
     return Object.freeze({
       enabled: true,
-      maximum: active.maximum,
+      spyMaximumSetting: active.spyMaximumSetting,
       governmentIndex: index,
       visible,
       disabled,
+      policy: policyGovernment.policy,
       spyCount: readTrainingValue(government, "spy"),
       training: readTrainingValue(government, "trn"),
+      purchaseMoney: active.purchaseMoney,
+      moneyMaximum: purchasePrice === null ? 0 : active.moneyMaximum,
+      purchasePrice,
       occupied: Boolean(government["occ"]),
       annexed: Boolean(government["anx"]),
       purchased: Boolean(government["buy"]),
@@ -189,6 +251,7 @@ export function createCapturedSpyTraining(
         dependencies.rootState,
         dependencies.controls,
         dependencies.readSettings(),
+        dependencies.readPurchaseMoney,
       );
       if (sample === undefined)
         return Object.freeze({ available: false, governmentCount: 0 });
@@ -257,8 +320,13 @@ export function createCapturedSpyTraining(
         current.governmentIndex !== sampled.governmentIndex ||
         current.visible !== sampled.visible ||
         current.disabled !== sampled.disabled ||
+        current.policy !== sampled.policy ||
         current.spyCount !== sampled.spyCount ||
         current.training !== sampled.training ||
+        current.spyMaximumSetting !== sampled.spyMaximumSetting ||
+        current.purchaseMoney !== sampled.purchaseMoney ||
+        current.moneyMaximum !== sampled.moneyMaximum ||
+        current.purchasePrice !== sampled.purchasePrice ||
         current.occupied !== sampled.occupied ||
         current.annexed !== sampled.annexed ||
         current.purchased !== sampled.purchased

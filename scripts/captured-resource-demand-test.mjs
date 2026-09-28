@@ -1238,9 +1238,30 @@ for (const [missionId, completionTech, completionLevel] of [
         ...settingsOverride,
       }),
     }).sample();
-  assert.equal(spyDemand(true).requestedQuantity("Money"), 197992);
-  assert.equal(spyDemand(true).isDemanded("Money"), true);
+  const purchaseSample = spyDemand(true);
+  assert.equal(purchaseSample.requestedQuantity("Money"), 197992);
+  assert.equal(purchaseSample.spyPurchaseMoney, 197992);
+  assert.equal(purchaseSample.isDemanded("Money"), true);
   assert.equal(spyDemand(false).requestedQuantity("Money"), 0);
+
+  const unavailableSpyReservation = createCapturedResourceDemand({
+    rootState: { readRoot: () => spyRoot },
+    reservations: {
+      readReservations: () => ({ targets: [], unavailable: false }),
+    },
+    readSettings: () => ({
+      autoFight: true,
+      foreignUnification: true,
+      foreignPolicyInferior: "Purchase",
+    }),
+    readPrerequisites: () => ({ spy: "unavailable", ai: "not-needed" }),
+  }).sample();
+  assert.equal(unavailableSpyReservation.spyPurchaseMoney, undefined);
+  assert.ok(
+    unavailableSpyReservation.storageRequired("Money") > 0,
+    "an unavailable reserve must keep Money held",
+  );
+
   // Unification wanted by nothing — no setting, no achievement goal, pacifist guard off —
   // reserves nothing, exactly like the compatibility purchaseMoney staying zero.
   assert.equal(
@@ -1331,6 +1352,7 @@ for (const [missionId, completionTech, completionLevel] of [
     }),
   }).sample();
   assert.equal(sample.requestedQuantity("Money"), 0);
+  assert.equal(sample.spyPurchaseMoney, 0);
   assert.equal(sample.isDemanded("Money"), false);
 }
 

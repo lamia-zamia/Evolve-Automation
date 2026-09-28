@@ -22,10 +22,25 @@ export interface SpyTrainingInput {
   readonly policy: string;
   readonly spyCount: number;
   readonly spyMaximumSetting: number;
-  readonly purchaseMoney: number;
+  /** Undefined when the captured purchase-reservation state could not be established. */
+  readonly purchaseMoney: number | undefined;
   readonly moneyMaximum: number;
   readonly purchasePrice: number | null;
 }
+
+type SpyTrainingPolicyInput = Pick<
+  SpyTrainingInput,
+  | "disabled"
+  | "occupied"
+  | "annexed"
+  | "purchased"
+  | "policy"
+  | "spyCount"
+  | "spyMaximumSetting"
+  | "purchaseMoney"
+  | "moneyMaximum"
+  | "purchasePrice"
+>;
 
 export interface TrainSpyDecision {
   readonly kind: "train-spy";
@@ -84,8 +99,21 @@ export function planSpyCycle(
 export function planSpyTraining(
   input: Readonly<SpyTrainingInput>,
 ): Readonly<TrainSpyDecision> | null {
+  if (!shouldTrainSpyUnderPolicy(input)) return null;
+
+  return Object.freeze({
+    kind: "train-spy",
+    foreignIndex: input.foreignIndex,
+    governmentId: input.governmentId,
+    governmentName: input.governmentName,
+  });
+}
+
+export function shouldTrainSpyUnderPolicy(
+  input: Readonly<SpyTrainingPolicyInput>,
+): boolean {
   if (input.disabled || input.occupied || input.annexed || input.purchased) {
-    return null;
+    return false;
   }
 
   let spiesRequired =
@@ -109,18 +137,13 @@ export function planSpyTraining(
   }
   if (
     input.spyCount >= spiesRequired ||
-    (input.purchaseMoney > 0 &&
+    ((input.purchaseMoney === undefined || input.purchaseMoney > 0) &&
       input.policy !== "Purchase" &&
       input.spyCount > 0)
   ) {
-    return null;
+    return false;
   }
-  return Object.freeze({
-    kind: "train-spy",
-    foreignIndex: input.foreignIndex,
-    governmentId: input.governmentId,
-    governmentName: input.governmentName,
-  });
+  return true;
 }
 
 function selectMission(input: Readonly<SpyEspionageInput>): string | null {

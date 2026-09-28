@@ -121,6 +121,8 @@ export interface CapturedResourceDemandDependencies {
 }
 
 export interface CapturedDemandSample {
+  /** Undefined when a potentially active foreign Purchase reserve could not be sampled. */
+  readonly spyPurchaseMoney?: number | undefined;
   /** How much of a resource the queues are accumulating, clamped to what storage can hold. */
   requestedQuantity(resourceId: string): number;
   /** Other automation's resource target, excluding the Mech target when it is priceable. */
@@ -155,6 +157,7 @@ const NO_STORAGE_REQUIREMENT = 1;
 
 /** Nothing is committed, so nothing is demanded and one unit of storage is required. */
 export const EMPTY_DEMAND_SAMPLE: CapturedDemandSample = Object.freeze({
+  spyPurchaseMoney: 0,
   requestedQuantity: () => 0,
   requestedQuantityExcludingMech: () => 0,
   requestedQuantityForMechPriority: () => 0,
@@ -1116,9 +1119,9 @@ function readDemandReservationTruepathAiTarget(
  * government that is not bought yet and has no Purchase operation already running. Each
  * candidate needs `max(govPrice, spy cost to 3 spies)` within Money storage; the government
  * price is the shared captured mirror of upstream `govPrice`, and the spy cost restates
- * upstream `spyCost` at level 3 except for the Scorpio discount, whose sign no capture
- * reaches — ignoring it over-reserves slightly, which is the safe direction for a reserve.
- * A failed capture reads as `unavailable` rather than zero, so the sample holds Money.
+ * upstream `spyCost` at level 3. Its captured Scorpio modifier remains an approximation: see
+ * the foreign-spy-cost item in the feature backlog. A failed capture reads as `unavailable`,
+ * so the sample holds Money and exposes an unknown reserve to spy training.
  */
 function readDemandReservationSpyPurchaseMoney(
   root: unknown,
@@ -1154,7 +1157,12 @@ function readDemandReservationSpyPurchaseMoney(
   }
   const visible = readCapturedForeignTargets(root, controls, foreign, settings);
   if (visible.length === 0) return { status: "not-needed" };
-  const strategy = selectCapturedForeignStrategy(root, settings, visible);
+  const strategy = selectCapturedForeignStrategy(
+    root,
+    settings,
+    visible,
+    "spy-manager",
+  );
   if (
     !strategy.unificationRequested &&
     !capturedForeignPacifistGuardActive(root, settings)
@@ -1291,6 +1299,8 @@ export function createCapturedResourceDemand(
       );
       const spyPurchaseMoney =
         spyReservation.status === "ready" ? spyReservation.value : 0;
+      const sampledSpyPurchaseMoney =
+        spyReservation.status === "unavailable" ? undefined : spyPurchaseMoney;
       // A reservation that could exist but whose capture is not established must not read
       // as free: hold Money up to its storage envelope instead. The price is unknown, so
       // the envelope is anti-spend only and does not feed the storage requirements below.
@@ -1637,6 +1647,7 @@ export function createCapturedResourceDemand(
       );
 
       return Object.freeze({
+        spyPurchaseMoney: sampledSpyPurchaseMoney,
         storageRequired: (resourceId: string, pool?: string) =>
           required.get(storageRequirementScopeKey(resourceId, pool)) ??
           NO_STORAGE_REQUIREMENT,

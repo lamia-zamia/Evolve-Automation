@@ -643,6 +643,7 @@ export function startCapturedRuntime({
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,
     readSettings: () => settingsStore.readRaw(),
+    readPurchaseMoney: () => readDemand().spyPurchaseMoney,
   });
   let openCapturedForeignModal: (governmentId: number) => boolean = () => false;
   const capturedEspionage = createCapturedEspionage({

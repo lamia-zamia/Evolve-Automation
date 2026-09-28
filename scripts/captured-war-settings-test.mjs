@@ -244,11 +244,39 @@ function mercenaryFixture(settings, { money = 1_000 } = {}) {
 
 function spyTrainingFixture(settings) {
   const root = {
+    race: {},
     tech: { spy: 1 },
+    stats: { achieve: {} },
+    resource: { Money: { amount: 100_000, max: 100_000 } },
     civic: {
+      garrison: { display: true },
       foreign: {
-        gov0: { spy: 1, trn: 0, occ: false, anx: false, buy: false },
-        gov1: { spy: 1, trn: 0, occ: false, anx: false, buy: false },
+        gov0: {
+          mil: 50,
+          hstl: 0,
+          unrest: 0,
+          eco: 1,
+          spy: 1,
+          trn: 0,
+          sab: 0,
+          act: "none",
+          occ: false,
+          anx: false,
+          buy: false,
+        },
+        gov1: {
+          mil: 100,
+          hstl: 0,
+          unrest: 0,
+          eco: 1,
+          spy: 1,
+          trn: 0,
+          sab: 0,
+          act: "none",
+          occ: false,
+          anx: false,
+          buy: false,
+        },
       },
     },
   };
@@ -281,12 +309,19 @@ function spyTrainingFixture(settings) {
       capturedElementIds: () => ["foreign"],
     },
     readSettings: () => settings,
+    readPurchaseMoney: () => 0,
   });
   return { adapter, trained };
 }
 
 {
   const page = createCapturedSettingsPage();
+  edit(page, "foreignPolicyInferior", "Influence");
+  edit(page, "foreignPolicySuperior", "Influence");
+  edit(page, "foreignPolicyRival", "Influence");
+  edit(page, "foreignForceSabotage", false);
+  edit(page, "foreignUnification", false);
+  edit(page, "foreignOccupyLast", false);
   edit(page, "foreignTrainSpy", true);
   edit(page, "foreignSpyMax", 2);
   const training = spyTrainingFixture(page.effective);

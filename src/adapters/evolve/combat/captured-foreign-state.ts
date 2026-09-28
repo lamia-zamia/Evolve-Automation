@@ -53,6 +53,12 @@ export interface CapturedForeignStrategy {
   readonly unificationRequested: boolean;
 }
 
+/**
+ * `captured` preserves the current espionage/battle selector behavior. `spy-manager` mirrors the
+ * policy adjustments used by the old `SpyManager.updateForeigns()` for spy training and reserves.
+ */
+export type CapturedForeignStrategyPolicyMode = "captured" | "spy-manager";
+
 function capturedForeignSettingBoolean(
   settings: Record<string, unknown>,
   key: string,
@@ -432,10 +438,12 @@ export function capturedForeignEspionageUseful(
   }
 }
 
+/** Selects per-government policies through one shared policy authority. */
 export function selectCapturedForeignStrategy(
   root: unknown,
   settings: Record<string, unknown>,
   governments: readonly CapturedForeignGovernment[],
+  policyMode: CapturedForeignStrategyPolicyMode = "captured",
 ): CapturedForeignStrategy {
   const achievementGoal = capturedForeignAchievementGoal(
     root,
@@ -462,12 +470,28 @@ export function selectCapturedForeignStrategy(
       (target.purchased && target.policy === "Purchase") ||
       (target.occupied && target.policy === "Occupy"),
   ).length;
-  let currentTarget = active.find(
-    (target) =>
-      target.rank === "Inferior" && !target.annexed && !target.purchased,
-  );
-  currentTarget =
-    currentTarget ?? active.find((target) => target.occupied) ?? active[0];
+  const spyManagerPolicyMode = policyMode === "spy-manager";
+  const policyAdjustmentsEnabled =
+    !spyManagerPolicyMode ||
+    (!capturedForeignSettingBoolean(settings, "foreignPacifist", false) &&
+      !capturedForeignPacifistGuardActive(root, settings));
+  let currentTarget: CapturedForeignGovernment | undefined;
+  if (spyManagerPolicyMode) {
+    // SpyManager.updateForeigns() assigned each eligible inferior in order, so the last one won.
+    for (const target of active) {
+      if (target.rank === "Inferior" && !target.annexed && !target.purchased) {
+        currentTarget = target;
+      }
+    }
+  } else {
+    currentTarget = active.find(
+      (target) =>
+        target.rank === "Inferior" && !target.annexed && !target.purchased,
+    );
+  }
+  currentTarget = policyAdjustmentsEnabled
+    ? (currentTarget ?? active.find((target) => target.occupied) ?? active[0])
+    : undefined;
   if (currentTarget === undefined) {
     return Object.freeze({
       governments: Object.freeze(active),
@@ -482,6 +506,7 @@ export function selectCapturedForeignStrategy(
     controlledForeigns >= 2 &&
     readProperty(readProperty(root, "tech"), "unify") === 1;
   if (
+    policyAdjustmentsEnabled &&
     !readyToUnify &&
     (currentTarget.policy === "Annex" || currentTarget.policy === "Purchase") &&
     capturedForeignEspionageUseful(
@@ -504,6 +529,7 @@ export function selectCapturedForeignStrategy(
     currentTarget = replacement;
   }
   if (
+    policyAdjustmentsEnabled &&
     !readyToUnify &&
     capturedForeignSettingBoolean(settings, "foreignForceSabotage", true) &&
     currentTarget.governmentId !== 3 &&
@@ -523,6 +549,7 @@ export function selectCapturedForeignStrategy(
     currentTarget = replacement;
   }
   if (
+    policyAdjustmentsEnabled &&
     unificationRequested &&
     capturedForeignSettingBoolean(settings, "foreignOccupyLast", true) &&
     !readProperty(readProperty(root, "tech"), "world_control")
