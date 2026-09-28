@@ -2242,15 +2242,26 @@
     return result;
   }
 
-  // src/adapters/evolve/progression/build/captured-test-launch.ts
-  var CAPTURED_TEST_LAUNCH = Object.freeze({
-    elementId: "space-test_launch",
-    completedAtSpaceLevel: 2
+  // src/adapters/evolve/progression/build/captured-tech-gated-action.ts
+  var CAPTURED_TECH_GATED_ACTIONS = Object.freeze({
+    "space-test_launch": Object.freeze({
+      technology: "space",
+      availableAtLevel: 1,
+      completedAtLevel: 2
+    }),
+    "space-moon_mission": Object.freeze({
+      technology: "space",
+      availableAtLevel: 2,
+      completedAtLevel: 3
+    })
   });
-  function readCapturedTestLaunchCount(root) {
-    let spaceLevel = readProperty(readProperty(root, "tech"), "space");
-    if (!(typeof spaceLevel != "number" || !Number.isFinite(spaceLevel) || spaceLevel < 1))
-      return spaceLevel >= CAPTURED_TEST_LAUNCH.completedAtSpaceLevel ? 1 : 0;
+  function readCapturedTechGatedActionRule(elementId) {
+    return Object.hasOwn(CAPTURED_TECH_GATED_ACTIONS, elementId) ? CAPTURED_TECH_GATED_ACTIONS[elementId] : void 0;
+  }
+  function readCapturedTechGatedActionCount(root, rule) {
+    let level = readProperty(readProperty(root, "tech"), rule.technology);
+    if (!(typeof level != "number" || !Number.isFinite(level) || level < rule.availableAtLevel))
+      return level >= rule.completedAtLevel ? 1 : 0;
   }
 
   // src/adapters/evolve/progression/build/captured-build-policy.ts
@@ -2619,20 +2630,20 @@
     let binding = elementId;
     if (settings[`bat${binding}`] === !1 || settings[`bat${binding}`] === void 0 && settings.autoBuild !== !0)
       return;
-    let id = parts.id, testLaunch = elementId === CAPTURED_TEST_LAUNCH.elementId, owner = readProperty(root, region), state = readProperty(owner, id);
-    if (!testLaunch && !isRecord(state)) {
+    let id = parts.id, techGatedAction = readCapturedTechGatedActionRule(elementId), readCount2 = techGatedAction === void 0 ? void 0 : (capturedRoot) => readCapturedTechGatedActionCount(capturedRoot, techGatedAction), owner = readProperty(root, region), state = readProperty(owner, id);
+    if (readCount2 === void 0 && !isRecord(state)) {
       onSkipped(binding, `captured ${region} state is unavailable`);
       return;
     }
-    let count2 = testLaunch ? readCapturedTestLaunchCount(root) : readProperty(state, "count");
+    let count2 = readCount2 === void 0 ? readProperty(state, "count") : readCount2(root);
     if (typeof count2 != "number" || !Number.isFinite(count2)) {
       onSkipped(
         binding,
-        testLaunch ? "captured Test Launch completion state is unavailable" : `captured ${region} count is not finite`
+        readCount2 !== void 0 ? "captured tech-gated action completion state is unavailable" : `captured ${region} count is not finite`
       );
       return;
     }
-    if (testLaunch && count2 >= 1) return;
+    if (readCount2 !== void 0 && count2 >= 1) return;
     let weighting = readFiniteSetting(settings, `bld_w_${binding}`, 100);
     if (weighting === void 0) {
       onSkipped(binding, "configured weighting is not finite");
@@ -2643,7 +2654,7 @@
       onSkipped(binding, "new-building weighting is not finite");
       return;
     }
-    let powered = void 0, underpoweredWeighting = 1, maximum = testLaunch ? 1 : readFiniteSetting(settings, `bld_m_${binding}`, UNLIMITED);
+    let powered = void 0, underpoweredWeighting = 1, maximum = readCount2 !== void 0 ? 1 : readFiniteSetting(settings, `bld_m_${binding}`, UNLIMITED);
     if (maximum === void 0) {
       onSkipped(binding, "configured maximum is not finite");
       return;
@@ -2698,7 +2709,7 @@
       elementId,
       region,
       id,
-      ...testLaunch ? { readCount: readCapturedTestLaunchCount } : {},
+      ...readCount2 === void 0 ? {} : { readCount: readCount2 },
       weighting: applyUnderpoweredWeighting(
         applyAuthorityCapWeighting(
           dynamicWeight,

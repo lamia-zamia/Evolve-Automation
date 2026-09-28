@@ -41,9 +41,9 @@ import {
   CITY_ELEMENT_BINDING_ALIASES,
 } from "./captured-building-metadata.ts";
 import {
-  CAPTURED_TEST_LAUNCH,
-  readCapturedTestLaunchCount,
-} from "./captured-test-launch.ts";
+  readCapturedTechGatedActionCount,
+  readCapturedTechGatedActionRule,
+} from "./captured-tech-gated-action.ts";
 
 export interface CapturedBuildPolicyDependencies {
   readonly rootState: GameRootStateSource;
@@ -757,26 +757,30 @@ function readNonCityTarget(
     return undefined;
   }
   const id = parts.id;
-  const testLaunch = elementId === CAPTURED_TEST_LAUNCH.elementId;
+  const techGatedAction = readCapturedTechGatedActionRule(elementId);
+  const readCount =
+    techGatedAction === undefined
+      ? undefined
+      : (capturedRoot: unknown) =>
+          readCapturedTechGatedActionCount(capturedRoot, techGatedAction);
   const owner = readProperty(root, region);
   const state = readProperty(owner, id);
-  if (!testLaunch && !isRecord(state)) {
+  if (readCount === undefined && !isRecord(state)) {
     onSkipped(binding, `captured ${region} state is unavailable`);
     return undefined;
   }
-  const count = testLaunch
-    ? readCapturedTestLaunchCount(root)
-    : readProperty(state, "count");
+  const count =
+    readCount === undefined ? readProperty(state, "count") : readCount(root);
   if (typeof count !== "number" || !Number.isFinite(count)) {
     onSkipped(
       binding,
-      testLaunch
-        ? "captured Test Launch completion state is unavailable"
+      readCount !== undefined
+        ? "captured tech-gated action completion state is unavailable"
         : `captured ${region} count is not finite`,
     );
     return undefined;
   }
-  if (testLaunch && count >= 1) return undefined;
+  if (readCount !== undefined && count >= 1) return undefined;
   const weighting = readFiniteSetting(settings, `bld_w_${binding}`, 100);
   if (weighting === undefined) {
     onSkipped(binding, "configured weighting is not finite");
@@ -792,9 +796,10 @@ function readNonCityTarget(
   // private `powered()` method, so consumer-underpower weighting remains unavailable here too.
   const powered = undefined;
   const underpoweredWeighting = 1;
-  const maximum = testLaunch
-    ? 1
-    : readFiniteSetting(settings, `bld_m_${binding}`, UNLIMITED);
+  const maximum =
+    readCount !== undefined
+      ? 1
+      : readFiniteSetting(settings, `bld_m_${binding}`, UNLIMITED);
   if (maximum === undefined) {
     onSkipped(binding, "configured maximum is not finite");
     return undefined;
@@ -869,7 +874,7 @@ function readNonCityTarget(
     elementId,
     region,
     id,
-    ...(testLaunch ? { readCount: readCapturedTestLaunchCount } : {}),
+    ...(readCount === undefined ? {} : { readCount }),
     weighting: applyUnderpoweredWeighting(
       applyAuthorityCapWeighting(
         dynamicWeight,
