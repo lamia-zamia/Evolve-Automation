@@ -71,6 +71,7 @@ interface CapturedEspionageSample {
 interface CapturedEspionagePending {
   readonly root: unknown;
   readonly foreign: GameControlHandle;
+  readonly modalLifecycle: CapturedEspionageModalLifecycle | undefined;
   readonly target: CapturedForeignGovernment;
   readonly operation: CapturedEspionageOperation;
   readonly governmentId: number;
@@ -386,11 +387,17 @@ export function createCapturedEspionage(
   let opening: CapturedEspionageModalOpening | undefined;
   let cycleAction = false;
 
+  function clearPending(): void {
+    const active = pending;
+    active?.modalLifecycle?.cleanup();
+    pending = undefined;
+  }
+
   function completePending(root: unknown): boolean {
     const active = pending;
     if (active === undefined) return false;
     if (root !== active.root) {
-      pending = undefined;
+      clearPending();
       return false;
     }
     const currentForeign = dependencies.controls.resolve(
@@ -400,7 +407,7 @@ export function createCapturedEspionage(
       currentForeign === undefined ||
       currentForeign.generation !== active.foreign.generation
     ) {
-      pending = undefined;
+      clearPending();
       return false;
     }
     const state = capturedEspionageState(root, active.governmentId);
@@ -412,20 +419,20 @@ export function createCapturedEspionage(
     if (
       capturedEspionagePostconditionChanged(active.operation, active, state)
     ) {
-      pending = undefined;
+      clearPending();
       reportActivity(
         capturedEspionageActivity(active.operation, active.governmentId),
       );
       return true;
     }
-    pending = undefined;
+    clearPending();
     return false;
   }
 
   function discardCapturedEspionageSample(): void {
     const activeSample = sample;
-    sample = undefined;
     activeSample?.modalLifecycle?.cleanup();
+    sample = undefined;
   }
 
   function standDown(): void {
@@ -438,13 +445,15 @@ export function createCapturedEspionage(
       return;
     }
     const activeSample = sample;
+    const activePending = pending;
     const activeOpening = opening;
+    activeSample?.modalLifecycle?.cleanup();
+    activePending?.modalLifecycle?.cleanup();
+    activeOpening?.modalLifecycle?.cleanup();
     sample = undefined;
     pending = undefined;
     opening = undefined;
     cycleAction = false;
-    activeSample?.modalLifecycle?.cleanup();
-    activeOpening?.modalLifecycle?.cleanup();
   }
 
   const reader: CapturedEspionageReader = Object.freeze({
@@ -765,6 +774,7 @@ export function createCapturedEspionage(
         modal.generation !==
         dependencies.controls.resolve(modal.elementId)?.generation
       ) {
+        active.modalLifecycle?.cleanup();
         return stale(
           "captured-espionage-modal-changed",
           "captured espionage modal changed",
@@ -807,6 +817,7 @@ export function createCapturedEspionage(
       const baseline: CapturedEspionagePending = Object.freeze({
         root: active.root,
         foreign: active.foreign,
+        modalLifecycle: active.modalLifecycle,
         target: active.target,
         operation: decision.operation,
         governmentId: decision.governmentId,
@@ -823,6 +834,7 @@ export function createCapturedEspionage(
           after,
         )
       ) {
+        active.modalLifecycle?.cleanup();
         reportActivity(
           capturedEspionageActivity(decision.operation, decision.governmentId),
         );
@@ -836,6 +848,7 @@ export function createCapturedEspionage(
         );
       }
       pending = baseline;
+      pending.modalLifecycle?.cleanup();
       return stale(
         "captured-espionage-postcondition-pending",
         "the game queued the espionage operation but its result is pending",

@@ -309,6 +309,7 @@ runGovernorOwnershipCase("spyop");
 function makeModalFixture(activeModals) {
   let modal;
   const remove = () => {
+    modal.closed = true;
     const index = activeModals.indexOf(modal);
     if (index >= 0) activeModals.splice(index, 1);
   };
@@ -327,6 +328,62 @@ function makeModalFixture(activeModals) {
     remove,
   };
   return modal;
+}
+
+function makeAutomationModalCase(root, influence) {
+  const activeModals = [];
+  const automationModal = makeModalFixture(activeModals);
+  const controls = makeControls(
+    root,
+    { influence },
+    { initialModalGovernmentId: null },
+  );
+  const activities = [];
+  let liveRoot = root;
+  let policy = "Influence";
+  const adapter = createCapturedEspionage({
+    rootState: {
+      readRoot: () => liveRoot,
+      isReactivitySuppressed: () => false,
+      subscribeRootReplaced: () => () => {},
+    },
+    controls,
+    readSettings: () => makeSettings(policy),
+    getDocument: () => ({
+      querySelector: () => null,
+      querySelectorAll: (selector) => {
+        assert.equal(selector, ".modal.is-active");
+        return activeModals;
+      },
+    }),
+    ensureForeignModal: (governmentId) => {
+      activeModals.push(automationModal);
+      controls.installModal(governmentId);
+      return true;
+    },
+    onActivity: (activity) => activities.push(activity),
+  });
+  return {
+    adapter,
+    activeModals,
+    automationModal,
+    activities,
+    controls,
+    setPolicy(value) {
+      policy = value;
+    },
+    setRoot(value) {
+      liveRoot = value;
+    },
+  };
+}
+
+function openAutomationModal(testCase) {
+  const opened = runCapturedEspionage(testCase.adapter);
+  assert.equal(opened.status, "stale");
+  assert.equal(opened.failure.code, "captured-espionage-modal-pending");
+  assert.equal(testCase.automationModal.style.visibility, "hidden");
+  assert.equal(testCase.activeModals.includes(testCase.automationModal), true);
 }
 
 function runOne(policy, overrides, mutate) {
@@ -818,6 +875,168 @@ runOne("Purchase", { hstl: 0, unrest: 0, spy: 3 }, undefined);
     generationChanged.failure.code,
     "captured-espionage-foreign-changed",
   );
+}
+
+{
+  const root = makeRoot("Influence", { hstl: 30 });
+  const testCase = makeAutomationModalCase(root, (currentRoot) => {
+    currentRoot.civic.foreign.gov0.hstl -= 5;
+  });
+  openAutomationModal(testCase);
+
+  const outcome = runCapturedEspionage(testCase.adapter);
+  assert.equal(outcome.status, "succeeded");
+  assert.equal(testCase.automationModal.closed, true);
+  assert.deepEqual(testCase.activeModals, []);
+  assert.equal(testCase.activities.length, 1);
+  assert.equal(testCase.adapter.isBusy(), true);
+  testCase.adapter.reader.read();
+  assert.equal(testCase.adapter.isBusy(), false);
+}
+
+{
+  const root = makeRoot("Influence", { hstl: 30 });
+  const testCase = makeAutomationModalCase(root, (currentRoot) => {
+    currentRoot.civic.foreign.gov0.hstl -= 5;
+  });
+  openAutomationModal(testCase);
+  const input = testCase.adapter.reader.read();
+  const modal = testCase.controls.current.get("espModal");
+  testCase.controls.current.set("espModal", {
+    ...modal,
+    generation: modal.generation + 1,
+  });
+
+  const stale = testCase.adapter.executor.execute(planCapturedEspionage(input));
+  assert.equal(stale.status, "stale");
+  assert.equal(stale.failure.code, "captured-espionage-modal-changed");
+  assert.equal(testCase.automationModal.closed, true);
+  assert.deepEqual(testCase.activeModals, []);
+  assert.equal(testCase.adapter.isBusy(), false);
+}
+
+{
+  const root = makeRoot("Influence", { hstl: 30 });
+  const testCase = makeAutomationModalCase(root, (currentRoot) => {
+    currentRoot.civic.foreign.gov0.sab = 300;
+    currentRoot.civic.foreign.gov0.act = "influence";
+  });
+  openAutomationModal(testCase);
+
+  const queued = runCapturedEspionage(testCase.adapter);
+  assert.equal(queued.status, "stale");
+  assert.equal(queued.failure.code, "captured-espionage-postcondition-pending");
+  assert.equal(testCase.automationModal.closed, true);
+  assert.deepEqual(testCase.activeModals, []);
+  assert.equal(testCase.activities.length, 0);
+  assert.equal(testCase.adapter.isBusy(), true);
+
+  root.civic.foreign.gov0.hstl -= 5;
+  root.civic.foreign.gov0.sab = 0;
+  root.civic.foreign.gov0.act = "none";
+  const completed = runCapturedEspionage(testCase.adapter);
+  assert.equal(completed.status, "succeeded");
+  assert.equal(testCase.activities.length, 1);
+  assert.equal(testCase.adapter.isBusy(), false);
+  assert.deepEqual(testCase.activeModals, []);
+  testCase.adapter.standDown();
+  assert.deepEqual(testCase.activeModals, []);
+}
+
+{
+  const root = makeRoot("Influence", { hstl: 30 });
+  const testCase = makeAutomationModalCase(root, (currentRoot) => {
+    currentRoot.civic.foreign.gov0.sab = 300;
+    currentRoot.civic.foreign.gov0.act = "influence";
+  });
+  openAutomationModal(testCase);
+  testCase.automationModal.querySelector = () => undefined;
+
+  const queued = runCapturedEspionage(testCase.adapter);
+  assert.equal(queued.status, "stale");
+  assert.equal(queued.failure.code, "captured-espionage-postcondition-pending");
+  assert.equal(testCase.automationModal.closed, true);
+  assert.deepEqual(testCase.activeModals, []);
+  assert.equal(testCase.adapter.isBusy(), true);
+}
+
+{
+  const root = makeRoot("Influence", { hstl: 30 });
+  const testCase = makeAutomationModalCase(root, (currentRoot) => {
+    currentRoot.civic.foreign.gov0.sab = 300;
+    currentRoot.civic.foreign.gov0.act = "influence";
+  });
+  openAutomationModal(testCase);
+  runCapturedEspionage(testCase.adapter);
+
+  testCase.setPolicy("Ignore");
+  root.civic.foreign.gov0.sab = 0;
+  root.civic.foreign.gov0.act = "none";
+  const failed = runCapturedEspionage(testCase.adapter);
+  assert.equal(failed.status, "succeeded");
+  assert.equal(testCase.activities.length, 0);
+  assert.equal(testCase.adapter.isBusy(), false);
+  assert.deepEqual(testCase.activeModals, []);
+}
+
+{
+  const root = makeRoot("Influence", { hstl: 30 });
+  const testCase = makeAutomationModalCase(root, (currentRoot) => {
+    currentRoot.civic.foreign.gov0.sab = 300;
+    currentRoot.civic.foreign.gov0.act = "influence";
+  });
+  openAutomationModal(testCase);
+  runCapturedEspionage(testCase.adapter);
+  const playerModal = { style: { visibility: "visible" } };
+  testCase.activeModals.push(playerModal);
+
+  testCase.setRoot(makeRoot("Influence", { hstl: 30 }));
+  testCase.adapter.reader.read();
+  assert.equal(testCase.automationModal.closed, true);
+  assert.deepEqual(testCase.activeModals, [playerModal]);
+  assert.equal(playerModal.style.visibility, "visible");
+  assert.equal(testCase.adapter.isBusy(), false);
+}
+
+{
+  const root = makeRoot("Influence", { hstl: 30 });
+  const testCase = makeAutomationModalCase(root, (currentRoot) => {
+    currentRoot.civic.foreign.gov0.sab = 300;
+    currentRoot.civic.foreign.gov0.act = "influence";
+  });
+  openAutomationModal(testCase);
+  runCapturedEspionage(testCase.adapter);
+  const playerModal = { style: { visibility: "visible" } };
+  testCase.activeModals.push(playerModal);
+  testCase.controls.current.set("foreign", {
+    ...testCase.controls.current.get("foreign"),
+    generation: 2,
+  });
+
+  testCase.adapter.reader.read();
+  assert.equal(testCase.automationModal.closed, true);
+  assert.deepEqual(testCase.activeModals, [playerModal]);
+  assert.equal(playerModal.style.visibility, "visible");
+  assert.equal(testCase.adapter.isBusy(), false);
+}
+
+{
+  const root = makeRoot("Influence", { hstl: 30 });
+  const testCase = makeAutomationModalCase(root, (currentRoot) => {
+    currentRoot.civic.foreign.gov0.sab = 300;
+    currentRoot.civic.foreign.gov0.act = "influence";
+  });
+  openAutomationModal(testCase);
+  runCapturedEspionage(testCase.adapter);
+
+  root.race = { governor: { tasks: governorTasks("combo_spy") } };
+  const takeover = runCapturedEspionage(testCase.adapter);
+  assert.equal(takeover.status, "succeeded");
+  assert.equal(testCase.automationModal.closed, true);
+  assert.deepEqual(testCase.activeModals, []);
+  assert.equal(testCase.adapter.isBusy(), false);
+  testCase.adapter.standDown();
+  assert.deepEqual(testCase.activeModals, []);
 }
 
 console.log("captured espionage checks passed");

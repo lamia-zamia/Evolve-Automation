@@ -43590,30 +43590,32 @@ Only continue if you trust the source. Injected code:
   function createCapturedEspionage(dependencies) {
     let reportActivity = dependencies.onActivity ?? (() => {
     }), sample, pending, opening, cycleAction = !1;
+    function clearPending() {
+      pending?.modalLifecycle?.cleanup(), pending = void 0;
+    }
     function completePending(root) {
       let active = pending;
       if (active === void 0) return !1;
       if (root !== active.root)
-        return pending = void 0, !1;
+        return clearPending(), !1;
       let currentForeign = dependencies.controls.resolve(
         CAPTURED_FOREIGN_CONTROL
       );
       if (currentForeign === void 0 || currentForeign.generation !== active.foreign.generation)
-        return pending = void 0, !1;
+        return clearPending(), !1;
       let state = capturedEspionageState(root, active.governmentId);
-      return state === void 0 || state.sabotageProgress > 0 ? !1 : capturedEspionagePostconditionChanged(active.operation, active, state) ? (pending = void 0, reportActivity(
+      return state === void 0 || state.sabotageProgress > 0 ? !1 : capturedEspionagePostconditionChanged(active.operation, active, state) ? (clearPending(), reportActivity(
         capturedEspionageActivity(active.operation, active.governmentId)
-      ), !0) : (pending = void 0, !1);
+      ), !0) : (clearPending(), !1);
     }
     function discardCapturedEspionageSample() {
-      let activeSample = sample;
-      sample = void 0, activeSample?.modalLifecycle?.cleanup();
+      sample?.modalLifecycle?.cleanup(), sample = void 0;
     }
     function standDown() {
       if (sample === void 0 && pending === void 0 && opening === void 0 && !cycleAction)
         return;
-      let activeSample = sample, activeOpening = opening;
-      sample = void 0, pending = void 0, opening = void 0, cycleAction = !1, activeSample?.modalLifecycle?.cleanup(), activeOpening?.modalLifecycle?.cleanup();
+      let activeSample = sample, activePending = pending, activeOpening = opening;
+      activeSample?.modalLifecycle?.cleanup(), activePending?.modalLifecycle?.cleanup(), activeOpening?.modalLifecycle?.cleanup(), sample = void 0, pending = void 0, opening = void 0, cycleAction = !1;
     }
     let reader = Object.freeze({
       read() {
@@ -43786,7 +43788,7 @@ Only continue if you trust the source. Injected code:
           );
         }
         if (modal.generation !== dependencies.controls.resolve(modal.elementId)?.generation)
-          return stale(
+          return active.modalLifecycle?.cleanup(), stale(
             "captured-espionage-modal-changed",
             "captured espionage modal changed"
           );
@@ -43817,6 +43819,7 @@ Only continue if you trust the source. Injected code:
         let baseline = Object.freeze({
           root: active.root,
           foreign: active.foreign,
+          modalLifecycle: active.modalLifecycle,
           target: active.target,
           operation: decision.operation,
           governmentId: decision.governmentId,
@@ -43830,12 +43833,12 @@ Only continue if you trust the source. Injected code:
           decision.operation,
           baseline,
           after
-        ) ? (reportActivity(
+        ) ? (active.modalLifecycle?.cleanup(), reportActivity(
           capturedEspionageActivity(decision.operation, decision.governmentId)
         ), SUCCEEDED) : after.sabotageProgress <= 0 || after.action !== decision.operation ? (active.modalLifecycle?.cleanup(), stale(
           "captured-espionage-not-applied",
           "the game did not apply the espionage operation"
-        )) : (pending = baseline, stale(
+        )) : (pending = baseline, pending.modalLifecycle?.cleanup(), stale(
           "captured-espionage-postcondition-pending",
           "the game queued the espionage operation but its result is pending"
         ));
