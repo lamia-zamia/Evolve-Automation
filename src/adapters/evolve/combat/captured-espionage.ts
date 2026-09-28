@@ -31,6 +31,7 @@ import {
 import type { CapturedEspionageDecision } from "../../../domain/combat/captured-espionage.ts";
 
 const CAPTURED_ESPIONAGE_MODAL = "espModal";
+const CAPTURED_ESPIONAGE_MODAL_SELECTOR = "#espModal";
 const CAPTURED_ESPIONAGE_FOREIGN_METHODS = [
   "vis",
   "gvis",
@@ -87,6 +88,7 @@ interface CapturedEspionageModalOpening {
   readonly foreign: GameControlHandle;
   readonly governmentId: number;
   readonly previousModal: GameControlHandle | undefined;
+  readonly previousModals: readonly unknown[] | undefined;
   readonly modalLifecycle: CapturedEspionageModalLifecycle | undefined;
   readonly waitedCycles: number;
 }
@@ -270,6 +272,21 @@ function capturedEspionageActiveModals(
   return Object.freeze(modals);
 }
 
+function capturedEspionageModalIsMounted(
+  document: unknown,
+): boolean | undefined {
+  const querySelector = readProperty(document, "querySelector");
+  if (typeof querySelector !== "function") return undefined;
+  try {
+    const modal = Reflect.apply(querySelector, document, [
+      CAPTURED_ESPIONAGE_MODAL_SELECTOR,
+    ]);
+    return modal !== null && modal !== undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 function capturedEspionageNewModalLifecycle(
   document: unknown,
   previousModals: readonly unknown[] | undefined,
@@ -382,202 +399,226 @@ export function createCapturedEspionage(
   readonly standDown: () => void;
 } {
   const reportActivity = dependencies.onActivity ?? (() => {});
-  let sample: CapturedEspionageSample | undefined;
-  let pending: CapturedEspionagePending | undefined;
+  let samples = new Map<number, CapturedEspionageSample>();
+  const pending = new Map<number, CapturedEspionagePending>();
   let opening: CapturedEspionageModalOpening | undefined;
   let cycleAction = false;
 
-  function clearPending(): void {
-    const active = pending;
-    active?.modalLifecycle?.cleanup();
-    pending = undefined;
+  function clearPending(governmentId?: number): void {
+    if (governmentId !== undefined) {
+      pending.get(governmentId)?.modalLifecycle?.cleanup();
+      pending.delete(governmentId);
+      return;
+    }
+    for (const active of pending.values()) {
+      active.modalLifecycle?.cleanup();
+    }
+    pending.clear();
   }
 
   function completePending(root: unknown): boolean {
-    const active = pending;
-    if (active === undefined) return false;
-    if (root !== active.root) {
-      clearPending();
-      return false;
-    }
     const currentForeign = dependencies.controls.resolve(
       CAPTURED_FOREIGN_CONTROL,
     );
-    if (
-      currentForeign === undefined ||
-      currentForeign.generation !== active.foreign.generation
-    ) {
-      clearPending();
-      return false;
+    let completed = false;
+    for (const active of pending.values()) {
+      if (
+        root !== active.root ||
+        currentForeign === undefined ||
+        currentForeign.generation !== active.foreign.generation
+      ) {
+        clearPending(active.governmentId);
+        continue;
+      }
+      const state = capturedEspionageState(root, active.governmentId);
+      if (state === undefined || state.sabotageProgress > 0) continue;
+      // DeadSpace starts every espionage operation by setting sab/act and only applies its result
+      // when the sab timer reaches zero. A foreign military change during that interval is not this
+      // operation's completion.
+      if (
+        capturedEspionagePostconditionChanged(active.operation, active, state)
+      ) {
+        reportActivity(
+          capturedEspionageActivity(active.operation, active.governmentId),
+        );
+        completed = true;
+      }
+      clearPending(active.governmentId);
     }
-    const state = capturedEspionageState(root, active.governmentId);
-    if (state === undefined) return false;
-    // DeadSpace starts every espionage operation by setting sab/act and only applies its result
-    // when the sab timer reaches zero. A foreign military change during that interval is not this
-    // operation's completion.
-    if (state.sabotageProgress > 0) return false;
-    if (
-      capturedEspionagePostconditionChanged(active.operation, active, state)
-    ) {
-      clearPending();
-      reportActivity(
-        capturedEspionageActivity(active.operation, active.governmentId),
-      );
-      return true;
-    }
-    clearPending();
-    return false;
+    return completed;
   }
 
   function discardCapturedEspionageSample(): void {
-    const activeSample = sample;
-    activeSample?.modalLifecycle?.cleanup();
-    sample = undefined;
+    for (const activeSample of samples.values()) {
+      activeSample.modalLifecycle?.cleanup();
+    }
+    samples.clear();
   }
 
   function standDown(): void {
     if (
-      sample === undefined &&
-      pending === undefined &&
+      samples.size === 0 &&
+      pending.size === 0 &&
       opening === undefined &&
       !cycleAction
     ) {
       return;
     }
-    const activeSample = sample;
-    const activePending = pending;
+    const activePending = [...pending.values()];
     const activeOpening = opening;
-    activeSample?.modalLifecycle?.cleanup();
-    activePending?.modalLifecycle?.cleanup();
+    discardCapturedEspionageSample();
+    for (const active of activePending) {
+      active.modalLifecycle?.cleanup();
+    }
     activeOpening?.modalLifecycle?.cleanup();
-    sample = undefined;
-    pending = undefined;
+    pending.clear();
     opening = undefined;
     cycleAction = false;
   }
 
-  const reader: CapturedEspionageReader = Object.freeze({
-    read(): CapturedEspionageInput {
-      discardCapturedEspionageSample();
-      cycleAction = false;
-      const root = dependencies.rootState.readRoot();
-      if (!isRecord(root)) return capturedEspionageEmptyInput();
-      const pendingCompleted = completePending(root);
-      if (pending !== undefined || pendingCompleted) {
-        return capturedEspionageEmptyInput();
-      }
+  function readSelectedInput(): CapturedEspionageInput {
+    discardCapturedEspionageSample();
+    cycleAction = false;
+    const root = dependencies.rootState.readRoot();
+    if (!isRecord(root)) return capturedEspionageEmptyInput();
+    const pendingCompleted = completePending(root);
+    if (pendingCompleted) {
+      return capturedEspionageEmptyInput();
+    }
 
-      let modalFromOpening: GameControlHandle | undefined;
-      let modalLifecycleFromOpening:
-        CapturedEspionageModalLifecycle | undefined;
-      let modalGovernmentId: number | undefined;
-      let lifecycleTransferred = false;
-      try {
-        if (opening !== undefined) {
-          const activeOpening = opening;
-          if (
-            activeOpening.root !== root ||
-            dependencies.controls.resolve(CAPTURED_FOREIGN_CONTROL)
-              ?.generation !== activeOpening.foreign.generation
-          ) {
-            activeOpening.modalLifecycle?.cleanup();
-            opening = undefined;
-            cycleAction = true;
-            return capturedEspionageEmptyInput();
-          } else {
-            const currentModal = capturedEspionageControl(
-              dependencies.controls,
-              CAPTURED_ESPIONAGE_MODAL,
-              CAPTURED_ESPIONAGE_MODAL_METHODS,
-            );
-            if (
-              currentModal === undefined ||
-              (activeOpening.previousModal !== undefined &&
-                currentModal.generation ===
-                  activeOpening.previousModal.generation)
-            ) {
-              const waitedCycles = activeOpening.waitedCycles + 1;
-              if (waitedCycles >= CAPTURED_ESPIONAGE_MODAL_OPENING_MAX_CYCLES) {
-                activeOpening.modalLifecycle?.cleanup();
-                opening = undefined;
-                cycleAction = true;
-                return capturedEspionageEmptyInput();
-              }
-              opening = Object.freeze({ ...activeOpening, waitedCycles });
-              return capturedEspionageEmptyInput();
-            }
-            modalFromOpening = currentModal;
-            modalLifecycleFromOpening = activeOpening.modalLifecycle;
-            modalGovernmentId = activeOpening.governmentId;
-            opening = undefined;
-          }
-        }
-
-        const settingsValue = dependencies.readSettings();
-        const settings = isRecord(settingsValue) ? settingsValue : {};
-        const foreign = capturedEspionageControl(
-          dependencies.controls,
-          CAPTURED_FOREIGN_CONTROL,
-          CAPTURED_ESPIONAGE_FOREIGN_METHODS,
-        );
-        if (foreign === undefined) return capturedEspionageEmptyInput();
-        const visible = dependencies.controls.invoke(foreign, "vis");
-        const tech = finite(
-          readProperty(root, "tech") &&
-            readProperty(readProperty(root, "tech"), "spy"),
-        );
-        if (!visible.ok || visible.value !== true || (tech ?? 0) < 2) {
+    let modalFromOpening: GameControlHandle | undefined;
+    let modalLifecycleFromOpening: CapturedEspionageModalLifecycle | undefined;
+    let modalGovernmentId: number | undefined;
+    let lifecycleTransferred = false;
+    try {
+      if (opening !== undefined) {
+        const activeOpening = opening;
+        if (
+          activeOpening.root !== root ||
+          dependencies.controls.resolve(CAPTURED_FOREIGN_CONTROL)
+            ?.generation !== activeOpening.foreign.generation
+        ) {
+          activeOpening.modalLifecycle?.cleanup();
+          opening = undefined;
+          cycleAction = true;
           return capturedEspionageEmptyInput();
-        }
-        const targets = readCapturedForeignTargets(
-          root,
-          dependencies.controls,
-          foreign,
-          settings,
-        );
-        const strategy = selectCapturedForeignStrategy(root, settings, targets);
-        if (strategy.selectedTargetId === null)
-          return capturedEspionageEmptyInput();
-        const target = strategy.governments.find(
-          (candidate) => candidate.governmentId === strategy.selectedTargetId,
-        );
-        if (target === undefined) return capturedEspionageEmptyInput();
-        let modal =
-          modalFromOpening ??
-          capturedEspionageControl(
+        } else {
+          const currentModal = capturedEspionageControl(
             dependencies.controls,
             CAPTURED_ESPIONAGE_MODAL,
             CAPTURED_ESPIONAGE_MODAL_METHODS,
           );
-        let modalToReplace: GameControlHandle | undefined;
-        const capturedModalGovernmentId =
-          modal === undefined
-            ? undefined
-            : capturedEspionageModalGovernmentId(root, modal);
-        if (
-          modal !== undefined &&
-          ((capturedModalGovernmentId !== undefined &&
-            capturedModalGovernmentId !== target.governmentId) ||
-            (capturedModalGovernmentId === undefined &&
-              modalFromOpening === undefined) ||
-            (modalFromOpening !== undefined &&
-              modalGovernmentId !== target.governmentId))
-        ) {
-          if (modalFromOpening !== undefined) {
-            modalLifecycleFromOpening?.cleanup();
-            modalLifecycleFromOpening = undefined;
+          if (
+            currentModal === undefined ||
+            (activeOpening.previousModal !== undefined &&
+              currentModal.generation ===
+                activeOpening.previousModal.generation)
+          ) {
+            const waitedCycles = activeOpening.waitedCycles + 1;
+            if (waitedCycles >= CAPTURED_ESPIONAGE_MODAL_OPENING_MAX_CYCLES) {
+              activeOpening.modalLifecycle?.cleanup();
+              opening = undefined;
+              cycleAction = true;
+              return capturedEspionageEmptyInput();
+            }
+            opening = Object.freeze({ ...activeOpening, waitedCycles });
+            return capturedEspionageEmptyInput();
           }
-          modalToReplace = modal;
-          modal = undefined;
-          modalGovernmentId = undefined;
-        } else if (modal !== undefined) {
-          modalGovernmentId =
-            capturedModalGovernmentId ??
-            modalGovernmentId ??
-            target.governmentId;
+          modalFromOpening = currentModal;
+          modalLifecycleFromOpening = activeOpening.modalLifecycle;
+          if (
+            modalLifecycleFromOpening === undefined &&
+            capturedEspionageModalGovernmentId(root, currentModal) ===
+              activeOpening.governmentId
+          ) {
+            modalLifecycleFromOpening = capturedEspionageNewModalLifecycle(
+              dependencies.getDocument?.(),
+              activeOpening.previousModals,
+            );
+          }
+          modalGovernmentId = activeOpening.governmentId;
+          opening = undefined;
         }
-        const input = capturedEspionageInput(root, target);
-        sample = Object.freeze({
+      }
+
+      const settingsValue = dependencies.readSettings();
+      const settings = isRecord(settingsValue) ? settingsValue : {};
+      const foreign = capturedEspionageControl(
+        dependencies.controls,
+        CAPTURED_FOREIGN_CONTROL,
+        CAPTURED_ESPIONAGE_FOREIGN_METHODS,
+      );
+      if (foreign === undefined) return capturedEspionageEmptyInput();
+      const visible = dependencies.controls.invoke(foreign, "vis");
+      const tech = finite(
+        readProperty(root, "tech") &&
+          readProperty(readProperty(root, "tech"), "spy"),
+      );
+      if (!visible.ok || visible.value !== true || (tech ?? 0) < 2) {
+        return capturedEspionageEmptyInput();
+      }
+      const targets = readCapturedForeignTargets(
+        root,
+        dependencies.controls,
+        foreign,
+        settings,
+      );
+      const strategy = selectCapturedForeignStrategy(root, settings, targets);
+      const targetGovernmentId =
+        modalFromOpening !== undefined
+          ? modalGovernmentId
+          : strategy.selectedTargetId;
+      if (targetGovernmentId === null || targetGovernmentId === undefined)
+        return capturedEspionageEmptyInput();
+      const target = strategy.governments.find(
+        (candidate) => candidate.governmentId === targetGovernmentId,
+      );
+      if (target === undefined) return capturedEspionageEmptyInput();
+      let modal =
+        modalFromOpening ??
+        capturedEspionageControl(
+          dependencies.controls,
+          CAPTURED_ESPIONAGE_MODAL,
+          CAPTURED_ESPIONAGE_MODAL_METHODS,
+        );
+      if (
+        modal !== undefined &&
+        modalFromOpening === undefined &&
+        capturedEspionageModalIsMounted(dependencies.getDocument?.()) === false
+      ) {
+        // The Vue capture registry can retain the destroyed espionage component through the
+        // modal's leave transition. A removed #espModal is not an open modal for this cycle.
+        modal = undefined;
+      }
+      let modalToReplace: GameControlHandle | undefined;
+      const capturedModalGovernmentId =
+        modal === undefined
+          ? undefined
+          : capturedEspionageModalGovernmentId(root, modal);
+      if (
+        modal !== undefined &&
+        ((capturedModalGovernmentId !== undefined &&
+          capturedModalGovernmentId !== target.governmentId) ||
+          (capturedModalGovernmentId === undefined &&
+            modalFromOpening === undefined) ||
+          (modalFromOpening !== undefined &&
+            modalGovernmentId !== target.governmentId))
+      ) {
+        if (modalFromOpening !== undefined) {
+          modalLifecycleFromOpening?.cleanup();
+          modalLifecycleFromOpening = undefined;
+        }
+        modalToReplace = modal;
+        modal = undefined;
+        modalGovernmentId = undefined;
+      } else if (modal !== undefined) {
+        modalGovernmentId =
+          capturedModalGovernmentId ?? modalGovernmentId ?? target.governmentId;
+      }
+      const input = capturedEspionageInput(root, target);
+      samples.set(
+        target.governmentId,
+        Object.freeze({
           root,
           foreign,
           modal,
@@ -586,18 +627,76 @@ export function createCapturedEspionage(
           modalToReplace,
           target,
           input,
-        });
-        lifecycleTransferred = true;
-        return input;
-      } finally {
-        if (!lifecycleTransferred) modalLifecycleFromOpening?.cleanup();
+        }),
+      );
+      lifecycleTransferred = true;
+      return input;
+    } finally {
+      if (!lifecycleTransferred) modalLifecycleFromOpening?.cleanup();
+    }
+  }
+
+  const reader: CapturedEspionageReader = Object.freeze({
+    read: readSelectedInput,
+    readAll(): readonly CapturedEspionageInput[] {
+      const selectedInput = readSelectedInput();
+      const selected = samples.get(selectedInput.governmentId);
+      if (
+        selected === undefined ||
+        selectedInput.governmentId < 0 ||
+        selected.modal !== undefined ||
+        selected.modalLifecycle !== undefined ||
+        selected.modalToReplace !== undefined
+      ) {
+        return Object.freeze(
+          selected === undefined || selectedInput.governmentId < 0
+            ? []
+            : [selectedInput],
+        );
       }
+      const settingsValue = dependencies.readSettings();
+      const settings = isRecord(settingsValue) ? settingsValue : {};
+      const targets = readCapturedForeignTargets(
+        selected.root,
+        dependencies.controls,
+        selected.foreign,
+        settings,
+      );
+      const strategy = selectCapturedForeignStrategy(
+        selected.root,
+        settings,
+        targets,
+      );
+      const inputs: CapturedEspionageInput[] = [];
+      for (const target of strategy.governments) {
+        const existing = samples.get(target.governmentId);
+        if (existing !== undefined) {
+          inputs.push(existing.input);
+          continue;
+        }
+        const input = capturedEspionageInput(selected.root, target);
+        samples.set(
+          target.governmentId,
+          Object.freeze({
+            root: selected.root,
+            foreign: selected.foreign,
+            modal: undefined,
+            modalLifecycle: undefined,
+            modalGovernmentId: undefined,
+            modalToReplace: undefined,
+            target,
+            input,
+          }),
+        );
+        inputs.push(input);
+      }
+      return Object.freeze(inputs);
     },
   });
 
   const executor: CapturedEspionageExecutor = Object.freeze({
     execute(decision: Readonly<CapturedEspionageDecision>) {
-      const active = sample;
+      const active = samples.get(decision.governmentId);
       if (active === undefined) {
         return stale(
           "captured-espionage-session-missing",
@@ -671,8 +770,7 @@ export function createCapturedEspionage(
         currentTargets,
       );
       const currentStrategyTarget = currentStrategy.governments.find(
-        (candidate) =>
-          candidate.governmentId === currentStrategy.selectedTargetId,
+        (candidate) => candidate.governmentId === active.target.governmentId,
       );
       const currentInput =
         currentStrategyTarget === undefined
@@ -683,7 +781,6 @@ export function createCapturedEspionage(
         currentState === undefined ||
         currentStrategyTarget === undefined ||
         currentInput === undefined ||
-        currentStrategy.selectedTargetId !== active.target.governmentId ||
         currentStrategyTarget.governmentId !== active.target.governmentId ||
         currentTarget.governmentId !== active.target.governmentId ||
         currentTarget.policy !== active.target.policy ||
@@ -717,7 +814,7 @@ export function createCapturedEspionage(
         );
       }
 
-      sample = undefined;
+      samples.delete(decision.governmentId);
       const modal = active.modal;
       if (modal === undefined) {
         let opened = false;
@@ -767,6 +864,7 @@ export function createCapturedEspionage(
           foreign: openingForeign,
           governmentId: decision.governmentId,
           previousModal: active.modalToReplace,
+          previousModals,
           modalLifecycle,
           waitedCycles: 0,
         });
@@ -853,8 +951,8 @@ export function createCapturedEspionage(
           "the game did not apply the espionage operation",
         );
       }
-      pending = baseline;
-      pending.modalLifecycle?.cleanup();
+      pending.set(decision.governmentId, baseline);
+      baseline.modalLifecycle?.cleanup();
       return stale(
         "captured-espionage-postcondition-pending",
         "the game queued the espionage operation but its result is pending",
@@ -870,8 +968,10 @@ export function createCapturedEspionage(
     standDown,
     isBusy: () =>
       cycleAction ||
-      pending !== undefined ||
+      pending.size > 0 ||
       opening !== undefined ||
-      sample?.modalLifecycle !== undefined,
+      [...samples.values()].some(
+        (activeSample) => activeSample.modalLifecycle !== undefined,
+      ),
   });
 }

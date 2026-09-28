@@ -184,7 +184,7 @@ import {
 import { runEvolution } from "../application/evolution.ts";
 import { runCapturedPlanetSelection } from "../application/captured-planet-selection.ts";
 import { runCapturedSpyTraining } from "../application/captured-spy-training.ts";
-import { runCapturedEspionage } from "../application/captured-espionage.ts";
+import { createCapturedEspionageRunner } from "../application/captured-espionage.ts";
 import { runMercenaryAutomation } from "../application/mercenary.ts";
 import { runBattleAutomation } from "../application/battle.ts";
 import { challenges as evolutionChallengeCatalog } from "../adapters/evolve/runtime-catalogs.ts";
@@ -654,6 +654,8 @@ export function startCapturedRuntime({
       openCapturedForeignModal(governmentId),
     onActivity,
   });
+  const runCapturedEspionageCycle =
+    createCapturedEspionageRunner(capturedEspionage);
   const capturedBattle = createCapturedBattle({
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,
@@ -2435,7 +2437,7 @@ export function startCapturedRuntime({
         }
         const espionageOutcome = runPhase("autoFight.espionage", () => {
           ensureCivicControls();
-          return runCapturedEspionage(capturedEspionage);
+          return runCapturedEspionageCycle();
         });
         if (
           espionageOutcome !== undefined &&

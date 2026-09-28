@@ -6,6 +6,7 @@ import type { DecisionExecutor } from "./decision-executor.ts";
 
 export interface CapturedEspionageReader {
   read(): CapturedEspionageInput;
+  readAll(): readonly CapturedEspionageInput[];
 }
 
 export type CapturedEspionageExecutor =

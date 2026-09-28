@@ -585,6 +585,46 @@ runOne("Purchase", { hstl: 0, unrest: 0, spy: 3 }, undefined);
 
 {
   const root = makeRoot("Influence", { hstl: 30 });
+  const activeModals = [];
+  const delayedModal = makeModalFixture(activeModals);
+  const controls = makeControls(
+    root,
+    {
+      influence(currentRoot) {
+        currentRoot.civic.foreign.gov0.hstl -= 5;
+      },
+    },
+    { initialModalGovernmentId: null },
+  );
+  const adapter = createCapturedEspionage({
+    rootState: {
+      readRoot: () => root,
+      isReactivitySuppressed: () => false,
+      subscribeRootReplaced: () => () => {},
+    },
+    controls,
+    readSettings: () => makeSettings("Influence"),
+    getDocument: () => ({
+      querySelector: () => null,
+      querySelectorAll: () => activeModals,
+    }),
+    ensureForeignModal: () => true,
+  });
+
+  const opening = runCapturedEspionage(adapter);
+  assert.equal(opening.failure.code, "captured-espionage-modal-pending");
+  activeModals.push(delayedModal);
+  controls.installModal(0);
+
+  const completed = runCapturedEspionage(adapter);
+  assert.equal(completed.status, "succeeded");
+  assert.equal(root.civic.foreign.gov0.hstl, 25);
+  assert.equal(delayedModal.closed, true);
+  assert.deepEqual(activeModals, []);
+}
+
+{
+  const root = makeRoot("Influence", { hstl: 30 });
   const controls = makeControls(
     root,
     {
