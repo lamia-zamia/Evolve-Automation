@@ -3,6 +3,7 @@ import {
   type KnowledgeRequirements,
   type KnowledgeRequirementsInput,
 } from "../../knowledge-requirements.ts";
+import { calculateArpaProjectStepCosts } from "../arpa-project-costs.ts";
 
 export interface StorageResourceState {
   readonly id: string;
@@ -37,29 +38,16 @@ export interface ArpaStorageTargetCostsInput {
   readonly resources: readonly StorageResourceState[];
 }
 
-/** Matches `Project.updateResourceRequirements` before its cost reaches `calculateRequiredStorages`. */
+/** Storage's project target uses the shared ARPA step rule before its cost reaches the buffer. */
 export function calculateArpaStorageTargetCosts(
   input: Readonly<ArpaStorageTargetCostsInput>,
 ): readonly StorageRequestCost[] {
-  let maxStep = Math.min(
-    100 - input.progress,
-    input.isTriggerTarget ? 100 : input.stepPercent,
-  );
-  for (const cost of input.perPercentCosts) {
-    const resource = input.resources.find(
-      (candidate) =>
-        candidate.id === cost.resourceId && candidate.pool === undefined,
-    );
-    if (resource !== undefined) {
-      maxStep = Math.min(maxStep, resource.maxQuantity / cost.amount);
-    }
-  }
-  const currentStep = Math.max(Math.floor(maxStep), 1);
-  return Object.freeze(
-    input.perPercentCosts.map((cost) =>
-      Object.freeze({ ...cost, amount: cost.amount * currentStep }),
-    ),
-  );
+  return calculateArpaProjectStepCosts({
+    perPercentCosts: input.perPercentCosts,
+    progress: input.progress,
+    desiredStepPercent: input.isTriggerTarget ? 100 : input.stepPercent,
+    resources: input.resources,
+  }).costs;
 }
 
 export interface StorageRequirementsInput {

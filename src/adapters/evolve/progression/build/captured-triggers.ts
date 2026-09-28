@@ -14,10 +14,10 @@
  *
  * Known gaps, each of which drops the trigger instead of approximating it:
  *
- * - A trigger buys the whole remaining project, priced from the drawn panel's per-percent cost
- *   multiplied by the remaining percent. The drawn 1% price is rounded for display while the game
- *   charges the unrounded fraction per step, so the product slightly overstates the charge — the
- *   safe direction for both saving and the executor's affordability gate.
+ * - A trigger's effective step is limited by the drawn panel's per-percent cost and each resource's
+ *   current capacity. The drawn 1% price is rounded for display while the game charges the
+ *   unrounded fraction per step, so the product slightly overstates the charge — the safe direction
+ *   for both saving and the executor's affordability gate.
  * - A technology the current path never draws — one belonging to another tech path, say — is in
  *   neither half of the research panel, so a trigger naming it is dropped. The compatibility
  *   runtime's DOM read reported the same technology as simply not researched.
@@ -40,7 +40,10 @@ import {
   type CapturedConditionDemand,
   evaluateCapturedCondition,
 } from "../../captured-conditions.ts";
-import { costFitsStorage } from "../../captured-affordability.ts";
+import {
+  costFitsStorage,
+  readCapturedResourceView,
+} from "../../captured-affordability.ts";
 import {
   capturedConditionsNeedDemand,
   capturedConditionsNeedGrantedTechs,
@@ -54,13 +57,14 @@ import {
   readProperty,
   splitActionId,
 } from "../../../validation.ts";
+import { calculateArpaProjectStepCosts } from "../../../../domain/economy/arpa-project-costs.ts";
 
 /**
  * One trigger action the game could buy now, priced at the game's own current cost.
  *
  * A.R.P.A. targets carry the sampled project state the executor's stale checks and the demand
- * model's project rule need: a trigger buys the whole remaining project, so `cost` is the drawn
- * per-percent price times `steps` and `progress` is the `complete` percent it was priced from.
+ * model's project rule need: `cost` is the drawn per-percent price times the effective `steps`,
+ * and `progress` is the `complete` percent it was priced from.
  */
 export type CapturedTriggerTarget =
   | {
@@ -76,7 +80,7 @@ export type CapturedTriggerTarget =
       readonly pool?: string;
       /** The project id the game's own `build` method takes, e.g. `lhc`. */
       readonly projectId: string;
-      /** The whole remaining project in percent: the steps one press buys. */
+      /** The capacity-limited percent step one press buys. */
       readonly steps: number;
       /** The project's current `complete` percent. */
       readonly progress: number;
@@ -387,9 +391,10 @@ export function createCapturedTriggers(
       };
 
       /**
-       * A trigger buys the whole remaining project, priced from the drawn panel's per-percent
-       * cost. A project the panel is not offering — locked, or finished past its rank gate — is
-       * not one the game could buy now, so it raises no demand rather than guessing a price.
+       * A trigger buys the largest capacity-limited project step, priced from the drawn panel's
+       * per-percent cost. A project the panel is not offering — locked, or finished past its rank
+       * gate — is not one the game could buy now, so it raises no demand rather than guessing a
+       * price.
        */
       const priceArpa = (
         row: TriggerRow,
@@ -400,34 +405,53 @@ export function createCapturedTriggers(
         // press them; the panel draw above captures the project controls as it prices them.
         if (controls.resolve(row.actionId) === undefined) return undefined;
         const remaining = 100 - project.progress;
-        if (
-          !Number.isSafeInteger(remaining) ||
-          remaining < 1 ||
-          remaining > 100
-        ) {
+        if (!Number.isFinite(remaining) || remaining <= 0 || remaining > 100) {
           return undefined;
         }
-        const cost: Record<string, number> = {};
+        const perPercentCosts: { resourceId: string; amount: number }[] = [];
         for (const [resourceId, perPercent] of Object.entries(project.cost)) {
           if (!Number.isFinite(perPercent) || perPercent <= 0) {
             return undefined;
           }
-          cost[resourceId] = perPercent * remaining;
+          perPercentCosts.push({ resourceId, amount: perPercent });
         }
-        if (Object.keys(cost).length === 0) return undefined;
-        const total = Object.freeze(cost);
+        if (perPercentCosts.length === 0) return undefined;
+        const resources = perPercentCosts.flatMap(({ resourceId }) => {
+          const resource = readCapturedResourceView(root, resourceId);
+          return resource.present && Number.isFinite(resource.max)
+            ? [{ id: resourceId, maxQuantity: resource.max }]
+            : [];
+        });
+        const effective = calculateArpaProjectStepCosts({
+          perPercentCosts,
+          progress: project.progress,
+          desiredStepPercent: 100,
+          resources,
+        });
+        const cost = Object.freeze(
+          Object.fromEntries(
+            effective.costs.map(({ resourceId, amount }) => [
+              resourceId,
+              amount,
+            ]),
+          ),
+        );
         // A project pays civilization-wide even once resources are split by supply zone: upstream
         // `payArpaCosts` draws each partitioned resource through `drawPools`, across every pool, and
-        // `checkArpaCosts` compares against the combined total. So no pool narrows this comparison.
-        if (!fitsInStorage(root, { cost: total, pool: undefined })) {
+        // `checkArpaCosts` compares against the combined total. Stackable resources may grow to
+        // meet this step; a non-stackable resource that cannot meet one percent remains unavailable.
+        // So no pool narrows this comparison.
+        if (
+          costFitsStorage(root, cost, { allowExpandableStorage: true }) !== true
+        ) {
           return undefined;
         }
         return Object.freeze({
           actionId: row.actionId,
           actionType: "arpa",
-          cost: total,
+          cost,
           projectId: project.projectId,
-          steps: remaining,
+          steps: effective.steps,
           progress: project.progress,
           generation: project.generation,
         } as const);

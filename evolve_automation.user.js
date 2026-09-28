@@ -1042,7 +1042,8 @@
       if (amount > 0 && readProperty(entry, "display") !== !0) return !1;
       let capacity = capturedPoolCap(entry, options?.pool, regional);
       if (capacity === void 0) return;
-      if ((zeroCapIsCeiling ? capacity >= 0 : capacity > 0) && amount > capacity) return !1;
+      if ((zeroCapIsCeiling ? capacity >= 0 : capacity > 0) && amount > capacity && !(options?.allowExpandableStorage === !0 && readProperty(entry, "stackable") === !0))
+        return !1;
     }
     return !0;
   }
@@ -3323,24 +3324,31 @@
     });
   }
 
-  // src/domain/economy/storage/storage-requirements.ts
-  function calculateArpaStorageTargetCosts(input) {
-    let maxStep = Math.min(
-      100 - input.progress,
-      input.isTriggerTarget ? 100 : input.stepPercent
-    );
+  // src/domain/economy/arpa-project-costs.ts
+  function calculateArpaProjectStepCosts(input) {
+    let maxStep = Math.min(100 - input.progress, input.desiredStepPercent);
     for (let cost of input.perPercentCosts) {
       let resource = input.resources.find(
         (candidate) => candidate.id === cost.resourceId && candidate.pool === void 0
       );
-      resource !== void 0 && (maxStep = Math.min(maxStep, resource.maxQuantity / cost.amount));
+      resource !== void 0 && resource.maxQuantity >= 0 && (maxStep = Math.min(maxStep, resource.maxQuantity / cost.amount));
     }
-    let currentStep = Math.max(Math.floor(maxStep), 1);
-    return Object.freeze(
+    let steps = Math.max(Math.floor(maxStep), 1), costs = Object.freeze(
       input.perPercentCosts.map(
-        (cost) => Object.freeze({ ...cost, amount: cost.amount * currentStep })
+        (cost) => Object.freeze({ ...cost, amount: cost.amount * steps })
       )
     );
+    return Object.freeze({ steps, costs });
+  }
+
+  // src/domain/economy/storage/storage-requirements.ts
+  function calculateArpaStorageTargetCosts(input) {
+    return calculateArpaProjectStepCosts({
+      perPercentCosts: input.perPercentCosts,
+      progress: input.progress,
+      desiredStepPercent: input.isTriggerTarget ? 100 : input.stepPercent,
+      resources: input.resources
+    }).costs;
   }
   function storageRequirementScopeKey(resourceId, pool) {
     return `${resourceId}\0${pool === void 0 || pool === "*" ? "*" : pool}`;
@@ -20183,23 +20191,38 @@
           let project = offeredProjectsById?.get(row.actionId);
           if (project === void 0 || controls2.resolve(row.actionId) === void 0) return;
           let remaining = 100 - project.progress;
-          if (!Number.isSafeInteger(remaining) || remaining < 1 || remaining > 100)
+          if (!Number.isFinite(remaining) || remaining <= 0 || remaining > 100)
             return;
-          let cost = {};
+          let perPercentCosts = [];
           for (let [resourceId, perPercent] of Object.entries(project.cost)) {
             if (!Number.isFinite(perPercent) || perPercent <= 0)
               return;
-            cost[resourceId] = perPercent * remaining;
+            perPercentCosts.push({ resourceId, amount: perPercent });
           }
-          if (Object.keys(cost).length === 0) return;
-          let total = Object.freeze(cost);
-          if (fitsInStorage(root, { cost: total, pool: void 0 }))
+          if (perPercentCosts.length === 0) return;
+          let resources = perPercentCosts.flatMap(({ resourceId }) => {
+            let resource = readCapturedResourceView(root, resourceId);
+            return resource.present && Number.isFinite(resource.max) ? [{ id: resourceId, maxQuantity: resource.max }] : [];
+          }), effective = calculateArpaProjectStepCosts({
+            perPercentCosts,
+            progress: project.progress,
+            desiredStepPercent: 100,
+            resources
+          }), cost = Object.freeze(
+            Object.fromEntries(
+              effective.costs.map(({ resourceId, amount }) => [
+                resourceId,
+                amount
+              ])
+            )
+          );
+          if (costFitsStorage(root, cost, { allowExpandableStorage: !0 }) === !0)
             return Object.freeze({
               actionId: row.actionId,
               actionType: "arpa",
-              cost: total,
+              cost,
               projectId: project.projectId,
-              steps: remaining,
+              steps: effective.steps,
               progress: project.progress,
               generation: project.generation
             });

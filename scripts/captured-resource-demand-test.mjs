@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 
 import { calculateArpaStorageTargetCosts } from "../src/domain/economy/storage/storage-requirements.ts";
 import { createCapturedResourceDemand } from "../src/adapters/evolve/economy/resources/captured-resource-demand.ts";
+import { createCapturedTriggers } from "../src/adapters/evolve/progression/build/captured-triggers.ts";
 import { actionPrice } from "./test-support/action-price.mjs";
 
 const root = {
@@ -27,6 +28,79 @@ function withTargets(targets, settings = {}, saving = null, craftCosts) {
     readSettings: () => settings,
     craftCosts,
   });
+}
+
+function arpaProductionScenario({
+  capacities = { Iron: 1000 },
+  perPercentCosts = { Iron: 100 },
+  stackable = { Iron: true },
+  progress = 20,
+  autoTrigger = true,
+  requirementCount = 3,
+} = {}) {
+  const root = {
+    race: {},
+    city: { farm: { count: 3 } },
+    arpa: { lhc: { rank: 0, complete: progress } },
+    resource: Object.fromEntries(
+      Object.entries(capacities).map(([id, max]) => [
+        id,
+        { amount: 0, max, stackable: stackable[id] ?? true, display: true },
+      ]),
+    ),
+  };
+  const project = {
+    elementId: "arpalhc",
+    projectId: "lhc",
+    rank: 0,
+    progress,
+    cost: perPercentCosts,
+    generation: 3,
+  };
+  const settings = {
+    autoTrigger,
+    triggers: [
+      {
+        seq: 0,
+        priority: 0,
+        requirementType: "BuildingCount",
+        requirementId: "city-farm",
+        requirementCount,
+        actionType: "arpa",
+        actionId: "arpalhc",
+        actionCount: 1,
+      },
+    ],
+    arpaStep: 5,
+    storageAssignExtra: true,
+    arpa_lhc: true,
+  };
+  const rootState = { readRoot: () => root };
+  const triggerReader = createCapturedTriggers({
+    rootState,
+    controls: {
+      resolve: (elementId) =>
+        elementId === "arpalhc"
+          ? { elementId, generation: 3, methods: [] }
+          : undefined,
+      invoke: () => ({ ok: true, value: undefined }),
+      capturedElementIds: () => ["arpalhc"],
+    },
+    costs: { readCost: () => undefined },
+    readSettings: () => settings,
+    readOfferedTechs: () => [],
+    readOfferedProjects: () => [project],
+  });
+  const sample = createCapturedResourceDemand({
+    rootState,
+    reservations: {
+      readReservations: () => ({ targets: [], unavailable: false }),
+    },
+    readSettings: () => settings,
+    triggers: triggerReader,
+    readProjects: () => [project],
+  }).sample();
+  return { targets: triggerReader.read(), sample };
 }
 
 // Fleet demand uses the shipyard's rendered costs and only participates when the two script
@@ -1532,6 +1606,83 @@ for (const [missionId, completionTech, completionLevel] of [
     ],
   }).sample();
   assert.equal(sample.storageRequired("Iron"), 8240);
+}
+
+// The real captured trigger reader and resource-demand storage planner share the same
+// capacity-limited ARPA step. The whole 80% remainder costs 8000 Iron, but current capacity
+// supports an actionable 10% chunk that Storage buffers to 1030.
+{
+  const { targets, sample } = arpaProductionScenario();
+  assert.deepEqual(targets, [
+    {
+      actionId: "arpalhc",
+      actionType: "arpa",
+      cost: { Iron: 1000 },
+      projectId: "lhc",
+      steps: 10,
+      progress: 20,
+      generation: 3,
+    },
+  ]);
+  assert.equal(sample.maxCost?.("Iron"), 1000);
+  assert.equal(sample.storageRequired("Iron"), 1030);
+}
+
+// The trigger uses the full remaining project when it fits, and the minimum one-percent step
+// when capacity allows exactly one.
+{
+  const fullyAffordable = arpaProductionScenario({
+    capacities: { Iron: 10000 },
+  });
+  assert.equal(fullyAffordable.targets[0]?.steps, 80);
+  assert.deepEqual(fullyAffordable.targets[0]?.cost, { Iron: 8000 });
+
+  const oneStep = arpaProductionScenario({ capacities: { Iron: 100 } });
+  assert.equal(oneStep.targets[0]?.steps, 1);
+  assert.deepEqual(oneStep.targets[0]?.cost, { Iron: 100 });
+
+  const finalFraction = arpaProductionScenario({ progress: 99.9 });
+  assert.equal(finalFraction.targets[0]?.steps, 1);
+  assert.deepEqual(finalFraction.targets[0]?.cost, { Iron: 100 });
+}
+
+// The tightest resource controls a multi-resource project's shared step count.
+{
+  const { targets } = arpaProductionScenario({
+    capacities: { Iron: 1000, Polymer: 450 },
+    perPercentCosts: { Iron: 100, Polymer: 50 },
+  });
+  assert.equal(targets[0]?.steps, 9);
+  assert.deepEqual(targets[0]?.cost, { Iron: 900, Polymer: 450 });
+}
+
+// An unexpandable resource that cannot hold one percent keeps the trigger unavailable.
+{
+  const { targets } = arpaProductionScenario({
+    capacities: { Iron: 50 },
+    stackable: { Iron: false },
+  });
+  assert.deepEqual(targets, []);
+}
+
+// Stackable storage can grow to hold the legacy one-step floor even when it exceeds today's cap.
+{
+  const { targets, sample } = arpaProductionScenario({
+    capacities: { Iron: 50 },
+  });
+  assert.equal(targets[0]?.steps, 1);
+  assert.deepEqual(targets[0]?.cost, { Iron: 100 });
+  assert.equal(sample.storageRequired("Iron"), 103);
+}
+
+// Disabled or incomplete trigger conditions leave the regular configured ARPA step in Storage.
+{
+  for (const scenario of [{ autoTrigger: false }, { requirementCount: 4 }]) {
+    const { targets, sample } = arpaProductionScenario(scenario);
+    assert.deepEqual(targets, []);
+    assert.equal(sample.maxCost?.("Iron"), 500);
+    assert.equal(sample.storageRequired("Iron"), 515);
+  }
 }
 
 // Outer-fleet capacity uses expandability and the old non-ignore priority gate, not the

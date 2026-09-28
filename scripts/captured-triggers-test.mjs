@@ -284,7 +284,7 @@ assert.deepEqual(
   [],
 );
 
-// A.R.P.A. triggers buy the whole remaining project at the drawn per-percent price.
+// A.R.P.A. triggers use the full remaining project when it fits the drawn per-percent price.
 assert.deepEqual(
   triggers({
     triggers: [
@@ -311,7 +311,8 @@ assert.deepEqual(
   [],
 );
 
-// A project whose whole remaining cost does not fit in storage is not a target.
+// A project whose whole remainder does not fit is still a target at the largest capacity-fitting
+// step across all of its resources.
 assert.deepEqual(
   triggers({
     triggers: [
@@ -328,7 +329,17 @@ assert.deepEqual(
       },
     ],
   }).read(),
-  [],
+  [
+    {
+      actionId: "arpalaunch_facility",
+      actionType: "arpa",
+      cost: { Money: 8300, Lumber: 4980 },
+      projectId: "launch_facility",
+      steps: 83,
+      progress: 10,
+      generation: 3,
+    },
+  ],
 );
 
 // A project already at its configured rank is done, like a finished building count.

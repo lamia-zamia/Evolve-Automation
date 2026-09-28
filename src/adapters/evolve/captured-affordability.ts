@@ -159,12 +159,15 @@ export interface StorageFitOptions {
    * civilization-wide, which is right below `tech.shadow >= 5` and optimistic above it.
    */
   readonly pool?: string | undefined;
+  /** ARPA project demand may grow a stackable resource's storage to fit its next step. */
+  readonly allowExpandableStorage?: boolean;
 }
 
 /**
  * The game's `checkMaxCosts`: every positive cost must name a resource the game is displaying, and
  * must fit under the capacity of the pool that would pay for it. A negative capacity is the game's
- * "no limit" and passes.
+ * "no limit" and passes. ARPA demand may opt to allow stackable resources to grow beyond the
+ * current capacity; non-stackable resources still have to fit now.
  *
  * `undefined` means the comparison cannot be made — a cost key that is not an ordinary resource,
  * or one the root has no entry for. Callers that only need a safe answer can read that as "no".
@@ -196,7 +199,16 @@ export function costFitsStorage(
     const capacity = capturedPoolCap(entry, options?.pool, regional);
     if (capacity === undefined) return undefined;
     const isCeiling = zeroCapIsCeiling ? capacity >= 0 : capacity > 0;
-    if (isCeiling && amount > capacity) return false;
+    if (
+      isCeiling &&
+      amount > capacity &&
+      !(
+        options?.allowExpandableStorage === true &&
+        readProperty(entry, "stackable") === true
+      )
+    ) {
+      return false;
+    }
   }
   return true;
 }
