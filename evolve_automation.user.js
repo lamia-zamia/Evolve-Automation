@@ -1763,35 +1763,43 @@
           reportUnavailable("the game root has not been captured yet");
           return;
         }
-        let includeGranted = options?.includeGranted === !0, drawn, result = discovery.discover(RESEARCH_TAB_PATH, {
-          isPanelDrawn: () => drawnActions.exists(RESEARCH_PANEL_SELECTOR),
-          ...includeGranted ? {} : { discard: UNREAD_RESEARCH_CONTENT },
-          whileDrawn: () => {
-            let offered = Object.freeze(
-              drawnActions.read(OFFERED_TECH_SELECTOR).map(
-                (action) => Object.freeze({
-                  elementId: action.id,
-                  cost: action.cost,
-                  // Which binding of this control the offer belongs to. The game rebinds an action
-                  // every time it draws it, and a superseded closure keeps working, so recording the
-                  // generation here is what lets the executor refuse one from an older draw.
-                  generation: controls2.resolve(action.id)?.generation ?? 0
-                })
-              )
-            );
-            drawn = Object.freeze(
-              includeGranted ? {
-                offered,
-                granted: Object.freeze(
-                  new Set(
-                    drawnActions.read(GRANTED_TECH_SELECTOR).map((action) => action.id)
-                  )
+        let includeGranted = options?.includeGranted === !0, drawn, result;
+        try {
+          result = discovery.discover(RESEARCH_TAB_PATH, {
+            isPanelDrawn: () => drawnActions.exists(RESEARCH_PANEL_SELECTOR),
+            ...includeGranted ? {} : { discard: UNREAD_RESEARCH_CONTENT },
+            whileDrawn: () => {
+              let offered = Object.freeze(
+                drawnActions.read(OFFERED_TECH_SELECTOR).map(
+                  (action) => Object.freeze({
+                    elementId: action.id,
+                    cost: action.cost,
+                    // Which binding of this control the offer belongs to. The game rebinds an action
+                    // every time it draws it, and a superseded closure keeps working, so recording the
+                    // generation here is what lets the executor refuse one from an older draw.
+                    generation: controls2.resolve(action.id)?.generation ?? 0
+                  })
                 )
-              } : { offered }
-            );
-          }
-        });
+              );
+              drawn = Object.freeze(
+                includeGranted ? {
+                  offered,
+                  granted: Object.freeze(
+                    new Set(
+                      drawnActions.read(GRANTED_TECH_SELECTOR).map((action) => action.id)
+                    )
+                  )
+                } : { offered }
+              );
+            }
+          });
+        } catch (error) {
+          reportUnavailable(`research offer discovery failed: ${String(error)}`);
+          return;
+        }
         if (result.outcome.status !== "succeeded" || drawn === void 0) {
+          if (result.outcome.status !== "succeeded" && (result.outcome.failure.code === "game-state-not-captured" || result.outcome.failure.code === "unknown-player-tab"))
+            return;
           reportUnavailable(
             result.outcome.status === "succeeded" ? "the research panel was drawn but read nothing" : result.outcome.failure?.message ?? result.outcome.status
           );
@@ -3316,6 +3324,24 @@
   }
 
   // src/domain/economy/storage/storage-requirements.ts
+  function calculateArpaStorageTargetCosts(input) {
+    let maxStep = Math.min(
+      100 - input.progress,
+      input.isTriggerTarget ? 100 : input.stepPercent
+    );
+    for (let cost of input.perPercentCosts) {
+      let resource = input.resources.find(
+        (candidate) => candidate.id === cost.resourceId && candidate.pool === void 0
+      );
+      resource !== void 0 && (maxStep = Math.min(maxStep, resource.maxQuantity / cost.amount));
+    }
+    let currentStep = Math.max(Math.floor(maxStep), 1);
+    return Object.freeze(
+      input.perPercentCosts.map(
+        (cost) => Object.freeze({ ...cost, amount: cost.amount * currentStep })
+      )
+    );
+  }
   function storageRequirementScopeKey(resourceId, pool) {
     return `${resourceId}\0${pool === void 0 || pool === "*" ? "*" : pool}`;
   }
@@ -17017,8 +17043,8 @@
       sample() {
         let root = dependencies.rootState.readRoot(), resources = readProperty(root, "resource");
         if (!isRecord(resources)) return EMPTY_DEMAND_SAMPLE;
-        let queued = dependencies.reservations.readReservations().targets, saving = dependencies.construction?.readSavingTarget() ?? null, offered = dependencies.readOfferedTechs?.(), settingsValue = dependencies.readSettings(), settings = isRecord(settingsValue) ? settingsValue : {}, fleet = dependencies.fleet?.read(), triggerTargets = Object.freeze(
-          (dependencies.triggers?.read() ?? []).map(
+        let queued = dependencies.reservations.readReservations().targets, saving = dependencies.construction?.readSavingTarget() ?? null, offered = dependencies.readOfferedTechs?.(), settingsValue = dependencies.readSettings(), settings = isRecord(settingsValue) ? settingsValue : {}, fleet = dependencies.fleet?.read(), capturedTriggerTargets = dependencies.triggers?.read() ?? [], storageResources = readStorageResources(resources, root, settings), triggerTargets = Object.freeze(
+          capturedTriggerTargets.map(
             (target) => Object.freeze({
               // A project trigger reserves the whole remaining project, so it takes the same
               // doubling the pure planner gives any part-built project target.
@@ -17168,7 +17194,15 @@
         ) ? dependencies.readProjects?.() ?? [] : [], projectStorageTargets = Object.freeze(
           projects.flatMap((project) => {
             if (settings[`arpa_${project.projectId}`] !== !0) return [];
-            let costs = toCosts(project.cost);
+            let costs = calculateArpaStorageTargetCosts({
+              perPercentCosts: toCosts(project.cost),
+              progress: project.progress,
+              stepPercent: finite(settings.arpaStep) ?? 5,
+              isTriggerTarget: capturedTriggerTargets.some(
+                (target) => target.actionType === "arpa" && target.actionId === project.elementId
+              ),
+              resources: storageResources
+            });
             return costs.length === 0 ? [] : [Object.freeze({ costs })];
           })
         ), fleetStorageTargets = settingBoolean3(settings, "autoFleet", !1) && settingString(settings, "prioritizeOuterFleet", "ignore") !== "ignore" && fleet?.nextShipExpandable === !0 && fleet.nextShipCost.length > 0 ? Object.freeze([Object.freeze({ costs: fleet.nextShipCost })]) : Object.freeze([]);
@@ -17244,7 +17278,7 @@
             reservedTargets: Object.freeze([]),
             buildCandidates: Object.freeze([])
           }),
-          resources: readStorageResources(resources, root, settings),
+          resources: storageResources,
           inflationMoney,
           retirementGraphene
         }), required = new Map(
@@ -45713,7 +45747,9 @@ Only continue if you trust the source. Injected code:
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
       getDocument: () => document
-    }), triggerDemand = createCapturedResourceDemand({
+    }), ensureDemandResearchObservation = () => {
+      progression.sampleOfferedTechs();
+    }, triggerDemand = createCapturedResourceDemand({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
       costs: buildCosts,
@@ -45725,7 +45761,7 @@ Only continue if you trust the source. Injected code:
       readPrerequisites: readDemandPrerequisites,
       craftCosts: costs,
       fleet: fleetDemand
-    }), triggerDemandThisCycle, readTriggerDemand = () => triggerDemandThisCycle ??= triggerDemand.sample(), conditionContextReader = createCapturedConditionContextReader({
+    }), triggerDemandThisCycle, readTriggerDemand = () => (triggerDemandThisCycle === void 0 && (ensureDemandResearchObservation(), triggerDemandThisCycle = triggerDemand.sample()), triggerDemandThisCycle), conditionContextReader = createCapturedConditionContextReader({
       costs: buildCosts,
       readOfferedTechs: progression.sampleOfferedTechs,
       readGrantedTechs: progression.readGrantedTechs,
@@ -45749,7 +45785,7 @@ Only continue if you trust the source. Injected code:
           controls: pageCapture2.controls,
           ensureCivicControls,
           ensureBuildControls: progression.ensureBuildControls
-        }), triggerDemand.sample())
+        }), readTriggerDemand())
       }
     ).context;
     let triggers = createCapturedTriggers({
@@ -45832,13 +45868,7 @@ Only continue if you trust the source. Injected code:
       craftCosts: costs,
       fleet: fleetDemand
     }), demandThisCycle;
-    readDemand = () => {
-      if (demandThisCycle === void 0) {
-        let currentSettings = settingsStore.readRaw();
-        (isEnabled(currentSettings, "autoStorage") || isEnabled(currentSettings, "autoResearch")) && progression.sampleOfferedTechs(), demandThisCycle = demand.sample();
-      }
-      return demandThisCycle;
-    };
+    readDemand = () => (demandThisCycle === void 0 && (ensureDemandResearchObservation(), demandThisCycle = demand.sample()), demandThisCycle);
     let storagePorts = createCapturedStoragePorts({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,

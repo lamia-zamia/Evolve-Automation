@@ -279,6 +279,65 @@ function makePage({ offered = [[]], granted = [], generations = {} } = {}) {
 }
 
 {
+  // Startup can sample demand before the game creates settings. That observation is simply absent;
+  // it must not turn into stale offers or an error that stops other automation.
+  const page = makePage();
+  page.root.settings = undefined;
+  page.fail({
+    status: "rejected",
+    failure: {
+      code: "game-state-not-captured",
+      message: "the game has not created its settings yet",
+    },
+  });
+  assert.equal(page.catalog.read(), undefined);
+  assert.deepEqual(page.reasons, []);
+}
+
+{
+  // Settings itself can exist before the game has initialized its selected main tab.
+  const page = makePage();
+  page.fail({
+    status: "rejected",
+    failure: {
+      code: "unknown-player-tab",
+      message: "the game has not recorded settings.civTabs",
+    },
+  });
+  assert.equal(page.catalog.read(), undefined);
+  assert.deepEqual(page.reasons, []);
+}
+
+{
+  // A discovery precondition can fail before it returns a result; that is still an unavailable
+  // current catalog and must never abort demand consumers or expose a held offer.
+  const reasons = [];
+  const catalog = createCapturedTechCatalog({
+    rootState: {
+      readRoot: () => ({ tech: {}, settings: {} }),
+      isReactivitySuppressed: () => false,
+      subscribeRootReplaced: () => () => {},
+    },
+    discovery: {
+      discover() {
+        throw new Error("the game has not recorded settings.civTabs");
+      },
+    },
+    drawnActions: { read: () => [], exists: () => false },
+    controls: {
+      resolve: () => undefined,
+      invoke: () => ({ ok: false, reason: "unknown-control" }),
+      capturedElementIds: () => [],
+    },
+    onUnavailable: (reason) => reasons.push(reason),
+  });
+  assert.equal(catalog.read(), undefined);
+  assert.deepEqual(reasons, [
+    "research offer discovery failed: Error: the game has not recorded settings.civTabs",
+  ]);
+}
+
+{
   // The game drew the panel and there was nothing in it: an empty offer set is a real answer, not
   // a failure.
   const page = makePage({ offered: [[]] });

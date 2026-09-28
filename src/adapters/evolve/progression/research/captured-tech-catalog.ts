@@ -103,41 +103,57 @@ export function createCapturedTechCatalog(
       const includeGranted = options?.includeGranted === true;
 
       let drawn: Readonly<TechCatalogSnapshot> | undefined;
-      const result = discovery.discover(RESEARCH_TAB_PATH, {
-        isPanelDrawn: () => drawnActions.exists(RESEARCH_PANEL_SELECTOR),
-        ...(includeGranted ? {} : { discard: UNREAD_RESEARCH_CONTENT }),
-        whileDrawn: () => {
-          const offered: readonly Readonly<OfferedTech>[] = Object.freeze(
-            drawnActions.read(OFFERED_TECH_SELECTOR).map((action) =>
-              Object.freeze({
-                elementId: action.id,
-                cost: action.cost,
-                // Which binding of this control the offer belongs to. The game rebinds an action
-                // every time it draws it, and a superseded closure keeps working, so recording the
-                // generation here is what lets the executor refuse one from an older draw.
-                generation: controls.resolve(action.id)?.generation ?? 0,
-              }),
-            ),
-          );
-          drawn = Object.freeze(
-            includeGranted
-              ? {
-                  offered,
-                  granted: Object.freeze(
-                    new Set(
-                      drawnActions
-                        .read(GRANTED_TECH_SELECTOR)
-                        .map((action) => action.id),
-                    ),
-                  ) as ReadonlySet<string>,
-                }
-              : { offered },
-          );
-        },
-      });
+      let result: ReturnType<typeof discovery.discover>;
+      try {
+        result = discovery.discover(RESEARCH_TAB_PATH, {
+          isPanelDrawn: () => drawnActions.exists(RESEARCH_PANEL_SELECTOR),
+          ...(includeGranted ? {} : { discard: UNREAD_RESEARCH_CONTENT }),
+          whileDrawn: () => {
+            const offered: readonly Readonly<OfferedTech>[] = Object.freeze(
+              drawnActions.read(OFFERED_TECH_SELECTOR).map((action) =>
+                Object.freeze({
+                  elementId: action.id,
+                  cost: action.cost,
+                  // Which binding of this control the offer belongs to. The game rebinds an action
+                  // every time it draws it, and a superseded closure keeps working, so recording the
+                  // generation here is what lets the executor refuse one from an older draw.
+                  generation: controls.resolve(action.id)?.generation ?? 0,
+                }),
+              ),
+            );
+            drawn = Object.freeze(
+              includeGranted
+                ? {
+                    offered,
+                    granted: Object.freeze(
+                      new Set(
+                        drawnActions
+                          .read(GRANTED_TECH_SELECTOR)
+                          .map((action) => action.id),
+                      ),
+                    ) as ReadonlySet<string>,
+                  }
+                : { offered },
+            );
+          },
+        });
+      } catch (error) {
+        reportUnavailable(`research offer discovery failed: ${String(error)}`);
+        return undefined;
+      }
       if (result.outcome.status !== "succeeded" || drawn === undefined) {
         // A catalog that could not be read is not a catalog: acting on an earlier offer set would
         // spend on a technology the game may already have granted.
+        if (
+          result.outcome.status !== "succeeded" &&
+          (result.outcome.failure.code === "game-state-not-captured" ||
+            result.outcome.failure.code === "unknown-player-tab")
+        ) {
+          // A fresh game may sample demand before it has selected any tabs; the current catalog
+          // stays absent when settings or settings.civTabs has not initialized, while the discovery
+          // refusal remains available in its own diagnostics.
+          return undefined;
+        }
         reportUnavailable(
           result.outcome.status === "succeeded"
             ? "the research panel was drawn but read nothing"

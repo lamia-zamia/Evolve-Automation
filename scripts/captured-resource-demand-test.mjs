@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 
+import { calculateArpaStorageTargetCosts } from "../src/domain/economy/storage/storage-requirements.ts";
 import { createCapturedResourceDemand } from "../src/adapters/evolve/economy/resources/captured-resource-demand.ts";
 import { actionPrice } from "./test-support/action-price.mjs";
 
@@ -690,10 +691,10 @@ for (const [missionId, completionTech, completionLevel] of [
   assert.equal(sample.isDemanded("Stone"), false);
 }
 
-// Research demand uses the captured pre-MAD gate: an ordinary fresh run uses the ordinary
-// research setting, while a post-MAD run uses the separate Space+ setting.
+// Research demand uses the captured pre-MAD gate and reserves every resource in an affordable
+// current offer: an ordinary fresh run uses the ordinary setting, while post-MAD uses Space+.
 {
-  const demand = (tech) =>
+  const demand = (tech, settings) =>
     createCapturedResourceDemand({
       rootState: {
         readRoot: () => ({
@@ -701,6 +702,7 @@ for (const [missionId, completionTech, completionLevel] of [
           tech,
           resource: {
             Knowledge: { amount: 100, max: 500, stackable: false },
+            Polymer: { amount: 50, max: 500, stackable: true },
           },
         }),
       },
@@ -708,15 +710,24 @@ for (const [missionId, completionTech, completionLevel] of [
         readReservations: () => ({ targets: [], unavailable: false }),
       },
       readOfferedTechs: () => [
-        { elementId: "tech-stonework", cost: { Knowledge: 100 } },
+        {
+          elementId: "tech-polymer-process",
+          cost: { Knowledge: 100, Polymer: 50 },
+        },
       ],
-      readSettings: () => ({
-        researchRequest: true,
-        researchRequestSpace: false,
-      }),
+      readSettings: () => settings,
     }).sample();
-  assert.equal(demand({}).requestedQuantity("Knowledge"), 100);
-  assert.equal(demand({ mad: 1 }).requestedQuantity("Knowledge"), 0);
+  const ordinary = demand({}, { researchRequest: true });
+  assert.equal(ordinary.requestedQuantity("Knowledge"), 100);
+  assert.equal(ordinary.requestedQuantity("Polymer"), 50);
+  const postMadWithoutSpace = demand({ mad: 1 }, { researchRequest: true });
+  assert.equal(postMadWithoutSpace.requestedQuantity("Knowledge"), 0);
+  const space = demand(
+    { mad: 1 },
+    { researchRequest: true, researchRequestSpace: true },
+  );
+  assert.equal(space.requestedQuantity("Knowledge"), 100);
+  assert.equal(space.requestedQuantity("Polymer"), 50);
 }
 
 // True Path and sludge races leave the early-game window at high_tech 7, while the special
@@ -1311,16 +1322,15 @@ for (const [missionId, completionTech, completionLevel] of [
   assert.equal(sample.storageRequired("Alloy"), 669.5);
 }
 
-// A currently offered, per-project enabled A.R.P.A. entry contributes its one-percent price even
-// with the global action gate off, matching the old storage candidate filter. Disabled projects
-// are ignored, and a project absent from the current catalog cannot reserve capacity.
+// Storage scales the drawn one-percent A.R.P.A. price to the same effective step the old project
+// updater exposed. Per-project enablement still contributes with the global action gate off.
 {
   const sample = createCapturedResourceDemand({
     rootState: {
       readRoot: () => ({
         race: {},
         resource: {
-          Iron: { amount: 0, max: 100, stackable: true },
+          Iron: { amount: 0, max: 1000, stackable: true },
         },
       }),
     },
@@ -1329,8 +1339,11 @@ for (const [missionId, completionTech, completionLevel] of [
     },
     readSettings: () => ({
       autoARPA: false,
+      arpaStep: 10,
+      storageAssignExtra: true,
       arpa_enabled: true,
       arpa_disabled: false,
+      arpa_missing: true,
     }),
     readProjects: () => [
       {
@@ -1338,7 +1351,7 @@ for (const [missionId, completionTech, completionLevel] of [
         projectId: "enabled",
         rank: 0,
         progress: 0,
-        cost: { Iron: 600 },
+        cost: { Iron: 100 },
         generation: 1,
       },
       {
@@ -1352,7 +1365,173 @@ for (const [missionId, completionTech, completionLevel] of [
       // Locked projects are absent from the game's current offered catalog.
     ],
   }).sample();
-  assert.equal(sample.storageRequired("Iron"), 618);
+  assert.equal(sample.storageRequired("Iron"), 1030);
+}
+
+// The old updater floors the selected step and keeps one step even at the last fraction of a
+// project or when storage cannot hold one percent. Capacity across all priced resources limits
+// normal targets; a trigger target instead asks for the remaining project up to 100%.
+{
+  const resources = (maxima) =>
+    Object.entries(maxima).map(([id, maxQuantity]) => ({
+      id,
+      maxQuantity,
+      maxCost: 0,
+      storageRequired: 1,
+      hasStorage: true,
+      autoSellEnabled: false,
+      autoSellRatio: 0,
+    }));
+  const targetCosts = ({
+    perPercentCosts,
+    progress = 0,
+    stepPercent = 10,
+    trigger = false,
+    maxima,
+  }) =>
+    Object.fromEntries(
+      calculateArpaStorageTargetCosts({
+        perPercentCosts: Object.entries(perPercentCosts).map(
+          ([resourceId, amount]) => ({ resourceId, amount }),
+        ),
+        progress,
+        stepPercent,
+        isTriggerTarget: trigger,
+        resources: resources(maxima),
+      }).map(({ resourceId, amount }) => [resourceId, amount]),
+    );
+
+  assert.deepEqual(
+    targetCosts({
+      perPercentCosts: { Iron: 100 },
+      stepPercent: 1,
+      maxima: { Iron: 1000 },
+    }),
+    { Iron: 100 },
+  );
+  assert.deepEqual(
+    targetCosts({
+      perPercentCosts: { Iron: 100 },
+      progress: 99.9,
+      maxima: { Iron: 1000 },
+    }),
+    { Iron: 100 },
+  );
+  assert.deepEqual(
+    targetCosts({
+      perPercentCosts: { Iron: 100 },
+      maxima: { Iron: 350 },
+    }),
+    { Iron: 300 },
+  );
+  assert.deepEqual(
+    targetCosts({
+      perPercentCosts: { Iron: 100 },
+      maxima: { Iron: 50 },
+    }),
+    { Iron: 100 },
+  );
+  assert.deepEqual(
+    targetCosts({
+      perPercentCosts: { Iron: 100, Polymer: 20 },
+      maxima: { Iron: 800, Polymer: 50 },
+    }),
+    { Iron: 200, Polymer: 40 },
+  );
+  assert.deepEqual(
+    targetCosts({
+      perPercentCosts: { Iron: 100 },
+      progress: 20,
+      trigger: true,
+      maxima: { Iron: 10000 },
+    }),
+    { Iron: 8000 },
+  );
+}
+
+// Storage carries the capacity-clamped effective cost into the existing 3% buffer and keeps the
+// legacy one-step floor visible through maxCost even when that exceeds current storage capacity.
+{
+  const run = (max, progress = 0) =>
+    createCapturedResourceDemand({
+      rootState: {
+        readRoot: () => ({
+          race: {},
+          resource: {
+            Iron: { amount: 0, max, stackable: true },
+          },
+        }),
+      },
+      reservations: {
+        readReservations: () => ({ targets: [], unavailable: false }),
+      },
+      readSettings: () => ({
+        arpaStep: 10,
+        storageAssignExtra: true,
+        arpa_lhc: true,
+      }),
+      readProjects: () => [
+        {
+          elementId: "arpalhc",
+          projectId: "lhc",
+          rank: 0,
+          progress,
+          cost: { Iron: 100 },
+          generation: 1,
+        },
+      ],
+    }).sample();
+  assert.equal(run(350).maxCost?.("Iron"), 300);
+  assert.equal(run(350).storageRequired("Iron"), 309);
+  assert.equal(run(50).maxCost?.("Iron"), 100);
+  // Stackable resources keep the full requirement even when the one-step cost exceeds their
+  // current capacity; the 3% buffer therefore remains visible.
+  assert.equal(run(50).storageRequired("Iron"), 103);
+  assert.equal(run(1000, 99.9).storageRequired("Iron"), 103);
+}
+
+// A matching active trigger gets the whole remaining project, still limited by storage capacity.
+{
+  const sample = createCapturedResourceDemand({
+    rootState: {
+      readRoot: () => ({
+        race: {},
+        resource: { Iron: { amount: 0, max: 10000, stackable: true } },
+      }),
+    },
+    reservations: {
+      readReservations: () => ({ targets: [], unavailable: false }),
+    },
+    readSettings: () => ({
+      arpaStep: 10,
+      storageAssignExtra: true,
+      arpa_lhc: true,
+    }),
+    triggers: {
+      read: () => [
+        {
+          actionId: "arpalhc",
+          actionType: "arpa",
+          cost: { Iron: 100 },
+          projectId: "lhc",
+          steps: 80,
+          progress: 20,
+          generation: 1,
+        },
+      ],
+    },
+    readProjects: () => [
+      {
+        elementId: "arpalhc",
+        projectId: "lhc",
+        rank: 0,
+        progress: 20,
+        cost: { Iron: 100 },
+        generation: 1,
+      },
+    ],
+  }).sample();
+  assert.equal(sample.storageRequired("Iron"), 8240);
 }
 
 // Outer-fleet capacity uses expandability and the old non-ignore priority gate, not the

@@ -32,6 +32,7 @@
  */
 
 import {
+  calculateArpaStorageTargetCosts,
   planStorageRequirements,
   storageRequirementScopeKey,
 } from "../../../../domain/economy/storage/storage-requirements.ts";
@@ -1212,8 +1213,10 @@ export function createCapturedResourceDemand(
       const settingsValue = dependencies.readSettings();
       const settings = isRecord(settingsValue) ? settingsValue : {};
       const fleet = dependencies.fleet?.read();
+      const capturedTriggerTargets = dependencies.triggers?.read() ?? [];
+      const storageResources = readStorageResources(resources, root, settings);
       const triggerTargets = Object.freeze(
-        (dependencies.triggers?.read() ?? []).map((target) =>
+        capturedTriggerTargets.map((target) =>
           Object.freeze({
             // A project trigger reserves the whole remaining project, so it takes the same
             // doubling the pure planner gives any part-built project target.
@@ -1467,7 +1470,17 @@ export function createCapturedResourceDemand(
       const projectStorageTargets = Object.freeze(
         projects.flatMap((project) => {
           if (settings[`arpa_${project.projectId}`] !== true) return [];
-          const costs = toCosts(project.cost);
+          const costs = calculateArpaStorageTargetCosts({
+            perPercentCosts: toCosts(project.cost),
+            progress: project.progress,
+            stepPercent: finite(settings["arpaStep"]) ?? 5,
+            isTriggerTarget: capturedTriggerTargets.some(
+              (target) =>
+                target.actionType === "arpa" &&
+                target.actionId === project.elementId,
+            ),
+            resources: storageResources,
+          });
           return costs.length === 0 ? [] : [Object.freeze({ costs })];
         }),
       );
@@ -1606,7 +1619,7 @@ export function createCapturedResourceDemand(
           reservedTargets: Object.freeze([]),
           buildCandidates: Object.freeze([]),
         }),
-        resources: readStorageResources(resources, root, settings),
+        resources: storageResources,
         inflationMoney,
         retirementGraphene,
       });

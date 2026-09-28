@@ -912,6 +912,9 @@ export function startCapturedRuntime({
     controls: pageCapture.controls,
     getDocument: () => document,
   });
+  const ensureDemandResearchObservation = () => {
+    progression.sampleOfferedTechs();
+  };
   // The trigger conditions read what something else is accumulating, which needs the demand
   // commitments without the trigger targets. Sampling the cycle's own demand from a condition
   // would recurse through the trigger sampling it pulls in, so this second plan simply leaves
@@ -930,8 +933,13 @@ export function startCapturedRuntime({
     fleet: fleetDemand,
   });
   let triggerDemandThisCycle: CapturedDemandSample | undefined;
-  const readTriggerDemand = () =>
-    (triggerDemandThisCycle ??= triggerDemand.sample());
+  const readTriggerDemand = () => {
+    if (triggerDemandThisCycle === undefined) {
+      ensureDemandResearchObservation();
+      triggerDemandThisCycle = triggerDemand.sample();
+    }
+    return triggerDemandThisCycle;
+  };
   const conditionContextReader = createCapturedConditionContextReader({
     costs: buildCosts,
     readOfferedTechs: progression.sampleOfferedTechs,
@@ -965,7 +973,7 @@ export function startCapturedRuntime({
             ensureCivicControls,
             ensureBuildControls: progression.ensureBuildControls,
           });
-          return triggerDemand.sample();
+          return readTriggerDemand();
         },
       },
     ).context;
@@ -1108,15 +1116,7 @@ export function startCapturedRuntime({
   let demandThisCycle: CapturedDemandSample | undefined;
   readDemand = () => {
     if (demandThisCycle === undefined) {
-      const currentSettings = settingsStore.readRaw();
-      if (
-        isEnabled(currentSettings, "autoStorage") ||
-        isEnabled(currentSettings, "autoResearch")
-      ) {
-        // This is the observation phase for Storage and every later demand consumer when Storage
-        // or Research is active. Research reuses the held offer set after its action-order position.
-        progression.sampleOfferedTechs();
-      }
+      ensureDemandResearchObservation();
       demandThisCycle = demand.sample();
     }
     return demandThisCycle;

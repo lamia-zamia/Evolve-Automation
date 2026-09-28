@@ -3,6 +3,160 @@ import { startCapturedRuntime } from "../src/bootstrap/captured-runtime-control.
 import { createGameDrawnActionsReader } from "../src/adapters/browser/game-drawn-actions.ts";
 import { createTestDocument, element } from "./dom-fixture.mjs";
 
+function applyResearchDrawnAttributes(node, values) {
+  const attributes = Object.entries(values).map(([name, value]) => ({
+    name,
+    value: String(value),
+  }));
+  attributes.get = (name) =>
+    attributes.find((attribute) => attribute.name === name)?.value;
+  node.attributes = attributes;
+}
+
+function runDemandSampleScenario(settings, spaceEra = false) {
+  const invoked = [];
+  const root = {
+    race: {},
+    tech: { mad: spaceEra ? 1 : 0, trade: true },
+    civic: {},
+    settings: {
+      civTabs: 3,
+      spaceTabs: 0,
+      showMarket: true,
+      showResearch: true,
+    },
+    city: {
+      farm: { count: 0 },
+      market: { qty: 1, mtrade: 1, trade: 0 },
+    },
+    queue: { queue: [] },
+    resource: {
+      Money: { amount: 1000, max: 10000, display: true, diff: 0, value: 1 },
+      Food: {
+        amount: 0,
+        max: 100,
+        display: true,
+        diff: 0,
+        value: 1,
+        trade: 0,
+        stackable: true,
+      },
+      Polymer: { amount: 100, max: 1000, display: true, diff: 0 },
+    },
+  };
+  const market = root.city.market;
+  const documentRoot = element("div", { id: "runtime-root" });
+  const researchPanel = element("div", { id: "tech" });
+  const row = element("div");
+  row.classList.add("action");
+  Object.defineProperty(row, "id", { value: "tech-polymer-reserve" });
+  applyResearchDrawnAttributes(row, {
+    id: "tech-polymer-reserve",
+    class: "action",
+  });
+  const price = element("button");
+  applyResearchDrawnAttributes(price, {
+    class: "button res-Polymer",
+    "data-polymer": 100,
+  });
+  row.appendChild(price);
+  researchPanel.appendChild(row);
+  documentRoot.appendChild(researchPanel);
+  const document = createTestDocument(documentRoot);
+  let researchOfferReads = 0;
+  const queryAll = document.querySelectorAll;
+  document.querySelectorAll = (selector) => {
+    if (selector === "#tech .action") researchOfferReads += 1;
+    return queryAll(selector);
+  };
+  const handles = new Map(
+    [
+      ["buildQueue", ["setData"]],
+      ["city-farm", ["action"]],
+      ["market-qty", []],
+      ["market-Food", ["autoBuy", "autoSell", "zero", "purchase", "sell"]],
+      ["tech-polymer-reserve", ["action"]],
+    ].map(([elementId, methods]) => [
+      elementId,
+      {
+        elementId,
+        generation: 1,
+        methods,
+        ...(elementId === "market-qty" ? { data: market } : {}),
+      },
+    ]),
+  );
+  const pageCapture = {
+    isComplete: () => true,
+    rootState: {
+      readRoot: () => root,
+      isReactivitySuppressed: () => false,
+      subscribeRootReplaced: () => () => {},
+    },
+    controls: {
+      resolve: (id) => handles.get(id),
+      invoke: (handle, method) => {
+        invoked.push(`${handle.elementId}.${method}`);
+        if (handle.elementId === "buildQueue" && method === "setData") {
+          return { ok: true, value: { "data-Money": 10 } };
+        }
+        if (handle.elementId === "city-farm" && method === "action") {
+          root.city.farm.count += 1;
+        }
+        return { ok: true, value: undefined };
+      },
+      capturedElementIds: () => [...handles.keys()],
+    },
+    keyState: { readPressed: () => false },
+    controlUsage: { readUsage: () => [] },
+    periods: {
+      subscribe(next) {
+        pageCaptureCycle = next;
+        return () => {};
+      },
+    },
+    mountSuppression: { available: false, withoutMounting: () => undefined },
+    uninstall: () => {},
+  };
+  let pageCaptureCycle;
+  const errors = [];
+  const stop = startCapturedRuntime({
+    pageCapture,
+    document,
+    mouseEvent: class {},
+    storage: {
+      getItem: () =>
+        JSON.stringify({
+          masterScriptToggle: true,
+          tickRate: 1,
+          autoStorage: false,
+          autoResearch: false,
+          researchRequest: true,
+          researchRequestSpace: false,
+          ...settings,
+        }),
+      setItem: () => {},
+    },
+    logError: (message) => errors.push(message),
+  });
+  pageCaptureCycle({ periods: 1 });
+  stop();
+  return { invoked, researchOfferReads, errors, root };
+}
+
+function assertDemandScenarioErrors(errors) {
+  // This focused fixture intentionally has no Civilization-tab control, so current Storage build
+  // discovery is unavailable. Research discovery must still succeed and demand must continue.
+  assert.ok(
+    errors.every(
+      (message) =>
+        message ===
+        "progression skipped building-unlocks city: no captured control for #mainColumn div.content",
+    ),
+    `demand scenario had an unexpected failure: ${JSON.stringify(errors)}`,
+  );
+}
+
 // The captured runtime gates its cycles on the script's own `tickRate`, which defaults to four game
 // periods. These fixtures therefore deliver a four-period batch per intended cycle; the gate itself
 // is exercised separately at the end of this file.
@@ -2338,6 +2492,79 @@ function runCombatRuntime(autoFight) {
     `Storage did not allocate Polymer capacity from the current offer: ${JSON.stringify(storageCalls)}`,
   );
   assert.deepEqual(researchActions, ["tech-polymer-heavy"]);
+}
+
+{
+  const market = runDemandSampleScenario({ autoMarket: true, buyFood: true });
+  assert.equal(
+    market.researchOfferReads,
+    1,
+    `a Market demand sample must include the current affordable Polymer technology: ${JSON.stringify(market)}`,
+  );
+  assertDemandScenarioErrors(market.errors);
+}
+
+{
+  const trigger = runDemandSampleScenario({
+    autoTrigger: true,
+    triggers: [
+      {
+        priority: 0,
+        requirementType: "ResourceMaxCost",
+        requirementId: "Polymer",
+        requirementCount: 100,
+        actionType: "build",
+        actionId: "city-farm",
+        actionCount: 1,
+      },
+    ],
+  });
+  assert.equal(trigger.researchOfferReads, 1);
+  assert.ok(
+    trigger.invoked.includes("city-farm.action"),
+    "a demand-based build trigger must see the current research reservation without a tech operand",
+  );
+  assertDemandScenarioErrors(trigger.errors);
+}
+
+{
+  const combined = runDemandSampleScenario({
+    autoMarket: true,
+    buyFood: true,
+    autoTrigger: true,
+    triggers: [
+      {
+        priority: 0,
+        requirementType: "ResourceMaxCost",
+        requirementId: "Polymer",
+        requirementCount: 100,
+        actionType: "build",
+        actionId: "city-farm",
+        actionCount: 1,
+      },
+    ],
+  });
+  assert.equal(
+    combined.researchOfferReads,
+    1,
+    "Market and trigger demand consumers must share one current offer observation",
+  );
+  assert.ok(combined.invoked.includes("city-farm.action"));
+  assertDemandScenarioErrors(combined.errors);
+}
+
+{
+  const spaceMarket = runDemandSampleScenario(
+    {
+      autoMarket: true,
+      buyFood: true,
+      researchRequest: false,
+      researchRequestSpace: true,
+    },
+    true,
+  );
+  assert.equal(spaceMarket.researchOfferReads, 1);
+  assertDemandScenarioErrors(spaceMarket.errors);
 }
 
 console.log("captured-runtime-control ok");
