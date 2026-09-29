@@ -488,34 +488,68 @@ export const CAPTURED_TRAIT_BOOST_RESOURCES: readonly {
   Object.freeze({ id: "Aerographene", label: "Aerographene" }),
 ]);
 
-/** Wish options (minor): `wish_for` composed over each wish label. */
+/** Wish options and their `src/races.js` Vue methods, keyed by the settings id. */
 export const CAPTURED_TRAIT_WISH_MINOR: readonly {
   readonly id: string;
   readonly label: string;
+  readonly method: string;
 }[] = Object.freeze([
-  Object.freeze({ id: "Know", label: "Wish for Knowledge" }),
-  Object.freeze({ id: "Money", label: "Wish for Money" }),
-  Object.freeze({ id: "Res", label: "Wish for Resources" }),
-  Object.freeze({ id: "Love", label: "Wish for Love" }),
-  Object.freeze({ id: "Excite", label: "Wish for Excitement" }),
-  Object.freeze({ id: "Fame", label: "Wish for Fame" }),
-  Object.freeze({ id: "Strength", label: "Wish for Strength" }),
-  Object.freeze({ id: "Influence", label: "Wish for Influence" }),
+  Object.freeze({ id: "Know", label: "Wish for Knowledge", method: "know" }),
+  Object.freeze({ id: "Money", label: "Wish for Money", method: "money" }),
+  Object.freeze({ id: "Res", label: "Wish for Resources", method: "res" }),
+  Object.freeze({ id: "Love", label: "Wish for Love", method: "love" }),
+  Object.freeze({
+    id: "Excite",
+    label: "Wish for Excitement",
+    method: "excite",
+  }),
+  Object.freeze({ id: "Fame", label: "Wish for Fame", method: "famous" }),
+  Object.freeze({
+    id: "Strength",
+    label: "Wish for Strength",
+    method: "strength",
+  }),
+  Object.freeze({
+    id: "Influence",
+    label: "Wish for Influence",
+    method: "influence",
+  }),
 ]);
 
-/** Wish options (major): `wish_for` composed over each wish label. */
+/** Major wishes use the method names bound by `majorWish()` in `src/races.js`. */
 export const CAPTURED_TRAIT_WISH_MAJOR: readonly {
   readonly id: string;
   readonly label: string;
+  readonly method: string;
 }[] = Object.freeze([
-  Object.freeze({ id: "BigMoney", label: "Wish for Fat Stacks of Cash" }),
-  Object.freeze({ id: "BigRes", label: "Wish for Lots of Resources" }),
-  Object.freeze({ id: "Plasmid", label: "Wish for Plasmids" }),
-  Object.freeze({ id: "Power", label: "Wish for Power" }),
-  Object.freeze({ id: "Adoration", label: "Wish for Adoration" }),
-  Object.freeze({ id: "Thrill", label: "Wish for Thrills" }),
-  Object.freeze({ id: "Peace", label: "Wish for Peace" }),
-  Object.freeze({ id: "Greatness", label: "Wish for Greatness" }),
+  Object.freeze({
+    id: "BigMoney",
+    label: "Wish for Fat Stacks of Cash",
+    method: "money",
+  }),
+  Object.freeze({
+    id: "BigRes",
+    label: "Wish for Lots of Resources",
+    method: "res",
+  }),
+  Object.freeze({
+    id: "Plasmid",
+    label: "Wish for Plasmids",
+    method: "plasmid",
+  }),
+  Object.freeze({ id: "Power", label: "Wish for Power", method: "power" }),
+  Object.freeze({
+    id: "Adoration",
+    label: "Wish for Adoration",
+    method: "adoration",
+  }),
+  Object.freeze({ id: "Thrill", label: "Wish for Thrills", method: "thrill" }),
+  Object.freeze({ id: "Peace", label: "Wish for Peace", method: "peace" }),
+  Object.freeze({
+    id: "Greatness",
+    label: "Wish for Greatness",
+    method: "greatness",
+  }),
 ]);
 
 /** `neg_roll_traits` in `src/races.js`: traits offering reset toggles. */
@@ -631,39 +665,46 @@ export const CAPTURED_TRAIT_RACE_TYPE: Readonly<Record<string, string>> =
 /** Label for the mimic-genus `none` option. */
 export const CAPTURED_TRAIT_GENUS_NONE_LABEL = "None";
 
-/** Ocular power rows in `ocularPowerData` order. */
+/** Ocular rows in the order rendered by `ocularPower()` in `src/races.js`. */
 export const CAPTURED_TRAIT_OCULAR: readonly {
   readonly id: string;
+  readonly stateKey: string;
   readonly label: string;
   readonly hint: string;
 }[] = Object.freeze([
   Object.freeze({
     id: "disintegration",
+    stateKey: "d",
     label: "Disintegration",
     hint: "Disintegration rays increase your combat power by %0%.",
   }),
   Object.freeze({
     id: "petrification",
+    stateKey: "p",
     label: "Petrification",
     hint: "Turn enemies you defeat into %0.",
   }),
   Object.freeze({
     id: "wound",
+    stateKey: "w",
     label: "Wound",
     hint: "Wound prey, improve hunting by %0%.",
   }),
   Object.freeze({
     id: "telekinesis",
+    stateKey: "t",
     label: "Telekinesis",
     hint: "Use your telekinetic powers to improve hard labor jobs by %0%.",
   }),
   Object.freeze({
     id: "fear",
+    stateKey: "f",
     label: "Fear",
     hint: "Scare away potential enemies.",
   }),
   Object.freeze({
     id: "charm",
+    stateKey: "c",
     label: "Charm",
     hint: "Get %0% better trade deals.",
   }),

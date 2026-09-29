@@ -23,7 +23,7 @@ export interface ResourceView {
   readonly amount: number;
   /** The game stores an uncapped resource as -1. */
   readonly max: number;
-  /** `resource.diff` — net change per game tick. */
+  /** `resource.diff` — net change per second, as calculated by the game. */
   readonly rateOfChange: number;
   /** `amount / max`, or 0 when the resource is uncapped or has no ceiling yet. */
   readonly storageRatio: number;

@@ -26984,23 +26984,55 @@
     Object.freeze({ id: "Super_Fuel", label: "Super Fuel" }),
     Object.freeze({ id: "Aerographene", label: "Aerographene" })
   ]), CAPTURED_TRAIT_WISH_MINOR = Object.freeze([
-    Object.freeze({ id: "Know", label: "Wish for Knowledge" }),
-    Object.freeze({ id: "Money", label: "Wish for Money" }),
-    Object.freeze({ id: "Res", label: "Wish for Resources" }),
-    Object.freeze({ id: "Love", label: "Wish for Love" }),
-    Object.freeze({ id: "Excite", label: "Wish for Excitement" }),
-    Object.freeze({ id: "Fame", label: "Wish for Fame" }),
-    Object.freeze({ id: "Strength", label: "Wish for Strength" }),
-    Object.freeze({ id: "Influence", label: "Wish for Influence" })
+    Object.freeze({ id: "Know", label: "Wish for Knowledge", method: "know" }),
+    Object.freeze({ id: "Money", label: "Wish for Money", method: "money" }),
+    Object.freeze({ id: "Res", label: "Wish for Resources", method: "res" }),
+    Object.freeze({ id: "Love", label: "Wish for Love", method: "love" }),
+    Object.freeze({
+      id: "Excite",
+      label: "Wish for Excitement",
+      method: "excite"
+    }),
+    Object.freeze({ id: "Fame", label: "Wish for Fame", method: "famous" }),
+    Object.freeze({
+      id: "Strength",
+      label: "Wish for Strength",
+      method: "strength"
+    }),
+    Object.freeze({
+      id: "Influence",
+      label: "Wish for Influence",
+      method: "influence"
+    })
   ]), CAPTURED_TRAIT_WISH_MAJOR = Object.freeze([
-    Object.freeze({ id: "BigMoney", label: "Wish for Fat Stacks of Cash" }),
-    Object.freeze({ id: "BigRes", label: "Wish for Lots of Resources" }),
-    Object.freeze({ id: "Plasmid", label: "Wish for Plasmids" }),
-    Object.freeze({ id: "Power", label: "Wish for Power" }),
-    Object.freeze({ id: "Adoration", label: "Wish for Adoration" }),
-    Object.freeze({ id: "Thrill", label: "Wish for Thrills" }),
-    Object.freeze({ id: "Peace", label: "Wish for Peace" }),
-    Object.freeze({ id: "Greatness", label: "Wish for Greatness" })
+    Object.freeze({
+      id: "BigMoney",
+      label: "Wish for Fat Stacks of Cash",
+      method: "money"
+    }),
+    Object.freeze({
+      id: "BigRes",
+      label: "Wish for Lots of Resources",
+      method: "res"
+    }),
+    Object.freeze({
+      id: "Plasmid",
+      label: "Wish for Plasmids",
+      method: "plasmid"
+    }),
+    Object.freeze({ id: "Power", label: "Wish for Power", method: "power" }),
+    Object.freeze({
+      id: "Adoration",
+      label: "Wish for Adoration",
+      method: "adoration"
+    }),
+    Object.freeze({ id: "Thrill", label: "Wish for Thrills", method: "thrill" }),
+    Object.freeze({ id: "Peace", label: "Wish for Peace", method: "peace" }),
+    Object.freeze({
+      id: "Greatness",
+      label: "Wish for Greatness",
+      method: "greatness"
+    })
   ]), CAPTURED_TRAIT_NEG_ROLL = /* @__PURE__ */ new Set([
     "angry",
     "arrogant",
@@ -27104,31 +27136,37 @@
   }), CAPTURED_TRAIT_GENUS_NONE_LABEL = "None", CAPTURED_TRAIT_OCULAR = Object.freeze([
     Object.freeze({
       id: "disintegration",
+      stateKey: "d",
       label: "Disintegration",
       hint: "Disintegration rays increase your combat power by %0%."
     }),
     Object.freeze({
       id: "petrification",
+      stateKey: "p",
       label: "Petrification",
       hint: "Turn enemies you defeat into %0."
     }),
     Object.freeze({
       id: "wound",
+      stateKey: "w",
       label: "Wound",
       hint: "Wound prey, improve hunting by %0%."
     }),
     Object.freeze({
       id: "telekinesis",
+      stateKey: "t",
       label: "Telekinesis",
       hint: "Use your telekinetic powers to improve hard labor jobs by %0%."
     }),
     Object.freeze({
       id: "fear",
+      stateKey: "f",
       label: "Fear",
       hint: "Scare away potential enemies."
     }),
     Object.freeze({
       id: "charm",
+      stateKey: "c",
       label: "Charm",
       hint: "Get %0% better trade deals."
     })
@@ -45745,6 +45783,772 @@ Only continue if you trust the source. Injected code:
     return Object.freeze({ read, submit });
   }
 
+  // src/adapters/evolve/traits/captured-shapeshift.ts
+  var CAPTURED_SHAPESHIFT_CONTROL = "sshifter";
+  function capturedShapeshiftRace(rootState) {
+    return requireRecord(
+      readProperty(rootState.readRoot(), "race"),
+      "global.race"
+    );
+  }
+  function createCapturedShapeshiftAutomation(dependencies) {
+    let reader = Object.freeze({
+      read() {
+        let race = capturedShapeshiftRace(dependencies.rootState), settings = requireRecord(dependencies.readSettings(), "settings"), currentGenus = readProperty(race, "ss_genus");
+        return Object.freeze({
+          isShapeshifter: !!readProperty(race, "shapeshifter"),
+          shifterGenus: requireString(
+            readProperty(settings, "shifterGenus"),
+            "settings.shifterGenus"
+          ),
+          currentGenus: typeof currentGenus == "string" ? currentGenus : null
+        });
+      }
+    }), controls2 = Object.freeze({
+      setShape(genus) {
+        if (!dependencies.ensureControls()) return !1;
+        let handle = dependencies.controls.resolve(CAPTURED_SHAPESHIFT_CONTROL);
+        return handle === void 0 || !handle.methods.includes("setShape") ? !1 : dependencies.controls.invoke(handle, "setShape", [genus]).ok;
+      }
+    }), executor = Object.freeze({
+      execute(targetGenus) {
+        if (targetGenus === null) return SUCCEEDED;
+        let race = capturedShapeshiftRace(dependencies.rootState);
+        return readProperty(race, "shapeshifter") ? readProperty(race, "ss_genus") === targetGenus ? stale(
+          "shape-already-selected",
+          "target shape is already active"
+        ) : (controls2.setShape(targetGenus), readProperty(
+          capturedShapeshiftRace(dependencies.rootState),
+          "ss_genus"
+        ) === targetGenus ? SUCCEEDED : stale(
+          "shapeshift-postcondition-failed",
+          "the game did not apply the requested shape"
+        )) : stale("shapeshift-locked", "shapeshifting became unavailable");
+      }
+    });
+    return Object.freeze({ reader, controls: controls2, executor });
+  }
+
+  // src/domain/traits/psychic.ts
+  var POWER_COSTS = Object.freeze({
+    murder: [10, 8],
+    boost: [75, 60],
+    assault: [45, 36],
+    profit: [65, 52],
+    mind_break: [80, 64],
+    stun: [100, 80]
+  });
+  function psychicPowerCost(power, technologyLevel) {
+    return POWER_COSTS[power][technologyLevel >= 5 ? 1 : 0];
+  }
+  function hasRoom(resource) {
+    return resource.current + resource.income * 1.5 * 300 < resource.maximum;
+  }
+  function psychicDecision(input, power, boostedResourceId = null) {
+    return Object.freeze({
+      kind: "use-psychic-power",
+      power,
+      energyCost: psychicPowerCost(power, input.technologyLevel),
+      expectedEnergy: input.energyCurrent,
+      expectedTechnologyLevel: input.technologyLevel,
+      boostedResourceId
+    });
+  }
+  function canAfford2(input, power) {
+    return input.energyCurrent >= psychicPowerCost(power, input.technologyLevel);
+  }
+  function planPsychic(input) {
+    if (!input.available) return Object.freeze([]);
+    let decisions = [];
+    if ((input.mode === "murder" || input.mode !== "boost" && input.killCount < 10) && input.populationCurrent > 0 && canAfford2(input, "murder") && decisions.push(psychicDecision(input, "murder")), input.thrallAvailable && ((input.mode === "auto" || input.mode === "mind_break") && (input.thrallRate > 1 || input.thrallRate === 1 && input.thrallStorageRatio === 1) && canAfford2(input, "mind_break") && decisions.push(psychicDecision(input, "mind_break")), (input.mode === "auto" || input.mode === "stun") && input.thrallTechnologyLevel >= 2 && input.thrallStorageRatio < 1 && canAfford2(input, "stun") && decisions.push(psychicDecision(input, "stun"))), (input.mode === "auto" || input.mode === "profit") && input.technologyLevel >= 3 && input.money !== null && hasRoom(input.money) && !input.cashActive && canAfford2(input, "profit") && decisions.push(psychicDecision(input, "profit")), (input.mode === "auto" || input.mode === "boost") && !input.boostActive && canAfford2(input, "boost")) {
+      let boostedResourceId = null;
+      input.boostResourceMode === "auto" ? boostedResourceId = input.boostCandidates.filter(hasRoom).slice().sort((left, right) => right.income - left.income)[0]?.id ?? null : input.boostResourceMode && (boostedResourceId = input.boostResourceMode), boostedResourceId !== null && decisions.push(psychicDecision(input, "boost", boostedResourceId));
+    }
+    return (input.mode === "auto" || input.mode === "assault") && input.technologyLevel >= 2 && !input.assaultActive && canAfford2(input, "assault") && decisions.push(psychicDecision(input, "assault")), Object.freeze(decisions);
+  }
+
+  // src/adapters/evolve/traits/captured-psychic.ts
+  var CAPTURED_PSYCHIC_CONTROL_IDS = Object.freeze({
+    boostOptions: "psychicBoost",
+    murder: "psychicKill",
+    mindBreak: "psychicMindBreak",
+    stun: "psychicCapture",
+    profit: "psychicFinance",
+    boost: "psychicBoost",
+    assault: "psychicAssault"
+  }), CAPTURED_PSYCHIC_ACTION = Object.freeze({
+    murder: Object.freeze({
+      controlId: CAPTURED_PSYCHIC_CONTROL_IDS.murder,
+      method: "murder"
+    }),
+    mind_break: Object.freeze({
+      controlId: CAPTURED_PSYCHIC_CONTROL_IDS.mindBreak,
+      method: "breakMind"
+    }),
+    stun: Object.freeze({
+      controlId: CAPTURED_PSYCHIC_CONTROL_IDS.stun,
+      method: "stun"
+    }),
+    profit: Object.freeze({
+      controlId: CAPTURED_PSYCHIC_CONTROL_IDS.profit,
+      method: "boostVal"
+    }),
+    boost: Object.freeze({
+      controlId: CAPTURED_PSYCHIC_CONTROL_IDS.boost,
+      method: "boostVal"
+    }),
+    assault: Object.freeze({
+      controlId: CAPTURED_PSYCHIC_CONTROL_IDS.assault,
+      method: "boostVal"
+    })
+  });
+  function capturedPsychicEmptyInput() {
+    return Object.freeze({
+      available: !1,
+      mode: "none",
+      technologyLevel: 0,
+      killCount: 10,
+      energyCurrent: 0,
+      energyStorageRatio: 0,
+      populationCurrent: 0,
+      thrallAvailable: !1,
+      thrallTechnologyLevel: 0,
+      thrallRate: 0,
+      thrallStorageRatio: 0,
+      cashActive: !1,
+      boostActive: !1,
+      assaultActive: !1,
+      money: null,
+      boostResourceMode: "none",
+      boostCandidates: Object.freeze([])
+    });
+  }
+  function capturedPsychicTechnologyLevel(tech, key) {
+    let value = readProperty(tech, key);
+    return value == null || value === 0 ? 0 : finite(value) ?? 0;
+  }
+  function capturedPsychicRoom(root, id) {
+    let view = readCapturedResourceView(root, id);
+    if (!view.present) return null;
+    let amount = finite(view.amount), maximum = finite(view.max), income = finite(view.rateOfChange), ratio = finite(view.storageRatio);
+    return amount === void 0 || maximum === void 0 || income === void 0 || ratio === void 0 ? null : Object.freeze({ current: amount, amount, income, maximum, ratio });
+  }
+  function capturedPsychicEnergy(root) {
+    let view = readCapturedResourceView(root, "Energy"), amount = finite(view.amount), ratio = finite(view.storageRatio);
+    return view.present && amount !== void 0 && ratio !== void 0 ? Object.freeze({ amount, ratio }) : null;
+  }
+  function capturedPsychicRadioOptions(document) {
+    let querySelectorAll = readProperty(document, "querySelectorAll");
+    if (typeof querySelectorAll != "function") return Object.freeze([]);
+    let nodes;
+    try {
+      nodes = Reflect.apply(querySelectorAll, document, [
+        "#psyhscrolltarget input[type='radio']"
+      ]);
+    } catch {
+      return Object.freeze([]);
+    }
+    let length = finite(readProperty(nodes, "length"));
+    if (length === void 0 || !Number.isSafeInteger(length) || length < 0)
+      return Object.freeze([]);
+    let ids = [], seen = /* @__PURE__ */ new Set();
+    for (let index = 0; index < length; index += 1) {
+      let node = readProperty(nodes, String(index)), value = readProperty(node, "value");
+      typeof value == "string" && value.length > 0 && !seen.has(value) && (seen.add(value), ids.push(value));
+    }
+    return Object.freeze(ids);
+  }
+  function capturedPsychicCaptiveTotals(root) {
+    let city = readProperty(root, "city"), dwellers = readProperty(city, "surfaceDwellers"), housing = readProperty(city, "captive_housing");
+    if (!Array.isArray(dwellers) || !isRecord(housing)) return null;
+    let free = 0, jailed = 0;
+    for (let index = 0; index < dwellers.length; index += 1) {
+      let currentFree = finite(readProperty(housing, `race${index}`)), currentJailed = finite(readProperty(housing, `jailrace${index}`));
+      if (currentFree === void 0 || currentJailed === void 0) return null;
+      free += currentFree, jailed += currentJailed;
+    }
+    return Object.freeze({ free, jailed });
+  }
+  function capturedPsychicNightmareRank(root) {
+    return finite(
+      readProperty(
+        readProperty(
+          readProperty(readProperty(root, "stats"), "achieve"),
+          "nightmare"
+        ),
+        "mg"
+      )
+    ) ?? 0;
+  }
+  function capturedPsychicDurationFromRoot(root, power) {
+    let race = readProperty(root, "race"), psychicPowers = readProperty(race, "psychicPowers"), field = power === "profit" ? "cash" : power === "boost" ? "boostTime" : power === "assault" ? "assaultTime" : void 0;
+    return field === void 0 ? 0 : finite(readProperty(psychicPowers, field)) ?? 0;
+  }
+  function capturedPsychicPopulationAmount(root) {
+    let species = readProperty(readProperty(root, "race"), "species");
+    if (typeof species != "string") return 0;
+    let view = readCapturedResourceView(root, species);
+    return view.present ? finite(view.amount) ?? 0 : 0;
+  }
+  function capturedPsychicKillCount(root) {
+    return finite(readProperty(readProperty(root, "stats"), "psykill"));
+  }
+  function capturedPsychicDecisionMatches(left, right) {
+    return left.kind === right.kind && left.power === right.power && left.energyCost === right.energyCost && left.expectedEnergy === right.expectedEnergy && left.expectedTechnologyLevel === right.expectedTechnologyLevel && left.boostedResourceId === right.boostedResourceId;
+  }
+  function createCapturedPsychicAutomation(dependencies) {
+    let session = null;
+    function capturedPsychicGate() {
+      let settings = requireRecord(dependencies.readSettings(), "settings");
+      if (requireString(settings.psychicPower, "settings.psychicPower") === "none")
+        return session = null, !1;
+      let root = dependencies.rootState.readRoot(), race = readProperty(root, "race"), tech = readProperty(root, "tech"), technologyLevel = capturedPsychicTechnologyLevel(tech, "psychic"), energy = capturedPsychicEnergy(root);
+      return !readProperty(race, "psychic") || technologyLevel <= 0 || energy === null || energy.ratio < 1 ? (session = null, !1) : !0;
+    }
+    function capturedPsychicSamplePlan() {
+      if (!capturedPsychicGate()) return capturedPsychicEmptyInput();
+      if (!dependencies.ensureControls())
+        return session = null, capturedPsychicEmptyInput();
+      let root = dependencies.rootState.readRoot(), settings = requireRecord(dependencies.readSettings(), "settings"), race = requireRecord(readProperty(root, "race"), "global.race"), tech = readProperty(root, "tech"), technologyLevel = capturedPsychicTechnologyLevel(tech, "psychic"), energy = capturedPsychicEnergy(root), powers = readProperty(race, "psychicPowers");
+      if (energy === null || !isRecord(powers) || technologyLevel <= 0)
+        return session = null, capturedPsychicEmptyInput();
+      let mode = requireString(
+        settings.psychicPower,
+        "settings.psychicPower"
+      ), killCount = 10;
+      mode !== "boost" && mode !== "murder" && (killCount = capturedPsychicKillCount(root) ?? 10);
+      let species = readProperty(race, "species"), populationAmount = typeof species == "string" ? capturedPsychicRoom(root, species)?.amount ?? 0 : 0, thrallTechnologyLevel = capturedPsychicTechnologyLevel(
+        tech,
+        "psychicthrall"
+      ), thrallAvailable = !!(thrallTechnologyLevel > 0 && readProperty(tech, "unfathomable") && readProperty(race, "unfathomable")), thrall = thrallAvailable ? capturedPsychicRoom(root, "Thrall") : null, money = (mode === "auto" || mode === "profit") && technologyLevel >= 3 ? capturedPsychicRoom(root, "Money") : null, boostActive = !!readProperty(powers, "boostTime"), boostResourceMode = "none", boostCandidates = [];
+      if ((mode === "auto" || mode === "boost") && !boostActive && energy.amount >= (technologyLevel >= 5 ? 60 : 75) && (boostResourceMode = requireString(
+        settings.psychicBoostRes,
+        "settings.psychicBoostRes"
+      ), boostResourceMode === "auto"))
+        for (let id of capturedPsychicRadioOptions(
+          dependencies.getDocument()
+        )) {
+          let resource = capturedPsychicRoom(root, id);
+          resource === null || readProperty(readProperty(root, "resource"), id) === void 0 || !readProperty(
+            readProperty(readProperty(root, "resource"), id),
+            "display"
+          ) || boostCandidates.push(
+            Object.freeze({
+              id,
+              current: resource.current,
+              income: resource.income,
+              maximum: resource.maximum
+            })
+          );
+        }
+      let input = Object.freeze({
+        available: !0,
+        mode,
+        technologyLevel,
+        killCount,
+        energyCurrent: energy.amount,
+        energyStorageRatio: energy.ratio,
+        populationCurrent: populationAmount,
+        thrallAvailable: thrallAvailable && thrall !== null,
+        thrallTechnologyLevel,
+        thrallRate: thrall?.income ?? 0,
+        thrallStorageRatio: thrall?.ratio ?? 0,
+        cashActive: !!readProperty(powers, "cash"),
+        boostActive,
+        assaultActive: !!readProperty(powers, "assaultTime"),
+        money: money === null ? null : Object.freeze({
+          current: money.current,
+          income: money.income,
+          maximum: money.maximum
+        }),
+        boostResourceMode,
+        boostCandidates: Object.freeze(boostCandidates)
+      });
+      return session = Object.freeze({
+        input,
+        energyAmount: energy.amount,
+        populationAmount,
+        killCount: capturedPsychicKillCount(root),
+        duration: 72 * capturedPsychicNightmareRank(root),
+        captiveTotals: capturedPsychicCaptiveTotals(root)
+      }), input;
+    }
+    let reader = Object.freeze({
+      readGate: () => Object.freeze({ unlocked: capturedPsychicGate() }),
+      readPlan: capturedPsychicSamplePlan
+    }), controls2 = Object.freeze({
+      activate(psychicPowerAction) {
+        if (!dependencies.ensureControls()) return !1;
+        let action = CAPTURED_PSYCHIC_ACTION[psychicPowerAction.power], handle = dependencies.controls.resolve(action.controlId);
+        if (handle === void 0 || !handle.methods.includes(action.method))
+          return !1;
+        if (psychicPowerAction.power === "boost") {
+          let selected = psychicPowerAction.boostedResourceId;
+          if (selected == null) return !1;
+          let liveRoot = dependencies.rootState.readRoot(), currentBoostResource = readProperty(
+            readProperty(readProperty(liveRoot, "race"), "psychicPowers"),
+            "boost"
+          );
+          if (readProperty(currentBoostResource, "r") !== selected) {
+            let nodeList = readProperty(
+              dependencies.getDocument(),
+              "querySelectorAll"
+            );
+            if (typeof nodeList != "function") return !1;
+            let radios;
+            try {
+              radios = Reflect.apply(nodeList, dependencies.getDocument(), [
+                "#psyhscrolltarget input[type='radio']"
+              ]);
+            } catch {
+              return !1;
+            }
+            let length = finite(readProperty(radios, "length"));
+            if (length === void 0 || !Number.isSafeInteger(length) || length < 0)
+              return !1;
+            let selectedNode;
+            for (let index = 0; index < length; index += 1) {
+              let node = readProperty(radios, String(index));
+              if (readProperty(node, "value") === selected) {
+                selectedNode = node;
+                break;
+              }
+            }
+            let click = readProperty(selectedNode, "click");
+            if (typeof click != "function") return !1;
+            try {
+              Reflect.apply(click, selectedNode, []);
+            } catch {
+              return !1;
+            }
+          }
+          let livePowers = readProperty(
+            readProperty(dependencies.rootState.readRoot(), "race"),
+            "psychicPowers"
+          );
+          if (readProperty(readProperty(livePowers, "boost"), "r") !== selected)
+            return !1;
+        }
+        let currentHandle = dependencies.controls.resolve(action.controlId);
+        return currentHandle === void 0 || currentHandle.generation !== handle.generation || !currentHandle.methods.includes(action.method) ? !1 : dependencies.controls.invoke(currentHandle, action.method).ok;
+      }
+    }), executor = Object.freeze({
+      execute(psychicPlanAction) {
+        let currentInput = capturedPsychicSamplePlan(), current = session;
+        if (current === null)
+          return stale(
+            "psychic-state-unavailable",
+            "psychic state is unavailable"
+          );
+        if (planPsychic(currentInput).find(
+          (candidate) => capturedPsychicDecisionMatches(candidate, psychicPlanAction)
+        ) === void 0)
+          return stale(
+            "psychic-state-changed",
+            "psychic decision is no longer valid"
+          );
+        let activated = controls2.activate(psychicPlanAction), afterRoot = dependencies.rootState.readRoot(), energyAfter = capturedPsychicEnergy(afterRoot)?.amount;
+        if (!activated || energyAfter !== current.energyAmount - psychicPlanAction.energyCost)
+          return stale(
+            activated ? "psychic-postcondition-failed" : "psychic-control-unavailable",
+            activated ? `psychic ${psychicPlanAction.power} did not spend its expected Energy` : `psychic ${psychicPlanAction.power} control is unavailable`
+          );
+        let populationAfter = capturedPsychicPopulationAmount(afterRoot), killCountAfter = capturedPsychicKillCount(afterRoot);
+        if (psychicPlanAction.power === "murder" && (populationAfter !== current.populationAmount - 1 || current.killCount !== void 0 && killCountAfter !== current.killCount + 1))
+          return stale(
+            "psychic-postcondition-failed",
+            "psychic murder did not reduce population and advance the kill count"
+          );
+        if (psychicPlanAction.power === "mind_break" || psychicPlanAction.power === "stun") {
+          let afterCaptives = capturedPsychicCaptiveTotals(afterRoot);
+          if (current.captiveTotals === null || afterCaptives === null)
+            return stale(
+              "psychic-postcondition-unavailable",
+              "psychic captive state could not be verified"
+            );
+          if (!(psychicPlanAction.power === "mind_break" ? afterCaptives.jailed === current.captiveTotals.jailed - 1 && afterCaptives.free === current.captiveTotals.free + 1 : afterCaptives.jailed === current.captiveTotals.jailed + 1))
+            return stale(
+              "psychic-postcondition-failed",
+              `psychic ${psychicPlanAction.power} did not change captive housing`
+            );
+        }
+        if (psychicPlanAction.power === "profit" || psychicPlanAction.power === "boost" || psychicPlanAction.power === "assault") {
+          let expectedDuration = current.duration;
+          if (capturedPsychicDurationFromRoot(
+            afterRoot,
+            psychicPlanAction.power
+          ) !== expectedDuration)
+            return stale(
+              "psychic-postcondition-failed",
+              `psychic ${psychicPlanAction.power} timer did not reach its game-computed value`
+            );
+        }
+        return SUCCEEDED;
+      }
+    });
+    return Object.freeze({ reader, controls: controls2, executor });
+  }
+
+  // src/adapters/evolve/traits/captured-ocular-power.ts
+  var CAPTURED_OCULAR_POWER_CONTROL = "ocularPower", CAPTURED_OCULAR_POWER_ID_PREFIX = "#ocular";
+  function capturedOcularRace(rootState) {
+    return readProperty(rootState.readRoot(), "race");
+  }
+  function capturedOcularAvailable(rootState) {
+    let race = capturedOcularRace(rootState);
+    return !!(readProperty(race, "ocular_power") && readProperty(race, "ocularPowerConfig"));
+  }
+  function capturedOcularCheckbox(document, powerId) {
+    let querySelector = readProperty(document, "querySelector");
+    if (typeof querySelector == "function")
+      try {
+        return Reflect.apply(querySelector, document, [
+          `${CAPTURED_OCULAR_POWER_ID_PREFIX}${powerId} input[type='checkbox']`
+        ]);
+      } catch {
+        return;
+      }
+  }
+  function capturedOcularCapacity(controls2) {
+    let handle = controls2.resolve(CAPTURED_OCULAR_POWER_CONTROL);
+    if (handle === void 0 || !handle.methods.includes("max")) return 0;
+    let result = controls2.invoke(handle, "max");
+    if (!result.ok || typeof result.value != "string") return 0;
+    let counts = result.value.match(/\d+/g);
+    if (counts === null || counts.length !== 2) return 0;
+    let capacity = Number(counts[1]);
+    return Number.isSafeInteger(capacity) && capacity >= 0 ? capacity : 0;
+  }
+  function createCapturedOcularPowerAutomation(dependencies) {
+    let controls2 = Object.freeze({
+      capture() {
+        if (!capturedOcularAvailable(dependencies.rootState) || !dependencies.ensureControls()) return !1;
+        let handle = dependencies.controls.resolve(
+          CAPTURED_OCULAR_POWER_CONTROL
+        );
+        return handle !== void 0 && handle.methods.includes("max");
+      },
+      current(key) {
+        let power = CAPTURED_TRAIT_OCULAR.find(
+          (candidate) => candidate.stateKey === key
+        );
+        if (power === void 0) return null;
+        let config = readProperty(
+          capturedOcularRace(dependencies.rootState),
+          "ocularPowerConfig"
+        ), value = readProperty(config, power.stateKey);
+        return typeof value == "boolean" ? value : null;
+      },
+      toggle(powerId) {
+        let power = CAPTURED_TRAIT_OCULAR.find(
+          (candidate) => candidate.id === powerId
+        );
+        if (power === void 0 || !capturedOcularAvailable(dependencies.rootState) || !dependencies.ensureControls())
+          return !1;
+        let handle = dependencies.controls.resolve(
+          CAPTURED_OCULAR_POWER_CONTROL
+        );
+        if (handle === void 0 || !handle.methods.includes("max")) return !1;
+        let checkbox = capturedOcularCheckbox(
+          dependencies.getDocument(),
+          power.id
+        ), click = readProperty(checkbox, "click");
+        if (typeof click != "function") return !1;
+        try {
+          Reflect.apply(click, checkbox, []);
+        } catch {
+          return !1;
+        }
+        return !0;
+      }
+    }), reader = Object.freeze({
+      readGate() {
+        if (!capturedOcularAvailable(dependencies.rootState))
+          return Object.freeze({ unlocked: !1 });
+        let ocularSettings = dependencies.readSettings(), config = readProperty(
+          capturedOcularRace(dependencies.rootState),
+          "ocularPowerConfig"
+        ), hasEnabledPower = CAPTURED_TRAIT_OCULAR.some(
+          (power) => readProperty(ocularSettings, `ocularPower_${power.id}`) === !0
+        ), hasActivePower = CAPTURED_TRAIT_OCULAR.some(
+          (power) => readProperty(config, power.stateKey) === !0
+        );
+        return Object.freeze({
+          // With every setting off and no active power, the current state is already reconciled.
+          unlocked: hasEnabledPower || hasActivePower
+        });
+      },
+      readPlan() {
+        if (!capturedOcularAvailable(dependencies.rootState))
+          return Object.freeze({ capacity: 0, powers: Object.freeze([]) });
+        let rawSettings = dependencies.readSettings(), powers = CAPTURED_TRAIT_OCULAR.map(
+          (power) => {
+            let rawPriority = readProperty(
+              rawSettings,
+              `ocularPower_p_${power.id}`
+            ), priority = finite(Number(rawPriority)) ?? 0;
+            return Object.freeze({
+              key: power.stateKey,
+              id: power.id,
+              enabled: readProperty(rawSettings, `ocularPower_${power.id}`) === !0,
+              priority
+            });
+          }
+        );
+        return Object.freeze({
+          capacity: capturedOcularCapacity(dependencies.controls),
+          powers: Object.freeze(powers)
+        });
+      }
+    }), executor = Object.freeze({
+      execute(ocularPowerDecision) {
+        let power = CAPTURED_TRAIT_OCULAR.find(
+          (candidate) => candidate.stateKey === ocularPowerDecision.key && candidate.id === ocularPowerDecision.id
+        );
+        if (power === void 0 || typeof ocularPowerDecision.enabled != "boolean")
+          return stale(
+            "ocular-decision-invalid",
+            "ocular power decision is invalid"
+          );
+        if (!capturedOcularAvailable(dependencies.rootState))
+          return stale("ocular-power-locked", "ocular powers became unavailable");
+        let current = controls2.current(power.stateKey);
+        return current === ocularPowerDecision.enabled ? SUCCEEDED : current === null || !controls2.toggle(power.id) ? stale(
+          "ocular-controls-unavailable",
+          `ocular power ${power.id} control is unavailable`
+        ) : controls2.current(power.stateKey) === ocularPowerDecision.enabled ? SUCCEEDED : stale(
+          "ocular-postcondition-failed",
+          `the game did not set ocular power ${power.id}`
+        );
+      }
+    });
+    return Object.freeze({ reader, controls: controls2, executor });
+  }
+
+  // src/adapters/evolve/traits/captured-wish.ts
+  var CAPTURED_WISH_CONTROLS = Object.freeze({
+    minor: "minorWish",
+    major: "majorWish"
+  });
+  function capturedWishState(rootState) {
+    let root = rootState.readRoot(), race = requireRecord(readProperty(root, "race"), "global.race"), technology = readProperty(root, "tech"), rawLevel = readProperty(technology, "wish");
+    return Object.freeze({
+      race,
+      technologyLevel: rawLevel == null || rawLevel === 0 ? 0 : finite(rawLevel) ?? 0
+    });
+  }
+  function capturedWishRemaining(race, tier) {
+    let stats = readProperty(race, "wishStats");
+    return isRecord(stats) ? finite(readProperty(stats, tier)) : void 0;
+  }
+  function capturedWishCatalogMethod(tier, id) {
+    return (tier === "minor" ? CAPTURED_TRAIT_WISH_MINOR : CAPTURED_TRAIT_WISH_MAJOR).find((wish) => wish.id === id)?.method;
+  }
+  function createCapturedWishAutomation(dependencies) {
+    let reader = Object.freeze({
+      read() {
+        let { race, technologyLevel } = capturedWishState(
+          dependencies.rootState
+        );
+        if (!readProperty(race, "wish") || technologyLevel <= 0)
+          return Object.freeze({
+            unlocked: !1,
+            technologyLevel,
+            minorRemaining: 0,
+            majorRemaining: 0,
+            minorSelection: "none",
+            majorSelection: "none"
+          });
+        let minorRemaining = capturedWishRemaining(race, "minor"), majorRemaining = technologyLevel >= 2 ? capturedWishRemaining(race, "major") : 0;
+        if (minorRemaining === void 0 || majorRemaining === void 0)
+          return Object.freeze({
+            unlocked: !1,
+            technologyLevel,
+            minorRemaining: 0,
+            majorRemaining: 0,
+            minorSelection: "none",
+            majorSelection: "none"
+          });
+        let settings = requireRecord(dependencies.readSettings(), "settings");
+        return Object.freeze({
+          unlocked: !0,
+          technologyLevel,
+          minorRemaining,
+          majorRemaining,
+          minorSelection: minorRemaining === 0 ? requireString(settings.wishMinor, "settings.wishMinor") : "none",
+          majorSelection: technologyLevel >= 2 && majorRemaining === 0 ? requireString(settings.wishMajor, "settings.wishMajor") : "none"
+        });
+      }
+    }), controls2 = Object.freeze({
+      select(tier, wishId) {
+        if (!dependencies.ensureControls(tier, wishId)) return !1;
+        let controlId = tier === "minor" ? CAPTURED_WISH_CONTROLS.minor : CAPTURED_WISH_CONTROLS.major, method = capturedWishCatalogMethod(tier, wishId), handle = dependencies.controls.resolve(controlId);
+        return method === void 0 || handle === void 0 || !handle.methods.includes(method) ? !1 : dependencies.controls.invoke(handle, method).ok;
+      }
+    }), executor = Object.freeze({
+      execute(wishSelection) {
+        if (wishSelection.tier !== "minor" && wishSelection.tier !== "major" || wishSelection.expectedRemaining !== 0 || capturedWishCatalogMethod(wishSelection.tier, wishSelection.wishId) === void 0)
+          return stale("wish-decision-invalid", "wish selection is unavailable");
+        let { race, technologyLevel } = capturedWishState(
+          dependencies.rootState
+        );
+        if (!readProperty(race, "wish") || technologyLevel <= 0)
+          return stale("wish-locked", "wish selection became unavailable");
+        if (wishSelection.tier === "major" && technologyLevel < 2)
+          return stale("major-wish-locked", "major wish became unavailable");
+        if (capturedWishRemaining(race, wishSelection.tier) !== 0)
+          return stale("wish-already-selected", "wish was already selected");
+        controls2.select(wishSelection.tier, wishSelection.wishId);
+        let { race: updatedRace } = capturedWishState(dependencies.rootState);
+        return (capturedWishRemaining(updatedRace, wishSelection.tier) ?? 0) > 0 ? SUCCEEDED : stale(
+          "wish-postcondition-failed",
+          `the game did not apply the ${wishSelection.tier} wish`
+        );
+      }
+    });
+    return Object.freeze({ reader, controls: controls2, executor });
+  }
+
+  // src/domain/traits/shapeshift.ts
+  function planShapeshift(input) {
+    return !input.isShapeshifter || input.shifterGenus === "ignore" || input.currentGenus === input.shifterGenus ? null : input.shifterGenus;
+  }
+
+  // src/application/shapeshift.ts
+  function runShapeshiftAutomation(dependencies) {
+    let input = dependencies.reader.read(), target = planShapeshift(input), outcome = dependencies.executor.execute(target);
+    return Object.freeze({
+      outcome,
+      changed: outcome.status === "succeeded" && target !== null && input.currentGenus !== target
+    });
+  }
+
+  // src/application/psychic.ts
+  var SUCCEEDED14 = Object.freeze({
+    status: "succeeded"
+  });
+  function runPsychicAutomation(dependencies) {
+    if (!dependencies.reader.readGate().unlocked) return SUCCEEDED14;
+    for (let decision of planPsychic(dependencies.reader.readPlan())) {
+      let outcome = dependencies.executor.execute(decision);
+      if (outcome.status === "succeeded" || outcome.failure.code !== "psychic-control-unavailable") return outcome;
+    }
+    return SUCCEEDED14;
+  }
+
+  // src/domain/traits/ocular-power.ts
+  function planOcularPowers(input) {
+    if (input.capacity < 1) return Object.freeze([]);
+    let enabledCount = 0;
+    return Object.freeze(
+      [...input.powers].sort((left, right) => right.priority - left.priority).map((power) => {
+        let enabled = power.enabled && enabledCount < input.capacity;
+        return enabled && enabledCount++, Object.freeze({ key: power.key, id: power.id, enabled });
+      })
+    );
+  }
+
+  // src/application/ocular-power.ts
+  var SUCCEEDED15 = Object.freeze({
+    status: "succeeded"
+  });
+  function runOcularPowerAutomation(dependencies) {
+    if (!dependencies.reader.readGate().unlocked) return SUCCEEDED15;
+    if (!dependencies.controls.capture())
+      return {
+        status: "stale",
+        failure: {
+          code: "ocular-controls-unavailable",
+          message: "ocular power controls are unavailable"
+        }
+      };
+    for (let decision of planOcularPowers(dependencies.reader.readPlan())) {
+      let outcome = dependencies.executor.execute(decision);
+      if (outcome.status !== "succeeded") return outcome;
+    }
+    return SUCCEEDED15;
+  }
+
+  // src/domain/traits/wish.ts
+  function planWishes(input) {
+    if (!input.unlocked) return Object.freeze([]);
+    let decisions = [];
+    return input.minorRemaining === 0 && input.minorSelection !== "none" && decisions.push(
+      Object.freeze({
+        tier: "minor",
+        wishId: input.minorSelection,
+        expectedRemaining: 0
+      })
+    ), input.technologyLevel >= 2 && input.majorRemaining === 0 && input.majorSelection !== "none" && decisions.push(
+      Object.freeze({
+        tier: "major",
+        wishId: input.majorSelection,
+        expectedRemaining: 0
+      })
+    ), Object.freeze(decisions);
+  }
+
+  // src/application/wish.ts
+  var SUCCEEDED16 = Object.freeze({
+    status: "succeeded"
+  });
+  function runWishAutomation(dependencies) {
+    for (let decision of planWishes(dependencies.reader.read())) {
+      let outcome = dependencies.executor.execute(decision);
+      if (outcome.status !== "succeeded") return outcome;
+    }
+    return SUCCEEDED16;
+  }
+
+  // src/bootstrap/captured-trait-companion-control.ts
+  var CAPTURED_TRAIT_COMPANION_CONTROLS = Object.freeze({
+    shapeshift: CAPTURED_SHAPESHIFT_CONTROL,
+    psychic: CAPTURED_PSYCHIC_CONTROL_IDS,
+    ocularPower: CAPTURED_OCULAR_POWER_CONTROL,
+    wish: CAPTURED_WISH_CONTROLS
+  });
+  function createCapturedTraitCompanionControl(dependencies) {
+    let shapeshift = createCapturedShapeshiftAutomation({
+      rootState: dependencies.rootState,
+      controls: dependencies.controls,
+      readSettings: dependencies.readSettings,
+      ensureControls: dependencies.ensureShapeshiftControls
+    }), psychic = createCapturedPsychicAutomation({
+      rootState: dependencies.rootState,
+      controls: dependencies.controls,
+      getDocument: dependencies.getDocument,
+      readSettings: dependencies.readSettings,
+      ensureControls: dependencies.ensurePsychicControls
+    }), ocular = createCapturedOcularPowerAutomation({
+      rootState: dependencies.rootState,
+      controls: dependencies.controls,
+      getDocument: dependencies.getDocument,
+      readSettings: dependencies.readSettings,
+      ensureControls: dependencies.ensureOcularPowerControls
+    }), wish = createCapturedWishAutomation({
+      rootState: dependencies.rootState,
+      controls: dependencies.controls,
+      readSettings: dependencies.readSettings,
+      ensureControls: dependencies.ensureWishControls
+    });
+    return Object.freeze({
+      autoShapeshift: () => runShapeshiftAutomation({
+        reader: shapeshift.reader,
+        executor: shapeshift.executor
+      }),
+      autoPsychic: () => runPsychicAutomation({
+        reader: psychic.reader,
+        executor: psychic.executor
+      }),
+      autoOcularPowers: () => runOcularPowerAutomation({
+        reader: ocular.reader,
+        executor: ocular.executor,
+        controls: ocular.controls
+      }),
+      autoWish: () => runWishAutomation({ reader: wish.reader, executor: wish.executor })
+    });
+  }
+
   // src/bootstrap/captured-runtime-control.ts
   function isEnabled(settings, key) {
     return settings[key] === !0;
@@ -46034,7 +46838,7 @@ Only continue if you trust the source. Injected code:
       keyState: pageCapture2.keyState,
       readSettings: () => settingsStore.readRaw(),
       onActivity
-    }), capturedPrestigeGoal = "Standard", capturedMechCycleHasPendingWork = !1, capturedMercenary = createCapturedMercenary({
+    }), capturedPrestigeGoal = "Standard", capturedResetCommittedThisCycle = !1, capturedMechCycleHasPendingWork = !1, capturedMercenary = createCapturedMercenary({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
       readSettings: () => settingsStore.readRaw(),
@@ -46153,6 +46957,15 @@ Only continue if you trust the source. Injected code:
       keyState: pageCapture2.keyState,
       getDocument: () => document,
       readSettings: () => settingsStore.readRaw()
+    }), traitCompanions = createCapturedTraitCompanionControl({
+      rootState: pageCapture2.rootState,
+      controls: pageCapture2.controls,
+      getDocument: () => document,
+      readSettings: () => settingsStore.readRaw(),
+      ensureShapeshiftControls: () => ensureShapeshiftControls(),
+      ensurePsychicControls: () => ensurePsychicControls(),
+      ensureOcularPowerControls: () => ensureOcularPowerControls(),
+      ensureWishControls: (tier, wishId) => ensureWishControls(tier, wishId)
     }), costs = createCapturedCraftCosts({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls
@@ -46303,7 +47116,11 @@ Only continue if you trust the source. Injected code:
       } catch (error) {
         reportPlanningUiError(error);
       }
-    }, pageCapture2.rootState.subscribeRootReplaced(() => {
+    };
+    let invalidateCapturedCyclePlanning = () => {
+      latestConstructionSnapshot = null, latestConstructionRun = void 0, currentStateLogConstructionSnapshot = null, constructionFreshness = "none", triggerTargetsThisCycle = void 0, triggerDemandThisCycle = void 0, demandThisCycle = void 0, demandPrerequisitesThisCycle = void 0;
+    };
+    pageCapture2.rootState.subscribeRootReplaced(() => {
       settingsLifecycle.invalidateDynamicDefaults(), discoveryAttempts.invalidate(), latestConstructionSnapshot = null, latestConstructionRun = void 0, constructionFreshness = "none", triggerTargetsThisCycle = void 0, refreshCapturedPlanningPanels();
     });
     let triggerActions = createCapturedTriggerActions({
@@ -46596,11 +47413,13 @@ Only continue if you trust the source. Injected code:
       },
       readOfferedTechs: progression.readOfferedTechs,
       resources: createCapturedResourceSource(pageCapture2.rootState),
-      onResetCommitted: (endingReset, endingDay) => stateLogRecorder.prestigeCommitted(
-        settingsStore.readRaw(),
-        endingReset,
-        endingDay
-      ),
+      onResetCommitted: (endingReset, endingDay) => {
+        capturedResetCommittedThisCycle = !0, invalidateCapturedCyclePlanning(), stateLogRecorder.prestigeCommitted(
+          settingsStore.readRaw(),
+          endingReset,
+          endingDay
+        );
+      },
       readBuildingResetActions: (regions) => progression.readBuildingUnlocks(new Set(regions))?.unlocked,
       closeBioseedModal,
       loadQueuedSettings: queuedSettings.loadQueuedSettings
@@ -46618,6 +47437,98 @@ Only continue if you trust the source. Injected code:
           index: MAIN_TAB_INDEX.arpa
         })
       ]);
+    }, ensureShapeshiftControls = () => {
+      let satisfied = () => pageCapture2.controls.resolve(CAPTURED_TRAIT_COMPANION_CONTROLS.shapeshift)?.methods.includes("setShape") === !0;
+      if (satisfied()) return !0;
+      let root = pageCapture2.rootState.readRoot(), arpaSettings = readProperty(readProperty(root, "settings"), "arpa");
+      return readProperty(arpaSettings, "genetics") !== !0 || pageCapture2.controls.resolve(MAIN_TAB_CONTROL) === void 0 ? !1 : finishDiscovery(
+        "shapeshift-controls",
+        "shapeshift",
+        satisfied,
+        void 0,
+        [
+          Object.freeze({
+            setting: MAIN_TAB_SETTING,
+            control: MAIN_TAB_CONTROL,
+            index: MAIN_TAB_INDEX.arpa
+          })
+        ]
+      );
+    }, ensurePsychicControls = () => {
+      let satisfied = () => pageCapture2.controls.resolve(CAPTURED_TRAIT_COMPANION_CONTROLS.psychic.boost)?.methods.includes("boostVal") === !0;
+      if (satisfied()) return !0;
+      let root = pageCapture2.rootState.readRoot(), technologyLevel = readProperty(readProperty(root, "tech"), "psychic");
+      if (!readProperty(readProperty(root, "race"), "psychic") || typeof technologyLevel != "number" || technologyLevel <= 0 || pageCapture2.controls.resolve(MAIN_TAB_CONTROL) === void 0)
+        return !1;
+      let govTabs = SUB_TAB_CONTROLS[GOV_TABS_SETTING];
+      return govTabs === void 0 ? !1 : finishDiscovery(
+        "psychic-controls",
+        "psychic powers",
+        satisfied,
+        void 0,
+        [
+          Object.freeze({
+            setting: MAIN_TAB_SETTING,
+            control: MAIN_TAB_CONTROL,
+            index: MAIN_TAB_INDEX.civic
+          }),
+          Object.freeze({
+            setting: GOV_TABS_SETTING,
+            control: govTabs,
+            index: GOV_TAB_INDEX.psychicPowers
+          })
+        ]
+      );
+    }, ensureOcularPowerControls = () => {
+      let satisfied = () => pageCapture2.controls.resolve(CAPTURED_TRAIT_COMPANION_CONTROLS.ocularPower)?.methods.includes("max") === !0;
+      if (satisfied()) return !0;
+      let root = pageCapture2.rootState.readRoot(), race = readProperty(root, "race");
+      if (!readProperty(race, "ocular_power") || !readProperty(race, "ocularPowerConfig") || pageCapture2.controls.resolve(MAIN_TAB_CONTROL) === void 0)
+        return !1;
+      let govTabs = SUB_TAB_CONTROLS[GOV_TABS_SETTING];
+      return govTabs === void 0 ? !1 : finishDiscovery(
+        "supernatural-controls",
+        "supernatural powers",
+        satisfied,
+        void 0,
+        [
+          Object.freeze({
+            setting: MAIN_TAB_SETTING,
+            control: MAIN_TAB_CONTROL,
+            index: MAIN_TAB_INDEX.civic
+          }),
+          Object.freeze({
+            setting: GOV_TABS_SETTING,
+            control: govTabs,
+            index: GOV_TAB_INDEX.supernatural
+          })
+        ]
+      );
+    }, ensureWishControls = (tier, _wishId) => {
+      let controlId = tier === "minor" ? CAPTURED_TRAIT_COMPANION_CONTROLS.wish.minor : CAPTURED_TRAIT_COMPANION_CONTROLS.wish.major, satisfied = () => pageCapture2.controls.resolve(controlId) !== void 0;
+      if (satisfied()) return !0;
+      let root = pageCapture2.rootState.readRoot(), race = readProperty(root, "race"), technologyLevel = readProperty(readProperty(root, "tech"), "wish");
+      if (!readProperty(race, "wish") || !readProperty(race, "wishStats") || typeof technologyLevel != "number" || technologyLevel <= 0 || tier === "major" && technologyLevel < 2 || pageCapture2.controls.resolve(MAIN_TAB_CONTROL) === void 0)
+        return !1;
+      let govTabs = SUB_TAB_CONTROLS[GOV_TABS_SETTING];
+      return govTabs === void 0 ? !1 : finishDiscovery(
+        "supernatural-controls",
+        "supernatural powers",
+        satisfied,
+        void 0,
+        [
+          Object.freeze({
+            setting: MAIN_TAB_SETTING,
+            control: MAIN_TAB_CONTROL,
+            index: MAIN_TAB_INDEX.civic
+          }),
+          Object.freeze({
+            setting: GOV_TABS_SETTING,
+            control: govTabs,
+            index: GOV_TAB_INDEX.supernatural
+          })
+        ]
+      );
     }, ensureGalaxyFleetControls = () => {
       let satisfied = () => pageCapture2.controls.resolve("fleet") !== void 0;
       if (satisfied() || readProperty(
@@ -46985,7 +47896,7 @@ Only continue if you trust the source. Injected code:
     });
     refreshEffectiveSettings(), refreshCapturedPlanningPanels();
     let runCycle = () => {
-      if (automationCycle += 1, currentStateLogConstructionSnapshot = null, stateLogPlannerDetailsDue = !1, constructionFreshness = latestConstructionSnapshot === null ? "none" : "stale", capturedMechCycleHasPendingWork = !1, demandThisCycle = void 0, triggerTargetsThisCycle = void 0, triggerDemandThisCycle = void 0, demandPrerequisitesThisCycle = void 0, settingsPanel.ensurePanel(), !pageCapture2.isComplete()) {
+      if (automationCycle += 1, capturedResetCommittedThisCycle = !1, currentStateLogConstructionSnapshot = null, stateLogPlannerDetailsDue = !1, constructionFreshness = latestConstructionSnapshot === null ? "none" : "stale", capturedMechCycleHasPendingWork = !1, demandThisCycle = void 0, triggerTargetsThisCycle = void 0, triggerDemandThisCycle = void 0, demandPrerequisitesThisCycle = void 0, settingsPanel.ensurePanel(), !pageCapture2.isComplete()) {
         refreshCapturedPlanningPanels();
         return;
       }
@@ -47170,7 +48081,36 @@ Only continue if you trust the source. Injected code:
               return;
           }
           prestige.run();
-        }), isEnabled(settings, "autoMutateTraits")) {
+        }), capturedResetCommittedThisCycle) return;
+        if (isEnabled(settings, "autoMinorTrait")) {
+          let shapeshift = runPhase(
+            "autoShapeshift",
+            () => traitCompanions.autoShapeshift()
+          );
+          if (shapeshift !== void 0 && (shapeshift.outcome.status !== "succeeded" && reportOnce(
+            `autoShapeshift: ${shapeshift.outcome.failure.code}: ${shapeshift.outcome.failure.message}`
+          ), shapeshift.changed)) {
+            invalidateCapturedCyclePlanning();
+            return;
+          }
+          let psychic = runPhase(
+            "autoPsychic",
+            () => traitCompanions.autoPsychic()
+          );
+          psychic !== void 0 && psychic.status !== "succeeded" && reportOnce(
+            `autoPsychic: ${psychic.failure.code}: ${psychic.failure.message}`
+          );
+          let ocular = runPhase(
+            "autoOcularPowers",
+            () => traitCompanions.autoOcularPowers()
+          );
+          ocular !== void 0 && ocular.status !== "succeeded" && reportOnce(
+            `autoOcularPowers: ${ocular.failure.code}: ${ocular.failure.message}`
+          );
+          let wish = runPhase("autoWish", () => traitCompanions.autoWish());
+          wish !== void 0 && wish.status !== "succeeded" && reportOnce(`autoWish: ${wish.failure.code}: ${wish.failure.message}`);
+        }
+        if (isEnabled(settings, "autoMutateTraits")) {
           let outcome = runPhase("autoMutateTraits", () => (ensureGeneticsControls(), traits.autoMutateTrait()));
           outcome !== void 0 && outcome.status !== "succeeded" && reportOnce(
             `autoMutateTraits: ${outcome.failure.code}: ${outcome.failure.message}`

@@ -61,7 +61,7 @@ function hasRoom(resource: Readonly<PsychicRoomView>): boolean {
   return resource.current + resource.income * 1.5 * 300 < resource.maximum;
 }
 
-function decision(
+function psychicDecision(
   input: Readonly<PsychicInput>,
   power: PsychicPower,
   boostedResourceId: string | null = null,
@@ -95,7 +95,7 @@ export function planPsychic(
     input.populationCurrent > 0 &&
     canAfford(input, "murder")
   ) {
-    decisions.push(decision(input, "murder"));
+    decisions.push(psychicDecision(input, "murder"));
   }
 
   if (input.thrallAvailable) {
@@ -105,7 +105,7 @@ export function planPsychic(
         (input.thrallRate === 1 && input.thrallStorageRatio === 1)) &&
       canAfford(input, "mind_break")
     ) {
-      decisions.push(decision(input, "mind_break"));
+      decisions.push(psychicDecision(input, "mind_break"));
     }
     if (
       (input.mode === "auto" || input.mode === "stun") &&
@@ -113,7 +113,7 @@ export function planPsychic(
       input.thrallStorageRatio < 1 &&
       canAfford(input, "stun")
     ) {
-      decisions.push(decision(input, "stun"));
+      decisions.push(psychicDecision(input, "stun"));
     }
   }
 
@@ -125,7 +125,7 @@ export function planPsychic(
     !input.cashActive &&
     canAfford(input, "profit")
   ) {
-    decisions.push(decision(input, "profit"));
+    decisions.push(psychicDecision(input, "profit"));
   }
 
   if (
@@ -144,7 +144,7 @@ export function planPsychic(
       boostedResourceId = input.boostResourceMode;
     }
     if (boostedResourceId !== null) {
-      decisions.push(decision(input, "boost", boostedResourceId));
+      decisions.push(psychicDecision(input, "boost", boostedResourceId));
     }
   }
 
@@ -154,7 +154,7 @@ export function planPsychic(
     !input.assaultActive &&
     canAfford(input, "assault")
   ) {
-    decisions.push(decision(input, "assault"));
+    decisions.push(psychicDecision(input, "assault"));
   }
 
   return Object.freeze(decisions);

@@ -227,6 +227,10 @@ import type { TickDiagnostics } from "../ports/tick.ts";
 import type { GameActivitySink } from "../ports/game-message-log.ts";
 import { isRecord, readProperty } from "../adapters/validation.ts";
 import { overrideComparisons } from "../domain/override-comparators.ts";
+import {
+  CAPTURED_TRAIT_COMPANION_CONTROLS,
+  createCapturedTraitCompanionControl,
+} from "./captured-trait-companion-control.ts";
 
 type WorkspaceDocument = ReturnType<
   Parameters<typeof createGamePanelWorkspace>[0]["getDocument"]
@@ -668,6 +672,7 @@ export function startCapturedRuntime({
   // The captured runtime has no compatibility state object. This application-instance goal is
   // only the one-tick handoff used by the captured prestige planner and is discarded on reload.
   let capturedPrestigeGoal = "Standard";
+  let capturedResetCommittedThisCycle = false;
   let capturedMechCycleHasPendingWork = false;
   const capturedMercenary = createCapturedMercenary({
     rootState: pageCapture.rootState,
@@ -843,6 +848,16 @@ export function startCapturedRuntime({
     keyState: pageCapture.keyState,
     getDocument: () => document,
     readSettings: () => settingsStore.readRaw(),
+  });
+  const traitCompanions = createCapturedTraitCompanionControl({
+    rootState: pageCapture.rootState,
+    controls: pageCapture.controls,
+    getDocument: () => document,
+    readSettings: () => settingsStore.readRaw(),
+    ensureShapeshiftControls: () => ensureShapeshiftControls(),
+    ensurePsychicControls: () => ensurePsychicControls(),
+    ensureOcularPowerControls: () => ensureOcularPowerControls(),
+    ensureWishControls: (tier, wishId) => ensureWishControls(tier, wishId),
   });
   const costs = createCapturedCraftCosts({
     rootState: pageCapture.rootState,
@@ -1079,6 +1094,16 @@ export function startCapturedRuntime({
     } catch (error) {
       reportPlanningUiError(error);
     }
+  };
+  const invalidateCapturedCyclePlanning = () => {
+    latestConstructionSnapshot = null;
+    latestConstructionRun = undefined;
+    currentStateLogConstructionSnapshot = null;
+    constructionFreshness = "none";
+    triggerTargetsThisCycle = undefined;
+    triggerDemandThisCycle = undefined;
+    demandThisCycle = undefined;
+    demandPrerequisitesThisCycle = undefined;
   };
   pageCapture.rootState.subscribeRootReplaced(() => {
     settingsLifecycle.invalidateDynamicDefaults();
@@ -1526,12 +1551,15 @@ export function startCapturedRuntime({
     },
     readOfferedTechs: progression.readOfferedTechs,
     resources: createCapturedResourceSource(pageCapture.rootState),
-    onResetCommitted: (endingReset, endingDay) =>
+    onResetCommitted: (endingReset, endingDay) => {
+      capturedResetCommittedThisCycle = true;
+      invalidateCapturedCyclePlanning();
       stateLogRecorder.prestigeCommitted(
         settingsStore.readRaw(),
         endingReset,
         endingDay,
-      ),
+      );
+    },
     readBuildingResetActions: (regions) =>
       progression.readBuildingUnlocks(new Set(regions))?.unlocked,
     closeBioseedModal,
@@ -1573,6 +1601,149 @@ export function startCapturedRuntime({
         index: MAIN_TAB_INDEX.arpa,
       }),
     ]);
+  };
+  const ensureShapeshiftControls = () => {
+    const satisfied = () =>
+      pageCapture.controls
+        .resolve(CAPTURED_TRAIT_COMPANION_CONTROLS.shapeshift)
+        ?.methods.includes("setShape") === true;
+    if (satisfied()) return true;
+    const root = pageCapture.rootState.readRoot();
+    const arpaSettings = readProperty(readProperty(root, "settings"), "arpa");
+    if (readProperty(arpaSettings, "genetics") !== true) return false;
+    if (pageCapture.controls.resolve(MAIN_TAB_CONTROL) === undefined)
+      return false;
+    return finishDiscovery(
+      "shapeshift-controls",
+      "shapeshift",
+      satisfied,
+      undefined,
+      [
+        Object.freeze({
+          setting: MAIN_TAB_SETTING,
+          control: MAIN_TAB_CONTROL,
+          index: MAIN_TAB_INDEX.arpa,
+        }),
+      ],
+    );
+  };
+  const ensurePsychicControls = () => {
+    const satisfied = () =>
+      pageCapture.controls
+        .resolve(CAPTURED_TRAIT_COMPANION_CONTROLS.psychic.boost)
+        ?.methods.includes("boostVal") === true;
+    if (satisfied()) return true;
+    const root = pageCapture.rootState.readRoot();
+    const technologyLevel = readProperty(readProperty(root, "tech"), "psychic");
+    if (
+      !readProperty(readProperty(root, "race"), "psychic") ||
+      typeof technologyLevel !== "number" ||
+      technologyLevel <= 0
+    ) {
+      return false;
+    }
+    if (pageCapture.controls.resolve(MAIN_TAB_CONTROL) === undefined)
+      return false;
+    const govTabs = SUB_TAB_CONTROLS[GOV_TABS_SETTING];
+    if (govTabs === undefined) return false;
+    return finishDiscovery(
+      "psychic-controls",
+      "psychic powers",
+      satisfied,
+      undefined,
+      [
+        Object.freeze({
+          setting: MAIN_TAB_SETTING,
+          control: MAIN_TAB_CONTROL,
+          index: MAIN_TAB_INDEX.civic,
+        }),
+        Object.freeze({
+          setting: GOV_TABS_SETTING,
+          control: govTabs,
+          index: GOV_TAB_INDEX.psychicPowers,
+        }),
+      ],
+    );
+  };
+  const ensureOcularPowerControls = () => {
+    const satisfied = () =>
+      pageCapture.controls
+        .resolve(CAPTURED_TRAIT_COMPANION_CONTROLS.ocularPower)
+        ?.methods.includes("max") === true;
+    if (satisfied()) return true;
+    const root = pageCapture.rootState.readRoot();
+    const race = readProperty(root, "race");
+    if (
+      !readProperty(race, "ocular_power") ||
+      !readProperty(race, "ocularPowerConfig")
+    ) {
+      return false;
+    }
+    if (pageCapture.controls.resolve(MAIN_TAB_CONTROL) === undefined)
+      return false;
+    const govTabs = SUB_TAB_CONTROLS[GOV_TABS_SETTING];
+    if (govTabs === undefined) return false;
+    return finishDiscovery(
+      "supernatural-controls",
+      "supernatural powers",
+      satisfied,
+      undefined,
+      [
+        Object.freeze({
+          setting: MAIN_TAB_SETTING,
+          control: MAIN_TAB_CONTROL,
+          index: MAIN_TAB_INDEX.civic,
+        }),
+        Object.freeze({
+          setting: GOV_TABS_SETTING,
+          control: govTabs,
+          index: GOV_TAB_INDEX.supernatural,
+        }),
+      ],
+    );
+  };
+  const ensureWishControls = (tier: "minor" | "major", _wishId: string) => {
+    const controlId =
+      tier === "minor"
+        ? CAPTURED_TRAIT_COMPANION_CONTROLS.wish.minor
+        : CAPTURED_TRAIT_COMPANION_CONTROLS.wish.major;
+    const satisfied = () =>
+      pageCapture.controls.resolve(controlId) !== undefined;
+    if (satisfied()) return true;
+    const root = pageCapture.rootState.readRoot();
+    const race = readProperty(root, "race");
+    const technologyLevel = readProperty(readProperty(root, "tech"), "wish");
+    if (
+      !readProperty(race, "wish") ||
+      !readProperty(race, "wishStats") ||
+      typeof technologyLevel !== "number" ||
+      technologyLevel <= 0 ||
+      (tier === "major" && technologyLevel < 2)
+    ) {
+      return false;
+    }
+    if (pageCapture.controls.resolve(MAIN_TAB_CONTROL) === undefined)
+      return false;
+    const govTabs = SUB_TAB_CONTROLS[GOV_TABS_SETTING];
+    if (govTabs === undefined) return false;
+    return finishDiscovery(
+      "supernatural-controls",
+      "supernatural powers",
+      satisfied,
+      undefined,
+      [
+        Object.freeze({
+          setting: MAIN_TAB_SETTING,
+          control: MAIN_TAB_CONTROL,
+          index: MAIN_TAB_INDEX.civic,
+        }),
+        Object.freeze({
+          setting: GOV_TABS_SETTING,
+          control: govTabs,
+          index: GOV_TAB_INDEX.supernatural,
+        }),
+      ],
+    );
   };
   const ensureGalaxyFleetControls = () => {
     const satisfied = () => pageCapture.controls.resolve("fleet") !== undefined;
@@ -2140,6 +2311,7 @@ export function startCapturedRuntime({
 
   const runCycle = () => {
     automationCycle += 1;
+    capturedResetCommittedThisCycle = false;
     currentStateLogConstructionSnapshot = null;
     stateLogPlannerDetailsDue = false;
     constructionFreshness =
@@ -2614,6 +2786,47 @@ export function startCapturedRuntime({
           }
           prestige.run();
         });
+      }
+      // A confirmed reset changes the live run out from under every later feature. A planned
+      // one-tick `Reset` goal does not: it remains eligible for the old companion ordering.
+      if (capturedResetCommittedThisCycle) return;
+      if (isEnabled(settings, "autoMinorTrait")) {
+        const shapeshift = runPhase("autoShapeshift", () =>
+          traitCompanions.autoShapeshift(),
+        );
+        if (shapeshift !== undefined) {
+          if (shapeshift.outcome.status !== "succeeded") {
+            reportOnce(
+              `autoShapeshift: ${shapeshift.outcome.failure.code}: ${shapeshift.outcome.failure.message}`,
+            );
+          }
+          // shapeShift() can replace race traits, tech, buildings, resources, controls and DOM
+          // panels. No decision sampled before it is safe to execute in this cycle.
+          if (shapeshift.changed) {
+            invalidateCapturedCyclePlanning();
+            return;
+          }
+        }
+        const psychic = runPhase("autoPsychic", () =>
+          traitCompanions.autoPsychic(),
+        );
+        if (psychic !== undefined && psychic.status !== "succeeded") {
+          reportOnce(
+            `autoPsychic: ${psychic.failure.code}: ${psychic.failure.message}`,
+          );
+        }
+        const ocular = runPhase("autoOcularPowers", () =>
+          traitCompanions.autoOcularPowers(),
+        );
+        if (ocular !== undefined && ocular.status !== "succeeded") {
+          reportOnce(
+            `autoOcularPowers: ${ocular.failure.code}: ${ocular.failure.message}`,
+          );
+        }
+        const wish = runPhase("autoWish", () => traitCompanions.autoWish());
+        if (wish !== undefined && wish.status !== "succeeded") {
+          reportOnce(`autoWish: ${wish.failure.code}: ${wish.failure.message}`);
+        }
       }
       if (isEnabled(settings, "autoMutateTraits")) {
         const outcome = runPhase("autoMutateTraits", () => {

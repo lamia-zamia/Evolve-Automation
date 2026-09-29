@@ -539,7 +539,7 @@ export function computeStorageDefaults(
 export interface MinorTraitResetContext {
   /** Minor-trait names (minor traits plus `mastery`/`fortify`) in `game.traits` order. */
   readonly traitNames: readonly string[];
-  /** `Object.values(ocularPowerData).map((v) => v.id)`. */
+  /** Ocular power IDs in the order rendered by the upstream control. */
   readonly ocularPowerIds: readonly string[];
 }
 

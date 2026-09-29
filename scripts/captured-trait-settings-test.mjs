@@ -70,9 +70,46 @@ assert.deepEqual(
   CAPTURED_TRAIT_OCULAR.map((power) => power.id),
   ["disintegration", "petrification", "wound", "telekinesis", "fear", "charm"],
 );
+assert.deepEqual(
+  CAPTURED_TRAIT_OCULAR.map((power) => [power.id, power.stateKey]),
+  [
+    ["disintegration", "d"],
+    ["petrification", "p"],
+    ["wound", "w"],
+    ["telekinesis", "t"],
+    ["fear", "f"],
+    ["charm", "c"],
+  ],
+);
 assert.equal(CAPTURED_TRAIT_WISH_MINOR.length, 8);
 assert.equal(CAPTURED_TRAIT_WISH_MAJOR.length, 8);
 assert.equal(CAPTURED_TRAIT_WISH_MINOR[0].label, "Wish for Knowledge");
+assert.deepEqual(
+  CAPTURED_TRAIT_WISH_MINOR.map((wish) => [wish.id, wish.method]),
+  [
+    ["Know", "know"],
+    ["Money", "money"],
+    ["Res", "res"],
+    ["Love", "love"],
+    ["Excite", "excite"],
+    ["Fame", "famous"],
+    ["Strength", "strength"],
+    ["Influence", "influence"],
+  ],
+);
+assert.deepEqual(
+  CAPTURED_TRAIT_WISH_MAJOR.map((wish) => [wish.id, wish.method]),
+  [
+    ["BigMoney", "money"],
+    ["BigRes", "res"],
+    ["Plasmid", "plasmid"],
+    ["Power", "power"],
+    ["Adoration", "adoration"],
+    ["Thrill", "thrill"],
+    ["Peace", "peace"],
+    ["Greatness", "greatness"],
+  ],
+);
 assert.equal(CAPTURED_TRAIT_MINOR.length, 54);
 assert.equal(CAPTURED_TRAIT_MINOR[0].id, "tactical");
 assert.equal(CAPTURED_TRAIT_MINOR[52].id, "fortify");
