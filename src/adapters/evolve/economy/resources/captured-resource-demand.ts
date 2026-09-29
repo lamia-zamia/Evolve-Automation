@@ -1167,12 +1167,7 @@ function readDemandReservationSpyPurchaseMoney(
   }
   const visible = readCapturedForeignTargets(root, controls, foreign, settings);
   if (visible.length === 0) return { status: "not-needed" };
-  const strategy = selectCapturedForeignStrategy(
-    root,
-    settings,
-    visible,
-    "spy-manager",
-  );
+  const strategy = selectCapturedForeignStrategy(root, settings, visible);
   if (
     !strategy.unificationRequested &&
     !capturedForeignPacifistGuardActive(root, settings)

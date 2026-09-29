@@ -15,7 +15,6 @@ function foreignTarget({
   return {
     governmentId,
     rank: "Inferior",
-    espionagePolicy: "Ignore",
     policy: "Ignore",
     military,
     spyCount: spies,

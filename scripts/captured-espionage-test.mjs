@@ -413,12 +413,17 @@ function runOne(policy, overrides, mutate) {
       subscribeRootReplaced: () => () => {},
     },
     controls,
-    readSettings: () => makeSettings(policy),
+    readSettings: () => ({
+      ...makeSettings(policy),
+      // These standalone operation cases exercise the configured mission on its own. The old
+      // SpyManager leaves per-government missions intact under pacifism, without a farm target.
+      foreignPacifist: policy === "Annex" || policy === "Purchase",
+    }),
     onActivity: (activity) => activities.push(activity),
   });
   const outcome = runCapturedEspionage(adapter);
   assert.equal(outcome.status, "succeeded");
-  assert.equal(activities.length, 1);
+  assert.equal(activities.length, 1, `activity for ${policy}`);
   assert.equal(activities[0].tags[0], "combat");
   mutate?.(root);
   return { adapter, root, activities };
@@ -784,9 +789,11 @@ runOne("Purchase", { hstl: 0, unrest: 0, spy: 3 }, undefined);
     hstl: 90,
     gov1: { mil: 60, spy: 3, hstl: 20, unrest: 60 },
   });
+  root.tech.unify = 1;
+  root.civic.foreign.gov2 = makeGovernment({ mil: 90, anx: true });
   const activities = [];
   let policy = "Influence";
-  const visibleGovernmentIds = [0];
+  const visibleGovernmentIds = [0, 2];
   const controls = makeControls(
     root,
     {
@@ -815,7 +822,10 @@ runOne("Purchase", { hstl: 0, unrest: 0, spy: 3 }, undefined);
       subscribeRootReplaced: () => () => {},
     },
     controls,
-    readSettings: () => makeSettings(policy),
+    readSettings: () => ({
+      ...makeSettings(policy),
+      foreignUnification: policy === "Annex",
+    }),
     getDocument: () => ({
       querySelector(selector) {
         assert.equal(selector, "#gov1 div span:nth-child(3) button");

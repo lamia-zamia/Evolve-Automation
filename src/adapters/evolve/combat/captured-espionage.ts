@@ -219,7 +219,6 @@ function capturedEspionageTarget(
     target.governmentId,
     target.policy,
     target.rank,
-    target.espionagePolicy,
   );
 }
 
@@ -231,18 +230,18 @@ function capturedEspionageInput(
 ): CapturedEspionageInput {
   const elusive = Boolean(readProperty(readProperty(root, "race"), "elusive"));
   const purchaseReservation =
-    target.espionagePolicy === "Purchase" && target.spyCount < 3 && !elusive
+    target.policy === "Purchase" && target.spyCount < 3 && !elusive
       ? readPurchaseReservation?.()
       : undefined;
   const operation = capturedEspionageOperationForPolicy(
-    target.espionagePolicy,
+    target.policy,
     target.military,
     target.hostility,
   );
   return Object.freeze({
     enabled: true,
     governmentId: target.governmentId,
-    policy: target.espionagePolicy,
+    policy: target.policy,
     spyCount: target.spyCount,
     sabotageProgress: target.sabotageProgress,
     military: target.military,
@@ -657,7 +656,8 @@ export function createCapturedEspionage(
       const targetGovernmentId =
         modalFromOpening !== undefined
           ? modalGovernmentId
-          : strategy.selectedTargetId;
+          : (strategy.selectedTargetId ??
+            strategy.governments[0]?.governmentId);
       if (targetGovernmentId === null || targetGovernmentId === undefined)
         return capturedEspionageEmptyInput();
       const target = strategy.governments.find(
@@ -865,7 +865,6 @@ export function createCapturedEspionage(
         currentStrategyTarget.governmentId !== active.target.governmentId ||
         currentTarget.governmentId !== active.target.governmentId ||
         currentTarget.policy !== active.target.policy ||
-        currentTarget.espionagePolicy !== active.target.espionagePolicy ||
         !capturedEspionageInputsMatch(currentInput, active.input) ||
         currentState.spyCount !== active.input.spyCount ||
         currentState.sabotageProgress !== active.input.sabotageProgress ||

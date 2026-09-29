@@ -132,12 +132,7 @@ function readCycleInput(
     if (visible) governmentCount = index + 1;
   }
   const targets = readCapturedForeignTargets(root, controls, control, settings);
-  const strategy = selectCapturedForeignStrategy(
-    root,
-    settings,
-    targets,
-    "spy-manager",
-  );
+  const strategy = selectCapturedForeignStrategy(root, settings, targets);
   const needsPurchaseReservation =
     settings["autoFight"] === true &&
     readProperty(tech, "unify") === 1 &&

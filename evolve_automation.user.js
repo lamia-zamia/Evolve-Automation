@@ -16299,7 +16299,7 @@
       )
     });
   }
-  function readCapturedForeignGovernment(root, index, policy, rank, espionagePolicy = policy) {
+  function readCapturedForeignGovernment(root, index, policy, rank) {
     let government = readProperty(
       readProperty(readProperty(root, "civic"), "foreign"),
       `gov${index}`
@@ -16310,7 +16310,6 @@
       return Object.freeze({
         governmentId: index,
         rank,
-        espionagePolicy,
         policy,
         military,
         spyCount: finite(government.spy) ?? 0,
@@ -16343,8 +16342,8 @@
     }
     return Object.freeze(governments);
   }
-  function capturedForeignGovernmentWithPolicy(target, policy, espionagePolicy = policy === "Ignore" ? target.espionagePolicy : policy) {
-    return target.policy === policy && target.espionagePolicy === espionagePolicy ? target : Object.freeze({ ...target, policy, espionagePolicy });
+  function capturedForeignGovernmentWithPolicy(target, policy) {
+    return target.policy === policy ? target : Object.freeze({ ...target, policy });
   }
   function capturedForeignPacifistGuardActive(root, settings) {
     if (settings.achievementGuards !== !0 || settings.guardPacifist === !1)
@@ -16462,7 +16461,7 @@
       }
     }
   }
-  function selectCapturedForeignStrategy(root, settings, governments, policyMode = "captured") {
+  function selectCapturedForeignStrategy(root, settings, governments) {
     let achievementGoal = capturedForeignAchievementGoal(
       root,
       settings,
@@ -16471,14 +16470,9 @@
       (target) => target.governmentId < 3 && achievementPolicy !== null ? capturedForeignGovernmentWithPolicy(target, achievementPolicy) : target
     ), unificationRequested = capturedForeignSettingBoolean(settings, "foreignUnification", !0) || achievementGoal !== null, controlledForeigns = active.filter(
       (target) => target.annexed && target.policy === "Annex" || target.purchased && target.policy === "Purchase" || target.occupied && target.policy === "Occupy"
-    ).length, spyManagerPolicyMode = policyMode === "spy-manager", policyAdjustmentsEnabled = !spyManagerPolicyMode || !capturedForeignSettingBoolean(settings, "foreignPacifist", !1) && !capturedForeignPacifistGuardActive(root, settings), currentTarget;
-    if (spyManagerPolicyMode)
-      for (let target of active)
-        target.rank === "Inferior" && !target.annexed && !target.purchased && (currentTarget = target);
-    else
-      currentTarget = active.find(
-        (target) => target.rank === "Inferior" && !target.annexed && !target.purchased
-      );
+    ).length, policyAdjustmentsEnabled = !capturedForeignSettingBoolean(settings, "foreignPacifist", !1) && !capturedForeignPacifistGuardActive(root, settings), currentTarget;
+    for (let target of active)
+      target.rank === "Inferior" && !target.annexed && !target.purchased && (currentTarget = target);
     if (currentTarget = policyAdjustmentsEnabled ? currentTarget ?? active.find((target) => target.occupied) ?? active[0] : void 0, currentTarget === void 0)
       return Object.freeze({
         governments: Object.freeze(active),
@@ -17228,12 +17222,7 @@
       return { status: "not-needed" };
     let visible = readCapturedForeignTargets(root, controls2, foreign, settings);
     if (visible.length === 0) return { status: "not-needed" };
-    let strategy = selectCapturedForeignStrategy(
-      root,
-      settings,
-      visible,
-      "spy-manager"
-    );
+    let strategy = selectCapturedForeignStrategy(root, settings, visible);
     if (!strategy.unificationRequested && !capturedForeignPacifistGuardActive(root, settings))
       return { status: "not-needed" };
     let race = readProperty(root, "race"), infiltrator = isRecord(race) && !!readProperty(race, "infiltrator"), moneyMax = finite(
@@ -43548,12 +43537,7 @@ Only continue if you trust the source. Injected code:
       if (visible === void 0) return;
       visible && (governmentCount = index + 1);
     }
-    let targets = readCapturedForeignTargets(root, controls2, control, settings), strategy = selectCapturedForeignStrategy(
-      root,
-      settings,
-      targets,
-      "spy-manager"
-    ), purchaseMoney = settings.autoFight === !0 && readProperty(tech, "unify") === 1 && strategy.governments.some(
+    let targets = readCapturedForeignTargets(root, controls2, control, settings), strategy = selectCapturedForeignStrategy(root, settings, targets), purchaseMoney = settings.autoFight === !0 && readProperty(tech, "unify") === 1 && strategy.governments.some(
       (government) => government.policy !== "Purchase" && government.spyCount > 0
     ) ? finite(readPurchaseMoney()) : 0, moneyMaximum = finite(
       readProperty(
@@ -43759,20 +43743,19 @@ Only continue if you trust the source. Injected code:
       root,
       target.governmentId,
       target.policy,
-      target.rank,
-      target.espionagePolicy
+      target.rank
     );
   }
   function capturedEspionageInput(root, target, readPurchaseReservation) {
-    let elusive = !!readProperty(readProperty(root, "race"), "elusive"), purchaseReservation = target.espionagePolicy === "Purchase" && target.spyCount < 3 && !elusive ? readPurchaseReservation?.() : void 0, operation2 = capturedEspionageOperationForPolicy(
-      target.espionagePolicy,
+    let elusive = !!readProperty(readProperty(root, "race"), "elusive"), purchaseReservation = target.policy === "Purchase" && target.spyCount < 3 && !elusive ? readPurchaseReservation?.() : void 0, operation2 = capturedEspionageOperationForPolicy(
+      target.policy,
       target.military,
       target.hostility
     );
     return Object.freeze({
       enabled: !0,
       governmentId: target.governmentId,
-      policy: target.espionagePolicy,
+      policy: target.policy,
       spyCount: target.spyCount,
       sabotageProgress: target.sabotageProgress,
       military: target.military,
@@ -44002,7 +43985,7 @@ Only continue if you trust the source. Injected code:
           dependencies.controls,
           foreign,
           settings
-        ), strategy = selectCapturedForeignStrategy(root, settings, targets), targetGovernmentId = modalFromOpening !== void 0 ? modalGovernmentId : strategy.selectedTargetId;
+        ), strategy = selectCapturedForeignStrategy(root, settings, targets), targetGovernmentId = modalFromOpening !== void 0 ? modalGovernmentId : strategy.selectedTargetId ?? strategy.governments[0]?.governmentId;
         if (targetGovernmentId == null)
           return capturedEspionageEmptyInput();
         let target = strategy.governments.find(
@@ -44129,7 +44112,7 @@ Only continue if you trust the source. Injected code:
           currentStrategyTarget,
           dependencies.readPurchaseReservation
         );
-        if (currentTarget === void 0 || currentState === void 0 || currentStrategyTarget === void 0 || currentInput === void 0 || currentStrategyTarget.governmentId !== active.target.governmentId || currentTarget.governmentId !== active.target.governmentId || currentTarget.policy !== active.target.policy || currentTarget.espionagePolicy !== active.target.espionagePolicy || !capturedEspionageInputsMatch(currentInput, active.input) || currentState.spyCount !== active.input.spyCount || currentState.sabotageProgress !== active.input.sabotageProgress || currentState.military !== active.input.military || currentState.hostility !== active.input.hostility || currentState.unrest !== active.input.unrest || currentState.occupied !== active.input.occupied || currentState.annexed !== active.input.annexed || currentState.purchased !== active.input.purchased)
+        if (currentTarget === void 0 || currentState === void 0 || currentStrategyTarget === void 0 || currentInput === void 0 || currentStrategyTarget.governmentId !== active.target.governmentId || currentTarget.governmentId !== active.target.governmentId || currentTarget.policy !== active.target.policy || !capturedEspionageInputsMatch(currentInput, active.input) || currentState.spyCount !== active.input.spyCount || currentState.sabotageProgress !== active.input.sabotageProgress || currentState.military !== active.input.military || currentState.hostility !== active.input.hostility || currentState.unrest !== active.input.unrest || currentState.occupied !== active.input.occupied || currentState.annexed !== active.input.annexed || currentState.purchased !== active.input.purchased)
           return discardCapturedEspionageSample(), stale(
             "captured-espionage-state-changed",
             "captured foreign espionage state changed"

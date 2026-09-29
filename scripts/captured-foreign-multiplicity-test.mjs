@@ -154,7 +154,7 @@ assert.equal(
 
 const targets = readCapturedForeignTargets(root, controls, foreign, settings);
 const strategy = selectCapturedForeignStrategy(root, settings, targets);
-assert.equal(strategy.battleTargetId, 0);
+assert.equal(strategy.battleTargetId, 2);
 assert.deepEqual(
   targets.map((target) => target.governmentId),
   [0, 1, 2],
@@ -191,7 +191,7 @@ const refreshedStrategy = selectCapturedForeignStrategy(
   settings,
   refreshedTargets,
 );
-assert.equal(refreshedStrategy.battleTargetId, 0);
+assert.equal(refreshedStrategy.battleTargetId, 2);
 assert.equal(root.civic.foreign.gov1.act, "influence");
 
 console.log("captured foreign multiplicity checks passed");

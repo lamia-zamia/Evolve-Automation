@@ -31,8 +31,6 @@ export type CapturedForeignEspionage =
 export interface CapturedForeignGovernment {
   readonly governmentId: number;
   readonly rank: CapturedForeignRank;
-  /** The policy selected for the foreign action, before battle-only suppression. */
-  readonly espionagePolicy: string;
   readonly policy: string;
   readonly military: number;
   readonly spyCount: number;
@@ -56,12 +54,6 @@ export interface CapturedForeignStrategy {
   /** Whether unification is wanted: the `foreignUnification` setting or an achievement goal. */
   readonly unificationRequested: boolean;
 }
-
-/**
- * `captured` preserves the current espionage/battle selector behavior. `spy-manager` mirrors the
- * policy adjustments used by the old `SpyManager.updateForeigns()` for spy training and reserves.
- */
-export type CapturedForeignStrategyPolicyMode = "captured" | "spy-manager";
 
 function capturedForeignSettingBoolean(
   settings: Record<string, unknown>,
@@ -130,7 +122,6 @@ export function readCapturedForeignGovernment(
   index: number,
   policy: string,
   rank: CapturedForeignRank,
-  espionagePolicy = policy,
 ): CapturedForeignGovernment | undefined {
   const government = readProperty(
     readProperty(readProperty(root, "civic"), "foreign"),
@@ -142,7 +133,6 @@ export function readCapturedForeignGovernment(
   return Object.freeze({
     governmentId: index,
     rank,
-    espionagePolicy,
     policy,
     military,
     spyCount: finite(government["spy"]) ?? 0,
@@ -194,11 +184,10 @@ export function readCapturedForeignTargets(
 export function capturedForeignGovernmentWithPolicy(
   target: CapturedForeignGovernment,
   policy: string,
-  espionagePolicy = policy === "Ignore" ? target.espionagePolicy : policy,
 ): CapturedForeignGovernment {
-  if (target.policy === policy && target.espionagePolicy === espionagePolicy)
-    return target;
-  return Object.freeze({ ...target, policy, espionagePolicy });
+  return target.policy === policy
+    ? target
+    : Object.freeze({ ...target, policy });
 }
 
 export function capturedForeignPacifistGuardActive(
@@ -442,7 +431,6 @@ export function selectCapturedForeignStrategy(
   root: unknown,
   settings: Record<string, unknown>,
   governments: readonly CapturedForeignGovernment[],
-  policyMode: CapturedForeignStrategyPolicyMode = "captured",
 ): CapturedForeignStrategy {
   const achievementGoal = capturedForeignAchievementGoal(
     root,
@@ -469,24 +457,15 @@ export function selectCapturedForeignStrategy(
       (target.purchased && target.policy === "Purchase") ||
       (target.occupied && target.policy === "Occupy"),
   ).length;
-  const spyManagerPolicyMode = policyMode === "spy-manager";
   const policyAdjustmentsEnabled =
-    !spyManagerPolicyMode ||
-    (!capturedForeignSettingBoolean(settings, "foreignPacifist", false) &&
-      !capturedForeignPacifistGuardActive(root, settings));
+    !capturedForeignSettingBoolean(settings, "foreignPacifist", false) &&
+    !capturedForeignPacifistGuardActive(root, settings);
   let currentTarget: CapturedForeignGovernment | undefined;
-  if (spyManagerPolicyMode) {
-    // SpyManager.updateForeigns() assigned each eligible inferior in order, so the last one won.
-    for (const target of active) {
-      if (target.rank === "Inferior" && !target.annexed && !target.purchased) {
-        currentTarget = target;
-      }
+  // SpyManager.updateForeigns() assigned each eligible Inferior in order, so the last one won.
+  for (const target of active) {
+    if (target.rank === "Inferior" && !target.annexed && !target.purchased) {
+      currentTarget = target;
     }
-  } else {
-    currentTarget = active.find(
-      (target) =>
-        target.rank === "Inferior" && !target.annexed && !target.purchased,
-    );
   }
   currentTarget = policyAdjustmentsEnabled
     ? (currentTarget ?? active.find((target) => target.occupied) ?? active[0])
