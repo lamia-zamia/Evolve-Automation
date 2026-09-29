@@ -3370,11 +3370,11 @@
     let { rootState, controls: controls2, costs, readTargets } = dependencies, reportSkipped = dependencies.onSkipped ?? (() => {
     }), reportDiagnostic = dependencies.onDiagnostic ?? (() => {
     }), reportActivity = dependencies.onActivity ?? (() => {
-    }), cycle = /* @__PURE__ */ new Map(), savingCycle = /* @__PURE__ */ new Map(), nextSavingPrices = /* @__PURE__ */ new Map(), savingPrices = /* @__PURE__ */ new Map();
+    }), cycle = /* @__PURE__ */ new Map(), savingCycle = /* @__PURE__ */ new Map();
     return Object.freeze({
       family: "buildings",
       finishCycle() {
-        savingCycle = cycle, savingPrices = nextSavingPrices;
+        savingCycle = cycle;
       },
       readSavingCost(candidate) {
         let previous = savingCycle.get(candidate.key);
@@ -3384,16 +3384,12 @@
           return null;
         let building = readBuilding(rootState.readRoot(), previous.target);
         if (building === void 0) return;
-        let count2 = Number(building.count);
-        if (count2 >= previous.target.maximum) return null;
-        if (count2 !== previous.count) {
-          let next = savingPrices.get(candidate.key);
-          return next?.count === count2 ? next.cost : void 0;
-        }
-        return candidate.cost;
+        if (Number(building.count) >= previous.target.maximum) return null;
+        let current = costs.readCost(previous.target.elementId);
+        return current?.pool === candidate.pool ? current?.cost : void 0;
       },
       beginCycle() {
-        nextSavingPrices = /* @__PURE__ */ new Map(), dependencies.ensureControls?.();
+        dependencies.ensureControls?.();
         let root = rootState.readRoot(), entries = /* @__PURE__ */ new Map();
         for (let target of readTargets()) {
           let building = readBuilding(root, target);
@@ -3409,7 +3405,6 @@
           }
           entries.set(target.key, {
             target,
-            count: Number(building.count),
             candidate: Object.freeze({
               key: target.key,
               actionId: target.elementId,
@@ -3481,13 +3476,6 @@
             ...base
           });
         if (built) {
-          if (after < candidate.target.maximum) {
-            let next = costs.readCost(candidate.target.elementId);
-            next !== void 0 && next.pool === candidate.candidate.pool && nextSavingPrices.set(
-              key,
-              Object.freeze({ count: after, cost: next.cost })
-            );
-          }
           let label = readCapturedControlLabel(handle, candidate.target.id);
           reportActivity({
             message: `Built ${label} (${after})`,
@@ -4353,20 +4341,16 @@
         let settings = isNonArrayRecord(settingsValue) ? settingsValue : {};
         if (settings[`arpa_${previous.projectId}`] === !1 || settings[`arpa_w_${previous.projectId}`] === 0)
           return null;
-        let current = projectState(rootState.readRoot(), previous.projectId);
-        if (current === void 0) return;
+        let offered = catalog.readProjects();
+        if (offered === void 0) return;
+        let current = offered.find(
+          (project) => project.projectId === previous.projectId && project.elementId === previous.elementId
+        );
+        if (current === void 0) return null;
         let maximum = Number(settings[`arpa_m_${previous.projectId}`]);
         if (Number.isFinite(maximum) && maximum >= 0 && current.rank >= maximum)
           return null;
-        if (current.rank !== previous.rank) return;
-        let perPercent = Object.freeze(
-          Object.fromEntries(
-            Object.entries(previous.cost).map(([id, amount]) => [
-              id,
-              amount / previous.steps
-            ])
-          )
-        ), sample = resources.readResources(Object.keys(perPercent));
+        let perPercent = current.cost, sample = resources.readResources(Object.keys(perPercent));
         if (sample === void 0) return;
         let steps = Math.min(
           Math.max(

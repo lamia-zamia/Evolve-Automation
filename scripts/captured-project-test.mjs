@@ -284,7 +284,11 @@ function makeAdapter({
         catalog: {
           readProjects() {
             catalogReads++;
-            return catalog ?? undefined;
+            return catalog?.map((project) => ({
+              ...project,
+              rank: root.arpa[project.projectId]?.rank,
+              progress: root.arpa[project.projectId]?.complete,
+            }));
           },
         },
         resources,
@@ -305,7 +309,16 @@ function makeAdapter({
       respectReservations: true,
     }),
   });
-  return { adapter, root, calls, activity, reads: () => catalogReads };
+  return {
+    adapter,
+    root,
+    calls,
+    activity,
+    reads: () => catalogReads,
+    setCatalog: (next) => {
+      catalog = next;
+    },
+  };
 }
 
 // Old Project.updateResourceRequirements refreshes the next currentStep chunk before demand.
@@ -348,8 +361,24 @@ function makeAdapter({
     name: "arpalhc",
     cost: { Money: 20, Stone: 8 },
   });
-  assert.equal(fixture.reads(), 1);
+  assert.equal(fixture.reads(), 3);
   fixture.root.arpa.lhc.rank = 2;
+  fixture.root.arpa.lhc.complete = 0;
+  fixture.setCatalog([
+    offered("lhc", {
+      rank: 2,
+      progress: 0,
+      cost: { Money: 25, Stone: 9 },
+    }),
+  ]);
+  assert.deepEqual(fixture.adapter.observations.readSavingTarget(), {
+    name: "arpalhc",
+    cost: { Money: 125, Stone: 45 },
+  });
+  assert.deepEqual(fixture.calls, []);
+  fixture.setCatalog([]);
+  assert.equal(fixture.adapter.observations.readSavingTarget(), null);
+  fixture.setCatalog(undefined);
   assert.throws(
     () => fixture.adapter.observations.readSavingTarget(),
     /saving cost unavailable/,

@@ -114,6 +114,7 @@ function makeScenario({
   uninitializedMoneyMaximum = false,
   queue = [],
   bindControl = true,
+  marketStorage = false,
 } = {}) {
   const pageBody = element("div", { id: "page" });
   const mainColumn = element("div", { id: "mainColumn" });
@@ -130,6 +131,11 @@ function makeScenario({
   content.append(...mainPanels);
   mainColumn.appendChild(content);
   pageBody.appendChild(mainColumn);
+  if (marketStorage) {
+    pageBody.appendChild(element("div", { id: "market-qty" }));
+    pageBody.appendChild(element("div", { id: "market-Food" }));
+    pageBody.appendChild(element("div", { id: "createHead" }));
+  }
   const document = createTestDocument(pageBody);
 
   const gameRoot = {
@@ -151,6 +157,8 @@ function makeScenario({
       showCiv: true,
       showCivic: true,
       showResearch: true,
+      showMarket: marketStorage,
+      showStorage: marketStorage,
       showResources: true,
       showGenetics: true,
       arpa: { physics: true },
@@ -208,8 +216,8 @@ function makeScenario({
     },
     race: { species: "human", iceage: true },
     stats: { days: 100, reset: 1, resets: 1 },
-    tech: { mad: 1, high_tech: 7 },
-    city: {},
+    tech: { mad: 1, high_tech: 7, ...(marketStorage ? { trade: true } : {}) },
+    city: marketStorage ? { market: { qty: 1, mtrade: 1, trade: 0 } } : {},
     civic: {},
     portal: {},
     arpa: initialProject ? { [projectId]: { rank, complete: progress } } : {},
@@ -231,6 +239,9 @@ function makeScenario({
   let actualPerPercentCost = { Money: 10.2, Knowledge: 3.2 };
   let shouldBindControl = bindControl;
   const calls = [];
+  const marketCalls = [];
+  let storageReads = 0;
+  const phases = [];
   const swaps = [];
   const draws = [];
   const hoverEvents = [];
@@ -311,6 +322,57 @@ function makeScenario({
     },
   });
   if (currentTab === 5) drawArpaPanel();
+  if (marketStorage) {
+    gameRoot.resource.Crates = { amount: 0, max: 100, display: false };
+    gameRoot.resource.Containers = { amount: 0, max: 100, display: false };
+    gameRoot.resource.Food = {
+      amount: 0,
+      max: 100,
+      display: true,
+      diff: 0,
+      value: 1,
+      trade: 0,
+      stackable: true,
+    };
+    vue.createApp({
+      el: "#market-qty",
+      data: gameRoot.city.market,
+      methods: { setQty() {} },
+    });
+    vue.createApp({
+      el: "#mTabResource",
+      methods: {
+        swapTab(index) {
+          gameRoot.settings.marketTabs = index;
+        },
+      },
+    });
+    vue.createApp({
+      el: "#createHead",
+      methods: {
+        buildCrateDesc: () => {
+          storageReads++;
+          return "Cost 1 Capacity 10";
+        },
+        buildContainerDesc: () => {
+          storageReads++;
+          return "Cost 1 Capacity 20";
+        },
+      },
+    });
+    vue.createApp({
+      el: "#market-Food",
+      methods: {
+        autoBuy() {},
+        autoSell() {},
+        zero() {},
+        purchase() {
+          marketCalls.push("purchase");
+        },
+        sell() {},
+      },
+    });
+  }
   const worker = new page.Worker("evolve/evolve.js");
   worker.addEventListener("message", () => {});
 
@@ -330,7 +392,7 @@ function makeScenario({
   const diagnostics = {
     readPerformanceEnabled: () => true,
     nowMs: () => 0,
-    recordPerformance: () => {},
+    recordPerformance: (name) => phases.push(name),
     recordCount: () => {},
     flushPerformance: () => {},
   };
@@ -357,6 +419,9 @@ function makeScenario({
 
   return {
     calls,
+    marketCalls,
+    storageReads: () => storageReads,
+    phases,
     captureComplete: pageCapture.isComplete(),
     draws,
     hoverEvents,
@@ -374,6 +439,10 @@ function makeScenario({
       actualPerPercentCost = perPercentCost;
       shouldBindControl = bind;
       drawArpaPanel();
+    },
+    setOfferPrice(displayCost, perPercentCost) {
+      drawnDisplayCost = displayCost;
+      actualPerPercentCost = perPercentCost;
     },
     swaps,
     tick(periods = 1) {
@@ -681,6 +750,143 @@ withScenario(
           "project panel, project rows, or captured build controls were unavailable",
         ),
       ),
+    );
+  },
+);
+
+// The shared ARPA scope reuses a same-rank price, then the rank tally forces a fresh draw. Market
+// and Storage consume the completed construction order before the next construction pass.
+withScenario(
+  {
+    progress: 95,
+    rank: 1,
+    money: 0,
+    scriptSettings: {
+      arpa_lhc: true,
+      arpa_p_lhc: 0,
+      arpa_m_lhc: -1,
+      arpa_w_lhc: 2,
+    },
+  },
+  (scenario) => {
+    scenario.tick();
+    const drawsAtRankOne = scenario.draws.length;
+    scenario.gameRoot.arpa.lhc.complete = 98;
+    scenario.tick();
+    assert.equal(scenario.draws.length, drawsAtRankOne);
+    assert.deepEqual(scenario.calls, []);
+  },
+);
+
+withScenario(
+  {
+    progress: 95,
+    rank: 1,
+    marketStorage: true,
+    scriptSettings: {
+      autoMarket: true,
+      autoStorage: true,
+      autoARPA: true,
+      buyFood: true,
+      res_buy_r_Food: 0.9,
+      arpa_lhc: true,
+      arpa_p_lhc: 0,
+      arpa_m_lhc: -1,
+      arpa_w_lhc: 2,
+    },
+  },
+  (scenario) => {
+    scenario.tick();
+    assert.equal(scenario.gameRoot.arpa.lhc.rank, 2);
+    const drawsBefore = scenario.draws.length;
+    const phasesBefore = scenario.phases.length;
+    const storageReadsBefore = scenario.storageReads();
+    const errorsBefore = scenario.errors.length;
+    scenario.setOfferPrice(
+      { Money: 25, Knowledge: 9 },
+      { Money: 25.2, Knowledge: 9.2 },
+    );
+    scenario.gameRoot.resource.Money.amount = 75;
+    scenario.tick();
+    const nextPhases = scenario.phases.slice(phasesBefore);
+    assert.equal(scenario.draws.length, drawsBefore + 1);
+    assert.ok(
+      nextPhases.indexOf("autoMarket.adjustTradeRoutes") <
+        nextPhases.indexOf("autoBuild.beginCycle"),
+      JSON.stringify(nextPhases),
+    );
+    assert.ok(
+      nextPhases.includes("autoMarket.readSell"),
+      JSON.stringify({ nextPhases, errors: scenario.errors }),
+    );
+    assert.ok(
+      nextPhases.includes("autoStorage.read"),
+      JSON.stringify(nextPhases),
+    );
+    assert.ok(
+      nextPhases.indexOf("autoStorage.read") <
+        nextPhases.indexOf("autoBuild.beginCycle"),
+      JSON.stringify(nextPhases),
+    );
+    assert.ok(
+      nextPhases.indexOf("autoBuild.beginCycle") <
+        nextPhases.indexOf("autoBuild.sampleCandidate"),
+      JSON.stringify(nextPhases),
+    );
+    assert.ok(scenario.storageReads() > storageReadsBefore);
+    assert.ok(
+      scenario.errors
+        .slice(errorsBefore)
+        .every((message) => !message.startsWith("autoStorage stopped")),
+      JSON.stringify(scenario.errors),
+    );
+    assert.equal(
+      nextPhases
+        .slice(0, nextPhases.indexOf("autoMarket.adjustTradeRoutes"))
+        .includes("autoBuild.sampleCandidate"),
+      false,
+      JSON.stringify(nextPhases),
+    );
+    assert.equal(
+      scenario.errors.some((message) =>
+        message.includes("construction saving cost unavailable"),
+      ),
+      false,
+      JSON.stringify(scenario.errors),
+    );
+    assert.deepEqual(scenario.marketCalls, []);
+  },
+);
+
+withScenario(
+  {
+    progress: 95,
+    rank: 1,
+    marketStorage: true,
+    scriptSettings: {
+      autoMarket: true,
+      autoStorage: true,
+      autoARPA: true,
+      buyFood: true,
+      res_buy_r_Food: 0.9,
+      arpa_lhc: true,
+      arpa_p_lhc: 0,
+      arpa_m_lhc: -1,
+      arpa_w_lhc: 2,
+    },
+  },
+  (scenario) => {
+    scenario.tick();
+    scenario.setOfferPrice(
+      { Money: 5, Knowledge: 1 },
+      { Money: 5.2, Knowledge: 1.2 },
+    );
+    scenario.gameRoot.resource.Money.amount = 75;
+    scenario.tick();
+    assert.deepEqual(
+      scenario.marketCalls,
+      ["purchase"],
+      JSON.stringify(scenario.errors),
     );
   },
 );

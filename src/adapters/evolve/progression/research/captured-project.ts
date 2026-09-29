@@ -160,20 +160,18 @@ export function createCapturedProjectSource(
         settings[`arpa_w_${previous.projectId}`] === 0
       )
         return null;
-      const current = projectState(rootState.readRoot(), previous.projectId);
-      if (current === undefined) return undefined;
+      const offered = catalog.readProjects();
+      if (offered === undefined) return undefined;
+      const current = offered.find(
+        (project) =>
+          project.projectId === previous.projectId &&
+          project.elementId === previous.elementId,
+      );
+      if (current === undefined) return null;
       const maximum = Number(settings[`arpa_m_${previous.projectId}`]);
       if (Number.isFinite(maximum) && maximum >= 0 && current.rank >= maximum)
         return null;
-      if (current.rank !== previous.rank) return undefined;
-      const perPercent = Object.freeze(
-        Object.fromEntries(
-          Object.entries(previous.cost).map(([id, amount]) => [
-            id,
-            amount / previous.steps,
-          ]),
-        ),
-      );
+      const perPercent = current.cost;
       const sample = resources.readResources(Object.keys(perPercent));
       if (sample === undefined) return undefined;
       let steps = Math.min(

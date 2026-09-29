@@ -237,6 +237,54 @@ function makeControl(dependencies) {
   });
 }
 
+// The game's updateBuildings reprices an externally changed count before demand. The completed
+// construction order remains in force, but its current price comes from the game queue probe.
+{
+  const page = makePage({
+    buildings: {
+      farm: { count: 0, priceAt: (count) => ({ Money: 100 * (count + 1) }) },
+    },
+    resources: { Money: { amount: 0, max: 1000 } },
+  });
+  const control = makeControl({
+    rootState: page.rootState,
+    controls: page.registry,
+    readPolicy: policy([target("farm", 50)]),
+  });
+  assert.equal(control.runCycle().status, "succeeded");
+  assert.deepEqual(control.observations.readSavingTarget(), {
+    name: "city-farm",
+    cost: { Money: 100 },
+  });
+  page.root.city.farm.count = 1;
+  assert.deepEqual(control.observations.readSavingTarget(), {
+    name: "city-farm",
+    cost: { Money: 200 },
+  });
+}
+
+// A game modifier can also reprice the same building count between construction passes.
+{
+  let price = 100;
+  const page = makePage({
+    buildings: { farm: { count: 0, priceAt: () => ({ Money: price }) } },
+    resources: { Money: { amount: 0, max: 1000 } },
+  });
+  const control = makeControl({
+    rootState: page.rootState,
+    controls: page.registry,
+    readPolicy: policy([target("farm", 50)]),
+  });
+  assert.equal(control.runCycle().status, "succeeded");
+  assert.deepEqual(control.observations.readSavingTarget()?.cost, {
+    Money: 100,
+  });
+  price = 200;
+  assert.deepEqual(control.observations.readSavingTarget()?.cost, {
+    Money: 200,
+  });
+}
+
 /** A queue entry as the game stores it: an id the cost oracle resolves, plus its label. */
 function queued(id, label = id) {
   const separator = id.indexOf("-");
