@@ -26905,29 +26905,86 @@
     Object.freeze({ id: "eldritch", label: "Eldritch" }),
     Object.freeze({ id: "primordial", label: "Primordial" }),
     Object.freeze({ id: "hybrid", label: "Hybrid" })
-  ]), CAPTURED_TRAIT_GENUS_EMERGENT = Object.freeze({
-    humanoid: Object.freeze(["versatility"]),
-    carnivore: Object.freeze(["carnivore"]),
-    herbivore: Object.freeze(["grazer"]),
-    omnivore: Object.freeze([]),
-    small: Object.freeze(["unassuming"]),
-    giant: Object.freeze([]),
-    reptilian: Object.freeze([]),
-    avian: Object.freeze(["flier"]),
-    insectoid: Object.freeze(["fast_growth"]),
-    plant: Object.freeze(["photosynth"]),
-    fungi: Object.freeze(["spores"]),
-    aquatic: Object.freeze([]),
-    fey: Object.freeze([]),
-    heat: Object.freeze([]),
-    polar: Object.freeze(["pykrete"]),
-    sand: Object.freeze(["grey_market"]),
-    demonic: Object.freeze(["evil"]),
-    angelic: Object.freeze(["holy"]),
-    synthetic: Object.freeze(["artifical"]),
-    eldritch: Object.freeze(["darkness", "unfathomable"]),
-    primordial: Object.freeze(["connected"]),
-    hybrid: Object.freeze([])
+  ]);
+  function capturedTraitGenusDefinition(traits, emergent = []) {
+    return Object.freeze({
+      traits: Object.freeze(traits),
+      emergent: Object.freeze(emergent)
+    });
+  }
+  var CAPTURED_TRAIT_GENUS_DEFINITION = Object.freeze({
+    humanoid: capturedTraitGenusDefinition(
+      ["adaptable", "wasteful", "versatility"],
+      ["versatility"]
+    ),
+    carnivore: capturedTraitGenusDefinition(
+      ["carnivore", "beast", "cautious"],
+      ["carnivore"]
+    ),
+    herbivore: capturedTraitGenusDefinition(
+      ["herbivore", "instinct", "grazer"],
+      ["grazer"]
+    ),
+    omnivore: capturedTraitGenusDefinition([
+      "forager",
+      "beast",
+      "cautious",
+      "instinct"
+    ]),
+    small: capturedTraitGenusDefinition(
+      ["small", "weak", "unassuming"],
+      ["unassuming"]
+    ),
+    giant: capturedTraitGenusDefinition(["large", "strong"]),
+    reptilian: capturedTraitGenusDefinition(["cold_blooded", "scales"]),
+    avian: capturedTraitGenusDefinition(
+      ["flier", "hollow_bones", "sky_lover"],
+      ["flier"]
+    ),
+    insectoid: capturedTraitGenusDefinition(
+      ["high_pop", "fast_growth", "high_metabolism"],
+      ["fast_growth"]
+    ),
+    plant: capturedTraitGenusDefinition(
+      ["photosynth", "sappy", "asymmetrical"],
+      ["photosynth"]
+    ),
+    fungi: capturedTraitGenusDefinition(
+      ["detritivore", "spores", "spongy"],
+      ["spores"]
+    ),
+    aquatic: capturedTraitGenusDefinition(["submerged", "low_light"]),
+    fey: capturedTraitGenusDefinition(["elusive", "iron_allergy"]),
+    heat: capturedTraitGenusDefinition(["smoldering", "cold_intolerance"]),
+    polar: capturedTraitGenusDefinition(
+      ["chilled", "heat_intolerance", "pykrete"],
+      ["pykrete"]
+    ),
+    sand: capturedTraitGenusDefinition(
+      ["scavenger", "nomadic", "grey_market"],
+      ["grey_market"]
+    ),
+    demonic: capturedTraitGenusDefinition(
+      ["immoral", "soul_eater", "ruthless", "evil"],
+      ["evil"]
+    ),
+    angelic: capturedTraitGenusDefinition(
+      ["blissful", "pompous", "holy"],
+      ["holy"]
+    ),
+    synthetic: capturedTraitGenusDefinition(
+      ["artifical", "powered", "tireless"],
+      ["artifical"]
+    ),
+    eldritch: capturedTraitGenusDefinition(
+      ["psychic", "tormented", "darkness", "unfathomable"],
+      ["darkness", "unfathomable"]
+    ),
+    primordial: capturedTraitGenusDefinition(
+      ["deep_power", "ancient", "connected"],
+      ["connected"]
+    ),
+    hybrid: capturedTraitGenusDefinition([])
   }), CAPTURED_TRAIT_PSYCHIC = Object.freeze([
     Object.freeze({
       id: "boost",
@@ -46247,7 +46304,7 @@ Only continue if you trust the source. Injected code:
     "evil",
     "soul_eater",
     "artifical"
-  ]);
+  ]), CAPTURED_OCULAR_NON_MUTABLE_TRAITS = /* @__PURE__ */ new Set(["xenophobic", "rigid"]);
   function capturedOcularCountOrZero(value) {
     if (!value) return 0;
     let count2 = finite(value);
@@ -46264,7 +46321,9 @@ Only continue if you trust the source. Injected code:
     return trait === "ooze" && (species === "sludge" || species === "ultra_sludge") ? !0 : !!readProperty(readProperty(race, "fanaticTraits"), trait);
   }
   function capturedOcularKnownTrait(trait) {
-    return CAPTURED_OCULAR_PERMANENT_TRAITS.has(trait) || CAPTURED_TRAIT_MUTABLE.some((candidate) => candidate.id === trait);
+    return CAPTURED_OCULAR_PERMANENT_TRAITS.has(trait) || CAPTURED_OCULAR_NON_MUTABLE_TRAITS.has(trait) || Object.values(CAPTURED_TRAIT_GENUS_DEFINITION).some(
+      (definition) => definition.traits.includes(trait)
+    ) || CAPTURED_TRAIT_MUTABLE.some((candidate) => candidate.id === trait);
   }
   function capturedOcularGenusList(root, race) {
     let strandGenus = readProperty(race, "strandGenus");
@@ -46272,7 +46331,7 @@ Only continue if you trust the source. Injected code:
       let genera = [];
       for (let value of strandGenus) {
         if (typeof value != "string" || value !== "organism" && !Object.prototype.hasOwnProperty.call(
-          CAPTURED_TRAIT_GENUS_EMERGENT,
+          CAPTURED_TRAIT_GENUS_DEFINITION,
           value
         ))
           return;
@@ -46312,11 +46371,11 @@ Only continue if you trust the source. Injected code:
   }
   function capturedOcularGenusFeederCount(genus, race) {
     if (genus === "organism") return 0;
-    let emergent = CAPTURED_TRAIT_GENUS_EMERGENT[genus];
-    if (emergent === void 0) return;
-    let emergentTraits = new Set(emergent), feeders = 0;
-    for (let trait of CAPTURED_TRAIT_MUTABLE)
-      trait.type !== "genus" || trait.source !== genus || emergentTraits.has(trait.id) || capturedOcularTraitIsPermanent(trait.id, race) || feeders++;
+    let definition = CAPTURED_TRAIT_GENUS_DEFINITION[genus];
+    if (definition === void 0) return;
+    let emergentTraits = new Set(definition.emergent), feeders = 0;
+    for (let trait of definition.traits)
+      emergentTraits.has(trait) || CAPTURED_OCULAR_PERMANENT_TRAITS.has(trait) || capturedOcularTraitIsPermanent(trait, race) || feeders++;
     return feeders;
   }
   function capturedOcularMimicTraitCount(race) {
@@ -46324,9 +46383,11 @@ Only continue if you trust the source. Injected code:
     let traits = readProperty(race, "ss_traits");
     if (!Array.isArray(traits)) return 0;
     let mimic = readProperty(race, "ss_genus");
-    if (!mimic || mimic === "none" || typeof mimic != "string" || !Object.prototype.hasOwnProperty.call(CAPTURED_TRAIT_GENUS_EMERGENT, mimic))
+    if (!mimic || mimic === "none" || typeof mimic != "string")
       return 0;
-    let emergentTraits = new Set(CAPTURED_TRAIT_GENUS_EMERGENT[mimic]), count2 = 0;
+    let mimicDefinition = CAPTURED_TRAIT_GENUS_DEFINITION[mimic];
+    if (mimicDefinition === void 0) return 0;
+    let emergentTraits = new Set(mimicDefinition.emergent), count2 = 0;
     for (let value of traits) {
       if (typeof value != "string" || !capturedOcularKnownTrait(value)) return;
       emergentTraits.has(value) || capturedOcularTraitIsPermanent(value, race) || count2++;

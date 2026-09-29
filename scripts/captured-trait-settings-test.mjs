@@ -8,6 +8,7 @@ import {
   buildTraitWishOptions,
   CAPTURED_TRAIT_BOOST_RESOURCES,
   CAPTURED_TRAIT_GAINABLE,
+  CAPTURED_TRAIT_GENUS_DEFINITION,
   CAPTURED_TRAIT_GENUS_TYPES,
   CAPTURED_TRAIT_MINOR,
   CAPTURED_TRAIT_MUTABLE,
@@ -30,6 +31,45 @@ import {
 import { createRecordSettingsLifecycle } from "./test-support/captured-settings.mjs";
 
 // Upstream id sets, in upstream order.
+// Complete `genus_def` trait membership and emergent lists at DeadSpace 6cc9ba8c.
+const expectedGenusDefinitions = {
+  humanoid: [["adaptable", "wasteful", "versatility"], ["versatility"]],
+  carnivore: [["carnivore", "beast", "cautious"], ["carnivore"]],
+  herbivore: [["herbivore", "instinct", "grazer"], ["grazer"]],
+  omnivore: [["forager", "beast", "cautious", "instinct"], []],
+  small: [["small", "weak", "unassuming"], ["unassuming"]],
+  giant: [["large", "strong"], []],
+  reptilian: [["cold_blooded", "scales"], []],
+  avian: [["flier", "hollow_bones", "sky_lover"], ["flier"]],
+  insectoid: [["high_pop", "fast_growth", "high_metabolism"], ["fast_growth"]],
+  plant: [["photosynth", "sappy", "asymmetrical"], ["photosynth"]],
+  fungi: [["detritivore", "spores", "spongy"], ["spores"]],
+  aquatic: [["submerged", "low_light"], []],
+  fey: [["elusive", "iron_allergy"], []],
+  heat: [["smoldering", "cold_intolerance"], []],
+  polar: [["chilled", "heat_intolerance", "pykrete"], ["pykrete"]],
+  sand: [["scavenger", "nomadic", "grey_market"], ["grey_market"]],
+  demonic: [["immoral", "soul_eater", "ruthless", "evil"], ["evil"]],
+  angelic: [["blissful", "pompous", "holy"], ["holy"]],
+  synthetic: [["artifical", "powered", "tireless"], ["artifical"]],
+  eldritch: [
+    ["psychic", "tormented", "darkness", "unfathomable"],
+    ["darkness", "unfathomable"],
+  ],
+  primordial: [["deep_power", "ancient", "connected"], ["connected"]],
+  hybrid: [[], []],
+};
+assert.deepEqual(
+  Object.fromEntries(
+    Object.entries(CAPTURED_TRAIT_GENUS_DEFINITION).map(
+      ([genus, definition]) => [
+        genus,
+        [definition.traits, definition.emergent],
+      ],
+    ),
+  ),
+  expectedGenusDefinitions,
+);
 assert.equal(CAPTURED_TRAIT_RACES.length, 67);
 assert.equal(CAPTURED_TRAIT_RACES[0].id, "protoplasm");
 assert.equal(CAPTURED_TRAIT_RACES[1].id, "human");

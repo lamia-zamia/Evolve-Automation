@@ -11,7 +11,7 @@ import type {
   OcularPowerReader,
 } from "../../../ports/ocular-power.ts";
 import {
-  CAPTURED_TRAIT_GENUS_EMERGENT,
+  CAPTURED_TRAIT_GENUS_DEFINITION,
   CAPTURED_TRAIT_MUTABLE,
   CAPTURED_TRAIT_OCULAR,
   CAPTURED_TRAIT_RACE_TYPE,
@@ -86,6 +86,7 @@ const CAPTURED_OCULAR_PERMANENT_TRAITS = new Set([
   "soul_eater",
   "artifical",
 ]);
+const CAPTURED_OCULAR_NON_MUTABLE_TRAITS = new Set(["xenophobic", "rigid"]);
 
 function capturedOcularCountOrZero(value: unknown): number | undefined {
   // DeadSpace uses `value || 0` for geneRecess, geneSlotBonus, and evolve counts.
@@ -118,6 +119,10 @@ function capturedOcularTraitIsPermanent(trait: string, race: unknown): boolean {
 function capturedOcularKnownTrait(trait: string): boolean {
   return (
     CAPTURED_OCULAR_PERMANENT_TRAITS.has(trait) ||
+    CAPTURED_OCULAR_NON_MUTABLE_TRAITS.has(trait) ||
+    Object.values(CAPTURED_TRAIT_GENUS_DEFINITION).some((definition) =>
+      definition.traits.includes(trait),
+    ) ||
     CAPTURED_TRAIT_MUTABLE.some((candidate) => candidate.id === trait)
   );
 }
@@ -134,7 +139,7 @@ function capturedOcularGenusList(
         typeof value !== "string" ||
         (value !== "organism" &&
           !Object.prototype.hasOwnProperty.call(
-            CAPTURED_TRAIT_GENUS_EMERGENT,
+            CAPTURED_TRAIT_GENUS_DEFINITION,
             value,
           ))
       ) {
@@ -189,16 +194,15 @@ function capturedOcularGenusFeederCount(
   race: unknown,
 ): number | undefined {
   if (genus === "organism") return 0;
-  const emergent = CAPTURED_TRAIT_GENUS_EMERGENT[genus];
-  if (emergent === undefined) return undefined;
-  const emergentTraits = new Set(emergent);
+  const definition = CAPTURED_TRAIT_GENUS_DEFINITION[genus];
+  if (definition === undefined) return undefined;
+  const emergentTraits = new Set(definition.emergent);
   let feeders = 0;
-  for (const trait of CAPTURED_TRAIT_MUTABLE) {
+  for (const trait of definition.traits) {
     if (
-      trait.type !== "genus" ||
-      trait.source !== genus ||
-      emergentTraits.has(trait.id) ||
-      capturedOcularTraitIsPermanent(trait.id, race)
+      emergentTraits.has(trait) ||
+      CAPTURED_OCULAR_PERMANENT_TRAITS.has(trait) ||
+      capturedOcularTraitIsPermanent(trait, race)
     ) {
       continue;
     }
@@ -212,16 +216,13 @@ function capturedOcularMimicTraitCount(race: unknown): number | undefined {
   const traits = readProperty(race, "ss_traits");
   if (!Array.isArray(traits)) return 0;
   const mimic = readProperty(race, "ss_genus");
-  if (
-    !mimic ||
-    mimic === "none" ||
-    typeof mimic !== "string" ||
-    !Object.prototype.hasOwnProperty.call(CAPTURED_TRAIT_GENUS_EMERGENT, mimic)
-  ) {
+  if (!mimic || mimic === "none" || typeof mimic !== "string") {
     return 0;
   }
 
-  const emergentTraits = new Set(CAPTURED_TRAIT_GENUS_EMERGENT[mimic]);
+  const mimicDefinition = CAPTURED_TRAIT_GENUS_DEFINITION[mimic];
+  if (mimicDefinition === undefined) return 0;
+  const emergentTraits = new Set(mimicDefinition.emergent);
   let count = 0;
   for (const value of traits as readonly unknown[]) {
     if (typeof value !== "string") return undefined;

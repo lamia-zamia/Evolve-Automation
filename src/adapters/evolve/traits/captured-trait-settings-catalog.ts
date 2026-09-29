@@ -397,32 +397,98 @@ export const CAPTURED_TRAIT_GENUS_TYPES: readonly {
   Object.freeze({ id: "hybrid", label: "Hybrid" }),
 ]);
 
-/** `genus_def.<genus>.emergent` from DeadSpace `src/races.js`; excluded from strand pairs. */
-export const CAPTURED_TRAIT_GENUS_EMERGENT: Readonly<
-  Record<string, readonly string[]>
+function capturedTraitGenusDefinition(
+  traits: string[],
+  emergent: string[] = [],
+): {
+  readonly traits: readonly string[];
+  readonly emergent: readonly string[];
+} {
+  return Object.freeze({
+    traits: Object.freeze(traits),
+    emergent: Object.freeze(emergent),
+  });
+}
+
+/** DeadSpace `src/races.js` `genus_def` trait keys and emergent lists at 6cc9ba8c. */
+export const CAPTURED_TRAIT_GENUS_DEFINITION: Readonly<
+  Record<
+    string,
+    { readonly traits: readonly string[]; readonly emergent: readonly string[] }
+  >
 > = Object.freeze({
-  humanoid: Object.freeze(["versatility"]),
-  carnivore: Object.freeze(["carnivore"]),
-  herbivore: Object.freeze(["grazer"]),
-  omnivore: Object.freeze([]),
-  small: Object.freeze(["unassuming"]),
-  giant: Object.freeze([]),
-  reptilian: Object.freeze([]),
-  avian: Object.freeze(["flier"]),
-  insectoid: Object.freeze(["fast_growth"]),
-  plant: Object.freeze(["photosynth"]),
-  fungi: Object.freeze(["spores"]),
-  aquatic: Object.freeze([]),
-  fey: Object.freeze([]),
-  heat: Object.freeze([]),
-  polar: Object.freeze(["pykrete"]),
-  sand: Object.freeze(["grey_market"]),
-  demonic: Object.freeze(["evil"]),
-  angelic: Object.freeze(["holy"]),
-  synthetic: Object.freeze(["artifical"]),
-  eldritch: Object.freeze(["darkness", "unfathomable"]),
-  primordial: Object.freeze(["connected"]),
-  hybrid: Object.freeze([]),
+  humanoid: capturedTraitGenusDefinition(
+    ["adaptable", "wasteful", "versatility"],
+    ["versatility"],
+  ),
+  carnivore: capturedTraitGenusDefinition(
+    ["carnivore", "beast", "cautious"],
+    ["carnivore"],
+  ),
+  herbivore: capturedTraitGenusDefinition(
+    ["herbivore", "instinct", "grazer"],
+    ["grazer"],
+  ),
+  omnivore: capturedTraitGenusDefinition([
+    "forager",
+    "beast",
+    "cautious",
+    "instinct",
+  ]),
+  small: capturedTraitGenusDefinition(
+    ["small", "weak", "unassuming"],
+    ["unassuming"],
+  ),
+  giant: capturedTraitGenusDefinition(["large", "strong"]),
+  reptilian: capturedTraitGenusDefinition(["cold_blooded", "scales"]),
+  avian: capturedTraitGenusDefinition(
+    ["flier", "hollow_bones", "sky_lover"],
+    ["flier"],
+  ),
+  insectoid: capturedTraitGenusDefinition(
+    ["high_pop", "fast_growth", "high_metabolism"],
+    ["fast_growth"],
+  ),
+  plant: capturedTraitGenusDefinition(
+    ["photosynth", "sappy", "asymmetrical"],
+    ["photosynth"],
+  ),
+  fungi: capturedTraitGenusDefinition(
+    ["detritivore", "spores", "spongy"],
+    ["spores"],
+  ),
+  aquatic: capturedTraitGenusDefinition(["submerged", "low_light"]),
+  fey: capturedTraitGenusDefinition(["elusive", "iron_allergy"]),
+  heat: capturedTraitGenusDefinition(["smoldering", "cold_intolerance"]),
+  polar: capturedTraitGenusDefinition(
+    ["chilled", "heat_intolerance", "pykrete"],
+    ["pykrete"],
+  ),
+  sand: capturedTraitGenusDefinition(
+    ["scavenger", "nomadic", "grey_market"],
+    ["grey_market"],
+  ),
+  demonic: capturedTraitGenusDefinition(
+    ["immoral", "soul_eater", "ruthless", "evil"],
+    ["evil"],
+  ),
+  angelic: capturedTraitGenusDefinition(
+    ["blissful", "pompous", "holy"],
+    ["holy"],
+  ),
+  synthetic: capturedTraitGenusDefinition(
+    ["artifical", "powered", "tireless"],
+    ["artifical"],
+  ),
+  eldritch: capturedTraitGenusDefinition(
+    ["psychic", "tormented", "darkness", "unfathomable"],
+    ["darkness", "unfathomable"],
+  ),
+  primordial: capturedTraitGenusDefinition(
+    ["deep_power", "ancient", "connected"],
+    ["connected"],
+  ),
+  hybrid: capturedTraitGenusDefinition([]),
 });
 
 /** Psychic power options in script order. */

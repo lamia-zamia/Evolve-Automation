@@ -192,10 +192,9 @@ function makeRecessiveOcularRace({ traitSlots = {}, ...raceOverrides } = {}) {
   };
 }
 
-function enforceDeadSpaceOcularPow(config, stateKey, rebind) {
+function enforceDeadSpaceOcularPow(config, stateKey, rebind, capacity = 2) {
   // DeadSpace src/races.js ocularPower().pow(v) enforces vars()[0] over the
   // rendered d/p/w/t/f/c keys, then repeats in reverse while preserving v.
-  const capacity = 2;
   const renderKeys = ["d", "p", "w", "t", "f", "c"];
   let active = 0;
   for (const key of renderKeys) {
@@ -533,6 +532,109 @@ for (const race of [
   assert.equal(capturedOcularCapacity({ ocular_power: 1.33, empowered: 2 }), 3);
 
   const baseOcularState = { genes: { evolve: 0 }, custom: {} };
+  for (const [slot, rank, capacity] of [
+    [14, 1.33, 2],
+    [10, 1.73, 3],
+  ]) {
+    const omnivore = makeRecessiveOcularRace({
+      strandGenus: ["omnivore"],
+      traitSlots: { [slot]: "ocular_power" },
+    });
+    assert.equal(
+      capturedOcularEffectiveRank(omnivore, baseOcularState),
+      rank,
+      `omnivore Ocular slot ${slot} effective rank`,
+    );
+    assert.equal(
+      capturedOcularCapacity(omnivore, baseOcularState),
+      capacity,
+      `omnivore Ocular slot ${slot} capacity`,
+    );
+  }
+  for (const [label, overrides, slot, capacity] of [
+    ["humanoid emergent", { strandGenus: ["humanoid"] }, 12, 2],
+    ["humanoid emergent boundary", { strandGenus: ["humanoid"] }, 14, 3],
+    ["demonic permanent", { strandGenus: ["demonic"] }, 12, 2],
+    ["demonic permanent boundary", { strandGenus: ["demonic"] }, 14, 3],
+    ["empty hybrid definition", { strandGenus: ["hybrid"] }, 10, 2],
+    [
+      "one fanatic feeder leaves two omnivore pairs",
+      { strandGenus: ["omnivore"], fanaticTraits: { beast: 1 } },
+      14,
+      2,
+    ],
+    [
+      "fanatic feeders",
+      { strandGenus: ["omnivore"], fanaticTraits: { beast: 1, cautious: 1 } },
+      12,
+      2,
+    ],
+    [
+      "fanatic boundary",
+      { strandGenus: ["omnivore"], fanaticTraits: { beast: 1, cautious: 1 } },
+      14,
+      3,
+    ],
+    [
+      "separate hybrid genus pairs",
+      {
+        strandGenus: ["omnivore", "humanoid"],
+        fanaticTraits: { beast: 1, adaptable: 1 },
+      },
+      16,
+      2,
+    ],
+    [
+      "separate hybrid genus boundary",
+      {
+        strandGenus: ["omnivore", "humanoid"],
+        fanaticTraits: { beast: 1, adaptable: 1 },
+      },
+      14,
+      3,
+    ],
+  ]) {
+    assert.equal(
+      capturedOcularCapacity(
+        makeRecessiveOcularRace({
+          ...overrides,
+          traitSlots: { [slot]: "ocular_power" },
+        }),
+        baseOcularState,
+      ),
+      capacity,
+      label,
+    );
+  }
+  assert.equal(
+    capturedOcularCapacity(
+      makeRecessiveOcularRace({
+        species: "custom",
+        strandGenus: undefined,
+        traitSlots: { 14: "ocular_power" },
+      }),
+      { genes: { evolve: 0 }, custom: { race0: { genus: "omnivore" } } },
+    ),
+    2,
+    "a custom omnivore uses its genus definition",
+  );
+  assert.equal(
+    capturedOcularCapacity(
+      makeRecessiveOcularRace({
+        species: "hybrid",
+        strandGenus: undefined,
+        traitSlots: { 16: "ocular_power" },
+      }),
+      {
+        genes: { evolve: 0 },
+        custom: {
+          race1: { genus: "hybrid", hybrid: ["omnivore", "humanoid"] },
+        },
+      },
+    ),
+    2,
+    "a hybrid design sums both genus definitions",
+  );
   const recessiveOcular = makeRecessiveOcularRace({
     traitSlots: { 12: "ocular_power" },
   });
@@ -625,6 +727,19 @@ for (const race of [
     ),
     2,
     "the mimic's slottable traits add their current genus pair before recessives",
+  );
+  assert.equal(
+    capturedOcularCapacity(
+      makeRecessiveOcularRace({
+        traitSlots: { 14: "ocular_power" },
+        shapeshifter: true,
+        ss_genus: "demonic",
+        ss_traits: ["ruthless", "evil", "soul_eater"],
+      }),
+      baseOcularState,
+    ),
+    2,
+    "mimic accepts declared traits and excludes emergent and permanent traits",
   );
 
   assert.equal(
@@ -794,6 +909,52 @@ for (const race of [
     ["disintegration", "petrification"],
   );
   assert.equal(fixture.checkboxClicks.length, 2);
+  assert.deepEqual(fixture.errors, []);
+}
+
+// The production capture and pow path respects both omnivore Ocular capacities.
+for (const [slot, capacity, expected] of [
+  [14, 2, ["disintegration", "petrification"]],
+  [10, 3, ["disintegration", "petrification", "wound"]],
+]) {
+  const config = Object.fromEntries(
+    CAPTURED_TRAIT_OCULAR.map((power) => [power.stateKey, false]),
+  );
+  const root = coreRoot(
+    makeRecessiveOcularRace({
+      strandGenus: ["omnivore"],
+      traitSlots: { [slot]: "ocular_power" },
+      ocularPowerConfig: config,
+    }),
+  );
+  root.genes = { evolve: 0 };
+  root.custom = {};
+  const enabled = new Set(["disintegration", "petrification", "wound"]);
+  const priorities = { disintegration: 90, petrification: 80, wound: 70 };
+  const fixture = createCapturedOcularFixture({
+    root,
+    settings: Object.fromEntries([
+      ...CAPTURED_TRAIT_OCULAR.map((power) => [
+        `ocularPower_${power.id}`,
+        enabled.has(power.id),
+      ]),
+      ...CAPTURED_TRAIT_OCULAR.map((power) => [
+        `ocularPower_p_${power.id}`,
+        priorities[power.id] ?? 0,
+      ]),
+    ]),
+    gamePow(stateKey, rebind) {
+      enforceDeadSpaceOcularPow(config, stateKey, rebind, capacity);
+    },
+  });
+  assert.deepEqual(
+    CAPTURED_TRAIT_OCULAR.filter((power) => config[power.stateKey]).map(
+      (power) => power.id,
+    ),
+    expected,
+    `composed omnivore Ocular slot ${slot}`,
+  );
+  assert.equal(fixture.checkboxClicks.length, capacity);
   assert.deepEqual(fixture.errors, []);
 }
 
