@@ -79,6 +79,12 @@ import {
 import type { DemandPrerequisiteReport } from "./captured-demand-prerequisites.ts";
 import { planMechDemandCosts } from "../../../../domain/combat/mech-auto-choice.ts";
 import {
+  EMPTY_SPY_PURCHASE_RESERVATION,
+  planSpyPurchaseReservation,
+  type SpyPurchaseCandidate,
+  type SpyPurchaseReservation,
+} from "../../../../domain/combat/spy.ts";
+import {
   readCapturedMechState,
   withCapturedMechReservations,
   type CapturedMechReservedResources,
@@ -123,6 +129,9 @@ export interface CapturedResourceDemandDependencies {
 export interface CapturedDemandSample {
   /** Undefined when a potentially active foreign Purchase reserve could not be sampled. */
   readonly spyPurchaseMoney?: number | undefined;
+  /** Shared amount and qualifying targets from the same captured Purchase calculation. */
+  readonly spyPurchaseReservation?:
+    Readonly<SpyPurchaseReservation> | undefined;
   /** How much of a resource the queues are accumulating, clamped to what storage can hold. */
   requestedQuantity(resourceId: string): number;
   /** Other automation's resource target, excluding the Mech target when it is priceable. */
@@ -158,6 +167,7 @@ const NO_STORAGE_REQUIREMENT = 1;
 /** Nothing is committed, so nothing is demanded and one unit of storage is required. */
 export const EMPTY_DEMAND_SAMPLE: CapturedDemandSample = Object.freeze({
   spyPurchaseMoney: 0,
+  spyPurchaseReservation: EMPTY_SPY_PURCHASE_RESERVATION,
   requestedQuantity: () => 0,
   requestedQuantityExcludingMech: () => 0,
   requestedQuantityForMechPriority: () => 0,
@@ -1128,7 +1138,7 @@ function readDemandReservationSpyPurchaseMoney(
   settings: Record<PropertyKey, unknown>,
   controls: GameControlRegistry | undefined,
   report: DemandPrerequisiteReport | undefined,
-): DemandReservationOutcome<number> {
+): DemandReservationOutcome<Readonly<SpyPurchaseReservation>> {
   if (settings["autoFight"] !== true) return { status: "not-needed" };
   const tech = readProperty(root, "tech");
   if (!isRecord(tech) || readProperty(tech, "unify") !== 1)
@@ -1176,10 +1186,10 @@ function readDemandReservationSpyPurchaseMoney(
     readProperty(readProperty(readProperty(root, "resource"), "Money"), "max"),
   );
   if (moneyMax === undefined) return { status: "not-needed" };
-  let purchaseMoney = 0;
+  const candidates: SpyPurchaseCandidate[] = [];
   for (const target of strategy.governments) {
     if (target.governmentId >= 3 || target.policy !== "Purchase") continue;
-    if (target.purchased || target.occupied || target.annexed) continue;
+    if (target.purchased) continue;
     // A Purchase operation already running owns its Money; the compatibility reader only
     // reserves for governments whose `act` is not mid-purchase.
     if (target.activeEspionage === "purchase") continue;
@@ -1200,11 +1210,16 @@ function readDemandReservationSpyPurchaseMoney(
       if (!Number.isFinite(spyCost) || spyCost < 0) continue;
       moneyNeeded = Math.max(moneyNeeded, spyCost);
     }
-    if (moneyNeeded <= moneyMax && moneyNeeded > purchaseMoney) {
-      purchaseMoney = moneyNeeded;
-    }
+    candidates.push({
+      governmentId: target.governmentId,
+      moneyNeeded,
+      moneyMaximum: moneyMax,
+    });
   }
-  return { status: "ready", value: purchaseMoney };
+  return {
+    status: "ready",
+    value: planSpyPurchaseReservation(candidates),
+  };
 }
 
 export function createCapturedResourceDemand(
@@ -1297,10 +1312,17 @@ export function createCapturedResourceDemand(
         dependencies.controls,
         prerequisites,
       );
-      const spyPurchaseMoney =
-        spyReservation.status === "ready" ? spyReservation.value : 0;
+      const spyPurchaseReservation =
+        spyReservation.status === "ready"
+          ? spyReservation.value
+          : EMPTY_SPY_PURCHASE_RESERVATION;
+      const sampledSpyPurchaseReservation =
+        spyReservation.status === "unavailable"
+          ? undefined
+          : spyPurchaseReservation;
+      const spyPurchaseMoney = spyPurchaseReservation.purchaseMoney;
       const sampledSpyPurchaseMoney =
-        spyReservation.status === "unavailable" ? undefined : spyPurchaseMoney;
+        sampledSpyPurchaseReservation?.purchaseMoney;
       // A reservation that could exist but whose capture is not established must not read
       // as free: hold Money up to its storage envelope instead. The price is unknown, so
       // the envelope is anti-spend only and does not feed the storage requirements below.
@@ -1648,6 +1670,7 @@ export function createCapturedResourceDemand(
 
       return Object.freeze({
         spyPurchaseMoney: sampledSpyPurchaseMoney,
+        spyPurchaseReservation: sampledSpyPurchaseReservation,
         storageRequired: (resourceId: string, pool?: string) =>
           required.get(storageRequirementScopeKey(resourceId, pool)) ??
           NO_STORAGE_REQUIREMENT,

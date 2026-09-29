@@ -5,6 +5,49 @@ export interface SpyCycleInput {
   readonly foreignCount: number;
 }
 
+export interface SpyPurchaseReservation {
+  readonly purchaseMoney: number;
+  readonly purchaseGovernmentIds: readonly number[];
+}
+
+export interface SpyPurchaseCandidate {
+  readonly governmentId: number;
+  readonly moneyNeeded: number;
+  readonly moneyMaximum: number;
+}
+
+export const EMPTY_SPY_PURCHASE_RESERVATION: SpyPurchaseReservation =
+  Object.freeze({
+    purchaseMoney: 0,
+    purchaseGovernmentIds: Object.freeze([]),
+  });
+
+/** One answer supplies both the global reserve and the governments that justify it. */
+export function planSpyPurchaseReservation(
+  candidates: readonly Readonly<SpyPurchaseCandidate>[],
+): Readonly<SpyPurchaseReservation> {
+  let purchaseMoney = 0;
+  const purchaseGovernmentIds: number[] = [];
+  for (const candidate of candidates) {
+    if (
+      !Number.isSafeInteger(candidate.governmentId) ||
+      !Number.isFinite(candidate.moneyNeeded) ||
+      !Number.isFinite(candidate.moneyMaximum) ||
+      candidate.moneyNeeded <= 0 ||
+      candidate.moneyNeeded > candidate.moneyMaximum
+    ) {
+      continue;
+    }
+    purchaseGovernmentIds.push(candidate.governmentId);
+    purchaseMoney = Math.max(purchaseMoney, candidate.moneyNeeded);
+  }
+  if (purchaseGovernmentIds.length === 0) return EMPTY_SPY_PURCHASE_RESERVATION;
+  return Object.freeze({
+    purchaseMoney,
+    purchaseGovernmentIds: Object.freeze(purchaseGovernmentIds),
+  });
+}
+
 export interface SpyCyclePlan {
   readonly trainEnabled: boolean;
   readonly espionageEnabled: boolean;

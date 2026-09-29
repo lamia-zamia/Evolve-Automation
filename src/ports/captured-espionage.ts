@@ -1,5 +1,5 @@
 import type {
-  CapturedEspionageDecision,
+  CapturedEspionagePlan,
   CapturedEspionageInput,
 } from "../domain/combat/captured-espionage.ts";
 import type { DecisionExecutor } from "./decision-executor.ts";
@@ -9,5 +9,4 @@ export interface CapturedEspionageReader {
   readAll(): readonly CapturedEspionageInput[];
 }
 
-export type CapturedEspionageExecutor =
-  DecisionExecutor<CapturedEspionageDecision>;
+export type CapturedEspionageExecutor = DecisionExecutor<CapturedEspionagePlan>;

@@ -16267,7 +16267,10 @@
   }
 
   // src/adapters/evolve/combat/captured-foreign-state.ts
-  var CAPTURED_FOREIGN_CONTROL = "foreign", CAPTURED_FOREIGN_PANEL_SELECTOR = "#foreign", CAPTURED_FOREIGN_MAX_INDEX = 4;
+  var CAPTURED_FOREIGN_CONTROL = "foreign", CAPTURED_FOREIGN_PANEL_SELECTOR = "#foreign", CAPTURED_FOREIGN_MAX_INDEX = 4, CAPTURED_FOREIGN_GARRISON_CONTROLS = [
+    "garrison",
+    "c_garrison"
+  ];
   function capturedForeignSettingBoolean(settings, key, fallback) {
     return typeof settings[key] == "boolean" ? settings[key] : fallback;
   }
@@ -16553,6 +16556,27 @@
     return `#gov${governmentId} div span:nth-child(3) button`;
   }
 
+  // src/domain/combat/spy.ts
+  var EMPTY_SPY_PURCHASE_RESERVATION = Object.freeze({
+    purchaseMoney: 0,
+    purchaseGovernmentIds: Object.freeze([])
+  });
+  function planSpyPurchaseReservation(candidates) {
+    let purchaseMoney = 0, purchaseGovernmentIds = [];
+    for (let candidate of candidates)
+      !Number.isSafeInteger(candidate.governmentId) || !Number.isFinite(candidate.moneyNeeded) || !Number.isFinite(candidate.moneyMaximum) || candidate.moneyNeeded <= 0 || candidate.moneyNeeded > candidate.moneyMaximum || (purchaseGovernmentIds.push(candidate.governmentId), purchaseMoney = Math.max(purchaseMoney, candidate.moneyNeeded));
+    return purchaseGovernmentIds.length === 0 ? EMPTY_SPY_PURCHASE_RESERVATION : Object.freeze({
+      purchaseMoney,
+      purchaseGovernmentIds: Object.freeze(purchaseGovernmentIds)
+    });
+  }
+  function shouldTrainSpyUnderPolicy(input) {
+    if (input.disabled || input.occupied || input.annexed || input.purchased)
+      return !1;
+    let spiesRequired = input.spyMaximumSetting >= 0 ? input.spyMaximumSetting : Number.MAX_SAFE_INTEGER;
+    return spiesRequired < 1 && input.policy !== "Occupy" && input.policy !== "Ignore" && (spiesRequired = 1), spiesRequired < 3 && input.policy === "Purchase" && input.purchasePrice !== null && input.moneyMaximum >= input.purchasePrice && (spiesRequired = 3), !(input.spyCount >= spiesRequired || (input.purchaseMoney === void 0 || input.purchaseMoney > 0) && input.policy !== "Purchase" && input.spyCount > 0);
+  }
+
   // src/adapters/evolve/economy/resources/truepath-ai-demand-actions.ts
   var DEMAND_RESERVATION_TRUEPATH_AI_ACTIONS = Object.freeze({
     TitanDecoder: "space-decoder",
@@ -16578,6 +16602,7 @@
   // src/adapters/evolve/economy/resources/captured-resource-demand.ts
   var NO_STORAGE_REQUIREMENT = 1, EMPTY_DEMAND_SAMPLE = Object.freeze({
     spyPurchaseMoney: 0,
+    spyPurchaseReservation: EMPTY_SPY_PURCHASE_RESERVATION,
     requestedQuantity: () => 0,
     requestedQuantityExcludingMech: () => 0,
     requestedQuantityForMechPriority: () => 0,
@@ -17215,9 +17240,9 @@
       readProperty(readProperty(readProperty(root, "resource"), "Money"), "max")
     );
     if (moneyMax === void 0) return { status: "not-needed" };
-    let purchaseMoney = 0;
+    let candidates = [];
     for (let target of strategy.governments) {
-      if (target.governmentId >= 3 || target.policy !== "Purchase" || target.purchased || target.occupied || target.annexed || target.activeEspionage === "purchase" || target.military === void 0) continue;
+      if (target.governmentId >= 3 || target.policy !== "Purchase" || target.purchased || target.activeEspionage === "purchase" || target.military === void 0) continue;
       let price = capturedForeignGovernmentPrice(target);
       if (price === void 0) continue;
       let moneyNeeded = price;
@@ -17231,9 +17256,16 @@
         if (!Number.isFinite(spyCost) || spyCost < 0) continue;
         moneyNeeded = Math.max(moneyNeeded, spyCost);
       }
-      moneyNeeded <= moneyMax && moneyNeeded > purchaseMoney && (purchaseMoney = moneyNeeded);
+      candidates.push({
+        governmentId: target.governmentId,
+        moneyNeeded,
+        moneyMaximum: moneyMax
+      });
     }
-    return { status: "ready", value: purchaseMoney };
+    return {
+      status: "ready",
+      value: planSpyPurchaseReservation(candidates)
+    };
   }
   function createCapturedResourceDemand(dependencies) {
     return Object.freeze({
@@ -17285,7 +17317,7 @@
           settings,
           dependencies.controls,
           prerequisites
-        ), spyPurchaseMoney = spyReservation.status === "ready" ? spyReservation.value : 0, sampledSpyPurchaseMoney = spyReservation.status === "unavailable" ? void 0 : spyPurchaseMoney, moneyEnvelope = truepathAiReservation.status === "unavailable" || spyReservation.status === "unavailable", savingCosts = saving === null ? null : toCosts(saving.cost, saving.pool), baseInput = Object.freeze({
+        ), spyPurchaseReservation = spyReservation.status === "ready" ? spyReservation.value : EMPTY_SPY_PURCHASE_RESERVATION, sampledSpyPurchaseReservation = spyReservation.status === "unavailable" ? void 0 : spyPurchaseReservation, spyPurchaseMoney = spyPurchaseReservation.purchaseMoney, sampledSpyPurchaseMoney = sampledSpyPurchaseReservation?.purchaseMoney, moneyEnvelope = truepathAiReservation.status === "unavailable" || spyReservation.status === "unavailable", savingCosts = saving === null ? null : toCosts(saving.cost, saving.pool), baseInput = Object.freeze({
           settings: readSettingsInput(settingsValue),
           // The captured offer list is the game's own technology qualification result. The reader
           // only recomputes affordability from current holdings; it never recreates tech gates.
@@ -17491,6 +17523,7 @@
         );
         return Object.freeze({
           spyPurchaseMoney: sampledSpyPurchaseMoney,
+          spyPurchaseReservation: sampledSpyPurchaseReservation,
           storageRequired: (resourceId, pool) => required.get(storageRequirementScopeKey(resourceId, pool)) ?? NO_STORAGE_REQUIREMENT,
           requestedQuantity: (resourceId) => requested.get(resourceId) ?? 0,
           requestedQuantityExcludingMech: (resourceId) => requestedExcludingMech.get(resourceId) ?? 0,
@@ -43171,14 +43204,6 @@ Only continue if you trust the source. Injected code:
     return decision === null ? CAPTURED_PLANET_SELECTION_SUCCEEDED : executor.execute(decision);
   }
 
-  // src/domain/combat/spy.ts
-  function shouldTrainSpyUnderPolicy(input) {
-    if (input.disabled || input.occupied || input.annexed || input.purchased)
-      return !1;
-    let spiesRequired = input.spyMaximumSetting >= 0 ? input.spyMaximumSetting : Number.MAX_SAFE_INTEGER;
-    return spiesRequired < 1 && input.policy !== "Occupy" && input.policy !== "Ignore" && (spiesRequired = 1), spiesRequired < 3 && input.policy === "Purchase" && input.purchasePrice !== null && input.moneyMaximum >= input.purchasePrice && (spiesRequired = 3), !(input.spyCount >= spiesRequired || (input.purchaseMoney === void 0 || input.purchaseMoney > 0) && input.policy !== "Purchase" && input.spyCount > 0);
-  }
-
   // src/domain/combat/captured-spy-training.ts
   function planCapturedSpyTraining(input) {
     return !input.enabled || !Number.isFinite(input.spyMaximumSetting) || !Number.isSafeInteger(input.governmentIndex) || !input.visible || input.training > 0 || !shouldTrainSpyUnderPolicy(input) ? null : Object.freeze({
@@ -43209,6 +43234,23 @@ Only continue if you trust the source. Injected code:
   }
 
   // src/domain/combat/captured-espionage.ts
+  function capturedEspionageExpectedState(input) {
+    return {
+      governmentId: input.governmentId,
+      expectedPolicy: input.policy,
+      expectedSpyCount: input.spyCount,
+      expectedSabotageProgress: input.sabotageProgress,
+      expectedMilitary: input.military,
+      expectedHostility: input.hostility,
+      expectedUnrest: input.unrest,
+      expectedOccupied: input.occupied,
+      expectedAnnexed: input.annexed,
+      expectedPurchased: input.purchased,
+      expectedPurchaseMoney: input.purchaseMoney,
+      expectedPurchaseForeign: input.purchaseForeign,
+      expectedElusive: input.elusive
+    };
+  }
   function capturedEspionageOperationForPolicy(policy, military, hostility2) {
     return policy === "Betrayal" ? military <= 75 || hostility2 !== void 0 && hostility2 <= 0 ? "sabotage" : "influence" : policy === "Occupy" ? "sabotage" : capturedForeignPolicyEspionageOperation(policy);
   }
@@ -43220,19 +43262,16 @@ Only continue if you trust the source. Injected code:
     );
   }
   function planCapturedEspionage(input) {
+    if (!input.enabled || !Number.isSafeInteger(input.governmentId) || input.spyCount < 1 || input.sabotageProgress !== 0 || input.policy === "None")
+      return null;
     let operation2 = capturedEspionageOperation(input);
-    return !input.enabled || !Number.isSafeInteger(input.governmentId) || input.spyCount < 1 || input.sabotageProgress !== 0 || !input.useful || operation2 === null || input.occupied || input.annexed || input.purchased ? null : Object.freeze({
+    return operation2 === null || operation2 === "purchase" && input.spyCount < 3 && !input.elusive && (input.purchaseMoney === void 0 || input.purchaseMoney > 0) && input.purchaseForeign !== !1 ? null : input.annexed && input.policy !== "Annex" || input.purchased && input.policy !== "Purchase" || input.occupied && input.policy !== "Occupy" ? Object.freeze({
+      kind: "release-foreign",
+      ...capturedEspionageExpectedState(input)
+    }) : input.occupied || input.annexed || input.purchased || !input.useful ? null : Object.freeze({
       kind: "captured-espionage",
-      governmentId: input.governmentId,
-      operation: operation2,
-      expectedSpyCount: input.spyCount,
-      expectedSabotageProgress: input.sabotageProgress,
-      expectedMilitary: input.military,
-      expectedHostility: input.hostility,
-      expectedUnrest: input.unrest,
-      expectedOccupied: input.occupied,
-      expectedAnnexed: input.annexed,
-      expectedPurchased: input.purchased
+      ...capturedEspionageExpectedState(input),
+      operation: operation2
     });
   }
 
@@ -43686,6 +43725,12 @@ Only continue if you trust the source. Injected code:
     let control = controls2.resolve(elementId);
     return control !== void 0 && methods.every((method) => control.methods.includes(method)) ? control : void 0;
   }
+  function capturedEspionageFirstControl(controls2, elementIds, methods) {
+    for (let elementId of elementIds) {
+      let control = capturedEspionageControl(controls2, elementId, methods);
+      if (control !== void 0) return control;
+    }
+  }
   function capturedEspionageState(root, governmentId) {
     let government = capturedEspionageForeignGovernment(root, governmentId);
     if (government !== void 0)
@@ -43695,6 +43740,7 @@ Only continue if you trust the source. Injected code:
         sabotageProgress: finite(government.sab) ?? 0,
         hostility: finite(government.hstl),
         unrest: finite(government.unrest),
+        occupied: !!government.occ,
         annexed: !!government.anx,
         purchased: !!government.buy,
         action: typeof government.act == "string" ? government.act : void 0
@@ -43717,8 +43763,8 @@ Only continue if you trust the source. Injected code:
       target.espionagePolicy
     );
   }
-  function capturedEspionageInput(root, target) {
-    let operation2 = capturedEspionageOperationForPolicy(
+  function capturedEspionageInput(root, target, readPurchaseReservation) {
+    let elusive = !!readProperty(readProperty(root, "race"), "elusive"), purchaseReservation = target.espionagePolicy === "Purchase" && target.spyCount < 3 && !elusive ? readPurchaseReservation?.() : void 0, operation2 = capturedEspionageOperationForPolicy(
       target.espionagePolicy,
       target.military,
       target.hostility
@@ -43735,6 +43781,11 @@ Only continue if you trust the source. Injected code:
       occupied: target.occupied,
       annexed: target.annexed,
       purchased: target.purchased,
+      purchaseMoney: purchaseReservation?.purchaseMoney,
+      purchaseForeign: purchaseReservation?.purchaseGovernmentIds.includes(
+        target.governmentId
+      ),
+      elusive,
       useful: operation2 !== null && capturedForeignEspionageUseful(root, target, operation2)
     });
   }
@@ -43751,8 +43802,20 @@ Only continue if you trust the source. Injected code:
       occupied: !1,
       annexed: !1,
       purchased: !1,
+      purchaseMoney: void 0,
+      purchaseForeign: void 0,
+      elusive: !1,
       useful: !1
     });
+  }
+  function capturedEspionageDecisionMatchesInput(decision, input) {
+    return decision.governmentId === input.governmentId && decision.expectedPolicy === input.policy && decision.expectedSpyCount === input.spyCount && decision.expectedSabotageProgress === input.sabotageProgress && decision.expectedMilitary === input.military && decision.expectedHostility === input.hostility && decision.expectedUnrest === input.unrest && decision.expectedOccupied === input.occupied && decision.expectedAnnexed === input.annexed && decision.expectedPurchased === input.purchased && decision.expectedPurchaseMoney === input.purchaseMoney && decision.expectedPurchaseForeign === input.purchaseForeign && decision.expectedElusive === input.elusive;
+  }
+  function capturedEspionageInputsMatch(left, right) {
+    return left.governmentId === right.governmentId && left.policy === right.policy && left.spyCount === right.spyCount && left.sabotageProgress === right.sabotageProgress && left.military === right.military && left.hostility === right.hostility && left.unrest === right.unrest && left.occupied === right.occupied && left.annexed === right.annexed && left.purchased === right.purchased && left.purchaseMoney === right.purchaseMoney && left.purchaseForeign === right.purchaseForeign && left.elusive === right.elusive && left.useful === right.useful;
+  }
+  function capturedEspionagePlansMatch(expected, actual) {
+    return expected.kind !== actual.kind ? !1 : expected.kind === "release-foreign" || actual.kind === "captured-espionage" && expected.operation === actual.operation;
   }
   function capturedEspionageActiveModals(document) {
     let querySelectorAll = readProperty(document, "querySelectorAll");
@@ -43954,7 +44017,11 @@ Only continue if you trust the source. Injected code:
         modal !== void 0 && modalFromOpening === void 0 && capturedEspionageModalIsMounted(dependencies.getDocument?.()) === !1 && (modal = void 0);
         let modalToReplace, capturedModalGovernmentId = modal === void 0 ? void 0 : capturedEspionageModalGovernmentId(root, modal);
         modal !== void 0 && (capturedModalGovernmentId !== void 0 && capturedModalGovernmentId !== target.governmentId || capturedModalGovernmentId === void 0 && modalFromOpening === void 0 || modalFromOpening !== void 0 && modalGovernmentId !== target.governmentId) ? (modalFromOpening !== void 0 && (modalLifecycleFromOpening?.cleanup(), modalLifecycleFromOpening = void 0), modalToReplace = modal, modal = void 0, modalGovernmentId = void 0) : modal !== void 0 && (modalGovernmentId = capturedModalGovernmentId ?? modalGovernmentId ?? target.governmentId);
-        let input = capturedEspionageInput(root, target);
+        let input = capturedEspionageInput(
+          root,
+          target,
+          dependencies.readPurchaseReservation
+        );
         return samples.set(
           target.governmentId,
           Object.freeze({
@@ -43996,7 +44063,11 @@ Only continue if you trust the source. Injected code:
             inputs.push(existing.input);
             continue;
           }
-          let input = capturedEspionageInput(selected.root, target);
+          let input = capturedEspionageInput(
+            selected.root,
+            target,
+            dependencies.readPurchaseReservation
+          );
           samples.set(
             target.governmentId,
             Object.freeze({
@@ -44034,12 +44105,7 @@ Only continue if you trust the source. Injected code:
             "captured-espionage-foreign-changed",
             "captured foreign control changed"
           );
-        if (active.modal !== void 0 && active.modalGovernmentId !== decision.governmentId)
-          return discardCapturedEspionageSample(), stale(
-            "captured-espionage-modal-target-changed",
-            "captured espionage modal targets a different government"
-          );
-        if (decision.kind !== "captured-espionage" || decision.governmentId !== active.input.governmentId || decision.expectedSpyCount !== active.input.spyCount || decision.expectedSabotageProgress !== active.input.sabotageProgress || decision.expectedMilitary !== active.input.military || decision.expectedHostility !== active.input.hostility || decision.expectedUnrest !== active.input.unrest || decision.expectedOccupied !== active.input.occupied || decision.expectedAnnexed !== active.input.annexed || decision.expectedPurchased !== active.input.purchased)
+        if (!capturedEspionageDecisionMatchesInput(decision, active.input))
           return discardCapturedEspionageSample(), rejected(
             "invalid-captured-espionage-decision",
             "captured espionage decision does not match the sample"
@@ -44058,20 +44124,58 @@ Only continue if you trust the source. Injected code:
           currentTargets
         ).governments.find(
           (candidate) => candidate.governmentId === active.target.governmentId
-        ), currentInput = currentStrategyTarget === void 0 ? void 0 : capturedEspionageInput(active.root, currentStrategyTarget);
-        if (currentTarget === void 0 || currentState === void 0 || currentStrategyTarget === void 0 || currentInput === void 0 || currentStrategyTarget.governmentId !== active.target.governmentId || currentTarget.governmentId !== active.target.governmentId || currentTarget.policy !== active.target.policy || currentTarget.espionagePolicy !== active.target.espionagePolicy || currentInput.policy !== active.input.policy || currentInput.useful !== active.input.useful || currentState.spyCount !== active.input.spyCount || currentState.sabotageProgress !== active.input.sabotageProgress || currentState.military !== active.input.military || currentState.hostility !== active.input.hostility || currentState.unrest !== active.input.unrest || currentState.annexed !== active.input.annexed || currentState.purchased !== active.input.purchased)
+        ), currentInput = currentStrategyTarget === void 0 ? void 0 : capturedEspionageInput(
+          active.root,
+          currentStrategyTarget,
+          dependencies.readPurchaseReservation
+        );
+        if (currentTarget === void 0 || currentState === void 0 || currentStrategyTarget === void 0 || currentInput === void 0 || currentStrategyTarget.governmentId !== active.target.governmentId || currentTarget.governmentId !== active.target.governmentId || currentTarget.policy !== active.target.policy || currentTarget.espionagePolicy !== active.target.espionagePolicy || !capturedEspionageInputsMatch(currentInput, active.input) || currentState.spyCount !== active.input.spyCount || currentState.sabotageProgress !== active.input.sabotageProgress || currentState.military !== active.input.military || currentState.hostility !== active.input.hostility || currentState.unrest !== active.input.unrest || currentState.occupied !== active.input.occupied || currentState.annexed !== active.input.annexed || currentState.purchased !== active.input.purchased)
           return discardCapturedEspionageSample(), stale(
             "captured-espionage-state-changed",
             "captured foreign espionage state changed"
           );
-        if (capturedEspionageOperationForPolicy(
-          active.input.policy,
-          active.input.military,
-          active.input.hostility
-        ) !== decision.operation || !active.input.useful)
+        let expected = planCapturedEspionage(currentInput);
+        if (expected === null || !capturedEspionagePlansMatch(expected, decision))
           return discardCapturedEspionageSample(), rejected(
             "invalid-captured-espionage-plan",
-            "captured espionage plan is no longer useful"
+            "captured espionage plan no longer matches the sampled state"
+          );
+        if (decision.kind === "release-foreign") {
+          let garrison = capturedEspionageFirstControl(
+            dependencies.controls,
+            CAPTURED_FOREIGN_GARRISON_CONTROLS,
+            ["campaign"]
+          );
+          if (garrison === void 0)
+            return discardCapturedEspionageSample(), stale(
+              "captured-espionage-campaign-control-missing",
+              "the game-owned campaign control is not captured"
+            );
+          let result2 = dependencies.controls.invoke(garrison, "campaign", [
+            decision.governmentId
+          ]);
+          if (!result2.ok)
+            return discardCapturedEspionageSample(), stale(
+              "captured-espionage-campaign-failed",
+              `campaign failed: ${result2.reason}`
+            );
+          let after2 = capturedEspionageState(
+            active.root,
+            decision.governmentId
+          );
+          return after2 === void 0 || after2.occupied || after2.annexed || after2.purchased ? (discardCapturedEspionageSample(), stale(
+            "captured-espionage-release-not-applied",
+            "the game did not release the foreign power"
+          )) : (discardCapturedEspionageSample(), reportActivity({
+            message: `Released foreign power ${decision.governmentId + 1}`,
+            color: "success",
+            tags: Object.freeze(["combat"])
+          }), SUCCEEDED);
+        }
+        if (active.modal !== void 0 && active.modalGovernmentId !== decision.governmentId)
+          return discardCapturedEspionageSample(), stale(
+            "captured-espionage-modal-target-changed",
+            "captured espionage modal targets a different government"
           );
         samples.delete(decision.governmentId);
         let modal = active.modal;
@@ -44519,7 +44623,7 @@ Only continue if you trust the source. Injected code:
   }
 
   // src/adapters/evolve/combat/battle.ts
-  var CAPTURED_BATTLE_GARRISON_CONTROLS = ["garrison", "c_garrison"], CAPTURED_BATTLE_ENEMY_FACTORS = Object.freeze([
+  var CAPTURED_BATTLE_ENEMY_FACTORS = Object.freeze([
     5,
     27.5,
     62.5,
@@ -44663,7 +44767,7 @@ Only continue if you trust the source. Injected code:
       ["vis", "gvis"]
     ), garrison = capturedBattleResolveControl(
       dependencies.controls,
-      CAPTURED_BATTLE_GARRISON_CONTROLS,
+      CAPTURED_FOREIGN_GARRISON_CONTROLS,
       ["campaign", "next", "last", "aNext", "aLast", "rating", "hell", "s_max"]
     );
     if (foreign === void 0 || garrison === void 0 || capturedBattleInvokeBoolean(dependencies.controls, foreign, "vis") !== !0)
@@ -45913,11 +46017,12 @@ Only continue if you trust the source. Injected code:
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
       readSettings: () => settingsStore.readRaw(),
-      readPurchaseMoney: () => readDemand().spyPurchaseMoney
+      readPurchaseMoney: () => readDemand().spyPurchaseReservation?.purchaseMoney
     }), openCapturedForeignModal = () => !1, capturedEspionage = createCapturedEspionage({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
       readSettings: () => settingsStore.readRaw(),
+      readPurchaseReservation: () => readDemand().spyPurchaseReservation,
       getDocument: () => document,
       ensureForeignModal: (governmentId) => openCapturedForeignModal(governmentId),
       onActivity

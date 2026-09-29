@@ -19,6 +19,10 @@ import { finite, isRecord, readProperty } from "../../validation.ts";
 export const CAPTURED_FOREIGN_CONTROL = "foreign";
 export const CAPTURED_FOREIGN_PANEL_SELECTOR = "#foreign";
 export const CAPTURED_FOREIGN_MAX_INDEX = 4;
+export const CAPTURED_FOREIGN_GARRISON_CONTROLS = [
+  "garrison",
+  "c_garrison",
+] as const;
 
 export type CapturedForeignRank = "Inferior" | "Superior" | "Rival";
 export type CapturedForeignEspionage =

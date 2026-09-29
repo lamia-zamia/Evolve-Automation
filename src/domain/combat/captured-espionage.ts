@@ -20,13 +20,16 @@ export interface CapturedEspionageInput {
   readonly occupied: boolean;
   readonly annexed: boolean;
   readonly purchased: boolean;
+  /** Undefined when the shared Purchase reservation sample could not be established. */
+  readonly purchaseMoney: number | undefined;
+  readonly purchaseForeign: boolean | undefined;
+  readonly elusive: boolean;
   readonly useful: boolean;
 }
 
-export interface CapturedEspionageDecision {
-  readonly kind: "captured-espionage";
+interface CapturedEspionageExpectedState {
   readonly governmentId: number;
-  readonly operation: CapturedEspionageOperation;
+  readonly expectedPolicy: string;
   readonly expectedSpyCount: number;
   readonly expectedSabotageProgress: number;
   readonly expectedMilitary: number;
@@ -35,6 +38,41 @@ export interface CapturedEspionageDecision {
   readonly expectedOccupied: boolean;
   readonly expectedAnnexed: boolean;
   readonly expectedPurchased: boolean;
+  readonly expectedPurchaseMoney: number | undefined;
+  readonly expectedPurchaseForeign: boolean | undefined;
+  readonly expectedElusive: boolean;
+}
+
+export interface CapturedEspionageDecision extends CapturedEspionageExpectedState {
+  readonly kind: "captured-espionage";
+  readonly operation: CapturedEspionageOperation;
+}
+
+export interface CapturedForeignReleaseDecision extends CapturedEspionageExpectedState {
+  readonly kind: "release-foreign";
+}
+
+export type CapturedEspionagePlan =
+  CapturedEspionageDecision | CapturedForeignReleaseDecision;
+
+function capturedEspionageExpectedState(
+  input: Readonly<CapturedEspionageInput>,
+): CapturedEspionageExpectedState {
+  return {
+    governmentId: input.governmentId,
+    expectedPolicy: input.policy,
+    expectedSpyCount: input.spyCount,
+    expectedSabotageProgress: input.sabotageProgress,
+    expectedMilitary: input.military,
+    expectedHostility: input.hostility,
+    expectedUnrest: input.unrest,
+    expectedOccupied: input.occupied,
+    expectedAnnexed: input.annexed,
+    expectedPurchased: input.purchased,
+    expectedPurchaseMoney: input.purchaseMoney,
+    expectedPurchaseForeign: input.purchaseForeign,
+    expectedElusive: input.elusive,
+  };
 }
 
 export function capturedEspionageOperationForPolicy(
@@ -65,32 +103,47 @@ function capturedEspionageOperation(
 
 export function planCapturedEspionage(
   input: Readonly<CapturedEspionageInput>,
-): Readonly<CapturedEspionageDecision> | null {
-  const operation = capturedEspionageOperation(input);
+): Readonly<CapturedEspionagePlan> | null {
   if (
     !input.enabled ||
     !Number.isSafeInteger(input.governmentId) ||
     input.spyCount < 1 ||
     input.sabotageProgress !== 0 ||
-    !input.useful ||
-    operation === null ||
-    input.occupied ||
-    input.annexed ||
-    input.purchased
+    input.policy === "None"
   ) {
     return null;
   }
+  const operation = capturedEspionageOperation(input);
+  if (operation === null) return null;
+
+  if (
+    operation === "purchase" &&
+    input.spyCount < 3 &&
+    !input.elusive &&
+    (input.purchaseMoney === undefined
+      ? input.purchaseForeign !== false
+      : input.purchaseMoney > 0 && input.purchaseForeign !== false)
+  ) {
+    return null;
+  }
+
+  if (
+    (input.annexed && input.policy !== "Annex") ||
+    (input.purchased && input.policy !== "Purchase") ||
+    (input.occupied && input.policy !== "Occupy")
+  ) {
+    return Object.freeze({
+      kind: "release-foreign" as const,
+      ...capturedEspionageExpectedState(input),
+    });
+  }
+  if (input.occupied || input.annexed || input.purchased || !input.useful) {
+    return null;
+  }
+
   return Object.freeze({
     kind: "captured-espionage" as const,
-    governmentId: input.governmentId,
+    ...capturedEspionageExpectedState(input),
     operation,
-    expectedSpyCount: input.spyCount,
-    expectedSabotageProgress: input.sabotageProgress,
-    expectedMilitary: input.military,
-    expectedHostility: input.hostility,
-    expectedUnrest: input.unrest,
-    expectedOccupied: input.occupied,
-    expectedAnnexed: input.annexed,
-    expectedPurchased: input.purchased,
   });
 }

@@ -2,9 +2,12 @@
 
 import {
   capturedEspionageOperationForPolicy,
+  planCapturedEspionage,
   type CapturedEspionageInput,
   type CapturedEspionageOperation,
+  type CapturedEspionagePlan,
 } from "../../../domain/combat/captured-espionage.ts";
+import type { SpyPurchaseReservation } from "../../../domain/combat/spy.ts";
 import type {
   CapturedEspionageExecutor,
   CapturedEspionageReader,
@@ -19,6 +22,7 @@ import { rejected, stale, SUCCEEDED } from "../../command-outcomes.ts";
 import { finite, isRecord, readProperty } from "../../validation.ts";
 import {
   CAPTURED_FOREIGN_CONTROL,
+  CAPTURED_FOREIGN_GARRISON_CONTROLS,
   CAPTURED_FOREIGN_MAX_INDEX,
   capturedForeignEspionageTriggerSelector,
   capturedForeignEspionageUseful,
@@ -28,7 +32,6 @@ import {
   selectCapturedForeignStrategy,
   type CapturedForeignGovernment,
 } from "./captured-foreign-state.ts";
-import type { CapturedEspionageDecision } from "../../../domain/combat/captured-espionage.ts";
 
 const CAPTURED_ESPIONAGE_MODAL = "espModal";
 const CAPTURED_ESPIONAGE_MODAL_SELECTOR = "#espModal";
@@ -97,6 +100,9 @@ export interface CapturedEspionageDependencies {
   readonly rootState: GameRootStateSource;
   readonly controls: GameControlRegistry;
   readonly readSettings: () => unknown;
+  /** Shared Purchase authority sampled alongside Money demand and spy training. */
+  readonly readPurchaseReservation?: () =>
+    Readonly<SpyPurchaseReservation> | undefined;
   /** The page document is used only to click the game-owned modal trigger. */
   readonly getDocument?: () => unknown;
   /** Opens the modal through a genuinely mounted Foreign component when its panel is off-tab. */
@@ -142,6 +148,18 @@ function capturedEspionageControl(
     : undefined;
 }
 
+function capturedEspionageFirstControl(
+  controls: GameControlRegistry,
+  elementIds: readonly string[],
+  methods: readonly string[],
+): GameControlHandle | undefined {
+  for (const elementId of elementIds) {
+    const control = capturedEspionageControl(controls, elementId, methods);
+    if (control !== undefined) return control;
+  }
+  return undefined;
+}
+
 function capturedEspionageState(
   root: unknown,
   governmentId: number,
@@ -152,6 +170,7 @@ function capturedEspionageState(
       readonly sabotageProgress: number;
       readonly hostility: number | undefined;
       readonly unrest: number | undefined;
+      readonly occupied: boolean;
       readonly annexed: boolean;
       readonly purchased: boolean;
       readonly action: string | undefined;
@@ -165,6 +184,7 @@ function capturedEspionageState(
     sabotageProgress: finite(government["sab"]) ?? 0,
     hostility: finite(government["hstl"]),
     unrest: finite(government["unrest"]),
+    occupied: Boolean(government["occ"]),
     annexed: Boolean(government["anx"]),
     purchased: Boolean(government["buy"]),
     action:
@@ -206,7 +226,14 @@ function capturedEspionageTarget(
 function capturedEspionageInput(
   root: unknown,
   target: CapturedForeignGovernment,
+  readPurchaseReservation:
+    (() => Readonly<SpyPurchaseReservation> | undefined) | undefined,
 ): CapturedEspionageInput {
+  const elusive = Boolean(readProperty(readProperty(root, "race"), "elusive"));
+  const purchaseReservation =
+    target.espionagePolicy === "Purchase" && target.spyCount < 3 && !elusive
+      ? readPurchaseReservation?.()
+      : undefined;
   const operation = capturedEspionageOperationForPolicy(
     target.espionagePolicy,
     target.military,
@@ -224,6 +251,11 @@ function capturedEspionageInput(
     occupied: target.occupied,
     annexed: target.annexed,
     purchased: target.purchased,
+    purchaseMoney: purchaseReservation?.purchaseMoney,
+    purchaseForeign: purchaseReservation?.purchaseGovernmentIds.includes(
+      target.governmentId,
+    ),
+    elusive,
     useful:
       operation !== null &&
       capturedForeignEspionageUseful(root, target, operation),
@@ -243,8 +275,66 @@ function capturedEspionageEmptyInput(): CapturedEspionageInput {
     occupied: false,
     annexed: false,
     purchased: false,
+    purchaseMoney: undefined,
+    purchaseForeign: undefined,
+    elusive: false,
     useful: false,
   });
+}
+
+function capturedEspionageDecisionMatchesInput(
+  decision: Readonly<CapturedEspionagePlan>,
+  input: Readonly<CapturedEspionageInput>,
+): boolean {
+  return (
+    decision.governmentId === input.governmentId &&
+    decision.expectedPolicy === input.policy &&
+    decision.expectedSpyCount === input.spyCount &&
+    decision.expectedSabotageProgress === input.sabotageProgress &&
+    decision.expectedMilitary === input.military &&
+    decision.expectedHostility === input.hostility &&
+    decision.expectedUnrest === input.unrest &&
+    decision.expectedOccupied === input.occupied &&
+    decision.expectedAnnexed === input.annexed &&
+    decision.expectedPurchased === input.purchased &&
+    decision.expectedPurchaseMoney === input.purchaseMoney &&
+    decision.expectedPurchaseForeign === input.purchaseForeign &&
+    decision.expectedElusive === input.elusive
+  );
+}
+
+function capturedEspionageInputsMatch(
+  left: Readonly<CapturedEspionageInput>,
+  right: Readonly<CapturedEspionageInput>,
+): boolean {
+  return (
+    left.governmentId === right.governmentId &&
+    left.policy === right.policy &&
+    left.spyCount === right.spyCount &&
+    left.sabotageProgress === right.sabotageProgress &&
+    left.military === right.military &&
+    left.hostility === right.hostility &&
+    left.unrest === right.unrest &&
+    left.occupied === right.occupied &&
+    left.annexed === right.annexed &&
+    left.purchased === right.purchased &&
+    left.purchaseMoney === right.purchaseMoney &&
+    left.purchaseForeign === right.purchaseForeign &&
+    left.elusive === right.elusive &&
+    left.useful === right.useful
+  );
+}
+
+function capturedEspionagePlansMatch(
+  expected: Readonly<CapturedEspionagePlan>,
+  actual: Readonly<CapturedEspionagePlan>,
+): boolean {
+  if (expected.kind !== actual.kind) return false;
+  return (
+    expected.kind === "release-foreign" ||
+    (actual.kind === "captured-espionage" &&
+      expected.operation === actual.operation)
+  );
 }
 
 function capturedEspionageActiveModals(
@@ -615,7 +705,11 @@ export function createCapturedEspionage(
         modalGovernmentId =
           capturedModalGovernmentId ?? modalGovernmentId ?? target.governmentId;
       }
-      const input = capturedEspionageInput(root, target);
+      const input = capturedEspionageInput(
+        root,
+        target,
+        dependencies.readPurchaseReservation,
+      );
       samples.set(
         target.governmentId,
         Object.freeze({
@@ -674,7 +768,11 @@ export function createCapturedEspionage(
           inputs.push(existing.input);
           continue;
         }
-        const input = capturedEspionageInput(selected.root, target);
+        const input = capturedEspionageInput(
+          selected.root,
+          target,
+          dependencies.readPurchaseReservation,
+        );
         samples.set(
           target.governmentId,
           Object.freeze({
@@ -695,7 +793,7 @@ export function createCapturedEspionage(
   });
 
   const executor: CapturedEspionageExecutor = Object.freeze({
-    execute(decision: Readonly<CapturedEspionageDecision>) {
+    execute(decision: Readonly<CapturedEspionagePlan>) {
       const active = samples.get(decision.governmentId);
       if (active === undefined) {
         return stale(
@@ -723,28 +821,7 @@ export function createCapturedEspionage(
           "captured foreign control changed",
         );
       }
-      if (
-        active.modal !== undefined &&
-        active.modalGovernmentId !== decision.governmentId
-      ) {
-        discardCapturedEspionageSample();
-        return stale(
-          "captured-espionage-modal-target-changed",
-          "captured espionage modal targets a different government",
-        );
-      }
-      if (
-        decision.kind !== "captured-espionage" ||
-        decision.governmentId !== active.input.governmentId ||
-        decision.expectedSpyCount !== active.input.spyCount ||
-        decision.expectedSabotageProgress !== active.input.sabotageProgress ||
-        decision.expectedMilitary !== active.input.military ||
-        decision.expectedHostility !== active.input.hostility ||
-        decision.expectedUnrest !== active.input.unrest ||
-        decision.expectedOccupied !== active.input.occupied ||
-        decision.expectedAnnexed !== active.input.annexed ||
-        decision.expectedPurchased !== active.input.purchased
-      ) {
+      if (!capturedEspionageDecisionMatchesInput(decision, active.input)) {
         discardCapturedEspionageSample();
         return rejected(
           "invalid-captured-espionage-decision",
@@ -775,7 +852,11 @@ export function createCapturedEspionage(
       const currentInput =
         currentStrategyTarget === undefined
           ? undefined
-          : capturedEspionageInput(active.root, currentStrategyTarget);
+          : capturedEspionageInput(
+              active.root,
+              currentStrategyTarget,
+              dependencies.readPurchaseReservation,
+            );
       if (
         currentTarget === undefined ||
         currentState === undefined ||
@@ -785,13 +866,13 @@ export function createCapturedEspionage(
         currentTarget.governmentId !== active.target.governmentId ||
         currentTarget.policy !== active.target.policy ||
         currentTarget.espionagePolicy !== active.target.espionagePolicy ||
-        currentInput.policy !== active.input.policy ||
-        currentInput.useful !== active.input.useful ||
+        !capturedEspionageInputsMatch(currentInput, active.input) ||
         currentState.spyCount !== active.input.spyCount ||
         currentState.sabotageProgress !== active.input.sabotageProgress ||
         currentState.military !== active.input.military ||
         currentState.hostility !== active.input.hostility ||
         currentState.unrest !== active.input.unrest ||
+        currentState.occupied !== active.input.occupied ||
         currentState.annexed !== active.input.annexed ||
         currentState.purchased !== active.input.purchased
       ) {
@@ -801,16 +882,74 @@ export function createCapturedEspionage(
           "captured foreign espionage state changed",
         );
       }
-      const expected = capturedEspionageOperationForPolicy(
-        active.input.policy,
-        active.input.military,
-        active.input.hostility,
-      );
-      if (expected !== decision.operation || !active.input.useful) {
+      const expected = planCapturedEspionage(currentInput);
+      if (
+        expected === null ||
+        !capturedEspionagePlansMatch(expected, decision)
+      ) {
         discardCapturedEspionageSample();
         return rejected(
           "invalid-captured-espionage-plan",
-          "captured espionage plan is no longer useful",
+          "captured espionage plan no longer matches the sampled state",
+        );
+      }
+
+      if (decision.kind === "release-foreign") {
+        const garrison = capturedEspionageFirstControl(
+          dependencies.controls,
+          CAPTURED_FOREIGN_GARRISON_CONTROLS,
+          ["campaign"],
+        );
+        if (garrison === undefined) {
+          discardCapturedEspionageSample();
+          return stale(
+            "captured-espionage-campaign-control-missing",
+            "the game-owned campaign control is not captured",
+          );
+        }
+        const result = dependencies.controls.invoke(garrison, "campaign", [
+          decision.governmentId,
+        ]);
+        if (!result.ok) {
+          discardCapturedEspionageSample();
+          return stale(
+            "captured-espionage-campaign-failed",
+            `campaign failed: ${result.reason}`,
+          );
+        }
+        const after = capturedEspionageState(
+          active.root,
+          decision.governmentId,
+        );
+        if (
+          after === undefined ||
+          after.occupied ||
+          after.annexed ||
+          after.purchased
+        ) {
+          discardCapturedEspionageSample();
+          return stale(
+            "captured-espionage-release-not-applied",
+            "the game did not release the foreign power",
+          );
+        }
+        discardCapturedEspionageSample();
+        reportActivity({
+          message: `Released foreign power ${decision.governmentId + 1}`,
+          color: "success",
+          tags: Object.freeze(["combat"]),
+        });
+        return SUCCEEDED;
+      }
+
+      if (
+        active.modal !== undefined &&
+        active.modalGovernmentId !== decision.governmentId
+      ) {
+        discardCapturedEspionageSample();
+        return stale(
+          "captured-espionage-modal-target-changed",
+          "captured espionage modal targets a different government",
         );
       }
 

@@ -27,13 +27,13 @@ import {
 } from "./captured-hell-garrison.ts";
 import {
   CAPTURED_FOREIGN_CONTROL,
+  CAPTURED_FOREIGN_GARRISON_CONTROLS,
   capturedForeignPacifistGuardActive,
   readCapturedForeignTargets,
   selectCapturedForeignStrategy,
   type CapturedForeignGovernment,
 } from "./captured-foreign-state.ts";
 
-const CAPTURED_BATTLE_GARRISON_CONTROLS = ["garrison", "c_garrison"] as const;
 const CAPTURED_BATTLE_ENEMY_FACTORS: BattleTacticValues = Object.freeze([
   5, 27.5, 62.5, 125, 300,
 ]);
@@ -329,7 +329,7 @@ function capturedBattleReadCycle(
   );
   const garrison = capturedBattleResolveControl(
     dependencies.controls,
-    CAPTURED_BATTLE_GARRISON_CONTROLS,
+    CAPTURED_FOREIGN_GARRISON_CONTROLS,
     ["campaign", "next", "last", "aNext", "aLast", "rating", "hell", "s_max"],
   );
   if (foreign === undefined || garrison === undefined) return undefined;
