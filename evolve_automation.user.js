@@ -46209,15 +46209,29 @@ Only continue if you trust the source. Injected code:
         return;
       }
   }
-  function capturedOcularCapacity(controls2) {
-    let handle = controls2.resolve(CAPTURED_OCULAR_POWER_CONTROL);
-    if (handle === void 0 || !handle.methods.includes("max")) return 0;
-    let result = controls2.invoke(handle, "max");
-    if (!result.ok || typeof result.value != "string") return 0;
-    let counts = result.value.match(/\d+/g);
-    if (counts === null || counts.length !== 2) return 0;
-    let capacity = Number(counts[1]);
-    return Number.isSafeInteger(capacity) && capacity >= 0 ? capacity : 0;
+  function capturedOcularRankIsSupported(rank) {
+    return rank >= 0.1 && rank <= 2;
+  }
+  function capturedOcularMajorEmpoweredBonus(rank) {
+    if (!capturedOcularRankIsSupported(rank)) return;
+    let cappedRank = Math.min(2, rank), fraction = cappedRank < 1 ? (cappedRank - 0.1) / 0.9 : cappedRank - 1, start = cappedRank < 1 ? 0.01 : 0.2, end = cappedRank < 1 ? 0.2 : 0.4;
+    return finite(Number((start + (end - start) * fraction).toFixed(6)));
+  }
+  function capturedOcularCapacityAtRank(rank) {
+    return rank >= 1.67 ? 3 : rank >= 1 ? 2 : 1;
+  }
+  function capturedOcularCapacityFromRace(race) {
+    let rawRank = finite(readProperty(race, "ocular_power"));
+    if (rawRank === void 0 || !capturedOcularRankIsSupported(rawRank))
+      return 0;
+    let baseCapacity = capturedOcularCapacityAtRank(rawRank), rawEmpoweredRank = readProperty(race, "empowered");
+    if (!rawEmpoweredRank) return baseCapacity;
+    let empoweredRank = finite(rawEmpoweredRank);
+    if (empoweredRank === void 0) return 0;
+    let bonus = capturedOcularMajorEmpoweredBonus(empoweredRank);
+    if (bonus === void 0) return 0;
+    let effectiveRank = Number((rawRank + bonus).toFixed(6));
+    return Number.isFinite(effectiveRank) ? capturedOcularCapacityAtRank(effectiveRank) : 0;
   }
   function createCapturedOcularPowerAutomation(dependencies) {
     let controls2 = Object.freeze({
@@ -46226,7 +46240,7 @@ Only continue if you trust the source. Injected code:
         let handle = dependencies.controls.resolve(
           CAPTURED_OCULAR_POWER_CONTROL
         );
-        return handle !== void 0 && handle.methods.includes("max");
+        return handle !== void 0 && handle.methods.includes("pow");
       },
       current(key) {
         let power = CAPTURED_TRAIT_OCULAR.find(
@@ -46248,7 +46262,7 @@ Only continue if you trust the source. Injected code:
         let handle = dependencies.controls.resolve(
           CAPTURED_OCULAR_POWER_CONTROL
         );
-        if (handle === void 0 || !handle.methods.includes("max")) return !1;
+        if (handle === void 0 || !handle.methods.includes("pow")) return !1;
         let checkbox = capturedOcularCheckbox(
           dependencies.getDocument(),
           power.id
@@ -46279,7 +46293,8 @@ Only continue if you trust the source. Injected code:
         });
       },
       readPlan() {
-        if (!capturedOcularAvailable(dependencies.rootState))
+        let root = dependencies.rootState.readRoot(), race = readProperty(root, "race");
+        if (!readProperty(race, "ocular_power") || !readProperty(race, "ocularPowerConfig"))
           return Object.freeze({ capacity: 0, powers: Object.freeze([]) });
         let rawSettings = dependencies.readSettings(), powers = CAPTURED_TRAIT_OCULAR.map(
           (power) => {
@@ -46296,7 +46311,7 @@ Only continue if you trust the source. Injected code:
           }
         );
         return Object.freeze({
-          capacity: capturedOcularCapacity(dependencies.controls),
+          capacity: capturedOcularCapacityFromRace(race),
           powers: Object.freeze(powers)
         });
       }
@@ -47480,7 +47495,7 @@ Only continue if you trust the source. Injected code:
         ]
       );
     }, ensureOcularPowerControls = () => {
-      let satisfied = () => pageCapture2.controls.resolve(CAPTURED_TRAIT_COMPANION_CONTROLS.ocularPower)?.methods.includes("max") === !0;
+      let satisfied = () => pageCapture2.controls.resolve(CAPTURED_TRAIT_COMPANION_CONTROLS.ocularPower)?.methods.includes("pow") === !0;
       if (satisfied()) return !0;
       let root = pageCapture2.rootState.readRoot(), race = readProperty(root, "race");
       if (!readProperty(race, "ocular_power") || !readProperty(race, "ocularPowerConfig") || pageCapture2.controls.resolve(MAIN_TAB_CONTROL) === void 0)

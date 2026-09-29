@@ -49,17 +49,41 @@ function capturedOcularCheckbox(document: unknown, powerId: string): unknown {
   }
 }
 
-function capturedOcularCapacity(controls: GameControlRegistry): number {
-  const handle = controls.resolve(CAPTURED_OCULAR_POWER_CONTROL);
-  if (handle === undefined || !handle.methods.includes("max")) return 0;
-  const result = controls.invoke(handle, "max");
-  if (!result.ok || typeof result.value !== "string") return 0;
-  // `ocularPower.max()` is the game's computed display value and passes active count and capacity
-  // to localization. Accept the current localized text only when those are its sole numbers.
-  const counts = result.value.match(/\d+/g);
-  if (counts === null || counts.length !== 2) return 0;
-  const capacity = Number(counts[1]);
-  return Number.isSafeInteger(capacity) && capacity >= 0 ? capacity : 0;
+function capturedOcularRankIsSupported(rank: number): boolean {
+  return rank >= 0.1 && rank <= 2;
+}
+
+function capturedOcularMajorEmpoweredBonus(rank: number): number | undefined {
+  if (!capturedOcularRankIsSupported(rank)) return undefined;
+  // DeadSpace src/races.js traits.empowered.vars() uses traitScale() with the major-trait
+  // endpoints [0.01], [0.2], [0.4], capped at Empowered rank 2.
+  const cappedRank = Math.min(2, rank);
+  const fraction = cappedRank < 1 ? (cappedRank - 0.1) / 0.9 : cappedRank - 1;
+  const start = cappedRank < 1 ? 0.01 : 0.2;
+  const end = cappedRank < 1 ? 0.2 : 0.4;
+  return finite(Number((start + (end - start) * fraction).toFixed(6)));
+}
+
+function capturedOcularCapacityAtRank(rank: number): number {
+  // Mirrors traits.ocular_power.vars()'s rankStep(rank, [[0, 1], [1, 2], [1.67, 3]]).
+  return rank >= 1.67 ? 3 : rank >= 1 ? 2 : 1;
+}
+
+function capturedOcularCapacityFromRace(race: unknown): number {
+  const rawRank = finite(readProperty(race, "ocular_power"));
+  if (rawRank === undefined || !capturedOcularRankIsSupported(rawRank))
+    return 0;
+  const baseCapacity = capturedOcularCapacityAtRank(rawRank);
+  const rawEmpoweredRank = readProperty(race, "empowered");
+  if (!rawEmpoweredRank) return baseCapacity;
+
+  const empoweredRank = finite(rawEmpoweredRank);
+  if (empoweredRank === undefined) return 0;
+  const bonus = capturedOcularMajorEmpoweredBonus(empoweredRank);
+  if (bonus === undefined) return 0;
+  const effectiveRank = Number((rawRank + bonus).toFixed(6));
+  if (!Number.isFinite(effectiveRank)) return 0;
+  return capturedOcularCapacityAtRank(effectiveRank);
 }
 
 export function createCapturedOcularPowerAutomation(
@@ -76,7 +100,7 @@ export function createCapturedOcularPowerAutomation(
       const handle = dependencies.controls.resolve(
         CAPTURED_OCULAR_POWER_CONTROL,
       );
-      return handle !== undefined && handle.methods.includes("max");
+      return handle !== undefined && handle.methods.includes("pow");
     },
     current(key: string): boolean | null {
       const power = CAPTURED_TRAIT_OCULAR.find(
@@ -104,7 +128,7 @@ export function createCapturedOcularPowerAutomation(
       const handle = dependencies.controls.resolve(
         CAPTURED_OCULAR_POWER_CONTROL,
       );
-      if (handle === undefined || !handle.methods.includes("max")) return false;
+      if (handle === undefined || !handle.methods.includes("pow")) return false;
       const checkbox = capturedOcularCheckbox(
         dependencies.getDocument(),
         power.id,
@@ -145,7 +169,12 @@ export function createCapturedOcularPowerAutomation(
       });
     },
     readPlan(): OcularPowerInput {
-      if (!capturedOcularAvailable(dependencies.rootState)) {
+      const root = dependencies.rootState.readRoot();
+      const race = readProperty(root, "race");
+      if (
+        !readProperty(race, "ocular_power") ||
+        !readProperty(race, "ocularPowerConfig")
+      ) {
         return Object.freeze({ capacity: 0, powers: Object.freeze([]) });
       }
       const rawSettings = dependencies.readSettings();
@@ -166,7 +195,7 @@ export function createCapturedOcularPowerAutomation(
         },
       );
       return Object.freeze({
-        capacity: capturedOcularCapacity(dependencies.controls),
+        capacity: capturedOcularCapacityFromRace(race),
         powers: Object.freeze(powers),
       });
     },

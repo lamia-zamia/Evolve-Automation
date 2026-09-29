@@ -1669,7 +1669,7 @@ export function startCapturedRuntime({
     const satisfied = () =>
       pageCapture.controls
         .resolve(CAPTURED_TRAIT_COMPANION_CONTROLS.ocularPower)
-        ?.methods.includes("max") === true;
+        ?.methods.includes("pow") === true;
     if (satisfied()) return true;
     const root = pageCapture.rootState.readRoot();
     const race = readProperty(root, "race");

@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
+import { installVueCapture } from "../src/adapters/evolve/vue-capture.ts";
 import { CAPTURED_TRAIT_OCULAR } from "../src/adapters/evolve/traits/captured-trait-settings-catalog.ts";
+import { createCapturedOcularPowerAutomation } from "../src/adapters/evolve/traits/captured-ocular-power.ts";
 import { startCapturedRuntime } from "../src/bootstrap/captured-runtime-control.ts";
 import { createTestDocument, element } from "./dom-fixture.mjs";
 
@@ -133,6 +135,144 @@ function coreRoot(race = {}, tech = {}, resources = {}) {
     prestige: {},
     stats: { psykill: 0 },
   };
+}
+
+function capturedOcularCapacity(race) {
+  const root = coreRoot({ ocularPowerConfig: {}, ...race });
+  root.city = {};
+  root.civic = {};
+  const automation = createCapturedOcularPowerAutomation({
+    rootState: { readRoot: () => root },
+    controls: {
+      resolve: () => ({
+        elementId: "ocularPower",
+        generation: 1,
+        methods: ["pow"],
+      }),
+      invoke: () => ({ ok: false, reason: "unknown-method" }),
+    },
+    getDocument: () => undefined,
+    readSettings: () => ({}),
+    ensureControls: () => true,
+  });
+  return automation.reader.readPlan().capacity;
+}
+
+function createCapturedOcularFixture({
+  root,
+  settings = {},
+  gamePow = () => {},
+}) {
+  const document = createTestDocument(element("div", { id: "runtime-root" }));
+  const page = {};
+  const capture = installVueCapture(page);
+  const vue = {
+    reactive(value) {
+      return value;
+    },
+    toRaw(value) {
+      return value;
+    },
+    createApp() {
+      return {
+        use() {
+          return this;
+        },
+        mount() {
+          return {};
+        },
+        unmount() {},
+      };
+    },
+  };
+  page.Vue = vue;
+
+  root.city ??= {};
+  root.civic ??= {};
+  page.Vue.reactive(root);
+  let rebinds = 0;
+  const bindOcularPower = () => {
+    rebinds += 1;
+    page.Vue.createApp({
+      el: "#ocularPower",
+      data: root.race.ocularPowerConfig,
+      methods: {
+        pow(stateKey) {
+          gamePow(stateKey, bindOcularPower);
+        },
+      },
+      // Vue capture records the Vue 3 methods object, not this separate option bag.
+      filters: {
+        max() {
+          return "localized active / capacity";
+        },
+      },
+    });
+  };
+  bindOcularPower();
+
+  const checkboxClicks = [];
+  const powerQuery = document.querySelector.bind(document);
+  document.querySelector = (selector) => {
+    const power = CAPTURED_TRAIT_OCULAR.find(
+      (candidate) =>
+        selector === `#ocular${candidate.id} input[type='checkbox']`,
+    );
+    if (power === undefined) return powerQuery(selector);
+    return {
+      click() {
+        checkboxClicks.push(power.id);
+        root.race.ocularPowerConfig[power.stateKey] =
+          !root.race.ocularPowerConfig[power.stateKey];
+        const handle = capture.controls.resolve("ocularPower");
+        const result = capture.controls.invoke(handle, "pow", [power.stateKey]);
+        if (!result.ok) throw new Error("captured Ocular pow was unavailable");
+      },
+    };
+  };
+
+  let periodListener;
+  const pageCapture = {
+    ...capture,
+    isComplete: () => true,
+    keyState: { readPressed: () => false },
+    periods: {
+      subscribe(next) {
+        periodListener = next;
+        return () => {
+          periodListener = undefined;
+        };
+      },
+    },
+  };
+  const storage = {
+    getItem: () =>
+      JSON.stringify({
+        masterScriptToggle: true,
+        tickRate: 1,
+        autoMinorTrait: true,
+        autoMutateTraits: false,
+        autoGenetics: false,
+        autoPrestige: false,
+        ...settings,
+      }),
+    setItem: () => {},
+  };
+  const errors = [];
+  const stop = startCapturedRuntime({
+    pageCapture,
+    document,
+    keyboardEvent: class {},
+    mouseEvent: class {},
+    settingsHostWindow: { document },
+    storage,
+    logError: (message) => errors.push(message),
+  });
+  periodListener({ periods: 1 });
+  stop();
+  const handle = capture.controls.resolve("ocularPower");
+  capture.uninstall();
+  return { root, handle, checkboxClicks, errors, rebinds };
 }
 
 function psychicRoot({
@@ -297,8 +437,60 @@ for (const race of [
   assert.equal(count(fixture, "psychicBoost", "boostVal"), 1);
 }
 
-// Ocular powers reconcile the exact top two priorities and click only the controls whose
-// authoritative root values differ.
+// Current DeadSpace stores the seven rank tiers as 0.1, 0.25, 0.5, 1, 1.33,
+// 1.67 and 2. Legacy tiers 2, 3 and 4 migrate to 1.33, 1.67 and 2.
+{
+  for (const [rank, capacity] of [
+    [0.1, 1],
+    [0.25, 1],
+    [0.5, 1],
+    [1, 2],
+    [1.33, 2],
+    [1.67, 3],
+    [2, 3],
+  ]) {
+    assert.equal(
+      capturedOcularCapacity({ ocular_power: rank }),
+      capacity,
+      `ocular_power ${rank}`,
+    );
+  }
+
+  // space.js runs legacyTraitRank() while loading legacy tRanks before the game
+  // exposes the current race rank to captured readers.
+  for (const [legacyRank, currentRank, capacity] of [
+    [2, 1.33, 2],
+    [3, 1.67, 3],
+    [4, 2, 3],
+  ]) {
+    assert.equal(
+      capturedOcularCapacity({ ocular_power: currentRank }),
+      capacity,
+      `legacy ocular tier ${legacyRank} migrates to ${currentRank}`,
+    );
+  }
+
+  // Empowered is a major trait too: its rank-1.67 bonus puts Ocular Power at
+  // 1.664 (still capacity two), while rank 2 raises it to 1.73 (capacity three).
+  assert.equal(
+    capturedOcularCapacity({ ocular_power: 1.33, empowered: 1.67 }),
+    2,
+  );
+  assert.equal(capturedOcularCapacity({ ocular_power: 1.33, empowered: 2 }), 3);
+  assert.equal(
+    capturedOcularCapacity({ ocular_power: 3 }),
+    0,
+    "an unmigrated legacy tier fails closed",
+  );
+  assert.equal(
+    capturedOcularCapacity({ ocular_power: 4 }),
+    0,
+    "another unmigrated legacy tier fails closed",
+  );
+}
+
+// Ocular powers run through the real Vue capture and the production runtime. The capture sees
+// pow in methods and leaves the separate filters bag out of the control handle.
 {
   const config = Object.fromEntries(
     CAPTURED_TRAIT_OCULAR.map((power) => [power.stateKey, true]),
@@ -312,15 +504,7 @@ for (const race of [
     fear: 10,
     charm: 0,
   };
-  const controls = {
-    ocularPower: {
-      max() {
-        const active = Object.values(config).filter(Boolean).length;
-        return `${active} / 2`;
-      },
-    },
-  };
-  const fixture = createFixture({
+  const fixture = createCapturedOcularFixture({
     root,
     settings: Object.fromEntries([
       ...CAPTURED_TRAIT_OCULAR.map((power) => [
@@ -332,33 +516,57 @@ for (const race of [
         priorities[power.id],
       ]),
     ]),
-    controls,
-    documentSetup({ document, rebindControl }) {
-      const priorQuery = document.querySelector.bind(document);
-      document.querySelector = (selector) => {
-        const power = CAPTURED_TRAIT_OCULAR.find(
-          (candidate) =>
-            selector === `#ocular${candidate.id} input[type='checkbox']`,
-        );
-        if (power !== undefined) {
-          return {
-            click() {
-              config[power.stateKey] = !config[power.stateKey];
-              rebindControl("ocularPower");
-            },
-          };
-        }
-        return priorQuery(selector);
-      };
+    gamePow(stateKey, rebind) {
+      // Upstream redraws the panel while an over-cap config is reconciled.
+      if (Object.values(config).filter(Boolean).length > 2) rebind();
     },
   });
+  assert.deepEqual(fixture.handle.methods, ["pow"]);
+  assert.equal(fixture.handle.methods.includes("max"), false);
   assert.deepEqual(
     CAPTURED_TRAIT_OCULAR.filter((power) => config[power.stateKey]).map(
       (power) => power.id,
     ),
     ["disintegration", "petrification"],
   );
-  assert.equal(count(fixture, "ocularPower", "max"), 1);
+  assert.ok(fixture.rebinds > 1, "pow redraws and rebinds the control");
+  assert.equal(fixture.checkboxClicks.length, 4);
+  assert.deepEqual(fixture.errors, []);
+}
+
+// Priorities can beat the order in which the game renders the six checkboxes.
+{
+  const config = Object.fromEntries(
+    CAPTURED_TRAIT_OCULAR.map((power) => [power.stateKey, false]),
+  );
+  const root = coreRoot({ ocular_power: 1, ocularPowerConfig: config }, {});
+  const priorities = {
+    disintegration: 30,
+    petrification: 20,
+    wound: 10,
+    telekinesis: 0,
+    fear: 50,
+    charm: 40,
+  };
+  createCapturedOcularFixture({
+    root,
+    settings: Object.fromEntries([
+      ...CAPTURED_TRAIT_OCULAR.map((power) => [
+        `ocularPower_${power.id}`,
+        true,
+      ]),
+      ...CAPTURED_TRAIT_OCULAR.map((power) => [
+        `ocularPower_p_${power.id}`,
+        priorities[power.id],
+      ]),
+    ]),
+  });
+  assert.deepEqual(
+    CAPTURED_TRAIT_OCULAR.filter((power) => config[power.stateKey]).map(
+      (power) => power.id,
+    ),
+    ["fear", "charm"],
+  );
 }
 
 // Wish executes minor before major and verifies both game-owned cooldowns in the same cycle.
@@ -418,9 +626,7 @@ for (const race of [
       sshifter: { setShape() {} },
       psychicKill: { murder() {} },
       ocularPower: {
-        max() {
-          return "0 / 2";
-        },
+        pow() {},
       },
       minorWish: { know() {} },
       majorWish: { power() {} },
