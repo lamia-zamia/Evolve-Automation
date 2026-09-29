@@ -140,9 +140,68 @@ export function createCapturedProjectSource(
   const reportActivity = dependencies.onActivity ?? (() => {});
   const reportDiagnostic = dependencies.onDiagnostic;
   let cycle: ReadonlyMap<string, CycleProject> = new Map();
+  let savingCycle: ReadonlyMap<string, CycleProject> = new Map();
 
   return Object.freeze({
     family: "arpa",
+
+    finishCycle(): void {
+      savingCycle = cycle;
+    },
+
+    readSavingCost(candidate: Readonly<ConstructionCandidate>) {
+      const previous = savingCycle.get(candidate.key)?.project;
+      if (previous === undefined) return undefined;
+      const settingsValue = readSettings();
+      if (!isProjectAutomationEnabled(settingsValue)) return null;
+      const settings = isNonArrayRecord(settingsValue) ? settingsValue : {};
+      if (
+        settings[`arpa_${previous.projectId}`] === false ||
+        settings[`arpa_w_${previous.projectId}`] === 0
+      )
+        return null;
+      const current = projectState(rootState.readRoot(), previous.projectId);
+      if (current === undefined) return undefined;
+      const maximum = Number(settings[`arpa_m_${previous.projectId}`]);
+      if (Number.isFinite(maximum) && maximum >= 0 && current.rank >= maximum)
+        return null;
+      if (current.rank !== previous.rank) return undefined;
+      const perPercent = Object.freeze(
+        Object.fromEntries(
+          Object.entries(previous.cost).map(([id, amount]) => [
+            id,
+            amount / previous.steps,
+          ]),
+        ),
+      );
+      const sample = resources.readResources(Object.keys(perPercent));
+      if (sample === undefined) return undefined;
+      let steps = Math.min(
+        Math.max(
+          1,
+          Math.min(100, Math.floor(Number(settings["arpaStep"]) || 1)),
+        ),
+        100 - current.progress,
+      );
+      for (const [id, price] of Object.entries(perPercent)) {
+        const view = resourceView(sample, id);
+        if (
+          !view.present ||
+          !Number.isFinite(view.max) ||
+          !Number.isFinite(price) ||
+          price <= 0
+        )
+          return undefined;
+        if (view.max >= 0)
+          steps = Math.min(steps, Math.floor(view.max / price));
+      }
+      if (steps < 1) return null;
+      return Object.freeze(
+        Object.fromEntries(
+          Object.entries(perPercent).map(([id, price]) => [id, price * steps]),
+        ),
+      );
+    },
 
     beginCycle(): readonly Readonly<ConstructionCandidate>[] {
       const settings = readSettings();

@@ -39,6 +39,12 @@ export interface ConstructionCandidateSource {
   readonly family: string;
   /** Samples this family's candidates for one cycle, in its own preferred order. */
   beginCycle(): readonly Readonly<ConstructionCandidate>[];
+  /** Publishes this source's completed candidate data for later read-only saving observations. */
+  finishCycle?(): void;
+  /** Current price for a previously ordered candidate; null means explicitly no longer wanted. */
+  readSavingCost?(
+    candidate: Readonly<ConstructionCandidate>,
+  ): Readonly<Record<string, number>> | null | undefined;
   /** Buys the candidate this source offered under `key` during the current cycle. */
   execute(key: string): BuildClickResult;
 }

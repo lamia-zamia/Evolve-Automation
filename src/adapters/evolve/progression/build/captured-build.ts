@@ -59,6 +59,7 @@ export interface CapturedBuildDependencies {
   readonly controls: GameControlRegistry;
   readonly costs: GameActionCostReader;
   readonly readTargets: () => readonly Readonly<CapturedBuildTarget>[];
+  readonly readSettings?: () => unknown;
   /** Ensures the game has built the relevant action controls before target sampling. */
   readonly ensureControls?: () => void;
   /** Reports a candidate that could not be evaluated. It is dropped, never guessed at. */
@@ -72,6 +73,7 @@ export interface CapturedBuildDependencies {
 interface CycleCandidate {
   readonly target: Readonly<CapturedBuildTarget>;
   readonly candidate: Readonly<ConstructionCandidate>;
+  readonly count: number;
 }
 
 const NO_CONSUMPTION = Object.freeze([]);
@@ -135,11 +137,49 @@ export function createCapturedBuildSource(
   const reportDiagnostic = dependencies.onDiagnostic ?? (() => {});
   const reportActivity = dependencies.onActivity ?? (() => {});
   let cycle: ReadonlyMap<string, CycleCandidate> = new Map();
+  let savingCycle: ReadonlyMap<string, CycleCandidate> = new Map();
+  let nextSavingPrices = new Map<
+    string,
+    Readonly<{ count: number; cost: Readonly<Record<string, number>> }>
+  >();
+  let savingPrices: ReadonlyMap<
+    string,
+    Readonly<{ count: number; cost: Readonly<Record<string, number>> }>
+  > = new Map();
 
   return Object.freeze({
     family: "buildings",
 
+    finishCycle(): void {
+      savingCycle = cycle;
+      savingPrices = nextSavingPrices;
+    },
+
+    readSavingCost(candidate: Readonly<ConstructionCandidate>) {
+      const previous = savingCycle.get(candidate.key);
+      if (previous === undefined) return undefined;
+      const settings = dependencies.readSettings?.();
+      if (isRecord(settings)) {
+        if (
+          settings[`bat${candidate.key}`] === false ||
+          settings["autoBuild"] === false
+        )
+          return null;
+        if (settings[`bld_w_${candidate.key}`] === 0) return null;
+      }
+      const building = readBuilding(rootState.readRoot(), previous.target);
+      if (building === undefined) return undefined;
+      const count = Number(building["count"]);
+      if (count >= previous.target.maximum) return null;
+      if (count !== previous.count) {
+        const next = savingPrices.get(candidate.key);
+        return next?.count === count ? next.cost : undefined;
+      }
+      return candidate.cost;
+    },
+
     beginCycle(): readonly Readonly<ConstructionCandidate>[] {
+      nextSavingPrices = new Map();
       dependencies.ensureControls?.();
       const root = rootState.readRoot();
       const entries = new Map<string, CycleCandidate>();
@@ -157,6 +197,7 @@ export function createCapturedBuildSource(
         }
         entries.set(target.key, {
           target,
+          count: Number(building["count"]),
           candidate: Object.freeze({
             key: target.key,
             actionId: target.elementId,
@@ -266,6 +307,17 @@ export function createCapturedBuildSource(
         });
       }
       if (built) {
+        if (after < candidate.target.maximum) {
+          // Price one more copy while this is still the build phase. Demand can then read the
+          // next-cycle price without touching the queue or recomputing construction weighting.
+          const next = costs.readCost(candidate.target.elementId);
+          if (next !== undefined && next.pool === candidate.candidate.pool) {
+            nextSavingPrices.set(
+              key,
+              Object.freeze({ count: after, cost: next.cost }),
+            );
+          }
+        }
         const label = readCapturedControlLabel(handle, candidate.target.id);
         reportActivity({
           message: `Built ${label} (${after})`,

@@ -3370,11 +3370,30 @@
     let { rootState, controls: controls2, costs, readTargets } = dependencies, reportSkipped = dependencies.onSkipped ?? (() => {
     }), reportDiagnostic = dependencies.onDiagnostic ?? (() => {
     }), reportActivity = dependencies.onActivity ?? (() => {
-    }), cycle = /* @__PURE__ */ new Map();
+    }), cycle = /* @__PURE__ */ new Map(), savingCycle = /* @__PURE__ */ new Map(), nextSavingPrices = /* @__PURE__ */ new Map(), savingPrices = /* @__PURE__ */ new Map();
     return Object.freeze({
       family: "buildings",
+      finishCycle() {
+        savingCycle = cycle, savingPrices = nextSavingPrices;
+      },
+      readSavingCost(candidate) {
+        let previous = savingCycle.get(candidate.key);
+        if (previous === void 0) return;
+        let settings = dependencies.readSettings?.();
+        if (isRecord(settings) && (settings[`bat${candidate.key}`] === !1 || settings.autoBuild === !1 || settings[`bld_w_${candidate.key}`] === 0))
+          return null;
+        let building = readBuilding(rootState.readRoot(), previous.target);
+        if (building === void 0) return;
+        let count2 = Number(building.count);
+        if (count2 >= previous.target.maximum) return null;
+        if (count2 !== previous.count) {
+          let next = savingPrices.get(candidate.key);
+          return next?.count === count2 ? next.cost : void 0;
+        }
+        return candidate.cost;
+      },
       beginCycle() {
-        dependencies.ensureControls?.();
+        nextSavingPrices = /* @__PURE__ */ new Map(), dependencies.ensureControls?.();
         let root = rootState.readRoot(), entries = /* @__PURE__ */ new Map();
         for (let target of readTargets()) {
           let building = readBuilding(root, target);
@@ -3390,6 +3409,7 @@
           }
           entries.set(target.key, {
             target,
+            count: Number(building.count),
             candidate: Object.freeze({
               key: target.key,
               actionId: target.elementId,
@@ -3461,6 +3481,13 @@
             ...base
           });
         if (built) {
+          if (after < candidate.target.maximum) {
+            let next = costs.readCost(candidate.target.elementId);
+            next !== void 0 && next.pool === candidate.candidate.pool && nextSavingPrices.set(
+              key,
+              Object.freeze({ count: after, cost: next.cost })
+            );
+          }
           let label = readCapturedControlLabel(handle, candidate.target.id);
           reportActivity({
             message: `Built ${label} (${after})`,
@@ -3702,7 +3729,11 @@
     });
   }
   function createCapturedConstructionAdapter(dependencies) {
-    let { sources, resources, rootState, conflicts, readOptions: readOptions3 } = dependencies, readKnowledgeGate = dependencies.readKnowledgeGate, readStorageRequired = dependencies.readStorageRequired, cycle = Object.freeze([]), respectReservations = !0, savingTarget = null, cycleSavingTarget = null, knowledgeRequirement = 0, constructionCycleId = 0, uiPresentationMode = "off", capturePlannerDetails = !1, stateLogDetailsDue = !1, plannerAffordability = /* @__PURE__ */ new Map(), plannerResources = /* @__PURE__ */ new Map();
+    let { sources, resources, rootState, conflicts, readOptions: readOptions3 } = dependencies, readKnowledgeGate = dependencies.readKnowledgeGate, readStorageRequired = dependencies.readStorageRequired, cycle = Object.freeze([]), respectReservations = !0, completedIntent, cycleReadyToPublish = !1;
+    rootState.subscribeRootReplaced?.(() => {
+      completedIntent = void 0, cycleReadyToPublish = !1;
+    });
+    let knowledgeRequirement = 0, constructionCycleId = 0, uiPresentationMode = "off", capturePlannerDetails = !1, stateLogDetailsDue = !1, plannerAffordability = /* @__PURE__ */ new Map(), plannerResources = /* @__PURE__ */ new Map();
     function capturePlannerResources(index, candidate) {
       try {
         let resourceIds = Object.keys(candidate.cost), sample = resources.readResources(
@@ -3809,17 +3840,11 @@
     }
     function affordable(candidate) {
       let root = rootState.readRoot();
-      return root !== void 0 && costFitsNow(root, candidate.cost, { pool: candidate.pool }) === !0 ? !0 : (root !== void 0 && cycleSavingTarget === null && costFitsStorage(root, candidate.cost, {
-        pool: candidate.pool,
-        zeroCapIsCeiling: !1
-      }) !== !1 && (cycleSavingTarget = Object.freeze({
-        name: candidate.key,
-        ...candidate.pool === void 0 ? {} : { pool: candidate.pool },
-        cost: Object.freeze({ ...candidate.cost })
-      })), !1);
+      return root !== void 0 && costFitsNow(root, candidate.cost, { pool: candidate.pool }) === !0;
     }
     let reader = Object.freeze({
       beginCycle() {
+        cycleReadyToPublish = !1;
         let options = readOptions3();
         constructionCycleId++;
         let presentationSettings = dependencies.readPresentationSettings?.(), stateLogPlannerDetailsDue = dependencies.readStateLogPlannerDetailsDue?.() === !0;
@@ -3834,7 +3859,7 @@
               );
             owners.set(candidate.key, source.family), entries.push({ candidate, source });
           }
-        entries.sort((a, b) => b.candidate.weighting - a.candidate.weighting), cycle = Object.freeze(entries), savingTarget = cycleSavingTarget, cycleSavingTarget = null, knowledgeRequirement = 0;
+        entries.sort((a, b) => b.candidate.weighting - a.candidate.weighting), cycle = Object.freeze(entries), cycleReadyToPublish = !0, knowledgeRequirement = 0;
         for (let entry of entries) {
           if (entry.candidate.knowledge) continue;
           let cost = entry.candidate.cost.Knowledge;
@@ -3856,6 +3881,27 @@
           saveWhiteholeGems: options.saveWhiteholeGems,
           knowledgeGate: readKnowledgeGate?.() ?? ZERO_KNOWLEDGE_GATE
         });
+      },
+      finishCycle(completed) {
+        if (cycleReadyToPublish) {
+          if (completed) {
+            for (let source of sources) source.finishCycle?.();
+            completedIntent = Object.freeze(
+              cycle.filter(
+                ({ candidate }) => !candidate.ignored && candidate.weighting > 0
+              ).map(
+                ({ candidate, source }) => Object.freeze({
+                  candidate: Object.freeze({
+                    ...candidate,
+                    cost: Object.freeze({ ...candidate.cost })
+                  }),
+                  source
+                })
+              )
+            );
+          }
+          cycleReadyToPublish = !1;
+        }
       },
       sampleCandidate(index, request) {
         let { candidate } = entryAt(index), sample = {};
@@ -3974,7 +4020,41 @@
       reader,
       executor,
       observations: Object.freeze({
-        readSavingTarget: () => savingTarget,
+        hasCompletedOrdering: () => completedIntent !== void 0,
+        readSavingTarget() {
+          let intent = completedIntent;
+          if (intent === void 0)
+            throw new TypeError("construction saving order is not established");
+          let root = rootState.readRoot();
+          if (root === void 0)
+            throw new TypeError("construction saving root is unavailable");
+          for (let { candidate, source } of intent) {
+            let cost = source.readSavingCost === void 0 ? candidate.cost : source.readSavingCost(candidate);
+            if (cost === null) continue;
+            if (cost === void 0)
+              throw new TypeError(
+                `construction saving cost unavailable for ${candidate.key}`
+              );
+            let options = { pool: candidate.pool }, storable = costFitsStorage(root, cost, options);
+            if (storable === !1) continue;
+            if (storable === void 0)
+              throw new TypeError(
+                `construction storage fit unavailable for ${candidate.key}`
+              );
+            let affordable2 = costFitsNow(root, cost, options);
+            if (affordable2 === void 0)
+              throw new TypeError(
+                `construction affordability unavailable for ${candidate.key}`
+              );
+            if (!affordable2)
+              return Object.freeze({
+                name: candidate.key,
+                ...candidate.pool === void 0 ? {} : { pool: candidate.pool },
+                cost: Object.freeze({ ...cost })
+              });
+          }
+          return null;
+        },
         readKnowledgeRequirement: () => knowledgeRequirement,
         readPlannerSnapshot,
         readStateLogSnapshot
@@ -4259,9 +4339,54 @@
   }
   function createCapturedProjectSource(dependencies) {
     let { rootState, catalog, resources, controls: controls2, context, readSettings } = dependencies, reportActivity = dependencies.onActivity ?? (() => {
-    }), reportDiagnostic = dependencies.onDiagnostic, cycle = /* @__PURE__ */ new Map();
+    }), reportDiagnostic = dependencies.onDiagnostic, cycle = /* @__PURE__ */ new Map(), savingCycle = /* @__PURE__ */ new Map();
     return Object.freeze({
       family: "arpa",
+      finishCycle() {
+        savingCycle = cycle;
+      },
+      readSavingCost(candidate) {
+        let previous = savingCycle.get(candidate.key)?.project;
+        if (previous === void 0) return;
+        let settingsValue = readSettings();
+        if (!isProjectAutomationEnabled(settingsValue)) return null;
+        let settings = isNonArrayRecord(settingsValue) ? settingsValue : {};
+        if (settings[`arpa_${previous.projectId}`] === !1 || settings[`arpa_w_${previous.projectId}`] === 0)
+          return null;
+        let current = projectState(rootState.readRoot(), previous.projectId);
+        if (current === void 0) return;
+        let maximum = Number(settings[`arpa_m_${previous.projectId}`]);
+        if (Number.isFinite(maximum) && maximum >= 0 && current.rank >= maximum)
+          return null;
+        if (current.rank !== previous.rank) return;
+        let perPercent = Object.freeze(
+          Object.fromEntries(
+            Object.entries(previous.cost).map(([id, amount]) => [
+              id,
+              amount / previous.steps
+            ])
+          )
+        ), sample = resources.readResources(Object.keys(perPercent));
+        if (sample === void 0) return;
+        let steps = Math.min(
+          Math.max(
+            1,
+            Math.min(100, Math.floor(Number(settings.arpaStep) || 1))
+          ),
+          100 - current.progress
+        );
+        for (let [id, price] of Object.entries(perPercent)) {
+          let view = resourceView(sample, id);
+          if (!view.present || !Number.isFinite(view.max) || !Number.isFinite(price) || price <= 0)
+            return;
+          view.max >= 0 && (steps = Math.min(steps, Math.floor(view.max / price)));
+        }
+        return steps < 1 ? null : Object.freeze(
+          Object.fromEntries(
+            Object.entries(perPercent).map(([id, price]) => [id, price * steps])
+          )
+        );
+      },
       beginCycle() {
         let settings = readSettings();
         if (!isProjectAutomationEnabled(settings))
@@ -4655,6 +4780,14 @@
     status: "succeeded"
   }), EMPTY_SAMPLE = Object.freeze({});
   function runBuildAutomation(dependencies) {
+    let outcome;
+    try {
+      return outcome = runBuildCycle(dependencies), outcome;
+    } finally {
+      dependencies.reader.finishCycle?.(outcome?.status === "succeeded");
+    }
+  }
+  function runBuildCycle(dependencies) {
     let { reader, executor, diagnostics } = dependencies, reportDiagnostic = dependencies.onDiagnostic ?? (() => {
     }), measure = createPhaseMeasure(diagnostics), setup = measure("autoBuild.beginCycle", () => reader.beginCycle());
     reportDiagnostic(`autoBuild.candidates ${setup.candidates.length}`);
@@ -4809,6 +4942,7 @@
           controls: controls2,
           costs,
           readTargets: () => readPolicy().buildings,
+          readSettings,
           ...dependencies.ensureBuildControls === void 0 ? {} : { ensureControls: dependencies.ensureBuildControls },
           ...onSkipped === void 0 ? {} : { onSkipped },
           ...onDiagnostic === void 0 ? {} : { onDiagnostic },
@@ -8416,7 +8550,10 @@
     targets: Object.freeze([]),
     unavailable: !1
   }), NO_OBSERVATIONS = Object.freeze({
-    readSavingTarget: () => null,
+    hasCompletedOrdering: () => !1,
+    readSavingTarget: () => {
+      throw new TypeError("construction saving order is not established");
+    },
     readKnowledgeRequirement: () => 0,
     readPlannerSnapshot: () => null,
     readStateLogSnapshot: () => null
@@ -8636,6 +8773,7 @@
       ...onSkipped === void 0 ? {} : { onSkipped }
     }), readObservations = () => NO_OBSERVATIONS, savingReservations = Object.freeze({
       readReservations() {
+        if (!readObservations().hasCompletedOrdering()) return NO_RESERVATIONS3;
         let target = readObservations().readSavingTarget();
         return target === null ? NO_RESERVATIONS3 : Object.freeze({
           unavailable: !1,
@@ -16697,6 +16835,7 @@
 
   // src/adapters/evolve/economy/resources/captured-resource-demand.ts
   var NO_STORAGE_REQUIREMENT = 1, EMPTY_DEMAND_SAMPLE = Object.freeze({
+    savingTarget: null,
     spyPurchaseMoney: 0,
     spyPurchaseReservation: EMPTY_SPY_PURCHASE_RESERVATION,
     requestedQuantity: () => 0,
@@ -17613,6 +17752,7 @@
           ])
         );
         return Object.freeze({
+          savingTarget: saving,
           spyPurchaseMoney: sampledSpyPurchaseMoney,
           spyPurchaseReservation: sampledSpyPurchaseReservation,
           storageRequired: (resourceId, pool) => required.get(storageRequirementScopeKey(resourceId, pool)) ?? NO_STORAGE_REQUIREMENT,
@@ -21584,6 +21724,7 @@
   }
   function readInput6(dependencies) {
     let root = dependencies.rootState.readRoot(), city = readProperty(root, "city"), smelter = readProperty(city, "smelter"), resources = readProperty(root, "resource"), race = readProperty(root, "race"), tech = readProperty(root, "tech"), settings = readSettingRecord(dependencies.readSettings()), demand = dependencies.readDemand?.() ?? {
+      savingTarget: null,
       requestedQuantity: () => 0,
       requestedQuantityExcludingMech: () => 0,
       requestedQuantityForMechPriority: () => 0,
@@ -23352,7 +23493,7 @@
     if (!reservations.unavailable)
       for (let target of reservations.targets)
         targets.push(targetFromCost(target.name, target.cost, target.pool));
-    let saving = dependencies.construction?.readSavingTarget() ?? null;
+    let saving = dependencies.readSavingTarget?.() ?? null;
     saving !== null && targets.push(targetFromCost(saving.name, saving.cost, saving.pool));
     let requiredTargets = resourcesInput.filter((resource) => resource.unlocked && resource.managed).map(
       (resource) => targetFromCost(
@@ -47264,6 +47405,12 @@ Only continue if you trust the source. Injected code:
       diagnostics,
       onDiagnostic: reportDiagnostic,
       onActivity
+    }), savingTargetThisCycle, constructionRunning = !1, cycleConstructionObservations = Object.freeze({
+      ...progression.observations,
+      readSavingTarget() {
+        let settings = settingsStore.readRaw();
+        return settings.autoBuild !== !0 && settings.autoARPA !== !0 || constructionRunning && !progression.observations.hasCompletedOrdering() ? null : (savingTargetThisCycle === void 0 && (savingTargetThisCycle = progression.observations.readSavingTarget()), savingTargetThisCycle);
+      }
     }), readCapturedMechReservation = (resourceId) => {
       let demandSample = readDemand(), priorityDemand = progression.mechDemand.read({
         supply: demandSample.requestedQuantityForMechPriority("Supply"),
@@ -47379,7 +47526,7 @@ Only continue if you trust the source. Injected code:
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
       costs: buildCosts,
-      construction: progression.observations,
+      construction: cycleConstructionObservations,
       readOfferedTechs: progression.readOfferedTechs,
       reservations: queueReservations,
       readSettings: () => settingsStore.readRaw(),
@@ -47472,7 +47619,7 @@ Only continue if you trust the source. Injected code:
       latestConstructionSnapshot = null, latestConstructionRun = void 0, currentStateLogConstructionSnapshot = null, constructionFreshness = "none", triggerTargetsThisCycle = void 0, triggerDemandThisCycle = void 0, demandThisCycle = void 0, demandPrerequisitesThisCycle = void 0;
     };
     pageCapture2.rootState.subscribeRootReplaced(() => {
-      settingsLifecycle.invalidateDynamicDefaults(), discoveryAttempts.invalidate(), latestConstructionSnapshot = null, latestConstructionRun = void 0, constructionFreshness = "none", triggerTargetsThisCycle = void 0, refreshCapturedPlanningPanels();
+      savingTargetThisCycle = void 0, settingsLifecycle.invalidateDynamicDefaults(), discoveryAttempts.invalidate(), latestConstructionSnapshot = null, latestConstructionRun = void 0, constructionFreshness = "none", triggerTargetsThisCycle = void 0, refreshCapturedPlanningPanels();
     });
     let triggerActions = createCapturedTriggerActions({
       rootState: pageCapture2.rootState,
@@ -47487,7 +47634,7 @@ Only continue if you trust the source. Injected code:
       controls: pageCapture2.controls,
       costs: buildCosts,
       triggers: Object.freeze({ read: readTriggerTargets }),
-      construction: progression.observations,
+      construction: cycleConstructionObservations,
       readOfferedTechs: progression.readOfferedTechs,
       readBuildTargets: progression.readUnlockedStorageBuildTargets,
       readProjects: progression.readProjects,
@@ -47505,7 +47652,7 @@ Only continue if you trust the source. Injected code:
       readSettings: () => settingsStore.readRaw(),
       readStorageRequired: (resourceId, pool) => readDemand().storageRequired(resourceId, pool),
       reservations: queueReservations,
-      construction: progression.observations,
+      readSavingTarget: () => readDemand().savingTarget,
       readBuildTargets: progression.readUnlockedStorageBuildTargets,
       readOfferedTechs: progression.readOfferedTechs,
       readProjects: progression.readProjects,
@@ -48247,7 +48394,7 @@ Only continue if you trust the source. Injected code:
     });
     refreshEffectiveSettings(), refreshCapturedPlanningPanels();
     let runCycle = () => {
-      if (automationCycle += 1, capturedResetCommittedThisCycle = !1, currentStateLogConstructionSnapshot = null, stateLogPlannerDetailsDue = !1, constructionFreshness = latestConstructionSnapshot === null ? "none" : "stale", capturedMechCycleHasPendingWork = !1, demandThisCycle = void 0, triggerTargetsThisCycle = void 0, triggerDemandThisCycle = void 0, demandPrerequisitesThisCycle = void 0, settingsPanel.ensurePanel(), !pageCapture2.isComplete()) {
+      if (automationCycle += 1, capturedResetCommittedThisCycle = !1, currentStateLogConstructionSnapshot = null, stateLogPlannerDetailsDue = !1, constructionFreshness = latestConstructionSnapshot === null ? "none" : "stale", capturedMechCycleHasPendingWork = !1, demandThisCycle = void 0, savingTargetThisCycle = void 0, triggerTargetsThisCycle = void 0, triggerDemandThisCycle = void 0, demandPrerequisitesThisCycle = void 0, settingsPanel.ensurePanel(), !pageCapture2.isComplete()) {
         refreshCapturedPlanningPanels();
         return;
       }
@@ -48337,10 +48484,14 @@ Only continue if you trust the source. Injected code:
             executor: triggerActions.executor
           })
         ), !0)) !== !0 && (triggerActive = !0), !triggerActive && isEnabled(settings, "autoResearch") && runPhase("autoResearch", () => progression.runResearchCycle()), !triggerActive && (isEnabled(settings, "autoBuild") || isEnabled(settings, "autoARPA"))) {
-          let outcome = runPhase(
-            "autoBuild",
-            () => progression.runConstructionCycle()
-          );
+          let outcome = runPhase("autoBuild", () => {
+            constructionRunning = !0;
+            try {
+              return progression.runConstructionCycle();
+            } finally {
+              constructionRunning = !1;
+            }
+          });
           if (outcome !== void 0 && outcome.status !== "succeeded" && reportOnce(
             `autoBuild: ${outcome.failure.code}: ${outcome.failure.message}`
           ), outcome?.status === "succeeded")

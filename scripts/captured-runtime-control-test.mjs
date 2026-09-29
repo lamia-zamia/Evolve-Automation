@@ -23,8 +23,14 @@ function applyResearchDrawnAttributes(node, values) {
   node.attributes = attributes;
 }
 
-function runDemandSampleScenario(settings, spaceEra = false) {
+function runDemandSampleScenario(
+  settings,
+  spaceEra = false,
+  constructionCase = false,
+  moneyAfterFirst,
+) {
   const invoked = [];
+  const phases = [];
   const root = {
     race: {},
     tech: { mad: spaceEra ? 1 : 0, trade: true },
@@ -34,9 +40,11 @@ function runDemandSampleScenario(settings, spaceEra = false) {
       spaceTabs: 0,
       showMarket: true,
       showResearch: true,
+      showCity: constructionCase,
     },
     city: {
       farm: { count: 0 },
+      ...(constructionCase ? { bank: { count: 0 } } : {}),
       market: { qty: 1, mtrade: 1, trade: 0 },
     },
     queue: { queue: [] },
@@ -51,11 +59,32 @@ function runDemandSampleScenario(settings, spaceEra = false) {
         trade: 0,
         stackable: true,
       },
-      Polymer: { amount: 100, max: 1000, display: true, diff: 0 },
+      Polymer: {
+        amount: constructionCase ? 0 : 100,
+        max: 1000,
+        display: true,
+        diff: 0,
+      },
     },
   };
   const market = root.city.market;
   const documentRoot = element("div", { id: "runtime-root" });
+  if (constructionCase) {
+    const mainColumn = element("div", { id: "mainColumn" });
+    const content = element("div");
+    content.classList.add("content");
+    const civilPanel = element("div", { id: "mTabCivil" });
+    const cityPanel = element("div", { id: "city" });
+    for (const id of ["city-farm", "city-bank"]) {
+      const buildingRow = element("div", { id });
+      buildingRow.classList.add("action");
+      cityPanel.appendChild(buildingRow);
+    }
+    civilPanel.appendChild(cityPanel);
+    content.appendChild(civilPanel);
+    mainColumn.appendChild(content);
+    documentRoot.appendChild(mainColumn);
+  }
   const researchPanel = element("div", { id: "tech" });
   const row = element("div");
   row.classList.add("action");
@@ -83,6 +112,13 @@ function runDemandSampleScenario(settings, spaceEra = false) {
     [
       ["buildQueue", ["setData"]],
       ["city-farm", ["action"]],
+      ...(constructionCase
+        ? [
+            ["city-bank", ["action"]],
+            ["#mainColumn div.content", ["swapTab"]],
+            ["mTabCivil", ["swapTab"]],
+          ]
+        : []),
       ["market-qty", []],
       ["market-Food", ["autoBuy", "autoSell", "zero", "purchase", "sell"]],
       ["tech-polymer-reserve", ["action"]],
@@ -105,10 +141,26 @@ function runDemandSampleScenario(settings, spaceEra = false) {
     },
     controls: {
       resolve: (id) => handles.get(id),
-      invoke: (handle, method) => {
+      invoke: (handle, method, args = []) => {
         invoked.push(`${handle.elementId}.${method}`);
+        if (constructionCase) phases.push(`${handle.elementId}.${method}`);
+        if (
+          method === "swapTab" &&
+          handle.elementId === "#mainColumn div.content"
+        )
+          root.settings.civTabs = args[0];
+        if (method === "swapTab" && handle.elementId === "mTabCivil")
+          root.settings.spaceTabs = args[0];
         if (handle.elementId === "buildQueue" && method === "setData") {
-          return { ok: true, value: { "data-Money": 10 } };
+          const id = root.queue.queue.at(-1)?.id;
+          return {
+            ok: true,
+            value: constructionCase
+              ? id === "city-farm"
+                ? { "data-Polymer": 200 }
+                : { "data-Money": 2000 }
+              : { "data-Money": 10 },
+          };
         }
         if (handle.elementId === "city-farm" && method === "action") {
           root.city.farm.count += 1;
@@ -125,7 +177,13 @@ function runDemandSampleScenario(settings, spaceEra = false) {
         return () => {};
       },
     },
-    mountSuppression: { available: false, withoutMounting: () => undefined },
+    mountSuppression: constructionCase
+      ? {
+          available: true,
+          withoutMounting: (draw) => draw(),
+          withMountingEnabled: (draw) => draw(),
+        }
+      : { available: false, withoutMounting: () => undefined },
     uninstall: () => {},
   };
   let pageCaptureCycle;
@@ -147,11 +205,27 @@ function runDemandSampleScenario(settings, spaceEra = false) {
         }),
       setItem: () => {},
     },
+    diagnostics: constructionCase
+      ? {
+          readPerformanceEnabled: () => true,
+          nowMs: () => 0,
+          recordPerformance: (name) => phases.push(name),
+          recordCount: () => {},
+          flushPerformance: () => {},
+        }
+      : undefined,
     logError: (message) => errors.push(message),
   });
   pageCaptureCycle({ periods: 1 });
+  if (constructionCase) {
+    root.resource.Polymer.amount = 200;
+    if (moneyAfterFirst !== undefined)
+      root.resource.Money.amount = moneyAfterFirst;
+    phases.push("between callbacks");
+    pageCaptureCycle({ periods: 1 });
+  }
   stop();
-  return { invoked, researchOfferReads, errors, root };
+  return { invoked, phases, researchOfferReads, errors, root };
 }
 
 function assertDemandScenarioErrors(errors) {
@@ -350,6 +424,7 @@ assert.equal(unsubscribeCount, 1);
     JSON.stringify({
       ...fresh,
       autoMarket: true,
+      autoBuild: false,
       buyFood: true,
     }),
   );
@@ -2587,6 +2662,83 @@ function runCombatRuntime(autoFight) {
   );
   assert.equal(spaceMarket.researchOfferReads, 1);
   assertDemandScenarioErrors(spaceMarket.errors);
+}
+
+{
+  const saving = runDemandSampleScenario(
+    {
+      autoMarket: true,
+      autoStorage: true,
+      autoBuild: true,
+      buyFood: true,
+      res_buy_r_Food: 0.9,
+      "batcity-farm": true,
+      "batcity-bank": true,
+      "bld_w_city-farm": 200,
+      "bld_w_city-bank": 100,
+    },
+    false,
+    true,
+  );
+  assert.ok(
+    saving.phases.includes("autoBuild.beginCycle"),
+    JSON.stringify(saving),
+  );
+  assert.equal(
+    saving.phases.filter((phase) => phase === "autoBuild.beginCycle").length,
+    2,
+    JSON.stringify(saving),
+  );
+  const nextCallback = saving.phases.indexOf("between callbacks");
+  const nextMarket = saving.phases.indexOf("autoMarket.readSell", nextCallback);
+  const nextBuild = saving.phases.indexOf("autoBuild.beginCycle", nextCallback);
+  assert.ok(
+    nextCallback < nextMarket && nextMarket < nextBuild,
+    JSON.stringify(saving),
+  );
+  assert.equal(
+    saving.phases
+      .slice(nextCallback, nextMarket)
+      .includes("autoBuild.sampleCandidate"),
+    false,
+  );
+  assert.equal(
+    saving.invoked.includes("market-Food.purchase"),
+    false,
+    JSON.stringify(saving),
+  );
+  assert.deepEqual(saving.errors, [
+    "autoMarket stopped: TypeError: construction saving order is not established",
+  ]);
+  const affordable = runDemandSampleScenario(
+    {
+      autoMarket: true,
+      autoStorage: true,
+      autoBuild: true,
+      buyFood: true,
+      res_buy_r_Food: 0.9,
+      "batcity-farm": true,
+      "batcity-bank": true,
+      "bld_w_city-farm": 200,
+      "bld_w_city-bank": 100,
+    },
+    false,
+    true,
+    2000,
+  );
+  assert.ok(
+    affordable.invoked.includes("market-Food.purchase"),
+    JSON.stringify(affordable),
+  );
+  const noConstruction = runDemandSampleScenario({
+    autoMarket: true,
+    buyFood: true,
+    res_buy_r_Food: 0.9,
+  });
+  assert.ok(
+    noConstruction.invoked.includes("market-Food.purchase"),
+    JSON.stringify(noConstruction),
+  );
 }
 
 console.log("captured-runtime-control ok");

@@ -17,7 +17,7 @@ import { crateCost } from "../../../../domain/economy/storage/crate-cost.ts";
 import type { CommandExecutionOutcome } from "../../../../domain/commands.ts";
 import type { GameActionCostReader } from "../../../../ports/game-action-costs.ts";
 import type { CostReservationSource } from "../../../../ports/game-cost-reservations.ts";
-import type { ConstructionObservations } from "../../../../ports/game-construction-observations.ts";
+import type { SavingTarget } from "../../../../ports/game-construction-observations.ts";
 import type { DecisionExecutor } from "../../../../ports/decision-executor.ts";
 import type { GameBuildTarget } from "../../../../ports/game-build-targets.ts";
 import type { GameControlRegistry } from "../../../../ports/game-control-registry.ts";
@@ -41,7 +41,7 @@ interface CapturedStorageDependencies {
   readonly readSettings: () => unknown;
   readonly readStorageRequired: (resourceId: string, pool?: string) => number;
   readonly reservations: CostReservationSource;
-  readonly construction?: ConstructionObservations;
+  readonly readSavingTarget?: () => SavingTarget | null;
   /** Managed construction targets, sampled from the same captured build policy as autoBuild. */
   readonly readBuildTargets?: () => readonly Readonly<GameBuildTarget>[];
   /** The game's current cost for a captured build target. */
@@ -519,7 +519,7 @@ function readInput(dependencies: CapturedStorageDependencies): {
       targets.push(targetFromCost(target.name, target.cost, target.pool));
     }
   }
-  const saving = dependencies.construction?.readSavingTarget() ?? null;
+  const saving = dependencies.readSavingTarget?.() ?? null;
   if (saving !== null) {
     targets.push(targetFromCost(saving.name, saving.cost, saving.pool));
   }

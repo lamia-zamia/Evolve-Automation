@@ -54,7 +54,10 @@ import type { CostReservationSource } from "../../../../ports/game-cost-reservat
 import type { GameActionCostReader } from "../../../../ports/game-action-costs.ts";
 import type { GameControlRegistry } from "../../../../ports/game-control-registry.ts";
 import type { GameBuildTarget } from "../../../../ports/game-build-targets.ts";
-import type { ConstructionObservations } from "../../../../ports/game-construction-observations.ts";
+import type {
+  ConstructionObservations,
+  SavingTarget,
+} from "../../../../ports/game-construction-observations.ts";
 import type { GameRootStateSource } from "../../../../ports/game-root-state.ts";
 import type { OfferedTech } from "../../../../ports/game-tech-catalog.ts";
 import type { OfferedProject } from "../../../../ports/game-project-catalog.ts";
@@ -127,6 +130,8 @@ export interface CapturedResourceDemandDependencies {
 }
 
 export interface CapturedDemandSample {
+  /** One current-affordability construction observation shared by this cycle's consumers. */
+  readonly savingTarget: SavingTarget | null;
   /** Undefined when a potentially active foreign Purchase reserve could not be sampled. */
   readonly spyPurchaseMoney?: number | undefined;
   /** Shared amount and qualifying targets from the same captured Purchase calculation. */
@@ -166,6 +171,7 @@ const NO_STORAGE_REQUIREMENT = 1;
 
 /** Nothing is committed, so nothing is demanded and one unit of storage is required. */
 export const EMPTY_DEMAND_SAMPLE: CapturedDemandSample = Object.freeze({
+  savingTarget: null,
   spyPurchaseMoney: 0,
   spyPurchaseReservation: EMPTY_SPY_PURCHASE_RESERVATION,
   requestedQuantity: () => 0,
@@ -1664,6 +1670,7 @@ export function createCapturedResourceDemand(
       );
 
       return Object.freeze({
+        savingTarget: saving,
         spyPurchaseMoney: sampledSpyPurchaseMoney,
         spyPurchaseReservation: sampledSpyPurchaseReservation,
         storageRequired: (resourceId: string, pool?: string) =>

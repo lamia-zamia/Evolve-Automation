@@ -1,7 +1,7 @@
 import type { PlannerReadoutBlocker } from "../domain/planner-analysis.ts";
 
 /**
- * What the construction cycle observed while it ran, published for the features that need it.
+ * Construction intent retained from a completed build, with affordability sampled on demand.
  *
  * These are observations, not decisions. Candidate order and costs come from work the cycle
  * already does. When the planner is enabled, the adapter may take one additional read-only
@@ -17,8 +17,7 @@ import type { PlannerReadoutBlocker } from "../domain/planner-analysis.ts";
  * production splits, the market or storage that anything is saving, and cheaper candidates spend
  * its costs as they arrive.
  *
- * It is an observation of the cycle that produced it, not a decision: the cycle that reports it has
- * already finished, so a reader is looking at the most recent completed judgement.
+ * Candidate order is from the last completed cycle; storage fit and holdings are current.
  */
 export interface SavingTarget {
   /** The candidate's own key, as the family that offered it names it. */
@@ -49,9 +48,11 @@ export interface ConstructionReadoutSnapshot {
 }
 
 export interface ConstructionObservations {
+  /** Whether a successful construction pass has published an ordered wanted set. */
+  hasCompletedOrdering(): boolean;
   /**
-   * The current saving target, or null when everything wanted is affordable. It is the last
-   * finished cycle's judgement, because affordability is sampled as that cycle runs.
+   * Current saving target from the last completed wanted order. Throws when that order or a
+   * required current price/affordability comparison is unavailable, so consumers fail closed.
    */
   readSavingTarget(): SavingTarget | null;
   /**

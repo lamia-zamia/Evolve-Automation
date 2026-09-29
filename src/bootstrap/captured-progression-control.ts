@@ -210,9 +210,12 @@ const NO_RESERVATIONS = Object.freeze({
   unavailable: false,
 });
 
-/** Before the construction cycle exists there is nothing to observe. */
+/** Before the construction cycle exists, spending readers must fail closed. */
 const NO_OBSERVATIONS: ConstructionObservations = Object.freeze({
-  readSavingTarget: () => null,
+  hasCompletedOrdering: () => false,
+  readSavingTarget: () => {
+    throw new TypeError("construction saving order is not established");
+  },
   readKnowledgeRequirement: () => 0,
   readPlannerSnapshot: () => null,
   readStateLogSnapshot: () => null,
@@ -607,6 +610,7 @@ export function createCapturedProgressionControl(
   let readObservations: () => ConstructionObservations = () => NO_OBSERVATIONS;
   const savingReservations: CostReservationSource = Object.freeze({
     readReservations() {
+      if (!readObservations().hasCompletedOrdering()) return NO_RESERVATIONS;
       const target = readObservations().readSavingTarget();
       return target === null
         ? NO_RESERVATIONS

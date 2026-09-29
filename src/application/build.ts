@@ -35,6 +35,18 @@ const EMPTY_SAMPLE: BuildCandidateSample = Object.freeze({});
 export function runBuildAutomation(
   dependencies: BuildAutomationDependencies,
 ): CommandExecutionOutcome {
+  let outcome: CommandExecutionOutcome | undefined;
+  try {
+    outcome = runBuildCycle(dependencies);
+    return outcome;
+  } finally {
+    dependencies.reader.finishCycle?.(outcome?.status === "succeeded");
+  }
+}
+
+function runBuildCycle(
+  dependencies: BuildAutomationDependencies,
+): CommandExecutionOutcome {
   const { reader, executor, diagnostics } = dependencies;
   const reportDiagnostic = dependencies.onDiagnostic ?? (() => {});
   const measure = createPhaseMeasure(diagnostics);

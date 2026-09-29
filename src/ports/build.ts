@@ -26,6 +26,8 @@ export type BuildExecutionDisposition =
  */
 export interface BuildReader {
   beginCycle(): BuildCycleSetup;
+  /** Publishes the ordered intent only after the construction pass has ended. */
+  finishCycle?(completed: boolean): void;
   sampleCandidate(
     index: number,
     request: Readonly<BuildSampleRequest>,

@@ -261,7 +261,12 @@ function runConstructionWithMechPriority(buildingMechsFirst) {
       mechBuild: "user",
       buildingMechsFirst: buildingMechsFirstSetting,
     }),
-    construction: progression.observations,
+    construction: {
+      readSavingTarget: () =>
+        progression.observations.hasCompletedOrdering()
+          ? progression.observations.readSavingTarget()
+          : null,
+    },
     mechDemand: progression.mechDemand,
   });
   readDemand = () => resourceDemand.sample();
@@ -468,7 +473,7 @@ function runConstructionWithMechPriority(buildingMechsFirst) {
   assert.equal(allowedBuild.root.city.factory.count, 1);
 }
 
-// Mech-first priority excludes the construction cycle's own previous saving target.
+// Mech-first priority does not retain a construction target once it is affordable.
 {
   const noPriority = runConstructionWithMechPriority(false);
   noPriority.root.portal.purifier.supply = 25_000;
@@ -489,12 +494,9 @@ function runConstructionWithMechPriority(buildingMechsFirst) {
   assert.deepEqual(cycle.progression.runConstructionCycle(), {
     status: "succeeded",
   });
-  assert.deepEqual(cycle.progression.observations.readSavingTarget(), {
-    name: "factory",
-    cost: { Supply: 50_000 },
-  });
+  assert.equal(cycle.progression.observations.readSavingTarget(), null);
   const demandSample = cycle.resourceDemand.sample();
-  assert.equal(demandSample.requestedQuantityExcludingMech("Supply"), 50_000);
+  assert.equal(demandSample.requestedQuantityExcludingMech("Supply"), 0);
   assert.equal(demandSample.requestedQuantityForMechPriority("Supply"), 0);
   assert.equal(cycle.mechPriorityBudget("Supply"), 0);
   assert.equal(

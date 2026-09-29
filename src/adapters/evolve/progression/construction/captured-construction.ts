@@ -83,10 +83,7 @@ export interface CapturedConstructionDependencies {
 export interface CapturedConstructionAdapter {
   readonly reader: BuildReader;
   readonly executor: BuildExecutor;
-  /**
-   * What the last cycle turned out to be saving for. It is a by-product of the affordability the
-   * cycle already sampled, in the same weighting order, so it costs nothing extra to observe.
-   */
+  /** Previous completed ordering with affordability read from the current root. */
   readonly observations: ConstructionObservations;
 }
 
@@ -139,8 +136,12 @@ export function createCapturedConstructionAdapter(
   const readStorageRequired = dependencies.readStorageRequired;
   let cycle: readonly CycleEntry[] = Object.freeze([]);
   let respectReservations = true;
-  let savingTarget: SavingTarget | null = null;
-  let cycleSavingTarget: SavingTarget | null = null;
+  let completedIntent: readonly CycleEntry[] | undefined;
+  let cycleReadyToPublish = false;
+  rootState.subscribeRootReplaced?.(() => {
+    completedIntent = undefined;
+    cycleReadyToPublish = false;
+  });
   let knowledgeRequirement = 0;
   let constructionCycleId = 0;
   let uiPresentationMode: "off" | "targets" | "planner" = "off";
@@ -314,27 +315,12 @@ export function createCapturedConstructionAdapter(
     ) {
       return true;
     }
-    // The first candidate of the cycle that is wanted, storable and unaffordable is the one the
-    // cycle is saving for. A cost storage can never hold is not something to save for.
-    if (
-      root !== undefined &&
-      cycleSavingTarget === null &&
-      costFitsStorage(root, candidate.cost, {
-        pool: candidate.pool,
-        zeroCapIsCeiling: false,
-      }) !== false
-    ) {
-      cycleSavingTarget = Object.freeze({
-        name: candidate.key,
-        ...(candidate.pool === undefined ? {} : { pool: candidate.pool }),
-        cost: Object.freeze({ ...candidate.cost }),
-      });
-    }
     return false;
   }
 
   const reader: BuildReader = Object.freeze({
     beginCycle(): BuildCycleSetup {
+      cycleReadyToPublish = false;
       const options = readOptions();
       constructionCycleId++;
       const presentationSettings = dependencies.readPresentationSettings?.();
@@ -370,9 +356,7 @@ export function createCapturedConstructionAdapter(
       // families were given in, on ties.
       entries.sort((a, b) => b.candidate.weighting - a.candidate.weighting);
       cycle = Object.freeze(entries);
-      // The finished cycle's judgement stays readable while the new one is still being sampled.
-      savingTarget = cycleSavingTarget;
-      cycleSavingTarget = null;
+      cycleReadyToPublish = true;
       // The Knowledge requirement needs only the sorted list, so it describes this cycle. Only the
       // highest-weighted candidate that does not itself raise the cap counts: a Knowledge building
       // is the answer to a capacity shortage, not evidence of one.
@@ -399,6 +383,29 @@ export function createCapturedConstructionAdapter(
         saveWhiteholeGems: options.saveWhiteholeGems,
         knowledgeGate: readKnowledgeGate?.() ?? ZERO_KNOWLEDGE_GATE,
       });
+    },
+
+    finishCycle(completed: boolean): void {
+      if (!cycleReadyToPublish) return;
+      if (completed) {
+        for (const source of sources) source.finishCycle?.();
+        completedIntent = Object.freeze(
+          cycle
+            .filter(
+              ({ candidate }) => !candidate.ignored && candidate.weighting > 0,
+            )
+            .map(({ candidate, source }) =>
+              Object.freeze({
+                candidate: Object.freeze({
+                  ...candidate,
+                  cost: Object.freeze({ ...candidate.cost }),
+                }),
+                source,
+              }),
+            ),
+        );
+      }
+      cycleReadyToPublish = false;
     },
 
     sampleCandidate(
@@ -597,7 +604,50 @@ export function createCapturedConstructionAdapter(
     reader,
     executor,
     observations: Object.freeze({
-      readSavingTarget: (): SavingTarget | null => savingTarget,
+      hasCompletedOrdering: (): boolean => completedIntent !== undefined,
+      readSavingTarget(): SavingTarget | null {
+        const intent = completedIntent;
+        if (intent === undefined) {
+          throw new TypeError("construction saving order is not established");
+        }
+        const root = rootState.readRoot();
+        if (root === undefined) {
+          throw new TypeError("construction saving root is unavailable");
+        }
+        for (const { candidate, source } of intent) {
+          const cost =
+            source.readSavingCost === undefined
+              ? candidate.cost
+              : source.readSavingCost(candidate);
+          if (cost === null) continue;
+          if (cost === undefined) {
+            throw new TypeError(
+              `construction saving cost unavailable for ${candidate.key}`,
+            );
+          }
+          const options = { pool: candidate.pool };
+          const storable = costFitsStorage(root, cost, options);
+          if (storable === false) continue;
+          if (storable === undefined) {
+            throw new TypeError(
+              `construction storage fit unavailable for ${candidate.key}`,
+            );
+          }
+          const affordable = costFitsNow(root, cost, options);
+          if (affordable === undefined) {
+            throw new TypeError(
+              `construction affordability unavailable for ${candidate.key}`,
+            );
+          }
+          if (affordable) continue;
+          return Object.freeze({
+            name: candidate.key,
+            ...(candidate.pool === undefined ? {} : { pool: candidate.pool }),
+            cost: Object.freeze({ ...cost }),
+          });
+        }
+        return null;
+      },
       readKnowledgeRequirement: (): number => knowledgeRequirement,
       readPlannerSnapshot,
       readStateLogSnapshot,

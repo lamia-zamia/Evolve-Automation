@@ -82,7 +82,10 @@ import {
 } from "../application/planner-stats.ts";
 import type { PlannerRun, PlannerStats } from "../domain/planner-analysis.ts";
 import type { InterfaceSettingsState } from "../domain/interface-settings.ts";
-import type { ConstructionReadoutSnapshot } from "../ports/game-construction-observations.ts";
+import type {
+  ConstructionReadoutSnapshot,
+  SavingTarget,
+} from "../ports/game-construction-observations.ts";
 import { createCapturedFleetDemand } from "../adapters/evolve/combat/captured-fleet-demand.ts";
 import { createCapturedFleetAutomation } from "../adapters/evolve/combat/captured-fleet.ts";
 import { createCapturedOuterFleetControl } from "./captured-fleet-outer-control.ts";
@@ -789,6 +792,25 @@ export function startCapturedRuntime({
     onDiagnostic: reportDiagnostic,
     onActivity,
   });
+  let savingTargetThisCycle: SavingTarget | null | undefined;
+  let constructionRunning = false;
+  const cycleConstructionObservations = Object.freeze({
+    ...progression.observations,
+    readSavingTarget(): SavingTarget | null {
+      const settings = settingsStore.readRaw();
+      if (settings["autoBuild"] !== true && settings["autoARPA"] !== true)
+        return null;
+      if (
+        constructionRunning &&
+        !progression.observations.hasCompletedOrdering()
+      )
+        return null;
+      if (savingTargetThisCycle === undefined) {
+        savingTargetThisCycle = progression.observations.readSavingTarget();
+      }
+      return savingTargetThisCycle;
+    },
+  });
   const readCapturedMechReservation = (resourceId: string): number => {
     const demandSample = readDemand();
     // Re-evaluate Mech-first with the priority budget: the normal sample still contains the
@@ -942,7 +964,7 @@ export function startCapturedRuntime({
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,
     costs: buildCosts,
-    construction: progression.observations,
+    construction: cycleConstructionObservations,
     readOfferedTechs: progression.readOfferedTechs,
     reservations: queueReservations,
     readSettings: () => settingsStore.readRaw(),
@@ -1106,6 +1128,7 @@ export function startCapturedRuntime({
     demandPrerequisitesThisCycle = undefined;
   };
   pageCapture.rootState.subscribeRootReplaced(() => {
+    savingTargetThisCycle = undefined;
     settingsLifecycle.invalidateDynamicDefaults();
     // Attempts and readouts belong to the replaced root, even when its day/reset are unchanged.
     discoveryAttempts.invalidate();
@@ -1131,7 +1154,7 @@ export function startCapturedRuntime({
     controls: pageCapture.controls,
     costs: buildCosts,
     triggers: Object.freeze({ read: readTriggerTargets }),
-    construction: progression.observations,
+    construction: cycleConstructionObservations,
     readOfferedTechs: progression.readOfferedTechs,
     readBuildTargets: progression.readUnlockedStorageBuildTargets,
     readProjects: progression.readProjects,
@@ -1157,7 +1180,7 @@ export function startCapturedRuntime({
     readStorageRequired: (resourceId, pool) =>
       readDemand().storageRequired(resourceId, pool),
     reservations: queueReservations,
-    construction: progression.observations,
+    readSavingTarget: () => readDemand().savingTarget,
     readBuildTargets: progression.readUnlockedStorageBuildTargets,
     readOfferedTechs: progression.readOfferedTechs,
     readProjects: progression.readProjects,
@@ -2318,6 +2341,7 @@ export function startCapturedRuntime({
       latestConstructionSnapshot === null ? "none" : "stale";
     capturedMechCycleHasPendingWork = false;
     demandThisCycle = undefined;
+    savingTargetThisCycle = undefined;
     triggerTargetsThisCycle = undefined;
     triggerDemandThisCycle = undefined;
     demandPrerequisitesThisCycle = undefined;
@@ -2550,9 +2574,14 @@ export function startCapturedRuntime({
         !triggerActive &&
         (isEnabled(settings, "autoBuild") || isEnabled(settings, "autoARPA"))
       ) {
-        const outcome = runPhase("autoBuild", () =>
-          progression.runConstructionCycle(),
-        );
+        const outcome = runPhase("autoBuild", () => {
+          constructionRunning = true;
+          try {
+            return progression.runConstructionCycle();
+          } finally {
+            constructionRunning = false;
+          }
+        });
         if (outcome !== undefined && outcome.status !== "succeeded") {
           reportOnce(
             `autoBuild: ${outcome.failure.code}: ${outcome.failure.message}`,

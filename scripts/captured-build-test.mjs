@@ -126,6 +126,33 @@ function makePage({
   };
 }
 
+// A new build may omit a target that reached its maximum, while conflicts still read the
+// previous completed order until this new pass finishes.
+{
+  const page = makePage({
+    buildings: {
+      first: { count: 0, priceAt: () => ({ Money: 10 }) },
+      saved: { count: 0, priceAt: () => ({ Money: 1000 }) },
+      cheap: { count: 0, priceAt: () => ({ Money: 1 }) },
+    },
+    resources: { Money: { amount: 20 } },
+  });
+  const control = makeControl({
+    rootState: page.rootState,
+    controls: page.registry,
+    readPolicy: policy([
+      target("first", 300, 1),
+      target("saved", 200),
+      target("cheap", 100),
+    ]),
+  });
+  assert.equal(control.runCycle().status, "succeeded");
+  assert.equal(page.root.city.first.count, 1);
+  assert.equal(control.observations.readSavingTarget()?.name, "city-saved");
+  assert.equal(control.runCycle().status, "succeeded");
+  assert.equal(control.observations.readSavingTarget()?.name, "city-saved");
+}
+
 function target(
   id,
   weighting,
@@ -262,6 +289,17 @@ function queued(id, label = id) {
   assert.deepEqual(skipped, []);
   assert.deepEqual(activity, ["Built Basic Housing (10)"]);
   assert.deepEqual(page.root.queue.queue, [], "the cost probe left no trace");
+  page.root.resource.Money.amount = 0;
+  page.root.resource.Lumber.amount = 0;
+  assert.deepEqual(control.observations.readSavingTarget(), {
+    name: "city-basic_housing",
+    cost: { Money: 100, Lumber: 70 },
+  });
+  assert.equal(control.runCycle().status, "succeeded");
+  assert.deepEqual(control.observations.readSavingTarget(), {
+    name: "city-basic_housing",
+    cost: { Money: 100, Lumber: 70 },
+  });
 }
 
 // The executor exposes the full decision-to-effect boundary when diagnostics are enabled.

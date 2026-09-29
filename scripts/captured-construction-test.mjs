@@ -480,8 +480,7 @@ function runCycle(cycle) {
   assert.deepEqual(cycle.bought, ["arpalhc"]);
 }
 
-// The cycle reports what it turned out to be saving for: the highest-weighted candidate it wanted,
-// could eventually store, and could not afford. It becomes readable once that cycle has finished.
+// The completed cycle retains wanted order; every observation checks current affordability.
 {
   const cycle = makeCycle({
     city: [
@@ -500,13 +499,13 @@ function runCycle(cycle) {
     ],
     holdings: { Money: 100 },
   });
-  assert.equal(cycle.adapter.observations.readSavingTarget(), null);
+  assert.throws(
+    () => cycle.adapter.observations.readSavingTarget(),
+    /order is not established/,
+  );
   runCycle(cycle);
   // The cheaper candidate was still bought; saving for a target does not stop the cycle here.
   assert.deepEqual(cycle.bought, ["city-farm"]);
-  // The judgement belongs to the finished cycle, so the next one publishes it.
-  assert.equal(cycle.adapter.observations.readSavingTarget(), null);
-  runCycle(cycle);
   assert.deepEqual(cycle.adapter.observations.readSavingTarget(), {
     name: "city-bank",
     pool: "spc_home",
@@ -522,7 +521,6 @@ function runCycle(cycle) {
     holdings: { Money: 100 },
   });
   runCycle(cycle);
-  runCycle(cycle);
   assert.equal(cycle.adapter.observations.readSavingTarget(), null);
 }
 
@@ -533,8 +531,63 @@ function runCycle(cycle) {
     holdings: { Money: 100000 },
   });
   runCycle(cycle);
-  runCycle(cycle);
   assert.equal(cycle.adapter.observations.readSavingTarget(), null);
+}
+
+// The previous weighting order remains fixed while current holdings and capacity change.
+{
+  const city = [
+    { key: "A", weighting: 100, cost: { Money: 1000 } },
+    { key: "B", weighting: 90, cost: { Stone: 1000 } },
+  ];
+  const holdings = { Money: 100, Stone: 100 };
+  const root = {
+    tech: {},
+    race: { supplySplit: false },
+    resource: {
+      Money: { display: true, amount: 100, max: 2000 },
+      Stone: { display: true, amount: 100, max: 2000 },
+    },
+  };
+  let rootReplaced;
+  const cycle = makeCycle({
+    city,
+    holdings,
+    rootState: {
+      readRoot: () => root,
+      subscribeRootReplaced: (callback) => {
+        rootReplaced = callback;
+        return () => {};
+      },
+    },
+  });
+  const saving = () =>
+    cycle.adapter.observations.readSavingTarget()?.name ?? null;
+  assert.throws(saving, /order is not established/);
+  runCycle(cycle);
+  assert.equal(saving(), "A");
+  root.resource.Money.amount = 1000;
+  assert.equal(saving(), "B");
+  root.resource.Money.amount = 100;
+  assert.equal(saving(), "A");
+  root.resource.Money.max = 500;
+  assert.equal(saving(), "B");
+  root.resource.Money.max = 0;
+  assert.equal(saving(), "B");
+  root.resource.Money.max = 2000;
+  root.resource.Money.amount = 1000;
+  root.resource.Stone.amount = 1000;
+  assert.equal(saving(), null);
+  root.resource.Money.amount = 100;
+  assert.equal(saving(), "A");
+  city[0].weighting = 1;
+  city[1].weighting = 200;
+  assert.equal(saving(), "A");
+  runCycle(cycle);
+  root.resource.Stone.amount = 100;
+  assert.equal(saving(), "B");
+  rootReplaced();
+  assert.throws(saving, /order is not established/);
 }
 
 // The Knowledge requirement is the top-weighted candidate that does not itself raise the cap, and

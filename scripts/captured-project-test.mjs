@@ -255,6 +255,7 @@ function makeAdapter({
               id,
               resource === undefined
                 ? {
+                    present: false,
                     unlocked: false,
                     amount: 0,
                     max: 0,
@@ -262,6 +263,7 @@ function makeAdapter({
                     storageRatio: 0,
                   }
                 : {
+                    present: true,
                     unlocked: resource.display,
                     amount: resource.amount,
                     max: resource.max,
@@ -304,6 +306,56 @@ function makeAdapter({
     }),
   });
   return { adapter, root, calls, activity, reads: () => catalogReads };
+}
+
+// Old Project.updateResourceRequirements refreshes the next currentStep chunk before demand.
+// Keep the completed weight order, but use the current progress for the same rank's next chunk.
+{
+  const settings = {
+    autoARPA: true,
+    arpaStep: 5,
+    arpaScaleWeighting: true,
+    arpa_lhc: true,
+    arpa_p_lhc: 0,
+    arpa_m_lhc: -1,
+    arpa_w_lhc: 2,
+  };
+  const fixture = makeAdapter({
+    progress: 95,
+    settings,
+    catalog: [
+      offered("lhc", {
+        rank: 1,
+        progress: 95,
+        cost: { Money: 10, Stone: 4 },
+      }),
+    ],
+  });
+  fixture.root.resource.Money.amount = 0;
+  fixture.root.resource.Stone = {
+    display: true,
+    amount: 0,
+    max: 1000,
+    diff: 1,
+  };
+  assert.equal(runBuildAutomation(fixture.adapter).status, "succeeded");
+  assert.deepEqual(fixture.adapter.observations.readSavingTarget(), {
+    name: "arpalhc",
+    cost: { Money: 50, Stone: 20 },
+  });
+  fixture.root.arpa.lhc.complete = 98;
+  assert.deepEqual(fixture.adapter.observations.readSavingTarget(), {
+    name: "arpalhc",
+    cost: { Money: 20, Stone: 8 },
+  });
+  assert.equal(fixture.reads(), 1);
+  fixture.root.arpa.lhc.rank = 2;
+  assert.throws(
+    () => fixture.adapter.observations.readSavingTarget(),
+    /saving cost unavailable/,
+  );
+  settings.arpa_lhc = false;
+  assert.equal(fixture.adapter.observations.readSavingTarget(), null);
 }
 
 // Explicit diagnostics identify each project-planning gate without requiring a synthetic planner

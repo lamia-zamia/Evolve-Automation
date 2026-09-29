@@ -120,13 +120,11 @@ function makeHarness({
     reservations: {
       readReservations: () => ({ unavailable: false, targets: [] }),
     },
-    construction: {
-      readSavingTarget: () => ({
-        name: "saved",
-        cost: savingCost,
-        ...(savingPool === undefined ? {} : { pool: savingPool }),
-      }),
-    },
+    readSavingTarget: () => ({
+      name: "saved",
+      cost: savingCost,
+      ...(savingPool === undefined ? {} : { pool: savingPool }),
+    }),
     readBuildTargets: () => buildTargets,
     costs: {
       readCost: (elementId) => {

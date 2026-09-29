@@ -101,7 +101,7 @@ export interface CapturedConstructionControl {
   runCycle(): CommandExecutionOutcome;
   /** The most recently captured A.R.P.A. project snapshot, if one exists. */
   readonly readProjects: () => readonly Readonly<OfferedProject>[] | undefined;
-  /** What the last completed cycle was saving for, for the features that read demand. */
+  /** Previous completed order with current affordability, for demand consumers. */
   readonly observations: ConstructionObservations;
 }
 
@@ -197,6 +197,7 @@ export function createCapturedConstructionControl(
         controls,
         costs,
         readTargets: () => readPolicy().buildings,
+        readSettings,
         ...(dependencies.ensureBuildControls === undefined
           ? {}
           : { ensureControls: dependencies.ensureBuildControls }),
