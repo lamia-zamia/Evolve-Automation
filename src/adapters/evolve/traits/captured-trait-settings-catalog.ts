@@ -397,6 +397,34 @@ export const CAPTURED_TRAIT_GENUS_TYPES: readonly {
   Object.freeze({ id: "hybrid", label: "Hybrid" }),
 ]);
 
+/** `genus_def.<genus>.emergent` from DeadSpace `src/races.js`; excluded from strand pairs. */
+export const CAPTURED_TRAIT_GENUS_EMERGENT: Readonly<
+  Record<string, readonly string[]>
+> = Object.freeze({
+  humanoid: Object.freeze(["versatility"]),
+  carnivore: Object.freeze(["carnivore"]),
+  herbivore: Object.freeze(["grazer"]),
+  omnivore: Object.freeze([]),
+  small: Object.freeze(["unassuming"]),
+  giant: Object.freeze([]),
+  reptilian: Object.freeze([]),
+  avian: Object.freeze(["flier"]),
+  insectoid: Object.freeze(["fast_growth"]),
+  plant: Object.freeze(["photosynth"]),
+  fungi: Object.freeze(["spores"]),
+  aquatic: Object.freeze([]),
+  fey: Object.freeze([]),
+  heat: Object.freeze([]),
+  polar: Object.freeze(["pykrete"]),
+  sand: Object.freeze(["grey_market"]),
+  demonic: Object.freeze(["evil"]),
+  angelic: Object.freeze(["holy"]),
+  synthetic: Object.freeze(["artifical"]),
+  eldritch: Object.freeze(["darkness", "unfathomable"]),
+  primordial: Object.freeze(["connected"]),
+  hybrid: Object.freeze([]),
+});
+
 /** Psychic power options in script order. */
 export const CAPTURED_TRAIT_PSYCHIC: readonly {
   readonly id: string;

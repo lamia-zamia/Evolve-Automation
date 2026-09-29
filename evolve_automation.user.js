@@ -26905,7 +26905,30 @@
     Object.freeze({ id: "eldritch", label: "Eldritch" }),
     Object.freeze({ id: "primordial", label: "Primordial" }),
     Object.freeze({ id: "hybrid", label: "Hybrid" })
-  ]), CAPTURED_TRAIT_PSYCHIC = Object.freeze([
+  ]), CAPTURED_TRAIT_GENUS_EMERGENT = Object.freeze({
+    humanoid: Object.freeze(["versatility"]),
+    carnivore: Object.freeze(["carnivore"]),
+    herbivore: Object.freeze(["grazer"]),
+    omnivore: Object.freeze([]),
+    small: Object.freeze(["unassuming"]),
+    giant: Object.freeze([]),
+    reptilian: Object.freeze([]),
+    avian: Object.freeze(["flier"]),
+    insectoid: Object.freeze(["fast_growth"]),
+    plant: Object.freeze(["photosynth"]),
+    fungi: Object.freeze(["spores"]),
+    aquatic: Object.freeze([]),
+    fey: Object.freeze([]),
+    heat: Object.freeze([]),
+    polar: Object.freeze(["pykrete"]),
+    sand: Object.freeze(["grey_market"]),
+    demonic: Object.freeze(["evil"]),
+    angelic: Object.freeze(["holy"]),
+    synthetic: Object.freeze(["artifical"]),
+    eldritch: Object.freeze(["darkness", "unfathomable"]),
+    primordial: Object.freeze(["connected"]),
+    hybrid: Object.freeze([])
+  }), CAPTURED_TRAIT_PSYCHIC = Object.freeze([
     Object.freeze({
       id: "boost",
       label: "Boost Resource Production",
@@ -46220,18 +46243,168 @@ Only continue if you trust the source. Injected code:
   function capturedOcularCapacityAtRank(rank) {
     return rank >= 1.67 ? 3 : rank >= 1 ? 2 : 1;
   }
-  function capturedOcularCapacityFromRace(race) {
-    let rawRank = finite(readProperty(race, "ocular_power"));
-    if (rawRank === void 0 || !capturedOcularRankIsSupported(rawRank))
+  var CAPTURED_OCULAR_STRAND_SLOT_COUNT = 2, CAPTURED_OCULAR_STRAND_FLOOR = 24 * CAPTURED_OCULAR_STRAND_SLOT_COUNT, CAPTURED_OCULAR_MAJOR_STARTING_PAIRS = 5, CAPTURED_OCULAR_MINOR_STARTING_PAIRS = 4, CAPTURED_OCULAR_MAJOR_EVOLVE_RANKS = [5], CAPTURED_OCULAR_MINOR_EVOLVE_RANKS = [3, 8], CAPTURED_OCULAR_VERSATILITY_PAIR_RANK = 0.5, CAPTURED_OCULAR_PERMANENT_TRAITS = /* @__PURE__ */ new Set([
+    "evil",
+    "soul_eater",
+    "artifical"
+  ]);
+  function capturedOcularCountOrZero(value) {
+    if (!value) return 0;
+    let count2 = finite(value);
+    return count2 !== void 0 && Number.isInteger(count2) && count2 >= 0 ? count2 : void 0;
+  }
+  function capturedOcularRankOrZero(value) {
+    if (!value) return 0;
+    let rank = finite(value);
+    return rank !== void 0 && rank >= 0 ? rank : void 0;
+  }
+  function capturedOcularTraitIsPermanent(trait, race) {
+    if (CAPTURED_OCULAR_PERMANENT_TRAITS.has(trait)) return !0;
+    let species = readProperty(race, "species");
+    return trait === "ooze" && (species === "sludge" || species === "ultra_sludge") ? !0 : !!readProperty(readProperty(race, "fanaticTraits"), trait);
+  }
+  function capturedOcularKnownTrait(trait) {
+    return CAPTURED_OCULAR_PERMANENT_TRAITS.has(trait) || CAPTURED_TRAIT_MUTABLE.some((candidate) => candidate.id === trait);
+  }
+  function capturedOcularGenusList(root, race) {
+    let strandGenus = readProperty(race, "strandGenus");
+    if (Array.isArray(strandGenus) && strandGenus.length > 0) {
+      let genera = [];
+      for (let value of strandGenus) {
+        if (typeof value != "string" || value !== "organism" && !Object.prototype.hasOwnProperty.call(
+          CAPTURED_TRAIT_GENUS_EMERGENT,
+          value
+        ))
+          return;
+        genera.push(value);
+      }
+      return genera;
+    }
+    let species = readProperty(race, "species");
+    if (typeof species != "string" || species.length === 0) return;
+    if (species === "custom" || species === "hybrid") {
+      let design = readProperty(
+        readProperty(root, "custom"),
+        species === "custom" ? "race0" : "race1"
+      );
+      if (!design) return Object.freeze([]);
+      let genus2 = readProperty(design, "genus");
+      if (typeof genus2 != "string") return;
+      if (species === "hybrid" && genus2 === "hybrid") {
+        let hybrid = readProperty(design, "hybrid");
+        if (Array.isArray(hybrid)) {
+          let genera = [];
+          for (let value of hybrid) {
+            if (typeof value != "string") return;
+            genera.push(value);
+          }
+          return genera;
+        }
+      }
+      return Object.freeze([genus2]);
+    }
+    if ((species === "junker" || species === "sludge" || species === "ultra_sludge") && Object.prototype.hasOwnProperty.call(race, "jtype")) {
+      let jtype = readProperty(race, "jtype");
+      return typeof jtype == "string" ? Object.freeze([jtype]) : void 0;
+    }
+    let genus = CAPTURED_TRAIT_RACE_TYPE[species];
+    return genus === void 0 ? void 0 : Object.freeze([genus]);
+  }
+  function capturedOcularGenusFeederCount(genus, race) {
+    if (genus === "organism") return 0;
+    let emergent = CAPTURED_TRAIT_GENUS_EMERGENT[genus];
+    if (emergent === void 0) return;
+    let emergentTraits = new Set(emergent), feeders = 0;
+    for (let trait of CAPTURED_TRAIT_MUTABLE)
+      trait.type !== "genus" || trait.source !== genus || emergentTraits.has(trait.id) || capturedOcularTraitIsPermanent(trait.id, race) || feeders++;
+    return feeders;
+  }
+  function capturedOcularMimicTraitCount(race) {
+    if (!readProperty(race, "shapeshifter")) return 0;
+    let traits = readProperty(race, "ss_traits");
+    if (!Array.isArray(traits)) return 0;
+    let mimic = readProperty(race, "ss_genus");
+    if (!mimic || mimic === "none" || typeof mimic != "string" || !Object.prototype.hasOwnProperty.call(CAPTURED_TRAIT_GENUS_EMERGENT, mimic))
       return 0;
-    let baseCapacity = capturedOcularCapacityAtRank(rawRank), rawEmpoweredRank = readProperty(race, "empowered");
-    if (!rawEmpoweredRank) return baseCapacity;
+    let emergentTraits = new Set(CAPTURED_TRAIT_GENUS_EMERGENT[mimic]), count2 = 0;
+    for (let value of traits) {
+      if (typeof value != "string" || !capturedOcularKnownTrait(value)) return;
+      emergentTraits.has(value) || capturedOcularTraitIsPermanent(value, race) || count2++;
+    }
+    return count2;
+  }
+  function capturedOcularGenusPairCount(root, race) {
+    let genera = capturedOcularGenusList(root, race);
+    if (genera === void 0) return;
+    let pairs = 0;
+    for (let genus of genera) {
+      let feederCount = capturedOcularGenusFeederCount(genus, race);
+      if (feederCount === void 0) return;
+      pairs += Math.ceil(feederCount / CAPTURED_OCULAR_STRAND_SLOT_COUNT);
+    }
+    let mimicTraits = capturedOcularMimicTraitCount(race);
+    if (mimicTraits !== void 0)
+      return pairs + Math.ceil(mimicTraits / CAPTURED_OCULAR_STRAND_SLOT_COUNT);
+  }
+  function capturedOcularRecessivePairCount(root, race) {
+    let raceCount = capturedOcularCountOrZero(readProperty(race, "geneRecess"));
+    if (raceCount === void 0) return;
+    let species = readProperty(race, "species"), designKey = species === "custom" ? "race0" : species === "hybrid" ? "race1" : void 0;
+    if (designKey === void 0) return raceCount;
+    let design = readProperty(readProperty(root, "custom"), designKey), designCount = design ? capturedOcularCountOrZero(readProperty(design, "recessive")) : 0;
+    return designCount === void 0 ? void 0 : raceCount + designCount;
+  }
+  function capturedOcularTraitIsRecessive(root) {
+    let race = readProperty(root, "race"), recessivePairs = capturedOcularRecessivePairCount(root, race);
+    if (recessivePairs === void 0) return;
+    if (recessivePairs <= 0) return !1;
+    let evolveState = readProperty(root, "genes");
+    if (evolveState == null) return;
+    let evolve = capturedOcularRankOrZero(readProperty(evolveState, "evolve")), slotBonus = capturedOcularCountOrZero(
+      readProperty(race, "geneSlotBonus")
+    ), genusPairs = capturedOcularGenusPairCount(root, race), versatility = capturedOcularRankOrZero(
+      readProperty(race, "versatility")
+    );
+    if (evolve === void 0 || slotBonus === void 0 || genusPairs === void 0 || versatility === void 0)
+      return;
+    let majorPairs = CAPTURED_OCULAR_MAJOR_STARTING_PAIRS + CAPTURED_OCULAR_MAJOR_EVOLVE_RANKS.filter((rank) => evolve >= rank).length + slotBonus + genusPairs + recessivePairs, minorPairs = CAPTURED_OCULAR_MINOR_STARTING_PAIRS + CAPTURED_OCULAR_MINOR_EVOLVE_RANKS.filter((rank) => evolve >= rank).length + (versatility >= CAPTURED_OCULAR_VERSATILITY_PAIR_RANK ? 1 : 0) + slotBonus, rawSpan = readProperty(race, "strandSpan"), span = typeof rawSpan == "number" && rawSpan > CAPTURED_OCULAR_STRAND_FLOOR ? rawSpan : CAPTURED_OCULAR_STRAND_FLOOR;
+    if (!Number.isSafeInteger(span) || span % CAPTURED_OCULAR_STRAND_SLOT_COUNT || Math.max(majorPairs, minorPairs) * CAPTURED_OCULAR_STRAND_SLOT_COUNT > span)
+      return;
+    let totalMajorPairs = Math.min(
+      span / CAPTURED_OCULAR_STRAND_SLOT_COUNT,
+      majorPairs
+    );
+    if (!Number.isInteger(totalMajorPairs) || recessivePairs > totalMajorPairs)
+      return;
+    let rawSlots = readProperty(race, "geneSlots"), slots = Array.isArray(rawSlots) ? rawSlots : [], start = (totalMajorPairs - recessivePairs) * CAPTURED_OCULAR_STRAND_SLOT_COUNT, end = totalMajorPairs * CAPTURED_OCULAR_STRAND_SLOT_COUNT;
+    for (let index = start; index < end; index++) {
+      let slot = slots[index];
+      if (slot) {
+        if (typeof slot != "object") return;
+        if (readProperty(slot, "g") === "ocular_power") return !0;
+      }
+    }
+    return !1;
+  }
+  function readCapturedOcularEffectiveRank(root) {
+    let race = readProperty(root, "race"), rawRank = finite(readProperty(race, "ocular_power"));
+    if (rawRank === void 0 || !capturedOcularRankIsSupported(rawRank))
+      return;
+    let rawEmpoweredRank = readProperty(race, "empowered");
+    if (!rawEmpoweredRank) return rawRank;
     let empoweredRank = finite(rawEmpoweredRank);
-    if (empoweredRank === void 0) return 0;
+    if (empoweredRank === void 0) return;
     let bonus = capturedOcularMajorEmpoweredBonus(empoweredRank);
-    if (bonus === void 0) return 0;
+    if (bonus === void 0) return;
+    let recessive = capturedOcularTraitIsRecessive(root);
+    if (recessive === void 0) return;
+    if (recessive) return rawRank;
     let effectiveRank = Number((rawRank + bonus).toFixed(6));
-    return Number.isFinite(effectiveRank) ? capturedOcularCapacityAtRank(effectiveRank) : 0;
+    return finite(effectiveRank);
+  }
+  function capturedOcularCapacityFromRoot(root) {
+    let effectiveRank = readCapturedOcularEffectiveRank(root);
+    return effectiveRank === void 0 ? 0 : capturedOcularCapacityAtRank(effectiveRank);
   }
   function createCapturedOcularPowerAutomation(dependencies) {
     let controls2 = Object.freeze({
@@ -46311,7 +46484,7 @@ Only continue if you trust the source. Injected code:
           }
         );
         return Object.freeze({
-          capacity: capturedOcularCapacityFromRace(race),
+          capacity: capturedOcularCapacityFromRoot(root),
           powers: Object.freeze(powers)
         });
       }

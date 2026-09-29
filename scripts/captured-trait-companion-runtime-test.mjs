@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import { installVueCapture } from "../src/adapters/evolve/vue-capture.ts";
 import { CAPTURED_TRAIT_OCULAR } from "../src/adapters/evolve/traits/captured-trait-settings-catalog.ts";
-import { createCapturedOcularPowerAutomation } from "../src/adapters/evolve/traits/captured-ocular-power.ts";
+import {
+  createCapturedOcularPowerAutomation,
+  readCapturedOcularEffectiveRank,
+} from "../src/adapters/evolve/traits/captured-ocular-power.ts";
 import { startCapturedRuntime } from "../src/bootstrap/captured-runtime-control.ts";
 import { createTestDocument, element } from "./dom-fixture.mjs";
 
@@ -137,8 +140,11 @@ function coreRoot(race = {}, tech = {}, resources = {}) {
   };
 }
 
-function capturedOcularCapacity(race) {
-  const root = coreRoot({ ocularPowerConfig: {}, ...race });
+function capturedOcularCapacity(race, rootState = {}) {
+  const root = Object.assign(
+    coreRoot({ ocularPowerConfig: {}, ...race }),
+    rootState,
+  );
   root.city = {};
   root.civic = {};
   const automation = createCapturedOcularPowerAutomation({
@@ -156,6 +162,54 @@ function capturedOcularCapacity(race) {
     ensureControls: () => true,
   });
   return automation.reader.readPlan().capacity;
+}
+
+function capturedOcularEffectiveRank(race, rootState = {}) {
+  const root = Object.assign(
+    coreRoot({ ocularPowerConfig: {}, ...race }),
+    rootState,
+  );
+  return readCapturedOcularEffectiveRank(root);
+}
+
+function makeRecessiveOcularRace({ traitSlots = {}, ...raceOverrides } = {}) {
+  const geneSlots = Array.from({ length: 96 }, () => false);
+  for (const [slot, trait] of Object.entries(traitSlots)) {
+    geneSlots[Number(slot)] = { g: trait, r: 1.33 };
+  }
+  return {
+    species: "human",
+    strandGenus: ["humanoid"],
+    strandSpan: 48,
+    geneRecess: 1,
+    geneSlots,
+    ocular_power: 1.33,
+    empowered: 2,
+    ocularPowerConfig: Object.fromEntries(
+      CAPTURED_TRAIT_OCULAR.map((power) => [power.stateKey, false]),
+    ),
+    ...raceOverrides,
+  };
+}
+
+function enforceDeadSpaceOcularPow(config, stateKey, rebind) {
+  // DeadSpace src/races.js ocularPower().pow(v) enforces vars()[0] over the
+  // rendered d/p/w/t/f/c keys, then repeats in reverse while preserving v.
+  const capacity = 2;
+  const renderKeys = ["d", "p", "w", "t", "f", "c"];
+  let active = 0;
+  for (const key of renderKeys) {
+    if (config[key]) active++;
+    if (active > capacity && key !== stateKey) config[key] = false;
+  }
+  if (active > capacity) {
+    active = 0;
+    for (const key of [...renderKeys].reverse()) {
+      if (config[key]) active++;
+      if (active > capacity && key !== stateKey) config[key] = false;
+    }
+    rebind();
+  }
 }
 
 function createCapturedOcularFixture({
@@ -477,6 +531,171 @@ for (const race of [
     2,
   );
   assert.equal(capturedOcularCapacity({ ocular_power: 1.33, empowered: 2 }), 3);
+
+  const baseOcularState = { genes: { evolve: 0 }, custom: {} };
+  const recessiveOcular = makeRecessiveOcularRace({
+    traitSlots: { 12: "ocular_power" },
+  });
+  assert.equal(
+    capturedOcularEffectiveRank({ ocular_power: 1.33, empowered: 2 }),
+    1.73,
+    "non-recessive Ocular receives Empowered's 0.4 major bonus",
+  );
+  assert.equal(
+    capturedOcularCapacity(recessiveOcular, baseOcularState),
+    2,
+    "recessive Ocular keeps its raw 1.33 rank with Empowered 2",
+  );
+  assert.equal(
+    capturedOcularEffectiveRank(recessiveOcular, baseOcularState),
+    1.33,
+    "recessive Ocular rank remains raw with Empowered 2",
+  );
+
+  // Upstream's only current ladder pair that crosses the Ocular 1.67 capacity
+  // step is raw 1.33 plus Empowered's major-trait +0.4 bonus.
+  assert.equal(
+    capturedOcularCapacity(
+      makeRecessiveOcularRace({
+        traitSlots: { 12: "adaptable", 10: "ocular_power" },
+      }),
+      baseOcularState,
+    ),
+    3,
+    "a different trait in the recessive pair does not suppress Empowered",
+  );
+
+  const twoRecessivePairs = makeRecessiveOcularRace({
+    geneRecess: 2,
+    geneSlotBonus: 1,
+  });
+  const expandedOcularState = { genes: { evolve: 5 }, custom: {} };
+  assert.equal(
+    capturedOcularCapacity(
+      makeRecessiveOcularRace({
+        traitSlots: { 16: "ocular_power" },
+        geneRecess: 2,
+        geneSlotBonus: 1,
+      }),
+      expandedOcularState,
+    ),
+    2,
+    "the first of two active recessive pairs is detected",
+  );
+  assert.equal(
+    capturedOcularCapacity(
+      {
+        ...twoRecessivePairs,
+        geneSlots: makeRecessiveOcularRace({
+          traitSlots: { 18: "ocular_power" },
+          geneRecess: 2,
+          geneSlotBonus: 1,
+        }).geneSlots,
+      },
+      expandedOcularState,
+    ),
+    2,
+    "the last active recessive pair is detected",
+  );
+  assert.equal(
+    capturedOcularCapacity(
+      {
+        ...twoRecessivePairs,
+        geneSlots: makeRecessiveOcularRace({
+          traitSlots: { 14: "ocular_power" },
+          geneRecess: 2,
+          geneSlotBonus: 1,
+        }).geneSlots,
+      },
+      expandedOcularState,
+    ),
+    3,
+    "the major pair immediately before the recessive range is not recessive",
+  );
+
+  assert.equal(
+    capturedOcularCapacity(
+      makeRecessiveOcularRace({
+        traitSlots: { 14: "ocular_power" },
+        shapeshifter: true,
+        ss_genus: "fungi",
+        ss_traits: ["spores", "detritivore", "spongy"],
+      }),
+      baseOcularState,
+    ),
+    2,
+    "the mimic's slottable traits add their current genus pair before recessives",
+  );
+
+  assert.equal(
+    capturedOcularCapacity(
+      makeRecessiveOcularRace({
+        strandGenus: undefined,
+        traitSlots: { 12: "ocular_power" },
+      }),
+      baseOcularState,
+    ),
+    2,
+    "an empty strandGenus list falls back to the species catalog",
+  );
+
+  assert.equal(
+    capturedOcularCapacity(
+      makeRecessiveOcularRace({
+        traitSlots: { 12: "ocular_power" },
+        empowered: 0,
+      }),
+      baseOcularState,
+    ),
+    2,
+    "recessive placement does not change raw-rank capacity without Empowered",
+  );
+
+  for (const [species, designKey] of [
+    ["custom", "race0"],
+    ["hybrid", "race1"],
+  ]) {
+    assert.equal(
+      capturedOcularCapacity(
+        makeRecessiveOcularRace({
+          species,
+          geneRecess: 0,
+          traitSlots: { 12: "ocular_power" },
+        }),
+        {
+          genes: {},
+          custom: { [designKey]: { recessive: 1 } },
+        },
+      ),
+      2,
+      `${designKey}.recessive contributes an active custom recessive pair`,
+    );
+  }
+
+  assert.equal(
+    capturedOcularCapacity(
+      makeRecessiveOcularRace({
+        geneRecess: undefined,
+        geneSlotBonus: undefined,
+        strandSpan: undefined,
+      }),
+      { genes: {}, custom: {} },
+    ),
+    3,
+    "uninitialized recessive, bonus, evolve, and strand-span fields retain upstream defaults",
+  );
+  assert.equal(
+    capturedOcularCapacity(
+      makeRecessiveOcularRace({
+        geneSlots: undefined,
+        strandSpan: undefined,
+        geneSlotBonus: undefined,
+      }),
+      { genes: {}, custom: {} },
+    ),
+    3,
+    "a missing geneSlots array reads as the empty array geneSlots() initializes",
+  );
   assert.equal(
     capturedOcularCapacity({ ocular_power: 3 }),
     0,
@@ -531,6 +750,50 @@ for (const race of [
   );
   assert.ok(fixture.rebinds > 1, "pow redraws and rebinds the control");
   assert.equal(fixture.checkboxClicks.length, 4);
+  assert.deepEqual(fixture.errors, []);
+}
+
+// A recessive Ocular rank gives the upstream pow() method a real capacity of two. With three
+// enabled settings, the incorrect three-power plan lets pow() evict the highest-priority first
+// item according to its d/p/w/t/f/c render-key sweep.
+{
+  const config = Object.fromEntries(
+    CAPTURED_TRAIT_OCULAR.map((power) => [power.stateKey, false]),
+  );
+  const root = coreRoot(
+    makeRecessiveOcularRace({
+      traitSlots: { 12: "ocular_power" },
+      ocularPowerConfig: config,
+    }),
+  );
+  root.genes = { evolve: 0 };
+  root.custom = {};
+  const enabled = new Set(["disintegration", "petrification", "wound"]);
+  const priorities = { disintegration: 90, petrification: 80, wound: 70 };
+  const fixture = createCapturedOcularFixture({
+    root,
+    settings: Object.fromEntries([
+      ...CAPTURED_TRAIT_OCULAR.map((power) => [
+        `ocularPower_${power.id}`,
+        enabled.has(power.id),
+      ]),
+      ...CAPTURED_TRAIT_OCULAR.map((power) => [
+        `ocularPower_p_${power.id}`,
+        priorities[power.id] ?? 0,
+      ]),
+    ]),
+    gamePow(stateKey, rebind) {
+      enforceDeadSpaceOcularPow(config, stateKey, rebind);
+    },
+  });
+  assert.deepEqual(fixture.handle.methods, ["pow"]);
+  assert.deepEqual(
+    CAPTURED_TRAIT_OCULAR.filter((power) => config[power.stateKey]).map(
+      (power) => power.id,
+    ),
+    ["disintegration", "petrification"],
+  );
+  assert.equal(fixture.checkboxClicks.length, 2);
   assert.deepEqual(fixture.errors, []);
 }
 
