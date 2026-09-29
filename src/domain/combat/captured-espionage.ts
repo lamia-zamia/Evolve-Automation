@@ -24,7 +24,13 @@ export interface CapturedEspionageInput {
   readonly purchaseMoney: number | undefined;
   readonly purchaseForeign: boolean | undefined;
   readonly elusive: boolean;
-  readonly useful: boolean;
+  /** Usefulness of the operation selected by the configured policy. */
+  readonly requestedOperationUseful: boolean;
+  /** Preparation candidates used only when the configured policy is Annex or Purchase. */
+  readonly influenceUseful: boolean;
+  readonly inciteUseful: boolean;
+  /** Old SpyManager allowed Influence fallback only away from its primary foreign target. */
+  readonly influenceAllowed: boolean;
 }
 
 interface CapturedEspionageExpectedState {
@@ -41,6 +47,10 @@ interface CapturedEspionageExpectedState {
   readonly expectedPurchaseMoney: number | undefined;
   readonly expectedPurchaseForeign: boolean | undefined;
   readonly expectedElusive: boolean;
+  readonly expectedRequestedOperationUseful: boolean;
+  readonly expectedInfluenceUseful: boolean;
+  readonly expectedInciteUseful: boolean;
+  readonly expectedInfluenceAllowed: boolean;
 }
 
 export interface CapturedEspionageDecision extends CapturedEspionageExpectedState {
@@ -72,6 +82,10 @@ function capturedEspionageExpectedState(
     expectedPurchaseMoney: input.purchaseMoney,
     expectedPurchaseForeign: input.purchaseForeign,
     expectedElusive: input.elusive,
+    expectedRequestedOperationUseful: input.requestedOperationUseful,
+    expectedInfluenceUseful: input.influenceUseful,
+    expectedInciteUseful: input.inciteUseful,
+    expectedInfluenceAllowed: input.influenceAllowed,
   };
 }
 
@@ -113,11 +127,11 @@ export function planCapturedEspionage(
   ) {
     return null;
   }
-  const operation = capturedEspionageOperation(input);
-  if (operation === null) return null;
+  const requestedOperation = capturedEspionageOperation(input);
+  if (requestedOperation === null) return null;
 
   if (
-    operation === "purchase" &&
+    requestedOperation === "purchase" &&
     input.spyCount < 3 &&
     !input.elusive &&
     (input.purchaseMoney === undefined
@@ -137,9 +151,23 @@ export function planCapturedEspionage(
       ...capturedEspionageExpectedState(input),
     });
   }
-  if (input.occupied || input.annexed || input.purchased || !input.useful) {
-    return null;
+
+  if (input.occupied || input.annexed || input.purchased) return null;
+
+  let operation: CapturedEspionageOperation | null = requestedOperation;
+  if (input.policy === "Annex" || input.policy === "Purchase") {
+    if (!input.requestedOperationUseful) {
+      operation =
+        input.influenceAllowed && input.influenceUseful
+          ? "influence"
+          : input.inciteUseful
+            ? "incite"
+            : null;
+    }
+  } else if (!input.requestedOperationUseful) {
+    operation = null;
   }
+  if (operation === null) return null;
 
   return Object.freeze({
     kind: "captured-espionage" as const,

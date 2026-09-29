@@ -43237,7 +43237,11 @@ Only continue if you trust the source. Injected code:
       expectedPurchased: input.purchased,
       expectedPurchaseMoney: input.purchaseMoney,
       expectedPurchaseForeign: input.purchaseForeign,
-      expectedElusive: input.elusive
+      expectedElusive: input.elusive,
+      expectedRequestedOperationUseful: input.requestedOperationUseful,
+      expectedInfluenceUseful: input.influenceUseful,
+      expectedInciteUseful: input.inciteUseful,
+      expectedInfluenceAllowed: input.influenceAllowed
     };
   }
   function capturedEspionageOperationForPolicy(policy, military, hostility2) {
@@ -43253,11 +43257,17 @@ Only continue if you trust the source. Injected code:
   function planCapturedEspionage(input) {
     if (!input.enabled || !Number.isSafeInteger(input.governmentId) || input.spyCount < 1 || input.sabotageProgress !== 0 || input.policy === "None")
       return null;
-    let operation2 = capturedEspionageOperation(input);
-    return operation2 === null || operation2 === "purchase" && input.spyCount < 3 && !input.elusive && (input.purchaseMoney === void 0 || input.purchaseMoney > 0) && input.purchaseForeign !== !1 ? null : input.annexed && input.policy !== "Annex" || input.purchased && input.policy !== "Purchase" || input.occupied && input.policy !== "Occupy" ? Object.freeze({
-      kind: "release-foreign",
-      ...capturedEspionageExpectedState(input)
-    }) : input.occupied || input.annexed || input.purchased || !input.useful ? null : Object.freeze({
+    let requestedOperation = capturedEspionageOperation(input);
+    if (requestedOperation === null || requestedOperation === "purchase" && input.spyCount < 3 && !input.elusive && (input.purchaseMoney === void 0 || input.purchaseMoney > 0) && input.purchaseForeign !== !1)
+      return null;
+    if (input.annexed && input.policy !== "Annex" || input.purchased && input.policy !== "Purchase" || input.occupied && input.policy !== "Occupy")
+      return Object.freeze({
+        kind: "release-foreign",
+        ...capturedEspionageExpectedState(input)
+      });
+    if (input.occupied || input.annexed || input.purchased) return null;
+    let operation2 = requestedOperation;
+    return input.policy === "Annex" || input.policy === "Purchase" ? input.requestedOperationUseful || (operation2 = input.influenceAllowed && input.influenceUseful ? "influence" : input.inciteUseful ? "incite" : null) : input.requestedOperationUseful || (operation2 = null), operation2 === null ? null : Object.freeze({
       kind: "captured-espionage",
       ...capturedEspionageExpectedState(input),
       operation: operation2
@@ -43746,12 +43756,12 @@ Only continue if you trust the source. Injected code:
       target.rank
     );
   }
-  function capturedEspionageInput(root, target, readPurchaseReservation) {
+  function capturedEspionageInput(root, target, influenceAllowed, readPurchaseReservation) {
     let elusive = !!readProperty(readProperty(root, "race"), "elusive"), purchaseReservation = target.policy === "Purchase" && target.spyCount < 3 && !elusive ? readPurchaseReservation?.() : void 0, operation2 = capturedEspionageOperationForPolicy(
       target.policy,
       target.military,
       target.hostility
-    );
+    ), preparationFallback = target.policy === "Annex" || target.policy === "Purchase";
     return Object.freeze({
       enabled: !0,
       governmentId: target.governmentId,
@@ -43769,7 +43779,10 @@ Only continue if you trust the source. Injected code:
         target.governmentId
       ),
       elusive,
-      useful: operation2 !== null && capturedForeignEspionageUseful(root, target, operation2)
+      requestedOperationUseful: operation2 !== null && capturedForeignEspionageUseful(root, target, operation2),
+      influenceUseful: preparationFallback && capturedForeignEspionageUseful(root, target, "influence"),
+      inciteUseful: preparationFallback && capturedForeignEspionageUseful(root, target, "incite"),
+      influenceAllowed
     });
   }
   function capturedEspionageEmptyInput() {
@@ -43788,14 +43801,17 @@ Only continue if you trust the source. Injected code:
       purchaseMoney: void 0,
       purchaseForeign: void 0,
       elusive: !1,
-      useful: !1
+      requestedOperationUseful: !1,
+      influenceUseful: !1,
+      inciteUseful: !1,
+      influenceAllowed: !0
     });
   }
   function capturedEspionageDecisionMatchesInput(decision, input) {
-    return decision.governmentId === input.governmentId && decision.expectedPolicy === input.policy && decision.expectedSpyCount === input.spyCount && decision.expectedSabotageProgress === input.sabotageProgress && decision.expectedMilitary === input.military && decision.expectedHostility === input.hostility && decision.expectedUnrest === input.unrest && decision.expectedOccupied === input.occupied && decision.expectedAnnexed === input.annexed && decision.expectedPurchased === input.purchased && decision.expectedPurchaseMoney === input.purchaseMoney && decision.expectedPurchaseForeign === input.purchaseForeign && decision.expectedElusive === input.elusive;
+    return decision.governmentId === input.governmentId && decision.expectedPolicy === input.policy && decision.expectedSpyCount === input.spyCount && decision.expectedSabotageProgress === input.sabotageProgress && decision.expectedMilitary === input.military && decision.expectedHostility === input.hostility && decision.expectedUnrest === input.unrest && decision.expectedOccupied === input.occupied && decision.expectedAnnexed === input.annexed && decision.expectedPurchased === input.purchased && decision.expectedPurchaseMoney === input.purchaseMoney && decision.expectedPurchaseForeign === input.purchaseForeign && decision.expectedElusive === input.elusive && decision.expectedRequestedOperationUseful === input.requestedOperationUseful && decision.expectedInfluenceUseful === input.influenceUseful && decision.expectedInciteUseful === input.inciteUseful && decision.expectedInfluenceAllowed === input.influenceAllowed;
   }
   function capturedEspionageInputsMatch(left, right) {
-    return left.governmentId === right.governmentId && left.policy === right.policy && left.spyCount === right.spyCount && left.sabotageProgress === right.sabotageProgress && left.military === right.military && left.hostility === right.hostility && left.unrest === right.unrest && left.occupied === right.occupied && left.annexed === right.annexed && left.purchased === right.purchased && left.purchaseMoney === right.purchaseMoney && left.purchaseForeign === right.purchaseForeign && left.elusive === right.elusive && left.useful === right.useful;
+    return left.governmentId === right.governmentId && left.policy === right.policy && left.spyCount === right.spyCount && left.sabotageProgress === right.sabotageProgress && left.military === right.military && left.hostility === right.hostility && left.unrest === right.unrest && left.occupied === right.occupied && left.annexed === right.annexed && left.purchased === right.purchased && left.purchaseMoney === right.purchaseMoney && left.purchaseForeign === right.purchaseForeign && left.elusive === right.elusive && left.requestedOperationUseful === right.requestedOperationUseful && left.influenceUseful === right.influenceUseful && left.inciteUseful === right.inciteUseful && left.influenceAllowed === right.influenceAllowed;
   }
   function capturedEspionagePlansMatch(expected, actual) {
     return expected.kind !== actual.kind ? !1 : expected.kind === "release-foreign" || actual.kind === "captured-espionage" && expected.operation === actual.operation;
@@ -44003,6 +44019,7 @@ Only continue if you trust the source. Injected code:
         let input = capturedEspionageInput(
           root,
           target,
+          strategy.battleTargetId !== target.governmentId,
           dependencies.readPurchaseReservation
         );
         return samples.set(
@@ -44049,6 +44066,7 @@ Only continue if you trust the source. Injected code:
           let input = capturedEspionageInput(
             selected.root,
             target,
+            strategy.battleTargetId !== target.governmentId,
             dependencies.readPurchaseReservation
           );
           samples.set(
@@ -44101,15 +44119,16 @@ Only continue if you trust the source. Injected code:
           dependencies.controls,
           currentForeign,
           settings
-        ), currentStrategyTarget = selectCapturedForeignStrategy(
+        ), currentStrategy = selectCapturedForeignStrategy(
           active.root,
           settings,
           currentTargets
-        ).governments.find(
+        ), currentStrategyTarget = currentStrategy.governments.find(
           (candidate) => candidate.governmentId === active.target.governmentId
         ), currentInput = currentStrategyTarget === void 0 ? void 0 : capturedEspionageInput(
           active.root,
           currentStrategyTarget,
+          currentStrategy.battleTargetId !== currentStrategyTarget.governmentId,
           dependencies.readPurchaseReservation
         );
         if (currentTarget === void 0 || currentState === void 0 || currentStrategyTarget === void 0 || currentInput === void 0 || currentStrategyTarget.governmentId !== active.target.governmentId || currentTarget.governmentId !== active.target.governmentId || currentTarget.policy !== active.target.policy || !capturedEspionageInputsMatch(currentInput, active.input) || currentState.spyCount !== active.input.spyCount || currentState.sabotageProgress !== active.input.sabotageProgress || currentState.military !== active.input.military || currentState.hostility !== active.input.hostility || currentState.unrest !== active.input.unrest || currentState.occupied !== active.input.occupied || currentState.annexed !== active.input.annexed || currentState.purchased !== active.input.purchased)

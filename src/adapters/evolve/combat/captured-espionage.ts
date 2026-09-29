@@ -225,6 +225,7 @@ function capturedEspionageTarget(
 function capturedEspionageInput(
   root: unknown,
   target: CapturedForeignGovernment,
+  influenceAllowed: boolean,
   readPurchaseReservation:
     (() => Readonly<SpyPurchaseReservation> | undefined) | undefined,
 ): CapturedEspionageInput {
@@ -238,6 +239,8 @@ function capturedEspionageInput(
     target.military,
     target.hostility,
   );
+  const preparationFallback =
+    target.policy === "Annex" || target.policy === "Purchase";
   return Object.freeze({
     enabled: true,
     governmentId: target.governmentId,
@@ -255,9 +258,16 @@ function capturedEspionageInput(
       target.governmentId,
     ),
     elusive,
-    useful:
+    requestedOperationUseful:
       operation !== null &&
       capturedForeignEspionageUseful(root, target, operation),
+    influenceUseful:
+      preparationFallback &&
+      capturedForeignEspionageUseful(root, target, "influence"),
+    inciteUseful:
+      preparationFallback &&
+      capturedForeignEspionageUseful(root, target, "incite"),
+    influenceAllowed,
   });
 }
 
@@ -277,7 +287,10 @@ function capturedEspionageEmptyInput(): CapturedEspionageInput {
     purchaseMoney: undefined,
     purchaseForeign: undefined,
     elusive: false,
-    useful: false,
+    requestedOperationUseful: false,
+    influenceUseful: false,
+    inciteUseful: false,
+    influenceAllowed: true,
   });
 }
 
@@ -298,7 +311,12 @@ function capturedEspionageDecisionMatchesInput(
     decision.expectedPurchased === input.purchased &&
     decision.expectedPurchaseMoney === input.purchaseMoney &&
     decision.expectedPurchaseForeign === input.purchaseForeign &&
-    decision.expectedElusive === input.elusive
+    decision.expectedElusive === input.elusive &&
+    decision.expectedRequestedOperationUseful ===
+      input.requestedOperationUseful &&
+    decision.expectedInfluenceUseful === input.influenceUseful &&
+    decision.expectedInciteUseful === input.inciteUseful &&
+    decision.expectedInfluenceAllowed === input.influenceAllowed
   );
 }
 
@@ -320,7 +338,10 @@ function capturedEspionageInputsMatch(
     left.purchaseMoney === right.purchaseMoney &&
     left.purchaseForeign === right.purchaseForeign &&
     left.elusive === right.elusive &&
-    left.useful === right.useful
+    left.requestedOperationUseful === right.requestedOperationUseful &&
+    left.influenceUseful === right.influenceUseful &&
+    left.inciteUseful === right.inciteUseful &&
+    left.influenceAllowed === right.influenceAllowed
   );
 }
 
@@ -708,6 +729,7 @@ export function createCapturedEspionage(
       const input = capturedEspionageInput(
         root,
         target,
+        strategy.battleTargetId !== target.governmentId,
         dependencies.readPurchaseReservation,
       );
       samples.set(
@@ -771,6 +793,7 @@ export function createCapturedEspionage(
         const input = capturedEspionageInput(
           selected.root,
           target,
+          strategy.battleTargetId !== target.governmentId,
           dependencies.readPurchaseReservation,
         );
         samples.set(
@@ -855,6 +878,8 @@ export function createCapturedEspionage(
           : capturedEspionageInput(
               active.root,
               currentStrategyTarget,
+              currentStrategy.battleTargetId !==
+                currentStrategyTarget.governmentId,
               dependencies.readPurchaseReservation,
             );
       if (

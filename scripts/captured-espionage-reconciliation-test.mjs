@@ -16,10 +16,13 @@ function input(overrides = {}) {
     occupied: false,
     annexed: false,
     purchased: false,
-    useful: true,
+    requestedOperationUseful: true,
     purchaseMoney: 0,
     purchaseForeign: false,
     elusive: false,
+    influenceUseful: false,
+    inciteUseful: false,
+    influenceAllowed: true,
     ...overrides,
   };
 }
@@ -35,22 +38,38 @@ function noDecision(overrides) {
 }
 
 // Reconciliation follows mission selection and its old gates, but does not require a useful mission.
-assert.equal(release({ annexed: true, useful: false }).governmentId, 0);
 assert.equal(
-  release({ policy: "Sabotage", purchased: true, useful: false }).kind,
+  release({ annexed: true, requestedOperationUseful: false }).governmentId,
+  0,
+);
+assert.equal(
+  release({
+    policy: "Sabotage",
+    purchased: true,
+    requestedOperationUseful: false,
+  }).kind,
   "release-foreign",
 );
 noDecision({ policy: "Occupy", occupied: true });
 noDecision({ policy: "Annex", annexed: true });
 noDecision({ policy: "Purchase", purchased: true, spyCount: 3 });
-release({ policy: "Influence", occupied: true, useful: false });
-release({ policy: "Annex", occupied: true, useful: false });
+release({
+  policy: "Influence",
+  occupied: true,
+  requestedOperationUseful: false,
+});
+release({ policy: "Annex", occupied: true, requestedOperationUseful: false });
 noDecision({ policy: "Ignore", annexed: true });
 noDecision({ policy: "None", annexed: true });
 noDecision({ policy: "Unmapped", annexed: true });
 noDecision({ policy: "Influence", occupied: true, sabotageProgress: 1 });
 noDecision({ policy: "Influence", occupied: true, spyCount: 0 });
-release({ policy: "Betrayal", purchased: true, military: 75, useful: false });
+release({
+  policy: "Betrayal",
+  purchased: true,
+  military: 75,
+  requestedOperationUseful: false,
+});
 
 // The Purchase hold applies before reconciliation, and only when all its old terms hold.
 noDecision({
@@ -113,10 +132,130 @@ release({
 });
 
 assert.equal(
-  planCapturedEspionage(input({ policy: "Influence", useful: true }))?.kind,
+  planCapturedEspionage(
+    input({ policy: "Influence", requestedOperationUseful: true }),
+  )?.kind,
   "captured-espionage",
 );
-noDecision({ policy: "Influence", useful: false });
+noDecision({ policy: "Influence", requestedOperationUseful: false });
+
+// Annex and Purchase choose the requested operation first, then the old preparation fallback order.
+function actualOperation(overrides, expected) {
+  const decision = planCapturedEspionage(input(overrides));
+  assert.equal(
+    decision?.kind,
+    expected === null ? undefined : "captured-espionage",
+  );
+  assert.equal(decision?.operation ?? null, expected);
+}
+
+actualOperation({ policy: "Annex", requestedOperationUseful: true }, "annex");
+actualOperation(
+  {
+    policy: "Annex",
+    requestedOperationUseful: false,
+    influenceUseful: true,
+    inciteUseful: true,
+    influenceAllowed: true,
+  },
+  "influence",
+);
+actualOperation(
+  {
+    policy: "Annex",
+    requestedOperationUseful: false,
+    influenceUseful: true,
+    inciteUseful: true,
+    influenceAllowed: false,
+  },
+  "incite",
+);
+actualOperation(
+  {
+    policy: "Annex",
+    requestedOperationUseful: false,
+    influenceUseful: false,
+    inciteUseful: true,
+  },
+  "incite",
+);
+actualOperation(
+  {
+    policy: "Annex",
+    requestedOperationUseful: false,
+    influenceUseful: false,
+    inciteUseful: false,
+  },
+  null,
+);
+
+actualOperation(
+  { policy: "Purchase", requestedOperationUseful: true },
+  "purchase",
+);
+actualOperation(
+  {
+    policy: "Purchase",
+    requestedOperationUseful: false,
+    influenceUseful: true,
+    inciteUseful: true,
+  },
+  "influence",
+);
+actualOperation(
+  {
+    policy: "Purchase",
+    requestedOperationUseful: false,
+    influenceUseful: true,
+    inciteUseful: true,
+    influenceAllowed: false,
+  },
+  "incite",
+);
+actualOperation(
+  {
+    policy: "Purchase",
+    requestedOperationUseful: false,
+    influenceUseful: false,
+    inciteUseful: true,
+  },
+  "incite",
+);
+actualOperation(
+  {
+    policy: "Purchase",
+    spyCount: 3,
+    requestedOperationUseful: false,
+    influenceUseful: true,
+    inciteUseful: true,
+  },
+  "influence",
+);
+actualOperation(
+  {
+    policy: "Purchase",
+    spyCount: 2,
+    requestedOperationUseful: false,
+    influenceUseful: true,
+    inciteUseful: true,
+    purchaseMoney: 100,
+    purchaseForeign: true,
+  },
+  null,
+);
+actualOperation(
+  {
+    policy: "Purchase",
+    spyCount: 2,
+    requestedOperationUseful: false,
+    influenceUseful: true,
+    inciteUseful: true,
+    purchaseMoney: 100,
+    purchaseForeign: true,
+    elusive: true,
+  },
+  "influence",
+);
 
 // A release advances the existing per-government rotation before the next normal operation.
 {

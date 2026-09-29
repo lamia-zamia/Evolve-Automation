@@ -436,6 +436,170 @@ runOne("Annex", { hstl: 20, unrest: 60 }, undefined);
 runOne("Purchase", { hstl: 0, unrest: 0, spy: 3 }, undefined);
 
 {
+  const purchaseFallbackRoot = makeRoot("Purchase", {
+    hstl: 30,
+    unrest: 20,
+    spy: 3,
+  });
+  purchaseFallbackRoot.resource.Money.amount = 0;
+  const purchaseFallbackControls = makeControls(purchaseFallbackRoot, {
+    influence(currentRoot) {
+      currentRoot.civic.foreign.gov0.hstl -= 5;
+    },
+  });
+  const purchaseFallbackAdapter = createCapturedEspionage({
+    rootState: {
+      readRoot: () => purchaseFallbackRoot,
+      isReactivitySuppressed: () => false,
+      subscribeRootReplaced: () => () => {},
+    },
+    controls: purchaseFallbackControls,
+    readSettings: () => ({
+      ...makeSettings("Purchase"),
+      foreignPacifist: true,
+    }),
+  });
+  const purchaseFallbackInput = purchaseFallbackAdapter.reader.read();
+  assert.equal(purchaseFallbackInput.spyCount, 3);
+  assert.equal(purchaseFallbackInput.requestedOperationUseful, false);
+  assert.equal(purchaseFallbackInput.influenceUseful, true);
+  assert.equal(purchaseFallbackInput.inciteUseful, true);
+  assert.equal(purchaseFallbackInput.influenceAllowed, true);
+  assert.equal(
+    planCapturedEspionage(purchaseFallbackInput)?.operation,
+    "influence",
+    "Purchase below current Money still prepares with Influence at three spies",
+  );
+  const purchaseFallbackOutcome = runCapturedEspionage(purchaseFallbackAdapter);
+  assert.equal(purchaseFallbackOutcome.status, "succeeded");
+  assert.equal(purchaseFallbackRoot.civic.foreign.gov0.hstl, 25);
+}
+
+{
+  const stalePurchaseRoot = makeRoot("Purchase", {
+    hstl: 30,
+    unrest: 20,
+    spy: 3,
+  });
+  stalePurchaseRoot.resource.Money.amount = 0;
+  const stalePurchaseControls = makeControls(stalePurchaseRoot, {
+    influence() {},
+    purchase() {},
+  });
+  const stalePurchaseAdapter = createCapturedEspionage({
+    rootState: {
+      readRoot: () => stalePurchaseRoot,
+      isReactivitySuppressed: () => false,
+      subscribeRootReplaced: () => () => {},
+    },
+    controls: stalePurchaseControls,
+    readSettings: () => ({
+      ...makeSettings("Purchase"),
+      foreignPacifist: true,
+    }),
+  });
+  const stalePurchaseInput = stalePurchaseAdapter.reader.read();
+  const stalePurchaseDecision = planCapturedEspionage(stalePurchaseInput);
+  assert.equal(stalePurchaseDecision?.operation, "influence");
+  stalePurchaseRoot.resource.Money.amount = 100_000;
+  const changedPurchasePlan = stalePurchaseAdapter.executor.execute(
+    stalePurchaseDecision,
+  );
+  assert.equal(changedPurchasePlan.status, "stale");
+  assert.equal(
+    changedPurchasePlan.failure.code,
+    "captured-espionage-state-changed",
+    "the executor rechecks whether Purchase replaced the preparation fallback",
+  );
+}
+
+for (const fallbackPolicy of ["Annex", "Purchase"]) {
+  const adjustedTargetRoot = makeRoot("Ignore", {
+    mil: 90,
+    gov1: makeGovernment({ mil: 10 }),
+  });
+  adjustedTargetRoot.civic.foreign.gov2 = makeGovernment({ mil: 90 });
+  const adjustedTargetControls = makeControls(
+    adjustedTargetRoot,
+    {},
+    { visibleGovernmentIds: [0, 1, 2], initialModalGovernmentId: null },
+  );
+  const adjustedTargetAdapter = createCapturedEspionage({
+    rootState: {
+      readRoot: () => adjustedTargetRoot,
+      isReactivitySuppressed: () => false,
+      subscribeRootReplaced: () => () => {},
+    },
+    controls: adjustedTargetControls,
+    readSettings: () => ({
+      ...makeSettings("Ignore"),
+      foreignPowerRequired: 75,
+      foreignPolicyInferior: "Influence",
+      foreignPolicySuperior: fallbackPolicy,
+      foreignForceSabotage: false,
+      foreignOccupyLast: false,
+      foreignUnification: false,
+    }),
+  });
+  const strategyInputs = adjustedTargetAdapter.reader.readAll();
+  const preparedTargets = strategyInputs.filter(
+    (candidate) => candidate.policy === fallbackPolicy,
+  );
+  assert.deepEqual(
+    preparedTargets.map((candidate) => candidate.governmentId),
+    [0, 2],
+  );
+  for (const candidate of preparedTargets) {
+    assert.equal(candidate.influenceAllowed, true);
+    assert.equal(
+      planCapturedEspionage(candidate)?.operation,
+      "influence",
+      `${fallbackPolicy} target ${candidate.governmentId} is secondary when strategy battle target is null`,
+    );
+  }
+}
+
+{
+  const changingPrimaryRoot = makeRoot("Annex", {
+    hstl: 30,
+    unrest: 20,
+    spy: 3,
+    gov1: makeGovernment({ mil: 10, hstl: 30, unrest: 20, spy: 3 }),
+  });
+  const changingPrimaryControls = makeControls(
+    changingPrimaryRoot,
+    { incite() {}, influence() {} },
+    { visibleGovernmentIds: [0, 1], initialModalGovernmentId: 1 },
+  );
+  const changingPrimarySettings = {
+    ...makeSettings("Annex"),
+    foreignPacifist: false,
+  };
+  const changingPrimaryAdapter = createCapturedEspionage({
+    rootState: {
+      readRoot: () => changingPrimaryRoot,
+      isReactivitySuppressed: () => false,
+      subscribeRootReplaced: () => () => {},
+    },
+    controls: changingPrimaryControls,
+    readSettings: () => changingPrimarySettings,
+  });
+  const primaryInput = changingPrimaryAdapter.reader.read();
+  const primaryDecision = planCapturedEspionage(primaryInput);
+  assert.equal(primaryInput.influenceAllowed, false);
+  assert.equal(primaryDecision?.operation, "incite");
+  changingPrimarySettings.foreignPacifist = true;
+  const primaryStatusChanged =
+    changingPrimaryAdapter.executor.execute(primaryDecision);
+  assert.equal(primaryStatusChanged.status, "stale");
+  assert.equal(
+    primaryStatusChanged.failure.code,
+    "captured-espionage-state-changed",
+    "the executor rejects an operation when the old primary becomes secondary",
+  );
+}
+
+{
   const root = makeRoot("Sabotage", { mil: 80, sab: 0 });
   const activities = [];
   const controls = makeControls(root, {

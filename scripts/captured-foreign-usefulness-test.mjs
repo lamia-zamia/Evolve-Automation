@@ -78,7 +78,7 @@ assert.equal(
     occupied: false,
     annexed: false,
     purchased: false,
-    useful: true,
+    requestedOperationUseful: true,
   }),
   null,
   "An active sabotage operation still prevents starting another one",
