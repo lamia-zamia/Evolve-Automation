@@ -3451,7 +3451,7 @@
         ), queueAfter = readQueueLength(rootAfter), candidateQueueAfter = readCapturedBuildQueueEntryCount(
           rootAfter,
           candidate.target.elementId
-        ), built = after > before, queued = candidate.target.readCount === void 0 && candidateQueueAfter > candidateQueueBefore;
+        ), built = after > before, grantAction = readCapturedGrantAction(candidate.target.elementId), completedGrant = built && grantAction !== void 0 && grantAction.legacyUnmanaged !== !0, queued = candidate.target.readCount === void 0 && candidateQueueAfter > candidateQueueBefore;
         if (reportDiagnostic(`build.execute.after ${after}`), reportDiagnostic(`build.execute.queueAfter ${queueAfter}`), reportDiagnostic(`build.execute.built ${built}`), reportDiagnostic(`build.execute.queued ${queued}`), reportDiagnostic(`build.execute.noop ${!built && !queued}`), !result.ok)
           return Object.freeze({
             outcome: result.reason === "stale-control" ? stale("stale-build-control", result.detail ?? result.reason, {
@@ -3471,7 +3471,7 @@
         return Object.freeze({
           outcome: SUCCEEDED,
           clicked: built,
-          mission: !1,
+          mission: completedGrant,
           consumption: NO_CONSUMPTION,
           disposition: built || queued ? "verified-success" : "invoked-but-unverified"
         });

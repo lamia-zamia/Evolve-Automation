@@ -149,7 +149,10 @@ for (const [id, tech, before, complete] of [
     build.beginCycle().map((candidate) => candidate.key),
     [id],
   );
-  assert.equal(build.execute(id).disposition, "verified-success", id);
+  const result = build.execute(id);
+  assert.equal(result.disposition, "verified-success", id);
+  assert.equal(result.clicked, true, id);
+  assert.equal(result.mission, true, `${id} is an upstream grant action`);
   assert.deepEqual(reader().buildings, [], `${id} disappears when complete`);
 }
 
@@ -165,6 +168,7 @@ for (const [id, tech, before, complete] of [
   build.beginCycle();
   const result = build.execute("space-test_launch");
   assert.equal(result.clicked, false);
+  assert.equal(result.mission, false);
   assert.equal(result.disposition, "invoked-but-unverified");
 }
 
@@ -185,10 +189,9 @@ for (const tech of [undefined, null, { hell: "broken" }, { hell: NaN }]) {
     ["space-satellite"],
   );
   build.beginCycle();
-  assert.equal(
-    build.execute("space-satellite").disposition,
-    "verified-success",
-  );
+  const result = build.execute("space-satellite");
+  assert.equal(result.disposition, "verified-success");
+  assert.equal(result.mission, false);
   assert.equal(root.space.satellite.count, 1);
 }
 

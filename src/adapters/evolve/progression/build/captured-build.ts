@@ -29,6 +29,7 @@ import { costFitsStorage } from "../../captured-affordability.ts";
 import { readCapturedControlLabel } from "../../captured-control-label.ts";
 import { readCapturedBuildQueueEntryCount } from "../../captured-queue-reservations.ts";
 import { isRecord, readProperty } from "../../../validation.ts";
+import { readCapturedGrantAction } from "./captured-grant-action.ts";
 
 /** One building the caller manages, with the settings the planners need. */
 export interface CapturedBuildTarget {
@@ -239,6 +240,11 @@ export function createCapturedBuildSource(
         candidate.target.elementId,
       );
       const built = after > before;
+      const grantAction = readCapturedGrantAction(candidate.target.elementId);
+      const completedGrant =
+        built &&
+        grantAction !== undefined &&
+        grantAction.legacyUnmanaged !== true;
       const queued =
         candidate.target.readCount === undefined &&
         candidateQueueAfter > candidateQueueBefore;
@@ -271,7 +277,7 @@ export function createCapturedBuildSource(
       return Object.freeze({
         outcome: SUCCEEDED,
         clicked: built,
-        mission: false,
+        mission: completedGrant,
         consumption: NO_CONSUMPTION,
         disposition:
           built || queued

@@ -44,7 +44,7 @@ function makeSource(family, candidates, holdings, bought) {
         outcome: { status: "succeeded" },
         disposition: "verified-success",
         clicked: true,
-        mission: false,
+        mission: candidate.mission === true,
         consumption: candidate.consumption ?? [],
       };
     },
@@ -166,6 +166,24 @@ function runCycle(cycle) {
     reader: cycle.adapter.reader,
     executor: cycle.adapter.executor,
   });
+}
+
+// A grant invalidates the remaining candidate snapshot. The next cycle samples the new surface.
+{
+  const city = [
+    { key: "grant", weighting: 20, cost: { Money: 1 }, mission: true },
+    { key: "stale", weighting: 10, cost: { Money: 1 } },
+  ];
+  const cycle = makeCycle({ city, holdings: { Money: 100 } });
+  assert.equal(runCycle(cycle).status, "succeeded");
+  assert.deepEqual(cycle.bought, ["grant"]);
+  city.splice(0, city.length, {
+    key: "newly-unlocked",
+    weighting: 10,
+    cost: { Money: 1 },
+  });
+  assert.equal(runCycle(cycle).status, "succeeded");
+  assert.deepEqual(cycle.bought, ["grant", "newly-unlocked"]);
 }
 
 // Building costs are paid from the action's regional pool, not the summed resource total.
