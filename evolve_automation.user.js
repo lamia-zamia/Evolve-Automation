@@ -2242,26 +2242,113 @@
     return result;
   }
 
-  // src/adapters/evolve/progression/build/captured-tech-gated-action.ts
-  var CAPTURED_TECH_GATED_ACTIONS = Object.freeze({
-    "space-test_launch": Object.freeze({
-      technology: "space",
-      availableAtLevel: 1,
-      completedAtLevel: 2
-    }),
-    "space-moon_mission": Object.freeze({
-      technology: "space",
-      availableAtLevel: 2,
+  // src/adapters/evolve/progression/build/captured-grant-actions.generated.ts
+  var CAPTURED_GRANT_ACTIONS = Object.freeze({
+    "eden-scout_elysium": { technology: "elysium", completedAtLevel: 5 },
+    "eden-scout_palace": { technology: "palace", completedAtLevel: 2 },
+    "eden-survery_meadows": { technology: "edenic", completedAtLevel: 4 },
+    "eden-survey_fields": { technology: "elysium", completedAtLevel: 3 },
+    "galaxy-alien2_mission": {
+      technology: "conflict",
+      completedAtLevel: 1,
+      legacyUnmanaged: !0
+    },
+    "galaxy-chthonian_mission": {
+      technology: "chthonian",
+      completedAtLevel: 2,
+      legacyUnmanaged: !0
+    },
+    "galaxy-gateway_mission": { technology: "gateway", completedAtLevel: 2 },
+    "galaxy-gorddon_mission": { technology: "xeno", completedAtLevel: 3 },
+    "interstellar-alpha_mission": { technology: "alpha", completedAtLevel: 1 },
+    "interstellar-blackhole_mission": {
+      technology: "blackhole",
+      completedAtLevel: 1
+    },
+    "interstellar-jump_ship": { technology: "stargate", completedAtLevel: 2 },
+    "interstellar-nebula_mission": { technology: "nebula", completedAtLevel: 1 },
+    "interstellar-neutron_mission": {
+      technology: "neutron",
+      completedAtLevel: 1
+    },
+    "interstellar-proxima_mission": {
+      technology: "proxima",
+      completedAtLevel: 1
+    },
+    "interstellar-sirius_b": { technology: "ascension", completedAtLevel: 4 },
+    "interstellar-sirius_mission": {
+      technology: "ascension",
       completedAtLevel: 3
-    })
+    },
+    "interstellar-wormhole_mission": {
+      technology: "stargate",
+      completedAtLevel: 3
+    },
+    "portal-assault_forge": { technology: "hell_pit", completedAtLevel: 3 },
+    "portal-gate_mission": { technology: "hell_gate", completedAtLevel: 1 },
+    "portal-lake_mission": { technology: "hell_lake", completedAtLevel: 2 },
+    "portal-pit_mission": { technology: "hell_pit", completedAtLevel: 2 },
+    "portal-ruins_mission": { technology: "hell_ruins", completedAtLevel: 2 },
+    "portal-spire_mission": { technology: "hell_spire", completedAtLevel: 2 },
+    "portal-spire_survey": { technology: "hell_spire", completedAtLevel: 9 },
+    "space-belt_mission": { technology: "asteroid", completedAtLevel: 1 },
+    "space-dwarf_mission": { technology: "dwarf", completedAtLevel: 1 },
+    "space-enceladus_mission": { technology: "enceladus", completedAtLevel: 1 },
+    "space-eris_mission": { technology: "eris", completedAtLevel: 1 },
+    "space-gas_mission": { technology: "space", completedAtLevel: 5 },
+    "space-gas_moon_mission": { technology: "space", completedAtLevel: 6 },
+    "space-hell_mission": { technology: "hell", completedAtLevel: 1 },
+    "space-makemake_mission": { technology: "makemake", completedAtLevel: 1 },
+    "space-moon_mission": { technology: "space", completedAtLevel: 3 },
+    "space-red_mission": { technology: "space", completedAtLevel: 4 },
+    "space-salvage_dwarf": {
+      technology: "dwarf",
+      completedAtLevel: 3,
+      legacyUnmanaged: !0
+    },
+    "space-salvage_hell": {
+      technology: "hell",
+      completedAtLevel: 3,
+      legacyUnmanaged: !0
+    },
+    "space-salvage_ship": {
+      technology: "resettle",
+      completedAtLevel: 5,
+      legacyUnmanaged: !0
+    },
+    "space-sun_mission": { technology: "solar", completedAtLevel: 1 },
+    "space-test_launch": { technology: "space", completedAtLevel: 2 },
+    "space-titan_mission": { technology: "titan", completedAtLevel: 1 },
+    "space-triton_mission": { technology: "triton", completedAtLevel: 1 },
+    "tauceti-alien_station_survey": {
+      technology: "tau_gas2",
+      completedAtLevel: 4
+    },
+    "tauceti-contact": { technology: "tau_red", completedAtLevel: 5 },
+    "tauceti-dismantle": { technology: "tau_home", completedAtLevel: 2 },
+    "tauceti-excavate": { technology: "tau_home", completedAtLevel: 3 },
+    "tauceti-gas_contest": { technology: "tau_gas", completedAtLevel: 1 },
+    "tauceti-gas_contest2": { technology: "tau_gas2", completedAtLevel: 2 },
+    "tauceti-home_mission": { technology: "tau_home", completedAtLevel: 1 },
+    "tauceti-ignite_gas_giant": { technology: "m_ignite", completedAtLevel: 2 },
+    "tauceti-introduce": { technology: "tau_red", completedAtLevel: 5 },
+    "tauceti-red_mission": { technology: "tau_red", completedAtLevel: 1 },
+    "tauceti-roid_mission": { technology: "tau_roid", completedAtLevel: 1 },
+    "tauceti-subjugate": { technology: "tau_red", completedAtLevel: 5 }
   });
-  function readCapturedTechGatedActionRule(elementId) {
-    return Object.hasOwn(CAPTURED_TECH_GATED_ACTIONS, elementId) ? CAPTURED_TECH_GATED_ACTIONS[elementId] : void 0;
+
+  // src/adapters/evolve/progression/build/captured-grant-action.ts
+  function readCapturedGrantAction(elementId) {
+    return Object.hasOwn(CAPTURED_GRANT_ACTIONS, elementId) ? CAPTURED_GRANT_ACTIONS[elementId] : void 0;
   }
-  function readCapturedTechGatedActionCount(root, rule) {
-    let level = readProperty(readProperty(root, "tech"), rule.technology);
-    if (!(typeof level != "number" || !Number.isFinite(level) || level < rule.availableAtLevel))
-      return level >= rule.completedAtLevel ? 1 : 0;
+  function readCapturedGrantActionCount(root, grant) {
+    let tech = readProperty(root, "tech");
+    if (tech === null || typeof tech != "object" || Array.isArray(tech))
+      return;
+    let level = readProperty(tech, grant.technology);
+    if (level === void 0) return 0;
+    if (!(typeof level != "number" || !Number.isFinite(level) || level < 0))
+      return level >= grant.completedAtLevel ? 1 : 0;
   }
 
   // src/adapters/evolve/progression/build/captured-build-policy.ts
@@ -2630,7 +2717,9 @@
     let binding = elementId;
     if (settings[`bat${binding}`] === !1 || settings[`bat${binding}`] === void 0 && settings.autoBuild !== !0)
       return;
-    let id = parts.id, techGatedAction = readCapturedTechGatedActionRule(elementId), readCount2 = techGatedAction === void 0 ? void 0 : (capturedRoot) => readCapturedTechGatedActionCount(capturedRoot, techGatedAction), owner = readProperty(root, region), state = readProperty(owner, id);
+    let id = parts.id, grantAction = readCapturedGrantAction(elementId);
+    if (grantAction?.legacyUnmanaged === !0) return;
+    let readCount2 = grantAction === void 0 ? void 0 : (capturedRoot) => readCapturedGrantActionCount(capturedRoot, grantAction), owner = readProperty(root, region), state = readProperty(owner, id);
     if (readCount2 === void 0 && !isRecord(state)) {
       onSkipped(binding, `captured ${region} state is unavailable`);
       return;
@@ -2639,7 +2728,7 @@
     if (typeof count2 != "number" || !Number.isFinite(count2)) {
       onSkipped(
         binding,
-        readCount2 !== void 0 ? "captured tech-gated action completion state is unavailable" : `captured ${region} count is not finite`
+        readCount2 !== void 0 ? "captured grant action completion state is unavailable" : `captured ${region} count is not finite`
       );
       return;
     }
@@ -3350,7 +3439,7 @@
         ), queueAfter = readQueueLength(rootAfter), candidateQueueAfter = readCapturedBuildQueueEntryCount(
           rootAfter,
           candidate.target.elementId
-        ), built = after > before, queued = candidateQueueAfter > candidateQueueBefore;
+        ), built = after > before, queued = candidate.target.readCount === void 0 && candidateQueueAfter > candidateQueueBefore;
         if (reportDiagnostic(`build.execute.after ${after}`), reportDiagnostic(`build.execute.queueAfter ${queueAfter}`), reportDiagnostic(`build.execute.built ${built}`), reportDiagnostic(`build.execute.queued ${queued}`), reportDiagnostic(`build.execute.noop ${!built && !queued}`), !result.ok)
           return Object.freeze({
             outcome: result.reason === "stale-control" ? stale("stale-build-control", result.detail ?? result.reason, {

@@ -41,9 +41,9 @@ import {
   CITY_ELEMENT_BINDING_ALIASES,
 } from "./captured-building-metadata.ts";
 import {
-  readCapturedTechGatedActionCount,
-  readCapturedTechGatedActionRule,
-} from "./captured-tech-gated-action.ts";
+  readCapturedGrantAction,
+  readCapturedGrantActionCount,
+} from "./captured-grant-action.ts";
 
 export interface CapturedBuildPolicyDependencies {
   readonly rootState: GameRootStateSource;
@@ -757,12 +757,13 @@ function readNonCityTarget(
     return undefined;
   }
   const id = parts.id;
-  const techGatedAction = readCapturedTechGatedActionRule(elementId);
+  const grantAction = readCapturedGrantAction(elementId);
+  if (grantAction?.legacyUnmanaged === true) return undefined;
   const readCount =
-    techGatedAction === undefined
+    grantAction === undefined
       ? undefined
       : (capturedRoot: unknown) =>
-          readCapturedTechGatedActionCount(capturedRoot, techGatedAction);
+          readCapturedGrantActionCount(capturedRoot, grantAction);
   const owner = readProperty(root, region);
   const state = readProperty(owner, id);
   if (readCount === undefined && !isRecord(state)) {
@@ -775,7 +776,7 @@ function readNonCityTarget(
     onSkipped(
       binding,
       readCount !== undefined
-        ? "captured tech-gated action completion state is unavailable"
+        ? "captured grant action completion state is unavailable"
         : `captured ${region} count is not finite`,
     );
     return undefined;

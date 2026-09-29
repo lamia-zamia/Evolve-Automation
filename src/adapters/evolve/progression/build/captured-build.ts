@@ -239,7 +239,9 @@ export function createCapturedBuildSource(
         candidate.target.elementId,
       );
       const built = after > before;
-      const queued = candidateQueueAfter > candidateQueueBefore;
+      const queued =
+        candidate.target.readCount === undefined &&
+        candidateQueueAfter > candidateQueueBefore;
       reportDiagnostic(`build.execute.after ${after}`);
       reportDiagnostic(`build.execute.queueAfter ${queueAfter}`);
       reportDiagnostic(`build.execute.built ${built}`);

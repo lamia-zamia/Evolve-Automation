@@ -44,6 +44,8 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
@@ -54,5 +56,13 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Fetch pinned DeadSpace source for manifest verification
+        run: |
+          git init "$RUNNER_TEMP/evolve-source"
+          git -C "$RUNNER_TEMP/evolve-source" remote add origin https://github.com/pmotschmann/Evolve.git
+          git -C "$RUNNER_TEMP/evolve-source" fetch --depth=1 origin 6cc9ba8ce714e9ef474b468be93b4c7edfb98830
+
       - name: Rebuild and verify committed output
         run: npm run verify
+        env:
+          EVOLVE_SOURCE: ${{ runner.temp }}/evolve-source
