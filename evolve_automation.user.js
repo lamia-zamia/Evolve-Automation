@@ -16441,9 +16441,9 @@
       case "influence":
         return target.hostility !== void 0 && target.hostility > (spies > 0 ? 0 : 10);
       case "sabotage":
-        return target.sabotageProgress === 0 && target.military > (spies > 1 ? 50 : 74);
+        return spies < 1 || target.military > (spies > 1 ? 50 : 74);
       case "incite":
-        return target.governmentId < 3 && target.unrest !== void 0 && target.unrest < 100;
+        return spies < 3 || target.unrest !== void 0 && target.unrest < (spies > 3 ? 100 : 76);
       case "annex": {
         let morale = finite(
           readProperty(
@@ -16451,11 +16451,11 @@
             "current"
           )
         );
-        return target.governmentId < 3 && target.hostility !== void 0 && target.unrest !== void 0 && target.hostility <= 50 && target.unrest >= 50 && morale !== void 0 && morale >= 200 + target.hostility - target.unrest;
+        return target.hostility !== void 0 && target.unrest !== void 0 && target.hostility <= 50 && target.unrest >= 50 && morale !== void 0 && morale >= 200 + target.hostility - target.unrest;
       }
       case "purchase": {
         let price = capturedForeignGovernmentPrice(target), money = capturedForeignResourceAmount(root, "Money");
-        return target.governmentId < 3 && spies >= 3 && price !== void 0 && money !== void 0 && money >= price;
+        return spies >= 3 && price !== void 0 && money !== void 0 && money >= price;
       }
     }
   }

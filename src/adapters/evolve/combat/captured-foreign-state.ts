@@ -398,14 +398,11 @@ export function capturedForeignEspionageUseful(
         target.hostility > (spies > 0 ? 0 : 10)
       );
     case "sabotage":
-      return (
-        target.sabotageProgress === 0 && target.military > (spies > 1 ? 50 : 74)
-      );
+      return spies < 1 || target.military > (spies > 1 ? 50 : 74);
     case "incite":
       return (
-        target.governmentId < 3 &&
-        target.unrest !== undefined &&
-        target.unrest < 100
+        spies < 3 ||
+        (target.unrest !== undefined && target.unrest < (spies > 3 ? 100 : 76))
       );
     case "annex": {
       const morale = finite(
@@ -415,7 +412,6 @@ export function capturedForeignEspionageUseful(
         ),
       );
       return (
-        target.governmentId < 3 &&
         target.hostility !== undefined &&
         target.unrest !== undefined &&
         target.hostility <= 50 &&
@@ -428,7 +424,6 @@ export function capturedForeignEspionageUseful(
       const price = capturedForeignGovernmentPrice(target);
       const money = capturedForeignResourceAmount(root, "Money");
       return (
-        target.governmentId < 3 &&
         spies >= 3 &&
         price !== undefined &&
         money !== undefined &&
