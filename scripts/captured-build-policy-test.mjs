@@ -1,6 +1,17 @@
 import assert from "node:assert/strict";
-import { createCapturedBuildPolicyReader } from "../src/adapters/evolve/progression/build/captured-build-policy.ts";
+import { createCapturedBuildPolicyReader as createPolicyReader } from "../src/adapters/evolve/progression/build/captured-build-policy.ts";
 import { priceLookup } from "./test-support/action-price.mjs";
+
+const createCapturedBuildPolicyReader = (dependencies) =>
+  createPolicyReader({
+    ...dependencies,
+    readCurrentOffers:
+      dependencies.readCurrentOffers ??
+      ((regions) => ({
+        regions,
+        unlocked: new Set(dependencies.controls.capturedElementIds()),
+      })),
+  });
 
 const skipped = [];
 /** Nothing is known about Knowledge, so neither Knowledge rule applies. */
@@ -369,8 +380,16 @@ let fuelRoot = {
     Helium_3: { max: 100, display: true },
   },
 };
+const fuelOfferedIds = new Set([
+  "city-oil_well",
+  "city-oil_depot",
+  "city-farm",
+  "space-moon_mission",
+  "space-gas_moon_mission",
+]);
 const fuelReader = createCapturedBuildPolicyReader({
   readKnowledge: () => openKnowledge,
+  readCurrentOffers: (regions) => ({ regions, unlocked: fuelOfferedIds }),
   rootState: {
     readRoot: () => fuelRoot,
     isReactivitySuppressed: () => false,
@@ -385,12 +404,14 @@ const fuelReader = createCapturedBuildPolicyReader({
       "city-farm",
       "space-moon_mission",
       "space-gas_moon_mission",
+      "space-test_launch",
     ],
   },
   costs: {
     readCost: priceLookup({
       "space-moon_mission": { Oil: 500 },
       "space-gas_moon_mission": { Helium_3: 500 },
+      "space-test_launch": { Oil: 500 },
     }),
   },
   getSettings: () => ({
@@ -432,6 +453,20 @@ assert.deepEqual(
     { id: "farm", weighting: 10 },
   ],
   "fuel storage at the captured mission threshold is neutral",
+);
+fuelRoot.resource.Oil.max = 100;
+fuelRoot.resource.Helium_3.max = 100;
+fuelOfferedIds.delete("space-moon_mission");
+fuelOfferedIds.delete("space-gas_moon_mission");
+fuelOfferedIds.add("space-test_launch");
+assert.deepEqual(
+  fuelReader().buildings.map(({ id, weighting }) => ({ id, weighting })),
+  [
+    { id: "oil_well", weighting: 10 },
+    { id: "oil_depot", weighting: 100 },
+    { id: "farm", weighting: 10 },
+  ],
+  "fuel weighting uses only currently offered grant actions, including non-mission names",
 );
 
 const malformedStorageSettingReader = createCapturedBuildPolicyReader({

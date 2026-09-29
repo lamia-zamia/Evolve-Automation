@@ -262,6 +262,7 @@ function projectContext(settings, { manaRate = 0, witchHunter = false } = {}) {
   const policy = () =>
     createCapturedBuildPolicyReader({
       rootState: { readRoot: () => undefined },
+      readCurrentOffers: () => undefined,
       controls: {
         resolve: () => undefined,
         invoke: () => ({ ok: false, reason: "unknown-method" }),

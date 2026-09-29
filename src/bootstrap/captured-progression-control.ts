@@ -585,6 +585,7 @@ export function createCapturedProgressionControl(
       ? createCapturedBuildPolicyReader({
           rootState,
           controls,
+          readCurrentOffers: readBuildingUnlocks,
           getSettings: readSettings,
           readKnowledge,
           ...(dependencies.costs === undefined

@@ -3,6 +3,16 @@ import { startCapturedRuntime } from "../src/bootstrap/captured-runtime-control.
 import { createGameDrawnActionsReader } from "../src/adapters/browser/game-drawn-actions.ts";
 import { createTestDocument, element } from "./dom-fixture.mjs";
 
+function cityOfferDocument(id) {
+  const root = element("div", { id: "runtime-root" });
+  const city = element("div", { id: "city" });
+  const row = element("div", { id });
+  row.classList.add("action");
+  city.appendChild(row);
+  root.appendChild(city);
+  return createTestDocument(root);
+}
+
 function applyResearchDrawnAttributes(node, values) {
   const attributes = Object.entries(values).map(([name, value]) => ({
     name,
@@ -373,13 +383,13 @@ assert.equal(unsubscribeCount, 1);
     space: {},
     queue: { display: true, pause: false, queue: [] },
     r_queue: { display: false, pause: false, queue: [] },
-    settings: {},
+    settings: { civTabs: 1, spaceTabs: 0 },
     resource: {
       Money: { amount: 0, max: 100000, display: true, diff: 0, name: "$" },
     },
   };
   const handles = new Map(
-    ["buildQueue", "city-cottage"].map((id) => [
+    ["#mainColumn div.content", "buildQueue", "city-cottage"].map((id) => [
       id,
       { elementId: id, generation: 1, methods: ["setData", "action"] },
     ]),
@@ -413,7 +423,7 @@ assert.equal(unsubscribeCount, 1);
       mountSuppression: { available: false, withoutMounting: () => undefined },
       uninstall: () => {},
     },
-    document: { getElementById: () => null, querySelectorAll: () => [] },
+    document: cityOfferDocument("city-cottage"),
     mouseEvent: class {},
     storage: {
       getItem: () =>
@@ -458,13 +468,13 @@ assert.equal(unsubscribeCount, 1);
     space: {},
     queue: { display: true, pause: false, queue: [] },
     r_queue: { display: false, pause: false, queue: [] },
-    settings: {},
+    settings: { civTabs: 1, spaceTabs: 0 },
     resource: {
       Money: { amount: 0, max: 100000, display: true, diff: 0, name: "$" },
     },
   };
   const handles = new Map(
-    ["buildQueue", "city-cottage"].map((id) => [
+    ["#mainColumn div.content", "buildQueue", "city-cottage"].map((id) => [
       id,
       { elementId: id, generation: 1, methods: ["setData", "action"] },
     ]),
@@ -498,7 +508,7 @@ assert.equal(unsubscribeCount, 1);
       mountSuppression: { available: false, withoutMounting: () => undefined },
       uninstall: () => {},
     },
-    document: { getElementById: () => null, querySelectorAll: () => [] },
+    document: cityOfferDocument("city-cottage"),
     mouseEvent: class {},
     storage: {
       getItem: () =>
@@ -539,7 +549,9 @@ assert.equal(unsubscribeCount, 1);
     invoked.includes("buildQueue.setData"),
     `the ResourceDemanded override did not enable construction: ${JSON.stringify(invoked)}`,
   );
-  assert.deepEqual(errors, []);
+  assert.deepEqual(errors, [
+    "progression unavailable: temporary component mounting cannot be suppressed",
+  ]);
 }
 
 // A returned construction rejection is surfaced by the runtime phase instead of being mistaken
@@ -560,13 +572,13 @@ assert.equal(unsubscribeCount, 1);
     city: { cottage: { count: 0 } },
     space: {},
     queue: { display: true, pause: false, queue: [] },
-    settings: {},
+    settings: { civTabs: 1, spaceTabs: 0 },
     resource: {
       Money: { amount: 1000, max: 100000, display: true, diff: 0, name: "$" },
     },
   };
   const handles = new Map(
-    ["buildQueue", "city-cottage"].map((id) => [
+    ["#mainColumn div.content", "buildQueue", "city-cottage"].map((id) => [
       id,
       { elementId: id, generation: 1, methods: ["setData", "action"] },
     ]),
@@ -598,7 +610,7 @@ assert.equal(unsubscribeCount, 1);
       mountSuppression: { available: false, withoutMounting: () => undefined },
       uninstall: () => {},
     },
-    document: { getElementById: () => null, querySelectorAll: () => [] },
+    document: cityOfferDocument("city-cottage"),
     mouseEvent: class {},
     storage: {
       getItem: () =>
@@ -615,7 +627,10 @@ assert.equal(unsubscribeCount, 1);
   });
   cycle({ periods: 4 });
   stopCycle();
-  assert.deepEqual(reported, ["autoBuild: build-click-failed: unknown-method"]);
+  assert.deepEqual(reported, [
+    "progression unavailable: temporary component mounting cannot be suppressed",
+    "autoBuild: build-click-failed: unknown-method",
+  ]);
   assert.ok(diagnosticLog.includes("autoBuild.candidates 1"));
   assert.ok(diagnosticLog.includes("build.execute.invokeOk false"));
   assert.ok(diagnosticLog.includes("autoBuild.outcome rejected"));
@@ -690,7 +705,7 @@ assert.equal(unsubscribeCount, 1);
     city: { bank: { count: 0 }, farm: { count: 0 } },
     space: {},
     queue: { display: true, pause: false, queue: [] },
-    settings: {},
+    settings: { civTabs: 1, spaceTabs: 0 },
     resource: {
       Money: { amount: 600, max: 10000, display: true, diff: 100, name: "$" },
     },
@@ -703,6 +718,12 @@ assert.equal(unsubscribeCount, 1);
     ]),
   );
   const page = element("main");
+  const cityPanel = element("div", { id: "city" });
+  for (const id of ["city-bank", "city-farm"]) {
+    const row = element("div", { id });
+    row.classList.add("action");
+    cityPanel.appendChild(row);
+  }
   const resourcesPanel = element("div", { id: "resources" });
   const queueAnchor = element("div", { id: "buildQueue" });
   const settingsTab = element("div");
@@ -714,6 +735,7 @@ assert.equal(unsubscribeCount, 1);
   saveField.appendChild(importText);
   saveTransfer.appendChild(saveField);
   settingsTab.appendChild(saveTransfer);
+  page.appendChild(cityPanel);
   page.appendChild(resourcesPanel);
   page.appendChild(settingsTab);
   page.appendChild(queueAnchor);

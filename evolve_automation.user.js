@@ -2442,16 +2442,19 @@
     if (!(count2 === void 0 || on === void 0 || on > count2))
       return Object.freeze({ count: count2, on });
   }
-  function readFuelState(root, controls2, costs) {
+  function readFuelState(root, offeredIds, costs) {
     if (costs === void 0) return;
     let resources = readProperty(root, "resource"), oil = readProperty(resources, "Oil"), helium = readProperty(resources, "Helium_3"), oilMaximum = isRecord(oil) ? oil.max : void 0, heliumMaximum = isRecord(helium) ? helium.max : void 0;
     if (typeof oilMaximum != "number" || !Number.isFinite(oilMaximum) || oilMaximum < 0 || typeof heliumMaximum != "number" || !Number.isFinite(heliumMaximum) || heliumMaximum < 0)
       return;
-    let missionIds = controls2.capturedElementIds().filter((id) => id.startsWith("space-") && id.endsWith("_mission"));
-    if (missionIds.length === 0) return;
+    let grantIds = offeredIds.filter((id) => {
+      let grant = readCapturedGrantAction(id);
+      return id.startsWith("space-") && grant !== void 0 && !grant.legacyUnmanaged;
+    });
+    if (grantIds.length === 0) return;
     let maximumOilCost = 0, maximumHeliumCost = 0;
-    for (let missionId of missionIds) {
-      let price = costs.readCost(missionId);
+    for (let grantId of grantIds) {
+      let price = costs.readCost(grantId);
       if (price === void 0) return;
       let oilCost = price.cost.Oil, heliumCost = price.cost.Helium_3;
       if (oilCost !== void 0 && (typeof oilCost != "number" || !Number.isFinite(oilCost) || oilCost < 0) || heliumCost !== void 0 && (typeof heliumCost != "number" || !Number.isFinite(heliumCost) || heliumCost < 0))
@@ -2569,7 +2572,7 @@
     );
   }
   function readTarget2(settings, city, elementId, context, onSkipped) {
-    let binding = CITY_ELEMENT_BINDING_ALIASES[elementId] ?? elementId;
+    let binding = bindingForBuildingElement(elementId);
     if (!binding.startsWith("city-") || binding.length === 5 || settings[`bat${binding}`] === !1 || settings[`bat${binding}`] === void 0 && settings.autoBuild !== !0)
       return;
     let id = binding.slice(5), state = readProperty(city, id);
@@ -2820,6 +2823,7 @@
   function createCapturedBuildPolicyReader({
     rootState,
     controls: controls2,
+    readCurrentOffers,
     getSettings,
     readKnowledge,
     costs,
@@ -2828,7 +2832,15 @@
     let reportSkipped = onSkipped ?? (() => {
     });
     return () => {
-      let settings = getSettings(), root = rootState.readRoot(), city = readProperty(root, "city"), storageParts = readStorageParts(root), power = readPowerState(root), fuel = readFuelState(root, controls2, costs), knowledge = readKnowledge(), context = Object.freeze({
+      let settings = getSettings(), regions = new Set(
+        controls2.capturedElementIds().map((id) => splitActionId(bindingForBuildingElement(id))?.region).filter(
+          (region) => region !== void 0 && CAPTURED_BUILD_REGIONS.has(region)
+        )
+      ), offers = readCurrentOffers(regions), offeredIds = offers === void 0 ? [] : controls2.capturedElementIds().filter(
+        (id) => offers.unlocked.has(id) && offers.regions.has(
+          splitActionId(bindingForBuildingElement(id))?.region ?? ""
+        )
+      ), root = rootState.readRoot(), city = readProperty(root, "city"), storageParts = readStorageParts(root), power = readPowerState(root), fuel = readFuelState(root, offeredIds, costs), knowledge = readKnowledge(), context = Object.freeze({
         unusedStorageParts: storageParts?.unused ?? !1,
         storagePartsAllAssigned: storageParts?.allAssigned ?? !1,
         housingUnderused: readHousingUnderused(root) ?? !1,
@@ -2849,7 +2861,7 @@
         noOilProduction: fuel?.noOilProduction ?? !1
       }), buildings = [];
       if (isRecord(settings))
-        for (let elementId of controls2.capturedElementIds()) {
+        for (let elementId of offeredIds) {
           let target = isRecord(city) ? readTarget2(settings, city, elementId, context, reportSkipped) : void 0, nonCityTarget = target === void 0 ? readNonCityTarget(
             settings,
             root,
@@ -8613,6 +8625,7 @@
     }), readPolicy = getBuildingManager === void 0 ? createCapturedBuildPolicyReader({
       rootState,
       controls: controls2,
+      readCurrentOffers: readBuildingUnlocks,
       getSettings: readSettings,
       readKnowledge,
       ...dependencies.costs === void 0 ? {} : { costs: dependencies.costs },

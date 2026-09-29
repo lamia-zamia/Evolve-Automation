@@ -45,6 +45,8 @@ for (const id of [
 }
 
 function harness(id, root, invokeAction = () => {}, offered = true) {
+  let currentlyOffered = offered;
+  let actionCalls = 0;
   const handle = {
     elementId: id,
     generation: 1,
@@ -56,10 +58,12 @@ function harness(id, root, invokeAction = () => {}, offered = true) {
     invoke: (selected, method) => {
       if (selected !== handle || method !== "action")
         return { ok: false, reason: "unknown-method" };
+      actionCalls++;
       invokeAction();
       return { ok: true, value: true };
     },
-    capturedElementIds: () => (offered ? [id] : []),
+    // Vue capture retains an ID after the upstream panel stops drawing it.
+    capturedElementIds: () => [id],
   };
   const rootState = {
     readRoot: () => root,
@@ -69,6 +73,11 @@ function harness(id, root, invokeAction = () => {}, offered = true) {
   const reader = createCapturedBuildPolicyReader({
     rootState,
     controls,
+    readCurrentOffers: () => ({
+      regions: new Set([id.split("-")[0]]),
+      unlocked: new Set(currentlyOffered ? [id] : []),
+      states: new Map(),
+    }),
     getSettings: () => ({ autoBuild: true }),
     readKnowledge: () => ({
       knowledgeRequiredByTechs: 0,
@@ -85,22 +94,34 @@ function harness(id, root, invokeAction = () => {}, offered = true) {
     costs: { readCost: () => ({ cost: { Money: 1 } }) },
     readTargets: () => reader().buildings,
   });
-  return { reader, build };
+  return {
+    reader,
+    build,
+    setOffered: (value) => (currentlyOffered = value),
+    actionCalls: () => actionCalls,
+  };
 }
 
 {
-  const { reader, build } = harness(
+  const root = { tech: { space: 3 }, space: {} };
+  const { reader, build, setOffered, actionCalls } = harness(
     "space-red_mission",
-    { tech: { space: 3 }, space: {} },
-    () => {},
-    false,
+    root,
   );
+  assert.deepEqual(
+    reader().buildings.map(({ key }) => key),
+    ["space-red_mission"],
+  );
+  root.tech = {};
+  setOffered(false);
   assert.deepEqual(
     reader().buildings,
     [],
-    "an undrawn grant action is unavailable",
+    "a stale captured Mars control is unavailable after the game's fresh draw omits it",
   );
   assert.deepEqual(build.beginCycle(), []);
+  assert.equal(build.execute("space-red_mission").clicked, false);
+  assert.equal(actionCalls(), 0);
 }
 
 for (const [id, tech, before, complete] of [

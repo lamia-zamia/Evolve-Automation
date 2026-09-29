@@ -281,6 +281,11 @@ assert.equal(researchControl.readGrantedTechs(), undefined);
     nowMs: () => 0,
   });
   const priced = [];
+  assert.deepEqual(
+    buildControl.readManagedBuildTargets().map(({ elementId }) => elementId),
+    ["city-foundry", "city-refinery"],
+    "production build policy intersects cumulative controls with the drawn city rows",
+  );
   const buildDemand = createCapturedResourceDemand({
     rootState: { readRoot: () => buildRoot },
     reservations: {
@@ -307,6 +312,11 @@ assert.equal(researchControl.readGrantedTechs(), undefined);
   assert.equal(buildDemand.storageRequired("Alloy"), 669.5);
   unlockedRows = [{ id: "city-refinery" }];
   for (const listener of buildRootListeners) listener();
+  assert.deepEqual(
+    buildControl.readManagedBuildTargets().map(({ elementId }) => elementId),
+    ["city-refinery"],
+    "an old captured control leaves normal Auto Build after the new draw omits it",
+  );
   assert.deepEqual(
     buildControl
       .readUnlockedStorageBuildTargets()

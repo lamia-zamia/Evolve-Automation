@@ -31,6 +31,7 @@ import { planTruepathAiApocalypse } from "../../../../domain/progression/truepat
 import type { CapturedKnowledgeSample } from "./captured-knowledge-gate.ts";
 import type { ConstructionCycleOptions } from "../../../../ports/construction-candidates.ts";
 import type { GameActionCostReader } from "../../../../ports/game-action-costs.ts";
+import type { BuildingUnlockSample } from "../../../../ports/game-building-unlocks.ts";
 import type { GameControlRegistry } from "../../../../ports/game-control-registry.ts";
 import type { GameRootStateSource } from "../../../../ports/game-root-state.ts";
 import { isRecord, readProperty, splitActionId } from "../../../validation.ts";
@@ -38,7 +39,7 @@ import type { CapturedBuildTarget } from "./captured-build.ts";
 import type { ScriptBuildPolicy } from "./script-build-policy.ts";
 import {
   CAPTURED_BUILD_REGIONS,
-  CITY_ELEMENT_BINDING_ALIASES,
+  bindingForBuildingElement,
 } from "./captured-building-metadata.ts";
 import {
   readCapturedGrantAction,
@@ -48,10 +49,14 @@ import {
 export interface CapturedBuildPolicyDependencies {
   readonly rootState: GameRootStateSource;
   readonly controls: GameControlRegistry;
+  /** Current rows from the game's suppressed panel draw, never the cumulative control registry. */
+  readonly readCurrentOffers: (
+    regions: ReadonlySet<string>,
+  ) => Readonly<Pick<BuildingUnlockSample, "regions" | "unlocked">> | undefined;
   readonly getSettings: () => unknown;
   /** What this cycle knows about Knowledge, shared with the build planner's own gate. */
   readonly readKnowledge: () => CapturedKnowledgeSample;
-  /** Prices the captured mission controls for the fuel-storage weighting rule. */
+  /** Prices currently offered grant actions for the fuel-storage weighting rule. */
   readonly costs?: GameActionCostReader;
   readonly onSkipped?: (key: string, reason: string) => void;
 }
@@ -74,7 +79,7 @@ interface CityRuleContext {
   readonly unpoweredPowerDemand: number;
   /** Authority capacity is below the managed target. */
   readonly authorityCapBelowTarget: boolean;
-  /** Fuel capacity is below the most expensive captured mission that needs it. */
+  /** Fuel capacity is below the most expensive offered grant action that needs it. */
   readonly oilStorageBelowMissionCost: boolean;
   readonly heliumStorageBelowMissionCost: boolean;
   /** Neither the city oil well nor the space oil extractor exists. */
@@ -301,7 +306,7 @@ interface CapturedFuelState {
 
 function readFuelState(
   root: unknown,
-  controls: GameControlRegistry,
+  offeredIds: readonly string[],
   costs: GameActionCostReader | undefined,
 ): CapturedFuelState | undefined {
   if (costs === undefined) return undefined;
@@ -321,15 +326,18 @@ function readFuelState(
     return undefined;
   }
 
-  const missionIds = controls
-    .capturedElementIds()
-    .filter((id) => id.startsWith("space-") && id.endsWith("_mission"));
-  if (missionIds.length === 0) return undefined;
+  const grantIds = offeredIds.filter((id) => {
+    const grant = readCapturedGrantAction(id);
+    return (
+      id.startsWith("space-") && grant !== undefined && !grant.legacyUnmanaged
+    );
+  });
+  if (grantIds.length === 0) return undefined;
 
   let maximumOilCost = 0;
   let maximumHeliumCost = 0;
-  for (const missionId of missionIds) {
-    const price = costs.readCost(missionId);
+  for (const grantId of grantIds) {
+    const price = costs.readCost(grantId);
     if (price === undefined) return undefined;
     const oilCost = price.cost["Oil"];
     const heliumCost = price.cost["Helium_3"];
@@ -539,7 +547,7 @@ function readTarget(
   context: Readonly<CityRuleContext>,
   onSkipped: (key: string, reason: string) => void,
 ): Readonly<CapturedBuildTarget> | undefined {
-  const binding = CITY_ELEMENT_BINDING_ALIASES[elementId] ?? elementId;
+  const binding = bindingForBuildingElement(elementId);
   if (!binding.startsWith("city-") || binding.length === "city-".length) {
     return undefined;
   }
@@ -898,6 +906,7 @@ function readNonCityTarget(
 export function createCapturedBuildPolicyReader({
   rootState,
   controls,
+  readCurrentOffers,
   getSettings,
   readKnowledge,
   costs,
@@ -906,11 +915,35 @@ export function createCapturedBuildPolicyReader({
   const reportSkipped = onSkipped ?? (() => {});
   return () => {
     const settings = getSettings();
+    // The registry survives resets. It only tells us which regions to ask the game to draw.
+    const regions = new Set(
+      controls
+        .capturedElementIds()
+        .map((id) => splitActionId(bindingForBuildingElement(id))?.region)
+        .filter(
+          (region): region is string =>
+            region !== undefined && CAPTURED_BUILD_REGIONS.has(region),
+        ),
+    );
+    const offers = readCurrentOffers(regions);
+    // The draw may capture new controls, so take the registry after it completes.
+    const offeredIds =
+      offers === undefined
+        ? []
+        : controls
+            .capturedElementIds()
+            .filter(
+              (id) =>
+                offers.unlocked.has(id) &&
+                offers.regions.has(
+                  splitActionId(bindingForBuildingElement(id))?.region ?? "",
+                ),
+            );
     const root = rootState.readRoot();
     const city = readProperty(root, "city");
     const storageParts = readStorageParts(root);
     const power = readPowerState(root);
-    const fuel = readFuelState(root, controls, costs);
+    const fuel = readFuelState(root, offeredIds, costs);
     const knowledge = readKnowledge();
     const context: CityRuleContext = Object.freeze({
       unusedStorageParts: storageParts?.unused ?? false,
@@ -939,7 +972,7 @@ export function createCapturedBuildPolicyReader({
     });
     const buildings: Readonly<CapturedBuildTarget>[] = [];
     if (isRecord(settings)) {
-      for (const elementId of controls.capturedElementIds()) {
+      for (const elementId of offeredIds) {
         const target = isRecord(city)
           ? readTarget(settings, city, elementId, context, reportSkipped)
           : undefined;
