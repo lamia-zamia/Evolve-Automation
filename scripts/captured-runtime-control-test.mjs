@@ -1451,8 +1451,7 @@ assert.equal(unsubscribeCount, 1);
     "civ-farmer",
     "servant-farmer",
     "foundry",
-    "scraftPlywood",
-    "scraftBrick",
+    "skilledServants",
     "resPlywood",
     "resBrick",
   ];
@@ -1462,7 +1461,7 @@ assert.equal(unsubscribeCount, 1);
       const methods = elementId.startsWith("res")
         ? ["craftCost"]
         : elementId === "foundry" ||
-            elementId.startsWith("scraft") ||
+            elementId === "skilledServants" ||
             elementId.startsWith("servant-")
           ? ["add", "sub"]
           : ["add", "sub", "setDefault"];
@@ -1478,7 +1477,7 @@ assert.equal(unsubscribeCount, 1);
         root.city.foundry.crafting += method === "add" ? 1 : -1;
         root.civic.craftsman.workers += method === "add" ? 1 : -1;
         root.civic.unemployed.workers += method === "add" ? -1 : 1;
-      } else if (handle.elementId.startsWith("scraft")) {
+      } else if (handle.elementId === "skilledServants") {
         const id = args[0];
         root.race.servants.sjobs[id] =
           (root.race.servants.sjobs[id] ?? 0) + (method === "add" ? 1 : -1);
@@ -1548,12 +1547,287 @@ assert.equal(unsubscribeCount, 1);
   cycle({ periods: 4 });
   stopCycle();
   assert.ok(invoked.some((entry) => entry.startsWith("foundry.")));
-  assert.ok(invoked.some((entry) => entry.startsWith("scraft")));
+  assert.ok(invoked.some((entry) => entry.startsWith("skilledServants.")));
   assert.ok(invoked.some((entry) => entry.startsWith("servant-farmer.")));
   assert.equal(
     invoked.filter((entry) => entry.startsWith("foundry.")).length,
     1,
     "the combined branch must not run a second craftsmen-only pass",
+  );
+}
+
+function runCapturedJobsMatrixScenario({
+  autoJobs,
+  autoCraftsmen,
+  jobManageServants,
+  hasServants = true,
+}) {
+  const root = {
+    civic: {
+      d_job: "unemployed",
+      unemployed: {
+        job: "unemployed",
+        assigned: 4,
+        workers: 4,
+        max: 0,
+        display: true,
+      },
+      farmer: {
+        job: "farmer",
+        assigned: 0,
+        workers: 0,
+        max: -1,
+        display: true,
+      },
+      craftsman: { workers: 1, max: 2 },
+    },
+    city: {
+      foundry: {
+        Plywood: 1,
+        Brick: 0,
+        crafting: 1,
+        cap: 2,
+        rcap: { Plywood: 2, Brick: 2 },
+      },
+    },
+    race: hasServants
+      ? {
+          servants: {
+            jobs: { farmer: 0 },
+            sjobs: { Plywood: 1, Brick: 0 },
+            max: 1,
+            used: 0,
+            smax: 1,
+            sused: 1,
+          },
+        }
+      : {},
+    resource: {
+      Population: { amount: 4, max: 10 },
+      Plywood: { amount: 100, max: 1000, name: "Plywood", display: true },
+      Brick: { amount: 0, max: 1000, name: "Brick", display: true },
+      Iron: { amount: 100, max: 1000, name: "Iron", display: true },
+    },
+  };
+  const invoked = [];
+  let cycle;
+  const controlIds = [
+    "civ-unemployed",
+    "civ-farmer",
+    "foundry",
+    "resPlywood",
+    "resBrick",
+    ...(hasServants ? ["servant-farmer", "skilledServants"] : []),
+  ];
+  const controls = {
+    resolve: (elementId) => {
+      if (!controlIds.includes(elementId)) return undefined;
+      const methods = elementId.startsWith("res")
+        ? ["craftCost"]
+        : elementId === "foundry" ||
+            elementId === "skilledServants" ||
+            elementId.startsWith("servant-")
+          ? ["add", "sub"]
+          : ["add", "sub", "setDefault"];
+      return { elementId, generation: 1, methods };
+    },
+    invoke: (handle, method, args = []) => {
+      if (method === "craftCost")
+        return { ok: true, value: "<div>Iron 1</div>" };
+      invoked.push(`${handle.elementId}.${method}`);
+      if (handle.elementId === "foundry") {
+        const id = args[0];
+        root.city.foundry[id] += method === "add" ? 1 : -1;
+        root.city.foundry.crafting += method === "add" ? 1 : -1;
+        root.civic.craftsman.workers += method === "add" ? 1 : -1;
+        root.civic.unemployed.workers += method === "add" ? -1 : 1;
+      } else if (handle.elementId === "skilledServants") {
+        const id = args[0];
+        root.race.servants.sjobs[id] =
+          (root.race.servants.sjobs[id] ?? 0) + (method === "add" ? 1 : -1);
+        root.race.servants.sused += method === "add" ? 1 : -1;
+      } else if (handle.elementId.startsWith("servant-")) {
+        const id = handle.elementId.slice("servant-".length);
+        root.race.servants.jobs[id] =
+          (root.race.servants.jobs[id] ?? 0) + (method === "add" ? 1 : -1);
+        root.race.servants.used += method === "add" ? 1 : -1;
+      } else if (method === "setDefault") {
+        root.civic.d_job = args[0];
+      } else {
+        const id = handle.elementId.slice("civ-".length);
+        root.civic[id].workers += method === "add" ? 1 : -1;
+      }
+      return { ok: true, value: undefined };
+    },
+    capturedElementIds: () => controlIds,
+  };
+  const settings = {
+    masterScriptToggle: true,
+    autoJobs,
+    autoCraftsmen,
+    jobManageServants,
+    job_unemployed: true,
+    job_farmer: true,
+    job_b1_unemployed: 0,
+    job_b2_unemployed: 0,
+    job_b3_unemployed: 0,
+    job_b1_farmer: -1,
+    job_b2_farmer: -1,
+    job_b3_farmer: -1,
+    productionCraftsmen: "always",
+    craftPlywood: true,
+    job_Plywood: true,
+    foundry_w_Plywood: 1,
+    craftBrick: true,
+    job_Brick: true,
+    foundry_w_Brick: 1,
+  };
+  const stopCycle = startCapturedRuntime({
+    pageCapture: {
+      isComplete: () => true,
+      rootState: {
+        readRoot: () => root,
+        isReactivitySuppressed: () => false,
+        subscribeRootReplaced: () => () => {},
+      },
+      controls,
+      controlUsage: { readUsage: () => [] },
+      periods: {
+        subscribe(next) {
+          cycle = next;
+          return () => {};
+        },
+      },
+      mountSuppression: { available: false, withoutMounting: () => undefined },
+      uninstall: () => {},
+    },
+    document: {},
+    mouseEvent: class {},
+    storage: { getItem: () => JSON.stringify(settings) },
+    logError: (message) => {
+      throw new Error(message);
+    },
+  });
+  const servantsBefore = structuredClone(root.race.servants ?? null);
+  cycle({ periods: 4 });
+  stopCycle();
+  return { root, invoked, servantsBefore };
+}
+
+// The remaining settings combinations route to exactly one captured family and obey
+// jobManageServants in both ordinary and craftsmen-only mode.
+{
+  const combinedWithoutServants = runCapturedJobsMatrixScenario({
+    autoJobs: true,
+    autoCraftsmen: true,
+    jobManageServants: false,
+  });
+  assert.equal(
+    combinedWithoutServants.invoked.some(
+      (entry) =>
+        entry.startsWith("servant-") || entry.startsWith("skilledServants."),
+    ),
+    false,
+  );
+  assert.deepEqual(
+    combinedWithoutServants.root.race.servants,
+    combinedWithoutServants.servantsBefore,
+  );
+
+  const ordinaryWithServants = runCapturedJobsMatrixScenario({
+    autoJobs: true,
+    autoCraftsmen: false,
+    jobManageServants: true,
+  });
+  assert.ok(
+    ordinaryWithServants.invoked.some((entry) => entry.startsWith("servant-")),
+  );
+  assert.equal(
+    ordinaryWithServants.invoked.some((entry) => entry.startsWith("foundry.")),
+    false,
+  );
+  assert.equal(
+    ordinaryWithServants.invoked.some((entry) =>
+      entry.startsWith("skilledServants."),
+    ),
+    false,
+  );
+
+  const ordinaryWithoutServants = runCapturedJobsMatrixScenario({
+    autoJobs: true,
+    autoCraftsmen: false,
+    jobManageServants: false,
+  });
+  assert.equal(
+    ordinaryWithoutServants.invoked.some((entry) =>
+      entry.startsWith("servant-"),
+    ),
+    false,
+  );
+  assert.deepEqual(
+    ordinaryWithoutServants.root.race.servants,
+    ordinaryWithoutServants.servantsBefore,
+  );
+
+  const craftOnlyWithServants = runCapturedJobsMatrixScenario({
+    autoJobs: false,
+    autoCraftsmen: true,
+    jobManageServants: true,
+  });
+  assert.ok(
+    craftOnlyWithServants.invoked.some((entry) =>
+      entry.startsWith("skilledServants."),
+    ),
+  );
+  assert.equal(
+    craftOnlyWithServants.invoked.some((entry) => entry.startsWith("servant-")),
+    false,
+  );
+
+  const craftOnlyWithoutServants = runCapturedJobsMatrixScenario({
+    autoJobs: false,
+    autoCraftsmen: true,
+    jobManageServants: false,
+  });
+  assert.equal(
+    craftOnlyWithoutServants.invoked.some((entry) =>
+      entry.startsWith("skilledServants."),
+    ),
+    false,
+  );
+  assert.deepEqual(
+    craftOnlyWithoutServants.root.race.servants,
+    craftOnlyWithoutServants.servantsBefore,
+  );
+
+  const noServantRace = runCapturedJobsMatrixScenario({
+    autoJobs: false,
+    autoCraftsmen: true,
+    jobManageServants: true,
+    hasServants: false,
+  });
+  assert.equal(
+    noServantRace.invoked.some((entry) => entry.startsWith("skilledServants.")),
+    false,
+  );
+  assert.ok(
+    noServantRace.invoked.some((entry) => entry.startsWith("foundry.")),
+  );
+
+  const neitherEnabled = runCapturedJobsMatrixScenario({
+    autoJobs: false,
+    autoCraftsmen: false,
+    jobManageServants: true,
+  });
+  assert.equal(
+    neitherEnabled.invoked.some(
+      (entry) =>
+        entry.startsWith("civ-") ||
+        entry.startsWith("foundry.") ||
+        entry.startsWith("servant-") ||
+        entry.startsWith("skilledServants."),
+    ),
+    false,
   );
 }
 

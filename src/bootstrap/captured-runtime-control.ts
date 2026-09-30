@@ -794,12 +794,17 @@ export function startCapturedRuntime({
   });
   let savingTargetThisCycle: SavingTarget | null | undefined;
   let constructionRunning = false;
+  let constructionSuppressedThisCycle = false;
   const cycleConstructionObservations = Object.freeze({
     ...progression.observations,
     readSavingTarget(): SavingTarget | null {
       const settings = settingsStore.readRaw();
       if (settings["autoBuild"] !== true && settings["autoARPA"] !== true)
         return null;
+      // A trigger owns this cycle's construction budget even though it deliberately skips the
+      // construction planner. Later Factory/Jobs demand samples still run, with no stale target
+      // carried forward from a previous cycle.
+      if (constructionSuppressedThisCycle) return null;
       if (
         constructionRunning &&
         !progression.observations.hasCompletedOrdering()
@@ -898,6 +903,7 @@ export function startCapturedRuntime({
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,
     readSettings: () => settingsStore.readRaw(),
+    readDemand: () => readDemand(),
     onSkipped: (key, reason) => reportOnce(`jobs skipped ${key}: ${reason}`),
   });
   const fullJobs = createCapturedFullJobsAutomation({
@@ -2342,6 +2348,7 @@ export function startCapturedRuntime({
     capturedMechCycleHasPendingWork = false;
     demandThisCycle = undefined;
     savingTargetThisCycle = undefined;
+    constructionSuppressedThisCycle = false;
     triggerTargetsThisCycle = undefined;
     triggerDemandThisCycle = undefined;
     demandPrerequisitesThisCycle = undefined;
@@ -2527,37 +2534,8 @@ export function startCapturedRuntime({
           pylon.run();
         });
       }
-      const autoJobs = isEnabled(settings, "autoJobs");
-      const autoCraftsmen = isEnabled(settings, "autoCraftsmen");
-      let combinedJobs = false;
-      if (autoJobs && autoCraftsmen) {
-        const completed = runPhase("autoJobs with autoCraftsmen", () => {
-          ensureCivicControls();
-          refreshDiscoveredSettings();
-          combinedJobs = fullJobs.isAvailable();
-          if (combinedJobs) runJobsAutomation(fullJobs, false);
-        });
-        // The combined pass may have assigned some of the workers before it threw, and the split
-        // passes below would assign the same civics a second time. Treat a failed combined pass as
-        // having handled them.
-        if (!completed) combinedJobs = true;
-      }
-      if (autoJobs && !combinedJobs) {
-        runPhase("autoJobs", () => {
-          ensureCivicControls();
-          refreshDiscoveredSettings();
-          runJobsAutomation(ordinaryJobs, false);
-        });
-      }
-      if (autoCraftsmen && !combinedJobs) {
-        runPhase("autoCraftsmen", () => {
-          ensureCivicControls();
-          runJobsAutomation(craftsmen, true);
-        });
-      }
-      // Keep this progression order: research precedes construction, and both
-      // complete before combat. The trigger gate stays immediately before them because a trigger
-      // that acted this cycle owns the resources they would otherwise spend.
+      // Trigger gates Research and Build, then Factory finishes before Jobs samples the root.
+      // An active trigger suppresses only Research and Build for this cycle.
       let triggerActive = false;
       if (isEnabled(settings, "autoTrigger")) {
         const completed = runPhase("autoTrigger", () => {
@@ -2574,6 +2552,12 @@ export function startCapturedRuntime({
         // it — which is what the whole-cycle `try` did for this case, and the only part of that
         // behavior worth keeping.
         if (completed !== true) triggerActive = true;
+      }
+      if (
+        triggerActive &&
+        (isEnabled(settings, "autoBuild") || isEnabled(settings, "autoARPA"))
+      ) {
+        constructionSuppressedThisCycle = true;
       }
       if (!triggerActive && isEnabled(settings, "autoResearch")) {
         runPhase("autoResearch", () => progression.runResearchCycle());
@@ -2623,6 +2607,46 @@ export function startCapturedRuntime({
             );
           }
         }
+      }
+      // Construction can change storage commitments. Refresh the shared demand snapshot before
+      // Factory, then again after Factory so Jobs sees the post-Factory authoritative root.
+      demandThisCycle = undefined;
+      savingTargetThisCycle = undefined;
+      if (isEnabled(settings, "autoFactory")) {
+        runPhase("autoFactory", () => {
+          ensureFactoryControls();
+          refreshDiscoveredSettings();
+          factory.run();
+        });
+      }
+      demandThisCycle = undefined;
+      savingTargetThisCycle = undefined;
+      const autoJobs = isEnabled(settings, "autoJobs");
+      const autoCraftsmen = isEnabled(settings, "autoCraftsmen");
+      let combinedJobs = false;
+      if (autoJobs && autoCraftsmen) {
+        const completed = runPhase("autoJobs with autoCraftsmen", () => {
+          ensureCivicControls();
+          refreshDiscoveredSettings();
+          combinedJobs = fullJobs.isAvailable();
+          if (combinedJobs) runJobsAutomation(fullJobs, false);
+        });
+        // The combined path owns this settings combination even when the sampled command fails;
+        // split passes must not make a second decision in the same cycle.
+        if (!completed) combinedJobs = true;
+      }
+      if (autoJobs && !combinedJobs) {
+        runPhase("autoJobs", () => {
+          ensureCivicControls();
+          refreshDiscoveredSettings();
+          runJobsAutomation(ordinaryJobs, false);
+        });
+      }
+      if (autoCraftsmen && !combinedJobs) {
+        runPhase("autoCraftsmen", () => {
+          ensureCivicControls();
+          runJobsAutomation(craftsmen, true);
+        });
       }
       if (isEnabled(settings, "autoCraft")) {
         runPhase("autoCraft", () => {
@@ -2743,13 +2767,6 @@ export function startCapturedRuntime({
           ensureSmelterControls();
           refreshDiscoveredSettings();
           smelter.run();
-        });
-      }
-      if (isEnabled(settings, "autoFactory")) {
-        runPhase("autoFactory", () => {
-          ensureFactoryControls();
-          refreshDiscoveredSettings();
-          factory.run();
         });
       }
       if (isEnabled(settings, "autoFleet")) {

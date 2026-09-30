@@ -202,7 +202,7 @@ function demandResourceRecord(root: unknown, argument: unknown): unknown {
  * need, or 1 for an uncapped resource or one nothing is saving storage for. Needs both the
  * captured entry and the demand pass; either missing leaves the operand unanswered.
  */
-function demandUsefulRatio(
+export function readCapturedConditionUsefulRatio(
   root: unknown,
   demand: CapturedConditionDemand | undefined,
   argument: unknown,
@@ -619,7 +619,7 @@ function readNumber(
       return finite(context?.demand?.maxCost?.(argument));
     }
     case "ResourceSatisfyRatio":
-      return demandUsefulRatio(root, context?.demand, argument);
+      return readCapturedConditionUsefulRatio(root, context?.demand, argument);
     case "ResourceRatio": {
       const amount = finite(
         readProperty(resourceRecord(root, argument), "amount"),
@@ -823,7 +823,11 @@ function readBoolean(
       return context?.demand?.isDemanded(argument);
     }
     case "ResourceSatisfied": {
-      const ratio = demandUsefulRatio(root, context?.demand, argument);
+      const ratio = readCapturedConditionUsefulRatio(
+        root,
+        context?.demand,
+        argument,
+      );
       return ratio === undefined ? undefined : ratio >= 1;
     }
     case "JobUnlocked": {

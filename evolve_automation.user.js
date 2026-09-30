@@ -13014,6 +13014,526 @@
     });
   }
 
+  // src/adapters/evolve/economy/production/captured-factory-capacity.ts
+  function readRegionalFactoryOn(root, region, id) {
+    let owner = readProperty(root, region);
+    if (owner === void 0) return 0;
+    if (!isRecord(owner)) return;
+    let structure = readProperty(owner, id);
+    if (structure === void 0) return 0;
+    if (!isRecord(structure)) return;
+    let count2 = finiteNonNegative(structure.count), on = finiteNonNegative(structure.on);
+    if (!(count2 === void 0 || on === void 0 || !Number.isSafeInteger(count2) || !Number.isSafeInteger(on) || on > count2))
+      return on;
+  }
+  function readHighPopulationScale(root) {
+    let rank = readProperty(readProperty(root, "race"), "high_pop");
+    if (rank === void 0 || rank === !1) return 1;
+    if (!(typeof rank != "number" || !Number.isFinite(rank)))
+      switch (rank) {
+        case 0.1:
+        case 0.25:
+          return 2;
+        case 0.5:
+          return 3;
+        case 1:
+          return 4;
+        case 2:
+          return 5;
+        case 3:
+          return 6;
+        case 4:
+          return 7;
+        default:
+          return;
+      }
+  }
+  function readRankedFactoryLines(root, region, id) {
+    let owner = readProperty(root, region), structure = readProperty(owner, id);
+    if (structure === void 0) return 0;
+    if (!isRecord(structure)) return;
+    let rankValue = structure.rank, rank = rankValue == null ? 1 : finiteNonNegative(rankValue);
+    return rank !== void 0 && Number.isSafeInteger(rank) && rank >= 1 ? 3 + rank : void 0;
+  }
+  function readCapturedFactoryCapacity(root) {
+    let cityFactory = readProperty(readProperty(root, "city"), "factory");
+    if (!isRecord(cityFactory)) return;
+    let cityOn = finiteNonNegative(cityFactory.on);
+    if (cityOn === void 0 || !Number.isSafeInteger(cityOn)) return;
+    let redOn = readRegionalFactoryOn(root, "space", "red_factory"), interstellarOn = readRegionalFactoryOn(
+      root,
+      "interstellar",
+      "int_factory"
+    ), portalOn = readRegionalFactoryOn(root, "portal", "hell_factory"), undergroundOn = readRegionalFactoryOn(
+      root,
+      "underground",
+      "under_factory"
+    ), surfaceOn = readRegionalFactoryOn(root, "surface", "crater_factory"), industrialOn = readRegionalFactoryOn(
+      root,
+      "space",
+      "industrial_complex"
+    ), tauOn = readRegionalFactoryOn(root, "tauceti", "tau_factory"), portalLines = readRankedFactoryLines(root, "portal", "hell_factory"), highPopulationScale2 = readHighPopulationScale(root);
+    if (redOn === void 0 || interstellarOn === void 0 || portalOn === void 0 || undergroundOn === void 0 || surfaceOn === void 0 || industrialOn === void 0 || tauOn === void 0 || portalLines === void 0 || highPopulationScale2 === void 0)
+      return;
+    let craterLines = 0;
+    if (surfaceOn > 0) {
+      let craterWorker = readProperty(
+        readProperty(readProperty(root, "civic"), "crater_worker"),
+        "workers"
+      ), workers = finiteNonNegative(craterWorker);
+      if (workers === void 0) return;
+      craterLines = Math.floor(surfaceOn / 2 * (workers / highPopulationScale2));
+    }
+    let isolation = !!readProperty(readProperty(root, "tech"), "isolation"), maximum = cityOn + redOn + interstellarOn * 2 + portalOn * portalLines + undergroundOn * 2 + craterLines + industrialOn * 2 + tauOn * (isolation ? 5 : 3);
+    return Number.isSafeInteger(maximum) && maximum >= 0 ? maximum : void 0;
+  }
+
+  // src/adapters/evolve/captured-conditions.ts
+  var SWARM_SATELLITE_ACTION_ID = "space-swarm_satellite", BOOLEAN_OPERANDS = /* @__PURE__ */ new Set([
+    "Boolean",
+    "ResourceUnlocked",
+    "ResourceSatisfied",
+    "ResourceDemanded",
+    "JobUnlocked",
+    "ResearchUnlocked",
+    "ResearchComplete",
+    "ProjectUnlocked",
+    "BuildingUnlocked",
+    "BuildingAffordable",
+    "BuildingClickable",
+    "BuildingQueued",
+    "Challenge",
+    "Universe",
+    "Government",
+    "Governor",
+    "ResetType",
+    "RacePillared",
+    "MimicGenus",
+    "PlanetBiome",
+    "PlanetTrait"
+  ]);
+  function structureState(root, argument) {
+    if (typeof argument != "string") return;
+    let parts = splitActionId(argument);
+    if (parts === void 0) return;
+    let region = readProperty(root, parts.region);
+    return readProperty(region, parts.id);
+  }
+  function projectRecord(root, argument) {
+    if (!(typeof argument != "string" || !argument.startsWith("arpa")))
+      return readProperty(
+        readProperty(root, "arpa"),
+        argument.slice(4)
+      );
+  }
+  function resourceRecord(root, argument) {
+    if (typeof argument == "string")
+      return readProperty(readProperty(root, "resource"), argument);
+  }
+  function demandResourceRecord(root, argument) {
+    let record = resourceRecord(root, argument);
+    return isRecord(record) ? record : void 0;
+  }
+  function readCapturedConditionUsefulRatio(root, demand, argument) {
+    if (demand === void 0) return;
+    let record = demandResourceRecord(root, argument);
+    if (!isRecord(record)) return;
+    let amount = finite(readProperty(record, "amount")), maximum = finite(readProperty(record, "max"));
+    if (amount === void 0 || maximum === void 0) return;
+    let required = finite(demand.storageRequired(String(argument)));
+    if (required !== void 0)
+      return !(maximum > 0) || !(required > 0) ? 1 : amount / Math.min(maximum, required);
+  }
+  function resourceIncome(root, context, argument) {
+    if (typeof argument != "string" || context?.settings === void 0)
+      return;
+    let resource = resourceRecord(root, argument);
+    if (!isRecord(resource)) return;
+    let diff = finite(readProperty(resource, "diff")), amount = finite(readProperty(resource, "amount"));
+    if (!(diff === void 0 || amount === void 0) && !(readProperty(readProperty(root, "race"), "decay") && amount > 50)) {
+      if (context.settings.autoMarket === !0) {
+        let trade = finite(readProperty(resource, "trade"));
+        if (trade !== void 0 && trade < 0 && amount > 0) return;
+      }
+      return diff;
+    }
+  }
+  function civicJob(root, argument) {
+    if (typeof argument == "string")
+      return readProperty(readProperty(root, "civic"), argument);
+  }
+  function foundryRecord(root) {
+    return readProperty(readProperty(root, "city"), "foundry");
+  }
+  var BASIC_JOB_IDS = /* @__PURE__ */ new Set([
+    "unemployed",
+    "teamster",
+    "meditator",
+    "hunter",
+    "farmer",
+    "forager",
+    "lumberjack",
+    "quarry_worker",
+    "crystal_miner",
+    "scavenger"
+  ]);
+  function jobWorkers(root, argument) {
+    if (typeof argument != "string") return;
+    let assigned = finite(readProperty(civicJob(root, argument), "workers"));
+    return assigned !== void 0 ? assigned : finite(readProperty(foundryRecord(root), argument));
+  }
+  function jobExists(root, argument) {
+    return typeof argument != "string" ? !1 : isRecord(civicJob(root, argument)) ? !0 : finite(readProperty(foundryRecord(root), argument)) !== void 0;
+  }
+  function jobServantCount(root, argument) {
+    if (typeof argument != "string") return;
+    let servants = readProperty(readProperty(root, "race"), "servants"), assigned = finite(
+      readProperty(readProperty(servants, "jobs"), argument)
+    );
+    if (assigned !== void 0) return assigned;
+    let skilled = finite(
+      readProperty(readProperty(servants, "sjobs"), argument)
+    );
+    return skilled !== void 0 ? skilled : jobExists(root, argument) ? 0 : void 0;
+  }
+  function jobMax(root, argument) {
+    if (typeof argument != "string") return;
+    if (BASIC_JOB_IDS.has(argument)) return Number.MAX_SAFE_INTEGER;
+    let entry = civicJob(root, argument);
+    if (isRecord(entry)) return finite(readProperty(entry, "max"));
+    if (jobExists(root, argument))
+      return finite(
+        readProperty(readProperty(readProperty(root, "civic"), "craftsman"), "max")
+      );
+  }
+  function jobCount(root, argument) {
+    let workers = jobWorkers(root, argument);
+    if (workers === void 0) return;
+    let servants = jobServantCount(root, argument);
+    if (servants !== void 0 && !(servants > 0 && readProperty(readProperty(root, "race"), "high_pop")))
+      return workers + servants;
+  }
+  function resolveRaceId(root, argument) {
+    let race = readProperty(root, "race");
+    return argument === "species" || argument === "gods" || argument === "old_gods" ? readProperty(race, argument) : argument === "srace" ? readProperty(race, "srace") ?? "protoplasm" : argument;
+  }
+  function racePillared(root, argument) {
+    let pillars = readProperty(root, "pillars");
+    if (!isRecord(pillars)) return;
+    let level = readCapturedAscensionLevel(root);
+    if (level === void 0) return;
+    let raceId = resolveRaceId(root, argument);
+    if (typeof raceId != "string") return !1;
+    let rank = finite(readProperty(pillars, raceId));
+    return rank !== void 0 && rank >= level;
+  }
+  function queueLength(root, key) {
+    let entries = readProperty(readProperty(root, key), "queue");
+    return Array.isArray(entries) ? entries.length : void 0;
+  }
+  function switchedCount(context, argument, half) {
+    if (typeof argument != "string") return;
+    let parts = splitActionId(argument);
+    if (parts === void 0) return;
+    let sample = context?.buildingUnlocks;
+    if (!(sample === void 0 || !sample.regions.has(parts.region)) && sample.unlocked.has(argument))
+      return sample.states.get(argument)?.[half] ?? 0;
+  }
+  function factorySlots(root) {
+    return readCapturedFactoryCapacity(root);
+  }
+  function smelterSlots(root) {
+    let smelter = readProperty(readProperty(root, "city"), "smelter");
+    if (!isRecord(smelter)) return;
+    let cap = finite(readProperty(smelter, "cap")), star = finite(readProperty(smelter, "Star"));
+    if (!(cap === void 0 || star === void 0))
+      return cap - star;
+  }
+  function soldierCount(root, argument) {
+    if (typeof argument != "string") return;
+    let garrison = readProperty(readProperty(root, "civic"), "garrison"), workers = isRecord(garrison) ? finite(readProperty(garrison, "workers")) ?? 0 : 0, max = isRecord(garrison) ? finite(readProperty(garrison, "max")) ?? 0 : 0, crew = isRecord(garrison) ? finite(readProperty(garrison, "crew")) ?? 0 : 0, wounded = isRecord(garrison) ? finite(readProperty(garrison, "wounded")) ?? 0 : 0, fortress = readProperty(readProperty(root, "portal"), "fortress"), hellSoldiers = isRecord(fortress) ? finite(readProperty(fortress, "garrison")) ?? 0 : 0, fobTroops = finite(
+      readProperty(readProperty(readProperty(root, "space"), "fob"), "troops")
+    ) ?? 0;
+    switch (argument) {
+      case "workers":
+        return workers;
+      case "max":
+        return max;
+      case "crew":
+        return crew;
+      case "wounded":
+        return wounded;
+      case "deadSoldiers":
+        return max - workers;
+      case "currentCityGarrison":
+        return workers - crew - hellSoldiers - fobTroops;
+      case "maxCityGarrison":
+        return max - crew - hellSoldiers;
+      case "hellSoldiers":
+        return hellSoldiers;
+      case "hellPatrols":
+        return isRecord(fortress) ? finite(readProperty(fortress, "patrols")) ?? 0 : 0;
+      case "hellPatrolSize":
+        return isRecord(fortress) ? finite(readProperty(fortress, "patrol_size")) ?? 0 : 0;
+      case "raid":
+        return isRecord(garrison) ? finite(readProperty(garrison, "raid")) ?? 0 : 0;
+      default:
+        return;
+    }
+  }
+  function storedSettingNumber(context, argument) {
+    if (typeof argument != "string") return;
+    let value = context?.settings?.[argument];
+    return typeof value == "boolean" ? Number(value) : finite(value);
+  }
+  function splitCapturedBuildingCostArgument(argument) {
+    let [buildingId, resourceId] = argument.split(".");
+    if (!(buildingId === void 0 || resourceId === void 0))
+      return Object.freeze({ buildingId, resourceId });
+  }
+  function buildingCostAmount(context, argument) {
+    if (typeof argument != "string") return;
+    let parts = splitCapturedBuildingCostArgument(argument);
+    if (parts === void 0) return;
+    let price = context?.buildingCosts?.get(parts.buildingId);
+    if (price !== void 0)
+      return finite(price.cost[parts.resourceId]) ?? 0;
+  }
+  function readDate(root, argument) {
+    let days = finite(readProperty(readProperty(root, "stats"), "days"));
+    if (argument === "total") return days;
+    let race = readProperty(root, "race");
+    if (argument === "impact") {
+      if (days === void 0 || !isRecord(race)) return;
+      let decay = readProperty(race, "orbit_decay");
+      return decay ? Number(decay) - days : -1;
+    }
+    if (typeof argument == "string")
+      return finite(
+        readProperty(
+          readProperty(readProperty(root, "city"), "calendar"),
+          argument
+        )
+      );
+  }
+  function readNumber2(root, type, argument, context) {
+    switch (type) {
+      case "BuildingCost":
+        return buildingCostAmount(context, argument);
+      case "SettingCurrent":
+      case "SettingDefault":
+        return storedSettingNumber(context, argument);
+      case "BuildingCount":
+        return finite(readProperty(structureState(root, argument), "count"));
+      case "BuildingEnabled":
+        return switchedCount(context, argument, "on");
+      case "BuildingDisabled":
+        return switchedCount(context, argument, "off");
+      case "ProjectCount":
+        return finite(readProperty(projectRecord(root, argument), "rank"));
+      case "ProjectProgress":
+        return finite(readProperty(projectRecord(root, argument), "complete"));
+      case "ResourceQuantity":
+        return finite(readProperty(resourceRecord(root, argument), "amount"));
+      case "ResourceStorage":
+        return finite(readProperty(resourceRecord(root, argument), "max"));
+      case "ResourceIncome":
+        return resourceIncome(root, context, argument);
+      case "ResourceMaxCost":
+        return typeof argument != "string" || demandResourceRecord(root, argument) === void 0 ? void 0 : finite(context?.demand?.maxCost?.(argument));
+      case "ResourceSatisfyRatio":
+        return readCapturedConditionUsefulRatio(root, context?.demand, argument);
+      case "ResourceRatio": {
+        let amount = finite(
+          readProperty(resourceRecord(root, argument), "amount")
+        ), maximum = finite(
+          readProperty(resourceRecord(root, argument), "max")
+        );
+        return amount === void 0 || maximum === void 0 ? void 0 : maximum > 0 ? amount / maximum : 1;
+      }
+      case "TraitLevel": {
+        let race = readProperty(root, "race");
+        return !isRecord(race) || typeof argument != "string" ? void 0 : finite(readProperty(race, argument)) ?? 0;
+      }
+      case "JobWorkers":
+        return jobWorkers(root, argument);
+      case "JobMax":
+        return jobMax(root, argument);
+      case "JobCount":
+        return jobCount(root, argument);
+      case "JobServants":
+        return jobServantCount(root, argument);
+      case "Other": {
+        if (argument === "tpfleet") {
+          let ships = readProperty(
+            readProperty(readProperty(root, "space"), "shipyard"),
+            "ships"
+          );
+          return Array.isArray(ships) ? ships.length : 0;
+        }
+        if (argument === "mrelay")
+          return Number(
+            readProperty(
+              readProperty(readProperty(root, "space"), "m_relay"),
+              "charged"
+            )
+          ) / 1e4;
+        if (argument === "alevel") {
+          let level = readCapturedAscensionLevel(root);
+          return level === void 0 ? void 0 : level - 1;
+        }
+        if (argument === "bcar") {
+          let damaged = readProperty(
+            readProperty(readProperty(root, "portal"), "carport"),
+            "damaged"
+          );
+          return typeof damaged == "number" ? damaged : 0;
+        }
+        if (argument === "satcost") {
+          let price = context?.buildingCosts?.get(SWARM_SATELLITE_ACTION_ID);
+          return price === void 0 ? void 0 : finite(price.cost.Money) ?? 0;
+        }
+        return argument === "tknow" ? finite(context?.knowledgeRequiredByTechs) : void 0;
+      }
+      case "Date":
+        return readDate(root, argument);
+      case "Queue":
+        if (argument === "queue") return queueLength(root, "queue");
+        if (argument === "r_queue") return queueLength(root, "r_queue");
+        if (argument === "evo") {
+          let planned = context?.settings?.evolutionQueue;
+          return Array.isArray(planned) ? planned.length : void 0;
+        }
+        return;
+      case "Industry":
+        return argument === "smelters" ? smelterSlots(root) : argument === "factories" ? factorySlots(root) : void 0;
+      case "Soldiers":
+        return argument === "hellGarrison" ? finite(context?.hellGarrison) : soldierCount(root, argument);
+      default:
+        return;
+    }
+  }
+  function readBoolean(root, type, argument, context) {
+    switch (type) {
+      case "ResearchUnlocked":
+        return typeof argument != "string" ? void 0 : context?.offeredTechs?.has(argument);
+      case "ResearchComplete":
+        return typeof argument != "string" ? void 0 : context?.grantedTechs?.has(argument);
+      case "ProjectUnlocked":
+        return typeof argument != "string" ? void 0 : context?.unlockedProjects?.has(argument);
+      case "BuildingUnlocked": {
+        if (typeof argument != "string") return;
+        let parts = splitActionId(argument);
+        if (parts === void 0) return;
+        let sample = context?.buildingUnlocks;
+        return sample === void 0 || !sample.regions.has(parts.region) ? void 0 : sample.unlocked.has(argument);
+      }
+      case "BuildingAffordable": {
+        if (typeof argument != "string") return;
+        let price = context?.buildingCosts?.get(argument);
+        return price === void 0 ? void 0 : costFitsStorage(root, price.cost, { pool: price.pool });
+      }
+      case "BuildingClickable": {
+        if (typeof argument != "string") return;
+        let parts = splitActionId(argument), sample = context?.buildingUnlocks;
+        if (parts === void 0 || sample === void 0 || !sample.regions.has(parts.region)) return;
+        if (!sample.unlocked.has(argument)) return !1;
+        let price = context?.buildingCosts?.get(argument);
+        if (price === void 0) return;
+        let affordable = costFitsNow(root, price.cost, { pool: price.pool });
+        return affordable !== !0 ? affordable : context?.buildingCapacity?.get(argument);
+      }
+      case "BuildingQueued": {
+        if (typeof argument != "string" || splitActionId(argument) === void 0) return;
+        let queue = readProperty(root, "queue");
+        if (!isRecord(queue) || !readProperty(queue, "display")) return !1;
+        let entries = readProperty(queue, "queue");
+        if (!Array.isArray(entries)) return !1;
+        let settings = readProperty(root, "settings");
+        return (readProperty(settings, "qAny") ? entries : entries.slice(0, 1)).some((entry) => readProperty(entry, "id") === argument);
+      }
+      case "Boolean":
+        return typeof argument == "boolean" ? argument : void 0;
+      case "ResourceUnlocked": {
+        let entry = resourceRecord(root, argument);
+        return isRecord(entry) ? readProperty(entry, "display") === !0 : void 0;
+      }
+      case "ResourceDemanded":
+        return typeof argument != "string" || demandResourceRecord(root, argument) === void 0 ? void 0 : context?.demand?.isDemanded(argument);
+      case "ResourceSatisfied": {
+        let ratio = readCapturedConditionUsefulRatio(
+          root,
+          context?.demand,
+          argument
+        );
+        return ratio === void 0 ? void 0 : ratio >= 1;
+      }
+      case "JobUnlocked": {
+        if (typeof argument != "string") return;
+        let entry = civicJob(root, argument);
+        if (isRecord(entry)) return !!readProperty(entry, "display");
+        let resource = resourceRecord(root, argument);
+        return isRecord(resource) ? !!readProperty(resource, "display") : void 0;
+      }
+      case "Challenge": {
+        let race = readProperty(root, "race");
+        return !isRecord(race) || typeof argument != "string" ? void 0 : !!readProperty(race, argument);
+      }
+      case "Universe": {
+        let race = readProperty(root, "race");
+        return isRecord(race) ? readProperty(race, "universe") === argument : void 0;
+      }
+      case "Government": {
+        let civic = readProperty(root, "civic");
+        return isRecord(civic) ? readProperty(readProperty(civic, "govern"), "type") === argument : void 0;
+      }
+      case "Governor": {
+        let race = readProperty(root, "race");
+        return isRecord(race) ? (readProperty(
+          readProperty(readProperty(race, "governor"), "g"),
+          "bg"
+        ) ?? "none") === argument : void 0;
+      }
+      case "ResetType": {
+        if (typeof argument != "string") return;
+        let settings = context?.settings;
+        return settings === void 0 ? void 0 : settings.prestigeType === argument;
+      }
+      case "RacePillared":
+        return racePillared(root, argument);
+      case "MimicGenus": {
+        let race = readProperty(root, "race");
+        return isRecord(race) ? (readProperty(race, "ss_genus") ?? "none") === argument : void 0;
+      }
+      case "PlanetBiome": {
+        let city = readProperty(root, "city");
+        return isRecord(city) ? readProperty(city, "biome") === argument : void 0;
+      }
+      case "PlanetTrait": {
+        let traits = readProperty(readProperty(root, "city"), "ptrait");
+        return Array.isArray(traits) ? traits.includes(argument) : void 0;
+      }
+      default:
+        return;
+    }
+  }
+  function readCapturedOperand(root, type, argument, context) {
+    if (typeof type == "string") {
+      if (type === "RaceId") {
+        let raceId = resolveRaceId(root, argument);
+        return typeof raceId == "string" ? raceId : void 0;
+      }
+      return BOOLEAN_OPERANDS.has(type) ? readBoolean(root, type, argument, context) : readNumber2(root, type, argument, context);
+    }
+  }
+  function evaluateCapturedCondition(root, type, argument, count2, context) {
+    let value = readCapturedOperand(root, type, argument, context);
+    if (value === void 0 || typeof value == "string") return;
+    let target = Number(count2);
+    if (Number.isFinite(target))
+      return typeof value == "boolean" ? Number(value) === target : value >= target;
+  }
+
   // src/adapters/evolve/civic/captured-job-catalog.ts
   function toCapturedJobsJobInputs(catalog) {
     if (!catalog.jobSettingsConfigured) return;
@@ -13351,10 +13871,42 @@
     }
     return id !== "farmer" ? explicit : isRecord(readProperty(root, "race")) ? smartMaximum ?? count2 : null;
   }
-  function resourceStorageRatio(root, id) {
-    let resource = readProperty(readProperty(root, "resource"), id), amount = finiteNonNegative(readProperty(resource, "amount")), maximum = finite(readProperty(resource, "max"));
+  function resourceStorageRatio(root, id, resourceOverride) {
+    let resource = resourceOverride === void 0 ? readProperty(readProperty(root, "resource"), id) : resourceOverride, amount = finiteNonNegative(readProperty(resource, "amount")), maximum = finite(readProperty(resource, "max"));
     if (!(amount === void 0 || maximum === void 0))
       return maximum > 0 ? amount / maximum : 1;
+  }
+  function readGatewayStarbaseCount(root) {
+    let count2 = readProperty(
+      readProperty(readProperty(root, "galaxy"), "starbase"),
+      "count"
+    );
+    return count2 === void 0 ? 0 : finiteNonNegative(count2);
+  }
+  function readCapturedMinerReservation(root, settingsValue, readDemand) {
+    let race = readProperty(root, "race"), hoovedNeedsMiner = !1;
+    if (hasRaceFlag(race, "hooved")) {
+      let usefulRatio = readCapturedConditionUsefulRatio(
+        root,
+        readDemand?.(),
+        "Horseshoe"
+      );
+      if (usefulRatio === void 0) return;
+      hoovedNeedsMiner = usefulRatio < 1;
+    }
+    let artificialNeedsMiner = !1;
+    if (hasRaceFlag(race, "artifical") && !hasRaceFlag(race, "deconstructor")) {
+      let populationRatio = resourceStorageRatio(
+        root,
+        "Population",
+        readCapturedPopulationResource(root)
+      );
+      if (populationRatio === void 0) return;
+      artificialNeedsMiner = populationRatio < 1;
+    }
+    if (!hoovedNeedsMiner && !artificialNeedsMiner) return !1;
+    let settings = isRecord(settingsValue) ? settingsValue : {}, gatewayCount = readGatewayStarbaseCount(root);
+    return gatewayCount === void 0 ? void 0 : !(settings.jobDisableMiners === !0 && gatewayCount > 0 && !(hasRaceFlag(race, "sappy") && hasRaceFlag(race, "smoldering")));
   }
   function resourceDiff(root, id) {
     return finite(
@@ -13655,7 +14207,7 @@
       onSkipped("civics", "ordinary job crew state is incomplete");
       return;
     }
-    let servantModifier = readHighPopulationWorkerEffect(root);
+    let servantModifier = readCapturedJobStackMultiplier(root);
     if (servantModifier === void 0) {
       onSkipped("civics", "ordinary job servant modifier is unavailable");
       return;
@@ -14055,8 +14607,7 @@
       workers: workers >= 0 ? workers : assignedWorkers
     });
   }
-  function readDefaultJobState(readJobCatalog) {
-    let catalog = readJobCatalog();
+  function readDefaultJobState(catalog) {
     if (catalog === void 0) return;
     let job = catalog.jobs.find(({ isDefault }) => isDefault);
     return job === void 0 ? void 0 : Object.freeze({ id: job.id, workers: job.workers });
@@ -14083,12 +14634,14 @@
     let assignedWorkers = samples.reduce(
       (sum, sample) => sum + sample.workers,
       0
-    ), craftsmen = readCraftsmanState(root, foundry, assignedWorkers), defaultJob = readDefaultJobState(readJobCatalog);
-    if (defaultJob === void 0 || craftsmen.workers !== assignedWorkers) return;
+    ), craftsmen = readCraftsmanState(root, foundry, assignedWorkers), catalog = readJobCatalog(), defaultJob = readDefaultJobState(catalog), skilled = readSkilledCraftsmen(root);
+    if (catalog === void 0 || defaultJob === void 0 || skilled === void 0 || craftsmen.workers !== assignedWorkers) return;
     let craftOnlyWorkerPool = Math.min(
       craftsmen.maximum,
       craftsmen.workers + defaultJob.workers
-    ), settings = isRecord(settingsValue) ? settingsValue : {}, buildingMode = settings.productionFoundryWeighting === "buildings", buildingTargets = buildingMode ? readBuildTargets?.() : void 0, buildingCosts = buildingMode ? readBuildingCosts(buildingTargets, buildCosts) : void 0;
+    ), settings = isRecord(settingsValue) ? settingsValue : {}, manageServants = settings.jobManageServants === !0, servantModifier = catalog.servantModifier, skilledById = new Map(
+      skilled.samples.map((sample) => [sample.id, sample.servants])
+    ), buildingMode = settings.productionFoundryWeighting === "buildings", buildingTargets = buildingMode ? readBuildTargets?.() : void 0, buildingCosts = buildingMode ? readBuildingCosts(buildingTargets, buildCosts) : void 0;
     if (buildingMode && buildingTargets !== void 0 && buildingTargets.length > 0 && buildCosts !== void 0 && buildingCosts === void 0)
       return;
     let resources = readProperty(root, "resource"), demand = readDemand?.(), jobs = samples.map(
@@ -14097,14 +14650,14 @@
         id: sample.id,
         kind: "other",
         workers: sample.workers,
-        servants: 0,
-        count: sample.workers,
+        servants: skilledById.get(sample.id) ?? 0,
+        count: sample.workers + (skilledById.get(sample.id) ?? 0) * servantModifier,
         maximum: Number.MAX_SAFE_INTEGER,
         managed: !0,
         unlocked: !0,
         smart: !1,
         crafting: !0,
-        serves: !1,
+        serves: skilled.maximum > 0 || (skilledById.get(sample.id) ?? 0) > 0,
         split: !1,
         isDefault: !1,
         breakpoints: [0, 0, 0],
@@ -14143,11 +14696,11 @@
       autoCraftWithoutBuilding: !0,
       craftsmenMode: craftsmenMode(settings),
       foundryWeighting: foundryWeighting(settings, buildingTargets, buildCosts),
-      manageServants: !1,
+      manageServants,
       setDefault: !1,
-      servantModifier: 1,
+      servantModifier,
       servantsMaximum: 0,
-      skilledServantsMaximum: 0,
+      skilledServantsMaximum: manageServants ? skilled.maximum : 0,
       craftsmenMaximum: craftsmen.maximum,
       minimumDefault: 0,
       reserveMiner: !1,
@@ -14185,7 +14738,10 @@
       input,
       samples: Object.freeze(samples),
       workerPool: craftsmen.workers,
-      defaultJob
+      defaultJob,
+      skilledSamples: skilled.samples,
+      skilledMaximum: skilled.maximum,
+      skilledUsed: skilled.used
     });
   }
   function readCapturedCraftsmenCycle(root, settingsValue, costs, readJobCatalog, readDemand, readBuildTargets, buildCosts) {
@@ -14197,12 +14753,9 @@
       readDemand,
       readBuildTargets,
       buildCosts
-    ), skilled = readSkilledCraftsmen(root);
-    return sampled3 === void 0 || skilled === void 0 ? void 0 : Object.freeze({
-      ...sampled3,
-      skilledSamples: skilled.samples,
-      skilledMaximum: skilled.maximum,
-      skilledUsed: skilled.used
+    );
+    return sampled3 === void 0 ? void 0 : Object.freeze({
+      ...sampled3
     });
   }
   function decisionsMatch(left, right) {
@@ -14248,12 +14801,24 @@
           dependencies.readBuildTargets,
           dependencies.buildCosts
         )?.input;
-        if (currentInput === void 0 || JSON.stringify(currentInput.crafting) !== JSON.stringify(session.input.crafting) || currentInput.craftsmenMode !== session.input.craftsmenMode || currentInput.foundryWeighting !== session.input.foundryWeighting)
+        if (currentInput === void 0 || JSON.stringify(currentInput.crafting) !== JSON.stringify(session.input.crafting) || currentInput.craftsmenMode !== session.input.craftsmenMode || currentInput.foundryWeighting !== session.input.foundryWeighting || currentInput.manageServants !== session.input.manageServants || currentInput.servantModifier !== session.input.servantModifier || currentInput.skilledServantsMaximum !== session.input.skilledServantsMaximum || JSON.stringify(
+          currentInput.jobs.map(({ id, workers, servants }) => ({
+            id,
+            workers,
+            servants
+          }))
+        ) !== JSON.stringify(
+          session.input.jobs.map(({ id, workers, servants }) => ({
+            id,
+            workers,
+            servants
+          }))
+        ))
           return stale(
             "crafting-input-changed",
             "crafting quantities or demand changed"
           );
-        let currentDefaultJob = readDefaultJobState(readJobCatalog);
+        let currentDefaultJob = readDefaultJobState(readJobCatalog());
         if (currentDefaultJob?.id !== session.defaultJob?.id || currentDefaultJob?.workers !== session.defaultJob?.workers)
           return stale(
             "default-job-pool-changed",
@@ -14264,11 +14829,6 @@
             "invalid-craftsmen-decision",
             "craftsmen decision does not match the sampled plan"
           );
-        if (dependencies.controls.resolve(FOUNDRY_CONTROL) === void 0)
-          return rejected(
-            "foundry-control-missing",
-            "no captured control for foundry"
-          );
         for (let assignment of decision.assignments) {
           let sample = session.samples[assignment.jobToken];
           if (sample === void 0)
@@ -14276,7 +14836,29 @@
               "unknown-craftsmen-token",
               "craftsmen decision contains an unknown token"
             );
-          let delta = assignment.workers - sample.workers;
+          let delta = assignment.workers - sample.workers, workerMethod = delta < 0 ? "sub" : "add";
+          if (delta !== 0 && !dependencies.controls.resolve(FOUNDRY_CONTROL)?.methods.includes(workerMethod))
+            return rejected(
+              "foundry-controls-incomplete",
+              `missing ${workerMethod} control for foundry`
+            );
+          let currentJob = session.input.jobs[assignment.jobToken];
+          if (currentJob === void 0)
+            return rejected(
+              "unknown-craftsmen-token",
+              "craftsmen decision contains an unknown job token"
+            );
+          if (session.input.manageServants && assignment.servants !== currentJob.servants) {
+            let servantMethod = assignment.servants < currentJob.servants ? "sub" : "add";
+            if (!dependencies.controls.resolve("skilledServants")?.methods.includes(servantMethod))
+              return rejected(
+                "foundry-controls-incomplete",
+                `missing ${servantMethod} control for skilledServants`
+              );
+          }
+        }
+        for (let assignment of decision.assignments) {
+          let sample = session.samples[assignment.jobToken], delta = assignment.workers - sample.workers;
           if (delta < 0 && !controls2.unassign({
             elementId: FOUNDRY_CONTROL,
             count: -delta,
@@ -14299,7 +14881,49 @@
               `could not assign ${sample.id} craftsmen`
             );
         }
-        return sessionRef.value = void 0, SUCCEEDED;
+        if (session.input.manageServants) {
+          for (let assignment of decision.assignments) {
+            let sample = session.samples[assignment.jobToken], currentJob = session.input.jobs[assignment.jobToken], delta = assignment.servants - currentJob.servants;
+            if (delta < 0 && !controls2.unassign({
+              elementId: "skilledServants",
+              count: -delta,
+              craftedResourceId: sample.id
+            }))
+              return rejected(
+                "skilled-servant-control-failed",
+                `could not unassign skilled servants from ${sample.id}`
+              );
+          }
+          for (let assignment of decision.assignments) {
+            let sample = session.samples[assignment.jobToken], currentJob = session.input.jobs[assignment.jobToken], delta = assignment.servants - currentJob.servants;
+            if (delta > 0 && !controls2.assign({
+              elementId: "skilledServants",
+              count: delta,
+              craftedResourceId: sample.id
+            }))
+              return rejected(
+                "skilled-servant-control-failed",
+                `could not assign skilled servants to ${sample.id}`
+              );
+          }
+        }
+        sessionRef.value = void 0;
+        let postState = readCycleInput(
+          dependencies.rootState.readRoot(),
+          dependencies.readSettings(),
+          dependencies.costs,
+          readJobCatalog,
+          dependencies.readDemand,
+          dependencies.readBuildTargets,
+          dependencies.buildCosts
+        );
+        return postState === void 0 || decision.assignments.some((assignment) => {
+          let expected = session.input.jobs[assignment.jobToken], actual = postState.input.jobs[assignment.jobToken];
+          return expected === void 0 || actual === void 0 || actual.workers !== assignment.workers || (session.input.manageServants ? actual.servants !== assignment.servants : actual.servants !== expected.servants);
+        }) ? rejected(
+          "craftsmen-postcondition-failed",
+          "foundry assignment was not observed in captured root state"
+        ) : SUCCEEDED;
       }
     });
   }
@@ -14616,7 +15240,7 @@
       }
     return !0;
   }
-  function readCycle(root, settingsValue, catalogReader, previousAuthorityCap) {
+  function readCycle(root, settingsValue, catalogReader, readDemand, previousAuthorityCap) {
     let settings = isRecord(settingsValue) ? settingsValue : {}, authority = readAuthorityInput(root, settings, previousAuthorityCap);
     if (authority === void 0) return;
     let population = finiteNonNegative(
@@ -14625,7 +15249,13 @@
     if (population === void 0) return;
     let catalog = catalogReader();
     if (catalog === void 0 || !hasCompleteJobCatalog(root, catalog)) return;
-    let servantState = catalog.servantState, manageServants = settings.jobManageServants === !0, defaultJobToken = catalog.jobs.find((job) => job.isDefault)?.token;
+    let servantState = catalog.servantState, manageServants = settings.jobManageServants === !0, reserveMiner = readCapturedMinerReservation(
+      root,
+      settingsValue,
+      readDemand
+    );
+    if (reserveMiner === void 0) return;
+    let defaultJobToken = catalog.jobs.find((job) => job.isDefault)?.token;
     if (defaultJobToken == null)
       return;
     let farmerToken = !!readProperty(readProperty(root, "race"), "artifical") ? null : catalog.hunterActsAsUnemployed ? tokenFor(catalog, "hunter") : Math.max(
@@ -14645,7 +15275,7 @@
       skilledServantsMaximum: manageServants ? servantState?.skilledMaximum ?? 0 : 0,
       craftsmenMaximum: 0,
       minimumDefault: catalog.minimumDefault ?? 0,
-      reserveMiner: !1,
+      reserveMiner,
       defaultJobToken,
       hunterToken: tokenFor(catalog, "hunter"),
       farmerToken: normalizedFarmerToken,
@@ -14701,6 +15331,7 @@
       root,
       settingsValue,
       catalogReader,
+      readDemand,
       previousAuthorityCap
     );
     if (ordinary === void 0) return;
@@ -14734,7 +15365,7 @@
       craftsmenMode: craftsmenMode2,
       foundryWeighting: foundryWeighting2,
       craftsmenMaximum: foundry.input.craftsmenMaximum,
-      skilledServantsMaximum: foundry.skilledMaximum,
+      skilledServantsMaximum: ordinary.input.manageServants ? foundry.skilledMaximum : 0,
       jobs: Object.freeze([...ordinary.input.jobs, ...craftJobs]),
       crafting: Object.freeze(crafting)
     });
@@ -14755,7 +15386,10 @@
           servants: session.foundry.skilledSamples.find((sample) => sample.id === job.id)?.servants ?? 0
         }
       ])
-    ), workerRemovals = [], workerAdditions = [], servantRemovals = [], servantAdditions = [];
+    ), workerRemovals = [], workerAdditions = [], servantRemovals = [], servantAdditions = [], foundryWorkerDelta = decision.assignments.reduce(
+      (total, assignment) => foundry.has(assignment.jobToken) ? total + assignment.workers - foundry.get(assignment.jobToken).workers : total,
+      0
+    );
     for (let assignment of decision.assignments) {
       let ordinaryJob = ordinary.get(assignment.jobToken), foundryJob = foundry.get(assignment.jobToken);
       if (ordinaryJob === void 0 && foundryJob === void 0)
@@ -14763,10 +15397,11 @@
           "unknown-full-job-token",
           "full jobs decision contains an unknown token"
         );
-      let current = ordinaryJob?.workers ?? foundryJob.workers, kind = ordinaryJob === void 0 ? "foundry" : "ordinary", id = ordinaryJob?.id ?? foundryJob.id, delta = assignment.workers - current;
-      delta < 0 && workerRemovals.push([kind, id, -delta]), delta > 0 && workerAdditions.push([kind, id, delta]);
-      let servantDelta = assignment.servants - (ordinaryJob?.servants ?? foundryJob?.servants ?? 0);
-      servantDelta < 0 && servantRemovals.push([kind, id, -servantDelta]), servantDelta > 0 && servantAdditions.push([kind, id, servantDelta]);
+      let current = ordinaryJob?.workers ?? foundryJob.workers, kind = ordinaryJob === void 0 ? "foundry" : "ordinary", id = ordinaryJob?.id ?? foundryJob.id, effectiveCurrent = ordinaryJob?.id === session.catalog.defaultJobId ? ordinaryJob.workers - foundryWorkerDelta : current, delta = assignment.workers - effectiveCurrent;
+      if (delta < 0 && workerRemovals.push([kind, id, -delta]), delta > 0 && workerAdditions.push([kind, id, delta]), session.input.manageServants) {
+        let servantDelta = assignment.servants - (ordinaryJob?.servants ?? foundryJob?.servants ?? 0);
+        servantDelta < 0 && servantRemovals.push([kind, id, -servantDelta]), servantDelta > 0 && servantAdditions.push([kind, id, servantDelta]);
+      }
     }
     let selectedDefault = decision.selectedDefaultToken === null ? void 0 : ordinary.get(decision.selectedDefaultToken);
     if (decision.selectedDefaultToken !== null && selectedDefault === void 0)
@@ -14774,44 +15409,81 @@
         "unknown-full-default-job",
         "full jobs selects an unknown default job"
       );
-    let invoke2 = (kind, id, method, count2) => kind === "ordinary" ? (method === "assign" ? controls2.assign : controls2.unassign)({
-      elementId: `civ-${id}`,
-      count: count2
-    }) : (method === "assign" ? controls2.assign : controls2.unassign)({
-      elementId: "foundry",
-      count: count2,
-      craftedResourceId: id
-    });
+    let requiredMethods = /* @__PURE__ */ new Map(), requireMethod = (elementId, method) => {
+      let methods = requiredMethods.get(elementId) ?? /* @__PURE__ */ new Set();
+      methods.add(method), requiredMethods.set(elementId, methods);
+    };
+    for (let [kind, id] of workerRemovals)
+      requireMethod(kind === "ordinary" ? `civ-${id}` : "foundry", "sub");
+    for (let [kind, id] of workerAdditions)
+      requireMethod(kind === "ordinary" ? `civ-${id}` : "foundry", "add");
+    for (let [kind, id] of servantRemovals)
+      requireMethod(
+        kind === "ordinary" ? `servant-${id}` : "skilledServants",
+        "sub"
+      );
+    for (let [kind, id] of servantAdditions)
+      requireMethod(
+        kind === "ordinary" ? `servant-${id}` : "skilledServants",
+        "add"
+      );
+    selectedDefault !== void 0 && requireMethod(`civ-${selectedDefault.id}`, "setDefault");
+    let handles = /* @__PURE__ */ new Map();
+    for (let [elementId, methods] of requiredMethods) {
+      let handle = controls2.resolve(elementId);
+      if (handle === void 0 || handle.elementId !== elementId || [...methods].some((method) => !handle.methods.includes(method)))
+        return rejected(
+          "full-jobs-controls-incomplete",
+          `missing required method on ${elementId}`
+        );
+      handles.set(elementId, handle);
+    }
+    let invoke2 = (elementId, method, count2, args) => {
+      let handle = handles.get(elementId);
+      if (handle === void 0 || !Number.isFinite(count2)) return !1;
+      for (let index = 0; index < Math.ceil(Math.max(count2, 0)); index++)
+        if (!controls2.invoke(handle, method, args).ok) return !1;
+      return !0;
+    };
     for (let [kind, id, count2] of workerRemovals)
-      if (!invoke2(kind, id, "unassign", count2))
+      if (!invoke2(
+        kind === "ordinary" ? `civ-${id}` : "foundry",
+        "sub",
+        count2,
+        kind === "foundry" ? [id] : void 0
+      ))
         return rejected("full-job-control-failed", `could not unassign ${id}`);
     for (let [kind, id, count2] of workerAdditions)
-      if (!invoke2(kind, id, "assign", count2))
+      if (!invoke2(
+        kind === "ordinary" ? `civ-${id}` : "foundry",
+        "add",
+        count2,
+        kind === "foundry" ? [id] : void 0
+      ))
         return rejected("full-job-control-failed", `could not assign ${id}`);
     for (let [kind, id, count2] of servantRemovals)
-      if (!(kind === "ordinary" ? controls2.unassign({ elementId: `servant-${id}`, count: count2 }) : controls2.unassign({
-        elementId: `scraft${id}`,
-        count: count2,
-        craftedResourceId: id
-      })))
+      if (!invoke2(
+        kind === "ordinary" ? `servant-${id}` : "skilledServants",
+        "sub",
+        count2,
+        kind === "foundry" ? [id] : void 0
+      ))
         return rejected(
           "full-servant-control-failed",
           `could not unassign servants from ${id}`
         );
     for (let [kind, id, count2] of servantAdditions)
-      if (!(kind === "ordinary" ? controls2.assign({ elementId: `servant-${id}`, count: count2 }) : controls2.assign({
-        elementId: `scraft${id}`,
-        count: count2,
-        craftedResourceId: id
-      })))
+      if (!invoke2(
+        kind === "ordinary" ? `servant-${id}` : "skilledServants",
+        "add",
+        count2,
+        kind === "foundry" ? [id] : void 0
+      ))
         return rejected(
           "full-servant-control-failed",
           `could not assign servants to ${id}`
         );
-    return selectedDefault !== void 0 && !controls2.setDefault({
-      elementId: `civ-${selectedDefault.id}`,
-      jobId: selectedDefault.id
-    }) ? rejected(
+    return selectedDefault !== void 0 && !invoke2(`civ-${selectedDefault.id}`, "setDefault", 1, [selectedDefault.id]) ? rejected(
       "full-default-job-control-failed",
       `could not select ${selectedDefault.id} as the default job`
     ) : SUCCEEDED;
@@ -14820,12 +15492,14 @@
     rootState,
     controls: controls2,
     readSettings,
+    readDemand,
     onSkipped
   }) {
     let history, historyRoot, authorityCap = null, catalogReader = createCapturedJobCatalogReader({
       rootState,
       controls: controls2,
       readSettings,
+      ...readDemand === void 0 ? {} : { readDemand },
       ...onSkipped === void 0 ? {} : { onSkipped },
       readJobHistory: () => historyRoot === rootState.readRoot() ? history : void 0
     }), controlsPort = createCapturedJobControls({ controls: controls2 }), sessionRef = {
@@ -14838,6 +15512,7 @@
           root,
           readSettings(),
           catalogReader,
+          readDemand,
           authorityCap
         );
         return sampled3 === void 0 ? (sessionRef.value = void 0, unavailableInput()) : (sessionRef.value = Object.freeze({
@@ -14860,8 +15535,14 @@
             "ordinary-jobs-root-changed",
             "captured game root changed"
           );
-        let currentCatalog = catalogReader();
-        if (currentCatalog === void 0 || JSON.stringify(currentCatalog) !== JSON.stringify(session.catalog))
+        let currentCatalog = catalogReader(), currentCycle = readCycle(
+          session.root,
+          readSettings(),
+          catalogReader,
+          readDemand,
+          authorityCap
+        );
+        if (currentCatalog === void 0 || JSON.stringify(currentCatalog) !== JSON.stringify(session.catalog) || currentCycle === void 0 || JSON.stringify(currentCycle.input) !== JSON.stringify(session.input))
           return sessionRef.value = void 0, stale(
             "ordinary-jobs-state-changed",
             "ordinary job catalog changed"
@@ -14883,10 +15564,26 @@
           session.commandState,
           decision
         );
-        return outcome.status === "succeeded" && (historyRoot = session.root, history = Object.freeze({
-          lastPopulationCount: decision.lastPopulationCount,
-          lastFarmerCount: decision.lastFarmerCount
-        }), authorityCap = decision.clearAuthorityEntertainerCap ? null : decision.authorityEntertainerCap), outcome;
+        if (outcome.status === "succeeded") {
+          let observed2 = rootState.readRoot() === session.root ? catalogReader() : void 0;
+          observed2 !== void 0 && observed2.defaultJobId === (decision.selectedDefaultToken === null ? session.catalog.defaultJobId : session.commandState.jobs.find(
+            (job) => job.token === decision.selectedDefaultToken
+          )?.id ?? "") && decision.assignments.every((assignment) => {
+            let before = session.commandState.jobs.find(
+              (job) => job.token === assignment.jobToken
+            ), after = observed2.jobs.find(
+              (job) => job.token === assignment.jobToken
+            );
+            return before !== void 0 && after !== void 0 && after.workers === assignment.workers && after.servants === (session.commandState.manageServants ? assignment.servants : before.servants);
+          }) ? (historyRoot = rootState.readRoot(), history = Object.freeze({
+            lastPopulationCount: decision.lastPopulationCount,
+            lastFarmerCount: decision.lastFarmerCount
+          }), authorityCap = decision.clearAuthorityEntertainerCap ? null : decision.authorityEntertainerCap) : outcome = rejected(
+            "ordinary-jobs-postcondition-failed",
+            "ordinary job assignment was not observed in captured root state"
+          );
+        }
+        return outcome;
       }
     });
     return Object.freeze({ reader, executor });
@@ -14908,7 +15605,7 @@
       ...onSkipped === void 0 ? {} : { onSkipped },
       readJobHistory: () => historyRoot === rootState.readRoot() ? history : void 0,
       ...readDemand === void 0 ? {} : { readDemand }
-    }), controlsPort = createCapturedJobControls({ controls: controls2 }), sessionRef = {
+    }), sessionRef = {
       value: void 0
     }, reader = Object.freeze({
       readCycle(craftOnly) {
@@ -14951,7 +15648,7 @@
           readBuildTargets,
           buildCosts
         );
-        if (currentCatalog === void 0 || JSON.stringify(currentCatalog) !== JSON.stringify(session.catalog) || currentFoundry === void 0 || JSON.stringify(currentFoundry.samples) !== JSON.stringify(session.foundry.samples) || JSON.stringify(currentFoundry.skilledSamples) !== JSON.stringify(session.foundry.skilledSamples) || currentFoundry.skilledMaximum !== session.foundry.skilledMaximum || currentFoundry.skilledUsed !== session.foundry.skilledUsed || JSON.stringify(currentFoundry.input.crafting) !== JSON.stringify(session.foundry.input.crafting))
+        if (currentCatalog === void 0 || JSON.stringify(currentCatalog) !== JSON.stringify(session.catalog) || currentFoundry === void 0 || JSON.stringify(currentFoundry.samples) !== JSON.stringify(session.foundry.samples) || JSON.stringify(currentFoundry.skilledSamples) !== JSON.stringify(session.foundry.skilledSamples) || currentFoundry.skilledMaximum !== session.foundry.skilledMaximum || currentFoundry.skilledUsed !== session.foundry.skilledUsed || currentFoundry.input.manageServants !== session.foundry.input.manageServants || currentFoundry.input.servantModifier !== session.foundry.input.servantModifier || JSON.stringify(currentFoundry.input.crafting) !== JSON.stringify(session.foundry.input.crafting))
           return sessionRef.value = void 0, stale(
             "full-jobs-state-changed",
             "ordinary or foundry state changed"
@@ -14962,51 +15659,39 @@
             "invalid-full-jobs-decision",
             "full jobs decision does not match the sampled plan"
           );
-        let methods = /* @__PURE__ */ new Map();
-        for (let id of controls2.capturedElementIds()) {
-          let handle = controls2.resolve(id);
-          handle !== void 0 && methods.set(id, new Set(handle.methods));
-        }
-        for (let assignment of decision.assignments) {
-          let ordinaryJob = session.ordinaryJobs.find(
-            (job2) => job2.token === assignment.jobToken
-          ), firstCraftToken = session.input.jobs[session.ordinaryJobs.length]?.token, foundryIndex = firstCraftToken === void 0 ? -1 : assignment.jobToken - firstCraftToken, foundryJob = session.foundry.input.jobs[foundryIndex], job = ordinaryJob ?? (foundryJob === void 0 ? void 0 : { id: foundryJob.id, workers: foundryJob.workers });
-          if (job === void 0)
-            return sessionRef.value = void 0, rejected(
-              "full-jobs-controls-incomplete",
-              "full jobs contains an unknown command token"
-            );
-          if (assignment.workers !== job.workers) {
-            let method = assignment.workers < job.workers ? "sub" : "add", elementId = ordinaryJob === void 0 ? "foundry" : `civ-${job.id}`;
-            if (!methods.get(elementId)?.has(method))
-              return sessionRef.value = void 0, rejected(
-                "full-jobs-controls-incomplete",
-                `missing ${method} control for ${elementId}`
-              );
-          }
-          let currentServants = ordinaryJob?.servants ?? session.foundry.skilledSamples.find((sample) => sample.id === job.id)?.servants ?? 0;
-          if (assignment.servants !== currentServants) {
-            let method = assignment.servants < currentServants ? "sub" : "add", elementId = ordinaryJob === void 0 ? `scraft${job.id}` : `servant-${job.id}`;
-            if (!methods.get(elementId)?.has(method))
-              return sessionRef.value = void 0, rejected(
-                "full-jobs-controls-incomplete",
-                `missing ${method} control for ${elementId}`
-              );
-          }
-        }
-        if (decision.selectedDefaultToken !== null && !methods.get(
-          `civ-${session.ordinaryJobs.find((job) => job.token === decision.selectedDefaultToken)?.id ?? ""}`
-        )?.has("setDefault"))
-          return sessionRef.value = void 0, rejected(
-            "full-jobs-controls-incomplete",
-            "missing default-job control"
-          );
         sessionRef.value = void 0;
-        let outcome = executeFullDecision(controlsPort, session, decision);
-        return outcome.status === "succeeded" && (historyRoot = session.root, history = Object.freeze({
-          lastPopulationCount: decision.lastPopulationCount,
-          lastFarmerCount: decision.lastFarmerCount
-        }), authorityCap = decision.clearAuthorityEntertainerCap ? null : decision.authorityEntertainerCap), outcome;
+        let outcome = executeFullDecision(controls2, session, decision);
+        if (outcome.status === "succeeded") {
+          let currentRoot = rootState.readRoot(), observed2 = currentRoot === session.root ? readFullCycle(
+            currentRoot,
+            readSettings(),
+            catalogReader,
+            costs,
+            readDemand,
+            readBuildTargets,
+            buildCosts,
+            authorityCap
+          ) : void 0, expectedDefaultId = decision.selectedDefaultToken === null ? session.catalog.defaultJobId : session.ordinaryJobs.find(
+            (job) => job.token === decision.selectedDefaultToken
+          )?.id ?? "";
+          observed2 !== void 0 && observed2.catalog.defaultJobId === expectedDefaultId && decision.assignments.every((assignment) => {
+            let before = session.input.jobs.find(
+              (job) => job.token === assignment.jobToken
+            ), after = observed2.input.jobs.find(
+              (job) => job.token === assignment.jobToken
+            ), foundry = observed2.foundry.samples.find(
+              (sample) => sample.id === before?.id
+            );
+            return before !== void 0 && after !== void 0 && (before.crafting ? foundry?.workers === assignment.workers : after.workers === assignment.workers) && after.servants === (session.input.manageServants ? assignment.servants : before.servants);
+          }) ? (historyRoot = currentRoot, history = Object.freeze({
+            lastPopulationCount: decision.lastPopulationCount,
+            lastFarmerCount: decision.lastFarmerCount
+          }), authorityCap = decision.clearAuthorityEntertainerCap ? null : decision.authorityEntertainerCap) : outcome = rejected(
+            "full-jobs-postcondition-failed",
+            "ordinary or foundry assignment was not observed in captured root state"
+          );
+        }
+        return outcome;
       }
     });
     return Object.freeze({ reader, executor, isAvailable: () => readFullCycle(
@@ -16352,80 +17037,6 @@
       requests: Object.freeze(requests.map((entry) => Object.freeze(entry))),
       removedMissionIndices: Object.freeze(removedMissionIndices)
     });
-  }
-
-  // src/adapters/evolve/economy/production/captured-factory-capacity.ts
-  function readRegionalFactoryOn(root, region, id) {
-    let owner = readProperty(root, region);
-    if (owner === void 0) return 0;
-    if (!isRecord(owner)) return;
-    let structure = readProperty(owner, id);
-    if (structure === void 0) return 0;
-    if (!isRecord(structure)) return;
-    let count2 = finiteNonNegative(structure.count), on = finiteNonNegative(structure.on);
-    if (!(count2 === void 0 || on === void 0 || !Number.isSafeInteger(count2) || !Number.isSafeInteger(on) || on > count2))
-      return on;
-  }
-  function readHighPopulationScale(root) {
-    let rank = readProperty(readProperty(root, "race"), "high_pop");
-    if (rank === void 0 || rank === !1) return 1;
-    if (!(typeof rank != "number" || !Number.isFinite(rank)))
-      switch (rank) {
-        case 0.1:
-        case 0.25:
-          return 2;
-        case 0.5:
-          return 3;
-        case 1:
-          return 4;
-        case 2:
-          return 5;
-        case 3:
-          return 6;
-        case 4:
-          return 7;
-        default:
-          return;
-      }
-  }
-  function readRankedFactoryLines(root, region, id) {
-    let owner = readProperty(root, region), structure = readProperty(owner, id);
-    if (structure === void 0) return 0;
-    if (!isRecord(structure)) return;
-    let rankValue = structure.rank, rank = rankValue == null ? 1 : finiteNonNegative(rankValue);
-    return rank !== void 0 && Number.isSafeInteger(rank) && rank >= 1 ? 3 + rank : void 0;
-  }
-  function readCapturedFactoryCapacity(root) {
-    let cityFactory = readProperty(readProperty(root, "city"), "factory");
-    if (!isRecord(cityFactory)) return;
-    let cityOn = finiteNonNegative(cityFactory.on);
-    if (cityOn === void 0 || !Number.isSafeInteger(cityOn)) return;
-    let redOn = readRegionalFactoryOn(root, "space", "red_factory"), interstellarOn = readRegionalFactoryOn(
-      root,
-      "interstellar",
-      "int_factory"
-    ), portalOn = readRegionalFactoryOn(root, "portal", "hell_factory"), undergroundOn = readRegionalFactoryOn(
-      root,
-      "underground",
-      "under_factory"
-    ), surfaceOn = readRegionalFactoryOn(root, "surface", "crater_factory"), industrialOn = readRegionalFactoryOn(
-      root,
-      "space",
-      "industrial_complex"
-    ), tauOn = readRegionalFactoryOn(root, "tauceti", "tau_factory"), portalLines = readRankedFactoryLines(root, "portal", "hell_factory"), highPopulationScale2 = readHighPopulationScale(root);
-    if (redOn === void 0 || interstellarOn === void 0 || portalOn === void 0 || undergroundOn === void 0 || surfaceOn === void 0 || industrialOn === void 0 || tauOn === void 0 || portalLines === void 0 || highPopulationScale2 === void 0)
-      return;
-    let craterLines = 0;
-    if (surfaceOn > 0) {
-      let craterWorker = readProperty(
-        readProperty(readProperty(root, "civic"), "crater_worker"),
-        "workers"
-      ), workers = finiteNonNegative(craterWorker);
-      if (workers === void 0) return;
-      craterLines = Math.floor(surfaceOn / 2 * (workers / highPopulationScale2));
-    }
-    let isolation = !!readProperty(readProperty(root, "tech"), "isolation"), maximum = cityOn + redOn + interstellarOn * 2 + portalOn * portalLines + undergroundOn * 2 + craterLines + industrialOn * 2 + tauOn * (isolation ? 5 : 3);
-    return Number.isSafeInteger(maximum) && maximum >= 0 ? maximum : void 0;
   }
 
   // src/adapters/evolve/economy/resources/captured-inflation-assist.ts
@@ -19957,448 +20568,6 @@
     return Object.freeze({
       autoFleetOuter: () => runOuterFleetAutomation(adapter)
     });
-  }
-
-  // src/adapters/evolve/captured-conditions.ts
-  var SWARM_SATELLITE_ACTION_ID = "space-swarm_satellite", BOOLEAN_OPERANDS = /* @__PURE__ */ new Set([
-    "Boolean",
-    "ResourceUnlocked",
-    "ResourceSatisfied",
-    "ResourceDemanded",
-    "JobUnlocked",
-    "ResearchUnlocked",
-    "ResearchComplete",
-    "ProjectUnlocked",
-    "BuildingUnlocked",
-    "BuildingAffordable",
-    "BuildingClickable",
-    "BuildingQueued",
-    "Challenge",
-    "Universe",
-    "Government",
-    "Governor",
-    "ResetType",
-    "RacePillared",
-    "MimicGenus",
-    "PlanetBiome",
-    "PlanetTrait"
-  ]);
-  function structureState(root, argument) {
-    if (typeof argument != "string") return;
-    let parts = splitActionId(argument);
-    if (parts === void 0) return;
-    let region = readProperty(root, parts.region);
-    return readProperty(region, parts.id);
-  }
-  function projectRecord(root, argument) {
-    if (!(typeof argument != "string" || !argument.startsWith("arpa")))
-      return readProperty(
-        readProperty(root, "arpa"),
-        argument.slice(4)
-      );
-  }
-  function resourceRecord(root, argument) {
-    if (typeof argument == "string")
-      return readProperty(readProperty(root, "resource"), argument);
-  }
-  function demandResourceRecord(root, argument) {
-    let record = resourceRecord(root, argument);
-    return isRecord(record) ? record : void 0;
-  }
-  function demandUsefulRatio(root, demand, argument) {
-    if (demand === void 0) return;
-    let record = demandResourceRecord(root, argument);
-    if (!isRecord(record)) return;
-    let amount = finite(readProperty(record, "amount")), maximum = finite(readProperty(record, "max"));
-    if (amount === void 0 || maximum === void 0) return;
-    let required = finite(demand.storageRequired(String(argument)));
-    if (required !== void 0)
-      return !(maximum > 0) || !(required > 0) ? 1 : amount / Math.min(maximum, required);
-  }
-  function resourceIncome(root, context, argument) {
-    if (typeof argument != "string" || context?.settings === void 0)
-      return;
-    let resource = resourceRecord(root, argument);
-    if (!isRecord(resource)) return;
-    let diff = finite(readProperty(resource, "diff")), amount = finite(readProperty(resource, "amount"));
-    if (!(diff === void 0 || amount === void 0) && !(readProperty(readProperty(root, "race"), "decay") && amount > 50)) {
-      if (context.settings.autoMarket === !0) {
-        let trade = finite(readProperty(resource, "trade"));
-        if (trade !== void 0 && trade < 0 && amount > 0) return;
-      }
-      return diff;
-    }
-  }
-  function civicJob(root, argument) {
-    if (typeof argument == "string")
-      return readProperty(readProperty(root, "civic"), argument);
-  }
-  function foundryRecord(root) {
-    return readProperty(readProperty(root, "city"), "foundry");
-  }
-  var BASIC_JOB_IDS = /* @__PURE__ */ new Set([
-    "unemployed",
-    "teamster",
-    "meditator",
-    "hunter",
-    "farmer",
-    "forager",
-    "lumberjack",
-    "quarry_worker",
-    "crystal_miner",
-    "scavenger"
-  ]);
-  function jobWorkers(root, argument) {
-    if (typeof argument != "string") return;
-    let assigned = finite(readProperty(civicJob(root, argument), "workers"));
-    return assigned !== void 0 ? assigned : finite(readProperty(foundryRecord(root), argument));
-  }
-  function jobExists(root, argument) {
-    return typeof argument != "string" ? !1 : isRecord(civicJob(root, argument)) ? !0 : finite(readProperty(foundryRecord(root), argument)) !== void 0;
-  }
-  function jobServantCount(root, argument) {
-    if (typeof argument != "string") return;
-    let servants = readProperty(readProperty(root, "race"), "servants"), assigned = finite(
-      readProperty(readProperty(servants, "jobs"), argument)
-    );
-    if (assigned !== void 0) return assigned;
-    let skilled = finite(
-      readProperty(readProperty(servants, "sjobs"), argument)
-    );
-    return skilled !== void 0 ? skilled : jobExists(root, argument) ? 0 : void 0;
-  }
-  function jobMax(root, argument) {
-    if (typeof argument != "string") return;
-    if (BASIC_JOB_IDS.has(argument)) return Number.MAX_SAFE_INTEGER;
-    let entry = civicJob(root, argument);
-    if (isRecord(entry)) return finite(readProperty(entry, "max"));
-    if (jobExists(root, argument))
-      return finite(
-        readProperty(readProperty(readProperty(root, "civic"), "craftsman"), "max")
-      );
-  }
-  function jobCount(root, argument) {
-    let workers = jobWorkers(root, argument);
-    if (workers === void 0) return;
-    let servants = jobServantCount(root, argument);
-    if (servants !== void 0 && !(servants > 0 && readProperty(readProperty(root, "race"), "high_pop")))
-      return workers + servants;
-  }
-  function resolveRaceId(root, argument) {
-    let race = readProperty(root, "race");
-    return argument === "species" || argument === "gods" || argument === "old_gods" ? readProperty(race, argument) : argument === "srace" ? readProperty(race, "srace") ?? "protoplasm" : argument;
-  }
-  function racePillared(root, argument) {
-    let pillars = readProperty(root, "pillars");
-    if (!isRecord(pillars)) return;
-    let level = readCapturedAscensionLevel(root);
-    if (level === void 0) return;
-    let raceId = resolveRaceId(root, argument);
-    if (typeof raceId != "string") return !1;
-    let rank = finite(readProperty(pillars, raceId));
-    return rank !== void 0 && rank >= level;
-  }
-  function queueLength(root, key) {
-    let entries = readProperty(readProperty(root, key), "queue");
-    return Array.isArray(entries) ? entries.length : void 0;
-  }
-  function switchedCount(context, argument, half) {
-    if (typeof argument != "string") return;
-    let parts = splitActionId(argument);
-    if (parts === void 0) return;
-    let sample = context?.buildingUnlocks;
-    if (!(sample === void 0 || !sample.regions.has(parts.region)) && sample.unlocked.has(argument))
-      return sample.states.get(argument)?.[half] ?? 0;
-  }
-  function factorySlots(root) {
-    return readCapturedFactoryCapacity(root);
-  }
-  function smelterSlots(root) {
-    let smelter = readProperty(readProperty(root, "city"), "smelter");
-    if (!isRecord(smelter)) return;
-    let cap = finite(readProperty(smelter, "cap")), star = finite(readProperty(smelter, "Star"));
-    if (!(cap === void 0 || star === void 0))
-      return cap - star;
-  }
-  function soldierCount(root, argument) {
-    if (typeof argument != "string") return;
-    let garrison = readProperty(readProperty(root, "civic"), "garrison"), workers = isRecord(garrison) ? finite(readProperty(garrison, "workers")) ?? 0 : 0, max = isRecord(garrison) ? finite(readProperty(garrison, "max")) ?? 0 : 0, crew = isRecord(garrison) ? finite(readProperty(garrison, "crew")) ?? 0 : 0, wounded = isRecord(garrison) ? finite(readProperty(garrison, "wounded")) ?? 0 : 0, fortress = readProperty(readProperty(root, "portal"), "fortress"), hellSoldiers = isRecord(fortress) ? finite(readProperty(fortress, "garrison")) ?? 0 : 0, fobTroops = finite(
-      readProperty(readProperty(readProperty(root, "space"), "fob"), "troops")
-    ) ?? 0;
-    switch (argument) {
-      case "workers":
-        return workers;
-      case "max":
-        return max;
-      case "crew":
-        return crew;
-      case "wounded":
-        return wounded;
-      case "deadSoldiers":
-        return max - workers;
-      case "currentCityGarrison":
-        return workers - crew - hellSoldiers - fobTroops;
-      case "maxCityGarrison":
-        return max - crew - hellSoldiers;
-      case "hellSoldiers":
-        return hellSoldiers;
-      case "hellPatrols":
-        return isRecord(fortress) ? finite(readProperty(fortress, "patrols")) ?? 0 : 0;
-      case "hellPatrolSize":
-        return isRecord(fortress) ? finite(readProperty(fortress, "patrol_size")) ?? 0 : 0;
-      case "raid":
-        return isRecord(garrison) ? finite(readProperty(garrison, "raid")) ?? 0 : 0;
-      default:
-        return;
-    }
-  }
-  function storedSettingNumber(context, argument) {
-    if (typeof argument != "string") return;
-    let value = context?.settings?.[argument];
-    return typeof value == "boolean" ? Number(value) : finite(value);
-  }
-  function splitCapturedBuildingCostArgument(argument) {
-    let [buildingId, resourceId] = argument.split(".");
-    if (!(buildingId === void 0 || resourceId === void 0))
-      return Object.freeze({ buildingId, resourceId });
-  }
-  function buildingCostAmount(context, argument) {
-    if (typeof argument != "string") return;
-    let parts = splitCapturedBuildingCostArgument(argument);
-    if (parts === void 0) return;
-    let price = context?.buildingCosts?.get(parts.buildingId);
-    if (price !== void 0)
-      return finite(price.cost[parts.resourceId]) ?? 0;
-  }
-  function readDate(root, argument) {
-    let days = finite(readProperty(readProperty(root, "stats"), "days"));
-    if (argument === "total") return days;
-    let race = readProperty(root, "race");
-    if (argument === "impact") {
-      if (days === void 0 || !isRecord(race)) return;
-      let decay = readProperty(race, "orbit_decay");
-      return decay ? Number(decay) - days : -1;
-    }
-    if (typeof argument == "string")
-      return finite(
-        readProperty(
-          readProperty(readProperty(root, "city"), "calendar"),
-          argument
-        )
-      );
-  }
-  function readNumber2(root, type, argument, context) {
-    switch (type) {
-      case "BuildingCost":
-        return buildingCostAmount(context, argument);
-      case "SettingCurrent":
-      case "SettingDefault":
-        return storedSettingNumber(context, argument);
-      case "BuildingCount":
-        return finite(readProperty(structureState(root, argument), "count"));
-      case "BuildingEnabled":
-        return switchedCount(context, argument, "on");
-      case "BuildingDisabled":
-        return switchedCount(context, argument, "off");
-      case "ProjectCount":
-        return finite(readProperty(projectRecord(root, argument), "rank"));
-      case "ProjectProgress":
-        return finite(readProperty(projectRecord(root, argument), "complete"));
-      case "ResourceQuantity":
-        return finite(readProperty(resourceRecord(root, argument), "amount"));
-      case "ResourceStorage":
-        return finite(readProperty(resourceRecord(root, argument), "max"));
-      case "ResourceIncome":
-        return resourceIncome(root, context, argument);
-      case "ResourceMaxCost":
-        return typeof argument != "string" || demandResourceRecord(root, argument) === void 0 ? void 0 : finite(context?.demand?.maxCost?.(argument));
-      case "ResourceSatisfyRatio":
-        return demandUsefulRatio(root, context?.demand, argument);
-      case "ResourceRatio": {
-        let amount = finite(
-          readProperty(resourceRecord(root, argument), "amount")
-        ), maximum = finite(
-          readProperty(resourceRecord(root, argument), "max")
-        );
-        return amount === void 0 || maximum === void 0 ? void 0 : maximum > 0 ? amount / maximum : 1;
-      }
-      case "TraitLevel": {
-        let race = readProperty(root, "race");
-        return !isRecord(race) || typeof argument != "string" ? void 0 : finite(readProperty(race, argument)) ?? 0;
-      }
-      case "JobWorkers":
-        return jobWorkers(root, argument);
-      case "JobMax":
-        return jobMax(root, argument);
-      case "JobCount":
-        return jobCount(root, argument);
-      case "JobServants":
-        return jobServantCount(root, argument);
-      case "Other": {
-        if (argument === "tpfleet") {
-          let ships = readProperty(
-            readProperty(readProperty(root, "space"), "shipyard"),
-            "ships"
-          );
-          return Array.isArray(ships) ? ships.length : 0;
-        }
-        if (argument === "mrelay")
-          return Number(
-            readProperty(
-              readProperty(readProperty(root, "space"), "m_relay"),
-              "charged"
-            )
-          ) / 1e4;
-        if (argument === "alevel") {
-          let level = readCapturedAscensionLevel(root);
-          return level === void 0 ? void 0 : level - 1;
-        }
-        if (argument === "bcar") {
-          let damaged = readProperty(
-            readProperty(readProperty(root, "portal"), "carport"),
-            "damaged"
-          );
-          return typeof damaged == "number" ? damaged : 0;
-        }
-        if (argument === "satcost") {
-          let price = context?.buildingCosts?.get(SWARM_SATELLITE_ACTION_ID);
-          return price === void 0 ? void 0 : finite(price.cost.Money) ?? 0;
-        }
-        return argument === "tknow" ? finite(context?.knowledgeRequiredByTechs) : void 0;
-      }
-      case "Date":
-        return readDate(root, argument);
-      case "Queue":
-        if (argument === "queue") return queueLength(root, "queue");
-        if (argument === "r_queue") return queueLength(root, "r_queue");
-        if (argument === "evo") {
-          let planned = context?.settings?.evolutionQueue;
-          return Array.isArray(planned) ? planned.length : void 0;
-        }
-        return;
-      case "Industry":
-        return argument === "smelters" ? smelterSlots(root) : argument === "factories" ? factorySlots(root) : void 0;
-      case "Soldiers":
-        return argument === "hellGarrison" ? finite(context?.hellGarrison) : soldierCount(root, argument);
-      default:
-        return;
-    }
-  }
-  function readBoolean(root, type, argument, context) {
-    switch (type) {
-      case "ResearchUnlocked":
-        return typeof argument != "string" ? void 0 : context?.offeredTechs?.has(argument);
-      case "ResearchComplete":
-        return typeof argument != "string" ? void 0 : context?.grantedTechs?.has(argument);
-      case "ProjectUnlocked":
-        return typeof argument != "string" ? void 0 : context?.unlockedProjects?.has(argument);
-      case "BuildingUnlocked": {
-        if (typeof argument != "string") return;
-        let parts = splitActionId(argument);
-        if (parts === void 0) return;
-        let sample = context?.buildingUnlocks;
-        return sample === void 0 || !sample.regions.has(parts.region) ? void 0 : sample.unlocked.has(argument);
-      }
-      case "BuildingAffordable": {
-        if (typeof argument != "string") return;
-        let price = context?.buildingCosts?.get(argument);
-        return price === void 0 ? void 0 : costFitsStorage(root, price.cost, { pool: price.pool });
-      }
-      case "BuildingClickable": {
-        if (typeof argument != "string") return;
-        let parts = splitActionId(argument), sample = context?.buildingUnlocks;
-        if (parts === void 0 || sample === void 0 || !sample.regions.has(parts.region)) return;
-        if (!sample.unlocked.has(argument)) return !1;
-        let price = context?.buildingCosts?.get(argument);
-        if (price === void 0) return;
-        let affordable = costFitsNow(root, price.cost, { pool: price.pool });
-        return affordable !== !0 ? affordable : context?.buildingCapacity?.get(argument);
-      }
-      case "BuildingQueued": {
-        if (typeof argument != "string" || splitActionId(argument) === void 0) return;
-        let queue = readProperty(root, "queue");
-        if (!isRecord(queue) || !readProperty(queue, "display")) return !1;
-        let entries = readProperty(queue, "queue");
-        if (!Array.isArray(entries)) return !1;
-        let settings = readProperty(root, "settings");
-        return (readProperty(settings, "qAny") ? entries : entries.slice(0, 1)).some((entry) => readProperty(entry, "id") === argument);
-      }
-      case "Boolean":
-        return typeof argument == "boolean" ? argument : void 0;
-      case "ResourceUnlocked": {
-        let entry = resourceRecord(root, argument);
-        return isRecord(entry) ? readProperty(entry, "display") === !0 : void 0;
-      }
-      case "ResourceDemanded":
-        return typeof argument != "string" || demandResourceRecord(root, argument) === void 0 ? void 0 : context?.demand?.isDemanded(argument);
-      case "ResourceSatisfied": {
-        let ratio = demandUsefulRatio(root, context?.demand, argument);
-        return ratio === void 0 ? void 0 : ratio >= 1;
-      }
-      case "JobUnlocked": {
-        if (typeof argument != "string") return;
-        let entry = civicJob(root, argument);
-        if (isRecord(entry)) return !!readProperty(entry, "display");
-        let resource = resourceRecord(root, argument);
-        return isRecord(resource) ? !!readProperty(resource, "display") : void 0;
-      }
-      case "Challenge": {
-        let race = readProperty(root, "race");
-        return !isRecord(race) || typeof argument != "string" ? void 0 : !!readProperty(race, argument);
-      }
-      case "Universe": {
-        let race = readProperty(root, "race");
-        return isRecord(race) ? readProperty(race, "universe") === argument : void 0;
-      }
-      case "Government": {
-        let civic = readProperty(root, "civic");
-        return isRecord(civic) ? readProperty(readProperty(civic, "govern"), "type") === argument : void 0;
-      }
-      case "Governor": {
-        let race = readProperty(root, "race");
-        return isRecord(race) ? (readProperty(
-          readProperty(readProperty(race, "governor"), "g"),
-          "bg"
-        ) ?? "none") === argument : void 0;
-      }
-      case "ResetType": {
-        if (typeof argument != "string") return;
-        let settings = context?.settings;
-        return settings === void 0 ? void 0 : settings.prestigeType === argument;
-      }
-      case "RacePillared":
-        return racePillared(root, argument);
-      case "MimicGenus": {
-        let race = readProperty(root, "race");
-        return isRecord(race) ? (readProperty(race, "ss_genus") ?? "none") === argument : void 0;
-      }
-      case "PlanetBiome": {
-        let city = readProperty(root, "city");
-        return isRecord(city) ? readProperty(city, "biome") === argument : void 0;
-      }
-      case "PlanetTrait": {
-        let traits = readProperty(readProperty(root, "city"), "ptrait");
-        return Array.isArray(traits) ? traits.includes(argument) : void 0;
-      }
-      default:
-        return;
-    }
-  }
-  function readCapturedOperand(root, type, argument, context) {
-    if (typeof type == "string") {
-      if (type === "RaceId") {
-        let raceId = resolveRaceId(root, argument);
-        return typeof raceId == "string" ? raceId : void 0;
-      }
-      return BOOLEAN_OPERANDS.has(type) ? readBoolean(root, type, argument, context) : readNumber2(root, type, argument, context);
-    }
-  }
-  function evaluateCapturedCondition(root, type, argument, count2, context) {
-    let value = readCapturedOperand(root, type, argument, context);
-    if (value === void 0 || typeof value == "string") return;
-    let target = Number(count2);
-    if (Number.isFinite(target))
-      return typeof value == "boolean" ? Number(value) === target : value >= target;
   }
 
   // src/adapters/evolve/captured-condition-context.ts
@@ -47389,11 +47558,11 @@ Only continue if you trust the source. Injected code:
       diagnostics,
       onDiagnostic: reportDiagnostic,
       onActivity
-    }), savingTargetThisCycle, constructionRunning = !1, cycleConstructionObservations = Object.freeze({
+    }), savingTargetThisCycle, constructionRunning = !1, constructionSuppressedThisCycle = !1, cycleConstructionObservations = Object.freeze({
       ...progression.observations,
       readSavingTarget() {
         let settings = settingsStore.readRaw();
-        return settings.autoBuild !== !0 && settings.autoARPA !== !0 || constructionRunning && !progression.observations.hasCompletedOrdering() ? null : (savingTargetThisCycle === void 0 && (savingTargetThisCycle = progression.observations.readSavingTarget()), savingTargetThisCycle);
+        return settings.autoBuild !== !0 && settings.autoARPA !== !0 || constructionSuppressedThisCycle || constructionRunning && !progression.observations.hasCompletedOrdering() ? null : (savingTargetThisCycle === void 0 && (savingTargetThisCycle = progression.observations.readSavingTarget()), savingTargetThisCycle);
       }
     }), readCapturedMechReservation = (resourceId) => {
       let demandSample = readDemand(), priorityDemand = progression.mechDemand.read({
@@ -47463,6 +47632,7 @@ Only continue if you trust the source. Injected code:
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
       readSettings: () => settingsStore.readRaw(),
+      readDemand: () => readDemand(),
       onSkipped: (key, reason) => reportOnce(`jobs skipped ${key}: ${reason}`)
     }), fullJobs = createCapturedFullJobsAutomation({
       rootState: pageCapture2.rootState,
@@ -48378,7 +48548,7 @@ Only continue if you trust the source. Injected code:
     });
     refreshEffectiveSettings(), refreshCapturedPlanningPanels();
     let runCycle = () => {
-      if (automationCycle += 1, capturedResetCommittedThisCycle = !1, currentStateLogConstructionSnapshot = null, stateLogPlannerDetailsDue = !1, constructionFreshness = latestConstructionSnapshot === null ? "none" : "stale", capturedMechCycleHasPendingWork = !1, demandThisCycle = void 0, savingTargetThisCycle = void 0, triggerTargetsThisCycle = void 0, triggerDemandThisCycle = void 0, demandPrerequisitesThisCycle = void 0, settingsPanel.ensurePanel(), !pageCapture2.isComplete()) {
+      if (automationCycle += 1, capturedResetCommittedThisCycle = !1, currentStateLogConstructionSnapshot = null, stateLogPlannerDetailsDue = !1, constructionFreshness = latestConstructionSnapshot === null ? "none" : "stale", capturedMechCycleHasPendingWork = !1, demandThisCycle = void 0, savingTargetThisCycle = void 0, constructionSuppressedThisCycle = !1, triggerTargetsThisCycle = void 0, triggerDemandThisCycle = void 0, demandPrerequisitesThisCycle = void 0, settingsPanel.ensurePanel(), !pageCapture2.isComplete()) {
         refreshCapturedPlanningPanels();
         return;
       }
@@ -48455,21 +48625,13 @@ Only continue if you trust the source. Injected code:
         }), isEnabled(settings, "autoPylon") && runPhase("autoPylon", () => {
           ensurePylonControls(), refreshDiscoveredSettings(), pylon.run();
         });
-        let autoJobs = isEnabled(settings, "autoJobs"), autoCraftsmen = isEnabled(settings, "autoCraftsmen"), combinedJobs = !1;
-        autoJobs && autoCraftsmen && (runPhase("autoJobs with autoCraftsmen", () => {
-          ensureCivicControls(), refreshDiscoveredSettings(), combinedJobs = fullJobs.isAvailable(), combinedJobs && runJobsAutomation(fullJobs, !1);
-        }) || (combinedJobs = !0)), autoJobs && !combinedJobs && runPhase("autoJobs", () => {
-          ensureCivicControls(), refreshDiscoveredSettings(), runJobsAutomation(ordinaryJobs, !1);
-        }), autoCraftsmen && !combinedJobs && runPhase("autoCraftsmen", () => {
-          ensureCivicControls(), runJobsAutomation(craftsmen, !0);
-        });
         let triggerActive = !1;
         if (isEnabled(settings, "autoTrigger") && runPhase("autoTrigger", () => (triggerActive = triggerPhaseActive(
           runTriggerAutomation({
             reader: triggerActions.reader,
             executor: triggerActions.executor
           })
-        ), !0)) !== !0 && (triggerActive = !0), !triggerActive && isEnabled(settings, "autoResearch") && runPhase("autoResearch", () => progression.runResearchCycle()), !triggerActive && (isEnabled(settings, "autoBuild") || isEnabled(settings, "autoARPA"))) {
+        ), !0)) !== !0 && (triggerActive = !0), triggerActive && (isEnabled(settings, "autoBuild") || isEnabled(settings, "autoARPA")) && (constructionSuppressedThisCycle = !0), !triggerActive && isEnabled(settings, "autoResearch") && runPhase("autoResearch", () => progression.runResearchCycle()), !triggerActive && (isEnabled(settings, "autoBuild") || isEnabled(settings, "autoARPA"))) {
           let outcome = runPhase("autoBuild", () => {
             constructionRunning = !0;
             try {
@@ -48494,7 +48656,17 @@ Only continue if you trust the source. Injected code:
               );
             }
         }
-        if (isEnabled(settings, "autoCraft") && runPhase("autoCraft", () => {
+        demandThisCycle = void 0, savingTargetThisCycle = void 0, isEnabled(settings, "autoFactory") && runPhase("autoFactory", () => {
+          ensureFactoryControls(), refreshDiscoveredSettings(), factory.run();
+        }), demandThisCycle = void 0, savingTargetThisCycle = void 0;
+        let autoJobs = isEnabled(settings, "autoJobs"), autoCraftsmen = isEnabled(settings, "autoCraftsmen"), combinedJobs = !1;
+        if (autoJobs && autoCraftsmen && (runPhase("autoJobs with autoCraftsmen", () => {
+          ensureCivicControls(), refreshDiscoveredSettings(), combinedJobs = fullJobs.isAvailable(), combinedJobs && runJobsAutomation(fullJobs, !1);
+        }) || (combinedJobs = !0)), autoJobs && !combinedJobs && runPhase("autoJobs", () => {
+          ensureCivicControls(), refreshDiscoveredSettings(), runJobsAutomation(ordinaryJobs, !1);
+        }), autoCraftsmen && !combinedJobs && runPhase("autoCraftsmen", () => {
+          ensureCivicControls(), runJobsAutomation(craftsmen, !0);
+        }), isEnabled(settings, "autoCraft") && runPhase("autoCraft", () => {
           runCraftAutomation(craft);
         }), isEnabled(settings, "autoFight")) {
           let mercenaryOutcome = runPhase("autoFight.mercenary", () => (ensureMercenaryControls(), runMercenaryAutomation(capturedMercenary)));
@@ -48542,8 +48714,6 @@ Only continue if you trust the source. Injected code:
           ensureEjectorControls(), refreshDiscoveredSettings(), ejector.run();
         }), isEnabled(settings, "autoSmelter") && runPhase("autoSmelter", () => {
           ensureSmelterControls(), refreshDiscoveredSettings(), smelter.run();
-        }), isEnabled(settings, "autoFactory") && runPhase("autoFactory", () => {
-          ensureFactoryControls(), refreshDiscoveredSettings(), factory.run();
         }), isEnabled(settings, "autoFleet") && runPhase("autoFleet", () => {
           readProperty(
             readProperty(pageCapture2.rootState.readRoot(), "race"),

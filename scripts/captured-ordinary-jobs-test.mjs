@@ -6,6 +6,7 @@ import {
 } from "../src/adapters/evolve/civic/captured-ordinary-jobs.ts";
 import {
   createCapturedJobCatalogReader,
+  readCapturedMinerReservation,
   readCapturedPopulationResource,
 } from "../src/adapters/evolve/civic/captured-job-catalog.ts";
 
@@ -504,12 +505,14 @@ const fullRoot = {
   },
   resource: {
     Population: { amount: 4, max: 10 },
+    Food: { amount: 10, max: 100, diff: 0 },
     Plywood: { amount: 100 },
     Brick: { amount: 0 },
     Iron: { amount: 100 },
   },
 };
 const fullCalls = [];
+let fullControlFailure;
 const fullControls = {
   capturedElementIds: () => [
     "civ-unemployed",
@@ -517,28 +520,39 @@ const fullControls = {
     "civ-lumberjack",
     "servant-farmer",
     "foundry",
-    "scraftPlywood",
-    "scraftBrick",
+    "skilledServants",
   ],
-  resolve: (elementId) =>
-    elementId === "foundry" ||
-    elementId.startsWith("civ-") ||
-    elementId.startsWith("scraft") ||
-    elementId.startsWith("servant-")
-      ? {
-          elementId,
-          generation: 1,
-          methods:
-            elementId === "foundry" ||
-            elementId.startsWith("scraft") ||
-            elementId.startsWith("servant-")
-              ? ["add", "sub"]
-              : ["add", "sub", "setDefault"],
-        }
-      : undefined,
+  resolve: (elementId) => {
+    if (
+      fullControlFailure?.elementId === elementId &&
+      fullControlFailure.missingControl
+    ) {
+      return undefined;
+    }
+    if (
+      elementId !== "foundry" &&
+      !elementId.startsWith("civ-") &&
+      elementId !== "skilledServants" &&
+      !elementId.startsWith("servant-")
+    ) {
+      return undefined;
+    }
+    let methods =
+      elementId === "foundry" ||
+      elementId === "skilledServants" ||
+      elementId.startsWith("servant-")
+        ? ["add", "sub"]
+        : ["add", "sub", "setDefault"];
+    if (fullControlFailure?.elementId === elementId) {
+      methods = methods.filter(
+        (method) => method !== fullControlFailure.missingMethod,
+      );
+    }
+    return { elementId, generation: 1, methods };
+  },
   invoke: (handle, method, args = []) => {
     fullCalls.push({ elementId: handle.elementId, method, args });
-    if (handle.elementId.startsWith("scraft")) {
+    if (handle.elementId === "skilledServants") {
       const id = args[0];
       fullRoot.race.servants.sjobs[id] =
         (fullRoot.race.servants.sjobs[id] ?? 0) + (method === "add" ? 1 : -1);
@@ -553,7 +567,8 @@ const fullControls = {
       fullRoot.city.foundry[id] += method === "add" ? 1 : -1;
       fullRoot.city.foundry.crafting += method === "add" ? 1 : -1;
       fullRoot.civic.craftsman.workers += method === "add" ? 1 : -1;
-      fullRoot.civic.unemployed.workers += method === "add" ? -1 : 1;
+      const defaultJob = fullRoot.civic[fullRoot.civic.d_job];
+      defaultJob.workers += method === "add" ? -1 : 1;
     } else if (method === "setDefault") {
       fullRoot.civic.d_job = args[0];
     } else {
@@ -563,6 +578,7 @@ const fullControls = {
     return { ok: true, value: undefined };
   },
 };
+let fullManageServants = true;
 const fullAutomation = createCapturedFullJobsAutomation({
   rootState: { readRoot: () => fullRoot },
   controls: fullControls,
@@ -571,8 +587,10 @@ const fullAutomation = createCapturedFullJobsAutomation({
     job_unemployed: true,
     job_farmer: true,
     job_lumberjack: false,
+    job_s_farmer: true,
+    jobSetDefault: true,
     productionCraftsmen: "always",
-    jobManageServants: true,
+    jobManageServants: fullManageServants,
     craftPlywood: true,
     job_Plywood: true,
     foundry_w_Plywood: 1,
@@ -595,14 +613,63 @@ assert.equal(
   ),
   true,
 );
-assert.equal(fullAutomation.executor.execute(fullDecision).status, "succeeded");
+const fullStateBeforePreflight = structuredClone(fullRoot);
+fullControlFailure = {
+  elementId: "skilledServants",
+  missingControl: true,
+};
+assert.equal(
+  fullAutomation.executor.execute(fullDecision).status,
+  "rejected",
+  "a missing later skilled-servant control rejects the whole full decision",
+);
+assert.deepEqual(
+  fullCalls,
+  [],
+  "preflight must precede every captured mutation",
+);
+assert.deepEqual(fullRoot, fullStateBeforePreflight);
+
+// The full executor must not commit lastPopulation/lastFarmer history when preflight rejects.
+fullRoot.resource.Population.amount = fullDecision.lastPopulationCount + 2;
+fullRoot.civic.farmer.workers = fullDecision.lastFarmerCount + 2;
+const afterRejectedHistoryInput = fullAutomation.reader.readCycle(false);
+assert.equal(afterRejectedHistoryInput.available, true);
+assert.equal(
+  afterRejectedHistoryInput.jobs.find(({ id }) => id === "farmer")
+    ?.smartMaximum,
+  fullDecision.lastFarmerCount + 2,
+  "without accepted history, the captured low-food fallback retains the current Farmer count",
+);
+for (const key of Object.keys(fullRoot)) delete fullRoot[key];
+Object.assign(fullRoot, structuredClone(fullStateBeforePreflight));
+
+fullControlFailure = {
+  elementId: "skilledServants",
+  missingMethod: "add",
+};
+const retryInput = fullAutomation.reader.readCycle(false);
+const retryDecision = planJobs(retryInput);
+assert.equal(
+  fullAutomation.executor.execute(retryDecision).status,
+  "rejected",
+  "an existing captured handle without the required method also rejects before mutation",
+);
+assert.deepEqual(fullCalls, []);
+assert.deepEqual(fullRoot, fullStateBeforePreflight);
+
+fullControlFailure = undefined;
+const fullOutcome = fullAutomation.executor.execute(
+  planJobs(fullAutomation.reader.readCycle(false)),
+);
+assert.equal(fullOutcome.status, "succeeded");
 assert.equal(fullRoot.city.foundry.Brick, 2);
 assert.equal(
   fullCalls.some(({ elementId }) => elementId === "foundry"),
   true,
 );
 assert.equal(
-  fullCalls.some(({ elementId }) => elementId.startsWith("scraft")),
+  fullCalls.some(({ elementId }) => elementId === "skilledServants"),
   true,
 );
 assert.equal(
@@ -615,6 +682,162 @@ assert.equal(
   "a switched-off job is left alone rather than commanded",
 );
 assert.equal(fullRoot.civic.lumberjack.workers, 0);
+
+const servantsBeforeDisabling = structuredClone(fullRoot.race.servants);
+const callsBeforeDisabling = fullCalls.length;
+fullManageServants = false;
+const servantsDisabledInput = fullAutomation.reader.readCycle(false);
+assert.equal(servantsDisabledInput.manageServants, false);
+assert.equal(servantsDisabledInput.servantsMaximum, 0);
+assert.equal(servantsDisabledInput.skilledServantsMaximum, 0);
+const servantsDisabledOutcome = fullAutomation.executor.execute(
+  planJobs(servantsDisabledInput),
+);
+assert.equal(servantsDisabledOutcome.status, "succeeded");
+assert.equal(
+  fullCalls
+    .slice(callsBeforeDisabling)
+    .some(
+      ({ elementId }) =>
+        elementId.startsWith("servant-") || elementId === "skilledServants",
+    ),
+  false,
+  "the combined executor obeys the sampled jobManageServants authority",
+);
+assert.deepEqual(fullRoot.race.servants, servantsBeforeDisabling);
+
+// Miner reservation reuses the planner's single-Miner rule, while captured inputs reproduce the
+// two legacy resource ratios from their real root fields and demand sample.
+function minerRoot(race, population = { amount: 5, max: 10 }) {
+  return {
+    civic: {
+      d_job: "unemployed",
+      unemployed: {
+        job: "unemployed",
+        assigned: 5,
+        workers: 3,
+        max: 0,
+        display: true,
+      },
+      miner: {
+        job: "miner",
+        assigned: 2,
+        workers: 2,
+        max: -1,
+        display: true,
+      },
+    },
+    race: { species: "Population", ...race },
+    resource: {
+      Population: population,
+      Horseshoe: { amount: 5, max: 100 },
+      Copper: { amount: 0, max: 100 },
+    },
+  };
+}
+const minerControlIds = ["civ-unemployed", "civ-miner"];
+const minerControls = {
+  capturedElementIds: () => minerControlIds,
+  resolve: (elementId) =>
+    minerControlIds.includes(elementId)
+      ? {
+          elementId,
+          generation: 1,
+          methods: ["add", "sub", "setDefault"],
+        }
+      : undefined,
+  invoke: () => ({ ok: true, value: undefined }),
+};
+const minerSettings = {
+  autoJobs: true,
+  job_unemployed: true,
+  job_miner: true,
+  job_s_miner: true,
+  job_b1_unemployed: 0,
+  job_b2_unemployed: 0,
+  job_b3_unemployed: 0,
+  job_b1_miner: 0,
+  job_b2_miner: 0,
+  job_b3_miner: 0,
+};
+const horseshoeDemand = (storageRequired) => () => ({
+  isDemanded: () => false,
+  storageRequired: (id) => (id === "Horseshoe" ? storageRequired : 0),
+  requestedQuantity: () => 0,
+});
+const hoovedMinerRoot = minerRoot({ hooved: true });
+const hoovedMinerAutomation = createCapturedOrdinaryJobsAutomation({
+  rootState: { readRoot: () => hoovedMinerRoot },
+  controls: minerControls,
+  readSettings: () => minerSettings,
+  readDemand: horseshoeDemand(10),
+});
+const hoovedMinerInput = hoovedMinerAutomation.reader.readCycle(false);
+assert.equal(hoovedMinerInput.reserveMiner, true);
+const hoovedMinerDecision = planJobs(hoovedMinerInput);
+assert.equal(
+  hoovedMinerDecision.assignments.find(
+    ({ jobToken }) =>
+      hoovedMinerInput.jobs.find((job) => job.token === jobToken)?.id ===
+      "miner",
+  )?.workers,
+  1,
+  "a Hooved Miner stays assigned when Horseshoe is below its useful-storage ratio",
+);
+assert.equal(
+  readCapturedMinerReservation(
+    minerRoot({ hooved: true }),
+    minerSettings,
+    horseshoeDemand(5),
+  ),
+  false,
+  "usefulness is amount / min(maximum, committed storage), not amount / maximum",
+);
+assert.equal(
+  readCapturedMinerReservation(minerRoot({ artifical: true }), minerSettings),
+  true,
+  "Artificial races reserve a Miner while Population storage is below capacity",
+);
+assert.equal(
+  readCapturedMinerReservation(
+    minerRoot({ artifical: true, deconstructor: true }),
+    minerSettings,
+  ),
+  false,
+  "Deconstructors skip the Artificial population reserve",
+);
+assert.equal(
+  readCapturedMinerReservation(
+    {
+      ...minerRoot({ hooved: true }),
+      galaxy: { starbase: { count: 1 } },
+    },
+    { ...minerSettings, jobDisableMiners: true },
+    horseshoeDemand(10),
+  ),
+  false,
+  "the Gateway Starbase miner-disable gate suppresses the reserve",
+);
+assert.equal(
+  readCapturedMinerReservation(
+    {
+      ...minerRoot({ hooved: true, sappy: true, smoldering: true }),
+      galaxy: { starbase: { count: 1 } },
+    },
+    { ...minerSettings, jobDisableMiners: true },
+    horseshoeDemand(10),
+  ),
+  true,
+  "Sappy plus Smoldering keeps the old miner-disable exception",
+);
+assert.equal(
+  readCapturedMinerReservation(minerRoot({ artifical: true }), minerSettings),
+  true,
+  "an uninitialized Gateway Starbase count is treated as zero",
+);
+
+// Full jobs preflights every worker, servant, skilled-servant, and default control before its first
+// mutation. DeadSpace captures the skilled servant methods from one #skilledServants component.
 
 const fullConsumedResourceRoot = {
   civic: {

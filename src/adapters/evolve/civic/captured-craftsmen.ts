@@ -2,9 +2,8 @@
  * Rebalances craftsmen already assigned to the upstream foundry.
  *
  * DeadSpace keeps recipe costs outside the captured root, but persists the effective total and
- * per-resource caps beside the foundry plus the current craftsman and default-job pools. The
- * adapter uses those validated values to allocate craftsmen-only work; full auto-jobs remain out
- * of scope.
+ * per-resource caps beside the foundry plus the current craftsman and default-job pools. This
+ * adapter owns the craftsmen-only route and shares its captured inputs with combined full Jobs.
  */
 
 import {
@@ -300,9 +299,8 @@ function readCraftsmanState(
 }
 
 function readDefaultJobState(
-  readJobCatalog: () => CapturedJobCatalog | undefined,
+  catalog: CapturedJobCatalog | undefined,
 ): DefaultJobState | undefined {
-  const catalog = readJobCatalog();
   if (catalog === undefined) return undefined;
   const job = catalog.jobs.find(({ isDefault }) => isDefault);
   return job === undefined
@@ -351,6 +349,9 @@ function readCycleInput(
       readonly samples: readonly CraftSample[];
       readonly workerPool: number;
       readonly defaultJob: DefaultJobState | undefined;
+      readonly skilledSamples: readonly Readonly<SkilledCraftSample>[];
+      readonly skilledMaximum: number;
+      readonly skilledUsed: number;
     }
   | undefined {
   const samples = readProducts(root);
@@ -362,10 +363,17 @@ function readCycleInput(
     0,
   );
   const craftsmen = readCraftsmanState(root, foundry, assignedWorkers);
-  const defaultJob = readDefaultJobState(readJobCatalog);
+  const catalog = readJobCatalog();
+  const defaultJob = readDefaultJobState(catalog);
+  const skilled = readSkilledCraftsmen(root);
   // The game initializes this lazily, but a craftsmen command cannot safely acquire or release a
   // worker without the named default job. Keep the cycle unavailable until that state is present.
-  if (defaultJob === undefined) return undefined;
+  if (
+    catalog === undefined ||
+    defaultJob === undefined ||
+    skilled === undefined
+  )
+    return undefined;
   // Upstream updates the resource rows and civic.craftsman.workers in the same foundry control.
   // Do not acquire from the default pool while a reactive sample exposes only part of that update;
   // the planner cannot preserve an assignment that is missing from its captured rows.
@@ -375,6 +383,11 @@ function readCycleInput(
     craftsmen.workers + defaultJob.workers,
   );
   const settings = isRecord(settingsValue) ? settingsValue : {};
+  const manageServants = settings["jobManageServants"] === true;
+  const servantModifier = catalog.servantModifier;
+  const skilledById = new Map(
+    skilled.samples.map((sample) => [sample.id, sample.servants]),
+  );
   const buildingMode = settings["productionFoundryWeighting"] === "buildings";
   const buildingTargets = buildingMode ? readBuildTargets?.() : undefined;
   const buildingCosts = buildingMode
@@ -397,14 +410,15 @@ function readCycleInput(
       id: sample.id,
       kind: "other" as const,
       workers: sample.workers,
-      servants: 0,
-      count: sample.workers,
+      servants: skilledById.get(sample.id) ?? 0,
+      count:
+        sample.workers + (skilledById.get(sample.id) ?? 0) * servantModifier,
       maximum: Number.MAX_SAFE_INTEGER,
       managed: true,
       unlocked: true,
       smart: false,
       crafting: true,
-      serves: false,
+      serves: skilled.maximum > 0 || (skilledById.get(sample.id) ?? 0) > 0,
       split: false,
       isDefault: false,
       breakpoints: [0, 0, 0] as const,
@@ -453,11 +467,11 @@ function readCycleInput(
     autoCraftWithoutBuilding: true,
     craftsmenMode: craftsmenMode(settings),
     foundryWeighting: foundryWeighting(settings, buildingTargets, buildCosts),
-    manageServants: false,
+    manageServants,
     setDefault: false,
-    servantModifier: 1,
+    servantModifier,
     servantsMaximum: 0,
-    skilledServantsMaximum: 0,
+    skilledServantsMaximum: manageServants ? skilled.maximum : 0,
     craftsmenMaximum: craftsmen.maximum,
     minimumDefault: 0,
     reserveMiner: false,
@@ -496,6 +510,9 @@ function readCycleInput(
     samples: Object.freeze(samples),
     workerPool: craftsmen.workers,
     defaultJob,
+    skilledSamples: skilled.samples,
+    skilledMaximum: skilled.maximum,
+    skilledUsed: skilled.used,
   });
 }
 
@@ -518,14 +535,10 @@ export function readCapturedCraftsmenCycle(
     readBuildTargets,
     buildCosts,
   );
-  const skilled = readSkilledCraftsmen(root);
-  return sampled === undefined || skilled === undefined
+  return sampled === undefined
     ? undefined
     : Object.freeze({
         ...sampled,
-        skilledSamples: skilled.samples,
-        skilledMaximum: skilled.maximum,
-        skilledUsed: skilled.used,
       });
 }
 
@@ -593,13 +606,31 @@ function createExecutor(
         JSON.stringify(currentInput.crafting) !==
           JSON.stringify(session.input.crafting) ||
         currentInput.craftsmenMode !== session.input.craftsmenMode ||
-        currentInput.foundryWeighting !== session.input.foundryWeighting
+        currentInput.foundryWeighting !== session.input.foundryWeighting ||
+        currentInput.manageServants !== session.input.manageServants ||
+        currentInput.servantModifier !== session.input.servantModifier ||
+        currentInput.skilledServantsMaximum !==
+          session.input.skilledServantsMaximum ||
+        JSON.stringify(
+          currentInput.jobs.map(({ id, workers, servants }) => ({
+            id,
+            workers,
+            servants,
+          })),
+        ) !==
+          JSON.stringify(
+            session.input.jobs.map(({ id, workers, servants }) => ({
+              id,
+              workers,
+              servants,
+            })),
+          )
       )
         return stale(
           "crafting-input-changed",
           "crafting quantities or demand changed",
         );
-      const currentDefaultJob = readDefaultJobState(readJobCatalog);
+      const currentDefaultJob = readDefaultJobState(readJobCatalog());
       if (
         currentDefaultJob?.id !== session.defaultJob?.id ||
         currentDefaultJob?.workers !== session.defaultJob?.workers
@@ -613,12 +644,6 @@ function createExecutor(
           "invalid-craftsmen-decision",
           "craftsmen decision does not match the sampled plan",
         );
-      if (dependencies.controls.resolve(FOUNDRY_CONTROL) === undefined)
-        return rejected(
-          "foundry-control-missing",
-          "no captured control for foundry",
-        );
-
       for (const assignment of decision.assignments) {
         const sample = session.samples[assignment.jobToken];
         if (sample === undefined) {
@@ -627,6 +652,47 @@ function createExecutor(
             "craftsmen decision contains an unknown token",
           );
         }
+        const delta = assignment.workers - sample.workers;
+        const workerMethod = delta < 0 ? "sub" : "add";
+        if (
+          delta !== 0 &&
+          !dependencies.controls
+            .resolve(FOUNDRY_CONTROL)
+            ?.methods.includes(workerMethod)
+        ) {
+          return rejected(
+            "foundry-controls-incomplete",
+            `missing ${workerMethod} control for foundry`,
+          );
+        }
+        const currentJob = session.input.jobs[assignment.jobToken];
+        if (currentJob === undefined) {
+          return rejected(
+            "unknown-craftsmen-token",
+            "craftsmen decision contains an unknown job token",
+          );
+        }
+        if (
+          session.input.manageServants &&
+          assignment.servants !== currentJob.servants
+        ) {
+          const servantMethod =
+            assignment.servants < currentJob.servants ? "sub" : "add";
+          if (
+            !dependencies.controls
+              .resolve("skilledServants")
+              ?.methods.includes(servantMethod)
+          ) {
+            return rejected(
+              "foundry-controls-incomplete",
+              `missing ${servantMethod} control for skilledServants`,
+            );
+          }
+        }
+      }
+
+      for (const assignment of decision.assignments) {
+        const sample = session.samples[assignment.jobToken]!;
         const delta = assignment.workers - sample.workers;
         if (
           delta < 0 &&
@@ -659,7 +725,74 @@ function createExecutor(
           );
         }
       }
+      if (session.input.manageServants) {
+        for (const assignment of decision.assignments) {
+          const sample = session.samples[assignment.jobToken]!;
+          const currentJob = session.input.jobs[assignment.jobToken]!;
+          const delta = assignment.servants - currentJob.servants;
+          if (
+            delta < 0 &&
+            !controls.unassign({
+              elementId: "skilledServants",
+              count: -delta,
+              craftedResourceId: sample.id,
+            })
+          ) {
+            return rejected(
+              "skilled-servant-control-failed",
+              `could not unassign skilled servants from ${sample.id}`,
+            );
+          }
+        }
+        for (const assignment of decision.assignments) {
+          const sample = session.samples[assignment.jobToken]!;
+          const currentJob = session.input.jobs[assignment.jobToken]!;
+          const delta = assignment.servants - currentJob.servants;
+          if (
+            delta > 0 &&
+            !controls.assign({
+              elementId: "skilledServants",
+              count: delta,
+              craftedResourceId: sample.id,
+            })
+          ) {
+            return rejected(
+              "skilled-servant-control-failed",
+              `could not assign skilled servants to ${sample.id}`,
+            );
+          }
+        }
+      }
       sessionRef.value = undefined;
+      const postState = readCycleInput(
+        dependencies.rootState.readRoot(),
+        dependencies.readSettings(),
+        dependencies.costs,
+        readJobCatalog,
+        dependencies.readDemand,
+        dependencies.readBuildTargets,
+        dependencies.buildCosts,
+      );
+      if (
+        postState === undefined ||
+        decision.assignments.some((assignment) => {
+          const expected = session.input.jobs[assignment.jobToken];
+          const actual = postState.input.jobs[assignment.jobToken];
+          return (
+            expected === undefined ||
+            actual === undefined ||
+            actual.workers !== assignment.workers ||
+            (session.input.manageServants
+              ? actual.servants !== assignment.servants
+              : actual.servants !== expected.servants)
+          );
+        })
+      ) {
+        return rejected(
+          "craftsmen-postcondition-failed",
+          "foundry assignment was not observed in captured root state",
+        );
+      }
       return SUCCEEDED;
     },
   });

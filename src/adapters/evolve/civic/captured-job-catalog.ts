@@ -16,6 +16,7 @@ import type {
 } from "../../../domain/civic/jobs.ts";
 import type { JobResetContext } from "../../../domain/settings-defaults.ts";
 import type { CapturedDemandSample } from "../economy/resources/captured-resource-demand.ts";
+import { readCapturedConditionUsefulRatio } from "../captured-conditions.ts";
 import {
   finite,
   finiteNonNegative,
@@ -852,12 +853,65 @@ function readCapturedFarmerMinimum(
   return isRecord(readProperty(root, "race")) ? (smartMaximum ?? count) : null;
 }
 
-function resourceStorageRatio(root: unknown, id: string): number | undefined {
-  const resource = readProperty(readProperty(root, "resource"), id);
+function resourceStorageRatio(
+  root: unknown,
+  id: string,
+  resourceOverride?: unknown,
+): number | undefined {
+  const resource =
+    resourceOverride === undefined
+      ? readProperty(readProperty(root, "resource"), id)
+      : resourceOverride;
   const amount = finiteNonNegative(readProperty(resource, "amount"));
   const maximum = finite(readProperty(resource, "max"));
   if (amount === undefined || maximum === undefined) return undefined;
   return maximum > 0 ? amount / maximum : 1;
+}
+
+function readGatewayStarbaseCount(root: unknown): number | undefined {
+  const count = readProperty(
+    readProperty(readProperty(root, "galaxy"), "starbase"),
+    "count",
+  );
+  // DeadSpace can omit galaxy.starbase before the first Gateway is built; upstream treats that as zero.
+  return count === undefined ? 0 : finiteNonNegative(count);
+}
+
+export function readCapturedMinerReservation(
+  root: unknown,
+  settingsValue: unknown,
+  readDemand?: () => CapturedDemandSample,
+): boolean | undefined {
+  const race = readProperty(root, "race");
+  let hoovedNeedsMiner = false;
+  if (hasRaceFlag(race, "hooved")) {
+    const usefulRatio = readCapturedConditionUsefulRatio(
+      root,
+      readDemand?.(),
+      "Horseshoe",
+    );
+    if (usefulRatio === undefined) return undefined;
+    hoovedNeedsMiner = usefulRatio < 1;
+  }
+  let artificialNeedsMiner = false;
+  if (hasRaceFlag(race, "artifical") && !hasRaceFlag(race, "deconstructor")) {
+    const populationRatio = resourceStorageRatio(
+      root,
+      "Population",
+      readCapturedPopulationResource(root),
+    );
+    if (populationRatio === undefined) return undefined;
+    artificialNeedsMiner = populationRatio < 1;
+  }
+  if (!hoovedNeedsMiner && !artificialNeedsMiner) return false;
+  const settings = isRecord(settingsValue) ? settingsValue : {};
+  const gatewayCount = readGatewayStarbaseCount(root);
+  if (gatewayCount === undefined) return undefined;
+  const minersDisabled =
+    settings["jobDisableMiners"] === true &&
+    gatewayCount > 0 &&
+    !(hasRaceFlag(race, "sappy") && hasRaceFlag(race, "smoldering"));
+  return !minersDisabled;
 }
 
 function resourceDiff(root: unknown, id: string): number | undefined {
@@ -1380,7 +1434,8 @@ function readCatalog(
     onSkipped("civics", "ordinary job crew state is incomplete");
     return undefined;
   }
-  const servantModifier = readHighPopulationWorkerEffect(root);
+  // Legacy CoreJob.count uses traitVal("high_pop", 0, 1): the first captured value, not worker effectiveness.
+  const servantModifier = readCapturedJobStackMultiplier(root);
   if (servantModifier === undefined) {
     onSkipped("civics", "ordinary job servant modifier is unavailable");
     return undefined;
