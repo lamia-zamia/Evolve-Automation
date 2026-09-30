@@ -115,6 +115,7 @@ function makeScenario({
   queue = [],
   bindControl = true,
   marketStorage = false,
+  manualCraftLumber,
 } = {}) {
   const pageBody = element("div", { id: "page" });
   const mainColumn = element("div", { id: "mainColumn" });
@@ -137,6 +138,9 @@ function makeScenario({
     pageBody.appendChild(element("div", { id: "createHead" }));
   }
   const document = createTestDocument(pageBody);
+  if (manualCraftLumber !== undefined) {
+    pageBody.appendChild(element("button", { id: "incPlywoodA" }));
+  }
 
   const gameRoot = {
     settings: {
@@ -213,6 +217,31 @@ function makeScenario({
         diff: 0,
         value: 1,
       },
+      ...(manualCraftLumber === undefined
+        ? {}
+        : {
+            human: {
+              name: "Human",
+              amount: 10,
+              max: 20,
+              display: true,
+              diff: 0,
+            },
+            Lumber: {
+              name: "Lumber",
+              amount: manualCraftLumber,
+              max: 1000,
+              display: true,
+              diff: 100,
+            },
+            Plywood: {
+              name: "Plywood",
+              amount: 0,
+              max: -1,
+              display: true,
+              diff: 0,
+            },
+          }),
     },
     race: { species: "human", iceage: true },
     stats: { days: 100, reset: 1, resets: 1 },
@@ -235,10 +264,17 @@ function makeScenario({
   page.Vue = vue;
   vue.reactive(gameRoot);
 
-  let drawnDisplayCost = { Money: 10, Knowledge: 3 };
-  let actualPerPercentCost = { Money: 10.2, Knowledge: 3.2 };
+  let drawnDisplayCost =
+    manualCraftLumber === undefined
+      ? { Money: 10, Knowledge: 3 }
+      : { Lumber: 200 };
+  let actualPerPercentCost =
+    manualCraftLumber === undefined
+      ? { Money: 10.2, Knowledge: 3.2 }
+      : { Lumber: 200 };
   let shouldBindControl = bindControl;
   const calls = [];
+  const craftCalls = [];
   const marketCalls = [];
   let storageReads = 0;
   const phases = [];
@@ -246,6 +282,25 @@ function makeScenario({
   const draws = [];
   const hoverEvents = [];
   let panelAvailable = true;
+
+  if (manualCraftLumber !== undefined) {
+    vue.createApp({
+      el: "#resPlywood",
+      methods: {
+        craftCost(resourceId, volume) {
+          assert.equal(resourceId, "Plywood");
+          assert.equal(volume, 1);
+          return "<div>Lumber 100</div>";
+        },
+        craft(resourceId, volume) {
+          assert.equal(resourceId, "Plywood");
+          craftCalls.push(volume);
+          gameRoot.resource.Lumber.amount -= 100 * volume;
+          gameRoot.resource.Plywood.amount += volume;
+        },
+      },
+    });
+  }
 
   const bindProject = () => {
     const project = gameRoot.arpa[projectId];
@@ -419,6 +474,7 @@ function makeScenario({
 
   return {
     calls,
+    craftCalls,
     marketCalls,
     storageReads: () => storageReads,
     phases,
@@ -887,6 +943,44 @@ withScenario(
       scenario.marketCalls,
       ["purchase"],
       JSON.stringify(scenario.errors),
+    );
+  },
+);
+
+// Progression owns an exactly-affordable Lumber holding before the captured Craft row can spend it.
+withScenario(
+  {
+    progress: 20,
+    manualCraftLumber: 900,
+    scriptSettings: {
+      autoBuild: true,
+      autoARPA: true,
+      autoCraft: true,
+      craftPlywood: true,
+      prestigeMADIgnoreArpa: true,
+      arpa_lhc: true,
+      arpa_p_lhc: 0,
+      arpa_m_lhc: -1,
+      arpa_w_lhc: 2,
+      arpaStep: 5,
+    },
+  },
+  (scenario) => {
+    const initialProgress = scenario.gameRoot.arpa.lhc.complete;
+    scenario.tick();
+    assert.equal(scenario.gameRoot.arpa.lhc.complete, initialProgress);
+    assert.equal(scenario.gameRoot.resource.Lumber.amount, 900);
+    assert.deepEqual(scenario.craftCalls, []);
+
+    scenario.gameRoot.resource.Lumber.amount = 1000;
+    scenario.tick();
+    assert.deepEqual(scenario.calls, [["lhc", 5]]);
+    assert.equal(scenario.gameRoot.arpa.lhc.complete, initialProgress + 5);
+    assert.equal(scenario.gameRoot.resource.Lumber.amount, 0);
+    assert.deepEqual(
+      scenario.craftCalls,
+      [],
+      "captured Plywood craft must not spend the Lumber before the LHC action",
     );
   },
 );
