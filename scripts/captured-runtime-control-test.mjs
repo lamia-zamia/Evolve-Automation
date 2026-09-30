@@ -626,6 +626,7 @@ assert.equal(unsubscribeCount, 1);
   );
   assert.deepEqual(errors, [
     "progression unavailable: temporary component mounting cannot be suppressed",
+    "pre-Gather demand stopped: TypeError: construction saving order is not established",
   ]);
 }
 
@@ -704,6 +705,7 @@ assert.equal(unsubscribeCount, 1);
   stopCycle();
   assert.deepEqual(reported, [
     "progression unavailable: temporary component mounting cannot be suppressed",
+    "pre-Gather demand stopped: TypeError: construction saving order is not established",
     "autoBuild: build-click-failed: unknown-method",
   ]);
   assert.ok(diagnosticLog.includes("autoBuild.candidates 1"));
@@ -2090,6 +2092,7 @@ assert.equal(unsubscribeCount, 1);
       // The demand-prerequisites phase reads the root first, so it is the first to report
       // while the stub is still throwing.
       "demand prerequisites",
+      "pre-Gather demand",
       "autoResearch",
       "autoBuild",
       "autoFight.mercenary",
@@ -2708,6 +2711,7 @@ function runCombatRuntime(autoFight) {
     JSON.stringify(saving),
   );
   assert.deepEqual(saving.errors, [
+    "pre-Gather demand stopped: TypeError: construction saving order is not established",
     "autoMarket stopped: TypeError: construction saving order is not established",
   ]);
   const affordable = runDemandSampleScenario(

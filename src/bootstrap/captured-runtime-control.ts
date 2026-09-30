@@ -2416,6 +2416,18 @@ export function startCapturedRuntime({
           else ensureGalaxyFleetControls();
         });
       }
+      if (
+        isEnabled(settings, "autoBuild") ||
+        isEnabled(settings, "buildingAlwaysClick")
+      ) {
+        const demandReady = runPhase("pre-Gather demand", () => {
+          readDemand();
+          return true;
+        });
+        if (demandReady === true) {
+          runPhase("buildingAlwaysClick", () => gatherResources());
+        }
+      }
       if (isEnabled(settings, "autoMarket")) {
         runPhase("autoMarket", () => {
           ensureMarketControls();
@@ -2436,12 +2448,6 @@ export function startCapturedRuntime({
           refreshDiscoveredSettings();
           storageAutomation.run();
         });
-      }
-      if (
-        isEnabled(settings, "autoBuild") ||
-        isEnabled(settings, "buildingAlwaysClick")
-      ) {
-        runPhase("buildingAlwaysClick", () => gatherResources());
       }
       if (isEnabled(settings, "autoHell")) {
         runPhase("autoHell", () => {
