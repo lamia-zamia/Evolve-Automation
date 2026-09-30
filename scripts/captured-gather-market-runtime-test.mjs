@@ -81,14 +81,14 @@ vue.reactive(root);
 
 let gatherClicks = 0;
 let purchases = 0;
-let firstGatherDemandReads;
+const gatherDemandReads = [];
 let gatherMutations = 0;
 let priceReadsAfterGather = 0;
 vue.createApp({
   el: "#city-food",
   methods: {
     action() {
-      firstGatherDemandReads ??= demandReads;
+      gatherDemandReads.push(demandReads);
       const before = root.resource.Food.amount;
       gatherClicks += 1;
       root.resource.Food.amount += 1;
@@ -131,6 +131,7 @@ const stop = startCapturedRuntime({
       JSON.stringify({
         masterScriptToggle: true,
         tickRate: 1,
+        autoBuild: true,
         buildingAlwaysClick: true,
         buildingClickPerTick: 10,
         autoMarket: true,
@@ -150,19 +151,49 @@ try {
     10,
     "captured Gather must change the live root",
   );
-  assert.ok(firstGatherDemandReads > 0, "demand must be sampled before Gather");
-  assert.equal(purchases, 0, "Market must see post-Gather holdings");
-  assert.ok(
-    marketPriceReads > priceReadsAfterGather,
-    "Market must evaluate Food after Gather",
+  assert.equal(
+    gatherDemandReads[0],
+    0,
+    "Gather must run before the first construction ordering exists",
   );
+  assert.equal(purchases, 0, "Market must see post-Gather holdings");
   assert.equal(root.resource.Food.amount, 50);
   assert.equal(root.resource.Money.amount, 1000);
-  assert.deepEqual(errors, []);
+  assert.ok(
+    !errors.some((message) =>
+      message.startsWith("pre-Gather demand stopped: TypeError:"),
+    ),
+    "pre-Gather demand must not be attempted before construction ordering exists",
+  );
+  assert.ok(
+    errors.includes(
+      "autoMarket stopped: TypeError: construction saving order is not established",
+    ),
+    "Market must fail closed while construction ordering is unavailable",
+  );
+
+  root.resource.Food.amount = 40;
+  worker.dispatch({ loop: "main", periods: 1 });
+  assert.equal(
+    gatherClicks,
+    20,
+    "Gather must run after ordering is established",
+  );
+  assert.ok(
+    gatherDemandReads[10] > 0,
+    "later demand must be sampled before Gather",
+  );
+  assert.equal(purchases, 0, "Market must not buy at the 50% threshold");
+  assert.equal(root.resource.Food.amount, 50);
+  assert.equal(root.resource.Money.amount, 1000);
+  assert.ok(
+    marketPriceReads > priceReadsAfterGather,
+    "Market must evaluate Food after the later Gather",
+  );
 
   failDemand = true;
   worker.dispatch({ loop: "main", periods: 1 });
-  assert.equal(gatherClicks, 10, "failed demand must skip Gather");
+  assert.equal(gatherClicks, 20, "failed demand must skip Gather");
   assert.equal(root.resource.Food.amount, 50);
   assert.ok(
     errors.includes("pre-Gather demand stopped: Error: demand sample failed"),

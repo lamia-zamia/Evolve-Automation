@@ -48399,7 +48399,7 @@ Only continue if you trust the source. Injected code:
             return;
           }
         }
-        runPhase("demand prerequisites", () => {
+        if (runPhase("demand prerequisites", () => {
           demandPrerequisitesThisCycle ??= ensureDemandPrerequisiteControls({
             root: pageCapture2.rootState.readRoot(),
             settings,
@@ -48414,7 +48414,11 @@ Only continue if you trust the source. Injected code:
             readProperty(pageCapture2.rootState.readRoot(), "race"),
             "truepath"
           ) === !0 ? ensureOuterFleetControls() : ensureGalaxyFleetControls();
-        }), (isEnabled(settings, "autoBuild") || isEnabled(settings, "buildingAlwaysClick")) && runPhase("pre-Gather demand", () => (readDemand(), !0)) === !0 && runPhase("buildingAlwaysClick", () => gatherResources()), isEnabled(settings, "autoMarket") && runPhase("autoMarket", () => {
+        }), isEnabled(settings, "autoBuild") || isEnabled(settings, "buildingAlwaysClick")) {
+          let needsConstructionSaving = isEnabled(settings, "autoBuild") || isEnabled(settings, "autoARPA"), savingOrderReady = progression.observations.hasCompletedOrdering();
+          needsConstructionSaving && !savingOrderReady ? runPhase("buildingAlwaysClick", () => gatherResources()) : runPhase("pre-Gather demand", () => (readDemand(), !0)) === !0 && runPhase("buildingAlwaysClick", () => gatherResources());
+        }
+        isEnabled(settings, "autoMarket") && runPhase("autoMarket", () => {
           ensureMarketControls(), refreshDiscoveredSettings(), marketAutomation.run();
         }), isEnabled(settings, "autoGalaxyMarket") && runPhase("autoGalaxyMarket", () => {
           ensureGalaxyMarketControls(), refreshDiscoveredSettings(), galaxyMarketAutomation.run();

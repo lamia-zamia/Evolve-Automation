@@ -2416,16 +2416,24 @@ export function startCapturedRuntime({
           else ensureGalaxyFleetControls();
         });
       }
-      if (
+      const gatherEnabled =
         isEnabled(settings, "autoBuild") ||
-        isEnabled(settings, "buildingAlwaysClick")
-      ) {
-        const demandReady = runPhase("pre-Gather demand", () => {
-          readDemand();
-          return true;
-        });
-        if (demandReady === true) {
+        isEnabled(settings, "buildingAlwaysClick");
+      if (gatherEnabled) {
+        const needsConstructionSaving =
+          isEnabled(settings, "autoBuild") || isEnabled(settings, "autoARPA");
+        const savingOrderReady =
+          progression.observations.hasCompletedOrdering();
+        if (needsConstructionSaving && !savingOrderReady) {
           runPhase("buildingAlwaysClick", () => gatherResources());
+        } else {
+          const demandReady = runPhase("pre-Gather demand", () => {
+            readDemand();
+            return true;
+          });
+          if (demandReady === true) {
+            runPhase("buildingAlwaysClick", () => gatherResources());
+          }
         }
       }
       if (isEnabled(settings, "autoMarket")) {
