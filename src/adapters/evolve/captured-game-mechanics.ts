@@ -8,6 +8,7 @@ import type { GamePeriodSource } from "../../ports/game-period-source.ts";
 import type {
   CapturedGameFuelInput,
   CapturedGameMechanics,
+  CapturedGameRead,
   CapturedGameStructureDefinition,
   CapturedPowerBalanceRule,
   CapturedProductionBreakdown,
@@ -17,6 +18,7 @@ import type {
 import { isNonArrayRecord, readProperty } from "../validation.ts";
 
 type CapturedGameCall = (this: unknown, ...args: unknown[]) => unknown;
+const structureMapCaptureThreshold = 3;
 
 interface CapturedGridEntry {
   readonly entryKey: string;
@@ -92,19 +94,6 @@ function readMechanicsEntry(
       return undefined;
     }
 
-    // A grid definition has at least one of the game's read-only power/support semantics.
-    const hasGridRead = [
-      "powered",
-      "p_fuel",
-      "support",
-      "support_fuel",
-      "power_limit",
-      "powerBalancer",
-    ].some(
-      (name) => typeof readMechanicsDataProperty(action, name) === "function",
-    );
-    if (!hasGridRead) return undefined;
-
     return { entryKey, region, sector, struct, actionId, action };
   } catch {
     return undefined;
@@ -121,41 +110,80 @@ function readMechanicsMethod(
     : undefined;
 }
 
-function invokeMechanicsMethod(
+function readMechanicsCall(
   action: Record<string, unknown>,
   name: string,
-): unknown {
-  const method = readMechanicsMethod(action, name);
-  if (method === undefined) return undefined;
+): CapturedGameRead<unknown> {
+  let descriptor: PropertyDescriptor | undefined;
   try {
-    return Reflect.apply(method, action, []);
+    descriptor = Object.getOwnPropertyDescriptor(action, name);
   } catch {
-    return undefined;
+    return { kind: "invalid" };
+  }
+  if (descriptor === undefined) return { kind: "absent" };
+  const method = readMechanicsMethod(action, name);
+  if (method === undefined) return { kind: "invalid" };
+  try {
+    const value = Reflect.apply(method, action, []);
+    return value === undefined ? { kind: "invalid" } : { kind: "value", value };
+  } catch {
+    return { kind: "invalid" };
   }
 }
 
-function readMechanicsNumber(
+function readMechanicsPrimitive(
   action: Record<string, unknown>,
   name: string,
-): number | undefined {
-  const value = invokeMechanicsMethod(action, name);
-  return typeof value === "number" && Number.isFinite(value)
-    ? value
-    : undefined;
+): CapturedGameRead<number | string | boolean> {
+  const read = readMechanicsCall(action, name);
+  if (read.kind !== "value") return read;
+  const value = read.value;
+  if (typeof value === "number") {
+    return Number.isFinite(value)
+      ? { kind: "value", value }
+      : { kind: "invalid" };
+  }
+  return typeof value === "string" || typeof value === "boolean"
+    ? { kind: "value", value }
+    : { kind: "invalid" };
+}
+
+function readMechanicsTitle(
+  action: Record<string, unknown>,
+): CapturedGameRead<string> {
+  let descriptor: PropertyDescriptor | undefined;
+  try {
+    descriptor = Object.getOwnPropertyDescriptor(action, "title");
+  } catch {
+    return { kind: "invalid" };
+  }
+  if (descriptor === undefined) return { kind: "absent" };
+  let value: unknown = "value" in descriptor ? descriptor.value : undefined;
+  if (typeof value === "function") {
+    try {
+      value = Reflect.apply(value as CapturedGameCall, action, []);
+    } catch {
+      return { kind: "invalid" };
+    }
+  }
+  return typeof value === "string"
+    ? { kind: "value", value }
+    : { kind: "invalid" };
 }
 
 function readMechanicsFuel(
   action: Record<string, unknown>,
   name: string,
-): readonly CapturedGameFuelInput[] | undefined {
-  const value = invokeMechanicsMethod(action, name);
-  if (value === undefined || value === null || value === false) {
-    return undefined;
-  }
+): CapturedGameRead<readonly CapturedGameFuelInput[] | false> {
+  const read = readMechanicsCall(action, name);
+  if (read.kind !== "value") return read;
+  const value = read.value;
+  if (value === false) return { kind: "value", value: false };
+  if (value === null) return { kind: "invalid" };
   const items = Array.isArray(value) ? value : [value];
   const result: CapturedGameFuelInput[] = [];
   for (const item of items) {
-    if (!isNonArrayRecord(item)) return undefined;
+    if (!isNonArrayRecord(item)) return { kind: "invalid" };
     const resourceId = readMechanicsDataProperty(item, "r");
     const amount = readMechanicsDataProperty(item, "a");
     if (
@@ -163,30 +191,51 @@ function readMechanicsFuel(
       typeof amount !== "number" ||
       !Number.isFinite(amount)
     ) {
-      return undefined;
+      return { kind: "invalid" };
     }
     result.push(Object.freeze({ resourceId, amount }));
   }
-  return Object.freeze(result);
+  return { kind: "value", value: Object.freeze(result) };
 }
 
-function readMechanicsFuelFlag(
+function readMechanicsBooleanFlag(
   action: Record<string, unknown>,
   name: string,
-): boolean | undefined {
+): CapturedGameRead<boolean> {
+  let descriptor: PropertyDescriptor | undefined;
+  try {
+    descriptor = Object.getOwnPropertyDescriptor(action, name);
+  } catch {
+    return { kind: "invalid" };
+  }
+  if (descriptor === undefined) return { kind: "absent" };
   const value = readMechanicsDataProperty(action, name);
-  return typeof value === "boolean" ? value : undefined;
+  return typeof value === "boolean"
+    ? { kind: "value", value }
+    : { kind: "invalid" };
+}
+
+function readMechanicsAdjustmentDisabled(
+  action: Record<string, unknown>,
+  name: string,
+): CapturedGameRead<boolean> {
+  const read = readMechanicsBooleanFlag(action, name);
+  return read.kind === "value"
+    ? { kind: "value", value: read.value === false }
+    : read;
 }
 
 function readMechanicsBalancer(
   action: Record<string, unknown>,
-): readonly CapturedPowerBalanceRule[] | false | undefined {
-  const value = invokeMechanicsMethod(action, "powerBalancer");
-  if (value === false) return false;
-  if (!Array.isArray(value)) return undefined;
+): CapturedGameRead<readonly CapturedPowerBalanceRule[] | false> {
+  const read = readMechanicsCall(action, "powerBalancer");
+  if (read.kind !== "value") return read;
+  const value = read.value;
+  if (value === false) return { kind: "value", value: false };
+  if (!Array.isArray(value)) return { kind: "invalid" };
   const result: CapturedPowerBalanceRule[] = [];
   for (const item of value) {
-    if (!isNonArrayRecord(item)) return undefined;
+    if (!isNonArrayRecord(item)) return { kind: "invalid" };
     const resourceId = readMechanicsDataProperty(item, "r");
     const stateField = readMechanicsDataProperty(item, "k");
     if (typeof resourceId === "string" && typeof stateField === "string") {
@@ -198,9 +247,9 @@ function readMechanicsBalancer(
       result.push(Object.freeze({ kind: "support", amount: supportAmount }));
       continue;
     }
-    return undefined;
+    return { kind: "invalid" };
   }
-  return Object.freeze(result);
+  return { kind: "value", value: Object.freeze(result) };
 }
 
 function createMechanicsDefinition(
@@ -213,17 +262,16 @@ function createMechanicsDefinition(
     sector: entry.sector,
     struct: entry.struct,
     actionId: entry.actionId,
-    readPowered: () => readMechanicsNumber(action, "powered"),
+    readTitle: () => readMechanicsTitle(action),
+    readPowered: () => readMechanicsPrimitive(action, "powered"),
     readFuel: () => readMechanicsFuel(action, "p_fuel"),
     readFuelAdjustmentRequested: () =>
-      readMechanicsFuelFlag(action, "p_fuel_adjust"),
-    readSupport: () => readMechanicsNumber(action, "support"),
+      readMechanicsBooleanFlag(action, "p_fuel_adjust"),
+    readSupport: () => readMechanicsPrimitive(action, "support"),
     readSupportFuel: () => readMechanicsFuel(action, "support_fuel"),
-    readSupportFuelAdjustmentDisabled: () => {
-      const value = readMechanicsDataProperty(action, "support_fuel_adjust");
-      return typeof value === "boolean" ? value === false : undefined;
-    },
-    readPowerLimit: () => readMechanicsNumber(action, "power_limit"),
+    readSupportFuelAdjustmentDisabled: () =>
+      readMechanicsAdjustmentDisabled(action, "support_fuel_adjust"),
+    readPowerLimit: () => readMechanicsPrimitive(action, "power_limit"),
     readPowerBalancer: () => readMechanicsBalancer(action),
   });
 }
@@ -319,10 +367,20 @@ export function installCapturedGameMechanics(
   const mapSetDescriptor = isNonArrayRecord(mapPrototype)
     ? Object.getOwnPropertyDescriptor(mapPrototype, "set")
     : undefined;
+  const mapSizeDescriptor = isNonArrayRecord(mapPrototype)
+    ? Object.getOwnPropertyDescriptor(mapPrototype, "size")
+    : undefined;
+  const mapSizeGetter = mapSizeDescriptor?.get;
   const objectConstructor = readMechanicsProperty(pageWindow, "Object");
   const objectPrototype = readMechanicsProperty(objectConstructor, "prototype");
+  const objectDefineProperty = readMechanicsDataProperty(
+    objectConstructor,
+    "defineProperty",
+  );
 
   let structureEntries: Map<unknown, unknown> | undefined;
+  let candidateStructureMap: Map<unknown, unknown> | undefined;
+  let candidateStructureKeys = new Set<string>();
   let productionBreakdownOwner: Record<string, unknown> | undefined;
   let stopped = false;
   let mapHook: CapturedGameCall | undefined;
@@ -348,7 +406,15 @@ export function installCapturedGameMechanics(
       Object.getOwnPropertyDescriptor(objectPrototype, "consume")?.set ===
         consumeSetter
     ) {
-      delete objectPrototype["consume"];
+      if (originalConsumeDescriptor === undefined) {
+        delete objectPrototype["consume"];
+      } else {
+        Object.defineProperty(
+          objectPrototype,
+          "consume",
+          originalConsumeDescriptor,
+        );
+      }
     }
     consumeSetter = undefined;
   }
@@ -375,8 +441,34 @@ export function installCapturedGameMechanics(
       if (structureEntries === undefined && args.length >= 2) {
         const entry = readMechanicsEntry(args[0], args[1]);
         if (entry !== undefined && isNonArrayRecord(this)) {
-          structureEntries = this as unknown as Map<unknown, unknown>;
-          restoreMapSet();
+          const candidateMap = this as unknown as Map<unknown, unknown>;
+          let size: unknown;
+          try {
+            size =
+              typeof mapSizeGetter === "function"
+                ? Reflect.apply(mapSizeGetter, candidateMap, [])
+                : undefined;
+          } catch {
+            size = undefined;
+          }
+          if (candidateMap === candidateStructureMap) {
+            if (
+              candidateStructureKeys.has(entry.entryKey) ||
+              size !== candidateStructureKeys.size + 1
+            ) {
+              candidateStructureMap = undefined;
+              candidateStructureKeys = new Set<string>();
+            } else {
+              candidateStructureKeys.add(entry.entryKey);
+              if (candidateStructureKeys.size >= structureMapCaptureThreshold) {
+                structureEntries = candidateMap;
+                restoreMapSet();
+              }
+            }
+          } else if (size === 1) {
+            candidateStructureMap = candidateMap;
+            candidateStructureKeys = new Set([entry.entryKey]);
+          }
         }
       }
       return result;
@@ -393,7 +485,8 @@ export function installCapturedGameMechanics(
     : undefined;
   if (
     isNonArrayRecord(objectPrototype) &&
-    originalConsumeDescriptor === undefined
+    originalConsumeDescriptor === undefined &&
+    typeof objectDefineProperty === "function"
   ) {
     const temporaryConsumeSetter = function capturedProductionConsumeSet(
       this: unknown,
@@ -403,24 +496,26 @@ export function installCapturedGameMechanics(
       if (productionBreakdownOwner === undefined) {
         isLedgerOwner = isProductionConsumeOwner(this, value);
       }
-      if (
-        ((typeof this === "object" && this !== null) ||
-          typeof this === "function") &&
-        isNonArrayRecord(this)
-      ) {
-        try {
-          const assigned = Reflect.defineProperty(this, "consume", {
-            configurable: true,
-            enumerable: true,
-            writable: true,
-            value,
-          });
-          if (assigned && isLedgerOwner) {
-            retainProductionBreakdownOwner(this);
-          }
-        } catch {
-          // Preserve startup if an unrelated nonextensible object receives this assignment.
-        }
+      if (typeof objectDefineProperty !== "function") {
+        throw new TypeError("page Object.defineProperty is unavailable");
+      }
+      // Match inherited writable-data assignment on successful writes by defining an ordinary
+      // own data property on the actual receiver. Object.defineProperty covers arrays, functions,
+      // proxies, and exotic objects. It also throws when the receiver cannot accept the property;
+      // unlike native sloppy assignment, this brief hook cannot silently fail because the setter
+      // would make the assignment itself report success. During the hook, `"consume" in receiver`
+      // is true through the prototype chain; deleting the hook restores that visibility.
+      Reflect.apply(
+        objectDefineProperty as CapturedGameCall,
+        objectConstructor,
+        [
+          this,
+          "consume",
+          { configurable: true, enumerable: true, writable: true, value },
+        ],
+      );
+      if (isLedgerOwner) {
+        retainProductionBreakdownOwner(this as Record<string, unknown>);
       }
     };
     consumeSetter = temporaryConsumeSetter;

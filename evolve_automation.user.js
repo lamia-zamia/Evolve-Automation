@@ -417,6 +417,7 @@
   }
 
   // src/adapters/evolve/captured-game-mechanics.ts
+  var structureMapCaptureThreshold = 3;
   function readMechanicsProperty(owner, key) {
     try {
       return readProperty(owner, key);
@@ -440,16 +441,7 @@
         if (entryKey !== mapKey || typeof region != "string" || region.length === 0 || typeof sector != "string" || sector.length === 0 || typeof struct != "string" || struct.length === 0 || mapKey !== `${sector}:${struct}` || info !== !1 && !isNonArrayRecord(info) || !isNonArrayRecord(action))
           return;
         let actionId = readMechanicsDataProperty(action, "id");
-        return typeof actionId != "string" || actionId.trim().length === 0 || ![
-          "powered",
-          "p_fuel",
-          "support",
-          "support_fuel",
-          "power_limit",
-          "powerBalancer"
-        ].some(
-          (name) => typeof readMechanicsDataProperty(action, name) == "function"
-        ) ? void 0 : { entryKey, region, sector, struct, actionId, action };
+        return typeof actionId != "string" || actionId.trim().length === 0 ? void 0 : { entryKey, region, sector, struct, actionId, action };
       } catch {
         return;
       }
@@ -458,44 +450,86 @@
     let method = readMechanicsDataProperty(action, name);
     return typeof method == "function" ? method : void 0;
   }
-  function invokeMechanicsMethod(action, name) {
+  function readMechanicsCall(action, name) {
+    let descriptor;
+    try {
+      descriptor = Object.getOwnPropertyDescriptor(action, name);
+    } catch {
+      return { kind: "invalid" };
+    }
+    if (descriptor === void 0) return { kind: "absent" };
     let method = readMechanicsMethod(action, name);
-    if (method !== void 0)
-      try {
-        return Reflect.apply(method, action, []);
-      } catch {
-        return;
-      }
+    if (method === void 0) return { kind: "invalid" };
+    try {
+      let value = Reflect.apply(method, action, []);
+      return value === void 0 ? { kind: "invalid" } : { kind: "value", value };
+    } catch {
+      return { kind: "invalid" };
+    }
   }
-  function readMechanicsNumber(action, name) {
-    let value = invokeMechanicsMethod(action, name);
-    return typeof value == "number" && Number.isFinite(value) ? value : void 0;
+  function readMechanicsPrimitive(action, name) {
+    let read = readMechanicsCall(action, name);
+    if (read.kind !== "value") return read;
+    let value = read.value;
+    return typeof value == "number" ? Number.isFinite(value) ? { kind: "value", value } : { kind: "invalid" } : typeof value == "string" || typeof value == "boolean" ? { kind: "value", value } : { kind: "invalid" };
+  }
+  function readMechanicsTitle(action) {
+    let descriptor;
+    try {
+      descriptor = Object.getOwnPropertyDescriptor(action, "title");
+    } catch {
+      return { kind: "invalid" };
+    }
+    if (descriptor === void 0) return { kind: "absent" };
+    let value = "value" in descriptor ? descriptor.value : void 0;
+    if (typeof value == "function")
+      try {
+        value = Reflect.apply(value, action, []);
+      } catch {
+        return { kind: "invalid" };
+      }
+    return typeof value == "string" ? { kind: "value", value } : { kind: "invalid" };
   }
   function readMechanicsFuel(action, name) {
-    let value = invokeMechanicsMethod(action, name);
-    if (value == null || value === !1)
-      return;
+    let read = readMechanicsCall(action, name);
+    if (read.kind !== "value") return read;
+    let value = read.value;
+    if (value === !1) return { kind: "value", value: !1 };
+    if (value === null) return { kind: "invalid" };
     let items = Array.isArray(value) ? value : [value], result = [];
     for (let item of items) {
-      if (!isNonArrayRecord(item)) return;
+      if (!isNonArrayRecord(item)) return { kind: "invalid" };
       let resourceId = readMechanicsDataProperty(item, "r"), amount = readMechanicsDataProperty(item, "a");
       if (typeof resourceId != "string" || typeof amount != "number" || !Number.isFinite(amount))
-        return;
+        return { kind: "invalid" };
       result.push(Object.freeze({ resourceId, amount }));
     }
-    return Object.freeze(result);
+    return { kind: "value", value: Object.freeze(result) };
   }
-  function readMechanicsFuelFlag(action, name) {
+  function readMechanicsBooleanFlag(action, name) {
+    let descriptor;
+    try {
+      descriptor = Object.getOwnPropertyDescriptor(action, name);
+    } catch {
+      return { kind: "invalid" };
+    }
+    if (descriptor === void 0) return { kind: "absent" };
     let value = readMechanicsDataProperty(action, name);
-    return typeof value == "boolean" ? value : void 0;
+    return typeof value == "boolean" ? { kind: "value", value } : { kind: "invalid" };
+  }
+  function readMechanicsAdjustmentDisabled(action, name) {
+    let read = readMechanicsBooleanFlag(action, name);
+    return read.kind === "value" ? { kind: "value", value: read.value === !1 } : read;
   }
   function readMechanicsBalancer(action) {
-    let value = invokeMechanicsMethod(action, "powerBalancer");
-    if (value === !1) return !1;
-    if (!Array.isArray(value)) return;
+    let read = readMechanicsCall(action, "powerBalancer");
+    if (read.kind !== "value") return read;
+    let value = read.value;
+    if (value === !1) return { kind: "value", value: !1 };
+    if (!Array.isArray(value)) return { kind: "invalid" };
     let result = [];
     for (let item of value) {
-      if (!isNonArrayRecord(item)) return;
+      if (!isNonArrayRecord(item)) return { kind: "invalid" };
       let resourceId = readMechanicsDataProperty(item, "r"), stateField = readMechanicsDataProperty(item, "k");
       if (typeof resourceId == "string" && typeof stateField == "string") {
         result.push(Object.freeze({ kind: "resource", resourceId, stateField }));
@@ -506,9 +540,9 @@
         result.push(Object.freeze({ kind: "support", amount: supportAmount }));
         continue;
       }
-      return;
+      return { kind: "invalid" };
     }
-    return Object.freeze(result);
+    return { kind: "value", value: Object.freeze(result) };
   }
   function createMechanicsDefinition(entry) {
     let action = entry.action;
@@ -518,16 +552,14 @@
       sector: entry.sector,
       struct: entry.struct,
       actionId: entry.actionId,
-      readPowered: () => readMechanicsNumber(action, "powered"),
+      readTitle: () => readMechanicsTitle(action),
+      readPowered: () => readMechanicsPrimitive(action, "powered"),
       readFuel: () => readMechanicsFuel(action, "p_fuel"),
-      readFuelAdjustmentRequested: () => readMechanicsFuelFlag(action, "p_fuel_adjust"),
-      readSupport: () => readMechanicsNumber(action, "support"),
+      readFuelAdjustmentRequested: () => readMechanicsBooleanFlag(action, "p_fuel_adjust"),
+      readSupport: () => readMechanicsPrimitive(action, "support"),
       readSupportFuel: () => readMechanicsFuel(action, "support_fuel"),
-      readSupportFuelAdjustmentDisabled: () => {
-        let value = readMechanicsDataProperty(action, "support_fuel_adjust");
-        return typeof value == "boolean" ? value === !1 : void 0;
-      },
-      readPowerLimit: () => readMechanicsNumber(action, "power_limit"),
+      readSupportFuelAdjustmentDisabled: () => readMechanicsAdjustmentDisabled(action, "support_fuel_adjust"),
+      readPowerLimit: () => readMechanicsPrimitive(action, "power_limit"),
       readPowerBalancer: () => readMechanicsBalancer(action)
     });
   }
@@ -590,12 +622,19 @@
         uninstall: () => {
         }
       });
-    let mapConstructor = readMechanicsProperty(pageWindow, "Map"), mapPrototype = readMechanicsProperty(mapConstructor, "prototype"), mapSetDescriptor = isNonArrayRecord(mapPrototype) ? Object.getOwnPropertyDescriptor(mapPrototype, "set") : void 0, objectConstructor = readMechanicsProperty(pageWindow, "Object"), objectPrototype = readMechanicsProperty(objectConstructor, "prototype"), structureEntries, productionBreakdownOwner, stopped = !1, mapHook, consumeSetter, unsubscribeFirstPeriod;
+    let mapConstructor = readMechanicsProperty(pageWindow, "Map"), mapPrototype = readMechanicsProperty(mapConstructor, "prototype"), mapSetDescriptor = isNonArrayRecord(mapPrototype) ? Object.getOwnPropertyDescriptor(mapPrototype, "set") : void 0, mapSizeGetter = (isNonArrayRecord(mapPrototype) ? Object.getOwnPropertyDescriptor(mapPrototype, "size") : void 0)?.get, objectConstructor = readMechanicsProperty(pageWindow, "Object"), objectPrototype = readMechanicsProperty(objectConstructor, "prototype"), objectDefineProperty = readMechanicsDataProperty(
+      objectConstructor,
+      "defineProperty"
+    ), structureEntries, candidateStructureMap, candidateStructureKeys = /* @__PURE__ */ new Set(), productionBreakdownOwner, stopped = !1, mapHook, consumeSetter, unsubscribeFirstPeriod;
     function restoreMapSet() {
       mapHook !== void 0 && isNonArrayRecord(mapPrototype) && Object.getOwnPropertyDescriptor(mapPrototype, "set")?.value === mapHook && mapSetDescriptor !== void 0 && Object.defineProperty(mapPrototype, "set", mapSetDescriptor), mapHook = void 0;
     }
     function restoreConsumeSetter() {
-      consumeSetter !== void 0 && isNonArrayRecord(objectPrototype) && Object.getOwnPropertyDescriptor(objectPrototype, "consume")?.set === consumeSetter && delete objectPrototype.consume, consumeSetter = void 0;
+      consumeSetter !== void 0 && isNonArrayRecord(objectPrototype) && Object.getOwnPropertyDescriptor(objectPrototype, "consume")?.set === consumeSetter && (originalConsumeDescriptor === void 0 ? delete objectPrototype.consume : Object.defineProperty(
+        objectPrototype,
+        "consume",
+        originalConsumeDescriptor
+      )), consumeSetter = void 0;
     }
     function retainProductionBreakdownOwner(owner) {
       productionBreakdownOwner = owner, restoreConsumeSetter();
@@ -603,7 +642,19 @@
     if (isNonArrayRecord(mapPrototype) && mapSetDescriptor !== void 0 && mapSetDescriptor.configurable === !0 && typeof mapSetDescriptor.value == "function") {
       let nativeMapSet = mapSetDescriptor.value, mapSetCapture = function(...args) {
         let result = Reflect.apply(nativeMapSet, this, args);
-        return structureEntries === void 0 && args.length >= 2 && readMechanicsEntry(args[0], args[1]) !== void 0 && isNonArrayRecord(this) && (structureEntries = this, restoreMapSet()), result;
+        if (structureEntries === void 0 && args.length >= 2) {
+          let entry = readMechanicsEntry(args[0], args[1]);
+          if (entry !== void 0 && isNonArrayRecord(this)) {
+            let candidateMap = this, size;
+            try {
+              size = typeof mapSizeGetter == "function" ? Reflect.apply(mapSizeGetter, candidateMap, []) : void 0;
+            } catch {
+              size = void 0;
+            }
+            candidateMap === candidateStructureMap ? candidateStructureKeys.has(entry.entryKey) || size !== candidateStructureKeys.size + 1 ? (candidateStructureMap = void 0, candidateStructureKeys = /* @__PURE__ */ new Set()) : (candidateStructureKeys.add(entry.entryKey), candidateStructureKeys.size >= structureMapCaptureThreshold && (structureEntries = candidateMap, restoreMapSet())) : size === 1 && (candidateStructureMap = candidateMap, candidateStructureKeys = /* @__PURE__ */ new Set([entry.entryKey]));
+          }
+        }
+        return result;
       };
       mapHook = mapSetCapture, Object.defineProperty(mapPrototype, "set", {
         ...mapSetDescriptor,
@@ -611,19 +662,20 @@
       });
     }
     let originalConsumeDescriptor = isNonArrayRecord(objectPrototype) ? Object.getOwnPropertyDescriptor(objectPrototype, "consume") : void 0;
-    if (isNonArrayRecord(objectPrototype) && originalConsumeDescriptor === void 0) {
+    if (isNonArrayRecord(objectPrototype) && originalConsumeDescriptor === void 0 && typeof objectDefineProperty == "function") {
       let temporaryConsumeSetter = function(value) {
         let isLedgerOwner = !1;
-        if (productionBreakdownOwner === void 0 && (isLedgerOwner = isProductionConsumeOwner(this, value)), (typeof this == "object" && this !== null || typeof this == "function") && isNonArrayRecord(this))
-          try {
-            Reflect.defineProperty(this, "consume", {
-              configurable: !0,
-              enumerable: !0,
-              writable: !0,
-              value
-            }) && isLedgerOwner && retainProductionBreakdownOwner(this);
-          } catch {
-          }
+        if (productionBreakdownOwner === void 0 && (isLedgerOwner = isProductionConsumeOwner(this, value)), typeof objectDefineProperty != "function")
+          throw new TypeError("page Object.defineProperty is unavailable");
+        Reflect.apply(
+          objectDefineProperty,
+          objectConstructor,
+          [
+            this,
+            "consume",
+            { configurable: !0, enumerable: !0, writable: !0, value }
+          ]
+        ), isLedgerOwner && retainProductionBreakdownOwner(this);
       };
       consumeSetter = temporaryConsumeSetter, Object.defineProperty(objectPrototype, "consume", {
         configurable: !0,

@@ -29,7 +29,7 @@ class FakeWorker {
 }
 
 function makePage() {
-  const page = runInNewContext("({ Map, Object })");
+  const page = runInNewContext("({ Map, Object, Array, Function, Proxy })");
   page.Worker = FakeWorker;
   return page;
 }
@@ -37,6 +37,7 @@ function makePage() {
 function structureEntry({ region, sector, struct, actionId, powered }) {
   const action = {
     id: actionId,
+    title: "Relay",
     powered,
     p_fuel: () => ({ r: "Oil", a: 2 }),
     p_fuel_adjust: true,
@@ -76,6 +77,70 @@ assert.equal(capture.mechanics.readProductionBreakdown(), undefined);
 const unrelatedBefore = new page.Map();
 unrelatedBefore.set("ordinary", { value: 1 });
 assert.equal(capture.mechanics.readStructures(), undefined);
+assert.equal("consume" in unrelatedBefore, true);
+
+const ordinaryReceiver = new page.Object();
+ordinaryReceiver.consume = "ordinary value";
+assert.equal(ordinaryReceiver.consume, "ordinary value");
+assert.deepEqual(Object.getOwnPropertyDescriptor(ordinaryReceiver, "consume"), {
+  configurable: true,
+  enumerable: true,
+  value: "ordinary value",
+  writable: true,
+});
+
+const arrayReceiver = new page.Array();
+arrayReceiver.consume = "array value";
+assert.equal(arrayReceiver.consume, "array value");
+assert.equal(Object.hasOwn(arrayReceiver, "consume"), true);
+
+const functionReceiver = new page.Function();
+functionReceiver.consume = "function value";
+assert.equal(functionReceiver.consume, "function value");
+assert.equal(Object.hasOwn(functionReceiver, "consume"), true);
+
+let proxyDefineCalls = 0;
+const proxyTarget = new page.Object();
+const proxyReceiver = new page.Proxy(proxyTarget, {
+  defineProperty(target, property, descriptor) {
+    proxyDefineCalls += 1;
+    return Reflect.defineProperty(target, property, descriptor);
+  },
+});
+proxyReceiver.consume = "proxy value";
+assert.equal(proxyTarget.consume, "proxy value");
+assert.equal(proxyDefineCalls, 1);
+
+const primitiveAssignment = new page.Function(
+  "receiver",
+  "'use strict'; receiver.consume = 'cannot create';",
+);
+assert.throws(() => primitiveAssignment("primitive"), { name: "TypeError" });
+
+const ownPropertyReceiver = new page.Object();
+ownPropertyReceiver.consume = "old value";
+ownPropertyReceiver.consume = "new value";
+assert.equal(ownPropertyReceiver.consume, "new value");
+assert.equal(Object.hasOwn(ownPropertyReceiver, "consume"), true);
+
+const nonExtensibleReceiver = new page.Object();
+page.Object.preventExtensions(nonExtensibleReceiver);
+assert.throws(
+  () => {
+    nonExtensibleReceiver.consume = "cannot create";
+  },
+  { name: "TypeError" },
+);
+const sloppyAssignment = new page.Function(
+  "receiver",
+  "receiver.consume = 'cannot create';",
+);
+assert.throws(
+  () => sloppyAssignment(nonExtensibleReceiver),
+  { name: "TypeError" },
+  "the temporary setter throws rather than reporting a failed write as success",
+);
+assert.equal(Object.hasOwn(nonExtensibleReceiver, "consume"), false);
 
 const falseCandidate = new page.Map();
 falseCandidate.set(
@@ -117,6 +182,21 @@ assert.equal(
   "the structural probe does not execute accessor properties on an unrelated map",
 );
 
+const singleEntryCandidate = new page.Map();
+const plausibleEntry = structureEntry({
+  region: "space",
+  sector: "spc_plausible",
+  struct: "relay",
+  actionId: "space-spc_plausible-relay",
+  powered: () => -1,
+});
+singleEntryCandidate.set(plausibleEntry.key, plausibleEntry);
+assert.equal(
+  capture.mechanics.readStructures(),
+  undefined,
+  "one structurally plausible row does not identify a private registry",
+);
+
 let liveGlobal = { space: { relay: { watts: -2 } } };
 const entries = new page.Map();
 const first = structureEntry({
@@ -127,13 +207,12 @@ const first = structureEntry({
   powered: () => liveGlobal.space.relay.watts,
 });
 entries.set(first.key, first);
-assert.deepEqual(
+assert.equal(capture.mechanics.readStructures(), undefined);
+assert.notDeepEqual(
   Object.getOwnPropertyDescriptor(page.Map.prototype, "set"),
   nativeMapSetDescriptor,
-  "the exact native Map.set descriptor is restored inside the matching call",
 );
 
-// The game keeps populating the retained Map after native behavior is restored.
 const second = structureEntry({
   region: "interstellar",
   sector: "int_home",
@@ -142,8 +221,32 @@ const second = structureEntry({
   powered: () => -4,
 });
 entries.set(second.key, second);
+assert.equal(capture.mechanics.readStructures(), undefined);
+const third = structureEntry({
+  region: "space",
+  sector: "spc_red",
+  struct: "relay",
+  actionId: "space-spc_red-relay",
+  powered: () => -3,
+});
+entries.set(third.key, third);
+assert.deepEqual(
+  Object.getOwnPropertyDescriptor(page.Map.prototype, "set"),
+  nativeMapSetDescriptor,
+  "the exact native Map.set descriptor is restored inside the third matching call",
+);
+
+// The game keeps populating the retained Map after native behavior is restored.
+const fourth = structureEntry({
+  region: "galaxy",
+  sector: "gxy_home",
+  struct: "relay",
+  actionId: "galaxy-gxy_home-relay",
+  powered: () => -5,
+});
+entries.set(fourth.key, fourth);
 const definitions = capture.mechanics.readStructures();
-assert.equal(definitions.length, 2);
+assert.equal(definitions.length, 4);
 assert.deepEqual(
   definitions.map(({ entryKey, region, sector, struct }) => ({
     entryKey,
@@ -164,36 +267,128 @@ assert.deepEqual(
       sector: "int_home",
       struct: "relay",
     },
+    {
+      entryKey: "spc_red:relay",
+      region: "space",
+      sector: "spc_red",
+      struct: "relay",
+    },
+    {
+      entryKey: "gxy_home:relay",
+      region: "galaxy",
+      sector: "gxy_home",
+      struct: "relay",
+    },
   ],
   "same short struct names in different worlds remain separate identities",
 );
 assert.notEqual(definitions[0].entryKey, definitions[1].entryKey);
-assert.equal(definitions[0].readPowered(), -2);
+assert.deepEqual(definitions[0].readTitle(), {
+  kind: "value",
+  value: "Relay",
+});
+assert.deepEqual(definitions[0].readPowered(), { kind: "value", value: -2 });
 liveGlobal = { space: { relay: { watts: -7 } } };
 assert.equal(
-  definitions[0].readPowered(),
+  definitions[0].readPowered().value,
   -7,
   "a retained game-owned read closure observes the replacement live root",
 );
-assert.equal(definitions[1].readPowered(), -4);
-assert.deepEqual(definitions[0].readFuel(), [{ resourceId: "Oil", amount: 2 }]);
-assert.equal(definitions[0].readFuelAdjustmentRequested(), true);
-assert.equal(definitions[0].readSupport(), -1);
-assert.deepEqual(definitions[0].readSupportFuel(), [
-  { resourceId: "Oil", amount: 1 },
-]);
-assert.equal(definitions[0].readSupportFuelAdjustmentDisabled(), true);
-assert.equal(definitions[0].readPowerLimit(), 5);
-assert.deepEqual(definitions[0].readPowerBalancer(), [
-  { kind: "resource", resourceId: "Food", stateField: "lpmod" },
-  { kind: "support", amount: 3 },
-]);
+assert.deepEqual(definitions[1].readPowered(), { kind: "value", value: -4 });
+assert.deepEqual(definitions[0].readFuel(), {
+  kind: "value",
+  value: [{ resourceId: "Oil", amount: 2 }],
+});
+assert.deepEqual(definitions[0].readFuelAdjustmentRequested(), {
+  kind: "value",
+  value: true,
+});
+assert.deepEqual(definitions[0].readSupport(), { kind: "value", value: -1 });
+assert.deepEqual(definitions[0].readSupportFuel(), {
+  kind: "value",
+  value: [{ resourceId: "Oil", amount: 1 }],
+});
+assert.deepEqual(definitions[0].readSupportFuelAdjustmentDisabled(), {
+  kind: "value",
+  value: true,
+});
+assert.deepEqual(definitions[0].readPowerLimit(), { kind: "value", value: 5 });
+assert.deepEqual(definitions[0].readPowerBalancer(), {
+  kind: "value",
+  value: [
+    { kind: "resource", resourceId: "Food", stateField: "lpmod" },
+    { kind: "support", amount: 3 },
+  ],
+});
 assert.equal("c_action" in definitions[0], false);
 assert.equal("action" in definitions[0], false);
 assert.equal("postPower" in definitions[0], false);
 assert.equal("payCosts" in definitions[0], false);
 assert.equal("invoke" in capture.mechanics, false);
 assert.equal("uninstall" in capture.mechanics, false);
+
+const falseResultAction = structureEntry({
+  region: "space",
+  sector: "spc_elsewhere",
+  struct: "relay",
+  actionId: "space-spc_elsewhere-relay",
+  powered: () => false,
+});
+falseResultAction.c_action.p_fuel = () => false;
+falseResultAction.c_action.powerBalancer = () => false;
+falseResultAction.c_action.title = () => "Dynamic relay";
+falseResultAction.c_action.p_fuel_adjust = false;
+delete falseResultAction.c_action.support_fuel_adjust;
+delete falseResultAction.c_action.power_limit;
+entries.set(falseResultAction.key, falseResultAction);
+const falseResultDefinition = capture.mechanics
+  .readStructures()
+  .find((entry) => entry.entryKey === falseResultAction.key);
+assert.deepEqual(falseResultDefinition.readPowered(), {
+  kind: "value",
+  value: false,
+});
+assert.deepEqual(falseResultDefinition.readTitle(), {
+  kind: "value",
+  value: "Dynamic relay",
+});
+assert.deepEqual(falseResultDefinition.readFuel(), {
+  kind: "value",
+  value: false,
+});
+assert.deepEqual(falseResultDefinition.readFuelAdjustmentRequested(), {
+  kind: "value",
+  value: false,
+});
+assert.deepEqual(falseResultDefinition.readPowerBalancer(), {
+  kind: "value",
+  value: false,
+});
+assert.deepEqual(falseResultDefinition.readSupportFuelAdjustmentDisabled(), {
+  kind: "absent",
+});
+assert.deepEqual(falseResultDefinition.readPowerLimit(), { kind: "absent" });
+
+const invalidResultAction = structureEntry({
+  region: "space",
+  sector: "spc_invalid",
+  struct: "relay",
+  actionId: "space-spc_invalid-relay",
+  powered: () => Number.NaN,
+});
+delete invalidResultAction.c_action.title;
+invalidResultAction.c_action.p_fuel_adjust = "false";
+entries.set(invalidResultAction.key, invalidResultAction);
+const invalidResultDefinition = capture.mechanics
+  .readStructures()
+  .find((entry) => entry.entryKey === invalidResultAction.key);
+assert.deepEqual(invalidResultDefinition.readPowered(), { kind: "invalid" });
+assert.deepEqual(invalidResultDefinition.readTitle(), { kind: "absent" });
+invalidResultAction.c_action.title = 7;
+assert.deepEqual(invalidResultDefinition.readTitle(), { kind: "invalid" });
+assert.deepEqual(invalidResultDefinition.readFuelAdjustmentRequested(), {
+  kind: "invalid",
+});
 
 const unrelatedAfter = new page.Map();
 unrelatedAfter.set(
@@ -206,9 +401,19 @@ unrelatedAfter.set(
     powered: () => 1,
   }),
 );
-assert.equal(capture.mechanics.readStructures().length, 2);
+assert.equal(capture.mechanics.readStructures().length, 6);
 
 // One inherited assignment captures the p-ledger owner and then removes the prototype hook.
+const falseLedgerCandidate = new page.Object();
+falseLedgerCandidate.Global = {};
+falseLedgerCandidate.consume = { Food: {} };
+assert.equal(Object.hasOwn(falseLedgerCandidate, "consume"), true);
+assert.equal(
+  capture.mechanics.readProductionBreakdown(),
+  undefined,
+  "a Global section with a nonempty consume value is not the production owner",
+);
+
 const unrelatedOwner = new page.Object();
 unrelatedOwner.notes = {};
 unrelatedOwner.consume = {};
@@ -223,6 +428,7 @@ assert.deepEqual(
   nativeConsumeDescriptor,
   "the inherited property hook is restored as soon as the production owner is identified",
 );
+assert.equal("consume" in unrelatedBefore, false);
 ledger.Food = { workers: "4v" };
 ledger.consume.Food = { "coal plant": -3 };
 const firstBreakdown = capture.mechanics.readProductionBreakdown();
@@ -278,6 +484,7 @@ assert.deepEqual(
   Object.getOwnPropertyDescriptor(missedPage.Object.prototype, "consume"),
   missedConsume,
 );
+assert.equal("consume" in missedPage.Object.prototype, false);
 missedCapture.uninstall();
 
 // Teardown also restores pending hooks when no game worker ever starts.
@@ -300,3 +507,4 @@ assert.deepEqual(
   Object.getOwnPropertyDescriptor(tornDownPage.Object.prototype, "consume"),
   tornDownConsume,
 );
+assert.equal("consume" in tornDownPage.Object.prototype, false);

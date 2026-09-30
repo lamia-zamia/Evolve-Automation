@@ -17,6 +17,7 @@
     "format": "prettier . --write --cache",
     "format:check": "prettier . --check --cache",
     "test": "node scripts/test.mjs",
+    "test:captured-game-mechanics-live": "node scripts/captured-game-mechanics-live-check.mjs",
     "check": "node scripts/check.mjs",
     "check:serial": "npm run typecheck && npm run lint:check && npm run format:check && node scripts/test.mjs",
     "dev": "node build.mjs --watch",

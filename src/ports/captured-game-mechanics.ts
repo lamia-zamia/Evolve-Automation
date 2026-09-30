@@ -5,6 +5,12 @@ export interface CapturedGameFuelInput {
   readonly amount: number;
 }
 
+/** A captured action read keeps absence distinct from a valid false result or bad output. */
+export type CapturedGameRead<T> =
+  | { readonly kind: "value"; readonly value: T }
+  | { readonly kind: "absent" }
+  | { readonly kind: "invalid" };
+
 export type CapturedPowerBalanceRule =
   | {
       readonly kind: "resource";
@@ -21,14 +27,19 @@ export interface CapturedGameStructureDefinition {
   readonly struct: string;
   /** The current Vue control id declared by the game action definition. */
   readonly actionId: string;
-  readPowered(): number | undefined;
-  readFuel(): readonly CapturedGameFuelInput[] | undefined;
-  readFuelAdjustmentRequested(): boolean | undefined;
-  readSupport(): number | undefined;
-  readSupportFuel(): readonly CapturedGameFuelInput[] | undefined;
-  readSupportFuelAdjustmentDisabled(): boolean | undefined;
-  readPowerLimit(): number | undefined;
-  readPowerBalancer(): readonly CapturedPowerBalanceRule[] | false | undefined;
+  /** The game-owned display key used by its source-specific production ledger. */
+  readTitle(): CapturedGameRead<string>;
+  readPowered(): CapturedGameRead<number | string | boolean>;
+  readFuel(): CapturedGameRead<readonly CapturedGameFuelInput[] | false>;
+  /** DeadSpace applies generator fuel adjustment only when this positive flag is true. */
+  readFuelAdjustmentRequested(): CapturedGameRead<boolean>;
+  readSupport(): CapturedGameRead<number | string | boolean>;
+  readSupportFuel(): CapturedGameRead<readonly CapturedGameFuelInput[] | false>;
+  readSupportFuelAdjustmentDisabled(): CapturedGameRead<boolean>;
+  readPowerLimit(): CapturedGameRead<number | string | boolean>;
+  readPowerBalancer(): CapturedGameRead<
+    readonly CapturedPowerBalanceRule[] | false
+  >;
 }
 
 export type CapturedProductionCell = number | string;
