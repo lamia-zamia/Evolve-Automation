@@ -416,6 +416,272 @@
     });
   }
 
+  // src/adapters/evolve/captured-game-mechanics.ts
+  function readMechanicsProperty(owner, key) {
+    try {
+      return readProperty(owner, key);
+    } catch {
+      return;
+    }
+  }
+  function readMechanicsDataProperty(owner, key) {
+    if (!((typeof owner != "object" || owner === null) && typeof owner != "function"))
+      try {
+        let descriptor = Object.getOwnPropertyDescriptor(owner, key);
+        return descriptor !== void 0 && "value" in descriptor ? descriptor.value : void 0;
+      } catch {
+        return;
+      }
+  }
+  function readMechanicsEntry(mapKey, candidate) {
+    if (!(!isNonArrayRecord(candidate) || typeof mapKey != "string"))
+      try {
+        let entryKey = readMechanicsDataProperty(candidate, "key"), region = readMechanicsDataProperty(candidate, "region"), sector = readMechanicsDataProperty(candidate, "sector"), struct = readMechanicsDataProperty(candidate, "struct"), action = readMechanicsDataProperty(candidate, "c_action"), info = readMechanicsDataProperty(candidate, "info");
+        if (entryKey !== mapKey || typeof region != "string" || region.length === 0 || typeof sector != "string" || sector.length === 0 || typeof struct != "string" || struct.length === 0 || mapKey !== `${sector}:${struct}` || info !== !1 && !isNonArrayRecord(info) || !isNonArrayRecord(action))
+          return;
+        let actionId = readMechanicsDataProperty(action, "id");
+        return typeof actionId != "string" || actionId.trim().length === 0 || ![
+          "powered",
+          "p_fuel",
+          "support",
+          "support_fuel",
+          "power_limit",
+          "powerBalancer"
+        ].some(
+          (name) => typeof readMechanicsDataProperty(action, name) == "function"
+        ) ? void 0 : { entryKey, region, sector, struct, actionId, action };
+      } catch {
+        return;
+      }
+  }
+  function readMechanicsMethod(action, name) {
+    let method = readMechanicsDataProperty(action, name);
+    return typeof method == "function" ? method : void 0;
+  }
+  function invokeMechanicsMethod(action, name) {
+    let method = readMechanicsMethod(action, name);
+    if (method !== void 0)
+      try {
+        return Reflect.apply(method, action, []);
+      } catch {
+        return;
+      }
+  }
+  function readMechanicsNumber(action, name) {
+    let value = invokeMechanicsMethod(action, name);
+    return typeof value == "number" && Number.isFinite(value) ? value : void 0;
+  }
+  function readMechanicsFuel(action, name) {
+    let value = invokeMechanicsMethod(action, name);
+    if (value == null || value === !1)
+      return;
+    let items = Array.isArray(value) ? value : [value], result = [];
+    for (let item of items) {
+      if (!isNonArrayRecord(item)) return;
+      let resourceId = readMechanicsDataProperty(item, "r"), amount = readMechanicsDataProperty(item, "a");
+      if (typeof resourceId != "string" || typeof amount != "number" || !Number.isFinite(amount))
+        return;
+      result.push(Object.freeze({ resourceId, amount }));
+    }
+    return Object.freeze(result);
+  }
+  function readMechanicsFuelFlag(action, name) {
+    let value = readMechanicsDataProperty(action, name);
+    return typeof value == "boolean" ? value : void 0;
+  }
+  function readMechanicsBalancer(action) {
+    let value = invokeMechanicsMethod(action, "powerBalancer");
+    if (value === !1) return !1;
+    if (!Array.isArray(value)) return;
+    let result = [];
+    for (let item of value) {
+      if (!isNonArrayRecord(item)) return;
+      let resourceId = readMechanicsDataProperty(item, "r"), stateField = readMechanicsDataProperty(item, "k");
+      if (typeof resourceId == "string" && typeof stateField == "string") {
+        result.push(Object.freeze({ kind: "resource", resourceId, stateField }));
+        continue;
+      }
+      let supportAmount = readMechanicsDataProperty(item, "s");
+      if (typeof supportAmount == "number" && Number.isFinite(supportAmount)) {
+        result.push(Object.freeze({ kind: "support", amount: supportAmount }));
+        continue;
+      }
+      return;
+    }
+    return Object.freeze(result);
+  }
+  function createMechanicsDefinition(entry) {
+    let action = entry.action;
+    return Object.freeze({
+      entryKey: entry.entryKey,
+      region: entry.region,
+      sector: entry.sector,
+      struct: entry.struct,
+      actionId: entry.actionId,
+      readPowered: () => readMechanicsNumber(action, "powered"),
+      readFuel: () => readMechanicsFuel(action, "p_fuel"),
+      readFuelAdjustmentRequested: () => readMechanicsFuelFlag(action, "p_fuel_adjust"),
+      readSupport: () => readMechanicsNumber(action, "support"),
+      readSupportFuel: () => readMechanicsFuel(action, "support_fuel"),
+      readSupportFuelAdjustmentDisabled: () => {
+        let value = readMechanicsDataProperty(action, "support_fuel_adjust");
+        return typeof value == "boolean" ? value === !1 : void 0;
+      },
+      readPowerLimit: () => readMechanicsNumber(action, "power_limit"),
+      readPowerBalancer: () => readMechanicsBalancer(action)
+    });
+  }
+  function readCapturedProductionCells(source) {
+    if (!isNonArrayRecord(source)) return;
+    let result = /* @__PURE__ */ Object.create(
+      null
+    );
+    try {
+      for (let key of Object.keys(source)) {
+        let descriptor = Object.getOwnPropertyDescriptor(source, key);
+        if (descriptor === void 0 || !("value" in descriptor)) continue;
+        let value = descriptor.value;
+        (typeof value == "string" || typeof value == "number" && Number.isFinite(value)) && (result[key] = value);
+      }
+    } catch {
+      return;
+    }
+    return Object.freeze(result);
+  }
+  function readCapturedProductionLedger(source) {
+    if (!isNonArrayRecord(source)) return;
+    let result = /* @__PURE__ */ Object.create(null);
+    try {
+      for (let key of Object.keys(source)) {
+        let descriptor = Object.getOwnPropertyDescriptor(source, key);
+        if (descriptor === void 0 || !("value" in descriptor)) continue;
+        let cells = readCapturedProductionCells(descriptor.value);
+        cells !== void 0 && (result[key] = cells);
+      }
+    } catch {
+      return;
+    }
+    return Object.freeze(result);
+  }
+  function isProductionConsumeOwner(owner, assigned) {
+    if (!isNonArrayRecord(owner) || !isNonArrayRecord(assigned)) return !1;
+    try {
+      let ownerKeys = Object.keys(owner);
+      if (ownerKeys.length !== 1 || ownerKeys[0] !== "Global" || Object.keys(assigned).length !== 0)
+        return !1;
+      let section = readMechanicsDataProperty(owner, "Global");
+      return isNonArrayRecord(section);
+    } catch {
+      return !1;
+    }
+  }
+  function emptyGameMechanics() {
+    return Object.freeze({
+      readStructures: () => {
+      },
+      readProductionBreakdown: () => {
+      }
+    });
+  }
+  function installCapturedGameMechanics(pageWindow, periods) {
+    if (!isNonArrayRecord(pageWindow))
+      return Object.freeze({
+        mechanics: emptyGameMechanics(),
+        uninstall: () => {
+        }
+      });
+    let mapConstructor = readMechanicsProperty(pageWindow, "Map"), mapPrototype = readMechanicsProperty(mapConstructor, "prototype"), mapSetDescriptor = isNonArrayRecord(mapPrototype) ? Object.getOwnPropertyDescriptor(mapPrototype, "set") : void 0, objectConstructor = readMechanicsProperty(pageWindow, "Object"), objectPrototype = readMechanicsProperty(objectConstructor, "prototype"), structureEntries, productionBreakdownOwner, stopped = !1, mapHook, consumeSetter, unsubscribeFirstPeriod;
+    function restoreMapSet() {
+      mapHook !== void 0 && isNonArrayRecord(mapPrototype) && Object.getOwnPropertyDescriptor(mapPrototype, "set")?.value === mapHook && mapSetDescriptor !== void 0 && Object.defineProperty(mapPrototype, "set", mapSetDescriptor), mapHook = void 0;
+    }
+    function restoreConsumeSetter() {
+      consumeSetter !== void 0 && isNonArrayRecord(objectPrototype) && Object.getOwnPropertyDescriptor(objectPrototype, "consume")?.set === consumeSetter && delete objectPrototype.consume, consumeSetter = void 0;
+    }
+    function retainProductionBreakdownOwner(owner) {
+      productionBreakdownOwner = owner, restoreConsumeSetter();
+    }
+    if (isNonArrayRecord(mapPrototype) && mapSetDescriptor !== void 0 && mapSetDescriptor.configurable === !0 && typeof mapSetDescriptor.value == "function") {
+      let nativeMapSet = mapSetDescriptor.value, mapSetCapture = function(...args) {
+        let result = Reflect.apply(nativeMapSet, this, args);
+        return structureEntries === void 0 && args.length >= 2 && readMechanicsEntry(args[0], args[1]) !== void 0 && isNonArrayRecord(this) && (structureEntries = this, restoreMapSet()), result;
+      };
+      mapHook = mapSetCapture, Object.defineProperty(mapPrototype, "set", {
+        ...mapSetDescriptor,
+        value: mapSetCapture
+      });
+    }
+    let originalConsumeDescriptor = isNonArrayRecord(objectPrototype) ? Object.getOwnPropertyDescriptor(objectPrototype, "consume") : void 0;
+    if (isNonArrayRecord(objectPrototype) && originalConsumeDescriptor === void 0) {
+      let temporaryConsumeSetter = function(value) {
+        let isLedgerOwner = !1;
+        if (productionBreakdownOwner === void 0 && (isLedgerOwner = isProductionConsumeOwner(this, value)), (typeof this == "object" && this !== null || typeof this == "function") && isNonArrayRecord(this))
+          try {
+            Reflect.defineProperty(this, "consume", {
+              configurable: !0,
+              enumerable: !0,
+              writable: !0,
+              value
+            }) && isLedgerOwner && retainProductionBreakdownOwner(this);
+          } catch {
+          }
+      };
+      consumeSetter = temporaryConsumeSetter, Object.defineProperty(objectPrototype, "consume", {
+        configurable: !0,
+        enumerable: !1,
+        set: temporaryConsumeSetter
+      });
+    }
+    function restoreUnmatchedHooksAfterFirstPeriod() {
+      structureEntries === void 0 && restoreMapSet(), productionBreakdownOwner === void 0 && restoreConsumeSetter(), unsubscribeFirstPeriod?.(), unsubscribeFirstPeriod = void 0;
+    }
+    unsubscribeFirstPeriod = periods.subscribe(
+      restoreUnmatchedHooksAfterFirstPeriod
+    );
+    let mechanics = Object.freeze({
+      readStructures() {
+        let entries = structureEntries;
+        if (!(entries === void 0 || stopped))
+          try {
+            let result = [];
+            for (let [key, value] of entries) {
+              let entry = readMechanicsEntry(key, value);
+              entry !== void 0 && result.push(createMechanicsDefinition(entry));
+            }
+            return Object.freeze(result);
+          } catch {
+            return;
+          }
+      },
+      readProductionBreakdown() {
+        let owner = productionBreakdownOwner;
+        if (owner === void 0 || stopped) return;
+        let consumption = readCapturedProductionLedger(
+          readMechanicsDataProperty(owner, "consume")
+        ), productionSource = /* @__PURE__ */ Object.create(
+          null
+        );
+        try {
+          for (let key of Object.keys(owner)) {
+            if (key === "consume") continue;
+            let value = readMechanicsDataProperty(owner, key);
+            isNonArrayRecord(value) && (productionSource[key] = value);
+          }
+        } catch {
+          return;
+        }
+        let production = readCapturedProductionLedger(productionSource);
+        if (!(consumption === void 0 || production === void 0))
+          return Object.freeze({ production, consumption });
+      }
+    });
+    return Object.freeze({
+      mechanics,
+      uninstall() {
+        stopped || (stopped = !0, unsubscribeFirstPeriod?.(), unsubscribeFirstPeriod = void 0, restoreMapSet(), restoreConsumeSetter());
+      }
+    });
+  }
+
   // src/adapters/evolve/vue-capture.ts
   var CAPTURE_MARKER = /* @__PURE__ */ Symbol.for("evolve-automation.vue-capture"), DISPOSABLE_APP_MARKER = /* @__PURE__ */ Symbol.for(
     "evolve-automation.disposable-vue-app"
@@ -849,7 +1115,7 @@
   function installPageCapture(pageWindow, options = {}) {
     let installed = readInstalledCapture(pageWindow);
     if (installed !== void 0) return installed;
-    let vue = installVueCapture(pageWindow, options), worker = installWorkerCapture(pageWindow, options), keyState = createGameKeyStateCapture(
+    let vue = installVueCapture(pageWindow, options), worker = installWorkerCapture(pageWindow, options), mechanics = installCapturedGameMechanics(pageWindow, worker.periods), keyState = createGameKeyStateCapture(
       () => readProperty(pageWindow, "document")
     ), capture = Object.freeze({
       rootState: vue.rootState,
@@ -857,10 +1123,11 @@
       controls: vue.controls,
       controlUsage: vue.controlUsage,
       periods: worker.periods,
+      mechanics: mechanics.mechanics,
       mountSuppression: vue.mountSuppression,
       isComplete: () => vue.rootState.readRoot() !== void 0 && worker.isCaptured(),
       uninstall() {
-        isRecord(pageWindow) && pageWindow[PAGE_CAPTURE_MARKER] === capture && delete pageWindow[PAGE_CAPTURE_MARKER], vue.uninstall(), worker.uninstall(), keyState.uninstall();
+        isRecord(pageWindow) && pageWindow[PAGE_CAPTURE_MARKER] === capture && delete pageWindow[PAGE_CAPTURE_MARKER], vue.uninstall(), worker.uninstall(), mechanics.uninstall(), keyState.uninstall();
       }
     });
     return isRecord(pageWindow) && Object.defineProperty(pageWindow, PAGE_CAPTURE_MARKER, {

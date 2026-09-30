@@ -9,8 +9,8 @@
  * The game's own answer is genuinely not reachable here, which is why these are restated. The drawn
  * `market-<res>` row exposes `aSell` and `aBuy`, but `aSell` only returns a localized sentence with
  * the figures interpolated into prose, and `aBuy` throws on every call: upstream's `resources.js`
- * references a bare `astroSign` that the module never declares. Debug Mode's `window.evolve`
- * carries both functions, but production must not depend on Debug Mode — it is a test oracle only.
+ * references a bare `astroSign` that the module never declares. The private price functions are
+ * outside the normal captured page surface; Debug/Expose is not an oracle or runtime dependency.
  *
  * Three upstream terms are not restated, because each needs a subsystem this module has no reason
  * to own. `unsupportedTradePriceModifier` names whichever one is active so the caller's diagnostic

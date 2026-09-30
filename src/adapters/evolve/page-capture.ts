@@ -14,8 +14,10 @@ import type { GameMountSuppression } from "../../ports/game-mount-suppression.ts
 import type { GamePeriodSource } from "../../ports/game-period-source.ts";
 import type { GameRootStateSource } from "../../ports/game-root-state.ts";
 import type { GameKeyStateReader } from "../../ports/game-key-state.ts";
+import type { CapturedGameMechanics } from "../../ports/captured-game-mechanics.ts";
 import { isRecord, readProperty } from "../validation.ts";
 import { createGameKeyStateCapture } from "../browser/game-key-state.ts";
+import { installCapturedGameMechanics } from "./captured-game-mechanics.ts";
 import { installVueCapture, type VueCaptureOptions } from "./vue-capture.ts";
 import {
   installWorkerCapture,
@@ -29,6 +31,8 @@ export interface PageCapture {
   readonly controls: GameControlRegistry;
   readonly controlUsage: GameControlUsageReader;
   readonly periods: GamePeriodSource;
+  /** Safe read access to DeadSpace's private grid definitions and current production ledger. */
+  readonly mechanics: CapturedGameMechanics;
   /** Scoped suppression of temporary component mounting, for a discovery draw. */
   readonly mountSuppression: GameMountSuppression;
   /** True once the root state has been captured and the game's worker listener is wrapped. */
@@ -61,6 +65,7 @@ export function installPageCapture(
 
   const vue = installVueCapture(pageWindow, options);
   const worker = installWorkerCapture(pageWindow, options);
+  const mechanics = installCapturedGameMechanics(pageWindow, worker.periods);
   const keyState = createGameKeyStateCapture(() =>
     readProperty(pageWindow, "document"),
   );
@@ -70,6 +75,7 @@ export function installPageCapture(
     controls: vue.controls,
     controlUsage: vue.controlUsage,
     periods: worker.periods,
+    mechanics: mechanics.mechanics,
     mountSuppression: vue.mountSuppression,
     isComplete: () =>
       vue.rootState.readRoot() !== undefined && worker.isCaptured(),
@@ -79,6 +85,7 @@ export function installPageCapture(
       }
       vue.uninstall();
       worker.uninstall();
+      mechanics.uninstall();
       keyState.uninstall();
     },
   });
