@@ -11,6 +11,8 @@ import type {
   CapturedGameRead,
   CapturedGameStructureDefinition,
   CapturedPowerBalanceRule,
+  CapturedPowerRequirement,
+  CapturedFuelAdjustmentMode,
   CapturedSupportTopology,
   CapturedProductionBreakdown,
   CapturedProductionCell,
@@ -298,7 +300,9 @@ function readMechanicsSupportTopology(
         break;
       }
     }
-    if (anchorEntryKey === null) return { kind: "invalid" };
+    // `initStructureGrids()` keeps a false anchor when the info.support name has no matching
+    // action in the same region. The live support pass then disables that group, so null is a
+    // complete observation rather than a malformed mechanics read.
   }
   let conditionDescriptor: PropertyDescriptor | undefined;
   try {
@@ -460,6 +464,239 @@ function readMechanicsBalancer(
   return { kind: "value", value: Object.freeze(result) };
 }
 
+function readMechanicsPowerRequirements(
+  action: Record<string, unknown>,
+): CapturedGameRead<readonly CapturedPowerRequirement[]> {
+  let descriptor: PropertyDescriptor | undefined;
+  try {
+    descriptor = Object.getOwnPropertyDescriptor(action, "power_reqs");
+  } catch {
+    return { kind: "invalid" };
+  }
+  if (descriptor === undefined) return { kind: "absent" };
+  if (!("value" in descriptor) || !isNonArrayRecord(descriptor.value)) {
+    return { kind: "invalid" };
+  }
+  const result: CapturedPowerRequirement[] = [];
+  try {
+    for (const techId of Object.keys(descriptor.value)) {
+      const requirement = Object.getOwnPropertyDescriptor(
+        descriptor.value,
+        techId,
+      );
+      if (requirement === undefined || !("value" in requirement)) {
+        return { kind: "invalid" };
+      }
+      const level = Number(requirement.value);
+      if (!Number.isFinite(level)) return { kind: "invalid" };
+      result.push(Object.freeze({ techId, level }));
+    }
+  } catch {
+    return { kind: "invalid" };
+  }
+  return { kind: "value", value: Object.freeze(result) };
+}
+
+function sameMechanicsDescriptor(
+  left: PropertyDescriptor | undefined,
+  right: PropertyDescriptor | undefined,
+): boolean {
+  if (left === undefined || right === undefined) return left === right;
+  return (
+    left.configurable === right.configurable &&
+    left.enumerable === right.enumerable &&
+    left.writable === right.writable &&
+    left.value === right.value &&
+    left.get === right.get &&
+    left.set === right.set
+  );
+}
+
+type FuelProbeResult =
+  | { readonly kind: "value"; readonly factor: number }
+  | { readonly kind: "absent" }
+  | { readonly kind: "invalid" };
+
+function fuelAdjustmentRegionMatches(
+  region: string,
+  mode: CapturedFuelAdjustmentMode,
+): boolean {
+  return mode === "space"
+    ? region === "space" || region === "underground" || region === "surface"
+    : region !== "space" && region !== "underground" && region !== "surface";
+}
+
+function fuelAdjustmentResourceMatches(
+  resourceId: string,
+  mode: CapturedFuelAdjustmentMode,
+): boolean {
+  return mode === "space"
+    ? resourceId === "Oil" ||
+        resourceId === "Helium_3" ||
+        resourceId === "Super_Fuel"
+    : resourceId === "Deuterium" ||
+        resourceId === "Helium_3" ||
+        resourceId === "Super_Fuel";
+}
+
+function readFuelProbeResult(
+  action: Record<string, unknown>,
+  numberPrototype: Record<string, unknown>,
+  objectConstructor: unknown,
+  mode: CapturedFuelAdjustmentMode,
+  resourceId: string,
+): FuelProbeResult | undefined {
+  if (!fuelAdjustmentResourceMatches(resourceId, mode)) return undefined;
+  const fuelDescriptor = Object.getOwnPropertyDescriptor(action, "p_fuel");
+  const effectDescriptor = Object.getOwnPropertyDescriptor(action, "effect");
+  const toFixedDescriptor = Object.getOwnPropertyDescriptor(
+    numberPrototype,
+    "toFixed",
+  );
+  if (
+    fuelDescriptor === undefined ||
+    !("value" in fuelDescriptor) ||
+    typeof fuelDescriptor.value !== "function" ||
+    fuelDescriptor.configurable !== true ||
+    effectDescriptor === undefined ||
+    !("value" in effectDescriptor) ||
+    typeof effectDescriptor.value !== "function" ||
+    toFixedDescriptor === undefined ||
+    !("value" in toFixedDescriptor) ||
+    typeof toFixedDescriptor.value !== "function" ||
+    toFixedDescriptor.configurable !== true
+  ) {
+    return undefined;
+  }
+
+  const originalFuel = fuelDescriptor;
+  const effect = effectDescriptor.value as CapturedGameCall;
+  const originalToFixed = toFixedDescriptor.value as CapturedGameCall;
+  const pageDefineProperty = readMechanicsDataProperty(
+    objectConstructor,
+    "defineProperty",
+  );
+  if (typeof pageDefineProperty !== "function") return undefined;
+
+  const originalFuelValue = readMechanicsFuel(action, "p_fuel");
+  if (originalFuelValue.kind !== "value" || originalFuelValue.value === false) {
+    return undefined;
+  }
+  const matchingFuels = originalFuelValue.value.filter(
+    (fuel) => fuel.resourceId === resourceId,
+  );
+  if (matchingFuels.length !== 1) return undefined;
+
+  const source = Reflect.apply(
+    fuelDescriptor.value as CapturedGameCall,
+    action,
+    [],
+  );
+  const arraySource = Array.isArray(source);
+  const probeAmounts = [4.25, 13.75] as const;
+  const observations: number[][] = [];
+  let result: FuelProbeResult = { kind: "absent" };
+  try {
+    const wrappedToFixed: CapturedGameCall = function capturedFuelToFixed(
+      this: unknown,
+      ...args: unknown[]
+    ): unknown {
+      let numeric: number;
+      try {
+        numeric = Number(this);
+      } catch {
+        numeric = Number.NaN;
+      }
+      const latest = observations[observations.length - 1];
+      latest?.push(numeric);
+      return Reflect.apply(originalToFixed, this, args);
+    };
+    Reflect.apply(pageDefineProperty as CapturedGameCall, objectConstructor, [
+      numberPrototype,
+      "toFixed",
+      { ...toFixedDescriptor, value: wrappedToFixed },
+    ]);
+    for (const amount of probeAmounts) {
+      observations.push([]);
+      const controlledFuel: CapturedGameCall = function capturedFuelAmount() {
+        const item = { r: resourceId, a: amount };
+        return arraySource ? [item] : item;
+      };
+      Reflect.apply(pageDefineProperty as CapturedGameCall, objectConstructor, [
+        action,
+        "p_fuel",
+        { ...fuelDescriptor, value: controlledFuel },
+      ]);
+      Reflect.apply(effect, action, []);
+    }
+    const [first, second] = observations;
+    if (first !== undefined && second !== undefined) {
+      const firstScaled: number[] = [];
+      const secondScaled: number[] = [];
+      for (const left of first) {
+        if (!Number.isFinite(left)) continue;
+        for (const right of second) {
+          if (!Number.isFinite(right)) continue;
+          const slope = (right - left) / (probeAmounts[1] - probeAmounts[0]);
+          if (!Number.isFinite(slope) || slope <= 0) continue;
+          const firstFactor = left / probeAmounts[0];
+          const secondFactor = right / probeAmounts[1];
+          if (
+            Math.abs(firstFactor - secondFactor) <=
+            1e-9 * Math.max(1, Math.abs(firstFactor), Math.abs(secondFactor))
+          ) {
+            firstScaled.push(firstFactor);
+            secondScaled.push(secondFactor);
+          }
+        }
+      }
+      const factors = [...firstScaled, ...secondScaled];
+      if (firstScaled.length === 0 && secondScaled.length === 0) {
+        result = { kind: "absent" };
+      } else if (
+        firstScaled.length === 1 &&
+        secondScaled.length === 1 &&
+        factors.every((factor) => factor === factors[0])
+      ) {
+        result = { kind: "value", factor: factors[0]! };
+      } else {
+        result = { kind: "invalid" };
+      }
+    }
+  } catch {
+    result = { kind: "invalid" };
+  } finally {
+    try {
+      Reflect.apply(pageDefineProperty as CapturedGameCall, objectConstructor, [
+        action,
+        "p_fuel",
+        fuelDescriptor,
+      ]);
+    } finally {
+      Reflect.apply(pageDefineProperty as CapturedGameCall, objectConstructor, [
+        numberPrototype,
+        "toFixed",
+        toFixedDescriptor,
+      ]);
+      // A failed restoration invalidates the oracle result instead of silently leaving the page
+      // prototype or action definition modified.
+      if (
+        !sameMechanicsDescriptor(
+          Object.getOwnPropertyDescriptor(action, "p_fuel"),
+          originalFuel,
+        ) ||
+        !sameMechanicsDescriptor(
+          Object.getOwnPropertyDescriptor(numberPrototype, "toFixed"),
+          toFixedDescriptor,
+        )
+      ) {
+        result = { kind: "invalid" };
+      }
+    }
+  }
+  return result;
+}
+
 function createMechanicsDefinition(
   entry: CapturedGridEntry,
   registry: Map<unknown, unknown>,
@@ -473,6 +710,7 @@ function createMechanicsDefinition(
     actionId: entry.actionId,
     readTitle: () => readMechanicsTitle(action),
     readPowered: () => readMechanicsPrimitive(action, "powered"),
+    readPowerRequirements: () => readMechanicsPowerRequirements(action),
     readFuel: () => readMechanicsFuel(action, "p_fuel"),
     readFuelAdjustmentRequested: () =>
       readMechanicsBooleanFlag(action, "p_fuel_adjust"),
@@ -563,6 +801,7 @@ function emptyGameMechanics(): CapturedGameMechanics {
     readPowerOrder: () => ({ kind: "invalid" as const }),
     readSupportOrder: () => ({ kind: "invalid" as const }),
     readProductionBreakdown: () => undefined,
+    readAdjustedFuelFactor: () => ({ kind: "invalid" as const }),
   });
 }
 
@@ -837,6 +1076,70 @@ export function installCapturedGameMechanics(
       if (consumption === undefined || production === undefined)
         return undefined;
       return Object.freeze({ production, consumption });
+    },
+    readAdjustedFuelFactor(
+      mode: CapturedFuelAdjustmentMode,
+      resourceId: string,
+    ): CapturedGameRead<number> {
+      const entries = structureEntries;
+      const numberConstructor = readMechanicsProperty(pageWindow, "Number");
+      const numberPrototype = readMechanicsProperty(
+        numberConstructor,
+        "prototype",
+      );
+      const objectConstructor = readMechanicsProperty(pageWindow, "Object");
+      if (
+        entries === undefined ||
+        stopped ||
+        !isNonArrayRecord(numberPrototype) ||
+        !fuelAdjustmentResourceMatches(resourceId, mode)
+      ) {
+        return { kind: "invalid" };
+      }
+      const factors: number[] = [];
+      let invalidCandidate = false;
+      try {
+        for (const [key, value] of entries) {
+          const entry = readMechanicsEntry(key, value);
+          if (
+            entry === undefined ||
+            !fuelAdjustmentRegionMatches(entry.region, mode)
+          ) {
+            continue;
+          }
+          const rawFuel = readMechanicsFuel(entry.action, "p_fuel");
+          if (rawFuel.kind !== "value" || rawFuel.value === false) continue;
+          if (
+            rawFuel.value.filter((fuel) => fuel.resourceId === resourceId)
+              .length !== 1
+          ) {
+            continue;
+          }
+          const probed = readFuelProbeResult(
+            entry.action,
+            numberPrototype,
+            objectConstructor,
+            mode,
+            resourceId,
+          );
+          if (probed?.kind === "invalid") {
+            invalidCandidate = true;
+            break;
+          }
+          if (probed?.kind === "value") factors.push(probed.factor);
+        }
+      } catch {
+        return { kind: "invalid" };
+      }
+      if (invalidCandidate) return { kind: "invalid" };
+      if (factors.length === 0) return { kind: "absent" };
+      const first = factors[0]!;
+      const consistent = factors.every(
+        (factor) =>
+          Math.abs(factor - first) <=
+          1e-9 * Math.max(1, Math.abs(factor), Math.abs(first)),
+      );
+      return consistent ? { kind: "value", value: first } : { kind: "invalid" };
     },
   });
 

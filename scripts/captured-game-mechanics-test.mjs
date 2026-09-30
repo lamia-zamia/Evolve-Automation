@@ -29,7 +29,27 @@ class FakeWorker {
 }
 
 function makePage() {
-  const page = runInNewContext("({ Map, Object, Array, Function, Proxy })");
+  const page = runInNewContext(`
+    (function() {
+      function createProbe(region, sector, struct, actionId, resourceId, factor, behavior, state) {
+        const action = {
+          id: actionId,
+          title: function() { return "probe action"; },
+          powered: function() { return 0; },
+          p_fuel: function() { return { r: resourceId, a: 1 }; },
+          effect: function() {
+            const amount = this.p_fuel().a;
+            const first = Number(amount * factor).toFixed(2);
+            if (behavior === "ambiguous") Number(amount * (factor + 0.25)).toFixed(2);
+            if (behavior === "throws") throw new Error("effect probe failure");
+            return first;
+          },
+        };
+        return { key: sector + ":" + struct, region, sector, struct, c_action: action, info: false, state };
+      }
+      return { Map, Object, Array, Function, Number, Proxy, createProbe };
+    })()
+  `);
   page.Worker = FakeWorker;
   return page;
 }
@@ -434,6 +454,126 @@ assert.deepEqual(coercibleFuelDefinition.readFuel(), {
   kind: "value",
   value: [{ resourceId: "Oil", amount: 2.5 }],
 });
+coercibleFuelAction.c_action.power_reqs = { advanced_power: "2" };
+assert.deepEqual(coercibleFuelDefinition.readPowerRequirements(), {
+  kind: "value",
+  value: [{ techId: "advanced_power", level: 2 }],
+});
+
+const probeState = { unchanged: true };
+const spaceProbe = page.createProbe(
+  "space",
+  "spc_probe",
+  "space_probe",
+  "space-space_probe",
+  "Oil",
+  0.25,
+  "ok",
+  probeState,
+);
+entries.set(spaceProbe.key, spaceProbe);
+const spaceProbeFuelDescriptor = Object.getOwnPropertyDescriptor(
+  spaceProbe.c_action,
+  "p_fuel",
+);
+const nativeToFixedDescriptor = Object.getOwnPropertyDescriptor(
+  page.Number.prototype,
+  "toFixed",
+);
+assert.deepEqual(
+  capture.mechanics
+    .readStructures()
+    .find((entry) => entry.entryKey === spaceProbe.key)
+    .readFuel(),
+  { kind: "value", value: [{ resourceId: "Oil", amount: 1 }] },
+);
+assert.deepEqual(
+  capture.mechanics.readAdjustedFuelFactor("space", "Oil"),
+  { kind: "value", value: 0.25 },
+  "the action effect exposes the exact fuel_adjust(..., true) factor before rounding",
+);
+assert.deepEqual(probeState, { unchanged: true });
+assert.deepEqual(
+  Object.getOwnPropertyDescriptor(spaceProbe.c_action, "p_fuel"),
+  spaceProbeFuelDescriptor,
+  "the original p_fuel descriptor is restored after a successful probe",
+);
+assert.deepEqual(
+  Object.getOwnPropertyDescriptor(page.Number.prototype, "toFixed"),
+  nativeToFixedDescriptor,
+  "the page realm toFixed descriptor is restored after a successful probe",
+);
+
+const interstellarProbe = page.createProbe(
+  "tauceti",
+  "tau_home",
+  "fuel_probe",
+  "tauceti-fuel_probe",
+  "Helium_3",
+  0.75,
+  "ok",
+  probeState,
+);
+entries.set(interstellarProbe.key, interstellarProbe);
+assert.deepEqual(
+  capture.mechanics.readAdjustedFuelFactor("interstellar", "Helium_3"),
+  { kind: "value", value: 0.75 },
+  "the action effect exposes the exact int_fuel_adjust factor",
+);
+
+const failedProbe = page.createProbe(
+  "space",
+  "spc_probe",
+  "failed_probe",
+  "space-failed_probe",
+  "Oil",
+  0.5,
+  "throws",
+  probeState,
+);
+entries.set(failedProbe.key, failedProbe);
+const failedFuelDescriptor = Object.getOwnPropertyDescriptor(
+  failedProbe.c_action,
+  "p_fuel",
+);
+assert.deepEqual(
+  capture.mechanics.readAdjustedFuelFactor("space", "Oil"),
+  { kind: "invalid" },
+  "a throwing candidate rejects the factor rather than guessing from another action",
+);
+assert.deepEqual(probeState, { unchanged: true });
+assert.deepEqual(
+  Object.getOwnPropertyDescriptor(failedProbe.c_action, "p_fuel"),
+  failedFuelDescriptor,
+  "the original p_fuel descriptor is restored after a failed probe",
+);
+assert.deepEqual(
+  Object.getOwnPropertyDescriptor(page.Number.prototype, "toFixed"),
+  nativeToFixedDescriptor,
+  "the page realm toFixed descriptor is restored after a failed probe",
+);
+entries.delete(failedProbe.key);
+
+const ambiguousProbe = page.createProbe(
+  "space",
+  "spc_probe",
+  "ambiguous_probe",
+  "space-ambiguous_probe",
+  "Oil",
+  0.5,
+  "ambiguous",
+  probeState,
+);
+entries.set(ambiguousProbe.key, ambiguousProbe);
+assert.deepEqual(
+  capture.mechanics.readAdjustedFuelFactor("space", "Oil"),
+  { kind: "invalid" },
+  "multiple values scaling with the probe amount are rejected as ambiguous",
+);
+assert.deepEqual(
+  Object.getOwnPropertyDescriptor(page.Number.prototype, "toFixed"),
+  nativeToFixedDescriptor,
+);
 
 // The private Map is the action catalog, while live root lists are the current game priority.
 const reorderedRoot = {
@@ -471,9 +611,9 @@ assert.deepEqual(capture.mechanics.readSupportOrder({}, "moon"), {
 
 const typedSupport = structureEntry({
   region: "space",
-  sector: "spc_typed",
+  sector: "spc_home",
   struct: "provider",
-  actionId: "space-spc_typed-provider",
+  actionId: "space-spc_home-provider",
   powered: () => 0,
   support: () => -4,
   supportTypes: ["moon", 2, "red"],
@@ -631,8 +771,15 @@ const unresolvedSupportDefinition = capture.mechanics
   .find((entry) => entry.entryKey === unresolvedSupportAnchor.key);
 assert.deepEqual(
   unresolvedSupportDefinition.readSupportTopology(),
-  { kind: "invalid" },
-  "an unresolved info.support target is not reported as a complete topology",
+  {
+    kind: "value",
+    value: {
+      anchorEntryKey: null,
+      unlimited: false,
+      enabled: { kind: "value", value: true },
+    },
+  },
+  "the game retains a false anchor when info.support does not resolve in the region",
 );
 
 const unrelatedAfter = new page.Map();
@@ -646,7 +793,7 @@ unrelatedAfter.set(
     powered: () => 1,
   }),
 );
-assert.equal(capture.mechanics.readStructures().length, 13);
+assert.equal(capture.mechanics.readStructures().length, 16);
 
 // One inherited assignment captures the p-ledger owner and then removes the prototype hook.
 const falseLedgerCandidate = new page.Object();

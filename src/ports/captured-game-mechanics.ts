@@ -27,6 +27,13 @@ export interface CapturedSupportTopology {
   readonly enabled: CapturedGameRead<boolean>;
 }
 
+export interface CapturedPowerRequirement {
+  readonly techId: string;
+  readonly level: number;
+}
+
+export type CapturedFuelAdjustmentMode = "space" | "interstellar";
+
 export interface CapturedGameStructureDefinition {
   /** DeadSpace's full grid key; short `struct` names are not unique identities. */
   readonly entryKey: string;
@@ -38,6 +45,10 @@ export interface CapturedGameStructureDefinition {
   /** The game-owned display key used by its source-specific production ledger. */
   readTitle(): CapturedGameRead<string>;
   readPowered(): CapturedGameRead<number>;
+  /** `power_reqs`, normalized to the root tech levels checked by the retired wrapper. */
+  readPowerRequirements(): CapturedGameRead<
+    readonly CapturedPowerRequirement[]
+  >;
   readFuel(): CapturedGameRead<readonly CapturedGameFuelInput[] | false>;
   /** DeadSpace applies generator fuel adjustment only when this positive flag is true. */
   readFuelAdjustmentRequested(): CapturedGameRead<boolean>;
@@ -87,4 +98,9 @@ export interface CapturedGameMechanics {
   ): CapturedGameRead<readonly CapturedGameStructureDefinition[]>;
   /** `undefined` means the private production ledger has not been captured or validated. */
   readProductionBreakdown(): CapturedProductionBreakdown | undefined;
+  /** Factor observed by synchronously probing a game-owned action effect. */
+  readAdjustedFuelFactor(
+    mode: CapturedFuelAdjustmentMode,
+    resourceId: string,
+  ): CapturedGameRead<number>;
 }

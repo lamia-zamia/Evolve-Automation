@@ -76,6 +76,7 @@ const buildOptions = {
   target: ["esnext"],
   define: {
     "globalThis.__EA_TEST_SURFACE_ENABLED__": "false",
+    __EA_TEST_SURFACE_ENABLED__: "false",
   },
   minifySyntax: true,
   treeShaking: true,

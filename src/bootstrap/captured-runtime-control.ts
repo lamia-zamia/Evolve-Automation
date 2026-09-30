@@ -105,8 +105,14 @@ import {
   TITAN_MINE_CONTROL,
 } from "../adapters/evolve/economy/resources/captured-production-ratios.ts";
 import { createCapturedPowerProducerAutomation } from "../adapters/evolve/economy/production/captured-power-producers.ts";
+import { createCapturedPowerReader } from "../adapters/evolve/economy/production/captured-power-reader.ts";
 import { createDiscoveryAttempts } from "./discovery-attempts.ts";
 import { createCapturedPowerWarningAutomation } from "../adapters/evolve/economy/production/captured-power-warnings.ts";
+import {
+  EMPTY_POWER_AUTOMATION_STATE,
+  planPowerCycle,
+} from "../domain/economy/production/power.ts";
+import { CONSUMPTION_BALANCE_MIN } from "../config.ts";
 import {
   createCapturedSmelterAutomation,
   SMELTER_CONTROL,
@@ -223,6 +229,8 @@ import {
   capturedForeignEspionageTriggerSelector,
 } from "../adapters/evolve/combat/captured-foreign-state.ts";
 import type { PageCapture } from "../adapters/evolve/page-capture.ts";
+
+declare const __EA_TEST_SURFACE_ENABLED__: boolean;
 import { createGameKeyboardHandlers } from "../adapters/browser/game-keyboard-handlers.ts";
 import { createGameCustomRaceLab } from "../adapters/browser/game-custom-race-lab.ts";
 import { createGameTerraformLab } from "../adapters/browser/game-terraform-lab.ts";
@@ -518,6 +526,43 @@ export function startCapturedRuntime({
     replaceRaw: settingsStorage.replaceRaw,
     persist: settingsStorage.persist,
   });
+  // The live characterization bundle opts into this inert hook by defining both the build
+  // constant and the hook bag before main.ts starts. Production builds fold this block away.
+  if (
+    typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
+    __EA_TEST_SURFACE_ENABLED__ === true
+  ) {
+    const hooks = readProperty(settingsHostWindow, "__EA_TEST_HOOKS__");
+    if (isRecord(hooks)) {
+      const powerReader = createCapturedPowerReader({
+        rootState: pageCapture.rootState,
+        mechanics: pageCapture.mechanics,
+        controls: pageCapture.controls,
+        resources: createCapturedResourceSource(pageCapture.rootState),
+        readSettingsRaw: settingsLifecycle.readEffective,
+        readRuntimeOptions: () => ({
+          settings: {
+            showGalactic: false,
+            limitPowered: false,
+            autoFleet: false,
+            crewReserve: 0,
+          },
+          debug: false,
+          consumptionBalanceMinimum: CONSUMPTION_BALANCE_MIN,
+        }),
+        readWarnings: () => Object.freeze([]),
+      });
+      Reflect.set(hooks, "readPowerCycle", () => {
+        const cycle = powerReader.readCycle();
+        return cycle === undefined
+          ? undefined
+          : Object.freeze({
+              cycle,
+              plan: planPowerCycle(cycle, EMPTY_POWER_AUTOMATION_STATE),
+            });
+      });
+    }
+  }
   const buildCosts = createCapturedActionCostReader({
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,

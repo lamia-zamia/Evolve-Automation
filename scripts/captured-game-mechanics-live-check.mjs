@@ -1,11 +1,14 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
-import { resolve } from "node:path";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
+import * as esbuild from "esbuild";
 
 import {
   createChromiumRunner,
   parseSave,
 } from "../tools/chromium-evolve-runner.mjs";
+import { capturedPowerMetadataForBinding } from "../src/adapters/evolve/economy/production/captured-power-metadata.ts";
 
 const save = parseSave(
   await readFile(
@@ -14,16 +17,37 @@ const save = parseSave(
   ),
 );
 
+const bundleDirectory = await mkdtemp(join(tmpdir(), "captured-power-reader-"));
+const testBundle = join(bundleDirectory, "captured-power-reader.test.js");
+const userscriptMetadata = await readFile(
+  resolve("src/userscript.meta.js"),
+  "utf8",
+);
+await esbuild.build({
+  absWorkingDir: process.cwd(),
+  entryPoints: ["scripts/captured-power-reader-live-entry.ts"],
+  outfile: testBundle,
+  bundle: true,
+  format: "iife",
+  platform: "browser",
+  target: ["esnext"],
+  banner: { js: userscriptMetadata },
+  define: { __EA_TEST_SURFACE_ENABLED__: "true" },
+  logLevel: "silent",
+});
+
 const runner = await createChromiumRunner();
+let mechanics;
 try {
   const session = await runner.openSession({
+    bundle: testBundle,
     save,
     settings: {},
     seed: 42,
   });
   try {
     await session.advance(4);
-    const mechanics = await session.evaluate(() => {
+    mechanics = await session.evaluate(() => {
       const capture = globalThis[Symbol.for("evolve-automation.page-capture")];
       if (!capture || !capture.mechanics) return undefined;
       const structures = capture.mechanics.readStructures();
@@ -171,6 +195,42 @@ try {
           );
         });
       const powered = poweredRead?.readPowered();
+      const rootBeforeFuelProbes = JSON.stringify(root);
+      const nativeToFixed = Object.getOwnPropertyDescriptor(
+        Number.prototype,
+        "toFixed",
+      );
+      const solarFuelAdjustment = capture.mechanics.readAdjustedFuelFactor(
+        "space",
+        "Oil",
+      );
+      const interstellarFuelAdjustment =
+        capture.mechanics.readAdjustedFuelFactor("interstellar", "Helium_3");
+      const rootAfterFuelProbes = JSON.stringify(root);
+      const restoredToFixed = Object.getOwnPropertyDescriptor(
+        Number.prototype,
+        "toFixed",
+      );
+      const toFixedRestored =
+        restoredToFixed?.value === nativeToFixed?.value &&
+        restoredToFixed?.get === nativeToFixed?.get &&
+        restoredToFixed?.set === nativeToFixed?.set &&
+        restoredToFixed?.configurable === nativeToFixed?.configurable &&
+        restoredToFixed?.enumerable === nativeToFixed?.enumerable &&
+        restoredToFixed?.writable === nativeToFixed?.writable;
+      const managedCandidates =
+        structures?.flatMap((entry) => {
+          const state = stateFor(entry);
+          if (
+            !state ||
+            typeof state !== "object" ||
+            !Object.hasOwn(state, "on") ||
+            Number(state.count ?? 0) <= 0
+          ) {
+            return [];
+          }
+          return [{ binding: entry.actionId, entryKey: entry.entryKey }];
+        }) ?? [];
       return {
         captureComplete: capture.isComplete(),
         structureCount: structures?.length,
@@ -196,6 +256,12 @@ try {
             : undefined,
         },
         activeFuelLedger,
+        capturedFuels:
+          structures?.map((entry) => ({
+            binding: entry.actionId,
+            power: entry.readFuel(),
+            support: entry.readSupportFuel(),
+          })) ?? [],
         sampleIdentity: poweredRead
           ? {
               entryKey: poweredRead.entryKey,
@@ -216,6 +282,13 @@ try {
           supportFuel: poweredRead?.readSupportFuel(),
           powerBalancer: poweredRead?.readPowerBalancer(),
         },
+        liveFuelProbe: {
+          solarFuelAdjustment,
+          interstellarFuelAdjustment,
+          rootUnchanged: rootBeforeFuelProbes === rootAfterFuelProbes,
+          toFixedRestored,
+        },
+        managedCandidates,
         productionResources: production
           ? Object.keys(production.production).length
           : undefined,
@@ -250,6 +323,13 @@ try {
     assert.ok(mechanics.selectedRootExamples.unavailableProducer);
     assert.ok(mechanics.selectedRootExamples.supportOverride);
     assert.ok(mechanics.activeFuelLedger.some((entry) => entry.hasSource));
+    assert.equal(mechanics.liveFuelProbe.solarFuelAdjustment.kind, "value");
+    assert.equal(
+      mechanics.liveFuelProbe.interstellarFuelAdjustment.kind,
+      "value",
+    );
+    assert.equal(mechanics.liveFuelProbe.rootUnchanged, true);
+    assert.equal(mechanics.liveFuelProbe.toFixedRestored, true);
     assert.ok(mechanics.sampleIdentity);
     assert.equal(mechanics.samplePowerMechanics.powered.kind, "value");
     if (mechanics.selectedByNegativePoweredResult) {
@@ -265,9 +345,109 @@ try {
       powerLedger: false,
     });
     assert.equal(mechanics.consumePrototypeDescriptor, undefined);
-    process.stdout.write(`${JSON.stringify(mechanics)}\n`);
   } finally {
     await session.close();
+  }
+
+  mechanics.declaredFuelOverlaps = mechanics.capturedFuels.flatMap((entry) => {
+    const declarations = capturedPowerMetadataForBinding(
+      entry.binding,
+    ).consumptions;
+    if (declarations.length === 0) return [];
+    const gameFuels = [
+      ...(entry.power.kind === "value" && entry.power.value !== false
+        ? entry.power.value
+        : []),
+      ...(entry.support.kind === "value" && entry.support.value !== false
+        ? entry.support.value
+        : []),
+    ];
+    return declarations.flatMap((declaration) =>
+      gameFuels
+        .filter((fuel) => fuel.resourceId === declaration.resourceId)
+        .map((fuel) => ({
+          binding: entry.binding,
+          resourceId: declaration.resourceId,
+          declaredRate:
+            declaration.policy.kind === "fixed"
+              ? declaration.policy.value
+              : declaration.policy.kind,
+          gameFuelAmount: fuel.amount,
+        })),
+    );
+  });
+  delete mechanics.capturedFuels;
+  assert.deepEqual(
+    mechanics.declaredFuelOverlaps,
+    [],
+    "game-owned p_fuel/support_fuel rows are not duplicated as automation declarations",
+  );
+  process.stdout.write(
+    `${JSON.stringify({ declaredFuelOverlaps: mechanics.declaredFuelOverlaps })}\n`,
+  );
+
+  const prioritySettings = Object.create(null);
+  const priorityCandidates = [...mechanics.managedCandidates].reverse();
+  for (let index = 0; index < priorityCandidates.length; index++) {
+    const { binding } = priorityCandidates[index];
+    prioritySettings[`bld_s_${binding}`] = true;
+    prioritySettings[`bld_p_${binding}`] = index;
+  }
+  const cycleSession = await runner.openSession({
+    bundle: testBundle,
+    save,
+    settings: prioritySettings,
+    seed: 42,
+  });
+  try {
+    await cycleSession.advance(4);
+    const captured = await cycleSession.evaluate(() => {
+      const hooks = globalThis.__EA_TEST_HOOKS__;
+      if (!hooks || typeof hooks.readPowerCycle !== "function")
+        return undefined;
+      const result = hooks.readPowerCycle();
+      if (!result) return undefined;
+      return {
+        buildingCount: result.cycle.buildings.length,
+        positivePower: result.cycle.buildings.filter(
+          (building) => building.powered > 0,
+        ).length,
+        negativePower: result.cycle.buildings.filter(
+          (building) => building.powered < 0,
+        ).length,
+        resourceCount: result.cycle.resources.length,
+        plannerReturned: Boolean(result.plan && result.plan.nextState),
+        decisionKind: result.plan.decision?.kind ?? null,
+        buildingOrder: result.cycle.buildings.map(
+          (building) => building.binding,
+        ),
+      };
+    });
+    assert.ok(
+      captured,
+      "the complete captured cycle is available to the retained planner",
+    );
+    assert.ok(captured.buildingCount > 0);
+    assert.ok(
+      captured.positivePower > 0,
+      "captured cycle contains positive-power consumers",
+    );
+    assert.ok(
+      captured.negativePower > 0,
+      "captured cycle contains negative-power generators",
+    );
+    assert.ok(captured.resourceCount > 0);
+    assert.equal(captured.plannerReturned, true);
+    assert.deepEqual(
+      captured.buildingOrder,
+      priorityCandidates.map(({ binding }) => binding),
+      "the captured cycle follows stored building priorities rather than root.power",
+    );
+    process.stdout.write(
+      `${JSON.stringify({ capturedPowerCycle: captured })}\n`,
+    );
+  } finally {
+    await cycleSession.close();
   }
 
   const earlySave = parseSave(
@@ -385,4 +565,5 @@ try {
   }
 } finally {
   await runner.close();
+  await rm(bundleDirectory, { recursive: true, force: true });
 }

@@ -585,7 +585,6 @@
           break;
         }
       }
-      if (anchorEntryKey === null) return { kind: "invalid" };
     }
     let conditionDescriptor;
     try {
@@ -709,6 +708,128 @@
     }
     return { kind: "value", value: Object.freeze(result) };
   }
+  function readMechanicsPowerRequirements(action) {
+    let descriptor;
+    try {
+      descriptor = Object.getOwnPropertyDescriptor(action, "power_reqs");
+    } catch {
+      return { kind: "invalid" };
+    }
+    if (descriptor === void 0) return { kind: "absent" };
+    if (!("value" in descriptor) || !isNonArrayRecord(descriptor.value))
+      return { kind: "invalid" };
+    let result = [];
+    try {
+      for (let techId of Object.keys(descriptor.value)) {
+        let requirement = Object.getOwnPropertyDescriptor(
+          descriptor.value,
+          techId
+        );
+        if (requirement === void 0 || !("value" in requirement))
+          return { kind: "invalid" };
+        let level = Number(requirement.value);
+        if (!Number.isFinite(level)) return { kind: "invalid" };
+        result.push(Object.freeze({ techId, level }));
+      }
+    } catch {
+      return { kind: "invalid" };
+    }
+    return { kind: "value", value: Object.freeze(result) };
+  }
+  function sameMechanicsDescriptor(left, right) {
+    return left === void 0 || right === void 0 ? left === right : left.configurable === right.configurable && left.enumerable === right.enumerable && left.writable === right.writable && left.value === right.value && left.get === right.get && left.set === right.set;
+  }
+  function fuelAdjustmentRegionMatches(region, mode) {
+    return mode === "space" ? region === "space" || region === "underground" || region === "surface" : region !== "space" && region !== "underground" && region !== "surface";
+  }
+  function fuelAdjustmentResourceMatches(resourceId, mode) {
+    return mode === "space" ? resourceId === "Oil" || resourceId === "Helium_3" || resourceId === "Super_Fuel" : resourceId === "Deuterium" || resourceId === "Helium_3" || resourceId === "Super_Fuel";
+  }
+  function readFuelProbeResult(action, numberPrototype, objectConstructor, mode, resourceId) {
+    if (!fuelAdjustmentResourceMatches(resourceId, mode)) return;
+    let fuelDescriptor = Object.getOwnPropertyDescriptor(action, "p_fuel"), effectDescriptor = Object.getOwnPropertyDescriptor(action, "effect"), toFixedDescriptor = Object.getOwnPropertyDescriptor(
+      numberPrototype,
+      "toFixed"
+    );
+    if (fuelDescriptor === void 0 || !("value" in fuelDescriptor) || typeof fuelDescriptor.value != "function" || fuelDescriptor.configurable !== !0 || effectDescriptor === void 0 || !("value" in effectDescriptor) || typeof effectDescriptor.value != "function" || toFixedDescriptor === void 0 || !("value" in toFixedDescriptor) || typeof toFixedDescriptor.value != "function" || toFixedDescriptor.configurable !== !0)
+      return;
+    let originalFuel = fuelDescriptor, effect = effectDescriptor.value, originalToFixed = toFixedDescriptor.value, pageDefineProperty = readMechanicsDataProperty(
+      objectConstructor,
+      "defineProperty"
+    );
+    if (typeof pageDefineProperty != "function") return;
+    let originalFuelValue = readMechanicsFuel(action, "p_fuel");
+    if (originalFuelValue.kind !== "value" || originalFuelValue.value === !1 || originalFuelValue.value.filter(
+      (fuel) => fuel.resourceId === resourceId
+    ).length !== 1) return;
+    let source = Reflect.apply(
+      fuelDescriptor.value,
+      action,
+      []
+    ), arraySource = Array.isArray(source), probeAmounts = [4.25, 13.75], observations = [], result = { kind: "absent" };
+    try {
+      Reflect.apply(pageDefineProperty, objectConstructor, [
+        numberPrototype,
+        "toFixed",
+        { ...toFixedDescriptor, value: function(...args) {
+          let numeric;
+          try {
+            numeric = Number(this);
+          } catch {
+            numeric = Number.NaN;
+          }
+          return observations[observations.length - 1]?.push(numeric), Reflect.apply(originalToFixed, this, args);
+        } }
+      ]);
+      for (let amount of probeAmounts)
+        observations.push([]), Reflect.apply(pageDefineProperty, objectConstructor, [
+          action,
+          "p_fuel",
+          { ...fuelDescriptor, value: function() {
+            let item = { r: resourceId, a: amount };
+            return arraySource ? [item] : item;
+          } }
+        ]), Reflect.apply(effect, action, []);
+      let [first, second] = observations;
+      if (first !== void 0 && second !== void 0) {
+        let firstScaled = [], secondScaled = [];
+        for (let left of first)
+          if (Number.isFinite(left))
+            for (let right of second) {
+              if (!Number.isFinite(right)) continue;
+              let slope = (right - left) / (probeAmounts[1] - probeAmounts[0]);
+              if (!Number.isFinite(slope) || slope <= 0) continue;
+              let firstFactor = left / probeAmounts[0], secondFactor = right / probeAmounts[1];
+              Math.abs(firstFactor - secondFactor) <= 1e-9 * Math.max(1, Math.abs(firstFactor), Math.abs(secondFactor)) && (firstScaled.push(firstFactor), secondScaled.push(secondFactor));
+            }
+        let factors = [...firstScaled, ...secondScaled];
+        firstScaled.length === 0 && secondScaled.length === 0 ? result = { kind: "absent" } : firstScaled.length === 1 && secondScaled.length === 1 && factors.every((factor) => factor === factors[0]) ? result = { kind: "value", factor: factors[0] } : result = { kind: "invalid" };
+      }
+    } catch {
+      result = { kind: "invalid" };
+    } finally {
+      try {
+        Reflect.apply(pageDefineProperty, objectConstructor, [
+          action,
+          "p_fuel",
+          fuelDescriptor
+        ]);
+      } finally {
+        Reflect.apply(pageDefineProperty, objectConstructor, [
+          numberPrototype,
+          "toFixed",
+          toFixedDescriptor
+        ]), (!sameMechanicsDescriptor(
+          Object.getOwnPropertyDescriptor(action, "p_fuel"),
+          originalFuel
+        ) || !sameMechanicsDescriptor(
+          Object.getOwnPropertyDescriptor(numberPrototype, "toFixed"),
+          toFixedDescriptor
+        )) && (result = { kind: "invalid" });
+      }
+    }
+    return result;
+  }
   function createMechanicsDefinition(entry, registry) {
     let action = entry.action;
     return Object.freeze({
@@ -719,6 +840,7 @@
       actionId: entry.actionId,
       readTitle: () => readMechanicsTitle(action),
       readPowered: () => readMechanicsPrimitive(action, "powered"),
+      readPowerRequirements: () => readMechanicsPowerRequirements(action),
       readFuel: () => readMechanicsFuel(action, "p_fuel"),
       readFuelAdjustmentRequested: () => readMechanicsBooleanFlag(action, "p_fuel_adjust"),
       readSupport: () => readMechanicsPrimitive(action, "support"),
@@ -783,7 +905,8 @@
       readPowerOrder: () => ({ kind: "invalid" }),
       readSupportOrder: () => ({ kind: "invalid" }),
       readProductionBreakdown: () => {
-      }
+      },
+      readAdjustedFuelFactor: () => ({ kind: "invalid" })
     });
   }
   function resolveCapturedStructureOrder(registry, rawOrder) {
@@ -911,7 +1034,7 @@
       readProductionBreakdown() {
         let owner = productionBreakdownOwner;
         if (owner === void 0 || stopped) return;
-        let consumption = readCapturedProductionLedger(
+        let consumption2 = readCapturedProductionLedger(
           readMechanicsDataProperty(owner, "consume")
         ), productionSource = /* @__PURE__ */ Object.create(
           null
@@ -926,8 +1049,47 @@
           return;
         }
         let production = readCapturedProductionLedger(productionSource);
-        if (!(consumption === void 0 || production === void 0))
-          return Object.freeze({ production, consumption });
+        if (!(consumption2 === void 0 || production === void 0))
+          return Object.freeze({ production, consumption: consumption2 });
+      },
+      readAdjustedFuelFactor(mode, resourceId) {
+        let entries = structureEntries, numberConstructor = readMechanicsProperty(pageWindow, "Number"), numberPrototype = readMechanicsProperty(
+          numberConstructor,
+          "prototype"
+        ), objectConstructor2 = readMechanicsProperty(pageWindow, "Object");
+        if (entries === void 0 || stopped || !isNonArrayRecord(numberPrototype) || !fuelAdjustmentResourceMatches(resourceId, mode))
+          return { kind: "invalid" };
+        let factors = [], invalidCandidate = !1;
+        try {
+          for (let [key, value] of entries) {
+            let entry = readMechanicsEntry(key, value);
+            if (entry === void 0 || !fuelAdjustmentRegionMatches(entry.region, mode))
+              continue;
+            let rawFuel = readMechanicsFuel(entry.action, "p_fuel");
+            if (rawFuel.kind !== "value" || rawFuel.value === !1 || rawFuel.value.filter((fuel) => fuel.resourceId === resourceId).length !== 1)
+              continue;
+            let probed = readFuelProbeResult(
+              entry.action,
+              numberPrototype,
+              objectConstructor2,
+              mode,
+              resourceId
+            );
+            if (probed?.kind === "invalid") {
+              invalidCandidate = !0;
+              break;
+            }
+            probed?.kind === "value" && factors.push(probed.factor);
+          }
+        } catch {
+          return { kind: "invalid" };
+        }
+        if (invalidCandidate) return { kind: "invalid" };
+        if (factors.length === 0) return { kind: "absent" };
+        let first = factors[0];
+        return factors.every(
+          (factor) => Math.abs(factor - first) <= 1e-9 * Math.max(1, Math.abs(factor), Math.abs(first))
+        ) ? { kind: "value", value: first } : { kind: "invalid" };
       }
     });
     return Object.freeze({
@@ -21989,6 +22151,419 @@
     });
   }
 
+  // src/domain/settings-priority-order.ts
+  function storedPriority(value, fallback) {
+    return typeof value == "number" && Number.isFinite(value) ? value : fallback;
+  }
+  function sortByStoredPriority(entries, raw, prioritySettingName) {
+    return Object.freeze(
+      entries.map((entry, index) => ({
+        entry,
+        index,
+        priority: storedPriority(raw[prioritySettingName(entry)], index)
+      })).sort(
+        (left, right) => left.priority - right.priority || left.index - right.index
+      ).map(({ entry }) => entry)
+    );
+  }
+  function writeDefaultPriorityOrder(raw, ids, prioritySettingName) {
+    ids.forEach((id, index) => {
+      raw[prioritySettingName(id)] = index;
+    });
+  }
+  function writeExplicitPriorityOrder(raw, requestedIds, knownIds, prioritySettingName) {
+    let known = knownIds instanceof Set ? knownIds : new Set(knownIds);
+    requestedIds.forEach((id, index) => {
+      known.has(id) && (raw[prioritySettingName(id)] = index);
+    });
+  }
+
+  // src/adapters/evolve/captured-resource-metadata.ts
+  function readCapturedResource(root, resourceId) {
+    let resource = readProperty(readProperty(root, "resource"), resourceId);
+    return isRecord(resource) ? resource : void 0;
+  }
+  function readCapturedResourceLabel(root, resourceId) {
+    let resource = readCapturedResource(root, resourceId);
+    if (resource === void 0) return resourceId;
+    let title = readProperty(resource, "title");
+    if (typeof title == "string" && title.length > 0) return title;
+    let name = readProperty(resource, "name");
+    return typeof name == "string" && name.length > 0 ? name : resourceId;
+  }
+
+  // src/adapters/evolve/progression/build/captured-building-catalog.ts
+  function readCapturedBuildingRootStateRecord(root, binding, act, structures) {
+    let parts = splitActionId(binding);
+    if (parts === void 0 || !CAPTURED_BUILD_REGIONS.has(parts.region))
+      return;
+    let states = structures.filter(
+      (structure) => structure.actionId === binding && structure.region === parts.region && structure.struct === parts.id
+    ).flatMap((structure) => {
+      let region = readProperty(root, structure.region), state = readProperty(region, structure.struct);
+      return isRecord(state) ? [{ structure, state }] : [];
+    }), exactAct = act === void 0 ? void 0 : states.find(({ state }) => state === act);
+    if (exactAct !== void 0) return exactAct.state;
+    if (states.length === 1) return states[0].state;
+    if (states.length > 1) return;
+    let candidate = readProperty(readProperty(root, parts.region), parts.id);
+    return isRecord(candidate) && (act === void 0 || candidate === act) ? candidate : void 0;
+  }
+  function readCapturedBuildingControlData(handle) {
+    let data = handle?.data;
+    return isRecord(data) ? data : void 0;
+  }
+  function readCapturedBuildingEntries(root, controls2, structures = []) {
+    let entries = [], seen = /* @__PURE__ */ new Set();
+    for (let elementId of controls2.capturedElementIds()) {
+      let binding = bindingForBuildingElement(elementId), parts = splitActionId(binding);
+      if (parts === void 0 || !CAPTURED_BUILD_REGIONS.has(parts.region))
+        continue;
+      let handle = controls2.resolve(elementId), data = readCapturedBuildingControlData(handle), act = readProperty(data, "act"), state = readCapturedBuildingRootStateRecord(
+        root,
+        binding,
+        isRecord(act) ? act : void 0,
+        structures
+      );
+      if (state === void 0) continue;
+      let stateEntry = structures.find((structure) => {
+        let region = readProperty(root, structure.region);
+        return structure.actionId === binding && readProperty(region, structure.struct) === state;
+      }), metadata = metadataForBuilding(binding), liveState = isRecord(act) ? act : state;
+      entries.push(
+        Object.freeze({
+          binding,
+          entryKey: stateEntry?.entryKey,
+          elementId,
+          region: parts.region,
+          sector: stateEntry?.sector,
+          id: parts.id,
+          label: handle === void 0 ? binding : readCapturedControlLabel(handle, binding),
+          switchable: Object.hasOwn(liveState, "on"),
+          smart: metadata.smart,
+          knowledge: metadata.knowledge,
+          ...metadata.smartLinkedIds === void 0 ? {} : { smartLinkedIds: metadata.smartLinkedIds },
+          state
+        })
+      ), seen.add(binding);
+    }
+    for (let structure of structures) {
+      let binding = structure.actionId;
+      if (seen.has(binding)) continue;
+      let parts = splitActionId(binding);
+      if (parts === void 0 || !CAPTURED_BUILD_REGIONS.has(parts.region) || parts.region !== structure.region)
+        continue;
+      let region = readProperty(root, structure.region), state = readProperty(region, structure.struct);
+      if (!isRecord(state)) continue;
+      let title = structure.readTitle(), metadata = metadataForBuilding(binding);
+      entries.push(
+        Object.freeze({
+          binding,
+          entryKey: structure.entryKey,
+          elementId: binding,
+          region: structure.region,
+          sector: structure.sector,
+          id: structure.struct,
+          label: title.kind === "value" && title.value ? title.value : binding,
+          switchable: readProperty(state, "on") !== void 0,
+          smart: metadata.smart,
+          knowledge: metadata.knowledge,
+          ...metadata.smartLinkedIds === void 0 ? {} : { smartLinkedIds: metadata.smartLinkedIds },
+          state
+        })
+      ), seen.add(binding);
+    }
+    return Object.freeze(entries);
+  }
+  function readCapturedBuildingBindingMap(entries) {
+    return readBuildingBindingByKey(entries.map((entry) => entry.binding));
+  }
+
+  // src/adapters/evolve/economy/production/captured-power-metadata.ts
+  var fixedPowerRate = (value) => Object.freeze({ kind: "fixed", value });
+  function consumption(resourceId, policy) {
+    return Object.freeze({
+      resourceId,
+      policy: typeof policy == "number" ? fixedPowerRate(policy) : policy
+    });
+  }
+  var lunaSupport = Object.freeze({ kind: "luna-support" }), womlingVillage = Object.freeze({ kind: "womling-village" }), stationFood = Object.freeze({ kind: "station-food" }), embassyFood = Object.freeze({ kind: "embassy-food" }), POWER_DECLARED_CONSUMPTIONS = Object.freeze({
+    "city-tourist_center": [consumption("Food", 50)],
+    "space-nav_beacon": [consumption("Red_Support", lunaSupport)],
+    "interstellar-zoo": [
+      consumption("Alpha_Support", 1),
+      consumption("Food", 12e3)
+    ],
+    "space-decoder": [consumption("Titan_Support", 1)],
+    "space-electrolysis": [consumption("Electrolysis_Support", -1)],
+    "space-hydrogen_plant": [consumption("Electrolysis_Support", 1)],
+    "tauceti-womling_village": [consumption("Womlings_Support", womlingVillage)],
+    "tauceti-womling_farm": [
+      consumption("Womlings_Support", { kind: "smart-womling", value: 2 })
+    ],
+    "tauceti-womling_lab": [
+      consumption("Womlings_Support", { kind: "smart-womling", value: 1 })
+    ],
+    "tauceti-womling_mine": [
+      consumption("Womlings_Support", { kind: "smart-womling", value: 6 })
+    ],
+    "space-spaceport": [
+      consumption("Food", { kind: "cataclysm-food", normal: 25 })
+    ],
+    "space-red_factory": [consumption("Helium_3", 1)],
+    "space-space_barracks": [
+      consumption("Oil", 2),
+      consumption("Food", { kind: "cataclysm-food", normal: 10 })
+    ],
+    "space-outpost": [consumption("Oil", 2)],
+    "space-space_station": [consumption("Food", stationFood)],
+    "interstellar-starport": [consumption("Food", 100)],
+    "interstellar-int_factory": [consumption("Deuterium", 5)],
+    "interstellar-cruiser": [consumption("Helium_3", 6)],
+    "interstellar-neutron_miner": [consumption("Helium_3", 3)],
+    "galaxy-starbase": [consumption("Food", 250)],
+    "galaxy-bolognium_ship": [consumption("Helium_3", 5)],
+    "galaxy-scout_ship": [consumption("Helium_3", 6)],
+    "galaxy-corvette_ship": [consumption("Helium_3", 10)],
+    "galaxy-frigate_ship": [consumption("Helium_3", 25)],
+    "galaxy-cruiser_ship": [consumption("Deuterium", 25)],
+    "galaxy-dreadnought": [consumption("Deuterium", 80)],
+    "galaxy-embassy": [consumption("Food", embassyFood)],
+    "galaxy-freighter": [consumption("Helium_3", 12)],
+    "galaxy-vitreloy_plant": [
+      consumption("Bolognium", 2.5),
+      consumption("Stanene", 100),
+      consumption("Money", 5e4)
+    ],
+    "galaxy-super_freighter": [consumption("Helium_3", 25)],
+    "galaxy-foothold": [consumption("Elerium", 2.5)],
+    "galaxy-armed_miner": [consumption("Helium_3", 10)],
+    "galaxy-scavenger": [consumption("Helium_3", 12)],
+    "galaxy-minelayer": [consumption("Helium_3", 8)],
+    "galaxy-raider": [consumption("Helium_3", 18)],
+    "space-fob": [consumption("Helium_3", 125)],
+    "space-lander": [consumption("Oil", 50)]
+  }), POWER_SUPPORT_RESOURCE_BY_BINDING = Object.freeze({
+    "galaxy-foothold": "Alien_Support",
+    "galaxy-armed_miner": "Alien_Support",
+    "galaxy-ore_processor": "Alien_Support",
+    "galaxy-scavenger": "Alien_Support",
+    "interstellar-starport": "Alpha_Support",
+    "interstellar-habitat": "Alpha_Support",
+    "interstellar-mining_droid": "Alpha_Support",
+    "interstellar-processing": "Alpha_Support",
+    "interstellar-fusion": "Alpha_Support",
+    "interstellar-laboratory": "Alpha_Support",
+    "interstellar-exchange": "Alpha_Support",
+    "interstellar-g_factory": "Alpha_Support",
+    "interstellar-xfer_station": "Alpha_Support",
+    "eden-encampment": "Asphodel_Support",
+    "eden-soul_engine": "Asphodel_Support",
+    "eden-research_station": "Asphodel_Support",
+    "eden-asphodel_harvester": "Asphodel_Support",
+    "eden-ectoplasm_processor": "Asphodel_Support",
+    "eden-bunker": "Asphodel_Support",
+    "eden-bliss_den": "Asphodel_Support",
+    "eden-rectory": "Asphodel_Support",
+    "eden-corruptor": "Asphodel_Support",
+    "space-space_station": "Belt_Support",
+    "space-elerium_ship": "Belt_Support",
+    "space-iridium_ship": "Belt_Support",
+    "space-iron_ship": "Belt_Support",
+    "space-titan_spaceport": "Enceladus_Support",
+    "space-water_freighter": "Enceladus_Support",
+    "space-zero_g_lab": "Enceladus_Support",
+    "space-operating_base": "Enceladus_Support",
+    "space-drone_control": "Eris_Support",
+    "space-shock_trooper": "Eris_Support",
+    "space-tank": "Eris_Support",
+    "galaxy-starbase": "Gateway_Support",
+    "galaxy-ship_dock": "Gateway_Support",
+    "galaxy-bolognium_ship": "Gateway_Support",
+    "galaxy-scout_ship": "Gateway_Support",
+    "galaxy-corvette_ship": "Gateway_Support",
+    "galaxy-frigate_ship": "Gateway_Support",
+    "galaxy-cruiser_ship": "Gateway_Support",
+    "galaxy-dreadnought": "Gateway_Support",
+    "galaxy-gateway_station": "Gateway_Support",
+    "galaxy-telemetry_beacon": "Gateway_Support",
+    "portal-harbor": "Lake_Support",
+    "portal-bireme": "Lake_Support",
+    "portal-transport": "Lake_Support",
+    "space-nav_beacon": "Moon_Support",
+    "space-moon_base": "Moon_Support",
+    "space-iridium_mine": "Moon_Support",
+    "space-helium_mine": "Moon_Support",
+    "space-observatory": "Moon_Support",
+    "interstellar-nexus": "Nebula_Support",
+    "interstellar-harvester": "Nebula_Support",
+    "interstellar-elerium_prospector": "Nebula_Support",
+    "space-spaceport": "Red_Support",
+    "space-red_tower": "Red_Support",
+    "space-living_quarters": "Red_Support",
+    "space-vr_center": "Red_Support",
+    "space-red_mine": "Red_Support",
+    "space-fabrication": "Red_Support",
+    "space-biodome": "Red_Support",
+    "space-exotic_lab": "Red_Support",
+    "portal-purifier": "Spire_Support",
+    "portal-port": "Spire_Support",
+    "portal-base_camp": "Spire_Support",
+    "portal-mechbay": "Spire_Support",
+    "space-swarm_control": "Sun_Support",
+    "space-swarm_satellite": "Sun_Support",
+    "tauceti-patrol_ship": "Tau_Belt_Support",
+    "tauceti-mining_ship": "Tau_Belt_Support",
+    "tauceti-whaling_ship": "Tau_Belt_Support",
+    "tauceti-orbital_platform": "Tau_Red_Support",
+    "tauceti-overseer": "Tau_Red_Support",
+    "tauceti-womling_village": "Tau_Red_Support",
+    "tauceti-womling_farm": "Tau_Red_Support",
+    "tauceti-womling_mine": "Tau_Red_Support",
+    "tauceti-womling_fun": "Tau_Red_Support",
+    "tauceti-womling_lab": "Tau_Red_Support",
+    "tauceti-orbital_station": "Tau_Support",
+    "tauceti-tau_farm": "Tau_Support",
+    "tauceti-colony": "Tau_Support",
+    "tauceti-tau_factory": "Tau_Support",
+    "tauceti-infectious_disease_lab": "Tau_Support",
+    "tauceti-mining_pit": "Tau_Support",
+    "space-electrolysis": "Titan_Support",
+    "space-titan_quarters": "Titan_Support",
+    "space-titan_mine": "Titan_Support",
+    "space-g_factory": "Titan_Support"
+  }), SUPPORT_TYPE_BY_RESOURCE = Object.freeze({
+    Alien_Support: "alien2",
+    Alpha_Support: "alpha",
+    Asphodel_Support: "asphodel",
+    Belt_Support: "belt",
+    Enceladus_Support: "enceladus",
+    Eris_Support: "eris",
+    Gateway_Support: "gateway",
+    Lake_Support: "lake",
+    Moon_Support: "moon",
+    Nebula_Support: "nebula",
+    Red_Support: "red",
+    Spire_Support: "spire",
+    Sun_Support: "sun",
+    Tau_Belt_Support: "tau_roid",
+    Tau_Red_Support: "tau_red",
+    Tau_Support: "tau_home",
+    Titan_Support: "titan",
+    Electrolysis_Support: "titan",
+    Womlings_Support: "tau_red"
+  }), POWER_PRODUCES_BY_BINDING = Object.freeze({
+    "space-gas_mining": Object.freeze(["Helium_3"]),
+    "space-oil_extractor": Object.freeze(["Oil"]),
+    "city-coal_mine": Object.freeze(["Coal"]),
+    "interstellar-harvester": Object.freeze(["Helium_3", "Deuterium"]),
+    "space-elerium_mine": Object.freeze(["Elerium"]),
+    "space-water_freighter": Object.freeze(["Water"])
+  }), POWER_RULE_BY_BINDING = Object.freeze({
+    "interstellar-citadel": "neutron-citadel",
+    "space-space_station": "belt-space-station",
+    "city-cement_plant": "job-dependent",
+    "city-mine": "job-dependent",
+    "city-coal_mine": "job-dependent",
+    "portal-cooling_tower": "lake-cooling-tower",
+    "portal-harbor": "lake-harbor",
+    "space-gas_mining": "busy-resource",
+    "space-oil_extractor": "busy-resource",
+    "space-orichalcum_mine": "busy-resource",
+    "space-uranium_mine": "busy-resource",
+    "space-neutronium_mine": "busy-resource",
+    "space-elerium_mine": "busy-resource",
+    "space-iridium_ship": "busy-resource",
+    "space-iron_ship": "busy-resource",
+    "space-elerium_ship": "busy-resource",
+    "space-iridium_mine": "busy-resource",
+    "space-helium_mine": "busy-resource",
+    "galaxy-vitreloy_plant": "busy-resource",
+    "galaxy-excavator": "busy-resource",
+    "space-water_freighter": "busy-resource",
+    "eden-asphodel_harvester": "busy-resource",
+    "space-lander": "triton-lander",
+    "interstellar-ascension_trigger": "ascension-trigger",
+    "space-red_terraformer": "terraformer",
+    "portal-attractor": "badlands-attractor",
+    "city-tourist_center": "tourist-center",
+    "city-mill": "mill",
+    "galaxy-minelayer": "chthonian-mine-layer",
+    "portal-guard_post": "ruins-guard-post",
+    "portal-waygate": "spire-waygate",
+    "galaxy-scout_ship": "early-galaxy-ship",
+    "galaxy-corvette_ship": "early-galaxy-ship",
+    "galaxy-armed_miner": "armed-miner",
+    "galaxy-bolognium_ship": "bolognium-ship",
+    "galaxy-raider": "chthonian-raider",
+    "interstellar-harvester": "dual-resource",
+    "tauceti-womling_farm": "womling-farm",
+    "tauceti-overseer": "womling-overseer",
+    "tauceti-womling_fun": "womling-fun",
+    "tauceti-whaling_station": "tau-whaling-station",
+    "tauceti-mining_pit": "tau-mining-pit",
+    "interstellar-zoo": "exotic-zoo"
+  });
+  var CREW_VALUE_RANK_BY_BINDING = Object.freeze({
+    "galaxy-freighter": 0,
+    "galaxy-super_freighter": 0,
+    "galaxy-bolognium_ship": 1,
+    "galaxy-armed_miner": 1,
+    "galaxy-raider": 1,
+    "galaxy-minelayer": 1,
+    "galaxy-scavenger": 1,
+    "portal-bireme": 2,
+    "portal-transport": 2,
+    "galaxy-scout_ship": 3,
+    "galaxy-corvette_ship": 3,
+    "galaxy-frigate_ship": 3,
+    "galaxy-cruiser_ship": 3,
+    "galaxy-dreadnought": 3
+  });
+
+  // src/adapters/evolve/economy/production/captured-power-reader.ts
+  var EMPTY_LAKE = Object.freeze({
+    enabled: !1,
+    bloodSpireLevel: 0,
+    biremeId: "",
+    biremeBinding: "",
+    biremeCount: 0,
+    biremeStateOn: 0,
+    transportId: "",
+    transportBinding: "",
+    transportCount: 0,
+    transportStateOn: 0
+  }), EMPTY_SPIRE_BUILDING = Object.freeze({
+    buildingId: "",
+    binding: "",
+    count: 0,
+    stateOn: 0,
+    autoMaximum: 0,
+    autoBuildable: !1,
+    smartManaged: !1,
+    moneyCost: 0,
+    supplyCost: 0
+  }), EMPTY_SPIRE = Object.freeze({
+    enabled: !1,
+    autoBuild: !1,
+    autoMech: !1,
+    mechActive: !1,
+    autoPrestige: !1,
+    prestigeType: "",
+    prestigeDemonicFloor: 0,
+    towerCount: 0,
+    moneyMaximum: 0,
+    supplyCurrent: 0,
+    mechQueued: !1,
+    purifierQueued: !1,
+    purifierDescription: "",
+    expectedSaveSupply: !1,
+    mechBay: EMPTY_SPIRE_BUILDING,
+    port: EMPTY_SPIRE_BUILDING,
+    camp: EMPTY_SPIRE_BUILDING,
+    purifier: EMPTY_SPIRE_BUILDING
+  });
+
   // src/bootstrap/discovery-attempts.ts
   function discoveryRetryDelay(failures) {
     return Math.min(2 ** Math.max(0, failures - 1), 32);
@@ -30056,62 +30631,6 @@
     });
   }
 
-  // src/adapters/evolve/progression/build/captured-building-catalog.ts
-  function readCapturedBuildingRootStateRecord(root, binding, act) {
-    let parts = splitActionId(binding);
-    if (parts === void 0 || !CAPTURED_BUILD_REGIONS.has(parts.region))
-      return;
-    let candidate = readProperty(readProperty(root, parts.region), parts.id);
-    if (isRecord(candidate) && (act === void 0 || candidate === act))
-      return candidate;
-    if (act !== void 0 && isRecord(root))
-      for (let region of Object.keys(root)) {
-        let records = readProperty(root, region);
-        if (isRecord(records)) {
-          for (let id of Object.keys(records))
-            if (records[id] === act && isRecord(records[id])) return records[id];
-        }
-      }
-    return isRecord(candidate) ? candidate : void 0;
-  }
-  function readCapturedBuildingControlData(handle) {
-    let data = handle?.data;
-    return isRecord(data) ? data : void 0;
-  }
-  function readCapturedBuildingEntries(root, controls2) {
-    let entries = [];
-    for (let elementId of controls2.capturedElementIds()) {
-      let binding = bindingForBuildingElement(elementId), parts = splitActionId(binding);
-      if (parts === void 0 || !CAPTURED_BUILD_REGIONS.has(parts.region))
-        continue;
-      let handle = controls2.resolve(elementId), data = readCapturedBuildingControlData(handle), act = readProperty(data, "act"), state = readCapturedBuildingRootStateRecord(
-        root,
-        binding,
-        isRecord(act) ? act : void 0
-      );
-      if (state === void 0) continue;
-      let metadata = metadataForBuilding(binding), liveState = isRecord(act) ? act : state;
-      entries.push(
-        Object.freeze({
-          binding,
-          elementId,
-          region: parts.region,
-          id: parts.id,
-          label: handle === void 0 ? binding : readCapturedControlLabel(handle, binding),
-          switchable: Object.hasOwn(liveState, "on"),
-          smart: metadata.smart,
-          knowledge: metadata.knowledge,
-          ...metadata.smartLinkedIds === void 0 ? {} : { smartLinkedIds: metadata.smartLinkedIds },
-          state
-        })
-      );
-    }
-    return Object.freeze(entries);
-  }
-  function readCapturedBuildingBindingMap(entries) {
-    return readBuildingBindingByKey(entries.map((entry) => entry.binding));
-  }
-
   // src/adapters/evolve/progression/research/captured-research-settings-catalog.ts
   function readTechElementId(rootKey) {
     return rootKey.startsWith("tech-") ? rootKey : `tech-${rootKey}`;
@@ -33503,47 +34022,6 @@
         }
       }
     });
-  }
-
-  // src/domain/settings-priority-order.ts
-  function storedPriority(value, fallback) {
-    return typeof value == "number" && Number.isFinite(value) ? value : fallback;
-  }
-  function sortByStoredPriority(entries, raw, prioritySettingName) {
-    return Object.freeze(
-      entries.map((entry, index) => ({
-        entry,
-        index,
-        priority: storedPriority(raw[prioritySettingName(entry)], index)
-      })).sort(
-        (left, right) => left.priority - right.priority || left.index - right.index
-      ).map(({ entry }) => entry)
-    );
-  }
-  function writeDefaultPriorityOrder(raw, ids, prioritySettingName) {
-    ids.forEach((id, index) => {
-      raw[prioritySettingName(id)] = index;
-    });
-  }
-  function writeExplicitPriorityOrder(raw, requestedIds, knownIds, prioritySettingName) {
-    let known = knownIds instanceof Set ? knownIds : new Set(knownIds);
-    requestedIds.forEach((id, index) => {
-      known.has(id) && (raw[prioritySettingName(id)] = index);
-    });
-  }
-
-  // src/adapters/evolve/captured-resource-metadata.ts
-  function readCapturedResource(root, resourceId) {
-    let resource = readProperty(readProperty(root, "resource"), resourceId);
-    return isRecord(resource) ? resource : void 0;
-  }
-  function readCapturedResourceLabel(root, resourceId) {
-    let resource = readCapturedResource(root, resourceId);
-    if (resource === void 0) return resourceId;
-    let title = readProperty(resource, "title");
-    if (typeof title == "string" && title.length > 0) return title;
-    let name = readProperty(resource, "name");
-    return typeof name == "string" && name.length > 0 ? name : resourceId;
   }
 
   // src/adapters/evolve/progression/build/captured-building-settings.ts
