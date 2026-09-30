@@ -2555,12 +2555,6 @@ export function startCapturedRuntime({
           runJobsAutomation(craftsmen, true);
         });
       }
-      if (isEnabled(settings, "autoCraft")) {
-        runPhase("autoCraft", () => {
-          runCraftAutomation(craft);
-        });
-      }
-
       // Keep this progression order: research precedes construction, and both
       // complete before combat. The trigger gate stays immediately before them because a trigger
       // that acted this cycle owns the resources they would otherwise spend.
@@ -2629,6 +2623,11 @@ export function startCapturedRuntime({
             );
           }
         }
+      }
+      if (isEnabled(settings, "autoCraft")) {
+        runPhase("autoCraft", () => {
+          runCraftAutomation(craft);
+        });
       }
       if (isEnabled(settings, "autoFight")) {
         const mercenaryOutcome = runPhase("autoFight.mercenary", () => {
@@ -2739,13 +2738,6 @@ export function startCapturedRuntime({
           ejector.run();
         });
       }
-      if (isEnabled(settings, "autoPower")) {
-        runPhase("autoPower", () => {
-          ensureCityControls();
-          powerProducers.run();
-          powerWarnings.run();
-        });
-      }
       if (isEnabled(settings, "autoSmelter")) {
         runPhase("autoSmelter", () => {
           ensureSmelterControls();
@@ -2777,6 +2769,13 @@ export function startCapturedRuntime({
               executor: fleet.executor,
             });
           }
+        });
+      }
+      if (isEnabled(settings, "autoPower")) {
+        runPhase("autoPower", () => {
+          ensureCityControls();
+          powerProducers.run();
+          powerWarnings.run();
         });
       }
       // After construction and research, so neither is outbid for the Knowledge a gene costs.

@@ -48462,8 +48462,6 @@ Only continue if you trust the source. Injected code:
           ensureCivicControls(), refreshDiscoveredSettings(), runJobsAutomation(ordinaryJobs, !1);
         }), autoCraftsmen && !combinedJobs && runPhase("autoCraftsmen", () => {
           ensureCivicControls(), runJobsAutomation(craftsmen, !0);
-        }), isEnabled(settings, "autoCraft") && runPhase("autoCraft", () => {
-          runCraftAutomation(craft);
         });
         let triggerActive = !1;
         if (isEnabled(settings, "autoTrigger") && runPhase("autoTrigger", () => (triggerActive = triggerPhaseActive(
@@ -48496,7 +48494,9 @@ Only continue if you trust the source. Injected code:
               );
             }
         }
-        if (isEnabled(settings, "autoFight")) {
+        if (isEnabled(settings, "autoCraft") && runPhase("autoCraft", () => {
+          runCraftAutomation(craft);
+        }), isEnabled(settings, "autoFight")) {
           let mercenaryOutcome = runPhase("autoFight.mercenary", () => (ensureMercenaryControls(), runMercenaryAutomation(capturedMercenary)));
           mercenaryOutcome !== void 0 && mercenaryOutcome.status !== "succeeded" && reportOnce(
             `autoFight.mercenary: ${mercenaryOutcome.failure.code}: ${mercenaryOutcome.failure.message}`
@@ -48540,8 +48540,6 @@ Only continue if you trust the source. Injected code:
           ensureSupplyControls(), refreshDiscoveredSettings(), supply.run();
         }), isEnabled(settings, "autoEject") && runPhase("autoEject", () => {
           ensureEjectorControls(), refreshDiscoveredSettings(), ejector.run();
-        }), isEnabled(settings, "autoPower") && runPhase("autoPower", () => {
-          ensureCityControls(), powerProducers.run(), powerWarnings.run();
         }), isEnabled(settings, "autoSmelter") && runPhase("autoSmelter", () => {
           ensureSmelterControls(), refreshDiscoveredSettings(), smelter.run();
         }), isEnabled(settings, "autoFactory") && runPhase("autoFactory", () => {
@@ -48554,6 +48552,8 @@ Only continue if you trust the source. Injected code:
             reader: fleet.reader,
             executor: fleet.executor
           }));
+        }), isEnabled(settings, "autoPower") && runPhase("autoPower", () => {
+          ensureCityControls(), powerProducers.run(), powerWarnings.run();
         }), (isEnabled(settings, "autoGenetics") || isEnabled(settings, "autoMinorTrait") || isEnabled(settings, "autoMutateTraits")) && runPhase("autoGenetics", () => {
           ensureGeneticsControls(), isEnabled(settings, "autoGenetics") && runGeneticsAutomation(genetics);
         }), isEnabled(settings, "autoMinorTrait")) {
