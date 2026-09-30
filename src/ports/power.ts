@@ -4,7 +4,8 @@ import type {
 } from "../domain/economy/production/power.ts";
 
 export interface PowerReader {
-  readCycle(): PowerCycleInput;
+  /** `undefined` when captured game mechanics cannot provide an exact full cycle. */
+  readCycle(): PowerCycleInput | undefined;
   readWarnings(domIds: readonly string[]): readonly PowerWarnBuildingInput[];
   readStateOn(binding: string): number;
 }

@@ -11,6 +11,7 @@ import type {
   CapturedGameRead,
   CapturedGameStructureDefinition,
   CapturedPowerBalanceRule,
+  CapturedSupportTopology,
   CapturedProductionBreakdown,
   CapturedProductionCell,
   CapturedProductionLedger,
@@ -27,6 +28,7 @@ interface CapturedGridEntry {
   readonly struct: string;
   readonly actionId: string;
   readonly action: Record<string, unknown>;
+  readonly info: Record<string, unknown> | false;
 }
 
 export interface CapturedGameMechanicsInstall {
@@ -94,7 +96,7 @@ function readMechanicsEntry(
       return undefined;
     }
 
-    return { entryKey, region, sector, struct, actionId, action };
+    return { entryKey, region, sector, struct, actionId, action, info };
   } catch {
     return undefined;
   }
@@ -134,18 +136,216 @@ function readMechanicsCall(
 function readMechanicsPrimitive(
   action: Record<string, unknown>,
   name: string,
-): CapturedGameRead<number | string | boolean> {
+): CapturedGameRead<number> {
   const read = readMechanicsCall(action, name);
   if (read.kind !== "value") return read;
-  const value = read.value;
-  if (typeof value === "number") {
+  try {
+    // DeadSpace applies Number() during grid discovery and arithmetic coercion in the Power pass.
+    const value = Number(read.value);
     return Number.isFinite(value)
       ? { kind: "value", value }
       : { kind: "invalid" };
+  } catch {
+    return { kind: "invalid" };
   }
-  return typeof value === "string" || typeof value === "boolean"
-    ? { kind: "value", value }
-    : { kind: "invalid" };
+}
+
+function readMechanicsSupportTypes(
+  action: Record<string, unknown>,
+): CapturedGameRead<readonly string[]> {
+  let descriptor: PropertyDescriptor | undefined;
+  try {
+    descriptor = Object.getOwnPropertyDescriptor(action, "s_type");
+  } catch {
+    return { kind: "invalid" };
+  }
+  if (descriptor === undefined) return { kind: "absent" };
+  if (!("value" in descriptor)) return { kind: "invalid" };
+  const value = descriptor.value;
+  if (typeof value === "string")
+    return { kind: "value", value: Object.freeze([value]) };
+  try {
+    if (!Array.isArray(value)) return { kind: "invalid" };
+    // `supportGridTypes()` deliberately drops non-string array members.
+    const types: string[] = [];
+    for (let index = 0; index < value.length; index++) {
+      const item = Object.getOwnPropertyDescriptor(value, String(index));
+      if (item === undefined) continue;
+      if (!("value" in item)) return { kind: "invalid" };
+      if (typeof item.value === "string") {
+        types.push(item.value);
+      }
+    }
+    return { kind: "value", value: Object.freeze(types) };
+  } catch {
+    return { kind: "invalid" };
+  }
+}
+
+function readMechanicsSupportValue(
+  action: Record<string, unknown>,
+  type: string,
+): CapturedGameRead<number> {
+  let supportForDescriptor: PropertyDescriptor | undefined;
+  try {
+    supportForDescriptor = Object.getOwnPropertyDescriptor(
+      action,
+      "support_for",
+    );
+  } catch {
+    return { kind: "invalid" };
+  }
+  if (supportForDescriptor !== undefined && !("value" in supportForDescriptor))
+    return { kind: "invalid" };
+  const supportFor =
+    supportForDescriptor !== undefined && "value" in supportForDescriptor
+      ? supportForDescriptor.value
+      : undefined;
+  if (isNonArrayRecord(supportFor)) {
+    let valueDescriptor: PropertyDescriptor | undefined;
+    try {
+      valueDescriptor = Object.getOwnPropertyDescriptor(supportFor, type);
+    } catch {
+      return { kind: "invalid" };
+    }
+    if (valueDescriptor !== undefined) {
+      if (!("value" in valueDescriptor)) return { kind: "invalid" };
+      const value = valueDescriptor.value;
+      let result: unknown = value;
+      if (typeof value === "function") {
+        try {
+          result = Reflect.apply(value as CapturedGameCall, action, []);
+        } catch {
+          return { kind: "invalid" };
+        }
+      }
+      try {
+        const numeric = Number(result);
+        return Number.isFinite(numeric)
+          ? { kind: "value", value: numeric }
+          : { kind: "invalid" };
+      } catch {
+        return { kind: "invalid" };
+      }
+    }
+  } else if (supportFor) {
+    return { kind: "invalid" };
+  }
+  return readMechanicsPrimitive(action, "support");
+}
+
+function readMechanicsSupportProvider(
+  action: Record<string, unknown>,
+): CapturedGameRead<boolean> {
+  let descriptor: PropertyDescriptor | undefined;
+  try {
+    descriptor = Object.getOwnPropertyDescriptor(action, "support_provider");
+  } catch {
+    return { kind: "invalid" };
+  }
+  if (descriptor === undefined) return { kind: "absent" };
+  if (!("value" in descriptor)) return { kind: "invalid" };
+  return { kind: "value", value: Boolean(descriptor.value) };
+}
+
+function readMechanicsSupportTopology(
+  entry: CapturedGridEntry,
+  registry: Map<unknown, unknown>,
+): CapturedGameRead<CapturedSupportTopology> {
+  const { info } = entry;
+  if (info === false) {
+    return {
+      kind: "value",
+      value: Object.freeze({
+        anchorEntryKey: null,
+        unlimited: false,
+        enabled: { kind: "value", value: true } as const,
+      }),
+    };
+  }
+  let supportDescriptor: PropertyDescriptor | undefined;
+  let unlimitedDescriptor: PropertyDescriptor | undefined;
+  try {
+    supportDescriptor = Object.getOwnPropertyDescriptor(info, "support");
+    unlimitedDescriptor = Object.getOwnPropertyDescriptor(
+      info,
+      "support_unlimited",
+    );
+  } catch {
+    return { kind: "invalid" };
+  }
+  if (
+    (supportDescriptor !== undefined && !("value" in supportDescriptor)) ||
+    (unlimitedDescriptor !== undefined && !("value" in unlimitedDescriptor))
+  ) {
+    return { kind: "invalid" };
+  }
+  const support =
+    supportDescriptor !== undefined && "value" in supportDescriptor
+      ? supportDescriptor.value
+      : undefined;
+  let anchorEntryKey: string | null = null;
+  if (support) {
+    if (typeof support !== "string") return { kind: "invalid" };
+    for (const [key, value] of registry) {
+      const candidate = readMechanicsEntry(key, value);
+      if (
+        candidate !== undefined &&
+        candidate.region === entry.region &&
+        candidate.struct === support
+      ) {
+        anchorEntryKey = candidate.entryKey;
+        break;
+      }
+    }
+    if (anchorEntryKey === null) return { kind: "invalid" };
+  }
+  let conditionDescriptor: PropertyDescriptor | undefined;
+  try {
+    conditionDescriptor = Object.getOwnPropertyDescriptor(
+      info,
+      "support_condition",
+    );
+  } catch {
+    return { kind: "invalid" };
+  }
+  let enabled: CapturedGameRead<boolean> = { kind: "value", value: true };
+  if (conditionDescriptor !== undefined) {
+    if (!("value" in conditionDescriptor)) {
+      enabled = { kind: "invalid" };
+    } else if (conditionDescriptor.value) {
+      if (typeof conditionDescriptor.value !== "function") {
+        enabled = { kind: "invalid" };
+      } else {
+        try {
+          enabled = {
+            kind: "value",
+            value: Boolean(
+              Reflect.apply(
+                conditionDescriptor.value as CapturedGameCall,
+                info,
+                [],
+              ),
+            ),
+          };
+        } catch {
+          enabled = { kind: "invalid" };
+        }
+      }
+    }
+  }
+  const unlimitedValue =
+    unlimitedDescriptor !== undefined && "value" in unlimitedDescriptor
+      ? unlimitedDescriptor.value
+      : undefined;
+  return {
+    kind: "value",
+    value: Object.freeze({
+      anchorEntryKey,
+      unlimited: Boolean(unlimitedValue),
+      enabled,
+    }),
+  };
 }
 
 function readMechanicsTitle(
@@ -185,15 +385,16 @@ function readMechanicsFuel(
   for (const item of items) {
     if (!isNonArrayRecord(item)) return { kind: "invalid" };
     const resourceId = readMechanicsDataProperty(item, "r");
-    const amount = readMechanicsDataProperty(item, "a");
-    if (
-      typeof resourceId !== "string" ||
-      typeof amount !== "number" ||
-      !Number.isFinite(amount)
-    ) {
+    const rawAmount = readMechanicsDataProperty(item, "a");
+    if (typeof resourceId !== "string") return { kind: "invalid" };
+    try {
+      // Fuel quantities are multiplied and compared numerically by the upstream Power pass.
+      const amount = Number(rawAmount);
+      if (!Number.isFinite(amount)) return { kind: "invalid" };
+      result.push(Object.freeze({ resourceId, amount }));
+    } catch {
       return { kind: "invalid" };
     }
-    result.push(Object.freeze({ resourceId, amount }));
   }
   return { kind: "value", value: Object.freeze(result) };
 }
@@ -243,9 +444,16 @@ function readMechanicsBalancer(
       continue;
     }
     const supportAmount = readMechanicsDataProperty(item, "s");
-    if (typeof supportAmount === "number" && Number.isFinite(supportAmount)) {
-      result.push(Object.freeze({ kind: "support", amount: supportAmount }));
-      continue;
+    if (supportAmount !== undefined) {
+      try {
+        const amount = Number(supportAmount);
+        if (Number.isFinite(amount)) {
+          result.push(Object.freeze({ kind: "support", amount }));
+          continue;
+        }
+      } catch {
+        return { kind: "invalid" };
+      }
     }
     return { kind: "invalid" };
   }
@@ -254,6 +462,7 @@ function readMechanicsBalancer(
 
 function createMechanicsDefinition(
   entry: CapturedGridEntry,
+  registry: Map<unknown, unknown>,
 ): CapturedGameStructureDefinition {
   const action = entry.action;
   return Object.freeze({
@@ -268,6 +477,10 @@ function createMechanicsDefinition(
     readFuelAdjustmentRequested: () =>
       readMechanicsBooleanFlag(action, "p_fuel_adjust"),
     readSupport: () => readMechanicsPrimitive(action, "support"),
+    readSupportTypes: () => readMechanicsSupportTypes(action),
+    readSupportValue: (type: string) => readMechanicsSupportValue(action, type),
+    readSupportProvider: () => readMechanicsSupportProvider(action),
+    readSupportTopology: () => readMechanicsSupportTopology(entry, registry),
     readSupportFuel: () => readMechanicsFuel(action, "support_fuel"),
     readSupportFuelAdjustmentDisabled: () =>
       readMechanicsAdjustmentDisabled(action, "support_fuel_adjust"),
@@ -347,8 +560,35 @@ function isProductionConsumeOwner(owner: unknown, assigned: unknown): boolean {
 function emptyGameMechanics(): CapturedGameMechanics {
   return Object.freeze({
     readStructures: () => undefined,
+    readPowerOrder: () => ({ kind: "invalid" as const }),
+    readSupportOrder: () => ({ kind: "invalid" as const }),
     readProductionBreakdown: () => undefined,
   });
+}
+
+function resolveCapturedStructureOrder(
+  registry: Map<unknown, unknown>,
+  rawOrder: unknown,
+): CapturedGameRead<readonly CapturedGameStructureDefinition[]> {
+  if (!Array.isArray(rawOrder)) return { kind: "invalid" };
+  const result: CapturedGameStructureDefinition[] = [];
+  const seen = new Set<string>();
+  try {
+    for (const key of rawOrder) {
+      if (typeof key !== "string") return { kind: "invalid" };
+      if (seen.has(key)) return { kind: "invalid" };
+      seen.add(key);
+      const candidate = registry.get(key);
+      // A stale root-list key has no live registry entry and is ignored by support processing.
+      if (candidate === undefined) continue;
+      const entry = readMechanicsEntry(key, candidate);
+      if (entry === undefined) return { kind: "invalid" };
+      result.push(createMechanicsDefinition(entry, registry));
+    }
+    return { kind: "value", value: Object.freeze(result) };
+  } catch {
+    return { kind: "invalid" };
+  }
 }
 
 export function installCapturedGameMechanics(
@@ -545,12 +785,35 @@ export function installCapturedGameMechanics(
         for (const [key, value] of entries) {
           const entry = readMechanicsEntry(key, value);
           if (entry !== undefined)
-            result.push(createMechanicsDefinition(entry));
+            result.push(createMechanicsDefinition(entry, entries));
         }
         return Object.freeze(result);
       } catch {
         return undefined;
       }
+    },
+    readPowerOrder(
+      root: unknown,
+    ): CapturedGameRead<readonly CapturedGameStructureDefinition[]> {
+      const entries = structureEntries;
+      if (entries === undefined || stopped) return { kind: "invalid" };
+      const order = readMechanicsProperty(root, "power");
+      return order === undefined
+        ? { kind: "absent" }
+        : resolveCapturedStructureOrder(entries, order);
+    },
+    readSupportOrder(
+      root: unknown,
+      type: string,
+    ): CapturedGameRead<readonly CapturedGameStructureDefinition[]> {
+      const entries = structureEntries;
+      if (entries === undefined || stopped) return { kind: "invalid" };
+      const support = readMechanicsProperty(root, "support");
+      if (support === undefined) return { kind: "absent" };
+      const order = readMechanicsProperty(support, type);
+      return order === undefined
+        ? { kind: "absent" }
+        : resolveCapturedStructureOrder(entries, order);
     },
     readProductionBreakdown(): CapturedProductionBreakdown | undefined {
       const owner = productionBreakdownOwner;

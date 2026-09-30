@@ -38,6 +38,9 @@ export function createPowerAutomation(
       const cycle = measure("autoPower.readCycle", () =>
         dependencies.reader.readCycle(),
       );
+      if (cycle === undefined) {
+        return SUCCEEDED;
+      }
       const plan = measure("autoPower.planCycle", () =>
         planPowerCycle(cycle, state),
       );

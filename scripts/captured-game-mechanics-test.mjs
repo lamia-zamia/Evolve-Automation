@@ -34,14 +34,25 @@ function makePage() {
   return page;
 }
 
-function structureEntry({ region, sector, struct, actionId, powered }) {
+function structureEntry({
+  region,
+  sector,
+  struct,
+  actionId,
+  powered,
+  support = () => -1,
+  supportTypes,
+  supportFor,
+  supportProvider,
+  info = false,
+}) {
   const action = {
     id: actionId,
     title: "Relay",
     powered,
     p_fuel: () => ({ r: "Oil", a: 2 }),
     p_fuel_adjust: true,
-    support: () => -1,
+    support,
     support_fuel: () => [{ r: "Oil", a: 1 }],
     support_fuel_adjust: false,
     power_limit: () => 5,
@@ -51,13 +62,16 @@ function structureEntry({ region, sector, struct, actionId, powered }) {
     postPower: () => assert.fail("postPower must not cross the mechanics port"),
     payCosts: () => assert.fail("payCosts must not cross the mechanics port"),
   };
+  if (supportTypes !== undefined) action.s_type = supportTypes;
+  if (supportFor !== undefined) action.support_for = supportFor;
+  if (supportProvider !== undefined) action.support_provider = supportProvider;
   return {
     key: `${sector}:${struct}`,
     region,
     sector,
     struct,
     c_action: action,
-    info: false,
+    info,
   };
 }
 
@@ -320,6 +334,16 @@ assert.deepEqual(definitions[0].readPowerBalancer(), {
     { kind: "support", amount: 3 },
   ],
 });
+assert.deepEqual(definitions[0].readSupportTypes(), { kind: "absent" });
+assert.deepEqual(definitions[0].readSupportProvider(), { kind: "absent" });
+assert.deepEqual(definitions[0].readSupportTopology(), {
+  kind: "value",
+  value: {
+    anchorEntryKey: null,
+    unlimited: false,
+    enabled: { kind: "value", value: true },
+  },
+});
 assert.equal("c_action" in definitions[0], false);
 assert.equal("action" in definitions[0], false);
 assert.equal("postPower" in definitions[0], false);
@@ -346,7 +370,7 @@ const falseResultDefinition = capture.mechanics
   .find((entry) => entry.entryKey === falseResultAction.key);
 assert.deepEqual(falseResultDefinition.readPowered(), {
   kind: "value",
-  value: false,
+  value: 0,
 });
 assert.deepEqual(falseResultDefinition.readTitle(), {
   kind: "value",
@@ -390,6 +414,227 @@ assert.deepEqual(invalidResultDefinition.readFuelAdjustmentRequested(), {
   kind: "invalid",
 });
 
+const coercibleFuelAction = structureEntry({
+  region: "space",
+  sector: "spc_coercible_fuel",
+  struct: "generator",
+  actionId: "space-spc_coercible_fuel-generator",
+  powered: () => "-2",
+});
+coercibleFuelAction.c_action.p_fuel = () => ({ r: "Oil", a: "2.5" });
+entries.set(coercibleFuelAction.key, coercibleFuelAction);
+const coercibleFuelDefinition = capture.mechanics
+  .readStructures()
+  .find((entry) => entry.entryKey === coercibleFuelAction.key);
+assert.deepEqual(coercibleFuelDefinition.readPowered(), {
+  kind: "value",
+  value: -2,
+});
+assert.deepEqual(coercibleFuelDefinition.readFuel(), {
+  kind: "value",
+  value: [{ resourceId: "Oil", amount: 2.5 }],
+});
+
+// The private Map is the action catalog, while live root lists are the current game priority.
+const reorderedRoot = {
+  power: [
+    fourth.key,
+    "stale:entry",
+    first.key,
+    "not-captured:entry",
+    second.key,
+  ],
+  support: {
+    moon: [second.key, "stale:support", first.key, "not-captured:entry"],
+  },
+};
+assert.deepEqual(
+  capture.mechanics
+    .readPowerOrder(reorderedRoot)
+    .value.map((entry) => entry.entryKey),
+  [fourth.key, first.key, second.key],
+  "the live Power array controls order and stale keys are skipped",
+);
+assert.deepEqual(
+  capture.mechanics
+    .readSupportOrder(reorderedRoot, "moon")
+    .value.map((entry) => entry.entryKey),
+  [second.key, first.key],
+  "each live support array controls order independently of Map insertion",
+);
+assert.deepEqual(capture.mechanics.readPowerOrder({ power: "bad" }), {
+  kind: "invalid",
+});
+assert.deepEqual(capture.mechanics.readSupportOrder({}, "moon"), {
+  kind: "absent",
+});
+
+const typedSupport = structureEntry({
+  region: "space",
+  sector: "spc_typed",
+  struct: "provider",
+  actionId: "space-spc_typed-provider",
+  powered: () => 0,
+  support: () => -4,
+  supportTypes: ["moon", 2, "red"],
+  supportFor: {
+    moon() {
+      assert.equal(this, typedSupport.c_action);
+      return "6";
+    },
+    red: "3",
+  },
+  supportProvider: true,
+  info: {
+    support: "relay",
+    support_unlimited: true,
+    support_condition() {
+      return this.support_unlimited;
+    },
+  },
+});
+entries.set(typedSupport.key, typedSupport);
+const typedSupportDefinition = capture.mechanics
+  .readStructures()
+  .find((entry) => entry.entryKey === typedSupport.key);
+assert.deepEqual(typedSupportDefinition.readSupportTypes(), {
+  kind: "value",
+  value: ["moon", "red"],
+});
+assert.deepEqual(typedSupportDefinition.readSupportValue("moon"), {
+  kind: "value",
+  value: 6,
+});
+assert.deepEqual(typedSupportDefinition.readSupportValue("red"), {
+  kind: "value",
+  value: 3,
+});
+assert.deepEqual(typedSupportDefinition.readSupportValue("other"), {
+  kind: "value",
+  value: -4,
+});
+assert.deepEqual(typedSupportDefinition.readSupportProvider(), {
+  kind: "value",
+  value: true,
+});
+assert.deepEqual(typedSupportDefinition.readSupportTopology(), {
+  kind: "value",
+  value: {
+    anchorEntryKey: first.key,
+    unlimited: true,
+    enabled: { kind: "value", value: true },
+  },
+});
+
+const scalarSupport = structureEntry({
+  region: "space",
+  sector: "spc_scalar",
+  struct: "provider",
+  actionId: "space-spc_scalar-provider",
+  powered: () => 0,
+  support: () => "2",
+  supportTypes: "red",
+});
+entries.set(scalarSupport.key, scalarSupport);
+const scalarSupportDefinition = capture.mechanics
+  .readStructures()
+  .find((entry) => entry.entryKey === scalarSupport.key);
+assert.deepEqual(scalarSupportDefinition.readSupportTypes(), {
+  kind: "value",
+  value: ["red"],
+});
+assert.deepEqual(scalarSupportDefinition.readSupportValue("red"), {
+  kind: "value",
+  value: 2,
+});
+
+const negativeProvider = structureEntry({
+  region: "space",
+  sector: "spc_negative_provider",
+  struct: "provider",
+  actionId: "space-spc_negative_provider-provider",
+  powered: () => 0,
+  support: () => -1,
+  supportTypes: "moon",
+  supportProvider: "true",
+});
+entries.set(negativeProvider.key, negativeProvider);
+const negativeProviderDefinition = capture.mechanics
+  .readStructures()
+  .find((entry) => entry.entryKey === negativeProvider.key);
+assert.deepEqual(
+  negativeProviderDefinition.readSupportProvider(),
+  {
+    kind: "value",
+    value: true,
+  },
+  "support_provider qualifies independently of support() sign",
+);
+assert.deepEqual(negativeProviderDefinition.readSupportValue("moon"), {
+  kind: "value",
+  value: -1,
+});
+
+const disabledSupport = structureEntry({
+  region: "space",
+  sector: "spc_disabled",
+  struct: "consumer",
+  actionId: "space-spc_disabled-consumer",
+  powered: () => 0,
+  supportTypes: "moon",
+  info: { support_condition: () => 0 },
+});
+entries.set(disabledSupport.key, disabledSupport);
+const disabledSupportDefinition = capture.mechanics
+  .readStructures()
+  .find((entry) => entry.entryKey === disabledSupport.key);
+assert.deepEqual(
+  disabledSupportDefinition.readSupportTopology().value.enabled,
+  { kind: "value", value: false },
+  "falsey support conditions disable the group using game truthiness",
+);
+
+const invalidCondition = structureEntry({
+  region: "space",
+  sector: "spc_invalid_condition",
+  struct: "consumer",
+  actionId: "space-spc_invalid_condition-consumer",
+  powered: () => 0,
+  supportTypes: "moon",
+  info: {
+    support_condition: () => {
+      throw new Error("condition failed");
+    },
+  },
+});
+entries.set(invalidCondition.key, invalidCondition);
+const invalidConditionDefinition = capture.mechanics
+  .readStructures()
+  .find((entry) => entry.entryKey === invalidCondition.key);
+assert.deepEqual(
+  invalidConditionDefinition.readSupportTopology().value.enabled,
+  { kind: "invalid" },
+  "a throwing support condition remains unavailable instead of becoming enabled",
+);
+
+const unresolvedSupportAnchor = structureEntry({
+  region: "space",
+  sector: "spc_unresolved_anchor",
+  struct: "consumer",
+  actionId: "space-spc_unresolved_anchor-consumer",
+  powered: () => 0,
+  info: { support: "missing_anchor" },
+});
+entries.set(unresolvedSupportAnchor.key, unresolvedSupportAnchor);
+const unresolvedSupportDefinition = capture.mechanics
+  .readStructures()
+  .find((entry) => entry.entryKey === unresolvedSupportAnchor.key);
+assert.deepEqual(
+  unresolvedSupportDefinition.readSupportTopology(),
+  { kind: "invalid" },
+  "an unresolved info.support target is not reported as a complete topology",
+);
+
 const unrelatedAfter = new page.Map();
 unrelatedAfter.set(
   "unrelated-after-capture",
@@ -401,7 +646,7 @@ unrelatedAfter.set(
     powered: () => 1,
   }),
 );
-assert.equal(capture.mechanics.readStructures().length, 6);
+assert.equal(capture.mechanics.readStructures().length, 13);
 
 // One inherited assignment captures the p-ledger owner and then removes the prototype hook.
 const falseLedgerCandidate = new page.Object();

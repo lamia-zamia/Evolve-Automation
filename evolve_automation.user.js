@@ -441,7 +441,7 @@
         if (entryKey !== mapKey || typeof region != "string" || region.length === 0 || typeof sector != "string" || sector.length === 0 || typeof struct != "string" || struct.length === 0 || mapKey !== `${sector}:${struct}` || info !== !1 && !isNonArrayRecord(info) || !isNonArrayRecord(action))
           return;
         let actionId = readMechanicsDataProperty(action, "id");
-        return typeof actionId != "string" || actionId.trim().length === 0 ? void 0 : { entryKey, region, sector, struct, actionId, action };
+        return typeof actionId != "string" || actionId.trim().length === 0 ? void 0 : { entryKey, region, sector, struct, actionId, action, info };
       } catch {
         return;
       }
@@ -470,8 +470,162 @@
   function readMechanicsPrimitive(action, name) {
     let read = readMechanicsCall(action, name);
     if (read.kind !== "value") return read;
-    let value = read.value;
-    return typeof value == "number" ? Number.isFinite(value) ? { kind: "value", value } : { kind: "invalid" } : typeof value == "string" || typeof value == "boolean" ? { kind: "value", value } : { kind: "invalid" };
+    try {
+      let value = Number(read.value);
+      return Number.isFinite(value) ? { kind: "value", value } : { kind: "invalid" };
+    } catch {
+      return { kind: "invalid" };
+    }
+  }
+  function readMechanicsSupportTypes(action) {
+    let descriptor;
+    try {
+      descriptor = Object.getOwnPropertyDescriptor(action, "s_type");
+    } catch {
+      return { kind: "invalid" };
+    }
+    if (descriptor === void 0) return { kind: "absent" };
+    if (!("value" in descriptor)) return { kind: "invalid" };
+    let value = descriptor.value;
+    if (typeof value == "string")
+      return { kind: "value", value: Object.freeze([value]) };
+    try {
+      if (!Array.isArray(value)) return { kind: "invalid" };
+      let types = [];
+      for (let index = 0; index < value.length; index++) {
+        let item = Object.getOwnPropertyDescriptor(value, String(index));
+        if (item !== void 0) {
+          if (!("value" in item)) return { kind: "invalid" };
+          typeof item.value == "string" && types.push(item.value);
+        }
+      }
+      return { kind: "value", value: Object.freeze(types) };
+    } catch {
+      return { kind: "invalid" };
+    }
+  }
+  function readMechanicsSupportValue(action, type) {
+    let supportForDescriptor;
+    try {
+      supportForDescriptor = Object.getOwnPropertyDescriptor(
+        action,
+        "support_for"
+      );
+    } catch {
+      return { kind: "invalid" };
+    }
+    if (supportForDescriptor !== void 0 && !("value" in supportForDescriptor))
+      return { kind: "invalid" };
+    let supportFor = supportForDescriptor !== void 0 && "value" in supportForDescriptor ? supportForDescriptor.value : void 0;
+    if (isNonArrayRecord(supportFor)) {
+      let valueDescriptor;
+      try {
+        valueDescriptor = Object.getOwnPropertyDescriptor(supportFor, type);
+      } catch {
+        return { kind: "invalid" };
+      }
+      if (valueDescriptor !== void 0) {
+        if (!("value" in valueDescriptor)) return { kind: "invalid" };
+        let value = valueDescriptor.value, result = value;
+        if (typeof value == "function")
+          try {
+            result = Reflect.apply(value, action, []);
+          } catch {
+            return { kind: "invalid" };
+          }
+        try {
+          let numeric = Number(result);
+          return Number.isFinite(numeric) ? { kind: "value", value: numeric } : { kind: "invalid" };
+        } catch {
+          return { kind: "invalid" };
+        }
+      }
+    } else if (supportFor)
+      return { kind: "invalid" };
+    return readMechanicsPrimitive(action, "support");
+  }
+  function readMechanicsSupportProvider(action) {
+    let descriptor;
+    try {
+      descriptor = Object.getOwnPropertyDescriptor(action, "support_provider");
+    } catch {
+      return { kind: "invalid" };
+    }
+    return descriptor === void 0 ? { kind: "absent" } : "value" in descriptor ? { kind: "value", value: !!descriptor.value } : { kind: "invalid" };
+  }
+  function readMechanicsSupportTopology(entry, registry) {
+    let { info } = entry;
+    if (info === !1)
+      return {
+        kind: "value",
+        value: Object.freeze({
+          anchorEntryKey: null,
+          unlimited: !1,
+          enabled: { kind: "value", value: !0 }
+        })
+      };
+    let supportDescriptor, unlimitedDescriptor;
+    try {
+      supportDescriptor = Object.getOwnPropertyDescriptor(info, "support"), unlimitedDescriptor = Object.getOwnPropertyDescriptor(
+        info,
+        "support_unlimited"
+      );
+    } catch {
+      return { kind: "invalid" };
+    }
+    if (supportDescriptor !== void 0 && !("value" in supportDescriptor) || unlimitedDescriptor !== void 0 && !("value" in unlimitedDescriptor))
+      return { kind: "invalid" };
+    let support = supportDescriptor !== void 0 && "value" in supportDescriptor ? supportDescriptor.value : void 0, anchorEntryKey = null;
+    if (support) {
+      if (typeof support != "string") return { kind: "invalid" };
+      for (let [key, value] of registry) {
+        let candidate = readMechanicsEntry(key, value);
+        if (candidate !== void 0 && candidate.region === entry.region && candidate.struct === support) {
+          anchorEntryKey = candidate.entryKey;
+          break;
+        }
+      }
+      if (anchorEntryKey === null) return { kind: "invalid" };
+    }
+    let conditionDescriptor;
+    try {
+      conditionDescriptor = Object.getOwnPropertyDescriptor(
+        info,
+        "support_condition"
+      );
+    } catch {
+      return { kind: "invalid" };
+    }
+    let enabled = { kind: "value", value: !0 };
+    if (conditionDescriptor !== void 0) {
+      if (!("value" in conditionDescriptor))
+        enabled = { kind: "invalid" };
+      else if (conditionDescriptor.value)
+        if (typeof conditionDescriptor.value != "function")
+          enabled = { kind: "invalid" };
+        else
+          try {
+            enabled = {
+              kind: "value",
+              value: !!Reflect.apply(
+                conditionDescriptor.value,
+                info,
+                []
+              )
+            };
+          } catch {
+            enabled = { kind: "invalid" };
+          }
+    }
+    let unlimitedValue = unlimitedDescriptor !== void 0 && "value" in unlimitedDescriptor ? unlimitedDescriptor.value : void 0;
+    return {
+      kind: "value",
+      value: Object.freeze({
+        anchorEntryKey,
+        unlimited: !!unlimitedValue,
+        enabled
+      })
+    };
   }
   function readMechanicsTitle(action) {
     let descriptor;
@@ -499,10 +653,15 @@
     let items = Array.isArray(value) ? value : [value], result = [];
     for (let item of items) {
       if (!isNonArrayRecord(item)) return { kind: "invalid" };
-      let resourceId = readMechanicsDataProperty(item, "r"), amount = readMechanicsDataProperty(item, "a");
-      if (typeof resourceId != "string" || typeof amount != "number" || !Number.isFinite(amount))
+      let resourceId = readMechanicsDataProperty(item, "r"), rawAmount = readMechanicsDataProperty(item, "a");
+      if (typeof resourceId != "string") return { kind: "invalid" };
+      try {
+        let amount = Number(rawAmount);
+        if (!Number.isFinite(amount)) return { kind: "invalid" };
+        result.push(Object.freeze({ resourceId, amount }));
+      } catch {
         return { kind: "invalid" };
-      result.push(Object.freeze({ resourceId, amount }));
+      }
     }
     return { kind: "value", value: Object.freeze(result) };
   }
@@ -536,15 +695,21 @@
         continue;
       }
       let supportAmount = readMechanicsDataProperty(item, "s");
-      if (typeof supportAmount == "number" && Number.isFinite(supportAmount)) {
-        result.push(Object.freeze({ kind: "support", amount: supportAmount }));
-        continue;
-      }
+      if (supportAmount !== void 0)
+        try {
+          let amount = Number(supportAmount);
+          if (Number.isFinite(amount)) {
+            result.push(Object.freeze({ kind: "support", amount }));
+            continue;
+          }
+        } catch {
+          return { kind: "invalid" };
+        }
       return { kind: "invalid" };
     }
     return { kind: "value", value: Object.freeze(result) };
   }
-  function createMechanicsDefinition(entry) {
+  function createMechanicsDefinition(entry, registry) {
     let action = entry.action;
     return Object.freeze({
       entryKey: entry.entryKey,
@@ -557,6 +722,10 @@
       readFuel: () => readMechanicsFuel(action, "p_fuel"),
       readFuelAdjustmentRequested: () => readMechanicsBooleanFlag(action, "p_fuel_adjust"),
       readSupport: () => readMechanicsPrimitive(action, "support"),
+      readSupportTypes: () => readMechanicsSupportTypes(action),
+      readSupportValue: (type) => readMechanicsSupportValue(action, type),
+      readSupportProvider: () => readMechanicsSupportProvider(action),
+      readSupportTopology: () => readMechanicsSupportTopology(entry, registry),
       readSupportFuel: () => readMechanicsFuel(action, "support_fuel"),
       readSupportFuelAdjustmentDisabled: () => readMechanicsAdjustmentDisabled(action, "support_fuel_adjust"),
       readPowerLimit: () => readMechanicsPrimitive(action, "power_limit"),
@@ -611,9 +780,30 @@
     return Object.freeze({
       readStructures: () => {
       },
+      readPowerOrder: () => ({ kind: "invalid" }),
+      readSupportOrder: () => ({ kind: "invalid" }),
       readProductionBreakdown: () => {
       }
     });
+  }
+  function resolveCapturedStructureOrder(registry, rawOrder) {
+    if (!Array.isArray(rawOrder)) return { kind: "invalid" };
+    let result = [], seen = /* @__PURE__ */ new Set();
+    try {
+      for (let key of rawOrder) {
+        if (typeof key != "string") return { kind: "invalid" };
+        if (seen.has(key)) return { kind: "invalid" };
+        seen.add(key);
+        let candidate = registry.get(key);
+        if (candidate === void 0) continue;
+        let entry = readMechanicsEntry(key, candidate);
+        if (entry === void 0) return { kind: "invalid" };
+        result.push(createMechanicsDefinition(entry, registry));
+      }
+      return { kind: "value", value: Object.freeze(result) };
+    } catch {
+      return { kind: "invalid" };
+    }
   }
   function installCapturedGameMechanics(pageWindow, periods) {
     if (!isNonArrayRecord(pageWindow))
@@ -697,12 +887,26 @@
             let result = [];
             for (let [key, value] of entries) {
               let entry = readMechanicsEntry(key, value);
-              entry !== void 0 && result.push(createMechanicsDefinition(entry));
+              entry !== void 0 && result.push(createMechanicsDefinition(entry, entries));
             }
             return Object.freeze(result);
           } catch {
             return;
           }
+      },
+      readPowerOrder(root) {
+        let entries = structureEntries;
+        if (entries === void 0 || stopped) return { kind: "invalid" };
+        let order = readMechanicsProperty(root, "power");
+        return order === void 0 ? { kind: "absent" } : resolveCapturedStructureOrder(entries, order);
+      },
+      readSupportOrder(root, type) {
+        let entries = structureEntries;
+        if (entries === void 0 || stopped) return { kind: "invalid" };
+        let support = readMechanicsProperty(root, "support");
+        if (support === void 0) return { kind: "absent" };
+        let order = readMechanicsProperty(support, type);
+        return order === void 0 ? { kind: "absent" } : resolveCapturedStructureOrder(entries, order);
       },
       readProductionBreakdown() {
         let owner = productionBreakdownOwner;

@@ -19,6 +19,14 @@ export type CapturedPowerBalanceRule =
     }
   | { readonly kind: "support"; readonly amount: number };
 
+export interface CapturedSupportTopology {
+  /** Full registry key of the same-region anchor selected by DeadSpace, or null. */
+  readonly anchorEntryKey: string | null;
+  readonly unlimited: boolean;
+  /** Absent support_condition means enabled, matching the normal support pass. */
+  readonly enabled: CapturedGameRead<boolean>;
+}
+
 export interface CapturedGameStructureDefinition {
   /** DeadSpace's full grid key; short `struct` names are not unique identities. */
   readonly entryKey: string;
@@ -29,11 +37,19 @@ export interface CapturedGameStructureDefinition {
   readonly actionId: string;
   /** The game-owned display key used by its source-specific production ledger. */
   readTitle(): CapturedGameRead<string>;
-  readPowered(): CapturedGameRead<number | string | boolean>;
+  readPowered(): CapturedGameRead<number>;
   readFuel(): CapturedGameRead<readonly CapturedGameFuelInput[] | false>;
   /** DeadSpace applies generator fuel adjustment only when this positive flag is true. */
   readFuelAdjustmentRequested(): CapturedGameRead<boolean>;
-  readSupport(): CapturedGameRead<number | string | boolean>;
+  readSupport(): CapturedGameRead<number>;
+  /** Game `s_type`, normalized to the string members it actually retains. */
+  readSupportTypes(): CapturedGameRead<readonly string[]>;
+  /** Game `support_for[type]` with the `support()` fallback already applied. */
+  readSupportValue(type: string): CapturedGameRead<number>;
+  /** Truthy `support_provider` marker; absence remains distinct and means no marker. */
+  readSupportProvider(): CapturedGameRead<boolean>;
+  /** Semantic subset of the group info, without exposing `info` or its callback. */
+  readSupportTopology(): CapturedGameRead<CapturedSupportTopology>;
   readSupportFuel(): CapturedGameRead<readonly CapturedGameFuelInput[] | false>;
   readSupportFuelAdjustmentDisabled(): CapturedGameRead<boolean>;
   readPowerLimit(): CapturedGameRead<number | string | boolean>;
@@ -60,6 +76,15 @@ export interface CapturedProductionBreakdown {
 export interface CapturedGameMechanics {
   /** `undefined` means the private registry has not been captured or failed validation. */
   readStructures(): readonly CapturedGameStructureDefinition[] | undefined;
+  /** Resolve the live root Power list; unknown/stale keys are skipped, never Map-ordered. */
+  readPowerOrder(
+    root: unknown,
+  ): CapturedGameRead<readonly CapturedGameStructureDefinition[]>;
+  /** Resolve one live root support list with the same full-key ordering semantics. */
+  readSupportOrder(
+    root: unknown,
+    type: string,
+  ): CapturedGameRead<readonly CapturedGameStructureDefinition[]>;
   /** `undefined` means the private production ledger has not been captured or validated. */
   readProductionBreakdown(): CapturedProductionBreakdown | undefined;
 }
