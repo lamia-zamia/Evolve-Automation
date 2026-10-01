@@ -13,6 +13,8 @@
  *   controls    - `{ [elementId]: { event?, events?, data?, methods: { [method]: implementation } } }`.
  *                 Every invocation of that control appends its event to the trace, so an enabled
  *                 phase that decides not to act leaves no mark and the assertion fails loudly.
+ *                 `events[method]` may be a function of the invocation arguments when two phases
+ *                 share one captured method for two different mutations.
  *   documentSetup({ document, body, root }) - add the panels a feature reads out of the DOM.
  *   mount       - `true` lets the runtime's tab discovery draw, which is what the progression
  *                 phases need to sample their own panels. Off by default, so a fixture that does
@@ -20,6 +22,10 @@
  *   logEvents   - `[{ match, event }]`. A phase that reports itself through the production error
  *                 path rather than through a control invocation — Power, whose whole answer on an
  *                 unavailable cycle is a log line — is still an executed phase.
+ *   cycles      - how many `runCycle` calls this one runtime instance serves. Features that carry
+ *                 state across cycles — the Storage allocation debounce, the prestige goal — only
+ *                 move when the same instance runs again, so a relation that depends on such a
+ *                 mutation must ask for the cycle it lands in.
  */
 import { startCapturedRuntime } from "../src/bootstrap/captured-runtime-control.ts";
 import { createTestDocument, element } from "./dom-fixture.mjs";
@@ -48,12 +54,16 @@ export function runCapturedPhaseOrderCycle({
   mechanics,
   mount = false,
   logEvents = [],
+  cycles = 1,
   settingsHostWindow = {},
 }) {
   const trace = [];
   const errors = [];
   const invocations = [];
   const persisted = [];
+  const cycleTrace = [];
+  const cycleErrors = [];
+  const cycleInvocations = [];
   const handles = new Map();
   for (const [elementId, spec] of Object.entries(controls)) {
     const methods = spec.methods ?? {};
@@ -91,12 +101,17 @@ export function runCapturedPhaseOrderCycle({
         return { ok: false, reason: "stale-control" };
       }
       invocations.push({ elementId: handle.elementId, method, args });
+      cycleInvocations.push({ elementId: handle.elementId, method, args });
       // `event` marks every invocation of the control; `events` marks named methods only, for the
-      // controls whose read-only oracles must not look like the mutation they sit beside.
-      const event =
+      // controls whose read-only oracles must not look like the mutation they sit beside. A marked
+      // method may also be a function of the arguments, for a captured method two different phases
+      // invoke for two different mutations — Espionage's release and Battle's raid are both
+      // `garrison.campaign(index)` — so the phase is read off what the stub is about to change.
+      const marked =
         typeof current.event === "string"
           ? current.event
           : (current.events ?? {})[method];
+      const event = typeof marked === "function" ? marked(args) : marked;
       if (event !== undefined) trace.push(event);
       const implementation = current.implementations[method];
       return {
@@ -153,51 +168,43 @@ export function runCapturedPhaseOrderCycle({
     },
     logError: (message) => {
       errors.push(message);
+      cycleErrors.push(message);
       for (const { match, event } of logEvents) {
-        if (match.test(message)) trace.push(event);
+        if (match.test(message)) {
+          trace.push(event);
+          cycleTrace.push(event);
+        }
       }
     },
   });
-  runCycle({ periods: 1 });
+  for (let cycle = 0; cycle < cycles; cycle += 1) {
+    const traceBefore = trace.length;
+    const errorBefore = cycleErrors.length;
+    const invocationBefore = cycleInvocations.length;
+    runCycle({ periods: 1 });
+    cycleTrace.push({
+      cycle,
+      trace: trace.slice(traceBefore),
+      errors: cycleErrors.slice(errorBefore),
+      invocations: cycleInvocations.slice(invocationBefore),
+    });
+  }
   stop();
   return {
     trace,
     errors,
     invocations,
+    // Per-cycle slices of the same accumulated log, for a relation whose phases run in the cycle a
+    // cross-cycle state change actually lands in rather than in the first one.
+    cycleTrace,
     root,
     effectiveSettings:
       persisted.length === 0 ? {} : JSON.parse(persisted[persisted.length - 1]),
   };
 }
 
-/**
- * The same fixture over several cycles, with the trace and invocation log accumulated. Some
- * features debounce across cycles — Storage holds a freshly built crate back before assigning it —
- * so a relation that depends on their mutation needs the cycle it lands in.
- */
-export function runCapturedPhaseOrderCycles(count, scenario) {
-  const trace = [];
-  const errors = [];
-  const invocations = [];
-  let result;
-  for (let cycle = 0; cycle < count; cycle += 1) {
-    result = runCapturedPhaseOrderCycle(scenario);
-    trace.push(...result.trace);
-    errors.push(...result.errors);
-    invocations.push(...result.invocations);
-  }
-  return Object.freeze({
-    trace,
-    errors,
-    invocations,
-    root: result?.root,
-    effectiveSettings: result?.effectiveSettings,
-    cycles: count,
-  });
-}
-
 /** Index of the first trace entry, or -1. Asserting on the result names the missing phase. */
-export function traceIndex(trace, name) {
+function traceIndex(trace, name) {
   return trace.indexOf(name);
 }
 
