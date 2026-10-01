@@ -162,7 +162,9 @@ try {
   ]);
   assert.equal(root.galaxy.defense.gxy_stargate.scout_ship, 1);
   assert.equal(root.galaxy.defense.gxy_chthonian.scout_ship, 1);
-  assert.equal(root.galaxy.minelayer.on, 0);
+  // A DOM warning and a rendered switch cannot authorize Power without the complete
+  // semantic mechanics sample. Fleet remains independent of that unavailable cycle.
+  assert.equal(root.galaxy.minelayer.on, 1);
 } finally {
   stop();
   capture.uninstall();

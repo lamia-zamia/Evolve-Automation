@@ -79,6 +79,7 @@ import type { CapturedMechDemandSource } from "../ports/captured-mech.ts";
 import { CAPTURED_MECH_BUILDINGS } from "../adapters/evolve/progression/build/captured-building-metadata.ts";
 
 export interface CapturedProgressionControlDependencies {
+  readonly readMechPowerSupplyHold?: () => boolean | undefined;
   readonly rootState: GameRootStateSource;
   readonly controls: GameControlRegistry;
   readonly mountSuppression: GameMountSuppression;
@@ -655,6 +656,9 @@ export function createCapturedProgressionControl(
   // The pursued Mech build reserves its Supply and Soul Gems like any other
   // commitment, so cheaper construction candidates cannot spend them first.
   const mechDemand = createCapturedMechDemandSource({
+    ...(dependencies.readMechPowerSupplyHold === undefined
+      ? {}
+      : { readPowerSupplyHold: dependencies.readMechPowerSupplyHold }),
     rootState,
     controls,
     readSettings,

@@ -432,6 +432,7 @@ function sameCapturedMechInput(
 }
 
 export interface CapturedMechDependencies {
+  readonly readPowerSupplyHold?: () => boolean | undefined;
   readonly rootState: GameRootStateSource;
   readonly controls: GameControlRegistry;
   readonly readSettings: () => unknown;
@@ -468,7 +469,7 @@ export function createCapturedMech(dependencies: CapturedMechDependencies): {
     readState(): CapturedMechState {
       const root = dependencies.rootState.readRoot();
       const gameSettings = readProperty(root, "settings");
-      return withCapturedMechReservations(
+      const state = withCapturedMechReservations(
         readCapturedMechState({
           root,
           settings: dependencies.readSettings(),
@@ -479,6 +480,10 @@ export function createCapturedMech(dependencies: CapturedMechDependencies): {
         }),
         readReserved(),
       );
+      return Object.freeze({
+        ...state,
+        powerSupplyHold: dependencies.readPowerSupplyHold?.(),
+      });
     },
     readCanExpandBay(): boolean | undefined {
       return dependencies.readCanExpandBay?.();

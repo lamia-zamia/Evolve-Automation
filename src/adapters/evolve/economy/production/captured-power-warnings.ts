@@ -1,17 +1,15 @@
 /** Captured power-warning shutdown over the game's rendered warning markers. */
 
 import type { PowerWarnBuildingInput } from "../../../../domain/economy/production/power.ts";
-import { planPowerWarningShutdown } from "../../../../domain/economy/production/power.ts";
-import type { CommandExecutionOutcome } from "../../../../domain/commands.ts";
+import type { PowerWarningSource } from "../../../../ports/power.ts";
+import type { CapturedGameMechanics } from "../../../../ports/captured-game-mechanics.ts";
+import { readCapturedSemanticBuildingStates } from "../../progression/build/captured-building-availability.ts";
+import { readCapturedPowerSupportResourceState } from "./captured-power-reader.ts";
+import type { CapturedGameStructureDefinition } from "../../../../ports/captured-game-mechanics.ts";
+import type { CapturedBuildingState } from "../../progression/build/captured-building-state.ts";
 import type { GameControlRegistry } from "../../../../ports/game-control-registry.ts";
 import type { GameRootStateSource } from "../../../../ports/game-root-state.ts";
-import { rejected, stale, SUCCEEDED } from "../../../command-outcomes.ts";
-import {
-  finite,
-  isRecord,
-  readProperty,
-  splitActionId,
-} from "../../../validation.ts";
+import { isRecord, readProperty } from "../../../validation.ts";
 
 interface WarningElement {
   readonly parentElement?: { readonly id?: unknown } | null;
@@ -26,14 +24,7 @@ export interface CapturedPowerWarningDependencies {
   readonly controls: GameControlRegistry;
   readonly getDocument: () => unknown;
   readonly readSettings: () => unknown;
-}
-
-interface WarningSession {
-  readonly root: unknown;
-  readonly elementId: string;
-  readonly region: string;
-  readonly binding: string;
-  readonly stateOn: number;
+  readonly mechanics: CapturedGameMechanics;
 }
 
 function warningDocument(value: unknown): WarningDocument | undefined {
@@ -43,216 +34,127 @@ function warningDocument(value: unknown): WarningDocument | undefined {
   return value as unknown as WarningDocument;
 }
 
-function elementParts(
-  elementId: string,
-): { readonly region: string; readonly binding: string } | undefined {
-  const parts = splitActionId(elementId);
-  // An empty binding names no building: the shared parser answers the shape, this site keeps
-  // its own refusal of a trailing dash.
-  if (parts === undefined || parts.id.length === 0) return undefined;
-  return Object.freeze({
-    region: parts.region,
-    binding: parts.id,
-  });
-}
-
-function highPopulationScale(root: unknown): number | undefined {
-  const value = readProperty(readProperty(root, "race"), "high_pop");
-  if (value === undefined || value === false) return 1;
-  if (typeof value !== "number" || !Number.isFinite(value)) return undefined;
-  switch (value) {
-    case 0.1:
-    case 0.25:
-      return 2;
-    case 0.5:
-      return 3;
-    case 1:
-      return 4;
-    case 2:
-      return 5;
-    case 3:
-      return 6;
-    case 4:
-      return 7;
-    default:
-      return undefined;
-  }
-}
-
 function readWarning(
   root: unknown,
   settings: Record<PropertyKey, unknown>,
   elementId: string,
+  buildings: readonly Readonly<CapturedBuildingState>[],
+  structures: readonly CapturedGameStructureDefinition[],
 ): Readonly<PowerWarnBuildingInput> | undefined {
-  const parts = elementParts(elementId);
-  if (parts === undefined) return undefined;
-  const structure = readProperty(
-    readProperty(root, parts.region),
-    parts.binding,
+  const building = buildings.find(
+    (entry) => entry.catalog.elementId === elementId,
   );
-  if (!isRecord(structure)) return undefined;
-  const stateOn = finite(structure["on"]);
-  const count = finite(structure["count"]);
-  if (
-    stateOn === undefined ||
-    count === undefined ||
-    stateOn < 0 ||
-    count < 0 ||
-    stateOn > count
-  ) {
+  if (building === undefined || !building.available || !building.hasState)
     return undefined;
-  }
-
+  const stateOn = building.stateOn;
   const belt = ["elerium_ship", "iridium_ship", "iron_ship"].includes(
-    parts.binding,
+    building.catalog.id,
   );
-  const lake = ["bireme", "transport"].includes(parts.binding);
-  const tau = ["whaling_ship", "mining_ship"].includes(parts.binding);
+  const lake = ["bireme", "transport"].includes(building.catalog.id);
+  const tau = ["whaling_ship", "mining_ship"].includes(building.catalog.id);
   const warningKind = belt
-    ? parts.binding === "elerium_ship"
+    ? building.catalog.id === "elerium_ship"
       ? "belt-elerium"
-      : parts.binding === "iridium_ship"
+      : building.catalog.id === "iridium_ship"
         ? "belt-iridium"
         : "belt-iron"
     : lake
-      ? parts.binding === "bireme"
+      ? building.catalog.id === "bireme"
         ? "lake-bireme"
         : "lake-transport"
       : tau
-        ? parts.binding === "whaling_ship"
+        ? building.catalog.id === "whaling_ship"
           ? "tau-whaling"
           : "tau-mining"
         : "ordinary";
-  const resources = readProperty(root, "resource");
-  const support = readProperty(resources, "Belt_Support");
-  const lakeSupport = readProperty(resources, "Lake_Support");
-  const beltScale = highPopulationScale(root);
-  const beltSupportNeeded =
-    beltScale === undefined
-      ? 0
-      : (finite(
-          readProperty(
-            readProperty(readProperty(root, "space"), "elerium_ship"),
-            "on",
-          ),
-        ) ?? 0) *
-          2 *
-          beltScale +
-        (finite(
-          readProperty(
-            readProperty(readProperty(root, "space"), "iridium_ship"),
-            "on",
-          ),
-        ) ?? 0) *
-          beltScale +
-        (finite(
-          readProperty(
-            readProperty(readProperty(root, "space"), "iron_ship"),
-            "on",
-          ),
-        ) ?? 0) *
-          beltScale;
-  const lakeSupportNeeded =
-    (finite(
-      readProperty(readProperty(readProperty(root, "portal"), "bireme"), "on"),
-    ) ?? 0) +
-    (finite(
-      readProperty(
-        readProperty(readProperty(root, "portal"), "transport"),
-        "on",
-      ),
-    ) ?? 0);
-  const autoStateValue = settings[`bld_s_${parts.binding}`];
+  const beltSupport = belt
+    ? readCapturedPowerSupportResourceState(
+        root,
+        "Belt_Support",
+        settings,
+        structures,
+        buildings,
+      )
+    : undefined;
+  const lakeSupport = lake
+    ? readCapturedPowerSupportResourceState(
+        root,
+        "Lake_Support",
+        settings,
+        structures,
+        buildings,
+      )
+    : undefined;
+  if (
+    (belt && beltSupport === undefined) ||
+    (lake && lakeSupport === undefined)
+  )
+    return undefined;
+  const autoStateValue = settings[`bld_s_${building.catalog.binding}`];
   return Object.freeze({
     domId: elementId,
-    buildingId: elementId,
-    binding: parts.binding,
+    buildingId: building.catalog.id,
+    binding: building.catalog.binding,
     stateOn,
     autoStateEnabled: autoStateValue === undefined || autoStateValue === true,
     ship: belt || tau,
     warningKind,
-    beltSupportNeeded,
-    beltSupportMaximum: finite(readProperty(support, "max")) ?? 0,
-    lakeSupportNeeded,
-    lakeSupportMaximum: finite(readProperty(lakeSupport, "max")) ?? 0,
+    beltSupportNeeded: beltSupport?.currentQuantity ?? 0,
+    beltSupportMaximum: beltSupport?.maxQuantity ?? 0,
+    lakeSupportNeeded: lakeSupport?.currentQuantity ?? 0,
+    lakeSupportMaximum: lakeSupport?.maxQuantity ?? 0,
   });
 }
 
-function readWarnings(
-  root: unknown,
-  settingsValue: unknown,
-  documentValue: unknown,
-): readonly Readonly<PowerWarnBuildingInput>[] {
-  const document = warningDocument(documentValue);
-  if (document === undefined || root === undefined) return Object.freeze([]);
-  const settings = isRecord(settingsValue) ? settingsValue : {};
-  const warnings: Readonly<PowerWarnBuildingInput>[] = [];
-  for (const element of Array.from(document.querySelectorAll("span.on.warn"))) {
-    const elementId = element?.parentElement?.id;
-    if (typeof elementId !== "string" || elementId.length === 0) continue;
-    const warning = readWarning(root, settings, elementId);
-    if (warning !== undefined) warnings.push(warning);
-  }
-  return Object.freeze(warnings);
-}
-
-function currentStateOn(root: unknown, elementId: string): number | undefined {
-  const parts = elementParts(elementId);
-  if (parts === undefined) return undefined;
-  return finite(
-    readProperty(
-      readProperty(readProperty(root, parts.region), parts.binding),
-      "on",
-    ),
-  );
-}
-
-export function createCapturedPowerWarningAutomation({
-  rootState,
-  controls,
-  getDocument,
-  readSettings,
-}: CapturedPowerWarningDependencies): {
-  readonly run: () => CommandExecutionOutcome;
+export function createCapturedPowerWarnings(
+  dependencies: CapturedPowerWarningDependencies,
+): PowerWarningSource & {
+  readWarnings(
+    domIds: readonly string[],
+  ): readonly Readonly<PowerWarnBuildingInput>[];
 } {
   return Object.freeze({
-    run(): CommandExecutionOutcome {
-      const root = rootState.readRoot();
-      const decision = planPowerWarningShutdown(
-        readWarnings(root, readSettings(), getDocument()),
+    readDebugEnabled(): boolean {
+      return readProperty(dependencies.readSettings(), "debug") === true;
+    },
+    readWarnedBuildingDomIds(): readonly string[] {
+      const document = warningDocument(dependencies.getDocument());
+      if (document === undefined) return Object.freeze([]);
+      return Object.freeze(
+        Array.from(document.querySelectorAll("span.on.warn")).flatMap(
+          (element) => {
+            const id = element?.parentElement?.id;
+            return typeof id === "string" && id.length > 0 ? [id] : [];
+          },
+        ),
       );
-      if (decision === null) return SUCCEEDED;
-      const handle = controls.resolve(decision.domId);
-      if (handle === undefined || !handle.methods.includes("power_off")) {
-        return rejected(
-          "captured-power-warning-control-missing",
-          `no captured power-off control for ${decision.domId}`,
-        );
-      }
-      const session: WarningSession = Object.freeze({
+    },
+    readWarnings(
+      domIds: readonly string[],
+    ): readonly Readonly<PowerWarnBuildingInput>[] {
+      const root = dependencies.rootState.readRoot();
+      const structures = dependencies.mechanics.readStructures();
+      if (structures === undefined) return Object.freeze([]);
+      const buildings = readCapturedSemanticBuildingStates(
         root,
-        elementId: decision.domId,
-        region: elementParts(decision.domId)?.region ?? "",
-        binding: decision.binding,
-        stateOn: decision.expectedStateOn,
-      });
-      if (
-        rootState.readRoot() !== session.root ||
-        currentStateOn(session.root, session.elementId) !== session.stateOn
-      ) {
-        return stale(
-          "captured-power-warning-state-changed",
-          "captured warned building changed",
-        );
-      }
-      const result = controls.invoke(handle, "power_off");
-      if (!result.ok) {
-        return rejected(
-          "captured-power-warning-control-failed",
-          result.detail ?? result.reason,
-        );
-      }
-      return SUCCEEDED;
+        dependencies.controls,
+        dependencies.mechanics,
+      );
+      if (buildings === undefined) return Object.freeze([]);
+      const settingsValue = dependencies.readSettings();
+      const settings = isRecord(settingsValue) ? settingsValue : {};
+      return Object.freeze(
+        domIds.flatMap((id) => {
+          const warning = readWarning(
+            root,
+            settings,
+            id,
+            buildings,
+            structures,
+          );
+          return warning === undefined ? [] : [warning];
+        }),
+      );
     },
   });
 }

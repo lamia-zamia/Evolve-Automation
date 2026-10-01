@@ -19,7 +19,7 @@ export interface PowerAutomationDependencies {
   readonly diagnostics?: TickDiagnostics | undefined;
 }
 
-const SUCCEEDED: CommandExecutionOutcome = Object.freeze({
+const POWER_AUTOMATION_SUCCEEDED: CommandExecutionOutcome = Object.freeze({
   status: "succeeded",
 });
 
@@ -39,14 +39,14 @@ export function createPowerAutomation(
         dependencies.reader.readCycle(),
       );
       if (cycle === undefined) {
-        return SUCCEEDED;
+        return POWER_AUTOMATION_SUCCEEDED;
       }
       const plan = measure("autoPower.planCycle", () =>
         planPowerCycle(cycle, state),
       );
       const decision = plan.decision;
       if (decision === null) {
-        return SUCCEEDED;
+        return POWER_AUTOMATION_SUCCEEDED;
       }
       const cycleOutcome = measure("autoPower.executeCycle", () =>
         dependencies.executor.execute(decision),
@@ -64,7 +64,7 @@ export function createPowerAutomation(
         ),
       );
       if (warning === null) {
-        return SUCCEEDED;
+        return POWER_AUTOMATION_SUCCEEDED;
       }
       const warningOutcome = measure("autoPower.executeWarning", () =>
         dependencies.executor.execute(warning),
@@ -77,7 +77,7 @@ export function createPowerAutomation(
         warning.binding,
         dependencies.reader.readStateOn(warning.binding),
       );
-      return SUCCEEDED;
+      return POWER_AUTOMATION_SUCCEEDED;
     },
 
     readState(): PowerAutomationState {

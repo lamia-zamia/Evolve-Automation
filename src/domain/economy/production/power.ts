@@ -404,7 +404,11 @@ interface MutableOscillationEntry {
   holdTicks?: number;
 }
 
-function mapValue<K, V>(map: ReadonlyMap<K, V>, key: K, label: string): V {
+function powerCycleMapValue<K, V>(
+  map: ReadonlyMap<K, V>,
+  key: K,
+  label: string,
+): V {
   const value = map.get(key);
   if (value === undefined) {
     throw new TypeError(`missing ${label}`);
@@ -437,7 +441,7 @@ function applyBusyCap(
   if (observation.useful) {
     return { maximum, adjusted: [] };
   }
-  const resource = mapValue(
+  const resource = powerCycleMapValue(
     resources,
     observation.resourceId,
     `power resource ${observation.resourceId}`,
@@ -661,7 +665,7 @@ function applySmartRule(
       if (rule.observations.every((entry) => !entry.useful)) {
         let cap = 0;
         for (const observation of rule.observations) {
-          const resource = mapValue(
+          const resource = powerCycleMapValue(
             resources,
             observation.resourceId,
             `power resource ${observation.resourceId}`,
@@ -709,7 +713,7 @@ function applySmartRule(
       } else if (rule.observations.every((entry) => !entry.useful)) {
         let cap = 0;
         for (const observation of rule.observations) {
-          const resource = mapValue(
+          const resource = powerCycleMapValue(
             resources,
             observation.resourceId,
             `power resource ${observation.resourceId}`,
@@ -732,7 +736,7 @@ function applySmartRule(
       if (rule.observations.every((entry) => !entry.useful)) {
         let cap = 0;
         for (const observation of rule.observations) {
-          const resource = mapValue(
+          const resource = powerCycleMapValue(
             resources,
             observation.resourceId,
             `power resource ${observation.resourceId}`,
@@ -980,7 +984,7 @@ export function planPowerCycle(
       if (consumption.rate > 0) {
         consumedResourceIds.add(consumption.resourceId);
       }
-      const resource = mapValue(
+      const resource = powerCycleMapValue(
         resources,
         consumption.resourceId,
         `power resource ${consumption.resourceId}`,
@@ -1016,8 +1020,11 @@ export function planPowerCycle(
       : building.count;
     const growth = building.produces.some(
       (resourceId) =>
-        mapValue(resources, resourceId, `producer resource ${resourceId}`).input
-          .useful,
+        powerCycleMapValue(
+          resources,
+          resourceId,
+          `producer resource ${resourceId}`,
+        ).input.useful,
     )
       ? 1
       : 0;
@@ -1112,7 +1119,11 @@ export function planPowerCycle(
       maximum = result.maximum;
       for (const resourceId of result.adjusted) {
         appendIncomeAdjusted(
-          mapValue(resources, resourceId, `power resource ${resourceId}`),
+          powerCycleMapValue(
+            resources,
+            resourceId,
+            `power resource ${resourceId}`,
+          ),
         );
       }
       if (input.settings.autoFleet && building.fleetMaximum !== null) {
@@ -1123,7 +1134,7 @@ export function planPowerCycle(
     let description =
       descriptionByBinding.get(building.binding) ?? building.extraDescription;
     for (const consumption of building.consumptions) {
-      const resource = mapValue(
+      const resource = powerCycleMapValue(
         resources,
         consumption.resourceId,
         `power resource ${consumption.resourceId}`,
@@ -1195,7 +1206,7 @@ export function planPowerCycle(
       const consumption = building.consumptions
         .filter((entry) => entry.fuelRate > 0)
         .map((entry) => {
-          const resource = mapValue(
+          const resource = powerCycleMapValue(
             resources,
             entry.resourceId,
             `power resource ${entry.resourceId}`,
@@ -1225,7 +1236,7 @@ export function planPowerCycle(
     }
 
     for (const consumption of building.consumptions) {
-      const resource = mapValue(
+      const resource = powerCycleMapValue(
         resources,
         consumption.resourceId,
         `power resource ${consumption.resourceId}`,
@@ -1411,8 +1422,11 @@ export function planPowerCycle(
     kind: "set-power-model",
     resourceId: input.powerResourceId,
     expectedCurrent: input.powerCurrent,
-    expectedRate: mapValue(resources, input.powerResourceId, "power resource")
-      .rate,
+    expectedRate: powerCycleMapValue(
+      resources,
+      input.powerResourceId,
+      "power resource",
+    ).rate,
     value: availablePower,
   });
 
@@ -1434,7 +1448,7 @@ export function planPowerWarningShutdown(
   warnings: readonly Readonly<PowerWarnBuildingInput>[],
 ): PowerWarnShutdownDecision | null {
   for (const warning of warnings) {
-    if (!warning.autoStateEnabled || warning.ship) {
+    if (!warning.autoStateEnabled || warning.ship || warning.stateOn <= 0) {
       continue;
     }
     if (

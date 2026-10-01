@@ -8,6 +8,13 @@ import {
   createChromiumRunner,
   parseSave,
 } from "../tools/chromium-evolve-runner.mjs";
+import {
+  MAIN_TAB_CONTROL,
+  MAIN_TAB_INDEX,
+  GOV_TABS_SETTING,
+  SUB_TAB_CONTROLS,
+  GOV_TAB_INDEX,
+} from "../src/adapters/evolve/captured-tab-discovery.ts";
 import { capturedPowerMetadataForBinding } from "../src/adapters/evolve/economy/production/captured-power-metadata.ts";
 
 const save = parseSave(
@@ -389,27 +396,59 @@ try {
     `${JSON.stringify({ declaredFuelOverlaps: mechanics.declaredFuelOverlaps })}\n`,
   );
 
-  const prioritySettings = Object.create(null);
+  const prioritySettings = Object.assign(Object.create(null), {
+    autoBuild: false,
+    autoARPA: false,
+    autoResearch: false,
+    autoMech: false,
+    autoStorage: false,
+  });
   const priorityCandidates = [...mechanics.managedCandidates].reverse();
   for (let index = 0; index < priorityCandidates.length; index++) {
     const { binding } = priorityCandidates[index];
     prioritySettings[`bld_s_${binding}`] = true;
     prioritySettings[`bld_p_${binding}`] = index;
   }
+  const cycleSave = structuredClone(save);
+  cycleSave.settings.cLabels = false;
+  cycleSave.settings.tabLoad = false;
+  cycleSave.settings.civTabs = 2;
+  cycleSave.settings.govTabs = 0;
   const cycleSession = await runner.openSession({
     bundle: testBundle,
-    save,
+    save: cycleSave,
     settings: prioritySettings,
     seed: 42,
   });
   try {
-    await cycleSession.advance(4);
+    await cycleSession.advance(1);
     const captured = await cycleSession.evaluate(() => {
       const hooks = globalThis.__EA_TEST_HOOKS__;
       if (!hooks || typeof hooks.readPowerCycle !== "function")
         return undefined;
-      hooks.samplePowerBuildingAvailability();
+      const beforeReadCityControls = globalThis[
+        Symbol.for("evolve-automation.page-capture")
+      ].controls
+        .capturedElementIds()
+        .filter((id) => id.startsWith("city-"));
+      const tabSettingsBeforeRead = JSON.stringify(
+        globalThis[
+          Symbol.for("evolve-automation.page-capture")
+        ].rootState.readRoot().settings,
+      );
+      hooks.samplePowerDemand();
       const result = hooks.readPowerCycle();
+      const afterReadCityControls = globalThis[
+        Symbol.for("evolve-automation.page-capture")
+      ].controls
+        .capturedElementIds()
+        .filter((id) => id.startsWith("city-"));
+      const readTabsUnchanged =
+        JSON.stringify(
+          globalThis[
+            Symbol.for("evolve-automation.page-capture")
+          ].rootState.readRoot().settings,
+        ) === tabSettingsBeforeRead;
       if (!result) return undefined;
       const root =
         globalThis[
@@ -472,6 +511,10 @@ try {
         forcedPlan = hooks.planPowerCycle(forcedCycle);
       }
       return {
+        beforeReadCityControls,
+        afterReadCityControls,
+        readTabsUnchanged,
+        freshPowerBuildings: hooks.freshPowerBuildings,
         buildingCount: result.cycle.buildings.length,
         powerUnlocked: result.cycle.powerUnlocked,
         powerCurrent: result.cycle.powerCurrent,
@@ -508,6 +551,35 @@ try {
       "the complete captured cycle is available to the retained planner",
     );
     assert.ok(captured.buildingCount > 0);
+    assert.deepEqual(captured.beforeReadCityControls, []);
+    assert.deepEqual(
+      captured.afterReadCityControls,
+      [],
+      "Power read does not discover the City panel",
+    );
+    assert.equal(captured.readTabsUnchanged, true);
+    const freshManaged = captured.freshPowerBuildings.filter(
+      (building) =>
+        building.hasState &&
+        (building.powered !== 0 || building.count > 0) &&
+        captured.buildingOrder.includes(building.binding),
+    );
+    assert.ok(freshManaged.length > 0);
+    assert.equal(
+      freshManaged.every((building) => !building.panelCaptured),
+      true,
+      "semantic Building state is captured before normal panels or runtime discovery",
+    );
+    assert.deepEqual(
+      priorityCandidates
+        .map(({ binding }) => binding)
+        .filter((binding) =>
+          freshManaged.some((building) => building.binding === binding),
+        ),
+      captured.buildingOrder,
+      "fresh undrawn semantic Building states produce the same managed ordering",
+    );
+
     assert.equal(
       captured.powerUnlocked,
       true,
@@ -574,6 +646,110 @@ try {
     );
     process.stdout.write(
       `${JSON.stringify({ capturedPowerCycle: captured })}\n`,
+    );
+    const execution = await cycleSession.evaluate(() => {
+      const hooks = globalThis.__EA_TEST_HOOKS__;
+      const capture = globalThis[Symbol.for("evolve-automation.page-capture")];
+      const root = capture.rootState.readRoot();
+      const before = hooks.readPowerCycle();
+      const candidate = before.cycle.buildings.find(
+        (building) => building.powered > 0 && building.count > 0,
+      );
+      if (!candidate) return { error: "no consumer" };
+      const structure = capture.mechanics
+        .readStructures()
+        .find((entry) => entry.actionId === candidate.binding);
+      const state = root[structure.region][structure.struct];
+      state.on = 0;
+      root.city.power = 1000000;
+      const settingsBefore = JSON.stringify(root.settings);
+      const controlsBefore = capture.controls.capturedElementIds();
+      const offered = structure.readAvailability(root);
+      const sampled = hooks.readPowerCycle();
+      const adjustment = sampled?.plan.decision?.operations.find(
+        (operation) =>
+          operation.kind === "adjust-building" &&
+          operation.binding === candidate.binding &&
+          operation.amount > 0,
+      );
+      const outcome = hooks.runPowerAutomation();
+      return {
+        binding: candidate.binding,
+        offered,
+        tabLoad: root.settings.tabLoad,
+        civTabs: root.settings.civTabs,
+        normalPanelCaptured:
+          capture.controls.resolve(candidate.binding) !== undefined,
+        beforeOn: 0,
+        plannedAmount: adjustment?.amount,
+        outcome,
+        afterOn: state.on,
+        settingsUnchanged: JSON.stringify(root.settings) === settingsBefore,
+        controlsUnchanged:
+          JSON.stringify(capture.controls.capturedElementIds()) ===
+          JSON.stringify(controlsBefore),
+        buildingOrder: hooks
+          .readPowerCycle()
+          ?.cycle.buildings.map((building) => building.binding),
+      };
+    });
+
+    assert.equal(
+      execution.normalPanelCaptured,
+      false,
+      "production Power executes before the Building panel is rendered",
+    );
+    assert.equal(execution.offered?.kind, "value");
+    assert.equal(execution.offered.value, true);
+    assert.ok(execution.plannedAmount > 0, JSON.stringify(execution));
+    assert.equal(
+      execution.outcome.status,
+      "succeeded",
+      JSON.stringify(execution),
+    );
+    assert.equal(
+      execution.afterOn,
+      execution.beforeOn + execution.plannedAmount,
+    );
+    assert.equal(
+      execution.settingsUnchanged,
+      true,
+      "Power does not change tab settings",
+    );
+    assert.equal(
+      execution.controlsUnchanged,
+      true,
+      "Power does not discover Building panels",
+    );
+    assert.deepEqual(execution.buildingOrder, captured.buildingOrder);
+    process.stdout.write(
+      `${JSON.stringify({ productionPowerExecution: execution })}\n`,
+    );
+    const rendered = await cycleSession.evaluate(
+      ({ main, civic, sub, industry, binding }) => {
+        const capture =
+          globalThis[Symbol.for("evolve-automation.page-capture")];
+        const root = capture.rootState.readRoot();
+        root.settings.civTabs = civic;
+        const mainHandle = capture.controls.resolve(main);
+        capture.controls.invoke(mainHandle, "swapTab", [civic]);
+        root.settings.govTabs = industry;
+        const subHandle = capture.controls.resolve(sub);
+        capture.controls.invoke(subHandle, "swapTab", [industry]);
+        return Boolean(globalThis.document.getElementById(`pg${binding}power`));
+      },
+      {
+        main: MAIN_TAB_CONTROL,
+        civic: MAIN_TAB_INDEX.civic,
+        sub: SUB_TAB_CONTROLS[GOV_TABS_SETTING],
+        industry: GOV_TAB_INDEX.powerGrid,
+        binding: execution.binding,
+      },
+    );
+    assert.equal(
+      rendered,
+      execution.offered.value,
+      "industry gridEnabled rendered result agrees with the semantic offer qualification",
     );
   } finally {
     await cycleSession.close();
@@ -645,7 +821,7 @@ try {
           ? `${supportTitle.value}+${supportWithNoActiveState.actionId}`
           : undefined;
       const hooks = globalThis.__EA_TEST_HOOKS__;
-      hooks.samplePowerBuildingAvailability();
+      hooks.samplePowerDemand();
       const cycle = hooks.readPowerCycle()?.cycle;
       const highTech = Number(root?.tech?.high_tech ?? 0);
       const rawOnCapabilities = structures.flatMap((entry) => {

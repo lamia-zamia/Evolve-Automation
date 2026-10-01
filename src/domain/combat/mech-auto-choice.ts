@@ -151,6 +151,7 @@ export function capturedMechSupplyHold(
 ): boolean {
   const { settings, bay, funds, spire } = state;
   if (force || settings.saveSupplyRatio <= 0) return false;
+  if (state.powerSupplyHold !== undefined) return state.powerSupplyHold;
   if (!settings.baysFirst || !funds.purifierFullyOn) return false;
   if (teamPower === null || spire === null) return false;
   const refund = mechFrameRefund("titan", state.prepared);

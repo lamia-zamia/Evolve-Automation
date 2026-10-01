@@ -94,6 +94,8 @@ export interface CapturedMechSettings {
 }
 
 export interface CapturedMechState {
+  /** Power's session reservation, when it has planned the Spire supply allocation. */
+  readonly powerSupplyHold?: boolean | undefined;
   readonly available: boolean;
   readonly queueKeyHeld: boolean;
   readonly warlord: boolean;

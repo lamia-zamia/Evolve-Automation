@@ -1,3 +1,4 @@
+import { createMechSupplyReservation } from "../application/mech-supply-reservation.ts";
 import { createCapturedProgressionControl } from "./captured-progression-control.ts";
 import { advancePeriodGate } from "../domain/tick.ts";
 import { createStateLogRecorder } from "../application/state-log.ts";
@@ -104,10 +105,12 @@ import {
   QUARRY_CONTROL,
   TITAN_MINE_CONTROL,
 } from "../adapters/evolve/economy/resources/captured-production-ratios.ts";
-import { createCapturedPowerProducerAutomation } from "../adapters/evolve/economy/production/captured-power-producers.ts";
+import { createPowerAutomation } from "../application/power.ts";
+import { createCapturedPowerExecutor } from "../adapters/evolve/economy/production/captured-power-executor.ts";
 import { createCapturedPowerReader } from "../adapters/evolve/economy/production/captured-power-reader.ts";
+import { readCapturedSemanticBuildingStates } from "../adapters/evolve/progression/build/captured-building-availability.ts";
 import { createDiscoveryAttempts } from "./discovery-attempts.ts";
-import { createCapturedPowerWarningAutomation } from "../adapters/evolve/economy/production/captured-power-warnings.ts";
+import { createCapturedPowerWarnings } from "../adapters/evolve/economy/production/captured-power-warnings.ts";
 import {
   EMPTY_POWER_AUTOMATION_STATE,
   planPowerCycle,
@@ -296,6 +299,32 @@ export function startCapturedRuntime({
   log = () => {},
   logError = () => {},
 }: CapturedRuntimeControlDependencies): () => void {
+  if (
+    typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
+    __EA_TEST_SURFACE_ENABLED__ === true
+  ) {
+    const hooks = readProperty(settingsHostWindow, "__EA_TEST_HOOKS__");
+    if (isRecord(hooks)) {
+      const buildings = readCapturedSemanticBuildingStates(
+        pageCapture.rootState.readRoot(),
+        pageCapture.controls,
+        pageCapture.mechanics,
+      );
+      Reflect.set(
+        hooks,
+        "freshPowerBuildings",
+        buildings?.map((building) => ({
+          binding: building.catalog.binding,
+          hasState: building.hasState,
+          powered: building.powered,
+          count: building.count,
+          panelCaptured:
+            pageCapture.controls.resolve(building.catalog.elementId) !==
+            undefined,
+        })),
+      );
+    }
+  }
   const document = documentValue as CapturedDocument;
   const fileDownload = createPageFileDownload(
     settingsHostWindow,
@@ -746,7 +775,9 @@ export function startCapturedRuntime({
   // reuses it for its demand consumers. Reset it with the cycle's other samples.
   let demandPrerequisitesThisCycle: DemandPrerequisiteReport | undefined;
   const readDemandPrerequisites = () => demandPrerequisitesThisCycle;
+  const mechSupplyReservation = createMechSupplyReservation();
   const progression = createCapturedProgressionControl({
+    readMechPowerSupplyHold: mechSupplyReservation.readPowerSupplyHold,
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,
     mountSuppression: pageCapture.mountSuppression,
@@ -840,6 +871,7 @@ export function startCapturedRuntime({
     )(resourceId);
   };
   const capturedMech = createCapturedMech({
+    readPowerSupplyHold: mechSupplyReservation.readPowerSupplyHold,
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,
     readSettings: () => settingsStore.readRaw(),
@@ -1142,6 +1174,7 @@ export function startCapturedRuntime({
     demandPrerequisitesThisCycle = undefined;
   };
   pageCapture.rootState.subscribeRootReplaced(() => {
+    mechSupplyReservation.reset();
     savingTargetThisCycle = undefined;
     settingsLifecycle.invalidateDynamicDefaults();
     // Attempts and readouts belong to the replaced root, even when its day/reset are unchanged.
@@ -1170,7 +1203,13 @@ export function startCapturedRuntime({
     triggers: Object.freeze({ read: readTriggerTargets }),
     construction: cycleConstructionObservations,
     readOfferedTechs: progression.readOfferedTechs,
-    readBuildTargets: progression.readUnlockedStorageBuildTargets,
+    readBuildTargets: () => {
+      const settings = settingsStore.readRaw();
+      return isEnabled(settings, "autoBuild") ||
+        isEnabled(settings, "autoStorage")
+        ? progression.readUnlockedStorageBuildTargets()
+        : Object.freeze([]);
+    },
     readProjects: progression.readProjects,
     reservations: queueReservations,
     readSettings: () => settingsStore.readRaw(),
@@ -1811,16 +1850,6 @@ export function startCapturedRuntime({
       }),
     ]);
   };
-  const ensureCityControls = () => {
-    if (pageCapture.controls.resolve(MAIN_TAB_CONTROL) === undefined) return;
-    finishDiscovery("city-controls", "city", undefined, undefined, [
-      Object.freeze({
-        setting: MAIN_TAB_SETTING,
-        control: MAIN_TAB_CONTROL,
-        index: MAIN_TAB_INDEX.civilization,
-      }),
-    ]);
-  };
   const ensurePylonControls = () => {
     const satisfied = () =>
       pageCapture.controls.resolve(PYLON_CONTROL) !== undefined;
@@ -2284,15 +2313,12 @@ export function startCapturedRuntime({
     );
     return typeof value === "number" && Number.isFinite(value) ? value : 0;
   };
-  const powerProducers = createCapturedPowerProducerAutomation({
+  const powerWarnings = createCapturedPowerWarnings({
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,
-  });
-  const powerWarnings = createCapturedPowerWarningAutomation({
-    rootState: pageCapture.rootState,
-    controls: pageCapture.controls,
+    mechanics: pageCapture.mechanics,
     getDocument: () => document,
-    readSettings: () => settingsStore.readRaw(),
+    readSettings: settingsLifecycle.readEffective,
   });
   const smelter = createCapturedSmelterAutomation({
     rootState: pageCapture.rootState,
@@ -2332,6 +2358,47 @@ export function startCapturedRuntime({
     readSettings: () => settingsStore.readRaw(),
     readDemand: () => readDemand(),
   });
+  const capturedPowerExecution = createCapturedPowerExecutor({
+    rootState: pageCapture.rootState,
+    controls: pageCapture.controls,
+    mechanics: pageCapture.mechanics,
+    readMechSaveSupply: mechSupplyReservation.readSaveSupply,
+    setMechSaveSupply: mechSupplyReservation.setSaveSupply,
+    log: (message) =>
+      onActivity({ message, color: "has-text-info", tags: ["automation"] }),
+  });
+  const powerReader = createCapturedPowerReader({
+    rootState: pageCapture.rootState,
+    mechanics: pageCapture.mechanics,
+    controls: pageCapture.controls,
+    resources: createCapturedResourceSource(pageCapture.rootState),
+    readDemand: () => demandThisCycle,
+    readFleetNeededShips: fleet.readNeededShips,
+    costs: buildCosts,
+    readCurrentDate: () => new Date(),
+    readPurifierDescription: () =>
+      capturedPowerExecution.readDescription("portal-purifier"),
+    readMechSaveSupply: mechSupplyReservation.readSaveSupply,
+    readMechState: () => capturedMech.reader.readState(),
+    readSettingsRaw: settingsLifecycle.readEffective,
+    readRuntimeOptions: () => ({
+      settings: {
+        showGalactic: false,
+        limitPowered: false,
+        autoFleet: false,
+        crewReserve: 0,
+      },
+      debug: powerWarnings.readDebugEnabled(),
+      consumptionBalanceMinimum: CONSUMPTION_BALANCE_MIN,
+    }),
+    readWarnings: powerWarnings.readWarnings,
+  });
+  const powerAutomation = createPowerAutomation({
+    reader: powerReader,
+    executor: capturedPowerExecution.executor,
+    warnings: powerWarnings,
+    diagnostics,
+  });
   // The live characterization bundle opts into this inert hook by defining both the build
   // constant and the hook bag before main.ts starts. Production builds fold this block away.
   // Keep it after the captured demand, build-cost, and fleet capabilities so the test cycle uses
@@ -2342,46 +2409,10 @@ export function startCapturedRuntime({
   ) {
     const hooks = readProperty(settingsHostWindow, "__EA_TEST_HOOKS__");
     if (isRecord(hooks)) {
-      const powerReader = createCapturedPowerReader({
-        rootState: pageCapture.rootState,
-        mechanics: pageCapture.mechanics,
-        controls: pageCapture.controls,
-        resources: createCapturedResourceSource(pageCapture.rootState),
-        readDemand: () => readDemand(),
-        readFleetNeededShips: fleet.readNeededShips,
-        readBuildingUnlocked: progression.readCapturedBuildingUnlocked,
-        costs: buildCosts,
-        readCurrentDate: () => new Date(),
-        readMechState: () => capturedMech.reader.readState(),
-        readSettingsRaw: settingsLifecycle.readEffective,
-        readRuntimeOptions: () => ({
-          settings: {
-            showGalactic: false,
-            limitPowered: false,
-            autoFleet: false,
-            crewReserve: 0,
-          },
-          debug: false,
-          consumptionBalanceMinimum: CONSUMPTION_BALANCE_MIN,
-        }),
-        readWarnings: () => Object.freeze([]),
+      Reflect.set(hooks, "runPowerAutomation", () => powerAutomation.run());
+      Reflect.set(hooks, "samplePowerDemand", () => {
+        demandThisCycle = demand.sample();
       });
-      Reflect.set(
-        hooks,
-        "samplePowerBuildingAvailability",
-        (regions?: readonly string[]) => {
-          progression.resetBuildingUnlockSample();
-          return progression.readBuildingUnlocks(
-            new Set(
-              regions ??
-                pageCapture.mechanics
-                  .readStructures()
-                  ?.map((definition) => definition.region) ??
-                [],
-            ),
-          );
-        },
-      );
       Reflect.set(hooks, "readPowerCycle", () => {
         const cycle = powerReader.readCycle();
         return cycle === undefined
@@ -2865,9 +2896,21 @@ export function startCapturedRuntime({
       }
       if (isEnabled(settings, "autoPower")) {
         runPhase("autoPower", () => {
-          ensureCityControls();
-          powerProducers.run();
-          powerWarnings.run();
+          // Power consumes a completed demand snapshot. Construction/storage phases own any
+          // discovery their demand requires; a Power-only tick samples the real owner without
+          // requesting future construction targets.
+          if (
+            demandThisCycle === undefined &&
+            !isEnabled(settings, "autoBuild") &&
+            !isEnabled(settings, "autoARPA") &&
+            !isEnabled(settings, "autoStorage")
+          )
+            demandThisCycle = demand.sample();
+          const outcome = powerAutomation.run();
+          if (outcome.status !== "succeeded")
+            logError(
+              `autoPower: ${outcome.failure.code}: ${outcome.failure.message}`,
+            );
         });
       }
       // After construction and research, so neither is outbid for the Knowledge a gene costs.

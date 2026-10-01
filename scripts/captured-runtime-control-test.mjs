@@ -863,7 +863,10 @@ assert.equal(unsubscribeCount, 1);
     ],
   ]);
   let cycle;
-  let rootReplaced;
+  const rootReplacementListeners = new Set();
+  const rootReplaced = () => {
+    for (const listener of rootReplacementListeners) listener();
+  };
   const stopCycle = startCapturedRuntime({
     pageCapture: {
       isComplete: () => true,
@@ -871,8 +874,8 @@ assert.equal(unsubscribeCount, 1);
         readRoot: () => root,
         isReactivitySuppressed: () => false,
         subscribeRootReplaced: (listener) => {
-          rootReplaced = listener;
-          return () => {};
+          rootReplacementListeners.add(listener);
+          return () => rootReplacementListeners.delete(listener);
         },
       },
       controls: {
@@ -1154,7 +1157,8 @@ assert.equal(unsubscribeCount, 1);
   assert.equal(page.querySelectorAll("#ea-script-planner").length, 1);
   cycle({ periods: 4 });
   stopCycle();
-  assert.deepEqual(invoked, ["city-farm"]);
+  // Both construction and runtime listeners invalidate their observations on root replacement.
+  assert.deepEqual(invoked, ["city-farm", "city-farm"]);
 }
 
 // Startup evaluates Interface overrides before its first captured panel reconciliation, without
@@ -1254,7 +1258,7 @@ assert.equal(unsubscribeCount, 1);
   stopRuntime();
 }
 
-// autoPower reaches the captured city producer control without requiring the legacy manager.
+// A rendered producer switch cannot authorize Power when semantic mechanics are unavailable.
 {
   const root = {
     city: {
@@ -1268,6 +1272,10 @@ assert.equal(unsubscribeCount, 1);
   const stopCycle = startCapturedRuntime({
     pageCapture: {
       isComplete: () => true,
+      mechanics: {
+        readStructures: () => undefined,
+        readProductionBreakdown: () => undefined,
+      },
       rootState: {
         readRoot: () => root,
         isReactivitySuppressed: () => false,
@@ -1306,8 +1314,8 @@ assert.equal(unsubscribeCount, 1);
   });
   cycle({ periods: 4 });
   stopCycle();
-  assert.deepEqual(invoked, ["city-mill.power_on"]);
-  assert.equal(root.city.mill.on, 1);
+  assert.deepEqual(invoked, []);
+  assert.equal(root.city.mill.on, 0);
 }
 
 // autoJobs reaches captured ordinary civ controls without the compatibility manager.
@@ -1910,6 +1918,10 @@ function runCapturedJobsMatrixScenario({
   const stopCycle = startCapturedRuntime({
     pageCapture: {
       isComplete: () => true,
+      mechanics: {
+        readStructures: () => undefined,
+        readProductionBreakdown: () => undefined,
+      },
       rootState: {
         readRoot: () => root,
         isReactivitySuppressed: () => false,
@@ -1953,16 +1965,18 @@ function runCapturedJobsMatrixScenario({
   const firstPower = invoked.findIndex(
     (entry) => entry === "city-mill.power_on",
   );
-  assert.ok(firstPower > 0, JSON.stringify(invoked));
+  assert.equal(
+    firstPower,
+    -1,
+    "Power fails closed without a complete mechanics snapshot",
+  );
   assert.ok(
-    invoked
-      .slice(0, firstPower)
-      .every(
-        (entry) =>
-          entry === "iNFactory.addItem" ||
-          entry === "supplyCopper.supplyMore" ||
-          entry === "ejectCopper.ejectMore",
-      ),
+    invoked.every(
+      (entry) =>
+        entry === "iNFactory.addItem" ||
+        entry === "supplyCopper.supplyMore" ||
+        entry === "ejectCopper.ejectMore",
+    ),
     JSON.stringify(invoked),
   );
   assert.ok(

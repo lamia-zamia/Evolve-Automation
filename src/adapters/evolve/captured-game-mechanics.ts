@@ -1,7 +1,7 @@
 /**
  * Captures DeadSpace's private structure grid and production ledger during normal page execution.
- * The two native hooks exist only until the real registry and first ledger owner are identified,
- * or the first completed worker period proves that startup capture failed.
+ * Native hooks retain the registry, first ledger owner, and deferred power callback queue
+ * during startup; the first completed worker period removes any remaining hook.
  */
 
 import type { GamePeriodSource } from "../../ports/game-period-source.ts";
@@ -19,6 +19,7 @@ import type {
   CapturedProductionLedger,
 } from "../../ports/captured-game-mechanics.ts";
 import { isNonArrayRecord, readProperty } from "../validation.ts";
+import { readCapturedActionAvailability } from "./progression/build/captured-building-availability.ts";
 
 type CapturedGameCall = (this: unknown, ...args: unknown[]) => unknown;
 const structureMapCaptureThreshold = 3;
@@ -732,6 +733,15 @@ function createMechanicsDefinition(
     sector: entry.sector,
     struct: entry.struct,
     actionId: entry.actionId,
+    readAvailability: (root: unknown) =>
+      readCapturedActionAvailability(
+        root,
+        action,
+        entry.region,
+        entry.sector,
+        entry.struct,
+        entry.info,
+      ),
     readTitle: () => readMechanicsTitle(action),
     readDescription: () => readMechanicsDescription(action),
     readValue: () => readMechanicsPrimitive(action, "val"),
@@ -829,6 +839,7 @@ function isProductionConsumeOwner(owner: unknown, assigned: unknown): boolean {
 
 function emptyGameMechanics(): CapturedGameMechanics {
   return Object.freeze({
+    adjustPower: () => ({ kind: "invalid" as const }),
     readStructures: () => undefined,
     readPowerOrder: () => ({ kind: "invalid" as const }),
     readSupportOrder: () => ({ kind: "invalid" as const }),
@@ -891,6 +902,100 @@ export function installCapturedGameMechanics(
   );
 
   let structureEntries: Map<unknown, unknown> | undefined;
+  let powerCallbackQueue: Map<unknown, unknown> | undefined;
+  const callbackQueueCandidates = new Set<Map<unknown, unknown>>();
+  const callbackIteratorDescriptor = isNonArrayRecord(mapPrototype)
+    ? Object.getOwnPropertyDescriptor(mapPrototype, Symbol.iterator)
+    : undefined;
+  const callbackClearDescriptor = isNonArrayRecord(mapPrototype)
+    ? Object.getOwnPropertyDescriptor(mapPrototype, "clear")
+    : undefined;
+  let callbackSequence:
+    | {
+        phase: "iterated" | "cleared" | "repeated";
+        queue: unknown;
+        repeat?: unknown;
+      }
+    | undefined;
+  let callbackIteratorHook: CapturedGameCall | undefined;
+  let callbackClearHook: CapturedGameCall | undefined;
+  function restorePowerCallbackHooks(): void {
+    if (isNonArrayRecord(mapPrototype)) {
+      if (
+        callbackIteratorHook !== undefined &&
+        Object.getOwnPropertyDescriptor(mapPrototype, Symbol.iterator)
+          ?.value === callbackIteratorHook &&
+        callbackIteratorDescriptor !== undefined
+      )
+        Object.defineProperty(
+          mapPrototype,
+          Symbol.iterator,
+          callbackIteratorDescriptor,
+        );
+      if (
+        callbackClearHook !== undefined &&
+        Object.getOwnPropertyDescriptor(mapPrototype, "clear")?.value ===
+          callbackClearHook &&
+        callbackClearDescriptor !== undefined
+      )
+        Object.defineProperty(mapPrototype, "clear", callbackClearDescriptor);
+    }
+    callbackIteratorHook = undefined;
+    callbackClearHook = undefined;
+  }
+  if (
+    isNonArrayRecord(mapPrototype) &&
+    callbackIteratorDescriptor?.configurable &&
+    callbackClearDescriptor?.configurable &&
+    typeof callbackIteratorDescriptor.value === "function" &&
+    typeof callbackClearDescriptor.value === "function"
+  ) {
+    const nativeCallbackIterator =
+      callbackIteratorDescriptor.value as CapturedGameCall;
+    const nativeCallbackClear =
+      callbackClearDescriptor.value as CapturedGameCall;
+    callbackIteratorHook = function capturedPowerCallbackIterator(
+      this: unknown,
+      ...args: unknown[]
+    ) {
+      // actions.js doCallbacks always iterates/clears queue, then iterates/clears repeat.
+      callbackSequence =
+        callbackSequence?.phase === "cleared" && callbackSequence.queue !== this
+          ? { ...callbackSequence, phase: "repeated", repeat: this }
+          : { phase: "iterated", queue: this };
+      return Reflect.apply(nativeCallbackIterator, this, args);
+    };
+    callbackClearHook = function capturedPowerCallbackClear(
+      this: unknown,
+      ...args: unknown[]
+    ) {
+      const result = Reflect.apply(nativeCallbackClear, this, args);
+      if (
+        callbackSequence?.phase === "iterated" &&
+        callbackSequence.queue === this
+      )
+        callbackSequence = { ...callbackSequence, phase: "cleared" };
+      else if (
+        callbackSequence?.phase === "repeated" &&
+        callbackSequence.repeat === this &&
+        isNonArrayRecord(callbackSequence.queue)
+      ) {
+        callbackQueueCandidates.add(
+          callbackSequence.queue as unknown as Map<unknown, unknown>,
+        );
+        callbackSequence = undefined;
+      } else callbackSequence = undefined;
+      return result;
+    };
+    Object.defineProperty(mapPrototype, Symbol.iterator, {
+      ...callbackIteratorDescriptor,
+      value: callbackIteratorHook,
+    });
+    Object.defineProperty(mapPrototype, "clear", {
+      ...callbackClearDescriptor,
+      value: callbackClearHook,
+    });
+  }
   let candidateStructureMap: Map<unknown, unknown> | undefined;
   let candidateStructureKeys = new Set<string>();
   let productionBreakdownOwner: Record<string, unknown> | undefined;
@@ -1039,7 +1144,10 @@ export function installCapturedGameMechanics(
   }
 
   function restoreUnmatchedHooksAfterFirstPeriod(): void {
-    if (structureEntries === undefined) restoreMapSet();
+    if (callbackQueueCandidates.size === 1)
+      powerCallbackQueue = callbackQueueCandidates.values().next().value;
+    restoreMapSet();
+    restorePowerCallbackHooks();
     if (productionBreakdownOwner === undefined) restoreConsumeSetter();
     unsubscribeFirstPeriod?.();
     unsubscribeFirstPeriod = undefined;
@@ -1049,6 +1157,82 @@ export function installCapturedGameMechanics(
   );
 
   const mechanics: CapturedGameMechanics = Object.freeze({
+    adjustPower(
+      root: unknown,
+      entryKey: string,
+      expectedStateOn: number,
+      targetStateOn: number,
+      isCurrent: () => boolean = () => true,
+      preflightOnly = false,
+    ): CapturedGameRead<boolean> {
+      const entries = structureEntries;
+      const entry =
+        entries === undefined
+          ? undefined
+          : readMechanicsEntry(entryKey, entries.get(entryKey));
+      if (
+        stopped ||
+        entry === undefined ||
+        !Number.isSafeInteger(expectedStateOn) ||
+        !Number.isSafeInteger(targetStateOn) ||
+        targetStateOn < 0
+      )
+        return { kind: "invalid" };
+      const state = readMechanicsProperty(
+        readMechanicsProperty(root, entry.region),
+        entry.struct,
+      );
+      if (
+        !isNonArrayRecord(state) ||
+        (!preflightOnly &&
+          readMechanicsProperty(state, "on") !== expectedStateOn)
+      )
+        return { kind: "invalid" };
+      const increasing = targetStateOn > expectedStateOn;
+      const capRead = increasing
+        ? readMechanicsPrimitive(entry.action, "on_cap")
+        : { kind: "value" as const, value: expectedStateOn };
+      const cap =
+        capRead.kind === "absent"
+          ? readMechanicsProperty(state, "count")
+          : capRead.kind === "value"
+            ? capRead.value
+            : undefined;
+      const postPower = readMechanicsDataProperty(entry.action, "postPower");
+      if (
+        typeof cap !== "number" ||
+        !Number.isFinite(cap) ||
+        (targetStateOn > expectedStateOn && targetStateOn > Math.ceil(cap)) ||
+        (postPower !== undefined &&
+          (typeof postPower !== "function" || powerCallbackQueue === undefined))
+      )
+        return { kind: "invalid" };
+      if (!isCurrent()) return { kind: "invalid" };
+      if (preflightOnly) return { kind: "value", value: true };
+      // actions.js setAction's power_on/off: one unit per iteration, game on_cap,
+      // then deferred postPower. An explicit target avoids keyboard multiplier overshoot.
+      const direction = targetStateOn > expectedStateOn ? 1 : -1;
+      try {
+        for (let on = expectedStateOn; on !== targetStateOn; on += direction) {
+          if (!isCurrent() || readMechanicsProperty(state, "on") !== on)
+            return { kind: "invalid" };
+          state["on"] = on + direction;
+          if (
+            !isCurrent() ||
+            readMechanicsProperty(state, "on") !== on + direction
+          )
+            return { kind: "invalid" };
+        }
+        if (postPower !== undefined && targetStateOn !== expectedStateOn)
+          powerCallbackQueue!.set([entry.action, "postPower"], [direction > 0]);
+        return {
+          kind: "value",
+          value: readMechanicsProperty(state, "on") === targetStateOn,
+        };
+      } catch {
+        return { kind: "invalid" };
+      }
+    },
     readStructures(): readonly CapturedGameStructureDefinition[] | undefined {
       const entries = structureEntries;
       if (entries === undefined || stopped) return undefined;
@@ -1212,6 +1396,7 @@ export function installCapturedGameMechanics(
       unsubscribeFirstPeriod?.();
       unsubscribeFirstPeriod = undefined;
       restoreMapSet();
+      restorePowerCallbackHooks();
       restoreConsumeSetter();
     },
   });

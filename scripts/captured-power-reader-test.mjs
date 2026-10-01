@@ -58,6 +58,7 @@ function structure({
     sector,
     struct,
     actionId,
+    readAvailability: () => ({ kind: "value", value: true }),
     readTitle: () => ({ kind: "value", value: title }),
     readDescription: () => ({ kind: "value", value: description }),
     readValue: () =>
@@ -117,7 +118,7 @@ const moonAnchor = structure({
   region: "space",
   sector: "spc_home",
   struct: "moon_anchor",
-  actionId: "space-moon_anchor",
+  actionId: "space-gps",
   supportTypes: "moon",
 });
 const redAnchor = structure({
@@ -125,7 +126,7 @@ const redAnchor = structure({
   region: "space",
   sector: "spc_home",
   struct: "red_anchor",
-  actionId: "space-red_anchor",
+  actionId: "space-red_university",
   supportTypes: ["red", "moon"],
 });
 const inactiveProducer = structure({
@@ -142,7 +143,7 @@ const shortSpace = structure({
   region: "space",
   sector: "spc_home",
   struct: "reactor",
-  actionId: "space-reactor",
+  actionId: "space-storehouse",
   powered: 3,
 });
 const spaceGenerator = structure({
@@ -150,7 +151,7 @@ const spaceGenerator = structure({
   region: "space",
   sector: "spc_home",
   struct: "oil_generator",
-  actionId: "space-oil_generator",
+  actionId: "space-propellant_depot",
   powered: -12,
   fuel: [{ resourceId: "Oil", amount: 8 }],
   fuelAdjustmentRequested: true,
@@ -160,7 +161,7 @@ const interstellarGenerator = structure({
   region: "interstellar",
   sector: "int_alpha",
   struct: "helium_generator",
-  actionId: "interstellar-helium_generator",
+  actionId: "interstellar-cargo_yard",
   powered: -6,
   fuel: [{ resourceId: "Helium_3", amount: 10 }],
   fuelAdjustmentRequested: true,
@@ -187,7 +188,7 @@ const redSupportMember = structure({
   region: "space",
   sector: "spc_home",
   struct: "red_member",
-  actionId: "space-red_member",
+  actionId: "space-garage",
   supportTypes: ["red"],
   supportTopology: {
     anchorEntryKey: redAnchor.entryKey,
@@ -214,7 +215,7 @@ const cityConsumer = structure({
   region: "city",
   sector: "city",
   struct: "consumer",
-  actionId: "city-consumer",
+  actionId: "city-bank",
   powered: 5,
 });
 const cityGenerator = structure({
@@ -231,7 +232,7 @@ const lockedGenerator = structure({
   region: "space",
   sector: "spc_home",
   struct: "locked_generator",
-  actionId: "space-locked_generator",
+  actionId: "space-gas_storage",
   powered: -25,
   requirements: [{ techId: "advanced_power", level: 2 }],
 });
@@ -240,7 +241,7 @@ const shortInterstellar = structure({
   region: "interstellar",
   sector: "int_alpha",
   struct: "reactor",
-  actionId: "interstellar-reactor",
+  actionId: "interstellar-warehouse",
   powered: 2,
 });
 const metadataSpaceFuel = structure({
@@ -438,9 +439,9 @@ const settings = Object.fromEntries(
     [`bld_p_${binding}`, index],
   ]),
 );
-settings["bld_s_space-red_member"] = true;
-settings["bld_p_space-red_member"] = stateOnSettingsOrder.length;
-settings["bld_m_city-consumer"] = 15;
+settings["bld_s_space-garage"] = true;
+settings["bld_p_space-garage"] = stateOnSettingsOrder.length;
+settings["bld_m_city-bank"] = 15;
 
 const fakeControls = Object.freeze({
   capturedElementIds: () => Object.freeze([...capturedPowerFixtureControlIds]),
@@ -542,7 +543,6 @@ function createMechanics({
 }
 
 const reader = createCapturedPowerReader({
-  readBuildingUnlocked: () => true,
   rootState: { readRoot: () => root },
   mechanics: createMechanics(),
   controls: fakeControls,
@@ -571,30 +571,27 @@ assert.ok(
 assert.ok(Object.isFrozen(cycle) && Object.isFrozen(cycle.buildings));
 assert.deepEqual(
   cycle.buildings.map((building) => building.binding),
-  stateOnSettingsOrder.filter(
-    (binding) => binding !== "space-locked_generator",
-  ),
+  stateOnSettingsOrder.filter((binding) => binding !== "space-gas_storage"),
   "stored Building catalog priorities control Power input order, not root.power or Map order",
 );
 assert.ok(
-  cycle.buildings.every((building) => building.binding !== "space-red_member"),
+  cycle.buildings.every((building) => building.binding !== "space-garage"),
   "a managed-state row with no built instances is excluded",
 );
 assert.equal(
-  cycle.buildings.find((building) => building.binding === "space-reactor")?.id,
+  cycle.buildings.find((building) => building.binding === "space-storehouse")
+    ?.id,
   "reactor",
 );
 assert.equal(
   cycle.buildings.find(
-    (building) => building.binding === "interstellar-reactor",
+    (building) => building.binding === "interstellar-warehouse",
   )?.id,
   "reactor",
   "duplicate short structure ids remain distinct through their full bindings",
 );
 assert.equal(
-  cycle.buildings.find(
-    (building) => building.binding === "space-locked_generator",
-  ),
+  cycle.buildings.find((building) => building.binding === "space-gas_storage"),
   undefined,
   "an unsatisfied action power_reqs gate excludes state management despite raw on",
 );
@@ -616,8 +613,9 @@ assert.ok(
   "busy production matches the game's localized source, following percent rows, and Global modifier",
 );
 assert.equal(
-  cycle.buildings.find((building) => building.binding === "space-oil_generator")
-    ?.stateOn,
+  cycle.buildings.find(
+    (building) => building.binding === "space-propellant_depot",
+  )?.stateOn,
   0,
   "a fuel-consuming generator with no active instances stays in the cycle",
 );
@@ -675,7 +673,7 @@ assert.deepEqual(
 );
 assert.ok(
   cycle.buildings
-    .find((building) => building.binding === "space-oil_generator")
+    .find((building) => building.binding === "space-propellant_depot")
     ?.consumptions.some(
       (consumption) =>
         consumption.resourceId === "Oil" &&
@@ -686,7 +684,7 @@ assert.ok(
 );
 assert.ok(
   cycle.buildings
-    .find((building) => building.binding === "interstellar-helium_generator")
+    .find((building) => building.binding === "interstellar-cargo_yard")
     ?.consumptions.some(
       (consumption) =>
         consumption.resourceId === "Helium_3" &&
@@ -1199,7 +1197,6 @@ assert.ok(
 
 const fleetSettings = { ...settings, autoFleet: true };
 const fleetReader = createCapturedPowerReader({
-  readBuildingUnlocked: () => true,
   rootState: { readRoot: () => root },
   mechanics: createMechanics(),
   controls: fakeControls,
@@ -1229,15 +1226,14 @@ assert.equal(
   "autoFleet reads the current neededShips cap for the matching ship structure",
 );
 assert.equal(
-  fleetCycle?.buildings.find((building) => building.binding === "city-consumer")
+  fleetCycle?.buildings.find((building) => building.binding === "city-bank")
     ?.fleetMaximum,
   null,
   "non-fleet buildings retain the legacy absence of a fleet cap",
 );
 
-const disabledSettings = { ...settings, "bld_s_space-reactor": false };
+const disabledSettings = { ...settings, "bld_s_space-storehouse": false };
 const disabledReader = createCapturedPowerReader({
-  readBuildingUnlocked: () => true,
   rootState: { readRoot: () => root },
   mechanics: createMechanics(),
   controls: fakeControls,
@@ -1260,13 +1256,12 @@ const disabledReader = createCapturedPowerReader({
 assert.equal(
   disabledReader
     .readCycle()
-    ?.buildings.some((building) => building.binding === "space-reactor"),
+    ?.buildings.some((building) => building.binding === "space-storehouse"),
   false,
   "auto-Power-disabled buildings are omitted",
 );
 
 const unavailableReader = createCapturedPowerReader({
-  readBuildingUnlocked: () => true,
   rootState: { readRoot: () => root },
   mechanics: createMechanics({ invalidateFuel: true }),
   controls: fakeControls,
@@ -1293,7 +1288,6 @@ assert.equal(
 );
 
 const badOrderReader = createCapturedPowerReader({
-  readBuildingUnlocked: () => true,
   rootState: { readRoot: () => root },
   mechanics: createMechanics({ powerOrder: () => undefined }),
   controls: fakeControls,
@@ -1322,7 +1316,6 @@ assert.equal(
 const missingAnchorRoot = { ...root, space: { ...root.space } };
 delete missingAnchorRoot.space.moon_anchor;
 const missingSupportReader = createCapturedPowerReader({
-  readBuildingUnlocked: () => true,
   rootState: { readRoot: () => missingAnchorRoot },
   mechanics: createMechanics(),
   controls: fakeControls,
@@ -1832,7 +1825,23 @@ const specialControls = Object.freeze({
 const specialReader = createCapturedPowerReader({
   rootState: { readRoot: () => specialRoot },
   mechanics: createMechanics({
-    structures: specialStructures,
+    structures: [
+      ...specialStructures,
+      {
+        ...structure({
+          entryKey: "gxy_alien1:gorddon_mission",
+          region: "galaxy",
+          sector: "gxy_alien1",
+          struct: "gorddon_mission",
+          actionId: "galaxy-gorddon_mission",
+          ownsPowered: false,
+        }),
+        readAvailability: () => ({
+          kind: "value",
+          value: specialRoot.tech.xeno < 3,
+        }),
+      },
+    ],
     productionBreakdown: {
       production: {
         Elerium: {
@@ -1864,8 +1873,6 @@ const specialReader = createCapturedPowerReader({
     ...demandSample(),
     maxCost: (id) => (id === "Elerium" ? 44 : 0),
   }),
-  readBuildingUnlocked: (actionId) =>
-    actionId !== "galaxy-gorddon_mission" || specialRoot.tech.xeno < 3,
   costs: {
     readCost: () => ({ cost: { Money: 12, Supply: 7 }, pool: "spire" }),
   },
@@ -2086,7 +2093,7 @@ specialRoot.settings.showPortal = true;
     region: "city",
     sector: "city",
     struct: "semantic_probe",
-    actionId: "city-semantic_probe",
+    actionId: "city-warehouse",
     powered: 3,
   });
   const semanticCatalog = (binding, state) => ({
@@ -2102,7 +2109,7 @@ specialRoot.settings.showPortal = true;
     knowledge: false,
     state,
   });
-  const ordinary = semanticCatalog("city-semantic_probe", { count: 3, on: 1 });
+  const ordinary = semanticCatalog("city-warehouse", { count: 3, on: 1 });
   const sample = (
     definition = stateDefinition,
     available = true,
@@ -2223,7 +2230,7 @@ specialRoot.settings.showPortal = true;
     region: "city",
     sector: "city",
     struct: "semantic_probe",
-    actionId: "city-semantic_probe",
+    actionId: "city-warehouse",
     powered: 3,
   });
   const registryOnly = structure({
@@ -2253,6 +2260,7 @@ specialRoot.settings.showPortal = true;
     structures: [
       {
         ...probe,
+        readAvailability: () => ({ kind: "value", value: available }),
         get ownsPowered() {
           return ownsPowered;
         },
@@ -2272,14 +2280,13 @@ specialRoot.settings.showPortal = true;
   const semanticReader = createCapturedPowerReader({
     rootState: { readRoot: () => semanticRoot },
     mechanics: semanticMechanics,
-    controls: fakeControls,
+    controls: { ...fakeControls, capturedElementIds: () => [probe.actionId] },
     resources: createResources(semanticRoot),
     readDemand: () => EMPTY_DEMAND_SAMPLE,
-    readBuildingUnlocked: () => available,
     readCurrentDate: () => new Date("2026-07-01T12:00:00"),
     readSettingsRaw: () => ({
-      "bld_s_city-semantic_probe": true,
-      "bld_p_city-semantic_probe": 0,
+      "bld_s_city-warehouse": true,
+      "bld_p_city-warehouse": 0,
     }),
     readRuntimeOptions: () => ({
       settings: {
@@ -2348,6 +2355,7 @@ specialRoot.settings.showPortal = true;
       struct: "coal_power",
       actionId: "city-coal_power",
     }),
+    readAvailability: () => ({ kind: "value", value: singleCaptureAvailable }),
     readPowered: () => ({
       kind: "value",
       value: ++poweredReads === 1 ? 3 : 100,
@@ -2381,7 +2389,6 @@ specialRoot.settings.showPortal = true;
     },
     resources: createResources(singleCaptureRoot),
     readDemand: () => EMPTY_DEMAND_SAMPLE,
-    readBuildingUnlocked: () => singleCaptureAvailable,
     readCurrentDate: () => new Date("2026-07-01T12:00:00"),
     readSettingsRaw: () => singleCaptureSettings,
     readRuntimeOptions: () => ({

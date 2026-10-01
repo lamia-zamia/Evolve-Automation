@@ -42,6 +42,8 @@ export interface CapturedGameStructureDefinition {
   readonly struct: string;
   /** The current Vue control id declared by the game action definition. */
   readonly actionId: string;
+  /** Semantic offer qualification, independent of rendered panels. Invalid fails the whole cycle. */
+  readAvailability(root: unknown): CapturedGameRead<boolean>;
   /** The game-owned display key used by its source-specific production ledger. */
   readTitle(): CapturedGameRead<string>;
   /** The current game-owned action description, preserving the active locale. */
@@ -93,10 +95,19 @@ export interface CapturedProductionBreakdown {
 }
 
 /**
- * Read-only game-owned structure definitions and the current production ledger.
- * No action, pay-cost, increment, or power-post callback crosses this boundary.
+ * Game-owned structure definitions, production ledger, and narrow semantic power switches.
+ * Raw actions and callbacks never cross this boundary.
  */
 export interface CapturedGameMechanics {
+  /** Exact target switch using the action's cap and the game's deferred postPower queue. */
+  adjustPower(
+    root: unknown,
+    entryKey: string,
+    expectedStateOn: number,
+    targetStateOn: number,
+    isCurrent?: () => boolean,
+    preflightOnly?: boolean,
+  ): CapturedGameRead<boolean>;
   /** `undefined` means the private registry has not been captured or failed validation. */
   readStructures(): readonly CapturedGameStructureDefinition[] | undefined;
   /** Resolve the live root Power list; unknown/stale keys are skipped, never Map-ordered. */

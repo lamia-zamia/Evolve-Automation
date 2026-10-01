@@ -17,6 +17,7 @@ import { CAPTURED_MECH_ASSEMBLY_CONTROL } from "./captured-mech-control-ids.ts";
 import { finite, isRecord, readProperty } from "../../validation.ts";
 
 export interface CapturedMechDemandDependencies {
+  readonly readPowerSupplyHold?: () => boolean | undefined;
   readonly rootState: GameRootStateSource;
   readonly controls: GameControlRegistry;
   readonly readSettings: () => unknown;
@@ -83,7 +84,7 @@ export function createCapturedMechDemandSource(
       // The queued-build reservation covers a build admitted with the queue key held. This target
       // describes the next automatic build regardless of that transient, matching the old demand
       // sample's explicit unheld queue-key assumption.
-      const state = withCapturedMechReservations(
+      const capturedState = withCapturedMechReservations(
         readCapturedMechState({
           root,
           settings,
@@ -91,6 +92,10 @@ export function createCapturedMechDemandSource(
         }),
         reserved,
       );
+      const state = Object.freeze({
+        ...capturedState,
+        powerSupplyHold: dependencies.readPowerSupplyHold?.(),
+      });
       const userBuildCost = readCapturedUserMechCost(state, controls);
       const portal = readProperty(root, "portal");
       // DeadSpace src/portal.js creates portal.mechbay only when its hell_spire-gated

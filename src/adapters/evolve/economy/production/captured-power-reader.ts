@@ -12,10 +12,8 @@ import type {
   PowerSpireInput,
   PowerWarnBuildingInput,
 } from "../../../../domain/economy/production/power.ts";
-import {
-  readCapturedBuildingState,
-  type CapturedBuildingState,
-} from "../../progression/build/captured-building-state.ts";
+import { type CapturedBuildingState } from "../../progression/build/captured-building-state.ts";
+import { readCapturedSemanticBuildingStates } from "../../progression/build/captured-building-availability.ts";
 import { sortByStoredPriority } from "../../../../domain/settings-priority-order.ts";
 import type { GameControlRegistry } from "../../../../ports/game-control-registry.ts";
 import type { GameRootStateSource } from "../../../../ports/game-root-state.ts";
@@ -60,10 +58,7 @@ import {
   readCapturedMechPotential,
 } from "../../../../domain/combat/mech-auto-choice.ts";
 import { getCitadelPowerConsumption } from "../../../../domain/economy/production/power.ts";
-import {
-  readCapturedBuildingEntries,
-  type CapturedBuildingEntry,
-} from "../../progression/build/captured-building-catalog.ts";
+import type { CapturedBuildingEntry } from "../../progression/build/captured-building-catalog.ts";
 import {
   capturedPowerMetadataForBinding,
   capturedPowerSmartEnabled,
@@ -83,15 +78,10 @@ export interface CapturedPowerReaderDependencies {
   readonly mechanics: CapturedGameMechanics;
   readonly resources: GameResourceSource;
   /** Resource commitments and largest observed build cost from the shared demand phase. */
-  readonly readDemand: () => CapturedDemandSample;
+  readonly readDemand: () => CapturedDemandSample | undefined;
   /** The current fleet planner's `neededShips`, when that result is available. */
   readonly readFleetNeededShips?: () =>
     Readonly<Record<string, number>> | null | undefined;
-  /** Already captured progression availability. This lookup must never draw a tab. */
-  readonly readBuildingUnlocked?: (
-    actionId: string,
-    region: string,
-  ) => boolean | undefined;
   /** Current game-owned action costs, used by Spire and lake support rules. */
   readonly costs?: GameActionCostReader;
   /** The page-local date used by the retired reader's astrology bonus. */
@@ -100,6 +90,7 @@ export interface CapturedPowerReaderDependencies {
   readonly readPurifierDescription?: () => string | undefined;
   /** The current typed Mech reader state, including the queue-key sample. */
   readonly readMechState?: () => CapturedMechState;
+  readonly readMechSaveSupply?: () => boolean;
   /** Stored automation settings, including the managed-building priorities and state flags. */
   readonly readSettingsRaw: () => unknown;
   readonly readRuntimeOptions: () =>
@@ -203,42 +194,6 @@ function readCapturedStructureState(
   return readProperty(region, structure.struct);
 }
 
-function makeStructureByBinding(
-  structures: readonly CapturedGameStructureDefinition[],
-): ReadonlyMap<string, readonly CapturedGameStructureDefinition[]> {
-  const result = new Map<string, CapturedGameStructureDefinition[]>();
-  for (const structure of structures) {
-    const matching = result.get(structure.actionId) ?? [];
-    matching.push(structure);
-    result.set(structure.actionId, matching);
-  }
-  return new Map(
-    [...result].map(([binding, candidates]) => [
-      binding,
-      Object.freeze(candidates),
-    ]),
-  );
-}
-
-function structureForCatalogEntry(
-  entry: Readonly<CapturedBuildingEntry>,
-  structures: ReadonlyMap<string, readonly CapturedGameStructureDefinition[]>,
-): CapturedGameStructureDefinition | undefined {
-  const candidates = structures.get(entry.binding) ?? [];
-  if (entry.entryKey !== undefined) {
-    return candidates.find(
-      (candidate) => candidate.entryKey === entry.entryKey,
-    );
-  }
-  const matching = candidates.filter(
-    (candidate) =>
-      candidate.region === entry.region &&
-      candidate.struct === entry.id &&
-      (entry.sector === undefined || candidate.sector === entry.sector),
-  );
-  return matching.length === 1 ? matching[0] : undefined;
-}
-
 function readOrderedMechanics(
   root: unknown,
   mechanics: CapturedGameMechanics,
@@ -267,28 +222,6 @@ function readOrderedMechanics(
     }
   }
   return true;
-}
-
-function readPowerBuildingStates(
-  root: unknown,
-  catalog: readonly CapturedBuildingEntry[],
-  structures: readonly CapturedGameStructureDefinition[],
-  readAvailable: CapturedPowerReaderDependencies["readBuildingUnlocked"],
-): readonly CapturedBuildingState[] | undefined {
-  const byBinding = makeStructureByBinding(structures);
-  const result: CapturedBuildingState[] = [];
-  for (const entry of catalog) {
-    const structure = structureForCatalogEntry(entry, byBinding);
-    const state = readCapturedBuildingState(
-      root,
-      entry,
-      structure,
-      readAvailable?.(entry.elementId, entry.region) === true,
-    );
-    if (state === undefined) return undefined;
-    result.push(state);
-  }
-  return Object.freeze(result);
 }
 
 function readCrewReserve(raw: unknown, population: number): number {
@@ -2045,14 +1978,15 @@ function readLakeAndSpire(
       purifierQueued,
       purifierDescription,
       expectedSaveSupply:
-        design === null || mechState === undefined
+        dependencies.readMechSaveSupply?.() ??
+        (design === null || mechState === undefined
           ? false
           : capturedMechSupplyHold(
               mechState,
               false,
               design.teamPower,
               design.cost.space,
-            ),
+            )),
       mechBay: spireMech,
       port,
       camp,
@@ -2072,6 +2006,7 @@ function readPowerCycle(
   const structures = dependencies.mechanics.readStructures();
   const production = dependencies.mechanics.readProductionBreakdown();
   const demand = dependencies.readDemand();
+  if (demand === undefined) return undefined;
   if (
     structures === undefined ||
     production === undefined ||
@@ -2079,18 +2014,13 @@ function readPowerCycle(
   ) {
     return undefined;
   }
-  const allCatalog = readCapturedBuildingEntries(
+  const buildingStates = readCapturedSemanticBuildingStates(
     root,
     dependencies.controls,
-    structures,
-  );
-  const buildingStates = readPowerBuildingStates(
-    root,
-    allCatalog,
-    structures,
-    dependencies.readBuildingUnlocked,
+    dependencies.mechanics,
   );
   if (buildingStates === undefined) return undefined;
+  const allCatalog = buildingStates.map((building) => building.catalog);
   const managed = sortByStoredPriority(
     buildingStates,
     settings,
@@ -2341,7 +2271,7 @@ function readPowerCycle(
   return cycle;
 }
 
-/** Captured Power port. Production `autoPower` continues to use its bounded slice for now. */
+/** Captured Power port with panel-independent semantic Building sampling. */
 export function createCapturedPowerReader({
   rootState,
   mechanics,
@@ -2349,11 +2279,11 @@ export function createCapturedPowerReader({
   resources,
   readDemand,
   readFleetNeededShips,
-  readBuildingUnlocked,
   costs,
   readCurrentDate,
   readPurifierDescription,
   readMechState,
+  readMechSaveSupply,
   readSettingsRaw,
   readRuntimeOptions,
   readWarnings,
@@ -2365,13 +2295,13 @@ export function createCapturedPowerReader({
     resources,
     readDemand,
     ...(readFleetNeededShips === undefined ? {} : { readFleetNeededShips }),
-    ...(readBuildingUnlocked === undefined ? {} : { readBuildingUnlocked }),
     ...(costs === undefined ? {} : { costs }),
     readCurrentDate,
     ...(readPurifierDescription === undefined
       ? {}
       : { readPurifierDescription }),
     ...(readMechState === undefined ? {} : { readMechState }),
+    ...(readMechSaveSupply === undefined ? {} : { readMechSaveSupply }),
     readSettingsRaw,
     readRuntimeOptions,
     readWarnings,
@@ -2406,12 +2336,10 @@ export function createCapturedPowerReader({
       if (root === undefined || structures === undefined) {
         throw new TypeError("captured Power structure registry is unavailable");
       }
-      const catalog = readCapturedBuildingEntries(root, controls, structures);
-      const snapshots = readPowerBuildingStates(
+      const snapshots = readCapturedSemanticBuildingStates(
         root,
-        catalog,
-        structures,
-        readBuildingUnlocked,
+        controls,
+        mechanics,
       );
       const building = snapshots?.find(
         (entry) =>

@@ -1,70 +1,137 @@
 import assert from "node:assert/strict";
+import { createCapturedPowerWarnings } from "../src/adapters/evolve/economy/production/captured-power-warnings.ts";
+import { planPowerWarningShutdown } from "../src/domain/economy/production/power.ts";
 
-import { createCapturedPowerWarningAutomation } from "../src/adapters/evolve/economy/production/captured-power-warnings.ts";
-
-function runCase({
-  root,
-  settings = {},
-  ids,
-  invoke = () => ({ ok: true, value: undefined }),
-}) {
-  const calls = [];
-  const automation = createCapturedPowerWarningAutomation({
+for (const [region, id] of [
+  ["city", "coal_power"],
+  ["space", "geothermal"],
+  ["interstellar", "fusion"],
+  ["galaxy", "minelayer"],
+  ["portal", "attractor"],
+  ["tauceti", "fusion_generator"],
+  ["eden", "spirit_vacuum"],
+]) {
+  const binding = `${region}-${id}`;
+  const root = {
+    race: {},
+    tech: { high_tech: 2 },
+    resource: { Lake_Support: { max: 0 } },
+    [region]: { [id]: { count: 2, on: 2 } },
+  };
+  const definition = {
+    entryKey: `${region}.test.${id}`,
+    region,
+    sector: "test",
+    struct: id,
+    actionId: binding,
+    readTitle: () => ({ kind: "value", value: id }),
+    readAvailability: () => ({ kind: "value", value: true }),
+    ownsPowered: true,
+    readPowered: () => ({ kind: "value", value: 1 }),
+    readPowerRequirements: () => ({ kind: "absent" }),
+    readSwitchable: () => ({ kind: "absent" }),
+  };
+  const settings = { [`bld_s_${binding}`]: false };
+  const warnings = createCapturedPowerWarnings({
     rootState: { readRoot: () => root },
-    controls: {
-      resolve: (elementId) =>
-        ids.includes(elementId)
-          ? { elementId, generation: 1, methods: ["power_off"] }
-          : undefined,
-      invoke: (handle, method) => {
-        calls.push(`${handle.elementId}.${method}`);
-        return invoke(handle, method);
-      },
-    },
-    getDocument: () => ({
-      querySelectorAll: () => ids.map((id) => ({ parentElement: { id } })),
-    }),
+    mechanics: { readStructures: () => [definition] },
+    controls: { capturedElementIds: () => [binding], resolve: () => undefined },
     readSettings: () => settings,
+    getDocument: () => ({
+      querySelectorAll: () => [{ parentElement: { id: binding } }],
+    }),
   });
-  return { outcome: automation.run(), calls };
+  assert.deepEqual(warnings.readWarnedBuildingDomIds(), [binding]);
+  const [warning] = warnings.readWarnings([binding]);
+  assert.ok(warning, binding);
+  assert.equal(warning.domId, binding);
+  assert.equal(warning.buildingId, id);
+  assert.equal(warning.binding, binding);
+  assert.equal(warning.autoStateEnabled, false);
+  assert.equal(
+    planPowerWarningShutdown([warning]),
+    null,
+    "full-binding disabled state prevents shutdown",
+  );
+  settings[`bld_s_${binding}`] = true;
+  assert.equal(
+    planPowerWarningShutdown(warnings.readWarnings([binding]))?.binding,
+    binding,
+  );
 }
+console.log("Captured Power warning identity tests passed");
 
-const root = {
-  race: {},
-  resource: { Belt_Support: { max: 100 }, Lake_Support: { max: 100 } },
-  city: { farm: { count: 2, on: 2 } },
-};
-assert.deepEqual(runCase({ root, ids: ["city-farm"] }), {
-  outcome: { status: "succeeded" },
-  calls: ["city-farm.power_off"],
-});
-
-assert.deepEqual(
-  runCase({ root, settings: { bld_s_farm: false }, ids: ["city-farm"] }),
-  { outcome: { status: "succeeded" }, calls: [] },
-);
-
-const lakeRoot = {
-  race: {},
-  resource: { Belt_Support: { max: 100 }, Lake_Support: { max: 1 } },
-  portal: {
-    bireme: { count: 2, on: 2 },
-    transport: { count: 1, on: 1 },
-  },
-};
-assert.deepEqual(runCase({ root: lakeRoot, ids: ["portal-transport"] }).calls, [
-  "portal-transport.power_off",
-]);
-
-const supportedLake = structuredClone(lakeRoot);
-supportedLake.resource.Lake_Support.max = 3;
-assert.deepEqual(
-  runCase({ root: supportedLake, ids: ["portal-transport"] }).calls,
-  [],
-);
-
-assert.deepEqual(runCase({ root, ids: ["city-missing"] }).outcome, {
-  status: "succeeded",
-});
-
-console.log("Captured power-warning adapter tests passed");
+for (const [region, id, anchorId, supportType] of [
+  ["portal", "bireme", "harbor", "lake"],
+  ["space", "elerium_ship", "space_station", "belt"],
+]) {
+  const binding = `${region}-${id}`;
+  const anchorBinding = `${region}-${anchorId}`;
+  const anchor = { count: 2, on: 1, support: 3, s_max: 4 };
+  const supportRoot = {
+    race: {},
+    tech: { high_tech: 2 },
+    civic: { space_miner: { workers: 5 } },
+    [region]: { [id]: { count: 2, on: 2 }, [anchorId]: anchor },
+  };
+  const definition = (struct) => ({
+    entryKey: `${supportType}:${struct}`,
+    region,
+    sector: supportType,
+    struct,
+    actionId: `${region}-${struct}`,
+    readTitle: () => ({ kind: "value", value: struct }),
+    readAvailability: () => ({ kind: "value", value: true }),
+    ownsPowered: true,
+    readPowered: () => ({ kind: "value", value: 1 }),
+    readPowerRequirements: () => ({ kind: "absent" }),
+    readSupportTypes: () => ({ kind: "value", value: [supportType] }),
+    readSupportTopology: () => ({
+      kind: "value",
+      value: { anchorEntryKey: `${supportType}:${anchorId}` },
+    }),
+  });
+  const supportWarnings = createCapturedPowerWarnings({
+    rootState: { readRoot: () => supportRoot },
+    mechanics: { readStructures: () => [definition(id), definition(anchorId)] },
+    controls: {
+      capturedElementIds: () => [binding, anchorBinding],
+      resolve: () => undefined,
+    },
+    readSettings: () => ({ [`bld_s_${binding}`]: true }),
+    getDocument: () => ({
+      querySelectorAll: () => [{ parentElement: { id: binding } }],
+    }),
+  });
+  const [surplus] = supportWarnings.readWarnings([binding]);
+  assert.ok(surplus);
+  if (supportType === "lake") {
+    assert.equal(surplus.lakeSupportNeeded, 3);
+    assert.equal(surplus.lakeSupportMaximum, 4);
+    assert.equal(
+      planPowerWarningShutdown([surplus]),
+      null,
+      "Lake warning survives when native anchor has spare support",
+    );
+    anchor.support = 5;
+    const [shortage] = supportWarnings.readWarnings([binding]);
+    assert.equal(shortage.lakeSupportNeeded, 5);
+    assert.equal(
+      planPowerWarningShutdown([shortage])?.binding,
+      binding,
+      "Lake shortage shuts down through shared support ownership",
+    );
+  } else {
+    assert.equal(surplus.beltSupportNeeded, 3);
+    assert.equal(
+      surplus.beltSupportMaximum,
+      3,
+      "Belt uses active station and worker limit, not raw anchor s_max",
+    );
+    assert.equal(
+      planPowerWarningShutdown([surplus]),
+      null,
+      "Belt ship remains excluded from generic warning shutdown",
+    );
+  }
+}
