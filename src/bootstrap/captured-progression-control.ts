@@ -47,7 +47,10 @@ import type { GameControlRegistry } from "../ports/game-control-registry.ts";
 import type { GameActivitySink } from "../ports/game-message-log.ts";
 import type { GameBuildTarget } from "../ports/game-build-targets.ts";
 import type { GameDrawnActionsReader } from "../ports/game-drawn-actions.ts";
-import type { BuildingUnlockSample } from "../ports/game-building-unlocks.ts";
+import type {
+  BuildingUnlockCatalog,
+  BuildingUnlockSample,
+} from "../ports/game-building-unlocks.ts";
 import {
   createCapturedBuildingUnlocks,
   sameBuildingUnlockCatalog,
@@ -161,6 +164,11 @@ export interface CapturedProgressionControl {
   readonly readBuildingUnlocks: (
     regions: ReadonlySet<string>,
   ) => Readonly<BuildingUnlockSample> | undefined;
+  /** Existing fresh catalog availability; never draws a tab to answer Power. */
+  readonly readCapturedBuildingUnlocked: (
+    actionId: string,
+    region: string,
+  ) => boolean | undefined;
   /** Drops the shared building-unlock sample, for the same reason as the A.R.P.A. one. */
   readonly resetBuildingUnlockSample: () => void;
   /** What the last construction cycle was saving for, for the features that read demand. */
@@ -536,6 +544,7 @@ export function createCapturedProgressionControl(
   // The sample is keyed by the regions it was taken for, so a later caller asking for a region the
   // first one did not request takes a fresh pass instead of being told that region is unanswerable.
   let buildingUnlockKey: string | undefined;
+  const sampledBuildingUnlockScopes = new Set<string>();
   let lastBuildingUnlocks: Readonly<BuildingUnlockSample> | undefined;
   const resetBuildingUnlockSample = () => {
     buildingUnlockKey = undefined;
@@ -551,11 +560,14 @@ export function createCapturedProgressionControl(
     const key = [...regions].sort().join(",");
     if (buildingUnlockKey !== key) {
       buildingUnlockKey = key;
+      const scope = `${BUILDING_UNLOCK_SCOPE} ${key}`;
+      sampledBuildingUnlockScopes.delete(scope);
+      sampledBuildingUnlockScopes.add(scope);
       // Which buildings are on offer is the only half a draw can answer, so it is the only half
       // held between draws. The switch counts are restated from the live root and the captured
       // `on_cap` afterwards, which is why a power change costs nothing and invalidates nothing.
       const catalog = scopes.read(
-        `${BUILDING_UNLOCK_SCOPE} ${key}`,
+        scope,
         () => buildingUnlocks.read(regions),
         sameBuildingUnlockCatalog,
       );
@@ -569,6 +581,15 @@ export function createCapturedProgressionControl(
             });
     }
     return lastBuildingUnlocks;
+  };
+  const readCapturedBuildingUnlocked = (actionId: string, region: string) => {
+    for (const scope of [...sampledBuildingUnlockScopes].reverse()) {
+      const catalog = scopes.peek<Readonly<BuildingUnlockCatalog>>(scope);
+      if (catalog?.regions.has(region) === true) {
+        return catalog.unlocked.has(actionId);
+      }
+    }
+    return undefined;
   };
   const readBuildingCapacity = (actionIds: ReadonlySet<string>) => {
     const result = new Map<string, boolean | undefined>();
@@ -815,6 +836,7 @@ export function createCapturedProgressionControl(
     readProjects,
     resetProjectSample,
     readBuildingUnlocks,
+    readCapturedBuildingUnlocked,
     readBuildingCapacity,
     resetBuildingUnlockSample,
     observations: construction.observations,

@@ -18,6 +18,9 @@ import {
 import { readCapturedMechState } from "../src/domain/combat/mech-state.ts";
 import { readCapturedMechQueueKeyHeld } from "../src/adapters/evolve/combat/captured-mech.ts";
 import { EMPTY_DEMAND_SAMPLE } from "../src/adapters/evolve/economy/resources/captured-resource-demand.ts";
+import { readCapturedBuildingState } from "../src/adapters/evolve/progression/build/captured-building-state.ts";
+
+const capturedPowerFixtureControlIds = new Set();
 
 function structure({
   entryKey,
@@ -26,6 +29,8 @@ function structure({
   struct,
   actionId,
   powered = 0,
+  ownsPowered = true,
+  switchable,
   requirements,
   fuel,
   supportFuel,
@@ -41,6 +46,11 @@ function structure({
   value,
   shipRating,
 }) {
+  // Arbitrary fixture actions belong to the automation catalog through captured controls.
+  // This one deliberately represents an upstream-only registry action.
+  if (actionId !== "city-registry_only") {
+    capturedPowerFixtureControlIds.add(actionId);
+  }
   const readNumber = (value) => ({ kind: "value", value });
   return Object.freeze({
     entryKey,
@@ -54,7 +64,12 @@ function structure({
       value === undefined ? { kind: "absent" } : readNumber(value),
     readShipRating: () =>
       shipRating === undefined ? { kind: "absent" } : readNumber(shipRating),
+    ownsPowered,
     readPowered: () => readNumber(powered),
+    readSwitchable: () =>
+      switchable === undefined
+        ? { kind: "absent" }
+        : { kind: "value", value: switchable },
     readPowerRequirements: () =>
       requirements === undefined
         ? { kind: "absent" }
@@ -294,7 +309,7 @@ const root = {
     int_factory: { count: 1, on: 1 },
   },
   galaxy: { cruiser_ship: { count: 1, on: 1 } },
-  tech: { advanced_power: 1, luna: 3 },
+  tech: { high_tech: 2, advanced_power: 1, luna: 3 },
   race: { universe: "magic", species: "Human", fasting: false, hungry: true },
   settings: { showGalactic: true },
   resource: {
@@ -428,7 +443,7 @@ settings["bld_p_space-red_member"] = stateOnSettingsOrder.length;
 settings["bld_m_city-consumer"] = 15;
 
 const fakeControls = Object.freeze({
-  capturedElementIds: () => Object.freeze([]),
+  capturedElementIds: () => Object.freeze([...capturedPowerFixtureControlIds]),
   resolve: () => undefined,
   invoke: () => ({ ok: false, reason: "unknown-control" }),
 });
@@ -527,6 +542,7 @@ function createMechanics({
 }
 
 const reader = createCapturedPowerReader({
+  readBuildingUnlocked: () => true,
   rootState: { readRoot: () => root },
   mechanics: createMechanics(),
   controls: fakeControls,
@@ -555,7 +571,9 @@ assert.ok(
 assert.ok(Object.isFrozen(cycle) && Object.isFrozen(cycle.buildings));
 assert.deepEqual(
   cycle.buildings.map((building) => building.binding),
-  stateOnSettingsOrder,
+  stateOnSettingsOrder.filter(
+    (binding) => binding !== "space-locked_generator",
+  ),
   "stored Building catalog priorities control Power input order, not root.power or Map order",
 );
 assert.ok(
@@ -576,9 +594,9 @@ assert.equal(
 assert.equal(
   cycle.buildings.find(
     (building) => building.binding === "space-locked_generator",
-  )?.powered,
-  0,
-  "an unsatisfied action power_reqs gate forces the captured output to zero",
+  ),
+  undefined,
+  "an unsatisfied action power_reqs gate excludes state management despite raw on",
 );
 assert.equal(
   cycle.buildings.find((building) => building.binding === "space-gas_mining")
@@ -922,8 +940,8 @@ const supportRoot = {
   space: {
     space_station: { count: 4, on: 1, s_max: 120, support: 20 },
     elerium_ship: { count: 1, on: 1 },
-    electrolysis: { on: 4 },
-    hydrogen_plant: { on: 3 },
+    electrolysis: { count: 4, on: 4 },
+    hydrogen_plant: { count: 3, on: 3 },
   },
   race: {
     high_pop: 2,
@@ -931,20 +949,81 @@ const supportRoot = {
     species: "Human",
   },
   civic: { space_miner: { workers: 100 } },
-  tech: { tau_red: 5, womling_pop: 2 },
+  tech: { high_tech: 2, tau_red: 5, womling_pop: 2 },
   tauceti: {
-    womling_village: { on: 4 },
-    womling_farm: { on: 3 },
-    womling_lab: { on: 2 },
-    womling_mine: { on: 1 },
+    womling_village: { count: 4, on: 4 },
+    womling_farm: { count: 3, on: 3 },
+    womling_lab: { count: 2, on: 2 },
+    womling_mine: { count: 1, on: 1 },
   },
   resource: {},
 };
+const supportBuildingStates = [
+  readCapturedBuildingState(
+    supportRoot,
+    {
+      binding: beltStation.actionId,
+      elementId: beltStation.actionId,
+      entryKey: beltStation.entryKey,
+      region: beltStation.region,
+      sector: beltStation.sector,
+      id: beltStation.struct,
+      label: beltStation.actionId,
+      switchable: true,
+      smart: false,
+      knowledge: false,
+      state: supportRoot.space.space_station,
+    },
+    beltStation,
+    true,
+  ),
+];
+assert.ok(supportBuildingStates[0]);
+for (const [region, id] of [
+  ["space", "electrolysis"],
+  ["space", "hydrogen_plant"],
+  ["tauceti", "womling_village"],
+  ["tauceti", "womling_farm"],
+  ["tauceti", "womling_lab"],
+  ["tauceti", "womling_mine"],
+]) {
+  const definition = structure({
+    entryKey: `${region}:${id}`,
+    region,
+    sector: region,
+    struct: id,
+    actionId: `${region}-${id}`,
+    ownsPowered: false,
+    switchable: true,
+  });
+  const snapshot = readCapturedBuildingState(
+    supportRoot,
+    {
+      binding: definition.actionId,
+      elementId: definition.actionId,
+      entryKey: definition.entryKey,
+      region,
+      sector: region,
+      id,
+      label: definition.actionId,
+      switchable: true,
+      smart: false,
+      knowledge: false,
+      state: supportRoot[region][id],
+    },
+    definition,
+    true,
+  );
+  assert.ok(snapshot);
+  supportStructures.push(definition);
+  supportBuildingStates.push(snapshot);
+}
 const beltSupport = readCapturedPowerSupportResourceState(
   supportRoot,
   "Belt_Support",
   { autoPower: true, "bld_s_space-space_station": true },
   supportStructures,
+  supportBuildingStates,
 );
 assert.deepEqual(
   [beltSupport?.currentQuantity, beltSupport?.maxQuantity],
@@ -957,6 +1036,7 @@ assert.equal(
     "Belt_Support",
     { autoPower: true },
     supportStructures,
+    supportBuildingStates,
   )?.maxQuantity,
   21,
   "Belt Support falls back to currently-on stations when auto-state is not enabled",
@@ -968,12 +1048,14 @@ assert.deepEqual(
       "Electrolysis_Support",
       {},
       [],
+      supportBuildingStates,
     )?.currentQuantity,
     readCapturedPowerSupportResourceState(
       supportRoot,
       "Electrolysis_Support",
       {},
       [],
+      supportBuildingStates,
     )?.maxQuantity,
   ],
   [3, 4],
@@ -986,12 +1068,14 @@ assert.deepEqual(
       "Womlings_Support",
       {},
       [],
+      supportBuildingStates,
     )?.currentQuantity,
     readCapturedPowerSupportResourceState(
       supportRoot,
       "Womlings_Support",
       {},
       [],
+      supportBuildingStates,
     )?.maxQuantity,
   ],
   [14, 24],
@@ -1115,6 +1199,7 @@ assert.ok(
 
 const fleetSettings = { ...settings, autoFleet: true };
 const fleetReader = createCapturedPowerReader({
+  readBuildingUnlocked: () => true,
   rootState: { readRoot: () => root },
   mechanics: createMechanics(),
   controls: fakeControls,
@@ -1152,6 +1237,7 @@ assert.equal(
 
 const disabledSettings = { ...settings, "bld_s_space-reactor": false };
 const disabledReader = createCapturedPowerReader({
+  readBuildingUnlocked: () => true,
   rootState: { readRoot: () => root },
   mechanics: createMechanics(),
   controls: fakeControls,
@@ -1180,6 +1266,7 @@ assert.equal(
 );
 
 const unavailableReader = createCapturedPowerReader({
+  readBuildingUnlocked: () => true,
   rootState: { readRoot: () => root },
   mechanics: createMechanics({ invalidateFuel: true }),
   controls: fakeControls,
@@ -1206,6 +1293,7 @@ assert.equal(
 );
 
 const badOrderReader = createCapturedPowerReader({
+  readBuildingUnlocked: () => true,
   rootState: { readRoot: () => root },
   mechanics: createMechanics({ powerOrder: () => undefined }),
   controls: fakeControls,
@@ -1234,6 +1322,7 @@ assert.equal(
 const missingAnchorRoot = { ...root, space: { ...root.space } };
 delete missingAnchorRoot.space.moon_anchor;
 const missingSupportReader = createCapturedPowerReader({
+  readBuildingUnlocked: () => true,
   rootState: { readRoot: () => missingAnchorRoot },
   mechanics: createMechanics(),
   controls: fakeControls,
@@ -1554,6 +1643,7 @@ const specialRoot = {
   galaxy: {
     ship_dock: { count: 1, on: 1, s_max: 20, support: 6 },
     bolognium_ship: { count: 1, on: 1 },
+    gorddon_mission: { count: 99 },
     vitreloy_plant: { count: 1, on: 1 },
     armed_miner: { count: 1, on: 1 },
     gxy_chthonian: { piracy: 8, armada: 12 },
@@ -1622,7 +1712,7 @@ const specialRoot = {
     governor: { g: { bg: "sports" }, tasks: {} },
     servants: { jobs: { farmer: 2, hunter: 1 } },
   },
-  tech: { xeno: 2, waygate: 3, evil: 0 },
+  tech: { high_tech: 2, xeno: 2, waygate: 3, evil: 0 },
   settings: {
     qKey: false,
     showPortal: true,
@@ -1725,7 +1815,7 @@ const specialHandles = new Map([
   ["garrison", { id: "garrison", methods: ["hell"] }],
 ]);
 const specialControls = Object.freeze({
-  capturedElementIds: () => Object.freeze([]),
+  capturedElementIds: () => Object.freeze(["galaxy-gorddon_mission"]),
   resolve: (id) => specialHandles.get(id),
   invoke(handle, method, args = []) {
     if (handle.id === "portal-guard_post" && method === "effect")
@@ -1739,13 +1829,6 @@ const specialControls = Object.freeze({
     return { ok: false, reason: "unknown-control" };
   },
 });
-const specialBuildTargets = [
-  ...specialStructures.map((entry) => ({
-    key: entry.actionId,
-    elementId: entry.actionId,
-  })),
-  { key: "galaxy-gorddon_mission", elementId: "galaxy-gorddon_mission" },
-];
 const specialReader = createCapturedPowerReader({
   rootState: { readRoot: () => specialRoot },
   mechanics: createMechanics({
@@ -1781,8 +1864,8 @@ const specialReader = createCapturedPowerReader({
     ...demandSample(),
     maxCost: (id) => (id === "Elerium" ? 44 : 0),
   }),
-  readBuildTargets: () => specialBuildTargets,
-  readBuildingUnlocked: () => true,
+  readBuildingUnlocked: (actionId) =>
+    actionId !== "galaxy-gorddon_mission" || specialRoot.tech.xeno < 3,
   costs: {
     readCost: () => ({ cost: { Money: 12, Supply: 7 }, pool: "spire" }),
   },
@@ -1895,6 +1978,16 @@ assert.equal(
   true,
   "Bolognium Ship sees the unlocked, enabled, weighted, not-yet-complete Gorddon mission",
 );
+specialRoot.tech.xeno = 3;
+assert.equal(
+  specialReader
+    .readCycle()
+    ?.buildings.find((entry) => entry.binding === "galaxy-bolognium_ship")?.rule
+    .missionBuildable,
+  false,
+  "completed Gorddon mission uses its semantic completion count and is no longer buildable",
+);
+specialRoot.tech.xeno = 2;
 assert.equal(
   specialCycle.buildings.find((entry) => entry.binding === "portal-waygate")
     ?.extraDescription,
@@ -1984,6 +2077,363 @@ assert.deepEqual(
   "hidden Portal groups stay disabled and their buildings remain in ordinary Power planning",
 );
 specialRoot.settings.showPortal = true;
+
+// The semantic Building owner, including count overrides, is independent of Power policy.
+{
+  const stateRoot = { tech: { high_tech: 1, advanced_power: 0, space: 3 } };
+  const stateDefinition = structure({
+    entryKey: "city:semantic_probe",
+    region: "city",
+    sector: "city",
+    struct: "semantic_probe",
+    actionId: "city-semantic_probe",
+    powered: 3,
+  });
+  const semanticCatalog = (binding, state) => ({
+    binding,
+    elementId: binding,
+    entryKey: stateDefinition.entryKey,
+    region: binding.split("-")[0],
+    sector: stateDefinition.sector,
+    id: binding.split("-")[1],
+    label: binding,
+    switchable: true,
+    smart: false,
+    knowledge: false,
+    state,
+  });
+  const ordinary = semanticCatalog("city-semantic_probe", { count: 3, on: 1 });
+  const sample = (
+    definition = stateDefinition,
+    available = true,
+    catalog = ordinary,
+  ) => readCapturedBuildingState(stateRoot, catalog, definition, available);
+  assert.deepEqual(
+    [sample().count, sample().hasState, sample().stateOn, sample().stateOff],
+    [3, false, 0, 0],
+    "raw on does not establish state capability before high_tech 2",
+  );
+  stateRoot.tech.high_tech = 2;
+  assert.deepEqual(
+    [sample().hasState, sample().stateOn, sample().stateOff],
+    [true, 1, 2],
+  );
+  const requirementDefinition = {
+    ...stateDefinition,
+    readPowerRequirements: () => ({
+      kind: "value",
+      value: [{ techId: "advanced_power", level: 2 }],
+    }),
+  };
+  assert.equal(sample(requirementDefinition).hasState, false);
+  stateRoot.tech.advanced_power = 2;
+  assert.equal(sample(requirementDefinition).hasState, true);
+  const switchDefinition = {
+    ...stateDefinition,
+    ownsPowered: false,
+    readPowered: () => ({ kind: "absent" }),
+    readSwitchable: () => ({ kind: "value", value: true }),
+  };
+  assert.deepEqual(
+    [sample(switchDefinition).hasState, sample(switchDefinition).powered],
+    [true, 0],
+  );
+  assert.equal(
+    sample({
+      ...switchDefinition,
+      readSwitchable: () => ({ kind: "value", value: false }),
+    }).hasState,
+    false,
+  );
+  assert.deepEqual(
+    [
+      sample(stateDefinition, false).available,
+      sample(stateDefinition, false).hasState,
+      sample(stateDefinition, false).stateOff,
+    ],
+    [false, false, 0],
+  );
+  const banquet = semanticCatalog("city-banquet", {
+    count: 1,
+    level: 4,
+    on: 0,
+  });
+  assert.deepEqual(
+    [
+      sample(switchDefinition, true, banquet).count,
+      sample(switchDefinition, true, banquet).stateOn,
+      sample(switchDefinition, true, banquet).stateOff,
+    ],
+    [4, 0, 1],
+    "Banquet level is its count while the shell is one switchable state",
+  );
+  banquet.state.on = 1;
+  assert.deepEqual(
+    [
+      sample(switchDefinition, true, banquet).stateOn,
+      sample(switchDefinition, true, banquet).stateOff,
+    ],
+    [1, 0],
+  );
+  const mission = semanticCatalog("space-red_mission", { count: 99, on: 0 });
+  const undrawnMission = readCapturedBuildingState(
+    stateRoot,
+    mission,
+    undefined,
+    true,
+  );
+  assert.deepEqual(
+    [
+      undrawnMission.count,
+      undrawnMission.hasState,
+      undrawnMission.stateOn,
+      undrawnMission.stateOff,
+    ],
+    [0, false, 0, 0],
+    "catalog missions without mechanics still report semantic completion count",
+  );
+  assert.equal(sample(switchDefinition, true, mission).count, 0);
+  stateRoot.tech.space = 4;
+  assert.equal(
+    sample(switchDefinition, true, mission).count,
+    1,
+    "mission count follows its grant completion rather than the root shell count",
+  );
+  const lockedCompletedMission = readCapturedBuildingState(
+    stateRoot,
+    mission,
+    undefined,
+    false,
+  );
+  assert.deepEqual(
+    [
+      lockedCompletedMission.available,
+      lockedCompletedMission.count,
+      lockedCompletedMission.hasState,
+    ],
+    [false, 1, false],
+    "locked mission completion count survives absent mechanics without granting state capability",
+  );
+}
+
+// Full cycle capacity and planner buildings consume the same semantic snapshots.
+{
+  const probe = structure({
+    entryKey: "city:semantic_probe",
+    region: "city",
+    sector: "city",
+    struct: "semantic_probe",
+    actionId: "city-semantic_probe",
+    powered: 3,
+  });
+  const registryOnly = structure({
+    entryKey: "city:registry_only",
+    region: "city",
+    sector: "city",
+    struct: "registry_only",
+    actionId: "city-registry_only",
+    powered: 100,
+  });
+  const semanticRoot = {
+    ...root,
+    tech: { high_tech: 1 },
+    city: {
+      ...root.city,
+      semantic_probe: { count: 3, on: 1 },
+      registry_only: { count: 100, on: 0 },
+    },
+    power: [probe.entryKey, registryOnly.entryKey],
+    support: {},
+  };
+  let available = true;
+  let required = false;
+  let switchable;
+  let ownsPowered = true;
+  const semanticMechanics = createMechanics({
+    structures: [
+      {
+        ...probe,
+        get ownsPowered() {
+          return ownsPowered;
+        },
+        readSwitchable: () =>
+          switchable === undefined
+            ? { kind: "absent" }
+            : { kind: "value", value: switchable },
+        readPowerRequirements: () =>
+          required
+            ? { kind: "value", value: [{ techId: "advanced_power", level: 2 }] }
+            : { kind: "absent" },
+      },
+      registryOnly,
+    ],
+    productionBreakdown: { production: {}, consumption: {} },
+  });
+  const semanticReader = createCapturedPowerReader({
+    rootState: { readRoot: () => semanticRoot },
+    mechanics: semanticMechanics,
+    controls: fakeControls,
+    resources: createResources(semanticRoot),
+    readDemand: () => EMPTY_DEMAND_SAMPLE,
+    readBuildingUnlocked: () => available,
+    readCurrentDate: () => new Date("2026-07-01T12:00:00"),
+    readSettingsRaw: () => ({
+      "bld_s_city-semantic_probe": true,
+      "bld_p_city-semantic_probe": 0,
+    }),
+    readRuntimeOptions: () => ({
+      settings: {
+        showGalactic: true,
+        limitPowered: false,
+        autoFleet: false,
+        crewReserve: 0,
+      },
+      debug: false,
+      consumptionBalanceMinimum: 60,
+    }),
+    readWarnings: () => [],
+  });
+  const assertSemanticCycle = (expectedBuildings, expectedMaximum) => {
+    const input = semanticReader.readCycle();
+    assert.ok(input);
+    assert.deepEqual(
+      input.buildings.map(({ binding, count, stateOn }) => [
+        binding,
+        count,
+        stateOn,
+      ]),
+      expectedBuildings,
+    );
+    assert.equal(
+      input.powerMaximum,
+      expectedMaximum,
+      "Power maximum and managed list share Building capability/count/on snapshots; registry-only state adds nothing",
+    );
+  };
+  assertSemanticCycle([], 0);
+  semanticRoot.tech.high_tech = 2;
+  assertSemanticCycle([[probe.actionId, 3, 1]], 6);
+  required = true;
+  assertSemanticCycle([], 0);
+  semanticRoot.tech.advanced_power = 2;
+  assertSemanticCycle([[probe.actionId, 3, 1]], 6);
+  available = false;
+  assertSemanticCycle([], 0);
+  available = true;
+  ownsPowered = false;
+  switchable = true;
+  assertSemanticCycle([[probe.actionId, 3, 1]], 0);
+  switchable = false;
+  assertSemanticCycle([], 0);
+}
+
+// A changing live getter detects a second independent capture inside this same cycle.
+{
+  let countReads = 0;
+  let onReads = 0;
+  let poweredReads = 0;
+  const singleCaptureState = {
+    get count() {
+      return ++countReads === 1 ? 3 : 99;
+    },
+    get on() {
+      return ++onReads === 1 ? 1 : 0;
+    },
+  };
+  const singleCaptureDefinition = {
+    ...structure({
+      entryKey: "city:coal_power",
+      region: "city",
+      sector: "city",
+      struct: "coal_power",
+      actionId: "city-coal_power",
+    }),
+    readPowered: () => ({
+      kind: "value",
+      value: ++poweredReads === 1 ? 3 : 100,
+    }),
+  };
+  const singleCaptureRoot = {
+    ...root,
+    city: { ...root.city, coal_power: singleCaptureState },
+    tech: { high_tech: 2 },
+    power: [singleCaptureDefinition.entryKey],
+    support: {},
+  };
+  const singleCaptureSettings = {
+    "bld_s_city-coal_power": true,
+    "bld_p_city-coal_power": 0,
+    masterScriptToggle: true,
+    autoPower: true,
+    buildingsLimitPowered: false,
+    "bld_m_city-coal_power": 2,
+  };
+  let singleCaptureAvailable = true;
+  const singleCaptureReader = createCapturedPowerReader({
+    rootState: { readRoot: () => singleCaptureRoot },
+    mechanics: createMechanics({
+      structures: [singleCaptureDefinition],
+      productionBreakdown: { production: {}, consumption: {} },
+    }),
+    controls: {
+      ...fakeControls,
+      capturedElementIds: () => [singleCaptureDefinition.actionId],
+    },
+    resources: createResources(singleCaptureRoot),
+    readDemand: () => EMPTY_DEMAND_SAMPLE,
+    readBuildingUnlocked: () => singleCaptureAvailable,
+    readCurrentDate: () => new Date("2026-07-01T12:00:00"),
+    readSettingsRaw: () => singleCaptureSettings,
+    readRuntimeOptions: () => ({
+      settings: {
+        showGalactic: true,
+        limitPowered: false,
+        autoFleet: false,
+        crewReserve: 0,
+      },
+      debug: false,
+      consumptionBalanceMinimum: 60,
+    }),
+    readWarnings: () => [],
+  });
+  const captureOnce = () => {
+    countReads = 0;
+    onReads = 0;
+    poweredReads = 0;
+    return singleCaptureReader.readCycle();
+  };
+  const input = captureOnce();
+  assert.ok(input);
+  assert.deepEqual(
+    input.buildings.map(({ count, stateOn, powered }) => [
+      count,
+      stateOn,
+      powered,
+    ]),
+    [[3, 1, 3]],
+  );
+  assert.equal(input.powerMaximum, 6);
+  assert.deepEqual(
+    [countReads, onReads, poweredReads],
+    [1, 1, 1],
+    "managed planner input and synthetic Power capacity reuse one count/on/powered capture",
+  );
+  singleCaptureSettings.buildingsLimitPowered = true;
+  assert.equal(
+    captureOnce().powerMaximum,
+    3,
+    "powered auto-max reduces the shared snapshot off capacity",
+  );
+  singleCaptureAvailable = undefined;
+  const unknownAvailability = captureOnce();
+  assert.ok(unknownAvailability);
+  assert.deepEqual(
+    unknownAvailability.buildings,
+    [],
+    "unknown availability does not infer unlocked from raw state",
+  );
+  assert.equal(unknownAvailability.powerMaximum, 0);
+}
 
 process.stdout.write(
   "captured Power reader builds and plans a full mechanics-backed cycle\n",

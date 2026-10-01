@@ -329,6 +329,8 @@ assert.deepEqual(definitions[0].readTitle(), {
   value: "Relay",
 });
 assert.deepEqual(definitions[0].readPowered(), { kind: "value", value: -2 });
+assert.equal(definitions[0].ownsPowered, true);
+assert.deepEqual(definitions[0].readSwitchable(), { kind: "absent" });
 liveGlobal = { space: { relay: { watts: -7 } } };
 assert.equal(
   definitions[0].readPowered().value,
@@ -398,6 +400,38 @@ const falseResultDefinition = capture.mechanics
 assert.deepEqual(falseResultDefinition.readPowered(), {
   kind: "value",
   value: 0,
+});
+assert.equal(falseResultDefinition.ownsPowered, true);
+let liveSwitchable = true;
+falseResultAction.c_action.switchable = function () {
+  assert.equal(this, falseResultAction.c_action);
+  return liveSwitchable;
+};
+assert.deepEqual(falseResultDefinition.readSwitchable(), {
+  kind: "value",
+  value: true,
+});
+liveSwitchable = false;
+assert.deepEqual(falseResultDefinition.readSwitchable(), {
+  kind: "value",
+  value: false,
+});
+falseResultAction.c_action.switchable = () => "true";
+assert.deepEqual(falseResultDefinition.readSwitchable(), { kind: "invalid" });
+falseResultAction.c_action.switchable = () => {
+  throw new Error("switchable failed");
+};
+assert.deepEqual(falseResultDefinition.readSwitchable(), { kind: "invalid" });
+delete falseResultAction.c_action.powered;
+const unpoweredDefinition = capture.mechanics
+  .readStructures()
+  .find((entry) => entry.entryKey === falseResultAction.key);
+assert.equal(unpoweredDefinition.ownsPowered, false);
+assert.deepEqual(unpoweredDefinition.readPowered(), { kind: "absent" });
+falseResultAction.c_action.switchable = () => true;
+assert.deepEqual(unpoweredDefinition.readSwitchable(), {
+  kind: "value",
+  value: true,
 });
 assert.deepEqual(falseResultDefinition.readTitle(), {
   kind: "value",

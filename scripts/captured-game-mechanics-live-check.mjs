@@ -37,6 +37,9 @@ await esbuild.build({
 });
 
 const runner = await createChromiumRunner();
+process.stdout.write(
+  `${JSON.stringify({ gameSnapshot: runner.inputs.gameSnapshot })}\n`,
+);
 let mechanics;
 try {
   const session = await runner.openSession({
@@ -405,6 +408,7 @@ try {
       const hooks = globalThis.__EA_TEST_HOOKS__;
       if (!hooks || typeof hooks.readPowerCycle !== "function")
         return undefined;
+      hooks.samplePowerBuildingAvailability();
       const result = hooks.readPowerCycle();
       if (!result) return undefined;
       const root =
@@ -563,7 +567,9 @@ try {
     );
     assert.deepEqual(
       captured.buildingOrder,
-      priorityCandidates.map(({ binding }) => binding),
+      priorityCandidates
+        .map(({ binding }) => binding)
+        .filter((binding) => captured.buildingOrder.includes(binding)),
       "the captured cycle follows stored building priorities rather than root.power",
     );
     process.stdout.write(
@@ -580,8 +586,9 @@ try {
     ),
   );
   const earlySession = await runner.openSession({
+    bundle: testBundle,
     save: earlySave,
-    settings: {},
+    settings: prioritySettings,
     seed: 42,
   });
   try {
@@ -637,8 +644,51 @@ try {
         supportWithNoActiveState !== undefined && supportTitle?.kind === "value"
           ? `${supportTitle.value}+${supportWithNoActiveState.actionId}`
           : undefined;
+      const hooks = globalThis.__EA_TEST_HOOKS__;
+      hooks.samplePowerBuildingAvailability();
+      const cycle = hooks.readPowerCycle()?.cycle;
+      const highTech = Number(root?.tech?.high_tech ?? 0);
+      const rawOnCapabilities = structures.flatMap((entry) => {
+        const state = stateFor(entry);
+        if (!entry.ownsPowered || !state || !Object.hasOwn(state, "on"))
+          return [];
+        const requirements = entry.readPowerRequirements();
+        const switchable = entry.readSwitchable();
+        const requirementsMet =
+          requirements.kind === "absent" ||
+          (requirements.kind === "value" &&
+            requirements.value.every(
+              ({ techId, level }) =>
+                Boolean(root?.tech?.[techId]) &&
+                Number(root.tech[techId]) >= level,
+            ));
+        return [
+          {
+            actionId: entry.actionId,
+            count: Number(state.count ?? 0),
+            highTech,
+            requirements,
+            requirementsMet,
+            switchable,
+            manageable:
+              (highTech >= 2 && requirementsMet) ||
+              (switchable.kind === "value" && switchable.value),
+            included:
+              cycle?.buildings.some(
+                (building) => building.binding === entry.actionId,
+              ) ?? false,
+          },
+        ];
+      });
+      const rawOnExcludedCandidate = rawOnCapabilities.find(
+        (entry) => entry.count > 0 && !entry.manageable,
+      );
       return {
         captureComplete: capture.isComplete(),
+        powerCycleCaptured: cycle !== undefined,
+        highTech,
+        rawOnCapabilities,
+        rawOnExcludedCandidate,
         zeroOnGenerator: generators[0],
         zeroActiveSupportDefinition: supportWithNoActiveState
           ? {
@@ -669,6 +719,23 @@ try {
       };
     });
     assert.equal(inactiveFacts.captureComplete, true);
+    assert.equal(inactiveFacts.powerCycleCaptured, true);
+    assert.ok(Number.isFinite(inactiveFacts.highTech));
+    assert.ok(inactiveFacts.rawOnCapabilities.length > 0);
+    for (const capability of inactiveFacts.rawOnCapabilities) {
+      assert.notEqual(capability.requirements.kind, "invalid");
+      assert.notEqual(capability.switchable.kind, "invalid");
+      if (!capability.manageable) {
+        assert.equal(
+          capability.included,
+          false,
+          `${capability.actionId}: raw on does not bypass the live state capability gate`,
+        );
+      }
+    }
+    if (inactiveFacts.rawOnExcludedCandidate) {
+      assert.equal(inactiveFacts.rawOnExcludedCandidate.included, false);
+    }
     assert.ok(inactiveFacts.zeroOnGenerator);
     assert.ok(inactiveFacts.zeroOnGenerator.fuel.length > 0);
     assert.deepEqual(

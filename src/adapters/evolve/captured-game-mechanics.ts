@@ -152,6 +152,17 @@ function readMechanicsPrimitive(
   }
 }
 
+function readMechanicsSwitchable(
+  action: Record<string, unknown>,
+): CapturedGameRead<boolean> {
+  const read = readMechanicsCall(action, "switchable");
+  if (read.kind !== "value") return read;
+  // DeadSpace action switchable() methods return booleans, including live completion gates.
+  return typeof read.value === "boolean"
+    ? { kind: "value", value: read.value }
+    : { kind: "invalid" };
+}
+
 function readMechanicsSupportTypes(
   action: Record<string, unknown>,
 ): CapturedGameRead<readonly string[]> {
@@ -728,7 +739,9 @@ function createMechanicsDefinition(
       shipRecord === undefined
         ? { kind: "absent" as const }
         : readMechanicsPrimitive(shipRecord, "rating"),
+    ownsPowered: Object.prototype.hasOwnProperty.call(action, "powered"),
     readPowered: () => readMechanicsPrimitive(action, "powered"),
+    readSwitchable: () => readMechanicsSwitchable(action),
     readPowerRequirements: () => readMechanicsPowerRequirements(action),
     readFuel: () => readMechanicsFuel(action, "p_fuel"),
     readFuelAdjustmentRequested: () =>

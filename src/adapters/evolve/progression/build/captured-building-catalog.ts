@@ -11,6 +11,7 @@ import type {
   GameControlRegistry,
 } from "../../../../ports/game-control-registry.ts";
 import { readCapturedControlLabel } from "../../captured-control-label.ts";
+import { CAPTURED_AUTOMATION_BUILDING_BINDINGS } from "./captured-building-bindings.generated.ts";
 import {
   bindingForBuildingElement,
   CAPTURED_BUILD_REGIONS,
@@ -147,11 +148,13 @@ export function readCapturedBuildingEntries(
   }
 
   // Building controls are captured as their panels are drawn, while the mechanics registry is
-  // complete from game startup. Use the same catalog entry shape to fill still-undrawn actions;
-  // priority ordering remains the shared stored-priority sorter used by Building settings.
+  // complete from game startup. Fill still-undrawn actions only when the automation owns that
+  // Building: registry membership alone does not add an automation entry. Priority ordering
+  // remains the shared stored-priority sorter used by Building settings.
   for (const structure of structures) {
     const binding = structure.actionId;
     if (seen.has(binding)) continue;
+    if (!CAPTURED_AUTOMATION_BUILDING_BINDINGS.has(binding)) continue;
     const parts = splitActionId(binding);
     if (
       parts === undefined ||
@@ -174,7 +177,7 @@ export function readCapturedBuildingEntries(
         sector: structure.sector,
         id: structure.struct,
         label: title.kind === "value" && title.value ? title.value : binding,
-        switchable: readProperty(state, "on") !== undefined,
+        switchable: Object.hasOwn(state, "on"),
         smart: metadata.smart,
         knowledge: metadata.knowledge,
         ...(metadata.smartLinkedIds === undefined

@@ -35,6 +35,20 @@ const OFFER = [{ elementId: "tech-mining", cost: { Knowledge: 6600 } }];
 const SAME_OFFER = [{ elementId: "tech-mining", cost: { Knowledge: 6600 } }];
 const DEARER = [{ elementId: "tech-mining", cost: { Knowledge: 9900 } }];
 
+{
+  const h = harness();
+  assert.equal(h.cache.peek("research"), undefined);
+  h.cache.read("research", h.take(OFFER));
+  assert.deepEqual(h.cache.peek("research"), OFFER);
+  assert.equal(h.takes(), 1);
+  h.advance(MIN_SAMPLE_AGE_MS);
+  assert.equal(h.cache.peek("research"), undefined);
+  assert.equal(h.takes(), 1, "expired peek must not refresh the scope");
+  h.cache.read("research", h.take(OFFER));
+  h.setEpoch("e2");
+  assert.equal(h.cache.peek("research"), undefined);
+}
+
 // --- the cached answer is served without a second take ---------------------
 
 {

@@ -50,7 +50,11 @@ export interface CapturedGameStructureDefinition {
   readValue(): CapturedGameRead<number>;
   /** Nested ship rating exposed by actions such as `galaxy-minelayer.ship.rating()`. */
   readShipRating(): CapturedGameRead<number>;
+  /** Action capability ownership, independent of the current `powered()` result. */
+  readonly ownsPowered: boolean;
   readPowered(): CapturedGameRead<number>;
+  /** Game-owned state capability where the action defines `switchable()`. */
+  readSwitchable(): CapturedGameRead<boolean>;
   /** `power_reqs`, normalized to the root tech levels checked by the retired wrapper. */
   readPowerRequirements(): CapturedGameRead<
     readonly CapturedPowerRequirement[]

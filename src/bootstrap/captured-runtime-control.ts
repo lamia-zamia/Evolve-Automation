@@ -2349,13 +2349,7 @@ export function startCapturedRuntime({
         resources: createCapturedResourceSource(pageCapture.rootState),
         readDemand: () => readDemand(),
         readFleetNeededShips: fleet.readNeededShips,
-        readBuildTargets: progression.readManagedBuildTargets,
-        readBuildingUnlocked: (actionId, region) => {
-          const offers = progression.readBuildingUnlocks(new Set([region]));
-          return offers?.regions.has(region) === true
-            ? offers.unlocked.has(actionId)
-            : undefined;
-        },
+        readBuildingUnlocked: progression.readCapturedBuildingUnlocked,
         costs: buildCosts,
         readCurrentDate: () => new Date(),
         readMechState: () => capturedMech.reader.readState(),
@@ -2372,6 +2366,22 @@ export function startCapturedRuntime({
         }),
         readWarnings: () => Object.freeze([]),
       });
+      Reflect.set(
+        hooks,
+        "samplePowerBuildingAvailability",
+        (regions?: readonly string[]) => {
+          progression.resetBuildingUnlockSample();
+          return progression.readBuildingUnlocks(
+            new Set(
+              regions ??
+                pageCapture.mechanics
+                  .readStructures()
+                  ?.map((definition) => definition.region) ??
+                [],
+            ),
+          );
+        },
+      );
       Reflect.set(hooks, "readPowerCycle", () => {
         const cycle = powerReader.readCycle();
         return cycle === undefined

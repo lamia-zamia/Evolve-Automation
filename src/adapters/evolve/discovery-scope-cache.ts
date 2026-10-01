@@ -43,6 +43,8 @@ export interface DiscoveryScopeCacheDependencies {
 }
 
 export interface DiscoveryScopeCache {
+  /** Read an existing fresh sample without drawing or refreshing an expired scope. */
+  peek<T>(scope: string): T | undefined;
   /**
    * The scope's current sample, taken afresh only when it has to be.
    *
@@ -114,6 +116,14 @@ export function createDiscoveryScopeCache(
   const entries = new Map<string, ScopeEntry>();
 
   return Object.freeze({
+    peek<T>(scope: string): T | undefined {
+      const entry = entries.get(scope);
+      return entry !== undefined &&
+        entry.epoch === readEpoch() &&
+        nowMs() - entry.takenAtMs < entry.ageMs
+        ? (entry.sample as T)
+        : undefined;
+    },
     read<T>(
       scope: string,
       take: () => T | undefined,

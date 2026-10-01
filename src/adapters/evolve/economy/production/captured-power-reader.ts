@@ -12,6 +12,10 @@ import type {
   PowerSpireInput,
   PowerWarnBuildingInput,
 } from "../../../../domain/economy/production/power.ts";
+import {
+  readCapturedBuildingState,
+  type CapturedBuildingState,
+} from "../../progression/build/captured-building-state.ts";
 import { sortByStoredPriority } from "../../../../domain/settings-priority-order.ts";
 import type { GameControlRegistry } from "../../../../ports/game-control-registry.ts";
 import type { GameRootStateSource } from "../../../../ports/game-root-state.ts";
@@ -24,7 +28,6 @@ import type {
 import type { GameResourceSource } from "../../../../ports/game-world-state.ts";
 import type { ResourceView } from "../../../../domain/game-world.ts";
 import type { GameActionCostReader } from "../../../../ports/game-action-costs.ts";
-import type { GameBuildTarget } from "../../../../ports/game-build-targets.ts";
 import type { CapturedMechState } from "../../../../domain/combat/mech-state.ts";
 import type { PowerReader } from "../../../../ports/power.ts";
 import { isRecord, readProperty } from "../../../validation.ts";
@@ -84,9 +87,7 @@ export interface CapturedPowerReaderDependencies {
   /** The current fleet planner's `neededShips`, when that result is available. */
   readonly readFleetNeededShips?: () =>
     Readonly<Record<string, number>> | null | undefined;
-  /** Current shared build-policy targets, used for legacy `isAutoBuildable` facts. */
-  readonly readBuildTargets?: () => readonly Readonly<GameBuildTarget>[];
-  /** Game-drawn action offers, which back the legacy Action.isUnlocked() predicate. */
+  /** Already captured progression availability. This lookup must never draw a tab. */
   readonly readBuildingUnlocked?: (
     actionId: string,
     region: string,
@@ -158,13 +159,6 @@ const EMPTY_SPIRE: PowerSpireInput = Object.freeze({
   purifier: EMPTY_SPIRE_BUILDING,
 });
 
-interface CapturedPowerBuildingRecord {
-  readonly catalog: Readonly<CapturedBuildingEntry>;
-  readonly structure: CapturedGameStructureDefinition;
-  readonly count: number;
-  readonly stateOn: number;
-}
-
 function asNumber(value: unknown): number | undefined {
   try {
     const numeric = Number(value);
@@ -207,16 +201,6 @@ function readCapturedStructureState(
   // global[entry.region][entry.struct]; `sector` identifies the grid and its
   // action definition, not a nested state bucket.
   return readProperty(region, structure.struct);
-}
-
-function readCapturedStructureOn(
-  root: unknown,
-  structure: CapturedGameStructureDefinition,
-): number | undefined {
-  const state = readCapturedStructureState(root, structure);
-  if (state === undefined || state === null) return 0;
-  if (!isRecord(state)) return undefined;
-  return readGameNumber(state, "on", 0);
 }
 
 function makeStructureByBinding(
@@ -285,63 +269,24 @@ function readOrderedMechanics(
   return true;
 }
 
-function readPowerRequirementsSatisfied(
+function readPowerBuildingStates(
   root: unknown,
-  structure: CapturedGameStructureDefinition,
-): boolean | undefined {
-  const requirements = structure.readPowerRequirements();
-  if (requirements.kind === "invalid") return undefined;
-  if (requirements.kind === "absent") return true;
-  const tech = readProperty(root, "tech");
-  for (const requirement of requirements.value) {
-    const level = readGameNumber(tech, requirement.techId, 0);
-    // Upstream checkPowerRequirements first requires a truthy tech rank, then compares it to the
-    // action's requirement. An absent or zero rank never satisfies even a zero threshold.
-    if (level === undefined || level === 0 || level < requirement.level)
-      return false;
-  }
-  return true;
-}
-
-function readCapturedPowerValue(
-  root: unknown,
-  structure: CapturedGameStructureDefinition,
-): number | undefined {
-  const requirements = readPowerRequirementsSatisfied(root, structure);
-  if (requirements === undefined) return undefined;
-  if (!requirements) return 0;
-  const powered = structure.readPowered();
-  if (powered.kind === "absent") return 0;
-  return powered.kind === "value" ? powered.value : undefined;
-}
-
-function readManagedBuildingRecords(
-  root: unknown,
-  settings: Readonly<Record<string, unknown>>,
-  controls: GameControlRegistry,
+  catalog: readonly CapturedBuildingEntry[],
   structures: readonly CapturedGameStructureDefinition[],
-): readonly CapturedPowerBuildingRecord[] | undefined {
+  readAvailable: CapturedPowerReaderDependencies["readBuildingUnlocked"],
+): readonly CapturedBuildingState[] | undefined {
   const byBinding = makeStructureByBinding(structures);
-  const catalog = readCapturedBuildingEntries(root, controls, structures);
-  const priorityCatalog = sortByStoredPriority(
-    catalog,
-    settings,
-    (entry) => `bld_p_${entry.binding}`,
-  );
-  const result: CapturedPowerBuildingRecord[] = [];
-  for (const entry of priorityCatalog) {
-    if (!entry.switchable || settings[`bld_s_${entry.binding}`] !== true) {
-      continue;
-    }
+  const result: CapturedBuildingState[] = [];
+  for (const entry of catalog) {
     const structure = structureForCatalogEntry(entry, byBinding);
-    if (structure === undefined) return undefined;
-    const state = readCapturedStructureState(root, structure);
-    if (!isRecord(state)) continue;
-    const count = readGameNumber(state, "count", 0);
-    const stateOn = readGameNumber(state, "on", 0);
-    if (count === undefined || stateOn === undefined) return undefined;
-    if (count <= 0) continue;
-    result.push(Object.freeze({ catalog: entry, structure, count, stateOn }));
+    const state = readCapturedBuildingState(
+      root,
+      entry,
+      structure,
+      readAvailable?.(entry.elementId, entry.region) === true,
+    );
+    if (state === undefined) return undefined;
+    result.push(state);
   }
   return Object.freeze(result);
 }
@@ -641,10 +586,14 @@ export function readCapturedPowerSupportResourceState(
   id: string,
   settings: Readonly<Record<string, unknown>>,
   structures: readonly CapturedGameStructureDefinition[],
+  buildingStates: readonly CapturedBuildingState[] = [],
 ): PowerResourceInput | undefined {
   let current: number;
   let maximum: number;
   let unlocked: boolean;
+  const supportBuildingOn = (binding: string) =>
+    buildingStates.find((building) => building.catalog.binding === binding)
+      ?.stateOn ?? 0;
   if (id === "Belt_Support") {
     const anchor = readSupportAnchorState(root, id, structures);
     if (anchor === undefined) return undefined;
@@ -653,26 +602,15 @@ export function readCapturedPowerSupportResourceState(
     unlocked = anchor.unlocked;
   } else if (id === "Electrolysis_Support") {
     unlocked = Boolean(readProperty(readProperty(root, "race"), "truepath"));
-    const space = readProperty(root, "space");
-    // Hydrogen Plant and Electrolysis `on` counts are lazy in a new save; Support read them as 0.
-    current =
-      asNumber(readProperty(readProperty(space, "hydrogen_plant"), "on")) ?? 0;
-    maximum =
-      asNumber(readProperty(readProperty(space, "electrolysis"), "on")) ?? 0;
+    current = supportBuildingOn("space-hydrogen_plant");
+    maximum = supportBuildingOn("space-electrolysis");
   } else if (id === "Womlings_Support") {
     const tech = readProperty(root, "tech");
     unlocked = (asNumber(readProperty(tech, "tau_red")) ?? 0) >= 5;
-    const tauCeti = readProperty(root, "tauceti");
-    // Tau-Ceti Womling structure counts are absent until built and read as zero by Support.
-    const farm =
-      asNumber(readProperty(readProperty(tauCeti, "womling_farm"), "on")) ?? 0;
-    const lab =
-      asNumber(readProperty(readProperty(tauCeti, "womling_lab"), "on")) ?? 0;
-    const mine =
-      asNumber(readProperty(readProperty(tauCeti, "womling_mine"), "on")) ?? 0;
-    const village =
-      asNumber(readProperty(readProperty(tauCeti, "womling_village"), "on")) ??
-      0;
+    const farm = supportBuildingOn("tauceti-womling_farm");
+    const lab = supportBuildingOn("tauceti-womling_lab");
+    const mine = supportBuildingOn("tauceti-womling_mine");
+    const village = supportBuildingOn("tauceti-womling_village");
     current = 2 * farm + lab + 6 * mine;
     maximum =
       village *
@@ -686,13 +624,11 @@ export function readCapturedPowerSupportResourceState(
   }
   if (id === "Belt_Support" && unlocked) {
     const highPopulation = readCapturedJobStackMultiplier(root);
-    const spaceStation = structures.find(
-      (structure) => structure.actionId === "space-space_station",
+    const spaceStation = buildingStates.find(
+      (building) => building.catalog.binding === "space-space_station",
     );
-    const stationState =
-      spaceStation && readCapturedStructureState(root, spaceStation);
-    const stationCount = readGameNumber(stationState, "count", 0);
-    const stationOn = readGameNumber(stationState, "on", 0);
+    const stationCount = spaceStation?.count ?? 0;
+    const stationOn = spaceStation?.stateOn ?? 0;
     const stationLimit =
       settings["autoPower"] === true &&
       settings["bld_s_space-space_station"] === true
@@ -746,6 +682,7 @@ function readPowerResourceState(
   production: CapturedProductionBreakdown,
   view: ResourceView | undefined,
   structures: readonly CapturedGameStructureDefinition[],
+  buildingStates: readonly CapturedBuildingState[],
 ): PowerResourceInput | undefined {
   if (id === "Power") {
     const city = readProperty(root, "city");
@@ -790,17 +727,11 @@ function readPowerResourceState(
       if (traitValue === undefined) return undefined;
       maximum += (populationMaximum - populationCurrent) * traitValue;
     }
-    for (const structure of structures) {
-      const state = readCapturedStructureState(root, structure);
-      if (!isRecord(state)) continue;
-      const count = readGameNumber(state, "count", 0);
-      const on = readGameNumber(state, "on", 0);
-      const powered = readCapturedPowerValue(root, structure);
-      if (count === undefined || on === undefined || powered === undefined)
-        return undefined;
-      let missing = count - on;
+    for (const building of buildingStates) {
+      const { count, stateOn: on, powered } = building;
+      let missing = building.stateOff;
       if (missing <= 0) continue;
-      const binding = structure.actionId;
+      const binding = building.catalog.binding;
       const autoMaximum = asNumber(settings[`bld_m_${binding}`]);
       if (
         autoMaximum !== undefined &&
@@ -921,6 +852,7 @@ function readPowerResourceState(
       id,
       settings,
       structures,
+      buildingStates,
     );
   }
   return readCapturedPowerOrdinaryResourceState(
@@ -941,6 +873,7 @@ function readPowerResourceInputs(
   production: CapturedProductionBreakdown,
   resources: GameResourceSource,
   structures: readonly CapturedGameStructureDefinition[],
+  buildingStates: readonly CapturedBuildingState[],
 ): readonly PowerResourceInput[] | undefined {
   const synthetic = new Set([
     "Power",
@@ -964,6 +897,7 @@ function readPowerResourceInputs(
       production,
       sample.resources.get(id),
       structures,
+      buildingStates,
     );
     if (input === undefined) return undefined;
     result.push(input);
@@ -1009,19 +943,14 @@ function readObservedProduction(
 }
 
 function readPowerHealingStructureValue(
-  root: unknown,
-  structures: readonly CapturedGameStructureDefinition[],
+  buildingStates: readonly CapturedBuildingState[],
   actionId: string,
   field: "count" | "on",
-): number | undefined {
-  const structure = structures.find((entry) => entry.actionId === actionId);
-  // Hospital, Boot Camp, Enceladus Base, and Banquet are lazily initialized in a new save;
-  // their retired Building wrappers exposed zero before an instance existed.
-  if (structure === undefined) return 0;
-  const state = readCapturedStructureState(root, structure);
-  if (state === undefined || state === null) return 0;
-  if (!isRecord(state)) return undefined;
-  return readGameNumber(state, field, 0);
+): number {
+  const building = buildingStates.find(
+    (entry) => entry.catalog.binding === actionId,
+  );
+  return field === "count" ? (building?.count ?? 0) : (building?.stateOn ?? 0);
 }
 
 function readPowerLegacyTraitValue(
@@ -1051,7 +980,7 @@ function readPowerLegacyTraitValue(
 /** Mirrors the retired `createGameRates().getHealingRate()` used by Triton Lander. */
 function readPowerLegacyHealingRate(
   root: unknown,
-  structures: readonly CapturedGameStructureDefinition[],
+  buildingStates: readonly CapturedBuildingState[],
   currentDate: Date,
 ): number | undefined {
   if (!(currentDate instanceof Date) || !Number.isFinite(currentDate.getTime()))
@@ -1065,22 +994,19 @@ function readPowerLegacyHealingRate(
   let healingCount: number | undefined;
   if (readProperty(race, "orbit_decayed") && readProperty(race, "truepath")) {
     healingCount = readPowerHealingStructureValue(
-      root,
-      structures,
+      buildingStates,
       "space-enceladus_base",
       "on",
     );
   } else if (readProperty(race, "artifical")) {
     healingCount = readPowerHealingStructureValue(
-      root,
-      structures,
+      buildingStates,
       "city-boot_camp",
       "count",
     );
   } else {
     healingCount = readPowerHealingStructureValue(
-      root,
-      structures,
+      buildingStates,
       "city-hospital",
       "count",
     );
@@ -1135,14 +1061,12 @@ function readPowerLegacyHealingRate(
   );
   if (governorBackground === "sports") healingCount *= 1.5;
   const banquetOn = readPowerHealingStructureValue(
-    root,
-    structures,
+    buildingStates,
     "city-banquet",
     "on",
   );
   const banquetCount = readPowerHealingStructureValue(
-    root,
-    structures,
+    buildingStates,
     "city-banquet",
     "count",
   );
@@ -1283,6 +1207,7 @@ function readBuildingRule(
   resources: ReadonlyMap<string, PowerResourceInput>,
   buildingCounts: ReadonlyMap<string, number>,
   buildingOns: ReadonlyMap<string, number>,
+  buildingStates: readonly CapturedBuildingState[],
   settings: Readonly<Record<string, unknown>>,
   structures: readonly CapturedGameStructureDefinition[],
   controls: GameControlRegistry,
@@ -1404,7 +1329,7 @@ function readBuildingRule(
       try {
         healingRate = readPowerLegacyHealingRate(
           root,
-          structures,
+          buildingStates,
           dependencies.readCurrentDate(),
         );
       } catch {
@@ -1681,20 +1606,12 @@ function readBuildingRule(
       });
     case "bolognium-ship": {
       const missionBinding = "galaxy-gorddon_mission";
-      const missionTarget = dependencies
-        .readBuildTargets?.()
-        .find(
-          (target) =>
-            target.key === missionBinding ||
-            target.elementId === missionBinding,
-        );
+      const mission = buildingStates.find(
+        (building) => building.catalog.binding === missionBinding,
+      );
       const missionMaximum = asNumber(settings[`bld_m_${missionBinding}`]);
-      const xenoLevel =
-        asNumber(readProperty(readProperty(root, "tech"), "xeno")) ?? 0;
-      const missionCount = xenoLevel >= 3 ? 1 : 0;
-      const missionUnlocked =
-        dependencies.readBuildingUnlocked?.(missionBinding, "galaxy") ??
-        missionTarget !== undefined;
+      const missionCount = mission?.count ?? 0;
+      const missionUnlocked = mission?.available === true;
       const missionBuildable =
         missionUnlocked &&
         settings[`bat${missionBinding}`] === true &&
@@ -1892,25 +1809,21 @@ function makeSpireBuilding(
   allRecords: readonly CapturedBuildingEntry[],
   settings: Readonly<Record<string, unknown>>,
   costs: GameActionCostReader | undefined,
-  readBuildTargets: CapturedPowerReaderDependencies["readBuildTargets"],
-  readBuildingUnlocked: CapturedPowerReaderDependencies["readBuildingUnlocked"],
+  buildingStates: readonly CapturedBuildingState[],
 ): PowerSpireBuildingInput | undefined {
   const entry = allRecords.find((item) => item.binding === binding);
   if (entry === undefined) return undefined;
-  const count = readGameNumber(entry.state, "count", 0) ?? 0;
-  const on = readGameNumber(entry.state, "on", 0) ?? 0;
+  const snapshot = buildingStates.find(
+    (building) => building.catalog.binding === binding,
+  );
+  const count = snapshot?.count ?? 0;
+  const on = snapshot?.stateOn ?? 0;
   const autoMaximumRaw = asNumber(settings[`bld_m_${binding}`]);
   const autoMaximum =
     autoMaximumRaw !== undefined && autoMaximumRaw >= 0
       ? Math.min(autoMaximumRaw, Number.MAX_SAFE_INTEGER)
       : Number.MAX_SAFE_INTEGER;
-  const target = readBuildTargets?.().find(
-    (candidate) =>
-      candidate.key === binding || candidate.elementId === entry.elementId,
-  );
-  const unlocked =
-    readBuildingUnlocked?.(entry.elementId, entry.region) ??
-    target !== undefined;
+  const unlocked = snapshot?.available === true;
   const weighting = asNumber(settings[`bld_w_${binding}`]) ?? 0;
   const autoBuildable =
     unlocked &&
@@ -1941,20 +1854,14 @@ function isPowerGroupSmartManagementEnabled(
   root: unknown,
   binding: string,
   settings: Readonly<Record<string, unknown>>,
-  allRecords: readonly CapturedBuildingEntry[],
-  dependencies: CapturedPowerReaderDependencies,
+  buildingStates: readonly CapturedBuildingState[],
 ): boolean {
-  const entry = allRecords.find((item) => item.binding === binding);
-  if (entry === undefined) return false;
-  const target = dependencies
-    .readBuildTargets?.()
-    .find(
-      (candidate) =>
-        candidate.key === binding || candidate.elementId === entry.elementId,
-    );
-  const unlocked =
-    dependencies.readBuildingUnlocked?.(entry.elementId, entry.region) ??
-    target !== undefined;
+  const snapshot = buildingStates.find(
+    (building) => building.catalog.binding === binding,
+  );
+  if (snapshot === undefined) return false;
+  const entry = snapshot.catalog;
+  const unlocked = snapshot.available;
   const gameSettings = readProperty(root, "settings");
   const visible =
     entry.region === "portal"
@@ -1986,6 +1893,7 @@ function readLakeAndSpire(
   resourceMap: ReadonlyMap<string, PowerResourceInput>,
   dependencies: CapturedPowerReaderDependencies,
   mechState: CapturedMechState | undefined,
+  buildingStates: readonly CapturedBuildingState[],
 ):
   | { readonly lake: PowerLakeInput; readonly spire: PowerSpireInput }
   | undefined {
@@ -2000,15 +1908,13 @@ function readLakeAndSpire(
       root,
       "portal-bireme",
       settings,
-      allRecords,
-      dependencies,
+      buildingStates,
     ) &&
     isPowerGroupSmartManagementEnabled(
       root,
       "portal-transport",
       settings,
-      allRecords,
-      dependencies,
+      buildingStates,
     );
   const lake: PowerLakeInput =
     lakeEnabled && lakeBireme !== undefined && lakeTransport !== undefined
@@ -2017,12 +1923,24 @@ function readLakeAndSpire(
           bloodSpireLevel: readGamePathNumber(root, ["blood", "spire"], 0) ?? 0,
           biremeId: lakeBireme.id,
           biremeBinding: lakeBireme.binding,
-          biremeCount: readGameNumber(lakeBireme.state, "count", 0) ?? 0,
-          biremeStateOn: readGameNumber(lakeBireme.state, "on", 0) ?? 0,
+          biremeCount:
+            buildingStates.find(
+              (building) => building.catalog.binding === lakeBireme.binding,
+            )?.count ?? 0,
+          biremeStateOn:
+            buildingStates.find(
+              (building) => building.catalog.binding === lakeBireme.binding,
+            )?.stateOn ?? 0,
           transportId: lakeTransport.id,
           transportBinding: lakeTransport.binding,
-          transportCount: readGameNumber(lakeTransport.state, "count", 0) ?? 0,
-          transportStateOn: readGameNumber(lakeTransport.state, "on", 0) ?? 0,
+          transportCount:
+            buildingStates.find(
+              (building) => building.catalog.binding === lakeTransport.binding,
+            )?.count ?? 0,
+          transportStateOn:
+            buildingStates.find(
+              (building) => building.catalog.binding === lakeTransport.binding,
+            )?.stateOn ?? 0,
         })
       : EMPTY_LAKE;
   const spireEnabled =
@@ -2030,15 +1948,13 @@ function readLakeAndSpire(
       root,
       "portal-port",
       settings,
-      allRecords,
-      dependencies,
+      buildingStates,
     ) &&
     isPowerGroupSmartManagementEnabled(
       root,
       "portal-base_camp",
       settings,
-      allRecords,
-      dependencies,
+      buildingStates,
     );
   let spire: PowerSpireInput = EMPTY_SPIRE;
   if (spireEnabled) {
@@ -2047,32 +1963,28 @@ function readLakeAndSpire(
       allRecords,
       settings,
       dependencies.costs,
-      dependencies.readBuildTargets,
-      dependencies.readBuildingUnlocked,
+      buildingStates,
     );
     const port = makeSpireBuilding(
       "portal-port",
       allRecords,
       settings,
       dependencies.costs,
-      dependencies.readBuildTargets,
-      dependencies.readBuildingUnlocked,
+      buildingStates,
     );
     const camp = makeSpireBuilding(
       "portal-base_camp",
       allRecords,
       settings,
       dependencies.costs,
-      dependencies.readBuildTargets,
-      dependencies.readBuildingUnlocked,
+      buildingStates,
     );
     const purifier = makeSpireBuilding(
       "portal-purifier",
       allRecords,
       settings,
       dependencies.costs,
-      dependencies.readBuildTargets,
-      dependencies.readBuildingUnlocked,
+      buildingStates,
     );
     if (
       spireMech === undefined ||
@@ -2124,7 +2036,9 @@ function readLakeAndSpire(
       // An absent floor is inert unless demonic auto-prestige is active; that case is validated above.
       prestigeDemonicFloor: prestigeFloor ?? 0,
       towerCount:
-        readGamePathNumber(root, ["portal", "spire", "count"], 0) ?? 0,
+        buildingStates.find(
+          (building) => building.catalog.binding === "portal-spire",
+        )?.count ?? 0,
       moneyMaximum: money.maxQuantity,
       supplyCurrent: supply.currentQuantity,
       mechQueued,
@@ -2170,14 +2084,28 @@ function readPowerCycle(
     dependencies.controls,
     structures,
   );
-  const managed = readManagedBuildingRecords(
+  const buildingStates = readPowerBuildingStates(
     root,
-    settings,
-    dependencies.controls,
+    allCatalog,
     structures,
+    dependencies.readBuildingUnlocked,
   );
-  if (managed === undefined) return undefined;
-  const allByBinding = makeStructureByBinding(structures);
+  if (buildingStates === undefined) return undefined;
+  const managed = sortByStoredPriority(
+    buildingStates,
+    settings,
+    (building) => "bld_p_" + building.catalog.binding,
+  ).filter(
+    (
+      building,
+    ): building is CapturedBuildingState & {
+      readonly structure: CapturedGameStructureDefinition;
+    } =>
+      building.structure !== undefined &&
+      building.hasState &&
+      settings["bld_s_" + building.catalog.binding] === true &&
+      building.count > 0,
+  );
   const autoFleet = settings["autoFleet"] === true;
   const fleetNeededShipsSample = autoFleet
     ? dependencies.readFleetNeededShips?.()
@@ -2191,30 +2119,26 @@ function readPowerCycle(
       root,
       "portal-bireme",
       settings,
-      allCatalog,
-      dependencies,
+      buildingStates,
     ) &&
     isPowerGroupSmartManagementEnabled(
       root,
       "portal-transport",
       settings,
-      allCatalog,
-      dependencies,
+      buildingStates,
     );
   const spireGroupManaged =
     isPowerGroupSmartManagementEnabled(
       root,
       "portal-port",
       settings,
-      allCatalog,
-      dependencies,
+      buildingStates,
     ) &&
     isPowerGroupSmartManagementEnabled(
       root,
       "portal-base_camp",
       settings,
-      allCatalog,
-      dependencies,
+      buildingStates,
     );
   const requiresMechState =
     settings["autoMech"] === true &&
@@ -2237,7 +2161,7 @@ function readPowerCycle(
       record.structure,
       metadata.consumptions,
     );
-    const powered = readCapturedPowerValue(root, record.structure);
+    const powered = record.powered;
     const title = record.structure.readTitle();
     const description = record.structure.readDescription();
     if (
@@ -2254,8 +2178,6 @@ function readPowerCycle(
       resourceIds.add(resourceId);
     const state = readCapturedStructureState(root, record.structure);
     const autoMaximumRaw = asNumber(settings[`bld_m_${binding}`]);
-    const requirements = readPowerRequirementsSatisfied(root, record.structure);
-    if (requirements === undefined) return undefined;
     let fleetMaximum: number | null = null;
     if (
       autoFleet &&
@@ -2317,6 +2239,7 @@ function readPowerCycle(
     production,
     dependencies.resources,
     structures,
+    buildingStates,
   );
   if (resourceInputs === undefined) return undefined;
   const resourceMap = new Map(resourceInputs.map((item) => [item.id, item]));
@@ -2333,15 +2256,9 @@ function readPowerCycle(
   resourceMap.set("Population", populationModel);
   const buildingCounts = new Map<string, number>();
   const buildingOns = new Map<string, number>();
-  for (const entry of allCatalog) {
-    const structure = structureForCatalogEntry(entry, allByBinding);
-    if (structure === undefined) continue;
-    const state = readCapturedStructureState(root, structure);
-    buildingCounts.set(entry.binding, readGameNumber(state, "count", 0) ?? 0);
-    buildingOns.set(
-      entry.binding,
-      readCapturedStructureOn(root, structure) ?? 0,
-    );
+  for (const building of buildingStates) {
+    buildingCounts.set(building.catalog.binding, building.count);
+    buildingOns.set(building.catalog.binding, building.stateOn);
   }
   const filledPowers: PowerBuildingInput[] = [];
   for (const building of powers) {
@@ -2355,6 +2272,7 @@ function readPowerCycle(
       resourceMap,
       buildingCounts,
       buildingOns,
+      buildingStates,
       settings,
       structures,
       dependencies.controls,
@@ -2389,6 +2307,7 @@ function readPowerCycle(
     resourceMap,
     dependencies,
     mechState,
+    buildingStates,
   );
   if (lakeAndSpire === undefined) return undefined;
   const cycle: PowerCycleInput = Object.freeze({
@@ -2430,7 +2349,6 @@ export function createCapturedPowerReader({
   resources,
   readDemand,
   readFleetNeededShips,
-  readBuildTargets,
   readBuildingUnlocked,
   costs,
   readCurrentDate,
@@ -2447,7 +2365,6 @@ export function createCapturedPowerReader({
     resources,
     readDemand,
     ...(readFleetNeededShips === undefined ? {} : { readFleetNeededShips }),
-    ...(readBuildTargets === undefined ? {} : { readBuildTargets }),
     ...(readBuildingUnlocked === undefined ? {} : { readBuildingUnlocked }),
     ...(costs === undefined ? {} : { costs }),
     readCurrentDate,
@@ -2489,17 +2406,24 @@ export function createCapturedPowerReader({
       if (root === undefined || structures === undefined) {
         throw new TypeError("captured Power structure registry is unavailable");
       }
-      const matching = structures.filter(
-        (entry) => entry.actionId === binding || entry.entryKey === binding,
+      const catalog = readCapturedBuildingEntries(root, controls, structures);
+      const snapshots = readPowerBuildingStates(
+        root,
+        catalog,
+        structures,
+        readBuildingUnlocked,
       );
-      const structure = matching.length === 1 ? matching[0] : undefined;
-      if (matching.length !== 1 || structure === undefined) {
-        throw new TypeError(`captured Power binding ${binding} is unavailable`);
+      const building = snapshots?.find(
+        (entry) =>
+          entry.catalog.binding === binding ||
+          entry.structure?.entryKey === binding,
+      );
+      if (building === undefined) {
+        throw new TypeError(
+          "captured Power binding is unavailable: " + binding,
+        );
       }
-      const stateOn = readCapturedStructureOn(root, structure);
-      if (stateOn === undefined) {
-        throw new TypeError(`captured Power state for ${binding} is invalid`);
-      }
+      const stateOn = building.stateOn;
       return stateOn;
     },
   });

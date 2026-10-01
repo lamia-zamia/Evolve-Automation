@@ -281,10 +281,27 @@ assert.equal(researchControl.readGrantedTechs(), undefined);
     nowMs: () => 0,
   });
   const priced = [];
+  assert.equal(
+    buildControl.readCapturedBuildingUnlocked("city-foundry", "city"),
+    undefined,
+    "availability lookup does not draw an unsampled region",
+  );
   assert.deepEqual(
     buildControl.readManagedBuildTargets().map(({ elementId }) => elementId),
     ["city-foundry", "city-refinery"],
     "production build policy intersects cumulative controls with the drawn city rows",
+  );
+  assert.equal(
+    buildControl.readCapturedBuildingUnlocked("city-foundry", "city"),
+    true,
+  );
+  assert.equal(
+    buildControl.readCapturedBuildingUnlocked("city-locked", "city"),
+    false,
+  );
+  assert.equal(
+    buildControl.readCapturedBuildingUnlocked("space-relay", "space"),
+    undefined,
   );
   const buildDemand = createCapturedResourceDemand({
     rootState: { readRoot: () => buildRoot },
@@ -312,6 +329,10 @@ assert.equal(researchControl.readGrantedTechs(), undefined);
   assert.equal(buildDemand.storageRequired("Alloy"), 669.5);
   unlockedRows = [{ id: "city-refinery" }];
   for (const listener of buildRootListeners) listener();
+  assert.equal(
+    buildControl.readCapturedBuildingUnlocked("city-foundry", "city"),
+    undefined,
+  );
   assert.deepEqual(
     buildControl.readManagedBuildTargets().map(({ elementId }) => elementId),
     ["city-refinery"],
