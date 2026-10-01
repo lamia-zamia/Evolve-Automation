@@ -10258,19 +10258,25 @@
       resources,
       readLastOfferedTechs: () => lastOffered,
       readBuildRequirement: () => readObservations().readKnowledgeRequirement()
-    }), readPolicy = getBuildingManager === void 0 ? createCapturedBuildPolicyReader({
+    }), createProgressionCapturedPolicy = (readCurrentOffers) => createCapturedBuildPolicyReader({
       rootState,
       controls: controls2,
-      readCurrentOffers: readBuildingUnlocks,
+      readCurrentOffers,
       getSettings: readSettings,
       readKnowledge,
       ...dependencies.costs === void 0 ? {} : { costs: dependencies.costs },
       ...onSkipped === void 0 ? {} : { onSkipped }
-    }) : createScriptBuildPolicyReader({
+    }), readPolicy = getBuildingManager === void 0 ? createProgressionCapturedPolicy(readBuildingUnlocks) : createScriptBuildPolicyReader({
       getBuildingManager,
       getSettings: readSettings,
       ...onSkipped === void 0 ? {} : { onSkipped }
-    }), readObservations = () => NO_OBSERVATIONS, savingReservations = Object.freeze({
+    }), readEstablishedBuildPolicy = getBuildingManager === void 0 ? () => {
+      let establishedOffersAvailable = !0, policy = createProgressionCapturedPolicy((regions) => {
+        let catalog = lastBuildingUnlocks;
+        return establishedOffersAvailable = catalog !== void 0 && [...regions].every((region) => catalog.regions.has(region)), establishedOffersAvailable ? catalog : void 0;
+      })();
+      return establishedOffersAvailable ? policy : void 0;
+    } : readPolicy, readObservations = () => NO_OBSERVATIONS, savingReservations = Object.freeze({
       readReservations() {
         if (!readObservations().hasCompletedOrdering()) return NO_RESERVATIONS3;
         let target = readObservations().readSavingTarget();
@@ -10339,17 +10345,27 @@
       diagnostics
     });
     readObservations = () => construction.observations;
-    let readManagedBuildTargets = () => (ensureBuildControls(), readPolicy().buildings), readUnlockedStorageBuildTargets = () => {
+    let readManagedBuildTargets = () => (ensureBuildControls(), readPolicy().buildings), readEstablishedStorageBuildTargets = () => {
+      let gameSettings = readProperty(rootState.readRoot(), "settings");
+      if (!isRecord(gameSettings) || typeof gameSettings[MAIN_TAB_SETTING] != "number" || lastBuildingUnlocks === void 0) return;
+      let policy = readEstablishedBuildPolicy();
+      if (policy === void 0) return;
+      let targets = policy.buildings;
+      if (targets.length === 0) return targets;
+      let regions = new Set(targets.map((target) => target.region)), offers = lastBuildingUnlocks;
+      if (!(offers === void 0 || [...regions].some((region) => !offers.regions.has(region))))
+        return Object.freeze(
+          targets.filter(
+            (target) => offers.regions.has(target.region) && offers.unlocked.has(target.elementId)
+          )
+        );
+    }, readUnlockedStorageBuildTargets = () => {
       let gameSettings = readProperty(rootState.readRoot(), "settings");
       if (!isRecord(gameSettings) || typeof gameSettings[MAIN_TAB_SETTING] != "number")
         return Object.freeze([]);
       ensureBuildControls();
       let targets = readPolicy().buildings;
-      if (targets.length === 0) return targets;
-      let regions = new Set(targets.map((target) => target.region)), offers = readBuildingUnlocks(regions);
-      return Object.freeze(offers === void 0 ? [] : targets.filter(
-        (target) => offers.regions.has(target.region) && offers.unlocked.has(target.elementId)
-      ));
+      return getBuildingManager !== void 0 && targets.length > 0 && readBuildingUnlocks(new Set(targets.map((target) => target.region))), readEstablishedStorageBuildTargets() ?? Object.freeze([]);
     };
     function readCanExpandMechBay() {
       let settings = readSettings();
@@ -10417,6 +10433,7 @@
       observations: construction.observations,
       readManagedBuildTargets,
       readUnlockedStorageBuildTargets,
+      readEstablishedStorageBuildTargets,
       readCanExpandMechBay,
       mechDemand,
       ensureBuildControls,
@@ -23551,7 +23568,13 @@
           () => dependencies.reader.readCycle()
         );
         if (cycle === void 0)
-          return POWER_AUTOMATION_SUCCEEDED;
+          return {
+            status: "stale",
+            failure: {
+              code: "captured-power-cycle-unavailable",
+              message: "Authoritative Power cycle input is unavailable; retry on a later tick."
+            }
+          };
         let plan = measure(
           "autoPower.planCycle",
           () => planPowerCycle(cycle, state)
@@ -51727,7 +51750,7 @@ Only continue if you trust the source. Injected code:
       readOfferedTechs: progression.readOfferedTechs,
       readBuildTargets: () => {
         let settings = settingsStore.readRaw();
-        return isEnabled(settings, "autoBuild") || isEnabled(settings, "autoStorage") ? progression.readUnlockedStorageBuildTargets() : Object.freeze([]);
+        return isEnabled(settings, "autoBuild") || isEnabled(settings, "autoStorage") ? progression.readEstablishedStorageBuildTargets() ?? Object.freeze([]) : Object.freeze([]);
       },
       readProjects: progression.readProjects,
       reservations: queueReservations,
@@ -52503,7 +52526,8 @@ Only continue if you trust the source. Injected code:
       executor: capturedPowerExecution.executor,
       warnings: powerWarnings,
       diagnostics
-    }), outerFleet = createCapturedOuterFleetControl({
+    }), observePowerDemandPhase = (stage, outcome) => {
+    }, outerFleet = createCapturedOuterFleetControl({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
       getDocument: () => document,
@@ -52541,6 +52565,8 @@ Only continue if you trust the source. Injected code:
             ensureCivicControls,
             ensureBuildControls: progression.ensureBuildControls
           });
+        }), (isEnabled(settings, "autoBuild") || isEnabled(settings, "autoStorage")) && runPhase("construction demand discovery", () => {
+          progression.readUnlockedStorageBuildTargets(), refreshDiscoveredSettings();
         }), isEnabled(settings, "autoTrigger") && runPhase("autoTrigger discovery", () => {
           progression.ensureBuildControls(), refreshDiscoveredSettings();
         }), isEnabled(settings, "autoFleet") && runPhase("autoFleet discovery", () => {
@@ -52595,7 +52621,9 @@ Only continue if you trust the source. Injected code:
             reader: triggerActions.reader,
             executor: triggerActions.executor
           })
-        ), !0)) !== !0 && (triggerActive = !0), triggerActive && (isEnabled(settings, "autoBuild") || isEnabled(settings, "autoARPA")) && (constructionSuppressedThisCycle = !0), !triggerActive && isEnabled(settings, "autoResearch") && runPhase("autoResearch", () => progression.runResearchCycle()), !triggerActive && (isEnabled(settings, "autoBuild") || isEnabled(settings, "autoARPA"))) {
+        ), !0)) !== !0 && (triggerActive = !0), triggerActive && (isEnabled(settings, "autoBuild") || isEnabled(settings, "autoARPA")) && (constructionSuppressedThisCycle = !0), !triggerActive && isEnabled(settings, "autoResearch") && (runPhase("autoResearch", () => progression.runResearchCycle()), progression.resetBuildingUnlockSample(), (isEnabled(settings, "autoBuild") || isEnabled(settings, "autoStorage")) && runPhase("post-research construction demand discovery", () => {
+          progression.readUnlockedStorageBuildTargets(), refreshDiscoveredSettings();
+        })), !triggerActive && (isEnabled(settings, "autoBuild") || isEnabled(settings, "autoARPA"))) {
           let outcome = runPhase("autoBuild", () => {
             constructionRunning = !0;
             try {
@@ -52620,9 +52648,9 @@ Only continue if you trust the source. Injected code:
               );
             }
         }
-        demandThisCycle = void 0, savingTargetThisCycle = void 0, isEnabled(settings, "autoFactory") && runPhase("autoFactory", () => {
+        observePowerDemandPhase("construction-complete"), demandThisCycle = void 0, savingTargetThisCycle = void 0, observePowerDemandPhase("construction-invalidated"), isEnabled(settings, "autoFactory") && runPhase("autoFactory", () => {
           ensureFactoryControls(), refreshDiscoveredSettings(), factory.run();
-        }), demandThisCycle = void 0, savingTargetThisCycle = void 0;
+        }), demandThisCycle = void 0, savingTargetThisCycle = void 0, observePowerDemandPhase("factory-invalidated");
         let autoJobs = isEnabled(settings, "autoJobs"), autoCraftsmen = isEnabled(settings, "autoCraftsmen"), combinedJobs = !1;
         if (autoJobs && autoCraftsmen && (runPhase("autoJobs with autoCraftsmen", () => {
           ensureCivicControls(), refreshDiscoveredSettings(), combinedJobs = fullJobs.isAvailable(), combinedJobs && runJobsAutomation(fullJobs, !1);
@@ -52687,9 +52715,23 @@ Only continue if you trust the source. Injected code:
             executor: fleet.executor
           }));
         }), isEnabled(settings, "autoPower") && runPhase("autoPower", () => {
-          demandThisCycle === void 0 && !isEnabled(settings, "autoBuild") && !isEnabled(settings, "autoARPA") && !isEnabled(settings, "autoStorage") && (demandThisCycle = demand.sample());
+          demandThisCycle = void 0;
+          let prerequisites = demandPrerequisitesThisCycle === void 0 ? void 0 : ensureDemandPrerequisiteControls({
+            root: pageCapture2.rootState.readRoot(),
+            settings,
+            controls: pageCapture2.controls,
+            ensureCivicControls: () => {
+            },
+            ensureBuildControls: () => {
+            }
+          });
+          demandPrerequisitesThisCycle = prerequisites;
+          let buildDemandRequired = isEnabled(settings, "autoBuild") || isEnabled(settings, "autoStorage");
+          isRecord(
+            readProperty(pageCapture2.rootState.readRoot(), "resource")
+          ) && prerequisites !== void 0 && prerequisites.spy !== "unavailable" && prerequisites.ai !== "unavailable" && (!buildDemandRequired || progression.readEstablishedStorageBuildTargets() !== void 0) && (demandThisCycle = demand.sample()), observePowerDemandPhase("power-ready");
           let outcome = powerAutomation.run();
-          outcome.status !== "succeeded" && logError(
+          observePowerDemandPhase("power-complete", outcome), outcome.status !== "succeeded" && logError(
             `autoPower: ${outcome.failure.code}: ${outcome.failure.message}`
           );
         }), (isEnabled(settings, "autoGenetics") || isEnabled(settings, "autoMinorTrait") || isEnabled(settings, "autoMutateTraits")) && runPhase("autoGenetics", () => {

@@ -39,7 +39,14 @@ export function createPowerAutomation(
         dependencies.reader.readCycle(),
       );
       if (cycle === undefined) {
-        return POWER_AUTOMATION_SUCCEEDED;
+        return {
+          status: "stale",
+          failure: {
+            code: "captured-power-cycle-unavailable",
+            message:
+              "Authoritative Power cycle input is unavailable; retry on a later tick.",
+          },
+        };
       }
       const plan = measure("autoPower.planCycle", () =>
         planPowerCycle(cycle, state),

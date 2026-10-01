@@ -163,7 +163,9 @@ function powerApplicationHarness() {
   const harness = powerApplicationHarness();
   const before = harness.automation.readState();
   harness.setCycle(undefined);
-  harness.automation.run();
+  const outcome = harness.automation.run();
+  assert.equal(outcome.status, "stale");
+  assert.equal(outcome.failure.code, "captured-power-cycle-unavailable");
   assert.equal(harness.executed.length, 0);
   assert.equal(harness.automation.readState(), before);
 }

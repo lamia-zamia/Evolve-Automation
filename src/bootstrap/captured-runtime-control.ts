@@ -1,4 +1,5 @@
 import { createMechSupplyReservation } from "../application/mech-supply-reservation.ts";
+import type { CommandExecutionOutcome } from "../domain/commands.ts";
 import { createCapturedProgressionControl } from "./captured-progression-control.ts";
 import { advancePeriodGate } from "../domain/tick.ts";
 import { createStateLogRecorder } from "../application/state-log.ts";
@@ -981,7 +982,7 @@ export function startCapturedRuntime({
     readSettings: () => settingsStore.readRaw(),
     readDemand: () => readDemand(),
   });
-  // The demand sample is planned at most once per cycle and shared by everything that reads it.
+  // Demand is shared within a mutation phase; construction and Factory invalidate it below.
   // The research offer snapshot is already captured by progression; sharing it here keeps queue
   // reservations and demand on one catalog without buying another discovery pass.
   const queueReservations = createCapturedQueueReservationSource({
@@ -1207,7 +1208,8 @@ export function startCapturedRuntime({
       const settings = settingsStore.readRaw();
       return isEnabled(settings, "autoBuild") ||
         isEnabled(settings, "autoStorage")
-        ? progression.readUnlockedStorageBuildTargets()
+        ? (progression.readEstablishedStorageBuildTargets() ??
+            Object.freeze([]))
         : Object.freeze([]);
     },
     readProjects: progression.readProjects,
@@ -2399,6 +2401,22 @@ export function startCapturedRuntime({
     warnings: powerWarnings,
     diagnostics,
   });
+  const observePowerDemandPhase = (
+    stage: string,
+    outcome?: CommandExecutionOutcome,
+  ) => {
+    if (
+      typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
+      __EA_TEST_SURFACE_ENABLED__ === true
+    ) {
+      const observer = readProperty(
+        readProperty(settingsHostWindow, "__EA_TEST_HOOKS__"),
+        "observePowerDemandPhase",
+      );
+      if (typeof observer === "function")
+        observer(stage, demandThisCycle, outcome);
+    }
+  };
   // The live characterization bundle opts into this inert hook by defining both the build
   // constant and the hook bag before main.ts starts. Production builds fold this block away.
   // Keep it after the captured demand, build-cost, and fleet capabilities so the test cycle uses
@@ -2510,6 +2528,17 @@ export function startCapturedRuntime({
           ensureBuildControls: progression.ensureBuildControls,
         });
       });
+      // Build/Storage own the Building offers used by shared demand. Establish them before
+      // any consumer samples; later refreshes only read this catalog and current live costs.
+      if (
+        isEnabled(settings, "autoBuild") ||
+        isEnabled(settings, "autoStorage")
+      ) {
+        runPhase("construction demand discovery", () => {
+          progression.readUnlockedStorageBuildTargets();
+          refreshDiscoveredSettings();
+        });
+      }
       if (isEnabled(settings, "autoTrigger")) {
         runPhase("autoTrigger discovery", () => {
           // Trigger targets are only the actions whose controls were captured, so the sample the
@@ -2667,6 +2696,18 @@ export function startCapturedRuntime({
       }
       if (!triggerActive && isEnabled(settings, "autoResearch")) {
         runPhase("autoResearch", () => progression.runResearchCycle());
+        // The earlier demand discovery cannot answer offers unlocked by this research.
+        // Construction owns the next discovery and must sample the new tech state.
+        progression.resetBuildingUnlockSample();
+        if (
+          isEnabled(settings, "autoBuild") ||
+          isEnabled(settings, "autoStorage")
+        ) {
+          runPhase("post-research construction demand discovery", () => {
+            progression.readUnlockedStorageBuildTargets();
+            refreshDiscoveredSettings();
+          });
+        }
       }
       if (
         !triggerActive &&
@@ -2714,10 +2755,12 @@ export function startCapturedRuntime({
           }
         }
       }
-      // Construction can change storage commitments. Refresh the shared demand snapshot before
-      // Factory, then again after Factory so Jobs sees the post-Factory authoritative root.
+      // Construction and Factory change holdings, commitments, and saving intent. Each
+      // invalidation ends the old sample's lifetime, including when an enabled phase is a no-op.
+      observePowerDemandPhase("construction-complete");
       demandThisCycle = undefined;
       savingTargetThisCycle = undefined;
+      observePowerDemandPhase("construction-invalidated");
       if (isEnabled(settings, "autoFactory")) {
         runPhase("autoFactory", () => {
           ensureFactoryControls();
@@ -2727,6 +2770,7 @@ export function startCapturedRuntime({
       }
       demandThisCycle = undefined;
       savingTargetThisCycle = undefined;
+      observePowerDemandPhase("factory-invalidated");
       const autoJobs = isEnabled(settings, "autoJobs");
       const autoCraftsmen = isEnabled(settings, "autoCraftsmen");
       let combinedJobs = false;
@@ -2896,17 +2940,41 @@ export function startCapturedRuntime({
       }
       if (isEnabled(settings, "autoPower")) {
         runPhase("autoPower", () => {
-          // Power consumes a completed demand snapshot. Construction/storage phases own any
-          // discovery their demand requires; a Power-only tick samples the real owner without
-          // requesting future construction targets.
+          // Refresh from the demand owner at the handoff, even if another consumer sampled
+          // after Factory: subsequent production work may also have changed the live root.
+          // Never discover Building panels here. Their owning phase established the catalog.
+          demandThisCycle = undefined;
+          // Earlier research/construction may have opened a reservation gate. Revalidate
+          // its current prerequisites without drawing; an uncaptured new gate stays stale.
+          const prerequisites =
+            demandPrerequisitesThisCycle === undefined
+              ? undefined
+              : ensureDemandPrerequisiteControls({
+                  root: pageCapture.rootState.readRoot(),
+                  settings,
+                  controls: pageCapture.controls,
+                  ensureCivicControls: () => undefined,
+                  ensureBuildControls: () => undefined,
+                });
+          demandPrerequisitesThisCycle = prerequisites;
+          const buildDemandRequired =
+            isEnabled(settings, "autoBuild") ||
+            isEnabled(settings, "autoStorage");
           if (
-            demandThisCycle === undefined &&
-            !isEnabled(settings, "autoBuild") &&
-            !isEnabled(settings, "autoARPA") &&
-            !isEnabled(settings, "autoStorage")
-          )
+            isRecord(
+              readProperty(pageCapture.rootState.readRoot(), "resource"),
+            ) &&
+            prerequisites !== undefined &&
+            prerequisites.spy !== "unavailable" &&
+            prerequisites.ai !== "unavailable" &&
+            (!buildDemandRequired ||
+              progression.readEstablishedStorageBuildTargets() !== undefined)
+          ) {
             demandThisCycle = demand.sample();
+          }
+          observePowerDemandPhase("power-ready");
           const outcome = powerAutomation.run();
+          observePowerDemandPhase("power-complete", outcome);
           if (outcome.status !== "succeeded")
             logError(
               `autoPower: ${outcome.failure.code}: ${outcome.failure.message}`,
@@ -3034,6 +3102,15 @@ export function startCapturedRuntime({
       }
     }
   };
+
+  if (
+    typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
+    __EA_TEST_SURFACE_ENABLED__ === true
+  ) {
+    const hooks = readProperty(settingsHostWindow, "__EA_TEST_HOOKS__");
+    if (isRecord(hooks))
+      Reflect.set(hooks, "runCapturedRuntimeCycle", runCycle);
+  }
 
   // The game wakes the script on every completed period; `tickRate` decides how many of those one
   // working cycle covers. Without this gate every automation decision, and every panel draw a cycle

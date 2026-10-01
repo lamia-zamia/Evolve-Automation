@@ -1839,7 +1839,7 @@ function runCapturedJobsMatrixScenario({
   );
 }
 
-// Nanite disposal runs before power producers, so the power planner sees the post-disposal rate.
+// Nanite disposal runs before Power; unavailable mechanics is an explicit Power failure.
 {
   const root = {
     race: { deconstructor: true },
@@ -1957,7 +1957,7 @@ function runCapturedJobsMatrixScenario({
         }),
     },
     logError: (message) => {
-      throw new Error(message);
+      assert.match(message, /autoPower: captured-power-cycle-unavailable:/);
     },
   });
   cycle({ periods: 4 });
@@ -2203,7 +2203,7 @@ function runCapturedJobsMatrixScenario({
   // Tuned to the tick's own read schedule: the first reads of the tick throw so the earlier
   // phases report failures, and the next three succeed so the espionage and battle phases run.
   // Re-tune by sweeping this number if the tick changes how often it reads the root.
-  let remainingRootFailures = 13;
+  let remainingRootFailures = 15;
   let validCombatRootReads = 0;
   const root = {
     tech: { spy: 2 },
@@ -2378,7 +2378,9 @@ function runCapturedJobsMatrixScenario({
       // The demand-prerequisites phase reads the root first, so it is the first to report
       // while the stub is still throwing.
       "demand prerequisites",
+      "construction demand discovery",
       "autoResearch",
+      "post-research construction demand discovery",
       "autoBuild",
       "autoFight.mercenary",
       "autoFight.battle",

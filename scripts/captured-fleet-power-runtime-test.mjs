@@ -155,7 +155,8 @@ const stop = startCapturedRuntime({
 });
 try {
   worker.dispatch({ loop: "main", periods: 1 });
-  assert.deepEqual(errors, []);
+  assert.equal(errors.length, 1);
+  assert.match(errors[0], /^autoPower: captured-power-cycle-unavailable:/);
   assert.deepEqual(fleetCalls, [
     ["add", "gxy_stargate", "scout_ship"],
     ["add", "gxy_chthonian", "scout_ship"],

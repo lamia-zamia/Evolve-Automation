@@ -755,6 +755,152 @@ try {
     await cycleSession.close();
   }
 
+  // Exercise the production cycle's demand owner, rather than manually pre-sampling Power.
+  for (const scenario of [
+    { name: "power-only", autoBuild: false, autoStorage: false },
+    { name: "build-and-power", autoBuild: true, autoStorage: false },
+    { name: "storage-and-power", autoBuild: false, autoStorage: true },
+    {
+      name: "unavailable-demand-prerequisite",
+      autoBuild: false,
+      autoStorage: false,
+      unavailable: true,
+    },
+  ]) {
+    const runtimeSession = await runner.openSession({
+      bundle: testBundle,
+      save: structuredClone(cycleSave),
+      settings: {
+        ...prioritySettings,
+        masterScriptToggle: true,
+        autoPower: true,
+        autoBuild: scenario.autoBuild,
+        autoStorage: scenario.autoStorage,
+        tickRate: 1000,
+      },
+      seed: 42,
+    });
+    try {
+      await runtimeSession.advance(1);
+      const runtimePower = await runtimeSession.evaluate(({ unavailable }) => {
+        const hooks = globalThis.__EA_TEST_HOOKS__;
+        const capture =
+          globalThis[Symbol.for("evolve-automation.page-capture")];
+        const root = capture.rootState.readRoot();
+        const structure = capture.mechanics.readStructures().find((entry) => {
+          const powered = entry.readPowered();
+          const state = root[entry.region]?.[entry.struct];
+          const offered = entry.readAvailability(root);
+          return (
+            powered.kind === "value" &&
+            powered.value > 0 &&
+            state?.count > 0 &&
+            Object.hasOwn(state, "on") &&
+            offered.kind === "value" &&
+            offered.value === true
+          );
+        });
+        if (!structure) return { error: "no offered Power consumer" };
+        const state = root[structure.region][structure.struct];
+        state.on = 0;
+        root.city.power = 1000000;
+        const phases = [];
+        let constructionDemand;
+        let readyDemand;
+        let settingsBeforePower;
+        let controlsBeforePower;
+        let powerOutcome;
+        let settingsUnchangedByPower;
+        let controlsUnchangedByPower;
+        hooks.observePowerDemandPhase = (stage, demand, outcome) => {
+          phases.push({ stage, demandAvailable: demand !== undefined });
+          if (stage === "construction-complete") constructionDemand = demand;
+          if (stage === "power-ready") {
+            readyDemand = demand;
+            settingsBeforePower = JSON.stringify(root.settings);
+            controlsBeforePower = JSON.stringify(
+              capture.controls.capturedElementIds(),
+            );
+          }
+          if (stage === "power-complete") {
+            powerOutcome = outcome;
+            settingsUnchangedByPower =
+              JSON.stringify(root.settings) === settingsBeforePower;
+            controlsUnchangedByPower =
+              JSON.stringify(capture.controls.capturedElementIds()) ===
+              controlsBeforePower;
+          }
+        };
+        const resources = root.resource;
+        if (unavailable) delete root.resource;
+        try {
+          hooks.runCapturedRuntimeCycle();
+          return {
+            binding: structure.actionId,
+            phases,
+            constructionDemandAvailable: constructionDemand !== undefined,
+            demandRefreshed:
+              readyDemand !== undefined && readyDemand !== constructionDemand,
+            outcome: powerOutcome,
+            afterOn: state.on,
+            normalPanelCaptured:
+              capture.controls.resolve(structure.actionId) !== undefined,
+            settingsUnchangedByPower,
+            controlsUnchangedByPower,
+          };
+        } finally {
+          root.resource = resources;
+          delete hooks.observePowerDemandPhase;
+        }
+      }, scenario);
+      assert.equal(runtimePower.error, undefined, JSON.stringify(runtimePower));
+      assert.deepEqual(
+        runtimePower.phases.filter(({ stage }) =>
+          stage.endsWith("invalidated"),
+        ),
+        [
+          { stage: "construction-invalidated", demandAvailable: false },
+          { stage: "factory-invalidated", demandAvailable: false },
+        ],
+      );
+      assert.equal(runtimePower.settingsUnchangedByPower, true);
+      assert.equal(runtimePower.controlsUnchangedByPower, true);
+      if (scenario.unavailable) {
+        assert.equal(runtimePower.outcome.status, "stale");
+        assert.equal(
+          runtimePower.outcome.failure.code,
+          "captured-power-cycle-unavailable",
+        );
+        assert.equal(runtimePower.afterOn, 0);
+        const diagnostics = await runtimeSession.diagnostics();
+        assert.ok(
+          diagnostics.events.some(({ text }) =>
+            text.includes("autoPower: captured-power-cycle-unavailable:"),
+          ),
+          "the production autoPower failure path logs unavailable demand",
+        );
+      } else {
+        if (scenario.autoBuild || scenario.autoStorage)
+          assert.equal(runtimePower.constructionDemandAvailable, true);
+        assert.equal(runtimePower.demandRefreshed, true);
+        assert.equal(runtimePower.outcome.status, "succeeded");
+        assert.ok(runtimePower.afterOn > 0, JSON.stringify(runtimePower));
+        if (!scenario.autoBuild && !scenario.autoStorage) {
+          assert.equal(
+            runtimePower.normalPanelCaptured,
+            false,
+            "Power-only production cycles act with the normal Building panel undrawn",
+          );
+        }
+      }
+      process.stdout.write(
+        `${JSON.stringify({ productionPowerRuntimeCycle: { scenario: scenario.name, ...runtimePower } })}\n`,
+      );
+    } finally {
+      await runtimeSession.close();
+    }
+  }
+
   const earlySave = parseSave(
     await readFile(
       resolve("test-artifacts/benchmark/saves/ds-early-bootstrap.json"),

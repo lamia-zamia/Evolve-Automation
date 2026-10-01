@@ -48,6 +48,7 @@ assert.deepEqual(control.runResearchCycle(), {
   },
 });
 assert.deepEqual(control.readUnlockedStorageBuildTargets(), []);
+assert.equal(control.readEstablishedStorageBuildTargets(), undefined);
 
 let root = {
   settings: { civTabs: 3 },
@@ -281,6 +282,7 @@ assert.equal(researchControl.readGrantedTechs(), undefined);
     nowMs: () => 0,
   });
   const priced = [];
+  assert.equal(buildControl.readEstablishedStorageBuildTargets(), undefined);
   assert.equal(
     buildControl.readCapturedBuildingUnlocked("city-foundry", "city"),
     undefined,
@@ -327,6 +329,22 @@ assert.equal(researchControl.readGrantedTechs(), undefined);
   }).sample();
   assert.deepEqual(priced, ["city-foundry", "city-refinery"]);
   assert.equal(buildDemand.storageRequired("Alloy"), 669.5);
+  assert.deepEqual(
+    buildControl
+      .readEstablishedStorageBuildTargets()
+      .map(({ elementId }) => elementId),
+    ["city-foundry", "city-refinery"],
+    "established offers remain readable without discovery",
+  );
+  buildIds.push("space-relay");
+  assert.equal(
+    buildControl.readEstablishedStorageBuildTargets(),
+    undefined,
+    "a newly captured region absent from the established catalog stays unavailable",
+  );
+  buildIds.pop();
+  buildControl.resetBuildingUnlockSample();
+  assert.equal(buildControl.readEstablishedStorageBuildTargets(), undefined);
   unlockedRows = [{ id: "city-refinery" }];
   for (const listener of buildRootListeners) listener();
   assert.equal(

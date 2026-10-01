@@ -33,7 +33,10 @@ import { createScriptCostReservationSource } from "../adapters/evolve/script-cos
 import { createScriptBuildPolicyReader } from "../adapters/evolve/progression/build/script-build-policy.ts";
 import { createCapturedTechCatalog } from "../adapters/evolve/progression/research/captured-tech-catalog.ts";
 import { createCapturedProjectCatalog } from "../adapters/evolve/progression/research/captured-project-catalog.ts";
-import { createCapturedBuildPolicyReader } from "../adapters/evolve/progression/build/captured-build-policy.ts";
+import {
+  createCapturedBuildPolicyReader,
+  type CapturedBuildPolicyDependencies,
+} from "../adapters/evolve/progression/build/captured-build-policy.ts";
 import { createCapturedKnowledgeReader } from "../adapters/evolve/progression/build/captured-knowledge-gate.ts";
 import { createCapturedConstructionControl } from "./captured-construction-control.ts";
 import { createCapturedResearchControl } from "./captured-research-control.ts";
@@ -178,6 +181,9 @@ export interface CapturedProgressionControl {
   readonly readManagedBuildTargets: () => readonly Readonly<GameBuildTarget>[];
   /** Currently offered and managed construction targets used by Storage capacity planning. */
   readonly readUnlockedStorageBuildTargets: () => readonly Readonly<GameBuildTarget>[];
+  /** Reads the owning phase's established offer catalog without discovering Building panels. */
+  readonly readEstablishedStorageBuildTargets: () =>
+    readonly Readonly<GameBuildTarget>[] | undefined;
   /** Whether the compatibility Mech loop would wait for a bay or purifier expansion. */
   readonly readCanExpandMechBay: () => boolean | undefined;
   /** Shared target used by global resource demand and construction reservations. */
@@ -605,24 +611,42 @@ export function createCapturedProgressionControl(
     readLastOfferedTechs: () => lastOffered,
     readBuildRequirement: () => readObservations().readKnowledgeRequirement(),
   });
+  const createProgressionCapturedPolicy = (
+    readCurrentOffers: CapturedBuildPolicyDependencies["readCurrentOffers"],
+  ) =>
+    createCapturedBuildPolicyReader({
+      rootState,
+      controls,
+      readCurrentOffers,
+      getSettings: readSettings,
+      readKnowledge,
+      ...(dependencies.costs === undefined
+        ? {}
+        : { costs: dependencies.costs }),
+      ...(onSkipped === undefined ? {} : { onSkipped }),
+    });
   const readPolicy =
     getBuildingManager === undefined
-      ? createCapturedBuildPolicyReader({
-          rootState,
-          controls,
-          readCurrentOffers: readBuildingUnlocks,
-          getSettings: readSettings,
-          readKnowledge,
-          ...(dependencies.costs === undefined
-            ? {}
-            : { costs: dependencies.costs }),
-          ...(onSkipped === undefined ? {} : { onSkipped }),
-        })
+      ? createProgressionCapturedPolicy(readBuildingUnlocks)
       : createScriptBuildPolicyReader({
           getBuildingManager,
           getSettings: readSettings,
           ...(onSkipped === undefined ? {} : { onSkipped }),
         });
+  const readEstablishedBuildPolicy =
+    getBuildingManager === undefined
+      ? () => {
+          let establishedOffersAvailable = true;
+          const policy = createProgressionCapturedPolicy((regions) => {
+            const catalog = lastBuildingUnlocks;
+            establishedOffersAvailable =
+              catalog !== undefined &&
+              [...regions].every((region) => catalog.regions.has(region));
+            return establishedOffersAvailable ? catalog : undefined;
+          })();
+          return establishedOffersAvailable ? policy : undefined;
+        }
+      : readPolicy;
   // The cycle's own saving target is a commitment like any other: without it in force, the cheaper
   // candidates that arrive first spend exactly the resources it is accumulating. It is the previous
   // cycle's judgement, so the target itself is never blocked by it once it becomes affordable —
@@ -738,7 +762,7 @@ export function createCapturedProgressionControl(
     ensureBuildControls();
     return readPolicy().buildings;
   };
-  const readUnlockedStorageBuildTargets = () => {
+  const readEstablishedStorageBuildTargets = () => {
     const gameSettings = readProperty(rootState.readRoot(), "settings");
     // Lazy game starts have no selected main tab yet, so no region's drawn unlock state can be
     // trusted. The storage candidate sample is empty until `settings.civTabs` exists.
@@ -746,14 +770,20 @@ export function createCapturedProgressionControl(
       !isRecord(gameSettings) ||
       typeof gameSettings[MAIN_TAB_SETTING] !== "number"
     ) {
-      return Object.freeze([]);
+      return undefined;
     }
-    ensureBuildControls();
-    const targets = readPolicy().buildings;
+    if (lastBuildingUnlocks === undefined) return undefined;
+    const policy = readEstablishedBuildPolicy();
+    if (policy === undefined) return undefined;
+    const targets = policy.buildings;
     if (targets.length === 0) return targets;
     const regions = new Set(targets.map((target) => target.region));
-    const offers = readBuildingUnlocks(regions);
-    if (offers === undefined) return Object.freeze([]);
+    const offers = lastBuildingUnlocks;
+    if (
+      offers === undefined ||
+      [...regions].some((region) => !offers.regions.has(region))
+    )
+      return undefined;
     return Object.freeze(
       targets.filter(
         (target) =>
@@ -761,6 +791,21 @@ export function createCapturedProgressionControl(
           offers.unlocked.has(target.elementId),
       ),
     );
+  };
+  const readUnlockedStorageBuildTargets = () => {
+    const gameSettings = readProperty(rootState.readRoot(), "settings");
+    if (
+      !isRecord(gameSettings) ||
+      typeof gameSettings[MAIN_TAB_SETTING] !== "number"
+    )
+      return Object.freeze([]);
+    ensureBuildControls();
+    const targets = readPolicy().buildings;
+    // The captured policy already established the full requested-region catalog. Narrowing it
+    // to managed targets would erase empty/disabled regions needed by later exactness checks.
+    if (getBuildingManager !== undefined && targets.length > 0)
+      readBuildingUnlocks(new Set(targets.map((target) => target.region)));
+    return readEstablishedStorageBuildTargets() ?? Object.freeze([]);
   };
 
   /**
@@ -846,6 +891,7 @@ export function createCapturedProgressionControl(
     observations: construction.observations,
     readManagedBuildTargets,
     readUnlockedStorageBuildTargets,
+    readEstablishedStorageBuildTargets,
     readCanExpandMechBay,
     mechDemand,
     ensureBuildControls,
