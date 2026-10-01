@@ -26,6 +26,18 @@ export interface OuterFleetReader {
   readBuildReadiness(
     plan: Readonly<OuterFleetReadinessPlan>,
   ): OuterFleetBuildReadinessInput;
+  /**
+   * Whether the last executed decision changed the ship the yard will build next — the live
+   * blueprint, or the number of built ships in its cost tier, either of which moves
+   * `shipCosts()` and therefore `CapturedFleetDemand`'s frozen `nextShipCost`.
+   *
+   * Owned here rather than derived from `CommandExecutionOutcome.status`, because the executor
+   * calls `setPart()` before its power and postcondition checks: upstream `shipPlans.setVal()`
+   * writes `global.space.shipyard.blueprint` and redraws the cost row immediately, so a pass can be
+   * rejected or stale and still leave the next cost moved. A consumer only has to compare this
+   * against what it sampled, which is exactly the fact a shared demand sample cannot hold.
+   */
+  readShipTargetChanged(): boolean;
 }
 
 export type OuterFleetExecutor = DecisionExecutor<OuterFleetDecision>;

@@ -24,19 +24,22 @@ export interface OuterFleetAutomationResult {
    * ship's own count. Both move `CapturedFleetDemand`'s `nextShipCost`, which a shared resource
    * demand sample freezes, so the composition ends that sample's lifetime when this is true. A
    * status report that only narrates the current blueprint moves nothing.
+   *
+   * Read back from the adapter rather than derived from the outcome, because a pass can move the
+   * yard and still fail: `setPart` writes the live blueprint before the power and postcondition
+   * checks run.
    */
   readonly shipTargetChanged: boolean;
 }
 
 function execute(
-  executor: OuterFleetExecutor,
+  dependencies: OuterFleetAutomationDependencies,
   decision: Readonly<OuterFleetDecision>,
 ): OuterFleetAutomationResult {
-  const outcome = executor.execute(decision);
+  const outcome = dependencies.executor.execute(decision);
   return Object.freeze({
     outcome,
-    shipTargetChanged:
-      outcome.status === "succeeded" && decision.kind === "build-outer-fleet",
+    shipTargetChanged: dependencies.reader.readShipTargetChanged(),
   });
 }
 
@@ -45,29 +48,29 @@ export function runOuterFleetAutomation(
 ): OuterFleetAutomationResult {
   const cycle = planOuterFleetCycle(dependencies.reader.readCycle());
   if (cycle.kind === "outer-fleet-status") {
-    return execute(dependencies.executor, cycle);
+    return execute(dependencies, cycle);
   }
   const target = planOuterFleetTarget(
     cycle,
     dependencies.reader.readTargeting(cycle),
   );
   if (target.kind === "outer-fleet-status") {
-    return execute(dependencies.executor, target);
+    return execute(dependencies, target);
   }
   const candidate = planOuterFleetBlueprint(
     dependencies.reader.readBlueprint(target),
   );
   if (candidate.kind === "outer-fleet-status") {
-    return execute(dependencies.executor, candidate);
+    return execute(dependencies, candidate);
   }
   const readiness = planOuterFleetCandidate(
     dependencies.reader.readCandidate(candidate),
   );
   if (readiness.kind === "outer-fleet-status") {
-    return execute(dependencies.executor, readiness);
+    return execute(dependencies, readiness);
   }
   return execute(
-    dependencies.executor,
+    dependencies,
     planOuterFleetBuild(dependencies.reader.readBuildReadiness(readiness)),
   );
 }

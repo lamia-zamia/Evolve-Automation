@@ -15,6 +15,7 @@ import {
   type OuterFleetBlueprint,
   type OuterFleetBlueprintInput,
   type OuterFleetBuildReadinessInput,
+  type OuterFleetBuildDecision,
   type OuterFleetCandidateInput,
   type OuterFleetCandidatePlan,
   type OuterFleetCycleInput,
@@ -26,6 +27,7 @@ import {
 } from "../../../domain/combat/fleet-outer.ts";
 import type { GameActivitySink } from "../../../ports/game-message-log.ts";
 import type { GameFleetControlsPort } from "../../../ports/game-fleet-controls.ts";
+import type { CommandExecutionOutcome } from "../../../domain/commands.ts";
 import type {
   GameModalPort,
   GameModalRequest,
@@ -799,6 +801,24 @@ export function createCapturedOuterFleetAdapter(
   } | null = null;
   let session: CapturedOuterFleetSession | null = null;
   let expectedDecision: Readonly<OuterFleetDecision> | null = null;
+  let shipTargetChanged = false;
+
+  /**
+   * The cost row the shipyard is offering right now: what `shipCosts(liveBlueprint)` returns for
+   * the live ship list, which is exactly what the game's `updateCosts()` renders into
+   * `#shipYardCosts` and what `CapturedFleetDemand` freezes as `nextShipCost`.
+   *
+   * Both inputs are read live on purpose. Upstream `shipPlans.setVal()` writes the blueprint and
+   * redraws immediately, and `shipCosts` scales by how many built ships share the blueprint's cost
+   * tier, so either can move the next cost without the pass being reported as a success.
+   */
+  function shipTargetFingerprint(root: UnknownRecord): string | undefined {
+    const blueprint = readProperty(capturedOuterFleetYard(root), "blueprint");
+    if (!isRecord(blueprint)) return undefined;
+    return JSON.stringify(
+      capturedOuterFleetShipCosts(blueprint, capturedOuterFleetShips(root)),
+    );
+  }
 
   function activeSession(): CapturedOuterFleetSession {
     if (session === null)
@@ -848,6 +868,9 @@ export function createCapturedOuterFleetAdapter(
     readCycle(): OuterFleetCycleInput {
       session = null;
       expectedDecision = null;
+      // One observation per cycle. Latching it would make every later cycle report a change and
+      // clear a freshly sampled demand cache forever.
+      shipTargetChanged = false;
       const blueprints = new Map<OuterFleetBlueprint, UnknownRecord>();
       const root = capturedOuterFleetRoot(dependencies.rootState);
       const settings = capturedOuterFleetSettings(dependencies.readSettings());
@@ -1178,6 +1201,10 @@ export function createCapturedOuterFleetAdapter(
       expectedDecision = planned;
       return input;
     },
+
+    readShipTargetChanged(): boolean {
+      return shipTargetChanged;
+    },
   });
 
   const executor: OuterFleetExecutor = Object.freeze({
@@ -1207,68 +1234,93 @@ export function createCapturedOuterFleetAdapter(
         );
       expectedDecision = null;
       if (decision.kind === "outer-fleet-status") return SUCCEEDED;
-      const blueprint = active.blueprints.get(decision.blueprint);
-      if (blueprint === undefined)
-        return stale(
-          "captured-outer-fleet-blueprint-changed",
-          "captured outer fleet blueprint changed",
-        );
-      const expectedBlueprint = capturedOuterFleetExpectedBlueprint(blueprint);
-      if (expectedBlueprint === undefined)
-        return stale(
-          "captured-outer-fleet-blueprint-invalid",
-          "captured outer fleet blueprint is incomplete",
-        );
-      for (const [type, part] of Object.entries(blueprint)) {
-        if (type === "name" || typeof part !== "string") continue;
-        const index = CAPTURED_OUTER_FLEET_PARTS[type]?.indexOf(part) ?? -1;
-        if (
-          index < 0 ||
-          !dependencies.controls.setPart({
-            elementId: CAPTURED_OUTER_FLEET_ELEMENT,
-            type,
-            part,
-            index,
-          })
-        ) {
-          return rejected(
-            "captured-outer-fleet-part-not-invoked",
-            "outer fleet part control was not invoked",
-          );
-        }
+      // Every exit from here on can have moved the shipyard's cost row, including the ones that
+      // report a rejection or a stale outcome: `setPart` writes the live blueprint before the power
+      // check, and `buildShip` can append a ship before the postcondition is judged. So the
+      // observation brackets the whole mutation window rather than a single branch of it.
+      const targetBefore = shipTargetFingerprint(active.root);
+      const outcome = applyOuterFleetBuild(active, decision);
+      const targetAfter = shipTargetFingerprint(active.root);
+      if (
+        shipTargetChanged === false &&
+        targetBefore !== targetAfter &&
+        (targetBefore !== undefined || targetAfter !== undefined)
+      ) {
+        shipTargetChanged = true;
       }
-      if (!dependencies.controls.hasShipPower(CAPTURED_OUTER_FLEET_ELEMENT))
-        return rejected(
-          "captured-outer-fleet-power-unavailable",
-          "outer fleet blueprint has insufficient power",
-        );
-      const build = dependencies.controls.buildShip({
-        elementId: CAPTURED_OUTER_FLEET_ELEMENT,
-        expectedBlueprint,
-      });
-      if (!build.actionable)
-        return rejected(
-          "captured-outer-fleet-build-not-invoked",
-          "outer fleet build control was not invoked",
-        );
-      if (build.builtIndex === null)
-        return stale(
-          "captured-outer-fleet-build-postcondition-failed",
-          "captured outer fleet build did not append the intended ship",
-        );
-      pendingDispatch = {
-        index: build.builtIndex,
-        region: decision.targetRegion,
-        attempts: 0,
-      };
-      dependencies.onActivity?.({
-        message: `${decision.shipName} has been assembled, and dispatched to ${decision.targetLocationName}.`,
-        color: "success",
-        tags: ["combat"],
-      });
-      return SUCCEEDED;
+      return outcome;
     },
   });
+
+  /**
+   * The mutating half of a `build-outer-fleet` execution, with every failure path returning its own
+   * outcome. Kept apart from `execute` so the ship-target observation above cannot miss an exit.
+   */
+  function applyOuterFleetBuild(
+    active: CapturedOuterFleetSession,
+    decision: Readonly<OuterFleetBuildDecision>,
+  ): CommandExecutionOutcome {
+    const blueprint = active.blueprints.get(decision.blueprint);
+    if (blueprint === undefined)
+      return stale(
+        "captured-outer-fleet-blueprint-changed",
+        "captured outer fleet blueprint changed",
+      );
+    const expectedBlueprint = capturedOuterFleetExpectedBlueprint(blueprint);
+    if (expectedBlueprint === undefined)
+      return stale(
+        "captured-outer-fleet-blueprint-invalid",
+        "captured outer fleet blueprint is incomplete",
+      );
+    for (const [type, part] of Object.entries(blueprint)) {
+      if (type === "name" || typeof part !== "string") continue;
+      const index = CAPTURED_OUTER_FLEET_PARTS[type]?.indexOf(part) ?? -1;
+      if (
+        index < 0 ||
+        !dependencies.controls.setPart({
+          elementId: CAPTURED_OUTER_FLEET_ELEMENT,
+          type,
+          part,
+          index,
+        })
+      ) {
+        return rejected(
+          "captured-outer-fleet-part-not-invoked",
+          "outer fleet part control was not invoked",
+        );
+      }
+    }
+    if (!dependencies.controls.hasShipPower(CAPTURED_OUTER_FLEET_ELEMENT))
+      return rejected(
+        "captured-outer-fleet-power-unavailable",
+        "outer fleet blueprint has insufficient power",
+      );
+    const build = dependencies.controls.buildShip({
+      elementId: CAPTURED_OUTER_FLEET_ELEMENT,
+      expectedBlueprint,
+    });
+    if (!build.actionable)
+      return rejected(
+        "captured-outer-fleet-build-not-invoked",
+        "outer fleet build control was not invoked",
+      );
+    if (build.builtIndex === null)
+      return stale(
+        "captured-outer-fleet-build-postcondition-failed",
+        "captured outer fleet build did not append the intended ship",
+      );
+    pendingDispatch = {
+      index: build.builtIndex,
+      region: decision.targetRegion,
+      attempts: 0,
+    };
+    dependencies.onActivity?.({
+      message: `${decision.shipName} has been assembled, and dispatched to ${decision.targetLocationName}.`,
+      color: "success",
+      tags: ["combat"],
+    });
+    return SUCCEEDED;
+  }
 
   return Object.freeze({ reader, executor });
 }

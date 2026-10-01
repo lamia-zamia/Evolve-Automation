@@ -21843,7 +21843,14 @@
     });
   }
   function createCapturedOuterFleetAdapter(dependencies) {
-    let gameModal = capturedOuterFleetModal(dependencies.getDocument), pendingDispatch = null, session = null, expectedDecision = null;
+    let gameModal = capturedOuterFleetModal(dependencies.getDocument), pendingDispatch = null, session = null, expectedDecision = null, shipTargetChanged = !1;
+    function shipTargetFingerprint(root) {
+      let blueprint = readProperty(capturedOuterFleetYard(root), "blueprint");
+      if (isRecord(blueprint))
+        return JSON.stringify(
+          capturedOuterFleetShipCosts(blueprint, capturedOuterFleetShips(root))
+        );
+    }
     function activeSession() {
       if (session === null)
         throw new Error("captured outer fleet cycle has not been sampled");
@@ -21880,7 +21887,7 @@
     }
     let reader = Object.freeze({
       readCycle() {
-        session = null, expectedDecision = null;
+        session = null, expectedDecision = null, shipTargetChanged = !1;
         let blueprints = /* @__PURE__ */ new Map(), root = capturedOuterFleetRoot(dependencies.rootState), settings = capturedOuterFleetSettings(dependencies.readSettings());
         if (root === void 0) {
           session = Object.freeze({
@@ -22095,6 +22102,9 @@
           currentCityGarrison: capturedOuterFleetCurrentGarrison(active.root)
         });
         return expectedDecision = planOuterFleetBuild(input), input;
+      },
+      readShipTargetChanged() {
+        return shipTargetChanged;
       }
     }), executor = Object.freeze({
       execute(decision) {
@@ -22115,89 +22125,93 @@
             "captured outer fleet decision does not match the sampled plan"
           );
         if (expectedDecision = null, decision.kind === "outer-fleet-status") return SUCCEEDED;
-        let blueprint = active.blueprints.get(decision.blueprint);
-        if (blueprint === void 0)
-          return stale(
-            "captured-outer-fleet-blueprint-changed",
-            "captured outer fleet blueprint changed"
-          );
-        let expectedBlueprint = capturedOuterFleetExpectedBlueprint(blueprint);
-        if (expectedBlueprint === void 0)
-          return stale(
-            "captured-outer-fleet-blueprint-invalid",
-            "captured outer fleet blueprint is incomplete"
-          );
-        for (let [type, part] of Object.entries(blueprint)) {
-          if (type === "name" || typeof part != "string") continue;
-          let index = CAPTURED_OUTER_FLEET_PARTS[type]?.indexOf(part) ?? -1;
-          if (index < 0 || !dependencies.controls.setPart({
-            elementId: CAPTURED_OUTER_FLEET_ELEMENT,
-            type,
-            part,
-            index
-          }))
-            return rejected(
-              "captured-outer-fleet-part-not-invoked",
-              "outer fleet part control was not invoked"
-            );
-        }
-        if (!dependencies.controls.hasShipPower(CAPTURED_OUTER_FLEET_ELEMENT))
-          return rejected(
-            "captured-outer-fleet-power-unavailable",
-            "outer fleet blueprint has insufficient power"
-          );
-        let build = dependencies.controls.buildShip({
-          elementId: CAPTURED_OUTER_FLEET_ELEMENT,
-          expectedBlueprint
-        });
-        return build.actionable ? build.builtIndex === null ? stale(
-          "captured-outer-fleet-build-postcondition-failed",
-          "captured outer fleet build did not append the intended ship"
-        ) : (pendingDispatch = {
-          index: build.builtIndex,
-          region: decision.targetRegion,
-          attempts: 0
-        }, dependencies.onActivity?.({
-          message: `${decision.shipName} has been assembled, and dispatched to ${decision.targetLocationName}.`,
-          color: "success",
-          tags: ["combat"]
-        }), SUCCEEDED) : rejected(
-          "captured-outer-fleet-build-not-invoked",
-          "outer fleet build control was not invoked"
-        );
+        let targetBefore = shipTargetFingerprint(active.root), outcome = applyOuterFleetBuild(active, decision), targetAfter = shipTargetFingerprint(active.root);
+        return shipTargetChanged === !1 && targetBefore !== targetAfter && (targetBefore !== void 0 || targetAfter !== void 0) && (shipTargetChanged = !0), outcome;
       }
     });
+    function applyOuterFleetBuild(active, decision) {
+      let blueprint = active.blueprints.get(decision.blueprint);
+      if (blueprint === void 0)
+        return stale(
+          "captured-outer-fleet-blueprint-changed",
+          "captured outer fleet blueprint changed"
+        );
+      let expectedBlueprint = capturedOuterFleetExpectedBlueprint(blueprint);
+      if (expectedBlueprint === void 0)
+        return stale(
+          "captured-outer-fleet-blueprint-invalid",
+          "captured outer fleet blueprint is incomplete"
+        );
+      for (let [type, part] of Object.entries(blueprint)) {
+        if (type === "name" || typeof part != "string") continue;
+        let index = CAPTURED_OUTER_FLEET_PARTS[type]?.indexOf(part) ?? -1;
+        if (index < 0 || !dependencies.controls.setPart({
+          elementId: CAPTURED_OUTER_FLEET_ELEMENT,
+          type,
+          part,
+          index
+        }))
+          return rejected(
+            "captured-outer-fleet-part-not-invoked",
+            "outer fleet part control was not invoked"
+          );
+      }
+      if (!dependencies.controls.hasShipPower(CAPTURED_OUTER_FLEET_ELEMENT))
+        return rejected(
+          "captured-outer-fleet-power-unavailable",
+          "outer fleet blueprint has insufficient power"
+        );
+      let build = dependencies.controls.buildShip({
+        elementId: CAPTURED_OUTER_FLEET_ELEMENT,
+        expectedBlueprint
+      });
+      return build.actionable ? build.builtIndex === null ? stale(
+        "captured-outer-fleet-build-postcondition-failed",
+        "captured outer fleet build did not append the intended ship"
+      ) : (pendingDispatch = {
+        index: build.builtIndex,
+        region: decision.targetRegion,
+        attempts: 0
+      }, dependencies.onActivity?.({
+        message: `${decision.shipName} has been assembled, and dispatched to ${decision.targetLocationName}.`,
+        color: "success",
+        tags: ["combat"]
+      }), SUCCEEDED) : rejected(
+        "captured-outer-fleet-build-not-invoked",
+        "outer fleet build control was not invoked"
+      );
+    }
     return Object.freeze({ reader, executor });
   }
 
   // src/application/fleet-outer.ts
-  function execute(executor, decision) {
-    let outcome = executor.execute(decision);
+  function execute(dependencies, decision) {
+    let outcome = dependencies.executor.execute(decision);
     return Object.freeze({
       outcome,
-      shipTargetChanged: outcome.status === "succeeded" && decision.kind === "build-outer-fleet"
+      shipTargetChanged: dependencies.reader.readShipTargetChanged()
     });
   }
   function runOuterFleetAutomation(dependencies) {
     let cycle = planOuterFleetCycle(dependencies.reader.readCycle());
     if (cycle.kind === "outer-fleet-status")
-      return execute(dependencies.executor, cycle);
+      return execute(dependencies, cycle);
     let target = planOuterFleetTarget(
       cycle,
       dependencies.reader.readTargeting(cycle)
     );
     if (target.kind === "outer-fleet-status")
-      return execute(dependencies.executor, target);
+      return execute(dependencies, target);
     let candidate = planOuterFleetBlueprint(
       dependencies.reader.readBlueprint(target)
     );
     if (candidate.kind === "outer-fleet-status")
-      return execute(dependencies.executor, candidate);
+      return execute(dependencies, candidate);
     let readiness = planOuterFleetCandidate(
       dependencies.reader.readCandidate(candidate)
     );
-    return readiness.kind === "outer-fleet-status" ? execute(dependencies.executor, readiness) : execute(
-      dependencies.executor,
+    return readiness.kind === "outer-fleet-status" ? execute(dependencies, readiness) : execute(
+      dependencies,
       planOuterFleetBuild(dependencies.reader.readBuildReadiness(readiness))
     );
   }

@@ -504,9 +504,14 @@ capturedMethods.build = () => {
   yard.ships.push({ ...yard.blueprint, location: "spc_dwarf" });
 };
 const staleBlueprintResult = createOuterControl().autoFleetOuter();
-// A status report only narrates the blueprint it found; it moves nothing.
+assert.equal(staleBlueprintResult.outcome.status, "rejected");
+// `setVal` was stubbed out, so the live blueprint stayed on the laser it already had and
+// `buildShip` refused before invoking anything. Nothing the demand sample froze moved.
 assert.equal(staleBlueprintResult.shipTargetChanged, false);
-assert.notEqual(staleBlueprintResult.status, "succeeded");
+assert.equal(
+  staleBlueprintResult.outcome.failure?.code,
+  "captured-outer-fleet-build-not-invoked",
+);
 assert.equal(capturedBuilds, buildsBeforeStaleBlueprint);
 assert.equal(yard.ships.length, 0);
 capturedMethods.setVal = originalSetVal;
@@ -529,8 +534,8 @@ capturedMethods.build = () => {
 const wrongShipControl = createOuterControl();
 const wrongShipResult = wrongShipControl.autoFleetOuter();
 assert.equal(wrongShipResult.outcome.status, "stale");
-// A build the game did not confirm did not change the ship target, so the composition keeps the
-// cycle's demand sample.
+// The appended frigate is outside this blueprint's cost tier and the blueprint itself was left
+// alone, so `shipCosts()` returns the same row it did before the pass.
 assert.equal(wrongShipResult.shipTargetChanged, false);
 assert.equal(capturedBuilds, buildsBeforeWrongShip + 1);
 assert.equal(yard.ships.length, 1);
@@ -542,5 +547,119 @@ assert.equal(modalOpen, false);
 assert.equal(yard.ships.length, 1);
 capturedSettings.fleetOuterShips = "custom";
 capturedMethods.build = originalBuild;
+
+// What follows covers the passes that move the shipyard's cost row without reporting success.
+// `CapturedFleetDemand` freezes `nextShipCost` for the cycle and upstream writes that row from the
+// live blueprint and the live per-tier ship count, so the flag has to come from the adapter
+// observing the yard. A rejected or stale outcome is not evidence either way.
+function createRegistryWith(overrides) {
+  const methods = { ...capturedMethods, ...overrides };
+  const handle = {
+    elementId: "shipPlans",
+    generation: 1,
+    methods: Object.keys(methods),
+    data: { s: yard },
+  };
+  return {
+    resolve: (elementId) => (elementId === "shipPlans" ? handle : undefined),
+    invoke: (current, method, args = []) => {
+      const fn = methods[method];
+      if (current !== handle || fn === undefined) {
+        return { ok: false, reason: "unknown-method" };
+      }
+      return { ok: true, value: fn(...args) };
+    },
+    capturedElementIds: () => ["shipPlans"],
+  };
+}
+
+// Upstream renders a power shortfall with its `danger` class, which is what `hasShipPower` looks
+// for. The pass refuses to build, having already rewritten the laser into the configured railgun —
+// and `shipCosts()` prices a railgun in Iron where a laser is paid in Iridium and Nano Tube, so the
+// row the demand sample froze no longer exists.
+yard.ships.length = 0;
+yard.blueprint.weapon = "laser";
+let powerShortBuilds = 0;
+const powerShortResult = createOuterControl(
+  createRegistryWith({
+    powerText: () => '<span class="danger">-50kW</span>',
+    build: () => {
+      powerShortBuilds += 1;
+    },
+  }),
+).autoFleetOuter();
+assert.equal(powerShortResult.outcome.status, "rejected");
+assert.equal(powerShortBuilds, 0);
+assert.equal(yard.blueprint.weapon, "railgun");
+assert.equal(powerShortResult.shipTargetChanged, true);
+
+// The same refusal with the yard already holding the configured ship. Nothing was written and no
+// ship was appended, so the cycle's sample survives.
+yard.ships.length = 0;
+const idlePowerShortResult = createOuterControl(
+  createRegistryWith({ powerText: () => '<span class="danger">-50kW</span>' }),
+).autoFleetOuter();
+assert.equal(idlePowerShortResult.outcome.status, "rejected");
+assert.equal(yard.blueprint.weapon, "railgun");
+assert.equal(idlePowerShortResult.shipTargetChanged, false);
+
+// The build control fires and the game appends no ship. The postcondition fails, and the weapon the
+// pass rewrote alone already moved the row.
+yard.ships.length = 0;
+yard.blueprint.weapon = "laser";
+let silentBuilds = 0;
+const silentResult = createOuterControl(
+  createRegistryWith({
+    build: () => {
+      silentBuilds += 1;
+    },
+  }),
+).autoFleetOuter();
+assert.equal(silentResult.outcome.status, "stale");
+assert.equal(silentBuilds, 1);
+assert.equal(yard.ships.length, 0);
+assert.equal(yard.blueprint.weapon, "railgun");
+assert.equal(silentResult.shipTargetChanged, true);
+
+// The yard appends a same-tier corvette that does not copy the requested blueprint, so the
+// postcondition rejects the row and no dispatch is queued. `shipCosts()` still rescales by one more
+// ship in this blueprint's tier.
+yard.ships.length = 0;
+let staleRowBuilds = 0;
+const staleRowResult = createOuterControl(
+  createRegistryWith({
+    build: () => {
+      staleRowBuilds += 1;
+      yard.ships.push({
+        ...yard.blueprint,
+        weapon: "laser",
+        location: "spc_dwarf",
+      });
+    },
+  }),
+).autoFleetOuter();
+assert.equal(staleRowResult.outcome.status, "stale");
+assert.equal(staleRowBuilds, 1);
+assert.equal(yard.ships.length, 1);
+assert.equal(modalOpen, false);
+assert.equal(staleRowResult.shipTargetChanged, true);
+yard.ships.length = 0;
+yard.blueprint.weapon = "railgun";
+
+// The counterpart is the build that appends a row outside this blueprint's tier while leaving the
+// blueprint alone — the wrong-tier block above. `shipCosts()` counts only ships sharing the
+// blueprint's class, so that pass moves nothing.
+
+// A disabled outer fleet only reports the blueprint it found; it moves nothing.
+capturedSettings.fleetOuterShips = "none";
+assert.equal(createOuterControl().autoFleetOuter().shipTargetChanged, false);
+capturedSettings.fleetOuterShips = "custom";
+
+// The flag reports one cycle. A pass that changed the yard must not make every later cycle report a
+// change, or the composition would clear a freshly sampled demand cache forever.
+assert.equal(createOuterControl().autoFleetOuter().shipTargetChanged, true);
+yard.ships.length = 0;
+yard.blueprint.weapon = "laser";
+assert.equal(createOuterControl().autoFleetOuter().shipTargetChanged, true);
 
 console.log("Captured outer-fleet control postcondition tests passed");
