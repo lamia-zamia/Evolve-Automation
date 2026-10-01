@@ -345,6 +345,8 @@ assert.equal(researchControl.readGrantedTechs(), undefined);
     { id: "city-disabled" },
   ];
   const buildRootListeners = [];
+  let buildingCatalogNow = 0;
+  let buildingCatalogDraws = 0;
   const buildIds = [
     "civTabs",
     "spaceTabs",
@@ -384,12 +386,16 @@ assert.equal(researchControl.readGrantedTechs(), undefined);
       open: () => ({ release: () => {}, isIntact: () => true }),
     },
     drawnActions: {
-      exists: (selector) => selector === "#city",
-      read: (selector) => (selector === "#city .action" ? unlockedRows : []),
+      exists: (selector) =>
+        ["#city", "#space", "#outerSol", "#interstellar"].includes(selector),
+      read: (selector) => {
+        buildingCatalogDraws++;
+        return selector === "#city .action" ? unlockedRows : [];
+      },
     },
     drawnProjects: { read: () => undefined, exists: () => false },
     readSettings: () => buildSettings,
-    nowMs: () => 0,
+    nowMs: () => buildingCatalogNow,
   });
   const priced = [];
   assert.equal(buildControl.readEstablishedStorageBuildTargets(), undefined);
@@ -446,7 +452,63 @@ assert.equal(researchControl.readGrantedTechs(), undefined);
     ["city-foundry", "city-refinery"],
     "established offers remain readable without discovery",
   );
-  buildIds.push("space-relay");
+  const broadBuildingRegions = new Set(["city", "space", "interstellar"]);
+  const broadBuildingSample =
+    buildControl.readBuildingUnlocks(broadBuildingRegions);
+  const narrowBuildingSample = buildControl.readBuildingUnlocks(
+    new Set(["city"]),
+  );
+  buildIds.push("space-relay", "interstellar-relay");
+  assert.deepEqual(
+    buildControl
+      .readEstablishedStorageBuildTargets()
+      .map(({ elementId }) => elementId),
+    ["city-foundry", "city-refinery"],
+    "established construction demand survives a narrower trigger catalog",
+  );
+  buildIds.splice(-2);
+  const drawsBeforeEstablishedLookup = buildingCatalogDraws;
+  assert.equal(
+    buildControl.readEstablishedBuildingUnlocks(broadBuildingRegions).unlocked,
+    broadBuildingSample.unlocked,
+    "a narrow trigger sample preserves the original broad authority",
+  );
+  assert.equal(
+    buildControl.readEstablishedBuildingUnlocks(new Set(["city"])).unlocked,
+    narrowBuildingSample.unlocked,
+    "an exact fresh region set is preferred to the broad superset",
+  );
+  assert.equal(
+    buildControl.readEstablishedBuildingUnlocks(new Set(["space"])).unlocked,
+    broadBuildingSample.unlocked,
+    "one fresh superset can answer a region without an exact sample",
+  );
+  assert.equal(
+    buildControl.readEstablishedBuildingUnlocks(new Set(["city", "portal"])),
+    undefined,
+    "unsampled coverage is unavailable",
+  );
+  assert.equal(buildingCatalogDraws, drawsBeforeEstablishedLookup);
+  buildingCatalogNow = 1_000;
+  assert.equal(
+    buildControl.readEstablishedBuildingUnlocks(broadBuildingRegions),
+    undefined,
+  );
+  assert.equal(
+    buildingCatalogDraws,
+    drawsBeforeEstablishedLookup,
+    "expiry never discovers",
+  );
+  const refreshedBroadBuildingSample =
+    buildControl.readBuildingUnlocks(broadBuildingRegions);
+  const drawsBeforeSupersetFallback = buildingCatalogDraws;
+  assert.equal(
+    buildControl.readEstablishedBuildingUnlocks(new Set(["city"])).unlocked,
+    refreshedBroadBuildingSample.unlocked,
+    "an expired exact scope falls back to one fresh superset",
+  );
+  assert.equal(buildingCatalogDraws, drawsBeforeSupersetFallback);
+  buildIds.push("portal-relay");
   assert.equal(
     buildControl.readEstablishedStorageBuildTargets(),
     undefined,
@@ -455,8 +517,19 @@ assert.equal(researchControl.readGrantedTechs(), undefined);
   buildIds.pop();
   buildControl.resetBuildingUnlockSample();
   assert.equal(buildControl.readEstablishedStorageBuildTargets(), undefined);
+  buildControl.readBuildingUnlocks(new Set(["city"]));
+  buildControl.readBuildingUnlocks(new Set(["space"]));
+  assert.equal(
+    buildControl.readEstablishedBuildingUnlocks(new Set(["city", "space"])),
+    undefined,
+    "independent scopes are never combined into a synthetic catalog",
+  );
   unlockedRows = [{ id: "city-refinery" }];
   for (const listener of buildRootListeners) listener();
+  assert.equal(
+    buildControl.readEstablishedBuildingUnlocks(new Set(["city"])),
+    undefined,
+  );
   assert.equal(
     buildControl.readCapturedBuildingUnlocked("city-foundry", "city"),
     undefined,

@@ -27,8 +27,8 @@
  * managed builds and projects, and the expandable outer-fleet blueprint; these targets do not
  * become spending requests.
  *
- * A missing part of the model can only leave a resource looking undemanded, never demand something
- * nothing wants, so every consumer degrades the same way the bounded slices already do.
+ * Best-effort consumers retain known commitments when an observation is missing. Exact consumers
+ * reject an incomplete queue reservation set or unavailable composed technology observation.
  */
 
 import {
@@ -109,7 +109,8 @@ export interface CapturedResourceDemandDependencies {
   readonly readOfferedTechs?: () =>
     readonly Readonly<OfferedTech>[] | undefined;
   /** Current enabled and unlocked managed build candidates from the build-policy authority. */
-  readonly readBuildTargets?: () => readonly Readonly<GameBuildTarget>[];
+  readonly readBuildTargets?: () =>
+    readonly Readonly<GameBuildTarget>[] | undefined;
   /** Current game-offered A.R.P.A. candidates; absent when project discovery is unavailable. */
   readonly readProjects?: () => readonly Readonly<OfferedProject>[] | undefined;
   readonly readSettings: () => unknown;
@@ -175,6 +176,8 @@ export interface CapturedDemandSample {
 export interface CapturedResourceDemand {
   /** Plans the demand for one cycle. Callers sample once and share the result. */
   sample(): CapturedDemandSample;
+  /** Plans only from established authorities, rejecting incomplete queue or technology input. */
+  sampleExact(): CapturedDemandSample | undefined;
 }
 
 const NO_STORAGE_REQUIREMENT = 1;
@@ -1236,14 +1239,22 @@ function readDemandReservationSpyPurchaseMoney(
 export function createCapturedResourceDemand(
   dependencies: CapturedResourceDemandDependencies,
 ): CapturedResourceDemand {
-  return Object.freeze({
-    sample(): CapturedDemandSample {
+  const capturedDemandSampler = {
+    sample(exact: boolean): CapturedDemandSample | undefined {
       const root = dependencies.rootState.readRoot();
       const resources = readProperty(root, "resource");
-      if (!isRecord(resources)) return EMPTY_DEMAND_SAMPLE;
-      const queued = dependencies.reservations.readReservations().targets;
+      if (!isRecord(resources)) return exact ? undefined : EMPTY_DEMAND_SAMPLE;
+      const reservationSample = dependencies.reservations.readReservations();
+      if (exact && reservationSample.unavailable) return undefined;
+      const queued = reservationSample.targets;
       const saving = dependencies.construction?.readSavingTarget() ?? null;
       const offered = dependencies.readOfferedTechs?.();
+      if (
+        exact &&
+        dependencies.readOfferedTechs !== undefined &&
+        offered === undefined
+      )
+        return undefined;
       const settingsValue = dependencies.readSettings();
       const settings = isRecord(settingsValue) ? settingsValue : {};
       const fleet = dependencies.fleet?.read();
@@ -1490,10 +1501,21 @@ export function createCapturedResourceDemand(
           return costs.length === 0 ? [] : [Object.freeze({ costs })];
         }),
       );
+      const managedBuildTargets = dependencies.readBuildTargets?.();
+      if (
+        exact &&
+        dependencies.readBuildTargets !== undefined &&
+        managedBuildTargets === undefined
+      )
+        return undefined;
+      let incompleteBuildStorageCosts = false;
       const buildingStorageTargets = Object.freeze(
-        (dependencies.readBuildTargets?.() ?? []).flatMap((target) => {
+        (managedBuildTargets ?? []).flatMap((target) => {
           const price = dependencies.costs?.readCost(target.elementId);
-          if (price === undefined) return [];
+          if (price === undefined) {
+            incompleteBuildStorageCosts = true;
+            return [];
+          }
           const costs = toCosts(price.cost, price.pool);
           if (costs.length === 0) return [];
           return [
@@ -1504,13 +1526,21 @@ export function createCapturedResourceDemand(
           ];
         }),
       );
+      if (exact && incompleteBuildStorageCosts) return undefined;
       const hasEnabledProjectStorageSetting =
         hasCapturedProjectStorageDemand(settings);
       const projects = hasEnabledProjectStorageSetting
-        ? (dependencies.readProjects?.() ?? [])
+        ? dependencies.readProjects?.()
         : [];
+      if (
+        exact &&
+        hasEnabledProjectStorageSetting &&
+        dependencies.readProjects !== undefined &&
+        projects === undefined
+      )
+        return undefined;
       const projectStorageTargets = Object.freeze(
-        projects.flatMap((project) => {
+        (projects ?? []).flatMap((project) => {
           if (settings[`arpa_${project.projectId}`] !== true) return [];
           const costs = calculateArpaStorageTargetCosts({
             perPercentCosts: toCosts(project.cost),
@@ -1703,5 +1733,9 @@ export function createCapturedResourceDemand(
         },
       });
     },
+  };
+  return Object.freeze({
+    sample: () => capturedDemandSampler.sample(false) ?? EMPTY_DEMAND_SAMPLE,
+    sampleExact: () => capturedDemandSampler.sample(true),
   });
 }

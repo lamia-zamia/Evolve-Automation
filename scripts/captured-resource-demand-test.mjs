@@ -6,6 +6,7 @@ import {
   hasCapturedProjectStorageDemand,
 } from "../src/adapters/evolve/economy/resources/captured-resource-demand.ts";
 import { createCapturedTriggers } from "../src/adapters/evolve/progression/build/captured-triggers.ts";
+import { createCapturedQueueReservationSource } from "../src/adapters/evolve/captured-queue-reservations.ts";
 import { actionPrice } from "./test-support/action-price.mjs";
 
 assert.equal(
@@ -55,6 +56,103 @@ const root = {
   },
 };
 
+// Exact demand preserves missing observations instead of manufacturing an empty commitment.
+{
+  let reservationUnavailable = false;
+  let offered;
+  const exactDemand = createCapturedResourceDemand({
+    rootState: { readRoot: () => root },
+    reservations: {
+      readReservations: () => ({
+        targets: [
+          { name: "known queue", cause: "Queue", cost: { Stone: 400 } },
+        ],
+        unavailable: reservationUnavailable,
+      }),
+    },
+    readOfferedTechs: () => offered,
+    readSettings: () => ({}),
+  });
+  assert.equal(
+    exactDemand.sampleExact(),
+    undefined,
+    "missing technology observation",
+  );
+  offered = [];
+  assert.equal(exactDemand.sampleExact().requestedQuantity("Stone"), 400);
+  reservationUnavailable = true;
+  assert.equal(
+    exactDemand.sampleExact(),
+    undefined,
+    "incomplete reservation set",
+  );
+  assert.equal(
+    exactDemand.sample().requestedQuantity("Stone"),
+    400,
+    "explicit best effort retains known targets",
+  );
+  reservationUnavailable = false;
+  offered = undefined;
+  assert.equal(
+    exactDemand.sampleExact(),
+    undefined,
+    "expired technology observation",
+  );
+  offered = [];
+  assert.equal(
+    exactDemand.sampleExact().requestedQuantity("Stone"),
+    400,
+    "authoritative empty technology observation",
+  );
+}
+
+// Compose the real reservation owner: unknown queue prices cannot become an empty exact demand.
+for (const [label, queuedRoot] of [
+  [
+    "unavailable queued research offer",
+    {
+      ...root,
+      settings: { qAny_res: false },
+      tech: { r_queue: 1 },
+      r_queue: {
+        display: true,
+        pause: false,
+        queue: [
+          { id: "tech-mining", type: "mining", req: true, label: "Mining" },
+        ],
+      },
+    },
+  ],
+  [
+    "unavailable queued build cost",
+    {
+      ...root,
+      settings: { qAny: false },
+      queue: {
+        display: true,
+        pause: false,
+        queue: [{ id: "city-mine", label: "Mine" }],
+      },
+    },
+  ],
+]) {
+  const rootState = { readRoot: () => queuedRoot };
+  const reservations = createCapturedQueueReservationSource({
+    rootState,
+    costs: { readCost: () => undefined },
+    readOfferedTechs: () => undefined,
+  });
+  assert.equal(reservations.readReservations().unavailable, true, label);
+  const exactDemand = createCapturedResourceDemand({
+    rootState,
+    reservations,
+    // Isolate reservation incompleteness from the demand owner's separate technology guard.
+    readOfferedTechs: () => [],
+    readSettings: () => ({}),
+  });
+  assert.equal(exactDemand.sampleExact(), undefined, label);
+}
+
 function withTargets(targets, settings = {}, saving = null, craftCosts) {
   return createCapturedResourceDemand({
     rootState: { readRoot: () => root },
@@ -68,6 +166,33 @@ function withTargets(targets, settings = {}, saving = null, craftCosts) {
     readSettings: () => settings,
     craftCosts,
   });
+}
+
+// A composed catalog's missing observation differs from its authoritative empty catalog.
+for (const catalogKind of ["building", "project"]) {
+  let catalog;
+  const catalogDemand = createCapturedResourceDemand({
+    rootState: { readRoot: () => root },
+    reservations: {
+      readReservations: () => ({ targets: [], unavailable: false }),
+    },
+    readSettings: () => ({ arpa_lhc: true }),
+    ...(catalogKind === "building"
+      ? { readBuildTargets: () => catalog }
+      : { readProjects: () => catalog }),
+  });
+  assert.equal(
+    catalogDemand.sampleExact(),
+    undefined,
+    `missing ${catalogKind} catalog`,
+  );
+  assert.equal(catalogDemand.sample().requestedQuantity("Stone"), 0);
+  catalog = [];
+  assert.equal(
+    catalogDemand.sampleExact().requestedQuantity("Stone"),
+    0,
+    `empty ${catalogKind} catalog`,
+  );
 }
 
 function arpaProductionScenario({
@@ -1421,10 +1546,11 @@ for (const [missionId, completionTech, completionLevel] of [
 }
 
 // Every managed building candidate contributes its current game price, even when another
-// candidate is the construction cycle's saving target. An unavailable price drops only that row.
+// candidate is the construction cycle's saving target. Only best effort drops an unavailable row.
 {
   const priced = [];
-  const sample = createCapturedResourceDemand({
+  let missingBuildCost = true;
+  const managedBuildDemand = createCapturedResourceDemand({
     rootState: {
       readRoot: () => ({
         race: {},
@@ -1446,16 +1572,27 @@ for (const [missionId, completionTech, completionLevel] of [
     costs: {
       readCost: (elementId) => {
         priced.push(elementId);
-        if (elementId === "city-unpriced") return undefined;
+        if (elementId === "city-unpriced" && missingBuildCost) return undefined;
         return {
           cost: { Alloy: elementId === "city-foundry" ? 500 : 650 },
           pool: undefined,
         };
       },
     },
-  }).sample();
+  });
+  const sample = managedBuildDemand.sample();
   assert.deepEqual(priced, ["city-foundry", "city-refinery", "city-unpriced"]);
   assert.equal(sample.storageRequired("Alloy"), 669.5);
+  assert.equal(
+    managedBuildDemand.sampleExact(),
+    undefined,
+    "fresh build offers cannot replace missing costs",
+  );
+  missingBuildCost = false;
+  assert.equal(
+    managedBuildDemand.sampleExact().storageRequired("Alloy"),
+    669.5,
+  );
 }
 
 // Storage scales the drawn one-percent A.R.P.A. price to the same effective step the old project

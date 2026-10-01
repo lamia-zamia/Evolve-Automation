@@ -760,6 +760,25 @@ try {
     { name: "power-only", autoBuild: false, autoStorage: false },
     { name: "build-and-power", autoBuild: true, autoStorage: false },
     { name: "storage-and-power", autoBuild: false, autoStorage: true },
+    {
+      name: "broad-build-narrow-trigger-and-power",
+      autoBuild: true,
+      narrowTrigger: true,
+    },
+    { name: "research-mutation-and-power", autoResearch: true },
+    {
+      name: "failed-post-research-catalog",
+      autoResearch: true,
+      failResearch: true,
+      stale: true,
+    },
+    {
+      name: "research-queue-unavailable-catalog",
+      researchQueue: true,
+      failResearch: true,
+      stale: true,
+    },
+    { name: "build-queue-unavailable-cost", buildQueue: true, stale: true },
     { name: "project-demand-without-owner", projectDemand: true, stale: true },
     { name: "arpa-and-power", autoARPA: true, projectDemand: true },
     {
@@ -798,6 +817,21 @@ try {
         autoBuild: scenario.autoBuild === true,
         autoStorage: scenario.autoStorage === true,
         autoARPA: scenario.autoARPA === true,
+        autoResearch: scenario.autoResearch === true,
+        autoTrigger: scenario.narrowTrigger === true,
+        triggers: scenario.narrowTrigger
+          ? [
+              {
+                priority: 0,
+                requirementType: "BuildingUnlocked",
+                requirementId: "city-basic_housing",
+                requirementCount: 0,
+                actionType: "build",
+                actionId: "city-basic_housing",
+                actionCount: 1000000,
+              },
+            ]
+          : [],
         ...Object.fromEntries(
           Object.keys(cycleSave.arpa).map((id) => [`arpa_${id}`, false]),
         ),
@@ -809,7 +843,15 @@ try {
     try {
       await runtimeSession.advance(1);
       const runtimePower = await runtimeSession.evaluate(
-        ({ unavailable, failArpa, expireArpa }) => {
+        ({
+          unavailable,
+          failArpa,
+          expireArpa,
+          autoResearch,
+          failResearch,
+          researchQueue,
+          buildQueue,
+        }) => {
           const hooks = globalThis.__EA_TEST_HOOKS__;
           const capture =
             globalThis[Symbol.for("evolve-automation.page-capture")];
@@ -831,6 +873,71 @@ try {
           const state = root[structure.region][structure.struct];
           state.on = 0;
           root.city.power = 1000000;
+          if (autoResearch) {
+            // Upstream tech.js: cement grants cement=1 for 500 Knowledge and has no side effects
+            // beyond initializing its existing structure. Re-offer it in this disposable world.
+            delete root.tech.cement;
+            for (const resource of Object.values(root.resource)) {
+              if (resource && typeof resource === "object") {
+                resource.amount = Math.max(resource.amount ?? 0, 1000000000000);
+                resource.max = Math.max(resource.max ?? 0, 1000000000000);
+              }
+            }
+          }
+          if (researchQueue) {
+            root.tech.r_queue = 1;
+            root.r_queue = {
+              display: true,
+              pause: false,
+              queue: [
+                {
+                  id: "tech-unavailable-test",
+                  label: "Unavailable test",
+                  req: true,
+                  cna: false,
+                },
+              ],
+            };
+          }
+          if (buildQueue)
+            root.queue = {
+              display: true,
+              pause: false,
+              queue: [
+                { id: "city-unavailable-test", label: "Unavailable test" },
+              ],
+            };
+          const techBeforeResearch = JSON.stringify(root.tech);
+          let researchChanged = false;
+          let researchControlsBeforePower;
+          let researchControlsAfterPower;
+          let researchPanelBeforePower;
+          let researchPanelAfterPower;
+          let powerStateBefore;
+          let powerStateAfter;
+          const readResearchControlSignature = () =>
+            capture.controls
+              .capturedElementIds()
+              .filter((id) => id.startsWith("tech-") || id === "resContent")
+              .map((id) => ({
+                id,
+                generation: capture.controls.resolve(id)?.generation,
+              }));
+          const querySelectorAllBefore = globalThis.document.querySelectorAll;
+          // Hiding `#tech` is not enough: the catalog pass draws the panel and reads its rows, so
+          // the sabotage has to reach the row read the research catalog owns. An unreadable panel
+          // reports itself unavailable; an empty row list would be the game's own answer instead.
+          const failResearchCatalogRead = () => {
+            globalThis.document.querySelectorAll = function (selector) {
+              if (
+                selector === "#tech .action" ||
+                selector === "#oldTech .action"
+              )
+                throw new Error("the drawn research panel cannot be read");
+              return querySelectorAllBefore.call(this, selector);
+            };
+          };
+          if (failResearch && !autoResearch) failResearchCatalogRead();
           const phases = [];
           let constructionDemand;
           let readyDemand;
@@ -854,6 +961,11 @@ try {
           const dateBefore = Date;
           hooks.observePowerDemandPhase = (stage, demand, outcome) => {
             phases.push({ stage, demandAvailable: demand !== undefined });
+            if (stage === "research-complete") {
+              researchChanged =
+                JSON.stringify(root.tech) !== techBeforeResearch;
+              if (failResearch) failResearchCatalogRead();
+            }
             if (stage === "construction-complete") constructionDemand = demand;
             if (stage === "power-handoff-start") {
               if (expireArpa)
@@ -873,6 +985,11 @@ try {
                 globalThis.document.getElementById("arpaPhysics"),
               );
               tabCallsBeforePower = readTabCalls();
+              powerStateBefore = hooks.readPowerAutomationState();
+              researchControlsBeforePower = readResearchControlSignature();
+              researchPanelBeforePower = Boolean(
+                globalThis.document.getElementById("tech"),
+              );
             }
             if (stage === "power-ready") readyDemand = demand;
             if (stage === "power-complete") {
@@ -887,6 +1004,11 @@ try {
                 .filter((id) => id.startsWith("arpa"));
               arpaPanelAfterPower = Boolean(
                 globalThis.document.getElementById("arpaPhysics"),
+              );
+              powerStateAfter = hooks.readPowerAutomationState();
+              researchControlsAfterPower = readResearchControlSignature();
+              researchPanelAfterPower = Boolean(
+                globalThis.document.getElementById("tech"),
               );
             }
           };
@@ -912,11 +1034,19 @@ try {
               arpaPanelAfterPower,
               tabCallsBeforePower,
               tabCallsDuringPower: readTabCalls() - tabCallsBeforePower,
+              powerStateBefore,
+              powerStateAfter,
+              researchChanged,
+              researchControlsBeforePower,
+              researchControlsAfterPower,
+              researchPanelBeforePower,
+              researchPanelAfterPower,
             };
           } finally {
             root.resource = resources;
             root.arpa = arpaBefore;
             globalThis.Date = dateBefore;
+            globalThis.document.querySelectorAll = querySelectorAllBefore;
             delete hooks.observePowerDemandPhase;
           }
         },
@@ -944,6 +1074,20 @@ try {
       );
       assert.equal(runtimePower.tabCallsDuringPower, 0);
       assert.deepEqual(
+        runtimePower.researchControlsAfterPower,
+        runtimePower.researchControlsBeforePower,
+      );
+      assert.equal(
+        runtimePower.researchPanelAfterPower,
+        runtimePower.researchPanelBeforePower,
+      );
+      if (scenario.autoResearch)
+        assert.equal(
+          runtimePower.researchChanged,
+          true,
+          JSON.stringify(await runtimeSession.diagnostics()),
+        );
+      assert.deepEqual(
         runtimePower.arpaControlsAfterPower,
         runtimePower.arpaControlsBeforePower,
       );
@@ -960,6 +1104,11 @@ try {
           "captured-power-cycle-unavailable",
         );
         assert.equal(runtimePower.afterOn, 0);
+        assert.deepEqual(
+          runtimePower.powerStateAfter,
+          runtimePower.powerStateBefore,
+          "unavailable demand preserves Power automation state",
+        );
         const diagnostics = await runtimeSession.diagnostics();
         assert.ok(
           diagnostics.events.some(({ text }) =>

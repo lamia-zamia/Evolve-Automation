@@ -171,6 +171,10 @@ export interface CapturedProgressionControl {
   readonly readBuildingUnlocks: (
     regions: ReadonlySet<string>,
   ) => Readonly<BuildingUnlockSample> | undefined;
+  /** One fresh catalog covering all requested regions; never discovers or joins samples. */
+  readonly readEstablishedBuildingUnlocks: (
+    regions: ReadonlySet<string>,
+  ) => Readonly<BuildingUnlockSample> | undefined;
   /** Existing fresh catalog availability; never draws a tab to answer Power. */
   readonly readCapturedBuildingUnlocked: (
     actionId: string,
@@ -563,17 +567,12 @@ export function createCapturedProgressionControl(
     controls,
     diagnostics,
   });
-  // The sample is keyed by the regions it was taken for, so a later caller asking for a region the
-  // first one did not request takes a fresh pass instead of being told that region is unanswerable.
-  let buildingUnlockKey: string | undefined;
-  const sampledBuildingUnlockScopes = new Set<string>();
-  let lastBuildingUnlocks: Readonly<BuildingUnlockSample> | undefined;
-  let establishedBuildingSwitchCatalog:
-    Readonly<BuildingUnlockCatalog> | undefined;
+  // Every requested region set owns its own scope, so a later caller asking for a region the first
+  // one did not request takes a fresh pass instead of being told that region is unanswerable, and a
+  // narrow pass cannot displace the broad one that established the build catalog.
+  const sampledBuildingUnlockScopes = new Map<string, ReadonlySet<string>>();
   const resetBuildingUnlockSample = () => {
-    buildingUnlockKey = undefined;
-    lastBuildingUnlocks = undefined;
-    establishedBuildingSwitchCatalog = undefined;
+    sampledBuildingUnlockScopes.clear();
   };
   rootState.subscribeRootReplaced(() => {
     scopes.invalidateAll();
@@ -583,40 +582,53 @@ export function createCapturedProgressionControl(
   });
   const readBuildingUnlocks = (regions: ReadonlySet<string>) => {
     const key = [...regions].sort().join(",");
-    if (buildingUnlockKey !== key) {
-      buildingUnlockKey = key;
-      const scope = `${BUILDING_UNLOCK_SCOPE} ${key}`;
-      sampledBuildingUnlockScopes.delete(scope);
-      sampledBuildingUnlockScopes.add(scope);
-      // Which buildings are on offer is the only half a draw can answer, so it is the only half
-      // held between draws. The switch counts are restated from the live root and the captured
-      // `on_cap` afterwards, which is why a power change costs nothing and invalidates nothing.
-      const catalog = scopes.read(
-        scope,
-        () => buildingUnlocks.read(regions),
-        sameBuildingUnlockCatalog,
-      );
-      establishedBuildingSwitchCatalog = catalog;
-      lastBuildingUnlocks =
-        catalog === undefined
-          ? undefined
-          : Object.freeze({
-              unlocked: catalog.unlocked,
-              regions: catalog.regions,
-              states: buildingSwitchStates.read(catalog),
-            });
-    }
-    return lastBuildingUnlocks;
+    const scope = `${BUILDING_UNLOCK_SCOPE} ${key}`;
+    sampledBuildingUnlockScopes.delete(scope);
+    sampledBuildingUnlockScopes.set(scope, new Set(regions));
+    // Which buildings are on offer is the only half a draw can answer, so it is the only half
+    // held between draws. The switch counts are restated from the live root and the captured
+    // `on_cap` afterwards, which is why a power change costs nothing and invalidates nothing.
+    const catalog = scopes.read(
+      scope,
+      () => buildingUnlocks.read(regions),
+      sameBuildingUnlockCatalog,
+    );
+    return catalog === undefined
+      ? undefined
+      : Object.freeze({
+          unlocked: catalog.unlocked,
+          regions: catalog.regions,
+          states: buildingSwitchStates.read(catalog),
+        });
   };
-  const readCapturedBuildingUnlocked = (actionId: string, region: string) => {
-    for (const scope of [...sampledBuildingUnlockScopes].reverse()) {
-      const catalog = scopes.peek<Readonly<BuildingUnlockCatalog>>(scope);
-      if (catalog?.regions.has(region) === true) {
-        return catalog.unlocked.has(actionId);
+  const readEstablishedBuildingUnlocks = (regions: ReadonlySet<string>) => {
+    const candidates = [...sampledBuildingUnlockScopes].reverse();
+    // One scope, one observation: an exact requested set wins over a superset, and independently
+    // sampled regions are never joined into a catalog nobody drew.
+    for (const exactOnly of [true, false]) {
+      for (const [scope, requestedRegions] of candidates) {
+        if (
+          (requestedRegions.size === regions.size) !== exactOnly ||
+          [...regions].some((region) => !requestedRegions.has(region))
+        )
+          continue;
+        const catalog = scopes.peek<Readonly<BuildingUnlockCatalog>>(scope);
+        if (
+          catalog !== undefined &&
+          [...regions].every((region) => catalog.regions.has(region))
+        ) {
+          return Object.freeze({
+            unlocked: catalog.unlocked,
+            regions: catalog.regions,
+            states: buildingSwitchStates.read(catalog),
+          });
+        }
       }
     }
     return undefined;
   };
+  const readCapturedBuildingUnlocked = (actionId: string, region: string) =>
+    readEstablishedBuildingUnlocks(new Set([region]))?.unlocked.has(actionId);
   const readBuildingCapacity = (actionIds: ReadonlySet<string>) => {
     const result = new Map<string, boolean | undefined>();
     for (const actionId of actionIds) {
@@ -657,11 +669,9 @@ export function createCapturedProgressionControl(
       ? () => {
           let establishedOffersAvailable = true;
           const policy = createProgressionCapturedPolicy((regions) => {
-            const catalog = lastBuildingUnlocks;
-            establishedOffersAvailable =
-              catalog !== undefined &&
-              [...regions].every((region) => catalog.regions.has(region));
-            return establishedOffersAvailable ? catalog : undefined;
+            const catalog = readEstablishedBuildingUnlocks(regions);
+            establishedOffersAvailable = catalog !== undefined;
+            return catalog;
           })();
           return establishedOffersAvailable ? policy : undefined;
         }
@@ -791,18 +801,17 @@ export function createCapturedProgressionControl(
     ) {
       return undefined;
     }
-    if (lastBuildingUnlocks === undefined) return undefined;
     const policy = readEstablishedBuildPolicy();
     if (policy === undefined) return undefined;
     const targets = policy.buildings;
+    // The captured policy reads one authoritative region catalog and filters its own candidates
+    // through it, so there is nothing left to re-check; only a manager-provided policy needs the
+    // drawn offers again, and narrowing the catalog for it would swap that authority mid-read.
+    if (getBuildingManager === undefined) return targets;
     if (targets.length === 0) return targets;
     const regions = new Set(targets.map((target) => target.region));
-    const offers = lastBuildingUnlocks;
-    if (
-      offers === undefined ||
-      [...regions].some((region) => !offers.regions.has(region))
-    )
-      return undefined;
+    const offers = readEstablishedBuildingUnlocks(regions);
+    if (offers === undefined) return undefined;
     return Object.freeze(
       targets.filter(
         (target) =>
@@ -820,8 +829,8 @@ export function createCapturedProgressionControl(
       return Object.freeze([]);
     ensureBuildControls();
     const targets = readPolicy().buildings;
-    // The captured policy already established the full requested-region catalog. Narrowing it
-    // to managed targets would erase empty/disabled regions needed by later exactness checks.
+    // The captured policy needs every region it could offer from, including the ones this cycle
+    // drew no candidates for; narrowing the sample would leave later exactness checks unanswered.
     if (getBuildingManager !== undefined && targets.length > 0)
       readBuildingUnlocks(new Set(targets.map((target) => target.region)));
     return readEstablishedStorageBuildTargets() ?? Object.freeze([]);
@@ -853,13 +862,9 @@ export function createCapturedProgressionControl(
       ? readEstablishedStorageBuildTargets()
       : readManagedBuildTargets();
     const offers = establishedOnly
-      ? lastBuildingUnlocks === undefined ||
-        establishedBuildingSwitchCatalog === undefined
-        ? undefined
-        : Object.freeze({
-            ...lastBuildingUnlocks,
-            states: buildingSwitchStates.read(establishedBuildingSwitchCatalog),
-          })
+      ? readEstablishedBuildingUnlocks(
+          new Set([CAPTURED_MECH_BUILDINGS.region]),
+        )
       : readBuildingUnlocks(new Set([CAPTURED_MECH_BUILDINGS.region]));
     if (
       targets === undefined ||
@@ -924,6 +929,7 @@ export function createCapturedProgressionControl(
     readEstablishedProjects,
     resetProjectSample,
     readBuildingUnlocks,
+    readEstablishedBuildingUnlocks,
     readCapturedBuildingUnlocked,
     readBuildingCapacity,
     resetBuildingUnlockSample,

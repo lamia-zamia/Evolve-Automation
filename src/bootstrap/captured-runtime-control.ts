@@ -1211,8 +1211,7 @@ export function startCapturedRuntime({
       const settings = settingsStore.readRaw();
       return isEnabled(settings, "autoBuild") ||
         isEnabled(settings, "autoStorage")
-        ? (progression.readEstablishedStorageBuildTargets() ??
-            Object.freeze([]))
+        ? progression.readEstablishedStorageBuildTargets()
         : Object.freeze([]);
     },
     readProjects: progression.readEstablishedProjects,
@@ -2431,6 +2430,9 @@ export function startCapturedRuntime({
     const hooks = readProperty(settingsHostWindow, "__EA_TEST_HOOKS__");
     if (isRecord(hooks)) {
       Reflect.set(hooks, "runPowerAutomation", () => powerAutomation.run());
+      Reflect.set(hooks, "readPowerAutomationState", () =>
+        powerAutomation.readState(),
+      );
       Reflect.set(hooks, "samplePowerDemand", () => {
         demandThisCycle = demand.sample();
       });
@@ -2711,6 +2713,7 @@ export function startCapturedRuntime({
       }
       if (!triggerActive && isEnabled(settings, "autoResearch")) {
         runPhase("autoResearch", () => progression.runResearchCycle());
+        observePowerDemandPhase("research-complete");
         // The earlier demand discovery cannot answer offers unlocked by this research.
         // Construction owns the next discovery and must sample the new tech state.
         progression.resetBuildingUnlockSample();
@@ -2954,6 +2957,11 @@ export function startCapturedRuntime({
         });
       }
       if (isEnabled(settings, "autoPower")) {
+        // Research or another progression mutation can invalidate the earlier offer sample.
+        // Its owning phase establishes a current catalog before Power's read-only handoff.
+        runPhase("pre-Power research demand observation", () => {
+          ensureDemandResearchObservation();
+        });
         runPhase("autoPower", () => {
           observePowerDemandPhase("power-handoff-start");
           // Refresh from the demand owner at the handoff, even if another consumer sampled
@@ -2993,7 +3001,7 @@ export function startCapturedRuntime({
             (!buildDemandRequired ||
               progression.readEstablishedStorageBuildTargets() !== undefined)
           ) {
-            demandThisCycle = demand.sample();
+            demandThisCycle = demand.sampleExact();
           }
           observePowerDemandPhase("power-ready");
           const outcome = powerAutomation.run();
