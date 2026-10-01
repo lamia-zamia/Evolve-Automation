@@ -44,6 +44,12 @@ export interface CapturedGameStructureDefinition {
   readonly actionId: string;
   /** The game-owned display key used by its source-specific production ledger. */
   readTitle(): CapturedGameRead<string>;
+  /** The current game-owned action description, preserving the active locale. */
+  readDescription(): CapturedGameRead<string>;
+  /** A game-owned `val()` result when an action defines one. */
+  readValue(): CapturedGameRead<number>;
+  /** Nested ship rating exposed by actions such as `galaxy-minelayer.ship.rating()`. */
+  readShipRating(): CapturedGameRead<number>;
   readPowered(): CapturedGameRead<number>;
   /** `power_reqs`, normalized to the root tech levels checked by the retired wrapper. */
   readPowerRequirements(): CapturedGameRead<
@@ -78,6 +84,8 @@ export interface CapturedProductionBreakdown {
   /** Source-specific values recorded by the game, grouped by resource then source label. */
   readonly production: CapturedProductionLedger;
   readonly consumption: CapturedProductionLedger;
+  /** Capacity rows from `breakdown.c`, when the page exposes that game-owned ledger. */
+  readonly capacity?: CapturedProductionLedger;
 }
 
 /**
@@ -98,6 +106,8 @@ export interface CapturedGameMechanics {
   ): CapturedGameRead<readonly CapturedGameStructureDefinition[]>;
   /** `undefined` means the private production ledger has not been captured or validated. */
   readProductionBreakdown(): CapturedProductionBreakdown | undefined;
+  /** Localize a game-owned key for matching its current production ledger label. */
+  readLocalizedText(key: string): CapturedGameRead<string>;
   /** Factor observed by synchronously probing a game-owned action effect. */
   readAdjustedFuelFactor(
     mode: CapturedFuelAdjustmentMode,

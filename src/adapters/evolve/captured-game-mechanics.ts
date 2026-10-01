@@ -375,6 +375,17 @@ function readMechanicsTitle(
     : { kind: "invalid" };
 }
 
+function readMechanicsDescription(
+  action: Record<string, unknown>,
+): CapturedGameRead<string> {
+  const result = readMechanicsCall(action, "desc");
+  return result.kind !== "value"
+    ? result
+    : typeof result.value === "string"
+      ? { kind: "value", value: result.value }
+      : { kind: "invalid" };
+}
+
 function readMechanicsFuel(
   action: Record<string, unknown>,
   name: string,
@@ -702,6 +713,8 @@ function createMechanicsDefinition(
   registry: Map<unknown, unknown>,
 ): CapturedGameStructureDefinition {
   const action = entry.action;
+  const ship = readMechanicsDataProperty(action, "ship");
+  const shipRecord = isNonArrayRecord(ship) ? ship : undefined;
   return Object.freeze({
     entryKey: entry.entryKey,
     region: entry.region,
@@ -709,6 +722,12 @@ function createMechanicsDefinition(
     struct: entry.struct,
     actionId: entry.actionId,
     readTitle: () => readMechanicsTitle(action),
+    readDescription: () => readMechanicsDescription(action),
+    readValue: () => readMechanicsPrimitive(action, "val"),
+    readShipRating: () =>
+      shipRecord === undefined
+        ? { kind: "absent" as const }
+        : readMechanicsPrimitive(shipRecord, "rating"),
     readPowered: () => readMechanicsPrimitive(action, "powered"),
     readPowerRequirements: () => readMechanicsPowerRequirements(action),
     readFuel: () => readMechanicsFuel(action, "p_fuel"),
@@ -801,6 +820,7 @@ function emptyGameMechanics(): CapturedGameMechanics {
     readPowerOrder: () => ({ kind: "invalid" as const }),
     readSupportOrder: () => ({ kind: "invalid" as const }),
     readProductionBreakdown: () => undefined,
+    readLocalizedText: () => ({ kind: "absent" as const }),
     readAdjustedFuelFactor: () => ({ kind: "invalid" as const }),
   });
 }
@@ -1075,7 +1095,35 @@ export function installCapturedGameMechanics(
       const production = readCapturedProductionLedger(productionSource);
       if (consumption === undefined || production === undefined)
         return undefined;
-      return Object.freeze({ production, consumption });
+      const game = readMechanicsProperty(pageWindow, "game");
+      const exposedBreakdown =
+        readMechanicsProperty(pageWindow, "breakdown") ??
+        readMechanicsProperty(game, "breakdown");
+      const capacity =
+        readCapturedProductionLedger(readMechanicsDataProperty(owner, "c")) ??
+        readCapturedProductionLedger(
+          readMechanicsProperty(exposedBreakdown, "c"),
+        );
+      return Object.freeze({
+        production,
+        consumption,
+        ...(capacity === undefined ? {} : { capacity }),
+      });
+    },
+    readLocalizedText(key: string): CapturedGameRead<string> {
+      if (stopped) return { kind: "invalid" };
+      const game = readMechanicsProperty(pageWindow, "game");
+      const localize = readMechanicsProperty(game, "loc");
+      if (localize === undefined) return { kind: "absent" };
+      if (typeof localize !== "function") return { kind: "invalid" };
+      try {
+        const value = Reflect.apply(localize as CapturedGameCall, game, [key]);
+        return typeof value === "string"
+          ? { kind: "value", value }
+          : { kind: "invalid" };
+      } catch {
+        return { kind: "invalid" };
+      }
     },
     readAdjustedFuelFactor(
       mode: CapturedFuelAdjustmentMode,

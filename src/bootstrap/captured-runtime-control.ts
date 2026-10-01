@@ -526,43 +526,6 @@ export function startCapturedRuntime({
     replaceRaw: settingsStorage.replaceRaw,
     persist: settingsStorage.persist,
   });
-  // The live characterization bundle opts into this inert hook by defining both the build
-  // constant and the hook bag before main.ts starts. Production builds fold this block away.
-  if (
-    typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
-    __EA_TEST_SURFACE_ENABLED__ === true
-  ) {
-    const hooks = readProperty(settingsHostWindow, "__EA_TEST_HOOKS__");
-    if (isRecord(hooks)) {
-      const powerReader = createCapturedPowerReader({
-        rootState: pageCapture.rootState,
-        mechanics: pageCapture.mechanics,
-        controls: pageCapture.controls,
-        resources: createCapturedResourceSource(pageCapture.rootState),
-        readSettingsRaw: settingsLifecycle.readEffective,
-        readRuntimeOptions: () => ({
-          settings: {
-            showGalactic: false,
-            limitPowered: false,
-            autoFleet: false,
-            crewReserve: 0,
-          },
-          debug: false,
-          consumptionBalanceMinimum: CONSUMPTION_BALANCE_MIN,
-        }),
-        readWarnings: () => Object.freeze([]),
-      });
-      Reflect.set(hooks, "readPowerCycle", () => {
-        const cycle = powerReader.readCycle();
-        return cycle === undefined
-          ? undefined
-          : Object.freeze({
-              cycle,
-              plan: planPowerCycle(cycle, EMPTY_POWER_AUTOMATION_STATE),
-            });
-      });
-    }
-  }
   const buildCosts = createCapturedActionCostReader({
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,
@@ -2369,6 +2332,63 @@ export function startCapturedRuntime({
     readSettings: () => settingsStore.readRaw(),
     readDemand: () => readDemand(),
   });
+  // The live characterization bundle opts into this inert hook by defining both the build
+  // constant and the hook bag before main.ts starts. Production builds fold this block away.
+  // Keep it after the captured demand, build-cost, and fleet capabilities so the test cycle uses
+  // the same owners as the runtime composition rather than synthetic empty inputs.
+  if (
+    typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
+    __EA_TEST_SURFACE_ENABLED__ === true
+  ) {
+    const hooks = readProperty(settingsHostWindow, "__EA_TEST_HOOKS__");
+    if (isRecord(hooks)) {
+      const powerReader = createCapturedPowerReader({
+        rootState: pageCapture.rootState,
+        mechanics: pageCapture.mechanics,
+        controls: pageCapture.controls,
+        resources: createCapturedResourceSource(pageCapture.rootState),
+        readDemand: () => readDemand(),
+        readFleetNeededShips: fleet.readNeededShips,
+        readBuildTargets: progression.readManagedBuildTargets,
+        readBuildingUnlocked: (actionId, region) => {
+          const offers = progression.readBuildingUnlocks(new Set([region]));
+          return offers?.regions.has(region) === true
+            ? offers.unlocked.has(actionId)
+            : undefined;
+        },
+        costs: buildCosts,
+        readCurrentDate: () => new Date(),
+        readMechState: () => capturedMech.reader.readState(),
+        readSettingsRaw: settingsLifecycle.readEffective,
+        readRuntimeOptions: () => ({
+          settings: {
+            showGalactic: false,
+            limitPowered: false,
+            autoFleet: false,
+            crewReserve: 0,
+          },
+          debug: false,
+          consumptionBalanceMinimum: CONSUMPTION_BALANCE_MIN,
+        }),
+        readWarnings: () => Object.freeze([]),
+      });
+      Reflect.set(hooks, "readPowerCycle", () => {
+        const cycle = powerReader.readCycle();
+        return cycle === undefined
+          ? undefined
+          : Object.freeze({
+              cycle,
+              plan: planPowerCycle(cycle, EMPTY_POWER_AUTOMATION_STATE),
+            });
+      });
+      Reflect.set(
+        hooks,
+        "planPowerCycle",
+        (cycle: Parameters<typeof planPowerCycle>[0]) =>
+          planPowerCycle(cycle, EMPTY_POWER_AUTOMATION_STATE),
+      );
+    }
+  }
   const outerFleet = createCapturedOuterFleetControl({
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,

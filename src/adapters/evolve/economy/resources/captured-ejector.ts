@@ -221,6 +221,34 @@ function currentAllocation(root: unknown, id: string): number | undefined {
   return value === undefined ? 0 : nonNegative(value);
 }
 
+/** Current automation Eject adjustment for one resource, from assigned mass and settings. */
+export function readCapturedEjectRateAdjustment(
+  root: unknown,
+  settings: unknown,
+  resourceId: string,
+): number {
+  if (
+    !isRecord(settings) ||
+    settings["autoEject"] !== true ||
+    settings[`res_eject${resourceId}`] !== true
+  )
+    return 0;
+  const ejector = readProperty(
+    readProperty(root, "interstellar"),
+    "mass_ejector",
+  );
+  const count = finite(readProperty(ejector, "count"));
+  const on = finite(readProperty(ejector, "on"));
+  const allocation = currentAllocation(root, resourceId);
+  return count !== undefined &&
+    count > 0 &&
+    on !== undefined &&
+    on > 0 &&
+    allocation !== undefined
+    ? allocation
+    : 0;
+}
+
 function executeDecision(
   dependencies: CapturedEjectorDependencies,
   session: EjectorSession,

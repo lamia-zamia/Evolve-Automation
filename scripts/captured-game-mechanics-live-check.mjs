@@ -407,8 +407,79 @@ try {
         return undefined;
       const result = hooks.readPowerCycle();
       if (!result) return undefined;
+      const root =
+        globalThis[
+          Symbol.for("evolve-automation.page-capture")
+        ].rootState.readRoot();
+      const race = root?.race;
+      const tasks = race?.governor?.tasks;
+      const replicatorActive =
+        tasks && Object.values(tasks).includes("replicate");
+      const expectedPowerCurrent =
+        (Number(root?.city?.power) || 0) +
+        (replicatorActive ? Number(race?.replicator?.pow) || 0 : 0);
+      const species = race?.species;
+      const speciesResource = species ? root?.resource?.[species] : undefined;
+      const population = result.cycle.resources.find(
+        (resource) => resource.id === species,
+      );
+      const specialPayloads = result.cycle.buildings
+        .filter((building) => building.rule.kind !== "ordinary")
+        .map((building) => ({
+          binding: building.binding,
+          kind: building.rule.kind,
+          rule: building.rule,
+        }));
+      const specialPayload =
+        specialPayloads.find(
+          ({ kind, rule }) =>
+            (kind === "belt-space-station" && rule.stationStorage > 0) ||
+            (kind === "triton-lander" && rule.healingRate > 0) ||
+            (kind === "chthonian-mine-layer" && rule.rating > 0) ||
+            (kind === "job-dependent" && rule.jobCount > 0),
+        ) ?? null;
+      const forcingBuilding = result.cycle.buildings.find(
+        (building) => building.powered > 0 && building.count > 0,
+      );
+      let forcedPlan;
+      if (forcingBuilding && typeof hooks.planPowerCycle === "function") {
+        const forcedPower = Math.max(1000000, expectedPowerCurrent);
+        const forcedCycle = {
+          ...result.cycle,
+          powerCurrent: forcedPower,
+          powerMaximum: Math.max(result.cycle.powerMaximum, forcedPower),
+          resources: result.cycle.resources.map((resource) =>
+            resource.id === "Power"
+              ? {
+                  ...resource,
+                  currentQuantity: forcedPower,
+                  rateOfChange: forcedPower,
+                  maxQuantity: Math.max(resource.maxQuantity, forcedPower),
+                  storageRatio: 1,
+                }
+              : resource,
+          ),
+          buildings: result.cycle.buildings.map((building) =>
+            building.binding === forcingBuilding.binding
+              ? { ...building, stateOn: 0 }
+              : building,
+          ),
+        };
+        forcedPlan = hooks.planPowerCycle(forcedCycle);
+      }
       return {
         buildingCount: result.cycle.buildings.length,
+        powerUnlocked: result.cycle.powerUnlocked,
+        powerCurrent: result.cycle.powerCurrent,
+        expectedPowerCurrent,
+        powerResource:
+          result.cycle.resources.find((resource) => resource.id === "Power") ??
+          null,
+        gameHasPowerResource: Boolean(root?.resource?.Power),
+        civilianPopulation: result.cycle.civilianPopulation,
+        population: population ?? null,
+        species,
+        speciesPopulation: Number(speciesResource?.amount) || 0,
         positivePower: result.cycle.buildings.filter(
           (building) => building.powered > 0,
         ).length,
@@ -416,8 +487,13 @@ try {
           (building) => building.powered < 0,
         ).length,
         resourceCount: result.cycle.resources.length,
-        plannerReturned: Boolean(result.plan && result.plan.nextState),
+        plannerReturned: Boolean(result.plan),
         decisionKind: result.plan.decision?.kind ?? null,
+        decisionOperations: result.plan.decision?.operations.length ?? 0,
+        specialPayload,
+        specialPayloads,
+        forcedPlanKind: forcedPlan?.decision?.kind ?? null,
+        forcedPlanOperations: forcedPlan?.decision?.operations ?? [],
         buildingOrder: result.cycle.buildings.map(
           (building) => building.binding,
         ),
@@ -428,6 +504,33 @@ try {
       "the complete captured cycle is available to the retained planner",
     );
     assert.ok(captured.buildingCount > 0);
+    assert.equal(
+      captured.powerUnlocked,
+      true,
+      "the late save has unlocked Power",
+    );
+    assert.equal(
+      captured.powerCurrent,
+      captured.expectedPowerCurrent,
+      "Power current matches city.power plus the active Replicator task output",
+    );
+    assert.equal(
+      captured.powerResource?.currentQuantity,
+      captured.powerCurrent,
+      "the cycle contains a synthetic Power resource backed by city.power",
+    );
+    assert.equal(
+      captured.gameHasPowerResource,
+      false,
+      "synthetic Power does not depend on a global.resource.Power entry",
+    );
+    assert.ok(captured.species, "the late save names a current species");
+    assert.ok(captured.speciesPopulation > 0, "species population is nonzero");
+    assert.equal(
+      captured.population?.currentQuantity,
+      captured.speciesPopulation,
+    );
+    assert.equal(captured.civilianPopulation, captured.speciesPopulation);
     assert.ok(
       captured.positivePower > 0,
       "captured cycle contains positive-power consumers",
@@ -438,6 +541,26 @@ try {
     );
     assert.ok(captured.resourceCount > 0);
     assert.equal(captured.plannerReturned, true);
+    assert.equal(
+      captured.decisionKind,
+      "apply-power-cycle",
+      "the retained planner passes the unlocked-Power guard",
+    );
+    assert.ok(
+      captured.decisionOperations > 0,
+      "the late save's planned Power decision contains operations",
+    );
+    assert.ok(
+      captured.specialPayload,
+      `at least one special Power rule has live values: ${JSON.stringify(captured.specialPayloads)}`,
+    );
+    assert.equal(captured.forcedPlanKind, "apply-power-cycle");
+    assert.ok(
+      captured.forcedPlanOperations.some(
+        (operation) => operation.kind === "adjust-building",
+      ),
+      "a captured Power consumer forced off in the test scenario gets a real adjustment operation",
+    );
     assert.deepEqual(
       captured.buildingOrder,
       priorityCandidates.map(({ binding }) => binding),

@@ -643,6 +643,10 @@
       }
     return typeof value == "string" ? { kind: "value", value } : { kind: "invalid" };
   }
+  function readMechanicsDescription(action) {
+    let result = readMechanicsCall(action, "desc");
+    return result.kind !== "value" ? result : typeof result.value == "string" ? { kind: "value", value: result.value } : { kind: "invalid" };
+  }
   function readMechanicsFuel(action, name) {
     let read = readMechanicsCall(action, name);
     if (read.kind !== "value") return read;
@@ -831,7 +835,7 @@
     return result;
   }
   function createMechanicsDefinition(entry, registry) {
-    let action = entry.action;
+    let action = entry.action, ship = readMechanicsDataProperty(action, "ship"), shipRecord = isNonArrayRecord(ship) ? ship : void 0;
     return Object.freeze({
       entryKey: entry.entryKey,
       region: entry.region,
@@ -839,6 +843,9 @@
       struct: entry.struct,
       actionId: entry.actionId,
       readTitle: () => readMechanicsTitle(action),
+      readDescription: () => readMechanicsDescription(action),
+      readValue: () => readMechanicsPrimitive(action, "val"),
+      readShipRating: () => shipRecord === void 0 ? { kind: "absent" } : readMechanicsPrimitive(shipRecord, "rating"),
       readPowered: () => readMechanicsPrimitive(action, "powered"),
       readPowerRequirements: () => readMechanicsPowerRequirements(action),
       readFuel: () => readMechanicsFuel(action, "p_fuel"),
@@ -906,6 +913,7 @@
       readSupportOrder: () => ({ kind: "invalid" }),
       readProductionBreakdown: () => {
       },
+      readLocalizedText: () => ({ kind: "absent" }),
       readAdjustedFuelFactor: () => ({ kind: "invalid" })
     });
   }
@@ -1049,8 +1057,28 @@
           return;
         }
         let production = readCapturedProductionLedger(productionSource);
-        if (!(consumption2 === void 0 || production === void 0))
-          return Object.freeze({ production, consumption: consumption2 });
+        if (consumption2 === void 0 || production === void 0)
+          return;
+        let game = readMechanicsProperty(pageWindow, "game"), exposedBreakdown = readMechanicsProperty(pageWindow, "breakdown") ?? readMechanicsProperty(game, "breakdown"), capacity = readCapturedProductionLedger(readMechanicsDataProperty(owner, "c")) ?? readCapturedProductionLedger(
+          readMechanicsProperty(exposedBreakdown, "c")
+        );
+        return Object.freeze({
+          production,
+          consumption: consumption2,
+          ...capacity === void 0 ? {} : { capacity }
+        });
+      },
+      readLocalizedText(key) {
+        if (stopped) return { kind: "invalid" };
+        let game = readMechanicsProperty(pageWindow, "game"), localize = readMechanicsProperty(game, "loc");
+        if (localize === void 0) return { kind: "absent" };
+        if (typeof localize != "function") return { kind: "invalid" };
+        try {
+          let value = Reflect.apply(localize, game, [key]);
+          return typeof value == "string" ? { kind: "value", value } : { kind: "invalid" };
+        } catch {
+          return { kind: "invalid" };
+        }
       },
       readAdjustedFuelFactor(mode, resourceId) {
         let entries = structureEntries, numberConstructor = readMechanicsProperty(pageWindow, "Number"), numberPrototype = readMechanicsProperty(
@@ -11808,7 +11836,7 @@
   function capturedTaxQuantity(value, key) {
     return capturedTaxFinite(readProperty(value, key), 0);
   }
-  function readCapturedTaxTaskActive(root) {
+  function readCapturedGovernorTaskActive(root, taskName) {
     let race = readProperty(root, "race");
     if (!isRecord(race)) return;
     let governor = readProperty(race, "governor");
@@ -11819,8 +11847,11 @@
     if (isRecord(tasks)) {
       for (let task of Object.values(tasks))
         if (typeof task != "string") return;
-      return Object.values(tasks).includes("tax");
+      return Object.values(tasks).includes(taskName);
     }
+  }
+  function readCapturedTaxTaskActive(root) {
+    return readCapturedGovernorTaskActive(root, "tax");
   }
   function capturedTaxDemanded(money, banana) {
     if (banana) return !1;
@@ -14319,7 +14350,7 @@
   }
   function readSmartMaximum(root, id, smart, settings, count2, readDemand, readJobHistory) {
     if (!smart) return null;
-    if (id === "space_miner") return readSpaceMinerSmartMaximum(root);
+    if (id === "space_miner") return readCapturedSpaceMinerSmartMaximum(root);
     if (id === "torturer") return readTorturerSmartMaximum(root);
     if (id === "hell_surveyor") return readHellSurveyorSmartMaximum(root);
     if (id === "scientist") return readScientistSmartMaximum(root, count2);
@@ -14354,38 +14385,43 @@
     let maximum = Math.round(teamster / transport * 1.5) - railway * 2;
     return Number.isFinite(maximum) ? maximum : maximum > 0 ? Number.MAX_SAFE_INTEGER : 0;
   }
-  function readHighPopulationFactors(race) {
-    let rank = readProperty(race, "high_pop");
-    if (rank === void 0 || rank === !1) return null;
-    if (!(typeof rank != "number" || !Number.isFinite(rank)))
-      switch (rank) {
-        case 0.1:
-        case 0.25:
-          return { breakpointScale: 2, workerEffect: 0.5 };
-        case 0.5:
-          return { breakpointScale: 3, workerEffect: 0.34 };
-        case 1:
-          return { breakpointScale: 4, workerEffect: 0.26 };
-        case 2:
-          return { breakpointScale: 5, workerEffect: 0.212 };
-        case 3:
-          return { breakpointScale: 6, workerEffect: 0.18 };
-        case 4:
-          return { breakpointScale: 7, workerEffect: 0.158 };
-        default:
-          return;
-      }
+  function readTraitScaleRank(root, traitId, traitKind = "genus") {
+    let race = readProperty(root, "race"), rank = readProperty(race, traitId);
+    if (typeof rank != "number" || !Number.isFinite(rank) || rank <= 0 || rank > 2)
+      return;
+    let empowered = readProperty(race, "empowered");
+    if (typeof empowered != "number" || !Number.isFinite(empowered) || empowered <= 0)
+      return rank;
+    let empoweredRank = Math.min(2, empowered), majorBonus = traitScaleVariable(empoweredRank, 0.01, 0.2, 0.4), genusBonus = traitScaleVariable(empoweredRank, 5e-3, 0.1, 0.2);
+    return Number((rank + (traitKind === "major" ? majorBonus : genusBonus)).toFixed(6));
+  }
+  function traitScaleVariable(rank, low, mid, high) {
+    let from = rank < 1 ? low : mid, to = rank < 1 ? mid : high, fraction = rank < 1 ? (rank - 0.1) / 0.9 : rank <= 2 ? rank - 1 : 1 + (rank - 2) / 2;
+    return Number((from + (to - from) * fraction).toFixed(6));
+  }
+  function readHighPopulationFactors(root) {
+    let rawRank = readProperty(readProperty(root, "race"), "high_pop"), rank = readTraitScaleRank(root, "high_pop");
+    if (rawRank === void 0 || rawRank === !1) return null;
+    if (rank === void 0) return;
+    let scale = (low, mid, high) => {
+      let from = rank < 1 ? low : mid, to = rank < 1 ? mid : high, fraction = rank < 1 ? (rank - 0.1) / 0.9 : rank <= 2 ? rank - 1 : 1 + (rank - 2) / 2;
+      return Number((from + (to - from) * fraction).toFixed(6));
+    };
+    return {
+      breakpointScale: scale(2, 4, 7),
+      workerEffect: scale(50, 26, 15.8) / 100
+    };
   }
   function readHighPopulationWorkerEffect(root) {
-    let factors = readHighPopulationFactors(readProperty(root, "race"));
+    let factors = readHighPopulationFactors(root);
     return factors === void 0 ? void 0 : factors?.workerEffect ?? 1;
   }
   function readCapturedJobStackMultiplier(root) {
-    let factors = readHighPopulationFactors(readProperty(root, "race"));
+    let factors = readHighPopulationFactors(root);
     return factors === void 0 ? void 0 : factors?.breakpointScale ?? 1;
   }
   function readCapturedHighPopulationPercent(root) {
-    let factors = readHighPopulationFactors(readProperty(root, "race"));
+    let factors = readHighPopulationFactors(root);
     return factors === void 0 ? void 0 : (factors?.workerEffect ?? 1) * 100;
   }
   function readCapturedPopulationResource(root) {
@@ -14398,7 +14434,7 @@
     let space = readProperty(root, "space"), building = readProperty(space, id);
     return building === void 0 ? 0 : finiteNonNegative(readProperty(building, "on"));
   }
-  function readSpaceMinerSmartMaximum(root) {
+  function readCapturedSpaceMinerSmartMaximum(root) {
     let elerium = readSpaceBuildingOn(root, "elerium_ship"), iridium = readSpaceBuildingOn(root, "iridium_ship"), iron = readSpaceBuildingOn(root, "iron_ship"), workerEffect = readHighPopulationWorkerEffect(root);
     if (!(elerium === void 0 || iridium === void 0 || iron === void 0 || workerEffect === void 0))
       return (elerium * 2 + iridium + iron) * workerEffect;
@@ -14506,7 +14542,7 @@
     let farm = readProperty(readProperty(root, "city"), "farm");
     if (farm === void 0) return foodMaximum;
     if (!isRecord(farm)) return;
-    let farmCount = finiteNonNegative(readProperty(farm, "count")), highPopulation = readHighPopulationFactors(readProperty(root, "race"));
+    let farmCount = finiteNonNegative(readProperty(farm, "count")), highPopulation = readHighPopulationFactors(root);
     if (farmCount === void 0 || highPopulation === void 0) return;
     let citizenCap = highPopulation?.breakpointScale ?? 1, farmerCapacity = farmCount > 0 ? Math.ceil(farmCount * citizenCap) + 1 : 0;
     return Math.min(foodMaximum ?? Number.MAX_SAFE_INTEGER, farmerCapacity);
@@ -14866,7 +14902,7 @@
   }
   function normalizeBreakpoints(configured, maximum, id, settings, root) {
     if (configured === null) return { capped: null, uncapped: null };
-    let highPopulation = readProperty(settings, "jobScalePop") === !0 && id !== "hell_surveyor" ? readHighPopulationFactors(readProperty(root, "race")) : null;
+    let highPopulation = readProperty(settings, "jobScalePop") === !0 && id !== "hell_surveyor" ? readHighPopulationFactors(root) : null;
     if (highPopulation === void 0) return;
     let scale = highPopulation?.breakpointScale ?? 1, uncapped = configured.map(
       (value) => value === -1 ? Number.MAX_SAFE_INTEGER : value * scale
@@ -20188,7 +20224,17 @@
           alien2: sample.alien2
         }), sample.input);
       }
-    }), executor = Object.freeze({
+    }), readNeededShips = () => {
+      let sample = readInput4(
+        dependencies.rootState.readRoot(),
+        dependencies.readSettings(),
+        dependencies.controls,
+        dependencies.readDemand
+      );
+      if (sample === void 0) return;
+      let decision = planFleet(sample.input);
+      return decision?.kind === "manage-galaxy-fleet" ? decision.neededShips : null;
+    }, executor = Object.freeze({
       execute(decision) {
         let active = session;
         if (active === null)
@@ -20238,7 +20284,7 @@
         return result.ok ? SUCCEEDED : stale("captured-fleet-mission-stale", result.detail ?? result.reason);
       }
     });
-    return Object.freeze({ reader, executor });
+    return Object.freeze({ reader, executor, readNeededShips });
   }
 
   // src/adapters/evolve/combat/captured-fleet-controls.ts
@@ -22192,6 +22238,674 @@
     return typeof name == "string" && name.length > 0 ? name : resourceId;
   }
 
+  // src/domain/economy/resources/consume.ts
+  function calculateConsumeKeepRatio(baseRatio, resource, storageShift, hungryRace) {
+    let keepRatio = baseRatio;
+    if (keepRatio === -1) {
+      if (resource.storageRequired <= 1)
+        return null;
+      keepRatio = Math.max(
+        keepRatio,
+        resource.storageRequired / resource.maxQuantity * storageShift
+      );
+    }
+    return resource.isFood && !hungryRace && (keepRatio = Math.max(keepRatio, 0.25)), Math.max(
+      keepRatio,
+      resource.requestedQuantity / resource.maxQuantity * storageShift
+    );
+  }
+  function planConsume(input) {
+    if (!input.initialised)
+      return Object.freeze({ adjustments: Object.freeze([]) });
+    let consumeAdjustments = Object.fromEntries(
+      input.resources.map((resource) => [resource.id, 0])
+    );
+    if (input.useful) {
+      let remaining = input.maximum;
+      for (let ratioIndex = 0; ratioIndex < input.ratios.length; ratioIndex++) {
+        let consumeRatio = input.ratios[ratioIndex];
+        if (consumeRatio !== void 0)
+          for (let resource of input.resources) {
+            if (remaining <= 0)
+              break;
+            if (!resource.enabled || resource.demanded)
+              continue;
+            let keepRatio = calculateConsumeKeepRatio(
+              consumeRatio,
+              resource,
+              input.storageShift,
+              input.hungryRace
+            );
+            if (keepRatio === null)
+              continue;
+            let allowedConsume = consumeAdjustments[resource.id] ?? 0;
+            if (remaining += allowedConsume, resource.isCraftable) {
+              if (resource.currentQuantity > resource.storageRequired * input.storageShift && resource.craftableMaximum !== null) {
+                let maxConsume = Math.floor(resource.craftableMaximum);
+                allowedConsume = Math.max(0, allowedConsume, maxConsume);
+              }
+            } else {
+              let rawMaximum = resource.ratioMaximums[ratioIndex];
+              resource.storageRatio > keepRatio + 0.01 && rawMaximum !== null && rawMaximum !== void 0 ? allowedConsume = Math.max(1, allowedConsume, Math.ceil(rawMaximum)) : (resource.storageRatio > keepRatio && rawMaximum !== null && rawMaximum !== void 0 || resource.storageRatio >= 0.999 && keepRatio >= 1 && rawMaximum !== null && rawMaximum !== void 0) && (allowedConsume = Math.max(
+                0,
+                allowedConsume,
+                Math.floor(rawMaximum)
+              ));
+            }
+            consumeAdjustments[resource.id] = Math.min(remaining, allowedConsume), remaining -= consumeAdjustments[resource.id] ?? 0;
+          }
+      }
+    }
+    let currentById = Object.fromEntries(
+      input.current.map((entry) => [entry.id, entry.count])
+    ), adjustments = Object.keys(consumeAdjustments).map((resourceId) => {
+      let expectedCurrent = currentById[resourceId] ?? 0;
+      return Object.freeze({
+        resourceId,
+        expectedCurrent,
+        delta: (consumeAdjustments[resourceId] ?? 0) - expectedCurrent
+      });
+    });
+    return Object.freeze({ adjustments: Object.freeze(adjustments) });
+  }
+
+  // src/adapters/evolve/economy/resources/captured-supply.ts
+  var SUPPLY_SUMMARY_CONTROL = "spireSupply", STORAGE_SHIFT = 1.01, SUPPLY_VALUES = Object.freeze({
+    Lumber: Object.freeze({ in: 0.5, out: 25e3 }),
+    Chrysotile: Object.freeze({ in: 0.5, out: 25e3 }),
+    Stone: Object.freeze({ in: 0.5, out: 25e3 }),
+    Crystal: Object.freeze({ in: 3, out: 25e3 }),
+    Furs: Object.freeze({ in: 3, out: 25e3 }),
+    Copper: Object.freeze({ in: 1.5, out: 25e3 }),
+    Iron: Object.freeze({ in: 1.5, out: 25e3 }),
+    Aluminium: Object.freeze({ in: 2.5, out: 25e3 }),
+    Cement: Object.freeze({ in: 3, out: 25e3 }),
+    Coal: Object.freeze({ in: 1.5, out: 25e3 }),
+    Oil: Object.freeze({ in: 2.5, out: 12e3 }),
+    Uranium: Object.freeze({ in: 5, out: 300 }),
+    Steel: Object.freeze({ in: 3, out: 25e3 }),
+    Titanium: Object.freeze({ in: 3, out: 25e3 }),
+    Alloy: Object.freeze({ in: 6, out: 25e3 }),
+    Polymer: Object.freeze({ in: 6, out: 25e3 }),
+    Iridium: Object.freeze({ in: 8, out: 25e3 }),
+    Helium_3: Object.freeze({ in: 4.5, out: 12e3 }),
+    Deuterium: Object.freeze({ in: 4, out: 1e3 }),
+    Neutronium: Object.freeze({ in: 15, out: 1e3 }),
+    Adamantite: Object.freeze({ in: 12.5, out: 1e3 }),
+    Infernite: Object.freeze({ in: 25, out: 250 }),
+    Elerium: Object.freeze({ in: 30, out: 250 }),
+    Nano_Tube: Object.freeze({ in: 6.5, out: 1e3 }),
+    Graphene: Object.freeze({ in: 5, out: 1e3 }),
+    Stanene: Object.freeze({ in: 4.5, out: 1e3 }),
+    Bolognium: Object.freeze({ in: 18, out: 1e3 }),
+    Vitreloy: Object.freeze({ in: 14, out: 1e3 }),
+    Orichalcum: Object.freeze({ in: 10, out: 1e3 }),
+    Plywood: Object.freeze({ in: 10, out: 250 }),
+    Brick: Object.freeze({ in: 10, out: 250 }),
+    Wrought_Iron: Object.freeze({ in: 10, out: 250 }),
+    Sheet_Metal: Object.freeze({ in: 10, out: 250 }),
+    Mythril: Object.freeze({ in: 12.5, out: 250 }),
+    Aerogel: Object.freeze({ in: 16.5, out: 250 }),
+    Nanoweave: Object.freeze({ in: 18, out: 250 }),
+    Scarletite: Object.freeze({ in: 35, out: 250 })
+  });
+  var CRAFTABLE_RESOURCES = Object.freeze({
+    Plywood: !0,
+    Brick: !0,
+    Wrought_Iron: !0,
+    Sheet_Metal: !0,
+    Mythril: !0,
+    Aerogel: !0,
+    Nanoweave: !0
+  }), RATIO_MODES = Object.freeze({
+    cap: Object.freeze([0.975]),
+    excess: Object.freeze([-1]),
+    all: Object.freeze([0.045]),
+    mixed: Object.freeze([0.975, -1]),
+    full: Object.freeze([0.975, -1, 0.045])
+  }), DEFAULT_RATIOS = Object.freeze([0.975]);
+  function nonNegative(value) {
+    let number = finite(value);
+    return number !== void 0 && number >= 0 ? number : void 0;
+  }
+  function truthy(value) {
+    return !!value;
+  }
+  function emptyInput7() {
+    return Object.freeze({
+      initialised: !1,
+      useful: !1,
+      maximum: 0,
+      storageShift: STORAGE_SHIFT,
+      hungryRace: !1,
+      ratios: Object.freeze([]),
+      resources: Object.freeze([]),
+      current: Object.freeze([])
+    });
+  }
+  function readRatios(settings) {
+    let mode = settings.supplyMode;
+    return mode === void 0 ? DEFAULT_RATIOS : typeof mode == "string" ? RATIO_MODES[mode] ?? [] : [];
+  }
+  function supplyResourceIds(controls2) {
+    return Object.freeze(
+      controls2.capturedElementIds().filter(
+        (id) => id.startsWith("supply") && id !== SUPPLY_SUMMARY_CONTROL && id.length > 6
+      ).map((id) => id.slice(6))
+    );
+  }
+  function readInput6(dependencies) {
+    let root = dependencies.rootState.readRoot(), settingsValue = dependencies.readSettings(), settings = isRecord(settingsValue) ? settingsValue : {}, portal = readProperty(root, "portal"), transport = readProperty(portal, "transport"), cargo = readProperty(transport, "cargo"), resources = readProperty(root, "resource"), race = readProperty(root, "race");
+    if (settings.autoSupply !== !0 || !isRecord(transport) || !isRecord(cargo) || !isRecord(resources) || !isRecord(race))
+      return Object.freeze({ root, input: emptyInput7() });
+    let transportCount = finite(transport.count), transportOn = finite(transport.on), cargoMaximum = nonNegative(cargo.max), bireme = readProperty(portal, "bireme"), biremeOn = finite(readProperty(bireme, "on")), supply = readProperty(resources, "Supply"), supplyAmount = finite(readProperty(supply, "amount")), supplyMaximum = finite(readProperty(supply, "max"));
+    if (transportCount === void 0 || !Number.isSafeInteger(transportCount) || transportCount < 1 || transportOn === void 0 || biremeOn === void 0 || cargoMaximum === void 0 || !Number.isSafeInteger(cargoMaximum) || !isRecord(supply) || supplyAmount === void 0 || supplyMaximum === void 0)
+      return Object.freeze({ root, input: emptyInput7() });
+    let useful = supplyMaximum > 0 && supplyAmount / supplyMaximum < 1 && transportOn > 0 && biremeOn > 0, demand = dependencies.readDemand(), ratios = readRatios(settings), hungryRace = truthy(race.carnivore) && !truthy(race.herbivore) && !truthy(race.artifical) || truthy(race.ravenous), resourceViews = [], current = [];
+    for (let id of supplyResourceIds(dependencies.controls)) {
+      let value = SUPPLY_VALUES[id], resource = readProperty(resources, id);
+      if (value === void 0 || !isRecord(resource) || resource.display !== !0)
+        continue;
+      let amount = nonNegative(resource.amount), rawMaximum = finite(resource.max), baseRate = finite(resource.diff), storageRequired = finite(demand.storageRequired(id)), requestedQuantity = finite(demand.requestedQuantity(id)), allocation = nonNegative(cargo[id] ?? 0);
+      if (amount === void 0 || rawMaximum === void 0 || baseRate === void 0 || storageRequired === void 0 || requestedQuantity === void 0 || allocation === void 0 || value.out <= 0)
+        return Object.freeze({ root, input: emptyInput7() });
+      let maximum = rawMaximum >= 0 ? rawMaximum : Number.MAX_SAFE_INTEGER;
+      if (maximum <= 0) return Object.freeze({ root, input: emptyInput7() });
+      let enabled = settings[`res_supply${id}`] === !0, demanded = demand.isDemanded(id), storageRatio2 = amount / maximum, isCraftable = CRAFTABLE_RESOURCES[id] === !0, keepView = {
+        storageRequired,
+        requestedQuantity,
+        maxQuantity: maximum,
+        isFood: !1
+      }, rate = baseRate + allocation * value.out, craftableMaximum = isCraftable && amount > storageRequired * STORAGE_SHIFT ? Math.max(rate, amount - storageRequired * STORAGE_SHIFT) / value.out : null, ratioMaximums = ratios.map((ratio) => {
+        if (!enabled || demanded || isCraftable) return null;
+        let keepRatio = calculateConsumeKeepRatio(
+          ratio,
+          keepView,
+          STORAGE_SHIFT,
+          hungryRace
+        );
+        if (keepRatio === null || !(storageRatio2 > keepRatio || storageRatio2 >= 0.999 && keepRatio >= 1))
+          return null;
+        let queryRatio = storageRatio2 > keepRatio ? keepRatio : storageRatio2 >= 0.999 && keepRatio >= 1 ? storageRatio2 : null;
+        return queryRatio === null ? null : Math.max(rate, (storageRatio2 - queryRatio) * maximum) / value.out;
+      });
+      resourceViews.push(
+        Object.freeze({
+          id,
+          enabled,
+          demanded,
+          ...keepView,
+          isCraftable,
+          currentQuantity: amount,
+          storageRatio: storageRatio2,
+          craftableMaximum,
+          ratioMaximums: Object.freeze(ratioMaximums)
+        })
+      ), current.push(Object.freeze({ id, count: allocation }));
+    }
+    return Object.freeze({
+      root,
+      input: Object.freeze({
+        initialised: !0,
+        useful,
+        maximum: cargoMaximum,
+        storageShift: STORAGE_SHIFT,
+        hungryRace,
+        ratios: Object.freeze([...ratios]),
+        resources: Object.freeze(resourceViews),
+        current: Object.freeze(current)
+      })
+    });
+  }
+  function currentAllocation(root, id) {
+    let value = readProperty(
+      readProperty(
+        readProperty(readProperty(root, "portal"), "transport"),
+        "cargo"
+      ),
+      id
+    );
+    return value === void 0 ? 0 : nonNegative(value);
+  }
+  function executeDecision(dependencies, session, decision) {
+    let adjustments = decision.adjustments.filter(
+      (adjustment) => adjustment.delta !== 0
+    );
+    if (adjustments.length === 0) return SUCCEEDED;
+    for (let adjustment of adjustments) {
+      if (!Number.isSafeInteger(adjustment.delta))
+        return rejected(
+          "captured-supply-invalid-adjustment",
+          "supply adjustment must be a safe integer"
+        );
+      if (currentAllocation(session.root, adjustment.resourceId) !== adjustment.expectedCurrent)
+        return stale(
+          "captured-supply-allocation-changed",
+          `${adjustment.resourceId}: sampled allocation changed`
+        );
+    }
+    for (let sign of [-1, 1])
+      for (let adjustment of adjustments) {
+        if (Math.sign(adjustment.delta) !== sign) continue;
+        let handle = dependencies.controls.resolve(
+          `supply${adjustment.resourceId}`
+        ), method = sign < 0 ? "supplyLess" : "supplyMore";
+        if (handle === void 0 || !handle.methods.includes(method))
+          return rejected(
+            "captured-supply-control-missing",
+            `captured supply${adjustment.resourceId} row lacks ${method}`
+          );
+        for (let index = 0; index < Math.abs(adjustment.delta); index += 1) {
+          if (dependencies.rootState.readRoot() !== session.root)
+            return stale(
+              "captured-supply-root-changed",
+              "captured game root changed"
+            );
+          let expected = adjustment.expectedCurrent + sign * index;
+          if (currentAllocation(session.root, adjustment.resourceId) !== expected)
+            return stale(
+              "captured-supply-allocation-changed",
+              `${adjustment.resourceId}: allocation changed during execution`
+            );
+          let result = dependencies.controls.invoke(handle, method, [
+            adjustment.resourceId
+          ]);
+          if (!result.ok)
+            return rejected(
+              "captured-supply-control-failed",
+              result.detail ?? result.reason
+            );
+        }
+      }
+    for (let adjustment of adjustments) {
+      let actual = currentAllocation(session.root, adjustment.resourceId);
+      if (actual !== adjustment.expectedCurrent + adjustment.delta)
+        return stale(
+          "captured-supply-allocation-unchanged",
+          `${adjustment.resourceId}: expected ${adjustment.expectedCurrent + adjustment.delta}, actual ${actual}`
+        );
+    }
+    return SUCCEEDED;
+  }
+  function createCapturedSupplyAutomation(dependencies) {
+    return Object.freeze({
+      run() {
+        let session = readInput6(dependencies);
+        return executeDecision(dependencies, session, planConsume(session.input));
+      }
+    });
+  }
+
+  // src/adapters/evolve/economy/resources/captured-ejector.ts
+  var EJECTOR_SUMMARY_CONTROL = "eject", STORAGE_SHIFT2 = 1.015, RATIO_MODES2 = Object.freeze({
+    cap: Object.freeze([0.985]),
+    excess: Object.freeze([-1]),
+    all: Object.freeze([0.055]),
+    mixed: Object.freeze([0.985, -1]),
+    full: Object.freeze([0.985, -1, 0.055])
+  }), DEFAULT_RATIOS2 = Object.freeze([0.985]);
+  function nonNegative2(value) {
+    let number = finite(value);
+    return number !== void 0 && number >= 0 ? number : void 0;
+  }
+  function truthy2(value) {
+    return !!value;
+  }
+  function emptyInput8() {
+    return Object.freeze({
+      initialised: !1,
+      useful: !1,
+      maximum: 0,
+      storageShift: STORAGE_SHIFT2,
+      hungryRace: !1,
+      ratios: Object.freeze([]),
+      resources: Object.freeze([]),
+      current: Object.freeze([])
+    });
+  }
+  function readRatios2(settings) {
+    let mode = settings.ejectMode;
+    return mode === void 0 ? DEFAULT_RATIOS2 : typeof mode == "string" ? RATIO_MODES2[mode] ?? [] : [];
+  }
+  function ejectableResourceIds(controls2) {
+    return Object.freeze(
+      controls2.capturedElementIds().filter(
+        (id) => id.startsWith("eject") && id !== EJECTOR_SUMMARY_CONTROL && id.length > 5
+      ).map((id) => id.slice(5))
+    );
+  }
+  function readInput7(dependencies) {
+    let root = dependencies.rootState.readRoot(), settingsValue = dependencies.readSettings(), settings = isRecord(settingsValue) ? settingsValue : {}, interstellar = readProperty(root, "interstellar"), ejector = readProperty(interstellar, "mass_ejector"), resources = readProperty(root, "resource"), race = readProperty(root, "race");
+    if (settings.autoEject !== !0 || !isRecord(ejector) || !isRecord(resources) || !isRecord(race))
+      return Object.freeze({ root, input: emptyInput8() });
+    let count2 = finite(ejector.count), on = finite(ejector.on);
+    if (count2 === void 0 || !Number.isSafeInteger(count2) || count2 < 1 || on === void 0 || on < 0)
+      return Object.freeze({ root, input: emptyInput8() });
+    let demand = dependencies.readDemand(), ratios = readRatios2(settings), hungryRace = truthy2(race.carnivore) && !truthy2(race.herbivore) && !truthy2(race.artifical) || truthy2(race.ravenous), resourceViews = [], current = [];
+    for (let id of ejectableResourceIds(dependencies.controls)) {
+      if (truthy2(race.artifical) && id === "Food") continue;
+      let resource = readProperty(resources, id);
+      if (!isRecord(resource) || resource.display !== !0) continue;
+      let amount = nonNegative2(resource.amount), rawMaximum = finite(resource.max), rate = finite(resource.diff), storageRequired = finite(demand.storageRequired(id)), requestedQuantity = finite(demand.requestedQuantity(id)), allocation = nonNegative2(ejector[id] ?? 0);
+      if (amount === void 0 || rawMaximum === void 0 || rate === void 0 || storageRequired === void 0 || requestedQuantity === void 0 || allocation === void 0)
+        return Object.freeze({ root, input: emptyInput8() });
+      let maximum = rawMaximum >= 0 ? rawMaximum : Number.MAX_SAFE_INTEGER;
+      if (maximum <= 0) return Object.freeze({ root, input: emptyInput8() });
+      let enabled = settings[`res_eject${id}`] === !0, demanded = demand.isDemanded(id), storageRatio2 = amount / maximum, keepView = {
+        storageRequired,
+        requestedQuantity,
+        maxQuantity: maximum,
+        isFood: id === "Food"
+      }, ratioMaximums = ratios.map((ratio) => {
+        let keepRatio = calculateConsumeKeepRatio(
+          ratio,
+          keepView,
+          STORAGE_SHIFT2,
+          hungryRace
+        );
+        if (!enabled || demanded || keepRatio === null || !(storageRatio2 > keepRatio || storageRatio2 >= 0.999 && keepRatio >= 1))
+          return null;
+        let queryRatio = storageRatio2 > keepRatio ? keepRatio : storageRatio2 >= 0.999 && keepRatio >= 1 ? storageRatio2 : null;
+        return queryRatio === null ? null : Math.max(rate, (storageRatio2 - queryRatio) * maximum);
+      });
+      resourceViews.push(
+        Object.freeze({
+          id,
+          enabled,
+          demanded,
+          ...keepView,
+          isCraftable: !1,
+          currentQuantity: amount,
+          storageRatio: storageRatio2,
+          craftableMaximum: null,
+          ratioMaximums: Object.freeze(ratioMaximums)
+        })
+      ), current.push(Object.freeze({ id, count: allocation }));
+    }
+    return Object.freeze({
+      root,
+      input: Object.freeze({
+        initialised: !0,
+        useful: !0,
+        maximum: on * 1e3,
+        storageShift: STORAGE_SHIFT2,
+        hungryRace,
+        ratios: Object.freeze([...ratios]),
+        resources: Object.freeze(resourceViews),
+        current: Object.freeze(current)
+      })
+    });
+  }
+  function currentAllocation2(root, id) {
+    let value = readProperty(
+      readProperty(readProperty(root, "interstellar"), "mass_ejector"),
+      id
+    );
+    return value === void 0 ? 0 : nonNegative2(value);
+  }
+  function executeDecision2(dependencies, session, decision) {
+    let adjustments = decision.adjustments.filter(
+      (adjustment) => adjustment.delta !== 0
+    );
+    if (adjustments.length === 0) return SUCCEEDED;
+    for (let adjustment of adjustments) {
+      if (!Number.isSafeInteger(adjustment.delta))
+        return rejected(
+          "captured-ejector-invalid-adjustment",
+          "ejector adjustment must be a safe integer"
+        );
+      if (currentAllocation2(session.root, adjustment.resourceId) !== adjustment.expectedCurrent)
+        return stale(
+          "captured-ejector-allocation-changed",
+          `${adjustment.resourceId}: sampled allocation changed`
+        );
+    }
+    for (let sign of [-1, 1])
+      for (let adjustment of adjustments) {
+        if (Math.sign(adjustment.delta) !== sign) continue;
+        let handle = dependencies.controls.resolve(
+          `eject${adjustment.resourceId}`
+        ), method = sign < 0 ? "ejectLess" : "ejectMore";
+        if (handle === void 0 || !handle.methods.includes(method))
+          return rejected(
+            "captured-ejector-control-missing",
+            `captured eject${adjustment.resourceId} row lacks ${method}`
+          );
+        for (let index = 0; index < Math.abs(adjustment.delta); index += 1) {
+          if (dependencies.rootState.readRoot() !== session.root)
+            return stale(
+              "captured-ejector-root-changed",
+              "captured game root changed"
+            );
+          let expected = adjustment.expectedCurrent + sign * index;
+          if (currentAllocation2(session.root, adjustment.resourceId) !== expected)
+            return stale(
+              "captured-ejector-allocation-changed",
+              `${adjustment.resourceId}: allocation changed during execution`
+            );
+          let result = dependencies.controls.invoke(handle, method, [
+            adjustment.resourceId
+          ]);
+          if (!result.ok)
+            return rejected(
+              "captured-ejector-control-failed",
+              result.detail ?? result.reason
+            );
+        }
+      }
+    for (let adjustment of adjustments) {
+      let actual = currentAllocation2(session.root, adjustment.resourceId);
+      if (actual !== adjustment.expectedCurrent + adjustment.delta)
+        return stale(
+          "captured-ejector-allocation-unchanged",
+          `${adjustment.resourceId}: expected ${adjustment.expectedCurrent + adjustment.delta}, actual ${actual}`
+        );
+    }
+    return SUCCEEDED;
+  }
+  function createCapturedEjectorAutomation(dependencies) {
+    return Object.freeze({
+      run() {
+        let session = readInput7(dependencies);
+        return executeDecision2(dependencies, session, planConsume(session.input));
+      }
+    });
+  }
+
+  // src/adapters/evolve/economy/market/trade-price-mirror.ts
+  var TRADE_ROUTE_RATIO = Object.freeze({
+    Food: 2,
+    Lumber: 2,
+    Chrysotile: 1,
+    Stone: 2,
+    Crystal: 0.4,
+    Furs: 1,
+    Copper: 1,
+    Iron: 1,
+    Aluminium: 1,
+    Cement: 1,
+    Coal: 1,
+    Oil: 0.5,
+    Uranium: 0.12,
+    Steel: 0.5,
+    Titanium: 0.25,
+    Alloy: 0.2,
+    Polymer: 0.2,
+    Iridium: 0.1,
+    Helium_3: 0.1,
+    Deuterium: 0.1,
+    Elerium: 0.02,
+    Water: 2,
+    Neutronium: 0.05,
+    Adamantite: 0.05,
+    Infernite: 0.01,
+    Nano_Tube: 0.1,
+    Graphene: 0.1,
+    Stanene: 0.1,
+    Bolognium: 0.12,
+    Vitreloy: 0.12,
+    Orichalcum: 0.05
+  }), TRAIT_RANKS = Object.freeze([0.1, 0.25, 0.5, 1, 2, 3, 4]), TRAIT_VALUES = Object.freeze({
+    arrogant: Object.freeze([16, 14, 12, 10, 8, 6, 5]),
+    merchant: Object.freeze([5, 10, 15, 25, 35, 40, 45]),
+    conniving: Object.freeze([1, 2, 3, 5, 8, 10, 12]),
+    asymmetrical: Object.freeze([35, 30, 25, 20, 15, 10, 5]),
+    devious: Object.freeze([35, 30, 25, 20, 15, 10, 8])
+  }), TRAIT_VALS = Object.freeze({
+    arrogant: -2,
+    merchant: 3,
+    conniving: 4,
+    asymmetrical: -3,
+    devious: -4
+  }), EMPOWERED_RANGES = Object.freeze([
+    Object.freeze([-1, 2]),
+    Object.freeze([-2, 3]),
+    Object.freeze([-3, 4]),
+    Object.freeze([-4, 6]),
+    Object.freeze([-6, 9]),
+    Object.freeze([-8, 12]),
+    Object.freeze([-99, 99])
+  ]), EMPOWERED_RANK = Object.freeze([0.25, 0.5, 1, 2, 3, 4, 4]), GOBLIN_SELL_DIVISOR_PERCENT = 25, IMP_BUY_PERCENT = 5;
+  function rivalCollapsed(root) {
+    let shadow = finite(readProperty(readProperty(root, "tech"), "shadow"));
+    return shadow !== void 0 && shadow >= 3;
+  }
+  function traitPercent(race, trait) {
+    if (!race[trait]) return 0;
+    let rank = finite(race[trait]);
+    if (rank === void 0) return;
+    let index = TRAIT_RANKS.indexOf(rank);
+    if (!(index < 0)) {
+      if (race.empowered) {
+        let empowered = finite(race.empowered);
+        if (empowered === void 0) return;
+        let empoweredIndex = TRAIT_RANKS.indexOf(empowered);
+        if (empoweredIndex < 0) return;
+        let range = EMPOWERED_RANGES[empoweredIndex], val = TRAIT_VALS[trait];
+        if (range !== void 0 && val >= range[0] && val <= range[1]) {
+          let promoted = TRAIT_RANKS.indexOf(EMPOWERED_RANK[index]);
+          if (promoted < 0) return;
+          index = promoted;
+        }
+      }
+      return TRAIT_VALUES[trait][index];
+    }
+  }
+  function fathom(root, race, target) {
+    if (!race.unfathomable) return 0;
+    let city = readProperty(root, "city"), dwellers = readProperty(city, "surfaceDwellers");
+    if (!Array.isArray(dwellers) || !dwellers.includes(target)) return 0;
+    let housing = readProperty(city, "captive_housing"), workers = finite(
+      readProperty(
+        readProperty(readProperty(root, "civic"), "torturer"),
+        "workers"
+      )
+    ), index = dwellers.indexOf(target), active = finite(readProperty(housing, `race${index}`)), nightmare = readProperty(
+      readProperty(readProperty(root, "stats"), "achieve"),
+      "nightmare"
+    ), mg = finite(readProperty(nightmare, "mg"));
+    if (workers === void 0 || active === void 0) return;
+    let adjusted = Math.min(active, 100);
+    return adjusted > workers && (adjusted -= Math.ceil((adjusted - workers) / 3)), adjusted / 100 * ((mg ?? 0) / 5);
+  }
+  function structureCount2(container, id) {
+    let structure = readProperty(container, id);
+    if (structure === void 0 || structure === !1) return 0;
+    let count2 = finite(readProperty(structure, "count"));
+    return count2 === void 0 ? void 0 : count2;
+  }
+  function achievementLevel2(root, id) {
+    let achieve = readProperty(readProperty(root, "stats"), "achieve"), entry = readProperty(achieve, id);
+    if (entry === void 0) return 0;
+    let level = finite(readProperty(entry, "l"));
+    return level === void 0 ? 0 : level;
+  }
+  function railwayLevel(root) {
+    let railway = readProperty(readProperty(root, "tech"), "railway");
+    return railway ? finite(railway) : 0;
+  }
+  function hostility(root, race) {
+    if (!race.truepath || race.lone_survivor || rivalCollapsed(root))
+      return 0;
+    let gov3 = readProperty(
+      readProperty(readProperty(root, "civic"), "foreign"),
+      "gov3"
+    ), hstl = finite(readProperty(gov3, "hstl"));
+    return hstl === void 0 ? void 0 : hstl;
+  }
+  function suspicionExcess(root, race) {
+    if (!race.witch_hunter) return 0;
+    let amount = finite(
+      readProperty(readProperty(readProperty(root, "resource"), "Sus"), "amount")
+    );
+    if (amount !== void 0)
+      return amount > 50 ? amount - 50 : 0;
+  }
+  function inflationLevel(race) {
+    let inflation = race.inflation;
+    return inflation === void 0 || inflation === !1 ? 0 : finite(inflation);
+  }
+  function cunningSlotted(root) {
+    let slots = readProperty(readProperty(root, "race"), "geneSlots");
+    return Array.isArray(slots) ? slots.some(
+      (slot) => isRecord(slot) && readProperty(slot, "g") === "cunning"
+    ) : !1;
+  }
+  function psychicCashActive(root) {
+    let race = readProperty(root, "race"), powers = readProperty(race, "psychicPowers");
+    return !!(readProperty(readProperty(root, "tech"), "psychic") && readProperty(race, "psychic") && isRecord(powers) && Object.hasOwn(powers, "cash"));
+  }
+  function unsupportedTradePriceModifier(root) {
+    if (cunningSlotted(root)) return "a slotted Cunning gene";
+    if (psychicCashActive(root)) return "the psychic cash power";
+  }
+  function tradeRoutePrices(root, resourceId, resource) {
+    let ratio = TRADE_ROUTE_RATIO[resourceId], value = finite(resource.value), race = readProperty(root, "race");
+    if (ratio === void 0 || value === void 0 || value <= 0 || !isRecord(race) || unsupportedTradePriceModifier(root) !== void 0) return;
+    let arrogant = traitPercent(race, "arrogant"), conniving = traitPercent(race, "conniving"), merchant = traitPercent(race, "merchant"), asymmetrical = traitPercent(race, "asymmetrical"), devious = traitPercent(race, "devious"), goblin = fathom(root, race, "goblin"), imp = fathom(root, race, "imp"), wharf = structureCount2(readProperty(root, "city"), "wharf"), gps = structureCount2(readProperty(root, "space"), "gps"), underground = structureCount2(
+      readProperty(root, "underground"),
+      "trade"
+    ), railway = railwayLevel(root), banana = achievementLevel2(root, "banana"), hstl = hostility(root, race), suspicion = suspicionExcess(root, race), inflation = inflationLevel(race), quarantine = finite(race.quarantine ?? 0);
+    if (arrogant === void 0 || conniving === void 0 || merchant === void 0 || asymmetrical === void 0 || devious === void 0 || goblin === void 0 || imp === void 0 || wharf === void 0 || gps === void 0 || underground === void 0 || railway === void 0 || banana === void 0 || hstl === void 0 || suspicion === void 0 || inflation === void 0 || quarantine === void 0)
+      return;
+    let railwayBuyBoost = banana >= 1 ? 0.97 : 0.98, railwaySellBoost = banana >= 1 ? 0.03 : 0.02, gpsActive = gps > 3 ? gps : 0, buy = value * (1 + arrogant / 100) * (1 - conniving / 100);
+    buy *= 1 - imp * IMP_BUY_PERCENT / 100, buy *= ratio, buy *= 0.99 ** wharf, buy *= 0.99 ** gpsActive, buy *= railwayBuyBoost ** railway, buy *= 1 + hstl / 101, buy *= 1 + inflation / 300, race.quarantine && (buy *= 1 + Math.round(quarantine ** 3.5)), buy *= 1 + suspicion / 8, buy *= 0.99 ** underground;
+    let divide = 4;
+    if (divide *= 1 - merchant / 100, divide *= 1 - goblin * GOBLIN_SELL_DIVISOR_PERCENT / 100, divide *= 1 + asymmetrical / 100, divide *= 1 + devious / 100, race.conniving && (divide -= 1), !(divide > 0)) return;
+    let sell = value * ratio / divide;
+    sell *= 1 + wharf * 0.01, sell *= 1 + gpsActive * 0.01, sell *= 1 + railway * railwaySellBoost, sell *= 1 - hstl / 101, sell *= 1 + inflation / 500, sell *= 1 - suspicion / 52;
+    let buyPrice = Number(buy.toFixed(1)), sellPrice = Number(sell.toFixed(1));
+    return Number.isFinite(buyPrice) && Number.isFinite(sellPrice) ? Object.freeze({ buy: buyPrice, sell: sellPrice }) : void 0;
+  }
+  function tradeRouteSellQuantity(root, resourceId) {
+    let ratio = TRADE_ROUTE_RATIO[resourceId];
+    if (ratio === void 0) return;
+    let level = achievementLevel2(root, "trade");
+    if (level === void 0) return;
+    let rank = Math.min(5, level), quantity = ratio * (1 - rank / 100);
+    return quantity > 0 ? quantity : void 0;
+  }
+
+  // src/domain/economy/production/power.ts
+  function planPowerWarningShutdown(warnings) {
+    for (let warning of warnings)
+      if (!(!warning.autoStateEnabled || warning.ship) && !((warning.warningKind === "belt-elerium" || warning.warningKind === "belt-iridium" || warning.warningKind === "belt-iron") && warning.beltSupportNeeded <= warning.beltSupportMaximum) && !((warning.warningKind === "lake-bireme" || warning.warningKind === "lake-transport") && warning.lakeSupportNeeded <= warning.lakeSupportMaximum) && !(warning.warningKind === "tau-whaling" || warning.warningKind === "tau-mining"))
+        return Object.freeze({
+          kind: "shutdown-warned-building",
+          domId: warning.domId,
+          buildingId: warning.buildingId,
+          binding: warning.binding,
+          expectedStateOn: warning.stateOn
+        });
+    return null;
+  }
+  var EMPTY_POWER_AUTOMATION_STATE = Object.freeze(
+    {
+      oscillations: Object.freeze({}),
+      warningCaps: Object.freeze({})
+    }
+  );
+
   // src/adapters/evolve/progression/build/captured-building-catalog.ts
   function readCapturedBuildingRootStateRecord(root, binding, act, structures) {
     let parts = splitActionId(binding);
@@ -22563,6 +23277,30 @@
     camp: EMPTY_SPIRE_BUILDING,
     purifier: EMPTY_SPIRE_BUILDING
   });
+  var POWER_BUSY_SOURCE_BINDING = Object.freeze({
+    "space-gas_mining": "space-gas_mining",
+    "space-oil_extractor": "space-oil_extractor",
+    "space-orichalcum_mine": "space-orichalcum_mine",
+    "space-uranium_mine": "space-uranium_mine",
+    "space-neutronium_mine": "space-neutronium_mine",
+    "space-elerium_mine": "space-elerium_mine",
+    "space-iridium_ship": "job_space_miner",
+    "space-iron_ship": "job_space_miner",
+    "space-elerium_ship": "job_space_miner",
+    "space-iridium_mine": "space-iridium_mine",
+    "space-helium_mine": "space-helium_mine",
+    "galaxy-vitreloy_plant": "galaxy-vitreloy_plant",
+    "galaxy-excavator": "galaxy-excavator",
+    "space-water_freighter": "space-water_freighter",
+    "eden-asphodel_harvester": "eden-asphodel_harvester",
+    "galaxy-armed_miner": "galaxy-armed_miner",
+    "galaxy-raider": "galaxy-raider",
+    "interstellar-harvester": "interstellar-harvester",
+    "city-tourist_center": "city-tourist_center"
+  }), POWER_BUSY_SOURCE_LOCALIZATION_KEY = Object.freeze({
+    "galaxy-vitreloy_plant": "galaxy_vitreloy_plant_bd",
+    "galaxy-armed_miner": "galaxy_armed_miner_bd"
+  });
 
   // src/bootstrap/discovery-attempts.ts
   function discoveryRetryDelay(failures) {
@@ -22603,26 +23341,6 @@
       }
     });
   }
-
-  // src/domain/economy/production/power.ts
-  function planPowerWarningShutdown(warnings) {
-    for (let warning of warnings)
-      if (!(!warning.autoStateEnabled || warning.ship) && !((warning.warningKind === "belt-elerium" || warning.warningKind === "belt-iridium" || warning.warningKind === "belt-iron") && warning.beltSupportNeeded <= warning.beltSupportMaximum) && !((warning.warningKind === "lake-bireme" || warning.warningKind === "lake-transport") && warning.lakeSupportNeeded <= warning.lakeSupportMaximum) && !(warning.warningKind === "tau-whaling" || warning.warningKind === "tau-mining"))
-        return Object.freeze({
-          kind: "shutdown-warned-building",
-          domId: warning.domId,
-          buildingId: warning.buildingId,
-          binding: warning.binding,
-          expectedStateOn: warning.stateOn
-        });
-    return null;
-  }
-  var EMPTY_POWER_AUTOMATION_STATE = Object.freeze(
-    {
-      oscillations: Object.freeze({}),
-      warningCaps: Object.freeze({})
-    }
-  );
 
   // src/adapters/evolve/economy/production/captured-power-warnings.ts
   function warningDocument(value) {
@@ -22904,7 +23622,7 @@
       minRateOfChange
     });
   }
-  function emptyInput7() {
+  function emptyInput9() {
     return Object.freeze({
       initialised: !1,
       hasForge: !1,
@@ -22973,7 +23691,7 @@
         cost: costs
       });
   }
-  function readInput6(dependencies) {
+  function readInput8(dependencies) {
     let root = dependencies.rootState.readRoot(), city = readProperty(root, "city"), smelter = readProperty(city, "smelter"), resources = readProperty(root, "resource"), race = readProperty(root, "race"), tech = readProperty(root, "tech"), settings = readSettingRecord(dependencies.readSettings()), demand = dependencies.readDemand?.() ?? {
       savingTarget: null,
       requestedQuantity: () => 0,
@@ -22983,18 +23701,18 @@
       storageRequired: () => 1
     };
     if (!isRecord(smelter) || !isRecord(resources) || !isRecord(race) || !isRecord(tech) || race.steelen || dependencies.controls.resolve(SMELTER_CONTROL) === void 0)
-      return Object.freeze({ root, input: emptyInput7() });
+      return Object.freeze({ root, input: emptyInput9() });
     let cap = readCount(smelter.cap), star = readCount(smelter.Star), ironCount = readCount(smelter.Iron), steelCount = readCount(smelter.Steel), iridiumCount = readCount(smelter.Iridium);
     if (cap === void 0 || star === void 0 || ironCount === void 0 || steelCount === void 0 || iridiumCount === void 0 || star > cap)
-      return Object.freeze({ root, input: emptyInput7() });
+      return Object.freeze({ root, input: emptyInput9() });
     let iron = readResource2(resources, "Iron"), steel = readResource2(resources, "Steel"), coal = readResource2(resources, "Coal"), titanium = readResource2(resources, "Titanium");
     if (iron === void 0 || steel === void 0 || coal === void 0 || titanium === void 0)
-      return Object.freeze({ root, input: emptyInput7() });
+      return Object.freeze({ root, input: emptyInput9() });
     let fuels = FUEL_IDS.map(
       (id) => readFuel(id, resources, race, tech, settings, demand)
     );
     if (fuels.some((fuel) => fuel === void 0))
-      return Object.freeze({ root, input: emptyInput7() });
+      return Object.freeze({ root, input: emptyInput9() });
     let withSmelterCounts = [...fuels].filter((fuel) => fuel !== void 0).sort(
       (left, right) => (finite(settings[`smelter_fuel_p_${left.id}`]) ?? FUEL_IDS.indexOf(left.id)) - (finite(settings[`smelter_fuel_p_${right.id}`]) ?? FUEL_IDS.indexOf(right.id))
     ).map(
@@ -23009,7 +23727,7 @@
       })
     ), requestedIron = demand.requestedQuantity("Iron"), requestedSteel = demand.requestedQuantity("Steel"), productionSmeltingIridium = finite(settings.productionSmeltingIridium) ?? 0.5;
     if (productionSmeltingIridium < 0)
-      return Object.freeze({ root, input: emptyInput7() });
+      return Object.freeze({ root, input: emptyInput9() });
     let miner = readProperty(readProperty(root, "civic"), "miner"), ironShip = readProperty(readProperty(root, "space"), "iron_ship"), titaniumRatio = titanium.maximum > 0 ? titanium.amount / titanium.maximum : 1, input = Object.freeze({
       initialised: !0,
       hasForge: !!race.forge,
@@ -23054,7 +23772,7 @@
   function createCapturedSmelterAutomation(dependencies) {
     return Object.freeze({
       run() {
-        let session = readInput6(dependencies), decision = planSmelter(session.input);
+        let session = readInput8(dependencies), decision = planSmelter(session.input);
         if (!session.input.initialised) return SUCCEEDED;
         let adjustments = [
           ...decision.fuelAdjustments.map((adjustment) => ({
@@ -23120,79 +23838,8 @@
     });
   }
 
-  // src/domain/economy/resources/consume.ts
-  function calculateConsumeKeepRatio(baseRatio, resource, storageShift, hungryRace) {
-    let keepRatio = baseRatio;
-    if (keepRatio === -1) {
-      if (resource.storageRequired <= 1)
-        return null;
-      keepRatio = Math.max(
-        keepRatio,
-        resource.storageRequired / resource.maxQuantity * storageShift
-      );
-    }
-    return resource.isFood && !hungryRace && (keepRatio = Math.max(keepRatio, 0.25)), Math.max(
-      keepRatio,
-      resource.requestedQuantity / resource.maxQuantity * storageShift
-    );
-  }
-  function planConsume(input) {
-    if (!input.initialised)
-      return Object.freeze({ adjustments: Object.freeze([]) });
-    let consumeAdjustments = Object.fromEntries(
-      input.resources.map((resource) => [resource.id, 0])
-    );
-    if (input.useful) {
-      let remaining = input.maximum;
-      for (let ratioIndex = 0; ratioIndex < input.ratios.length; ratioIndex++) {
-        let consumeRatio = input.ratios[ratioIndex];
-        if (consumeRatio !== void 0)
-          for (let resource of input.resources) {
-            if (remaining <= 0)
-              break;
-            if (!resource.enabled || resource.demanded)
-              continue;
-            let keepRatio = calculateConsumeKeepRatio(
-              consumeRatio,
-              resource,
-              input.storageShift,
-              input.hungryRace
-            );
-            if (keepRatio === null)
-              continue;
-            let allowedConsume = consumeAdjustments[resource.id] ?? 0;
-            if (remaining += allowedConsume, resource.isCraftable) {
-              if (resource.currentQuantity > resource.storageRequired * input.storageShift && resource.craftableMaximum !== null) {
-                let maxConsume = Math.floor(resource.craftableMaximum);
-                allowedConsume = Math.max(0, allowedConsume, maxConsume);
-              }
-            } else {
-              let rawMaximum = resource.ratioMaximums[ratioIndex];
-              resource.storageRatio > keepRatio + 0.01 && rawMaximum !== null && rawMaximum !== void 0 ? allowedConsume = Math.max(1, allowedConsume, Math.ceil(rawMaximum)) : (resource.storageRatio > keepRatio && rawMaximum !== null && rawMaximum !== void 0 || resource.storageRatio >= 0.999 && keepRatio >= 1 && rawMaximum !== null && rawMaximum !== void 0) && (allowedConsume = Math.max(
-                0,
-                allowedConsume,
-                Math.floor(rawMaximum)
-              ));
-            }
-            consumeAdjustments[resource.id] = Math.min(remaining, allowedConsume), remaining -= consumeAdjustments[resource.id] ?? 0;
-          }
-      }
-    }
-    let currentById = Object.fromEntries(
-      input.current.map((entry) => [entry.id, entry.count])
-    ), adjustments = Object.keys(consumeAdjustments).map((resourceId) => {
-      let expectedCurrent = currentById[resourceId] ?? 0;
-      return Object.freeze({
-        resourceId,
-        expectedCurrent,
-        delta: (consumeAdjustments[resourceId] ?? 0) - expectedCurrent
-      });
-    });
-    return Object.freeze({ adjustments: Object.freeze(adjustments) });
-  }
-
   // src/adapters/evolve/economy/resources/captured-nanite.ts
-  var NANITE_CONTROL = "iNFactory", STORAGE_SHIFT = 1.005, NANITE_RESOURCES = Object.freeze([
+  var NANITE_CONTROL = "iNFactory", STORAGE_SHIFT3 = 1.005, NANITE_RESOURCES = Object.freeze([
     "Neutronium",
     "Uranium",
     "Orichalcum",
@@ -23217,50 +23864,50 @@
     "Crystal",
     "Helium_3",
     "Deuterium"
-  ]), RATIO_MODES = Object.freeze({
+  ]), RATIO_MODES3 = Object.freeze({
     cap: Object.freeze([0.965]),
     excess: Object.freeze([-1]),
     all: Object.freeze([0.035]),
     mixed: Object.freeze([0.965, -1]),
     full: Object.freeze([0.965, -1, 0.035])
-  }), DEFAULT_RATIOS = Object.freeze([0.965, -1, 0.035]);
-  function nonNegative(value) {
+  }), DEFAULT_RATIOS3 = Object.freeze([0.965, -1, 0.035]);
+  function nonNegative3(value) {
     let number = finite(value);
     return number !== void 0 && number >= 0 ? number : void 0;
   }
-  function truthy(value) {
+  function truthy3(value) {
     return !!value;
   }
-  function emptyInput8() {
+  function emptyInput10() {
     return Object.freeze({
       initialised: !1,
       useful: !1,
       maximum: 0,
-      storageShift: STORAGE_SHIFT,
+      storageShift: STORAGE_SHIFT3,
       hungryRace: !1,
       ratios: Object.freeze([]),
       resources: Object.freeze([]),
       current: Object.freeze([])
     });
   }
-  function readRatios(settings) {
+  function readRatios3(settings) {
     let mode = settings.naniteMode;
-    return mode === void 0 ? DEFAULT_RATIOS : typeof mode == "string" ? RATIO_MODES[mode] ?? [] : [];
+    return mode === void 0 ? DEFAULT_RATIOS3 : typeof mode == "string" ? RATIO_MODES3[mode] ?? [] : [];
   }
-  function readInput7(dependencies) {
+  function readInput9(dependencies) {
     let root = dependencies.rootState.readRoot(), settingsValue = dependencies.readSettings(), settings = isRecord(settingsValue) ? settingsValue : {}, city = readProperty(root, "city"), race = readProperty(root, "race"), resources = readProperty(root, "resource"), factory = readProperty(city, "nanite_factory"), nanite = readProperty(resources, "Nanite"), control = dependencies.controls.resolve(NANITE_CONTROL);
-    if (settings.autoNanite !== !0 || !isRecord(race) || !isRecord(resources) || !isRecord(factory) || control === void 0 || !control.methods.includes("addItem") || !control.methods.includes("subItem") || !truthy(race.deconstructor))
-      return Object.freeze({ root, input: emptyInput8() });
+    if (settings.autoNanite !== !0 || !isRecord(race) || !isRecord(resources) || !isRecord(factory) || control === void 0 || !control.methods.includes("addItem") || !control.methods.includes("subItem") || !truthy3(race.deconstructor))
+      return Object.freeze({ root, input: emptyInput10() });
     let factoryCount = finite(factory.count), naniteAmount = finite(readProperty(nanite, "amount")), naniteMaximum = finite(readProperty(nanite, "max"));
     if (factoryCount === void 0 || !Number.isSafeInteger(factoryCount) || factoryCount < 0 || naniteAmount === void 0 || naniteMaximum === void 0)
-      return Object.freeze({ root, input: emptyInput8() });
-    let demand = dependencies.readDemand(), ratios = readRatios(settings), hungryRace = truthy(race.carnivore) && !truthy(race.herbivore) && !truthy(race.artifical) || truthy(race.ravenous), resourceViews = [], current = [];
+      return Object.freeze({ root, input: emptyInput10() });
+    let demand = dependencies.readDemand(), ratios = readRatios3(settings), hungryRace = truthy3(race.carnivore) && !truthy3(race.herbivore) && !truthy3(race.artifical) || truthy3(race.ravenous), resourceViews = [], current = [];
     for (let id of NANITE_RESOURCES) {
       let resource = readProperty(resources, id);
       if (!isRecord(resource) || resource.display !== !0) continue;
-      let amount = finite(resource.amount), maximum = finite(resource.max), rate = finite(resource.diff), storageRequired = finite(demand.storageRequired(id)), requestedQuantity = finite(demand.requestedQuantity(id)), allocation = nonNegative(factory[id] ?? 0);
+      let amount = finite(resource.amount), maximum = finite(resource.max), rate = finite(resource.diff), storageRequired = finite(demand.storageRequired(id)), requestedQuantity = finite(demand.requestedQuantity(id)), allocation = nonNegative3(factory[id] ?? 0);
       if (amount === void 0 || maximum === void 0 || maximum <= 0 || rate === void 0 || storageRequired === void 0 || requestedQuantity === void 0 || allocation === void 0)
-        return Object.freeze({ root, input: emptyInput8() });
+        return Object.freeze({ root, input: emptyInput10() });
       let currentQuantity2 = amount, enabled = settings[`res_nanite${id}`] === !0, demanded = demand.isDemanded(id), storageRatio2 = amount / maximum, keepView = {
         storageRequired,
         requestedQuantity,
@@ -23270,7 +23917,7 @@
         let keepRatio = calculateConsumeKeepRatio(
           ratio,
           keepView,
-          STORAGE_SHIFT,
+          STORAGE_SHIFT3,
           hungryRace
         );
         if (!enabled || demanded || keepRatio === null || !(storageRatio2 > keepRatio || storageRatio2 >= 0.999 && keepRatio >= 1))
@@ -23299,7 +23946,7 @@
         initialised: !0,
         useful: usefulRatio < 1,
         maximum: factoryCount * 50,
-        storageShift: STORAGE_SHIFT,
+        storageShift: STORAGE_SHIFT3,
         hungryRace,
         ratios: Object.freeze([...ratios]),
         resources: Object.freeze(resourceViews),
@@ -23307,14 +23954,14 @@
       })
     });
   }
-  function currentAllocation(root, id) {
+  function currentAllocation3(root, id) {
     let value = readProperty(
       readProperty(readProperty(root, "city"), "nanite_factory"),
       id
     );
-    return value === void 0 ? 0 : nonNegative(value);
+    return value === void 0 ? 0 : nonNegative3(value);
   }
-  function executeDecision(dependencies, session, decision) {
+  function executeDecision3(dependencies, session, decision) {
     let adjustments = decision.adjustments.filter(
       (adjustment) => adjustment.delta !== 0
     );
@@ -23326,7 +23973,7 @@
         "captured iNFactory control lacks the required allocation methods"
       );
     for (let adjustment of adjustments)
-      if (!Number.isSafeInteger(adjustment.delta) || currentAllocation(session.root, adjustment.resourceId) !== adjustment.expectedCurrent)
+      if (!Number.isSafeInteger(adjustment.delta) || currentAllocation3(session.root, adjustment.resourceId) !== adjustment.expectedCurrent)
         return stale(
           "captured-nanite-allocation-changed",
           `${adjustment.resourceId}: sampled allocation changed`
@@ -23342,7 +23989,7 @@
               "captured game root changed"
             );
           let expected = adjustment.expectedCurrent + sign * index;
-          if (currentAllocation(session.root, adjustment.resourceId) !== expected)
+          if (currentAllocation3(session.root, adjustment.resourceId) !== expected)
             return stale(
               "captured-nanite-allocation-changed",
               `${adjustment.resourceId}: allocation changed during execution`
@@ -23358,7 +24005,7 @@
         }
       }
     for (let adjustment of adjustments) {
-      let actual = currentAllocation(session.root, adjustment.resourceId);
+      let actual = currentAllocation3(session.root, adjustment.resourceId);
       if (actual !== adjustment.expectedCurrent + adjustment.delta)
         return stale(
           "captured-nanite-allocation-unchanged",
@@ -23368,408 +24015,6 @@
     return SUCCEEDED;
   }
   function createCapturedNaniteAutomation(dependencies) {
-    return Object.freeze({
-      run() {
-        let session = readInput7(dependencies);
-        return executeDecision(dependencies, session, planConsume(session.input));
-      }
-    });
-  }
-
-  // src/adapters/evolve/economy/resources/captured-ejector.ts
-  var EJECTOR_SUMMARY_CONTROL = "eject", STORAGE_SHIFT2 = 1.015, RATIO_MODES2 = Object.freeze({
-    cap: Object.freeze([0.985]),
-    excess: Object.freeze([-1]),
-    all: Object.freeze([0.055]),
-    mixed: Object.freeze([0.985, -1]),
-    full: Object.freeze([0.985, -1, 0.055])
-  }), DEFAULT_RATIOS2 = Object.freeze([0.985]);
-  function nonNegative2(value) {
-    let number = finite(value);
-    return number !== void 0 && number >= 0 ? number : void 0;
-  }
-  function truthy2(value) {
-    return !!value;
-  }
-  function emptyInput9() {
-    return Object.freeze({
-      initialised: !1,
-      useful: !1,
-      maximum: 0,
-      storageShift: STORAGE_SHIFT2,
-      hungryRace: !1,
-      ratios: Object.freeze([]),
-      resources: Object.freeze([]),
-      current: Object.freeze([])
-    });
-  }
-  function readRatios2(settings) {
-    let mode = settings.ejectMode;
-    return mode === void 0 ? DEFAULT_RATIOS2 : typeof mode == "string" ? RATIO_MODES2[mode] ?? [] : [];
-  }
-  function ejectableResourceIds(controls2) {
-    return Object.freeze(
-      controls2.capturedElementIds().filter(
-        (id) => id.startsWith("eject") && id !== EJECTOR_SUMMARY_CONTROL && id.length > 5
-      ).map((id) => id.slice(5))
-    );
-  }
-  function readInput8(dependencies) {
-    let root = dependencies.rootState.readRoot(), settingsValue = dependencies.readSettings(), settings = isRecord(settingsValue) ? settingsValue : {}, interstellar = readProperty(root, "interstellar"), ejector = readProperty(interstellar, "mass_ejector"), resources = readProperty(root, "resource"), race = readProperty(root, "race");
-    if (settings.autoEject !== !0 || !isRecord(ejector) || !isRecord(resources) || !isRecord(race))
-      return Object.freeze({ root, input: emptyInput9() });
-    let count2 = finite(ejector.count), on = finite(ejector.on);
-    if (count2 === void 0 || !Number.isSafeInteger(count2) || count2 < 1 || on === void 0 || on < 0)
-      return Object.freeze({ root, input: emptyInput9() });
-    let demand = dependencies.readDemand(), ratios = readRatios2(settings), hungryRace = truthy2(race.carnivore) && !truthy2(race.herbivore) && !truthy2(race.artifical) || truthy2(race.ravenous), resourceViews = [], current = [];
-    for (let id of ejectableResourceIds(dependencies.controls)) {
-      if (truthy2(race.artifical) && id === "Food") continue;
-      let resource = readProperty(resources, id);
-      if (!isRecord(resource) || resource.display !== !0) continue;
-      let amount = nonNegative2(resource.amount), rawMaximum = finite(resource.max), rate = finite(resource.diff), storageRequired = finite(demand.storageRequired(id)), requestedQuantity = finite(demand.requestedQuantity(id)), allocation = nonNegative2(ejector[id] ?? 0);
-      if (amount === void 0 || rawMaximum === void 0 || rate === void 0 || storageRequired === void 0 || requestedQuantity === void 0 || allocation === void 0)
-        return Object.freeze({ root, input: emptyInput9() });
-      let maximum = rawMaximum >= 0 ? rawMaximum : Number.MAX_SAFE_INTEGER;
-      if (maximum <= 0) return Object.freeze({ root, input: emptyInput9() });
-      let enabled = settings[`res_eject${id}`] === !0, demanded = demand.isDemanded(id), storageRatio2 = amount / maximum, keepView = {
-        storageRequired,
-        requestedQuantity,
-        maxQuantity: maximum,
-        isFood: id === "Food"
-      }, ratioMaximums = ratios.map((ratio) => {
-        let keepRatio = calculateConsumeKeepRatio(
-          ratio,
-          keepView,
-          STORAGE_SHIFT2,
-          hungryRace
-        );
-        if (!enabled || demanded || keepRatio === null || !(storageRatio2 > keepRatio || storageRatio2 >= 0.999 && keepRatio >= 1))
-          return null;
-        let queryRatio = storageRatio2 > keepRatio ? keepRatio : storageRatio2 >= 0.999 && keepRatio >= 1 ? storageRatio2 : null;
-        return queryRatio === null ? null : Math.max(rate, (storageRatio2 - queryRatio) * maximum);
-      });
-      resourceViews.push(
-        Object.freeze({
-          id,
-          enabled,
-          demanded,
-          ...keepView,
-          isCraftable: !1,
-          currentQuantity: amount,
-          storageRatio: storageRatio2,
-          craftableMaximum: null,
-          ratioMaximums: Object.freeze(ratioMaximums)
-        })
-      ), current.push(Object.freeze({ id, count: allocation }));
-    }
-    return Object.freeze({
-      root,
-      input: Object.freeze({
-        initialised: !0,
-        useful: !0,
-        maximum: on * 1e3,
-        storageShift: STORAGE_SHIFT2,
-        hungryRace,
-        ratios: Object.freeze([...ratios]),
-        resources: Object.freeze(resourceViews),
-        current: Object.freeze(current)
-      })
-    });
-  }
-  function currentAllocation2(root, id) {
-    let value = readProperty(
-      readProperty(readProperty(root, "interstellar"), "mass_ejector"),
-      id
-    );
-    return value === void 0 ? 0 : nonNegative2(value);
-  }
-  function executeDecision2(dependencies, session, decision) {
-    let adjustments = decision.adjustments.filter(
-      (adjustment) => adjustment.delta !== 0
-    );
-    if (adjustments.length === 0) return SUCCEEDED;
-    for (let adjustment of adjustments) {
-      if (!Number.isSafeInteger(adjustment.delta))
-        return rejected(
-          "captured-ejector-invalid-adjustment",
-          "ejector adjustment must be a safe integer"
-        );
-      if (currentAllocation2(session.root, adjustment.resourceId) !== adjustment.expectedCurrent)
-        return stale(
-          "captured-ejector-allocation-changed",
-          `${adjustment.resourceId}: sampled allocation changed`
-        );
-    }
-    for (let sign of [-1, 1])
-      for (let adjustment of adjustments) {
-        if (Math.sign(adjustment.delta) !== sign) continue;
-        let handle = dependencies.controls.resolve(
-          `eject${adjustment.resourceId}`
-        ), method = sign < 0 ? "ejectLess" : "ejectMore";
-        if (handle === void 0 || !handle.methods.includes(method))
-          return rejected(
-            "captured-ejector-control-missing",
-            `captured eject${adjustment.resourceId} row lacks ${method}`
-          );
-        for (let index = 0; index < Math.abs(adjustment.delta); index += 1) {
-          if (dependencies.rootState.readRoot() !== session.root)
-            return stale(
-              "captured-ejector-root-changed",
-              "captured game root changed"
-            );
-          let expected = adjustment.expectedCurrent + sign * index;
-          if (currentAllocation2(session.root, adjustment.resourceId) !== expected)
-            return stale(
-              "captured-ejector-allocation-changed",
-              `${adjustment.resourceId}: allocation changed during execution`
-            );
-          let result = dependencies.controls.invoke(handle, method, [
-            adjustment.resourceId
-          ]);
-          if (!result.ok)
-            return rejected(
-              "captured-ejector-control-failed",
-              result.detail ?? result.reason
-            );
-        }
-      }
-    for (let adjustment of adjustments) {
-      let actual = currentAllocation2(session.root, adjustment.resourceId);
-      if (actual !== adjustment.expectedCurrent + adjustment.delta)
-        return stale(
-          "captured-ejector-allocation-unchanged",
-          `${adjustment.resourceId}: expected ${adjustment.expectedCurrent + adjustment.delta}, actual ${actual}`
-        );
-    }
-    return SUCCEEDED;
-  }
-  function createCapturedEjectorAutomation(dependencies) {
-    return Object.freeze({
-      run() {
-        let session = readInput8(dependencies);
-        return executeDecision2(dependencies, session, planConsume(session.input));
-      }
-    });
-  }
-
-  // src/adapters/evolve/economy/resources/captured-supply.ts
-  var SUPPLY_SUMMARY_CONTROL = "spireSupply", STORAGE_SHIFT3 = 1.01, SUPPLY_VALUES = Object.freeze({
-    Lumber: Object.freeze({ in: 0.5, out: 25e3 }),
-    Chrysotile: Object.freeze({ in: 0.5, out: 25e3 }),
-    Stone: Object.freeze({ in: 0.5, out: 25e3 }),
-    Crystal: Object.freeze({ in: 3, out: 25e3 }),
-    Furs: Object.freeze({ in: 3, out: 25e3 }),
-    Copper: Object.freeze({ in: 1.5, out: 25e3 }),
-    Iron: Object.freeze({ in: 1.5, out: 25e3 }),
-    Aluminium: Object.freeze({ in: 2.5, out: 25e3 }),
-    Cement: Object.freeze({ in: 3, out: 25e3 }),
-    Coal: Object.freeze({ in: 1.5, out: 25e3 }),
-    Oil: Object.freeze({ in: 2.5, out: 12e3 }),
-    Uranium: Object.freeze({ in: 5, out: 300 }),
-    Steel: Object.freeze({ in: 3, out: 25e3 }),
-    Titanium: Object.freeze({ in: 3, out: 25e3 }),
-    Alloy: Object.freeze({ in: 6, out: 25e3 }),
-    Polymer: Object.freeze({ in: 6, out: 25e3 }),
-    Iridium: Object.freeze({ in: 8, out: 25e3 }),
-    Helium_3: Object.freeze({ in: 4.5, out: 12e3 }),
-    Deuterium: Object.freeze({ in: 4, out: 1e3 }),
-    Neutronium: Object.freeze({ in: 15, out: 1e3 }),
-    Adamantite: Object.freeze({ in: 12.5, out: 1e3 }),
-    Infernite: Object.freeze({ in: 25, out: 250 }),
-    Elerium: Object.freeze({ in: 30, out: 250 }),
-    Nano_Tube: Object.freeze({ in: 6.5, out: 1e3 }),
-    Graphene: Object.freeze({ in: 5, out: 1e3 }),
-    Stanene: Object.freeze({ in: 4.5, out: 1e3 }),
-    Bolognium: Object.freeze({ in: 18, out: 1e3 }),
-    Vitreloy: Object.freeze({ in: 14, out: 1e3 }),
-    Orichalcum: Object.freeze({ in: 10, out: 1e3 }),
-    Plywood: Object.freeze({ in: 10, out: 250 }),
-    Brick: Object.freeze({ in: 10, out: 250 }),
-    Wrought_Iron: Object.freeze({ in: 10, out: 250 }),
-    Sheet_Metal: Object.freeze({ in: 10, out: 250 }),
-    Mythril: Object.freeze({ in: 12.5, out: 250 }),
-    Aerogel: Object.freeze({ in: 16.5, out: 250 }),
-    Nanoweave: Object.freeze({ in: 18, out: 250 }),
-    Scarletite: Object.freeze({ in: 35, out: 250 })
-  }), CRAFTABLE_RESOURCES = Object.freeze({
-    Plywood: !0,
-    Brick: !0,
-    Wrought_Iron: !0,
-    Sheet_Metal: !0,
-    Mythril: !0,
-    Aerogel: !0,
-    Nanoweave: !0
-  }), RATIO_MODES3 = Object.freeze({
-    cap: Object.freeze([0.975]),
-    excess: Object.freeze([-1]),
-    all: Object.freeze([0.045]),
-    mixed: Object.freeze([0.975, -1]),
-    full: Object.freeze([0.975, -1, 0.045])
-  }), DEFAULT_RATIOS3 = Object.freeze([0.975]);
-  function nonNegative3(value) {
-    let number = finite(value);
-    return number !== void 0 && number >= 0 ? number : void 0;
-  }
-  function truthy3(value) {
-    return !!value;
-  }
-  function emptyInput10() {
-    return Object.freeze({
-      initialised: !1,
-      useful: !1,
-      maximum: 0,
-      storageShift: STORAGE_SHIFT3,
-      hungryRace: !1,
-      ratios: Object.freeze([]),
-      resources: Object.freeze([]),
-      current: Object.freeze([])
-    });
-  }
-  function readRatios3(settings) {
-    let mode = settings.supplyMode;
-    return mode === void 0 ? DEFAULT_RATIOS3 : typeof mode == "string" ? RATIO_MODES3[mode] ?? [] : [];
-  }
-  function supplyResourceIds(controls2) {
-    return Object.freeze(
-      controls2.capturedElementIds().filter(
-        (id) => id.startsWith("supply") && id !== SUPPLY_SUMMARY_CONTROL && id.length > 6
-      ).map((id) => id.slice(6))
-    );
-  }
-  function readInput9(dependencies) {
-    let root = dependencies.rootState.readRoot(), settingsValue = dependencies.readSettings(), settings = isRecord(settingsValue) ? settingsValue : {}, portal = readProperty(root, "portal"), transport = readProperty(portal, "transport"), cargo = readProperty(transport, "cargo"), resources = readProperty(root, "resource"), race = readProperty(root, "race");
-    if (settings.autoSupply !== !0 || !isRecord(transport) || !isRecord(cargo) || !isRecord(resources) || !isRecord(race))
-      return Object.freeze({ root, input: emptyInput10() });
-    let transportCount = finite(transport.count), transportOn = finite(transport.on), cargoMaximum = nonNegative3(cargo.max), bireme = readProperty(portal, "bireme"), biremeOn = finite(readProperty(bireme, "on")), supply = readProperty(resources, "Supply"), supplyAmount = finite(readProperty(supply, "amount")), supplyMaximum = finite(readProperty(supply, "max"));
-    if (transportCount === void 0 || !Number.isSafeInteger(transportCount) || transportCount < 1 || transportOn === void 0 || biremeOn === void 0 || cargoMaximum === void 0 || !Number.isSafeInteger(cargoMaximum) || !isRecord(supply) || supplyAmount === void 0 || supplyMaximum === void 0)
-      return Object.freeze({ root, input: emptyInput10() });
-    let useful = supplyMaximum > 0 && supplyAmount / supplyMaximum < 1 && transportOn > 0 && biremeOn > 0, demand = dependencies.readDemand(), ratios = readRatios3(settings), hungryRace = truthy3(race.carnivore) && !truthy3(race.herbivore) && !truthy3(race.artifical) || truthy3(race.ravenous), resourceViews = [], current = [];
-    for (let id of supplyResourceIds(dependencies.controls)) {
-      let value = SUPPLY_VALUES[id], resource = readProperty(resources, id);
-      if (value === void 0 || !isRecord(resource) || resource.display !== !0)
-        continue;
-      let amount = nonNegative3(resource.amount), rawMaximum = finite(resource.max), baseRate = finite(resource.diff), storageRequired = finite(demand.storageRequired(id)), requestedQuantity = finite(demand.requestedQuantity(id)), allocation = nonNegative3(cargo[id] ?? 0);
-      if (amount === void 0 || rawMaximum === void 0 || baseRate === void 0 || storageRequired === void 0 || requestedQuantity === void 0 || allocation === void 0 || value.out <= 0)
-        return Object.freeze({ root, input: emptyInput10() });
-      let maximum = rawMaximum >= 0 ? rawMaximum : Number.MAX_SAFE_INTEGER;
-      if (maximum <= 0) return Object.freeze({ root, input: emptyInput10() });
-      let enabled = settings[`res_supply${id}`] === !0, demanded = demand.isDemanded(id), storageRatio2 = amount / maximum, isCraftable = CRAFTABLE_RESOURCES[id] === !0, keepView = {
-        storageRequired,
-        requestedQuantity,
-        maxQuantity: maximum,
-        isFood: !1
-      }, rate = baseRate + allocation * value.out, craftableMaximum = isCraftable && amount > storageRequired * STORAGE_SHIFT3 ? Math.max(rate, amount - storageRequired * STORAGE_SHIFT3) / value.out : null, ratioMaximums = ratios.map((ratio) => {
-        if (!enabled || demanded || isCraftable) return null;
-        let keepRatio = calculateConsumeKeepRatio(
-          ratio,
-          keepView,
-          STORAGE_SHIFT3,
-          hungryRace
-        );
-        if (keepRatio === null || !(storageRatio2 > keepRatio || storageRatio2 >= 0.999 && keepRatio >= 1))
-          return null;
-        let queryRatio = storageRatio2 > keepRatio ? keepRatio : storageRatio2 >= 0.999 && keepRatio >= 1 ? storageRatio2 : null;
-        return queryRatio === null ? null : Math.max(rate, (storageRatio2 - queryRatio) * maximum) / value.out;
-      });
-      resourceViews.push(
-        Object.freeze({
-          id,
-          enabled,
-          demanded,
-          ...keepView,
-          isCraftable,
-          currentQuantity: amount,
-          storageRatio: storageRatio2,
-          craftableMaximum,
-          ratioMaximums: Object.freeze(ratioMaximums)
-        })
-      ), current.push(Object.freeze({ id, count: allocation }));
-    }
-    return Object.freeze({
-      root,
-      input: Object.freeze({
-        initialised: !0,
-        useful,
-        maximum: cargoMaximum,
-        storageShift: STORAGE_SHIFT3,
-        hungryRace,
-        ratios: Object.freeze([...ratios]),
-        resources: Object.freeze(resourceViews),
-        current: Object.freeze(current)
-      })
-    });
-  }
-  function currentAllocation3(root, id) {
-    let value = readProperty(
-      readProperty(
-        readProperty(readProperty(root, "portal"), "transport"),
-        "cargo"
-      ),
-      id
-    );
-    return value === void 0 ? 0 : nonNegative3(value);
-  }
-  function executeDecision3(dependencies, session, decision) {
-    let adjustments = decision.adjustments.filter(
-      (adjustment) => adjustment.delta !== 0
-    );
-    if (adjustments.length === 0) return SUCCEEDED;
-    for (let adjustment of adjustments) {
-      if (!Number.isSafeInteger(adjustment.delta))
-        return rejected(
-          "captured-supply-invalid-adjustment",
-          "supply adjustment must be a safe integer"
-        );
-      if (currentAllocation3(session.root, adjustment.resourceId) !== adjustment.expectedCurrent)
-        return stale(
-          "captured-supply-allocation-changed",
-          `${adjustment.resourceId}: sampled allocation changed`
-        );
-    }
-    for (let sign of [-1, 1])
-      for (let adjustment of adjustments) {
-        if (Math.sign(adjustment.delta) !== sign) continue;
-        let handle = dependencies.controls.resolve(
-          `supply${adjustment.resourceId}`
-        ), method = sign < 0 ? "supplyLess" : "supplyMore";
-        if (handle === void 0 || !handle.methods.includes(method))
-          return rejected(
-            "captured-supply-control-missing",
-            `captured supply${adjustment.resourceId} row lacks ${method}`
-          );
-        for (let index = 0; index < Math.abs(adjustment.delta); index += 1) {
-          if (dependencies.rootState.readRoot() !== session.root)
-            return stale(
-              "captured-supply-root-changed",
-              "captured game root changed"
-            );
-          let expected = adjustment.expectedCurrent + sign * index;
-          if (currentAllocation3(session.root, adjustment.resourceId) !== expected)
-            return stale(
-              "captured-supply-allocation-changed",
-              `${adjustment.resourceId}: allocation changed during execution`
-            );
-          let result = dependencies.controls.invoke(handle, method, [
-            adjustment.resourceId
-          ]);
-          if (!result.ok)
-            return rejected(
-              "captured-supply-control-failed",
-              result.detail ?? result.reason
-            );
-        }
-      }
-    for (let adjustment of adjustments) {
-      let actual = currentAllocation3(session.root, adjustment.resourceId);
-      if (actual !== adjustment.expectedCurrent + adjustment.delta)
-        return stale(
-          "captured-supply-allocation-unchanged",
-          `${adjustment.resourceId}: expected ${adjustment.expectedCurrent + adjustment.delta}, actual ${actual}`
-        );
-    }
-    return SUCCEEDED;
-  }
-  function createCapturedSupplyAutomation(dependencies) {
     return Object.freeze({
       run() {
         let session = readInput9(dependencies);
@@ -25299,13 +25544,13 @@
   }
 
   // src/adapters/evolve/economy/market/captured-market.ts
-  var MARKET_QUANTITY_CONTROL = "market-qty", TRAIT_VALUES = Object.freeze({
+  var MARKET_QUANTITY_CONTROL = "market-qty", TRAIT_VALUES2 = Object.freeze({
     arrogant: Object.freeze([16, 14, 12, 10, 8, 6, 5]),
     merchant: Object.freeze([5, 10, 15, 25, 35, 40, 45]),
     connivingBuy: Object.freeze([1, 2, 3, 5, 8, 10, 12]),
     connivingSell: Object.freeze([6, 8, 10, 15, 20, 24, 28]),
     asymmetrical: Object.freeze([35, 30, 25, 20, 15, 10, 5])
-  }), TRAIT_RANKS = Object.freeze([
+  }), TRAIT_RANKS2 = Object.freeze([
     0.1,
     0.25,
     0.5,
@@ -25322,7 +25567,7 @@
     if (race.empowered) return;
     let rank = finite(race[trait]);
     if (rank === void 0) return;
-    let index = TRAIT_RANKS.indexOf(rank), value = index >= 0 ? values[index] : void 0;
+    let index = TRAIT_RANKS2.indexOf(rank), value = index >= 0 ? values[index] : void 0;
     return value === void 0 ? void 0 : 1 + (increase ? value : -value) / 100;
   }
   function readFathom(root, race, target) {
@@ -25342,27 +25587,27 @@
     let arrogant = readMultiplier(
       race,
       "arrogant",
-      TRAIT_VALUES.arrogant,
+      TRAIT_VALUES2.arrogant,
       !0
     ), connivingBuy = readMultiplier(
       race,
       "conniving",
-      TRAIT_VALUES.connivingBuy,
+      TRAIT_VALUES2.connivingBuy,
       !1
     ), merchant = readMultiplier(
       race,
       "merchant",
-      TRAIT_VALUES.merchant,
+      TRAIT_VALUES2.merchant,
       !1
     ), asymmetrical = readMultiplier(
       race,
       "asymmetrical",
-      TRAIT_VALUES.asymmetrical,
+      TRAIT_VALUES2.asymmetrical,
       !0
     ), connivingSell = readMultiplier(
       race,
       "conniving",
-      TRAIT_VALUES.connivingSell,
+      TRAIT_VALUES2.connivingSell,
       !1
     ), impFathom = readFathom(root, race, "imp"), goblinFathom = readFathom(root, race, "goblin");
     if (arrogant === void 0 || connivingBuy === void 0 || merchant === void 0 || asymmetrical === void 0 || connivingSell === void 0 || impFathom === void 0 || goblinFathom === void 0)
@@ -25796,180 +26041,6 @@
         operations.map((operation2) => Object.freeze(operation2))
       )
     });
-  }
-
-  // src/adapters/evolve/economy/market/trade-price-mirror.ts
-  var TRADE_ROUTE_RATIO = Object.freeze({
-    Food: 2,
-    Lumber: 2,
-    Chrysotile: 1,
-    Stone: 2,
-    Crystal: 0.4,
-    Furs: 1,
-    Copper: 1,
-    Iron: 1,
-    Aluminium: 1,
-    Cement: 1,
-    Coal: 1,
-    Oil: 0.5,
-    Uranium: 0.12,
-    Steel: 0.5,
-    Titanium: 0.25,
-    Alloy: 0.2,
-    Polymer: 0.2,
-    Iridium: 0.1,
-    Helium_3: 0.1,
-    Deuterium: 0.1,
-    Elerium: 0.02,
-    Water: 2,
-    Neutronium: 0.05,
-    Adamantite: 0.05,
-    Infernite: 0.01,
-    Nano_Tube: 0.1,
-    Graphene: 0.1,
-    Stanene: 0.1,
-    Bolognium: 0.12,
-    Vitreloy: 0.12,
-    Orichalcum: 0.05
-  }), TRAIT_RANKS2 = Object.freeze([0.1, 0.25, 0.5, 1, 2, 3, 4]), TRAIT_VALUES2 = Object.freeze({
-    arrogant: Object.freeze([16, 14, 12, 10, 8, 6, 5]),
-    merchant: Object.freeze([5, 10, 15, 25, 35, 40, 45]),
-    conniving: Object.freeze([1, 2, 3, 5, 8, 10, 12]),
-    asymmetrical: Object.freeze([35, 30, 25, 20, 15, 10, 5]),
-    devious: Object.freeze([35, 30, 25, 20, 15, 10, 8])
-  }), TRAIT_VALS = Object.freeze({
-    arrogant: -2,
-    merchant: 3,
-    conniving: 4,
-    asymmetrical: -3,
-    devious: -4
-  }), EMPOWERED_RANGES = Object.freeze([
-    Object.freeze([-1, 2]),
-    Object.freeze([-2, 3]),
-    Object.freeze([-3, 4]),
-    Object.freeze([-4, 6]),
-    Object.freeze([-6, 9]),
-    Object.freeze([-8, 12]),
-    Object.freeze([-99, 99])
-  ]), EMPOWERED_RANK = Object.freeze([0.25, 0.5, 1, 2, 3, 4, 4]), GOBLIN_SELL_DIVISOR_PERCENT = 25, IMP_BUY_PERCENT = 5;
-  function rivalCollapsed(root) {
-    let shadow = finite(readProperty(readProperty(root, "tech"), "shadow"));
-    return shadow !== void 0 && shadow >= 3;
-  }
-  function traitPercent(race, trait) {
-    if (!race[trait]) return 0;
-    let rank = finite(race[trait]);
-    if (rank === void 0) return;
-    let index = TRAIT_RANKS2.indexOf(rank);
-    if (!(index < 0)) {
-      if (race.empowered) {
-        let empowered = finite(race.empowered);
-        if (empowered === void 0) return;
-        let empoweredIndex = TRAIT_RANKS2.indexOf(empowered);
-        if (empoweredIndex < 0) return;
-        let range = EMPOWERED_RANGES[empoweredIndex], val = TRAIT_VALS[trait];
-        if (range !== void 0 && val >= range[0] && val <= range[1]) {
-          let promoted = TRAIT_RANKS2.indexOf(EMPOWERED_RANK[index]);
-          if (promoted < 0) return;
-          index = promoted;
-        }
-      }
-      return TRAIT_VALUES2[trait][index];
-    }
-  }
-  function fathom(root, race, target) {
-    if (!race.unfathomable) return 0;
-    let city = readProperty(root, "city"), dwellers = readProperty(city, "surfaceDwellers");
-    if (!Array.isArray(dwellers) || !dwellers.includes(target)) return 0;
-    let housing = readProperty(city, "captive_housing"), workers = finite(
-      readProperty(
-        readProperty(readProperty(root, "civic"), "torturer"),
-        "workers"
-      )
-    ), index = dwellers.indexOf(target), active = finite(readProperty(housing, `race${index}`)), nightmare = readProperty(
-      readProperty(readProperty(root, "stats"), "achieve"),
-      "nightmare"
-    ), mg = finite(readProperty(nightmare, "mg"));
-    if (workers === void 0 || active === void 0) return;
-    let adjusted = Math.min(active, 100);
-    return adjusted > workers && (adjusted -= Math.ceil((adjusted - workers) / 3)), adjusted / 100 * ((mg ?? 0) / 5);
-  }
-  function structureCount2(container, id) {
-    let structure = readProperty(container, id);
-    if (structure === void 0 || structure === !1) return 0;
-    let count2 = finite(readProperty(structure, "count"));
-    return count2 === void 0 ? void 0 : count2;
-  }
-  function achievementLevel2(root, id) {
-    let achieve = readProperty(readProperty(root, "stats"), "achieve"), entry = readProperty(achieve, id);
-    if (entry === void 0) return 0;
-    let level = finite(readProperty(entry, "l"));
-    return level === void 0 ? 0 : level;
-  }
-  function railwayLevel(root) {
-    let railway = readProperty(readProperty(root, "tech"), "railway");
-    return railway ? finite(railway) : 0;
-  }
-  function hostility(root, race) {
-    if (!race.truepath || race.lone_survivor || rivalCollapsed(root))
-      return 0;
-    let gov3 = readProperty(
-      readProperty(readProperty(root, "civic"), "foreign"),
-      "gov3"
-    ), hstl = finite(readProperty(gov3, "hstl"));
-    return hstl === void 0 ? void 0 : hstl;
-  }
-  function suspicionExcess(root, race) {
-    if (!race.witch_hunter) return 0;
-    let amount = finite(
-      readProperty(readProperty(readProperty(root, "resource"), "Sus"), "amount")
-    );
-    if (amount !== void 0)
-      return amount > 50 ? amount - 50 : 0;
-  }
-  function inflationLevel(race) {
-    let inflation = race.inflation;
-    return inflation === void 0 || inflation === !1 ? 0 : finite(inflation);
-  }
-  function cunningSlotted(root) {
-    let slots = readProperty(readProperty(root, "race"), "geneSlots");
-    return Array.isArray(slots) ? slots.some(
-      (slot) => isRecord(slot) && readProperty(slot, "g") === "cunning"
-    ) : !1;
-  }
-  function psychicCashActive(root) {
-    let race = readProperty(root, "race"), powers = readProperty(race, "psychicPowers");
-    return !!(readProperty(readProperty(root, "tech"), "psychic") && readProperty(race, "psychic") && isRecord(powers) && Object.hasOwn(powers, "cash"));
-  }
-  function unsupportedTradePriceModifier(root) {
-    if (cunningSlotted(root)) return "a slotted Cunning gene";
-    if (psychicCashActive(root)) return "the psychic cash power";
-  }
-  function tradeRoutePrices(root, resourceId, resource) {
-    let ratio = TRADE_ROUTE_RATIO[resourceId], value = finite(resource.value), race = readProperty(root, "race");
-    if (ratio === void 0 || value === void 0 || value <= 0 || !isRecord(race) || unsupportedTradePriceModifier(root) !== void 0) return;
-    let arrogant = traitPercent(race, "arrogant"), conniving = traitPercent(race, "conniving"), merchant = traitPercent(race, "merchant"), asymmetrical = traitPercent(race, "asymmetrical"), devious = traitPercent(race, "devious"), goblin = fathom(root, race, "goblin"), imp = fathom(root, race, "imp"), wharf = structureCount2(readProperty(root, "city"), "wharf"), gps = structureCount2(readProperty(root, "space"), "gps"), underground = structureCount2(
-      readProperty(root, "underground"),
-      "trade"
-    ), railway = railwayLevel(root), banana = achievementLevel2(root, "banana"), hstl = hostility(root, race), suspicion = suspicionExcess(root, race), inflation = inflationLevel(race), quarantine = finite(race.quarantine ?? 0);
-    if (arrogant === void 0 || conniving === void 0 || merchant === void 0 || asymmetrical === void 0 || devious === void 0 || goblin === void 0 || imp === void 0 || wharf === void 0 || gps === void 0 || underground === void 0 || railway === void 0 || banana === void 0 || hstl === void 0 || suspicion === void 0 || inflation === void 0 || quarantine === void 0)
-      return;
-    let railwayBuyBoost = banana >= 1 ? 0.97 : 0.98, railwaySellBoost = banana >= 1 ? 0.03 : 0.02, gpsActive = gps > 3 ? gps : 0, buy = value * (1 + arrogant / 100) * (1 - conniving / 100);
-    buy *= 1 - imp * IMP_BUY_PERCENT / 100, buy *= ratio, buy *= 0.99 ** wharf, buy *= 0.99 ** gpsActive, buy *= railwayBuyBoost ** railway, buy *= 1 + hstl / 101, buy *= 1 + inflation / 300, race.quarantine && (buy *= 1 + Math.round(quarantine ** 3.5)), buy *= 1 + suspicion / 8, buy *= 0.99 ** underground;
-    let divide = 4;
-    if (divide *= 1 - merchant / 100, divide *= 1 - goblin * GOBLIN_SELL_DIVISOR_PERCENT / 100, divide *= 1 + asymmetrical / 100, divide *= 1 + devious / 100, race.conniving && (divide -= 1), !(divide > 0)) return;
-    let sell = value * ratio / divide;
-    sell *= 1 + wharf * 0.01, sell *= 1 + gpsActive * 0.01, sell *= 1 + railway * railwaySellBoost, sell *= 1 - hstl / 101, sell *= 1 + inflation / 500, sell *= 1 - suspicion / 52;
-    let buyPrice = Number(buy.toFixed(1)), sellPrice = Number(sell.toFixed(1));
-    return Number.isFinite(buyPrice) && Number.isFinite(sellPrice) ? Object.freeze({ buy: buyPrice, sell: sellPrice }) : void 0;
-  }
-  function tradeRouteSellQuantity(root, resourceId) {
-    let ratio = TRADE_ROUTE_RATIO[resourceId];
-    if (ratio === void 0) return;
-    let level = achievementLevel2(root, "trade");
-    if (level === void 0) return;
-    let rank = Math.min(5, level), quantity = ratio * (1 - rank / 100);
-    return quantity > 0 ? quantity : void 0;
   }
 
   // src/adapters/evolve/economy/market/captured-trade-routes.ts

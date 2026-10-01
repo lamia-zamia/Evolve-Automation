@@ -174,8 +174,11 @@ function capturedTaxQuantity(value: unknown, key: string): number {
   return capturedTaxFinite(readProperty(value, key), 0);
 }
 
-/** DeadSpace's haveTask("tax") is membership in the Governor task values. */
-export function readCapturedTaxTaskActive(root: unknown): boolean | undefined {
+/** DeadSpace's haveTask(task) is membership in the Governor task values. */
+export function readCapturedGovernorTaskActive(
+  root: unknown,
+  taskName: string,
+): boolean | undefined {
   const race = readProperty(root, "race");
   if (!isRecord(race)) return undefined;
   const governor = readProperty(race, "governor");
@@ -187,7 +190,12 @@ export function readCapturedTaxTaskActive(root: unknown): boolean | undefined {
   for (const task of Object.values(tasks)) {
     if (typeof task !== "string") return undefined;
   }
-  return Object.values(tasks).includes("tax");
+  return Object.values(tasks).includes(taskName);
+}
+
+/** DeadSpace's haveTask("tax") compatibility wrapper. */
+export function readCapturedTaxTaskActive(root: unknown): boolean | undefined {
+  return readCapturedGovernorTaskActive(root, "tax");
 }
 
 function capturedTaxDemanded(

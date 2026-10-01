@@ -13,7 +13,6 @@ export interface PowerResourceInput {
   readonly unlocked: boolean;
   readonly useful: boolean;
   readonly income: number;
-  readonly incomeAdjusted: boolean;
   readonly supportKind: PowerSupportKind;
 }
 
@@ -315,12 +314,6 @@ export type PowerOperation =
       readonly resourceId: string;
       readonly expected: number;
       readonly value: number;
-    }
-  | {
-      readonly kind: "set-income-adjusted";
-      readonly resourceId: string;
-      readonly expected: boolean;
-      readonly value: boolean;
     }
   | {
       readonly kind: "set-description";
@@ -908,16 +901,9 @@ function appendRateOperation(
   resource.rate = value;
 }
 
-function appendIncomeAdjusted(
-  operations: PowerOperation[],
-  resource: MutableResource,
-): void {
-  operations.push({
-    kind: "set-income-adjusted",
-    resourceId: resource.input.id,
-    expected: resource.incomeAdjusted,
-    value: true,
-  });
+function appendIncomeAdjusted(resource: MutableResource): void {
+  // This is legacy per-cycle bookkeeping used by busy-worker calculations. It never lived in
+  // game state; retain it only on the planner's mutable cycle resource.
   resource.incomeAdjusted = true;
 }
 
@@ -959,7 +945,7 @@ export function planPowerCycle(
     resources.set(resource.id, {
       input: resource,
       rate: resource.rateOfChange,
-      incomeAdjusted: resource.incomeAdjusted,
+      incomeAdjusted: false,
     });
   }
   // Identity is the Vue binding, not the game's short structure id. Ids repeat
@@ -1126,7 +1112,6 @@ export function planPowerCycle(
       maximum = result.maximum;
       for (const resourceId of result.adjusted) {
         appendIncomeAdjusted(
-          operations,
           mapValue(resources, resourceId, `power resource ${resourceId}`),
         );
       }

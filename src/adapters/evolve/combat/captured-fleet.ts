@@ -522,7 +522,12 @@ function sameDecision(
 
 export function createCapturedFleetAutomation(
   dependencies: CapturedFleetDependencies,
-): { readonly reader: FleetReader; readonly executor: FleetExecutor } {
+): {
+  readonly reader: FleetReader;
+  readonly executor: FleetExecutor;
+  readonly readNeededShips: () =>
+    Readonly<Record<string, number>> | null | undefined;
+} {
   let session: FleetSession | null = null;
   const reader: FleetReader = Object.freeze({
     read(): FleetInput {
@@ -565,6 +570,20 @@ export function createCapturedFleetAutomation(
       return sample.input;
     },
   });
+  const readNeededShips = ():
+    Readonly<Record<string, number>> | null | undefined => {
+    const sample = readInput(
+      dependencies.rootState.readRoot(),
+      dependencies.readSettings(),
+      dependencies.controls,
+      dependencies.readDemand,
+    );
+    if (sample === undefined) return undefined;
+    const decision = planFleet(sample.input);
+    return decision?.kind === "manage-galaxy-fleet"
+      ? decision.neededShips
+      : null;
+  };
   const executor: FleetExecutor = Object.freeze({
     execute(decision: Readonly<FleetDecision>): CommandExecutionOutcome {
       const active = session;
@@ -631,5 +650,5 @@ export function createCapturedFleetAutomation(
         : stale("captured-fleet-mission-stale", result.detail ?? result.reason);
     },
   });
-  return Object.freeze({ reader, executor });
+  return Object.freeze({ reader, executor, readNeededShips });
 }

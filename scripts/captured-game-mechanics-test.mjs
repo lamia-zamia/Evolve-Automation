@@ -47,7 +47,10 @@ function makePage() {
         };
         return { key: sector + ":" + struct, region, sector, struct, c_action: action, info: false, state };
       }
-      return { Map, Object, Array, Function, Number, Proxy, createProbe };
+      return {
+        Map, Object, Array, Function, Number, Proxy, createProbe,
+        game: { loc: function(key) { return "translated:" + key; } },
+      };
     })()
   `);
   page.Worker = FakeWorker;
@@ -107,6 +110,10 @@ const nativeConsumeDescriptor = Object.getOwnPropertyDescriptor(
 const capture = installPageCapture(page);
 assert.equal(capture.mechanics.readStructures(), undefined);
 assert.equal(capture.mechanics.readProductionBreakdown(), undefined);
+assert.deepEqual(capture.mechanics.readLocalizedText("probe_source"), {
+  kind: "value",
+  value: "translated:probe_source",
+});
 
 const unrelatedBefore = new page.Map();
 unrelatedBefore.set("ordinary", { value: 1 });
@@ -520,6 +527,30 @@ assert.deepEqual(
   { kind: "value", value: 0.75 },
   "the action effect exposes the exact int_fuel_adjust factor",
 );
+for (const [mode, resourceId, region, factor] of [
+  ["space", "Helium_3", "space", 0.33],
+  ["space", "Super_Fuel", "space", 0.44],
+  ["interstellar", "Deuterium", "tauceti", 0.66],
+  ["interstellar", "Super_Fuel", "tauceti", 0.88],
+]) {
+  const probe = page.createProbe(
+    region,
+    `${region}_${resourceId}`,
+    `fuel_probe_${resourceId}`,
+    `${region}-fuel_probe_${resourceId}`,
+    resourceId,
+    factor,
+    "ok",
+    probeState,
+  );
+  entries.set(probe.key, probe);
+  assert.deepEqual(
+    capture.mechanics.readAdjustedFuelFactor(mode, resourceId),
+    { kind: "value", value: factor },
+    `${mode} fuel adjustment preserves the captured ${resourceId} factor`,
+  );
+  entries.delete(probe.key);
+}
 
 const failedProbe = page.createProbe(
   "space",

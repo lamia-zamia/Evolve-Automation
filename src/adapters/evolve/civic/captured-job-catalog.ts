@@ -332,7 +332,7 @@ function readSmartMaximum(
   readJobHistory?: () => Readonly<CapturedJobHistory> | undefined,
 ): number | null | undefined {
   if (!smart) return null;
-  if (id === "space_miner") return readSpaceMinerSmartMaximum(root);
+  if (id === "space_miner") return readCapturedSpaceMinerSmartMaximum(root);
   if (id === "torturer") return readTorturerSmartMaximum(root);
   if (id === "hell_surveyor") return readHellSurveyorSmartMaximum(root);
   if (id === "scientist") return readScientistSmartMaximum(root, count);
@@ -393,33 +393,101 @@ interface HighPopulationFactors {
   readonly workerEffect: number;
 }
 
+function readTraitScaleRank(
+  root: unknown,
+  traitId: string,
+  traitKind: "major" | "genus" = "genus",
+): number | undefined {
+  const race = readProperty(root, "race");
+  const rank = readProperty(race, traitId);
+  // DeadSpace's stepTraitRank caps stored trait ranks at 2; empowered adds its
+  // bonus after this stored-rank check and may legitimately scale above 2.
+  if (
+    typeof rank !== "number" ||
+    !Number.isFinite(rank) ||
+    rank <= 0 ||
+    rank > 2
+  )
+    return undefined;
+  const empowered = readProperty(race, "empowered");
+  if (
+    typeof empowered !== "number" ||
+    !Number.isFinite(empowered) ||
+    empowered <= 0
+  )
+    return rank;
+  const empoweredRank = Math.min(2, empowered);
+  const majorBonus = traitScaleVariable(empoweredRank, 0.01, 0.2, 0.4);
+  const genusBonus = traitScaleVariable(empoweredRank, 0.005, 0.1, 0.2);
+  const majorTrait = traitKind === "major";
+  return Number((rank + (majorTrait ? majorBonus : genusBonus)).toFixed(6));
+}
+
+function traitScaleVariable(
+  rank: number,
+  low: number,
+  mid: number,
+  high: number,
+): number {
+  const from = rank < 1 ? low : mid;
+  const to = rank < 1 ? mid : high;
+  const fraction =
+    rank < 1 ? (rank - 0.1) / 0.9 : rank <= 2 ? rank - 1 : 1 + (rank - 2) / 2;
+  return Number((from + (to - from) * fraction).toFixed(6));
+}
+
+/** Mirrors one `traits.<id>.vars()[index]` value from DeadSpace's `races.js`. */
+export function readCapturedTraitScaleVariable(
+  root: unknown,
+  traitId: string,
+  _index: number,
+  values: readonly [number, number, number],
+  traitKind: "major" | "genus",
+): number | undefined {
+  const rank = readTraitScaleRank(root, traitId, traitKind);
+  return rank === undefined
+    ? undefined
+    : traitScaleVariable(rank, values[0], values[1], values[2]);
+}
+
+/** `traitVal("high_pop", 2, 1)` used by the retired Power `getHealingRate()`. */
+export function readCapturedHighPopulationGrowthMultiplier(
+  root: unknown,
+): number | undefined {
+  const rawRank = readProperty(readProperty(root, "race"), "high_pop");
+  if (rawRank === undefined || rawRank === false) return 1;
+  return readCapturedTraitScaleVariable(
+    root,
+    "high_pop",
+    2,
+    [1.2, 3.5, 6.5],
+    "genus",
+  );
+}
+
 function readHighPopulationFactors(
-  race: unknown,
+  root: unknown,
 ): Readonly<HighPopulationFactors> | null | undefined {
-  const rank = readProperty(race, "high_pop");
-  if (rank === undefined || rank === false) return null;
-  if (typeof rank !== "number" || !Number.isFinite(rank)) return undefined;
-  switch (rank) {
-    case 0.1:
-    case 0.25:
-      return { breakpointScale: 2, workerEffect: 0.5 };
-    case 0.5:
-      return { breakpointScale: 3, workerEffect: 0.34 };
-    case 1:
-      return { breakpointScale: 4, workerEffect: 0.26 };
-    case 2:
-      return { breakpointScale: 5, workerEffect: 0.212 };
-    case 3:
-      return { breakpointScale: 6, workerEffect: 0.18 };
-    case 4:
-      return { breakpointScale: 7, workerEffect: 0.158 };
-    default:
-      return undefined;
-  }
+  const rawRank = readProperty(readProperty(root, "race"), "high_pop");
+  const rank = readTraitScaleRank(root, "high_pop");
+  if (rawRank === undefined || rawRank === false) return null;
+  if (rank === undefined) return undefined;
+  // DeadSpace races.js `traitScale`: vars(r) interpolates each tuple and rounds to six decimals.
+  const scale = (low: number, mid: number, high: number): number => {
+    const from = rank < 1 ? low : mid;
+    const to = rank < 1 ? mid : high;
+    const fraction =
+      rank < 1 ? (rank - 0.1) / 0.9 : rank <= 2 ? rank - 1 : 1 + (rank - 2) / 2;
+    return Number((from + (to - from) * fraction).toFixed(6));
+  };
+  return {
+    breakpointScale: scale(2, 4, 7),
+    workerEffect: scale(50, 26, 15.8) / 100,
+  };
 }
 
 function readHighPopulationWorkerEffect(root: unknown): number | undefined {
-  const factors = readHighPopulationFactors(readProperty(root, "race"));
+  const factors = readHighPopulationFactors(root);
   return factors === undefined ? undefined : (factors?.workerEffect ?? 1);
 }
 
@@ -427,15 +495,27 @@ function readHighPopulationWorkerEffect(root: unknown): number | undefined {
 export function readCapturedJobStackMultiplier(
   root: unknown,
 ): number | undefined {
-  const factors = readHighPopulationFactors(readProperty(root, "race"));
+  const factors = readHighPopulationFactors(root);
   return factors === undefined ? undefined : (factors?.breakpointScale ?? 1);
 }
 
 export function readCapturedHighPopulationPercent(
   root: unknown,
 ): number | undefined {
-  const factors = readHighPopulationFactors(readProperty(root, "race"));
+  const factors = readHighPopulationFactors(root);
   return factors === undefined ? undefined : (factors?.workerEffect ?? 1) * 100;
+}
+
+/** `traitVal("powered", 0)` for Power.capacity's powered-race contribution. */
+export function readCapturedPoweredTraitValue(
+  root: unknown,
+): number | undefined {
+  const rank = readTraitScaleRank(root, "powered");
+  if (rank === undefined) {
+    const raw = readProperty(readProperty(root, "race"), "powered");
+    return raw === undefined || raw === false ? 0 : undefined;
+  }
+  return traitScaleVariable(rank, 0.4, 0.2, 0.05);
 }
 
 /**
@@ -463,7 +543,9 @@ function readSpaceBuildingOn(root: unknown, id: string): number | undefined {
   return on;
 }
 
-function readSpaceMinerSmartMaximum(root: unknown): number | undefined {
+export function readCapturedSpaceMinerSmartMaximum(
+  root: unknown,
+): number | undefined {
   const elerium = readSpaceBuildingOn(root, "elerium_ship");
   const iridium = readSpaceBuildingOn(root, "iridium_ship");
   const iron = readSpaceBuildingOn(root, "iron_ship");
@@ -477,6 +559,37 @@ function readSpaceMinerSmartMaximum(root: unknown): number | undefined {
     return undefined;
   }
   return (elerium * 2 + iridium + iron) * workerEffect;
+}
+
+/**
+ * CoreJob.count is workers plus BasicJob servants times traitVal("high_pop", 0, 1):
+ * the first high_pop variable, with a fallback of one when the race has no trait.
+ * The retired Power reader uses this for job-dependent rules and Mill; only Farmer and Hunter
+ * are BasicJob instances in the entity catalog.
+ */
+export function readCapturedLegacyJobCount(
+  root: unknown,
+  jobId: string,
+  basicJob: boolean,
+): number | undefined {
+  const job = readProperty(readProperty(root, "civic"), jobId);
+  if (job === undefined) return 0;
+  if (!isRecord(job)) return undefined;
+  const rawWorkers = readProperty(job, "workers");
+  const workers = rawWorkers === undefined ? 0 : finiteNonNegative(rawWorkers);
+  if (workers === undefined) return undefined;
+  if (!basicJob) return workers;
+  const servantJobs = readProperty(
+    readProperty(readProperty(root, "race"), "servants"),
+    "jobs",
+  );
+  const rawServants = readProperty(servantJobs, jobId);
+  const servants =
+    rawServants === undefined ? 0 : finiteNonNegative(rawServants);
+  const servantMultiplier = readCapturedJobStackMultiplier(root);
+  return servants === undefined || servantMultiplier === undefined
+    ? undefined
+    : workers + servants * servantMultiplier;
 }
 
 function readTorturerSmartMaximum(root: unknown): number | undefined {
@@ -764,7 +877,7 @@ function readFarmerSmartMaximum(
   if (farm === undefined) return foodMaximum;
   if (!isRecord(farm)) return undefined;
   const farmCount = finiteNonNegative(readProperty(farm, "count"));
-  const highPopulation = readHighPopulationFactors(readProperty(root, "race"));
+  const highPopulation = readHighPopulationFactors(root);
   if (farmCount === undefined || highPopulation === undefined) return undefined;
   const citizenCap = highPopulation?.breakpointScale ?? 1;
   const farmerCapacity =
@@ -1390,7 +1503,7 @@ function normalizeBreakpoints(
   const highPopulationEnabled =
     readProperty(settings, "jobScalePop") === true && id !== "hell_surveyor";
   const highPopulation = highPopulationEnabled
-    ? readHighPopulationFactors(readProperty(root, "race"))
+    ? readHighPopulationFactors(root)
     : null;
   if (highPopulation === undefined) return undefined;
   const scale = highPopulation?.breakpointScale ?? 1;
@@ -1434,7 +1547,7 @@ function readCatalog(
     onSkipped("civics", "ordinary job crew state is incomplete");
     return undefined;
   }
-  // Legacy CoreJob.count uses traitVal("high_pop", 0, 1): the first captured value, not worker effectiveness.
+  // Legacy CoreJob.count uses traitVal("high_pop", 0, 1): first variable, fallback one.
   const servantModifier = readCapturedJobStackMultiplier(root);
   if (servantModifier === undefined) {
     onSkipped("civics", "ordinary job servant modifier is unavailable");

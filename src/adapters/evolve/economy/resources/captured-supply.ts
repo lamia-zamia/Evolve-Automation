@@ -58,6 +58,46 @@ const SUPPLY_VALUES: Readonly<
   Nanoweave: Object.freeze({ in: 18, out: 250 }),
   Scarletite: Object.freeze({ in: 35, out: 250 }),
 });
+
+/** The same game `supplyValue[id].out` used by SupplyManager's rate modifier. */
+export function readCapturedSupplyOutRate(resourceId: string): number {
+  return SUPPLY_VALUES[resourceId]?.out ?? 0;
+}
+
+/** Current automation Supply adjustment for one resource, from assigned cargo and settings. */
+export function readCapturedSupplyRateAdjustment(
+  root: unknown,
+  settings: unknown,
+  resourceId: string,
+): number {
+  if (
+    !isRecord(settings) ||
+    settings["autoSupply"] !== true ||
+    settings[`res_supply${resourceId}`] !== true
+  )
+    return 0;
+  const portal = readProperty(root, "portal");
+  const transport = readProperty(portal, "transport");
+  const bireme = readProperty(portal, "bireme");
+  const transportCount = finite(readProperty(transport, "count"));
+  const transportOn = finite(readProperty(transport, "on"));
+  const biremeOn = finite(readProperty(bireme, "on"));
+  const allocation = finite(
+    readProperty(readProperty(transport, "cargo"), resourceId),
+  );
+  const out = readCapturedSupplyOutRate(resourceId);
+  return transportCount !== undefined &&
+    transportCount > 0 &&
+    transportOn !== undefined &&
+    transportOn > 0 &&
+    biremeOn !== undefined &&
+    biremeOn > 0 &&
+    allocation !== undefined &&
+    allocation > 0 &&
+    out > 0
+    ? allocation * out
+    : 0;
+}
 const CRAFTABLE_RESOURCES: Readonly<Record<string, true>> = Object.freeze({
   Plywood: true,
   Brick: true,
