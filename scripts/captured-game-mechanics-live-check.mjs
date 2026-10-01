@@ -1117,7 +1117,10 @@ try {
           "the production autoPower failure path logs unavailable demand",
         );
       } else {
-        if (scenario.autoBuild || scenario.autoStorage)
+        // Only a cycle that still has a construction phase rebuilds a shared sample after
+        // Storage ends it. A Storage-only cycle deliberately carries none into the tail, and the
+        // invariant there is that Power's own handoff still gets an exact sample.
+        if (scenario.autoBuild)
           assert.equal(runtimePower.constructionDemandAvailable, true);
         assert.equal(runtimePower.demandRefreshed, true);
         assert.equal(runtimePower.outcome.status, "succeeded");

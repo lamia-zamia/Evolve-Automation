@@ -2688,6 +2688,16 @@ export function startCapturedRuntime({
           refreshDiscoveredSettings();
           storageAutomation.run();
         });
+        // Storage owns the capacity facts a demand sample freezes. It reallocates crates and
+        // containers and changes `resource[id].max` and the regional maxima, and the sample clamps
+        // every requested quantity against `max` and builds `storageRequired` from it, while the
+        // memoized construction saving target re-tests its costs against it too. A sample created
+        // by an earlier consumer — Gather, Market, Galaxy Market, a production ratio, or Smelter —
+        // therefore answers Replicator and everything after it from a capacity that no longer
+        // exists. The phase has had its opportunity to mutate by the time it returns, so the
+        // boundary is the phase and not its outcome.
+        demandThisCycle = undefined;
+        savingTargetThisCycle = undefined;
       }
       if (isEnabled(settings, "autoReplicator")) {
         runPhase("autoReplicator", () => {
@@ -2782,14 +2792,39 @@ export function startCapturedRuntime({
           }
         }
       }
-      // Construction and Factory change holdings, commitments, and saving intent. Each
-      // invalidation ends the old sample's lifetime, including when an enabled phase is a no-op.
-      // These two boundaries plus the Power handoff below are the whole lifetime: no phase after
-      // Factory changes a fact the demand sample represents. Fleet moves ships, Mech spends
-      // Supply and Soul Gems, Craft converts materials, combat and the civic tail move Money,
-      // garrison and foreign state — none of which any requested quantity, storage requirement or
-      // saving target is built from. Producers (Smelter, Replicator, the ratios) only re-route
-      // next-period rates, which the sample does not read.
+      // Construction and Factory each end the current sample's lifetime, including when an enabled
+      // phase turns out to be a no-op: both own facts the sample freezes. Construction publishes a
+      // new wanted order, spends holdings, moves queue entries and can grant a Building, so it
+      // moves the offered catalogs, the build targets and the saving target. Factory re-reads
+      // factory building counts, which scale its own demand block.
+      //
+      // Between Factory and Power the sample is shared by Jobs, Fleet, Mech, Genetics, Minor
+      // Trait, Craft, the combat block, Tax, Government, Nanite, Supply and Eject, and that share
+      // is deliberate rather than an oversight. What each of them changes, against what the sample
+      // freezes:
+      //
+      //   * Jobs/Craftsmen change `civic.<job>.workers`, `city.foundry` and servant counts. The
+      //     crafter demand block reads `civic.craftsman.max` and `resource[material].max`, neither
+      //     of which this pass moves, and `isDemanded()` reads `amount` live.
+      //   * The ordinary galaxy Fleet moves ships between defence regions. No frozen input names
+      //     `galaxy`. The Truepath outer Fleet moves the shipyard blueprint and the ship count,
+      //     which is `CapturedFleetDemand`'s frozen `nextShipCost`, so that pass ends the sample
+      //     itself.
+      //   * Mech spends Supply and Soul Gems and fills the bay. Those move the sample's `mechCosts`
+      //     block, which only ever feeds the `Supply`/`Soul_Gem` requests, and no consumer between
+      //     here and Power spends either; Power resamples.
+      //   * Genetics and Minor Trait move Knowledge and Genes. Amounts are read live by
+      //     `isDemanded()`, and a minor trait cannot unlock a technology, so the offered catalogs
+      //     are unchanged.
+      //   * Craft converts materials, so it changes amounts — again read live — and its own inputs
+      //     are craftable materials, which no committed request names.
+      //   * The combat block moves garrison, foreign state, `stats.attacks` and arbitrary resource
+      //     amounts. The one frozen input it touches is `spyPurchaseReservation`, and that is
+      //     correct as a pre-combat reading on purpose: the reserve describes the commitments
+      //     entering Espionage, which decides before Battle can change any of them.
+      //   * Tax and Government change the tax rate and `civic.govern`/`race.governor`, none of which
+      //     the sample reads.
+      //   * Nanite, Supply and Eject change their own allocation ledgers. Power reads those live.
       observePowerDemandPhase("construction-complete");
       demandThisCycle = undefined;
       savingTargetThisCycle = undefined;
@@ -2832,10 +2867,10 @@ export function startCapturedRuntime({
         });
       }
       // Fleet reassigns already-built ships and settles the defence ledger. Power reads that
-      // ledger live at its own phase, so what matters here is only that Fleet lands after the
-      // Jobs/Fleet consumers of the shared demand sample and before Mech's Supply commitment.
+      // ledger live at its own phase, so Fleet needs no adjacency to it; what Fleet does own is
+      // the shipyard target, and only the Truepath outer pass can move that.
       if (isEnabled(settings, "autoFleet")) {
-        runPhase("autoFleet", () => {
+        const outerResult = runPhase("autoFleet", () => {
           const truepath =
             readProperty(
               readProperty(pageCapture.rootState.readRoot(), "race"),
@@ -2843,15 +2878,23 @@ export function startCapturedRuntime({
             ) === true;
           if (truepath) {
             ensureOuterFleetControls();
-            outerFleet.autoFleetOuter();
-          } else {
-            ensureGalaxyFleetControls();
-            runFleetAutomation({
-              reader: fleet.reader,
-              executor: fleet.executor,
-            });
+            return outerFleet.autoFleetOuter();
           }
+          ensureGalaxyFleetControls();
+          runFleetAutomation({
+            reader: fleet.reader,
+            executor: fleet.executor,
+          });
+          return undefined;
         });
+        // `CapturedFleetDemand` freezes `nextShipCost`, which is the Truepath shipyard blueprint's
+        // own cost. The outer pass changes that by setting blueprint parts and by building a ship,
+        // so a sample created by Jobs/Craftsmen or any earlier consumer must not survive it. The
+        // ordinary galaxy pass never touches the blueprint or the ship count, and never reads that
+        // shipyard cost, so it ends nothing.
+        if (outerResult?.shipTargetChanged === true) {
+          demandThisCycle = undefined;
+        }
       }
       // After Build, so construction has first claim on the supplies a Mech reservation holds.
       if (isEnabled(settings, "autoMech")) {

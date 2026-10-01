@@ -271,12 +271,22 @@ const outerControl = createCapturedOuterFleetControl({
   getDocument: () => capturedDocument,
   readSettings: () => effectiveSettings,
 });
-assert.equal(outerControl.autoFleetOuter().status, "succeeded");
+const built = outerControl.autoFleetOuter();
+assert.equal(built.outcome.status, "succeeded");
+// A confirmed build is the one pass that moves the ship the next one will be: the composition ends
+// the cycle's shared demand sample on exactly this signal, because `CapturedFleetDemand` freezes
+// the shipyard's own next-ship cost.
+assert.equal(built.shipTargetChanged, true);
 assert.equal(yard.ships.length, 1);
 assert.equal(yard.ships[0].location, "spc_dwarf");
-assert.equal(outerControl.autoFleetOuter().status, "succeeded");
+const dispatched = outerControl.autoFleetOuter();
+assert.equal(dispatched.outcome.status, "succeeded");
+// Dispatching a ship that was already built changes where it is, not what the yard builds next.
+assert.equal(dispatched.shipTargetChanged, false);
 assert.equal(modalOpen, true);
-assert.equal(outerControl.autoFleetOuter().status, "succeeded");
+const redispatched = outerControl.autoFleetOuter();
+assert.equal(redispatched.outcome.status, "succeeded");
+assert.equal(redispatched.shipTargetChanged, false);
 assert.equal(yard.ships[0].location, "spc_red");
 
 // Authority management must reach the existing policy before build execution. A corvette removes
@@ -295,7 +305,7 @@ const authorityControl = createCapturedOuterFleetControl({
   getDocument: () => capturedDocument,
   readSettings: () => effectiveSettings,
 });
-assert.equal(authorityControl.autoFleetOuter().status, "succeeded");
+assert.equal(authorityControl.autoFleetOuter().outcome.status, "succeeded");
 assert.equal(capturedBuilds, buildsBeforeAuthority);
 assert.equal(yard.ships.length, 0);
 
@@ -358,7 +368,7 @@ const stalledControl = createCapturedOuterFleetControl({
   getDocument: () => stalledDocument,
   readSettings: () => effectiveSettings,
 });
-assert.equal(stalledControl.autoFleetOuter().status, "succeeded");
+assert.equal(stalledControl.autoFleetOuter().outcome.status, "succeeded");
 assert.equal(yard.ships.length, 1);
 capturedSettings.fleetOuterShips = "none";
 for (let cycle = 0; cycle < 200; cycle++) {
@@ -368,19 +378,19 @@ assert.equal(yard.ships.length, 1);
 assert.equal(stalledModalOpen, false);
 assert.equal(stalledModalShip, null);
 capturedSettings.fleetOuterShips = "custom";
-assert.equal(stalledControl.autoFleetOuter().status, "succeeded");
+assert.equal(stalledControl.autoFleetOuter().outcome.status, "succeeded");
 assert.equal(yard.ships.length, 2);
 capturedSettings.fleetOuterShips = "none";
 allowStalledDestination = true;
-assert.equal(stalledControl.autoFleetOuter().status, "succeeded");
+assert.equal(stalledControl.autoFleetOuter().outcome.status, "succeeded");
 assert.equal(stalledModalOpen, true);
 assert.equal(stalledModalShip, 1);
 assert.equal(yard.ships[1].location, "spc_dwarf");
-assert.equal(stalledControl.autoFleetOuter().status, "succeeded");
+assert.equal(stalledControl.autoFleetOuter().outcome.status, "succeeded");
 assert.equal(stalledModalOpen, false);
 assert.equal(stalledModalShip, null);
 assert.equal(yard.ships[1].location, "spc_red");
-assert.equal(stalledControl.autoFleetOuter().status, "succeeded");
+assert.equal(stalledControl.autoFleetOuter().outcome.status, "succeeded");
 
 // Missing root capture must stand down without touching the shipyard.
 capturedSettings.fleetOuterShips = "custom";
@@ -395,7 +405,7 @@ const missingRootControl = createCapturedOuterFleetControl({
   getDocument: () => capturedDocument,
   readSettings: () => effectiveSettings,
 });
-assert.equal(missingRootControl.autoFleetOuter().status, "succeeded");
+assert.equal(missingRootControl.autoFleetOuter().outcome.status, "succeeded");
 assert.equal(capturedBuilds, buildsBeforeMissingRoot);
 
 // A control click that appends no ship is not a successful construction.
@@ -435,7 +445,7 @@ const noTransitionControl = createCapturedOuterFleetControl({
   getDocument: () => capturedDocument,
   readSettings: () => effectiveSettings,
 });
-assert.equal(noTransitionControl.autoFleetOuter().status, "stale");
+assert.equal(noTransitionControl.autoFleetOuter().outcome.status, "stale");
 assert.equal(noTransitionBuilds, 1);
 assert.equal(yard.ships.length, 0);
 
@@ -494,6 +504,8 @@ capturedMethods.build = () => {
   yard.ships.push({ ...yard.blueprint, location: "spc_dwarf" });
 };
 const staleBlueprintResult = createOuterControl().autoFleetOuter();
+// A status report only narrates the blueprint it found; it moves nothing.
+assert.equal(staleBlueprintResult.shipTargetChanged, false);
 assert.notEqual(staleBlueprintResult.status, "succeeded");
 assert.equal(capturedBuilds, buildsBeforeStaleBlueprint);
 assert.equal(yard.ships.length, 0);
@@ -516,7 +528,10 @@ capturedMethods.build = () => {
 };
 const wrongShipControl = createOuterControl();
 const wrongShipResult = wrongShipControl.autoFleetOuter();
-assert.equal(wrongShipResult.status, "stale");
+assert.equal(wrongShipResult.outcome.status, "stale");
+// A build the game did not confirm did not change the ship target, so the composition keeps the
+// cycle's demand sample.
+assert.equal(wrongShipResult.shipTargetChanged, false);
 assert.equal(capturedBuilds, buildsBeforeWrongShip + 1);
 assert.equal(yard.ships.length, 1);
 assert.equal(yard.ships[0].class, "frigate");

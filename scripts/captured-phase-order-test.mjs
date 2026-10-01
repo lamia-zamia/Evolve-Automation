@@ -1353,16 +1353,23 @@ assert.deepEqual(
 //
 // Smelter → Storage. Smelter re-routes next-period rates through `city.smelter`; the captured
 // demand sample reads no production ratio and no `resource[id].diff`, so nothing it moves is a
-// fact Storage's own decision is built from. Storage settles the capacity ledger
-// (`resource[id].max`, `crates`, `containers`) before any of its later consumers — Replicator,
-// Research, Build, Jobs, Fleet, Power — read it, which is the reason it stays ahead of them.
+// fact Storage's own decision is built from. Storage in turn owns the capacity ledger
+// (`resource[id].max`, `crates`, `containers`) that every later consumer's request is clamped
+// against, which is why the runtime ends the sample at its phase boundary — see
+// `scripts/captured-fleet-outer-test.mjs` and `src/application/fleet-outer.ts` for the other
+// boundary. This save's planner reads its crate and container descriptors and declines to act, so
+// what is locked here is the execution order and the fact that Storage reaches its own action
+// boundary before Replicator does.
 assertRunsBefore(assert, prologue.trace, "smelter", "storage");
+assertRunsBefore(assert, prologue.trace, "storage", "replicator");
 assert.notEqual(prologue.root.city.smelter.Iron, 2, "Smelter must act");
 assert.notEqual(prologue.root.city.smelter.Steel, 0, "Smelter must act");
 assert.ok(
-  prologue.root.resource.Iron.max >= 0 &&
-    prologue.root.resource.Iron.crates >= 0,
-  "Storage must settle its own capacity ledger",
+  prologue.invocations.some(
+    ({ elementId }) =>
+      elementId === "createHead" || elementId.startsWith("stack-"),
+  ),
+  "Storage must reach its own captured action boundary",
 );
 
 // Fleet → Mech → Power. Fleet's roster mutation and Mech's blueprint edit both land before the

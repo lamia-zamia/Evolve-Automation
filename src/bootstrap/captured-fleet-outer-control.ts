@@ -6,6 +6,7 @@ import type { GameRootStateSource } from "../ports/game-root-state.ts";
 import { createCapturedFleetControls } from "../adapters/evolve/combat/captured-fleet-controls.ts";
 import { createCapturedOuterFleetAdapter } from "../adapters/evolve/combat/captured-fleet-outer.ts";
 import { runOuterFleetAutomation } from "../application/fleet-outer.ts";
+import type { OuterFleetAutomationResult } from "../application/fleet-outer.ts";
 
 interface CapturedFleetOuterDependencies {
   readonly rootState: GameRootStateSource;
@@ -18,7 +19,7 @@ interface CapturedFleetOuterDependencies {
 export function createCapturedOuterFleetControl(
   dependencies: CapturedFleetOuterDependencies,
 ): {
-  readonly autoFleetOuter: () => ReturnType<typeof runOuterFleetAutomation>;
+  readonly autoFleetOuter: () => OuterFleetAutomationResult;
 } {
   const adapter = createCapturedOuterFleetAdapter({
     rootState: dependencies.rootState,

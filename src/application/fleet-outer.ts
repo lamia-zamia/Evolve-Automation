@@ -17,16 +17,32 @@ export interface OuterFleetAutomationDependencies {
   readonly executor: OuterFleetExecutor;
 }
 
+export interface OuterFleetAutomationResult {
+  readonly outcome: CommandExecutionOutcome;
+  /**
+   * Whether this pass changed the ship the next one will be: the yard blueprint's parts, or the
+   * ship's own count. Both move `CapturedFleetDemand`'s `nextShipCost`, which a shared resource
+   * demand sample freezes, so the composition ends that sample's lifetime when this is true. A
+   * status report that only narrates the current blueprint moves nothing.
+   */
+  readonly shipTargetChanged: boolean;
+}
+
 function execute(
   executor: OuterFleetExecutor,
   decision: Readonly<OuterFleetDecision>,
-): CommandExecutionOutcome {
-  return executor.execute(decision);
+): OuterFleetAutomationResult {
+  const outcome = executor.execute(decision);
+  return Object.freeze({
+    outcome,
+    shipTargetChanged:
+      outcome.status === "succeeded" && decision.kind === "build-outer-fleet",
+  });
 }
 
 export function runOuterFleetAutomation(
   dependencies: OuterFleetAutomationDependencies,
-): CommandExecutionOutcome {
+): OuterFleetAutomationResult {
   const cycle = planOuterFleetCycle(dependencies.reader.readCycle());
   if (cycle.kind === "outer-fleet-status") {
     return execute(dependencies.executor, cycle);

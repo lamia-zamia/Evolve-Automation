@@ -22172,7 +22172,11 @@
 
   // src/application/fleet-outer.ts
   function execute(executor, decision) {
-    return executor.execute(decision);
+    let outcome = executor.execute(decision);
+    return Object.freeze({
+      outcome,
+      shipTargetChanged: outcome.status === "succeeded" && decision.kind === "build-outer-fleet"
+    });
   }
   function runOuterFleetAutomation(dependencies) {
     let cycle = planOuterFleetCycle(dependencies.reader.readCycle());
@@ -52655,9 +52659,9 @@ Only continue if you trust the source. Injected code:
           ), ratios.miningShip();
         }), isEnabled(settings, "autoSmelter") && runPhase("autoSmelter", () => {
           ensureSmelterControls(), refreshDiscoveredSettings(), smelter.run();
-        }), isEnabled(settings, "autoStorage") && runPhase("autoStorage", () => {
+        }), isEnabled(settings, "autoStorage") && (runPhase("autoStorage", () => {
           ensureStorageControls(), refreshDiscoveredSettings(), storageAutomation.run();
-        }), isEnabled(settings, "autoReplicator") && runPhase("autoReplicator", () => {
+        }), demandThisCycle = void 0, savingTargetThisCycle = void 0), isEnabled(settings, "autoReplicator") && runPhase("autoReplicator", () => {
           ensureReplicatorControls(), replicator.run();
         });
         let triggerActive = !1;
@@ -52704,14 +52708,16 @@ Only continue if you trust the source. Injected code:
         }), autoCraftsmen && !combinedJobs && runPhase("autoCraftsmen", () => {
           ensureCivicControls(), runJobsAutomation(craftsmen, !0);
         }), isEnabled(settings, "autoFleet") && runPhase("autoFleet", () => {
-          readProperty(
+          if (readProperty(
             readProperty(pageCapture2.rootState.readRoot(), "race"),
             "truepath"
-          ) === !0 ? (ensureOuterFleetControls(), outerFleet.autoFleetOuter()) : (ensureGalaxyFleetControls(), runFleetAutomation({
+          ) === !0)
+            return ensureOuterFleetControls(), outerFleet.autoFleetOuter();
+          ensureGalaxyFleetControls(), runFleetAutomation({
             reader: fleet.reader,
             executor: fleet.executor
-          }));
-        }), isEnabled(settings, "autoMech") && runPhase("autoMech", () => {
+          });
+        })?.shipTargetChanged === !0 && (demandThisCycle = void 0), isEnabled(settings, "autoMech") && runPhase("autoMech", () => {
           ensureMechControls();
           let result = runCapturedMechAutomationWithActivity({
             ...capturedMech,

@@ -170,6 +170,32 @@ export function runCapturedPhaseOrderCycle({
   };
 }
 
+/**
+ * The same fixture over several cycles, with the trace and invocation log accumulated. Some
+ * features debounce across cycles — Storage holds a freshly built crate back before assigning it —
+ * so a relation that depends on their mutation needs the cycle it lands in.
+ */
+export function runCapturedPhaseOrderCycles(count, scenario) {
+  const trace = [];
+  const errors = [];
+  const invocations = [];
+  let result;
+  for (let cycle = 0; cycle < count; cycle += 1) {
+    result = runCapturedPhaseOrderCycle(scenario);
+    trace.push(...result.trace);
+    errors.push(...result.errors);
+    invocations.push(...result.invocations);
+  }
+  return Object.freeze({
+    trace,
+    errors,
+    invocations,
+    root: result?.root,
+    effectiveSettings: result?.effectiveSettings,
+    cycles: count,
+  });
+}
+
 /** Index of the first trace entry, or -1. Asserting on the result names the missing phase. */
 export function traceIndex(trace, name) {
   return trace.indexOf(name);
