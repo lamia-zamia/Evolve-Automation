@@ -10184,11 +10184,17 @@
       ...onDiagnostic === void 0 ? {} : {
         onDiagnostic: (reason) => onDiagnostic(`progression diagnostic arpa: ${reason}`)
       }
-    }), projectSampled = !1, lastProjects, resetProjectSample = () => {
-      projectSampled = !1, lastProjects = void 0;
+    }), projectSampled = !1, lastProjects, establishedProjectEpoch, resetProjectSample = () => {
+      projectSampled = !1, lastProjects = void 0, establishedProjectEpoch = void 0;
+    }, readEstablishedProjects = () => {
+      if (projectSampled && establishedProjectEpoch !== epoch.read())
+        return;
+      let establishedProjects = projectSampled ? lastProjects : scopes.peek(ARPA_SCOPE);
+      if (establishedProjects !== void 0)
+        return projectCatalog.restate(establishedProjects);
     }, readProjects2 = () => {
       if (!projectSampled) {
-        projectSampled = !0;
+        projectSampled = !0, establishedProjectEpoch = epoch.read();
         let held = scopes.read(
           ARPA_SCOPE,
           () => projectCatalog.readProjects(),
@@ -10218,8 +10224,8 @@
       rootState,
       controls: controls2,
       diagnostics
-    }), buildingUnlockKey, sampledBuildingUnlockScopes = /* @__PURE__ */ new Set(), lastBuildingUnlocks, resetBuildingUnlockSample = () => {
-      buildingUnlockKey = void 0, lastBuildingUnlocks = void 0;
+    }), buildingUnlockKey, sampledBuildingUnlockScopes = /* @__PURE__ */ new Set(), lastBuildingUnlocks, establishedBuildingSwitchCatalog, resetBuildingUnlockSample = () => {
+      buildingUnlockKey = void 0, lastBuildingUnlocks = void 0, establishedBuildingSwitchCatalog = void 0;
     };
     rootState.subscribeRootReplaced(() => {
       scopes.invalidateAll(), clearResearchSample(), resetProjectSample(), resetBuildingUnlockSample();
@@ -10235,7 +10241,7 @@
           () => buildingUnlocks.read(regions),
           sameBuildingUnlockCatalog
         );
-        lastBuildingUnlocks = catalog === void 0 ? void 0 : Object.freeze({
+        establishedBuildingSwitchCatalog = catalog, lastBuildingUnlocks = catalog === void 0 ? void 0 : Object.freeze({
           unlocked: catalog.unlocked,
           regions: catalog.regions,
           states: buildingSwitchStates.read(catalog)
@@ -10297,7 +10303,7 @@
       rootState,
       controls: controls2,
       readSettings,
-      readCanExpandBay: () => readCanExpandMechBay()
+      readCanExpandBay: () => readEstablishedMechBayExpansion()
     }), mechReservations = createCapturedMechReservationSource({
       demand: mechDemand,
       ...dependencies.readReservedQuantityForMechPriority === void 0 ? {} : {
@@ -10368,14 +10374,21 @@
       return getBuildingManager !== void 0 && targets.length > 0 && readBuildingUnlocks(new Set(targets.map((target) => target.region))), readEstablishedStorageBuildTargets() ?? Object.freeze([]);
     };
     function readCanExpandMechBay() {
+      return readCapturedMechBayExpansion(!1);
+    }
+    function readEstablishedMechBayExpansion() {
+      return readCapturedMechBayExpansion(!0);
+    }
+    function readCapturedMechBayExpansion(establishedOnly) {
       let settings = readSettings();
       if (!isRecord(settings)) return;
       if (settings.autoBuild !== !0 || settings.mechBaysFirst !== !0)
         return !1;
-      let targets = readManagedBuildTargets(), offers = readBuildingUnlocks(
-        /* @__PURE__ */ new Set([CAPTURED_MECH_BUILDINGS.region])
-      );
-      if (offers === void 0 || !offers.regions.has(CAPTURED_MECH_BUILDINGS.region))
+      let targets = establishedOnly ? readEstablishedStorageBuildTargets() : readManagedBuildTargets(), offers = establishedOnly ? lastBuildingUnlocks === void 0 || establishedBuildingSwitchCatalog === void 0 ? void 0 : Object.freeze({
+        ...lastBuildingUnlocks,
+        states: buildingSwitchStates.read(establishedBuildingSwitchCatalog)
+      }) : readBuildingUnlocks(/* @__PURE__ */ new Set([CAPTURED_MECH_BUILDINGS.region]));
+      if (targets === void 0 || offers === void 0 || !offers.regions.has(CAPTURED_MECH_BUILDINGS.region))
         return;
       let root = rootState.readRoot();
       if (!isRecord(root)) return;
@@ -10425,6 +10438,7 @@
       sampleOfferedTechs,
       readGrantedTechs: () => lastGranted,
       readProjects: readProjects2,
+      readEstablishedProjects,
       resetProjectSample,
       readBuildingUnlocks,
       readCapturedBuildingUnlocked,
@@ -19006,6 +19020,11 @@
   }
 
   // src/adapters/evolve/economy/resources/captured-resource-demand.ts
+  function hasCapturedProjectStorageDemand(settings, persistedSettings = settings) {
+    return [...Object.keys(persistedSettings), ...Object.keys(settings)].some(
+      (key) => key.startsWith("arpa_") && settings[key] === !0
+    );
+  }
   var NO_STORAGE_REQUIREMENT = 1, EMPTY_DEMAND_SAMPLE = Object.freeze({
     savingTarget: null,
     spyPurchaseMoney: 0,
@@ -19820,9 +19839,7 @@
               })
             ];
           })
-        ), projects = Object.keys(settings).some(
-          (key) => key.startsWith("arpa_") && settings[key] === !0
-        ) ? dependencies.readProjects?.() ?? [] : [], projectStorageTargets = Object.freeze(
+        ), projects = hasCapturedProjectStorageDemand(settings) ? dependencies.readProjects?.() ?? [] : [], projectStorageTargets = Object.freeze(
           projects.flatMap((project) => {
             if (settings[`arpa_${project.projectId}`] !== !0) return [];
             let costs = calculateArpaStorageTargetCosts({
@@ -51745,16 +51762,18 @@ Only continue if you trust the source. Injected code:
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
       costs: buildCosts,
-      triggers: Object.freeze({ read: readTriggerTargets }),
+      triggers: Object.freeze({
+        read: () => triggerTargetsThisCycle ?? Object.freeze([])
+      }),
       construction: cycleConstructionObservations,
       readOfferedTechs: progression.readOfferedTechs,
       readBuildTargets: () => {
         let settings = settingsStore.readRaw();
         return isEnabled(settings, "autoBuild") || isEnabled(settings, "autoStorage") ? progression.readEstablishedStorageBuildTargets() ?? Object.freeze([]) : Object.freeze([]);
       },
-      readProjects: progression.readProjects,
+      readProjects: progression.readEstablishedProjects,
       reservations: queueReservations,
-      readSettings: () => settingsStore.readRaw(),
+      readSettings: () => settingsLifecycle.materializeEffective(),
       mechDemand: progression.mechDemand,
       readPrerequisites: readDemandPrerequisites,
       craftCosts: costs,
@@ -52567,8 +52586,10 @@ Only continue if you trust the source. Injected code:
           });
         }), (isEnabled(settings, "autoBuild") || isEnabled(settings, "autoStorage")) && runPhase("construction demand discovery", () => {
           progression.readUnlockedStorageBuildTargets(), refreshDiscoveredSettings();
+        }), hasCapturedProjectStorageDemand(settings, settingsStorage.readRaw()) && (isEnabled(settings, "autoBuild") || isEnabled(settings, "autoARPA") || isEnabled(settings, "autoStorage")) && runPhase("project demand discovery", () => {
+          progression.readProjects(), refreshDiscoveredSettings();
         }), isEnabled(settings, "autoTrigger") && runPhase("autoTrigger discovery", () => {
-          progression.ensureBuildControls(), refreshDiscoveredSettings();
+          progression.ensureBuildControls(), refreshDiscoveredSettings(), readTriggerTargets();
         }), isEnabled(settings, "autoFleet") && runPhase("autoFleet discovery", () => {
           readProperty(
             readProperty(pageCapture2.rootState.readRoot(), "race"),
@@ -52715,7 +52736,7 @@ Only continue if you trust the source. Injected code:
             executor: fleet.executor
           }));
         }), isEnabled(settings, "autoPower") && runPhase("autoPower", () => {
-          demandThisCycle = void 0;
+          observePowerDemandPhase("power-handoff-start"), demandThisCycle = void 0;
           let prerequisites = demandPrerequisitesThisCycle === void 0 ? void 0 : ensureDemandPrerequisiteControls({
             root: pageCapture2.rootState.readRoot(),
             settings,
@@ -52729,7 +52750,10 @@ Only continue if you trust the source. Injected code:
           let buildDemandRequired = isEnabled(settings, "autoBuild") || isEnabled(settings, "autoStorage");
           isRecord(
             readProperty(pageCapture2.rootState.readRoot(), "resource")
-          ) && prerequisites !== void 0 && prerequisites.spy !== "unavailable" && prerequisites.ai !== "unavailable" && (!buildDemandRequired || progression.readEstablishedStorageBuildTargets() !== void 0) && (demandThisCycle = demand.sample()), observePowerDemandPhase("power-ready");
+          ) && prerequisites !== void 0 && prerequisites.spy !== "unavailable" && prerequisites.ai !== "unavailable" && (!isEnabled(settings, "autoTrigger") || triggerTargetsThisCycle !== void 0) && (!hasCapturedProjectStorageDemand(
+            settings,
+            settingsStorage.readRaw()
+          ) || progression.readEstablishedProjects() !== void 0) && (!buildDemandRequired || progression.readEstablishedStorageBuildTargets() !== void 0) && (demandThisCycle = demand.sample()), observePowerDemandPhase("power-ready");
           let outcome = powerAutomation.run();
           observePowerDemandPhase("power-complete", outcome), outcome.status !== "succeeded" && logError(
             `autoPower: ${outcome.failure.code}: ${outcome.failure.message}`

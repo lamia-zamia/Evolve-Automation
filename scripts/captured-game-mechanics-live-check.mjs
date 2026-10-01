@@ -760,6 +760,27 @@ try {
     { name: "power-only", autoBuild: false, autoStorage: false },
     { name: "build-and-power", autoBuild: true, autoStorage: false },
     { name: "storage-and-power", autoBuild: false, autoStorage: true },
+    { name: "project-demand-without-owner", projectDemand: true, stale: true },
+    { name: "arpa-and-power", autoARPA: true, projectDemand: true },
+    {
+      name: "project-storage-without-autoarpa",
+      autoStorage: true,
+      projectDemand: true,
+    },
+    {
+      name: "failed-arpa-establishment",
+      autoARPA: true,
+      projectDemand: true,
+      failArpa: true,
+      stale: true,
+    },
+    {
+      name: "expired-arpa-scope",
+      autoARPA: true,
+      projectDemand: true,
+      expireArpa: true,
+      stale: true,
+    },
     {
       name: "unavailable-demand-prerequisite",
       autoBuild: false,
@@ -774,85 +795,133 @@ try {
         ...prioritySettings,
         masterScriptToggle: true,
         autoPower: true,
-        autoBuild: scenario.autoBuild,
-        autoStorage: scenario.autoStorage,
+        autoBuild: scenario.autoBuild === true,
+        autoStorage: scenario.autoStorage === true,
+        autoARPA: scenario.autoARPA === true,
+        ...Object.fromEntries(
+          Object.keys(cycleSave.arpa).map((id) => [`arpa_${id}`, false]),
+        ),
+        arpa_lhc: scenario.projectDemand === true,
         tickRate: 1000,
       },
       seed: 42,
     });
     try {
       await runtimeSession.advance(1);
-      const runtimePower = await runtimeSession.evaluate(({ unavailable }) => {
-        const hooks = globalThis.__EA_TEST_HOOKS__;
-        const capture =
-          globalThis[Symbol.for("evolve-automation.page-capture")];
-        const root = capture.rootState.readRoot();
-        const structure = capture.mechanics.readStructures().find((entry) => {
-          const powered = entry.readPowered();
-          const state = root[entry.region]?.[entry.struct];
-          const offered = entry.readAvailability(root);
-          return (
-            powered.kind === "value" &&
-            powered.value > 0 &&
-            state?.count > 0 &&
-            Object.hasOwn(state, "on") &&
-            offered.kind === "value" &&
-            offered.value === true
-          );
-        });
-        if (!structure) return { error: "no offered Power consumer" };
-        const state = root[structure.region][structure.struct];
-        state.on = 0;
-        root.city.power = 1000000;
-        const phases = [];
-        let constructionDemand;
-        let readyDemand;
-        let settingsBeforePower;
-        let controlsBeforePower;
-        let powerOutcome;
-        let settingsUnchangedByPower;
-        let controlsUnchangedByPower;
-        hooks.observePowerDemandPhase = (stage, demand, outcome) => {
-          phases.push({ stage, demandAvailable: demand !== undefined });
-          if (stage === "construction-complete") constructionDemand = demand;
-          if (stage === "power-ready") {
-            readyDemand = demand;
-            settingsBeforePower = JSON.stringify(root.settings);
-            controlsBeforePower = JSON.stringify(
-              capture.controls.capturedElementIds(),
+      const runtimePower = await runtimeSession.evaluate(
+        ({ unavailable, failArpa, expireArpa }) => {
+          const hooks = globalThis.__EA_TEST_HOOKS__;
+          const capture =
+            globalThis[Symbol.for("evolve-automation.page-capture")];
+          const root = capture.rootState.readRoot();
+          const structure = capture.mechanics.readStructures().find((entry) => {
+            const powered = entry.readPowered();
+            const state = root[entry.region]?.[entry.struct];
+            const offered = entry.readAvailability(root);
+            return (
+              powered.kind === "value" &&
+              powered.value > 0 &&
+              state?.count > 0 &&
+              Object.hasOwn(state, "on") &&
+              offered.kind === "value" &&
+              offered.value === true
             );
-          }
-          if (stage === "power-complete") {
-            powerOutcome = outcome;
-            settingsUnchangedByPower =
-              JSON.stringify(root.settings) === settingsBeforePower;
-            controlsUnchangedByPower =
-              JSON.stringify(capture.controls.capturedElementIds()) ===
-              controlsBeforePower;
-          }
-        };
-        const resources = root.resource;
-        if (unavailable) delete root.resource;
-        try {
-          hooks.runCapturedRuntimeCycle();
-          return {
-            binding: structure.actionId,
-            phases,
-            constructionDemandAvailable: constructionDemand !== undefined,
-            demandRefreshed:
-              readyDemand !== undefined && readyDemand !== constructionDemand,
-            outcome: powerOutcome,
-            afterOn: state.on,
-            normalPanelCaptured:
-              capture.controls.resolve(structure.actionId) !== undefined,
-            settingsUnchangedByPower,
-            controlsUnchangedByPower,
+          });
+          if (!structure) return { error: "no offered Power consumer" };
+          const state = root[structure.region][structure.struct];
+          state.on = 0;
+          root.city.power = 1000000;
+          const phases = [];
+          let constructionDemand;
+          let readyDemand;
+          let settingsBeforePower;
+          let controlsBeforePower;
+          let powerOutcome;
+          let settingsUnchangedByPower;
+          let controlsUnchangedByPower;
+          let arpaControlsBeforePower;
+          let arpaControlsAfterPower;
+          let arpaPanelBeforePower;
+          let arpaPanelAfterPower;
+          const readTabCalls = () =>
+            capture.controlUsage
+              .readUsage()
+              .filter((entry) => entry.method === "swapTab")
+              .reduce((sum, entry) => sum + entry.returned + entry.threw, 0);
+          let tabCallsBeforePower;
+          const arpaBefore = root.arpa;
+          if (failArpa) delete root.arpa;
+          const dateBefore = Date;
+          hooks.observePowerDemandPhase = (stage, demand, outcome) => {
+            phases.push({ stage, demandAvailable: demand !== undefined });
+            if (stage === "construction-complete") constructionDemand = demand;
+            if (stage === "power-handoff-start") {
+              if (expireArpa)
+                globalThis.Date = class extends dateBefore {
+                  static now() {
+                    return dateBefore.now() + 60000;
+                  }
+                };
+              settingsBeforePower = JSON.stringify(root.settings);
+              controlsBeforePower = JSON.stringify(
+                capture.controls.capturedElementIds(),
+              );
+              arpaControlsBeforePower = capture.controls
+                .capturedElementIds()
+                .filter((id) => id.startsWith("arpa"));
+              arpaPanelBeforePower = Boolean(
+                globalThis.document.getElementById("arpaPhysics"),
+              );
+              tabCallsBeforePower = readTabCalls();
+            }
+            if (stage === "power-ready") readyDemand = demand;
+            if (stage === "power-complete") {
+              powerOutcome = outcome;
+              settingsUnchangedByPower =
+                JSON.stringify(root.settings) === settingsBeforePower;
+              controlsUnchangedByPower =
+                JSON.stringify(capture.controls.capturedElementIds()) ===
+                controlsBeforePower;
+              arpaControlsAfterPower = capture.controls
+                .capturedElementIds()
+                .filter((id) => id.startsWith("arpa"));
+              arpaPanelAfterPower = Boolean(
+                globalThis.document.getElementById("arpaPhysics"),
+              );
+            }
           };
-        } finally {
-          root.resource = resources;
-          delete hooks.observePowerDemandPhase;
-        }
-      }, scenario);
+          const resources = root.resource;
+          if (unavailable) delete root.resource;
+          try {
+            hooks.runCapturedRuntimeCycle();
+            return {
+              binding: structure.actionId,
+              phases,
+              constructionDemandAvailable: constructionDemand !== undefined,
+              demandRefreshed:
+                readyDemand !== undefined && readyDemand !== constructionDemand,
+              outcome: powerOutcome,
+              afterOn: state.on,
+              normalPanelCaptured:
+                capture.controls.resolve(structure.actionId) !== undefined,
+              settingsUnchangedByPower,
+              controlsUnchangedByPower,
+              arpaControlsBeforePower,
+              arpaControlsAfterPower,
+              arpaPanelBeforePower,
+              arpaPanelAfterPower,
+              tabCallsBeforePower,
+              tabCallsDuringPower: readTabCalls() - tabCallsBeforePower,
+            };
+          } finally {
+            root.resource = resources;
+            root.arpa = arpaBefore;
+            globalThis.Date = dateBefore;
+            delete hooks.observePowerDemandPhase;
+          }
+        },
+        scenario,
+      );
       assert.equal(runtimePower.error, undefined, JSON.stringify(runtimePower));
       assert.deepEqual(
         runtimePower.phases.filter(({ stage }) =>
@@ -863,9 +932,28 @@ try {
           { stage: "factory-invalidated", demandAvailable: false },
         ],
       );
-      assert.equal(runtimePower.settingsUnchangedByPower, true);
-      assert.equal(runtimePower.controlsUnchangedByPower, true);
-      if (scenario.unavailable) {
+      assert.equal(
+        runtimePower.settingsUnchangedByPower,
+        true,
+        "tab settings stay unchanged from before demand refresh through Power completion",
+      );
+      assert.equal(
+        runtimePower.controlsUnchangedByPower,
+        true,
+        "demand refresh and Power must not discover any captured controls",
+      );
+      assert.equal(runtimePower.tabCallsDuringPower, 0);
+      assert.deepEqual(
+        runtimePower.arpaControlsAfterPower,
+        runtimePower.arpaControlsBeforePower,
+      );
+      assert.equal(
+        runtimePower.arpaPanelAfterPower,
+        runtimePower.arpaPanelBeforePower,
+      );
+      if (scenario.projectDemand && !scenario.stale)
+        assert.ok(runtimePower.arpaControlsBeforePower.length > 0);
+      if (scenario.unavailable || scenario.stale) {
         assert.equal(runtimePower.outcome.status, "stale");
         assert.equal(
           runtimePower.outcome.failure.code,
@@ -885,7 +973,11 @@ try {
         assert.equal(runtimePower.demandRefreshed, true);
         assert.equal(runtimePower.outcome.status, "succeeded");
         assert.ok(runtimePower.afterOn > 0, JSON.stringify(runtimePower));
-        if (!scenario.autoBuild && !scenario.autoStorage) {
+        if (
+          !scenario.autoBuild &&
+          !scenario.autoStorage &&
+          !scenario.autoARPA
+        ) {
           assert.equal(
             runtimePower.normalPanelCaptured,
             false,

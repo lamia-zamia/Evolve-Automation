@@ -129,6 +129,16 @@ export interface CapturedResourceDemandDependencies {
   readonly mechDemand?: CapturedMechDemandSource;
 }
 
+/** Persisted project switches also request storage when autoARPA itself is disabled. */
+export function hasCapturedProjectStorageDemand(
+  settings: Readonly<Record<string, unknown>>,
+  persistedSettings: Readonly<Record<string, unknown>> = settings,
+): boolean {
+  return [...Object.keys(persistedSettings), ...Object.keys(settings)].some(
+    (key) => key.startsWith("arpa_") && settings[key] === true,
+  );
+}
+
 export interface CapturedDemandSample {
   /** One current-affordability construction observation shared by this cycle's consumers. */
   readonly savingTarget: SavingTarget | null;
@@ -1494,9 +1504,8 @@ export function createCapturedResourceDemand(
           ];
         }),
       );
-      const hasEnabledProjectStorageSetting = Object.keys(settings).some(
-        (key) => key.startsWith("arpa_") && settings[key] === true,
-      );
+      const hasEnabledProjectStorageSetting =
+        hasCapturedProjectStorageDemand(settings);
       const projects = hasEnabledProjectStorageSetting
         ? (dependencies.readProjects?.() ?? [])
         : [];

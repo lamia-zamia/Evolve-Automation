@@ -154,6 +154,9 @@ export interface CapturedProgressionControl {
   readonly readGrantedTechs: () => ReadonlySet<string> | undefined;
   /** A fresh captured A.R.P.A. project snapshot, if it can be read. */
   readonly readProjects: () => readonly Readonly<OfferedProject>[] | undefined;
+  /** Restates an established project catalog; never discovers or refreshes a panel. */
+  readonly readEstablishedProjects: () =>
+    readonly Readonly<OfferedProject>[] | undefined;
   /**
    * Drops the shared A.R.P.A. sample so the next reader takes a fresh one. The trigger phase
    * prices project triggers from this same sample before construction runs, so it is reset once
@@ -499,13 +502,25 @@ export function createCapturedProgressionControl(
   // costs a draw.
   let projectSampled = false;
   let lastProjects: readonly Readonly<OfferedProject>[] | undefined;
+  let establishedProjectEpoch: string | undefined;
   const resetProjectSample = () => {
     projectSampled = false;
     lastProjects = undefined;
+    establishedProjectEpoch = undefined;
+  };
+  const readEstablishedProjects = () => {
+    if (projectSampled && establishedProjectEpoch !== epoch.read())
+      return undefined;
+    const establishedProjects = projectSampled
+      ? lastProjects
+      : scopes.peek<readonly Readonly<OfferedProject>[]>(ARPA_SCOPE);
+    if (establishedProjects === undefined) return undefined;
+    return projectCatalog.restate(establishedProjects);
   };
   const readProjects = () => {
     if (!projectSampled) {
       projectSampled = true;
+      establishedProjectEpoch = epoch.read();
       const held = scopes.read(
         ARPA_SCOPE,
         () => projectCatalog.readProjects(),
@@ -553,9 +568,12 @@ export function createCapturedProgressionControl(
   let buildingUnlockKey: string | undefined;
   const sampledBuildingUnlockScopes = new Set<string>();
   let lastBuildingUnlocks: Readonly<BuildingUnlockSample> | undefined;
+  let establishedBuildingSwitchCatalog:
+    Readonly<BuildingUnlockCatalog> | undefined;
   const resetBuildingUnlockSample = () => {
     buildingUnlockKey = undefined;
     lastBuildingUnlocks = undefined;
+    establishedBuildingSwitchCatalog = undefined;
   };
   rootState.subscribeRootReplaced(() => {
     scopes.invalidateAll();
@@ -578,6 +596,7 @@ export function createCapturedProgressionControl(
         () => buildingUnlocks.read(regions),
         sameBuildingUnlockCatalog,
       );
+      establishedBuildingSwitchCatalog = catalog;
       lastBuildingUnlocks =
         catalog === undefined
           ? undefined
@@ -686,7 +705,7 @@ export function createCapturedProgressionControl(
     rootState,
     controls,
     readSettings,
-    readCanExpandBay: () => readCanExpandMechBay(),
+    readCanExpandBay: () => readEstablishedMechBayExpansion(),
   });
   const mechReservations = createCapturedMechReservationSource({
     demand: mechDemand,
@@ -815,16 +834,35 @@ export function createCapturedProgressionControl(
    * comes from the game's drawn row.
    */
   function readCanExpandMechBay(): boolean | undefined {
+    return readCapturedMechBayExpansion(false);
+  }
+
+  function readEstablishedMechBayExpansion(): boolean | undefined {
+    return readCapturedMechBayExpansion(true);
+  }
+
+  function readCapturedMechBayExpansion(
+    establishedOnly: boolean,
+  ): boolean | undefined {
     const settings = readSettings();
     if (!isRecord(settings)) return undefined;
     if (settings["autoBuild"] !== true || settings["mechBaysFirst"] !== true) {
       return false;
     }
-    const targets = readManagedBuildTargets();
-    const offers = readBuildingUnlocks(
-      new Set([CAPTURED_MECH_BUILDINGS.region]),
-    );
+    const targets = establishedOnly
+      ? readEstablishedStorageBuildTargets()
+      : readManagedBuildTargets();
+    const offers = establishedOnly
+      ? lastBuildingUnlocks === undefined ||
+        establishedBuildingSwitchCatalog === undefined
+        ? undefined
+        : Object.freeze({
+            ...lastBuildingUnlocks,
+            states: buildingSwitchStates.read(establishedBuildingSwitchCatalog),
+          })
+      : readBuildingUnlocks(new Set([CAPTURED_MECH_BUILDINGS.region]));
     if (
+      targets === undefined ||
       offers === undefined ||
       !offers.regions.has(CAPTURED_MECH_BUILDINGS.region)
     ) {
@@ -883,6 +921,7 @@ export function createCapturedProgressionControl(
     sampleOfferedTechs,
     readGrantedTechs: () => lastGranted,
     readProjects,
+    readEstablishedProjects,
     resetProjectSample,
     readBuildingUnlocks,
     readCapturedBuildingUnlocked,

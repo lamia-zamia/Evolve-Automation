@@ -1,9 +1,49 @@
 import assert from "node:assert/strict";
 
 import { calculateArpaStorageTargetCosts } from "../src/domain/economy/storage/storage-requirements.ts";
-import { createCapturedResourceDemand } from "../src/adapters/evolve/economy/resources/captured-resource-demand.ts";
+import {
+  createCapturedResourceDemand,
+  hasCapturedProjectStorageDemand,
+} from "../src/adapters/evolve/economy/resources/captured-resource-demand.ts";
 import { createCapturedTriggers } from "../src/adapters/evolve/progression/build/captured-triggers.ts";
 import { actionPrice } from "./test-support/action-price.mjs";
+
+assert.equal(
+  hasCapturedProjectStorageDemand({ autoARPA: true, arpa_lhc: false }),
+  false,
+);
+assert.equal(
+  hasCapturedProjectStorageDemand({ autoARPA: false, arpa_lhc: true }),
+  true,
+);
+assert.equal(hasCapturedProjectStorageDemand({ arpaStep: true }), false);
+const persistedProjectDemandSettings = { arpa_lhc: true };
+const effectiveProjectDemandSettings = Object.create(
+  persistedProjectDemandSettings,
+);
+assert.equal(
+  hasCapturedProjectStorageDemand(
+    effectiveProjectDemandSettings,
+    persistedProjectDemandSettings,
+  ),
+  true,
+);
+effectiveProjectDemandSettings.arpa_lhc = false;
+assert.equal(
+  hasCapturedProjectStorageDemand(
+    effectiveProjectDemandSettings,
+    persistedProjectDemandSettings,
+  ),
+  false,
+);
+effectiveProjectDemandSettings.arpa_new_project = true;
+assert.equal(
+  hasCapturedProjectStorageDemand(
+    effectiveProjectDemandSettings,
+    persistedProjectDemandSettings,
+  ),
+  true,
+);
 
 const root = {
   race: {},

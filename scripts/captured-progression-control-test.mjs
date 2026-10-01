@@ -49,6 +49,116 @@ assert.deepEqual(control.runResearchCycle(), {
 });
 assert.deepEqual(control.readUnlockedStorageBuildTargets(), []);
 assert.equal(control.readEstablishedStorageBuildTargets(), undefined);
+assert.equal(control.readEstablishedProjects(), undefined);
+
+// Only the owner draws project rows. Consumers restate the live fields or preserve unknown.
+{
+  const projectRoot = {
+    settings: { civTabs: 5 },
+    race: {},
+    tech: {},
+    resource: { Money: {} },
+    arpa: { lhc: { rank: 2, complete: 35 } },
+  };
+  let projectClock = 0;
+  let projectReads = 0;
+  let projectPanelAvailable = true;
+  let projectGeneration = 7;
+  let projectHandleAvailable = true;
+  let projectRowsEmpty = false;
+  const projectReplacements = [];
+  const projectControl = createCapturedProgressionControl({
+    rootState: {
+      readRoot: () => projectRoot,
+      subscribeRootReplaced: (listener) => {
+        projectReplacements.push(listener);
+        return () => {};
+      },
+    },
+    controls: {
+      resolve: (id) =>
+        projectHandleAvailable && id === "arpalhc"
+          ? { elementId: id, generation: projectGeneration, methods: ["build"] }
+          : undefined,
+      invoke: () => {
+        throw new Error("established projects must not swap tabs");
+      },
+      capturedElementIds: () => ["arpalhc"],
+    },
+    mountSuppression: {
+      available: false,
+      withoutMounting: () => {
+        throw new Error("must not discover");
+      },
+    },
+    panels: {
+      open: () => {
+        throw new Error("must not open panels");
+      },
+    },
+    drawnActions: { read: () => [], exists: () => false },
+    drawnProjects: {
+      exists: () => projectPanelAvailable,
+      read: () => {
+        projectReads++;
+        return projectRowsEmpty
+          ? []
+          : [{ elementId: "arpalhc", projectId: "lhc", cost: { Money: 10 } }];
+      },
+    },
+    readSettings: () => ({}),
+    nowMs: () => projectClock,
+  });
+  assert.equal(projectControl.readEstablishedProjects(), undefined);
+  assert.equal(projectReads, 0);
+  assert.equal(projectControl.readProjects()[0].progress, 35);
+  projectRoot.arpa.lhc.complete = 40;
+  projectGeneration++;
+  assert.deepEqual(projectControl.readEstablishedProjects()[0], {
+    elementId: "arpalhc",
+    projectId: "lhc",
+    cost: { Money: 10 },
+    rank: 2,
+    progress: 40,
+    generation: 8,
+  });
+  assert.equal(projectReads, 1);
+  projectRoot.arpa.lhc.rank++;
+  assert.equal(
+    projectControl.readEstablishedProjects(),
+    undefined,
+    "rank changes invalidate the drawn price",
+  );
+  projectRoot.arpa.lhc.rank--;
+  projectControl.resetProjectSample();
+  assert.equal(projectControl.readEstablishedProjects()[0].progress, 40);
+  projectClock = 60000;
+  assert.equal(projectControl.readEstablishedProjects(), undefined);
+  assert.equal(projectReads, 1, "expired scopes cannot refresh in a consumer");
+  assert.equal(projectControl.readProjects()[0].progress, 40);
+  projectHandleAvailable = false;
+  assert.equal(projectControl.readEstablishedProjects(), undefined);
+  projectControl.resetProjectSample();
+  assert.equal(projectControl.readProjects(), undefined);
+  assert.equal(projectControl.readEstablishedProjects(), undefined);
+  projectHandleAvailable = true;
+  projectControl.resetProjectSample();
+  projectControl.readProjects();
+  for (const listener of projectReplacements) listener();
+  assert.equal(projectControl.readEstablishedProjects(), undefined);
+  projectPanelAvailable = false;
+  assert.equal(projectControl.readProjects(), undefined);
+  assert.equal(projectControl.readEstablishedProjects(), undefined);
+  projectPanelAvailable = true;
+  projectRowsEmpty = true;
+  projectControl.resetProjectSample();
+  assert.deepEqual(projectControl.readProjects(), []);
+  assert.deepEqual(
+    projectControl.readEstablishedProjects(),
+    [],
+    "an authoritative empty catalog is distinct from unknown",
+  );
+}
 
 let root = {
   settings: { civTabs: 3 },

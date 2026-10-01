@@ -59,6 +59,7 @@ import {
 } from "../adapters/evolve/economy/production/captured-replicator.ts";
 import {
   createCapturedResourceDemand,
+  hasCapturedProjectStorageDemand,
   EMPTY_DEMAND_SAMPLE,
   type CapturedDemandSample,
 } from "../adapters/evolve/economy/resources/captured-resource-demand.ts";
@@ -1201,7 +1202,9 @@ export function startCapturedRuntime({
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,
     costs: buildCosts,
-    triggers: Object.freeze({ read: readTriggerTargets }),
+    triggers: Object.freeze({
+      read: () => triggerTargetsThisCycle ?? Object.freeze([]),
+    }),
     construction: cycleConstructionObservations,
     readOfferedTechs: progression.readOfferedTechs,
     readBuildTargets: () => {
@@ -1212,9 +1215,9 @@ export function startCapturedRuntime({
             Object.freeze([]))
         : Object.freeze([]);
     },
-    readProjects: progression.readProjects,
+    readProjects: progression.readEstablishedProjects,
     reservations: queueReservations,
-    readSettings: () => settingsStore.readRaw(),
+    readSettings: () => settingsLifecycle.materializeEffective(),
     mechDemand: progression.mechDemand,
     readPrerequisites: readDemandPrerequisites,
     craftCosts: costs,
@@ -2539,12 +2542,24 @@ export function startCapturedRuntime({
           refreshDiscoveredSettings();
         });
       }
+      if (
+        hasCapturedProjectStorageDemand(settings, settingsStorage.readRaw()) &&
+        (isEnabled(settings, "autoBuild") ||
+          isEnabled(settings, "autoARPA") ||
+          isEnabled(settings, "autoStorage"))
+      ) {
+        runPhase("project demand discovery", () => {
+          progression.readProjects();
+          refreshDiscoveredSettings();
+        });
+      }
       if (isEnabled(settings, "autoTrigger")) {
         runPhase("autoTrigger discovery", () => {
           // Trigger targets are only the actions whose controls were captured, so the sample the
           // demand model shares has to be taken after construction discovery, not before it.
           progression.ensureBuildControls();
           refreshDiscoveredSettings();
+          readTriggerTargets();
         });
       }
       if (isEnabled(settings, "autoFleet")) {
@@ -2940,9 +2955,10 @@ export function startCapturedRuntime({
       }
       if (isEnabled(settings, "autoPower")) {
         runPhase("autoPower", () => {
+          observePowerDemandPhase("power-handoff-start");
           // Refresh from the demand owner at the handoff, even if another consumer sampled
           // after Factory: subsequent production work may also have changed the live root.
-          // Never discover Building panels here. Their owning phase established the catalog.
+          // Never discover panels here. Progression owns the established offer catalogs.
           demandThisCycle = undefined;
           // Earlier research/construction may have opened a reservation gate. Revalidate
           // its current prerequisites without drawing; an uncaptured new gate stays stale.
@@ -2967,6 +2983,13 @@ export function startCapturedRuntime({
             prerequisites !== undefined &&
             prerequisites.spy !== "unavailable" &&
             prerequisites.ai !== "unavailable" &&
+            (!isEnabled(settings, "autoTrigger") ||
+              triggerTargetsThisCycle !== undefined) &&
+            (!hasCapturedProjectStorageDemand(
+              settings,
+              settingsStorage.readRaw(),
+            ) ||
+              progression.readEstablishedProjects() !== undefined) &&
             (!buildDemandRequired ||
               progression.readEstablishedStorageBuildTargets() !== undefined)
           ) {
