@@ -52623,18 +52623,18 @@ Only continue if you trust the source. Injected code:
         }
         isEnabled(settings, "autoMarket") && runPhase("autoMarket", () => {
           ensureMarketControls(), refreshDiscoveredSettings(), marketAutomation.run();
-        }), isEnabled(settings, "autoGalaxyMarket") && runPhase("autoGalaxyMarket", () => {
-          ensureGalaxyMarketControls(), refreshDiscoveredSettings(), galaxyMarketAutomation.run();
-        }), isEnabled(settings, "autoStorage") && runPhase("autoStorage", () => {
-          ensureStorageControls(), refreshDiscoveredSettings(), storageAutomation.run();
         }), isEnabled(settings, "autoHell") && runPhase("autoHell", () => {
           ensureCivicControls(), hell.run();
+        }), isEnabled(settings, "autoGalaxyMarket") && runPhase("autoGalaxyMarket", () => {
+          ensureGalaxyMarketControls(), refreshDiscoveredSettings(), galaxyMarketAutomation.run();
         }), isEnabled(settings, "autoMiningDroid") && runPhase("autoMiningDroid", () => {
           ensureMiningDroidControls(), miningDroid.run();
         }), isEnabled(settings, "autoGraphenePlant") && runPhase("autoGraphenePlant", () => {
           ensureGrapheneControls(), graphene.run();
-        }), isEnabled(settings, "autoReplicator") && runPhase("autoReplicator", () => {
-          ensureReplicatorControls(), replicator.run();
+        }), isEnabled(settings, "autoAlchemy") && runPhase("autoAlchemy", () => {
+          ensureAlchemyControls(), refreshDiscoveredSettings(), alchemy.run();
+        }), isEnabled(settings, "autoPylon") && runPhase("autoPylon", () => {
+          ensurePylonControls(), refreshDiscoveredSettings(), pylon.run();
         }), isEnabled(settings, "autoQuarry") && runPhase("autoQuarry", () => {
           ensureRatioControls(
             QUARRY_CONTROL,
@@ -52653,10 +52653,12 @@ Only continue if you trust the source. Injected code:
             MINING_SHIP_CONTROL,
             structureCount3("tauceti", "mining_ship") >= 1
           ), ratios.miningShip();
-        }), isEnabled(settings, "autoAlchemy") && runPhase("autoAlchemy", () => {
-          ensureAlchemyControls(), refreshDiscoveredSettings(), alchemy.run();
-        }), isEnabled(settings, "autoPylon") && runPhase("autoPylon", () => {
-          ensurePylonControls(), refreshDiscoveredSettings(), pylon.run();
+        }), isEnabled(settings, "autoSmelter") && runPhase("autoSmelter", () => {
+          ensureSmelterControls(), refreshDiscoveredSettings(), smelter.run();
+        }), isEnabled(settings, "autoStorage") && runPhase("autoStorage", () => {
+          ensureStorageControls(), refreshDiscoveredSettings(), storageAutomation.run();
+        }), isEnabled(settings, "autoReplicator") && runPhase("autoReplicator", () => {
+          ensureReplicatorControls(), replicator.run();
         });
         let triggerActive = !1;
         if (isEnabled(settings, "autoTrigger") && runPhase("autoTrigger", () => (triggerActive = triggerPhaseActive(
@@ -52701,7 +52703,34 @@ Only continue if you trust the source. Injected code:
           ensureCivicControls(), refreshDiscoveredSettings(), runJobsAutomation(ordinaryJobs, !1);
         }), autoCraftsmen && !combinedJobs && runPhase("autoCraftsmen", () => {
           ensureCivicControls(), runJobsAutomation(craftsmen, !0);
-        }), isEnabled(settings, "autoCraft") && runPhase("autoCraft", () => {
+        }), isEnabled(settings, "autoFleet") && runPhase("autoFleet", () => {
+          readProperty(
+            readProperty(pageCapture2.rootState.readRoot(), "race"),
+            "truepath"
+          ) === !0 ? (ensureOuterFleetControls(), outerFleet.autoFleetOuter()) : (ensureGalaxyFleetControls(), runFleetAutomation({
+            reader: fleet.reader,
+            executor: fleet.executor
+          }));
+        }), isEnabled(settings, "autoMech") && runPhase("autoMech", () => {
+          ensureMechControls();
+          let result = runCapturedMechAutomationWithActivity({
+            ...capturedMech,
+            random: capturedMechRandom
+          });
+          capturedMechCycleHasPendingWork = result.hasPendingWork;
+          let outcome = result.outcome;
+          outcome.status !== "succeeded" && reportOnce(
+            `autoMech: ${outcome.failure.code}: ${outcome.failure.message}`
+          );
+        }), (isEnabled(settings, "autoGenetics") || isEnabled(settings, "autoMinorTrait") || isEnabled(settings, "autoMutateTraits")) && runPhase("autoGenetics", () => {
+          ensureGeneticsControls(), isEnabled(settings, "autoGenetics") && runGeneticsAutomation(genetics);
+        }), isEnabled(settings, "autoMinorTrait")) {
+          let outcome = runPhase("autoMinorTrait", () => (ensureGeneticsControls(), traits.autoMinorTrait()));
+          outcome !== void 0 && outcome.status !== "succeeded" && reportOnce(
+            `autoMinorTrait: ${outcome.failure.code}: ${outcome.failure.message}`
+          );
+        }
+        if (isEnabled(settings, "autoCraft") && runPhase("autoCraft", () => {
           runCraftAutomation(craft);
         }), isEnabled(settings, "autoFight")) {
           let mercenaryOutcome = runPhase("autoFight.mercenary", () => (ensureMercenaryControls(), runMercenaryAutomation(capturedMercenary)));
@@ -52726,37 +52755,16 @@ Only continue if you trust the source. Injected code:
             );
           }
         }
-        if (isEnabled(settings, "autoTax") && runPhase("autoTax", () => {
+        isEnabled(settings, "autoTax") && runPhase("autoTax", () => {
           ensureCivicControls(), tax.autoTax();
         }), isEnabled(settings, "autoGovernment") && runPhase("autoGovernment", () => {
           ensureCivicControls(), runCapturedGovernmentAutomation(government);
-        }), isEnabled(settings, "autoMech") && runPhase("autoMech", () => {
-          ensureMechControls();
-          let result = runCapturedMechAutomationWithActivity({
-            ...capturedMech,
-            random: capturedMechRandom
-          });
-          capturedMechCycleHasPendingWork = result.hasPendingWork;
-          let outcome = result.outcome;
-          outcome.status !== "succeeded" && reportOnce(
-            `autoMech: ${outcome.failure.code}: ${outcome.failure.message}`
-          );
         }), isEnabled(settings, "autoNanite") && runPhase("autoNanite", () => {
           ensureNaniteControls(), refreshDiscoveredSettings(), nanite.run();
         }), isEnabled(settings, "autoSupply") && runPhase("autoSupply", () => {
           ensureSupplyControls(), refreshDiscoveredSettings(), supply.run();
         }), isEnabled(settings, "autoEject") && runPhase("autoEject", () => {
           ensureEjectorControls(), refreshDiscoveredSettings(), ejector.run();
-        }), isEnabled(settings, "autoSmelter") && runPhase("autoSmelter", () => {
-          ensureSmelterControls(), refreshDiscoveredSettings(), smelter.run();
-        }), isEnabled(settings, "autoFleet") && runPhase("autoFleet", () => {
-          readProperty(
-            readProperty(pageCapture2.rootState.readRoot(), "race"),
-            "truepath"
-          ) === !0 ? (ensureOuterFleetControls(), outerFleet.autoFleetOuter()) : (ensureGalaxyFleetControls(), runFleetAutomation({
-            reader: fleet.reader,
-            executor: fleet.executor
-          }));
         }), isEnabled(settings, "autoPower") && (runPhase("pre-Power research demand observation", () => {
           ensureDemandResearchObservation();
         }), runPhase("autoPower", () => {
@@ -52782,14 +52790,7 @@ Only continue if you trust the source. Injected code:
           observePowerDemandPhase("power-complete", outcome), outcome.status !== "succeeded" && logError(
             `autoPower: ${outcome.failure.code}: ${outcome.failure.message}`
           );
-        })), (isEnabled(settings, "autoGenetics") || isEnabled(settings, "autoMinorTrait") || isEnabled(settings, "autoMutateTraits")) && runPhase("autoGenetics", () => {
-          ensureGeneticsControls(), isEnabled(settings, "autoGenetics") && runGeneticsAutomation(genetics);
-        }), isEnabled(settings, "autoMinorTrait")) {
-          let outcome = runPhase("autoMinorTrait", () => (ensureGeneticsControls(), traits.autoMinorTrait()));
-          outcome !== void 0 && outcome.status !== "succeeded" && reportOnce(
-            `autoMinorTrait: ${outcome.failure.code}: ${outcome.failure.message}`
-          );
-        }
+        }));
         let prestigeType = settings.prestigeType;
         if (isEnabled(settings, "autoPrestige") && (prestigeType === "mad" || prestigeType === "cataclysm" || prestigeType === "apocalypse" || prestigeType === "demonic" || prestigeType === "whitehole" || prestigeType === "bioseed" || isCapturedBuildingPrestigeType(prestigeType)) && capturedPrestigeGoal !== "GameOverMan" && runPhase("autoPrestige", () => {
           if (prestigeType === "mad") {

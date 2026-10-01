@@ -2602,24 +2602,17 @@ export function startCapturedRuntime({
           marketAutomation.run();
         });
       }
+      if (isEnabled(settings, "autoHell")) {
+        runPhase("autoHell", () => {
+          ensureCivicControls();
+          hell.run();
+        });
+      }
       if (isEnabled(settings, "autoGalaxyMarket")) {
         runPhase("autoGalaxyMarket", () => {
           ensureGalaxyMarketControls();
           refreshDiscoveredSettings();
           galaxyMarketAutomation.run();
-        });
-      }
-      if (isEnabled(settings, "autoStorage")) {
-        runPhase("autoStorage", () => {
-          ensureStorageControls();
-          refreshDiscoveredSettings();
-          storageAutomation.run();
-        });
-      }
-      if (isEnabled(settings, "autoHell")) {
-        runPhase("autoHell", () => {
-          ensureCivicControls();
-          hell.run();
         });
       }
       if (isEnabled(settings, "autoMiningDroid")) {
@@ -2634,10 +2627,18 @@ export function startCapturedRuntime({
           graphene.run();
         });
       }
-      if (isEnabled(settings, "autoReplicator")) {
-        runPhase("autoReplicator", () => {
-          ensureReplicatorControls();
-          replicator.run();
+      if (isEnabled(settings, "autoAlchemy")) {
+        runPhase("autoAlchemy", () => {
+          ensureAlchemyControls();
+          refreshDiscoveredSettings();
+          alchemy.run();
+        });
+      }
+      if (isEnabled(settings, "autoPylon")) {
+        runPhase("autoPylon", () => {
+          ensurePylonControls();
+          refreshDiscoveredSettings();
+          pylon.run();
         });
       }
       if (isEnabled(settings, "autoQuarry")) {
@@ -2672,18 +2673,26 @@ export function startCapturedRuntime({
           ratios.miningShip();
         });
       }
-      if (isEnabled(settings, "autoAlchemy")) {
-        runPhase("autoAlchemy", () => {
-          ensureAlchemyControls();
+      if (isEnabled(settings, "autoSmelter")) {
+        runPhase("autoSmelter", () => {
+          ensureSmelterControls();
           refreshDiscoveredSettings();
-          alchemy.run();
+          smelter.run();
         });
       }
-      if (isEnabled(settings, "autoPylon")) {
-        runPhase("autoPylon", () => {
-          ensurePylonControls();
+      // Storage settles the quantum and storage allocation before Jobs, Fleet, Mech and Power
+      // observe the resource ledger their own reads and allocations depend on.
+      if (isEnabled(settings, "autoStorage")) {
+        runPhase("autoStorage", () => {
+          ensureStorageControls();
           refreshDiscoveredSettings();
-          pylon.run();
+          storageAutomation.run();
+        });
+      }
+      if (isEnabled(settings, "autoReplicator")) {
+        runPhase("autoReplicator", () => {
+          ensureReplicatorControls();
+          replicator.run();
         });
       }
       // Trigger gates Research and Build, then Factory finishes before Jobs samples the root.
@@ -2775,6 +2784,12 @@ export function startCapturedRuntime({
       }
       // Construction and Factory change holdings, commitments, and saving intent. Each
       // invalidation ends the old sample's lifetime, including when an enabled phase is a no-op.
+      // These two boundaries plus the Power handoff below are the whole lifetime: no phase after
+      // Factory changes a fact the demand sample represents. Fleet moves ships, Mech spends
+      // Supply and Soul Gems, Craft converts materials, combat and the civic tail move Money,
+      // garrison and foreign state — none of which any requested quantity, storage requirement or
+      // saving target is built from. Producers (Smelter, Replicator, the ratios) only re-route
+      // next-period rates, which the sample does not read.
       observePowerDemandPhase("construction-complete");
       demandThisCycle = undefined;
       savingTargetThisCycle = undefined;
@@ -2816,6 +2831,73 @@ export function startCapturedRuntime({
           runJobsAutomation(craftsmen, true);
         });
       }
+      // Fleet reassigns already-built ships and settles the defence ledger. Power reads that
+      // ledger live at its own phase, so what matters here is only that Fleet lands after the
+      // Jobs/Fleet consumers of the shared demand sample and before Mech's Supply commitment.
+      if (isEnabled(settings, "autoFleet")) {
+        runPhase("autoFleet", () => {
+          const truepath =
+            readProperty(
+              readProperty(pageCapture.rootState.readRoot(), "race"),
+              "truepath",
+            ) === true;
+          if (truepath) {
+            ensureOuterFleetControls();
+            outerFleet.autoFleetOuter();
+          } else {
+            ensureGalaxyFleetControls();
+            runFleetAutomation({
+              reader: fleet.reader,
+              executor: fleet.executor,
+            });
+          }
+        });
+      }
+      // After Build, so construction has first claim on the supplies a Mech reservation holds.
+      if (isEnabled(settings, "autoMech")) {
+        runPhase("autoMech", () => {
+          ensureMechControls();
+          const result = runCapturedMechAutomationWithActivity({
+            ...capturedMech,
+            random: capturedMechRandom,
+          });
+          capturedMechCycleHasPendingWork = result.hasPendingWork;
+          const outcome = result.outcome;
+          if (outcome.status !== "succeeded") {
+            reportOnce(
+              `autoMech: ${outcome.failure.code}: ${outcome.failure.message}`,
+            );
+          }
+        });
+      }
+      // Genetics spends Knowledge, so it runs after Research and Build have had first claim on
+      // it and after the Fleet/Mech reservations are settled. A gene is Genes, not a craftable.
+      const geneticsAutomationEnabled =
+        isEnabled(settings, "autoGenetics") ||
+        isEnabled(settings, "autoMinorTrait") ||
+        isEnabled(settings, "autoMutateTraits");
+      if (geneticsAutomationEnabled) {
+        runPhase("autoGenetics", () => {
+          ensureGeneticsControls();
+          if (isEnabled(settings, "autoGenetics")) {
+            runGeneticsAutomation(genetics);
+          }
+        });
+      }
+      // A newly bought minor trait is usable right away, so this follows genetics.
+      if (isEnabled(settings, "autoMinorTrait")) {
+        const outcome = runPhase("autoMinorTrait", () => {
+          ensureGeneticsControls();
+          return traits.autoMinorTrait();
+        });
+        if (outcome !== undefined && outcome.status !== "succeeded") {
+          reportOnce(
+            `autoMinorTrait: ${outcome.failure.code}: ${outcome.failure.message}`,
+          );
+        }
+      }
+      // Craft converts raw inputs into craftables, so it runs after every feature that has
+      // claimed raw inputs this cycle and before the combat and civic tail.
       if (isEnabled(settings, "autoCraft")) {
         runPhase("autoCraft", () => {
           runCraftAutomation(craft);
@@ -2893,22 +2975,6 @@ export function startCapturedRuntime({
           runCapturedGovernmentAutomation(government);
         });
       }
-      if (isEnabled(settings, "autoMech")) {
-        runPhase("autoMech", () => {
-          ensureMechControls();
-          const result = runCapturedMechAutomationWithActivity({
-            ...capturedMech,
-            random: capturedMechRandom,
-          });
-          capturedMechCycleHasPendingWork = result.hasPendingWork;
-          const outcome = result.outcome;
-          if (outcome.status !== "succeeded") {
-            reportOnce(
-              `autoMech: ${outcome.failure.code}: ${outcome.failure.message}`,
-            );
-          }
-        });
-      }
       if (isEnabled(settings, "autoNanite")) {
         runPhase("autoNanite", () => {
           ensureNaniteControls();
@@ -2930,32 +2996,6 @@ export function startCapturedRuntime({
           ejector.run();
         });
       }
-      if (isEnabled(settings, "autoSmelter")) {
-        runPhase("autoSmelter", () => {
-          ensureSmelterControls();
-          refreshDiscoveredSettings();
-          smelter.run();
-        });
-      }
-      if (isEnabled(settings, "autoFleet")) {
-        runPhase("autoFleet", () => {
-          const truepath =
-            readProperty(
-              readProperty(pageCapture.rootState.readRoot(), "race"),
-              "truepath",
-            ) === true;
-          if (truepath) {
-            ensureOuterFleetControls();
-            outerFleet.autoFleetOuter();
-          } else {
-            ensureGalaxyFleetControls();
-            runFleetAutomation({
-              reader: fleet.reader,
-              executor: fleet.executor,
-            });
-          }
-        });
-      }
       if (isEnabled(settings, "autoPower")) {
         // Research or another progression mutation can invalidate the earlier offer sample.
         // Its owning phase establishes a current catalog before Power's read-only handoff.
@@ -2964,9 +3004,9 @@ export function startCapturedRuntime({
         });
         runPhase("autoPower", () => {
           observePowerDemandPhase("power-handoff-start");
-          // Refresh from the demand owner at the handoff, even if another consumer sampled
-          // after Factory: subsequent production work may also have changed the live root.
-          // Never discover panels here. Progression owns the established offer catalogs.
+          // Power reads live holdings, Fleet and Building state at this phase, so the refresh
+          // below reuses the catalogs progression already established and takes current holdings
+          // from the root. Never discover panels here.
           demandThisCycle = undefined;
           // Earlier research/construction may have opened a reservation gate. Revalidate
           // its current prerequisites without drawing; an uncaptured new gate stays stale.
@@ -3011,30 +3051,6 @@ export function startCapturedRuntime({
               `autoPower: ${outcome.failure.code}: ${outcome.failure.message}`,
             );
         });
-      }
-      // After construction and research, so neither is outbid for the Knowledge a gene costs.
-      const geneticsAutomationEnabled =
-        isEnabled(settings, "autoGenetics") ||
-        isEnabled(settings, "autoMinorTrait") ||
-        isEnabled(settings, "autoMutateTraits");
-      if (geneticsAutomationEnabled) {
-        runPhase("autoGenetics", () => {
-          ensureGeneticsControls();
-          if (isEnabled(settings, "autoGenetics")) {
-            runGeneticsAutomation(genetics);
-          }
-        });
-      }
-      if (isEnabled(settings, "autoMinorTrait")) {
-        const outcome = runPhase("autoMinorTrait", () => {
-          ensureGeneticsControls();
-          return traits.autoMinorTrait();
-        });
-        if (outcome !== undefined && outcome.status !== "succeeded") {
-          reportOnce(
-            `autoMinorTrait: ${outcome.failure.code}: ${outcome.failure.message}`,
-          );
-        }
       }
       const prestigeType = settings["prestigeType"];
       if (
