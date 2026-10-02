@@ -1,5 +1,15 @@
 /** Captured Truepath outer-fleet adapter over the game's root and shipyard controls. */
 
+/**
+ * Which hulls, components and specials the yard offers is the game's own answer, and nothing here
+ * holds a second copy of it. Every question about a part — whether it can be selected, which design
+ * field it fills, whether a built ship is that design — is asked either of the yard's captured
+ * blueprint or of the part catalogue read out of the option markup `drawShipYard()` produced
+ * (`captured-outer-fleet-parts`). What this module owns is the *policy* around those answers: which
+ * fields are worth asking about, in what order to write them, and what counts as the design that was
+ * built.
+ */
+
 import {
   assessAuthorityRemoval,
   type AuthorityPolicyView,
@@ -31,6 +41,7 @@ import type { CommandExecutionOutcome } from "../../../domain/commands.ts";
 import type { CapturedOuterFleetDispatchCapture } from "../../../ports/captured-outer-fleet-dispatch.ts";
 import type { GameRootStateSource } from "../../../ports/game-root-state.ts";
 import type { GameShipyardCosts } from "../../../ports/game-shipyard-costs.ts";
+import type { GameShipyardPartCatalogSource } from "../../../ports/game-shipyard-parts.ts";
 import type {
   OuterFleetExecutor,
   OuterFleetReader,
@@ -54,6 +65,8 @@ interface CapturedOuterFleetAdapterDependencies {
   readonly controls: GameFleetControlsPort;
   /** The yard's own `#shipYardCosts`, which is the only price this feature may quote. */
   readonly costs: GameShipyardCosts;
+  /** The yard's own option markup, which is the only authority on what parts it offers. */
+  readonly parts: GameShipyardPartCatalogSource;
   readonly dispatch: CapturedOuterFleetDispatchCapture;
   readonly readSettings: () => unknown;
   readonly onActivity?: GameActivitySink;
@@ -78,37 +91,6 @@ const CAPTURED_OUTER_FLEET_REGIONS = Object.freeze([
   "spc_makemake",
   "spc_eris",
 ]);
-const CAPTURED_OUTER_FLEET_PARTS: Readonly<Record<string, readonly string[]>> =
-  Object.freeze({
-    class: Object.freeze([
-      "corvette",
-      "frigate",
-      "destroyer",
-      "cruiser",
-      "battlecruiser",
-      "dreadnought",
-      "explorer",
-    ]),
-    power: Object.freeze(["solar", "diesel", "fission", "fusion", "elerium"]),
-    weapon: Object.freeze([
-      "railgun",
-      "laser",
-      "p_laser",
-      "plasma",
-      "phaser",
-      "disruptor",
-    ]),
-    armor: Object.freeze(["steel", "alloy", "neutronium"]),
-    engine: Object.freeze([
-      "ion",
-      "tie",
-      "pulse",
-      "photon",
-      "vacuum",
-      "emdrive",
-    ]),
-    sensor: Object.freeze(["visual", "radar", "lidar", "quantum"]),
-  });
 const CAPTURED_OUTER_FLEET_EXPLORER = Object.freeze({
   class: "explorer",
   armor: "neutronium",
@@ -117,8 +99,12 @@ const CAPTURED_OUTER_FLEET_EXPLORER = Object.freeze({
   power: "elerium",
   sensor: "quantum",
 });
+/** A yard whose option markup could not be read. Not a yard with nothing to offer. */
+const NO_CATALOG_TYPES: readonly string[] = Object.freeze([]);
 // Mirrors the class bases in DeadSpace ships.js shipCrewSize; jobStack scaling
-// comes from captured-job-catalog and rounds as jobs.js jobStack does.
+// comes from captured-job-catalog and rounds as jobs.js jobStack does. The two hulls upstream added
+// since this table was written both crew one, which is also what lets either be configured at all
+// rather than refused as a hull this script has no crew for.
 const CAPTURED_OUTER_FLEET_CLASS_CREW: Readonly<Record<string, number>> =
   Object.freeze({
     corvette: 2,
@@ -127,7 +113,9 @@ const CAPTURED_OUTER_FLEET_CLASS_CREW: Readonly<Record<string, number>> =
     cruiser: 6,
     battlecruiser: 8,
     dreadnought: 10,
+    freighter: 1,
     explorer: 10,
+    supply_ship: 1,
   });
 const CAPTURED_OUTER_FLEET_GRENADIER_CREW: Readonly<Record<string, number>> =
   Object.freeze({
@@ -137,7 +125,9 @@ const CAPTURED_OUTER_FLEET_GRENADIER_CREW: Readonly<Record<string, number>> =
     cruiser: 4,
     battlecruiser: 5,
     dreadnought: 6,
+    freighter: 1,
     explorer: 6,
+    supply_ship: 1,
   });
 const CAPTURED_OUTER_FLEET_WEAPON_POWER: Readonly<Record<string, number>> =
   Object.freeze({
@@ -188,51 +178,73 @@ function capturedOuterFleetShips(root: UnknownRecord): readonly unknown[] {
   return Array.isArray(ships) ? ships : [];
 }
 
+/**
+ * The design the yard is holding right now, as the game's own captured control carries it.
+ *
+ * Not the root clone: that is the game's pre-period state and cannot see what a build or a class
+ * change did to the yard. Undefined when there is no captured control to ask, and every "already
+ * held" question below then answers no, because a yard nothing could be asked about is a yard whose
+ * design is unknown rather than an empty one.
+ */
+function capturedOuterFleetLiveDesign(
+  controls: GameFleetControlsPort,
+): Readonly<Record<string, unknown>> | undefined {
+  return controls.currentDesign(CAPTURED_OUTER_FLEET_SHIPYARD_CONTROL);
+}
+
+/**
+ * A configured preset, built from the dimensions the yard itself offers.
+ *
+ * The dimensions come from the yard's catalogue and the values from `${prefix}${type}` in the
+ * settings, so a dimension the settings configure and the yard offers both are included, and a
+ * dimension the settings do not configure is simply absent — rather than this module deciding which
+ * six of the game's dimensions count. That is why the settings prefix is combined with a discovered
+ * dimension rather than searched: `fleet_outer_pr_*` and `fleet_outer_def_*` are region weightings
+ * that share the prefix and are not blueprint fields at all.
+ */
 function capturedOuterFleetPartBlueprint(
   settings: UnknownRecord,
   prefix: string,
+  types: readonly string[],
 ): UnknownRecord {
   const blueprint: Record<string, unknown> = {};
-  for (const type of Object.keys(CAPTURED_OUTER_FLEET_PARTS)) {
+  for (const type of types) {
     const part = settings[`${prefix}${type}`];
     if (typeof part === "string") blueprint[type] = part;
   }
   return blueprint;
 }
 
+/**
+ * Whether the yard can be asked for this design at all.
+ *
+ * A field the yard already holds needs no question asked of `avail()`: it is on the blueprint the
+ * yard is wearing, and asking whether the yard offers it would be asking about the player's own
+ * design. That is what makes Current Design work — the yard normalizes a `special` into every
+ * modern blueprint whether or not the special-slot selector was ever unlocked, so a design that is
+ * already on the blueprint can name a part the yard would not offer as a fresh choice.
+ *
+ * Every other named field is asked of the game's own answer, through the option index the yard's
+ * markup gave it. A dimension the design does not name is left out rather than filled in: upstream
+ * fills those in itself when a class change rewrites the fields its hull forces, and a value
+ * invented here would be a design nobody asked for.
+ */
 function capturedOuterFleetBlueprintAvailable(
-  root: UnknownRecord,
   controls: GameFleetControlsPort,
   blueprint: UnknownRecord,
+  types: readonly string[],
 ): boolean {
-  const yard = capturedOuterFleetYard(root);
-  const yardBlueprint = readProperty(yard, "blueprint");
-  if (!isRecord(yardBlueprint)) return false;
-  const shipClass = blueprint["class"];
-  if (typeof shipClass !== "string") return false;
-  if (
-    shipClass === "explorer" &&
-    (blueprint["weapon"] !== "railgun" || blueprint["sensor"] !== "quantum")
-  ) {
-    return false;
-  }
-  for (const type of Object.keys(CAPTURED_OUTER_FLEET_PARTS)) {
+  if (typeof blueprint["class"] !== "string") return false;
+  const live = capturedOuterFleetLiveDesign(controls);
+  for (const type of types) {
     const part = blueprint[type];
-    if (typeof part !== "string") return false;
+    if (typeof part !== "string") continue;
+    if (live?.[type] === part) continue;
     if (
-      yardBlueprint[type] === part ||
-      (shipClass === "explorer" && (type === "weapon" || type === "sensor"))
-    ) {
-      continue;
-    }
-    const index = CAPTURED_OUTER_FLEET_PARTS[type]?.indexOf(part) ?? -1;
-    if (
-      index < 0 ||
       !controls.isPartAvailable({
         elementId: CAPTURED_OUTER_FLEET_SHIPYARD_CONTROL,
         type,
         part,
-        index,
       })
     ) {
       return false;
@@ -487,21 +499,48 @@ function capturedOuterFleetAuthorityAssessment(
     : assessAuthorityRemoval(view, removedSoldiers);
 }
 
+/**
+ * Whether one record is the design another record names.
+ *
+ * Only the dimensions the *naming* blueprint actually carries are compared. A preset that
+ * configures six of the game's dimensions says nothing about the rest, and comparing them would make
+ * every ship in the yard differ from it over a field it never claimed. A design the yard or the game
+ * normalized itself carries all of them, and is compared in full.
+ */
 function capturedOuterFleetBlueprintMatches(
   left: UnknownRecord,
   right: UnknownRecord,
+  types: readonly string[],
 ): boolean {
-  return Object.keys(CAPTURED_OUTER_FLEET_PARTS).every(
-    (type) => left[type] === right[type],
-  );
+  return types.every((type) => {
+    const part = right[type];
+    return typeof part !== "string" || left[type] === part;
+  });
 }
 
+/**
+ * The design the yard will build once every requested write has been made, over the dimensions the
+ * yard itself offers.
+ *
+ * The fields the request names are the ones being written; the fields it does not name are whatever
+ * the game's own `setVal` left behind, which is where a class change's rewrites end up. Reading the
+ * postcondition out of the yard rather than out of the request is what keeps a freighter's forced
+ * weapon and special in the answer without this module restating a single one of those rules — and
+ * it is the same design the price probe walked into the yard, so what was priced, what was built and
+ * what is judged to have been built are one design rather than three.
+ *
+ * A dimension neither the request nor the yard holds is a design this cannot describe, and the caller
+ * refuses rather than building something it cannot then verify.
+ */
 function capturedOuterFleetExpectedBlueprint(
-  blueprint: UnknownRecord,
+  requested: UnknownRecord,
+  live: Readonly<Record<string, unknown>>,
+  types: readonly string[],
 ): Readonly<Record<string, string>> | undefined {
   const expected: Record<string, string> = {};
-  for (const type of Object.keys(CAPTURED_OUTER_FLEET_PARTS)) {
-    const part = blueprint[type];
+  for (const type of types) {
+    const part =
+      typeof requested[type] === "string" ? requested[type] : live[type];
     if (typeof part !== "string") return undefined;
     expected[type] = part;
   }
@@ -512,10 +551,11 @@ function capturedOuterFleetShipCount(
   root: UnknownRecord,
   region: string,
   blueprint: UnknownRecord,
+  types: readonly string[],
 ): number {
   return capturedOuterFleetShips(root).filter((ship) => {
     if (!isRecord(ship) || ship["location"] !== region) return false;
-    return capturedOuterFleetBlueprintMatches(ship, blueprint);
+    return capturedOuterFleetBlueprintMatches(ship, blueprint, types);
   }).length;
 }
 
@@ -559,6 +599,19 @@ export function createCapturedOuterFleetAdapter(
   let session: CapturedOuterFleetSession | null = null;
   let expectedDecision: Readonly<OuterFleetDecision> | null = null;
   let shipTargetChanged = false;
+
+  /**
+   * The dimensions the yard's own option markup named, in that markup's order, or none at all while
+   * that markup cannot be read.
+   *
+   * Asking the catalogue rather than holding a list is what makes a part upstream added work: it is
+   * dimension `special` and a hull or component this script has never heard of, and both are as
+   * ordinary here as `railgun`. An empty list is not a yard with no parts — it is a yard whose parts
+   * are unknown, and every question below is answered no or refused rather than from a default.
+   */
+  function catalogTypes(): readonly string[] {
+    return dependencies.parts.catalog()?.types ?? NO_CATALOG_TYPES;
+  }
 
   /**
    * The identity of the ship the yard will build next, as the yard itself prices it.
@@ -633,7 +686,6 @@ export function createCapturedOuterFleetAdapter(
       let manualBlueprintAvailable = false;
       if (initialized && settings["fleetOuterShips"] === "manual") {
         manualBlueprintAvailable = capturedOuterFleetBlueprintAvailable(
-          root,
           dependencies.controls,
           storeBlueprint(
             "yard",
@@ -641,6 +693,7 @@ export function createCapturedOuterFleetAdapter(
             "shipyard.blueprint",
             blueprints,
           ),
+          catalogTypes(),
         );
       }
       const input = Object.freeze({
@@ -685,16 +738,18 @@ export function createCapturedOuterFleetAdapter(
           "explorer blueprint",
           active.blueprints,
         );
+        const types = catalogTypes();
         explorerAvailable = capturedOuterFleetBlueprintAvailable(
-          root,
           dependencies.controls,
           explorer,
+          types,
         );
         if (explorerAvailable)
           explorerCount = capturedOuterFleetShipCount(
             root,
             "tauceti",
             explorer,
+            types,
           );
       }
       const erisTechnology = finite(readProperty(tech, "eris")) ?? 0;
@@ -785,11 +840,12 @@ export function createCapturedOuterFleetAdapter(
       const active = activeSession();
       expectedDecision = null;
       const yard = capturedOuterFleetYard(active.root);
+      const types = catalogTypes();
       const avail = (blueprint: UnknownRecord) =>
         capturedOuterFleetBlueprintAvailable(
-          active.root,
           dependencies.controls,
           blueprint,
+          types,
         );
       let yardAvailable = false;
       let scoutAvailable = false;
@@ -810,7 +866,11 @@ export function createCapturedOuterFleetAdapter(
       } else if (target.forcedBlueprint === null) {
         const scout = storeBlueprint(
           "scout",
-          capturedOuterFleetPartBlueprint(active.settings, "fleet_scout_"),
+          capturedOuterFleetPartBlueprint(
+            active.settings,
+            "fleet_scout_",
+            types,
+          ),
           "scout blueprint",
           active.blueprints,
         );
@@ -820,6 +880,7 @@ export function createCapturedOuterFleetAdapter(
             active.root,
             target.targetRegion,
             scout,
+            types,
           );
           maximumScouts =
             finite(active.settings[`fleet_outer_sc_${target.targetRegion}`]) ??
@@ -828,7 +889,11 @@ export function createCapturedOuterFleetAdapter(
         if (!scoutAvailable || scoutCount >= maximumScouts) {
           const fighter = storeBlueprint(
             "fighter",
-            capturedOuterFleetPartBlueprint(active.settings, "fleet_outer_"),
+            capturedOuterFleetPartBlueprint(
+              active.settings,
+              "fleet_outer_",
+              types,
+            ),
             "fighter blueprint",
             active.blueprints,
           );
@@ -1001,24 +1066,26 @@ export function createCapturedOuterFleetAdapter(
         "captured-outer-fleet-blueprint-changed",
         "captured outer fleet blueprint changed",
       );
-    const expectedBlueprint = capturedOuterFleetExpectedBlueprint(blueprint);
-    if (expectedBlueprint === undefined)
-      return stale(
-        "captured-outer-fleet-blueprint-invalid",
-        "captured outer fleet blueprint is incomplete",
-      );
     // The yard's design fields, in the blueprint's own order and through the game's own `setVal` — the
     // same list, in the same order, the cost probe walks before it prices a candidate, so what is priced
     // and what is built are the same ship.
     for (const { type, part } of outerFleetBlueprintWrites(blueprint)) {
-      const index = CAPTURED_OUTER_FLEET_PARTS[type]?.indexOf(part) ?? -1;
+      // A field the yard already holds is not rewritten. Current Design is exactly this case: the
+      // design being built is the yard's own blueprint, which `drawShipYard()` has already normalized
+      // — including a `special` the special-slot selector may never have been unlocked for, and which
+      // the yard therefore cannot be asked about through `avail()` at all. Rewriting it would ask the
+      // yard for a selector the player never had, and each unnecessary `setVal` would redraw the cost
+      // row the price probe and the fleet demand both read.
       if (
-        index < 0 ||
+        capturedOuterFleetLiveDesign(dependencies.controls)?.[type] === part
+      ) {
+        continue;
+      }
+      if (
         !dependencies.controls.setPart({
           elementId: CAPTURED_OUTER_FLEET_SHIPYARD_CONTROL,
           type,
           part,
-          index,
         })
       ) {
         return rejected(
@@ -1027,6 +1094,24 @@ export function createCapturedOuterFleetAdapter(
         );
       }
     }
+    // What the yard holds now, not what was asked of it: a class change has already rewritten the
+    // fields its hull forces, and the design the build postcondition judges has to be that one.
+    const liveDesign = capturedOuterFleetLiveDesign(dependencies.controls);
+    if (liveDesign === undefined)
+      return stale(
+        "captured-outer-fleet-design-unavailable",
+        "the captured yard holds no design",
+      );
+    const expectedBlueprint = capturedOuterFleetExpectedBlueprint(
+      blueprint,
+      liveDesign,
+      catalogTypes(),
+    );
+    if (expectedBlueprint === undefined)
+      return stale(
+        "captured-outer-fleet-blueprint-invalid",
+        "captured outer fleet blueprint is incomplete",
+      );
     if (
       !dependencies.controls.hasShipPower(CAPTURED_OUTER_FLEET_SHIPYARD_CONTROL)
     )

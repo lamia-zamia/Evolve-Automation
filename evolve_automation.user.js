@@ -21333,6 +21333,16 @@
   function shipyardControlGeneration(controls2) {
     return controls2.resolve(CAPTURED_OUTER_FLEET_SHIPYARD_CONTROL)?.generation ?? 0;
   }
+  function scratchPlansElement(document, host) {
+    if (!isRecord(document)) return;
+    let getElementById = readProperty(document, "getElementById"), contains = readProperty(host, "contains");
+    if (typeof getElementById != "function" || typeof contains != "function")
+      return;
+    let plans = Reflect.apply(getElementById, document, [
+      CAPTURED_OUTER_FLEET_SHIPYARD_CONTROL
+    ]);
+    return plans != null && Reflect.apply(contains, host, [plans]) === !0 ? plans : void 0;
+  }
   function shipRowGenerations(controls2) {
     let before = /* @__PURE__ */ new Map();
     for (let elementId of controls2.capturedElementIds())
@@ -21471,6 +21481,11 @@
                   reportError
                 );
               });
+              let plans = scratchPlansElement(
+                dependencies.getDocument(),
+                host.element
+              );
+              plans !== void 0 && dependencies.parts.captureFrom(plans);
             } finally {
               settings[MAIN_TAB_SETTING] = playerMainTab, settings[GOV_TABS_SETTING] = playerSubTab, settings.animated = playerAnimated, removeHiddenHostElement(host), workspace.release(), workspace.isIntact() || reportError("the workspace could not put the panels back");
             }
@@ -21630,10 +21645,11 @@
         return dependencies.controls.resolve(elementId) !== void 0;
       },
       isPartAvailable(request) {
-        if (request.index === void 0) return !1;
+        let option = dependencies.parts.catalog()?.optionFor(request.type, request.part);
+        if (option === void 0) return !1;
         let result = methodValue(dependencies, request.elementId, "avail", [
           request.type,
-          request.index,
+          option.index,
           request.part
         ]);
         return result.ok && result.value === !0;
@@ -21643,6 +21659,13 @@
           request.type,
           request.part
         ]).ok;
+      },
+      currentDesign(elementId) {
+        let handle = dependencies.controls.resolve(elementId), blueprint = readProperty(
+          readProperty(handle?.data, "s"),
+          "blueprint"
+        );
+        return isRecord(blueprint) ? Object.freeze({ ...blueprint }) : void 0;
       },
       hasShipPower(elementId) {
         let result = methodValue(dependencies, elementId, "powerText");
@@ -21869,50 +21892,23 @@
     "spc_triton",
     "spc_makemake",
     "spc_eris"
-  ]), CAPTURED_OUTER_FLEET_PARTS = Object.freeze({
-    class: Object.freeze([
-      "corvette",
-      "frigate",
-      "destroyer",
-      "cruiser",
-      "battlecruiser",
-      "dreadnought",
-      "explorer"
-    ]),
-    power: Object.freeze(["solar", "diesel", "fission", "fusion", "elerium"]),
-    weapon: Object.freeze([
-      "railgun",
-      "laser",
-      "p_laser",
-      "plasma",
-      "phaser",
-      "disruptor"
-    ]),
-    armor: Object.freeze(["steel", "alloy", "neutronium"]),
-    engine: Object.freeze([
-      "ion",
-      "tie",
-      "pulse",
-      "photon",
-      "vacuum",
-      "emdrive"
-    ]),
-    sensor: Object.freeze(["visual", "radar", "lidar", "quantum"])
-  }), CAPTURED_OUTER_FLEET_EXPLORER = Object.freeze({
+  ]), CAPTURED_OUTER_FLEET_EXPLORER = Object.freeze({
     class: "explorer",
     armor: "neutronium",
     weapon: "railgun",
     engine: "emdrive",
     power: "elerium",
     sensor: "quantum"
-  }), CAPTURED_OUTER_FLEET_CLASS_CREW = Object.freeze({
+  }), NO_CATALOG_TYPES = Object.freeze([]), CAPTURED_OUTER_FLEET_CLASS_CREW = Object.freeze({
     corvette: 2,
     frigate: 3,
     destroyer: 4,
     cruiser: 6,
     battlecruiser: 8,
     dreadnought: 10,
-    explorer: 10
+    freighter: 1,
+    explorer: 10,
+    supply_ship: 1
   }), CAPTURED_OUTER_FLEET_GRENADIER_CREW = Object.freeze({
     corvette: 1,
     frigate: 2,
@@ -21920,7 +21916,9 @@
     cruiser: 4,
     battlecruiser: 5,
     dreadnought: 6,
-    explorer: 6
+    freighter: 1,
+    explorer: 6,
+    supply_ship: 1
   }), CAPTURED_OUTER_FLEET_WEAPON_POWER = Object.freeze({
     railgun: 36,
     laser: 64,
@@ -21957,31 +21955,26 @@
     let ships = readProperty(capturedOuterFleetYard(root), "ships");
     return Array.isArray(ships) ? ships : [];
   }
-  function capturedOuterFleetPartBlueprint(settings, prefix) {
+  function capturedOuterFleetLiveDesign(controls2) {
+    return controls2.currentDesign(CAPTURED_OUTER_FLEET_SHIPYARD_CONTROL);
+  }
+  function capturedOuterFleetPartBlueprint(settings, prefix, types) {
     let blueprint = {};
-    for (let type of Object.keys(CAPTURED_OUTER_FLEET_PARTS)) {
+    for (let type of types) {
       let part = settings[`${prefix}${type}`];
       typeof part == "string" && (blueprint[type] = part);
     }
     return blueprint;
   }
-  function capturedOuterFleetBlueprintAvailable(root, controls2, blueprint) {
-    let yard = capturedOuterFleetYard(root), yardBlueprint = readProperty(yard, "blueprint");
-    if (!isRecord(yardBlueprint)) return !1;
-    let shipClass = blueprint.class;
-    if (typeof shipClass != "string" || shipClass === "explorer" && (blueprint.weapon !== "railgun" || blueprint.sensor !== "quantum"))
-      return !1;
-    for (let type of Object.keys(CAPTURED_OUTER_FLEET_PARTS)) {
+  function capturedOuterFleetBlueprintAvailable(controls2, blueprint, types) {
+    if (typeof blueprint.class != "string") return !1;
+    let live = capturedOuterFleetLiveDesign(controls2);
+    for (let type of types) {
       let part = blueprint[type];
-      if (typeof part != "string") return !1;
-      if (yardBlueprint[type] === part || shipClass === "explorer" && (type === "weapon" || type === "sensor"))
-        continue;
-      let index = CAPTURED_OUTER_FLEET_PARTS[type]?.indexOf(part) ?? -1;
-      if (index < 0 || !controls2.isPartAvailable({
+      if (typeof part == "string" && live?.[type] !== part && !controls2.isPartAvailable({
         elementId: CAPTURED_OUTER_FLEET_SHIPYARD_CONTROL,
         type,
-        part,
-        index
+        part
       }))
         return !1;
     }
@@ -22102,28 +22095,32 @@
     let view = capturedOuterFleetAuthorityView(root, settings);
     return view === void 0 ? { status: "unavailable" } : assessAuthorityRemoval(view, removedSoldiers);
   }
-  function capturedOuterFleetBlueprintMatches(left, right) {
-    return Object.keys(CAPTURED_OUTER_FLEET_PARTS).every(
-      (type) => left[type] === right[type]
-    );
+  function capturedOuterFleetBlueprintMatches(left, right, types) {
+    return types.every((type) => {
+      let part = right[type];
+      return typeof part != "string" || left[type] === part;
+    });
   }
-  function capturedOuterFleetExpectedBlueprint(blueprint) {
+  function capturedOuterFleetExpectedBlueprint(requested, live, types) {
     let expected = {};
-    for (let type of Object.keys(CAPTURED_OUTER_FLEET_PARTS)) {
-      let part = blueprint[type];
+    for (let type of types) {
+      let part = typeof requested[type] == "string" ? requested[type] : live[type];
       if (typeof part != "string") return;
       expected[type] = part;
     }
     return Object.freeze(expected);
   }
-  function capturedOuterFleetShipCount(root, region, blueprint) {
-    return capturedOuterFleetShips(root).filter((ship) => !isRecord(ship) || ship.location !== region ? !1 : capturedOuterFleetBlueprintMatches(ship, blueprint)).length;
+  function capturedOuterFleetShipCount(root, region, blueprint, types) {
+    return capturedOuterFleetShips(root).filter((ship) => !isRecord(ship) || ship.location !== region ? !1 : capturedOuterFleetBlueprintMatches(ship, blueprint, types)).length;
   }
   function capturedOuterFleetDecisionMatches(expected, actual) {
     return expected.kind !== actual.kind || expected.blueprint !== actual.blueprint ? !1 : expected.kind === "outer-fleet-status" && actual.kind === "outer-fleet-status" ? expected.nextShipName === actual.nextShipName && expected.messageBeforeUpdate === actual.messageBeforeUpdate && expected.messageAfterUpdate === actual.messageAfterUpdate : expected.kind === "build-outer-fleet" && actual.kind === "build-outer-fleet" && expected.targetRegion === actual.targetRegion && expected.targetLocationName === actual.targetLocationName && expected.shipName === actual.shipName && expected.shipCrew === actual.shipCrew && expected.nextShipName === actual.nextShipName;
   }
   function createCapturedOuterFleetAdapter(dependencies) {
     let session = null, expectedDecision = null, shipTargetChanged = !1;
+    function catalogTypes() {
+      return dependencies.parts.catalog()?.types ?? NO_CATALOG_TYPES;
+    }
     function shipTargetFingerprint() {
       let sample = dependencies.costs.current();
       if (sample !== void 0)
@@ -22162,14 +22159,14 @@
         }
         let yard = capturedOuterFleetYard(root), initialized = (finite(readProperty(readProperty(root, "tech"), "syndicate")) ?? 0) > 0 && yard !== void 0 && Object.hasOwn(yard, "blueprint") && dependencies.controls.isRendered(CAPTURED_OUTER_FLEET_SHIPYARD_CONTROL), manualBlueprintAvailable = !1;
         initialized && settings.fleetOuterShips === "manual" && (manualBlueprintAvailable = capturedOuterFleetBlueprintAvailable(
-          root,
           dependencies.controls,
           storeBlueprint(
             "yard",
             yard.blueprint,
             "shipyard.blueprint",
             blueprints
-          )
+          ),
+          catalogTypes()
         ));
         let input = Object.freeze({
           initialized,
@@ -22201,15 +22198,16 @@
             CAPTURED_OUTER_FLEET_EXPLORER,
             "explorer blueprint",
             active.blueprints
-          );
+          ), types = catalogTypes();
           explorerAvailable = capturedOuterFleetBlueprintAvailable(
-            root,
             dependencies.controls,
-            explorer
+            explorer,
+            types
           ), explorerAvailable && (explorerCount = capturedOuterFleetShipCount(
             root,
             "tauceti",
-            explorer
+            explorer,
+            types
           ));
         }
         let erisTechnology = finite(readProperty(tech, "eris")) ?? 0, erisWeighting = finite(settings.fleet_outer_pr_spc_eris) ?? 0, erisSensor = erisTechnology === 1 && erisWeighting > 0 ? Number(
@@ -22252,10 +22250,10 @@
       readBlueprint(target) {
         let active = activeSession();
         expectedDecision = null;
-        let yard = capturedOuterFleetYard(active.root), avail = (blueprint) => capturedOuterFleetBlueprintAvailable(
-          active.root,
+        let yard = capturedOuterFleetYard(active.root), types = catalogTypes(), avail = (blueprint) => capturedOuterFleetBlueprintAvailable(
           dependencies.controls,
-          blueprint
+          blueprint,
+          types
         ), yardAvailable = !1, scoutAvailable = !1, scoutCount = 0, maximumScouts = 0, fighterAvailable = !1;
         if (target.forcedBlueprint !== "explorer" && target.mode === "user")
           yard !== void 0 && (yardAvailable = avail(
@@ -22269,18 +22267,27 @@
         else if (target.forcedBlueprint === null) {
           let scout = storeBlueprint(
             "scout",
-            capturedOuterFleetPartBlueprint(active.settings, "fleet_scout_"),
+            capturedOuterFleetPartBlueprint(
+              active.settings,
+              "fleet_scout_",
+              types
+            ),
             "scout blueprint",
             active.blueprints
           );
           if (scoutAvailable = avail(scout), scoutAvailable && (scoutCount = capturedOuterFleetShipCount(
             active.root,
             target.targetRegion,
-            scout
+            scout,
+            types
           ), maximumScouts = finite(active.settings[`fleet_outer_sc_${target.targetRegion}`]) ?? 0), !scoutAvailable || scoutCount >= maximumScouts) {
             let fighter = storeBlueprint(
               "fighter",
-              capturedOuterFleetPartBlueprint(active.settings, "fleet_outer_"),
+              capturedOuterFleetPartBlueprint(
+                active.settings,
+                "fleet_outer_",
+                types
+              ),
               "fighter blueprint",
               active.blueprints
             );
@@ -22393,25 +22400,32 @@
           "captured-outer-fleet-blueprint-changed",
           "captured outer fleet blueprint changed"
         );
-      let expectedBlueprint = capturedOuterFleetExpectedBlueprint(blueprint);
-      if (expectedBlueprint === void 0)
-        return stale(
-          "captured-outer-fleet-blueprint-invalid",
-          "captured outer fleet blueprint is incomplete"
-        );
-      for (let { type, part } of outerFleetBlueprintWrites(blueprint)) {
-        let index = CAPTURED_OUTER_FLEET_PARTS[type]?.indexOf(part) ?? -1;
-        if (index < 0 || !dependencies.controls.setPart({
+      for (let { type, part } of outerFleetBlueprintWrites(blueprint))
+        if (capturedOuterFleetLiveDesign(dependencies.controls)?.[type] !== part && !dependencies.controls.setPart({
           elementId: CAPTURED_OUTER_FLEET_SHIPYARD_CONTROL,
           type,
-          part,
-          index
+          part
         }))
           return rejected(
             "captured-outer-fleet-part-not-invoked",
             "outer fleet part control was not invoked"
           );
-      }
+      let liveDesign = capturedOuterFleetLiveDesign(dependencies.controls);
+      if (liveDesign === void 0)
+        return stale(
+          "captured-outer-fleet-design-unavailable",
+          "the captured yard holds no design"
+        );
+      let expectedBlueprint = capturedOuterFleetExpectedBlueprint(
+        blueprint,
+        liveDesign,
+        catalogTypes()
+      );
+      if (expectedBlueprint === void 0)
+        return stale(
+          "captured-outer-fleet-blueprint-invalid",
+          "captured outer fleet blueprint is incomplete"
+        );
       if (!dependencies.controls.hasShipPower(CAPTURED_OUTER_FLEET_SHIPYARD_CONTROL))
         return rejected(
           "captured-outer-fleet-power-unavailable",
@@ -22487,9 +22501,11 @@
     let adapter = createCapturedOuterFleetAdapter({
       rootState: dependencies.rootState,
       controls: createCapturedFleetControls({
-        controls: dependencies.controls
+        controls: dependencies.controls,
+        parts: dependencies.parts
       }),
       costs: dependencies.costs,
+      parts: dependencies.parts,
       dispatch: dependencies.dispatch,
       readSettings: dependencies.readSettings,
       ...dependencies.onActivity === void 0 ? {} : { onActivity: dependencies.onActivity }
@@ -49472,6 +49488,112 @@ Only continue if you trust the source. Injected code:
     });
   }
 
+  // src/adapters/evolve/combat/captured-outer-fleet-parts.ts
+  var SHIPYARD_PART_INDEX_PATTERN = /^a(\d+)$/, SHIPYARD_PART_TYPE_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/, SHIPYARD_PART_VALUE_ATTRIBUTE = "data-val", NOT_A_PART_OPTION = -1, AMBIGUOUS_PART_OPTION = -2;
+  function shipyardPartNode(value) {
+    return isRecord(value) && typeof value.getAttribute == "function" && typeof value.querySelectorAll == "function" ? value : void 0;
+  }
+  function shipyardPartClassTokens(node) {
+    let value = node.getAttribute("class");
+    return value === null ? [] : value.split(/\s+/).filter((token) => token !== "");
+  }
+  function shipyardPartIndexPosition(tokens) {
+    let position = NOT_A_PART_OPTION;
+    for (let index = 0; index < tokens.length; index += 1)
+      if (SHIPYARD_PART_INDEX_PATTERN.test(tokens[index] ?? "")) {
+        if (position !== NOT_A_PART_OPTION) return AMBIGUOUS_PART_OPTION;
+        position = index;
+      }
+    return position;
+  }
+  function readShipyardPartOption(node, tokens, position) {
+    if (position === AMBIGUOUS_PART_OPTION || position === 0) return;
+    let type = tokens[position - 1] ?? "", part = node.getAttribute(SHIPYARD_PART_VALUE_ATTRIBUTE), index = Number(
+      SHIPYARD_PART_INDEX_PATTERN.exec(tokens[position] ?? "")?.[1] ?? ""
+    );
+    if (!(!SHIPYARD_PART_TYPE_PATTERN.test(type) || part === null || part === "" || /\s/.test(part) || !Number.isSafeInteger(index)))
+      return Object.freeze({ type, value: part, index });
+  }
+  function readShipyardPartOptions(element) {
+    let root = shipyardPartNode(element);
+    if (root === void 0) return;
+    let nodes = [
+      root,
+      ...Array.from(root.querySelectorAll("*"))
+    ], options = [];
+    for (let value of nodes) {
+      let node = shipyardPartNode(value);
+      if (node === void 0) return;
+      let tokens = shipyardPartClassTokens(node), position = shipyardPartIndexPosition(tokens);
+      if (position === NOT_A_PART_OPTION) continue;
+      let option = readShipyardPartOption(node, tokens, position);
+      if (option === void 0) return;
+      options.push(option);
+    }
+    return options;
+  }
+  function buildShipyardPartCatalog(options) {
+    if (options.length === 0) return;
+    let parts = [], types = [], indicesByType = /* @__PURE__ */ new Map(), byIdentity = /* @__PURE__ */ new Map();
+    for (let option of options) {
+      let part = Object.freeze({
+        type: option.type,
+        value: option.value,
+        index: option.index
+      });
+      if (byIdentity.has(`${part.type} ${part.value}`)) return;
+      byIdentity.set(`${part.type} ${part.value}`, part);
+      let indices = indicesByType.get(part.type);
+      indices === void 0 ? (types.push(part.type), indicesByType.set(part.type, [part.index])) : indices.push(part.index), parts.push(part);
+    }
+    for (let indices of indicesByType.values())
+      for (let position = 0; position < indices.length; position += 1)
+        if (indices[position] !== position) return;
+    return Object.freeze({
+      types: Object.freeze(types),
+      parts: Object.freeze(parts),
+      optionFor(type, value) {
+        return byIdentity.get(`${type} ${value}`);
+      }
+    });
+  }
+  function parseShipyardPartCatalog(element) {
+    let options = readShipyardPartOptions(element);
+    return options === void 0 ? void 0 : buildShipyardPartCatalog(options);
+  }
+  function createCapturedOuterFleetParts(dependencies) {
+    let proven, drew = !1, reported = !1;
+    function reportUnreadable() {
+      reported || (reported = !0, dependencies.onCaptureError?.(
+        "the shipyard's own part options could not be read"
+      ));
+    }
+    function renderedCatalog() {
+      let plans = renderedElementInside(
+        dependencies.getDocument(),
+        CAPTURED_OUTER_FLEET_SHIPYARD_PANEL_ID,
+        CAPTURED_OUTER_FLEET_SHIPYARD_CONTROL
+      );
+      if (plans === void 0) return;
+      let catalog = parseShipyardPartCatalog(plans);
+      return catalog === void 0 && reportUnreadable(), Object.freeze({ catalog });
+    }
+    return Object.freeze({
+      captureFrom(element) {
+        let catalog = parseShipyardPartCatalog(element);
+        return catalog === void 0 ? (reportUnreadable(), !1) : (proven = catalog, !0);
+      },
+      catalog() {
+        if (proven !== void 0) return proven;
+        let rendered = renderedCatalog();
+        if (rendered !== void 0)
+          return proven = rendered.catalog, proven;
+        if (!(drew || !dependencies.yard.established(dependencies.yard.control())))
+          return drew = !0, dependencies.yard.establish(), proven;
+      }
+    });
+  }
+
   // src/domain/state-update.ts
   function computeMoneyWindow(incomes, rate) {
     let next = incomes.slice(1);
@@ -52177,6 +52299,16 @@ Only continue if you trust the source. Injected code:
       getDocument: () => document,
       getPageWindow: () => settingsHostWindow2,
       onCaptureError: (detail) => logError(`espionage operation capture: ${detail}`)
+    }), outerFleetParts = createCapturedOuterFleetParts({
+      getDocument: () => document,
+      // Bound now and called only later, and only when the yard is already established: a draw is the
+      // yard's own pass, never one this catalogue starts on its own.
+      yard: {
+        control: () => outerFleetShipyard.control(),
+        established: (control) => outerFleetShipyard.established(control),
+        establish: () => outerFleetShipyard.establish()
+      },
+      onCaptureError: (detail) => logError(`outer fleet part catalogue: ${detail}`)
     }), outerFleetShipyard = createCapturedOuterFleetShipyard({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
@@ -52185,6 +52317,7 @@ Only continue if you trust the source. Injected code:
       panels,
       getDocument: () => document,
       getPageWindow: () => settingsHostWindow2,
+      parts: outerFleetParts,
       onEstablishError: (detail) => logError(`outer fleet shipyard capture: ${detail}`)
     }), capturedOuterFleetDispatch = createCapturedOuterFleetDispatch({
       controls: pageCapture2.controls,
@@ -53295,6 +53428,7 @@ Only continue if you trust the source. Injected code:
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
       costs: outerFleetCosts,
+      parts: outerFleetParts,
       dispatch: capturedOuterFleetDispatch,
       readSettings: () => settingsStore.readRaw(),
       onActivity

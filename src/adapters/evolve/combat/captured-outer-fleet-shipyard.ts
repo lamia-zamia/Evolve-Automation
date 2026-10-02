@@ -96,6 +96,7 @@ import type { GameControlSynthesis } from "../../../ports/game-control-synthesis
 import type { GameMountSuppression } from "../../../ports/game-mount-suppression.ts";
 import type { GamePanelWorkspace } from "../../../ports/game-panel-workspace.ts";
 import type { GameRootStateSource } from "../../../ports/game-root-state.ts";
+import type { GameShipyardPartCatalogSink } from "../../../ports/game-shipyard-parts.ts";
 import {
   GOV_TAB_INDEX,
   GOV_TABS_SETTING,
@@ -188,6 +189,12 @@ export interface CapturedOuterFleetShipyardDependencies {
   readonly getDocument: () => unknown;
   /** The page's global object, whose Vue answers a binding proxy's own value. */
   readonly getPageWindow: () => unknown;
+  /**
+   * Where the yard's own option markup goes on its way out of the draw. Upstream emits every
+   * `shipParts` entry into this `#shipPlans`, so this is the only place the yard's part catalogue
+   * exists at all, and it exists only while this draw's host is standing.
+   */
+  readonly parts: GameShipyardPartCatalogSink;
   /** Reports a fault in the capture itself, never a game fault. */
   readonly onEstablishError?: (detail: string) => void;
 }
@@ -399,6 +406,32 @@ function shipyardControlGeneration(controls: GameControlRegistry): number {
   return (
     controls.resolve(CAPTURED_OUTER_FLEET_SHIPYARD_CONTROL)?.generation ?? 0
   );
+}
+
+/**
+ * The `#shipPlans` the draw just produced, and only when the scratch host this pass stood is the one
+ * holding it.
+ *
+ * The panel workspace hides the player's Civic panel by renaming it, so the element this resolves is
+ * the one inside the host and not a yard the player is looking at. Answering from the host rather
+ * than from the document is what makes that true by construction: a host the draw never filled has no
+ * child to find, and nothing outside it is ever taken for this pass's own output.
+ */
+function scratchPlansElement(document: unknown, host: unknown): unknown {
+  if (!isRecord(document)) return undefined;
+  const getElementById = readProperty(document, "getElementById");
+  const contains = readProperty(host, "contains");
+  if (typeof getElementById !== "function" || typeof contains !== "function") {
+    return undefined;
+  }
+  const plans = Reflect.apply(getElementById, document, [
+    CAPTURED_OUTER_FLEET_SHIPYARD_CONTROL,
+  ]);
+  return plans !== null &&
+    plans !== undefined &&
+    Reflect.apply(contains, host, [plans]) === true
+    ? plans
+    : undefined;
 }
 
 /**
@@ -689,6 +722,16 @@ export function createCapturedOuterFleetShipyard(
               reportError,
             );
           });
+          // Inside the host's lifetime, because that is the whole of it: the draw has already rendered
+          // the yard's entire part catalogue into `#shipPlans`, and the `finally` below takes the host
+          // — and every option in it — away again. Handing it over here is what keeps this catalogue
+          // from being bought later by a second draw of the same thing. A draw that produced no
+          // `#shipPlans` at all is the refusal reported further down, not a reading that went wrong.
+          const plans = scratchPlansElement(
+            dependencies.getDocument(),
+            host.element,
+          );
+          if (plans !== undefined) dependencies.parts.captureFrom(plans);
         } finally {
           settings[MAIN_TAB_SETTING] = playerMainTab;
           settings[GOV_TABS_SETTING] = playerSubTab;

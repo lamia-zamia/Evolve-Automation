@@ -34,6 +34,9 @@
  * reaching us, never a rule restated here.
  */
 import assert from "node:assert/strict";
+import { readdirSync, readFileSync } from "node:fs";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import {
   CAPTURED_OUTER_FLEET_SHIP_ROW_PREFIX,
@@ -42,6 +45,10 @@ import {
 } from "../src/adapters/evolve/combat/captured-outer-fleet-shipyard.ts";
 import { createCapturedOuterFleetDispatch } from "../src/adapters/evolve/combat/captured-outer-fleet-dispatch.ts";
 import { createCapturedOuterFleetCosts } from "../src/adapters/evolve/combat/captured-outer-fleet-costs.ts";
+import {
+  createCapturedOuterFleetParts,
+  parseShipyardPartCatalog,
+} from "../src/adapters/evolve/combat/captured-outer-fleet-parts.ts";
 import { createCapturedFleetDemand } from "../src/adapters/evolve/combat/captured-fleet-demand.ts";
 import { createCapturedOuterFleetControl } from "../src/bootstrap/captured-fleet-outer-control.ts";
 import { createGamePanelWorkspace } from "../src/adapters/browser/game-panel-workspace.ts";
@@ -57,7 +64,13 @@ import {
 } from "./dom-fixture.mjs";
 
 const MAIN_TAB_CONTROL = "#mainColumn div.content";
-const CREW_BY_CLASS = { corvette: 2, frigate: 3, explorer: 6 };
+const CREW_BY_CLASS = {
+  corvette: 2,
+  frigate: 3,
+  freighter: 1,
+  supply_ship: 1,
+  explorer: 6,
+};
 const HARNESS_SETTINGS = {
   fleetOuterShips: "custom",
   fleetOuterCrew: 4,
@@ -85,6 +98,63 @@ const HARNESS_SETTINGS = {
 const realApps = [];
 /** The page's own `addEventListener`, so a test can prove the interception went back. */
 const realAddEventListener = TestElement.prototype.addEventListener;
+
+/**
+ * `ships.js:shipParts` at the pinned tip, transcribed whole: the game's own part catalogue, in the
+ * unlock order `drawShipYard()` walks, with `special` among the dimensions because upstream keeps it
+ * in the same object. A case overrides it to stand in for a game that has changed it.
+ */
+const SHIP_PARTS = Object.freeze({
+  class: Object.freeze([
+    "corvette",
+    "frigate",
+    "destroyer",
+    "cruiser",
+    "battlecruiser",
+    "dreadnought",
+    "freighter",
+    "explorer",
+    "supply_ship",
+  ]),
+  power: Object.freeze([
+    "solar",
+    "diesel",
+    "fission",
+    "fusion",
+    "elerium",
+    "antimatter",
+  ]),
+  weapon: Object.freeze([
+    "railgun",
+    "laser",
+    "p_laser",
+    "plasma",
+    "phaser",
+    "disruptor",
+    "gauss",
+  ]),
+  armor: Object.freeze(["steel", "alloy", "neutronium", "aerographene"]),
+  engine: Object.freeze([
+    "ion",
+    "tie",
+    "pulse",
+    "photon",
+    "vacuum",
+    "emdrive",
+    "electrokinetic",
+  ]),
+  sensor: Object.freeze(["visual", "radar", "lidar", "quantum"]),
+  special: Object.freeze([
+    "none",
+    "massdriver",
+    "extra_fuel",
+    "extra_cargo",
+    "extra_thruster",
+    "mobile_storage",
+    "fuel_tanker",
+    "repair_ship",
+  ]),
+});
 
 /**
  * Enough Vue 3 for the yard's own binding. `reactive` is the identity to the object it wraps, which
@@ -264,7 +334,21 @@ function makeRoot() {
       grenadier: false,
       universe: "evil",
     },
-    tech: { syndicate: 1, tauceti: 0, eris: 2, triton: 0, outer: 0 },
+    // The shipyard's own unlock ladder, which is what `shipPartAvailable` compares an option's index
+    // against. A save that has reached the Dwarf Shipyard has at least these.
+    tech: {
+      syndicate: 1,
+      tauceti: 0,
+      eris: 2,
+      triton: 0,
+      outer: 0,
+      syard_class: 6,
+      syard_power: 4,
+      syard_weapon: 5,
+      syard_armor: 2,
+      syard_engine: 5,
+      syard_sensor: 3,
+    },
     settings: {
       civTabs: 1,
       govTabs: 0,
@@ -341,6 +425,16 @@ function installGame(page, root) {
   // own keyspace for that. A map keeps the filter's rule intact without restating the game.
   page.systems = page.systems ?? {};
   page.repairYards = page.repairYards ?? ["spc_dwarf"];
+  /**
+   * `ships.js:shipParts` at the pinned tip, in unlock order, exactly as `drawShipYard()` iterates it.
+   * A knob so a case can stand in for a game that has added a part — or moved one, which is what
+   * changes the index a part owns and therefore the answer `shipPartAvailable` gives about it.
+   */
+  page.shipParts = page.shipParts ?? SHIP_PARTS;
+  /** Parts the yard holds in its catalogue but will not offer, as `${type}:${value}`. */
+  page.lockedParts = page.lockedParts ?? new Set();
+  /** Every `avail()` call the control received, as `[type, index, value, liveClass]`. */
+  page.availCalls = page.availCalls ?? [];
   /**
    * Overridable so a case can stand in for a draw that bound a row to the wrong ship. The default is
    * the game's own line: `data: global.space.shipyard.ships[i]`.
@@ -851,6 +945,42 @@ function installGame(page, root) {
   }
 
   /**
+   * `ships.js:shipPartAvailable(part, idx, value, shipClass)`, transcribed on upstream's structural
+   * contract: which technology gates a part, and which branches read the option index as the whole
+   * answer.
+   *
+   * One line is stricter than upstream, and deliberately so. Upstream only ever reaches this from the
+   * markup it emitted itself, where the index and the value were bound together by the same
+   * `forEach(function(v, idx))`, so it never has to check that they agree. A transcription that
+   * skipped the check could not tell a correct index from one inferred from a stale list, because the
+   * index alone is a level to compare against. Refusing a mismatched pair is what makes the option
+   * index this test watches the yard's own.
+   *
+   * `avail()` is the yard's own method, and it receives the index as the option markup wrote it — a
+   * quoted string upstream — so the comparison is made numerically here for the same reason every
+   * comparison upstream is: the number is what both sides mean.
+   */
+  function shipPartAvailable(part, index, value, shipClass) {
+    if (page.shipParts[part]?.[index] !== value) return false;
+    if (page.lockedParts.has(`${part}:${value}`)) return false;
+    if (part === "class") {
+      if (value === "freighter") return (root.tech.shadow ?? 0) >= 5;
+      if (value === "supply_ship") return root.tech.syard_supply === true;
+      if (root.tech.tauceti) return value === "explorer";
+      return (root.tech.syard_class ?? 0) > index;
+    }
+    if (part === "special") {
+      if (shipClass === "supply_ship") {
+        return supplyShipSpecials.includes(value);
+      }
+      if (shipClass === "freighter") return freighterSpecials.includes(value);
+      if (!shipSpecialAllowed(value, shipClass)) return false;
+      return root.tech.syard_special === true;
+    }
+    return (root.tech[`syard_${part}`] ?? 0) > index;
+  }
+
+  /**
    * `truepath.js:drawShipYard`'s own `#shipPlans` binding, transcribed member for member where it
    * matters: the yard's design methods, and nothing from any ship row.
    */
@@ -926,7 +1056,15 @@ function installGame(page, root) {
     slotOpen() {
       return true;
     },
-    avail: (_type, _index, part) => part !== "phaser",
+    avail(type, index, value) {
+      page.availCalls.push([type, Number(index), value, yard.blueprint.class]);
+      return shipPartAvailable(
+        type,
+        Number(index),
+        value,
+        yard.blueprint.class,
+      );
+    },
     crewText() {
       return shipCrewSize(yard.blueprint);
     },
@@ -988,6 +1126,7 @@ function installGame(page, root) {
     ) {
       return;
     }
+    page.yardDraws = (page.yardDraws ?? 0) + 1;
     clearShipDrag();
     clearElement($("#dwarfShipYard"));
     if (!Object.hasOwn(root.space, "shipyard") || !settings.showShipYard) {
@@ -997,6 +1136,24 @@ function installGame(page, root) {
     const plans = $('<div id="shipPlans"></div>');
     panel.append(plans);
     plans.append($('<div id="shipYardCosts" class="costList"></div>'));
+    /**
+     * `truepath.js:drawShipYard`'s own option markup, one `b-dropdown-item` per `shipParts` entry,
+     * in that list's order, carrying the entry's position as its option index. Every entry is
+     * emitted, locked ones included: `v-show` is what hides an option the yard will not offer, and the
+     * markup is the yard's only statement of what the position of each part is.
+     */
+    const options = $('<div class="shipBayOptions"></div>');
+    plans.append(options);
+    Object.keys(page.shipParts).forEach((type) => {
+      let values = "";
+      page.shipParts[type].forEach((value, index) => {
+        values += `<b-dropdown-item aria-role="listitem" @click="setVal('${type}','${value}')" class="${type} a${index}" data-val="${value}" v-show="avail('${type}','${index}','${value}')">{{ lbl('${value}', '${type}') }}</b-dropdown-item>`;
+      });
+      const slot = type === "special" || type === "weapon" ? " open" : "";
+      options.append(
+        `<b-dropdown aria-role="list"${slot}><template #trigger><button class="button is-info"><span>${type}</span></button></template>${values}</b-dropdown>`,
+      );
+    });
     plans.append(
       '<div class="assemble"><button class="button is-info" v-on:click="build()"></button></div>',
     );
@@ -1129,6 +1286,10 @@ function makeHarness({
   playerPanel = true,
   playerYard = false,
   preload = false,
+  /** A different `ships.js:shipParts`, for a case standing in for a game that changed it. */
+  shipParts = undefined,
+  /** Parts the yard catalogues but will not offer, as `${type}:${value}`. */
+  lockedParts = undefined,
   /** Ships already in the yard, so a draw during `establish` binds their rows. */
   ships = [],
   establish = false,
@@ -1139,6 +1300,8 @@ function makeHarness({
   page.builds = [];
   page.setValWrites = [];
   page.globalSupply = false;
+  if (shipParts !== undefined) page.shipParts = shipParts;
+  if (lockedParts !== undefined) page.lockedParts = lockedParts;
   const game = installGame(page, root);
   page.body.append(element("div", { id: "mainColumn" }));
   const content = element("div", { class: "content" });
@@ -1168,6 +1331,17 @@ function makeHarness({
   });
 
   const panels = createGamePanelWorkspace({ getDocument: () => page.document });
+  // The yard's own part catalogue, over the markup that yard's draws produce. Wired before the yard
+  // exists and called only through it, which is the only route either of them has to the other.
+  const parts = createCapturedOuterFleetParts({
+    getDocument: () => page.document,
+    yard: {
+      control: () => shipyard.control(),
+      established: (control) => shipyard.established(control),
+      establish: () => shipyard.establish(),
+    },
+    onCaptureError: (detail) => faults.push(detail),
+  });
   const shipyard = createCapturedOuterFleetShipyard({
     rootState: { readRoot: () => root },
     controls: capture.controls,
@@ -1176,6 +1350,7 @@ function makeHarness({
     panels,
     getDocument: () => page.document,
     getPageWindow: () => page,
+    parts,
     onEstablishError: (detail) => faults.push(detail),
   });
   const dispatch = createCapturedOuterFleetDispatch({
@@ -1216,6 +1391,7 @@ function makeHarness({
     game,
     capture,
     shipyard,
+    parts,
     dispatch,
     costs,
     panels,
@@ -1236,6 +1412,21 @@ function rowControl(capture, index) {
   return capture.controls.resolve(
     `${CAPTURED_OUTER_FLEET_SHIP_ROW_PREFIX}${index}`,
   );
+}
+
+/**
+ * Every production source file, as text. A list of what the yard offers belongs to the game's own
+ * markup, so this is how a second copy of it is kept from being written: a test that only checks
+ * behaviour cannot see one that happens to agree with the save it was run against.
+ */
+function productionSources() {
+  const root = fileURLToPath(new URL("../src", import.meta.url));
+  return readdirSync(root, { recursive: true, withFileTypes: true })
+    .filter((entry) => entry.isFile() && entry.name.endsWith(".ts"))
+    .map((entry) => {
+      const path = join(entry.parentPath ?? root, entry.name);
+      return { path, text: readFileSync(path, "utf8") };
+    });
 }
 
 // ---------------------------------------------------------------------------
@@ -1680,15 +1871,25 @@ assert.deepEqual(sentTo(unbound.page), []);
 // Build and dispatch in one pass, from a shipyard the save never rendered.
 // ---------------------------------------------------------------------------
 
+/**
+ * The outer-fleet composition over one harness, with the yard's own part catalogue among its
+ * dependencies: the yard's cost row prices a candidate, the yard's option markup says what the yard
+ * offers, and the dispatch closure sends what was built.
+ */
+function outerFleetControl(harness, readSettings) {
+  return createCapturedOuterFleetControl({
+    rootState: { readRoot: () => harness.root },
+    controls: harness.capture.controls,
+    costs: harness.costs,
+    parts: harness.parts,
+    dispatch: harness.dispatch,
+    readSettings,
+  });
+}
+
 const integrated = makeHarness({ establish: true });
 const effectiveSettings = Object.create(HARNESS_SETTINGS);
-const outerControl = createCapturedOuterFleetControl({
-  rootState: { readRoot: () => integrated.root },
-  controls: integrated.capture.controls,
-  costs: integrated.costs,
-  dispatch: integrated.dispatch,
-  readSettings: () => effectiveSettings,
-});
+const outerControl = outerFleetControl(integrated, () => effectiveSettings);
 const pass = outerControl.autoFleetOuter();
 assert.equal(pass.outcome.status, "succeeded");
 assert.equal(pass.shipTargetChanged, true);
@@ -1774,7 +1975,9 @@ assert.deepEqual(
 );
 // An explorer hull takes the emdrive, and the railgun the hull forces goes back to the laser the
 // candidate asked for — because the mount is written *after* the hull, which is the order a real
-// build uses and the only order that can be priced for the ship that would actually be built.
+// build uses and the only order that can be priced for the ship that would actually be built. The
+// reactor is the hull's own rewrite too, and this save has reached the shipyard power technology
+// that grants it.
 assert.deepEqual(
   explorer,
   gameSample(integrated, {
@@ -1782,6 +1985,7 @@ assert.deepEqual(
     class: "explorer",
     weapon: "laser",
     engine: "emdrive",
+    power: "elerium",
   }),
 );
 assert.deepEqual(integrated.root.space.shipyard.blueprint, beforeExplor);
@@ -1975,13 +2179,7 @@ owned.page.body.append(playerBackground);
 assert.equal(owned.dispatch.blockedByPlayerModal(), true);
 assert.equal(never.dispatch.blockedByPlayerModal(), false);
 const ownedSettings = Object.create(HARNESS_SETTINGS);
-const ownedControl = createCapturedOuterFleetControl({
-  rootState: { readRoot: () => owned.root },
-  controls: owned.capture.controls,
-  costs: owned.costs,
-  dispatch: owned.dispatch,
-  readSettings: () => ownedSettings,
-});
+const ownedControl = outerFleetControl(owned, () => ownedSettings);
 const deferred = ownedControl.autoFleetOuter();
 // The deferral is a status, not a failure, and it happens before anything is written: a pass that
 // could not finish its own send must not have configured a blueprint it cannot act on.
@@ -2063,13 +2261,7 @@ assert.notEqual(
 assert.notEqual(preload.page.document.getElementById("shipList"), null);
 assert.equal(preload.page.shipRowsDrawn, undefined, "an empty yard drew a row");
 const preloadSettings = Object.create(HARNESS_SETTINGS);
-const preloadControl = createCapturedOuterFleetControl({
-  rootState: { readRoot: () => preload.root },
-  controls: preload.capture.controls,
-  costs: preload.costs,
-  dispatch: preload.dispatch,
-  readSettings: () => preloadSettings,
-});
+const preloadControl = outerFleetControl(preload, () => preloadSettings);
 const preloadPass = preloadControl.autoFleetOuter();
 assert.equal(preloadPass.outcome.status, "succeeded");
 assert.equal(preloadPass.shipTargetChanged, true);
@@ -2355,6 +2547,437 @@ for (const [broken, why] of [
     ),
     true,
     "the save was not stocked, so this could be the resource amounts",
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Which parts the yard offers, and which option position each one owns.
+//
+// Every hull, every component and the special slot come out of `ships.js:shipParts` through the
+// markup `drawShipYard()` emitted, and the option index that reaches `avail()` is the one written
+// into that markup. Nothing in the script keeps a second copy, so what follows is a set of designs
+// the local copy this used to be could not express at all.
+// ---------------------------------------------------------------------------
+
+/** A preset as the settings layer hands one over, with named fields dropped rather than inherited. */
+function presetSettings(overrides = {}, dropped = []) {
+  const settings = { ...HARNESS_SETTINGS, ...overrides };
+  for (const key of dropped) delete settings[key];
+  return settings;
+}
+
+/** A save whose shipyard technology has reached the levels the newer parts need. */
+function shipyardTech(levels) {
+  const root = makeRoot();
+  Object.assign(root.tech, levels);
+  return root;
+}
+
+/** Every part the yard was asked about, as `type=index:value`, in the order it was asked. */
+function askedFor(harness) {
+  return harness.page.availCalls.map(
+    ([type, index, value]) => `${type}=${index}:${value}`,
+  );
+}
+
+// The yard's own catalogue, off the very markup that drew it.
+assert.deepEqual(integrated.parts.catalog().types, [
+  "class",
+  "power",
+  "weapon",
+  "armor",
+  "engine",
+  "sensor",
+  "special",
+]);
+assert.deepEqual(integrated.parts.catalog().optionFor("class", "supply_ship"), {
+  type: "class",
+  value: "supply_ship",
+  index: 8,
+});
+assert.deepEqual(
+  integrated.parts.catalog().optionFor("special", "repair_ship"),
+  {
+    type: "special",
+    value: "repair_ship",
+    index: 7,
+  },
+);
+assert.equal(
+  integrated.parts.catalog().optionFor("weapon", "not_a_mount"),
+  undefined,
+  "a part the yard never offered was answered",
+);
+
+// ---------------------------------------------------------------------------
+// Current Design: the yard's own blueprint, normalized by the yard.
+// ---------------------------------------------------------------------------
+
+// `drawShipYard()` normalizes a `special` into every blueprint whether or not the special-slot
+// selector was ever researched, so a save that never unlocked it still holds a design with one.
+// Building that design must not begin by asking the yard whether it offers the special its own
+// blueprint already carries.
+const designed = makeHarness({ establish: true });
+assert.equal(designed.root.space.shipyard.blueprint.special, "none");
+assert.equal(
+  designed.root.tech.syard_special,
+  undefined,
+  "the special slot was never researched",
+);
+const designedSettings = presetSettings({ fleetOuterShips: "user" });
+const designedBlueprint = makeRoot().space.shipyard.blueprint;
+const designedPass = outerFleetControl(
+  designed,
+  () => designedSettings,
+).autoFleetOuter();
+assert.equal(designedPass.outcome.status, "succeeded");
+assert.deepEqual(askedFor(designed), [], "an unchanged field was asked about");
+// The three passes the price probe makes on its way through — the readiness price and the two target
+// observations — and nothing else. A build that rewrote even one field of the design it was given
+// would be a fourth pass, and the yard's blueprint is unchanged afterwards in any case.
+const priceProbePass = Object.entries(designedBlueprint)
+  .filter(([type]) => type !== "name")
+  .map(([type, part]) => [type, part]);
+assert.deepEqual(designed.page.setValWrites, [
+  ...priceProbePass,
+  ...priceProbePass,
+  ...priceProbePass,
+]);
+assert.deepEqual(
+  designed.root.space.shipyard.blueprint,
+  designedBlueprint,
+  "the yard's own design was written back into it",
+);
+assert.equal(designed.page.buildCount, 1);
+assert.equal(designed.root.space.shipyard.ships.length, 1);
+assert.deepEqual(sentTo(designed.page), [
+  { kind: "sendShipTo", id: 0, region: "spc_red", moved: true },
+]);
+assert.deepEqual(designed.root.space.shipyard.ships[0].special, "none");
+assert.deepEqual(designed.faults, []);
+
+// ---------------------------------------------------------------------------
+// Parts the local copy did not have: a preset naming all four of them builds.
+// ---------------------------------------------------------------------------
+
+const modern = makeHarness({
+  establish: true,
+  root: shipyardTech({
+    syard_power: 6,
+    syard_weapon: 7,
+    syard_armor: 4,
+    syard_engine: 7,
+  }),
+});
+const modernSettings = presetSettings({
+  fleet_outer_power: "antimatter",
+  fleet_outer_weapon: "gauss",
+  fleet_outer_armor: "aerographene",
+  fleet_outer_engine: "electrokinetic",
+});
+assert.equal(
+  outerFleetControl(modern, () => modernSettings).autoFleetOuter().outcome
+    .status,
+  "succeeded",
+);
+assert.equal(modern.root.space.shipyard.ships.length, 1);
+const modernShip = modern.root.space.shipyard.ships[0];
+assert.deepEqual(
+  {
+    power: modernShip.power,
+    weapon: modernShip.weapon,
+    armor: modernShip.armor,
+    engine: modernShip.engine,
+  },
+  {
+    power: "antimatter",
+    weapon: "gauss",
+    armor: "aerographene",
+    engine: "electrokinetic",
+  },
+);
+// Each was reached through the position the yard's own markup gave it, not through a list here.
+assert.deepEqual(askedFor(modern), [
+  "power=5:antimatter",
+  "weapon=6:gauss",
+  "armor=3:aerographene",
+  "engine=6:electrokinetic",
+]);
+assert.deepEqual(modern.faults, []);
+
+// The same four, with the yard refusing one of them. The entry is in the catalogue and the design is
+// refused whole: no write, no build, nothing sent.
+const locked = makeHarness({
+  establish: true,
+  root: shipyardTech({ syard_power: 6, syard_weapon: 7, syard_armor: 4 }),
+  lockedParts: new Set(["weapon:gauss"]),
+});
+const lockedResult = outerFleetControl(
+  locked,
+  () => modernSettings,
+).autoFleetOuter();
+assert.equal(lockedResult.outcome.status, "succeeded");
+assert.deepEqual(askedFor(locked), ["power=5:antimatter", "weapon=6:gauss"]);
+assert.deepEqual(locked.page.setValWrites, [], "a locked part was written");
+assert.equal(locked.page.buildCount, undefined, "a locked part built a ship");
+assert.equal(locked.root.space.shipyard.ships.length, 0);
+assert.deepEqual(sentTo(locked.page), []);
+
+// ---------------------------------------------------------------------------
+// A hull that rewrites the design: the postcondition is the yard's own result.
+// ---------------------------------------------------------------------------
+
+// A freighter has no mount and takes a fuel tank with it, and a Supply Ship has no mount either and
+// whose special slot is never empty. Neither preset names a weapon or a special, so every field of
+// the ship that was built is one the game's own `setVal` decided.
+for (const [hull, technology, forced] of [
+  ["freighter", { shadow: 5 }, { weapon: "none", special: "extra_fuel" }],
+  [
+    "supply_ship",
+    { syard_supply: true },
+    { weapon: "none", special: "mobile_storage" },
+  ],
+]) {
+  const cargo = makeHarness({
+    establish: true,
+    root: shipyardTech(technology),
+  });
+  const cargoSettings = presetSettings({ fleet_outer_class: hull }, [
+    "fleet_outer_weapon",
+  ]);
+  const result = outerFleetControl(cargo, () => cargoSettings).autoFleetOuter();
+  assert.equal(result.outcome.status, "succeeded", `${hull} did not build`);
+  const built = cargo.root.space.shipyard.ships[0];
+  assert.deepEqual(
+    { weapon: built.weapon, special: built.special },
+    forced,
+    `${hull} was built from something other than the design the game normalized`,
+  );
+  // And the design the build was judged against is that one: the hull was the only field the yard was
+  // asked about, and no request for a weapon or a special was ever made of it. A postcondition read
+  // off the preset instead would name a railgun the hull cannot carry, and the build would have
+  // appended nothing this could accept.
+  assert.deepEqual(askedFor(cargo), [
+    `class=${hull === "freighter" ? 6 : 8}:${hull}`,
+  ]);
+  assert.deepEqual(cargo.faults, []);
+}
+
+// ---------------------------------------------------------------------------
+// The option index is the yard's, and the yard's is the only one that works.
+// ---------------------------------------------------------------------------
+
+// Upstream inserts a part, so `laser` is no longer the second weapon in the list. A position inferred
+// from any list this script used to keep would still be 1, and `shipPartAvailable` compares the index
+// as the unlock level — so the wrong index is a different answer, not a near miss.
+const shifted = {
+  ...SHIP_PARTS,
+  weapon: [
+    "auto_turret",
+    "railgun",
+    "laser",
+    "p_laser",
+    "plasma",
+    "phaser",
+    "disruptor",
+    "gauss",
+  ],
+};
+const reindexed = makeHarness({
+  establish: true,
+  shipParts: shifted,
+  root: shipyardTech({ syard_weapon: 3 }),
+});
+const reindexedSettings = presetSettings({ fleet_outer_weapon: "laser" });
+const reindexedResult = outerFleetControl(
+  reindexed,
+  () => reindexedSettings,
+).autoFleetOuter();
+assert.equal(reindexedResult.outcome.status, "succeeded");
+assert.deepEqual(askedFor(reindexed), ["weapon=2:laser"]);
+assert.equal(reindexed.root.space.shipyard.ships[0].weapon, "laser");
+
+// ---------------------------------------------------------------------------
+// Upstream adds a part this script has never heard of.
+// ---------------------------------------------------------------------------
+
+const extended = {
+  ...SHIP_PARTS,
+  weapon: [...shifted.weapon, "railcannon"],
+};
+const futuristic = makeHarness({
+  establish: true,
+  shipParts: extended,
+  root: shipyardTech({ syard_weapon: 9 }),
+});
+const futuristicSettings = presetSettings({ fleet_outer_weapon: "railcannon" });
+const futuristicResult = outerFleetControl(
+  futuristic,
+  () => futuristicSettings,
+).autoFleetOuter();
+assert.equal(futuristicResult.outcome.status, "succeeded");
+assert.deepEqual(askedFor(futuristic), ["weapon=8:railcannon"]);
+assert.equal(futuristic.root.space.shipyard.ships[0].weapon, "railcannon");
+assert.deepEqual(futuristic.faults, []);
+
+// ---------------------------------------------------------------------------
+// Markup that is not a catalogue is no catalogue.
+// ---------------------------------------------------------------------------
+
+for (const [markup, why] of [
+  [
+    '<b-dropdown-item class="weapon a0" data-val="laser"></b-dropdown-item><b-dropdown-item class="weapon a1" data-val="laser"></b-dropdown-item>',
+    "one part at two positions",
+  ],
+  [
+    '<b-dropdown-item class="weapon a0" data-val="laser"></b-dropdown-item><b-dropdown-item class="weapon a0" data-val="phaser"></b-dropdown-item>',
+    "two parts at one position",
+  ],
+  [
+    '<b-dropdown-item class="weapon a1" data-val="laser"></b-dropdown-item>',
+    "a position the dimension skipped",
+  ],
+  [
+    '<b-dropdown-item class="weapon a0"></b-dropdown-item>',
+    "an option with no part",
+  ],
+  [
+    '<b-dropdown-item class="weapon a0" data-val=""></b-dropdown-item>',
+    "an option with an empty part",
+  ],
+  [
+    '<b-dropdown-item class="weapon a0" data-val="two words"></b-dropdown-item>',
+    "a part that is not one name",
+  ],
+  [
+    '<b-dropdown-item class="a0" data-val="laser"></b-dropdown-item>',
+    "an option with no dimension",
+  ],
+  [
+    '<b-dropdown-item class="a0 a1" data-val="laser"></b-dropdown-item>',
+    "an option claiming two positions",
+  ],
+  [
+    '<b-dropdown-item class="weapon a0" data-val="laser"></b-dropdown-item>',
+    "",
+  ],
+]) {
+  const host = element("div", { id: "shipPlans" });
+  host.append(...parseTestMarkup(markup));
+  const catalog = parseShipyardPartCatalog(host);
+  if (why === "") {
+    assert.deepEqual(catalog?.parts, [
+      { type: "weapon", value: "laser", index: 0 },
+    ]);
+    continue;
+  }
+  assert.equal(catalog, undefined, `${why} was read as a catalogue`);
+}
+
+// The same refusal end to end: a yard whose own options cannot be read has no catalogue, and preload
+// mode leaves no scratch draw to fall back on.
+{
+  const damaged = makeHarness({ preload: true });
+  damaged.game.initTabs();
+  damaged.page.document
+    .getElementById("shipPlans")
+    .querySelectorAll("*")
+    .filter((node) => node.getAttribute("data-val") === "gauss")
+    .forEach((node) => node.attributes.delete("data-val"));
+  assert.equal(damaged.parts.catalog(), undefined);
+  assert.ok(
+    damaged.faults.some((detail) =>
+      detail.includes("part options could not be read"),
+    ),
+    damaged.faults.join("; "),
+  );
+}
+
+// ---------------------------------------------------------------------------
+// The three routes to a catalogue, and what each one costs the player.
+// ---------------------------------------------------------------------------
+
+// A yard the player visited and then left: the control is still captured, the markup is gone, and
+// nothing has drawn a yard since. Exactly one protected draw buys the catalogue back.
+const visited = makeHarness({ playerYard: true });
+visited.game.drawShipYard();
+assert.notEqual(
+  visited.capture.controls.resolve(CAPTURED_OUTER_FLEET_SHIPYARD_CONTROL),
+  undefined,
+  "the player's own visit did not capture the yard",
+);
+// The player switches away, and the game's own tab clear empties the Civic panel.
+const civicPanel = visited.page.document.getElementById("mTabCivic");
+for (const child of [...civicPanel.children]) civicPanel.removeChild(child);
+assert.equal(visited.page.document.getElementById("shipPlans"), null);
+assert.equal(visited.page.document.getElementById("dwarfShipYard"), null);
+const drawsBeforeOffTab = visited.page.yardDraws;
+const offTabCatalog = visited.parts.catalog();
+assert.notEqual(
+  offTabCatalog,
+  undefined,
+  "no catalogue for a yard the player left",
+);
+assert.equal(
+  visited.page.yardDraws - drawsBeforeOffTab,
+  1,
+  "the catalogue cost something other than one protected draw",
+);
+assert.deepEqual(offTabCatalog.types, integrated.parts.catalog().types);
+assert.equal(visited.parts.catalog(), offTabCatalog);
+assert.equal(
+  visited.page.yardDraws,
+  drawsBeforeOffTab + 1,
+  "a proven catalogue was bought again",
+);
+// The player is on their own shipyard, the workspace put every name back, and the draw is gone.
+assert.equal(
+  visited.root.settings.civTabs,
+  2,
+  "the player's own Civic sub-tab",
+);
+assert.equal(visited.root.settings.govTabs, 5);
+assert.notEqual(visited.page.document.getElementById("mTabCivic"), null);
+assert.deepEqual(
+  visited.page.document
+    .querySelectorAll("[id]")
+    .filter((node) => node.id.startsWith("ea-aside-"))
+    .map((node) => node.id),
+  [],
+  "the workspace left an aliased name behind",
+);
+assert.equal(visited.page.document.getElementById("dwarfShipYard"), null);
+assert.deepEqual(visited.faults, []);
+
+// A yard the page is really rendering is read where it lies: no draw, and nothing borrowed.
+{
+  const renderedYard = makeHarness({ preload: true });
+  renderedYard.game.initTabs();
+  const drawsBefore = renderedYard.page.yardDraws;
+  const passive = renderedYard.parts.catalog();
+  assert.notEqual(passive, undefined);
+  assert.deepEqual(passive.types, integrated.parts.catalog().types);
+  assert.deepEqual(passive.optionFor("engine", "electrokinetic"), {
+    type: "engine",
+    value: "electrokinetic",
+    index: 6,
+  });
+  assert.equal(
+    renderedYard.page.yardDraws,
+    drawsBefore,
+    "a rendered yard was redrawn for its catalogue",
+  );
+  assert.deepEqual(renderedYard.faults, []);
+}
+
+// ---------------------------------------------------------------------------
+// Which parts the yard offers is not a question this script answers from a list.
+// ---------------------------------------------------------------------------
+
+for (const { path, text } of productionSources()) {
+  assert.ok(
+    !text.includes("CAPTURED_OUTER_FLEET_PARTS"),
+    `${path} brought the outer-fleet part list back`,
   );
 }
 

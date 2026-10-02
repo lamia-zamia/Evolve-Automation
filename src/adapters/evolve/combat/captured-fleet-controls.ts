@@ -1,11 +1,20 @@
 /**
  * Adapts the captured `shipPlans` Vue control to the narrow fleet-controls port: which parts are
- * offered, how a blueprint is written, whether it has the power to build, and the build itself.
+ * offered, how a blueprint is written, what design the yard holds, whether it has the power to build,
+ * and the build itself.
  *
  * The captured component's `s` field is the live shipyard object, and it is the only captured value
  * that can prove a build appended a ship; the root state is the game's pre-period clone and cannot
  * serve as an execution postcondition. Sending that ship onward is not a panel method and is not
  * here — it is the ship's own dispatch closure, behind its own capture.
+ *
+ * **The option index belongs to the yard, not to the caller.** `avail(type, index, value)` is
+ * upstream `shipPartAvailable(part, idx, value, shipClass)`, which reads that index as the unlock
+ * level it is testing against, so a caller that named its own would be asking a different question
+ * from the one the yard asks. The position is therefore resolved here, out of the yard's own option
+ * markup, and a part the markup never offered is not available — which is also what keeps a part
+ * upstream has since added working without anything here knowing it exists. `setVal(type, value)`
+ * takes no index and is given none.
  */
 
 import type {
@@ -16,11 +25,18 @@ import type {
   GameFleetStepRequest,
 } from "../../../ports/game-fleet-controls.ts";
 import type { GameControlRegistry } from "../../../ports/game-control-registry.ts";
-import { matchesStringRecordFields, readProperty } from "../../validation.ts";
+import type { GameShipyardPartCatalogSource } from "../../../ports/game-shipyard-parts.ts";
+import {
+  isRecord,
+  matchesStringRecordFields,
+  readProperty,
+} from "../../validation.ts";
 import { capturedOuterFleetShipList } from "./captured-outer-fleet-shipyard.ts";
 
 export interface CapturedFleetControlsDependencies {
   readonly controls: GameControlRegistry;
+  /** The yard's own option markup, which is what gives a part its position. */
+  readonly parts: GameShipyardPartCatalogSource;
 }
 
 const NOT_ACTIONABLE: GameFleetBuildResult = Object.freeze({
@@ -63,10 +79,13 @@ export function createCapturedFleetControls(
     },
 
     isPartAvailable(request: GameFleetPartRequest): boolean {
-      if (request.index === undefined) return false;
+      const option = dependencies.parts
+        .catalog()
+        ?.optionFor(request.type, request.part);
+      if (option === undefined) return false;
       const result = methodValue(dependencies, request.elementId, "avail", [
         request.type,
-        request.index,
+        option.index,
         request.part,
       ]);
       return result.ok && result.value === true;
@@ -77,6 +96,19 @@ export function createCapturedFleetControls(
         request.type,
         request.part,
       ]).ok;
+    },
+
+    currentDesign(
+      elementId: string,
+    ): Readonly<Record<string, unknown>> | undefined {
+      const handle = dependencies.controls.resolve(elementId);
+      const blueprint = readProperty(
+        readProperty(handle?.data, "s"),
+        "blueprint",
+      );
+      // A copy, because this is what the yard holds rather than a bag a caller could hold on to and
+      // find changed under it; the yard itself keeps writing the original.
+      return isRecord(blueprint) ? Object.freeze({ ...blueprint }) : undefined;
     },
 
     hasShipPower(elementId: string): boolean {

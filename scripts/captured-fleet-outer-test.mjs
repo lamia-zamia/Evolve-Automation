@@ -1,14 +1,92 @@
 import assert from "node:assert/strict";
 
 import { createCapturedFleetControls } from "../src/adapters/evolve/combat/captured-fleet-controls.ts";
+import { parseShipyardPartCatalog } from "../src/adapters/evolve/combat/captured-outer-fleet-parts.ts";
 import { createCapturedOuterFleetControl } from "../src/bootstrap/captured-fleet-outer-control.ts";
+import { element, parseTestMarkup } from "./dom-fixture.mjs";
+
+/**
+ * The yard's own part catalogue, as the option markup `drawShipYard()` emits it.
+ *
+ * `ships.js:shipParts` is transcribed here in the unlock order the yard walks it, because that order
+ * *is* a part's option index and `avail()` is called with it. This is fixture data standing in for
+ * markup the game produced — the transcription of the whole yard, markup included, is
+ * `captured-outer-fleet-dispatch-test.mjs`.
+ */
+function shipyardCatalog(shipParts) {
+  const plans = element("div", { id: "shipPlans" });
+  for (const [type, values] of Object.entries(shipParts)) {
+    values.forEach((value, index) => {
+      plans.append(
+        ...parseTestMarkup(
+          `<b-dropdown-item class="${type} a${index}" data-val="${value}"></b-dropdown-item>`,
+        ),
+      );
+    });
+  }
+  const catalog = parseShipyardPartCatalog(plans);
+  if (catalog === undefined)
+    throw new Error("the fixture catalogue did not parse");
+  return catalog;
+}
+
+const WEAPONS = [
+  "railgun",
+  "laser",
+  "p_laser",
+  "plasma",
+  "phaser",
+  "disruptor",
+  "gauss",
+];
+
+const SHIP_PARTS = {
+  class: [
+    "corvette",
+    "frigate",
+    "destroyer",
+    "cruiser",
+    "battlecruiser",
+    "dreadnought",
+    "freighter",
+    "explorer",
+    "supply_ship",
+  ],
+  power: ["solar", "diesel", "fission", "fusion", "elerium", "antimatter"],
+  weapon: WEAPONS,
+  armor: ["steel", "alloy", "neutronium", "aerographene"],
+  engine: [
+    "ion",
+    "tie",
+    "pulse",
+    "photon",
+    "vacuum",
+    "emdrive",
+    "electrokinetic",
+  ],
+  sensor: ["visual", "radar", "lidar", "quantum"],
+  special: [
+    "none",
+    "massdriver",
+    "extra_fuel",
+    "extra_cargo",
+    "extra_thruster",
+    "mobile_storage",
+    "fuel_tanker",
+    "repair_ship",
+  ],
+};
 
 function createFixture({ append = true } = {}) {
   const ships = [];
   const calls = [];
+  const avail = [];
   const data = { s: { ships, sort: false } };
   const methods = {
-    avail: (_type, _index, part) => part === "railgun",
+    avail: (type, index, part) => {
+      avail.push([type, index, part]);
+      return part === "railgun";
+    },
     setVal: (type, part) => calls.push(["setVal", type, part]),
     powerText: () => "100kW",
     build: () => {
@@ -34,8 +112,12 @@ function createFixture({ append = true } = {}) {
     capturedElementIds: () => ["shipPlans"],
   };
   return {
-    controls: createCapturedFleetControls({ controls }),
+    controls: createCapturedFleetControls({
+      controls,
+      parts: { catalog: () => shipyardCatalog({ weapon: WEAPONS }) },
+    }),
     calls,
+    avail,
     ships,
   };
 }
@@ -47,7 +129,6 @@ assert.equal(
     elementId: "shipPlans",
     type: "weapon",
     part: "railgun",
-    index: 0,
   }),
   true,
 );
@@ -56,10 +137,25 @@ assert.equal(
     elementId: "shipPlans",
     type: "weapon",
     part: "laser",
-    index: 1,
   }),
   false,
 );
+// The index that reached `avail` is the one the yard's markup gave the part, not one the caller chose.
+assert.deepEqual(ready.avail, [
+  ["weapon", 0, "railgun"],
+  ["weapon", 1, "laser"],
+]);
+// A part the yard never offered is unavailable, whatever the control would answer about it.
+assert.equal(
+  ready.controls.isPartAvailable({
+    elementId: "shipPlans",
+    type: "weapon",
+    part: "bolt_caster",
+  }),
+  false,
+);
+assert.equal(ready.avail.length, 2, "an uncatalogued part was asked about");
+assert.deepEqual(ready.controls.currentDesign("shipPlans"), undefined);
 assert.equal(
   ready.controls.setPart({
     elementId: "shipPlans",
@@ -93,6 +189,8 @@ const yard = {
     engine: "ion",
     power: "diesel",
     sensor: "radar",
+    // `drawShipYard()` normalizes a special into every blueprint, so a captured yard always has one.
+    special: "none",
   },
   ships: [],
 };
@@ -179,6 +277,7 @@ const capturedMethods = {
       armor: yard.blueprint.armor,
       engine: yard.blueprint.engine,
       sensor: yard.blueprint.sensor,
+      special: yard.blueprint.special,
       location: "spc_dwarf",
       transit: 0,
       fueled: true,
@@ -296,6 +395,8 @@ function createCostStub() {
 }
 
 let costs = createCostStub();
+/** The one catalogue every composition here shares, as the yard's own markup would have produced it. */
+const partCatalog = shipyardCatalog(SHIP_PARTS);
 function createOuterControl(
   registry = capturedRegistry,
   stub = dispatch,
@@ -309,6 +410,7 @@ function createOuterControl(
     },
     controls: registry,
     costs: costAuthority,
+    parts: { catalog: () => partCatalog },
     dispatch: {
       blockedByPlayerModal: () => playerModalOpen,
       dispatchShipyardShip: (request) => stub.dispatchShipyardShip(request),
@@ -399,6 +501,7 @@ const missingRootControl = createCapturedOuterFleetControl({
   },
   controls: capturedRegistry,
   costs,
+  parts: { catalog: () => partCatalog },
   dispatch,
   readSettings: () => effectiveSettings,
 });

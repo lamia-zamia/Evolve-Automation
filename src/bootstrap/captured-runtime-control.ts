@@ -208,6 +208,7 @@ import { createCapturedEspionageOperationCapture } from "../adapters/evolve/comb
 import { createCapturedOuterFleetCosts } from "../adapters/evolve/combat/captured-outer-fleet-costs.ts";
 import { createCapturedOuterFleetDispatch } from "../adapters/evolve/combat/captured-outer-fleet-dispatch.ts";
 import { createCapturedOuterFleetShipyard } from "../adapters/evolve/combat/captured-outer-fleet-shipyard.ts";
+import { createCapturedOuterFleetParts } from "../adapters/evolve/combat/captured-outer-fleet-parts.ts";
 import {
   CAPTURED_MERCENARY_CONTROLS,
   createCapturedMercenary,
@@ -722,6 +723,23 @@ export function startCapturedRuntime({
    * never on `shipPlans`, so `captureRow()` runs the yard's own `redraw()` against a scratch
    * `#shipList` whenever a dispatch needs a row the save does not have one for.
    */
+  // The yard's own part catalogue, out of the option markup that draw produces. Bound here rather
+  // than built into the yard: the markup only exists inside a draw, so the establishment hands it
+  // over on its way out, and the catalogue itself has three routes to be proven — the markup the game
+  // is really rendering, the markup this establishment produced, and one protected draw for a yard
+  // whose control was captured on an earlier visit and whose markup has since been cleared.
+  const outerFleetParts = createCapturedOuterFleetParts({
+    getDocument: () => document,
+    // Bound now and called only later, and only when the yard is already established: a draw is the
+    // yard's own pass, never one this catalogue starts on its own.
+    yard: {
+      control: () => outerFleetShipyard.control(),
+      established: (control) => outerFleetShipyard.established(control),
+      establish: () => outerFleetShipyard.establish(),
+    },
+    onCaptureError: (detail) =>
+      logError(`outer fleet part catalogue: ${detail}`),
+  });
   const outerFleetShipyard = createCapturedOuterFleetShipyard({
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,
@@ -730,6 +748,7 @@ export function startCapturedRuntime({
     panels,
     getDocument: () => document,
     getPageWindow: () => settingsHostWindow,
+    parts: outerFleetParts,
     onEstablishError: (detail) =>
       logError(`outer fleet shipyard capture: ${detail}`),
   });
@@ -2584,6 +2603,7 @@ export function startCapturedRuntime({
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,
     costs: outerFleetCosts,
+    parts: outerFleetParts,
     dispatch: capturedOuterFleetDispatch,
     readSettings: () => settingsStore.readRaw(),
     onActivity,

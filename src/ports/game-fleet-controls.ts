@@ -5,9 +5,12 @@
  * configured part by part and one ship of it is built and parked in a region,
  * and the piracy armada (`fleet`), where ships are moved between the gateway
  * and a defended region. Callers name the control by the element id the game
- * gives it, and name the ship part with its position in the panel's option
- * list for the availability checks. How many component calls a count takes,
- * and which methods perform them, is this port's business.
+ * gives it, and name a ship part by its blueprint dimension and the part itself
+ * — never by its position in the panel's option list. The position belongs to
+ * the yard's own option markup and is part of the game's own availability
+ * answer, so this port resolves it rather than asking its callers to know it.
+ * How many component calls a count takes, and which methods perform them, is
+ * this port's business.
  *
  * Sending a built ship onward is not here: the game offers no method for it, only a ship row's
  * dispatch closure, so that lives behind its own capture rather than as a panel method call.
@@ -16,17 +19,11 @@ export interface GameFleetPartRequest {
   /** The element the game gives this panel's control. */
   readonly elementId: string;
 
-  /** The blueprint dimension: class, power, weapon, armor, engine, or sensor. */
+  /** The blueprint dimension: the yard's class, power, weapon, armor, engine, sensor, or special. */
   readonly type: string;
 
   /** The part to configure or check. */
   readonly part: string;
-
-  /**
-   * The part's position in the panel's option list. Availability checks
-   * require it; configuring a part ignores it.
-   */
-  readonly index?: number;
 }
 
 /** Moving ships on the piracy armada. */
@@ -70,8 +67,9 @@ export interface GameFleetControlsPort {
   isRendered(elementId: string): boolean;
 
   /**
-   * Whether the panel offers the part at the given option position. False
-   * means the part is not selectable or the control is not actionable.
+   * Whether the panel offers this part at the option position its own markup gave it. False
+   * means the part is not selectable, the panel never offered it, or the control is not
+   * actionable.
    */
   isPartAvailable(request: GameFleetPartRequest): boolean;
 
@@ -80,6 +78,17 @@ export interface GameFleetControlsPort {
    * actionable.
    */
   setPart(request: GameFleetPartRequest): boolean;
+
+  /**
+   * The design the panel is holding right now, as the game's own control carries it.
+   *
+   * Not the saved design: the panel's live blueprint is what its own controls read and write,
+   * including the fields a class change rewrote. Undefined when there is no such control or
+   * the save has no design for it.
+   */
+  currentDesign(
+    elementId: string,
+  ): Readonly<Record<string, unknown>> | undefined;
 
   /**
    * Whether the configured blueprint has enough power to build. False means
