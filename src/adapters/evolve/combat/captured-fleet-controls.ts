@@ -1,51 +1,32 @@
 /**
- * Adapts the captured `shipPlans` Vue control to the narrow fleet-controls port.
+ * Adapts the captured `shipPlans` Vue control to the narrow fleet-controls port: which parts are
+ * offered, how a blueprint is written, whether it has the power to build, and the build itself.
  *
- * The captured component's `s` field is the live shipyard object. It is the only captured value
+ * The captured component's `s` field is the live shipyard object, and it is the only captured value
  * that can prove a build appended a ship; the root state is the game's pre-period clone and cannot
- * serve as an execution postcondition.
+ * serve as an execution postcondition. Sending that ship onward is not a panel method and is not
+ * here — it is the ship's own dispatch closure, behind its own capture.
  */
 
 import type {
   GameFleetBuildRequest,
   GameFleetBuildResult,
   GameFleetControlsPort,
-  GameFleetDispatchRequest,
   GameFleetPartRequest,
   GameFleetStepRequest,
 } from "../../../ports/game-fleet-controls.ts";
 import type { GameControlRegistry } from "../../../ports/game-control-registry.ts";
-import {
-  isRecord,
-  matchesStringRecordFields,
-  readProperty,
-} from "../../validation.ts";
-
-interface FleetDocument {
-  querySelector(selector: string): { click?(): void } | null;
-}
+import { matchesStringRecordFields, readProperty } from "../../validation.ts";
+import { capturedOuterFleetShipList } from "./captured-outer-fleet-shipyard.ts";
 
 export interface CapturedFleetControlsDependencies {
   readonly controls: GameControlRegistry;
-  readonly getDocument: () => unknown;
 }
 
 const NOT_ACTIONABLE: GameFleetBuildResult = Object.freeze({
   actionable: false,
   builtIndex: null,
 });
-
-function fleetDocument(value: unknown): FleetDocument | undefined {
-  return isRecord(value) && typeof value["querySelector"] === "function"
-    ? (value as unknown as FleetDocument)
-    : undefined;
-}
-
-function liveShipList(handle: { readonly data?: unknown }): unknown[] | null {
-  const yard = readProperty(handle.data, "s");
-  const ships = readProperty(yard, "ships");
-  return Array.isArray(ships) ? ships : null;
-}
 
 function methodValue(
   dependencies: CapturedFleetControlsDependencies,
@@ -121,13 +102,13 @@ export function createCapturedFleetControls(
       ) {
         return NOT_ACTIONABLE;
       }
-      const beforeList = liveShipList(handle);
-      if (beforeList === null) return NOT_ACTIONABLE;
+      const beforeList = capturedOuterFleetShipList(handle);
+      if (beforeList === undefined) return NOT_ACTIONABLE;
       const before = [...beforeList];
       const result = dependencies.controls.invoke(handle, "build");
       if (!result.ok) return NOT_ACTIONABLE;
-      const after = liveShipList(handle);
-      if (after === null || after.length <= before.length) {
+      const after = capturedOuterFleetShipList(handle);
+      if (after === undefined || after.length <= before.length) {
         // The game may have accepted the click by queueing a future order. No ship began its
         // outer-fleet action yet, so the caller must not report a dispatched fleet.
         return { actionable: true, builtIndex: null };
@@ -147,19 +128,6 @@ export function createCapturedFleetControls(
               ? after.length - 1
               : null,
       };
-    },
-
-    dispatchTrigger(index: number): string {
-      return `#ship${index}loc`;
-    },
-
-    dispatchShip(request: GameFleetDispatchRequest): boolean {
-      const destination = fleetDocument(
-        dependencies.getDocument(),
-      )?.querySelector(`#modalBox .shipDispatch button.${request.region}`);
-      if (typeof destination?.click !== "function") return false;
-      destination.click();
-      return true;
     },
 
     addShips(request: GameFleetStepRequest): boolean {

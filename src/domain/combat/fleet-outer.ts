@@ -2,8 +2,12 @@ export type OuterFleetBlueprint = "yard" | "explorer" | "scout" | "fighter";
 
 export interface OuterFleetCycleInput {
   readonly initialized: boolean;
-  /** A built ship is still waiting for the game-owned dispatch window. */
-  readonly busy?: boolean;
+  /**
+   * A window the player owns is on screen. Building and sending a ship are one pass, so a pass that
+   * could not finish its own send must not start: the game reaches outside the window it was given
+   * to do both, and a ship built here cannot be dispatched later.
+   */
+  readonly playerModalOpen?: boolean;
   readonly mode: string;
   readonly manualBlueprintAvailable: boolean;
   readonly configuredMinimumCrew: number;
@@ -140,8 +144,8 @@ export function planOuterFleetCycle(
   if (!input.initialized) {
     return status(null, "No ships needed yet", null);
   }
-  if (input.busy === true) {
-    return status(null, null, "Outer fleet action pending");
+  if (input.playerModalOpen === true) {
+    return status(null, null, "Outer fleet action deferred");
   }
   if (input.mode === "none") {
     return status(null, null, "Ship construction is disabled");

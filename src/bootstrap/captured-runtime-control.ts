@@ -205,6 +205,8 @@ import { challenges as evolutionChallengeCatalog } from "../adapters/evolve/runt
 import { createCapturedSpyTraining } from "../adapters/evolve/combat/captured-spy-training.ts";
 import { createCapturedEspionage } from "../adapters/evolve/combat/captured-espionage.ts";
 import { createCapturedEspionageOperationCapture } from "../adapters/evolve/combat/captured-espionage-capture.ts";
+import { createCapturedOuterFleetDispatch } from "../adapters/evolve/combat/captured-outer-fleet-dispatch.ts";
+import { createCapturedOuterFleetShipyard } from "../adapters/evolve/combat/captured-outer-fleet-shipyard.ts";
 import {
   CAPTURED_MERCENARY_CONTROLS,
   createCapturedMercenary,
@@ -708,6 +710,19 @@ export function startCapturedRuntime({
     getPageWindow: () => settingsHostWindow,
     onCaptureError: (detail) =>
       logError(`espionage operation capture: ${detail}`),
+  });
+  // The Dwarf Shipyard's dispatch is the same shape: the game offers no method for sending a built
+  // ship onward, only a ship row's `pickDest` closure behind a Buefy modal. This capture reaches that
+  // closure with a no-op `$buefy` and a throwaway `#modalBox`, so a build and its dispatch are one
+  // synchronous pass with nothing on screen.
+  const capturedOuterFleetDispatch = createCapturedOuterFleetDispatch({
+    controls: pageCapture.controls,
+    synthesis: pageCapture.synthesis,
+    mountSuppression: pageCapture.mountSuppression,
+    getDocument: () => document,
+    getPageWindow: () => settingsHostWindow,
+    onCaptureError: (detail) =>
+      logError(`outer fleet dispatch capture: ${detail}`),
   });
   const capturedEspionage = createCapturedEspionage({
     rootState: pageCapture.rootState,
@@ -1332,6 +1347,22 @@ export function startCapturedRuntime({
     diagnostics,
   });
   /**
+   * The Dwarf Shipyard's own controls, established against scratch DOM instead of a Civic
+   * sub-tab draw: `#dwarfShipYard` is that tab's component render, so a suppressed Civic pass has
+   * nothing to draw into and captures nothing. This stands one, runs the game's draw against it, and
+   * keeps the controls.
+   */
+  const outerFleetShipyard = createCapturedOuterFleetShipyard({
+    rootState: pageCapture.rootState,
+    controls: pageCapture.controls,
+    synthesis: pageCapture.synthesis,
+    mountSuppression: pageCapture.mountSuppression,
+    panels,
+    getDocument: () => document,
+    onEstablishError: (detail) =>
+      logError(`outer fleet shipyard capture: ${detail}`),
+  });
+  /**
    * The one place a captured feature spends a tab draw. Callers check their own eligibility first
    * and pass `satisfied`: the authoritative answer to "does this feature now hold the control it
    * came for". A draw that reports success while leaving that control absent is a failure here, so
@@ -1378,6 +1409,40 @@ export function startCapturedRuntime({
       return false;
     }
     discoveryAttempts.recordSuccess(key, epoch);
+    return true;
+  };
+  /**
+   * The same bookkeeping as `finishDiscovery`, for a capability that establishes itself against its
+   * own scratch DOM rather than through a tab-discovery path. The Outer Fleet shipyard is that: its
+   * draw is reached through the game's own tab switch, but with a `#dwarfShipYard` of its own, so
+   * there is no panel to point a path at. An attempt is a plain `() => boolean` here — it captured
+   * something or it did not — and the rules above apply unchanged: a throw is a failed attempt, a
+   * capability that did not appear is a failed attempt, and both back off.
+   */
+  const finishEstablishment = (
+    key: string,
+    label: string,
+    establish: () => boolean,
+  ): boolean => {
+    if (!discoveryAttempts.shouldAttempt(key)) return false;
+    let established: boolean;
+    try {
+      established = establish();
+    } catch (error) {
+      discoveryAttempts.recordFailure(key);
+      logError(
+        `${label} capture threw: ${String(error)} (${discoveryAttempts.describe(key)})`,
+      );
+      return false;
+    }
+    if (!established) {
+      discoveryAttempts.recordFailure(key);
+      logError(
+        `${label} capture drew its yard without capturing the control (${discoveryAttempts.describe(key)})`,
+      );
+      return false;
+    }
+    discoveryAttempts.recordSuccess(key);
     return true;
   };
   /**
@@ -1496,10 +1561,23 @@ export function startCapturedRuntime({
       reportCapturedGarrisonGap();
     }
   };
+  /**
+   * Establishes the Dwarf Shipyard's own controls without the player visiting the tab.
+   *
+   * `drawShipYard()` is module-private, and both closures over it open by clearing every panel in
+   * the Civic tab. It also draws into `#dwarfShipYard`, which is that tab's own `b-tabs` *render*
+   * rather than markup — so with the render suppressed there is nothing to append into, `#shipPlans`
+   * is created detached, and a Civic pass could never have captured the yard. `captured-outer-fleet-shipyard.ts`
+   * stands a `#dwarfShipYard` of its own inside a scratch workspace, runs the game's draw against it
+   * with the tab settings the draw gates on, and proves the control was rebound by that call.
+   *
+   * Eligibility is still the game's own answer, unchanged: a run without a shipyard, without the
+   * syndicate tech, or with an unpowered yard is not worth a draw, and the game itself moves the
+   * player off the Dwarf Shipyard sub-tab every period while `showShipYard` is false.
+   */
   const ensureOuterFleetControls = () => {
     const satisfied = () =>
-      pageCapture.controls.resolve("shipPlans")?.methods.includes("build") ===
-      true;
+      outerFleetShipyard.established(outerFleetShipyard.control());
     if (satisfied()) return;
     const root = pageCapture.rootState.readRoot();
     const tech = readProperty(root, "tech");
@@ -1513,21 +1591,11 @@ export function startCapturedRuntime({
     ) {
       return;
     }
-    if (pageCapture.controls.resolve(MAIN_TAB_CONTROL) === undefined) return;
-    const govTabs = SUB_TAB_CONTROLS[GOV_TABS_SETTING];
-    if (govTabs === undefined) return;
-    finishDiscovery("outer-fleet", "outer fleet", satisfied, undefined, [
-      Object.freeze({
-        setting: MAIN_TAB_SETTING,
-        control: MAIN_TAB_CONTROL,
-        index: MAIN_TAB_INDEX.civic,
-      }),
-      Object.freeze({
-        setting: GOV_TABS_SETTING,
-        control: govTabs,
-        index: GOV_TAB_INDEX.dwarfShipYard,
-      }),
-    ]);
+    finishEstablishment(
+      "outer-fleet",
+      "outer fleet",
+      () => outerFleetShipyard.establish() !== undefined,
+    );
   };
   const ensureMercenaryControls = () => {
     const satisfied = () =>
@@ -2489,7 +2557,7 @@ export function startCapturedRuntime({
   const outerFleet = createCapturedOuterFleetControl({
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,
-    getDocument: () => document,
+    dispatch: capturedOuterFleetDispatch,
     readSettings: () => settingsStore.readRaw(),
     onActivity,
   });

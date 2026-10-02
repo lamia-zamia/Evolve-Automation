@@ -6,7 +6,6 @@ import { createCapturedOuterFleetControl } from "../src/bootstrap/captured-fleet
 function createFixture({ append = true } = {}) {
   const ships = [];
   const calls = [];
-  let destinationClicks = 0;
   const data = { s: { ships, sort: false } };
   const methods = {
     avail: (_type, _index, part) => part === "railgun",
@@ -34,22 +33,10 @@ function createFixture({ append = true } = {}) {
     },
     capturedElementIds: () => ["shipPlans"],
   };
-  const document = {
-    querySelector: (selector) =>
-      selector === "#modalBox .shipDispatch button.spc_red"
-        ? { click: () => destinationClicks++ }
-        : null,
-  };
   return {
-    controls: createCapturedFleetControls({
-      controls,
-      getDocument: () => document,
-    }),
+    controls: createCapturedFleetControls({ controls }),
     calls,
     ships,
-    get destinationClicks() {
-      return destinationClicks;
-    },
   };
 }
 
@@ -87,11 +74,6 @@ assert.deepEqual(ready.controls.buildShip({ elementId: "shipPlans" }), {
   builtIndex: 0,
 });
 assert.equal(ready.ships.length, 1);
-assert.equal(
-  ready.controls.dispatchShip({ index: 0, region: "spc_red" }),
-  true,
-);
-assert.equal(ready.destinationClicks, 1);
 
 const noTransition = createFixture({ append: false });
 assert.deepEqual(noTransition.controls.buildShip({ elementId: "shipPlans" }), {
@@ -100,9 +82,9 @@ assert.deepEqual(noTransition.controls.buildShip({ elementId: "shipPlans" }), {
 });
 assert.equal(noTransition.ships.length, 0);
 
-// Full captured composition: the first call builds, the next opens the game's dispatch window,
-// and the following call clicks the destination. The postcondition is the live ship location, not
-// the return value of either control method.
+// A full captured composition. One pass builds a ship and the same pass sends it: the dispatch is
+// reached through the game's own ship-row closure, and whether it worked is judged from the yard's
+// own report of the ship afterwards, never from the captured handler returning normally.
 const yard = {
   blueprint: {
     class: "corvette",
@@ -181,7 +163,6 @@ const capturedSettings = {
  * fleet is driven through the layered shape here and nowhere through a copy of it.
  */
 const effectiveSettings = Object.create(capturedSettings);
-let modalOpen = false;
 let capturedBuilds = 0;
 const capturedMethods = {
   avail: () => true,
@@ -204,6 +185,8 @@ const capturedMethods = {
       damage: 0,
     });
   },
+  // The yard's own answer to whether a ship is under way, mirroring `shipMoving(ships[id])`.
+  show: (id) => yard.ships[id]?.movement !== undefined,
 };
 const capturedHandle = {
   elementId: "shipPlans",
@@ -225,31 +208,31 @@ const capturedRegistry = {
   },
   capturedElementIds: () => ["shipPlans"],
 };
-const capturedDocument = {
-  querySelector: (selector) => {
-    if (selector === "#ship0loc") return { click: () => (modalOpen = true) };
-    if (
-      (selector === "#modalBox .shipDispatch button" ||
-        selector === "#modalBox .shipDispatch button.spc_red") &&
-      modalOpen
-    ) {
-      return {
-        click: () => {
-          yard.ships[0].location = "spc_red";
-          modalOpen = false;
-        },
-      };
-    }
-    if (selector === ".modal .modal-close")
-      return { click: () => (modalOpen = false) };
-    return null;
-  },
-  getElementById: (id) => (id === "modalBox" && modalOpen ? {} : null),
-};
-function createOuterControl(
-  controls = capturedRegistry,
-  document = capturedDocument,
-) {
+
+/**
+ * A stand-in for the game's own dispatch capture, which has its own file and its own tests against a
+ * transcription of `shipDispatchModal`. What this composition needs from it is the shape of the
+ * answer: the ship's live state moves, or it does not.
+ */
+function createDispatchStub(kind = "launched") {
+  const requests = [];
+  return {
+    requests,
+    blockedByPlayerModal: () => false,
+    dispatchShipyardShip(request) {
+      requests.push({ ...request });
+      if (kind !== "launched") return { kind };
+      const ship = yard.ships[request.index];
+      if (ship === undefined) return { kind: "no-destination" };
+      ship.movement = { to: request.region };
+      return { kind: "launched" };
+    },
+  };
+}
+
+let dispatch = createDispatchStub();
+let playerModalOpen = false;
+function createOuterControl(controls = capturedRegistry, stub = dispatch) {
   return createCapturedOuterFleetControl({
     rootState: {
       readRoot: () => root,
@@ -257,20 +240,15 @@ function createOuterControl(
       subscribeRootReplaced: () => () => {},
     },
     controls,
-    getDocument: () => document,
+    dispatch: {
+      blockedByPlayerModal: () => playerModalOpen,
+      dispatchShipyardShip: (request) => stub.dispatchShipyardShip(request),
+    },
     readSettings: () => effectiveSettings,
   });
 }
-const outerControl = createCapturedOuterFleetControl({
-  rootState: {
-    readRoot: () => root,
-    isReactivitySuppressed: () => false,
-    subscribeRootReplaced: () => () => {},
-  },
-  controls: capturedRegistry,
-  getDocument: () => capturedDocument,
-  readSettings: () => effectiveSettings,
-});
+const outerControl = createOuterControl();
+dispatch.requests.length = 0;
 const built = outerControl.autoFleetOuter();
 assert.equal(built.outcome.status, "succeeded");
 // A confirmed build is the one pass that moves the ship the next one will be: the composition ends
@@ -278,16 +256,56 @@ assert.equal(built.outcome.status, "succeeded");
 // the shipyard's own next-ship cost.
 assert.equal(built.shipTargetChanged, true);
 assert.equal(yard.ships.length, 1);
-assert.equal(yard.ships[0].location, "spc_dwarf");
-const dispatched = outerControl.autoFleetOuter();
-assert.equal(dispatched.outcome.status, "succeeded");
-// Dispatching a ship that was already built changes where it is, not what the yard builds next.
-assert.equal(dispatched.shipTargetChanged, false);
-assert.equal(modalOpen, true);
-const redispatched = outerControl.autoFleetOuter();
-assert.equal(redispatched.outcome.status, "succeeded");
-assert.equal(redispatched.shipTargetChanged, false);
-assert.equal(yard.ships[0].location, "spc_red");
+// Build and dispatch are one pass. The ship was sent the moment it was assembled.
+assert.equal(dispatch.requests.length, 1);
+assert.deepEqual(dispatch.requests[0], { index: 0, region: "spc_red" });
+assert.equal(capturedMethods.show(0), true);
+assert.equal(yard.ships[0].movement.to, "spc_red");
+// Sending a ship that was already built changes where it is, not what the yard builds next.
+assert.equal(outerControl.autoFleetOuter().shipTargetChanged, true);
+assert.equal(dispatch.requests.length, 2);
+yard.ships.length = 0;
+
+// The game's own destination closure ran and declined. The ship was still built — that is what the
+// build control confirmed — but nothing is reported as sent and no success is claimed.
+const decliningControl = createOuterControl(
+  capturedRegistry,
+  createDispatchStub("refused"),
+);
+const declined = decliningControl.autoFleetOuter();
+assert.equal(declined.outcome.status, "rejected");
+assert.equal(
+  declined.outcome.failure?.code,
+  "captured-outer-fleet-dispatch-declined",
+);
+assert.equal(yard.ships.length, 1);
+assert.equal(capturedMethods.show(0), false);
+yard.ships.length = 0;
+
+const unreachableControl = createOuterControl(
+  capturedRegistry,
+  createDispatchStub("unreachable"),
+);
+const unreachable = unreachableControl.autoFleetOuter();
+assert.equal(unreachable.outcome.status, "rejected");
+assert.equal(
+  unreachable.outcome.failure?.code,
+  "captured-outer-fleet-dispatch-unavailable",
+);
+yard.ships.length = 0;
+
+// A window the player owns is on screen. Building and sending are one pass, so a pass that could not
+// finish its own send must not start either half.
+const buildsBeforePlayerModal = capturedBuilds;
+dispatch.requests.length = 0;
+playerModalOpen = true;
+const playerModalResult = outerControl.autoFleetOuter();
+assert.equal(playerModalResult.outcome.status, "succeeded");
+assert.equal(playerModalResult.shipTargetChanged, false);
+assert.equal(capturedBuilds, buildsBeforePlayerModal);
+assert.equal(yard.ships.length, 0);
+assert.equal(dispatch.requests.length, 0);
+playerModalOpen = false;
 
 // Authority management must reach the existing policy before build execution. A corvette removes
 // two soldiers; at 100 Authority and a 99 target, the policy predicts 98 and must stand down.
@@ -295,104 +313,13 @@ const buildsBeforeAuthority = capturedBuilds;
 capturedSettings.authorityManage = true;
 capturedSettings.generalMinimumAuthority = 99;
 yard.ships.length = 0;
-const authorityControl = createCapturedOuterFleetControl({
-  rootState: {
-    readRoot: () => root,
-    isReactivitySuppressed: () => false,
-    subscribeRootReplaced: () => () => {},
-  },
-  controls: capturedRegistry,
-  getDocument: () => capturedDocument,
-  readSettings: () => effectiveSettings,
-});
-assert.equal(authorityControl.autoFleetOuter().outcome.status, "succeeded");
+assert.equal(createOuterControl().autoFleetOuter().outcome.status, "succeeded");
 assert.equal(capturedBuilds, buildsBeforeAuthority);
 assert.equal(yard.ships.length, 0);
 
-// A trigger can click successfully while the dispatch modal never mounts its destination. The
-// captured modal adapter must let FleetManagerOuter's retry budget advance instead of holding the
-// manager busy forever.
+// Missing root capture must stand down without touching the shipyard.
 capturedSettings.authorityManage = false;
 capturedSettings.generalMinimumAuthority = 0;
-yard.ships.length = 0;
-let stalledModalOpen = false;
-let stalledModalShip = null;
-let allowStalledDestination = false;
-const stalledDispatchTriggers = new Map([
-  ["#ship0loc", 0],
-  ["#ship1loc", 1],
-]);
-const stalledDocument = {
-  querySelector: (selector) => {
-    const shipIndex = stalledDispatchTriggers.get(selector);
-    if (shipIndex !== undefined) {
-      return {
-        click: () => {
-          stalledModalOpen = true;
-          stalledModalShip = shipIndex;
-        },
-      };
-    }
-    if (
-      (selector === "#modalBox .shipDispatch button" ||
-        selector === "#modalBox .shipDispatch button.spc_red") &&
-      stalledModalOpen &&
-      allowStalledDestination
-    ) {
-      return {
-        click: () => {
-          yard.ships[stalledModalShip].location = "spc_red";
-          stalledModalOpen = false;
-          stalledModalShip = null;
-        },
-      };
-    }
-    if (selector === ".modal .modal-close" && stalledModalOpen)
-      return {
-        click: () => {
-          stalledModalOpen = false;
-          stalledModalShip = null;
-        },
-      };
-    return null;
-  },
-  getElementById: (id) => (id === "modalBox" && stalledModalOpen ? {} : null),
-};
-const stalledControl = createCapturedOuterFleetControl({
-  rootState: {
-    readRoot: () => root,
-    isReactivitySuppressed: () => false,
-    subscribeRootReplaced: () => () => {},
-  },
-  controls: capturedRegistry,
-  getDocument: () => stalledDocument,
-  readSettings: () => effectiveSettings,
-});
-assert.equal(stalledControl.autoFleetOuter().outcome.status, "succeeded");
-assert.equal(yard.ships.length, 1);
-capturedSettings.fleetOuterShips = "none";
-for (let cycle = 0; cycle < 200; cycle++) {
-  stalledControl.autoFleetOuter();
-}
-assert.equal(yard.ships.length, 1);
-assert.equal(stalledModalOpen, false);
-assert.equal(stalledModalShip, null);
-capturedSettings.fleetOuterShips = "custom";
-assert.equal(stalledControl.autoFleetOuter().outcome.status, "succeeded");
-assert.equal(yard.ships.length, 2);
-capturedSettings.fleetOuterShips = "none";
-allowStalledDestination = true;
-assert.equal(stalledControl.autoFleetOuter().outcome.status, "succeeded");
-assert.equal(stalledModalOpen, true);
-assert.equal(stalledModalShip, 1);
-assert.equal(yard.ships[1].location, "spc_dwarf");
-assert.equal(stalledControl.autoFleetOuter().outcome.status, "succeeded");
-assert.equal(stalledModalOpen, false);
-assert.equal(stalledModalShip, null);
-assert.equal(yard.ships[1].location, "spc_red");
-assert.equal(stalledControl.autoFleetOuter().outcome.status, "succeeded");
-
-// Missing root capture must stand down without touching the shipyard.
 capturedSettings.fleetOuterShips = "custom";
 const buildsBeforeMissingRoot = capturedBuilds;
 const missingRootControl = createCapturedOuterFleetControl({
@@ -402,7 +329,7 @@ const missingRootControl = createCapturedOuterFleetControl({
     subscribeRootReplaced: () => () => {},
   },
   controls: capturedRegistry,
-  getDocument: () => capturedDocument,
+  dispatch,
   readSettings: () => effectiveSettings,
 });
 assert.equal(missingRootControl.autoFleetOuter().outcome.status, "succeeded");
@@ -435,23 +362,12 @@ const noTransitionRegistry = {
   },
   capturedElementIds: () => ["shipPlans"],
 };
-const noTransitionControl = createCapturedOuterFleetControl({
-  rootState: {
-    readRoot: () => root,
-    isReactivitySuppressed: () => false,
-    subscribeRootReplaced: () => () => {},
-  },
-  controls: noTransitionRegistry,
-  getDocument: () => capturedDocument,
-  readSettings: () => effectiveSettings,
-});
+const noTransitionControl = createOuterControl(noTransitionRegistry);
 assert.equal(noTransitionControl.autoFleetOuter().outcome.status, "stale");
 assert.equal(noTransitionBuilds, 1);
 assert.equal(yard.ships.length, 0);
 
 // Normal corvettes reserve two soldiers; Grenadier corvettes reserve one.
-capturedSettings.authorityManage = false;
-capturedSettings.generalMinimumAuthority = 0;
 capturedSettings.fleetOuterCrew = 99;
 delete root.race.high_pop;
 root.race.grenadier = false;
@@ -495,6 +411,7 @@ capturedSettings.authorityManage = false;
 capturedSettings.generalMinimumAuthority = 0;
 yard.blueprint.weapon = "laser";
 yard.ships.length = 0;
+dispatch.requests.length = 0;
 const originalSetVal = capturedMethods.setVal;
 const originalBuild = capturedMethods.build;
 capturedMethods.setVal = () => {};
@@ -514,14 +431,15 @@ assert.equal(
 );
 assert.equal(capturedBuilds, buildsBeforeStaleBlueprint);
 assert.equal(yard.ships.length, 0);
+assert.equal(dispatch.requests.length, 0);
 capturedMethods.setVal = originalSetVal;
 capturedMethods.build = originalBuild;
 yard.blueprint.weapon = "railgun";
 
 // Even with the requested blueprint selected, a new row that does not copy it
-// cannot be accepted or queued for dispatch.
+// cannot be accepted, dispatched or queued.
 yard.ships.length = 0;
-modalOpen = false;
+dispatch.requests.length = 0;
 const buildsBeforeWrongShip = capturedBuilds;
 capturedMethods.build = () => {
   capturedBuilds++;
@@ -540,11 +458,10 @@ assert.equal(wrongShipResult.shipTargetChanged, false);
 assert.equal(capturedBuilds, buildsBeforeWrongShip + 1);
 assert.equal(yard.ships.length, 1);
 assert.equal(yard.ships[0].class, "frigate");
-assert.equal(modalOpen, false);
+assert.equal(dispatch.requests.length, 0);
 capturedSettings.fleetOuterShips = "none";
 wrongShipControl.autoFleetOuter();
-assert.equal(modalOpen, false);
-assert.equal(yard.ships.length, 1);
+assert.equal(dispatch.requests.length, 0);
 capturedSettings.fleetOuterShips = "custom";
 capturedMethods.build = originalBuild;
 
@@ -622,9 +539,10 @@ assert.equal(yard.blueprint.weapon, "railgun");
 assert.equal(silentResult.shipTargetChanged, true);
 
 // The yard appends a same-tier corvette that does not copy the requested blueprint, so the
-// postcondition rejects the row and no dispatch is queued. `shipCosts()` still rescales by one more
+// postcondition rejects the row and nothing is sent. `shipCosts()` still rescales by one more
 // ship in this blueprint's tier.
 yard.ships.length = 0;
+dispatch.requests.length = 0;
 let staleRowBuilds = 0;
 const staleRowResult = createOuterControl(
   createRegistryWith({
@@ -641,7 +559,7 @@ const staleRowResult = createOuterControl(
 assert.equal(staleRowResult.outcome.status, "stale");
 assert.equal(staleRowBuilds, 1);
 assert.equal(yard.ships.length, 1);
-assert.equal(modalOpen, false);
+assert.equal(dispatch.requests.length, 0);
 assert.equal(staleRowResult.shipTargetChanged, true);
 yard.ships.length = 0;
 yard.blueprint.weapon = "railgun";
@@ -651,8 +569,10 @@ yard.blueprint.weapon = "railgun";
 // blueprint's class, so that pass moves nothing.
 
 // A disabled outer fleet only reports the blueprint it found; it moves nothing.
+dispatch.requests.length = 0;
 capturedSettings.fleetOuterShips = "none";
 assert.equal(createOuterControl().autoFleetOuter().shipTargetChanged, false);
+assert.equal(dispatch.requests.length, 0);
 capturedSettings.fleetOuterShips = "custom";
 
 // The flag reports one cycle. A pass that changed the yard must not make every later cycle report a

@@ -2,6 +2,7 @@
 
 import type { GameActivitySink } from "../ports/game-message-log.ts";
 import type { GameControlRegistry } from "../ports/game-control-registry.ts";
+import type { CapturedOuterFleetDispatchCapture } from "../ports/captured-outer-fleet-dispatch.ts";
 import type { GameRootStateSource } from "../ports/game-root-state.ts";
 import { createCapturedFleetControls } from "../adapters/evolve/combat/captured-fleet-controls.ts";
 import { createCapturedOuterFleetAdapter } from "../adapters/evolve/combat/captured-fleet-outer.ts";
@@ -11,7 +12,8 @@ import type { OuterFleetAutomationResult } from "../application/fleet-outer.ts";
 interface CapturedFleetOuterDependencies {
   readonly rootState: GameRootStateSource;
   readonly controls: GameControlRegistry;
-  readonly getDocument: () => unknown;
+  /** The game's own dispatch closure, reached without a dispatch window. */
+  readonly dispatch: CapturedOuterFleetDispatchCapture;
   readonly readSettings: () => unknown;
   readonly onActivity?: GameActivitySink;
 }
@@ -25,9 +27,8 @@ export function createCapturedOuterFleetControl(
     rootState: dependencies.rootState,
     controls: createCapturedFleetControls({
       controls: dependencies.controls,
-      getDocument: dependencies.getDocument,
     }),
-    getDocument: dependencies.getDocument,
+    dispatch: dependencies.dispatch,
     readSettings: dependencies.readSettings,
     ...(dependencies.onActivity === undefined
       ? {}

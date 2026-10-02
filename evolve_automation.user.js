@@ -21260,18 +21260,160 @@
     return Object.freeze({ reader, executor, readNeededShips });
   }
 
+  // src/adapters/evolve/combat/captured-outer-fleet-shipyard.ts
+  var CAPTURED_OUTER_FLEET_SHIPYARD_CONTROL = "shipPlans", CAPTURED_OUTER_FLEET_SHIPYARD_PANEL_ID = "dwarfShipYard", CAPTURED_OUTER_FLEET_DISPATCH_TRIGGER_METHOD = "pickDest", CAPTURED_OUTER_FLEET_UNDERWAY_METHOD = "show", TAB_SWAP_METHOD = "swapTab", OUTER_FLEET_SHIPYARD_METHODS = Object.freeze([
+    "build",
+    "drawShips",
+    "pickDest",
+    "powerText",
+    "show"
+  ]);
+  function capturedShipyardHost(document) {
+    if (!isRecord(document)) return;
+    let getElementById = readProperty(document, "getElementById");
+    if (typeof getElementById == "function") {
+      let owner = Reflect.apply(getElementById, document, [
+        CAPTURED_OUTER_FLEET_SHIPYARD_PANEL_ID
+      ]);
+      if (owner != null) return;
+    }
+    let createElement = readProperty(document, "createElement");
+    if (typeof createElement != "function") return;
+    let parent = readProperty(document, "body") ?? readProperty(document, "documentElement"), appendChild = readProperty(parent, "appendChild");
+    if (typeof appendChild != "function") return;
+    let element = Reflect.apply(createElement, document, ["div"]);
+    if (!isRecord(element)) return;
+    Reflect.set(element, "id", CAPTURED_OUTER_FLEET_SHIPYARD_PANEL_ID);
+    let style = readProperty(element, "style");
+    return isRecord(style) && Reflect.set(style, "display", "none"), Reflect.apply(appendChild, parent, [element]), { parent, element };
+  }
+  function removeCapturedShipyardHost(host) {
+    let removeChild = readProperty(host.parent, "removeChild");
+    try {
+      if (typeof removeChild == "function") {
+        Reflect.apply(removeChild, host.parent, [host.element]);
+        return;
+      }
+      let remove = readProperty(host.element, "remove");
+      typeof remove == "function" && Reflect.apply(remove, host.element, []);
+    } catch {
+    }
+  }
+  function capturedOuterFleetShipList(handle) {
+    let ships = readProperty(readProperty(handle.data, "s"), "ships");
+    return Array.isArray(ships) ? ships : void 0;
+  }
+  function shipyardControlGeneration(controls2) {
+    return controls2.resolve(CAPTURED_OUTER_FLEET_SHIPYARD_CONTROL)?.generation ?? 0;
+  }
+  function reboundShipyardControl(controls2, minimumGeneration) {
+    let control = controls2.resolve(CAPTURED_OUTER_FLEET_SHIPYARD_CONTROL);
+    return control !== void 0 && control.generation > minimumGeneration && OUTER_FLEET_SHIPYARD_METHODS.every(
+      (method) => control.methods.includes(method)
+    ) ? control : void 0;
+  }
+  function drawCapturedShipyard(controls2, synthesis, reportError) {
+    let subTabControl = SUB_TAB_CONTROLS[GOV_TABS_SETTING], route = subTabControl !== void 0 && controls2.resolve(subTabControl) !== void 0 ? { elementId: subTabControl, index: GOV_TAB_INDEX.dwarfShipYard } : { elementId: MAIN_TAB_CONTROL, index: MAIN_TAB_INDEX.civic }, result = synthesis.invoke({
+      elementId: route.elementId,
+      method: TAB_SWAP_METHOD,
+      args: [route.index]
+    });
+    return result.ok || reportError(
+      `${route.elementId} ${TAB_SWAP_METHOD} failed: ${result.reason} ${result.detail ?? ""}`
+    ), result.ok;
+  }
+  function createCapturedOuterFleetShipyard(dependencies) {
+    let reportError = dependencies.onEstablishError ?? (() => {
+    }), establishing = !1;
+    return Object.freeze({
+      control() {
+        return dependencies.controls.resolve(
+          CAPTURED_OUTER_FLEET_SHIPYARD_CONTROL
+        );
+      },
+      established(control) {
+        return control !== void 0 && OUTER_FLEET_SHIPYARD_METHODS.every(
+          (method) => control.methods.includes(method)
+        );
+      },
+      establish() {
+        let synthesis = dependencies.synthesis;
+        if (!(establishing || synthesis === void 0 || !synthesis.available) && dependencies.mountSuppression.available) {
+          establishing = !0;
+          try {
+            let settings = readProperty(
+              dependencies.rootState.readRoot(),
+              "settings"
+            );
+            if (!isRecord(settings)) return;
+            if (settings.tabLoad === !0) {
+              reportError(
+                "the game retains every tab, so neither route to the shipyard draw would run"
+              );
+              return;
+            }
+            let generationBefore = shipyardControlGeneration(
+              dependencies.controls
+            ), civicPanel = MAIN_TAB_PANELS[MAIN_TAB_INDEX.civic];
+            if (civicPanel === void 0) return;
+            let playerMainTab = settings[MAIN_TAB_SETTING], playerSubTab = settings[GOV_TABS_SETTING], playerAnimated = settings.animated, playerPanel = typeof playerMainTab == "number" ? MAIN_TAB_PANELS[playerMainTab] : void 0, workspace = dependencies.panels.open({
+              keep: playerPanel,
+              scratch: civicPanel
+            });
+            if (workspace === void 0) {
+              reportError(
+                "the Civic panel could not be put beyond the game's reach"
+              );
+              return;
+            }
+            let host = capturedShipyardHost(dependencies.getDocument());
+            if (host === void 0) {
+              workspace.release(), reportError(
+                `no scratch ${CAPTURED_OUTER_FLEET_SHIPYARD_PANEL_ID} could be stood up`
+              );
+              return;
+            }
+            let drew = !1;
+            try {
+              settings[MAIN_TAB_SETTING] = MAIN_TAB_INDEX.civic, settings[GOV_TABS_SETTING] = GOV_TAB_INDEX.dwarfShipYard, settings.animated = !1, dependencies.mountSuppression.withoutMounting(() => {
+                drew = drawCapturedShipyard(
+                  dependencies.controls,
+                  synthesis,
+                  reportError
+                );
+              });
+            } finally {
+              settings[MAIN_TAB_SETTING] = playerMainTab, settings[GOV_TABS_SETTING] = playerSubTab, settings.animated = playerAnimated, removeCapturedShipyardHost(host), workspace.release(), workspace.isIntact() || reportError("the workspace could not put the panels back");
+            }
+            if (!drew) {
+              reportError("the shipyard draw did not run");
+              return;
+            }
+            let control = reboundShipyardControl(
+              dependencies.controls,
+              generationBefore
+            );
+            return control === void 0 && reportError(
+              dependencies.controls.resolve(
+                CAPTURED_OUTER_FLEET_SHIPYARD_CONTROL
+              ) === void 0 ? `no ${CAPTURED_OUTER_FLEET_SHIPYARD_CONTROL} captured` : `${CAPTURED_OUTER_FLEET_SHIPYARD_CONTROL} was not rebound by this capture`
+            ), control;
+          } catch (error) {
+            reportError(String(error));
+            return;
+          } finally {
+            establishing = !1;
+          }
+        }
+      }
+    });
+  }
+
   // src/adapters/evolve/combat/captured-fleet-controls.ts
   var NOT_ACTIONABLE = Object.freeze({
     actionable: !1,
     builtIndex: null
   });
-  function fleetDocument2(value) {
-    return isRecord(value) && typeof value.querySelector == "function" ? value : void 0;
-  }
-  function liveShipList(handle) {
-    let yard = readProperty(handle.data, "s"), ships = readProperty(yard, "ships");
-    return Array.isArray(ships) ? ships : null;
-  }
   function methodValue(dependencies, elementId, method, args = []) {
     let handle = dependencies.controls.resolve(elementId);
     if (handle === void 0 || !handle.methods.includes(method))
@@ -21316,12 +21458,12 @@
           request.expectedBlueprint
         ))
           return NOT_ACTIONABLE;
-        let beforeList = liveShipList(handle);
-        if (beforeList === null) return NOT_ACTIONABLE;
+        let beforeList = capturedOuterFleetShipList(handle);
+        if (beforeList === void 0) return NOT_ACTIONABLE;
         let before = [...beforeList];
         if (!dependencies.controls.invoke(handle, "build").ok) return NOT_ACTIONABLE;
-        let after = liveShipList(handle);
-        if (after === null || after.length <= before.length)
+        let after = capturedOuterFleetShipList(handle);
+        if (after === void 0 || after.length <= before.length)
           return { actionable: !0, builtIndex: null };
         let newIndex = after.findIndex(
           (ship) => !before.includes(ship) && (request.expectedBlueprint === void 0 || matchesStringRecordFields(ship, request.expectedBlueprint))
@@ -21330,15 +21472,6 @@
           actionable: !0,
           builtIndex: newIndex >= 0 ? newIndex : request.expectedBlueprint === void 0 ? after.length - 1 : null
         };
-      },
-      dispatchTrigger(index) {
-        return `#ship${index}loc`;
-      },
-      dispatchShip(request) {
-        let destination = fleetDocument2(
-          dependencies.getDocument()
-        )?.querySelector(`#modalBox .shipDispatch button.${request.region}`);
-        return typeof destination?.click != "function" ? !1 : (destination.click(), !0);
       },
       addShips(request) {
         return step(dependencies, request, "add");
@@ -21407,7 +21540,7 @@
     });
   }
   function planOuterFleetCycle(input) {
-    return input.initialized ? input.busy === !0 ? status(null, null, "Outer fleet action pending") : input.mode === "none" ? status(null, null, "Ship construction is disabled") : input.mode === "manual" ? status(
+    return input.initialized ? input.playerModalOpen === !0 ? status(null, null, "Outer fleet action deferred") : input.mode === "none" ? status(null, null, "Ship construction is disabled") : input.mode === "manual" ? status(
       input.manualBlueprintAvailable ? "yard" : null,
       null,
       "Ships managed manually"
@@ -21515,7 +21648,7 @@
   }
 
   // src/adapters/evolve/combat/captured-fleet-outer.ts
-  var CAPTURED_OUTER_FLEET_ELEMENT = "shipPlans", CAPTURED_OUTER_FLEET_DISPATCH_ATTEMPTS = 30, CAPTURED_OUTER_FLEET_MODAL_WAITS = 3, CAPTURED_OUTER_FLEET_REGIONS = Object.freeze([
+  var CAPTURED_OUTER_FLEET_REGIONS = Object.freeze([
     "spc_moon",
     "spc_red",
     "spc_gas",
@@ -21643,7 +21776,7 @@
         continue;
       let index = CAPTURED_OUTER_FLEET_PARTS[type]?.indexOf(part) ?? -1;
       if (index < 0 || !controls2.isPartAvailable({
-        elementId: CAPTURED_OUTER_FLEET_ELEMENT,
+        elementId: CAPTURED_OUTER_FLEET_SHIPYARD_CONTROL,
         type,
         part,
         index
@@ -21891,37 +22024,8 @@
   function capturedOuterFleetDecisionMatches(expected, actual) {
     return expected.kind !== actual.kind || expected.blueprint !== actual.blueprint ? !1 : expected.kind === "outer-fleet-status" && actual.kind === "outer-fleet-status" ? expected.nextShipName === actual.nextShipName && expected.messageBeforeUpdate === actual.messageBeforeUpdate && expected.messageAfterUpdate === actual.messageAfterUpdate : expected.kind === "build-outer-fleet" && actual.kind === "build-outer-fleet" && expected.targetRegion === actual.targetRegion && expected.targetLocationName === actual.targetLocationName && expected.shipName === actual.shipName && expected.shipCrew === actual.shipCrew && expected.nextShipName === actual.nextShipName;
   }
-  function capturedOuterFleetModal(getDocument) {
-    let pending = null, document = () => {
-      let value = getDocument();
-      return isRecord(value) && typeof value.querySelector == "function" ? value : void 0;
-    }, close = () => document()?.querySelector(".modal .modal-close")?.click?.();
-    return Object.freeze({
-      isOpen() {
-        if (pending !== null)
-          return typeof document()?.querySelector(
-            "#modalBox .shipDispatch button"
-          )?.click == "function" ? (pending.action(), close(), pending = null, !0) : (pending.waits += 1, pending.waits >= CAPTURED_OUTER_FLEET_MODAL_WAITS ? (pending = null, close(), !1) : !0);
-        let modal = document()?.getElementById?.("modalBox");
-        return modal != null;
-      },
-      canOpen(triggerSelector) {
-        return document()?.querySelector(triggerSelector) !== null;
-      },
-      open(request) {
-        if (pending !== null || this.isOpen()) return;
-        let trigger = document()?.querySelector(request.triggerSelector);
-        typeof trigger?.click == "function" && (pending = { action: request.action, waits: 0 }, trigger.click());
-      },
-      isAwaitingScriptModal() {
-        return pending !== null;
-      },
-      captureScriptModal() {
-      }
-    });
-  }
   function createCapturedOuterFleetAdapter(dependencies) {
-    let gameModal = capturedOuterFleetModal(dependencies.getDocument), pendingDispatch = null, session = null, expectedDecision = null, shipTargetChanged = !1;
+    let session = null, expectedDecision = null, shipTargetChanged = !1;
     function shipTargetFingerprint(root) {
       let blueprint = readProperty(capturedOuterFleetYard(root), "blueprint");
       if (isRecord(blueprint))
@@ -21937,31 +22041,6 @@
     function storeBlueprint(token, raw, path, blueprints) {
       if (!isRecord(raw)) throw new TypeError(`${path} must be a record`);
       return blueprints.set(token, raw), raw;
-    }
-    function dispatchPendingShip(root) {
-      let pending = pendingDispatch;
-      if (pending === null) return;
-      let ship = capturedOuterFleetShips(root)[pending.index];
-      if (isRecord(ship) && ship.location === pending.region) {
-        pendingDispatch = null;
-        return;
-      }
-      if (!(ship === void 0 || !isRecord(ship)) && !gameModal.isOpen()) {
-        if (pending.attempts >= CAPTURED_OUTER_FLEET_DISPATCH_ATTEMPTS) {
-          pendingDispatch = null;
-          return;
-        }
-        pending.attempts += 1, gameModal.open({
-          triggerSelector: dependencies.controls.dispatchTrigger(pending.index),
-          title: `outer_shipyard_dispatch ${String(ship.name ?? "")}`,
-          action: () => {
-            dependencies.controls.dispatchShip({
-              index: pending.index,
-              region: pending.region
-            });
-          }
-        });
-      }
     }
     let reader = Object.freeze({
       readCycle() {
@@ -21982,8 +22061,7 @@
           }), planned2 = planOuterFleetCycle(input2);
           return expectedDecision = planned2.kind === "outer-fleet-status" ? planned2 : null, input2;
         }
-        dispatchPendingShip(root);
-        let yard = capturedOuterFleetYard(root), initialized = (finite(readProperty(readProperty(root, "tech"), "syndicate")) ?? 0) > 0 && yard !== void 0 && Object.hasOwn(yard, "blueprint") && dependencies.controls.isRendered(CAPTURED_OUTER_FLEET_ELEMENT), manualBlueprintAvailable = !1;
+        let yard = capturedOuterFleetYard(root), initialized = (finite(readProperty(readProperty(root, "tech"), "syndicate")) ?? 0) > 0 && yard !== void 0 && Object.hasOwn(yard, "blueprint") && dependencies.controls.isRendered(CAPTURED_OUTER_FLEET_SHIPYARD_CONTROL), manualBlueprintAvailable = !1;
         initialized && settings.fleetOuterShips === "manual" && (manualBlueprintAvailable = capturedOuterFleetBlueprintAvailable(
           root,
           dependencies.controls,
@@ -21996,7 +22074,11 @@
         ));
         let input = Object.freeze({
           initialized,
-          busy: pendingDispatch !== null,
+          // A dispatch is one synchronous call now, so a built ship is never left waiting between
+          // cycles. What can still be waiting is the player: the game's dispatch draw and its
+          // destination closures reach outside the window they were given, so a pass stands down
+          // entirely rather than build a ship it must not send.
+          playerModalOpen: dependencies.dispatch.blockedByPlayerModal(),
           mode: typeof settings.fleetOuterShips == "string" ? settings.fleetOuterShips : "none",
           manualBlueprintAvailable,
           configuredMinimumCrew: finite(settings.fleetOuterCrew) ?? 0
@@ -22224,7 +22306,7 @@
         if (type === "name" || typeof part != "string") continue;
         let index = CAPTURED_OUTER_FLEET_PARTS[type]?.indexOf(part) ?? -1;
         if (index < 0 || !dependencies.controls.setPart({
-          elementId: CAPTURED_OUTER_FLEET_ELEMENT,
+          elementId: CAPTURED_OUTER_FLEET_SHIPYARD_CONTROL,
           type,
           part,
           index
@@ -22234,30 +22316,40 @@
             "outer fleet part control was not invoked"
           );
       }
-      if (!dependencies.controls.hasShipPower(CAPTURED_OUTER_FLEET_ELEMENT))
+      if (!dependencies.controls.hasShipPower(CAPTURED_OUTER_FLEET_SHIPYARD_CONTROL))
         return rejected(
           "captured-outer-fleet-power-unavailable",
           "outer fleet blueprint has insufficient power"
         );
       let build = dependencies.controls.buildShip({
-        elementId: CAPTURED_OUTER_FLEET_ELEMENT,
+        elementId: CAPTURED_OUTER_FLEET_SHIPYARD_CONTROL,
         expectedBlueprint
       });
-      return build.actionable ? build.builtIndex === null ? stale(
-        "captured-outer-fleet-build-postcondition-failed",
-        "captured outer fleet build did not append the intended ship"
-      ) : (pendingDispatch = {
+      if (!build.actionable)
+        return rejected(
+          "captured-outer-fleet-build-not-invoked",
+          "outer fleet build control was not invoked"
+        );
+      if (build.builtIndex === null)
+        return stale(
+          "captured-outer-fleet-build-postcondition-failed",
+          "captured outer fleet build did not append the intended ship"
+        );
+      let dispatched = dependencies.dispatch.dispatchShipyardShip({
         index: build.builtIndex,
-        region: decision.targetRegion,
-        attempts: 0
-      }, dependencies.onActivity?.({
+        region: decision.targetRegion
+      });
+      return dispatched.kind !== "launched" ? dispatched.kind === "unreachable" ? rejected(
+        "captured-outer-fleet-dispatch-unavailable",
+        "the shipyard dispatch could not be reached"
+      ) : rejected(
+        "captured-outer-fleet-dispatch-declined",
+        dispatched.kind === "no-destination" ? `the shipyard offered no route from ${String(decision.targetLocationName)}` : `the game declined to send this ship to ${String(decision.targetLocationName)}`
+      ) : (dependencies.onActivity?.({
         message: `${decision.shipName} has been assembled, and dispatched to ${decision.targetLocationName}.`,
         color: "success",
         tags: ["combat"]
-      }), SUCCEEDED) : rejected(
-        "captured-outer-fleet-build-not-invoked",
-        "outer fleet build control was not invoked"
-      );
+      }), SUCCEEDED);
     }
     return Object.freeze({ reader, executor });
   }
@@ -22299,10 +22391,9 @@
     let adapter = createCapturedOuterFleetAdapter({
       rootState: dependencies.rootState,
       controls: createCapturedFleetControls({
-        controls: dependencies.controls,
-        getDocument: dependencies.getDocument
+        controls: dependencies.controls
       }),
-      getDocument: dependencies.getDocument,
+      dispatch: dependencies.dispatch,
       readSettings: dependencies.readSettings,
       ...dependencies.onActivity === void 0 ? {} : { onActivity: dependencies.onActivity }
     });
@@ -48867,6 +48958,242 @@ Only continue if you trust the source. Injected code:
     });
   }
 
+  // src/adapters/evolve/combat/captured-outer-fleet-dispatch.ts
+  var DISPATCH_CAPTURE_HOST_ID = "modalBox", ACTIVE_MODAL_SELECTOR = ".modal.is-active", DISPATCH_SYNTHETIC_OPEN_METHODS = ["$buefy.modal.open"], DISPATCH_LIST_CLASS = "shipDispatch", EMPTY_DESTINATIONS = Object.freeze([]);
+  function activePlayerModals(document) {
+    let querySelectorAll = readProperty(document, "querySelectorAll");
+    if (typeof querySelectorAll != "function") return;
+    let result;
+    try {
+      result = Reflect.apply(querySelectorAll, document, [ACTIVE_MODAL_SELECTOR]);
+    } catch {
+      return;
+    }
+    let length = readProperty(result, "length");
+    if (!(typeof length != "number" || !Number.isSafeInteger(length) || length < 0))
+      return Object.freeze(
+        Array.from(
+          { length },
+          (_, index) => readProperty(result, String(index))
+        ).filter((modal) => modal != null)
+      );
+  }
+  function dispatchCaptureHost(document) {
+    if (!isRecord(document)) return;
+    let querySelector = readProperty(document, "querySelector");
+    if (typeof querySelector == "function")
+      try {
+        if (Reflect.apply(querySelector, document, [
+          `#${DISPATCH_CAPTURE_HOST_ID}`
+        ]) != null)
+          return;
+      } catch {
+        return;
+      }
+    let createElement = readProperty(document, "createElement");
+    if (typeof createElement != "function") return;
+    let parent = readProperty(document, "body") ?? readProperty(document, "documentElement"), appendChild = readProperty(parent, "appendChild");
+    if (typeof appendChild != "function") return;
+    let element = Reflect.apply(createElement, document, ["div"]);
+    if (!isRecord(element)) return;
+    Reflect.set(element, "id", DISPATCH_CAPTURE_HOST_ID);
+    let style = readProperty(element, "style");
+    return isRecord(style) && Reflect.set(style, "display", "none"), Reflect.apply(appendChild, parent, [element]), { parent, element };
+  }
+  function removeDispatchCaptureHost(host) {
+    let removeChild = readProperty(host.parent, "removeChild");
+    try {
+      if (typeof removeChild == "function") {
+        Reflect.apply(removeChild, host.parent, [host.element]);
+        return;
+      }
+      let remove = readProperty(host.element, "remove");
+      typeof remove == "function" && Reflect.apply(remove, host.element, []);
+    } catch {
+    }
+  }
+  function dispatchFlushedTimers(pageWindow, reportError, run) {
+    if (!isRecord(pageWindow)) {
+      run();
+      return;
+    }
+    let originalSetInterval = readProperty(pageWindow, "setInterval");
+    if (typeof originalSetInterval != "function") {
+      run();
+      return;
+    }
+    let originalClearInterval = readProperty(pageWindow, "clearInterval"), immediateHandles = /* @__PURE__ */ new Set(), queued = [], flushing = !1, immediateSetInterval = function(...args) {
+      let [callback, ...rest] = args;
+      if (flushing || typeof callback != "function")
+        return Reflect.apply(originalSetInterval, this, args);
+      let handle = Object.freeze({ outerFleetDispatchTimer: !0 });
+      return immediateHandles.add(handle), queued.push({ callback, self: this, args: rest }), handle;
+    }, immediateClearInterval = function(...args) {
+      immediateHandles.delete(args[0]) || typeof originalClearInterval == "function" && Reflect.apply(originalClearInterval, this, args);
+    };
+    Reflect.set(pageWindow, "setInterval", immediateSetInterval), Reflect.set(pageWindow, "clearInterval", immediateClearInterval);
+    try {
+      run(), flushing = !0;
+      for (let round = 0; queued.length > 0 && round < 16; round += 1) {
+        let next = queued.shift();
+        if (next === void 0) break;
+        try {
+          Reflect.apply(next.callback, next.self, next.args);
+        } catch (error) {
+          reportError(`timer callback threw: ${String(error)}`);
+        }
+      }
+    } finally {
+      flushing = !1, readProperty(pageWindow, "setInterval") === immediateSetInterval && Reflect.set(pageWindow, "setInterval", originalSetInterval), readProperty(pageWindow, "clearInterval") === immediateClearInterval && Reflect.set(pageWindow, "clearInterval", originalClearInterval);
+    }
+  }
+  function dispatchButtonFor(node, region) {
+    let tag = readProperty(node, "tagName");
+    if (typeof tag != "string" || tag.toLowerCase() !== "button") return !1;
+    let classes = readProperty(node, "classList"), contains = readProperty(classes, "contains");
+    return typeof contains != "function" ? !1 : Reflect.apply(contains, classes, [region]) === !0;
+  }
+  function dispatchInterceptedListeners(pageWindow, region, reportError, run) {
+    let prototype = readProperty(
+      readProperty(pageWindow, "EventTarget"),
+      "prototype"
+    ), original = readProperty(prototype, "addEventListener");
+    if (!isRecord(prototype) || typeof original != "function")
+      return reportError("the page exposes no addEventListener to intercept"), run(), EMPTY_DESTINATIONS;
+    let claimed = [], intercepted = function(...args) {
+      let [type, listener] = args, result = Reflect.apply(original, this, args);
+      return type === "click" && typeof listener == "function" && dispatchButtonFor(this, region) && claimed.push({ node: this, listener }), result;
+    };
+    Reflect.set(prototype, "addEventListener", intercepted);
+    try {
+      run();
+    } finally {
+      readProperty(prototype, "addEventListener") === intercepted && Reflect.set(prototype, "addEventListener", original);
+    }
+    return Object.freeze(claimed);
+  }
+  function dispatchRowOfHost(candidate, host) {
+    let contains = readProperty(host.element, "contains");
+    if (typeof contains != "function" || Reflect.apply(contains, host.element, [candidate.node]) !== !0)
+      return !1;
+    let closest = readProperty(candidate.node, "closest");
+    if (typeof closest != "function") return !1;
+    let list = Reflect.apply(closest, candidate.node, [
+      `.${DISPATCH_LIST_CLASS}`
+    ]), listContains = readProperty(host.element, "contains");
+    return list != null && typeof listContains == "function" && Reflect.apply(listContains, host.element, [list]) === !0;
+  }
+  function shipUnderway(controls2, ship) {
+    let handle = controls2.resolve(CAPTURED_OUTER_FLEET_SHIPYARD_CONTROL);
+    if (handle === void 0) return !1;
+    let ships = capturedOuterFleetShipList(handle);
+    if (ships === void 0) return !1;
+    let index = ships.indexOf(ship);
+    if (index < 0) return !1;
+    let underway = controls2.invoke(
+      handle,
+      CAPTURED_OUTER_FLEET_UNDERWAY_METHOD,
+      [index]
+    );
+    return underway.ok && underway.value === !0;
+  }
+  var DISPATCH_NOOP_EVENT = Object.freeze({
+    preventDefault: () => {
+    },
+    stopPropagation: () => {
+    }
+  });
+  function createCapturedOuterFleetDispatch(dependencies) {
+    let reportError = dependencies.onCaptureError ?? (() => {
+    }), dispatching = !1;
+    return Object.freeze({
+      blockedByPlayerModal() {
+        let active = activePlayerModals(dependencies.getDocument());
+        return active !== void 0 && active.length > 0;
+      },
+      dispatchShipyardShip(request) {
+        let synthesis = dependencies.synthesis, handle = dependencies.controls.resolve(
+          CAPTURED_OUTER_FLEET_SHIPYARD_CONTROL
+        );
+        if (dispatching || synthesis === void 0 || !synthesis.available || !dependencies.mountSuppression.available || handle === void 0 || !handle.methods.includes(
+          CAPTURED_OUTER_FLEET_DISPATCH_TRIGGER_METHOD
+        ) || !handle.methods.includes(CAPTURED_OUTER_FLEET_UNDERWAY_METHOD))
+          return Object.freeze({ kind: "unreachable" });
+        let ship = capturedOuterFleetShipList(handle)?.[request.index];
+        if (ship === void 0)
+          return reportError(`no ship at ${request.index} in the yard's own list`), Object.freeze({ kind: "unreachable" });
+        dispatching = !0;
+        try {
+          let host = dispatchCaptureHost(dependencies.getDocument());
+          if (host === void 0)
+            return reportError(
+              `a real #${DISPATCH_CAPTURE_HOST_ID} already owns the id`
+            ), Object.freeze({ kind: "unreachable" });
+          let claimed = EMPTY_DESTINATIONS, destinations = EMPTY_DESTINATIONS, invoked = !1;
+          try {
+            dependencies.mountSuppression.withoutMounting(() => {
+              claimed = dispatchInterceptedListeners(
+                dependencies.getPageWindow(),
+                request.region,
+                reportError,
+                () => dispatchFlushedTimers(
+                  dependencies.getPageWindow(),
+                  reportError,
+                  () => {
+                    let result = synthesis.invoke({
+                      elementId: CAPTURED_OUTER_FLEET_SHIPYARD_CONTROL,
+                      method: CAPTURED_OUTER_FLEET_DISPATCH_TRIGGER_METHOD,
+                      args: [request.index],
+                      receiver: {
+                        noOpMethods: DISPATCH_SYNTHETIC_OPEN_METHODS
+                      }
+                    });
+                    invoked = result.ok, result.ok || reportError(
+                      `${CAPTURED_OUTER_FLEET_DISPATCH_TRIGGER_METHOD} failed: ${result.reason} ${result.detail ?? ""}`
+                    );
+                  }
+                )
+              ), destinations = claimed.filter(
+                (candidate) => dispatchRowOfHost(candidate, host)
+              );
+            });
+          } finally {
+            removeDispatchCaptureHost(host);
+          }
+          if (!invoked)
+            return reportError(
+              `the ${CAPTURED_OUTER_FLEET_DISPATCH_TRIGGER_METHOD} invocation did not complete`
+            ), Object.freeze({ kind: "unreachable" });
+          if (destinations.length === 0)
+            return reportError(
+              `the dispatch draw offered no destination for ${request.region}`
+            ), Object.freeze({ kind: "no-destination" });
+          if (destinations.length > 1)
+            return reportError(
+              `the dispatch draw bound ${destinations.length} destinations for ${request.region}`
+            ), Object.freeze({ kind: "unreachable" });
+          let destination = destinations[0];
+          if (destination === void 0)
+            return Object.freeze({ kind: "unreachable" });
+          try {
+            Reflect.apply(destination.listener, destination.node, [
+              DISPATCH_NOOP_EVENT
+            ]);
+          } catch (error) {
+            return reportError(`the destination closure threw: ${String(error)}`), Object.freeze({ kind: "unreachable" });
+          }
+          return Object.freeze({
+            kind: shipUnderway(dependencies.controls, ship) ? "launched" : "refused"
+          });
+        } catch (error) {
+          return reportError(String(error)), Object.freeze({ kind: "unreachable" });
+        } finally {
+          dispatching = !1;
+        }
+      }
+    });
+  }
+
   // src/domain/state-update.ts
   function computeMoneyWindow(incomes, rate) {
     let next = incomes.slice(1);
@@ -51572,6 +51899,13 @@ Only continue if you trust the source. Injected code:
       getDocument: () => document,
       getPageWindow: () => settingsHostWindow2,
       onCaptureError: (detail) => logError(`espionage operation capture: ${detail}`)
+    }), capturedOuterFleetDispatch = createCapturedOuterFleetDispatch({
+      controls: pageCapture2.controls,
+      synthesis: pageCapture2.synthesis,
+      mountSuppression: pageCapture2.mountSuppression,
+      getDocument: () => document,
+      getPageWindow: () => settingsHostWindow2,
+      onCaptureError: (detail) => logError(`outer fleet dispatch capture: ${detail}`)
     }), capturedEspionage = createCapturedEspionage({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
@@ -51979,6 +52313,14 @@ Only continue if you trust the source. Injected code:
       mountSuppression: pageCapture2.mountSuppression,
       panels,
       diagnostics
+    }), outerFleetShipyard = createCapturedOuterFleetShipyard({
+      rootState: pageCapture2.rootState,
+      controls: pageCapture2.controls,
+      synthesis: pageCapture2.synthesis,
+      mountSuppression: pageCapture2.mountSuppression,
+      panels,
+      getDocument: () => document,
+      onEstablishError: (detail) => logError(`outer fleet shipyard capture: ${detail}`)
     }), finishDiscovery = (key, label, satisfied, epoch, steps, options = void 0) => {
       if (!discoveryAttempts.shouldAttempt(key, epoch)) return !1;
       let result;
@@ -51994,6 +52336,19 @@ Only continue if you trust the source. Injected code:
       ), !1) : satisfied !== void 0 && !satisfied() ? (discoveryAttempts.recordFailure(key, epoch), logError(
         `${label} discovery drew its tab without capturing its control (${discoveryAttempts.describe(key, epoch)})`
       ), !1) : (discoveryAttempts.recordSuccess(key, epoch), !0);
+    }, finishEstablishment = (key, label, establish) => {
+      if (!discoveryAttempts.shouldAttempt(key)) return !1;
+      let established;
+      try {
+        established = establish();
+      } catch (error) {
+        return discoveryAttempts.recordFailure(key), logError(
+          `${label} capture threw: ${String(error)} (${discoveryAttempts.describe(key)})`
+        ), !1;
+      }
+      return established ? (discoveryAttempts.recordSuccess(key), !0) : (discoveryAttempts.recordFailure(key), logError(
+        `${label} capture drew its yard without capturing the control (${discoveryAttempts.describe(key)})`
+      ), !1);
     }, ensureHellGarrisonControls = () => {
       let satisfied = () => HELL_GARRISON_CONTROLS.some(
         (id) => pageCapture2.controls.resolve(id)?.methods.includes("patrolling")
@@ -52046,23 +52401,13 @@ Only continue if you trust the source. Injected code:
         draw.options
       ) && reportCapturedGarrisonGap();
     }, ensureOuterFleetControls = () => {
-      let satisfied = () => pageCapture2.controls.resolve("shipPlans")?.methods.includes("build") === !0;
-      if (satisfied()) return;
+      if (outerFleetShipyard.established(outerFleetShipyard.control())) return;
       let root = pageCapture2.rootState.readRoot(), tech = readProperty(root, "tech"), settings = readProperty(root, "settings"), shipyard = readProperty(readProperty(root, "space"), "shipyard"), syndicate = readProperty(tech, "syndicate");
-      if (!isRecord(shipyard) || !(typeof syndicate == "number" && syndicate > 0) || readProperty(settings, "showShipYard") !== !0 || pageCapture2.controls.resolve(MAIN_TAB_CONTROL) === void 0) return;
-      let govTabs = SUB_TAB_CONTROLS[GOV_TABS_SETTING];
-      govTabs !== void 0 && finishDiscovery("outer-fleet", "outer fleet", satisfied, void 0, [
-        Object.freeze({
-          setting: MAIN_TAB_SETTING,
-          control: MAIN_TAB_CONTROL,
-          index: MAIN_TAB_INDEX.civic
-        }),
-        Object.freeze({
-          setting: GOV_TABS_SETTING,
-          control: govTabs,
-          index: GOV_TAB_INDEX.dwarfShipYard
-        })
-      ]);
+      !isRecord(shipyard) || !(typeof syndicate == "number" && syndicate > 0) || readProperty(settings, "showShipYard") !== !0 || finishEstablishment(
+        "outer-fleet",
+        "outer fleet",
+        () => outerFleetShipyard.establish() !== void 0
+      );
     }, ensureMercenaryControls = () => {
       let satisfied = () => CAPTURED_MERCENARY_CONTROLS.some(
         (id) => pageCapture2.controls.resolve(id)?.methods.includes("hire")
@@ -52661,7 +53006,7 @@ Only continue if you trust the source. Injected code:
     }, outerFleet = createCapturedOuterFleetControl({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
-      getDocument: () => document,
+      dispatch: capturedOuterFleetDispatch,
       readSettings: () => settingsStore.readRaw(),
       onActivity
     });

@@ -28,10 +28,7 @@ import {
 import type { GameActivitySink } from "../../../ports/game-message-log.ts";
 import type { GameFleetControlsPort } from "../../../ports/game-fleet-controls.ts";
 import type { CommandExecutionOutcome } from "../../../domain/commands.ts";
-import type {
-  GameModalPort,
-  GameModalRequest,
-} from "../../../ports/game-modal.ts";
+import type { CapturedOuterFleetDispatchCapture } from "../../../ports/captured-outer-fleet-dispatch.ts";
 import type { GameRootStateSource } from "../../../ports/game-root-state.ts";
 import type {
   OuterFleetExecutor,
@@ -48,11 +45,12 @@ import {
   readProperty,
   type UnknownRecord,
 } from "../../validation.ts";
+import { CAPTURED_OUTER_FLEET_SHIPYARD_CONTROL } from "./captured-outer-fleet-shipyard.ts";
 
 interface CapturedOuterFleetAdapterDependencies {
   readonly rootState: GameRootStateSource;
   readonly controls: GameFleetControlsPort;
-  readonly getDocument: () => unknown;
+  readonly dispatch: CapturedOuterFleetDispatchCapture;
   readonly readSettings: () => unknown;
   readonly onActivity?: GameActivitySink;
 }
@@ -64,9 +62,6 @@ interface CapturedOuterFleetSession {
   readonly blueprints: Map<OuterFleetBlueprint, UnknownRecord>;
 }
 
-const CAPTURED_OUTER_FLEET_ELEMENT = "shipPlans";
-const CAPTURED_OUTER_FLEET_DISPATCH_ATTEMPTS = 30;
-const CAPTURED_OUTER_FLEET_MODAL_WAITS = 3;
 const CAPTURED_OUTER_FLEET_REGIONS = Object.freeze([
   "spc_moon",
   "spc_red",
@@ -242,7 +237,7 @@ function capturedOuterFleetBlueprintAvailable(
     if (
       index < 0 ||
       !controls.isPartAvailable({
-        elementId: CAPTURED_OUTER_FLEET_ELEMENT,
+        elementId: CAPTURED_OUTER_FLEET_SHIPYARD_CONTROL,
         type,
         part,
         index,
@@ -734,71 +729,12 @@ function capturedOuterFleetDecisionMatches(
   );
 }
 
-function capturedOuterFleetModal(getDocument: () => unknown): GameModalPort {
-  let pending: { readonly action: () => void; waits: number } | null = null;
-  const document = () => {
-    const value = getDocument();
-    return isRecord(value) && typeof value["querySelector"] === "function"
-      ? (value as unknown as {
-          querySelector(selector: string): { click?(): void } | null;
-          getElementById?(id: string): unknown;
-        })
-      : undefined;
-  };
-  const close = () =>
-    document()?.querySelector(".modal .modal-close")?.click?.();
-  return Object.freeze({
-    isOpen(): boolean {
-      if (pending !== null) {
-        const destination = document()?.querySelector(
-          "#modalBox .shipDispatch button",
-        );
-        if (typeof destination?.click === "function") {
-          pending.action();
-          close();
-          pending = null;
-          return true;
-        }
-        pending.waits += 1;
-        if (pending.waits >= CAPTURED_OUTER_FLEET_MODAL_WAITS) {
-          pending = null;
-          close();
-          return false;
-        }
-        return true;
-      }
-      const modal = document()?.getElementById?.("modalBox");
-      return modal !== null && modal !== undefined;
-    },
-    canOpen(triggerSelector: string): boolean {
-      return document()?.querySelector(triggerSelector) !== null;
-    },
-    open(request: GameModalRequest): void {
-      if (pending !== null || this.isOpen()) return;
-      const trigger = document()?.querySelector(request.triggerSelector);
-      if (typeof trigger?.click !== "function") return;
-      pending = { action: request.action, waits: 0 };
-      trigger.click();
-    },
-    isAwaitingScriptModal(): boolean {
-      return pending !== null;
-    },
-    captureScriptModal(): void {},
-  });
-}
-
 export function createCapturedOuterFleetAdapter(
   dependencies: CapturedOuterFleetAdapterDependencies,
 ): {
   readonly reader: OuterFleetReader;
   readonly executor: OuterFleetExecutor;
 } {
-  const gameModal = capturedOuterFleetModal(dependencies.getDocument);
-  let pendingDispatch: {
-    index: number;
-    region: string;
-    attempts: number;
-  } | null = null;
   let session: CapturedOuterFleetSession | null = null;
   let expectedDecision: Readonly<OuterFleetDecision> | null = null;
   let shipTargetChanged = false;
@@ -837,33 +773,6 @@ export function createCapturedOuterFleetAdapter(
     return raw;
   }
 
-  function dispatchPendingShip(root: UnknownRecord): void {
-    const pending = pendingDispatch;
-    if (pending === null) return;
-    const ship = capturedOuterFleetShips(root)[pending.index];
-    if (isRecord(ship) && ship["location"] === pending.region) {
-      pendingDispatch = null;
-      return;
-    }
-    if (ship === undefined || !isRecord(ship)) return;
-    if (gameModal.isOpen()) return;
-    if (pending.attempts >= CAPTURED_OUTER_FLEET_DISPATCH_ATTEMPTS) {
-      pendingDispatch = null;
-      return;
-    }
-    pending.attempts += 1;
-    gameModal.open({
-      triggerSelector: dependencies.controls.dispatchTrigger(pending.index),
-      title: `outer_shipyard_dispatch ${String(ship["name"] ?? "")}`,
-      action: () => {
-        dependencies.controls.dispatchShip({
-          index: pending.index,
-          region: pending.region,
-        });
-      },
-    });
-  }
-
   const reader: OuterFleetReader = Object.freeze({
     readCycle(): OuterFleetCycleInput {
       session = null;
@@ -892,14 +801,13 @@ export function createCapturedOuterFleetAdapter(
           planned.kind === "outer-fleet-status" ? planned : null;
         return input;
       }
-      dispatchPendingShip(root);
       const yard = capturedOuterFleetYard(root);
       const initialized =
         (finite(readProperty(readProperty(root, "tech"), "syndicate")) ?? 0) >
           0 &&
         yard !== undefined &&
         Object.hasOwn(yard, "blueprint") &&
-        dependencies.controls.isRendered(CAPTURED_OUTER_FLEET_ELEMENT);
+        dependencies.controls.isRendered(CAPTURED_OUTER_FLEET_SHIPYARD_CONTROL);
       let manualBlueprintAvailable = false;
       if (initialized && settings["fleetOuterShips"] === "manual") {
         manualBlueprintAvailable = capturedOuterFleetBlueprintAvailable(
@@ -915,7 +823,11 @@ export function createCapturedOuterFleetAdapter(
       }
       const input = Object.freeze({
         initialized,
-        busy: pendingDispatch !== null,
+        // A dispatch is one synchronous call now, so a built ship is never left waiting between
+        // cycles. What can still be waiting is the player: the game's dispatch draw and its
+        // destination closures reach outside the window they were given, so a pass stands down
+        // entirely rather than build a ship it must not send.
+        playerModalOpen: dependencies.dispatch.blockedByPlayerModal(),
         mode:
           typeof settings["fleetOuterShips"] === "string"
             ? settings["fleetOuterShips"]
@@ -1278,7 +1190,7 @@ export function createCapturedOuterFleetAdapter(
       if (
         index < 0 ||
         !dependencies.controls.setPart({
-          elementId: CAPTURED_OUTER_FLEET_ELEMENT,
+          elementId: CAPTURED_OUTER_FLEET_SHIPYARD_CONTROL,
           type,
           part,
           index,
@@ -1290,13 +1202,15 @@ export function createCapturedOuterFleetAdapter(
         );
       }
     }
-    if (!dependencies.controls.hasShipPower(CAPTURED_OUTER_FLEET_ELEMENT))
+    if (
+      !dependencies.controls.hasShipPower(CAPTURED_OUTER_FLEET_SHIPYARD_CONTROL)
+    )
       return rejected(
         "captured-outer-fleet-power-unavailable",
         "outer fleet blueprint has insufficient power",
       );
     const build = dependencies.controls.buildShip({
-      elementId: CAPTURED_OUTER_FLEET_ELEMENT,
+      elementId: CAPTURED_OUTER_FLEET_SHIPYARD_CONTROL,
       expectedBlueprint,
     });
     if (!build.actionable)
@@ -1309,11 +1223,25 @@ export function createCapturedOuterFleetAdapter(
         "captured-outer-fleet-build-postcondition-failed",
         "captured outer fleet build did not append the intended ship",
       );
-    pendingDispatch = {
+    // One synchronous call, in the same task as the build that produced the ship. There is no
+    // window to wait for and nothing to retry: whatever the game's own destination closure decides
+    // is the answer, and it is judged from the yard's own report of the ship afterwards.
+    const dispatched = dependencies.dispatch.dispatchShipyardShip({
       index: build.builtIndex,
       region: decision.targetRegion,
-      attempts: 0,
-    };
+    });
+    if (dispatched.kind !== "launched")
+      return dispatched.kind === "unreachable"
+        ? rejected(
+            "captured-outer-fleet-dispatch-unavailable",
+            "the shipyard dispatch could not be reached",
+          )
+        : rejected(
+            "captured-outer-fleet-dispatch-declined",
+            dispatched.kind === "no-destination"
+              ? `the shipyard offered no route from ${String(decision.targetLocationName)}`
+              : `the game declined to send this ship to ${String(decision.targetLocationName)}`,
+          );
     dependencies.onActivity?.({
       message: `${decision.shipName} has been assembled, and dispatched to ${decision.targetLocationName}.`,
       color: "success",

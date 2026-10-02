@@ -8,6 +8,9 @@
  * gives it, and name the ship part with its position in the panel's option
  * list for the availability checks. How many component calls a count takes,
  * and which methods perform them, is this port's business.
+ *
+ * Sending a built ship onward is not here: the game offers no method for it, only a ship row's
+ * dispatch closure, so that lives behind its own capture rather than as a panel method call.
  */
 export interface GameFleetPartRequest {
   /** The element the game gives this panel's control. */
@@ -62,20 +65,6 @@ export interface GameFleetBuildResult {
   readonly builtIndex: number | null;
 }
 
-/**
- * Sending one built ship to a region. The game offers no direct call for this:
- * a ship row opens a dispatch window listing its reachable regions, and the
- * region's own control performs the move. So a dispatch is a modal interaction,
- * not a method call, and the caller drives it through the modal port.
- */
-export interface GameFleetDispatchRequest {
-  /** The ship's position in the shipyard's own list. */
-  readonly index: number;
-
-  /** The region the ship is sent to, as the game names it. */
-  readonly region: string;
-}
-
 export interface GameFleetControlsPort {
   /** Whether the game currently renders the panel's control. */
   isRendered(elementId: string): boolean;
@@ -103,15 +92,6 @@ export interface GameFleetControlsPort {
    * shipyard and is sent onward with `dispatchShip`.
    */
   buildShip(request: GameFleetBuildRequest): GameFleetBuildResult;
-
-  /** The control that opens the dispatch window for the ship at `index`. */
-  dispatchTrigger(index: number): string;
-
-  /**
-   * Sends the ship to the region from inside its open dispatch window. False
-   * means the window did not offer that destination.
-   */
-  dispatchShip(request: GameFleetDispatchRequest): boolean;
 
   /**
    * Moves ships from the gateway to the region, one click step at a time.
