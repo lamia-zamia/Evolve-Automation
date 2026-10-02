@@ -2,7 +2,14 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
 import { createCapturedFleetControls } from "../src/adapters/evolve/combat/captured-fleet-controls.ts";
+import { createCapturedOuterFleetAdapter } from "../src/adapters/evolve/combat/captured-fleet-outer.ts";
 import { parseShipyardPartCatalog } from "../src/adapters/evolve/combat/captured-outer-fleet-parts.ts";
+import {
+  planOuterFleetBlueprint,
+  planOuterFleetCandidate,
+  planOuterFleetCycle,
+  planOuterFleetTarget,
+} from "../src/domain/combat/fleet-outer.ts";
 import { createCapturedOuterFleetControl } from "../src/bootstrap/captured-fleet-outer-control.ts";
 import { element, parseTestMarkup } from "./dom-fixture.mjs";
 
@@ -1268,13 +1275,107 @@ function resetOuterPass() {
 
 // A crew requirement the compatibility table cannot give stands the pass down rather than throwing
 // out of ordinary planning: a hull upstream has since added is an ordinary state, not a fault.
+//
+// The hull has to be one the *yard* offers, or this never reaches the crew question at all. Shipyard
+// and catalogue authority are the yard's own answers, so a preset naming a hull the yard never
+// rendered is refused earlier — as "no suitable blueprint", which says nothing about crew. A fictional
+// future hull is the way past that: it passes every authority the way any unlocked hull does, and the
+// only answer left missing is the one this table is pinned to.
 {
   resetOuterPass();
   syndicate = createSyndicateStub({ spc_red: { p: 0.7319, s: 47 } });
-  capturedSettings.fleet_outer_class = "corsair";
-  const unknownHull = createOuterControl().autoFleetOuter();
-  assert.equal(unknownHull.outcome.status, "succeeded");
+  capturedSettings.fleet_outer_class = "future_cruiser";
+  // `setVal` writes the live blueprint, so an unwritten class is the proof nothing was written at all.
+  // Earlier cases have left the yard wearing a design of their own making, which is why this is the
+  // class the yard holds now rather than a literal.
+  const classBefore = yard.blueprint.class;
+  const futureCatalog = shipyardCatalog({
+    ...SHIP_PARTS,
+    class: [...SHIP_PARTS.class, "future_cruiser"],
+  });
+  const catalogSource = { catalog: () => futureCatalog };
+  const dependencies = {
+    rootState: {
+      readRoot: () => root,
+      isReactivitySuppressed: () => false,
+      subscribeRootReplaced: () => () => {},
+    },
+    controls: capturedRegistry,
+    costs,
+    parts: catalogSource,
+    dispatch: {
+      blockedByPlayerModal: () => playerModalOpen,
+      dispatchShipyardShip: (request) => dispatch.dispatchShipyardShip(request),
+    },
+    syndicate,
+    readSettings: () => effectiveSettings,
+  };
+
+  // Walked by hand because the status a crew-unavailable pass returns is not otherwise observable:
+  // the control reports it as an ordinary success, which is indistinguishable from a build unless the
+  // side effects are checked. What each phase produced is the point.
+  const adapter = createCapturedOuterFleetAdapter({
+    ...dependencies,
+    controls: createCapturedFleetControls({
+      controls: capturedRegistry,
+      parts: catalogSource,
+    }),
+  });
+  const cycle = planOuterFleetCycle(adapter.reader.readCycle());
+  assert.equal(cycle.kind, "select-target");
+  const target = planOuterFleetTarget(
+    cycle,
+    adapter.reader.readTargeting(cycle),
+  );
+  assert.equal(target.kind, "select-blueprint");
+  const candidate = planOuterFleetBlueprint(
+    adapter.reader.readBlueprint(target),
+  );
+  assert.equal(candidate.kind, "check-candidate");
+  const candidateInput = adapter.reader.readCandidate(candidate);
+  // The pinned table has no entry for this hull, and an unknown hull is not a hull it may crew at zero.
+  assert.equal(candidateInput.shipCrew, null);
+  const readiness = planOuterFleetCandidate(candidateInput);
+  assert.equal(readiness.kind, "outer-fleet-status");
+  assert.equal(
+    readiness.messageAfterUpdate,
+    "Ship crew requirement unavailable; ship construction paused",
+  );
+  // Nothing was written, so there is no earlier message to show and no blueprint it was written from.
+  assert.equal(readiness.messageBeforeUpdate, null);
+  assert.equal(readiness.blueprint, "fighter");
+
+  // And the decision that status stands for is executed, not merely planned: nothing is priced,
+  // nothing is written, nothing is built and nothing is sent.
+  assert.equal(adapter.executor.execute(readiness).status, "succeeded");
+  assert.deepEqual(
+    costs.requests.filter(([method]) => method === "price"),
+    [],
+  );
+  assert.deepEqual(dispatch.requests, []);
+  assert.equal(capturedBuilds, 0);
   assert.equal(yard.ships.length, 0);
+  assert.equal(yard.blueprint.class, classBefore);
+
+  // The same hull through the production composition, which must stand down the same way rather than
+  // throw out of ordinary planning.
+  resetOuterPass();
+  const unknownHull = createOuterControl(
+    capturedRegistry,
+    dispatch,
+    costs,
+    catalogSource,
+  ).autoFleetOuter();
+  assert.equal(unknownHull.outcome.status, "succeeded");
+  assert.equal(unknownHull.shipTargetChanged, false);
+  assert.deepEqual(
+    costs.requests.filter(([method]) => method === "price"),
+    [],
+  );
+  assert.deepEqual(dispatch.requests, []);
+  assert.equal(capturedBuilds, 0);
+  assert.equal(yard.ships.length, 0);
+  assert.equal(yard.blueprint.class, classBefore);
   capturedSettings.fleet_outer_class = "corvette";
 }
 

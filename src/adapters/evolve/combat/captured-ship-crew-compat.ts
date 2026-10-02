@@ -1,12 +1,15 @@
 /**
  * A pinned compatibility transcription of DeadSpace's `ships.js:shipCrewSize(ship)`.
  *
- * **This is not captured mechanics authority.** `shipCrewSize` is an export of a module the shipped
- * build folds into a single esbuild IIFE, and it has no read-only display anywhere in the game: its
- * five call sites only move `global.civic.garrison.crew`. So it cannot be imported, observed, or
- * asked for, and a transcription is the only way to answer "how many crew does this hull need".
- * Every other Truepath mechanic in this feature was removed for exactly the reason that this one is
- * still here; see `docs/feature-backlog.md` for the difference.
+ * **This is not captured mechanics authority, and the reason is reachability rather than principle.**
+ * The shipped game bundles every module into one esbuild IIFE, so it has no runtime module graph and
+ * `shipCrewSize` cannot be imported, observed, or asked for — and unlike Syndicate it has no read-only
+ * display anywhere in the game, because its five call sites only move `global.civic.garrison.crew`.
+ * Syndicate is read from the running game itself, through the `#<region>synd` binding
+ * `src/space.js` draws behind `syndicateActive()`; see
+ * `src/adapters/evolve/captured-syndicate-mechanics.ts`. There is no equivalent surface for crew, so
+ * a transcription is the only way to answer "how many crew does this hull need", and this file is the
+ * last of the Truepath mechanics that needed one.
  *
  * What makes the transcription safe rather than merely duplicated:
  *

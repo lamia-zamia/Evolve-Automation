@@ -206,8 +206,8 @@ function readAuthorityInput(
   const display = readProperty(authority, "display");
   if (display !== undefined && typeof display !== "boolean") return undefined;
   if (display === false) return unavailableInput().authority;
-  // A 1.4.x save migrated into 1.5.0 can carry `city.morale.current` and `.potential` as NaN (see
-  // the open question in docs/deadspace-port.md). Authority is the only part of the cycle that
+  // A 1.4.x save migrated into 1.5.0 can carry `city.morale.current` and `.potential` as NaN, so
+  // morale is validated rather than used as a number. Authority is the only part of the cycle that
   // needs morale, so an unreadable figure stands that part down rather than taking every job with
   // it — the same answer a locked Authority resource gets above.
   const morale = readCapturedMorale(root);

@@ -21,7 +21,7 @@
  * (`resource.Demonic_Essence.amount >= 1`, `interstellar.dyson_sphere.count >= 100`,
  * `eden.fortress.armory < 100`) and enumerating them here would be a list that rots against
  * upstream. The cache that consults this reader carries its own maximum age for exactly that
- * residue — see [docs/discovery-invalidation.md](../../../docs/discovery-invalidation.md).
+ * residue — see `discovery-scope-cache.ts`.
  */
 
 import type { GameRootStateSource } from "../../ports/game-root-state.ts";

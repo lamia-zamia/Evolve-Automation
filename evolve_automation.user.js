@@ -49634,8 +49634,12 @@ Only continue if you trust the source. Injected code:
     return `${region}synd`;
   }
   function syndicateOperating(root) {
-    let tech = readProperty(root, "tech"), race = readProperty(root, "race"), space = readProperty(root, "space"), syndicate = readProperty(space, "syndicate");
-    return (finite(readProperty(tech, "shadow")) ?? 0) >= 5 || readProperty(tech, "isolation") || (finite(readProperty(tech, "syndicate")) ?? 0) <= 0 || readProperty(race, "truepath") !== !0 ? !1 : isRecord(syndicate);
+    let tech = readProperty(root, "tech"), race = readProperty(root, "race"), space = readProperty(root, "space");
+    for (let container of [tech, race, space])
+      if (container !== void 0 && !isRecord(container))
+        return;
+    let shadow = readProperty(tech, "shadow");
+    return !(shadow && (finite(shadow) ?? 0) >= 5 || readProperty(tech, "isolation") || !readProperty(tech, "syndicate") || !readProperty(race, "truepath") || !readProperty(space, "syndicate"));
   }
   function createCapturedSyndicateMechanics(dependencies) {
     let { rootState, controls: controls2, discovery, mechanics } = dependencies;
@@ -49663,7 +49667,9 @@ Only continue if you trust the source. Injected code:
       read(region) {
         let root = rootState.readRoot();
         if (!isRecord(root)) return { kind: "absent" };
-        if (!syndicateOperating(root))
+        let operating = syndicateOperating(root);
+        if (operating === void 0) return { kind: "absent" };
+        if (!operating)
           return {
             kind: "value",
             value: Object.freeze({ p: 1, s: 0 })
@@ -49672,10 +49678,10 @@ Only continue if you trust the source. Injected code:
         controls2.resolve(control) === void 0 && captureReadout(region);
         let handle = controls2.resolve(control);
         if (handle === void 0) return { kind: "absent" };
-        let scan = mechanics.readRoundedValues(() => {
-          controls2.invoke(handle, SYNDICATE_SCAN_METHOD, [region]);
+        let invocation, scan = mechanics.readRoundedValues(() => {
+          invocation = controls2.invoke(handle, SYNDICATE_SCAN_METHOD, [region]);
         });
-        return scan.kind === "absent" ? { kind: "absent" } : scan.kind === "invalid" ? { kind: "invalid" } : readSyndicateSample(scan.value);
+        return scan.kind === "absent" ? { kind: "absent" } : scan.kind === "invalid" ? { kind: "invalid" } : invocation?.ok !== !0 ? { kind: "invalid" } : readSyndicateSample(scan.value);
       }
     });
   }

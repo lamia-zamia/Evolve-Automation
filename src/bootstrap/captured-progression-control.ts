@@ -299,8 +299,8 @@ export function createCapturedProgressionControl(
     diagnostics,
   });
   // Which panel samples may be reused, and for how long. Every entry here is a `loadTab` draw that
-  // was otherwise paid for on every tick to re-derive an answer that had not moved; the scopes and
-  // what invalidates each are in docs/discovery-invalidation.md.
+  // was otherwise paid for on every tick to re-derive an answer that had not moved;
+  // `discovery-scope-cache.ts` owns the age policy that bounds a stale one.
   const epoch = createProgressionEpochReader(rootState);
   const buildCapacity =
     dependencies.keyboard === undefined || dependencies.keyState === undefined

@@ -20,121 +20,7 @@ import {
   createChromiumRunner,
   parseSave,
 } from "../tools/chromium-evolve-runner.mjs";
-
-/**
- * A disposable True Path save.
- *
- * No retained save reaches the Syndicate — `docs/feature-backlog.md` records that a Fleet cycle has
- * never had one — so the state this characterization needs is written into a copy of a real save
- * rather than invented wholesale. Only *state* is added: which regions the Syndicate operates in, how
- * much piracy each holds, and one armed hull. Not one line of the calculation lives here, which is the
- * whole point: every number this check reads is computed by the game at runtime.
- */
-function truepathSave(base) {
-  const state = base.save ?? base;
-  state.race = { ...state.race, truepath: true, species: "human" };
-  state.tech = {
-    ...state.tech,
-    syndicate: 1,
-    eris: 1,
-    titan: 3,
-    enceladus: 2,
-    triton: 2,
-    makemake: 1,
-    outer: 0,
-    sensors: 2,
-    syard_class: 6,
-    syard_power: 4,
-    syard_weapon: 5,
-    syard_armor: 2,
-    syard_engine: 5,
-    syard_sensor: 3,
-  };
-  state.space = {
-    ...state.space,
-    syndicate: {
-      spc_moon: 500,
-      spc_red: 400,
-      spc_belt: 350,
-      spc_gas: 300,
-      spc_gas_moon: 260,
-      spc_titan: 200,
-      spc_enceladus: 180,
-      spc_triton: 160,
-      spc_makemake: 140,
-      spc_eris: 120,
-    },
-    operating_base: { on: 0 },
-    sam: { on: 0 },
-    fob: { on: 0 },
-    shipyard: {
-      blueprint: {
-        name: "Nomad",
-        class: "destroyer",
-        armor: "steel",
-        weapon: "railgun",
-        engine: "ion",
-        power: "diesel",
-        sensor: "radar",
-        special: "none",
-      },
-      // Modern upstream stores `ship.location` as a point object, which is what `shipDockedAt`
-      // reads. A ship written as a bare region string is the shape the deleted replica assumed, and
-      // is what this check contrasts against.
-      ships: [
-        {
-          name: "Nomad",
-          class: "destroyer",
-          armor: "steel",
-          weapon: "gauss",
-          engine: "ion",
-          power: "diesel",
-          sensor: "radar",
-          special: "none",
-          location: { id: "spc_moon" },
-          damage: 0,
-          fueled: true,
-        },
-      ],
-      sort: false,
-      expand: false,
-    },
-  };
-  // `syndicate()` reads the rival government's hostility, so a save that has never discovered a
-  // government has no `gov3` to read and the game's own function throws. Supplying the record is
-  // state, not arithmetic: the value is only ever compared against the game's own thresholds.
-  state.civic = {
-    ...state.civic,
-    foreign: {
-      ...(state.civic?.foreign ?? {}),
-      gov3: { hstl: 50 },
-    },
-  };
-  state.settings = {
-    ...state.settings,
-    tabLoad: false,
-    civTabs: 1,
-    spaceTabs: 1,
-    showSpace: true,
-    showOuter: true,
-    space: {
-      moon: true,
-      red: true,
-      belt: true,
-      gas: true,
-      gas_moon: true,
-      titan: true,
-      enceladus: true,
-      triton: true,
-      makemake: true,
-      eris: true,
-      dwarf: true,
-      home: true,
-      hell: true,
-    },
-  };
-  return base;
-}
+import { truepathSave } from "./captured-syndicate-live-save.mjs";
 
 const save = truepathSave(
   parseSave(
@@ -238,6 +124,16 @@ try {
               weapon: ships[0]?.weapon,
             }
           : { count: 0 };
+        // The representation the pinned game itself writes, on the live root the read below consults.
+        // Checked before the first read rather than inferred from one: a gate that demanded the
+        // boolean `true` would answer "inactive" here, and every assertion below would then be
+        // asserting the native default instead of the game's calculation.
+        const truepath = root?.race?.truepath;
+        if (truepath !== 1) {
+          return {
+            error: `captured race.truepath is ${String(truepath)}, not the 1 the pinned game writes`,
+          };
+        }
         const baseline = read(region);
         const baselinePiracy = syndicate[region];
 
@@ -336,6 +232,7 @@ try {
         return {
           region,
           regions,
+          truepath,
           shipyard,
           baseline,
           observation,
@@ -390,7 +287,9 @@ try {
     assert.equal(facts.error, undefined, facts.error);
     process.stdout.write(`${JSON.stringify({ nativeSyndicate: facts })}\n`);
 
-    // The answer is a real sample, not a refusal and not a stand-in.
+    // The answer is a real sample, not a refusal and not a stand-in, read over the representation the
+    // pinned game writes.
+    assert.equal(facts.truepath, 1);
     assert.equal(facts.baseline.kind, "value", JSON.stringify(facts.baseline));
     assert.ok(Number.isFinite(facts.baseline.value.p));
     assert.ok(Number.isFinite(facts.baseline.value.s));

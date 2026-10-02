@@ -50,10 +50,16 @@ function assertPrototypeRestored(before, label) {
 /**
  * A page whose Syndicate is operating, which is the only state in which the game draws a readout at
  * all. One key per clause of `syndicateActive()` that a case has to switch off individually.
+ *
+ * `race.truepath` is `1` and not `true`, because that is what the pinned game writes:
+ * `truepath.js` assigns `global.race['truepath'] = 1` when the path is chosen. `syndicateActive()`
+ * tests it for truth and nothing else, so a gate that demanded the boolean would report every real
+ * True Path save as having no Syndicate at all — and every case below would still pass, because the
+ * fixture is where the value comes from.
  */
 function operatingRoot(overrides = {}) {
   return {
-    race: { truepath: true, ...overrides.race },
+    race: { truepath: 1, ...overrides.race },
     tech: { syndicate: 1, ...overrides.tech },
     space: {
       syndicate: { spc_red: 600 },
@@ -61,6 +67,20 @@ function operatingRoot(overrides = {}) {
       ...overrides.space,
     },
   };
+}
+
+/** The same page with `race.truepath` absent entirely, which is not the same as a falsey one. */
+function rootWithoutTruepath() {
+  const root = operatingRoot();
+  delete root.race.truepath;
+  return root;
+}
+
+/** The same page with one of the three bags the gate reads replaced by something that is not a bag. */
+function rootWithContainer(name, value) {
+  const root = operatingRoot();
+  root[name] = value;
+  return root;
 }
 
 /**
@@ -195,13 +215,47 @@ function syndicateFor({ root, registry, discovery }) {
   assert.deepEqual(read, { kind: "value", value: { p: 1, s: 0 } });
 }
 
-// A page whose Syndicate is not operating has no readout to read, and the game answers with its own
-// default without one. Each clause of `syndicateActive()` is switched off on its own.
+// `race.truepath` is the representation the pinned game itself writes, and the gate reads it for
+// truth exactly as `syndicateActive()` does. Both truthy values therefore reach the game's own
+// closure and come back as its native sample.
+for (const truepath of [1, true]) {
+  const label = `race.truepath: ${String(truepath)}`;
+  let scans = 0;
+  const registry = registryFor((region) => {
+    scans += 1;
+    return scanOver({ ratio: 0.2681, sensor: 47 })(region);
+  });
+  const read = syndicateFor({
+    root: operatingRoot({ race: { truepath } }),
+    registry,
+  }).read("spc_red");
+  assert.deepEqual(read, { kind: "value", value: { p: 0.7319, s: 47 } }, label);
+  assert.equal(scans, 1, `${label} did not read through the game's closure`);
+}
+
+// Every falsey shape, including an absent one, is the game drawing no readout at all. `true` is not
+// privileged here: the gate has no opinion about the representation, only about whether a readout can
+// exist.
+for (const [label, root] of [
+  ["race.truepath: 0", operatingRoot({ race: { truepath: 0 } })],
+  ["race.truepath: false", operatingRoot({ race: { truepath: false } })],
+  ["no race.truepath", rootWithoutTruepath()],
+]) {
+  const registry = registryFor(() => {
+    throw new Error("a readout was read while the Syndicate was not operating");
+  });
+  const discovery = discoveryStub();
+  const read = syndicateFor({ root, registry, discovery }).read("spc_red");
+  assert.deepEqual(read, { kind: "value", value: { p: 1, s: 0 } }, label);
+  assert.deepEqual(discovery.passes, [], `${label} spent a discovery pass`);
+}
+
+// The remaining clauses of the same gate, each switched off on its own: shadow at five, Isolation,
+// and a Syndicate the game has no technology or no per-region record for.
 for (const [label, root] of [
   ["shadow", operatingRoot({ tech: { shadow: 5 } })],
   ["isolation", operatingRoot({ tech: { isolation: true } })],
   ["no syndicate technology", operatingRoot({ tech: { syndicate: 0 } })],
-  ["not truepath", operatingRoot({ race: { truepath: false } })],
   ["no space syndicate", operatingRoot({ space: { syndicate: undefined } })],
 ]) {
   const registry = registryFor(() => {
@@ -210,6 +264,26 @@ for (const [label, root] of [
   const discovery = discoveryStub();
   const read = syndicateFor({ root, registry, discovery }).read("spc_red");
   assert.deepEqual(read, { kind: "value", value: { p: 1, s: 0 } }, label);
+  assert.deepEqual(discovery.passes, [], `${label} spent a discovery pass`);
+}
+
+// A page whose gate cannot be evaluated at all is unavailable, not inactive. Every field of a
+// container that is not a bag reads as absent, so answering `{p: 1, s: 0}` here would report a
+// defended region for a page this never read — and the fleet planner treats those as opposite answers.
+for (const [label, root] of [
+  ["an unreadable tech", rootWithContainer("tech", "corrupt")],
+  ["an unreadable race", rootWithContainer("race", 42)],
+  ["an unreadable space", rootWithContainer("space", null)],
+]) {
+  const registry = registryFor(() => {
+    throw new Error("a readout was read on a page the gate could not evaluate");
+  });
+  const discovery = discoveryStub();
+  assert.deepEqual(
+    syndicateFor({ root, registry, discovery }).read("spc_red"),
+    { kind: "absent" },
+    label,
+  );
   assert.deepEqual(discovery.passes, [], `${label} spent a discovery pass`);
 }
 
@@ -279,6 +353,34 @@ for (const refusal of refusalCases) {
   );
   assert.deepEqual(read, { kind: "invalid" }, refusal.label);
   assertPrototypeRestored(descriptor, refusal.label);
+}
+
+// Two perfect roundings are not an answer the registry did not vouch for. A superseded binding still
+// runs a live closure of an older draw, and that closure can round both values and then fail, so the
+// observations on their own would be attributed to a call the registry itself reports as unsuccessful.
+{
+  const descriptor = toFixedDescriptor();
+  const scan = scanOver({ ratio: 0.2681, sensor: 47 });
+  const handle = {
+    elementId: "spc_redsynd",
+    generation: 1,
+    methods: ["scan"],
+  };
+  const registry = {
+    handle,
+    resolve: (elementId) => (elementId === "spc_redsynd" ? handle : undefined),
+    invoke: () => {
+      scan("spc_red");
+      return { ok: false, reason: "stale-control" };
+    },
+    capturedElementIds: () => ["spc_redsynd"],
+  };
+  assert.deepEqual(
+    syndicateFor({ root: operatingRoot(), registry }).read("spc_red"),
+    { kind: "invalid" },
+    "a failed invocation was attributed to the game's answer",
+  );
+  assertPrototypeRestored(descriptor, "a failed invocation");
 }
 
 // A readout the page cannot be asked about at all: no control, and a region no Space sub-tab draws.

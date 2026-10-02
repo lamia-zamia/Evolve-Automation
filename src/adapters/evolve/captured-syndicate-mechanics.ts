@@ -4,8 +4,8 @@
  * ## Why a display method rather than a copy of the formula
  *
  * `syndicate(region, true)` is a module-private export of a single esbuild IIFE — the shipped build
- * has no runtime module graph, so it cannot be imported and nothing can be added to the game to
- * expose it (see `docs/feature-backlog.md`). What the game *does* draw is a per-region Syndicate
+ * bundles every module into one file and has no runtime module graph, so it cannot be imported and
+ * nothing can be added to the game to expose it. What the game *does* draw is a per-region Syndicate
  * readout, and one of its three methods closes over the real function:
  *
  * ```js
@@ -45,7 +45,10 @@ import type {
   GameSyndicateMechanics,
   GameSyndicateSample,
 } from "../../ports/game-syndicate-mechanics.ts";
-import type { GameControlRegistry } from "../../ports/game-control-registry.ts";
+import type {
+  GameControlRegistry,
+  GameControlResult,
+} from "../../ports/game-control-registry.ts";
 import type { GameRootStateSource } from "../../ports/game-root-state.ts";
 import type { GameTabDiscovery } from "../../ports/game-tab-discovery.ts";
 import type { CapturedGameMechanics } from "../../ports/captured-game-mechanics.ts";
@@ -100,24 +103,44 @@ function syndicateReadoutControl(region: string): string {
 }
 
 /**
- * `truepath.js:syndicateActive()`, exactly as upstream writes it and no further.
+ * `truepath.js:syndicateActive()`, in the game's own truthiness and no further:
+ *
+ * ```js
+ * if (global.tech['shadow'] && global.tech['shadow'] >= 5) { return false; }
+ * return !global.tech['isolation'] && global.tech['syndicate']
+ *     && global.race['truepath'] && global.space['syndicate'] ? true : false;
+ * ```
+ *
+ * Every clause is a bare truthiness test upstream, and each one is one here. `true` is a valid
+ * `race.truepath` but not the only value the game writes: `truepath.js` assigns
+ * `global.race['truepath'] = 1` when the path is chosen, so a gate demanding the boolean would
+ * report every real True Path save as having no Syndicate at all.
  *
  * Used only to tell a page where no Syndicate readout can exist from a page whose readout could not
  * be captured. An inactive Syndicate has no `#<region>synd` element at all, because the game only
  * draws one behind `syndicateActive()`, so there is nothing to reach and the function's own default
  * answer is the answer. This is the whole of the gate, deliberately: nothing else about
  * `syndicate()` is restated here.
+ *
+ * `undefined` when a container the game reads as a bag is not one. Every field of a malformed
+ * container reads as absent, which would report a page that cannot be read as a page whose Syndicate
+ * is off, and a defended region and an unanswered one are opposite answers.
  */
-function syndicateOperating(root: unknown): boolean {
+function syndicateOperating(root: unknown): boolean | undefined {
   const tech = readProperty(root, "tech");
   const race = readProperty(root, "race");
   const space = readProperty(root, "space");
-  const syndicate = readProperty(space, "syndicate");
-  if ((finite(readProperty(tech, "shadow")) ?? 0) >= 5) return false;
+  for (const container of [tech, race, space]) {
+    if (container === undefined) continue;
+    if (!isRecord(container)) return undefined;
+  }
+  const shadow = readProperty(tech, "shadow");
+  if (shadow && (finite(shadow) ?? 0) >= 5) return false;
   if (readProperty(tech, "isolation")) return false;
-  if ((finite(readProperty(tech, "syndicate")) ?? 0) <= 0) return false;
-  if (readProperty(race, "truepath") !== true) return false;
-  return isRecord(syndicate);
+  if (!readProperty(tech, "syndicate")) return false;
+  if (!readProperty(race, "truepath")) return false;
+  if (!readProperty(space, "syndicate")) return false;
+  return true;
 }
 
 export interface CapturedSyndicateMechanicsDependencies {
@@ -166,9 +189,11 @@ export function createCapturedSyndicateMechanics(
     read(region: string): CapturedGameRead<GameSyndicateSample> {
       const root = rootState.readRoot();
       if (!isRecord(root)) return { kind: "absent" };
+      const operating = syndicateOperating(root);
+      if (operating === undefined) return { kind: "absent" };
       // The native inactive answer, without a binding to read it through: `syndicate()` returns
       // `{p: 1, r: 0, s: 0, o: 0}` and draws no readout at all.
-      if (!syndicateOperating(root)) {
+      if (!operating) {
         return {
           kind: "value",
           value: Object.freeze({ p: 1, s: 0 }),
@@ -179,11 +204,16 @@ export function createCapturedSyndicateMechanics(
       const handle = controls.resolve(control);
       if (handle === undefined) return { kind: "absent" };
 
+      // The registry's own verdict is what makes the observations attributable. A superseded binding
+      // still runs a live closure of an older draw, and that closure can round both values before the
+      // registry reports the call as failed, so its roundings are not this region's answer.
+      let invocation: GameControlResult | undefined;
       const scan = mechanics.readRoundedValues(() => {
-        controls.invoke(handle, SYNDICATE_SCAN_METHOD, [region]);
+        invocation = controls.invoke(handle, SYNDICATE_SCAN_METHOD, [region]);
       });
       if (scan.kind === "absent") return { kind: "absent" };
       if (scan.kind === "invalid") return { kind: "invalid" };
+      if (invocation?.ok !== true) return { kind: "invalid" };
       return readSyndicateSample(scan.value);
     },
   });
