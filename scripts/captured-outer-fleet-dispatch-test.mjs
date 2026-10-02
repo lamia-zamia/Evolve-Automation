@@ -2894,6 +2894,177 @@ for (const [markup, why] of [
 }
 
 // ---------------------------------------------------------------------------
+// A yard whose options cannot be read is not a yard with nothing to offer.
+// ---------------------------------------------------------------------------
+
+/**
+ * A preload yard whose own option markup has been damaged beyond reading: one weapon option has lost
+ * the part it names, so the catalogue refuses rather than answering with fewer parts than the game's.
+ *
+ * Preload mode is the hard case, because the markup is the only catalogue this page has — the yard is
+ * on screen, so there is no scratch draw to buy another one with.
+ */
+function damagedCatalogHarness({ root = makeRoot(), ships = [] } = {}) {
+  const harness = makeHarness({ root, preload: true, ships });
+  harness.game.initTabs();
+  harness.page.document
+    .getElementById("shipPlans")
+    .querySelectorAll("*")
+    .filter((node) => node.getAttribute("data-val") === "gauss")
+    .forEach((node) => node.attributes.delete("data-val"));
+  assert.equal(
+    harness.parts.catalog(),
+    undefined,
+    "damaged markup was read as a catalogue",
+  );
+  return harness;
+}
+
+/**
+ * The composition with the build control stubbed, and every price question counted.
+ *
+ * The stub appends a hull nothing asked for and counts itself, which is what makes the execution's
+ * own defence observable rather than asserted: the postcondition is the design the yard holds over the
+ * game's own part dimensions, and a dreadnought cannot satisfy a corvette. A postcondition built over
+ * no dimensions at all is an empty record, which satisfies *every* hull — so that build would run, be
+ * accepted as the intended ship, and be dispatched.
+ */
+function outerFleetControlOverDamagedYard(harness, readSettings) {
+  const registry = harness.capture.controls;
+  const prices = [];
+  return {
+    prices,
+    control: createCapturedOuterFleetControl({
+      rootState: { readRoot: () => harness.root },
+      controls: {
+        resolve: (elementId) => registry.resolve(elementId),
+        invoke: (handle, method, args) => {
+          if (method !== "build") return registry.invoke(handle, method, args);
+          harness.page.buildCount = (harness.page.buildCount ?? 0) + 1;
+          harness.root.space.shipyard.ships.push({
+            ...harness.root.space.shipyard.blueprint,
+            name: "Wrong Hull",
+            class: "dreadnought",
+            location: { id: "spc_dwarf" },
+          });
+          return { ok: true, value: undefined };
+        },
+        capturedElementIds: () => registry.capturedElementIds(),
+      },
+      costs: {
+        current: () => harness.costs.current(),
+        price: (blueprint) => {
+          prices.push(blueprint);
+          return harness.costs.price(blueprint);
+        },
+      },
+      parts: harness.parts,
+      dispatch: harness.dispatch,
+      readSettings,
+    }),
+  };
+}
+
+/** The one fault a damaged yard's catalogue reports, once, however many questions it is asked. */
+const UNREADABLE_CATALOG_FAULT = [
+  "the shipyard's own part options could not be read",
+];
+
+// Current Design. The yard's own design needs no `avail()` call — a field it already holds cannot be
+// asked about — but the postcondition that judges the build is still the yard's design described over
+// the game's part dimensions, and without them that design cannot be described at all. Answering
+// "available" anyway would build the player's design against an empty postcondition, which every hull
+// the yard could append would satisfy.
+{
+  const unreadableDesign = damagedCatalogHarness();
+  const designBefore = { ...unreadableDesign.root.space.shipyard.blueprint };
+  const currentDesignSettings = presetSettings({ fleetOuterShips: "user" });
+  const { control, prices } = outerFleetControlOverDamagedYard(
+    unreadableDesign,
+    () => currentDesignSettings,
+  );
+  assert.equal(control.autoFleetOuter().outcome.status, "succeeded");
+  assert.deepEqual(prices, [], "Current Design was priced without a catalogue");
+  assert.deepEqual(
+    askedFor(unreadableDesign),
+    [],
+    "the yard was asked about a part its own markup cannot show it offers",
+  );
+  assert.deepEqual(
+    unreadableDesign.page.setValWrites,
+    [],
+    "Current Design wrote the blueprint without a catalogue",
+  );
+  assert.equal(
+    unreadableDesign.page.buildCount,
+    undefined,
+    "Current Design built without a catalogue",
+  );
+  assert.equal(unreadableDesign.root.space.shipyard.ships.length, 0);
+  assert.deepEqual(sentTo(unreadableDesign.page), []);
+  assert.deepEqual(
+    unreadableDesign.root.space.shipyard.blueprint,
+    designBefore,
+    "the yard's own design was left changed",
+  );
+  assert.deepEqual(unreadableDesign.faults, UNREADABLE_CATALOG_FAULT);
+}
+
+// The forced Explorer, with an unreadable catalogue. `setVal(type, value)` has no availability gate
+// upstream, so a design written without the catalogue is a hull the player may never have unlocked —
+// and the Explorer is the one blueprint this script writes itself rather than configuring out of the
+// settings, so nothing else would ever have caught it. Nothing here is Explorer-specific: every
+// catalogue-dependent question answers no without authority, and so does every route that could have
+// asked one.
+for (const [why, tauShips] of [
+  ["nothing is parked at Tau Ceti", []],
+  [
+    // The form the adapter's own region comparison reads. A ship here matches the Explorer's region
+    // and nothing else about it, which is exactly the ship a zero-dimensional comparison counts as an
+    // Explorer: the loop over no dimensions examines no field of it.
+    "an unrelated ship at Tau Ceti is not an Explorer",
+    [makeShip({ name: "Vagrant", location: "tauceti" })],
+  ],
+]) {
+  const explorerRoot = makeRoot();
+  explorerRoot.tech.tauceti = 1;
+  const unreadableExplorer = damagedCatalogHarness({
+    root: explorerRoot,
+    ships: tauShips,
+  });
+  const parked = unreadableExplorer.root.space.shipyard.ships.length;
+  const exploreSettings = presetSettings({ fleetExploreTau: true });
+  const { control, prices } = outerFleetControlOverDamagedYard(
+    unreadableExplorer,
+    () => exploreSettings,
+  );
+  assert.equal(control.autoFleetOuter().outcome.status, "succeeded");
+  assert.deepEqual(prices, [], `${why}: an Explorer was priced`);
+  assert.deepEqual(
+    askedFor(unreadableExplorer),
+    [],
+    `${why}: an Explorer part was asked about`,
+  );
+  assert.deepEqual(
+    unreadableExplorer.page.setValWrites,
+    [],
+    `${why}: an Explorer part was written`,
+  );
+  assert.equal(
+    unreadableExplorer.page.buildCount,
+    undefined,
+    `${why}: an Explorer was built`,
+  );
+  assert.equal(
+    unreadableExplorer.root.space.shipyard.ships.length,
+    parked,
+    `${why}: a ship was appended`,
+  );
+  assert.deepEqual(sentTo(unreadableExplorer.page), []);
+  assert.deepEqual(unreadableExplorer.faults, UNREADABLE_CATALOG_FAULT);
+}
+
+// ---------------------------------------------------------------------------
 // The three routes to a catalogue, and what each one costs the player.
 // ---------------------------------------------------------------------------
 

@@ -21899,7 +21899,7 @@
     engine: "emdrive",
     power: "elerium",
     sensor: "quantum"
-  }), NO_CATALOG_TYPES = Object.freeze([]), CAPTURED_OUTER_FLEET_CLASS_CREW = Object.freeze({
+  }), CAPTURED_OUTER_FLEET_CLASS_CREW = Object.freeze({
     corvette: 2,
     frigate: 3,
     destroyer: 4,
@@ -21958,18 +21958,18 @@
   function capturedOuterFleetLiveDesign(controls2) {
     return controls2.currentDesign(CAPTURED_OUTER_FLEET_SHIPYARD_CONTROL);
   }
-  function capturedOuterFleetPartBlueprint(settings, prefix, types) {
+  function capturedOuterFleetPartBlueprint(settings, prefix, dimensions) {
     let blueprint = {};
-    for (let type of types) {
+    for (let type of dimensions) {
       let part = settings[`${prefix}${type}`];
       typeof part == "string" && (blueprint[type] = part);
     }
     return blueprint;
   }
-  function capturedOuterFleetBlueprintAvailable(controls2, blueprint, types) {
+  function capturedOuterFleetBlueprintAvailable(controls2, blueprint, dimensions) {
     if (typeof blueprint.class != "string") return !1;
     let live = capturedOuterFleetLiveDesign(controls2);
-    for (let type of types) {
+    for (let type of dimensions) {
       let part = blueprint[type];
       if (typeof part == "string" && live?.[type] !== part && !controls2.isPartAvailable({
         elementId: CAPTURED_OUTER_FLEET_SHIPYARD_CONTROL,
@@ -22095,32 +22095,29 @@
     let view = capturedOuterFleetAuthorityView(root, settings);
     return view === void 0 ? { status: "unavailable" } : assessAuthorityRemoval(view, removedSoldiers);
   }
-  function capturedOuterFleetBlueprintMatches(left, right, types) {
-    return types.every((type) => {
+  function capturedOuterFleetBlueprintMatches(left, right, dimensions) {
+    return dimensions.every((type) => {
       let part = right[type];
       return typeof part != "string" || left[type] === part;
     });
   }
-  function capturedOuterFleetExpectedBlueprint(requested, live, types) {
+  function capturedOuterFleetExpectedBlueprint(requested, live, dimensions) {
     let expected = {};
-    for (let type of types) {
+    for (let type of dimensions) {
       let part = typeof requested[type] == "string" ? requested[type] : live[type];
       if (typeof part != "string") return;
       expected[type] = part;
     }
     return Object.freeze(expected);
   }
-  function capturedOuterFleetShipCount(root, region, blueprint, types) {
-    return capturedOuterFleetShips(root).filter((ship) => !isRecord(ship) || ship.location !== region ? !1 : capturedOuterFleetBlueprintMatches(ship, blueprint, types)).length;
+  function capturedOuterFleetShipCount(root, region, blueprint, dimensions) {
+    return capturedOuterFleetShips(root).filter((ship) => !isRecord(ship) || ship.location !== region ? !1 : capturedOuterFleetBlueprintMatches(ship, blueprint, dimensions)).length;
   }
   function capturedOuterFleetDecisionMatches(expected, actual) {
     return expected.kind !== actual.kind || expected.blueprint !== actual.blueprint ? !1 : expected.kind === "outer-fleet-status" && actual.kind === "outer-fleet-status" ? expected.nextShipName === actual.nextShipName && expected.messageBeforeUpdate === actual.messageBeforeUpdate && expected.messageAfterUpdate === actual.messageAfterUpdate : expected.kind === "build-outer-fleet" && actual.kind === "build-outer-fleet" && expected.targetRegion === actual.targetRegion && expected.targetLocationName === actual.targetLocationName && expected.shipName === actual.shipName && expected.shipCrew === actual.shipCrew && expected.nextShipName === actual.nextShipName;
   }
   function createCapturedOuterFleetAdapter(dependencies) {
     let session = null, expectedDecision = null, shipTargetChanged = !1;
-    function catalogTypes() {
-      return dependencies.parts.catalog()?.types ?? NO_CATALOG_TYPES;
-    }
     function shipTargetFingerprint() {
       let sample = dependencies.costs.current();
       if (sample !== void 0)
@@ -22134,6 +22131,9 @@
         throw new Error("captured outer fleet cycle has not been sampled");
       return session;
     }
+    function provenDimensions(active) {
+      return active.catalog?.types;
+    }
     function storeBlueprint(token, raw, path, blueprints) {
       if (!isRecord(raw)) throw new TypeError(`${path} must be a record`);
       return blueprints.set(token, raw), raw;
@@ -22141,11 +22141,12 @@
     let reader = Object.freeze({
       readCycle() {
         session = null, expectedDecision = null, shipTargetChanged = !1;
-        let blueprints = /* @__PURE__ */ new Map(), root = capturedOuterFleetRoot(dependencies.rootState), settings = capturedOuterFleetSettings(dependencies.readSettings());
+        let blueprints = /* @__PURE__ */ new Map(), catalog = dependencies.parts.catalog(), root = capturedOuterFleetRoot(dependencies.rootState), settings = capturedOuterFleetSettings(dependencies.readSettings());
         if (root === void 0) {
           session = Object.freeze({
             root: {},
             sourceUnavailable: !0,
+            catalog,
             settings,
             blueprints
           });
@@ -22157,8 +22158,8 @@
           }), planned2 = planOuterFleetCycle(input2);
           return expectedDecision = planned2.kind === "outer-fleet-status" ? planned2 : null, input2;
         }
-        let yard = capturedOuterFleetYard(root), initialized = (finite(readProperty(readProperty(root, "tech"), "syndicate")) ?? 0) > 0 && yard !== void 0 && Object.hasOwn(yard, "blueprint") && dependencies.controls.isRendered(CAPTURED_OUTER_FLEET_SHIPYARD_CONTROL), manualBlueprintAvailable = !1;
-        initialized && settings.fleetOuterShips === "manual" && (manualBlueprintAvailable = capturedOuterFleetBlueprintAvailable(
+        let yard = capturedOuterFleetYard(root), initialized = (finite(readProperty(readProperty(root, "tech"), "syndicate")) ?? 0) > 0 && yard !== void 0 && Object.hasOwn(yard, "blueprint") && dependencies.controls.isRendered(CAPTURED_OUTER_FLEET_SHIPYARD_CONTROL), manualBlueprintAvailable = !1, dimensions = catalog?.types;
+        initialized && dimensions !== void 0 && settings.fleetOuterShips === "manual" && (manualBlueprintAvailable = capturedOuterFleetBlueprintAvailable(
           dependencies.controls,
           storeBlueprint(
             "yard",
@@ -22166,7 +22167,7 @@
             "shipyard.blueprint",
             blueprints
           ),
-          catalogTypes()
+          dimensions
         ));
         let input = Object.freeze({
           initialized,
@@ -22182,6 +22183,7 @@
         session = Object.freeze({
           root,
           sourceUnavailable: !1,
+          catalog,
           settings,
           blueprints
         });
@@ -22191,23 +22193,23 @@
       readTargeting(cycle) {
         let active = activeSession();
         expectedDecision = null;
-        let root = active.root, tech = readProperty(root, "tech"), settings = active.settings, exploreTau = settings.fleetExploreTau === !0, tauTechnology = finite(readProperty(tech, "tauceti")) ?? 0, explorerAvailable = !1, explorerCount = 0;
-        if (exploreTau && tauTechnology === 1) {
+        let root = active.root, tech = readProperty(root, "tech"), settings = active.settings, exploreTau = settings.fleetExploreTau === !0, tauTechnology = finite(readProperty(tech, "tauceti")) ?? 0, explorerAvailable = !1, explorerCount = 0, dimensions = provenDimensions(active);
+        if (exploreTau && tauTechnology === 1 && dimensions !== void 0) {
           let explorer = storeBlueprint(
             "explorer",
             CAPTURED_OUTER_FLEET_EXPLORER,
             "explorer blueprint",
             active.blueprints
-          ), types = catalogTypes();
+          );
           explorerAvailable = capturedOuterFleetBlueprintAvailable(
             dependencies.controls,
             explorer,
-            types
+            dimensions
           ), explorerAvailable && (explorerCount = capturedOuterFleetShipCount(
             root,
             "tauceti",
             explorer,
-            types
+            dimensions
           ));
         }
         let erisTechnology = finite(readProperty(tech, "eris")) ?? 0, erisWeighting = finite(settings.fleet_outer_pr_spc_eris) ?? 0, erisSensor = erisTechnology === 1 && erisWeighting > 0 ? Number(
@@ -22250,48 +22252,53 @@
       readBlueprint(target) {
         let active = activeSession();
         expectedDecision = null;
-        let yard = capturedOuterFleetYard(active.root), types = catalogTypes(), avail = (blueprint) => capturedOuterFleetBlueprintAvailable(
-          dependencies.controls,
-          blueprint,
-          types
-        ), yardAvailable = !1, scoutAvailable = !1, scoutCount = 0, maximumScouts = 0, fighterAvailable = !1;
-        if (target.forcedBlueprint !== "explorer" && target.mode === "user")
-          yard !== void 0 && (yardAvailable = avail(
-            storeBlueprint(
-              "yard",
-              yard.blueprint,
-              "shipyard.blueprint",
-              active.blueprints
-            )
-          ));
-        else if (target.forcedBlueprint === null) {
-          let scout = storeBlueprint(
-            "scout",
-            capturedOuterFleetPartBlueprint(
-              active.settings,
-              "fleet_scout_",
-              types
-            ),
-            "scout blueprint",
-            active.blueprints
+        let yard = capturedOuterFleetYard(active.root), yardAvailable = !1, scoutAvailable = !1, scoutCount = 0, maximumScouts = 0, fighterAvailable = !1, dimensions = provenDimensions(active);
+        if (dimensions !== void 0) {
+          let avail = (blueprint) => capturedOuterFleetBlueprintAvailable(
+            dependencies.controls,
+            blueprint,
+            dimensions
           );
-          if (scoutAvailable = avail(scout), scoutAvailable && (scoutCount = capturedOuterFleetShipCount(
-            active.root,
-            target.targetRegion,
-            scout,
-            types
-          ), maximumScouts = finite(active.settings[`fleet_outer_sc_${target.targetRegion}`]) ?? 0), !scoutAvailable || scoutCount >= maximumScouts) {
-            let fighter = storeBlueprint(
-              "fighter",
+          if (target.forcedBlueprint !== "explorer" && target.mode === "user")
+            yard !== void 0 && (yardAvailable = avail(
+              storeBlueprint(
+                "yard",
+                yard.blueprint,
+                "shipyard.blueprint",
+                active.blueprints
+              )
+            ));
+          else if (target.forcedBlueprint === null) {
+            let scout = storeBlueprint(
+              "scout",
               capturedOuterFleetPartBlueprint(
                 active.settings,
-                "fleet_outer_",
-                types
+                "fleet_scout_",
+                dimensions
               ),
-              "fighter blueprint",
+              "scout blueprint",
               active.blueprints
             );
-            fighterAvailable = avail(fighter);
+            if (scoutAvailable = avail(scout), scoutAvailable && (scoutCount = capturedOuterFleetShipCount(
+              active.root,
+              target.targetRegion,
+              scout,
+              dimensions
+            ), maximumScouts = finite(
+              active.settings[`fleet_outer_sc_${target.targetRegion}`]
+            ) ?? 0), !scoutAvailable || scoutCount >= maximumScouts) {
+              let fighter = storeBlueprint(
+                "fighter",
+                capturedOuterFleetPartBlueprint(
+                  active.settings,
+                  "fleet_outer_",
+                  dimensions
+                ),
+                "fighter blueprint",
+                active.blueprints
+              );
+              fighterAvailable = avail(fighter);
+            }
           }
         }
         let input = Object.freeze({
@@ -22394,6 +22401,12 @@
       }
     });
     function applyOuterFleetBuild(active, decision) {
+      let dimensions = provenDimensions(active);
+      if (dimensions === void 0)
+        return stale(
+          "captured-outer-fleet-catalog-unavailable",
+          "the shipyard's part catalogue could not be read"
+        );
       let blueprint = active.blueprints.get(decision.blueprint);
       if (blueprint === void 0)
         return stale(
@@ -22419,7 +22432,7 @@
       let expectedBlueprint = capturedOuterFleetExpectedBlueprint(
         blueprint,
         liveDesign,
-        catalogTypes()
+        dimensions
       );
       if (expectedBlueprint === void 0)
         return stale(
@@ -49532,6 +49545,10 @@ Only continue if you trust the source. Injected code:
     }
     return options;
   }
+  function provenShipyardPartDimensions(types) {
+    let [first, ...rest] = types;
+    return first === void 0 ? void 0 : Object.freeze([first, ...rest]);
+  }
   function buildShipyardPartCatalog(options) {
     if (options.length === 0) return;
     let parts = [], types = [], indicesByType = /* @__PURE__ */ new Map(), byIdentity = /* @__PURE__ */ new Map();
@@ -49549,13 +49566,15 @@ Only continue if you trust the source. Injected code:
     for (let indices of indicesByType.values())
       for (let position = 0; position < indices.length; position += 1)
         if (indices[position] !== position) return;
-    return Object.freeze({
-      types: Object.freeze(types),
-      parts: Object.freeze(parts),
-      optionFor(type, value) {
-        return byIdentity.get(`${type} ${value}`);
-      }
-    });
+    let dimensions = provenShipyardPartDimensions(types);
+    if (dimensions !== void 0)
+      return Object.freeze({
+        types: dimensions,
+        parts: Object.freeze(parts),
+        optionFor(type, value) {
+          return byIdentity.get(`${type} ${value}`);
+        }
+      });
   }
   function parseShipyardPartCatalog(element) {
     let options = readShipyardPartOptions(element);

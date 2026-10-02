@@ -29,13 +29,16 @@
  * so the only way it changes is a reload. Markup that cannot be read is refused rather than
  * guessed at — a duplicate value or index, an option with no `data-val`, an index that is not the
  * dimension's own next one, or two index tokens on one element each mean this script would be
- * answering about a different yard than the game's.
+ * answering about a different yard than the game's. Refusal is `undefined` and nothing else: no
+ * catalogue with no dimensions in it is ever built, because an empty dimension list would answer
+ * every downstream question by comparing nothing at all.
  */
 import type {
   GameShipyardPart,
   GameShipyardPartCatalog,
   GameShipyardPartCatalogSink,
   GameShipyardPartCatalogSource,
+  GameShipyardPartDimensions,
   GameShipyardCatalogYard,
 } from "../../../ports/game-shipyard-parts.ts";
 import {
@@ -173,6 +176,23 @@ function readShipyardPartOptions(
 }
 
 /**
+ * The dimensions the options named, or `undefined` when they named none.
+ *
+ * The empty case is refused rather than catalogued. A dimension list of no dimensions is not a yard
+ * offering nothing — it is a yard this could not read, and every question asked over it answers
+ * vacuously: an availability loop checks no fields, a match compares none, and a build postcondition
+ * built from it constrains nothing at all. Refusing here means an unreadable yard has no dimension
+ * list anywhere in this script, so the only way a caller can reach these questions is with a
+ * catalogue the game's own markup produced.
+ */
+function provenShipyardPartDimensions(
+  types: readonly string[],
+): GameShipyardPartDimensions | undefined {
+  const [first, ...rest] = types;
+  return first === undefined ? undefined : Object.freeze([first, ...rest]);
+}
+
+/**
  * The catalogue the markup describes, or `undefined` when the markup cannot be one.
  *
  * Two integrity rules beyond the per-option reading, both about the index rather than the part.
@@ -212,8 +232,10 @@ function buildShipyardPartCatalog(
       if (indices[position] !== position) return undefined;
     }
   }
+  const dimensions = provenShipyardPartDimensions(types);
+  if (dimensions === undefined) return undefined;
   return Object.freeze({
-    types: Object.freeze(types),
+    types: dimensions,
     parts: Object.freeze(parts),
     optionFor(type: string, value: string): GameShipyardPart | undefined {
       return byIdentity.get(`${type} ${value}`);

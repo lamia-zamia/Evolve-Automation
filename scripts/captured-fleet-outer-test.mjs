@@ -401,6 +401,7 @@ function createOuterControl(
   registry = capturedRegistry,
   stub = dispatch,
   costAuthority = costs,
+  catalogSource = { catalog: () => partCatalog },
 ) {
   return createCapturedOuterFleetControl({
     rootState: {
@@ -410,7 +411,7 @@ function createOuterControl(
     },
     controls: registry,
     costs: costAuthority,
-    parts: { catalog: () => partCatalog },
+    parts: catalogSource,
     dispatch: {
       blockedByPlayerModal: () => playerModalOpen,
       dispatchShipyardShip: (request) => stub.dispatchShipyardShip(request),
@@ -868,5 +869,113 @@ const costless = createOuterControl(capturedRegistry, dispatch, {
 assert.equal(costless.outcome.status, "succeeded");
 assert.equal(capturedBuilds, buildsBeforeCostless);
 yard.ships.length = 0;
+
+// ---------------------------------------------------------------------------
+// No catalogue at all: the yard's own part options could not be read.
+// ---------------------------------------------------------------------------
+
+/**
+ * Every effect the composition could reach the yard or the game's answers with, counted.
+ *
+ * The counters exist because the absence of a catalogue is not the absence of work: asked over an
+ * empty dimension set, availability is true for every design, a match is true for every ship, and a
+ * build postcondition is an empty record that any appended hull satisfies. So the list below must stay
+ * empty, rather than merely ending in a refusal.
+ */
+function countingRegistry() {
+  const seen = { avail: 0, setVal: 0, build: 0 };
+  return {
+    seen,
+    registry: createRegistryWith({
+      avail: () => {
+        seen.avail += 1;
+        return true;
+      },
+      setVal: (type, part) => {
+        seen.setVal += 1;
+        yard.blueprint[type] = part;
+      },
+      build: () => {
+        seen.build += 1;
+      },
+    }),
+  };
+}
+
+/** The direct form of an unreadable yard: the source simply cannot answer. */
+const unavailableCatalog = { catalog: () => undefined };
+
+/**
+ * One pass against a source that cannot answer, with the yard's own build stubbed to append a hull
+ * nothing asked for. That hull is what an empty postcondition would accept, so reaching it is the
+ * failure this guards.
+ */
+function passWithoutCatalog(settings, prepare) {
+  const { seen, registry } = countingRegistry();
+  const prices = [];
+  const sends = [];
+  const blueprintBefore = { ...yard.blueprint };
+  yard.ships.length = 0;
+  for (const key of Object.keys(settings))
+    capturedSettings[key] = settings[key];
+  prepare();
+  const result = createOuterControl(
+    registry,
+    {
+      blockedByPlayerModal: () => false,
+      dispatchShipyardShip(request) {
+        sends.push(request);
+        return dispatch.dispatchShipyardShip(request);
+      },
+    },
+    {
+      requests: costs.requests,
+      current: () => costs.current(),
+      price: (blueprint) => {
+        prices.push(blueprint);
+        return costs.price(blueprint);
+      },
+    },
+    unavailableCatalog,
+  ).autoFleetOuter();
+  assert.equal(
+    [seen.avail, seen.setVal, seen.build, prices.length, sends.length].join(
+      "/",
+    ),
+    "0/0/0/0/0",
+    `the yard was reached without a catalogue (${settings.fleetOuterShips})`,
+  );
+  assert.deepEqual(
+    yard.blueprint,
+    blueprintBefore,
+    "the blueprint was written",
+  );
+  assert.equal(yard.ships.length, 0, "a ship was appended");
+  assert.equal(result.outcome.status, "succeeded");
+  yard.ships.length = 0;
+}
+
+// Current Design. Its fields need no `avail()` call — the yard already holds them — but the design
+// still has to be described over the game's part dimensions before it can be judged built, and over no
+// dimensions it cannot be. `avail` would answer true here for any design with a hull.
+passWithoutCatalog(
+  { fleetOuterShips: "user", fleetExploreTau: false },
+  () => {},
+);
+
+// The automatic route's own presets, which are constructed out of the catalogue's dimensions: with no
+// catalogue there is nothing to construct them from, and nothing to construct.
+passWithoutCatalog(
+  { fleetOuterShips: "custom", fleetExploreTau: false },
+  () => {},
+);
+
+// The forced Explorer, the one blueprint this script writes itself. `setVal` has no availability gate
+// upstream, so a design written from no catalogue is a hull the player may never have unlocked.
+passWithoutCatalog({ fleetOuterShips: "custom", fleetExploreTau: true }, () => {
+  root.tech.tauceti = 1;
+});
+root.tech.tauceti = 0;
+capturedSettings.fleetExploreTau = false;
 
 console.log("Captured outer-fleet control postcondition tests passed");

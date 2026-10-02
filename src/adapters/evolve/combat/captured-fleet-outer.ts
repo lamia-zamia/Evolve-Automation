@@ -8,6 +8,14 @@
  * (`captured-outer-fleet-parts`). What this module owns is the *policy* around those answers: which
  * fields are worth asking about, in what order to write them, and what counts as the design that was
  * built.
+ *
+ * **That catalogue is the authority, and its absence is not an empty one.** A cycle samples it once
+ * and holds it on the session, and every dimension question below is asked only over a proven
+ * catalogue's dimensions. An unreadable yard therefore produces no dimensions at all rather than a
+ * dimension list of nothing: each question here is a loop or a comparison over dimensions, and an
+ * empty list would make availability true for every design, matching true for every ship, and the
+ * build postcondition an empty record satisfying any hull the yard appended. The execution checks the
+ * same authority again before its first write rather than relying on planning having filtered.
  */
 
 import {
@@ -41,7 +49,11 @@ import type { CommandExecutionOutcome } from "../../../domain/commands.ts";
 import type { CapturedOuterFleetDispatchCapture } from "../../../ports/captured-outer-fleet-dispatch.ts";
 import type { GameRootStateSource } from "../../../ports/game-root-state.ts";
 import type { GameShipyardCosts } from "../../../ports/game-shipyard-costs.ts";
-import type { GameShipyardPartCatalogSource } from "../../../ports/game-shipyard-parts.ts";
+import type {
+  GameShipyardPartCatalog,
+  GameShipyardPartCatalogSource,
+  GameShipyardPartDimensions,
+} from "../../../ports/game-shipyard-parts.ts";
 import type {
   OuterFleetExecutor,
   OuterFleetReader,
@@ -75,6 +87,16 @@ interface CapturedOuterFleetAdapterDependencies {
 interface CapturedOuterFleetSession {
   readonly root: UnknownRecord;
   readonly sourceUnavailable: boolean;
+  /**
+   * The yard's own part catalogue, as this cycle found it, or `undefined` when the yard's option
+   * markup could not be read.
+   *
+   * Held here rather than re-asked per question so the plan and the execution that follows it are
+   * judged by one authority: `shipParts` is the game's own module-level data and cannot change under
+   * a page, and a plan whose postcondition was built from dimensions the execution can no longer see
+   * is a plan nothing can be checked against.
+   */
+  readonly catalog: GameShipyardPartCatalog | undefined;
   readonly settings: UnknownRecord;
   readonly blueprints: Map<OuterFleetBlueprint, UnknownRecord>;
 }
@@ -99,8 +121,6 @@ const CAPTURED_OUTER_FLEET_EXPLORER = Object.freeze({
   power: "elerium",
   sensor: "quantum",
 });
-/** A yard whose option markup could not be read. Not a yard with nothing to offer. */
-const NO_CATALOG_TYPES: readonly string[] = Object.freeze([]);
 // Mirrors the class bases in DeadSpace ships.js shipCrewSize; jobStack scaling
 // comes from captured-job-catalog and rounds as jobs.js jobStack does. The two hulls upstream added
 // since this table was written both crew one, which is also what lets either be configured at all
@@ -201,14 +221,17 @@ function capturedOuterFleetLiveDesign(
  * six of the game's dimensions count. That is why the settings prefix is combined with a discovered
  * dimension rather than searched: `fleet_outer_pr_*` and `fleet_outer_def_*` are region weightings
  * that share the prefix and are not blueprint fields at all.
+ *
+ * `dimensions` is a proven catalogue's, so it is never empty: this cannot construct a preset over no
+ * dimensions at all, which would be a design that answers every question below about it with yes.
  */
 function capturedOuterFleetPartBlueprint(
   settings: UnknownRecord,
   prefix: string,
-  types: readonly string[],
+  dimensions: GameShipyardPartDimensions,
 ): UnknownRecord {
   const blueprint: Record<string, unknown> = {};
-  for (const type of types) {
+  for (const type of dimensions) {
     const part = settings[`${prefix}${type}`];
     if (typeof part === "string") blueprint[type] = part;
   }
@@ -222,7 +245,10 @@ function capturedOuterFleetPartBlueprint(
  * yard is wearing, and asking whether the yard offers it would be asking about the player's own
  * design. That is what makes Current Design work — the yard normalizes a `special` into every
  * modern blueprint whether or not the special-slot selector was ever unlocked, so a design that is
- * already on the blueprint can name a part the yard would not offer as a fresh choice.
+ * already on the blueprint can name a part the yard would not offer as a fresh choice. It is also
+ * why this cannot answer for a yard whose catalogue is unreadable: without the dimensions, the design
+ * on the blueprint cannot be described at all, so there is no authoritative postcondition to build
+ * against and no design this may claim the yard can take.
  *
  * Every other named field is asked of the game's own answer, through the option index the yard's
  * markup gave it. A dimension the design does not name is left out rather than filled in: upstream
@@ -232,11 +258,11 @@ function capturedOuterFleetPartBlueprint(
 function capturedOuterFleetBlueprintAvailable(
   controls: GameFleetControlsPort,
   blueprint: UnknownRecord,
-  types: readonly string[],
+  dimensions: GameShipyardPartDimensions,
 ): boolean {
   if (typeof blueprint["class"] !== "string") return false;
   const live = capturedOuterFleetLiveDesign(controls);
-  for (const type of types) {
+  for (const type of dimensions) {
     const part = blueprint[type];
     if (typeof part !== "string") continue;
     if (live?.[type] === part) continue;
@@ -506,13 +532,17 @@ function capturedOuterFleetAuthorityAssessment(
  * configures six of the game's dimensions says nothing about the rest, and comparing them would make
  * every ship in the yard differ from it over a field it never claimed. A design the yard or the game
  * normalized itself carries all of them, and is compared in full.
+ *
+ * Over a proven catalogue's dimensions, so the comparison is never vacuous: there is no collection of
+ * zero dimensions to return true over. Where the catalogue is unavailable the caller counts nothing
+ * rather than asking this.
  */
 function capturedOuterFleetBlueprintMatches(
   left: UnknownRecord,
   right: UnknownRecord,
-  types: readonly string[],
+  dimensions: GameShipyardPartDimensions,
 ): boolean {
-  return types.every((type) => {
+  return dimensions.every((type) => {
     const part = right[type];
     return typeof part !== "string" || left[type] === part;
   });
@@ -530,15 +560,17 @@ function capturedOuterFleetBlueprintMatches(
  * what is judged to have been built are one design rather than three.
  *
  * A dimension neither the request nor the yard holds is a design this cannot describe, and the caller
- * refuses rather than building something it cannot then verify.
+ * refuses rather than building something it cannot then verify. The answer is never an empty design:
+ * the dimensions are a proven catalogue's, so the first one read either names a field or refuses the
+ * whole postcondition. An empty record would satisfy every hull the yard could append.
  */
 function capturedOuterFleetExpectedBlueprint(
   requested: UnknownRecord,
   live: Readonly<Record<string, unknown>>,
-  types: readonly string[],
+  dimensions: GameShipyardPartDimensions,
 ): Readonly<Record<string, string>> | undefined {
   const expected: Record<string, string> = {};
-  for (const type of types) {
+  for (const type of dimensions) {
     const part =
       typeof requested[type] === "string" ? requested[type] : live[type];
     if (typeof part !== "string") return undefined;
@@ -547,15 +579,16 @@ function capturedOuterFleetExpectedBlueprint(
   return Object.freeze(expected);
 }
 
+/** How many of the yard's ships at this region are the design another record names. */
 function capturedOuterFleetShipCount(
   root: UnknownRecord,
   region: string,
   blueprint: UnknownRecord,
-  types: readonly string[],
+  dimensions: GameShipyardPartDimensions,
 ): number {
   return capturedOuterFleetShips(root).filter((ship) => {
     if (!isRecord(ship) || ship["location"] !== region) return false;
-    return capturedOuterFleetBlueprintMatches(ship, blueprint, types);
+    return capturedOuterFleetBlueprintMatches(ship, blueprint, dimensions);
   }).length;
 }
 
@@ -601,19 +634,6 @@ export function createCapturedOuterFleetAdapter(
   let shipTargetChanged = false;
 
   /**
-   * The dimensions the yard's own option markup named, in that markup's order, or none at all while
-   * that markup cannot be read.
-   *
-   * Asking the catalogue rather than holding a list is what makes a part upstream added work: it is
-   * dimension `special` and a hull or component this script has never heard of, and both are as
-   * ordinary here as `railgun`. An empty list is not a yard with no parts — it is a yard whose parts
-   * are unknown, and every question below is answered no or refused rather than from a default.
-   */
-  function catalogTypes(): readonly string[] {
-    return dependencies.parts.catalog()?.types ?? NO_CATALOG_TYPES;
-  }
-
-  /**
    * The identity of the ship the yard will build next, as the yard itself prices it.
    *
    * Two questions are kept apart on purpose. What the design *costs* is the target: it moves when the
@@ -637,6 +657,21 @@ export function createCapturedOuterFleetAdapter(
     return session;
   }
 
+  /**
+   * The blueprint dimensions the yard's own markup named, or `undefined` while it cannot be read.
+   *
+   * Asking the catalogue rather than holding a list is what makes a part upstream added work: it is
+   * dimension `special` and a hull or component this script has never heard of, and both are as
+   * ordinary here as `railgun`. The absent case is not an empty list — it is a yard whose parts are
+   * unknown, and no question below is answered at all rather than answered from a default that
+   * compares nothing.
+   */
+  function provenDimensions(
+    active: CapturedOuterFleetSession,
+  ): GameShipyardPartDimensions | undefined {
+    return active.catalog?.types;
+  }
+
   function storeBlueprint(
     token: OuterFleetBlueprint,
     raw: unknown,
@@ -656,12 +691,17 @@ export function createCapturedOuterFleetAdapter(
       // clear a freshly sampled demand cache forever.
       shipTargetChanged = false;
       const blueprints = new Map<OuterFleetBlueprint, UnknownRecord>();
+      // Sampled once for the whole cycle, and held on the session below. It is the only authority on
+      // which dimensions a blueprint may be written, compared or judged over, so the plan this cycle
+      // produces and the execution that follows it are held to the same one.
+      const catalog = dependencies.parts.catalog();
       const root = capturedOuterFleetRoot(dependencies.rootState);
       const settings = capturedOuterFleetSettings(dependencies.readSettings());
       if (root === undefined) {
         session = Object.freeze({
           root: {},
           sourceUnavailable: true,
+          catalog,
           settings,
           blueprints,
         });
@@ -684,7 +724,15 @@ export function createCapturedOuterFleetAdapter(
         Object.hasOwn(yard, "blueprint") &&
         dependencies.controls.isRendered(CAPTURED_OUTER_FLEET_SHIPYARD_CONTROL);
       let manualBlueprintAvailable = false;
-      if (initialized && settings["fleetOuterShips"] === "manual") {
+      const dimensions = catalog?.types;
+      // Without a catalogue the yard's own design cannot even be described, so there is nothing to
+      // compare against and nothing to offer: Current Design reports no blueprint rather than every
+      // blueprint.
+      if (
+        initialized &&
+        dimensions !== undefined &&
+        settings["fleetOuterShips"] === "manual"
+      ) {
         manualBlueprintAvailable = capturedOuterFleetBlueprintAvailable(
           dependencies.controls,
           storeBlueprint(
@@ -693,7 +741,7 @@ export function createCapturedOuterFleetAdapter(
             "shipyard.blueprint",
             blueprints,
           ),
-          catalogTypes(),
+          dimensions,
         );
       }
       const input = Object.freeze({
@@ -713,6 +761,7 @@ export function createCapturedOuterFleetAdapter(
       session = Object.freeze({
         root,
         sourceUnavailable: false,
+        catalog,
         settings,
         blueprints,
       });
@@ -731,25 +780,31 @@ export function createCapturedOuterFleetAdapter(
       const tauTechnology = finite(readProperty(tech, "tauceti")) ?? 0;
       let explorerAvailable = false;
       let explorerCount = 0;
-      if (exploreTau && tauTechnology === 1) {
+      const dimensions = provenDimensions(active);
+      // The Explorer is the one blueprint this script writes itself rather than configuring out of the
+      // settings, so it is also the one that must never be written without the yard's own catalogue
+      // saying its parts are offered: `setVal` has no availability gate, so an Explorer configured
+      // against no catalogue would be a hull the player has not unlocked. Without a catalogue nothing
+      // is asked about it and nothing is counted, which also means an unrelated ship parked at Tau
+      // Ceti is never mistaken for one.
+      if (exploreTau && tauTechnology === 1 && dimensions !== undefined) {
         const explorer = storeBlueprint(
           "explorer",
           CAPTURED_OUTER_FLEET_EXPLORER,
           "explorer blueprint",
           active.blueprints,
         );
-        const types = catalogTypes();
         explorerAvailable = capturedOuterFleetBlueprintAvailable(
           dependencies.controls,
           explorer,
-          types,
+          dimensions,
         );
         if (explorerAvailable)
           explorerCount = capturedOuterFleetShipCount(
             root,
             "tauceti",
             explorer,
-            types,
+            dimensions,
           );
       }
       const erisTechnology = finite(readProperty(tech, "eris")) ?? 0;
@@ -840,64 +895,72 @@ export function createCapturedOuterFleetAdapter(
       const active = activeSession();
       expectedDecision = null;
       const yard = capturedOuterFleetYard(active.root);
-      const types = catalogTypes();
-      const avail = (blueprint: UnknownRecord) =>
-        capturedOuterFleetBlueprintAvailable(
-          dependencies.controls,
-          blueprint,
-          types,
-        );
       let yardAvailable = false;
       let scoutAvailable = false;
       let scoutCount = 0;
       let maximumScouts = 0;
       let fighterAvailable = false;
-      if (target.forcedBlueprint !== "explorer" && target.mode === "user") {
-        if (yard !== undefined) {
-          yardAvailable = avail(
-            storeBlueprint(
-              "yard",
-              yard["blueprint"],
-              "shipyard.blueprint",
-              active.blueprints,
-            ),
+      const dimensions = provenDimensions(active);
+      // Nothing below is judged without the yard's own catalogue. All three flags stay false, which is
+      // the planner's own "no blueprint" answer: no preset is constructed over an empty dimension set,
+      // the yard's own design is not priced, and Current Design — whose unchanged fields need no
+      // `avail()` call but whose build postcondition is still built over these dimensions — never
+      // reaches the point of describing itself as the design to build.
+      if (dimensions !== undefined) {
+        const avail = (blueprint: UnknownRecord) =>
+          capturedOuterFleetBlueprintAvailable(
+            dependencies.controls,
+            blueprint,
+            dimensions,
           );
-        }
-      } else if (target.forcedBlueprint === null) {
-        const scout = storeBlueprint(
-          "scout",
-          capturedOuterFleetPartBlueprint(
-            active.settings,
-            "fleet_scout_",
-            types,
-          ),
-          "scout blueprint",
-          active.blueprints,
-        );
-        scoutAvailable = avail(scout);
-        if (scoutAvailable) {
-          scoutCount = capturedOuterFleetShipCount(
-            active.root,
-            target.targetRegion,
-            scout,
-            types,
-          );
-          maximumScouts =
-            finite(active.settings[`fleet_outer_sc_${target.targetRegion}`]) ??
-            0;
-        }
-        if (!scoutAvailable || scoutCount >= maximumScouts) {
-          const fighter = storeBlueprint(
-            "fighter",
+        if (target.forcedBlueprint !== "explorer" && target.mode === "user") {
+          if (yard !== undefined) {
+            yardAvailable = avail(
+              storeBlueprint(
+                "yard",
+                yard["blueprint"],
+                "shipyard.blueprint",
+                active.blueprints,
+              ),
+            );
+          }
+        } else if (target.forcedBlueprint === null) {
+          const scout = storeBlueprint(
+            "scout",
             capturedOuterFleetPartBlueprint(
               active.settings,
-              "fleet_outer_",
-              types,
+              "fleet_scout_",
+              dimensions,
             ),
-            "fighter blueprint",
+            "scout blueprint",
             active.blueprints,
           );
-          fighterAvailable = avail(fighter);
+          scoutAvailable = avail(scout);
+          if (scoutAvailable) {
+            scoutCount = capturedOuterFleetShipCount(
+              active.root,
+              target.targetRegion,
+              scout,
+              dimensions,
+            );
+            maximumScouts =
+              finite(
+                active.settings[`fleet_outer_sc_${target.targetRegion}`],
+              ) ?? 0;
+          }
+          if (!scoutAvailable || scoutCount >= maximumScouts) {
+            const fighter = storeBlueprint(
+              "fighter",
+              capturedOuterFleetPartBlueprint(
+                active.settings,
+                "fleet_outer_",
+                dimensions,
+              ),
+              "fighter blueprint",
+              active.blueprints,
+            );
+            fighterAvailable = avail(fighter);
+          }
         }
       }
       const input: OuterFleetBlueprintInput = Object.freeze({
@@ -1060,6 +1123,16 @@ export function createCapturedOuterFleetAdapter(
     active: CapturedOuterFleetSession,
     decision: Readonly<OuterFleetBuildDecision>,
   ): CommandExecutionOutcome {
+    // Planning should already have refused every candidate without this authority, but the execution
+    // defends itself rather than trusting that: `setVal` writes a blueprint whatever the yard offers,
+    // and the postcondition below is only a postcondition if it was built over the dimensions the game
+    // itself rendered. Refused before the first write, and before any price, power check or dispatch.
+    const dimensions = provenDimensions(active);
+    if (dimensions === undefined)
+      return stale(
+        "captured-outer-fleet-catalog-unavailable",
+        "the shipyard's part catalogue could not be read",
+      );
     const blueprint = active.blueprints.get(decision.blueprint);
     if (blueprint === undefined)
       return stale(
@@ -1105,7 +1178,7 @@ export function createCapturedOuterFleetAdapter(
     const expectedBlueprint = capturedOuterFleetExpectedBlueprint(
       blueprint,
       liveDesign,
-      catalogTypes(),
+      dimensions,
     );
     if (expectedBlueprint === undefined)
       return stale(

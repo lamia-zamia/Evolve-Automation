@@ -22,6 +22,17 @@ export interface GameShipyardPart {
   readonly index: number;
 }
 
+/**
+ * The blueprint dimensions a proven catalogue names, in the markup's own order.
+ *
+ * At least one, by construction. Markup that carries no option in it is not a yard with nothing to
+ * offer, it is a yard whose options could not be read, and answering about it with an empty dimension
+ * list is the opposite of refusing: a loop over no dimensions checks nothing and returns success, so
+ * every blueprint would match every ship and every build postcondition would be satisfied by any
+ * appended hull. Making that value unrepresentable is what keeps the refusal where it belongs.
+ */
+export type GameShipyardPartDimensions = readonly [string, ...string[]];
+
 export interface GameShipyardPartCatalog {
   /**
    * Every dimension the yard's markup offered, in the markup's own first-appearance order. That is
@@ -29,7 +40,7 @@ export interface GameShipyardPartCatalog {
    * a blueprint built from these dimensions write its class change before the fields that change
    * rewrites.
    */
-  readonly types: readonly string[];
+  readonly types: GameShipyardPartDimensions;
   /** Every option the markup carried, in the markup's own order. */
   readonly parts: readonly GameShipyardPart[];
   /** The catalogued option for one part, or `undefined` when the yard never offered it. */
@@ -40,7 +51,8 @@ export interface GameShipyardPartCatalogSource {
   /**
    * The yard's catalog, or `undefined` while it cannot be read. Absence is not an empty catalogue:
    * a dimension with no options is a different thing from a yard whose options could not be read,
-   * and only the first of those answers a question about what the yard offers.
+   * and only the first of those answers a question about what the yard offers. No empty catalogue is
+   * ever synthesized — `undefined` is the whole of the answer when the yard's markup is unreadable.
    */
   catalog(): GameShipyardPartCatalog | undefined;
 }
