@@ -23,8 +23,8 @@ import { rejected, stale, SUCCEEDED } from "../../command-outcomes.ts";
 import { finite, isRecord, readProperty } from "../../validation.ts";
 import {
   CAPTURED_FOREIGN_CONTROL,
-  CAPTURED_FOREIGN_ESPIONAGE_TRIGGER_METHOD,
   CAPTURED_FOREIGN_GARRISON_CONTROLS,
+  CAPTURED_FOREIGN_REQUIRED_METHODS,
   capturedForeignEspionageUseful,
   capturedForeignOperationMethod,
   readCapturedForeignGovernment,
@@ -33,13 +33,6 @@ import {
   type CapturedForeignGovernment,
 } from "./captured-foreign-state.ts";
 
-const CAPTURED_ESPIONAGE_FOREIGN_METHODS = [
-  "vis",
-  "gvis",
-  CAPTURED_FOREIGN_ESPIONAGE_TRIGGER_METHOD,
-  "spy_disabled",
-  "spy",
-] as const;
 const CAPTURED_ESPIONAGE_GOVERNOR_TASKS = ["combo_spy", "spyop"] as const;
 
 interface CapturedEspionageSample {
@@ -414,7 +407,7 @@ export function createCapturedEspionage(
     const foreign = capturedEspionageControl(
       dependencies.controls,
       CAPTURED_FOREIGN_CONTROL,
-      CAPTURED_ESPIONAGE_FOREIGN_METHODS,
+      CAPTURED_FOREIGN_REQUIRED_METHODS,
     );
     if (foreign === undefined) return capturedEspionageEmptyInput();
     const visible = dependencies.controls.invoke(foreign, "vis");

@@ -4,6 +4,9 @@ import { createCapturedResourceDemand } from "../src/adapters/evolve/economy/res
 import { ensureDemandPrerequisiteControls } from "../src/adapters/evolve/economy/resources/captured-demand-prerequisites.ts";
 import { actionPrice } from "./test-support/action-price.mjs";
 
+/** The Foreign authority the prerequisite now requires: not the id, the methods. */
+const FOREIGN_METHODS = ["vis", "gvis", "trigModal", "spy_disabled", "spy"];
+
 function fakeControls(ids = []) {
   const map = new Map(
     ids.map((id) => [
@@ -25,7 +28,7 @@ function track() {
   const seen = [];
   return {
     seen,
-    civic: () => seen.push("civic"),
+    foreign: () => seen.push("foreign"),
     build: () => seen.push("build"),
   };
 }
@@ -35,12 +38,12 @@ function prerequisites(root, settings, controls, tracked) {
     root,
     settings,
     controls,
-    ensureCivicControls: tracked.civic,
+    ensureForeignControls: tracked.foreign,
     ensureBuildControls: tracked.build,
   });
 }
 
-// The civic discovery runs while a spy-purchase reservation is possible but its control is
+// The Foreign discovery runs while a spy-purchase reservation is possible but its authority is
 // not captured yet: unification researched, unification wanted, the panel available, and
 // automation willing. A discovery that still leaves the control absent reports unavailable
 // rather than silently spending onward.
@@ -58,10 +61,10 @@ function prerequisites(root, settings, controls, tracked) {
     spy: "unavailable",
     ai: "not-needed",
   });
-  assert.deepEqual(tracked.seen, ["civic"]);
+  assert.deepEqual(tracked.seen, ["foreign"]);
 
   const discovered = track();
-  controls.add("foreign", ["vis", "gvis"]);
+  controls.add("foreign", FOREIGN_METHODS);
   assert.deepEqual(prerequisites(root, settings, controls, discovered), {
     spy: "ready",
     ai: "not-needed",
@@ -360,7 +363,7 @@ for (const [root, settings] of [
     root,
     settings,
     controls: captured,
-    ensureCivicControls: () => captured.add("foreign", ["vis", "gvis"]),
+    ensureForeignControls: () => captured.add("foreign", FOREIGN_METHODS),
     ensureBuildControls: succeeded.build,
   });
   assert.equal(readyReport.spy, "ready");
@@ -430,7 +433,7 @@ for (const [root, settings] of [
     root,
     settings,
     controls: partial,
-    ensureCivicControls: drawable.civic,
+    ensureForeignControls: drawable.foreign,
     ensureBuildControls: () => {
       for (const id of Object.keys(prices)) {
         if (id !== "space-tank") partial.add(id, ["setData"]);
@@ -456,7 +459,7 @@ for (const [root, settings] of [
     root: fullRoot,
     settings,
     controls: full,
-    ensureCivicControls: complete.civic,
+    ensureForeignControls: complete.foreign,
     ensureBuildControls: () => {
       for (const id of Object.keys(prices)) full.add(id, ["setData"]);
     },

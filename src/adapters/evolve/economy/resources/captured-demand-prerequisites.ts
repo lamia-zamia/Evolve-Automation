@@ -26,8 +26,8 @@ import {
   readEligibleTruepathAiTargets,
 } from "./truepath-ai-demand-actions.ts";
 import {
+  capturedForeignEstablished,
   capturedForeignPanelAvailable,
-  CAPTURED_FOREIGN_CONTROL,
   readCapturedForeignUnificationWanted,
 } from "../../combat/captured-foreign-state.ts";
 import { finite, isRecord, readProperty } from "../../../validation.ts";
@@ -43,8 +43,12 @@ export interface CapturedDemandPrerequisitesDependencies {
   readonly root: unknown;
   readonly settings: Record<PropertyKey, unknown>;
   readonly controls: GameControlRegistry;
-  /** Draws the civics tab, which binds the `foreign` panel control. */
-  readonly ensureCivicControls: () => void;
+  /**
+   * Establishes the Foreign panel's own authority. Not the generic Civic draw: that one cannot
+   * capture `foreign` at all, so asking it left this prerequisite permanently `unavailable` on any
+   * save whose player had never rendered Government.
+   */
+  readonly ensureForeignControls: () => void;
   /** Sweeps the civilization build controls the AI target is priced from. */
   readonly ensureBuildControls: () => void;
 }
@@ -86,11 +90,11 @@ function spyPrerequisiteStatus(
   if (!spyReservationWanted(dependencies.root, dependencies.settings)) {
     return "not-needed";
   }
-  if (dependencies.controls.resolve(CAPTURED_FOREIGN_CONTROL) !== undefined) {
-    return "ready";
-  }
-  dependencies.ensureCivicControls();
-  return dependencies.controls.resolve(CAPTURED_FOREIGN_CONTROL) !== undefined
+  // The same authority Espionage and Battle read, checked the same way: a `foreign` control
+  // without its methods has no Purchase route either.
+  if (capturedForeignEstablished(dependencies.controls)) return "ready";
+  dependencies.ensureForeignControls();
+  return capturedForeignEstablished(dependencies.controls)
     ? "ready"
     : "unavailable";
 }

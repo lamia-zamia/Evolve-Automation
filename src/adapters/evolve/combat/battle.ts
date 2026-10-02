@@ -28,6 +28,7 @@ import {
 import {
   CAPTURED_FOREIGN_CONTROL,
   CAPTURED_FOREIGN_GARRISON_CONTROLS,
+  CAPTURED_FOREIGN_GARRISON_REQUIRED_METHODS,
   capturedForeignPacifistGuardActive,
   readCapturedForeignTargets,
   selectCapturedForeignStrategy,
@@ -330,7 +331,7 @@ function capturedBattleReadCycle(
   const garrison = capturedBattleResolveControl(
     dependencies.controls,
     CAPTURED_FOREIGN_GARRISON_CONTROLS,
-    ["campaign", "next", "last", "aNext", "aLast", "rating", "hell", "s_max"],
+    CAPTURED_FOREIGN_GARRISON_REQUIRED_METHODS,
   );
   if (foreign === undefined || garrison === undefined) return undefined;
   if (

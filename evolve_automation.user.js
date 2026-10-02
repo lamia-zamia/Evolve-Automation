@@ -18749,10 +18749,39 @@
   }
 
   // src/adapters/evolve/combat/captured-foreign-state.ts
-  var CAPTURED_FOREIGN_CONTROL = "foreign", CAPTURED_FOREIGN_MAX_INDEX = 4, CAPTURED_FOREIGN_ESPIONAGE_TRIGGER_METHOD = "trigModal", CAPTURED_FOREIGN_GARRISON_CONTROLS = [
+  var CAPTURED_FOREIGN_CONTROL = "foreign", CAPTURED_FOREIGN_MAX_INDEX = 4, CAPTURED_FOREIGN_GOVERNMENT_PANEL = "#government", CAPTURED_FOREIGN_ESPIONAGE_TRIGGER_METHOD = "trigModal", CAPTURED_FOREIGN_GARRISON_CONTROLS = [
     "garrison",
     "c_garrison"
+  ], CAPTURED_FOREIGN_REQUIRED_METHODS = [
+    "vis",
+    "gvis",
+    CAPTURED_FOREIGN_ESPIONAGE_TRIGGER_METHOD,
+    "spy_disabled",
+    "spy"
+  ], CAPTURED_FOREIGN_GARRISON_REQUIRED_METHODS = [
+    "campaign",
+    "next",
+    "last",
+    "aNext",
+    "aLast",
+    "rating",
+    "hell",
+    "s_max"
   ];
+  function capturedForeignEstablished(controls2) {
+    let control = controls2.resolve(CAPTURED_FOREIGN_CONTROL);
+    return control !== void 0 && CAPTURED_FOREIGN_REQUIRED_METHODS.every(
+      (method) => control.methods.includes(method)
+    );
+  }
+  function capturedForeignGarrisonEstablished(controls2) {
+    return CAPTURED_FOREIGN_GARRISON_CONTROLS.some((id) => {
+      let control = controls2.resolve(id);
+      return control !== void 0 && CAPTURED_FOREIGN_GARRISON_REQUIRED_METHODS.every(
+        (method) => control.methods.includes(method)
+      );
+    });
+  }
   function capturedForeignSettingBoolean(settings, key, fallback) {
     return typeof settings[key] == "boolean" ? settings[key] : fallback;
   }
@@ -20046,7 +20075,7 @@
     return aiCoreLevel !== void 0 && aiCoreLevel >= 3;
   }
   function spyPrerequisiteStatus(dependencies) {
-    return spyReservationWanted(dependencies.root, dependencies.settings) ? dependencies.controls.resolve(CAPTURED_FOREIGN_CONTROL) !== void 0 ? "ready" : (dependencies.ensureCivicControls(), dependencies.controls.resolve(CAPTURED_FOREIGN_CONTROL) !== void 0 ? "ready" : "unavailable") : "not-needed";
+    return spyReservationWanted(dependencies.root, dependencies.settings) ? capturedForeignEstablished(dependencies.controls) ? "ready" : (dependencies.ensureForeignControls(), capturedForeignEstablished(dependencies.controls) ? "ready" : "unavailable") : "not-needed";
   }
   function aiPrerequisiteStatus(dependencies) {
     if (!truepathAiReservationWanted(dependencies.root, dependencies.settings))
@@ -48260,13 +48289,7 @@ Only continue if you trust the source. Injected code:
   }
 
   // src/adapters/evolve/combat/captured-espionage.ts
-  var CAPTURED_ESPIONAGE_FOREIGN_METHODS = [
-    "vis",
-    "gvis",
-    CAPTURED_FOREIGN_ESPIONAGE_TRIGGER_METHOD,
-    "spy_disabled",
-    "spy"
-  ], CAPTURED_ESPIONAGE_GOVERNOR_TASKS = ["combo_spy", "spyop"];
+  var CAPTURED_ESPIONAGE_GOVERNOR_TASKS = ["combo_spy", "spyop"];
   function capturedEspionageForeignGovernment(root, governmentId) {
     let value = readProperty(
       readProperty(readProperty(root, "civic"), "foreign"),
@@ -48438,7 +48461,7 @@ Only continue if you trust the source. Injected code:
       let settingsValue = dependencies.readSettings(), settings = isRecord(settingsValue) ? settingsValue : {}, foreign = capturedEspionageControl(
         dependencies.controls,
         CAPTURED_FOREIGN_CONTROL,
-        CAPTURED_ESPIONAGE_FOREIGN_METHODS
+        CAPTURED_FOREIGN_REQUIRED_METHODS
       );
       if (foreign === void 0) return capturedEspionageEmptyInput();
       let visible = dependencies.controls.invoke(foreign, "vis"), tech = finite(
@@ -49311,7 +49334,7 @@ Only continue if you trust the source. Injected code:
     ), garrison = capturedBattleResolveControl(
       dependencies.controls,
       CAPTURED_FOREIGN_GARRISON_CONTROLS,
-      ["campaign", "next", "last", "aNext", "aLast", "rating", "hell", "s_max"]
+      CAPTURED_FOREIGN_GARRISON_REQUIRED_METHODS
     );
     if (foreign === void 0 || garrison === void 0 || capturedBattleInvokeBoolean(dependencies.controls, foreign, "vis") !== !0)
       return;
@@ -49811,6 +49834,36 @@ Only continue if you trust the source. Injected code:
   // src/adapters/browser/random.ts
   function createBrowserRandomSource() {
     return Object.freeze({ nextUnit: () => Math.random() });
+  }
+
+  // src/adapters/evolve/combat/foreign-panel-draw.ts
+  var FOREIGN_PANEL_DRAW_KEY = "foreign";
+  function foreignPanelDrawnUpstream(root) {
+    let race = readProperty(root, "race");
+    return isRecord(race) && readProperty(race, "species") !== "protoplasm" && readProperty(race, "start_cataclysm") !== !0;
+  }
+  function planForeignPanelDraw(root, controls2) {
+    if (!foreignPanelDrawnUpstream(root) || !capturedForeignPanelAvailable(root) || controls2.resolve(MAIN_TAB_CONTROL) === void 0) return;
+    let govTabs = SUB_TAB_CONTROLS[GOV_TABS_SETTING];
+    if (govTabs !== void 0)
+      return Object.freeze({
+        path: Object.freeze([
+          Object.freeze({
+            setting: MAIN_TAB_SETTING,
+            control: MAIN_TAB_CONTROL,
+            index: MAIN_TAB_INDEX.civic
+          }),
+          Object.freeze({
+            setting: GOV_TABS_SETTING,
+            control: govTabs,
+            index: GOV_TAB_INDEX.civic
+          })
+        ]),
+        options: Object.freeze({
+          mount: Object.freeze([CAPTURED_FOREIGN_GOVERNMENT_PANEL]),
+          isPanelDrawn: () => capturedForeignEstablished(controls2)
+        })
+      });
   }
 
   // src/adapters/browser/game-keyboard-handlers.ts
@@ -51745,7 +51798,7 @@ Only continue if you trust the source. Injected code:
           root: pageCapture2.rootState.readRoot(),
           settings: settingsStore.readRaw(),
           controls: pageCapture2.controls,
-          ensureCivicControls,
+          ensureForeignControls,
           ensureBuildControls: progression.ensureBuildControls
         }), readTriggerDemand())
       }
@@ -51910,11 +51963,11 @@ Only continue if you trust the source. Injected code:
       mountSuppression: pageCapture2.mountSuppression,
       panels,
       diagnostics
-    }), finishDiscovery = (key, label, satisfied, epoch, steps) => {
+    }), finishDiscovery = (key, label, satisfied, epoch, steps, options = void 0) => {
       if (!discoveryAttempts.shouldAttempt(key, epoch)) return !1;
       let result;
       try {
-        result = civicDiscovery.discover(steps);
+        result = civicDiscovery.discover(steps, options);
       } catch (error) {
         return discoveryAttempts.recordFailure(key, epoch), logError(
           `${label} discovery threw: ${String(error)} (${discoveryAttempts.describe(key, epoch)})`
@@ -51954,6 +52007,28 @@ Only continue if you trust the source. Injected code:
           index: MAIN_TAB_INDEX.civic
         })
       ]) && (refreshDiscoveredSettings(), settingsPanel.refreshSettings());
+    }, reportCapturedGarrisonGap = () => {
+      capturedForeignGarrisonEstablished(pageCapture2.controls) || reportOnce(
+        "Foreign authority established without a Garrison campaign control; Battle stays dark until the civic military tab has been drawn"
+      );
+    }, ensureForeignControls = () => {
+      let satisfied = () => capturedForeignEstablished(pageCapture2.controls);
+      if (satisfied()) {
+        reportCapturedGarrisonGap();
+        return;
+      }
+      let draw = planForeignPanelDraw(
+        pageCapture2.rootState.readRoot(),
+        pageCapture2.controls
+      );
+      draw !== void 0 && finishDiscovery(
+        FOREIGN_PANEL_DRAW_KEY,
+        "Foreign",
+        satisfied,
+        void 0,
+        draw.path,
+        draw.options
+      ) && reportCapturedGarrisonGap();
     }, ensureOuterFleetControls = () => {
       let satisfied = () => pageCapture2.controls.resolve("shipPlans")?.methods.includes("build") === !0;
       if (satisfied()) return;
@@ -52602,7 +52677,7 @@ Only continue if you trust the source. Injected code:
             root: pageCapture2.rootState.readRoot(),
             settings,
             controls: pageCapture2.controls,
-            ensureCivicControls,
+            ensureForeignControls,
             ensureBuildControls: progression.ensureBuildControls
           });
         }), (isEnabled(settings, "autoBuild") || isEnabled(settings, "autoStorage")) && runPhase("construction demand discovery", () => {
@@ -52738,18 +52813,18 @@ Only continue if you trust the source. Injected code:
           mercenaryOutcome !== void 0 && mercenaryOutcome.status !== "succeeded" && reportOnce(
             `autoFight.mercenary: ${mercenaryOutcome.failure.code}: ${mercenaryOutcome.failure.message}`
           );
-          let outcome = runPhase("autoFight.spy", () => (ensureCivicControls(), runCapturedSpyTraining(capturedSpyTraining)));
+          let outcome = runPhase("autoFight.spy", () => (ensureForeignControls(), runCapturedSpyTraining(capturedSpyTraining)));
           outcome !== void 0 && outcome.status !== "succeeded" && reportOnce(
             `autoFight.spy: ${outcome.failure.code}: ${outcome.failure.message}`
           );
-          let espionageOutcome = runPhase("autoFight.espionage", () => runCapturedEspionageCycle());
+          let espionageOutcome = runPhase("autoFight.espionage", () => (capturedEspionage.isGovernorEspionageOwned() || ensureForeignControls(), runCapturedEspionageCycle()));
           if (espionageOutcome !== void 0 && espionageOutcome.status !== "succeeded" && ![
             "captured-espionage-postcondition-pending",
             "captured-espionage-modal-conflict"
           ].includes(espionageOutcome.failure.code) && reportOnce(
             `autoFight.espionage: ${espionageOutcome.failure.code}: ${espionageOutcome.failure.message}`
           ), espionageOutcome?.status === "succeeded" && !capturedEspionage.isBusy()) {
-            let battleOutcome = runPhase("autoFight.battle", () => (ensureCivicControls(), isEnabled(settings, "autoHell") && ensureHellGarrisonControls(), runBattleAutomation(capturedBattle)));
+            let battleOutcome = runPhase("autoFight.battle", () => (ensureForeignControls(), isEnabled(settings, "autoHell") && ensureHellGarrisonControls(), runBattleAutomation(capturedBattle)));
             battleOutcome !== void 0 && battleOutcome.status !== "succeeded" && reportOnce(
               `autoFight.battle: ${battleOutcome.failure.code}: ${battleOutcome.failure.message}`
             );
@@ -52773,7 +52848,7 @@ Only continue if you trust the source. Injected code:
             root: pageCapture2.rootState.readRoot(),
             settings,
             controls: pageCapture2.controls,
-            ensureCivicControls: () => {
+            ensureForeignControls: () => {
             },
             ensureBuildControls: () => {
             }

@@ -2201,8 +2201,10 @@ function runCapturedJobsMatrixScenario({
   // times it looked at the root.
   let bootstrapping = true;
   // Tuned to the tick's own read schedule: the first reads of the tick throw so the earlier
-  // phases report failures, and the next three succeed so the espionage and battle phases run.
-  // Re-tune by sweeping this number if the tick changes how often it reads the root.
+  // phases report failures, and the next four succeed so the espionage and battle phases run. The
+  // espionage phase asks the Governor-ownership question before it stands down, which is one more
+  // read of its own. Re-tune by sweeping this number if the tick changes how often it reads the
+  // root.
   let remainingRootFailures = 15;
   let validCombatRootReads = 0;
   const root = {
@@ -2257,7 +2259,7 @@ function runCapturedJobsMatrixScenario({
             remainingRootFailures -= 1;
             throw new Error("phase stub");
           }
-          if (validCombatRootReads < 3) {
+          if (validCombatRootReads < 4) {
             validCombatRootReads += 1;
             return root;
           }

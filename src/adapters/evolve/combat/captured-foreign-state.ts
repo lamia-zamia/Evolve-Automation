@@ -19,6 +19,12 @@ import { finite, isRecord, readProperty } from "../../validation.ts";
 export const CAPTURED_FOREIGN_CONTROL = "foreign";
 export const CAPTURED_FOREIGN_MAX_INDEX = 4;
 /**
+ * The element `defineGovernment()` creates and `vBind`es, and whose Buefy tab template is what
+ * materialises `#r_govern0` — the container `foreignGov()` appends `#foreign` into. One owner for
+ * the id, because it is both what a discovery must really mount and what a check would name.
+ */
+export const CAPTURED_FOREIGN_GOVERNMENT_PANEL = "#government";
+/**
  * The Foreign component method whose closure reaches the module-private `drawEspModal(gov)`. It is
  * the only route to the game's own espionage operations, and calling it is what captures them
  * without a Buefy modal — see `captured-espionage-capture.ts`.
@@ -28,6 +34,72 @@ export const CAPTURED_FOREIGN_GARRISON_CONTROLS = [
   "garrison",
   "c_garrison",
 ] as const;
+
+/**
+ * The union of what Foreign's consumers read: Espionage needs every one of them, and Spy Training
+ * and Battle each need a subset. It is the discovery authority, because the Foreign panel cannot be
+ * half established — a `foreign` control that is missing `trigModal` has no espionage route at all,
+ * and one missing `gvis` cannot even name a target.
+ */
+export const CAPTURED_FOREIGN_REQUIRED_METHODS = [
+  "vis",
+  "gvis",
+  CAPTURED_FOREIGN_ESPIONAGE_TRIGGER_METHOD,
+  "spy_disabled",
+  "spy",
+] as const;
+
+/**
+ * The campaign authority Battle reads from whichever Garrison control exists. `garrison` is the
+ * full military panel and `c_garrison` the compact one inside Government; they bind the same
+ * methods, and only one of the two draws has happened.
+ */
+export const CAPTURED_FOREIGN_GARRISON_REQUIRED_METHODS = [
+  "campaign",
+  "next",
+  "last",
+  "aNext",
+  "aLast",
+  "rating",
+  "hell",
+  "s_max",
+] as const;
+
+/**
+ * Whether the Foreign authority is established. Not "the `foreign` id resolves": a control that was
+ * captured while its panel was still detached has the id without the methods, and consumers would
+ * then invoke a route that does not exist.
+ */
+export function capturedForeignEstablished(
+  controls: GameControlRegistry,
+): boolean {
+  const control = controls.resolve(CAPTURED_FOREIGN_CONTROL);
+  return (
+    control !== undefined &&
+    CAPTURED_FOREIGN_REQUIRED_METHODS.every((method) =>
+      control.methods.includes(method),
+    )
+  );
+}
+
+/**
+ * Whether Battle's campaign authority is established, from either Garrison panel. Reported
+ * separately from Foreign because the two come from the same draw but fail independently: a player
+ * whose military tab was never drawn has Foreign and no compact Garrison.
+ */
+export function capturedForeignGarrisonEstablished(
+  controls: GameControlRegistry,
+): boolean {
+  return CAPTURED_FOREIGN_GARRISON_CONTROLS.some((id) => {
+    const control = controls.resolve(id);
+    return (
+      control !== undefined &&
+      CAPTURED_FOREIGN_GARRISON_REQUIRED_METHODS.every((method) =>
+        control.methods.includes(method),
+      )
+    );
+  });
+}
 
 export type CapturedForeignRank = "Inferior" | "Superior" | "Rival";
 export type CapturedForeignEspionage =

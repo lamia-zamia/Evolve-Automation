@@ -230,6 +230,15 @@ import {
   SPACE_TAB_INDEX,
   SUB_TAB_CONTROLS,
 } from "../adapters/evolve/captured-tab-discovery.ts";
+import type { TabDiscoveryOptions } from "../ports/game-tab-discovery.ts";
+import {
+  capturedForeignEstablished,
+  capturedForeignGarrisonEstablished,
+} from "../adapters/evolve/combat/captured-foreign-state.ts";
+import {
+  FOREIGN_PANEL_DRAW_KEY,
+  planForeignPanelDraw,
+} from "../adapters/evolve/combat/foreign-panel-draw.ts";
 import type { PageCapture } from "../adapters/evolve/page-capture.ts";
 
 declare const __EA_TEST_SURFACE_ENABLED__: boolean;
@@ -1065,7 +1074,7 @@ export function startCapturedRuntime({
             root: pageCapture.rootState.readRoot(),
             settings: settingsStore.readRaw(),
             controls: pageCapture.controls,
-            ensureCivicControls,
+            ensureForeignControls,
             ensureBuildControls: progression.ensureBuildControls,
           });
           return readTriggerDemand();
@@ -1329,6 +1338,8 @@ export function startCapturedRuntime({
    * the feature stays eligible for a later cycle instead of latching itself off for the session.
    *
    * `epoch` names a feature-owned identity — a progression reset — that starts the attempts over.
+   * `options` is the same per-pass surface `civicDiscovery.discover()` takes, for the one path that
+   * needs a component really mounted or a cheap observed answer.
    */
   const finishDiscovery = (
     key: string,
@@ -1336,6 +1347,7 @@ export function startCapturedRuntime({
     satisfied: (() => boolean) | undefined,
     epoch: string | undefined,
     steps: Parameters<typeof civicDiscovery.discover>[0],
+    options: Readonly<TabDiscoveryOptions> | undefined = undefined,
   ): boolean => {
     if (!discoveryAttempts.shouldAttempt(key, epoch)) return false;
     // A draw that throws is a failed attempt like any other. Without this the exception would
@@ -1343,7 +1355,7 @@ export function startCapturedRuntime({
     // redrawing its tab on every cycle forever.
     let result;
     try {
-      result = civicDiscovery.discover(steps);
+      result = civicDiscovery.discover(steps, options);
     } catch (error) {
       discoveryAttempts.recordFailure(key, epoch);
       logError(
@@ -1420,6 +1432,69 @@ export function startCapturedRuntime({
     }
     refreshDiscoveredSettings();
     settingsPanel.refreshSettings();
+  };
+  /**
+   * Draws the Government sub-tab, which is the only path to the Foreign panel's own controls.
+   *
+   * `defineGovernment()` creates `#government` and binds its `b-tabs`, but `#r_govern0` is that
+   * component's *render*, not markup: `government()`, the compact `#c_garrison`, `foreignGov()` and
+   * its `vBind({el:'#foreign'})` all append into `#r_govern0`, so with every mount suppressed they
+   * append into a detached element and the Foreign methods are never bound at all. This pass is
+   * therefore the one discovery that lets `#government` really mount — its Buefy tab template is
+   * what materialises the container the game's own synchronous code appends into — and everything
+   * else the draw binds stays suppressed. The Foreign component itself is not left mounted; its
+   * `vBind` methods are recorded from the binding options, which is all any consumer needs.
+   *
+   * Eligibility is the upstream answer, not a guess: `foreignGov()` runs only for
+   * `species !== 'protoplasm'` runs without `start_cataclysm`, and only when
+   * `capturedForeignPanelAvailable` holds, which is upstream's own `garrison.display && spyActive()`.
+   * A panel the game would not draw is not a failed discovery and must not be redrawn.
+   *
+   * The draw also establishes the compact Garrison Battle needs, because `buildGarrison($('#c_garrison'))`
+   * runs inside the same Government draw; a player who has never visited the military tab has no
+   * other source for it.
+   */
+  /**
+   * Battle reads the Foreign authority and a Garrison campaign authority, which this one draw
+   * produces but which fail independently: the compact `#c_garrison` is only bound when
+   * `#r_govern0` existed for it, and the full `garrison` only when the military tab has been drawn
+   * too. Naming the missing half is what keeps a dark Battle explainable instead of silent.
+   */
+  const reportCapturedGarrisonGap = () => {
+    if (capturedForeignGarrisonEstablished(pageCapture.controls)) return;
+    reportOnce(
+      "Foreign authority established without a Garrison campaign control; Battle stays dark until the civic military tab has been drawn",
+    );
+  };
+  /**
+   * Draws the Government sub-tab, the only path to the Foreign panel's own controls — see
+   * `foreign-panel-draw.ts` for why that needs one real `#government` mount and why a panel upstream
+   * would not create must not be redrawn. Attempt bookkeeping, restoration and diagnostics stay
+   * with the shared `finishDiscovery`.
+   */
+  const ensureForeignControls = () => {
+    const satisfied = () => capturedForeignEstablished(pageCapture.controls);
+    if (satisfied()) {
+      reportCapturedGarrisonGap();
+      return;
+    }
+    const draw = planForeignPanelDraw(
+      pageCapture.rootState.readRoot(),
+      pageCapture.controls,
+    );
+    if (draw === undefined) return;
+    if (
+      finishDiscovery(
+        FOREIGN_PANEL_DRAW_KEY,
+        "Foreign",
+        satisfied,
+        undefined,
+        draw.path,
+        draw.options,
+      )
+    ) {
+      reportCapturedGarrisonGap();
+    }
   };
   const ensureOuterFleetControls = () => {
     const satisfied = () =>
@@ -2478,8 +2553,8 @@ export function startCapturedRuntime({
         }
       }
       // Two demand reservations need controls that are otherwise discovered later in the
-      // cycle: the spy-purchase reserve needs the `foreign` panel control and the True Path AI
-      // target needs the civilization build controls. The cycle caches its demand sample on
+      // cycle: the spy-purchase reserve needs the Foreign panel's own authority and the True Path
+      // AI target needs the civilization build controls. The cycle caches its demand sample on
       // first use, so this runs before any consumer (triggers, market, storage) can sample,
       // and the report it writes is what the samples fail closed on when a capture is missing.
       runPhase("demand prerequisites", () => {
@@ -2487,7 +2562,7 @@ export function startCapturedRuntime({
           root: pageCapture.rootState.readRoot(),
           settings,
           controls: pageCapture.controls,
-          ensureCivicControls,
+          ensureForeignControls,
           ensureBuildControls: progression.ensureBuildControls,
         });
       });
@@ -2918,7 +2993,7 @@ export function startCapturedRuntime({
           );
         }
         const outcome = runPhase("autoFight.spy", () => {
-          ensureCivicControls();
+          ensureForeignControls();
           return runCapturedSpyTraining(capturedSpyTraining);
         });
         if (outcome !== undefined && outcome.status !== "succeeded") {
@@ -2926,10 +3001,16 @@ export function startCapturedRuntime({
             `autoFight.spy: ${outcome.failure.code}: ${outcome.failure.message}`,
           );
         }
-        // No `ensureCivicControls()`: espionage runs the game's own captured operations, which
-        // reach their own methods without a tab, a panel, or a modal. Battle, Spy Training and the
-        // rest of the civic tail still need their normal Foreign/Garrison controls.
+        // The synthetic Espionage executor runs the game's own captured operations, so the phase
+        // needs no tab, no panel and no modal — but it does need the `foreign` closure those
+        // operations come from, which only the Government draw establishes. Skipped entirely when
+        // the Governor owns espionage: the phase would immediately stand down, and spending a draw
+        // to learn a fact the Governor already answered is the kind of pointless work this
+        // discovery is otherwise rate-limited against.
         const espionageOutcome = runPhase("autoFight.espionage", () => {
+          if (!capturedEspionage.isGovernorEspionageOwned()) {
+            ensureForeignControls();
+          }
           return runCapturedEspionageCycle();
         });
         if (
@@ -2949,7 +3030,9 @@ export function startCapturedRuntime({
           !capturedEspionage.isBusy()
         ) {
           const battleOutcome = runPhase("autoFight.battle", () => {
-            ensureCivicControls();
+            // Foreign and the compact Garrison come out of the same Government draw, so this is
+            // one pass rather than a Civic draw plus a Government one.
+            ensureForeignControls();
             if (isEnabled(settings, "autoHell")) ensureHellGarrisonControls();
             return runBattleAutomation(capturedBattle);
           });
@@ -3019,7 +3102,7 @@ export function startCapturedRuntime({
                   root: pageCapture.rootState.readRoot(),
                   settings,
                   controls: pageCapture.controls,
-                  ensureCivicControls: () => undefined,
+                  ensureForeignControls: () => undefined,
                   ensureBuildControls: () => undefined,
                 });
           demandPrerequisitesThisCycle = prerequisites;
