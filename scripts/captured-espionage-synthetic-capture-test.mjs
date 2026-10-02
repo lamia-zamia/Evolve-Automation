@@ -238,6 +238,12 @@ function installGame(page, root) {
   }
 
   function drawEspModal(gov) {
+    // The two ways this draw can fail before it binds, so a recapture's failure is exercised rather
+    // than assumed: `before-bind` throws out of the poll callback the capture flushes, and `trigger`
+    // makes `trigModal` itself throw. Neither binds a control, so neither may look like a capture.
+    if (page.failEspionageCapture === "before-bind") {
+      throw new Error("the game threw before vBind");
+    }
     const box = $("#modalBox");
     box.append($('<p id="modalBoxTitle"></p>'));
     box.append($('<div id="espModal" class="modalBody"></div>'));
@@ -341,6 +347,9 @@ function installGame(page, root) {
     spy_disabled: () => false,
     spy: () => {},
     trigModal(i) {
+      if (page.failEspionageCapture === "trigger") {
+        throw new Error("the game threw before opening the modal");
+      }
       this.$buefy.modal.open({
         hasModalCard: false,
         customClass: "evolve-modal",
@@ -709,6 +718,177 @@ for (const [policy, operation, land] of [
   assert.equal(page.setInterval, page.realSetInterval);
   assert.equal(page.timers.size, 0);
   capture.uninstall();
+}
+
+// --- a capture succeeds only when it rebound the control ----------------------------------------------
+//
+// `vue-capture` never forgets a control, so a recapture of the *same* government finds the previous
+// `espModal` still in the registry with a current generation and a `data` that still matches the
+// government the decision named. Neither the executor's scope check nor its generation check can
+// tell that from a genuine capture; only the capture itself can, by proving this invocation
+// produced the binding.
+
+/** Every game field an operation would change, for the "nothing happened" assertion. */
+function governmentSnapshot(root) {
+  return JSON.stringify({
+    gov0: root.civic.foreign.gov0,
+    gov1: root.civic.foreign.gov1,
+    gov2: root.civic.foreign.gov2,
+    money: root.resource.Money.amount,
+  });
+}
+
+{
+  // The game's own draw throws inside the flushed poll callback, before `vBind`. The control from
+  // the first capture stays in the registry untouched, and must not be handed back.
+  const harness = makeHarness();
+  const first = harness.operations.capture(0);
+  assert.notEqual(
+    first,
+    undefined,
+    "the first capture establishes the control",
+  );
+  assert.equal(first.data, harness.root.civic.foreign.gov0);
+  const generationBefore =
+    harness.capture.controls.resolve("espModal").generation;
+
+  harness.page.failEspionageCapture = "before-bind";
+  assert.equal(
+    harness.operations.capture(0),
+    undefined,
+    "the previous generation must not masquerade as this capture",
+  );
+  // Nothing was deleted or mutated to achieve that: the old control is still a correct answer for
+  // the government it was drawn for.
+  const survivor = harness.capture.controls.resolve("espModal");
+  assert.equal(
+    survivor.generation,
+    generationBefore,
+    "the old control was left alone",
+  );
+  assert.equal(survivor.data, harness.root.civic.foreign.gov0);
+  // Both failures are reported: the game's own callback throw, and the capture's refusal.
+  assert.ok(
+    harness.faults.some((fault) => /timer callback threw/.test(fault)),
+    JSON.stringify(harness.faults),
+  );
+  assert.ok(
+    harness.faults.some((fault) =>
+      /espModal was not rebound by this capture/.test(fault),
+    ),
+    JSON.stringify(harness.faults),
+  );
+  // Every other guarantee of the call is unchanged: no modal, no mounted component, the host gone,
+  // and the page's own timers handed back.
+  assert.equal(
+    harness.page.document.querySelectorAll(".modal.is-active").length,
+    0,
+  );
+  assert.equal(harness.page.document.querySelector(".modal-background"), null);
+  assert.equal(harness.page.document.querySelector("#modalBox"), null);
+  assert.equal(harness.page.document.querySelector("#espModal"), null);
+  assert.equal(harness.page.setInterval, harness.page.realSetInterval);
+  assert.equal(harness.page.clearInterval, harness.page.realClearInterval);
+  harness.capture.uninstall();
+}
+
+{
+  // The trigger itself throwing: `synthesis.invoke` fails, so nothing was captured whatever the
+  // registry holds.
+  const harness = makeHarness();
+  assert.notEqual(harness.operations.capture(0), undefined);
+  harness.page.failEspionageCapture = "trigger";
+  assert.equal(harness.operations.capture(0), undefined);
+  assert.ok(
+    harness.faults.some((fault) => /trigModal failed: threw/.test(fault)),
+    JSON.stringify(harness.faults),
+  );
+  assert.ok(
+    harness.faults.some((fault) =>
+      /trigModal invocation did not complete/.test(fault),
+    ),
+    JSON.stringify(harness.faults),
+  );
+  assert.equal(
+    harness.page.document.querySelectorAll(".modal.is-active").length,
+    0,
+  );
+  assert.equal(harness.page.document.querySelector("#modalBox"), null);
+  assert.equal(harness.page.setInterval, harness.page.realSetInterval);
+  harness.capture.uninstall();
+}
+
+{
+  // The executor's own view. An earlier successful capture for gov0 leaves a plausible handle in
+  // the registry; the next recapture fails, and the phase must stand down rather than invoke a
+  // closure from the earlier draw.
+  const harness = makeHarness({
+    settings: { foreignPolicyInferior: "Influence" },
+  });
+  assert.notEqual(
+    harness.operations.capture(0),
+    undefined,
+    "an earlier capture for the same government",
+  );
+  const before = governmentSnapshot(harness.root);
+  harness.page.failEspionageCapture = "before-bind";
+
+  const outcome = runCapturedEspionage(harness.espionage);
+  assert.equal(outcome.status, "stale");
+  assert.equal(
+    outcome.failure.code,
+    "captured-espionage-operation-capture-unavailable",
+    "the refused capture is a closed door, not an old closure",
+  );
+  assert.equal(
+    governmentSnapshot(harness.root),
+    before,
+    "no sab, act, Money, hostility, military, unrest, annex or purchase moved",
+  );
+  assert.deepEqual(
+    harness.capture.controlUsage
+      .readUsage()
+      .filter((record) => record.elementId === "espModal"),
+    [],
+    "no captured operation was invoked",
+  );
+  assert.equal(harness.activities.length, 0);
+  assert.equal(
+    harness.page.document.querySelectorAll(".modal.is-active").length,
+    0,
+  );
+  assert.equal(harness.page.document.querySelector("#espModal"), null);
+  assert.equal(harness.page.document.querySelector("#modalBox"), null);
+  harness.capture.uninstall();
+}
+
+{
+  // The refusal is per attempt, not latched: once the game draws again, the same government is
+  // captured afresh, the generation advances, and the executor runs the operation normally.
+  const harness = makeHarness({
+    settings: { foreignPolicyInferior: "Influence" },
+  });
+  const first = harness.operations.capture(0);
+  harness.page.failEspionageCapture = "before-bind";
+  assert.equal(harness.operations.capture(0), undefined);
+  harness.page.failEspionageCapture = undefined;
+
+  const again = harness.operations.capture(0);
+  assert.notEqual(again, undefined, "a genuine redraw is still a capture");
+  assert.equal(
+    again.generation,
+    first.generation + 1,
+    "the generation advanced",
+  );
+  assert.equal(again.data, harness.root.civic.foreign.gov0);
+  const outcome = runCapturedEspionage(harness.espionage);
+  assert.equal(
+    outcome.failure.code,
+    "captured-espionage-postcondition-pending",
+  );
+  assert.equal(harness.root.civic.foreign.gov0.act, "influence");
+  assert.ok(harness.root.civic.foreign.gov0.sab > 0);
+  harness.capture.uninstall();
 }
 
 // --- the synthesized receiver is ephemeral ---------------------------------------------------------------

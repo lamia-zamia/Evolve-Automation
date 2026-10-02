@@ -48705,11 +48705,14 @@ Only continue if you trust the source. Injected code:
     "annex",
     "purchase"
   ], ESPIONAGE_CAPTURE_HOST_ID = "modalBox", ESPIONAGE_ACTIVE_MODAL_SELECTOR = ".modal.is-active", ESPIONAGE_SYNTHETIC_OPEN_METHODS = ["$buefy.modal.open"];
-  function espionageOperationControl(controls2) {
+  function espionageOperationControl(controls2, minimumGeneration) {
     let control = controls2.resolve(ESPIONAGE_OPERATION_CONTROL);
-    return control !== void 0 && ESPIONAGE_OPERATION_METHODS.every(
+    return control !== void 0 && control.generation > minimumGeneration && ESPIONAGE_OPERATION_METHODS.every(
       (method) => control.methods.includes(method)
     ) ? control : void 0;
+  }
+  function espionageOperationGeneration(controls2) {
+    return controls2.resolve(ESPIONAGE_OPERATION_CONTROL)?.generation ?? 0;
   }
   function espionageActiveModals(document) {
     let querySelectorAll = readProperty(document, "querySelectorAll");
@@ -48813,7 +48816,9 @@ Only continue if you trust the source. Injected code:
         if (!(capturing || synthesis === void 0 || !synthesis.available || !dependencies.mountSuppression.available)) {
           capturing = !0;
           try {
-            let document = dependencies.getDocument(), host = espionageCaptureHost(document);
+            let generationBefore = espionageOperationGeneration(
+              dependencies.controls
+            ), invoked = !1, document = dependencies.getDocument(), host = espionageCaptureHost(document);
             if (host === void 0) return;
             try {
               dependencies.mountSuppression.withoutMounting(() => {
@@ -48829,7 +48834,7 @@ Only continue if you trust the source. Injected code:
                         noOpMethods: ESPIONAGE_SYNTHETIC_OPEN_METHODS
                       }
                     });
-                    result.ok || reportError(
+                    invoked = result.ok, result.ok || reportError(
                       `${CAPTURED_FOREIGN_ESPIONAGE_TRIGGER_METHOD} failed: ${result.reason} ${result.detail ?? ""}`
                     );
                   }
@@ -48838,8 +48843,19 @@ Only continue if you trust the source. Injected code:
             } finally {
               removeEspionageCaptureHost(host);
             }
-            let control = espionageOperationControl(dependencies.controls);
-            return control === void 0 && reportError(`no ${ESPIONAGE_OPERATION_CONTROL} operations captured`), control;
+            if (!invoked) {
+              reportError(
+                `the ${CAPTURED_FOREIGN_ESPIONAGE_TRIGGER_METHOD} invocation did not complete`
+              );
+              return;
+            }
+            let control = espionageOperationControl(
+              dependencies.controls,
+              generationBefore
+            );
+            return control === void 0 && reportError(
+              dependencies.controls.resolve(ESPIONAGE_OPERATION_CONTROL) === void 0 ? `no ${ESPIONAGE_OPERATION_CONTROL} operations captured` : `${ESPIONAGE_OPERATION_CONTROL} was not rebound by this capture`
+            ), control;
           } catch (error) {
             reportError(String(error));
             return;

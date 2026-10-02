@@ -24,6 +24,15 @@
  * government is not correct for another. Each capture re-enters the game and is not kept: the
  * returned handle's `data` is the government object the game bound, which is what a caller compares
  * to prove the scope.
+ *
+ * That per-government check is not enough on its own, and neither is the generation check the caller
+ * makes afterwards: a recapture of the *same* government leaves the previous `espModal` control in
+ * the registry with a current generation and a matching `data`, so a failure that never reached
+ * `vBind` would hand back a perfectly plausible handle whose closure is from an earlier draw. A
+ * capture therefore succeeds only when this invocation demonstrably rebound the control: the
+ * generation before the call is read, the invocation must report success, and the resolved control
+ * must carry every operation method *and* a generation produced after it. Nothing is deleted to make
+ * that work — an old control stays a correct answer for the government it was drawn for.
  */
 import type { CapturedEspionageOperationCapture } from "../../../ports/captured-espionage.ts";
 import type {
@@ -69,14 +78,26 @@ export interface CapturedEspionageOperationCaptureDependencies {
 
 function espionageOperationControl(
   controls: GameControlRegistry,
+  minimumGeneration: number,
 ): GameControlHandle | undefined {
   const control = controls.resolve(ESPIONAGE_OPERATION_CONTROL);
   return control !== undefined &&
+    control.generation > minimumGeneration &&
     ESPIONAGE_OPERATION_METHODS.every((method) =>
       control.methods.includes(method),
     )
     ? control
     : undefined;
+}
+
+/**
+ * The generation the operation control holds right now, and `0` when the registry has never seen
+ * one. `vue-capture` starts a control at generation 1 and increments it on every rebind, so this is
+ * the whole freshness question: did *this* invocation bind, or is the caller looking at a control an
+ * earlier invocation left behind?
+ */
+function espionageOperationGeneration(controls: GameControlRegistry): number {
+  return controls.resolve(ESPIONAGE_OPERATION_CONTROL)?.generation ?? 0;
 }
 
 function espionageActiveModals(
@@ -272,6 +293,15 @@ export function createCapturedEspionageOperationCapture(
       }
       capturing = true;
       try {
+        // Read before the invocation, never cleared: a control that survives in the registry from an
+        // earlier capture is still a valid handle to *its* government, so the only honest test of
+        // this capture is whether the invocation itself rebound it. For the same government the
+        // stale control's `data` still matches and its generation is still current, so the
+        // executor's own scope check cannot tell the two apart.
+        const generationBefore = espionageOperationGeneration(
+          dependencies.controls,
+        );
+        let invoked = false;
         const document = dependencies.getDocument();
         const host = espionageCaptureHost(document);
         if (host === undefined) return undefined;
@@ -289,6 +319,7 @@ export function createCapturedEspionageOperationCapture(
                     noOpMethods: ESPIONAGE_SYNTHETIC_OPEN_METHODS,
                   },
                 });
+                invoked = result.ok;
                 if (!result.ok) {
                   reportError(
                     `${CAPTURED_FOREIGN_ESPIONAGE_TRIGGER_METHOD} failed: ${result.reason} ${result.detail ?? ""}`,
@@ -300,9 +331,26 @@ export function createCapturedEspionageOperationCapture(
         } finally {
           removeEspionageCaptureHost(host);
         }
-        const control = espionageOperationControl(dependencies.controls);
+        // A refused or failed invocation captured nothing, whatever the registry happens to hold.
+        // This also covers the game's poll callback throwing before `drawEspModal` binds: the
+        // reported failure and the freshness check are independent, and either one refuses.
+        if (!invoked) {
+          reportError(
+            `the ${CAPTURED_FOREIGN_ESPIONAGE_TRIGGER_METHOD} invocation did not complete`,
+          );
+          return undefined;
+        }
+        const control = espionageOperationControl(
+          dependencies.controls,
+          generationBefore,
+        );
         if (control === undefined) {
-          reportError(`no ${ESPIONAGE_OPERATION_CONTROL} operations captured`);
+          reportError(
+            dependencies.controls.resolve(ESPIONAGE_OPERATION_CONTROL) ===
+              undefined
+              ? `no ${ESPIONAGE_OPERATION_CONTROL} operations captured`
+              : `${ESPIONAGE_OPERATION_CONTROL} was not rebound by this capture`,
+          );
         }
         return control;
       } catch (error) {
