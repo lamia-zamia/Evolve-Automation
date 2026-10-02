@@ -643,13 +643,22 @@ capturedMethods.build = originalBuild;
 // `CapturedFleetDemand` freezes `nextShipCost` for the cycle and upstream writes that row from the
 // live blueprint and the live per-tier ship count, so the flag has to come from the adapter
 // observing the yard. A rejected or stale outcome is not evidence either way.
-function createRegistryWith(overrides) {
+/**
+ * The same registry over a yard the captured control reads instead of `root`'s own.
+ *
+ * The requested design is the root clone's blueprint — the save's snapshot — while the live design is
+ * what the captured `shipPlans` control holds, which is the whole reason `currentDesign()` does not
+ * read the root. A save whose blueprint predates a field the yard has since normalized therefore
+ * carries it in one and not the other, and that is the only way to hand a requested design a field the
+ * yard's own live design never mentions.
+ */
+function createRegistryWith(overrides, live = yard) {
   const methods = { ...capturedMethods, ...overrides };
   const handle = {
     elementId: "shipPlans",
     generation: 1,
     methods: Object.keys(methods),
-    data: { s: yard },
+    data: { s: live },
   };
   return {
     resolve: (elementId) => (elementId === "shipPlans" ? handle : undefined),
@@ -871,34 +880,37 @@ assert.equal(capturedBuilds, buildsBeforeCostless);
 yard.ships.length = 0;
 
 // ---------------------------------------------------------------------------
-// No catalogue at all: the yard's own part options could not be read.
+// No catalogue authority: unreadable, absent, or readable and not whole.
 // ---------------------------------------------------------------------------
 
 /**
  * Every effect the composition could reach the yard or the game's answers with, counted.
  *
- * The counters exist because the absence of a catalogue is not the absence of work: asked over an
+ * The counters exist because having no catalogue authority is not the absence of work: asked over an
  * empty dimension set, availability is true for every design, a match is true for every ship, and a
  * build postcondition is an empty record that any appended hull satisfies. So the list below must stay
  * empty, rather than merely ending in a refusal.
  */
-function countingRegistry() {
+function countingRegistry(live = yard) {
   const seen = { avail: 0, setVal: 0, build: 0 };
   return {
     seen,
-    registry: createRegistryWith({
-      avail: () => {
-        seen.avail += 1;
-        return true;
+    registry: createRegistryWith(
+      {
+        avail: () => {
+          seen.avail += 1;
+          return true;
+        },
+        setVal: (type, part) => {
+          seen.setVal += 1;
+          live.blueprint[type] = part;
+        },
+        build: () => {
+          seen.build += 1;
+        },
       },
-      setVal: (type, part) => {
-        seen.setVal += 1;
-        yard.blueprint[type] = part;
-      },
-      build: () => {
-        seen.build += 1;
-      },
-    }),
+      live,
+    ),
   };
 }
 
@@ -906,14 +918,43 @@ function countingRegistry() {
 const unavailableCatalog = { catalog: () => undefined };
 
 /**
- * One pass against a source that cannot answer, with the yard's own build stubbed to append a hull
- * nothing asked for. That hull is what an empty postcondition would accept, so reaching it is the
- * failure this guards.
+ * A catalogue over the yard's own markup with one dimension left out — what a catalogue missing that
+ * dimension looks like from the outside: readable throughout, internally valid, and short.
+ *
+ * The dimension dropped here is `special`, on purpose. It is a dimension the settings never configure,
+ * so no preset this script builds names it in any blueprint at all: with the catalogue proving itself
+ * against the yard's own live design, this is the one catalogue defect that a check of the *requested*
+ * design alone cannot see. Upstream keeps the special slot in `shipParts` beside the other six, and
+ * `drawShipYard()` normalizes one entry into every modern blueprint, so the live design is what carries
+ * the proof that the catalogue is missing something.
  */
-function passWithoutCatalog(settings, prepare) {
-  const { seen, registry } = countingRegistry();
+function catalogWithout(dimension) {
+  const catalog = shipyardCatalog(
+    Object.fromEntries(
+      Object.entries(SHIP_PARTS).filter(([type]) => type !== dimension),
+    ),
+  );
+  assert.ok(
+    !catalog.types.includes(dimension),
+    `${dimension}: the catalogue kept the dimension it was meant to drop`,
+  );
+  return { catalog: () => catalog };
+}
+
+/** A non-empty catalogue that is nonetheless not the whole yard. */
+const specialLessCatalog = catalogWithout("special");
+
+/**
+ * One pass against a source that cannot be the yard's whole catalogue, with the yard's own build stub
+ * appending a hull nothing asked for. That hull is what an incomplete postcondition would accept, so
+ * reaching it is the failure this guards.
+ */
+function passWithoutProvenCatalog(settings, prepare, options = {}) {
+  const { source = unavailableCatalog, live = yard } = options;
+  const { seen, registry } = countingRegistry(live);
   const prices = [];
   const sends = [];
+  const liveBefore = { ...live.blueprint };
   const blueprintBefore = { ...yard.blueprint };
   yard.ships.length = 0;
   for (const key of Object.keys(settings))
@@ -936,14 +977,19 @@ function passWithoutCatalog(settings, prepare) {
         return costs.price(blueprint);
       },
     },
-    unavailableCatalog,
+    source,
   ).autoFleetOuter();
   assert.equal(
     [seen.avail, seen.setVal, seen.build, prices.length, sends.length].join(
       "/",
     ),
     "0/0/0/0/0",
-    `the yard was reached without a catalogue (${settings.fleetOuterShips})`,
+    `the yard was reached without a whole catalogue (${settings.fleetOuterShips}/${settings.fleetExploreTau})`,
+  );
+  assert.deepEqual(
+    live.blueprint,
+    liveBefore,
+    "the captured design was written",
   );
   assert.deepEqual(
     yard.blueprint,
@@ -958,24 +1004,75 @@ function passWithoutCatalog(settings, prepare) {
 // Current Design. Its fields need no `avail()` call — the yard already holds them — but the design
 // still has to be described over the game's part dimensions before it can be judged built, and over no
 // dimensions it cannot be. `avail` would answer true here for any design with a hull.
-passWithoutCatalog(
+passWithoutProvenCatalog(
   { fleetOuterShips: "user", fleetExploreTau: false },
   () => {},
 );
 
 // The automatic route's own presets, which are constructed out of the catalogue's dimensions: with no
 // catalogue there is nothing to construct them from, and nothing to construct.
-passWithoutCatalog(
+passWithoutProvenCatalog(
   { fleetOuterShips: "custom", fleetExploreTau: false },
   () => {},
 );
 
 // The forced Explorer, the one blueprint this script writes itself. `setVal` has no availability gate
 // upstream, so a design written from no catalogue is a hull the player may never have unlocked.
-passWithoutCatalog({ fleetOuterShips: "custom", fleetExploreTau: true }, () => {
-  root.tech.tauceti = 1;
-});
+passWithoutProvenCatalog(
+  { fleetOuterShips: "custom", fleetExploreTau: true },
+  () => {
+    root.tech.tauceti = 1;
+  },
+);
 root.tech.tauceti = 0;
+
+// The same three routes against a catalogue that exists, reads cleanly and is still short a dimension.
+// Nothing about the source is faulted here — no capture error, no unreadable markup — so the only
+// thing that can refuse these is the yard's own live design against the catalogue's dimensions.
+passWithoutProvenCatalog(
+  { fleetOuterShips: "user", fleetExploreTau: false },
+  () => {},
+  { source: specialLessCatalog },
+);
+passWithoutProvenCatalog(
+  { fleetOuterShips: "custom", fleetExploreTau: false },
+  () => {},
+  { source: specialLessCatalog },
+);
+passWithoutProvenCatalog(
+  { fleetOuterShips: "custom", fleetExploreTau: true },
+  () => {
+    root.tech.tauceti = 1;
+  },
+  { source: specialLessCatalog },
+);
+root.tech.tauceti = 0;
+
+// A field the requested design names and the catalogue does not.
+//
+// This is the other direction from the proof above: the catalogue accounts for everything the yard's
+// live design holds, and the request still reaches past it. Only a requested design can do that — the
+// presets are built out of the catalogue's own dimensions, and Current Design's design is the root
+// clone's blueprint, which the yard normalizes into its live one and may therefore outgrow. The yard's
+// own `setVal(type, value)` would write such a field whatever the catalogue says, so availability has
+// to refuse the design rather than skip the field. A fictional field is used deliberately: nothing
+// here may decide which dimensions exist, so the invariant has to hold for a name neither this script
+// nor the game has ever had.
+{
+  const invented = "warp_core";
+  yard.blueprint[invented] = "flux_drive";
+  // The captured control holds the yard's own design without the invented field, which is what the
+  // root clone looks like for a blueprint the yard has not normalized yet. The catalogue is whole.
+  const capturedYard = { ...yard, blueprint: { ...yard.blueprint } };
+  delete capturedYard.blueprint[invented];
+  passWithoutProvenCatalog(
+    { fleetOuterShips: "user", fleetExploreTau: false },
+    () => {},
+    { live: capturedYard, source: { catalog: () => partCatalog } },
+  );
+  delete yard.blueprint[invented];
+}
+
 capturedSettings.fleetExploreTau = false;
 
 console.log("Captured outer-fleet control postcondition tests passed");

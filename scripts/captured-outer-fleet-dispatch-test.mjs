@@ -2927,9 +2927,10 @@ function damagedCatalogHarness({ root = makeRoot(), ships = [] } = {}) {
  * own defence observable rather than asserted: the postcondition is the design the yard holds over the
  * game's own part dimensions, and a dreadnought cannot satisfy a corvette. A postcondition built over
  * no dimensions at all is an empty record, which satisfies *every* hull — so that build would run, be
- * accepted as the intended ship, and be dispatched.
+ * accepted as the intended ship, and be dispatched. A postcondition built over a catalogue missing
+ * `class` is worse in exactly the same way, and that is the case this stub is here for.
  */
-function outerFleetControlOverDamagedYard(harness, readSettings) {
+function outerFleetControlOverWrongHull(harness, readSettings) {
   const registry = harness.capture.controls;
   const prices = [];
   return {
@@ -2979,7 +2980,7 @@ const UNREADABLE_CATALOG_FAULT = [
   const unreadableDesign = damagedCatalogHarness();
   const designBefore = { ...unreadableDesign.root.space.shipyard.blueprint };
   const currentDesignSettings = presetSettings({ fleetOuterShips: "user" });
-  const { control, prices } = outerFleetControlOverDamagedYard(
+  const { control, prices } = outerFleetControlOverWrongHull(
     unreadableDesign,
     () => currentDesignSettings,
   );
@@ -3034,7 +3035,7 @@ for (const [why, tauShips] of [
   });
   const parked = unreadableExplorer.root.space.shipyard.ships.length;
   const exploreSettings = presetSettings({ fleetExploreTau: true });
-  const { control, prices } = outerFleetControlOverDamagedYard(
+  const { control, prices } = outerFleetControlOverWrongHull(
     unreadableExplorer,
     () => exploreSettings,
   );
@@ -3062,6 +3063,136 @@ for (const [why, tauShips] of [
   );
   assert.deepEqual(sentTo(unreadableExplorer.page), []);
   assert.deepEqual(unreadableExplorer.faults, UNREADABLE_CATALOG_FAULT);
+}
+
+// ---------------------------------------------------------------------------
+// A catalogue that reads is not yet a whole one.
+//
+// Markup that has lost every option of one dimension still parses. What remains runs `0 … n-1` per
+// dimension, nothing is duplicated and nothing is skipped, so the parser has every reason to call it a
+// catalogue — and it is one, as far as anything inside the markup can tell. What it is not is the
+// Dwarf Shipyard: `drawShipYard()` emits one `b-dropdown` per `Object.keys(shipParts)` entry, and the
+// design it normalizes beside them carries a string field for each. So the yard's own blueprint is
+// the only thing on the page that can say how many dimensions a complete catalogue has, and a
+// catalogue that cannot place every field of it is not an authority over this yard.
+// ---------------------------------------------------------------------------
+
+/**
+ * A preload yard whose option markup is readable throughout and missing one whole dimension.
+ *
+ * Every option of that dimension is taken out of the document and nothing else is touched, so this is
+ * not the damaged markup above: the catalogue is built, it is non-empty, and every remaining dimension
+ * in it is internally valid. The assertions that follow are what proves the yard is nonetheless refused.
+ */
+function incompleteCatalogHarness(dimension, options = {}) {
+  const harness = makeHarness({ preload: true, ...options });
+  harness.game.initTabs();
+  for (const node of [
+    ...harness.page.document.getElementById("shipPlans").querySelectorAll("*"),
+  ]) {
+    if (node.classList.contains(dimension)) node.remove();
+  }
+  const catalog = harness.parts.catalog();
+  assert.notEqual(
+    catalog,
+    undefined,
+    `${dimension}: the markup stopped being readable instead of incomplete`,
+  );
+  assert.ok(
+    !catalog.types.includes(dimension),
+    `${dimension}: a dimension nothing offers was catalogued`,
+  );
+  assert.deepEqual(
+    harness.faults,
+    [],
+    `${dimension}: readable but incomplete markup reported a read fault`,
+  );
+  // Without the yard's own control the cycle would never be initialized and every assertion below
+  // would hold vacuously, which is the same silent acceptance this section exists to prevent.
+  assert.notEqual(
+    harness.capture.controls.resolve(CAPTURED_OUTER_FLEET_SHIPYARD_CONTROL),
+    undefined,
+    `${dimension}: the yard was never captured, so nothing below was proven`,
+  );
+  return harness;
+}
+
+// Current Design with the whole hull dimension gone. Its fields are never asked about through
+// `avail()` — the yard already holds them — so a catalogue without `class` answers this design
+// completely, and the postcondition it builds names no hull. That is the regression the wrong-hull
+// stub is for: without the design itself as the check, the dreadnought below satisfies an empty post
+// condition, and the pass builds and dispatches a hull nobody asked for.
+{
+  const hullLess = incompleteCatalogHarness("class");
+  const designBefore = { ...hullLess.root.space.shipyard.blueprint };
+  const hullLessSettings = presetSettings({ fleetOuterShips: "user" });
+  const { control, prices } = outerFleetControlOverWrongHull(
+    hullLess,
+    () => hullLessSettings,
+  );
+  assert.equal(control.autoFleetOuter().outcome.status, "succeeded");
+  assert.deepEqual(
+    prices,
+    [],
+    "a design was priced without a hull in the catalogue",
+  );
+  assert.deepEqual(askedFor(hullLess), [], "the yard was asked about anything");
+  assert.deepEqual(hullLess.page.setValWrites, [], "the blueprint was written");
+  assert.equal(
+    hullLess.page.buildCount,
+    undefined,
+    "a postcondition without a hull built a ship",
+  );
+  assert.equal(hullLess.root.space.shipyard.ships.length, 0);
+  assert.deepEqual(
+    sentTo(hullLess.page),
+    [],
+    "a hull nobody asked for was dispatched",
+  );
+  assert.deepEqual(
+    hullLess.root.space.shipyard.blueprint,
+    designBefore,
+    "the yard's own design was left changed",
+  );
+}
+
+// The forced Explorer with the whole mount dimension gone. Upstream `setVal(type, value)` has no
+// availability gate, so a missing dimension here is not a quieter answer — it is the one route that
+// reaches `setVal("weapon", "railgun")` without the yard ever being asked whether an Explorer may
+// carry it. This blueprint is written by this script rather than iterated out of the catalogue's
+// dimensions, which is exactly why nothing else would have caught it.
+{
+  const explorerRoot = makeRoot();
+  explorerRoot.tech.tauceti = 1;
+  const mountLess = incompleteCatalogHarness("weapon", { root: explorerRoot });
+  const mountLessSettings = presetSettings({ fleetExploreTau: true });
+  const { control, prices } = outerFleetControlOverWrongHull(
+    mountLess,
+    () => mountLessSettings,
+  );
+  assert.equal(control.autoFleetOuter().outcome.status, "succeeded");
+  assert.deepEqual(
+    prices,
+    [],
+    "an Explorer was priced in a yard that offers no mount",
+  );
+  assert.deepEqual(
+    askedFor(mountLess),
+    [],
+    "the yard was asked about an Explorer part it cannot be shown to offer",
+  );
+  assert.deepEqual(
+    mountLess.page.setValWrites,
+    [],
+    "an Explorer part was written without the catalogue naming its dimension",
+  );
+  assert.equal(
+    mountLess.page.buildCount,
+    undefined,
+    "an Explorer was built in a yard that offers no mount",
+  );
+  assert.equal(mountLess.root.space.shipyard.ships.length, 0);
+  assert.deepEqual(sentTo(mountLess.page), []);
 }
 
 // ---------------------------------------------------------------------------

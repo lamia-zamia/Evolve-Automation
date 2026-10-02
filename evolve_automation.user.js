@@ -21873,10 +21873,11 @@
   }
 
   // src/adapters/evolve/combat/captured-outer-fleet-blueprint.ts
+  var OUTER_FLEET_BLUEPRINT_NAME_FIELD = "name";
   function outerFleetBlueprintWrites(blueprint) {
     let writes = [];
     for (let [type, part] of Object.entries(blueprint))
-      type === "name" || typeof part != "string" || writes.push(Object.freeze({ type, part }));
+      type === OUTER_FLEET_BLUEPRINT_NAME_FIELD || typeof part != "string" || writes.push(Object.freeze({ type, part }));
     return Object.freeze(writes);
   }
 
@@ -21958,6 +21959,14 @@
   function capturedOuterFleetLiveDesign(controls2) {
     return controls2.currentDesign(CAPTURED_OUTER_FLEET_SHIPYARD_CONTROL);
   }
+  function provenCatalogForLiveYard(catalog, live) {
+    if (!(catalog === void 0 || live === void 0)) {
+      for (let [type, part] of Object.entries(live))
+        if (!(typeof part != "string" || type === OUTER_FLEET_BLUEPRINT_NAME_FIELD) && !catalog.types.includes(type))
+          return;
+      return catalog;
+    }
+  }
   function capturedOuterFleetPartBlueprint(settings, prefix, dimensions) {
     let blueprint = {};
     for (let type of dimensions) {
@@ -21968,6 +21977,8 @@
   }
   function capturedOuterFleetBlueprintAvailable(controls2, blueprint, dimensions) {
     if (typeof blueprint.class != "string") return !1;
+    for (let { type } of outerFleetBlueprintWrites(blueprint))
+      if (!dimensions.includes(type)) return !1;
     let live = capturedOuterFleetLiveDesign(controls2);
     for (let type of dimensions) {
       let part = blueprint[type];
@@ -22141,7 +22152,10 @@
     let reader = Object.freeze({
       readCycle() {
         session = null, expectedDecision = null, shipTargetChanged = !1;
-        let blueprints = /* @__PURE__ */ new Map(), catalog = dependencies.parts.catalog(), root = capturedOuterFleetRoot(dependencies.rootState), settings = capturedOuterFleetSettings(dependencies.readSettings());
+        let blueprints = /* @__PURE__ */ new Map(), catalog = provenCatalogForLiveYard(
+          dependencies.parts.catalog(),
+          capturedOuterFleetLiveDesign(dependencies.controls)
+        ), root = capturedOuterFleetRoot(dependencies.rootState), settings = capturedOuterFleetSettings(dependencies.readSettings());
         if (root === void 0) {
           session = Object.freeze({
             root: {},
@@ -22405,7 +22419,7 @@
       if (dimensions === void 0)
         return stale(
           "captured-outer-fleet-catalog-unavailable",
-          "the shipyard's part catalogue could not be read"
+          "the shipyard's part catalogue could not be read in full"
         );
       let blueprint = active.blueprints.get(decision.blueprint);
       if (blueprint === void 0)
@@ -22413,7 +22427,13 @@
           "captured-outer-fleet-blueprint-changed",
           "captured outer fleet blueprint changed"
         );
-      for (let { type, part } of outerFleetBlueprintWrites(blueprint))
+      let writes = outerFleetBlueprintWrites(blueprint);
+      if (writes.some(({ type }) => !dimensions.includes(type)))
+        return stale(
+          "captured-outer-fleet-blueprint-invalid",
+          "the shipyard's catalogue does not name every requested part"
+        );
+      for (let { type, part } of writes)
         if (capturedOuterFleetLiveDesign(dependencies.controls)?.[type] !== part && !dependencies.controls.setPart({
           elementId: CAPTURED_OUTER_FLEET_SHIPYARD_CONTROL,
           type,

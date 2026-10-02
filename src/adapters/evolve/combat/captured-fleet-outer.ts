@@ -9,13 +9,15 @@
  * fields are worth asking about, in what order to write them, and what counts as the design that was
  * built.
  *
- * **That catalogue is the authority, and its absence is not an empty one.** A cycle samples it once
- * and holds it on the session, and every dimension question below is asked only over a proven
- * catalogue's dimensions. An unreadable yard therefore produces no dimensions at all rather than a
- * dimension list of nothing: each question here is a loop or a comparison over dimensions, and an
- * empty list would make availability true for every design, matching true for every ship, and the
- * build postcondition an empty record satisfying any hull the yard appended. The execution checks the
- * same authority again before its first write rather than relying on planning having filtered.
+ * **That catalogue is the authority, and it is not authoritative until it is whole.** A cycle samples
+ * it once and holds it on the session, and every dimension question below is asked only over
+ * dimensions that survived the yard's own live blueprint. An unreadable yard produces no dimensions
+ * at all rather than a dimension list of nothing: each question here is a loop or a comparison over
+ * dimensions, and an empty list would make availability true for every design, matching true for
+ * every ship, and the build postcondition an empty record satisfying any hull the yard appended. The
+ * same holds for a catalogue that parsed and is still incomplete, which no per-option reading can
+ * see. The execution checks the same authority again before its first write rather than relying on
+ * planning having filtered.
  */
 
 import {
@@ -69,7 +71,10 @@ import {
   readProperty,
   type UnknownRecord,
 } from "../../validation.ts";
-import { outerFleetBlueprintWrites } from "./captured-outer-fleet-blueprint.ts";
+import {
+  outerFleetBlueprintWrites,
+  OUTER_FLEET_BLUEPRINT_NAME_FIELD,
+} from "./captured-outer-fleet-blueprint.ts";
 import { CAPTURED_OUTER_FLEET_SHIPYARD_CONTROL } from "./captured-outer-fleet-shipyard.ts";
 
 interface CapturedOuterFleetAdapterDependencies {
@@ -88,8 +93,9 @@ interface CapturedOuterFleetSession {
   readonly root: UnknownRecord;
   readonly sourceUnavailable: boolean;
   /**
-   * The yard's own part catalogue, as this cycle found it, or `undefined` when the yard's option
-   * markup could not be read.
+   * The yard's own part catalogue, as this cycle found it and as the yard's live design proved it
+   * whole, or `undefined` when there was no catalogue or it did not account for every dimension that
+   * design names.
    *
    * Held here rather than re-asked per question so the plan and the execution that follows it are
    * judged by one authority: `shipParts` is the game's own module-level data and cannot change under
@@ -213,6 +219,48 @@ function capturedOuterFleetLiveDesign(
 }
 
 /**
+ * The sampled catalogue, once the yard's own live design has proved it whole.
+ *
+ * Reading every option is not the same as reading every dimension. Markup that lost all of one
+ * dimension's options still parses: what is left runs `0 … n-1` per dimension with no repeat and no
+ * duplicate answers for anything, so the catalogue comes back non-empty and authoritative-looking,
+ * and every question below is then answered over fewer dimensions than the yard actually has. The
+ * failures are silent rather than loud — a preset naming a hull the catalogue never listed asks about
+ * nothing at all and is treated as satisfied, and a build postcondition built without `class`
+ * accepts every hull the yard could append, which is exactly what a wrong-hull build stub exploits.
+ *
+ * The yard's live blueprint is the check, and the game supplies it. `drawShipYard()` emits one
+ * option per entry of every `shipParts` dimension into the same `#shipPlans`, and normalizes the
+ * design it holds to one string entry per dimension plus the ship's `name`. So every string field of
+ * that design other than `name` is a dimension the yard rendered options for, and one the catalogue
+ * has to account for — which is what proves `class`, `power`, `weapon`, `armor`, `engine`, `sensor`
+ * and `special` without a single one of those names being written here.
+ *
+ * Presence is all this proves, and it has to be: the live *value* is not required to be an option
+ * the yard would offer fresh. A freighter holds `weapon: "none"`, a blueprint the game normalized can
+ * hold values no selector offers, and Current Design deliberately builds an unchanged field without
+ * asking `avail()` at all. Requiring the value too would refuse those designs over a part the yard
+ * is itself wearing.
+ *
+ * Undefined — and therefore a cycle with no catalogue authority at all — when there is no live design
+ * to check the catalogue against, or when the catalogue is absent, or when it does not account for
+ * every dimension the design names.
+ */
+function provenCatalogForLiveYard(
+  catalog: GameShipyardPartCatalog | undefined,
+  live: Readonly<Record<string, unknown>> | undefined,
+): GameShipyardPartCatalog | undefined {
+  if (catalog === undefined || live === undefined) return undefined;
+  for (const [type, part] of Object.entries(live)) {
+    if (typeof part !== "string" || type === OUTER_FLEET_BLUEPRINT_NAME_FIELD) {
+      continue;
+    }
+    if (!catalog.types.includes(type)) return undefined;
+  }
+  return catalog;
+}
+
+/**
  * A configured preset, built from the dimensions the yard itself offers.
  *
  * The dimensions come from the yard's catalogue and the values from `${prefix}${type}` in the
@@ -254,6 +302,12 @@ function capturedOuterFleetPartBlueprint(
  * markup gave it. A dimension the design does not name is left out rather than filled in: upstream
  * fills those in itself when a class change rewrites the fields its hull forces, and a value
  * invented here would be a design nobody asked for.
+ *
+ * A field the dimensions do not name is refused before any of that, and the refusal is not
+ * redundant with the read above: the option index `avail()` needs comes out of the catalogue, so a
+ * dimension it never catalogued is one the yard has said nothing about, and a design naming it would
+ * otherwise have its field skipped rather than judged. The forced Explorer is where that matters most,
+ * because its blueprint is written here rather than iterated out of the catalogue's dimensions.
  */
 function capturedOuterFleetBlueprintAvailable(
   controls: GameFleetControlsPort,
@@ -261,6 +315,9 @@ function capturedOuterFleetBlueprintAvailable(
   dimensions: GameShipyardPartDimensions,
 ): boolean {
   if (typeof blueprint["class"] !== "string") return false;
+  for (const { type } of outerFleetBlueprintWrites(blueprint)) {
+    if (!dimensions.includes(type)) return false;
+  }
   const live = capturedOuterFleetLiveDesign(controls);
   for (const type of dimensions) {
     const part = blueprint[type];
@@ -693,8 +750,12 @@ export function createCapturedOuterFleetAdapter(
       const blueprints = new Map<OuterFleetBlueprint, UnknownRecord>();
       // Sampled once for the whole cycle, and held on the session below. It is the only authority on
       // which dimensions a blueprint may be written, compared or judged over, so the plan this cycle
-      // produces and the execution that follows it are held to the same one.
-      const catalog = dependencies.parts.catalog();
+      // produces and the execution that follows it are held to the same one — and only once it has
+      // accounted for every dimension the yard's own live design names.
+      const catalog = provenCatalogForLiveYard(
+        dependencies.parts.catalog(),
+        capturedOuterFleetLiveDesign(dependencies.controls),
+      );
       const root = capturedOuterFleetRoot(dependencies.rootState);
       const settings = capturedOuterFleetSettings(dependencies.readSettings());
       if (root === undefined) {
@@ -1124,14 +1185,13 @@ export function createCapturedOuterFleetAdapter(
     decision: Readonly<OuterFleetBuildDecision>,
   ): CommandExecutionOutcome {
     // Planning should already have refused every candidate without this authority, but the execution
-    // defends itself rather than trusting that: `setVal` writes a blueprint whatever the yard offers,
-    // and the postcondition below is only a postcondition if it was built over the dimensions the game
-    // itself rendered. Refused before the first write, and before any price, power check or dispatch.
+    // defends itself rather than trusting that. Refused before the first write, and before any price,
+    // power check or dispatch.
     const dimensions = provenDimensions(active);
     if (dimensions === undefined)
       return stale(
         "captured-outer-fleet-catalog-unavailable",
-        "the shipyard's part catalogue could not be read",
+        "the shipyard's part catalogue could not be read in full",
       );
     const blueprint = active.blueprints.get(decision.blueprint);
     if (blueprint === undefined)
@@ -1142,7 +1202,17 @@ export function createCapturedOuterFleetAdapter(
     // The yard's design fields, in the blueprint's own order and through the game's own `setVal` — the
     // same list, in the same order, the cost probe walks before it prices a candidate, so what is priced
     // and what is built are the same ship.
-    for (const { type, part } of outerFleetBlueprintWrites(blueprint)) {
+    const writes = outerFleetBlueprintWrites(blueprint);
+    // Every one of them is a dimension the sampled catalogue accounts for, checked before the first
+    // write. `setPart()` cannot be the check: it invokes upstream `setVal(type, value)`, which has no
+    // availability gate of its own, so a field the catalogue does not name would be written and only
+    // then found out about. Planning refused the same design, and this does not trust that it did.
+    if (writes.some(({ type }) => !dimensions.includes(type)))
+      return stale(
+        "captured-outer-fleet-blueprint-invalid",
+        "the shipyard's catalogue does not name every requested part",
+      );
+    for (const { type, part } of writes) {
       // A field the yard already holds is not rewritten. Current Design is exactly this case: the
       // design being built is the yard's own blueprint, which `drawShipYard()` has already normalized
       // — including a `special` the special-slot selector may never have been unlocked for, and which

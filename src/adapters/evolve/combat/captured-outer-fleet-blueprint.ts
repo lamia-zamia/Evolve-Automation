@@ -21,6 +21,16 @@ export interface OuterFleetBlueprintWrite {
 }
 
 /**
+ * The one field a blueprint holds that is not a part dimension.
+ *
+ * `drawShipYard()` writes the ship's name into the same record its selectors are bound to, and it is
+ * not in `shipParts`, so it is not something `avail()` or `setVal()` has ever heard of. Naming it
+ * once here keeps every question that reads a blueprint's own fields — which fields are parts, which
+ * dimensions the catalogue has to account for — from re-deciding it.
+ */
+export const OUTER_FLEET_BLUEPRINT_NAME_FIELD = "name";
+
+/**
  * The blueprint fields the yard is configured from, in the blueprint's own key order.
  *
  * The ship's name is not a part, and a field the blueprint does not carry as a string — a fleet id, a
@@ -32,7 +42,9 @@ export function outerFleetBlueprintWrites(
 ): readonly OuterFleetBlueprintWrite[] {
   const writes: OuterFleetBlueprintWrite[] = [];
   for (const [type, part] of Object.entries(blueprint)) {
-    if (type === "name" || typeof part !== "string") continue;
+    if (type === OUTER_FLEET_BLUEPRINT_NAME_FIELD || typeof part !== "string") {
+      continue;
+    }
     writes.push(Object.freeze({ type, part }));
   }
   return Object.freeze(writes);
