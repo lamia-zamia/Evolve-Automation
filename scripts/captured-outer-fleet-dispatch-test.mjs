@@ -50,6 +50,9 @@ import {
   parseShipyardPartCatalog,
 } from "../src/adapters/evolve/combat/captured-outer-fleet-parts.ts";
 import { createCapturedFleetDemand } from "../src/adapters/evolve/combat/captured-fleet-demand.ts";
+import { createCapturedSyndicateMechanics } from "../src/adapters/evolve/captured-syndicate-mechanics.ts";
+import { createCapturedTabDiscovery } from "../src/adapters/evolve/captured-tab-discovery.ts";
+import { probeScopedNumberToFixed } from "../src/adapters/evolve/scoped-number-to-fixed.ts";
 import { createCapturedOuterFleetControl } from "../src/bootstrap/captured-fleet-outer-control.ts";
 import { createGamePanelWorkspace } from "../src/adapters/browser/game-panel-workspace.ts";
 import {
@@ -306,6 +309,9 @@ function makePage() {
     realClearInterval(handle) {
       timers.delete(handle);
     },
+    // The page's own intrinsics, which the Syndicate probe patches for the length of one call.
+    Number,
+    Object,
   };
   page.$ = makeJquery(page);
   page.Vue = makeVue();
@@ -351,6 +357,7 @@ function makeRoot() {
     },
     settings: {
       civTabs: 1,
+      spaceTabs: 0,
       govTabs: 0,
       tabLoad: false,
       animated: false,
@@ -1200,6 +1207,119 @@ function installGame(page, root) {
     },
   };
 
+  /**
+   * `space.js:space(zone)`, reduced to what binds the Syndicate readout.
+   *
+   * One container per sub-tab, one row per region the fixture says that sub-tab shows, and — behind
+   * `syndicateActive()` and the region's own `info.syndicate()` — the `#<region>synd` binding whose
+   * `scan` is the game's own one-line rendering of the private `s`. The arithmetic behind `s` and `p`
+   * is the real game's own and is exercised against the real page; transcribing it here would be the
+   * same copy of it that production has just deleted.
+   */
+  const SPACE_ZONES = {
+    inner: ["spc_home", "spc_moon", "spc_red", "spc_belt"],
+    outer: [
+      "spc_gas",
+      "spc_gas_moon",
+      "spc_titan",
+      "spc_enceladus",
+      "spc_triton",
+      "spc_makemake",
+      "spc_eris",
+    ],
+  };
+  /** `truepath.js:syndicateActive()`, transcribed in full, because the draw is gated on it. */
+  function syndicateActive() {
+    if (root.tech.shadow && root.tech.shadow >= 5) return false;
+    return !root.tech.isolation &&
+      root.tech.syndicate &&
+      root.race.truepath &&
+      root.space.syndicate
+      ? true
+      : false;
+  }
+  /**
+   * The two numbers `syndicate(r, true)` builds, as the harness stands in for them.
+   *
+   * `p` is the game's own `1 - +(piracy / divisor).toFixed(4)` over the ratio the fixture's `p`
+   * implies, and `s` is the sensor the display renders. Only the *rounding* is reproduced: the
+   * arithmetic behind both is the real game's own, exercised against the real page, and
+   * transcribing it here would be the very copy production has just deleted.
+   *
+   * `undefined` is the game's own "no piracy" answer: `scan` returns its localised string without
+   * rounding anything at all, so a caller learns nothing and has to treat the region as unreadable.
+   */
+  function syndicateSample(r) {
+    const sample = page.syndicateSamples?.[r];
+    if (sample === undefined || sample === "unavailable") return undefined;
+    return { p: 1 - +(1 - sample.p).toFixed(4), s: sample.s };
+  }
+  function drawSpaceRegion(zone, region) {
+    const parent = $(zone === "inner" ? "#space" : "#outerSol");
+    parent.append(
+      $(
+        `<div id="${region}" class="space"><div id="sr${region}"><h3 class="name"></h3></div></div>`,
+      ),
+    );
+    if (syndicateActive() && root.space.syndicate[region] !== undefined) {
+      $(`#${region}`).append(
+        $(`<div id="${region}synd" v-show="${region}"></div>`),
+      );
+      vBind({
+        el: `#${region}synd`,
+        data: root.space.syndicate,
+        methods: {
+          /** The game's own rendering: `syndicate(r,true)` and then the percentage above it. */
+          scan(r) {
+            if (!(
+              root.space.shipyard && Array.isArray(root.space.shipyard.ships)
+            )) {
+              return "no piracy";
+            }
+            const sample = syndicateSample(r);
+            if (sample === undefined) return "no piracy";
+            page.syndicateScans = (page.syndicateScans ?? 0) + 1;
+            return `${+((sample.s + 25) / 1.25).toFixed(1)}%`;
+          },
+        },
+      });
+    }
+  }
+  function drawSpace(subTab) {
+    const zones = subTab === 5 ? ["outer"] : subTab === 1 ? ["inner"] : [];
+    for (const zone of zones) {
+      const container = zone === "inner" ? "#space" : "#outerSol";
+      if ($(container).length === 0) continue;
+      clearElement($(container));
+      for (const region of SPACE_ZONES[zone]) drawSpaceRegion(zone, region);
+    }
+  }
+
+  const spaceMethods = {
+    swapTab(subTab) {
+      if (!settings.tabLoad) {
+        clearTabPanels(
+          { "#space": [], "#outerSol": [] },
+          subTab === 1 ? "#space" : subTab === 5 ? "#outerSol" : null,
+        );
+      }
+      page.spaceDraws = (page.spaceDraws ?? 0) + 1;
+      drawSpace(subTab);
+      return subTab;
+    },
+  };
+
+  function loadCivilizationTab() {
+    const civil = $("#mTabCivil");
+    for (const id of ["space", "outerSol"]) {
+      if ($(`#${id}`).length === 0)
+        civil.append($(`<div id="${id}" class="spacePanel"></div>`));
+    }
+    vBind({ el: "#mTabCivil", data: { s: settings }, methods: spaceMethods });
+    if (!settings.tabLoad) return;
+    drawSpace(settings.spaceTabs);
+  }
+
   function loadCivicTab() {
     $("#mTabCivic").append($('<b-tabs class="resTabs"></b-tabs>'));
     vBind({ el: "#mTabCivic", data: { s: settings }, methods: civicMethods });
@@ -1222,9 +1342,11 @@ function installGame(page, root) {
   function initTabs() {
     if (settings.tabLoad) {
       loadCivicTab();
+      loadCivilizationTab();
       return;
     }
     if (settings.civTabs === 2) loadCivicTab();
+    if (settings.civTabs === 1) loadCivilizationTab();
   }
 
   const mainMethods = {
@@ -1249,6 +1371,9 @@ function installGame(page, root) {
         );
       }
       switch (tab) {
+        case 1:
+          loadCivilizationTab();
+          break;
         case 2:
           loadCivicTab();
           break;
@@ -1262,9 +1387,12 @@ function installGame(page, root) {
   return {
     drawShipYard,
     drawShips,
+    drawSpace,
+    loadCivilizationTab,
     initTabs,
     mainMethods,
     civicMethods,
+    spaceMethods,
     shipyardMethods,
     shipyardView,
     shipCosts,
@@ -1293,9 +1421,37 @@ function makeHarness({
   /** Ships already in the yard, so a draw during `establish` binds their rows. */
   ships = [],
   establish = false,
+  /** Systems the game's own destination closure will accept, when a case needs a narrower set. */
+  destinations = undefined,
+  /**
+   * The running game's own Syndicate answer per region, as `{ p, s }`. Distinctive on purpose: no
+   * arithmetic over this save's piracy, caps, rival or ships reproduces them, so a pass that reaches
+   * a target is provably following the game's answer rather than a table that happens to agree.
+   */
+  syndicateSamples = {
+    spc_home: { p: 0.7319, s: 47 },
+    spc_moon: { p: 0.6417, s: 31 },
+    spc_red: { p: 0.7319, s: 47 },
+    spc_belt: { p: 0.8123, s: 12 },
+    spc_gas: { p: 0.5284, s: 63 },
+    spc_gas_moon: { p: 0.4431, s: 88 },
+    spc_titan: { p: 0.2976, s: 105 },
+    spc_enceladus: { p: 0.3382, s: 120 },
+    spc_triton: { p: 0.2145, s: 140 },
+    spc_makemake: { p: 0.1763, s: 155 },
+    spc_eris: { p: 0.0947, s: 12 },
+  },
 } = {}) {
   for (const ship of ships) root.space.shipyard.ships.push(ship);
   const page = makePage();
+  if (destinations !== undefined) page.destinations = destinations;
+  page.syndicateSamples = syndicateSamples;
+  page.syndicateSensor = Object.fromEntries(
+    Object.entries(syndicateSamples).map(([region, sample]) => [
+      region,
+      sample === "unavailable" ? 0 : sample.s,
+    ]),
+  );
   page.builtShips = [];
   page.builds = [];
   page.setValWrites = [];
@@ -1371,6 +1527,28 @@ function makeHarness({
     onCaptureError: (detail) => faults.push(detail),
   });
   if (establish) shipyard.establish();
+  const rootState = { readRoot: () => root };
+  const discovery = createCapturedTabDiscovery({
+    rootState,
+    controls: capture.controls,
+    mountSuppression: capture.mountSuppression,
+    panels,
+  });
+  const syndicate = createCapturedSyndicateMechanics({
+    rootState,
+    controls: capture.controls,
+    discovery,
+    mechanics: {
+      readRoundedValues: (read) => {
+        const seen = probeScopedNumberToFixed(page, () => {
+          read();
+        });
+        return seen === undefined
+          ? { kind: "invalid" }
+          : { kind: "value", value: seen };
+      },
+    },
+  });
   if (playerYard || preload) {
     // `#dwarfShipYard` is a `b-tab-item` the Civic tab's own render creates, so it is stood here in
     // the one panel the game's Civic markup lives in, exactly where upstream's `b-tabs` would put it.
@@ -1395,6 +1573,8 @@ function makeHarness({
     dispatch,
     costs,
     panels,
+    discovery,
+    syndicate,
     faults,
   };
 }
@@ -1883,6 +2063,7 @@ function outerFleetControl(harness, readSettings) {
     costs: harness.costs,
     parts: harness.parts,
     dispatch: harness.dispatch,
+    syndicate: harness.syndicate,
     readSettings,
   });
 }
@@ -2573,6 +2754,14 @@ function shipyardTech(levels) {
   return root;
 }
 
+/** A save whose Syndicate has reached Eris, which is what its own region gate requires. */
+function erisSyndicateTech(levels) {
+  const root = shipyardTech(levels);
+  root.tech.eris = 1;
+  root.space.syndicate.spc_eris = 600;
+  return root;
+}
+
 /** Every part the yard was asked about, as `type=index:value`, in the order it was asked. */
 function askedFor(harness) {
   return harness.page.availCalls.map(
@@ -2730,6 +2919,13 @@ assert.deepEqual(sentTo(locked.page), []);
 // A freighter has no mount and takes a fuel tank with it, and a Supply Ship has no mount either and
 // whose special slot is never empty. Neither preset names a weapon or a special, so every field of
 // the ship that was built is one the game's own `setVal` decided.
+//
+// Both hulls are targeted through the Eris gate rather than through a region's Syndicate defense,
+// and for the freighter that is the game's own doing: a hull that needs Shadow 5 is a hull whose save
+// has `shadow >= 5`, and `syndicateActive()` is false from there — the game shuts the Syndicate off
+// entirely. So the answer every region's ratio now carries is the native inactive one, and no region
+// is a target. The gate is the one branch that does not read a defense ratio, which is exactly what
+// this case needs: the hull's forced fields, not a defense.
 for (const [hull, technology, forced] of [
   ["freighter", { shadow: 5 }, { weapon: "none", special: "extra_fuel" }],
   [
@@ -2740,11 +2936,13 @@ for (const [hull, technology, forced] of [
 ]) {
   const cargo = makeHarness({
     establish: true,
-    root: shipyardTech(technology),
+    root: erisSyndicateTech(technology),
+    destinations: ["spc_eris"],
   });
-  const cargoSettings = presetSettings({ fleet_outer_class: hull }, [
-    "fleet_outer_weapon",
-  ]);
+  const cargoSettings = presetSettings(
+    { fleet_outer_class: hull, fleet_outer_pr_spc_eris: 1 },
+    ["fleet_outer_weapon"],
+  );
   const result = outerFleetControl(cargo, () => cargoSettings).autoFleetOuter();
   assert.equal(result.outcome.status, "succeeded", `${hull} did not build`);
   const built = cargo.root.space.shipyard.ships[0];
@@ -2961,6 +3159,7 @@ function outerFleetControlOverWrongHull(harness, readSettings) {
       },
       parts: harness.parts,
       dispatch: harness.dispatch,
+      syndicate: harness.syndicate,
       readSettings,
     }),
   };

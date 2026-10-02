@@ -11,6 +11,23 @@ export type CapturedGameRead<T> =
   | { readonly kind: "absent" }
   | { readonly kind: "invalid" };
 
+/**
+ * One `Number.prototype.toFixed` call the page made while a probe held it.
+ *
+ * Some game answers have no other reachable expression: the fuel-adjustment factor is only ever a
+ * rounded literal, and the Truepath `syndicate()` result keeps its remaining-defense ratio solely as
+ * the string that ratio is subtracted from. Both are read by observing the rounding rather than by
+ * re-deriving what was rounded.
+ */
+export interface CapturedRoundedValue {
+  /** The receiver as the page's own `Number` coercion of it, before rounding. */
+  readonly receiver: number;
+  /** The digit count the observed code asked for. */
+  readonly digits: number;
+  /** The string the page itself produced. */
+  readonly text: string;
+}
+
 export type CapturedPowerBalanceRule =
   | {
       readonly kind: "resource";
@@ -128,4 +145,13 @@ export interface CapturedGameMechanics {
     mode: CapturedFuelAdjustmentMode,
     resourceId: string,
   ): CapturedGameRead<number>;
+  /**
+   * Runs one synchronous read with the page's own `Number.prototype.toFixed` observed, and returns
+   * what the game rounded. The value the game receives is untouched, the exact original property
+   * descriptor is restored before this returns, and a probe already in flight is refused rather
+   * than interleaved — so a truncated observation list is never reported as a complete one.
+   */
+  readRoundedValues(
+    read: () => unknown,
+  ): CapturedGameRead<readonly CapturedRoundedValue[]>;
 }

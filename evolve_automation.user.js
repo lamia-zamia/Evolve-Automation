@@ -416,6 +416,55 @@
     });
   }
 
+  // src/adapters/evolve/scoped-number-to-fixed.ts
+  var scopedToFixedProbeInFlight = !1;
+  function probeScopedNumberToFixed(pageWindow, read) {
+    if (scopedToFixedProbeInFlight) return;
+    let numberConstructor = readProperty(pageWindow, "Number"), numberPrototype = readProperty(numberConstructor, "prototype"), objectConstructor = readProperty(pageWindow, "Object"), defineProperty = readProperty(objectConstructor, "defineProperty");
+    if (typeof defineProperty != "function" || typeof numberPrototype != "object" || numberPrototype === null)
+      return;
+    let original = Object.getOwnPropertyDescriptor(numberPrototype, "toFixed");
+    if (original === void 0 || original.configurable !== !0 || !("value" in original) || typeof original.value != "function")
+      return;
+    let nativeToFixed = original.value, observations = [], wrapper = function(...args) {
+      let digits = args[0], text = Reflect.apply(nativeToFixed, this, args);
+      if (typeof text == "string" && typeof digits == "number") {
+        let receiver;
+        try {
+          receiver = Number(this);
+        } catch {
+          receiver = Number.NaN;
+        }
+        observations.push(Object.freeze({ receiver, digits, text }));
+      }
+      return text;
+    };
+    scopedToFixedProbeInFlight = !0;
+    let unusable = !1;
+    try {
+      Reflect.apply(defineProperty, objectConstructor, [
+        numberPrototype,
+        "toFixed",
+        { ...original, value: wrapper }
+      ]), read(observations);
+    } catch {
+      unusable = !0;
+    }
+    if (Object.getOwnPropertyDescriptor(numberPrototype, "toFixed")?.value === wrapper)
+      try {
+        Reflect.apply(defineProperty, objectConstructor, [
+          numberPrototype,
+          "toFixed",
+          original
+        ]);
+      } catch {
+        unusable = !0;
+      }
+    scopedToFixedProbeInFlight = !1;
+    let current = Object.getOwnPropertyDescriptor(numberPrototype, "toFixed");
+    return (current?.configurable !== original.configurable || current.enumerable !== original.enumerable || current.writable !== original.writable || current.value !== original.value || current.get !== original.get || current.set !== original.set) && (unusable = !0), unusable ? void 0 : Object.freeze(observations);
+  }
+
   // src/adapters/evolve/captured-control-label.ts
   function readCapturedControlLabel(handle, fallback) {
     let data = handle.data;
@@ -1719,15 +1768,12 @@
   function fuelAdjustmentResourceMatches(resourceId, mode) {
     return mode === "space" ? resourceId === "Oil" || resourceId === "Helium_3" || resourceId === "Super_Fuel" : resourceId === "Deuterium" || resourceId === "Helium_3" || resourceId === "Super_Fuel";
   }
-  function readFuelProbeResult(action, numberPrototype, objectConstructor, mode, resourceId) {
+  function readFuelProbeResult(action, probe, objectConstructor, mode, resourceId) {
     if (!fuelAdjustmentResourceMatches(resourceId, mode)) return;
-    let fuelDescriptor = Object.getOwnPropertyDescriptor(action, "p_fuel"), effectDescriptor = Object.getOwnPropertyDescriptor(action, "effect"), toFixedDescriptor = Object.getOwnPropertyDescriptor(
-      numberPrototype,
-      "toFixed"
-    );
-    if (fuelDescriptor === void 0 || !("value" in fuelDescriptor) || typeof fuelDescriptor.value != "function" || fuelDescriptor.configurable !== !0 || effectDescriptor === void 0 || !("value" in effectDescriptor) || typeof effectDescriptor.value != "function" || toFixedDescriptor === void 0 || !("value" in toFixedDescriptor) || typeof toFixedDescriptor.value != "function" || toFixedDescriptor.configurable !== !0)
+    let fuelDescriptor = Object.getOwnPropertyDescriptor(action, "p_fuel"), effectDescriptor = Object.getOwnPropertyDescriptor(action, "effect");
+    if (fuelDescriptor === void 0 || !("value" in fuelDescriptor) || typeof fuelDescriptor.value != "function" || fuelDescriptor.configurable !== !0 || effectDescriptor === void 0 || !("value" in effectDescriptor) || typeof effectDescriptor.value != "function")
       return;
-    let originalFuel = fuelDescriptor, effect = effectDescriptor.value, originalToFixed = toFixedDescriptor.value, pageDefineProperty = readMechanicsDataProperty(
+    let originalFuel = fuelDescriptor, effect = effectDescriptor.value, pageDefineProperty = readMechanicsDataProperty(
       objectConstructor,
       "defineProperty"
     );
@@ -1742,42 +1788,45 @@
       []
     ), arraySource = Array.isArray(source), probeAmounts = [4.25, 13.75], observations = [], result = { kind: "absent" };
     try {
-      Reflect.apply(pageDefineProperty, objectConstructor, [
-        numberPrototype,
-        "toFixed",
-        { ...toFixedDescriptor, value: function(...args) {
-          let numeric;
-          try {
-            numeric = Number(this);
-          } catch {
-            numeric = Number.NaN;
-          }
-          return observations[observations.length - 1]?.push(numeric), Reflect.apply(originalToFixed, this, args);
-        } }
-      ]);
-      for (let amount of probeAmounts)
-        observations.push([]), Reflect.apply(pageDefineProperty, objectConstructor, [
+      for (let amount of probeAmounts) {
+        Reflect.apply(pageDefineProperty, objectConstructor, [
           action,
           "p_fuel",
           { ...fuelDescriptor, value: function() {
             let item = { r: resourceId, a: amount };
             return arraySource ? [item] : item;
           } }
-        ]), Reflect.apply(effect, action, []);
-      let [first, second] = observations;
-      if (first !== void 0 && second !== void 0) {
-        let firstScaled = [], secondScaled = [];
-        for (let left of first)
-          if (Number.isFinite(left))
-            for (let right of second) {
-              if (!Number.isFinite(right)) continue;
-              let slope = (right - left) / (probeAmounts[1] - probeAmounts[0]);
-              if (!Number.isFinite(slope) || slope <= 0) continue;
-              let firstFactor = left / probeAmounts[0], secondFactor = right / probeAmounts[1];
-              Math.abs(firstFactor - secondFactor) <= 1e-9 * Math.max(1, Math.abs(firstFactor), Math.abs(secondFactor)) && (firstScaled.push(firstFactor), secondScaled.push(secondFactor));
-            }
-        let factors = [...firstScaled, ...secondScaled];
-        firstScaled.length === 0 && secondScaled.length === 0 ? result = { kind: "absent" } : firstScaled.length === 1 && secondScaled.length === 1 && factors.every((factor) => factor === factors[0]) ? result = { kind: "value", factor: factors[0] } : result = { kind: "invalid" };
+        ]);
+        let thrown, read = probe(() => {
+          try {
+            Reflect.apply(effect, action, []);
+          } catch (error) {
+            thrown = error;
+          }
+        });
+        if (thrown !== void 0) {
+          result = { kind: "invalid" };
+          break;
+        }
+        if (read.kind !== "value") return;
+        observations.push(read.value.map((value) => value.receiver));
+      }
+      if (result.kind !== "invalid") {
+        let [first, second] = observations;
+        if (first !== void 0 && second !== void 0) {
+          let firstScaled = [], secondScaled = [];
+          for (let left of first)
+            if (Number.isFinite(left))
+              for (let right of second) {
+                if (!Number.isFinite(right)) continue;
+                let slope = (right - left) / (probeAmounts[1] - probeAmounts[0]);
+                if (!Number.isFinite(slope) || slope <= 0) continue;
+                let firstFactor = left / probeAmounts[0], secondFactor = right / probeAmounts[1];
+                Math.abs(firstFactor - secondFactor) <= 1e-9 * Math.max(1, Math.abs(firstFactor), Math.abs(secondFactor)) && (firstScaled.push(firstFactor), secondScaled.push(secondFactor));
+              }
+          let factors = [...firstScaled, ...secondScaled];
+          firstScaled.length === 0 && secondScaled.length === 0 ? result = { kind: "absent" } : firstScaled.length === 1 && secondScaled.length === 1 && factors.every((factor) => factor === factors[0]) ? result = { kind: "value", factor: factors[0] } : result = { kind: "invalid" };
+        }
       }
     } catch {
       result = { kind: "invalid" };
@@ -1789,17 +1838,10 @@
           fuelDescriptor
         ]);
       } finally {
-        Reflect.apply(pageDefineProperty, objectConstructor, [
-          numberPrototype,
-          "toFixed",
-          toFixedDescriptor
-        ]), (!sameMechanicsDescriptor(
+        sameMechanicsDescriptor(
           Object.getOwnPropertyDescriptor(action, "p_fuel"),
           originalFuel
-        ) || !sameMechanicsDescriptor(
-          Object.getOwnPropertyDescriptor(numberPrototype, "toFixed"),
-          toFixedDescriptor
-        )) && (result = { kind: "invalid" });
+        ) || (result = { kind: "invalid" });
       }
     }
     return result;
@@ -1895,7 +1937,8 @@
       readProductionBreakdown: () => {
       },
       readLocalizedText: () => ({ kind: "absent" }),
-      readAdjustedFuelFactor: () => ({ kind: "invalid" })
+      readAdjustedFuelFactor: () => ({ kind: "invalid" }),
+      readRoundedValues: () => ({ kind: "invalid" })
     });
   }
   function resolveCapturedStructureOrder(registry, rawOrder) {
@@ -2118,11 +2161,8 @@
         }
       },
       readAdjustedFuelFactor(mode, resourceId) {
-        let entries = structureEntries, numberConstructor = readMechanicsProperty(pageWindow, "Number"), numberPrototype = readMechanicsProperty(
-          numberConstructor,
-          "prototype"
-        ), objectConstructor2 = readMechanicsProperty(pageWindow, "Object");
-        if (entries === void 0 || stopped || !isNonArrayRecord(numberPrototype) || !fuelAdjustmentResourceMatches(resourceId, mode))
+        let entries = structureEntries, objectConstructor2 = readMechanicsProperty(pageWindow, "Object");
+        if (entries === void 0 || stopped || !fuelAdjustmentResourceMatches(resourceId, mode))
           return { kind: "invalid" };
         let factors = [], invalidCandidate = !1;
         try {
@@ -2135,7 +2175,7 @@
               continue;
             let probed = readFuelProbeResult(
               entry.action,
-              numberPrototype,
+              mechanics.readRoundedValues,
               objectConstructor2,
               mode,
               resourceId
@@ -2155,6 +2195,16 @@
         return factors.every(
           (factor) => Math.abs(factor - first) <= 1e-9 * Math.max(1, Math.abs(factor), Math.abs(first))
         ) ? { kind: "value", value: first } : { kind: "invalid" };
+      },
+      /**
+       * The only route to a game answer that exists solely as a rounded literal, and the only place
+       * the page prototype is patched at all. The prototype is the page's own, so the patch is scoped
+       * to the one synchronous `read` and undone before this returns.
+       */
+      readRoundedValues(read) {
+        if (stopped) return { kind: "invalid" };
+        let observations = probeScopedNumberToFixed(pageWindow, (seen) => (read(), seen));
+        return observations === void 0 ? { kind: "invalid" } : { kind: "value", value: observations };
       }
     });
     return Object.freeze({
@@ -21759,6 +21809,7 @@
       messageAfterUpdate
     });
   }
+  var SYNDICATE_UNAVAILABLE = "Syndicate defense data unavailable; ship construction paused";
   function planOuterFleetCycle(input) {
     return input.initialized ? input.playerModalOpen === !0 ? status(null, null, "Outer fleet action deferred") : input.mode === "none" ? status(null, null, "Ship construction is disabled") : input.mode === "manual" ? status(
       input.manualBlueprintAvailable ? "yard" : null,
@@ -21787,18 +21838,26 @@
         minimumCrew: 0,
         forcedBlueprint: "explorer"
       });
-    if (input.erisTechnology === 1 && input.erisWeighting > 0 && input.erisSensor < 50)
-      return Object.freeze({
-        kind: "select-blueprint",
-        mode: cycle.mode,
-        targetRegion: "spc_eris",
-        minimumCrew: 0,
-        forcedBlueprint: null
-      });
+    if (input.erisTechnology === 1 && input.erisWeighting > 0) {
+      if (input.erisSensor === null)
+        return status(null, null, SYNDICATE_UNAVAILABLE);
+      if (input.erisSensor < 50)
+        return Object.freeze({
+          kind: "select-blueprint",
+          mode: cycle.mode,
+          targetRegion: "spc_eris",
+          minimumCrew: 0,
+          forcedBlueprint: null
+        });
+    }
+    if (input.regions.some(
+      (region) => region.unlocked && region.weighting > 0 && region.syndicateRatio === null
+    ))
+      return status(null, null, SYNDICATE_UNAVAILABLE);
     let target = input.regions.filter(
-      (region) => region.unlocked && region.weighting > 0 && region.syndicateRatio < calculateOuterFleetDefenseTarget(region)
+      (region) => region.unlocked && region.weighting > 0 && region.syndicateRatio !== null && region.syndicateRatio < calculateOuterFleetDefenseTarget(region)
     ).sort(
-      (left, right) => (1 - right.syndicateRatio) * right.weighting - (1 - left.syndicateRatio) * left.weighting
+      (left, right) => (1 - (right.syndicateRatio ?? 1)) * right.weighting - (1 - (left.syndicateRatio ?? 1)) * left.weighting
     )[0];
     return target === void 0 ? status(null, null, "No more ships currently needed") : Object.freeze({
       kind: "select-blueprint",
@@ -21824,7 +21883,12 @@
   }
   function planOuterFleetCandidate(input) {
     let nextShipName = `${input.shipName} to ${input.candidate.targetLocationName}`;
-    return input.authority.status === "unavailable" ? status(
+    return input.shipCrew === null ? status(
+      input.candidate.blueprint,
+      null,
+      "Ship crew requirement unavailable; ship construction paused",
+      nextShipName
+    ) : input.authority.status === "unavailable" ? status(
       input.candidate.blueprint,
       null,
       "Authority data unavailable; ship construction paused",
@@ -21872,6 +21936,28 @@
     });
   }
 
+  // src/adapters/evolve/combat/captured-ship-crew-compat.ts
+  var CAPTURED_SHIP_CREW = Object.freeze({
+    corvette: Object.freeze({ crew: 2, grenadier: 1 }),
+    frigate: Object.freeze({ crew: 3, grenadier: 2 }),
+    destroyer: Object.freeze({ crew: 4, grenadier: 3 }),
+    corsair: Object.freeze({ crew: 4, grenadier: 3 }),
+    cruiser: Object.freeze({ crew: 6, grenadier: 4 }),
+    battlecruiser: Object.freeze({ crew: 8, grenadier: 5 }),
+    dreadnought: Object.freeze({ crew: 10, grenadier: 6 }),
+    explorer: Object.freeze({ crew: 10, grenadier: 6 }),
+    freighter: Object.freeze({ crew: 1, grenadier: 1 }),
+    supply_ship: Object.freeze({ crew: 1, grenadier: 1 })
+  });
+  function capturedShipCrewSize(root, shipClass) {
+    let entry = CAPTURED_SHIP_CREW[shipClass];
+    if (entry === void 0) return;
+    let crew = readProperty(readProperty(root, "race"), "grenadier") ? entry.grenadier : entry.crew, jobStack = readCapturedJobStackMultiplier(root);
+    if (jobStack === void 0) return;
+    let total = Math.round(crew * jobStack);
+    return total > 0 ? total : void 0;
+  }
+
   // src/adapters/evolve/combat/captured-outer-fleet-blueprint.ts
   var OUTER_FLEET_BLUEPRINT_NAME_FIELD = "name";
   function outerFleetBlueprintWrites(blueprint) {
@@ -21900,46 +21986,6 @@
     engine: "emdrive",
     power: "elerium",
     sensor: "quantum"
-  }), CAPTURED_OUTER_FLEET_CLASS_CREW = Object.freeze({
-    corvette: 2,
-    frigate: 3,
-    destroyer: 4,
-    cruiser: 6,
-    battlecruiser: 8,
-    dreadnought: 10,
-    freighter: 1,
-    explorer: 10,
-    supply_ship: 1
-  }), CAPTURED_OUTER_FLEET_GRENADIER_CREW = Object.freeze({
-    corvette: 1,
-    frigate: 2,
-    destroyer: 3,
-    cruiser: 4,
-    battlecruiser: 5,
-    dreadnought: 6,
-    freighter: 1,
-    explorer: 6,
-    supply_ship: 1
-  }), CAPTURED_OUTER_FLEET_WEAPON_POWER = Object.freeze({
-    railgun: 36,
-    laser: 64,
-    p_laser: 54,
-    plasma: 90,
-    phaser: 114,
-    disruptor: 156
-  }), CAPTURED_OUTER_FLEET_CLASS_POWER = Object.freeze({
-    corvette: 1,
-    frigate: 1.5,
-    destroyer: 2.75,
-    cruiser: 5.5,
-    battlecruiser: 10,
-    dreadnought: 22,
-    explorer: 1.2
-  }), CAPTURED_OUTER_FLEET_SENSOR_RANGE = Object.freeze({
-    visual: 1,
-    radar: 20,
-    lidar: 35,
-    quantum: 60
   });
   function capturedOuterFleetRoot(rootState) {
     let root = rootState.readRoot();
@@ -22015,64 +22061,6 @@
       default:
         return !1;
     }
-  }
-  function capturedOuterFleetRegionCap(root, region) {
-    let tech = readProperty(root, "tech");
-    switch (region) {
-      case "spc_titan":
-        return (finite(readProperty(tech, "triton")) ?? 0) > 0 ? (finite(readProperty(tech, "outer")) ?? 0) >= 4 ? 2e3 : 1e3 : 600;
-      case "spc_enceladus":
-        return (finite(readProperty(tech, "triton")) ?? 0) > 0 ? (finite(readProperty(tech, "outer")) ?? 0) >= 4 ? 1500 : 1e3 : 600;
-      case "spc_triton":
-        return (finite(readProperty(tech, "outer")) ?? 0) >= 4 ? 5e3 : 3e3;
-      case "spc_makemake":
-        return 2500;
-      case "spc_eris":
-        return 7500;
-      default:
-        return region === "spc_moon" || region === "spc_red" ? 1250 : 1020;
-    }
-  }
-  function capturedOuterFleetSyndicate(root, region, extra, all) {
-    let tech = readProperty(root, "tech"), race = readProperty(root, "race"), space = readProperty(root, "space"), syndicate = readProperty(space, "syndicate");
-    if ((finite(readProperty(tech, "syndicate")) ?? 0) <= 0 || readProperty(race, "truepath") !== !0 || !isRecord(syndicate) || !Object.hasOwn(syndicate, region))
-      return extra ? { p: 1, r: 0, s: 0 } : 1;
-    let gov3 = readProperty(
-      readProperty(readProperty(root, "civic"), "foreign"),
-      "gov3"
-    ), rivalRel = finite(readProperty(gov3, "hstl"));
-    if (rivalRel === void 0) return extra ? { p: 1, r: 0, s: 0 } : 1;
-    let rival = rivalRel < 10 ? 250 - 25 * rivalRel : rivalRel > 60 ? -13 * (rivalRel - 60) : 0, divisor = 1e3;
-    switch (region) {
-      case "spc_home":
-      case "spc_moon":
-      case "spc_red":
-      case "spc_hell":
-        divisor = 1250 + rival;
-        break;
-      case "spc_gas":
-      case "spc_gas_moon":
-      case "spc_belt":
-        divisor = 1020 + rival;
-        break;
-      case "spc_titan":
-      case "spc_enceladus":
-        divisor = (finite(readProperty(tech, "triton")) ?? 0) <= 0 ? 600 : capturedOuterFleetRegionCap(root, region);
-        break;
-      case "spc_triton":
-      case "spc_makemake":
-      case "spc_eris":
-        divisor = capturedOuterFleetRegionCap(root, region);
-        break;
-    }
-    let piracy = finite(syndicate[region]) ?? 0, patrol = 0, sensor = 0, ships = capturedOuterFleetShips(root);
-    for (let ship of ships) {
-      if (!isRecord(ship) || ship.location !== region || !(all === !0 || (finite(ship.transit) ?? 1) === 0 && ship.fueled === !0)) continue;
-      let rating = (CAPTURED_OUTER_FLEET_WEAPON_POWER[String(ship.weapon ?? "")] ?? 0) * (CAPTURED_OUTER_FLEET_CLASS_POWER[String(ship.class ?? "")] ?? 0);
-      patrol += (finite(ship.damage) ?? 0) > 0 ? Math.round(rating * (100 - (finite(ship.damage) ?? 0)) / 100) : Math.round(rating), sensor += CAPTURED_OUTER_FLEET_SENSOR_RANGE[String(ship.sensor ?? "")] ?? 0;
-    }
-    let spaceRoot = isRecord(space) ? space : {}, buildingOn = (id) => finite(readProperty(readProperty(spaceRoot, id), "on")) ?? 0;
-    return region === "spc_enceladus" ? patrol += buildingOn("operating_base") * 50 : region === "spc_titan" ? patrol += buildingOn("sam") * 25 : region === "spc_triton" && buildingOn("fob") > 0 && (patrol += 500, sensor += 10), sensor > 100 && (sensor = Math.round((sensor - 100) / (sensor + 100) * 100) + 100), patrol = Math.round(patrol * ((sensor + 25) / 125)), piracy = piracy - patrol > 0 ? piracy - patrol : 0, extra ? { p: 1 - +(piracy / divisor).toFixed(4), r: piracy, s: sensor } : 1 - +(piracy / divisor).toFixed(4);
   }
   function capturedOuterFleetLocationName(region) {
     return region === "tauceti" ? "tech_era_tauceti" : region;
@@ -22226,12 +22214,15 @@
             dimensions
           ));
         }
-        let erisTechnology = finite(readProperty(tech, "eris")) ?? 0, erisWeighting = finite(settings.fleet_outer_pr_spc_eris) ?? 0, erisSensor = erisTechnology === 1 && erisWeighting > 0 ? Number(
-          capturedOuterFleetSyndicate(root, "spc_eris", !0, !0).s
-        ) : 50, regions = [], space = readProperty(root, "space");
-        if (!(exploreTau && tauTechnology === 1 && explorerAvailable && explorerCount < 1) && !(erisTechnology === 1 && erisWeighting > 0 && erisSensor < 50))
+        let erisTechnology = finite(readProperty(tech, "eris")) ?? 0, erisWeighting = finite(settings.fleet_outer_pr_spc_eris) ?? 0, erisGateLive = erisTechnology === 1 && erisWeighting > 0, erisSample = erisGateLive ? dependencies.syndicate.read("spc_eris") : void 0, erisSensor = erisSample === void 0 || erisSample.kind !== "value" ? null : erisSample.value.s, regions = [], space = readProperty(root, "space");
+        if (!(exploreTau && tauTechnology === 1 && explorerAvailable && explorerCount < 1) && !(erisGateLive && erisSensor !== null && erisSensor < 50))
           for (let id of CAPTURED_OUTER_FLEET_REGIONS) {
-            let unlocked = capturedOuterFleetRegionEnabled(root, id), weighting = unlocked ? finite(settings[`fleet_outer_pr_${id}`]) ?? 0 : 0, syndicate = unlocked && weighting > 0 ? Number(capturedOuterFleetSyndicate(root, id, !1, !0)) : 1, maximumDefense = finite(settings[`fleet_outer_def_${id}`]) ?? 1, digsite = readProperty(space, "digsite"), digsiteIncomplete = id === "spc_eris" && isRecord(digsite) && (finite(digsite.count) ?? 100) < 100, troopers = digsiteIncomplete ? finite(
+            let unlocked = capturedOuterFleetRegionEnabled(root, id), weighting = unlocked ? finite(settings[`fleet_outer_pr_${id}`]) ?? 0 : 0, syndicateRatio = null;
+            if (unlocked && weighting > 0) {
+              let sample = dependencies.syndicate.read(id);
+              syndicateRatio = sample.kind === "value" ? sample.value.p : null;
+            }
+            let maximumDefense = finite(settings[`fleet_outer_def_${id}`]) ?? 1, digsite = readProperty(space, "digsite"), digsiteIncomplete = id === "spc_eris" && isRecord(digsite) && (finite(digsite.count) ?? 100) < 100, troopers = digsiteIncomplete ? finite(
               readProperty(readProperty(space, "shock_trooper"), "on")
             ) ?? 0 : 0, tanks = digsiteIncomplete ? finite(readProperty(readProperty(space, "tank"), "on")) ?? 0 : 0, support = readProperty(
               readProperty(root, "resource"),
@@ -22242,7 +22233,7 @@
                 id,
                 unlocked,
                 weighting,
-                syndicateRatio: syndicate,
+                syndicateRatio,
                 maximumDefense,
                 digsiteIncomplete,
                 requestedTroopers: troopers,
@@ -22339,19 +22330,11 @@
           throw new TypeError(
             `captured ${candidate.blueprint} blueprint.class must be a string`
           );
-        let shipName = capturedOuterFleetShipName(blueprint), race = readProperty(active.root, "race"), baseCrew = (readProperty(race, "grenadier") === !0 ? CAPTURED_OUTER_FLEET_GRENADIER_CREW : CAPTURED_OUTER_FLEET_CLASS_CREW)[shipClass] ?? 0, jobStackMultiplier = readCapturedJobStackMultiplier(active.root);
-        if (baseCrew <= 0 || jobStackMultiplier === void 0)
-          throw new TypeError(
-            `captured crew data is unavailable for ${shipClass}`
-          );
-        let shipCrew = Math.round(baseCrew * jobStackMultiplier);
-        if (shipCrew <= 0)
-          throw new TypeError(`unknown outer fleet class ${shipClass}`);
-        let authority = { status: "not-required" }, authorityResource = readProperty(
+        let shipName = capturedOuterFleetShipName(blueprint), shipCrew = capturedShipCrewSize(active.root, shipClass) ?? null, authority = { status: "not-required" }, authorityResource = readProperty(
           readProperty(active.root, "resource"),
           "Authority"
         );
-        active.settings.authorityManage === !0 && (finite(active.settings.generalMinimumAuthority) ?? 0) !== 0 && readProperty(readProperty(active.root, "race"), "universe") === "evil" && readProperty(authorityResource, "display") !== !1 && (authority = capturedOuterFleetAuthorityAssessment(
+        shipCrew !== null && active.settings.authorityManage === !0 && (finite(active.settings.generalMinimumAuthority) ?? 0) !== 0 && readProperty(readProperty(active.root, "race"), "universe") === "evil" && readProperty(authorityResource, "display") !== !1 && (authority = capturedOuterFleetAuthorityAssessment(
           active.root,
           active.settings,
           shipCrew
@@ -22540,6 +22523,7 @@
       costs: dependencies.costs,
       parts: dependencies.parts,
       dispatch: dependencies.dispatch,
+      syndicate: dependencies.syndicate,
       readSettings: dependencies.readSettings,
       ...dependencies.onActivity === void 0 ? {} : { onActivity: dependencies.onActivity }
     });
@@ -49633,6 +49617,88 @@ Only continue if you trust the source. Injected code:
     });
   }
 
+  // src/adapters/evolve/captured-syndicate-mechanics.ts
+  var SYNDICATE_SCAN_METHOD = "scan", SYNDICATE_RATIO_DIGITS = 4, SYNDICATE_SCAN_DIGITS = 1, SYNDICATE_REGION_TABS = Object.freeze({
+    spc_moon: SPACE_TAB_INDEX.space,
+    spc_red: SPACE_TAB_INDEX.space,
+    spc_belt: SPACE_TAB_INDEX.space,
+    spc_gas: SPACE_TAB_INDEX.outerSol,
+    spc_gas_moon: SPACE_TAB_INDEX.outerSol,
+    spc_titan: SPACE_TAB_INDEX.outerSol,
+    spc_enceladus: SPACE_TAB_INDEX.outerSol,
+    spc_triton: SPACE_TAB_INDEX.outerSol,
+    spc_makemake: SPACE_TAB_INDEX.outerSol,
+    spc_eris: SPACE_TAB_INDEX.outerSol
+  });
+  function syndicateReadoutControl(region) {
+    return `${region}synd`;
+  }
+  function syndicateOperating(root) {
+    let tech = readProperty(root, "tech"), race = readProperty(root, "race"), space = readProperty(root, "space"), syndicate = readProperty(space, "syndicate");
+    return (finite(readProperty(tech, "shadow")) ?? 0) >= 5 || readProperty(tech, "isolation") || (finite(readProperty(tech, "syndicate")) ?? 0) <= 0 || readProperty(race, "truepath") !== !0 ? !1 : isRecord(syndicate);
+  }
+  function createCapturedSyndicateMechanics(dependencies) {
+    let { rootState, controls: controls2, discovery, mechanics } = dependencies;
+    function captureReadout(region) {
+      let subTab = SYNDICATE_REGION_TABS[region];
+      if (subTab === void 0) return;
+      let panel = MAIN_TAB_PANELS[MAIN_TAB_INDEX.civilization];
+      discovery.discover(
+        Object.freeze([
+          Object.freeze({
+            setting: MAIN_TAB_SETTING,
+            control: MAIN_TAB_CONTROL,
+            index: MAIN_TAB_INDEX.civilization
+          }),
+          Object.freeze({
+            setting: SPACE_TABS_SETTING,
+            control: SUB_TAB_CONTROLS[SPACE_TABS_SETTING] ?? "",
+            index: subTab
+          })
+        ]),
+        panel === void 0 ? {} : { mount: Object.freeze([`#${panel}`]) }
+      );
+    }
+    return Object.freeze({
+      read(region) {
+        let root = rootState.readRoot();
+        if (!isRecord(root)) return { kind: "absent" };
+        if (!syndicateOperating(root))
+          return {
+            kind: "value",
+            value: Object.freeze({ p: 1, s: 0 })
+          };
+        let control = syndicateReadoutControl(region);
+        controls2.resolve(control) === void 0 && captureReadout(region);
+        let handle = controls2.resolve(control);
+        if (handle === void 0) return { kind: "absent" };
+        let scan = mechanics.readRoundedValues(() => {
+          controls2.invoke(handle, SYNDICATE_SCAN_METHOD, [region]);
+        });
+        return scan.kind === "absent" ? { kind: "absent" } : scan.kind === "invalid" ? { kind: "invalid" } : readSyndicateSample(scan.value);
+      }
+    });
+  }
+  function readSyndicateSample(observations) {
+    let ratios = observations.filter(
+      (value) => value.digits === SYNDICATE_RATIO_DIGITS
+    ), scans = observations.filter(
+      (value) => value.digits === SYNDICATE_SCAN_DIGITS
+    );
+    if (scans.length !== 1) return { kind: "invalid" };
+    let sensor = scans[0].receiver * 1.25 - 25;
+    if (!Number.isFinite(sensor) || sensor < 0) return { kind: "invalid" };
+    if (ratios.length === 0)
+      return sensor === 0 ? { kind: "value", value: Object.freeze({ p: 1, s: 0 }) } : { kind: "invalid" };
+    if (ratios.length !== 1) return { kind: "invalid" };
+    let ratio = ratios[0];
+    if (!Number.isFinite(ratio.receiver)) return { kind: "invalid" };
+    let remaining = Number(ratio.text);
+    if (!Number.isFinite(remaining)) return { kind: "invalid" };
+    let p = 1 - remaining;
+    return !Number.isFinite(p) || p > 1 ? { kind: "invalid" } : { kind: "value", value: Object.freeze({ p, s: sensor }) };
+  }
+
   // src/domain/state-update.ts
   function computeMoneyWindow(incomes, rate) {
     let next = incomes.slice(1);
@@ -53463,12 +53529,18 @@ Only continue if you trust the source. Injected code:
       warnings: powerWarnings,
       diagnostics
     }), observePowerDemandPhase = (stage, outcome) => {
-    }, outerFleet = createCapturedOuterFleetControl({
+    }, outerFleetSyndicate = createCapturedSyndicateMechanics({
+      rootState: pageCapture2.rootState,
+      controls: pageCapture2.controls,
+      discovery: civicDiscovery,
+      mechanics: pageCapture2.mechanics
+    }), outerFleet = createCapturedOuterFleetControl({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
       costs: outerFleetCosts,
       parts: outerFleetParts,
       dispatch: capturedOuterFleetDispatch,
+      syndicate: outerFleetSyndicate,
       readSettings: () => settingsStore.readRaw(),
       onActivity
     });

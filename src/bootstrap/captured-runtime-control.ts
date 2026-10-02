@@ -209,6 +209,7 @@ import { createCapturedOuterFleetCosts } from "../adapters/evolve/combat/capture
 import { createCapturedOuterFleetDispatch } from "../adapters/evolve/combat/captured-outer-fleet-dispatch.ts";
 import { createCapturedOuterFleetShipyard } from "../adapters/evolve/combat/captured-outer-fleet-shipyard.ts";
 import { createCapturedOuterFleetParts } from "../adapters/evolve/combat/captured-outer-fleet-parts.ts";
+import { createCapturedSyndicateMechanics } from "../adapters/evolve/captured-syndicate-mechanics.ts";
 import {
   CAPTURED_MERCENARY_CONTROLS,
   createCapturedMercenary,
@@ -2599,15 +2600,37 @@ export function startCapturedRuntime({
       );
     }
   }
+  const outerFleetSyndicate = createCapturedSyndicateMechanics({
+    rootState: pageCapture.rootState,
+    controls: pageCapture.controls,
+    discovery: civicDiscovery,
+    mechanics: pageCapture.mechanics,
+  });
   const outerFleet = createCapturedOuterFleetControl({
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,
     costs: outerFleetCosts,
     parts: outerFleetParts,
     dispatch: capturedOuterFleetDispatch,
+    syndicate: outerFleetSyndicate,
     readSettings: () => settingsStore.readRaw(),
     onActivity,
   });
+  if (
+    typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
+    __EA_TEST_SURFACE_ENABLED__ === true
+  ) {
+    // The running game's own Syndicate answer, as a characterization reads it: a live run has to be
+    // able to ask the same question production asks without standing up the rest of the feature.
+    const hooks = readProperty(settingsHostWindow, "__EA_TEST_HOOKS__");
+    if (isRecord(hooks)) {
+      Reflect.set(hooks, "readOuterFleetSyndicate", (region: unknown) =>
+        typeof region === "string"
+          ? outerFleetSyndicate.read(region)
+          : { kind: "invalid" as const },
+      );
+    }
+  }
 
   // The settings panel prepares the raw layer before this composition has an override context.
   // Resolve it after all condition readers and their lazy control helpers are ready, before the

@@ -13,12 +13,14 @@ import type {
   CapturedPowerBalanceRule,
   CapturedPowerRequirement,
   CapturedFuelAdjustmentMode,
+  CapturedRoundedValue,
   CapturedSupportTopology,
   CapturedProductionBreakdown,
   CapturedProductionCell,
   CapturedProductionLedger,
 } from "../../ports/captured-game-mechanics.ts";
 import { isNonArrayRecord, readProperty } from "../validation.ts";
+import { probeScopedNumberToFixed } from "./scoped-number-to-fixed.ts";
 import { readCapturedActionAvailability } from "./progression/build/captured-building-availability.ts";
 
 type CapturedGameCall = (this: unknown, ...args: unknown[]) => unknown;
@@ -564,7 +566,9 @@ function fuelAdjustmentResourceMatches(
 
 function readFuelProbeResult(
   action: Record<string, unknown>,
-  numberPrototype: Record<string, unknown>,
+  probe: (
+    read: () => unknown,
+  ) => CapturedGameRead<readonly CapturedRoundedValue[]>,
   objectConstructor: unknown,
   mode: CapturedFuelAdjustmentMode,
   resourceId: string,
@@ -572,10 +576,6 @@ function readFuelProbeResult(
   if (!fuelAdjustmentResourceMatches(resourceId, mode)) return undefined;
   const fuelDescriptor = Object.getOwnPropertyDescriptor(action, "p_fuel");
   const effectDescriptor = Object.getOwnPropertyDescriptor(action, "effect");
-  const toFixedDescriptor = Object.getOwnPropertyDescriptor(
-    numberPrototype,
-    "toFixed",
-  );
   if (
     fuelDescriptor === undefined ||
     !("value" in fuelDescriptor) ||
@@ -583,18 +583,13 @@ function readFuelProbeResult(
     fuelDescriptor.configurable !== true ||
     effectDescriptor === undefined ||
     !("value" in effectDescriptor) ||
-    typeof effectDescriptor.value !== "function" ||
-    toFixedDescriptor === undefined ||
-    !("value" in toFixedDescriptor) ||
-    typeof toFixedDescriptor.value !== "function" ||
-    toFixedDescriptor.configurable !== true
+    typeof effectDescriptor.value !== "function"
   ) {
     return undefined;
   }
 
   const originalFuel = fuelDescriptor;
   const effect = effectDescriptor.value as CapturedGameCall;
-  const originalToFixed = toFixedDescriptor.value as CapturedGameCall;
   const pageDefineProperty = readMechanicsDataProperty(
     objectConstructor,
     "defineProperty",
@@ -620,27 +615,11 @@ function readFuelProbeResult(
   const observations: number[][] = [];
   let result: FuelProbeResult = { kind: "absent" };
   try {
-    const wrappedToFixed: CapturedGameCall = function capturedFuelToFixed(
-      this: unknown,
-      ...args: unknown[]
-    ): unknown {
-      let numeric: number;
-      try {
-        numeric = Number(this);
-      } catch {
-        numeric = Number.NaN;
-      }
-      const latest = observations[observations.length - 1];
-      latest?.push(numeric);
-      return Reflect.apply(originalToFixed, this, args);
-    };
-    Reflect.apply(pageDefineProperty as CapturedGameCall, objectConstructor, [
-      numberPrototype,
-      "toFixed",
-      { ...toFixedDescriptor, value: wrappedToFixed },
-    ]);
+    // One probe per amount, so each amount's roundings belong to its own effect call. A `p_fuel`
+    // this probe could not observe at all is a probe this action is skipped for, as it was when the
+    // page's `toFixed` was checked up front; an effect that throws is the answer being unreadable
+    // rather than the action being silent, and invalidates the whole read.
     for (const amount of probeAmounts) {
-      observations.push([]);
       const controlledFuel: CapturedGameCall = function capturedFuelAmount() {
         const item = { r: resourceId, a: amount };
         return arraySource ? [item] : item;
@@ -650,40 +629,55 @@ function readFuelProbeResult(
         "p_fuel",
         { ...fuelDescriptor, value: controlledFuel },
       ]);
-      Reflect.apply(effect, action, []);
+      let thrown: unknown;
+      const read = probe(() => {
+        try {
+          Reflect.apply(effect, action, []);
+        } catch (error) {
+          thrown = error;
+        }
+      });
+      if (thrown !== undefined) {
+        result = { kind: "invalid" };
+        break;
+      }
+      if (read.kind !== "value") return undefined;
+      observations.push(read.value.map((value) => value.receiver));
     }
-    const [first, second] = observations;
-    if (first !== undefined && second !== undefined) {
-      const firstScaled: number[] = [];
-      const secondScaled: number[] = [];
-      for (const left of first) {
-        if (!Number.isFinite(left)) continue;
-        for (const right of second) {
-          if (!Number.isFinite(right)) continue;
-          const slope = (right - left) / (probeAmounts[1] - probeAmounts[0]);
-          if (!Number.isFinite(slope) || slope <= 0) continue;
-          const firstFactor = left / probeAmounts[0];
-          const secondFactor = right / probeAmounts[1];
-          if (
-            Math.abs(firstFactor - secondFactor) <=
-            1e-9 * Math.max(1, Math.abs(firstFactor), Math.abs(secondFactor))
-          ) {
-            firstScaled.push(firstFactor);
-            secondScaled.push(secondFactor);
+    if (result.kind !== "invalid") {
+      const [first, second] = observations;
+      if (first !== undefined && second !== undefined) {
+        const firstScaled: number[] = [];
+        const secondScaled: number[] = [];
+        for (const left of first) {
+          if (!Number.isFinite(left)) continue;
+          for (const right of second) {
+            if (!Number.isFinite(right)) continue;
+            const slope = (right - left) / (probeAmounts[1] - probeAmounts[0]);
+            if (!Number.isFinite(slope) || slope <= 0) continue;
+            const firstFactor = left / probeAmounts[0];
+            const secondFactor = right / probeAmounts[1];
+            if (
+              Math.abs(firstFactor - secondFactor) <=
+              1e-9 * Math.max(1, Math.abs(firstFactor), Math.abs(secondFactor))
+            ) {
+              firstScaled.push(firstFactor);
+              secondScaled.push(secondFactor);
+            }
           }
         }
-      }
-      const factors = [...firstScaled, ...secondScaled];
-      if (firstScaled.length === 0 && secondScaled.length === 0) {
-        result = { kind: "absent" };
-      } else if (
-        firstScaled.length === 1 &&
-        secondScaled.length === 1 &&
-        factors.every((factor) => factor === factors[0])
-      ) {
-        result = { kind: "value", factor: factors[0]! };
-      } else {
-        result = { kind: "invalid" };
+        const factors = [...firstScaled, ...secondScaled];
+        if (firstScaled.length === 0 && secondScaled.length === 0) {
+          result = { kind: "absent" };
+        } else if (
+          firstScaled.length === 1 &&
+          secondScaled.length === 1 &&
+          factors.every((factor) => factor === factors[0])
+        ) {
+          result = { kind: "value", factor: factors[0]! };
+        } else {
+          result = { kind: "invalid" };
+        }
       }
     }
   } catch {
@@ -696,21 +690,12 @@ function readFuelProbeResult(
         fuelDescriptor,
       ]);
     } finally {
-      Reflect.apply(pageDefineProperty as CapturedGameCall, objectConstructor, [
-        numberPrototype,
-        "toFixed",
-        toFixedDescriptor,
-      ]);
       // A failed restoration invalidates the oracle result instead of silently leaving the page
-      // prototype or action definition modified.
+      // action definition modified.
       if (
         !sameMechanicsDescriptor(
           Object.getOwnPropertyDescriptor(action, "p_fuel"),
           originalFuel,
-        ) ||
-        !sameMechanicsDescriptor(
-          Object.getOwnPropertyDescriptor(numberPrototype, "toFixed"),
-          toFixedDescriptor,
         )
       ) {
         result = { kind: "invalid" };
@@ -846,6 +831,7 @@ function emptyGameMechanics(): CapturedGameMechanics {
     readProductionBreakdown: () => undefined,
     readLocalizedText: () => ({ kind: "absent" as const }),
     readAdjustedFuelFactor: () => ({ kind: "invalid" as const }),
+    readRoundedValues: () => ({ kind: "invalid" as const }),
   });
 }
 
@@ -1327,16 +1313,10 @@ export function installCapturedGameMechanics(
       resourceId: string,
     ): CapturedGameRead<number> {
       const entries = structureEntries;
-      const numberConstructor = readMechanicsProperty(pageWindow, "Number");
-      const numberPrototype = readMechanicsProperty(
-        numberConstructor,
-        "prototype",
-      );
       const objectConstructor = readMechanicsProperty(pageWindow, "Object");
       if (
         entries === undefined ||
         stopped ||
-        !isNonArrayRecord(numberPrototype) ||
         !fuelAdjustmentResourceMatches(resourceId, mode)
       ) {
         return { kind: "invalid" };
@@ -1362,7 +1342,7 @@ export function installCapturedGameMechanics(
           }
           const probed = readFuelProbeResult(
             entry.action,
-            numberPrototype,
+            mechanics.readRoundedValues,
             objectConstructor,
             mode,
             resourceId,
@@ -1385,6 +1365,23 @@ export function installCapturedGameMechanics(
           1e-9 * Math.max(1, Math.abs(factor), Math.abs(first)),
       );
       return consistent ? { kind: "value", value: first } : { kind: "invalid" };
+    },
+    /**
+     * The only route to a game answer that exists solely as a rounded literal, and the only place
+     * the page prototype is patched at all. The prototype is the page's own, so the patch is scoped
+     * to the one synchronous `read` and undone before this returns.
+     */
+    readRoundedValues(
+      read: () => unknown,
+    ): CapturedGameRead<readonly CapturedRoundedValue[]> {
+      if (stopped) return { kind: "invalid" };
+      const observations = probeScopedNumberToFixed(pageWindow, (seen) => {
+        read();
+        return seen;
+      });
+      return observations === undefined
+        ? { kind: "invalid" }
+        : { kind: "value", value: observations };
     },
   });
 

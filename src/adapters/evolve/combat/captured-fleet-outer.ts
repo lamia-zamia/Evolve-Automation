@@ -51,6 +51,7 @@ import type { CommandExecutionOutcome } from "../../../domain/commands.ts";
 import type { CapturedOuterFleetDispatchCapture } from "../../../ports/captured-outer-fleet-dispatch.ts";
 import type { GameRootStateSource } from "../../../ports/game-root-state.ts";
 import type { GameShipyardCosts } from "../../../ports/game-shipyard-costs.ts";
+import type { GameSyndicateMechanics } from "../../../ports/game-syndicate-mechanics.ts";
 import type {
   GameShipyardPartCatalog,
   GameShipyardPartCatalogSource,
@@ -61,10 +62,8 @@ import type {
   OuterFleetReader,
 } from "../../../ports/fleet-outer.ts";
 import { rejected, stale, SUCCEEDED } from "../../command-outcomes.ts";
-import {
-  readCapturedHighPopulationPercent,
-  readCapturedJobStackMultiplier,
-} from "../civic/captured-job-catalog.ts";
+import { readCapturedHighPopulationPercent } from "../civic/captured-job-catalog.ts";
+import { capturedShipCrewSize } from "./captured-ship-crew-compat.ts";
 import {
   finite,
   isRecord,
@@ -85,6 +84,8 @@ interface CapturedOuterFleetAdapterDependencies {
   /** The yard's own option markup, which is the only authority on what parts it offers. */
   readonly parts: GameShipyardPartCatalogSource;
   readonly dispatch: CapturedOuterFleetDispatchCapture;
+  /** The running game's own Syndicate result; there is no local arithmetic for this question. */
+  readonly syndicate: GameSyndicateMechanics;
   readonly readSettings: () => unknown;
   readonly onActivity?: GameActivitySink;
 }
@@ -127,60 +128,6 @@ const CAPTURED_OUTER_FLEET_EXPLORER = Object.freeze({
   power: "elerium",
   sensor: "quantum",
 });
-// Mirrors the class bases in DeadSpace ships.js shipCrewSize; jobStack scaling
-// comes from captured-job-catalog and rounds as jobs.js jobStack does. The two hulls upstream added
-// since this table was written both crew one, which is also what lets either be configured at all
-// rather than refused as a hull this script has no crew for.
-const CAPTURED_OUTER_FLEET_CLASS_CREW: Readonly<Record<string, number>> =
-  Object.freeze({
-    corvette: 2,
-    frigate: 3,
-    destroyer: 4,
-    cruiser: 6,
-    battlecruiser: 8,
-    dreadnought: 10,
-    freighter: 1,
-    explorer: 10,
-    supply_ship: 1,
-  });
-const CAPTURED_OUTER_FLEET_GRENADIER_CREW: Readonly<Record<string, number>> =
-  Object.freeze({
-    corvette: 1,
-    frigate: 2,
-    destroyer: 3,
-    cruiser: 4,
-    battlecruiser: 5,
-    dreadnought: 6,
-    freighter: 1,
-    explorer: 6,
-    supply_ship: 1,
-  });
-const CAPTURED_OUTER_FLEET_WEAPON_POWER: Readonly<Record<string, number>> =
-  Object.freeze({
-    railgun: 36,
-    laser: 64,
-    p_laser: 54,
-    plasma: 90,
-    phaser: 114,
-    disruptor: 156,
-  });
-const CAPTURED_OUTER_FLEET_CLASS_POWER: Readonly<Record<string, number>> =
-  Object.freeze({
-    corvette: 1,
-    frigate: 1.5,
-    destroyer: 2.75,
-    cruiser: 5.5,
-    battlecruiser: 10,
-    dreadnought: 22,
-    explorer: 1.2,
-  });
-const CAPTURED_OUTER_FLEET_SENSOR_RANGE: Readonly<Record<string, number>> =
-  Object.freeze({
-    visual: 1,
-    radar: 20,
-    lidar: 35,
-    quantum: 60,
-  });
 function capturedOuterFleetRoot(
   rootState: GameRootStateSource,
 ): UnknownRecord | undefined {
@@ -373,129 +320,6 @@ function capturedOuterFleetRegionEnabled(
     default:
       return false;
   }
-}
-
-function capturedOuterFleetRegionCap(
-  root: UnknownRecord,
-  region: string,
-): number {
-  const tech = readProperty(root, "tech");
-  switch (region) {
-    case "spc_titan":
-      return (finite(readProperty(tech, "triton")) ?? 0) > 0
-        ? (finite(readProperty(tech, "outer")) ?? 0) >= 4
-          ? 2000
-          : 1000
-        : 600;
-    case "spc_enceladus":
-      return (finite(readProperty(tech, "triton")) ?? 0) > 0
-        ? (finite(readProperty(tech, "outer")) ?? 0) >= 4
-          ? 1500
-          : 1000
-        : 600;
-    case "spc_triton":
-      return (finite(readProperty(tech, "outer")) ?? 0) >= 4 ? 5000 : 3000;
-    case "spc_makemake":
-      return 2500;
-    case "spc_eris":
-      return 7500;
-    default:
-      return region === "spc_moon" || region === "spc_red" ? 1250 : 1020;
-  }
-}
-
-function capturedOuterFleetSyndicate(
-  root: UnknownRecord,
-  region: string,
-  extra: boolean,
-  all: boolean,
-): { readonly p: number; readonly r: number; readonly s: number } | number {
-  const tech = readProperty(root, "tech");
-  const race = readProperty(root, "race");
-  const space = readProperty(root, "space");
-  const syndicate = readProperty(space, "syndicate");
-  if (
-    (finite(readProperty(tech, "syndicate")) ?? 0) <= 0 ||
-    readProperty(race, "truepath") !== true ||
-    !isRecord(syndicate) ||
-    !Object.hasOwn(syndicate, region)
-  ) {
-    return extra ? { p: 1, r: 0, s: 0 } : 1;
-  }
-  const gov3 = readProperty(
-    readProperty(readProperty(root, "civic"), "foreign"),
-    "gov3",
-  );
-  const rivalRel = finite(readProperty(gov3, "hstl"));
-  if (rivalRel === undefined) return extra ? { p: 1, r: 0, s: 0 } : 1;
-  const rival =
-    rivalRel < 10
-      ? 250 - 25 * rivalRel
-      : rivalRel > 60
-        ? -13 * (rivalRel - 60)
-        : 0;
-  let divisor = 1000;
-  switch (region) {
-    case "spc_home":
-    case "spc_moon":
-    case "spc_red":
-    case "spc_hell":
-      divisor = 1250 + rival;
-      break;
-    case "spc_gas":
-    case "spc_gas_moon":
-    case "spc_belt":
-      divisor = 1020 + rival;
-      break;
-    case "spc_titan":
-    case "spc_enceladus":
-      divisor =
-        (finite(readProperty(tech, "triton")) ?? 0) <= 0
-          ? 600
-          : capturedOuterFleetRegionCap(root, region);
-      break;
-    case "spc_triton":
-    case "spc_makemake":
-    case "spc_eris":
-      divisor = capturedOuterFleetRegionCap(root, region);
-      break;
-  }
-  let piracy = finite(syndicate[region]) ?? 0;
-  let patrol = 0;
-  let sensor = 0;
-  const ships = capturedOuterFleetShips(root);
-  for (const ship of ships) {
-    if (!isRecord(ship) || ship["location"] !== region) continue;
-    const active =
-      all === true ||
-      ((finite(ship["transit"]) ?? 1) === 0 && ship["fueled"] === true);
-    if (!active) continue;
-    const rating =
-      (CAPTURED_OUTER_FLEET_WEAPON_POWER[String(ship["weapon"] ?? "")] ?? 0) *
-      (CAPTURED_OUTER_FLEET_CLASS_POWER[String(ship["class"] ?? "")] ?? 0);
-    patrol +=
-      (finite(ship["damage"]) ?? 0) > 0
-        ? Math.round((rating * (100 - (finite(ship["damage"]) ?? 0))) / 100)
-        : Math.round(rating);
-    sensor +=
-      CAPTURED_OUTER_FLEET_SENSOR_RANGE[String(ship["sensor"] ?? "")] ?? 0;
-  }
-  const spaceRoot = isRecord(space) ? space : {};
-  const buildingOn = (id: string) =>
-    finite(readProperty(readProperty(spaceRoot, id), "on")) ?? 0;
-  if (region === "spc_enceladus") patrol += buildingOn("operating_base") * 50;
-  else if (region === "spc_titan") patrol += buildingOn("sam") * 25;
-  else if (region === "spc_triton" && buildingOn("fob") > 0) {
-    patrol += 500;
-    sensor += 10;
-  }
-  if (sensor > 100)
-    sensor = Math.round(((sensor - 100) / (sensor + 100)) * 100) + 100;
-  patrol = Math.round(patrol * ((sensor + 25) / 125));
-  piracy = piracy - patrol > 0 ? piracy - patrol : 0;
-  return extra
-    ? { p: 1 - +(piracy / divisor).toFixed(4), r: piracy, s: sensor }
-    : 1 - +(piracy / divisor).toFixed(4);
 }
 
 function capturedOuterFleetLocationName(region: string): string {
@@ -870,16 +694,16 @@ export function createCapturedOuterFleetAdapter(
       }
       const erisTechnology = finite(readProperty(tech, "eris")) ?? 0;
       const erisWeighting = finite(settings["fleet_outer_pr_spc_eris"]) ?? 0;
+      const erisGateLive = erisTechnology === 1 && erisWeighting > 0;
+      // The game's own sensor reading at Eris, and only where the gate is live: an unweighted Eris
+      // decides nothing, and asking would cost a protected draw for an answer nobody reads.
+      const erisSample = erisGateLive
+        ? dependencies.syndicate.read("spc_eris")
+        : undefined;
       const erisSensor =
-        erisTechnology === 1 && erisWeighting > 0
-          ? Number(
-              (
-                capturedOuterFleetSyndicate(root, "spc_eris", true, true) as {
-                  readonly s: number;
-                }
-              ).s,
-            )
-          : 50;
+        erisSample === undefined || erisSample.kind !== "value"
+          ? null
+          : erisSample.value.s;
       const regions: OuterFleetRegionInput[] = [];
       const space = readProperty(root, "space");
       if (
@@ -889,17 +713,21 @@ export function createCapturedOuterFleetAdapter(
           explorerAvailable &&
           explorerCount < 1
         ) &&
-        !(erisTechnology === 1 && erisWeighting > 0 && erisSensor < 50)
+        !(erisGateLive && erisSensor !== null && erisSensor < 50)
       ) {
         for (const id of CAPTURED_OUTER_FLEET_REGIONS) {
           const unlocked = capturedOuterFleetRegionEnabled(root, id);
           const weighting = unlocked
             ? (finite(settings[`fleet_outer_pr_${id}`]) ?? 0)
             : 0;
-          const syndicate =
-            unlocked && weighting > 0
-              ? Number(capturedOuterFleetSyndicate(root, id, false, true))
-              : 1;
+          // Sampled once per unlocked, weighted region. A zero-weight region is not a target this
+          // pass can choose, so its defense is never a question worth a draw; the Eris gate above is
+          // the one exception, because it is a gate rather than a target.
+          let syndicateRatio: number | null = null;
+          if (unlocked && weighting > 0) {
+            const sample = dependencies.syndicate.read(id);
+            syndicateRatio = sample.kind === "value" ? sample.value.p : null;
+          }
           const maximumDefense = finite(settings[`fleet_outer_def_${id}`]) ?? 1;
           const digsite = readProperty(space, "digsite");
           const digsiteIncomplete =
@@ -927,7 +755,7 @@ export function createCapturedOuterFleetAdapter(
               id,
               unlocked,
               weighting,
-              syndicateRatio: syndicate,
+              syndicateRatio,
               maximumDefense,
               digsiteIncomplete,
               requestedTroopers: troopers,
@@ -1052,26 +880,17 @@ export function createCapturedOuterFleetAdapter(
           `captured ${candidate.blueprint} blueprint.class must be a string`,
         );
       const shipName = capturedOuterFleetShipName(blueprint);
-      const race = readProperty(active.root, "race");
-      const crewByClass =
-        readProperty(race, "grenadier") === true
-          ? CAPTURED_OUTER_FLEET_GRENADIER_CREW
-          : CAPTURED_OUTER_FLEET_CLASS_CREW;
-      const baseCrew = crewByClass[shipClass] ?? 0;
-      const jobStackMultiplier = readCapturedJobStackMultiplier(active.root);
-      if (baseCrew <= 0 || jobStackMultiplier === undefined)
-        throw new TypeError(
-          `captured crew data is unavailable for ${shipClass}`,
-        );
-      const shipCrew = Math.round(baseCrew * jobStackMultiplier);
-      if (shipCrew <= 0)
-        throw new TypeError(`unknown outer fleet class ${shipClass}`);
+      // The game's own crew requirement for this hull, scaled by the game's own job stack. An
+      // unreadable answer is `null` and stands the pass down rather than throwing: a hull upstream
+      // has since added is an ordinary state, not a fault.
+      const shipCrew = capturedShipCrewSize(active.root, shipClass) ?? null;
       let authority: OuterFleetAuthorityAssessment = { status: "not-required" };
       const authorityResource = readProperty(
         readProperty(active.root, "resource"),
         "Authority",
       );
       if (
+        shipCrew !== null &&
         active.settings["authorityManage"] === true &&
         (finite(active.settings["generalMinimumAuthority"]) ?? 0) !== 0 &&
         readProperty(readProperty(active.root, "race"), "universe") ===

@@ -31,7 +31,12 @@ export interface OuterFleetRegionInput {
   readonly id: string;
   readonly unlocked: boolean;
   readonly weighting: number;
-  readonly syndicateRatio: number;
+  /**
+   * The running game's own Syndicate defense ratio for this region, or `null` when its mechanics
+   * could not be reached. There is no defensible substitute: the automation has no arithmetic left
+   * for this question, and an unanswered ratio would read as a defended region.
+   */
+  readonly syndicateRatio: number | null;
   readonly maximumDefense: number;
   readonly digsiteIncomplete: boolean;
   readonly requestedTroopers: number;
@@ -46,7 +51,11 @@ export interface OuterFleetTargetInput {
   readonly explorerCount: number;
   readonly erisTechnology: number;
   readonly erisWeighting: number;
-  readonly erisSensor: number;
+  /**
+   * The game's own effective Syndicate sensor reading at Eris, or `null` when it could not be
+   * reached. Only consulted when the Eris gate is otherwise live.
+   */
+  readonly erisSensor: number | null;
   readonly regions: readonly OuterFleetRegionInput[];
 }
 
@@ -89,7 +98,13 @@ export type OuterFleetAuthorityAssessment =
 export interface OuterFleetCandidateInput {
   readonly candidate: Readonly<OuterFleetCandidatePlan>;
   readonly shipName: string;
-  readonly shipCrew: number;
+  /**
+   * How many crew this design takes out of the garrison, or `null` when the game's own crew
+   * requirement for the hull could not be answered. The build readiness check below compares that
+   * number against the garrison, so an unanswered one is not a ship with unknown cost — it is a
+   * design that cannot be checked, and stands down.
+   */
+  readonly shipCrew: number | null;
   readonly authority: Readonly<OuterFleetAuthorityAssessment>;
 }
 
@@ -144,6 +159,14 @@ function status(
     messageAfterUpdate,
   });
 }
+
+/**
+ * The stand-down when the running game's own Syndicate mechanics cannot be reached. One message for
+ * both places that need it, because the two have the same cause and the same consequence: a pass
+ * that cannot see how defended a region is cannot decide whether to send a ship there.
+ */
+const SYNDICATE_UNAVAILABLE =
+  "Syndicate defense data unavailable; ship construction paused";
 
 export function planOuterFleetCycle(
   input: Readonly<OuterFleetCycleInput>,
@@ -212,18 +235,38 @@ export function planOuterFleetTarget(
     });
   }
 
+  if (input.erisTechnology === 1 && input.erisWeighting > 0) {
+    // The gate cannot be decided without the game's own sensor reading, and deciding it wrongly
+    // either way is the failure this feature exists to avoid: sending a ship elsewhere while Eris is
+    // undefended, or holding one back from a region that needs it. So an unread reading stands the
+    // pass down rather than picking a side.
+    if (input.erisSensor === null) {
+      return status(null, null, SYNDICATE_UNAVAILABLE);
+    }
+    if (input.erisSensor < 50) {
+      return Object.freeze({
+        kind: "select-blueprint",
+        mode: cycle.mode,
+        targetRegion: "spc_eris",
+        minimumCrew: 0,
+        forcedBlueprint: null,
+      });
+    }
+  }
+
+  // Every weighted, unlocked region is a target this pass would ship to, so an unread ratio on any of
+  // them is a question that has to be answered before the best one can be named. Refused before the
+  // filter, because a filter that dropped it would quietly ship to whichever region happened to
+  // answer, and a ratio that reads as fully defended ships nowhere at all.
   if (
-    input.erisTechnology === 1 &&
-    input.erisWeighting > 0 &&
-    input.erisSensor < 50
+    input.regions.some(
+      (region) =>
+        region.unlocked &&
+        region.weighting > 0 &&
+        region.syndicateRatio === null,
+    )
   ) {
-    return Object.freeze({
-      kind: "select-blueprint",
-      mode: cycle.mode,
-      targetRegion: "spc_eris",
-      minimumCrew: 0,
-      forcedBlueprint: null,
-    });
+    return status(null, null, SYNDICATE_UNAVAILABLE);
   }
 
   const regionsToProtect = input.regions
@@ -231,12 +274,13 @@ export function planOuterFleetTarget(
       (region) =>
         region.unlocked &&
         region.weighting > 0 &&
+        region.syndicateRatio !== null &&
         region.syndicateRatio < calculateOuterFleetDefenseTarget(region),
     )
     .sort(
       (left, right) =>
-        (1 - right.syndicateRatio) * right.weighting -
-        (1 - left.syndicateRatio) * left.weighting,
+        (1 - (right.syndicateRatio ?? 1)) * right.weighting -
+        (1 - (left.syndicateRatio ?? 1)) * left.weighting,
     );
   const target = regionsToProtect[0];
   if (target === undefined) {
@@ -285,6 +329,14 @@ export function planOuterFleetCandidate(
   input: Readonly<OuterFleetCandidateInput>,
 ): Readonly<OuterFleetReadinessPlan | OuterFleetStatusDecision> {
   const nextShipName = `${input.shipName} to ${input.candidate.targetLocationName}`;
+  if (input.shipCrew === null) {
+    return status(
+      input.candidate.blueprint,
+      null,
+      "Ship crew requirement unavailable; ship construction paused",
+      nextShipName,
+    );
+  }
   if (input.authority.status === "unavailable") {
     return status(
       input.candidate.blueprint,

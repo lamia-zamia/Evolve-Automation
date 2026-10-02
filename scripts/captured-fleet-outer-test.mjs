@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 
 import { createCapturedFleetControls } from "../src/adapters/evolve/combat/captured-fleet-controls.ts";
 import { parseShipyardPartCatalog } from "../src/adapters/evolve/combat/captured-outer-fleet-parts.ts";
@@ -394,6 +395,31 @@ function createCostStub() {
   };
 }
 
+/**
+ * The running game's own Syndicate result, which is the only authority on how defended a region is.
+ *
+ * The figures are deliberately distinctive: `0.7319` is not what any arithmetic over this save's
+ * piracy (`spc_red: 600`), the regional cap, the rival hostility or the ships in the yard produces, so
+ * a pass that reaches `spc_red` is provably following the game's answer rather than a table that
+ * happens to agree with this fixture. `"unavailable"` is the game's own "no piracy" readout, which
+ * rounds nothing and so leaves a caller with nothing to read.
+ */
+function createSyndicateStub(samples = { spc_red: { p: 0.7319, s: 47 } }) {
+  return {
+    samples,
+    requests: [],
+    read(region) {
+      this.requests.push(region);
+      const sample = samples[region];
+      if (sample === undefined || sample === "unavailable") {
+        return { kind: "invalid" };
+      }
+      return { kind: "value", value: { p: sample.p, s: sample.s } };
+    },
+  };
+}
+let syndicate = createSyndicateStub();
+
 let costs = createCostStub();
 /** The one catalogue every composition here shares, as the yard's own markup would have produced it. */
 const partCatalog = shipyardCatalog(SHIP_PARTS);
@@ -416,6 +442,7 @@ function createOuterControl(
       blockedByPlayerModal: () => playerModalOpen,
       dispatchShipyardShip: (request) => stub.dispatchShipyardShip(request),
     },
+    syndicate,
     readSettings: () => effectiveSettings,
   });
 }
@@ -504,6 +531,7 @@ const missingRootControl = createCapturedOuterFleetControl({
   costs,
   parts: { catalog: () => partCatalog },
   dispatch,
+  syndicate,
   readSettings: () => effectiveSettings,
 });
 assert.equal(missingRootControl.autoFleetOuter().outcome.status, "succeeded");
@@ -1074,5 +1102,207 @@ root.tech.tauceti = 0;
 }
 
 capturedSettings.fleetExploreTau = false;
+
+// ---------------------------------------------------------------------------
+// The game's own Syndicate result, and the pass standing down without it.
+// ---------------------------------------------------------------------------
+
+capturedSettings.fleetOuterShips = "custom";
+capturedSettings.fleet_outer_pr_spc_red = 1;
+capturedSettings.fleet_outer_def_spc_red = 0.9;
+root.tech.eris = 2;
+
+/** Restores the pass's shared state so each case below starts where the one above left off. */
+function resetOuterPass() {
+  yard.ships.length = 0;
+  dispatch.requests.length = 0;
+  costs.requests.length = 0;
+  capturedBuilds = 0;
+}
+
+// The native ratio is the target's answer, exactly. Nothing in this composition can turn `0.7319`
+// into that region, so a ship sent there is following the game rather than a table.
+{
+  resetOuterPass();
+  syndicate = createSyndicateStub({ spc_red: { p: 0.7319, s: 47 } });
+  const pass = createOuterControl().autoFleetOuter();
+  assert.equal(pass.outcome.status, "succeeded");
+  assert.equal(yard.ships.length, 1);
+  assert.deepEqual(dispatch.requests, [{ index: 0, region: "spc_red" }]);
+  assert.deepEqual(syndicate.requests, ["spc_red"]);
+}
+
+// The same native ratio, with every field the deleted replica read on the way to its own answer
+// moved: the region's piracy, the rival government's hostility, and the technology the regional caps
+// branch on. The answer does not move, because it is not computed from any of them here.
+{
+  resetOuterPass();
+  root.space.syndicate.spc_red = 6;
+  root.civic.foreign.gov3.hstl = 61;
+  root.tech.outer = 4;
+  const seen = syndicate.requests.length;
+  createOuterControl().autoFleetOuter();
+  assert.equal(syndicate.requests.length, seen + 1);
+  assert.deepEqual(syndicate.requests.at(-1), "spc_red");
+  root.space.syndicate.spc_red = 600;
+  root.civic.foreign.gov3.hstl = 50;
+  root.tech.outer = 0;
+}
+
+// A ratio above the region's own maximum defense is a defended region, not a target: the same
+// comparison the replica made, now over the game's own number.
+{
+  resetOuterPass();
+  syndicate = createSyndicateStub({ spc_red: { p: 0.9512, s: 47 } });
+  const pass = createOuterControl().autoFleetOuter();
+  assert.equal(pass.outcome.status, "succeeded");
+  assert.equal(yard.ships.length, 0);
+  assert.deepEqual(dispatch.requests, []);
+  assert.deepEqual(
+    costs.requests.filter(([method]) => method === "price"),
+    [],
+  );
+}
+
+// The native inactive result is a real answer, not a missing one. `syndicate()` answers
+// `{p: 1, r: 0, s: 0, o: 0}` when the Syndicate is not operating, and `p: 1` is a fully defended
+// region: the pass reports that no ship is needed rather than standing down over missing data.
+{
+  resetOuterPass();
+  syndicate = createSyndicateStub({ spc_red: { p: 1, s: 0 } });
+  const pass = createOuterControl().autoFleetOuter();
+  assert.equal(pass.outcome.status, "succeeded");
+  assert.equal(yard.ships.length, 0);
+  assert.equal(syndicate.requests.length, 1);
+}
+
+// The Eris exploration gate is the game's own sensor reading, exactly. A distinctive value decides
+// it, and one on the far side of the game's own 50-point threshold does not.
+{
+  resetOuterPass();
+  capturedSettings.fleet_outer_pr_spc_eris = 1;
+  root.tech.eris = 1;
+  root.space.syndicate.spc_eris = 600;
+  syndicate = createSyndicateStub({
+    spc_red: { p: 0.7319, s: 47 },
+    spc_eris: { p: 0.5, s: 12 },
+  });
+  const gated = createOuterControl().autoFleetOuter();
+  assert.equal(gated.outcome.status, "succeeded");
+  assert.deepEqual(dispatch.requests, [{ index: 0, region: "spc_eris" }]);
+
+  resetOuterPass();
+  syndicate = createSyndicateStub({
+    spc_red: { p: 0.7319, s: 47 },
+    spc_eris: { p: 0.9512, s: 50 },
+  });
+  const ungated = createOuterControl().autoFleetOuter();
+  assert.equal(ungated.outcome.status, "succeeded");
+  assert.deepEqual(dispatch.requests, [{ index: 0, region: "spc_red" }]);
+  delete capturedSettings.fleet_outer_pr_spc_eris;
+  delete root.space.syndicate.spc_eris;
+  root.tech.eris = 2;
+}
+
+// Mechanics unavailable where the pass needs them: nothing is priced, nothing is written, nothing is
+// built, nothing is sent, and the pass says why instead of guessing a ratio.
+{
+  resetOuterPass();
+  syndicate = createSyndicateStub({ spc_red: "unavailable" });
+  const pass = createOuterControl().autoFleetOuter();
+  assert.equal(pass.outcome.status, "succeeded");
+  assert.equal(yard.ships.length, 0);
+  assert.equal(capturedBuilds, 0);
+  assert.deepEqual(dispatch.requests, []);
+  assert.deepEqual(
+    costs.requests.filter(([method]) => method === "price"),
+    [],
+  );
+  assert.deepEqual(yard.blueprint, {
+    class: "corvette",
+    armor: "steel",
+    weapon: "railgun",
+    engine: "ion",
+    power: "diesel",
+    sensor: "radar",
+    special: "none",
+  });
+}
+
+// Mechanics unavailable where the pass needs none: neither a zero-weight region nor a disabled
+// feature is a question, and neither may reject the cycle.
+{
+  resetOuterPass();
+  syndicate = createSyndicateStub({});
+  capturedSettings.fleetOuterShips = "none";
+  const disabled = createOuterControl().autoFleetOuter();
+  assert.equal(disabled.outcome.status, "succeeded");
+  assert.deepEqual(syndicate.requests, []);
+
+  resetOuterPass();
+  capturedSettings.fleetOuterShips = "custom";
+  syndicate = createSyndicateStub({ spc_red: { p: 0.7319, s: 47 } });
+  const oneTarget = createOuterControl().autoFleetOuter();
+  assert.equal(oneTarget.outcome.status, "succeeded");
+  assert.deepEqual(
+    syndicate.requests,
+    ["spc_red"],
+    "a zero-weight region was asked about",
+  );
+  assert.equal(yard.ships.length, 1);
+}
+
+// Mechanics unavailable and the Explorer branch resolving first: the Explorer needs no Syndicate
+// answer, so a missing one is not a reason to refuse it.
+{
+  resetOuterPass();
+  capturedSettings.fleetExploreTau = true;
+  root.tech.tauceti = 1;
+  syndicate = createSyndicateStub({});
+  const explored = createOuterControl().autoFleetOuter();
+  assert.equal(explored.outcome.status, "succeeded");
+  assert.deepEqual(dispatch.requests, [{ index: 0, region: "tauceti" }]);
+  capturedSettings.fleetExploreTau = false;
+  root.tech.tauceti = 0;
+}
+
+// A crew requirement the compatibility table cannot give stands the pass down rather than throwing
+// out of ordinary planning: a hull upstream has since added is an ordinary state, not a fault.
+{
+  resetOuterPass();
+  syndicate = createSyndicateStub({ spc_red: { p: 0.7319, s: 47 } });
+  capturedSettings.fleet_outer_class = "corsair";
+  const unknownHull = createOuterControl().autoFleetOuter();
+  assert.equal(unknownHull.outcome.status, "succeeded");
+  assert.equal(yard.ships.length, 0);
+  capturedSettings.fleet_outer_class = "corvette";
+}
+
+// ---------------------------------------------------------------------------
+// What production no longer contains.
+// ---------------------------------------------------------------------------
+
+const productionFleetOuter = readFileSync(
+  new URL(
+    "../src/adapters/evolve/combat/captured-fleet-outer.ts",
+    import.meta.url,
+  ),
+  "utf8",
+);
+for (const gone of [
+  "CAPTURED_OUTER_FLEET_CLASS_CREW",
+  "CAPTURED_OUTER_FLEET_GRENADIER_CREW",
+  "CAPTURED_OUTER_FLEET_WEAPON_POWER",
+  "CAPTURED_OUTER_FLEET_CLASS_POWER",
+  "CAPTURED_OUTER_FLEET_SENSOR_RANGE",
+  "capturedOuterFleetRegionCap",
+  "capturedOuterFleetSyndicate",
+]) {
+  assert.equal(
+    productionFleetOuter.includes(gone),
+    false,
+    `${gone} is back in the outer-fleet adapter`,
+  );
+}
 
 console.log("Captured outer-fleet control postcondition tests passed");
