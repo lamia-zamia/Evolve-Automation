@@ -47,6 +47,34 @@
  * generation produced after it together with every method this feature reaches for. A draw that
  * returned early — no shipyard, no `showShipYard`, a True Path run the game does not ship for — is
  * refused rather than answered with a control an earlier draw left behind.
+ *
+ * **The dispatch trigger is not one of those methods.** `drawShipYard()` binds `#shipPlans` with the
+ * yard's design methods, and `drawShips()` binds each `#shipReg${i}` separately with the row's own:
+ * `pickDest(id)`, whose closure is the only route to `sendShipTo(id, region)`, and
+ * `show(id)`, which is `shipMoving(ships[id])`. Nothing in `shipPlans` can be asked for either, so
+ * `captureRow()` below runs the game's own ship-list draw — `shipPlans.redraw()`, which upstream
+ * defines as exactly `drawShips()` — against scratch DOM, and proves the row that draw bound belongs
+ * to the ship being dispatched.
+ *
+ * That pass needs its own `#shipList`, because `drawShips()` clears and refills the element the
+ * yard gives it: a capture that drew into the player's would leave them a yard the automation
+ * redrew. The panel workspace answers that the same way it does for the establishment pass, by
+ * aliasing every id under the Civic panel for the length of one synchronous draw, so the player's
+ * own `#shipList` and rows cannot be resolved at all. The draw's tab gate is satisfied the same way,
+ * and `settings.civTabs`/`govTabs` and the yard's own view options are put back before the browser
+ * or Vue can observe any of it.
+ *
+ * **The player's saved view is not a participant either.** `drawShips()` omits rows for a system
+ * filter, a folded location group or a folded fleet, so a yard left filtered or folded would hide
+ * the very row being dispatched. Only the three fields that can hide *this* ship are touched —
+ * `sys` and `group`, and the one `ffold` entry naming the target's fleet — each read first and put
+ * back in the same synchronous call. No ship list is reimplemented here; the rows are the game's.
+ *
+ * A redraw can also re-sort and re-cluster the yard's live array, so the ship is held by identity
+ * and its index is derived from the list the draw leaves behind. The row that draw bound is then
+ * required to carry a generation newer than the one *that element id* held before it: a control
+ * surviving an earlier draw, or one bound to whichever ship used to sit at this index, can never
+ * answer for a capture.
  */
 import type {
   GameControlHandle,
@@ -67,38 +95,70 @@ import {
 } from "../captured-tab-discovery.ts";
 import { isRecord, readProperty } from "../../validation.ts";
 
-/** The control the game binds its `#shipPlans` markup to: blueprint, parts, build, dispatch. */
+/** The control the game binds its `#shipPlans` markup to: the yard's blueprint, parts and build. */
 export const CAPTURED_OUTER_FLEET_SHIPYARD_CONTROL = "shipPlans";
 
 /** The panel `drawShipYard()` draws into, and the element a shipyard host has to stand in for. */
 export const CAPTURED_OUTER_FLEET_SHIPYARD_PANEL_ID = "dwarfShipYard";
 
-/** The ship-row method whose closure is the only route to `sendShipTo(id, region)`. */
-export const CAPTURED_OUTER_FLEET_DISPATCH_TRIGGER_METHOD = "pickDest";
+/** The element `drawShipYard()` gives the yard's ship list, and the one `drawShips()` refills. */
+export const CAPTURED_OUTER_FLEET_SHIP_LIST_ID = "shipList";
 
 /**
- * The yard's own answer to "is this ship under way", which is `shipMoving(ships[id])`. Read by
+ * The prefix `drawShipRow()` gives each ship row. It is bound per row, with the ship as its data,
+ * which is why the dispatch trigger and the yard's own under-way answer are asked of
+ * `#shipReg${index}` rather than of `shipPlans`.
+ */
+export const CAPTURED_OUTER_FLEET_SHIP_ROW_PREFIX = "shipReg";
+
+/** The ship-row method whose closure is the only route to `sendShipTo(id, region)`. */
+export const CAPTURED_OUTER_FLEET_ROW_DISPATCH_METHOD = "pickDest";
+
+/**
+ * The ship row's own answer to "is this ship under way", which is `shipMoving(ships[id])`. Read by
  * index, so it is asked of the ship's position *after* the dispatch: `drawShips()` re-sorts and
  * re-clusters the yard's list, and the index a ship was built at is not the one it sails from.
  */
-export const CAPTURED_OUTER_FLEET_UNDERWAY_METHOD = "show";
+export const CAPTURED_OUTER_FLEET_ROW_UNDERWAY_METHOD = "show";
+
+/** The yard's own switch to its ship list, which upstream defines as exactly `drawShips()`. */
+const OUTER_FLEET_SHIPYARD_REDRAW_METHOD = "redraw";
 
 /** The tab components' own switch method, for the main tab and for the Civic sub-tabs. */
 const TAB_SWAP_METHOD = "swapTab";
 
 /**
- * Every method this feature reaches the yard through, so a control that answers with a plausible
- * generation but a partial binding is refused. `build` is the build itself, `pickDest` the dispatch,
- * `show` the postcondition, `drawShips` what `setVal` and `build` redraw through, and `powerText`
- * the power gate.
+ * Every method this feature reaches the yard's *design* control through, so a control that answers
+ * with a plausible generation but a partial binding is refused: `avail` the part gate, `setVal` the
+ * blueprint write, `powerText` the power gate, `build` the build itself, and `redraw` the one
+ * game-owned closure to `drawShips()` the row capture runs.
+ *
+ * Exactly what the callers ask for, and nothing else. `pickDest` and `show` are *not* here: upstream
+ * binds those on each `#shipReg${i}` row, so requiring them of `shipPlans` describes a control the
+ * game never builds.
  */
 const OUTER_FLEET_SHIPYARD_METHODS: readonly string[] = Object.freeze([
+  "avail",
   "build",
-  "drawShips",
-  "pickDest",
   "powerText",
-  "show",
+  OUTER_FLEET_SHIPYARD_REDRAW_METHOD,
+  "setVal",
 ]);
+
+/** What a ship row's own binding must carry for this feature to reach the dispatch and its answer. */
+const OUTER_FLEET_SHIP_ROW_METHODS: readonly string[] = Object.freeze([
+  CAPTURED_OUTER_FLEET_ROW_DISPATCH_METHOD,
+  CAPTURED_OUTER_FLEET_ROW_UNDERWAY_METHOD,
+]);
+
+/**
+ * One ship row, as the game bound it. `index` is the ship's position in the yard's live list, which
+ * is what every row method is read by; `elementId` is the row control to ask.
+ */
+export interface CapturedOuterFleetShipRow {
+  readonly index: number;
+  readonly elementId: string;
+}
 
 export interface CapturedOuterFleetShipyardDependencies {
   readonly rootState: GameRootStateSource;
@@ -108,6 +168,8 @@ export interface CapturedOuterFleetShipyardDependencies {
   readonly mountSuppression: GameMountSuppression;
   readonly panels: GamePanelWorkspace;
   readonly getDocument: () => unknown;
+  /** The page's global object, whose Vue answers a binding proxy's own value. */
+  readonly getPageWindow: () => unknown;
   /** Reports a fault in the capture itself, never a game fault. */
   readonly onEstablishError?: (detail: string) => void;
 }
@@ -122,25 +184,38 @@ export interface CapturedOuterFleetShipyard {
    * rebound, or `undefined` when it rebound nothing. Never carried past the call.
    */
   establish(): GameControlHandle | undefined;
+  /**
+   * The row control the yard's own last draw bound for this ship, or `undefined` when none answers
+   * for it. A resolution, not a draw: it says nothing about whether that row is current.
+   */
+  rowFor(ship: unknown): CapturedOuterFleetShipRow | undefined;
+  /**
+   * Runs the game's own ship-list draw against scratch DOM and answers the row it bound for this
+   * ship, or `undefined` when the draw bound no row that can be proven to be this ship's. One
+   * attempt: nothing is retained past the call.
+   */
+  captureRow(ship: unknown): CapturedOuterFleetShipRow | undefined;
 }
 
-interface ShipyardHost {
+/** A hidden element the capture owns and removes: the panel or list the game's draw will find. */
+interface HiddenHost {
   readonly parent: unknown;
   readonly element: unknown;
 }
 
 /**
- * The hidden `#dwarfShipYard` the game's draw will find and fill. Refused when the id is already
- * taken: a real shipyard owns it then, and a capture must never clear or refill the player's panel
- * because it resolved to the same element.
+ * The hidden element the game's draw will find and fill. Refused when the id is already taken: a
+ * real yard owns it then, and a capture must never clear or refill the player's panel because it
+ * resolved to the same element.
  */
-function capturedShipyardHost(document: unknown): ShipyardHost | undefined {
+function hiddenHostElement(
+  document: unknown,
+  elementId: string,
+): HiddenHost | undefined {
   if (!isRecord(document)) return undefined;
   const getElementById = readProperty(document, "getElementById");
   if (typeof getElementById === "function") {
-    const owner = Reflect.apply(getElementById, document, [
-      CAPTURED_OUTER_FLEET_SHIPYARD_PANEL_ID,
-    ]);
+    const owner = Reflect.apply(getElementById, document, [elementId]);
     if (owner !== null && owner !== undefined) return undefined;
   }
   const createElement = readProperty(document, "createElement");
@@ -151,14 +226,14 @@ function capturedShipyardHost(document: unknown): ShipyardHost | undefined {
   if (typeof appendChild !== "function") return undefined;
   const element = Reflect.apply(createElement, document, ["div"]);
   if (!isRecord(element)) return undefined;
-  Reflect.set(element, "id", CAPTURED_OUTER_FLEET_SHIPYARD_PANEL_ID);
+  Reflect.set(element, "id", elementId);
   const style = readProperty(element, "style");
   if (isRecord(style)) Reflect.set(style, "display", "none");
   Reflect.apply(appendChild, parent, [element]);
   return { parent, element };
 }
 
-function removeCapturedShipyardHost(host: ShipyardHost): void {
+function removeHiddenHostElement(host: HiddenHost): void {
   const removeChild = readProperty(host.parent, "removeChild");
   try {
     if (typeof removeChild === "function") {
@@ -187,10 +262,75 @@ export function capturedOuterFleetShipList(handle: {
   return Array.isArray(ships) ? ships : undefined;
 }
 
+/**
+ * The yard's own view options, which `shipPlans` binds as its `v` data and `drawShips()` reads
+ * through `activeShipyardView()`. It is `global.space.shipyard.view`, created and backfilled by the
+ * game on read, and it is saved with the yard — so anything this capture changes in it is the
+ * player's setting and goes back before the call returns.
+ */
+function capturedOuterFleetYardView(handle: {
+  readonly data?: unknown;
+}): Record<PropertyKey, unknown> | undefined {
+  const bound = readProperty(handle.data, "v");
+  const stored = readProperty(readProperty(handle.data, "s"), "view");
+  const view = isRecord(bound) ? bound : stored;
+  return isRecord(view) ? view : undefined;
+}
+
+/**
+ * Whether a row binding's data is this ship.
+ *
+ * `vBind` rewrites every component's `data` into `function(){ return Vue.reactive(original); }` before
+ * `Vue.createApp` sees it, so what a captured handle carries is a reactive proxy and not the object the
+ * game passed in — a direct identity comparison would refuse every real row. The page's own
+ * `Vue.toRaw` is the game's answer to what such a proxy wraps, and it answers for an unproxied object
+ * too, so both spellings are accepted. Without it the comparison fails closed rather than guessing.
+ */
+function boundShipIs(
+  bound: unknown,
+  ship: unknown,
+  pageWindow: unknown,
+): boolean {
+  if (bound === ship) return true;
+  const toRaw = readProperty(readProperty(pageWindow, "Vue"), "toRaw");
+  if (typeof toRaw !== "function") return false;
+  try {
+    return Reflect.apply(toRaw, undefined, [bound]) === ship;
+  } catch {
+    return false;
+  }
+}
+
+/** Where `ship` sits in the yard's own list right now, or `-1` when the yard no longer holds it. */
+function liveShipIndex(
+  ships: readonly unknown[] | undefined,
+  ship: unknown,
+): number {
+  return ships === undefined ? -1 : ships.indexOf(ship);
+}
+
 function shipyardControlGeneration(controls: GameControlRegistry): number {
   return (
     controls.resolve(CAPTURED_OUTER_FLEET_SHIPYARD_CONTROL)?.generation ?? 0
   );
+}
+
+/**
+ * The generation every already-captured ship row carries, read before a redraw.
+ *
+ * Keyed by element id rather than by ship: the target's index can change during the redraw's own
+ * sorting, so what has to be compared afterwards is the row that took this id over, not the row that
+ * left it.
+ */
+function shipRowGenerations(
+  controls: GameControlRegistry,
+): ReadonlyMap<string, number> {
+  const before = new Map<string, number>();
+  for (const elementId of controls.capturedElementIds()) {
+    if (!elementId.startsWith(CAPTURED_OUTER_FLEET_SHIP_ROW_PREFIX)) continue;
+    before.set(elementId, controls.resolve(elementId)?.generation ?? 0);
+  }
+  return before;
 }
 
 function reboundShipyardControl(
@@ -200,11 +340,75 @@ function reboundShipyardControl(
   const control = controls.resolve(CAPTURED_OUTER_FLEET_SHIPYARD_CONTROL);
   return control !== undefined &&
     control.generation > minimumGeneration &&
+    shipyardControlIsEstablished(control)
+    ? control
+    : undefined;
+}
+
+/** Whether the yard's design control carries every method this feature reaches it for. */
+function shipyardControlIsEstablished(
+  control: GameControlHandle | undefined,
+): boolean {
+  return (
+    control !== undefined &&
     OUTER_FLEET_SHIPYARD_METHODS.every((method) =>
       control.methods.includes(method),
     )
-    ? control
-    : undefined;
+  );
+}
+
+/**
+ * The row the yard's own last draw bound for this ship, once it is proven to be this ship's row.
+ *
+ * Proving it takes the index from the live list rather than from the caller, because a redraw may
+ * have re-sorted or re-clustered the yard, and then the row control and its `data` must both say so.
+ * `requireFresh`, for the capture pass only, additionally demands that this element id carries a
+ * generation newer than the one it held before the redraw: a row surviving an earlier draw, or one
+ * left behind by whichever ship used to occupy this index, can never answer for it.
+ */
+function provenShipRow(
+  controls: GameControlRegistry,
+  pageWindow: unknown,
+  ship: unknown,
+  reportError: (detail: string) => void,
+  requireFresh: (elementId: string) => boolean,
+): CapturedOuterFleetShipRow | undefined {
+  const control = controls.resolve(CAPTURED_OUTER_FLEET_SHIPYARD_CONTROL);
+  const index = liveShipIndex(
+    control === undefined ? undefined : capturedOuterFleetShipList(control),
+    ship,
+  );
+  if (index < 0) {
+    reportError("the yard no longer lists that ship");
+    return undefined;
+  }
+  const elementId = `${CAPTURED_OUTER_FLEET_SHIP_ROW_PREFIX}${index}`;
+  const row = controls.resolve(elementId);
+  if (row === undefined) {
+    reportError(`the shipyard bound no ${elementId} for that ship`);
+    return undefined;
+  }
+  if (
+    !OUTER_FLEET_SHIP_ROW_METHODS.every((method) =>
+      row.methods.includes(method),
+    )
+  ) {
+    reportError(
+      `${elementId} is missing ${OUTER_FLEET_SHIP_ROW_METHODS.filter(
+        (method) => !row.methods.includes(method),
+      ).join(", ")}`,
+    );
+    return undefined;
+  }
+  if (!boundShipIs(row.data, ship, pageWindow)) {
+    reportError(`${elementId} is bound to another ship`);
+    return undefined;
+  }
+  if (!requireFresh(elementId)) {
+    reportError(`${elementId} was not rebound by this capture`);
+    return undefined;
+  }
+  return Object.freeze({ index, elementId });
 }
 
 /**
@@ -241,11 +445,85 @@ function drawCapturedShipyard(
   return result.ok;
 }
 
+/**
+ * The settings and saved view options one yard draw borrows, and puts back.
+ *
+ * `drawShips()` opens by returning unless the Dwarf Shipyard is the tab in front of the player, so the
+ * two tab settings have to say so for the length of the call. They are the player's own saved values,
+ * so both go back before anything else observes them. Answers `undefined` when the settings are not
+ * a record at all — the caller then refuses, because a gate it cannot satisfy would return early and
+ * the row proof would have nothing to judge.
+ */
+interface YardDrawBorrow {
+  /** Satisfies the draw's tab gate, and neutralizes only the view fields that can hide this ship. */
+  open(ship: unknown): void;
+  /** Puts the tab settings and the view options back. Idempotent. */
+  restore(): void;
+}
+
+function yardDrawBorrow(
+  settings: unknown,
+  view: Record<PropertyKey, unknown> | undefined,
+): YardDrawBorrow | undefined {
+  if (!isRecord(settings)) return undefined;
+  const playerMainTab = settings[MAIN_TAB_SETTING];
+  const playerSubTab = settings[GOV_TABS_SETTING];
+  const savedSystem = view === undefined ? undefined : view["sys"];
+  const savedGroup = view === undefined ? undefined : view["group"];
+  const fleets: Record<string, unknown> | undefined = isRecord(view?.["ffold"])
+    ? (view?.["ffold"] as Record<string, unknown>)
+    : undefined;
+  /** The one folded-fleet entry this ship can be hidden by, and what it held. */
+  let foldKey: string | undefined;
+  let savedFold: unknown;
+  return {
+    open(ship: unknown): void {
+      settings[MAIN_TAB_SETTING] = MAIN_TAB_INDEX.civic;
+      settings[GOV_TABS_SETTING] = GOV_TAB_INDEX.dwarfShipYard;
+      if (view === undefined) return;
+      // `drawShips()` omits rows for a system filter, for a folded location group, and for a folded
+      // fleet's escorts. Only the system filter, the grouping, and the entry naming this ship's own
+      // fleet can hide *this* ship: `fold` is never read while grouping is off, and every other ship
+      // keeping its fold is the player's own arrangement, not this capture's business.
+      view["sys"] = "all";
+      view["group"] = false;
+      foldKey = undefined;
+      savedFold = undefined;
+      const fleetId = readProperty(ship, "fid");
+      if (
+        fleetId === undefined ||
+        fleetId === null ||
+        readProperty(ship, "flag") === true ||
+        fleets === undefined
+      ) {
+        return;
+      }
+      const key = String(fleetId);
+      if (fleets[key] === undefined) return;
+      foldKey = key;
+      savedFold = fleets[key];
+      delete fleets[key];
+    },
+    restore(): void {
+      settings[MAIN_TAB_SETTING] = playerMainTab;
+      settings[GOV_TABS_SETTING] = playerSubTab;
+      if (view === undefined) return;
+      view["sys"] = savedSystem;
+      view["group"] = savedGroup;
+      if (foldKey !== undefined && fleets !== undefined) {
+        fleets[foldKey] = savedFold;
+      }
+      foldKey = undefined;
+      savedFold = undefined;
+    },
+  };
+}
+
 export function createCapturedOuterFleetShipyard(
   dependencies: CapturedOuterFleetShipyardDependencies,
 ): CapturedOuterFleetShipyard {
   const reportError = dependencies.onEstablishError ?? (() => {});
-  let establishing = false;
+  let drawing = false;
 
   return Object.freeze({
     control(): GameControlHandle | undefined {
@@ -254,20 +532,15 @@ export function createCapturedOuterFleetShipyard(
       );
     },
     established(control: GameControlHandle | undefined): boolean {
-      return (
-        control !== undefined &&
-        OUTER_FLEET_SHIPYARD_METHODS.every((method) =>
-          control.methods.includes(method),
-        )
-      );
+      return shipyardControlIsEstablished(control);
     },
     establish(): GameControlHandle | undefined {
       const synthesis = dependencies.synthesis;
-      if (establishing || synthesis === undefined || !synthesis.available) {
+      if (drawing || synthesis === undefined || !synthesis.available) {
         return undefined;
       }
       if (!dependencies.mountSuppression.available) return undefined;
-      establishing = true;
+      drawing = true;
       try {
         const settings = readProperty(
           dependencies.rootState.readRoot(),
@@ -307,7 +580,10 @@ export function createCapturedOuterFleetShipyard(
           );
           return undefined;
         }
-        const host = capturedShipyardHost(dependencies.getDocument());
+        const host = hiddenHostElement(
+          dependencies.getDocument(),
+          CAPTURED_OUTER_FLEET_SHIPYARD_PANEL_ID,
+        );
         if (host === undefined) {
           workspace.release();
           reportError(
@@ -331,7 +607,7 @@ export function createCapturedOuterFleetShipyard(
           settings[MAIN_TAB_SETTING] = playerMainTab;
           settings[GOV_TABS_SETTING] = playerSubTab;
           settings["animated"] = playerAnimated;
-          removeCapturedShipyardHost(host);
+          removeHiddenHostElement(host);
           workspace.release();
           if (!workspace.isIntact()) {
             reportError("the workspace could not put the panels back");
@@ -359,7 +635,138 @@ export function createCapturedOuterFleetShipyard(
         reportError(String(error));
         return undefined;
       } finally {
-        establishing = false;
+        drawing = false;
+      }
+    },
+
+    rowFor(ship: unknown): CapturedOuterFleetShipRow | undefined {
+      try {
+        return provenShipRow(
+          dependencies.controls,
+          dependencies.getPageWindow(),
+          ship,
+          () => {},
+          () => true,
+        );
+      } catch (error) {
+        reportError(String(error));
+        return undefined;
+      }
+    },
+
+    captureRow(ship: unknown): CapturedOuterFleetShipRow | undefined {
+      const synthesis = dependencies.synthesis;
+      if (drawing || synthesis === undefined || !synthesis.available) {
+        return undefined;
+      }
+      if (!dependencies.mountSuppression.available) return undefined;
+      // A ship the yard does not list has no row to bind; refusing here also keeps the caller's
+      // object identity from being an accident about a stale index.
+      const control = dependencies.controls.resolve(
+        CAPTURED_OUTER_FLEET_SHIPYARD_CONTROL,
+      );
+      if (
+        control === undefined ||
+        !shipyardControlIsEstablished(control) ||
+        liveShipIndex(capturedOuterFleetShipList(control), ship) < 0
+      ) {
+        return undefined;
+      }
+      drawing = true;
+      try {
+        const settings = readProperty(
+          dependencies.rootState.readRoot(),
+          "settings",
+        );
+        if (isRecord(settings) && settings["tabLoad"] === true) {
+          reportError(
+            "the game retains every tab, so the yard's own ship list would not draw",
+          );
+          return undefined;
+        }
+        const civicPanel = MAIN_TAB_PANELS[MAIN_TAB_INDEX.civic];
+        if (civicPanel === undefined) return undefined;
+        // The whole Civic panel is kept by name, which is what takes the player's own `#shipList` and
+        // its rows out of the game's reach: `drawShips()` clears and refills whatever `#shipList`
+        // resolves to, and a capture must never be the reason their yard was redrawn.
+        const workspace = dependencies.panels.open({
+          keep: civicPanel,
+          scratch: civicPanel,
+        });
+        if (workspace === undefined) {
+          reportError(
+            "the Civic panel could not be put beyond the game's reach",
+          );
+          return undefined;
+        }
+        const list = hiddenHostElement(
+          dependencies.getDocument(),
+          CAPTURED_OUTER_FLEET_SHIP_LIST_ID,
+        );
+        if (list === undefined) {
+          workspace.release();
+          reportError(
+            `no scratch ${CAPTURED_OUTER_FLEET_SHIP_LIST_ID} could be stood up`,
+          );
+          return undefined;
+        }
+        const borrow = yardDrawBorrow(
+          readProperty(dependencies.rootState.readRoot(), "settings"),
+          capturedOuterFleetYardView(control),
+        );
+        if (borrow === undefined) {
+          removeHiddenHostElement(list);
+          workspace.release();
+          return undefined;
+        }
+        // Read immediately before the draw. The target's own index can change inside it, so the
+        // comparison afterwards is per element id rather than per ship.
+        const generationsBefore = shipRowGenerations(dependencies.controls);
+        let drew = false;
+        try {
+          borrow.open(ship);
+          dependencies.mountSuppression.withoutMounting(() => {
+            const result = synthesis.invoke({
+              elementId: CAPTURED_OUTER_FLEET_SHIPYARD_CONTROL,
+              method: OUTER_FLEET_SHIPYARD_REDRAW_METHOD,
+            });
+            drew = result.ok;
+            if (!result.ok) {
+              reportError(
+                `${CAPTURED_OUTER_FLEET_SHIPYARD_CONTROL} ${OUTER_FLEET_SHIPYARD_REDRAW_METHOD} failed: ${result.reason} ${result.detail ?? ""}`,
+              );
+            }
+          });
+        } finally {
+          borrow.restore();
+          removeHiddenHostElement(list);
+          workspace.release();
+          if (!workspace.isIntact()) {
+            reportError("the workspace could not put the panels back");
+          }
+        }
+        if (!drew) {
+          reportError("the shipyard did not redraw its ship list");
+          return undefined;
+        }
+        return provenShipRow(
+          dependencies.controls,
+          dependencies.getPageWindow(),
+          ship,
+          reportError,
+          (elementId) => {
+            const row = dependencies.controls.resolve(elementId);
+            return (
+              row !== undefined &&
+              row.generation > (generationsBefore.get(elementId) ?? 0)
+            );
+          },
+        );
+      } catch (error) {
+        reportError(String(error));
+        return undefined;
+      } finally {
+        drawing = false;
       }
     },
   });

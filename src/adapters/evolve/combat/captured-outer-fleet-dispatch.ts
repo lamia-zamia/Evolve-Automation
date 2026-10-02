@@ -15,7 +15,17 @@
  * and fuel, clears any trade route or patrol, claims the crew, initializes the trip, and reports
  * whether the ship actually moved. None of that is restated here.
  *
- * What this capture adds is a way *in* that costs the player nothing:
+ * **`pickDest` is a ship-row method, not a yard method.** `drawShipYard()` binds `#shipPlans` with
+ * the yard's design methods — `avail`, `setVal`, `powerText`, `build`, `redraw` and the rest of its
+ * own — and `drawShips()` binds each `#shipReg${i}` separately, with the ship as its data. `pickDest`
+ * and the row's `show(id)` exist only on that row. So a newly built ship cannot be dispatched
+ * through the yard control: it needs a row of its own, and a ship built while the player is
+ * elsewhere does not have one, because upstream's `buildTPShip()` calls `drawShips()` and that draw
+ * opens by returning unless the Dwarf Shipyard is the panel in front of the player. The row is
+ * therefore captured first, through the yard's own `redraw()` — which upstream defines as exactly
+ * `drawShips()` — and this capture then enters through `shipReg${index}.pickDest(index)`.
+ *
+ * What this capture adds on top of that row is a way *in* that costs the player nothing:
  *
  * - `$buefy.modal.open` is a no-op, so Buefy builds no `.modal.is-active` and no
  *   `.modal-background`, and the `modal` the draw closes over stays `undefined` — the destination
@@ -44,10 +54,13 @@
  * never dispatch a ship with a closure bound for an earlier one.
  *
  * The result is not read from the closure. `sendShipTo` returns whether it moved anything, but the
- * yard is asked instead: `drawShips()` re-sorts and re-clusters the ship's list, so the index a ship
- * was built at is not the one it sails from, and the yard's own `show()` — `shipMoving(ships[id])` —
- * is asked of the ship's position after the dispatch. That is the live ship state, and it is the
- * game's own answer.
+ * yard is asked instead: `sendShipTo()` calls `drawShips()`, which re-sorts and re-clusters the ship's
+ * list, so the index a ship was built at is not the one it sails from and even the row control this
+ * call invoked may have been rebound. So the ship is found again by identity in the yard's live list
+ * and the row that holds it *now* is asked — its own `show(currentIndex)`, which is
+ * `shipMoving(ships[currentIndex])`. Off the shipyard that redraw returns at its tab gate and the
+ * row captured here is still the current one; on the shipyard the real rows have taken that element
+ * id over, and they are the game's answer just as much.
  */
 import type {
   CapturedOuterFleetDispatch,
@@ -59,10 +72,11 @@ import type { GameControlSynthesis } from "../../../ports/game-control-synthesis
 import type { GameMountSuppression } from "../../../ports/game-mount-suppression.ts";
 import { isRecord, readProperty } from "../../validation.ts";
 import {
-  CAPTURED_OUTER_FLEET_DISPATCH_TRIGGER_METHOD,
+  CAPTURED_OUTER_FLEET_ROW_DISPATCH_METHOD,
+  CAPTURED_OUTER_FLEET_ROW_UNDERWAY_METHOD,
   CAPTURED_OUTER_FLEET_SHIPYARD_CONTROL,
-  CAPTURED_OUTER_FLEET_UNDERWAY_METHOD,
   capturedOuterFleetShipList,
+  type CapturedOuterFleetShipyard,
 } from "./captured-outer-fleet-shipyard.ts";
 
 type AnyFunction = (this: unknown, ...args: unknown[]) => unknown;
@@ -91,6 +105,8 @@ interface DispatchCaptureHost {
 
 export interface CapturedOuterFleetDispatchDependencies {
   readonly controls: GameControlRegistry;
+  /** The yard whose own draw binds the ship rows this capture dispatches through. */
+  readonly shipyard: CapturedOuterFleetShipyard;
   /** Absent when no Vue hook is installed; the capture then fails closed. */
   readonly synthesis: GameControlSynthesis | undefined;
   readonly mountSuppression: GameMountSuppression;
@@ -345,22 +361,30 @@ function dispatchRowOfHost(
 }
 
 /**
- * Whether the yard now reports this ship as under way. Asked of the ship's position *after* the
- * dispatch, because `sendShipTo` calls `drawShips()`, and that redraw re-sorts and re-clusters the
- * yard's list whenever the yard is the panel in front of the player — so the index a ship was built
- * at is not necessarily the one it sails from.
+ * Whether the yard now reports this ship as under way, through the row that holds it now.
+ *
+ * `sendShipTo` calls `drawShips()`, and that redraw re-sorts and re-clusters the yard's list
+ * whenever the yard is the panel in front of the player — so the index a ship was built at is not
+ * necessarily the one it sails from, and the row control this call invoked may have been rebound. The
+ * ship is therefore located by identity again, and the row that carries it after the dispatch is the
+ * one asked; off the shipyard that redraw returns at its own tab gate and leaves the row captured
+ * here current, and on the shipyard the real rows have taken the same element id over.
+ *
+ * A row that cannot be proven to be this ship's row is not asked at all: `undefined` here is a failed
+ * postcondition, never a claim that the ship stayed put.
  */
-function shipUnderway(controls: GameControlRegistry, ship: unknown): boolean {
-  const handle = controls.resolve(CAPTURED_OUTER_FLEET_SHIPYARD_CONTROL);
+function shipUnderway(
+  dependencies: CapturedOuterFleetDispatchDependencies,
+  ship: unknown,
+): boolean {
+  const row = dependencies.shipyard.rowFor(ship);
+  if (row === undefined) return false;
+  const handle = dependencies.controls.resolve(row.elementId);
   if (handle === undefined) return false;
-  const ships = capturedOuterFleetShipList(handle);
-  if (ships === undefined) return false;
-  const index = ships.indexOf(ship);
-  if (index < 0) return false;
-  const underway = controls.invoke(
+  const underway = dependencies.controls.invoke(
     handle,
-    CAPTURED_OUTER_FLEET_UNDERWAY_METHOD,
-    [index],
+    CAPTURED_OUTER_FLEET_ROW_UNDERWAY_METHOD,
+    [row.index],
   );
   return underway.ok && underway.value === true;
 }
@@ -389,26 +413,30 @@ export function createCapturedOuterFleetDispatch(
       request: Readonly<CapturedOuterFleetDispatchRequest>,
     ): CapturedOuterFleetDispatch {
       const synthesis = dependencies.synthesis;
-      const handle = dependencies.controls.resolve(
-        CAPTURED_OUTER_FLEET_SHIPYARD_CONTROL,
-      );
       if (
         dispatching ||
         synthesis === undefined ||
         !synthesis.available ||
-        !dependencies.mountSuppression.available ||
-        handle === undefined ||
-        !handle.methods.includes(
-          CAPTURED_OUTER_FLEET_DISPATCH_TRIGGER_METHOD,
-        ) ||
-        !handle.methods.includes(CAPTURED_OUTER_FLEET_UNDERWAY_METHOD)
+        !dependencies.mountSuppression.available
       ) {
         return Object.freeze({ kind: "unreachable" });
       }
-      const ships = capturedOuterFleetShipList(handle);
+      const yard = dependencies.controls.resolve(
+        CAPTURED_OUTER_FLEET_SHIPYARD_CONTROL,
+      );
+      const ships =
+        yard === undefined ? undefined : capturedOuterFleetShipList(yard);
       const ship = ships?.[request.index];
       if (ship === undefined) {
         reportError(`no ship at ${request.index} in the yard's own list`);
+        return Object.freeze({ kind: "unreachable" });
+      }
+      // The row this dispatch enters through is the game's own `pickDest`, and a ship built while
+      // the player was elsewhere has none: `buildTPShip()`'s own `drawShips()` returns at its tab
+      // gate. One capture attempt, through the yard's own `redraw()`, and nothing is retained.
+      const row = dependencies.shipyard.captureRow(ship);
+      if (row === undefined) {
+        reportError("no ship row could be captured for that ship");
         return Object.freeze({ kind: "unreachable" });
       }
       dispatching = true;
@@ -435,9 +463,9 @@ export function createCapturedOuterFleetDispatch(
                   reportError,
                   () => {
                     const result = synthesis.invoke({
-                      elementId: CAPTURED_OUTER_FLEET_SHIPYARD_CONTROL,
-                      method: CAPTURED_OUTER_FLEET_DISPATCH_TRIGGER_METHOD,
-                      args: [request.index],
+                      elementId: row.elementId,
+                      method: CAPTURED_OUTER_FLEET_ROW_DISPATCH_METHOD,
+                      args: [row.index],
                       receiver: {
                         noOpMethods: DISPATCH_SYNTHETIC_OPEN_METHODS,
                       },
@@ -445,7 +473,7 @@ export function createCapturedOuterFleetDispatch(
                     invoked = result.ok;
                     if (!result.ok) {
                       reportError(
-                        `${CAPTURED_OUTER_FLEET_DISPATCH_TRIGGER_METHOD} failed: ${result.reason} ${result.detail ?? ""}`,
+                        `${row.elementId} ${CAPTURED_OUTER_FLEET_ROW_DISPATCH_METHOD} failed: ${result.reason} ${result.detail ?? ""}`,
                       );
                     }
                   },
@@ -463,7 +491,7 @@ export function createCapturedOuterFleetDispatch(
         // A refused or failed invocation drew nothing at all, whatever the interception recorded.
         if (!invoked) {
           reportError(
-            `the ${CAPTURED_OUTER_FLEET_DISPATCH_TRIGGER_METHOD} invocation did not complete`,
+            `the ${CAPTURED_OUTER_FLEET_ROW_DISPATCH_METHOD} invocation did not complete`,
           );
           return Object.freeze({ kind: "unreachable" });
         }
@@ -491,12 +519,10 @@ export function createCapturedOuterFleetDispatch(
           reportError(`the destination closure threw: ${String(error)}`);
           return Object.freeze({ kind: "unreachable" });
         }
-        // Not read from the closure: the yard's own answer, taken from the live list after the
-        // redraw `sendShipTo` triggers.
+        // Not read from the closure: the row that holds this ship now, asked after the redraw
+        // `sendShipTo` triggers, which may have reordered the list or rebound the row entirely.
         return Object.freeze({
-          kind: shipUnderway(dependencies.controls, ship)
-            ? "launched"
-            : "refused",
+          kind: shipUnderway(dependencies, ship) ? "launched" : "refused",
         });
       } catch (error) {
         reportError(String(error));

@@ -1,18 +1,21 @@
 /**
  * The game's own shipyard dispatch, reached without a dispatch window.
  *
- * Upstream offers no direct call for sending a built ship somewhere. A ship row's `pickDest(id)`
- * asks Buefy for a modal, polls every 50 ms for the `#modalBox` that modal would have produced, and
- * then calls the module-private `shipDispatchModal(id, modal)`, which builds one button per
- * reachable region and binds each to a closure over `id` and that region. Those closures are the
- * only route to `sendShipTo(id, region)`, and `sendShipTo` is the authoritative mutation: hull,
- * crew, trip and fuel viability, fleets, routes, patrols and travel initialization all live in it.
+ * Upstream offers no direct call for sending a built ship somewhere, and no yard method either:
+ * `drawShipYard()` binds `#shipPlans` with the design methods, and `drawShips()` binds each
+ * `#shipReg${i}` separately with the row's own — `pickDest(id)`, whose closure is the only route to
+ * `sendShipTo(id, region)`, and `show(id)`, which is `shipMoving(ships[id])`. So the caller arrives
+ * through a ship row: the capture runs the yard's own `redraw()` (upstream's `drawShips()`) against
+ * scratch DOM first, because a ship built while the player was elsewhere has no row bound at all —
+ * upstream's `buildTPShip()` calls `drawShips()`, and that draw returns at its own tab gate — and
+ * then the dispatch draw it binds is taken without anything on screen.
  *
- * So a caller must arrive through that closure rather than restate any of it. This capture does,
- * without anything on screen, and never keeps what it takes: the closure is bound by the draw that
- * ran for this ship and this region, invoked inside that call, and gone when the call returns. A
- * capture that fails — no shipyard control, no modal host, a draw that offered nothing, a throw —
- * reports which of those it was, and never falls back to an earlier one.
+ * `sendShipTo` is the authoritative mutation: hull, crew, trip and fuel viability, fleets, routes,
+ * patrols and travel initialization all live in it. Nothing captured is kept: the destination closure
+ * is bound by the draw that ran for this ship and this region, invoked inside that call, and gone
+ * when the call returns. A capture that fails — no shipyard control, no row, no modal host, a draw
+ * that offered nothing, a throw — reports which of those it was, and never falls back to an earlier
+ * one.
  */
 
 /** One ship, and the region it is being sent to. */
@@ -26,8 +29,8 @@ export interface CapturedOuterFleetDispatchRequest {
 /**
  * What one attempt did.
  *
- * `launched` is the only success, and it is the game's own answer rather than an inference: the
- * shipyard reports the ship as under way after the closure ran. Everything else is a refusal or a
+ * `launched` is the only success, and it is the game's own answer rather than an inference: the ship
+ * row holding this ship reports it under way after the closure ran. Everything else is a refusal or a
  * failure, and each is reported as itself so a caller can tell "the game said no" from "we never
  * reached the game".
  */
@@ -40,13 +43,14 @@ export type CapturedOuterFleetDispatch =
    */
   | { readonly kind: "no-destination" }
   /**
-   * The game's own destination closure ran and declined. The row may have been disabled for fuel,
-   * and `sendShipTo` re-checks everything anyway; the refusal is the game's, not a local replica's.
+   * The game's own destination closure ran and did not put the ship under way. The row may have been
+   * disabled for fuel and `sendShipTo` re-checks everything anyway, so the refusal is the game's, not
+   * a local replica's; the same answer covers a yard whose own row for the ship cannot be read back.
    */
   | { readonly kind: "refused" }
   /**
-   * The closure could not be reached: no shipyard control, no modal host to draw into, a suppressed
-   * capture, or a draw that threw. Nothing was invoked.
+   * The closure could not be reached: no shipyard control, no ship row to dispatch through, no modal
+   * host to draw into, a suppressed capture, or a draw that threw. Nothing was invoked.
    */
   | { readonly kind: "unreachable" };
 

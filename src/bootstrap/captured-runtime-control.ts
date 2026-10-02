@@ -711,12 +711,34 @@ export function startCapturedRuntime({
     onCaptureError: (detail) =>
       logError(`espionage operation capture: ${detail}`),
   });
+  /**
+   * The Dwarf Shipyard's own controls, established against scratch DOM instead of a Civic
+   * sub-tab draw: `#dwarfShipYard` is that tab's component render, so a suppressed Civic pass has
+   * nothing to draw into and captures nothing. This stands one, runs the game's draw against it, and
+   * keeps the controls.
+   *
+   * It is also the only owner of the ship rows: `pickDest` and `show` are bound per `#shipReg${i}`,
+   * never on `shipPlans`, so `captureRow()` runs the yard's own `redraw()` against a scratch
+   * `#shipList` whenever a dispatch needs a row the save does not have one for.
+   */
+  const outerFleetShipyard = createCapturedOuterFleetShipyard({
+    rootState: pageCapture.rootState,
+    controls: pageCapture.controls,
+    synthesis: pageCapture.synthesis,
+    mountSuppression: pageCapture.mountSuppression,
+    panels,
+    getDocument: () => document,
+    getPageWindow: () => settingsHostWindow,
+    onEstablishError: (detail) =>
+      logError(`outer fleet shipyard capture: ${detail}`),
+  });
   // The Dwarf Shipyard's dispatch is the same shape: the game offers no method for sending a built
   // ship onward, only a ship row's `pickDest` closure behind a Buefy modal. This capture reaches that
-  // closure with a no-op `$buefy` and a throwaway `#modalBox`, so a build and its dispatch are one
-  // synchronous pass with nothing on screen.
+  // closure with a row the yard itself bound, a no-op `$buefy` and a throwaway `#modalBox`, so a
+  // build and its dispatch are one synchronous pass with nothing on screen.
   const capturedOuterFleetDispatch = createCapturedOuterFleetDispatch({
     controls: pageCapture.controls,
+    shipyard: outerFleetShipyard,
     synthesis: pageCapture.synthesis,
     mountSuppression: pageCapture.mountSuppression,
     getDocument: () => document,
@@ -1345,22 +1367,6 @@ export function startCapturedRuntime({
     mountSuppression: pageCapture.mountSuppression,
     panels,
     diagnostics,
-  });
-  /**
-   * The Dwarf Shipyard's own controls, established against scratch DOM instead of a Civic
-   * sub-tab draw: `#dwarfShipYard` is that tab's component render, so a suppressed Civic pass has
-   * nothing to draw into and captures nothing. This stands one, runs the game's draw against it, and
-   * keeps the controls.
-   */
-  const outerFleetShipyard = createCapturedOuterFleetShipyard({
-    rootState: pageCapture.rootState,
-    controls: pageCapture.controls,
-    synthesis: pageCapture.synthesis,
-    mountSuppression: pageCapture.mountSuppression,
-    panels,
-    getDocument: () => document,
-    onEstablishError: (detail) =>
-      logError(`outer fleet shipyard capture: ${detail}`),
   });
   /**
    * The one place a captured feature spends a tab draw. Callers check their own eligibility first
