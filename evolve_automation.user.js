@@ -49633,6 +49633,9 @@ Only continue if you trust the source. Injected code:
   function syndicateReadoutControl(region) {
     return `${region}synd`;
   }
+  function syndicateReadoutsFor(subTab) {
+    return Object.entries(SYNDICATE_REGION_TABS).filter(([, tab]) => tab === subTab).map(([region]) => syndicateReadoutControl(region));
+  }
   function syndicateOperating(root) {
     let tech = readProperty(root, "tech"), race = readProperty(root, "race"), space = readProperty(root, "space");
     for (let container of [tech, race, space])
@@ -49648,6 +49651,20 @@ Only continue if you trust the source. Injected code:
   });
   function createCapturedSyndicateMechanics(dependencies) {
     let { rootState, controls: controls2, discovery, mechanics } = dependencies, rejectedDiscoveryGenerations = /* @__PURE__ */ new Map();
+    function snapshotReadoutGenerations(readouts) {
+      let generations = /* @__PURE__ */ new Map();
+      for (let control of readouts) {
+        let handle = controls2.resolve(control);
+        handle !== void 0 && generations.set(control, handle.generation);
+      }
+      return generations;
+    }
+    function quarantineFailedDraw(readouts, before) {
+      for (let control of readouts) {
+        let current = controls2.resolve(control);
+        current !== void 0 && before.get(control) !== current.generation && rejectedDiscoveryGenerations.set(control, current.generation);
+      }
+    }
     function trustedReadout(control, handle) {
       if (handle === void 0) return;
       let quarantined = rejectedDiscoveryGenerations.get(control);
@@ -49658,7 +49675,8 @@ Only continue if you trust the source. Injected code:
     function captureReadout(region) {
       let control = syndicateReadoutControl(region), subTab = SYNDICATE_REGION_TABS[region];
       if (subTab === void 0) return READOUT_NOT_DRAWN;
-      let panel = MAIN_TAB_PANELS[MAIN_TAB_INDEX.civilization], result = discovery.discover(
+      let panel = MAIN_TAB_PANELS[MAIN_TAB_INDEX.civilization], readouts = syndicateReadoutsFor(subTab), before = snapshotReadoutGenerations(readouts);
+      if (discovery.discover(
         Object.freeze([
           Object.freeze({
             setting: MAIN_TAB_SETTING,
@@ -49672,8 +49690,10 @@ Only continue if you trust the source. Injected code:
           })
         ]),
         panel === void 0 ? {} : { mount: Object.freeze([`#${panel}`]) }
-      ), captured = controls2.resolve(control);
-      return result.outcome.status !== "succeeded" ? (captured !== void 0 && rejectedDiscoveryGenerations.set(control, captured.generation), READOUT_PASS_FAILED) : captured === void 0 ? READOUT_NOT_DRAWN : Object.freeze({ kind: "captured", handle: captured });
+      ).outcome.status !== "succeeded")
+        return quarantineFailedDraw(readouts, before), READOUT_PASS_FAILED;
+      let captured = controls2.resolve(control);
+      return captured === void 0 ? READOUT_NOT_DRAWN : Object.freeze({ kind: "captured", handle: captured });
     }
     function readSyndicateScan(region, handle) {
       let invocation, scan = mechanics.readRoundedValues(() => {

@@ -50,12 +50,27 @@
  *
  * - a first-use read runs one pass and reads `scan` only when that pass reported `succeeded` and the
  *   generation it left behind is one this adapter vouches for;
- * - a failed pass quarantines the generation it left, and the next read tries again rather than
- *   treating the presence of that handle as the control being established.
+ * - a failed pass quarantines what it left, and the next read tries again rather than treating the
+ *   presence of that handle as the control being established.
  *
  * The quarantine is one generation of one element id, never the id: the game rebinds a readout
  * whenever it redraws that region, so a later generation is ordinary authority again — the
  * player's own redraw, or another successful pass, without a synthetic one.
+ *
+ * ## Why the quarantine is panel-wide and still narrow
+ *
+ * `space(zone)` does not bind one readout, it binds one per region it renders: the function walks
+ * `spaceProjects` in order and calls `vBind({el: '#${region}synd', ...})` for every region of that
+ * zone it shows. One Inner System draw is therefore three bindings — Red, Moon and the Belt — and a
+ * pass that then failed to restore the player's view left all three behind. Quarantining only the
+ * region the caller asked about would hand two of them to the next cycle, which finds the control
+ * already present and reads it on the cheap path.
+ *
+ * So a pass snapshots every readout its sub-tab can draw before it runs, and after a failure
+ * quarantines each generation that appeared or changed. "Belongs to this panel" is not enough and is
+ * not what is used: a generation the draw left alone was not that draw's output, and quarantining it
+ * would refuse a binding the player has been relying on because some other control on the same panel
+ * failed. Membership decides which readouts to compare; the comparison decides which to quarantine.
  */
 
 import type { CapturedGameRead } from "../../ports/captured-game-mechanics.ts";
@@ -119,6 +134,20 @@ const SYNDICATE_REGION_TABS: Readonly<Record<string, number>> = Object.freeze({
  */
 function syndicateReadoutControl(region: string): string {
   return `${region}synd`;
+}
+
+/**
+ * Every `#<region>synd` a draw of this Space sub-tab can bind, as element ids.
+ *
+ * `SYNDICATE_REGION_TABS` is the whole of the topology: it says which sub-tab renders which region,
+ * and `space(zone)` renders every region of the zone it was asked for, so filtering the same map by
+ * one sub-tab names every binding a pass over that sub-tab could have written. One map for both
+ * halves of that, so there is no second list to drift and no Inner/Outer case of any rule below.
+ */
+function syndicateReadoutsFor(subTab: number): readonly string[] {
+  return Object.entries(SYNDICATE_REGION_TABS)
+    .filter(([, tab]) => tab === subTab)
+    .map(([region]) => syndicateReadoutControl(region));
 }
 
 /**
@@ -200,7 +229,7 @@ export function createCapturedSyndicateMechanics(
   const { rootState, controls, discovery, mechanics } = dependencies;
 
   /**
-   * The generation a failed discovery pass left behind for each readout, by element id.
+   * The generation a failed discovery pass left behind, for each element id that pass wrote.
    *
    * The registry retains captured controls, so refusing only the read that ran the failed pass would
    * hand that pass's binding to the next cycle, which finds the control already present and skips
@@ -209,6 +238,48 @@ export function createCapturedSyndicateMechanics(
    * generation is a binding no failed pass produced.
    */
   const rejectedDiscoveryGenerations = new Map<string, number>();
+
+  /**
+   * The generation each of the panel's readouts carries right now, so a pass can be told apart from
+   * the bindings that were already there.
+   *
+   * `TabDiscoveryResult.discovered` cannot answer this. It names the element ids that did not exist
+   * before the pass, so it says nothing about a readout the draw *replaced* — which is what a redraw
+   * does to every region it renders — and a replaced binding produced by a failing pass is exactly
+   * the one that must not be read through.
+   */
+  function snapshotReadoutGenerations(
+    readouts: readonly string[],
+  ): Map<string, number> {
+    const generations = new Map<string, number>();
+    for (const control of readouts) {
+      const handle = controls.resolve(control);
+      if (handle !== undefined) generations.set(control, handle.generation);
+    }
+    return generations;
+  }
+
+  /**
+   * Quarantine every generation this failed pass created or replaced on its own panel, and only
+   * those.
+   *
+   * The pass drew the whole panel, so a failure on the region the caller asked about says nothing
+   * about its neighbours' standing — but it says everything about the generations that same draw
+   * wrote or replaced. A readout the draw left untouched keeps whatever standing it had: its
+   * generation did not move, so it is not this pass's output, and an existing quarantine for it is
+   * left standing rather than cleared.
+   */
+  function quarantineFailedDraw(
+    readouts: readonly string[],
+    before: ReadonlyMap<string, number>,
+  ): void {
+    for (const control of readouts) {
+      const current = controls.resolve(control);
+      if (current === undefined) continue;
+      if (before.get(control) === current.generation) continue;
+      rejectedDiscoveryGenerations.set(control, current.generation);
+    }
+  }
 
   /**
    * The handle for a readout, when the registry's current one is authority this adapter vouches for.
@@ -240,14 +311,16 @@ export function createCapturedSyndicateMechanics(
    * the draw is dropped again. At most one pass runs per read: the caller stands down and the next
    * cycle tries again.
    *
-   * A failed pass reports the failure rather than a handle, and marks whatever it left behind. That
-   * generation is never read through on the strength of this pass.
+   * A failed pass reports the failure rather than a handle, and marks every generation that pass
+   * wrote or replaced across the panel it drew. None of them is read through on the strength of it.
    */
   function captureReadout(region: string): SyndicateReadoutCapture {
     const control = syndicateReadoutControl(region);
     const subTab = SYNDICATE_REGION_TABS[region];
     if (subTab === undefined) return READOUT_NOT_DRAWN;
     const panel = MAIN_TAB_PANELS[MAIN_TAB_INDEX.civilization];
+    const readouts = syndicateReadoutsFor(subTab);
+    const before = snapshotReadoutGenerations(readouts);
     const result = discovery.discover(
       Object.freeze([
         Object.freeze({
@@ -263,13 +336,11 @@ export function createCapturedSyndicateMechanics(
       ]),
       panel === undefined ? {} : { mount: Object.freeze([`#${panel}`]) },
     );
-    const captured = controls.resolve(control);
     if (result.outcome.status !== "succeeded") {
-      if (captured !== undefined) {
-        rejectedDiscoveryGenerations.set(control, captured.generation);
-      }
+      quarantineFailedDraw(readouts, before);
       return READOUT_PASS_FAILED;
     }
+    const captured = controls.resolve(control);
     return captured === undefined
       ? READOUT_NOT_DRAWN
       : Object.freeze({ kind: "captured", handle: captured });

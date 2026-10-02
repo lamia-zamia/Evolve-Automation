@@ -517,46 +517,76 @@ function untilDiscovered(inner, discovery) {
 // ---------------------------------------------------------------------------
 
 /**
- * A registry that holds no readout until something binds one, and whose generation a case advances
- * itself. This is the real capture's shape: a control is retained, so its generation outlives the
- * pass that bound it, and every rebind is a new generation no earlier pass produced.
+ * The readouts one Space sub-tab owns, as element ids. `space(zone)` walks every visible
+ * `spaceProjects` region of the zone and `vBind`s `#<region>synd` for each, so one draw is one
+ * binding per region on the panel — Inner System draws Red, Moon and the Belt together.
  */
-function boundOnDemandRegistry(controlId = "spc_redsynd") {
-  const state = {
-    generation: 0,
-    current: undefined,
-    scan: undefined,
-    invocations: [],
-  };
+const INNER_READOUTS = ["spc_redsynd", "spc_moonsynd", "spc_beltsynd"];
+const OUTER_READOUTS = [
+  "spc_gassynd",
+  "spc_gas_moonsynd",
+  "spc_titansynd",
+  "spc_enceladussynd",
+  "spc_tritonsynd",
+  "spc_makemakesynd",
+  "spc_erissynd",
+];
+
+/**
+ * A registry over a whole panel of readouts at once, each with its own generation counter, because a
+ * case has to be able to say which of the bindings one pass produced. A control is retained once
+ * bound, so its generation outlives the pass that bound it, and every rebind is a new generation no
+ * earlier pass produced. This is the real capture's shape.
+ */
+function panelBoundRegistry(controlIds = ["spc_redsynd"]) {
+  const bindings = new Map(
+    controlIds.map((elementId) => [
+      elementId,
+      { generation: 0, scan: undefined, current: undefined },
+    ]),
+  );
+  const invocations = [];
   return {
-    state,
+    bindings,
+    invocations,
     /**
      * What the game itself does to bind a readout again, whether the player visited the panel or a
      * pass drew it: a new generation of that region's own closures.
      */
-    bind: (scan) => {
-      state.generation += 1;
-      state.scan = scan;
-      state.current = Object.freeze({
-        elementId: controlId,
-        generation: state.generation,
+    bind: (elementId, scan) => {
+      const binding = bindings.get(elementId);
+      assert.notEqual(binding, undefined, `${elementId} is not on this panel`);
+      binding.generation += 1;
+      binding.scan = scan;
+      binding.current = Object.freeze({
+        elementId,
+        generation: binding.generation,
         methods: ["scan"],
       });
     },
-    resolve: (elementId) =>
-      elementId === controlId ? state.current : undefined,
+    resolve: (elementId) => bindings.get(elementId)?.current,
     invoke: (resolved, method, args = []) => {
-      state.invocations.push({ generation: resolved?.generation, method });
+      invocations.push({
+        elementId: resolved?.elementId,
+        generation: resolved?.generation,
+        method,
+      });
+      const binding =
+        resolved === undefined ? undefined : bindings.get(resolved.elementId);
       if (
-        resolved !== state.current ||
+        binding === undefined ||
+        resolved !== binding.current ||
         method !== "scan" ||
-        state.scan === undefined
+        binding.scan === undefined
       ) {
         return { ok: false, reason: "unknown-method" };
       }
-      return { ok: true, value: state.scan(...args) };
+      return { ok: true, value: binding.scan(...args) };
     },
-    capturedElementIds: () => (state.current === undefined ? [] : [controlId]),
+    capturedElementIds: () =>
+      controlIds.filter(
+        (elementId) => bindings.get(elementId).current !== undefined,
+      ),
   };
 }
 
@@ -569,6 +599,8 @@ function scriptedDiscovery(steps) {
   const unscripted = [...steps];
   return {
     passes: [],
+    /** Script one more pass, for a case that decides what it does only once the read is under way. */
+    queue: (outcome, draw = () => {}) => unscripted.push({ draw, outcome }),
     discover(path, options) {
       this.passes.push({ path, options });
       const step = unscripted.shift();
@@ -582,6 +614,10 @@ function scriptedDiscovery(steps) {
     },
   };
 }
+
+/** The failure this whole section is about: the draw worked and the player's view did not come back. */
+const VIEW_NOT_RESTORED = () =>
+  rejected("tab-restore-failed", "the workspace could not put the panels back");
 
 /**
  * The failures `GameTabDiscovery` reports, each of which can happen after the readout was bound. The
@@ -620,10 +656,11 @@ const failedDiscoveryOutcomes = [
 
 for (const [label, outcome] of failedDiscoveryOutcomes) {
   const descriptor = toFixedDescriptor();
-  const registry = boundOnDemandRegistry();
+  const registry = panelBoundRegistry();
   const discovery = scriptedDiscovery([
     {
-      draw: () => registry.bind(scanOver({ ratio: 0.2681, sensor: 47 })),
+      draw: () =>
+        registry.bind("spc_redsynd", scanOver({ ratio: 0.2681, sensor: 47 })),
       outcome,
     },
   ]);
@@ -638,11 +675,15 @@ for (const [label, outcome] of failedDiscoveryOutcomes) {
     `${label}: a failed pass answered for the region`,
   );
   assert.deepEqual(
-    registry.state.invocations,
+    registry.invocations,
     [],
     `${label}: the failed pass's own closure was read`,
   );
-  assert.equal(registry.state.generation, 1, `${label}: nothing was bound`);
+  assert.equal(
+    registry.bindings.get("spc_redsynd").generation,
+    1,
+    `${label}: nothing was bound`,
+  );
   assert.equal(discovery.passes.length, 1, `${label}: pass count`);
   assertPrototypeRestored(descriptor, label);
 }
@@ -651,21 +692,16 @@ for (const [label, outcome] of failedDiscoveryOutcomes) {
 // `GameControlRegistry` is not proof of anything. A quarantined generation must still spend a pass,
 // and a pass that fails again must leave the region just as unanswered.
 {
-  const registry = boundOnDemandRegistry();
+  const registry = panelBoundRegistry();
   const discovery = scriptedDiscovery([
     {
-      draw: () => registry.bind(scanOver({ ratio: 0.2681, sensor: 47 })),
-      outcome: rejected(
-        "tab-restore-failed",
-        "the workspace could not put the panels back",
-      ),
+      draw: () =>
+        registry.bind("spc_redsynd", scanOver({ ratio: 0.2681, sensor: 47 })),
+      outcome: VIEW_NOT_RESTORED(),
     },
     {
       draw: () => {},
-      outcome: rejected(
-        "tab-restore-failed",
-        "the workspace could not put the panels back",
-      ),
+      outcome: VIEW_NOT_RESTORED(),
     },
   ]);
   const syndicate = syndicateFor({
@@ -674,7 +710,7 @@ for (const [label, outcome] of failedDiscoveryOutcomes) {
     discovery,
   });
   assert.deepEqual(syndicate.read("spc_red"), { kind: "invalid" });
-  assert.equal(registry.state.generation, 1);
+  assert.equal(registry.bindings.get("spc_redsynd").generation, 1);
   const second = syndicate.read("spc_red");
   assert.deepEqual(
     second,
@@ -686,20 +722,18 @@ for (const [label, outcome] of failedDiscoveryOutcomes) {
     2,
     "the quarantined control skipped discovery entirely",
   );
-  assert.deepEqual(registry.state.invocations, []);
+  assert.deepEqual(registry.invocations, []);
 }
 
 // A pass that reports success without rebinding the readout — the observed no-draw case, taken while
 // the player is already on the panel — is not proof about a binding a failed pass produced either.
 {
-  const registry = boundOnDemandRegistry();
+  const registry = panelBoundRegistry();
   const discovery = scriptedDiscovery([
     {
-      draw: () => registry.bind(scanOver({ ratio: 0.2681, sensor: 47 })),
-      outcome: rejected(
-        "tab-restore-failed",
-        "the workspace could not put the panels back",
-      ),
+      draw: () =>
+        registry.bind("spc_redsynd", scanOver({ ratio: 0.2681, sensor: 47 })),
+      outcome: VIEW_NOT_RESTORED(),
     },
     { draw: () => {}, outcome: SUCCEEDED },
   ]);
@@ -715,24 +749,22 @@ for (const [label, outcome] of failedDiscoveryOutcomes) {
     "a pass that drew nothing vouched for the generation a failed pass left",
   );
   assert.equal(discovery.passes.length, 2);
-  assert.deepEqual(registry.state.invocations, []);
+  assert.deepEqual(registry.invocations, []);
 }
 
 // A retry that genuinely redraws the panel replaces the quarantined generation with a real one, and
 // only then is the region's own arithmetic answerable.
 {
-  const registry = boundOnDemandRegistry();
+  const registry = panelBoundRegistry();
   // A different sample from the failed generation's closure, so which one was read is visible.
   const redrawn = scanOver({ ratio: 0.4, sensor: 30 });
   const discovery = scriptedDiscovery([
     {
-      draw: () => registry.bind(scanOver({ ratio: 0.2681, sensor: 47 })),
-      outcome: rejected(
-        "tab-restore-failed",
-        "the workspace could not put the panels back",
-      ),
+      draw: () =>
+        registry.bind("spc_redsynd", scanOver({ ratio: 0.2681, sensor: 47 })),
+      outcome: VIEW_NOT_RESTORED(),
     },
-    { draw: () => registry.bind(redrawn), outcome: SUCCEEDED },
+    { draw: () => registry.bind("spc_redsynd", redrawn), outcome: SUCCEEDED },
   ]);
   const syndicate = syndicateFor({
     root: operatingRoot(),
@@ -745,8 +777,8 @@ for (const [label, outcome] of failedDiscoveryOutcomes) {
     value: { p: 0.6, s: 30 },
   });
   assert.deepEqual(
-    registry.state.invocations,
-    [{ generation: 2, method: "scan" }],
+    registry.invocations,
+    [{ elementId: "spc_redsynd", generation: 2, method: "scan" }],
     "the retry read through something other than the redrawn generation",
   );
   assert.equal(discovery.passes.length, 2);
@@ -756,20 +788,18 @@ for (const [label, outcome] of failedDiscoveryOutcomes) {
     value: { p: 0.6, s: 30 },
   });
   assert.equal(discovery.passes.length, 2);
-  assert.equal(registry.state.invocations.length, 2);
+  assert.equal(registry.invocations.length, 2);
 }
 
 // The quarantine is one generation, not one element id. A game redraw the automation did not ask for
 // supersedes it on its own — the player visiting the panel — and costs no pass.
 {
-  const registry = boundOnDemandRegistry();
+  const registry = panelBoundRegistry();
   const discovery = scriptedDiscovery([
     {
-      draw: () => registry.bind(scanOver({ ratio: 0.2681, sensor: 47 })),
-      outcome: rejected(
-        "tab-restore-failed",
-        "the workspace could not put the panels back",
-      ),
+      draw: () =>
+        registry.bind("spc_redsynd", scanOver({ ratio: 0.2681, sensor: 47 })),
+      outcome: VIEW_NOT_RESTORED(),
     },
   ]);
   const syndicate = syndicateFor({
@@ -778,7 +808,7 @@ for (const [label, outcome] of failedDiscoveryOutcomes) {
     discovery,
   });
   assert.deepEqual(syndicate.read("spc_red"), { kind: "invalid" });
-  registry.bind(scanOver({ ratio: 0.1, sensor: 12 }));
+  registry.bind("spc_redsynd", scanOver({ ratio: 0.1, sensor: 12 }));
   assert.deepEqual(
     syndicate.read("spc_red"),
     { kind: "value", value: { p: 0.9, s: 12 } },
@@ -789,8 +819,266 @@ for (const [label, outcome] of failedDiscoveryOutcomes) {
     1,
     "a genuine redraw was mistaken for a control that still had to be discovered",
   );
-  assert.deepEqual(registry.state.invocations, [
-    { generation: 2, method: "scan" },
+  assert.deepEqual(registry.invocations, [
+    { elementId: "spc_redsynd", generation: 2, method: "scan" },
+  ]);
+}
+
+// ---------------------------------------------------------------------------
+// One draw binds the whole panel, so one failed pass quarantines the whole panel.
+//
+// `space(zone)` does not bind one readout: it walks `spaceProjects` in order and `vBind`s
+// `#${region}synd` for every region of the zone it renders. An Inner System draw is therefore three
+// bindings at once — Red, Moon and the Belt — and a pass that then could not put the player's view
+// back left all three of them in the registry, live and answering. Quarantining only the region the
+// caller asked about hands the other two to the next cycle, which finds the control already present
+// and reads it on the cheap path with no pass at all.
+//
+// So what a failed pass has to quarantine is every generation that draw created or replaced, on this
+// sub-tab's own readouts — and, just as importantly, nothing else.
+// ---------------------------------------------------------------------------
+
+/**
+ * One Inner System draw that binds every readout the panel owns and then fails to restore the
+ * player's view, which is what `regionOrder.forEach` over `spc_moon`, `spc_red` and `spc_belt`
+ * actually performs.
+ *
+ * Each region gets its own sample, so reading through a generation from the wrong draw is visible in
+ * the answer and not only in the invocation record.
+ */
+function failedInnerSystemDraw() {
+  const samples = {
+    spc_redsynd: scanOver({ ratio: 0.2681, sensor: 47 }),
+    spc_moonsynd: scanOver({ ratio: 0.5, sensor: 90 }),
+    spc_beltsynd: scanOver({ ratio: 0.1111, sensor: 8 }),
+  };
+  const registry = panelBoundRegistry(INNER_READOUTS);
+  const discovery = scriptedDiscovery([
+    {
+      draw: () => {
+        for (const elementId of INNER_READOUTS) {
+          registry.bind(elementId, samples[elementId]);
+        }
+      },
+      outcome: VIEW_NOT_RESTORED(),
+    },
+  ]);
+  return { registry, discovery };
+}
+
+// One failed pass, three bindings, one answer. Nothing it left is read through.
+{
+  const { registry, discovery } = failedInnerSystemDraw();
+  const read = syndicateFor({
+    root: operatingRoot(),
+    registry,
+    discovery,
+  }).read("spc_red");
+  assert.deepEqual(
+    read,
+    { kind: "invalid" },
+    "a failed pass answered for the region it was asked about",
+  );
+  assert.deepEqual(
+    registry.invocations,
+    [],
+    "one of the three bindings the failed pass left was read through",
+  );
+  for (const elementId of INNER_READOUTS) {
+    assert.equal(
+      registry.bindings.get(elementId).generation,
+      1,
+      `${elementId} was not bound by the failed draw`,
+    );
+  }
+  assert.equal(discovery.passes.length, 1);
+}
+
+// Every sibling that failed draw rebound is in exactly the position the requested region was in: its
+// binding is present, live and quarantined, so the cheap path cannot use it, a pass is spent, and a
+// pass that does not redraw it leaves it just as unreadable whether it failed or reported success.
+// Repeated over both of the other Inner System readouts, so this is the panel's rule and not a rule
+// about Moon and Belt by name.
+for (const sibling of ["spc_moon", "spc_belt"]) {
+  const { registry, discovery } = failedInnerSystemDraw();
+  const syndicate = syndicateFor({
+    root: operatingRoot(),
+    registry,
+    discovery,
+  });
+  assert.deepEqual(syndicate.read("spc_red"), { kind: "invalid" });
+  const before = discovery.passes.length;
+  // The next cycle finds the sibling's binding already in the registry, present and live, which is
+  // exactly the trap the requested region was caught by one case earlier.
+  assert.notEqual(
+    registry.resolve(`${sibling}synd`),
+    undefined,
+    `${sibling} has no binding to be leaked`,
+  );
+  // The retry fails, and redraws nothing.
+  discovery.queue(VIEW_NOT_RESTORED());
+  assert.deepEqual(
+    syndicate.read(sibling),
+    { kind: "invalid" },
+    `${sibling} was answered through the generation the failed draw left`,
+  );
+  assert.equal(
+    discovery.passes.length,
+    before + 1,
+    `${sibling} skipped discovery because the registry already held it`,
+  );
+  // The one after that reports success and still redraws nothing, which vouches for nothing either.
+  discovery.queue(SUCCEEDED);
+  assert.deepEqual(
+    syndicate.read(sibling),
+    { kind: "invalid" },
+    `${sibling} was blessed by a pass that drew nothing`,
+  );
+  assert.equal(discovery.passes.length, before + 2);
+  assert.deepEqual(
+    registry.invocations,
+    [],
+    `${sibling}'s failed-draw closure was invoked`,
+  );
+}
+
+// A retry that genuinely redraws the panel rehabilitates every binding it actually rebound, not only
+// the one that was asked for: their generations now differ from the quarantined ones, so they are
+// ordinary authority again — read directly, at no cost, with no synthetic discovery to clear the old
+// quarantine. The quarantine stays generation-scoped rather than becoming element-scoped.
+{
+  const { registry, discovery } = failedInnerSystemDraw();
+  const syndicate = syndicateFor({
+    root: operatingRoot(),
+    registry,
+    discovery,
+  });
+  assert.deepEqual(syndicate.read("spc_red"), { kind: "invalid" });
+  const redrawn = {
+    spc_redsynd: scanOver({ ratio: 0.4, sensor: 30 }),
+    spc_moonsynd: scanOver({ ratio: 0.2, sensor: 61 }),
+    spc_beltsynd: scanOver({ ratio: 0.05, sensor: 4 }),
+  };
+  discovery.queue(SUCCEEDED, () => {
+    for (const elementId of INNER_READOUTS) {
+      registry.bind(elementId, redrawn[elementId]);
+    }
+  });
+  assert.deepEqual(syndicate.read("spc_red"), {
+    kind: "value",
+    value: { p: 0.6, s: 30 },
+  });
+  assert.equal(discovery.passes.length, 2);
+  assert.deepEqual(syndicate.read("spc_moon"), {
+    kind: "value",
+    value: { p: 0.8, s: 61 },
+  });
+  assert.deepEqual(syndicate.read("spc_belt"), {
+    kind: "value",
+    value: { p: 0.95, s: 4 },
+  });
+  assert.equal(
+    discovery.passes.length,
+    2,
+    "a redrawn sibling needed its own discovery merely to clear the old quarantine",
+  );
+  // Not one failed-draw closure is on this list: every answer came from the generation the retry
+  // bound.
+  assert.deepEqual(registry.invocations, [
+    { elementId: "spc_redsynd", generation: 2, method: "scan" },
+    { elementId: "spc_moonsynd", generation: 2, method: "scan" },
+    { elementId: "spc_beltsynd", generation: 2, method: "scan" },
+  ]);
+}
+
+// The inverse: a legitimate binding that predates the failed draw and is not rebound by it was not
+// that draw's output, so it keeps standing. Quarantining it would refuse a binding the player has
+// been relying on because some other control on the same panel failed — which is why membership is
+// not what decides this, and the before/after comparison is.
+{
+  const registry = panelBoundRegistry(INNER_READOUTS);
+  registry.bind("spc_moonsynd", scanOver({ ratio: 0.5, sensor: 90 }));
+  const discovery = scriptedDiscovery([
+    {
+      draw: () => {
+        registry.bind("spc_redsynd", scanOver({ ratio: 0.2681, sensor: 47 }));
+        registry.bind("spc_beltsynd", scanOver({ ratio: 0.1111, sensor: 8 }));
+      },
+      outcome: VIEW_NOT_RESTORED(),
+    },
+  ]);
+  const syndicate = syndicateFor({
+    root: operatingRoot(),
+    registry,
+    discovery,
+  });
+  assert.deepEqual(syndicate.read("spc_red"), { kind: "invalid" });
+  assert.equal(
+    registry.bindings.get("spc_moonsynd").generation,
+    1,
+    "the failed draw rebound a region it did not render",
+  );
+  assert.deepEqual(
+    syndicate.read("spc_moon"),
+    { kind: "value", value: { p: 0.5, s: 90 } },
+    "a binding the failed draw never touched lost its standing with its panel",
+  );
+  assert.equal(
+    discovery.passes.length,
+    1,
+    "reading Moon spent a discovery because Red failed",
+  );
+  assert.deepEqual(registry.invocations, [
+    { elementId: "spc_moonsynd", generation: 1, method: "scan" },
+  ]);
+}
+
+// The Outer System group is the same rule over a different sub-tab, not a second algorithm: it is
+// `SYNDICATE_REGION_TABS` filtered by whatever tab index the pass targeted.
+{
+  // The whole Civilization space tab, so the two groups can only be told apart by the machinery and
+  // not by which controls a case happened to create.
+  const registry = panelBoundRegistry([...INNER_READOUTS, ...OUTER_READOUTS]);
+  registry.bind("spc_moonsynd", scanOver({ ratio: 0.5, sensor: 90 }));
+  const discovery = scriptedDiscovery([
+    {
+      draw: () => {
+        registry.bind("spc_titansynd", scanOver({ ratio: 0.2681, sensor: 47 }));
+        registry.bind("spc_erissynd", scanOver({ ratio: 0.6, sensor: 72 }));
+      },
+      outcome: VIEW_NOT_RESTORED(),
+    },
+    { draw: () => {}, outcome: SUCCEEDED },
+  ]);
+  const syndicate = syndicateFor({
+    root: operatingRoot({ space: { syndicate: { spc_titan: 600 } } }),
+    registry,
+    discovery,
+  });
+  assert.deepEqual(syndicate.read("spc_titan"), { kind: "invalid" });
+  assert.equal(discovery.passes[0].path[1].index, SPACE_TAB_INDEX.outerSol);
+  // Eris is rendered by that same Outer System draw and rebound by it, so the generation it left is
+  // refused on the same grounds. The one difference from the Inner System cases is which sub-tab the
+  // map was filtered by.
+  assert.deepEqual(syndicate.read("spc_eris"), { kind: "invalid" });
+  assert.equal(
+    discovery.passes.length,
+    2,
+    "a quarantined Outer System sibling skipped discovery entirely",
+  );
+  // And the Inner System group is not this pass's output at all, so its standing is untouched by an
+  // Outer System failure.
+  assert.deepEqual(syndicate.read("spc_moon"), {
+    kind: "value",
+    value: { p: 0.5, s: 90 },
+  });
+  assert.equal(
+    discovery.passes.length,
+    2,
+    "an Outer System failure quarantined an Inner System readout",
+  );
+  assert.deepEqual(registry.invocations, [
+    { elementId: "spc_moonsynd", generation: 1, method: "scan" },
   ]);
 }
 
