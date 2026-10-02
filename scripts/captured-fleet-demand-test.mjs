@@ -32,20 +32,54 @@ const root = {
   },
 };
 
-function makeShipyard({ established = true, onEstablish = [] } = {}) {
-  const calls = { established: 0 };
+/**
+ * The yard, counted rather than merely spied on. `established: true` is a yard the player visited
+ * earlier and has since navigated away from: its `shipPlans` survives, so `control()` still answers
+ * and `current()` has no rendered `#shipYardCosts` to read and would fall back to the scratch probe.
+ * That is the state in which a price is worth something to check and nothing at all to compute.
+ */
+function makeShipyard({ established = true, order = [] } = {}) {
+  const calls = { control: 0, established: 0, establish: 0 };
   let held = established;
   return {
     calls,
+    control() {
+      calls.control += 1;
+      return held
+        ? { methods: ["avail", "build", "powerText", "redraw"] }
+        : undefined;
+    },
+    established(control) {
+      calls.established += 1;
+      return control !== undefined;
+    },
     establish() {
-      onEstablish.push(true);
+      calls.establish += 1;
+      order.push("establish");
       held = true;
       return undefined;
     },
-    control: () => undefined,
-    established: () => {
-      calls.established += 1;
-      return held;
+  };
+}
+
+/**
+ * The cost row, counted, and recording its order so a price can be shown to follow a draw.
+ *
+ * `costSample` has no default on purpose: an absent price is one of the cases under test, and a
+ * default would silently answer it with the priced sample instead.
+ */
+function makeCosts(costSample, order = []) {
+  const calls = { current: 0, price: 0 };
+  return {
+    calls,
+    current() {
+      calls.current += 1;
+      order.push("current");
+      return costSample;
+    },
+    price() {
+      calls.price += 1;
+      return costSample;
     },
   };
 }
@@ -57,9 +91,10 @@ function demand(
     resourceMaximums = root.resource,
     settings = { autoFleet: true, prioritizeOuterFleet: "req" },
     shipyard = makeShipyard(),
-    costs = { current: () => costSample, price: () => costSample },
+    costs = makeCosts(costSample),
   } = {},
 ) {
+  const settingsReads = { count: 0 };
   return {
     reader: createCapturedFleetDemand({
       rootState: {
@@ -67,9 +102,14 @@ function demand(
       },
       costs,
       shipyard,
-      readSettings: () => settings,
+      readSettings: () => {
+        settingsReads.count += 1;
+        return settings;
+      },
     }),
     shipyard,
+    costs,
+    settingsReads,
   };
 }
 
@@ -121,65 +161,185 @@ assert.equal(notStackable.read()?.nextShipExpandable, false);
 for (const absent of [undefined, sample([], undefined)]) {
   assert.equal(
     demand(absent, {
-      costs: { current: () => absent, price: () => absent },
+      costs: makeCosts(absent),
     }).reader.read(),
     undefined,
   );
 }
 
 // A save that never rendered the shipyard still gets a price — by establishing the yard itself —
-// but only while the fleet demand the prioritizer would keep is a live one.
+// and the price is read after the draw that made it possible, never before.
 {
-  const established = [];
-  const shipyard = makeShipyard({
-    established: false,
-    onEstablish: established,
-  });
-  const reader = demand(priced, { shipyard }).reader;
+  const order = [];
+  const shipyard = makeShipyard({ established: false, order });
+  const costs = makeCosts(priced, order);
+  const { reader, settingsReads } = demand(priced, { shipyard, costs });
   reader.read();
   reader.read();
-  assert.equal(established.length, 1, "the yard was established");
-  assert.equal(shipyard.calls.established, 2);
+  assert.deepEqual(order, ["establish", "current", "current"]);
+  assert.deepEqual(
+    shipyard.calls,
+    { control: 2, established: 2, establish: 1 },
+    "the yard was established once and asked twice",
+  );
+  assert.equal(
+    costs.calls.price,
+    0,
+    "the held design was never priced by candidate",
+  );
+  assert.equal(settingsReads.count, 2, "the gate was read once per sample");
 }
 
+// A yard already established is never re-established, whatever the settings say, and is priced
+// directly: `current()` is the same read either way.
+{
+  const order = [];
+  const shipyard = makeShipyard({ established: true, order });
+  const costs = makeCosts(priced, order);
+  const sampleValue = demand(priced, { shipyard, costs }).reader.read();
+  assert.deepEqual(order, ["current"]);
+  assert.deepEqual(shipyard.calls, {
+    control: 1,
+    established: 1,
+    establish: 0,
+  });
+  assert.equal(sampleValue?.nextShipCost.length, 2);
+}
+
+// The runtime's effective settings are layered: a thin object whose prototype is the raw persisted
+// record and whose own properties are only this pass's overrides. Both gates resolve through that
+// chain, so a save whose fleet switches live only in the raw record is still priced...
+{
+  const layered = Object.create({
+    autoFleet: true,
+    prioritizeOuterFleet: "req",
+  });
+  assert.deepEqual(Object.keys(layered), []);
+  const order = [];
+  const shipyard = makeShipyard({ established: false, order });
+  const costs = makeCosts(priced, order);
+  const reader = demand(priced, { shipyard, costs, settings: layered }).reader;
+  assert.equal(reader.read()?.nextShipCost.length, 2);
+  assert.deepEqual(order, ["establish", "current"]);
+}
+
+// ...and an override that turns the fleet off wins over the inherited value, still without the yard
+// being asked anything.
+{
+  const layered = Object.assign(
+    Object.create({ autoFleet: true, prioritizeOuterFleet: "req" }),
+    { autoFleet: false },
+  );
+  const order = [];
+  const shipyard = makeShipyard({ established: false, order });
+  const costs = makeCosts(priced, order);
+  assert.equal(
+    demand(priced, { shipyard, costs, settings: layered }).reader.read(),
+    undefined,
+  );
+  assert.deepEqual(order, []);
+}
+
+// Fleet demand nothing keeps is not a reason to touch the yard at all. The off-tab case is the one
+// this gate exists for: nothing needed establishing, so an earlier reader went straight on to price
+// the ship — and `current()` with no rendered row is the scratch probe, `shipPlans.setVal` per call,
+// for a figure that was discarded unread.
 for (const settings of [
   { autoFleet: false, prioritizeOuterFleet: "req" },
   { autoFleet: true, prioritizeOuterFleet: "ignore" },
+]) {
+  const label = JSON.stringify(settings);
+  for (const established of [false, true]) {
+    const order = [];
+    const shipyard = makeShipyard({ established, order });
+    const costs = makeCosts(priced, order);
+    const { reader, settingsReads } = demand(priced, {
+      shipyard,
+      costs,
+      settings,
+    });
+    assert.equal(
+      reader.read(),
+      undefined,
+      `a cost nothing keeps was sampled: ${label}, yard established: ${established}`,
+    );
+    assert.deepEqual(
+      shipyard.calls,
+      { control: 0, established: 0, establish: 0 },
+      `the yard was asked to price a cost nothing keeps: ${label}, yard established: ${established}`,
+    );
+    assert.deepEqual(
+      costs.calls,
+      { current: 0, price: 0 },
+      `the cost row was read for a cost nothing keeps: ${label}, yard established: ${established}`,
+    );
+    assert.deepEqual(order, [], `the probe ran: ${label}`);
+    assert.equal(
+      settingsReads.count,
+      1,
+      "the gate was read once, and it was the only read",
+    );
+  }
+}
+
+// The same gate for settings that cannot answer it at all: a missing switch, a missing priority, an
+// empty record and something that is not a record are all "not wanted", and cost the yard nothing.
+for (const settings of [
   { autoFleet: true },
+  { autoFleet: true, prioritizeOuterFleet: "ignore" },
   {},
   "not a settings record",
 ]) {
-  const established = [];
-  const shipyard = makeShipyard({
-    established: false,
-    onEstablish: established,
-  });
-  demand(priced, { shipyard, settings }).reader.read();
-  assert.deepEqual(
-    established,
-    [],
-    `the yard was established to price a cost nothing keeps: ${JSON.stringify(settings)}`,
+  const shipyard = makeShipyard({ established: false });
+  const costs = makeCosts(priced);
+  assert.equal(
+    demand(priced, { shipyard, costs, settings }).reader.read(),
+    undefined,
   );
-}
-
-// A yard already established is never re-established, whatever the settings say.
-{
-  const established = [];
-  const shipyard = makeShipyard({
-    established: true,
-    onEstablish: established,
+  assert.deepEqual(shipyard.calls, {
+    control: 0,
+    established: 0,
+    establish: 0,
   });
-  demand(priced, { shipyard }).reader.read();
-  assert.deepEqual(established, []);
+  assert.deepEqual(costs.calls, { current: 0, price: 0 });
 }
 
-// Anything but a True Path save with the syndicate has no fleet cost to ask about.
+// A `save` or `savereq` priority keeps the demand: only `ignore` switches it off.
+for (const prioritizeOuterFleet of ["save", "savereq", "req"]) {
+  const shipyard = makeShipyard({ established: false });
+  const costs = makeCosts(priced);
+  const reader = demand(priced, {
+    shipyard,
+    costs,
+    settings: { autoFleet: true, prioritizeOuterFleet },
+  }).reader;
+  assert.equal(reader.read()?.nextShipCost.length, 2);
+  assert.equal(shipyard.calls.establish, 1);
+  assert.equal(costs.calls.current, 1);
+}
+
+// Anything but a True Path save with the syndicate has no fleet cost to ask about, so the settings
+// are never even consulted.
 for (const absent of [
   { ...root, race: { truepath: false } },
   { ...root, tech: { syndicate: 0 } },
   { ...root, space: {} },
 ]) {
-  assert.equal(demand(priced, { rootValue: absent }).reader.read(), undefined);
+  const shipyard = makeShipyard({ established: false });
+  const costs = makeCosts(priced);
+  const { reader, settingsReads } = demand(priced, {
+    rootValue: absent,
+    shipyard,
+    costs,
+  });
+  assert.equal(reader.read(), undefined);
+  assert.deepEqual(shipyard.calls, {
+    control: 0,
+    established: 0,
+    establish: 0,
+  });
+  assert.deepEqual(costs.calls, { current: 0, price: 0 });
+  assert.equal(settingsReads.count, 0);
 }
 
 console.log("Captured fleet demand adapter tests passed");

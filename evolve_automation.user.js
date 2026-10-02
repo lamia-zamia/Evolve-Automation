@@ -20557,7 +20557,9 @@
         let root = dependencies.rootState.readRoot(), tech = readProperty(root, "tech"), race = readProperty(root, "race"), shipyard = readProperty(readProperty(root, "space"), "shipyard"), blueprint = readProperty(shipyard, "blueprint");
         if (!isRecord(tech) || !isRecord(race) || !isRecord(shipyard) || !isRecord(blueprint) || !(typeof tech.syndicate == "number" && tech.syndicate > 0) || race.truepath !== !0)
           return;
-        !dependencies.shipyard.established(dependencies.shipyard.control()) && fleetDemandWanted(dependencies.readSettings()) && dependencies.shipyard.establish();
+        let settings = dependencies.readSettings();
+        if (!fleetDemandWanted(settings)) return;
+        dependencies.shipyard.established(dependencies.shipyard.control()) || dependencies.shipyard.establish();
         let sample = dependencies.costs.current();
         if (sample === void 0 || sample.amounts.length === 0) return;
         let cost = sample.amounts, capacity = readShipCapacityState(root, cost);

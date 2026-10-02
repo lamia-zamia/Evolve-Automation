@@ -17,11 +17,16 @@
  * storage — because those are questions about where the yard's resources can go, not about what the
  * ship costs.
  *
- * **The yard is established only when the fleet demand is real.** `shipPlans` is captured on the
- * player's first visit, so without this a save that never opened the Civic tab could never ask what
- * its next ship costs. But synthesizing a draw costs the player's Civic panel a moment, so it happens
- * only under the same settings the prioritizer reads: Auto Fleet on, and outer-fleet priority not set
- * to ignore. A save with the fleet automation off never pays for a price it will not use.
+ * **The yard is touched only when the fleet demand is real.** `shipPlans` is captured on the player's
+ * first visit, so a save that never opened the Civic tab could otherwise never ask what its next ship
+ * costs; synthesizing a draw costs the player's Civic panel a moment, so that pass runs under the same
+ * settings the prioritizer reads: Auto Fleet on, and outer-fleet priority not set to ignore. A save
+ * with the fleet automation off never pays for a price it will not use.
+ *
+ * The gate is read first, before the yard is asked anything, because the settings decide whether this
+ * demand exists at all. A yard that was captured earlier and has since gone off-tab answers `current()`
+ * from the scratch probe — `shipPlans.setVal` per call, to be thrown away — so a mere price check
+ * would be the expensive work all by itself, on a save whose fleet demand nothing keeps.
  */
 
 import type { DemandFleet } from "../../../domain/economy/resources/demand-prioritization.ts";
@@ -51,8 +56,8 @@ export interface CapturedFleetDemandSample extends DemandFleet {
 
 /**
  * Whether the settings say the fleet's next ship is wanted at all, which is the same pair of gates
- * the prioritizer applies before it keeps a fleet cost. A demand sampled with either off is not a
- * demand for a ship, so it is not a reason to draw the shipyard.
+ * the prioritizer applies before it keeps a fleet cost. A demand with either off is not a demand for
+ * a ship, so it is not a reason to touch the yard: not to draw it, and not to price it.
  */
 function fleetDemandWanted(settingsValue: unknown): boolean {
   if (!isRecord(settingsValue)) return false;
@@ -108,10 +113,9 @@ export function createCapturedFleetDemand(
       ) {
         return undefined;
       }
-      if (
-        !dependencies.shipyard.established(dependencies.shipyard.control()) &&
-        fleetDemandWanted(dependencies.readSettings())
-      ) {
+      const settings = dependencies.readSettings();
+      if (!fleetDemandWanted(settings)) return undefined;
+      if (!dependencies.shipyard.established(dependencies.shipyard.control())) {
         dependencies.shipyard.establish();
       }
       const sample = dependencies.costs.current();
