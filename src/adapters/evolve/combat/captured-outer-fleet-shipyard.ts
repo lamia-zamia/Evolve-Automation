@@ -113,6 +113,12 @@ export const CAPTURED_OUTER_FLEET_SHIPYARD_CONTROL = "shipPlans";
 /** The panel `drawShipYard()` draws into, and the element a shipyard host has to stand in for. */
 export const CAPTURED_OUTER_FLEET_SHIPYARD_PANEL_ID = "dwarfShipYard";
 
+/**
+ * The cost row `drawShipYard()` gives the yard and `updateCosts()` owns. It is the game's only price
+ * for a design, and the element a scratch cost probe stands in for when the yard is off-tab.
+ */
+export const CAPTURED_OUTER_FLEET_SHIPYARD_COSTS_ID = "shipYardCosts";
+
 /** The element `drawShipYard()` gives the yard's ship list, and the one `drawShips()` refills. */
 export const CAPTURED_OUTER_FLEET_SHIP_LIST_ID = "shipList";
 
@@ -220,7 +226,7 @@ interface HiddenHost {
  * real yard owns it then, and a capture must never clear or refill the player's panel because it
  * resolved to the same element.
  */
-function hiddenHostElement(
+export function hiddenHostElement(
   document: unknown,
   elementId: string,
 ): HiddenHost | undefined {
@@ -245,7 +251,7 @@ function hiddenHostElement(
   return { parent, element };
 }
 
-function removeHiddenHostElement(host: HiddenHost): void {
+export function removeHiddenHostElement(host: HiddenHost): void {
   const removeChild = readProperty(host.parent, "removeChild");
   try {
     if (typeof removeChild === "function") {
@@ -331,7 +337,7 @@ function liveShipIndex(
  * removes both, and the registry never forgets it — so a matching `data` alone proves nothing about
  * whether the game ever drew that row.
  */
-function renderedElementInside(
+export function renderedElementInside(
   document: unknown,
   containerId: string,
   elementId: string,

@@ -13924,10 +13924,10 @@
     return finite(readProperty(settings, `mutableTrait_p_${traitId}`));
   }
   function readAuthoritativeMutationCost(dependencies, root, traitId, operation2) {
-    let readCost5 = dependencies.readMutationCost;
-    if (readCost5 === void 0) return null;
+    let readCost4 = dependencies.readMutationCost;
+    if (readCost4 === void 0) return null;
     try {
-      let value = finite(readCost5(root, traitId, operation2));
+      let value = finite(readCost4(root, traitId, operation2));
       return value !== void 0 && value >= 0 ? value : null;
     } catch {
       return null;
@@ -20531,36 +20531,17 @@
   }
 
   // src/adapters/evolve/combat/captured-fleet-demand.ts
-  function fleetDocument(value) {
-    return isRecord(value) && typeof value.querySelector == "function" ? value : void 0;
+  function fleetDemandWanted(settingsValue) {
+    if (!isRecord(settingsValue) || settingsValue.autoFleet !== !0) return !1;
+    let priority = settingsValue.prioritizeOuterFleet;
+    return typeof priority == "string" && priority !== "ignore";
   }
-  function readCost3(element) {
-    let names = /* @__PURE__ */ new Set(), amounts = /* @__PURE__ */ new Map(), collect2 = (candidate) => {
-      for (let attribute of Array.from(candidate.attributes ?? []))
-        if (attribute.name === "class")
-          for (let token of attribute.value.split(/\s+/))
-            token.startsWith("res-") && token.length > 4 && names.add(token.slice(4));
-        else attribute.name.startsWith("data-") && amounts.set(attribute.name.slice(5), attribute.value);
-    };
-    collect2(element);
-    for (let descendant of Array.from(element.querySelectorAll?.("*") ?? []))
-      collect2(descendant);
-    let cost = {};
-    for (let name of names) {
-      let rawAmount = amounts.get(name.toLowerCase());
-      if (rawAmount === void 0) return;
-      let amount = Number(rawAmount);
-      if (!Number.isFinite(amount) || amount <= 0) return;
-      cost[name] = amount;
-    }
-    return Object.freeze(cost);
-  }
-  function readShipCapacityState(root, cost) {
+  function readShipCapacityState(root, costs) {
     let resources = readProperty(root, "resource");
     if (!isRecord(resources))
       return Object.freeze({ affordable: !1, expandable: !1 });
     let affordable = !0, expandable = !0;
-    for (let [resourceId, amount] of Object.entries(cost)) {
+    for (let { resourceId, amount } of costs) {
       let resource = readProperty(resources, resourceId), maximum = readProperty(resource, "max");
       if (typeof maximum != "number" || !Number.isFinite(maximum)) {
         affordable = !1, expandable = !1;
@@ -20574,20 +20555,22 @@
     return Object.freeze({
       read() {
         let root = dependencies.rootState.readRoot(), tech = readProperty(root, "tech"), race = readProperty(root, "race"), shipyard = readProperty(readProperty(root, "space"), "shipyard"), blueprint = readProperty(shipyard, "blueprint");
-        if (!isRecord(tech) || !isRecord(race) || !isRecord(shipyard) || !isRecord(blueprint) || !(typeof tech.syndicate == "number" && tech.syndicate > 0) || race.truepath !== !0 || dependencies.controls.resolve("shipPlans") === void 0)
+        if (!isRecord(tech) || !isRecord(race) || !isRecord(shipyard) || !isRecord(blueprint) || !(typeof tech.syndicate == "number" && tech.syndicate > 0) || race.truepath !== !0)
           return;
-        let costsElement = fleetDocument(dependencies.getDocument())?.querySelector("#shipYardCosts");
-        if (costsElement == null) return;
-        let cost = readCost3(costsElement);
-        if (cost === void 0 || Object.keys(cost).length === 0)
-          return;
-        let capacity = readShipCapacityState(root, cost);
+        !dependencies.shipyard.established(dependencies.shipyard.control()) && fleetDemandWanted(dependencies.readSettings()) && dependencies.shipyard.establish();
+        let sample = dependencies.costs.current();
+        if (sample === void 0 || sample.amounts.length === 0) return;
+        let cost = sample.amounts, capacity = readShipCapacityState(root, cost);
         return Object.freeze({
           nextShipAffordable: capacity.affordable,
           nextShipExpandable: capacity.expandable,
           nextShipCost: Object.freeze(
-            Object.entries(cost).map(
-              ([resourceId, amount]) => Object.freeze({ resourceId, amount })
+            cost.map(
+              (entry) => Object.freeze({
+                resourceId: entry.resourceId,
+                amount: entry.amount,
+                ...sample.pool === void 0 ? {} : { pool: sample.pool }
+              })
             )
           )
         });
@@ -21261,7 +21244,7 @@
   }
 
   // src/adapters/evolve/combat/captured-outer-fleet-shipyard.ts
-  var CAPTURED_OUTER_FLEET_SHIPYARD_CONTROL = "shipPlans", CAPTURED_OUTER_FLEET_SHIPYARD_PANEL_ID = "dwarfShipYard", CAPTURED_OUTER_FLEET_SHIP_LIST_ID = "shipList", CAPTURED_OUTER_FLEET_SHIP_ROW_PREFIX = "shipReg", CAPTURED_OUTER_FLEET_ROW_DISPATCH_METHOD = "pickDest", CAPTURED_OUTER_FLEET_ROW_UNDERWAY_METHOD = "show", OUTER_FLEET_SHIPYARD_REDRAW_METHOD = "redraw", TAB_SWAP_METHOD = "swapTab", OUTER_FLEET_SHIPYARD_METHODS = Object.freeze([
+  var CAPTURED_OUTER_FLEET_SHIPYARD_CONTROL = "shipPlans", CAPTURED_OUTER_FLEET_SHIPYARD_PANEL_ID = "dwarfShipYard", CAPTURED_OUTER_FLEET_SHIPYARD_COSTS_ID = "shipYardCosts", CAPTURED_OUTER_FLEET_SHIP_LIST_ID = "shipList", CAPTURED_OUTER_FLEET_SHIP_ROW_PREFIX = "shipReg", CAPTURED_OUTER_FLEET_ROW_DISPATCH_METHOD = "pickDest", CAPTURED_OUTER_FLEET_ROW_UNDERWAY_METHOD = "show", OUTER_FLEET_SHIPYARD_REDRAW_METHOD = "redraw", TAB_SWAP_METHOD = "swapTab", OUTER_FLEET_SHIPYARD_METHODS = Object.freeze([
     "avail",
     "build",
     "powerText",
@@ -21838,7 +21821,12 @@
     });
   }
   function planOuterFleetBuild(input) {
-    return input.missingResourceName !== null ? status(
+    return input.costKnown === !1 ? status(
+      input.plan.blueprint,
+      null,
+      `Next ship(${input.plan.nextShipName}) cost unavailable; ship construction paused`,
+      input.plan.nextShipName
+    ) : input.missingResourceName !== null ? status(
       input.plan.blueprint,
       null,
       `Next ship(${input.plan.nextShipName}) is missing ${input.missingResourceName}`,
@@ -21857,6 +21845,14 @@
       shipCrew: input.plan.shipCrew,
       nextShipName: input.plan.nextShipName
     });
+  }
+
+  // src/adapters/evolve/combat/captured-outer-fleet-blueprint.ts
+  function outerFleetBlueprintWrites(blueprint) {
+    let writes = [];
+    for (let [type, part] of Object.entries(blueprint))
+      type === "name" || typeof part != "string" || writes.push(Object.freeze({ type, part }));
+    return Object.freeze(writes);
   }
 
   // src/adapters/evolve/combat/captured-fleet-outer.ts
@@ -21959,14 +21955,6 @@
     let ships = readProperty(capturedOuterFleetYard(root), "ships");
     return Array.isArray(ships) ? ships : [];
   }
-  function capturedOuterFleetAmount(root, resourceId) {
-    return finite(
-      readProperty(
-        readProperty(readProperty(root, "resource"), resourceId),
-        "amount"
-      )
-    );
-  }
   function capturedOuterFleetPartBlueprint(settings, prefix) {
     let blueprint = {};
     for (let type of Object.keys(CAPTURED_OUTER_FLEET_PARTS)) {
@@ -22038,110 +22026,6 @@
       default:
         return region === "spc_moon" || region === "spc_red" ? 1250 : 1020;
     }
-  }
-  function capturedOuterFleetShipCosts(blueprint, ships) {
-    let costs = {}, healthInflate = 1, powerInflate = 1, creepFactor = 1, shipClass = String(blueprint.class ?? "");
-    switch (shipClass) {
-      case "corvette":
-        costs.Money = 25e5, costs.Aluminium = 5e5, creepFactor = 2;
-        break;
-      case "frigate":
-        costs.Money = 5e6, costs.Aluminium = 125e4, healthInflate = 1.1, powerInflate = 1.09, creepFactor = 1.5;
-        break;
-      case "destroyer":
-        costs.Money = 15e6, costs.Aluminium = 35e5, healthInflate = 1.2, powerInflate = 1.18, creepFactor = 1.2;
-        break;
-      case "cruiser":
-        costs.Money = 5e7, costs.Adamantite = 1e6, healthInflate = 1.3, powerInflate = 1.25;
-        break;
-      case "battlecruiser":
-        costs.Money = 125e6, costs.Adamantite = 26e5, healthInflate = 1.35, powerInflate = 1.3, creepFactor = 0.8;
-        break;
-      case "dreadnought":
-        costs.Money = 5e8, costs.Adamantite = 8e6, healthInflate = 1.4, powerInflate = 1.35, creepFactor = 0.5;
-        break;
-      case "explorer":
-        costs.Money = 8e8, costs.Adamantite = 95e5, healthInflate = 1.45;
-        break;
-      default:
-        return costs;
-    }
-    switch (blueprint.armor) {
-      case "steel":
-        costs.Steel = Math.round(35e4 ** healthInflate);
-        break;
-      case "alloy":
-        costs.Alloy = Math.round(25e4 ** healthInflate);
-        break;
-      case "neutronium":
-        costs.Neutronium = Math.round(1e4 ** healthInflate);
-        break;
-    }
-    let alternateCost = ["freighter", "supply_ship"].includes(
-      String(blueprint.class ?? "")
-    ), engine = {
-      ion: alternateCost ? 1e4 : 75e3,
-      tie: alternateCost ? 45e3 : 15e4,
-      pulse: alternateCost ? 3e4 : 125e3,
-      photon: alternateCost ? 75e3 : 21e4,
-      vacuum: alternateCost ? 125e3 : 3e5,
-      emdrive: 125e4
-    }[String(blueprint.engine ?? "")];
-    engine !== void 0 && (costs.Titanium = Math.round(engine ** powerInflate));
-    let alternateMaterial = shipClass === "explorer", power = {
-      solar: 4e4,
-      diesel: 4e4,
-      fission: 5e4,
-      fusion: 5e4,
-      elerium: 6e4
-    }[String(blueprint.power ?? "")];
-    if (power !== void 0) {
-      costs[alternateMaterial ? "Orichalcum" : "Copper"] = Math.round(
-        power ** healthInflate
-      );
-      let iridium = {
-        solar: 15e3,
-        diesel: 15e3,
-        fission: 3e4,
-        fusion: 4e4,
-        elerium: 55e3
-      }[String(blueprint.power ?? "")];
-      iridium !== void 0 && (costs.Iridium = Math.round(iridium ** powerInflate));
-    }
-    if (shipClass !== "explorer") {
-      let sensorPower = { radar: 1.04, lidar: 1.08, quantum: 1.12 }[String(blueprint.sensor ?? "")];
-      sensorPower !== void 0 && (costs.Money = Math.round((costs.Money ?? 0) ** sensorPower));
-    }
-    switch (blueprint.weapon) {
-      case "railgun":
-        costs.Iron = Math.round(25e3 ** healthInflate);
-        break;
-      case "laser":
-        costs.Iridium = Math.round((costs.Iridium ?? 0) ** 1.05), costs.Nano_Tube = Math.round(12e3 ** healthInflate);
-        break;
-      case "p_laser":
-        costs.Iridium = Math.round((costs.Iridium ?? 0) ** 1.035), costs.Nano_Tube = Math.round(12e3 ** healthInflate);
-        break;
-      case "plasma":
-        costs.Iridium = Math.round((costs.Iridium ?? 0) ** 1.1), costs.Nano_Tube = Math.round(2e4 ** healthInflate);
-        break;
-      case "phaser":
-        costs.Iridium = Math.round((costs.Iridium ?? 0) ** 1.15), costs.Quantium = Math.round(18e3 ** healthInflate);
-        break;
-      case "disruptor":
-        costs.Iridium = Math.round((costs.Iridium ?? 0) ** 1.2), costs.Quantium = Math.round(35e3 ** healthInflate);
-        break;
-    }
-    blueprint.special === "massdriver" && (costs.Iridium = Math.round((costs.Iridium ?? 0) ** 1.2), costs.Tungsten = Math.round(75e4 ** healthInflate), costs.Quantium = Math.round(4e4 ** healthInflate)), shipClass === "explorer" && (costs.Iron = (costs.Iron ?? 0) * 10, costs.Titanium = (costs.Titanium ?? 0) * 5, costs.Iridium = (costs.Iridium ?? 0) * 50);
-    let sameTier = ships.filter((ship) => {
-      let value = isRecord(ship) ? ship : {};
-      return value.class === blueprint.class && (!["freighter", "supply_ship"].includes(
-        String(blueprint.class ?? "")
-      ) || value.special === blueprint.special);
-    }).length, creep = 1 + (sameTier - 2) / 25 * creepFactor;
-    for (let resourceId of Object.keys(costs))
-      costs[resourceId] = shipClass === "explorer" ? Math.ceil(costs[resourceId] * (sameTier + 1) * 3) : sameTier < 2 ? Math.ceil(costs[resourceId] * (sameTier === 0 ? 0.75 : 0.9)) : sameTier > 2 ? Math.ceil(costs[resourceId] * creep) : costs[resourceId];
-    return costs;
   }
   function capturedOuterFleetSyndicate(root, region, extra, all) {
     let tech = readProperty(root, "tech"), race = readProperty(root, "race"), space = readProperty(root, "space"), syndicate = readProperty(space, "syndicate");
@@ -22238,12 +22122,13 @@
   }
   function createCapturedOuterFleetAdapter(dependencies) {
     let session = null, expectedDecision = null, shipTargetChanged = !1;
-    function shipTargetFingerprint(root) {
-      let blueprint = readProperty(capturedOuterFleetYard(root), "blueprint");
-      if (isRecord(blueprint))
-        return JSON.stringify(
-          capturedOuterFleetShipCosts(blueprint, capturedOuterFleetShips(root))
-        );
+    function shipTargetFingerprint() {
+      let sample = dependencies.costs.current();
+      if (sample !== void 0)
+        return JSON.stringify({
+          pool: sample.pool ?? null,
+          amounts: sample.amounts.map((entry) => [entry.resourceId, entry.amount])
+        });
     }
     function activeSession() {
       if (session === null)
@@ -22457,19 +22342,17 @@
           throw new Error(
             `captured outer fleet blueprint ${plan.blueprint} is missing`
           );
-        let costs = capturedOuterFleetShipCosts(
-          blueprint,
-          capturedOuterFleetShips(active.root)
-        ), missingResourceName = null;
-        for (let [resourceId, cost] of Object.entries(costs)) {
-          let amount = capturedOuterFleetAmount(active.root, resourceId);
-          if (amount === void 0 || amount < cost) {
-            missingResourceName = resourceId;
-            break;
-          }
+        let sample = dependencies.costs.price(blueprint), missingResourceName = null;
+        if (sample !== void 0) {
+          for (let entry of sample.amounts)
+            if (!entry.affordable) {
+              missingResourceName = entry.resourceId;
+              break;
+            }
         }
         let input = Object.freeze({
           plan,
+          costKnown: sample !== void 0,
           missingResourceName,
           currentCityGarrison: capturedOuterFleetCurrentGarrison(active.root)
         });
@@ -22497,7 +22380,7 @@
             "captured outer fleet decision does not match the sampled plan"
           );
         if (expectedDecision = null, decision.kind === "outer-fleet-status") return SUCCEEDED;
-        let targetBefore = shipTargetFingerprint(active.root), outcome = applyOuterFleetBuild(active, decision), targetAfter = shipTargetFingerprint(active.root);
+        let targetBefore = shipTargetFingerprint(), outcome = applyOuterFleetBuild(active, decision), targetAfter = shipTargetFingerprint();
         return shipTargetChanged === !1 && targetBefore !== targetAfter && (targetBefore !== void 0 || targetAfter !== void 0) && (shipTargetChanged = !0), outcome;
       }
     });
@@ -22514,8 +22397,7 @@
           "captured-outer-fleet-blueprint-invalid",
           "captured outer fleet blueprint is incomplete"
         );
-      for (let [type, part] of Object.entries(blueprint)) {
-        if (type === "name" || typeof part != "string") continue;
+      for (let { type, part } of outerFleetBlueprintWrites(blueprint)) {
         let index = CAPTURED_OUTER_FLEET_PARTS[type]?.indexOf(part) ?? -1;
         if (index < 0 || !dependencies.controls.setPart({
           elementId: CAPTURED_OUTER_FLEET_SHIPYARD_CONTROL,
@@ -22605,6 +22487,7 @@
       controls: createCapturedFleetControls({
         controls: dependencies.controls
       }),
+      costs: dependencies.costs,
       dispatch: dependencies.dispatch,
       readSettings: dependencies.readSettings,
       ...dependencies.onActivity === void 0 ? {} : { onActivity: dependencies.onActivity }
@@ -31203,7 +31086,7 @@
     let count2 = Number(trimmed);
     return Number.isSafeInteger(count2) ? count2 : void 0;
   }
-  function readCost4(element) {
+  function readCost3(element) {
     let markup = { names: /* @__PURE__ */ new Set(), amounts: /* @__PURE__ */ new Map() };
     collect(element, markup);
     let descendants = element.querySelectorAll?.("*");
@@ -31235,7 +31118,7 @@
           actions.push(
             Object.freeze({
               id,
-              cost: Object.freeze(readCost4(element)),
+              cost: Object.freeze(readCost3(element)),
               ...state === void 0 ? {} : { state }
             })
           );
@@ -49170,6 +49053,188 @@ Only continue if you trust the source. Injected code:
     });
   }
 
+  // src/adapters/evolve/combat/captured-outer-fleet-costs.ts
+  var SHIPYARD_SET_VAL_METHOD = "setVal", SHIPYARD_POOL_ATTRIBUTE = "data-pool", SHIPYARD_SUCCESS_ATTRIBUTE = "data-ok", SHIPYARD_RESOURCE_CLASS = "res-";
+  function shipyardCostNode(value) {
+    return isRecord(value) && typeof value.getAttribute == "function" && typeof value.querySelectorAll == "function" ? value : void 0;
+  }
+  function classTokens2(node) {
+    let value = node.getAttribute("class");
+    return value === null ? [] : value.split(/\s+/).filter((token) => token !== "");
+  }
+  function namedResources(tokens) {
+    return tokens.filter(
+      (token) => token.startsWith(SHIPYARD_RESOURCE_CLASS) && token.length > SHIPYARD_RESOURCE_CLASS.length
+    ).map((token) => token.slice(SHIPYARD_RESOURCE_CLASS.length));
+  }
+  function carriesSuccessClass(node, tokens) {
+    let success = node.getAttribute(SHIPYARD_SUCCESS_ATTRIBUTE);
+    return success !== null && success !== "" && tokens.includes(success);
+  }
+  function readCostAmount(node, resourceId) {
+    let raw = node.getAttribute(`data-${resourceId.toLowerCase()}`);
+    if (raw === null) return;
+    let amount = Number(raw);
+    if (!(!Number.isFinite(amount) || amount < 0))
+      return Object.freeze({
+        resourceId,
+        amount,
+        affordable: carriesSuccessClass(node, classTokens2(node))
+      });
+  }
+  function parseShipyardCostRow(element) {
+    let row = shipyardCostNode(element);
+    if (row === void 0) return;
+    let named = /* @__PURE__ */ new Map(), nodes = [
+      row,
+      ...Array.from(row.querySelectorAll("*"))
+    ];
+    for (let node of nodes) {
+      let costNode = shipyardCostNode(node);
+      if (costNode === void 0) return;
+      let resourceIds = namedResources(classTokens2(costNode));
+      if (resourceIds.length === 0) continue;
+      if (resourceIds.length > 1) return;
+      let [resourceId] = resourceIds;
+      if (resourceId === void 0 || named.has(resourceId)) return;
+      let amount = readCostAmount(costNode, resourceId);
+      if (amount === void 0) return;
+      named.set(resourceId, amount);
+    }
+    if (named.size === 0) return;
+    let rawPool = row.getAttribute(SHIPYARD_POOL_ATTRIBUTE);
+    return Object.freeze({
+      pool: rawPool === null || rawPool === "" ? void 0 : rawPool,
+      amounts: Object.freeze(
+        [...named.values()].sort(
+          (left, right) => left.resourceId < right.resourceId ? -1 : left.resourceId > right.resourceId ? 1 : 0
+        )
+      )
+    });
+  }
+  var NO_RENDERED_ROW = Object.freeze({
+    present: !1,
+    sample: void 0
+  });
+  function renderedCostRow(dependencies) {
+    let row = renderedElementInside(
+      dependencies.getDocument(),
+      CAPTURED_OUTER_FLEET_SHIPYARD_CONTROL,
+      CAPTURED_OUTER_FLEET_SHIPYARD_COSTS_ID
+    );
+    if (row === void 0) return NO_RENDERED_ROW;
+    let sample = parseShipyardCostRow(row);
+    return sample === void 0 && dependencies.onCaptureError?.(
+      `the rendered ${CAPTURED_OUTER_FLEET_SHIPYARD_COSTS_ID} could not be read`
+    ), Object.freeze({ present: !0, sample });
+  }
+  function liveBlueprint(dependencies) {
+    let yard = readProperty(
+      readProperty(dependencies.rootState.readRoot(), "space"),
+      "shipyard"
+    );
+    return readProperty(yard, "blueprint");
+  }
+  function blueprintSnapshot(blueprint) {
+    let values = {}, keys = [];
+    for (let key of Object.keys(blueprint))
+      keys.push(key), values[key] = blueprint[key];
+    return Object.freeze({
+      keys: Object.freeze(keys),
+      values: Object.freeze(values)
+    });
+  }
+  function restoreBlueprint(blueprint, snapshot2) {
+    for (let key of Object.keys(blueprint))
+      Object.hasOwn(snapshot2.values, key) || delete blueprint[key];
+    for (let key of snapshot2.keys) blueprint[key] = snapshot2.values[key];
+  }
+  function blueprintRestored(blueprint, snapshot2) {
+    let keys = Object.keys(blueprint);
+    return keys.length !== snapshot2.keys.length ? !1 : snapshot2.keys.every(
+      (key, index) => keys[index] === key && blueprint[key] === snapshot2.values[key]
+    );
+  }
+  function designAlreadyHeld(candidate, live) {
+    return outerFleetBlueprintWrites(candidate).every(
+      (write) => live[write.type] === write.part
+    );
+  }
+  function createCapturedOuterFleetCosts(dependencies) {
+    let reportError = dependencies.onCaptureError ?? (() => {
+    }), probing = !1;
+    function probe(blueprint) {
+      if (probing || !dependencies.mountSuppression.available) return;
+      let control = dependencies.controls.resolve(
+        CAPTURED_OUTER_FLEET_SHIPYARD_CONTROL
+      );
+      if (control === void 0 || !control.methods.includes(SHIPYARD_SET_VAL_METHOD))
+        return;
+      let live = liveBlueprint(dependencies);
+      if (!isRecord(live)) return;
+      let civicPanel = MAIN_TAB_PANELS[MAIN_TAB_INDEX.civic];
+      if (civicPanel === void 0) return;
+      let workspace = dependencies.panels.open({
+        keep: civicPanel,
+        scratch: civicPanel
+      });
+      if (workspace === void 0) {
+        reportError("the Civic panel could not be put beyond the game's reach");
+        return;
+      }
+      let host = hiddenHostElement(
+        dependencies.getDocument(),
+        CAPTURED_OUTER_FLEET_SHIPYARD_COSTS_ID
+      );
+      if (host === void 0) {
+        workspace.release(), reportError(
+          `no scratch ${CAPTURED_OUTER_FLEET_SHIPYARD_COSTS_ID} could be stood up`
+        );
+        return;
+      }
+      let snapshot2 = blueprintSnapshot(live), writes = outerFleetBlueprintWrites(blueprint), sample;
+      probing = !0;
+      try {
+        let applied = dependencies.mountSuppression.withoutMounting(() => {
+          for (let write of writes)
+            if (!dependencies.controls.invoke(
+              control,
+              SHIPYARD_SET_VAL_METHOD,
+              [write.type, write.part]
+            ).ok) return !1;
+          return writes.every((write) => live[write.type] === write.part);
+        });
+        sample = applied ? parseShipyardCostRow(host.element) : void 0, applied && sample === void 0 && reportError(
+          `the scratch ${CAPTURED_OUTER_FLEET_SHIPYARD_COSTS_ID} carried no readable cost`
+        );
+      } catch (error) {
+        reportError(String(error)), sample = void 0;
+      } finally {
+        restoreBlueprint(live, snapshot2), probing = !1, removeHiddenHostElement(host), workspace.release(), blueprintRestored(live, snapshot2) || (reportError(
+          "the blueprint could not be put back the way the yard had it"
+        ), sample = void 0), workspace.isIntact() || reportError("the workspace could not put the panels back");
+      }
+      return sample;
+    }
+    function price(blueprint) {
+      let live = liveBlueprint(dependencies);
+      if (isRecord(live) && designAlreadyHeld(blueprint, live)) {
+        let rendered = renderedCostRow(dependencies);
+        if (rendered.present) return rendered.sample;
+      }
+      return probe(blueprint);
+    }
+    return Object.freeze({
+      current() {
+        let rendered = renderedCostRow(dependencies);
+        if (rendered.present) return rendered.sample;
+        let live = liveBlueprint(dependencies);
+        return isRecord(live) ? probe(live) : void 0;
+      },
+      price
+    });
+  }
+
   // src/adapters/evolve/combat/captured-outer-fleet-dispatch.ts
   var DISPATCH_CAPTURE_HOST_ID = "modalBox", ACTIVE_MODAL_SELECTOR = ".modal.is-active", DISPATCH_SYNTHETIC_OPEN_METHODS = ["$buefy.modal.open"], DISPATCH_LIST_CLASS = "shipDispatch", EMPTY_DESTINATIONS = Object.freeze([]);
   function activePlayerModals(document) {
@@ -52127,6 +52192,13 @@ Only continue if you trust the source. Injected code:
       getDocument: () => document,
       getPageWindow: () => settingsHostWindow2,
       onCaptureError: (detail) => logError(`outer fleet dispatch capture: ${detail}`)
+    }), outerFleetCosts = createCapturedOuterFleetCosts({
+      rootState: pageCapture2.rootState,
+      controls: pageCapture2.controls,
+      panels,
+      mountSuppression: pageCapture2.mountSuppression,
+      getDocument: () => document,
+      onCaptureError: (detail) => logError(`outer fleet costs: ${detail}`)
     }), capturedEspionage = createCapturedEspionage({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
@@ -52331,8 +52403,9 @@ Only continue if you trust the source. Injected code:
       })
     }), fleetDemand = createCapturedFleetDemand({
       rootState: pageCapture2.rootState,
-      controls: pageCapture2.controls,
-      getDocument: () => document
+      costs: outerFleetCosts,
+      shipyard: outerFleetShipyard,
+      readSettings: () => settingsStore.readRaw()
     }), ensureDemandResearchObservation = () => {
       progression.sampleOfferedTechs();
     }, triggerDemand = createCapturedResourceDemand({
@@ -53219,6 +53292,7 @@ Only continue if you trust the source. Injected code:
     }, outerFleet = createCapturedOuterFleetControl({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
+      costs: outerFleetCosts,
       dispatch: capturedOuterFleetDispatch,
       readSettings: () => settingsStore.readRaw(),
       onActivity

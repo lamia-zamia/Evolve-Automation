@@ -41,6 +41,8 @@ import {
   createCapturedOuterFleetShipyard,
 } from "../src/adapters/evolve/combat/captured-outer-fleet-shipyard.ts";
 import { createCapturedOuterFleetDispatch } from "../src/adapters/evolve/combat/captured-outer-fleet-dispatch.ts";
+import { createCapturedOuterFleetCosts } from "../src/adapters/evolve/combat/captured-outer-fleet-costs.ts";
+import { createCapturedFleetDemand } from "../src/adapters/evolve/combat/captured-fleet-demand.ts";
 import { createCapturedOuterFleetControl } from "../src/bootstrap/captured-fleet-outer-control.ts";
 import { createGamePanelWorkspace } from "../src/adapters/browser/game-panel-workspace.ts";
 import {
@@ -425,13 +427,86 @@ function installGame(page, root) {
     }
   }
 
-  function updateCosts() {
-    // The game's own price row for the live blueprint. A cost the yard cannot pay queues instead of
-    // appending, which the `build` below reproduces.
-    page.lastCostRow = {
-      class: yard.blueprint.class,
-      ships: yard.ships.length,
+  /**
+   * `truepath.js:updateCosts`, transcribed to upstream's structural contract: price the live blueprint
+   * with the yard's own `shipCosts`, resolve the paying pool, write it as `data-pool` on
+   * `#shipYardCosts`, and append one `res-<resource>` span per cost carrying the exact amount as
+   * `data-<resource>`, the class chosen by `poolHeld(resource, pool) >= cost`, and `data-ok` naming the
+   * class that means "affordable".
+   *
+   * The figures are deliberately unlike a ship's real cost: a per-part character-code tag and a
+   * per-tier multiplier, so every consumer that follows this row is provably following the row rather
+   * than a formula it happens to agree with. Only the *shape* is upstream's.
+   */
+  function shipCosts(bp) {
+    const costs = {};
+    const resourceOf = {
+      class: "Money",
+      armor: "Steel",
+      weapon: "Iron",
+      engine: "Titanium",
+      power: "Copper",
+      sensor: "Iridium",
+      special: "Quantium",
     };
+    for (const [type, resourceId] of Object.entries(resourceOf)) {
+      costs[resourceId] = String(bp[type] ?? "")
+        .split("")
+        .reduce((total, character) => total + character.charCodeAt(0), 0);
+    }
+    const sameTier = yard.ships.filter(
+      (ship) => ship.class === bp.class && ship.special === bp.special,
+    ).length;
+    // An explorer hull multiplies what it carries, as upstream's does.
+    return Object.fromEntries(
+      Object.entries(costs).map(([resourceId, amount]) => [
+        resourceId,
+        bp.class === "explorer"
+          ? amount * 10 * (sameTier + 1)
+          : amount * (1 + sameTier),
+      ]),
+    );
+  }
+
+  /** `functions.js:actionPool(shipyardPayer())` — the supply zone the yard draws this cost from. */
+  function shipyardPayer() {
+    return { id: "tp-ship", supply: () => "tau_gas2" };
+  }
+
+  function actionPool(action) {
+    if (page.globalSupply === true) return false;
+    return action.supply();
+  }
+
+  /** `functions.js:poolHeld` — the regional figure for a partitioned resource, the total otherwise. */
+  function poolHeld(resourceId, pool) {
+    const resource = root.resource[resourceId];
+    if (!resource) return 0;
+    return pool === false || resource.regAmount === undefined
+      ? resource.amount
+      : (resource.regAmount[pool] ?? 0);
+  }
+
+  function updateCosts() {
+    const costs = shipCosts(yard.blueprint);
+    const row = $("#shipYardCosts");
+    clearElement(row);
+    const pool = actionPool(shipyardPayer());
+    if (pool) {
+      row.attr(`data-pool`, pool);
+    } else {
+      row.removeAttr(`data-pool`);
+    }
+    for (const [resourceId, amount] of Object.entries(costs)) {
+      const color =
+        poolHeld(resourceId, pool) >= amount
+          ? `has-text-success`
+          : `has-text-danger`;
+      row.append(
+        `<span class="res-${resourceId} ${color}" data-${resourceId}="${amount}" data-ok="has-text-success">${resourceId} ${amount}</span>`,
+      );
+    }
+    page.costDraws = (page.costDraws ?? 0) + 1;
   }
 
   function initializeShipTrip(ship, locationName, trip) {
@@ -752,6 +827,30 @@ function installGame(page, root) {
   }
 
   /**
+   * `ships.js:shipSpecialAllowed` / `shipDefaultSpecial`. Only the class rules matter here: which
+   * fits a hull, and what a hull falls back to when a class change leaves its current special behind.
+   */
+  const supplyShipSpecials = ["mobile_storage", "fuel_tanker", "repair_ship"];
+  const freighterSpecials = ["extra_fuel", "extra_cargo", "extra_thruster"];
+  const massDriverHulls = ["cruiser", "battlecruiser", "dreadnought"];
+  function shipSpecialAllowed(special, shipClass) {
+    if (special === "mobile_storage" && page.globalSupply === true)
+      return false;
+    if (supplyShipSpecials.includes(special))
+      return shipClass === "supply_ship";
+    if (shipClass === "supply_ship") return false;
+    if (special === "massdriver") return massDriverHulls.includes(shipClass);
+    if (freighterSpecials.includes(special)) return shipClass === "freighter";
+    return special === "none";
+  }
+  function shipDefaultSpecial(shipClass) {
+    if (shipClass !== "supply_ship") return "none";
+    return shipSpecialAllowed("mobile_storage", shipClass)
+      ? "mobile_storage"
+      : "fuel_tanker";
+  }
+
+  /**
    * `truepath.js:drawShipYard`'s own `#shipPlans` binding, transcribed member for member where it
    * matters: the yard's design methods, and nothing from any ship row.
    */
@@ -774,8 +873,54 @@ function installGame(page, root) {
       shipyardView().sys = sys;
       drawShips();
     },
-    setVal(type, part) {
-      yard.blueprint[type] = part;
+    /**
+     * `truepath.js:drawShipYard`'s `setVal`, transcribed whole: a class change rewrites the fields
+     * that hull forces, the special is dropped when it no longer fits, the part is written, and the
+     * cost row is redrawn by the game's own `updateCosts`.
+     *
+     * This is what makes an off-tab price probe faithful — and what makes a probe that wrote the
+     * blueprint directly wrong, since the rewrites below are the design.
+     */
+    setVal(b, v) {
+      // Knobs for a draw that could not take the part: a rejected write and a throwing one.
+      if (page.setValRefuses === b) {
+        page.refusedWrites = (page.refusedWrites ?? 0) + 1;
+        return;
+      }
+      if (page.setValThrows === b) throw new Error(`the yard refused the ${b}`);
+      const bp = yard.blueprint;
+      if (b === "class" && v === "freighter") {
+        bp.weapon = "none";
+        bp.special = "extra_fuel";
+      } else if (b === "class" && v === "explorer") {
+        bp.engine = "emdrive";
+        bp.weapon = "railgun";
+        if ((root.tech.syard_armor ?? 0) >= 3) bp.armor = "neutronium";
+        if ((root.tech.syard_sensor ?? 0) >= 4) bp.sensor = "quantum";
+        if ((root.tech.syard_power ?? 0) >= 4) bp.power = "elerium";
+      } else if (
+        b === "class" &&
+        v !== "freighter" &&
+        bp.class === "freighter"
+      ) {
+        bp.weapon = "railgun";
+      } else if (b === "class" && v !== "explorer" && bp.class === "explorer") {
+        bp.engine = "ion";
+      }
+      if (b === "class" && !shipSpecialAllowed(bp.special, v)) {
+        bp.special = shipDefaultSpecial(v);
+      }
+      if (b === "class" && v === "supply_ship") {
+        bp.weapon = "none";
+      } else if (
+        b === "class" &&
+        bp.class === "supply_ship" &&
+        bp.weapon === "none"
+      ) {
+        bp.weapon = "railgun";
+      }
+      bp[b] = v;
+      page.setValWrites.push([b, v]);
       updateCosts();
     },
     slotOpen() {
@@ -805,7 +950,17 @@ function installGame(page, root) {
       return "N/A";
     },
     build() {
+      // A design the yard cannot pay queues the order instead of building, which is the whole point
+      // of the cost row's marking and why readiness has to ask the yard rather than assume.
+      const pool = actionPool(shipyardPayer());
+      const affordable = Object.entries(shipCosts(yard.blueprint)).every(
+        ([resourceId, amount]) => poolHeld(resourceId, pool) >= amount,
+      );
       page.buildCount = (page.buildCount ?? 0) + 1;
+      if (!affordable) {
+        page.queuedBuilds = (page.queuedBuilds ?? 0) + 1;
+        return;
+      }
       buildTPShip({
         ...yard.blueprint,
         name: yard.blueprint.name || "Nomad",
@@ -955,6 +1110,8 @@ function installGame(page, root) {
     civicMethods,
     shipyardMethods,
     shipyardView,
+    shipCosts,
+    shipyardPayer,
   };
 }
 
@@ -980,6 +1137,8 @@ function makeHarness({
   const page = makePage();
   page.builtShips = [];
   page.builds = [];
+  page.setValWrites = [];
+  page.globalSupply = false;
   const game = installGame(page, root);
   page.body.append(element("div", { id: "mainColumn" }));
   const content = element("div", { class: "content" });
@@ -1028,6 +1187,14 @@ function makeHarness({
     getPageWindow: () => page,
     onCaptureError: (detail) => faults.push(detail),
   });
+  const costs = createCapturedOuterFleetCosts({
+    rootState: { readRoot: () => root },
+    controls: capture.controls,
+    panels,
+    mountSuppression: capture.mountSuppression,
+    getDocument: () => page.document,
+    onCaptureError: (detail) => faults.push(detail),
+  });
   if (establish) shipyard.establish();
   if (playerYard || preload) {
     // `#dwarfShipYard` is a `b-tab-item` the Civic tab's own render creates, so it is stood here in
@@ -1043,7 +1210,17 @@ function makeHarness({
       .getElementById("mTabCivic")
       .append(element("div", { id: "dwarfShipYard" }));
   }
-  return { page, root, game, capture, shipyard, dispatch, panels, faults };
+  return {
+    page,
+    root,
+    game,
+    capture,
+    shipyard,
+    dispatch,
+    costs,
+    panels,
+    faults,
+  };
 }
 
 function sentTo(page) {
@@ -1125,11 +1302,8 @@ assert.equal(
 );
 // The capture recorded the binding without building a Vue tree behind it.
 assert.deepEqual(
-  never.page.binds.map((bind) => [bind.el, bind.disposable, bind.real]),
-  [
-    ["#mTabCivic", true, false],
-    ["#shipPlans", true, false],
-  ],
+  never.page.binds.map((bind) => bind.el),
+  ["#mTabCivic", "#shipPlans"],
 );
 assert.deepEqual(
   realApps,
@@ -1511,6 +1685,7 @@ const effectiveSettings = Object.create(HARNESS_SETTINGS);
 const outerControl = createCapturedOuterFleetControl({
   rootState: { readRoot: () => integrated.root },
   controls: integrated.capture.controls,
+  costs: integrated.costs,
   dispatch: integrated.dispatch,
   readSettings: () => effectiveSettings,
 });
@@ -1531,6 +1706,260 @@ assert.equal(integrated.root.settings.civTabs, 1);
 assert.equal(integrated.root.settings.govTabs, 0);
 assert.equal(integrated.faults.length, 0);
 
+// ---------------------------------------------------------------------------
+// The yard's own price, off-tab: the cost authority against this transcription.
+// ---------------------------------------------------------------------------
+
+const pristineBlueprint = makeRoot().space.shipyard.blueprint;
+/** Everything the pass itself bound, so a probe can be shown to bind nothing further. */
+const bindsAfterPass = integrated.page.binds.map((bind) => bind.el);
+const appsAfterPass = [...realApps];
+
+/**
+ * What the yard's own `shipCosts()` says, as a cost sample. This is the answer the automation has to
+ * reproduce, and it is deliberately unlike any ship cost formula — so a consumer that agreed with it
+ * by coincidence would have agreed with the wrong figure.
+ */
+function gameSample(harness, blueprint) {
+  const costs = harness.game.shipCosts(blueprint);
+  return {
+    pool: harness.game.shipyardPayer().supply(),
+    amounts: Object.keys(costs)
+      .sort()
+      .map((resourceId) => ({
+        resourceId,
+        amount: costs[resourceId],
+        affordable: true,
+      })),
+  };
+}
+
+// The fighter the pass priced is the yard's own design, so the price is the yard's own answer to it.
+const fighterDesign = {
+  class: "corvette",
+  power: "diesel",
+  weapon: "railgun",
+  armor: "steel",
+  engine: "ion",
+  sensor: "radar",
+};
+assert.deepEqual(
+  integrated.costs.price(fighterDesign),
+  gameSample(integrated, { ...pristineBlueprint, ...fighterDesign }),
+  "an off-tab candidate was not priced by the game",
+);
+assert.deepEqual(
+  integrated.costs.current(),
+  gameSample(integrated, pristineBlueprint),
+);
+assert.deepEqual(
+  integrated.root.space.shipyard.blueprint,
+  pristineBlueprint,
+  "a price probe left the player's blueprint changed",
+);
+
+// The probe is the game's own class transitions, in the shared order, and it left nothing standing.
+// The candidate names only the hull and a mount the hull does not keep, so every other field of the
+// priced design was decided by the game's `setVal`, not by this script.
+const beforeExplor = integrated.root.space.shipyard.blueprint;
+const drawBeforeExplor = integrated.page.costDraws;
+const explorer = integrated.costs.price({ class: "explorer", weapon: "laser" });
+assert.deepEqual(
+  integrated.page.setValWrites.slice(-2).map(([type, part]) => [type, part]),
+  [
+    ["class", "explorer"],
+    ["weapon", "laser"],
+  ],
+  "the probe did not apply the design in the build's own order",
+);
+// An explorer hull takes the emdrive, and the railgun the hull forces goes back to the laser the
+// candidate asked for — because the mount is written *after* the hull, which is the order a real
+// build uses and the only order that can be priced for the ship that would actually be built.
+assert.deepEqual(
+  explorer,
+  gameSample(integrated, {
+    ...beforeExplor,
+    class: "explorer",
+    weapon: "laser",
+    engine: "emdrive",
+  }),
+);
+assert.deepEqual(integrated.root.space.shipyard.blueprint, beforeExplor);
+assert.equal(
+  integrated.page.costDraws - drawBeforeExplor,
+  2,
+  "every setVal must run its own updateCosts",
+);
+
+// A freighter has no mount at all and takes `extra_fuel` with it, so the design the price belongs to
+// is one the candidate never named.
+const beforeFreighter = integrated.root.space.shipyard.blueprint;
+const freighter = integrated.costs.price({ class: "freighter" });
+assert.deepEqual(
+  freighter,
+  gameSample(integrated, {
+    ...beforeFreighter,
+    class: "freighter",
+    weapon: "none",
+    special: "extra_fuel",
+  }),
+);
+assert.deepEqual(integrated.root.space.shipyard.blueprint, beforeFreighter);
+
+// Off-tab, the probe borrows the document and gives all of it back: no scratch element, no panel left
+// aliased, no new Vue app, no timer installed, nothing of the player's touched.
+assert.equal(integrated.page.document.getElementById("shipYardCosts"), null);
+assert.equal(integrated.page.document.getElementById("shipPlans"), null);
+assert.equal(integrated.page.document.getElementById("dwarfShipYard"), null);
+assert.deepEqual(
+  integrated.page.document
+    .querySelectorAll("[id]")
+    .filter((node) => node.id.startsWith("ea-aside-"))
+    .map((node) => node.id),
+  [],
+  "the workspace left an aliased name behind",
+);
+assert.deepEqual(
+  integrated.page.binds.map((bind) => bind.el),
+  bindsAfterPass,
+  "a price probe bound a component",
+);
+assert.deepEqual(realApps, appsAfterPass, "a price probe mounted a Vue app");
+assert.equal(
+  integrated.page.document.getElementById("mTabCivil").querySelectorAll("#city")
+    .length,
+  1,
+  "the player's own panel is still there",
+);
+assert.equal(integrated.page.setInterval, integrated.page.realSetInterval);
+assert.equal(integrated.page.clearInterval, integrated.page.realClearInterval);
+assert.equal(TestElement.prototype.addEventListener, realAddEventListener);
+assert.equal(integrated.page.document.querySelector(".modal.is-active"), null);
+assert.equal(integrated.root.settings.animated, false);
+assert.deepEqual(integrated.root.settings, {
+  ...makeRoot().settings,
+  showShipYard: true,
+});
+
+// A `setVal` the game throws out — or takes without applying — is its own refusal, not a capture
+// fault: the probe is refused rather than pricing a design the yard never held, the blueprint is
+// still the player's, and no scratch element survives it.
+for (const [knob, candidate] of [
+  ["setValThrows", { class: "frigate", weapon: "laser" }],
+  ["setValRefuses", { class: "frigate", weapon: "laser" }],
+]) {
+  const stubborn = makeHarness({ establish: true });
+  const before = { ...stubborn.root.space.shipyard.blueprint };
+  stubborn.page[knob] = "class";
+  assert.equal(
+    stubborn.costs.price(candidate),
+    undefined,
+    `a ${knob} did not fail the probe closed`,
+  );
+  assert.deepEqual(stubborn.root.space.shipyard.blueprint, before);
+  assert.equal(stubborn.page.document.getElementById("shipYardCosts"), null);
+  assert.equal(stubborn.page.document.getElementById("shipPlans"), null);
+  assert.deepEqual(stubborn.faults, []);
+}
+
+// Refusing a write whose value the yard already holds is not a refusal at all: the design asked for
+// is the design the yard is holding, and the price still comes from the game.
+{
+  const idle = makeHarness({ establish: true });
+  idle.page.setValRefuses = "weapon";
+  assert.deepEqual(
+    idle.costs.price(fighterDesign),
+    gameSample(idle, pristineBlueprint),
+  );
+  assert.deepEqual(idle.root.space.shipyard.blueprint, pristineBlueprint);
+  assert.equal(idle.page.refusedWrites, 1);
+}
+
+// Fleet demand reads the same authority, so a save that never opened the shipyard still knows what
+// its next ship costs — and it says so through the pool the game wrote for the cost.
+{
+  const demand = createCapturedFleetDemand({
+    rootState: { readRoot: () => integrated.root },
+    costs: integrated.costs,
+    shipyard: integrated.shipyard,
+    readSettings: () => ({
+      autoFleet: true,
+      prioritizeOuterFleet: "req",
+    }),
+  });
+  assert.deepEqual(demand.read(), {
+    nextShipAffordable: true,
+    nextShipExpandable: true,
+    nextShipCost: gameSample(
+      integrated,
+      integrated.root.space.shipyard.blueprint,
+    ).amounts.map(({ resourceId, amount }) => ({
+      resourceId,
+      amount,
+      pool: "tau_gas2",
+    })),
+  });
+  assert.deepEqual(integrated.root.space.shipyard.blueprint, pristineBlueprint);
+}
+
+// The same save with the fleet automation off: the yard is never established merely to price a cost
+// nothing keeps.
+{
+  const untouched = makeHarness();
+  const requested = [];
+  const demand = createCapturedFleetDemand({
+    rootState: { readRoot: () => untouched.root },
+    costs: untouched.costs,
+    shipyard: {
+      ...untouched.shipyard,
+      establish: () => {
+        requested.push(true);
+        return undefined;
+      },
+    },
+    readSettings: () => ({ autoFleet: false, prioritizeOuterFleet: "req" }),
+  });
+  assert.equal(demand.read(), undefined);
+  assert.deepEqual(requested, []);
+  assert.equal(
+    untouched.capture.controls.resolve(CAPTURED_OUTER_FLEET_SHIPYARD_CONTROL),
+    undefined,
+    "the shipyard was established to price a cost nothing keeps",
+  );
+  assert.equal(untouched.page.document.getElementById("dwarfShipYard"), null);
+}
+
+// And with it on, the demand establishes the yard itself rather than waiting for a visit.
+{
+  const visiting = makeHarness();
+  const demand = createCapturedFleetDemand({
+    rootState: { readRoot: () => visiting.root },
+    costs: visiting.costs,
+    shipyard: visiting.shipyard,
+    readSettings: () => ({ autoFleet: true, prioritizeOuterFleet: "req" }),
+  });
+  assert.deepEqual(demand.read(), {
+    nextShipAffordable: true,
+    nextShipExpandable: true,
+    nextShipCost: gameSample(
+      visiting,
+      visiting.root.space.shipyard.blueprint,
+    ).amounts.map(({ resourceId, amount }) => ({
+      resourceId,
+      amount,
+      pool: "tau_gas2",
+    })),
+  });
+  assert.equal(
+    visiting.capture.controls.resolve(CAPTURED_OUTER_FLEET_SHIPYARD_CONTROL) !==
+      undefined,
+    true,
+    "the yard was not established for its own cost",
+  );
+  assert.equal(visiting.page.document.getElementById("dwarfShipYard"), null);
+  assert.deepEqual(visiting.root.space.shipyard.blueprint, pristineBlueprint);
+}
+
 // A window the player owns: the pass stands down before it builds, and a dispatch that runs anyway
 // never touches it.
 const owned = makeHarness({ establish: true });
@@ -1549,6 +1978,7 @@ const ownedSettings = Object.create(HARNESS_SETTINGS);
 const ownedControl = createCapturedOuterFleetControl({
   rootState: { readRoot: () => owned.root },
   controls: owned.capture.controls,
+  costs: owned.costs,
   dispatch: owned.dispatch,
   readSettings: () => ownedSettings,
 });
@@ -1636,6 +2066,7 @@ const preloadSettings = Object.create(HARNESS_SETTINGS);
 const preloadControl = createCapturedOuterFleetControl({
   rootState: { readRoot: () => preload.root },
   controls: preload.capture.controls,
+  costs: preload.costs,
   dispatch: preload.dispatch,
   readSettings: () => preloadSettings,
 });
@@ -1768,5 +2199,163 @@ assert.ok(
   ),
   orphan.faults.join("; "),
 );
+
+// ---------------------------------------------------------------------------
+// Preload mode: the game's own cost row, read without ever probing.
+// ---------------------------------------------------------------------------
+
+// `updateCosts()` runs inside every `setVal`, so the row the preload panel holds is already this
+// save's own answer. Reading it must be completely passive: no `setVal`, no new draw, no scratch.
+{
+  const drawsBefore = preload.page.costDraws;
+  const writesBefore = preload.page.setValWrites.length;
+  assert.deepEqual(
+    preload.costs.current(),
+    gameSample(preload, preload.root.space.shipyard.blueprint),
+  );
+  assert.deepEqual(
+    preload.costs.price({ ...preload.root.space.shipyard.blueprint }),
+    gameSample(preload, preload.root.space.shipyard.blueprint),
+  );
+  assert.equal(
+    preload.page.costDraws,
+    drawsBefore,
+    "a rendered row was redrawn",
+  );
+  assert.equal(
+    preload.page.setValWrites.length,
+    writesBefore,
+    "a rendered row was probed",
+  );
+  assert.deepEqual(preload.faults, []);
+}
+
+// A design the yard is not holding has no rendered row to read, so it is priced the off-tab way —
+// and the player's own row is neither read nor rewritten.
+{
+  const drafts = makeHarness({ preload: true });
+  drafts.game.initTabs();
+  const realRow = drafts.page.document.getElementById("shipYardCosts");
+  assert.notEqual(realRow, null);
+  const renderedBefore = realRow.innerHTML;
+  const writesBefore = drafts.page.setValWrites.length;
+  const pricedDesign = drafts.costs.price({
+    class: "frigate",
+    power: "fusion",
+    weapon: "plasma",
+    armor: "alloy",
+    engine: "tie",
+    sensor: "lidar",
+  });
+  assert.deepEqual(
+    pricedDesign,
+    gameSample(drafts, {
+      ...drafts.root.space.shipyard.blueprint,
+      class: "frigate",
+      power: "fusion",
+      weapon: "plasma",
+      armor: "alloy",
+      engine: "tie",
+      sensor: "lidar",
+    }),
+  );
+  assert.deepEqual(
+    drafts.root.space.shipyard.blueprint,
+    makeRoot().space.shipyard.blueprint,
+  );
+  assert.equal(drafts.page.setValWrites.length, writesBefore + 6);
+  // The probe ran against a scratch row, so the player's row kept exactly the markup it had.
+  assert.equal(realRow.innerHTML, renderedBefore);
+  assert.equal(
+    drafts.page.document.getElementById("shipYardCosts"),
+    realRow,
+    "the player's own cost row was replaced",
+  );
+  assert.deepEqual(drafts.faults, []);
+}
+
+// Markup the game does not emit is no answer. Each of these is refused rather than read, because a
+// caller that received one would be reading a question the yard was never asked.
+for (const [broken, why] of [
+  [
+    (row) =>
+      row
+        .querySelectorAll("span")
+        .forEach((span) => span.attributes.delete("data-money")),
+    "a resource with no amount",
+  ],
+  [
+    (row) =>
+      row.append(
+        ...parseTestMarkup(
+          '<span class="res-Iron" data-iron="5" data-ok="has-text-success">Iron 5</span>',
+        ),
+      ),
+    "a second element for a resource already priced",
+  ],
+  [
+    (row) => row.querySelectorAll("span").forEach((span) => span.remove()),
+    "no resource at all",
+  ],
+  [
+    (row) =>
+      row
+        .querySelectorAll("span")[0]
+        .setAttribute("data-money", "not a number"),
+    "an amount that is not a number",
+  ],
+  [
+    (row) => row.querySelectorAll("span")[0].attributes.delete("data-ok"),
+    "a resource with no success marking",
+  ],
+]) {
+  const damaged = makeHarness({ preload: true });
+  damaged.game.initTabs();
+  broken(damaged.page.document.getElementById("shipYardCosts"));
+  const sample = damaged.costs.current();
+  assert.ok(
+    sample === undefined ||
+      sample.amounts.some((entry) => entry.affordable === false),
+    `${why} was read as a payable cost`,
+  );
+  if (sample === undefined) {
+    assert.ok(
+      damaged.faults.some((detail) =>
+        detail.includes("rendered shipYardCosts could not be read"),
+      ),
+      `${why} was not reported: ${damaged.faults.join("; ")}`,
+    );
+    // And it is not quietly answered by pricing off-tab instead: the yard already drew a price, so
+    // the answer belongs to the yard.
+    assert.equal(
+      damaged.page.setValWrites.length,
+      0,
+      `${why} was priced off-tab`,
+    );
+  }
+}
+
+// A resource the game did not mark is not one the yard can pay, however much stock the save holds.
+{
+  const unmarked = makeHarness({ preload: true });
+  unmarked.game.initTabs();
+  unmarked.page.document
+    .getElementById("shipYardCosts")
+    .querySelectorAll("span")
+    .forEach((span) => span.attributes.delete("data-ok"));
+  const sample = unmarked.costs.current();
+  assert.notEqual(sample, undefined);
+  assert.deepEqual(
+    sample.amounts.map((entry) => entry.affordable),
+    sample.amounts.map(() => false),
+  );
+  assert.deepEqual(
+    sample.amounts.every(
+      (entry) => unmarked.root.resource[entry.resourceId].amount > entry.amount,
+    ),
+    true,
+    "the save was not stocked, so this could be the resource amounts",
+  );
+}
 
 console.log("Captured outer-fleet synthetic capture checks passed");

@@ -95,11 +95,22 @@ export class TestElement {
   }
 
   getAttribute(name) {
-    return this.attributes.get(name) ?? null;
+    // A real `class` attribute is the token list, so reading it has to see what `classList` holds.
+    if (name === "class") return this.classList.values().join(" ");
+    // HTML lowercases attribute names, which is what makes `data-Money` readable as `data-money`.
+    return this.attributes.get(name.toLowerCase()) ?? null;
   }
 
   setAttribute(name, value) {
-    this.attributes.set(name, value);
+    if (name === "class") {
+      for (const className of this.classList.values())
+        this.classList.remove(className);
+      for (const className of String(value).split(/\s+/).filter(Boolean)) {
+        this.classList.add(className);
+      }
+      return;
+    }
+    this.attributes.set(name.toLowerCase(), value);
   }
 
   get nextElementSibling() {

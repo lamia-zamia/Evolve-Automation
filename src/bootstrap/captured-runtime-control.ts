@@ -205,6 +205,7 @@ import { challenges as evolutionChallengeCatalog } from "../adapters/evolve/runt
 import { createCapturedSpyTraining } from "../adapters/evolve/combat/captured-spy-training.ts";
 import { createCapturedEspionage } from "../adapters/evolve/combat/captured-espionage.ts";
 import { createCapturedEspionageOperationCapture } from "../adapters/evolve/combat/captured-espionage-capture.ts";
+import { createCapturedOuterFleetCosts } from "../adapters/evolve/combat/captured-outer-fleet-costs.ts";
 import { createCapturedOuterFleetDispatch } from "../adapters/evolve/combat/captured-outer-fleet-dispatch.ts";
 import { createCapturedOuterFleetShipyard } from "../adapters/evolve/combat/captured-outer-fleet-shipyard.ts";
 import {
@@ -746,6 +747,22 @@ export function startCapturedRuntime({
     onCaptureError: (detail) =>
       logError(`outer fleet dispatch capture: ${detail}`),
   });
+  /**
+   * The yard's own `#shipYardCosts`, and therefore the only price this script quotes for a ship.
+   *
+   * Off-tab it is not a pass of its own but a scratch `#shipYardCosts` the game's own
+   * `updateCosts()` fills: the design is applied through the captured `shipPlans.setVal` for the
+   * length of one synchronous call and the blueprint is put back before it returns. Both the outer
+   * fleet and fleet demand read it, so neither ever needs the player to visit the shipyard.
+   */
+  const outerFleetCosts = createCapturedOuterFleetCosts({
+    rootState: pageCapture.rootState,
+    controls: pageCapture.controls,
+    panels,
+    mountSuppression: pageCapture.mountSuppression,
+    getDocument: () => document,
+    onCaptureError: (detail) => logError(`outer fleet costs: ${detail}`),
+  });
   const capturedEspionage = createCapturedEspionage({
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,
@@ -1046,12 +1063,15 @@ export function startCapturedRuntime({
       controls: pageCapture.controls,
     }),
   });
-  // The rendered shipyard cost is read-only, so one fleet demand reader serves both demand
-  // plans below instead of each drawing the panel's cost markup twice.
+  // The yard's own cost row serves both demand plans below instead of each drawing the panel's cost
+  // markup twice, and it is what lets a save that never rendered the shipyard still be priced: the
+  // reader establishes the yard itself, and only while the fleet demand the prioritizer would keep
+  // is actually a live one.
   const fleetDemand = createCapturedFleetDemand({
     rootState: pageCapture.rootState,
-    controls: pageCapture.controls,
-    getDocument: () => document,
+    costs: outerFleetCosts,
+    shipyard: outerFleetShipyard,
+    readSettings: () => settingsStore.readRaw(),
   });
   const ensureDemandResearchObservation = () => {
     progression.sampleOfferedTechs();
@@ -2563,6 +2583,7 @@ export function startCapturedRuntime({
   const outerFleet = createCapturedOuterFleetControl({
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,
+    costs: outerFleetCosts,
     dispatch: capturedOuterFleetDispatch,
     readSettings: () => settingsStore.readRaw(),
     onActivity,

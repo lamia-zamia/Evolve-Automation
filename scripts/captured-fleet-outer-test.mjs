@@ -232,14 +232,83 @@ function createDispatchStub(kind = "launched") {
 
 let dispatch = createDispatchStub();
 let playerModalOpen = false;
-function createOuterControl(controls = capturedRegistry, stub = dispatch) {
+
+/**
+ * The yard's own cost row, as the only price this composition may quote.
+ *
+ * The figures are deliberately not a ship cost formula. A per-part character-code tag and a per-tier
+ * multiplier produce amounts no replica of upstream's arithmetic would predict, while still moving
+ * for exactly the two things that do move a design's price upstream — the parts it names, and how
+ * many built ships share its cost tier. Affordability is the game's separate verdict, carried
+ * alongside and never folded into the price.
+ */
+function partTag(part) {
+  return (
+    String(part)
+      .split("")
+      .reduce((total, character) => total + character.charCodeAt(0), 0) % 997
+  );
+}
+
+function pricedAmounts(blueprint, ships) {
+  const tag = [
+    "class",
+    "armor",
+    "weapon",
+    "engine",
+    "power",
+    "sensor",
+    "special",
+  ].reduce((total, type) => total + partTag(blueprint[type] ?? ""), 0);
+  const sameTier = ships.filter(
+    (ship) => ship.class === blueprint.class,
+  ).length;
+  return ["Iron", "Money"].map((resourceId) => {
+    const amount = (resourceId === "Money" ? 1000 : 7) * (tag + sameTier);
+    return {
+      resourceId,
+      amount,
+      affordable: this.unaffordable.has(resourceId) !== true,
+    };
+  });
+}
+
+function createCostStub() {
+  return {
+    requests: [],
+    /** The resources the game's own marking calls unaffordable. */
+    unaffordable: new Set(),
+    current() {
+      this.requests.push(["current", yard.blueprint]);
+      return {
+        pool: "spc_dwarf",
+        amounts: pricedAmounts.call(this, yard.blueprint, yard.ships),
+      };
+    },
+    price(blueprint) {
+      this.requests.push(["price", blueprint]);
+      return {
+        pool: "spc_dwarf",
+        amounts: pricedAmounts.call(this, blueprint, yard.ships),
+      };
+    },
+  };
+}
+
+let costs = createCostStub();
+function createOuterControl(
+  registry = capturedRegistry,
+  stub = dispatch,
+  costAuthority = costs,
+) {
   return createCapturedOuterFleetControl({
     rootState: {
       readRoot: () => root,
       isReactivitySuppressed: () => false,
       subscribeRootReplaced: () => () => {},
     },
-    controls,
+    controls: registry,
+    costs: costAuthority,
     dispatch: {
       blockedByPlayerModal: () => playerModalOpen,
       dispatchShipyardShip: (request) => stub.dispatchShipyardShip(request),
@@ -329,6 +398,7 @@ const missingRootControl = createCapturedOuterFleetControl({
     subscribeRootReplaced: () => () => {},
   },
   controls: capturedRegistry,
+  costs,
   dispatch,
   readSettings: () => effectiveSettings,
 });
@@ -581,5 +651,119 @@ assert.equal(createOuterControl().autoFleetOuter().shipTargetChanged, true);
 yard.ships.length = 0;
 yard.blueprint.weapon = "laser";
 assert.equal(createOuterControl().autoFleetOuter().shipTargetChanged, true);
+
+// ---------------------------------------------------------------------------
+// The cost authority, not an arithmetic answer.
+// ---------------------------------------------------------------------------
+
+// Which designs were priced, and by which question: readiness asks for the candidate, the target
+// fingerprint for the live one.
+yard.ships.length = 0;
+yard.blueprint.weapon = "laser";
+costs.requests.length = 0;
+createOuterControl().autoFleetOuter();
+const pricedCandidates = costs.requests
+  .filter(([question]) => question === "price")
+  .map(([, blueprint]) => blueprint);
+const currentSamples = costs.requests
+  .filter(([question]) => question === "current")
+  .map(([, blueprint]) => blueprint);
+assert.equal(pricedCandidates.length, 1);
+assert.deepEqual(pricedCandidates[0], {
+  class: "corvette",
+  power: "diesel",
+  weapon: "railgun",
+  armor: "steel",
+  engine: "ion",
+  sensor: "radar",
+});
+assert.ok(
+  currentSamples.length >= 2,
+  "the target observation is bracketed around the mutation window",
+);
+for (const sampled of currentSamples) {
+  assert.equal(
+    sampled,
+    yard.blueprint,
+    "the fingerprint priced something but the live blueprint",
+  );
+}
+
+// Affordability is the game's own marking. Every resource in the save reads as empty, and the yard
+// still builds, because the row says the yard can pay it from its supply pool.
+yard.ships.length = 0;
+yard.blueprint.weapon = "railgun";
+const globalAmounts = Object.fromEntries(
+  Object.keys(root.resource).map((id) => [
+    id,
+    { ...root.resource[id], amount: 0 },
+  ]),
+);
+root.resource = globalAmounts;
+const buildsBeforeGlobalAmounts = capturedBuilds;
+const pricedResult = createOuterControl().autoFleetOuter();
+assert.equal(pricedResult.outcome.status, "succeeded");
+assert.equal(capturedBuilds, buildsBeforeGlobalAmounts + 1);
+assert.deepEqual(
+  Object.values(globalAmounts).every((resource) => resource.amount === 0),
+  true,
+  "the save was not emptied",
+);
+yard.ships.length = 0;
+
+// The same save, with the game marking a cost as not payable right now.
+costs.unaffordable.add("Iron");
+const buildsBeforeUnaffordable = capturedBuilds;
+const unaffordableResult = createOuterControl().autoFleetOuter();
+assert.equal(unaffordableResult.outcome.status, "succeeded");
+assert.equal(
+  capturedBuilds,
+  buildsBeforeUnaffordable,
+  "an unaffordable cost built a ship",
+);
+assert.equal(
+  unaffordableResult.outcome.status === "succeeded",
+  true,
+  "the refusal is a status, not a failure",
+);
+costs.unaffordable.delete("Iron");
+
+// Stock moving is not the ship target moving. The pass changes what the yard can pay and appends a
+// hull outside this design's cost tier, so nothing about the next ship changed.
+yard.ships.length = 0;
+const stockOnlyResult = createOuterControl(
+  createRegistryWith({
+    build: () => {
+      capturedBuilds++;
+      costs.unaffordable.add("Money");
+      yard.ships.push({
+        ...yard.blueprint,
+        class: "frigate",
+        location: "spc_dwarf",
+      });
+    },
+  }),
+).autoFleetOuter();
+assert.equal(stockOnlyResult.outcome.status, "stale");
+assert.equal(
+  stockOnlyResult.shipTargetChanged,
+  false,
+  "a stock change reported a new ship target",
+);
+costs.unaffordable.delete("Money");
+yard.ships.length = 0;
+
+// No price from the yard is no build. A cost the capture cannot produce must not be read as one the
+// yard can pay.
+const buildsBeforeCostless = capturedBuilds;
+const costless = createOuterControl(capturedRegistry, dispatch, {
+  requests: [],
+  unaffordable: new Set(),
+  current: () => undefined,
+  price: () => undefined,
+}).autoFleetOuter();
+assert.equal(costless.outcome.status, "succeeded");
+assert.equal(capturedBuilds, buildsBeforeCostless);
+yard.ships.length = 0;
 
 console.log("Captured outer-fleet control postcondition tests passed");

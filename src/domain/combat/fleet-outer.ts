@@ -106,6 +106,13 @@ export interface OuterFleetReadinessPlan {
 
 export interface OuterFleetBuildReadinessInput {
   readonly plan: Readonly<OuterFleetReadinessPlan>;
+  /**
+   * Whether the shipyard was able to price the candidate at all. False means the yard's own cost row
+   * could not be read or could not be reached, and construction then stands down: an unanswered price
+   * is not an affordable one.
+   */
+  readonly costKnown: boolean;
+  /** The first resource the game's own cost row marks as not currently payable, when it marks one. */
   readonly missingResourceName: string | null;
   readonly currentCityGarrison: number;
 }
@@ -309,6 +316,14 @@ export function planOuterFleetCandidate(
 export function planOuterFleetBuild(
   input: Readonly<OuterFleetBuildReadinessInput>,
 ): Readonly<OuterFleetDecision> {
+  if (input.costKnown === false) {
+    return status(
+      input.plan.blueprint,
+      null,
+      `Next ship(${input.plan.nextShipName}) cost unavailable; ship construction paused`,
+      input.plan.nextShipName,
+    );
+  }
   if (input.missingResourceName !== null) {
     return status(
       input.plan.blueprint,
