@@ -204,6 +204,7 @@ import { runBattleAutomation } from "../application/battle.ts";
 import { challenges as evolutionChallengeCatalog } from "../adapters/evolve/runtime-catalogs.ts";
 import { createCapturedSpyTraining } from "../adapters/evolve/combat/captured-spy-training.ts";
 import { createCapturedEspionage } from "../adapters/evolve/combat/captured-espionage.ts";
+import { createCapturedEspionageOperationCapture } from "../adapters/evolve/combat/captured-espionage-capture.ts";
 import {
   CAPTURED_MERCENARY_CONTROLS,
   createCapturedMercenary,
@@ -229,10 +230,6 @@ import {
   SPACE_TAB_INDEX,
   SUB_TAB_CONTROLS,
 } from "../adapters/evolve/captured-tab-discovery.ts";
-import {
-  CAPTURED_FOREIGN_PANEL_SELECTOR,
-  capturedForeignEspionageTriggerSelector,
-} from "../adapters/evolve/combat/captured-foreign-state.ts";
 import type { PageCapture } from "../adapters/evolve/page-capture.ts";
 
 declare const __EA_TEST_SURFACE_ENABLED__: boolean;
@@ -691,15 +688,24 @@ export function startCapturedRuntime({
     readSettings: () => settingsStore.readRaw(),
     readPurchaseMoney: () => readDemand().spyPurchaseReservation?.purchaseMoney,
   });
-  let openCapturedForeignModal: (governmentId: number) => boolean = () => false;
+  // Espionage runs the game's own operations, which live behind a Buefy modal the game builds.
+  // The capture reaches them through `foreign.trigModal` with a no-op `$buefy` and a throwaway
+  // `#modalBox`, so this phase needs no tab, no panel, and no modal.
+  const capturedEspionageOperations = createCapturedEspionageOperationCapture({
+    controls: pageCapture.controls,
+    synthesis: pageCapture.synthesis,
+    mountSuppression: pageCapture.mountSuppression,
+    getDocument: () => document,
+    getPageWindow: () => settingsHostWindow,
+    onCaptureError: (detail) =>
+      logError(`espionage operation capture: ${detail}`),
+  });
   const capturedEspionage = createCapturedEspionage({
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,
     readSettings: () => settingsStore.readRaw(),
     readPurchaseReservation: () => readDemand().spyPurchaseReservation,
-    getDocument: () => document,
-    ensureForeignModal: (governmentId) =>
-      openCapturedForeignModal(governmentId),
+    operations: capturedEspionageOperations,
     onActivity,
   });
   const runCapturedEspionageCycle =
@@ -1472,54 +1478,6 @@ export function startCapturedRuntime({
         index: GOV_TAB_INDEX.military,
       }),
     ]);
-  };
-  openCapturedForeignModal = (governmentId) => {
-    const govTabs = SUB_TAB_CONTROLS[GOV_TABS_SETTING];
-    if (
-      govTabs === undefined ||
-      pageCapture.controls.resolve(MAIN_TAB_CONTROL) === undefined
-    ) {
-      return false;
-    }
-    let clicked = false;
-    const result = civicDiscovery.discover(
-      [
-        Object.freeze({
-          setting: MAIN_TAB_SETTING,
-          control: MAIN_TAB_CONTROL,
-          index: MAIN_TAB_INDEX.civic,
-        }),
-        Object.freeze({
-          setting: GOV_TABS_SETTING,
-          control: govTabs,
-          index: GOV_TAB_INDEX.civic,
-        }),
-      ],
-      {
-        mount: [CAPTURED_FOREIGN_PANEL_SELECTOR],
-        whileDrawn: () => {
-          const trigger = document.querySelector(
-            capturedForeignEspionageTriggerSelector(governmentId),
-          );
-          if (trigger === null || typeof trigger.click !== "function") {
-            throw new Error(
-              "the game-owned espionage modal trigger is not mounted",
-            );
-          }
-          const click = trigger.click;
-          pageCapture.mountSuppression.withMountingEnabled(() => {
-            click.call(trigger);
-          });
-          clicked = true;
-        },
-      },
-    );
-    if (result.outcome.status !== "succeeded") {
-      logError(
-        `foreign espionage modal discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`,
-      );
-    }
-    return result.outcome.status === "succeeded" && clicked;
   };
   const ensureMechControls = () => {
     const satisfied = () =>
@@ -2968,15 +2926,16 @@ export function startCapturedRuntime({
             `autoFight.spy: ${outcome.failure.code}: ${outcome.failure.message}`,
           );
         }
+        // No `ensureCivicControls()`: espionage runs the game's own captured operations, which
+        // reach their own methods without a tab, a panel, or a modal. Battle, Spy Training and the
+        // rest of the civic tail still need their normal Foreign/Garrison controls.
         const espionageOutcome = runPhase("autoFight.espionage", () => {
-          ensureCivicControls();
           return runCapturedEspionageCycle();
         });
         if (
           espionageOutcome !== undefined &&
           espionageOutcome.status !== "succeeded" &&
           ![
-            "captured-espionage-modal-pending",
             "captured-espionage-postcondition-pending",
             "captured-espionage-modal-conflict",
           ].includes(espionageOutcome.failure.code)

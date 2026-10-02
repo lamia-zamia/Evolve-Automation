@@ -2,10 +2,10 @@ import assert from "node:assert/strict";
 
 import { startCapturedRuntime } from "../src/bootstrap/captured-runtime-control.ts";
 import {
-  capturedForeignEspionageTriggerSelector,
   readCapturedForeignTargets,
   selectCapturedForeignStrategy,
 } from "../src/adapters/evolve/combat/captured-foreign-state.ts";
+import { createTestDocument, element } from "./dom-fixture.mjs";
 
 const preparationSettings = {
   masterScriptToggle: true,
@@ -78,11 +78,10 @@ const preparationRoot = {
 
 const preparationEvents = [];
 const preparationErrors = [];
+const preparationModalHosts = [];
 let preparationCycle;
-let preparationModalGeneration = 0;
-let preparationModalControl;
-let preparationModalElement;
-const preparationActiveModals = [];
+let preparationOperationGeneration = 0;
+let preparationOperationControl;
 const preparationModalMethods = [
   "influence",
   "sabotage",
@@ -91,45 +90,26 @@ const preparationModalMethods = [
   "purchase",
 ];
 
-function removePreparationModal() {
-  if (preparationModalElement !== undefined) {
-    const index = preparationActiveModals.indexOf(preparationModalElement);
-    if (index >= 0) preparationActiveModals.splice(index, 1);
-  }
-  preparationModalElement = undefined;
-  preparationModalControl = undefined;
+const preparationBody = element("div", { id: "page" });
+const preparationDocument = createTestDocument(preparationBody);
+const preparationTimers = new Map();
+let preparationTimerId = 0;
+/**
+ * A real timer registry, so the capture's temporary replacement can be shown to leave nothing
+ * behind: any handle it hands back that reaches this one is a leak.
+ */
+function realSetInterval(callback, delay) {
+  const handle = ++preparationTimerId;
+  preparationTimers.set(handle, { callback, delay });
+  return handle;
 }
-
-function openPreparationModal(governmentId) {
-  const background = { click: removePreparationModal };
-  preparationModalElement = {
-    style: {},
-    querySelector: (selector) =>
-      selector === ".modal-background" ? background : null,
-  };
-  preparationActiveModals.push(preparationModalElement);
-  preparationModalGeneration += 1;
-  preparationModalControl = {
-    elementId: "espModal",
-    generation: preparationModalGeneration,
-    methods: preparationModalMethods,
-    data: preparationRoot.civic.foreign[`gov${governmentId}`],
-  };
+function realClearInterval(handle) {
+  preparationTimers.delete(handle);
 }
-
-const preparationDocument = {
-  querySelectorAll(selector) {
-    return selector === ".modal.is-active" ? preparationActiveModals : [];
-  },
-  querySelector(selector) {
-    if (selector === "#espModal") return preparationModalElement ?? null;
-    for (const governmentId of [0, 1]) {
-      if (selector === capturedForeignEspionageTriggerSelector(governmentId)) {
-        return { click: () => openPreparationModal(governmentId) };
-      }
-    }
-    return null;
-  },
+const preparationPage = {
+  document: preparationDocument,
+  setInterval: realSetInterval,
+  clearInterval: realClearInterval,
 };
 
 const preparationForeignControl = {
@@ -152,11 +132,37 @@ const preparationGarrisonControl = {
   ],
 };
 
+/**
+ * Stands in for `foreign.trigModal(gov)` reaching the private `drawEspModal(gov)`: it reproduces the
+ * part of the upstream draw the automation depends on — a fresh `#espModal` control bound to
+ * `gov${gov}` — and nothing else. The real game builds the methods itself; here the stub does.
+ */
+const preparationSynthesis = {
+  available: true,
+  invoke(request) {
+    assert.equal(request.elementId, "foreign");
+    assert.equal(request.method, "trigModal");
+    assert.deepEqual(request.receiver?.noOpMethods, ["$buefy.modal.open"]);
+    const governmentId = request.args[0];
+    preparationModalHosts.push(
+      preparationDocument.querySelector("#modalBox") !== null,
+    );
+    preparationOperationGeneration += 1;
+    preparationOperationControl = {
+      elementId: "espModal",
+      generation: preparationOperationGeneration,
+      methods: preparationModalMethods,
+      data: preparationRoot.civic.foreign[`gov${governmentId}`],
+    };
+    return { ok: true, value: undefined };
+  },
+};
+
 const preparationControls = {
   resolve(elementId) {
     if (elementId === "foreign") return preparationForeignControl;
     if (elementId === "garrison") return preparationGarrisonControl;
-    if (elementId === "espModal") return preparationModalControl;
+    if (elementId === "espModal") return preparationOperationControl;
     return undefined;
   },
   invoke(control, method, args = []) {
@@ -182,7 +188,7 @@ const preparationControls = {
     return { ok: true, value: undefined };
   },
   capturedElementIds() {
-    return preparationModalControl === undefined
+    return preparationOperationControl === undefined
       ? ["foreign", "garrison"]
       : ["foreign", "garrison", "espModal"];
   },
@@ -205,10 +211,16 @@ const preparationStop = startCapturedRuntime({
         return () => {};
       },
     },
-    mountSuppression: { available: false, withoutMounting: () => undefined },
+    mountSuppression: {
+      available: true,
+      withoutMounting: (draw) => draw(),
+      withMountingEnabled: (draw) => draw(),
+    },
+    synthesis: preparationSynthesis,
     uninstall: () => {},
   },
   document: preparationDocument,
+  settingsHostWindow: preparationPage,
   mouseEvent: class {},
   storage: { getItem: () => JSON.stringify(preparationSettings) },
   logError: (message) => preparationErrors.push(message),
@@ -246,7 +258,29 @@ assert.deepEqual(
     { governmentId: 0, operation: "influence" },
     { governmentId: 1, operation: "incite" },
   ],
-  "autoFight.spy uses the shared strategy's secondary/primary status before modal execution",
+  "autoFight.espionage uses the shared strategy's secondary/primary status, one capture per government",
+);
+assert.deepEqual(
+  preparationModalHosts,
+  [true, true],
+  "each capture ran against a synthetic #modalBox host",
+);
+assert.equal(
+  preparationDocument.querySelector("#modalBox"),
+  null,
+  "no espionage modal host outlives a capture",
+);
+assert.equal(
+  preparationDocument.querySelectorAll(".modal.is-active").length,
+  0,
+  "the espionage phase opens no modal",
+);
+assert.equal(preparationPage.setInterval, realSetInterval);
+assert.equal(preparationPage.clearInterval, realClearInterval);
+assert.equal(
+  preparationTimers.size,
+  0,
+  "the page's own timer registry is untouched",
 );
 assert.equal(preparationRoot.civic.foreign.gov0.hstl, 0);
 assert.equal(preparationRoot.civic.foreign.gov1.unrest, 25);
@@ -254,5 +288,6 @@ assert.equal(
   preparationErrors.some((message) => message.includes("autoFight.")),
   false,
 );
+assert.equal(preparationErrors.length, 0, preparationErrors.join(" | "));
 
 console.log("captured espionage preparation runtime checks passed");

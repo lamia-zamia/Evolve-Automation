@@ -62,39 +62,44 @@ const settings = {
   foreignOccupyLast: false,
 };
 
-let modalGeneration = 0;
+const foreignMethods = ["vis", "gvis", "trigModal", "spy_disabled", "spy"];
+const operationMethods = [
+  "influence",
+  "sabotage",
+  "incite",
+  "annex",
+  "purchase",
+];
 const controlsById = new Map();
-const activeModals = [];
+let operationGeneration = 0;
+const captures = [];
 const foreign = {
   elementId: "foreign",
   generation: 1,
-  methods: ["vis", "gvis", "trigModal", "spy_disabled", "spy"],
+  methods: foreignMethods,
 };
 controlsById.set("foreign", foreign);
 
-function installModal(governmentId) {
-  modalGeneration += 1;
-  let modal;
-  modal = {
-    style: { visibility: "visible" },
-    querySelector(selector) {
-      assert.equal(selector, ".modal-background");
-      return {
-        click() {
-          const index = activeModals.indexOf(modal);
-          if (index >= 0) activeModals.splice(index, 1);
-        },
-      };
-    },
-  };
-  activeModals.push(modal);
-  controlsById.set("espModal", {
-    elementId: "espModal",
-    generation: modalGeneration,
-    methods: ["influence", "sabotage", "incite", "annex", "purchase"],
-    data: root.civic.foreign[`gov${governmentId}`],
-  });
-}
+/**
+ * The synthetic capture the production bootstrap buys its per-government `#espModal` control with.
+ * A fresh generation bound to the requested government is the whole contract: the game builds a new
+ * set per `drawEspModal(gov)`, so reusing one would apply another government's closure.
+ */
+const operations = {
+  blockedByPlayerModal: () => false,
+  capture(governmentId) {
+    operationGeneration += 1;
+    captures.push(governmentId);
+    const control = {
+      elementId: "espModal",
+      generation: operationGeneration,
+      methods: [...operationMethods],
+      data: root.civic.foreign[`gov${governmentId}`],
+    };
+    controlsById.set("espModal", control);
+    return control;
+  },
+};
 
 const controls = {
   resolve: (elementId) => controlsById.get(elementId),
@@ -109,12 +114,7 @@ const controls = {
       if (method === "gvis") return { ok: true, value: args[0] < 3 };
       return { ok: false, reason: "unknown-method" };
     }
-    const governmentId = Object.entries(root.civic.foreign)
-      .find(([, government]) => government === control.data)?.[0]
-      .replace("gov", "");
-    if (governmentId === undefined)
-      return { ok: false, reason: "unknown-government" };
-    const government = root.civic.foreign[`gov${governmentId}`];
+    const government = root.civic.foreign[`gov${args[0]}`];
     government.sab = 300;
     government.act = method;
     return { ok: true, value: undefined };
@@ -131,19 +131,7 @@ const adapter = createCapturedEspionage({
   rootState: stateSource,
   controls,
   readSettings: () => settings,
-  getDocument: () => ({
-    querySelector(selector) {
-      if (selector === "#espModal") {
-        return activeModals.length > 0 ? {} : null;
-      }
-      return null;
-    },
-    querySelectorAll: () => activeModals,
-  }),
-  ensureForeignModal: (governmentId) => {
-    installModal(governmentId);
-    return true;
-  },
+  operations,
 });
 
 assert.equal(
@@ -165,20 +153,20 @@ assert.deepEqual(
 );
 
 const run = capturedEspionageApplication.createCapturedEspionageRunner(adapter);
-assert.equal(run().failure.code, "captured-espionage-modal-pending");
 assert.equal(run().failure.code, "captured-espionage-postcondition-pending");
 assert.equal(root.civic.foreign.gov0.act, "sabotage");
 assert.equal(root.civic.foreign.gov0.sab, 300);
 
-assert.equal(run().failure.code, "captured-espionage-modal-pending");
-assert.equal(root.civic.foreign.gov0.act, "sabotage");
-assert.equal(root.civic.foreign.gov0.sab, 300);
-assert.equal(root.civic.foreign.gov1.act, "none");
 assert.equal(run().failure.code, "captured-espionage-postcondition-pending");
 assert.equal(root.civic.foreign.gov1.act, "influence");
 assert.equal(root.civic.foreign.gov1.sab, 300);
 assert.equal(root.civic.foreign.gov2.act, "none");
 assert.equal(root.civic.foreign.gov2.sab, 0);
+assert.deepEqual(
+  captures,
+  [0, 1],
+  "one capture per operation, each scoped to the government it acted on",
+);
 
 const refreshedTargets = readCapturedForeignTargets(
   root,

@@ -26,6 +26,11 @@ import type {
   GameControlResult,
 } from "../../ports/game-control-registry.ts";
 import type {
+  GameControlSyntheticReceiver,
+  GameControlSynthesis,
+  GameControlSynthesisRequest,
+} from "../../ports/game-control-synthesis.ts";
+import type {
   GameControlUsage,
   GameControlUsageReader,
 } from "../../ports/game-control-usage.ts";
@@ -68,11 +73,16 @@ function createDisposableApp(): Record<PropertyKey, unknown> {
 /** A bare `#name` selector: no descendant, class, or attribute part. */
 const BARE_ID = /^#[\w-]+$/;
 
+/** A dotted `this` path a synthetic receiver may name, e.g. `$buefy.modal.open`. */
+const RECEIVER_PATH = /^[$A-Z_a-z][\w$]*(?:\.[$A-Z_a-z][\w$]*)*$/;
+
 export interface VueCapture {
   readonly rootState: GameRootStateSource;
   readonly controls: GameControlRegistry;
   readonly controlUsage: GameControlUsageReader;
   readonly mountSuppression: GameMountSuppression;
+  /** One-shot invocation of a captured method with a synthetic receiver. Capture-layer only. */
+  readonly synthesis: GameControlSynthesis;
   /** True when the Vue methods are wrapped; false for an inert capture with no Vue to hook. */
   readonly installed: boolean;
   /** Restores every wrapped Vue method and stops recording. Idempotent. */
@@ -163,6 +173,10 @@ function inertCapture(): VueCapture {
           "no Vue was captured, so mounting cannot be re-enabled",
         );
       },
+    }),
+    synthesis: Object.freeze({
+      available: false,
+      invoke: () => ({ ok: false, reason: "unknown-control" }) as const,
     }),
     uninstall: () => {},
   });
@@ -320,6 +334,107 @@ export function installVueCapture(
     return receiver;
   }
 
+  /**
+   * The extras a one-shot synthetic invocation may add, as a fresh object layered over the
+   * control's own receiver bag. Only no-op callables named by path exist here, so the copy is what
+   * keeps the captured receiver — and anything reachable from it — untouched for the call.
+   */
+  function syntheticReceiver(
+    control: CapturedControl,
+    requested: GameControlSyntheticReceiver | undefined,
+  ): Record<string, unknown> {
+    const base = receiverFor(control);
+    if (requested === undefined) return { ...base };
+    const extras: Record<string, unknown> = {};
+    for (const path of requested.noOpMethods) {
+      if (!RECEIVER_PATH.test(path)) {
+        reportError("synthesis", `rejected receiver path: ${path}`);
+        continue;
+      }
+      const segments = path.split(".");
+      const leaf = segments.pop() as string;
+      let node = extras;
+      for (const segment of segments) {
+        const child = node[segment];
+        if (isRecord(child)) {
+          node = child as Record<string, unknown>;
+        } else {
+          const created: Record<string, unknown> = {};
+          node[segment] = created;
+          node = created;
+        }
+      }
+      node[leaf] = (): void => {};
+    }
+    return { ...base, ...extras };
+  }
+
+  function handleFor(control: CapturedControl): GameControlHandle {
+    return Object.freeze({
+      elementId: control.elementId,
+      generation: control.generation,
+      methods: Object.freeze(Object.keys(control.methods)),
+      // Lazy: a handle resolved only to invoke a method never runs the game's data factory.
+      get data(): unknown {
+        return bindingData(control);
+      },
+    });
+  }
+
+  function invokeControl(
+    handle: GameControlHandle,
+    method: string,
+    args: readonly unknown[],
+    receiver: GameControlSyntheticReceiver | undefined,
+  ): GameControlResult {
+    const control = controls.get(handle.elementId);
+    if (control === undefined) {
+      return { ok: false, reason: "unknown-control" };
+    }
+    if (control.generation !== handle.generation) {
+      return {
+        ok: false,
+        reason: "stale-control",
+        detail: `${handle.elementId} generation ${handle.generation}, current ${control.generation}`,
+      };
+    }
+    const target = control.methods[method];
+    if (target === undefined) {
+      return {
+        ok: false,
+        reason: "unknown-method",
+        detail: `${handle.elementId}.${method}`,
+      };
+    }
+    const usageKey = `${handle.elementId} ${method}`;
+    const previous = usage.get(usageKey);
+    const record = (outcome: "returned" | "threw"): void => {
+      const next: GameControlUsage = Object.freeze({
+        elementId: handle.elementId,
+        method,
+        returned: (previous?.returned ?? 0) + (outcome === "returned" ? 1 : 0),
+        threw: (previous?.threw ?? 0) + (outcome === "threw" ? 1 : 0),
+      });
+      usage.set(usageKey, next);
+    };
+    try {
+      const value = Reflect.apply(
+        target,
+        syntheticReceiver(control, receiver),
+        [...args],
+      );
+      record("returned");
+      return { ok: true, value };
+    } catch (error) {
+      record("threw");
+      return {
+        ok: false,
+        reason: "threw",
+        detail: `${handle.elementId}.${method}: ${String(error)}`,
+      };
+    }
+  }
+
   function wrap(
     vue: Record<PropertyKey, unknown>,
     name: string,
@@ -469,71 +584,43 @@ export function installVueCapture(
   const registry: GameControlRegistry = Object.freeze({
     resolve(elementId: string): GameControlHandle | undefined {
       const control = controls.get(elementId);
-      if (control === undefined) return undefined;
-      return Object.freeze({
-        elementId: control.elementId,
-        generation: control.generation,
-        methods: Object.freeze(Object.keys(control.methods)),
-        // Lazy: a handle resolved only to invoke a method never runs the game's data factory.
-        get data(): unknown {
-          return bindingData(control);
-        },
-      });
+      return control === undefined ? undefined : handleFor(control);
     },
     invoke(
       handle: GameControlHandle,
       method: string,
       args: readonly unknown[] = [],
     ): GameControlResult {
-      const control = controls.get(handle.elementId);
-      if (control === undefined) {
-        return { ok: false, reason: "unknown-control" };
-      }
-      if (control.generation !== handle.generation) {
-        return {
-          ok: false,
-          reason: "stale-control",
-          detail: `${handle.elementId} generation ${handle.generation}, current ${control.generation}`,
-        };
-      }
-      const target = control.methods[method];
-      if (target === undefined) {
-        return {
-          ok: false,
-          reason: "unknown-method",
-          detail: `${handle.elementId}.${method}`,
-        };
-      }
-      const usageKey = `${handle.elementId}\u0000${method}`;
-      const previous = usage.get(usageKey);
-      const record = (outcome: "returned" | "threw"): void => {
-        const next: GameControlUsage = Object.freeze({
-          elementId: handle.elementId,
-          method,
-          returned:
-            (previous?.returned ?? 0) + (outcome === "returned" ? 1 : 0),
-          threw: (previous?.threw ?? 0) + (outcome === "threw" ? 1 : 0),
-        });
-        usage.set(usageKey, next);
-      };
-      try {
-        const value = Reflect.apply(target, receiverFor(control), [...args]);
-        record("returned");
-        return { ok: true, value };
-      } catch (error) {
-        record("threw");
-        return {
-          ok: false,
-          reason: "threw",
-          detail: `${handle.elementId}.${method}: ${String(error)}`,
-        };
-      }
+      return invokeControl(handle, method, args, undefined);
     },
     capturedElementIds: () => Object.freeze([...captureOrder]),
   });
 
   const controlUsage: GameControlUsageReader = Object.freeze({
     readUsage: () => Object.freeze([...usage.values()]),
+  });
+
+  /**
+   * The capture-layer-only path to a method the registry cannot call. It resolves the current build
+   * of the control itself, so a caller can never hold a handle across a rebuild, and the receiver
+   * extras exist for that one call only.
+   */
+  const synthesis: GameControlSynthesis = Object.freeze({
+    get available(): boolean {
+      return !stopped;
+    },
+    invoke(request: Readonly<GameControlSynthesisRequest>): GameControlResult {
+      const control = controls.get(request.elementId);
+      if (control === undefined) {
+        return { ok: false, reason: "unknown-control" };
+      }
+      return invokeControl(
+        handleFor(control),
+        request.method,
+        request.args ?? [],
+        request.receiver,
+      );
+    },
   });
 
   const mountSuppression: GameMountSuppression = Object.freeze({
@@ -592,6 +679,7 @@ export function installVueCapture(
     controls: registry,
     controlUsage,
     mountSuppression,
+    synthesis,
     uninstall() {
       stopped = true;
       marker.capture = undefined;

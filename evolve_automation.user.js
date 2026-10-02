@@ -2179,7 +2179,7 @@
     };
     return app[DISPOSABLE_APP_MARKER] = !0, app;
   }
-  var BARE_ID = /^#[\w-]+$/;
+  var BARE_ID = /^#[\w-]+$/, RECEIVER_PATH = /^[$A-Z_a-z][\w$]*(?:\.[$A-Z_a-z][\w$]*)*$/;
   function asFunction(value) {
     return typeof value == "function" ? value : void 0;
   }
@@ -2219,6 +2219,10 @@
             "no Vue was captured, so mounting cannot be re-enabled"
           );
         }
+      }),
+      synthesis: Object.freeze({
+        available: !1,
+        invoke: () => ({ ok: !1, reason: "unknown-control" })
       }),
       uninstall: () => {
       }
@@ -2290,6 +2294,82 @@
       for (let [name, method] of Object.entries(control.methods))
         receiver[name] = method.bind(receiver);
       return control.receiver = receiver, receiver;
+    }
+    function syntheticReceiver(control, requested) {
+      let base = receiverFor(control);
+      if (requested === void 0) return { ...base };
+      let extras = {};
+      for (let path of requested.noOpMethods) {
+        if (!RECEIVER_PATH.test(path)) {
+          reportError("synthesis", `rejected receiver path: ${path}`);
+          continue;
+        }
+        let segments = path.split("."), leaf = segments.pop(), node = extras;
+        for (let segment of segments) {
+          let child = node[segment];
+          if (isRecord(child))
+            node = child;
+          else {
+            let created = {};
+            node[segment] = created, node = created;
+          }
+        }
+        node[leaf] = () => {
+        };
+      }
+      return { ...base, ...extras };
+    }
+    function handleFor(control) {
+      return Object.freeze({
+        elementId: control.elementId,
+        generation: control.generation,
+        methods: Object.freeze(Object.keys(control.methods)),
+        // Lazy: a handle resolved only to invoke a method never runs the game's data factory.
+        get data() {
+          return bindingData(control);
+        }
+      });
+    }
+    function invokeControl(handle, method, args, receiver) {
+      let control = controls2.get(handle.elementId);
+      if (control === void 0)
+        return { ok: !1, reason: "unknown-control" };
+      if (control.generation !== handle.generation)
+        return {
+          ok: !1,
+          reason: "stale-control",
+          detail: `${handle.elementId} generation ${handle.generation}, current ${control.generation}`
+        };
+      let target = control.methods[method];
+      if (target === void 0)
+        return {
+          ok: !1,
+          reason: "unknown-method",
+          detail: `${handle.elementId}.${method}`
+        };
+      let usageKey = `${handle.elementId}\0${method}`, previous = usage.get(usageKey), record = (outcome) => {
+        let next = Object.freeze({
+          elementId: handle.elementId,
+          method,
+          returned: (previous?.returned ?? 0) + (outcome === "returned" ? 1 : 0),
+          threw: (previous?.threw ?? 0) + (outcome === "threw" ? 1 : 0)
+        });
+        usage.set(usageKey, next);
+      };
+      try {
+        let value = Reflect.apply(
+          target,
+          syntheticReceiver(control, receiver),
+          [...args]
+        );
+        return record("returned"), { ok: !0, value };
+      } catch (error) {
+        return record("threw"), {
+          ok: !1,
+          reason: "threw",
+          detail: `${handle.elementId}.${method}: ${String(error)}`
+        };
+      }
     }
     function wrap(vue, name, make) {
       let original = asFunction(vue[name]);
@@ -2390,57 +2470,27 @@
     }), registry = Object.freeze({
       resolve(elementId) {
         let control = controls2.get(elementId);
-        if (control !== void 0)
-          return Object.freeze({
-            elementId: control.elementId,
-            generation: control.generation,
-            methods: Object.freeze(Object.keys(control.methods)),
-            // Lazy: a handle resolved only to invoke a method never runs the game's data factory.
-            get data() {
-              return bindingData(control);
-            }
-          });
+        return control === void 0 ? void 0 : handleFor(control);
       },
       invoke(handle, method, args = []) {
-        let control = controls2.get(handle.elementId);
-        if (control === void 0)
-          return { ok: !1, reason: "unknown-control" };
-        if (control.generation !== handle.generation)
-          return {
-            ok: !1,
-            reason: "stale-control",
-            detail: `${handle.elementId} generation ${handle.generation}, current ${control.generation}`
-          };
-        let target = control.methods[method];
-        if (target === void 0)
-          return {
-            ok: !1,
-            reason: "unknown-method",
-            detail: `${handle.elementId}.${method}`
-          };
-        let usageKey = `${handle.elementId}\0${method}`, previous = usage.get(usageKey), record = (outcome) => {
-          let next = Object.freeze({
-            elementId: handle.elementId,
-            method,
-            returned: (previous?.returned ?? 0) + (outcome === "returned" ? 1 : 0),
-            threw: (previous?.threw ?? 0) + (outcome === "threw" ? 1 : 0)
-          });
-          usage.set(usageKey, next);
-        };
-        try {
-          let value = Reflect.apply(target, receiverFor(control), [...args]);
-          return record("returned"), { ok: !0, value };
-        } catch (error) {
-          return record("threw"), {
-            ok: !1,
-            reason: "threw",
-            detail: `${handle.elementId}.${method}: ${String(error)}`
-          };
-        }
+        return invokeControl(handle, method, args, void 0);
       },
       capturedElementIds: () => Object.freeze([...captureOrder])
     }), controlUsage = Object.freeze({
       readUsage: () => Object.freeze([...usage.values()])
+    }), synthesis = Object.freeze({
+      get available() {
+        return !stopped;
+      },
+      invoke(request) {
+        let control = controls2.get(request.elementId);
+        return control === void 0 ? { ok: !1, reason: "unknown-control" } : invokeControl(
+          handleFor(control),
+          request.method,
+          request.args ?? [],
+          request.receiver
+        );
+      }
     }), mountSuppression = Object.freeze({
       get available() {
         return createAppHooked && !stopped;
@@ -2484,6 +2534,7 @@
       controls: registry,
       controlUsage,
       mountSuppression,
+      synthesis,
       uninstall() {
         stopped = !0, marker.capture = void 0, rootListeners.clear(), restoreVue?.(), restoreVue = void 0;
       }
@@ -2608,6 +2659,7 @@
       periods: worker.periods,
       mechanics: mechanics.mechanics,
       mountSuppression: vue.mountSuppression,
+      synthesis: vue.synthesis,
       isComplete: () => vue.rootState.readRoot() !== void 0 && worker.isCaptured(),
       uninstall() {
         isRecord(pageWindow) && pageWindow[PAGE_CAPTURE_MARKER] === capture && delete pageWindow[PAGE_CAPTURE_MARKER], vue.uninstall(), worker.uninstall(), mechanics.uninstall(), keyState.uninstall();
@@ -18697,7 +18749,7 @@
   }
 
   // src/adapters/evolve/combat/captured-foreign-state.ts
-  var CAPTURED_FOREIGN_CONTROL = "foreign", CAPTURED_FOREIGN_PANEL_SELECTOR = "#foreign", CAPTURED_FOREIGN_MAX_INDEX = 4, CAPTURED_FOREIGN_GARRISON_CONTROLS = [
+  var CAPTURED_FOREIGN_CONTROL = "foreign", CAPTURED_FOREIGN_MAX_INDEX = 4, CAPTURED_FOREIGN_ESPIONAGE_TRIGGER_METHOD = "trigModal", CAPTURED_FOREIGN_GARRISON_CONTROLS = [
     "garrison",
     "c_garrison"
   ];
@@ -18975,9 +19027,6 @@
       battleTargetId: stopBattle ? null : refreshedTarget.governmentId,
       unificationRequested
     });
-  }
-  function capturedForeignEspionageTriggerSelector(governmentId) {
-    return `#gov${governmentId} div span:nth-child(3) button`;
   }
 
   // src/domain/combat/spy.ts
@@ -48211,19 +48260,13 @@ Only continue if you trust the source. Injected code:
   }
 
   // src/adapters/evolve/combat/captured-espionage.ts
-  var CAPTURED_ESPIONAGE_MODAL = "espModal", CAPTURED_ESPIONAGE_MODAL_SELECTOR = "#espModal", CAPTURED_ESPIONAGE_FOREIGN_METHODS = [
+  var CAPTURED_ESPIONAGE_FOREIGN_METHODS = [
     "vis",
     "gvis",
-    "trigModal",
+    CAPTURED_FOREIGN_ESPIONAGE_TRIGGER_METHOD,
     "spy_disabled",
     "spy"
-  ], CAPTURED_ESPIONAGE_MODAL_METHODS = [
-    "influence",
-    "sabotage",
-    "incite",
-    "annex",
-    "purchase"
-  ], CAPTURED_ESPIONAGE_MODAL_OPENING_MAX_CYCLES = 3, CAPTURED_ESPIONAGE_ACTIVE_MODAL_SELECTOR = ".modal.is-active", CAPTURED_ESPIONAGE_MODAL_BACKGROUND_SELECTOR = ".modal-background", CAPTURED_ESPIONAGE_GOVERNOR_TASKS = ["combo_spy", "spyop"];
+  ], CAPTURED_ESPIONAGE_GOVERNOR_TASKS = ["combo_spy", "spyop"];
   function capturedEspionageForeignGovernment(root, governmentId) {
     let value = readProperty(
       readProperty(readProperty(root, "civic"), "foreign"),
@@ -48266,14 +48309,6 @@ Only continue if you trust the source. Injected code:
         purchased: !!government.buy,
         action: typeof government.act == "string" ? government.act : void 0
       });
-  }
-  function capturedEspionageModalGovernmentId(root, modal) {
-    let data = modal.data;
-    if (data !== void 0) {
-      for (let governmentId = 0; governmentId <= CAPTURED_FOREIGN_MAX_INDEX; governmentId += 1)
-        if (data === capturedEspionageForeignGovernment(root, governmentId))
-          return governmentId;
-    }
   }
   function capturedEspionageTarget(root, target) {
     return readCapturedForeignGovernment(
@@ -48343,85 +48378,6 @@ Only continue if you trust the source. Injected code:
   function capturedEspionagePlansMatch(expected, actual) {
     return expected.kind !== actual.kind ? !1 : expected.kind === "release-foreign" || actual.kind === "captured-espionage" && expected.operation === actual.operation;
   }
-  function capturedEspionageActiveModals(document) {
-    let querySelectorAll = readProperty(document, "querySelectorAll");
-    if (typeof querySelectorAll != "function") return;
-    let result;
-    try {
-      result = Reflect.apply(querySelectorAll, document, [
-        CAPTURED_ESPIONAGE_ACTIVE_MODAL_SELECTOR
-      ]);
-    } catch {
-      return;
-    }
-    let length = finite(readProperty(result, "length"));
-    if (length === void 0 || !Number.isSafeInteger(length) || length < 0)
-      return;
-    let modals = [];
-    for (let index = 0; index < length; index += 1) {
-      let modal = readProperty(result, String(index));
-      modal != null && modals.push(modal);
-    }
-    return Object.freeze(modals);
-  }
-  function capturedEspionageModalIsMounted(document) {
-    let querySelector = readProperty(document, "querySelector");
-    if (typeof querySelector == "function")
-      try {
-        let modal = Reflect.apply(querySelector, document, [
-          CAPTURED_ESPIONAGE_MODAL_SELECTOR
-        ]);
-        return modal != null;
-      } catch {
-        return;
-      }
-  }
-  function capturedEspionageNewModalLifecycle(document, previousModals) {
-    if (previousModals === void 0) return;
-    let activeModals = capturedEspionageActiveModals(document);
-    if (activeModals === void 0) return;
-    let previous = new Set(previousModals), modal = activeModals.find((candidate) => !previous.has(candidate));
-    if (modal === void 0) return;
-    let style = readProperty(modal, "style");
-    if (!isRecord(style)) return;
-    try {
-      Reflect.set(style, "visibility", "hidden");
-    } catch {
-      return;
-    }
-    let cleaned = !1;
-    return Object.freeze({
-      owns: (candidate) => candidate === modal,
-      cleanup: () => {
-        if (cleaned) return;
-        cleaned = !0;
-        let querySelector = readProperty(modal, "querySelector");
-        if (typeof querySelector == "function")
-          try {
-            let background = Reflect.apply(querySelector, modal, [
-              CAPTURED_ESPIONAGE_MODAL_BACKGROUND_SELECTOR
-            ]), click = readProperty(background, "click");
-            if (typeof click == "function") {
-              Reflect.apply(click, background, []);
-              return;
-            }
-          } catch {
-          }
-        let remove = readProperty(modal, "remove");
-        if (typeof remove == "function")
-          try {
-            Reflect.apply(remove, modal, []);
-          } catch {
-          }
-      }
-    });
-  }
-  function capturedEspionageModalConflicts(document, ownedModal) {
-    let activeModals = capturedEspionageActiveModals(document);
-    return activeModals !== void 0 && activeModals.some(
-      (candidate) => ownedModal === void 0 || !ownedModal.owns(candidate)
-    );
-  }
   function capturedEspionagePostconditionChanged(operation2, before, after) {
     switch (operation2) {
       case "influence":
@@ -48445,14 +48401,12 @@ Only continue if you trust the source. Injected code:
   }
   function createCapturedEspionage(dependencies) {
     let reportActivity = dependencies.onActivity ?? (() => {
-    }), samples = /* @__PURE__ */ new Map(), pending = /* @__PURE__ */ new Map(), opening, cycleAction = !1;
+    }), samples = /* @__PURE__ */ new Map(), pending = /* @__PURE__ */ new Map();
     function clearPending(governmentId) {
       if (governmentId !== void 0) {
-        pending.get(governmentId)?.modalLifecycle?.cleanup(), pending.delete(governmentId);
+        pending.delete(governmentId);
         return;
       }
-      for (let active of pending.values())
-        active.modalLifecycle?.cleanup();
       pending.clear();
     }
     function completePending(root) {
@@ -48472,108 +48426,55 @@ Only continue if you trust the source. Injected code:
       return completed;
     }
     function discardCapturedEspionageSample() {
-      for (let activeSample of samples.values())
-        activeSample.modalLifecycle?.cleanup();
       samples.clear();
     }
     function standDown() {
-      if (samples.size === 0 && pending.size === 0 && opening === void 0 && !cycleAction)
-        return;
-      let activePending = [...pending.values()], activeOpening = opening;
-      discardCapturedEspionageSample();
-      for (let active of activePending)
-        active.modalLifecycle?.cleanup();
-      activeOpening?.modalLifecycle?.cleanup(), pending.clear(), opening = void 0, cycleAction = !1;
+      samples.size === 0 && pending.size === 0 || (discardCapturedEspionageSample(), pending.clear());
     }
     function readSelectedInput() {
-      discardCapturedEspionageSample(), cycleAction = !1;
+      discardCapturedEspionageSample();
       let root = dependencies.rootState.readRoot();
-      if (!isRecord(root) || completePending(root))
+      if (!isRecord(root) || completePending(root)) return capturedEspionageEmptyInput();
+      let settingsValue = dependencies.readSettings(), settings = isRecord(settingsValue) ? settingsValue : {}, foreign = capturedEspionageControl(
+        dependencies.controls,
+        CAPTURED_FOREIGN_CONTROL,
+        CAPTURED_ESPIONAGE_FOREIGN_METHODS
+      );
+      if (foreign === void 0) return capturedEspionageEmptyInput();
+      let visible = dependencies.controls.invoke(foreign, "vis"), tech = finite(
+        readProperty(root, "tech") && readProperty(readProperty(root, "tech"), "spy")
+      );
+      if (!visible.ok || visible.value !== !0 || (tech ?? 0) < 2)
         return capturedEspionageEmptyInput();
-      let modalFromOpening, modalLifecycleFromOpening, modalGovernmentId, lifecycleTransferred = !1;
-      try {
-        if (opening !== void 0) {
-          let activeOpening = opening;
-          if (activeOpening.root !== root || dependencies.controls.resolve(CAPTURED_FOREIGN_CONTROL)?.generation !== activeOpening.foreign.generation)
-            return activeOpening.modalLifecycle?.cleanup(), opening = void 0, cycleAction = !0, capturedEspionageEmptyInput();
-          {
-            let currentModal = capturedEspionageControl(
-              dependencies.controls,
-              CAPTURED_ESPIONAGE_MODAL,
-              CAPTURED_ESPIONAGE_MODAL_METHODS
-            );
-            if (currentModal === void 0 || activeOpening.previousModal !== void 0 && currentModal.generation === activeOpening.previousModal.generation) {
-              let waitedCycles = activeOpening.waitedCycles + 1;
-              return waitedCycles >= CAPTURED_ESPIONAGE_MODAL_OPENING_MAX_CYCLES ? (activeOpening.modalLifecycle?.cleanup(), opening = void 0, cycleAction = !0, capturedEspionageEmptyInput()) : (opening = Object.freeze({ ...activeOpening, waitedCycles }), capturedEspionageEmptyInput());
-            }
-            modalFromOpening = currentModal, modalLifecycleFromOpening = activeOpening.modalLifecycle, modalLifecycleFromOpening === void 0 && capturedEspionageModalGovernmentId(root, currentModal) === activeOpening.governmentId && (modalLifecycleFromOpening = capturedEspionageNewModalLifecycle(
-              dependencies.getDocument?.(),
-              activeOpening.previousModals
-            )), modalGovernmentId = activeOpening.governmentId, opening = void 0;
-          }
-        }
-        let settingsValue = dependencies.readSettings(), settings = isRecord(settingsValue) ? settingsValue : {}, foreign = capturedEspionageControl(
-          dependencies.controls,
-          CAPTURED_FOREIGN_CONTROL,
-          CAPTURED_ESPIONAGE_FOREIGN_METHODS
-        );
-        if (foreign === void 0) return capturedEspionageEmptyInput();
-        let visible = dependencies.controls.invoke(foreign, "vis"), tech = finite(
-          readProperty(root, "tech") && readProperty(readProperty(root, "tech"), "spy")
-        );
-        if (!visible.ok || visible.value !== !0 || (tech ?? 0) < 2)
-          return capturedEspionageEmptyInput();
-        let targets = readCapturedForeignTargets(
-          root,
-          dependencies.controls,
-          foreign,
-          settings
-        ), strategy = selectCapturedForeignStrategy(root, settings, targets), targetGovernmentId = modalFromOpening !== void 0 ? modalGovernmentId : strategy.selectedTargetId ?? strategy.governments[0]?.governmentId;
-        if (targetGovernmentId == null)
-          return capturedEspionageEmptyInput();
-        let target = strategy.governments.find(
-          (candidate) => candidate.governmentId === targetGovernmentId
-        );
-        if (target === void 0) return capturedEspionageEmptyInput();
-        let modal = modalFromOpening ?? capturedEspionageControl(
-          dependencies.controls,
-          CAPTURED_ESPIONAGE_MODAL,
-          CAPTURED_ESPIONAGE_MODAL_METHODS
-        );
-        modal !== void 0 && modalFromOpening === void 0 && capturedEspionageModalIsMounted(dependencies.getDocument?.()) === !1 && (modal = void 0);
-        let modalToReplace, capturedModalGovernmentId = modal === void 0 ? void 0 : capturedEspionageModalGovernmentId(root, modal);
-        modal !== void 0 && (capturedModalGovernmentId !== void 0 && capturedModalGovernmentId !== target.governmentId || capturedModalGovernmentId === void 0 && modalFromOpening === void 0 || modalFromOpening !== void 0 && modalGovernmentId !== target.governmentId) ? (modalFromOpening !== void 0 && (modalLifecycleFromOpening?.cleanup(), modalLifecycleFromOpening = void 0), modalToReplace = modal, modal = void 0, modalGovernmentId = void 0) : modal !== void 0 && (modalGovernmentId = capturedModalGovernmentId ?? modalGovernmentId ?? target.governmentId);
-        let input = capturedEspionageInput(
-          root,
-          target,
-          strategy.battleTargetId !== target.governmentId,
-          dependencies.readPurchaseReservation
-        );
-        return samples.set(
-          target.governmentId,
-          Object.freeze({
-            root,
-            foreign,
-            modal,
-            modalLifecycle: modalLifecycleFromOpening,
-            modalGovernmentId,
-            modalToReplace,
-            target,
-            input
-          })
-        ), lifecycleTransferred = !0, input;
-      } finally {
-        lifecycleTransferred || modalLifecycleFromOpening?.cleanup();
-      }
+      let targets = readCapturedForeignTargets(
+        root,
+        dependencies.controls,
+        foreign,
+        settings
+      ), strategy = selectCapturedForeignStrategy(root, settings, targets), targetGovernmentId = strategy.selectedTargetId ?? strategy.governments[0]?.governmentId;
+      if (targetGovernmentId == null)
+        return capturedEspionageEmptyInput();
+      let target = strategy.governments.find(
+        (candidate) => candidate.governmentId === targetGovernmentId
+      );
+      if (target === void 0) return capturedEspionageEmptyInput();
+      let input = capturedEspionageInput(
+        root,
+        target,
+        strategy.battleTargetId !== target.governmentId,
+        dependencies.readPurchaseReservation
+      );
+      return samples.set(
+        target.governmentId,
+        Object.freeze({ root, foreign, target, input })
+      ), input;
     }
     let reader = Object.freeze({
       read: readSelectedInput,
       readAll() {
         let selectedInput = readSelectedInput(), selected = samples.get(selectedInput.governmentId);
-        if (selected === void 0 || selectedInput.governmentId < 0 || selected.modal !== void 0 || selected.modalLifecycle !== void 0 || selected.modalToReplace !== void 0)
-          return Object.freeze(
-            selected === void 0 || selectedInput.governmentId < 0 ? [] : [selectedInput]
-          );
+        if (selected === void 0 || selectedInput.governmentId < 0)
+          return Object.freeze([]);
         let settingsValue = dependencies.readSettings(), settings = isRecord(settingsValue) ? settingsValue : {}, targets = readCapturedForeignTargets(
           selected.root,
           dependencies.controls,
@@ -48601,10 +48502,6 @@ Only continue if you trust the source. Injected code:
             Object.freeze({
               root: selected.root,
               foreign: selected.foreign,
-              modal: void 0,
-              modalLifecycle: void 0,
-              modalGovernmentId: void 0,
-              modalToReplace: void 0,
               target,
               input
             })
@@ -48701,85 +48598,50 @@ Only continue if you trust the source. Injected code:
             tags: Object.freeze(["combat"])
           }), SUCCEEDED);
         }
-        if (active.modal !== void 0 && active.modalGovernmentId !== decision.governmentId)
-          return discardCapturedEspionageSample(), stale(
-            "captured-espionage-modal-target-changed",
-            "captured espionage modal targets a different government"
-          );
-        samples.delete(decision.governmentId);
-        let modal = active.modal;
-        if (modal === void 0) {
-          let opened = !1, document = dependencies.getDocument?.(), previousModals = capturedEspionageActiveModals(document);
-          if (previousModals !== void 0 && previousModals.length > 0)
-            return cycleAction = !0, stale(
-              "captured-espionage-modal-conflict",
-              "another modal is active; espionage is deferred"
-            );
-          let trigger = isRecord(document) && typeof document.querySelector == "function" ? document.querySelector(
-            capturedForeignEspionageTriggerSelector(decision.governmentId)
-          ) : void 0;
-          if (isRecord(trigger) && typeof trigger.click == "function" ? (Reflect.apply(
-            trigger.click,
-            trigger,
-            []
-          ), opened = !0) : dependencies.ensureForeignModal?.(decision.governmentId) && (opened = !0), !opened)
-            return stale(
-              "captured-espionage-modal-trigger-missing",
-              "the game-owned espionage modal trigger is not mounted"
-            );
-          let modalLifecycle = capturedEspionageNewModalLifecycle(
-            document,
-            previousModals
-          );
-          cycleAction = !0;
-          let openingForeign = dependencies.controls.resolve(CAPTURED_FOREIGN_CONTROL) ?? active.foreign;
-          return opening = Object.freeze({
-            root: active.root,
-            foreign: openingForeign,
-            governmentId: decision.governmentId,
-            previousModal: active.modalToReplace,
-            previousModals,
-            modalLifecycle,
-            waitedCycles: 0
-          }), stale(
-            "captured-espionage-modal-pending",
-            "the game is still opening the espionage modal"
-          );
-        }
-        if (modal.generation !== dependencies.controls.resolve(modal.elementId)?.generation)
-          return active.modalLifecycle?.cleanup(), stale(
-            "captured-espionage-modal-changed",
-            "captured espionage modal changed"
-          );
-        if (capturedEspionageModalConflicts(
-          dependencies.getDocument?.(),
-          active.modalLifecycle
-        ))
-          return active.modalLifecycle?.cleanup(), cycleAction = !0, stale(
+        if (samples.delete(decision.governmentId), dependencies.operations.blockedByPlayerModal())
+          return stale(
             "captured-espionage-modal-conflict",
             "another modal is active; espionage is deferred"
           );
+        let operation2 = dependencies.operations.capture(decision.governmentId);
+        if (operation2 === void 0)
+          return stale(
+            "captured-espionage-operation-capture-unavailable",
+            "the game-owned espionage operations are not captured"
+          );
+        if (operation2.generation !== dependencies.controls.resolve(operation2.elementId)?.generation)
+          return stale(
+            "captured-espionage-operation-control-changed",
+            "the captured espionage operations were rebuilt"
+          );
+        let government = capturedEspionageForeignGovernment(
+          active.root,
+          decision.governmentId
+        );
+        if (government === void 0 || operation2.data !== government)
+          return stale(
+            "captured-espionage-operation-scope-changed",
+            "the captured espionage operations target a different government"
+          );
         let result = dependencies.controls.invoke(
-          modal,
+          operation2,
           decision.operation,
           [decision.governmentId]
         );
-        if (cycleAction = !0, !result.ok)
-          return active.modalLifecycle?.cleanup(), stale(
+        if (!result.ok)
+          return stale(
             "captured-espionage-operation-failed",
             `captured espionage operation failed: ${result.reason}`
           );
         let after = capturedEspionageState(active.root, decision.governmentId);
         if (after === void 0)
-          return active.modalLifecycle?.cleanup(), stale(
+          return stale(
             "captured-espionage-postcondition-unreadable",
             "the foreign espionage postcondition is unreadable"
           );
         let baseline = Object.freeze({
           root: active.root,
           foreign: active.foreign,
-          modalLifecycle: active.modalLifecycle,
-          target: active.target,
           operation: decision.operation,
           governmentId: decision.governmentId,
           military: active.input.military,
@@ -48792,12 +48654,12 @@ Only continue if you trust the source. Injected code:
           decision.operation,
           baseline,
           after
-        ) ? (active.modalLifecycle?.cleanup(), reportActivity(
+        ) ? (reportActivity(
           capturedEspionageActivity(decision.operation, decision.governmentId)
-        ), SUCCEEDED) : after.sabotageProgress <= 0 || after.action !== decision.operation ? (active.modalLifecycle?.cleanup(), stale(
+        ), SUCCEEDED) : after.sabotageProgress <= 0 || after.action !== decision.operation ? stale(
           "captured-espionage-not-applied",
           "the game did not apply the espionage operation"
-        )) : (pending.set(decision.governmentId, baseline), baseline.modalLifecycle?.cleanup(), stale(
+        ) : (pending.set(decision.governmentId, baseline), stale(
           "captured-espionage-postcondition-pending",
           "the game queued the espionage operation but its result is pending"
         ));
@@ -48808,9 +48670,161 @@ Only continue if you trust the source. Injected code:
       executor,
       isGovernorEspionageOwned: () => capturedEspionageGovernorOwnsEspionage(dependencies.rootState.readRoot()),
       standDown,
-      isBusy: () => cycleAction || pending.size > 0 || opening !== void 0 || [...samples.values()].some(
-        (activeSample) => activeSample.modalLifecycle !== void 0
-      )
+      isBusy: () => pending.size > 0
+    });
+  }
+
+  // src/adapters/evolve/combat/captured-espionage-capture.ts
+  var ESPIONAGE_OPERATION_CONTROL = "espModal", ESPIONAGE_OPERATION_METHODS = [
+    "influence",
+    "sabotage",
+    "incite",
+    "annex",
+    "purchase"
+  ], ESPIONAGE_CAPTURE_HOST_ID = "modalBox", ESPIONAGE_ACTIVE_MODAL_SELECTOR = ".modal.is-active", ESPIONAGE_SYNTHETIC_OPEN_METHODS = ["$buefy.modal.open"];
+  function espionageOperationControl(controls2) {
+    let control = controls2.resolve(ESPIONAGE_OPERATION_CONTROL);
+    return control !== void 0 && ESPIONAGE_OPERATION_METHODS.every(
+      (method) => control.methods.includes(method)
+    ) ? control : void 0;
+  }
+  function espionageActiveModals(document) {
+    let querySelectorAll = readProperty(document, "querySelectorAll");
+    if (typeof querySelectorAll != "function") return;
+    let result;
+    try {
+      result = Reflect.apply(querySelectorAll, document, [
+        ESPIONAGE_ACTIVE_MODAL_SELECTOR
+      ]);
+    } catch {
+      return;
+    }
+    let length = readProperty(result, "length");
+    if (!(typeof length != "number" || !Number.isSafeInteger(length) || length < 0))
+      return Object.freeze(
+        Array.from(
+          { length },
+          (_, index) => readProperty(result, String(index))
+        ).filter((modal) => modal != null)
+      );
+  }
+  function espionageCaptureHost(document) {
+    if (!isRecord(document)) return;
+    let querySelector = readProperty(document, "querySelector");
+    if (typeof querySelector == "function")
+      try {
+        if (Reflect.apply(querySelector, document, [
+          `#${ESPIONAGE_CAPTURE_HOST_ID}`
+        ]) != null)
+          return;
+      } catch {
+        return;
+      }
+    let createElement = readProperty(document, "createElement");
+    if (typeof createElement != "function") return;
+    let parent = readProperty(document, "body") ?? readProperty(document, "documentElement"), appendChild = readProperty(parent, "appendChild");
+    if (typeof appendChild != "function") return;
+    let element = Reflect.apply(createElement, document, ["div"]);
+    if (!isRecord(element)) return;
+    Reflect.set(element, "id", ESPIONAGE_CAPTURE_HOST_ID);
+    let style = readProperty(element, "style");
+    return isRecord(style) && Reflect.set(style, "display", "none"), Reflect.apply(appendChild, parent, [element]), { parent, element };
+  }
+  function removeEspionageCaptureHost(host) {
+    let removeChild = readProperty(host.parent, "removeChild");
+    try {
+      if (typeof removeChild == "function") {
+        Reflect.apply(removeChild, host.parent, [host.element]);
+        return;
+      }
+      let remove = readProperty(host.element, "remove");
+      typeof remove == "function" && Reflect.apply(remove, host.element, []);
+    } catch {
+    }
+  }
+  function espionageFlushedTimers(pageWindow, reportError, run) {
+    if (!isRecord(pageWindow)) {
+      run();
+      return;
+    }
+    let originalSetInterval = readProperty(pageWindow, "setInterval");
+    if (typeof originalSetInterval != "function") {
+      run();
+      return;
+    }
+    let originalClearInterval = readProperty(pageWindow, "clearInterval"), immediateHandles = /* @__PURE__ */ new Set(), queued = [], flushing = !1, immediateSetInterval = function(...args) {
+      let [callback, ...rest] = args;
+      if (flushing || typeof callback != "function")
+        return Reflect.apply(originalSetInterval, this, args);
+      let handle = Object.freeze({ espionageCaptureTimer: !0 });
+      return immediateHandles.add(handle), queued.push({ callback, self: this, args: rest }), handle;
+    }, immediateClearInterval = function(...args) {
+      immediateHandles.delete(args[0]) || typeof originalClearInterval == "function" && Reflect.apply(originalClearInterval, this, args);
+    };
+    Reflect.set(pageWindow, "setInterval", immediateSetInterval), Reflect.set(pageWindow, "clearInterval", immediateClearInterval);
+    try {
+      run(), flushing = !0;
+      for (let round = 0; queued.length > 0 && round < 16; round += 1) {
+        let next = queued.shift();
+        if (next === void 0) break;
+        try {
+          Reflect.apply(next.callback, next.self, next.args);
+        } catch (error) {
+          reportError(`timer callback threw: ${String(error)}`);
+        }
+      }
+    } finally {
+      flushing = !1, readProperty(pageWindow, "setInterval") === immediateSetInterval && Reflect.set(pageWindow, "setInterval", originalSetInterval), readProperty(pageWindow, "clearInterval") === immediateClearInterval && Reflect.set(pageWindow, "clearInterval", originalClearInterval);
+    }
+  }
+  function createCapturedEspionageOperationCapture(dependencies) {
+    let reportError = dependencies.onCaptureError ?? (() => {
+    }), capturing = !1;
+    return Object.freeze({
+      blockedByPlayerModal() {
+        let active = espionageActiveModals(dependencies.getDocument());
+        return active !== void 0 && active.length > 0;
+      },
+      capture(governmentId) {
+        let synthesis = dependencies.synthesis;
+        if (!(capturing || synthesis === void 0 || !synthesis.available || !dependencies.mountSuppression.available)) {
+          capturing = !0;
+          try {
+            let document = dependencies.getDocument(), host = espionageCaptureHost(document);
+            if (host === void 0) return;
+            try {
+              dependencies.mountSuppression.withoutMounting(() => {
+                espionageFlushedTimers(
+                  dependencies.getPageWindow(),
+                  reportError,
+                  () => {
+                    let result = synthesis.invoke({
+                      elementId: CAPTURED_FOREIGN_CONTROL,
+                      method: CAPTURED_FOREIGN_ESPIONAGE_TRIGGER_METHOD,
+                      args: [governmentId],
+                      receiver: {
+                        noOpMethods: ESPIONAGE_SYNTHETIC_OPEN_METHODS
+                      }
+                    });
+                    result.ok || reportError(
+                      `${CAPTURED_FOREIGN_ESPIONAGE_TRIGGER_METHOD} failed: ${result.reason} ${result.detail ?? ""}`
+                    );
+                  }
+                );
+              });
+            } finally {
+              removeEspionageCaptureHost(host);
+            }
+            let control = espionageOperationControl(dependencies.controls);
+            return control === void 0 && reportError(`no ${ESPIONAGE_OPERATION_CONTROL} operations captured`), control;
+          } catch (error) {
+            reportError(String(error));
+            return;
+          } finally {
+            capturing = !1;
+          }
+        }
+      }
     });
   }
 
@@ -51482,13 +51496,19 @@ Only continue if you trust the source. Injected code:
       controls: pageCapture2.controls,
       readSettings: () => settingsStore.readRaw(),
       readPurchaseMoney: () => readDemand().spyPurchaseReservation?.purchaseMoney
-    }), openCapturedForeignModal = () => !1, capturedEspionage = createCapturedEspionage({
+    }), capturedEspionageOperations = createCapturedEspionageOperationCapture({
+      controls: pageCapture2.controls,
+      synthesis: pageCapture2.synthesis,
+      mountSuppression: pageCapture2.mountSuppression,
+      getDocument: () => document,
+      getPageWindow: () => settingsHostWindow2,
+      onCaptureError: (detail) => logError(`espionage operation capture: ${detail}`)
+    }), capturedEspionage = createCapturedEspionage({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
       readSettings: () => settingsStore.readRaw(),
       readPurchaseReservation: () => readDemand().spyPurchaseReservation,
-      getDocument: () => document,
-      ensureForeignModal: (governmentId) => openCapturedForeignModal(governmentId),
+      operations: capturedEspionageOperations,
       onActivity
     }), runCapturedEspionageCycle = createCapturedEspionageRunner(capturedEspionage), capturedBattle = createCapturedBattle({
       rootState: pageCapture2.rootState,
@@ -51972,46 +51992,7 @@ Only continue if you trust the source. Injected code:
           index: GOV_TAB_INDEX.military
         })
       ]);
-    };
-    openCapturedForeignModal = (governmentId) => {
-      let govTabs = SUB_TAB_CONTROLS[GOV_TABS_SETTING];
-      if (govTabs === void 0 || pageCapture2.controls.resolve(MAIN_TAB_CONTROL) === void 0)
-        return !1;
-      let clicked = !1, result = civicDiscovery.discover(
-        [
-          Object.freeze({
-            setting: MAIN_TAB_SETTING,
-            control: MAIN_TAB_CONTROL,
-            index: MAIN_TAB_INDEX.civic
-          }),
-          Object.freeze({
-            setting: GOV_TABS_SETTING,
-            control: govTabs,
-            index: GOV_TAB_INDEX.civic
-          })
-        ],
-        {
-          mount: [CAPTURED_FOREIGN_PANEL_SELECTOR],
-          whileDrawn: () => {
-            let trigger = document.querySelector(
-              capturedForeignEspionageTriggerSelector(governmentId)
-            );
-            if (trigger === null || typeof trigger.click != "function")
-              throw new Error(
-                "the game-owned espionage modal trigger is not mounted"
-              );
-            let click = trigger.click;
-            pageCapture2.mountSuppression.withMountingEnabled(() => {
-              click.call(trigger);
-            }), clicked = !0;
-          }
-        }
-      );
-      return result.outcome.status !== "succeeded" && logError(
-        `foreign espionage modal discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`
-      ), result.outcome.status === "succeeded" && clicked;
-    };
-    let ensureMechControls = () => {
+    }, ensureMechControls = () => {
       let satisfied = () => capturedMechControlsSatisfied(
         pageCapture2.controls,
         settingsStore.readRaw()
@@ -52761,9 +52742,8 @@ Only continue if you trust the source. Injected code:
           outcome !== void 0 && outcome.status !== "succeeded" && reportOnce(
             `autoFight.spy: ${outcome.failure.code}: ${outcome.failure.message}`
           );
-          let espionageOutcome = runPhase("autoFight.espionage", () => (ensureCivicControls(), runCapturedEspionageCycle()));
+          let espionageOutcome = runPhase("autoFight.espionage", () => runCapturedEspionageCycle());
           if (espionageOutcome !== void 0 && espionageOutcome.status !== "succeeded" && ![
-            "captured-espionage-modal-pending",
             "captured-espionage-postcondition-pending",
             "captured-espionage-modal-conflict"
           ].includes(espionageOutcome.failure.code) && reportOnce(

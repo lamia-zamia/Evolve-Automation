@@ -17,8 +17,13 @@ import type {
 import { finite, isRecord, readProperty } from "../../validation.ts";
 
 export const CAPTURED_FOREIGN_CONTROL = "foreign";
-export const CAPTURED_FOREIGN_PANEL_SELECTOR = "#foreign";
 export const CAPTURED_FOREIGN_MAX_INDEX = 4;
+/**
+ * The Foreign component method whose closure reaches the module-private `drawEspModal(gov)`. It is
+ * the only route to the game's own espionage operations, and calling it is what captures them
+ * without a Buefy modal — see `captured-espionage-capture.ts`.
+ */
+export const CAPTURED_FOREIGN_ESPIONAGE_TRIGGER_METHOD = "trigModal";
 export const CAPTURED_FOREIGN_GARRISON_CONTROLS = [
   "garrison",
   "c_garrison",
@@ -575,12 +580,6 @@ export function selectCapturedForeignStrategy(
     battleTargetId: stopBattle ? null : refreshedTarget.governmentId,
     unificationRequested,
   });
-}
-
-export function capturedForeignEspionageTriggerSelector(
-  governmentId: number,
-): string {
-  return `#gov${governmentId} div span:nth-child(3) button`;
 }
 
 export function capturedForeignOperationMethod(

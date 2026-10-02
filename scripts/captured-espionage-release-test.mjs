@@ -60,6 +60,7 @@ function runRelease({ applyCampaign = true } = {}) {
     },
   };
   const activities = [];
+  const captures = [];
   const espionage = createCapturedEspionage({
     rootState: { readRoot: () => root },
     controls,
@@ -77,14 +78,24 @@ function runRelease({ applyCampaign = true } = {}) {
       purchaseMoney: 0,
       purchaseGovernmentIds: Object.freeze([]),
     }),
+    // Releasing a controlled government is the game's own `garrison.campaign`, so the espionage
+    // modal capture must not be reached at all.
+    operations: {
+      blockedByPlayerModal: () => false,
+      capture(governmentId) {
+        captures.push(governmentId);
+        return undefined;
+      },
+    },
     onActivity: (activity) => activities.push(activity),
   });
   const run = createCapturedEspionageRunner(espionage);
-  return { run, espionage, government, calls, activities };
+  return { run, espionage, government, calls, activities, captures };
 }
 
 {
-  const { run, espionage, government, calls, activities } = runRelease();
+  const { run, espionage, government, calls, activities, captures } =
+    runRelease();
   const outcome = run();
   assert.equal(outcome.status, "succeeded");
   assert.deepEqual(
@@ -96,6 +107,11 @@ function runRelease({ applyCampaign = true } = {}) {
     [["garrison", "campaign", 0]],
   );
   assert.equal(espionage.isBusy(), false);
+  assert.deepEqual(
+    captures,
+    [],
+    "release never reaches the espionage modal capture",
+  );
   assert.equal(activities[0]?.message, "Released foreign power 1");
 }
 

@@ -151,6 +151,12 @@ export function runCapturedPhaseOrderCycle({
             withMountingEnabled: (draw) => draw(),
           }
         : { available: false, withoutMounting: () => undefined },
+    // The capture-only path. No scenario here runs a real espionage operation — a release goes
+    // through `garrison.campaign` — so this reports the closed door the adapter must fail on.
+    synthesis: {
+      available: true,
+      invoke: () => ({ ok: false, reason: "unknown-method" }),
+    },
     uninstall: () => {},
   };
 
