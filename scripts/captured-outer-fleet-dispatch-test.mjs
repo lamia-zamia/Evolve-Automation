@@ -552,47 +552,54 @@ function installGame(page, root) {
     desc.append(row4);
     list.append(desc);
     page.shipRowsDrawn = (page.shipRowsDrawn ?? 0) + 1;
+    // `Vue.capture`'s `recordApp` keeps only the callable entries of a `methods` object, so a binding
+    // whose options omit one loses it from the control while the row itself still renders. That is
+    // what `rowMethodsMissing` stands in for: a row the page really drew whose control cannot carry
+    // the row's dispatch surface, which the proof has to refuse rather than assume.
+    const omitted = new Set(page.rowMethodsMissing ?? []);
+    const methods = {
+      scrap(id) {
+        const s = yard.ships[id];
+        if (!s) return;
+        yard.ships.splice(id, 1);
+        drawShips();
+        updateCosts();
+      },
+      copyMode() {
+        return yard.copy === true;
+      },
+      crewText(id) {
+        return shipCrewSize(yard.ships[id]);
+      },
+      fuelShort(id) {
+        return yard.ships[id]?.fueled === false;
+      },
+      retShow(id) {
+        return yard.ships[id]?.ret !== undefined;
+      },
+      pickDest(id) {
+        const modal = this.$buefy.modal.open({
+          hasModalCard: false,
+          content: '<div id="modalBox" class="modalBox"></div>',
+        });
+        modalCloseButton();
+        const checkExist = page.setInterval(function () {
+          if ($("#modalBox").length > 0) {
+            page.clearInterval(checkExist);
+            shipDispatchModal(id, modal);
+          }
+        }, 50);
+      },
+      // The yard's own answer to whether a ship is under way.
+      show(id) {
+        return yard.ships[id]?.movement !== undefined;
+      },
+    };
+    for (const name of omitted) delete methods[name];
     vBind({
       el: `#shipReg${i}`,
       data: page.rowData(i),
-      methods: {
-        scrap(id) {
-          const s = yard.ships[id];
-          if (!s) return;
-          yard.ships.splice(id, 1);
-          drawShips();
-          updateCosts();
-        },
-        copyMode() {
-          return yard.copy === true;
-        },
-        crewText(id) {
-          return shipCrewSize(yard.ships[id]);
-        },
-        fuelShort(id) {
-          return yard.ships[id]?.fueled === false;
-        },
-        retShow(id) {
-          return yard.ships[id]?.ret !== undefined;
-        },
-        pickDest(id) {
-          const modal = this.$buefy.modal.open({
-            hasModalCard: false,
-            content: '<div id="modalBox" class="modalBox"></div>',
-          });
-          modalCloseButton();
-          const checkExist = page.setInterval(function () {
-            if ($("#modalBox").length > 0) {
-              page.clearInterval(checkExist);
-              shipDispatchModal(id, modal);
-            }
-          }, 50);
-        },
-        // The yard's own answer to whether a ship is under way.
-        show(id) {
-          return yard.ships[id]?.movement !== undefined;
-        },
-      },
+      methods,
     });
   }
 
@@ -884,7 +891,8 @@ function installGame(page, root) {
   function loadCivicTab() {
     $("#mTabCivic").append($('<b-tabs class="resTabs"></b-tabs>'));
     vBind({ el: "#mTabCivic", data: { s: settings }, methods: civicMethods });
-    // `loadTab('mTabCivic')` reaches the yard itself once the tab settings select it.
+    // `loadTab('mTabCivic')` calls the yard itself, outside the sub-tab branch, so this runs under
+    // `tabLoad` too - which is exactly why preload mode ends up with a real yard.
     if (
       root.race.truepath &&
       root.race.species !== "protoplasm" &&
@@ -892,6 +900,19 @@ function installGame(page, root) {
     ) {
       drawShipYard();
     }
+  }
+
+  /**
+   * `index.js:initTabs` - preload mode loads every main tab up front and only the loaded one
+   * otherwise. The Civic tab is the only one transcribed here, because it is the only one that draws
+   * the yard; the branch is the game's, not the harness's.
+   */
+  function initTabs() {
+    if (settings.tabLoad) {
+      loadCivicTab();
+      return;
+    }
+    if (settings.civTabs === 2) loadCivicTab();
   }
 
   const mainMethods = {
@@ -929,6 +950,7 @@ function installGame(page, root) {
   return {
     drawShipYard,
     drawShips,
+    initTabs,
     mainMethods,
     civicMethods,
     shipyardMethods,
@@ -939,14 +961,17 @@ function installGame(page, root) {
 /**
  * One page with the game's own globals, the real Vue capture, and both captures on top. `withCivic`
  * stands for a player who has opened the Civic tab at some point, which is what binds `mTabCivic`.
- * `playerYard` stands for a player who is looking at the Dwarf Shipyard right now: the panel and its
- * own `#shipPlans`/`#shipList` rows are really in the document, drawn by the game's own draw.
+ * `playerYard` stands for a player who is looking at the Dwarf Shipyard right now, and `preload` for
+ * one whose settings retain every tab: both leave a real `#dwarfShipYard` in the document with the
+ * game's own `#shipPlans`, `#shipList` and `#shipReg*` bindings. In both cases the draw that fills it
+ * is left to the case, which owns the yard's contents.
  */
 function makeHarness({
   root = makeRoot(),
   withCivic = false,
   playerPanel = true,
   playerYard = false,
+  preload = false,
   /** Ships already in the yard, so a draw during `establish` binds their rows. */
   ships = [],
   establish = false,
@@ -1004,11 +1029,16 @@ function makeHarness({
     onCaptureError: (detail) => faults.push(detail),
   });
   if (establish) shipyard.establish();
-  if (playerYard) {
-    // The player is on the Dwarf Shipyard: their tab settings say so and their own panel is really
-    // in the document. The game's draw into it is left to the case, which owns the yard's contents.
-    root.settings.civTabs = 2;
-    root.settings.govTabs = 5;
+  if (playerYard || preload) {
+    // `#dwarfShipYard` is a `b-tab-item` the Civic tab's own render creates, so it is stood here in
+    // the one panel the game's Civic markup lives in, exactly where upstream's `b-tabs` would put it.
+    if (playerYard) {
+      // The player is on the Dwarf Shipyard, so their own saved sub-tab says so.
+      root.settings.civTabs = 2;
+      root.settings.govTabs = 5;
+    } else {
+      root.settings.tabLoad = true;
+    }
     page.document
       .getElementById("mTabCivic")
       .append(element("div", { id: "dwarfShipYard" }));
@@ -1233,9 +1263,10 @@ assert.equal(reorderedShips[0].movement.to, "spc_red");
 assert.equal(reorderedShips[1].name, "First");
 assert.equal(reorderedShips[1].movement, undefined);
 
-// The player is on the shipyard itself, so `sendShipTo`'s own `drawShips()` runs against the yard
-// they are looking at, and the real rows take the element id over from the captured ones. The
-// postcondition has to be read from the row that holds the ship now, not from the one invoked.
+// The player is on the shipyard itself, so the game has already drawn its rows and
+// `buildTPShip()`'s own `drawShips()` keeps them current. The capture therefore uses the row the
+// page really rendered rather than drawing a second, hidden list, and only `sendShipTo`'s own redraw
+// reorders and rebinds the yard while the dispatch runs.
 const onTab = makeHarness({ establish: true, playerYard: true });
 onTab.root.space.shipyard.ships.push(makeShip({ name: "First" }));
 onTab.root.space.shipyard.ships.push(makeShip({ name: "Second" }));
@@ -1247,8 +1278,9 @@ assert.equal(
   onTab.page.Vue.toRaw(onTabRow.data),
   onTab.root.space.shipyard.ships[1],
 );
-// The second draw of the pass is the one `sendShipTo` triggers, and it re-clusters the list.
-onTab.page.reorderShips = (onTab.page.drawShips ?? 0) + 2;
+// The next draw of the pass is the one `sendShipTo` triggers, and it re-clusters the list.
+const onTabDraws = onTab.page.drawShips;
+onTab.page.reorderShips = onTabDraws + 1;
 assert.deepEqual(
   onTab.dispatch.dispatchShipyardShip({ index: 1, region: "spc_red" }),
   { kind: "launched" },
@@ -1256,6 +1288,12 @@ assert.deepEqual(
 assert.deepEqual(sentTo(onTab.page), [
   { kind: "sendShipTo", id: 1, region: "spc_red", moved: true },
 ]);
+assert.equal(
+  onTab.page.drawShips,
+  onTabDraws + 1,
+  "the dispatch drew the ship list again instead of using the rendered row",
+);
+assert.equal(rowControl(onTab.capture, 1).generation, onTabRow.generation + 1);
 assert.equal(onTab.root.space.shipyard.ships[1].name, "First");
 assert.equal(onTab.root.space.shipyard.ships[1].movement, undefined);
 assert.equal(onTab.root.space.shipyard.ships[0].name, "Second");
@@ -1566,23 +1604,169 @@ assert.equal(
 );
 assert.equal(dark.page.document.getElementById("dwarfShipYard"), null);
 
-// A game that retains every tab makes both routes no-ops, so the capture refuses rather than
-// clearing panels its workspace does not cover.
+// Preload mode draws every tab itself, so there is no yard left for the scratch route to establish.
 const retained = makeHarness();
 retained.root.settings.tabLoad = true;
 assert.equal(retained.shipyard.establish(), undefined);
 assert.ok(
-  retained.faults.some((detail) => detail.includes("retains every tab")),
+  retained.faults.some((detail) =>
+    detail.includes("preload mode draws every tab"),
+  ),
   retained.faults.join("; "),
 );
-// The same gate refuses a row capture: the yard's own ship list would not draw either.
-const retainedRows = makeHarness({ establish: true });
-retainedRows.root.settings.tabLoad = true;
-retainedRows.root.space.shipyard.ships.push(makeShip());
+
+// ---------------------------------------------------------------------------
+// Preload mode: the game's own row, and the scratch route never running.
+// ---------------------------------------------------------------------------
+
+// `initTabs()` loads every main tab up front and `loadTab('mTabCivic')` calls `drawShipYard()` itself,
+// so the real panel, `#shipPlans` and `#shipList` exist before the automation does anything, and
+// `buildTPShip()`'s own `drawShips()` - whose tab gate is skipped entirely under preload - refreshes
+// the rows after a build.
+const preload = makeHarness({ preload: true });
+preload.game.initTabs();
+assert.notEqual(
+  preload.capture.controls.resolve(CAPTURED_OUTER_FLEET_SHIPYARD_CONTROL),
+  undefined,
+  "preload mode did not capture the yard's own control",
+);
+assert.notEqual(preload.page.document.getElementById("shipList"), null);
+assert.equal(preload.page.shipRowsDrawn, undefined, "an empty yard drew a row");
+const preloadSettings = Object.create(HARNESS_SETTINGS);
+const preloadControl = createCapturedOuterFleetControl({
+  rootState: { readRoot: () => preload.root },
+  controls: preload.capture.controls,
+  dispatch: preload.dispatch,
+  readSettings: () => preloadSettings,
+});
+const preloadPass = preloadControl.autoFleetOuter();
+assert.equal(preloadPass.outcome.status, "succeeded");
+assert.equal(preloadPass.shipTargetChanged, true);
+assert.equal(preload.root.space.shipyard.ships.length, 1);
+// The game's own build drew the row, into the player's own list.
+assert.deepEqual(preload.page.builds, [{ rowsBound: 1, drewList: 1 }]);
+const preloadRow = rowControl(preload.capture, 0);
+assert.notEqual(preloadRow, undefined);
+assert.ok(preloadRow.methods.includes("pickDest"));
+assert.ok(preloadRow.methods.includes("show"));
+assert.equal(
+  preload.page.Vue.toRaw(preloadRow.data),
+  preload.root.space.shipyard.ships[0],
+);
+assert.equal(
+  preload.page.document
+    .getElementById("shipList")
+    .contains(preload.page.document.getElementById("shipReg0")),
+  true,
+  "the row is not inside the game's own ship list",
+);
+assert.deepEqual(sentTo(preload.page), [
+  { kind: "sendShipTo", id: 0, region: "spc_red", moved: true },
+]);
+assert.equal(preload.root.space.shipyard.ships[0].movement.to, "spc_red");
+assert.equal(preload.root.civic.garrison.crew, 2);
+// One list, the player's own, and nothing of the scratch route anywhere.
+assert.equal(
+  preload.page.document.querySelectorAll("#shipList").length,
+  1,
+  "the dispatch stood a second ship list",
+);
+assert.equal(
+  preload.page.document.getElementById("shipList").parentElement.id,
+  "dwarfShipYard",
+);
+assert.equal(preload.page.document.getElementById("modalBox"), null);
+assert.equal(preload.page.document.querySelector(".modal.is-active"), null);
+assert.equal(preload.page.document.querySelector(".modal-background"), null);
+assert.equal(preload.root.settings.tabLoad, true);
+assert.equal(preload.root.settings.civTabs, 1);
+assert.equal(preload.root.settings.govTabs, 0);
+assert.equal(preload.page.setInterval, preload.page.realSetInterval);
+assert.equal(preload.page.clearInterval, preload.page.realClearInterval);
+assert.equal(
+  TestElement.prototype.addEventListener,
+  realAddEventListener,
+  "the page's own addEventListener was not restored",
+);
+assert.deepEqual(preload.faults, []);
+
+// A row the page really drew, but bound to another ship: the identity proof refuses it and preload
+// mode leaves no scratch route to fall back on.
+const preloadWrong = makeHarness({ preload: true });
+preloadWrong.root.space.shipyard.ships.push(makeShip({ name: "First" }));
+preloadWrong.root.space.shipyard.ships.push(makeShip({ name: "Second" }));
+preloadWrong.page.rowData = (index) =>
+  preloadWrong.root.space.shipyard.ships[(index + 1) % 2];
+preloadWrong.game.initTabs();
+assert.notEqual(preloadWrong.page.document.getElementById("shipReg0"), null);
 assert.deepEqual(
-  retainedRows.dispatch.dispatchShipyardShip({ index: 0, region: "spc_red" }),
+  preloadWrong.dispatch.dispatchShipyardShip({ index: 0, region: "spc_red" }),
   { kind: "unreachable" },
 );
-assert.deepEqual(sentTo(retainedRows.page), []);
+assert.deepEqual(sentTo(preloadWrong.page), []);
+assert.ok(
+  preloadWrong.faults.some((detail) =>
+    detail.includes("bound to another ship"),
+  ),
+  preloadWrong.faults.join("; "),
+);
+
+// The same, for a row whose binding lost one of the two methods the dispatch needs.
+for (const omitted of ["pickDest", "show"]) {
+  const preloadPartial = makeHarness({ preload: true });
+  preloadPartial.root.space.shipyard.ships.push(makeShip());
+  preloadPartial.page.rowMethodsMissing = [omitted];
+  preloadPartial.game.initTabs();
+  assert.notEqual(
+    preloadPartial.page.document.getElementById("shipReg0"),
+    null,
+  );
+  assert.deepEqual(
+    preloadPartial.dispatch.dispatchShipyardShip({
+      index: 0,
+      region: "spc_red",
+    }),
+    { kind: "unreachable" },
+  );
+  assert.deepEqual(sentTo(preloadPartial.page), []);
+  assert.ok(
+    preloadPartial.faults.some((detail) => detail.includes(omitted)),
+    preloadPartial.faults.join("; "),
+  );
+}
+
+// A registry-only row left by an earlier scratch capture: same id, still this ship's object, element
+// long gone. Preload mode has not drawn a row, so it must not answer.
+const orphan = makeHarness({ establish: true });
+const orphanShip = makeShip({ name: "Nomad" });
+orphan.root.space.shipyard.ships.push(orphanShip);
+assert.deepEqual(
+  orphan.dispatch.dispatchShipyardShip({ index: 0, region: "spc_red" }),
+  { kind: "launched" },
+);
+assert.equal(orphan.page.document.getElementById("shipReg0"), null);
+assert.equal(orphan.page.document.getElementById("shipList"), null);
+const orphanGeneration = rowControl(orphan.capture, 0).generation;
+orphan.root.settings.tabLoad = true;
+orphan.page.document
+  .getElementById("mTabCivic")
+  .append(element("div", { id: "dwarfShipYard" }));
+const orphanSecond = makeShip({ name: "Vagrant" });
+orphan.root.space.shipyard.ships.push(orphanSecond);
+assert.deepEqual(
+  orphan.dispatch.dispatchShipyardShip({ index: 1, region: "spc_red" }),
+  { kind: "unreachable" },
+);
+assert.deepEqual(sentTo(orphan.page).slice(-1), [
+  { kind: "sendShipTo", id: 0, region: "spc_red", moved: true },
+]);
+assert.equal(rowControl(orphan.capture, 0).generation, orphanGeneration);
+assert.equal(orphanSecond.movement, undefined);
+assert.ok(
+  orphan.faults.some((detail) =>
+    detail.includes("should already be bound and rendered"),
+  ),
+  orphan.faults.join("; "),
+);
 
 console.log("Captured outer-fleet synthetic capture checks passed");

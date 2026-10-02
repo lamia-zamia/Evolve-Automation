@@ -38,9 +38,9 @@
  * on, `clearTabPanels` would park each outgoing panel behind a `setTimeout` this pass drops, and a
  * later genuine clear would then skip it.
  *
- * `tabLoad` is the one condition that refuses outright. With every tab retained, both routes are
- * no-ops by the game's own guard, and running them without that guard would clear panels this
- * workspace does not cover.
+ * `tabLoad` is the one condition that refuses outright. With every tab retained the Civic component's
+ * own `swapTab` is a no-op by the game's guard, and the fallback route would append a second copy of
+ * the whole Civic tab into a panel that already holds one - for a yard the game has drawn itself.
  *
  * Freshness is the whole question here, because `shipPlans` outlives the draw: the generation before
  * the call is read, the call must report that it drew, and the resolved control must carry a
@@ -75,6 +75,18 @@
  * required to carry a generation newer than the one *that element id* held before it: a control
  * surviving an earlier draw, or one bound to whichever ship used to sit at this index, can never
  * answer for a capture.
+ *
+ * **A row the game already drew is used, never redrawn.** Two page states hold one: preload mode
+ * (`settings.tabLoad`) has `initTabs()` load every main tab at startup, `loadTab('mTabCivic')` call
+ * `drawShipYard()` itself, and `drawShips()` skip its tab gate altogether — so `#shipList` and its
+ * `#shipReg${i}` rows stay bound and current, and `buildTPShip()`'s own draw refreshes them; and a yard
+ * the player is looking at has just been redrawn the same way by the build that produced the ship.
+ * `captureRow()` therefore looks for the game's own rendered row first, requiring the element to exist
+ * inside the real `#shipList` rather than only in the registry. That check is what keeps a scratch
+ * capture's leftover control — same id, still matching data, element long gone — from answering, so
+ * the freshness proof below stays exactly as strict. Only when the page has drawn no row does the
+ * scratch route run, and never under preload: there a missing row means the game did not produce the
+ * control that mode is supposed to hold.
  */
 import type {
   GameControlHandle,
@@ -307,6 +319,74 @@ function liveShipIndex(
   ship: unknown,
 ): number {
   return ships === undefined ? -1 : ships.indexOf(ship);
+}
+
+/**
+ * The element the game itself rendered for `elementId`, and only when it sits inside the container
+ * the game owns and named `containerId`.
+ *
+ * `undefined` for everything else, deliberately including a document with no `getElementById`: this
+ * is the one check that separates a row the player can see from a control the registry kept after its
+ * element was taken away. A scratch capture binds `#shipReg${i}` into a `#shipList` of its own and
+ * removes both, and the registry never forgets it — so a matching `data` alone proves nothing about
+ * whether the game ever drew that row.
+ */
+function renderedElementInside(
+  document: unknown,
+  containerId: string,
+  elementId: string,
+): unknown {
+  if (!isRecord(document)) return undefined;
+  const getElementById = readProperty(document, "getElementById");
+  if (typeof getElementById !== "function") return undefined;
+  const resolve = (id: string): unknown => {
+    const found = Reflect.apply(getElementById, document, [id]);
+    return found === null || found === undefined ? undefined : found;
+  };
+  const container = resolve(containerId);
+  const element = resolve(elementId);
+  if (container === undefined || element === undefined) return undefined;
+  const contains = readProperty(container, "contains");
+  return typeof contains === "function" &&
+    Reflect.apply(contains, container, [element]) === true
+    ? element
+    : undefined;
+}
+
+/**
+ * The row the game has really drawn for this ship, or `undefined` when it has not drawn one.
+ *
+ * The same proof `provenShipRow` applies, plus the one only this route can apply: the element has to
+ * exist in the document inside the yard's own `#shipList`. That is what preload mode and a yard the
+ * player is looking at share, and it is what a scratch capture never has.
+ *
+ * Silent when the page simply has no rendered row, because for the lazy route that is the normal case
+ * and a fault every dispatch would carry says nothing. Once the element *is* there, the control proof
+ * reports: a row the page drew but whose binding is wrong is a real fault worth a line.
+ */
+function renderedShipRow(
+  controls: GameControlRegistry,
+  document: unknown,
+  pageWindow: unknown,
+  ship: unknown,
+  reportError: (detail: string) => void,
+): CapturedOuterFleetShipRow | undefined {
+  const control = controls.resolve(CAPTURED_OUTER_FLEET_SHIPYARD_CONTROL);
+  const index = liveShipIndex(
+    control === undefined ? undefined : capturedOuterFleetShipList(control),
+    ship,
+  );
+  if (index < 0) return undefined;
+  if (
+    renderedElementInside(
+      document,
+      CAPTURED_OUTER_FLEET_SHIP_LIST_ID,
+      `${CAPTURED_OUTER_FLEET_SHIP_ROW_PREFIX}${index}`,
+    ) === undefined
+  ) {
+    return undefined;
+  }
+  return provenShipRow(controls, pageWindow, ship, reportError, () => true);
 }
 
 function shipyardControlGeneration(controls: GameControlRegistry): number {
@@ -549,7 +629,7 @@ export function createCapturedOuterFleetShipyard(
         if (!isRecord(settings)) return undefined;
         if (settings["tabLoad"] === true) {
           reportError(
-            "the game retains every tab, so neither route to the shipyard draw would run",
+            "preload mode draws every tab itself, so there is no yard left to establish",
           );
           return undefined;
         }
@@ -655,11 +735,6 @@ export function createCapturedOuterFleetShipyard(
     },
 
     captureRow(ship: unknown): CapturedOuterFleetShipRow | undefined {
-      const synthesis = dependencies.synthesis;
-      if (drawing || synthesis === undefined || !synthesis.available) {
-        return undefined;
-      }
-      if (!dependencies.mountSuppression.available) return undefined;
       // A ship the yard does not list has no row to bind; refusing here also keeps the caller's
       // object identity from being an accident about a stale index.
       const control = dependencies.controls.resolve(
@@ -672,15 +747,35 @@ export function createCapturedOuterFleetShipyard(
       ) {
         return undefined;
       }
+      const settings = readProperty(
+        dependencies.rootState.readRoot(),
+        "settings",
+      );
+      // First, the game's own row. Two states of the page have one already drawn and current, and in
+      // both the scratch route below is the wrong tool: preload mode retains every tab, and a yard the
+      // player is looking at is refreshed by `buildTPShip()`'s own `drawShips()` a moment earlier.
+      // Redrawing either one would have the automation redraw a panel the game already owns.
+      const rendered = renderedShipRow(
+        dependencies.controls,
+        dependencies.getDocument(),
+        dependencies.getPageWindow(),
+        ship,
+        reportError,
+      );
+      if (rendered !== undefined) return rendered;
+      const synthesis = dependencies.synthesis;
+      if (drawing || synthesis === undefined || !synthesis.available) {
+        return undefined;
+      }
+      if (!dependencies.mountSuppression.available) return undefined;
       drawing = true;
       try {
-        const settings = readProperty(
-          dependencies.rootState.readRoot(),
-          "settings",
-        );
+        // Preload mode keeps every tab drawn, `loadTab('mTabCivic')` calls `drawShipYard()` itself and
+        // `drawShips()` skips its tab gate entirely — so a missing row here means the game did not
+        // produce the control the mode is supposed to hold, not that a draw is owed.
         if (isRecord(settings) && settings["tabLoad"] === true) {
           reportError(
-            "the game retains every tab, so the yard's own ship list would not draw",
+            "preload mode keeps every tab drawn, so the yard's own row for that ship should already be bound and rendered",
           );
           return undefined;
         }
@@ -711,7 +806,7 @@ export function createCapturedOuterFleetShipyard(
           return undefined;
         }
         const borrow = yardDrawBorrow(
-          readProperty(dependencies.rootState.readRoot(), "settings"),
+          settings,
           capturedOuterFleetYardView(control),
         );
         if (borrow === undefined) {

@@ -21321,6 +21321,30 @@
   function liveShipIndex(ships, ship) {
     return ships === void 0 ? -1 : ships.indexOf(ship);
   }
+  function renderedElementInside(document, containerId, elementId) {
+    if (!isRecord(document)) return;
+    let getElementById = readProperty(document, "getElementById");
+    if (typeof getElementById != "function") return;
+    let resolve = (id) => {
+      let found = Reflect.apply(getElementById, document, [id]);
+      return found ?? void 0;
+    }, container = resolve(containerId), element = resolve(elementId);
+    if (container === void 0 || element === void 0) return;
+    let contains = readProperty(container, "contains");
+    return typeof contains == "function" && Reflect.apply(contains, container, [element]) === !0 ? element : void 0;
+  }
+  function renderedShipRow(controls2, document, pageWindow, ship, reportError) {
+    let control = controls2.resolve(CAPTURED_OUTER_FLEET_SHIPYARD_CONTROL), index = liveShipIndex(
+      control === void 0 ? void 0 : capturedOuterFleetShipList(control),
+      ship
+    );
+    if (!(index < 0) && renderedElementInside(
+      document,
+      CAPTURED_OUTER_FLEET_SHIP_LIST_ID,
+      `${CAPTURED_OUTER_FLEET_SHIP_ROW_PREFIX}${index}`
+    ) !== void 0)
+      return provenShipRow(controls2, pageWindow, ship, reportError, () => !0);
+  }
   function shipyardControlGeneration(controls2) {
     return controls2.resolve(CAPTURED_OUTER_FLEET_SHIPYARD_CONTROL)?.generation ?? 0;
   }
@@ -21425,7 +21449,7 @@
             if (!isRecord(settings)) return;
             if (settings.tabLoad === !0) {
               reportError(
-                "the game retains every tab, so neither route to the shipyard draw would run"
+                "preload mode draws every tab itself, so there is no yard left to establish"
               );
               return;
             }
@@ -21502,21 +21526,29 @@
         }
       },
       captureRow(ship) {
-        let synthesis = dependencies.synthesis;
-        if (drawing || synthesis === void 0 || !synthesis.available || !dependencies.mountSuppression.available) return;
         let control = dependencies.controls.resolve(
           CAPTURED_OUTER_FLEET_SHIPYARD_CONTROL
         );
-        if (!(control === void 0 || !shipyardControlIsEstablished(control) || liveShipIndex(capturedOuterFleetShipList(control), ship) < 0)) {
+        if (control === void 0 || !shipyardControlIsEstablished(control) || liveShipIndex(capturedOuterFleetShipList(control), ship) < 0)
+          return;
+        let settings = readProperty(
+          dependencies.rootState.readRoot(),
+          "settings"
+        ), rendered = renderedShipRow(
+          dependencies.controls,
+          dependencies.getDocument(),
+          dependencies.getPageWindow(),
+          ship,
+          reportError
+        );
+        if (rendered !== void 0) return rendered;
+        let synthesis = dependencies.synthesis;
+        if (!(drawing || synthesis === void 0 || !synthesis.available) && dependencies.mountSuppression.available) {
           drawing = !0;
           try {
-            let settings = readProperty(
-              dependencies.rootState.readRoot(),
-              "settings"
-            );
             if (isRecord(settings) && settings.tabLoad === !0) {
               reportError(
-                "the game retains every tab, so the yard's own ship list would not draw"
+                "preload mode keeps every tab drawn, so the yard's own row for that ship should already be bound and rendered"
               );
               return;
             }
@@ -21543,7 +21575,7 @@
               return;
             }
             let borrow = yardDrawBorrow(
-              readProperty(dependencies.rootState.readRoot(), "settings"),
+              settings,
               capturedOuterFleetYardView(control)
             );
             if (borrow === void 0) {
