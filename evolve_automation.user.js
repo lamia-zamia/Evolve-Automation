@@ -49641,13 +49641,24 @@ Only continue if you trust the source. Injected code:
     let shadow = readProperty(tech, "shadow");
     return !(shadow && (finite(shadow) ?? 0) >= 5 || readProperty(tech, "isolation") || !readProperty(tech, "syndicate") || !readProperty(race, "truepath") || !readProperty(space, "syndicate"));
   }
+  var READOUT_NOT_DRAWN = Object.freeze({
+    kind: "absent"
+  }), READOUT_PASS_FAILED = Object.freeze({
+    kind: "refused"
+  });
   function createCapturedSyndicateMechanics(dependencies) {
-    let { rootState, controls: controls2, discovery, mechanics } = dependencies;
+    let { rootState, controls: controls2, discovery, mechanics } = dependencies, rejectedDiscoveryGenerations = /* @__PURE__ */ new Map();
+    function trustedReadout(control, handle) {
+      if (handle === void 0) return;
+      let quarantined = rejectedDiscoveryGenerations.get(control);
+      if (quarantined === void 0) return handle;
+      if (quarantined !== handle.generation)
+        return rejectedDiscoveryGenerations.delete(control), handle;
+    }
     function captureReadout(region) {
-      let subTab = SYNDICATE_REGION_TABS[region];
-      if (subTab === void 0) return;
-      let panel = MAIN_TAB_PANELS[MAIN_TAB_INDEX.civilization];
-      discovery.discover(
+      let control = syndicateReadoutControl(region), subTab = SYNDICATE_REGION_TABS[region];
+      if (subTab === void 0) return READOUT_NOT_DRAWN;
+      let panel = MAIN_TAB_PANELS[MAIN_TAB_INDEX.civilization], result = discovery.discover(
         Object.freeze([
           Object.freeze({
             setting: MAIN_TAB_SETTING,
@@ -49661,7 +49672,14 @@ Only continue if you trust the source. Injected code:
           })
         ]),
         panel === void 0 ? {} : { mount: Object.freeze([`#${panel}`]) }
-      );
+      ), captured = controls2.resolve(control);
+      return result.outcome.status !== "succeeded" ? (captured !== void 0 && rejectedDiscoveryGenerations.set(control, captured.generation), READOUT_PASS_FAILED) : captured === void 0 ? READOUT_NOT_DRAWN : Object.freeze({ kind: "captured", handle: captured });
+    }
+    function readSyndicateScan(region, handle) {
+      let invocation, scan = mechanics.readRoundedValues(() => {
+        invocation = controls2.invoke(handle, SYNDICATE_SCAN_METHOD, [region]);
+      });
+      return scan.kind === "absent" ? { kind: "absent" } : scan.kind === "invalid" ? { kind: "invalid" } : invocation?.ok !== !0 ? { kind: "invalid" } : readSyndicateSample(scan.value);
     }
     return Object.freeze({
       read(region) {
@@ -49674,14 +49692,10 @@ Only continue if you trust the source. Injected code:
             kind: "value",
             value: Object.freeze({ p: 1, s: 0 })
           };
-        let control = syndicateReadoutControl(region);
-        controls2.resolve(control) === void 0 && captureReadout(region);
-        let handle = controls2.resolve(control);
-        if (handle === void 0) return { kind: "absent" };
-        let invocation, scan = mechanics.readRoundedValues(() => {
-          invocation = controls2.invoke(handle, SYNDICATE_SCAN_METHOD, [region]);
-        });
-        return scan.kind === "absent" ? { kind: "absent" } : scan.kind === "invalid" ? { kind: "invalid" } : invocation?.ok !== !0 ? { kind: "invalid" } : readSyndicateSample(scan.value);
+        let control = syndicateReadoutControl(region), held = trustedReadout(control, controls2.resolve(control));
+        if (held !== void 0) return readSyndicateScan(region, held);
+        let capture = captureReadout(region);
+        return capture.kind === "absent" ? { kind: "absent" } : capture.kind === "refused" ? { kind: "invalid" } : trustedReadout(control, capture.handle) === void 0 ? { kind: "invalid" } : readSyndicateScan(region, capture.handle);
       }
     });
   }

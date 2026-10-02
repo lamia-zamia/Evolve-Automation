@@ -11,6 +11,11 @@
 import assert from "node:assert/strict";
 
 import { createCapturedSyndicateMechanics } from "../src/adapters/evolve/captured-syndicate-mechanics.ts";
+import {
+  rejected,
+  stale,
+  SUCCEEDED,
+} from "../src/adapters/command-outcomes.ts";
 import { probeScopedNumberToFixed } from "../src/adapters/evolve/scoped-number-to-fixed.ts";
 import {
   MAIN_TAB_CONTROL,
@@ -178,13 +183,19 @@ function syndicateFor({ root, registry, discovery }) {
   const registry = registryFor(
     scanOver({ ratio: 0.2681000012345, sensor: 47 }),
   );
-  const read = syndicateFor({ root: operatingRoot(), registry }).read(
-    "spc_red",
-  );
+  const discovery = discoveryStub();
+  const read = syndicateFor({
+    root: operatingRoot(),
+    registry,
+    discovery,
+  }).read("spc_red");
   assert.deepEqual(read, { kind: "value", value: { p: 0.7319, s: 47 } });
   assert.equal(read.value.p, 1 - Number((0.2681000012345).toFixed(4)));
   assert.notEqual(read.value.p, 1 - 0.2681000012345);
   assert.equal(registry.invoked.length, 0);
+  // A control the game bound on its own is read directly, at no draw: the player is looking at that
+  // panel, or a drawing is this capture already holds.
+  assert.deepEqual(discovery.passes, []);
   assertPrototypeRestored(descriptor, "exact p");
 }
 
@@ -492,6 +503,295 @@ function untilDiscovered(inner, discovery) {
     { kind: "absent" },
   );
   assert.deepEqual(discovery.passes, []);
+}
+
+// ---------------------------------------------------------------------------
+// A pass that failed does not leave authority behind.
+//
+// The registry keeps whatever a draw captured, and a captured closure outlives the panel it came
+// from. So a pass that bound the readout and then could not put the player's view back leaves a
+// handle that is present, live, and perfectly capable of answering — and nothing about the page
+// distinguishes it from a binding the game drew for the player. Every fixture below therefore gives
+// the failed pass a `scan` closure that produces the exact `{p, s}` the fleet would have planned a
+// ship from: the answer being wrong is only visible if it is produced at all.
+// ---------------------------------------------------------------------------
+
+/**
+ * A registry that holds no readout until something binds one, and whose generation a case advances
+ * itself. This is the real capture's shape: a control is retained, so its generation outlives the
+ * pass that bound it, and every rebind is a new generation no earlier pass produced.
+ */
+function boundOnDemandRegistry(controlId = "spc_redsynd") {
+  const state = {
+    generation: 0,
+    current: undefined,
+    scan: undefined,
+    invocations: [],
+  };
+  return {
+    state,
+    /**
+     * What the game itself does to bind a readout again, whether the player visited the panel or a
+     * pass drew it: a new generation of that region's own closures.
+     */
+    bind: (scan) => {
+      state.generation += 1;
+      state.scan = scan;
+      state.current = Object.freeze({
+        elementId: controlId,
+        generation: state.generation,
+        methods: ["scan"],
+      });
+    },
+    resolve: (elementId) =>
+      elementId === controlId ? state.current : undefined,
+    invoke: (resolved, method, args = []) => {
+      state.invocations.push({ generation: resolved?.generation, method });
+      if (
+        resolved !== state.current ||
+        method !== "scan" ||
+        state.scan === undefined
+      ) {
+        return { ok: false, reason: "unknown-method" };
+      }
+      return { ok: true, value: state.scan(...args) };
+    },
+    capturedElementIds: () => (state.current === undefined ? [] : [controlId]),
+  };
+}
+
+/**
+ * A discovery pass over a scripted list of `draw` and `outcome` steps, because on a real page the two
+ * are independent: a pass can bind the readout and still fail afterwards, and a pass can succeed
+ * without drawing anything at all.
+ */
+function scriptedDiscovery(steps) {
+  const unscripted = [...steps];
+  return {
+    passes: [],
+    discover(path, options) {
+      this.passes.push({ path, options });
+      const step = unscripted.shift();
+      if (step === undefined) {
+        throw new Error(
+          "this case spent more discovery passes than it scripted",
+        );
+      }
+      if (step.draw !== undefined) step.draw();
+      return { outcome: step.outcome, discovered: [] };
+    },
+  };
+}
+
+/**
+ * The failures `GameTabDiscovery` reports, each of which can happen after the readout was bound. The
+ * first is the one the protected-draw invariant is about: the draw worked, and the player's view
+ * did not come back.
+ */
+const failedDiscoveryOutcomes = [
+  [
+    "a restore failure",
+    rejected(
+      "tab-restore-failed",
+      "the workspace could not put the panels back",
+    ),
+  ],
+  [
+    "an unobserved workspace",
+    rejected("tab-observer-failed", "not a function"),
+  ],
+  ["a failed draw", rejected("tab-draw-failed", "unknown-method")],
+  [
+    "a missing tab control",
+    rejected("tab-control-missing", "no captured control for mTabCivil"),
+  ],
+  [
+    "a superseded tab control",
+    stale("stale-tab-control", "mTabCivil generation 3, current 2"),
+  ],
+  [
+    "an uninitialized page",
+    rejected(
+      "game-state-not-captured",
+      "the game has not created its settings yet",
+    ),
+  ],
+];
+
+for (const [label, outcome] of failedDiscoveryOutcomes) {
+  const descriptor = toFixedDescriptor();
+  const registry = boundOnDemandRegistry();
+  const discovery = scriptedDiscovery([
+    {
+      draw: () => registry.bind(scanOver({ ratio: 0.2681, sensor: 47 })),
+      outcome,
+    },
+  ]);
+  const read = syndicateFor({
+    root: operatingRoot(),
+    registry,
+    discovery,
+  }).read("spc_red");
+  assert.deepEqual(
+    read,
+    { kind: "invalid" },
+    `${label}: a failed pass answered for the region`,
+  );
+  assert.deepEqual(
+    registry.state.invocations,
+    [],
+    `${label}: the failed pass's own closure was read`,
+  );
+  assert.equal(registry.state.generation, 1, `${label}: nothing was bound`);
+  assert.equal(discovery.passes.length, 1, `${label}: pass count`);
+  assertPrototypeRestored(descriptor, label);
+}
+
+// The next cycle finds the control already in the registry, which is exactly the trap: presence in
+// `GameControlRegistry` is not proof of anything. A quarantined generation must still spend a pass,
+// and a pass that fails again must leave the region just as unanswered.
+{
+  const registry = boundOnDemandRegistry();
+  const discovery = scriptedDiscovery([
+    {
+      draw: () => registry.bind(scanOver({ ratio: 0.2681, sensor: 47 })),
+      outcome: rejected(
+        "tab-restore-failed",
+        "the workspace could not put the panels back",
+      ),
+    },
+    {
+      draw: () => {},
+      outcome: rejected(
+        "tab-restore-failed",
+        "the workspace could not put the panels back",
+      ),
+    },
+  ]);
+  const syndicate = syndicateFor({
+    root: operatingRoot(),
+    registry,
+    discovery,
+  });
+  assert.deepEqual(syndicate.read("spc_red"), { kind: "invalid" });
+  assert.equal(registry.state.generation, 1);
+  const second = syndicate.read("spc_red");
+  assert.deepEqual(
+    second,
+    { kind: "invalid" },
+    "the quarantined generation was trusted because the registry held it",
+  );
+  assert.equal(
+    discovery.passes.length,
+    2,
+    "the quarantined control skipped discovery entirely",
+  );
+  assert.deepEqual(registry.state.invocations, []);
+}
+
+// A pass that reports success without rebinding the readout — the observed no-draw case, taken while
+// the player is already on the panel — is not proof about a binding a failed pass produced either.
+{
+  const registry = boundOnDemandRegistry();
+  const discovery = scriptedDiscovery([
+    {
+      draw: () => registry.bind(scanOver({ ratio: 0.2681, sensor: 47 })),
+      outcome: rejected(
+        "tab-restore-failed",
+        "the workspace could not put the panels back",
+      ),
+    },
+    { draw: () => {}, outcome: SUCCEEDED },
+  ]);
+  const syndicate = syndicateFor({
+    root: operatingRoot(),
+    registry,
+    discovery,
+  });
+  assert.deepEqual(syndicate.read("spc_red"), { kind: "invalid" });
+  assert.deepEqual(
+    syndicate.read("spc_red"),
+    { kind: "invalid" },
+    "a pass that drew nothing vouched for the generation a failed pass left",
+  );
+  assert.equal(discovery.passes.length, 2);
+  assert.deepEqual(registry.state.invocations, []);
+}
+
+// A retry that genuinely redraws the panel replaces the quarantined generation with a real one, and
+// only then is the region's own arithmetic answerable.
+{
+  const registry = boundOnDemandRegistry();
+  // A different sample from the failed generation's closure, so which one was read is visible.
+  const redrawn = scanOver({ ratio: 0.4, sensor: 30 });
+  const discovery = scriptedDiscovery([
+    {
+      draw: () => registry.bind(scanOver({ ratio: 0.2681, sensor: 47 })),
+      outcome: rejected(
+        "tab-restore-failed",
+        "the workspace could not put the panels back",
+      ),
+    },
+    { draw: () => registry.bind(redrawn), outcome: SUCCEEDED },
+  ]);
+  const syndicate = syndicateFor({
+    root: operatingRoot(),
+    registry,
+    discovery,
+  });
+  assert.deepEqual(syndicate.read("spc_red"), { kind: "invalid" });
+  assert.deepEqual(syndicate.read("spc_red"), {
+    kind: "value",
+    value: { p: 0.6, s: 30 },
+  });
+  assert.deepEqual(
+    registry.state.invocations,
+    [{ generation: 2, method: "scan" }],
+    "the retry read through something other than the redrawn generation",
+  );
+  assert.equal(discovery.passes.length, 2);
+  // Generation 2 is ordinary authority from here: the player-drawn fast path, at no cost.
+  assert.deepEqual(syndicate.read("spc_red"), {
+    kind: "value",
+    value: { p: 0.6, s: 30 },
+  });
+  assert.equal(discovery.passes.length, 2);
+  assert.equal(registry.state.invocations.length, 2);
+}
+
+// The quarantine is one generation, not one element id. A game redraw the automation did not ask for
+// supersedes it on its own — the player visiting the panel — and costs no pass.
+{
+  const registry = boundOnDemandRegistry();
+  const discovery = scriptedDiscovery([
+    {
+      draw: () => registry.bind(scanOver({ ratio: 0.2681, sensor: 47 })),
+      outcome: rejected(
+        "tab-restore-failed",
+        "the workspace could not put the panels back",
+      ),
+    },
+  ]);
+  const syndicate = syndicateFor({
+    root: operatingRoot(),
+    registry,
+    discovery,
+  });
+  assert.deepEqual(syndicate.read("spc_red"), { kind: "invalid" });
+  registry.bind(scanOver({ ratio: 0.1, sensor: 12 }));
+  assert.deepEqual(
+    syndicate.read("spc_red"),
+    { kind: "value", value: { p: 0.9, s: 12 } },
+    "a newer generation inherited an older generation's quarantine",
+  );
+  assert.equal(
+    discovery.passes.length,
+    1,
+    "a genuine redraw was mistaken for a control that still had to be discovered",
+  );
+  assert.deepEqual(registry.state.invocations, [
+    { generation: 2, method: "scan" },
+  ]);
 }
 
 // ---------------------------------------------------------------------------

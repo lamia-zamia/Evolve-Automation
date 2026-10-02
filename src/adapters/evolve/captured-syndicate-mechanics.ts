@@ -36,8 +36,26 @@
  *
  * The game binds `#<region>synd` while it renders a region's row, which only happens while that
  * region is on the Inner System or Outer System panel. A control the capture already holds is used
- * directly — a captured closure keeps working after its panel is torn down, so the protected
- * discovery pass runs at most once per region and never again.
+ * directly — a captured closure keeps working after its panel is torn down — so the common read
+ * costs no draw at all, whether the player is looking at that panel or the binding survived an
+ * earlier pass.
+ *
+ * ## Why a pass has to be proven, and what a failed one leaves behind
+ *
+ * `GameTabDiscovery` reports `rejected` or `stale` when a tab control could not be invoked, the
+ * observer threw, the player's view could not be restored, or the workspace did not survive. Any of
+ * those can happen *after* the draw bound the readout, and the registry keeps whatever a draw
+ * captured — a captured closure outlives both the panel it came from and the pass that captured it.
+ * A generation the registry merely holds is therefore not authority:
+ *
+ * - a first-use read runs one pass and reads `scan` only when that pass reported `succeeded` and the
+ *   generation it left behind is one this adapter vouches for;
+ * - a failed pass quarantines the generation it left, and the next read tries again rather than
+ *   treating the presence of that handle as the control being established.
+ *
+ * The quarantine is one generation of one element id, never the id: the game rebinds a readout
+ * whenever it redraws that region, so a later generation is ordinary authority again — the
+ * player's own redraw, or another successful pass, without a synthetic one.
  */
 
 import type { CapturedGameRead } from "../../ports/captured-game-mechanics.ts";
@@ -46,6 +64,7 @@ import type {
   GameSyndicateSample,
 } from "../../ports/game-syndicate-mechanics.ts";
 import type {
+  GameControlHandle,
   GameControlRegistry,
   GameControlResult,
 } from "../../ports/game-control-registry.ts";
@@ -151,24 +170,85 @@ export interface CapturedSyndicateMechanicsDependencies {
   readonly mechanics: CapturedGameMechanics;
 }
 
+/**
+ * What one protected draw left behind for a region's readout.
+ *
+ * `captured` is the only answer a read may go through, and only once the generation it names is one
+ * this adapter still vouches for.
+ */
+type SyndicateReadoutCapture =
+  | { readonly kind: "captured"; readonly handle: GameControlHandle }
+  | { readonly kind: "absent" }
+  | { readonly kind: "refused" };
+
+/**
+ * No draw could reach this readout: no Space sub-tab draws the region, or the pass ran and bound
+ * nothing. Both are the game having no readout here, not a read this adapter failed to make.
+ */
+const READOUT_NOT_DRAWN: SyndicateReadoutCapture = Object.freeze({
+  kind: "absent",
+});
+
+/** The pass ran and failed, so nothing it left behind is this read's authority. */
+const READOUT_PASS_FAILED: SyndicateReadoutCapture = Object.freeze({
+  kind: "refused",
+});
+
 export function createCapturedSyndicateMechanics(
   dependencies: CapturedSyndicateMechanicsDependencies,
 ): GameSyndicateMechanics {
   const { rootState, controls, discovery, mechanics } = dependencies;
 
   /**
+   * The generation a failed discovery pass left behind for each readout, by element id.
+   *
+   * The registry retains captured controls, so refusing only the read that ran the failed pass would
+   * hand that pass's binding to the next cycle, which finds the control already present and skips
+   * discovery entirely. Marking the generation instead of the element id keeps the quarantine as
+   * narrow as the failure: the game rebinds a readout whenever it redraws that region, and any later
+   * generation is a binding no failed pass produced.
+   */
+  const rejectedDiscoveryGenerations = new Map<string, number>();
+
+  /**
+   * The handle for a readout, when the registry's current one is authority this adapter vouches for.
+   *
+   * `undefined` for no handle at all and for a quarantined generation alike, which is what keeps the
+   * two cases apart from the caller's side: both spend one protected pass. A generation other than
+   * the quarantined one is dropped from the record as it is read, because the game rebinds the
+   * control on every redraw and a newer binding is not the one that failed.
+   */
+  function trustedReadout(
+    control: string,
+    handle: GameControlHandle | undefined,
+  ): GameControlHandle | undefined {
+    if (handle === undefined) return undefined;
+    const quarantined = rejectedDiscoveryGenerations.get(control);
+    if (quarantined === undefined) return handle;
+    if (quarantined !== handle.generation) {
+      rejectedDiscoveryGenerations.delete(control);
+      return handle;
+    }
+    return undefined;
+  }
+
+  /**
    * One protected draw of the panel that renders this region, and nothing else.
    *
    * The main tab's own component is mounted for real because the region containers are that
    * component's render rather than markup, and the Civilization panel is the workspace's scratch, so
-   * the draw is dropped again. A pass that fails is not retried inside one read: the caller stands
-   * down and the next cycle tries again.
+   * the draw is dropped again. At most one pass runs per read: the caller stands down and the next
+   * cycle tries again.
+   *
+   * A failed pass reports the failure rather than a handle, and marks whatever it left behind. That
+   * generation is never read through on the strength of this pass.
    */
-  function captureReadout(region: string): void {
+  function captureReadout(region: string): SyndicateReadoutCapture {
+    const control = syndicateReadoutControl(region);
     const subTab = SYNDICATE_REGION_TABS[region];
-    if (subTab === undefined) return;
+    if (subTab === undefined) return READOUT_NOT_DRAWN;
     const panel = MAIN_TAB_PANELS[MAIN_TAB_INDEX.civilization];
-    discovery.discover(
+    const result = discovery.discover(
       Object.freeze([
         Object.freeze({
           setting: MAIN_TAB_SETTING,
@@ -183,6 +263,37 @@ export function createCapturedSyndicateMechanics(
       ]),
       panel === undefined ? {} : { mount: Object.freeze([`#${panel}`]) },
     );
+    const captured = controls.resolve(control);
+    if (result.outcome.status !== "succeeded") {
+      if (captured !== undefined) {
+        rejectedDiscoveryGenerations.set(control, captured.generation);
+      }
+      return READOUT_PASS_FAILED;
+    }
+    return captured === undefined
+      ? READOUT_NOT_DRAWN
+      : Object.freeze({ kind: "captured", handle: captured });
+  }
+
+  /**
+   * The game's own two roundings, read through one proven handle.
+   *
+   * The registry's own verdict is what makes the observations attributable. A superseded binding
+   * still runs a live closure of an older draw, and that closure can round both values before the
+   * registry reports the call as failed, so its roundings are not this region's answer.
+   */
+  function readSyndicateScan(
+    region: string,
+    handle: GameControlHandle,
+  ): CapturedGameRead<GameSyndicateSample> {
+    let invocation: GameControlResult | undefined;
+    const scan = mechanics.readRoundedValues(() => {
+      invocation = controls.invoke(handle, SYNDICATE_SCAN_METHOD, [region]);
+    });
+    if (scan.kind === "absent") return { kind: "absent" };
+    if (scan.kind === "invalid") return { kind: "invalid" };
+    if (invocation?.ok !== true) return { kind: "invalid" };
+    return readSyndicateSample(scan.value);
   }
 
   return Object.freeze({
@@ -200,21 +311,19 @@ export function createCapturedSyndicateMechanics(
         };
       }
       const control = syndicateReadoutControl(region);
-      if (controls.resolve(control) === undefined) captureReadout(region);
-      const handle = controls.resolve(control);
-      if (handle === undefined) return { kind: "absent" };
-
-      // The registry's own verdict is what makes the observations attributable. A superseded binding
-      // still runs a live closure of an older draw, and that closure can round both values before the
-      // registry reports the call as failed, so its roundings are not this region's answer.
-      let invocation: GameControlResult | undefined;
-      const scan = mechanics.readRoundedValues(() => {
-        invocation = controls.invoke(handle, SYNDICATE_SCAN_METHOD, [region]);
-      });
-      if (scan.kind === "absent") return { kind: "absent" };
-      if (scan.kind === "invalid") return { kind: "invalid" };
-      if (invocation?.ok !== true) return { kind: "invalid" };
-      return readSyndicateSample(scan.value);
+      // The cheap read: a control the game bound outside a failed pass, at no cost and no draw.
+      const held = trustedReadout(control, controls.resolve(control));
+      if (held !== undefined) return readSyndicateScan(region, held);
+      const capture = captureReadout(region);
+      if (capture.kind === "absent") return { kind: "absent" };
+      if (capture.kind === "refused") return { kind: "invalid" };
+      // A successful pass is authority for what it itself left behind. A pass that rebound nothing
+      // — the observed no-draw case — leaves the quarantined generation exactly where it was, and
+      // that binding is still the failed pass's, so it is refused rather than read through.
+      if (trustedReadout(control, capture.handle) === undefined) {
+        return { kind: "invalid" };
+      }
+      return readSyndicateScan(region, capture.handle);
     },
   });
 }
