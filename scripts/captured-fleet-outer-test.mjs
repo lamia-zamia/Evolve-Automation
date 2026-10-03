@@ -99,7 +99,7 @@ function createFixture({ append = true } = {}) {
     powerText: () => "100kW",
     build: () => {
       calls.push(["build"]);
-      if (append) ships.push({ location: "spc_dwarf" });
+      if (append) ships.push({ location: outerAssignmentPoint("spc_dwarf") });
     },
   };
   const handle = {
@@ -286,8 +286,7 @@ const capturedMethods = {
       engine: yard.blueprint.engine,
       sensor: yard.blueprint.sensor,
       special: yard.blueprint.special,
-      location: "spc_dwarf",
-      transit: 0,
+      location: outerAssignmentPoint("spc_dwarf"),
       fueled: true,
       damage: 0,
     });
@@ -331,7 +330,11 @@ function createDispatchStub(kind = "launched") {
       if (kind !== "launched") return { kind };
       const ship = yard.ships[request.index];
       if (ship === undefined) return { kind: "no-destination" };
-      ship.movement = { to: request.region };
+      ship.movement = {
+        from: ship.location,
+        left: 10,
+        legs: [{ to: outerAssignmentPoint(request.region), days: 10 }],
+      };
       return { kind: "launched" };
     },
   };
@@ -466,7 +469,7 @@ assert.equal(yard.ships.length, 1);
 assert.equal(dispatch.requests.length, 1);
 assert.deepEqual(dispatch.requests[0], { index: 0, region: "spc_red" });
 assert.equal(capturedMethods.show(0), true);
-assert.equal(yard.ships[0].movement.to, "spc_red");
+assert.equal(yard.ships[0].movement.legs.at(-1).to.id, "spc_red");
 // Sending a ship that was already built changes where it is, not what the yard builds next.
 assert.equal(outerControl.autoFleetOuter().shipTargetChanged, true);
 assert.equal(dispatch.requests.length, 2);
@@ -627,7 +630,10 @@ capturedMethods.setVal = () => {};
 const buildsBeforeStaleBlueprint = capturedBuilds;
 capturedMethods.build = () => {
   capturedBuilds++;
-  yard.ships.push({ ...yard.blueprint, location: "spc_dwarf" });
+  yard.ships.push({
+    ...yard.blueprint,
+    location: outerAssignmentPoint("spc_dwarf"),
+  });
 };
 const staleBlueprintResult = createOuterControl().autoFleetOuter();
 assert.equal(staleBlueprintResult.outcome.status, "rejected");
@@ -655,7 +661,7 @@ capturedMethods.build = () => {
   yard.ships.push({
     ...yard.blueprint,
     class: "frigate",
-    location: "spc_dwarf",
+    location: outerAssignmentPoint("spc_dwarf"),
   });
 };
 const wrongShipControl = createOuterControl();
@@ -769,7 +775,7 @@ const staleRowResult = createOuterControl(
       yard.ships.push({
         ...yard.blueprint,
         weapon: "laser",
-        location: "spc_dwarf",
+        location: outerAssignmentPoint("spc_dwarf"),
       });
     },
   }),
@@ -887,7 +893,7 @@ const stockOnlyResult = createOuterControl(
       yard.ships.push({
         ...yard.blueprint,
         class: "frigate",
-        location: "spc_dwarf",
+        location: outerAssignmentPoint("spc_dwarf"),
       });
     },
   }),
@@ -1273,6 +1279,207 @@ function resetOuterPass() {
   root.tech.tauceti = 0;
 }
 
+// Assigned ships reserve their slots while moving; the last departed port is not their assignment.
+function outerAssignmentPoint(id) {
+  return { id, x: 0, y: 0, z: 0 };
+}
+function outerAssignmentShip(blueprint, port, destination) {
+  const location = outerAssignmentPoint(port);
+  return {
+    ...blueprint,
+    location,
+    ...(destination === undefined
+      ? {}
+      : {
+          movement: {
+            from: location,
+            left: 10,
+            legs: [{ to: outerAssignmentPoint(destination), days: 10 }],
+          },
+        }),
+  };
+}
+function readOuterAssignmentPlan(registry = capturedRegistry) {
+  const parts = { catalog: () => partCatalog };
+  const adapter = createCapturedOuterFleetAdapter({
+    rootState: {
+      readRoot: () => root,
+      isReactivitySuppressed: () => false,
+      subscribeRootReplaced: () => () => {},
+    },
+    controls: createCapturedFleetControls({ controls: registry, parts }),
+    costs,
+    parts,
+    dispatch,
+    syndicate,
+    readSettings: () => effectiveSettings,
+  });
+  const cycle = planOuterFleetCycle(adapter.reader.readCycle());
+  assert.equal(cycle.kind, "select-target");
+  const target = planOuterFleetTarget(
+    cycle,
+    adapter.reader.readTargeting(cycle),
+  );
+  return target.kind === "outer-fleet-status"
+    ? target
+    : planOuterFleetBlueprint(adapter.reader.readBlueprint(target));
+}
+const assignmentUnavailableMessage =
+  "Ship assignment data unavailable; ship construction paused";
+const assignmentExplorer = {
+  class: "explorer",
+  armor: "neutronium",
+  weapon: "railgun",
+  engine: "emdrive",
+  power: "elerium",
+  sensor: "quantum",
+};
+{
+  syndicate = createSyndicateStub({ spc_red: { p: 0.7319, s: 47 } });
+  capturedSettings.fleetExploreTau = true;
+  root.tech.tauceti = 1;
+  capturedSettings.fleet_outer_pr_spc_red = 0;
+  for (const ship of [
+    outerAssignmentShip(assignmentExplorer, "spc_dwarf", "tauceti"),
+    outerAssignmentShip(assignmentExplorer, "tauceti"),
+  ]) {
+    resetOuterPass();
+    yard.ships.push(ship);
+    assert.equal(
+      readOuterAssignmentPlan().messageAfterUpdate,
+      "No more ships currently needed",
+    );
+    const pass = createOuterControl().autoFleetOuter();
+    assert.equal(pass.outcome.status, "succeeded");
+    assert.equal(capturedBuilds, 0);
+    assert.deepEqual(dispatch.requests, []);
+  }
+  resetOuterPass();
+  yard.ships.push(
+    outerAssignmentShip(assignmentExplorer, "tauceti", "spc_red"),
+  );
+  assert.equal(readOuterAssignmentPlan().blueprint, "explorer");
+  resetOuterPass();
+  yard.ships.push({ ...assignmentExplorer, movement: { legs: [{ to: {} }] } });
+  assert.equal(
+    readOuterAssignmentPlan().messageAfterUpdate,
+    assignmentUnavailableMessage,
+  );
+  assert.equal(
+    createOuterControl().autoFleetOuter().outcome.status,
+    "succeeded",
+  );
+  assert.equal(capturedBuilds, 0);
+  assert.deepEqual(dispatch.requests, []);
+  capturedSettings.fleetExploreTau = false;
+  root.tech.tauceti = 0;
+  capturedSettings.fleet_outer_pr_spc_red = 1;
+  resetOuterPass();
+  yard.ships.push({
+    ...assignmentExplorer,
+    get movement() {
+      throw new Error("disabled Explorer route was inspected");
+    },
+  });
+  assert.equal(readOuterAssignmentPlan().blueprint, "fighter");
+}
+{
+  capturedSettings.fleet_outer_sc_spc_red = 1;
+  capturedSettings.fleet_outer_weapon = "laser";
+  const scout = {
+    class: "corvette",
+    armor: "steel",
+    weapon: "railgun",
+    engine: "ion",
+    power: "diesel",
+    sensor: "radar",
+  };
+  for (const [ship, expected] of [
+    [outerAssignmentShip(scout, "spc_red"), "fighter"],
+    [outerAssignmentShip(scout, "spc_dwarf", "spc_red"), "fighter"],
+    [outerAssignmentShip(scout, "spc_belt"), "scout"],
+    [outerAssignmentShip(scout, "spc_red", "spc_belt"), "scout"],
+    [
+      outerAssignmentShip(
+        { ...scout, weapon: "laser" },
+        "spc_dwarf",
+        "spc_red",
+      ),
+      "scout",
+    ],
+  ]) {
+    resetOuterPass();
+    yard.ships.push(ship);
+    assert.equal(readOuterAssignmentPlan().blueprint, expected);
+    assert.equal(
+      createOuterControl().autoFleetOuter().outcome.status,
+      "succeeded",
+    );
+    assert.equal(capturedBuilds, 1);
+    assert.equal(
+      yard.ships[1].weapon,
+      expected === "fighter" ? "laser" : "railgun",
+    );
+    assert.deepEqual(dispatch.requests, [{ index: 1, region: "spc_red" }]);
+  }
+  resetOuterPass();
+  yard.ships.push({
+    ...scout,
+    location: outerAssignmentPoint("spc_red"),
+    movement: { legs: [{ to: {} }] },
+  });
+  const unavailable = readOuterAssignmentPlan();
+  assert.equal(unavailable.kind, "outer-fleet-status");
+  assert.equal(unavailable.messageAfterUpdate, assignmentUnavailableMessage);
+  assert.equal(
+    createOuterControl().autoFleetOuter().outcome.status,
+    "succeeded",
+  );
+  assert.equal(capturedBuilds, 0);
+  assert.deepEqual(dispatch.requests, []);
+  assert.deepEqual(
+    costs.requests.filter(([method]) => method === "price"),
+    [],
+  );
+
+  // Irrelevant routes must not be inspected, including disabled caps and unavailable scout designs.
+  const unreadableRoute = {
+    ...scout,
+    get movement() {
+      throw new Error("irrelevant route was inspected");
+    },
+  };
+  resetOuterPass();
+  yard.ships.push(unreadableRoute);
+  capturedSettings.fleet_outer_sc_spc_red = 0;
+  assert.equal(readOuterAssignmentPlan().blueprint, "fighter");
+  capturedSettings.fleet_outer_sc_spc_red = 1;
+  capturedSettings.fleetOuterShips = "user";
+  assert.equal(readOuterAssignmentPlan().blueprint, "yard");
+  capturedSettings.fleetOuterShips = "custom";
+  yard.blueprint.weapon = "laser";
+  const scoutUnavailableRegistry = createRegistryWith({
+    avail: (type, index, part) => part !== "railgun",
+  });
+  assert.equal(
+    readOuterAssignmentPlan(scoutUnavailableRegistry).blueprint,
+    "fighter",
+  );
+  resetOuterPass();
+  yard.ships.push({
+    ...scout,
+    class: "frigate",
+    get movement() {
+      throw new Error("unrelated route was inspected");
+    },
+  });
+  assert.equal(readOuterAssignmentPlan().blueprint, "scout");
+  capturedSettings.fleet_outer_sc_spc_red = 0;
+  capturedSettings.fleet_outer_weapon = "railgun";
+  yard.blueprint.weapon = "railgun";
+  resetOuterPass();
+}
+
 // A crew requirement the compatibility table cannot give stands the pass down rather than throwing
 // out of ordinary planning: a hull upstream has since added is an ordinary state, not a fault.
 //
@@ -1390,6 +1597,11 @@ const productionFleetOuter = readFileSync(
   ),
   "utf8",
 );
+assert.doesNotMatch(
+  productionFleetOuter,
+  /ship\s*\[\s*["']location["']\s*\]\s*!?===?\s*region/,
+);
+assert.doesNotMatch(productionFleetOuter, /\btransit\b/);
 for (const gone of [
   "CAPTURED_OUTER_FLEET_CLASS_CREW",
   "CAPTURED_OUTER_FLEET_GRENADIER_CREW",

@@ -21889,7 +21889,7 @@
       messageAfterUpdate
     });
   }
-  var SYNDICATE_UNAVAILABLE = "Syndicate defense data unavailable; ship construction paused";
+  var SYNDICATE_UNAVAILABLE = "Syndicate defense data unavailable; ship construction paused", OUTER_FLEET_ASSIGNMENT_UNAVAILABLE = "Ship assignment data unavailable; ship construction paused";
   function planOuterFleetCycle(input) {
     return input.initialized ? input.playerModalOpen === !0 ? status(null, null, "Outer fleet action deferred") : input.mode === "none" ? status(null, null, "Ship construction is disabled") : input.mode === "manual" ? status(
       input.manualBlueprintAvailable ? "yard" : null,
@@ -21910,14 +21910,18 @@
     return Math.max(region.maximumDefense, digsiteDefense);
   }
   function planOuterFleetTarget(cycle, input) {
-    if (input.exploreTau && input.tauTechnology === 1 && input.explorerAvailable && input.explorerCount < 1)
-      return Object.freeze({
-        kind: "select-blueprint",
-        mode: cycle.mode,
-        targetRegion: "tauceti",
-        minimumCrew: 0,
-        forcedBlueprint: "explorer"
-      });
+    if (input.exploreTau && input.tauTechnology === 1 && input.explorerAvailable) {
+      if (input.explorerCount === null)
+        return status(null, null, OUTER_FLEET_ASSIGNMENT_UNAVAILABLE);
+      if (input.explorerCount < 1)
+        return Object.freeze({
+          kind: "select-blueprint",
+          mode: cycle.mode,
+          targetRegion: "tauceti",
+          minimumCrew: 0,
+          forcedBlueprint: "explorer"
+        });
+    }
     if (input.erisTechnology === 1 && input.erisWeighting > 0) {
       if (input.erisSensor === null)
         return status(null, null, SYNDICATE_UNAVAILABLE);
@@ -21949,7 +21953,17 @@
   }
   function planOuterFleetBlueprint(input) {
     let blueprint = input.target.forcedBlueprint;
-    return blueprint === null && input.target.mode === "user" ? blueprint = input.yardAvailable ? "yard" : null : blueprint === null && (input.scoutAvailable && input.scoutCount < input.maximumScouts && (blueprint = "scout"), blueprint === null && input.fighterAvailable && (blueprint = "fighter")), blueprint === null ? status(
+    if (blueprint === null && input.target.mode === "user")
+      blueprint = input.yardAvailable ? "yard" : null;
+    else if (blueprint === null) {
+      if (input.scoutAvailable && input.maximumScouts > 0) {
+        if (input.scoutCount === null)
+          return status(null, null, OUTER_FLEET_ASSIGNMENT_UNAVAILABLE);
+        input.scoutCount < input.maximumScouts && (blueprint = "scout");
+      }
+      blueprint === null && input.fighterAvailable && (blueprint = "fighter");
+    }
+    return blueprint === null ? status(
       null,
       null,
       `No suitable blueprint for ship to ${input.targetLocationName}`
@@ -22036,6 +22050,28 @@
     if (jobStack === void 0) return;
     let total = Math.round(crew * jobStack);
     return total > 0 ? total : void 0;
+  }
+
+  // src/adapters/evolve/combat/captured-ship-route.ts
+  function capturedShipBound(ship) {
+    try {
+      if (!isNonArrayRecord(ship)) return { kind: "unavailable" };
+      let shipRouteMovement = ship.movement;
+      if (!shipRouteMovement) {
+        let shipRouteLocation = ship.location;
+        return isNonArrayRecord(shipRouteLocation) && typeof shipRouteLocation.id == "string" ? { kind: "region", region: shipRouteLocation.id } : { kind: "unavailable" };
+      }
+      if (!isNonArrayRecord(shipRouteMovement)) return { kind: "unavailable" };
+      let shipRouteLegs = shipRouteMovement.legs;
+      if (!Array.isArray(shipRouteLegs)) return { kind: "unavailable" };
+      if (shipRouteLegs.length === 0) return { kind: "none" };
+      let shipRouteFinalLeg = shipRouteLegs[shipRouteLegs.length - 1];
+      if (!isNonArrayRecord(shipRouteFinalLeg)) return { kind: "unavailable" };
+      let shipRouteDestination = shipRouteFinalLeg.to;
+      return isNonArrayRecord(shipRouteDestination) && typeof shipRouteDestination.id == "string" ? { kind: "region", region: shipRouteDestination.id } : { kind: "unavailable" };
+    } catch {
+      return { kind: "unavailable" };
+    }
   }
 
   // src/adapters/evolve/combat/captured-outer-fleet-blueprint.ts
@@ -22189,8 +22225,16 @@
     }
     return Object.freeze(expected);
   }
-  function capturedOuterFleetShipCount(root, region, blueprint, dimensions) {
-    return capturedOuterFleetShips(root).filter((ship) => !isRecord(ship) || ship.location !== region ? !1 : capturedOuterFleetBlueprintMatches(ship, blueprint, dimensions)).length;
+  function capturedOuterFleetAssignedShipCount(root, region, blueprint, dimensions) {
+    let count2 = 0;
+    for (let ship of capturedOuterFleetShips(root)) {
+      if (!isRecord(ship) || !capturedOuterFleetBlueprintMatches(ship, blueprint, dimensions))
+        continue;
+      let bound = capturedShipBound(ship);
+      if (bound.kind === "unavailable") return null;
+      bound.kind === "region" && bound.region === region && count2++;
+    }
+    return count2;
   }
   function capturedOuterFleetDecisionMatches(expected, actual) {
     return expected.kind !== actual.kind || expected.blueprint !== actual.blueprint ? !1 : expected.kind === "outer-fleet-status" && actual.kind === "outer-fleet-status" ? expected.nextShipName === actual.nextShipName && expected.messageBeforeUpdate === actual.messageBeforeUpdate && expected.messageAfterUpdate === actual.messageAfterUpdate : expected.kind === "build-outer-fleet" && actual.kind === "build-outer-fleet" && expected.targetRegion === actual.targetRegion && expected.targetLocationName === actual.targetLocationName && expected.shipName === actual.shipName && expected.shipCrew === actual.shipCrew && expected.nextShipName === actual.nextShipName;
@@ -22287,7 +22331,7 @@
             dependencies.controls,
             explorer,
             dimensions
-          ), explorerAvailable && (explorerCount = capturedOuterFleetShipCount(
+          ), explorerAvailable && (explorerCount = capturedOuterFleetAssignedShipCount(
             root,
             "tauceti",
             explorer,
@@ -22295,7 +22339,7 @@
           ));
         }
         let erisTechnology = finite(readProperty(tech, "eris")) ?? 0, erisWeighting = finite(settings.fleet_outer_pr_spc_eris) ?? 0, erisGateLive = erisTechnology === 1 && erisWeighting > 0, erisSample = erisGateLive ? dependencies.syndicate.read("spc_eris") : void 0, erisSensor = erisSample === void 0 || erisSample.kind !== "value" ? null : erisSample.value.s, regions = [], space = readProperty(root, "space");
-        if (!(exploreTau && tauTechnology === 1 && explorerAvailable && explorerCount < 1) && !(erisGateLive && erisSensor !== null && erisSensor < 50))
+        if (!(exploreTau && tauTechnology === 1 && explorerAvailable && (explorerCount === null || explorerCount < 1)) && !(erisGateLive && erisSensor !== null && erisSensor < 50))
           for (let id of CAPTURED_OUTER_FLEET_REGIONS) {
             let unlocked = capturedOuterFleetRegionEnabled(root, id), weighting = unlocked ? finite(settings[`fleet_outer_pr_${id}`]) ?? 0 : 0, syndicateRatio = null;
             if (unlocked && weighting > 0) {
@@ -22364,14 +22408,14 @@
               "scout blueprint",
               active.blueprints
             );
-            if (scoutAvailable = avail(scout), scoutAvailable && (scoutCount = capturedOuterFleetShipCount(
+            if (scoutAvailable = avail(scout), scoutAvailable && (maximumScouts = finite(
+              active.settings[`fleet_outer_sc_${target.targetRegion}`]
+            ) ?? 0, maximumScouts > 0 && (scoutCount = capturedOuterFleetAssignedShipCount(
               active.root,
               target.targetRegion,
               scout,
               dimensions
-            ), maximumScouts = finite(
-              active.settings[`fleet_outer_sc_${target.targetRegion}`]
-            ) ?? 0), !scoutAvailable || scoutCount >= maximumScouts) {
+            ))), !scoutAvailable || scoutCount !== null && scoutCount >= maximumScouts) {
               let fighter = storeBlueprint(
                 "fighter",
                 capturedOuterFleetPartBlueprint(

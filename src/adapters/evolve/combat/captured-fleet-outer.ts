@@ -64,6 +64,7 @@ import type {
 import { rejected, stale, SUCCEEDED } from "../../command-outcomes.ts";
 import { readCapturedHighPopulationPercent } from "../civic/captured-job-catalog.ts";
 import { capturedShipCrewSize } from "./captured-ship-crew-compat.ts";
+import { capturedShipBound } from "./captured-ship-route.ts";
 import {
   finite,
   isRecord,
@@ -460,17 +461,26 @@ function capturedOuterFleetExpectedBlueprint(
   return Object.freeze(expected);
 }
 
-/** How many of the yard's ships at this region are the design another record names. */
-function capturedOuterFleetShipCount(
+/** Matching ships already committed to this region, including inbound ships. */
+function capturedOuterFleetAssignedShipCount(
   root: UnknownRecord,
   region: string,
   blueprint: UnknownRecord,
   dimensions: GameShipyardPartDimensions,
-): number {
-  return capturedOuterFleetShips(root).filter((ship) => {
-    if (!isRecord(ship) || ship["location"] !== region) return false;
-    return capturedOuterFleetBlueprintMatches(ship, blueprint, dimensions);
-  }).length;
+): number | null {
+  let count = 0;
+  for (const ship of capturedOuterFleetShips(root)) {
+    // A different design cannot occupy this slot, so its route is not a question this pass needs.
+    if (
+      !isRecord(ship) ||
+      !capturedOuterFleetBlueprintMatches(ship, blueprint, dimensions)
+    )
+      continue;
+    const bound = capturedShipBound(ship);
+    if (bound.kind === "unavailable") return null;
+    if (bound.kind === "region" && bound.region === region) count++;
+  }
+  return count;
 }
 
 function capturedOuterFleetDecisionMatches(
@@ -664,7 +674,7 @@ export function createCapturedOuterFleetAdapter(
       const exploreTau = settings["fleetExploreTau"] === true;
       const tauTechnology = finite(readProperty(tech, "tauceti")) ?? 0;
       let explorerAvailable = false;
-      let explorerCount = 0;
+      let explorerCount: number | null = 0;
       const dimensions = provenDimensions(active);
       // The Explorer is the one blueprint this script writes itself rather than configuring out of the
       // settings, so it is also the one that must never be written without the yard's own catalogue
@@ -685,7 +695,7 @@ export function createCapturedOuterFleetAdapter(
           dimensions,
         );
         if (explorerAvailable)
-          explorerCount = capturedOuterFleetShipCount(
+          explorerCount = capturedOuterFleetAssignedShipCount(
             root,
             "tauceti",
             explorer,
@@ -711,7 +721,7 @@ export function createCapturedOuterFleetAdapter(
           exploreTau &&
           tauTechnology === 1 &&
           explorerAvailable &&
-          explorerCount < 1
+          (explorerCount === null || explorerCount < 1)
         ) &&
         !(erisGateLive && erisSensor !== null && erisSensor < 50)
       ) {
@@ -786,7 +796,7 @@ export function createCapturedOuterFleetAdapter(
       const yard = capturedOuterFleetYard(active.root);
       let yardAvailable = false;
       let scoutAvailable = false;
-      let scoutCount = 0;
+      let scoutCount: number | null = 0;
       let maximumScouts = 0;
       let fighterAvailable = false;
       const dimensions = provenDimensions(active);
@@ -826,18 +836,22 @@ export function createCapturedOuterFleetAdapter(
           );
           scoutAvailable = avail(scout);
           if (scoutAvailable) {
-            scoutCount = capturedOuterFleetShipCount(
-              active.root,
-              target.targetRegion,
-              scout,
-              dimensions,
-            );
             maximumScouts =
               finite(
                 active.settings[`fleet_outer_sc_${target.targetRegion}`],
               ) ?? 0;
+            if (maximumScouts > 0)
+              scoutCount = capturedOuterFleetAssignedShipCount(
+                active.root,
+                target.targetRegion,
+                scout,
+                dimensions,
+              );
           }
-          if (!scoutAvailable || scoutCount >= maximumScouts) {
+          if (
+            !scoutAvailable ||
+            (scoutCount !== null && scoutCount >= maximumScouts)
+          ) {
             const fighter = storeBlueprint(
               "fighter",
               capturedOuterFleetPartBlueprint(

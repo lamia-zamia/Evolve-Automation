@@ -48,7 +48,8 @@ export interface OuterFleetTargetInput {
   readonly exploreTau: boolean;
   readonly tauTechnology: number;
   readonly explorerAvailable: boolean;
-  readonly explorerCount: number;
+  /** Matching ships assigned to Tau, including inbound ships; null means an unreadable assignment. */
+  readonly explorerCount: number | null;
   readonly erisTechnology: number;
   readonly erisWeighting: number;
   /**
@@ -72,7 +73,8 @@ export interface OuterFleetBlueprintInput {
   readonly targetLocationName: string;
   readonly yardAvailable: boolean;
   readonly scoutAvailable: boolean;
-  readonly scoutCount: number;
+  /** Matching ships assigned to the target; null means an unreadable assignment. */
+  readonly scoutCount: number | null;
   readonly maximumScouts: number;
   readonly fighterAvailable: boolean;
 }
@@ -167,6 +169,8 @@ function status(
  */
 const SYNDICATE_UNAVAILABLE =
   "Syndicate defense data unavailable; ship construction paused";
+const OUTER_FLEET_ASSIGNMENT_UNAVAILABLE =
+  "Ship assignment data unavailable; ship construction paused";
 
 export function planOuterFleetCycle(
   input: Readonly<OuterFleetCycleInput>,
@@ -223,16 +227,19 @@ export function planOuterFleetTarget(
   if (
     input.exploreTau &&
     input.tauTechnology === 1 &&
-    input.explorerAvailable &&
-    input.explorerCount < 1
+    input.explorerAvailable
   ) {
-    return Object.freeze({
-      kind: "select-blueprint",
-      mode: cycle.mode,
-      targetRegion: "tauceti",
-      minimumCrew: 0,
-      forcedBlueprint: "explorer",
-    });
+    if (input.explorerCount === null) {
+      return status(null, null, OUTER_FLEET_ASSIGNMENT_UNAVAILABLE);
+    }
+    if (input.explorerCount < 1)
+      return Object.freeze({
+        kind: "select-blueprint",
+        mode: cycle.mode,
+        targetRegion: "tauceti",
+        minimumCrew: 0,
+        forcedBlueprint: "explorer",
+      });
   }
 
   if (input.erisTechnology === 1 && input.erisWeighting > 0) {
@@ -302,8 +309,11 @@ export function planOuterFleetBlueprint(
   if (blueprint === null && input.target.mode === "user") {
     blueprint = input.yardAvailable ? "yard" : null;
   } else if (blueprint === null) {
-    if (input.scoutAvailable && input.scoutCount < input.maximumScouts) {
-      blueprint = "scout";
+    if (input.scoutAvailable && input.maximumScouts > 0) {
+      if (input.scoutCount === null) {
+        return status(null, null, OUTER_FLEET_ASSIGNMENT_UNAVAILABLE);
+      }
+      if (input.scoutCount < input.maximumScouts) blueprint = "scout";
     }
     if (blueprint === null && input.fighterAvailable) {
       blueprint = "fighter";
