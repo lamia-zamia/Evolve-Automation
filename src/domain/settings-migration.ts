@@ -498,6 +498,7 @@ export function migrateSettingsRecord(
     "prestigeAscensionSkipCustom",
     "prestigeBioseedGECK",
     "tickTimeout",
+    "tickSchedule",
     "minorTraitSettingsCollapsed",
     "fleetOuterMinSyndicate",
     "smelter_fuel_p_Star",

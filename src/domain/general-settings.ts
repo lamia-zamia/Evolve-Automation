@@ -60,12 +60,6 @@ const generalSettingsReadModel: GeneralSettingsReadModel = Object.freeze({
       label: "Script tick rate",
       hint: "Script runs once per this amount of game ticks. Game tick every 250ms, thus with rate 4 script will run once per second. You can set it lower to make script act faster, or increase it if you have performance issues. Tick rate should be a positive integer.",
     }),
-    Object.freeze({
-      kind: "toggle",
-      settingName: "tickSchedule",
-      label: "Schedule script ticks",
-      hint: "When enabled script will schedule its ticks to run after game ticks, instead of executing both at once. Splitting of long task allows browser to update UI in between of game and script ticks, making game run smoother, but less throttling-proof - that can make tick rate float inconsistently.",
-    }),
     Object.freeze({ kind: "header", label: "Prioritization" }),
     Object.freeze({
       kind: "toggle",

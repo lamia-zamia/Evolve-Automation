@@ -63,7 +63,6 @@ assert.deepEqual(
   controls.map(({ kind, key, label }) => ({ kind, key, label })),
   [
     { kind: "number", key: "tickRate", label: "Script tick rate" },
-    { kind: "toggle", key: "tickSchedule", label: "Schedule script ticks" },
     { kind: "header", key: undefined, label: "Prioritization" },
     {
       kind: "toggle",
