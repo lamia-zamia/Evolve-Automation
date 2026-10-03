@@ -34,7 +34,10 @@ function makeControls(
       invoked.push({ elementId: handle.elementId, method, args });
       if (method === "hell") return { ok: true, value: cityCurrent };
       if (method === "s_max") return { ok: true, value: cityMaximum };
-      if (method === "rating") return { ok: true, value: 2.5 };
+      if (method === "rating") return { ok: true, value: args[0] * 2.5 };
+      if (method === "patrolling") {
+        return { ok: true, value: args[0] };
+      }
       return { ok: true, value: undefined };
     },
     capturedElementIds: () =>
@@ -201,14 +204,11 @@ function makeEvacuationRoot({
     }),
   });
   assert.deepEqual(automation.run(), { status: "succeeded" });
-  assert.deepEqual(
+  assert.ok(invoked.some(({ method }) => method === "rating"));
+  assert.ok(
     invoked
       .filter(({ method }) => method === "rating")
-      .map(({ method, args }) => ({ method, args })),
-    [
-      { method: "rating", args: [10, true] },
-      { method: "rating", args: [10, true] },
-    ],
+      .every(({ args }) => args[1] === false),
   );
   assert.equal(invoked.filter(({ method }) => method === "aNext").length, 990);
   assert.equal(
@@ -276,6 +276,7 @@ for (const fortressId of ["fort", "gFort"]) {
       ...new Set(
         invoked
           .filter(({ elementId }) => elementId === fortressId)
+          .filter(({ method }) => method !== "patrolling")
           .map(({ method }) => method),
       ),
     ],
@@ -396,7 +397,10 @@ function runNativeFillScenario(cityCurrent, cityMaximum, fortressId = "gFort") {
   assert.equal(outcome.status, "stale");
   assert.equal(outcome.failure.code, "hell-plan-no-longer-valid");
   assert.deepEqual(
-    invoked.filter(({ elementId }) => elementId === "fort"),
+    invoked.filter(
+      ({ elementId, method }) =>
+        elementId === "fort" && method !== "patrolling",
+    ),
     [],
   );
 }
@@ -427,7 +431,8 @@ function runNativeFillScenario(cityCurrent, cityMaximum, fortressId = "gFort") {
               }
             : base.resolve(id),
       invoke: (handle, method, args) => {
-        if (handle.elementId === "fort") generation++;
+        if (handle.elementId === "fort" && method !== "patrolling")
+          generation++;
         return base.invoke(handle, method, args);
       },
     },
@@ -439,7 +444,10 @@ function runNativeFillScenario(cityCurrent, cityMaximum, fortressId = "gFort") {
     [],
   );
   assert.equal(
-    invoked.filter(({ elementId }) => elementId === "fort").length,
+    invoked.filter(
+      ({ elementId, method }) =>
+        elementId === "fort" && method !== "patrolling",
+    ).length,
     1,
   );
 }
@@ -488,5 +496,191 @@ assert.doesNotMatch(
   hellSource,
   /fobTroops|pillbox.*currentCityGarrison|pillbox.*maximumCityGarrison/,
 );
+
+function runNativeOracleScenario({
+  fortressId = "fort",
+  stationed = 15,
+  rating = (n) => n * n,
+  authority = false,
+  patrolTarget = 30,
+  onRead = () => {},
+} = {}) {
+  const root = makeEvacuationRoot({ assigned: 20, patrols: 1, patrolSize: 5 });
+  root.portal.fortress.garrison = 20;
+  root.portal.fortress.walls = 100;
+  root.portal.fortress.threat = 0;
+  root.resource = { Authority: { amount: 0, max: 100, display: true } };
+  const calls = [];
+  let currentRoot = root;
+  let fortressGeneration = 1;
+  let cityGeneration = 1;
+  let stationedReads = 0;
+  const controls = {
+    resolve: (id) =>
+      id === fortressId
+        ? {
+            elementId: id,
+            generation: fortressGeneration,
+            methods: [
+              "patrolling",
+              "aNext",
+              "aLast",
+              "patInc",
+              "patDec",
+              "patSizeInc",
+              "patSizeDec",
+            ],
+          }
+        : id === "garrison"
+          ? {
+              elementId: id,
+              generation: cityGeneration,
+              methods: ["hell", "s_max", "rating"],
+            }
+          : undefined,
+    invoke: (handle, method, args = []) => {
+      calls.push([handle.elementId, method, ...args]);
+      if (method === "hell" || method === "s_max")
+        return { ok: true, value: 100 };
+      if (method === "rating") return { ok: true, value: rating(args[0]) };
+      if (method === "patrolling") {
+        stationedReads += 1;
+        onRead({
+          replaceRoot: () => {
+            currentRoot = {};
+          },
+          replaceFortress: () => {
+            fortressGeneration += 1;
+          },
+          replaceCity: () => {
+            cityGeneration += 1;
+          },
+          read: stationedReads,
+        });
+        const value =
+          typeof stationed === "function"
+            ? stationed(stationedReads)
+            : stationed;
+        if (value instanceof Error) throw value;
+        return value && typeof value === "object" && "ok" in value
+          ? value
+          : { ok: true, value };
+      }
+      return { ok: true, value: undefined };
+    },
+  };
+  const automation = createCapturedHellAutomation({
+    rootState: { readRoot: () => currentRoot },
+    controls,
+    readSettings: () => ({
+      hellHomeGarrison: 10,
+      hellMinSoldiers: 20,
+      hellPatrolMinRating: patrolTarget,
+      hellBolsterPatrolRating: 0,
+      authorityManage: authority,
+      generalMinimumAuthority: 20,
+    }),
+  });
+  return { outcome: automation.run(), calls, stationedReads };
+}
+
+const mutationCount = (result, method) =>
+  result.calls.filter(([, called]) => called === method).length;
+for (const fortressId of ["fort", "gFort"]) {
+  // Forge- and guard-post-shaped native deductions alter stationed defenders even though the
+  // visible fortress fields are identical. Authority responds to the native answer.
+  const ordinary = runNativeOracleScenario({ fortressId, authority: true });
+  const forge = runNativeOracleScenario({
+    fortressId,
+    authority: true,
+    stationed: 5,
+  });
+  const guardPost = runNativeOracleScenario({
+    fortressId,
+    authority: true,
+    stationed: 9,
+  });
+  for (const result of [ordinary, forge, guardPost]) {
+    assert.equal(result.outcome.status, "succeeded");
+    assert.equal(result.stationedReads, 2);
+    assert.ok(
+      result.calls
+        .filter(([, method]) => method === "patrolling")
+        .every(([id, , value]) => id === fortressId && value === 20),
+    );
+  }
+  assert.notEqual(
+    mutationCount(ordinary, "patInc"),
+    mutationCount(forge, "patInc"),
+  );
+  assert.notEqual(
+    mutationCount(forge, "patInc"),
+    mutationCount(guardPost, "patInc"),
+  );
+}
+
+const nonlinear = runNativeOracleScenario();
+assert.equal(nonlinear.outcome.status, "succeeded");
+assert.equal(mutationCount(nonlinear, "patSizeInc"), 1); // native rating(6) = 36, so size 5 → 6
+assert.ok(
+  nonlinear.calls
+    .filter(([, method]) => method === "rating")
+    .every(([, , , scale]) => scale === false),
+);
+const changedCurve = runNativeOracleScenario({ rating: (n) => n * 10 });
+assert.equal(changedCurve.outcome.status, "succeeded");
+assert.equal(mutationCount(changedCurve, "patSizeDec"), 2); // native rating(3) = 30
+const unreachable = runNativeOracleScenario({ patrolTarget: 20000 });
+assert.equal(unreachable.outcome.status, "succeeded");
+assert.equal(mutationCount(unreachable, "patSizeInc"), 85); // capacity 90 → 91, policy budgets 90
+for (const stationed of [
+  { ok: true, value: undefined },
+  "invalid",
+  NaN,
+  { ok: false, reason: "threw" },
+  new Error("native"),
+]) {
+  const result = runNativeOracleScenario({ stationed });
+  assert.equal(result.outcome.status, "stale");
+  assert.equal(mutationCount(result, "patInc"), 0);
+  assert.equal(mutationCount(result, "aNext"), 0);
+}
+for (const options of [
+  { stationed: (read) => (read === 1 ? 15 : 5) },
+  {
+    stationed: 15,
+    onRead: ({ replaceRoot, read }) => {
+      if (read === 1) replaceRoot();
+    },
+  },
+  {
+    stationed: 15,
+    onRead: ({ replaceFortress, read }) => {
+      if (read === 1) replaceFortress();
+    },
+  },
+  {
+    stationed: 15,
+    onRead: ({ replaceCity, read }) => {
+      if (read === 1) replaceCity();
+    },
+  },
+]) {
+  const result = runNativeOracleScenario(options);
+  assert.equal(result.outcome.status, "stale");
+  assert.equal(mutationCount(result, "patInc"), 0);
+  assert.equal(mutationCount(result, "aNext"), 0);
+}
+for (const rating of [
+  () => undefined,
+  () => {
+    throw Error("native rating");
+  },
+  () => ({ ok: false, reason: "threw" }),
+]) {
+  const result = runNativeOracleScenario({ rating });
+  assert.equal(result.outcome.status, "stale");
+  assert.equal(mutationCount(result, "aNext"), 0);
+}
 
 console.log("Captured Hell adapter tests passed");

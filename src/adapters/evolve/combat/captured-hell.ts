@@ -7,16 +7,22 @@ import {
   type HellCycleInput,
   type HellAuthorityInput,
 } from "../../../domain/combat/hell.ts";
-import type { GameControlRegistry } from "../../../ports/game-control-registry.ts";
+import type {
+  GameControlHandle,
+  GameControlRegistry,
+} from "../../../ports/game-control-registry.ts";
 import type { GameRootStateSource } from "../../../ports/game-root-state.ts";
 import { stale, SUCCEEDED } from "../../command-outcomes.ts";
 import { finite, isRecord, readProperty } from "../../validation.ts";
 import {
   HELL_FORTRESS_CONTROL,
+  HELL_GARRISON_CONTROLS,
+  readCapturedHellGarrison,
   resolveCapturedOrdinaryFortress,
 } from "./captured-hell-garrison.ts";
 import {
   CAPTURED_CITY_GARRISON_CONTROLS,
+  capturedCitySoldiersForRating,
   readCapturedCityGarrisonSnapshot,
   type CapturedCityGarrisonSnapshot,
 } from "./captured-city-garrison.ts";
@@ -114,6 +120,7 @@ function readHellInput(
   root: unknown,
   settingsValue: unknown,
   cityGarrison: CapturedCityGarrisonSnapshot | undefined,
+  stationed: number | undefined,
 ): HellCycleInput | undefined {
   if (!isRecord(root)) return emptyHellInput();
   const race = readProperty(root, "race");
@@ -125,6 +132,7 @@ function readHellInput(
   const fortress = readProperty(portal, "fortress");
   if (!isRecord(garrison) || !isRecord(fortress)) return emptyHellInput();
   if (cityGarrison === undefined) return undefined;
+  if (stationed === undefined) return undefined;
   const workers = finite(readProperty(garrison, "workers"));
   const maximumWorkers = finite(readProperty(garrison, "max"));
   const crew = finite(readProperty(garrison, "crew"));
@@ -169,7 +177,7 @@ function readHellInput(
     hellPatrolSize,
     // DeadSpace initializes `assigned` lazily; the compatibility bridge treats it as zero.
     hellAssigned: finite(readProperty(fortress, "assigned")) ?? 0,
-    currentHellGarrison: hellSoldiers - hellPatrols * hellPatrolSize,
+    currentHellGarrison: stationed,
     homeGarrison,
     minimumHellSoldiers,
     minimumSoldierPercent,
@@ -293,26 +301,6 @@ function applyHellManagement(
   return SUCCEEDED;
 }
 
-function readSoldierTarget(
-  controls: GameControlRegistry,
-  targetRating: number,
-): number | undefined {
-  if (targetRating <= 0) return 0;
-  const control = CAPTURED_CITY_GARRISON_CONTROLS.map((id) =>
-    controls.resolve(id),
-  ).find((candidate) => candidate?.methods.includes("rating"));
-  if (control === undefined) {
-    return undefined;
-  }
-  // DeadSpace's garrison.rating(10, true) renders armyRating(10,'army',0) / 10,
-  // the same per-soldier sample used by the compatibility target inversion.
-  const result = controls.invoke(control, "rating", [10, true]);
-  if (!result.ok) return undefined;
-  const perSoldier = finite(result.value);
-  if (perSoldier === undefined || perSoldier <= 0) return undefined;
-  return Math.ceil(targetRating / perSoldier);
-}
-
 function readHellAuthority(
   root: unknown,
   input: Readonly<HellCycleInput>,
@@ -357,19 +345,52 @@ export function createCapturedHellAutomation(dependencies: {
   return Object.freeze({
     run(): CommandExecutionOutcome {
       const root = dependencies.rootState.readRoot();
-      const readInput = () =>
-        readHellInput(
+      let sampledCityControl: GameControlHandle | undefined;
+      const readInput = () => {
+        const warlord =
+          readProperty(readProperty(root, "race"), "warlord") === true;
+        const sampledControls = warlord
+          ? []
+          : [...CAPTURED_CITY_GARRISON_CONTROLS, ...HELL_GARRISON_CONTROLS].map(
+              (id) => ({
+                id,
+                generation: dependencies.controls.resolve(id)?.generation,
+              }),
+            );
+        const cityGarrison = warlord
+          ? undefined
+          : readCapturedCityGarrisonSnapshot(
+              dependencies.rootState,
+              dependencies.controls,
+              root,
+            );
+        if (!warlord && cityGarrison === undefined) return undefined;
+        sampledCityControl = cityGarrison?.control;
+        const stationed = warlord
+          ? undefined
+          : readCapturedHellGarrison(
+              dependencies.rootState,
+              dependencies.controls,
+              root,
+            );
+        if (!warlord && stationed === undefined) return undefined;
+        if (
+          dependencies.rootState.readRoot() !== root ||
+          sampledControls.some(
+            ({ id, generation }) =>
+              dependencies.controls.resolve(id)?.generation !== generation,
+          )
+        )
+          return undefined;
+        return readHellInput(
           root,
           dependencies.readSettings(),
-          readProperty(readProperty(root, "race"), "warlord") === true
-            ? undefined
-            : readCapturedCityGarrisonSnapshot(
-                dependencies.rootState,
-                dependencies.controls,
-                root,
-              ),
+          cityGarrison,
+          stationed,
         );
+      };
       const input = readInput();
+      const initialCityControl = sampledCityControl;
       if (input === undefined) {
         return stale(
           "hell-city-garrison-unavailable",
@@ -388,6 +409,16 @@ export function createCapturedHellAutomation(dependencies: {
         return stale(
           "hell-city-garrison-unavailable",
           "native city-garrison snapshot is unavailable during revalidation",
+        );
+      }
+      if (
+        initialCityControl !== undefined &&
+        (sampledCityControl?.elementId !== initialCityControl.elementId ||
+          sampledCityControl.generation !== initialCityControl.generation)
+      ) {
+        return stale(
+          "hell-city-garrison-unavailable",
+          "native city-garrison binding changed during revalidation",
         );
       }
       const current = prepareHellCycle(currentInput);
@@ -410,14 +441,30 @@ export function createCapturedHellAutomation(dependencies: {
         return applyHellManagement(decision, control, dependencies.controls);
       }
       if (decision.kind === "calculate-hell-targets") {
-        const garrisonSoldiers = readSoldierTarget(
-          dependencies.controls,
-          decision.garrisonRating,
+        const ratingControl = initialCityControl;
+        if (ratingControl === undefined)
+          return stale(
+            "hell-calculation-unavailable",
+            "the captured Hell soldier-rating control is unavailable",
+          );
+        const capacity = Math.max(
+          0,
+          Math.floor(decision.availableHellSoldiers),
         );
+        const target = (targetRating: number) =>
+          capturedCitySoldiersForRating({
+            rootState: dependencies.rootState,
+            controls: dependencies.controls,
+            control: ratingControl,
+            expectedRoot: root,
+            targetRating,
+            capacity,
+          });
+        const garrisonSoldiers = target(decision.garrisonRating);
         const patrolSoldiers =
           decision.patrolRating === null
             ? decision.input.hellPatrolSize
-            : readSoldierTarget(dependencies.controls, decision.patrolRating);
+            : target(decision.patrolRating);
         if (garrisonSoldiers === undefined || patrolSoldiers === undefined) {
           return stale(
             "hell-calculation-unavailable",

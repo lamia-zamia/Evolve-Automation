@@ -25,6 +25,7 @@ import {
   HELL_GARRISON_CONTROLS,
   readCapturedHellGarrison,
 } from "./captured-hell-garrison.ts";
+import { capturedCitySoldiersForRating } from "./captured-city-garrison.ts";
 import {
   CAPTURED_FOREIGN_CONTROL,
   CAPTURED_FOREIGN_GARRISON_CONTROLS,
@@ -176,44 +177,6 @@ function capturedBattleEnemyRating(
   if (readProperty(race, "banana")) rating *= 2;
   if (readProperty(city, "biome") === "swamp") rating *= 1.4;
   return Number.isFinite(rating) && rating >= 0 ? rating : undefined;
-}
-
-function capturedBattleOwnRating(
-  controls: GameControlRegistry,
-  control: GameControlHandle,
-  soldiers: number,
-): number | undefined {
-  if (!Number.isSafeInteger(soldiers) || soldiers < 0) return undefined;
-  return capturedBattleInvokeNumber(controls, control, "rating", [
-    soldiers,
-    false,
-  ]);
-}
-
-/** Invert the game's own rounded rating display without reproducing armyRating or race traits. */
-function capturedBattleSoldiersForRating(
-  controls: GameControlRegistry,
-  control: GameControlHandle,
-  targetRating: number,
-  capacity: number,
-): number | undefined {
-  if (!Number.isFinite(targetRating) || targetRating <= 0) return 0;
-  const upper = Math.floor(capacity);
-  if (!Number.isSafeInteger(upper) || upper < 1) return undefined;
-  const upperRating = capturedBattleOwnRating(controls, control, upper);
-  if (upperRating === undefined) return undefined;
-  if (upperRating < targetRating) return upper + 1;
-
-  let low = 1;
-  let high = upper;
-  while (low < high) {
-    const middle = Math.floor((low + high) / 2);
-    const rating = capturedBattleOwnRating(controls, control, middle);
-    if (rating === undefined) return undefined;
-    if (rating >= targetRating) high = middle;
-    else low = middle + 1;
-  }
-  return low;
 }
 
 function capturedBattleOccupationCost(root: unknown): number | undefined {
@@ -555,6 +518,7 @@ function capturedBattleTargetInput(
 
 function capturedBattleReadPlunderTarget(
   root: unknown,
+  rootState: GameRootStateSource,
   controls: GameControlRegistry,
   garrison: GameControlHandle,
   parameters: Readonly<BattleParameters>,
@@ -574,18 +538,22 @@ function capturedBattleReadPlunderTarget(
     const tactic = rawTactic as BattleTactic;
     const rating = capturedBattleEnemyRating(root, target, tactic);
     if (rating === undefined) return undefined;
-    const minimum = capturedBattleSoldiersForRating(
+    const minimum = capturedCitySoldiersForRating({
+      rootState,
       controls,
-      garrison,
-      rating / (1 - parameters.minimumAdvantage / 100),
-      upper,
-    );
-    const maximum = capturedBattleSoldiersForRating(
+      control: garrison,
+      expectedRoot: root,
+      targetRating: rating / (1 - parameters.minimumAdvantage / 100),
+      capacity: upper,
+    });
+    const maximum = capturedCitySoldiersForRating({
+      rootState,
       controls,
-      garrison,
-      rating / (1 - parameters.maximumAdvantage / 100),
-      upper,
-    );
+      control: garrison,
+      expectedRoot: root,
+      targetRating: rating / (1 - parameters.maximumAdvantage / 100),
+      capacity: upper,
+    });
     if (minimum === undefined || maximum === undefined) return undefined;
     minimumSoldiers[tactic] = minimum;
     maximumSoldiers[tactic] = maximum;
@@ -792,28 +760,26 @@ export function createCapturedBattle(
           continue;
         const rating = capturedBattleEnemyRating(active.root, target, 4);
         if (rating === undefined) continue;
-        const minimumSiegeSoldiers = capturedBattleSoldiersForRating(
-          dependencies.controls,
-          active.garrison,
-          rating / (1 - parameters.minimumAdvantage / 100),
-          Math.max(
-            1,
-            Math.floor(
-              parameters.maximumSoldiers || parameters.maxCityGarrison,
-            ),
-          ),
+        const capacity = Math.max(
+          1,
+          Math.floor(parameters.maximumSoldiers || parameters.maxCityGarrison),
         );
-        const maximumSiegeSoldiers = capturedBattleSoldiersForRating(
-          dependencies.controls,
-          active.garrison,
-          rating / (1 - parameters.maximumAdvantage / 100),
-          Math.max(
-            1,
-            Math.floor(
-              parameters.maximumSoldiers || parameters.maxCityGarrison,
-            ),
-          ),
-        );
+        const minimumSiegeSoldiers = capturedCitySoldiersForRating({
+          rootState: dependencies.rootState,
+          controls: dependencies.controls,
+          control: active.garrison,
+          expectedRoot: active.root,
+          targetRating: rating / (1 - parameters.minimumAdvantage / 100),
+          capacity,
+        });
+        const maximumSiegeSoldiers = capturedCitySoldiersForRating({
+          rootState: dependencies.rootState,
+          controls: dependencies.controls,
+          control: active.garrison,
+          expectedRoot: active.root,
+          targetRating: rating / (1 - parameters.maximumAdvantage / 100),
+          capacity,
+        });
         if (
           minimumSiegeSoldiers === undefined ||
           maximumSiegeSoldiers === undefined
@@ -843,6 +809,7 @@ export function createCapturedBattle(
           ? null
           : capturedBattleReadPlunderTarget(
               active.root,
+              dependencies.rootState,
               dependencies.controls,
               active.garrison,
               parameters,

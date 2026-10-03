@@ -169,7 +169,12 @@ for (const fixture of [
     compactMethods: ["hell", "s_max"],
   }),
 ]) {
-  assert.deepEqual(fixture.read(), { current: 7, maximum: 13 });
+  const snapshot = fixture.read();
+  assert.deepEqual(
+    { current: snapshot.current, maximum: snapshot.maximum },
+    { current: 7, maximum: 13 },
+  );
+  assert.equal(snapshot.control.elementId, fixture.calls[0][0]);
   assert.deepEqual(fixture.calls, [
     [fixture.calls[0][0], "hell"],
     [fixture.calls[0][0], "s_max"],
@@ -179,10 +184,14 @@ for (const answers of [
   { hell: 0, s_max: -4 },
   { hell: -3, s_max: 0 },
 ]) {
-  assert.deepEqual(nativeSnapshotFixture({ answers }).read(), {
-    current: answers.hell,
-    maximum: answers.s_max,
-  });
+  const snapshot = nativeSnapshotFixture({ answers }).read();
+  assert.deepEqual(
+    { current: snapshot.current, maximum: snapshot.maximum },
+    {
+      current: answers.hell,
+      maximum: answers.s_max,
+    },
+  );
 }
 for (const method of ["hell", "s_max"]) {
   for (const bad of [

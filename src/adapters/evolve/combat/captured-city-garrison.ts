@@ -15,6 +15,7 @@ export const CAPTURED_CITY_GARRISON_CONTROLS = Object.freeze([
 export interface CapturedCityGarrisonSnapshot {
   readonly current: number;
   readonly maximum: number;
+  readonly control: GameControlHandle;
 }
 
 function cityGarrisonHandleIsCurrent(
@@ -69,7 +70,7 @@ export function readCapturedCityGarrisonSnapshot(
         return undefined;
       }
       if (maximum === undefined) return undefined;
-      return Object.freeze({ current, maximum });
+      return Object.freeze({ current, maximum, control });
     }
   } catch {
     // A throwing native method or changing capture cannot authorize a snapshot.
@@ -105,4 +106,51 @@ export function readCapturedCurrentCityGarrison(
     // A throwing native control or changed capture cannot authorize construction.
   }
   return undefined;
+}
+
+/** Invert DeadSpace `buildGarrison().rating(n, false)` on one unchanged binding. */
+export function capturedCitySoldiersForRating(options: {
+  readonly rootState: GameRootStateSource;
+  readonly controls: GameControlRegistry;
+  readonly control: GameControlHandle;
+  readonly expectedRoot: unknown;
+  readonly targetRating: number;
+  readonly capacity: number;
+}): number | undefined {
+  const { rootState, controls, control, expectedRoot, targetRating, capacity } =
+    options;
+  if (
+    !Number.isFinite(targetRating) ||
+    !Number.isSafeInteger(capacity) ||
+    capacity < 0
+  )
+    return undefined;
+  const current = () =>
+    cityGarrisonHandleIsCurrent(rootState, controls, expectedRoot, control);
+  try {
+    if (!control.methods.includes("rating") || !current()) return undefined;
+    if (targetRating <= 0) return 0;
+    if (capacity === 0) return 1;
+    const rating = (soldiers: number): number | undefined => {
+      if (!current()) return undefined;
+      const answer = controls.invoke(control, "rating", [soldiers, false]);
+      if (!current() || !answer.ok) return undefined;
+      return finite(answer.value);
+    };
+    const upperRating = rating(capacity);
+    if (upperRating === undefined) return undefined;
+    if (upperRating < targetRating) return capacity + 1;
+    let low = 1;
+    let high = capacity;
+    while (low < high) {
+      const middle = Math.floor((low + high) / 2);
+      const answer = rating(middle);
+      if (answer === undefined) return undefined;
+      if (answer >= targetRating) high = middle;
+      else low = middle + 1;
+    }
+    return current() ? low : undefined;
+  } catch {
+    return undefined;
+  }
 }

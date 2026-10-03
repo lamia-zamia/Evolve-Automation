@@ -13316,23 +13316,28 @@
       (candidate) => candidate !== void 0 && candidate.methods.includes("patrolling") && methods.every((method) => candidate.methods.includes(method))
     );
   }
-  function readCapturedHellGarrison(rootState, controls2) {
-    let root = rootState.readRoot(), race = readProperty(root, "race"), portal = readProperty(root, "portal");
-    if (!isNonArrayRecord(root) || !isNonArrayRecord(race) || !isNonArrayRecord(portal) || // Warlord's `#fort` is `buildEnemyFortress`, a different component with no `patrolling`;
-    // upstream skips `buildFortress` entirely for that trait, so neither id can answer here.
-    readProperty(race, "warlord"))
+  function readCapturedHellGarrison(rootState, controls2, expectedRoot = rootState.readRoot()) {
+    try {
+      let root = rootState.readRoot();
+      if (root !== expectedRoot) return;
+      let race = readProperty(root, "race"), portal = readProperty(root, "portal");
+      if (!isNonArrayRecord(root) || !isNonArrayRecord(race) || !isNonArrayRecord(portal) || // Warlord's `#fort` is `buildEnemyFortress`, a different component with no `patrolling`;
+      // upstream skips `buildFortress` entirely for that trait, so neither id can answer here.
+      readProperty(race, "warlord"))
+        return;
+      let fortress = readProperty(portal, "fortress");
+      if (fortress === void 0) return 0;
+      if (!isNonArrayRecord(fortress)) return;
+      let garrison = finite(readProperty(fortress, "garrison"));
+      if (garrison === void 0 || finite(readProperty(fortress, "patrols")) === void 0 || finite(readProperty(fortress, "patrol_size")) === void 0)
+        return;
+      let control = resolveCapturedOrdinaryFortress(controls2, ["patrolling"]);
+      if (control === void 0) return;
+      let result = controls2.invoke(control, "patrolling", [garrison]);
+      return !result.ok || rootState.readRoot() !== expectedRoot || controls2.resolve(control.elementId)?.generation !== control.generation ? void 0 : finite(result.value);
+    } catch {
       return;
-    let fortress = readProperty(portal, "fortress");
-    if (fortress === void 0) return 0;
-    if (!isNonArrayRecord(fortress)) return;
-    let garrison = finite(readProperty(fortress, "garrison"));
-    if (garrison === void 0 || finite(readProperty(fortress, "patrols")) === void 0 || finite(readProperty(fortress, "patrol_size")) === void 0)
-      return;
-    let control = resolveCapturedOrdinaryFortress(controls2, ["patrolling"]);
-    if (control === void 0) return;
-    let result = controls2.invoke(control, "patrolling", [garrison]);
-    if (!(!result.ok || rootState.readRoot() !== root || controls2.resolve(control.elementId)?.generation !== control.generation))
-      return finite(result.value);
+    }
   }
 
   // src/adapters/evolve/combat/captured-city-garrison.ts
@@ -13357,7 +13362,7 @@
         let current = invokeCityGarrisonNumber(controls2, control, "hell");
         if (!cityGarrisonHandleIsCurrent(rootState, controls2, expectedRoot, control) || current === void 0) return;
         let maximum = invokeCityGarrisonNumber(controls2, control, "s_max");
-        return !cityGarrisonHandleIsCurrent(rootState, controls2, expectedRoot, control) || maximum === void 0 ? void 0 : Object.freeze({ current, maximum });
+        return !cityGarrisonHandleIsCurrent(rootState, controls2, expectedRoot, control) || maximum === void 0 ? void 0 : Object.freeze({ current, maximum, control });
       }
     } catch {
     }
@@ -13378,6 +13383,34 @@
         if (value !== void 0) return value;
       }
     } catch {
+    }
+  }
+  function capturedCitySoldiersForRating(options) {
+    let { rootState, controls: controls2, control, expectedRoot, targetRating, capacity } = options;
+    if (!Number.isFinite(targetRating) || !Number.isSafeInteger(capacity) || capacity < 0)
+      return;
+    let current = () => cityGarrisonHandleIsCurrent(rootState, controls2, expectedRoot, control);
+    try {
+      if (!control.methods.includes("rating") || !current()) return;
+      if (targetRating <= 0) return 0;
+      if (capacity === 0) return 1;
+      let rating = (soldiers) => {
+        if (!current()) return;
+        let answer = controls2.invoke(control, "rating", [soldiers, !1]);
+        if (!(!current() || !answer.ok))
+          return finite(answer.value);
+      }, upperRating = rating(capacity);
+      if (upperRating === void 0) return;
+      if (upperRating < targetRating) return capacity + 1;
+      let low = 1, high = capacity;
+      for (; low < high; ) {
+        let middle = Math.floor((low + high) / 2), answer = rating(middle);
+        if (answer === void 0) return;
+        answer >= targetRating ? high = middle : low = middle + 1;
+      }
+      return current() ? low : void 0;
+    } catch {
+      return;
     }
   }
 
@@ -13451,14 +13484,14 @@
       minimumMinions: finite(settings.warlordMinimumMinions) ?? 0
     });
   }
-  function readHellInput(root, settingsValue, cityGarrison) {
+  function readHellInput(root, settingsValue, cityGarrison, stationed) {
     if (!isRecord(root)) return emptyHellInput();
     let race = readProperty(root, "race"), portal = readProperty(root, "portal");
     if (!isRecord(race) || !isRecord(portal)) return emptyHellInput();
     if (race.warlord === !0) return readWarlordInput(root, settingsValue);
     let garrison = readProperty(readProperty(root, "civic"), "garrison"), fortress = readProperty(portal, "fortress");
     if (!isRecord(garrison) || !isRecord(fortress)) return emptyHellInput();
-    if (cityGarrison === void 0) return;
+    if (cityGarrison === void 0 || stationed === void 0) return;
     let workers = finite(readProperty(garrison, "workers")), maximumWorkers = finite(readProperty(garrison, "max")), crew = finite(readProperty(garrison, "crew")), hellSoldiers = finite(readProperty(fortress, "garrison")), hellPatrols = finite(readProperty(fortress, "patrols")), hellPatrolSize = finite(readProperty(fortress, "patrol_size"));
     if (workers === void 0 || maximumWorkers === void 0 || crew === void 0 || hellSoldiers === void 0 || hellPatrols === void 0 || hellPatrolSize === void 0)
       return emptyHellInput();
@@ -13479,7 +13512,7 @@
       hellPatrolSize,
       // DeadSpace initializes `assigned` lazily; the compatibility bridge treats it as zero.
       hellAssigned: finite(readProperty(fortress, "assigned")) ?? 0,
-      currentHellGarrison: hellSoldiers - hellPatrols * hellPatrolSize,
+      currentHellGarrison: stationed,
       homeGarrison,
       minimumHellSoldiers,
       minimumSoldierPercent,
@@ -13578,19 +13611,6 @@
     }
     return SUCCEEDED;
   }
-  function readSoldierTarget(controls2, targetRating) {
-    if (targetRating <= 0) return 0;
-    let control = CAPTURED_CITY_GARRISON_CONTROLS.map(
-      (id) => controls2.resolve(id)
-    ).find((candidate) => candidate?.methods.includes("rating"));
-    if (control === void 0)
-      return;
-    let result = controls2.invoke(control, "rating", [10, !0]);
-    if (!result.ok) return;
-    let perSoldier = finite(result.value);
-    if (!(perSoldier === void 0 || perSoldier <= 0))
-      return Math.ceil(targetRating / perSoldier);
-  }
   function readHellAuthority(root, input) {
     let unavailable2 = Object.freeze({
       unlocked: !1,
@@ -13618,15 +13638,34 @@
     let session = null;
     return Object.freeze({
       run() {
-        let root = dependencies.rootState.readRoot(), readInput12 = () => readHellInput(
-          root,
-          dependencies.readSettings(),
-          readProperty(readProperty(root, "race"), "warlord") === !0 ? void 0 : readCapturedCityGarrisonSnapshot(
+        let root = dependencies.rootState.readRoot(), sampledCityControl, readInput12 = () => {
+          let warlord = readProperty(readProperty(root, "race"), "warlord") === !0, sampledControls = warlord ? [] : [...CAPTURED_CITY_GARRISON_CONTROLS, ...HELL_GARRISON_CONTROLS].map(
+            (id) => ({
+              id,
+              generation: dependencies.controls.resolve(id)?.generation
+            })
+          ), cityGarrison = warlord ? void 0 : readCapturedCityGarrisonSnapshot(
             dependencies.rootState,
             dependencies.controls,
             root
-          )
-        ), input = readInput12();
+          );
+          if (!warlord && cityGarrison === void 0) return;
+          sampledCityControl = cityGarrison?.control;
+          let stationed = warlord ? void 0 : readCapturedHellGarrison(
+            dependencies.rootState,
+            dependencies.controls,
+            root
+          );
+          if (!(!warlord && stationed === void 0) && !(dependencies.rootState.readRoot() !== root || sampledControls.some(
+            ({ id, generation }) => dependencies.controls.resolve(id)?.generation !== generation
+          )))
+            return readHellInput(
+              root,
+              dependencies.readSettings(),
+              cityGarrison,
+              stationed
+            );
+        }, input = readInput12(), initialCityControl = sampledCityControl;
         if (input === void 0)
           return stale(
             "hell-city-garrison-unavailable",
@@ -13642,6 +13681,11 @@
           return stale(
             "hell-city-garrison-unavailable",
             "native city-garrison snapshot is unavailable during revalidation"
+          );
+        if (initialCityControl !== void 0 && (sampledCityControl?.elementId !== initialCityControl.elementId || sampledCityControl.generation !== initialCityControl.generation))
+          return stale(
+            "hell-city-garrison-unavailable",
+            "native city-garrison binding changed during revalidation"
           );
         let current = prepareHellCycle(currentInput);
         if (current === null || JSON.stringify(current) !== JSON.stringify(decision))
@@ -13659,10 +13703,23 @@
           return applyHellManagement(decision, control2, dependencies.controls);
         }
         if (decision.kind === "calculate-hell-targets") {
-          let garrisonSoldiers = readSoldierTarget(
-            dependencies.controls,
-            decision.garrisonRating
-          ), patrolSoldiers = decision.patrolRating === null ? decision.input.hellPatrolSize : readSoldierTarget(dependencies.controls, decision.patrolRating);
+          let ratingControl = initialCityControl;
+          if (ratingControl === void 0)
+            return stale(
+              "hell-calculation-unavailable",
+              "the captured Hell soldier-rating control is unavailable"
+            );
+          let capacity = Math.max(
+            0,
+            Math.floor(decision.availableHellSoldiers)
+          ), target = (targetRating) => capturedCitySoldiersForRating({
+            rootState: dependencies.rootState,
+            controls: dependencies.controls,
+            control: ratingControl,
+            expectedRoot: root,
+            targetRating,
+            capacity
+          }), garrisonSoldiers = target(decision.garrisonRating), patrolSoldiers = decision.patrolRating === null ? decision.input.hellPatrolSize : target(decision.patrolRating);
           if (garrisonSoldiers === void 0 || patrolSoldiers === void 0)
             return stale(
               "hell-calculation-unavailable",
@@ -50490,28 +50547,6 @@ Only continue if you trust the source. Injected code:
     let rating = factor * military / 100, race = readProperty(root, "race"), city = readProperty(root, "city");
     return readProperty(race, "banana") && (rating *= 2), readProperty(city, "biome") === "swamp" && (rating *= 1.4), Number.isFinite(rating) && rating >= 0 ? rating : void 0;
   }
-  function capturedBattleOwnRating(controls2, control, soldiers) {
-    if (!(!Number.isSafeInteger(soldiers) || soldiers < 0))
-      return capturedBattleInvokeNumber(controls2, control, "rating", [
-        soldiers,
-        !1
-      ]);
-  }
-  function capturedBattleSoldiersForRating(controls2, control, targetRating, capacity) {
-    if (!Number.isFinite(targetRating) || targetRating <= 0) return 0;
-    let upper = Math.floor(capacity);
-    if (!Number.isSafeInteger(upper) || upper < 1) return;
-    let upperRating = capturedBattleOwnRating(controls2, control, upper);
-    if (upperRating === void 0) return;
-    if (upperRating < targetRating) return upper + 1;
-    let low = 1, high = upper;
-    for (; low < high; ) {
-      let middle = Math.floor((low + high) / 2), rating = capturedBattleOwnRating(controls2, control, middle);
-      if (rating === void 0) return;
-      rating >= targetRating ? high = middle : low = middle + 1;
-    }
-    return low;
-  }
   function capturedBattleOccupationCost(root) {
     let race = readProperty(root, "race");
     if (readProperty(race, "high_pop")) return;
@@ -50724,7 +50759,7 @@ Only continue if you trust the source. Injected code:
       maximumSoldiers
     });
   }
-  function capturedBattleReadPlunderTarget(root, controls2, garrison, parameters, target) {
+  function capturedBattleReadPlunderTarget(root, rootState, controls2, garrison, parameters, target) {
     let minimumSoldiers = [...CAPTURED_BATTLE_EMPTY_TACTICS], maximumSoldiers = [...CAPTURED_BATTLE_EMPTY_TACTICS], upper = Math.max(
       1,
       Math.floor(
@@ -50734,17 +50769,21 @@ Only continue if you trust the source. Injected code:
     for (let rawTactic of [0, 1, 2, 3, 4]) {
       let tactic = rawTactic, rating = capturedBattleEnemyRating(root, target, tactic);
       if (rating === void 0) return;
-      let minimum = capturedBattleSoldiersForRating(
-        controls2,
-        garrison,
-        rating / (1 - parameters.minimumAdvantage / 100),
-        upper
-      ), maximum = capturedBattleSoldiersForRating(
-        controls2,
-        garrison,
-        rating / (1 - parameters.maximumAdvantage / 100),
-        upper
-      );
+      let minimum = capturedCitySoldiersForRating({
+        rootState,
+        controls: controls2,
+        control: garrison,
+        expectedRoot: root,
+        targetRating: rating / (1 - parameters.minimumAdvantage / 100),
+        capacity: upper
+      }), maximum = capturedCitySoldiersForRating({
+        rootState,
+        controls: controls2,
+        control: garrison,
+        expectedRoot: root,
+        targetRating: rating / (1 - parameters.maximumAdvantage / 100),
+        capacity: upper
+      });
       if (minimum === void 0 || maximum === void 0) return;
       minimumSoldiers[tactic] = minimum, maximumSoldiers[tactic] = maximum;
     }
@@ -50868,27 +50907,24 @@ Only continue if you trust the source. Injected code:
             continue;
           let rating = capturedBattleEnemyRating(active.root, target, 4);
           if (rating === void 0) continue;
-          let minimumSiegeSoldiers = capturedBattleSoldiersForRating(
-            dependencies.controls,
-            active.garrison,
-            rating / (1 - parameters.minimumAdvantage / 100),
-            Math.max(
-              1,
-              Math.floor(
-                parameters.maximumSoldiers || parameters.maxCityGarrison
-              )
-            )
-          ), maximumSiegeSoldiers = capturedBattleSoldiersForRating(
-            dependencies.controls,
-            active.garrison,
-            rating / (1 - parameters.maximumAdvantage / 100),
-            Math.max(
-              1,
-              Math.floor(
-                parameters.maximumSoldiers || parameters.maxCityGarrison
-              )
-            )
-          );
+          let capacity = Math.max(
+            1,
+            Math.floor(parameters.maximumSoldiers || parameters.maxCityGarrison)
+          ), minimumSiegeSoldiers = capturedCitySoldiersForRating({
+            rootState: dependencies.rootState,
+            controls: dependencies.controls,
+            control: active.garrison,
+            expectedRoot: active.root,
+            targetRating: rating / (1 - parameters.minimumAdvantage / 100),
+            capacity
+          }), maximumSiegeSoldiers = capturedCitySoldiersForRating({
+            rootState: dependencies.rootState,
+            controls: dependencies.controls,
+            control: active.garrison,
+            expectedRoot: active.root,
+            targetRating: rating / (1 - parameters.maximumAdvantage / 100),
+            capacity
+          });
           minimumSiegeSoldiers === void 0 || maximumSiegeSoldiers === void 0 || occupationTargets.push(
             Object.freeze({
               ...capturedBattleTargetInput(target),
@@ -50899,6 +50935,7 @@ Only continue if you trust the source. Injected code:
         }
         let selected = strategy.battleTargetId === null ? void 0 : effectiveGovernments.get(strategy.battleTargetId), plunderTarget = selected !== void 0 && !active.occupationSupported && selected.policy === "Occupy" ? void 0 : selected, currentTarget = plunderTarget === void 0 ? null : capturedBattleReadPlunderTarget(
           active.root,
+          dependencies.rootState,
           dependencies.controls,
           active.garrison,
           parameters,
