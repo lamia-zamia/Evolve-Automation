@@ -25,9 +25,11 @@ function makePage({
     race: { species: "human", ...race },
     stats: { attacks: 0, achieve: {}, ...stats },
     tech,
+    civic: { foreign: {} },
     resource: {},
     city: {},
     queue: { display: queue.length > 0, queue: [...queue] },
+    r_queue: { queue: [] },
   };
   for (const [id, resource] of Object.entries(resources)) {
     root.resource[id] = { display: true, max: -1, diff: 0, ...resource };
@@ -54,6 +56,10 @@ function makePage({
         action() {
           clicks.push(entry.id);
           if (actionModes[entry.id] === "no-op") return undefined;
+          if (entry.nativeAffordable?.(root) === false) {
+            root.r_queue.queue.push({ id: entry.id });
+            return false;
+          }
           for (const [res, amount] of Object.entries(entry.cost)) {
             if ((root.resource[res]?.amount ?? 0) < amount) return false;
           }
@@ -103,6 +109,7 @@ function makePage({
       drawn().map((entry) => ({
         id: entry.id,
         cost: Object.freeze({ ...entry.cost }),
+        nativeAffordable: entry.nativeAffordable?.(root) !== false,
       })),
     exists: () => root.settings.civTabs === 3,
   };
@@ -601,7 +608,7 @@ const UNIFICATION = {
   id: "tech-unification2",
   title: "Unification",
   grant: "unification2",
-  cost: { Knowledge: 900 },
+  cost: {},
 };
 const ISOLATION = {
   id: "tech-isolation_protocol",
@@ -609,6 +616,35 @@ const ISOLATION = {
   grant: "isolation_protocol",
   cost: { Knowledge: 900 },
 };
+
+{
+  const unification = {
+    ...UNIFICATION,
+    nativeAffordable: (root) =>
+      [0, 1, 2].every((index) => root.civic.foreign[`gov${index}`]?.occ),
+  };
+  const page = makePage({
+    offered: [unification, THEOLOGY],
+    resources: { Knowledge: { amount: 1000 } },
+  });
+  assert.equal(page.control.runCycle().status, "succeeded");
+  assert.deepEqual(page.clicks, ["tech-theology"]);
+  assert.deepEqual(page.root.r_queue.queue, []);
+  assert.equal(page.root.tech.theology, 1);
+
+  page.root.r_queue.queue = [{ id: "tech-unification2" }];
+  page.root.r_queue.queue = [];
+  page.control.runCycle();
+  assert.deepEqual(page.clicks, ["tech-theology"]);
+  assert.deepEqual(page.root.r_queue.queue, []);
+
+  for (const index of [0, 1, 2]) {
+    page.root.civic.foreign[`gov${index}`] = { occ: true };
+  }
+  page.control.runCycle();
+  assert.deepEqual(page.clicks, ["tech-theology", "tech-unification2"]);
+  assert.equal(page.root.tech.unification2, 1);
+}
 
 {
   // Unification is the player's call, and a run that has not enabled it does not get it.

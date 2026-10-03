@@ -21,7 +21,7 @@ function attributesOf(attributes) {
  * carrying Vue’s own `data-v-app` marker, and inside it a button whose classes keep each
  * resource’s real spelling while its price attributes have been lower-cased by the HTML parser.
  */
-function element(id, prices = {}, extraAttributes = {}) {
+function element(id, prices = {}, extraAttributes = {}, unavailable = false) {
   const classes = ["button", "is-dark"];
   const data = {};
   for (const [resource, amount] of Object.entries(prices)) {
@@ -37,7 +37,10 @@ function element(id, prices = {}, extraAttributes = {}) {
   };
   return {
     id,
-    attributes: attributesOf({ class: "action", "data-v-app": "" }),
+    attributes: attributesOf({
+      class: unavailable ? "action cna cnam" : "action",
+      "data-v-app": "",
+    }),
     querySelectorAll: () => [button],
   };
 }
@@ -74,6 +77,22 @@ function documentOf(elements, bySelector = {}) {
   assert.deepEqual(actions[2].cost, { Knowledge: 900 });
   // Vue’s own mount marker has no paired class either.
   assert.deepEqual(actions[3].cost, {});
+  assert.equal(actions[3].nativeAffordable, true);
+}
+
+{
+  const reader = createGameDrawnActionsReader({
+    getDocument: () =>
+      documentOf([
+        element("tech-unification2", {}, {}, true),
+        element("tech-theology", { Knowledge: 900 }),
+      ]),
+  });
+  const actions = reader.read("#tech .action");
+  assert.deepEqual(
+    actions.map((action) => action.nativeAffordable),
+    [false, true],
+  );
 }
 
 {
@@ -164,6 +183,29 @@ function makePage({ offered = [[]], granted = [], generations = {} } = {}) {
       failure = outcome;
     },
   };
+}
+
+{
+  const page = makePage({
+    offered: [
+      [
+        element("tech-unification2", {}, {}, true),
+        element("tech-theology", { Knowledge: 900 }),
+      ],
+    ],
+    generations: { "tech-unification2": 1, "tech-theology": 1 },
+  });
+  assert.deepEqual(
+    page.catalog.read().offered.map((tech) => ({
+      id: tech.elementId,
+      cost: tech.cost,
+      nativeAffordable: tech.nativeAffordable,
+    })),
+    [
+      { id: "tech-unification2", cost: {}, nativeAffordable: false },
+      { id: "tech-theology", cost: { Knowledge: 900 }, nativeAffordable: true },
+    ],
+  );
 }
 
 {

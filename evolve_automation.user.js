@@ -3695,6 +3695,7 @@
                   (action) => Object.freeze({
                     elementId: action.id,
                     cost: action.cost,
+                    nativeAffordable: action.nativeAffordable === !0,
                     // Which binding of this control the offer belongs to. The game rebinds an action
                     // every time it draws it, and a superseded closure keeps working, so recording the
                     // generation here is what lets the executor refuse one from an older draw.
@@ -6702,7 +6703,7 @@
         for (let index = startIndex; index < offered.length; index++) {
           let tech = offered[index];
           if (tech === void 0) continue;
-          let affordable = isAffordable(tech.cost), view = Object.freeze({
+          let affordable = tech.nativeAffordable && isAffordable(tech.cost), view = Object.freeze({
             index,
             id: tech.elementId,
             affordable,
@@ -31340,6 +31341,17 @@
 
   // src/adapters/browser/game-drawn-actions.ts
   var DATA_PREFIX = "data-", RESOURCE_CLASS_PREFIX = "res-";
+  function readNativeAffordability(element) {
+    if (element.classList !== void 0)
+      return !element.classList.contains("cna");
+    let attributes = element.attributes;
+    if (attributes !== void 0)
+      for (let index = 0; index < attributes.length; index++) {
+        let attribute = attributes[index];
+        if (attribute?.name === "class")
+          return !attribute.value.split(/\s+/).includes("cna");
+      }
+  }
   function collect(element, markup) {
     let attributes = element.attributes;
     if (attributes !== void 0)
@@ -31404,11 +31416,12 @@
           let element = elements[index], id = element?.id;
           if (element === void 0 || typeof id != "string" || id.length === 0)
             continue;
-          let state = readSwitchState(element);
+          let state = readSwitchState(element), nativeAffordable = readNativeAffordability(element);
           actions.push(
             Object.freeze({
               id,
               cost: Object.freeze(readCost3(element)),
+              ...nativeAffordable === void 0 ? {} : { nativeAffordable },
               ...state === void 0 ? {} : { state }
             })
           );

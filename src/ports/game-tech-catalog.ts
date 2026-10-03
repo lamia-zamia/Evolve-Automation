@@ -18,6 +18,8 @@ export interface OfferedTech {
   readonly elementId: string;
   /** The game's own current price, keyed by its resource names. */
   readonly cost: Readonly<Record<string, number>>;
+  /** The native `checkAffordable` verdict from this draw, including synthetic costs. */
+  readonly nativeAffordable: boolean;
   /**
    * The captured-control generation this offer was read from, or 0 when the game drew the action
    * without binding a control for it. Anything acting on the offer checks it against the current

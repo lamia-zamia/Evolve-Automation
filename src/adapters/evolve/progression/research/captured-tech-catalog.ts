@@ -114,6 +114,7 @@ export function createCapturedTechCatalog(
                 Object.freeze({
                   elementId: action.id,
                   cost: action.cost,
+                  nativeAffordable: action.nativeAffordable === true,
                   // Which binding of this control the offer belongs to. The game rebinds an action
                   // every time it draws it, and a superseded closure keeps working, so recording the
                   // generation here is what lets the executor refuse one from an older draw.

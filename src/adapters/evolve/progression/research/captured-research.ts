@@ -5,8 +5,9 @@
  * The offered technologies and their prices are one snapshot of the game's own `drawTech` output,
  * taken when the cycle began and belonging to that cycle alone. Prices in it are a snapshot and
  * that is the right shape for them — a tech's price changes only when the game's own cost inputs
- * change — but **affordability is recomputed every read** against live holdings, because Knowledge
- * moves every tick.
+ * change — but numeric affordability is recomputed every read against live holdings, because
+ * Knowledge moves every tick. The drawn row's native verdict also gates synthetic costs such as
+ * Unification's `Bool()` price, which cannot be reconstructed from numeric markup.
  *
  * `runAction` reports nothing a caller can use, so a research is confirmed by the only thing that
  * proves it: the game's tech state moved. Nothing here carries over between cycles; whether the
@@ -111,7 +112,7 @@ export function createCapturedResearchAdapter(
       for (let index = startIndex; index < offered.length; index++) {
         const tech = offered[index];
         if (tech === undefined) continue;
-        const affordable = isAffordable(tech.cost);
+        const affordable = tech.nativeAffordable && isAffordable(tech.cost);
         const view = Object.freeze({
           index,
           id: tech.elementId,

@@ -9,8 +9,8 @@
  *
  * These reads are only meaningful while the panel is mounted and only accurate immediately after
  * it was drawn, so a caller takes them inside a discovery pass and treats the result as a
- * snapshot. Prices age slowly; affordability does not, and must be recomputed against live
- * holdings rather than read from the `cna` class.
+ * snapshot. Numeric affordability changes with live holdings, so consumers still recheck costs;
+ * the native `cna` class also carries nonnumeric gates that price markup cannot express.
  */
 
 /** The on/off counts the game rendered onto a building row that has a power switch. */
@@ -26,6 +26,8 @@ export interface DrawnAction {
   readonly id: string;
   /** `data-<Resource>` costs, keyed by the game's resource names. */
   readonly cost: Readonly<Record<string, number>>;
+  /** The row's native current affordability, or absent if its class could not be read. */
+  readonly nativeAffordable?: boolean;
   /**
    * The row's rendered on/off counts, when it rendered a pair of them. `setAction` appends the
    * two spans only for an action whose own gate passed — `switchable()` if the definition has

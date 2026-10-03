@@ -35,6 +35,7 @@ import type {
 /** The subset of a page element this adapter touches. */
 interface DrawnElement {
   readonly id?: unknown;
+  readonly classList?: { contains(token: string): boolean };
   readonly textContent?: unknown;
   readonly attributes?: ArrayLike<{
     readonly name: string;
@@ -55,6 +56,20 @@ const DATA_PREFIX = "data-";
 
 /** The class the game pairs with every price attribute, carrying the resource's real name. */
 const RESOURCE_CLASS_PREFIX = "res-";
+
+function readNativeAffordability(element: DrawnElement): boolean | undefined {
+  if (element.classList !== undefined) {
+    return !element.classList.contains("cna");
+  }
+  const attributes = element.attributes;
+  if (attributes === undefined) return undefined;
+  for (let index = 0; index < attributes.length; index++) {
+    const attribute = attributes[index];
+    if (attribute?.name !== "class") continue;
+    return !attribute.value.split(/\s+/).includes("cna");
+  }
+  return undefined;
+}
 
 interface PriceMarkup {
   /** Resource names exactly as the game spells them, from the `res-` classes. */
@@ -164,10 +179,12 @@ export function createGameDrawnActionsReader({
           continue;
         }
         const state = readSwitchState(element);
+        const nativeAffordable = readNativeAffordability(element);
         actions.push(
           Object.freeze({
             id,
             cost: Object.freeze(readCost(element)),
+            ...(nativeAffordable === undefined ? {} : { nativeAffordable }),
             ...(state === undefined ? {} : { state }),
           }),
         );
