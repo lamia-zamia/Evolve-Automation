@@ -42,9 +42,6 @@ export interface HellCycleInput {
   readonly manageAuthority: boolean;
   readonly minimumAuthority: number;
   readonly minimumAuthorityPatrolPercent: number;
-  readonly evilTechnology: number;
-  readonly grenadier: boolean;
-  readonly government: string;
 }
 
 export type HellAdjustmentKind =
@@ -88,13 +85,22 @@ export interface HellSoldierTargets {
   readonly patrolSoldiers: number;
 }
 
-export interface HellAuthorityInput {
-  readonly unlocked: boolean;
-  readonly current: number;
-  readonly maximum: number;
-  readonly scriptTick: number;
-  readonly debugEnabled: boolean;
-}
+export type HellAuthorityInput =
+  | Readonly<{
+      readonly unlocked: false;
+      readonly current: number;
+      readonly maximum: number;
+      readonly scriptTick: number;
+      readonly debugEnabled: boolean;
+    }>
+  | Readonly<{
+      readonly unlocked: true;
+      readonly current: number;
+      readonly maximum: number;
+      readonly scriptTick: number;
+      readonly debugEnabled: boolean;
+      readonly perSoldier: number;
+    }>;
 
 export interface HellCalculationInput extends HellSoldierTargets {
   readonly authority: Readonly<HellAuthorityInput>;
@@ -304,10 +310,7 @@ export function planHell(
     calculated.authority.unlocked &&
     patrolSize > 0
   ) {
-    let perSoldier = 0.7 + 0.1 * input.evilTechnology;
-    if (input.grenadier) perSoldier *= 1.75;
-    if (input.government === "autocracy") perSoldier *= 1.08;
-    else if (input.government === "dictator") perSoldier *= 1.12;
+    const perSoldier = calculated.authority.perSoldier;
     const authorityTarget =
       input.minimumAuthority < 0
         ? calculated.authority.maximum

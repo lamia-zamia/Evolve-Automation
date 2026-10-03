@@ -13247,9 +13247,7 @@
   function planHell(request, calculated) {
     let input = request.input, base = calculateHellBaseTargets(request, calculated), hellGarrison = base.hellGarrison, patrolSize = base.patrolSize, authorityAdjusted = !1, authorityDebug = null;
     if (input.manageAuthority && input.minimumAuthority !== 0 && calculated.authority.unlocked && patrolSize > 0) {
-      let perSoldier = 0.7 + 0.1 * input.evilTechnology;
-      input.grenadier && (perSoldier *= 1.75), input.government === "autocracy" ? perSoldier *= 1.08 : input.government === "dictator" && (perSoldier *= 1.12);
-      let authorityTarget = input.minimumAuthority < 0 ? calculated.authority.maximum : input.minimumAuthority, deficit = authorityTarget - calculated.authority.current, neededStationed = input.currentHellGarrison + Math.ceil(deficit / perSoldier), patrolReserve = 1;
+      let perSoldier = calculated.authority.perSoldier, authorityTarget = input.minimumAuthority < 0 ? calculated.authority.maximum : input.minimumAuthority, deficit = authorityTarget - calculated.authority.current, neededStationed = input.currentHellGarrison + Math.ceil(deficit / perSoldier), patrolReserve = 1;
       input.minimumAuthority < 0 && input.minimumAuthorityPatrolPercent > 0 && (patrolReserve = Math.min(
         request.availableHellSoldiers,
         Math.ceil(
@@ -13505,10 +13503,7 @@
       bootCampCount: 0,
       manageAuthority: !1,
       minimumAuthority: 0,
-      minimumAuthorityPatrolPercent: 0,
-      evilTechnology: 0,
-      grenadier: !1,
-      government: ""
+      minimumAuthorityPatrolPercent: 0
     });
   }
   function readWarlordInput(root, settingsValue) {
@@ -13538,7 +13533,7 @@
     let workers = finite(readProperty(garrison, "workers")), maximumWorkers = finite(readProperty(garrison, "max")), crew = finite(readProperty(garrison, "crew")), hellSoldiers = finite(readProperty(fortress, "garrison")), hellPatrols = finite(readProperty(fortress, "patrols")), hellPatrolSize = finite(readProperty(fortress, "patrol_size"));
     if (workers === void 0 || maximumWorkers === void 0 || crew === void 0 || hellSoldiers === void 0 || hellPatrols === void 0 || hellPatrolSize === void 0)
       return emptyHellInput();
-    let settings = isRecord(settingsValue) ? settingsValue : {}, tech = readProperty(root, "tech"), city = readProperty(root, "city"), turret = readProperty(portal, "turret"), warDrone = readProperty(portal, "war_drone"), warDroid = readProperty(portal, "war_droid"), bootCamp = readProperty(city, "boot_camp"), govern = readProperty(readProperty(root, "civic"), "govern"), elysium = finite(readProperty(tech, "elysium")) ?? 0, homeGarrison = settingNumber(settings, "hellHomeGarrison", 10), minimumHellSoldiers = settingNumber(settings, "hellMinSoldiers", 20), minimumSoldierPercent = settingNumber(
+    let settings = isRecord(settingsValue) ? settingsValue : {}, tech = readProperty(root, "tech"), city = readProperty(root, "city"), turret = readProperty(portal, "turret"), warDrone = readProperty(portal, "war_drone"), warDroid = readProperty(portal, "war_droid"), bootCamp = readProperty(city, "boot_camp"), elysium = finite(readProperty(tech, "elysium")) ?? 0, homeGarrison = settingNumber(settings, "hellHomeGarrison", 10), minimumHellSoldiers = settingNumber(settings, "hellMinSoldiers", 20), minimumSoldierPercent = settingNumber(
       settings,
       "hellMinSoldiersPercent",
       90
@@ -13602,10 +13597,7 @@
         settings,
         "generalAuthorityMinPatrolPercent",
         0
-      ),
-      evilTechnology: finite(readProperty(tech, "evil")) ?? 0,
-      grenadier: readProperty(race, "grenadier") === !0,
-      government: typeof readProperty(govern, "type") == "string" ? readProperty(govern, "type") : ""
+      )
     });
   }
   var HELL_ADJUSTMENT_METHODS = Object.freeze({
@@ -13654,7 +13646,7 @@
     }
     return SUCCEEDED;
   }
-  function readHellAuthority(root, input) {
+  function readHellAuthority(root, input, readAuthorityMarginal) {
     let unavailable2 = Object.freeze({
       unlocked: !1,
       current: 0,
@@ -13667,14 +13659,18 @@
     let authority = readProperty(readProperty(root, "resource"), "Authority");
     if (!isRecord(authority) || authority.display === !1)
       return unavailable2;
-    let current = finite(readProperty(authority, "amount")), maximum = finite(readProperty(authority, "max"));
-    if (!(current === void 0 || maximum === void 0))
+    let marginal = readAuthorityMarginal(root, {
+      authorityManage: input.manageAuthority,
+      generalMinimumAuthority: input.minimumAuthority
+    });
+    if (marginal !== void 0)
       return Object.freeze({
         unlocked: !0,
-        current: Math.max(0, current),
-        maximum: Math.max(0, maximum),
+        current: marginal.current,
+        maximum: marginal.maximum,
         scriptTick: 0,
-        debugEnabled: !1
+        debugEnabled: !1,
+        perSoldier: marginal.perSoldier
       });
   }
   function createCapturedHellAutomation(dependencies) {
@@ -13768,7 +13764,11 @@
               "hell-calculation-unavailable",
               "the captured Hell soldier-rating query is unavailable"
             );
-          let authority = readHellAuthority(session.root, decision.input);
+          let authority = readHellAuthority(
+            session.root,
+            decision.input,
+            dependencies.readAuthorityMarginal
+          );
           if (authority === void 0)
             return stale(
               "hell-calculation-unavailable",
@@ -22306,6 +22306,15 @@
     } catch {
       return unavailable("inaccessible-data");
     }
+  }
+  function readCapturedAuthorityMarginal(rawRoot, rawSettings) {
+    let result = readCapturedAuthorityPolicyView(rawRoot, rawSettings);
+    if (result.status === "ready")
+      return Object.freeze({
+        current: result.view.current,
+        maximum: result.view.target.maximum,
+        perSoldier: calculateAuthorityPerSoldier(result.view.modifiers)
+      });
   }
   function buildValidatedAuthorityPolicyView(rawRoot, rawSettings, rawAuthority, readHighPopulationPercent) {
     try {
@@ -53241,7 +53250,8 @@ Only continue if you trust the source. Injected code:
     }), hell = createCapturedHellAutomation({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
-      readSettings: () => settingsStore.readRaw()
+      readSettings: () => settingsStore.readRaw(),
+      readAuthorityMarginal: readCapturedAuthorityMarginal
     }), genetics = createCapturedGenetics({
       rootState: pageCapture2.rootState,
       keyState: pageCapture2.keyState,

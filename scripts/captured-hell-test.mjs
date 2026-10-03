@@ -1,7 +1,15 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
-import { createCapturedHellAutomation } from "../src/adapters/evolve/combat/captured-hell.ts";
+import { createCapturedHellAutomation as createHellAutomationBase } from "../src/adapters/evolve/combat/captured-hell.ts";
+import { readCapturedAuthorityMarginal } from "../src/adapters/evolve/civic/authority.ts";
+
+function createCapturedHellAutomation(dependencies) {
+  return createHellAutomationBase({
+    ...dependencies,
+    readAuthorityMarginal: readCapturedAuthorityMarginal,
+  });
+}
 
 function makeRoot({ enemies = 1, minions = 1500, warlord = true } = {}) {
   return {
@@ -502,6 +510,9 @@ function runNativeOracleScenario({
   stationed = 15,
   rating = (n) => n * n,
   authority = false,
+  race = {},
+  governmentType = "",
+  authorityTarget = 20,
   patrolTarget = 30,
   onRead = () => {},
 } = {}) {
@@ -510,6 +521,8 @@ function runNativeOracleScenario({
   root.portal.fortress.walls = 100;
   root.portal.fortress.threat = 0;
   root.resource = { Authority: { amount: 0, max: 100, display: true } };
+  Object.assign(root.race, race);
+  root.civic.govern = { type: governmentType };
   const calls = [];
   let currentRoot = root;
   let fortressGeneration = 1;
@@ -578,7 +591,7 @@ function runNativeOracleScenario({
       hellPatrolMinRating: patrolTarget,
       hellBolsterPatrolRating: 0,
       authorityManage: authority,
-      generalMinimumAuthority: 20,
+      generalMinimumAuthority: authorityTarget,
     }),
   });
   return { outcome: automation.run(), calls, stationedReads };
@@ -586,6 +599,41 @@ function runNativeOracleScenario({
 
 const mutationCount = (result, method) =>
   result.calls.filter(([, called]) => called === method).length;
+
+{
+  const ordinary = runNativeOracleScenario({ authority: true });
+  const grenadier = runNativeOracleScenario({
+    authority: true,
+    race: { grenadier: 1 },
+  });
+  const highPopulation = runNativeOracleScenario({
+    authority: true,
+    race: { high_pop: 1 },
+  });
+  const despot = runNativeOracleScenario({
+    authority: true,
+    race: { despot: 10 },
+  });
+  for (const result of [ordinary, grenadier, highPopulation, despot]) {
+    assert.equal(result.outcome.status, "succeeded");
+  }
+  assert.deepEqual(
+    [ordinary, grenadier, highPopulation, despot].map((result) =>
+      mutationCount(result, "patInc"),
+    ),
+    [6, 8, 0, 7],
+  );
+  assert.ok(
+    mutationCount(grenadier, "patInc") > mutationCount(ordinary, "patInc"),
+  );
+  assert.ok(
+    mutationCount(highPopulation, "patInc") < mutationCount(ordinary, "patInc"),
+  );
+  assert.ok(
+    mutationCount(despot, "patInc") > mutationCount(ordinary, "patInc"),
+  );
+}
+
 for (const fortressId of ["fort", "gFort"]) {
   // Forge- and guard-post-shaped native deductions alter stationed defenders even though the
   // visible fortress fields are identical. Authority responds to the native answer.

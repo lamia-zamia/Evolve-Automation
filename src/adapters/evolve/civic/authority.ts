@@ -1,4 +1,7 @@
-import type { AuthorityPolicyView } from "../../../domain/civic/authority.ts";
+import {
+  calculateAuthorityPerSoldier,
+  type AuthorityPolicyView,
+} from "../../../domain/civic/authority.ts";
 import { isFiniteNumber, isRecord } from "../../validation.ts";
 import { readCapturedHighPopulationPercent } from "./captured-job-catalog.ts";
 
@@ -82,6 +85,26 @@ export function readCapturedAuthorityPolicyView(
   } catch {
     return unavailable("inaccessible-data");
   }
+}
+
+/** The validated game-owned Authority state and the shared soldier marginal for Hell. */
+export function readCapturedAuthorityMarginal(
+  rawRoot: unknown,
+  rawSettings: unknown,
+):
+  | Readonly<{
+      current: number;
+      maximum: number;
+      perSoldier: number;
+    }>
+  | undefined {
+  const result = readCapturedAuthorityPolicyView(rawRoot, rawSettings);
+  if (result.status !== "ready") return undefined;
+  return Object.freeze({
+    current: result.view.current,
+    maximum: result.view.target.maximum,
+    perSoldier: calculateAuthorityPerSoldier(result.view.modifiers),
+  });
 }
 
 function buildValidatedAuthorityPolicyView(

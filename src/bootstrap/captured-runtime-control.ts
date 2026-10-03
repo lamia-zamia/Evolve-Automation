@@ -95,6 +95,7 @@ import type {
 import { createCapturedFleetDemand } from "../adapters/evolve/combat/captured-fleet-demand.ts";
 import { createCapturedFleetAutomation } from "../adapters/evolve/combat/captured-fleet.ts";
 import { createCapturedOuterFleetControl } from "./captured-fleet-outer-control.ts";
+import { readCapturedAuthorityMarginal } from "../adapters/evolve/civic/authority.ts";
 import { createCapturedActionCostReader } from "../adapters/evolve/captured-action-costs.ts";
 import {
   createCapturedTriggers,
@@ -995,6 +996,7 @@ export function startCapturedRuntime({
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,
     readSettings: () => settingsStore.readRaw(),
+    readAuthorityMarginal: readCapturedAuthorityMarginal,
   });
   const genetics = createCapturedGenetics({
     rootState: pageCapture.rootState,

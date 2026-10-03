@@ -85,9 +85,6 @@ function emptyHellInput(): HellCycleInput {
     manageAuthority: false,
     minimumAuthority: 0,
     minimumAuthorityPatrolPercent: 0,
-    evilTechnology: 0,
-    grenadier: false,
-    government: "",
   });
 }
 
@@ -156,7 +153,6 @@ function readHellInput(
   const warDrone = readProperty(portal, "war_drone");
   const warDroid = readProperty(portal, "war_droid");
   const bootCamp = readProperty(city, "boot_camp");
-  const govern = readProperty(readProperty(root, "civic"), "govern");
   const elysium = finite(readProperty(tech, "elysium")) ?? 0;
   const homeGarrison = settingNumber(settings, "hellHomeGarrison", 10);
   const minimumHellSoldiers = settingNumber(settings, "hellMinSoldiers", 20);
@@ -225,12 +221,6 @@ function readHellInput(
       "generalAuthorityMinPatrolPercent",
       0,
     ),
-    evilTechnology: finite(readProperty(tech, "evil")) ?? 0,
-    grenadier: readProperty(race, "grenadier") === true,
-    government:
-      typeof readProperty(govern, "type") === "string"
-        ? (readProperty(govern, "type") as string)
-        : "",
   });
 }
 
@@ -304,6 +294,16 @@ function applyHellManagement(
 function readHellAuthority(
   root: unknown,
   input: Readonly<HellCycleInput>,
+  readAuthorityMarginal: (
+    root: unknown,
+    settings: unknown,
+  ) =>
+    | Readonly<{
+        current: number;
+        maximum: number;
+        perSoldier: number;
+      }>
+    | undefined,
 ): Readonly<HellAuthorityInput> | undefined {
   const unavailable = Object.freeze({
     unlocked: false,
@@ -319,15 +319,18 @@ function readHellAuthority(
   if (!isRecord(authority) || authority["display"] === false) {
     return unavailable;
   }
-  const current = finite(readProperty(authority, "amount"));
-  const maximum = finite(readProperty(authority, "max"));
-  if (current === undefined || maximum === undefined) return undefined;
+  const marginal = readAuthorityMarginal(root, {
+    authorityManage: input.manageAuthority,
+    generalMinimumAuthority: input.minimumAuthority,
+  });
+  if (marginal === undefined) return undefined;
   return Object.freeze({
     unlocked: true,
-    current: Math.max(0, current),
-    maximum: Math.max(0, maximum),
+    current: marginal.current,
+    maximum: marginal.maximum,
     scriptTick: 0,
     debugEnabled: false,
+    perSoldier: marginal.perSoldier,
   });
 }
 
@@ -339,6 +342,12 @@ export function createCapturedHellAutomation(dependencies: {
   readonly rootState: GameRootStateSource;
   readonly controls: GameControlRegistry;
   readonly readSettings: () => unknown;
+  readonly readAuthorityMarginal: (
+    root: unknown,
+    settings: unknown,
+  ) =>
+    | Readonly<{ current: number; maximum: number; perSoldier: number }>
+    | undefined;
 }): CapturedHellAutomation {
   let session: HellSession | null = null;
 
@@ -471,7 +480,11 @@ export function createCapturedHellAutomation(dependencies: {
             "the captured Hell soldier-rating query is unavailable",
           );
         }
-        const authority = readHellAuthority(session.root, decision.input);
+        const authority = readHellAuthority(
+          session.root,
+          decision.input,
+          dependencies.readAuthorityMarginal,
+        );
         if (authority === undefined) {
           return stale(
             "hell-calculation-unavailable",
