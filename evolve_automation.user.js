@@ -22159,14 +22159,7 @@
   }
 
   // src/adapters/evolve/combat/captured-fleet-outer.ts
-  var CAPTURED_OUTER_FLEET_EXPLORER = Object.freeze({
-    class: "explorer",
-    armor: "neutronium",
-    weapon: "railgun",
-    engine: "emdrive",
-    power: "elerium",
-    sensor: "quantum"
-  });
+  var OUTER_FLEET_HULL_FIELD = "class", OUTER_FLEET_EXPLORER_HULL = "explorer";
   function capturedOuterFleetRoot(rootState) {
     let root = rootState.readRoot();
     return isRecord(root) ? root : void 0;
@@ -22201,8 +22194,18 @@
     }
     return blueprint;
   }
+  function capturedOuterFleetNormalizedBlueprint(native, dimensions) {
+    if (native === void 0) return;
+    let blueprint = {};
+    for (let type of dimensions) {
+      let part = native[type];
+      if (typeof part != "string") return;
+      blueprint[type] = part;
+    }
+    return blueprint;
+  }
   function capturedOuterFleetBlueprintAvailable(controls2, blueprint, dimensions) {
-    if (typeof blueprint.class != "string") return !1;
+    if (typeof blueprint[OUTER_FLEET_HULL_FIELD] != "string") return !1;
     for (let { type } of outerFleetBlueprintWrites(blueprint))
       if (!dimensions.includes(type)) return !1;
     let live = capturedOuterFleetLiveDesign(controls2);
@@ -22221,7 +22224,7 @@
     return region === "tauceti" ? "tech_era_tauceti" : region;
   }
   function capturedOuterFleetShipName(blueprint) {
-    return `outer_shipyard_class_${String(blueprint.class ?? "")}`;
+    return `outer_shipyard_class_${String(blueprint[OUTER_FLEET_HULL_FIELD] ?? "")}`;
   }
   function capturedOuterFleetCurrentGarrison(root) {
     let civic = readProperty(root, "civic"), garrison = readProperty(civic, "garrison"), fortress = readProperty(readProperty(root, "portal"), "fortress"), fob = readProperty(readProperty(root, "space"), "fob");
@@ -22344,13 +22347,22 @@
         expectedDecision = null;
         let root = active.root, tech = readProperty(root, "tech"), settings = active.settings, exploreTau = settings.fleetExploreTau === !0, tauTechnology = finite(readProperty(tech, "tauceti")) ?? 0, explorerAvailable = !1, explorerCount = 0, dimensions = provenDimensions(active);
         if (exploreTau && tauTechnology === 1 && dimensions !== void 0) {
-          let explorer = storeBlueprint(
+          let explorer = dependencies.controls.isPartAvailable({
+            elementId: CAPTURED_OUTER_FLEET_SHIPYARD_CONTROL,
+            type: OUTER_FLEET_HULL_FIELD,
+            part: OUTER_FLEET_EXPLORER_HULL
+          }) ? capturedOuterFleetNormalizedBlueprint(
+            dependencies.costs.normalize({
+              [OUTER_FLEET_HULL_FIELD]: OUTER_FLEET_EXPLORER_HULL
+            }),
+            dimensions
+          ) : void 0;
+          explorer !== void 0 && (storeBlueprint(
             "explorer",
-            CAPTURED_OUTER_FLEET_EXPLORER,
+            explorer,
             "explorer blueprint",
             active.blueprints
-          );
-          explorerAvailable = capturedOuterFleetBlueprintAvailable(
+          ), explorerAvailable = capturedOuterFleetBlueprintAvailable(
             dependencies.controls,
             explorer,
             dimensions
@@ -22359,7 +22371,7 @@
             "tauceti",
             explorer,
             dimensions
-          ));
+          )));
         }
         let erisTechnology = finite(readProperty(tech, "eris")) ?? 0, erisWeighting = finite(settings.fleet_outer_pr_spc_eris) ?? 0, explorerPriority = exploreTau && tauTechnology === 1 && explorerAvailable && (explorerCount === null || explorerCount < 1), regionStates = explorerPriority ? [] : OUTER_FLEET_REGIONS.map((id) => {
           let weighting = finite(settings[`fleet_outer_pr_${id}`]) ?? 0, state = weighting > 0 ? dependencies.regionMechanics.read(id) : void 0;
@@ -22482,9 +22494,9 @@
           throw new Error(
             `captured outer fleet blueprint ${candidate.blueprint} is missing`
           );
-        if (typeof blueprint.class != "string")
+        if (typeof blueprint[OUTER_FLEET_HULL_FIELD] != "string")
           throw new TypeError(
-            `captured ${candidate.blueprint} blueprint.class must be a string`
+            `captured ${candidate.blueprint} blueprint.${OUTER_FLEET_HULL_FIELD} must be a string`
           );
         let shipName = capturedOuterFleetShipName(blueprint), quote = dependencies.costs.quote(blueprint);
         active.quotes.delete(candidate.blueprint), quote !== void 0 && active.quotes.set(candidate.blueprint, quote);
@@ -49281,6 +49293,13 @@ Only continue if you trust the source. Injected code:
       values: Object.freeze(values)
     });
   }
+  function detachedBlueprint(blueprint) {
+    try {
+      return Object.freeze({ ...blueprint });
+    } catch {
+      return;
+    }
+  }
   function restoreBlueprint(blueprint, snapshot2) {
     for (let key of Object.keys(blueprint))
       delete blueprint[key];
@@ -49310,12 +49329,12 @@ Only continue if you trust the source. Injected code:
       );
       return result.ok && typeof result.value == "number" && Number.isFinite(result.value) && result.value > 0 ? result.value : void 0;
     }
-    function probe(blueprint, includeCrew = !1) {
+    function probe(blueprint, application) {
       if (probing || !dependencies.mountSuppression.available) return;
       let control = dependencies.controls.resolve(
         CAPTURED_OUTER_FLEET_SHIPYARD_CONTROL
       );
-      if (control === void 0 || !control.methods.includes(SHIPYARD_SET_VAL_METHOD) || !control.methods.includes(CAPTURED_OUTER_FLEET_SHIPYARD_CREW_METHOD))
+      if (control === void 0 || !control.methods.includes(SHIPYARD_SET_VAL_METHOD) || application === "quote" && !control.methods.includes(CAPTURED_OUTER_FLEET_SHIPYARD_CREW_METHOD))
         return;
       let live = liveBlueprint(dependencies);
       if (!isRecord(live)) return;
@@ -49339,7 +49358,7 @@ Only continue if you trust the source. Injected code:
         );
         return;
       }
-      let snapshot2 = blueprintSnapshot(live), writes = outerFleetBlueprintWrites(blueprint), sample, crew;
+      let snapshot2 = blueprintSnapshot(live), writes = outerFleetBlueprintWrites(blueprint), normalizedBlueprint, sample, crew;
       probing = !0;
       try {
         let applied = dependencies.mountSuppression.withoutMounting(() => {
@@ -49351,13 +49370,13 @@ Only continue if you trust the source. Injected code:
             ).ok) return !1;
           return writes.every((write) => live[write.type] === write.part);
         });
-        sample = applied ? parseShipyardCostRow(host.element) : void 0, applied && includeCrew && (crew = nativeDesignCrew(control), crew === void 0 && (reportError(
-          "the native shipPlans crew requirement could not be read"
-        ), sample = void 0)), applied && sample === void 0 && (!includeCrew || crew !== void 0) && reportError(
+        applied && (normalizedBlueprint = detachedBlueprint(live), normalizedBlueprint === void 0 && reportError("the yard's design could not be read after the writes")), applied && normalizedBlueprint !== void 0 && application !== "normalize" && (sample = parseShipyardCostRow(host.element), sample === void 0 && reportError(
           `the scratch ${CAPTURED_OUTER_FLEET_SHIPYARD_COSTS_ID} carried no readable cost`
-        );
+        )), applied && application === "quote" && (crew = nativeDesignCrew(control), crew === void 0 && reportError(
+          "the native shipPlans crew requirement could not be read"
+        ));
       } catch (error) {
-        reportError(String(error)), sample = void 0;
+        reportError(String(error)), normalizedBlueprint = void 0, sample = void 0;
       } finally {
         let restored = !1, costHostRemoved = !1, workspaceRestored = !1;
         try {
@@ -49377,9 +49396,23 @@ Only continue if you trust the source. Injected code:
         }
         probing = !1, restored || (reportError(
           "the blueprint could not be put back the way the yard had it"
-        ), sample = void 0), costHostRemoved || (reportError("the scratch shipYardCosts could not be removed"), sample = void 0), workspaceRestored || (reportError("the workspace could not put the panels back"), sample = void 0);
+        ), normalizedBlueprint = void 0), costHostRemoved || (reportError("the scratch shipYardCosts could not be removed"), normalizedBlueprint = void 0), workspaceRestored || (reportError("the workspace could not put the panels back"), normalizedBlueprint = void 0);
       }
-      return sample === void 0 ? void 0 : Object.freeze({ costs: sample, crew });
+      if (normalizedBlueprint !== void 0)
+        return Object.freeze({
+          normalizedBlueprint,
+          costs: application === "normalize" ? void 0 : sample,
+          crew
+        });
+    }
+    function normalize(blueprint) {
+      if (!probing)
+        try {
+          return probe(blueprint, "normalize")?.normalizedBlueprint;
+        } catch (error) {
+          reportError(String(error));
+          return;
+        }
     }
     function quote(blueprint) {
       if (!probing)
@@ -49393,12 +49426,20 @@ Only continue if you trust the source. Injected code:
                 dependencies.controls.resolve(
                   CAPTURED_OUTER_FLEET_SHIPYARD_CONTROL
                 )
-              );
-              return rendered.sample !== void 0 && crew !== void 0 ? Object.freeze({ costs: rendered.sample, crew }) : void 0;
+              ), normalizedBlueprint = detachedBlueprint(live);
+              return rendered.sample !== void 0 && crew !== void 0 && normalizedBlueprint !== void 0 ? Object.freeze({
+                normalizedBlueprint,
+                costs: rendered.sample,
+                crew
+              }) : void 0;
             }
           }
-          let sampled3 = probe(blueprint, !0);
-          return sampled3 !== void 0 && sampled3.crew !== void 0 ? Object.freeze({ costs: sampled3.costs, crew: sampled3.crew }) : void 0;
+          let sampled3 = probe(blueprint, "quote");
+          return sampled3 !== void 0 && sampled3.costs !== void 0 && sampled3.crew !== void 0 ? Object.freeze({
+            normalizedBlueprint: sampled3.normalizedBlueprint,
+            costs: sampled3.costs,
+            crew: sampled3.crew
+          }) : void 0;
         } catch (error) {
           reportError(String(error));
           return;
@@ -49409,8 +49450,9 @@ Only continue if you trust the source. Injected code:
         let rendered = renderedCostRow(dependencies);
         if (rendered.present) return rendered.sample;
         let live = liveBlueprint(dependencies);
-        return isRecord(live) ? probe(live)?.costs : void 0;
+        return isRecord(live) ? probe(live, "price")?.costs : void 0;
       },
+      normalize,
       quote
     });
   }

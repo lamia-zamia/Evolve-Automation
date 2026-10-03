@@ -27,17 +27,30 @@
  * element. After the final native normalization, `shipPlans.crewText()` returns the private
  * `shipCrewSize(blueprint)` answer in that same probe. Nothing is calculated here.
  *
+ * **One pass, three answers.** The same protected application answers every question a caller can ask
+ * of a temporary design, and the three are not asking for the same strength of answer:
+ *
+ * - `normalize()` is what the yard *decided* the design is. It reads nothing but the live blueprint
+ *   once the writes are done, so it depends on neither the cost row parsing nor a crew method
+ *   answering - a design can be validly normalized on a yard whose price nobody can read, and a
+ *   caller that has to know what a hull turns into must not need a price for it. What comes back is
+ *   detached, frozen and complete: every entry the yard held, in its own order, because the fields a
+ *   class change rewrites are precisely the ones a request never named.
+ * - `quote()` adds what `updateCosts()` wrote about that same final design and what `crewText()`
+ *   answered for it, and is unavailable unless both were readable.
+ * - `current()` asks for the price alone, of the design the yard is already holding.
+ *
  * **Nothing the probe borrows outlives it.** The live blueprint is snapshotted key for key
  * immediately before the first write and restored in `finally`, the scratch element is removed, the
- * workspace is released, and the restore is *proved* before any sample is returned — so a design that
- * cannot be put back is reported as no price at all rather than as a price for a yard left in a
- * state the player never chose. The forward path only ever writes through `setVal`; a raw assignment
- * appears nowhere.
+ * workspace is released, and the restore is *proved* before any answer is returned — so a design that
+ * cannot be put back is reported as no normalization, no crew and no price at all, rather than as an
+ * answer about a yard left in a state the player never chose. The forward path only ever writes
+ * through `setVal`; a raw assignment appears nowhere.
  *
  * The design is applied in the same order a real build applies it, because upstream's class
- * transitions are order-sensitive (`captured-outer-fleet-blueprint.ts`). That is what makes a class
- * probe faithful: the explorer and freighter rewrites are the game's own, and the snapshot restores
- * exactly what they overwrote.
+ * transitions are order-sensitive (`captured-outer-fleet-blueprint.ts`). That is what makes the
+ * normalized answer faithful: the explorer and freighter rewrites are the game's own, and the
+ * snapshot restores exactly what they overwrote.
  *
  * The whole probe is one synchronous task and mounts nothing: `setVal` reaches
  * `vBind({el:'#shipPlans'},'update')`, which finds no element because the panel is aliased away, and
@@ -55,6 +68,7 @@ import type {
   ShipyardDesignQuote,
   ShipyardCostAmount,
   ShipyardCostSample,
+  ShipyardNormalizedBlueprint,
 } from "../../../ports/game-shipyard-costs.ts";
 import { MAIN_TAB_INDEX, MAIN_TAB_PANELS } from "../captured-tab-discovery.ts";
 import {
@@ -283,6 +297,24 @@ function blueprintSnapshot(blueprint: UnknownRecord): BlueprintSnapshot {
   });
 }
 
+/**
+ * The yard's own design as its own fields, or `undefined` when it cannot be read.
+ *
+ * Detached, because the yard keeps writing the live object and a caller holding it would be holding
+ * a bag that changes under it. Every own entry is carried, not only the part dimensions: what a
+ * class change rewrites is exactly what the caller did not ask for, so an answer trimmed to the
+ * requested fields would be the request back again.
+ */
+function detachedBlueprint(
+  blueprint: UnknownRecord,
+): ShipyardNormalizedBlueprint | undefined {
+  try {
+    return Object.freeze({ ...blueprint });
+  } catch {
+    return undefined;
+  }
+}
+
 function restoreBlueprint(
   blueprint: UnknownRecord,
   snapshot: BlueprintSnapshot,
@@ -322,6 +354,27 @@ function designAlreadyHeld(
   );
 }
 
+/**
+ * Which half of one protected application's answer a caller came for.
+ *
+ * `normalize` stops at what the yard decided the design is. `price` adds what `updateCosts()` wrote
+ * about it. `quote` adds the crew requirement as well. Normalization is listed separately rather than
+ * as the absence of the other two, because the other two are *reads of other surfaces*: a design can
+ * be validly normalized on a yard whose cost row cannot be parsed and whose crew method throws, and
+ * a caller asking only what the Explorer hull turns into must not have to pay for - or fail on - an
+ * answer it never asked for.
+ */
+type DesignApplication = "normalize" | "price" | "quote";
+
+/** What the yard held once the requested writes were applied, and whatever else was asked for. */
+interface DesignProbeAnswer {
+  readonly normalizedBlueprint: ShipyardNormalizedBlueprint;
+  /** Absent unless this call asked for a price, or for a quote and could not read the row. */
+  readonly costs: ShipyardCostSample | undefined;
+  /** Absent unless this call asked for a quote and the crew method answered. */
+  readonly crew: number | undefined;
+}
+
 export function createCapturedOuterFleetCosts(
   dependencies: CapturedOuterFleetCostsDependencies,
 ): GameShipyardDesignQuotes {
@@ -351,15 +404,19 @@ export function createCapturedOuterFleetCosts(
   }
 
   /**
-   * The game's own price for a design that is not applied, taken by applying it for the length of
-   * one synchronous call and reading what `updateCosts()` wrote about it.
+   * The game's own answer for one design, applied through native `setVal` for the length of a single
+   * synchronous call and read back out of the yard before it is put back.
+   *
+   * One pass for every caller, because the lifecycle is the same whichever half is wanted: snapshot
+   * the live blueprint, stand the scratch cost row, apply the writes, read the design the yard ended
+   * up holding, prove the restore, and take the host and the workspace away again. `undefined` for
+   * the whole pass rather than a partial answer, since a design that cannot be put back is not a
+   * design this may describe at all.
    */
   function probe(
     blueprint: Readonly<Record<PropertyKey, unknown>>,
-    includeCrew = false,
-  ):
-    | { readonly costs: ShipyardCostSample; readonly crew: number | undefined }
-    | undefined {
+    application: DesignApplication,
+  ): DesignProbeAnswer | undefined {
     if (probing || !dependencies.mountSuppression.available) return undefined;
     const control = dependencies.controls.resolve(
       CAPTURED_OUTER_FLEET_SHIPYARD_CONTROL,
@@ -367,7 +424,8 @@ export function createCapturedOuterFleetCosts(
     if (
       control === undefined ||
       !control.methods.includes(SHIPYARD_SET_VAL_METHOD) ||
-      !control.methods.includes(CAPTURED_OUTER_FLEET_SHIPYARD_CREW_METHOD)
+      (application === "quote" &&
+        !control.methods.includes(CAPTURED_OUTER_FLEET_SHIPYARD_CREW_METHOD))
     )
       return undefined;
     const live = liveBlueprint(dependencies);
@@ -397,6 +455,7 @@ export function createCapturedOuterFleetCosts(
     }
     const snapshot = blueprintSnapshot(live);
     const writes = outerFleetBlueprintWrites(blueprint);
+    let normalizedBlueprint: ShipyardNormalizedBlueprint | undefined;
     let sample: ShipyardCostSample | undefined;
     let crew: number | undefined;
     probing = true;
@@ -412,32 +471,39 @@ export function createCapturedOuterFleetCosts(
           );
           if (!result.ok) return false;
         }
-        // A write the game accepted without applying would leave a price for a design nobody asked
-        // for, so the yard holding the design is part of the answer rather than an assumption.
+        // A write the game accepted without applying would leave an answer about a design nobody
+        // asked for, so the yard holding the design is part of the answer rather than an assumption.
         return writes.every((write) => live[write.type] === write.part);
       });
+      if (applied) {
+        // The yard's own normalization, read before anything is put back and before the other two
+        // answers are even attempted.
+        normalizedBlueprint = detachedBlueprint(live);
+        if (normalizedBlueprint === undefined)
+          reportError("the yard's design could not be read after the writes");
+      }
       // Only after the final part's own `updateCosts()` has run.
-      sample = applied ? parseShipyardCostRow(host.element) : undefined;
-      if (applied && includeCrew) {
+      if (
+        applied &&
+        normalizedBlueprint !== undefined &&
+        application !== "normalize"
+      ) {
+        sample = parseShipyardCostRow(host.element);
+        if (sample === undefined)
+          reportError(
+            `the scratch ${CAPTURED_OUTER_FLEET_SHIPYARD_COSTS_ID} carried no readable cost`,
+          );
+      }
+      if (applied && application === "quote") {
         crew = nativeDesignCrew(control);
-        if (crew === undefined) {
+        if (crew === undefined)
           reportError(
             "the native shipPlans crew requirement could not be read",
           );
-          sample = undefined;
-        }
-      }
-      if (
-        applied &&
-        sample === undefined &&
-        (!includeCrew || crew !== undefined)
-      ) {
-        reportError(
-          `the scratch ${CAPTURED_OUTER_FLEET_SHIPYARD_COSTS_ID} carried no readable cost`,
-        );
       }
     } catch (error) {
       reportError(String(error));
+      normalizedBlueprint = undefined;
       sample = undefined;
     } finally {
       let restored = false;
@@ -467,20 +533,35 @@ export function createCapturedOuterFleetCosts(
         reportError(
           "the blueprint could not be put back the way the yard had it",
         );
-        sample = undefined;
+        normalizedBlueprint = undefined;
       }
       if (!costHostRemoved) {
         reportError("the scratch shipYardCosts could not be removed");
-        sample = undefined;
+        normalizedBlueprint = undefined;
       }
       if (!workspaceRestored) {
         reportError("the workspace could not put the panels back");
-        sample = undefined;
+        normalizedBlueprint = undefined;
       }
     }
-    return sample === undefined
-      ? undefined
-      : Object.freeze({ costs: sample, crew });
+    if (normalizedBlueprint === undefined) return undefined;
+    return Object.freeze({
+      normalizedBlueprint,
+      costs: application === "normalize" ? undefined : sample,
+      crew,
+    });
+  }
+
+  function normalize(
+    blueprint: Readonly<Record<PropertyKey, unknown>>,
+  ): ShipyardNormalizedBlueprint | undefined {
+    if (probing) return undefined;
+    try {
+      return probe(blueprint, "normalize")?.normalizedBlueprint;
+    } catch (error) {
+      reportError(String(error));
+      return undefined;
+    }
   }
 
   function quote(
@@ -498,14 +579,31 @@ export function createCapturedOuterFleetCosts(
               CAPTURED_OUTER_FLEET_SHIPYARD_CONTROL,
             ),
           );
-          return rendered.sample !== undefined && crew !== undefined
-            ? Object.freeze({ costs: rendered.sample, crew })
+          // Nothing is applied in this route, so the design the row prices is the one the yard is
+          // already holding: the live blueprint is already the normalized answer, and describing it
+          // costs no second pass.
+          const normalizedBlueprint = detachedBlueprint(live);
+          return rendered.sample !== undefined &&
+            crew !== undefined &&
+            normalizedBlueprint !== undefined
+            ? Object.freeze({
+                normalizedBlueprint,
+                costs: rendered.sample,
+                crew,
+              })
             : undefined;
         }
       }
-      const sampled = probe(blueprint, true);
-      return sampled !== undefined && sampled.crew !== undefined
-        ? Object.freeze({ costs: sampled.costs, crew: sampled.crew })
+      const sampled = probe(blueprint, "quote");
+      // A crew answer without a price, or a price without a crew answer, is no quote at all.
+      return sampled !== undefined &&
+        sampled.costs !== undefined &&
+        sampled.crew !== undefined
+        ? Object.freeze({
+            normalizedBlueprint: sampled.normalizedBlueprint,
+            costs: sampled.costs,
+            crew: sampled.crew,
+          })
         : undefined;
     } catch (error) {
       reportError(String(error));
@@ -518,8 +616,9 @@ export function createCapturedOuterFleetCosts(
       const rendered = renderedCostRow(dependencies);
       if (rendered.present) return rendered.sample;
       const live = liveBlueprint(dependencies);
-      return isRecord(live) ? probe(live)?.costs : undefined;
+      return isRecord(live) ? probe(live, "price")?.costs : undefined;
     },
+    normalize,
     quote,
   });
 }

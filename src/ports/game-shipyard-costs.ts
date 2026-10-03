@@ -37,13 +37,39 @@ export interface GameShipyardCosts {
   current(): ShipyardCostSample | undefined;
 }
 
+/**
+ * What the yard itself held once every requested `setVal()` call had run, detached from it.
+ *
+ * Upstream's `setVal(type, value)` is not a plain assignment: a class change also rewrites whatever
+ * that hull forces, so the design a request turns into is the one the *yard* decided, not the one that
+ * was asked for. This is that answer, as its own fields — every entry the yard held, in its own key
+ * order, including dimensions the request never named — and never the live object, which the yard
+ * keeps writing.
+ */
+export type ShipyardNormalizedBlueprint = Readonly<Record<string, unknown>>;
+
 /** One native answer for a candidate after the yard's own design normalization. */
 export interface ShipyardDesignQuote {
+  /** The design the crew and the costs below belong to, which the request did not necessarily name. */
+  readonly normalizedBlueprint: ShipyardNormalizedBlueprint;
   readonly crew: number;
   readonly costs: ShipyardCostSample;
 }
 
 export interface GameShipyardDesignQuotes extends GameShipyardCosts {
+  /**
+   * The yard's own normalization of a requested blueprint, and nothing else.
+   *
+   * A separate answer rather than half of a quote, because it is one: a temporary design can be
+   * validly normalized when the cost row cannot be parsed and no crew method answers at all. Asking
+   * this never spends a read the answer does not need, and a caller that has to know what a hull
+   * turns into never has to have a price for it.
+   *
+   * Unavailable unless the whole protected pass restores, exactly as a quote is.
+   */
+  normalize(
+    blueprint: Readonly<Record<PropertyKey, unknown>>,
+  ): ShipyardNormalizedBlueprint | undefined;
   /** Crew and costs for the same final native design; unavailable unless protection restores it. */
   quote(
     blueprint: Readonly<Record<PropertyKey, unknown>>,

@@ -50,6 +50,7 @@ import type { GameRootStateSource } from "../../../ports/game-root-state.ts";
 import type {
   GameShipyardDesignQuotes,
   ShipyardDesignQuote,
+  ShipyardNormalizedBlueprint,
 } from "../../../ports/game-shipyard-costs.ts";
 import type { GameSyndicateMechanics } from "../../../ports/game-syndicate-mechanics.ts";
 import type { GameSpaceRegionMechanics } from "../../../ports/game-space-region-mechanics.ts";
@@ -112,14 +113,24 @@ interface CapturedOuterFleetSession {
   readonly quotes: Map<OuterFleetBlueprint, ShipyardDesignQuote>;
 }
 
-const CAPTURED_OUTER_FLEET_EXPLORER = Object.freeze({
-  class: "explorer",
-  armor: "neutronium",
-  weapon: "railgun",
-  engine: "emdrive",
-  power: "elerium",
-  sensor: "quantum",
-});
+/**
+ * The one blueprint dimension a hull is chosen by.
+ *
+ * `ships.js:shipParts` keeps the hull list under this name, upstream's `setVal('class', …)` is the
+ * write whose own rewrites decide what a hull carries, and the ship's registry name is printed from
+ * it. So every question about *which* hull a design is — the one Tau exploration forces, the one a
+ * build postcondition judges, the one a message names — reads this one name.
+ */
+const OUTER_FLEET_HULL_FIELD = "class";
+
+/**
+ * The hull Tau exploration needs, named the way the yard's own class dimension names it.
+ *
+ * That is the whole of this feature's Explorer policy: the rest of the design is whatever the
+ * running game's `setVal('class', 'explorer')` makes of this, read back out of the yard.
+ */
+const OUTER_FLEET_EXPLORER_HULL = "explorer";
+
 function capturedOuterFleetRoot(
   rootState: GameRootStateSource,
 ): UnknownRecord | undefined {
@@ -226,6 +237,35 @@ function capturedOuterFleetPartBlueprint(
 }
 
 /**
+ * The design the yard normalized into, described over the dimensions the yard itself offers.
+ *
+ * Built by iterating the catalogue's dimensions rather than by reading the native answer's own keys,
+ * for two reasons that are the same reason. It refuses a design that does not account for every
+ * dimension — a blueprint missing one is a design whose postcondition this feature could not later
+ * verify, and a dimension the yard offers but the design leaves empty is exactly that. And it keeps
+ * the yard's own field order, which is `Object.keys(shipParts)`: the hull first, so the write whose
+ * rewrites decide the rest of the design is applied before the fields it rewrites.
+ *
+ * Anything the native answer carries that is not a dimension the catalogue names is left out rather
+ * than carried: the catalogue is the whole of what the yard offers, so a field this cannot place is
+ * one this may not build with. A dimension upstream adds needs nothing here — it arrives in the
+ * catalogue, the yard normalizes into it, and this loop includes it.
+ */
+function capturedOuterFleetNormalizedBlueprint(
+  native: ShipyardNormalizedBlueprint | undefined,
+  dimensions: GameShipyardPartDimensions,
+): UnknownRecord | undefined {
+  if (native === undefined) return undefined;
+  const blueprint: Record<string, unknown> = {};
+  for (const type of dimensions) {
+    const part = native[type];
+    if (typeof part !== "string") return undefined;
+    blueprint[type] = part;
+  }
+  return blueprint;
+}
+
+/**
  * Whether the yard can be asked for this design at all.
  *
  * A field the yard already holds needs no question asked of `avail()`: it is on the blueprint the
@@ -245,15 +285,16 @@ function capturedOuterFleetPartBlueprint(
  * A field the dimensions do not name is refused before any of that, and the refusal is not
  * redundant with the read above: the option index `avail()` needs comes out of the catalogue, so a
  * dimension it never catalogued is one the yard has said nothing about, and a design naming it would
- * otherwise have its field skipped rather than judged. The forced Explorer is where that matters most,
- * because its blueprint is written here rather than iterated out of the catalogue's dimensions.
+ * otherwise have its field skipped rather than judged. A design the yard normalized rather than this
+ * script configured is where that matters most, because such an answer can carry a field from a game
+ * that has moved on.
  */
 function capturedOuterFleetBlueprintAvailable(
   controls: GameFleetControlsPort,
   blueprint: UnknownRecord,
   dimensions: GameShipyardPartDimensions,
 ): boolean {
-  if (typeof blueprint["class"] !== "string") return false;
+  if (typeof blueprint[OUTER_FLEET_HULL_FIELD] !== "string") return false;
   for (const { type } of outerFleetBlueprintWrites(blueprint)) {
     if (!dimensions.includes(type)) return false;
   }
@@ -280,7 +321,7 @@ function capturedOuterFleetLocationName(region: string): string {
 }
 
 function capturedOuterFleetShipName(blueprint: UnknownRecord): string {
-  return `outer_shipyard_class_${String(blueprint["class"] ?? "")}`;
+  return `outer_shipyard_class_${String(blueprint[OUTER_FLEET_HULL_FIELD] ?? "")}`;
 }
 
 function capturedOuterFleetCurrentGarrison(root: UnknownRecord): number {
@@ -578,31 +619,53 @@ export function createCapturedOuterFleetAdapter(
       let explorerAvailable = false;
       let explorerCount: number | null = 0;
       const dimensions = provenDimensions(active);
-      // The Explorer is the one blueprint this script writes itself rather than configuring out of the
-      // settings, so it is also the one that must never be written without the yard's own catalogue
-      // saying its parts are offered: `setVal` has no availability gate, so an Explorer configured
-      // against no catalogue would be a hull the player has not unlocked. Without a catalogue nothing
-      // is asked about it and nothing is counted, which also means an unrelated ship parked at Tau
-      // Ceti is never mistaken for one.
+      // The Explorer is not this script's design. Which parts an Explorer carries is whatever the
+      // running game's `setVal('class', 'explorer')` decides — the hull's forced components, the
+      // technology-gated ones, the `special` its class allows, and any dimension upstream has added
+      // since — so the design is *asked for* and then read back out of the yard rather than written
+      // here, and every question about it is asked of that answer.
+      //
+      // The hull itself is the yard's to offer or not, so that is asked first and through the yard's
+      // own `avail()`: `setVal` has no availability gate, and an availability answer that goes away
+      // when the hull is retired is how a retired Explorer stops being configured at all. Nothing
+      // about the design is asked without a proven catalogue either, since the catalogue is what the
+      // normalized answer is described over — and a normalized design that does not account for every
+      // dimension is no design at all, which also means an unrelated ship parked at Tau Ceti is never
+      // mistaken for one.
       if (exploreTau && tauTechnology === 1 && dimensions !== undefined) {
-        const explorer = storeBlueprint(
-          "explorer",
-          CAPTURED_OUTER_FLEET_EXPLORER,
-          "explorer blueprint",
-          active.blueprints,
-        );
-        explorerAvailable = capturedOuterFleetBlueprintAvailable(
-          dependencies.controls,
-          explorer,
-          dimensions,
-        );
-        if (explorerAvailable)
-          explorerCount = capturedOuterFleetAssignedShipCount(
-            root,
-            "tauceti",
+        const hullOffered = dependencies.controls.isPartAvailable({
+          elementId: CAPTURED_OUTER_FLEET_SHIPYARD_CONTROL,
+          type: OUTER_FLEET_HULL_FIELD,
+          part: OUTER_FLEET_EXPLORER_HULL,
+        });
+        const explorer = hullOffered
+          ? capturedOuterFleetNormalizedBlueprint(
+              dependencies.costs.normalize({
+                [OUTER_FLEET_HULL_FIELD]: OUTER_FLEET_EXPLORER_HULL,
+              }),
+              dimensions,
+            )
+          : undefined;
+        if (explorer !== undefined) {
+          storeBlueprint(
+            "explorer",
+            explorer,
+            "explorer blueprint",
+            active.blueprints,
+          );
+          explorerAvailable = capturedOuterFleetBlueprintAvailable(
+            dependencies.controls,
             explorer,
             dimensions,
           );
+          if (explorerAvailable)
+            explorerCount = capturedOuterFleetAssignedShipCount(
+              root,
+              "tauceti",
+              explorer,
+              dimensions,
+            );
+        }
       }
       const erisTechnology = finite(readProperty(tech, "eris")) ?? 0;
       const erisWeighting = finite(settings["fleet_outer_pr_spc_eris"]) ?? 0;
@@ -816,10 +879,10 @@ export function createCapturedOuterFleetAdapter(
         throw new Error(
           `captured outer fleet blueprint ${candidate.blueprint} is missing`,
         );
-      const shipClass = blueprint["class"];
+      const shipClass = blueprint[OUTER_FLEET_HULL_FIELD];
       if (typeof shipClass !== "string")
         throw new TypeError(
-          `captured ${candidate.blueprint} blueprint.class must be a string`,
+          `captured ${candidate.blueprint} blueprint.${OUTER_FLEET_HULL_FIELD} must be a string`,
         );
       const shipName = capturedOuterFleetShipName(blueprint);
       // Crew and price describe the same final native design, observed in one protected probe.

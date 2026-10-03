@@ -317,14 +317,12 @@ const capturedMethods = {
   },
   build: () => {
     capturedBuilds++;
+    // Upstream's `build()` hands `deepClone(global.space.shipyard.blueprint)` to `buildTPShip()`, so
+    // the appended hull carries every field the yard holds — including a dimension this fixture has
+    // never heard of, which is the only way a build postcondition over the catalogue can be tested
+    // against a design the yard itself grew a field for.
     yard.ships.push({
-      class: yard.blueprint.class,
-      power: yard.blueprint.power,
-      weapon: yard.blueprint.weapon,
-      armor: yard.blueprint.armor,
-      engine: yard.blueprint.engine,
-      sensor: yard.blueprint.sensor,
-      special: yard.blueprint.special,
+      ...yard.blueprint,
       location: outerAssignmentPoint("spc_dwarf"),
       fueled: true,
       damage: 0,
@@ -422,9 +420,68 @@ function pricedAmounts(blueprint, ships) {
   });
 }
 
+/**
+ * What the game's own class change forces, as this stub's native answer.
+ *
+ * Upstream `setVal('class', v)` rewrites whatever the new hull forces and then normalizes the rest,
+ * so a request naming only the hull becomes a design the request never named. Which fields those are
+ * belongs to the running game, and they are declared here — as data the stub answers with, never as
+ * something the adapter knows. The values are deliberately unlike any historical Explorer design, so
+ * an adapter still holding its own copy of one cannot agree with this stub by accident.
+ *
+ * Mutable on purpose: a case changes these to stand in for a game whose Explorer differs from this
+ * one's, and the automation is expected to follow without a production edit.
+ */
+const NATIVE_CLASS_FORCED = {
+  explorer: {
+    power: "antimatter",
+    weapon: "gauss",
+    armor: "aerographene",
+    engine: "electrokinetic",
+    sensor: "quantum",
+    special: "none",
+  },
+};
+
+/**
+ * The design this stub's Explorer normalization answers with.
+ *
+ * Read out of the normalizer itself, over a known starting design rather than whatever the yard
+ * happens to be wearing, so the Explorer every case below uses is the one the stub answers with
+ * instead of a second copy of it.
+ */
+const NATIVE_EXPLORER_DESIGN = nativeNormalized(
+  { class: "explorer" },
+  {
+    class: "corvette",
+    armor: "steel",
+    weapon: "railgun",
+    engine: "ion",
+    power: "diesel",
+    sensor: "radar",
+    special: "none",
+  },
+);
+
+/** This stub's own `setVal`, over a copy: the requested writes, then what the new hull forces. */
+function nativeNormalized(requested, base = yard.blueprint) {
+  const normalized = {};
+  for (const [type, part] of Object.entries(base)) normalized[type] = part;
+  for (const [type, part] of Object.entries(requested)) {
+    if (typeof part === "string") normalized[type] = part;
+  }
+  Object.assign(
+    normalized,
+    NATIVE_CLASS_FORCED[String(normalized.class ?? "")],
+  );
+  return Object.freeze(normalized);
+}
+
 function createCostStub() {
   return {
     nativeCrew: 2,
+    /** Set to stand in for a yard that cannot normalize a design at all. */
+    normalizationUnavailable: false,
     requests: [],
     /** The resources the game's own marking calls unaffordable. */
     unaffordable: new Set(),
@@ -435,11 +492,18 @@ function createCostStub() {
         amounts: pricedAmounts.call(this, yard.blueprint, yard.ships),
       };
     },
+    normalize(requested) {
+      this.requests.push(["normalize", requested]);
+      return this.normalizationUnavailable
+        ? undefined
+        : nativeNormalized(requested);
+    },
     quote(blueprint) {
       this.requests.push(["quote", blueprint]);
       if (this.nativeCrew === undefined) return undefined;
       return {
         crew: this.nativeCrew,
+        normalizedBlueprint: nativeNormalized(blueprint),
         costs: {
           pool: "spc_dwarf",
           amounts: pricedAmounts.call(this, blueprint, yard.ships),
@@ -1241,6 +1305,10 @@ function passWithoutProvenCatalog(settings, prepare, options = {}) {
     {
       requests: costs.requests,
       current: () => costs.current(),
+      normalize: (requested) => {
+        prices.push(requested);
+        return costs.normalize(requested);
+      },
       quote: (blueprint) => {
         prices.push(blueprint);
         return costs.quote(blueprint);
@@ -1645,8 +1713,11 @@ function outerAssignmentShip(blueprint, port, destination) {
         }),
   };
 }
-function readOuterAssignmentPlan(registry = capturedRegistry) {
-  const parts = { catalog: () => partCatalog };
+function readOuterAssignmentPlan(
+  registry = capturedRegistry,
+  catalog = partCatalog,
+) {
+  const parts = { catalog: () => catalog };
   const adapter = createCapturedOuterFleetAdapter({
     rootState: {
       readRoot: () => root,
@@ -1673,14 +1744,10 @@ function readOuterAssignmentPlan(registry = capturedRegistry) {
 }
 const assignmentUnavailableMessage =
   "Ship assignment data unavailable; ship construction paused";
-const assignmentExplorer = {
-  class: "explorer",
-  armor: "neutronium",
-  weapon: "railgun",
-  engine: "emdrive",
-  power: "elerium",
-  sensor: "quantum",
-};
+// The Explorer this file compares against is the one the stub's native normalization produces, field
+// for field and dimension for dimension — which is what the assigned ships have to be for the
+// comparison to mean anything.
+const assignmentExplorer = NATIVE_EXPLORER_DESIGN;
 {
   syndicate = createSyndicateStub({ spc_red: { p: 0.7319, s: 47 } });
   capturedSettings.fleetExploreTau = true;
@@ -1827,10 +1894,220 @@ const assignmentExplorer = {
   resetOuterPass();
 }
 
-// An unavailable native quote stands the pass down rather than throwing
-// out of ordinary planning: a hull upstream has since added is an ordinary state, not a fault.
-//
-// A future hull offered by the yard still requires a native crew answer.
+// ---------------------------------------------------------------------------
+// The Explorer design is the game's own answer, not a table this script holds.
+// ---------------------------------------------------------------------------
+
+/** The player's own design, which every case in this section starts from. */
+const playerDesign = {
+  class: "corvette",
+  armor: "steel",
+  weapon: "railgun",
+  engine: "ion",
+  power: "diesel",
+  sensor: "radar",
+  special: "none",
+};
+
+/** Puts the player's own design back on the yard, so each case starts from a known one. */
+function resetYardDesign() {
+  for (const type of Object.keys(yard.blueprint)) delete yard.blueprint[type];
+  Object.assign(yard.blueprint, playerDesign);
+}
+
+/**
+ * The design fields of a hull the yard appended, read over the yard's own dimensions.
+ *
+ * Over the dimensions rather than over the hull's own keys, because that is what a hull is: a route, a
+ * state and a design, and only the last of the three is what the yard was asked to build.
+ */
+function shipDesign(ship, dimensions = Object.keys(SHIP_PARTS)) {
+  return Object.fromEntries(
+    dimensions
+      .filter((type) => Object.hasOwn(ship, type))
+      .map((type) => [type, ship[type]]),
+  );
+}
+
+/**
+ * One Tau-exploring pass over a known yard, and nothing but its outcome.
+ *
+ * `fleetExploreTau` and the Tau Ceti technology are put back before it returns, so the cases below
+ * read only the pass they asked for.
+ */
+function explorerPass({
+  registry = capturedRegistry,
+  catalogSource = { catalog: () => partCatalog },
+} = {}) {
+  resetOuterPass();
+  resetYardDesign();
+  syndicate = createSyndicateStub({ spc_red: { p: 0.7319, s: 47 } });
+  capturedSettings.fleetExploreTau = true;
+  root.tech.tauceti = 1;
+  try {
+    return createOuterControl(
+      registry,
+      dispatch,
+      costs,
+      catalogSource,
+    ).autoFleetOuter();
+  } finally {
+    capturedSettings.fleetExploreTau = false;
+    root.tech.tauceti = 0;
+  }
+}
+
+// The hull is the whole of this feature's Explorer policy; the design is the yard's answer to it. The
+// design the pass builds is that answer field for field — carrying the parts this fixture's
+// normalization forces and none of the parts any historical Explorer table named — and it reaches the
+// build through the ordinary candidate path: one normalization, one native quote, one native build.
+{
+  const result = explorerPass();
+  assert.equal(result.outcome.status, "succeeded");
+  assert.deepEqual(
+    costs.requests
+      .filter(([method]) => method === "normalize")
+      .map(([, requested]) => requested),
+    [{ class: "explorer" }],
+    "the Explorer was not asked of the yard's own normalizer, or was asked for something else",
+  );
+  assert.deepEqual(
+    costs.requests
+      .filter(([method]) => method === "quote")
+      .map(([, design]) => design),
+    [NATIVE_EXPLORER_DESIGN],
+    "the candidate was priced as something other than the normalized design",
+  );
+  assert.deepEqual(
+    shipDesign(yard.ships[0]),
+    { ...NATIVE_EXPLORER_DESIGN },
+    "the built Explorer is not the design the yard normalized into",
+  );
+  assert.deepEqual(dispatch.requests, [{ index: 0, region: "tauceti" }]);
+}
+
+// A game whose Explorer is not this fixture's. Only the stub's native answer changes; nothing in
+// production moves with it, and the appended hull follows the new answer exactly.
+{
+  const defaults = { ...NATIVE_CLASS_FORCED.explorer };
+  assert.equal(explorerPass().outcome.status, "succeeded");
+  assert.deepEqual(shipDesign(yard.ships[0]), { ...NATIVE_EXPLORER_DESIGN });
+  Object.assign(NATIVE_CLASS_FORCED.explorer, {
+    power: "solar",
+    engine: "tie",
+  });
+  try {
+    assert.equal(explorerPass().outcome.status, "succeeded");
+    assert.deepEqual(shipDesign(yard.ships[0]), {
+      ...NATIVE_EXPLORER_DESIGN,
+      power: "solar",
+      engine: "tie",
+    });
+  } finally {
+    Object.assign(NATIVE_CLASS_FORCED.explorer, defaults);
+  }
+}
+
+// A dimension the yard offers that neither this script nor any historical Explorer design has heard
+// of, filled by the same class change. Nothing local names it: it arrives in the catalogue, the game's
+// normalization populates it, and the design the pass builds carries it — while the request that
+// started all of this still names the hull and nothing else.
+{
+  const forced = NATIVE_CLASS_FORCED.explorer;
+  const extendedCatalog = shipyardCatalog({
+    ...SHIP_PARTS,
+    booster: ["none", "warp_core"],
+  });
+  forced.booster = "warp_core";
+  try {
+    const result = explorerPass({
+      catalogSource: { catalog: () => extendedCatalog },
+    });
+    assert.equal(result.outcome.status, "succeeded");
+    assert.deepEqual(
+      shipDesign(yard.ships[0], [...Object.keys(SHIP_PARTS), "booster"]),
+      { ...NATIVE_EXPLORER_DESIGN, booster: "warp_core" },
+    );
+    assert.deepEqual(
+      costs.requests
+        .filter(([method]) => method === "normalize")
+        .map(([, requested]) => requested),
+      [{ class: "explorer" }],
+    );
+    // Counting compares the whole normalized design, so an Explorer already at Tau Ceti that predates
+    // the new dimension has not filled the slot — and one that carries it has.
+    resetOuterPass();
+    capturedSettings.fleetExploreTau = true;
+    root.tech.tauceti = 1;
+    yard.ships.push(
+      outerAssignmentShip({ ...NATIVE_EXPLORER_DESIGN }, "tauceti"),
+    );
+    assert.equal(
+      readOuterAssignmentPlan(capturedRegistry, extendedCatalog).blueprint,
+      "explorer",
+      "an assigned Explorer that differs in a new dimension filled the slot anyway",
+    );
+    yard.ships[0].booster = "warp_core";
+    assert.equal(
+      readOuterAssignmentPlan(capturedRegistry, extendedCatalog).blueprint,
+      "fighter",
+      "an assigned Explorer that matches the normalized design did not fill the slot",
+    );
+    capturedSettings.fleetExploreTau = false;
+    root.tech.tauceti = 0;
+    resetOuterPass();
+  } finally {
+    delete forced.booster;
+  }
+}
+
+// A yard that cannot normalize a design has no Explorer authority at all: the hull is never written,
+// nothing Explorer-shaped is built, and the pass falls through to its ordinary target rather than
+// building a ship it cannot describe.
+{
+  costs.normalizationUnavailable = true;
+  try {
+    assert.equal(explorerPass().outcome.status, "succeeded");
+    assert.equal(
+      costs.requests.filter(([method]) => method === "normalize").length,
+      1,
+    );
+    assert.equal(
+      yard.ships.some((ship) => ship.class === "explorer"),
+      false,
+      "an Explorer was built without a normalized design",
+    );
+  } finally {
+    costs.normalizationUnavailable = false;
+  }
+}
+
+// The hull is the yard's to offer. A yard whose own `avail()` does not offer it is asked nothing about
+// any design, which is how a retired Explorer stops being configured without anything local knowing
+// that hulls get retired.
+{
+  const unoffered = createRegistryWith({
+    avail: (type, index, part) => !(type === "class" && part === "explorer"),
+  });
+  assert.equal(
+    explorerPass({ registry: unoffered }).outcome.status,
+    "succeeded",
+  );
+  assert.deepEqual(
+    costs.requests
+      .filter(([method]) => method === "normalize")
+      .map(([, requested]) => requested),
+    [],
+    "a hull the yard does not offer was normalized anyway",
+  );
+  assert.equal(
+    yard.ships.some((ship) => ship.class === "explorer"),
+    false,
+    "an Explorer was built for a hull the yard does not offer",
+  );
+  resetYardDesign();
+  resetOuterPass();
+}
 {
   resetOuterPass();
   syndicate = createSyndicateStub({ spc_red: { p: 0.7319, s: 47 } });
@@ -1975,6 +2252,28 @@ assert.doesNotMatch(
 assert.doesNotMatch(
   productionFleetOuter,
   /(?:hasOwn|hasOwnProperty)\([^\n]*region/,
+);
+
+// The Explorer is the game's design. Its component choices used to be a local table copied out of an
+// older upstream version, so the adapter could name a hull's parts the running game has since changed
+// — and a save whose own `setVal` disagrees with the copy would be configured into a ship nobody
+// built. Every one of those part names is the game's, reached through the yard's own normalization,
+// so the adapter may not carry one as a value: not written into a blueprint field, and not held
+// against a design either.
+assert.equal(
+  productionFleetOuter.includes("CAPTURED_OUTER_FLEET_EXPLORER"),
+  false,
+  "a local Explorer design table is back in the outer-fleet adapter",
+);
+assert.doesNotMatch(
+  productionFleetOuter,
+  /(?:armor|weapon|engine|power|sensor|special)\s*:\s*["'](?:neutronium|railgun|emdrive|elerium|quantum|aerographene|gauss|antimatter)["']/,
+  "an Explorer component is written into a blueprint field",
+);
+assert.doesNotMatch(
+  productionFleetOuter,
+  /["'](?:neutronium|emdrive|elerium|quantum|aerographene|electrokinetic)["']/,
+  "an Explorer component is named as a value the adapter compares against",
 );
 
 console.log("Captured outer-fleet control postcondition tests passed");
