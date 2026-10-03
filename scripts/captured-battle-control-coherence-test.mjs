@@ -480,6 +480,37 @@ for (const method of ["patDec", "next", "aNext"]) {
   );
 }
 
+for (const method of ["aNext", "patDec"]) {
+  const f = fixture({ hell: method === "patDec" });
+  f.root.tech.military = 0;
+  const invoke = f.automation.controls.invoke;
+  f.automation.controls.invoke = (handle, called, args) => {
+    const result = invoke(handle, called, args);
+    return called === "rating" && result.ok
+      ? { ...result, value: args[0] * (f.root.tech.military ? 5 : 10) }
+      : result;
+  };
+  const { decision } = sample(f);
+  assert.ok(decision);
+  f.state.onInvoke = (_handle, called) => {
+    if (called === method) f.root.tech.military = 1;
+  };
+  f.trace.length = 0;
+  assert.equal(f.automation.adapter.executor.execute(decision).status, "stale");
+  assert.ok(
+    f.trace.some(([, called]) => called === method),
+    method,
+  );
+  assert.ok(
+    f.trace.some(([, called]) => called === "rating"),
+    method,
+  );
+  assert.equal(
+    f.trace.some(([, called]) => called === "campaign"),
+    false,
+  );
+}
+
 for (const method of ["patDec", "next", "aNext"]) {
   const f = fixture({ hell: method === "patDec" });
   const { decision } = sample(f);

@@ -51092,6 +51092,34 @@ Only continue if you trust the source. Injected code:
       maximumSoldiers: 0
     } : input);
   }
+  function capturedBattleTargetMatches(left, right) {
+    return left.governmentId === right.governmentId && left.policy === right.policy && left.released === right.released && left.occupied === right.occupied && left.annexed === right.annexed && left.purchased === right.purchased && left.spyCount === right.spyCount;
+  }
+  function capturedBattleMechanicsMatch(left, right) {
+    let current = left.battlefield.currentTarget, expected = right.battlefield.currentTarget;
+    if (current === null || expected === null) {
+      if (current !== expected) return !1;
+    } else if (!capturedBattleTargetMatches(current, expected) || !current.minimumSoldiers.every(
+      (value, index) => value === expected.minimumSoldiers[index]
+    ) || !current.maximumSoldiers.every(
+      (value, index) => value === expected.maximumSoldiers[index]
+    ))
+      return !1;
+    if (left.battlefield.occupationTargets.length !== right.battlefield.occupationTargets.length)
+      return !1;
+    for (let [index, target] of left.battlefield.occupationTargets.entries()) {
+      let prior = right.battlefield.occupationTargets[index];
+      if (prior === void 0 || !capturedBattleTargetMatches(target, prior) || target.minimumSiegeSoldiers !== prior.minimumSiegeSoldiers || target.maximumSiegeSoldiers !== prior.maximumSiegeSoldiers)
+        return !1;
+    }
+    if (left.governments.size !== right.governments.size) return !1;
+    for (let [id, government] of left.governments) {
+      let prior = right.governments.get(id);
+      if (prior === void 0 || government.governmentId !== prior.governmentId || government.rank !== prior.rank || government.policy !== prior.policy || government.military !== prior.military || government.spyCount !== prior.spyCount || government.sabotageProgress !== prior.sabotageProgress || government.activeEspionage !== prior.activeEspionage || government.hostility !== prior.hostility || government.unrest !== prior.unrest || government.economy !== prior.economy || government.occupied !== prior.occupied || government.annexed !== prior.annexed || government.purchased !== prior.purchased)
+        return !1;
+    }
+    return !0;
+  }
   function capturedBattleResample(dependencies, active, decision, allowHell) {
     if (!capturedBattleAuthorityCurrent(dependencies, active) || !capturedBattleSettingsMatch(
       active.settings,
@@ -51111,11 +51139,11 @@ Only continue if you trust the source. Injected code:
     let parameters = prepareBattle(fresh.input);
     if (parameters === null) return !1;
     let sampled3 = capturedBattleSampleField(dependencies, fresh, parameters);
-    if (sampled3 === void 0 || capturedBattleStableKey(sampled3.stateKey, allowHell) !== capturedBattleStableKey(active.stateKey, allowHell) || JSON.stringify([...sampled3.governments.values()]) !== JSON.stringify([...active.governments.values()]))
+    if (sampled3 === void 0 || capturedBattleStableKey(sampled3.stateKey, allowHell) !== capturedBattleStableKey(active.stateKey, allowHell) || !capturedBattleMechanicsMatch(sampled3, active))
       return !1;
     if (!allowHell) {
       let replanned = planBattle(parameters, sampled3.battlefield);
-      if (replanned === null || !capturedBattleDecisionsMatch(replanned, decision) || JSON.stringify(sampled3.battlefield) !== JSON.stringify(active.battlefield))
+      if (replanned === null || !capturedBattleDecisionsMatch(replanned, decision))
         return !1;
     }
     let settingsCurrent = capturedBattleSettings(dependencies.readSettings());

@@ -5,6 +5,7 @@ import type {
   BattleOccupationTargetInput,
   BattleParameters,
   BattlePlunderTargetInput,
+  BattleTargetInput,
   BattleTactic,
   BattleTacticValues,
   BattlefieldInput,
@@ -921,6 +922,79 @@ function capturedBattleStableInput(
   });
 }
 
+function capturedBattleTargetMatches(
+  left: Readonly<BattleTargetInput>,
+  right: Readonly<BattleTargetInput>,
+): boolean {
+  return (
+    left.governmentId === right.governmentId &&
+    left.policy === right.policy &&
+    left.released === right.released &&
+    left.occupied === right.occupied &&
+    left.annexed === right.annexed &&
+    left.purchased === right.purchased &&
+    left.spyCount === right.spyCount
+  );
+}
+
+function capturedBattleMechanicsMatch(
+  left: Pick<CapturedBattleSession, "battlefield" | "governments">,
+  right: Pick<CapturedBattleSession, "battlefield" | "governments">,
+): boolean {
+  const current = left.battlefield.currentTarget;
+  const expected = right.battlefield.currentTarget;
+  if (current === null || expected === null) {
+    if (current !== expected) return false;
+  } else if (
+    !capturedBattleTargetMatches(current, expected) ||
+    !current.minimumSoldiers.every(
+      (value, index) => value === expected.minimumSoldiers[index],
+    ) ||
+    !current.maximumSoldiers.every(
+      (value, index) => value === expected.maximumSoldiers[index],
+    )
+  ) {
+    return false;
+  }
+  if (
+    left.battlefield.occupationTargets.length !==
+    right.battlefield.occupationTargets.length
+  )
+    return false;
+  for (const [index, target] of left.battlefield.occupationTargets.entries()) {
+    const prior = right.battlefield.occupationTargets[index];
+    if (
+      prior === undefined ||
+      !capturedBattleTargetMatches(target, prior) ||
+      target.minimumSiegeSoldiers !== prior.minimumSiegeSoldiers ||
+      target.maximumSiegeSoldiers !== prior.maximumSiegeSoldiers
+    )
+      return false;
+  }
+  if (left.governments.size !== right.governments.size) return false;
+  for (const [id, government] of left.governments) {
+    const prior = right.governments.get(id);
+    if (
+      prior === undefined ||
+      government.governmentId !== prior.governmentId ||
+      government.rank !== prior.rank ||
+      government.policy !== prior.policy ||
+      government.military !== prior.military ||
+      government.spyCount !== prior.spyCount ||
+      government.sabotageProgress !== prior.sabotageProgress ||
+      government.activeEspionage !== prior.activeEspionage ||
+      government.hostility !== prior.hostility ||
+      government.unrest !== prior.unrest ||
+      government.economy !== prior.economy ||
+      government.occupied !== prior.occupied ||
+      government.annexed !== prior.annexed ||
+      government.purchased !== prior.purchased
+    )
+      return false;
+  }
+  return true;
+}
+
 function capturedBattleResample(
   dependencies: CapturedBattleDependencies,
   active: CapturedBattleSession,
@@ -971,16 +1045,14 @@ function capturedBattleResample(
     sampled === undefined ||
     capturedBattleStableKey(sampled.stateKey, allowHell) !==
       capturedBattleStableKey(active.stateKey, allowHell) ||
-    JSON.stringify([...sampled.governments.values()]) !==
-      JSON.stringify([...active.governments.values()])
+    !capturedBattleMechanicsMatch(sampled, active)
   )
     return false;
   if (!allowHell) {
     const replanned = planBattle(parameters, sampled.battlefield);
     if (
       replanned === null ||
-      !capturedBattleDecisionsMatch(replanned, decision) ||
-      JSON.stringify(sampled.battlefield) !== JSON.stringify(active.battlefield)
+      !capturedBattleDecisionsMatch(replanned, decision)
     )
       return false;
   }
