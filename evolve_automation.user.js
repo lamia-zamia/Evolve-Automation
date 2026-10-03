@@ -2253,6 +2253,9 @@
       controls: Object.freeze({
         resolve: () => {
         },
+        checkpoint: () => Object.freeze({}),
+        rejectChanges: () => {
+        },
         invoke: () => ({ ok: !1, reason: "unknown-control" }),
         capturedElementIds: () => []
       }),
@@ -2283,7 +2286,7 @@
     let isRootCandidate = options.isRootCandidate ?? isGameRootShape, reportError = options.onCaptureError ?? (() => {
     }), existingDescriptor = Object.getOwnPropertyDescriptor(pageWindow, "Vue"), existingMarker = readMarker(readProperty(readProperty(pageWindow, "Vue"), "reactive")) ?? readMarker(existingDescriptor?.get);
     if (existingMarker?.capture !== void 0) return existingMarker.capture;
-    let marker = { capture: void 0 }, root, rootRaw, suppressed = !1, stopped = !1, rootListeners = /* @__PURE__ */ new Set(), controls2 = /* @__PURE__ */ new Map(), captureOrder = [], usage = /* @__PURE__ */ new Map(), createAppHooked = !1, mountingEnabled = 0, suppressionScopes = [], mountedInScope = [], restoreVue;
+    let marker = { capture: void 0 }, root, rootRaw, suppressed = !1, stopped = !1, rootListeners = /* @__PURE__ */ new Set(), controls2 = /* @__PURE__ */ new Map(), controlCheckpoints = /* @__PURE__ */ new WeakMap(), captureOrder = [], usage = /* @__PURE__ */ new Map(), createAppHooked = !1, mountingEnabled = 0, suppressionScopes = [], mountedInScope = [], restoreVue;
     function notifyRootReplaced() {
       for (let listener of [...rootListeners])
         try {
@@ -2370,13 +2373,15 @@
       return { ...base, ...extras };
     }
     function handleFor(control) {
+      let handleGeneration = control.generation;
       return Object.freeze({
         elementId: control.elementId,
-        generation: control.generation,
+        generation: handleGeneration,
         methods: Object.freeze(Object.keys(control.methods)),
         // Lazy: a handle resolved only to invoke a method never runs the game's data factory.
         get data() {
-          return bindingData(control);
+          if (!(control.generation !== handleGeneration || control.rejectedGeneration === handleGeneration))
+            return bindingData(control);
         }
       });
     }
@@ -2389,6 +2394,12 @@
           ok: !1,
           reason: "stale-control",
           detail: `${handle.elementId} generation ${handle.generation}, current ${control.generation}`
+        };
+      if (control.rejectedGeneration === control.generation)
+        return {
+          ok: !1,
+          reason: "stale-control",
+          detail: `${handle.elementId} generation ${handle.generation} came from a rejected protected draw`
         };
       let target = control.methods[method];
       if (target === void 0)
@@ -2518,9 +2529,23 @@
         rootListeners.delete(listener);
       })
     }), registry = Object.freeze({
+      checkpoint() {
+        let controlCheckpoint = Object.freeze({});
+        return controlCheckpoints.set(
+          controlCheckpoint,
+          new Map([...controls2].map(([id, control]) => [id, control.generation]))
+        ), controlCheckpoint;
+      },
+      rejectChanges(checkpoint) {
+        let checkpointGenerations = controlCheckpoints.get(checkpoint);
+        if (checkpointGenerations === void 0)
+          throw new Error("control checkpoint belongs to another capture");
+        for (let [id, control] of controls2)
+          checkpointGenerations.get(id) !== control.generation && (control.rejectedGeneration = control.generation);
+      },
       resolve(elementId) {
         let control = controls2.get(elementId);
-        return control === void 0 ? void 0 : handleFor(control);
+        return control === void 0 || control.rejectedGeneration === control.generation ? void 0 : handleFor(control);
       },
       invoke(handle, method, args = []) {
         return invokeControl(handle, method, args, void 0);
@@ -3334,55 +3359,60 @@
               for (let container of discard.containers)
                 workspace?.discard(container);
           }
-        }, playerPanel = MAIN_TAB_PANELS[playerTabs.get(MAIN_TAB_SETTING) ?? -1], targetPanel = MAIN_TAB_PANELS[first.index], workspace;
-        targetPanel !== void 0 && (workspace = panels.open({ keep: playerPanel, scratch: targetPanel }));
-        let before = new Set(controls2.capturedElementIds()), playerAnimation = settings.animated, stepFailure, restoreFailure, observerFailure, drawnPath = tally.enabled ? describeTabPath(path) : "";
-        if (tally.enabled && (tally.count("discovery.draw"), tally.count(`discovery.draw ${drawnPath}`)), measureDraw("discovery.draw", () => {
-          try {
-            settings.animated = !1, mountSuppression.withoutMounting(
-              () => {
-                for (let step2 of path) {
-                  let handle = controls2.resolve(step2.control);
-                  if (handle === void 0) {
-                    stepFailure = failure(
-                      "tab-control-missing",
-                      `no captured control for ${step2.control}`
-                    );
-                    break;
+        }, playerPanel = MAIN_TAB_PANELS[playerTabs.get(MAIN_TAB_SETTING) ?? -1], targetPanel = MAIN_TAB_PANELS[first.index], checkpoint = controls2.checkpoint(), passSucceeded = !1, workspace;
+        try {
+          targetPanel !== void 0 && (workspace = panels.open({ keep: playerPanel, scratch: targetPanel }));
+          let before = new Set(controls2.capturedElementIds()), playerAnimation = settings.animated, stepFailure, restoreFailure, observerFailure, drawnPath = tally.enabled ? describeTabPath(path) : "";
+          if (tally.enabled && (tally.count("discovery.draw"), tally.count(`discovery.draw ${drawnPath}`)), measureDraw("discovery.draw", () => {
+            try {
+              settings.animated = !1, mountSuppression.withoutMounting(
+                () => {
+                  for (let step2 of path) {
+                    let handle = controls2.resolve(step2.control);
+                    if (handle === void 0) {
+                      stepFailure = failure(
+                        "tab-control-missing",
+                        `no captured control for ${step2.control}`
+                      );
+                      break;
+                    }
+                    settings[step2.setting] = step2.index;
+                    let swap = controls2.invoke(handle, "swapTab", [step2.index]);
+                    if (!swap.ok) {
+                      let detail = swap.detail ?? swap.reason;
+                      stepFailure = Object.freeze({
+                        outcome: swap.reason === "stale-control" ? stale("stale-tab-control", detail) : rejected("tab-draw-failed", detail),
+                        discovered: NOTHING
+                      });
+                      break;
+                    }
                   }
-                  settings[step2.setting] = step2.index;
-                  let swap = controls2.invoke(handle, "swapTab", [step2.index]);
-                  if (!swap.ok) {
-                    let detail = swap.detail ?? swap.reason;
-                    stepFailure = Object.freeze({
-                      outcome: swap.reason === "stale-control" ? stale("stale-tab-control", detail) : rejected("tab-draw-failed", detail),
-                      discovered: NOTHING
-                    });
-                    break;
-                  }
-                }
-                if (stepFailure === void 0 && whileDrawn !== void 0)
-                  try {
-                    whileDrawn();
-                  } catch (error) {
-                    observerFailure = String(error);
-                  }
-              },
-              { ...discardScope, ...mountScope }
-            );
-          } finally {
-            for (let [setting, value] of playerTabs) settings[setting] = value;
-            workspace === void 0 ? restoreFailure = restorePlayerView() : (workspace.release(), workspace.isIntact() || (restoreFailure = "the workspace could not put the panels back")), settings.animated = playerAnimation;
-          }
-        }), stepFailure !== void 0)
-          return tally.count("discovery.draw.failed"), stepFailure;
-        let discovered = controls2.capturedElementIds().filter((id) => !before.has(id));
-        return tally.enabled && (discovered.length === 0 ? tally.count("discovery.barren") : (tally.count("discovery.found", discovered.length), tally.count(`discovery.found ${drawnPath}`, discovered.length))), Object.freeze({
-          // The draw worked and the way back did not: the discovered controls are real, and leaving
-          // someone on a tab they did not choose is not a detail to swallow.
-          outcome: observerFailure !== void 0 ? rejected("tab-observer-failed", observerFailure) : restoreFailure === void 0 ? SUCCEEDED : rejected("tab-restore-failed", restoreFailure),
-          discovered: Object.freeze(discovered)
-        });
+                  if (stepFailure === void 0 && whileDrawn !== void 0)
+                    try {
+                      whileDrawn();
+                    } catch (error) {
+                      observerFailure = String(error);
+                    }
+                },
+                { ...discardScope, ...mountScope }
+              );
+            } finally {
+              for (let [setting, value] of playerTabs)
+                settings[setting] = value;
+              workspace === void 0 ? restoreFailure = restorePlayerView() : (workspace.release(), workspace.isIntact() || (restoreFailure = "the workspace could not put the panels back")), settings.animated = playerAnimation;
+            }
+          }), stepFailure !== void 0)
+            return tally.count("discovery.draw.failed"), stepFailure;
+          let discovered = controls2.capturedElementIds().filter((id) => !before.has(id));
+          tally.enabled && (discovered.length === 0 ? tally.count("discovery.barren") : (tally.count("discovery.found", discovered.length), tally.count(`discovery.found ${drawnPath}`, discovered.length)));
+          let result = Object.freeze({
+            outcome: observerFailure !== void 0 ? rejected("tab-observer-failed", observerFailure) : restoreFailure === void 0 ? SUCCEEDED : rejected("tab-restore-failed", restoreFailure),
+            discovered: Object.freeze(discovered)
+          });
+          return passSucceeded = result.outcome.status === "succeeded", result;
+        } finally {
+          passSucceeded || controls2.rejectChanges(checkpoint);
+        }
       }
     });
   }
@@ -20605,11 +20635,15 @@
     return Object.freeze({
       read() {
         let root = dependencies.rootState.readRoot(), tech = readProperty(root, "tech"), race = readProperty(root, "race"), shipyard = readProperty(readProperty(root, "space"), "shipyard"), blueprint = readProperty(shipyard, "blueprint");
-        if (!isRecord(tech) || !isRecord(race) || !isRecord(shipyard) || !isRecord(blueprint) || !(typeof tech.syndicate == "number" && tech.syndicate > 0) || race.truepath !== !0)
+        if (!isRecord(tech) || !isRecord(race) || !isRecord(shipyard) || !isRecord(blueprint) || !(typeof tech.syndicate == "number" && tech.syndicate > 0) || // DeadSpace stores 1; the game's True Path gates use truthiness.
+        !race.truepath)
           return;
         let settings = dependencies.readSettings();
         if (!fleetDemandWanted(settings)) return;
-        dependencies.shipyard.established(dependencies.shipyard.control()) || dependencies.shipyard.establish();
+        if (!dependencies.shipyard.established(dependencies.shipyard.control())) {
+          let established = dependencies.shipyard.establish();
+          if (!dependencies.shipyard.established(established)) return;
+        }
         let sample = dependencies.costs.current();
         if (sample === void 0 || sample.amounts.length === 0) return;
         let cost = sample.amounts, capacity = readShipCapacityState(root, cost);
@@ -21305,7 +21339,7 @@
   ]), OUTER_FLEET_SHIP_ROW_METHODS = Object.freeze([
     CAPTURED_OUTER_FLEET_ROW_DISPATCH_METHOD,
     CAPTURED_OUTER_FLEET_ROW_UNDERWAY_METHOD
-  ]);
+  ]), OUTER_FLEET_HIDDEN_HOST_MARKER = /* @__PURE__ */ Symbol("outer-fleet-hidden-host");
   function hiddenHostElement(document, elementId) {
     if (!isRecord(document)) return;
     let getElementById = readProperty(document, "getElementById");
@@ -21319,21 +21353,23 @@
     if (typeof appendChild != "function") return;
     let element = Reflect.apply(createElement, document, ["div"]);
     if (!isRecord(element)) return;
-    Reflect.set(element, "id", elementId);
+    Reflect.set(element, OUTER_FLEET_HIDDEN_HOST_MARKER, !0), Reflect.set(element, "id", elementId);
     let style = readProperty(element, "style");
     return isRecord(style) && Reflect.set(style, "display", "none"), Reflect.apply(appendChild, parent, [element]), { parent, element };
   }
   function removeHiddenHostElement(host) {
     let removeChild = readProperty(host.parent, "removeChild");
     try {
-      if (typeof removeChild == "function") {
+      if (typeof removeChild == "function")
         Reflect.apply(removeChild, host.parent, [host.element]);
-        return;
+      else {
+        let remove = readProperty(host.element, "remove");
+        typeof remove == "function" && Reflect.apply(remove, host.element, []);
       }
-      let remove = readProperty(host.element, "remove");
-      typeof remove == "function" && Reflect.apply(remove, host.element, []);
     } catch {
     }
+    let hiddenHostContains = readProperty(host.parent, "contains");
+    return typeof hiddenHostContains == "function" && Reflect.apply(hiddenHostContains, host.parent, [host.element]) === !1 && readProperty(host.element, "isConnected") === !1;
   }
   function capturedOuterFleetShipList(handle) {
     let ships = readProperty(readProperty(handle.data, "s"), "ships");
@@ -21365,6 +21401,9 @@
       return found ?? void 0;
     }, container = resolve(containerId), element = resolve(elementId);
     if (container === void 0 || element === void 0) return;
+    for (let renderedOwner = container; renderedOwner != null; renderedOwner = readProperty(renderedOwner, "parentNode"))
+      if (readProperty(renderedOwner, OUTER_FLEET_HIDDEN_HOST_MARKER) === !0)
+        return;
     let contains = readProperty(container, "contains");
     return typeof contains == "function" && Reflect.apply(contains, container, [element]) === !0 ? element : void 0;
   }
@@ -21466,7 +21505,11 @@
         fleets[key] !== void 0 && (foldKey = key, savedFold = fleets[key], delete fleets[key]);
       },
       restore() {
-        settings[MAIN_TAB_SETTING] = playerMainTab, settings[GOV_TABS_SETTING] = playerSubTab, view !== void 0 && (view.sys = savedSystem, view.group = savedGroup, foldKey !== void 0 && fleets !== void 0 && (fleets[foldKey] = savedFold), foldKey = void 0, savedFold = void 0);
+        if (settings[MAIN_TAB_SETTING] = playerMainTab, settings[GOV_TABS_SETTING] = playerSubTab, view === void 0)
+          return Object.is(settings[MAIN_TAB_SETTING], playerMainTab) && Object.is(settings[GOV_TABS_SETTING], playerSubTab);
+        view.sys = savedSystem, view.group = savedGroup, foldKey !== void 0 && fleets !== void 0 && (fleets[foldKey] = savedFold);
+        let shipyardBorrowRestored = Object.is(settings[MAIN_TAB_SETTING], playerMainTab) && Object.is(settings[GOV_TABS_SETTING], playerSubTab) && Object.is(view.sys, savedSystem) && Object.is(view.group, savedGroup) && (foldKey === void 0 || fleets !== void 0 && Object.is(fleets[foldKey], savedFold));
+        return foldKey = void 0, savedFold = void 0, shipyardBorrowRestored;
       }
     };
   }
@@ -21484,80 +21527,96 @@
       },
       establish() {
         let synthesis = dependencies.synthesis;
-        if (!(drawing || synthesis === void 0 || !synthesis.available) && dependencies.mountSuppression.available) {
-          drawing = !0;
+        if (drawing || synthesis === void 0 || !synthesis.available || !dependencies.mountSuppression.available) return;
+        drawing = !0;
+        let yardPassCheckpoint, yardPassSucceeded = !1;
+        try {
+          let settings = readProperty(
+            dependencies.rootState.readRoot(),
+            "settings"
+          );
+          if (!isRecord(settings)) return;
+          if (settings.tabLoad === !0) {
+            reportError(
+              "preload mode draws every tab itself, so there is no yard left to establish"
+            );
+            return;
+          }
+          let generationBefore = shipyardControlGeneration(
+            dependencies.controls
+          ), civicPanel = MAIN_TAB_PANELS[MAIN_TAB_INDEX.civic];
+          if (civicPanel === void 0) return;
+          let playerMainTab = settings[MAIN_TAB_SETTING], playerSubTab = settings[GOV_TABS_SETTING], playerAnimated = settings.animated, playerPanel = typeof playerMainTab == "number" ? MAIN_TAB_PANELS[playerMainTab] : void 0, workspace = dependencies.panels.open({
+            keep: playerPanel,
+            scratch: civicPanel
+          });
+          if (workspace === void 0) {
+            reportError(
+              "the Civic panel could not be put beyond the game's reach"
+            );
+            return;
+          }
+          let host = hiddenHostElement(
+            dependencies.getDocument(),
+            CAPTURED_OUTER_FLEET_SHIPYARD_PANEL_ID
+          );
+          if (host === void 0) {
+            workspace.release(), reportError(
+              `no scratch ${CAPTURED_OUTER_FLEET_SHIPYARD_PANEL_ID} could be stood up`
+            );
+            return;
+          }
+          let drew = !1, yardPassRestored = !1, yardStagedCatalog;
+          yardPassCheckpoint = dependencies.controls.checkpoint();
           try {
-            let settings = readProperty(
-              dependencies.rootState.readRoot(),
-              "settings"
-            );
-            if (!isRecord(settings)) return;
-            if (settings.tabLoad === !0) {
-              reportError(
-                "preload mode draws every tab itself, so there is no yard left to establish"
+            settings[MAIN_TAB_SETTING] = MAIN_TAB_INDEX.civic, settings[GOV_TABS_SETTING] = GOV_TAB_INDEX.dwarfShipYard, settings.animated = !1, dependencies.mountSuppression.withoutMounting(() => {
+              drew = drawCapturedShipyard(
+                dependencies.controls,
+                synthesis,
+                reportError
               );
-              return;
-            }
-            let generationBefore = shipyardControlGeneration(
-              dependencies.controls
-            ), civicPanel = MAIN_TAB_PANELS[MAIN_TAB_INDEX.civic];
-            if (civicPanel === void 0) return;
-            let playerMainTab = settings[MAIN_TAB_SETTING], playerSubTab = settings[GOV_TABS_SETTING], playerAnimated = settings.animated, playerPanel = typeof playerMainTab == "number" ? MAIN_TAB_PANELS[playerMainTab] : void 0, workspace = dependencies.panels.open({
-              keep: playerPanel,
-              scratch: civicPanel
             });
-            if (workspace === void 0) {
-              reportError(
-                "the Civic panel could not be put beyond the game's reach"
-              );
-              return;
-            }
-            let host = hiddenHostElement(
+            let plans = scratchPlansElement(
               dependencies.getDocument(),
-              CAPTURED_OUTER_FLEET_SHIPYARD_PANEL_ID
+              host.element
             );
-            if (host === void 0) {
-              workspace.release(), reportError(
-                `no scratch ${CAPTURED_OUTER_FLEET_SHIPYARD_PANEL_ID} could be stood up`
-              );
-              return;
-            }
-            let drew = !1;
+            plans !== void 0 && (yardStagedCatalog = dependencies.parts.stageFrom(plans));
+          } finally {
+            let yardSettingsRestored = !1, yardHostRemoved = !1;
             try {
-              settings[MAIN_TAB_SETTING] = MAIN_TAB_INDEX.civic, settings[GOV_TABS_SETTING] = GOV_TAB_INDEX.dwarfShipYard, settings.animated = !1, dependencies.mountSuppression.withoutMounting(() => {
-                drew = drawCapturedShipyard(
-                  dependencies.controls,
-                  synthesis,
-                  reportError
-                );
-              });
-              let plans = scratchPlansElement(
-                dependencies.getDocument(),
-                host.element
-              );
-              plans !== void 0 && dependencies.parts.captureFrom(plans);
+              settings[MAIN_TAB_SETTING] = playerMainTab, settings[GOV_TABS_SETTING] = playerSubTab, settings.animated = playerAnimated, yardSettingsRestored = Object.is(settings[MAIN_TAB_SETTING], playerMainTab) && Object.is(settings[GOV_TABS_SETTING], playerSubTab) && Object.is(settings.animated, playerAnimated);
             } finally {
-              settings[MAIN_TAB_SETTING] = playerMainTab, settings[GOV_TABS_SETTING] = playerSubTab, settings.animated = playerAnimated, removeHiddenHostElement(host), workspace.release(), workspace.isIntact() || reportError("the workspace could not put the panels back");
+              try {
+                yardHostRemoved = removeHiddenHostElement(host);
+              } finally {
+                workspace.release();
+              }
             }
-            if (!drew) {
-              reportError("the shipyard draw did not run");
-              return;
-            }
-            let control = reboundShipyardControl(
-              dependencies.controls,
-              generationBefore
-            );
-            return control === void 0 && reportError(
+            yardPassRestored = yardSettingsRestored && yardHostRemoved && workspace.isIntact(), yardPassRestored || reportError("the workspace could not put the panels back");
+          }
+          if (!drew) {
+            reportError("the shipyard draw did not run");
+            return;
+          }
+          if (!yardPassRestored) return;
+          let control = reboundShipyardControl(
+            dependencies.controls,
+            generationBefore
+          );
+          if (control === void 0) {
+            reportError(
               dependencies.controls.resolve(
                 CAPTURED_OUTER_FLEET_SHIPYARD_CONTROL
               ) === void 0 ? `no ${CAPTURED_OUTER_FLEET_SHIPYARD_CONTROL} captured` : `${CAPTURED_OUTER_FLEET_SHIPYARD_CONTROL} was not rebound by this capture`
-            ), control;
-          } catch (error) {
-            reportError(String(error));
+            );
             return;
-          } finally {
-            drawing = !1;
           }
+          return yardStagedCatalog?.commit(), yardPassSucceeded = !0, control;
+        } catch (error) {
+          reportError(String(error));
+          return;
+        } finally {
+          yardPassCheckpoint !== void 0 && !yardPassSucceeded && dependencies.controls.rejectChanges(yardPassCheckpoint), drawing = !1;
         }
       },
       rowFor(ship) {
@@ -21593,79 +21652,92 @@
         );
         if (rendered !== void 0) return rendered;
         let synthesis = dependencies.synthesis;
-        if (!(drawing || synthesis === void 0 || !synthesis.available) && dependencies.mountSuppression.available) {
-          drawing = !0;
-          try {
-            if (isRecord(settings) && settings.tabLoad === !0) {
-              reportError(
-                "preload mode keeps every tab drawn, so the yard's own row for that ship should already be bound and rendered"
-              );
-              return;
-            }
-            let civicPanel = MAIN_TAB_PANELS[MAIN_TAB_INDEX.civic];
-            if (civicPanel === void 0) return;
-            let workspace = dependencies.panels.open({
-              keep: civicPanel,
-              scratch: civicPanel
-            });
-            if (workspace === void 0) {
-              reportError(
-                "the Civic panel could not be put beyond the game's reach"
-              );
-              return;
-            }
-            let list = hiddenHostElement(
-              dependencies.getDocument(),
-              CAPTURED_OUTER_FLEET_SHIP_LIST_ID
+        if (drawing || synthesis === void 0 || !synthesis.available || !dependencies.mountSuppression.available) return;
+        drawing = !0;
+        let rowPassCheckpoint, rowPassSucceeded = !1;
+        try {
+          if (isRecord(settings) && settings.tabLoad === !0) {
+            reportError(
+              "preload mode keeps every tab drawn, so the yard's own row for that ship should already be bound and rendered"
             );
-            if (list === void 0) {
-              workspace.release(), reportError(
-                `no scratch ${CAPTURED_OUTER_FLEET_SHIP_LIST_ID} could be stood up`
-              );
-              return;
-            }
-            let borrow = yardDrawBorrow(
-              settings,
-              capturedOuterFleetYardView(control)
-            );
-            if (borrow === void 0) {
-              removeHiddenHostElement(list), workspace.release();
-              return;
-            }
-            let generationsBefore = shipRowGenerations(dependencies.controls), drew = !1;
-            try {
-              borrow.open(ship), dependencies.mountSuppression.withoutMounting(() => {
-                let result = synthesis.invoke({
-                  elementId: CAPTURED_OUTER_FLEET_SHIPYARD_CONTROL,
-                  method: OUTER_FLEET_SHIPYARD_REDRAW_METHOD
-                });
-                drew = result.ok, result.ok || reportError(
-                  `${CAPTURED_OUTER_FLEET_SHIPYARD_CONTROL} ${OUTER_FLEET_SHIPYARD_REDRAW_METHOD} failed: ${result.reason} ${result.detail ?? ""}`
-                );
-              });
-            } finally {
-              borrow.restore(), removeHiddenHostElement(list), workspace.release(), workspace.isIntact() || reportError("the workspace could not put the panels back");
-            }
-            if (!drew) {
-              reportError("the shipyard did not redraw its ship list");
-              return;
-            }
-            return provenShipRow(
-              dependencies.controls,
-              dependencies.getPageWindow(),
-              ship,
-              reportError,
-              (elementId) => {
-                let row = dependencies.controls.resolve(elementId);
-                return row !== void 0 && row.generation > (generationsBefore.get(elementId) ?? 0);
-              }
-            );
-          } catch (error) {
-            reportError(String(error));
             return;
-          } finally {
-            drawing = !1;
           }
+          let civicPanel = MAIN_TAB_PANELS[MAIN_TAB_INDEX.civic];
+          if (civicPanel === void 0) return;
+          let workspace = dependencies.panels.open({
+            keep: civicPanel,
+            scratch: civicPanel
+          });
+          if (workspace === void 0) {
+            reportError(
+              "the Civic panel could not be put beyond the game's reach"
+            );
+            return;
+          }
+          let list = hiddenHostElement(
+            dependencies.getDocument(),
+            CAPTURED_OUTER_FLEET_SHIP_LIST_ID
+          );
+          if (list === void 0) {
+            workspace.release(), reportError(
+              `no scratch ${CAPTURED_OUTER_FLEET_SHIP_LIST_ID} could be stood up`
+            );
+            return;
+          }
+          let borrow = yardDrawBorrow(
+            settings,
+            capturedOuterFleetYardView(control)
+          );
+          if (borrow === void 0) {
+            removeHiddenHostElement(list), workspace.release();
+            return;
+          }
+          let generationsBefore = shipRowGenerations(dependencies.controls), drew = !1, rowPassRestored = !1;
+          rowPassCheckpoint = dependencies.controls.checkpoint();
+          try {
+            borrow.open(ship), dependencies.mountSuppression.withoutMounting(() => {
+              let result = synthesis.invoke({
+                elementId: CAPTURED_OUTER_FLEET_SHIPYARD_CONTROL,
+                method: OUTER_FLEET_SHIPYARD_REDRAW_METHOD
+              });
+              drew = result.ok, result.ok || reportError(
+                `${CAPTURED_OUTER_FLEET_SHIPYARD_CONTROL} ${OUTER_FLEET_SHIPYARD_REDRAW_METHOD} failed: ${result.reason} ${result.detail ?? ""}`
+              );
+            });
+          } finally {
+            let rowBorrowRestored = !1, rowHostRemoved = !1;
+            try {
+              rowBorrowRestored = borrow.restore();
+            } finally {
+              try {
+                rowHostRemoved = removeHiddenHostElement(list);
+              } finally {
+                workspace.release();
+              }
+            }
+            rowPassRestored = rowBorrowRestored && rowHostRemoved && workspace.isIntact(), rowPassRestored || reportError("the workspace could not put the panels back");
+          }
+          if (!drew) {
+            reportError("the shipyard did not redraw its ship list");
+            return;
+          }
+          if (!rowPassRestored) return;
+          let provenFreshShipRow = provenShipRow(
+            dependencies.controls,
+            dependencies.getPageWindow(),
+            ship,
+            reportError,
+            (elementId) => {
+              let row = dependencies.controls.resolve(elementId);
+              return row !== void 0 && row.generation > (generationsBefore.get(elementId) ?? 0);
+            }
+          );
+          return rowPassSucceeded = provenFreshShipRow !== void 0, provenFreshShipRow;
+        } catch (error) {
+          reportError(String(error));
+          return;
+        } finally {
+          rowPassCheckpoint !== void 0 && !rowPassSucceeded && dependencies.controls.rejectChanges(rowPassCheckpoint), drawing = !1;
         }
       }
     });
@@ -49245,9 +49317,11 @@ Only continue if you trust the source. Injected code:
       } catch (error) {
         reportError(String(error)), sample = void 0;
       } finally {
-        restoreBlueprint(live, snapshot2), probing = !1, removeHiddenHostElement(host), workspace.release(), blueprintRestored(live, snapshot2) || (reportError(
+        restoreBlueprint(live, snapshot2), probing = !1;
+        let costHostRemoved = removeHiddenHostElement(host);
+        workspace.release(), blueprintRestored(live, snapshot2) || (reportError(
           "the blueprint could not be put back the way the yard had it"
-        ), sample = void 0), workspace.isIntact() || reportError("the workspace could not put the panels back");
+        ), sample = void 0), costHostRemoved || (reportError("the scratch shipYardCosts could not be removed"), sample = void 0), workspace.isIntact() || (reportError("the workspace could not put the panels back"), sample = void 0);
       }
       return sample;
     }
@@ -49602,9 +49676,17 @@ Only continue if you trust the source. Injected code:
       return catalog === void 0 && reportUnreadable(), Object.freeze({ catalog });
     }
     return Object.freeze({
-      captureFrom(element) {
+      stageFrom(element) {
         let catalog = parseShipyardPartCatalog(element);
-        return catalog === void 0 ? (reportUnreadable(), !1) : (proven = catalog, !0);
+        if (catalog === void 0) {
+          reportUnreadable();
+          return;
+        }
+        return Object.freeze({
+          commit() {
+            proven = catalog;
+          }
+        });
       },
       catalog() {
         if (proven !== void 0) return proven;
@@ -49633,9 +49715,6 @@ Only continue if you trust the source. Injected code:
   function syndicateReadoutControl(region) {
     return `${region}synd`;
   }
-  function syndicateReadoutsFor(subTab) {
-    return Object.entries(SYNDICATE_REGION_TABS).filter(([, tab]) => tab === subTab).map(([region]) => syndicateReadoutControl(region));
-  }
   function syndicateOperating(root) {
     let tech = readProperty(root, "tech"), race = readProperty(root, "race"), space = readProperty(root, "space");
     for (let container of [tech, race, space])
@@ -49650,32 +49729,11 @@ Only continue if you trust the source. Injected code:
     kind: "refused"
   });
   function createCapturedSyndicateMechanics(dependencies) {
-    let { rootState, controls: controls2, discovery, mechanics } = dependencies, rejectedDiscoveryGenerations = /* @__PURE__ */ new Map();
-    function snapshotReadoutGenerations(readouts) {
-      let generations = /* @__PURE__ */ new Map();
-      for (let control of readouts) {
-        let handle = controls2.resolve(control);
-        handle !== void 0 && generations.set(control, handle.generation);
-      }
-      return generations;
-    }
-    function quarantineFailedDraw(readouts, before) {
-      for (let control of readouts) {
-        let current = controls2.resolve(control);
-        current !== void 0 && before.get(control) !== current.generation && rejectedDiscoveryGenerations.set(control, current.generation);
-      }
-    }
-    function trustedReadout(control, handle) {
-      if (handle === void 0) return;
-      let quarantined = rejectedDiscoveryGenerations.get(control);
-      if (quarantined === void 0) return handle;
-      if (quarantined !== handle.generation)
-        return rejectedDiscoveryGenerations.delete(control), handle;
-    }
+    let { rootState, controls: controls2, discovery, mechanics } = dependencies;
     function captureReadout(region) {
       let control = syndicateReadoutControl(region), subTab = SYNDICATE_REGION_TABS[region];
       if (subTab === void 0) return READOUT_NOT_DRAWN;
-      let panel = MAIN_TAB_PANELS[MAIN_TAB_INDEX.civilization], readouts = syndicateReadoutsFor(subTab), before = snapshotReadoutGenerations(readouts);
+      let panel = MAIN_TAB_PANELS[MAIN_TAB_INDEX.civilization];
       if (discovery.discover(
         Object.freeze([
           Object.freeze({
@@ -49691,9 +49749,9 @@ Only continue if you trust the source. Injected code:
         ]),
         panel === void 0 ? {} : { mount: Object.freeze([`#${panel}`]) }
       ).outcome.status !== "succeeded")
-        return quarantineFailedDraw(readouts, before), READOUT_PASS_FAILED;
+        return READOUT_PASS_FAILED;
       let captured = controls2.resolve(control);
-      return captured === void 0 ? READOUT_NOT_DRAWN : Object.freeze({ kind: "captured", handle: captured });
+      return captured === void 0 ? controls2.capturedElementIds().includes(control) ? READOUT_PASS_FAILED : READOUT_NOT_DRAWN : Object.freeze({ kind: "captured", handle: captured });
     }
     function readSyndicateScan(region, handle) {
       let invocation, scan = mechanics.readRoundedValues(() => {
@@ -49712,10 +49770,10 @@ Only continue if you trust the source. Injected code:
             kind: "value",
             value: Object.freeze({ p: 1, s: 0 })
           };
-        let control = syndicateReadoutControl(region), held = trustedReadout(control, controls2.resolve(control));
+        let control = syndicateReadoutControl(region), held = controls2.resolve(control);
         if (held !== void 0) return readSyndicateScan(region, held);
         let capture = captureReadout(region);
-        return capture.kind === "absent" ? { kind: "absent" } : capture.kind === "refused" ? { kind: "invalid" } : trustedReadout(control, capture.handle) === void 0 ? { kind: "invalid" } : readSyndicateScan(region, capture.handle);
+        return capture.kind === "absent" ? { kind: "absent" } : capture.kind === "refused" ? { kind: "invalid" } : readSyndicateScan(region, capture.handle);
       }
     });
   }

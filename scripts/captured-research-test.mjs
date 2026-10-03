@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 
 import { createCapturedResearchControl } from "../src/bootstrap/captured-research-control.ts";
+import { withControlCaptureAuthority } from "./control-capture-fixture.mjs";
 
 /**
  * A stand-in for the captured page: a game root, a research panel the game draws on demand with
@@ -66,7 +67,7 @@ function makePage({
     });
   }
 
-  const registry = {
+  const registry = withControlCaptureAuthority({
     resolve(elementId) {
       const control = controls.get(elementId);
       return control === undefined
@@ -94,7 +95,7 @@ function makePage({
         return { ok: false, reason: "threw", detail: String(error) };
       }
     },
-  };
+  });
 
   /** The markup `setAction` writes: prices as a case-preserving class and a lower-cased attribute. */
   const drawnActions = {
@@ -373,11 +374,11 @@ const SMELTING = {
       isReactivitySuppressed: () => false,
       subscribeRootReplaced: () => () => {},
     },
-    controls: {
+    controls: withControlCaptureAuthority({
       resolve: () => undefined,
       capturedElementIds: () => [],
       invoke: () => ({ ok: false, reason: "unknown-control" }),
-    },
+    }),
     drawnActions: { read: () => [], exists: () => false },
     mountSuppression: { available: true, withoutMounting: (draw) => draw() },
     panels: { open: () => undefined },

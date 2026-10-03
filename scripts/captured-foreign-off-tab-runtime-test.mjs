@@ -13,6 +13,7 @@
  * consumers and the demand prerequisite on top of it.
  */
 import assert from "node:assert/strict";
+import { installVueCapture } from "../src/adapters/evolve/vue-capture.ts";
 
 import { createCapturedTabDiscovery } from "../src/adapters/evolve/captured-tab-discovery.ts";
 import { createCapturedBattle } from "../src/adapters/evolve/combat/battle.ts";
@@ -36,34 +37,22 @@ import { createTestDocument, element } from "./dom-fixture.mjs";
  * a control appears when the game binds the element, and its methods are the game's own closures.
  */
 function makeRegistry() {
+  const vue = { createApp: () => ({}) };
+  const capture = installVueCapture({ Vue: vue });
   const controls = new Map();
   const usage = [];
   return {
     usage,
     registry: {
+      checkpoint: capture.controls.checkpoint,
+      rejectChanges: capture.controls.rejectChanges,
       resolve(elementId) {
-        const control = controls.get(elementId);
-        return control === undefined
-          ? undefined
-          : {
-              elementId,
-              generation: control.generation,
-              methods: control.names,
-              data: control.data,
-            };
+        return capture.controls.resolve(elementId);
       },
       invoke(handle, method, args = []) {
-        const control = controls.get(handle.elementId);
-        if (control === undefined)
-          return { ok: false, reason: "unknown-control" };
-        if (control.generation !== handle.generation) {
-          return { ok: false, reason: "stale-control" };
-        }
-        usage.push(`${handle.elementId}.${method}`);
-        const result = control.calls[method];
-        return typeof result === "function"
-          ? { ok: true, value: Reflect.apply(result, control.receiver, args) }
-          : { ok: true, value: result };
+        const result = capture.controls.invoke(handle, method, args);
+        if (result.ok) usage.push(`${handle.elementId}.${method}`);
+        return result;
       },
       capturedElementIds: () => [...controls.keys()],
     },
@@ -81,10 +70,22 @@ function makeRegistry() {
         ),
         receiver,
       });
+      vue.createApp({
+        el: elementId.startsWith("#") ? elementId : `#${elementId}`,
+        data,
+        methods: Object.fromEntries(
+          Object.entries(methods).map(([name, value]) => [
+            name,
+            typeof value === "function"
+              ? (...args) => Reflect.apply(value, receiver, args)
+              : () => value,
+          ]),
+        ),
+      });
       return { elementId, generation: controls.get(elementId).generation };
     },
     has(elementId) {
-      return controls.has(elementId);
+      return capture.controls.resolve(elementId) !== undefined;
     },
   };
 }

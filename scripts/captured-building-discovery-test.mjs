@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 
 import { createCapturedProgressionControl } from "../src/bootstrap/captured-progression-control.ts";
 import { createGameDrawnActionsReader } from "../src/adapters/browser/game-drawn-actions.ts";
+import { installVueCapture } from "../src/adapters/evolve/vue-capture.ts";
 import { MIN_SAMPLE_AGE_MS } from "../src/adapters/evolve/discovery-scope-cache.ts";
 import { CAPTURED_MECH_BUILDINGS } from "../src/adapters/evolve/progression/build/captured-building-metadata.ts";
 import {
@@ -78,55 +79,32 @@ function makeGame({
       offered().map(([id, region, type]) => {
         if (type === undefined) return renderRow(id);
         const state = root[region][type];
-        controlGenerations.set(id, (controlGenerations.get(id) ?? 0) + 1);
-        bindings.set(id, state);
+        buildingVue.createApp({
+          el: `#${id}`,
+          data: { act: state },
+          methods: { on_cap: () => state.count },
+        });
         return renderRow(id, state);
       }),
     );
   };
 
-  const controlGenerations = new Map([
-    [MAIN_TAB_CONTROL, 1],
-    ["mTabCivil", 1],
-    ["mTabCivic", 1],
-  ]);
-  const bindings = new Map();
-
-  const controls = {
-    resolve(elementId) {
-      const generation = controlGenerations.get(elementId);
-      if (generation === undefined) return undefined;
-      return {
-        elementId,
-        generation,
-        methods: ["swapTab", "on_cap"],
-        data: bindings.has(elementId)
-          ? { act: bindings.get(elementId) }
-          : undefined,
-      };
-    },
-    invoke(handle, method, args = []) {
-      const current = controlGenerations.get(handle.elementId);
-      if (current === undefined) {
-        return { ok: false, reason: "unknown-control" };
-      }
-      if (current !== handle.generation) {
-        return { ok: false, reason: "stale-control" };
-      }
-      if (method === "swapTab") {
-        if (handle.elementId === "mTabCivil") drawSpaceTab(args[0]);
-        return { ok: true, value: undefined };
-      }
-      if (method === "on_cap") {
-        const act = bindings.get(handle.elementId);
-        return act === undefined
-          ? { ok: false, reason: "unknown-control" }
-          : { ok: true, value: act.count };
-      }
-      return { ok: false, reason: "unknown-method" };
-    },
-    capturedElementIds: () => [...controlGenerations.keys()],
+  const buildingVue = {
+    reactive: (value) => value,
+    toRaw: (value) => value,
+    createApp: () => ({}),
   };
+  const controls = installVueCapture({ Vue: buildingVue }).controls;
+  for (const id of [MAIN_TAB_CONTROL, "mTabCivil", "mTabCivic"]) {
+    buildingVue.createApp({
+      el: id === MAIN_TAB_CONTROL ? id : `#${id}`,
+      methods: {
+        swapTab(index) {
+          if (id === "mTabCivil") drawSpaceTab(index);
+        },
+      },
+    });
+  }
 
   const page = {
     querySelectorAll(selector) {

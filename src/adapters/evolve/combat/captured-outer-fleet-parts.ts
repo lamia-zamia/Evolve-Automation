@@ -24,6 +24,8 @@
  * paying for a second draw to learn what the first one already rendered. And a yard the player
  * visited and then left keeps its captured `shipPlans` control but has no markup left to read, so
  * exactly one protected scratch draw runs through that same establishment machinery.
+ * Scratch markup is parsed while its host exists, then cached only after the yard proves the whole
+ * draw and restoration succeeded. A failed pass leaves no copied catalogue behind.
  *
  * A proven catalogue is cached for the page: `shipParts` is module-level game data, not save state,
  * so the only way it changes is a reload. Markup that cannot be read is refused rather than
@@ -36,6 +38,7 @@
 import type {
   GameShipyardPart,
   GameShipyardPartCatalog,
+  GameShipyardPartCatalogCandidate,
   GameShipyardPartCatalogSink,
   GameShipyardPartCatalogSource,
   GameShipyardPartDimensions,
@@ -304,14 +307,17 @@ export function createCapturedOuterFleetParts(
   }
 
   return Object.freeze({
-    captureFrom(element: unknown): boolean {
+    stageFrom(element: unknown): GameShipyardPartCatalogCandidate | undefined {
       const catalog = parseShipyardPartCatalog(element);
       if (catalog === undefined) {
         reportUnreadable();
-        return false;
+        return undefined;
       }
-      proven = catalog;
-      return true;
+      return Object.freeze({
+        commit(): void {
+          proven = catalog;
+        },
+      });
     },
 
     catalog(): GameShipyardPartCatalog | undefined {

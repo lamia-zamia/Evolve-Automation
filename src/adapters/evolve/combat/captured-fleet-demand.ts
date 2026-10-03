@@ -109,14 +109,16 @@ export function createCapturedFleetDemand(
         !isRecord(shipyard) ||
         !isRecord(blueprint) ||
         !(typeof tech["syndicate"] === "number" && tech["syndicate"] > 0) ||
-        race["truepath"] !== true
+        // DeadSpace stores 1; the game's True Path gates use truthiness.
+        !race["truepath"]
       ) {
         return undefined;
       }
       const settings = dependencies.readSettings();
       if (!fleetDemandWanted(settings)) return undefined;
       if (!dependencies.shipyard.established(dependencies.shipyard.control())) {
-        dependencies.shipyard.establish();
+        const established = dependencies.shipyard.establish();
+        if (!dependencies.shipyard.established(established)) return undefined;
       }
       const sample = dependencies.costs.current();
       if (sample === undefined || sample.amounts.length === 0) return undefined;

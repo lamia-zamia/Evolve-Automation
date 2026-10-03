@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { withControlCaptureAuthority } from "./control-capture-fixture.mjs";
 
 import { startCapturedRuntime } from "../src/bootstrap/captured-runtime-control.ts";
 import {
@@ -44,7 +45,7 @@ let madCaptured = false;
 let discoveryInvocations = 0;
 let cycle;
 const reported = [];
-const controls = {
+const controls = withControlCaptureAuthority({
   resolve(elementId) {
     if (elementId === MAIN_TAB_CONTROL) return mainHandle;
     if (elementId === civicHandle.elementId) return civicHandle;
@@ -72,7 +73,7 @@ const controls = {
       ? [MAIN_TAB_CONTROL, civicHandle.elementId, CAPTURED_MAD_CONTROL]
       : [MAIN_TAB_CONTROL, civicHandle.elementId];
   },
-};
+});
 
 const stop = startCapturedRuntime({
   pageCapture: {

@@ -1,3 +1,4 @@
+import { withControlCaptureAuthority } from "./control-capture-fixture.mjs";
 import assert from "node:assert/strict";
 
 import { createDiscoveryAttempts } from "../src/bootstrap/discovery-attempts.ts";
@@ -157,7 +158,7 @@ function runMarketFixture({
         isReactivitySuppressed: () => false,
         subscribeRootReplaced: () => () => {},
       },
-      controls: {
+      controls: withControlCaptureAuthority({
         resolve: (elementId) =>
           ids().includes(elementId)
             ? { elementId, generation: 1, methods: ["swapTab"] }
@@ -174,7 +175,7 @@ function runMarketFixture({
           return { ok: true, value: undefined };
         },
         capturedElementIds: () => ids(),
-      },
+      }),
       controlUsage: { readUsage: () => [] },
       periods: {
         subscribe(next) {
@@ -274,7 +275,7 @@ function runMarketFixture({
         isReactivitySuppressed: () => false,
         subscribeRootReplaced: () => () => {},
       },
-      controls: {
+      controls: withControlCaptureAuthority({
         resolve: (elementId) =>
           ids().includes(elementId)
             ? { elementId, generation: 1, methods: ["swapTab"] }
@@ -290,7 +291,7 @@ function runMarketFixture({
           return { ok: true, value: undefined };
         },
         capturedElementIds: () => ids(),
-      },
+      }),
       controlUsage: { readUsage: () => [] },
       periods: {
         subscribe(next) {
@@ -348,7 +349,7 @@ function runMarketFixture({
           return () => {};
         },
       },
-      controls: {
+      controls: withControlCaptureAuthority({
         resolve: (elementId) =>
           ids().includes(elementId)
             ? { elementId, generation: 1, methods: ["swapTab"] }
@@ -364,7 +365,7 @@ function runMarketFixture({
           return { ok: true, value: undefined };
         },
         capturedElementIds: () => ids(),
-      },
+      }),
       controlUsage: { readUsage: () => [] },
       periods: {
         subscribe(next) {
@@ -460,7 +461,7 @@ function runMarketFixture({
     generation: 1,
     methods: ["scrap"],
   };
-  const controls = {
+  const controls = withControlCaptureAuthority({
     resolve(elementId) {
       if (elementId === MAIN_TAB_CONTROL) {
         return { elementId, generation: 1, methods: ["swapTab"] };
@@ -509,7 +510,7 @@ function runMarketFixture({
         ...(completeMechSurface ? [CAPTURED_MECH_LIST_CONTROL] : []),
       ];
     },
-  };
+  });
   assert.equal(
     capturedMechControlsSatisfied(controls, root.settings),
     false,

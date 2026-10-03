@@ -12,6 +12,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { outerFleetBlueprintWrites } from "../src/adapters/evolve/combat/captured-outer-fleet-blueprint.ts";
+import { createCapturedOuterFleetCosts } from "../src/adapters/evolve/combat/captured-outer-fleet-costs.ts";
 import { planOuterFleetBuild } from "../src/domain/combat/fleet-outer.ts";
 
 // ---------------------------------------------------------------------------
@@ -53,6 +54,100 @@ assert.deepEqual(
 );
 assert.deepEqual(outerFleetBlueprintWrites({}), []);
 assert.deepEqual(outerFleetBlueprintWrites({ name: "Nomad", fleet: 1 }), []);
+
+// A readable scratch price is not authority if the protected workspace cannot restore the page.
+// The blueprint still goes back exactly, and both callers must discard the parsed answer.
+for (const [request, failure] of ["price", "current"].flatMap((request) =>
+  ["workspace", "host"].map((failure) => [request, failure]),
+)) {
+  const blueprint = { class: "corvette", armor: "steel" };
+  const original = { ...blueprint };
+  let scratch;
+  let released = false;
+  let parsed = false;
+  const faults = [];
+  const amountNode = {
+    getAttribute(name) {
+      return (
+        {
+          class: "res-Money has-text-success",
+          "data-money": "12345",
+          "data-ok": "has-text-success",
+        }[name] ?? null
+      );
+    },
+    querySelectorAll: () => [],
+  };
+  const document = {
+    getElementById: () => null,
+    createElement() {
+      return {
+        style: {},
+        get isConnected() {
+          return scratch === this;
+        },
+        getAttribute: () => null,
+        querySelectorAll() {
+          parsed = true;
+          return [amountNode];
+        },
+      };
+    },
+    body: {
+      contains: (element) => scratch === element,
+      appendChild(element) {
+        scratch = element;
+      },
+      removeChild(element) {
+        assert.equal(element, scratch);
+        if (failure === "host") return;
+        scratch = undefined;
+      },
+    },
+  };
+  const control = { methods: ["setVal"] };
+  const costs = createCapturedOuterFleetCosts({
+    rootState: { readRoot: () => ({ space: { shipyard: { blueprint } } }) },
+    controls: {
+      resolve: () => control,
+      invoke(handle, method, [field, value]) {
+        assert.equal(handle, control);
+        assert.equal(method, "setVal");
+        assert.notEqual(scratch, undefined);
+        blueprint[field] = value;
+        return { ok: true, value: undefined };
+      },
+    },
+    panels: {
+      open: () => ({
+        release() {
+          released = true;
+        },
+        isIntact() {
+          assert.equal(released, true);
+          return failure !== "workspace";
+        },
+      }),
+    },
+    mountSuppression: { available: true, withoutMounting: (draw) => draw() },
+    getDocument: () => document,
+    onCaptureError: (detail) => faults.push(detail),
+  });
+  const answer =
+    request === "price"
+      ? costs.price({ class: "explorer", armor: "neutronium" })
+      : costs.current();
+  assert.equal(parsed, true, "the valid scratch cost row was read");
+  assert.equal(answer, undefined, "a broken workspace cannot return a price");
+  assert.deepEqual(blueprint, original);
+  assert.equal(scratch === undefined, failure !== "host");
+  assert.equal(released, true);
+  assert.deepEqual(faults, [
+    failure === "host"
+      ? "the scratch shipYardCosts could not be removed"
+      : "the workspace could not put the panels back",
+  ]);
+}
 
 // ---------------------------------------------------------------------------
 // What the planner does with the yard's answer.

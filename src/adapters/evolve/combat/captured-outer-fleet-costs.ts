@@ -397,7 +397,7 @@ export function createCapturedOuterFleetCosts(
     } finally {
       restoreBlueprint(live, snapshot);
       probing = false;
-      removeHiddenHostElement(host);
+      const costHostRemoved = removeHiddenHostElement(host);
       workspace.release();
       if (!blueprintRestored(live, snapshot)) {
         reportError(
@@ -405,8 +405,13 @@ export function createCapturedOuterFleetCosts(
         );
         sample = undefined;
       }
+      if (!costHostRemoved) {
+        reportError("the scratch shipYardCosts could not be removed");
+        sample = undefined;
+      }
       if (!workspace.isIntact()) {
         reportError("the workspace could not put the panels back");
+        sample = undefined;
       }
     }
     return sample;

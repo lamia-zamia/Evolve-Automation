@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { installVueCapture } from "../src/adapters/evolve/vue-capture.ts";
 
 import {
   createCapturedTabDiscovery,
@@ -131,12 +132,23 @@ function makePage({
     return undefined;
   }
   const root = { settings };
+  const vue = { createApp: () => ({}) };
+  const capture = installVueCapture({ Vue: vue });
   const controls = new Map();
   const mounted = new Set();
   const pendingClears = [];
   const swaps = [];
 
   function register(elementId) {
+    vue.createApp({
+      el: elementId.startsWith("#") ? elementId : `#${elementId}`,
+      methods: {
+        swapTab: (index) => {
+          drawTab(elementId, index);
+          return index;
+        },
+      },
+    });
     const existing = controls.get(elementId);
     if (existing === undefined) {
       controls.set(elementId, { elementId, generation: 1 });
@@ -191,23 +203,20 @@ function makePage({
   mount(selectedSubPanels(civTabs));
 
   const registry = {
+    checkpoint: capture.controls.checkpoint,
+    rejectChanges: capture.controls.rejectChanges,
     resolve(elementId) {
       const control = controls.get(elementId);
       return control === undefined
         ? undefined
-        : { elementId, generation: control.generation };
+        : capture.controls.resolve(elementId);
     },
     capturedElementIds: () => [...controls.keys()],
     invoke(handle, method, args = []) {
       const control = controls.get(handle.elementId);
       if (control === undefined)
         return { ok: false, reason: "unknown-control" };
-      if (control.generation !== handle.generation) {
-        return { ok: false, reason: "stale-control", detail: "superseded" };
-      }
-      if (method !== "swapTab") return { ok: false, reason: "unknown-method" };
-      drawTab(handle.elementId, args[0]);
-      return { ok: true, value: args[0] };
+      return capture.controls.invoke(handle, method, args);
     },
   };
 
@@ -216,6 +225,8 @@ function makePage({
     settings,
     controls,
     registry,
+    capture,
+    register,
     suppression,
     panels: panelWorkspace,
     workspaceLog,
@@ -249,6 +260,96 @@ function discoveryFor(page) {
     mountSuppression: page.suppression,
     panels: page.panels,
   });
+}
+
+for (const cause of [
+  "missing",
+  "stale",
+  "swap",
+  "observer",
+  "workspace",
+  "restore",
+  "exception",
+]) {
+  const page = makePage();
+  const discovery = discoveryFor(page);
+  const untouched = page.registry.resolve("resTrade");
+  page.register("foundry");
+  const original = page.registry.resolve("foundry");
+  let produced;
+  const invoke = page.registry.invoke;
+  page.registry.invoke = (handle, method, args) => {
+    const result = invoke(handle, method, args);
+    if (args[0] === 2 && result.ok) {
+      produced = page.registry.resolve("foundry");
+      if (cause === "stale" || cause === "swap")
+        return {
+          ok: false,
+          reason: cause === "stale" ? "stale-control" : "threw",
+          detail: "failure after bindings",
+        };
+    }
+    if (cause === "restore" && args[0] === 4)
+      return { ok: false, reason: "threw" };
+    return result;
+  };
+  if (cause === "workspace") page.setIntact(false);
+  if (cause === "restore") page.setOpenable(false);
+  if (cause === "exception") {
+    const draw = page.suppression.withoutMounting;
+    page.suppression.withoutMounting = (...args) => {
+      draw(...args);
+      throw new Error("unexpected failure after bindings");
+    };
+  }
+  const path =
+    cause === "missing"
+      ? [
+          ...mainTab(2),
+          { setting: SPACE_TABS_SETTING, control: "neverBound", index: 1 },
+        ]
+      : mainTab(2);
+  const run = () =>
+    discovery.discover(path, {
+      whileDrawn: () => {
+        if (cause === "observer") throw new Error("observer failed");
+      },
+    });
+  if (cause === "exception") assert.throws(run, /unexpected failure/);
+  else assert.notEqual(run().outcome.status, "succeeded", cause);
+  for (const id of ["mTabCivic", "civ-farmer", "foundry"]) {
+    assert.equal(page.registry.resolve(id), undefined, `${cause}: ${id}`);
+    assert.equal(
+      page.capture.synthesis.invoke({
+        elementId: id,
+        method: "swapTab",
+        args: [2],
+      }).reason,
+      "stale-control",
+    );
+  }
+  assert.equal(
+    page.registry.invoke(produced, "swapTab", [2]).reason,
+    "stale-control",
+  );
+  assert.equal(
+    page.registry.invoke(original, "swapTab", [2]).reason,
+    "stale-control",
+  );
+  if (cause !== "restore") {
+    assert.equal(
+      page.registry.resolve("resTrade").generation,
+      untouched.generation,
+    );
+    assert.equal(page.registry.invoke(untouched, "swapTab", [4]).ok, true);
+  }
+  page.register("foundry");
+  const recovered = page.registry.resolve("foundry");
+  assert.equal(recovered.generation, produced.generation + 1);
+  assert.equal(
+    page.capture.controls.invoke(recovered, "swapTab", [2]).ok,
+    true,
+  );
 }
 
 // --- one pass captures a panel and puts the player back ---------------------

@@ -1,3 +1,4 @@
+import { withControlCaptureAuthority } from "./control-capture-fixture.mjs";
 import assert from "node:assert/strict";
 import { startCapturedRuntime } from "../src/bootstrap/captured-runtime-control.ts";
 import { createGameDrawnActionsReader } from "../src/adapters/browser/game-drawn-actions.ts";
@@ -139,7 +140,7 @@ function runDemandSampleScenario(
       isReactivitySuppressed: () => false,
       subscribeRootReplaced: () => () => {},
     },
-    controls: {
+    controls: withControlCaptureAuthority({
       resolve: (id) => handles.get(id),
       invoke: (handle, method, args = []) => {
         invoked.push(`${handle.elementId}.${method}`);
@@ -168,7 +169,7 @@ function runDemandSampleScenario(
         return { ok: true, value: undefined };
       },
       capturedElementIds: () => [...handles.keys()],
-    },
+    }),
     keyState: { readPressed: () => false },
     controlUsage: { readUsage: () => [] },
     periods: {
@@ -258,11 +259,11 @@ const stop = startCapturedRuntime({
       isReactivitySuppressed: () => false,
       subscribeRootReplaced: () => () => {},
     },
-    controls: {
+    controls: withControlCaptureAuthority({
       resolve: () => undefined,
       invoke: () => ({ ok: false, reason: "unknown-control" }),
       capturedElementIds: () => [],
-    },
+    }),
     controlUsage: { readUsage: () => [] },
     periods: {
       subscribe(next) {
@@ -358,7 +359,7 @@ assert.equal(unsubscribeCount, 1);
       isReactivitySuppressed: () => false,
       subscribeRootReplaced: () => () => {},
     },
-    controls: {
+    controls: withControlCaptureAuthority({
       resolve: (id) => handles.get(id),
       invoke: (handle, method, args = []) => {
         invoked.push(`${handle.elementId}.${method}`);
@@ -388,7 +389,7 @@ assert.equal(unsubscribeCount, 1);
         return { ok: true, value: undefined };
       },
       capturedElementIds: () => [...handles.keys()],
-    },
+    }),
     controlUsage: { readUsage: () => [] },
     periods: {
       subscribe(next) {
@@ -478,7 +479,7 @@ assert.equal(unsubscribeCount, 1);
         isReactivitySuppressed: () => false,
         subscribeRootReplaced: () => () => {},
       },
-      controls: {
+      controls: withControlCaptureAuthority({
         resolve: (id) => handles.get(id),
         invoke: (handle, method, args = []) => {
           invoked.push(`${handle.elementId}.${method}`);
@@ -487,7 +488,7 @@ assert.equal(unsubscribeCount, 1);
             : { ok: true, value: undefined };
         },
         capturedElementIds: () => [...handles.keys()],
-      },
+      }),
       controlUsage: { readUsage: () => [] },
       periods: {
         subscribe(next) {
@@ -563,7 +564,7 @@ assert.equal(unsubscribeCount, 1);
         isReactivitySuppressed: () => false,
         subscribeRootReplaced: () => () => {},
       },
-      controls: {
+      controls: withControlCaptureAuthority({
         resolve: (id) => handles.get(id),
         invoke: (handle, method, args = []) => {
           invoked.push(`${handle.elementId}.${method}`);
@@ -572,7 +573,7 @@ assert.equal(unsubscribeCount, 1);
             : { ok: true, value: undefined };
         },
         capturedElementIds: () => [...handles.keys()],
-      },
+      }),
       controlUsage: { readUsage: () => [] },
       periods: {
         subscribe(next) {
@@ -667,14 +668,14 @@ assert.equal(unsubscribeCount, 1);
         isReactivitySuppressed: () => false,
         subscribeRootReplaced: () => () => {},
       },
-      controls: {
+      controls: withControlCaptureAuthority({
         resolve: (id) => handles.get(id),
         invoke: (_handle, method, args = []) =>
           method === "setData"
             ? { ok: true, value: { [`${args[1]}-Money`]: 10 } }
             : { ok: false, reason: "unknown-method" },
         capturedElementIds: () => [...handles.keys()],
-      },
+      }),
       controlUsage: { readUsage: () => [] },
       periods: {
         subscribe(next) {
@@ -733,11 +734,11 @@ assert.equal(unsubscribeCount, 1);
         isReactivitySuppressed: () => false,
         subscribeRootReplaced: () => () => {},
       },
-      controls: {
+      controls: withControlCaptureAuthority({
         resolve: () => undefined,
         invoke: () => ({ ok: false, reason: "unknown-control" }),
         capturedElementIds: () => ["city-cottage"],
-      },
+      }),
       controlUsage: { readUsage: () => [] },
       periods: {
         subscribe(next) {
@@ -878,7 +879,7 @@ assert.equal(unsubscribeCount, 1);
           return () => rootReplacementListeners.delete(listener);
         },
       },
-      controls: {
+      controls: withControlCaptureAuthority({
         resolve: (id) => handles.get(id),
         invoke: (handle, method, args = []) => {
           if (method === "setData") {
@@ -892,7 +893,7 @@ assert.equal(unsubscribeCount, 1);
           return { ok: true, value: undefined };
         },
         capturedElementIds: () => [...handles.keys()],
-      },
+      }),
       controlUsage: { readUsage: () => [] },
       periods: {
         subscribe(next) {
@@ -1218,11 +1219,11 @@ assert.equal(unsubscribeCount, 1);
         isReactivitySuppressed: () => false,
         subscribeRootReplaced: () => () => {},
       },
-      controls: {
+      controls: withControlCaptureAuthority({
         resolve: (id) => handles.get(id),
         invoke: () => ({ ok: false, reason: "unknown-control" }),
         capturedElementIds: () => [...handles.keys()],
-      },
+      }),
       controlUsage: { readUsage: () => [] },
       periods: {
         subscribe(next) {
@@ -1281,7 +1282,7 @@ assert.equal(unsubscribeCount, 1);
         isReactivitySuppressed: () => false,
         subscribeRootReplaced: () => () => {},
       },
-      controls: {
+      controls: withControlCaptureAuthority({
         resolve: (id) =>
           id === "city-mill"
             ? { elementId: id, generation: 1, methods: ["power_on"] }
@@ -1293,7 +1294,7 @@ assert.equal(unsubscribeCount, 1);
           return { ok: true, value: undefined };
         },
         capturedElementIds: () => ["city-mill"],
-      },
+      }),
       controlUsage: { readUsage: () => [] },
       periods: {
         subscribe(next) {
@@ -1350,7 +1351,7 @@ assert.equal(unsubscribeCount, 1);
         isReactivitySuppressed: () => false,
         subscribeRootReplaced: () => () => {},
       },
-      controls: {
+      controls: withControlCaptureAuthority({
         resolve: (id) =>
           id === "civ-unemployed" || id === "civ-farmer"
             ? {
@@ -1370,7 +1371,7 @@ assert.equal(unsubscribeCount, 1);
           return { ok: true, value: undefined };
         },
         capturedElementIds: () => ["civ-unemployed", "civ-farmer"],
-      },
+      }),
       controlUsage: { readUsage: () => [] },
       periods: {
         subscribe(next) {
@@ -1463,7 +1464,7 @@ assert.equal(unsubscribeCount, 1);
     "resPlywood",
     "resBrick",
   ];
-  const controls = {
+  const controls = withControlCaptureAuthority({
     resolve: (elementId) => {
       if (!controlIds.includes(elementId)) return undefined;
       const methods = elementId.startsWith("res")
@@ -1502,7 +1503,7 @@ assert.equal(unsubscribeCount, 1);
       return { ok: true, value: undefined };
     },
     capturedElementIds: () => controlIds,
-  };
+  });
   const stopCycle = startCapturedRuntime({
     pageCapture: {
       isComplete: () => true,
@@ -1627,7 +1628,7 @@ function runCapturedJobsMatrixScenario({
     "resBrick",
     ...(hasServants ? ["servant-farmer", "skilledServants"] : []),
   ];
-  const controls = {
+  const controls = withControlCaptureAuthority({
     resolve: (elementId) => {
       if (!controlIds.includes(elementId)) return undefined;
       const methods = elementId.startsWith("res")
@@ -1668,7 +1669,7 @@ function runCapturedJobsMatrixScenario({
       return { ok: true, value: undefined };
     },
     capturedElementIds: () => controlIds,
-  };
+  });
   const settings = {
     masterScriptToggle: true,
     autoJobs,
@@ -1864,7 +1865,7 @@ function runCapturedJobsMatrixScenario({
   };
   const invoked = [];
   let cycle;
-  const controls = {
+  const controls = withControlCaptureAuthority({
     resolve: (elementId) => {
       if (elementId === "iNFactory") {
         return {
@@ -1914,7 +1915,7 @@ function runCapturedJobsMatrixScenario({
       "ejectCopper",
       "city-mill",
     ],
-  };
+  });
   const stopCycle = startCapturedRuntime({
     pageCapture: {
       isComplete: () => true,
@@ -2009,11 +2010,11 @@ function runCapturedJobsMatrixScenario({
           isReactivitySuppressed: () => false,
           subscribeRootReplaced: () => () => {},
         },
-        controls: {
+        controls: withControlCaptureAuthority({
           resolve: () => undefined,
           invoke: () => ({ ok: false, reason: "unknown-control" }),
           capturedElementIds: () => [],
-        },
+        }),
         controlUsage: { readUsage: () => [] },
         periods: {
           subscribe(next) {
@@ -2095,7 +2096,7 @@ function runCapturedJobsMatrixScenario({
         isReactivitySuppressed: () => false,
         subscribeRootReplaced: () => () => {},
       },
-      controls: {
+      controls: withControlCaptureAuthority({
         resolve: (elementId) => {
           // Nanite disposal runs first of these three. Its control throwing stands in for any
           // feature whose own state has gone out from under it mid-run.
@@ -2130,7 +2131,7 @@ function runCapturedJobsMatrixScenario({
           return { ok: true, value: undefined };
         },
         capturedElementIds: () => ["supplyCopper", "ejectCopper"],
-      },
+      }),
       controlUsage: { readUsage: () => [] },
       periods: {
         subscribe(next) {
@@ -2268,7 +2269,7 @@ function runCapturedJobsMatrixScenario({
         isReactivitySuppressed: () => false,
         subscribeRootReplaced: () => () => {},
       },
-      controls: {
+      controls: withControlCaptureAuthority({
         resolve: (id) => {
           if (
             id === "garrison" &&
@@ -2308,7 +2309,7 @@ function runCapturedJobsMatrixScenario({
           return { ok: true, value: false };
         },
         capturedElementIds: () => ["foreign"],
-      },
+      }),
       controlUsage: { readUsage: () => [] },
       periods: {
         subscribe(next) {
@@ -2438,7 +2439,7 @@ function runCombatRuntime(autoFight) {
         isReactivitySuppressed: () => false,
         subscribeRootReplaced: () => () => {},
       },
-      controls: {
+      controls: withControlCaptureAuthority({
         resolve: (id) =>
           id === "garrison" ? garrison : id === "foreign" ? foreign : undefined,
         invoke: (handle, method) => {
@@ -2464,7 +2465,7 @@ function runCombatRuntime(autoFight) {
           return { ok: true, value: false };
         },
         capturedElementIds: () => ["garrison", "foreign"],
-      },
+      }),
       controlUsage: { readUsage: () => [] },
       keyState: { readPressed: () => false },
       periods: {
@@ -2605,7 +2606,7 @@ function runCombatRuntime(autoFight) {
         subscribeRootReplaced: () => () => {},
       },
       keyState: { readPressed: () => false },
-      controls: {
+      controls: withControlCaptureAuthority({
         resolve: (elementId) => handles.get(elementId),
         invoke: (handle, method) => {
           invoked.push(`${handle.elementId}.${method}`);
@@ -2638,7 +2639,7 @@ function runCombatRuntime(autoFight) {
           return { ok: false, reason: "unknown-method" };
         },
         capturedElementIds: () => [...handles.keys()],
-      },
+      }),
       controlUsage: { readUsage: () => [] },
       periods: {
         subscribe(next) {
@@ -2792,7 +2793,7 @@ function runCombatRuntime(autoFight) {
       },
     ],
   ]);
-  const controls = {
+  const controls = withControlCaptureAuthority({
     resolve: (id) => handles.get(id),
     invoke: (handle, method) => {
       storageCalls.push([handle.elementId, method]);
@@ -2822,7 +2823,7 @@ function runCombatRuntime(autoFight) {
       return { ok: true, value: undefined };
     },
     capturedElementIds: () => [...handles.keys()],
-  };
+  });
   let cycle;
   const stop = startCapturedRuntime({
     pageCapture: {

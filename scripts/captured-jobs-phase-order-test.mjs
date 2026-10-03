@@ -1,3 +1,4 @@
+import { withControlCaptureAuthority } from "./control-capture-fixture.mjs";
 import assert from "node:assert/strict";
 import { startCapturedRuntime } from "../src/bootstrap/captured-runtime-control.ts";
 import { createTestDocument, element } from "./dom-fixture.mjs";
@@ -146,7 +147,7 @@ function runOrderedCapturedCycle({ activeTrigger }) {
     cityPanel.appendChild(row);
   }
 
-  const controls = {
+  const controls = withControlCaptureAuthority({
     resolve: (elementId) => handles.get(elementId),
     capturedElementIds: () => [...handles.keys()],
     invoke(handle, method, args = []) {
@@ -214,7 +215,7 @@ function runOrderedCapturedCycle({ activeTrigger }) {
       }
       return { ok: true, value: undefined };
     },
-  };
+  });
 
   let cycle;
   const stop = startCapturedRuntime({

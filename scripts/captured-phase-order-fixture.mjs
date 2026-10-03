@@ -1,3 +1,4 @@
+import { withControlCaptureAuthority } from "./control-capture-fixture.mjs";
 /**
  * Shared fixture for the captured runtime's phase-order regressions.
  *
@@ -83,7 +84,7 @@ export function runCapturedPhaseOrderCycle({
   const document = createTestDocument(body);
   documentSetup({ document, body, root });
 
-  const registry = {
+  const registry = withControlCaptureAuthority({
     resolve(elementId) {
       const handle = handles.get(elementId);
       return handle === undefined
@@ -123,7 +124,7 @@ export function runCapturedPhaseOrderCycle({
       };
     },
     capturedElementIds: () => [...handles.keys()],
-  };
+  });
 
   let runCycle;
   const pageCapture = {

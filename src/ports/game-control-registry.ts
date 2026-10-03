@@ -26,9 +26,19 @@ export type GameControlResult =
       readonly detail?: string;
     };
 
+declare const controlCaptureCheckpointBrand: unique symbol;
+
+/** Opaque snapshot owned by the capture that produced it. */
+export interface ControlCaptureCheckpoint {
+  readonly [controlCaptureCheckpointBrand]: true;
+}
+
 export interface GameControlRegistry {
-  /** The current handle for an element id, or `undefined` if the game has never built it. */
+  /** The current authoritative handle; absent and rejected generations answer `undefined`. */
   resolve(elementId: string): GameControlHandle | undefined;
+  checkpoint(): ControlCaptureCheckpoint;
+  /** Reject every current generation created or replaced since this checkpoint. */
+  rejectChanges(checkpoint: ControlCaptureCheckpoint): void;
   /**
    * Invoke one captured method. A missing or superseded control is an explicit failure with a
    * reason: it must never read as "the feature is locked".

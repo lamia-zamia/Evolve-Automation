@@ -67,10 +67,15 @@ export interface GameShipyardPartCatalogSource {
  */
 export interface GameShipyardPartCatalogSink {
   /**
-   * Reads the `#shipPlans` a draw just produced. False when the markup could not be read, which is a
-   * fault in the reading rather than in the yard.
+   * Parses the `#shipPlans` a draw just produced without caching it. The caller commits only after
+   * its protected draw and restoration are proven; an abandoned candidate grants no catalogue.
    */
-  captureFrom(element: unknown): boolean;
+  stageFrom(element: unknown): GameShipyardPartCatalogCandidate | undefined;
+}
+
+export interface GameShipyardPartCatalogCandidate {
+  /** Cache the staged catalogue after the protected pass succeeds. */
+  commit(): void;
 }
 
 /**

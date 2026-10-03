@@ -1,17 +1,18 @@
 import assert from "node:assert/strict";
 import { createCapturedProgressionControl } from "../src/bootstrap/captured-progression-control.ts";
 import { createCapturedResourceDemand } from "../src/adapters/evolve/economy/resources/captured-resource-demand.ts";
+import { withControlCaptureAuthority } from "./control-capture-fixture.mjs";
 
 const control = createCapturedProgressionControl({
   rootState: {
     readRoot: () => undefined,
     subscribeRootReplaced: () => () => {},
   },
-  controls: {
+  controls: withControlCaptureAuthority({
     resolve: () => undefined,
     invoke: () => ({ ok: false, reason: "unknown-control" }),
     capturedElementIds: () => [],
-  },
+  }),
   mountSuppression: {
     begin: () => undefined,
   },
@@ -75,7 +76,7 @@ assert.equal(control.readEstablishedProjects(), undefined);
         return () => {};
       },
     },
-    controls: {
+    controls: withControlCaptureAuthority({
       resolve: (id) =>
         projectHandleAvailable && id === "arpalhc"
           ? { elementId: id, generation: projectGeneration, methods: ["build"] }
@@ -84,7 +85,7 @@ assert.equal(control.readEstablishedProjects(), undefined);
         throw new Error("established projects must not swap tabs");
       },
       capturedElementIds: () => ["arpalhc"],
-    },
+    }),
     mountSuppression: {
       available: false,
       withoutMounting: () => {
@@ -186,11 +187,11 @@ const researchControl = createCapturedProgressionControl({
       return () => {};
     },
   },
-  controls: {
+  controls: withControlCaptureAuthority({
     resolve: (id) => techHandles.get(id),
     invoke: () => ({ ok: false, reason: "unknown-control" }),
     capturedElementIds: () => [...techHandles.keys()],
-  },
+  }),
   mountSuppression: { available: false, withoutMounting: () => undefined },
   panels: { open: () => ({ close: () => {} }) },
   drawnActions: {
@@ -369,7 +370,7 @@ assert.equal(researchControl.readGrantedTechs(), undefined);
         return () => {};
       },
     },
-    controls: {
+    controls: withControlCaptureAuthority({
       resolve: (elementId) => ({
         elementId,
         generation: 1,
@@ -377,7 +378,7 @@ assert.equal(researchControl.readGrantedTechs(), undefined);
       }),
       invoke: () => ({ ok: true, value: undefined }),
       capturedElementIds: () => buildIds,
-    },
+    }),
     mountSuppression: {
       available: true,
       withoutMounting: (action) => action(),

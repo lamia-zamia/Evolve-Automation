@@ -21,6 +21,7 @@
 
 import type { GameRootStateSource } from "../../ports/game-root-state.ts";
 import type {
+  ControlCaptureCheckpoint,
   GameControlHandle,
   GameControlRegistry,
   GameControlResult,
@@ -111,6 +112,7 @@ interface CaptureMarker {
 interface CapturedControl {
   readonly elementId: string;
   generation: number;
+  rejectedGeneration?: number;
   methods: Record<string, AnyFunction>;
   /** Exactly what the options carried, which for a game component is a factory. See `bindingData`. */
   data: unknown;
@@ -157,6 +159,8 @@ function inertCapture(): VueCapture {
     }),
     controls: Object.freeze({
       resolve: () => undefined,
+      checkpoint: () => Object.freeze({}) as ControlCaptureCheckpoint,
+      rejectChanges: () => {},
       invoke: () => ({ ok: false, reason: "unknown-control" }) as const,
       capturedElementIds: () => [],
     }),
@@ -207,6 +211,10 @@ export function installVueCapture(
   const rootListeners = new Set<() => void>();
 
   const controls = new Map<string, CapturedControl>();
+  const controlCheckpoints = new WeakMap<
+    ControlCaptureCheckpoint,
+    ReadonlyMap<string, number>
+  >();
   const captureOrder: string[] = [];
   const usage = new Map<string, GameControlUsage>();
 
@@ -370,12 +378,18 @@ export function installVueCapture(
   }
 
   function handleFor(control: CapturedControl): GameControlHandle {
+    const handleGeneration = control.generation;
     return Object.freeze({
       elementId: control.elementId,
-      generation: control.generation,
+      generation: handleGeneration,
       methods: Object.freeze(Object.keys(control.methods)),
       // Lazy: a handle resolved only to invoke a method never runs the game's data factory.
       get data(): unknown {
+        if (
+          control.generation !== handleGeneration ||
+          control.rejectedGeneration === handleGeneration
+        )
+          return undefined;
         return bindingData(control);
       },
     });
@@ -396,6 +410,13 @@ export function installVueCapture(
         ok: false,
         reason: "stale-control",
         detail: `${handle.elementId} generation ${handle.generation}, current ${control.generation}`,
+      };
+    }
+    if (control.rejectedGeneration === control.generation) {
+      return {
+        ok: false,
+        reason: "stale-control",
+        detail: `${handle.elementId} generation ${handle.generation} came from a rejected protected draw`,
       };
     }
     const target = control.methods[method];
@@ -582,9 +603,30 @@ export function installVueCapture(
   });
 
   const registry: GameControlRegistry = Object.freeze({
+    checkpoint(): ControlCaptureCheckpoint {
+      const controlCheckpoint = Object.freeze({}) as ControlCaptureCheckpoint;
+      controlCheckpoints.set(
+        controlCheckpoint,
+        new Map([...controls].map(([id, control]) => [id, control.generation])),
+      );
+      return controlCheckpoint;
+    },
+    rejectChanges(checkpoint: ControlCaptureCheckpoint): void {
+      const checkpointGenerations = controlCheckpoints.get(checkpoint);
+      if (checkpointGenerations === undefined)
+        throw new Error("control checkpoint belongs to another capture");
+      for (const [id, control] of controls) {
+        if (checkpointGenerations.get(id) !== control.generation) {
+          control.rejectedGeneration = control.generation;
+        }
+      }
+    },
     resolve(elementId: string): GameControlHandle | undefined {
       const control = controls.get(elementId);
-      return control === undefined ? undefined : handleFor(control);
+      return control === undefined ||
+        control.rejectedGeneration === control.generation
+        ? undefined
+        : handleFor(control);
     },
     invoke(
       handle: GameControlHandle,

@@ -89,6 +89,7 @@
  * control that mode is supposed to hold.
  */
 import type {
+  ControlCaptureCheckpoint,
   GameControlHandle,
   GameControlRegistry,
 } from "../../../ports/game-control-registry.ts";
@@ -96,7 +97,10 @@ import type { GameControlSynthesis } from "../../../ports/game-control-synthesis
 import type { GameMountSuppression } from "../../../ports/game-mount-suppression.ts";
 import type { GamePanelWorkspace } from "../../../ports/game-panel-workspace.ts";
 import type { GameRootStateSource } from "../../../ports/game-root-state.ts";
-import type { GameShipyardPartCatalogSink } from "../../../ports/game-shipyard-parts.ts";
+import type {
+  GameShipyardPartCatalogCandidate,
+  GameShipyardPartCatalogSink,
+} from "../../../ports/game-shipyard-parts.ts";
 import {
   GOV_TAB_INDEX,
   GOV_TABS_SETTING,
@@ -206,7 +210,8 @@ export interface CapturedOuterFleetShipyard {
   established(control: GameControlHandle | undefined): boolean;
   /**
    * Runs the game's own shipyard draw against scratch DOM and answers the control this call
-   * rebound, or `undefined` when it rebound nothing. Never carried past the call.
+   * rebound after proving restoration, or `undefined`. A failed pass rejects every changed control
+   * generation and discards its staged catalogue.
    */
   establish(): GameControlHandle | undefined;
   /**
@@ -216,8 +221,8 @@ export interface CapturedOuterFleetShipyard {
   rowFor(ship: unknown): CapturedOuterFleetShipRow | undefined;
   /**
    * Runs the game's own ship-list draw against scratch DOM and answers the row it bound for this
-   * ship, or `undefined` when the draw bound no row that can be proven to be this ship's. One
-   * attempt: nothing is retained past the call.
+   * ship after proving restoration, or `undefined`. A failed pass rejects every changed control
+   * generation, including sibling rows bound by the same draw.
    */
   captureRow(ship: unknown): CapturedOuterFleetShipRow | undefined;
 }
@@ -227,6 +232,9 @@ interface HiddenHost {
   readonly parent: unknown;
   readonly element: unknown;
 }
+
+/** Scratch markup stays distinguishable from player-rendered markup if cleanup cannot remove it. */
+const OUTER_FLEET_HIDDEN_HOST_MARKER = Symbol("outer-fleet-hidden-host");
 
 /**
  * The hidden element the game's draw will find and fill. Refused when the id is already taken: a
@@ -251,6 +259,7 @@ export function hiddenHostElement(
   if (typeof appendChild !== "function") return undefined;
   const element = Reflect.apply(createElement, document, ["div"]);
   if (!isRecord(element)) return undefined;
+  Reflect.set(element, OUTER_FLEET_HIDDEN_HOST_MARKER, true);
   Reflect.set(element, "id", elementId);
   const style = readProperty(element, "style");
   if (isRecord(style)) Reflect.set(style, "display", "none");
@@ -258,18 +267,24 @@ export function hiddenHostElement(
   return { parent, element };
 }
 
-export function removeHiddenHostElement(host: HiddenHost): void {
+export function removeHiddenHostElement(host: HiddenHost): boolean {
   const removeChild = readProperty(host.parent, "removeChild");
   try {
     if (typeof removeChild === "function") {
       Reflect.apply(removeChild, host.parent, [host.element]);
-      return;
+    } else {
+      const remove = readProperty(host.element, "remove");
+      if (typeof remove === "function") Reflect.apply(remove, host.element, []);
     }
-    const remove = readProperty(host.element, "remove");
-    if (typeof remove === "function") Reflect.apply(remove, host.element, []);
   } catch {
-    // The page already took the host, or refused to; nothing here may escape.
+    // The page may already have taken the host. Prove absence below even if removal threw.
   }
+  const hiddenHostContains = readProperty(host.parent, "contains");
+  return (
+    typeof hiddenHostContains === "function" &&
+    Reflect.apply(hiddenHostContains, host.parent, [host.element]) === false &&
+    readProperty(host.element, "isConnected") === false
+  );
 }
 
 /**
@@ -359,6 +374,14 @@ export function renderedElementInside(
   const container = resolve(containerId);
   const element = resolve(elementId);
   if (container === undefined || element === undefined) return undefined;
+  for (
+    let renderedOwner: unknown = container;
+    renderedOwner !== undefined && renderedOwner !== null;
+    renderedOwner = readProperty(renderedOwner, "parentNode")
+  ) {
+    if (readProperty(renderedOwner, OUTER_FLEET_HIDDEN_HOST_MARKER) === true)
+      return undefined;
+  }
   const contains = readProperty(container, "contains");
   return typeof contains === "function" &&
     Reflect.apply(contains, container, [element]) === true
@@ -576,8 +599,8 @@ function drawCapturedShipyard(
 interface YardDrawBorrow {
   /** Satisfies the draw's tab gate, and neutralizes only the view fields that can hide this ship. */
   open(ship: unknown): void;
-  /** Puts the tab settings and the view options back. Idempotent. */
-  restore(): void;
+  /** Puts the tab settings and the view options back and proves their saved values. Idempotent. */
+  restore(): boolean;
 }
 
 function yardDrawBorrow(
@@ -623,17 +646,30 @@ function yardDrawBorrow(
       savedFold = fleets[key];
       delete fleets[key];
     },
-    restore(): void {
+    restore(): boolean {
       settings[MAIN_TAB_SETTING] = playerMainTab;
       settings[GOV_TABS_SETTING] = playerSubTab;
-      if (view === undefined) return;
+      if (view === undefined) {
+        return (
+          Object.is(settings[MAIN_TAB_SETTING], playerMainTab) &&
+          Object.is(settings[GOV_TABS_SETTING], playerSubTab)
+        );
+      }
       view["sys"] = savedSystem;
       view["group"] = savedGroup;
       if (foldKey !== undefined && fleets !== undefined) {
         fleets[foldKey] = savedFold;
       }
+      const shipyardBorrowRestored =
+        Object.is(settings[MAIN_TAB_SETTING], playerMainTab) &&
+        Object.is(settings[GOV_TABS_SETTING], playerSubTab) &&
+        Object.is(view["sys"], savedSystem) &&
+        Object.is(view["group"], savedGroup) &&
+        (foldKey === undefined ||
+          (fleets !== undefined && Object.is(fleets[foldKey], savedFold)));
       foldKey = undefined;
       savedFold = undefined;
+      return shipyardBorrowRestored;
     },
   };
 }
@@ -660,6 +696,8 @@ export function createCapturedOuterFleetShipyard(
       }
       if (!dependencies.mountSuppression.available) return undefined;
       drawing = true;
+      let yardPassCheckpoint: ControlCaptureCheckpoint | undefined;
+      let yardPassSucceeded = false;
       try {
         const settings = readProperty(
           dependencies.rootState.readRoot(),
@@ -711,6 +749,9 @@ export function createCapturedOuterFleetShipyard(
           return undefined;
         }
         let drew = false;
+        let yardPassRestored = false;
+        let yardStagedCatalog: GameShipyardPartCatalogCandidate | undefined;
+        yardPassCheckpoint = dependencies.controls.checkpoint();
         try {
           settings[MAIN_TAB_SETTING] = MAIN_TAB_INDEX.civic;
           settings[GOV_TABS_SETTING] = GOV_TAB_INDEX.dwarfShipYard;
@@ -731,21 +772,36 @@ export function createCapturedOuterFleetShipyard(
             dependencies.getDocument(),
             host.element,
           );
-          if (plans !== undefined) dependencies.parts.captureFrom(plans);
+          if (plans !== undefined)
+            yardStagedCatalog = dependencies.parts.stageFrom(plans);
         } finally {
-          settings[MAIN_TAB_SETTING] = playerMainTab;
-          settings[GOV_TABS_SETTING] = playerSubTab;
-          settings["animated"] = playerAnimated;
-          removeHiddenHostElement(host);
-          workspace.release();
-          if (!workspace.isIntact()) {
-            reportError("the workspace could not put the panels back");
+          let yardSettingsRestored = false;
+          let yardHostRemoved = false;
+          try {
+            settings[MAIN_TAB_SETTING] = playerMainTab;
+            settings[GOV_TABS_SETTING] = playerSubTab;
+            settings["animated"] = playerAnimated;
+            yardSettingsRestored =
+              Object.is(settings[MAIN_TAB_SETTING], playerMainTab) &&
+              Object.is(settings[GOV_TABS_SETTING], playerSubTab) &&
+              Object.is(settings["animated"], playerAnimated);
+          } finally {
+            try {
+              yardHostRemoved = removeHiddenHostElement(host);
+            } finally {
+              workspace.release();
+            }
           }
+          yardPassRestored =
+            yardSettingsRestored && yardHostRemoved && workspace.isIntact();
+          if (!yardPassRestored)
+            reportError("the workspace could not put the panels back");
         }
         if (!drew) {
           reportError("the shipyard draw did not run");
           return undefined;
         }
+        if (!yardPassRestored) return undefined;
         const control = reboundShipyardControl(
           dependencies.controls,
           generationBefore,
@@ -758,12 +814,18 @@ export function createCapturedOuterFleetShipyard(
               ? `no ${CAPTURED_OUTER_FLEET_SHIPYARD_CONTROL} captured`
               : `${CAPTURED_OUTER_FLEET_SHIPYARD_CONTROL} was not rebound by this capture`,
           );
+          return undefined;
         }
+        yardStagedCatalog?.commit();
+        yardPassSucceeded = true;
         return control;
       } catch (error) {
         reportError(String(error));
         return undefined;
       } finally {
+        if (yardPassCheckpoint !== undefined && !yardPassSucceeded) {
+          dependencies.controls.rejectChanges(yardPassCheckpoint);
+        }
         drawing = false;
       }
     },
@@ -818,6 +880,8 @@ export function createCapturedOuterFleetShipyard(
       }
       if (!dependencies.mountSuppression.available) return undefined;
       drawing = true;
+      let rowPassCheckpoint: ControlCaptureCheckpoint | undefined;
+      let rowPassSucceeded = false;
       try {
         // Preload mode keeps every tab drawn, `loadTab('mTabCivic')` calls `drawShipYard()` itself and
         // `drawShips()` skips its tab gate entirely — so a missing row here means the game did not
@@ -867,6 +931,8 @@ export function createCapturedOuterFleetShipyard(
         // comparison afterwards is per element id rather than per ship.
         const generationsBefore = shipRowGenerations(dependencies.controls);
         let drew = false;
+        let rowPassRestored = false;
+        rowPassCheckpoint = dependencies.controls.checkpoint();
         try {
           borrow.open(ship);
           dependencies.mountSuppression.withoutMounting(() => {
@@ -882,18 +948,28 @@ export function createCapturedOuterFleetShipyard(
             }
           });
         } finally {
-          borrow.restore();
-          removeHiddenHostElement(list);
-          workspace.release();
-          if (!workspace.isIntact()) {
-            reportError("the workspace could not put the panels back");
+          let rowBorrowRestored = false;
+          let rowHostRemoved = false;
+          try {
+            rowBorrowRestored = borrow.restore();
+          } finally {
+            try {
+              rowHostRemoved = removeHiddenHostElement(list);
+            } finally {
+              workspace.release();
+            }
           }
+          rowPassRestored =
+            rowBorrowRestored && rowHostRemoved && workspace.isIntact();
+          if (!rowPassRestored)
+            reportError("the workspace could not put the panels back");
         }
         if (!drew) {
           reportError("the shipyard did not redraw its ship list");
           return undefined;
         }
-        return provenShipRow(
+        if (!rowPassRestored) return undefined;
+        const provenFreshShipRow = provenShipRow(
           dependencies.controls,
           dependencies.getPageWindow(),
           ship,
@@ -906,10 +982,15 @@ export function createCapturedOuterFleetShipyard(
             );
           },
         );
+        rowPassSucceeded = provenFreshShipRow !== undefined;
+        return provenFreshShipRow;
       } catch (error) {
         reportError(String(error));
         return undefined;
       } finally {
+        if (rowPassCheckpoint !== undefined && !rowPassSucceeded) {
+          dependencies.controls.rejectChanges(rowPassCheckpoint);
+        }
         drawing = false;
       }
     },

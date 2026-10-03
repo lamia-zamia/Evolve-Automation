@@ -9,6 +9,7 @@
  * receiver, both produce a different number for these inputs.
  */
 import assert from "node:assert/strict";
+import { installVueCapture } from "../src/adapters/evolve/vue-capture.ts";
 
 import { createCapturedSyndicateMechanics } from "../src/adapters/evolve/captured-syndicate-mechanics.ts";
 import {
@@ -164,6 +165,21 @@ function mechanicsOver(pageWindow) {
 }
 
 function syndicateFor({ root, registry, discovery }) {
+  // Scripted discovery supplies outcomes rather than a real workspace; honor its authority contract.
+  if (registry?.checkpoint && discovery) {
+    const discover = discovery.discover.bind(discovery);
+    discovery.discover = (...args) => {
+      const checkpoint = registry.checkpoint();
+      let succeeded = false;
+      try {
+        const result = discover(...args);
+        succeeded = result.outcome.status === "succeeded";
+        return result;
+      } finally {
+        if (!succeeded) registry.rejectChanges(checkpoint);
+      }
+    };
+  }
   return createCapturedSyndicateMechanics({
     rootState: { readRoot: () => root },
     controls: registry ?? registryFor(scanOver({ ratio: 0.2681, sensor: 47 })),
@@ -539,6 +555,8 @@ const OUTER_READOUTS = [
  * earlier pass produced. This is the real capture's shape.
  */
 function panelBoundRegistry(controlIds = ["spc_redsynd"]) {
+  const vue = { createApp: () => ({}) };
+  const capture = installVueCapture({ Vue: vue });
   const bindings = new Map(
     controlIds.map((elementId) => [
       elementId,
@@ -549,6 +567,8 @@ function panelBoundRegistry(controlIds = ["spc_redsynd"]) {
   return {
     bindings,
     invocations,
+    checkpoint: capture.controls.checkpoint,
+    rejectChanges: capture.controls.rejectChanges,
     /**
      * What the game itself does to bind a readout again, whether the player visited the panel or a
      * pass drew it: a new generation of that region's own closures.
@@ -558,30 +578,17 @@ function panelBoundRegistry(controlIds = ["spc_redsynd"]) {
       assert.notEqual(binding, undefined, `${elementId} is not on this panel`);
       binding.generation += 1;
       binding.scan = scan;
-      binding.current = Object.freeze({
-        elementId,
-        generation: binding.generation,
-        methods: ["scan"],
-      });
+      vue.createApp({ el: `#${elementId}`, methods: { scan } });
+      binding.current = capture.controls.resolve(elementId);
     },
-    resolve: (elementId) => bindings.get(elementId)?.current,
+    resolve: capture.controls.resolve,
     invoke: (resolved, method, args = []) => {
       invocations.push({
         elementId: resolved?.elementId,
         generation: resolved?.generation,
         method,
       });
-      const binding =
-        resolved === undefined ? undefined : bindings.get(resolved.elementId);
-      if (
-        binding === undefined ||
-        resolved !== binding.current ||
-        method !== "scan" ||
-        binding.scan === undefined
-      ) {
-        return { ok: false, reason: "unknown-method" };
-      }
-      return { ok: true, value: binding.scan(...args) };
+      return capture.controls.invoke(resolved, method, args);
     },
     capturedElementIds: () =>
       controlIds.filter(
@@ -908,13 +915,8 @@ for (const sibling of ["spc_moon", "spc_belt"]) {
   });
   assert.deepEqual(syndicate.read("spc_red"), { kind: "invalid" });
   const before = discovery.passes.length;
-  // The next cycle finds the sibling's binding already in the registry, present and live, which is
-  // exactly the trap the requested region was caught by one case earlier.
-  assert.notEqual(
-    registry.resolve(`${sibling}synd`),
-    undefined,
-    `${sibling} has no binding to be leaked`,
-  );
+  assert.ok(registry.capturedElementIds().includes(`${sibling}synd`));
+  assert.equal(registry.resolve(`${sibling}synd`), undefined);
   // The retry fails, and redraws nothing.
   discovery.queue(VIEW_NOT_RESTORED());
   assert.deepEqual(

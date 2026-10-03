@@ -23,7 +23,7 @@ const regional = sample(
   "spc_dwarf",
 );
 const root = {
-  race: { truepath: true },
+  race: { truepath: 1 },
   tech: { syndicate: 1 },
   space: { shipyard: { blueprint: { class: "corvette" } } },
   resource: {
@@ -38,26 +38,33 @@ const root = {
  * and `current()` has no rendered `#shipYardCosts` to read and would fall back to the scratch probe.
  * That is the state in which a price is worth something to check and nothing at all to compute.
  */
-function makeShipyard({ established = true, order = [] } = {}) {
+function makeShipyard({
+  established = true,
+  order = [],
+  establishmentResult = "succeeded",
+} = {}) {
   const calls = { control: 0, established: 0, establish: 0 };
   let held = established;
+  const trusted = { methods: ["avail", "build", "powerText", "redraw"] };
   return {
     calls,
     control() {
       calls.control += 1;
-      return held
-        ? { methods: ["avail", "build", "powerText", "redraw"] }
-        : undefined;
+      return held ? trusted : undefined;
     },
     established(control) {
       calls.established += 1;
-      return control !== undefined;
+      return control?.methods.includes("build") === true;
     },
     establish() {
       calls.establish += 1;
       order.push("establish");
-      held = true;
-      return undefined;
+      held = establishmentResult === "succeeded";
+      return held
+        ? trusted
+        : establishmentResult === "incomplete"
+          ? { methods: ["setVal"] }
+          : undefined;
     },
   };
 }
@@ -179,7 +186,7 @@ for (const absent of [undefined, sample([], undefined)]) {
   assert.deepEqual(order, ["establish", "current", "current"]);
   assert.deepEqual(
     shipyard.calls,
-    { control: 2, established: 2, establish: 1 },
+    { control: 2, established: 3, establish: 1 },
     "the yard was established once and asked twice",
   );
   assert.equal(
@@ -188,6 +195,21 @@ for (const absent of [undefined, sample([], undefined)]) {
     "the held design was never priced by candidate",
   );
   assert.equal(settingsReads.count, 2, "the gate was read once per sample");
+}
+
+// A draw that failed to establish a trusted yard cannot supply the demand's price, even when a
+// cost reader could independently return one. The establishment result must be validated first.
+for (const establishmentResult of ["failed", "incomplete"]) {
+  const order = [];
+  const shipyard = makeShipyard({
+    established: false,
+    establishmentResult,
+    order,
+  });
+  const costs = makeCosts(priced, order);
+  assert.equal(demand(priced, { shipyard, costs }).reader.read(), undefined);
+  assert.deepEqual(order, ["establish"]);
+  assert.deepEqual(costs.calls, { current: 0, price: 0 });
 }
 
 // A yard already established is never re-established, whatever the settings say, and is priced
@@ -320,8 +342,18 @@ for (const prioritizeOuterFleet of ["save", "savereq", "req"]) {
 
 // Anything but a True Path save with the syndicate has no fleet cost to ask about, so the settings
 // are never even consulted.
+for (const truepath of [1, true]) {
+  assert.equal(
+    demand(priced, { rootValue: { ...root, race: { truepath } } }).reader.read()
+      ?.nextShipCost.length,
+    2,
+    `upstream's truthy True Path representation ${truepath} permits demand`,
+  );
+}
 for (const absent of [
+  { ...root, race: { truepath: 0 } },
   { ...root, race: { truepath: false } },
+  { ...root, race: {} },
   { ...root, tech: { syndicate: 0 } },
   { ...root, space: {} },
 ]) {

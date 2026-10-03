@@ -42,6 +42,8 @@ import {
   CAPTURED_OUTER_FLEET_SHIP_ROW_PREFIX,
   CAPTURED_OUTER_FLEET_SHIPYARD_CONTROL,
   createCapturedOuterFleetShipyard,
+  hiddenHostElement,
+  removeHiddenHostElement,
 } from "../src/adapters/evolve/combat/captured-outer-fleet-shipyard.ts";
 import { createCapturedOuterFleetDispatch } from "../src/adapters/evolve/combat/captured-outer-fleet-dispatch.ts";
 import { createCapturedOuterFleetCosts } from "../src/adapters/evolve/combat/captured-outer-fleet-costs.ts";
@@ -1423,6 +1425,8 @@ function makeHarness({
   establish = false,
   /** Systems the game's own destination closure will accept, when a case needs a narrower set. */
   destinations = undefined,
+  /** A focused restoration fault, after the real workspace has released its panels. */
+  workspaceIntact = () => true,
   /**
    * The running game's own Syndicate answer per region, as `{ p, s }`. Distinctive on purpose: no
    * arithmetic over this save's piracy, caps, rival or ships reproduces them, so a pass that reaches
@@ -1486,10 +1490,29 @@ function makeHarness({
     }
   });
 
-  const panels = createGamePanelWorkspace({ getDocument: () => page.document });
+  const realPanels = createGamePanelWorkspace({
+    getDocument: () => page.document,
+  });
+  const panels = {
+    open(request) {
+      const workspace = realPanels.open(request);
+      if (workspace === undefined) return undefined;
+      return {
+        release() {
+          page.releasedControls = capture.controls
+            .capturedElementIds()
+            .map((id) => capture.controls.resolve(id))
+            .filter(Boolean);
+          workspace.release();
+          page.workspaceReleases = (page.workspaceReleases ?? 0) + 1;
+        },
+        isIntact: () => workspace.isIntact() && workspaceIntact(),
+      };
+    },
+  };
   // The yard's own part catalogue, over the markup that yard's draws produce. Wired before the yard
   // exists and called only through it, which is the only route either of them has to the other.
-  const parts = createCapturedOuterFleetParts({
+  const partCapture = createCapturedOuterFleetParts({
     getDocument: () => page.document,
     yard: {
       control: () => shipyard.control(),
@@ -1498,6 +1521,20 @@ function makeHarness({
     },
     onCaptureError: (detail) => faults.push(detail),
   });
+  const parts = {
+    catalog: () => partCapture.catalog(),
+    stageFrom(plans) {
+      const candidate = partCapture.stageFrom(plans);
+      if (candidate === undefined) return undefined;
+      page.catalogStages = (page.catalogStages ?? 0) + 1;
+      return {
+        commit() {
+          page.catalogCommits = (page.catalogCommits ?? 0) + 1;
+          candidate.commit();
+        },
+      };
+    },
+  };
   const shipyard = createCapturedOuterFleetShipyard({
     rootState: { readRoot: () => root },
     controls: capture.controls,
@@ -3479,6 +3516,242 @@ for (const { path, text } of productionSources()) {
   assert.ok(
     !text.includes("CAPTURED_OUTER_FLEET_PARTS"),
     `${path} brought the outer-fleet part list back`,
+  );
+}
+
+// Failed protection cannot grant controls or a copied catalogue from its scratch draw.
+{
+  const root = element("div");
+  const body = element("div");
+  const elsewhere = element("div");
+  root.append(body, elsewhere);
+  const document = createTestDocument(root);
+  document.body = body;
+  const host = hiddenHostElement(document, "reparentedScratch");
+  const removeChild = body.removeChild.bind(body);
+  body.removeChild = (node) => {
+    removeChild(node);
+    elsewhere.append(node);
+    return node;
+  };
+  assert.equal(
+    removeHiddenHostElement(host),
+    false,
+    "a connected reparented scratch host counted as removed",
+  );
+  elsewhere.removeChild(host.element);
+  assert.equal(removeHiddenHostElement(host), true);
+}
+
+{
+  const failedYard = makeHarness({ workspaceIntact: () => false });
+  failedYard.capture.mountSuppression.withoutMounting(() => {
+    failedYard.page.Vue.createApp({
+      el: "#unchangedYardSibling",
+      methods: { ping: () => 7 },
+    });
+  });
+  const unchanged = failedYard.capture.controls.resolve("unchangedYardSibling");
+  assert.equal(
+    failedYard.shipyard.establish(),
+    undefined,
+    "a broken workspace established the yard",
+  );
+  assert.equal(failedYard.page.workspaceReleases, 1);
+  assert.equal(failedYard.page.yardDraws, 1);
+  assert.equal(
+    failedYard.page.catalogStages,
+    1,
+    "valid options were not staged during the scratch draw",
+  );
+  assert.equal(
+    failedYard.page.catalogCommits,
+    undefined,
+    "a failed pass committed its staged options",
+  );
+  for (const id of ["shipPlans", "mTabCivic"]) {
+    const retained = failedYard.page.releasedControls.find(
+      (handle) => handle.elementId === id,
+    );
+    assert.notEqual(retained, undefined, `the scratch draw did not bind ${id}`);
+    assert.equal(failedYard.capture.controls.resolve(id), undefined);
+    const method = id === "shipPlans" ? "powerText" : "swapTab";
+    assert.equal(
+      failedYard.capture.controls.invoke(retained, method, [0]).ok,
+      false,
+    );
+    assert.equal(
+      failedYard.capture.synthesis.invoke({ elementId: id, method, args: [0] })
+        .ok,
+      false,
+    );
+  }
+  assert.equal(
+    failedYard.parts.catalog(),
+    undefined,
+    "a failed draw committed its catalogue",
+  );
+  assert.equal(
+    failedYard.page.yardDraws,
+    1,
+    "a failed catalogue bought another scratch draw",
+  );
+  assert.deepEqual(failedYard.capture.controls.invoke(unchanged, "ping"), {
+    ok: true,
+    value: 7,
+  });
+  // A genuine later visit rebinds both controls and offers a passive catalogue normally.
+  failedYard.root.settings.civTabs = 2;
+  failedYard.root.settings.govTabs = 5;
+  failedYard.page.document
+    .getElementById("mTabCivic")
+    .append(element("div", { id: "dwarfShipYard" }));
+  failedYard.page.Vue.createApp({
+    el: "#mTabCivic",
+    methods: failedYard.game.civicMethods,
+  });
+  failedYard.game.drawShipYard();
+  for (const id of ["shipPlans", "mTabCivic"]) {
+    const old = failedYard.page.releasedControls.find(
+      (handle) => handle.elementId === id,
+    );
+    assert.ok(
+      failedYard.capture.controls.resolve(id).generation > old.generation,
+    );
+  }
+  assert.equal(
+    failedYard.capture.controls.invoke(
+      failedYard.shipyard.control(),
+      "powerText",
+    ).ok,
+    true,
+  );
+  assert.equal(
+    failedYard.capture.synthesis.invoke({
+      elementId: "mTabCivic",
+      method: "swapTab",
+      args: [5],
+    }).ok,
+    true,
+  );
+  assert.notEqual(
+    failedYard.parts.catalog(),
+    undefined,
+    "the real rendered catalogue could not recover",
+  );
+}
+
+// A scratch host whose removal fails still cannot masquerade as a passive player-rendered yard.
+{
+  const strandedYard = makeHarness();
+  const removeChild = strandedYard.page.body.removeChild;
+  strandedYard.page.body.removeChild = function (child) {
+    return child.id === "dwarfShipYard" ? child : removeChild.call(this, child);
+  };
+  assert.equal(strandedYard.shipyard.establish(), undefined);
+  const strandedHost =
+    strandedYard.page.document.getElementById("dwarfShipYard");
+  const strandedPlans = strandedYard.page.document.getElementById("shipPlans");
+  assert.notEqual(
+    strandedHost,
+    null,
+    "the failed removal did not leave the scratch host",
+  );
+  assert.notEqual(
+    parseShipyardPartCatalog(strandedPlans),
+    undefined,
+    "the scratch catalogue was not readable",
+  );
+  assert.equal(strandedYard.page.catalogStages, 1);
+  assert.equal(strandedYard.page.catalogCommits, undefined);
+  assert.equal(strandedYard.capture.controls.resolve("shipPlans"), undefined);
+  assert.equal(
+    strandedYard.parts.catalog(),
+    undefined,
+    "stranded scratch markup became passive authority",
+  );
+  assert.equal(
+    strandedYard.costs.current(),
+    undefined,
+    "a cost nested inside stranded scratch markup became passive authority",
+  );
+  assert.equal(strandedYard.page.yardDraws, 1);
+
+  strandedYard.page.body.removeChild = removeChild;
+  strandedYard.page.body.removeChild(strandedHost);
+  strandedYard.root.settings.civTabs = 2;
+  strandedYard.root.settings.govTabs = 5;
+  strandedYard.page.document
+    .getElementById("mTabCivic")
+    .append(element("div", { id: "dwarfShipYard" }));
+  strandedYard.game.drawShipYard();
+  assert.notEqual(
+    strandedYard.parts.catalog(),
+    undefined,
+    "a real rendered yard did not recover",
+  );
+}
+
+// A rejected drawShips pass rejects the entire newly-bound list, including siblings.
+{
+  let intact = true;
+  const first = makeShip({ name: "Failed row" });
+  const sibling = makeShip({ name: "Failed sibling" });
+  const failedRows = makeHarness({
+    establish: true,
+    workspaceIntact: () => intact,
+  });
+  failedRows.root.space.shipyard.ships.push(first, sibling);
+  intact = false;
+  const settingsBefore = { ...failedRows.root.settings };
+  const viewBeforeFailure = structuredClone(failedRows.game.shipyardView());
+  assert.equal(
+    failedRows.shipyard.captureRow(first),
+    undefined,
+    "a broken workspace returned a row",
+  );
+  for (const id of ["shipReg0", "shipReg1"]) {
+    const retained = failedRows.page.releasedControls.find(
+      (handle) => handle.elementId === id,
+    );
+    assert.notEqual(retained, undefined);
+    assert.equal(failedRows.capture.controls.resolve(id), undefined);
+    assert.equal(
+      failedRows.capture.controls.invoke(retained, "show", [0]).ok,
+      false,
+    );
+    assert.equal(
+      failedRows.capture.synthesis.invoke({
+        elementId: id,
+        method: "show",
+        args: [0],
+      }).ok,
+      false,
+    );
+  }
+  assert.equal(failedRows.shipyard.rowFor(first), undefined);
+  assert.equal(failedRows.shipyard.rowFor(sibling), undefined);
+  assert.notDeepEqual(
+    failedRows.dispatch.dispatchShipyardShip({ index: 0, region: "spc_red" }),
+    { kind: "launched" },
+  );
+  assert.deepEqual(sentTo(failedRows.page), []);
+  assert.deepEqual(failedRows.root.settings, settingsBefore);
+  assert.deepEqual(failedRows.game.shipyardView(), viewBeforeFailure);
+  assert.equal(failedRows.page.document.getElementById("shipList"), null);
+  // The player later draws the real list, whose newer generations are authoritative.
+  intact = true;
+  failedRows.root.settings.civTabs = 2;
+  failedRows.root.settings.govTabs = 5;
+  failedRows.page.document
+    .getElementById("mTabCivic")
+    .append(element("div", { id: "dwarfShipYard" }));
+  failedRows.game.drawShipYard();
+  assert.notEqual(failedRows.capture.controls.resolve("shipReg0"), undefined);
+  assert.notEqual(failedRows.capture.controls.resolve("shipReg1"), undefined);
+  assert.deepEqual(
+    failedRows.dispatch.dispatchShipyardShip({ index: 0, region: "spc_red" }),
+    { kind: "launched" },
   );
 }
 

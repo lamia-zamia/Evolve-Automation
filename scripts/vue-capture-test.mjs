@@ -41,6 +41,68 @@ function makeRoot(days) {
   };
 }
 
+// Rejection belongs to changed generations, never their ids or unchanged siblings.
+for (const rebound of [false, true]) {
+  const vue = makeVue();
+  const capture = installVueCapture({ Vue: vue });
+  let invoked = 0;
+  const bind = (id) =>
+    vue.createApp({
+      el: `#${id}`,
+      data: { source: id },
+      methods: { action: () => ++invoked },
+    });
+  bind("survivor");
+  const survivor = capture.controls.resolve("survivor");
+  if (rebound) bind("foo");
+  const original = capture.controls.resolve("foo");
+  const checkpoint = capture.controls.checkpoint();
+  bind("foo");
+  const failed = capture.controls.resolve("foo");
+  assert.equal(failed.generation, rebound ? 2 : 1);
+  capture.controls.rejectChanges(checkpoint);
+  assert.equal(capture.controls.resolve("foo"), undefined);
+  assert.equal(
+    failed.data,
+    undefined,
+    "rejected binding data remained readable through a retained handle",
+  );
+  assert.equal(
+    capture.controls.invoke(failed, "action").reason,
+    "stale-control",
+  );
+  assert.equal(
+    capture.synthesis.invoke({ elementId: "foo", method: "action" }).reason,
+    "stale-control",
+  );
+  if (original)
+    assert.equal(
+      capture.controls.invoke(original, "action").reason,
+      "stale-control",
+    );
+  if (original) assert.equal(original.data, undefined);
+  assert.equal(invoked, 0);
+  const unchangedCheckpoint = capture.controls.checkpoint();
+  capture.controls.rejectChanges(unchangedCheckpoint);
+  assert.equal(
+    capture.controls.resolve("foo"),
+    undefined,
+    "an unchanged rejected generation regained authority",
+  );
+  assert.equal(capture.controls.invoke(survivor, "action").ok, true);
+  assert.ok(capture.controls.capturedElementIds().includes("foo"));
+  bind("foo");
+  const recovered = capture.controls.resolve("foo");
+  assert.equal(recovered.generation, rebound ? 3 : 2);
+  assert.deepEqual(recovered.data, { source: "foo" });
+  assert.equal(capture.controls.invoke(recovered, "action").ok, true);
+  assert.equal(
+    capture.synthesis.invoke({ elementId: "foo", method: "action" }).ok,
+    true,
+  );
+  capture.uninstall();
+}
+
 // --- root shape ------------------------------------------------------------------------------
 
 assert.equal(isGameRootShape(makeRoot(1)), true);
