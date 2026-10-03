@@ -85,20 +85,25 @@ const SHIP_PARTS = {
   ],
 };
 
-function createFixture({ append = true } = {}) {
-  const ships = [];
+function createFixture({
+  append = true,
+  initialShips = [],
+  blueprint,
+  buildEffect,
+} = {}) {
+  const ships = [...initialShips];
   const calls = [];
   const avail = [];
-  const data = { s: { ships, sort: false } };
+  const data = { s: { ships, blueprint, sort: false } };
   const methods = {
     avail: (type, index, part) => {
       avail.push([type, index, part]);
       return part === "railgun";
     },
     setVal: (type, part) => calls.push(["setVal", type, part]),
-    powerText: () => "100kW",
     build: () => {
       calls.push(["build"]);
+      if (buildEffect) return buildEffect(ships);
       if (append) ships.push({ location: outerAssignmentPoint("spc_dwarf") });
     },
   };
@@ -172,7 +177,6 @@ assert.equal(
   }),
   true,
 );
-assert.equal(ready.controls.hasShipPower("shipPlans"), true);
 assert.deepEqual(ready.controls.buildShip({ elementId: "shipPlans" }), {
   actionable: true,
   builtIndex: 0,
@@ -185,6 +189,42 @@ assert.deepEqual(noTransition.controls.buildShip({ elementId: "shipPlans" }), {
   builtIndex: null,
 });
 assert.equal(noTransition.ships.length, 0);
+
+// The postcondition follows live identities even when a native draw reorders ships. Reusing an
+// old identity, losing an old ship, appending the wrong design or appending multiple ships is not
+// evidence of the one intended native build.
+{
+  const blueprint = { class: "corvette", weapon: "railgun" };
+  const existing = { ...blueprint, name: "Already there" };
+  const intended = { ...blueprint, name: "New ship" };
+  for (const [label, buildEffect, builtIndex] of [
+    ["intended", (ships) => ships.push(intended), 1],
+    ["reordered", (ships) => ships.unshift(intended), 0],
+    ["wrong", (ships) => ships.push({ ...intended, weapon: "laser" }), null],
+    ["reused identity", (ships) => ships.push(existing), null],
+    ["multiple", (ships) => ships.push(intended, { ...intended }), null],
+    [
+      "lost identity",
+      (ships) => ships.splice(0, 1, intended, { ...intended }),
+      null,
+    ],
+  ]) {
+    const fixture = createFixture({
+      initialShips: [existing],
+      blueprint,
+      buildEffect,
+    });
+    assert.deepEqual(
+      fixture.controls.buildShip({
+        elementId: "shipPlans",
+        expectedBlueprint: blueprint,
+      }),
+      { actionable: true, builtIndex },
+      label,
+    );
+    assert.deepEqual(fixture.calls, [["build"]], label);
+  }
+}
 
 // A full captured composition. One pass builds a ship and the same pass sends it: the dispatch is
 // reached through the game's own ship-row closure, and whether it worked is judged from the yard's
@@ -275,7 +315,6 @@ const capturedMethods = {
   setVal: (type, part) => {
     yard.blueprint[type] = part;
   },
-  powerText: () => "100kW",
   build: () => {
     capturedBuilds++;
     yard.ships.push({
@@ -897,23 +936,29 @@ function createRegistryWith(overrides, live = yard) {
   };
 }
 
-// Upstream renders a power shortfall with its `danger` class, which is what `hasShipPower` looks
-// for. The pass refuses to build, having already rewritten the laser into the configured railgun —
+// Native build refuses this underpowered design by appending nothing, having already rewritten
+// the laser into the configured railgun —
 // and `shipCosts()` prices a railgun in Iron where a laser is paid in Iridium and Nano Tube, so the
 // row the demand sample froze no longer exists.
 yard.ships.length = 0;
 yard.blueprint.weapon = "laser";
+dispatch.requests.length = 0;
 let powerShortBuilds = 0;
 const powerShortResult = createOuterControl(
   createRegistryWith({
-    powerText: () => '<span class="danger">-50kW</span>',
     build: () => {
       powerShortBuilds += 1;
     },
   }),
 ).autoFleetOuter();
-assert.equal(powerShortResult.outcome.status, "rejected");
-assert.equal(powerShortBuilds, 0);
+assert.equal(powerShortResult.outcome.status, "stale");
+assert.equal(
+  powerShortResult.outcome.failure?.code,
+  "captured-outer-fleet-build-postcondition-failed",
+);
+assert.equal(powerShortBuilds, 1);
+assert.equal(yard.ships.length, 0);
+assert.equal(dispatch.requests.length, 0);
 assert.equal(yard.blueprint.weapon, "railgun");
 assert.equal(powerShortResult.shipTargetChanged, true);
 
@@ -921,9 +966,9 @@ assert.equal(powerShortResult.shipTargetChanged, true);
 // ship was appended, so the cycle's sample survives.
 yard.ships.length = 0;
 const idlePowerShortResult = createOuterControl(
-  createRegistryWith({ powerText: () => '<span class="danger">-50kW</span>' }),
+  createRegistryWith({ build: () => {} }),
 ).autoFleetOuter();
-assert.equal(idlePowerShortResult.outcome.status, "rejected");
+assert.equal(idlePowerShortResult.outcome.status, "stale");
 assert.equal(yard.blueprint.weapon, "railgun");
 assert.equal(idlePowerShortResult.shipTargetChanged, false);
 

@@ -45,7 +45,7 @@ function makeShipyard({
 } = {}) {
   const calls = { control: 0, established: 0, establish: 0 };
   let held = established;
-  const trusted = { methods: ["avail", "build", "powerText", "redraw"] };
+  const trusted = { methods: ["avail", "build", "redraw"] };
   return {
     calls,
     control() {

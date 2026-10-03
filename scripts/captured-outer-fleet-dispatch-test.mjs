@@ -9,7 +9,7 @@
  * workspace, both real captures, and the real outer-fleet composition.
  *
  * **The topology is the point of this transcription.** Upstream `drawShipYard()` binds `#shipPlans`
- * with the yard's *design* methods — `avail`, `setVal`, `powerText`, `build`, `redraw` and the rest
+ * with the yard's *design* methods — `avail`, `setVal`, `crewText`, `build`, `redraw` and the rest
  * of its own — and nothing else. Upstream `drawShips()` then binds each `#shipReg${i}` separately,
  * with the ship as its data, and `pickDest` and `show` exist only there. A stand-in that folds the
  * row methods onto the yard control describes a control the game never builds, and every assertion
@@ -1085,7 +1085,6 @@ function installGame(page, root) {
         ? page.designCrew
         : shipCrewSize(yard.blueprint);
     },
-    powerText: () => page.powerText ?? "100kW",
     fireText() {
       return 0;
     },
@@ -1112,6 +1111,8 @@ function installGame(page, root) {
         ([resourceId, amount]) => poolHeld(resourceId, pool) >= amount,
       );
       page.buildCount = (page.buildCount ?? 0) + 1;
+      // The native power gate is a fixture verdict, never a locally reproduced formula.
+      if (page.nativeBuildRefuses) return;
       if (!affordable) {
         page.queuedBuilds = (page.queuedBuilds ?? 0) + 1;
         return;
@@ -1637,11 +1638,26 @@ function rowControl(capture, index) {
 function productionSources() {
   const root = fileURLToPath(new URL("../src", import.meta.url));
   return readdirSync(root, { recursive: true, withFileTypes: true })
-    .filter((entry) => entry.isFile() && entry.name.endsWith(".ts"))
+    .filter((entry) => entry.isFile() && /\.(?:ts|js)$/.test(entry.name))
     .map((entry) => {
       const path = join(entry.parentPath ?? root, entry.name);
       return { path, text: readFileSync(path, "utf8") };
     });
+}
+
+// Ship power is private native build mechanics. Neither presentation reads nor a replacement
+// formula/table may become an automation authority, including in compatibility JavaScript.
+for (const source of productionSources()) {
+  assert.doesNotMatch(
+    source.text,
+    /\b(?:hasShipPower|powerText|shipPower)\b/,
+    source.path,
+  );
+  assert.doesNotMatch(
+    source.text,
+    /\b(?:solar|diesel|fission|fusion|antimatter|elerium)\s*:\s*\d/,
+    `a local reactor-output table appeared in ${source.path}`,
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -1680,14 +1696,7 @@ const yardControl = never.capture.controls.resolve(
 );
 assert.equal(yardControl.elementId, CAPTURED_OUTER_FLEET_SHIPYARD_CONTROL);
 // Exactly the design methods this feature reaches, and every one of them present.
-for (const method of [
-  "avail",
-  "setVal",
-  "crewText",
-  "powerText",
-  "build",
-  "redraw",
-]) {
+for (const method of ["avail", "setVal", "crewText", "build", "redraw"]) {
   assert.ok(
     yardControl.methods.includes(method),
     `shipPlans is missing ${method}`,
@@ -2993,6 +3002,123 @@ assert.equal(
 // Current Design: the yard's own blueprint, normalized by the yard.
 // ---------------------------------------------------------------------------
 
+// Presentation methods are optional and never consulted for buildability. The native build and
+// the intended ship's synchronous appearance decide whether this pass may dispatch.
+for (const presentation of ["absent", "throws", "arbitrary", "danger"]) {
+  const native = makeHarness();
+  let presentationCalls = 0;
+  if (presentation === "absent") delete native.game.shipyardMethods.powerText;
+  else
+    native.game.shipyardMethods.powerText = () => {
+      presentationCalls += 1;
+      if (presentation === "throws")
+        throw new Error("presentation unavailable");
+      return presentation === "danger"
+        ? '<span class="danger">-50kW</span>'
+        : "<div>unrelated presentation</div>";
+    };
+  assert.notEqual(native.shipyard.establish(), undefined, presentation);
+  const settings = presetSettings();
+  const pass = outerFleetControl(native, () => settings).autoFleetOuter();
+  assert.equal(
+    pass.outcome.status,
+    "succeeded",
+    JSON.stringify({ presentation, outcome: pass.outcome }),
+  );
+  assert.equal(native.page.buildCount, 1, presentation);
+  assert.equal(native.root.space.shipyard.ships.length, 1, presentation);
+  assert.deepEqual(sentTo(native.page), [
+    { kind: "sendShipTo", id: 0, region: "spc_red", moved: true },
+  ]);
+  assert.equal(presentationCalls, 0, presentation);
+  assert.deepEqual(native.faults, [], presentation);
+}
+
+// The same affordable quote can lead to a native refusal or a queued order as live state changes.
+// Both outcomes append nothing. Only the native method decides, and no dispatch follows either.
+for (const nativeOutcome of [
+  "underpowered",
+  "queued",
+  "throws",
+  "unavailable",
+  "stale",
+]) {
+  const native = makeHarness();
+  native.root.space.shipyard.blueprint.weapon = "laser";
+  const build = native.game.shipyardMethods.build;
+  if (nativeOutcome === "underpowered") native.page.nativeBuildRefuses = true;
+  if (nativeOutcome === "queued")
+    native.game.shipyardMethods.build = () => {
+      // Readiness saw the native affordable cost row; payment changes only at invocation.
+      for (const resource of Object.values(native.root.resource)) {
+        resource.amount = 0;
+        if (resource.regAmount)
+          for (const pool of Object.keys(resource.regAmount))
+            resource.regAmount[pool] = 0;
+      }
+      return build();
+    };
+  if (nativeOutcome === "throws")
+    native.game.shipyardMethods.build = () => {
+      native.page.buildCount = (native.page.buildCount ?? 0) + 1;
+      throw new Error("native build unavailable");
+    };
+  assert.notEqual(native.shipyard.establish(), undefined);
+  let executionHarness = native;
+  if (nativeOutcome === "unavailable" || nativeOutcome === "stale") {
+    const invoke = native.capture.controls.invoke;
+    const failBuild = (handle, method, args) =>
+      method === "build"
+        ? invoke(
+            nativeOutcome === "stale"
+              ? { ...handle, generation: handle.generation - 1 }
+              : handle,
+            nativeOutcome === "unavailable" ? "missingBuild" : method,
+            args,
+          )
+        : invoke(handle, method, args);
+    executionHarness = {
+      ...native,
+      capture: {
+        ...native.capture,
+        controls: { ...native.capture.controls, invoke: failBuild },
+      },
+    };
+  }
+  const settings = presetSettings();
+  const result = outerFleetControl(
+    executionHarness,
+    () => settings,
+  ).autoFleetOuter();
+  const noAppend =
+    nativeOutcome === "underpowered" || nativeOutcome === "queued";
+  assert.equal(
+    result.outcome.status,
+    noAppend ? "stale" : "rejected",
+    nativeOutcome,
+  );
+  assert.equal(
+    result.outcome.failure?.code,
+    noAppend
+      ? "captured-outer-fleet-build-postcondition-failed"
+      : "captured-outer-fleet-build-not-invoked",
+    nativeOutcome,
+  );
+  assert.doesNotMatch(result.outcome.failure?.message ?? "", /power/i);
+  assert.equal(
+    native.page.buildCount ?? 0,
+    noAppend || nativeOutcome === "throws" ? 1 : 0,
+  );
+  assert.equal(
+    native.page.queuedBuilds ?? 0,
+    nativeOutcome === "queued" ? 1 : 0,
+  );
+  assert.equal(native.root.space.shipyard.ships.length, 0, nativeOutcome);
+  assert.deepEqual(sentTo(native.page), [], nativeOutcome);
+  assert.equal(native.root.space.shipyard.blueprint.weapon, "railgun");
+  assert.equal(result.shipTargetChanged, true, nativeOutcome);
+}
+
 // `drawShipYard()` normalizes a `special` into every blueprint whether or not the special-slot
 // selector was ever researched, so a save that never unlocked it still holds a design with one.
 // Building that design must not begin by asking the yard whether it offers the special its own
@@ -3726,7 +3852,7 @@ for (const { path, text } of productionSources()) {
     );
     assert.notEqual(retained, undefined, `the scratch draw did not bind ${id}`);
     assert.equal(failedYard.capture.controls.resolve(id), undefined);
-    const method = id === "shipPlans" ? "powerText" : "swapTab";
+    const method = id === "shipPlans" ? "crewText" : "swapTab";
     assert.equal(
       failedYard.capture.controls.invoke(retained, method, [0]).ok,
       false,
@@ -3773,7 +3899,7 @@ for (const { path, text } of productionSources()) {
   assert.equal(
     failedYard.capture.controls.invoke(
       failedYard.shipyard.control(),
-      "powerText",
+      "crewText",
     ).ok,
     true,
   );

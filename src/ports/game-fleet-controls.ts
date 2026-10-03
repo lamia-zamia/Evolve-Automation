@@ -49,18 +49,15 @@ export interface GameFleetBuildRequest {
   readonly expectedBlueprint?: Readonly<Record<string, string>>;
 }
 
-/** What a build attempt did. */
-export interface GameFleetBuildResult {
-  /** Whether the build control was actionable at all. */
-  readonly actionable: boolean;
-
-  /**
-   * The new ship's position in the shipyard's own list, or null when no ship
-   * matching `expectedBlueprint` was appended. A cost the yard cannot pay
-   * queues the order instead of building, and a queued order appends nothing.
-   */
-  readonly builtIndex: number | null;
-}
+/**
+ * What the native build attempt proved. `actionable` means the captured method completed without
+ * an invocation error, never that a ship was built. A null index after invocation covers native
+ * refusal, queueing, and any failed live ship-list postcondition without guessing a private cause.
+ * A non-null index proves exactly one new ship matching `expectedBlueprint`, by live identity.
+ */
+export type GameFleetBuildResult =
+  | { readonly actionable: false; readonly builtIndex: null }
+  | { readonly actionable: true; readonly builtIndex: number | null };
 
 export interface GameFleetControlsPort {
   /** Whether the game currently renders the panel's control. */
@@ -89,12 +86,6 @@ export interface GameFleetControlsPort {
   currentDesign(
     elementId: string,
   ): Readonly<Record<string, unknown>> | undefined;
-
-  /**
-   * Whether the configured blueprint has enough power to build. False means
-   * the control could not confirm it.
-   */
-  hasShipPower(elementId: string): boolean;
 
   /**
    * Builds one ship of the configured blueprint. A built ship starts at the

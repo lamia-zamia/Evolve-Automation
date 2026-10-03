@@ -16,7 +16,7 @@
  * whether the ship actually moved. None of that is restated here.
  *
  * **`pickDest` is a ship-row method, not a yard method.** `drawShipYard()` binds `#shipPlans` with
- * the yard's design methods — `avail`, `setVal`, `powerText`, `build`, `redraw` and the rest of its
+ * the yard's design methods — `avail`, `setVal`, `crewText`, `build`, `redraw` and the rest of its
  * own — and `drawShips()` binds each `#shipReg${i}` separately, with the ship as its data. `pickDest`
  * and the row's `show(id)` exist only on that row. So a newly built ship cannot be dispatched
  * through the yard control: it needs a row of its own, and a ship built while the player is

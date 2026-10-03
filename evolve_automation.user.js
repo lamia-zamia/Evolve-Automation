@@ -21342,7 +21342,6 @@
     "avail",
     "build",
     CAPTURED_OUTER_FLEET_SHIPYARD_CREW_METHOD,
-    "powerText",
     OUTER_FLEET_SHIPYARD_REDRAW_METHOD,
     "setVal"
   ]), OUTER_FLEET_SHIP_ROW_METHODS = Object.freeze([
@@ -21798,10 +21797,6 @@
         );
         return isRecord(blueprint) ? Object.freeze({ ...blueprint }) : void 0;
       },
-      hasShipPower(elementId) {
-        let result = methodValue(dependencies, elementId, "powerText");
-        return result.ok && typeof result.value == "string" && !result.value.includes("danger");
-      },
       buildShip(request) {
         let handle = dependencies.controls.resolve(request.elementId);
         if (handle === void 0 || !handle.methods.includes("build") || request.expectedBlueprint !== void 0 && !matchesStringRecordFields(
@@ -21814,14 +21809,12 @@
         let before = [...beforeList];
         if (!dependencies.controls.invoke(handle, "build").ok) return NOT_ACTIONABLE;
         let after = capturedOuterFleetShipList(handle);
-        if (after === void 0 || after.length <= before.length)
+        if (after === void 0 || after.length !== before.length + 1 || before.some((ship) => !after.includes(ship)))
           return { actionable: !0, builtIndex: null };
-        let newIndex = after.findIndex(
-          (ship) => !before.includes(ship) && (request.expectedBlueprint === void 0 || matchesStringRecordFields(ship, request.expectedBlueprint))
-        );
+        let appended = after.filter((ship) => !before.includes(ship)), intended = appended[0];
         return {
           actionable: !0,
-          builtIndex: newIndex >= 0 ? newIndex : request.expectedBlueprint === void 0 ? after.length - 1 : null
+          builtIndex: appended.length === 1 && (request.expectedBlueprint === void 0 || matchesStringRecordFields(intended, request.expectedBlueprint)) ? after.indexOf(intended) : null
         };
       },
       addShips(request) {
@@ -22605,11 +22598,6 @@
           "captured-outer-fleet-blueprint-invalid",
           "captured outer fleet blueprint is incomplete"
         );
-      if (!dependencies.controls.hasShipPower(CAPTURED_OUTER_FLEET_SHIPYARD_CONTROL))
-        return rejected(
-          "captured-outer-fleet-power-unavailable",
-          "outer fleet blueprint has insufficient power"
-        );
       let build = dependencies.controls.buildShip({
         elementId: CAPTURED_OUTER_FLEET_SHIPYARD_CONTROL,
         expectedBlueprint
@@ -22617,7 +22605,7 @@
       if (!build.actionable)
         return rejected(
           "captured-outer-fleet-build-not-invoked",
-          "outer fleet build control was not invoked"
+          "outer fleet native build invocation could not be completed"
         );
       if (build.builtIndex === null)
         return stale(

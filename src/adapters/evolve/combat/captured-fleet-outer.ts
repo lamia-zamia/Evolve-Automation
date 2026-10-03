@@ -948,8 +948,7 @@ export function createCapturedOuterFleetAdapter(
     decision: Readonly<OuterFleetBuildDecision>,
   ): CommandExecutionOutcome {
     // Planning should already have refused every candidate without this authority, but the execution
-    // defends itself rather than trusting that. Refused before the first write, and before any price,
-    // power check or dispatch.
+    // defends itself rather than trusting that. Refused before the first write or native build.
     const dimensions = provenDimensions(active);
     if (dimensions === undefined)
       return stale(
@@ -1018,13 +1017,6 @@ export function createCapturedOuterFleetAdapter(
         "captured-outer-fleet-blueprint-invalid",
         "captured outer fleet blueprint is incomplete",
       );
-    if (
-      !dependencies.controls.hasShipPower(CAPTURED_OUTER_FLEET_SHIPYARD_CONTROL)
-    )
-      return rejected(
-        "captured-outer-fleet-power-unavailable",
-        "outer fleet blueprint has insufficient power",
-      );
     const build = dependencies.controls.buildShip({
       elementId: CAPTURED_OUTER_FLEET_SHIPYARD_CONTROL,
       expectedBlueprint,
@@ -1032,7 +1024,7 @@ export function createCapturedOuterFleetAdapter(
     if (!build.actionable)
       return rejected(
         "captured-outer-fleet-build-not-invoked",
-        "outer fleet build control was not invoked",
+        "outer fleet native build invocation could not be completed",
       );
     if (build.builtIndex === null)
       return stale(

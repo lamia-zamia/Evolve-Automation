@@ -1,7 +1,6 @@
 /**
  * Adapts the captured `shipPlans` Vue control to the narrow fleet-controls port: which parts are
- * offered, how a blueprint is written, what design the yard holds, whether it has the power to build,
- * and the build itself.
+ * offered, how a blueprint is written, what design the yard holds, and the native build outcome.
  *
  * The captured component's `s` field is the live shipyard object, and it is the only captured value
  * that can prove a build appended a ship; the root state is the game's pre-period clone and cannot
@@ -111,15 +110,6 @@ export function createCapturedFleetControls(
       return isRecord(blueprint) ? Object.freeze({ ...blueprint }) : undefined;
     },
 
-    hasShipPower(elementId: string): boolean {
-      const result = methodValue(dependencies, elementId, "powerText");
-      return (
-        result.ok &&
-        typeof result.value === "string" &&
-        !result.value.includes("danger")
-      );
-    },
-
     buildShip(request: GameFleetBuildRequest): GameFleetBuildResult {
       const handle = dependencies.controls.resolve(request.elementId);
       if (handle === undefined || !handle.methods.includes("build")) {
@@ -140,25 +130,26 @@ export function createCapturedFleetControls(
       const result = dependencies.controls.invoke(handle, "build");
       if (!result.ok) return NOT_ACTIONABLE;
       const after = capturedOuterFleetShipList(handle);
-      if (after === undefined || after.length <= before.length) {
-        // The game may have accepted the click by queueing a future order. No ship began its
-        // outer-fleet action yet, so the caller must not report a dispatched fleet.
+      if (
+        after === undefined ||
+        after.length !== before.length + 1 ||
+        before.some((ship) => !after.includes(ship))
+      ) {
+        // Native refusal and queueing both append nothing. Any unproven list transition also
+        // fails closed; the caller must not report a build or dispatch from invocation alone.
         return { actionable: true, builtIndex: null };
       }
-      const newIndex = after.findIndex(
-        (ship) =>
-          !before.includes(ship) &&
-          (request.expectedBlueprint === undefined ||
-            matchesStringRecordFields(ship, request.expectedBlueprint)),
-      );
+      // A native draw may reorder the list, so identify the new ship by identity rather than its
+      // position. Exactly one new identity must exist, and it must be the requested native design.
+      const appended = after.filter((ship) => !before.includes(ship));
+      const intended = appended[0];
+      const matches =
+        appended.length === 1 &&
+        (request.expectedBlueprint === undefined ||
+          matchesStringRecordFields(intended, request.expectedBlueprint));
       return {
         actionable: true,
-        builtIndex:
-          newIndex >= 0
-            ? newIndex
-            : request.expectedBlueprint === undefined
-              ? after.length - 1
-              : null,
+        builtIndex: matches ? after.indexOf(intended) : null,
       };
     },
 
