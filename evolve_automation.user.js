@@ -14974,7 +14974,7 @@
         "workers"
       ), workers = finiteNonNegative(craterWorker);
       if (workers === void 0) return;
-      craterLines = Math.floor(surfaceOn / 2 * (workers / highPopulationScale));
+      craterLines = Math.floor(surfaceOn / 2 * workers / highPopulationScale);
     }
     let isolation = !!readProperty(readProperty(root, "tech"), "isolation"), maximum = cityOn + redOn + interstellarOn * 2 + portalOn * portalLines + undergroundOn * 2 + craterLines + industrialOn * 2 + tauOn * (isolation ? 5 : 3);
     return Number.isSafeInteger(maximum) && maximum >= 0 ? maximum : void 0;

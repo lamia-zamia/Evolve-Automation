@@ -120,7 +120,8 @@ export function readCapturedFactoryCapacity(root: unknown): number | undefined {
     );
     const workers = finiteNonNegative(craterWorker);
     if (workers === undefined) return undefined;
-    craterLines = Math.floor((surfaceOn / 2) * (workers / highPopulationScale));
+    // Preserve `industry.js:factoryData.factoryCapacity()` evaluation order at floor boundaries.
+    craterLines = Math.floor(((surfaceOn / 2) * workers) / highPopulationScale);
   }
   const isolation = Boolean(
     readProperty(readProperty(root, "tech"), "isolation"),
