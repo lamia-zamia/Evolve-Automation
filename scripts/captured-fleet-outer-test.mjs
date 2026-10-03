@@ -526,6 +526,147 @@ assert.equal(createOuterControl().autoFleetOuter().outcome.status, "succeeded");
 assert.equal(capturedBuilds, buildsBeforeAuthority);
 assert.equal(yard.ships.length, 0);
 
+// Real Bombardier state is rank 1. A destroyer takes three crew rather than four,
+// but loses 3.675 Authority rather than the old 2.1 prediction.
+{
+  const savedClass = capturedSettings.fleet_outer_class;
+  const savedSetVal = capturedMethods.setVal;
+  let writes = 0;
+  capturedMethods.setVal = (...args) => {
+    writes++;
+    savedSetVal(...args);
+  };
+  function authorityCandidate() {
+    const adapter = createCapturedOuterFleetAdapter({
+      rootState: {
+        readRoot: () => root,
+        isReactivitySuppressed: () => false,
+        subscribeRootReplaced: () => () => {},
+      },
+      controls: createCapturedFleetControls({
+        controls: capturedRegistry,
+        parts: { catalog: () => partCatalog },
+      }),
+      costs,
+      parts: { catalog: () => partCatalog },
+      dispatch,
+      syndicate,
+      readSettings: () => effectiveSettings,
+    });
+    const cycle = planOuterFleetCycle(adapter.reader.readCycle());
+    assert.equal(cycle.kind, "select-target");
+    const target = planOuterFleetTarget(
+      cycle,
+      adapter.reader.readTargeting(cycle),
+    );
+    assert.equal(target.kind, "select-blueprint");
+    const candidate = planOuterFleetBlueprint(
+      adapter.reader.readBlueprint(target),
+    );
+    assert.equal(candidate.kind, "check-candidate");
+    const input = adapter.reader.readCandidate(candidate);
+    return { input, decision: planOuterFleetCandidate(input) };
+  }
+  function blockedAuthority(predicted, target, crew) {
+    yard.ships.length = 0;
+    costs.requests.length = 0;
+    dispatch.requests.length = 0;
+    const builds = capturedBuilds;
+    const beforeWrites = writes;
+    const { input, decision } = authorityCandidate();
+    assert.equal(input.shipCrew, crew);
+    assert.deepEqual(input.authority, {
+      status: "ready",
+      target,
+      predicted,
+      blocksRemoval: true,
+    });
+    assert.equal(decision.kind, "outer-fleet-status");
+    assert.match(
+      decision.messageAfterUpdate,
+      /would lower Authority to .*below the .* target/,
+    );
+    const result = createOuterControl().autoFleetOuter();
+    assert.equal(result.outcome.status, "succeeded");
+    assert.equal(result.shipTargetChanged, false);
+    assert.equal(writes, beforeWrites);
+    assert.equal(capturedBuilds, builds);
+    assert.equal(yard.ships.length, 0);
+    assert.deepEqual(dispatch.requests, []);
+    assert.deepEqual(
+      costs.requests.filter(([method]) => method === "price"),
+      [],
+    );
+  }
+  capturedSettings.fleet_outer_class = "destroyer";
+  capturedSettings.generalMinimumAuthority = 97;
+  root.race.grenadier = 1;
+  blockedAuthority(96, 97, 3);
+  root.race.grenadier = 0;
+  assert.equal(authorityCandidate().input.authority.blocksRemoval, false);
+  let builds = capturedBuilds;
+  createOuterControl().autoFleetOuter();
+  assert.equal(capturedBuilds, builds + 1);
+  yard.ships.length = 0;
+
+  capturedSettings.fleet_outer_class = "corvette";
+  capturedSettings.generalMinimumAuthority = 98;
+  root.tech.evil = 2;
+  root.race.despot = 10;
+  blockedAuthority(97, 98, 2);
+  delete root.race.despot;
+  assert.equal(authorityCandidate().input.authority.blocksRemoval, false);
+  builds = capturedBuilds;
+  createOuterControl().autoFleetOuter();
+  assert.equal(capturedBuilds, builds + 1);
+  yard.ships.length = 0;
+  delete root.tech.evil;
+
+  // Authority-only state is never needed for a disabled guard. High Population
+  // is still read by crew compatibility, independently of Authority.
+  capturedSettings.authorityManage = false;
+  let despotReads = 0;
+  Object.defineProperty(root.race, "despot", {
+    configurable: true,
+    get() {
+      despotReads++;
+      throw new Error("disabled Authority read");
+    },
+  });
+  root.race.high_pop = 9;
+  const disabled = authorityCandidate();
+  assert.equal(disabled.input.authority.status, "not-required");
+  assert.equal(despotReads, 0);
+  delete root.race.high_pop;
+  builds = capturedBuilds;
+  createOuterControl().autoFleetOuter();
+  assert.equal(capturedBuilds, builds + 1);
+  assert.equal(despotReads, 0);
+  yard.ships.length = 0;
+  capturedSettings.authorityManage = true;
+  capturedSettings.generalMinimumAuthority = 0;
+  assert.equal(authorityCandidate().input.authority.status, "not-required");
+  capturedSettings.generalMinimumAuthority = 98;
+  root.resource.Authority.display = false;
+  assert.equal(authorityCandidate().input.authority.status, "not-required");
+  assert.equal(despotReads, 0);
+  root.resource.Authority.display = true;
+  delete root.race.despot;
+  root.race.despot = "bad rank";
+  assert.equal(authorityCandidate().input.authority.status, "unavailable");
+  const beforeMalformed = capturedBuilds;
+  assert.equal(
+    createOuterControl().autoFleetOuter().outcome.status,
+    "succeeded",
+  );
+  assert.equal(capturedBuilds, beforeMalformed);
+  delete root.race.despot;
+  root.race.grenadier = false;
+  capturedSettings.fleet_outer_class = savedClass;
+  capturedMethods.setVal = savedSetVal;
+  yard.ships.length = 0;
+}
+
 // Missing root capture must stand down without touching the shipyard.
 capturedSettings.authorityManage = false;
 capturedSettings.generalMinimumAuthority = 0;

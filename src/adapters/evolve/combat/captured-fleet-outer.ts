@@ -20,10 +20,7 @@
  * planning having filtered.
  */
 
-import {
-  assessAuthorityRemoval,
-  type AuthorityPolicyView,
-} from "../../../domain/civic/authority.ts";
+import { assessAuthorityRemoval } from "../../../domain/civic/authority.ts";
 import {
   planOuterFleetBlueprint,
   planOuterFleetBuild,
@@ -62,7 +59,7 @@ import type {
   OuterFleetReader,
 } from "../../../ports/fleet-outer.ts";
 import { rejected, stale, SUCCEEDED } from "../../command-outcomes.ts";
-import { readCapturedHighPopulationPercent } from "../civic/captured-job-catalog.ts";
+import { readCapturedAuthorityPolicyView } from "../civic/authority.ts";
 import { capturedShipCrewSize } from "./captured-ship-crew-compat.ts";
 import { capturedShipBound } from "./captured-ship-route.ts";
 import {
@@ -344,67 +341,15 @@ function capturedOuterFleetCurrentGarrison(root: UnknownRecord): number {
   );
 }
 
-function capturedOuterFleetAuthorityView(
-  root: UnknownRecord,
-  settings: UnknownRecord,
-): Readonly<AuthorityPolicyView> | undefined {
-  const manage = settings["authorityManage"];
-  const configuredTarget = finite(settings["generalMinimumAuthority"]);
-  const authority = readProperty(readProperty(root, "resource"), "Authority");
-  const current = finite(readProperty(authority, "amount"));
-  const maximum = finite(readProperty(authority, "max"));
-  const tech = readProperty(root, "tech");
-  const race = readProperty(root, "race");
-  const civic = readProperty(root, "civic");
-  const government = readProperty(civic, "govern");
-  const rawEvilTechLevel = readProperty(tech, "evil");
-  const evilTechLevel =
-    rawEvilTechLevel === undefined ? 0 : finite(rawEvilTechLevel);
-  const highPopulationPercent = finite(readCapturedHighPopulationPercent(root));
-  const governmentType = readProperty(government, "type");
-  if (
-    typeof manage !== "boolean" ||
-    configuredTarget === undefined ||
-    current === undefined ||
-    current < 0 ||
-    maximum === undefined ||
-    maximum < 0 ||
-    !isRecord(tech) ||
-    !isRecord(race) ||
-    !isRecord(civic) ||
-    typeof governmentType !== "string" ||
-    evilTechLevel === undefined ||
-    evilTechLevel < 0 ||
-    highPopulationPercent === undefined ||
-    highPopulationPercent < 0
-  ) {
-    return undefined;
-  }
-  return Object.freeze({
-    target: Object.freeze({
-      manage,
-      configuredTarget,
-      maximum,
-    }),
-    current,
-    modifiers: Object.freeze({
-      evilTechLevel,
-      highPopulationPercent,
-      grenadier: readProperty(race, "grenadier") === true,
-      governmentType,
-    }),
-  });
-}
-
 function capturedOuterFleetAuthorityAssessment(
   root: UnknownRecord,
   settings: UnknownRecord,
   removedSoldiers: number,
 ): OuterFleetAuthorityAssessment {
-  const view = capturedOuterFleetAuthorityView(root, settings);
-  return view === undefined
+  const result = readCapturedAuthorityPolicyView(root, settings);
+  return result.status === "unavailable"
     ? { status: "unavailable" }
-    : assessAuthorityRemoval(view, removedSoldiers);
+    : assessAuthorityRemoval(result.view, removedSoldiers);
 }
 
 /**
@@ -905,6 +850,7 @@ export function createCapturedOuterFleetAdapter(
       );
       if (
         shipCrew !== null &&
+        shipCrew > 0 &&
         active.settings["authorityManage"] === true &&
         (finite(active.settings["generalMinimumAuthority"]) ?? 0) !== 0 &&
         readProperty(readProperty(active.root, "race"), "universe") ===

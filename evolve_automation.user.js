@@ -21838,7 +21838,7 @@
   }
   function calculateAuthorityPerSoldier(modifiers) {
     let authorityPerSoldier = (0.7 + 0.1 * modifiers.evilTechLevel) * (modifiers.highPopulationPercent / 100);
-    return modifiers.grenadier && (authorityPerSoldier *= 1.75), modifiers.governmentType === "autocracy" ? authorityPerSoldier *= 1.08 : modifiers.governmentType === "dictator" && (authorityPerSoldier *= 1.12), authorityPerSoldier;
+    return modifiers.grenadier && (authorityPerSoldier *= 1.75), modifiers.governmentType === "autocracy" ? authorityPerSoldier *= 1.08 : modifiers.governmentType === "dictator" && (authorityPerSoldier *= 1.12), authorityPerSoldier * modifiers.authorityLossMultiplier;
   }
   function calculateRequiredAuthorityGarrison(view, currentGarrison) {
     let target = resolveAuthorityTarget(view.target);
@@ -22030,6 +22030,91 @@
     });
   }
 
+  // src/adapters/evolve/civic/authority.ts
+  function unavailable(reason) {
+    return Object.freeze({ status: "unavailable", reason });
+  }
+  function readAuthorityPolicyView(rawGame, rawSettings, rawResources, readHighPopulationPercent) {
+    try {
+      return buildValidatedAuthorityPolicyView(
+        isRecord(rawGame) ? rawGame.global : void 0,
+        rawSettings,
+        isRecord(rawResources) ? rawResources.Authority : void 0,
+        readHighPopulationPercent
+      );
+    } catch {
+      return unavailable("inaccessible-data");
+    }
+  }
+  function readCapturedAuthorityPolicyView(rawRoot, rawSettings) {
+    try {
+      let resources = isRecord(rawRoot) ? rawRoot.resource : void 0, authority = isRecord(resources) ? resources.Authority : void 0;
+      return buildValidatedAuthorityPolicyView(
+        rawRoot,
+        rawSettings,
+        isRecord(authority) ? {
+          currentQuantity: authority.amount,
+          maxQuantity: authority.max
+        } : void 0,
+        () => readCapturedHighPopulationPercent(rawRoot)
+      );
+    } catch {
+      return unavailable("inaccessible-data");
+    }
+  }
+  function buildValidatedAuthorityPolicyView(rawRoot, rawSettings, rawAuthority, readHighPopulationPercent) {
+    try {
+      if (!isRecord(rawSettings) || typeof rawSettings.authorityManage != "boolean" || !isFiniteNumber(rawSettings.generalMinimumAuthority))
+        return unavailable("invalid-settings");
+      if (!isRecord(rawAuthority))
+        return unavailable("invalid-resource");
+      let authority = rawAuthority, current = authority.currentQuantity, maximum = authority.maxQuantity;
+      if (!isFiniteNumber(current) || current < 0 || !isFiniteNumber(maximum) || maximum < 0)
+        return unavailable("invalid-resource");
+      if (!isRecord(rawRoot))
+        return unavailable("invalid-game-state");
+      let global = rawRoot;
+      if (!isRecord(global.tech) || !isRecord(global.race) || !isRecord(global.civic))
+        return unavailable("invalid-game-state");
+      let civic = global.civic;
+      if (!isRecord(civic.govern))
+        return unavailable("invalid-game-state");
+      let governmentType = civic.govern.type;
+      if (typeof governmentType != "string")
+        return unavailable("invalid-game-state");
+      let evilTechLevel = global.tech.evil ?? 0;
+      if (!isFiniteNumber(evilTechLevel) || evilTechLevel < 0)
+        return unavailable("invalid-game-state");
+      let highPopulationPercent = readHighPopulationPercent();
+      if (!isFiniteNumber(highPopulationPercent) || highPopulationPercent < 0)
+        return unavailable("invalid-trait-value");
+      let despotRank = global.race.despot;
+      if (despotRank !== void 0 && despotRank !== !1 && (!isFiniteNumber(despotRank) || despotRank < 0))
+        return unavailable("invalid-trait-value");
+      let authorityLossMultiplier = typeof despotRank == "number" ? 1 + 0.02 * despotRank : 1;
+      return Object.freeze({
+        status: "ready",
+        view: Object.freeze({
+          target: Object.freeze({
+            manage: rawSettings.authorityManage,
+            configuredTarget: rawSettings.generalMinimumAuthority,
+            maximum
+          }),
+          current,
+          modifiers: Object.freeze({
+            evilTechLevel,
+            highPopulationPercent,
+            grenadier: !!global.race.grenadier,
+            governmentType,
+            authorityLossMultiplier
+          })
+        })
+      });
+    } catch {
+      return unavailable("inaccessible-data");
+    }
+  }
+
   // src/adapters/evolve/combat/captured-ship-crew-compat.ts
   var CAPTURED_SHIP_CREW = Object.freeze({
     corvette: Object.freeze({ crew: 2, grenadier: 1 }),
@@ -22188,27 +22273,9 @@
     let civic = readProperty(root, "civic"), garrison = readProperty(civic, "garrison"), fortress = readProperty(readProperty(root, "portal"), "fortress"), fob = readProperty(readProperty(root, "space"), "fob");
     return (finite(readProperty(garrison, "workers")) ?? 0) - (finite(readProperty(garrison, "crew")) ?? 0) - (finite(readProperty(fortress, "garrison")) ?? 0) - (finite(readProperty(fob, "troops")) ?? 0);
   }
-  function capturedOuterFleetAuthorityView(root, settings) {
-    let manage = settings.authorityManage, configuredTarget2 = finite(settings.generalMinimumAuthority), authority = readProperty(readProperty(root, "resource"), "Authority"), current = finite(readProperty(authority, "amount")), maximum = finite(readProperty(authority, "max")), tech = readProperty(root, "tech"), race = readProperty(root, "race"), civic = readProperty(root, "civic"), government = readProperty(civic, "govern"), rawEvilTechLevel = readProperty(tech, "evil"), evilTechLevel = rawEvilTechLevel === void 0 ? 0 : finite(rawEvilTechLevel), highPopulationPercent = finite(readCapturedHighPopulationPercent(root)), governmentType = readProperty(government, "type");
-    if (!(typeof manage != "boolean" || configuredTarget2 === void 0 || current === void 0 || current < 0 || maximum === void 0 || maximum < 0 || !isRecord(tech) || !isRecord(race) || !isRecord(civic) || typeof governmentType != "string" || evilTechLevel === void 0 || evilTechLevel < 0 || highPopulationPercent === void 0 || highPopulationPercent < 0))
-      return Object.freeze({
-        target: Object.freeze({
-          manage,
-          configuredTarget: configuredTarget2,
-          maximum
-        }),
-        current,
-        modifiers: Object.freeze({
-          evilTechLevel,
-          highPopulationPercent,
-          grenadier: readProperty(race, "grenadier") === !0,
-          governmentType
-        })
-      });
-  }
   function capturedOuterFleetAuthorityAssessment(root, settings, removedSoldiers) {
-    let view = capturedOuterFleetAuthorityView(root, settings);
-    return view === void 0 ? { status: "unavailable" } : assessAuthorityRemoval(view, removedSoldiers);
+    let result = readCapturedAuthorityPolicyView(root, settings);
+    return result.status === "unavailable" ? { status: "unavailable" } : assessAuthorityRemoval(result.view, removedSoldiers);
   }
   function capturedOuterFleetBlueprintMatches(left, right, dimensions) {
     return dimensions.every((type) => {
@@ -22458,7 +22525,7 @@
           readProperty(active.root, "resource"),
           "Authority"
         );
-        shipCrew !== null && active.settings.authorityManage === !0 && (finite(active.settings.generalMinimumAuthority) ?? 0) !== 0 && readProperty(readProperty(active.root, "race"), "universe") === "evil" && readProperty(authorityResource, "display") !== !1 && (authority = capturedOuterFleetAuthorityAssessment(
+        shipCrew !== null && shipCrew > 0 && active.settings.authorityManage === !0 && (finite(active.settings.generalMinimumAuthority) ?? 0) !== 0 && readProperty(readProperty(active.root, "race"), "universe") === "evil" && readProperty(authorityResource, "display") !== !1 && (authority = capturedOuterFleetAuthorityAssessment(
           active.root,
           active.settings,
           shipCrew
@@ -24249,56 +24316,6 @@
     if (typeof title == "string" && title.length > 0) return title;
     let name = readProperty(resource, "name");
     return typeof name == "string" && name.length > 0 ? name : resourceId;
-  }
-
-  // src/adapters/evolve/civic/authority.ts
-  function unavailable(reason) {
-    return Object.freeze({ status: "unavailable", reason });
-  }
-  function readAuthorityPolicyView(rawGame, rawSettings, rawResources, readHighPopulationPercent) {
-    try {
-      if (!isRecord(rawSettings) || typeof rawSettings.authorityManage != "boolean" || !isFiniteNumber(rawSettings.generalMinimumAuthority))
-        return unavailable("invalid-settings");
-      if (!isRecord(rawResources) || !isRecord(rawResources.Authority))
-        return unavailable("invalid-resource");
-      let authority = rawResources.Authority, current = authority.currentQuantity, maximum = authority.maxQuantity;
-      if (!isFiniteNumber(current) || current < 0 || !isFiniteNumber(maximum) || maximum < 0)
-        return unavailable("invalid-resource");
-      if (!isRecord(rawGame) || !isRecord(rawGame.global))
-        return unavailable("invalid-game-state");
-      let global = rawGame.global;
-      if (!isRecord(global.tech) || !isRecord(global.race) || !isRecord(global.civic))
-        return unavailable("invalid-game-state");
-      let civic = global.civic;
-      if (!isRecord(civic.govern))
-        return unavailable("invalid-game-state");
-      let governmentType = civic.govern.type;
-      if (typeof governmentType != "string")
-        return unavailable("invalid-game-state");
-      let evilTechLevel = global.tech.evil ?? 0;
-      if (!isFiniteNumber(evilTechLevel) || evilTechLevel < 0)
-        return unavailable("invalid-game-state");
-      let highPopulationPercent = readHighPopulationPercent();
-      return !isFiniteNumber(highPopulationPercent) || highPopulationPercent < 0 ? unavailable("invalid-trait-value") : Object.freeze({
-        status: "ready",
-        view: Object.freeze({
-          target: Object.freeze({
-            manage: rawSettings.authorityManage,
-            configuredTarget: rawSettings.generalMinimumAuthority,
-            maximum
-          }),
-          current,
-          modifiers: Object.freeze({
-            evilTechLevel,
-            highPopulationPercent,
-            grenadier: !!global.race.grenadier,
-            governmentType
-          })
-        })
-      });
-    } catch {
-      return unavailable("inaccessible-data");
-    }
   }
 
   // src/domain/economy/resources/consume.ts

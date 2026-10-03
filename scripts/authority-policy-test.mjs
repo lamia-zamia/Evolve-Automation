@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   assessAuthorityRemoval,
   calculateRequiredAuthorityGarrison,
+  calculateAuthorityPerSoldier,
   resolveAuthorityTarget,
 } from "../src/domain/civic/authority.ts";
 
@@ -15,6 +16,7 @@ function view({
   highPopulationPercent = 100,
   grenadier = false,
   governmentType = "federation",
+  authorityLossMultiplier = 1,
 } = {}) {
   return {
     target: { manage, configuredTarget, maximum },
@@ -24,6 +26,7 @@ function view({
       highPopulationPercent,
       grenadier,
       governmentType,
+      authorityLossMultiplier,
     },
   };
 }
@@ -67,5 +70,71 @@ assert.deepEqual(assessAuthorityRemoval(view({ configuredTarget: 0 }), 2), {
   status: "unmanaged",
 });
 assert.ok(Object.isFrozen(assessAuthorityRemoval(view(), 2)));
+
+assert.equal(
+  assessAuthorityRemoval(view({ current: 102 }), 2).blocksRemoval,
+  false,
+);
+assert.deepEqual(
+  assessAuthorityRemoval(view({ current: 102, grenadier: true }), 2),
+  {
+    status: "ready",
+    target: 100,
+    predicted: 99,
+    blocksRemoval: true,
+  },
+);
+assert.equal(
+  assessAuthorityRemoval(view({ current: 102, evilTechLevel: 2 }), 2)
+    .blocksRemoval,
+  false,
+);
+assert.deepEqual(
+  assessAuthorityRemoval(
+    view({ current: 102, evilTechLevel: 2, authorityLossMultiplier: 1.2 }),
+    2,
+  ),
+  {
+    status: "ready",
+    target: 100,
+    predicted: 99,
+    blocksRemoval: true,
+  },
+);
+for (const [governmentType, factor] of [
+  ["federation", 1],
+  ["autocracy", 1.08],
+  ["dictator", 1.12],
+]) {
+  assert.ok(
+    Math.abs(
+      calculateAuthorityPerSoldier(
+        view({
+          evilTechLevel: 2,
+          highPopulationPercent: 50,
+          grenadier: true,
+          governmentType,
+        }).modifiers,
+      ) -
+        0.9 * 0.5 * 1.75 * factor,
+    ) < 1e-12,
+  );
+}
+
+// The game's pre-floor remainder and a weak gene can only make the actual
+// remaining Authority higher than this prediction from the already floored amount.
+for (const remainder of [0, 0.25, 0.99]) {
+  for (const actualMultiplier of [1.1, 1.2]) {
+    const input = view({
+      current: 102,
+      evilTechLevel: 2,
+      authorityLossMultiplier: 1.2,
+    });
+    const prediction = assessAuthorityRemoval(input, 2).predicted;
+    assert.ok(
+      prediction <= Math.floor(102 + remainder - 2 * 0.9 * actualMultiplier),
+    );
+  }
+}
 
 console.log("Authority policy module tests passed");

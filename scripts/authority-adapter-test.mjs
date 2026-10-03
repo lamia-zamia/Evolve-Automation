@@ -3,11 +3,12 @@ import assert from "node:assert/strict";
 import {
   readAuthorityPolicyView,
   readAuthorityQuantity,
+  readCapturedAuthorityPolicyView,
 } from "../src/adapters/evolve/civic/authority.ts";
 
 const validGame = {
   global: {
-    race: { grenadier: true },
+    race: { grenadier: 1 },
     tech: { evil: 2 },
     civic: { govern: { type: "dictator" } },
   },
@@ -39,6 +40,7 @@ assert.deepEqual(ready.view, {
     highPopulationPercent: 50,
     grenadier: true,
     governmentType: "dictator",
+    authorityLossMultiplier: 1,
   },
 });
 assert.ok(Object.isFrozen(ready));
@@ -54,6 +56,134 @@ const noEvilTech = readAuthorityPolicyView(
 );
 assert.equal(noEvilTech.status, "ready");
 assert.equal(noEvilTech.view.modifiers.evilTechLevel, 0);
+
+for (const [grenadier, active] of [
+  [1, true],
+  [true, true],
+  [0, false],
+  [false, false],
+  [undefined, false],
+]) {
+  const result = readAuthorityPolicyView(
+    { global: { ...validGame.global, race: { grenadier } } },
+    validSettings,
+    validResources,
+    () => 100,
+  );
+  assert.equal(result.status, "ready");
+  assert.equal(result.view.modifiers.grenadier, active);
+}
+for (const [despot, multiplier] of [
+  [undefined, 1],
+  [false, 1],
+  [0, 1],
+  [1, 1.02],
+  [5, 1.1],
+  [10, 1.2],
+]) {
+  const result = readAuthorityPolicyView(
+    { global: { ...validGame.global, race: { grenadier: 1, despot } } },
+    validSettings,
+    validResources,
+    () => 100,
+  );
+  assert.equal(result.status, "ready");
+  assert.ok(
+    Math.abs(result.view.modifiers.authorityLossMultiplier - multiplier) <
+      1e-12,
+  );
+  assert.equal(
+    result.view.current,
+    101,
+    "the game's floored Authority is unchanged",
+  );
+}
+for (const despot of [-1, NaN, Infinity, "5", {}, null, true]) {
+  assert.deepEqual(
+    readAuthorityPolicyView(
+      { global: { ...validGame.global, race: { despot } } },
+      validSettings,
+      validResources,
+      () => 100,
+    ),
+    { status: "unavailable", reason: "invalid-trait-value" },
+  );
+}
+
+function sharedAuthorityReads(root, settings = validSettings) {
+  return [
+    readCapturedAuthorityPolicyView(root, settings),
+    readAuthorityPolicyView(
+      { global: root },
+      settings,
+      {
+        Authority: {
+          currentQuantity: root.resource?.Authority?.amount,
+          maxQuantity: root.resource?.Authority?.max,
+        },
+      },
+      () => (root.race?.high_pop ? 26 : 100),
+    ),
+  ];
+}
+for (const grenadier of [1, true, 0, false, undefined]) {
+  for (const despot of [
+    undefined,
+    false,
+    0,
+    1,
+    5,
+    10,
+    -1,
+    NaN,
+    Infinity,
+    "5",
+    {},
+    null,
+  ]) {
+    const root = {
+      ...validGame.global,
+      race: { grenadier, despot, high_pop: 1 },
+      resource: { Authority: { amount: 101, max: 137 } },
+    };
+    const [captured, normalized] = sharedAuthorityReads(root);
+    assert.deepEqual(
+      captured,
+      normalized,
+      "both consumers share the compatibility contract",
+    );
+  }
+}
+for (const [patch, settings, reason] of [
+  [{}, {}, "invalid-settings"],
+  [{ resource: {} }, validSettings, "invalid-resource"],
+  [{ tech: { evil: -1 } }, validSettings, "invalid-game-state"],
+  [{ civic: { govern: { type: 42 } } }, validSettings, "invalid-game-state"],
+]) {
+  const root = {
+    ...validGame.global,
+    resource: { Authority: { amount: 101, max: 137 } },
+    ...patch,
+  };
+  for (const result of sharedAuthorityReads(root, settings)) {
+    assert.deepEqual(result, { status: "unavailable", reason });
+  }
+}
+const throwingDespotRoot = {
+  ...validGame.global,
+  race: {
+    get despot() {
+      throw new Error("inaccessible rank");
+    },
+  },
+  resource: { Authority: { amount: 101, max: 137 } },
+};
+for (const result of sharedAuthorityReads(throwingDespotRoot)) {
+  assert.deepEqual(result, {
+    status: "unavailable",
+    reason: "inaccessible-data",
+  });
+}
 
 assert.deepEqual(readAuthorityQuantity(1.25), {
   status: "ready",

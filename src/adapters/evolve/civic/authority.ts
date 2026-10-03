@@ -1,5 +1,6 @@
 import type { AuthorityPolicyView } from "../../../domain/civic/authority.ts";
 import { isFiniteNumber, isRecord } from "../../validation.ts";
+import { readCapturedHighPopulationPercent } from "./captured-job-catalog.ts";
 
 export type AuthorityUnavailableReason =
   | "inaccessible-data"
@@ -48,6 +49,48 @@ export function readAuthorityPolicyView(
   readHighPopulationPercent: () => unknown,
 ): AuthorityViewReadResult {
   try {
+    return buildValidatedAuthorityPolicyView(
+      isRecord(rawGame) ? rawGame["global"] : undefined,
+      rawSettings,
+      isRecord(rawResources) ? rawResources["Authority"] : undefined,
+      readHighPopulationPercent,
+    );
+  } catch {
+    return unavailable("inaccessible-data");
+  }
+}
+
+/** Maps the live root's quantities into the same contract as normalized resources. */
+export function readCapturedAuthorityPolicyView(
+  rawRoot: unknown,
+  rawSettings: unknown,
+): AuthorityViewReadResult {
+  try {
+    const resources = isRecord(rawRoot) ? rawRoot["resource"] : undefined;
+    const authority = isRecord(resources) ? resources["Authority"] : undefined;
+    return buildValidatedAuthorityPolicyView(
+      rawRoot,
+      rawSettings,
+      isRecord(authority)
+        ? {
+            currentQuantity: authority["amount"],
+            maxQuantity: authority["max"],
+          }
+        : undefined,
+      () => readCapturedHighPopulationPercent(rawRoot),
+    );
+  } catch {
+    return unavailable("inaccessible-data");
+  }
+}
+
+function buildValidatedAuthorityPolicyView(
+  rawRoot: unknown,
+  rawSettings: unknown,
+  rawAuthority: unknown,
+  readHighPopulationPercent: () => unknown,
+): AuthorityViewReadResult {
+  try {
     if (
       !isRecord(rawSettings) ||
       typeof rawSettings["authorityManage"] !== "boolean" ||
@@ -55,10 +98,10 @@ export function readAuthorityPolicyView(
     ) {
       return unavailable("invalid-settings");
     }
-    if (!isRecord(rawResources) || !isRecord(rawResources["Authority"])) {
+    if (!isRecord(rawAuthority)) {
       return unavailable("invalid-resource");
     }
-    const authority = rawResources["Authority"];
+    const authority = rawAuthority;
     const current = authority["currentQuantity"];
     const maximum = authority["maxQuantity"];
     if (
@@ -70,10 +113,10 @@ export function readAuthorityPolicyView(
       return unavailable("invalid-resource");
     }
 
-    if (!isRecord(rawGame) || !isRecord(rawGame["global"])) {
+    if (!isRecord(rawRoot)) {
       return unavailable("invalid-game-state");
     }
-    const global = rawGame["global"];
+    const global = rawRoot;
     if (
       !isRecord(global["tech"]) ||
       !isRecord(global["race"]) ||
@@ -98,6 +141,19 @@ export function readAuthorityPolicyView(
     if (!isFiniteNumber(highPopulationPercent) || highPopulationPercent < 0) {
       return unavailable("invalid-trait-value");
     }
+    const despotRank = global["race"]["despot"];
+    // races.js syncGenes writes slot.r onto race.despot. Despot vars is [2*r];
+    // geneVars halves it for a weak gene, so the bonded value bounds either case.
+    // A lazily absent despot (or false/zero) is the game's no-gene state.
+    if (
+      despotRank !== undefined &&
+      despotRank !== false &&
+      (!isFiniteNumber(despotRank) || despotRank < 0)
+    ) {
+      return unavailable("invalid-trait-value");
+    }
+    const authorityLossMultiplier =
+      typeof despotRank === "number" ? 1 + 0.02 * despotRank : 1;
 
     return Object.freeze({
       status: "ready",
@@ -113,6 +169,7 @@ export function readAuthorityPolicyView(
           highPopulationPercent,
           grenadier: Boolean(global["race"]["grenadier"]),
           governmentType,
+          authorityLossMultiplier,
         }),
       }),
     });

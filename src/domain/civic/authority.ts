@@ -9,6 +9,8 @@ export interface AuthorityModifiers {
   readonly highPopulationPercent: number;
   readonly grenadier: boolean;
   readonly governmentType: string;
+  /** Upper bound on the game's final standing multiplier, for soldier-loss prediction. */
+  readonly authorityLossMultiplier: number;
 }
 
 export interface AuthorityPolicyView {
@@ -50,7 +52,7 @@ export function calculateAuthorityPerSoldier(
   } else if (modifiers.governmentType === "dictator") {
     authorityPerSoldier *= 1.12;
   }
-  return authorityPerSoldier;
+  return authorityPerSoldier * modifiers.authorityLossMultiplier;
 }
 
 export function calculateRequiredAuthorityGarrison(

@@ -7,9 +7,16 @@
  * regular expression literals.
  */
 export function extractSnapshotFunction(source, name) {
-  const marker = `function ${name}(`;
+  return extractSnapshotBlock(source, `function ${name}(`);
+}
+
+/** One block or object literal, found by its unique source prefix. */
+export function extractSnapshotBlock(source, marker) {
   const start = source.indexOf(marker);
-  if (start < 0) throw new Error(`${name} is not in the snapshot`);
+  if (start < 0) throw new Error(`${marker} is not in the snapshot`);
+  if (source.indexOf(marker, start + marker.length) >= 0) {
+    throw new Error(`${marker} is ambiguous in the snapshot`);
+  }
   let depth = 0;
   let opened = false;
   for (let index = start; index < source.length; index += 1) {
@@ -17,12 +24,12 @@ export function extractSnapshotFunction(source, name) {
     const next = source[index + 1];
     if (character === "/" && next === "/") {
       index = source.indexOf("\n", index);
-      if (index < 0) throw new Error(`${name} has an unterminated comment`);
+      if (index < 0) throw new Error(`${marker} has an unterminated comment`);
       continue;
     }
     if (character === "/" && next === "*") {
       index = source.indexOf("*/", index);
-      if (index < 0) throw new Error(`${name} has an unterminated comment`);
+      if (index < 0) throw new Error(`${marker} has an unterminated comment`);
       index += 1;
       continue;
     }
@@ -40,7 +47,7 @@ export function extractSnapshotFunction(source, name) {
       if (opened && depth === 0) return source.slice(start, index + 1);
     }
   }
-  throw new Error(`${name} has no closing brace`);
+  throw new Error(`${marker} has no closing brace`);
 }
 
 function skipLiteral(source, start) {
