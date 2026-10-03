@@ -1048,13 +1048,11 @@ export function createCapturedOuterFleetAdapter(
         "the shipyard's catalogue does not name every requested part",
       );
     for (const { type, part } of writes) {
-      // A field the yard already holds is not rewritten. Current Design is exactly this case: the
-      // design being built is the yard's own blueprint, which `drawShipYard()` has already normalized
-      // — including a `special` the special-slot selector may never have been unlocked for, and which
-      // the yard therefore cannot be asked about through `avail()` at all. Rewriting it would ask the
-      // yard for a selector the player never had, and each unnecessary `setVal` would redraw the cost
-      // row the price probe and the fleet demand both read.
+      // Current Design is already the yard's own blueprint, so its matching fields need no writes.
+      // Candidate designs must repeat every quote write: even an unchanged class can normalize an
+      // unrequested dependent field such as `special`, changing the ship the yard will build.
       if (
+        decision.blueprint === "yard" &&
         capturedOuterFleetLiveDesign(dependencies.controls)?.[type] === part
       ) {
         continue;

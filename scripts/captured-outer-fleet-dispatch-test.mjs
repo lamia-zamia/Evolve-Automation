@@ -2169,6 +2169,24 @@ function outerFleetControl(harness, readSettings) {
   });
 }
 
+// The candidate quote applies the hull through native `setVal` even when the live hull already has
+// that name. Its class write normalizes a stale special the preset did not name, so the permanent
+// build must run that same write before it builds the ship.
+{
+  const root = makeRoot();
+  root.space.shipyard.blueprint.special = "extra_fuel";
+  const native = makeHarness({ establish: true, root });
+  const pass = outerFleetControl(
+    native,
+    () => HARNESS_SETTINGS,
+  ).autoFleetOuter();
+  assert.equal(pass.outcome.status, "succeeded");
+  assert.equal(native.page.builtShips.length, 1);
+  assert.equal(native.page.builtShips[0].special, "none");
+  assert.equal(native.root.space.shipyard.blueprint.special, "none");
+  assert.deepEqual(native.faults, []);
+}
+
 const integrated = makeHarness({ establish: true });
 const effectiveSettings = Object.create(HARNESS_SETTINGS);
 const outerControl = outerFleetControl(integrated, () => effectiveSettings);

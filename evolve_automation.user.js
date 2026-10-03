@@ -22823,7 +22823,7 @@
           "the shipyard's catalogue does not name every requested part"
         );
       for (let { type, part } of writes)
-        if (capturedOuterFleetLiveDesign(dependencies.controls)?.[type] !== part && !dependencies.controls.setPart({
+        if (!(decision.blueprint === "yard" && capturedOuterFleetLiveDesign(dependencies.controls)?.[type] === part) && !dependencies.controls.setPart({
           elementId: CAPTURED_OUTER_FLEET_SHIPYARD_CONTROL,
           type,
           part
