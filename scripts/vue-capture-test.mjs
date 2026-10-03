@@ -105,6 +105,54 @@ for (const rebound of [false, true]) {
 
 // --- root shape ------------------------------------------------------------------------------
 
+for (const initial of [false, true]) {
+  for (const superseded of [false, true]) {
+    const vue = makeVue();
+    const capture = installVueCapture({ Vue: vue });
+    let calls = 0;
+    const bind = (id) =>
+      vue.createApp({ el: `#${id}`, methods: { action: () => ++calls } });
+    if (initial) bind("foo");
+    const before = capture.controls.checkpoint();
+    bind("foo");
+    const target = capture.controls.resolve("foo");
+    const through = capture.controls.checkpoint();
+    if (superseded) bind("foo");
+    bind("later");
+    const current = capture.controls.resolve("foo");
+    capture.controls.rejectChanges(before, through);
+    assert.equal(
+      capture.controls.invoke(target, "action").reason,
+      "stale-control",
+    );
+    if (superseded) {
+      assert.equal(
+        capture.controls.resolve("foo").generation,
+        current.generation,
+      );
+      assert.equal(capture.controls.invoke(current, "action").ok, true);
+      assert.equal(
+        capture.synthesis.invoke({ elementId: "foo", method: "action" }).ok,
+        true,
+      );
+    } else {
+      assert.equal(capture.controls.resolve("foo"), undefined);
+      assert.equal(
+        capture.synthesis.invoke({ elementId: "foo", method: "action" }).reason,
+        "stale-control",
+      );
+    }
+    const later = capture.controls.resolve("later");
+    assert.notEqual(
+      later,
+      undefined,
+      "a control bound after the fence was rejected",
+    );
+    assert.equal(capture.controls.invoke(later, "action").ok, true);
+    capture.uninstall();
+  }
+}
+
 assert.equal(isGameRootShape(makeRoot(1)), true);
 const initialRoot = makeRoot(0);
 delete initialRoot.settings;

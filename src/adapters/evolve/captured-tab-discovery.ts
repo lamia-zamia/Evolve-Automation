@@ -33,7 +33,10 @@
  * mounted.
  */
 
-import type { GameControlRegistry } from "../../ports/game-control-registry.ts";
+import type {
+  ControlCaptureCheckpoint,
+  GameControlRegistry,
+} from "../../ports/game-control-registry.ts";
 import type { GameMountSuppression } from "../../ports/game-mount-suppression.ts";
 import type {
   GamePanelWorkspace,
@@ -382,6 +385,8 @@ export function createCapturedTabDiscovery(
       const targetPanel = MAIN_TAB_PANELS[first.index];
       const checkpoint = controls.checkpoint();
       let passSucceeded = false;
+      let targetThroughCheckpoint: ControlCaptureCheckpoint | undefined;
+      let fallbackRestorationSucceeded = false;
       let workspace: PanelWorkspace | undefined;
       try {
         if (targetPanel !== undefined) {
@@ -446,17 +451,24 @@ export function createCapturedTabDiscovery(
               { ...discardScope, ...mountScope },
             );
           } finally {
-            for (const [setting, value] of playerTabs)
-              settings[setting] = value;
-            if (workspace === undefined) {
-              restoreFailure = restorePlayerView();
-            } else {
-              workspace.release();
-              if (!workspace.isIntact()) {
-                restoreFailure = "the workspace could not put the panels back";
+            // Fence target output even while unwinding: the fallback's real redraw is later authority.
+            targetThroughCheckpoint = controls.checkpoint();
+            try {
+              for (const [setting, value] of playerTabs)
+                settings[setting] = value;
+              if (workspace === undefined) {
+                restoreFailure = restorePlayerView();
+                fallbackRestorationSucceeded = restoreFailure === undefined;
+              } else {
+                workspace.release();
+                if (!workspace.isIntact()) {
+                  restoreFailure =
+                    "the workspace could not put the panels back";
+                }
               }
+            } finally {
+              settings["animated"] = playerAnimation;
             }
-            settings["animated"] = playerAnimation;
           }
         });
 
@@ -489,7 +501,11 @@ export function createCapturedTabDiscovery(
         passSucceeded = result.outcome.status === "succeeded";
         return result;
       } finally {
-        if (!passSucceeded) controls.rejectChanges(checkpoint);
+        if (!passSucceeded)
+          controls.rejectChanges(
+            checkpoint,
+            fallbackRestorationSucceeded ? targetThroughCheckpoint : undefined,
+          );
       }
     },
   });

@@ -37,9 +37,9 @@ export function withControlCaptureAuthority(registry) {
       mirrorAll();
       return capture.controls.checkpoint();
     },
-    rejectChanges(checkpoint) {
+    rejectChanges(checkpoint, through) {
       mirrorAll();
-      capture.controls.rejectChanges(checkpoint);
+      capture.controls.rejectChanges(checkpoint, through);
     },
     resolve(elementId) {
       const original = mirror(elementId);

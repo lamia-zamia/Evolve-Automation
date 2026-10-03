@@ -37,8 +37,11 @@ export interface GameControlRegistry {
   /** The current authoritative handle; absent and rejected generations answer `undefined`. */
   resolve(elementId: string): GameControlHandle | undefined;
   checkpoint(): ControlCaptureCheckpoint;
-  /** Reject every current generation created or replaced since this checkpoint. */
-  rejectChanges(checkpoint: ControlCaptureCheckpoint): void;
+  /** Reject changed current generations, optionally bounded before a later legitimate redraw. */
+  rejectChanges(
+    checkpoint: ControlCaptureCheckpoint,
+    through?: ControlCaptureCheckpoint,
+  ): void;
   /**
    * Invoke one captured method. A missing or superseded control is an explicit failure with a
    * reason: it must never read as "the feature is locked".

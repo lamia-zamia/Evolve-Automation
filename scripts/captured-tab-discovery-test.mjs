@@ -354,6 +354,136 @@ for (const cause of [
 
 // --- one pass captures a panel and puts the player back ---------------------
 
+for (const cause of ["observer", "step", "exception", "restore", "success"]) {
+  const page = makePage({ civTabs: 4 });
+  page.setOpenable(false);
+  const playerBefore = ["mTabResource", "resTrade"].map((id) =>
+    page.registry.resolve(id),
+  );
+  const targetHandles = [];
+  const restoredHandles = [];
+  const invoke = page.registry.invoke;
+  page.registry.invoke = (handle, method, args) => {
+    const result = invoke(handle, method, args);
+    if (result.ok && args[0] === 2) {
+      for (const id of ["mTabCivic", "civ-farmer", "foundry"])
+        targetHandles.push(page.registry.resolve(id));
+      if (cause === "step")
+        return {
+          ok: false,
+          reason: "threw",
+          detail: "target failed after binding",
+        };
+    }
+    if (result.ok && args[0] === 4) {
+      for (const id of ["mTabResource", "resTrade"])
+        restoredHandles.push(page.registry.resolve(id));
+      if (cause === "restore")
+        return {
+          ok: false,
+          reason: "threw",
+          detail: "restore failed after binding",
+        };
+    }
+    return result;
+  };
+  const originalException = new Error("synthetic scope failed after bindings");
+  if (cause === "exception") {
+    const draw = page.suppression.withoutMounting;
+    page.suppression.withoutMounting = (...args) => {
+      draw(...args);
+      throw originalException;
+    };
+  }
+  const run = () =>
+    discoveryFor(page).discover(mainTab(2), {
+      whileDrawn: () => {
+        if (cause === "observer") throw new Error("observer failed");
+      },
+    });
+  if (cause === "exception")
+    assert.throws(run, (error) => error === originalException);
+  else {
+    const result = run();
+    if (cause === "success") assert.equal(result.outcome.status, "succeeded");
+    else
+      assert.equal(
+        result.outcome.failure.code,
+        {
+          observer: "tab-observer-failed",
+          step: "tab-draw-failed",
+          restore: "tab-restore-failed",
+        }[cause],
+      );
+  }
+  assert.deepEqual(page.mainSwaps(), [2, 4]);
+  assert.equal(page.settings.civTabs, 4);
+  assert.equal(page.settings.animated, true);
+  for (const handle of targetHandles) {
+    if (cause === "success") {
+      assert.notEqual(page.registry.resolve(handle.elementId), undefined);
+      assert.equal(
+        page.capture.controls.invoke(handle, "swapTab", [2]).ok,
+        true,
+      );
+    } else {
+      assert.equal(page.registry.resolve(handle.elementId), undefined);
+      assert.equal(
+        page.capture.controls.invoke(handle, "swapTab", [2]).reason,
+        "stale-control",
+      );
+      assert.equal(
+        page.capture.synthesis.invoke({
+          elementId: handle.elementId,
+          method: "swapTab",
+          args: [2],
+        }).reason,
+        "stale-control",
+      );
+    }
+  }
+  for (const [index, handle] of restoredHandles.entries()) {
+    assert.ok(handle.generation > playerBefore[index].generation);
+    assert.equal(
+      page.capture.controls.invoke(playerBefore[index], "swapTab", [4]).reason,
+      "stale-control",
+    );
+    if (cause === "restore") {
+      assert.equal(page.registry.resolve(handle.elementId), undefined);
+      assert.equal(
+        page.capture.controls.invoke(handle, "swapTab", [4]).reason,
+        "stale-control",
+      );
+      assert.equal(
+        page.capture.synthesis.invoke({
+          elementId: handle.elementId,
+          method: "swapTab",
+          args: [4],
+        }).reason,
+        "stale-control",
+      );
+    } else {
+      assert.notEqual(
+        page.registry.resolve(handle.elementId),
+        undefined,
+        `${cause}: successful player restoration was rejected`,
+      );
+      assert.equal(
+        page.capture.controls.invoke(handle, "swapTab", [4]).ok,
+        true,
+      );
+      assert.equal(
+        page.capture.synthesis.invoke({
+          elementId: handle.elementId,
+          method: "swapTab",
+          args: [4],
+        }).ok,
+        true,
+      );
+    }
+  }
+}
+
 {
   const page = makePage({ civTabs: 4 });
   const result = discoveryFor(page).discover(mainTab(2));

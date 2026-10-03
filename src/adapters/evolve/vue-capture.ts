@@ -611,12 +611,24 @@ export function installVueCapture(
       );
       return controlCheckpoint;
     },
-    rejectChanges(checkpoint: ControlCaptureCheckpoint): void {
+    rejectChanges(
+      checkpoint: ControlCaptureCheckpoint,
+      through?: ControlCaptureCheckpoint,
+    ): void {
       const checkpointGenerations = controlCheckpoints.get(checkpoint);
-      if (checkpointGenerations === undefined)
+      const throughGenerations =
+        through === undefined ? undefined : controlCheckpoints.get(through);
+      if (
+        checkpointGenerations === undefined ||
+        (through !== undefined && throughGenerations === undefined)
+      )
         throw new Error("control checkpoint belongs to another capture");
       for (const [id, control] of controls) {
-        if (checkpointGenerations.get(id) !== control.generation) {
+        if (
+          checkpointGenerations.get(id) !== control.generation &&
+          (throughGenerations === undefined ||
+            throughGenerations.get(id) === control.generation)
+        ) {
           control.rejectedGeneration = control.generation;
         }
       }

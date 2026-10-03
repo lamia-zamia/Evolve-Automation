@@ -61,7 +61,7 @@ export interface TabDiscoveryOptions {
 }
 
 export interface GameTabDiscovery {
-  /** A failed synthetic pass leaves no created/rebound control generation authoritative. */
+  /** Failed target output loses authority; newer controls from successful real restoration retain it. */
   /**
    * Observes the panel `path` names, drawing it and restoring the tabs the player was on when it
    * is not the panel already in front of them.

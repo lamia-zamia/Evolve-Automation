@@ -2536,12 +2536,12 @@
           new Map([...controls2].map(([id, control]) => [id, control.generation]))
         ), controlCheckpoint;
       },
-      rejectChanges(checkpoint) {
-        let checkpointGenerations = controlCheckpoints.get(checkpoint);
-        if (checkpointGenerations === void 0)
+      rejectChanges(checkpoint, through) {
+        let checkpointGenerations = controlCheckpoints.get(checkpoint), throughGenerations = through === void 0 ? void 0 : controlCheckpoints.get(through);
+        if (checkpointGenerations === void 0 || through !== void 0 && throughGenerations === void 0)
           throw new Error("control checkpoint belongs to another capture");
         for (let [id, control] of controls2)
-          checkpointGenerations.get(id) !== control.generation && (control.rejectedGeneration = control.generation);
+          checkpointGenerations.get(id) !== control.generation && (throughGenerations === void 0 || throughGenerations.get(id) === control.generation) && (control.rejectedGeneration = control.generation);
       },
       resolve(elementId) {
         let control = controls2.get(elementId);
@@ -3359,7 +3359,7 @@
               for (let container of discard.containers)
                 workspace?.discard(container);
           }
-        }, playerPanel = MAIN_TAB_PANELS[playerTabs.get(MAIN_TAB_SETTING) ?? -1], targetPanel = MAIN_TAB_PANELS[first.index], checkpoint = controls2.checkpoint(), passSucceeded = !1, workspace;
+        }, playerPanel = MAIN_TAB_PANELS[playerTabs.get(MAIN_TAB_SETTING) ?? -1], targetPanel = MAIN_TAB_PANELS[first.index], checkpoint = controls2.checkpoint(), passSucceeded = !1, targetThroughCheckpoint, fallbackRestorationSucceeded = !1, workspace;
         try {
           targetPanel !== void 0 && (workspace = panels.open({ keep: playerPanel, scratch: targetPanel }));
           let before = new Set(controls2.capturedElementIds()), playerAnimation = settings.animated, stepFailure, restoreFailure, observerFailure, drawnPath = tally.enabled ? describeTabPath(path) : "";
@@ -3397,9 +3397,14 @@
                 { ...discardScope, ...mountScope }
               );
             } finally {
-              for (let [setting, value] of playerTabs)
-                settings[setting] = value;
-              workspace === void 0 ? restoreFailure = restorePlayerView() : (workspace.release(), workspace.isIntact() || (restoreFailure = "the workspace could not put the panels back")), settings.animated = playerAnimation;
+              targetThroughCheckpoint = controls2.checkpoint();
+              try {
+                for (let [setting, value] of playerTabs)
+                  settings[setting] = value;
+                workspace === void 0 ? (restoreFailure = restorePlayerView(), fallbackRestorationSucceeded = restoreFailure === void 0) : (workspace.release(), workspace.isIntact() || (restoreFailure = "the workspace could not put the panels back"));
+              } finally {
+                settings.animated = playerAnimation;
+              }
             }
           }), stepFailure !== void 0)
             return tally.count("discovery.draw.failed"), stepFailure;
@@ -3411,7 +3416,10 @@
           });
           return passSucceeded = result.outcome.status === "succeeded", result;
         } finally {
-          passSucceeded || controls2.rejectChanges(checkpoint);
+          passSucceeded || controls2.rejectChanges(
+            checkpoint,
+            fallbackRestorationSucceeded ? targetThroughCheckpoint : void 0
+          );
         }
       }
     });
