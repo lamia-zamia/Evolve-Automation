@@ -78,10 +78,13 @@ import {
   OUTER_FLEET_BLUEPRINT_NAME_FIELD,
 } from "./captured-outer-fleet-blueprint.ts";
 import { CAPTURED_OUTER_FLEET_SHIPYARD_CONTROL } from "./captured-outer-fleet-shipyard.ts";
+import { readCapturedCurrentCityGarrison } from "./captured-city-garrison.ts";
+import type { GameControlRegistry } from "../../../ports/game-control-registry.ts";
 
 interface CapturedOuterFleetAdapterDependencies {
   readonly rootState: GameRootStateSource;
   readonly controls: GameFleetControlsPort;
+  readonly garrisonControls: GameControlRegistry;
   /** The yard's own `#shipYardCosts`, which is the only price this feature may quote. */
   readonly costs: GameShipyardDesignQuotes;
   /** The yard's own option markup, which is the only authority on what parts it offers. */
@@ -322,19 +325,6 @@ function capturedOuterFleetLocationName(region: string): string {
 
 function capturedOuterFleetShipName(blueprint: UnknownRecord): string {
   return `outer_shipyard_class_${String(blueprint[OUTER_FLEET_HULL_FIELD] ?? "")}`;
-}
-
-function capturedOuterFleetCurrentGarrison(root: UnknownRecord): number {
-  const civic = readProperty(root, "civic");
-  const garrison = readProperty(civic, "garrison");
-  const fortress = readProperty(readProperty(root, "portal"), "fortress");
-  const fob = readProperty(readProperty(root, "space"), "fob");
-  return (
-    (finite(readProperty(garrison, "workers")) ?? 0) -
-    (finite(readProperty(garrison, "crew")) ?? 0) -
-    (finite(readProperty(fortress, "garrison")) ?? 0) -
-    (finite(readProperty(fob, "troops")) ?? 0)
-  );
 }
 
 function capturedOuterFleetAuthorityAssessment(
@@ -960,7 +950,12 @@ export function createCapturedOuterFleetAdapter(
         plan,
         costKnown: sample !== undefined,
         missingResourceName,
-        currentCityGarrison: capturedOuterFleetCurrentGarrison(active.root),
+        currentCityGarrison:
+          readCapturedCurrentCityGarrison(
+            dependencies.rootState,
+            dependencies.garrisonControls,
+            active.root,
+          ) ?? null,
       });
       const planned = planOuterFleetBuild(input);
       expectedDecision = planned;

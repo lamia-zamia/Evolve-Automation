@@ -133,7 +133,7 @@ export interface OuterFleetBuildReadinessInput {
   readonly costKnown: boolean;
   /** The first resource the game's own cost row marks as not currently payable, when it marks one. */
   readonly missingResourceName: string | null;
-  readonly currentCityGarrison: number;
+  readonly currentCityGarrison: number | null;
 }
 
 export interface OuterFleetBuildDecision {
@@ -405,6 +405,14 @@ export function planOuterFleetBuild(
       input.plan.blueprint,
       null,
       `Next ship(${input.plan.nextShipName}) is missing ${input.missingResourceName}`,
+      input.plan.nextShipName,
+    );
+  }
+  if (input.currentCityGarrison === null) {
+    return status(
+      input.plan.blueprint,
+      null,
+      "City garrison data unavailable; ship construction paused",
       input.plan.nextShipName,
     );
   }

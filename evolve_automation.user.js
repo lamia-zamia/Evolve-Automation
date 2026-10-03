@@ -13324,8 +13324,32 @@
       return finite(result.value);
   }
 
+  // src/adapters/evolve/combat/captured-city-garrison.ts
+  var CAPTURED_CITY_GARRISON_CONTROLS = Object.freeze([
+    "garrison",
+    "c_garrison"
+  ]);
+  function readCapturedCurrentCityGarrison(rootState, controls2, expectedRoot) {
+    try {
+      if (rootState.readRoot() !== expectedRoot) return;
+      for (let elementId of CAPTURED_CITY_GARRISON_CONTROLS) {
+        let control = controls2.resolve(elementId);
+        if (control === void 0 || !control.methods.includes("hell")) continue;
+        let value;
+        try {
+          let result = controls2.invoke(control, "hell", [void 0]);
+          result.ok && (value = finite(result.value));
+        } catch {
+        }
+        if (rootState.readRoot() !== expectedRoot || controls2.resolve(elementId)?.generation !== control.generation)
+          return;
+        if (value !== void 0) return value;
+      }
+    } catch {
+    }
+  }
+
   // src/adapters/evolve/combat/captured-hell.ts
-  var GARRISON_CONTROLS = ["garrison", "c_garrison"];
   function settingNumber(settings, key, fallback) {
     return finite(settings[key]) ?? fallback;
   }
@@ -13514,9 +13538,9 @@
   }
   function readSoldierTarget(controls2, targetRating) {
     if (targetRating <= 0) return 0;
-    let control = GARRISON_CONTROLS.map((id) => controls2.resolve(id)).find(
-      (candidate) => candidate !== void 0
-    );
+    let control = CAPTURED_CITY_GARRISON_CONTROLS.map(
+      (id) => controls2.resolve(id)
+    ).find((candidate) => candidate !== void 0);
     if (control === void 0 || !control.methods.includes("rating"))
       return;
     let result = controls2.invoke(control, "rating", [10, !0]);
@@ -22012,6 +22036,11 @@
       null,
       `Next ship(${input.plan.nextShipName}) is missing ${input.missingResourceName}`,
       input.plan.nextShipName
+    ) : input.currentCityGarrison === null ? status(
+      input.plan.blueprint,
+      null,
+      "City garrison data unavailable; ship construction paused",
+      input.plan.nextShipName
     ) : input.currentCityGarrison - input.plan.shipCrew < input.plan.minimumCrew ? status(
       input.plan.blueprint,
       null,
@@ -22225,10 +22254,6 @@
   }
   function capturedOuterFleetShipName(blueprint) {
     return `outer_shipyard_class_${String(blueprint[OUTER_FLEET_HULL_FIELD] ?? "")}`;
-  }
-  function capturedOuterFleetCurrentGarrison(root) {
-    let civic = readProperty(root, "civic"), garrison = readProperty(civic, "garrison"), fortress = readProperty(readProperty(root, "portal"), "fortress"), fob = readProperty(readProperty(root, "space"), "fob");
-    return (finite(readProperty(garrison, "workers")) ?? 0) - (finite(readProperty(garrison, "crew")) ?? 0) - (finite(readProperty(fortress, "garrison")) ?? 0) - (finite(readProperty(fob, "troops")) ?? 0);
   }
   function capturedOuterFleetAuthorityAssessment(root, settings, removedSoldiers) {
     let result = readCapturedAuthorityPolicyView(root, settings);
@@ -22531,7 +22556,11 @@
           plan,
           costKnown: sample !== void 0,
           missingResourceName,
-          currentCityGarrison: capturedOuterFleetCurrentGarrison(active.root)
+          currentCityGarrison: readCapturedCurrentCityGarrison(
+            dependencies.rootState,
+            dependencies.garrisonControls,
+            active.root
+          ) ?? null
         });
         return expectedDecision = planOuterFleetBuild(input), input;
       },
@@ -22679,6 +22708,7 @@
         controls: dependencies.controls,
         parts: dependencies.parts
       }),
+      garrisonControls: dependencies.controls,
       costs: dependencies.costs,
       parts: dependencies.parts,
       dispatch: dependencies.dispatch,
@@ -50016,10 +50046,7 @@ Only continue if you trust the source. Injected code:
   }
 
   // src/adapters/evolve/combat/captured-mercenary.ts
-  var CAPTURED_MERCENARY_CONTROLS = Object.freeze([
-    "garrison",
-    "c_garrison"
-  ]), CAPTURED_MERCENARY_METHODS = Object.freeze([
+  var CAPTURED_MERCENARY_METHODS = Object.freeze([
     "vis",
     "hire",
     "hell",
@@ -50051,7 +50078,7 @@ Only continue if you trust the source. Injected code:
     return value === void 0 ? fallback : typeof value == "boolean" ? value : void 0;
   }
   function capturedMercenaryControl(controls2) {
-    return CAPTURED_MERCENARY_CONTROLS.map(
+    return CAPTURED_CITY_GARRISON_CONTROLS.map(
       (elementId) => controls2.resolve(elementId)
     ).find(
       (control) => control !== void 0 && CAPTURED_MERCENARY_METHODS.every(
@@ -53182,6 +53209,23 @@ Only continue if you trust the source. Injected code:
       return established ? (discoveryAttempts.recordSuccess(key), !0) : (discoveryAttempts.recordFailure(key), logError(
         `${label} capture drew its yard without capturing the control (${discoveryAttempts.describe(key)})`
       ), !1);
+    }, civicMilitaryGarrisonPath = () => {
+      if (pageCapture2.controls.resolve(MAIN_TAB_CONTROL) === void 0)
+        return;
+      let govTabs = SUB_TAB_CONTROLS[GOV_TABS_SETTING];
+      if (govTabs !== void 0)
+        return [
+          Object.freeze({
+            setting: MAIN_TAB_SETTING,
+            control: MAIN_TAB_CONTROL,
+            index: MAIN_TAB_INDEX.civic
+          }),
+          Object.freeze({
+            setting: GOV_TABS_SETTING,
+            control: govTabs,
+            index: GOV_TAB_INDEX.military
+          })
+        ];
     }, ensureHellGarrisonControls = () => {
       let satisfied = () => HELL_GARRISON_CONTROLS.some(
         (id) => pageCapture2.controls.resolve(id)?.methods.includes("patrolling")
@@ -53190,19 +53234,14 @@ Only continue if you trust the source. Injected code:
       let root = pageCapture2.rootState.readRoot();
       if (!isRecord(readProperty(readProperty(root, "portal"), "fortress")) || readProperty(readProperty(root, "race"), "warlord"))
         return;
-      let govTabs = SUB_TAB_CONTROLS[GOV_TABS_SETTING];
-      govTabs !== void 0 && pageCapture2.controls.resolve(MAIN_TAB_CONTROL) !== void 0 && finishDiscovery("hell-garrison", "Hell garrison", satisfied, void 0, [
-        Object.freeze({
-          setting: MAIN_TAB_SETTING,
-          control: MAIN_TAB_CONTROL,
-          index: MAIN_TAB_INDEX.civic
-        }),
-        Object.freeze({
-          setting: GOV_TABS_SETTING,
-          control: govTabs,
-          index: GOV_TAB_INDEX.military
-        })
-      ]);
+      let path = civicMilitaryGarrisonPath();
+      path !== void 0 && finishDiscovery(
+        "hell-garrison",
+        "Hell garrison",
+        satisfied,
+        void 0,
+        path
+      );
     }, ensureCivicControls = () => {
       pageCapture2.controls.resolve(MAIN_TAB_CONTROL) !== void 0 && finishDiscovery("civic-controls", "civic", void 0, void 0, [
         Object.freeze({
@@ -53241,26 +53280,28 @@ Only continue if you trust the source. Injected code:
         "outer fleet",
         () => outerFleetShipyard.establish() !== void 0
       );
+    }, ensureOuterFleetGarrison = () => {
+      let satisfied = () => CAPTURED_CITY_GARRISON_CONTROLS.some(
+        (id) => pageCapture2.controls.resolve(id)?.methods.includes("hell")
+      );
+      if (satisfied()) return;
+      let path = civicMilitaryGarrisonPath();
+      path !== void 0 && finishDiscovery(
+        "outer-fleet-garrison",
+        "Outer Fleet garrison",
+        satisfied,
+        void 0,
+        path
+      );
     }, ensureMercenaryControls = () => {
-      let satisfied = () => CAPTURED_MERCENARY_CONTROLS.some(
+      let satisfied = () => CAPTURED_CITY_GARRISON_CONTROLS.some(
         (id) => pageCapture2.controls.resolve(id)?.methods.includes("hire")
       );
       if (satisfied()) return;
       let root = pageCapture2.rootState.readRoot(), garrison = readProperty(readProperty(root, "civic"), "garrison");
-      if (!isRecord(garrison) || garrison.mercs !== !0 || pageCapture2.controls.resolve(MAIN_TAB_CONTROL) === void 0) return;
-      let govTabs = SUB_TAB_CONTROLS[GOV_TABS_SETTING];
-      govTabs !== void 0 && finishDiscovery("mercenary", "Mercenary", satisfied, void 0, [
-        Object.freeze({
-          setting: MAIN_TAB_SETTING,
-          control: MAIN_TAB_CONTROL,
-          index: MAIN_TAB_INDEX.civic
-        }),
-        Object.freeze({
-          setting: GOV_TABS_SETTING,
-          control: govTabs,
-          index: GOV_TAB_INDEX.military
-        })
-      ]);
+      if (!isRecord(garrison) || garrison.mercs !== !0) return;
+      let path = civicMilitaryGarrisonPath();
+      path !== void 0 && finishDiscovery("mercenary", "Mercenary", satisfied, void 0, path);
     }, ensureMechControls = () => {
       let satisfied = () => capturedMechControlsSatisfied(
         pageCapture2.controls,
@@ -53989,7 +54030,7 @@ Only continue if you trust the source. Injected code:
             readProperty(pageCapture2.rootState.readRoot(), "race"),
             "truepath"
           ) === !0)
-            return ensureOuterFleetControls(), outerFleet.autoFleetOuter();
+            return ensureOuterFleetControls(), ensureOuterFleetGarrison(), outerFleet.autoFleetOuter();
           ensureGalaxyFleetControls(), runFleetAutomation({
             reader: fleet.reader,
             executor: fleet.executor

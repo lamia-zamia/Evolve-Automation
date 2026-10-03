@@ -180,6 +180,39 @@ assert.deepEqual(planOuterFleetBuild({ ...buildable, plan: readiness }), {
   shipCrew: 2,
   nextShipName: "Corvette to spc_red",
 });
+assert.equal(
+  planOuterFleetBuild({
+    ...buildable,
+    currentCityGarrison: null,
+    plan: readiness,
+  }).messageAfterUpdate,
+  "City garrison data unavailable; ship construction paused",
+);
+assert.equal(
+  planOuterFleetBuild({
+    ...buildable,
+    currentCityGarrison: null,
+    missingResourceName: "Iridium",
+    plan: readiness,
+  }).messageAfterUpdate,
+  "Next ship(Corvette to spc_red) is missing Iridium",
+);
+assert.equal(
+  planOuterFleetBuild({
+    ...buildable,
+    currentCityGarrison: 39,
+    plan: { ...readiness, shipCrew: 12, minimumCrew: 27 },
+  }).kind,
+  "build-outer-fleet",
+);
+assert.equal(
+  planOuterFleetBuild({
+    ...buildable,
+    currentCityGarrison: 38,
+    plan: { ...readiness, shipCrew: 12, minimumCrew: 27 },
+  }).kind,
+  "outer-fleet-status",
+);
 
 // The resource the game's own row marks as not payable is the one that is named. It comes from that
 // marking rather than from a comparison against the global resource amount, so a supply-pool shortfall

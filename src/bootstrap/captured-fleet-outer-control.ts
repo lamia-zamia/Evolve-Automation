@@ -40,6 +40,7 @@ export function createCapturedOuterFleetControl(
       controls: dependencies.controls,
       parts: dependencies.parts,
     }),
+    garrisonControls: dependencies.controls,
     costs: dependencies.costs,
     parts: dependencies.parts,
     dispatch: dependencies.dispatch,

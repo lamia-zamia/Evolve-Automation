@@ -211,10 +211,8 @@ import { createCapturedOuterFleetShipyard } from "../adapters/evolve/combat/capt
 import { createCapturedOuterFleetParts } from "../adapters/evolve/combat/captured-outer-fleet-parts.ts";
 import { createCapturedSyndicateMechanics } from "../adapters/evolve/captured-syndicate-mechanics.ts";
 import { createCapturedSpaceRegionMechanics } from "../adapters/evolve/captured-space-region-mechanics.ts";
-import {
-  CAPTURED_MERCENARY_CONTROLS,
-  createCapturedMercenary,
-} from "../adapters/evolve/combat/captured-mercenary.ts";
+import { createCapturedMercenary } from "../adapters/evolve/combat/captured-mercenary.ts";
+import { CAPTURED_CITY_GARRISON_CONTROLS } from "../adapters/evolve/combat/captured-city-garrison.ts";
 import { createCapturedBattle } from "../adapters/evolve/combat/battle.ts";
 import {
   capturedMechControlRequirementEpoch,
@@ -1493,6 +1491,24 @@ export function startCapturedRuntime({
     discoveryAttempts.recordSuccess(key);
     return true;
   };
+  const civicMilitaryGarrisonPath = () => {
+    if (pageCapture.controls.resolve(MAIN_TAB_CONTROL) === undefined)
+      return undefined;
+    const govTabs = SUB_TAB_CONTROLS[GOV_TABS_SETTING];
+    if (govTabs === undefined) return undefined;
+    return [
+      Object.freeze({
+        setting: MAIN_TAB_SETTING,
+        control: MAIN_TAB_CONTROL,
+        index: MAIN_TAB_INDEX.civic,
+      }),
+      Object.freeze({
+        setting: GOV_TABS_SETTING,
+        control: govTabs,
+        index: GOV_TAB_INDEX.military,
+      }),
+    ];
+  };
   /**
    * Draws the civics military sub-tab, where `index.js` calls `buildFortress($('#fortress'),false)`
    * and captures `gFort`. The same draw runs `defineGarrison()`, so a later slice that needs the
@@ -1514,21 +1530,15 @@ export function startCapturedRuntime({
     ) {
       return;
     }
-    const govTabs = SUB_TAB_CONTROLS[GOV_TABS_SETTING];
-    if (govTabs === undefined) return;
-    if (pageCapture.controls.resolve(MAIN_TAB_CONTROL) === undefined) return;
-    finishDiscovery("hell-garrison", "Hell garrison", satisfied, undefined, [
-      Object.freeze({
-        setting: MAIN_TAB_SETTING,
-        control: MAIN_TAB_CONTROL,
-        index: MAIN_TAB_INDEX.civic,
-      }),
-      Object.freeze({
-        setting: GOV_TABS_SETTING,
-        control: govTabs,
-        index: GOV_TAB_INDEX.military,
-      }),
-    ]);
+    const path = civicMilitaryGarrisonPath();
+    if (path === undefined) return;
+    finishDiscovery(
+      "hell-garrison",
+      "Hell garrison",
+      satisfied,
+      undefined,
+      path,
+    );
   };
   const ensureCivicControls = () => {
     if (pageCapture.controls.resolve(MAIN_TAB_CONTROL) === undefined) return;
@@ -1645,30 +1655,34 @@ export function startCapturedRuntime({
       () => outerFleetShipyard.establish() !== undefined,
     );
   };
+  const ensureOuterFleetGarrison = () => {
+    const satisfied = () =>
+      CAPTURED_CITY_GARRISON_CONTROLS.some((id) =>
+        pageCapture.controls.resolve(id)?.methods.includes("hell"),
+      );
+    if (satisfied()) return;
+    const path = civicMilitaryGarrisonPath();
+    if (path === undefined) return;
+    finishDiscovery(
+      "outer-fleet-garrison",
+      "Outer Fleet garrison",
+      satisfied,
+      undefined,
+      path,
+    );
+  };
   const ensureMercenaryControls = () => {
     const satisfied = () =>
-      CAPTURED_MERCENARY_CONTROLS.some((id) =>
+      CAPTURED_CITY_GARRISON_CONTROLS.some((id) =>
         pageCapture.controls.resolve(id)?.methods.includes("hire"),
       );
     if (satisfied()) return;
     const root = pageCapture.rootState.readRoot();
     const garrison = readProperty(readProperty(root, "civic"), "garrison");
     if (!isRecord(garrison) || garrison["mercs"] !== true) return;
-    if (pageCapture.controls.resolve(MAIN_TAB_CONTROL) === undefined) return;
-    const govTabs = SUB_TAB_CONTROLS[GOV_TABS_SETTING];
-    if (govTabs === undefined) return;
-    finishDiscovery("mercenary", "Mercenary", satisfied, undefined, [
-      Object.freeze({
-        setting: MAIN_TAB_SETTING,
-        control: MAIN_TAB_CONTROL,
-        index: MAIN_TAB_INDEX.civic,
-      }),
-      Object.freeze({
-        setting: GOV_TABS_SETTING,
-        control: govTabs,
-        index: GOV_TAB_INDEX.military,
-      }),
-    ]);
+    const path = civicMilitaryGarrisonPath();
+    if (path === undefined) return;
+    finishDiscovery("mercenary", "Mercenary", satisfied, undefined, path);
   };
   const ensureMechControls = () => {
     const satisfied = () =>
@@ -3062,6 +3076,7 @@ export function startCapturedRuntime({
             ) === true;
           if (truepath) {
             ensureOuterFleetControls();
+            ensureOuterFleetGarrison();
             return outerFleet.autoFleetOuter();
           }
           ensureGalaxyFleetControls();

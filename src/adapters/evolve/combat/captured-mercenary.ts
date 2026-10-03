@@ -21,12 +21,7 @@ import type { GameRootStateSource } from "../../../ports/game-root-state.ts";
 import { rejected, stale } from "../../command-outcomes.ts";
 import { readCapturedInflationSaveMoney } from "../economy/resources/captured-inflation-assist.ts";
 import { finite, isRecord, readProperty } from "../../validation.ts";
-
-/** `buildGarrison` binds the same hire methods to the full and compact city panels. */
-export const CAPTURED_MERCENARY_CONTROLS = Object.freeze([
-  "garrison",
-  "c_garrison",
-] as const);
+import { CAPTURED_CITY_GARRISON_CONTROLS } from "./captured-city-garrison.ts";
 
 const CAPTURED_MERCENARY_METHODS = Object.freeze([
   "vis",
@@ -117,7 +112,7 @@ function capturedMercenarySettingBoolean(
 function capturedMercenaryControl(
   controls: GameControlRegistry,
 ): GameControlHandle | undefined {
-  return CAPTURED_MERCENARY_CONTROLS.map((elementId) =>
+  return CAPTURED_CITY_GARRISON_CONTROLS.map((elementId) =>
     controls.resolve(elementId),
   ).find(
     (control) =>

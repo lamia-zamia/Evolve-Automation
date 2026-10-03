@@ -12,8 +12,7 @@ import type { GameRootStateSource } from "../../../ports/game-root-state.ts";
 import { stale, SUCCEEDED } from "../../command-outcomes.ts";
 import { finite, isRecord, readProperty } from "../../validation.ts";
 import { HELL_FORTRESS_CONTROL } from "./captured-hell-garrison.ts";
-
-const GARRISON_CONTROLS = ["garrison", "c_garrison"] as const;
+import { CAPTURED_CITY_GARRISON_CONTROLS } from "./captured-city-garrison.ts";
 
 interface HellSession {
   readonly root: unknown;
@@ -273,9 +272,9 @@ function readSoldierTarget(
   targetRating: number,
 ): number | undefined {
   if (targetRating <= 0) return 0;
-  const control = GARRISON_CONTROLS.map((id) => controls.resolve(id)).find(
-    (candidate) => candidate !== undefined,
-  );
+  const control = CAPTURED_CITY_GARRISON_CONTROLS.map((id) =>
+    controls.resolve(id),
+  ).find((candidate) => candidate !== undefined);
   if (control === undefined || !control.methods.includes("rating")) {
     return undefined;
   }

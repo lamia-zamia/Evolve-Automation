@@ -2138,6 +2138,25 @@ function dispatchHarnessRegions() {
 }
 
 function outerFleetControl(harness, readSettings) {
+  if (harness.page.document.getElementById("garrison") === null) {
+    const panel = element("div", { id: "garrison" });
+    harness.page.document.getElementById("mTabCivic").append(panel);
+    harness.capture.mountSuppression.withMountingEnabled(() => {
+      harness.page.Vue.createApp({
+        el: "#garrison",
+        methods: {
+          hell() {
+            if (harness.page.garrisonThrows)
+              throw new Error("native garrison unavailable");
+            return Object.hasOwn(harness.page, "garrisonAnswer")
+              ? harness.page.garrisonAnswer
+              : harness.root.civic.garrison.workers -
+                  harness.root.civic.garrison.crew;
+          },
+        },
+      }).mount(panel);
+    });
+  }
   return createCapturedOuterFleetControl({
     rootState: { readRoot: () => harness.root },
     controls: harness.capture.controls,
@@ -2169,6 +2188,59 @@ assert.equal(integrated.page.document.querySelector(".modal.is-active"), null);
 assert.equal(integrated.root.settings.civTabs, 1);
 assert.equal(integrated.root.settings.govTabs, 0);
 assert.equal(integrated.faults.length, 0);
+
+// The native ship crew and native city garrison meet at the configured reserve boundary. Root
+// reservations deliberately disagree: the old four-term mirror sees 100 free soldiers throughout.
+for (const [label, nativeGarrison, builds] of [
+  ["pillbox reservation", 63, 0],
+  ["exact reserve boundary", 64, 1],
+  ["soul forge reservation", 62, 0],
+  ["native zero", 0, 0],
+  ["native negative", -3, 0],
+]) {
+  const native = makeHarness({ establish: true });
+  native.root.portal.fortress = { garrison: 0 };
+  native.root.space.fob.troops = 0;
+  native.root.eden = {
+    pillbox: { staffed: label === "pillbox reservation" ? 37 : 0 },
+  };
+  native.root.race.warlord = label === "soul forge reservation";
+  if (label === "exact reserve boundary") {
+    native.root.portal.fortress.garrison = 40;
+    native.root.space.fob.troops = 30;
+  }
+  native.page.designCrew = 37;
+  native.page.garrisonAnswer = nativeGarrison;
+  const reserveSettings = {
+    ...HARNESS_SETTINGS,
+    fleetOuterCrew: 27,
+  };
+  const result = outerFleetControl(
+    native,
+    () => reserveSettings,
+  ).autoFleetOuter();
+  assert.equal(result.outcome.status, "succeeded", label);
+  assert.equal(native.page.buildCount ?? 0, builds, label);
+  assert.equal(native.root.space.shipyard.ships.length, builds, label);
+  assert.equal(sentTo(native.page).length, builds, label);
+}
+
+const unavailableGarrison = makeHarness({ establish: true });
+unavailableGarrison.page.garrisonAnswer = NaN;
+const untouchedDesign = {
+  ...unavailableGarrison.root.space.shipyard.blueprint,
+};
+const unavailablePass = outerFleetControl(
+  unavailableGarrison,
+  () => HARNESS_SETTINGS,
+).autoFleetOuter();
+assert.equal(unavailablePass.outcome.status, "succeeded");
+assert.deepEqual(
+  unavailableGarrison.root.space.shipyard.blueprint,
+  untouchedDesign,
+);
+assert.equal(unavailableGarrison.page.buildCount ?? 0, 0);
+assert.deepEqual(sentTo(unavailableGarrison.page), []);
 
 // ---------------------------------------------------------------------------
 // The yard's own price, off-tab: the cost authority against this transcription.

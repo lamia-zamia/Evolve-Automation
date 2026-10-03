@@ -337,10 +337,25 @@ const capturedHandle = {
   methods: Object.keys(capturedMethods),
   data: { s: yard },
 };
+const cityGarrisonHandle = {
+  elementId: "garrison",
+  generation: 1,
+  methods: ["hell"],
+};
 const capturedRegistry = {
   resolve: (elementId) =>
-    elementId === "shipPlans" ? capturedHandle : undefined,
+    elementId === "shipPlans"
+      ? capturedHandle
+      : elementId === "garrison"
+        ? cityGarrisonHandle
+        : undefined,
   invoke: (handle, method, args = []) => {
+    if (handle === cityGarrisonHandle && method === "hell") {
+      return {
+        ok: true,
+        value: root.civic.garrison.workers - root.civic.garrison.crew,
+      };
+    }
     if (handle !== capturedHandle || capturedMethods[method] === undefined) {
       return { ok: false, reason: "unknown-method" };
     }
@@ -349,7 +364,7 @@ const capturedRegistry = {
       value: capturedMethods[method](...args),
     };
   },
-  capturedElementIds: () => ["shipPlans"],
+  capturedElementIds: () => ["shipPlans", "garrison"],
 };
 
 /**
@@ -564,13 +579,24 @@ function createOuterControl(
   costAuthority = costs,
   catalogSource = { catalog: () => partCatalog },
 ) {
+  const registryWithGarrison = {
+    ...registry,
+    resolve: (elementId) =>
+      elementId === "garrison"
+        ? cityGarrisonHandle
+        : registry.resolve(elementId),
+    invoke: (handle, method, args = []) =>
+      handle === cityGarrisonHandle
+        ? capturedRegistry.invoke(handle, method, args)
+        : registry.invoke(handle, method, args),
+  };
   return createCapturedOuterFleetControl({
     rootState: {
       readRoot: () => root,
       isReactivitySuppressed: () => false,
       subscribeRootReplaced: () => () => {},
     },
-    controls: registry,
+    controls: registryWithGarrison,
     costs: costAuthority,
     parts: catalogSource,
     dispatch: {
@@ -672,6 +698,7 @@ assert.equal(yard.ships.length, 0);
         controls: capturedRegistry,
         parts: { catalog: () => partCatalog },
       }),
+      garrisonControls: capturedRegistry,
       costs,
       parts: { catalog: () => partCatalog },
       dispatch,
@@ -1725,6 +1752,7 @@ function readOuterAssignmentPlan(
       subscribeRootReplaced: () => () => {},
     },
     controls: createCapturedFleetControls({ controls: registry, parts }),
+    garrisonControls: capturedRegistry,
     costs,
     parts,
     dispatch,
@@ -2263,6 +2291,7 @@ for (const [hull, design] of [
       controls: capturedRegistry,
       parts: catalogSource,
     }),
+    garrisonControls: capturedRegistry,
   });
   const cycle = planOuterFleetCycle(adapter.reader.readCycle());
   assert.equal(cycle.kind, "select-target");
