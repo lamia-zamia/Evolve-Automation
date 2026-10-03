@@ -148,9 +148,7 @@ export function createCapturedProjectContextReader(
         weightMultiplier?: number;
       } = {};
       // A Vacuum Collapse is reached by building Mana Syphons, so its own maximum does not apply
-      // once that prestige is the plan. `prestigeWaitAT` is not consulted: it waits on banked
-      // accelerated time, which DeadSpace no longer accumulates — `global.settings.at` is only
-      // ever written 0 in 1.5.0.
+      // once that prestige is the plan.
       if (settings["autoPrestige"] === true && prestigeType === "vacuum") {
         syphon.ignoreMaximum = true;
       }

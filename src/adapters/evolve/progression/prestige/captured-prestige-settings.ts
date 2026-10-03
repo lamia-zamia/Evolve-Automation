@@ -20,11 +20,6 @@
  * | `prestigeWhiteholeSaveGems` | `captured-build-policy.ts`, `script-build-policy.ts` |
  * | `prestigeDemonicBomb`, `prestigeVaxStrat` | `captured-tech-conflicts.ts` research exclusions |
  *
- * Withheld, with the feature each one waits on:
- *
- * - `prestigeWaitAT` — only `prestige-eligibility.ts`, which no captured composition imports.
- *   `captured-project-context.ts` already says in a comment that it does not consult it.
- *
  * The prestige-type confirmation ("you may prestige immediately") needs the compatibility
  * building/tech surface to answer, so the captured reader returns no warning. That is a lost
  * prompt, not a lost behaviour: the setting itself is applied either way.

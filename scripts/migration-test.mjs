@@ -60,6 +60,7 @@ function makeFixture() {
       numberSetting: [condition({ ret: "7" })],
       tickTimeout: [condition({ ret: 1 })],
       tickSchedule: [condition({ ret: true })],
+      prestigeWaitAT: [condition({ ret: true })],
       log_old_type: [condition({ ret: false })],
       log_prestige_format: [condition({ ret: "old" })],
       logFilter: [condition({ ret: "native" })],
@@ -137,6 +138,7 @@ function makeFixture() {
     // deprecated post-overrides removal (with override)
     tickTimeout: 250,
     tickSchedule: true,
+    prestigeWaitAT: true,
   };
   return raw;
 }
@@ -285,6 +287,8 @@ assert.ok(!("tickTimeout" in settingsRaw));
 assert.ok(!("tickTimeout" in settingsRaw.overrides));
 assert.ok(!("tickSchedule" in settingsRaw));
 assert.ok(!("tickSchedule" in settingsRaw.overrides));
+assert.ok(!("prestigeWaitAT" in settingsRaw));
+assert.ok(!("prestigeWaitAT" in settingsRaw.overrides));
 assert.ok(!("prestigeAscensionSkipCustom" in settingsRaw));
 
 // ---- Pure primitive unit tests ----

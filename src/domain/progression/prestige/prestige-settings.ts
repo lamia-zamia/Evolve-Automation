@@ -113,12 +113,6 @@ export function createPrestigeSettingsReadModel(input: {
     },
     {
       kind: "toggle",
-      settingName: "prestigeWaitAT",
-      label: "Disable prestiging under Accelerated Time",
-      hint: "Delay reset until all accelerated time will be used, to avoid wasting it",
-    },
-    {
-      kind: "toggle",
       settingName: "prestigeMADIgnoreArpa",
       label: "Ignore early game A.R.P.A.",
       hint: "Disables building any A.R.P.A. projects until MAD is researched, or rival have appeared",

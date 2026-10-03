@@ -9378,7 +9378,6 @@
         prestigeMADIgnoreArpa: !0,
         prestigeMADWait: !0,
         prestigeMADPopulation: 1,
-        prestigeWaitAT: !1,
         prestigeGECK: 0,
         prestigeBioseedConstruct: !0,
         prestigeBioseedProbes: 3,
@@ -34787,6 +34786,7 @@
       "prestigeBioseedGECK",
       "tickTimeout",
       "tickSchedule",
+      "prestigeWaitAT",
       "minorTraitSettingsCollapsed",
       "fleetOuterMinSyndicate",
       "smelter_fuel_p_Star",
@@ -41824,12 +41824,6 @@ If script is allowed to reassign non-empty storage it might waste time producing
         label: "Prestige Type",
         hint: "",
         options
-      },
-      {
-        kind: "toggle",
-        settingName: "prestigeWaitAT",
-        label: "Disable prestiging under Accelerated Time",
-        hint: "Delay reset until all accelerated time will be used, to avoid wasting it"
       },
       {
         kind: "toggle",

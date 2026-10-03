@@ -11,15 +11,12 @@ import {
   CAPTURED_PRESTIGE_SETTINGS,
   createCapturedPrestigeSettingsAdapter,
 } from "../src/adapters/evolve/progression/prestige/captured-prestige-settings.ts";
-import { createPrestigeSettingsReadModel } from "../src/domain/progression/prestige/prestige-settings.ts";
 import { PRESTIGE_TYPES } from "../src/domain/progression/prestige/prestige-types.ts";
 import { createCapturedMadPrestige } from "../src/adapters/evolve/progression/prestige/captured-mad.ts";
 import { createCapturedProjectContextReader } from "../src/adapters/evolve/progression/research/captured-project-context.ts";
 import { createCapturedBuildPolicyReader } from "../src/adapters/evolve/progression/build/captured-build-policy.ts";
 import { createCapturedTechConflictReader } from "../src/adapters/evolve/progression/research/captured-tech-conflicts.ts";
 import { createCapturedSettingsPage, edit } from "./captured-settings-page.mjs";
-
-const WITHHELD = ["prestigeWaitAT"];
 
 // --- the read model offers exactly the exposed set, with no empty headers -----------------------
 
@@ -40,10 +37,6 @@ const WITHHELD = ["prestigeWaitAT"];
     [...CAPTURED_PRESTIGE_SETTINGS].sort(),
     "the read model must offer exactly the traced set",
   );
-  for (const setting of WITHHELD) {
-    assert.ok(!drawn.includes(setting), `${setting} must stay withheld`);
-  }
-
   // A header is dropped only when nothing survives under it. "Matrix" holds the vaccination
   // strategy the research exclusions now consume, so it is back.
   const headers = model.controls
@@ -52,18 +45,6 @@ const WITHHELD = ["prestigeWaitAT"];
   assert.ok(headers.includes("Matrix"));
   assert.ok(headers.includes("Demonic Infusion"));
   assert.ok(headers.includes("Mutual Assured Destruction"));
-
-  // The unfiltered model still carries everything, so the filter is the only difference.
-  const full = createPrestigeSettingsReadModel({ prestigeOptions: [] });
-  for (const setting of WITHHELD) {
-    assert.ok(
-      full.controls.some(
-        (control) =>
-          control.kind !== "header" && control.settingName === setting,
-      ),
-      `${setting} must still exist in the unfiltered model`,
-    );
-  }
 
   // Every prestige the script can aim for is selectable.
   const type = model.controls.find(
@@ -101,13 +82,6 @@ const WITHHELD = ["prestigeWaitAT"];
       page.root.querySelectorAll(`.script_${setting}`).length,
       1,
       `${setting} should be drawn once`,
-    );
-  }
-  for (const setting of WITHHELD) {
-    assert.equal(
-      page.root.querySelectorAll(`.script_${setting}`).length,
-      0,
-      `${setting} has no captured consumer and must not be drawn`,
     );
   }
 }

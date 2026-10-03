@@ -184,7 +184,6 @@ export function computePrestigeDefaults(): ResetPlan {
       prestigeMADIgnoreArpa: true,
       prestigeMADWait: true,
       prestigeMADPopulation: 1,
-      prestigeWaitAT: false,
       prestigeGECK: 0,
       prestigeBioseedConstruct: true,
       prestigeBioseedProbes: 3,
