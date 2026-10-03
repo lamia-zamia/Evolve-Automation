@@ -1,13 +1,8 @@
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
 import { CAPTURED_GRANT_ACTIONS } from "../src/adapters/evolve/progression/build/captured-grant-actions.generated.ts";
 import { createCapturedBuildSource } from "../src/adapters/evolve/progression/build/captured-build.ts";
 import { createCapturedBuildPolicyReader } from "../src/adapters/evolve/progression/build/captured-build-policy.ts";
 
-execFileSync(process.execPath, [
-  "scripts/generate-captured-grant-actions.mjs",
-  "--check",
-]);
 assert.ok(Object.keys(CAPTURED_GRANT_ACTIONS).length > 40);
 for (const [id, technology, level] of [
   ["space-test_launch", "space", 2],

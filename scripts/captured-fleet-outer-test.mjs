@@ -12,8 +12,6 @@ import {
 } from "../src/domain/combat/fleet-outer.ts";
 import { createCapturedOuterFleetControl } from "../src/bootstrap/captured-fleet-outer-control.ts";
 import { element, parseTestMarkup } from "./dom-fixture.mjs";
-import { createNativeSpaceRegionFixture } from "./space-region-native-fixture.mjs";
-import { createCapturedSpaceRegionMechanics } from "../src/adapters/evolve/captured-space-region-mechanics.ts";
 
 /**
  * The yard's own part catalogue, as the option markup `drawShipYard()` emits it.
@@ -205,11 +203,8 @@ const yard = {
   ships: [],
 };
 const root = {
-  settings: {
-    space: { titan: true, triton: true, makemake: true, eris: true },
-  },
   race: { truepath: true, universe: "evil", grenadier: false },
-  tech: { syndicate: 1, tauceti: 0, eris: 2, triton: 0, outer: 0 },
+  tech: { syndicate: 1, tauceti: 0, eris: 2, outer: 0 },
   space: {
     shipyard: yard,
     syndicate: { spc_red: 600 },
@@ -434,18 +429,23 @@ function createSyndicateStub(samples = { spc_red: { p: 0.7319, s: 47 } }) {
   };
 }
 let syndicate = createSyndicateStub();
-const nativeRegions = createNativeSpaceRegionFixture(root);
-const capturedRegionMechanics = createCapturedSpaceRegionMechanics({
-  pageWindow: { Object: nativeRegions.pageObject },
-  rootState: { readRoot: () => root },
-  discovery: {
-    discover() {
-      nativeRegions.pageObject.keys(nativeRegions.projects);
-      return { outcome: { status: "succeeded" }, discovered: [] };
+// This composition consumes the mechanics port's verdict, independently of the game's formulas.
+function createOuterRegionMechanicsStub(samples = {}) {
+  return {
+    requests: [],
+    read(region) {
+      this.requests.push(region);
+      return (
+        samples[region] ?? {
+          kind: "value",
+          value: { reachable: true, syndicateEnabled: true },
+        }
+      );
     },
-  },
-});
-let regionMechanics = capturedRegionMechanics;
+  };
+}
+const defaultRegionMechanics = createOuterRegionMechanicsStub();
+let regionMechanics = defaultRegionMechanics;
 
 let costs = createCostStub();
 /** The one catalogue every composition here shares, as the yard's own markup would have produced it. */
@@ -1380,7 +1380,7 @@ function resetOuterPass() {
 
 // Mechanics unavailable where the pass needs them: nothing is priced, nothing is written, nothing is
 // built, nothing is sent, and the pass says why instead of guessing a ratio.
-// Native metadata gates are live closures, independent of piracy keys and local tech thresholds.
+// The policy boundary follows native eligibility and fails closed before any effects.
 {
   const savedTech = { ...root.tech };
   const savedWeights = { ...capturedSettings };
@@ -1395,124 +1395,97 @@ function resetOuterPass() {
     assert.equal(yard.ships.length, 0);
     assert.equal(regionWrites, 0);
     assert.deepEqual(dispatch.requests, []);
-    assert.deepEqual(
-      costs.requests.filter(([method]) => method === "price"),
-      [],
-    );
+    assert.deepEqual(costs.requests, [], "no pricing or cost probes");
+  }
+  function resetRegionPass() {
+    resetOuterPass();
+    regionWrites = 0;
+    syndicate = createSyndicateStub({
+      spc_red: { p: 0.5, s: 47 },
+      spc_moon: { p: 0.5, s: 47 },
+      spc_eris: { p: 0.5, s: 12 },
+    });
   }
   try {
     capturedSettings.fleet_outer_pr_spc_red = 0;
     capturedSettings.fleet_outer_pr_spc_moon = 1;
-    root.race.tidal_decay = 1;
-    syndicate = createSyndicateStub({ spc_moon: { p: 0.5, s: 47 } });
-    resetOuterPass();
-    createOuterControl().autoFleetOuter();
-    assert.deepEqual(
-      syndicate.requests,
-      [],
-      "tidally decayed Moon must not be queried",
-    );
-    noRegionEffects();
-    delete root.race.tidal_decay;
-    capturedSettings.fleet_outer_pr_spc_moon = 0;
-    capturedSettings.fleet_outer_pr_spc_titan = 1;
-    root.tech.titan = 3;
-    root.tech.enceladus = 2;
-    root.settings.space.titan = false;
-    syndicate = createSyndicateStub({ spc_titan: { p: 0.5, s: 47 } });
-    resetOuterPass();
-    createOuterControl().autoFleetOuter();
-    assert.deepEqual(
-      syndicate.requests,
-      [],
-      "hidden Titan must not be queried",
-    );
-    noRegionEffects();
-    root.settings.space.titan = true;
-    resetOuterPass();
-    createOuterControl().autoFleetOuter();
-    assert.deepEqual(syndicate.requests, ["spc_titan"]);
-    assert.deepEqual(dispatch.requests, [{ index: 0, region: "spc_titan" }]);
-    assert.equal(
-      Object.hasOwn(root.space.syndicate, "spc_titan"),
-      false,
-      "a missing piracy key must not prevent native eligibility",
-    );
-    root.tech.enceladus = 1; // Native syndicate() now answers false while nav stays true.
-    resetOuterPass();
-    regionWrites = 0;
-    syndicate.requests.length = 0;
-    createOuterControl().autoFleetOuter();
-    assert.deepEqual(syndicate.requests, []);
-    noRegionEffects();
+    for (const eligibility of [
+      { reachable: true, syndicateEnabled: true },
+      { reachable: false, syndicateEnabled: true },
+      { reachable: true, syndicateEnabled: false },
+    ]) {
+      regionMechanics = createOuterRegionMechanicsStub({
+        spc_moon: { kind: "value", value: eligibility },
+      });
+      resetRegionPass();
+      createOuterControl().autoFleetOuter();
+      assert.deepEqual(regionMechanics.requests, ["spc_moon"]);
+      if (eligibility.reachable && eligibility.syndicateEnabled) {
+        assert.deepEqual(syndicate.requests, ["spc_moon"]);
+        assert.deepEqual(dispatch.requests, [{ index: 0, region: "spc_moon" }]);
+        assert.equal(capturedBuilds, 1);
+        assert.equal(Object.hasOwn(root.space.syndicate, "spc_moon"), false);
+      } else {
+        assert.deepEqual(syndicate.requests, []);
+        noRegionEffects();
+      }
+    }
 
     capturedSettings.fleet_outer_pr_spc_red = 1;
-    regionMechanics = {
-      read(id) {
-        return id === "spc_titan"
-          ? { kind: "invalid" }
-          : capturedRegionMechanics.read(id);
-      },
-    };
-    syndicate = createSyndicateStub();
-    resetOuterPass();
-    createOuterControl().autoFleetOuter();
-    noRegionEffects();
-    assert.deepEqual(syndicate.requests, []);
-    capturedSettings.fleet_outer_pr_spc_titan = 0;
-    resetOuterPass();
-    createOuterControl().autoFleetOuter();
-    assert.deepEqual(syndicate.requests, ["spc_red"]);
-    assert.deepEqual(dispatch.requests, [{ index: 0, region: "spc_red" }]);
+    for (const kind of ["absent", "invalid"]) {
+      regionMechanics = createOuterRegionMechanicsStub({ spc_moon: { kind } });
+      resetRegionPass();
+      createOuterControl().autoFleetOuter();
+      assert.deepEqual(syndicate.requests, []);
+      noRegionEffects();
 
-    // Stage-1 Eris sensors are policy, but only a native eligible Eris can use that gate.
-    regionMechanics = capturedRegionMechanics;
+      capturedSettings.fleet_outer_pr_spc_moon = 0;
+      regionMechanics.requests.length = 0;
+      resetRegionPass();
+      createOuterControl().autoFleetOuter();
+      assert.deepEqual(regionMechanics.requests, ["spc_red"]);
+      assert.deepEqual(syndicate.requests, ["spc_red"]);
+      assert.deepEqual(dispatch.requests, [{ index: 0, region: "spc_red" }]);
+      capturedSettings.fleet_outer_pr_spc_moon = 1;
+    }
+
+    // Stage-1 Eris's sensor gate runs only for a weighted, natively eligible Eris.
     root.tech.eris = 1;
-    capturedSettings.fleet_outer_pr_spc_eris = 1;
-    root.settings.space.eris = false;
-    resetOuterPass();
-    syndicate = createSyndicateStub();
-    createOuterControl().autoFleetOuter();
-    assert.deepEqual(syndicate.requests, ["spc_red"]);
-    assert.deepEqual(dispatch.requests, [{ index: 0, region: "spc_red" }]);
-    root.settings.space.eris = true;
-    regionMechanics = {
-      read(id) {
-        return id === "spc_red"
-          ? { kind: "invalid" }
-          : capturedRegionMechanics.read(id);
-      },
-    };
-    resetOuterPass();
-    regionWrites = 0;
-    syndicate = createSyndicateStub({ spc_eris: { p: 0.5, s: 12 } });
-    createOuterControl().autoFleetOuter();
-    noRegionEffects();
-    assert.deepEqual(
-      syndicate.requests,
-      [],
-      "unavailable weighted region precedes Eris sensor priority",
-    );
-    regionMechanics = {
-      read(id) {
-        return id === "spc_eris"
-          ? {
-              kind: "value",
-              value: { reachable: true, syndicateEnabled: false },
-            }
-          : capturedRegionMechanics.read(id);
-      },
-    };
-    resetOuterPass();
-    syndicate = createSyndicateStub();
-    createOuterControl().autoFleetOuter();
-    assert.deepEqual(syndicate.requests, ["spc_red"]);
+    capturedSettings.fleet_outer_pr_spc_moon = 0;
+    for (const [weighting, eligibility] of [
+      [0, { reachable: true, syndicateEnabled: true }],
+      [1, { reachable: false, syndicateEnabled: true }],
+      [1, { reachable: true, syndicateEnabled: false }],
+      [1, { reachable: true, syndicateEnabled: true }],
+    ]) {
+      capturedSettings.fleet_outer_pr_spc_eris = weighting;
+      regionMechanics = createOuterRegionMechanicsStub({
+        spc_eris: { kind: "value", value: eligibility },
+      });
+      resetRegionPass();
+      createOuterControl().autoFleetOuter();
+      if (weighting && eligibility.reachable && eligibility.syndicateEnabled) {
+        assert.deepEqual(syndicate.requests, ["spc_eris"]);
+        // The low sensor answer selects Eris ahead of the ordinary defense targets.
+        assert.deepEqual(dispatch.requests, [{ index: 0, region: "spc_eris" }]);
+      } else {
+        assert.deepEqual(syndicate.requests, ["spc_red"]);
+        assert.deepEqual(dispatch.requests, [{ index: 0, region: "spc_red" }]);
+      }
+    }
+
+    // Unavailable weighted authority also precedes the otherwise-live Eris gate.
+    for (const kind of ["absent", "invalid"]) {
+      regionMechanics = createOuterRegionMechanicsStub({ spc_red: { kind } });
+      resetRegionPass();
+      createOuterControl().autoFleetOuter();
+      assert.deepEqual(syndicate.requests, []);
+      noRegionEffects();
+    }
   } finally {
     capturedMethods.setVal = savedSetVal;
-    regionMechanics = capturedRegionMechanics;
+    regionMechanics = defaultRegionMechanics;
     Object.assign(root.tech, savedTech);
-    delete root.tech.titan;
-    delete root.tech.enceladus;
     for (const key of Object.keys(capturedSettings))
       delete capturedSettings[key];
     Object.assign(capturedSettings, savedWeights);
@@ -1582,7 +1555,7 @@ function resetOuterPass() {
   assert.deepEqual(dispatch.requests, [{ index: 0, region: "tauceti" }]);
   capturedSettings.fleetExploreTau = false;
   root.tech.tauceti = 0;
-  regionMechanics = capturedRegionMechanics;
+  regionMechanics = defaultRegionMechanics;
 }
 
 // Assigned ships reserve their slots while moving; the last departed port is not their assignment.

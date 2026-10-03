@@ -1,6 +1,5 @@
 /** Retains the running game's private Space info closures from one protected render. */
 import { OUTER_FLEET_REGIONS } from "../../domain/combat/outer-fleet-regions.ts";
-import type { GameRootStateSource } from "../../ports/game-root-state.ts";
 import type { GameTabDiscovery } from "../../ports/game-tab-discovery.ts";
 import type { GameSpaceRegionMechanics } from "../../ports/game-space-region-mechanics.ts";
 import {
@@ -21,7 +20,6 @@ import { observeScopedObjectKeys } from "./scoped-object-keys.ts";
 
 interface CapturedSpaceRegionDependencies {
   readonly pageWindow: unknown;
-  readonly rootState: GameRootStateSource;
   readonly discovery: GameTabDiscovery;
 }
 
@@ -122,16 +120,8 @@ export function createCapturedSpaceRegionMechanics(
         const syndicate = info["syndicate"];
         if (typeof nav !== "function" || typeof syndicate !== "function")
           return { kind: "invalid" as const };
-        let reachable = Boolean(Reflect.apply(nav, info, []));
+        const reachable = Boolean(Reflect.apply(nav, info, []));
         const syndicateEnabled = Boolean(Reflect.apply(syndicate, info, []));
-        // ships.js:regionReachable adds this edge after info.nav(); all other gates stay native.
-        if (region === "spc_moon") {
-          const root = dependencies.rootState.readRoot();
-          const race = readProperty(root, "race");
-          if (!isNonArrayRecord(root) || !isNonArrayRecord(race))
-            return { kind: "invalid" as const };
-          if (race["orbit_decayed"]) reachable = false;
-        }
         return {
           kind: "value" as const,
           value: Object.freeze({ reachable, syndicateEnabled }),

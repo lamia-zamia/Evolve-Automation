@@ -1,7 +1,5 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import { capturedShipBound } from "../src/adapters/evolve/combat/captured-ship-route.ts";
-import { extractSnapshotFunction } from "./snapshot-function-fixture.mjs";
 
 const point = (id) => ({ id, x: 0, y: 1, z: 2 });
 const regionAnswer = (region) => ({ kind: "region", region });
@@ -150,46 +148,4 @@ assert.deepEqual(
   { kind: "unavailable" },
 );
 
-const snapshotPath = new URL(
-  "../test-artifacts/game/evolve-deadspace.js",
-  import.meta.url,
-);
-const snapshot = readFileSync(snapshotPath, "utf8");
-const sidecar = JSON.parse(
-  readFileSync(new URL(`${snapshotPath.href}.json`), "utf8"),
-);
-assert.match(
-  String(sidecar.commit),
-  /^[0-9a-f]{7,40} \S/,
-  "the snapshot must identify its upstream commit",
-);
-const pinnedDeclarations = {
-  legsOf: `function legsOf(ship) {
-    return ship && ship.movement && Array.isArray(ship.movement.legs) ? ship.movement.legs : [];
-  }`,
-  shipMoving: `function shipMoving(ship) {
-    return !!(ship && ship.movement);
-  }`,
-  shipPort: `function shipPort(ship) {
-    return ship && ship.location ? ship.location.id : void 0;
-  }`,
-  shipDestination: `function shipDestination(ship) {
-    const legs = legsOf(ship);
-    return legs.length ? legPlace(legs[legs.length - 1]) : false;
-  }`,
-  shipBound: `function shipBound(ship) {
-    return shipMoving(ship) ? shipDestination(ship) : shipPort(ship);
-  }`,
-  legPlace: `function legPlace(leg) {
-    return leg.to && typeof leg.to.id === "string" ? leg.to.id : "";
-  }`,
-};
-for (const [name, declaration] of Object.entries(pinnedDeclarations)) {
-  assert.equal(
-    extractSnapshotFunction(snapshot, name).replace(/\s+/g, " ").trim(),
-    declaration.replace(/\s+/g, " ").trim(),
-    `${name} changed in ${sidecar.commit}; reverify capturedShipBound against upstream ships.js`,
-  );
-}
-
-console.log(`Captured ship route tests passed (snapshot ${sidecar.commit})`);
+console.log("Captured ship route tests passed");

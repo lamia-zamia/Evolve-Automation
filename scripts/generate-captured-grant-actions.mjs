@@ -4,7 +4,15 @@ import { resolve } from "node:path";
 import ts from "typescript";
 import prettier from "prettier";
 
-const upstream = resolve(process.env.EVOLVE_SOURCE ?? "../Evolve");
+const upstreamArgument = process.argv.find((argument) =>
+  argument.startsWith("--upstream="),
+);
+if (!upstreamArgument?.slice("--upstream=".length)) {
+  throw new Error(
+    "Pass --upstream=<path> to an explicit Evolve source checkout",
+  );
+}
+const upstream = resolve(upstreamArgument.slice("--upstream=".length));
 const commit = "6cc9ba8ce714e9ef474b468be93b4c7edfb98830";
 const initialGrantCommit = "6cc9ba8ce714e9ef474b468be93b4c7edfb98830";
 const legacyManagerCommit = "a4777a2b39325baa700fc1facf5635e526dac4d4";

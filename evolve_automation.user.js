@@ -49956,12 +49956,6 @@ Only continue if you trust the source. Injected code:
           if (typeof nav != "function" || typeof syndicate != "function")
             return { kind: "invalid" };
           let reachable = !!Reflect.apply(nav, info, []), syndicateEnabled = !!Reflect.apply(syndicate, info, []);
-          if (region === "spc_moon") {
-            let root = dependencies.rootState.readRoot(), race = readProperty(root, "race");
-            if (!isNonArrayRecord(root) || !isNonArrayRecord(race))
-              return { kind: "invalid" };
-            race.orbit_decayed && (reachable = !1);
-          }
           return {
             kind: "value",
             value: Object.freeze({ reachable, syndicateEnabled })
@@ -53810,7 +53804,6 @@ Only continue if you trust the source. Injected code:
       mechanics: pageCapture2.mechanics
     }), outerFleetRegions = createCapturedSpaceRegionMechanics({
       pageWindow: settingsHostWindow2,
-      rootState: pageCapture2.rootState,
       discovery: civicDiscovery
     }), outerFleet = createCapturedOuterFleetControl({
       rootState: pageCapture2.rootState,

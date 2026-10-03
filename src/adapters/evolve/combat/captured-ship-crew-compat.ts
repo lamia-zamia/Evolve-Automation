@@ -13,10 +13,9 @@
  *
  * What makes the transcription safe rather than merely duplicated:
  *
- * - it is derived from the pinned snapshot, not from memory, and
- *   `scripts/captured-ship-crew-compat-test.mjs` reads `shipCrewSize` back out of
- *   `test-artifacts/game/evolve-deadspace.js` and fails when the two disagree, so an upstream change
- *   cannot leave stale crew numbers here silently;
+ * - it is derived from the pinned upstream source, and
+ *   `scripts/captured-ship-crew-compat-test.mjs` characterizes the selected hull requirements,
+ *   truthiness and job scaling using repository-owned inputs;
  * - it holds no combat, sensor or piracy arithmetic — one table and the game's own job scaling.
  *
  * Nothing else may grow here.

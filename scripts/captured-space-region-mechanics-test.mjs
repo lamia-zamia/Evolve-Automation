@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import vm from "node:vm";
+import { OUTER_FLEET_REGIONS } from "../src/domain/combat/outer-fleet-regions.ts";
 import { createCapturedSpaceRegionMechanics } from "../src/adapters/evolve/captured-space-region-mechanics.ts";
 import {
   MAIN_TAB_CONTROL,
@@ -9,29 +11,38 @@ import {
   SPACE_TAB_INDEX,
   SUB_TAB_CONTROLS,
 } from "../src/adapters/evolve/captured-tab-discovery.ts";
-import { createNativeSpaceRegionFixture } from "./space-region-native-fixture.mjs";
-
-function spaceMechanicsTestRoot() {
-  return {
-    race: {},
-    tech: { titan: 3, enceladus: 2, triton: 2, makemake: 1, eris: 1 },
-    settings: {
-      space: { titan: true, triton: true, makemake: true, eris: true },
+// Synthetic answers deliberately carry no game rules. Each retained method closes over live state.
+function spaceMechanicsBehaviorFixture() {
+  const state = Object.fromEntries(
+    OUTER_FLEET_REGIONS.map((region) => [
+      region,
+      {
+        nav: true,
+        syndicate: true,
+      },
+    ]),
+  );
+  const context = vm.createContext({ state, regions: OUTER_FLEET_REGIONS });
+  const projects = vm.runInContext(
+    `Object.fromEntries(regions.map(region => [region, {
+    info: {
+      nav() { return state[region].nav; },
+      syndicate() { return state[region].syndicate; },
     },
-  };
+  }]))`,
+    context,
+  );
+  return { state, projects, pageObject: vm.runInContext("Object", context) };
 }
 
 function spaceMechanicsTestHarness() {
-  const root = spaceMechanicsTestRoot();
-  const native = createNativeSpaceRegionFixture(root);
+  const native = spaceMechanicsBehaviorFixture();
   const page = { Object: native.pageObject };
   const calls = [];
-  let liveRoot = root;
   let draw = () => native.pageObject.keys(native.projects);
   let result = { outcome: { status: "succeeded" } };
   const dependencies = {
     pageWindow: page,
-    rootState: { readRoot: () => liveRoot },
     discovery: {
       discover(path, scope) {
         calls.push({ path, scope });
@@ -41,7 +52,6 @@ function spaceMechanicsTestHarness() {
     },
   };
   return {
-    root,
     native,
     page,
     calls,
@@ -52,9 +62,6 @@ function spaceMechanicsTestHarness() {
     },
     setResult(value) {
       result = value;
-    },
-    setRoot(value) {
-      liveRoot = value;
     },
   };
 }
@@ -102,42 +109,21 @@ function spaceMechanicsTestValue(adapter, region) {
     descriptor,
   );
   harness.setDraw(() => assert.fail("captured authority must never redraw"));
-  harness.root.race.tidal_decay = 1;
-  assert.equal(
-    spaceMechanicsTestValue(harness.adapter, "spc_moon").reachable,
-    false,
-  );
-  delete harness.root.race.tidal_decay;
-  assert.equal(
-    spaceMechanicsTestValue(harness.adapter, "spc_moon").reachable,
-    true,
-  );
-  for (const region of ["titan", "triton", "makemake", "eris"]) {
-    harness.root.settings.space[region] = false;
-    assert.equal(
-      spaceMechanicsTestValue(harness.adapter, `spc_${region}`).reachable,
-      false,
-    );
-    harness.root.settings.space[region] = true;
-    assert.equal(
-      spaceMechanicsTestValue(harness.adapter, `spc_${region}`).reachable,
-      true,
-    );
+  for (const region of OUTER_FLEET_REGIONS) {
+    const state = harness.native.state[region];
+    state.nav = false;
+    state.syndicate = false;
+    assert.deepEqual(spaceMechanicsTestValue(harness.adapter, region), {
+      reachable: false,
+      syndicateEnabled: false,
+    });
+    state.nav = true;
+    state.syndicate = true;
+    assert.deepEqual(spaceMechanicsTestValue(harness.adapter, region), {
+      reachable: true,
+      syndicateEnabled: true,
+    });
   }
-  harness.root.tech.enceladus = 1;
-  assert.equal(
-    spaceMechanicsTestValue(harness.adapter, "spc_titan").syndicateEnabled,
-    false,
-  );
-  assert.equal(
-    spaceMechanicsTestValue(harness.adapter, "spc_enceladus").syndicateEnabled,
-    false,
-  );
-  harness.root.tech.enceladus = 2;
-  assert.equal(
-    spaceMechanicsTestValue(harness.adapter, "spc_titan").syndicateEnabled,
-    true,
-  );
   assert.equal(harness.calls.length, 1);
 }
 
@@ -156,7 +142,7 @@ function spaceMechanicsTestValue(adapter, region) {
 }
 {
   const harness = spaceMechanicsTestHarness();
-  const other = createNativeSpaceRegionFixture(harness.root);
+  const other = spaceMechanicsBehaviorFixture();
   harness.setDraw(() => {
     harness.native.pageObject.keys(harness.native.projects);
     harness.native.pageObject.keys(other.projects);
@@ -308,57 +294,6 @@ for (const method of ["nav", "syndicate"]) {
     assert.equal(harness.adapter.read("spc_titan").kind, "value");
     assert.equal(harness.calls.length, 1);
   }
-}
-
-// Exactly the pinned post-nav Moon edge, including malformed/unreadable root state.
-{
-  const harness = spaceMechanicsTestHarness();
-  harness.native.projects.spc_moon.info.nav = () => true;
-  harness.root.race.orbit_decayed = "yes";
-  assert.equal(
-    spaceMechanicsTestValue(harness.adapter, "spc_moon").reachable,
-    false,
-  );
-  harness.root.race.orbit_decayed = 0;
-  assert.equal(
-    spaceMechanicsTestValue(harness.adapter, "spc_moon").reachable,
-    true,
-  );
-  harness.root.race.tidal_decay = true;
-  assert.equal(
-    spaceMechanicsTestValue(harness.adapter, "spc_moon").reachable,
-    true,
-    "tidal decay belongs to native nav and is not another local edge",
-  );
-  for (const malformed of [
-    undefined,
-    null,
-    1,
-    [],
-    {},
-    { race: null },
-    { race: [] },
-    { race: 5 },
-  ]) {
-    harness.setRoot(malformed);
-    assert.deepEqual(harness.adapter.read("spc_moon"), { kind: "invalid" });
-  }
-  harness.setRoot({
-    get race() {
-      throw new Error("unreadable race");
-    },
-  });
-  assert.deepEqual(harness.adapter.read("spc_moon"), { kind: "invalid" });
-  harness.setRoot({
-    race: {
-      get orbit_decayed() {
-        throw new Error("unreadable edge");
-      },
-    },
-  });
-  assert.deepEqual(harness.adapter.read("spc_moon"), { kind: "invalid" });
-  harness.setRoot(harness.root);
-  assert.equal(harness.calls.length, 1);
 }
 
 // Nested reads are unavailable within one adapter and across adapters sharing the page Object.

@@ -2609,7 +2609,6 @@ export function startCapturedRuntime({
   });
   const outerFleetRegions = createCapturedSpaceRegionMechanics({
     pageWindow: settingsHostWindow,
-    rootState: pageCapture.rootState,
     discovery: civicDiscovery,
   });
   const outerFleet = createCapturedOuterFleetControl({
