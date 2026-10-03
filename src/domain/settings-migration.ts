@@ -500,6 +500,8 @@ export function migrateSettingsRecord(
     "tickTimeout",
     "tickSchedule",
     "prestigeWaitAT",
+    "mechSpecial",
+    "mechInfernalCollector",
     "minorTraitSettingsCollapsed",
     "fleetOuterMinSyndicate",
     "smelter_fuel_p_Star",

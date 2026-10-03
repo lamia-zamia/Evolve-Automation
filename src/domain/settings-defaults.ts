@@ -343,8 +343,6 @@ export function computeMechDefaults(): ResetPlan {
       mechScoutsRebuild: false,
       mechMinSupply: 1000,
       mechMaxCollectors: 0.5,
-      mechInfernalCollector: true,
-      mechSpecial: "prefered",
       mechSaveSupplyRatio: 1,
       buildingMechsFirst: true,
       mechBaysFirst: true,

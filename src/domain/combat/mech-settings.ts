@@ -73,29 +73,6 @@ const buildOptions: readonly MechSettingsOption[] = Object.freeze([
     hint: "Build whatever currently set in Mech Lab",
   }),
 ]);
-const specialOptions: readonly MechSettingsOption[] = Object.freeze([
-  Object.freeze({
-    val: "always",
-    label: "Always",
-    hint: "Add special equipment to all mechs",
-  }),
-  Object.freeze({
-    val: "prefered",
-    label: "Preferred",
-    hint: "Add special equipment when it doesn't reduce efficiency for current floor",
-  }),
-  Object.freeze({
-    val: "random",
-    label: "Random",
-    hint: "Special equipment will have same chance to be added as all others",
-  }),
-  Object.freeze({
-    val: "never",
-    label: "Never",
-    hint: "Never add special equipment",
-  }),
-]);
-
 const CAPTURED_MECH_SETTING_NAMES: ReadonlySet<string> = new Set([
   "mechScrap",
   "mechScrapEfficiency",
@@ -103,6 +80,7 @@ const CAPTURED_MECH_SETTING_NAMES: ReadonlySet<string> = new Set([
   "mechBuild",
   "mechSize",
   "mechSizeGravity",
+  "mechWaygatePotential",
   "mechMinSupply",
   "mechMaxCollectors",
   "mechSaveSupplyRatio",
@@ -158,13 +136,6 @@ export function createMechSettingsReadModel(
       options: sizeOptions,
     }),
     Object.freeze({
-      kind: "select",
-      settingName: "mechSpecial",
-      label: "Special mechs",
-      hint: "Configures special equip",
-      options: specialOptions,
-    }),
-    Object.freeze({
       kind: "number",
       settingName: "mechWaygatePotential",
       label: "Maximum mech potential for Waygate",
@@ -193,12 +164,6 @@ export function createMechSettingsReadModel(
       settingName: "mechScouts",
       label: "Minimum scouts ratio",
       hint: "Scouts compensate terrain penalty of suboptimal mechs. Build them up to this ratio.",
-    }),
-    Object.freeze({
-      kind: "toggle",
-      settingName: "mechInfernalCollector",
-      label: "Build infernal collectors",
-      hint: "Infernal collectors have incresed supply cost, and payback time, but becomes more profitable after ~30 minutes of uptime.",
     }),
     Object.freeze({
       kind: "toggle",

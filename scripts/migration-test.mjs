@@ -61,6 +61,8 @@ function makeFixture() {
       tickTimeout: [condition({ ret: 1 })],
       tickSchedule: [condition({ ret: true })],
       prestigeWaitAT: [condition({ ret: true })],
+      mechSpecial: [condition({ ret: "always" })],
+      mechInfernalCollector: [condition({ ret: false })],
       log_old_type: [condition({ ret: false })],
       log_prestige_format: [condition({ ret: "old" })],
       logFilter: [condition({ ret: "native" })],
@@ -139,6 +141,8 @@ function makeFixture() {
     tickTimeout: 250,
     tickSchedule: true,
     prestigeWaitAT: true,
+    mechSpecial: "always",
+    mechInfernalCollector: false,
   };
   return raw;
 }
@@ -289,6 +293,10 @@ assert.ok(!("tickSchedule" in settingsRaw));
 assert.ok(!("tickSchedule" in settingsRaw.overrides));
 assert.ok(!("prestigeWaitAT" in settingsRaw));
 assert.ok(!("prestigeWaitAT" in settingsRaw.overrides));
+assert.ok(!("mechSpecial" in settingsRaw));
+assert.ok(!("mechSpecial" in settingsRaw.overrides));
+assert.ok(!("mechInfernalCollector" in settingsRaw));
+assert.ok(!("mechInfernalCollector" in settingsRaw.overrides));
 assert.ok(!("prestigeAscensionSkipCustom" in settingsRaw));
 
 // ---- Pure primitive unit tests ----

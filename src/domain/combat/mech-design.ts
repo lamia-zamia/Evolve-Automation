@@ -12,7 +12,7 @@
  * DeadSpace `fa62465f`), so exact history is impossible and this is the
  * narrowest current equivalent, evaluated under current legality:
  * - `special` is pinned at equip slot zero (`normalizeBlueprint`, line 7046);
- *   the `mechSpecial` setting chooses nothing anymore and is obsolete.
+ *   the former `mechSpecial` setting could not choose it and was retired.
  * - general slots follow `mechGeneralSlots` (line 6989), hardpoints follow the
  *   `setSize` trimming (collector 0, small 1, medium/large 2, titan 4).
  * - power mirrors `mechRating`'s floor branch (line 7844): wrath, gladiator,

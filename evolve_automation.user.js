@@ -9510,8 +9510,6 @@
         mechScoutsRebuild: !1,
         mechMinSupply: 1e3,
         mechMaxCollectors: 0.5,
-        mechInfernalCollector: !0,
-        mechSpecial: "prefered",
         mechSaveSupplyRatio: 1,
         buildingMechsFirst: !0,
         mechBaysFirst: !0,
@@ -9931,19 +9929,13 @@
       collectorValue: mechSettingNumber("mechCollectorValue"),
       preferredSize: mechSettingString("mechSize"),
       gravitySize: mechSettingString("mechSizeGravity"),
-      specialMode: pick(
-        "mechSpecial",
-        ["always", "prefered", "random", "never"],
-        "prefered"
-      ),
       waygatePotential: mechSettingNumber("mechWaygatePotential"),
       minimumSupplyRate: mechSettingNumber("mechMinSupply"),
       maximumCollectorShare: mechSettingNumber("mechMaxCollectors"),
       saveSupplyRatio: mechSettingNumber("mechSaveSupplyRatio"),
       scoutsRatio: mechSettingNumber("mechScouts"),
-      // The shipped defaults for these four are true, so only an explicit
+      // The shipped defaults for these three are true, so only an explicit
       // false disables them; an absent key reads as the default.
-      infernalCollector: settings.mechInfernalCollector !== !1,
       rebuildScouts: settings.mechScoutsRebuild === !0,
       fillBay: settings.mechFillBay !== !1,
       buildingsFirst: settings.buildingMechsFirst !== !1,
@@ -34806,6 +34798,8 @@
       "tickTimeout",
       "tickSchedule",
       "prestigeWaitAT",
+      "mechSpecial",
+      "mechInfernalCollector",
       "minorTraitSettingsCollapsed",
       "fleetOuterMinSyndicate",
       "smelter_fuel_p_Star",
@@ -45428,27 +45422,6 @@ If script is allowed to reassign non-empty storage it might waste time producing
       label: "Current design",
       hint: "Build whatever currently set in Mech Lab"
     })
-  ]), specialOptions = Object.freeze([
-    Object.freeze({
-      val: "always",
-      label: "Always",
-      hint: "Add special equipment to all mechs"
-    }),
-    Object.freeze({
-      val: "prefered",
-      label: "Preferred",
-      hint: "Add special equipment when it doesn't reduce efficiency for current floor"
-    }),
-    Object.freeze({
-      val: "random",
-      label: "Random",
-      hint: "Special equipment will have same chance to be added as all others"
-    }),
-    Object.freeze({
-      val: "never",
-      label: "Never",
-      hint: "Never add special equipment"
-    })
   ]), CAPTURED_MECH_SETTING_NAMES = /* @__PURE__ */ new Set([
     "mechScrap",
     "mechScrapEfficiency",
@@ -45456,6 +45429,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
     "mechBuild",
     "mechSize",
     "mechSizeGravity",
+    "mechWaygatePotential",
     "mechMinSupply",
     "mechMaxCollectors",
     "mechSaveSupplyRatio",
@@ -45511,13 +45485,6 @@ Efficiency above '1' is useful to save resources for more desperate times, or to
         options: sizeOptions
       }),
       Object.freeze({
-        kind: "select",
-        settingName: "mechSpecial",
-        label: "Special mechs",
-        hint: "Configures special equip",
-        options: specialOptions
-      }),
-      Object.freeze({
         kind: "number",
         settingName: "mechWaygatePotential",
         label: "Maximum mech potential for Waygate",
@@ -45546,12 +45513,6 @@ Efficiency above '1' is useful to save resources for more desperate times, or to
         settingName: "mechScouts",
         label: "Minimum scouts ratio",
         hint: "Scouts compensate terrain penalty of suboptimal mechs. Build them up to this ratio."
-      }),
-      Object.freeze({
-        kind: "toggle",
-        settingName: "mechInfernalCollector",
-        label: "Build infernal collectors",
-        hint: "Infernal collectors have incresed supply cost, and payback time, but becomes more profitable after ~30 minutes of uptime."
       }),
       Object.freeze({
         kind: "toggle",

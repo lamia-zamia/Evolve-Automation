@@ -19,7 +19,6 @@ import { mechHardpoints } from "./mech-design.ts";
 
 export type MechBuildMode = "none" | "random" | "user";
 export type MechScrapMode = "none" | "single" | "all" | "mixed";
-export type MechSpecialMode = "always" | "prefered" | "random" | "never";
 
 export interface CapturedMechDesign {
   readonly size: string;
@@ -80,13 +79,11 @@ export interface CapturedMechSettings {
   readonly collectorValue: number;
   readonly preferredSize: string;
   readonly gravitySize: string;
-  readonly specialMode: MechSpecialMode;
   readonly waygatePotential: number;
   readonly minimumSupplyRate: number;
   readonly maximumCollectorShare: number;
   readonly saveSupplyRatio: number;
   readonly scoutsRatio: number;
-  readonly infernalCollector: boolean;
   readonly rebuildScouts: boolean;
   readonly fillBay: boolean;
   readonly buildingsFirst: boolean;
@@ -224,19 +221,13 @@ function readMechSettings(value: unknown): CapturedMechSettings {
     collectorValue: mechSettingNumber("mechCollectorValue"),
     preferredSize: mechSettingString("mechSize"),
     gravitySize: mechSettingString("mechSizeGravity"),
-    specialMode: pick(
-      "mechSpecial",
-      ["always", "prefered", "random", "never"],
-      "prefered",
-    ),
     waygatePotential: mechSettingNumber("mechWaygatePotential"),
     minimumSupplyRate: mechSettingNumber("mechMinSupply"),
     maximumCollectorShare: mechSettingNumber("mechMaxCollectors"),
     saveSupplyRatio: mechSettingNumber("mechSaveSupplyRatio"),
     scoutsRatio: mechSettingNumber("mechScouts"),
-    // The shipped defaults for these four are true, so only an explicit
+    // The shipped defaults for these three are true, so only an explicit
     // false disables them; an absent key reads as the default.
-    infernalCollector: settings["mechInfernalCollector"] !== false,
     rebuildScouts: settings["mechScoutsRebuild"] === true,
     fillBay: settings["mechFillBay"] !== false,
     buildingsFirst: settings["buildingMechsFirst"] !== false,
