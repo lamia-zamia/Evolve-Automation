@@ -2602,15 +2602,16 @@ export function startCapturedRuntime({
       );
     }
   }
-  const outerFleetSyndicate = createCapturedSyndicateMechanics({
-    rootState: pageCapture.rootState,
-    controls: pageCapture.controls,
-    discovery: civicDiscovery,
-    mechanics: pageCapture.mechanics,
-  });
   const outerFleetRegions = createCapturedSpaceRegionMechanics({
     pageWindow: settingsHostWindow,
     discovery: civicDiscovery,
+  });
+  const outerFleetSyndicate = createCapturedSyndicateMechanics({
+    regions: outerFleetRegions,
+    document: documentValue,
+    controls: pageCapture.controls,
+    discovery: civicDiscovery,
+    mechanics: pageCapture.mechanics,
   });
   const outerFleet = createCapturedOuterFleetControl({
     rootState: pageCapture.rootState,

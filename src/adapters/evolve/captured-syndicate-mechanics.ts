@@ -54,7 +54,10 @@ import type {
   GameControlRegistry,
   GameControlResult,
 } from "../../ports/game-control-registry.ts";
-import type { GameRootStateSource } from "../../ports/game-root-state.ts";
+import type {
+  GameSpaceRegionMechanics,
+  GameSpaceRegionState,
+} from "../../ports/game-space-region-mechanics.ts";
 import type { GameTabDiscovery } from "../../ports/game-tab-discovery.ts";
 import type { CapturedGameMechanics } from "../../ports/captured-game-mechanics.ts";
 import {
@@ -66,7 +69,7 @@ import {
   SPACE_TAB_INDEX,
   SUB_TAB_CONTROLS,
 } from "./captured-tab-discovery.ts";
-import { finite, isRecord, readProperty } from "../validation.ts";
+import { isRecord, readProperty } from "../validation.ts";
 
 /** The captured method on `#<region>synd` whose one call performs the whole calculation. */
 const SYNDICATE_SCAN_METHOD = "scan";
@@ -78,28 +81,6 @@ const SYNDICATE_RATIO_DIGITS = 4;
 const SYNDICATE_SCAN_DIGITS = 1;
 
 /**
- * Which Civilization space sub-tab draws each region, from `spaceProjects[region].info.zone` at the
- * pinned commit: `zone: 'inner'` on Moon, Red and the Belt, `zone: 'outer'` on Gas, Gas Moon, Titan,
- * Enceladus, Triton, Makemake and Eris. UI topology, not gameplay arithmetic — the game's own
- * `zone` decides this, and only the tab that renders a region can bind its Syndicate readout.
- *
- * One owner: a caller that named its own tab map would be able to disagree with this one about
- * where a region's readout is drawn.
- */
-const SYNDICATE_REGION_TABS: Readonly<Record<string, number>> = Object.freeze({
-  spc_moon: SPACE_TAB_INDEX.space,
-  spc_red: SPACE_TAB_INDEX.space,
-  spc_belt: SPACE_TAB_INDEX.space,
-  spc_gas: SPACE_TAB_INDEX.outerSol,
-  spc_gas_moon: SPACE_TAB_INDEX.outerSol,
-  spc_titan: SPACE_TAB_INDEX.outerSol,
-  spc_enceladus: SPACE_TAB_INDEX.outerSol,
-  spc_triton: SPACE_TAB_INDEX.outerSol,
-  spc_makemake: SPACE_TAB_INDEX.outerSol,
-  spc_eris: SPACE_TAB_INDEX.outerSol,
-});
-
-/**
  * The element id the game binds the Syndicate readout to: `space.js` appends
  * `<div id="${region}synd">` inside the region's row and calls `vBind` on it.
  */
@@ -107,49 +88,9 @@ function syndicateReadoutControl(region: string): string {
   return `${region}synd`;
 }
 
-/**
- * `truepath.js:syndicateActive()`, in the game's own truthiness and no further:
- *
- * ```js
- * if (global.tech['shadow'] && global.tech['shadow'] >= 5) { return false; }
- * return !global.tech['isolation'] && global.tech['syndicate']
- *     && global.race['truepath'] && global.space['syndicate'] ? true : false;
- * ```
- *
- * Every clause is a bare truthiness test upstream, and each one is one here. `true` is a valid
- * `race.truepath` but not the only value the game writes: `truepath.js` assigns
- * `global.race['truepath'] = 1` when the path is chosen, so a gate demanding the boolean would
- * report every real True Path save as having no Syndicate at all.
- *
- * Used only to tell a page where no Syndicate readout can exist from a page whose readout could not
- * be captured. An inactive Syndicate has no `#<region>synd` element at all, because the game only
- * draws one behind `syndicateActive()`, so there is nothing to reach and the function's own default
- * answer is the answer. This is the whole of the gate, deliberately: nothing else about
- * `syndicate()` is restated here.
- *
- * `undefined` when a container the game reads as a bag is not one. Every field of a malformed
- * container reads as absent, which would report a page that cannot be read as a page whose Syndicate
- * is off, and a defended region and an unanswered one are opposite answers.
- */
-function syndicateOperating(root: unknown): boolean | undefined {
-  const tech = readProperty(root, "tech");
-  const race = readProperty(root, "race");
-  const space = readProperty(root, "space");
-  for (const container of [tech, race, space]) {
-    if (container === undefined) continue;
-    if (!isRecord(container)) return undefined;
-  }
-  const shadow = readProperty(tech, "shadow");
-  if (shadow && (finite(shadow) ?? 0) >= 5) return false;
-  if (readProperty(tech, "isolation")) return false;
-  if (!readProperty(tech, "syndicate")) return false;
-  if (!readProperty(race, "truepath")) return false;
-  if (!readProperty(space, "syndicate")) return false;
-  return true;
-}
-
 export interface CapturedSyndicateMechanicsDependencies {
-  readonly rootState: GameRootStateSource;
+  readonly regions: GameSpaceRegionMechanics;
+  readonly document: unknown;
   readonly controls: GameControlRegistry;
   readonly discovery: GameTabDiscovery;
   /** The page-realm rounding observation; the only capability that reaches a private literal. */
@@ -163,16 +104,8 @@ export interface CapturedSyndicateMechanicsDependencies {
  */
 type SyndicateReadoutCapture =
   | { readonly kind: "captured"; readonly handle: GameControlHandle }
-  | { readonly kind: "absent" }
+  | { readonly kind: "inactive" }
   | { readonly kind: "refused" };
-
-/**
- * No draw could reach this readout: no Space sub-tab draws the region, or the pass ran and bound
- * nothing. Both are the game having no readout here, not a read this adapter failed to make.
- */
-const READOUT_NOT_DRAWN: SyndicateReadoutCapture = Object.freeze({
-  kind: "absent",
-});
 
 /** The pass ran and failed, so nothing it left behind is this read's authority. */
 const READOUT_PASS_FAILED: SyndicateReadoutCapture = Object.freeze({
@@ -182,7 +115,10 @@ const READOUT_PASS_FAILED: SyndicateReadoutCapture = Object.freeze({
 export function createCapturedSyndicateMechanics(
   dependencies: CapturedSyndicateMechanicsDependencies,
 ): GameSyndicateMechanics {
-  const { rootState, controls, discovery, mechanics } = dependencies;
+  const { regions, document, controls, discovery, mechanics } = dependencies;
+  // A successful draw can disprove a retained binding without replacing its generation.
+  // Only that generation loses the cheap path; a later real binding restores it automatically.
+  const refusedReadoutGenerations = new Map<string, number>();
 
   /**
    * One protected draw of the panel that renders this region, and nothing else.
@@ -194,10 +130,20 @@ export function createCapturedSyndicateMechanics(
    *
    * Discovery owns rejection of every changed generation when a protected pass fails.
    */
-  function captureReadout(region: string): SyndicateReadoutCapture {
+  function captureReadout(
+    region: string,
+    state: GameSpaceRegionState,
+  ): SyndicateReadoutCapture {
     const control = syndicateReadoutControl(region);
-    const subTab = SYNDICATE_REGION_TABS[region];
-    if (subTab === undefined) return READOUT_NOT_DRAWN;
+    const subTab =
+      state.zone === "inner" ? SPACE_TAB_INDEX.space : SPACE_TAB_INDEX.outerSol;
+    const getElement = readProperty(document, "getElementById");
+    if (typeof getElement !== "function") return READOUT_PASS_FAILED;
+    const previousRow = Reflect.apply(getElement, document, [region]);
+    const previousChild = Reflect.apply(getElement, document, [control]);
+    const previousHandle = controls.resolve(control);
+    let drawn: SyndicateReadoutCapture = READOUT_PASS_FAILED;
+    let drawnGeneration: number | undefined;
     const panel = MAIN_TAB_PANELS[MAIN_TAB_INDEX.civilization];
     const result = discovery.discover(
       Object.freeze([
@@ -212,17 +158,37 @@ export function createCapturedSyndicateMechanics(
           index: subTab,
         }),
       ]),
-      panel === undefined ? {} : { mount: Object.freeze([`#${panel}`]) },
+      {
+        forceDraw: true,
+        ...(panel === undefined ? {} : { mount: Object.freeze([`#${panel}`]) }),
+        whileDrawn: () => {
+          const captured = controls.resolve(control);
+          drawnGeneration = captured?.generation;
+          const row = Reflect.apply(getElement, document, [region]);
+          if (!isRecord(row) || row === previousRow) return;
+          const child = Reflect.apply(getElement, document, [control]);
+          if (child === null) {
+            if (state.syndicateEnabled) drawn = { kind: "inactive" };
+            return;
+          }
+          if (!isRecord(child) || child === previousChild) return;
+          if (
+            captured === undefined ||
+            !captured.methods.includes(SYNDICATE_SCAN_METHOD) ||
+            captured.generation === previousHandle?.generation
+          )
+            return;
+          drawn = Object.freeze({ kind: "captured", handle: captured });
+        },
+      },
     );
     if (result.outcome.status !== "succeeded") {
       return READOUT_PASS_FAILED;
     }
-    const captured = controls.resolve(control);
-    return captured === undefined
-      ? controls.capturedElementIds().includes(control)
-        ? READOUT_PASS_FAILED
-        : READOUT_NOT_DRAWN
-      : Object.freeze({ kind: "captured", handle: captured });
+    if (drawn.kind === "captured") refusedReadoutGenerations.delete(control);
+    else if (drawnGeneration !== undefined)
+      refusedReadoutGenerations.set(control, drawnGeneration);
+    return drawn;
   }
 
   /**
@@ -248,24 +214,26 @@ export function createCapturedSyndicateMechanics(
 
   return Object.freeze({
     read(region: string): CapturedGameRead<GameSyndicateSample> {
-      const root = rootState.readRoot();
-      if (!isRecord(root)) return { kind: "absent" };
-      const operating = syndicateOperating(root);
-      if (operating === undefined) return { kind: "absent" };
-      // The native inactive answer, without a binding to read it through: `syndicate()` returns
-      // `{p: 1, r: 0, s: 0, o: 0}` and draws no readout at all.
-      if (!operating) {
-        return {
-          kind: "value",
-          value: Object.freeze({ p: 1, s: 0 }),
-        };
-      }
+      const state = regions.read(region);
+      if (state.kind !== "value") return { kind: state.kind };
       const control = syndicateReadoutControl(region);
       // The cheap read: a control the game bound outside a failed pass, at no cost and no draw.
       const held = controls.resolve(control);
-      if (held !== undefined) return readSyndicateScan(region, held);
-      const capture = captureReadout(region);
-      if (capture.kind === "absent") return { kind: "absent" };
+      if (
+        state.value.syndicateEnabled &&
+        held !== undefined &&
+        held.generation !== refusedReadoutGenerations.get(control) &&
+        held.methods.includes(SYNDICATE_SCAN_METHOD)
+      )
+        return readSyndicateScan(region, held);
+      let capture: SyndicateReadoutCapture;
+      try {
+        capture = captureReadout(region, state.value);
+      } catch {
+        return { kind: "invalid" };
+      }
+      if (capture.kind === "inactive")
+        return { kind: "value", value: Object.freeze({ p: 1, s: 0 }) };
       if (capture.kind === "refused") return { kind: "invalid" };
       return readSyndicateScan(region, capture.handle);
     },

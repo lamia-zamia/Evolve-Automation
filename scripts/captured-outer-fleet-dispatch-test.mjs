@@ -52,6 +52,7 @@ import {
   parseShipyardPartCatalog,
 } from "../src/adapters/evolve/combat/captured-outer-fleet-parts.ts";
 import { createCapturedFleetDemand } from "../src/adapters/evolve/combat/captured-fleet-demand.ts";
+import { OUTER_FLEET_REGIONS } from "../src/domain/combat/outer-fleet-regions.ts";
 import { createCapturedSyndicateMechanics } from "../src/adapters/evolve/captured-syndicate-mechanics.ts";
 import { createCapturedTabDiscovery } from "../src/adapters/evolve/captured-tab-discovery.ts";
 import { probeScopedNumberToFixed } from "../src/adapters/evolve/scoped-number-to-fixed.ts";
@@ -1216,37 +1217,7 @@ function installGame(page, root) {
     },
   };
 
-  /**
-   * `space.js:space(zone)`, reduced to what binds the Syndicate readout.
-   *
-   * One container per sub-tab, one row per region the fixture says that sub-tab shows, and — behind
-   * `syndicateActive()` and the region's own `info.syndicate()` — the `#<region>synd` binding whose
-   * `scan` is the game's own one-line rendering of the private `s`. The arithmetic behind `s` and `p`
-   * is the real game's own and is exercised against the real page; transcribing it here would be the
-   * same copy of it that production has just deleted.
-   */
-  const SPACE_ZONES = {
-    inner: ["spc_home", "spc_moon", "spc_red", "spc_belt"],
-    outer: [
-      "spc_gas",
-      "spc_gas_moon",
-      "spc_titan",
-      "spc_enceladus",
-      "spc_triton",
-      "spc_makemake",
-      "spc_eris",
-    ],
-  };
-  /** `truepath.js:syndicateActive()`, transcribed in full, because the draw is gated on it. */
-  function syndicateActive() {
-    if (root.tech.shadow && root.tech.shadow >= 5) return false;
-    return !root.tech.isolation &&
-      root.tech.syndicate &&
-      root.race.truepath &&
-      root.space.syndicate
-      ? true
-      : false;
-  }
+  // Synthetic native metadata and render state, deliberately independent of game gates and region topology.
   /**
    * The two numbers `syndicate(r, true)` builds, as the harness stands in for them.
    *
@@ -1270,7 +1241,7 @@ function installGame(page, root) {
         `<div id="${region}" class="space"><div id="sr${region}"><h3 class="name"></h3></div></div>`,
       ),
     );
-    if (syndicateActive() && root.space.syndicate[region] !== undefined) {
+    if (page.syndicateRendered) {
       $(`#${region}`).append(
         $(`<div id="${region}synd" v-show="${region}"></div>`),
       );
@@ -1300,7 +1271,9 @@ function installGame(page, root) {
       const container = zone === "inner" ? "#space" : "#outerSol";
       if ($(container).length === 0) continue;
       clearElement($(container));
-      for (const region of SPACE_ZONES[zone]) drawSpaceRegion(zone, region);
+      for (const [region, state] of Object.entries(page.spaceRegionStates)) {
+        if (state.zone === zone) drawSpaceRegion(zone, region);
+      }
     }
   }
 
@@ -1439,6 +1412,7 @@ function makeHarness({
    * arithmetic over this save's piracy, caps, rival or ships reproduces them, so a pass that reaches
    * a target is provably following the game's answer rather than a table that happens to agree.
    */
+  syndicateRendered = true,
   syndicateSamples = {
     spc_home: { p: 0.7319, s: 47 },
     spc_moon: { p: 0.6417, s: 31 },
@@ -1457,6 +1431,17 @@ function makeHarness({
   const page = makePage();
   if (destinations !== undefined) page.destinations = destinations;
   page.syndicateSamples = syndicateSamples;
+  page.syndicateRendered = syndicateRendered;
+  page.spaceRegionStates = Object.fromEntries(
+    OUTER_FLEET_REGIONS.map((region, index) => [
+      region,
+      {
+        zone: index % 2 === 0 ? "inner" : "outer",
+        reachable: true,
+        syndicateEnabled: true,
+      },
+    ]),
+  );
   page.syndicateSensor = Object.fromEntries(
     Object.entries(syndicateSamples).map(([region, sample]) => [
       region,
@@ -1579,7 +1564,13 @@ function makeHarness({
     panels,
   });
   const syndicate = createCapturedSyndicateMechanics({
-    rootState,
+    document: page.document,
+    regions: {
+      read: (region) =>
+        page.spaceRegionStates[region] === undefined
+          ? { kind: "invalid" }
+          : { kind: "value", value: page.spaceRegionStates[region] },
+    },
     controls: capture.controls,
     discovery,
     mechanics: {
@@ -2112,7 +2103,7 @@ function dispatchHarnessRegions() {
     read() {
       return {
         kind: "value",
-        value: { reachable: true, syndicateEnabled: true },
+        value: { zone: "inner", reachable: true, syndicateEnabled: true },
       };
     },
   };
@@ -3120,12 +3111,7 @@ assert.deepEqual(sentTo(locked.page), []);
 // whose special slot is never empty. Neither preset names a weapon or a special, so every field of
 // the ship that was built is one the game's own `setVal` decided.
 //
-// Both hulls are targeted through the Eris gate rather than through a region's Syndicate defense,
-// and for the freighter that is the game's own doing: a hull that needs Shadow 5 is a hull whose save
-// has `shadow >= 5`, and `syndicateActive()` is false from there — the game shuts the Syndicate off
-// entirely. So the answer every region's ratio now carries is the native inactive one, and no region
-// is a target. The gate is the one branch that does not read a defense ratio, which is exactly what
-// this case needs: the hull's forced fields, not a defense.
+// The fixture independently marks the freighter scenario inactive; both hulls use the Eris gate.
 for (const [hull, technology, forced] of [
   ["freighter", { shadow: 5 }, { weapon: "none", special: "extra_fuel" }],
   [
@@ -3137,6 +3123,7 @@ for (const [hull, technology, forced] of [
   const cargo = makeHarness({
     establish: true,
     root: erisSyndicateTech(technology),
+    syndicateRendered: hull !== "freighter",
     destinations: ["spc_eris"],
   });
   const cargoSettings = presetSettings(
@@ -3917,6 +3904,25 @@ for (const { path, text } of productionSources()) {
     failedRows.dispatch.dispatchShipyardShip({ index: 0, region: "spc_red" }),
     { kind: "launched" },
   );
+}
+
+// Repository-owned DOM + real discovery/workspace preserve the player's view for active and inactive reads.
+for (const syndicateRendered of [true, false]) {
+  const protectedSyndicate = makeHarness({ syndicateRendered });
+  const { page, root, syndicate } = protectedSyndicate;
+  const playerNode = page.document.getElementById("mTabCivil");
+  const playerMarkup = playerNode.innerHTML;
+  const playerTabs = { ...root.settings };
+  const result = syndicate.read("spc_red");
+  assert.equal(result.kind, "value");
+  if (!syndicateRendered) assert.deepEqual(result.value, { p: 1, s: 0 });
+  assert.equal(page.document.getElementById("mTabCivil"), playerNode);
+  assert.equal(playerNode.innerHTML, playerMarkup);
+  assert.deepEqual(root.settings, playerTabs);
+  assert.equal(page.document.getElementById("spc_red"), null);
+  assert.equal(page.document.getElementById("spc_redsynd"), null);
+  assert.equal(page.document.getElementById("ea-aside-mTabCivil"), null);
+  assert.equal(page.document.getElementById("ea-aside-city"), null);
 }
 
 console.log("Captured outer-fleet synthetic capture checks passed");

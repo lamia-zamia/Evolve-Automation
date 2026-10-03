@@ -26,6 +26,7 @@ function spaceMechanicsBehaviorFixture() {
   const projects = vm.runInContext(
     `Object.fromEntries(regions.map(region => [region, {
     info: {
+      zone: "inner",
       nav() { return state[region].nav; },
       syndicate() { return state[region].syndicate; },
     },
@@ -81,6 +82,7 @@ function spaceMechanicsTestValue(adapter, region) {
     "keys",
   );
   assert.deepEqual(spaceMechanicsTestValue(harness.adapter, "spc_moon"), {
+    zone: "inner",
     reachable: true,
     syndicateEnabled: true,
   });
@@ -114,12 +116,14 @@ function spaceMechanicsTestValue(adapter, region) {
     state.nav = false;
     state.syndicate = false;
     assert.deepEqual(spaceMechanicsTestValue(harness.adapter, region), {
+      zone: "inner",
       reachable: false,
       syndicateEnabled: false,
     });
     state.nav = true;
     state.syndicate = true;
     assert.deepEqual(spaceMechanicsTestValue(harness.adapter, region), {
+      zone: "inner",
       reachable: true,
       syndicateEnabled: true,
     });
@@ -161,6 +165,9 @@ for (const badShape of [
   "missing",
   "entry",
   "info",
+  "zone-missing",
+  "zone-unknown",
+  "zone-unreadable",
   "nav",
   "syndicate",
   "unreadable",
@@ -173,6 +180,14 @@ for (const badShape of [
   if (badShape === "missing") candidate = {};
   if (badShape === "entry") delete candidate.spc_eris;
   if (badShape === "info") candidate.spc_eris.info = null;
+  if (badShape === "zone-missing") delete candidate.spc_eris.info.zone;
+  if (badShape === "zone-unknown") candidate.spc_eris.info.zone = "beyond";
+  if (badShape === "zone-unreadable")
+    Object.defineProperty(candidate.spc_eris.info, "zone", {
+      get() {
+        throw new Error("zone");
+      },
+    });
   if (badShape === "nav") candidate.spc_eris.info.nav = undefined;
   if (badShape === "syndicate") candidate.spc_eris.info.syndicate = "function";
   if (badShape === "unreadable")
@@ -251,6 +266,7 @@ for (const failure of [
     return 0;
   };
   assert.deepEqual(spaceMechanicsTestValue(harness.adapter, "spc_titan"), {
+    zone: "inner",
     reachable: true,
     syndicateEnabled: false,
   });
@@ -261,6 +277,7 @@ for (const failure of [
     return [];
   };
   assert.deepEqual(spaceMechanicsTestValue(harness.adapter, "spc_titan"), {
+    zone: "inner",
     reachable: false,
     syndicateEnabled: true,
   });
@@ -356,3 +373,19 @@ for (const failure of ["replacement", "restore-trap"]) {
 }
 
 console.log("Captured native Space region mechanics tests passed");
+
+// The retained native metadata remains authoritative when its zone changes.
+{
+  const harness = spaceMechanicsTestHarness();
+  assert.equal(
+    spaceMechanicsTestValue(harness.adapter, "spc_red").zone,
+    "inner",
+  );
+  harness.native.projects.spc_red.info.zone = "outer";
+  assert.equal(
+    spaceMechanicsTestValue(harness.adapter, "spc_red").zone,
+    "outer",
+  );
+  harness.native.projects.spc_red.info.zone = "unsupported";
+  assert.deepEqual(harness.adapter.read("spc_red"), { kind: "invalid" });
+}

@@ -31,9 +31,11 @@ function spaceRegionInfoCandidate(
   for (const region of OUTER_FLEET_REGIONS) {
     const entry = readProperty(value, region);
     const info = readProperty(entry, "info");
+    const zone = readProperty(info, "zone");
     if (
       !isNonArrayRecord(entry) ||
       !isNonArrayRecord(info) ||
+      (zone !== "inner" && zone !== "outer") ||
       typeof readProperty(info, "nav") !== "function" ||
       typeof readProperty(info, "syndicate") !== "function"
     )
@@ -118,13 +120,16 @@ export function createCapturedSpaceRegionMechanics(
       try {
         const nav = info["nav"];
         const syndicate = info["syndicate"];
+        const zone = info["zone"];
+        if (zone !== "inner" && zone !== "outer")
+          return { kind: "invalid" as const };
         if (typeof nav !== "function" || typeof syndicate !== "function")
           return { kind: "invalid" as const };
         const reachable = Boolean(Reflect.apply(nav, info, []));
         const syndicateEnabled = Boolean(Reflect.apply(syndicate, info, []));
         return {
           kind: "value" as const,
-          value: Object.freeze({ reachable, syndicateEnabled }),
+          value: Object.freeze({ zone, reachable, syndicateEnabled }),
         };
       } catch {
         return { kind: "invalid" as const };

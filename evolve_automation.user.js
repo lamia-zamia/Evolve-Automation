@@ -49783,41 +49783,20 @@ Only continue if you trust the source. Injected code:
   }
 
   // src/adapters/evolve/captured-syndicate-mechanics.ts
-  var SYNDICATE_SCAN_METHOD = "scan", SYNDICATE_RATIO_DIGITS = 4, SYNDICATE_SCAN_DIGITS = 1, SYNDICATE_REGION_TABS = Object.freeze({
-    spc_moon: SPACE_TAB_INDEX.space,
-    spc_red: SPACE_TAB_INDEX.space,
-    spc_belt: SPACE_TAB_INDEX.space,
-    spc_gas: SPACE_TAB_INDEX.outerSol,
-    spc_gas_moon: SPACE_TAB_INDEX.outerSol,
-    spc_titan: SPACE_TAB_INDEX.outerSol,
-    spc_enceladus: SPACE_TAB_INDEX.outerSol,
-    spc_triton: SPACE_TAB_INDEX.outerSol,
-    spc_makemake: SPACE_TAB_INDEX.outerSol,
-    spc_eris: SPACE_TAB_INDEX.outerSol
-  });
+  var SYNDICATE_SCAN_METHOD = "scan", SYNDICATE_RATIO_DIGITS = 4, SYNDICATE_SCAN_DIGITS = 1;
   function syndicateReadoutControl(region) {
     return `${region}synd`;
   }
-  function syndicateOperating(root) {
-    let tech = readProperty(root, "tech"), race = readProperty(root, "race"), space = readProperty(root, "space");
-    for (let container of [tech, race, space])
-      if (container !== void 0 && !isRecord(container))
-        return;
-    let shadow = readProperty(tech, "shadow");
-    return !(shadow && (finite(shadow) ?? 0) >= 5 || readProperty(tech, "isolation") || !readProperty(tech, "syndicate") || !readProperty(race, "truepath") || !readProperty(space, "syndicate"));
-  }
-  var READOUT_NOT_DRAWN = Object.freeze({
-    kind: "absent"
-  }), READOUT_PASS_FAILED = Object.freeze({
+  var READOUT_PASS_FAILED = Object.freeze({
     kind: "refused"
   });
   function createCapturedSyndicateMechanics(dependencies) {
-    let { rootState, controls: controls2, discovery, mechanics } = dependencies;
-    function captureReadout(region) {
-      let control = syndicateReadoutControl(region), subTab = SYNDICATE_REGION_TABS[region];
-      if (subTab === void 0) return READOUT_NOT_DRAWN;
-      let panel = MAIN_TAB_PANELS[MAIN_TAB_INDEX.civilization];
-      if (discovery.discover(
+    let { regions, document, controls: controls2, discovery, mechanics } = dependencies, refusedReadoutGenerations = /* @__PURE__ */ new Map();
+    function captureReadout(region, state) {
+      let control = syndicateReadoutControl(region), subTab = state.zone === "inner" ? SPACE_TAB_INDEX.space : SPACE_TAB_INDEX.outerSol, getElement = readProperty(document, "getElementById");
+      if (typeof getElement != "function") return READOUT_PASS_FAILED;
+      let previousRow = Reflect.apply(getElement, document, [region]), previousChild = Reflect.apply(getElement, document, [control]), previousHandle = controls2.resolve(control), drawn = READOUT_PASS_FAILED, drawnGeneration, panel = MAIN_TAB_PANELS[MAIN_TAB_INDEX.civilization];
+      return discovery.discover(
         Object.freeze([
           Object.freeze({
             setting: MAIN_TAB_SETTING,
@@ -49830,11 +49809,23 @@ Only continue if you trust the source. Injected code:
             index: subTab
           })
         ]),
-        panel === void 0 ? {} : { mount: Object.freeze([`#${panel}`]) }
-      ).outcome.status !== "succeeded")
-        return READOUT_PASS_FAILED;
-      let captured = controls2.resolve(control);
-      return captured === void 0 ? controls2.capturedElementIds().includes(control) ? READOUT_PASS_FAILED : READOUT_NOT_DRAWN : Object.freeze({ kind: "captured", handle: captured });
+        {
+          forceDraw: !0,
+          ...panel === void 0 ? {} : { mount: Object.freeze([`#${panel}`]) },
+          whileDrawn: () => {
+            let captured = controls2.resolve(control);
+            drawnGeneration = captured?.generation;
+            let row = Reflect.apply(getElement, document, [region]);
+            if (!isRecord(row) || row === previousRow) return;
+            let child = Reflect.apply(getElement, document, [control]);
+            if (child === null) {
+              state.syndicateEnabled && (drawn = { kind: "inactive" });
+              return;
+            }
+            !isRecord(child) || child === previousChild || captured === void 0 || !captured.methods.includes(SYNDICATE_SCAN_METHOD) || captured.generation === previousHandle?.generation || (drawn = Object.freeze({ kind: "captured", handle: captured }));
+          }
+        }
+      ).outcome.status !== "succeeded" ? READOUT_PASS_FAILED : (drawn.kind === "captured" ? refusedReadoutGenerations.delete(control) : drawnGeneration !== void 0 && refusedReadoutGenerations.set(control, drawnGeneration), drawn);
     }
     function readSyndicateScan(region, handle) {
       let invocation, scan = mechanics.readRoundedValues(() => {
@@ -49844,19 +49835,18 @@ Only continue if you trust the source. Injected code:
     }
     return Object.freeze({
       read(region) {
-        let root = rootState.readRoot();
-        if (!isRecord(root)) return { kind: "absent" };
-        let operating = syndicateOperating(root);
-        if (operating === void 0) return { kind: "absent" };
-        if (!operating)
-          return {
-            kind: "value",
-            value: Object.freeze({ p: 1, s: 0 })
-          };
+        let state = regions.read(region);
+        if (state.kind !== "value") return { kind: state.kind };
         let control = syndicateReadoutControl(region), held = controls2.resolve(control);
-        if (held !== void 0) return readSyndicateScan(region, held);
-        let capture = captureReadout(region);
-        return capture.kind === "absent" ? { kind: "absent" } : capture.kind === "refused" ? { kind: "invalid" } : readSyndicateScan(region, capture.handle);
+        if (state.value.syndicateEnabled && held !== void 0 && held.generation !== refusedReadoutGenerations.get(control) && held.methods.includes(SYNDICATE_SCAN_METHOD))
+          return readSyndicateScan(region, held);
+        let capture;
+        try {
+          capture = captureReadout(region, state.value);
+        } catch {
+          return { kind: "invalid" };
+        }
+        return capture.kind === "inactive" ? { kind: "value", value: Object.freeze({ p: 1, s: 0 }) } : capture.kind === "refused" ? { kind: "invalid" } : readSyndicateScan(region, capture.handle);
       }
     });
   }
@@ -49916,8 +49906,8 @@ Only continue if you trust the source. Injected code:
     if (!isNonArrayRecord(value)) return;
     let infos = /* @__PURE__ */ new Map();
     for (let region of OUTER_FLEET_REGIONS) {
-      let entry = readProperty(value, region), info = readProperty(entry, "info");
-      if (!isNonArrayRecord(entry) || !isNonArrayRecord(info) || typeof readProperty(info, "nav") != "function" || typeof readProperty(info, "syndicate") != "function")
+      let entry = readProperty(value, region), info = readProperty(entry, "info"), zone = readProperty(info, "zone");
+      if (!isNonArrayRecord(entry) || !isNonArrayRecord(info) || zone !== "inner" && zone !== "outer" || typeof readProperty(info, "nav") != "function" || typeof readProperty(info, "syndicate") != "function")
         return;
       infos.set(region, info);
     }
@@ -49973,13 +49963,15 @@ Only continue if you trust the source. Injected code:
         let info = spaceRegionAuthority?.get(region);
         if (info === void 0) return { kind: "invalid" };
         try {
-          let nav = info.nav, syndicate = info.syndicate;
+          let nav = info.nav, syndicate = info.syndicate, zone = info.zone;
+          if (zone !== "inner" && zone !== "outer")
+            return { kind: "invalid" };
           if (typeof nav != "function" || typeof syndicate != "function")
             return { kind: "invalid" };
           let reachable = !!Reflect.apply(nav, info, []), syndicateEnabled = !!Reflect.apply(syndicate, info, []);
           return {
             kind: "value",
-            value: Object.freeze({ reachable, syndicateEnabled })
+            value: Object.freeze({ zone, reachable, syndicateEnabled })
           };
         } catch {
           return { kind: "invalid" };
@@ -53818,14 +53810,15 @@ Only continue if you trust the source. Injected code:
       warnings: powerWarnings,
       diagnostics
     }), observePowerDemandPhase = (stage, outcome) => {
-    }, outerFleetSyndicate = createCapturedSyndicateMechanics({
-      rootState: pageCapture2.rootState,
+    }, outerFleetRegions = createCapturedSpaceRegionMechanics({
+      pageWindow: settingsHostWindow2,
+      discovery: civicDiscovery
+    }), outerFleetSyndicate = createCapturedSyndicateMechanics({
+      regions: outerFleetRegions,
+      document: documentValue,
       controls: pageCapture2.controls,
       discovery: civicDiscovery,
       mechanics: pageCapture2.mechanics
-    }), outerFleetRegions = createCapturedSpaceRegionMechanics({
-      pageWindow: settingsHostWindow2,
-      discovery: civicDiscovery
     }), outerFleet = createCapturedOuterFleetControl({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
