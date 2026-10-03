@@ -19008,9 +19008,9 @@
         return !1;
       let rawStar = readProperty(wheelbarrow, affix), wheelbarrowStar = rawStar == null ? 0 : finite(rawStar);
       if (wheelbarrowStar === void 0 || wheelbarrowStar < 0) return !1;
-      let achievementLevel4 = readCapturedAscensionLevel(root);
-      return achievementLevel4 === void 0 ? !1 : shouldSaveInflationMoney({
-        active: wheelbarrowStar < achievementLevel4 && readProperty(race, "inflation") !== !1,
+      let achievementLevel3 = readCapturedAscensionLevel(root);
+      return achievementLevel3 === void 0 ? !1 : shouldSaveInflationMoney({
+        active: wheelbarrowStar < achievementLevel3 && readProperty(race, "inflation") !== !1,
         saveMinutes,
         money: {
           targetMoney: 25e10,
@@ -25013,8 +25013,8 @@
     });
   }
 
-  // src/adapters/evolve/economy/market/trade-price-mirror.ts
-  var TRADE_ROUTE_RATIO = Object.freeze({
+  // src/adapters/evolve/economy/production/captured-power-trade-ratio.ts
+  var POWER_DECAY_TRADE_RATIO = Object.freeze({
     Food: 2,
     Lumber: 2,
     Chrysotile: 1,
@@ -25046,146 +25046,7 @@
     Bolognium: 0.12,
     Vitreloy: 0.12,
     Orichalcum: 0.05
-  }), TRAIT_RANKS = Object.freeze([0.1, 0.25, 0.5, 1, 2, 3, 4]), TRAIT_VALUES = Object.freeze({
-    arrogant: Object.freeze([16, 14, 12, 10, 8, 6, 5]),
-    merchant: Object.freeze([5, 10, 15, 25, 35, 40, 45]),
-    conniving: Object.freeze([1, 2, 3, 5, 8, 10, 12]),
-    asymmetrical: Object.freeze([35, 30, 25, 20, 15, 10, 5]),
-    devious: Object.freeze([35, 30, 25, 20, 15, 10, 8])
-  }), TRAIT_VALS = Object.freeze({
-    arrogant: -2,
-    merchant: 3,
-    conniving: 4,
-    asymmetrical: -3,
-    devious: -4
-  }), EMPOWERED_RANGES = Object.freeze([
-    Object.freeze([-1, 2]),
-    Object.freeze([-2, 3]),
-    Object.freeze([-3, 4]),
-    Object.freeze([-4, 6]),
-    Object.freeze([-6, 9]),
-    Object.freeze([-8, 12]),
-    Object.freeze([-99, 99])
-  ]), EMPOWERED_RANK = Object.freeze([0.25, 0.5, 1, 2, 3, 4, 4]), GOBLIN_SELL_DIVISOR_PERCENT = 25, IMP_BUY_PERCENT = 5;
-  function rivalCollapsed(root) {
-    let shadow = finite(readProperty(readProperty(root, "tech"), "shadow"));
-    return shadow !== void 0 && shadow >= 3;
-  }
-  function traitPercent(race, trait) {
-    if (!race[trait]) return 0;
-    let rank = finite(race[trait]);
-    if (rank === void 0) return;
-    let index = TRAIT_RANKS.indexOf(rank);
-    if (!(index < 0)) {
-      if (race.empowered) {
-        let empowered = finite(race.empowered);
-        if (empowered === void 0) return;
-        let empoweredIndex = TRAIT_RANKS.indexOf(empowered);
-        if (empoweredIndex < 0) return;
-        let range = EMPOWERED_RANGES[empoweredIndex], val = TRAIT_VALS[trait];
-        if (range !== void 0 && val >= range[0] && val <= range[1]) {
-          let promoted = TRAIT_RANKS.indexOf(EMPOWERED_RANK[index]);
-          if (promoted < 0) return;
-          index = promoted;
-        }
-      }
-      return TRAIT_VALUES[trait][index];
-    }
-  }
-  function fathom(root, race, target) {
-    if (!race.unfathomable) return 0;
-    let city = readProperty(root, "city"), dwellers = readProperty(city, "surfaceDwellers");
-    if (!Array.isArray(dwellers) || !dwellers.includes(target)) return 0;
-    let housing = readProperty(city, "captive_housing"), workers = finite(
-      readProperty(
-        readProperty(readProperty(root, "civic"), "torturer"),
-        "workers"
-      )
-    ), index = dwellers.indexOf(target), active = finite(readProperty(housing, `race${index}`)), nightmare = readProperty(
-      readProperty(readProperty(root, "stats"), "achieve"),
-      "nightmare"
-    ), mg = finite(readProperty(nightmare, "mg"));
-    if (workers === void 0 || active === void 0) return;
-    let adjusted = Math.min(active, 100);
-    return adjusted > workers && (adjusted -= Math.ceil((adjusted - workers) / 3)), adjusted / 100 * ((mg ?? 0) / 5);
-  }
-  function structureCount2(container, id) {
-    let structure = readProperty(container, id);
-    if (structure === void 0 || structure === !1) return 0;
-    let count2 = finite(readProperty(structure, "count"));
-    return count2 === void 0 ? void 0 : count2;
-  }
-  function achievementLevel2(root, id) {
-    let achieve = readProperty(readProperty(root, "stats"), "achieve"), entry = readProperty(achieve, id);
-    if (entry === void 0) return 0;
-    let level = finite(readProperty(entry, "l"));
-    return level === void 0 ? 0 : level;
-  }
-  function railwayLevel(root) {
-    let railway = readProperty(readProperty(root, "tech"), "railway");
-    return railway ? finite(railway) : 0;
-  }
-  function hostility(root, race) {
-    if (!race.truepath || race.lone_survivor || rivalCollapsed(root))
-      return 0;
-    let gov3 = readProperty(
-      readProperty(readProperty(root, "civic"), "foreign"),
-      "gov3"
-    ), hstl = finite(readProperty(gov3, "hstl"));
-    return hstl === void 0 ? void 0 : hstl;
-  }
-  function suspicionExcess(root, race) {
-    if (!race.witch_hunter) return 0;
-    let amount = finite(
-      readProperty(readProperty(readProperty(root, "resource"), "Sus"), "amount")
-    );
-    if (amount !== void 0)
-      return amount > 50 ? amount - 50 : 0;
-  }
-  function inflationLevel(race) {
-    let inflation = race.inflation;
-    return inflation === void 0 || inflation === !1 ? 0 : finite(inflation);
-  }
-  function cunningSlotted(root) {
-    let slots = readProperty(readProperty(root, "race"), "geneSlots");
-    return Array.isArray(slots) ? slots.some(
-      (slot) => isRecord(slot) && readProperty(slot, "g") === "cunning"
-    ) : !1;
-  }
-  function psychicCashActive(root) {
-    let race = readProperty(root, "race"), powers = readProperty(race, "psychicPowers");
-    return !!(readProperty(readProperty(root, "tech"), "psychic") && readProperty(race, "psychic") && isRecord(powers) && Object.hasOwn(powers, "cash"));
-  }
-  function unsupportedTradePriceModifier(root) {
-    if (cunningSlotted(root)) return "a slotted Cunning gene";
-    if (psychicCashActive(root)) return "the psychic cash power";
-  }
-  function tradeRoutePrices(root, resourceId, resource) {
-    let ratio = TRADE_ROUTE_RATIO[resourceId], value = finite(resource.value), race = readProperty(root, "race");
-    if (ratio === void 0 || value === void 0 || value <= 0 || !isRecord(race) || unsupportedTradePriceModifier(root) !== void 0) return;
-    let arrogant = traitPercent(race, "arrogant"), conniving = traitPercent(race, "conniving"), merchant = traitPercent(race, "merchant"), asymmetrical = traitPercent(race, "asymmetrical"), devious = traitPercent(race, "devious"), goblin = fathom(root, race, "goblin"), imp = fathom(root, race, "imp"), wharf = structureCount2(readProperty(root, "city"), "wharf"), gps = structureCount2(readProperty(root, "space"), "gps"), underground = structureCount2(
-      readProperty(root, "underground"),
-      "trade"
-    ), railway = railwayLevel(root), banana = achievementLevel2(root, "banana"), hstl = hostility(root, race), suspicion = suspicionExcess(root, race), inflation = inflationLevel(race), quarantine = finite(race.quarantine ?? 0);
-    if (arrogant === void 0 || conniving === void 0 || merchant === void 0 || asymmetrical === void 0 || devious === void 0 || goblin === void 0 || imp === void 0 || wharf === void 0 || gps === void 0 || underground === void 0 || railway === void 0 || banana === void 0 || hstl === void 0 || suspicion === void 0 || inflation === void 0 || quarantine === void 0)
-      return;
-    let railwayBuyBoost = banana >= 1 ? 0.97 : 0.98, railwaySellBoost = banana >= 1 ? 0.03 : 0.02, gpsActive = gps > 3 ? gps : 0, buy = value * (1 + arrogant / 100) * (1 - conniving / 100);
-    buy *= 1 - imp * IMP_BUY_PERCENT / 100, buy *= ratio, buy *= 0.99 ** wharf, buy *= 0.99 ** gpsActive, buy *= railwayBuyBoost ** railway, buy *= 1 + hstl / 101, buy *= 1 + inflation / 300, race.quarantine && (buy *= 1 + Math.round(quarantine ** 3.5)), buy *= 1 + suspicion / 8, buy *= 0.99 ** underground;
-    let divide = 4;
-    if (divide *= 1 - merchant / 100, divide *= 1 - goblin * GOBLIN_SELL_DIVISOR_PERCENT / 100, divide *= 1 + asymmetrical / 100, divide *= 1 + devious / 100, race.conniving && (divide -= 1), !(divide > 0)) return;
-    let sell = value * ratio / divide;
-    sell *= 1 + wharf * 0.01, sell *= 1 + gpsActive * 0.01, sell *= 1 + railway * railwaySellBoost, sell *= 1 - hstl / 101, sell *= 1 + inflation / 500, sell *= 1 - suspicion / 52;
-    let buyPrice = Number(buy.toFixed(1)), sellPrice = Number(sell.toFixed(1));
-    return Number.isFinite(buyPrice) && Number.isFinite(sellPrice) ? Object.freeze({ buy: buyPrice, sell: sellPrice }) : void 0;
-  }
-  function tradeRouteSellQuantity(root, resourceId) {
-    let ratio = TRADE_ROUTE_RATIO[resourceId];
-    if (ratio === void 0) return;
-    let level = achievementLevel2(root, "trade");
-    if (level === void 0) return;
-    let rank = Math.min(5, level), quantity = ratio * (1 - rank / 100);
-    return quantity > 0 ? quantity : void 0;
-  }
+  });
 
   // src/adapters/evolve/economy/production/captured-power-metadata.ts
   var fixedPowerRate = (value) => Object.freeze({ kind: "fixed", value });
@@ -25723,7 +25584,7 @@
     let current = view?.present ? asNumber(view.amount) : 0, rawMaximum = view?.present ? asNumber(view.max) : 0, rawRate = view?.present ? asNumber(view.rateOfChange) : 0;
     if (current === void 0 || rawMaximum === void 0 || rawRate === void 0)
       return;
-    let maximum = rawMaximum < 0 ? Number.MAX_SAFE_INTEGER : rawMaximum, storageRatio2 = maximum > 0 ? current / maximum : 1, tradeRoutes = TRADE_ROUTE_RATIO[id] ?? -1, tradeDiff = asNumber(production.consumption[id]?.Trade) ?? 0, sell = settings.autoMarket === !0 && tradeRoutes > 0 && tradeDiff < 0 ? -tradeDiff : 0, decay = readProperty(readProperty(root, "race"), "decay") === !0 && tradeRoutes > 0 && current >= 50 ? (current - 50) * (1e-3 * tradeRoutes) : 0, supply = view?.unlocked === !0 ? readCapturedSupplyRateAdjustment(root, settings, id) : 0, eject = view?.unlocked === !0 ? readCapturedEjectRateAdjustment(root, settings, id) : 0, storeOverflow = settings[`res_storage_o_${id}`] === !0, maxStorage = asNumber(settings[`res_max_store${id}`]) ?? 0;
+    let maximum = rawMaximum < 0 ? Number.MAX_SAFE_INTEGER : rawMaximum, storageRatio2 = maximum > 0 ? current / maximum : 1, tradeRoutes = POWER_DECAY_TRADE_RATIO[id] ?? -1, tradeDiff = asNumber(production.consumption[id]?.Trade) ?? 0, sell = settings.autoMarket === !0 && tradeRoutes > 0 && tradeDiff < 0 ? -tradeDiff : 0, decay = readProperty(readProperty(root, "race"), "decay") === !0 && tradeRoutes > 0 && current >= 50 ? (current - 50) * (1e-3 * tradeRoutes) : 0, supply = view?.unlocked === !0 ? readCapturedSupplyRateAdjustment(root, settings, id) : 0, eject = view?.unlocked === !0 ? readCapturedEjectRateAdjustment(root, settings, id) : 0, storeOverflow = settings[`res_storage_o_${id}`] === !0, maxStorage = asNumber(settings[`res_max_store${id}`]) ?? 0;
     return Object.freeze({
       id,
       title: readCapturedResourceLabel(root, id),
@@ -29123,13 +28984,13 @@
   }
 
   // src/adapters/evolve/economy/market/captured-market.ts
-  var MARKET_QUANTITY_CONTROL = "market-qty", TRAIT_VALUES2 = Object.freeze({
+  var MARKET_QUANTITY_CONTROL = "market-qty", TRAIT_VALUES = Object.freeze({
     arrogant: Object.freeze([16, 14, 12, 10, 8, 6, 5]),
     merchant: Object.freeze([5, 10, 15, 25, 35, 40, 45]),
     connivingBuy: Object.freeze([1, 2, 3, 5, 8, 10, 12]),
     connivingSell: Object.freeze([6, 8, 10, 15, 20, 24, 28]),
     asymmetrical: Object.freeze([35, 30, 25, 20, 15, 10, 5])
-  }), TRAIT_RANKS2 = Object.freeze([
+  }), TRAIT_RANKS = Object.freeze([
     0.1,
     0.25,
     0.5,
@@ -29146,7 +29007,7 @@
     if (race.empowered) return;
     let rank = finite(race[trait]);
     if (rank === void 0) return;
-    let index = TRAIT_RANKS2.indexOf(rank), value = index >= 0 ? values[index] : void 0;
+    let index = TRAIT_RANKS.indexOf(rank), value = index >= 0 ? values[index] : void 0;
     return value === void 0 ? void 0 : 1 + (increase ? value : -value) / 100;
   }
   function readFathom(root, race, target) {
@@ -29166,27 +29027,27 @@
     let arrogant = readMultiplier(
       race,
       "arrogant",
-      TRAIT_VALUES2.arrogant,
+      TRAIT_VALUES.arrogant,
       !0
     ), connivingBuy = readMultiplier(
       race,
       "conniving",
-      TRAIT_VALUES2.connivingBuy,
+      TRAIT_VALUES.connivingBuy,
       !1
     ), merchant = readMultiplier(
       race,
       "merchant",
-      TRAIT_VALUES2.merchant,
+      TRAIT_VALUES.merchant,
       !1
     ), asymmetrical = readMultiplier(
       race,
       "asymmetrical",
-      TRAIT_VALUES2.asymmetrical,
+      TRAIT_VALUES.asymmetrical,
       !0
     ), connivingSell = readMultiplier(
       race,
       "conniving",
-      TRAIT_VALUES2.connivingSell,
+      TRAIT_VALUES.connivingSell,
       !1
     ), impFathom = readFathom(root, race, "imp"), goblinFathom = readFathom(root, race, "goblin");
     if (arrogant === void 0 || connivingBuy === void 0 || merchant === void 0 || asymmetrical === void 0 || connivingSell === void 0 || impFathom === void 0 || goblinFathom === void 0)
@@ -29622,45 +29483,89 @@
     });
   }
 
+  // src/adapters/evolve/economy/market/captured-trade-quote.ts
+  function roundedTradeValue(value, digits) {
+    if (value?.digits !== digits || !Number.isFinite(value.receiver) || !new RegExp(`^-?\\d+\\.\\d{${digits}}$`).test(value.text))
+      return;
+    let rounded = Number(value.text);
+    return Number.isFinite(rounded) && rounded > 0 ? rounded : void 0;
+  }
+  function tradeRoundingPair(values, firstDigits, lastDigits) {
+    if (values.length < 2) return;
+    let first = values[values.length - 2], last = values[values.length - 1];
+    if (!(roundedTradeValue(first, firstDigits) === void 0 || roundedTradeValue(last, lastDigits) === void 0)) {
+      for (let index = 0; index < values.length - 2; index += 1)
+        if (values[index]?.digits === firstDigits && values[index + 1]?.digits === lastDigits)
+          return;
+      return [first, last];
+    }
+  }
+  function observeTradeRounding(root, resourceId, control, method, firstDigits, lastDigits, rootState, controls2, mechanics) {
+    if (rootState.readRoot() !== root || controls2.resolve(control.elementId)?.generation !== control.generation || !control.methods.includes(method))
+      return;
+    let invoked = !1, scan = mechanics.readRoundedValues(() => {
+      invoked = controls2.invoke(
+        control,
+        method,
+        method === "volume" ? [] : [resourceId]
+      ).ok;
+    });
+    if (!(scan.kind !== "value" || !invoked || rootState.readRoot() !== root || controls2.resolve(control.elementId)?.generation !== control.generation || !controls2.resolve(control.elementId)?.methods.includes(method))) {
+      if (lastDigits === void 0) {
+        let value = scan.value.at(-1);
+        return roundedTradeValue(value, firstDigits) !== void 0 && scan.value.slice(0, -1).every((entry) => entry.digits !== firstDigits) ? [value] : void 0;
+      }
+      return tradeRoundingPair(scan.value, firstDigits, lastDigits);
+    }
+  }
+  function readCapturedTradeQuote(root, resourceId, control, rootState, controls2, mechanics) {
+    let sell = observeTradeRounding(
+      root,
+      resourceId,
+      control,
+      "aSell",
+      1,
+      3,
+      rootState,
+      controls2,
+      mechanics
+    );
+    if (sell === void 0) return;
+    let buy = observeTradeRounding(
+      root,
+      resourceId,
+      control,
+      "aBuy",
+      3,
+      1,
+      rootState,
+      controls2,
+      mechanics
+    );
+    if (buy !== void 0)
+      return Object.freeze({
+        sellPrice: Number(sell[0].text),
+        sellQuantity: sell[1].receiver,
+        buyPrice: Number(buy[1].text),
+        buyVolume: buy[0].receiver
+      });
+  }
+  function readCapturedRegionalVolume(root, resourceId, control, rootState, controls2, mechanics) {
+    return observeTradeRounding(
+      root,
+      resourceId,
+      control,
+      "volume",
+      2,
+      void 0,
+      rootState,
+      controls2,
+      mechanics
+    )?.[0]?.receiver;
+  }
+
   // src/adapters/evolve/economy/market/captured-trade-routes.ts
-  var BLACK_MARKET_VOLUMES = Object.freeze({
-    Food: 20,
-    Lumber: 20,
-    Chrysotile: 10,
-    Stone: 20,
-    Crystal: 4,
-    Furs: 10,
-    Copper: 10,
-    Iron: 10,
-    Aluminium: 10,
-    Cement: 10,
-    Coal: 10,
-    Oil: 5,
-    Uranium: 1.2,
-    Steel: 5,
-    Titanium: 2.5,
-    Alloy: 2,
-    Polymer: 2,
-    Iridium: 1,
-    Helium_3: 1,
-    Elerium: 0.2,
-    Water: 20,
-    Neutronium: 0.5,
-    Adamantite: 0.5,
-    Nano_Tube: 10,
-    Graphene: 1,
-    Stanene: 1,
-    Bolognium: 1.2,
-    Orichalcum: 0.5,
-    Unobtainium: 0.25,
-    Plywood: 1,
-    Brick: 1,
-    Wrought_Iron: 1,
-    Sheet_Metal: 1,
-    Mythril: 1,
-    Quantium: 1,
-    Aerographene: 1
-  }), REGIONAL_PRIORITY = Object.freeze([
+  var REGIONAL_PRIORITY = Object.freeze([
     "Food",
     "Oil",
     "Helium_3",
@@ -29671,13 +29576,6 @@
   function settingsRecord3(value) {
     return isRecord(value) ? value : {};
   }
-  function hasUnsupportedRegionalVolumeModifier(root) {
-    let race = readProperty(root, "race"), genes = readProperty(root, "genes"), governor = readProperty(race, "governor"), governorType = readProperty(readProperty(governor, "g"), "bg"), gov3 = readProperty(
-      readProperty(readProperty(root, "civic"), "foreign"),
-      "gov3"
-    ), achieve = readProperty(readProperty(root, "stats"), "achieve");
-    return !!(readProperty(genes, "trader") || readProperty(race, "persuasive") || readProperty(race, "ocular_power") || readProperty(race, "devious") || readProperty(race, "merchant") || readProperty(race, "empowered") || readProperty(race, "unfathomable") || readProperty(race, "truepath") || readProperty(achieve, "trade") || readProperty(gov3, "hstl") !== void 0 || governorType === "dealmaker");
-  }
   function routeUnlocked(root, resourceId, resource) {
     if (resource.display !== !0) return !1;
     let race = readProperty(root, "race"), tech = readProperty(root, "tech");
@@ -29686,13 +29584,6 @@
   function readRouteInput(dependencies) {
     let root = dependencies.rootState.readRoot();
     if (root === void 0) return;
-    let unsupported = unsupportedTradePriceModifier(root);
-    if (unsupported !== void 0) {
-      dependencies.onUnavailable?.(
-        `trade-route prices do not model ${unsupported}`
-      );
-      return;
-    }
     let cityMarket = readProperty(readProperty(root, "city"), "market"), resources = readProperty(root, "resource"), tech = readProperty(root, "tech"), currency = finite(readProperty(tech, "currency")) ?? 0, money = readProperty(resources, "Money");
     if (!isRecord(cityMarket) || !isRecord(resources) || !isRecord(money) || Object.hasOwn(cityMarket, "bm")) return;
     let maximum = finite(cityMarket.mtrade), used = finite(cityMarket.trade), moneyRate = finite(money.diff), moneyMaximum = finite(money.max), moneyCurrent = finite(money.amount);
@@ -29703,13 +29594,12 @@
       storageRequired: () => 1
     }, routeCounts = /* @__PURE__ */ new Map(), routeControls = /* @__PURE__ */ new Map(), priority = [];
     for (let [index, resourceId] of Object.keys(resources).entries()) {
-      let resource = readProperty(resources, resourceId), ratio = TRADE_ROUTE_RATIO[resourceId], trade = isRecord(resource) ? finite(resource.trade) : void 0;
-      if (!isRecord(resource) || ratio === void 0 || trade === void 0)
-        continue;
+      let resource = readProperty(resources, resourceId), trade = isRecord(resource) ? finite(resource.trade) : void 0;
+      if (!isRecord(resource) || trade === void 0) continue;
       if (!Number.isSafeInteger(trade)) return;
       if (!routeUnlocked(root, resourceId, resource)) continue;
       let control = dependencies.controls.resolve(`market-${resourceId}`);
-      if (control === void 0 || !control.methods.includes("autoBuy") || !control.methods.includes("autoSell") || !control.methods.includes("zero"))
+      if (control === void 0 || !control.methods.includes("autoBuy") || !control.methods.includes("autoSell") || !control.methods.includes("zero") || !control.methods.includes("aSell") || !control.methods.includes("aBuy"))
         return;
       let marketPriority = finite(settings[`res_buy_p_${resourceId}`]) ?? Number.MAX_SAFE_INTEGER;
       priority.push({ id: resourceId, index, value: marketPriority }), routeCounts.set(resourceId, trade), routeControls.set(resourceId, control);
@@ -29721,10 +29611,17 @@
     for (let entry of priority) {
       let resource = readProperty(resources, entry.id);
       if (!isRecord(resource)) return;
-      let amount = finite(resource.amount), maximumResource = finite(resource.max), diff = finite(resource.diff), ratio = tradeRouteSellQuantity(root, entry.id);
-      if (ratio === void 0) return;
-      let prices = tradeRoutePrices(root, entry.id, resource), required = finite(demand.storageRequired(entry.id));
-      if (amount === void 0 || maximumResource === void 0 || diff === void 0 || required === void 0 || prices === void 0 || maximumResource < 0 || required <= 0)
+      let amount = finite(resource.amount), maximumResource = finite(resource.max), diff = finite(resource.diff), control = routeControls.get(entry.id);
+      if (control === void 0) return;
+      let quote = readCapturedTradeQuote(
+        root,
+        entry.id,
+        control,
+        dependencies.rootState,
+        dependencies.controls,
+        dependencies.mechanics
+      ), required = finite(demand.storageRequired(entry.id));
+      if (amount === void 0 || maximumResource === void 0 || diff === void 0 || required === void 0 || quote === void 0 || maximumResource < 0 || required <= 0)
         return;
       let storageRatio2 = maximumResource > 0 ? amount / maximumResource : 1, usefulRatio = maximumResource > 0 ? amount / Math.min(maximumResource, required) : 1, buyEnabled = settings[`res_trade_buy_${entry.id}`] === !0, sellEnabled = settings[`res_trade_sell_${entry.id}`] === !0;
       !buyEnabled && !sellEnabled && (unmanaged += routeCounts.get(entry.id) ?? 0), views.push(
@@ -29735,10 +29632,10 @@
           autoTradeSellEnabled: sellEnabled,
           usefulRatio,
           storageRatio: storageRatio2,
-          tradeSellPrice: prices.sell,
-          tradeBuyPrice: prices.buy,
+          tradeSellPrice: quote.sellPrice,
+          tradeBuyPrice: quote.buyPrice,
           rateOfChange: diff,
-          tradeRouteQuantity: ratio,
+          tradeRouteQuantity: quote.sellQuantity,
           autoTradeWeighting: finite(settings[`res_trade_w_${entry.id}`]) ?? 0,
           autoTradePriority: finite(settings[`res_trade_p_${entry.id}`]) ?? 0,
           isRoutesUnlocked: !0,
@@ -29789,12 +29686,6 @@
     let root = dependencies.rootState.readRoot(), tech = readProperty(root, "tech"), shadow = finite(readProperty(tech, "shadow"));
     if (root === void 0 || shadow === void 0 || shadow < 5)
       return;
-    if (hasUnsupportedRegionalVolumeModifier(root)) {
-      dependencies.onUnavailable?.(
-        "regional black-market volume modifiers are not captured"
-      );
-      return;
-    }
     let city = readProperty(root, "city"), market = readProperty(city, "market"), resources = readProperty(root, "resource"), race = readProperty(root, "race"), governor = readProperty(race, "governor"), config = readProperty(governor, "config"), trader = readProperty(config, "trader");
     if (!isRecord(market) || !isRecord(resources)) return;
     let maximumRoutes = finite(market.mtrade), money = finite(
@@ -29804,8 +29695,26 @@
       return;
     let marginValue = isRecord(trader) ? finite(trader.margin) : void 0, reserveValue = isRecord(trader) ? finite(trader.reserve) : void 0, margin = marginValue !== void 0 && marginValue > 0 ? marginValue : 0, reserve = reserveValue !== void 0 && reserveValue > 0 ? reserveValue : 0, blackMarket = readProperty(market, "bm"), ledger = isRecord(blackMarket) ? blackMarket : {}, poolNames = /* @__PURE__ */ new Set(), routeCounts = /* @__PURE__ */ new Map();
     for (let value of Object.keys(ledger)) poolNames.add(value);
+    let resourceIds = dependencies.controls.capturedElementIds().filter((id) => id.startsWith("bm-")).map((id) => id.slice(3));
+    if (resourceIds.length === 0) return;
+    let volumes = /* @__PURE__ */ new Map(), controls2 = /* @__PURE__ */ new Map();
+    for (let resourceId of resourceIds) {
+      let control = dependencies.controls.resolve(`bm-${resourceId}`);
+      if (control === void 0 || !control.methods.includes("volume") || !control.methods.includes("more") || !control.methods.includes("less"))
+        return;
+      let volume = readCapturedRegionalVolume(
+        root,
+        resourceId,
+        control,
+        dependencies.rootState,
+        dependencies.controls,
+        dependencies.mechanics
+      );
+      if (volume === void 0) return;
+      volumes.set(resourceId, volume), controls2.set(resourceId, control);
+    }
     let candidates = [];
-    for (let resourceId of Object.keys(BLACK_MARKET_VOLUMES)) {
+    for (let resourceId of resourceIds) {
       let resource = readProperty(resources, resourceId);
       if (!isRecord(resource) || resource.display !== !0) continue;
       let diffLedger = readProperty(resource, "regDiff");
@@ -29815,9 +29724,8 @@
       }
     }
     if (poolNames.size === 0) return;
-    let controls2 = /* @__PURE__ */ new Map();
     for (let pool of poolNames)
-      for (let [resourceId, volume] of Object.entries(BLACK_MARKET_VOLUMES)) {
+      for (let [resourceId, volume] of volumes) {
         let resource = readProperty(resources, resourceId);
         if (!isRecord(resource) || resource.display !== !0) continue;
         let diffLedger = readProperty(resource, "regDiff");
@@ -29839,10 +29747,10 @@
     for (let candidate of candidates) {
       let key = `${candidate.pool}\0${candidate.resourceId}`;
       if (!(candidate.rateOfChange < 0 || candidate.currentRoutes > 0)) continue;
-      let control = dependencies.controls.resolve(`bm-${candidate.resourceId}`);
+      let control = controls2.get(candidate.resourceId);
       if (control === void 0 || !control.methods.includes("more") || !control.methods.includes("less"))
         return;
-      controls2.set(candidate.resourceId, control), routeCounts.has(key) || routeCounts.set(key, candidate.currentRoutes);
+      routeCounts.has(key) || routeCounts.set(key, candidate.currentRoutes);
     }
     let expectedRoutes = new Map(routeCounts), input = Object.freeze({
       resources: Object.freeze(
@@ -29879,7 +29787,8 @@
         let control = captured.session.controls.get(operation2.resourceId);
         if (control === void 0) return;
         for (let index = 0; index < operation2.count; index += 1) {
-          if (dependencies.rootState.readRoot() !== captured.session.root) return;
+          if (dependencies.rootState.readRoot() !== captured.session.root || dependencies.controls.resolve(control.elementId)?.generation !== control.generation || !control.methods.includes("volume") || !control.methods.includes("more") || !control.methods.includes("less"))
+            return;
           let key = `${operation2.pool}\0${operation2.resourceId}`, expected = captured.session.expectedRoutes.get(key) ?? 0;
           if (regionalPoolRoute(
             isRecord(market.bm) ? market.bm : {},
@@ -29928,6 +29837,9 @@
             resourceId
           );
           if (!isRecord(resource) || finite(resource.trade) !== routes) return;
+          let control = captured.session.controls.get(resourceId);
+          if (control === void 0 || dependencies.controls.resolve(control.elementId)?.generation !== control.generation || !control.methods.includes("aSell") || !control.methods.includes("aBuy"))
+            return;
         }
         let expected = new Map(captured.session.routeCounts);
         for (let operation2 of result.operations) {
@@ -29940,7 +29852,7 @@
           );
           let count2 = operation2.kind === "zero" ? 1 : operation2.count;
           for (let index = 0; index < count2; index += 1)
-            if (!dependencies.controls.invoke(control, method, [
+            if (dependencies.rootState.readRoot() !== captured.session.root || dependencies.controls.resolve(control.elementId)?.generation !== control.generation || !dependencies.controls.invoke(control, method, [
               operation2.resourceId,
               1
             ]).ok) return;
@@ -36813,7 +36725,7 @@
       targetName: typeof targetName == "string" ? targetName : null
     });
   }
-  function achievementLevel3(value) {
+  function achievementLevel2(value) {
     if (value == null || value === !1) return null;
     if (!isNonArrayRecord(value)) return NaN;
     let level = value.l;
@@ -36844,7 +36756,7 @@
         readProperty(capturedPlanetRecord(root.stats), "achieve")
       );
       if (achieve === void 0) return;
-      let minersDreamLevel = achievementLevel3(achieve.miners_dream), lamentisLevel = achievementLevel3(achieve.lamentis), budget = revealBudget(minersDreamLevel, lamentisLevel), planets = [];
+      let minersDreamLevel = achievementLevel2(achieve.miners_dream), lamentisLevel = achievementLevel2(achieve.lamentis), budget = revealBudget(minersDreamLevel, lamentisLevel), planets = [];
       for (let elementId of candidateIds) {
         let detail = metadata2.readPlanetDetail(elementId);
         if (detail === void 0) return;
@@ -48412,8 +48324,8 @@ Only continue if you trust the source. Injected code:
       expectedInfluenceAllowed: input.influenceAllowed
     };
   }
-  function capturedEspionageOperationForPolicy(policy, military, hostility2) {
-    return policy === "Betrayal" ? military <= 75 || hostility2 !== void 0 && hostility2 <= 0 ? "sabotage" : "influence" : policy === "Occupy" ? "sabotage" : capturedForeignPolicyEspionageOperation(policy);
+  function capturedEspionageOperationForPolicy(policy, military, hostility) {
+    return policy === "Betrayal" ? military <= 75 || hostility !== void 0 && hostility <= 0 ? "sabotage" : "influence" : policy === "Occupy" ? "sabotage" : capturedForeignPolicyEspionageOperation(policy);
   }
   function capturedEspionageOperation(input) {
     return capturedEspionageOperationForPolicy(
@@ -50354,8 +50266,8 @@ Only continue if you trust the source. Injected code:
           ),
           "mg"
         )
-      ) ?? 0, fathom2 = adjusted / 100 * (nightmare / 5);
-      if (fathom2 > 0) {
+      ) ?? 0, fathom = adjusted / 100 * (nightmare / 5);
+      if (fathom > 0) {
         let fathomDiscount = capturedMercenaryTraitScale(
           1,
           [15, 40],
@@ -50363,7 +50275,7 @@ Only continue if you trust the source. Injected code:
           [70, 150]
         )[0];
         if (fathomDiscount === void 0) return;
-        cost *= 1 - fathomDiscount / 100 * fathom2;
+        cost *= 1 - fathomDiscount / 100 * fathom;
       }
     }
     let inflation = race.inflation;
@@ -53571,6 +53483,7 @@ Only continue if you trust the source. Injected code:
     }), tradeRoutes = createCapturedTradeRoutes({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
+      mechanics: pageCapture2.mechanics,
       readSettings: () => settingsStore.readRaw(),
       readDemand: () => readDemand(),
       onUnavailable: (reason) => reportOnce(`trade routes unavailable: ${reason}`)
@@ -54163,7 +54076,14 @@ Only continue if you trust the source. Injected code:
         })
       ]);
     }, ensureMarketControls = () => {
-      let satisfied = () => pageCapture2.controls.resolve(MARKET_QUANTITY_CONTROL) !== void 0;
+      let satisfied = () => {
+        let root2 = pageCapture2.rootState.readRoot(), regional = finite(
+          readProperty(readProperty(root2, "tech"), "shadow")
+        );
+        return regional !== void 0 && regional >= 5 ? pageCapture2.controls.capturedElementIds().some(
+          (id) => id.startsWith("bm-") && pageCapture2.controls.resolve(id) !== void 0
+        ) : pageCapture2.controls.resolve(MARKET_QUANTITY_CONTROL) !== void 0;
+      };
       if (satisfied() || pageCapture2.controls.resolve(MAIN_TAB_CONTROL) === void 0) return;
       let root = pageCapture2.rootState.readRoot();
       if (readProperty(readProperty(root, "settings"), "showMarket") !== !0)
@@ -54241,7 +54161,7 @@ Only continue if you trust the source. Injected code:
           })
         ]
       );
-    }, structureCount3 = (region, id) => {
+    }, structureCount2 = (region, id) => {
       let value = readProperty(
         readProperty(readProperty(pageCapture2.rootState.readRoot(), region), id),
         "count"
@@ -54408,17 +54328,17 @@ Only continue if you trust the source. Injected code:
             !!readProperty(
               readProperty(pageCapture2.rootState.readRoot(), "race"),
               "smoldering"
-            ) && structureCount3("city", "rock_quarry") >= 1
+            ) && structureCount2("city", "rock_quarry") >= 1
           ), ratios.quarry();
         }), isEnabled(settings, "autoMine") && runPhase("autoMine", () => {
           ensureRatioControls(
             TITAN_MINE_CONTROL,
-            structureCount3("space", "titan_mine") >= 1
+            structureCount2("space", "titan_mine") >= 1
           ), ratios.titanMine();
         }), isEnabled(settings, "autoExtractor") && runPhase("autoExtractor", () => {
           ensureRatioControls(
             MINING_SHIP_CONTROL,
-            structureCount3("tauceti", "mining_ship") >= 1
+            structureCount2("tauceti", "mining_ship") >= 1
           ), ratios.miningShip();
         }), isEnabled(settings, "autoSmelter") && runPhase("autoSmelter", () => {
           ensureSmelterControls(), refreshDiscoveredSettings(), smelter.run();

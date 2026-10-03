@@ -46,7 +46,7 @@ import { readAuthorityPolicyView } from "../../civic/authority.ts";
 import type { CapturedDemandSample } from "../../economy/resources/captured-resource-demand.ts";
 import { readCapturedSupplyRateAdjustment } from "../../economy/resources/captured-supply.ts";
 import { readCapturedEjectRateAdjustment } from "../../economy/resources/captured-ejector.ts";
-import { TRADE_ROUTE_RATIO } from "../../economy/market/trade-price-mirror.ts";
+import { POWER_DECAY_TRADE_RATIO } from "./captured-power-trade-ratio.ts";
 import { readCapturedControlLabel } from "../../captured-control-label.ts";
 import { readCapturedUniverseAffix } from "../../captured-achievements.ts";
 import { readCapturedBuildQueueEntryCount } from "../../captured-queue-reservations.ts";
@@ -456,7 +456,7 @@ export function readCapturedPowerOrdinaryResourceState(
     return undefined;
   const maximum = rawMaximum < 0 ? Number.MAX_SAFE_INTEGER : rawMaximum;
   const storageRatio = maximum > 0 ? current / maximum : 1;
-  const tradeRoutes = TRADE_ROUTE_RATIO[id] ?? -1;
+  const tradeRoutes = POWER_DECAY_TRADE_RATIO[id] ?? -1;
   const tradeDiff = asNumber(production.consumption[id]?.Trade) ?? 0;
   const sell =
     settings["autoMarket"] === true && tradeRoutes > 0 && tradeDiff < 0

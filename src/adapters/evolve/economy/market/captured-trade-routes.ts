@@ -13,17 +13,17 @@ import type { TradeRouteAdjuster } from "../../../../ports/market.ts";
 import type { GameControlHandle } from "../../../../ports/game-control-registry.ts";
 import type { GameControlRegistry } from "../../../../ports/game-control-registry.ts";
 import type { GameRootStateSource } from "../../../../ports/game-root-state.ts";
+import type { CapturedGameMechanics } from "../../../../ports/captured-game-mechanics.ts";
 import { finite, isRecord, readProperty } from "../../../validation.ts";
 import {
-  TRADE_ROUTE_RATIO,
-  tradeRoutePrices,
-  tradeRouteSellQuantity,
-  unsupportedTradePriceModifier,
-} from "./trade-price-mirror.ts";
+  readCapturedTradeQuote,
+  readCapturedRegionalVolume,
+} from "./captured-trade-quote.ts";
 
 interface CapturedTradeRoutesDependencies {
   readonly rootState: GameRootStateSource;
   readonly controls: GameControlRegistry;
+  readonly mechanics: CapturedGameMechanics;
   readonly readSettings: () => unknown;
   readonly readDemand?: () => {
     readonly isDemanded: (resourceId: string) => boolean;
@@ -53,45 +53,6 @@ interface RegionalRouteCapture {
   readonly session: RegionalRouteSession;
 }
 
-const BLACK_MARKET_VOLUMES: Readonly<Record<string, number>> = Object.freeze({
-  Food: 20,
-  Lumber: 20,
-  Chrysotile: 10,
-  Stone: 20,
-  Crystal: 4,
-  Furs: 10,
-  Copper: 10,
-  Iron: 10,
-  Aluminium: 10,
-  Cement: 10,
-  Coal: 10,
-  Oil: 5,
-  Uranium: 1.2,
-  Steel: 5,
-  Titanium: 2.5,
-  Alloy: 2,
-  Polymer: 2,
-  Iridium: 1,
-  Helium_3: 1,
-  Elerium: 0.2,
-  Water: 20,
-  Neutronium: 0.5,
-  Adamantite: 0.5,
-  Nano_Tube: 10,
-  Graphene: 1,
-  Stanene: 1,
-  Bolognium: 1.2,
-  Orichalcum: 0.5,
-  Unobtainium: 0.25,
-  Plywood: 1,
-  Brick: 1,
-  Wrought_Iron: 1,
-  Sheet_Metal: 1,
-  Mythril: 1,
-  Quantium: 1,
-  Aerographene: 1,
-});
-
 const REGIONAL_PRIORITY = Object.freeze([
   "Food",
   "Oil",
@@ -103,36 +64,6 @@ const REGIONAL_PRIORITY = Object.freeze([
 
 function settingsRecord(value: unknown): Record<PropertyKey, unknown> {
   return isRecord(value) ? value : {};
-}
-
-/**
- * The regional black-market path still restates upstream `tradeVolumeBonus()`, so it keeps its own
- * bail list. Every term that function multiplies in and this adapter does not model belongs here.
- * Trade-route *prices* are answered by `trade-price-mirror.ts` and are not gated by this.
- */
-function hasUnsupportedRegionalVolumeModifier(root: unknown): boolean {
-  const race = readProperty(root, "race");
-  const genes = readProperty(root, "genes");
-  const governor = readProperty(race, "governor");
-  const governorType = readProperty(readProperty(governor, "g"), "bg");
-  const gov3 = readProperty(
-    readProperty(readProperty(root, "civic"), "foreign"),
-    "gov3",
-  );
-  const achieve = readProperty(readProperty(root, "stats"), "achieve");
-  return Boolean(
-    readProperty(genes, "trader") ||
-    readProperty(race, "persuasive") ||
-    readProperty(race, "ocular_power") ||
-    readProperty(race, "devious") ||
-    readProperty(race, "merchant") ||
-    readProperty(race, "empowered") ||
-    readProperty(race, "unfathomable") ||
-    readProperty(race, "truepath") ||
-    readProperty(achieve, "trade") ||
-    readProperty(gov3, "hstl") !== undefined ||
-    governorType === "dealmaker",
-  );
 }
 
 function routeUnlocked(
@@ -162,13 +93,6 @@ function readRouteInput(
   | undefined {
   const root = dependencies.rootState.readRoot();
   if (root === undefined) return undefined;
-  const unsupported = unsupportedTradePriceModifier(root);
-  if (unsupported !== undefined) {
-    dependencies.onUnavailable?.(
-      `trade-route prices do not model ${unsupported}`,
-    );
-    return undefined;
-  }
   const cityMarket = readProperty(readProperty(root, "city"), "market");
   const resources = readProperty(root, "resource");
   const tech = readProperty(root, "tech");
@@ -212,10 +136,8 @@ function readRouteInput(
   }[] = [];
   for (const [index, resourceId] of Object.keys(resources).entries()) {
     const resource = readProperty(resources, resourceId);
-    const ratio = TRADE_ROUTE_RATIO[resourceId];
     const trade = isRecord(resource) ? finite(resource["trade"]) : undefined;
-    if (!isRecord(resource) || ratio === undefined || trade === undefined)
-      continue;
+    if (!isRecord(resource) || trade === undefined) continue;
     if (!Number.isSafeInteger(trade)) return undefined;
     if (!routeUnlocked(root, resourceId, resource)) continue;
     const control = dependencies.controls.resolve(`market-${resourceId}`);
@@ -223,7 +145,9 @@ function readRouteInput(
       control === undefined ||
       !control.methods.includes("autoBuy") ||
       !control.methods.includes("autoSell") ||
-      !control.methods.includes("zero")
+      !control.methods.includes("zero") ||
+      !control.methods.includes("aSell") ||
+      !control.methods.includes("aBuy")
     ) {
       return undefined;
     }
@@ -245,16 +169,23 @@ function readRouteInput(
     const amount = finite(resource["amount"]);
     const maximumResource = finite(resource["max"]);
     const diff = finite(resource["diff"]);
-    const ratio = tradeRouteSellQuantity(root, entry.id);
-    if (ratio === undefined) return undefined;
-    const prices = tradeRoutePrices(root, entry.id, resource);
+    const control = routeControls.get(entry.id);
+    if (control === undefined) return undefined;
+    const quote = readCapturedTradeQuote(
+      root,
+      entry.id,
+      control,
+      dependencies.rootState,
+      dependencies.controls,
+      dependencies.mechanics,
+    );
     const required = finite(demand.storageRequired(entry.id));
     if (
       amount === undefined ||
       maximumResource === undefined ||
       diff === undefined ||
       required === undefined ||
-      prices === undefined ||
+      quote === undefined ||
       maximumResource < 0 ||
       required <= 0
     ) {
@@ -275,10 +206,10 @@ function readRouteInput(
         autoTradeSellEnabled: sellEnabled,
         usefulRatio,
         storageRatio,
-        tradeSellPrice: prices.sell,
-        tradeBuyPrice: prices.buy,
+        tradeSellPrice: quote.sellPrice,
+        tradeBuyPrice: quote.buyPrice,
         rateOfChange: diff,
-        tradeRouteQuantity: ratio,
+        tradeRouteQuantity: quote.sellQuantity,
         autoTradeWeighting: finite(settings[`res_trade_w_${entry.id}`]) ?? 0,
         autoTradePriority: finite(settings[`res_trade_p_${entry.id}`]) ?? 0,
         isRoutesUnlocked: true,
@@ -355,13 +286,6 @@ function readRegionalRouteInput(
   const shadow = finite(readProperty(tech, "shadow"));
   if (root === undefined || shadow === undefined || shadow < 5)
     return undefined;
-  if (hasUnsupportedRegionalVolumeModifier(root)) {
-    dependencies.onUnavailable?.(
-      "regional black-market volume modifiers are not captured",
-    );
-    return undefined;
-  }
-
   const city = readProperty(root, "city");
   const market = readProperty(city, "market");
   const resources = readProperty(root, "resource");
@@ -395,8 +319,36 @@ function readRegionalRouteInput(
   const routeCounts = new Map<string, number>();
   for (const value of Object.keys(ledger)) poolNames.add(value);
 
+  const resourceIds = dependencies.controls
+    .capturedElementIds()
+    .filter((id) => id.startsWith("bm-"))
+    .map((id) => id.slice(3));
+  if (resourceIds.length === 0) return undefined;
+  const volumes = new Map<string, number>();
+  const controls = new Map<string, GameControlHandle>();
+  for (const resourceId of resourceIds) {
+    const control = dependencies.controls.resolve(`bm-${resourceId}`);
+    if (
+      control === undefined ||
+      !control.methods.includes("volume") ||
+      !control.methods.includes("more") ||
+      !control.methods.includes("less")
+    )
+      return undefined;
+    const volume = readCapturedRegionalVolume(
+      root,
+      resourceId,
+      control,
+      dependencies.rootState,
+      dependencies.controls,
+      dependencies.mechanics,
+    );
+    if (volume === undefined) return undefined;
+    volumes.set(resourceId, volume);
+    controls.set(resourceId, control);
+  }
   const candidates: RegionalTradeResourceInput[] = [];
-  for (const resourceId of Object.keys(BLACK_MARKET_VOLUMES)) {
+  for (const resourceId of resourceIds) {
     const resource = readProperty(resources, resourceId);
     if (!isRecord(resource) || resource["display"] !== true) continue;
     const diffLedger = readProperty(resource, "regDiff");
@@ -408,9 +360,8 @@ function readRegionalRouteInput(
   }
   if (poolNames.size === 0) return undefined;
 
-  const controls = new Map<string, GameControlHandle>();
   for (const pool of poolNames) {
-    for (const [resourceId, volume] of Object.entries(BLACK_MARKET_VOLUMES)) {
+    for (const [resourceId, volume] of volumes) {
       const resource = readProperty(resources, resourceId);
       if (!isRecord(resource) || resource["display"] !== true) continue;
       const diffLedger = readProperty(resource, "regDiff");
@@ -444,7 +395,7 @@ function readRegionalRouteInput(
     const needsControl =
       candidate.rateOfChange < 0 || candidate.currentRoutes > 0;
     if (!needsControl) continue;
-    const control = dependencies.controls.resolve(`bm-${candidate.resourceId}`);
+    const control = controls.get(candidate.resourceId);
     if (
       control === undefined ||
       !control.methods.includes("more") ||
@@ -452,7 +403,6 @@ function readRegionalRouteInput(
     ) {
       return undefined;
     }
-    controls.set(candidate.resourceId, control);
     if (!routeCounts.has(key)) routeCounts.set(key, candidate.currentRoutes);
   }
 
@@ -502,6 +452,14 @@ function applyRegionalTradeRoutes(
       if (control === undefined) return;
       for (let index = 0; index < operation.count; index += 1) {
         if (dependencies.rootState.readRoot() !== captured.session.root) return;
+        if (
+          dependencies.controls.resolve(control.elementId)?.generation !==
+            control.generation ||
+          !control.methods.includes("volume") ||
+          !control.methods.includes("more") ||
+          !control.methods.includes("less")
+        )
+          return;
         const key = `${operation.pool}\u0000${operation.resourceId}`;
         const expected = captured.session.expectedRoutes.get(key) ?? 0;
         const actual = regionalPoolRoute(
@@ -562,6 +520,15 @@ export function createCapturedTradeRoutes(
           resourceId,
         );
         if (!isRecord(resource) || finite(resource["trade"]) !== routes) return;
+        const control = captured.session.controls.get(resourceId);
+        if (
+          control === undefined ||
+          dependencies.controls.resolve(control.elementId)?.generation !==
+            control.generation ||
+          !control.methods.includes("aSell") ||
+          !control.methods.includes("aBuy")
+        )
+          return;
       }
 
       const expected = new Map(captured.session.routeCounts);
@@ -583,6 +550,12 @@ export function createCapturedTradeRoutes(
           );
         const count = operation.kind === "zero" ? 1 : operation.count;
         for (let index = 0; index < count; index += 1) {
+          if (
+            dependencies.rootState.readRoot() !== captured.session.root ||
+            dependencies.controls.resolve(control.elementId)?.generation !==
+              control.generation
+          )
+            return;
           const invoked = dependencies.controls.invoke(control, method, [
             operation.resourceId,
             1,

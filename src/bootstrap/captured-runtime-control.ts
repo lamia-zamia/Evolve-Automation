@@ -253,7 +253,7 @@ import { createGameCustomRaceLab } from "../adapters/browser/game-custom-race-la
 import { createGameTerraformLab } from "../adapters/browser/game-terraform-lab.ts";
 import type { TickDiagnostics } from "../ports/tick.ts";
 import type { GameActivitySink } from "../ports/game-message-log.ts";
-import { isRecord, readProperty } from "../adapters/validation.ts";
+import { finite, isRecord, readProperty } from "../adapters/validation.ts";
 import { overrideComparisons } from "../domain/override-comparators.ts";
 import {
   CAPTURED_TRAIT_COMPANION_CONTROLS,
@@ -1367,6 +1367,7 @@ export function startCapturedRuntime({
   const tradeRoutes = createCapturedTradeRoutes({
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,
+    mechanics: pageCapture.mechanics,
     readSettings: () => settingsStore.readRaw(),
     readDemand: () => readDemand(),
     onUnavailable: (reason) =>
@@ -2401,8 +2402,21 @@ export function startCapturedRuntime({
   };
 
   const ensureMarketControls = () => {
-    const satisfied = () =>
-      pageCapture.controls.resolve(MARKET_QUANTITY_CONTROL) !== undefined;
+    const satisfied = () => {
+      const root = pageCapture.rootState.readRoot();
+      const regional = finite(
+        readProperty(readProperty(root, "tech"), "shadow"),
+      );
+      return regional !== undefined && regional >= 5
+        ? pageCapture.controls
+            .capturedElementIds()
+            .some(
+              (id) =>
+                id.startsWith("bm-") &&
+                pageCapture.controls.resolve(id) !== undefined,
+            )
+        : pageCapture.controls.resolve(MARKET_QUANTITY_CONTROL) !== undefined;
+    };
     if (satisfied()) return;
     if (pageCapture.controls.resolve(MAIN_TAB_CONTROL) === undefined) return;
     const root = pageCapture.rootState.readRoot();
