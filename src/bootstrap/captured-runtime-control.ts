@@ -210,6 +210,7 @@ import { createCapturedOuterFleetDispatch } from "../adapters/evolve/combat/capt
 import { createCapturedOuterFleetShipyard } from "../adapters/evolve/combat/captured-outer-fleet-shipyard.ts";
 import { createCapturedOuterFleetParts } from "../adapters/evolve/combat/captured-outer-fleet-parts.ts";
 import { createCapturedSyndicateMechanics } from "../adapters/evolve/captured-syndicate-mechanics.ts";
+import { createCapturedSpaceRegionMechanics } from "../adapters/evolve/captured-space-region-mechanics.ts";
 import {
   CAPTURED_MERCENARY_CONTROLS,
   createCapturedMercenary,
@@ -2606,6 +2607,11 @@ export function startCapturedRuntime({
     discovery: civicDiscovery,
     mechanics: pageCapture.mechanics,
   });
+  const outerFleetRegions = createCapturedSpaceRegionMechanics({
+    pageWindow: settingsHostWindow,
+    rootState: pageCapture.rootState,
+    discovery: civicDiscovery,
+  });
   const outerFleet = createCapturedOuterFleetControl({
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,
@@ -2613,6 +2619,7 @@ export function startCapturedRuntime({
     parts: outerFleetParts,
     dispatch: capturedOuterFleetDispatch,
     syndicate: outerFleetSyndicate,
+    regionMechanics: outerFleetRegions,
     readSettings: () => settingsStore.readRaw(),
     onActivity,
   });
@@ -2624,6 +2631,11 @@ export function startCapturedRuntime({
     // able to ask the same question production asks without standing up the rest of the feature.
     const hooks = readProperty(settingsHostWindow, "__EA_TEST_HOOKS__");
     if (isRecord(hooks)) {
+      Reflect.set(hooks, "readOuterFleetRegion", (region: unknown) =>
+        typeof region === "string"
+          ? outerFleetRegions.read(region)
+          : { kind: "invalid" as const },
+      );
       Reflect.set(hooks, "readOuterFleetSyndicate", (region: unknown) =>
         typeof region === "string"
           ? outerFleetSyndicate.read(region)

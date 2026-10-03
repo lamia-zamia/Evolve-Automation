@@ -7,6 +7,7 @@ import type { GameRootStateSource } from "../ports/game-root-state.ts";
 import type { GameShipyardCosts } from "../ports/game-shipyard-costs.ts";
 import type { GameShipyardPartCatalogSource } from "../ports/game-shipyard-parts.ts";
 import type { GameSyndicateMechanics } from "../ports/game-syndicate-mechanics.ts";
+import type { GameSpaceRegionMechanics } from "../ports/game-space-region-mechanics.ts";
 import { createCapturedFleetControls } from "../adapters/evolve/combat/captured-fleet-controls.ts";
 import { createCapturedOuterFleetAdapter } from "../adapters/evolve/combat/captured-fleet-outer.ts";
 import { runOuterFleetAutomation } from "../application/fleet-outer.ts";
@@ -23,6 +24,7 @@ interface CapturedFleetOuterDependencies {
   readonly dispatch: CapturedOuterFleetDispatchCapture;
   /** The game's own Syndicate result: this feature computes no defense arithmetic. */
   readonly syndicate: GameSyndicateMechanics;
+  readonly regionMechanics: GameSpaceRegionMechanics;
   readonly readSettings: () => unknown;
   readonly onActivity?: GameActivitySink;
 }
@@ -42,6 +44,7 @@ export function createCapturedOuterFleetControl(
     parts: dependencies.parts,
     dispatch: dependencies.dispatch,
     syndicate: dependencies.syndicate,
+    regionMechanics: dependencies.regionMechanics,
     readSettings: dependencies.readSettings,
     ...(dependencies.onActivity === undefined
       ? {}

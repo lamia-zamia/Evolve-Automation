@@ -306,7 +306,10 @@ export function createCapturedTabDiscovery(
       // The panel is in front of the player already — every step names the tab their own settings
       // select. The game keeps that panel current itself, so there is nothing to draw and no reason
       // to touch their view.
-      if (path.every((step) => settings[step.setting] === step.index)) {
+      if (
+        !options.forceDraw &&
+        path.every((step) => settings[step.setting] === step.index)
+      ) {
         if (isPanelDrawn === undefined || isPanelDrawn()) {
           // The cheap answer: the game keeps this panel current itself, so the pass costs a read
           // and no draw at all. Counted apart from a draw because that is the whole difference.

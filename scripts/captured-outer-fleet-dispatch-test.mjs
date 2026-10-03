@@ -34,6 +34,7 @@
  * reaching us, never a rule restated here.
  */
 import assert from "node:assert/strict";
+import { createNativeSpaceRegionFixture } from "./space-region-native-fixture.mjs";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -358,6 +359,7 @@ function makeRoot() {
       syard_sensor: 3,
     },
     settings: {
+      space: { titan: true, triton: true, makemake: true, eris: true },
       civTabs: 1,
       spaceTabs: 0,
       govTabs: 0,
@@ -2093,6 +2095,15 @@ assert.deepEqual(sentTo(unbound.page), []);
  * dependencies: the yard's cost row prices a candidate, the yard's option markup says what the yard
  * offers, and the dispatch closure sends what was built.
  */
+function dispatchHarnessRegions(root) {
+  const nativeRegions = createNativeSpaceRegionFixture(root);
+  return {
+    read(region) {
+      return { kind: "value", value: nativeRegions.read(region) };
+    },
+  };
+}
+
 function outerFleetControl(harness, readSettings) {
   return createCapturedOuterFleetControl({
     rootState: { readRoot: () => harness.root },
@@ -2101,6 +2112,7 @@ function outerFleetControl(harness, readSettings) {
     parts: harness.parts,
     dispatch: harness.dispatch,
     syndicate: harness.syndicate,
+    regionMechanics: dispatchHarnessRegions(harness.root),
     readSettings,
   });
 }
@@ -3197,6 +3209,7 @@ function outerFleetControlOverWrongHull(harness, readSettings) {
       parts: harness.parts,
       dispatch: harness.dispatch,
       syndicate: harness.syndicate,
+      regionMechanics: dispatchHarnessRegions(harness.root),
       readSettings,
     }),
   };

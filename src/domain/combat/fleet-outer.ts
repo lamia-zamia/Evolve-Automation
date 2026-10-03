@@ -29,7 +29,8 @@ export interface OuterFleetStatusDecision {
 
 export interface OuterFleetRegionInput {
   readonly id: string;
-  readonly unlocked: boolean;
+  /** Both native navigation and Syndicate participation; null means unavailable. */
+  readonly unlocked: boolean | null;
   readonly weighting: number;
   /**
    * The running game's own Syndicate defense ratio for this region, or `null` when its mechanics
@@ -52,6 +53,7 @@ export interface OuterFleetTargetInput {
   readonly explorerCount: number | null;
   readonly erisTechnology: number;
   readonly erisWeighting: number;
+  readonly erisRegionEnabled: boolean;
   /**
    * The game's own effective Syndicate sensor reading at Eris, or `null` when it could not be
    * reached. Only consulted when the Eris gate is otherwise live.
@@ -242,7 +244,19 @@ export function planOuterFleetTarget(
       });
   }
 
-  if (input.erisTechnology === 1 && input.erisWeighting > 0) {
+  if (
+    input.regions.some(
+      (region) => region.weighting > 0 && region.unlocked === null,
+    )
+  ) {
+    return status(null, null, "Space region mechanics unavailable");
+  }
+
+  if (
+    input.erisTechnology === 1 &&
+    input.erisWeighting > 0 &&
+    input.erisRegionEnabled
+  ) {
     // The gate cannot be decided without the game's own sensor reading, and deciding it wrongly
     // either way is the failure this feature exists to avoid: sending a ship elsewhere while Eris is
     // undefended, or holding one back from a region that needs it. So an unread reading stands the

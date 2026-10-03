@@ -29,6 +29,8 @@ export interface TabDiscoveryResult {
 }
 
 export interface TabDiscoveryOptions {
+  /** Require a protected render even when the player already has this panel drawn. */
+  readonly forceDraw?: boolean;
   /**
    * Runs once with the panel drawn, which is the only moment its rendered detail — ids, costs,
    * document order — is both present and freshly computed. It runs inside the pass, so it must not

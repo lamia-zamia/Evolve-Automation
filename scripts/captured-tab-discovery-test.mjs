@@ -262,6 +262,31 @@ function discoveryFor(page) {
   });
 }
 
+// Explicit native-metadata discovery must draw even if the player already selected the panel.
+for (const failureMode of ["success", "observer", "integrity"]) {
+  const page = makePage({ civTabs: 1, spaceTabs: 1 });
+  if (failureMode === "integrity") page.setIntact(false);
+  let forcedObservation = 0;
+  const result = discoveryFor(page).discover(subTab(1, SPACE_TABS_SETTING, 1), {
+    forceDraw: true,
+    whileDrawn() {
+      forcedObservation++;
+      if (failureMode === "observer") throw new Error("forced observer failed");
+    },
+  });
+  assert.equal(forcedObservation, 1);
+  assert.equal(page.suppression.scopes, 1);
+  assert.equal(page.settings.civTabs, 1);
+  assert.equal(page.settings.spaceTabs, 1);
+  assert.equal(page.settings.animated, true);
+  assert.equal(
+    result.outcome.status === "succeeded",
+    failureMode === "success",
+  );
+  if (failureMode !== "success")
+    assert.equal(page.registry.resolve("space-moon_base"), undefined);
+}
+
 for (const cause of [
   "missing",
   "stale",

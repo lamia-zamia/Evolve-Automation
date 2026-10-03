@@ -49,6 +49,8 @@ import type { CapturedOuterFleetDispatchCapture } from "../../../ports/captured-
 import type { GameRootStateSource } from "../../../ports/game-root-state.ts";
 import type { GameShipyardCosts } from "../../../ports/game-shipyard-costs.ts";
 import type { GameSyndicateMechanics } from "../../../ports/game-syndicate-mechanics.ts";
+import type { GameSpaceRegionMechanics } from "../../../ports/game-space-region-mechanics.ts";
+import { OUTER_FLEET_REGIONS } from "../../../domain/combat/outer-fleet-regions.ts";
 import type {
   GameShipyardPartCatalog,
   GameShipyardPartCatalogSource,
@@ -84,6 +86,7 @@ interface CapturedOuterFleetAdapterDependencies {
   readonly dispatch: CapturedOuterFleetDispatchCapture;
   /** The running game's own Syndicate result; there is no local arithmetic for this question. */
   readonly syndicate: GameSyndicateMechanics;
+  readonly regionMechanics: GameSpaceRegionMechanics;
   readonly readSettings: () => unknown;
   readonly onActivity?: GameActivitySink;
 }
@@ -106,18 +109,6 @@ interface CapturedOuterFleetSession {
   readonly blueprints: Map<OuterFleetBlueprint, UnknownRecord>;
 }
 
-const CAPTURED_OUTER_FLEET_REGIONS = Object.freeze([
-  "spc_moon",
-  "spc_red",
-  "spc_gas",
-  "spc_gas_moon",
-  "spc_belt",
-  "spc_titan",
-  "spc_enceladus",
-  "spc_triton",
-  "spc_makemake",
-  "spc_eris",
-]);
 const CAPTURED_OUTER_FLEET_EXPLORER = Object.freeze({
   class: "explorer",
   armor: "neutronium",
@@ -279,45 +270,6 @@ function capturedOuterFleetBlueprintAvailable(
     }
   }
   return true;
-}
-
-function capturedOuterFleetRegionEnabled(
-  root: UnknownRecord,
-  region: string,
-): boolean {
-  const tech = readProperty(root, "tech");
-  const space = readProperty(root, "space");
-  if (
-    readProperty(readProperty(root, "race"), "orbit_decayed") &&
-    region === "spc_moon"
-  ) {
-    return false;
-  }
-  if (readProperty(tech, "resettle")) return false;
-  const syndicate = readProperty(space, "syndicate");
-  if (!isRecord(syndicate) || !Object.hasOwn(syndicate, region)) return false;
-  switch (region) {
-    case "spc_moon":
-    case "spc_red":
-    case "spc_gas":
-    case "spc_gas_moon":
-    case "spc_belt":
-      return true;
-    case "spc_titan":
-    case "spc_enceladus":
-      return (
-        (finite(readProperty(tech, "titan")) ?? 0) >= 3 &&
-        (finite(readProperty(tech, "enceladus")) ?? 0) >= 2
-      );
-    case "spc_triton":
-      return (finite(readProperty(tech, "triton")) ?? 0) >= 2;
-    case "spc_makemake":
-      return (finite(readProperty(tech, "makemake")) ?? 0) >= 1;
-    case "spc_eris":
-      return (finite(readProperty(tech, "eris")) ?? 0) >= 1;
-    default:
-      return false;
-  }
 }
 
 function capturedOuterFleetLocationName(region: string): string {
@@ -649,38 +601,63 @@ export function createCapturedOuterFleetAdapter(
       }
       const erisTechnology = finite(readProperty(tech, "eris")) ?? 0;
       const erisWeighting = finite(settings["fleet_outer_pr_spc_eris"]) ?? 0;
-      const erisGateLive = erisTechnology === 1 && erisWeighting > 0;
+      const explorerPriority =
+        exploreTau &&
+        tauTechnology === 1 &&
+        explorerAvailable &&
+        (explorerCount === null || explorerCount < 1);
+      const regionStates = explorerPriority
+        ? []
+        : OUTER_FLEET_REGIONS.map((id) => {
+            const weighting = finite(settings[`fleet_outer_pr_${id}`]) ?? 0;
+            const state =
+              weighting > 0 ? dependencies.regionMechanics.read(id) : undefined;
+            return {
+              id,
+              weighting,
+              unlocked:
+                state === undefined
+                  ? null
+                  : state.kind === "value"
+                    ? state.value.reachable && state.value.syndicateEnabled
+                    : null,
+            };
+          });
+      const erisRegionEnabled =
+        regionStates.find(({ id }) => id === "spc_eris")?.unlocked === true;
+      const regionStateUnavailable = regionStates.some(
+        ({ unlocked, weighting }) => unlocked === null && weighting > 0,
+      );
+      const erisGateLive =
+        erisTechnology === 1 && erisWeighting > 0 && erisRegionEnabled;
       // The game's own sensor reading at Eris, and only where the gate is live: an unweighted Eris
       // decides nothing, and asking would cost a protected draw for an answer nobody reads.
-      const erisSample = erisGateLive
-        ? dependencies.syndicate.read("spc_eris")
-        : undefined;
+      const erisSample =
+        erisGateLive && !regionStateUnavailable
+          ? dependencies.syndicate.read("spc_eris")
+          : undefined;
       const erisSensor =
         erisSample === undefined || erisSample.kind !== "value"
           ? null
           : erisSample.value.s;
       const regions: OuterFleetRegionInput[] = [];
       const space = readProperty(root, "space");
-      if (
-        !(
-          exploreTau &&
-          tauTechnology === 1 &&
-          explorerAvailable &&
-          (explorerCount === null || explorerCount < 1)
-        ) &&
-        !(erisGateLive && erisSensor !== null && erisSensor < 50)
-      ) {
-        for (const id of CAPTURED_OUTER_FLEET_REGIONS) {
-          const unlocked = capturedOuterFleetRegionEnabled(root, id);
-          const weighting = unlocked
-            ? (finite(settings[`fleet_outer_pr_${id}`]) ?? 0)
-            : 0;
+      if (!explorerPriority) {
+        for (const { id, unlocked, weighting } of regionStates) {
           // Sampled once per unlocked, weighted region. A zero-weight region is not a target this
           // pass can choose, so its defense is never a question worth a draw; the Eris gate above is
           // the one exception, because it is a gate rather than a target.
           let syndicateRatio: number | null = null;
-          if (unlocked && weighting > 0) {
-            const sample = dependencies.syndicate.read(id);
+          if (
+            unlocked &&
+            weighting > 0 &&
+            !regionStateUnavailable &&
+            !(erisGateLive && (erisSensor === null || erisSensor < 50))
+          ) {
+            const sample =
+              id === "spc_eris" && erisSample !== undefined
+                ? erisSample
+                : dependencies.syndicate.read(id);
             syndicateRatio = sample.kind === "value" ? sample.value.p : null;
           }
           const maximumDefense = finite(settings[`fleet_outer_def_${id}`]) ?? 1;
@@ -727,6 +704,7 @@ export function createCapturedOuterFleetAdapter(
         explorerCount,
         erisTechnology,
         erisWeighting,
+        erisRegionEnabled,
         erisSensor,
         regions: Object.freeze(regions),
       });

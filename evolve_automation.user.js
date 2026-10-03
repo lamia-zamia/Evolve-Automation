@@ -3321,7 +3321,7 @@
             "game-state-not-captured",
             "the game has not created its settings yet"
           );
-        if (path.every((step2) => settings[step2.setting] === step2.index) && (isPanelDrawn === void 0 || isPanelDrawn()))
+        if (!options.forceDraw && path.every((step2) => settings[step2.setting] === step2.index) && (isPanelDrawn === void 0 || isPanelDrawn()))
           return tally.count("discovery.observed"), observed(whileDrawn);
         let playerTabs = /* @__PURE__ */ new Map();
         for (let step2 of path) {
@@ -21922,7 +21922,11 @@
           forcedBlueprint: "explorer"
         });
     }
-    if (input.erisTechnology === 1 && input.erisWeighting > 0) {
+    if (input.regions.some(
+      (region) => region.weighting > 0 && region.unlocked === null
+    ))
+      return status(null, null, "Space region mechanics unavailable");
+    if (input.erisTechnology === 1 && input.erisWeighting > 0 && input.erisRegionEnabled) {
       if (input.erisSensor === null)
         return status(null, null, SYNDICATE_UNAVAILABLE);
       if (input.erisSensor < 50)
@@ -22029,6 +22033,20 @@
       nextShipName: input.plan.nextShipName
     });
   }
+
+  // src/domain/combat/outer-fleet-regions.ts
+  var OUTER_FLEET_REGIONS = Object.freeze([
+    "spc_moon",
+    "spc_red",
+    "spc_gas",
+    "spc_gas_moon",
+    "spc_belt",
+    "spc_titan",
+    "spc_enceladus",
+    "spc_triton",
+    "spc_makemake",
+    "spc_eris"
+  ]);
 
   // src/adapters/evolve/civic/authority.ts
   function unavailable(reason) {
@@ -22169,18 +22187,7 @@
   }
 
   // src/adapters/evolve/combat/captured-fleet-outer.ts
-  var CAPTURED_OUTER_FLEET_REGIONS = Object.freeze([
-    "spc_moon",
-    "spc_red",
-    "spc_gas",
-    "spc_gas_moon",
-    "spc_belt",
-    "spc_titan",
-    "spc_enceladus",
-    "spc_triton",
-    "spc_makemake",
-    "spc_eris"
-  ]), CAPTURED_OUTER_FLEET_EXPLORER = Object.freeze({
+  var CAPTURED_OUTER_FLEET_EXPLORER = Object.freeze({
     class: "explorer",
     armor: "neutronium",
     weapon: "railgun",
@@ -22237,31 +22244,6 @@
         return !1;
     }
     return !0;
-  }
-  function capturedOuterFleetRegionEnabled(root, region) {
-    let tech = readProperty(root, "tech"), space = readProperty(root, "space");
-    if (readProperty(readProperty(root, "race"), "orbit_decayed") && region === "spc_moon" || readProperty(tech, "resettle")) return !1;
-    let syndicate = readProperty(space, "syndicate");
-    if (!isRecord(syndicate) || !Object.hasOwn(syndicate, region)) return !1;
-    switch (region) {
-      case "spc_moon":
-      case "spc_red":
-      case "spc_gas":
-      case "spc_gas_moon":
-      case "spc_belt":
-        return !0;
-      case "spc_titan":
-      case "spc_enceladus":
-        return (finite(readProperty(tech, "titan")) ?? 0) >= 3 && (finite(readProperty(tech, "enceladus")) ?? 0) >= 2;
-      case "spc_triton":
-        return (finite(readProperty(tech, "triton")) ?? 0) >= 2;
-      case "spc_makemake":
-        return (finite(readProperty(tech, "makemake")) ?? 0) >= 1;
-      case "spc_eris":
-        return (finite(readProperty(tech, "eris")) ?? 0) >= 1;
-      default:
-        return !1;
-    }
   }
   function capturedOuterFleetLocationName(region) {
     return region === "tauceti" ? "tech_era_tauceti" : region;
@@ -22405,12 +22387,21 @@
             dimensions
           ));
         }
-        let erisTechnology = finite(readProperty(tech, "eris")) ?? 0, erisWeighting = finite(settings.fleet_outer_pr_spc_eris) ?? 0, erisGateLive = erisTechnology === 1 && erisWeighting > 0, erisSample = erisGateLive ? dependencies.syndicate.read("spc_eris") : void 0, erisSensor = erisSample === void 0 || erisSample.kind !== "value" ? null : erisSample.value.s, regions = [], space = readProperty(root, "space");
-        if (!(exploreTau && tauTechnology === 1 && explorerAvailable && (explorerCount === null || explorerCount < 1)) && !(erisGateLive && erisSensor !== null && erisSensor < 50))
-          for (let id of CAPTURED_OUTER_FLEET_REGIONS) {
-            let unlocked = capturedOuterFleetRegionEnabled(root, id), weighting = unlocked ? finite(settings[`fleet_outer_pr_${id}`]) ?? 0 : 0, syndicateRatio = null;
-            if (unlocked && weighting > 0) {
-              let sample = dependencies.syndicate.read(id);
+        let erisTechnology = finite(readProperty(tech, "eris")) ?? 0, erisWeighting = finite(settings.fleet_outer_pr_spc_eris) ?? 0, explorerPriority = exploreTau && tauTechnology === 1 && explorerAvailable && (explorerCount === null || explorerCount < 1), regionStates = explorerPriority ? [] : OUTER_FLEET_REGIONS.map((id) => {
+          let weighting = finite(settings[`fleet_outer_pr_${id}`]) ?? 0, state = weighting > 0 ? dependencies.regionMechanics.read(id) : void 0;
+          return {
+            id,
+            weighting,
+            unlocked: state === void 0 ? null : state.kind === "value" ? state.value.reachable && state.value.syndicateEnabled : null
+          };
+        }), erisRegionEnabled = regionStates.find(({ id }) => id === "spc_eris")?.unlocked === !0, regionStateUnavailable = regionStates.some(
+          ({ unlocked, weighting }) => unlocked === null && weighting > 0
+        ), erisGateLive = erisTechnology === 1 && erisWeighting > 0 && erisRegionEnabled, erisSample = erisGateLive && !regionStateUnavailable ? dependencies.syndicate.read("spc_eris") : void 0, erisSensor = erisSample === void 0 || erisSample.kind !== "value" ? null : erisSample.value.s, regions = [], space = readProperty(root, "space");
+        if (!explorerPriority)
+          for (let { id, unlocked, weighting } of regionStates) {
+            let syndicateRatio = null;
+            if (unlocked && weighting > 0 && !regionStateUnavailable && !(erisGateLive && (erisSensor === null || erisSensor < 50))) {
+              let sample = id === "spc_eris" && erisSample !== void 0 ? erisSample : dependencies.syndicate.read(id);
               syndicateRatio = sample.kind === "value" ? sample.value.p : null;
             }
             let maximumDefense = finite(settings[`fleet_outer_def_${id}`]) ?? 1, digsite = readProperty(space, "digsite"), digsiteIncomplete = id === "spc_eris" && isRecord(digsite) && (finite(digsite.count) ?? 100) < 100, troopers = digsiteIncomplete ? finite(
@@ -22440,6 +22431,7 @@
           explorerCount,
           erisTechnology,
           erisWeighting,
+          erisRegionEnabled,
           erisSensor,
           regions: Object.freeze(regions)
         }), planned = planOuterFleetTarget(cycle, input);
@@ -22715,6 +22707,7 @@
       parts: dependencies.parts,
       dispatch: dependencies.dispatch,
       syndicate: dependencies.syndicate,
+      regionMechanics: dependencies.regionMechanics,
       readSettings: dependencies.readSettings,
       ...dependencies.onActivity === void 0 ? {} : { onActivity: dependencies.onActivity }
     });
@@ -49866,6 +49859,120 @@ Only continue if you trust the source. Injected code:
     return !Number.isFinite(p) || p > 1 ? { kind: "invalid" } : { kind: "value", value: Object.freeze({ p, s: sensor }) };
   }
 
+  // src/adapters/evolve/scoped-object-keys.ts
+  var scopedKeysOwners = /* @__PURE__ */ new WeakSet();
+  function observeScopedObjectKeys(pageWindow, inspect, draw) {
+    let owner = readProperty(pageWindow, "Object");
+    if (typeof owner != "function" && typeof owner != "object" || owner === null || scopedKeysOwners.has(owner)) return !1;
+    scopedKeysOwners.add(owner);
+    let original, keysWrapper, keysScopeSucceeded = !0;
+    try {
+      if (original = Object.getOwnPropertyDescriptor(owner, "keys"), original?.configurable !== !0 || typeof original.value != "function")
+        return !1;
+      let originalKeys = original.value;
+      keysWrapper = function(...args) {
+        let answer = Reflect.apply(originalKeys, this, args);
+        return inspect(args[0]), answer;
+      }, Object.defineProperty(owner, "keys", { ...original, value: keysWrapper }), draw();
+    } catch {
+      keysScopeSucceeded = !1;
+    } finally {
+      try {
+        keysWrapper !== void 0 && Object.getOwnPropertyDescriptor(owner, "keys")?.value === keysWrapper && Object.defineProperty(owner, "keys", original);
+        let restored = Object.getOwnPropertyDescriptor(owner, "keys");
+        (original === void 0 || restored?.value !== original.value || restored?.writable !== original.writable || restored?.enumerable !== original.enumerable || restored?.configurable !== original.configurable || restored?.get !== original.get || restored?.set !== original.set) && (keysScopeSucceeded = !1);
+      } catch {
+        keysScopeSucceeded = !1;
+      } finally {
+        scopedKeysOwners.delete(owner);
+      }
+    }
+    return keysScopeSucceeded;
+  }
+
+  // src/adapters/evolve/captured-space-region-mechanics.ts
+  function spaceRegionInfoCandidate(value) {
+    if (!isNonArrayRecord(value)) return;
+    let infos = /* @__PURE__ */ new Map();
+    for (let region of OUTER_FLEET_REGIONS) {
+      let entry = readProperty(value, region), info = readProperty(entry, "info");
+      if (!isNonArrayRecord(entry) || !isNonArrayRecord(info) || typeof readProperty(info, "nav") != "function" || typeof readProperty(info, "syndicate") != "function")
+        return;
+      infos.set(region, info);
+    }
+    return infos;
+  }
+  function createCapturedSpaceRegionMechanics(dependencies) {
+    let spaceRegionAuthority, spaceRegionCaptureInFlight = !1;
+    function captureSpaceRegionAuthority() {
+      if (spaceRegionCaptureInFlight) return !1;
+      spaceRegionCaptureInFlight = !0;
+      let candidateIdentity, candidateInfos, ambiguousSpaceMetadata = !1, protectedSpaceDrawSucceeded = !1;
+      try {
+        return !observeScopedObjectKeys(
+          dependencies.pageWindow,
+          (argument) => {
+            if (candidateIdentity === argument && candidateInfos !== void 0)
+              return;
+            let infos = spaceRegionInfoCandidate(argument);
+            infos !== void 0 && (candidateInfos !== void 0 ? ambiguousSpaceMetadata = !0 : (candidateIdentity = argument, candidateInfos = infos));
+          },
+          () => {
+            let panel = MAIN_TAB_PANELS[MAIN_TAB_INDEX.civilization];
+            protectedSpaceDrawSucceeded = dependencies.discovery.discover(
+              [
+                {
+                  setting: MAIN_TAB_SETTING,
+                  control: MAIN_TAB_CONTROL,
+                  index: MAIN_TAB_INDEX.civilization
+                },
+                {
+                  setting: SPACE_TABS_SETTING,
+                  control: SUB_TAB_CONTROLS[SPACE_TABS_SETTING] ?? "",
+                  index: SPACE_TAB_INDEX.space
+                }
+              ],
+              {
+                forceDraw: !0,
+                ...panel === void 0 ? {} : { mount: [`#${panel}`] }
+              }
+            ).outcome.status === "succeeded";
+          }
+        ) || !protectedSpaceDrawSucceeded || ambiguousSpaceMetadata || candidateInfos === void 0 ? !1 : (spaceRegionAuthority = candidateInfos, !0);
+      } finally {
+        spaceRegionCaptureInFlight = !1;
+      }
+    }
+    return Object.freeze({
+      read(region) {
+        if (!OUTER_FLEET_REGIONS.includes(region))
+          return { kind: "invalid" };
+        if (spaceRegionAuthority === void 0 && !captureSpaceRegionAuthority())
+          return { kind: "absent" };
+        let info = spaceRegionAuthority?.get(region);
+        if (info === void 0) return { kind: "invalid" };
+        try {
+          let nav = info.nav, syndicate = info.syndicate;
+          if (typeof nav != "function" || typeof syndicate != "function")
+            return { kind: "invalid" };
+          let reachable = !!Reflect.apply(nav, info, []), syndicateEnabled = !!Reflect.apply(syndicate, info, []);
+          if (region === "spc_moon") {
+            let root = dependencies.rootState.readRoot(), race = readProperty(root, "race");
+            if (!isNonArrayRecord(root) || !isNonArrayRecord(race))
+              return { kind: "invalid" };
+            race.orbit_decayed && (reachable = !1);
+          }
+          return {
+            kind: "value",
+            value: Object.freeze({ reachable, syndicateEnabled })
+          };
+        } catch {
+          return { kind: "invalid" };
+        }
+      }
+    });
+  }
+
   // src/domain/state-update.ts
   function computeMoneyWindow(incomes, rate) {
     let next = incomes.slice(1);
@@ -53701,6 +53808,10 @@ Only continue if you trust the source. Injected code:
       controls: pageCapture2.controls,
       discovery: civicDiscovery,
       mechanics: pageCapture2.mechanics
+    }), outerFleetRegions = createCapturedSpaceRegionMechanics({
+      pageWindow: settingsHostWindow2,
+      rootState: pageCapture2.rootState,
+      discovery: civicDiscovery
     }), outerFleet = createCapturedOuterFleetControl({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
@@ -53708,6 +53819,7 @@ Only continue if you trust the source. Injected code:
       parts: outerFleetParts,
       dispatch: capturedOuterFleetDispatch,
       syndicate: outerFleetSyndicate,
+      regionMechanics: outerFleetRegions,
       readSettings: () => settingsStore.readRaw(),
       onActivity
     });
