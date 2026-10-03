@@ -258,6 +258,45 @@ export function readCapturedForeignTargets(
   return Object.freeze(governments);
 }
 
+/** Battle requires a complete visibility sample; `false` alone means hidden. */
+export function readCapturedBattleForeignTargets(
+  root: unknown,
+  controls: GameControlRegistry,
+  foreign: GameControlHandle,
+  settings: Record<string, unknown>,
+  authorityCurrent: () => boolean,
+): readonly CapturedForeignGovernment[] | undefined {
+  const governments: CapturedForeignGovernment[] = [];
+  if (!authorityCurrent()) return undefined;
+  for (let index = 0; index <= CAPTURED_FOREIGN_MAX_INDEX; index += 1) {
+    const raw = readProperty(
+      readProperty(readProperty(root, "civic"), "foreign"),
+      `gov${index}`,
+    );
+    if (!isRecord(raw) || finite(raw["mil"]) === undefined) continue;
+    let visible: boolean | undefined;
+    try {
+      visible = capturedForeignInvokeBoolean(controls, foreign, "gvis", [
+        index,
+      ]);
+    } catch {
+      return undefined;
+    }
+    if (!authorityCurrent() || visible === undefined) return undefined;
+    if (!visible) continue;
+    const policy = capturedForeignPolicy(settings, index, finite(raw["mil"])!);
+    const target = readCapturedForeignGovernment(
+      root,
+      index,
+      policy.policy,
+      policy.rank,
+    );
+    if (target === undefined || !authorityCurrent()) return undefined;
+    governments.push(target);
+  }
+  return authorityCurrent() ? Object.freeze(governments) : undefined;
+}
+
 export function capturedForeignGovernmentWithPolicy(
   target: CapturedForeignGovernment,
   policy: string,

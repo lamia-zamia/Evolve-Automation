@@ -35,15 +35,14 @@ function fixture({
     policy: hell ? "Occupy" : "Sabotage",
   });
   if (hell) root.portal.fortress.patrols = 3;
-  const automation = makeAutomation(
-    root,
-    {
-      ...settings,
-      autoHell: Boolean(hell),
-      foreignPolicyInferior: hell ? "Occupy" : "Sabotage",
-    },
-    { hell: Boolean(hell) },
-  );
+  const configuredSettings = {
+    ...settings,
+    autoHell: Boolean(hell),
+    foreignPolicyInferior: hell ? "Occupy" : "Sabotage",
+  };
+  const automation = makeAutomation(root, configuredSettings, {
+    hell: Boolean(hell),
+  });
   const { controls, handles, trace } = automation;
   const originalResolve = controls.resolve.bind(controls);
   const originalInvoke = controls.invoke.bind(controls);
@@ -97,7 +96,7 @@ function fixture({
     trace.at(-1)[0] = handle.elementId;
     return result;
   };
-  return { root, automation, state, trace };
+  return { root, automation, state, trace, settings: configuredSettings };
 }
 
 function sample(f) {
@@ -258,6 +257,259 @@ for (const changed of ["city", "foreign", "fort"]) {
   assert.equal(f.automation.adapter.executor.execute(decision).status, "stale");
   assert.deepEqual(f.trace, []);
   assert.equal(f.root.stats.attacks, 0);
+}
+
+{
+  const f = fixture();
+  const cycle = f.automation.adapter.reader.readCycle();
+  f.settings.foreignMinAdvantage = 25;
+  const battlefield = f.automation.adapter.reader.readBattlefield(
+    prepareBattle(cycle),
+  );
+  assert.equal(battlefield.currentTarget, null);
+  assert.deepEqual(battlefield.occupationTargets, []);
+}
+
+{
+  const f = fixture();
+  f.state.onInvoke = (_handle, method) => {
+    if (method === "gvis") f.settings.foreignMinAdvantage = 25;
+  };
+  assert.equal(sample(f).decision, null);
+  assert.equal(
+    f.automation.adapter.executor.execute({ kind: "launch-battle" }).status,
+    "stale",
+  );
+}
+
+{
+  const f = fixture();
+  const cycle = f.automation.adapter.reader.readCycle();
+  f.root.civic.garrison.wounded += 1;
+  const battlefield = f.automation.adapter.reader.readBattlefield(
+    prepareBattle(cycle),
+  );
+  assert.equal(battlefield.currentTarget, null);
+}
+
+for (const [change, mutate] of [
+  (f) => {
+    f.settings.foreignMinAdvantage = 25;
+  },
+  (f) => {
+    f.root.civic.foreign.gov0.mil += 20;
+  },
+  (f) => {
+    f.root.civic.garrison.cityGarrison -= 1;
+  },
+  (f) => {
+    f.root.civic.garrison.wounded += 1;
+  },
+  (f) => {
+    f.root.civic.foreign.gov0.hstl += 1;
+  },
+].entries()) {
+  const f = fixture();
+  const { decision } = sample(f);
+  assert.ok(decision);
+  f.trace.length = 0;
+  mutate(f);
+  assert.equal(
+    f.automation.adapter.executor.execute(decision).status,
+    "stale",
+    `change ${change}`,
+  );
+  assert.equal(
+    f.trace.some(([, method]) => method === "campaign"),
+    false,
+  );
+}
+
+{
+  const f = fixture();
+  const { decision } = sample(f);
+  f.settings.foreignPowerRequired = undefined;
+  assert.equal(
+    f.automation.adapter.executor.execute(decision).status,
+    "succeeded",
+  );
+}
+
+{
+  const f = fixture();
+  f.root.civic.foreign.gov1 = { ...f.root.civic.foreign.gov0, mil: 100 };
+  const { decision } = sample(f);
+  assert.ok(decision);
+  f.root.civic.foreign.gov1.mil += 1;
+  f.trace.length = 0;
+  assert.equal(f.automation.adapter.executor.execute(decision).status, "stale");
+  assert.equal(
+    f.trace.some(([, method]) => method === "campaign"),
+    false,
+  );
+}
+
+for (const failure of [
+  "false",
+  "malformed",
+  "rejected",
+  "throwing",
+  "generation",
+  "root",
+]) {
+  const f = fixture();
+  const invoke = f.automation.controls.invoke;
+  f.automation.controls.invoke = (handle, method, args) => {
+    if (method !== "gvis") return invoke(handle, method, args);
+    if (failure === "generation")
+      f.state.foreign = { ...f.state.foreign, generation: 2 };
+    if (failure === "root") f.automation.sourceRoot.current = makeRoot();
+    if (failure === "throwing") throw new Error("native visibility failed");
+    if (failure === "rejected") return { ok: false, reason: "threw" };
+    if (failure === "malformed") return { ok: true, value: "visible" };
+    if (failure === "false") return { ok: true, value: false };
+    return invoke(handle, method, args);
+  };
+  const { decision } = sample(f);
+  assert.equal(decision, null, failure);
+  assert.equal(
+    f.automation.adapter.executor.execute({ kind: "launch-battle" }).status,
+    "stale",
+  );
+}
+
+{
+  const f = fixture();
+  const { decision } = sample(f);
+  const invoke = f.automation.controls.invoke;
+  f.automation.controls.invoke = (handle, method, args) =>
+    method === "gvis"
+      ? { ok: true, value: false }
+      : invoke(handle, method, args);
+  f.trace.length = 0;
+  assert.equal(f.automation.adapter.executor.execute(decision).status, "stale");
+  assert.equal(
+    f.trace.some(([, method]) => method === "campaign"),
+    false,
+  );
+}
+
+for (const change of ["generation", "root"]) {
+  const f = fixture();
+  const invoke = f.automation.controls.invoke;
+  f.automation.controls.invoke = (handle, method, args) => {
+    if (method === "rating") {
+      if (change === "generation")
+        f.state.city = { ...f.state.city, generation: 2 };
+      else f.automation.sourceRoot.current = makeRoot();
+    }
+    return invoke(handle, method, args);
+  };
+  assert.equal(sample(f).decision, null);
+  assert.equal(
+    f.automation.adapter.executor.execute({ kind: "launch-battle" }).status,
+    "stale",
+  );
+}
+
+for (const failure of ["rejected", "throwing", "malformed"]) {
+  for (const hell of [false, true]) {
+    const f = fixture({ hell });
+    const invoke = f.automation.controls.invoke;
+    f.automation.controls.invoke = (handle, method, args) => {
+      if (method !== "rating") return invoke(handle, method, args);
+      if (failure === "throwing") throw new Error("native rating failed");
+      if (failure === "malformed") return { ok: true, value: NaN };
+      return { ok: false, reason: "threw" };
+    };
+    assert.equal(sample(f).decision, null);
+    assert.equal(
+      f.automation.adapter.executor.execute({ kind: "launch-battle" }).status,
+      "stale",
+    );
+  }
+}
+
+for (const field of ["garrison", "patrols", "patrol_size"]) {
+  const f = fixture({ hell: true });
+  const { decision } = sample(f);
+  assert.ok(decision);
+  f.trace.length = 0;
+  f.root.portal.fortress[field] += 1;
+  assert.equal(f.automation.adapter.executor.execute(decision).status, "stale");
+  assert.equal(
+    f.trace.some(([, method]) =>
+      ["patDec", "aLast", "campaign"].includes(method),
+    ),
+    false,
+  );
+}
+
+{
+  const f = fixture({ hell: true });
+  const { decision } = sample(f);
+  f.state.onInvoke = (_handle, method) => {
+    if (method === "patrolling") f.settings.foreignMinAdvantage = 25;
+  };
+  f.trace.length = 0;
+  assert.equal(f.automation.adapter.executor.execute(decision).status, "stale");
+  assert.equal(
+    f.trace.some(([, method]) =>
+      ["patDec", "aLast", "campaign"].includes(method),
+    ),
+    false,
+  );
+}
+
+for (const method of ["patDec", "next", "aNext"]) {
+  const f = fixture({ hell: method === "patDec" });
+  const { decision } = sample(f);
+  assert.ok(decision);
+  f.state.onInvoke = (_handle, called) => {
+    if (called === method) f.root.civic.foreign.gov0.mil += 1;
+  };
+  f.trace.length = 0;
+  assert.equal(f.automation.adapter.executor.execute(decision).status, "stale");
+  assert.ok(
+    f.trace.some(([, called]) => called === method),
+    method,
+  );
+  assert.equal(
+    f.trace.some(([, called]) => called === "campaign"),
+    false,
+  );
+}
+
+for (const method of ["patDec", "next", "aNext"]) {
+  const f = fixture({ hell: method === "patDec" });
+  const { decision } = sample(f);
+  f.state.onInvoke = (handle, called) => {
+    if (called !== method) return;
+    if (handle.elementId === "gFort")
+      f.state.gFort = { ...f.state.gFort, generation: 2 };
+    else f.state.foreign = { ...f.state.foreign, generation: 2 };
+  };
+  f.trace.length = 0;
+  assert.equal(f.automation.adapter.executor.execute(decision).status, "stale");
+  assert.ok(f.trace.some(([, called]) => called === method));
+  assert.equal(
+    f.trace.some(([, called]) => called === "campaign"),
+    false,
+  );
+}
+
+{
+  const f = fixture();
+  f.root.civic.foreign.gov0.occ = true;
+  const { decision } = sample(f);
+  assert.equal(decision?.releaseControl, true);
+  f.root.civic.foreign.gov0.mil += 1;
+  f.trace.length = 0;
+  assert.equal(f.automation.adapter.executor.execute(decision).status, "stale");
+  assert.equal(
+    f.trace.some(([, method]) => method === "campaign"),
+    false,
+  );
 }
 
 const battleSource = readFileSync(

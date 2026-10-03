@@ -75,6 +75,9 @@ export function makeRoot({
 
 export function makeControls(root, { hell = false } = {}) {
   const trace = [];
+  const initialFortressGarrison = root.portal.fortress?.garrison ?? 0;
+  const returnedHellSoldiers = () =>
+    initialFortressGarrison - (root.portal.fortress?.garrison ?? 0);
   const garrison = {
     elementId: "garrison",
     generation: 1,
@@ -117,10 +120,16 @@ export function makeControls(root, { hell = false } = {}) {
         };
       }
       if (handle === garrison && method === "hell") {
-        return { ok: true, value: root.civic.garrison.cityGarrison };
+        return {
+          ok: true,
+          value: root.civic.garrison.cityGarrison + returnedHellSoldiers(),
+        };
       }
       if (handle === garrison && method === "s_max") {
-        return { ok: true, value: root.civic.garrison.maxCityGarrison };
+        return {
+          ok: true,
+          value: root.civic.garrison.maxCityGarrison + returnedHellSoldiers(),
+        };
       }
       if (handle === garrison && method === "rating") {
         return { ok: true, value: args[0] * 10 };

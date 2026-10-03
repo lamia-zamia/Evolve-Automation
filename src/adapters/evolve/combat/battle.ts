@@ -10,7 +10,7 @@ import type {
   BattlefieldInput,
   LaunchBattleDecision,
 } from "../../../domain/combat/battle.ts";
-import { planBattle } from "../../../domain/combat/battle.ts";
+import { planBattle, prepareBattle } from "../../../domain/combat/battle.ts";
 import type { BattleExecutor, BattleReader } from "../../../ports/battle.ts";
 import type { GameActivitySink } from "../../../ports/game-message-log.ts";
 import type {
@@ -21,6 +21,7 @@ import type { GameKeyStateReader } from "../../../ports/game-key-state.ts";
 import type { GameRootStateSource } from "../../../ports/game-root-state.ts";
 import { rejected, stale, SUCCEEDED } from "../../command-outcomes.ts";
 import { finite, isRecord, readProperty } from "../../validation.ts";
+import { readCapturedAchievementStar } from "../captured-achievements.ts";
 import {
   readCapturedHellGarrisonFromControl,
   resolveCapturedOrdinaryFortress,
@@ -34,7 +35,7 @@ import {
   CAPTURED_FOREIGN_GARRISON_CONTROLS,
   CAPTURED_FOREIGN_GARRISON_REQUIRED_METHODS,
   capturedForeignPacifistGuardActive,
-  readCapturedForeignTargets,
+  readCapturedBattleForeignTargets,
   selectCapturedForeignStrategy,
   type CapturedForeignGovernment,
 } from "./captured-foreign-state.ts";
@@ -55,10 +56,20 @@ type CapturedBattleGovernment = CapturedForeignGovernment;
 
 interface CapturedBattleCycle {
   readonly root: unknown;
+  readonly stateKey: string;
   readonly garrison: GameControlHandle;
   readonly foreign: GameControlHandle;
   readonly hell: GameControlHandle | undefined;
   readonly input: Readonly<BattleCycleInput>;
+  readonly settings: Readonly<Record<string, unknown>>;
+  readonly fortress:
+    | Readonly<{
+        garrison: number;
+        patrols: number;
+        patrolSize: number;
+        patrolling: number;
+      }>
+    | undefined;
   readonly currentTactic: number;
   readonly raid: number;
   readonly attacks: number;
@@ -71,6 +82,9 @@ interface CapturedBattleSession {
   readonly foreign: GameControlHandle;
   readonly hell: GameControlHandle | undefined;
   readonly input: Readonly<BattleCycleInput>;
+  readonly settings: Readonly<Record<string, unknown>>;
+  readonly fortress: CapturedBattleCycle["fortress"];
+  readonly stateKey: string;
   readonly parameters: Readonly<BattleParameters>;
   readonly battlefield: Readonly<BattlefieldInput>;
   readonly governments: ReadonlyMap<number, CapturedBattleGovernment>;
@@ -78,6 +92,57 @@ interface CapturedBattleSession {
   readonly raid: number;
   readonly attacks: number;
   readonly occupationSupported: boolean;
+}
+
+const CAPTURED_BATTLE_SETTING_NUMBERS = Object.freeze({
+  foreignAttackHealthySoldiersPercent: 90,
+  foreignAttackLivingSoldiersPercent: 90,
+  foreignMinAdvantage: 40,
+  foreignMaxAdvantage: 80,
+  foreignMaxSiegeBattalion: 10,
+  foreignPowerRequired: 75,
+});
+const CAPTURED_BATTLE_SETTING_BOOLEANS = Object.freeze({
+  foreignPacifist: false,
+  autoHell: false,
+  autoBuild: false,
+  hellAssaultReserve: true,
+  foreignUnification: true,
+  foreignOccupyLast: true,
+  foreignForceSabotage: true,
+  achievementGuards: false,
+  guardPacifist: true,
+  guardWorldDomination: true,
+  guardSyndicate: true,
+});
+const CAPTURED_BATTLE_SETTING_STRINGS = Object.freeze({
+  foreignProtect: "auto",
+  foreignPolicyInferior: "Ignore",
+  foreignPolicySuperior: "Ignore",
+  foreignPolicyRival: "Ignore",
+});
+
+function capturedBattleSettings(
+  value: unknown,
+): Readonly<Record<string, unknown>> {
+  const source = isRecord(value) ? value : {};
+  const settings: Record<string, unknown> = {};
+  for (const [key, fallback] of Object.entries(CAPTURED_BATTLE_SETTING_NUMBERS))
+    settings[key] = capturedBattleSettingNumber(source, key, fallback);
+  for (const [key, fallback] of Object.entries(
+    CAPTURED_BATTLE_SETTING_BOOLEANS,
+  ))
+    settings[key] = capturedBattleSettingBoolean(source, key, fallback);
+  for (const [key, fallback] of Object.entries(CAPTURED_BATTLE_SETTING_STRINGS))
+    settings[key] = capturedBattleSettingString(source, key, fallback);
+  return Object.freeze(settings);
+}
+
+function capturedBattleSettingsMatch(
+  left: Readonly<Record<string, unknown>>,
+  right: Readonly<Record<string, unknown>>,
+): boolean {
+  return JSON.stringify(left) === JSON.stringify(right);
 }
 
 export interface CapturedBattleDependencies {
@@ -146,10 +211,108 @@ function capturedBattleInvokeBoolean(
   method: string,
   args: readonly unknown[] = [],
 ): boolean | undefined {
-  const result = controls.invoke(control, method, args);
-  return result.ok && typeof result.value === "boolean"
-    ? result.value
-    : undefined;
+  try {
+    const result = controls.invoke(control, method, args);
+    return result.ok && typeof result.value === "boolean"
+      ? result.value
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function capturedBattleAuthorityCurrent(
+  dependencies: CapturedBattleDependencies,
+  active: {
+    readonly root: unknown;
+    readonly garrison: GameControlHandle;
+    readonly foreign: GameControlHandle;
+    readonly hell: GameControlHandle | undefined;
+  },
+): boolean {
+  return (
+    dependencies.rootState.readRoot() === active.root &&
+    dependencies.controls.resolve(active.garrison.elementId)?.generation ===
+      active.garrison.generation &&
+    dependencies.controls.resolve(active.foreign.elementId)?.generation ===
+      active.foreign.generation &&
+    (active.hell === undefined ||
+      dependencies.controls.resolve(active.hell.elementId)?.generation ===
+        active.hell.generation)
+  );
+}
+
+function capturedBattleRelevantState(root: unknown): string {
+  const civic = readProperty(root, "civic");
+  const garrison = readProperty(civic, "garrison");
+  const foreign = readProperty(civic, "foreign");
+  const fortress = readProperty(readProperty(root, "portal"), "fortress");
+  const fields = (value: unknown, keys: readonly string[]) =>
+    keys.map((key) => readProperty(value, key) ?? null);
+  return JSON.stringify([
+    fields(readProperty(root, "race"), [
+      "banana",
+      "frail",
+      "high_pop",
+      "rage",
+      "warlord",
+      "no_plasmid",
+      "no_trade",
+      "no_craft",
+      "no_crispr",
+      "cataclysm",
+      "truepath",
+    ]),
+    fields(readProperty(root, "tech"), [
+      "armor",
+      "hell_pit",
+      "unify",
+      "world_control",
+      "isolation",
+      "shadow",
+    ]),
+    fields(readProperty(root, "city"), ["biome", "ptrait"]),
+    fields(readProperty(readProperty(root, "city"), "morale"), ["current"]),
+    fields(readProperty(civic, "govern"), ["type"]),
+    fields(readProperty(root, "settings"), ["showPortal", "mKeys", "keyMap"]),
+    fields(garrison, [
+      "workers",
+      "max",
+      "crew",
+      "wounded",
+      "progress",
+      "rate",
+      "display",
+    ]),
+    fields(fortress, ["garrison", "patrols", "patrol_size"]),
+    ["soul_forge", "guard_post", "assault_forge"].map((name) =>
+      fields(readProperty(readProperty(root, "portal"), name), ["count"]),
+    ),
+    fields(readProperty(readProperty(root, "resource"), "Money"), [
+      "amount",
+      "currentQuantity",
+    ]),
+    fields(readProperty(readProperty(root, "space"), "fob"), ["troops"]),
+    fields(readProperty(readProperty(root, "eden"), "pillbox"), ["staffed"]),
+    ["pacifist", "world_domination", "syndicate"].map(
+      (name) => readCapturedAchievementStar(root, name) ?? null,
+    ),
+    fields(readProperty(root, "stats"), ["attacks"]),
+    Array.from({ length: 5 }, (_, index) =>
+      fields(readProperty(foreign, `gov${index}`), [
+        "mil",
+        "spy",
+        "occ",
+        "anx",
+        "buy",
+        "hstl",
+        "unrest",
+        "eco",
+        "sab",
+        "act",
+      ]),
+    ),
+  ]);
 }
 
 // DeadSpace exposes `battleAssessment(gov)` as localized prose rather than a numeric
@@ -269,10 +432,10 @@ function capturedBattleReadCycle(
 ): CapturedBattleCycle | undefined {
   const root = dependencies.rootState.readRoot();
   if (!isRecord(root)) return undefined;
+  const stateKey = capturedBattleRelevantState(root);
   if (capturedBattleModifierHeld(root, dependencies.keyState)) return undefined;
 
-  const settingsValue = dependencies.readSettings();
-  const settings = isRecord(settingsValue) ? settingsValue : {};
+  const settings = capturedBattleSettings(dependencies.readSettings());
   if (
     capturedBattleSettingBoolean(settings, "foreignPacifist", false) ||
     capturedForeignPacifistGuardActive(root, settings)
@@ -359,6 +522,7 @@ function capturedBattleReadCycle(
   let hellGarrison = 0;
   let hellPatrolSize = 1;
   let hellAvailable = false;
+  let fortressSnapshot: CapturedBattleCycle["fortress"];
   const hellReserveKnown = capturedBattleHellReserveKnown(root, settings);
   const fortress = readProperty(readProperty(root, "portal"), "fortress");
   if (
@@ -368,6 +532,7 @@ function capturedBattleReadCycle(
     readProperty(race, "warlord") !== true
   ) {
     const fortressGarrison = finite(fortress["garrison"]);
+    const patrols = finite(fortress["patrols"]);
     const patrolSize = finite(fortress["patrol_size"]);
     hell = resolveCapturedOrdinaryFortress(dependencies.controls, [
       "aLast",
@@ -385,6 +550,7 @@ function capturedBattleReadCycle(
     if (hell !== undefined && stationed === undefined) return undefined;
     if (
       fortressGarrison !== undefined &&
+      patrols !== undefined &&
       patrolSize !== undefined &&
       patrolSize > 0 &&
       stationed !== undefined
@@ -393,6 +559,12 @@ function capturedBattleReadCycle(
       hellPatrolSize = patrolSize;
       hellGarrison = stationed;
       hellAvailable = true;
+      fortressSnapshot = Object.freeze({
+        garrison: fortressGarrison,
+        patrols,
+        patrolSize,
+        patrolling: stationed,
+      });
     } else {
       hell = undefined;
     }
@@ -405,16 +577,16 @@ function capturedBattleReadCycle(
     hellSoldiers = 0;
     hellGarrison = 0;
     hellPatrolSize = 1;
+    fortressSnapshot = undefined;
   }
   if (
-    dependencies.rootState.readRoot() !== root ||
-    dependencies.controls.resolve(garrison.elementId)?.generation !==
-      garrison.generation ||
-    dependencies.controls.resolve(foreign.elementId)?.generation !==
-      foreign.generation ||
-    (hell !== undefined &&
-      dependencies.controls.resolve(hell.elementId)?.generation !==
-        hell.generation)
+    !capturedBattleAuthorityCurrent(dependencies, {
+      root,
+      garrison,
+      foreign,
+      hell,
+    }) ||
+    capturedBattleRelevantState(root) !== stateKey
   )
     return undefined;
 
@@ -489,10 +661,13 @@ function capturedBattleReadCycle(
   });
   return Object.freeze({
     root,
+    stateKey,
     garrison,
     foreign,
     hell: hellAvailable ? hell : undefined,
     input,
+    settings,
+    fortress: fortressSnapshot,
     currentTactic,
     raid,
     attacks,
@@ -590,20 +765,6 @@ function capturedBattleDecisionsMatch(
   );
 }
 
-function capturedBattleTargetMatches(
-  target: CapturedBattleGovernment,
-  decision: Readonly<LaunchBattleDecision>,
-): boolean {
-  return (
-    target.governmentId === decision.governmentId &&
-    false === decision.expectedReleased &&
-    target.occupied === decision.expectedOccupied &&
-    target.annexed === decision.expectedAnnexed &&
-    target.purchased === decision.expectedPurchased &&
-    target.spyCount === decision.spyCount
-  );
-}
-
 function capturedBattleRefreshGovernment(
   root: unknown,
   governmentId: number,
@@ -671,7 +832,26 @@ function capturedBattleDriveHell(
     );
     const patrolsBefore = finite(readProperty(fortress, "patrols"));
     const garrisonBefore = finite(readProperty(fortress, "garrison"));
-    if (patrolsBefore === undefined || garrisonBefore === undefined)
+    const patrolSize = finite(readProperty(fortress, "patrol_size"));
+    const patrolling = readCapturedHellGarrisonFromControl(
+      dependencies.rootState,
+      dependencies.controls,
+      active.root,
+      active.hell,
+    );
+    if (
+      active.fortress === undefined ||
+      patrolsBefore !== active.fortress.patrols ||
+      garrisonBefore !== active.fortress.garrison ||
+      patrolSize !== active.fortress.patrolSize ||
+      patrolling !== active.fortress.patrolling ||
+      capturedBattleRelevantState(active.root) !== active.stateKey ||
+      !capturedBattleSettingsMatch(
+        active.settings,
+        capturedBattleSettings(dependencies.readSettings()),
+      ) ||
+      !capturedBattleAuthorityCurrent(dependencies, active)
+    )
       return false;
     const patrolTarget = Math.max(
       0,
@@ -689,7 +869,7 @@ function capturedBattleDriveHell(
       if (!result.ok) return false;
     }
     const patrolsAfter = finite(readProperty(fortress, "patrols"));
-    if (patrolsAfter === undefined || patrolsAfter > patrolTarget) return false;
+    if (patrolsAfter !== patrolTarget) return false;
     const garrisonTarget = Math.max(
       0,
       garrisonBefore - decision.hellGarrisonToRemove,
@@ -706,10 +886,231 @@ function capturedBattleDriveHell(
       if (!result.ok) return false;
     }
     const garrisonAfter = finite(readProperty(fortress, "garrison"));
-    if (garrisonAfter === undefined || garrisonAfter > garrisonTarget)
+    if (
+      garrisonAfter !== garrisonTarget ||
+      finite(readProperty(fortress, "patrol_size")) !==
+        active.fortress.patrolSize ||
+      finite(readProperty(fortress, "patrols")) !== patrolTarget
+    )
       return false;
   }
   return true;
+}
+
+function capturedBattleStableKey(value: string, allowHell: boolean): string {
+  if (!allowHell) return value;
+  const fields: unknown[] = JSON.parse(value);
+  fields[7] = null;
+  return JSON.stringify(fields);
+}
+
+function capturedBattleStableInput(
+  input: Readonly<BattleCycleInput>,
+  allowHell: boolean,
+  hellGarrisonDelta = 0,
+): string {
+  if (!allowHell) return JSON.stringify(input);
+  return JSON.stringify({
+    ...input,
+    currentCityGarrison: input.currentCityGarrison - hellGarrisonDelta,
+    maxCityGarrison: input.maxCityGarrison - hellGarrisonDelta,
+    availableGarrison: input.availableGarrison - hellGarrisonDelta,
+    hellSoldiers: 0,
+    hellGarrison: 0,
+    maximumSoldiers: 0,
+  });
+}
+
+function capturedBattleResample(
+  dependencies: CapturedBattleDependencies,
+  active: CapturedBattleSession,
+  decision: Readonly<LaunchBattleDecision>,
+  allowHell: boolean,
+): boolean {
+  if (
+    !capturedBattleAuthorityCurrent(dependencies, active) ||
+    !capturedBattleSettingsMatch(
+      active.settings,
+      capturedBattleSettings(dependencies.readSettings()),
+    )
+  )
+    return false;
+  const fresh = capturedBattleReadCycle(dependencies);
+  if (
+    fresh === undefined ||
+    fresh.root !== active.root ||
+    fresh.garrison.elementId !== active.garrison.elementId ||
+    fresh.garrison.generation !== active.garrison.generation ||
+    fresh.foreign.elementId !== active.foreign.elementId ||
+    fresh.foreign.generation !== active.foreign.generation ||
+    fresh.hell?.elementId !== active.hell?.elementId ||
+    fresh.hell?.generation !== active.hell?.generation ||
+    !capturedBattleSettingsMatch(active.settings, fresh.settings) ||
+    capturedBattleStableInput(
+      fresh.input,
+      allowHell,
+      allowHell && active.fortress !== undefined && fresh.fortress !== undefined
+        ? active.fortress.garrison - fresh.fortress.garrison
+        : 0,
+    ) !== capturedBattleStableInput(active.input, allowHell) ||
+    capturedBattleStableKey(
+      capturedBattleRelevantState(active.root),
+      allowHell,
+    ) !== capturedBattleStableKey(active.stateKey, allowHell)
+  )
+    return false;
+  if (
+    !allowHell &&
+    JSON.stringify(fresh.fortress) !== JSON.stringify(active.fortress)
+  )
+    return false;
+  const parameters = prepareBattle(fresh.input);
+  if (parameters === null) return false;
+  const sampled = capturedBattleSampleField(dependencies, fresh, parameters);
+  if (
+    sampled === undefined ||
+    capturedBattleStableKey(sampled.stateKey, allowHell) !==
+      capturedBattleStableKey(active.stateKey, allowHell) ||
+    JSON.stringify([...sampled.governments.values()]) !==
+      JSON.stringify([...active.governments.values()])
+  )
+    return false;
+  if (!allowHell) {
+    const replanned = planBattle(parameters, sampled.battlefield);
+    if (
+      replanned === null ||
+      !capturedBattleDecisionsMatch(replanned, decision) ||
+      JSON.stringify(sampled.battlefield) !== JSON.stringify(active.battlefield)
+    )
+      return false;
+  }
+  const settingsCurrent = capturedBattleSettings(dependencies.readSettings());
+  return (
+    capturedBattleAuthorityCurrent(dependencies, active) &&
+    capturedBattleSettingsMatch(active.settings, settingsCurrent) &&
+    capturedBattleStableKey(
+      capturedBattleRelevantState(active.root),
+      allowHell,
+    ) === capturedBattleStableKey(active.stateKey, allowHell)
+  );
+}
+
+function capturedBattleSampleField(
+  dependencies: CapturedBattleDependencies,
+  active: CapturedBattleCycle,
+  parameters: Readonly<BattleParameters>,
+):
+  | {
+      battlefield: BattlefieldInput;
+      governments: ReadonlyMap<number, CapturedBattleGovernment>;
+      stateKey: string;
+    }
+  | undefined {
+  if (
+    !capturedBattleAuthorityCurrent(dependencies, active) ||
+    !capturedBattleSettingsMatch(
+      active.settings,
+      capturedBattleSettings(dependencies.readSettings()),
+    )
+  )
+    return undefined;
+  const before = capturedBattleRelevantState(active.root);
+  const targets = readCapturedBattleForeignTargets(
+    active.root,
+    dependencies.controls,
+    active.foreign,
+    active.settings,
+    () => capturedBattleAuthorityCurrent(dependencies, active),
+  );
+  if (targets === undefined) return undefined;
+  const strategy = selectCapturedForeignStrategy(
+    active.root,
+    active.settings,
+    targets,
+  );
+  const effectiveGovernments = new Map(
+    strategy.governments.map((target) => [target.governmentId, target]),
+  );
+  const occupationTargets: BattleOccupationTargetInput[] = [];
+  for (const target of strategy.governments) {
+    if (
+      !active.occupationSupported ||
+      target.policy !== "Occupy" ||
+      target.occupied
+    )
+      continue;
+    const rating = capturedBattleEnemyRating(active.root, target, 4);
+    if (rating === undefined) return undefined;
+    const capacity = Math.max(
+      1,
+      Math.floor(parameters.maximumSoldiers || parameters.maxCityGarrison),
+    );
+    const minimumSiegeSoldiers = capturedCitySoldiersForRating({
+      rootState: dependencies.rootState,
+      controls: dependencies.controls,
+      control: active.garrison,
+      expectedRoot: active.root,
+      targetRating: rating / (1 - parameters.minimumAdvantage / 100),
+      capacity,
+    });
+    const maximumSiegeSoldiers = capturedCitySoldiersForRating({
+      rootState: dependencies.rootState,
+      controls: dependencies.controls,
+      control: active.garrison,
+      expectedRoot: active.root,
+      targetRating: rating / (1 - parameters.maximumAdvantage / 100),
+      capacity,
+    });
+    if (
+      minimumSiegeSoldiers === undefined ||
+      maximumSiegeSoldiers === undefined
+    )
+      return undefined;
+    occupationTargets.push(
+      Object.freeze({
+        ...capturedBattleTargetInput(target),
+        minimumSiegeSoldiers,
+        maximumSiegeSoldiers,
+      }),
+    );
+  }
+  const selected =
+    strategy.battleTargetId === null
+      ? undefined
+      : effectiveGovernments.get(strategy.battleTargetId);
+  const plunderTarget =
+    selected !== undefined &&
+    !active.occupationSupported &&
+    selected.policy === "Occupy"
+      ? undefined
+      : selected;
+  const currentTarget =
+    plunderTarget === undefined
+      ? null
+      : capturedBattleReadPlunderTarget(
+          active.root,
+          dependencies.rootState,
+          dependencies.controls,
+          active.garrison,
+          parameters,
+          plunderTarget,
+        );
+  if (plunderTarget !== undefined && currentTarget === undefined)
+    return undefined;
+  const battlefield: BattlefieldInput = Object.freeze({
+    currentTarget: currentTarget ?? null,
+    occupationTargets: Object.freeze(occupationTargets),
+  });
+  if (
+    !capturedBattleAuthorityCurrent(dependencies, active) ||
+    capturedBattleRelevantState(active.root) !== before ||
+    !capturedBattleSettingsMatch(
+      active.settings,
+      capturedBattleSettings(dependencies.readSettings()),
+    )
+  )
+    return undefined;
+  return { battlefield, governments: effectiveGovernments, stateKey: before };
 }
 
 export function createCapturedBattle(
@@ -730,113 +1131,47 @@ export function createCapturedBattle(
     },
 
     readBattlefield(parameters: Readonly<BattleParameters>): BattlefieldInput {
+      session = undefined;
       const active = cycle;
-      if (active === undefined) {
-        return Object.freeze({
-          currentTarget: null,
-          occupationTargets: Object.freeze([]),
-        });
-      }
-      const settingsValue = dependencies.readSettings();
-      const settings = isRecord(settingsValue) ? settingsValue : {};
-      const governments = new Map<number, CapturedBattleGovernment>();
-      for (const target of readCapturedForeignTargets(
-        active.root,
-        dependencies.controls,
-        active.foreign,
-        settings,
-      )) {
-        governments.set(target.governmentId, target);
-      }
-
-      const strategy = selectCapturedForeignStrategy(active.root, settings, [
-        ...governments.values(),
-      ]);
-      const effectiveGovernments = new Map(
-        strategy.governments.map((target) => [target.governmentId, target]),
-      );
-      const occupationTargets: BattleOccupationTargetInput[] = [];
-      for (const target of strategy.governments) {
-        if (
-          !active.occupationSupported ||
-          target.policy !== "Occupy" ||
-          target.occupied
-        )
-          continue;
-        const rating = capturedBattleEnemyRating(active.root, target, 4);
-        if (rating === undefined) continue;
-        const capacity = Math.max(
-          1,
-          Math.floor(parameters.maximumSoldiers || parameters.maxCityGarrison),
-        );
-        const minimumSiegeSoldiers = capturedCitySoldiersForRating({
-          rootState: dependencies.rootState,
-          controls: dependencies.controls,
-          control: active.garrison,
-          expectedRoot: active.root,
-          targetRating: rating / (1 - parameters.minimumAdvantage / 100),
-          capacity,
-        });
-        const maximumSiegeSoldiers = capturedCitySoldiersForRating({
-          rootState: dependencies.rootState,
-          controls: dependencies.controls,
-          control: active.garrison,
-          expectedRoot: active.root,
-          targetRating: rating / (1 - parameters.maximumAdvantage / 100),
-          capacity,
-        });
-        if (
-          minimumSiegeSoldiers === undefined ||
-          maximumSiegeSoldiers === undefined
-        )
-          continue;
-        occupationTargets.push(
-          Object.freeze({
-            ...capturedBattleTargetInput(target),
-            minimumSiegeSoldiers,
-            maximumSiegeSoldiers,
-          }),
-        );
-      }
-
-      const selected =
-        strategy.battleTargetId === null
-          ? undefined
-          : effectiveGovernments.get(strategy.battleTargetId);
-      const plunderTarget =
-        selected !== undefined &&
-        !active.occupationSupported &&
-        selected.policy === "Occupy"
-          ? undefined
-          : selected;
-      const currentTarget =
-        plunderTarget === undefined
-          ? null
-          : capturedBattleReadPlunderTarget(
-              active.root,
-              dependencies.rootState,
-              dependencies.controls,
-              active.garrison,
-              parameters,
-              plunderTarget,
-            );
-      const battlefield: BattlefieldInput = Object.freeze({
-        currentTarget: currentTarget ?? null,
-        occupationTargets: Object.freeze(occupationTargets),
+      cycle = undefined;
+      const empty: BattlefieldInput = Object.freeze({
+        currentTarget: null,
+        occupationTargets: Object.freeze([]),
       });
+      if (
+        active === undefined ||
+        !capturedBattleSettingsMatch(
+          active.settings,
+          capturedBattleSettings(dependencies.readSettings()),
+        ) ||
+        !capturedBattleAuthorityCurrent(dependencies, active) ||
+        capturedBattleRelevantState(active.root) !== active.stateKey ||
+        JSON.stringify(prepareBattle(active.input)) !==
+          JSON.stringify(parameters)
+      )
+        return empty;
+      const sample = capturedBattleSampleField(
+        dependencies,
+        active,
+        parameters,
+      );
+      if (sample === undefined) return empty;
+      if (planBattle(parameters, sample.battlefield) === null)
+        return sample.battlefield;
       session = Object.freeze({
         ...active,
         parameters,
-        battlefield,
-        governments: effectiveGovernments,
+        battlefield: sample.battlefield,
+        governments: sample.governments,
+        stateKey: sample.stateKey,
       });
-      return battlefield;
+      return sample.battlefield;
     },
   });
-
   const executor: BattleExecutor = Object.freeze({
     execute(decision: Readonly<LaunchBattleDecision>) {
       const active = session;
+      session = undefined;
       if (active === undefined) {
         return stale(
           "captured-battle-session-missing",
@@ -859,74 +1194,26 @@ export function createCapturedBattle(
           "captured battle decision does not match the sampled plan",
         );
       }
-      const target = active.governments.get(decision.governmentId);
-      const government = capturedBattleRefreshGovernment(
-        active.root,
-        decision.governmentId,
-      );
-      const attacks = finite(
-        readProperty(readProperty(active.root, "stats"), "attacks"),
-      );
-      const tactic = finite(
-        readProperty(
-          readProperty(readProperty(active.root, "civic"), "garrison"),
-          "tactic",
-        ),
-      );
-      const raid = finite(
-        readProperty(
-          readProperty(readProperty(active.root, "civic"), "garrison"),
-          "raid",
-        ),
-      );
       if (
-        target === undefined ||
-        government === undefined ||
-        attacks !== active.attacks ||
-        tactic !== active.currentTactic ||
-        raid !== active.raid ||
-        !capturedBattleTargetMatches(target, decision) ||
-        Boolean(government["occ"]) !== decision.expectedOccupied ||
-        Boolean(government["anx"]) !== decision.expectedAnnexed ||
-        Boolean(government["buy"]) !== decision.expectedPurchased ||
-        (finite(government["spy"]) ?? 0) !== decision.spyCount
+        !capturedBattleResample(dependencies, active, decision, false) ||
+        finite(
+          readProperty(
+            readProperty(readProperty(active.root, "civic"), "garrison"),
+            "tactic",
+          ),
+        ) !== active.currentTactic ||
+        finite(
+          readProperty(
+            readProperty(readProperty(active.root, "civic"), "garrison"),
+            "raid",
+          ),
+        ) !== active.raid
       ) {
         return stale(
           "captured-battle-state-changed",
           "captured battle state changed",
         );
       }
-      const currentGarrison = dependencies.controls.resolve(
-        active.garrison.elementId,
-      );
-      if (currentGarrison?.generation !== active.garrison.generation) {
-        return stale(
-          "captured-battle-garrison-changed",
-          "captured garrison control changed",
-        );
-      }
-      const currentForeign = dependencies.controls.resolve(
-        active.foreign.elementId,
-      );
-      if (currentForeign?.generation !== active.foreign.generation) {
-        return stale(
-          "captured-battle-foreign-changed",
-          "captured foreign control changed",
-        );
-      }
-      if (active.hell !== undefined) {
-        const currentHell = dependencies.controls.resolve(
-          active.hell.elementId,
-        );
-        if (currentHell?.generation !== active.hell.generation) {
-          return stale(
-            "captured-battle-hell-changed",
-            "captured Hell control changed",
-          );
-        }
-      }
-
-      session = undefined;
       if (decision.releaseControl) {
         const result = dependencies.controls.invoke(
           active.garrison,
@@ -968,12 +1255,26 @@ export function createCapturedBattle(
           "Hell garrison adjustment failed",
         );
       }
+      if (!capturedBattleResample(dependencies, active, decision, true))
+        return stale(
+          "captured-battle-after-hell-changed",
+          "battle state changed after Hell adjustment",
+        );
+      const afterHellKey = capturedBattleRelevantState(active.root);
       if (!capturedBattleDriveTactic(dependencies, active, decision.tactic)) {
         return stale(
           "captured-battle-tactic-failed",
           "garrison tactic did not reach the planned value",
         );
       }
+      if (
+        capturedBattleRelevantState(active.root) !== afterHellKey ||
+        !capturedBattleResample(dependencies, active, decision, true)
+      )
+        return stale(
+          "captured-battle-after-tactic-changed",
+          "battle state changed after tactic adjustment",
+        );
       if (
         !capturedBattleDriveRaid(dependencies, active, decision.battalionSize)
       ) {
@@ -982,6 +1283,26 @@ export function createCapturedBattle(
           "garrison battalion did not reach the planned value",
         );
       }
+      if (
+        capturedBattleRelevantState(active.root) !== afterHellKey ||
+        !capturedBattleResample(dependencies, active, decision, true) ||
+        finite(
+          readProperty(
+            readProperty(readProperty(active.root, "civic"), "garrison"),
+            "tactic",
+          ),
+        ) !== decision.tactic ||
+        finite(
+          readProperty(
+            readProperty(readProperty(active.root, "civic"), "garrison"),
+            "raid",
+          ),
+        ) !== decision.battalionSize
+      )
+        return stale(
+          "captured-battle-before-campaign-changed",
+          "battle state changed before campaign",
+        );
       const result = dependencies.controls.invoke(active.garrison, "campaign", [
         decision.governmentId,
       ]);
