@@ -1910,9 +1910,9 @@ const playerDesign = {
 };
 
 /** Puts the player's own design back on the yard, so each case starts from a known one. */
-function resetYardDesign() {
+function resetYardDesign(design = playerDesign) {
   for (const type of Object.keys(yard.blueprint)) delete yard.blueprint[type];
-  Object.assign(yard.blueprint, playerDesign);
+  Object.assign(yard.blueprint, design);
 }
 
 /**
@@ -1938,9 +1938,11 @@ function shipDesign(ship, dimensions = Object.keys(SHIP_PARTS)) {
 function explorerPass({
   registry = capturedRegistry,
   catalogSource = { catalog: () => partCatalog },
+  /** The player's own design this pass starts from, for a case standing in for another hull. */
+  design = playerDesign,
 } = {}) {
   resetOuterPass();
-  resetYardDesign();
+  resetYardDesign(design);
   syndicate = createSyndicateStub({ spc_red: { p: 0.7319, s: 47 } });
   capturedSettings.fleetExploreTau = true;
   root.tech.tauceti = 1;
@@ -2104,6 +2106,118 @@ function explorerPass({
     yard.ships.some((ship) => ship.class === "explorer"),
     false,
     "an Explorer was built for a hull the yard does not offer",
+  );
+  resetYardDesign();
+  resetOuterPass();
+}
+
+/**
+ * The availability boundary exactly as `truepath.js` binds it: `avail(k, i, v)` is
+ * `ships.js:shipPartAvailable(k, i, v, global.space.shipyard.blueprint.class)`, so every answer is the
+ * *live* hull's and the index is the yard's own option position.
+ *
+ * Transcribed on the branches `ships.js` makes per hull, which is the whole of the class-sensitivity
+ * here: a cargo hull's special slot is its own set and is never empty, a mass driver belongs to the
+ * heavy hulls alone, and an Explorer's weapon, engine and sensor are its own indexes. The asks are
+ * recorded so a case can see which questions a pass made and in what state of the design.
+ */
+function liveHullRegistry(asked) {
+  const hullSpecials = {
+    freighter: ["extra_fuel", "extra_cargo", "extra_thruster"],
+    supply_ship: ["mobile_storage", "fuel_tanker", "repair_ship"],
+  };
+  const massDriverHulls = ["cruiser", "battlecruiser", "dreadnought"];
+  return createRegistryWith({
+    avail: (type, index, part) => {
+      asked.push([type, index, part]);
+      const hull = yard.blueprint.class;
+      if (type === "class") return part === "explorer";
+      if (type === "special") {
+        if (hullSpecials[hull] !== undefined)
+          return hullSpecials[hull].includes(part);
+        return (
+          part === "none" ||
+          (part === "massdriver" && massDriverHulls.includes(hull))
+        );
+      }
+      if (hull === "explorer") {
+        if (type === "weapon") return index === 1;
+        if (type === "engine") return index === 6;
+        if (type === "sensor") return index === 4;
+      }
+      return true;
+    },
+  });
+}
+
+// And that is the whole of it. `normalize()` has already put the player's own design back by the time
+// anything further could be asked, so on a yard wearing a Freighter or a Supply Ship the class-forced
+// `special: "none"` is a choice the live hull would refuse as a fresh one — and the yard's answer would
+// be about the cargo hull, not about the Explorer whose class change chose it. A valid native class
+// transition is the game's own statement about every field it selected, so both cargo hulls still get
+// an Explorer, and the only question either pass asks is the hull's own.
+for (const [hull, design] of [
+  [
+    "freighter",
+    {
+      class: "freighter",
+      armor: "alloy",
+      weapon: "none",
+      engine: "tie",
+      power: "fusion",
+      sensor: "lidar",
+      special: "extra_fuel",
+    },
+  ],
+  [
+    "supply_ship",
+    {
+      class: "supply_ship",
+      armor: "alloy",
+      weapon: "none",
+      engine: "tie",
+      power: "fusion",
+      sensor: "lidar",
+      special: "mobile_storage",
+    },
+  ],
+]) {
+  const asked = [];
+  const result = explorerPass({ registry: liveHullRegistry(asked), design });
+  assert.equal(
+    result.outcome.status,
+    "succeeded",
+    `${hull}: the pass did not finish`,
+  );
+  assert.deepEqual(
+    asked,
+    [["class", 7, "explorer"]],
+    `${hull}: the Explorer hull was not the only availability question asked`,
+  );
+  assert.deepEqual(
+    costs.requests
+      .filter(([method]) => method === "normalize")
+      .map(([, requested]) => requested),
+    [{ class: "explorer" }],
+    `${hull}: the Explorer was not asked of the yard's own normalizer`,
+  );
+  // The stored normalized design is what the quote walks into the yard and what the build writes.
+  assert.deepEqual(
+    costs.requests
+      .filter(([method]) => method === "quote")
+      .map(([, quoted]) => quoted),
+    [NATIVE_EXPLORER_DESIGN],
+    `${hull}: the candidate was priced as something other than the normalized design`,
+  );
+  assert.deepEqual(
+    shipDesign(yard.ships[0]),
+    { ...NATIVE_EXPLORER_DESIGN },
+    `${hull}: the Explorer was not built from the design the yard normalized into`,
+  );
+  assert.deepEqual(
+    dispatch.requests,
+    [{ index: 0, region: "tauceti" }],
+    `${hull}: the Explorer was not sent to Tau Ceti`,
   );
   resetYardDesign();
   resetOuterPass();

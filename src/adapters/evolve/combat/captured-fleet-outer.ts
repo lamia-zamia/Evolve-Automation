@@ -623,7 +623,7 @@ export function createCapturedOuterFleetAdapter(
       // running game's `setVal('class', 'explorer')` decides — the hull's forced components, the
       // technology-gated ones, the `special` its class allows, and any dimension upstream has added
       // since — so the design is *asked for* and then read back out of the yard rather than written
-      // here, and every question about it is asked of that answer.
+      // here, and the design this stores and builds is that answer field for field.
       //
       // The hull itself is the yard's to offer or not, so that is asked first and through the yard's
       // own `avail()`: `setVal` has no availability gate, and an availability answer that goes away
@@ -631,7 +631,8 @@ export function createCapturedOuterFleetAdapter(
       // about the design is asked without a proven catalogue either, since the catalogue is what the
       // normalized answer is described over — and a normalized design that does not account for every
       // dimension is no design at all, which also means an unrelated ship parked at Tau Ceti is never
-      // mistaken for one.
+      // mistaken for one. Together those two questions are the whole of the authority, and the reason
+      // there is no third is below.
       if (exploreTau && tauTechnology === 1 && dimensions !== undefined) {
         const hullOffered = dependencies.controls.isPartAvailable({
           elementId: CAPTURED_OUTER_FLEET_SHIPYARD_CONTROL,
@@ -653,18 +654,32 @@ export function createCapturedOuterFleetAdapter(
             "explorer blueprint",
             active.blueprints,
           );
-          explorerAvailable = capturedOuterFleetBlueprintAvailable(
-            dependencies.controls,
+          // Nothing further is asked of `avail()` about the fields the class transition chose, and
+          // the reason is that `normalize()` has already put the player's own design back by now.
+          //
+          // `avail()` is bound by `truepath.js` to
+          // `shipPartAvailable(type, index, part, global.space.shipyard.blueprint.class)`, so it
+          // answers about whatever hull the yard is *currently* wearing — and `ships.js`'s
+          // `shipPartAvailable` is class-sensitive: an Explorer's weapon, engine, sensor and special
+          // rules are its own, a Freighter's and a Supply Ship's are theirs, and `special: "none"` in
+          // particular is a choice no cargo hull would ever offer as a fresh one. Asking after the
+          // restore therefore judges the Explorer's parts by the player's old hull and refuses a
+          // perfectly valid design whenever the player happened to be building something else.
+          //
+          // Two questions are the whole of the authority here, and both are asked before the restore
+          // matters. The hull is the yard's to offer, so the class question above is asked of the
+          // yard's own `avail()` and a retired Explorer never reaches normalization at all. And a
+          // native `setVal('class', 'explorer')` that produces a design accounting for every proven
+          // dimension *is* the game's own statement that this class transition is valid: it selected
+          // those forced and defaulted fields itself, so re-testing them against a hull the
+          // transition has already left would be asking the game to contradict itself.
+          explorerAvailable = true;
+          explorerCount = capturedOuterFleetAssignedShipCount(
+            root,
+            "tauceti",
             explorer,
             dimensions,
           );
-          if (explorerAvailable)
-            explorerCount = capturedOuterFleetAssignedShipCount(
-              root,
-              "tauceti",
-              explorer,
-              dimensions,
-            );
         }
       }
       const erisTechnology = finite(readProperty(tech, "eris")) ?? 0;

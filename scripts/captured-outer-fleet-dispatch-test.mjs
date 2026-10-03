@@ -437,6 +437,8 @@ function installGame(page, root) {
   page.lockedParts = page.lockedParts ?? new Set();
   /** Every `avail()` call the control received, as `[type, index, value, liveClass]`. */
   page.availCalls = page.availCalls ?? [];
+  /** How many `avail()` calls had been made before each `setVal` write, in write order. */
+  page.availBeforeWrites = [];
   /**
    * Overridable so a case can stand in for a draw that bound a row to the wrong ship. The default is
    * the game's own line: `data: global.space.shipyard.ships[i]`.
@@ -1068,6 +1070,10 @@ function installGame(page, root) {
         bp.scratchOnly = "discard";
       }
       page.setValWrites.push([b, v]);
+      // What the yard had already been asked before this write, so a case can tell a question asked
+      // before normalization from one asked after the design was put back — the two are answered by
+      // different hulls, because `avail()` reads `global.space.shipyard.blueprint.class`.
+      page.availBeforeWrites.push(page.availCalls.length);
       updateCosts();
     },
     slotOpen() {
@@ -2491,10 +2497,10 @@ function makeTauRoot(tech = {}) {
  * The design such a save is wearing, chosen so the class change has real work to do: four components
  * no Explorer carries, and a `special` that cannot follow the hull, so the class default replaces it.
  *
- * A mass-driver cruiser rather than a freighter or a supply ship on purpose. `avail('special', …)`
- * is upstream `shipPartAvailable(…, shipClass)` with the *live* class, so a yard wearing a hull whose
- * special slot is its own cannot be asked about `none` — which is exactly the case the next section
- * characterizes, and not one the usable-design cases should rest on.
+ * A mass-driver cruiser rather than a cargo hull on purpose. `avail('special', …)` is upstream
+ * `shipPartAvailable(…, shipClass)` with the *live* class, and a cruiser can still be asked about
+ * `none` — so the ordinary cases here are not resting on a hull that could not have had the Explorer's
+ * class-forced fields validated against it. The cargo hulls, which cannot, are a case of their own.
  */
 function massdriverDesign(root) {
   Object.assign(root.space.shipyard.blueprint, {
@@ -2691,44 +2697,156 @@ for (const [unreadable, breakIt] of [
   assert.deepEqual(harness.faults, []);
 }
 
-// The availability boundary is asked of the yard as it is, and `avail()` carries the *live* hull —
-// upstream `shipPartAvailable(part, idx, value, shipClass)` is bound with
-// `global.space.shipyard.blueprint.class`. So an Explorer normalized out of a yard wearing a hull whose
-// special slot is its own carries a `special` the live yard would not offer as a fresh choice, and the
-// design is refused. Characterized rather than worked around: this is what the boundary answers, and
-// the pass falls through to its ordinary target instead of building a design it cannot justify.
-{
+// The availability boundary is asked of the yard as it is, and the only question it can answer about
+// this design is the hull's own. `truepath.js` binds `avail()` to
+// `shipPartAvailable(type, index, part, global.space.shipyard.blueprint.class)`, and `ships.js` gives
+// every hull its own special set: a Freighter's is the fuel/cargo/thruster trio, a Supply Ship's is the
+// fit it carries, and neither offers `special: "none"` as a fresh choice. `normalize()` has put the
+// player's own design back by the time anything further could be asked, so a question about the
+// Explorer's forced or defaulted fields would now be answered by whatever hull the player was wearing
+// — which is a statement about the cargo hull, not about the Explorer whose class change chose them.
+// That class transition is the game saying this Explorer is valid, so the hull question is the whole
+// of it, and the Explorer is selected and built from either cargo yard.
+for (const [hull, design] of [
+  [
+    "freighter",
+    {
+      class: "freighter",
+      armor: "alloy",
+      weapon: "none",
+      engine: "tie",
+      power: "fusion",
+      sensor: "lidar",
+      special: "extra_fuel",
+    },
+  ],
+  [
+    "supply_ship",
+    {
+      class: "supply_ship",
+      armor: "alloy",
+      weapon: "none",
+      engine: "tie",
+      power: "fusion",
+      sensor: "lidar",
+      special: "mobile_storage",
+    },
+  ],
+]) {
   const { harness, control } = explorerHarness({
     design: (root) =>
-      Object.assign(root.space.shipyard.blueprint, {
-        class: "freighter",
-        armor: "alloy",
-        weapon: "none",
-        engine: "tie",
-        power: "fusion",
-        sensor: "lidar",
-        special: "extra_fuel",
-        name: "Nomad",
-      }),
+      Object.assign(root.space.shipyard.blueprint, design, { name: "Nomad" }),
   });
+  // What the restored yard would answer about the Explorer's class-forced `special`, recorded and then
+  // cleared so the pass is judged on the calls it makes for itself.
+  assert.equal(
+    harness.game.shipyardMethods.avail("special", 0, "none"),
+    false,
+    `${hull} could be asked about a special it does not offer`,
+  );
+  harness.page.availCalls.length = 0;
   assert.deepEqual(
     harness.costs.normalize({ class: "explorer" }),
     nativeExplorerDesign(),
-    "the normalized design is not the game's own class change",
+    `${hull}: the normalized design is not the game's own class change`,
   );
-  assert.equal(control.autoFleetOuter().outcome.status, "succeeded");
+  // The player's own design is back before the pass plans anything, so the yard has to be asked for
+  // its Explorer hull alone.
+  assert.deepEqual(
+    harness.root.space.shipyard.blueprint,
+    { ...design, name: "Nomad" },
+    `${hull}: normalization left the design behind`,
+  );
+  const askedBefore = harness.page.availCalls.length;
+  const writesBefore = harness.page.availBeforeWrites.length;
+  assert.equal(
+    control.autoFleetOuter().outcome.status,
+    "succeeded",
+    `${hull}: the pass did not finish`,
+  );
+  assert.deepEqual(
+    builtDesign(harness),
+    nativeExplorerParts(),
+    `${hull}: an Explorer was not built from the normalized design`,
+  );
+  assert.deepEqual(sentTo(harness.page), [
+    { kind: "sendShipTo", id: 0, region: "tauceti", moved: true },
+  ]);
+  // One question, the hull's own, asked about the hull the yard was wearing — and every native write
+  // the pass made saw that same single question, so nothing was asked of `avail()` after the restore.
+  assert.deepEqual(
+    askedFor(harness).slice(askedBefore),
+    [`class=7:explorer`],
+    `${hull}`,
+  );
+  assert.deepEqual(
+    harness.page.availCalls
+      .slice(askedBefore)
+      .map(([, , , liveClass]) => liveClass),
+    [hull],
+    `${hull}: the hull question was not asked of the live hull`,
+  );
+  const askedDuringPass = harness.page.availBeforeWrites.slice(writesBefore);
+  assert.ok(
+    askedDuringPass.length > 0,
+    `${hull}: no native write recorded what the yard had been asked`,
+  );
+  assert.deepEqual(
+    [...new Set(askedDuringPass)],
+    [1],
+    `${hull}: an Explorer field was re-validated against the restored hull`,
+  );
+  // The yard is left holding exactly the design that was built, so the build wrote the normalized
+  // Explorer rather than anything the cargo hull contributed.
+  assert.deepEqual(
+    { ...harness.root.space.shipyard.blueprint },
+    nativeExplorerDesign(),
+    `${hull}: the yard was not left holding the design that was built`,
+  );
+  assert.deepEqual(harness.faults, [], `${hull}`);
+}
+
+// The hull question alone is not enough when normalization leaves a dimension unanswered. A blueprint
+// the yard has not normalized an armour into yet, on a save whose armour technology is short of the
+// level the Explorer class change forces one at, is a design this cannot describe over the yard's own
+// dimensions — so it is not a design at all, and the Explorer stands down even though the hull was
+// offered and the class change ran. Deleting a field the class change fills would prove nothing: the
+// change puts it straight back, which is the whole of what a normalized design is.
+{
+  const { harness, control } = explorerHarness({
+    tech: { syard_armor: 2 },
+    design: (root) => {
+      massdriverDesign(root);
+      delete root.space.shipyard.blueprint.armor;
+    },
+  });
+  assert.equal(
+    control.autoFleetOuter().outcome.status,
+    "succeeded",
+    "the pass did not finish",
+  );
   assert.equal(
     harness.page.builtShips.some((ship) => ship.class === "explorer"),
     false,
-    "an Explorer was built from a design the yard would not offer",
+    "an Explorer was built from a design missing a proven dimension",
   );
-  assert.ok(
-    harness.page.availCalls.some(
-      ([type, , value, liveClass]) =>
-        type === "special" && value === "none" && liveClass === "freighter",
-    ),
-    "the availability question was not asked of the live hull",
+  assert.deepEqual(
+    sentTo(harness.page).filter((record) => record.region === "tauceti"),
+    [],
+    "a ship was sent to Tau Ceti for an incomplete Explorer design",
   );
+  // The Explorer hull was asked about, and nothing an Explorer class change forces was.
+  assert.deepEqual(
+    askedFor(harness).slice(0, 1),
+    ["class=7:explorer"],
+    "the Explorer hull was not asked about",
+  );
+  assert.deepEqual(
+    askedFor(harness).filter((asked) => asked.includes(":emdrive")),
+    [],
+    "a part the Explorer class change forces was asked about for a design nothing could describe",
+  );
+  assert.deepEqual(harness.faults, []);
 }
 
 // A yard that cannot say what the Explorer is has no Explorer authority at all: no design is stored,

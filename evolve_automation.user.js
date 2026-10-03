@@ -22362,16 +22362,12 @@
             explorer,
             "explorer blueprint",
             active.blueprints
-          ), explorerAvailable = capturedOuterFleetBlueprintAvailable(
-            dependencies.controls,
-            explorer,
-            dimensions
-          ), explorerAvailable && (explorerCount = capturedOuterFleetAssignedShipCount(
+          ), explorerAvailable = !0, explorerCount = capturedOuterFleetAssignedShipCount(
             root,
             "tauceti",
             explorer,
             dimensions
-          )));
+          ));
         }
         let erisTechnology = finite(readProperty(tech, "eris")) ?? 0, erisWeighting = finite(settings.fleet_outer_pr_spc_eris) ?? 0, explorerPriority = exploreTau && tauTechnology === 1 && explorerAvailable && (explorerCount === null || explorerCount < 1), regionStates = explorerPriority ? [] : OUTER_FLEET_REGIONS.map((id) => {
           let weighting = finite(settings[`fleet_outer_pr_${id}`]) ?? 0, state = weighting > 0 ? dependencies.regionMechanics.read(id) : void 0;
