@@ -13,6 +13,7 @@ import {
 import {
   createCapturedGameSettingsSource,
   createCapturedIdentitySource,
+  isCapturedTruepath,
   readCapturedIdentitySnapshot,
   createCapturedRaceTraitSource,
   createCapturedResourceSource,
@@ -29,6 +30,12 @@ function rootSource(root) {
 }
 
 const NO_ROOT = rootSource(undefined);
+
+assert.equal(isCapturedTruepath({ race: { truepath: 1 } }), true);
+assert.equal(isCapturedTruepath({ race: { truepath: true } }), true);
+assert.equal(isCapturedTruepath({ race: { truepath: 0 } }), false);
+assert.equal(isCapturedTruepath({ race: { truepath: false } }), false);
+assert.equal(isCapturedTruepath({ race: {} }), false);
 
 function fullRoot() {
   return {

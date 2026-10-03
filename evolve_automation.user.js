@@ -2988,6 +2988,9 @@
   }
 
   // src/adapters/evolve/captured-world-state.ts
+  function isCapturedTruepath(root) {
+    return !!readProperty(readProperty(root, "race"), "truepath");
+  }
   function readString(owner, key) {
     let value = readProperty(owner, key);
     return typeof value == "string" ? value : "";
@@ -21391,7 +21394,7 @@
   }
   function readInput4(root, settingsValue, controls2, readDemand) {
     let race = readProperty(root, "race"), tech = readProperty(root, "tech"), galaxy = readProperty(root, "galaxy"), settings = isRecord(settingsValue) ? settingsValue : {};
-    if (!isRecord(race) || !isRecord(tech) || !isRecord(galaxy) || race.truepath === !0)
+    if (!isRecord(race) || !isRecord(tech) || !isRecord(galaxy) || isCapturedTruepath(root))
       return;
     let piracy = finite(tech.piracy), defense = readDefense(root), fleet = controls2.resolve("fleet");
     if (piracy === void 0 || piracy <= 0 || defense === void 0 || fleet === void 0 || !fleet.methods.includes("add") || !fleet.methods.includes("sub"))
@@ -54294,10 +54297,7 @@ Only continue if you trust the source. Injected code:
         }), isEnabled(settings, "autoTrigger") && runPhase("autoTrigger discovery", () => {
           progression.ensureBuildControls(), refreshDiscoveredSettings(), readTriggerTargets();
         }), isEnabled(settings, "autoFleet") && runPhase("autoFleet discovery", () => {
-          readProperty(
-            readProperty(pageCapture2.rootState.readRoot(), "race"),
-            "truepath"
-          ) === !0 ? ensureOuterFleetControls() : ensureGalaxyFleetControls();
+          isCapturedTruepath(pageCapture2.rootState.readRoot()) ? ensureOuterFleetControls() : ensureGalaxyFleetControls();
         }), isEnabled(settings, "autoBuild") || isEnabled(settings, "buildingAlwaysClick")) {
           let needsConstructionSaving = isEnabled(settings, "autoBuild") || isEnabled(settings, "autoARPA"), savingOrderReady = progression.observations.hasCompletedOrdering();
           needsConstructionSaving && !savingOrderReady ? runPhase("buildingAlwaysClick", () => gatherResources()) : runPhase("pre-Gather demand", () => (readDemand(), !0)) === !0 && runPhase("buildingAlwaysClick", () => gatherResources());
@@ -54385,10 +54385,7 @@ Only continue if you trust the source. Injected code:
         }), autoCraftsmen && !combinedJobs && runPhase("autoCraftsmen", () => {
           ensureCivicControls(), runJobsAutomation(craftsmen, !0);
         }), isEnabled(settings, "autoFleet") && runPhase("autoFleet", () => {
-          if (readProperty(
-            readProperty(pageCapture2.rootState.readRoot(), "race"),
-            "truepath"
-          ) === !0)
+          if (isCapturedTruepath(pageCapture2.rootState.readRoot()))
             return ensureOuterFleetControls(), ensureOuterFleetGarrison(), outerFleet.autoFleetOuter();
           ensureGalaxyFleetControls(), runFleetAutomation({
             reader: fleet.reader,

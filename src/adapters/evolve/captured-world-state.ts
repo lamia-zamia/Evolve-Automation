@@ -37,6 +37,11 @@ import { readCapturedResourceView } from "./captured-affordability.ts";
 /** The game's `show*` settings are the record of which features it is currently offering. */
 const FEATURE_PREFIX = "show";
 
+/** DeadSpace stores True Path as numeric 1; its own gates test the value by truthiness. */
+export function isCapturedTruepath(root: unknown): boolean {
+  return Boolean(readProperty(readProperty(root, "race"), "truepath"));
+}
+
 function readString(owner: unknown, key: string): string {
   const value = readProperty(owner, key);
   return typeof value === "string" ? value : "";

@@ -138,4 +138,11 @@ assert.deepEqual(ordinaryTrace, [
   ["fleet", "add", "gxy_gateway", "corvette_ship"],
 ]);
 
+ordinaryRoot.race.truepath = 1;
+assert.equal(ordinaryAutomation.reader.read().available, false);
+ordinaryRoot.race.truepath = true;
+assert.equal(ordinaryAutomation.reader.read().available, false);
+ordinaryRoot.race.truepath = 0;
+assert.equal(ordinaryAutomation.reader.read().available, true);
+
 console.log("Captured galaxy fleet tests passed");

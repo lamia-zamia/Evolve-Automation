@@ -23,6 +23,7 @@ import type {
 import type { GameRootStateSource } from "../../../ports/game-root-state.ts";
 import { rejected, stale, SUCCEEDED } from "../../command-outcomes.ts";
 import { finite, isRecord, readProperty } from "../../validation.ts";
+import { isCapturedTruepath } from "../captured-world-state.ts";
 
 export interface CapturedFleetDependencies {
   readonly rootState: GameRootStateSource;
@@ -394,7 +395,7 @@ function readInput(
     !isRecord(race) ||
     !isRecord(tech) ||
     !isRecord(galaxy) ||
-    race["truepath"] === true
+    isCapturedTruepath(root)
   )
     return undefined;
   const piracy = finite(tech["piracy"]);

@@ -243,7 +243,7 @@ const yard = {
   ships: [],
 };
 const root = {
-  race: { truepath: true, universe: "evil", grenadier: false },
+  race: { truepath: 1, universe: "evil", grenadier: false },
   tech: { syndicate: 1, tauceti: 0, eris: 2, outer: 0 },
   space: {
     shipyard: yard,

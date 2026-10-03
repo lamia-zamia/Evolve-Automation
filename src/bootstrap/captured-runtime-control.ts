@@ -70,6 +70,7 @@ import type { DemandPrerequisiteReport } from "../adapters/evolve/economy/resour
 import {
   createCapturedIdentitySource,
   createCapturedResourceSource,
+  isCapturedTruepath,
 } from "../adapters/evolve/captured-world-state.ts";
 import { createCapturedStateLogReader } from "../adapters/evolve/captured-state-log.ts";
 import { createStateLogStore } from "../adapters/storage/state-log-store.ts";
@@ -2811,11 +2812,7 @@ export function startCapturedRuntime({
       }
       if (isEnabled(settings, "autoFleet")) {
         runPhase("autoFleet discovery", () => {
-          const truepath =
-            readProperty(
-              readProperty(pageCapture.rootState.readRoot(), "race"),
-              "truepath",
-            ) === true;
+          const truepath = isCapturedTruepath(pageCapture.rootState.readRoot());
           if (truepath) ensureOuterFleetControls();
           else ensureGalaxyFleetControls();
         });
@@ -3117,11 +3114,7 @@ export function startCapturedRuntime({
       // the shipyard target, and only the Truepath outer pass can move that.
       if (isEnabled(settings, "autoFleet")) {
         const outerResult = runPhase("autoFleet", () => {
-          const truepath =
-            readProperty(
-              readProperty(pageCapture.rootState.readRoot(), "race"),
-              "truepath",
-            ) === true;
+          const truepath = isCapturedTruepath(pageCapture.rootState.readRoot());
           if (truepath) {
             ensureOuterFleetControls();
             ensureOuterFleetGarrison();
