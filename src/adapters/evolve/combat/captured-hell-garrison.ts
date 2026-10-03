@@ -46,8 +46,44 @@ export function readCapturedHellGarrison(
   expectedRoot: unknown = rootState.readRoot(),
 ): number | undefined {
   try {
+    if (rootState.readRoot() !== expectedRoot) return undefined;
+    if (
+      readProperty(readProperty(expectedRoot, "portal"), "fortress") ===
+        undefined &&
+      isNonArrayRecord(expectedRoot) &&
+      isNonArrayRecord(readProperty(expectedRoot, "race")) &&
+      isNonArrayRecord(readProperty(expectedRoot, "portal")) &&
+      !readProperty(readProperty(expectedRoot, "race"), "warlord")
+    )
+      return 0;
+    const control = resolveCapturedOrdinaryFortress(controls, ["patrolling"]);
+    return control === undefined
+      ? undefined
+      : readCapturedHellGarrisonFromControl(
+          rootState,
+          controls,
+          expectedRoot,
+          control,
+        );
+  } catch {
+    return undefined;
+  }
+}
+
+export function readCapturedHellGarrisonFromControl(
+  rootState: GameRootStateSource,
+  controls: GameControlRegistry,
+  expectedRoot: unknown,
+  control: GameControlHandle,
+): number | undefined {
+  try {
     const root = rootState.readRoot();
-    if (root !== expectedRoot) return undefined;
+    if (
+      root !== expectedRoot ||
+      !control.methods.includes("patrolling") ||
+      controls.resolve(control.elementId)?.generation !== control.generation
+    )
+      return undefined;
     const race = readProperty(root, "race");
     const portal = readProperty(root, "portal");
     if (
@@ -73,8 +109,6 @@ export function readCapturedHellGarrison(
     ) {
       return undefined;
     }
-    const control = resolveCapturedOrdinaryFortress(controls, ["patrolling"]);
-    if (control === undefined) return undefined;
     const result = controls.invoke(control, "patrolling", [garrison]);
     if (
       !result.ok ||

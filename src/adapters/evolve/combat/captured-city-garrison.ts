@@ -56,26 +56,61 @@ export function readCapturedCityGarrisonSnapshot(
       ) {
         continue;
       }
-      const current = invokeCityGarrisonNumber(controls, control, "hell");
-      if (
-        !cityGarrisonHandleIsCurrent(rootState, controls, expectedRoot, control)
-      ) {
-        return undefined;
-      }
-      if (current === undefined) return undefined;
-      const maximum = invokeCityGarrisonNumber(controls, control, "s_max");
-      if (
-        !cityGarrisonHandleIsCurrent(rootState, controls, expectedRoot, control)
-      ) {
-        return undefined;
-      }
-      if (maximum === undefined) return undefined;
-      return Object.freeze({ current, maximum, control });
+      const snapshot = readCapturedCityGarrisonSnapshotFromControl(
+        rootState,
+        controls,
+        expectedRoot,
+        control,
+      );
+      return snapshot === undefined
+        ? undefined
+        : Object.freeze({ ...snapshot, control });
     }
   } catch {
     // A throwing native method or changing capture cannot authorize a snapshot.
   }
   return undefined;
+}
+
+export function readCapturedCityGarrisonSnapshotFromControl(
+  rootState: GameRootStateSource,
+  controls: GameControlRegistry,
+  expectedRoot: unknown,
+  control: GameControlHandle,
+): Pick<CapturedCityGarrisonSnapshot, "current" | "maximum"> | undefined {
+  try {
+    if (
+      !control.methods.includes("hell") ||
+      !control.methods.includes("s_max") ||
+      !cityGarrisonHandleIsCurrent(rootState, controls, expectedRoot, control)
+    )
+      return undefined;
+    const current = invokeCityGarrisonNumber(controls, control, "hell");
+    if (
+      !cityGarrisonHandleIsCurrent(
+        rootState,
+        controls,
+        expectedRoot,
+        control,
+      ) ||
+      current === undefined
+    )
+      return undefined;
+    const maximum = invokeCityGarrisonNumber(controls, control, "s_max");
+    if (
+      !cityGarrisonHandleIsCurrent(
+        rootState,
+        controls,
+        expectedRoot,
+        control,
+      ) ||
+      maximum === undefined
+    )
+      return undefined;
+    return Object.freeze({ current, maximum });
+  } catch {
+    return undefined;
+  }
 }
 
 /** `hell()` returns `civics.js:garrisonSize()`; `stationed()` can return presentation text. */

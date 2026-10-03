@@ -22,10 +22,13 @@ import type { GameRootStateSource } from "../../../ports/game-root-state.ts";
 import { rejected, stale, SUCCEEDED } from "../../command-outcomes.ts";
 import { finite, isRecord, readProperty } from "../../validation.ts";
 import {
-  HELL_GARRISON_CONTROLS,
-  readCapturedHellGarrison,
+  readCapturedHellGarrisonFromControl,
+  resolveCapturedOrdinaryFortress,
 } from "./captured-hell-garrison.ts";
-import { capturedCitySoldiersForRating } from "./captured-city-garrison.ts";
+import {
+  capturedCitySoldiersForRating,
+  readCapturedCityGarrisonSnapshotFromControl,
+} from "./captured-city-garrison.ts";
 import {
   CAPTURED_FOREIGN_CONTROL,
   CAPTURED_FOREIGN_GARRISON_CONTROLS,
@@ -135,16 +138,6 @@ function capturedBattleResolveControl(
     if (capturedBattleHasMethods(control, methods)) return control;
   }
   return undefined;
-}
-
-function capturedBattleInvokeNumber(
-  controls: GameControlRegistry,
-  control: GameControlHandle,
-  method: string,
-  args: readonly unknown[] = [],
-): number | undefined {
-  const result = controls.invoke(control, method, args);
-  return result.ok ? finite(result.value) : undefined;
 }
 
 function capturedBattleInvokeBoolean(
@@ -312,16 +305,15 @@ function capturedBattleReadCycle(
   const wounded = finite(rawGarrison["wounded"]);
   const raid = finite(rawGarrison["raid"]);
   const currentTactic = finite(rawGarrison["tactic"]);
-  const currentCityGarrison = capturedBattleInvokeNumber(
+  const citySnapshot = readCapturedCityGarrisonSnapshotFromControl(
+    dependencies.rootState,
     dependencies.controls,
+    root,
     garrison,
-    "hell",
   );
-  const maxCityGarrison = capturedBattleInvokeNumber(
-    dependencies.controls,
-    garrison,
-    "s_max",
-  );
+  if (citySnapshot === undefined) return undefined;
+  const currentCityGarrison = citySnapshot.current;
+  const maxCityGarrison = citySnapshot.maximum;
   const attacks = finite(readProperty(readProperty(root, "stats"), "attacks"));
   if (
     workers === undefined ||
@@ -377,18 +369,20 @@ function capturedBattleReadCycle(
   ) {
     const fortressGarrison = finite(fortress["garrison"]);
     const patrolSize = finite(fortress["patrol_size"]);
-    hell = capturedBattleResolveControl(
-      dependencies.controls,
-      HELL_GARRISON_CONTROLS,
-      ["aLast", "patDec", "patrolling"],
-    );
+    hell = resolveCapturedOrdinaryFortress(dependencies.controls, [
+      "aLast",
+      "patDec",
+    ]);
     const stationed =
       hell === undefined
         ? undefined
-        : readCapturedHellGarrison(
+        : readCapturedHellGarrisonFromControl(
             dependencies.rootState,
             dependencies.controls,
+            root,
+            hell,
           );
+    if (hell !== undefined && stationed === undefined) return undefined;
     if (
       fortressGarrison !== undefined &&
       patrolSize !== undefined &&
@@ -412,6 +406,17 @@ function capturedBattleReadCycle(
     hellGarrison = 0;
     hellPatrolSize = 1;
   }
+  if (
+    dependencies.rootState.readRoot() !== root ||
+    dependencies.controls.resolve(garrison.elementId)?.generation !==
+      garrison.generation ||
+    dependencies.controls.resolve(foreign.elementId)?.generation !==
+      foreign.generation ||
+    (hell !== undefined &&
+      dependencies.controls.resolve(hell.elementId)?.generation !==
+        hell.generation)
+  )
+    return undefined;
 
   const input: BattleCycleInput = Object.freeze({
     available: true,
@@ -898,6 +903,15 @@ export function createCapturedBattle(
         return stale(
           "captured-battle-garrison-changed",
           "captured garrison control changed",
+        );
+      }
+      const currentForeign = dependencies.controls.resolve(
+        active.foreign.elementId,
+      );
+      if (currentForeign?.generation !== active.foreign.generation) {
+        return stale(
+          "captured-battle-foreign-changed",
+          "captured foreign control changed",
         );
       }
       if (active.hell !== undefined) {

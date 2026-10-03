@@ -13318,8 +13318,25 @@
   }
   function readCapturedHellGarrison(rootState, controls2, expectedRoot = rootState.readRoot()) {
     try {
+      if (rootState.readRoot() !== expectedRoot) return;
+      if (readProperty(readProperty(expectedRoot, "portal"), "fortress") === void 0 && isNonArrayRecord(expectedRoot) && isNonArrayRecord(readProperty(expectedRoot, "race")) && isNonArrayRecord(readProperty(expectedRoot, "portal")) && !readProperty(readProperty(expectedRoot, "race"), "warlord"))
+        return 0;
+      let control = resolveCapturedOrdinaryFortress(controls2, ["patrolling"]);
+      return control === void 0 ? void 0 : readCapturedHellGarrisonFromControl(
+        rootState,
+        controls2,
+        expectedRoot,
+        control
+      );
+    } catch {
+      return;
+    }
+  }
+  function readCapturedHellGarrisonFromControl(rootState, controls2, expectedRoot, control) {
+    try {
       let root = rootState.readRoot();
-      if (root !== expectedRoot) return;
+      if (root !== expectedRoot || !control.methods.includes("patrolling") || controls2.resolve(control.elementId)?.generation !== control.generation)
+        return;
       let race = readProperty(root, "race"), portal = readProperty(root, "portal");
       if (!isNonArrayRecord(root) || !isNonArrayRecord(race) || !isNonArrayRecord(portal) || // Warlord's `#fort` is `buildEnemyFortress`, a different component with no `patrolling`;
       // upstream skips `buildFortress` entirely for that trait, so neither id can answer here.
@@ -13331,8 +13348,6 @@
       let garrison = finite(readProperty(fortress, "garrison"));
       if (garrison === void 0 || finite(readProperty(fortress, "patrols")) === void 0 || finite(readProperty(fortress, "patrol_size")) === void 0)
         return;
-      let control = resolveCapturedOrdinaryFortress(controls2, ["patrolling"]);
-      if (control === void 0) return;
       let result = controls2.invoke(control, "patrolling", [garrison]);
       return !result.ok || rootState.readRoot() !== expectedRoot || controls2.resolve(control.elementId)?.generation !== control.generation ? void 0 : finite(result.value);
     } catch {
@@ -13359,12 +13374,38 @@
         let control = controls2.resolve(elementId);
         if (control === void 0 || !control.methods.includes("hell") || !control.methods.includes("s_max"))
           continue;
-        let current = invokeCityGarrisonNumber(controls2, control, "hell");
-        if (!cityGarrisonHandleIsCurrent(rootState, controls2, expectedRoot, control) || current === void 0) return;
-        let maximum = invokeCityGarrisonNumber(controls2, control, "s_max");
-        return !cityGarrisonHandleIsCurrent(rootState, controls2, expectedRoot, control) || maximum === void 0 ? void 0 : Object.freeze({ current, maximum, control });
+        let snapshot2 = readCapturedCityGarrisonSnapshotFromControl(
+          rootState,
+          controls2,
+          expectedRoot,
+          control
+        );
+        return snapshot2 === void 0 ? void 0 : Object.freeze({ ...snapshot2, control });
       }
     } catch {
+    }
+  }
+  function readCapturedCityGarrisonSnapshotFromControl(rootState, controls2, expectedRoot, control) {
+    try {
+      if (!control.methods.includes("hell") || !control.methods.includes("s_max") || !cityGarrisonHandleIsCurrent(rootState, controls2, expectedRoot, control))
+        return;
+      let current = invokeCityGarrisonNumber(controls2, control, "hell");
+      if (!cityGarrisonHandleIsCurrent(
+        rootState,
+        controls2,
+        expectedRoot,
+        control
+      ) || current === void 0)
+        return;
+      let maximum = invokeCityGarrisonNumber(controls2, control, "s_max");
+      return !cityGarrisonHandleIsCurrent(
+        rootState,
+        controls2,
+        expectedRoot,
+        control
+      ) || maximum === void 0 ? void 0 : Object.freeze({ current, maximum });
+    } catch {
+      return;
     }
   }
   function readCapturedCurrentCityGarrison(rootState, controls2, expectedRoot) {
@@ -50532,10 +50573,6 @@ Only continue if you trust the source. Injected code:
       if (capturedBattleHasMethods(control, methods)) return control;
     }
   }
-  function capturedBattleInvokeNumber(controls2, control, method, args = []) {
-    let result = controls2.invoke(control, method, args);
-    return result.ok ? finite(result.value) : void 0;
-  }
   function capturedBattleInvokeBoolean(controls2, control, method, args = []) {
     let result = controls2.invoke(control, method, args);
     return result.ok && typeof result.value == "boolean" ? result.value : void 0;
@@ -50630,15 +50667,14 @@ Only continue if you trust the source. Injected code:
       return;
     let civic = readProperty(root, "civic"), rawGarrison = readProperty(civic, "garrison");
     if (!isRecord(rawGarrison) || Array.isArray(rawGarrison)) return;
-    let workers = finite(rawGarrison.workers), maximumWorkers = finite(rawGarrison.max), crew = finite(rawGarrison.crew), wounded = finite(rawGarrison.wounded), raid = finite(rawGarrison.raid), currentTactic = finite(rawGarrison.tactic), currentCityGarrison = capturedBattleInvokeNumber(
+    let workers = finite(rawGarrison.workers), maximumWorkers = finite(rawGarrison.max), crew = finite(rawGarrison.crew), wounded = finite(rawGarrison.wounded), raid = finite(rawGarrison.raid), currentTactic = finite(rawGarrison.tactic), citySnapshot = readCapturedCityGarrisonSnapshotFromControl(
+      dependencies.rootState,
       dependencies.controls,
-      garrison,
-      "hell"
-    ), maxCityGarrison = capturedBattleInvokeNumber(
-      dependencies.controls,
-      garrison,
-      "s_max"
-    ), attacks = finite(readProperty(readProperty(root, "stats"), "attacks"));
+      root,
+      garrison
+    );
+    if (citySnapshot === void 0) return;
+    let currentCityGarrison = citySnapshot.current, maxCityGarrison = citySnapshot.maximum, attacks = finite(readProperty(readProperty(root, "stats"), "attacks"));
     if (workers === void 0 || maximumWorkers === void 0 || crew === void 0 || wounded === void 0 || raid === void 0 || currentTactic === void 0 || currentCityGarrison === void 0 || maxCityGarrison === void 0 || attacks === void 0 || maxCityGarrison <= 0)
       return;
     let protectMode = capturedBattleSettingString(
@@ -50653,18 +50689,21 @@ Only continue if you trust the source. Injected code:
     let occupationCost = capturedBattleOccupationCost(root), occupationSupported = occupationCost !== void 0, autoHell = capturedBattleSettingBoolean(settings, "autoHell", !1), hell, hellSoldiers = 0, hellGarrison = 0, hellPatrolSize = 1, hellAvailable = !1, hellReserveKnown = capturedBattleHellReserveKnown(root, settings), fortress = readProperty(readProperty(root, "portal"), "fortress");
     if (autoHell && isRecord(fortress) && !Array.isArray(fortress) && readProperty(race, "warlord") !== !0) {
       let fortressGarrison = finite(fortress.garrison), patrolSize = finite(fortress.patrol_size);
-      hell = capturedBattleResolveControl(
-        dependencies.controls,
-        HELL_GARRISON_CONTROLS,
-        ["aLast", "patDec", "patrolling"]
-      );
-      let stationed = hell === void 0 ? void 0 : readCapturedHellGarrison(
+      hell = resolveCapturedOrdinaryFortress(dependencies.controls, [
+        "aLast",
+        "patDec"
+      ]);
+      let stationed = hell === void 0 ? void 0 : readCapturedHellGarrisonFromControl(
         dependencies.rootState,
-        dependencies.controls
+        dependencies.controls,
+        root,
+        hell
       );
+      if (hell !== void 0 && stationed === void 0) return;
       fortressGarrison !== void 0 && patrolSize !== void 0 && patrolSize > 0 && stationed !== void 0 ? (hellSoldiers = fortressGarrison, hellPatrolSize = patrolSize, hellGarrison = stationed, hellAvailable = !0) : hell = void 0;
     }
-    hellReserveKnown || (hell = void 0, hellAvailable = !1, hellSoldiers = 0, hellGarrison = 0, hellPatrolSize = 1);
+    if (hellReserveKnown || (hell = void 0, hellAvailable = !1, hellSoldiers = 0, hellGarrison = 0, hellPatrolSize = 1), dependencies.rootState.readRoot() !== root || dependencies.controls.resolve(garrison.elementId)?.generation !== garrison.generation || dependencies.controls.resolve(foreign.elementId)?.generation !== foreign.generation || hell !== void 0 && dependencies.controls.resolve(hell.elementId)?.generation !== hell.generation)
+      return;
     let input = Object.freeze({
       available: !0,
       wounded,
@@ -50997,6 +51036,13 @@ Only continue if you trust the source. Injected code:
           return stale(
             "captured-battle-garrison-changed",
             "captured garrison control changed"
+          );
+        if (dependencies.controls.resolve(
+          active.foreign.elementId
+        )?.generation !== active.foreign.generation)
+          return stale(
+            "captured-battle-foreign-changed",
+            "captured foreign control changed"
           );
         if (active.hell !== void 0 && dependencies.controls.resolve(
           active.hell.elementId
