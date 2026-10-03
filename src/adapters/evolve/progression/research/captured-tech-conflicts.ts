@@ -31,6 +31,7 @@ import type { GameRootStateSource } from "../../../../ports/game-root-state.ts";
 import type { OfferedTech } from "../../../../ports/game-tech-catalog.ts";
 import { readCapturedAscensionLevel } from "../../ascension-level.ts";
 import { isCapturedAchievementUnlocked } from "../../captured-achievements.ts";
+import { isCapturedTruepath } from "../../captured-world-state.ts";
 import { readCapturedAchievementGuard } from "../prestige/captured-achievement-guards.ts";
 import { fanatAchievements } from "../../runtime-catalogs.ts";
 import { readCapturedBananaProgress } from "../../civic/captured-banana-republic.ts";
@@ -258,7 +259,7 @@ export function createCapturedTechConflictReader(
         }
         const assistInput: Readonly<RetirementAssistInput> = Object.freeze({
           assistEnabled: rawAssist === true,
-          truepath: readProperty(race, "truepath") === true,
+          truepath: isCapturedTruepath(root),
           retirePrestige: true,
           isolationResearched:
             (finiteNonNegative(

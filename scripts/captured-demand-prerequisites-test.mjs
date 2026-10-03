@@ -175,8 +175,8 @@ for (const [root, settings] of [
 // reports unavailable while it stays missing; a missing ineligible one is legitimately
 // locked and irrelevant.
 {
-  const stage = (tech) => ({
-    race: { truepath: true },
+  const stage = (tech, truepath = true) => ({
+    race: { truepath },
     tech,
     resource: {},
     space: {},
@@ -195,6 +195,17 @@ for (const [root, settings] of [
     { spy: "not-needed", ai: "unavailable" },
   );
   assert.deepEqual(colonistMissing.seen, ["build"]);
+  const numericMissing = track();
+  assert.deepEqual(
+    prerequisites(
+      stage({ titan_ai_core: 3 }, 1),
+      settings,
+      fakeControls(),
+      numericMissing,
+    ),
+    { spy: "not-needed", ai: "unavailable" },
+  );
+  assert.deepEqual(numericMissing.seen, ["build"]);
   const colonistReady = track();
   assert.deepEqual(
     prerequisites(

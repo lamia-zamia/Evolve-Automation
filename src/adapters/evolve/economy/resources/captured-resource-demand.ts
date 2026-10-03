@@ -66,6 +66,7 @@ import type { CapturedFleetDemand } from "../../combat/captured-fleet-demand.ts"
 import type { CapturedTriggers } from "../../progression/build/captured-triggers.ts";
 import { readCapturedFactoryCapacity } from "../production/captured-factory-capacity.ts";
 import { isRegionalSupply } from "../../captured-affordability.ts";
+import { isCapturedTruepath } from "../../captured-world-state.ts";
 import { finite, isRecord, readProperty } from "../../../validation.ts";
 import { INFLATION_CHALLENGE_MONEY } from "../../../../domain/economy/resources/inflation-assist.ts";
 import { readCapturedInflationSaveMoney } from "./captured-inflation-assist.ts";
@@ -935,8 +936,7 @@ function readDemandReservationRetirementGraphene(
   settings: Record<PropertyKey, unknown>,
 ): number | null {
   const assistEnabled = settings["retirementChallengeAssist"] === true;
-  const race = readProperty(root, "race");
-  const truepath = isRecord(race) && readProperty(race, "truepath") === true;
+  const truepath = isCapturedTruepath(root);
   const retirePrestige = settings["prestigeType"] === "retire";
   const tech = readProperty(root, "tech");
   const isolationLevel = isRecord(tech)
@@ -1013,9 +1013,7 @@ function readDemandReservationTruepathAiTarget(
   costs: GameActionCostReader | undefined,
   report: DemandPrerequisiteReport | undefined,
 ): DemandReservationOutcome<DemandTarget> {
-  const race = readProperty(root, "race");
-  if (!isRecord(race) || readProperty(race, "truepath") !== true)
-    return { status: "not-needed" };
+  if (!isCapturedTruepath(root)) return { status: "not-needed" };
   if (settings["prestigeType"] !== "apocalypse")
     return { status: "not-needed" };
   const tech = readProperty(root, "tech");

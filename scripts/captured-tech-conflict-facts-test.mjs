@@ -129,9 +129,9 @@ function bananaRoot(complete) {
 
 /* --------------------------------------------------- Isolation Protocol under retirement assist */
 
-function retirementRoot(counts) {
+function retirementRoot(counts, truepath = true) {
   return {
-    race: { species: "human", gods: "none", truepath: true },
+    race: { species: "human", gods: "none", truepath },
     stats: { achieve: {} },
     resource: {},
     tech: {},
@@ -177,6 +177,13 @@ const RETIRE_SETTINGS = {
   assert.equal(decision.status, "conflict");
   assert.equal(decision.conflict.code, "retirement-preparation");
   assert.ok(decision.conflict.missing.includes("tauceti-fusion_generator"));
+  const numericDecision = evaluate(
+    retirementRoot({ fusionGenerators: 0, factories: 0, scienceLabs: 0 }, 1),
+    RETIRE_SETTINGS,
+    "tech-isolation_protocol",
+  );
+  assert.equal(numericDecision.status, "conflict");
+  assert.equal(numericDecision.conflict.code, "retirement-preparation");
 }
 
 {

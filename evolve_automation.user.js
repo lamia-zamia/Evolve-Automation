@@ -7558,7 +7558,7 @@
             );
           let assistInput = Object.freeze({
             assistEnabled: rawAssist === !0,
-            truepath: readProperty(race, "truepath") === !0,
+            truepath: isCapturedTruepath(root),
             retirePrestige: !0,
             isolationResearched: (finiteNonNegative(
               readProperty(readProperty(root, "tech"), "isolation")
@@ -19934,7 +19934,7 @@
     return readCapturedInflationSaveMoney(root, settings) ? 25e10 : null;
   }
   function readDemandReservationRetirementGraphene(root, settings) {
-    let assistEnabled = settings.retirementChallengeAssist === !0, race = readProperty(root, "race"), truepath = isRecord(race) && readProperty(race, "truepath") === !0, retirePrestige = settings.prestigeType === "retire", tech = readProperty(root, "tech"), isolationLevel = isRecord(tech) ? finite(readProperty(tech, "isolation")) : void 0;
+    let assistEnabled = settings.retirementChallengeAssist === !0, truepath = isCapturedTruepath(root), retirePrestige = settings.prestigeType === "retire", tech = readProperty(root, "tech"), isolationLevel = isRecord(tech) ? finite(readProperty(tech, "isolation")) : void 0;
     return isRetirementAssistActive({
       assistEnabled,
       truepath,
@@ -19957,9 +19957,7 @@
     return money === void 0 || money < 0 ? null : money;
   }
   function readDemandReservationTruepathAiTarget(root, settings, controls2, costs, report) {
-    let race = readProperty(root, "race");
-    if (!isRecord(race) || readProperty(race, "truepath") !== !0)
-      return { status: "not-needed" };
+    if (!isCapturedTruepath(root)) return { status: "not-needed" };
     if (settings.prestigeType !== "apocalypse")
       return { status: "not-needed" };
     let tech = readProperty(root, "tech"), aiCoreLevel = isRecord(tech) ? finite(readProperty(tech, "titan_ai_core")) : void 0;
@@ -20385,8 +20383,7 @@
     return !isRecord(tech) || readProperty(tech, "unify") !== 1 || !readCapturedForeignUnificationWanted(root, settings) ? !1 : capturedForeignPanelAvailable(root);
   }
   function truepathAiReservationWanted(root, settings) {
-    let race = readProperty(root, "race");
-    if (!isRecord(race) || readProperty(race, "truepath") !== !0 || settings.prestigeType !== "apocalypse") return !1;
+    if (!isCapturedTruepath(root) || settings.prestigeType !== "apocalypse") return !1;
     let tech = readProperty(root, "tech"), aiCoreLevel = isRecord(tech) ? finite(readProperty(tech, "titan_ai_core")) : void 0;
     return aiCoreLevel !== void 0 && aiCoreLevel >= 3;
   }

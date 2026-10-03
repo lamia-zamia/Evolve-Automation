@@ -1142,16 +1142,16 @@ for (const [missionId, completionTech, completionLevel] of [
 
 // The Retirement assist reserves the Tau Graphene plan while Isolation Protocol is unresearched.
 {
-  const retirementRoot = (isolation) => ({
-    race: { truepath: true },
+  const retirementRoot = (isolation, truepath = true) => ({
+    race: { truepath },
     tech: isolation > 0 ? { isolation } : {},
     resource: {
       Graphene: { amount: 0, max: 300e6, stackable: true },
     },
   });
-  const demand = (isolation) =>
+  const demand = (isolation, truepath) =>
     createCapturedResourceDemand({
-      rootState: { readRoot: () => retirementRoot(isolation) },
+      rootState: { readRoot: () => retirementRoot(isolation, truepath) },
       reservations: {
         readReservations: () => ({ targets: [], unavailable: false }),
       },
@@ -1161,6 +1161,7 @@ for (const [missionId, completionTech, completionLevel] of [
       }),
     }).sample();
   assert.equal(demand(0).requestedQuantity("Graphene"), 200e6);
+  assert.equal(demand(0, 1).requestedQuantity("Graphene"), 200e6);
   assert.equal(demand(0).isDemanded("Graphene"), true);
   assert.equal(demand(1).requestedQuantity("Graphene"), 0);
 }
@@ -1210,6 +1211,8 @@ for (const [missionId, completionTech, completionLevel] of [
     }).sample();
   assert.equal(aiDemand("apocalypse").requestedQuantity("Money"), 12.5e6);
   assert.equal(aiDemand("apocalypse").isDemanded("Money"), true);
+  aiRoot.race.truepath = 1;
+  assert.equal(aiDemand("apocalypse").requestedQuantity("Money"), 12.5e6);
   assert.equal(aiDemand("none").requestedQuantity("Money"), 0);
 }
 

@@ -31,6 +31,7 @@ import {
   readCapturedForeignUnificationWanted,
 } from "../../combat/captured-foreign-state.ts";
 import { finite, isRecord, readProperty } from "../../../validation.ts";
+import { isCapturedTruepath } from "../../captured-world-state.ts";
 
 export type DemandPrerequisiteStatus = "ready" | "not-needed" | "unavailable";
 
@@ -74,8 +75,7 @@ function truepathAiReservationWanted(
   root: unknown,
   settings: Record<PropertyKey, unknown>,
 ): boolean {
-  const race = readProperty(root, "race");
-  if (!isRecord(race) || readProperty(race, "truepath") !== true) return false;
+  if (!isCapturedTruepath(root)) return false;
   if (settings["prestigeType"] !== "apocalypse") return false;
   const tech = readProperty(root, "tech");
   const aiCoreLevel = isRecord(tech)
