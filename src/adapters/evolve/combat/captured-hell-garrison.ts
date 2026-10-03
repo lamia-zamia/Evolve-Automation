@@ -5,7 +5,10 @@
  * this condition deliberately reads the actual defenders instead of the compatibility reserve.
  */
 
-import type { GameControlRegistry } from "../../../ports/game-control-registry.ts";
+import type {
+  GameControlHandle,
+  GameControlRegistry,
+} from "../../../ports/game-control-registry.ts";
 import type { GameRootStateSource } from "../../../ports/game-root-state.ts";
 import { finite, isNonArrayRecord, readProperty } from "../../validation.ts";
 
@@ -14,6 +17,28 @@ export const HELL_GARRISON_CONTROLS = Object.freeze([
   HELL_FORTRESS_CONTROL,
   "gFort",
 ] as const);
+
+export const HELL_ORDINARY_FORTRESS_METHODS = Object.freeze([
+  "patrolling",
+  "aNext",
+  "aLast",
+  "patInc",
+  "patDec",
+  "patSizeInc",
+  "patSizeDec",
+] as const);
+
+export function resolveCapturedOrdinaryFortress(
+  controls: GameControlRegistry,
+  methods: readonly string[],
+): GameControlHandle | undefined {
+  return HELL_GARRISON_CONTROLS.map((id) => controls.resolve(id)).find(
+    (candidate) =>
+      candidate !== undefined &&
+      candidate.methods.includes("patrolling") &&
+      methods.every((method) => candidate.methods.includes(method)),
+  );
+}
 
 export function readCapturedHellGarrison(
   rootState: GameRootStateSource,
@@ -45,9 +70,7 @@ export function readCapturedHellGarrison(
   ) {
     return undefined;
   }
-  const control = HELL_GARRISON_CONTROLS.map((id) => controls.resolve(id)).find(
-    (candidate) => candidate?.methods.includes("patrolling"),
-  );
+  const control = resolveCapturedOrdinaryFortress(controls, ["patrolling"]);
   if (control === undefined) return undefined;
   const result = controls.invoke(control, "patrolling", [garrison]);
   if (

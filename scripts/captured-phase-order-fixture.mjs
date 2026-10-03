@@ -51,6 +51,7 @@ export function runCapturedPhaseOrderCycle({
   root,
   settings = {},
   controls = {},
+  controlSetup = () => {},
   documentSetup = () => {},
   mechanics,
   mount = false,
@@ -80,6 +81,17 @@ export function runCapturedPhaseOrderCycle({
       ...(spec.events === undefined ? {} : { events: spec.events }),
     });
   }
+  controlSetup({
+    register(elementId, spec) {
+      handles.set(elementId, {
+        elementId,
+        generation: 1,
+        methods: Object.keys(spec.methods ?? {}),
+        implementations: spec.methods ?? {},
+        event: spec.event,
+      });
+    },
+  });
   const body = element("div", { id: "page" });
   const document = createTestDocument(body);
   documentSetup({ document, body, root });

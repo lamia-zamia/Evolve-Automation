@@ -2,7 +2,10 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
-import { readCapturedCurrentCityGarrison } from "../src/adapters/evolve/combat/captured-city-garrison.ts";
+import {
+  readCapturedCurrentCityGarrison,
+  readCapturedCityGarrisonSnapshot,
+} from "../src/adapters/evolve/combat/captured-city-garrison.ts";
 
 function fixture({
   id = "garrison",
@@ -117,3 +120,108 @@ assert.doesNotMatch(
   /\b(?:workers|fortress|fob|pillbox|soulForgeSoldiers|warlord)\b/i,
 );
 assert.doesNotMatch(source, /readProperty\([^\n]*["']crew["']/);
+
+function nativeSnapshotFixture({
+  primaryMethods = ["hell", "s_max"],
+  compactMethods = [],
+  answers = { hell: 7, s_max: 13 },
+  afterInvoke = () => {},
+} = {}) {
+  const root = {};
+  const state = { root, generations: { garrison: 1, c_garrison: 1 } };
+  const calls = [];
+  const controls = {
+    resolve(id) {
+      const methods = id === "garrison" ? primaryMethods : compactMethods;
+      return methods.length
+        ? { elementId: id, generation: state.generations[id], methods }
+        : undefined;
+    },
+    invoke(handle, method) {
+      calls.push([handle.elementId, method]);
+      afterInvoke(state, handle, method);
+      const answer = answers[method];
+      if (answer instanceof Error) throw answer;
+      return answer?.ok === false ? answer : { ok: true, value: answer };
+    },
+  };
+  return {
+    root,
+    state,
+    calls,
+    read: () =>
+      readCapturedCityGarrisonSnapshot(
+        { readRoot: () => state.root },
+        controls,
+        root,
+      ),
+  };
+}
+
+for (const fixture of [
+  nativeSnapshotFixture(),
+  nativeSnapshotFixture({
+    primaryMethods: [],
+    compactMethods: ["hell", "s_max"],
+  }),
+  nativeSnapshotFixture({
+    primaryMethods: ["hell"],
+    compactMethods: ["hell", "s_max"],
+  }),
+]) {
+  assert.deepEqual(fixture.read(), { current: 7, maximum: 13 });
+  assert.deepEqual(fixture.calls, [
+    [fixture.calls[0][0], "hell"],
+    [fixture.calls[0][0], "s_max"],
+  ]);
+}
+for (const answers of [
+  { hell: 0, s_max: -4 },
+  { hell: -3, s_max: 0 },
+]) {
+  assert.deepEqual(nativeSnapshotFixture({ answers }).read(), {
+    current: answers.hell,
+    maximum: answers.s_max,
+  });
+}
+for (const method of ["hell", "s_max"]) {
+  for (const bad of [
+    NaN,
+    Infinity,
+    "7",
+    new Error("refused"),
+    { ok: false, reason: "threw" },
+  ]) {
+    const fixture = nativeSnapshotFixture({
+      compactMethods: ["hell", "s_max"],
+      answers: { hell: 7, s_max: 13, [method]: bad },
+    });
+    assert.equal(fixture.read(), undefined);
+    assert.equal(
+      fixture.calls.some(([id]) => id === "c_garrison"),
+      false,
+    );
+  }
+}
+for (const changedAfter of ["hell", "s_max"]) {
+  for (const transition of [
+    (state) => {
+      state.root = {};
+    },
+    (state) => {
+      state.generations.garrison++;
+    },
+  ]) {
+    const fixture = nativeSnapshotFixture({
+      compactMethods: ["hell", "s_max"],
+      afterInvoke: (state, _handle, method) => {
+        if (method === changedAfter) transition(state);
+      },
+    });
+    assert.equal(fixture.read(), undefined);
+    assert.equal(
+      fixture.calls.some(([id]) => id === "c_garrison"),
+      false,
+    );
+  }
+}

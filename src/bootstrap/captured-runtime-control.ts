@@ -25,7 +25,9 @@ import { runGeneticsAutomation } from "../application/genetics.ts";
 import { createCapturedTraitControl } from "./captured-trait-control.ts";
 import {
   HELL_GARRISON_CONTROLS,
+  HELL_ORDINARY_FORTRESS_METHODS,
   readCapturedHellGarrison,
+  resolveCapturedOrdinaryFortress,
 } from "../adapters/evolve/combat/captured-hell-garrison.ts";
 import {
   CAPTURED_MAD_CONTROL,
@@ -1511,12 +1513,43 @@ export function startCapturedRuntime({
   };
   /**
    * Draws the civics military sub-tab, where `index.js` calls `buildFortress($('#fortress'),false)`
-   * and captures `gFort`. The same draw runs `defineGarrison()`, so a later slice that needs the
-   * `garrison` controls reuses this helper instead of adding a second military-tab discovery.
+   * and captures `gFort`. The same draw binds the city garrison methods Auto Hell consumes.
    *
    * Eligibility comes before the attempt, like the other conditional discoveries: the fortress is
    * built mid-run, so a pre-fortress cycle must not spend a draw on a panel that cannot exist yet.
    */
+  const ensureHellManagementControls = () => {
+    const satisfied = () =>
+      CAPTURED_CITY_GARRISON_CONTROLS.some((id) => {
+        const methods = pageCapture.controls.resolve(id)?.methods;
+        return (
+          methods?.includes("hell") &&
+          methods.includes("s_max") &&
+          methods.includes("rating")
+        );
+      }) &&
+      resolveCapturedOrdinaryFortress(
+        pageCapture.controls,
+        HELL_ORDINARY_FORTRESS_METHODS,
+      ) !== undefined;
+    if (satisfied()) return;
+    const root = pageCapture.rootState.readRoot();
+    if (
+      !isRecord(readProperty(readProperty(root, "portal"), "fortress")) ||
+      readProperty(readProperty(root, "race"), "warlord")
+    ) {
+      return;
+    }
+    const path = civicMilitaryGarrisonPath();
+    if (path === undefined) return;
+    finishDiscovery(
+      "hell-management",
+      "Hell management",
+      satisfied,
+      undefined,
+      path,
+    );
+  };
   const ensureHellGarrisonControls = () => {
     const satisfied = () =>
       HELL_GARRISON_CONTROLS.some((id) =>
@@ -2803,6 +2836,7 @@ export function startCapturedRuntime({
       if (isEnabled(settings, "autoHell")) {
         runPhase("autoHell", () => {
           ensureCivicControls();
+          ensureHellManagementControls();
           hell.run();
         });
       }

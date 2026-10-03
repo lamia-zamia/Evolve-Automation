@@ -13302,7 +13302,20 @@
   var HELL_FORTRESS_CONTROL = "fort", HELL_GARRISON_CONTROLS = Object.freeze([
     HELL_FORTRESS_CONTROL,
     "gFort"
+  ]), HELL_ORDINARY_FORTRESS_METHODS = Object.freeze([
+    "patrolling",
+    "aNext",
+    "aLast",
+    "patInc",
+    "patDec",
+    "patSizeInc",
+    "patSizeDec"
   ]);
+  function resolveCapturedOrdinaryFortress(controls2, methods) {
+    return HELL_GARRISON_CONTROLS.map((id) => controls2.resolve(id)).find(
+      (candidate) => candidate !== void 0 && candidate.methods.includes("patrolling") && methods.every((method) => candidate.methods.includes(method))
+    );
+  }
   function readCapturedHellGarrison(rootState, controls2) {
     let root = rootState.readRoot(), race = readProperty(root, "race"), portal = readProperty(root, "portal");
     if (!isNonArrayRecord(root) || !isNonArrayRecord(race) || !isNonArrayRecord(portal) || // Warlord's `#fort` is `buildEnemyFortress`, a different component with no `patrolling`;
@@ -13315,9 +13328,7 @@
     let garrison = finite(readProperty(fortress, "garrison"));
     if (garrison === void 0 || finite(readProperty(fortress, "patrols")) === void 0 || finite(readProperty(fortress, "patrol_size")) === void 0)
       return;
-    let control = HELL_GARRISON_CONTROLS.map((id) => controls2.resolve(id)).find(
-      (candidate) => candidate?.methods.includes("patrolling")
-    );
+    let control = resolveCapturedOrdinaryFortress(controls2, ["patrolling"]);
     if (control === void 0) return;
     let result = controls2.invoke(control, "patrolling", [garrison]);
     if (!(!result.ok || rootState.readRoot() !== root || controls2.resolve(control.elementId)?.generation !== control.generation))
@@ -13329,6 +13340,28 @@
     "garrison",
     "c_garrison"
   ]);
+  function cityGarrisonHandleIsCurrent(rootState, controls2, expectedRoot, control) {
+    return rootState.readRoot() === expectedRoot && controls2.resolve(control.elementId)?.generation === control.generation;
+  }
+  function invokeCityGarrisonNumber(controls2, control, method) {
+    let result = controls2.invoke(control, method, [void 0]);
+    return result.ok ? finite(result.value) : void 0;
+  }
+  function readCapturedCityGarrisonSnapshot(rootState, controls2, expectedRoot) {
+    try {
+      if (rootState.readRoot() !== expectedRoot) return;
+      for (let elementId of CAPTURED_CITY_GARRISON_CONTROLS) {
+        let control = controls2.resolve(elementId);
+        if (control === void 0 || !control.methods.includes("hell") || !control.methods.includes("s_max"))
+          continue;
+        let current = invokeCityGarrisonNumber(controls2, control, "hell");
+        if (!cityGarrisonHandleIsCurrent(rootState, controls2, expectedRoot, control) || current === void 0) return;
+        let maximum = invokeCityGarrisonNumber(controls2, control, "s_max");
+        return !cityGarrisonHandleIsCurrent(rootState, controls2, expectedRoot, control) || maximum === void 0 ? void 0 : Object.freeze({ current, maximum });
+      }
+    } catch {
+    }
+  }
   function readCapturedCurrentCityGarrison(rootState, controls2, expectedRoot) {
     try {
       if (rootState.readRoot() !== expectedRoot) return;
@@ -13337,11 +13370,10 @@
         if (control === void 0 || !control.methods.includes("hell")) continue;
         let value;
         try {
-          let result = controls2.invoke(control, "hell", [void 0]);
-          result.ok && (value = finite(result.value));
+          value = invokeCityGarrisonNumber(controls2, control, "hell");
         } catch {
         }
-        if (rootState.readRoot() !== expectedRoot || controls2.resolve(elementId)?.generation !== control.generation)
+        if (!cityGarrisonHandleIsCurrent(rootState, controls2, expectedRoot, control))
           return;
         if (value !== void 0) return value;
       }
@@ -13419,17 +13451,18 @@
       minimumMinions: finite(settings.warlordMinimumMinions) ?? 0
     });
   }
-  function readHellInput(root, settingsValue) {
+  function readHellInput(root, settingsValue, cityGarrison) {
     if (!isRecord(root)) return emptyHellInput();
     let race = readProperty(root, "race"), portal = readProperty(root, "portal");
     if (!isRecord(race) || !isRecord(portal)) return emptyHellInput();
     if (race.warlord === !0) return readWarlordInput(root, settingsValue);
     let garrison = readProperty(readProperty(root, "civic"), "garrison"), fortress = readProperty(portal, "fortress");
     if (!isRecord(garrison) || !isRecord(fortress)) return emptyHellInput();
+    if (cityGarrison === void 0) return;
     let workers = finite(readProperty(garrison, "workers")), maximumWorkers = finite(readProperty(garrison, "max")), crew = finite(readProperty(garrison, "crew")), hellSoldiers = finite(readProperty(fortress, "garrison")), hellPatrols = finite(readProperty(fortress, "patrols")), hellPatrolSize = finite(readProperty(fortress, "patrol_size"));
     if (workers === void 0 || maximumWorkers === void 0 || crew === void 0 || hellSoldiers === void 0 || hellPatrols === void 0 || hellPatrolSize === void 0)
       return emptyHellInput();
-    let space = readProperty(root, "space"), fob = readProperty(space, "fob"), fobTroops = finite(readProperty(fob, "troops")) ?? 0, settings = isRecord(settingsValue) ? settingsValue : {}, tech = readProperty(root, "tech"), city = readProperty(root, "city"), turret = readProperty(portal, "turret"), warDrone = readProperty(portal, "war_drone"), warDroid = readProperty(portal, "war_droid"), bootCamp = readProperty(city, "boot_camp"), govern = readProperty(readProperty(root, "civic"), "govern"), elysium = finite(readProperty(tech, "elysium")) ?? 0, homeGarrison = settingNumber(settings, "hellHomeGarrison", 10), minimumHellSoldiers = settingNumber(settings, "hellMinSoldiers", 20), minimumSoldierPercent = settingNumber(
+    let settings = isRecord(settingsValue) ? settingsValue : {}, tech = readProperty(root, "tech"), city = readProperty(root, "city"), turret = readProperty(portal, "turret"), warDrone = readProperty(portal, "war_drone"), warDroid = readProperty(portal, "war_droid"), bootCamp = readProperty(city, "boot_camp"), govern = readProperty(readProperty(root, "civic"), "govern"), elysium = finite(readProperty(tech, "elysium")) ?? 0, homeGarrison = settingNumber(settings, "hellHomeGarrison", 10), minimumHellSoldiers = settingNumber(settings, "hellMinSoldiers", 20), minimumSoldierPercent = settingNumber(
       settings,
       "hellMinSoldiersPercent",
       90
@@ -13439,8 +13472,8 @@
       available: !0,
       maximumSoldiers: maximumWorkers - crew,
       currentSoldiers: workers - crew,
-      currentCityGarrison: workers - crew - hellSoldiers - fobTroops,
-      maximumCityGarrison: maximumWorkers - crew - hellSoldiers,
+      currentCityGarrison: cityGarrison.current,
+      maximumCityGarrison: cityGarrison.maximum,
       hellSoldiers,
       hellPatrols,
       hellPatrolSize,
@@ -13513,6 +13546,11 @@
         "hell-controls-unavailable",
         "the captured Hell fortress control is unavailable"
       );
+    if (!control.methods.includes("patrolling"))
+      return stale(
+        "hell-controls-unavailable",
+        "ordinary Hell fortress control is unavailable"
+      );
     for (let command of decision.commands) {
       let method = HELL_ADJUSTMENT_METHODS[command.kind];
       if (!control.methods.includes(method))
@@ -13526,11 +13564,15 @@
           `invalid Hell adjustment count: ${command.count}`
         );
       for (let i = 0; i < command.count; i += 1) {
-        let result = controls2.invoke(control, method);
-        if (!result.ok)
+        if (controls2.resolve(control.elementId)?.generation !== control.generation)
           return stale(
             "hell-controls-unavailable",
-            `Hell adjustment failed: ${result.reason}`
+            "Hell fortress control generation changed"
+          );
+        if (!controls2.invoke(control, method).ok || controls2.resolve(control.elementId)?.generation !== control.generation)
+          return stale(
+            "hell-controls-unavailable",
+            "Hell fortress control changed or rejected an adjustment"
           );
       }
     }
@@ -13540,8 +13582,8 @@
     if (targetRating <= 0) return 0;
     let control = CAPTURED_CITY_GARRISON_CONTROLS.map(
       (id) => controls2.resolve(id)
-    ).find((candidate) => candidate !== void 0);
-    if (control === void 0 || !control.methods.includes("rating"))
+    ).find((candidate) => candidate?.methods.includes("rating"));
+    if (control === void 0)
       return;
     let result = controls2.invoke(control, "rating", [10, !0]);
     if (!result.ok) return;
@@ -13576,23 +13618,46 @@
     let session = null;
     return Object.freeze({
       run() {
-        let root = dependencies.rootState.readRoot(), input = readHellInput(root, dependencies.readSettings());
+        let root = dependencies.rootState.readRoot(), readInput12 = () => readHellInput(
+          root,
+          dependencies.readSettings(),
+          readProperty(readProperty(root, "race"), "warlord") === !0 ? void 0 : readCapturedCityGarrisonSnapshot(
+            dependencies.rootState,
+            dependencies.controls,
+            root
+          )
+        ), input = readInput12();
+        if (input === void 0)
+          return stale(
+            "hell-city-garrison-unavailable",
+            "native city-garrison snapshot is unavailable"
+          );
         session = Object.freeze({ root, input });
         let decision = prepareHellCycle(input);
         if (decision === null) return SUCCEEDED;
         if (dependencies.rootState.readRoot() !== session.root)
           return stale("hell-root-changed", "game root changed after sampling");
-        let current = prepareHellCycle(
-          readHellInput(session.root, dependencies.readSettings())
-        );
+        let currentInput = readInput12();
+        if (currentInput === void 0)
+          return stale(
+            "hell-city-garrison-unavailable",
+            "native city-garrison snapshot is unavailable during revalidation"
+          );
+        let current = prepareHellCycle(currentInput);
         if (current === null || JSON.stringify(current) !== JSON.stringify(decision))
           return stale(
             "hell-plan-no-longer-valid",
             "the captured Hell plan is no longer valid"
           );
-        let control = dependencies.controls.resolve(HELL_FORTRESS_CONTROL);
-        if (decision.kind === "manage-hell")
-          return applyHellManagement(decision, control, dependencies.controls);
+        if (decision.kind === "manage-hell") {
+          let control2 = resolveCapturedOrdinaryFortress(
+            dependencies.controls,
+            decision.commands.map(
+              (command) => HELL_ADJUSTMENT_METHODS[command.kind]
+            )
+          );
+          return applyHellManagement(decision, control2, dependencies.controls);
+        }
         if (decision.kind === "calculate-hell-targets") {
           let garrisonSoldiers = readSoldierTarget(
             dependencies.controls,
@@ -13614,9 +13679,17 @@
             patrolSoldiers,
             authority
           });
-          return planned === null ? SUCCEEDED : applyHellManagement(planned, control, dependencies.controls);
+          if (planned === null) return SUCCEEDED;
+          let control2 = resolveCapturedOrdinaryFortress(
+            dependencies.controls,
+            planned.commands.map(
+              (command) => HELL_ADJUSTMENT_METHODS[command.kind]
+            )
+          );
+          return applyHellManagement(planned, control2, dependencies.controls);
         }
         if (decision.kind !== "attack-enemy-fortress") return SUCCEEDED;
+        let control = dependencies.controls.resolve(HELL_FORTRESS_CONTROL);
         if (control === void 0 || !control.methods.includes("attack"))
           return stale(
             "hell-controls-unavailable",
@@ -53226,6 +53299,26 @@ Only continue if you trust the source. Injected code:
             index: GOV_TAB_INDEX.military
           })
         ];
+    }, ensureHellManagementControls = () => {
+      let satisfied = () => CAPTURED_CITY_GARRISON_CONTROLS.some((id) => {
+        let methods = pageCapture2.controls.resolve(id)?.methods;
+        return methods?.includes("hell") && methods.includes("s_max") && methods.includes("rating");
+      }) && resolveCapturedOrdinaryFortress(
+        pageCapture2.controls,
+        HELL_ORDINARY_FORTRESS_METHODS
+      ) !== void 0;
+      if (satisfied()) return;
+      let root = pageCapture2.rootState.readRoot();
+      if (!isRecord(readProperty(readProperty(root, "portal"), "fortress")) || readProperty(readProperty(root, "race"), "warlord"))
+        return;
+      let path = civicMilitaryGarrisonPath();
+      path !== void 0 && finishDiscovery(
+        "hell-management",
+        "Hell management",
+        satisfied,
+        void 0,
+        path
+      );
     }, ensureHellGarrisonControls = () => {
       let satisfied = () => HELL_GARRISON_CONTROLS.some(
         (id) => pageCapture2.controls.resolve(id)?.methods.includes("patrolling")
@@ -53946,7 +54039,7 @@ Only continue if you trust the source. Injected code:
         isEnabled(settings, "autoMarket") && runPhase("autoMarket", () => {
           ensureMarketControls(), refreshDiscoveredSettings(), marketAutomation.run();
         }), isEnabled(settings, "autoHell") && runPhase("autoHell", () => {
-          ensureCivicControls(), hell.run();
+          ensureCivicControls(), ensureHellManagementControls(), hell.run();
         }), isEnabled(settings, "autoGalaxyMarket") && runPhase("autoGalaxyMarket", () => {
           ensureGalaxyMarketControls(), refreshDiscoveredSettings(), galaxyMarketAutomation.run();
         }), isEnabled(settings, "autoMiningDroid") && runPhase("autoMiningDroid", () => {
