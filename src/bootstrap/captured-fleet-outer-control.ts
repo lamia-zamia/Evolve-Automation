@@ -4,7 +4,7 @@ import type { GameActivitySink } from "../ports/game-message-log.ts";
 import type { GameControlRegistry } from "../ports/game-control-registry.ts";
 import type { CapturedOuterFleetDispatchCapture } from "../ports/captured-outer-fleet-dispatch.ts";
 import type { GameRootStateSource } from "../ports/game-root-state.ts";
-import type { GameShipyardCosts } from "../ports/game-shipyard-costs.ts";
+import type { GameShipyardDesignQuotes } from "../ports/game-shipyard-costs.ts";
 import type { GameShipyardPartCatalogSource } from "../ports/game-shipyard-parts.ts";
 import type { GameSyndicateMechanics } from "../ports/game-syndicate-mechanics.ts";
 import type { GameSpaceRegionMechanics } from "../ports/game-space-region-mechanics.ts";
@@ -17,7 +17,7 @@ interface CapturedFleetOuterDependencies {
   readonly rootState: GameRootStateSource;
   readonly controls: GameControlRegistry;
   /** The yard's own cost row: the price of a candidate and the identity of the current design. */
-  readonly costs: GameShipyardCosts;
+  readonly costs: GameShipyardDesignQuotes;
   /** The yard's own option markup: which parts it offers and which position each one owns. */
   readonly parts: GameShipyardPartCatalogSource;
   /** The game's own dispatch closure, reached without a dispatch window. */

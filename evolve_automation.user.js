@@ -21338,9 +21338,10 @@
   }
 
   // src/adapters/evolve/combat/captured-outer-fleet-shipyard.ts
-  var CAPTURED_OUTER_FLEET_SHIPYARD_CONTROL = "shipPlans", CAPTURED_OUTER_FLEET_SHIPYARD_PANEL_ID = "dwarfShipYard", CAPTURED_OUTER_FLEET_SHIPYARD_COSTS_ID = "shipYardCosts", CAPTURED_OUTER_FLEET_SHIP_LIST_ID = "shipList", CAPTURED_OUTER_FLEET_SHIP_ROW_PREFIX = "shipReg", CAPTURED_OUTER_FLEET_ROW_DISPATCH_METHOD = "pickDest", CAPTURED_OUTER_FLEET_ROW_UNDERWAY_METHOD = "show", OUTER_FLEET_SHIPYARD_REDRAW_METHOD = "redraw", TAB_SWAP_METHOD = "swapTab", OUTER_FLEET_SHIPYARD_METHODS = Object.freeze([
+  var CAPTURED_OUTER_FLEET_SHIPYARD_CONTROL = "shipPlans", CAPTURED_OUTER_FLEET_SHIPYARD_CREW_METHOD = "crewText", CAPTURED_OUTER_FLEET_SHIPYARD_PANEL_ID = "dwarfShipYard", CAPTURED_OUTER_FLEET_SHIPYARD_COSTS_ID = "shipYardCosts", CAPTURED_OUTER_FLEET_SHIP_LIST_ID = "shipList", CAPTURED_OUTER_FLEET_SHIP_ROW_PREFIX = "shipReg", CAPTURED_OUTER_FLEET_ROW_DISPATCH_METHOD = "pickDest", CAPTURED_OUTER_FLEET_ROW_UNDERWAY_METHOD = "show", OUTER_FLEET_SHIPYARD_REDRAW_METHOD = "redraw", TAB_SWAP_METHOD = "swapTab", OUTER_FLEET_SHIPYARD_METHODS = Object.freeze([
     "avail",
     "build",
+    CAPTURED_OUTER_FLEET_SHIPYARD_CREW_METHOD,
     "powerText",
     OUTER_FLEET_SHIPYARD_REDRAW_METHOD,
     "setVal"
@@ -22133,28 +22134,6 @@
     }
   }
 
-  // src/adapters/evolve/combat/captured-ship-crew-compat.ts
-  var CAPTURED_SHIP_CREW = Object.freeze({
-    corvette: Object.freeze({ crew: 2, grenadier: 1 }),
-    frigate: Object.freeze({ crew: 3, grenadier: 2 }),
-    destroyer: Object.freeze({ crew: 4, grenadier: 3 }),
-    corsair: Object.freeze({ crew: 4, grenadier: 3 }),
-    cruiser: Object.freeze({ crew: 6, grenadier: 4 }),
-    battlecruiser: Object.freeze({ crew: 8, grenadier: 5 }),
-    dreadnought: Object.freeze({ crew: 10, grenadier: 6 }),
-    explorer: Object.freeze({ crew: 10, grenadier: 6 }),
-    freighter: Object.freeze({ crew: 1, grenadier: 1 }),
-    supply_ship: Object.freeze({ crew: 1, grenadier: 1 })
-  });
-  function capturedShipCrewSize(root, shipClass) {
-    let entry = CAPTURED_SHIP_CREW[shipClass];
-    if (entry === void 0) return;
-    let crew = readProperty(readProperty(root, "race"), "grenadier") ? entry.grenadier : entry.crew, jobStack = readCapturedJobStackMultiplier(root);
-    if (jobStack === void 0) return;
-    let total = Math.round(crew * jobStack);
-    return total > 0 ? total : void 0;
-  }
-
   // src/adapters/evolve/combat/captured-ship-route.ts
   function capturedShipBound(ship) {
     try {
@@ -22323,7 +22302,8 @@
             sourceUnavailable: !0,
             catalog,
             settings,
-            blueprints
+            blueprints,
+            quotes: /* @__PURE__ */ new Map()
           });
           let input2 = Object.freeze({
             initialized: !1,
@@ -22360,7 +22340,8 @@
           sourceUnavailable: !1,
           catalog,
           settings,
-          blueprints
+          blueprints,
+          quotes: /* @__PURE__ */ new Map()
         });
         let planned = planOuterFleetCycle(input);
         return expectedDecision = planned.kind === "outer-fleet-status" ? planned : null, input;
@@ -22508,12 +22489,13 @@
           throw new Error(
             `captured outer fleet blueprint ${candidate.blueprint} is missing`
           );
-        let shipClass = blueprint.class;
-        if (typeof shipClass != "string")
+        if (typeof blueprint.class != "string")
           throw new TypeError(
             `captured ${candidate.blueprint} blueprint.class must be a string`
           );
-        let shipName = capturedOuterFleetShipName(blueprint), shipCrew = capturedShipCrewSize(active.root, shipClass) ?? null, authority = { status: "not-required" }, authorityResource = readProperty(
+        let shipName = capturedOuterFleetShipName(blueprint), quote = dependencies.costs.quote(blueprint);
+        active.quotes.delete(candidate.blueprint), quote !== void 0 && active.quotes.set(candidate.blueprint, quote);
+        let shipCrew = quote?.crew ?? null, authority = { status: "not-required" }, authorityResource = readProperty(
           readProperty(active.root, "resource"),
           "Authority"
         );
@@ -22532,13 +22514,11 @@
       },
       readBuildReadiness(plan) {
         let active = activeSession();
-        expectedDecision = null;
-        let blueprint = active.blueprints.get(plan.blueprint);
-        if (blueprint === void 0)
+        if (expectedDecision = null, active.blueprints.get(plan.blueprint) === void 0)
           throw new Error(
             `captured outer fleet blueprint ${plan.blueprint} is missing`
           );
-        let sample = dependencies.costs.price(blueprint), missingResourceName = null;
+        let sample = active.quotes.get(plan.blueprint)?.costs, missingResourceName = null;
         if (sample !== void 0) {
           for (let entry of sample.amounts)
             if (!entry.affordable) {
@@ -49315,7 +49295,7 @@ Only continue if you trust the source. Injected code:
   }
   function restoreBlueprint(blueprint, snapshot2) {
     for (let key of Object.keys(blueprint))
-      Object.hasOwn(snapshot2.values, key) || delete blueprint[key];
+      delete blueprint[key];
     for (let key of snapshot2.keys) blueprint[key] = snapshot2.values[key];
   }
   function blueprintRestored(blueprint, snapshot2) {
@@ -49332,12 +49312,22 @@ Only continue if you trust the source. Injected code:
   function createCapturedOuterFleetCosts(dependencies) {
     let reportError = dependencies.onCaptureError ?? (() => {
     }), probing = !1;
-    function probe(blueprint) {
+    function nativeDesignCrew(control) {
+      if (control === void 0 || !control.methods.includes(CAPTURED_OUTER_FLEET_SHIPYARD_CREW_METHOD))
+        return;
+      let result = dependencies.controls.invoke(
+        control,
+        CAPTURED_OUTER_FLEET_SHIPYARD_CREW_METHOD,
+        []
+      );
+      return result.ok && typeof result.value == "number" && Number.isFinite(result.value) && result.value > 0 ? result.value : void 0;
+    }
+    function probe(blueprint, includeCrew = !1) {
       if (probing || !dependencies.mountSuppression.available) return;
       let control = dependencies.controls.resolve(
         CAPTURED_OUTER_FLEET_SHIPYARD_CONTROL
       );
-      if (control === void 0 || !control.methods.includes(SHIPYARD_SET_VAL_METHOD))
+      if (control === void 0 || !control.methods.includes(SHIPYARD_SET_VAL_METHOD) || !control.methods.includes(CAPTURED_OUTER_FLEET_SHIPYARD_CREW_METHOD))
         return;
       let live = liveBlueprint(dependencies);
       if (!isRecord(live)) return;
@@ -49361,7 +49351,7 @@ Only continue if you trust the source. Injected code:
         );
         return;
       }
-      let snapshot2 = blueprintSnapshot(live), writes = outerFleetBlueprintWrites(blueprint), sample;
+      let snapshot2 = blueprintSnapshot(live), writes = outerFleetBlueprintWrites(blueprint), sample, crew;
       probing = !0;
       try {
         let applied = dependencies.mountSuppression.withoutMounting(() => {
@@ -49373,36 +49363,67 @@ Only continue if you trust the source. Injected code:
             ).ok) return !1;
           return writes.every((write) => live[write.type] === write.part);
         });
-        sample = applied ? parseShipyardCostRow(host.element) : void 0, applied && sample === void 0 && reportError(
+        sample = applied ? parseShipyardCostRow(host.element) : void 0, applied && includeCrew && (crew = nativeDesignCrew(control), crew === void 0 && (reportError(
+          "the native shipPlans crew requirement could not be read"
+        ), sample = void 0)), applied && sample === void 0 && (!includeCrew || crew !== void 0) && reportError(
           `the scratch ${CAPTURED_OUTER_FLEET_SHIPYARD_COSTS_ID} carried no readable cost`
         );
       } catch (error) {
         reportError(String(error)), sample = void 0;
       } finally {
-        restoreBlueprint(live, snapshot2), probing = !1;
-        let costHostRemoved = removeHiddenHostElement(host);
-        workspace.release(), blueprintRestored(live, snapshot2) || (reportError(
+        let restored = !1, costHostRemoved = !1, workspaceRestored = !1;
+        try {
+          restoreBlueprint(live, snapshot2), restored = liveBlueprint(dependencies) === live && blueprintRestored(live, snapshot2);
+        } catch (error) {
+          reportError(String(error));
+        }
+        try {
+          costHostRemoved = removeHiddenHostElement(host);
+        } catch (error) {
+          reportError(String(error));
+        }
+        try {
+          workspace.release(), workspaceRestored = workspace.isIntact();
+        } catch (error) {
+          reportError(String(error));
+        }
+        probing = !1, restored || (reportError(
           "the blueprint could not be put back the way the yard had it"
-        ), sample = void 0), costHostRemoved || (reportError("the scratch shipYardCosts could not be removed"), sample = void 0), workspace.isIntact() || (reportError("the workspace could not put the panels back"), sample = void 0);
+        ), sample = void 0), costHostRemoved || (reportError("the scratch shipYardCosts could not be removed"), sample = void 0), workspaceRestored || (reportError("the workspace could not put the panels back"), sample = void 0);
       }
-      return sample;
+      return sample === void 0 ? void 0 : Object.freeze({ costs: sample, crew });
     }
-    function price(blueprint) {
-      let live = liveBlueprint(dependencies);
-      if (isRecord(live) && designAlreadyHeld(blueprint, live)) {
-        let rendered = renderedCostRow(dependencies);
-        if (rendered.present) return rendered.sample;
-      }
-      return probe(blueprint);
+    function quote(blueprint) {
+      if (!probing)
+        try {
+          let live = liveBlueprint(dependencies);
+          if (!isRecord(live)) return;
+          if (designAlreadyHeld(blueprint, live)) {
+            let rendered = renderedCostRow(dependencies);
+            if (rendered.present) {
+              let crew = nativeDesignCrew(
+                dependencies.controls.resolve(
+                  CAPTURED_OUTER_FLEET_SHIPYARD_CONTROL
+                )
+              );
+              return rendered.sample !== void 0 && crew !== void 0 ? Object.freeze({ costs: rendered.sample, crew }) : void 0;
+            }
+          }
+          let sampled3 = probe(blueprint, !0);
+          return sampled3 !== void 0 && sampled3.crew !== void 0 ? Object.freeze({ costs: sampled3.costs, crew: sampled3.crew }) : void 0;
+        } catch (error) {
+          reportError(String(error));
+          return;
+        }
     }
     return Object.freeze({
       current() {
         let rendered = renderedCostRow(dependencies);
         if (rendered.present) return rendered.sample;
         let live = liveBlueprint(dependencies);
-        return isRecord(live) ? probe(live) : void 0;
+        return isRecord(live) ? probe(live)?.costs : void 0;
       },
-      price
+      quote
     });
   }
 

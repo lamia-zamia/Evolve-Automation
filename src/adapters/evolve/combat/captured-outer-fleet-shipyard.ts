@@ -115,6 +115,9 @@ import { isRecord, readProperty } from "../../validation.ts";
 /** The control the game binds its `#shipPlans` markup to: the yard's blueprint, parts and build. */
 export const CAPTURED_OUTER_FLEET_SHIPYARD_CONTROL = "shipPlans";
 
+/** `drawShipYard()` returns private `shipCrewSize(blueprint)` through this native method. */
+export const CAPTURED_OUTER_FLEET_SHIPYARD_CREW_METHOD = "crewText";
+
 /** The panel `drawShipYard()` draws into, and the element a shipyard host has to stand in for. */
 export const CAPTURED_OUTER_FLEET_SHIPYARD_PANEL_ID = "dwarfShipYard";
 
@@ -153,7 +156,7 @@ const TAB_SWAP_METHOD = "swapTab";
 /**
  * Every method this feature reaches the yard's *design* control through, so a control that answers
  * with a plausible generation but a partial binding is refused: `avail` the part gate, `setVal` the
- * blueprint write, `powerText` the power gate, `build` the build itself, and `redraw` the one
+ * blueprint write, `crewText` the crew requirement, `powerText` the power gate, `build` the build itself, and `redraw` the one
  * game-owned closure to `drawShips()` the row capture runs.
  *
  * Exactly what the callers ask for, and nothing else. `pickDest` and `show` are *not* here: upstream
@@ -163,6 +166,7 @@ const TAB_SWAP_METHOD = "swapTab";
 const OUTER_FLEET_SHIPYARD_METHODS: readonly string[] = Object.freeze([
   "avail",
   "build",
+  CAPTURED_OUTER_FLEET_SHIPYARD_CREW_METHOD,
   "powerText",
   OUTER_FLEET_SHIPYARD_REDRAW_METHOD,
   "setVal",

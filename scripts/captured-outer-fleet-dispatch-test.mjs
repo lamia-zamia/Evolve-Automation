@@ -69,13 +69,6 @@ import {
 } from "./dom-fixture.mjs";
 
 const MAIN_TAB_CONTROL = "#mainColumn div.content";
-const CREW_BY_CLASS = {
-  corvette: 2,
-  frigate: 3,
-  freighter: 1,
-  supply_ship: 1,
-  explorer: 6,
-};
 const HARNESS_SETTINGS = {
   fleetOuterShips: "custom",
   fleetOuterCrew: 4,
@@ -452,7 +445,7 @@ function installGame(page, root) {
   const shipPort = (ship) => ship.location?.id;
   const shipBound = (ship) => ship.location?.id ?? ship.movement?.to;
   const locSystem = (loc) => page.systems[loc] ?? loc;
-  const shipCrewSize = (ship) => CREW_BY_CLASS[ship.class] ?? 2;
+  const shipCrewSize = () => page.shipCrew ?? 2;
   const shipManned = (ship) => ship.manned === true;
   const shipCanLaunch = (ship) => 100 - (ship.damage ?? 0) >= page.launchFloor;
   const shipCanMakeTrip = (ship) =>
@@ -1058,6 +1051,12 @@ function installGame(page, root) {
         bp.weapon = "railgun";
       }
       bp[b] = v;
+      if (page.reorderBlueprint) {
+        const armor = bp.armor;
+        delete bp.armor;
+        bp.armor = armor;
+        bp.scratchOnly = "discard";
+      }
       page.setValWrites.push([b, v]);
       updateCosts();
     },
@@ -1074,7 +1073,16 @@ function installGame(page, root) {
       );
     },
     crewText() {
-      return shipCrewSize(yard.blueprint);
+      page.crewSamples ??= [];
+      page.crewSamples.push({
+        blueprint: { ...yard.blueprint },
+        writes: page.setValWrites.length,
+        draws: page.costDraws,
+      });
+      if (page.crewThrows) throw new Error("native crew unavailable");
+      return Object.hasOwn(page, "designCrew")
+        ? page.designCrew
+        : shipCrewSize(yard.blueprint);
     },
     powerText: () => page.powerText ?? "100kW",
     fireText() {
@@ -1681,7 +1689,14 @@ const yardControl = never.capture.controls.resolve(
 );
 assert.equal(yardControl.elementId, CAPTURED_OUTER_FLEET_SHIPYARD_CONTROL);
 // Exactly the design methods this feature reaches, and every one of them present.
-for (const method of ["avail", "setVal", "powerText", "build", "redraw"]) {
+for (const method of [
+  "avail",
+  "setVal",
+  "crewText",
+  "powerText",
+  "build",
+  "redraw",
+]) {
   assert.ok(
     yardControl.methods.includes(method),
     `shipPlans is missing ${method}`,
@@ -2174,7 +2189,7 @@ const fighterDesign = {
   sensor: "radar",
 };
 assert.deepEqual(
-  integrated.costs.price(fighterDesign),
+  integrated.costs.quote(fighterDesign)?.costs,
   gameSample(integrated, { ...pristineBlueprint, ...fighterDesign }),
   "an off-tab candidate was not priced by the game",
 );
@@ -2193,7 +2208,10 @@ assert.deepEqual(
 // priced design was decided by the game's `setVal`, not by this script.
 const beforeExplor = integrated.root.space.shipyard.blueprint;
 const drawBeforeExplor = integrated.page.costDraws;
-const explorer = integrated.costs.price({ class: "explorer", weapon: "laser" });
+const explorer = integrated.costs.quote({
+  class: "explorer",
+  weapon: "laser",
+})?.costs;
 assert.deepEqual(
   integrated.page.setValWrites.slice(-2).map(([type, part]) => [type, part]),
   [
@@ -2227,7 +2245,7 @@ assert.equal(
 // A freighter has no mount at all and takes `extra_fuel` with it, so the design the price belongs to
 // is one the candidate never named.
 const beforeFreighter = integrated.root.space.shipyard.blueprint;
-const freighter = integrated.costs.price({ class: "freighter" });
+const freighter = integrated.costs.quote({ class: "freighter" })?.costs;
 assert.deepEqual(
   freighter,
   gameSample(integrated, {
@@ -2274,6 +2292,119 @@ assert.deepEqual(integrated.root.settings, {
   showShipYard: true,
 });
 
+// A quote crews and prices the normalized candidate in one protected application.
+{
+  const quoted = makeHarness({ preload: true });
+  quoted.game.initTabs();
+  const live = quoted.root.space.shipyard.blueprint;
+  const original = Object.entries(live);
+  const row = quoted.page.document.getElementById("shipYardCosts");
+  const markup = row.innerHTML;
+  quoted.page.designCrew = 37;
+  quoted.root.race.grenadier = 1;
+  quoted.root.race.high_pop = 9;
+  quoted.page.reorderBlueprint = true;
+  const writes = quoted.page.setValWrites.length;
+  const draws = quoted.page.costDraws;
+  const releases = quoted.page.workspaceReleases ?? 0;
+  const answer = quoted.costs.quote({ class: "explorer", weapon: "laser" });
+  const normalized = {
+    ...Object.fromEntries(original),
+    class: "explorer",
+    weapon: "laser",
+    engine: "emdrive",
+    power: "elerium",
+    scratchOnly: "discard",
+  };
+  assert.equal(
+    answer.crew,
+    37,
+    "native crew must override any hull/race inference",
+  );
+  assert.deepEqual(answer.costs, gameSample(quoted, normalized));
+  assert.deepEqual(quoted.page.crewSamples, [
+    { blueprint: normalized, writes: writes + 2, draws: draws + 2 },
+  ]);
+  assert.equal(
+    quoted.page.setValWrites.length,
+    writes + 2,
+    "candidate was applied twice",
+  );
+  assert.equal(
+    quoted.page.workspaceReleases,
+    releases + 1,
+    "candidate used more than one workspace",
+  );
+  assert.deepEqual(
+    Object.entries(live),
+    original,
+    "blueprint values and key order must be restored",
+  );
+  assert.equal(row.innerHTML, markup, "player's cost row was changed");
+  assert.equal(quoted.page.document.getElementById("shipYardCosts"), row);
+  assert.deepEqual(quoted.page.builtShips, []);
+  assert.deepEqual(sentTo(quoted.page), []);
+}
+
+// Unreadable crew never falls back to a local answer or causes permanent effects.
+for (const crew of [
+  undefined,
+  null,
+  "37",
+  "bad",
+  NaN,
+  Infinity,
+  -Infinity,
+  0,
+  -3,
+  {},
+  "throws",
+]) {
+  const unavailable = makeHarness({ establish: true });
+  const live = unavailable.root.space.shipyard.blueprint;
+  const original = Object.entries(live);
+  unavailable.page.designCrew = crew;
+  unavailable.page.crewThrows = crew === "throws";
+  unavailable.page.reorderBlueprint = true;
+  unavailable.root.space.shipyard.blueprint.weapon = "laser";
+  original.find(([key]) => key === "weapon")[1] = "laser";
+  const writes = unavailable.page.setValWrites.length;
+  const result = outerFleetControl(
+    unavailable,
+    () => HARNESS_SETTINGS,
+  ).autoFleetOuter();
+  assert.equal(result.outcome.status, "succeeded");
+  assert.equal(result.shipTargetChanged, false);
+  assert.equal(unavailable.page.crewSamples.length, 1);
+  assert.equal(
+    unavailable.page.setValWrites.length - writes,
+    6,
+    "failed candidate was applied again",
+  );
+  assert.deepEqual(Object.entries(live), original);
+  assert.deepEqual(unavailable.page.builtShips, []);
+  assert.deepEqual(sentTo(unavailable.page), []);
+  assert.equal(unavailable.page.document.getElementById("shipYardCosts"), null);
+  assert.equal(
+    unavailable.page.document
+      .querySelectorAll("[id]")
+      .some((node) => node.id.startsWith("ea-aside-")),
+    false,
+  );
+}
+
+// A binding without callable crewText is incomplete authority even if every other method exists.
+for (const absentCrew of [undefined, 37]) {
+  const incomplete = makeHarness();
+  incomplete.game.shipyardMethods.crewText = absentCrew;
+  assert.equal(incomplete.shipyard.establish(), undefined);
+  assert.equal(incomplete.shipyard.control(), undefined);
+  assert.equal(incomplete.costs.quote(fighterDesign), undefined);
+  assert.deepEqual(incomplete.page.setValWrites, []);
+  assert.deepEqual(incomplete.page.builtShips, []);
+  assert.deepEqual(sentTo(incomplete.page), []);
+}
+
 // A `setVal` the game throws out — or takes without applying — is its own refusal, not a capture
 // fault: the probe is refused rather than pricing a design the yard never held, the blueprint is
 // still the player's, and no scratch element survives it.
@@ -2283,13 +2414,17 @@ for (const [knob, candidate] of [
 ]) {
   const stubborn = makeHarness({ establish: true });
   const before = { ...stubborn.root.space.shipyard.blueprint };
-  stubborn.page[knob] = "class";
+  stubborn.page[knob] = "weapon";
   assert.equal(
-    stubborn.costs.price(candidate),
+    stubborn.costs.quote(candidate)?.costs,
     undefined,
     `a ${knob} did not fail the probe closed`,
   );
   assert.deepEqual(stubborn.root.space.shipyard.blueprint, before);
+  assert.deepEqual(
+    Object.keys(stubborn.root.space.shipyard.blueprint),
+    Object.keys(before),
+  );
   assert.equal(stubborn.page.document.getElementById("shipYardCosts"), null);
   assert.equal(stubborn.page.document.getElementById("shipPlans"), null);
   assert.deepEqual(stubborn.faults, []);
@@ -2301,7 +2436,7 @@ for (const [knob, candidate] of [
   const idle = makeHarness({ establish: true });
   idle.page.setValRefuses = "weapon";
   assert.deepEqual(
-    idle.costs.price(fighterDesign),
+    idle.costs.quote(fighterDesign)?.costs,
     gameSample(idle, pristineBlueprint),
   );
   assert.deepEqual(idle.root.space.shipyard.blueprint, pristineBlueprint);
@@ -2635,9 +2770,26 @@ assert.ok(
     gameSample(preload, preload.root.space.shipyard.blueprint),
   );
   assert.deepEqual(
-    preload.costs.price({ ...preload.root.space.shipyard.blueprint }),
+    preload.costs.quote({ ...preload.root.space.shipyard.blueprint })?.costs,
     gameSample(preload, preload.root.space.shipyard.blueprint),
   );
+  preload.page.designCrew = 41;
+  const releases = preload.page.workspaceReleases;
+  const crewReads = preload.page.crewSamples?.length ?? 0;
+  assert.deepEqual(
+    preload.costs.quote({ ...preload.root.space.shipyard.blueprint }),
+    {
+      crew: 41,
+      costs: gameSample(preload, preload.root.space.shipyard.blueprint),
+    },
+  );
+  assert.equal(preload.page.crewSamples.length, crewReads + 1);
+  assert.equal(
+    preload.page.workspaceReleases,
+    releases,
+    "current design unnecessarily protected/redrawn",
+  );
+  delete preload.page.designCrew;
   assert.equal(
     preload.page.costDraws,
     drawsBefore,
@@ -2660,14 +2812,14 @@ assert.ok(
   assert.notEqual(realRow, null);
   const renderedBefore = realRow.innerHTML;
   const writesBefore = drafts.page.setValWrites.length;
-  const pricedDesign = drafts.costs.price({
+  const pricedDesign = drafts.costs.quote({
     class: "frigate",
     power: "fusion",
     weapon: "plasma",
     armor: "alloy",
     engine: "tie",
     sensor: "lidar",
-  });
+  })?.costs;
   assert.deepEqual(
     pricedDesign,
     gameSample(drafts, {
@@ -3200,9 +3352,9 @@ function outerFleetControlOverWrongHull(harness, readSettings) {
       },
       costs: {
         current: () => harness.costs.current(),
-        price: (blueprint) => {
+        quote: (blueprint) => {
           prices.push(blueprint);
-          return harness.costs.price(blueprint);
+          return harness.costs.quote(blueprint);
         },
       },
       parts: harness.parts,

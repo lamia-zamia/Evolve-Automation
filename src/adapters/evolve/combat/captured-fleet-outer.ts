@@ -47,7 +47,10 @@ import type { GameFleetControlsPort } from "../../../ports/game-fleet-controls.t
 import type { CommandExecutionOutcome } from "../../../domain/commands.ts";
 import type { CapturedOuterFleetDispatchCapture } from "../../../ports/captured-outer-fleet-dispatch.ts";
 import type { GameRootStateSource } from "../../../ports/game-root-state.ts";
-import type { GameShipyardCosts } from "../../../ports/game-shipyard-costs.ts";
+import type {
+  GameShipyardDesignQuotes,
+  ShipyardDesignQuote,
+} from "../../../ports/game-shipyard-costs.ts";
 import type { GameSyndicateMechanics } from "../../../ports/game-syndicate-mechanics.ts";
 import type { GameSpaceRegionMechanics } from "../../../ports/game-space-region-mechanics.ts";
 import { OUTER_FLEET_REGIONS } from "../../../domain/combat/outer-fleet-regions.ts";
@@ -62,7 +65,6 @@ import type {
 } from "../../../ports/fleet-outer.ts";
 import { rejected, stale, SUCCEEDED } from "../../command-outcomes.ts";
 import { readCapturedAuthorityPolicyView } from "../civic/authority.ts";
-import { capturedShipCrewSize } from "./captured-ship-crew-compat.ts";
 import { capturedShipBound } from "./captured-ship-route.ts";
 import {
   finite,
@@ -80,7 +82,7 @@ interface CapturedOuterFleetAdapterDependencies {
   readonly rootState: GameRootStateSource;
   readonly controls: GameFleetControlsPort;
   /** The yard's own `#shipYardCosts`, which is the only price this feature may quote. */
-  readonly costs: GameShipyardCosts;
+  readonly costs: GameShipyardDesignQuotes;
   /** The yard's own option markup, which is the only authority on what parts it offers. */
   readonly parts: GameShipyardPartCatalogSource;
   readonly dispatch: CapturedOuterFleetDispatchCapture;
@@ -107,6 +109,7 @@ interface CapturedOuterFleetSession {
   readonly catalog: GameShipyardPartCatalog | undefined;
   readonly settings: UnknownRecord;
   readonly blueprints: Map<OuterFleetBlueprint, UnknownRecord>;
+  readonly quotes: Map<OuterFleetBlueprint, ShipyardDesignQuote>;
 }
 
 const CAPTURED_OUTER_FLEET_EXPLORER = Object.freeze({
@@ -496,6 +499,7 @@ export function createCapturedOuterFleetAdapter(
           catalog,
           settings,
           blueprints,
+          quotes: new Map(),
         });
         const input = Object.freeze({
           initialized: false,
@@ -556,6 +560,7 @@ export function createCapturedOuterFleetAdapter(
         catalog,
         settings,
         blueprints,
+        quotes: new Map(),
       });
       const planned = planOuterFleetCycle(input);
       expectedDecision = planned.kind === "outer-fleet-status" ? planned : null;
@@ -817,10 +822,11 @@ export function createCapturedOuterFleetAdapter(
           `captured ${candidate.blueprint} blueprint.class must be a string`,
         );
       const shipName = capturedOuterFleetShipName(blueprint);
-      // The game's own crew requirement for this hull, scaled by the game's own job stack. An
-      // unreadable answer is `null` and stands the pass down rather than throwing: a hull upstream
-      // has since added is an ordinary state, not a fault.
-      const shipCrew = capturedShipCrewSize(active.root, shipClass) ?? null;
+      // Crew and price describe the same final native design, observed in one protected probe.
+      const quote = dependencies.costs.quote(blueprint);
+      active.quotes.delete(candidate.blueprint);
+      if (quote !== undefined) active.quotes.set(candidate.blueprint, quote);
+      const shipCrew = quote?.crew ?? null;
       let authority: OuterFleetAuthorityAssessment = { status: "not-required" };
       const authorityResource = readProperty(
         readProperty(active.root, "resource"),
@@ -860,10 +866,10 @@ export function createCapturedOuterFleetAdapter(
         throw new Error(
           `captured outer fleet blueprint ${plan.blueprint} is missing`,
         );
-      // The yard's own price for this candidate, taken before it is applied: the game's cost row
+      // Reuse the candidate's quote: the game's cost row
       // answers both what it costs and whether the yard can pay it from the active supply pool, and
       // nothing here decides either.
-      const sample = dependencies.costs.price(blueprint);
+      const sample = active.quotes.get(plan.blueprint)?.costs;
       let missingResourceName: string | null = null;
       if (sample !== undefined) {
         for (const entry of sample.amounts) {

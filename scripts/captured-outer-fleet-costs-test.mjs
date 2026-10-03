@@ -57,7 +57,7 @@ assert.deepEqual(outerFleetBlueprintWrites({ name: "Nomad", fleet: 1 }), []);
 
 // A readable scratch price is not authority if the protected workspace cannot restore the page.
 // The blueprint still goes back exactly, and both callers must discard the parsed answer.
-for (const [request, failure] of ["price", "current"].flatMap((request) =>
+for (const [request, failure] of ["current", "quote"].flatMap((request) =>
   ["workspace", "host"].map((failure) => [request, failure]),
 )) {
   const blueprint = { class: "corvette", armor: "steel" };
@@ -105,13 +105,14 @@ for (const [request, failure] of ["price", "current"].flatMap((request) =>
       },
     },
   };
-  const control = { methods: ["setVal"] };
+  const control = { methods: ["setVal", "crewText"] };
   const costs = createCapturedOuterFleetCosts({
     rootState: { readRoot: () => ({ space: { shipyard: { blueprint } } }) },
     controls: {
       resolve: () => control,
-      invoke(handle, method, [field, value]) {
+      invoke(handle, method, [field, value] = []) {
         assert.equal(handle, control);
+        if (method === "crewText") return { ok: true, value: 37 };
         assert.equal(method, "setVal");
         assert.notEqual(scratch, undefined);
         blueprint[field] = value;
@@ -134,8 +135,8 @@ for (const [request, failure] of ["price", "current"].flatMap((request) =>
     onCaptureError: (detail) => faults.push(detail),
   });
   const answer =
-    request === "price"
-      ? costs.price({ class: "explorer", armor: "neutronium" })
+    request === "quote"
+      ? costs.quote({ class: "explorer", armor: "neutronium" })
       : costs.current();
   assert.equal(parsed, true, "the valid scratch cost row was read");
   assert.equal(answer, undefined, "a broken workspace cannot return a price");

@@ -35,12 +35,17 @@ export interface GameShipyardCosts {
    * rendering its own cost row; otherwise the design is priced and put back inside this call.
    */
   current(): ShipyardCostSample | undefined;
-  /**
-   * The game's price for `blueprint`, which need not be the one applied — this is what lets a
-   * candidate be priced before it is permanently written. `undefined` when the game cannot be asked
-   * without leaving the yard's blueprint changed.
-   */
-  price(
+}
+
+/** One native answer for a candidate after the yard's own design normalization. */
+export interface ShipyardDesignQuote {
+  readonly crew: number;
+  readonly costs: ShipyardCostSample;
+}
+
+export interface GameShipyardDesignQuotes extends GameShipyardCosts {
+  /** Crew and costs for the same final native design; unavailable unless protection restores it. */
+  quote(
     blueprint: Readonly<Record<PropertyKey, unknown>>,
-  ): ShipyardCostSample | undefined;
+  ): ShipyardDesignQuote | undefined;
 }

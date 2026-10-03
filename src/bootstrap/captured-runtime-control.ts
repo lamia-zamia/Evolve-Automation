@@ -773,7 +773,8 @@ export function startCapturedRuntime({
    *
    * Off-tab it is not a pass of its own but a scratch `#shipYardCosts` the game's own
    * `updateCosts()` fills: the design is applied through the captured `shipPlans.setVal` for the
-   * length of one synchronous call and the blueprint is put back before it returns. Both the outer
+   * length of one synchronous call, crew is read through native `crewText`, and the blueprint is put
+   * back before it returns. Outer Fleet holds that one crew/cost quote for its candidate. Both the outer
    * fleet and fleet demand read it, so neither ever needs the player to visit the shipyard.
    */
   const outerFleetCosts = createCapturedOuterFleetCosts({

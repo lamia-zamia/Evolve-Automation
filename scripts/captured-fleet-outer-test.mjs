@@ -385,6 +385,7 @@ function pricedAmounts(blueprint, ships) {
 
 function createCostStub() {
   return {
+    nativeCrew: 2,
     requests: [],
     /** The resources the game's own marking calls unaffordable. */
     unaffordable: new Set(),
@@ -395,11 +396,15 @@ function createCostStub() {
         amounts: pricedAmounts.call(this, yard.blueprint, yard.ships),
       };
     },
-    price(blueprint) {
-      this.requests.push(["price", blueprint]);
+    quote(blueprint) {
+      this.requests.push(["quote", blueprint]);
+      if (this.nativeCrew === undefined) return undefined;
       return {
-        pool: "spc_dwarf",
-        amounts: pricedAmounts.call(this, blueprint, yard.ships),
+        crew: this.nativeCrew,
+        costs: {
+          pool: "spc_dwarf",
+          amounts: pricedAmounts.call(this, blueprint, yard.ships),
+        },
       };
     },
   };
@@ -544,8 +549,7 @@ assert.equal(createOuterControl().autoFleetOuter().outcome.status, "succeeded");
 assert.equal(capturedBuilds, buildsBeforeAuthority);
 assert.equal(yard.ships.length, 0);
 
-// Real Bombardier state is rank 1. A destroyer takes three crew rather than four,
-// but loses 3.675 Authority rather than the old 2.1 prediction.
+// Native crew feeds the Authority policy independently of hull/race inference.
 {
   const savedClass = capturedSettings.fleet_outer_class;
   const savedSetVal = capturedMethods.setVal;
@@ -612,16 +616,18 @@ assert.equal(yard.ships.length, 0);
     assert.equal(capturedBuilds, builds);
     assert.equal(yard.ships.length, 0);
     assert.deepEqual(dispatch.requests, []);
-    assert.deepEqual(
-      costs.requests.filter(([method]) => method === "price"),
-      [],
+    assert.equal(
+      costs.requests.filter(([method]) => method === "quote").length,
+      2,
     );
   }
   capturedSettings.fleet_outer_class = "destroyer";
   capturedSettings.generalMinimumAuthority = 97;
   root.race.grenadier = 1;
+  costs.nativeCrew = 3;
   blockedAuthority(96, 97, 3);
   root.race.grenadier = 0;
+  costs.nativeCrew = 2;
   assert.equal(authorityCandidate().input.authority.blocksRemoval, false);
   let builds = capturedBuilds;
   createOuterControl().autoFleetOuter();
@@ -641,8 +647,7 @@ assert.equal(yard.ships.length, 0);
   yard.ships.length = 0;
   delete root.tech.evil;
 
-  // Authority-only state is never needed for a disabled guard. High Population
-  // is still read by crew compatibility, independently of Authority.
+  // Authority-only state is never needed for a disabled guard.
   capturedSettings.authorityManage = false;
   let despotReads = 0;
   Object.defineProperty(root.race, "despot", {
@@ -740,7 +745,23 @@ assert.equal(noTransitionControl.autoFleetOuter().outcome.status, "stale");
 assert.equal(noTransitionBuilds, 1);
 assert.equal(yard.ships.length, 0);
 
-// Normal corvettes reserve two soldiers; Grenadier corvettes reserve one.
+// A distinctive native quote controls the exact minimum-garrison boundary despite race state.
+costs.nativeCrew = 37;
+root.race.grenadier = 1;
+root.race.high_pop = 9;
+capturedSettings.fleetOuterCrew = 64;
+yard.ships.length = 0;
+const beforeDistinctiveCrew = capturedBuilds;
+costs.requests.length = 0;
+createOuterControl().autoFleetOuter();
+assert.equal(capturedBuilds, beforeDistinctiveCrew);
+assert.equal(costs.requests.filter(([method]) => method === "quote").length, 1);
+capturedSettings.fleetOuterCrew = 63;
+createOuterControl().autoFleetOuter();
+assert.equal(capturedBuilds, beforeDistinctiveCrew + 1);
+costs.nativeCrew = 2;
+
+// The native quote decides crew, even with identical hull and race state.
 capturedSettings.fleetOuterCrew = 99;
 delete root.race.high_pop;
 root.race.grenadier = false;
@@ -750,17 +771,17 @@ createOuterControl().autoFleetOuter();
 assert.equal(capturedBuilds, buildsBeforeCrewGate);
 assert.equal(yard.ships.length, 0);
 
-root.race.grenadier = true;
+costs.nativeCrew = 1;
 buildsBeforeCrewGate = capturedBuilds;
 createOuterControl().autoFleetOuter();
 assert.equal(capturedBuilds, buildsBeforeCrewGate + 1);
 assert.equal(yard.ships.length, 1);
 
-// Rank-one high_pop makes jobStack(2) equal eight, so the minimum-garrison gate
-// must include the upstream citizen-cap multiplier.
+// A distinctive native result must feed the minimum-garrison gate.
 yard.ships.length = 0;
 root.race.grenadier = false;
 root.race.high_pop = 1;
+costs.nativeCrew = 8;
 capturedSettings.fleetOuterCrew = 93;
 buildsBeforeCrewGate = capturedBuilds;
 createOuterControl().autoFleetOuter();
@@ -780,6 +801,7 @@ assert.equal(yard.ships.length, 0);
 // A successful setVal invocation is not evidence that the live blueprint
 // changed. A stale laser blueprint must not be built as the configured railgun.
 root.race.high_pop = undefined;
+costs.nativeCrew = 2;
 capturedSettings.authorityManage = false;
 capturedSettings.generalMinimumAuthority = 0;
 yard.blueprint.weapon = "laser";
@@ -978,7 +1000,7 @@ yard.blueprint.weapon = "laser";
 costs.requests.length = 0;
 createOuterControl().autoFleetOuter();
 const pricedCandidates = costs.requests
-  .filter(([question]) => question === "price")
+  .filter(([question]) => question === "quote")
   .map(([, blueprint]) => blueprint);
 const currentSamples = costs.requests
   .filter(([question]) => question === "current")
@@ -1075,7 +1097,7 @@ const costless = createOuterControl(capturedRegistry, dispatch, {
   requests: [],
   unaffordable: new Set(),
   current: () => undefined,
-  price: () => undefined,
+  quote: () => undefined,
 }).autoFleetOuter();
 assert.equal(costless.outcome.status, "succeeded");
 assert.equal(capturedBuilds, buildsBeforeCostless);
@@ -1174,9 +1196,9 @@ function passWithoutProvenCatalog(settings, prepare, options = {}) {
     {
       requests: costs.requests,
       current: () => costs.current(),
-      price: (blueprint) => {
+      quote: (blueprint) => {
         prices.push(blueprint);
-        return costs.price(blueprint);
+        return costs.quote(blueprint);
       },
     },
     source,
@@ -1333,7 +1355,7 @@ function resetOuterPass() {
   assert.equal(yard.ships.length, 0);
   assert.deepEqual(dispatch.requests, []);
   assert.deepEqual(
-    costs.requests.filter(([method]) => method === "price"),
+    costs.requests.filter(([method]) => method === "quote"),
     [],
   );
 }
@@ -1501,7 +1523,7 @@ function resetOuterPass() {
   assert.equal(capturedBuilds, 0);
   assert.deepEqual(dispatch.requests, []);
   assert.deepEqual(
-    costs.requests.filter(([method]) => method === "price"),
+    costs.requests.filter(([method]) => method === "quote"),
     [],
   );
   assert.deepEqual(yard.blueprint, {
@@ -1718,7 +1740,7 @@ const assignmentExplorer = {
   assert.equal(capturedBuilds, 0);
   assert.deepEqual(dispatch.requests, []);
   assert.deepEqual(
-    costs.requests.filter(([method]) => method === "price"),
+    costs.requests.filter(([method]) => method === "quote"),
     [],
   );
 
@@ -1760,18 +1782,15 @@ const assignmentExplorer = {
   resetOuterPass();
 }
 
-// A crew requirement the compatibility table cannot give stands the pass down rather than throwing
+// An unavailable native quote stands the pass down rather than throwing
 // out of ordinary planning: a hull upstream has since added is an ordinary state, not a fault.
 //
-// The hull has to be one the *yard* offers, or this never reaches the crew question at all. Shipyard
-// and catalogue authority are the yard's own answers, so a preset naming a hull the yard never
-// rendered is refused earlier — as "no suitable blueprint", which says nothing about crew. A fictional
-// future hull is the way past that: it passes every authority the way any unlocked hull does, and the
-// only answer left missing is the one this table is pinned to.
+// A future hull offered by the yard still requires a native crew answer.
 {
   resetOuterPass();
   syndicate = createSyndicateStub({ spc_red: { p: 0.7319, s: 47 } });
   capturedSettings.fleet_outer_class = "future_cruiser";
+  costs.nativeCrew = undefined;
   // `setVal` writes the live blueprint, so an unwritten class is the proof nothing was written at all.
   // Earlier cases have left the yard wearing a design of their own making, which is why this is the
   // class the yard holds now rather than a literal.
@@ -1821,7 +1840,7 @@ const assignmentExplorer = {
   );
   assert.equal(candidate.kind, "check-candidate");
   const candidateInput = adapter.reader.readCandidate(candidate);
-  // The pinned table has no entry for this hull, and an unknown hull is not a hull it may crew at zero.
+  // The native quote was unavailable, so crew cannot be inferred from the hull.
   assert.equal(candidateInput.shipCrew, null);
   const readiness = planOuterFleetCandidate(candidateInput);
   assert.equal(readiness.kind, "outer-fleet-status");
@@ -1833,12 +1852,12 @@ const assignmentExplorer = {
   assert.equal(readiness.messageBeforeUpdate, null);
   assert.equal(readiness.blueprint, "fighter");
 
-  // And the decision that status stands for is executed, not merely planned: nothing is priced,
+  // And the decision that status stands for is executed, not merely planned: one quote was attempted,
   // nothing is written, nothing is built and nothing is sent.
   assert.equal(adapter.executor.execute(readiness).status, "succeeded");
-  assert.deepEqual(
-    costs.requests.filter(([method]) => method === "price"),
-    [],
+  assert.equal(
+    costs.requests.filter(([method]) => method === "quote").length,
+    1,
   );
   assert.deepEqual(dispatch.requests, []);
   assert.equal(capturedBuilds, 0);
@@ -1856,15 +1875,16 @@ const assignmentExplorer = {
   ).autoFleetOuter();
   assert.equal(unknownHull.outcome.status, "succeeded");
   assert.equal(unknownHull.shipTargetChanged, false);
-  assert.deepEqual(
-    costs.requests.filter(([method]) => method === "price"),
-    [],
+  assert.equal(
+    costs.requests.filter(([method]) => method === "quote").length,
+    1,
   );
   assert.deepEqual(dispatch.requests, []);
   assert.equal(capturedBuilds, 0);
   assert.equal(yard.ships.length, 0);
   assert.equal(yard.blueprint.class, classBefore);
   capturedSettings.fleet_outer_class = "corvette";
+  costs.nativeCrew = 2;
 }
 
 // ---------------------------------------------------------------------------
@@ -1886,6 +1906,8 @@ assert.doesNotMatch(productionFleetOuter, /\btransit\b/);
 for (const gone of [
   "CAPTURED_OUTER_FLEET_CLASS_CREW",
   "CAPTURED_OUTER_FLEET_GRENADIER_CREW",
+  "capturedShipCrewSize",
+  "readCapturedJobStackMultiplier",
   "CAPTURED_OUTER_FLEET_WEAPON_POWER",
   "CAPTURED_OUTER_FLEET_CLASS_POWER",
   "CAPTURED_OUTER_FLEET_SENSOR_RANGE",

@@ -24,7 +24,8 @@
  * `#shipYardCosts` out of `$('#shipYardCosts')` — a single hidden `#shipYardCosts` the capture owns
  * is stood up instead, and the design is applied through the captured `shipPlans.setVal`, so the
  * game's own `updateCosts()` runs inside that call and writes its own answer into the capture's
- * element. Nothing is calculated here.
+ * element. After the final native normalization, `shipPlans.crewText()` returns the private
+ * `shipCrewSize(blueprint)` answer in that same probe. Nothing is calculated here.
  *
  * **Nothing the probe borrows outlives it.** The live blueprint is snapshotted key for key
  * immediately before the first write and restored in `finally`, the scratch element is removed, the
@@ -42,12 +43,16 @@
  * `vBind({el:'#shipPlans'},'update')`, which finds no element because the panel is aliased away, and
  * mounting stays suppressed regardless.
  */
-import type { GameControlRegistry } from "../../../ports/game-control-registry.ts";
+import type {
+  GameControlHandle,
+  GameControlRegistry,
+} from "../../../ports/game-control-registry.ts";
 import type { GameMountSuppression } from "../../../ports/game-mount-suppression.ts";
 import type { GamePanelWorkspace } from "../../../ports/game-panel-workspace.ts";
 import type { GameRootStateSource } from "../../../ports/game-root-state.ts";
 import type {
-  GameShipyardCosts,
+  GameShipyardDesignQuotes,
+  ShipyardDesignQuote,
   ShipyardCostAmount,
   ShipyardCostSample,
 } from "../../../ports/game-shipyard-costs.ts";
@@ -61,6 +66,7 @@ import { outerFleetBlueprintWrites } from "./captured-outer-fleet-blueprint.ts";
 import {
   CAPTURED_OUTER_FLEET_SHIPYARD_CONTROL,
   CAPTURED_OUTER_FLEET_SHIPYARD_COSTS_ID,
+  CAPTURED_OUTER_FLEET_SHIPYARD_CREW_METHOD,
   hiddenHostElement,
   removeHiddenHostElement,
   renderedElementInside,
@@ -282,7 +288,7 @@ function restoreBlueprint(
   snapshot: BlueprintSnapshot,
 ): void {
   for (const key of Object.keys(blueprint)) {
-    if (!Object.hasOwn(snapshot.values, key)) delete blueprint[key];
+    delete blueprint[key];
   }
   for (const key of snapshot.keys) blueprint[key] = snapshot.values[key];
 }
@@ -318,10 +324,31 @@ function designAlreadyHeld(
 
 export function createCapturedOuterFleetCosts(
   dependencies: CapturedOuterFleetCostsDependencies,
-): GameShipyardCosts {
+): GameShipyardDesignQuotes {
   const reportError = dependencies.onCaptureError ?? (() => {});
   // One probe at a time: a price must never be taken while another one holds the yard's blueprint.
   let probing = false;
+
+  function nativeDesignCrew(
+    control: GameControlHandle | undefined,
+  ): number | undefined {
+    if (
+      control === undefined ||
+      !control.methods.includes(CAPTURED_OUTER_FLEET_SHIPYARD_CREW_METHOD)
+    )
+      return undefined;
+    const result = dependencies.controls.invoke(
+      control,
+      CAPTURED_OUTER_FLEET_SHIPYARD_CREW_METHOD,
+      [],
+    );
+    return result.ok &&
+      typeof result.value === "number" &&
+      Number.isFinite(result.value) &&
+      result.value > 0
+      ? result.value
+      : undefined;
+  }
 
   /**
    * The game's own price for a design that is not applied, taken by applying it for the length of
@@ -329,14 +356,18 @@ export function createCapturedOuterFleetCosts(
    */
   function probe(
     blueprint: Readonly<Record<PropertyKey, unknown>>,
-  ): ShipyardCostSample | undefined {
+    includeCrew = false,
+  ):
+    | { readonly costs: ShipyardCostSample; readonly crew: number | undefined }
+    | undefined {
     if (probing || !dependencies.mountSuppression.available) return undefined;
     const control = dependencies.controls.resolve(
       CAPTURED_OUTER_FLEET_SHIPYARD_CONTROL,
     );
     if (
       control === undefined ||
-      !control.methods.includes(SHIPYARD_SET_VAL_METHOD)
+      !control.methods.includes(SHIPYARD_SET_VAL_METHOD) ||
+      !control.methods.includes(CAPTURED_OUTER_FLEET_SHIPYARD_CREW_METHOD)
     )
       return undefined;
     const live = liveBlueprint(dependencies);
@@ -367,6 +398,7 @@ export function createCapturedOuterFleetCosts(
     const snapshot = blueprintSnapshot(live);
     const writes = outerFleetBlueprintWrites(blueprint);
     let sample: ShipyardCostSample | undefined;
+    let crew: number | undefined;
     probing = true;
     try {
       // One `setVal` per part, in the order a real build uses, so the game's own class transitions
@@ -386,7 +418,20 @@ export function createCapturedOuterFleetCosts(
       });
       // Only after the final part's own `updateCosts()` has run.
       sample = applied ? parseShipyardCostRow(host.element) : undefined;
-      if (applied && sample === undefined) {
+      if (applied && includeCrew) {
+        crew = nativeDesignCrew(control);
+        if (crew === undefined) {
+          reportError(
+            "the native shipPlans crew requirement could not be read",
+          );
+          sample = undefined;
+        }
+      }
+      if (
+        applied &&
+        sample === undefined &&
+        (!includeCrew || crew !== undefined)
+      ) {
         reportError(
           `the scratch ${CAPTURED_OUTER_FLEET_SHIPYARD_COSTS_ID} carried no readable cost`,
         );
@@ -395,11 +440,30 @@ export function createCapturedOuterFleetCosts(
       reportError(String(error));
       sample = undefined;
     } finally {
-      restoreBlueprint(live, snapshot);
+      let restored = false;
+      let costHostRemoved = false;
+      let workspaceRestored = false;
+      try {
+        restoreBlueprint(live, snapshot);
+        restored =
+          liveBlueprint(dependencies) === live &&
+          blueprintRestored(live, snapshot);
+      } catch (error) {
+        reportError(String(error));
+      }
+      try {
+        costHostRemoved = removeHiddenHostElement(host);
+      } catch (error) {
+        reportError(String(error));
+      }
+      try {
+        workspace.release();
+        workspaceRestored = workspace.isIntact();
+      } catch (error) {
+        reportError(String(error));
+      }
       probing = false;
-      const costHostRemoved = removeHiddenHostElement(host);
-      workspace.release();
-      if (!blueprintRestored(live, snapshot)) {
+      if (!restored) {
         reportError(
           "the blueprint could not be put back the way the yard had it",
         );
@@ -409,25 +473,44 @@ export function createCapturedOuterFleetCosts(
         reportError("the scratch shipYardCosts could not be removed");
         sample = undefined;
       }
-      if (!workspace.isIntact()) {
+      if (!workspaceRestored) {
         reportError("the workspace could not put the panels back");
         sample = undefined;
       }
     }
-    return sample;
+    return sample === undefined
+      ? undefined
+      : Object.freeze({ costs: sample, crew });
   }
 
-  function price(
+  function quote(
     blueprint: Readonly<Record<PropertyKey, unknown>>,
-  ): ShipyardCostSample | undefined {
-    const live = liveBlueprint(dependencies);
-    if (isRecord(live) && designAlreadyHeld(blueprint, live)) {
-      const rendered = renderedCostRow(dependencies);
-      // A row the yard drew and this cannot read is not an invitation to price off-tab: the yard is
-      // already answering, just not in a shape this knows how to read.
-      if (rendered.present) return rendered.sample;
+  ): ShipyardDesignQuote | undefined {
+    if (probing) return undefined;
+    try {
+      const live = liveBlueprint(dependencies);
+      if (!isRecord(live)) return undefined;
+      if (designAlreadyHeld(blueprint, live)) {
+        const rendered = renderedCostRow(dependencies);
+        if (rendered.present) {
+          const crew = nativeDesignCrew(
+            dependencies.controls.resolve(
+              CAPTURED_OUTER_FLEET_SHIPYARD_CONTROL,
+            ),
+          );
+          return rendered.sample !== undefined && crew !== undefined
+            ? Object.freeze({ costs: rendered.sample, crew })
+            : undefined;
+        }
+      }
+      const sampled = probe(blueprint, true);
+      return sampled !== undefined && sampled.crew !== undefined
+        ? Object.freeze({ costs: sampled.costs, crew: sampled.crew })
+        : undefined;
+    } catch (error) {
+      reportError(String(error));
+      return undefined;
     }
-    return probe(blueprint);
   }
 
   return Object.freeze({
@@ -435,8 +518,8 @@ export function createCapturedOuterFleetCosts(
       const rendered = renderedCostRow(dependencies);
       if (rendered.present) return rendered.sample;
       const live = liveBlueprint(dependencies);
-      return isRecord(live) ? probe(live) : undefined;
+      return isRecord(live) ? probe(live)?.costs : undefined;
     },
-    price,
+    quote,
   });
 }
