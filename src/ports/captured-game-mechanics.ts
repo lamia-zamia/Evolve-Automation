@@ -51,6 +51,14 @@ export interface CapturedPowerRequirement {
 
 export type CapturedFuelAdjustmentMode = "space" | "interstellar";
 
+export interface CapturedNativeSupportGrid {
+  readonly type: string;
+  readonly contribution: number;
+  readonly consumer: boolean;
+  readonly provider: boolean;
+  readonly topology: CapturedSupportTopology;
+}
+
 export interface CapturedGameStructureDefinition {
   /** DeadSpace's full grid key; short `struct` names are not unique identities. */
   readonly entryKey: string;
@@ -72,6 +80,11 @@ export interface CapturedGameStructureDefinition {
   /** Action capability ownership, independent of the current `powered()` result. */
   readonly ownsPowered: boolean;
   readPowered(): CapturedGameRead<number>;
+  /** Current native Power role, checked against the live full-key order and root state. */
+  readPowerGridRole(
+    root: unknown,
+    sampledPowered?: number,
+  ): CapturedGameRead<"consumer" | "generator" | "none">;
   /** Game-owned state capability where the action defines `switchable()`. */
   readSwitchable(): CapturedGameRead<boolean>;
   /** `power_reqs`, normalized to the root tech levels checked by the retired wrapper. */
@@ -90,6 +103,10 @@ export interface CapturedGameStructureDefinition {
   readSupportProvider(): CapturedGameRead<boolean>;
   /** Semantic subset of the group info, without exposing `info` or its callback. */
   readSupportTopology(): CapturedGameRead<CapturedSupportTopology>;
+  /** Native support groups with live consumer order and current action output. */
+  readNativeSupportGrids(
+    root: unknown,
+  ): CapturedGameRead<readonly CapturedNativeSupportGrid[]>;
   readSupportFuel(): CapturedGameRead<readonly CapturedGameFuelInput[] | false>;
   readSupportFuelAdjustmentDisabled(): CapturedGameRead<boolean>;
   readPowerLimit(): CapturedGameRead<number | string | boolean>;

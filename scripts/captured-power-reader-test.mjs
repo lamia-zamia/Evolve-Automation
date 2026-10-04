@@ -8,7 +8,7 @@ import {
   createCapturedPowerReader,
   readCapturedPowerMetadataFuelMode,
   readCapturedPowerOrdinaryResourceState,
-  readCapturedPowerSupportResourceState,
+  readNativePowerSupports,
 } from "../src/adapters/evolve/economy/production/captured-power-reader.ts";
 import {
   readCapturedHighPopulationGrowthMultiplier,
@@ -67,6 +67,14 @@ function structure({
       shipRating === undefined ? { kind: "absent" } : readNumber(shipRating),
     ownsPowered,
     readPowered: () => readNumber(powered),
+    readPowerGridRole: (sample, sampledPowered = powered) =>
+      readNumber(
+        Number(sampledPowered) > 0
+          ? "consumer"
+          : Number(sampledPowered) < 0
+            ? "generator"
+            : "none",
+      ),
     readSwitchable: () =>
       switchable === undefined
         ? { kind: "absent" }
@@ -101,6 +109,26 @@ function structure({
         unlimited: false,
         enabled: { kind: "value", value: true },
       },
+    }),
+    readNativeSupportGrids: () => ({
+      kind: "value",
+      value: (supportTypes === undefined
+        ? []
+        : Array.isArray(supportTypes)
+          ? supportTypes
+          : [supportTypes]
+      ).map((type) => ({
+        type,
+        contribution: supportFor?.[type] ?? support,
+        consumer: support < 0,
+        provider:
+          (supportFor?.[type] ?? support) > 0 || supportProvider === true,
+        topology: supportTopology ?? {
+          anchorEntryKey: null,
+          unlimited: false,
+          enabled: { kind: "value", value: true },
+        },
+      })),
     }),
     readSupportFuel: () =>
       supportFuel === undefined ? { kind: "absent" } : readNumber(supportFuel),
@@ -250,6 +278,7 @@ const metadataSpaceFuel = structure({
   sector: "spc_home",
   struct: "red_factory",
   actionId: "space-red_factory",
+  powered: 1,
 });
 const metadataInterstellarDeuterium = structure({
   entryKey: "int_alpha:int_factory",
@@ -257,6 +286,7 @@ const metadataInterstellarDeuterium = structure({
   sector: "int_alpha",
   struct: "int_factory",
   actionId: "interstellar-int_factory",
+  powered: 1,
 });
 const metadataGalaxyDeuterium = structure({
   entryKey: "gxy_home:cruiser_ship",
@@ -392,13 +422,9 @@ const root = {
     },
   },
   support: {
-    moon: [moonConsumer.entryKey, "stale:moon", moonAnchor.entryKey],
-    red: [
-      redSupportMember.entryKey,
-      redSupportConsumer.entryKey,
-      redAnchor.entryKey,
-    ],
-    gateway: [metadataGalaxyDeuterium.entryKey],
+    moon: [moonConsumer.entryKey, "stale:moon"],
+    red: [redSupportConsumer.entryKey],
+    gateway: [],
   },
   portal: { purifier: { supply: 32, sup_max: 80, diff: 7 } },
   power: [
@@ -569,10 +595,35 @@ assert.ok(
   "complete captured mechanics and live state produce a full cycle",
 );
 assert.ok(Object.isFrozen(cycle) && Object.isFrozen(cycle.buildings));
+assert.equal(
+  cycle.buildings.find((building) => building.binding === "city-bank")?.powered,
+  5,
+  "a new native consumer is managed without Power binding metadata",
+);
+assert.equal(
+  cycle.buildings.find(
+    (building) => building.binding === "space-propellant_depot",
+  )?.powered,
+  -12,
+  "a new native generator is managed without Power binding metadata",
+);
 assert.deepEqual(
   cycle.buildings.map((building) => building.binding),
-  stateOnSettingsOrder.filter((binding) => binding !== "space-gas_storage"),
-  "stored Building catalog priorities control Power input order, not root.power or Map order",
+  [
+    "city-coal_power",
+    "city-bank",
+    "space-gas_mining",
+    "space-propellant_depot",
+    "interstellar-cargo_yard",
+    "space-nav_beacon",
+    "space-storehouse",
+    "interstellar-warehouse",
+    "space-red_factory",
+    "interstellar-int_factory",
+    "galaxy-cruiser_ship",
+    "space-vr_center",
+  ],
+  "captured native power and support orders control the Power cycle",
 );
 assert.ok(
   cycle.buildings.every((building) => building.binding !== "space-garage"),
@@ -623,7 +674,7 @@ assert.deepEqual(
   cycle.buildings.find((building) => building.binding === "space-gas_mining")
     ?.produces,
   ["Helium_3"],
-  "inactive producers retain script-owned produces metadata with no active ledger row",
+  "producer resources follow the captured native production ledger",
 );
 const navBeacon = cycle.buildings.find(
   (building) => building.binding === "space-nav_beacon",
@@ -634,13 +685,9 @@ assert.equal(
   0,
   "the support provider has no active instances",
 );
-assert.ok(
-  navBeacon.consumptions.some(
-    (consumption) =>
-      consumption.resourceId === "Moon_Support" &&
-      consumption.rate === -6 &&
-      consumption.fuelRate === -6,
-  ),
+assert.deepEqual(
+  navBeacon.supportChanges,
+  [{ type: "moon", amount: -6 }],
   "the support_for[moon] value overrides support() for the typed support consumption",
 );
 const redSupportConsumerInput = cycle.buildings.find(
@@ -652,24 +699,65 @@ assert.equal(
   0,
   "the support consumer has no active instances",
 );
-assert.ok(
-  redSupportConsumerInput.consumptions.some(
-    (consumption) =>
-      consumption.resourceId === "Red_Support" && consumption.rate === 3,
-  ),
+assert.deepEqual(
+  redSupportConsumerInput.supportChanges,
+  [{ type: "red", amount: 3 }],
   "an inactive support consumer retains its per-type consumption semantics",
 );
 assert.deepEqual(
   [
-    cycle.resources.find((resource) => resource.id === "Moon_Support")
-      ?.currentQuantity,
-    cycle.resources.find((resource) => resource.id === "Moon_Support")
-      ?.maxQuantity,
-    cycle.resources.find((resource) => resource.id === "Moon_Support")
-      ?.rateOfChange,
+    cycle.supports.find((support) => support.type === "moon")?.current,
+    cycle.supports.find((support) => support.type === "moon")?.maximum,
+    cycle.supports.find((support) => support.type === "moon")?.available,
   ],
   [3, 10, 7],
   "support resources read s_max, support use, and available rate from live root state",
+);
+const newSupportAnchor = structure({
+  entryKey: "spc_new:quasar_anchor",
+  region: "space",
+  sector: "spc_new",
+  struct: "quasar_anchor",
+  actionId: "space-quasar_anchor",
+  supportTypes: ["quasar", "nova"],
+  support: 5,
+});
+const newSupportConsumer = structure({
+  entryKey: "spc_new:quasar_consumer",
+  region: "space",
+  sector: "spc_new",
+  struct: "quasar_consumer",
+  actionId: "space-quasar_consumer",
+  supportTypes: ["quasar", "nova"],
+  support: -2,
+  supportFor: { nova: -3 },
+  supportTopology: {
+    anchorEntryKey: newSupportAnchor.entryKey,
+    unlimited: false,
+    enabled: { kind: "value", value: true },
+  },
+});
+const newSupportRoot = {
+  space: {
+    quasar_anchor: { count: 1, on: 1, support: 4, s_max: 12 },
+    quasar_consumer: { count: 1, on: 0 },
+  },
+  support: {
+    quasar: [newSupportConsumer.entryKey],
+    nova: [newSupportConsumer.entryKey],
+  },
+};
+assert.deepEqual(
+  readNativePowerSupports(
+    newSupportRoot,
+    createMechanics({ structures: [newSupportAnchor, newSupportConsumer] }),
+    [newSupportAnchor, newSupportConsumer],
+  )?.map(({ type, available }) => [type, available]),
+  [
+    ["quasar", 8],
+    ["nova", 8],
+  ],
+  "new multi-support types use native topology and root anchor without a type catalogue",
 );
 assert.ok(
   cycle.buildings
@@ -845,7 +933,7 @@ const adjustedOil = readCapturedPowerOrdinaryResourceState(
     res_ejectOil: true,
   },
   demandSample(),
-  { production: {}, consumption: { Oil: { Trade: -4 } } },
+  { production: {}, consumption: { Oil: { Trade: -4, Decay: -0.005 } } },
   {
     present: true,
     unlocked: true,
@@ -854,6 +942,7 @@ const adjustedOil = readCapturedPowerOrdinaryResourceState(
     rateOfChange: -3,
     storageRatio: 0.6,
   },
+  "Decay",
 );
 assert.equal(
   adjustedOil?.income,
@@ -864,6 +953,27 @@ assert.equal(
   adjustedOil?.rateOfChange,
   24004.005,
   "rateOfChange retains all current sell, decay, Supply, and Eject adjustments",
+);
+const changedNativeDecay = readCapturedPowerOrdinaryResourceState(
+  { race: { decay: true } },
+  "Oil",
+  {},
+  demandSample(),
+  { production: {}, consumption: { Oil: { Decay: -0.025 } } },
+  {
+    present: true,
+    unlocked: true,
+    amount: 60,
+    max: 100,
+    rateOfChange: 0,
+    storageRatio: 0.6,
+  },
+  "Decay",
+);
+assert.equal(
+  changedNativeDecay?.rateOfChange,
+  0.025,
+  "Power follows the native decay ledger when the game's ratio changes",
 );
 assert.equal(
   adjustedOil?.useful,
@@ -911,216 +1021,6 @@ assert.equal(
   "store-overflow uses its captured storage setting",
 );
 
-const beltStation = structure({
-  entryKey: "spc_titan:space_station",
-  region: "space",
-  sector: "spc_titan",
-  struct: "space_station",
-  actionId: "space-space_station",
-  supportTypes: "belt",
-});
-const beltMember = structure({
-  entryKey: "spc_titan:elerium_ship",
-  region: "space",
-  sector: "spc_titan",
-  struct: "elerium_ship",
-  actionId: "space-elerium_ship",
-  supportTypes: "belt",
-  supportTopology: {
-    anchorEntryKey: beltStation.entryKey,
-    unlimited: false,
-    enabled: { kind: "value", value: true },
-  },
-});
-const supportStructures = [beltStation, beltMember];
-const supportRoot = {
-  city: {},
-  space: {
-    space_station: { count: 4, on: 1, s_max: 120, support: 20 },
-    elerium_ship: { count: 1, on: 1 },
-    electrolysis: { count: 4, on: 4 },
-    hydrogen_plant: { count: 3, on: 3 },
-  },
-  race: {
-    high_pop: 2,
-    truepath: true,
-    species: "Human",
-  },
-  civic: { space_miner: { workers: 100 } },
-  tech: { high_tech: 2, tau_red: 5, womling_pop: 2 },
-  tauceti: {
-    womling_village: { count: 4, on: 4 },
-    womling_farm: { count: 3, on: 3 },
-    womling_lab: { count: 2, on: 2 },
-    womling_mine: { count: 1, on: 1 },
-  },
-  resource: {},
-};
-const supportBuildingStates = [
-  readCapturedBuildingState(
-    supportRoot,
-    {
-      binding: beltStation.actionId,
-      elementId: beltStation.actionId,
-      entryKey: beltStation.entryKey,
-      region: beltStation.region,
-      sector: beltStation.sector,
-      id: beltStation.struct,
-      label: beltStation.actionId,
-      switchable: true,
-      smart: false,
-      knowledge: false,
-      state: supportRoot.space.space_station,
-    },
-    beltStation,
-    true,
-  ),
-];
-assert.ok(supportBuildingStates[0]);
-for (const [region, id] of [
-  ["space", "electrolysis"],
-  ["space", "hydrogen_plant"],
-  ["tauceti", "womling_village"],
-  ["tauceti", "womling_farm"],
-  ["tauceti", "womling_lab"],
-  ["tauceti", "womling_mine"],
-]) {
-  const definition = structure({
-    entryKey: `${region}:${id}`,
-    region,
-    sector: region,
-    struct: id,
-    actionId: `${region}-${id}`,
-    ownsPowered: false,
-    switchable: true,
-  });
-  const snapshot = readCapturedBuildingState(
-    supportRoot,
-    {
-      binding: definition.actionId,
-      elementId: definition.actionId,
-      entryKey: definition.entryKey,
-      region,
-      sector: region,
-      id,
-      label: definition.actionId,
-      switchable: true,
-      smart: false,
-      knowledge: false,
-      state: supportRoot[region][id],
-    },
-    definition,
-    true,
-  );
-  assert.ok(snapshot);
-  supportStructures.push(definition);
-  supportBuildingStates.push(snapshot);
-}
-const beltSupport = readCapturedPowerSupportResourceState(
-  supportRoot,
-  "Belt_Support",
-  { autoPower: true, "bld_s_space-space_station": true },
-  supportStructures,
-  supportBuildingStates,
-);
-assert.deepEqual(
-  [beltSupport?.currentQuantity, beltSupport?.maxQuantity],
-  [20, 84],
-  "Belt Support capacity uses powered station count, high-pop capacity, and current miner workers",
-);
-assert.equal(
-  readCapturedPowerSupportResourceState(
-    supportRoot,
-    "Belt_Support",
-    { autoPower: true },
-    supportStructures,
-    supportBuildingStates,
-  )?.maxQuantity,
-  21,
-  "Belt Support falls back to currently-on stations when auto-state is not enabled",
-);
-assert.deepEqual(
-  [
-    readCapturedPowerSupportResourceState(
-      supportRoot,
-      "Electrolysis_Support",
-      {},
-      [],
-      supportBuildingStates,
-    )?.currentQuantity,
-    readCapturedPowerSupportResourceState(
-      supportRoot,
-      "Electrolysis_Support",
-      {},
-      [],
-      supportBuildingStates,
-    )?.maxQuantity,
-  ],
-  [3, 4],
-  "Electrolysis Support uses Titan hydrogen-plant and electrolysis counts",
-);
-assert.deepEqual(
-  [
-    readCapturedPowerSupportResourceState(
-      supportRoot,
-      "Womlings_Support",
-      {},
-      [],
-      supportBuildingStates,
-    )?.currentQuantity,
-    readCapturedPowerSupportResourceState(
-      supportRoot,
-      "Womlings_Support",
-      {},
-      [],
-      supportBuildingStates,
-    )?.maxQuantity,
-  ],
-  [14, 24],
-  "Womlings Support uses flat tau-red structure state and the level-two population cap",
-);
-const uninitializedSupportRoot = {
-  race: { truepath: true },
-  space: {},
-  tech: { tau_red: 4 },
-  tauceti: {},
-};
-assert.deepEqual(
-  [
-    readCapturedPowerSupportResourceState(
-      uninitializedSupportRoot,
-      "Electrolysis_Support",
-      {},
-      [],
-    )?.currentQuantity,
-    readCapturedPowerSupportResourceState(
-      uninitializedSupportRoot,
-      "Electrolysis_Support",
-      {},
-      [],
-    )?.maxQuantity,
-    readCapturedPowerSupportResourceState(
-      uninitializedSupportRoot,
-      "Womlings_Support",
-      {},
-      [],
-    )?.currentQuantity,
-    readCapturedPowerSupportResourceState(
-      uninitializedSupportRoot,
-      "Womlings_Support",
-      {},
-      [],
-    )?.maxQuantity,
-    readCapturedPowerSupportResourceState(
-      uninitializedSupportRoot,
-      "Womlings_Support",
-      {},
-      [],
-    )?.unlocked,
-  ],
-  [0, 0, 0, 0, false],
-  "uninitialized Electrolysis and Tau-Ceti counts retain the wrappers' zero and locked state",
-);
 assert.deepEqual(
   [
     readCapturedLegacyJobCount(
@@ -1337,16 +1237,14 @@ const missingSupportReader = createCapturedPowerReader({
 });
 const missingSupportCycle = missingSupportReader.readCycle();
 assert.equal(
-  missingSupportCycle?.resources.find(
-    (resource) => resource.id === "Moon_Support",
-  )?.unlocked,
+  missingSupportCycle?.supports.find((support) => support.type === "moon")
+    ?.unlocked,
   false,
   "a lazily absent support anchor remains locked instead of falling back to global.resource",
 );
 assert.equal(
-  missingSupportCycle?.resources.find(
-    (resource) => resource.id === "Moon_Support",
-  )?.maxQuantity,
+  missingSupportCycle?.supports.find((support) => support.type === "moon")
+    ?.maximum,
   0,
 );
 
@@ -1371,6 +1269,7 @@ const spireStructure = (
     struct,
     actionId,
     supportTypes: supportType,
+    support: `${sector}:${struct}` === anchorEntryKey ? 1 : -1,
     supportTopology: {
       anchorEntryKey,
       unlimited: false,
@@ -1488,6 +1387,7 @@ const specialPurifier = spireStructure(
 );
 const specialStructures = Object.freeze([
   structure({
+    powered: -1,
     entryKey: "city:hospital",
     region: "city",
     sector: "city",
@@ -1495,6 +1395,7 @@ const specialStructures = Object.freeze([
     actionId: "city-hospital",
   }),
   structure({
+    powered: -1,
     entryKey: "city:banquet",
     region: "city",
     sector: "city",
@@ -1512,6 +1413,7 @@ const specialStructures = Object.freeze([
     powered: -10,
   }),
   structure({
+    powered: -1,
     entryKey: "space:fob",
     region: "space",
     sector: "space",
@@ -1519,6 +1421,7 @@ const specialStructures = Object.freeze([
     actionId: "space-fob",
   }),
   structure({
+    powered: -1,
     entryKey: "int_home:ascension_trigger",
     region: "interstellar",
     sector: "int_home",
@@ -1526,6 +1429,7 @@ const specialStructures = Object.freeze([
     actionId: "interstellar-ascension_trigger",
   }),
   structure({
+    powered: -1,
     entryKey: "galaxy:vitreloy_plant",
     region: "galaxy",
     sector: "gxy_home",
@@ -1533,6 +1437,7 @@ const specialStructures = Object.freeze([
     actionId: "galaxy-vitreloy_plant",
   }),
   structure({
+    powered: -1,
     entryKey: "galaxy:armed_miner",
     region: "galaxy",
     sector: "gxy_home",
@@ -1542,6 +1447,7 @@ const specialStructures = Object.freeze([
     support: 5,
   }),
   structure({
+    powered: -1,
     entryKey: "galaxy:minelayer",
     region: "galaxy",
     sector: "gxy_chthonian",
@@ -1550,6 +1456,7 @@ const specialStructures = Object.freeze([
     shipRating: 77,
   }),
   structure({
+    powered: -1,
     entryKey: "prtl_ruins:guard_post",
     region: "portal",
     sector: "prtl_ruins",
@@ -1557,6 +1464,7 @@ const specialStructures = Object.freeze([
     actionId: "portal-guard_post",
   }),
   structure({
+    powered: -1,
     entryKey: "prtl_spire:waygate",
     region: "portal",
     sector: "prtl_spire",
@@ -1607,6 +1515,7 @@ const specialStructures = Object.freeze([
   specialBaseCamp,
   specialPurifier,
   structure({
+    powered: -1,
     entryKey: "prtl_spire:spire",
     region: "portal",
     sector: "prtl_spire",
@@ -1739,17 +1648,12 @@ const specialRoot = {
     Deuterium: { amount: 100, max: 500, diff: 0, display: true },
   },
   support: {
-    belt: [specialStation.entryKey, specialEleriumShip.entryKey],
-    gateway: [specialGatewayAnchor.entryKey, specialBologniumShip.entryKey],
-    alien2: ["galaxy:armed_miner"],
-    tau_red: [specialOverseer.entryKey, specialWomlingFun.entryKey],
-    lake: [
-      specialLakeAnchor.entryKey,
-      specialBireme.entryKey,
-      specialTransport.entryKey,
-    ],
+    belt: [specialEleriumShip.entryKey],
+    gateway: [specialBologniumShip.entryKey],
+    alien2: [],
+    tau_red: [specialWomlingFun.entryKey],
+    lake: [specialBireme.entryKey, specialTransport.entryKey],
     spire: [
-      specialMechBay.entryKey,
       specialPort.entryKey,
       specialBaseCamp.entryKey,
       specialPurifier.entryKey,
@@ -1946,12 +1850,12 @@ assert.deepEqual(
 const tritonRule = specialRule("space-lander", "triton-lander");
 assert.deepEqual(
   [
-    tritonRule.healingRate,
+    tritonRule.wounded,
     tritonRule.highPopulationMultiplier,
     tritonRule.authorityReserve,
   ],
-  [9.1, 4, 50],
-  "Triton retains the legacy healing calculation, high-pop scale, and typed authority reserve",
+  [4, 4, 50],
+  "Triton conservatively reserves currently wounded soldiers using native state",
 );
 assert.equal(
   specialRule("interstellar-ascension_trigger", "ascension-trigger")
@@ -2329,7 +2233,7 @@ specialRoot.settings.showPortal = true;
   available = true;
   ownsPowered = false;
   switchable = true;
-  assertSemanticCycle([[probe.actionId, 3, 1]], 0);
+  assertSemanticCycle([], 0);
   switchable = false;
   assertSemanticCycle([], 0);
 }

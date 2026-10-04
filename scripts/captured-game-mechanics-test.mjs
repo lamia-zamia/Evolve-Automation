@@ -674,6 +674,116 @@ assert.deepEqual(capture.mechanics.readSupportOrder({}, "moon"), {
   kind: "absent",
 });
 
+const currentGridRoot = {
+  space: { relay: { on: 1 } },
+  interstellar: { relay: { on: 1 } },
+  galaxy: { relay: { on: 1 } },
+  power: [],
+  support: {},
+};
+assert.deepEqual(definitions[0].readPowerGridRole(currentGridRoot), {
+  kind: "value",
+  value: "generator",
+});
+assert.deepEqual(
+  definitions[0].readPowerGridRole({
+    ...currentGridRoot,
+    power: [first.key],
+  }),
+  { kind: "invalid" },
+  "negative native output cannot be listed as a consumer",
+);
+let nativeConsumerWatts = 2;
+const nativeConsumer = structureEntry({
+  region: "space",
+  sector: "spc_dynamic",
+  struct: "consumer",
+  actionId: "space-spc_dynamic-consumer",
+  powered: () => nativeConsumerWatts,
+  support: () => -2,
+  supportTypes: ["moon", "red"],
+  supportFor: { moon: 3, red: 0 },
+  supportProvider: true,
+  info: { support: "relay", support_unlimited: true },
+});
+entries.set(nativeConsumer.key, nativeConsumer);
+const nativeConsumerDefinition = capture.mechanics
+  .readStructures()
+  .find((entry) => entry.entryKey === nativeConsumer.key);
+const dynamicRoot = {
+  ...currentGridRoot,
+  space: { ...currentGridRoot.space, consumer: { on: 1 } },
+  power: [nativeConsumer.key],
+  support: { moon: [nativeConsumer.key], red: [nativeConsumer.key] },
+};
+assert.deepEqual(nativeConsumerDefinition.readPowerGridRole(dynamicRoot), {
+  kind: "value",
+  value: "consumer",
+});
+assert.deepEqual(nativeConsumerDefinition.readNativeSupportGrids(dynamicRoot), {
+  kind: "value",
+  value: [
+    {
+      type: "moon",
+      contribution: 3,
+      consumer: true,
+      provider: true,
+      topology: {
+        anchorEntryKey: first.key,
+        unlimited: true,
+        enabled: { kind: "value", value: true },
+      },
+    },
+    {
+      type: "red",
+      contribution: 0,
+      consumer: true,
+      provider: true,
+      topology: {
+        anchorEntryKey: first.key,
+        unlimited: true,
+        enabled: { kind: "value", value: true },
+      },
+    },
+  ],
+});
+nativeConsumerWatts = 0;
+assert.deepEqual(
+  nativeConsumerDefinition.readPowerGridRole(dynamicRoot),
+  { kind: "invalid" },
+  "a changed powered() answer requires the native order to agree",
+);
+assert.deepEqual(
+  nativeConsumerDefinition.readPowerGridRole({ ...dynamicRoot, power: [] }),
+  {
+    kind: "value",
+    value: "none",
+  },
+);
+nativeConsumerWatts = 2;
+assert.deepEqual(
+  nativeConsumerDefinition.readNativeSupportGrids({
+    ...dynamicRoot,
+    support: { moon: [], red: [nativeConsumer.key] },
+  }),
+  { kind: "invalid" },
+  "a missing native consumer order entry fails closed",
+);
+assert.deepEqual(
+  nativeConsumerDefinition.readPowerGridRole({
+    ...dynamicRoot,
+    space: { relay: { on: 1 } },
+  }),
+  { kind: "invalid" },
+  "missing current structure state fails closed",
+);
+entries.delete(nativeConsumer.key);
+assert.deepEqual(
+  nativeConsumerDefinition.readPowerGridRole(dynamicRoot),
+  { kind: "invalid" },
+  "a retained descriptor cannot outlive its exact registry entry",
+);
+
 const typedSupport = structureEntry({
   region: "space",
   sector: "spc_home",
@@ -752,6 +862,39 @@ assert.deepEqual(scalarSupportDefinition.readSupportValue("red"), {
   kind: "value",
   value: 2,
 });
+assert.deepEqual(
+  scalarSupportDefinition.readNativeSupportGrids({
+    space: { provider: { on: 1 } },
+    support: { red: [] },
+  }),
+  {
+    kind: "value",
+    value: [
+      {
+        type: "red",
+        contribution: 2,
+        consumer: false,
+        provider: true,
+        topology: {
+          anchorEntryKey: null,
+          unlimited: false,
+          enabled: { kind: "value", value: true },
+        },
+      },
+    ],
+  },
+  "positive support output is a provider without appearing in consumer order",
+);
+scalarSupport.c_action.support = () => {
+  throw new Error("native support failed");
+};
+assert.deepEqual(
+  scalarSupportDefinition.readNativeSupportGrids({
+    space: { provider: { on: 1 } },
+    support: { red: [] },
+  }),
+  { kind: "invalid" },
+);
 
 const negativeProvider = structureEntry({
   region: "space",

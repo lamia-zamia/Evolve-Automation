@@ -1,8 +1,5 @@
 export const POWER_WIDE_OSCILLATION_HOLD_TICKS = 10;
 
-export type PowerSupportKind =
-  "none" | "support" | "womlings-support" | "tau-belt-support";
-
 export interface PowerResourceInput {
   readonly id: string;
   readonly title: string;
@@ -13,7 +10,24 @@ export interface PowerResourceInput {
   readonly unlocked: boolean;
   readonly useful: boolean;
   readonly income: number;
-  readonly supportKind: PowerSupportKind;
+}
+
+/** One native support grid, keyed by the game's support type. */
+export interface PowerSupportInput {
+  readonly type: string;
+  readonly title: string;
+  readonly current: number;
+  readonly maximum: number;
+  readonly available: number;
+  readonly unlocked: boolean;
+  /** Automation's treatment of a support shortage. */
+  readonly allocation: "strict" | "round-up" | "unconstrained";
+}
+
+/** Positive amounts consume native support; negative amounts provide it. */
+export interface PowerSupportChangeInput {
+  readonly type: string;
+  readonly amount: number;
 }
 
 export interface PowerConsumptionInput {
@@ -63,7 +77,6 @@ export type PowerBuildingRule =
       readonly fobOn: number;
       readonly currentSoldiers: number;
       readonly wounded: number;
-      readonly healingRate: number;
       readonly highPopulationMultiplier: number;
       readonly authorityReserve: number;
     }
@@ -190,7 +203,6 @@ export interface PowerBuildingInput {
   readonly tab: string;
   readonly smartCategory: boolean;
   readonly smartEnabled: boolean;
-  readonly ship: boolean;
   /**
    * True when this building draws civilian ship crew (its game struct carries a
    * `crew` field). Only these are eligible for crew-reserve shedding.
@@ -206,6 +218,7 @@ export interface PowerBuildingInput {
   readonly skipGroup: "none" | "lake" | "spire";
   readonly extraDescription: string;
   readonly consumptions: readonly PowerConsumptionInput[];
+  readonly supportChanges: readonly PowerSupportChangeInput[];
   readonly produces: readonly string[];
   readonly fleetMaximum: number | null;
   readonly rule: PowerBuildingRule;
@@ -285,6 +298,7 @@ export interface PowerCycleInput {
   readonly currentCrew: number;
   readonly settings: PowerSettingsInput;
   readonly resources: readonly PowerResourceInput[];
+  readonly supports: readonly PowerSupportInput[];
   readonly buildings: readonly PowerBuildingInput[];
   readonly lake: PowerLakeInput;
   readonly spire: PowerSpireInput;
@@ -394,6 +408,11 @@ interface MutableResource {
   readonly input: PowerResourceInput;
   rate: number;
   incomeAdjusted: boolean;
+}
+
+interface MutableSupport {
+  readonly input: PowerSupportInput;
+  available: number;
 }
 
 interface MutableOscillationEntry {
@@ -542,9 +561,7 @@ function applySmartRule(
         maximum = 0;
       } else {
         const dispatch =
-          rule.currentSoldiers -
-          rule.authorityReserve -
-          Math.max(0, rule.wounded - Math.floor(rule.healingRate));
+          rule.currentSoldiers - rule.authorityReserve - rule.wounded;
         maximum = Math.min(
           maximum,
           Math.floor(dispatch / (3 * rule.highPopulationMultiplier)),
@@ -952,6 +969,16 @@ export function planPowerCycle(
       incomeAdjusted: false,
     });
   }
+  const supports = new Map<string, MutableSupport>();
+  for (const support of input.supports) {
+    if (supports.has(support.type)) {
+      throw new TypeError(`duplicate power support ${support.type}`);
+    }
+    supports.set(support.type, {
+      input: support,
+      available: support.available,
+    });
+  }
   // Identity is the Vue binding, not the game's short structure id. Ids repeat
   // across regions - the Alpha and Titan Graphene Plants are both `g_factory` -
   // and a True Path run owns both from Titan onward.
@@ -976,7 +1003,7 @@ export function planPowerCycle(
   );
 
   let availablePower = input.powerCurrent;
-  const missingProducer: Record<string, number> = {};
+  const missingSupportProvider: Record<string, number> = {};
   const consumedResourceIds = new Set<string>();
   for (const building of input.buildings) {
     availablePower += building.powered * building.stateOn;
@@ -989,16 +1016,22 @@ export function planPowerCycle(
         consumption.resourceId,
         `power resource ${consumption.resourceId}`,
       );
-      const value =
-        building.rule.kind === "belt-space-station" &&
-        resource.input.supportKind === "support" &&
-        resource.input.id === "Belt_Support"
-          ? resource.rate - resource.input.maxQuantity
-          : resource.rate + consumption.fuelRate * building.stateOn;
-      appendRateOperation(operations, resource, value);
-      if (resource.input.supportKind !== "none" && consumption.rate < 0) {
-        missingProducer[resource.input.id] =
-          (missingProducer[resource.input.id] ?? 0) + 1;
+      appendRateOperation(
+        operations,
+        resource,
+        resource.rate + consumption.fuelRate * building.stateOn,
+      );
+    }
+    for (const change of building.supportChanges) {
+      const support = powerCycleMapValue(
+        supports,
+        change.type,
+        `power support ${change.type}`,
+      );
+      support.available += change.amount * building.stateOn;
+      if (change.amount < 0) {
+        missingSupportProvider[change.type] =
+          (missingSupportProvider[change.type] ?? 0) + 1;
       }
     }
   }
@@ -1157,27 +1190,42 @@ export function planPowerCycle(
           }
         } else if (
           current > 0 &&
-          resource.input.supportKind === "none" &&
           (building.powered < 0 || resource.input.storageRatio >= 0.95) &&
           resource.input.currentQuantity >=
             maximum * input.consumptionBalanceMinimum * consumption.rate
         ) {
           continue;
-        } else if (resource.input.supportKind === "tau-belt-support") {
-          continue;
         }
-        let supported = resource.rate / consumption.rate;
-        if (resource.input.supportKind === "womlings-support") {
-          supported = Math.ceil(supported);
+        maximum = Math.min(maximum, resource.rate / consumption.rate);
+      }
+    }
+    for (const change of building.supportChanges) {
+      const support = powerCycleMapValue(
+        supports,
+        change.type,
+        `power support ${change.type}`,
+      );
+      if (change.amount > 0) {
+        if (!support.input.unlocked) {
+          maximum = 0;
+          break;
         }
-        maximum = Math.min(maximum, supported);
-        if (missingProducer[resource.input.id]) {
-          const value = `Make sure all ${resource.input.title} producers are above consumers in buildings list!<br>${description}`;
+        if (support.input.allocation !== "unconstrained") {
+          const supported = support.available / change.amount;
+          maximum = Math.min(
+            maximum,
+            support.input.allocation === "round-up"
+              ? Math.ceil(supported)
+              : supported,
+          );
+        }
+        if (missingSupportProvider[change.type]) {
+          const value = `Make sure all ${support.input.title} producers are above consumers in buildings list!<br>${description}`;
           appendDescription(building.id, building.binding, description, value);
           description = value;
         }
-      } else if (missingProducer[resource.input.id] && consumption.rate < 0) {
-        missingProducer[resource.input.id]!--;
+      } else if (change.amount < 0 && missingSupportProvider[change.type]) {
+        missingSupportProvider[change.type]!--;
       }
     }
 
@@ -1241,12 +1289,19 @@ export function planPowerCycle(
         consumption.resourceId,
         `power resource ${consumption.resourceId}`,
       );
-      const value =
-        building.rule.kind === "belt-space-station" &&
-        resource.input.id === "Belt_Support"
-          ? resource.rate + resource.input.maxQuantity
-          : resource.rate - consumption.fuelRate * maximum;
-      appendRateOperation(operations, resource, value);
+      appendRateOperation(
+        operations,
+        resource,
+        resource.rate - consumption.fuelRate * maximum,
+      );
+    }
+    for (const change of building.supportChanges) {
+      const support = powerCycleMapValue(
+        supports,
+        change.type,
+        `power support ${change.type}`,
+      );
+      support.available -= change.amount * maximum;
     }
     operations.push({
       kind: "adjust-building",
@@ -1264,7 +1319,7 @@ export function planPowerCycle(
         : building.powered * maximum;
   }
 
-  const lakeSupport = resources.get("Lake_Support")?.rate ?? 0;
+  const lakeSupport = supports.get("lake")?.available ?? 0;
   if (input.lake.enabled && lakeSupport > 0) {
     const rating = input.lake.bloodSpireLevel >= 2 ? 0.8 : 0.85;
     let bireme = input.lake.biremeCount;
@@ -1299,7 +1354,7 @@ export function planPowerCycle(
     );
   }
 
-  const spireSupport = Math.floor(resources.get("Spire_Support")?.rate ?? 0);
+  const spireSupport = Math.floor(supports.get("spire")?.available ?? 0);
   if (input.spire.enabled && spireSupport > 0) {
     const spire = input.spire;
     const buildAllowed =

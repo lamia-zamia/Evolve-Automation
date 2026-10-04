@@ -1,7 +1,8 @@
 /**
- * Stable Power policy recovered from the retired Building/entity adapter. The game owns live
- * action values and resource state; this catalog owns the declarations that were added by the
- * automation itself, including `produces`, ship/rule classifications and crew-shed order.
+ * Power policy that cannot be inferred from one immutable native grid sample. The live action
+ * supplies power, support and fuel. Resource upkeep here is a pre-enable reservation: the
+ * game's production ledger reports only currently running copies, so it cannot price switching
+ * on a currently idle copy. The separate crew ranks express which jobs automation sacrifices.
  */
 
 import type { PowerBuildingRule } from "../../../../domain/economy/production/power.ts";
@@ -9,9 +10,6 @@ import { readProperty } from "../../../validation.ts";
 
 export type CapturedPowerRatePolicy =
   | { readonly kind: "fixed"; readonly value: number }
-  | { readonly kind: "luna-support" }
-  | { readonly kind: "womling-village" }
-  | { readonly kind: "smart-womling"; readonly value: number }
   | { readonly kind: "cataclysm-food"; readonly normal: number }
   | { readonly kind: "station-food" }
   | { readonly kind: "embassy-food" };
@@ -28,9 +26,6 @@ export type CapturedPowerRuleKind = Exclude<
 
 export interface CapturedPowerBuildingMetadata {
   readonly consumptions: readonly CapturedPowerConsumptionMetadata[];
-  readonly supportResourceId?: string;
-  readonly produces: readonly string[];
-  readonly ship: boolean;
   readonly crewValueRank: number;
   readonly rule: CapturedPowerRuleKind | "ordinary";
   readonly singleState: boolean;
@@ -56,11 +51,6 @@ function metadata(
 ): CapturedPowerBuildingMetadata {
   return Object.freeze({
     consumptions: Object.freeze(fields.consumptions ?? []),
-    ...(fields.supportResourceId === undefined
-      ? {}
-      : { supportResourceId: fields.supportResourceId }),
-    produces: Object.freeze(fields.produces ?? []),
-    ship: fields.ship ?? false,
     crewValueRank: fields.crewValueRank ?? 1,
     rule: fields.rule ?? "ordinary",
     singleState: fields.singleState ?? false,
@@ -69,33 +59,14 @@ function metadata(
   });
 }
 
-const lunaSupport = Object.freeze({ kind: "luna-support" } as const);
-const womlingVillage = Object.freeze({ kind: "womling-village" } as const);
 const stationFood = Object.freeze({ kind: "station-food" } as const);
 const embassyFood = Object.freeze({ kind: "embassy-food" } as const);
 
-const POWER_DECLARED_CONSUMPTIONS: Readonly<
+const POWER_PREENABLE_RESOURCE_RESERVATIONS: Readonly<
   Record<string, readonly CapturedPowerConsumptionMetadata[]>
 > = Object.freeze({
   "city-tourist_center": [consumption("Food", 50)],
-  "space-nav_beacon": [consumption("Red_Support", lunaSupport)],
-  "interstellar-zoo": [
-    consumption("Alpha_Support", 1),
-    consumption("Food", 12000),
-  ],
-  "space-decoder": [consumption("Titan_Support", 1)],
-  "space-electrolysis": [consumption("Electrolysis_Support", -1)],
-  "space-hydrogen_plant": [consumption("Electrolysis_Support", 1)],
-  "tauceti-womling_village": [consumption("Womlings_Support", womlingVillage)],
-  "tauceti-womling_farm": [
-    consumption("Womlings_Support", { kind: "smart-womling", value: 2 }),
-  ],
-  "tauceti-womling_lab": [
-    consumption("Womlings_Support", { kind: "smart-womling", value: 1 }),
-  ],
-  "tauceti-womling_mine": [
-    consumption("Womlings_Support", { kind: "smart-womling", value: 6 }),
-  ],
+  "interstellar-zoo": [consumption("Food", 12000)],
   "space-spaceport": [
     consumption("Food", { kind: "cataclysm-food", normal: 25 }),
   ],
@@ -134,131 +105,6 @@ const POWER_DECLARED_CONSUMPTIONS: Readonly<
   "space-lander": [consumption("Oil", 50)],
 });
 
-const POWER_SUPPORT_RESOURCE_BY_BINDING: Readonly<Record<string, string>> =
-  Object.freeze({
-    "galaxy-foothold": "Alien_Support",
-    "galaxy-armed_miner": "Alien_Support",
-    "galaxy-ore_processor": "Alien_Support",
-    "galaxy-scavenger": "Alien_Support",
-    "interstellar-starport": "Alpha_Support",
-    "interstellar-habitat": "Alpha_Support",
-    "interstellar-mining_droid": "Alpha_Support",
-    "interstellar-processing": "Alpha_Support",
-    "interstellar-fusion": "Alpha_Support",
-    "interstellar-laboratory": "Alpha_Support",
-    "interstellar-exchange": "Alpha_Support",
-    "interstellar-g_factory": "Alpha_Support",
-    "interstellar-xfer_station": "Alpha_Support",
-    "eden-encampment": "Asphodel_Support",
-    "eden-soul_engine": "Asphodel_Support",
-    "eden-research_station": "Asphodel_Support",
-    "eden-asphodel_harvester": "Asphodel_Support",
-    "eden-ectoplasm_processor": "Asphodel_Support",
-    "eden-bunker": "Asphodel_Support",
-    "eden-bliss_den": "Asphodel_Support",
-    "eden-rectory": "Asphodel_Support",
-    "eden-corruptor": "Asphodel_Support",
-    "space-space_station": "Belt_Support",
-    "space-elerium_ship": "Belt_Support",
-    "space-iridium_ship": "Belt_Support",
-    "space-iron_ship": "Belt_Support",
-    "space-titan_spaceport": "Enceladus_Support",
-    "space-water_freighter": "Enceladus_Support",
-    "space-zero_g_lab": "Enceladus_Support",
-    "space-operating_base": "Enceladus_Support",
-    "space-drone_control": "Eris_Support",
-    "space-shock_trooper": "Eris_Support",
-    "space-tank": "Eris_Support",
-    "galaxy-starbase": "Gateway_Support",
-    "galaxy-ship_dock": "Gateway_Support",
-    "galaxy-bolognium_ship": "Gateway_Support",
-    "galaxy-scout_ship": "Gateway_Support",
-    "galaxy-corvette_ship": "Gateway_Support",
-    "galaxy-frigate_ship": "Gateway_Support",
-    "galaxy-cruiser_ship": "Gateway_Support",
-    "galaxy-dreadnought": "Gateway_Support",
-    "galaxy-gateway_station": "Gateway_Support",
-    "galaxy-telemetry_beacon": "Gateway_Support",
-    "portal-harbor": "Lake_Support",
-    "portal-bireme": "Lake_Support",
-    "portal-transport": "Lake_Support",
-    "space-nav_beacon": "Moon_Support",
-    "space-moon_base": "Moon_Support",
-    "space-iridium_mine": "Moon_Support",
-    "space-helium_mine": "Moon_Support",
-    "space-observatory": "Moon_Support",
-    "interstellar-nexus": "Nebula_Support",
-    "interstellar-harvester": "Nebula_Support",
-    "interstellar-elerium_prospector": "Nebula_Support",
-    "space-spaceport": "Red_Support",
-    "space-red_tower": "Red_Support",
-    "space-living_quarters": "Red_Support",
-    "space-vr_center": "Red_Support",
-    "space-red_mine": "Red_Support",
-    "space-fabrication": "Red_Support",
-    "space-biodome": "Red_Support",
-    "space-exotic_lab": "Red_Support",
-    "portal-purifier": "Spire_Support",
-    "portal-port": "Spire_Support",
-    "portal-base_camp": "Spire_Support",
-    "portal-mechbay": "Spire_Support",
-    "space-swarm_control": "Sun_Support",
-    "space-swarm_satellite": "Sun_Support",
-    "tauceti-patrol_ship": "Tau_Belt_Support",
-    "tauceti-mining_ship": "Tau_Belt_Support",
-    "tauceti-whaling_ship": "Tau_Belt_Support",
-    "tauceti-orbital_platform": "Tau_Red_Support",
-    "tauceti-overseer": "Tau_Red_Support",
-    "tauceti-womling_village": "Tau_Red_Support",
-    "tauceti-womling_farm": "Tau_Red_Support",
-    "tauceti-womling_mine": "Tau_Red_Support",
-    "tauceti-womling_fun": "Tau_Red_Support",
-    "tauceti-womling_lab": "Tau_Red_Support",
-    "tauceti-orbital_station": "Tau_Support",
-    "tauceti-tau_farm": "Tau_Support",
-    "tauceti-colony": "Tau_Support",
-    "tauceti-tau_factory": "Tau_Support",
-    "tauceti-infectious_disease_lab": "Tau_Support",
-    "tauceti-mining_pit": "Tau_Support",
-    "space-electrolysis": "Titan_Support",
-    "space-titan_quarters": "Titan_Support",
-    "space-titan_mine": "Titan_Support",
-    "space-g_factory": "Titan_Support",
-  });
-
-const SUPPORT_TYPE_BY_RESOURCE: Readonly<Record<string, string>> =
-  Object.freeze({
-    Alien_Support: "alien2",
-    Alpha_Support: "alpha",
-    Asphodel_Support: "asphodel",
-    Belt_Support: "belt",
-    Enceladus_Support: "enceladus",
-    Eris_Support: "eris",
-    Gateway_Support: "gateway",
-    Lake_Support: "lake",
-    Moon_Support: "moon",
-    Nebula_Support: "nebula",
-    Red_Support: "red",
-    Spire_Support: "spire",
-    Sun_Support: "sun",
-    Tau_Belt_Support: "tau_roid",
-    Tau_Red_Support: "tau_red",
-    Tau_Support: "tau_home",
-    Titan_Support: "titan",
-    Electrolysis_Support: "titan",
-    Womlings_Support: "tau_red",
-  });
-
-const POWER_PRODUCES_BY_BINDING: Readonly<Record<string, readonly string[]>> =
-  Object.freeze({
-    "space-gas_mining": Object.freeze(["Helium_3"]),
-    "space-oil_extractor": Object.freeze(["Oil"]),
-    "city-coal_mine": Object.freeze(["Coal"]),
-    "interstellar-harvester": Object.freeze(["Helium_3", "Deuterium"]),
-    "space-elerium_mine": Object.freeze(["Elerium"]),
-    "space-water_freighter": Object.freeze(["Water"]),
-  });
-
 const POWER_RULE_BY_BINDING: Readonly<Record<string, CapturedPowerRuleKind>> =
   Object.freeze({
     "interstellar-citadel": "neutron-citadel",
@@ -268,21 +114,9 @@ const POWER_RULE_BY_BINDING: Readonly<Record<string, CapturedPowerRuleKind>> =
     "city-coal_mine": "job-dependent",
     "portal-cooling_tower": "lake-cooling-tower",
     "portal-harbor": "lake-harbor",
-    "space-gas_mining": "busy-resource",
-    "space-oil_extractor": "busy-resource",
-    "space-orichalcum_mine": "busy-resource",
-    "space-uranium_mine": "busy-resource",
-    "space-neutronium_mine": "busy-resource",
-    "space-elerium_mine": "busy-resource",
     "space-iridium_ship": "busy-resource",
     "space-iron_ship": "busy-resource",
     "space-elerium_ship": "busy-resource",
-    "space-iridium_mine": "busy-resource",
-    "space-helium_mine": "busy-resource",
-    "galaxy-vitreloy_plant": "busy-resource",
-    "galaxy-excavator": "busy-resource",
-    "space-water_freighter": "busy-resource",
-    "eden-asphodel_harvester": "busy-resource",
     "space-lander": "triton-lander",
     "interstellar-ascension_trigger": "ascension-trigger",
     "space-red_terraformer": "terraformer",
@@ -306,22 +140,8 @@ const POWER_RULE_BY_BINDING: Readonly<Record<string, CapturedPowerRuleKind>> =
     "interstellar-zoo": "exotic-zoo",
   });
 
-const SHIP_BINDINGS: ReadonlySet<string> = new Set([
-  "galaxy-bolognium_ship",
-  "galaxy-scout_ship",
-  "galaxy-corvette_ship",
-  "galaxy-frigate_ship",
-  "galaxy-cruiser_ship",
-  "galaxy-dreadnought",
-  "galaxy-freighter",
-  "galaxy-super_freighter",
-  "galaxy-armed_miner",
-  "galaxy-scavenger",
-  "galaxy-minelayer",
-  "galaxy-raider",
-]);
-
-const CREW_VALUE_RANK_BY_BINDING: Readonly<Record<string, number>> =
+/** Automation priorities, not a claim about native ship classes or crew requirements. */
+const POWER_CREW_SHEDDING_RANK: Readonly<Record<string, number>> =
   Object.freeze({
     "galaxy-freighter": 0,
     "galaxy-super_freighter": 0,
@@ -343,19 +163,12 @@ export function capturedPowerMetadataForBinding(
   binding: string,
 ): CapturedPowerBuildingMetadata {
   const base = metadata({
-    ...(POWER_DECLARED_CONSUMPTIONS[binding] === undefined
+    ...(POWER_PREENABLE_RESOURCE_RESERVATIONS[binding] === undefined
       ? {}
-      : { consumptions: POWER_DECLARED_CONSUMPTIONS[binding] }),
-    ...(POWER_SUPPORT_RESOURCE_BY_BINDING[binding] === undefined
+      : { consumptions: POWER_PREENABLE_RESOURCE_RESERVATIONS[binding] }),
+    ...(POWER_CREW_SHEDDING_RANK[binding] === undefined
       ? {}
-      : { supportResourceId: POWER_SUPPORT_RESOURCE_BY_BINDING[binding] }),
-    ...(POWER_PRODUCES_BY_BINDING[binding] === undefined
-      ? {}
-      : { produces: POWER_PRODUCES_BY_BINDING[binding] }),
-    ship: SHIP_BINDINGS.has(binding),
-    ...(CREW_VALUE_RANK_BY_BINDING[binding] === undefined
-      ? {}
-      : { crewValueRank: CREW_VALUE_RANK_BY_BINDING[binding] }),
+      : { crewValueRank: POWER_CREW_SHEDDING_RANK[binding] }),
     ...(POWER_RULE_BY_BINDING[binding] === undefined
       ? {}
       : { rule: POWER_RULE_BY_BINDING[binding] }),
@@ -372,34 +185,15 @@ export function capturedPowerMetadataForBinding(
   return base;
 }
 
-export function capturedPowerSupportType(
-  resourceId: string,
-): string | undefined {
-  return SUPPORT_TYPE_BY_RESOURCE[resourceId];
-}
-
 function truthy(root: unknown, path: readonly string[]): boolean {
   let value = root;
   for (const key of path) value = readProperty(value, key);
   return Boolean(value);
 }
 
-function numberAt(root: unknown, path: readonly string[]): number {
-  let value = root;
-  for (const key of path) value = readProperty(value, key);
-  try {
-    const numeric = Number(value);
-    return Number.isFinite(numeric) ? numeric : 0;
-  } catch {
-    return 0;
-  }
-}
-
 /** Evaluates the one retired addResourceConsumption declaration policy by its stable key. */
 export function readCapturedPowerConsumptionRate(
   root: unknown,
-  binding: string,
-  settings: Readonly<Record<string, unknown>>,
   consumption: CapturedPowerConsumptionMetadata,
 ): number {
   const policy = consumption.policy;
@@ -408,12 +202,6 @@ export function readCapturedPowerConsumptionRate(
   switch (policy.kind) {
     case "fixed":
       return policy.value;
-    case "luna-support":
-      return numberAt(root, ["tech", "luna"]) >= 3 ? -1 : 0;
-    case "womling-village":
-      return numberAt(root, ["tech", "womling_pop"]) >= 2 ? -6 : -5;
-    case "smart-womling":
-      return settings[`bld_s2_${binding}`] === true ? policy.value : 0;
     case "cataclysm-food":
       return truthy(root, [...race, "cataclysm"]) ||
         truthy(root, [...race, "orbit_decayed"])

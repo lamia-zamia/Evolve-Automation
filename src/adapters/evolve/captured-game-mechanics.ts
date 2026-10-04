@@ -15,6 +15,7 @@ import type {
   CapturedFuelAdjustmentMode,
   CapturedRoundedValue,
   CapturedSupportTopology,
+  CapturedNativeSupportGrid,
   CapturedProductionBreakdown,
   CapturedProductionCell,
   CapturedProductionLedger,
@@ -712,6 +713,40 @@ function createMechanicsDefinition(
   const action = entry.action;
   const ship = readMechanicsDataProperty(action, "ship");
   const shipRecord = isNonArrayRecord(ship) ? ship : undefined;
+  const currentState = (root: unknown): boolean => {
+    const liveEntry = readMechanicsEntry(
+      entry.entryKey,
+      registry.get(entry.entryKey),
+    );
+    const state = readMechanicsProperty(
+      readMechanicsProperty(root, entry.region),
+      entry.struct,
+    );
+    const stateOn = readMechanicsProperty(state, "on");
+    return (
+      liveEntry?.action === action &&
+      liveEntry.region === entry.region &&
+      liveEntry.sector === entry.sector &&
+      liveEntry.struct === entry.struct &&
+      liveEntry.actionId === entry.actionId &&
+      isNonArrayRecord(state) &&
+      typeof stateOn === "number" &&
+      Number.isFinite(stateOn)
+    );
+  };
+  const orderedKeys = (source: unknown): Set<string> | undefined => {
+    if (!Array.isArray(source)) return undefined;
+    const keys = new Set<string>();
+    try {
+      for (const key of source) {
+        if (typeof key !== "string" || keys.has(key)) return undefined;
+        keys.add(key);
+      }
+    } catch {
+      return undefined;
+    }
+    return keys;
+  };
   return Object.freeze({
     entryKey: entry.entryKey,
     region: entry.region,
@@ -736,6 +771,30 @@ function createMechanicsDefinition(
         : readMechanicsPrimitive(shipRecord, "rating"),
     ownsPowered: Object.prototype.hasOwnProperty.call(action, "powered"),
     readPowered: () => readMechanicsPrimitive(action, "powered"),
+    readPowerGridRole: (root: unknown, sampledPowered?: number) => {
+      if (!currentState(root)) return { kind: "invalid" as const };
+      const ordered = orderedKeys(readMechanicsProperty(root, "power"));
+      if (ordered === undefined) return { kind: "invalid" as const };
+      const power =
+        sampledPowered === undefined
+          ? readMechanicsPrimitive(action, "powered")
+          : Number.isFinite(sampledPowered)
+            ? { kind: "value" as const, value: sampledPowered }
+            : { kind: "invalid" as const };
+      if (power.kind === "invalid") return power;
+      const watts = power.kind === "value" ? power.value : 0;
+      const listed = ordered.has(entry.entryKey);
+      if (listed !== watts > 0) return { kind: "invalid" as const };
+      return {
+        kind: "value" as const,
+        value:
+          watts > 0
+            ? ("consumer" as const)
+            : watts < 0
+              ? ("generator" as const)
+              : ("none" as const),
+      };
+    },
     readSwitchable: () => readMechanicsSwitchable(action),
     readPowerRequirements: () => readMechanicsPowerRequirements(action),
     readFuel: () => readMechanicsFuel(action, "p_fuel"),
@@ -746,6 +805,44 @@ function createMechanicsDefinition(
     readSupportValue: (type: string) => readMechanicsSupportValue(action, type),
     readSupportProvider: () => readMechanicsSupportProvider(action),
     readSupportTopology: () => readMechanicsSupportTopology(entry, registry),
+    readNativeSupportGrids: (root: unknown) => {
+      if (!currentState(root)) return { kind: "invalid" as const };
+      const support = readMechanicsPrimitive(action, "support");
+      if (support.kind === "invalid") return support;
+      if (support.kind === "absent")
+        return { kind: "value" as const, value: Object.freeze([]) };
+      const types = readMechanicsSupportTypes(action);
+      if (types.kind !== "value")
+        return types.kind === "absent"
+          ? { kind: "value" as const, value: Object.freeze([]) }
+          : types;
+      const provider = readMechanicsSupportProvider(action);
+      if (provider.kind === "invalid") return provider;
+      const topology = readMechanicsSupportTopology(entry, registry);
+      if (topology.kind !== "value") return topology;
+      const nativeSupport = readMechanicsProperty(root, "support");
+      const result: CapturedNativeSupportGrid[] = [];
+      for (const type of types.value) {
+        const ordered = orderedKeys(readMechanicsProperty(nativeSupport, type));
+        if (ordered === undefined) return { kind: "invalid" as const };
+        const consumer = support.value < 0;
+        if (ordered.has(entry.entryKey) !== consumer)
+          return { kind: "invalid" as const };
+        const output = readMechanicsSupportValue(action, type);
+        if (output.kind !== "value") return { kind: "invalid" as const };
+        result.push(
+          Object.freeze({
+            type,
+            contribution: output.value,
+            consumer,
+            provider:
+              output.value > 0 || (provider.kind === "value" && provider.value),
+            topology: topology.value,
+          }),
+        );
+      }
+      return { kind: "value" as const, value: Object.freeze(result) };
+    },
     readSupportFuel: () => readMechanicsFuel(action, "support_fuel"),
     readSupportFuelAdjustmentDisabled: () =>
       readMechanicsAdjustmentDisabled(action, "support_fuel_adjust"),

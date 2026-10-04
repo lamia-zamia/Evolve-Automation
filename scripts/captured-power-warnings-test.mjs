@@ -30,6 +30,7 @@ for (const [region, id] of [
     readPowered: () => ({ kind: "value", value: 1 }),
     readPowerRequirements: () => ({ kind: "absent" }),
     readSwitchable: () => ({ kind: "absent" }),
+    readSupport: () => ({ kind: "absent" }),
   };
   const settings = { [`bld_s_${binding}`]: false };
   const warnings = createCapturedPowerWarnings({
@@ -72,6 +73,7 @@ for (const [region, id, anchorId, supportType] of [
     race: {},
     tech: { high_tech: 2 },
     civic: { space_miner: { workers: 5 } },
+    support: { [supportType]: [`${supportType}:${id}`] },
     [region]: { [id]: { count: 2, on: 2 }, [anchorId]: anchor },
   };
   const definition = (struct) => ({
@@ -85,15 +87,35 @@ for (const [region, id, anchorId, supportType] of [
     ownsPowered: true,
     readPowered: () => ({ kind: "value", value: 1 }),
     readPowerRequirements: () => ({ kind: "absent" }),
+    readSupport: () => ({
+      kind: "value",
+      value: struct === id ? -1 : 1,
+    }),
     readSupportTypes: () => ({ kind: "value", value: [supportType] }),
+    readSupportProvider: () => ({ kind: "absent" }),
+    readSupportValue: () => ({
+      kind: "value",
+      value: struct === id ? -1 : 1,
+    }),
     readSupportTopology: () => ({
       kind: "value",
-      value: { anchorEntryKey: `${supportType}:${anchorId}` },
+      value: {
+        anchorEntryKey: `${supportType}:${anchorId}`,
+        unlimited: false,
+        enabled: { kind: "value", value: true },
+      },
     }),
   });
+  const supportDefinitions = [definition(id), definition(anchorId)];
   const supportWarnings = createCapturedPowerWarnings({
     rootState: { readRoot: () => supportRoot },
-    mechanics: { readStructures: () => [definition(id), definition(anchorId)] },
+    mechanics: {
+      readStructures: () => supportDefinitions,
+      readSupportOrder: () => ({
+        kind: "value",
+        value: [supportDefinitions[0]],
+      }),
+    },
     controls: {
       capturedElementIds: () => [binding, anchorBinding],
       resolve: () => undefined,
@@ -125,8 +147,8 @@ for (const [region, id, anchorId, supportType] of [
     assert.equal(surplus.beltSupportNeeded, 3);
     assert.equal(
       surplus.beltSupportMaximum,
-      3,
-      "Belt uses active station and worker limit, not raw anchor s_max",
+      4,
+      "Belt warning uses the native anchor s_max",
     );
     assert.equal(
       planPowerWarningShutdown([surplus]),

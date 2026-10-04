@@ -2615,7 +2615,6 @@ export function startCapturedRuntime({
     readDemand: () => demandThisCycle,
     readFleetNeededShips: fleet.readNeededShips,
     costs: buildCosts,
-    readCurrentDate: () => new Date(),
     readPurifierDescription: () =>
       capturedPowerExecution.readDescription("portal-purifier"),
     readMechSaveSupply: mechSupplyReservation.readSaveSupply,

@@ -7,6 +7,8 @@ import type {
   PowerCycleInput,
   PowerLakeInput,
   PowerResourceInput,
+  PowerSupportInput,
+  PowerSupportChangeInput,
   PowerSettingsInput,
   PowerSpireBuildingInput,
   PowerSpireInput,
@@ -14,7 +16,6 @@ import type {
 } from "../../../../domain/economy/production/power.ts";
 import { type CapturedBuildingState } from "../../progression/build/captured-building-state.ts";
 import { readCapturedSemanticBuildingStates } from "../../progression/build/captured-building-availability.ts";
-import { sortByStoredPriority } from "../../../../domain/settings-priority-order.ts";
 import type { GameControlRegistry } from "../../../../ports/game-control-registry.ts";
 import type { GameRootStateSource } from "../../../../ports/game-root-state.ts";
 import type {
@@ -32,13 +33,10 @@ import { isRecord, readProperty } from "../../../validation.ts";
 import { readCapturedResourceLabel } from "../../captured-resource-metadata.ts";
 import {
   readCapturedJobStackMultiplier,
-  readCapturedHighPopulationGrowthMultiplier,
   readCapturedHighPopulationPercent,
   readCapturedLegacyJobCount,
   readCapturedPopulationResource,
   readCapturedPoweredTraitValue,
-  readCapturedSpaceMinerSmartMaximum,
-  readCapturedTraitScaleVariable,
 } from "../../civic/captured-job-catalog.ts";
 import { readCapturedGovernorTaskActive } from "../../civic/captured-tax.ts";
 import { calculateRequiredAuthorityGarrison } from "../../../../domain/civic/authority.ts";
@@ -46,7 +44,6 @@ import { readAuthorityPolicyView } from "../../civic/authority.ts";
 import type { CapturedDemandSample } from "../../economy/resources/captured-resource-demand.ts";
 import { readCapturedSupplyRateAdjustment } from "../../economy/resources/captured-supply.ts";
 import { readCapturedEjectRateAdjustment } from "../../economy/resources/captured-ejector.ts";
-import { POWER_DECAY_TRADE_RATIO } from "./captured-power-trade-ratio.ts";
 import { readCapturedControlLabel } from "../../captured-control-label.ts";
 import { readCapturedUniverseAffix } from "../../captured-achievements.ts";
 import { readCapturedBuildQueueEntryCount } from "../../captured-queue-reservations.ts";
@@ -62,7 +59,6 @@ import type { CapturedBuildingEntry } from "../../progression/build/captured-bui
 import {
   capturedPowerMetadataForBinding,
   capturedPowerSmartEnabled,
-  capturedPowerSupportType,
   readCapturedPowerConsumptionRate,
 } from "./captured-power-metadata.ts";
 
@@ -85,7 +81,6 @@ export interface CapturedPowerReaderDependencies {
   /** Current game-owned action costs, used by Spire and lake support rules. */
   readonly costs?: GameActionCostReader;
   /** The page-local date used by the retired reader's astrology bonus. */
-  readonly readCurrentDate: () => Date;
   /** Previous Power-cycle description emitted for the Spire purifier. */
   readonly readPurifierDescription?: () => string | undefined;
   /** The current typed Mech reader state, including the queue-key sample. */
@@ -198,30 +193,47 @@ function readOrderedMechanics(
   root: unknown,
   mechanics: CapturedGameMechanics,
   structures: readonly CapturedGameStructureDefinition[],
-): boolean {
+): readonly CapturedGameStructureDefinition[] | undefined {
   const powerOrder = mechanics.readPowerOrder(root);
-  if (powerOrder.kind !== "value") return false;
+  if (powerOrder.kind !== "value") return undefined;
 
   const types = new Set<string>();
   for (const structure of structures) {
+    const support = structure.readSupport();
+    if (support.kind === "invalid") return undefined;
+    if (support.kind === "absent") continue;
     const supportTypes = structure.readSupportTypes();
-    if (supportTypes.kind === "invalid") return false;
+    if (supportTypes.kind === "invalid") return undefined;
     if (supportTypes.kind === "value") {
       for (const type of supportTypes.value) types.add(type);
     }
     const provider = structure.readSupportProvider();
     const topology = structure.readSupportTopology();
-    if (provider.kind === "invalid" || topology.kind !== "value") return false;
-    if (topology.value.enabled.kind === "invalid") return false;
+    if (provider.kind === "invalid" || topology.kind !== "value")
+      return undefined;
+    if (topology.value.enabled.kind === "invalid") return undefined;
   }
+  const ordered: CapturedGameStructureDefinition[] = [];
+  const seen = new Set<string>();
+  const add = (structure: CapturedGameStructureDefinition) => {
+    if (!seen.has(structure.entryKey)) {
+      ordered.push(structure);
+      seen.add(structure.entryKey);
+    }
+  };
+  powerOrder.value.forEach(add);
   for (const type of types) {
     const ordered = mechanics.readSupportOrder(root, type);
-    if (ordered.kind !== "value") return false;
+    if (ordered.kind !== "value") return undefined;
     for (const structure of ordered.value) {
-      if (structure.readSupportValue(type).kind !== "value") return false;
+      if (structure.readSupportValue(type).kind !== "value") return undefined;
+      add(structure);
     }
   }
-  return true;
+  // Generators and support providers have no saved user order in initStructureGrids().
+  // Its captured registry supplies their native discovery order.
+  structures.forEach(add);
+  return Object.freeze(ordered);
 }
 
 function readCrewReserve(raw: unknown, population: number): number {
@@ -284,7 +296,6 @@ export function readCapturedPowerMetadataFuelMode(
 
 function readFuelInputs(
   root: unknown,
-  settings: Readonly<Record<string, unknown>>,
   mechanics: CapturedGameMechanics,
   structure: CapturedGameStructureDefinition,
   metadataConsumptions: readonly {
@@ -295,7 +306,7 @@ function readFuelInputs(
   const binding = structure.actionId;
   const definitions = metadataConsumptions.map((item) => ({
     resourceId: item.resourceId,
-    rate: readCapturedPowerConsumptionRate(root, binding, settings, item),
+    rate: readCapturedPowerConsumptionRate(root, item),
   }));
   const powerFuel = structure.readFuel();
   if (powerFuel.kind === "invalid") return undefined;
@@ -358,83 +369,91 @@ function readFuelInputs(
     }
   }
 
-  const metadata = capturedPowerMetadataForBinding(binding);
-  if (metadata.supportResourceId !== undefined) {
-    const type = capturedPowerSupportType(metadata.supportResourceId);
-    if (type === undefined) return undefined;
-    const types = structure.readSupportTypes();
-    if (types.kind !== "value" || !types.value.includes(type)) return undefined;
-    const output = structure.readSupportValue(type);
-    if (output.kind !== "value") return undefined;
-    if (!append(metadata.supportResourceId, -output.value)) return undefined;
-  }
   return Object.freeze(result);
 }
 
-function readSupportAnchorState(
+export function readNativePowerSupports(
   root: unknown,
-  resourceId: string,
+  mechanics: CapturedGameMechanics,
   structures: readonly CapturedGameStructureDefinition[],
-):
-  | Pick<
-      PowerResourceInput,
-      | "currentQuantity"
-      | "maxQuantity"
-      | "rateOfChange"
-      | "storageRatio"
-      | "unlocked"
-    >
-  | undefined {
-  const type = capturedPowerSupportType(resourceId);
-  if (type === undefined) return undefined;
-  const anchors = new Set<string>();
+): readonly PowerSupportInput[] | undefined {
+  const groups = new Map<string, CapturedGameStructureDefinition[]>();
   for (const structure of structures) {
+    const support = structure.readSupport();
+    if (support.kind === "invalid") return undefined;
+    if (support.kind === "absent") continue;
     const types = structure.readSupportTypes();
     if (types.kind === "invalid") return undefined;
-    if (types.kind !== "value" || !types.value.includes(type)) continue;
-    const topology = structure.readSupportTopology();
-    if (topology.kind !== "value") return undefined;
-    if (topology.value.anchorEntryKey !== null)
-      anchors.add(topology.value.anchorEntryKey);
+    if (types.kind !== "value") continue;
+    for (const type of types.value) {
+      const group = groups.get(type) ?? [];
+      group.push(structure);
+      groups.set(type, group);
+    }
   }
-  if (anchors.size === 0) {
-    // Support wrappers retain zeroed state before their game's anchor is initialized.
-    return Object.freeze({
-      currentQuantity: 0,
-      maxQuantity: 0,
-      rateOfChange: 0,
-      storageRatio: 1,
-      unlocked: false,
-    });
+  const supports: PowerSupportInput[] = [];
+  for (const [type, members] of groups) {
+    const ordered = mechanics.readSupportOrder(root, type);
+    if (ordered.kind !== "value") return undefined;
+    const consumers: CapturedGameStructureDefinition[] = [];
+    let anchorKey: string | null = null;
+    let unlimited = false;
+    let enabled = true;
+    for (const member of members) {
+      const generic = member.readSupport();
+      if (generic.kind !== "value") return undefined;
+      if (generic.value >= 0) continue;
+      consumers.push(member);
+      const topology = member.readSupportTopology();
+      if (topology.kind !== "value" || topology.value.enabled.kind !== "value")
+        return undefined;
+      if (anchorKey === null && topology.value.anchorEntryKey !== null) {
+        anchorKey = topology.value.anchorEntryKey;
+        unlimited = topology.value.unlimited;
+        enabled = topology.value.enabled.value;
+      }
+    }
+    if (
+      ordered.value.length !== consumers.length ||
+      ordered.value.some(
+        (member) =>
+          !consumers.some((consumer) => consumer.entryKey === member.entryKey),
+      )
+    )
+      return undefined;
+    const anchor = structures.find((member) => member.entryKey === anchorKey);
+    const state =
+      anchor === undefined
+        ? undefined
+        : readCapturedStructureState(root, anchor);
+    let current = 0;
+    let maximum = 0;
+    if (state !== undefined && state !== null) {
+      if (!isRecord(state)) return undefined;
+      const readCurrent = readGameNumber(state, "support");
+      const readMaximum = readGameNumber(state, "s_max");
+      if (readCurrent === undefined || readMaximum === undefined)
+        return undefined;
+      current = readCurrent;
+      maximum = readMaximum;
+    }
+    supports.push(
+      Object.freeze({
+        type,
+        title: type,
+        current,
+        maximum,
+        available: maximum - current,
+        unlocked:
+          anchor !== undefined &&
+          state !== undefined &&
+          state !== null &&
+          enabled,
+        allocation: unlimited || !enabled ? "unconstrained" : "strict",
+      }),
+    );
   }
-  if (anchors.size !== 1) return undefined;
-  const anchorKey = [...anchors][0];
-  const anchor = structures.find(
-    (structure) => structure.entryKey === anchorKey,
-  );
-  if (anchor === undefined) return undefined;
-  const state = readCapturedStructureState(root, anchor);
-  if (state === undefined || state === null) {
-    return Object.freeze({
-      currentQuantity: 0,
-      maxQuantity: 0,
-      rateOfChange: 0,
-      storageRatio: 1,
-      unlocked: false,
-    });
-  }
-  if (!isRecord(state)) return undefined;
-  const maximum = readGameNumber(state, "s_max");
-  const current = readGameNumber(state, "support");
-  if (maximum === undefined || current === undefined) return undefined;
-  const rate = maximum - current;
-  return Object.freeze({
-    currentQuantity: current,
-    maxQuantity: maximum,
-    rateOfChange: rate,
-    storageRatio: maximum > 0 ? rate / maximum : 1,
-    unlocked: true,
-  });
+  return Object.freeze(supports);
 }
 
 export function readCapturedPowerOrdinaryResourceState(
@@ -444,6 +463,7 @@ export function readCapturedPowerOrdinaryResourceState(
   demand: CapturedDemandSample,
   production: CapturedProductionBreakdown,
   view: ResourceView | undefined,
+  decaySource = "",
 ): PowerResourceInput | undefined {
   const current = view?.present ? asNumber(view.amount) : 0;
   const rawMaximum = view?.present ? asNumber(view.max) : 0;
@@ -456,18 +476,26 @@ export function readCapturedPowerOrdinaryResourceState(
     return undefined;
   const maximum = rawMaximum < 0 ? Number.MAX_SAFE_INTEGER : rawMaximum;
   const storageRatio = maximum > 0 ? current / maximum : 1;
-  const tradeRoutes = POWER_DECAY_TRADE_RATIO[id] ?? -1;
   const tradeDiff = asNumber(production.consumption[id]?.Trade) ?? 0;
   const sell =
-    settings["autoMarket"] === true && tradeRoutes > 0 && tradeDiff < 0
-      ? -tradeDiff
-      : 0;
-  const decay =
-    readProperty(readProperty(root, "race"), "decay") === true &&
-    tradeRoutes > 0 &&
-    current >= 50
-      ? (current - 50) * (0.001 * tradeRoutes)
-      : 0;
+    settings["autoMarket"] === true && tradeDiff < 0 ? -tradeDiff : 0;
+  let decay = 0;
+  if (readProperty(readProperty(root, "race"), "decay") === true) {
+    if (decaySource.length === 0) return undefined;
+    const cell = production.consumption[id]?.[decaySource];
+    if (current > 50) {
+      const value =
+        typeof cell === "number"
+          ? cell
+          : typeof cell === "string" && /^-[\d,]+(?:\.\d+)?$/u.test(cell)
+            ? Number(cell.replaceAll(",", ""))
+            : Number.NaN;
+      if (!Number.isFinite(value) || value >= 0) return undefined;
+      decay = -value;
+    } else if (cell !== undefined) {
+      return undefined;
+    }
+  }
   const supply =
     view?.unlocked === true
       ? readCapturedSupplyRateAdjustment(root, settings, id)
@@ -495,7 +523,6 @@ export function readCapturedPowerOrdinaryResourceState(
     // `income` removes sell, decay, Supply, and Ejector adjustments while retaining the game's
     // original diff. Trade buys are separately excluded by Resource.calculateRateOfChange.
     income: rawRate,
-    supportKind: "none",
   });
 }
 
@@ -514,99 +541,6 @@ function readLegacySyntheticUseful(
   );
 }
 
-export function readCapturedPowerSupportResourceState(
-  root: unknown,
-  id: string,
-  settings: Readonly<Record<string, unknown>>,
-  structures: readonly CapturedGameStructureDefinition[],
-  buildingStates: readonly CapturedBuildingState[] = [],
-): PowerResourceInput | undefined {
-  let current: number;
-  let maximum: number;
-  let unlocked: boolean;
-  const supportBuildingOn = (binding: string) =>
-    buildingStates.find((building) => building.catalog.binding === binding)
-      ?.stateOn ?? 0;
-  if (id === "Belt_Support") {
-    const anchor = readSupportAnchorState(root, id, structures);
-    if (anchor === undefined) return undefined;
-    current = anchor.currentQuantity;
-    maximum = anchor.maxQuantity;
-    unlocked = anchor.unlocked;
-  } else if (id === "Electrolysis_Support") {
-    unlocked = Boolean(readProperty(readProperty(root, "race"), "truepath"));
-    current = supportBuildingOn("space-hydrogen_plant");
-    maximum = supportBuildingOn("space-electrolysis");
-  } else if (id === "Womlings_Support") {
-    const tech = readProperty(root, "tech");
-    unlocked = (asNumber(readProperty(tech, "tau_red")) ?? 0) >= 5;
-    const farm = supportBuildingOn("tauceti-womling_farm");
-    const lab = supportBuildingOn("tauceti-womling_lab");
-    const mine = supportBuildingOn("tauceti-womling_mine");
-    const village = supportBuildingOn("tauceti-womling_village");
-    current = 2 * farm + lab + 6 * mine;
-    maximum =
-      village *
-      ((asNumber(readProperty(tech, "womling_pop")) ?? 0) >= 2 ? 6 : 5);
-  } else {
-    const anchor = readSupportAnchorState(root, id, structures);
-    if (anchor === undefined) return undefined;
-    current = anchor.currentQuantity;
-    maximum = anchor.maxQuantity;
-    unlocked = anchor.unlocked;
-  }
-  if (id === "Belt_Support" && unlocked) {
-    const highPopulation = readCapturedJobStackMultiplier(root);
-    const spaceStation = buildingStates.find(
-      (building) => building.catalog.binding === "space-space_station",
-    );
-    const stationCount = spaceStation?.count ?? 0;
-    const stationOn = spaceStation?.stateOn ?? 0;
-    const stationLimit =
-      settings["autoPower"] === true &&
-      settings["bld_s_space-space_station"] === true
-        ? stationCount
-        : stationOn;
-    const smartSpaceMiners =
-      settings["autoJobs"] === true &&
-      settings["job_space_miner"] === true &&
-      settings["job_s_space_miner"] === true;
-    const workerLimit = smartSpaceMiners
-      ? readCapturedSpaceMinerSmartMaximum(root)
-      : readCapturedLegacyJobCount(root, "space_miner", false);
-    if (
-      highPopulation === undefined ||
-      stationLimit === undefined ||
-      workerLimit === undefined
-    )
-      return undefined;
-    maximum = Math.min(stationLimit * 3 * highPopulation, workerLimit);
-  }
-  if (!unlocked) {
-    current = 0;
-    maximum = 0;
-  }
-  const rate = maximum - current;
-  const storageRatio = maximum > 0 ? rate / maximum : 1;
-  return Object.freeze({
-    id,
-    title: readCapturedResourceLabel(root, id),
-    currentQuantity: current,
-    maxQuantity: maximum,
-    rateOfChange: unlocked ? rate : 0,
-    storageRatio,
-    unlocked,
-    useful: storageRatio < 0.99,
-    income: unlocked ? rate : 0,
-    supportKind:
-      id === "Womlings_Support"
-        ? "womlings-support"
-        : id === "Tau_Belt_Support"
-          ? "tau-belt-support"
-          : "support",
-  });
-}
-
 function readPowerResourceState(
   root: unknown,
   id: string,
@@ -614,8 +548,8 @@ function readPowerResourceState(
   demand: CapturedDemandSample,
   production: CapturedProductionBreakdown,
   view: ResourceView | undefined,
-  structures: readonly CapturedGameStructureDefinition[],
   buildingStates: readonly CapturedBuildingState[],
+  decaySource: string,
 ): PowerResourceInput | undefined {
   if (id === "Power") {
     const city = readProperty(root, "city");
@@ -632,7 +566,6 @@ function readPowerResourceState(
         unlocked: false,
         useful: false,
         income: 0,
-        supportKind: "none",
       });
     }
     const replicatorTask =
@@ -704,7 +637,6 @@ function readPowerResourceState(
         demand,
       ),
       income: current,
-      supportKind: "none",
     });
   }
   if (id === "Supply") {
@@ -721,7 +653,6 @@ function readPowerResourceState(
         unlocked: false,
         useful: false,
         income: 0,
-        supportKind: "none",
       });
     }
     const purifier = readProperty(portal, "purifier");
@@ -745,7 +676,6 @@ function readPowerResourceState(
         demand,
       ),
       income: rate,
-      supportKind: "none",
     });
   }
   if (id === "Population") {
@@ -776,17 +706,7 @@ function readPowerResourceState(
         demand,
       ),
       income: rate,
-      supportKind: "none",
     });
-  }
-  if (capturedPowerSupportType(id) !== undefined) {
-    return readCapturedPowerSupportResourceState(
-      root,
-      id,
-      settings,
-      structures,
-      buildingStates,
-    );
   }
   return readCapturedPowerOrdinaryResourceState(
     root,
@@ -795,6 +715,7 @@ function readPowerResourceState(
     demand,
     production,
     view,
+    decaySource,
   );
 }
 
@@ -805,15 +726,10 @@ function readPowerResourceInputs(
   demand: CapturedDemandSample,
   production: CapturedProductionBreakdown,
   resources: GameResourceSource,
-  structures: readonly CapturedGameStructureDefinition[],
   buildingStates: readonly CapturedBuildingState[],
+  decaySource: string,
 ): readonly PowerResourceInput[] | undefined {
-  const synthetic = new Set([
-    "Power",
-    "Population",
-    "Supply",
-    ...ids.filter((id) => capturedPowerSupportType(id) !== undefined),
-  ]);
+  const synthetic = new Set(["Power", "Population", "Supply"]);
   const ordinaryIds = ids.filter((id) => !synthetic.has(id));
   const sample =
     ordinaryIds.length === 0
@@ -829,8 +745,8 @@ function readPowerResourceInputs(
       demand,
       production,
       sample.resources.get(id),
-      structures,
       buildingStates,
+      decaySource,
     );
     if (input === undefined) return undefined;
     result.push(input);
@@ -875,225 +791,30 @@ function readObservedProduction(
   return produced * globalModifier;
 }
 
-function readPowerHealingStructureValue(
-  buildingStates: readonly CapturedBuildingState[],
-  actionId: string,
-  field: "count" | "on",
-): number {
-  const building = buildingStates.find(
-    (entry) => entry.catalog.binding === actionId,
-  );
-  return field === "count" ? (building?.count ?? 0) : (building?.stateOn ?? 0);
-}
-
-function readPowerLegacyTraitValue(
+function readNativePowerProducedResources(
   root: unknown,
-  traitId: string,
-  index: number,
-  fallback: number,
-  values: readonly [number, number, number],
-  operation: "raw" | "plus" = "raw",
-): number | undefined {
-  const race = readProperty(root, "race");
-  if (!readProperty(race, traitId)) return fallback;
-  const value = readCapturedTraitScaleVariable(
+  structure: CapturedGameStructureDefinition,
+  production: CapturedProductionBreakdown,
+  structures: readonly CapturedGameStructureDefinition[],
+  controls: GameControlRegistry,
+  mechanics: CapturedGameMechanics,
+): readonly string[] {
+  const source = readLocalizedProductionSource(
     root,
-    traitId,
-    index,
-    values,
-    "major",
+    structure.actionId,
+    structures,
+    controls,
+    mechanics,
   );
-  return value === undefined
-    ? undefined
-    : operation === "plus"
-      ? 1 + value / 100
-      : value;
+  if (source.length === 0) return Object.freeze([]);
+  return Object.freeze(
+    Object.keys(production.production).filter(
+      (resourceId) =>
+        resourceId !== "Global" &&
+        readObservedProduction(resourceId, production, source) > 0,
+    ),
+  );
 }
-
-/** Mirrors the retired `createGameRates().getHealingRate()` used by Triton Lander. */
-function readPowerLegacyHealingRate(
-  root: unknown,
-  buildingStates: readonly CapturedBuildingState[],
-  currentDate: Date,
-): number | undefined {
-  if (!(currentDate instanceof Date) || !Number.isFinite(currentDate.getTime()))
-    return undefined;
-  const race = readProperty(root, "race");
-  const city = readProperty(root, "city");
-  const tech = readProperty(root, "tech");
-  const stats = readProperty(root, "stats");
-  const achievements = readProperty(stats, "achieve");
-  const sacrificialAltar = readProperty(city, "s_alter");
-  let healingCount: number | undefined;
-  if (readProperty(race, "orbit_decayed") && readProperty(race, "truepath")) {
-    healingCount = readPowerHealingStructureValue(
-      buildingStates,
-      "space-enceladus_base",
-      "on",
-    );
-  } else if (readProperty(race, "artifical")) {
-    healingCount = readPowerHealingStructureValue(
-      buildingStates,
-      "city-boot_camp",
-      "count",
-    );
-  } else {
-    healingCount = readPowerHealingStructureValue(
-      buildingStates,
-      "city-hospital",
-      "count",
-    );
-  }
-  if (healingCount === undefined) return undefined;
-  if (
-    readProperty(race, "rejuvenated") &&
-    readProperty(achievements, "lamentis")
-  ) {
-    const lamentis = readProperty(achievements, "lamentis");
-    const level = asNumber(readProperty(lamentis, "l"));
-    if (level === undefined) return undefined;
-    healingCount += Math.min(level, 5);
-  }
-  const month = currentDate.getMonth();
-  const day = currentDate.getDate();
-  // DeadSpace seasons.js astrologySign() uses the page's local calendar date.
-  const cancerSign = (month === 5 && day >= 22) || (month === 6 && day <= 22);
-  healingCount *= cancerSign ? 1.05 : 1;
-  const medic = asNumber(readProperty(tech, "medic")) || 1;
-  healingCount *= medic;
-  healingCount += (asNumber(readProperty(race, "fibroblast")) ?? 0) * 2 || 0;
-  if ((asNumber(readProperty(sacrificialAltar, "regen")) ?? 0) > 0) {
-    const cannibalize = readPowerLegacyTraitValue(
-      root,
-      "cannibalize",
-      0,
-      1,
-      [6, 15, 24],
-    );
-    const cannibalizeFactor = readPowerLegacyTraitValue(
-      root,
-      "cannibalize",
-      0,
-      1,
-      [6, 15, 24],
-      "plus",
-    );
-    if (cannibalize === undefined || cannibalizeFactor === undefined)
-      return undefined;
-    healingCount =
-      healingCount >= 20
-        ? healingCount * cannibalizeFactor
-        : healingCount + Math.floor(cannibalize / 5);
-  }
-  const highPopulationGrowth = readCapturedHighPopulationGrowthMultiplier(root);
-  if (highPopulationGrowth === undefined) return undefined;
-  healingCount *= highPopulationGrowth;
-  const governorBackground = readProperty(
-    readProperty(readProperty(race, "governor"), "g"),
-    "bg",
-  );
-  if (governorBackground === "sports") healingCount *= 1.5;
-  const banquetOn = readPowerHealingStructureValue(
-    buildingStates,
-    "city-banquet",
-    "on",
-  );
-  const banquetCount = readPowerHealingStructureValue(
-    buildingStates,
-    "city-banquet",
-    "count",
-  );
-  if (banquetOn === undefined || banquetCount === undefined) return undefined;
-  if (banquetOn > 0 && banquetCount >= 2) {
-    const strength = asNumber(
-      readProperty(readProperty(city, "banquet"), "strength"),
-    );
-    if (strength === undefined) return undefined;
-    healingCount *= 1 + strength ** 0.65 / 100;
-  }
-  // Retain the legacy TODO: troll fathom has not been included in this automation rate.
-  const regeneration = readPowerLegacyTraitValue(
-    root,
-    "slow_regen",
-    0,
-    1,
-    [45, 25, 12],
-    "plus",
-  );
-  const regenerative = readPowerLegacyTraitValue(
-    root,
-    "regenerative",
-    1,
-    1,
-    [1, 4, 7],
-  );
-  if (regeneration === undefined || regenerative === undefined)
-    return undefined;
-  const maximumBound = 20 * regeneration;
-  healingCount = Math.round(healingCount);
-  let healed = regenerative + Math.floor(healingCount / maximumBound);
-  const leftover = healingCount % maximumBound;
-  if (leftover > 0) {
-    const chances = leftover * maximumBound;
-    let success = 0;
-    for (let index = 0; index < leftover; index++) {
-      for (let comparison = 0; comparison < maximumBound; comparison++) {
-        success += Number(index > comparison);
-      }
-    }
-    healed += success / chances;
-  }
-  return Number.isFinite(healed) ? healed : undefined;
-}
-
-/** Mirrors CraftingJob.count for the legacy Crafter.Scarletite usefulness guard. */
-function readPowerLegacyCrafterCount(
-  root: unknown,
-  resourceId: string,
-): number | undefined {
-  const workers =
-    asNumber(
-      readProperty(
-        readProperty(readProperty(root, "city"), "foundry"),
-        resourceId,
-      ),
-    ) ?? 0;
-  const servants =
-    asNumber(
-      readProperty(
-        readProperty(
-          readProperty(readProperty(root, "race"), "servants"),
-          "sjobs",
-        ),
-        resourceId,
-      ),
-    ) ?? 0;
-  const multiplier = readCapturedJobStackMultiplier(root);
-  return multiplier === undefined ? undefined : workers + servants * multiplier;
-}
-
-const POWER_BUSY_SOURCE_BINDING: Readonly<Record<string, string>> =
-  Object.freeze({
-    "space-gas_mining": "space-gas_mining",
-    "space-oil_extractor": "space-oil_extractor",
-    "space-orichalcum_mine": "space-orichalcum_mine",
-    "space-uranium_mine": "space-uranium_mine",
-    "space-neutronium_mine": "space-neutronium_mine",
-    "space-elerium_mine": "space-elerium_mine",
-    "space-iridium_ship": "job_space_miner",
-    "space-iron_ship": "job_space_miner",
-    "space-elerium_ship": "job_space_miner",
-    "space-iridium_mine": "space-iridium_mine",
-    "space-helium_mine": "space-helium_mine",
-    "galaxy-vitreloy_plant": "galaxy-vitreloy_plant",
-    "galaxy-excavator": "galaxy-excavator",
-    "space-water_freighter": "space-water_freighter",
-    "eden-asphodel_harvester": "eden-asphodel_harvester",
-    "galaxy-armed_miner": "galaxy-armed_miner",
-    "galaxy-raider": "galaxy-raider",
-    "interstellar-harvester": "interstellar-harvester",
-    "city-tourist_center": "city-tourist_center",
-  });
 
 const POWER_BUSY_SOURCE_LOCALIZATION_KEY: Readonly<Record<string, string>> =
   Object.freeze({
@@ -1135,9 +856,12 @@ function readBuildingRule(
   root: unknown,
   binding: string,
   metadataRule: string,
+  nativeProducedResources: readonly string[],
+  powered: number,
   production: CapturedProductionBreakdown,
   demand: CapturedDemandSample,
   resources: ReadonlyMap<string, PowerResourceInput>,
+  supports: ReadonlyMap<string, PowerSupportInput>,
   buildingCounts: ReadonlyMap<string, number>,
   buildingOns: ReadonlyMap<string, number>,
   buildingStates: readonly CapturedBuildingState[],
@@ -1151,7 +875,13 @@ function readBuildingRule(
   const resource = (id: string) => resources.get(id);
   const obs = (
     id: string,
-    sourceBinding = POWER_BUSY_SOURCE_BINDING[binding] ?? binding,
+    sourceBinding = [
+      "space-iridium_ship",
+      "space-iron_ship",
+      "space-elerium_ship",
+    ].includes(binding)
+      ? "job_space_miner"
+      : binding,
   ) => {
     const value = resource(id);
     return Object.freeze({
@@ -1171,6 +901,14 @@ function readBuildingRule(
       income: value?.income ?? 0,
     });
   };
+  if (metadataRule === "ordinary" && nativeProducedResources.length === 1) {
+    return Object.freeze({
+      kind: "busy-resource",
+      active: true,
+      savingOnly: powered < 0,
+      observation: obs(nativeProducedResources[0]!),
+    });
+  }
   switch (metadataRule) {
     case "neutron-citadel":
       return Object.freeze({
@@ -1223,25 +961,9 @@ function readBuildingRule(
       const selector: Readonly<
         Record<string, readonly [string, string, boolean]>
       > = {
-        "space-gas_mining": ["Helium_3", "space-gas_mining", true],
-        "space-oil_extractor": ["Oil", "space-oil_extractor", true],
-        "space-orichalcum_mine": ["Orichalcum", "space-orichalcum_mine", true],
-        "space-uranium_mine": ["Uranium", "space-uranium_mine", true],
-        "space-neutronium_mine": ["Neutronium", "space-neutronium_mine", true],
-        "space-elerium_mine": ["Elerium", "space-elerium_mine", true],
         "space-iridium_ship": ["Iridium", "job_space_miner", false],
         "space-iron_ship": ["Iron", "job_space_miner", false],
         "space-elerium_ship": ["Elerium", "job_space_miner", false],
-        "space-iridium_mine": ["Iridium", "space-iridium_mine", false],
-        "space-helium_mine": ["Helium_3", "space-helium_mine", false],
-        "galaxy-vitreloy_plant": ["Vitreloy", "galaxy-vitreloy_plant", false],
-        "galaxy-excavator": ["Orichalcum", "galaxy-excavator", false],
-        "space-water_freighter": ["Water", "space-water_freighter", false],
-        "eden-asphodel_harvester": [
-          "Asphodel_Powder",
-          "eden-asphodel_harvester",
-          false,
-        ],
       };
       const selected = selector[sourceBinding];
       if (selected === undefined) return undefined;
@@ -1258,16 +980,6 @@ function readBuildingRule(
       });
     }
     case "triton-lander": {
-      let healingRate: number | undefined;
-      try {
-        healingRate = readPowerLegacyHealingRate(
-          root,
-          buildingStates,
-          dependencies.readCurrentDate(),
-        );
-      } catch {
-        return undefined;
-      }
       const authorityResource = resource("Authority");
       const authorityView =
         authorityResource === undefined
@@ -1290,8 +1002,6 @@ function readBuildingRule(
       const currentSoldiers =
         (readGamePathNumber(root, ["civic", "garrison", "workers"], 0) ?? 0) -
         (readGamePathNumber(root, ["civic", "garrison", "crew"], 0) ?? 0);
-      if (healingRate === undefined || !Number.isFinite(healingRate))
-        return undefined;
       let authorityReserve = 0;
       if (
         readProperty(readProperty(root, "race"), "universe") === "evil" &&
@@ -1321,7 +1031,6 @@ function readBuildingRule(
         currentSoldiers,
         wounded:
           readGamePathNumber(root, ["civic", "garrison", "wounded"], 0) ?? 0,
-        healingRate,
         highPopulationMultiplier: readCapturedJobStackMultiplier(root) ?? 1,
         authorityReserve,
       });
@@ -1460,17 +1169,28 @@ function readBuildingRule(
         "archaeologist",
         false,
       );
-      const scarletiteCrafters = readPowerLegacyCrafterCount(
+      const assignedScarletite = readGamePathNumber(
         root,
-        "Scarletite",
+        ["city", "foundry", "Scarletite"],
+        0,
       );
-      if (archaeologists === undefined || scarletiteCrafters === undefined)
+      const skilledScarletite = readGamePathNumber(
+        root,
+        ["race", "servants", "sjobs", "Scarletite"],
+        0,
+      );
+      if (
+        archaeologists === undefined ||
+        assignedScarletite === undefined ||
+        skilledScarletite === undefined
+      )
         return undefined;
       return Object.freeze({
         kind: metadataRule,
         suppressionUseful:
           archaeologists > 0 ||
-          scarletiteCrafters > 0 ||
+          assignedScarletite > 0 ||
+          skilledScarletite > 0 ||
           (buildingOns.get("portal-arcology") ?? 0) > 0 ||
           (buildingOns.get("portal-infernite_mine") ?? 0) > 0,
         postRating,
@@ -1558,7 +1278,7 @@ function readBuildingRule(
         missionBuildable,
         scoutCount: buildingCounts.get("galaxy-scout_ship") ?? 0,
         corvetteCount: buildingCounts.get("galaxy-corvette_ship") ?? 0,
-        gatewaySupportMaximum: resource("Gateway_Support")?.maxQuantity ?? 0,
+        gatewaySupportMaximum: supports.get("gateway")?.maximum ?? 0,
         observation: obs("Bolognium", "galaxy-bolognium_ship"),
       });
     }
@@ -1592,7 +1312,7 @@ function readBuildingRule(
     case "womling-farm":
       return Object.freeze({
         kind: metadataRule,
-        supportMaximum: resource("Womlings_Support")?.maxQuantity ?? 0,
+        supportMaximum: supports.get("tau_red")?.maximum ?? 0,
         cropPerFarm:
           (Number(
             readProperty(readProperty(root, "tech"), "womling_pop") ?? 0,
@@ -1653,8 +1373,8 @@ function readBuildingRule(
     case "tau-whaling-station":
       return Object.freeze({
         kind: metadataRule,
-        supportMaximum: resource("Tau_Belt_Support")?.maxQuantity ?? 0,
-        supportCurrent: resource("Tau_Belt_Support")?.currentQuantity ?? 0,
+        supportMaximum: supports.get("tau_roid")?.maximum ?? 0,
+        supportCurrent: supports.get("tau_roid")?.current ?? 0,
         whalingShipsOn: buildingOns.get("tauceti-whaling_ship") ?? 0,
       });
     case "tau-mining-pit":
@@ -1666,74 +1386,6 @@ function readBuildingRule(
       return Object.freeze({ kind: metadataRule });
     default:
       return Object.freeze({ kind: "ordinary" });
-  }
-}
-
-function readRuleResourceIds(binding: string): readonly string[] {
-  switch (binding) {
-    case "interstellar-citadel":
-      return [];
-    case "space-space_station":
-      return ["Elerium"];
-    case "interstellar-ascension_trigger":
-      return ["Harmony"];
-    case "city-cement_plant":
-    case "city-mine":
-    case "city-coal_mine":
-      return [];
-    case "portal-cooling_tower":
-    case "portal-harbor":
-      return [];
-    case "space-gas_mining":
-      return ["Helium_3"];
-    case "space-oil_extractor":
-      return ["Oil"];
-    case "space-orichalcum_mine":
-      return ["Orichalcum"];
-    case "space-uranium_mine":
-      return ["Uranium"];
-    case "space-neutronium_mine":
-      return ["Neutronium"];
-    case "space-elerium_mine":
-    case "space-elerium_ship":
-      return ["Elerium"];
-    case "space-iridium_ship":
-    case "space-iridium_mine":
-      return ["Iridium"];
-    case "space-iron_ship":
-      return ["Iron"];
-    case "space-helium_mine":
-      return ["Helium_3"];
-    case "galaxy-vitreloy_plant":
-      return ["Vitreloy", "Bolognium", "Stanene", "Money"];
-    case "galaxy-excavator":
-      return ["Orichalcum"];
-    case "space-water_freighter":
-      return ["Water"];
-    case "eden-asphodel_harvester":
-      return ["Asphodel_Powder"];
-    case "space-lander":
-      return ["Authority"];
-    case "city-tourist_center":
-      return ["Food", "Money"];
-    case "city-mill":
-      return ["Food", "Power"];
-    case "galaxy-armed_miner":
-      return ["Bolognium", "Adamantite", "Iridium"];
-    case "galaxy-bolognium_ship":
-      return ["Bolognium", "Gateway_Support"];
-    case "galaxy-raider":
-      return ["Vitreloy", "Polymer", "Neutronium", "Deuterium"];
-    case "interstellar-harvester":
-      return ["Deuterium", "Helium_3"];
-    case "tauceti-womling_farm":
-      return ["Womlings_Support"];
-    case "tauceti-whaling_station":
-      return ["Tau_Belt_Support"];
-    case "tauceti-mining_pit":
-      return ["Population"];
-    default:
-      return [];
   }
 }
 
@@ -2007,10 +1659,14 @@ function readPowerCycle(
   const production = dependencies.mechanics.readProductionBreakdown();
   const demand = dependencies.readDemand();
   if (demand === undefined) return undefined;
+  const nativeOrder =
+    structures === undefined
+      ? undefined
+      : readOrderedMechanics(root, dependencies.mechanics, structures);
   if (
     structures === undefined ||
     production === undefined ||
-    !readOrderedMechanics(root, dependencies.mechanics, structures)
+    nativeOrder === undefined
   ) {
     return undefined;
   }
@@ -2021,21 +1677,28 @@ function readPowerCycle(
   );
   if (buildingStates === undefined) return undefined;
   const allCatalog = buildingStates.map((building) => building.catalog);
-  const managed = sortByStoredPriority(
-    buildingStates,
-    settings,
-    (building) => "bld_p_" + building.catalog.binding,
-  ).filter(
-    (
-      building,
-    ): building is CapturedBuildingState & {
-      readonly structure: CapturedGameStructureDefinition;
-    } =>
-      building.structure !== undefined &&
-      building.hasState &&
-      settings["bld_s_" + building.catalog.binding] === true &&
-      building.count > 0,
+  const nativeOrderIndex = new Map(
+    nativeOrder.map((structure, index) => [structure.entryKey, index]),
   );
+  const managed = buildingStates
+    .filter(
+      (
+        building,
+      ): building is CapturedBuildingState & {
+        readonly structure: CapturedGameStructureDefinition;
+      } =>
+        building.structure !== undefined &&
+        building.hasState &&
+        settings["bld_s_" + building.catalog.binding] === true &&
+        building.count > 0,
+    )
+    .sort(
+      (left, right) =>
+        (nativeOrderIndex.get(left.structure.entryKey) ??
+          Number.MAX_SAFE_INTEGER) -
+        (nativeOrderIndex.get(right.structure.entryKey) ??
+          Number.MAX_SAFE_INTEGER),
+    );
   const autoFleet = settings["autoFleet"] === true;
   const fleetNeededShipsSample = autoFleet
     ? dependencies.readFleetNeededShips?.()
@@ -2078,18 +1741,60 @@ function readPowerCycle(
     ? dependencies.readMechState?.()
     : undefined;
   if (requiresMechState && mechState === undefined) return undefined;
+  const supports = readNativePowerSupports(
+    root,
+    dependencies.mechanics,
+    structures,
+  );
+  if (supports === undefined) return undefined;
+  const supportMap = new Map(supports.map((item) => [item.type, item]));
+  const decayLabel = dependencies.mechanics.readLocalizedText(
+    "evo_challenge_decay",
+  );
+  if (
+    readProperty(readProperty(root, "race"), "decay") === true &&
+    decayLabel.kind !== "value"
+  )
+    return undefined;
+  const decaySource = decayLabel.kind === "value" ? decayLabel.value : "";
   const resourceIds = new Set<string>(["Power", "Population", "Supply"]);
   if (spireGroupManaged) resourceIds.add("Money");
+  const gameResources = readProperty(root, "resource");
+  if (!isRecord(gameResources)) return undefined;
+  const speciesId = readProperty(readProperty(root, "race"), "species");
+  for (const resourceId of Object.keys(gameResources)) {
+    if (resourceId !== speciesId && !resourceId.endsWith("_Support"))
+      resourceIds.add(resourceId);
+  }
   for (let index = 0; index < managed.length; index++) {
     const record = managed[index]!;
     const binding = record.catalog.binding;
+    const nativeRole = record.structure.readPowerGridRole(root, record.powered);
+    const nativeSupport = record.structure.readNativeSupportGrids(root);
+    if (nativeRole.kind !== "value" || nativeSupport.kind !== "value") {
+      return undefined;
+    }
+    if (nativeRole.value === "none" && nativeSupport.value.length === 0)
+      continue;
     const metadata = capturedPowerMetadataForBinding(binding);
     const consumptions = readFuelInputs(
       root,
-      settings,
       dependencies.mechanics,
       record.structure,
       metadata.consumptions,
+    );
+    const supportChanges: readonly PowerSupportChangeInput[] = Object.freeze(
+      nativeSupport.value.map((group) =>
+        Object.freeze({ type: group.type, amount: -group.contribution }),
+      ),
+    );
+    const produces = readNativePowerProducedResources(
+      root,
+      record.structure,
+      production,
+      structures,
+      dependencies.controls,
+      dependencies.mechanics,
     );
     const powered = record.powered;
     const title = record.structure.readTitle();
@@ -2103,9 +1808,7 @@ function readPowerCycle(
       return undefined;
     for (const consumption of consumptions)
       resourceIds.add(consumption.resourceId);
-    for (const resourceId of metadata.produces) resourceIds.add(resourceId);
-    for (const resourceId of readRuleResourceIds(binding))
-      resourceIds.add(resourceId);
+    for (const resourceId of produces) resourceIds.add(resourceId);
     const state = readCapturedStructureState(root, record.structure);
     const autoMaximumRaw = asNumber(settings[`bld_m_${binding}`]);
     let fleetMaximum: number | null = null;
@@ -2119,7 +1822,7 @@ function readPowerCycle(
       fleetMaximum = needed;
     }
     const input: PowerBuildingInput = Object.freeze({
-      index,
+      index: powers.length,
       id: record.structure.struct,
       binding,
       count: record.count,
@@ -2132,7 +1835,6 @@ function readPowerCycle(
       tab: record.structure.region,
       smartCategory: record.catalog.smart,
       smartEnabled: capturedPowerSmartEnabled(binding, settings),
-      ship: metadata.ship,
       crewShip: typeof readProperty(state, "crew") === "number",
       crewValueRank: metadata.crewValueRank,
       singleState: metadata.singleState,
@@ -2146,21 +1848,14 @@ function readPowerCycle(
       // Actions without a description have no extra text in the old Power wrapper.
       extraDescription: description.kind === "value" ? description.value : "",
       consumptions,
-      produces: Object.freeze([...metadata.produces]),
+      supportChanges,
+      produces,
       fleetMaximum,
       rule: Object.freeze({ kind: "ordinary" }),
     });
     powers.push(input);
   }
-  const supportIds = [...resourceIds].filter(
-    (id) => capturedPowerSupportType(id) !== undefined,
-  );
   const completeResourceIds = [...resourceIds];
-  // The retired reader's rule payloads and direct building declarations share one resource
-  // registry. Support capacities are sampled from their live anchor state, never reconstructed.
-  for (const id of supportIds) {
-    if (!completeResourceIds.includes(id)) completeResourceIds.push(id);
-  }
   const resourceInputs = readPowerResourceInputs(
     root,
     completeResourceIds,
@@ -2168,8 +1863,8 @@ function readPowerCycle(
     demand,
     production,
     dependencies.resources,
-    structures,
     buildingStates,
+    decaySource,
   );
   if (resourceInputs === undefined) return undefined;
   const resourceMap = new Map(resourceInputs.map((item) => [item.id, item]));
@@ -2197,9 +1892,12 @@ function readPowerCycle(
       root,
       building.binding,
       metadata.rule,
+      building.produces,
+      building.powered,
       production,
       demand,
       resourceMap,
+      supportMap,
       buildingCounts,
       buildingOns,
       buildingStates,
@@ -2264,6 +1962,7 @@ function readPowerCycle(
     currentCrew,
     settings: settingsInput,
     resources: resourceInputs,
+    supports,
     buildings: Object.freeze(filledPowers),
     lake: lakeAndSpire.lake,
     spire: lakeAndSpire.spire,
@@ -2280,7 +1979,6 @@ export function createCapturedPowerReader({
   readDemand,
   readFleetNeededShips,
   costs,
-  readCurrentDate,
   readPurifierDescription,
   readMechState,
   readMechSaveSupply,
@@ -2296,7 +1994,6 @@ export function createCapturedPowerReader({
     readDemand,
     ...(readFleetNeededShips === undefined ? {} : { readFleetNeededShips }),
     ...(costs === undefined ? {} : { costs }),
-    readCurrentDate,
     ...(readPurifierDescription === undefined
       ? {}
       : { readPurifierDescription }),
