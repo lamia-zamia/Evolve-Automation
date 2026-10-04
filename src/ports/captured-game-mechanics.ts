@@ -97,7 +97,7 @@ export interface CapturedGameStructureDefinition {
   readSupport(): CapturedGameRead<number>;
   /** Game `s_type`, normalized to the string members it actually retains. */
   readSupportTypes(): CapturedGameRead<readonly string[]>;
-  /** Game `support_for[type]` with the `support()` fallback already applied. */
+  /** Raw game `supportGridValue()` (`support_for[type]` or `support()`); upstream can further scale effective provider output. */
   readSupportValue(type: string): CapturedGameRead<number>;
   /** Truthy `support_provider` marker; absence remains distinct and means no marker. */
   readSupportProvider(): CapturedGameRead<boolean>;

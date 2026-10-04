@@ -27,6 +27,7 @@ import type {
 import type { GameResourceSource } from "../../../../ports/game-world-state.ts";
 import type { ResourceView } from "../../../../domain/game-world.ts";
 import type { GameActionCostReader } from "../../../../ports/game-action-costs.ts";
+import { capturedPowerProducerCapability } from "./captured-power-producer-capability.ts";
 import type { CapturedMechState } from "../../../../domain/combat/mech-state.ts";
 import type { PowerReader } from "../../../../ports/power.ts";
 import { isRecord, readProperty } from "../../../validation.ts";
@@ -789,31 +790,6 @@ function readObservedProduction(
     globalModifier *= 1 + readCellNumber(cell) / 100;
   }
   return produced * globalModifier;
-}
-
-function readNativePowerProducedResources(
-  root: unknown,
-  structure: CapturedGameStructureDefinition,
-  production: CapturedProductionBreakdown,
-  structures: readonly CapturedGameStructureDefinition[],
-  controls: GameControlRegistry,
-  mechanics: CapturedGameMechanics,
-): readonly string[] {
-  const source = readLocalizedProductionSource(
-    root,
-    structure.actionId,
-    structures,
-    controls,
-    mechanics,
-  );
-  if (source.length === 0) return Object.freeze([]);
-  return Object.freeze(
-    Object.keys(production.production).filter(
-      (resourceId) =>
-        resourceId !== "Global" &&
-        readObservedProduction(resourceId, production, source) > 0,
-    ),
-  );
 }
 
 const POWER_BUSY_SOURCE_LOCALIZATION_KEY: Readonly<Record<string, string>> =
@@ -1788,14 +1764,7 @@ function readPowerCycle(
         Object.freeze({ type: group.type, amount: -group.contribution }),
       ),
     );
-    const produces = readNativePowerProducedResources(
-      root,
-      record.structure,
-      production,
-      structures,
-      dependencies.controls,
-      dependencies.mechanics,
-    );
+    const produces = capturedPowerProducerCapability(binding);
     const powered = record.powered;
     const title = record.structure.readTitle();
     const description = record.structure.readDescription();
@@ -1854,6 +1823,25 @@ function readPowerCycle(
       rule: Object.freeze({ kind: "ordinary" }),
     });
     powers.push(input);
+  }
+  // The planner rewinds support with configured stateOn. Only do so when its
+  // complete modeled group agrees with the game's actual support pass.
+  for (const support of supports) {
+    let modeledMaximum = 0;
+    let modeledCurrent = 0;
+    for (const building of powers) {
+      for (const change of building.supportChanges) {
+        if (change.type !== support.type) continue;
+        if (change.amount < 0)
+          modeledMaximum -= change.amount * building.stateOn;
+        else modeledCurrent += change.amount * building.stateOn;
+      }
+    }
+    if (
+      Math.abs(modeledMaximum - support.maximum) > 1e-9 ||
+      Math.abs(modeledCurrent - support.current) > 1e-9
+    )
+      return undefined;
   }
   const completeResourceIds = [...resourceIds];
   const resourceInputs = readPowerResourceInputs(

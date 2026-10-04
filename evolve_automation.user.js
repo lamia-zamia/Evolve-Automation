@@ -24753,6 +24753,32 @@
     });
   }
 
+  // src/adapters/evolve/economy/production/captured-power-producer-capability.ts
+  var POWER_PRODUCER_CAPABILITY_FALLBACK = Object.freeze({
+    "space-gas_mining": ["Helium_3"],
+    "space-oil_extractor": ["Oil"],
+    "city-coal_mine": ["Coal"],
+    "interstellar-harvester": ["Helium_3", "Deuterium"],
+    "space-elerium_mine": ["Elerium"],
+    "space-water_freighter": ["Water"],
+    "space-iridium_ship": ["Iridium"],
+    "space-iron_ship": ["Iron"],
+    "space-elerium_ship": ["Elerium"],
+    "space-iridium_mine": ["Iridium"],
+    "space-helium_mine": ["Helium_3"],
+    "space-uranium_mine": ["Uranium"],
+    "space-neutronium_mine": ["Neutronium"],
+    "space-orichalcum_mine": ["Orichalcum"],
+    "galaxy-vitreloy_plant": ["Vitreloy"],
+    "galaxy-excavator": ["Orichalcum"],
+    "eden-asphodel_harvester": ["Asphodel_Powder"]
+  });
+  function capturedPowerProducerCapability(binding) {
+    return Object.freeze([
+      ...POWER_PRODUCER_CAPABILITY_FALLBACK[binding] ?? []
+    ]);
+  }
+
   // src/adapters/evolve/captured-resource-metadata.ts
   function readCapturedResource(root, resourceId) {
     let resource = readProperty(readProperty(root, "resource"), resourceId);
@@ -25815,20 +25841,6 @@
       globalModifier *= 1 + readCellNumber(cell) / 100;
     return produced * globalModifier;
   }
-  function readNativePowerProducedResources(root, structure, production, structures, controls2, mechanics) {
-    let source = readLocalizedProductionSource(
-      root,
-      structure.actionId,
-      structures,
-      controls2,
-      mechanics
-    );
-    return source.length === 0 ? Object.freeze([]) : Object.freeze(
-      Object.keys(production.production).filter(
-        (resourceId) => resourceId !== "Global" && readObservedProduction(resourceId, production, source) > 0
-      )
-    );
-  }
   var POWER_BUSY_SOURCE_LOCALIZATION_KEY = Object.freeze({
     "galaxy-vitreloy_plant": "galaxy_vitreloy_plant_bd",
     "galaxy-armed_miner": "galaxy_armed_miner_bd"
@@ -26411,14 +26423,7 @@
         nativeSupport.value.map(
           (group) => Object.freeze({ type: group.type, amount: -group.contribution })
         )
-      ), produces = readNativePowerProducedResources(
-        root,
-        record.structure,
-        production,
-        structures,
-        dependencies.controls,
-        dependencies.mechanics
-      ), powered = record.powered, title = record.structure.readTitle(), description = record.structure.readDescription();
+      ), produces = capturedPowerProducerCapability(binding), powered = record.powered, title = record.structure.readTitle(), description = record.structure.readDescription();
       if (consumptions === void 0 || powered === void 0 || title.kind === "invalid" || description.kind === "invalid")
         return;
       for (let consumption2 of consumptions)
@@ -26455,6 +26460,14 @@
         rule: Object.freeze({ kind: "ordinary" })
       });
       powers.push(input);
+    }
+    for (let support of supports) {
+      let modeledMaximum = 0, modeledCurrent = 0;
+      for (let building of powers)
+        for (let change of building.supportChanges)
+          change.type === support.type && (change.amount < 0 ? modeledMaximum -= change.amount * building.stateOn : modeledCurrent += change.amount * building.stateOn);
+      if (Math.abs(modeledMaximum - support.maximum) > 1e-9 || Math.abs(modeledCurrent - support.current) > 1e-9)
+        return;
     }
     let completeResourceIds = [...resourceIds], resourceInputs = readPowerResourceInputs(
       root,

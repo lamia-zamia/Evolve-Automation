@@ -331,8 +331,8 @@ const root = {
     red_member: { count: 0, on: 0 },
     vr_center: { count: 1, on: 0 },
     locked_generator: { count: 1, on: 1 },
-    moon_anchor: { count: 0, s_max: 10, support: 3 },
-    red_anchor: { count: 0, s_max: 20, support: 8 },
+    moon_anchor: { count: 0, s_max: 0, support: 0 },
+    red_anchor: { count: 0, s_max: 0, support: 0 },
   },
   interstellar: {
     reactor: { count: 1, on: 1 },
@@ -517,14 +517,7 @@ const resources = createResources(root);
 function createMechanics({
   structures: structureSample = structures,
   productionBreakdown = {
-    production: {
-      Helium_3: {
-        "Explotación de gas": "4",
-        "Bonificación orbital": "50%",
-        "Siguiente fuente": "2",
-      },
-      Global: { "Mejora global": "20%" },
-    },
+    production: { Global: { "Mejora global": "20%" } },
     consumption: {},
   },
   localizedText = {},
@@ -568,7 +561,7 @@ function createMechanics({
   });
 }
 
-const reader = createCapturedPowerReader({
+const readerDependencies = {
   rootState: { readRoot: () => root },
   mechanics: createMechanics(),
   controls: fakeControls,
@@ -587,7 +580,8 @@ const reader = createCapturedPowerReader({
     consumptionBalanceMinimum: 60,
   }),
   readWarnings: () => Object.freeze([]),
-});
+};
+const reader = createCapturedPowerReader(readerDependencies);
 
 const cycle = reader.readCycle();
 assert.ok(
@@ -658,10 +652,10 @@ assert.ok(
       ?.rule.kind === "busy-resource"
       ? cycle.buildings.find(
           (building) => building.binding === "space-gas_mining",
-        )?.rule.observation.production - 7.2
+        )?.rule.observation.production
       : Number.POSITIVE_INFINITY,
   ) < 1e-9,
-  "busy production matches the game's localized source, following percent rows, and Global modifier",
+  "an off Gas Mining has no observed production row",
 );
 assert.equal(
   cycle.buildings.find(
@@ -674,7 +668,239 @@ assert.deepEqual(
   cycle.buildings.find((building) => building.binding === "space-gas_mining")
     ?.produces,
   ["Helium_3"],
-  "producer resources follow the captured native production ledger",
+  "producer capability survives an absent production ledger row",
+);
+assert.ok(
+  planPowerCycle(cycle, EMPTY_POWER_AUTOMATION_STATE).decision?.operations.some(
+    (operation) =>
+      operation.kind === "adjust-building" &&
+      operation.binding === "space-gas_mining" &&
+      operation.amount > 0,
+  ),
+  "useful Helium-3 can power an off Gas Mining producer on",
+);
+const activeGasRoot = {
+  ...root,
+  space: { ...root.space, gas_mining: { count: 3, on: 1 } },
+};
+const activeGasCycle = createCapturedPowerReader({
+  ...readerDependencies,
+  rootState: { readRoot: () => activeGasRoot },
+  mechanics: createMechanics({
+    productionBreakdown: {
+      production: {
+        Helium_3: {
+          "Explotación de gas": "4",
+          "Bonificación orbital": "50%",
+          "Siguiente fuente": "2",
+        },
+        Global: { "Mejora global": "20%" },
+      },
+      consumption: {},
+    },
+  }),
+}).readCycle();
+assert.ok(
+  Math.abs(
+    activeGasCycle?.buildings.find(
+      (building) => building.binding === "space-gas_mining",
+    )?.rule.observation.production - 7.2,
+  ) < 1e-9,
+  "active Gas Mining's amount comes from the native ledger",
+);
+assert.deepEqual(
+  activeGasCycle?.buildings.find(
+    (building) => building.binding === "space-gas_mining",
+  )?.produces,
+  ["Helium_3"],
+);
+const offHarvester = structure({
+  entryKey: "int_alpha:harvester",
+  region: "interstellar",
+  sector: "int_alpha",
+  struct: "harvester",
+  actionId: "interstellar-harvester",
+  powered: 4,
+});
+const offHarvesterRoot = {
+  ...root,
+  interstellar: {
+    ...root.interstellar,
+    harvester: { count: 1, on: 0 },
+  },
+  power: [...root.power, offHarvester.entryKey],
+};
+const offHarvesterCycle = createCapturedPowerReader({
+  ...readerDependencies,
+  rootState: { readRoot: () => offHarvesterRoot },
+  mechanics: createMechanics({ structures: [...structures, offHarvester] }),
+  readSettingsRaw: () => ({
+    ...settings,
+    "bld_s_interstellar-harvester": true,
+  }),
+}).readCycle();
+assert.deepEqual(
+  offHarvesterCycle?.buildings.find(
+    (building) => building.binding === "interstellar-harvester",
+  )?.produces,
+  ["Helium_3", "Deuterium"],
+  "both producer capabilities survive an off multi-output harvester",
+);
+
+function sampleSupportCoherence({
+  providerOns = [1],
+  providerValues = [2],
+  consumerOns = [1],
+  consumerValues = [1],
+  nativeMaximum = providerOns.reduce(
+    (total, on, index) => total + on * providerValues[index],
+    0,
+  ),
+  nativeCurrent = consumerOns.reduce(
+    (total, on, index) => total + on * consumerValues[index],
+    0,
+  ),
+  unlimited = false,
+  consumerFuel = false,
+} = {}) {
+  const type = "quasar";
+  const providerIds = ["nav_beacon", "red_university"];
+  const consumerIds = ["vr_center", "garage"];
+  const providerKey = `spc_home:${providerIds[0]}`;
+  const providers = providerOns.map((_, index) =>
+    structure({
+      entryKey: `spc_home:${providerIds[index]}`,
+      region: "space",
+      sector: "spc_home",
+      struct: providerIds[index],
+      actionId: `space-${providerIds[index]}`,
+      support: 1,
+      supportFor: { [type]: providerValues[index] },
+      supportTypes: type,
+    }),
+  );
+  const consumers = consumerOns.map((_, index) =>
+    structure({
+      entryKey: `spc_home:${consumerIds[index]}`,
+      region: "space",
+      sector: "spc_home",
+      struct: consumerIds[index],
+      actionId: `space-${consumerIds[index]}`,
+      powered: 1,
+      support: -consumerValues[index],
+      supportTypes: type,
+      supportFuel: consumerFuel
+        ? [{ resourceId: "Oil", amount: 1 }]
+        : undefined,
+      supportTopology: {
+        anchorEntryKey: providerKey,
+        unlimited,
+        enabled: { kind: "value", value: true },
+      },
+    }),
+  );
+  const sampleStructures = [...providers, ...consumers];
+  const space = { ...root.space };
+  sampleStructures.forEach((item, index) => {
+    space[item.struct] = {
+      count: 10,
+      on:
+        index < providers.length
+          ? providerOns[index]
+          : consumerOns[index - providers.length],
+      ...(index === 0 ? { s_max: nativeMaximum, support: nativeCurrent } : {}),
+    };
+  });
+  const sampleRoot = {
+    ...root,
+    space,
+    power: consumers.map((item) => item.entryKey),
+    support: { [type]: consumers.map((item) => item.entryKey) },
+  };
+  const sampleSettings = Object.fromEntries(
+    sampleStructures.map((item) => [`bld_s_${item.actionId}`, true]),
+  );
+  return createCapturedPowerReader({
+    ...readerDependencies,
+    rootState: { readRoot: () => sampleRoot },
+    mechanics: createMechanics({
+      structures: sampleStructures,
+      productionBreakdown: { production: {}, consumption: {} },
+    }),
+    resources: createResources(sampleRoot),
+    readSettingsRaw: () => sampleSettings,
+  }).readCycle();
+}
+const coherentSupport = sampleSupportCoherence();
+assert.ok(coherentSupport);
+assert.ok(
+  planPowerCycle(coherentSupport, EMPTY_POWER_AUTOMATION_STATE).decision,
+  "a reconciled native group proceeds into planning",
+);
+assert.equal(
+  sampleSupportCoherence({ providerOns: [10], nativeMaximum: 10 }),
+  undefined,
+  "five effective providers cannot be rewound as ten configured providers",
+);
+assert.equal(
+  sampleSupportCoherence({ consumerOns: [10], nativeCurrent: 3 }),
+  undefined,
+  "three active consumers cannot be rewound as ten configured consumers",
+);
+assert.equal(
+  sampleSupportCoherence({ providerOns: [10], nativeMaximum: 15 }),
+  undefined,
+  "raw support_for output is not presumed to include the infiltrator factor",
+);
+assert.equal(
+  sampleSupportCoherence({
+    consumerOns: [10],
+    nativeCurrent: 3,
+    consumerFuel: true,
+  }),
+  undefined,
+  "support-fuel shortages cannot fabricate free support",
+);
+assert.ok(
+  sampleSupportCoherence({
+    providerOns: [2, 3],
+    providerValues: [2, 4],
+  }),
+  "all providers reconcile to the native capacity",
+);
+assert.equal(
+  sampleSupportCoherence({
+    providerOns: [2, 3],
+    providerValues: [2, 4],
+    nativeMaximum: 15,
+  }),
+  undefined,
+  "a multi-provider group fails closed if one contribution is missing",
+);
+assert.ok(
+  sampleSupportCoherence({ consumerOns: [2, 3], consumerValues: [1, 2] }),
+  "all consumers reconcile to native usage",
+);
+assert.equal(
+  sampleSupportCoherence({
+    consumerOns: [2, 3],
+    consumerValues: [1, 2],
+    nativeCurrent: 7,
+  }),
+  undefined,
+  "a multi-consumer group fails closed when usage differs",
+);
+assert.equal(
+  sampleSupportCoherence({ unlimited: true })?.supports[0]?.allocation,
+  "unconstrained",
+  "support_unlimited retains the native allocation semantics",
+);
+assert.deepEqual(
+  sampleSupportCoherence({ providerValues: [3] })?.buildings.find(
+    (building) => building.binding === "space-nav_beacon",
+  )?.supportChanges,
+  [{ type: "quasar", amount: -3 }],
+  "a dynamic support_for value and arbitrary native support type reach Power",
 );
 const navBeacon = cycle.buildings.find(
   (building) => building.binding === "space-nav_beacon",
@@ -710,7 +936,7 @@ assert.deepEqual(
     cycle.supports.find((support) => support.type === "moon")?.maximum,
     cycle.supports.find((support) => support.type === "moon")?.available,
   ],
-  [3, 10, 7],
+  [0, 0, 0],
   "support resources read s_max, support use, and available rate from live root state",
 );
 const newSupportAnchor = structure({
@@ -1443,8 +1669,6 @@ const specialStructures = Object.freeze([
     sector: "gxy_home",
     struct: "armed_miner",
     actionId: "galaxy-armed_miner",
-    supportTypes: "alien2",
-    support: 5,
   }),
   structure({
     powered: -1,
@@ -1536,14 +1760,14 @@ const specialRoot = {
     foundry: {},
   },
   space: {
-    space_station: { count: 3, on: 2, s_max: 45, support: 12 },
+    space_station: { count: 3, on: 2, s_max: 2, support: 1 },
     elerium_ship: { count: 2, on: 1 },
     lander: { count: 1, on: 1 },
     fob: { count: 1, on: 1 },
   },
   interstellar: { ascension_trigger: { count: 1, on: 1 } },
   galaxy: {
-    ship_dock: { count: 1, on: 1, s_max: 20, support: 6 },
+    ship_dock: { count: 1, on: 1, s_max: 1, support: 1 },
     bolognium_ship: { count: 1, on: 1 },
     gorddon_mission: { count: 99 },
     vitreloy_plant: { count: 1, on: 1 },
@@ -1554,7 +1778,7 @@ const specialRoot = {
   portal: {
     guard_post: { count: 1, on: 1 },
     waygate: { count: 1, on: 0 },
-    harbor: { count: 1, on: 1, s_max: 18, support: 7 },
+    harbor: { count: 1, on: 1, s_max: 1, support: 3 },
     bireme: { count: 2, on: 1 },
     transport: { count: 3, on: 2 },
     mechbay: {
@@ -1564,8 +1788,8 @@ const specialRoot = {
       bay: 1,
       active: 1,
       scouts: 0,
-      s_max: 12,
-      support: 5,
+      s_max: 1,
+      support: 3,
       blueprint: {
         size: "small",
         chassis: "wheel",
@@ -1589,7 +1813,7 @@ const specialRoot = {
     spire: { count: 3, type: "sand", progress: 25, status: {}, boss: "snake" },
   },
   tauceti: {
-    overseer: { count: 1, on: 1, s_max: 10, support: 4, miners: 6, injured: 2 },
+    overseer: { count: 1, on: 1, s_max: 1, support: 1, miners: 6, injured: 2 },
     womling_mine: { count: 1, on: 1, miners: 6 },
     womling_farm: { count: 1, on: 1, farmers: 5 },
     womling_fun: { count: 1, on: 1 },
