@@ -16195,6 +16195,55 @@
     if (ancients !== void 0)
       return ancients >= 2 ? workers : null;
   }
+  function readCapturedJobServantAssignments(root) {
+    let servants = readProperty(readProperty(root, "race"), "servants");
+    if (servants === void 0 || servants === !1) return null;
+    if (!isRecord(servants)) return;
+    let jobs = readProperty(servants, "jobs");
+    return isRecord(jobs) ? jobs : void 0;
+  }
+  function readCapturedEffectiveJobContext(root) {
+    let civic = readProperty(root, "civic"), servantJobs = readCapturedJobServantAssignments(root), servantModifier = readCapturedJobStackMultiplier(root);
+    if (!(!isRecord(civic) || servantJobs === void 0 || servantModifier === void 0))
+      return { civic, servantJobs, servantModifier };
+  }
+  function readCapturedEffectiveJobCount(context, id) {
+    if (!Object.prototype.hasOwnProperty.call(context.civic, id))
+      return Object.freeze({
+        present: !1,
+        workers: 0,
+        servants: 0,
+        serves: !1,
+        count: 0
+      });
+    let job = readProperty(context.civic, id);
+    if (!isRecord(job)) return;
+    let workers = finiteNonNegative(readProperty(job, "workers"));
+    if (workers === void 0) return;
+    let servantJobs = context.servantJobs, serves = servantJobs !== null && Object.prototype.hasOwnProperty.call(servantJobs, id), rawServants = servantJobs === null ? void 0 : readProperty(servantJobs, id), servants = rawServants === void 0 ? 0 : finiteNonNegative(rawServants);
+    if (servants === void 0) return;
+    let count2 = finiteNonNegative(workers + servants * context.servantModifier);
+    return count2 === void 0 ? void 0 : Object.freeze({
+      present: !0,
+      workers,
+      servants,
+      serves,
+      count: count2
+    });
+  }
+  function readCapturedJobCountSnapshot(root, jobIds) {
+    let context = readCapturedEffectiveJobContext(root);
+    if (context === void 0) return;
+    let counts = /* @__PURE__ */ new Map();
+    for (let id of jobIds) {
+      if (typeof id != "string" || id.length === 0 || counts.has(id))
+        return;
+      let job = readCapturedEffectiveJobCount(context, id);
+      if (job === void 0) return;
+      counts.set(id, job.count);
+    }
+    return Object.freeze({ readCount: (jobId) => counts.get(jobId) });
+  }
   function readServantState(root) {
     let race = readProperty(root, "race"), servants = readProperty(race, "servants");
     if (servants === void 0 || servants === !1) return null;
@@ -16204,17 +16253,6 @@
     let maximum = finiteNonNegative(readProperty(servants, "max")), used = finiteNonNegative(readProperty(servants, "used")), skilledMaximum = finiteNonNegative(readProperty(servants, "smax")), skilledUsed = finiteNonNegative(readProperty(servants, "sused"));
     if (!(maximum === void 0 || used === void 0 || skilledMaximum === void 0 || skilledUsed === void 0))
       return Object.freeze({ maximum, used, skilledMaximum, skilledUsed });
-  }
-  function readServants(servantState, root, id) {
-    if (servantState === null) return { count: 0, serves: !1 };
-    let race = readProperty(root, "race"), servants = readProperty(race, "servants");
-    if (!isRecord(servants)) return;
-    let jobs = readProperty(servants, "jobs");
-    if (!isRecord(jobs)) return;
-    let serves = Object.prototype.hasOwnProperty.call(jobs, id), value = readProperty(jobs, id);
-    if (value === void 0) return { count: 0, serves };
-    let count2 = finiteNonNegative(value);
-    return count2 === void 0 ? void 0 : { count: count2, serves };
   }
   var JOB_KINDS = Object.freeze({
     farmer: "farmer",
@@ -16400,12 +16438,12 @@
       onSkipped("civics", "ordinary job crew state is incomplete");
       return;
     }
-    let servantModifier = readCapturedJobStackMultiplier(root);
-    if (servantModifier === void 0) {
-      onSkipped("civics", "ordinary job servant modifier is unavailable");
+    let countContext = readCapturedEffectiveJobContext(root);
+    if (countContext === void 0) {
+      onSkipped("civics", "ordinary job count state is unavailable");
       return;
     }
-    let jobs = [], seen = /* @__PURE__ */ new Set();
+    let servantModifier = countContext.servantModifier, jobs = [], seen = /* @__PURE__ */ new Set();
     for (let controlId of controls2.capturedElementIds()) {
       if (!controlId.startsWith("civ-") || controlId.length <= 4)
         continue;
@@ -16431,12 +16469,12 @@
         onSkipped(controlId, "ordinary job assigned count is not finite");
         continue;
       }
-      let workers = finiteNonNegative(readProperty(job, "workers"));
-      if (workers === void 0) {
-        onSkipped(controlId, "ordinary job worker count is not finite");
-        continue;
+      let effective = readCapturedEffectiveJobCount(countContext, id);
+      if (effective === void 0 || !effective.present) {
+        onSkipped(controlId, "ordinary job effective count is unavailable");
+        return;
       }
-      let maximum = finiteMaximum(readProperty(job, "max"));
+      let workers = effective.workers, maximum = finiteMaximum(readProperty(job, "max"));
       if (maximum === void 0) {
         onSkipped(controlId, "ordinary job maximum is not finite");
         continue;
@@ -16446,17 +16484,12 @@
         onSkipped(controlId, "ordinary job visibility is not boolean");
         continue;
       }
-      let servantInput = readServants(servantState, root, id);
-      if (servantInput === void 0) {
-        onSkipped(controlId, "ordinary job servant count is not finite");
-        return;
-      }
       let smart = display && readProperty(settings, `job_s_${id}`) === !0, smartMaximum = readSmartMaximum(
         root,
         id,
         smart,
         settings,
-        workers + servantInput.count * servantModifier,
+        effective.count,
         readDemand,
         readJobHistory
       );
@@ -16495,9 +16528,9 @@
           configuredPriority: finiteSettingNumber(settings, `job_p_${id}`),
           assigned,
           workers,
-          servants: servantInput.count,
-          count: workers + servantInput.count * servantModifier,
-          serves: servantInput.serves,
+          servants: effective.servants,
+          count: effective.count,
+          serves: effective.serves,
           split: isSplitJob(id),
           smartMaximum,
           smartMaximumKnown,
@@ -16505,7 +16538,7 @@
             root,
             id,
             smart,
-            workers + servantInput.count * servantModifier,
+            effective.count,
             smartMaximum,
             jobHistory,
             settings
@@ -17782,13 +17815,10 @@
     return Object.freeze({
       reader,
       executor,
-      readJobCounts(root) {
+      readJobCounts(root, jobIds) {
         if (root !== rootState.readRoot()) return;
-        let catalog = catalogReader();
-        if (root !== rootState.readRoot() || catalog === void 0)
-          return;
-        let counts = new Map(catalog.jobs.map((job) => [job.id, job.count]));
-        return Object.freeze({ readCount: (jobId) => counts.get(jobId) });
+        let snapshot2 = readCapturedJobCountSnapshot(root, jobIds);
+        return root === rootState.readRoot() ? snapshot2 : void 0;
       }
     });
   }
@@ -25930,7 +25960,7 @@
       } catch {
         return;
       }
-      return count2 !== void 0 ? Number.isFinite(count2) && count2 >= 0 ? count2 : void 0 : readProperty(readProperty(root, "civic"), id) === void 0 && !controls2.capturedElementIds().includes(`civ-${id}`) ? 0 : void 0;
+      return count2 !== void 0 && Number.isFinite(count2) && count2 >= 0 ? count2 : void 0;
     }, resource = (id) => resources.get(id), obs = (id, sourceBinding = [
       "space-iridium_ship",
       "space-iron_ship",
@@ -26408,7 +26438,14 @@
   function readPowerCycle(root, dependencies, runtime, settings) {
     let jobCounts;
     try {
-      jobCounts = dependencies.readJobCounts?.(root);
+      jobCounts = dependencies.readJobCounts?.(root, [
+        "cement_worker",
+        "miner",
+        "coal_miner",
+        "farmer",
+        "hunter",
+        "archaeologist"
+      ]);
     } catch {
       return;
     }

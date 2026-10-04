@@ -37,9 +37,9 @@ import {
   readCapturedHighPopulationPercent,
   readCapturedPopulationResource,
   readCapturedPoweredTraitValue,
+  type CapturedJobCountSnapshot,
 } from "../../civic/captured-job-catalog.ts";
 import { readCapturedGovernorTaskActive } from "../../civic/captured-tax.ts";
-import type { CapturedJobCountSnapshot } from "../../civic/captured-ordinary-jobs.ts";
 import { calculateRequiredAuthorityGarrison } from "../../../../domain/civic/authority.ts";
 import { readAuthorityPolicyView } from "../../civic/authority.ts";
 import type { CapturedDemandSample } from "../../economy/resources/captured-resource-demand.ts";
@@ -75,6 +75,7 @@ export interface CapturedPowerReaderDependencies {
   readonly mechanics: CapturedGameMechanics;
   readonly readJobCounts?: (
     root: unknown,
+    jobIds: readonly string[],
   ) => CapturedJobCountSnapshot | undefined;
   readonly resources: GameResourceSource;
   /** Resource commitments and largest observed build cost from the shared demand phase. */
@@ -862,13 +863,8 @@ function readBuildingRule(
     } catch {
       return undefined;
     }
-    if (count !== undefined)
-      return Number.isFinite(count) && count >= 0 ? count : undefined;
-    // A genuinely absent job has no civic record or captured control. A skipped or incomplete
-    // catalog entry has one of those and cannot be treated as an idle worker pool.
-    return readProperty(readProperty(root, "civic"), id) === undefined &&
-      !controls.capturedElementIds().includes(`civ-${id}`)
-      ? 0
+    return count !== undefined && Number.isFinite(count) && count >= 0
+      ? count
       : undefined;
   };
   const resource = (id: string) => resources.get(id);
@@ -1643,7 +1639,14 @@ function readPowerCycle(
 ): PowerCycleInput | undefined {
   let jobCounts: CapturedJobCountSnapshot | undefined;
   try {
-    jobCounts = dependencies.readJobCounts?.(root);
+    jobCounts = dependencies.readJobCounts?.(root, [
+      "cement_worker",
+      "miner",
+      "coal_miner",
+      "farmer",
+      "hunter",
+      "archaeologist",
+    ]);
   } catch {
     return undefined;
   }

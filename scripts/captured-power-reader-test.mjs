@@ -18,6 +18,7 @@ import { readCapturedMechState } from "../src/domain/combat/mech-state.ts";
 import { readCapturedMechQueueKeyHeld } from "../src/adapters/evolve/combat/captured-mech.ts";
 import { EMPTY_DEMAND_SAMPLE } from "../src/adapters/evolve/economy/resources/captured-resource-demand.ts";
 import { readCapturedBuildingState } from "../src/adapters/evolve/progression/build/captured-building-state.ts";
+import { createCapturedOrdinaryJobsAutomation } from "../src/adapters/evolve/civic/captured-ordinary-jobs.ts";
 
 const capturedPowerFixtureControlIds = new Set();
 
@@ -2036,10 +2037,14 @@ const specialJobCounts = new Map([
   ["hunter", 7],
   ["archaeologist", 2],
 ]);
-const specialReader = createCapturedPowerReader({
+const specialReaderDependencies = {
   rootState: { readRoot: () => specialRoot },
   readJobCounts: () =>
-    Object.freeze({ readCount: (id) => specialJobCounts.get(id) }),
+    Object.freeze({
+      readCount: (id) =>
+        specialJobCounts.get(id) ??
+        (Object.hasOwn(specialRoot.civic, id) ? undefined : 0),
+    }),
   mechanics: createMechanics({
     structures: [
       ...specialStructures,
@@ -2117,12 +2122,73 @@ const specialReader = createCapturedPowerReader({
     consumptionBalanceMinimum: 60,
   }),
   readWarnings: () => [],
-});
+};
+const specialReader = createCapturedPowerReader(specialReaderDependencies);
 const specialCycle = specialReader.readCycle();
 assert.ok(
   specialCycle,
   "the complete special-rule fixture yields a captured Power cycle",
 );
+const panelIndependentJobs = createCapturedOrdinaryJobsAutomation({
+  rootState: specialReaderDependencies.rootState,
+  controls: specialControls,
+  readSettings: () => ({ autoJobs: false }),
+});
+const requiredPowerJobs = [
+  "cement_worker",
+  "miner",
+  "coal_miner",
+  "farmer",
+  "hunter",
+  "archaeologist",
+];
+assert.equal(
+  specialControls.capturedElementIds().some((id) => id.startsWith("civ-")),
+  false,
+);
+const rootCounts = panelIndependentJobs.readJobCounts(
+  specialRoot,
+  requiredPowerJobs,
+);
+assert.ok(
+  rootCounts,
+  "valid root job counts need no Civics controls or Jobs planner settings",
+);
+assert.deepEqual(
+  requiredPowerJobs.map((id) => rootCounts.readCount(id)),
+  [11, 13, 17, 12, 7, 2],
+);
+const realCountPower = createCapturedPowerReader({
+  ...specialReaderDependencies,
+  readJobCounts: panelIndependentJobs.readJobCounts,
+});
+const realCountCycle = realCountPower.readCycle();
+assert.ok(
+  realCountCycle,
+  "Power runs with root job counts and no Civics panel",
+);
+assert.deepEqual(
+  [
+    realCountCycle.buildings.find(
+      (building) => building.binding === "city-mine",
+    )?.rule.jobCount,
+    realCountCycle.buildings.find(
+      (building) => building.binding === "city-cement_plant",
+    )?.rule.jobCount,
+    realCountCycle.buildings.find(
+      (building) => building.binding === "city-mill",
+    )?.rule.foodWorkers,
+  ],
+  [13, 11, 19],
+);
+const realWorkers = specialRoot.civic.miner.workers;
+specialRoot.civic.miner.workers = Number.NaN;
+assert.equal(
+  realCountPower.readCycle(),
+  undefined,
+  "malformed requested root workers close Power without Civics controls",
+);
+specialRoot.civic.miner.workers = realWorkers;
 const specialRule = (binding, kind) => {
   const building = specialCycle.buildings.find(
     (entry) => entry.binding === binding,

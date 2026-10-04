@@ -24,10 +24,12 @@ import {
 } from "../../validation.ts";
 import {
   createCapturedJobCatalogReader,
+  readCapturedJobCountSnapshot,
   readCapturedMinerReservation,
   readCapturedPopulationResource,
   toCapturedJobsCycleInput,
   type CapturedJobCatalog,
+  type CapturedJobCountSnapshot,
   type CapturedJobHistory,
   type CapturedJobsCycleOptions,
 } from "./captured-job-catalog.ts";
@@ -54,11 +56,6 @@ export interface CapturedOrdinaryJobsDependencies {
   readonly readSettings: () => unknown;
   readonly readDemand?: () => CapturedDemandSample;
   readonly onSkipped?: (controlId: string, reason: string) => void;
-}
-
-/** Current effective counts from the same validated catalog used by ordinary Jobs. */
-export interface CapturedJobCountSnapshot {
-  readonly readCount: (jobId: string) => number | undefined;
 }
 
 export interface CapturedFullJobsDependencies extends CapturedOrdinaryJobsDependencies {
@@ -805,6 +802,7 @@ export function createCapturedOrdinaryJobsAutomation({
   readonly executor: JobsExecutor;
   readonly readJobCounts: (
     root: unknown,
+    jobIds: readonly string[],
   ) => CapturedJobCountSnapshot | undefined;
 } {
   let history: CapturedJobHistory | undefined;
@@ -959,13 +957,13 @@ export function createCapturedOrdinaryJobsAutomation({
   return Object.freeze({
     reader,
     executor,
-    readJobCounts(root: unknown): CapturedJobCountSnapshot | undefined {
+    readJobCounts(
+      root: unknown,
+      jobIds: readonly string[],
+    ): CapturedJobCountSnapshot | undefined {
       if (root !== rootState.readRoot()) return undefined;
-      const catalog = catalogReader();
-      if (root !== rootState.readRoot() || catalog === undefined)
-        return undefined;
-      const counts = new Map(catalog.jobs.map((job) => [job.id, job.count]));
-      return Object.freeze({ readCount: (jobId: string) => counts.get(jobId) });
+      const snapshot = readCapturedJobCountSnapshot(root, jobIds);
+      return root === rootState.readRoot() ? snapshot : undefined;
     },
   });
 }

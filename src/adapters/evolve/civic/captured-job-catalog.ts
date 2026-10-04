@@ -73,6 +73,25 @@ export interface CapturedJobCatalogEntry {
   readonly isDefault: boolean;
 }
 
+/** Frozen effective counts sampled from civic/race state, independent of Jobs controls. */
+export interface CapturedJobCountSnapshot {
+  readonly readCount: (jobId: string) => number | undefined;
+}
+
+interface CapturedEffectiveJobCount {
+  readonly present: boolean;
+  readonly workers: number;
+  readonly servants: number;
+  readonly serves: boolean;
+  readonly count: number;
+}
+
+interface CapturedEffectiveJobContext {
+  readonly civic: Readonly<Record<string, unknown>>;
+  readonly servantJobs: Readonly<Record<string, unknown>> | null;
+  readonly servantModifier: number;
+}
+
 export interface CapturedServantState {
   readonly maximum: number;
   readonly used: number;
@@ -1199,6 +1218,88 @@ function readStorageBackedMinimum(
   return ancients >= 2 ? workers : null;
 }
 
+function readCapturedJobServantAssignments(
+  root: unknown,
+): Readonly<Record<string, unknown>> | null | undefined {
+  const servants = readProperty(readProperty(root, "race"), "servants");
+  // DeadSpace omits this entire bag for races without servants. Individual assignments appear
+  // lazily, so an absent job key below is also a valid zero.
+  if (servants === undefined || servants === false) return null;
+  if (!isRecord(servants)) return undefined;
+  const jobs = readProperty(servants, "jobs");
+  return isRecord(jobs) ? jobs : undefined;
+}
+
+function readCapturedEffectiveJobContext(
+  root: unknown,
+): CapturedEffectiveJobContext | undefined {
+  const civic = readProperty(root, "civic");
+  const servantJobs = readCapturedJobServantAssignments(root);
+  const servantModifier = readCapturedJobStackMultiplier(root);
+  if (
+    !isRecord(civic) ||
+    servantJobs === undefined ||
+    servantModifier === undefined
+  )
+    return undefined;
+  return { civic, servantJobs, servantModifier };
+}
+
+/** The only implementation of DeadSpace's current effective ordinary-job count. */
+function readCapturedEffectiveJobCount(
+  context: CapturedEffectiveJobContext,
+  id: string,
+): CapturedEffectiveJobCount | undefined {
+  if (!Object.prototype.hasOwnProperty.call(context.civic, id))
+    return Object.freeze({
+      present: false,
+      workers: 0,
+      servants: 0,
+      serves: false,
+      count: 0,
+    });
+  const job = readProperty(context.civic, id);
+  if (!isRecord(job)) return undefined;
+  const workers = finiteNonNegative(readProperty(job, "workers"));
+  if (workers === undefined) return undefined;
+  const servantJobs = context.servantJobs;
+  const serves =
+    servantJobs !== null &&
+    Object.prototype.hasOwnProperty.call(servantJobs, id);
+  const rawServants =
+    servantJobs === null ? undefined : readProperty(servantJobs, id);
+  const servants =
+    rawServants === undefined ? 0 : finiteNonNegative(rawServants);
+  if (servants === undefined) return undefined;
+  const count = finiteNonNegative(workers + servants * context.servantModifier);
+  return count === undefined
+    ? undefined
+    : Object.freeze({
+        present: true,
+        workers,
+        servants,
+        serves,
+        count,
+      });
+}
+
+export function readCapturedJobCountSnapshot(
+  root: unknown,
+  jobIds: readonly string[],
+): CapturedJobCountSnapshot | undefined {
+  const context = readCapturedEffectiveJobContext(root);
+  if (context === undefined) return undefined;
+  const counts = new Map<string, number>();
+  for (const id of jobIds) {
+    if (typeof id !== "string" || id.length === 0 || counts.has(id))
+      return undefined;
+    const job = readCapturedEffectiveJobCount(context, id);
+    if (job === undefined) return undefined;
+    counts.set(id, job.count);
+  }
+  return Object.freeze({ readCount: (jobId: string) => counts.get(jobId) });
+}
+
 function readServantState(
   root: unknown,
 ): Readonly<CapturedServantState> | null | undefined {
@@ -1223,26 +1324,6 @@ function readServantState(
     return undefined;
   }
   return Object.freeze({ maximum, used, skilledMaximum, skilledUsed });
-}
-
-function readServants(
-  servantState: Readonly<CapturedServantState> | null,
-  root: unknown,
-  id: string,
-): { readonly count: number; readonly serves: boolean } | undefined {
-  if (servantState === null) return { count: 0, serves: false };
-  const race = readProperty(root, "race");
-  const servants = readProperty(race, "servants");
-  if (!isRecord(servants)) return undefined;
-  const jobs = readProperty(servants, "jobs");
-  if (!isRecord(jobs)) return undefined;
-  const serves = Object.prototype.hasOwnProperty.call(jobs, id);
-  const value = readProperty(jobs, id);
-  // A servant job is created lazily with the servant panel. An absent entry therefore means that
-  // no servant is assigned yet; it must not make an ordinary worker sample unavailable.
-  if (value === undefined) return { count: 0, serves };
-  const count = finiteNonNegative(value);
-  return count === undefined ? undefined : { count, serves };
 }
 
 // These are the canonical ordinary ids from DeadSpace's defineJobs list. The fallback keeps
@@ -1516,12 +1597,12 @@ function readCatalog(
     onSkipped("civics", "ordinary job crew state is incomplete");
     return undefined;
   }
-  // Legacy CoreJob.count uses traitVal("high_pop", 0, 1): first variable, fallback one.
-  const servantModifier = readCapturedJobStackMultiplier(root);
-  if (servantModifier === undefined) {
-    onSkipped("civics", "ordinary job servant modifier is unavailable");
+  const countContext = readCapturedEffectiveJobContext(root);
+  if (countContext === undefined) {
+    onSkipped("civics", "ordinary job count state is unavailable");
     return undefined;
   }
+  const servantModifier = countContext.servantModifier;
 
   const jobs: CapturedJobCatalogEntry[] = [];
   const seen = new Set<string>();
@@ -1555,11 +1636,12 @@ function readCatalog(
       onSkipped(controlId, "ordinary job assigned count is not finite");
       continue;
     }
-    const workers = finiteNonNegative(readProperty(job, "workers"));
-    if (workers === undefined) {
-      onSkipped(controlId, "ordinary job worker count is not finite");
-      continue;
+    const effective = readCapturedEffectiveJobCount(countContext, id);
+    if (effective === undefined || !effective.present) {
+      onSkipped(controlId, "ordinary job effective count is unavailable");
+      return undefined;
     }
+    const workers = effective.workers;
     const maximum = finiteMaximum(readProperty(job, "max"));
     if (maximum === undefined) {
       onSkipped(controlId, "ordinary job maximum is not finite");
@@ -1570,11 +1652,6 @@ function readCatalog(
       onSkipped(controlId, "ordinary job visibility is not boolean");
       continue;
     }
-    const servantInput = readServants(servantState, root, id);
-    if (servantInput === undefined) {
-      onSkipped(controlId, "ordinary job servant count is not finite");
-      return undefined;
-    }
     // Locked DeadSpace jobs still expose civic records and controls, but their smart settings are
     // irrelevant until the job is displayed. Do not let an unavailable locked-job input disable
     // the whole ordinary-job catalog.
@@ -1584,7 +1661,7 @@ function readCatalog(
       id,
       smart,
       settings,
-      workers + servantInput.count * servantModifier,
+      effective.count,
       readDemand,
       readJobHistory,
     );
@@ -1643,9 +1720,9 @@ function readCatalog(
         configuredPriority: finiteSettingNumber(settings, `job_p_${id}`),
         assigned,
         workers,
-        servants: servantInput.count,
-        count: workers + servantInput.count * servantModifier,
-        serves: servantInput.serves,
+        servants: effective.servants,
+        count: effective.count,
+        serves: effective.serves,
         split: isSplitJob(id),
         smartMaximum,
         smartMaximumKnown,
@@ -1653,7 +1730,7 @@ function readCatalog(
           root,
           id,
           smart,
-          workers + servantInput.count * servantModifier,
+          effective.count,
           smartMaximum,
           jobHistory,
           settings,

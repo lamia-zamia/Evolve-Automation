@@ -6,6 +6,8 @@ import {
 } from "../src/adapters/evolve/civic/captured-ordinary-jobs.ts";
 import {
   createCapturedJobCatalogReader,
+  readCapturedJobCountSnapshot,
+  readCapturedJobStackMultiplier,
   readCapturedMinerReservation,
   readCapturedPopulationResource,
 } from "../src/adapters/evolve/civic/captured-job-catalog.ts";
@@ -933,5 +935,154 @@ assert.equal(
   "a race without servants keeps the ordinary cycle available while jobManageServants is on",
 );
 assert.equal(servantlessInput.servantsMaximum, 0);
+
+const countRoot = structuredClone(fullRoot);
+countRoot.civic.d_job = "unemployed";
+countRoot.civic.miner = {
+  job: "miner",
+  assigned: 2,
+  workers: 2,
+  max: -1,
+  display: true,
+};
+countRoot.civic.farmer.workers = 4;
+countRoot.civic.hunter = {
+  job: "hunter",
+  assigned: 3,
+  workers: 3,
+  max: -1,
+  display: true,
+};
+countRoot.race.high_pop = 1;
+countRoot.race.servants.jobs = { farmer: 2, hunter: 1 };
+countRoot.race.servants.max = 3;
+countRoot.race.servants.used = 3;
+const countIds = ["miner", "farmer", "hunter", "archaeologist"];
+const countControls = {
+  capturedElementIds: () => [
+    "civ-unemployed",
+    "civ-farmer",
+    "civ-lumberjack",
+    "civ-miner",
+    "civ-hunter",
+  ],
+  resolve: (elementId) => ({
+    elementId,
+    generation: 1,
+    methods: ["add", "sub", "setDefault"],
+  }),
+};
+const fullCountCatalog = createCapturedJobCatalogReader({
+  rootState: { readRoot: () => countRoot },
+  controls: countControls,
+  readSettings: () => ({ autoJobs: false }),
+});
+const sameCounts = () => {
+  const snapshot = readCapturedJobCountSnapshot(countRoot, countIds);
+  const catalog = fullCountCatalog();
+  assert.ok(snapshot);
+  assert.ok(catalog);
+  assert.deepEqual(
+    countIds.slice(0, 3).map((id) => snapshot.readCount(id)),
+    countIds
+      .slice(0, 3)
+      .map((id) => catalog.jobs.find((job) => job.id === id)?.count),
+  );
+  return snapshot;
+};
+const initialCounts = sameCounts();
+assert.deepEqual(
+  countIds.map((id) => initialCounts.readCount(id)),
+  [2, 12, 7, 0],
+);
+const badSplitCatalog = createCapturedJobCatalogReader({
+  rootState: { readRoot: () => countRoot },
+  controls: countControls,
+  readSettings: () => ({ autoJobs: false, jobLumberWeighting: "malformed" }),
+});
+assert.equal(
+  badSplitCatalog(),
+  undefined,
+  "the full Jobs catalog rejects malformed split policy",
+);
+assert.equal(
+  readCapturedJobCountSnapshot(countRoot, countIds)?.readCount("miner"),
+  2,
+);
+const noDefaultCatalog = createCapturedJobCatalogReader({
+  rootState: { readRoot: () => countRoot },
+  controls: {
+    ...countControls,
+    capturedElementIds: () => ["civ-miner", "civ-farmer"],
+  },
+  readSettings: () => ({ autoJobs: false }),
+});
+assert.equal(
+  noDefaultCatalog(),
+  undefined,
+  "the full Jobs catalog requires its default control",
+);
+assert.equal(
+  readCapturedJobCountSnapshot(countRoot, countIds)?.readCount("farmer"),
+  12,
+);
+countRoot.civic.miner.workers = 8;
+assert.equal(
+  initialCounts.readCount("miner"),
+  2,
+  "count snapshot does not lazily reread root",
+);
+assert.equal(sameCounts().readCount("miner"), 8);
+countRoot.civic.miner.workers = 2;
+countRoot.race.high_pop = 2;
+assert.deepEqual(
+  [
+    readCapturedJobStackMultiplier(countRoot),
+    sameCounts().readCount("farmer"),
+    sameCounts().readCount("hunter"),
+  ],
+  [7, 18, 10],
+);
+delete countRoot.race.servants.jobs.hunter;
+assert.equal(
+  sameCounts().readCount("hunter"),
+  3,
+  "absent servant assignment is zero",
+);
+delete countRoot.race.servants;
+assert.deepEqual(
+  [sameCounts().readCount("farmer"), sameCounts().readCount("hunter")],
+  [4, 3],
+  "a species without servants uses workers only",
+);
+countRoot.civic.miner.workers = Number.NaN;
+assert.equal(readCapturedJobCountSnapshot(countRoot, countIds), undefined);
+countRoot.civic.miner.workers = 2;
+countRoot.race.servants = { jobs: { farmer: "bad" } };
+assert.equal(readCapturedJobCountSnapshot(countRoot, countIds), undefined);
+
+const noCivicControls = createCapturedOrdinaryJobsAutomation({
+  rootState: { readRoot: () => countRoot },
+  controls: {
+    capturedElementIds: () => {
+      throw new Error("Jobs controls must not be read");
+    },
+    resolve: () => undefined,
+  },
+  readSettings: () => {
+    throw new Error("Jobs settings must not be read");
+  },
+  readDemand: () => {
+    throw new Error("Jobs demand must not be read");
+  },
+});
+countRoot.race.servants = { jobs: { farmer: 2, hunter: 1 } };
+assert.deepEqual(
+  countIds.map((id) =>
+    noCivicControls.readJobCounts(countRoot, countIds)?.readCount(id),
+  ),
+  [2, 18, 10, 0],
+  "root counts survive missing controls, incomplete servant pools and bad split settings",
+);
 
 console.log("captured-ordinary-jobs ok");
