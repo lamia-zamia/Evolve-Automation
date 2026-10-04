@@ -762,6 +762,10 @@ function sampleSupportCoherence({
   ),
   unlimited = false,
   consumerFuel = false,
+  managedProviders = providerOns.map(() => true),
+  managedConsumers = consumerOns.map(() => true),
+  crossGroup = false,
+  frozenFuelDependency = false,
 } = {}) {
   const type = "quasar";
   const providerIds = ["nav_beacon", "red_university"];
@@ -777,6 +781,15 @@ function sampleSupportCoherence({
       support: 1,
       supportFor: { [type]: providerValues[index] },
       supportTypes: type,
+      ...(frozenFuelDependency && index === 0
+        ? { fuel: [{ resourceId: "MissingFuel", amount: 1 }] }
+        : {}),
+      ...(crossGroup && index === 0
+        ? {
+            supportTypes: [type, "nova"],
+            supportFor: { [type]: providerValues[index], nova: 1 },
+          }
+        : {}),
     }),
   );
   const consumers = consumerOns.map((_, index) =>
@@ -800,6 +813,43 @@ function sampleSupportCoherence({
     }),
   );
   const sampleStructures = [...providers, ...consumers];
+  if (crossGroup) {
+    sampleStructures.push(
+      structure({
+        entryKey: "spc_home:moon_anchor",
+        region: "space",
+        sector: "spc_home",
+        struct: "moon_anchor",
+        actionId: "space-moon_anchor",
+        support: 1,
+        supportTypes: "nova",
+      }),
+      structure({
+        entryKey: "spc_home:red_member",
+        region: "space",
+        sector: "spc_home",
+        struct: "red_member",
+        actionId: "space-red_member",
+        powered: 1,
+        support: -3,
+        supportTypes: "nova",
+        supportTopology: {
+          anchorEntryKey: providerKey,
+          unlimited: false,
+          enabled: { kind: "value", value: true },
+        },
+      }),
+    );
+  }
+  const unrelated = structure({
+    entryKey: "city:consumer",
+    region: "city",
+    sector: "city",
+    struct: "consumer",
+    actionId: "city-bank",
+    powered: 5,
+  });
+  sampleStructures.push(unrelated);
   const space = { ...root.space };
   sampleStructures.forEach((item, index) => {
     space[item.struct] = {
@@ -807,18 +857,29 @@ function sampleSupportCoherence({
       on:
         index < providers.length
           ? providerOns[index]
-          : consumerOns[index - providers.length],
+          : (consumerOns[index - providers.length] ?? 1),
       ...(index === 0 ? { s_max: nativeMaximum, support: nativeCurrent } : {}),
     };
   });
   const sampleRoot = {
     ...root,
+    city: { ...root.city, consumer: { count: 2, on: 0 } },
     space,
-    power: consumers.map((item) => item.entryKey),
-    support: { [type]: consumers.map((item) => item.entryKey) },
+    power: [...consumers.map((item) => item.entryKey), unrelated.entryKey],
+    support: {
+      [type]: consumers.map((item) => item.entryKey),
+      ...(crossGroup ? { nova: ["spc_home:red_member"] } : {}),
+    },
   };
   const sampleSettings = Object.fromEntries(
-    sampleStructures.map((item) => [`bld_s_${item.actionId}`, true]),
+    sampleStructures.map((item, index) => [
+      `bld_s_${item.actionId}`,
+      index === sampleStructures.length - 1
+        ? true
+        : index < providers.length
+          ? managedProviders[index]
+          : (managedConsumers[index - providers.length] ?? true),
+    ]),
   );
   return createCapturedPowerReader({
     ...readerDependencies,
@@ -833,33 +894,71 @@ function sampleSupportCoherence({
 }
 const coherentSupport = sampleSupportCoherence();
 assert.ok(coherentSupport);
+assert.deepEqual(
+  coherentSupport.buildings.map((building) => building.binding).sort(),
+  ["city-bank", "space-nav_beacon", "space-vr_center"],
+  "all coherent support participants and unrelated Power remain managed",
+);
 assert.ok(
   planPowerCycle(coherentSupport, EMPTY_POWER_AUTOMATION_STATE).decision,
   "a reconciled native group proceeds into planning",
 );
-assert.equal(
-  sampleSupportCoherence({ providerOns: [10], nativeMaximum: 10 }),
-  undefined,
+function assertFrozenSupport(options, message) {
+  const sample = sampleSupportCoherence(options);
+  assert.ok(sample, message);
+  assert.deepEqual(
+    sample.buildings.map((building) => building.binding),
+    ["city-bank"],
+    message,
+  );
+  assert.ok(
+    planPowerCycle(
+      sample,
+      EMPTY_POWER_AUTOMATION_STATE,
+    ).decision?.operations.some(
+      (operation) =>
+        operation.kind === "adjust-building" &&
+        operation.binding === "city-bank" &&
+        operation.amount > 0,
+    ),
+    "unrelated Power still adjusts its ordinary building",
+  );
+}
+assertFrozenSupport(
+  { managedProviders: [false], managedConsumers: [false], nativeMaximum: 2 },
+  "a nonzero native group with no managed participants remains background state",
+);
+assertFrozenSupport(
+  { managedProviders: [false] },
+  "an unmanaged provider freezes its managed consumer",
+);
+assertFrozenSupport(
+  { managedConsumers: [false] },
+  "an unmanaged consumer freezes its managed provider",
+);
+assertFrozenSupport(
+  { managedConsumers: [false], frozenFuelDependency: true },
+  "a frozen provider's unavailable fuel resource does not block Power",
+);
+assertFrozenSupport(
+  { providerOns: [10], nativeMaximum: 10 },
   "five effective providers cannot be rewound as ten configured providers",
 );
-assert.equal(
-  sampleSupportCoherence({ consumerOns: [10], nativeCurrent: 3 }),
-  undefined,
+assertFrozenSupport(
+  { consumerOns: [10], nativeCurrent: 3 },
   "three active consumers cannot be rewound as ten configured consumers",
 );
-assert.equal(
-  sampleSupportCoherence({ providerOns: [10], nativeMaximum: 15 }),
-  undefined,
+assertFrozenSupport(
+  { providerOns: [10], nativeMaximum: 15 },
   "raw support_for output is not presumed to include the infiltrator factor",
 );
-assert.equal(
-  sampleSupportCoherence({
-    consumerOns: [10],
-    nativeCurrent: 3,
-    consumerFuel: true,
-  }),
-  undefined,
+assertFrozenSupport(
+  { consumerOns: [10], nativeCurrent: 3, consumerFuel: true },
   "support-fuel shortages cannot fabricate free support",
+);
+assertFrozenSupport(
+  { crossGroup: true, nativeCurrent: 3 },
+  "removing a cross-group participant forces the second group to be rechecked",
 );
 assert.ok(
   sampleSupportCoherence({
@@ -868,26 +967,24 @@ assert.ok(
   }),
   "all providers reconcile to the native capacity",
 );
-assert.equal(
-  sampleSupportCoherence({
+assertFrozenSupport(
+  {
     providerOns: [2, 3],
     providerValues: [2, 4],
     nativeMaximum: 15,
-  }),
-  undefined,
+  },
   "a multi-provider group fails closed if one contribution is missing",
 );
 assert.ok(
   sampleSupportCoherence({ consumerOns: [2, 3], consumerValues: [1, 2] }),
   "all consumers reconcile to native usage",
 );
-assert.equal(
-  sampleSupportCoherence({
+assertFrozenSupport(
+  {
     consumerOns: [2, 3],
     consumerValues: [1, 2],
     nativeCurrent: 7,
-  }),
-  undefined,
+  },
   "a multi-consumer group fails closed when usage differs",
 );
 assert.equal(

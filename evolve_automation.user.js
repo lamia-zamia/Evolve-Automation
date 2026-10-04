@@ -26228,22 +26228,12 @@
     let entry = snapshot2.catalog, unlocked = snapshot2.available, gameSettings = readProperty(root, "settings");
     return (entry.region === "portal" ? readProperty(gameSettings, "showPortal") === !0 : entry.region === "space" ? readProperty(gameSettings, "showSpace") === !0 || readProperty(gameSettings, "showOuter") === !0 : entry.region === "galaxy" ? readProperty(gameSettings, "showGalactic") === !0 : entry.region === "interstellar" ? readProperty(gameSettings, "showDeep") === !0 : entry.region === "tauceti" ? readProperty(gameSettings, "showTau") === !0 : !0) && unlocked && settings.autoPower === !0 && settings[`bld_s_${binding}`] === !0 && capturedPowerSmartEnabled(binding, settings);
   }
-  function readLakeAndSpire(root, settings, runtime, allRecords, resourceMap, dependencies, mechState, buildingStates) {
+  function readLakeAndSpire(root, settings, runtime, allRecords, resourceMap, dependencies, mechState, buildingStates, lakeEnabled, spireEnabled) {
     let lakeBireme = allRecords.find(
       (entry) => entry.binding === "portal-bireme"
     ), lakeTransport = allRecords.find(
       (entry) => entry.binding === "portal-transport"
-    ), lake = isPowerGroupSmartManagementEnabled(
-      root,
-      "portal-bireme",
-      settings,
-      buildingStates
-    ) && isPowerGroupSmartManagementEnabled(
-      root,
-      "portal-transport",
-      settings,
-      buildingStates
-    ) && lakeBireme !== void 0 && lakeTransport !== void 0 ? Object.freeze({
+    ), lake = lakeEnabled && lakeBireme !== void 0 && lakeTransport !== void 0 ? Object.freeze({
       enabled: !0,
       bloodSpireLevel: readGamePathNumber(root, ["blood", "spire"], 0) ?? 0,
       biremeId: lakeBireme.id,
@@ -26262,17 +26252,7 @@
       transportStateOn: buildingStates.find(
         (building) => building.catalog.binding === lakeTransport.binding
       )?.stateOn ?? 0
-    }) : EMPTY_LAKE, spireEnabled = isPowerGroupSmartManagementEnabled(
-      root,
-      "portal-port",
-      settings,
-      buildingStates
-    ) && isPowerGroupSmartManagementEnabled(
-      root,
-      "portal-base_camp",
-      settings,
-      buildingStates
-    ), spire = EMPTY_SPIRE;
+    }) : EMPTY_LAKE, spire = EMPTY_SPIRE;
     if (spireEnabled) {
       let spireMech = makeSpireBuilding(
         "portal-mechbay",
@@ -26366,9 +26346,53 @@
       (building) => building.structure !== void 0 && building.hasState && settings["bld_s_" + building.catalog.binding] === !0 && building.count > 0
     ).sort(
       (left, right) => (nativeOrderIndex.get(left.structure.entryKey) ?? Number.MAX_SAFE_INTEGER) - (nativeOrderIndex.get(right.structure.entryKey) ?? Number.MAX_SAFE_INTEGER)
-    ), autoFleet = settings.autoFleet === !0, fleetNeededShipsSample = autoFleet ? dependencies.readFleetNeededShips?.() : null;
+    ), supports = readNativePowerSupports(
+      root,
+      dependencies.mechanics,
+      structures
+    );
+    if (supports === void 0) return;
+    let supportMap = new Map(supports.map((item) => [item.type, item])), candidates = [];
+    for (let record of managed) {
+      let role = record.structure.readPowerGridRole(root, record.powered), grids = record.structure.readNativeSupportGrids(root);
+      if (role.kind !== "value" || grids.kind !== "value") return;
+      role.value === "none" && grids.value.length === 0 || candidates.push({
+        record,
+        supportChanges: Object.freeze(
+          grids.value.map(
+            (group) => Object.freeze({ type: group.type, amount: -group.contribution })
+          )
+        )
+      });
+    }
+    let supportSafe = candidates;
+    for (; ; ) {
+      let unsafeTypes = new Set(
+        supportSafe.flatMap(
+          (candidate) => candidate.supportChanges.filter((change) => !supportMap.has(change.type)).map((change) => change.type)
+        )
+      );
+      for (let support of supports) {
+        let modeledMaximum = 0, modeledCurrent = 0, touched = !1;
+        for (let candidate of supportSafe)
+          for (let change of candidate.supportChanges)
+            change.type === support.type && (touched = !0, change.amount < 0 ? modeledMaximum -= change.amount * candidate.record.stateOn : modeledCurrent += change.amount * candidate.record.stateOn);
+        touched && (Math.abs(modeledMaximum - support.maximum) > 1e-9 || Math.abs(modeledCurrent - support.current) > 1e-9) && unsafeTypes.add(support.type);
+      }
+      if (unsafeTypes.size === 0) break;
+      let next = supportSafe.filter(
+        (candidate) => !candidate.supportChanges.some(
+          (change) => unsafeTypes.has(change.type)
+        )
+      );
+      if (next.length === supportSafe.length) break;
+      supportSafe = next;
+    }
+    let autoFleet = settings.autoFleet === !0, fleetNeededShipsSample = autoFleet ? dependencies.readFleetNeededShips?.() : null;
     if (autoFleet && fleetNeededShipsSample === void 0) return;
-    let fleetNeededShips = fleetNeededShipsSample ?? null, powers = [], lakeGroupManaged = isPowerGroupSmartManagementEnabled(
+    let fleetNeededShips = fleetNeededShipsSample ?? null, powers = [], supportSafeBindings = new Set(
+      supportSafe.map(({ record }) => record.catalog.binding)
+    ), lakeGroupManaged = supportSafeBindings.has("portal-bireme") && supportSafeBindings.has("portal-transport") && isPowerGroupSmartManagementEnabled(
       root,
       "portal-bireme",
       settings,
@@ -26378,7 +26402,7 @@
       "portal-transport",
       settings,
       buildingStates
-    ), spireGroupManaged = isPowerGroupSmartManagementEnabled(
+    ), spireGroupManaged = supportSafeBindings.has("portal-port") && supportSafeBindings.has("portal-base_camp") && isPowerGroupSmartManagementEnabled(
       root,
       "portal-port",
       settings,
@@ -26388,15 +26412,11 @@
       "portal-base_camp",
       settings,
       buildingStates
-    ), requiresMechState = settings.autoMech === !0 && (spireGroupManaged || managed.some(({ catalog }) => catalog.binding === "portal-waygate")), mechState = requiresMechState ? dependencies.readMechState?.() : void 0;
+    ), requiresMechState = settings.autoMech === !0 && (spireGroupManaged || supportSafe.some(
+      ({ record }) => record.catalog.binding === "portal-waygate"
+    )), mechState = requiresMechState ? dependencies.readMechState?.() : void 0;
     if (requiresMechState && mechState === void 0) return;
-    let supports = readNativePowerSupports(
-      root,
-      dependencies.mechanics,
-      structures
-    );
-    if (supports === void 0) return;
-    let supportMap = new Map(supports.map((item) => [item.type, item])), decayLabel = dependencies.mechanics.readLocalizedText(
+    let decayLabel = dependencies.mechanics.readLocalizedText(
       "evo_challenge_decay"
     );
     if (readProperty(readProperty(root, "race"), "decay") === !0 && decayLabel.kind !== "value")
@@ -26408,21 +26428,12 @@
     let speciesId = readProperty(readProperty(root, "race"), "species");
     for (let resourceId of Object.keys(gameResources))
       resourceId !== speciesId && !resourceId.endsWith("_Support") && resourceIds.add(resourceId);
-    for (let index = 0; index < managed.length; index++) {
-      let record = managed[index], binding = record.catalog.binding, nativeRole = record.structure.readPowerGridRole(root, record.powered), nativeSupport = record.structure.readNativeSupportGrids(root);
-      if (nativeRole.kind !== "value" || nativeSupport.kind !== "value")
-        return;
-      if (nativeRole.value === "none" && nativeSupport.value.length === 0)
-        continue;
-      let metadata2 = capturedPowerMetadataForBinding(binding), consumptions = readFuelInputs(
+    for (let candidate of supportSafe) {
+      let { record, supportChanges } = candidate, binding = record.catalog.binding, metadata2 = capturedPowerMetadataForBinding(binding), consumptions = readFuelInputs(
         root,
         dependencies.mechanics,
         record.structure,
         metadata2.consumptions
-      ), supportChanges = Object.freeze(
-        nativeSupport.value.map(
-          (group) => Object.freeze({ type: group.type, amount: -group.contribution })
-        )
       ), produces = capturedPowerProducerCapability(binding), powered = record.powered, title = record.structure.readTitle(), description = record.structure.readDescription();
       if (consumptions === void 0 || powered === void 0 || title.kind === "invalid" || description.kind === "invalid")
         return;
@@ -26460,14 +26471,6 @@
         rule: Object.freeze({ kind: "ordinary" })
       });
       powers.push(input);
-    }
-    for (let support of supports) {
-      let modeledMaximum = 0, modeledCurrent = 0;
-      for (let building of powers)
-        for (let change of building.supportChanges)
-          change.type === support.type && (change.amount < 0 ? modeledMaximum -= change.amount * building.stateOn : modeledCurrent += change.amount * building.stateOn);
-      if (Math.abs(modeledMaximum - support.maximum) > 1e-9 || Math.abs(modeledCurrent - support.current) > 1e-9)
-        return;
     }
     let completeResourceIds = [...resourceIds], resourceInputs = readPowerResourceInputs(
       root,
@@ -26530,7 +26533,9 @@
       resourceMap,
       dependencies,
       mechState,
-      buildingStates
+      buildingStates,
+      lakeGroupManaged,
+      spireGroupManaged
     );
     return lakeAndSpire === void 0 ? void 0 : Object.freeze({
       powerUnlocked,

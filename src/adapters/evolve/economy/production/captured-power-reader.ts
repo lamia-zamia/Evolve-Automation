@@ -1455,6 +1455,8 @@ function readLakeAndSpire(
   dependencies: CapturedPowerReaderDependencies,
   mechState: CapturedMechState | undefined,
   buildingStates: readonly CapturedBuildingState[],
+  lakeEnabled: boolean,
+  spireEnabled: boolean,
 ):
   | { readonly lake: PowerLakeInput; readonly spire: PowerSpireInput }
   | undefined {
@@ -1464,19 +1466,6 @@ function readLakeAndSpire(
   const lakeTransport = allRecords.find(
     (entry) => entry.binding === "portal-transport",
   );
-  const lakeEnabled =
-    isPowerGroupSmartManagementEnabled(
-      root,
-      "portal-bireme",
-      settings,
-      buildingStates,
-    ) &&
-    isPowerGroupSmartManagementEnabled(
-      root,
-      "portal-transport",
-      settings,
-      buildingStates,
-    );
   const lake: PowerLakeInput =
     lakeEnabled && lakeBireme !== undefined && lakeTransport !== undefined
       ? Object.freeze({
@@ -1504,19 +1493,6 @@ function readLakeAndSpire(
             )?.stateOn ?? 0,
         })
       : EMPTY_LAKE;
-  const spireEnabled =
-    isPowerGroupSmartManagementEnabled(
-      root,
-      "portal-port",
-      settings,
-      buildingStates,
-    ) &&
-    isPowerGroupSmartManagementEnabled(
-      root,
-      "portal-base_camp",
-      settings,
-      buildingStates,
-    );
   let spire: PowerSpireInput = EMPTY_SPIRE;
   if (spireEnabled) {
     const spireMech = makeSpireBuilding(
@@ -1675,6 +1651,72 @@ function readPowerCycle(
         (nativeOrderIndex.get(right.structure.entryKey) ??
           Number.MAX_SAFE_INTEGER),
     );
+  const supports = readNativePowerSupports(
+    root,
+    dependencies.mechanics,
+    structures,
+  );
+  if (supports === undefined) return undefined;
+  const supportMap = new Map(supports.map((item) => [item.type, item]));
+  const candidates: {
+    readonly record: (typeof managed)[number];
+    readonly supportChanges: readonly PowerSupportChangeInput[];
+  }[] = [];
+  for (const record of managed) {
+    const role = record.structure.readPowerGridRole(root, record.powered);
+    const grids = record.structure.readNativeSupportGrids(root);
+    if (role.kind !== "value" || grids.kind !== "value") return undefined;
+    if (role.value === "none" && grids.value.length === 0) continue;
+    candidates.push({
+      record,
+      supportChanges: Object.freeze(
+        grids.value.map((group) =>
+          Object.freeze({ type: group.type, amount: -group.contribution }),
+        ),
+      ),
+    });
+  }
+  // Once a group fails, its buildings stay in the native baseline. Removing a
+  // cross-group building can make another group's remaining model incomplete.
+  let supportSafe = candidates;
+  while (true) {
+    const unsafeTypes = new Set(
+      supportSafe.flatMap((candidate) =>
+        candidate.supportChanges
+          .filter((change) => !supportMap.has(change.type))
+          .map((change) => change.type),
+      ),
+    );
+    for (const support of supports) {
+      let modeledMaximum = 0;
+      let modeledCurrent = 0;
+      let touched = false;
+      for (const candidate of supportSafe) {
+        for (const change of candidate.supportChanges) {
+          if (change.type !== support.type) continue;
+          touched = true;
+          if (change.amount < 0)
+            modeledMaximum -= change.amount * candidate.record.stateOn;
+          else modeledCurrent += change.amount * candidate.record.stateOn;
+        }
+      }
+      if (
+        touched &&
+        (Math.abs(modeledMaximum - support.maximum) > 1e-9 ||
+          Math.abs(modeledCurrent - support.current) > 1e-9)
+      )
+        unsafeTypes.add(support.type);
+    }
+    if (unsafeTypes.size === 0) break;
+    const next = supportSafe.filter(
+      (candidate) =>
+        !candidate.supportChanges.some((change) =>
+          unsafeTypes.has(change.type),
+        ),
+    );
+    if (next.length === supportSafe.length) break;
+    supportSafe = next;
+  }
   const autoFleet = settings["autoFleet"] === true;
   const fleetNeededShipsSample = autoFleet
     ? dependencies.readFleetNeededShips?.()
@@ -1683,7 +1725,12 @@ function readPowerCycle(
   const fleetNeededShips = fleetNeededShipsSample ?? null;
 
   const powers: PowerBuildingInput[] = [];
+  const supportSafeBindings = new Set(
+    supportSafe.map(({ record }) => record.catalog.binding),
+  );
   const lakeGroupManaged =
+    supportSafeBindings.has("portal-bireme") &&
+    supportSafeBindings.has("portal-transport") &&
     isPowerGroupSmartManagementEnabled(
       root,
       "portal-bireme",
@@ -1697,6 +1744,8 @@ function readPowerCycle(
       buildingStates,
     );
   const spireGroupManaged =
+    supportSafeBindings.has("portal-port") &&
+    supportSafeBindings.has("portal-base_camp") &&
     isPowerGroupSmartManagementEnabled(
       root,
       "portal-port",
@@ -1712,18 +1761,13 @@ function readPowerCycle(
   const requiresMechState =
     settings["autoMech"] === true &&
     (spireGroupManaged ||
-      managed.some(({ catalog }) => catalog.binding === "portal-waygate"));
+      supportSafe.some(
+        ({ record }) => record.catalog.binding === "portal-waygate",
+      ));
   const mechState = requiresMechState
     ? dependencies.readMechState?.()
     : undefined;
   if (requiresMechState && mechState === undefined) return undefined;
-  const supports = readNativePowerSupports(
-    root,
-    dependencies.mechanics,
-    structures,
-  );
-  if (supports === undefined) return undefined;
-  const supportMap = new Map(supports.map((item) => [item.type, item]));
   const decayLabel = dependencies.mechanics.readLocalizedText(
     "evo_challenge_decay",
   );
@@ -1742,27 +1786,15 @@ function readPowerCycle(
     if (resourceId !== speciesId && !resourceId.endsWith("_Support"))
       resourceIds.add(resourceId);
   }
-  for (let index = 0; index < managed.length; index++) {
-    const record = managed[index]!;
+  for (const candidate of supportSafe) {
+    const { record, supportChanges } = candidate;
     const binding = record.catalog.binding;
-    const nativeRole = record.structure.readPowerGridRole(root, record.powered);
-    const nativeSupport = record.structure.readNativeSupportGrids(root);
-    if (nativeRole.kind !== "value" || nativeSupport.kind !== "value") {
-      return undefined;
-    }
-    if (nativeRole.value === "none" && nativeSupport.value.length === 0)
-      continue;
     const metadata = capturedPowerMetadataForBinding(binding);
     const consumptions = readFuelInputs(
       root,
       dependencies.mechanics,
       record.structure,
       metadata.consumptions,
-    );
-    const supportChanges: readonly PowerSupportChangeInput[] = Object.freeze(
-      nativeSupport.value.map((group) =>
-        Object.freeze({ type: group.type, amount: -group.contribution }),
-      ),
     );
     const produces = capturedPowerProducerCapability(binding);
     const powered = record.powered;
@@ -1823,25 +1855,6 @@ function readPowerCycle(
       rule: Object.freeze({ kind: "ordinary" }),
     });
     powers.push(input);
-  }
-  // The planner rewinds support with configured stateOn. Only do so when its
-  // complete modeled group agrees with the game's actual support pass.
-  for (const support of supports) {
-    let modeledMaximum = 0;
-    let modeledCurrent = 0;
-    for (const building of powers) {
-      for (const change of building.supportChanges) {
-        if (change.type !== support.type) continue;
-        if (change.amount < 0)
-          modeledMaximum -= change.amount * building.stateOn;
-        else modeledCurrent += change.amount * building.stateOn;
-      }
-    }
-    if (
-      Math.abs(modeledMaximum - support.maximum) > 1e-9 ||
-      Math.abs(modeledCurrent - support.current) > 1e-9
-    )
-      return undefined;
   }
   const completeResourceIds = [...resourceIds];
   const resourceInputs = readPowerResourceInputs(
@@ -1924,6 +1937,8 @@ function readPowerCycle(
     dependencies,
     mechState,
     buildingStates,
+    lakeGroupManaged,
+    spireGroupManaged,
   );
   if (lakeAndSpire === undefined) return undefined;
   const cycle: PowerCycleInput = Object.freeze({
