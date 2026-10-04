@@ -2252,15 +2252,17 @@ assert.deepEqual(
 );
 assert.deepEqual(
   [
-    specialCycle.spire.enabled,
+    specialCycle.spire.available,
+    specialCycle.spire.stateBalancingEnabled,
     specialCycle.spire.moneyMaximum,
     specialCycle.spire.supplyCurrent,
+    specialCycle.spire.supportedSupplyCapacity,
     specialCycle.spire.mechQueued,
     specialCycle.spire.purifierQueued,
     specialCycle.spire.purifierDescription,
     specialCycle.spire.expectedSaveSupply,
   ],
-  [true, 700, 0, true, true, "Purificador de la torre", false],
+  [true, true, 700, 0, 1000, true, true, "Purificador de la torre", false],
   "Spire input captures costs, live queues and description; final-floor state disables supply saving",
 );
 const spireBindings = ["portal-mechbay", "portal-port", "portal-base_camp"];
@@ -2273,12 +2275,19 @@ const spireAdjustments = (cycle) =>
       operation.kind === "adjust-building" &&
       spireBindings.includes(operation.binding),
   );
+const saveSupplyOperation = (cycle) =>
+  planPowerCycle(cycle, EMPTY_POWER_AUTOMATION_STATE).decision.operations.find(
+    (operation) => operation.kind === "set-mech-save-supply",
+  );
 assert.deepEqual(
   spireAdjustments(specialCycle).map((operation) => operation.binding),
   spireBindings,
   "a coherent, fully managed Spire can balance all three consumers",
 );
 const spireNativeCurrent = specialRoot.portal.purifier.support;
+const originalMechActive = specialRoot.portal.mechbay.active;
+specialRoot.portal.mechbay.active = 0;
+specialSettings.autoPrestige = false;
 for (const binding of spireBindings) {
   const key = binding.slice("portal-".length);
   const previousOn = specialRoot.portal[key].on;
@@ -2288,10 +2297,12 @@ for (const binding of spireBindings) {
   const cycle = specialReader.readCycle();
   assert.ok(cycle, `${binding} background state leaves Power available`);
   assert.equal(
-    cycle.spire.enabled,
+    cycle.spire.stateBalancingEnabled,
     false,
     `${binding} blocks partial Spire balancing`,
   );
+  assert.equal(cycle.spire.available, true);
+  assert.equal(saveSupplyOperation(cycle)?.value, true);
   assert.ok(
     spireAdjustments(cycle).every((operation) => operation.binding !== binding),
     `${binding} cannot be adjusted through ordinary or special Power`,
@@ -2317,10 +2328,15 @@ for (const binding of spireBindings) {
   specialRoot.portal[key].on = previousOn;
   specialRoot.portal.purifier.support = spireNativeCurrent;
 }
+const originalSupplyCapacity = specialRoot.portal.purifier.sup_max;
 specialSettings["bld_s2_portal-mechbay"] = false;
+specialRoot.portal.purifier.sup_max = 6;
 const noSmartMechCycle = specialReader.readCycle();
 assert.ok(noSmartMechCycle);
-assert.equal(noSmartMechCycle.spire.enabled, false);
+assert.equal(noSmartMechCycle.spire.available, true);
+assert.equal(noSmartMechCycle.spire.stateBalancingEnabled, false);
+assert.equal(noSmartMechCycle.spire.supportedSupplyCapacity, 6);
+assert.equal(saveSupplyOperation(noSmartMechCycle)?.value, false);
 assert.ok(
   noSmartMechCycle.buildings.some(
     (building) =>
@@ -2332,9 +2348,44 @@ specialSettings["bld_s2_portal-mechbay"] = true;
 specialRoot.portal.purifier.support = spireNativeCurrent + 1;
 const incoherentSpireCycle = specialReader.readCycle();
 assert.ok(incoherentSpireCycle);
-assert.equal(incoherentSpireCycle.spire.enabled, false);
+assert.equal(incoherentSpireCycle.spire.available, true);
+assert.equal(incoherentSpireCycle.spire.stateBalancingEnabled, false);
 assert.deepEqual(spireAdjustments(incoherentSpireCycle), []);
+assert.equal(saveSupplyOperation(incoherentSpireCycle)?.value, false);
 specialRoot.portal.purifier.support = spireNativeCurrent;
+const originalMechCount = specialRoot.portal.mechbay.count;
+const originalMechOn = specialRoot.portal.mechbay.on;
+specialRoot.portal.mechbay.count = 0;
+specialRoot.portal.mechbay.on = 0;
+specialRoot.portal.purifier.support = spireNativeCurrent - originalMechOn;
+specialRoot.portal.purifier.sup_max = 8;
+const unbuiltMechCycle = specialReader.readCycle();
+assert.ok(unbuiltMechCycle);
+assert.equal(unbuiltMechCycle.spire.available, true);
+assert.equal(unbuiltMechCycle.spire.stateBalancingEnabled, false);
+assert.equal(unbuiltMechCycle.spire.mechQueued, true);
+assert.equal(unbuiltMechCycle.spire.autoMech, true);
+assert.ok(
+  spireAdjustments(unbuiltMechCycle).every(
+    (operation) => operation.binding !== "portal-mechbay",
+  ),
+);
+assert.ok(
+  unbuiltMechCycle.buildings
+    .filter((building) => spireBindings.includes(building.binding))
+    .every((building) => building.skipGroup === "none"),
+);
+assert.equal(saveSupplyOperation(unbuiltMechCycle)?.value, true);
+specialRoot.portal.purifier.sup_max = 6;
+const lowCapacityCycle = specialReader.readCycle();
+assert.ok(lowCapacityCycle);
+assert.equal(saveSupplyOperation(lowCapacityCycle)?.value, false);
+specialRoot.portal.mechbay.count = originalMechCount;
+specialRoot.portal.mechbay.on = originalMechOn;
+specialRoot.portal.purifier.support = spireNativeCurrent;
+specialRoot.portal.purifier.sup_max = originalSupplyCapacity;
+specialRoot.portal.mechbay.active = originalMechActive;
+specialSettings.autoPrestige = true;
 for (const binding of ["portal-bireme", "portal-transport"]) {
   const key = binding.slice("portal-".length);
   const previousOn = specialRoot.portal[key].on;
@@ -2400,7 +2451,7 @@ assert.ok(hiddenPortalCycle);
 assert.deepEqual(
   [
     hiddenPortalCycle.lake.enabled,
-    hiddenPortalCycle.spire.enabled,
+    hiddenPortalCycle.spire.available,
     hiddenPortalCycle.buildings.find(
       (entry) => entry.binding === "portal-bireme",
     )?.skipGroup,

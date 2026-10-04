@@ -24468,12 +24468,8 @@
       );
     }
     let spireSupport = Math.floor(supports.get("spire")?.available ?? 0);
-    if (input.spire.enabled && spireSupport > 0) {
-      let spire = input.spire, buildAllowed = spire.autoBuild && !(spire.autoMech && spire.mechActive) && !(spire.autoPrestige && spire.prestigeType === "demonic" && spire.prestigeDemonicFloor - spire.towerCount <= spire.mechBay.count), canBuild = (building, checkSmart = !1) => buildAllowed && building.autoBuildable && spire.moneyMaximum >= building.moneyCost && (!checkSmart || building.smartManaged), maximumBay = Math.min(spire.mechBay.count, spireSupport), currentPort = spire.port.count, currentCamp = spire.camp.count, maximumPorts = canBuild(spire.port) ? spire.port.autoMaximum : currentPort, maximumCamps = canBuild(spire.camp) ? spire.camp.autoMaximum : currentCamp, nextMechCost = canBuild(spire.mechBay, !0) ? spire.mechBay.supplyCost : Number.MAX_SAFE_INTEGER, nextPurifierCost = canBuild(spire.purifier, !0) ? spire.purifier.supplyCost : Number.MAX_SAFE_INTEGER, [bestSupplies] = getBestPowerSupplyRatio(
-        spireSupport,
-        maximumPorts,
-        maximumCamps
-      ), purifierDescription = descriptionByBinding.get(spire.purifier.binding) ?? spire.purifierDescription;
+    if (input.spire.available) {
+      let spire = input.spire, buildAllowed = spire.autoBuild && !(spire.autoMech && spire.mechActive) && !(spire.autoPrestige && spire.prestigeType === "demonic" && spire.prestigeDemonicFloor - spire.towerCount <= spire.mechBay.count), canBuild = (building, checkSmart = !1) => buildAllowed && building.autoBuildable && spire.moneyMaximum >= building.moneyCost && (!checkSmart || building.smartManaged), maximumBay = Math.min(spire.mechBay.count, spireSupport), currentPort = spire.port.count, currentCamp = spire.camp.count, maximumPorts = canBuild(spire.port) ? spire.port.autoMaximum : currentPort, maximumCamps = canBuild(spire.camp) ? spire.camp.autoMaximum : currentCamp, nextMechCost = canBuild(spire.mechBay, !0) ? spire.mechBay.supplyCost : Number.MAX_SAFE_INTEGER, nextPurifierCost = canBuild(spire.purifier, !0) ? spire.purifier.supplyCost : Number.MAX_SAFE_INTEGER, bestSupplies = spire.stateBalancingEnabled && spireSupport > 0 ? getBestPowerSupplyRatio(spireSupport, maximumPorts, maximumCamps)[0] : spire.supportedSupplyCapacity, purifierDescription = descriptionByBinding.get(spire.purifier.binding) ?? spire.purifierDescription;
       appendDescription(
         spire.purifier.buildingId,
         spire.purifier.binding,
@@ -24481,48 +24477,49 @@
         `Supported Supplies: ${Math.floor(bestSupplies)}<br>${purifierDescription}`
       );
       let nextCost = spire.mechQueued && nextMechCost <= bestSupplies ? nextMechCost : spire.purifierQueued && nextPurifierCost <= bestSupplies ? nextPurifierCost : Math.min(nextMechCost, nextPurifierCost);
-      operations.push({
+      if (operations.push({
         kind: "set-mech-save-supply",
         expected: spire.expectedSaveSupply,
         value: nextCost <= bestSupplies
-      });
-      let assignStorage = spire.mechQueued || spire.purifierQueued, addSpireAdjustments = (mech, port, camp) => {
-        for (let [building, target] of [
-          [spire.mechBay, mech],
-          [spire.port, port],
-          [spire.camp, camp]
-        ])
-          operations.push({
-            kind: "adjust-building",
-            buildingId: building.buildingId,
-            binding: building.binding,
-            expectedStateOn: building.stateOn,
-            amount: target - building.stateOn
-          });
-      };
-      for (let targetMech = maximumBay; targetMech >= 0; targetMech--) {
-        let [targetSupplies, targetPort, targetCamp] = getBestPowerSupplyRatio(
-          spireSupport - targetMech,
-          maximumPorts,
-          maximumCamps
-        ), missingStorage = targetPort > currentPort ? spire.port : targetCamp > currentCamp ? spire.camp : null;
-        if (missingStorage !== null) {
-          for (let index = maximumBay; index >= 0; index--) {
-            let [storageSupplies, storagePort, storageCamp] = getBestPowerSupplyRatio(
-              spireSupport - index,
-              currentPort,
-              currentCamp
-            );
-            if (storageSupplies >= missingStorage.supplyCost) {
-              addSpireAdjustments(index, storagePort, storageCamp);
-              break;
+      }), spire.stateBalancingEnabled && spireSupport > 0) {
+        let assignStorage = spire.mechQueued || spire.purifierQueued, addSpireAdjustments = (mech, port, camp) => {
+          for (let [building, target] of [
+            [spire.mechBay, mech],
+            [spire.port, port],
+            [spire.camp, camp]
+          ])
+            operations.push({
+              kind: "adjust-building",
+              buildingId: building.buildingId,
+              binding: building.binding,
+              expectedStateOn: building.stateOn,
+              amount: target - building.stateOn
+            });
+        };
+        for (let targetMech = maximumBay; targetMech >= 0; targetMech--) {
+          let [targetSupplies, targetPort, targetCamp] = getBestPowerSupplyRatio(
+            spireSupport - targetMech,
+            maximumPorts,
+            maximumCamps
+          ), missingStorage = targetPort > currentPort ? spire.port : targetCamp > currentCamp ? spire.camp : null;
+          if (missingStorage !== null) {
+            for (let index = maximumBay; index >= 0; index--) {
+              let [storageSupplies, storagePort, storageCamp] = getBestPowerSupplyRatio(
+                spireSupport - index,
+                currentPort,
+                currentCamp
+              );
+              if (storageSupplies >= missingStorage.supplyCost) {
+                addSpireAdjustments(index, storagePort, storageCamp);
+                break;
+              }
             }
+            break;
           }
-          break;
-        }
-        if (spire.supplyCurrent >= targetSupplies && (assignStorage = !0), !assignStorage || bestSupplies < nextCost || targetSupplies >= nextCost) {
-          addSpireAdjustments(targetMech, targetPort, targetCamp);
-          break;
+          if (spire.supplyCurrent >= targetSupplies && (assignStorage = !0), !assignStorage || bestSupplies < nextCost || targetSupplies >= nextCost) {
+            addSpireAdjustments(targetMech, targetPort, targetCamp);
+            break;
+          }
         }
       }
     }
@@ -25449,7 +25446,8 @@
     moneyCost: 0,
     supplyCost: 0
   }), EMPTY_SPIRE = Object.freeze({
-    enabled: !1,
+    available: !1,
+    stateBalancingEnabled: !1,
     autoBuild: !1,
     autoMech: !1,
     mechActive: !1,
@@ -25459,6 +25457,7 @@
     towerCount: 0,
     moneyMaximum: 0,
     supplyCurrent: 0,
+    supportedSupplyCapacity: 0,
     mechQueued: !1,
     purifierQueued: !1,
     purifierDescription: "",
@@ -26228,7 +26227,7 @@
     let entry = snapshot2.catalog, unlocked = snapshot2.available, gameSettings = readProperty(root, "settings");
     return (entry.region === "portal" ? readProperty(gameSettings, "showPortal") === !0 : entry.region === "space" ? readProperty(gameSettings, "showSpace") === !0 || readProperty(gameSettings, "showOuter") === !0 : entry.region === "galaxy" ? readProperty(gameSettings, "showGalactic") === !0 : entry.region === "interstellar" ? readProperty(gameSettings, "showDeep") === !0 : entry.region === "tauceti" ? readProperty(gameSettings, "showTau") === !0 : !0) && unlocked && settings.autoPower === !0 && settings[`bld_s_${binding}`] === !0 && capturedPowerSmartEnabled(binding, settings);
   }
-  function readLakeAndSpire(root, settings, runtime, allRecords, resourceMap, dependencies, mechState, buildingStates, lakeEnabled, spireEnabled) {
+  function readLakeAndSpire(root, settings, runtime, allRecords, resourceMap, dependencies, mechState, buildingStates, lakeEnabled, spireAvailable, spireStateBalancingEnabled) {
     let lakeBireme = allRecords.find(
       (entry) => entry.binding === "portal-bireme"
     ), lakeTransport = allRecords.find(
@@ -26253,7 +26252,7 @@
         (building) => building.catalog.binding === lakeTransport.binding
       )?.stateOn ?? 0
     }) : EMPTY_LAKE, spire = EMPTY_SPIRE;
-    if (spireEnabled) {
+    if (spireAvailable) {
       let spireMech = makeSpireBuilding(
         "portal-mechbay",
         allRecords,
@@ -26280,25 +26279,33 @@
         buildingStates
       );
       if (spireMech === void 0 || port === void 0 || camp === void 0 || purifier === void 0)
-        return;
+        return Object.freeze({ lake, spire });
       let autoMech = settings.autoMech === !0;
-      if (autoMech && mechState === void 0) return;
+      if (autoMech && mechState === void 0)
+        return Object.freeze({ lake, spire });
       let prestigeType = settings.prestigeType;
-      if (typeof prestigeType != "string") return;
+      if (typeof prestigeType != "string") return Object.freeze({ lake, spire });
       let prestigeFloor = asNumber(settings.prestigeDemonicFloor);
       if (settings.autoPrestige === !0 && prestigeType === "demonic" && prestigeFloor === void 0)
-        return;
+        return Object.freeze({ lake, spire });
       let money = resourceMap.get("Money"), supply = resourceMap.get("Supply");
-      if (money === void 0 || supply === void 0) return;
+      if (money === void 0 || supply === void 0)
+        return Object.freeze({ lake, spire });
+      let supportedSupplyCapacity = asNumber(
+        readGamePath(root, ["portal", "purifier", "sup_max"])
+      );
+      if (supportedSupplyCapacity === void 0 || supportedSupplyCapacity < 0)
+        return Object.freeze({ lake, spire });
       let design = autoMech && mechState !== void 0 ? designAutoChoice(mechState, () => 0) : null, purifierDescription = dependencies.readPurifierDescription?.();
       if (purifierDescription === void 0) {
         let description = dependencies.mechanics.readStructures()?.find((structure) => structure.actionId === "portal-purifier")?.readDescription();
-        if (description?.kind !== "value") return;
+        if (description?.kind !== "value") return Object.freeze({ lake, spire });
         purifierDescription = description.value;
       }
       let mechQueued = readCapturedBuildQueueEntryCount(root, spireMech.binding) > 0, purifierQueued = readCapturedBuildQueueEntryCount(root, purifier.binding) > 0;
       spire = Object.freeze({
-        enabled: !0,
+        available: !0,
+        stateBalancingEnabled: spireStateBalancingEnabled,
         autoBuild: settings.autoBuild === !0,
         autoMech,
         mechActive: (asNumber(readGamePath(root, ["portal", "mechbay", "active"])) ?? 0) > 0,
@@ -26311,6 +26318,7 @@
         )?.count ?? 0,
         moneyMaximum: money.maxQuantity,
         supplyCurrent: supply.currentQuantity,
+        supportedSupplyCapacity,
         mechQueued,
         purifierQueued,
         purifierDescription,
@@ -26402,7 +26410,7 @@
       "portal-transport",
       settings,
       buildingStates
-    ), spireGroupManaged = supportSafeBindings.has("portal-mechbay") && supportSafeBindings.has("portal-port") && supportSafeBindings.has("portal-base_camp") && isPowerGroupSmartManagementEnabled(
+    ), spireStateBalancingEnabled = supportSafeBindings.has("portal-mechbay") && supportSafeBindings.has("portal-port") && supportSafeBindings.has("portal-base_camp") && isPowerGroupSmartManagementEnabled(
       root,
       "portal-mechbay",
       settings,
@@ -26417,17 +26425,18 @@
       "portal-base_camp",
       settings,
       buildingStates
-    ), requiresMechState = settings.autoMech === !0 && (spireGroupManaged || supportSafe.some(
+    ), spirePolicyCandidate = settings.autoPower === !0 && readProperty(readProperty(root, "settings"), "showPortal") === !0, waygateNeedsMechState = supportSafe.some(
       ({ record }) => record.catalog.binding === "portal-waygate"
-    )), mechState = requiresMechState ? dependencies.readMechState?.() : void 0;
-    if (requiresMechState && mechState === void 0) return;
-    let decayLabel = dependencies.mechanics.readLocalizedText(
+    ), mechState = settings.autoMech === !0 && (spirePolicyCandidate || waygateNeedsMechState) ? dependencies.readMechState?.() : void 0;
+    if (settings.autoMech === !0 && waygateNeedsMechState && mechState === void 0)
+      return;
+    let spireAvailable = spirePolicyCandidate && (settings.autoMech !== !0 || mechState !== void 0), decayLabel = dependencies.mechanics.readLocalizedText(
       "evo_challenge_decay"
     );
     if (readProperty(readProperty(root, "race"), "decay") === !0 && decayLabel.kind !== "value")
       return;
     let decaySource = decayLabel.kind === "value" ? decayLabel.value : "", resourceIds = /* @__PURE__ */ new Set(["Power", "Population", "Supply"]);
-    spireGroupManaged && resourceIds.add("Money");
+    spireAvailable && resourceIds.add("Money");
     let gameResources = readProperty(root, "resource");
     if (!isRecord(gameResources)) return;
     let speciesId = readProperty(readProperty(root, "race"), "species");
@@ -26466,7 +26475,7 @@
         crewValueRank: metadata2.crewValueRank,
         singleState: metadata2.singleState,
         ignorePositivePowerCap: metadata2.ignorePositivePowerCap,
-        skipGroup: metadata2.skipGroup === "spire" && spireGroupManaged ? "spire" : metadata2.skipGroup === "lake" && lakeGroupManaged ? "lake" : "none",
+        skipGroup: metadata2.skipGroup === "spire" && spireStateBalancingEnabled ? "spire" : metadata2.skipGroup === "lake" && lakeGroupManaged ? "lake" : "none",
         // Actions without a description have no extra text in the old Power wrapper.
         extraDescription: description.kind === "value" ? description.value : "",
         consumptions,
@@ -26540,9 +26549,10 @@
       mechState,
       buildingStates,
       lakeGroupManaged,
-      spireGroupManaged
+      spireAvailable,
+      spireStateBalancingEnabled
     );
-    return lakeAndSpire === void 0 ? void 0 : Object.freeze({
+    return Object.freeze({
       powerUnlocked,
       powerResourceId: "Power",
       powerCurrent: power.currentQuantity,

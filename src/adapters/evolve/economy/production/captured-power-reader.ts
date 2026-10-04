@@ -124,9 +124,10 @@ const EMPTY_SPIRE_BUILDING: PowerSpireBuildingInput = Object.freeze({
   supplyCost: 0,
 });
 
-// Retired Power uses this disabled subgroup when either smart-managed gate is off.
+// Keep auxiliary Spire policy absent when the current native facts are unavailable.
 const EMPTY_SPIRE: PowerSpireInput = Object.freeze({
-  enabled: false,
+  available: false,
+  stateBalancingEnabled: false,
   autoBuild: false,
   autoMech: false,
   mechActive: false,
@@ -136,6 +137,7 @@ const EMPTY_SPIRE: PowerSpireInput = Object.freeze({
   towerCount: 0,
   moneyMaximum: 0,
   supplyCurrent: 0,
+  supportedSupplyCapacity: 0,
   mechQueued: false,
   purifierQueued: false,
   purifierDescription: "",
@@ -1456,10 +1458,9 @@ function readLakeAndSpire(
   mechState: CapturedMechState | undefined,
   buildingStates: readonly CapturedBuildingState[],
   lakeEnabled: boolean,
-  spireEnabled: boolean,
-):
-  | { readonly lake: PowerLakeInput; readonly spire: PowerSpireInput }
-  | undefined {
+  spireAvailable: boolean,
+  spireStateBalancingEnabled: boolean,
+): { readonly lake: PowerLakeInput; readonly spire: PowerSpireInput } {
   const lakeBireme = allRecords.find(
     (entry) => entry.binding === "portal-bireme",
   );
@@ -1494,7 +1495,7 @@ function readLakeAndSpire(
         })
       : EMPTY_LAKE;
   let spire: PowerSpireInput = EMPTY_SPIRE;
-  if (spireEnabled) {
+  if (spireAvailable) {
     const spireMech = makeSpireBuilding(
       "portal-mechbay",
       allRecords,
@@ -1529,21 +1530,28 @@ function readLakeAndSpire(
       camp === undefined ||
       purifier === undefined
     )
-      return undefined;
+      return Object.freeze({ lake, spire });
     const autoMech = settings["autoMech"] === true;
-    if (autoMech && mechState === undefined) return undefined;
+    if (autoMech && mechState === undefined)
+      return Object.freeze({ lake, spire });
     const prestigeType = settings["prestigeType"];
-    if (typeof prestigeType !== "string") return undefined;
+    if (typeof prestigeType !== "string") return Object.freeze({ lake, spire });
     const prestigeFloor = asNumber(settings["prestigeDemonicFloor"]);
     if (
       settings["autoPrestige"] === true &&
       prestigeType === "demonic" &&
       prestigeFloor === undefined
     )
-      return undefined;
+      return Object.freeze({ lake, spire });
     const money = resourceMap.get("Money");
     const supply = resourceMap.get("Supply");
-    if (money === undefined || supply === undefined) return undefined;
+    if (money === undefined || supply === undefined)
+      return Object.freeze({ lake, spire });
+    const supportedSupplyCapacity = asNumber(
+      readGamePath(root, ["portal", "purifier", "sup_max"]),
+    );
+    if (supportedSupplyCapacity === undefined || supportedSupplyCapacity < 0)
+      return Object.freeze({ lake, spire });
     const design =
       autoMech && mechState !== undefined
         ? designAutoChoice(mechState, () => 0)
@@ -1554,7 +1562,7 @@ function readLakeAndSpire(
         .readStructures()
         ?.find((structure) => structure.actionId === "portal-purifier");
       const description = purifierDefinition?.readDescription();
-      if (description?.kind !== "value") return undefined;
+      if (description?.kind !== "value") return Object.freeze({ lake, spire });
       purifierDescription = description.value;
     }
     const mechQueued =
@@ -1562,7 +1570,8 @@ function readLakeAndSpire(
     const purifierQueued =
       readCapturedBuildQueueEntryCount(root, purifier.binding) > 0;
     spire = Object.freeze({
-      enabled: true,
+      available: true,
+      stateBalancingEnabled: spireStateBalancingEnabled,
       autoBuild: settings["autoBuild"] === true,
       autoMech,
       mechActive:
@@ -1578,6 +1587,7 @@ function readLakeAndSpire(
         )?.count ?? 0,
       moneyMaximum: money.maxQuantity,
       supplyCurrent: supply.currentQuantity,
+      supportedSupplyCapacity,
       mechQueued,
       purifierQueued,
       purifierDescription,
@@ -1743,7 +1753,7 @@ function readPowerCycle(
       settings,
       buildingStates,
     );
-  const spireGroupManaged =
+  const spireStateBalancingEnabled =
     supportSafeBindings.has("portal-mechbay") &&
     supportSafeBindings.has("portal-port") &&
     supportSafeBindings.has("portal-base_camp") &&
@@ -1765,16 +1775,27 @@ function readPowerCycle(
       settings,
       buildingStates,
     );
+  const spirePolicyCandidate =
+    settings["autoPower"] === true &&
+    readProperty(readProperty(root, "settings"), "showPortal") === true;
+  const waygateNeedsMechState = supportSafe.some(
+    ({ record }) => record.catalog.binding === "portal-waygate",
+  );
   const requiresMechState =
     settings["autoMech"] === true &&
-    (spireGroupManaged ||
-      supportSafe.some(
-        ({ record }) => record.catalog.binding === "portal-waygate",
-      ));
+    (spirePolicyCandidate || waygateNeedsMechState);
   const mechState = requiresMechState
     ? dependencies.readMechState?.()
     : undefined;
-  if (requiresMechState && mechState === undefined) return undefined;
+  if (
+    settings["autoMech"] === true &&
+    waygateNeedsMechState &&
+    mechState === undefined
+  )
+    return undefined;
+  const spireAvailable =
+    spirePolicyCandidate &&
+    (settings["autoMech"] !== true || mechState !== undefined);
   const decayLabel = dependencies.mechanics.readLocalizedText(
     "evo_challenge_decay",
   );
@@ -1785,7 +1806,7 @@ function readPowerCycle(
     return undefined;
   const decaySource = decayLabel.kind === "value" ? decayLabel.value : "";
   const resourceIds = new Set<string>(["Power", "Population", "Supply"]);
-  if (spireGroupManaged) resourceIds.add("Money");
+  if (spireAvailable) resourceIds.add("Money");
   const gameResources = readProperty(root, "resource");
   if (!isRecord(gameResources)) return undefined;
   const speciesId = readProperty(readProperty(root, "race"), "species");
@@ -1848,7 +1869,7 @@ function readPowerCycle(
       singleState: metadata.singleState,
       ignorePositivePowerCap: metadata.ignorePositivePowerCap,
       skipGroup:
-        metadata.skipGroup === "spire" && spireGroupManaged
+        metadata.skipGroup === "spire" && spireStateBalancingEnabled
           ? "spire"
           : metadata.skipGroup === "lake" && lakeGroupManaged
             ? "lake"
@@ -1945,9 +1966,9 @@ function readPowerCycle(
     mechState,
     buildingStates,
     lakeGroupManaged,
-    spireGroupManaged,
+    spireAvailable,
+    spireStateBalancingEnabled,
   );
-  if (lakeAndSpire === undefined) return undefined;
   const cycle: PowerCycleInput = Object.freeze({
     powerUnlocked,
     powerResourceId: "Power",

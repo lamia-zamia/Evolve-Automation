@@ -78,7 +78,7 @@ function adjustment(supports, buildings) {
     supports,
     buildings,
     lake: { enabled: false },
-    spire: { enabled: false },
+    spire: { available: false },
   };
   return planPowerCycle(cycle, EMPTY_POWER_AUTOMATION_STATE)
     .decision.operations.filter(

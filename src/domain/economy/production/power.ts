@@ -248,7 +248,8 @@ export interface PowerSpireBuildingInput {
 }
 
 export interface PowerSpireInput {
-  readonly enabled: boolean;
+  readonly available: boolean;
+  readonly stateBalancingEnabled: boolean;
   readonly autoBuild: boolean;
   readonly autoMech: boolean;
   readonly mechActive: boolean;
@@ -258,6 +259,7 @@ export interface PowerSpireInput {
   readonly towerCount: number;
   readonly moneyMaximum: number;
   readonly supplyCurrent: number;
+  readonly supportedSupplyCapacity: number;
   readonly mechQueued: boolean;
   readonly purifierQueued: boolean;
   readonly purifierDescription: string;
@@ -1355,7 +1357,7 @@ export function planPowerCycle(
   }
 
   const spireSupport = Math.floor(supports.get("spire")?.available ?? 0);
-  if (input.spire.enabled && spireSupport > 0) {
+  if (input.spire.available) {
     const spire = input.spire;
     const buildAllowed =
       spire.autoBuild &&
@@ -1388,11 +1390,10 @@ export function planPowerCycle(
     const nextPurifierCost = canBuild(spire.purifier, true)
       ? spire.purifier.supplyCost
       : Number.MAX_SAFE_INTEGER;
-    const [bestSupplies] = getBestPowerSupplyRatio(
-      spireSupport,
-      maximumPorts,
-      maximumCamps,
-    );
+    const bestSupplies =
+      spire.stateBalancingEnabled && spireSupport > 0
+        ? getBestPowerSupplyRatio(spireSupport, maximumPorts, maximumCamps)[0]
+        : spire.supportedSupplyCapacity;
     const purifierDescription =
       descriptionByBinding.get(spire.purifier.binding) ??
       spire.purifierDescription;
@@ -1413,62 +1414,69 @@ export function planPowerCycle(
       expected: spire.expectedSaveSupply,
       value: nextCost <= bestSupplies,
     });
-    let assignStorage = spire.mechQueued || spire.purifierQueued;
-    const addSpireAdjustments = (mech: number, port: number, camp: number) => {
-      for (const [building, target] of [
-        [spire.mechBay, mech],
-        [spire.port, port],
-        [spire.camp, camp],
-      ] as const) {
-        // Spire mech/port/camp are adjusted directly and may be absent from the
-        // managed building list, so use the binding carried on the input rather
-        // than resolving through buildingById.
-        operations.push({
-          kind: "adjust-building",
-          buildingId: building.buildingId,
-          binding: building.binding,
-          expectedStateOn: building.stateOn,
-          amount: target - building.stateOn,
-        });
-      }
-    };
-    for (let targetMech = maximumBay; targetMech >= 0; targetMech--) {
-      const [targetSupplies, targetPort, targetCamp] = getBestPowerSupplyRatio(
-        spireSupport - targetMech,
-        maximumPorts,
-        maximumCamps,
-      );
-      const missingStorage =
-        targetPort > currentPort
-          ? spire.port
-          : targetCamp > currentCamp
-            ? spire.camp
-            : null;
-      if (missingStorage !== null) {
-        for (let index = maximumBay; index >= 0; index--) {
-          const [storageSupplies, storagePort, storageCamp] =
-            getBestPowerSupplyRatio(
-              spireSupport - index,
-              currentPort,
-              currentCamp,
-            );
-          if (storageSupplies >= missingStorage.supplyCost) {
-            addSpireAdjustments(index, storagePort, storageCamp);
-            break;
-          }
+    if (spire.stateBalancingEnabled && spireSupport > 0) {
+      let assignStorage = spire.mechQueued || spire.purifierQueued;
+      const addSpireAdjustments = (
+        mech: number,
+        port: number,
+        camp: number,
+      ) => {
+        for (const [building, target] of [
+          [spire.mechBay, mech],
+          [spire.port, port],
+          [spire.camp, camp],
+        ] as const) {
+          // Spire mech/port/camp are adjusted directly and may be absent from the
+          // managed building list, so use the binding carried on the input rather
+          // than resolving through buildingById.
+          operations.push({
+            kind: "adjust-building",
+            buildingId: building.buildingId,
+            binding: building.binding,
+            expectedStateOn: building.stateOn,
+            amount: target - building.stateOn,
+          });
         }
-        break;
-      }
-      if (spire.supplyCurrent >= targetSupplies) {
-        assignStorage = true;
-      }
-      if (
-        !assignStorage ||
-        bestSupplies < nextCost ||
-        targetSupplies >= nextCost
-      ) {
-        addSpireAdjustments(targetMech, targetPort, targetCamp);
-        break;
+      };
+      for (let targetMech = maximumBay; targetMech >= 0; targetMech--) {
+        const [targetSupplies, targetPort, targetCamp] =
+          getBestPowerSupplyRatio(
+            spireSupport - targetMech,
+            maximumPorts,
+            maximumCamps,
+          );
+        const missingStorage =
+          targetPort > currentPort
+            ? spire.port
+            : targetCamp > currentCamp
+              ? spire.camp
+              : null;
+        if (missingStorage !== null) {
+          for (let index = maximumBay; index >= 0; index--) {
+            const [storageSupplies, storagePort, storageCamp] =
+              getBestPowerSupplyRatio(
+                spireSupport - index,
+                currentPort,
+                currentCamp,
+              );
+            if (storageSupplies >= missingStorage.supplyCost) {
+              addSpireAdjustments(index, storagePort, storageCamp);
+              break;
+            }
+          }
+          break;
+        }
+        if (spire.supplyCurrent >= targetSupplies) {
+          assignStorage = true;
+        }
+        if (
+          !assignStorage ||
+          bestSupplies < nextCost ||
+          targetSupplies >= nextCost
+        ) {
+          addSpireAdjustments(targetMech, targetPort, targetCamp);
+          break;
+        }
       }
     }
   }

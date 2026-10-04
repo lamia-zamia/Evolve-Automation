@@ -62,7 +62,7 @@ const powerApplicationCycle = {
   supports: [],
   buildings: [powerApplicationBuilding],
   lake: { enabled: false },
-  spire: { enabled: false },
+  spire: { available: false },
 };
 const powerApplicationWarning = {
   domId: "city-coal_power",
