@@ -16207,24 +16207,11 @@
     if (!(!isRecord(civic) || servantJobs === void 0 || servantModifier === void 0))
       return { civic, servantJobs, servantModifier };
   }
-  function readCapturedEffectiveJobCount(context, id) {
-    if (!Object.prototype.hasOwnProperty.call(context.civic, id))
-      return Object.freeze({
-        present: !1,
-        workers: 0,
-        servants: 0,
-        serves: !1,
-        count: 0
-      });
-    let job = readProperty(context.civic, id);
-    if (!isRecord(job)) return;
-    let workers = finiteNonNegative(readProperty(job, "workers"));
-    if (workers === void 0) return;
+  function readCapturedEffectiveJobCount(context, id, workers) {
     let servantJobs = context.servantJobs, serves = servantJobs !== null && Object.prototype.hasOwnProperty.call(servantJobs, id), rawServants = servantJobs === null ? void 0 : readProperty(servantJobs, id), servants = rawServants === void 0 ? 0 : finiteNonNegative(rawServants);
     if (servants === void 0) return;
     let count2 = finiteNonNegative(workers + servants * context.servantModifier);
     return count2 === void 0 ? void 0 : Object.freeze({
-      present: !0,
       workers,
       servants,
       serves,
@@ -16238,9 +16225,17 @@
     for (let id of jobIds) {
       if (typeof id != "string" || id.length === 0 || counts.has(id))
         return;
-      let job = readCapturedEffectiveJobCount(context, id);
-      if (job === void 0) return;
-      counts.set(id, job.count);
+      if (!Object.prototype.hasOwnProperty.call(context.civic, id)) {
+        counts.set(id, 0);
+        continue;
+      }
+      let job = readProperty(context.civic, id);
+      if (!isRecord(job)) return;
+      let workers = finiteNonNegative(readProperty(job, "workers"));
+      if (workers === void 0) return;
+      let effective = readCapturedEffectiveJobCount(context, id, workers);
+      if (effective === void 0) return;
+      counts.set(id, effective.count);
     }
     return Object.freeze({ readCount: (jobId) => counts.get(jobId) });
   }
@@ -16469,12 +16464,12 @@
         onSkipped(controlId, "ordinary job assigned count is not finite");
         continue;
       }
-      let effective = readCapturedEffectiveJobCount(countContext, id);
-      if (effective === void 0 || !effective.present) {
-        onSkipped(controlId, "ordinary job effective count is unavailable");
-        return;
+      let workers = finiteNonNegative(readProperty(job, "workers"));
+      if (workers === void 0) {
+        onSkipped(controlId, "ordinary job worker count is not finite");
+        continue;
       }
-      let workers = effective.workers, maximum = finiteMaximum(readProperty(job, "max"));
+      let maximum = finiteMaximum(readProperty(job, "max"));
       if (maximum === void 0) {
         onSkipped(controlId, "ordinary job maximum is not finite");
         continue;
@@ -16483,6 +16478,11 @@
       if (typeof display != "boolean") {
         onSkipped(controlId, "ordinary job visibility is not boolean");
         continue;
+      }
+      let effective = readCapturedEffectiveJobCount(countContext, id, workers);
+      if (effective === void 0) {
+        onSkipped(controlId, "ordinary job servant count is not finite");
+        return;
       }
       let smart = display && readProperty(settings, `job_s_${id}`) === !0, smartMaximum = readSmartMaximum(
         root,

@@ -995,6 +995,81 @@ assert.deepEqual(
   countIds.map((id) => initialCounts.readCount(id)),
   [2, 12, 7, 0],
 );
+const readLocallyMalformedCatalog = (field, value) => {
+  const malformedRoot = structuredClone(countRoot);
+  malformedRoot.civic.miner[field] = value;
+  const skipped = [];
+  const read = createCapturedJobCatalogReader({
+    rootState: { readRoot: () => malformedRoot },
+    controls: countControls,
+    readSettings: () => ({ ...resetBreakpoints, autoJobs: false }),
+    onSkipped: (controlId, reason) => skipped.push({ controlId, reason }),
+  });
+  const catalog = read();
+  assert.ok(catalog, `malformed Miner ${field} must not remove the catalog`);
+  assert.equal(
+    catalog.jobs.some((job) => job.id === "miner"),
+    false,
+  );
+  assert.equal(
+    catalog.jobs.some((job) => job.id === "farmer"),
+    true,
+  );
+  return { malformedRoot, skipped };
+};
+const malformedWorkers = readLocallyMalformedCatalog("workers", Number.NaN);
+assert.deepEqual(malformedWorkers.skipped, [
+  { controlId: "civ-miner", reason: "ordinary job worker count is not finite" },
+]);
+assert.equal(
+  readCapturedJobCountSnapshot(malformedWorkers.malformedRoot, ["miner"]),
+  undefined,
+);
+for (const [field, value, reason] of [
+  ["max", Number.NaN, "ordinary job maximum is not finite"],
+  ["display", "bad", "ordinary job visibility is not boolean"],
+]) {
+  const malformed = readLocallyMalformedCatalog(field, value);
+  assert.deepEqual(malformed.skipped, [{ controlId: "civ-miner", reason }]);
+  // Local validation precedes servant processing even if this skipped job has bad servants.
+  malformed.malformedRoot.race.servants.jobs.miner = "bad";
+  const skipped = [];
+  const catalog = createCapturedJobCatalogReader({
+    rootState: { readRoot: () => malformed.malformedRoot },
+    controls: countControls,
+    readSettings: () => ({ ...resetBreakpoints, autoJobs: false }),
+    onSkipped: (controlId, skipReason) =>
+      skipped.push({ controlId, reason: skipReason }),
+  })();
+  assert.ok(catalog);
+  assert.equal(
+    catalog.jobs.some((job) => job.id === "farmer"),
+    true,
+  );
+  assert.deepEqual(skipped, [{ controlId: "civ-miner", reason }]);
+}
+const malformedServantsRoot = structuredClone(countRoot);
+malformedServantsRoot.race.servants.jobs.farmer = "bad";
+assert.equal(
+  readCapturedJobCountSnapshot(malformedServantsRoot, ["farmer"]),
+  undefined,
+);
+const servantSkips = [];
+assert.equal(
+  createCapturedJobCatalogReader({
+    rootState: { readRoot: () => malformedServantsRoot },
+    controls: countControls,
+    readSettings: () => ({ ...resetBreakpoints, autoJobs: false }),
+    onSkipped: (controlId, reason) => servantSkips.push({ controlId, reason }),
+  })(),
+  undefined,
+);
+assert.deepEqual(servantSkips, [
+  {
+    controlId: "civ-farmer",
+    reason: "ordinary job servant count is not finite",
+  },
+]);
 const badSplitCatalog = createCapturedJobCatalogReader({
   rootState: { readRoot: () => countRoot },
   controls: countControls,

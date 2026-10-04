@@ -79,7 +79,6 @@ export interface CapturedJobCountSnapshot {
 }
 
 interface CapturedEffectiveJobCount {
-  readonly present: boolean;
   readonly workers: number;
   readonly servants: number;
   readonly serves: boolean;
@@ -1249,19 +1248,8 @@ function readCapturedEffectiveJobContext(
 function readCapturedEffectiveJobCount(
   context: CapturedEffectiveJobContext,
   id: string,
+  workers: number,
 ): CapturedEffectiveJobCount | undefined {
-  if (!Object.prototype.hasOwnProperty.call(context.civic, id))
-    return Object.freeze({
-      present: false,
-      workers: 0,
-      servants: 0,
-      serves: false,
-      count: 0,
-    });
-  const job = readProperty(context.civic, id);
-  if (!isRecord(job)) return undefined;
-  const workers = finiteNonNegative(readProperty(job, "workers"));
-  if (workers === undefined) return undefined;
   const servantJobs = context.servantJobs;
   const serves =
     servantJobs !== null &&
@@ -1275,7 +1263,6 @@ function readCapturedEffectiveJobCount(
   return count === undefined
     ? undefined
     : Object.freeze({
-        present: true,
         workers,
         servants,
         serves,
@@ -1293,9 +1280,17 @@ export function readCapturedJobCountSnapshot(
   for (const id of jobIds) {
     if (typeof id !== "string" || id.length === 0 || counts.has(id))
       return undefined;
-    const job = readCapturedEffectiveJobCount(context, id);
-    if (job === undefined) return undefined;
-    counts.set(id, job.count);
+    if (!Object.prototype.hasOwnProperty.call(context.civic, id)) {
+      counts.set(id, 0);
+      continue;
+    }
+    const job = readProperty(context.civic, id);
+    if (!isRecord(job)) return undefined;
+    const workers = finiteNonNegative(readProperty(job, "workers"));
+    if (workers === undefined) return undefined;
+    const effective = readCapturedEffectiveJobCount(context, id, workers);
+    if (effective === undefined) return undefined;
+    counts.set(id, effective.count);
   }
   return Object.freeze({ readCount: (jobId: string) => counts.get(jobId) });
 }
@@ -1636,12 +1631,11 @@ function readCatalog(
       onSkipped(controlId, "ordinary job assigned count is not finite");
       continue;
     }
-    const effective = readCapturedEffectiveJobCount(countContext, id);
-    if (effective === undefined || !effective.present) {
-      onSkipped(controlId, "ordinary job effective count is unavailable");
-      return undefined;
+    const workers = finiteNonNegative(readProperty(job, "workers"));
+    if (workers === undefined) {
+      onSkipped(controlId, "ordinary job worker count is not finite");
+      continue;
     }
-    const workers = effective.workers;
     const maximum = finiteMaximum(readProperty(job, "max"));
     if (maximum === undefined) {
       onSkipped(controlId, "ordinary job maximum is not finite");
@@ -1651,6 +1645,11 @@ function readCatalog(
     if (typeof display !== "boolean") {
       onSkipped(controlId, "ordinary job visibility is not boolean");
       continue;
+    }
+    const effective = readCapturedEffectiveJobCount(countContext, id, workers);
+    if (effective === undefined) {
+      onSkipped(controlId, "ordinary job servant count is not finite");
+      return undefined;
     }
     // Locked DeadSpace jobs still expose civic records and controls, but their smart settings are
     // irrelevant until the job is displayed. Do not let an unavailable locked-job input disable
