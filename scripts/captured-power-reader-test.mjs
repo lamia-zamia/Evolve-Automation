@@ -1575,7 +1575,7 @@ const stationKey = "spc_belt:space_station";
 const gatewayKey = "gxy_home:ship_dock";
 const overseerKey = "tau_home:overseer";
 const lakeAnchorKey = "prtl_lake:harbor";
-const spireAnchorKey = "prtl_spire:mechbay";
+const spireAnchorKey = "prtl_spire:purifier";
 const spireStructure = (
   region,
   sector,
@@ -1885,8 +1885,6 @@ const specialRoot = {
       bay: 1,
       active: 1,
       scouts: 0,
-      s_max: 1,
-      support: 3,
       blueprint: {
         size: "small",
         chassis: "wheel",
@@ -1906,7 +1904,15 @@ const specialRoot = {
     },
     port: { count: 1, on: 1 },
     base_camp: { count: 1, on: 1 },
-    purifier: { count: 1, on: 1, supply: 0, sup_max: 1000, diff: 1 },
+    purifier: {
+      count: 4,
+      on: 4,
+      s_max: 4,
+      support: 3,
+      supply: 0,
+      sup_max: 1000,
+      diff: 1,
+    },
     spire: { count: 3, type: "sand", progress: 25, status: {}, boss: "snake" },
   },
   tauceti: {
@@ -1977,7 +1983,7 @@ const specialRoot = {
     spire: [
       specialPort.entryKey,
       specialBaseCamp.entryKey,
-      specialPurifier.entryKey,
+      specialMechBay.entryKey,
     ],
   },
   power: specialStructures.map((entry) => entry.entryKey),
@@ -2257,6 +2263,100 @@ assert.deepEqual(
   [true, 700, 0, true, true, "Purificador de la torre", false],
   "Spire input captures costs, live queues and description; final-floor state disables supply saving",
 );
+const spireBindings = ["portal-mechbay", "portal-port", "portal-base_camp"];
+const spireAdjustments = (cycle) =>
+  planPowerCycle(
+    cycle,
+    EMPTY_POWER_AUTOMATION_STATE,
+  ).decision.operations.filter(
+    (operation) =>
+      operation.kind === "adjust-building" &&
+      spireBindings.includes(operation.binding),
+  );
+assert.deepEqual(
+  spireAdjustments(specialCycle).map((operation) => operation.binding),
+  spireBindings,
+  "a coherent, fully managed Spire can balance all three consumers",
+);
+const spireNativeCurrent = specialRoot.portal.purifier.support;
+for (const binding of spireBindings) {
+  const key = binding.slice("portal-".length);
+  const previousOn = specialRoot.portal[key].on;
+  specialRoot.portal[key].on = 0;
+  specialRoot.portal.purifier.support = spireNativeCurrent - previousOn;
+  specialSettings[`bld_s_${binding}`] = false;
+  const cycle = specialReader.readCycle();
+  assert.ok(cycle, `${binding} background state leaves Power available`);
+  assert.equal(
+    cycle.spire.enabled,
+    false,
+    `${binding} blocks partial Spire balancing`,
+  );
+  assert.ok(
+    spireAdjustments(cycle).every((operation) => operation.binding !== binding),
+    `${binding} cannot be adjusted through ordinary or special Power`,
+  );
+  assert.ok(
+    cycle.buildings
+      .filter((building) => spireBindings.includes(building.binding))
+      .every((building) => building.skipGroup === "none"),
+    "the special Spire subgroup stays disabled",
+  );
+  assert.ok(
+    planPowerCycle(
+      cycle,
+      EMPTY_POWER_AUTOMATION_STATE,
+    ).decision.operations.some(
+      (operation) =>
+        operation.kind === "adjust-building" &&
+        operation.binding === "city-cement_plant",
+    ),
+    "unrelated Power operations continue",
+  );
+  specialSettings[`bld_s_${binding}`] = true;
+  specialRoot.portal[key].on = previousOn;
+  specialRoot.portal.purifier.support = spireNativeCurrent;
+}
+specialSettings["bld_s2_portal-mechbay"] = false;
+const noSmartMechCycle = specialReader.readCycle();
+assert.ok(noSmartMechCycle);
+assert.equal(noSmartMechCycle.spire.enabled, false);
+assert.ok(
+  noSmartMechCycle.buildings.some(
+    (building) =>
+      building.binding === "portal-mechbay" && building.skipGroup === "none",
+  ),
+  "a support-safe Mech Bay without smart management uses ordinary Power only",
+);
+specialSettings["bld_s2_portal-mechbay"] = true;
+specialRoot.portal.purifier.support = spireNativeCurrent + 1;
+const incoherentSpireCycle = specialReader.readCycle();
+assert.ok(incoherentSpireCycle);
+assert.equal(incoherentSpireCycle.spire.enabled, false);
+assert.deepEqual(spireAdjustments(incoherentSpireCycle), []);
+specialRoot.portal.purifier.support = spireNativeCurrent;
+for (const binding of ["portal-bireme", "portal-transport"]) {
+  const key = binding.slice("portal-".length);
+  const previousOn = specialRoot.portal[key].on;
+  specialRoot.portal[key].on = 0;
+  specialRoot.portal.harbor.support -= previousOn;
+  specialSettings[`bld_s_${binding}`] = false;
+  const cycle = specialReader.readCycle();
+  assert.ok(cycle);
+  assert.equal(cycle.lake.enabled, false, `${binding} blocks Lake balancing`);
+  assert.ok(
+    planPowerCycle(
+      cycle,
+      EMPTY_POWER_AUTOMATION_STATE,
+    ).decision.operations.every(
+      (operation) =>
+        operation.kind !== "adjust-building" || operation.binding !== binding,
+    ),
+  );
+  specialSettings[`bld_s_${binding}`] = true;
+  specialRoot.portal.harbor.support += previousOn;
+  specialRoot.portal[key].on = previousOn;
+}
 specialSettings.autoPrestige = false;
 specialRoot.portal.spire.progress = 100;
 assert.equal(

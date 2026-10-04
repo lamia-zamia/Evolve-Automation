@@ -26402,7 +26402,12 @@
       "portal-transport",
       settings,
       buildingStates
-    ), spireGroupManaged = supportSafeBindings.has("portal-port") && supportSafeBindings.has("portal-base_camp") && isPowerGroupSmartManagementEnabled(
+    ), spireGroupManaged = supportSafeBindings.has("portal-mechbay") && supportSafeBindings.has("portal-port") && supportSafeBindings.has("portal-base_camp") && isPowerGroupSmartManagementEnabled(
+      root,
+      "portal-mechbay",
+      settings,
+      buildingStates
+    ) && isPowerGroupSmartManagementEnabled(
       root,
       "portal-port",
       settings,
