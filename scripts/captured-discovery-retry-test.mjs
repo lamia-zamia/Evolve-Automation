@@ -145,10 +145,16 @@ function runMarketFixture({
   const root = {
     settings: { showMarket: true, civTabs: 0, marketTabs: 0, animated: false },
     race: { species: "human" },
+    resource: { Food: { display: true } },
   };
   const ids = () =>
     captured
-      ? [MAIN_TAB_CONTROL, MARKET_SUB_TAB_CONTROL, MARKET_QUANTITY_CONTROL]
+      ? [
+          MAIN_TAB_CONTROL,
+          MARKET_SUB_TAB_CONTROL,
+          MARKET_QUANTITY_CONTROL,
+          "market-Food",
+        ]
       : [MAIN_TAB_CONTROL, MARKET_SUB_TAB_CONTROL];
   const stop = startCapturedRuntime({
     pageCapture: {
@@ -333,10 +339,16 @@ function runMarketFixture({
   let root = {
     settings: { showMarket: true, civTabs: 0, marketTabs: 0, animated: false },
     race: { species: "human" },
+    resource: { Food: { display: true } },
   };
   const ids = () =>
     captured
-      ? [MAIN_TAB_CONTROL, MARKET_SUB_TAB_CONTROL, MARKET_QUANTITY_CONTROL]
+      ? [
+          MAIN_TAB_CONTROL,
+          MARKET_SUB_TAB_CONTROL,
+          MARKET_QUANTITY_CONTROL,
+          "market-Food",
+        ]
       : [MAIN_TAB_CONTROL, MARKET_SUB_TAB_CONTROL];
   startCapturedRuntime({
     pageCapture: {
@@ -396,6 +408,7 @@ function runMarketFixture({
   root = {
     settings: { showMarket: true, civTabs: 0, marketTabs: 0, animated: false },
     race: { species: "human" },
+    resource: { Food: { display: true } },
   };
   captured = false;
   assert.ok(rootListeners.length > 0, "root replacement is observed");

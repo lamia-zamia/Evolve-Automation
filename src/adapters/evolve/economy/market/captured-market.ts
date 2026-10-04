@@ -14,12 +14,18 @@ import { rejected, stale, SUCCEEDED } from "../../../command-outcomes.ts";
 import { finite, isRecord, readProperty } from "../../../validation.ts";
 import { readScriptCyclesPerSecond } from "../../captured-tick-rate.ts";
 import { isRegionalSupply } from "../../captured-affordability.ts";
+import { readUnitPrices } from "./captured-instant-market-price.ts";
+import type {
+  MarketBoard,
+  MarketBoardSource,
+} from "./captured-market-board.ts";
 
 export const MARKET_QUANTITY_CONTROL = "market-qty";
 
 interface CapturedMarketDependencies {
   readonly rootState: GameRootStateSource;
   readonly controls: GameControlRegistry;
+  readonly board: MarketBoardSource;
   readonly readSettings: () => unknown;
   readonly readDemand?: () => {
     readonly isDemanded: (resourceId: string) => boolean;
@@ -29,145 +35,19 @@ interface CapturedMarketDependencies {
 
 interface MarketSession {
   readonly root: unknown;
+  readonly board: MarketBoard;
+  readonly settings: Readonly<Record<string, unknown>>;
   readonly quantityControl: GameControlHandle;
   readonly rowGenerations: ReadonlyMap<string, number>;
   readonly resourceIds: readonly string[];
   readonly originalMultiplier: number;
   readonly maximumMultiplier: number;
   readonly minimumMoneyAllowed: number;
+  ownedMultiplier: number;
 }
-
-const TRAIT_VALUES: Readonly<{
-  readonly arrogant: readonly number[];
-  readonly merchant: readonly number[];
-  readonly connivingBuy: readonly number[];
-  readonly connivingSell: readonly number[];
-  readonly asymmetrical: readonly number[];
-}> = Object.freeze({
-  arrogant: Object.freeze([16, 14, 12, 10, 8, 6, 5]),
-  merchant: Object.freeze([5, 10, 15, 25, 35, 40, 45]),
-  connivingBuy: Object.freeze([1, 2, 3, 5, 8, 10, 12]),
-  connivingSell: Object.freeze([6, 8, 10, 15, 20, 24, 28]),
-  asymmetrical: Object.freeze([35, 30, 25, 20, 15, 10, 5]),
-});
-
-const TRAIT_RANKS: readonly number[] = Object.freeze([
-  0.1, 0.25, 0.5, 1, 2, 3, 4,
-]);
 
 function settingsRecord(value: unknown): Record<PropertyKey, unknown> {
   return isRecord(value) ? value : {};
-}
-
-function readMultiplier(
-  race: Record<PropertyKey, unknown>,
-  trait: string,
-  values: readonly number[],
-  increase: boolean,
-): number | undefined {
-  if (!race[trait]) return 1;
-  // DeadSpace's traitRank can remap every market trait when Empowered is active. The captured
-  // root does not expose empowered.vars(), so refusing this one case is safer than pricing a
-  // trade with a rank that differs from the game's closure.
-  if (race["empowered"]) return undefined;
-  const rank = finite(race[trait]);
-  if (rank === undefined) return undefined;
-  const index = TRAIT_RANKS.indexOf(rank);
-  const value = index >= 0 ? values[index] : undefined;
-  return value === undefined
-    ? undefined
-    : 1 + (increase ? value : -value) / 100;
-}
-
-function readFathom(
-  root: unknown,
-  race: Record<PropertyKey, unknown>,
-  target: string,
-): number | undefined {
-  if (!race["unfathomable"]) return 0;
-  const city = readProperty(root, "city");
-  const dwellers = readProperty(city, "surfaceDwellers");
-  if (!Array.isArray(dwellers) || !dwellers.includes(target)) return 0;
-  const housing = readProperty(city, "captive_housing");
-  const civic = readProperty(root, "civic");
-  const torturer = readProperty(civic, "torturer");
-  const workers = finite(readProperty(torturer, "workers"));
-  const index = dwellers.indexOf(target);
-  const active = finite(readProperty(housing, `race${index}`));
-  if (workers === undefined || active === undefined) return undefined;
-  let adjusted = Math.min(active, 100);
-  if (adjusted > workers) {
-    adjusted -= Math.ceil((adjusted - workers) / 3);
-  }
-  const nightmare = readProperty(readProperty(root, "stats"), "achieve");
-  const mg = finite(readProperty(readProperty(nightmare, "nightmare"), "mg"));
-  return (adjusted / 100) * ((mg ?? 0) / 5);
-}
-
-function readUnitPrices(
-  root: unknown,
-  resource: Record<PropertyKey, unknown>,
-): { readonly buy: number; readonly sell: number } | undefined {
-  const value = finite(resource["value"]);
-  const race = readProperty(root, "race");
-  if (value === undefined || value <= 0 || !isRecord(race)) return undefined;
-
-  const arrogant = readMultiplier(
-    race,
-    "arrogant",
-    TRAIT_VALUES.arrogant,
-    true,
-  );
-  const connivingBuy = readMultiplier(
-    race,
-    "conniving",
-    TRAIT_VALUES.connivingBuy,
-    false,
-  );
-  const merchant = readMultiplier(
-    race,
-    "merchant",
-    TRAIT_VALUES.merchant,
-    false,
-  );
-  const asymmetrical = readMultiplier(
-    race,
-    "asymmetrical",
-    TRAIT_VALUES.asymmetrical,
-    true,
-  );
-  const connivingSell = readMultiplier(
-    race,
-    "conniving",
-    TRAIT_VALUES.connivingSell,
-    false,
-  );
-  const impFathom = readFathom(root, race, "imp");
-  const goblinFathom = readFathom(root, race, "goblin");
-  if (
-    arrogant === undefined ||
-    connivingBuy === undefined ||
-    merchant === undefined ||
-    asymmetrical === undefined ||
-    connivingSell === undefined ||
-    impFathom === undefined ||
-    goblinFathom === undefined
-  ) {
-    return undefined;
-  }
-
-  const buy = value * arrogant * connivingBuy * (1 - (impFathom * 5) / 100);
-  const sellDivide =
-    4 *
-    merchant *
-    (1 - (goblinFathom * 25) / 100) *
-    asymmetrical *
-    connivingSell *
-    (1 - (impFathom * 15) / 100);
-  const sell = value / sellDivide;
-  return Number.isFinite(buy) && Number.isFinite(sell) && sellDivide > 0
-    ? Object.freeze({ buy, sell })
-    : undefined;
 }
 
 function resourceStorageRatio(resource: Record<PropertyKey, unknown>): number {
@@ -235,25 +115,45 @@ function emptyBuy(index: number, resourceId: string): MarketBuyInput {
 }
 
 function readPriorityIds(
-  resources: Record<PropertyKey, unknown>,
+  board: MarketBoard,
   settings: Record<PropertyKey, unknown>,
 ): readonly string[] {
-  return Object.keys(resources)
-    .map((id, index) => ({
-      id,
+  return board.rows
+    .map((row, index) => ({
+      id: row.elementId.slice("market-".length),
       index,
-      resource: readProperty(resources, id),
-      priority: finite(settings[`res_buy_p_${id}`]) ?? Number.MAX_SAFE_INTEGER,
+      priority:
+        finite(
+          settings[`res_buy_p_${row.elementId.slice("market-".length)}`],
+        ) ?? Number.MAX_SAFE_INTEGER,
     }))
-    .filter(
-      (entry) =>
-        isRecord(entry.resource) && Object.hasOwn(entry.resource, "trade"),
-    )
     .sort(
       (left, right) =>
         left.priority - right.priority || left.index - right.index,
     )
     .map((entry) => entry.id);
+}
+
+function marketSettingsSnapshot(
+  source: unknown,
+  rows: readonly GameControlHandle[],
+): Readonly<Record<string, unknown>> {
+  const settings = settingsRecord(source);
+  const snapshot: Record<string, unknown> = {
+    minimumMoney: finite(settings["minimumMoney"]) ?? 0,
+    minimumMoneyPercentage: finite(settings["minimumMoneyPercentage"]) ?? 0,
+    tickRate: finite(settings["tickRate"]),
+  };
+  for (const row of rows) {
+    const id = row.elementId.slice("market-".length);
+    snapshot[`buy${id}`] = settings[`buy${id}`] === true;
+    snapshot[`sell${id}`] = settings[`sell${id}`] === true;
+    snapshot[`res_buy_r_${id}`] = finite(settings[`res_buy_r_${id}`]) ?? 0;
+    snapshot[`res_sell_r_${id}`] = finite(settings[`res_sell_r_${id}`]) ?? 0;
+    snapshot[`res_buy_p_${id}`] =
+      finite(settings[`res_buy_p_${id}`]) ?? Number.MAX_SAFE_INTEGER;
+  }
+  return Object.freeze(snapshot);
 }
 
 export function createCapturedMarketPorts(
@@ -271,29 +171,36 @@ export function createCapturedMarketPorts(
       const root = dependencies.rootState.readRoot();
       const settings = readProperty(root, "settings");
       const race = readProperty(root, "race");
+      const board = dependencies.board.current();
       return Object.freeze({
-        // Once resources are split by supply zone the ordinary trade market does not exist.
-        // `drawResourceTab`'s market branch calls `loadBlackMarket()` and returns before it creates
-        // `#market-qty`, and `loadMarket` returns on the same condition, so the quantity control
-        // this feature drives is never bound and the trade routes are not drawn either. That is
-        // nothing to automate rather than a control to wait for: without this the session read threw
-        // every cycle. Automating the per-zone black market is a separate feature.
         unlocked:
           readProperty(settings, "showMarket") === true &&
-          !isRegionalSupply(root),
+          board !== undefined &&
+          board.root === root,
+        ordinary: board?.mode === "global" && !isRegionalSupply(root),
         noTrade: Boolean(readProperty(race, "no_trade")),
       });
     },
 
     readSession(): MarketSessionInput {
       const root = dependencies.rootState.readRoot();
-      const settings = settingsRecord(dependencies.readSettings());
+      const board = dependencies.board.current();
+      if (
+        board === undefined ||
+        board.root !== root ||
+        board.mode !== "global" ||
+        board.quantity === undefined
+      )
+        throw new Error("current ordinary market board is unavailable");
+      // Market planning and its immediate execution share this one synchronous application stack.
+      const settings = marketSettingsSnapshot(
+        dependencies.readSettings(),
+        board.rows,
+      );
       const resources = readProperty(root, "resource");
       const cityMarket = readProperty(readProperty(root, "city"), "market");
       const money = readProperty(resources, "Money");
-      const quantityControl = dependencies.controls.resolve(
-        MARKET_QUANTITY_CONTROL,
-      );
+      const quantityControl = board.quantity;
       if (
         !isRecord(resources) ||
         !isRecord(cityMarket) ||
@@ -319,21 +226,25 @@ export function createCapturedMarketPorts(
           100,
         finite(settings["minimumMoney"]) ?? 0,
       );
-      const resourceIds = readPriorityIds(resources, settings);
+      const resourceIds = readPriorityIds(board, settings);
       const rowGenerations = new Map<string, number>();
-      for (const resourceId of resourceIds) {
-        const row = dependencies.controls.resolve(`market-${resourceId}`);
-        if (row !== undefined) rowGenerations.set(resourceId, row.generation);
-      }
-      session = Object.freeze({
+      for (const row of board.rows)
+        rowGenerations.set(
+          row.elementId.slice("market-".length),
+          row.generation,
+        );
+      session = {
         root,
+        board,
+        settings,
         quantityControl,
         rowGenerations,
         resourceIds: Object.freeze(resourceIds),
         originalMultiplier,
         maximumMultiplier: maximumMultiplier(root),
         minimumMoneyAllowed,
-      });
+        ownedMultiplier: originalMultiplier,
+      };
       lastResourceId = null;
       return Object.freeze({
         originalMultiplier,
@@ -352,6 +263,8 @@ export function createCapturedMarketPorts(
       }
       lastResourceId = resourceId;
       const root = active.root;
+      if (!dependencies.board.isCurrent(active.board))
+        throw new Error("market board changed during session");
       const resources = readProperty(root, "resource");
       const resource = readProperty(resources, resourceId);
       const money = readProperty(resources, "Money");
@@ -360,17 +273,18 @@ export function createCapturedMarketPorts(
         !isRecord(resource) ||
         !isRecord(money) ||
         control === undefined ||
+        control.generation !== active.rowGenerations.get(resourceId) ||
         !control.methods.includes("purchase") ||
         !control.methods.includes("sell")
       ) {
-        return emptySell(index, resourceId, ignoreSellRatio);
+        throw new Error("current market row is unavailable");
       }
       const currentQuantity = finite(resource["amount"]);
       const maxQuantity = resourceMaximum(resource);
       const moneyMaximum = finite(money["max"]);
       const moneyCurrent = finite(money["amount"]);
       const prices = readUnitPrices(root, resource);
-      const settings = settingsRecord(dependencies.readSettings());
+      const settings = active.settings;
       const autoSellRatio = finite(settings[`res_sell_r_${resourceId}`]) ?? 0;
       const storageRatio = resourceStorageRatio(resource);
       const income = finite(resource["diff"]);
@@ -420,6 +334,8 @@ export function createCapturedMarketPorts(
         throw new Error("market buy must follow its sell candidate");
       }
       const resources = readProperty(active.root, "resource");
+      if (!dependencies.board.isCurrent(active.board))
+        throw new Error("market board changed during session");
       const resource = readProperty(resources, resourceId);
       const money = readProperty(resources, "Money");
       const control = dependencies.controls.resolve(`market-${resourceId}`);
@@ -427,16 +343,17 @@ export function createCapturedMarketPorts(
         !isRecord(resource) ||
         !isRecord(money) ||
         control === undefined ||
+        control.generation !== active.rowGenerations.get(resourceId) ||
         !control.methods.includes("purchase") ||
         !control.methods.includes("sell")
       ) {
-        return emptyBuy(index, resourceId);
+        throw new Error("current market row is unavailable");
       }
       const currentQuantity = finite(resource["amount"]);
       const maxQuantity = resourceMaximum(resource);
       const moneyCurrent = finite(money["amount"]);
       const prices = readUnitPrices(active.root, resource);
-      const settings = settingsRecord(dependencies.readSettings());
+      const settings = active.settings;
       const autoBuyRatio = finite(settings[`res_buy_r_${resourceId}`]) ?? 0;
       if (
         currentQuantity === undefined ||
@@ -517,6 +434,9 @@ export function createCapturedMarketPorts(
           "captured game root changed",
         );
       }
+      if (!dependencies.board.isCurrent(active.board)) {
+        return stale("captured-market-board-changed", "market board changed");
+      }
       const resource = readProperty(
         readProperty(active.root, "resource"),
         decision.resourceId,
@@ -554,11 +474,39 @@ export function createCapturedMarketPorts(
       const result = setMultiplier(active, decision.multiplier);
       if (result.status !== "succeeded") return result;
       const method = decision.side === "buy" ? "purchase" : "sell";
+      let expectedResource = decision.expectedResourceCurrent;
+      let expectedMoney = decision.expectedMoneyCurrent;
       for (
         let repetition = 0;
         repetition < decision.repetitions;
         repetition += 1
       ) {
+        if (
+          dependencies.rootState.readRoot() !== active.root ||
+          !dependencies.board.isCurrent(active.board) ||
+          dependencies.controls.resolve(control.elementId)?.generation !==
+            control.generation ||
+          dependencies.controls.resolve(MARKET_QUANTITY_CONTROL)?.generation !==
+            active.quantityControl.generation ||
+          readProperty(
+            readProperty(active.root, "resource"),
+            decision.resourceId,
+          ) !== resource ||
+          readProperty(readProperty(active.root, "resource"), "Money") !==
+            money ||
+          finite(resource["amount"]) !== expectedResource ||
+          finite(money["amount"]) !== expectedMoney ||
+          finite(
+            readProperty(
+              readProperty(readProperty(active.root, "city"), "market"),
+              "qty",
+            ),
+          ) !== active.ownedMultiplier
+        )
+          return stale(
+            "captured-market-sequence-changed",
+            "market trade sequence changed",
+          );
         const invoked = dependencies.controls.invoke(control, method, [
           decision.resourceId,
         ]);
@@ -568,6 +516,44 @@ export function createCapturedMarketPorts(
             `${method} control failed`,
           );
         }
+        const nextResource = finite(resource["amount"]);
+        const nextMoney = finite(money["amount"]);
+        const resourceMax = finite(resource["max"]);
+        const moneyMax = finite(money["max"]);
+        if (
+          dependencies.rootState.readRoot() !== active.root ||
+          !dependencies.board.isCurrent(active.board) ||
+          dependencies.controls.resolve(control.elementId)?.generation !==
+            control.generation ||
+          dependencies.controls.resolve(MARKET_QUANTITY_CONTROL)?.generation !==
+            active.quantityControl.generation ||
+          readProperty(
+            readProperty(active.root, "resource"),
+            decision.resourceId,
+          ) !== resource ||
+          readProperty(readProperty(active.root, "resource"), "Money") !==
+            money ||
+          nextResource === undefined ||
+          nextMoney === undefined ||
+          resourceMax === undefined ||
+          moneyMax === undefined ||
+          (decision.side === "buy" &&
+            (nextResource < expectedResource ||
+              nextMoney > expectedMoney ||
+              nextResource > resourceMax)) ||
+          (decision.side === "sell" &&
+            (nextResource > expectedResource ||
+              nextMoney < expectedMoney ||
+              nextMoney > moneyMax))
+        )
+          return stale(
+            "captured-market-postcondition-failed",
+            "native market trade changed unexpected state",
+          );
+        if (nextResource === expectedResource && nextMoney === expectedMoney)
+          break;
+        expectedResource = nextResource;
+        expectedMoney = nextMoney;
       }
       return SUCCEEDED;
     },
@@ -586,6 +572,9 @@ export function createCapturedMarketPorts(
         "captured game root changed",
       );
     }
+    if (!dependencies.board.isCurrent(active.board)) {
+      return stale("captured-market-board-changed", "market board changed");
+    }
     const control = dependencies.controls.resolve(MARKET_QUANTITY_CONTROL);
     if (
       control === undefined ||
@@ -599,7 +588,8 @@ export function createCapturedMarketPorts(
     const data = control.data;
     if (
       !isRecord(data) ||
-      data !== readProperty(readProperty(active.root, "city"), "market")
+      data !== readProperty(readProperty(active.root, "city"), "market") ||
+      finite(data["qty"]) !== active.ownedMultiplier
     ) {
       return stale(
         "captured-market-quantity-state-changed",
@@ -607,12 +597,17 @@ export function createCapturedMarketPorts(
       );
     }
     Reflect.set(data, "qty", multiplier);
-    return finite(data["qty"]) === multiplier
-      ? SUCCEEDED
-      : rejected(
-          "captured-market-quantity-failed",
-          "market quantity did not change",
-        );
+    if (
+      finite(data["qty"]) === multiplier &&
+      dependencies.board.isCurrent(active.board)
+    ) {
+      active.ownedMultiplier = multiplier;
+      return SUCCEEDED;
+    }
+    return rejected(
+      "captured-market-quantity-failed",
+      "market quantity did not change",
+    );
   }
 
   return Object.freeze({ reader, executor });

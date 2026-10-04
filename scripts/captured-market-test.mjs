@@ -78,9 +78,29 @@ const registry = {
   },
 };
 
+function marketBoard(gameRoot) {
+  const snapshot = {
+    root: gameRoot,
+    mode: "global",
+    epoch: "test",
+    quantity: controls.get(MARKET_QUANTITY_CONTROL),
+    rows: [controls.get("market-Iron"), controls.get("market-Copper")],
+  };
+  return {
+    current: () => snapshot,
+    isCurrent: (board) =>
+      board === snapshot &&
+      board.root === gameRoot &&
+      [...board.rows, board.quantity].every(
+        (row) => registry.resolve(row.elementId)?.generation === row.generation,
+      ),
+  };
+}
+
 const ports = createCapturedMarketPorts({
   rootState: { readRoot: () => root },
   controls: registry,
+  board: marketBoard(root),
   readSettings: () => ({
     tickRate: 4,
     minimumMoney: 0,
@@ -94,7 +114,11 @@ const ports = createCapturedMarketPorts({
   }),
 });
 
-assert.deepEqual(ports.reader.readGate(), { unlocked: true, noTrade: false });
+assert.deepEqual(ports.reader.readGate(), {
+  unlocked: true,
+  ordinary: true,
+  noTrade: false,
+});
 
 // Once the game splits resources by supply zone the ordinary trade market is gone: the market tab
 // draws a per-zone black market and never creates `#market-qty`, so there is nothing to automate.
@@ -108,10 +132,12 @@ assert.deepEqual(ports.reader.readGate(), { unlocked: true, noTrade: false });
   const regionalPorts = createCapturedMarketPorts({
     rootState: { readRoot: () => regionalRoot },
     controls: registry,
+    board: marketBoard(regionalRoot),
     readSettings: () => ({ tickRate: 4 }),
   });
   assert.deepEqual(regionalPorts.reader.readGate(), {
-    unlocked: false,
+    unlocked: true,
+    ordinary: false,
     noTrade: false,
   });
   // One level below is still the ordinary market.
@@ -120,6 +146,7 @@ assert.deepEqual(ports.reader.readGate(), { unlocked: true, noTrade: false });
     createCapturedMarketPorts({
       rootState: { readRoot: () => belowRoot },
       controls: registry,
+      board: marketBoard(belowRoot),
       readSettings: () => ({ tickRate: 4 }),
     }).reader.readGate().unlocked,
     true,
@@ -147,6 +174,7 @@ root.race = { arrogant: 1, merchant: 1, conniving: 1, asymmetrical: 1 };
 const traitPorts = createCapturedMarketPorts({
   rootState: { readRoot: () => root },
   controls: registry,
+  board: marketBoard(root),
   readSettings: () => ({ tickRate: 4 }),
 });
 traitPorts.reader.readGate();
@@ -156,5 +184,44 @@ assert.equal(
   10 / (4 * 0.75 * 1.2 * 0.85),
 );
 assert.equal(traitPorts.reader.readBuy(0, 0).unitPrice, 10 * 1.1 * 0.95);
+
+let settingsReads = 0;
+const coherentPorts = createCapturedMarketPorts({
+  rootState: { readRoot: () => root },
+  controls: registry,
+  board: marketBoard(root),
+  readSettings: () => {
+    settingsReads += 1;
+    return settingsReads === 1
+      ? {
+          tickRate: 4,
+          sellCopper: true,
+          buyCopper: true,
+          res_sell_r_Copper: 0.7,
+          res_buy_r_Copper: 0.3,
+          res_buy_p_Copper: 0,
+          res_buy_p_Iron: 1,
+        }
+      : {
+          tickRate: 1,
+          sellCopper: false,
+          buyCopper: false,
+          res_sell_r_Copper: 0,
+          res_buy_r_Copper: 0,
+          res_buy_p_Copper: 5,
+          res_buy_p_Iron: 0,
+        };
+  },
+});
+coherentPorts.reader.readGate();
+coherentPorts.reader.readSession();
+const coherentSell = coherentPorts.reader.readSell(0, false);
+const coherentBuy = coherentPorts.reader.readBuy(0, 0);
+assert.equal(coherentSell?.resourceId, "Copper");
+assert.equal(coherentSell?.autoSellEnabled, true);
+assert.equal(coherentSell?.autoSellRatio, 0.7);
+assert.equal(coherentBuy.autoBuyEnabled, true);
+assert.equal(coherentBuy.autoBuyRatio, 0.3);
+assert.equal(settingsReads, 1);
 
 console.log("captured market tests passed");

@@ -1,5 +1,6 @@
 export interface MarketGateInput {
   readonly unlocked: boolean;
+  readonly ordinary: boolean;
   readonly noTrade: boolean;
 }
 

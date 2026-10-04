@@ -47,6 +47,7 @@ function resource(amount, max, extra = {}) {
  * enabled and every stub mutates the same live root, so the trace is the executed order.
  */
 function runResourcePrologue() {
+  let rebindMarket = () => {};
   const root = {
     race: {
       smoldering: true,
@@ -75,6 +76,7 @@ function runResourcePrologue() {
     },
     settings: {
       civTabs: 1,
+      marketTabs: 0,
       spaceTabs: 0,
       showCity: true,
       showMarket: true,
@@ -258,6 +260,13 @@ function runResourcePrologue() {
   return runCapturedPhaseOrderCycle({
     root,
     settings,
+    mount: true,
+    controlSetup: ({ rebind }) => {
+      rebindMarket = () => {
+        for (const id of ["market-qty", "market-Food", "market-Iron"])
+          rebind(id);
+      };
+    },
     documentSetup: ({ body }) => {
       const city = element("div", { id: "city" });
       const food = element("div", { id: "city-food" });
@@ -266,6 +275,21 @@ function runResourcePrologue() {
       body.append(city);
     },
     controls: {
+      "#mainColumn div.content": {
+        methods: {
+          swapTab(index) {
+            root.settings.civTabs = index;
+          },
+        },
+      },
+      mTabResource: {
+        methods: {
+          swapTab(index) {
+            root.settings.marketTabs = index;
+            if (index === 0) rebindMarket();
+          },
+        },
+      },
       "city-food": {
         event: "gather",
         methods: {

@@ -82,6 +82,14 @@ export function runCapturedPhaseOrderCycle({
     });
   }
   controlSetup({
+    rebind(elementId) {
+      const handle = handles.get(elementId);
+      if (handle !== undefined)
+        handles.set(elementId, {
+          ...handle,
+          generation: handle.generation + 1,
+        });
+    },
     register(elementId, spec) {
       handles.set(elementId, {
         elementId,

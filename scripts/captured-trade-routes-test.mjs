@@ -100,9 +100,42 @@ const registry = {
   },
 };
 
+function boardSource(gameRoot, controlRegistry, mode) {
+  let snapshot;
+  const redraw = () => {
+    snapshot = {
+      root: gameRoot,
+      mode,
+      epoch: "test",
+      rows: controlRegistry
+        .capturedElementIds()
+        .filter(
+          (id) =>
+            id.startsWith(mode === "regional" ? "bm-" : "market-") &&
+            id !== "market-qty",
+        )
+        .map((id) => controlRegistry.resolve(id)),
+    };
+  };
+  redraw();
+  return {
+    redraw,
+    current: () => snapshot,
+    isCurrent: (board) =>
+      board === snapshot &&
+      board.root === gameRoot &&
+      board.rows.every(
+        (row) =>
+          controlRegistry.resolve(row.elementId)?.generation === row.generation,
+      ),
+  };
+}
+const ordinaryBoard = boardSource(root, registry, "global");
+
 const routes = createCapturedTradeRoutes({
   rootState: { readRoot: () => root },
   controls: registry,
+  board: ordinaryBoard,
   mechanics,
   readSettings: () => settings,
   readDemand: () => ({
@@ -116,6 +149,18 @@ assert.equal(root.resource.Iron.trade, -4);
 assert.equal(root.city.market.trade, 4);
 assert.equal(calls.length, 4);
 assert.deepEqual(calls[0], ["autoSell", "Iron"]);
+
+root.tech.shadow = 5;
+root.race.supplySplit = false;
+root.resource.Iron.trade = 0;
+root.city.market.trade = 0;
+calls.length = 0;
+routes.adjust();
+assert.equal(
+  root.resource.Iron.trade,
+  -4,
+  "Shadow progression alone keeps ordinary routes active",
+);
 
 root.resource.Iron.amount = 0;
 calls.length = 0;
@@ -162,6 +207,7 @@ const staleRoot = { ...root };
 const staleRoutes = createCapturedTradeRoutes({
   rootState: { readRoot: () => staleRoot },
   controls: registry,
+  board: ordinaryBoard,
   mechanics,
   readSettings: () => ({}),
 });
@@ -199,6 +245,7 @@ assert.deepEqual(regionalPlan.operations, [
 
 const regionalRoot = {
   race: {
+    supplySplit: true,
     governor: {
       g: { bg: "none" },
       config: { trader: { margin: 0, reserve: 0 } },
@@ -264,12 +311,15 @@ const regionalRegistry = {
       if (current <= 1) delete poolLedger[resourceId];
       else poolLedger[resourceId] = current - 1;
     }
+    regionalRoot.city.market.trade += method === "more" ? 1 : -1;
     return { ok: true, value: undefined };
   },
 };
+const regionalBoard = boardSource(regionalRoot, regionalRegistry, "regional");
 const regionalRoutes = createCapturedTradeRoutes({
   rootState: { readRoot: () => regionalRoot },
   controls: regionalRegistry,
+  board: regionalBoard,
   mechanics,
   readSettings: () => ({}),
 });
@@ -299,12 +349,37 @@ regionalControls.set("bm-Novelium", {
   generation: 1,
   methods: ["more", "less", "volume"],
 });
+regionalBoard.redraw();
 regionalCalls.length = 0;
 regionalRoutes.adjust();
 assert.equal(regionalRoot.city.market.bm.spc_moon.Novelium, 2);
 
+regionalRoot.city.market.bm = { spc_home: { Food: 1 }, spc_moon: {} };
+regionalRoot.city.market.trade = 1;
+regionalRoot.city.market.bmZone = "spc_home";
+regionalRoot.resource.Food.regDiff.spc_home = 30;
+const normalRegionalInvoke = regionalRegistry.invoke;
+regionalRegistry.invoke = (handle, method, args) => {
+  const result = normalRegionalInvoke(handle, method, args);
+  if (method === "less") regionalRoot.city.market.bmZone = "external";
+  return result;
+};
+regionalCalls.length = 0;
+regionalRoutes.adjust();
+assert.equal(
+  regionalRoot.city.market.bmZone,
+  "external",
+  "external zone change is not overwritten",
+);
+assert.equal(
+  regionalCalls.length,
+  1,
+  "lost zone ownership stops remaining routes",
+);
+
 function oracleFixture() {
   let currentRoot = {};
+  let currentBoard = true;
   let currentControl = {
     elementId: "market-Iron",
     generation: 1,
@@ -322,6 +397,7 @@ function oracleFixture() {
       if (behavior === "reject") return { ok: false, reason: "threw" };
       rounded = method === "aSell" ? sell : method === "aBuy" ? buy : volume;
       if (behavior === "root") currentRoot = {};
+      if (behavior === "board") currentBoard = false;
       if (behavior === "generation")
         currentControl = { ...currentControl, generation: 2 };
       return { ok: true, value: "localized prose" };
@@ -347,6 +423,7 @@ function oracleFixture() {
         rootState,
         controls,
         probe,
+        () => currentBoard,
       ),
     regional: () =>
       readCapturedRegionalVolume(
@@ -356,6 +433,7 @@ function oracleFixture() {
         rootState,
         controls,
         probe,
+        () => currentBoard,
       ),
     setSell: (values) => {
       sell = values;
@@ -411,7 +489,7 @@ native.setVolume([]);
 assert.equal(native.regional(), undefined);
 native.setVolume([{ receiver: 10, digits: 2, text: "bad" }]);
 assert.equal(native.regional(), undefined);
-for (const failure of ["reject", "throw", "root", "generation"]) {
+for (const failure of ["reject", "throw", "root", "generation", "board"]) {
   const broken = oracleFixture();
   broken.setBehavior(failure);
   assert.equal(broken.quote(), undefined, failure);
@@ -472,5 +550,50 @@ registry.invoke = (_handle, method, args = []) => {
 };
 routes.adjust();
 assert.equal(root.resource.Iron.trade, -5);
+
+root.resource.Iron.trade = 0;
+root.city.market.trade = 0;
+settings = { ...settings, res_trade_sell_Iron: true };
+let routeSettingsReads = 0;
+const quoteInvoke = registry.invoke;
+registry.invoke = (handle, method, args) => {
+  if (method === "aSell")
+    settings = { ...settings, res_trade_sell_Iron: false };
+  return quoteInvoke(handle, method, args);
+};
+const coherentRoutes = createCapturedTradeRoutes({
+  rootState: { readRoot: () => root },
+  controls: registry,
+  board: ordinaryBoard,
+  mechanics,
+  readSettings: () => {
+    routeSettingsReads += 1;
+    return settings;
+  },
+  readDemand: () => ({ isDemanded: () => false, storageRequired: () => 1 }),
+});
+coherentRoutes.adjust();
+assert.equal(
+  root.resource.Iron.trade,
+  -5,
+  "the route plan uses settings sampled before quotes",
+);
+assert.equal(routeSettingsReads, 1);
+
+root.resource.Iron.trade = 0;
+root.city.market.trade = 0;
+settings = { ...settings, res_trade_sell_Iron: true };
+let routeMutations = 0;
+registry.invoke = (handle, method, args) => {
+  if (method === "autoSell") {
+    routeMutations += 1;
+    if (routeMutations === 2) return { ok: true, value: undefined };
+  }
+  return quoteInvoke(handle, method, args);
+};
+routes.adjust();
+assert.equal(routeMutations, 2, "a no-op middle route step stops the batch");
+assert.equal(root.resource.Iron.trade, -1);
+assert.equal(root.city.market.trade, 1);
 
 console.log("captured trade routes tests passed");

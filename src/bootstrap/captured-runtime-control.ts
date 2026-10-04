@@ -155,10 +155,8 @@ import {
   createCapturedGalaxyMarketPorts,
   GALAXY_MARKET_CONTROL,
 } from "../adapters/evolve/economy/market/captured-galaxy-market.ts";
-import {
-  createCapturedMarketPorts,
-  MARKET_QUANTITY_CONTROL,
-} from "../adapters/evolve/economy/market/captured-market.ts";
+import { createCapturedMarketPorts } from "../adapters/evolve/economy/market/captured-market.ts";
+import { createCapturedMarketBoard } from "../adapters/evolve/economy/market/captured-market-board.ts";
 import { createCapturedTradeRoutes } from "../adapters/evolve/economy/market/captured-trade-routes.ts";
 import { runGalaxyMarketAutomation } from "../application/galaxy-market.ts";
 import { runFleetAutomation } from "../application/fleet.ts";
@@ -260,7 +258,7 @@ import { createGameCustomRaceLab } from "../adapters/browser/game-custom-race-la
 import { createGameTerraformLab } from "../adapters/browser/game-terraform-lab.ts";
 import type { TickDiagnostics } from "../ports/tick.ts";
 import type { GameActivitySink } from "../ports/game-message-log.ts";
-import { finite, isRecord, readProperty } from "../adapters/validation.ts";
+import { isRecord, readProperty } from "../adapters/validation.ts";
 import { overrideComparisons } from "../domain/override-comparators.ts";
 import {
   CAPTURED_TRAIT_COMPANION_CONTROLS,
@@ -1364,9 +1362,14 @@ export function startCapturedRuntime({
         executor: galaxyMarketPorts.executor,
       }),
   });
+  const marketBoard = createCapturedMarketBoard(
+    pageCapture.rootState,
+    pageCapture.controls,
+  );
   const marketPorts = createCapturedMarketPorts({
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,
+    board: marketBoard,
     readSettings: () => settingsStore.readRaw(),
     readDemand: () => readDemand(),
     onUnavailable: (resourceId, reason) =>
@@ -1375,6 +1378,7 @@ export function startCapturedRuntime({
   const tradeRoutes = createCapturedTradeRoutes({
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,
+    board: marketBoard,
     mechanics: pageCapture.mechanics,
     readSettings: () => settingsStore.readRaw(),
     readDemand: () => readDemand(),
@@ -2429,22 +2433,7 @@ export function startCapturedRuntime({
   };
 
   const ensureMarketControls = () => {
-    const satisfied = () => {
-      const root = pageCapture.rootState.readRoot();
-      const regional = finite(
-        readProperty(readProperty(root, "tech"), "shadow"),
-      );
-      return regional !== undefined && regional >= 5
-        ? pageCapture.controls
-            .capturedElementIds()
-            .some(
-              (id) =>
-                id.startsWith("bm-") &&
-                pageCapture.controls.resolve(id) !== undefined,
-            )
-        : pageCapture.controls.resolve(MARKET_QUANTITY_CONTROL) !== undefined;
-    };
-    if (satisfied()) return;
+    if (marketBoard.current() !== undefined) return;
     if (pageCapture.controls.resolve(MAIN_TAB_CONTROL) === undefined) return;
     const root = pageCapture.rootState.readRoot();
     if (readProperty(readProperty(root, "settings"), "showMarket") !== true) {
@@ -2452,18 +2441,27 @@ export function startCapturedRuntime({
     }
     const marketTabs = SUB_TAB_CONTROLS[MARKET_TABS_SETTING];
     if (marketTabs === undefined) return;
-    finishDiscovery("market", "market", satisfied, undefined, [
-      Object.freeze({
-        setting: MAIN_TAB_SETTING,
-        control: MAIN_TAB_CONTROL,
-        index: MAIN_TAB_INDEX.resources,
-      }),
-      Object.freeze({
-        setting: MARKET_TABS_SETTING,
-        control: marketTabs,
-        index: MARKET_TAB_INDEX.market,
-      }),
-    ]);
+    if (!marketBoard.beginDraw()) return;
+    const succeeded = finishDiscovery(
+      "market",
+      "market",
+      () => marketBoard.hasObservedRows(),
+      marketBoard.epoch(),
+      [
+        Object.freeze({
+          setting: MAIN_TAB_SETTING,
+          control: MAIN_TAB_CONTROL,
+          index: MAIN_TAB_INDEX.resources,
+        }),
+        Object.freeze({
+          setting: MARKET_TABS_SETTING,
+          control: marketTabs,
+          index: MARKET_TAB_INDEX.market,
+        }),
+      ],
+      { forceDraw: true, whileDrawn: () => marketBoard.observeDraw() },
+    );
+    marketBoard.completeDraw(succeeded);
   };
 
   runBulkSellFromPanel = () => {

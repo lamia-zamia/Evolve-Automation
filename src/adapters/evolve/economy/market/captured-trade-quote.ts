@@ -63,8 +63,10 @@ function observeTradeRounding(
   rootState: GameRootStateSource,
   controls: GameControlRegistry,
   mechanics: CapturedGameMechanics,
+  isBoardCurrent: () => boolean,
 ): readonly CapturedRoundedValue[] | undefined {
   if (
+    !isBoardCurrent() ||
     rootState.readRoot() !== root ||
     controls.resolve(control.elementId)?.generation !== control.generation ||
     !control.methods.includes(method)
@@ -80,6 +82,7 @@ function observeTradeRounding(
     invoked = result.ok;
   });
   if (
+    !isBoardCurrent() ||
     scan.kind !== "value" ||
     !invoked ||
     rootState.readRoot() !== root ||
@@ -105,6 +108,7 @@ export function readCapturedTradeQuote(
   rootState: GameRootStateSource,
   controls: GameControlRegistry,
   mechanics: CapturedGameMechanics,
+  isBoardCurrent: () => boolean,
 ): NativeTradeQuote | undefined {
   const sell = observeTradeRounding(
     root,
@@ -116,6 +120,7 @@ export function readCapturedTradeQuote(
     rootState,
     controls,
     mechanics,
+    isBoardCurrent,
   );
   if (sell === undefined) return undefined;
   const buy = observeTradeRounding(
@@ -128,6 +133,7 @@ export function readCapturedTradeQuote(
     rootState,
     controls,
     mechanics,
+    isBoardCurrent,
   );
   if (buy === undefined) return undefined;
   return Object.freeze({
@@ -146,6 +152,7 @@ export function readCapturedRegionalVolume(
   rootState: GameRootStateSource,
   controls: GameControlRegistry,
   mechanics: CapturedGameMechanics,
+  isBoardCurrent: () => boolean,
 ): number | undefined {
   const observed = observeTradeRounding(
     root,
@@ -157,6 +164,7 @@ export function readCapturedRegionalVolume(
     rootState,
     controls,
     mechanics,
+    isBoardCurrent,
   );
   return observed?.[0]?.receiver;
 }

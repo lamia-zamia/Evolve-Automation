@@ -389,16 +389,21 @@ function makeScenario({
       trade: 0,
       stackable: true,
     };
-    vue.createApp({
+    const marketQuantityOptions = {
       el: "#market-qty",
       data: gameRoot.city.market,
       methods: { setQty() {} },
-    });
+    };
+    vue.createApp(marketQuantityOptions);
     vue.createApp({
       el: "#mTabResource",
       methods: {
         swapTab(index) {
           gameRoot.settings.marketTabs = index;
+          if (index === 0) {
+            vue.createApp(marketQuantityOptions);
+            vue.createApp(marketFoodOptions);
+          }
         },
       },
     });
@@ -415,7 +420,7 @@ function makeScenario({
         },
       },
     });
-    vue.createApp({
+    const marketFoodOptions = {
       el: "#market-Food",
       methods: {
         autoBuy() {},
@@ -426,7 +431,8 @@ function makeScenario({
         },
         sell() {},
       },
-    });
+    };
+    vue.createApp(marketFoodOptions);
   }
   const worker = new page.Worker("evolve/evolve.js");
   worker.addEventListener("message", () => {});

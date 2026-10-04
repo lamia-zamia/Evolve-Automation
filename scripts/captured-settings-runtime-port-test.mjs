@@ -2,10 +2,12 @@ import assert from "node:assert/strict";
 
 import { startCapturedRuntime } from "../src/bootstrap/captured-runtime-control.ts";
 import { createTestDocument, element } from "./dom-fixture.mjs";
+import { withControlCaptureAuthority } from "./control-capture-fixture.mjs";
 
 function createPanelPage() {
   const pageRoot = element("div", { id: "root" });
   const resources = element("div", { id: "resources" });
+  resources.appendChild(element("div", { id: "mTabResource" }));
   const settingsTab = element("div");
   settingsTab.classList.add("settings");
   pageRoot.appendChild(resources);
@@ -63,10 +65,23 @@ function createCapturedPage(root, handles, settings, log = () => {}) {
       subscribeRootReplaced: () => () => {},
     },
     keyState: { readPressed: () => false },
-    controls: {
+    controls: withControlCaptureAuthority({
       resolve: (id) => handles.get(id),
       invoke: (handle, method, args = []) => {
         invoked.push(`${handle.elementId}.${method}`);
+        if (
+          method === "swapTab" &&
+          handle.elementId === "#mainColumn div.content"
+        )
+          root.settings.civTabs = args[0];
+        if (method === "swapTab" && handle.elementId === "mTabResource") {
+          root.settings.marketTabs = args[0];
+          for (const id of ["market-qty", "market-Food"])
+            handles.set(id, {
+              ...handles.get(id),
+              generation: handles.get(id).generation + 1,
+            });
+        }
         const resourceId = args[0];
         if (resourceId === "Food" && method === "sell") {
           const quantity = Math.max(1, market.qty);
@@ -81,7 +96,7 @@ function createCapturedPage(root, handles, settings, log = () => {}) {
         return { ok: true, value: undefined };
       },
       capturedElementIds: () => [...handles.keys()],
-    },
+    }),
     controlUsage: { readUsage: () => [] },
     periods: {
       subscribe(next) {
@@ -89,7 +104,11 @@ function createCapturedPage(root, handles, settings, log = () => {}) {
         return () => {};
       },
     },
-    mountSuppression: { available: false, withoutMounting: () => undefined },
+    mountSuppression: {
+      available: true,
+      withoutMounting: (draw) => draw(),
+      withMountingEnabled: (draw) => draw(),
+    },
     uninstall: () => {},
   };
   const timing = {
@@ -122,7 +141,14 @@ const gameRoot = {
   race: { species: "human", governor: { tasks: {} } },
   tech: { trade: true, currency: 0 },
   civic: {},
-  settings: { showMarket: true, showMechLab: true, qKey: false },
+  settings: {
+    showMarket: true,
+    showMechLab: true,
+    qKey: false,
+    civTabs: 1,
+    marketTabs: 0,
+    animated: false,
+  },
   city: { market: { qty: 1, mtrade: 1, trade: 0 } },
   portal: {
     mechbay: {
@@ -175,6 +201,18 @@ const gameRoot = {
   },
 };
 const handles = new Map([
+  [
+    "#mainColumn div.content",
+    {
+      elementId: "#mainColumn div.content",
+      generation: 1,
+      methods: ["swapTab"],
+    },
+  ],
+  [
+    "mTabResource",
+    { elementId: "mTabResource", generation: 1, methods: ["swapTab"] },
+  ],
   [
     "market-qty",
     {
@@ -261,7 +299,10 @@ const bulkSell = app.document.getElementById("bulk-sell");
 assert.ok(bulkSell, "the real settings container renders Bulk Sell");
 app.invoked.length = 0;
 bulkSell.dispatch("mouseup");
-assert.ok(app.invoked.includes("market-Food.sell"));
+assert.ok(
+  app.invoked.includes("market-Food.sell"),
+  JSON.stringify({ invoked: app.invoked, errors: app.errors }),
+);
 assert.equal(app.invoked.includes("market-Food.purchase"), false);
 assert.equal(gameRoot.resource.Food.amount < 5, true);
 assert.equal(
@@ -331,8 +372,10 @@ assert.ok(missingPage.document.getElementById("bulk-sell"));
 assert.doesNotThrow(() =>
   missingPage.document.getElementById("bulk-sell").dispatch("mouseup"),
 );
-assert.ok(
-  missingErrors.some((message) => message.startsWith("Bulk Sell failed:")),
+assert.deepEqual(
+  missingErrors,
+  [],
+  "missing Market board is an inert manual sell",
 );
 missingRuntime();
 

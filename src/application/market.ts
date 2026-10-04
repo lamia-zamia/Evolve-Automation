@@ -53,7 +53,7 @@ export function runMarketTradesAutomation(
     }
     measure("autoMarket.adjustTradeRoutes", () => tradeRoutes.adjust());
   }
-  if (gate.noTrade) {
+  if (gate.noTrade || !gate.ordinary) {
     return SUCCEEDED;
   }
 

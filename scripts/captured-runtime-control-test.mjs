@@ -39,6 +39,8 @@ function runDemandSampleScenario(
     settings: {
       civTabs: 3,
       spaceTabs: 0,
+      marketTabs: 0,
+      animated: false,
       showMarket: true,
       showResearch: true,
       showCity: constructionCase,
@@ -70,6 +72,7 @@ function runDemandSampleScenario(
   };
   const market = root.city.market;
   const documentRoot = element("div", { id: "runtime-root" });
+  documentRoot.appendChild(element("div", { id: "mTabResource" }));
   if (constructionCase) {
     const mainColumn = element("div", { id: "mainColumn" });
     const content = element("div");
@@ -113,10 +116,11 @@ function runDemandSampleScenario(
     [
       ["buildQueue", ["setData"]],
       ["city-farm", ["action"]],
+      ["#mainColumn div.content", ["swapTab"]],
+      ["mTabResource", ["swapTab"]],
       ...(constructionCase
         ? [
             ["city-bank", ["action"]],
-            ["#mainColumn div.content", ["swapTab"]],
             ["mTabCivil", ["swapTab"]],
           ]
         : []),
@@ -152,6 +156,14 @@ function runDemandSampleScenario(
           root.settings.civTabs = args[0];
         if (method === "swapTab" && handle.elementId === "mTabCivil")
           root.settings.spaceTabs = args[0];
+        if (method === "swapTab" && handle.elementId === "mTabResource") {
+          root.settings.marketTabs = args[0];
+          for (const id of ["market-qty", "market-Food"])
+            handles.set(id, {
+              ...handles.get(id),
+              generation: handles.get(id).generation + 1,
+            });
+        }
         if (handle.elementId === "buildQueue" && method === "setData") {
           const id = root.queue.queue.at(-1)?.id;
           return {
@@ -178,13 +190,11 @@ function runDemandSampleScenario(
         return () => {};
       },
     },
-    mountSuppression: constructionCase
-      ? {
-          available: true,
-          withoutMounting: (draw) => draw(),
-          withMountingEnabled: (draw) => draw(),
-        }
-      : { available: false, withoutMounting: () => undefined },
+    mountSuppression: {
+      available: true,
+      withoutMounting: (draw) => draw(),
+      withMountingEnabled: (draw) => draw(),
+    },
     uninstall: () => {},
   };
   let pageCaptureCycle;
@@ -315,7 +325,7 @@ assert.equal(unsubscribeCount, 1);
     race: {},
     tech: { trade: true, currency: 0 },
     civic: {},
-    settings: { showMarket: true },
+    settings: { showMarket: true, civTabs: 1, marketTabs: 0, animated: false },
     city: { market: { qty: 1, mtrade: 1, trade: 0 } },
     resource: {
       Money: { amount: 1000, max: 10000, display: true, diff: 0, value: 1 },
@@ -332,6 +342,18 @@ assert.equal(unsubscribeCount, 1);
   };
   const market = root.city.market;
   const handles = new Map([
+    [
+      "#mainColumn div.content",
+      {
+        elementId: "#mainColumn div.content",
+        generation: 1,
+        methods: ["swapTab"],
+      },
+    ],
+    [
+      "mTabResource",
+      { elementId: "mTabResource", generation: 1, methods: ["swapTab"] },
+    ],
     [
       "market-qty",
       {
@@ -352,6 +374,9 @@ assert.equal(unsubscribeCount, 1);
   ]);
   let cycle;
   const persisted = new Map();
+  const marketDocumentRoot = element("div", { id: "runtime-root" });
+  marketDocumentRoot.appendChild(element("div", { id: "mTabResource" }));
+  const marketDocument = createTestDocument(marketDocumentRoot);
   const pageCapture = {
     isComplete: () => true,
     rootState: {
@@ -363,6 +388,19 @@ assert.equal(unsubscribeCount, 1);
       resolve: (id) => handles.get(id),
       invoke: (handle, method, args = []) => {
         invoked.push(`${handle.elementId}.${method}`);
+        if (
+          method === "swapTab" &&
+          handle.elementId === "#mainColumn div.content"
+        )
+          root.settings.civTabs = args[0];
+        if (method === "swapTab" && handle.elementId === "mTabResource") {
+          root.settings.marketTabs = args[0];
+          for (const id of ["market-qty", "market-Food"])
+            handles.set(id, {
+              ...handles.get(id),
+              generation: handles.get(id).generation + 1,
+            });
+        }
         const resourceId = args[0];
         if (method === "purchase" && resourceId === "Food") {
           const quantity = market.qty;
@@ -397,12 +435,16 @@ assert.equal(unsubscribeCount, 1);
         return () => {};
       },
     },
-    mountSuppression: { available: false, withoutMounting: () => undefined },
+    mountSuppression: {
+      available: true,
+      withoutMounting: (draw) => draw(),
+      withMountingEnabled: (draw) => draw(),
+    },
     uninstall: () => {},
   };
   const firstStop = startCapturedRuntime({
     pageCapture,
-    document: {},
+    document: marketDocument,
     mouseEvent: class {},
     storage: {
       getItem: (key) => persisted.get(key) ?? null,
@@ -431,7 +473,7 @@ assert.equal(unsubscribeCount, 1);
   );
   const secondStop = startCapturedRuntime({
     pageCapture,
-    document: {},
+    document: marketDocument,
     mouseEvent: class {},
     storage: {
       getItem: (key) => persisted.get(key) ?? null,

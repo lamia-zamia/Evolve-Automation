@@ -29067,8 +29067,8 @@
     return Object.freeze({ reader, executor });
   }
 
-  // src/adapters/evolve/economy/market/captured-market.ts
-  var MARKET_QUANTITY_CONTROL = "market-qty", TRAIT_VALUES = Object.freeze({
+  // src/adapters/evolve/economy/market/captured-instant-market-price.ts
+  var TRAIT_VALUES = Object.freeze({
     arrogant: Object.freeze([16, 14, 12, 10, 8, 6, 5]),
     merchant: Object.freeze([5, 10, 15, 25, 35, 40, 45]),
     connivingBuy: Object.freeze([1, 2, 3, 5, 8, 10, 12]),
@@ -29083,9 +29083,6 @@
     3,
     4
   ]);
-  function settingsRecord2(value) {
-    return isRecord(value) ? value : {};
-  }
   function readMultiplier(race, trait, values, increase) {
     if (!race[trait]) return 1;
     if (race.empowered) return;
@@ -29139,6 +29136,12 @@
     let buy = value * arrogant * connivingBuy * (1 - impFathom * 5 / 100), sellDivide = 4 * merchant * (1 - goblinFathom * 25 / 100) * asymmetrical * connivingSell * (1 - impFathom * 15 / 100), sell = value / sellDivide;
     return Number.isFinite(buy) && Number.isFinite(sell) && sellDivide > 0 ? Object.freeze({ buy, sell }) : void 0;
   }
+
+  // src/adapters/evolve/economy/market/captured-market.ts
+  var MARKET_QUANTITY_CONTROL = "market-qty";
+  function settingsRecord2(value) {
+    return isRecord(value) ? value : {};
+  }
   function resourceStorageRatio2(resource) {
     let amount = finite(resource.amount), maximum = finite(resource.max);
     return amount !== void 0 && maximum !== void 0 && maximum > 0 ? amount / maximum : 1;
@@ -29187,38 +29190,48 @@
       maximumMultiplier: 1
     });
   }
-  function readPriorityIds(resources, settings) {
-    return Object.keys(resources).map((id, index) => ({
-      id,
+  function readPriorityIds(board, settings) {
+    return board.rows.map((row, index) => ({
+      id: row.elementId.slice(7),
       index,
-      resource: readProperty(resources, id),
-      priority: finite(settings[`res_buy_p_${id}`]) ?? Number.MAX_SAFE_INTEGER
-    })).filter(
-      (entry) => isRecord(entry.resource) && Object.hasOwn(entry.resource, "trade")
-    ).sort(
+      priority: finite(
+        settings[`res_buy_p_${row.elementId.slice(7)}`]
+      ) ?? Number.MAX_SAFE_INTEGER
+    })).sort(
       (left, right) => left.priority - right.priority || left.index - right.index
     ).map((entry) => entry.id);
+  }
+  function marketSettingsSnapshot(source, rows) {
+    let settings = settingsRecord2(source), snapshot2 = {
+      minimumMoney: finite(settings.minimumMoney) ?? 0,
+      minimumMoneyPercentage: finite(settings.minimumMoneyPercentage) ?? 0,
+      tickRate: finite(settings.tickRate)
+    };
+    for (let row of rows) {
+      let id = row.elementId.slice(7);
+      snapshot2[`buy${id}`] = settings[`buy${id}`] === !0, snapshot2[`sell${id}`] = settings[`sell${id}`] === !0, snapshot2[`res_buy_r_${id}`] = finite(settings[`res_buy_r_${id}`]) ?? 0, snapshot2[`res_sell_r_${id}`] = finite(settings[`res_sell_r_${id}`]) ?? 0, snapshot2[`res_buy_p_${id}`] = finite(settings[`res_buy_p_${id}`]) ?? Number.MAX_SAFE_INTEGER;
+    }
+    return Object.freeze(snapshot2);
   }
   function createCapturedMarketPorts(dependencies) {
     let session = null, lastResourceId = null, reader = Object.freeze({
       readGate() {
         session = null;
-        let root = dependencies.rootState.readRoot(), settings = readProperty(root, "settings"), race = readProperty(root, "race");
+        let root = dependencies.rootState.readRoot(), settings = readProperty(root, "settings"), race = readProperty(root, "race"), board = dependencies.board.current();
         return Object.freeze({
-          // Once resources are split by supply zone the ordinary trade market does not exist.
-          // `drawResourceTab`'s market branch calls `loadBlackMarket()` and returns before it creates
-          // `#market-qty`, and `loadMarket` returns on the same condition, so the quantity control
-          // this feature drives is never bound and the trade routes are not drawn either. That is
-          // nothing to automate rather than a control to wait for: without this the session read threw
-          // every cycle. Automating the per-zone black market is a separate feature.
-          unlocked: readProperty(settings, "showMarket") === !0 && !isRegionalSupply(root),
+          unlocked: readProperty(settings, "showMarket") === !0 && board !== void 0 && board.root === root,
+          ordinary: board?.mode === "global" && !isRegionalSupply(root),
           noTrade: !!readProperty(race, "no_trade")
         });
       },
       readSession() {
-        let root = dependencies.rootState.readRoot(), settings = settingsRecord2(dependencies.readSettings()), resources = readProperty(root, "resource"), cityMarket = readProperty(readProperty(root, "city"), "market"), money = readProperty(resources, "Money"), quantityControl = dependencies.controls.resolve(
-          MARKET_QUANTITY_CONTROL
-        );
+        let root = dependencies.rootState.readRoot(), board = dependencies.board.current();
+        if (board === void 0 || board.root !== root || board.mode !== "global" || board.quantity === void 0)
+          throw new Error("current ordinary market board is unavailable");
+        let settings = marketSettingsSnapshot(
+          dependencies.readSettings(),
+          board.rows
+        ), resources = readProperty(root, "resource"), cityMarket = readProperty(readProperty(root, "city"), "market"), money = readProperty(resources, "Money"), quantityControl = board.quantity;
         if (!isRecord(resources) || !isRecord(cityMarket) || !isRecord(money) || quantityControl === void 0)
           throw new Error("captured market controls are unavailable");
         let originalMultiplier = finite(cityMarket.qty), moneyMaximum = finite(money.max), moneyCurrent = finite(money.amount);
@@ -29227,20 +29240,24 @@
         let minimumMoneyAllowed = Math.max(
           moneyMaximum * (finite(settings.minimumMoneyPercentage) ?? 0) / 100,
           finite(settings.minimumMoney) ?? 0
-        ), resourceIds = readPriorityIds(resources, settings), rowGenerations = /* @__PURE__ */ new Map();
-        for (let resourceId of resourceIds) {
-          let row = dependencies.controls.resolve(`market-${resourceId}`);
-          row !== void 0 && rowGenerations.set(resourceId, row.generation);
-        }
-        return session = Object.freeze({
+        ), resourceIds = readPriorityIds(board, settings), rowGenerations = /* @__PURE__ */ new Map();
+        for (let row of board.rows)
+          rowGenerations.set(
+            row.elementId.slice(7),
+            row.generation
+          );
+        return session = {
           root,
+          board,
+          settings,
           quantityControl,
           rowGenerations,
           resourceIds: Object.freeze(resourceIds),
           originalMultiplier,
           maximumMultiplier: maximumMultiplier(root),
-          minimumMoneyAllowed
-        }), lastResourceId = null, Object.freeze({
+          minimumMoneyAllowed,
+          ownedMultiplier: originalMultiplier
+        }, lastResourceId = null, Object.freeze({
           originalMultiplier,
           maximumMultiplier: session.maximumMultiplier,
           minimumMoneyAllowed
@@ -29253,10 +29270,13 @@
         if (resourceId === void 0)
           return lastResourceId = null, null;
         lastResourceId = resourceId;
-        let root = active.root, resources = readProperty(root, "resource"), resource = readProperty(resources, resourceId), money = readProperty(resources, "Money"), control = dependencies.controls.resolve(`market-${resourceId}`);
-        if (!isRecord(resource) || !isRecord(money) || control === void 0 || !control.methods.includes("purchase") || !control.methods.includes("sell"))
-          return emptySell(index, resourceId, ignoreSellRatio);
-        let currentQuantity2 = finite(resource.amount), maxQuantity = resourceMaximum(resource), moneyMaximum = finite(money.max), moneyCurrent = finite(money.amount), prices = readUnitPrices(root, resource), settings = settingsRecord2(dependencies.readSettings()), autoSellRatio = finite(settings[`res_sell_r_${resourceId}`]) ?? 0, storageRatio2 = resourceStorageRatio2(resource), income = finite(resource.diff), ticksPerSecond = readScriptCyclesPerSecond(settings);
+        let root = active.root;
+        if (!dependencies.board.isCurrent(active.board))
+          throw new Error("market board changed during session");
+        let resources = readProperty(root, "resource"), resource = readProperty(resources, resourceId), money = readProperty(resources, "Money"), control = dependencies.controls.resolve(`market-${resourceId}`);
+        if (!isRecord(resource) || !isRecord(money) || control === void 0 || control.generation !== active.rowGenerations.get(resourceId) || !control.methods.includes("purchase") || !control.methods.includes("sell"))
+          throw new Error("current market row is unavailable");
+        let currentQuantity2 = finite(resource.amount), maxQuantity = resourceMaximum(resource), moneyMaximum = finite(money.max), moneyCurrent = finite(money.amount), prices = readUnitPrices(root, resource), settings = active.settings, autoSellRatio = finite(settings[`res_sell_r_${resourceId}`]) ?? 0, storageRatio2 = resourceStorageRatio2(resource), income = finite(resource.diff), ticksPerSecond = readScriptCyclesPerSecond(settings);
         return currentQuantity2 === void 0 || moneyMaximum === void 0 || moneyCurrent === void 0 || prices === void 0 || income === void 0 || ticksPerSecond <= 0 ? (dependencies.onUnavailable?.(
           resourceId,
           "market price or quantity is unavailable"
@@ -29282,10 +29302,13 @@
         let active = session, resourceId = active?.resourceIds[index];
         if (active == null || resourceId === void 0 || lastResourceId !== resourceId)
           throw new Error("market buy must follow its sell candidate");
-        let resources = readProperty(active.root, "resource"), resource = readProperty(resources, resourceId), money = readProperty(resources, "Money"), control = dependencies.controls.resolve(`market-${resourceId}`);
-        if (!isRecord(resource) || !isRecord(money) || control === void 0 || !control.methods.includes("purchase") || !control.methods.includes("sell"))
-          return emptyBuy(index, resourceId);
-        let currentQuantity2 = finite(resource.amount), maxQuantity = resourceMaximum(resource), moneyCurrent = finite(money.amount), prices = readUnitPrices(active.root, resource), settings = settingsRecord2(dependencies.readSettings()), autoBuyRatio = finite(settings[`res_buy_r_${resourceId}`]) ?? 0;
+        let resources = readProperty(active.root, "resource");
+        if (!dependencies.board.isCurrent(active.board))
+          throw new Error("market board changed during session");
+        let resource = readProperty(resources, resourceId), money = readProperty(resources, "Money"), control = dependencies.controls.resolve(`market-${resourceId}`);
+        if (!isRecord(resource) || !isRecord(money) || control === void 0 || control.generation !== active.rowGenerations.get(resourceId) || !control.methods.includes("purchase") || !control.methods.includes("sell"))
+          throw new Error("current market row is unavailable");
+        let currentQuantity2 = finite(resource.amount), maxQuantity = resourceMaximum(resource), moneyCurrent = finite(money.amount), prices = readUnitPrices(active.root, resource), settings = active.settings, autoBuyRatio = finite(settings[`res_buy_r_${resourceId}`]) ?? 0;
         return currentQuantity2 === void 0 || moneyCurrent === void 0 || prices === void 0 ? (dependencies.onUnavailable?.(
           resourceId,
           "market price or quantity is unavailable"
@@ -29333,6 +29356,8 @@
             "captured-market-root-changed",
             "captured game root changed"
           );
+        if (!dependencies.board.isCurrent(active.board))
+          return stale("captured-market-board-changed", "market board changed");
         let resource = readProperty(
           readProperty(active.root, "resource"),
           decision.resourceId
@@ -29352,8 +29377,21 @@
           );
         let result = setMultiplier(active, decision.multiplier);
         if (result.status !== "succeeded") return result;
-        let method = decision.side === "buy" ? "purchase" : "sell";
-        for (let repetition = 0; repetition < decision.repetitions; repetition += 1)
+        let method = decision.side === "buy" ? "purchase" : "sell", expectedResource = decision.expectedResourceCurrent, expectedMoney = decision.expectedMoneyCurrent;
+        for (let repetition = 0; repetition < decision.repetitions; repetition += 1) {
+          if (dependencies.rootState.readRoot() !== active.root || !dependencies.board.isCurrent(active.board) || dependencies.controls.resolve(control.elementId)?.generation !== control.generation || dependencies.controls.resolve(MARKET_QUANTITY_CONTROL)?.generation !== active.quantityControl.generation || readProperty(
+            readProperty(active.root, "resource"),
+            decision.resourceId
+          ) !== resource || readProperty(readProperty(active.root, "resource"), "Money") !== money || finite(resource.amount) !== expectedResource || finite(money.amount) !== expectedMoney || finite(
+            readProperty(
+              readProperty(readProperty(active.root, "city"), "market"),
+              "qty"
+            )
+          ) !== active.ownedMultiplier)
+            return stale(
+              "captured-market-sequence-changed",
+              "market trade sequence changed"
+            );
           if (!dependencies.controls.invoke(control, method, [
             decision.resourceId
           ]).ok)
@@ -29361,6 +29399,19 @@
               "captured-market-control-failed",
               `${method} control failed`
             );
+          let nextResource = finite(resource.amount), nextMoney = finite(money.amount), resourceMax = finite(resource.max), moneyMax = finite(money.max);
+          if (dependencies.rootState.readRoot() !== active.root || !dependencies.board.isCurrent(active.board) || dependencies.controls.resolve(control.elementId)?.generation !== control.generation || dependencies.controls.resolve(MARKET_QUANTITY_CONTROL)?.generation !== active.quantityControl.generation || readProperty(
+            readProperty(active.root, "resource"),
+            decision.resourceId
+          ) !== resource || readProperty(readProperty(active.root, "resource"), "Money") !== money || nextResource === void 0 || nextMoney === void 0 || resourceMax === void 0 || moneyMax === void 0 || decision.side === "buy" && (nextResource < expectedResource || nextMoney > expectedMoney || nextResource > resourceMax) || decision.side === "sell" && (nextResource > expectedResource || nextMoney < expectedMoney || nextMoney > moneyMax))
+            return stale(
+              "captured-market-postcondition-failed",
+              "native market trade changed unexpected state"
+            );
+          if (nextResource === expectedResource && nextMoney === expectedMoney)
+            break;
+          expectedResource = nextResource, expectedMoney = nextMoney;
+        }
         return SUCCEEDED;
       }
     });
@@ -29375,6 +29426,8 @@
           "captured-market-root-changed",
           "captured game root changed"
         );
+      if (!dependencies.board.isCurrent(active.board))
+        return stale("captured-market-board-changed", "market board changed");
       let control = dependencies.controls.resolve(MARKET_QUANTITY_CONTROL);
       if (control === void 0 || control.generation !== active.quantityControl.generation)
         return stale(
@@ -29382,15 +29435,106 @@
           "market quantity control changed"
         );
       let data = control.data;
-      return !isRecord(data) || data !== readProperty(readProperty(active.root, "city"), "market") ? stale(
+      return !isRecord(data) || data !== readProperty(readProperty(active.root, "city"), "market") || finite(data.qty) !== active.ownedMultiplier ? stale(
         "captured-market-quantity-state-changed",
         "market quantity state changed"
-      ) : (Reflect.set(data, "qty", multiplier), finite(data.qty) === multiplier ? SUCCEEDED : rejected(
+      ) : (Reflect.set(data, "qty", multiplier), finite(data.qty) === multiplier && dependencies.board.isCurrent(active.board) ? (active.ownedMultiplier = multiplier, SUCCEEDED) : rejected(
         "captured-market-quantity-failed",
         "market quantity did not change"
       ));
     }
     return Object.freeze({ reader, executor });
+  }
+
+  // src/adapters/evolve/economy/market/captured-market-board.ts
+  var MARKET_QUANTITY_ID = "market-qty", ROUTE_MULTIPLIER_ID = "marketRouteMultiplier";
+  function marketControl(id) {
+    return id === MARKET_QUANTITY_ID || id === ROUTE_MULTIPLIER_ID || id.startsWith("market-") || id.startsWith("bm-");
+  }
+  function marketDiscoveryEpoch(root) {
+    let resources = readProperty(root, "resource"), race = readProperty(root, "race"), tech = readProperty(root, "tech"), displayed = isRecord(resources) ? Object.keys(resources).filter(
+      (id) => readProperty(readProperty(resources, id), "display") === !0
+    ) : [];
+    return JSON.stringify([
+      isRegionalSupply(root) ? "regional" : "global",
+      displayed,
+      !!readProperty(race, "no_trade"),
+      !!readProperty(race, "artifical"),
+      !!readProperty(race, "fasting"),
+      !!readProperty(race, "iceage"),
+      !!readProperty(race, "terrifying"),
+      !!readProperty(race, "banana"),
+      !!readProperty(tech, "trade")
+    ]);
+  }
+  function createCapturedMarketBoard(rootState, controls2) {
+    let board, invalidations = 0, pending, isCurrent = (candidate) => board === candidate && rootState.readRoot() === candidate.root && marketDiscoveryEpoch(candidate.root) === candidate.epoch && candidate.rows.every(
+      (row) => controls2.resolve(row.elementId)?.generation === row.generation
+    ) && (candidate.quantity === void 0 || controls2.resolve(MARKET_QUANTITY_ID)?.generation === candidate.quantity.generation) && (candidate.routeMultiplier === void 0 || controls2.resolve(ROUTE_MULTIPLIER_ID)?.generation === candidate.routeMultiplier.generation);
+    function dropStaleBoard() {
+      board !== void 0 && !isCurrent(board) && (board = void 0, invalidations += 1);
+    }
+    return Object.freeze({
+      epoch() {
+        return `${marketDiscoveryEpoch(rootState.readRoot())}:${invalidations}`;
+      },
+      current() {
+        return dropStaleBoard(), board;
+      },
+      isCurrent,
+      beginDraw() {
+        dropStaleBoard();
+        let root = rootState.readRoot();
+        if (!isRecord(root))
+          return board = void 0, pending = void 0, !1;
+        let epoch = marketDiscoveryEpoch(root);
+        if (board !== void 0 && isCurrent(board)) return !1;
+        board = void 0;
+        let before = /* @__PURE__ */ new Map();
+        for (let id of controls2.capturedElementIds()) {
+          if (!marketControl(id)) continue;
+          let generation = controls2.resolve(id)?.generation;
+          generation !== void 0 && before.set(id, generation);
+        }
+        return pending = { root, epoch, before }, !0;
+      },
+      observeDraw() {
+        if (pending === void 0) return;
+        let { root, epoch, before } = pending;
+        if (rootState.readRoot() !== root || marketDiscoveryEpoch(root) !== epoch)
+          return;
+        let mode = isRegionalSupply(root) ? "regional" : "global", changed = [];
+        for (let id of controls2.capturedElementIds()) {
+          if (!marketControl(id)) continue;
+          let handle = controls2.resolve(id);
+          handle !== void 0 && before.get(id) !== handle.generation && changed.push(handle);
+        }
+        let prefix = mode === "regional" ? "bm-" : "market-", rows = changed.filter(
+          (handle) => handle.elementId.startsWith(prefix) && handle.elementId !== MARKET_QUANTITY_ID
+        ), quantity = mode === "global" ? changed.find((handle) => handle.elementId === MARKET_QUANTITY_ID) : void 0, routeMultiplier = changed.find(
+          (handle) => handle.elementId === ROUTE_MULTIPLIER_ID
+        );
+        pending.observed = Object.freeze({
+          root,
+          epoch,
+          mode,
+          rows: Object.freeze(rows),
+          ...quantity === void 0 ? {} : { quantity },
+          ...routeMultiplier === void 0 ? {} : { routeMultiplier }
+        });
+      },
+      hasObservedRows() {
+        let observed2 = pending?.observed;
+        return observed2 !== void 0 && observed2.rows.length > 0 && (observed2.mode === "regional" || observed2.quantity !== void 0 || !!readProperty(readProperty(observed2.root, "race"), "no_trade"));
+      },
+      completeDraw(succeeded) {
+        let observed2 = pending?.observed;
+        if (pending = void 0, !(!succeeded || observed2 === void 0 || observed2.rows.length === 0 || observed2.mode === "global" && observed2.quantity === void 0 && !readProperty(readProperty(observed2.root, "race"), "no_trade"))) {
+          if (board = observed2, isCurrent(board)) return board;
+          board = void 0, invalidations += 1;
+        }
+      }
+    });
   }
 
   // src/domain/economy/market/trade-routes.ts
@@ -29584,8 +29728,8 @@
       return [first, last];
     }
   }
-  function observeTradeRounding(root, resourceId, control, method, firstDigits, lastDigits, rootState, controls2, mechanics) {
-    if (rootState.readRoot() !== root || controls2.resolve(control.elementId)?.generation !== control.generation || !control.methods.includes(method))
+  function observeTradeRounding(root, resourceId, control, method, firstDigits, lastDigits, rootState, controls2, mechanics, isBoardCurrent) {
+    if (!isBoardCurrent() || rootState.readRoot() !== root || controls2.resolve(control.elementId)?.generation !== control.generation || !control.methods.includes(method))
       return;
     let invoked = !1, scan = mechanics.readRoundedValues(() => {
       invoked = controls2.invoke(
@@ -29594,7 +29738,7 @@
         method === "volume" ? [] : [resourceId]
       ).ok;
     });
-    if (!(scan.kind !== "value" || !invoked || rootState.readRoot() !== root || controls2.resolve(control.elementId)?.generation !== control.generation || !controls2.resolve(control.elementId)?.methods.includes(method))) {
+    if (!(!isBoardCurrent() || scan.kind !== "value" || !invoked || rootState.readRoot() !== root || controls2.resolve(control.elementId)?.generation !== control.generation || !controls2.resolve(control.elementId)?.methods.includes(method))) {
       if (lastDigits === void 0) {
         let value = scan.value.at(-1);
         return roundedTradeValue(value, firstDigits) !== void 0 && scan.value.slice(0, -1).every((entry) => entry.digits !== firstDigits) ? [value] : void 0;
@@ -29602,7 +29746,7 @@
       return tradeRoundingPair(scan.value, firstDigits, lastDigits);
     }
   }
-  function readCapturedTradeQuote(root, resourceId, control, rootState, controls2, mechanics) {
+  function readCapturedTradeQuote(root, resourceId, control, rootState, controls2, mechanics, isBoardCurrent) {
     let sell = observeTradeRounding(
       root,
       resourceId,
@@ -29612,7 +29756,8 @@
       3,
       rootState,
       controls2,
-      mechanics
+      mechanics,
+      isBoardCurrent
     );
     if (sell === void 0) return;
     let buy = observeTradeRounding(
@@ -29624,7 +29769,8 @@
       1,
       rootState,
       controls2,
-      mechanics
+      mechanics,
+      isBoardCurrent
     );
     if (buy !== void 0)
       return Object.freeze({
@@ -29634,7 +29780,7 @@
         buyVolume: buy[0].receiver
       });
   }
-  function readCapturedRegionalVolume(root, resourceId, control, rootState, controls2, mechanics) {
+  function readCapturedRegionalVolume(root, resourceId, control, rootState, controls2, mechanics, isBoardCurrent) {
     return observeTradeRounding(
       root,
       resourceId,
@@ -29644,7 +29790,8 @@
       void 0,
       rootState,
       controls2,
-      mechanics
+      mechanics,
+      isBoardCurrent
     )?.[0]?.receiver;
   }
 
@@ -29660,30 +29807,56 @@
   function settingsRecord3(value) {
     return isRecord(value) ? value : {};
   }
+  function routeSettingsSnapshot(value, board) {
+    let source = settingsRecord3(value), snapshot2 = {};
+    for (let key of [
+      "tradeRouteSellExcess",
+      "tradeRouteMinimumMoneyPerSecond",
+      "tradeRouteMinimumMoneyPercentage",
+      "inflationChallengeAssist",
+      "inflationChallengeSaveMinutes"
+    ])
+      snapshot2[key] = source[key];
+    for (let row of board.rows) {
+      let id = row.elementId.slice(board.mode === "regional" ? 3 : 7);
+      for (let prefix of [
+        "res_buy_p_",
+        "res_trade_buy_",
+        "res_trade_sell_",
+        "res_trade_w_",
+        "res_trade_p_"
+      ])
+        snapshot2[`${prefix}${id}`] = source[`${prefix}${id}`];
+    }
+    return Object.freeze(snapshot2);
+  }
   function routeUnlocked(root, resourceId, resource) {
     if (resource.display !== !0) return !1;
     let race = readProperty(root, "race"), tech = readProperty(root, "tech");
     return resourceId === "Food" && (readProperty(race, "artifical") || readProperty(race, "fasting")) || resourceId === "Lumber" && readProperty(race, "iceage") ? !1 : resourceId === "Food" && readProperty(race, "banana") ? !0 : readProperty(tech, "trade") ? !readProperty(race, "terrifying") : !1;
   }
-  function readRouteInput(dependencies) {
+  function readRouteInput(dependencies, board) {
     let root = dependencies.rootState.readRoot();
-    if (root === void 0) return;
+    if (root === void 0 || board.mode !== "global" || board.root !== root || !dependencies.board.isCurrent(board))
+      return;
     let cityMarket = readProperty(readProperty(root, "city"), "market"), resources = readProperty(root, "resource"), tech = readProperty(root, "tech"), currency = finite(readProperty(tech, "currency")) ?? 0, money = readProperty(resources, "Money");
-    if (!isRecord(cityMarket) || !isRecord(resources) || !isRecord(money) || Object.hasOwn(cityMarket, "bm")) return;
+    if (!isRecord(cityMarket) || !isRecord(resources) || !isRecord(money))
+      return;
     let maximum = finite(cityMarket.mtrade), used = finite(cityMarket.trade), moneyRate = finite(money.diff), moneyMaximum = finite(money.max), moneyCurrent = finite(money.amount);
     if (maximum === void 0 || used === void 0 || moneyRate === void 0 || moneyMaximum === void 0 || moneyCurrent === void 0 || !Number.isSafeInteger(maximum) || !Number.isSafeInteger(used) || maximum < 0 || used < 0)
       return;
-    let settings = settingsRecord3(dependencies.readSettings()), demand = dependencies.readDemand?.() ?? {
+    let settings = routeSettingsSnapshot(dependencies.readSettings(), board), demand = dependencies.readDemand?.() ?? {
       isDemanded: () => !1,
       storageRequired: () => 1
     }, routeCounts = /* @__PURE__ */ new Map(), routeControls = /* @__PURE__ */ new Map(), priority = [];
-    for (let [index, resourceId] of Object.keys(resources).entries()) {
-      let resource = readProperty(resources, resourceId), trade = isRecord(resource) ? finite(resource.trade) : void 0;
-      if (!isRecord(resource) || trade === void 0) continue;
-      if (!Number.isSafeInteger(trade)) return;
+    for (let [index, row] of board.rows.entries()) {
+      let resourceId = row.elementId.slice(7), resource = readProperty(resources, resourceId);
+      if (!isRecord(resource)) return;
       if (!routeUnlocked(root, resourceId, resource)) continue;
-      let control = dependencies.controls.resolve(`market-${resourceId}`);
-      if (control === void 0 || !control.methods.includes("autoBuy") || !control.methods.includes("autoSell") || !control.methods.includes("zero") || !control.methods.includes("aSell") || !control.methods.includes("aBuy"))
+      let trade = finite(resource.trade);
+      if (trade === void 0 || !Number.isSafeInteger(trade)) return;
+      let control = dependencies.controls.resolve(row.elementId);
+      if (control === void 0 || control.generation !== row.generation || !control.methods.includes("autoBuy") || !control.methods.includes("autoSell") || !control.methods.includes("zero") || !control.methods.includes("aSell") || !control.methods.includes("aBuy"))
         return;
       let marketPriority = finite(settings[`res_buy_p_${resourceId}`]) ?? Number.MAX_SAFE_INTEGER;
       priority.push({ id: resourceId, index, value: marketPriority }), routeCounts.set(resourceId, trade), routeControls.set(resourceId, control);
@@ -29703,8 +29876,11 @@
         control,
         dependencies.rootState,
         dependencies.controls,
-        dependencies.mechanics
-      ), required = finite(demand.storageRequired(entry.id));
+        dependencies.mechanics,
+        () => dependencies.board.isCurrent(board)
+      );
+      if (!dependencies.board.isCurrent(board)) return;
+      let required = finite(demand.storageRequired(entry.id));
       if (amount === void 0 || maximumResource === void 0 || diff === void 0 || required === void 0 || quote === void 0 || maximumResource < 0 || required <= 0)
         return;
       let storageRatio2 = maximumResource > 0 ? amount / maximumResource : 1, usefulRatio = maximumResource > 0 ? amount / Math.min(maximumResource, required) : 1, buyEnabled = settings[`res_trade_buy_${entry.id}`] === !0, sellEnabled = settings[`res_trade_sell_${entry.id}`] === !0;
@@ -29752,6 +29928,7 @@
       input,
       session: Object.freeze({
         root,
+        board,
         market: cityMarket,
         routeCounts,
         controls: routeControls,
@@ -29766,25 +29943,27 @@
     let value = readProperty(poolLedger, resourceId);
     return value === void 0 ? 0 : finite(value);
   }
-  function readRegionalRouteInput(dependencies) {
-    let root = dependencies.rootState.readRoot(), tech = readProperty(root, "tech"), shadow = finite(readProperty(tech, "shadow"));
-    if (root === void 0 || shadow === void 0 || shadow < 5)
+  function readRegionalRouteInput(dependencies, board) {
+    let root = dependencies.rootState.readRoot();
+    if (root === void 0 || board.mode !== "regional" || board.root !== root || !dependencies.board.isCurrent(board))
       return;
     let city = readProperty(root, "city"), market = readProperty(city, "market"), resources = readProperty(root, "resource"), race = readProperty(root, "race"), governor = readProperty(race, "governor"), config = readProperty(governor, "config"), trader = readProperty(config, "trader");
     if (!isRecord(market) || !isRecord(resources)) return;
-    let maximumRoutes = finite(market.mtrade), money = finite(
+    let maximumRoutes = finite(market.mtrade), usedRoutes = finite(market.trade), money = finite(
       readProperty(readProperty(resources, "Money"), "amount")
     );
-    if (maximumRoutes === void 0 || !Number.isSafeInteger(maximumRoutes) || maximumRoutes < 0 || money === void 0)
+    if (maximumRoutes === void 0 || !Number.isSafeInteger(maximumRoutes) || maximumRoutes < 0 || money === void 0 || usedRoutes === void 0 || !Number.isSafeInteger(usedRoutes))
       return;
     let marginValue = isRecord(trader) ? finite(trader.margin) : void 0, reserveValue = isRecord(trader) ? finite(trader.reserve) : void 0, margin = marginValue !== void 0 && marginValue > 0 ? marginValue : 0, reserve = reserveValue !== void 0 && reserveValue > 0 ? reserveValue : 0, blackMarket = readProperty(market, "bm"), ledger = isRecord(blackMarket) ? blackMarket : {}, poolNames = /* @__PURE__ */ new Set(), routeCounts = /* @__PURE__ */ new Map();
     for (let value of Object.keys(ledger)) poolNames.add(value);
-    let resourceIds = dependencies.controls.capturedElementIds().filter((id) => id.startsWith("bm-")).map((id) => id.slice(3));
+    let resourceIds = board.rows.map((row) => row.elementId.slice(3));
     if (resourceIds.length === 0) return;
     let volumes = /* @__PURE__ */ new Map(), controls2 = /* @__PURE__ */ new Map();
     for (let resourceId of resourceIds) {
-      let control = dependencies.controls.resolve(`bm-${resourceId}`);
-      if (control === void 0 || !control.methods.includes("volume") || !control.methods.includes("more") || !control.methods.includes("less"))
+      let row = board.rows.find(
+        (entry) => entry.elementId === `bm-${resourceId}`
+      ), control = dependencies.controls.resolve(`bm-${resourceId}`);
+      if (control === void 0 || row === void 0 || control.generation !== row.generation || !control.methods.includes("volume") || !control.methods.includes("more") || !control.methods.includes("less"))
         return;
       let volume = readCapturedRegionalVolume(
         root,
@@ -29792,15 +29971,17 @@
         control,
         dependencies.rootState,
         dependencies.controls,
-        dependencies.mechanics
+        dependencies.mechanics,
+        () => dependencies.board.isCurrent(board)
       );
-      if (volume === void 0) return;
+      if (volume === void 0 || !dependencies.board.isCurrent(board))
+        return;
       volumes.set(resourceId, volume), controls2.set(resourceId, control);
     }
     let candidates = [];
     for (let resourceId of resourceIds) {
       let resource = readProperty(resources, resourceId);
-      if (!isRecord(resource) || resource.display !== !0) continue;
+      if (!isRecord(resource) || resource.display !== !0) return;
       let diffLedger = readProperty(resource, "regDiff");
       if (diffLedger !== void 0) {
         if (!isRecord(diffLedger)) return;
@@ -29811,7 +29992,7 @@
     for (let pool of poolNames)
       for (let [resourceId, volume] of volumes) {
         let resource = readProperty(resources, resourceId);
-        if (!isRecord(resource) || resource.display !== !0) continue;
+        if (!isRecord(resource) || resource.display !== !0) return;
         let diffLedger = readProperty(resource, "regDiff");
         if (diffLedger !== void 0 && !isRecord(diffLedger)) return;
         let rateOfChange = finite(isRecord(diffLedger) ? diffLedger[pool] : void 0) ?? 0, currentRoutes = regionalPoolRoute(ledger, pool, resourceId);
@@ -29849,10 +30030,12 @@
       input,
       session: Object.freeze({
         root,
+        board,
         market,
         selectedZone: market.bmZone,
         expectedRoutes,
-        controls: controls2
+        controls: controls2,
+        marketRouteCount: usedRoutes
       })
     });
   }
@@ -29860,55 +30043,57 @@
     if (captured === void 0) return;
     let result = planRegionalTradeRoutes(captured.input);
     if (result.operations.length === 0) return;
-    let multiplier = dependencies.controls.resolve(
-      "marketRouteMultiplier"
-    )?.data;
-    if (isRecord(multiplier) && multiplier.multiplier !== void 0 && multiplier.multiplier !== 1)
+    let multiplierHandle = captured.session.board.routeMultiplier, multiplier = multiplierHandle?.data;
+    if (multiplierHandle !== void 0 && dependencies.controls.resolve(multiplierHandle.elementId)?.generation !== multiplierHandle.generation || isRecord(multiplier) && multiplier.multiplier !== void 0 && multiplier.multiplier !== 1)
       return;
-    let market = captured.session.market;
+    let market = captured.session.market, ownedZone = captured.session.selectedZone, expectedTotal = captured.session.marketRouteCount;
     try {
       for (let operation2 of result.operations) {
         let control = captured.session.controls.get(operation2.resourceId);
         if (control === void 0) return;
         for (let index = 0; index < operation2.count; index += 1) {
-          if (dependencies.rootState.readRoot() !== captured.session.root || dependencies.controls.resolve(control.elementId)?.generation !== control.generation || !control.methods.includes("volume") || !control.methods.includes("more") || !control.methods.includes("less"))
+          if (dependencies.rootState.readRoot() !== captured.session.root || !dependencies.board.isCurrent(captured.session.board) || readProperty(
+            readProperty(captured.session.root, "city"),
+            "market"
+          ) !== market || market.bmZone !== ownedZone || dependencies.controls.resolve(control.elementId)?.generation !== control.generation || !control.methods.includes("volume") || !control.methods.includes("more") || !control.methods.includes("less"))
             return;
           let key = `${operation2.pool}\0${operation2.resourceId}`, expected = captured.session.expectedRoutes.get(key) ?? 0;
           if (regionalPoolRoute(
             isRecord(market.bm) ? market.bm : {},
             operation2.pool,
             operation2.resourceId
-          ) !== expected) return;
-          market.bmZone = operation2.pool;
+          ) !== expected || finite(market.trade) !== expectedTotal || (market.bmZone = operation2.pool, ownedZone = operation2.pool, market.bmZone !== ownedZone)) return;
           let method = operation2.kind === "add" ? "more" : "less";
           if (!dependencies.controls.invoke(control, method).ok) return;
           let next = regionalPoolRoute(
             isRecord(market.bm) ? market.bm : {},
             operation2.pool,
             operation2.resourceId
-          ), expectedNext = expected + (operation2.kind === "add" ? 1 : -1);
-          if (next !== expectedNext) return;
-          captured.session.expectedRoutes.set(key, expectedNext);
+          ), expectedNext = expected + (operation2.kind === "add" ? 1 : -1), nextTotal = expectedTotal + (operation2.kind === "add" ? 1 : -1);
+          if (dependencies.rootState.readRoot() !== captured.session.root || !dependencies.board.isCurrent(captured.session.board) || market.bmZone !== ownedZone || next !== expectedNext || finite(market.trade) !== nextTotal)
+            return;
+          captured.session.expectedRoutes.set(key, expectedNext), expectedTotal = nextTotal;
         }
       }
     } finally {
-      market.bmZone = captured.session.selectedZone;
+      dependencies.rootState.readRoot() === captured.session.root && readProperty(readProperty(captured.session.root, "city"), "market") === market && market.bmZone === ownedZone && (market.bmZone = captured.session.selectedZone);
     }
   }
   function createCapturedTradeRoutes(dependencies) {
     return Object.freeze({
       adjust() {
-        let regional = readRegionalRouteInput(dependencies);
-        if (regional !== void 0) {
+        let board = dependencies.board.current();
+        if (board === void 0) return;
+        if (board.mode === "regional") {
+          let regional = readRegionalRouteInput(dependencies, board);
           applyRegionalTradeRoutes(dependencies, regional);
           return;
         }
-        let root = dependencies.rootState.readRoot(), shadow = finite(readProperty(readProperty(root, "tech"), "shadow"));
-        if (shadow !== void 0 && shadow >= 5) return;
-        let captured = readRouteInput(dependencies);
+        let captured = readRouteInput(dependencies, board);
         if (captured === void 0) return;
         let result = planTradeRoutes(captured.input);
-        if (dependencies.rootState.readRoot() !== captured.session.root) return;
+        if (dependencies.rootState.readRoot() !== captured.session.root || !dependencies.board.isCurrent(board))
+          return;
         let current = readProperty(
           readProperty(captured.session.root, "city"),
           "market"
@@ -29925,37 +30110,34 @@
           if (control === void 0 || dependencies.controls.resolve(control.elementId)?.generation !== control.generation || !control.methods.includes("aSell") || !control.methods.includes("aBuy"))
             return;
         }
-        let expected = new Map(captured.session.routeCounts);
+        let expected = new Map(captured.session.routeCounts), expectedTotal = captured.session.marketRouteCount;
         for (let operation2 of result.operations) {
           let control = captured.session.controls.get(operation2.resourceId);
           if (control === void 0) return;
-          let method = operation2.kind === "zero" ? "zero" : operation2.kind === "add" ? "autoBuy" : "autoSell";
-          operation2.kind === "zero" ? expected.set(operation2.resourceId, 0) : expected.set(
-            operation2.resourceId,
-            (expected.get(operation2.resourceId) ?? 0) + (operation2.kind === "add" ? operation2.count : -operation2.count)
-          );
-          let count2 = operation2.kind === "zero" ? 1 : operation2.count;
-          for (let index = 0; index < count2; index += 1)
-            if (dependencies.rootState.readRoot() !== captured.session.root || dependencies.controls.resolve(control.elementId)?.generation !== control.generation || !dependencies.controls.invoke(control, method, [
+          let method = operation2.kind === "zero" ? "zero" : operation2.kind === "add" ? "autoBuy" : "autoSell", count2 = operation2.kind === "zero" ? 1 : operation2.count;
+          for (let index = 0; index < count2; index += 1) {
+            let resource = readProperty(
+              readProperty(captured.session.root, "resource"),
+              operation2.resourceId
+            ), before = expected.get(operation2.resourceId);
+            if (dependencies.rootState.readRoot() !== captured.session.root || !dependencies.board.isCurrent(board) || readProperty(
+              readProperty(captured.session.root, "city"),
+              "market"
+            ) !== captured.session.market || !isRecord(resource) || before === void 0 || finite(resource.trade) !== before || finite(captured.session.market.trade) !== expectedTotal || dependencies.controls.resolve(control.elementId)?.generation !== control.generation || !dependencies.controls.invoke(control, method, [
               operation2.resourceId,
               1
             ]).ok) return;
-        }
-        let liveResources = readProperty(captured.session.root, "resource"), finalMarket = readProperty(
-          readProperty(captured.session.root, "city"),
-          "market"
-        );
-        if (!isRecord(liveResources) || !isRecord(finalMarket)) return;
-        let expectedTotal = [...expected.values()].reduce(
-          (sum, value) => sum + Math.abs(value),
-          0
-        );
-        if (finite(finalMarket.trade) === expectedTotal) {
-          for (let [resourceId, value] of expected)
-            if (finite(
-              readProperty(readProperty(liveResources, resourceId), "trade")
-            ) !== value)
+            let after = operation2.kind === "zero" ? 0 : before + (operation2.kind === "add" ? 1 : -1), totalAfter = operation2.kind === "zero" ? expectedTotal - Math.abs(before) : expectedTotal + (Math.abs(after) - Math.abs(before));
+            if (dependencies.rootState.readRoot() !== captured.session.root || !dependencies.board.isCurrent(board) || readProperty(
+              readProperty(captured.session.root, "city"),
+              "market"
+            ) !== captured.session.market || readProperty(
+              readProperty(captured.session.root, "resource"),
+              operation2.resourceId
+            ) !== resource || finite(resource.trade) !== after || finite(captured.session.market.trade) !== totalAfter)
               return;
+            expected.set(operation2.resourceId, after), expectedTotal = totalAfter;
+          }
         }
       }
     });
@@ -30150,7 +30332,7 @@
         return SUCCEEDED10;
       measure("autoMarket.adjustTradeRoutes", () => tradeRoutes.adjust());
     }
-    if (gate.noTrade)
+    if (gate.noTrade || !gate.ordinary)
       return SUCCEEDED10;
     let session = dependencies.reader.readSession(), outcome = SUCCEEDED10;
     for (let index = 0; ; index++) {
@@ -53514,15 +53696,20 @@ Only continue if you trust the source. Injected code:
         reader: galaxyMarketPorts.reader,
         executor: galaxyMarketPorts.executor
       })
-    }), marketPorts = createCapturedMarketPorts({
+    }), marketBoard = createCapturedMarketBoard(
+      pageCapture2.rootState,
+      pageCapture2.controls
+    ), marketPorts = createCapturedMarketPorts({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
+      board: marketBoard,
       readSettings: () => settingsStore.readRaw(),
       readDemand: () => readDemand(),
       onUnavailable: (resourceId, reason) => reportOnce(`market skipped ${resourceId}: ${reason}`)
     }), tradeRoutes = createCapturedTradeRoutes({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
+      board: marketBoard,
       mechanics: pageCapture2.mechanics,
       readSettings: () => settingsStore.readRaw(),
       readDemand: () => readDemand(),
@@ -54132,31 +54319,32 @@ Only continue if you trust the source. Injected code:
         })
       ]);
     }, ensureMarketControls = () => {
-      let satisfied = () => {
-        let root2 = pageCapture2.rootState.readRoot(), regional = finite(
-          readProperty(readProperty(root2, "tech"), "shadow")
-        );
-        return regional !== void 0 && regional >= 5 ? pageCapture2.controls.capturedElementIds().some(
-          (id) => id.startsWith("bm-") && pageCapture2.controls.resolve(id) !== void 0
-        ) : pageCapture2.controls.resolve(MARKET_QUANTITY_CONTROL) !== void 0;
-      };
-      if (satisfied() || pageCapture2.controls.resolve(MAIN_TAB_CONTROL) === void 0) return;
+      if (marketBoard.current() !== void 0 || pageCapture2.controls.resolve(MAIN_TAB_CONTROL) === void 0) return;
       let root = pageCapture2.rootState.readRoot();
       if (readProperty(readProperty(root, "settings"), "showMarket") !== !0)
         return;
       let marketTabs = SUB_TAB_CONTROLS[MARKET_TABS_SETTING];
-      marketTabs !== void 0 && finishDiscovery("market", "market", satisfied, void 0, [
-        Object.freeze({
-          setting: MAIN_TAB_SETTING,
-          control: MAIN_TAB_CONTROL,
-          index: MAIN_TAB_INDEX.resources
-        }),
-        Object.freeze({
-          setting: MARKET_TABS_SETTING,
-          control: marketTabs,
-          index: MARKET_TAB_INDEX.market
-        })
-      ]);
+      if (marketTabs === void 0 || !marketBoard.beginDraw()) return;
+      let succeeded = finishDiscovery(
+        "market",
+        "market",
+        () => marketBoard.hasObservedRows(),
+        marketBoard.epoch(),
+        [
+          Object.freeze({
+            setting: MAIN_TAB_SETTING,
+            control: MAIN_TAB_CONTROL,
+            index: MAIN_TAB_INDEX.resources
+          }),
+          Object.freeze({
+            setting: MARKET_TABS_SETTING,
+            control: marketTabs,
+            index: MARKET_TAB_INDEX.market
+          })
+        ],
+        { forceDraw: !0, whileDrawn: () => marketBoard.observeDraw() }
+      );
+      marketBoard.completeDraw(succeeded);
     };
     runBulkSellFromPanel = () => {
       try {

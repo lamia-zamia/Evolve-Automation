@@ -36,6 +36,7 @@ function makeVue() {
 }
 
 const body = element("div", { id: "page" });
+body.appendChild(element("div", { id: "mTabResource" }));
 const document = createTestDocument(body);
 let demandReads = 0;
 let marketPriceReads = 0;
@@ -46,7 +47,13 @@ const root = {
   stats: { days: 1, reset: 0 },
   tech: { trade: true, currency: 0 },
   civic: {},
-  settings: { showMarket: true, showResearch: true },
+  settings: {
+    showMarket: true,
+    showResearch: true,
+    civTabs: 1,
+    marketTabs: 0,
+    animated: false,
+  },
   city: { market: { qty: 1, mtrade: 1, trade: 0 } },
   queue: {
     get display() {
@@ -97,12 +104,13 @@ vue.createApp({
     },
   },
 });
-vue.createApp({
+const quantityOptions = {
   el: "#market-qty",
   data: root.city.market,
   methods: { setQty() {} },
-});
-vue.createApp({
+};
+vue.createApp(quantityOptions);
+const foodOptions = {
   el: "#market-Food",
   methods: {
     autoBuy() {},
@@ -114,6 +122,27 @@ vue.createApp({
       root.resource.Money.amount -= root.city.market.qty;
     },
     sell() {},
+  },
+};
+vue.createApp(foodOptions);
+vue.createApp({
+  el: "#mainColumn div.content",
+  methods: {
+    swapTab(index) {
+      root.settings.civTabs = index;
+    },
+  },
+});
+vue.createApp({
+  el: "#mTabResource",
+  methods: {
+    swapTab(index) {
+      root.settings.marketTabs = index;
+      if (index === 0) {
+        vue.createApp(quantityOptions);
+        vue.createApp(foodOptions);
+      }
+    },
   },
 });
 const worker = new page.Worker("evolve/evolve.js");
