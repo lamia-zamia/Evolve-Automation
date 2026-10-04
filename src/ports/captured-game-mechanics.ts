@@ -28,6 +28,11 @@ export interface CapturedRoundedValue {
   readonly text: string;
 }
 
+export interface CapturedMathRoundValue {
+  readonly input: number;
+  readonly result: number;
+}
+
 export type CapturedPowerBalanceRule =
   | {
       readonly kind: "resource";
@@ -171,4 +176,12 @@ export interface CapturedGameMechanics {
   readRoundedValues(
     read: () => unknown,
   ): CapturedGameRead<readonly CapturedRoundedValue[]>;
+  readMathRoundValues(
+    read: () => unknown,
+  ): CapturedGameRead<readonly CapturedMathRoundValue[]>;
+  /** Numeric oracle in the current native portal guard-post effect. */
+  readGuardPostRating(
+    root: unknown,
+    isCurrent: () => boolean,
+  ): CapturedGameRead<number>;
 }

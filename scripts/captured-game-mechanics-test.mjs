@@ -48,7 +48,7 @@ function makePage() {
         return { key: sector + ":" + struct, region, sector, struct, c_action: action, info: false, state };
       }
       return {
-        Map, Object, Array, Function, Number, Proxy, createProbe,
+        Map, Object, Array, Function, Number, Math, Proxy, createProbe,
         game: { loc: function(key) { return "translated:" + key; } },
       };
     })()
@@ -1002,6 +1002,67 @@ unrelatedAfter.set(
   }),
 );
 assert.equal(capture.mechanics.readStructures().length, 16);
+
+let guardRating = 37.5;
+const guardOriginalRound = Object.getOwnPropertyDescriptor(page.Math, "round");
+let guardBehavior = "valid";
+let guardCurrent = true;
+const guardAction = {
+  id: "portal-guard_post",
+  effect() {
+    if (guardBehavior === "throw") throw new Error("native effect failed");
+    if (guardBehavior === "none") return "<div>999 and 1,234</div>";
+    if (guardBehavior === "malformed") return page.Math.round(Number.NaN);
+    const rating = page.Math.round(guardRating);
+    if (guardBehavior === "ambiguous") page.Math.round(99.4);
+    if (guardBehavior === "replace-root") guardCurrent = false;
+    if (guardBehavior === "replace-structure")
+      entries.set(guardEntry.key, {
+        ...guardEntry,
+        c_action: { ...guardAction },
+      });
+    return `<div>999, 1.234 traduit ${rating}</div>`;
+  },
+};
+const guardEntry = {
+  key: "prtl_ruins:guard_post",
+  region: "portal",
+  sector: "prtl_ruins",
+  struct: "guard_post",
+  c_action: guardAction,
+  info: false,
+};
+entries.set(guardEntry.key, guardEntry);
+const guardRoot = {};
+const guardRead = () =>
+  capture.mechanics.readGuardPostRating(guardRoot, () => guardCurrent);
+assert.deepEqual(guardRead(), { kind: "value", value: 38 });
+guardRating = 71.6;
+assert.deepEqual(guardRead(), { kind: "value", value: 72 });
+for (const behavior of [
+  "throw",
+  "none",
+  "malformed",
+  "ambiguous",
+  "replace-root",
+  "replace-structure",
+]) {
+  guardBehavior = behavior;
+  assert.deepEqual(guardRead(), { kind: "invalid" }, behavior);
+  guardCurrent = true;
+  entries.set(guardEntry.key, guardEntry);
+}
+assert.deepEqual(
+  Object.getOwnPropertyDescriptor(page.Math, "round"),
+  guardOriginalRound,
+);
+assert.deepEqual(
+  capture.mechanics.readMathRoundValues(() => page.Math.round(-2.5)),
+  {
+    kind: "value",
+    value: [{ input: -2.5, result: -2 }],
+  },
+);
 
 // One inherited assignment captures the p-ledger owner and then removes the prototype hook.
 const falseLedgerCandidate = new page.Object();

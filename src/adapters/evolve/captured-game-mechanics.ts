@@ -14,6 +14,7 @@ import type {
   CapturedPowerRequirement,
   CapturedFuelAdjustmentMode,
   CapturedRoundedValue,
+  CapturedMathRoundValue,
   CapturedSupportTopology,
   CapturedNativeSupportGrid,
   CapturedProductionBreakdown,
@@ -22,6 +23,7 @@ import type {
 } from "../../ports/captured-game-mechanics.ts";
 import { isNonArrayRecord, readProperty } from "../validation.ts";
 import { probeScopedNumberToFixed } from "./scoped-number-to-fixed.ts";
+import { probeScopedMathRound } from "./scoped-math-round.ts";
 import { readCapturedActionAvailability } from "./progression/build/captured-building-availability.ts";
 
 type CapturedGameCall = (this: unknown, ...args: unknown[]) => unknown;
@@ -929,6 +931,8 @@ function emptyGameMechanics(): CapturedGameMechanics {
     readLocalizedText: () => ({ kind: "absent" as const }),
     readAdjustedFuelFactor: () => ({ kind: "invalid" as const }),
     readRoundedValues: () => ({ kind: "invalid" as const }),
+    readMathRoundValues: () => ({ kind: "invalid" as const }),
+    readGuardPostRating: () => ({ kind: "invalid" as const }),
   });
 }
 
@@ -1479,6 +1483,51 @@ export function installCapturedGameMechanics(
       return observations === undefined
         ? { kind: "invalid" }
         : { kind: "value", value: observations };
+    },
+    readMathRoundValues(
+      read: () => unknown,
+    ): CapturedGameRead<readonly CapturedMathRoundValue[]> {
+      if (stopped) return { kind: "invalid" };
+      const observations = probeScopedMathRound(pageWindow, () => {
+        read();
+      });
+      return observations === undefined
+        ? { kind: "invalid" }
+        : { kind: "value", value: observations };
+    },
+    readGuardPostRating(
+      root: unknown,
+      isCurrent: () => boolean,
+    ): CapturedGameRead<number> {
+      const entries = structureEntries;
+      const candidate = entries?.get("prtl_ruins:guard_post");
+      const entry =
+        entries === undefined
+          ? undefined
+          : readMechanicsEntry("prtl_ruins:guard_post", candidate);
+      if (
+        stopped ||
+        !isNonArrayRecord(root) ||
+        entry?.actionId !== "portal-guard_post" ||
+        readMechanicsMethod(entry.action, "effect") === undefined ||
+        !isCurrent()
+      )
+        return { kind: "invalid" };
+      const action = entry.action;
+      const observed = mechanics.readMathRoundValues(() => {
+        const effect = readMechanicsCall(action, "effect");
+        if (effect.kind !== "value")
+          throw new TypeError("guard-post effect unavailable");
+      });
+      const current =
+        entries !== undefined &&
+        entries === structureEntries &&
+        entries.get(entry.entryKey) === candidate &&
+        readMechanicsEntry(entry.entryKey, candidate)?.action === action &&
+        isCurrent();
+      if (!current || observed.kind !== "value" || observed.value.length !== 1)
+        return { kind: "invalid" };
+      return { kind: "value", value: observed.value[0]!.result };
     },
   });
 

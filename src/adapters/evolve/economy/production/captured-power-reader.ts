@@ -35,11 +35,11 @@ import { readCapturedResourceLabel } from "../../captured-resource-metadata.ts";
 import {
   readCapturedJobStackMultiplier,
   readCapturedHighPopulationPercent,
-  readCapturedLegacyJobCount,
   readCapturedPopulationResource,
   readCapturedPoweredTraitValue,
 } from "../../civic/captured-job-catalog.ts";
 import { readCapturedGovernorTaskActive } from "../../civic/captured-tax.ts";
+import type { CapturedJobCountSnapshot } from "../../civic/captured-ordinary-jobs.ts";
 import { calculateRequiredAuthorityGarrison } from "../../../../domain/civic/authority.ts";
 import { readAuthorityPolicyView } from "../../civic/authority.ts";
 import type { CapturedDemandSample } from "../../economy/resources/captured-resource-demand.ts";
@@ -73,6 +73,9 @@ export interface CapturedPowerReaderDependencies {
   readonly rootState: GameRootStateSource;
   readonly controls: GameControlRegistry;
   readonly mechanics: CapturedGameMechanics;
+  readonly readJobCounts?: (
+    root: unknown,
+  ) => CapturedJobCountSnapshot | undefined;
   readonly resources: GameResourceSource;
   /** Resource commitments and largest observed build cost from the shared demand phase. */
   readonly readDemand: () => CapturedDemandSample | undefined;
@@ -848,8 +851,26 @@ function readBuildingRule(
   controls: GameControlRegistry,
   dependencies: CapturedPowerReaderDependencies,
   mechState: CapturedMechState | undefined,
+  jobCounts: CapturedJobCountSnapshot | undefined,
 ): PowerBuildingRule | undefined {
   const race = readProperty(root, "race");
+  const jobCount = (id: string): number | undefined => {
+    if (jobCounts === undefined) return undefined;
+    let count: number | undefined;
+    try {
+      count = jobCounts.readCount(id);
+    } catch {
+      return undefined;
+    }
+    if (count !== undefined)
+      return Number.isFinite(count) && count >= 0 ? count : undefined;
+    // A genuinely absent job has no civic record or captured control. A skipped or incomplete
+    // catalog entry has one of those and cannot be treated as an idle worker pool.
+    return readProperty(readProperty(root, "civic"), id) === undefined &&
+      !controls.capturedElementIds().includes(`civ-${id}`)
+      ? 0
+      : undefined;
+  };
   const resource = (id: string) => resources.get(id);
   const obs = (
     id: string,
@@ -921,9 +942,11 @@ function readBuildingRule(
           : binding === "city-coal_mine"
             ? "coal_miner"
             : "miner";
+      const count = jobCount(jobId);
+      if (count === undefined) return undefined;
       return Object.freeze({
         kind: metadataRule,
-        jobCount: readCapturedLegacyJobCount(root, jobId, false) ?? 0,
+        jobCount: count,
       });
     }
     case "lake-cooling-tower":
@@ -1074,15 +1097,17 @@ function readBuildingRule(
         moneyUseful: resource("Money")?.useful ?? false,
         observation: obs("Money", "tech-tourism"),
       });
-    case "mill":
+    case "mill": {
+      const farmer = jobCount("farmer");
+      const hunter = jobCount("hunter");
+      if (farmer === undefined || hunter === undefined) return undefined;
       return Object.freeze({
         kind: metadataRule,
         foodStorageRatio: resource("Food")?.storageRatio ?? 1,
-        foodWorkers:
-          (readCapturedLegacyJobCount(root, "farmer", true) ?? 0) +
-          (readCapturedLegacyJobCount(root, "hunter", true) ?? 0),
+        foodWorkers: farmer + hunter,
         sampledPower: resource("Power")?.currentQuantity ?? 0,
       });
+    }
     case "chthonian-mine-layer": {
       const minelayer = structures.find(
         (structure) => structure.actionId === "galaxy-minelayer",
@@ -1106,21 +1131,16 @@ function readBuildingRule(
     case "ruins-guard-post": {
       const highPopulation = readCapturedJobStackMultiplier(root);
       const postControl = controls.resolve("portal-guard_post");
-      const postEffect =
-        postControl === undefined
-          ? undefined
-          : controls.invoke(postControl, "effect");
-      const postText =
-        postEffect?.ok === true && typeof postEffect.value === "string"
-          ? postEffect.value
-          : "";
-      // The effect contains the game's localized guard-post rating. Read its numeric value
-      // from that live output instead of reimplementing armyRating and its trait effects.
-      const postNumbers = postText.match(/[-+]?\d[\d,]*(?:\.\d+)?/gu) ?? [];
-      const postRating =
-        postNumbers.length > 0
-          ? Number(postNumbers[0]!.replaceAll(",", ""))
-          : undefined;
+      const postRead = dependencies.mechanics.readGuardPostRating(
+        root,
+        () => dependencies.rootState.readRoot() === root,
+      );
+      if (
+        postControl?.generation !==
+        controls.resolve("portal-guard_post")?.generation
+      )
+        return undefined;
+      const postRating = postRead.kind === "value" ? postRead.value : undefined;
       const ruinsControl = controls.resolve("prtl_ruins");
       const gateControl = controls.resolve("prtl_gate");
       const readSuppressionRating = (
@@ -1134,6 +1154,14 @@ function readBuildingRule(
       const ruinsRating = readSuppressionRating(ruinsControl);
       const gateRating = readSuppressionRating(gateControl);
       if (
+        postControl?.generation !==
+          controls.resolve("portal-guard_post")?.generation ||
+        ruinsControl?.generation !==
+          controls.resolve("prtl_ruins")?.generation ||
+        gateControl?.generation !== controls.resolve("prtl_gate")?.generation
+      )
+        return undefined;
+      if (
         highPopulation === undefined ||
         postRating === undefined ||
         ruinsRating === undefined ||
@@ -1142,11 +1170,7 @@ function readBuildingRule(
         return undefined;
       const gateUnlocked =
         Number(readProperty(readProperty(root, "tech"), "hell_gate") ?? 0) > 0;
-      const archaeologists = readCapturedLegacyJobCount(
-        root,
-        "archaeologist",
-        false,
-      );
+      const archaeologists = jobCount("archaeologist");
       const assignedScarletite = readGamePathNumber(
         root,
         ["city", "foundry", "Scarletite"],
@@ -1617,6 +1641,13 @@ function readPowerCycle(
   runtime: CapturedPowerReaderRuntimeOptions,
   settings: Readonly<Record<string, unknown>>,
 ): PowerCycleInput | undefined {
+  let jobCounts: CapturedJobCountSnapshot | undefined;
+  try {
+    jobCounts = dependencies.readJobCounts?.(root);
+  } catch {
+    return undefined;
+  }
+  if (dependencies.rootState.readRoot() !== root) return undefined;
   const structures = dependencies.mechanics.readStructures();
   const production = dependencies.mechanics.readProductionBreakdown();
   const demand = dependencies.readDemand();
@@ -1935,6 +1966,7 @@ function readPowerCycle(
       dependencies.controls,
       dependencies,
       mechState,
+      jobCounts,
     );
     if (rule === undefined) return undefined;
     filledPowers.push(
@@ -1998,13 +2030,14 @@ function readPowerCycle(
     lake: lakeAndSpire.lake,
     spire: lakeAndSpire.spire,
   });
-  return cycle;
+  return dependencies.rootState.readRoot() === root ? cycle : undefined;
 }
 
 /** Captured Power port with panel-independent semantic Building sampling. */
 export function createCapturedPowerReader({
   rootState,
   mechanics,
+  readJobCounts,
   controls,
   resources,
   readDemand,
@@ -2020,6 +2053,7 @@ export function createCapturedPowerReader({
   const dependencies: CapturedPowerReaderDependencies = {
     rootState,
     mechanics,
+    ...(readJobCounts === undefined ? {} : { readJobCounts }),
     controls,
     resources,
     readDemand,

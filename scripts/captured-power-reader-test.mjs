@@ -13,7 +13,6 @@ import {
 import {
   readCapturedHighPopulationGrowthMultiplier,
   readCapturedJobStackMultiplier,
-  readCapturedLegacyJobCount,
 } from "../src/adapters/evolve/civic/captured-job-catalog.ts";
 import { readCapturedMechState } from "../src/domain/combat/mech-state.ts";
 import { readCapturedMechQueueKeyHeld } from "../src/adapters/evolve/combat/captured-mech.ts";
@@ -528,6 +527,7 @@ function createMechanics({
     value: mode === "space" ? 0.5 : 0.75,
   }),
   invalidateFuel = false,
+  guardPostRating = () => 1234,
 } = {}) {
   const byKey = new Map(structureSample.map((item) => [item.entryKey, item]));
   const resolve = (keys) =>
@@ -558,6 +558,7 @@ function createMechanics({
       invalidateFuel && mode === "space" && resourceId === "Oil"
         ? { kind: "absent" }
         : adjustedFuelFactor(mode, resourceId),
+    readGuardPostRating: () => ({ kind: "value", value: guardPostRating() }),
   });
 }
 
@@ -1346,34 +1347,6 @@ assert.equal(
 
 assert.deepEqual(
   [
-    readCapturedLegacyJobCount(
-      {
-        civic: { farmer: { workers: 4 }, archaeologist: { workers: 3 } },
-        race: {
-          high_pop: 2,
-          servants: { jobs: { farmer: 2, archaeologist: 5 } },
-        },
-      },
-      "farmer",
-      true,
-    ),
-    readCapturedLegacyJobCount(
-      {
-        civic: { farmer: { workers: 4 }, archaeologist: { workers: 3 } },
-        race: {
-          high_pop: 2,
-          servants: { jobs: { farmer: 2, archaeologist: 5 } },
-        },
-      },
-      "archaeologist",
-      false,
-    ),
-  ],
-  [18, 3],
-  "BasicJob counts include high-pop-scaled servants while ordinary Job counts remain workers only",
-);
-assert.deepEqual(
-  [
     readCapturedJobStackMultiplier({
       race: { high_pop: 1, empowered: 1 },
     }),
@@ -2053,8 +2026,20 @@ const specialControls = Object.freeze({
     return { ok: false, reason: "unknown-control" };
   },
 });
+let specialGuardRating = 1234;
+let specialOnGuardRead = () => {};
+const specialJobCounts = new Map([
+  ["cement_worker", 11],
+  ["miner", 13],
+  ["coal_miner", 17],
+  ["farmer", 12],
+  ["hunter", 7],
+  ["archaeologist", 2],
+]);
 const specialReader = createCapturedPowerReader({
   rootState: { readRoot: () => specialRoot },
+  readJobCounts: () =>
+    Object.freeze({ readCount: (id) => specialJobCounts.get(id) }),
   mechanics: createMechanics({
     structures: [
       ...specialStructures,
@@ -2096,6 +2081,10 @@ const specialReader = createCapturedPowerReader({
     localizedText: {
       galaxy_vitreloy_plant_bd: "Fábrica de Vitreloy",
       galaxy_armed_miner_bd: "Minero armado",
+    },
+    guardPostRating: () => {
+      specialOnGuardRead();
+      return specialGuardRating;
     },
   }),
   controls: specialControls,
@@ -2199,7 +2188,7 @@ assert.deepEqual(
     specialRule("portal-guard_post", "ruins-guard-post").gateRating,
   ],
   [77, true, 1234, 321, 654],
-  "Chthonian and localized Ruins outputs retain all live combat values",
+  "Chthonian and native Ruins answers retain all live combat values",
 );
 assert.deepEqual(
   [
@@ -2433,8 +2422,78 @@ assert.equal(specialRule("city-coal_mine", "job-dependent").jobCount, 17);
 assert.equal(
   specialRule("city-mill", "mill").foodWorkers,
   19,
-  "Mill combines Farmer and Hunter worker plus high-pop-scaled servant counts",
+  "Mill combines the canonical Farmer and Hunter counts",
 );
+specialGuardRating = 777;
+specialJobCounts.set("cement_worker", 21);
+specialJobCounts.set("miner", 23);
+specialJobCounts.set("coal_miner", 27);
+specialJobCounts.set("farmer", 30);
+specialJobCounts.set("hunter", 4);
+specialJobCounts.set("archaeologist", 0);
+const changedAuthorityCycle = specialReader.readCycle();
+assert.ok(changedAuthorityCycle);
+const changedRule = (binding) =>
+  changedAuthorityCycle.buildings.find(
+    (building) => building.binding === binding,
+  )?.rule;
+assert.deepEqual(
+  [
+    changedRule("city-cement_plant").jobCount,
+    changedRule("city-mine").jobCount,
+    changedRule("city-coal_mine").jobCount,
+    changedRule("city-mill").foodWorkers,
+    changedRule("portal-guard_post").suppressionUseful,
+    changedRule("portal-guard_post").postRating,
+  ],
+  [21, 23, 27, 34, false, 777],
+);
+specialJobCounts.delete("farmer");
+assert.equal(
+  specialReader.readCycle(),
+  undefined,
+  "an incomplete canonical job snapshot closes the Power cycle",
+);
+specialJobCounts.set("farmer", 30);
+specialJobCounts.set("miner", Number.NaN);
+assert.equal(
+  specialReader.readCycle(),
+  undefined,
+  "a malformed canonical count closes the Power cycle",
+);
+specialJobCounts.set("miner", 23);
+const firstGuardHandle = specialHandles.get("portal-guard_post");
+specialOnGuardRead = () =>
+  specialHandles.set("portal-guard_post", {
+    ...firstGuardHandle,
+    generation: 2,
+  });
+assert.equal(
+  specialReader.readCycle(),
+  undefined,
+  "a changed Guard Post control generation closes the Power cycle",
+);
+specialOnGuardRead = () => {};
+specialHandles.set("portal-guard_post", firstGuardHandle);
+specialJobCounts.delete("coal_miner");
+const absentCoal = specialRoot.civic.coal_miner;
+delete specialRoot.civic.coal_miner;
+const absentJobCycle = specialReader.readCycle();
+assert.equal(
+  absentJobCycle?.buildings.find(
+    (building) => building.binding === "city-coal_mine",
+  )?.rule.jobCount,
+  0,
+  "a genuinely absent job has zero effective workers",
+);
+specialRoot.civic.coal_miner = absentCoal;
+specialJobCounts.set("coal_miner", 17);
+specialJobCounts.set("cement_worker", 11);
+specialJobCounts.set("miner", 13);
+specialJobCounts.set("farmer", 12);
+specialJobCounts.set("hunter", 7);
+specialJobCounts.set("archaeologist", 2);
+specialGuardRating = 1234;
 specialRoot.resource.Harmony.amount = 0;
 const noHarmonyCycle = specialReader.readCycle();
 assert.ok(noHarmonyCycle);

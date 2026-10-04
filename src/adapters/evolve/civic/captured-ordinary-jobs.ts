@@ -56,6 +56,11 @@ export interface CapturedOrdinaryJobsDependencies {
   readonly onSkipped?: (controlId: string, reason: string) => void;
 }
 
+/** Current effective counts from the same validated catalog used by ordinary Jobs. */
+export interface CapturedJobCountSnapshot {
+  readonly readCount: (jobId: string) => number | undefined;
+}
+
 export interface CapturedFullJobsDependencies extends CapturedOrdinaryJobsDependencies {
   readonly costs: CapturedCraftCosts;
   readonly readBuildTargets?: () => readonly Readonly<GameBuildTarget>[];
@@ -798,6 +803,9 @@ export function createCapturedOrdinaryJobsAutomation({
 }: CapturedOrdinaryJobsDependencies): {
   readonly reader: JobsReader;
   readonly executor: JobsExecutor;
+  readonly readJobCounts: (
+    root: unknown,
+  ) => CapturedJobCountSnapshot | undefined;
 } {
   let history: CapturedJobHistory | undefined;
   let historyRoot: unknown;
@@ -948,7 +956,18 @@ export function createCapturedOrdinaryJobsAutomation({
       return outcome;
     },
   });
-  return Object.freeze({ reader, executor });
+  return Object.freeze({
+    reader,
+    executor,
+    readJobCounts(root: unknown): CapturedJobCountSnapshot | undefined {
+      if (root !== rootState.readRoot()) return undefined;
+      const catalog = catalogReader();
+      if (root !== rootState.readRoot() || catalog === undefined)
+        return undefined;
+      const counts = new Map(catalog.jobs.map((job) => [job.id, job.count]));
+      return Object.freeze({ readCount: (jobId: string) => counts.get(jobId) });
+    },
+  });
 }
 
 /** Combines ordinary jobs, foundry craftsmen, and their servant pools in one planner decision. */

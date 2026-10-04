@@ -2610,6 +2610,7 @@ export function startCapturedRuntime({
   const powerReader = createCapturedPowerReader({
     rootState: pageCapture.rootState,
     mechanics: pageCapture.mechanics,
+    readJobCounts: ordinaryJobs.readJobCounts,
     controls: pageCapture.controls,
     resources: createCapturedResourceSource(pageCapture.rootState),
     readDemand: () => demandThisCycle,

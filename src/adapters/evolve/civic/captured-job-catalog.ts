@@ -561,37 +561,6 @@ export function readCapturedSpaceMinerSmartMaximum(
   return (elerium * 2 + iridium + iron) * workerEffect;
 }
 
-/**
- * CoreJob.count is workers plus BasicJob servants times traitVal("high_pop", 0, 1):
- * the first high_pop variable, with a fallback of one when the race has no trait.
- * The retired Power reader uses this for job-dependent rules and Mill; only Farmer and Hunter
- * are BasicJob instances in the entity catalog.
- */
-export function readCapturedLegacyJobCount(
-  root: unknown,
-  jobId: string,
-  basicJob: boolean,
-): number | undefined {
-  const job = readProperty(readProperty(root, "civic"), jobId);
-  if (job === undefined) return 0;
-  if (!isRecord(job)) return undefined;
-  const rawWorkers = readProperty(job, "workers");
-  const workers = rawWorkers === undefined ? 0 : finiteNonNegative(rawWorkers);
-  if (workers === undefined) return undefined;
-  if (!basicJob) return workers;
-  const servantJobs = readProperty(
-    readProperty(readProperty(root, "race"), "servants"),
-    "jobs",
-  );
-  const rawServants = readProperty(servantJobs, jobId);
-  const servants =
-    rawServants === undefined ? 0 : finiteNonNegative(rawServants);
-  const servantMultiplier = readCapturedJobStackMultiplier(root);
-  return servants === undefined || servantMultiplier === undefined
-    ? undefined
-    : workers + servants * servantMultiplier;
-}
-
 function readTorturerSmartMaximum(root: unknown): number | undefined {
   const city = readProperty(root, "city");
   const dwellers = readProperty(city, "surfaceDwellers");

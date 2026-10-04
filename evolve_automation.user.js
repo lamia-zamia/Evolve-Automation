@@ -512,6 +512,43 @@
     return (current?.configurable !== original.configurable || current.enumerable !== original.enumerable || current.writable !== original.writable || current.value !== original.value || current.get !== original.get || current.set !== original.set) && (unusable = !0), unusable ? void 0 : Object.freeze(observations);
   }
 
+  // src/adapters/evolve/scoped-math-round.ts
+  var mathRoundProbeInFlight = !1;
+  function probeScopedMathRound(pageWindow, read) {
+    if (mathRoundProbeInFlight) return;
+    let pageMath = readProperty(pageWindow, "Math");
+    if (typeof pageMath != "object" || pageMath === null) return;
+    let original;
+    try {
+      original = Object.getOwnPropertyDescriptor(pageMath, "round");
+    } catch {
+      return;
+    }
+    if (original === void 0 || !original.configurable || !("value" in original) || typeof original.value != "function")
+      return;
+    let nativeRound = original.value, observations = [], malformed = !1, wrapper = function(...args) {
+      let result = Reflect.apply(nativeRound, pageMath, args);
+      return typeof args[0] == "number" && Number.isFinite(args[0]) && typeof result == "number" && Number.isFinite(result) ? observations.push(Object.freeze({ input: args[0], result })) : malformed = !0, result;
+    };
+    mathRoundProbeInFlight = !0;
+    let invalid = !1;
+    try {
+      Object.defineProperty(pageMath, "round", { ...original, value: wrapper }), read(observations);
+    } catch {
+      invalid = !0;
+    } finally {
+      try {
+        Object.getOwnPropertyDescriptor(pageMath, "round")?.value !== wrapper && (invalid = !0), Object.defineProperty(pageMath, "round", original);
+        let current = Object.getOwnPropertyDescriptor(pageMath, "round");
+        (current?.value !== original.value || current?.configurable !== original.configurable || current?.enumerable !== original.enumerable || current?.writable !== original.writable) && (invalid = !0);
+      } catch {
+        invalid = !0;
+      }
+      mathRoundProbeInFlight = !1;
+    }
+    return invalid || malformed ? void 0 : Object.freeze(observations);
+  }
+
   // src/adapters/evolve/captured-control-label.ts
   function readCapturedControlLabel(handle, fallback) {
     let data = handle.data;
@@ -2052,7 +2089,9 @@
       },
       readLocalizedText: () => ({ kind: "absent" }),
       readAdjustedFuelFactor: () => ({ kind: "invalid" }),
-      readRoundedValues: () => ({ kind: "invalid" })
+      readRoundedValues: () => ({ kind: "invalid" }),
+      readMathRoundValues: () => ({ kind: "invalid" }),
+      readGuardPostRating: () => ({ kind: "invalid" })
     });
   }
   function resolveCapturedStructureOrder(registry, rawOrder) {
@@ -2319,6 +2358,23 @@
         if (stopped) return { kind: "invalid" };
         let observations = probeScopedNumberToFixed(pageWindow, (seen) => (read(), seen));
         return observations === void 0 ? { kind: "invalid" } : { kind: "value", value: observations };
+      },
+      readMathRoundValues(read) {
+        if (stopped) return { kind: "invalid" };
+        let observations = probeScopedMathRound(pageWindow, () => {
+          read();
+        });
+        return observations === void 0 ? { kind: "invalid" } : { kind: "value", value: observations };
+      },
+      readGuardPostRating(root, isCurrent) {
+        let entries = structureEntries, candidate = entries?.get("prtl_ruins:guard_post"), entry = entries === void 0 ? void 0 : readMechanicsEntry("prtl_ruins:guard_post", candidate);
+        if (stopped || !isNonArrayRecord(root) || entry?.actionId !== "portal-guard_post" || readMechanicsMethod(entry.action, "effect") === void 0 || !isCurrent())
+          return { kind: "invalid" };
+        let action = entry.action, observed2 = mechanics.readMathRoundValues(() => {
+          if (readMechanicsCall(action, "effect").kind !== "value")
+            throw new TypeError("guard-post effect unavailable");
+        });
+        return !(entries !== void 0 && entries === structureEntries && entries.get(entry.entryKey) === candidate && readMechanicsEntry(entry.entryKey, candidate)?.action === action && isCurrent()) || observed2.kind !== "value" || observed2.value.length !== 1 ? { kind: "invalid" } : { kind: "value", value: observed2.value[0].result };
       }
     });
     return Object.freeze({
@@ -15855,19 +15911,6 @@
     if (!(elerium === void 0 || iridium === void 0 || iron === void 0 || workerEffect === void 0))
       return (elerium * 2 + iridium + iron) * workerEffect;
   }
-  function readCapturedLegacyJobCount(root, jobId, basicJob) {
-    let job = readProperty(readProperty(root, "civic"), jobId);
-    if (job === void 0) return 0;
-    if (!isRecord(job)) return;
-    let rawWorkers = readProperty(job, "workers"), workers = rawWorkers === void 0 ? 0 : finiteNonNegative(rawWorkers);
-    if (workers === void 0) return;
-    if (!basicJob) return workers;
-    let servantJobs = readProperty(
-      readProperty(readProperty(root, "race"), "servants"),
-      "jobs"
-    ), rawServants = readProperty(servantJobs, jobId), servants = rawServants === void 0 ? 0 : finiteNonNegative(rawServants), servantMultiplier = readCapturedJobStackMultiplier(root);
-    return servants === void 0 || servantMultiplier === void 0 ? void 0 : workers + servants * servantMultiplier;
-  }
   function readTorturerSmartMaximum(root) {
     let city = readProperty(root, "city"), dwellers = readProperty(city, "surfaceDwellers"), housing = readProperty(city, "captive_housing");
     if (!Array.isArray(dwellers) || !isRecord(housing)) return;
@@ -17736,7 +17779,18 @@
         return outcome;
       }
     });
-    return Object.freeze({ reader, executor });
+    return Object.freeze({
+      reader,
+      executor,
+      readJobCounts(root) {
+        if (root !== rootState.readRoot()) return;
+        let catalog = catalogReader();
+        if (root !== rootState.readRoot() || catalog === void 0)
+          return;
+        let counts = new Map(catalog.jobs.map((job) => [job.id, job.count]));
+        return Object.freeze({ readCount: (jobId) => counts.get(jobId) });
+      }
+    });
   }
   function createCapturedFullJobsAutomation({
     rootState,
@@ -25867,8 +25921,17 @@
     let handle = controls2.resolve(sourceBinding);
     return handle === void 0 ? "" : readCapturedControlLabel(handle, "");
   }
-  function readBuildingRule(root, binding, metadataRule, nativeProducedResources, powered, production, demand, resources, supports, buildingCounts, buildingOns, buildingStates, settings, structures, controls2, dependencies, mechState) {
-    let race = readProperty(root, "race"), resource = (id) => resources.get(id), obs = (id, sourceBinding = [
+  function readBuildingRule(root, binding, metadataRule, nativeProducedResources, powered, production, demand, resources, supports, buildingCounts, buildingOns, buildingStates, settings, structures, controls2, dependencies, mechState, jobCounts) {
+    let race = readProperty(root, "race"), jobCount2 = (id) => {
+      if (jobCounts === void 0) return;
+      let count2;
+      try {
+        count2 = jobCounts.readCount(id);
+      } catch {
+        return;
+      }
+      return count2 !== void 0 ? Number.isFinite(count2) && count2 >= 0 ? count2 : void 0 : readProperty(readProperty(root, "civic"), id) === void 0 && !controls2.capturedElementIds().includes(`civ-${id}`) ? 0 : void 0;
+    }, resource = (id) => resources.get(id), obs = (id, sourceBinding = [
       "space-iridium_ship",
       "space-iron_ship",
       "space-elerium_ship"
@@ -25922,11 +25985,13 @@
           ironShipsOn: buildingOns.get("space-iron_ship") ?? 0
         });
       }
-      case "job-dependent":
-        return Object.freeze({
+      case "job-dependent": {
+        let count2 = jobCount2(binding === "city-cement_plant" ? "cement_worker" : binding === "city-coal_mine" ? "coal_miner" : "miner");
+        return count2 === void 0 ? void 0 : Object.freeze({
           kind: metadataRule,
-          jobCount: readCapturedLegacyJobCount(root, binding === "city-cement_plant" ? "cement_worker" : binding === "city-coal_mine" ? "coal_miner" : "miner", !1) ?? 0
+          jobCount: count2
         });
+      }
       case "lake-cooling-tower":
         return Object.freeze({
           kind: metadataRule,
@@ -26025,13 +26090,15 @@
           moneyUseful: resource("Money")?.useful ?? !1,
           observation: obs("Money", "tech-tourism")
         });
-      case "mill":
-        return Object.freeze({
+      case "mill": {
+        let farmer = jobCount2("farmer"), hunter = jobCount2("hunter");
+        return farmer === void 0 || hunter === void 0 ? void 0 : Object.freeze({
           kind: metadataRule,
           foodStorageRatio: resource("Food")?.storageRatio ?? 1,
-          foodWorkers: (readCapturedLegacyJobCount(root, "farmer", !0) ?? 0) + (readCapturedLegacyJobCount(root, "hunter", !0) ?? 0),
+          foodWorkers: farmer + hunter,
           sampledPower: resource("Power")?.currentQuantity ?? 0
         });
+      }
       case "chthonian-mine-layer": {
         let rating = structures.find(
           (structure) => structure.actionId === "galaxy-minelayer"
@@ -26047,19 +26114,21 @@
         });
       }
       case "ruins-guard-post": {
-        let highPopulation = readCapturedJobStackMultiplier(root), postControl = controls2.resolve("portal-guard_post"), postEffect = postControl === void 0 ? void 0 : controls2.invoke(postControl, "effect"), postNumbers = (postEffect?.ok === !0 && typeof postEffect.value == "string" ? postEffect.value : "").match(/[-+]?\d[\d,]*(?:\.\d+)?/gu) ?? [], postRating = postNumbers.length > 0 ? Number(postNumbers[0].replaceAll(",", "")) : void 0, ruinsControl = controls2.resolve("prtl_ruins"), gateControl = controls2.resolve("prtl_gate"), readSuppressionRating = (handle) => {
+        let highPopulation = readCapturedJobStackMultiplier(root), postControl = controls2.resolve("portal-guard_post"), postRead = dependencies.mechanics.readGuardPostRating(
+          root,
+          () => dependencies.rootState.readRoot() === root
+        );
+        if (postControl?.generation !== controls2.resolve("portal-guard_post")?.generation)
+          return;
+        let postRating = postRead.kind === "value" ? postRead.value : void 0, ruinsControl = controls2.resolve("prtl_ruins"), gateControl = controls2.resolve("prtl_gate"), readSuppressionRating = (handle) => {
           if (handle === void 0 || !handle.methods.includes("filter"))
             return;
           let result = controls2.invoke(handle, "filter", [0, "army"]);
           return result.ok ? asNumber(result.value) : void 0;
         }, ruinsRating = readSuppressionRating(ruinsControl), gateRating = readSuppressionRating(gateControl);
-        if (highPopulation === void 0 || postRating === void 0 || ruinsRating === void 0 || gateRating === void 0)
+        if (postControl?.generation !== controls2.resolve("portal-guard_post")?.generation || ruinsControl?.generation !== controls2.resolve("prtl_ruins")?.generation || gateControl?.generation !== controls2.resolve("prtl_gate")?.generation || highPopulation === void 0 || postRating === void 0 || ruinsRating === void 0 || gateRating === void 0)
           return;
-        let gateUnlocked = Number(readProperty(readProperty(root, "tech"), "hell_gate") ?? 0) > 0, archaeologists = readCapturedLegacyJobCount(
-          root,
-          "archaeologist",
-          !1
-        ), assignedScarletite = readGamePathNumber(
+        let gateUnlocked = Number(readProperty(readProperty(root, "tech"), "hell_gate") ?? 0) > 0, archaeologists = jobCount2("archaeologist"), assignedScarletite = readGamePathNumber(
           root,
           ["city", "foundry", "Scarletite"],
           0
@@ -26337,6 +26406,13 @@
     return Object.freeze({ lake, spire });
   }
   function readPowerCycle(root, dependencies, runtime, settings) {
+    let jobCounts;
+    try {
+      jobCounts = dependencies.readJobCounts?.(root);
+    } catch {
+      return;
+    }
+    if (dependencies.rootState.readRoot() !== root) return;
     let structures = dependencies.mechanics.readStructures(), production = dependencies.mechanics.readProductionBreakdown(), demand = dependencies.readDemand();
     if (demand === void 0) return;
     let nativeOrder = structures === void 0 ? void 0 : readOrderedMechanics(root, dependencies.mechanics, structures);
@@ -26524,7 +26600,8 @@
         structures,
         dependencies.controls,
         dependencies,
-        mechState
+        mechState,
+        jobCounts
       );
       if (rule === void 0) return;
       filledPowers.push(
@@ -26551,8 +26628,7 @@
       lakeGroupManaged,
       spireAvailable,
       spireStateBalancingEnabled
-    );
-    return Object.freeze({
+    ), cycle = Object.freeze({
       powerUnlocked,
       powerResourceId: "Power",
       powerCurrent: power.currentQuantity,
@@ -26576,10 +26652,12 @@
       lake: lakeAndSpire.lake,
       spire: lakeAndSpire.spire
     });
+    return dependencies.rootState.readRoot() === root ? cycle : void 0;
   }
   function createCapturedPowerReader({
     rootState,
     mechanics,
+    readJobCounts,
     controls: controls2,
     resources,
     readDemand,
@@ -26595,6 +26673,7 @@
     let dependencies = {
       rootState,
       mechanics,
+      ...readJobCounts === void 0 ? {} : { readJobCounts },
       controls: controls2,
       resources,
       readDemand,
@@ -54226,6 +54305,7 @@ Only continue if you trust the source. Injected code:
     }), powerReader = createCapturedPowerReader({
       rootState: pageCapture2.rootState,
       mechanics: pageCapture2.mechanics,
+      readJobCounts: ordinaryJobs.readJobCounts,
       controls: pageCapture2.controls,
       resources: createCapturedResourceSource(pageCapture2.rootState),
       readDemand: () => demandThisCycle,
