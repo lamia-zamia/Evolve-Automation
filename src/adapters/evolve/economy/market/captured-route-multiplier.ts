@@ -1,7 +1,7 @@
 import type { GameControlRegistry } from "../../../../ports/game-control-registry.ts";
-import type { GameKeyStateReader } from "../../../../ports/game-key-state.ts";
+import type { GameKeyboardState } from "../../../../ports/game-key-state.ts";
 import { isRecord } from "../../../validation.ts";
-import { readCapturedMultiplierKeys } from "../../captured-multiplier-keys.ts";
+import { readCapturedMultiplierLatch } from "../../captured-multiplier-keys.ts";
 import type {
   MarketBoard,
   MarketBoardSource,
@@ -12,7 +12,7 @@ interface CapturedRouteMultiplierInput {
   readonly boards: MarketBoardSource;
   readonly board: MarketBoard;
   readonly controls: GameControlRegistry;
-  readonly keyState: GameKeyStateReader | undefined;
+  readonly keyState: GameKeyboardState | undefined;
 }
 
 /**
@@ -28,8 +28,14 @@ interface CapturedRouteMultiplierInput {
  * The mobile picker must be the handle this board recorded, at its exact generation, reading one.
  * That is conservative on desktop too, where upstream prefers the keyboard answer — and still
  * necessary, because only the board knows which build of the picker the current draw left behind.
- * The keyboard half then covers desktop: with no multiplier mapping held, upstream `keyMultiplier`
- * answers one whichever branch runs. Anything missing, malformed, or unanswerable fails closed.
+ *
+ * The keyboard half then covers desktop, and it asks the game-equivalent question rather than a
+ * physical one: not "is the mapped key down" but "is the game's own multiplier latch set". Upstream
+ * latches on keydown and clears on the keyup of whatever is mapped *then*, so a mapping changed while
+ * its key is still down leaves `keyMultiplier()` multiplying by ten with nothing held at all — a
+ * pressed-key reconstruction cannot see that, and acting on it commits ten routes. The latch answer
+ * is also unknown until the capture has seen enough of the page to know it, and unknown fails closed
+ * here rather than collapsing to "not held". Anything missing, malformed, or unanswerable fails.
  */
 export function isCapturedRouteMultiplierNeutral(
   input: CapturedRouteMultiplierInput,
@@ -43,5 +49,7 @@ export function isCapturedRouteMultiplierNeutral(
     return false;
   const mobile = picker.data;
   if (!isRecord(mobile) || mobile["multiplier"] !== 1) return false;
-  return readCapturedMultiplierKeys(input.root, input.keyState) === "none-held";
+  return (
+    readCapturedMultiplierLatch(input.root, input.keyState) === "none-latched"
+  );
 }

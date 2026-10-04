@@ -63,6 +63,9 @@
         return Array.isArray(value) ? `array(${value.length})` : describeObject(value);
     }
   }
+  function readRecord(value) {
+    return isRecord(value) ? value : void 0;
+  }
   function matchesStringRecordFields(value, expected) {
     return isRecord(value) && Object.entries(expected).every(
       ([key, expectedValue]) => Object.hasOwn(value, key) && value[key] === expectedValue
@@ -368,6 +371,9 @@
     ]);
   }
 
+  // src/ports/game-key-state.ts
+  var GAME_MULTIPLIER_LATCH_NAMES = Object.freeze(["x10", "x25", "x100"]);
+
   // src/adapters/browser/game-key-state.ts
   var GAME_KEY_STATE_MOUSE_MODIFIER_BINDINGS = Object.freeze([
     Object.freeze({ eventProperty: "shiftKey", key: "Shift", keyCode: 16 }),
@@ -379,11 +385,25 @@
     let key = readProperty(event, "key"), keyCode = finite(readProperty(event, "keyCode")), keys = [];
     return typeof key == "string" && key.length > 0 && keys.push(key), keyCode !== void 0 && keyCode > 0 && keys.push(keyCode), keys;
   }
-  function createGameKeyStateCapture(getDocument) {
-    let pressed = /* @__PURE__ */ new Set(), document = getDocument();
+  function mappedEventKey(event) {
+    let key = readProperty(event, "key");
+    return typeof key == "string" && key.length > 0 ? key : finite(readProperty(event, "keyCode"));
+  }
+  function createGameKeyStateCapture(getDocument, options = {}) {
+    let pressed = /* @__PURE__ */ new Set(), latched = /* @__PURE__ */ new Map(), readMultiplierMapping = options.readMultiplierMapping, capturedRoot = options.roots?.readRoot();
+    function foldMultiplierLatches(apply) {
+      if (readMultiplierMapping !== void 0)
+        for (let name of GAME_MULTIPLIER_LATCH_NAMES) {
+          let mapping = readMultiplierMapping(name);
+          mapping !== void 0 && (latched.has(name) || latched.set(name, !1), apply(name, mapping));
+        }
+    }
+    let document = getDocument();
     if (typeof document != "object" || document === null)
       return Object.freeze({
         readPressed: () => {
+        },
+        readMultiplierLatch: () => {
         },
         uninstall: () => {
         }
@@ -393,25 +413,52 @@
       return Object.freeze({
         readPressed: () => {
         },
+        readMultiplierLatch: () => {
+        },
         uninstall: () => {
         }
       });
     let onKeyDown = (event) => {
       for (let key of observedKeys(event)) pressed.add(key);
+      let mapped = mappedEventKey(event);
+      mapped !== void 0 && foldMultiplierLatches((name, mapping) => {
+        mapping === mapped && latched.set(name, !0);
+      });
     }, onKeyUp = (event) => {
       for (let key of observedKeys(event)) pressed.delete(key);
+      let mapped = mappedEventKey(event);
+      mapped !== void 0 && foldMultiplierLatches((name, mapping) => {
+        mapping === mapped && latched.set(name, !1);
+      });
     }, onMouseMove = (event) => {
       for (let binding of GAME_KEY_STATE_MOUSE_MODIFIER_BINDINGS)
         readProperty(event, binding.eventProperty) === !0 ? (pressed.add(binding.key), pressed.add(binding.keyCode)) : (pressed.delete(binding.key), pressed.delete(binding.keyCode));
+      foldMultiplierLatches((name, mapping) => {
+        for (let binding of GAME_KEY_STATE_MOUSE_MODIFIER_BINDINGS)
+          if (!(mapping !== binding.key && mapping !== binding.keyCode)) {
+            latched.set(name, readProperty(event, binding.eventProperty) === !0);
+            return;
+          }
+      });
     }, capturePhase = !0;
     pageDocument.addEventListener("keydown", onKeyDown, capturePhase), pageDocument.addEventListener("keyup", onKeyUp, capturePhase), pageDocument.addEventListener("mousemove", onMouseMove, capturePhase);
-    let uninstalled = !1;
+    let stopWatchingRoot = (() => {
+      let roots = options.roots;
+      return roots === void 0 ? () => {
+      } : roots.subscribeRootReplaced(() => {
+        let next = roots.readRoot();
+        next !== capturedRoot && (capturedRoot = next, latched.clear());
+      });
+    })(), uninstalled = !1;
     return Object.freeze({
       readPressed(key) {
         return pressed.has(key);
       },
+      readMultiplierLatch(name) {
+        return latched.get(name);
+      },
       uninstall() {
-        uninstalled || (uninstalled = !0, pageDocument.removeEventListener("keydown", onKeyDown, capturePhase), pageDocument.removeEventListener("keyup", onKeyUp, capturePhase), pageDocument.removeEventListener("mousemove", onMouseMove, capturePhase), pressed.clear());
+        uninstalled || (uninstalled = !0, pageDocument.removeEventListener("keydown", onKeyDown, capturePhase), pageDocument.removeEventListener("keyup", onKeyUp, capturePhase), pageDocument.removeEventListener("mousemove", onMouseMove, capturePhase), stopWatchingRoot(), pressed.clear(), latched.clear());
       }
     });
   }
@@ -2215,6 +2262,43 @@
     });
   }
 
+  // src/adapters/evolve/captured-multiplier-keys.ts
+  function readCapturedMultiplierMapping(root, name) {
+    let keyMap = readRecord(
+      readProperty(readProperty(root, "settings"), "keyMap")
+    );
+    if (keyMap === void 0) return;
+    let configured = keyMap[name];
+    return typeof configured == "string" || typeof configured == "number" ? configured : void 0;
+  }
+  function readCapturedMultiplierKeys(root, keyState) {
+    let settings = readProperty(root, "settings");
+    if (!readProperty(settings, "mKeys")) return "none-held";
+    if (keyState === void 0 || readRecord(readProperty(settings, "keyMap")) === void 0)
+      return "unknown";
+    let answer = "none-held";
+    for (let name of GAME_MULTIPLIER_LATCH_NAMES) {
+      let configured = readCapturedMultiplierMapping(root, name);
+      if (configured === void 0) continue;
+      let pressed = keyState.readPressed(configured);
+      if (pressed === !0) return "one-held";
+      pressed === void 0 && (answer = "unknown");
+    }
+    return answer;
+  }
+  function readCapturedMultiplierLatch(root, keyState) {
+    if (!readProperty(readProperty(root, "settings"), "mKeys"))
+      return "none-latched";
+    if (keyState === void 0) return "unknown";
+    let answer = "none-latched";
+    for (let name of GAME_MULTIPLIER_LATCH_NAMES) {
+      let latched = keyState.readMultiplierLatch(name);
+      if (latched === !0) return "one-latched";
+      latched !== !1 && (answer = "unknown");
+    }
+    return answer;
+  }
+
   // src/adapters/evolve/vue-capture.ts
   var CAPTURE_MARKER = /* @__PURE__ */ Symbol.for("evolve-automation.vue-capture"), DISPOSABLE_APP_MARKER = /* @__PURE__ */ Symbol.for(
     "evolve-automation.disposable-vue-app"
@@ -2725,7 +2809,12 @@
     let installed = readInstalledCapture(pageWindow);
     if (installed !== void 0) return installed;
     let vue = installVueCapture(pageWindow, options), worker = installWorkerCapture(pageWindow, options), mechanics = installCapturedGameMechanics(pageWindow, worker.periods), keyState = createGameKeyStateCapture(
-      () => readProperty(pageWindow, "document")
+      () => readProperty(pageWindow, "document"),
+      {
+        roots: vue.rootState,
+        // The captured root is the only settings authority available before the game's own modules run.
+        readMultiplierMapping: (name) => readCapturedMultiplierMapping(vue.rootState.readRoot(), name)
+      }
     ), capture = Object.freeze({
       rootState: vue.rootState,
       keyState,
@@ -29795,30 +29884,6 @@
     )?.[0]?.receiver;
   }
 
-  // src/adapters/evolve/captured-multiplier-keys.ts
-  var MULTIPLIER_KEY_MAPPINGS = Object.freeze([
-    "x10",
-    "x25",
-    "x100"
-  ]);
-  function readCapturedMultiplierKeys(root, keyState) {
-    let settings = readProperty(root, "settings");
-    if (!readProperty(settings, "mKeys")) return "none-held";
-    if (keyState === void 0) return "unknown";
-    let keyMap = readProperty(settings, "keyMap");
-    if (!isRecord(keyMap)) return "unknown";
-    let answer = "none-held";
-    for (let mapping of MULTIPLIER_KEY_MAPPINGS) {
-      let configured = keyMap[mapping];
-      if (typeof configured != "string" && typeof configured != "number")
-        continue;
-      let pressed = keyState.readPressed(configured);
-      if (pressed === !0) return "one-held";
-      pressed === void 0 && (answer = "unknown");
-    }
-    return answer;
-  }
-
   // src/adapters/evolve/economy/market/captured-route-multiplier.ts
   function isCapturedRouteMultiplierNeutral(input) {
     if (!input.boards.isCurrent(input.board)) return !1;
@@ -29826,7 +29891,7 @@
     if (picker === void 0 || input.controls.resolve(picker.elementId)?.generation !== picker.generation)
       return !1;
     let mobile = picker.data;
-    return !isRecord(mobile) || mobile.multiplier !== 1 ? !1 : readCapturedMultiplierKeys(input.root, input.keyState) === "none-held";
+    return !isRecord(mobile) || mobile.multiplier !== 1 ? !1 : readCapturedMultiplierLatch(input.root, input.keyState) === "none-latched";
   }
 
   // src/adapters/evolve/economy/market/captured-trade-routes.ts

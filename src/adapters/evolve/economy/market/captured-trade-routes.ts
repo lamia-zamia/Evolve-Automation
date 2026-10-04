@@ -14,7 +14,7 @@ import type { GameControlHandle } from "../../../../ports/game-control-registry.
 import type { GameControlRegistry } from "../../../../ports/game-control-registry.ts";
 import type { GameRootStateSource } from "../../../../ports/game-root-state.ts";
 import type { CapturedGameMechanics } from "../../../../ports/captured-game-mechanics.ts";
-import type { GameKeyStateReader } from "../../../../ports/game-key-state.ts";
+import type { GameKeyboardState } from "../../../../ports/game-key-state.ts";
 import { finite, isRecord, readProperty } from "../../../validation.ts";
 import {
   readCapturedTradeQuote,
@@ -31,7 +31,7 @@ interface CapturedTradeRoutesDependencies {
   readonly controls: GameControlRegistry;
   readonly board: MarketBoardSource;
   readonly mechanics: CapturedGameMechanics;
-  readonly keyState: GameKeyStateReader;
+  readonly keyState: GameKeyboardState;
   readonly readSettings: () => unknown;
   readonly readDemand?: () => {
     readonly isDemanded: (resourceId: string) => boolean;

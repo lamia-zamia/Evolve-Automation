@@ -136,7 +136,13 @@ function boardSource(gameRoot, controlRegistry, mode) {
   };
 }
 const ordinaryBoard = boardSource(root, registry, "global");
-const neutralKeyState = { readPressed: () => false };
+// The regional executor proves native multiplier neutrality per step, so its key state has to carry
+// the game's own latch answer. Nothing here observes a keyboard; see captured-route-multiplier-test.mjs
+// for the latch semantics themselves.
+const neutralKeyState = {
+  readPressed: () => false,
+  readMultiplierLatch: () => false,
+};
 
 const routes = createCapturedTradeRoutes({
   rootState: { readRoot: () => root },

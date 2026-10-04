@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 
+import { createGameKeyStateCapture } from "../src/adapters/browser/game-key-state.ts";
+import { readCapturedMultiplierMapping } from "../src/adapters/evolve/captured-multiplier-keys.ts";
 import { createCapturedTradeRoutes } from "../src/adapters/evolve/economy/market/captured-trade-routes.ts";
 import { isCapturedRouteMultiplierNeutral } from "../src/adapters/evolve/economy/market/captured-route-multiplier.ts";
 
@@ -7,6 +9,17 @@ import { isCapturedRouteMultiplierNeutral } from "../src/adapters/evolve/economy
 // above 768px, so the captured picker's own data cannot speak for the value the native `more()` and
 // `less()` closures will use. This fixture reproduces that branch faithfully.
 const VIEWPORT_WIDTH = 1024;
+
+/**
+ * The game's own private latch, transcribed from pinned `main.js` and updated only by the fixture's
+ * key events.
+ *
+ * It is deliberately *not* derived from the pressed-key set the adapter under test observes: if the
+ * adapter reconstructed latched state from physical keys, this copy of upstream would disagree with it
+ * exactly where the game would multiply and the adapter would not, which is the defect these tests
+ * exist to catch. Pinned `vars.js` starts all four entries `false` and `main.js` is the only writer.
+ */
+const nativeKeyMap = { x10: false, x25: false, x100: false, q: false };
 
 function regionalRoot(mKeys, keyMap) {
   return {
@@ -37,11 +50,9 @@ function regionalRoot(mKeys, keyMap) {
 
 function createFixture({
   mKeys = false,
-  keyMap = {},
-  pressed = [],
+  keyMap = { x10: "Control", x25: "Shift", x100: "Alt", q: "q" },
   mobileMultiplier = 1,
   withPicker = true,
-  keyStateUnavailable = false,
   forcedMultiplier,
   noOpFirstMutation = false,
   afterMutation,
@@ -51,23 +62,17 @@ function createFixture({
   const root = regionalRoot(mKeys, keyMap);
   root.city.market.mtrade = maximumRoutes;
   if (!removeFood) root.resource.Food.regDiff.spc_home = 0;
-  const down = new Set(pressed);
+  for (const name of Object.keys(nativeKeyMap)) nativeKeyMap[name] = false;
 
-  /** `vars.js:keyMultiplier`: each mapping the game currently records as held multiplies in. */
-  function mappingHeld(mapping) {
-    const configured = root.settings.keyMap[mapping];
-    if (typeof configured !== "string" && typeof configured !== "number")
-      return false;
-    return down.has(configured);
-  }
+  /** `vars.js:keyMultiplier`, reading the latch the game's own handlers maintain. */
   function nativeRouteMultiplier() {
     if (VIEWPORT_WIDTH <= 768) return mobileMultiplier;
     if (forcedMultiplier !== undefined) return forcedMultiplier;
     let number = 1;
-    if (root.settings.mKeys) {
-      if (mappingHeld("x10")) number *= 10;
-      if (mappingHeld("x25")) number *= 25;
-      if (mappingHeld("x100")) number *= 100;
+    if (currentRoot.settings.mKeys) {
+      if (nativeKeyMap.x10) number *= 10;
+      if (nativeKeyMap.x25) number *= 25;
+      if (nativeKeyMap.x100) number *= 100;
     }
     return number;
   }
@@ -79,6 +84,69 @@ function createFixture({
     else ledger[resourceId] = current + applied;
     root.city.market.trade += applied;
   }
+
+  const listeners = new Map();
+  const documentStub = {
+    addEventListener: (type, listener) => listeners.set(type, listener),
+    removeEventListener: (type) => listeners.delete(type),
+    dispatch: (type, event) => listeners.get(type)?.(event),
+  };
+  const rootListeners = new Set();
+  let currentRoot = root;
+  const roots = {
+    readRoot: () => currentRoot,
+    isReactivitySuppressed: () => false,
+    subscribeRootReplaced: (listener) => {
+      rootListeners.add(listener);
+      return () => rootListeners.delete(listener);
+    },
+  };
+  const keyState = createGameKeyStateCapture(() => documentStub, {
+    roots,
+    readMultiplierMapping: (name) =>
+      readCapturedMultiplierMapping(currentRoot, name),
+  });
+
+  /** One browser event, handed to the capture and to the game's own handler. */
+  function event(type, properties) {
+    documentStub.dispatch(type, properties);
+    if (type === "keydown" || type === "keyup") {
+      const key = properties.key || properties.keyCode;
+      for (const name of Object.keys(nativeKeyMap)) {
+        if (key === currentRoot.settings.keyMap[name])
+          nativeKeyMap[name] = type === "keydown";
+      }
+      return;
+    }
+    for (const [name, mapping] of Object.entries(currentRoot.settings.keyMap)) {
+      switch (mapping) {
+        case "Shift":
+        case 16:
+          nativeKeyMap[name] = properties.shiftKey ? true : false;
+          break;
+        case "Control":
+        case 17:
+          nativeKeyMap[name] = properties.ctrlKey ? true : false;
+          break;
+        case "Alt":
+        case 18:
+          nativeKeyMap[name] = properties.altKey ? true : false;
+          break;
+        case "Meta":
+        case 91:
+          nativeKeyMap[name] = properties.metaKey ? true : false;
+          break;
+      }
+    }
+  }
+  const mouse = (flags = {}) =>
+    event("mousemove", {
+      shiftKey: false,
+      ctrlKey: false,
+      altKey: false,
+      metaKey: false,
+      ...flags,
+    });
 
   const controls = new Map();
   for (const id of ["bm-Food", "bm-Iron"]) {
@@ -150,11 +218,8 @@ function createFixture({
           candidate.routeMultiplier.generation),
   };
 
-  const keyState = {
-    readPressed: (key) => (keyStateUnavailable ? undefined : down.has(key)),
-  };
   const adjuster = createCapturedTradeRoutes({
-    rootState: { readRoot: () => root },
+    rootState: roots,
     controls: registry,
     board: boards,
     mechanics: {
@@ -187,7 +252,26 @@ function createFixture({
       }),
     ledger: (pool, resourceId) => root.city.market.bm[pool]?.[resourceId],
     trade: () => root.city.market.trade,
-    press: (key) => down.add(key),
+    latch: (name) => keyState.readMultiplierLatch(name),
+    keyDown: (key, keyCode) => event("keydown", { key, keyCode }),
+    keyUp: (key, keyCode) => event("keyup", { key, keyCode }),
+    mouse,
+    /** Remap a multiplier while the game is running, as the settings panel does. */
+    remap: (name, value) => {
+      root.settings.keyMap[name] = value;
+    },
+    /** A different captured root with its own settings, as a wiki save import produces. */
+    swapRoot: () => {
+      currentRoot = {
+        ...root,
+        settings: {
+          mKeys: true,
+          keyMap: { x10: "y", x25: "Shift", x100: "Alt", q: "q" },
+        },
+      };
+      for (const listener of rootListeners) listener();
+    },
+    establishLatch: () => mouse(),
   };
 }
 
@@ -206,26 +290,42 @@ function createFixture({
   assert.equal(run.trade(), 2);
 }
 
+// The latch answers nothing until the capture has compared an event against a real mapping, and the
+// regional mutation fails closed in the meantime.
 {
-  const run = createFixture({ removeFood: false, maximumRoutes: 3 });
+  const run = createFixture({ mKeys: true });
+  assert.equal(run.latch("x10"), undefined);
+  assert.equal(run.neutral(), false);
   run.adjust();
-  assert.deepEqual(run.nativeCalls, [
-    ["more", "spc_moon"],
-    ["more", "spc_moon"],
-  ]);
-  assert.deepEqual(run.appliedMultipliers, [1, 1]);
-  assert.equal(run.ledger("spc_moon", "Iron"), 2);
+  assert.equal(run.nativeCalls.length, 0);
+  run.establishLatch();
+  assert.equal(run.latch("x10"), false);
+  assert.equal(run.neutral(), true);
 }
 
-// A held multiplier key would make the native call commit ten routes. Nothing may be invoked.
+// A held multiplier key latches the game's own state, so nothing may reach a native more()/less().
 for (const mapping of ["x10", "x25", "x100"]) {
   for (const configured of ["Shift", "x", 88]) {
     const run = createFixture({
       mKeys: true,
-      keyMap: { [mapping]: configured },
-      pressed: [configured],
+      keyMap: {
+        x10: "Control",
+        x25: "Shift",
+        x100: "Alt",
+        q: "q",
+        [mapping]: configured,
+      },
     });
-    assert.equal(run.neutral(), false, `${mapping}=${configured} is held`);
+    run.establishLatch();
+    assert.equal(run.neutral(), true, `${mapping}=${configured} idle`);
+    if (typeof configured === "string") run.keyDown(configured, 0);
+    else run.keyDown("", configured);
+    assert.equal(
+      nativeKeyMap[mapping],
+      true,
+      `${mapping}=${configured} latches`,
+    );
+    assert.equal(run.neutral(), false, `${mapping}=${configured} is latched`);
     run.adjust();
     assert.equal(
       run.nativeCalls.length,
@@ -238,24 +338,125 @@ for (const mapping of ["x10", "x25", "x100"]) {
   }
 }
 
-// Without a configured mapping there is nothing upstream can multiply by, however many keys are
-// down; the modifier names are not assumed, so only the mapping value decides.
+// The whole defect: upstream latches on keydown and clears on the keyup of whatever is mapped *then*,
+// so a mapping changed while its key is down leaves the game multiplying by ten with nothing held. A
+// pressed-key reconstruction reads the new mapping, sees nothing pressed, and calls that neutral.
 {
-  const run = createFixture({
-    mKeys: true,
-    keyMap: {},
-    pressed: ["Shift", "Control", "z", 88],
-  });
+  const run = createFixture({ mKeys: true });
+  run.remap("x10", "x");
+  run.establishLatch();
+  run.keyDown("x", 88);
+  assert.equal(run.neutral(), false);
+  run.remap("x10", "z");
+  assert.equal(run.latch("x10"), true, "the latch outlives its own mapping");
+  assert.equal(run.keyState.readPressed("x"), true);
+  assert.equal(run.keyState.readPressed("z"), false);
+  assert.equal(run.neutral(), false, "a stale latch is not neutral");
+  run.adjust();
+  assert.equal(
+    run.nativeCalls.length,
+    0,
+    "no native call while remapped mid-press",
+  );
+
+  // Upstream's keyup compares `x` against the *current* mapping `z` and clears nothing, so the latch
+  // survives the release as well. Preserved deliberately: the question is what the game will answer.
+  run.keyUp("x", 88);
+  assert.equal(nativeKeyMap.x10, true, "upstream leaves the stale latch set");
+  assert.equal(run.latch("x10"), true);
+  assert.equal(run.neutral(), false);
+  run.adjust();
+  assert.equal(run.nativeCalls.length, 0);
+
+  // Pressing and releasing the currently mapped key clears it, exactly as upstream does.
+  run.keyDown("z", 90);
+  assert.equal(nativeKeyMap.x10, true);
+  run.keyUp("z", 90);
+  assert.equal(nativeKeyMap.x10, false);
+  assert.equal(run.latch("x10"), false);
   assert.equal(run.neutral(), true);
+  run.adjust();
+  assert.deepEqual(run.appliedMultipliers, [1, 1, 1]);
+  assert.equal(run.nativeCalls.length, 3);
 }
 
-// Without `mKeys` the keyboard half of upstream `keyMultiplier()` contributes nothing at all.
+// The mapping the game is configured with is the one each event is compared against, at that moment.
 {
-  const run = createFixture({
-    mKeys: false,
-    keyMap: { x10: "Shift", x25: 88, x100: "x" },
-    pressed: ["Shift", 88, "x"],
+  const run = createFixture({ mKeys: true });
+  run.remap("x10", 88);
+  run.establishLatch();
+  // `e.key || e.keyCode` is `"x"` here, so a numeric mapping never matches a named keydown.
+  run.keyDown("x", 88);
+  assert.equal(nativeKeyMap.x10, false);
+  assert.equal(run.latch("x10"), false);
+  assert.equal(run.neutral(), true);
+  // A keyCode-only event compares as the code, which is the mapping.
+  run.keyDown("", 88);
+  assert.equal(nativeKeyMap.x10, true);
+  assert.equal(run.neutral(), false);
+  run.keyUp("", 88);
+  assert.equal(run.latch("x10"), false);
+  run.keyDown("x", 88);
+  assert.equal(run.latch("x10"), false, "strict equality, not coercion");
+}
+
+// Modifiers arrive through mousemove rather than keyup/keydown, so they can set or clear a latch on
+// their own. Default upstream mappings are exactly these three aliases.
+{
+  const run = createFixture({ mKeys: true });
+  run.establishLatch();
+  assert.equal(run.latch("x25"), false);
+  run.mouse({ shiftKey: true });
+  assert.equal(nativeKeyMap.x25, true);
+  assert.equal(run.latch("x25"), true);
+  assert.equal(run.neutral(), false, "a held Shift holds x25");
+  run.mouse();
+  assert.equal(nativeKeyMap.x25, false);
+  assert.equal(run.latch("x25"), false);
+  assert.equal(run.neutral(), true);
+
+  const numeric = createFixture({
+    mKeys: true,
+    keyMap: { x10: "Control", x25: 17, x100: "Alt", q: "q" },
   });
+  numeric.establishLatch();
+  numeric.mouse({ ctrlKey: true });
+  assert.equal(nativeKeyMap.x25, true);
+  assert.equal(numeric.latch("x25"), true);
+  assert.equal(numeric.neutral(), false);
+  numeric.mouse();
+  assert.equal(numeric.latch("x25"), false);
+  assert.equal(numeric.neutral(), true);
+}
+
+// Without a configured mapping there is nothing upstream could ever compare against, so the latch
+// stays unanswerable and a mutation waiting on it waits — rather than being answered from a guess.
+{
+  const run = createFixture({ mKeys: true, keyMap: {} });
+  run.establishLatch();
+  assert.equal(
+    run.latch("x10"),
+    undefined,
+    "an unmapped latch stays unanswerable",
+  );
+  run.mouse({ shiftKey: true, ctrlKey: true });
+  run.keyDown("z", 90);
+  assert.equal(run.latch("x10"), undefined);
+  assert.equal(run.neutral(), false);
+  run.adjust();
+  assert.equal(run.nativeCalls.length, 0);
+}
+
+// Without `mKeys` the keyboard half of upstream `keyMultiplier()` contributes nothing at all, latch or
+// not, so a true latch must not block the regional trade.
+{
+  const run = createFixture({ mKeys: false });
+  run.remap("x10", "x");
+  run.establishLatch();
+  run.mouse({ shiftKey: true });
+  run.keyDown("x", 88);
+  assert.equal(nativeKeyMap.x10, true);
+  assert.equal(nativeKeyMap.x25, true);
   assert.equal(run.neutral(), true);
   run.adjust();
   assert.equal(run.nativeCalls.length, 3);
@@ -265,18 +466,21 @@ for (const mapping of ["x10", "x25", "x100"]) {
 // The mobile picker must be this board's own handle, current, and reading one.
 {
   const scaled = createFixture({ mobileMultiplier: 5 });
+  scaled.establishLatch();
   assert.equal(scaled.neutral(), false);
   scaled.adjust();
   assert.equal(scaled.nativeCalls.length, 0);
 }
 {
   const missing = createFixture({ withPicker: false });
+  missing.establishLatch();
   assert.equal(missing.neutral(), false);
   missing.adjust();
   assert.equal(missing.nativeCalls.length, 0);
 }
 {
   const stale = createFixture();
+  stale.establishLatch();
   stale.controls.set("marketRouteMultiplier", {
     ...stale.controls.get("marketRouteMultiplier"),
     generation: 2,
@@ -290,31 +494,50 @@ for (const mapping of ["x10", "x25", "x100"]) {
   stale.adjust();
   assert.equal(stale.nativeCalls.length, 0);
 }
+
+// A capture that cannot report the latch at all proves nothing, so the regional trade waits.
 {
-  const blind = createFixture({
-    mKeys: true,
-    keyMap: { x10: "Shift" },
-    keyStateUnavailable: true,
-  });
+  const blind = createFixture({ mKeys: true });
+  blind.establishLatch();
+  blind.keyState.uninstall();
   assert.equal(blind.neutral(), false);
   blind.adjust();
   assert.equal(blind.nativeCalls.length, 0);
 }
 
-// Each step proves its own neutrality, so a key pressed mid-batch stops the next step only.
+// Each step proves its own neutrality, so a key latched mid-batch stops the next step only.
 {
   const run = createFixture({
     mKeys: true,
-    keyMap: { x10: "Shift" },
     afterMutation: (count) => {
-      if (count === 1) run.press("Shift");
+      if (count === 1) run.mouse({ shiftKey: true });
     },
   });
+  run.establishLatch();
   run.adjust();
   assert.deepEqual(run.nativeCalls, [["less", "spc_home"]]);
   assert.equal(run.ledger("spc_home", "Food"), undefined);
   assert.equal(run.ledger("spc_moon", "Iron"), undefined);
   assert.equal(run.trade(), 0);
+}
+
+// A different captured root is not the root the fold was derived from, so its latches are unknown again
+// rather than inherited — fail closed, and re-established from the next observed event.
+{
+  const run = createFixture({ mKeys: true });
+  run.remap("x10", "x");
+  run.establishLatch();
+  run.keyDown("x", 88);
+  assert.equal(run.latch("x10"), true);
+  assert.equal(run.neutral(), false);
+  run.swapRoot();
+  assert.equal(run.latch("x10"), undefined, "no inherited authority");
+  assert.equal(run.neutral(), false);
+  run.adjust();
+  assert.equal(run.nativeCalls.length, 0);
+  run.mouse();
+  assert.equal(run.latch("x10"), false);
+  assert.equal(run.neutral(), true);
 }
 
 // The one-route postconditions still reject a native step that moved anything else, and the plan is
@@ -325,12 +548,14 @@ for (const mapping of ["x10", "x25", "x100"]) {
     removeFood: false,
     maximumRoutes: 3,
   });
+  oversized.establishLatch();
   oversized.adjust();
   assert.equal(oversized.nativeCalls.length, 1);
   assert.equal(oversized.ledger("spc_moon", "Iron"), 10);
 }
 {
   const silent = createFixture({ noOpFirstMutation: true });
+  silent.establishLatch();
   silent.adjust();
   assert.equal(silent.nativeCalls.length, 1);
   assert.equal(silent.ledger("spc_home", "Food"), 1);
