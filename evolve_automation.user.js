@@ -5036,7 +5036,7 @@
       },
       beginCycle() {
         dependencies.ensureControls?.();
-        let root = rootState.readRoot(), entries = /* @__PURE__ */ new Map();
+        let root = rootState.readRoot(), entries = /* @__PURE__ */ new Map(), complete = !0;
         for (let target of readTargets()) {
           let building = readBuilding(root, target);
           if (building === void 0) {
@@ -5046,7 +5046,7 @@
           if (Number(building.count) >= target.maximum) continue;
           let price = costs.readCost(target.elementId);
           if (price === void 0) {
-            reportSkipped(target.key, "cost unavailable");
+            reportSkipped(target.key, "cost unavailable"), complete = !1;
             continue;
           }
           entries.set(target.key, {
@@ -5065,14 +5065,17 @@
           });
         }
         let queued = readQueuedIds(root, [...entries.values()]);
-        return cycle = entries, Object.freeze(
-          [...entries.values()].map(
-            (entry) => Object.freeze({
-              ...entry.candidate,
-              ignored: queued.has(entry.target.elementId)
-            })
+        return cycle = entries, Object.freeze({
+          complete,
+          candidates: Object.freeze(
+            [...entries.values()].map(
+              (entry) => Object.freeze({
+                ...entry.candidate,
+                ignored: queued.has(entry.target.elementId)
+              })
+            )
           )
-        );
+        });
       },
       execute(key) {
         let base = {
@@ -5483,9 +5486,11 @@
         constructionCycleId++;
         let presentationSettings = dependencies.readPresentationSettings?.(), stateLogPlannerDetailsDue = dependencies.readStateLogPlannerDetailsDue?.() === !0;
         uiPresentationMode = presentationSettings?.buildPlannerUI === !0 ? "planner" : presentationSettings?.activeTargetsUI === !0 ? "targets" : "off", stateLogDetailsDue = stateLogPlannerDetailsDue, capturePlannerDetails = uiPresentationMode === "planner" || stateLogDetailsDue, plannerAffordability = /* @__PURE__ */ new Map(), plannerResources = /* @__PURE__ */ new Map(), respectReservations = options.respectReservations;
-        let entries = [], owners = /* @__PURE__ */ new Map();
-        for (let source of sources)
-          for (let candidate of source.beginCycle()) {
+        let entries = [], owners = /* @__PURE__ */ new Map(), sourcesComplete = !0;
+        for (let source of sources) {
+          let sample = source.beginCycle();
+          sample.complete || (sourcesComplete = !1);
+          for (let candidate of sample.candidates) {
             let owner = owners.get(candidate.key);
             if (owner !== void 0)
               throw new TypeError(
@@ -5493,12 +5498,15 @@
               );
             owners.set(candidate.key, source.family), entries.push({ candidate, source });
           }
-        entries.sort((a, b) => b.candidate.weighting - a.candidate.weighting), cycle = Object.freeze(entries), cycleReadyToPublish = !0, knowledgeRequirement = 0;
-        for (let entry of entries) {
-          if (entry.candidate.knowledge) continue;
-          let cost = entry.candidate.cost.Knowledge;
-          knowledgeRequirement = typeof cost == "number" && Number.isFinite(cost) ? cost : 0;
-          break;
+        }
+        if (entries.sort((a, b) => b.candidate.weighting - a.candidate.weighting), sourcesComplete || (entries.length = 0), cycle = Object.freeze(entries), cycleReadyToPublish = sourcesComplete, sourcesComplete) {
+          knowledgeRequirement = 0;
+          for (let entry of entries) {
+            if (entry.candidate.knowledge) continue;
+            let cost = entry.candidate.cost.Knowledge;
+            knowledgeRequirement = typeof cost == "number" && Number.isFinite(cost) ? cost : 0;
+            break;
+          }
         }
         return Object.freeze({
           candidates: Object.freeze(
@@ -6020,14 +6028,25 @@
       beginCycle() {
         let settings = readSettings();
         if (!isProjectAutomationEnabled(settings))
-          return cycle = /* @__PURE__ */ new Map(), Object.freeze([]);
+          return cycle = /* @__PURE__ */ new Map(), Object.freeze({ complete: !0, candidates: Object.freeze([]) });
         let offered = catalog.readProjects();
         if (offered === void 0)
-          return cycle = /* @__PURE__ */ new Map(), reportDiagnostic?.("ARPA catalog unavailable: no current offer sample"), Object.freeze([]);
+          return cycle = /* @__PURE__ */ new Map(), reportDiagnostic?.("ARPA catalog unavailable: no current offer sample"), Object.freeze({
+            complete: !1,
+            candidates: Object.freeze([])
+          });
         let resourceIds = new Set(
           offered.flatMap((project) => Object.keys(project.cost))
-        ), sample = resources.readResources(resourceIds), capacities = {};
-        if (sample !== void 0)
+        ), sample = resourceIds.size === 0 ? null : resources.readResources(resourceIds);
+        if (resourceIds.size > 0 && sample === void 0)
+          return cycle = /* @__PURE__ */ new Map(), reportDiagnostic?.(
+            "ARPA resources unavailable: no current capacity sample"
+          ), Object.freeze({
+            complete: !1,
+            candidates: Object.freeze([])
+          });
+        let capacities = {};
+        if (sample != null)
           for (let id of resourceIds) {
             let view = resourceView(sample, id);
             capacities[id] = Object.freeze({
@@ -6070,9 +6089,12 @@
           }), reportDiagnostic?.(
             `ARPA candidate produced: ${project.projectId} ${project.steps}%`
           );
-        return cycle = entries, Object.freeze(
-          [...entries.values()].map((entry) => entry.candidate)
-        );
+        return cycle = entries, Object.freeze({
+          complete: !0,
+          candidates: Object.freeze(
+            [...entries.values()].map((entry) => entry.candidate)
+          )
+        });
       },
       execute(key) {
         let base = {

@@ -39,7 +39,13 @@ for (const id of [
   );
 }
 
-function harness(id, root, invokeAction = () => {}, offered = true) {
+function harness(
+  id,
+  root,
+  invokeAction = () => {},
+  offered = true,
+  costAvailable = true,
+) {
   let currentlyOffered = offered;
   let actionCalls = 0;
   const handle = {
@@ -86,7 +92,9 @@ function harness(id, root, invokeAction = () => {}, offered = true) {
   const build = createCapturedBuildSource({
     rootState,
     controls,
-    costs: { readCost: () => ({ cost: { Money: 1 } }) },
+    costs: {
+      readCost: () => (costAvailable ? { cost: { Money: 1 } } : undefined),
+    },
     readTargets: () => reader().buildings,
   });
   return {
@@ -95,6 +103,17 @@ function harness(id, root, invokeAction = () => {}, offered = true) {
     setOffered: (value) => (currentlyOffered = value),
     actionCalls: () => actionCalls,
   };
+}
+
+{
+  const { build } = harness(
+    "space-red_mission",
+    { tech: { space: 3 }, space: {} },
+    () => {},
+    true,
+    false,
+  );
+  assert.deepEqual(build.beginCycle(), { complete: false, candidates: [] });
 }
 
 {
@@ -114,7 +133,7 @@ function harness(id, root, invokeAction = () => {}, offered = true) {
     [],
     "a stale captured Mars control is unavailable after the game's fresh draw omits it",
   );
-  assert.deepEqual(build.beginCycle(), []);
+  assert.deepEqual(build.beginCycle().candidates, []);
   assert.equal(build.execute("space-red_mission").clicked, false);
   assert.equal(actionCalls(), 0);
 }
@@ -141,7 +160,7 @@ for (const [id, tech, before, complete] of [
   );
   assert.equal(reader().buildings[0].maximum, 1);
   assert.deepEqual(
-    build.beginCycle().map((candidate) => candidate.key),
+    build.beginCycle().candidates.map((candidate) => candidate.key),
     [id],
   );
   const result = build.execute(id);
@@ -171,7 +190,7 @@ for (const tech of [undefined, null, { hell: "broken" }, { hell: NaN }]) {
   const root = { tech, space: {} };
   const { reader, build } = harness("space-hell_mission", root);
   assert.deepEqual(reader().buildings, []);
-  assert.deepEqual(build.beginCycle(), []);
+  assert.deepEqual(build.beginCycle().candidates, []);
 }
 
 {
@@ -196,7 +215,7 @@ for (const tech of [undefined, null, { hell: "broken" }, { hell: NaN }]) {
     space: {},
   });
   assert.deepEqual(reader().buildings, []);
-  assert.deepEqual(build.beginCycle(), []);
+  assert.deepEqual(build.beginCycle().candidates, []);
 }
 
 console.log("captured-grant-action ok");

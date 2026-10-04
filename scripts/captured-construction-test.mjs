@@ -8,7 +8,13 @@ import { runBuildAutomation } from "../src/application/build.ts";
  * candidates and buys them — so what is under test is the merged order and the shared judgement,
  * not either family's own capture.
  */
-function makeSource(family, candidates, holdings, bought) {
+function makeSource(
+  family,
+  candidates,
+  holdings,
+  bought,
+  complete = () => true,
+) {
   let cycle = new Map();
   return {
     family,
@@ -24,7 +30,7 @@ function makeSource(family, candidates, holdings, bought) {
           },
         ]),
       );
-      return [...cycle.values()];
+      return { candidates: [...cycle.values()], complete: complete() };
     },
     execute(key) {
       const candidate = cycle.get(key);
@@ -108,6 +114,7 @@ function makeCycle({
     activeTargetsUI: false,
     buildPlannerUI: false,
   },
+  sourceComplete = { city: true, arpa: true },
 } = {}) {
   const bought = [];
   const evaluatedPools = [];
@@ -129,8 +136,20 @@ function makeCycle({
   };
   const adapter = createCapturedConstructionAdapter({
     sources: [
-      makeSource("city", () => city, holdings, bought),
-      makeSource("arpa", () => arpa, holdings, bought),
+      makeSource(
+        "city",
+        () => city,
+        holdings,
+        bought,
+        () => sourceComplete.city,
+      ),
+      makeSource(
+        "arpa",
+        () => arpa,
+        holdings,
+        bought,
+        () => sourceComplete.arpa,
+      ),
     ],
     resources: resourceSource ?? makeResources(holdings, resourceOptions),
     rootState,
@@ -590,6 +609,43 @@ function runCycle(cycle) {
   assert.throws(saving, /order is not established/);
 }
 
+// A partial family sample cannot replace the last complete saving order with a truncated one.
+// The first partial cycle establishes no order.
+{
+  const city = [{ key: "A", weighting: 100, cost: { Money: 1000 } }];
+  const arpa = [{ key: "B", weighting: 90, cost: { Money: 1000 } }];
+  const sourceComplete = { city: false, arpa: true };
+  const cycle = makeCycle({
+    city,
+    arpa,
+    sourceComplete,
+    holdings: { Money: 100 },
+  });
+  const saving = () => cycle.adapter.observations.readSavingTarget()?.name;
+  runCycle(cycle);
+  assert.throws(saving, /order is not established/);
+  sourceComplete.city = true;
+  runCycle(cycle);
+  assert.equal(saving(), "A");
+  city.splice(0);
+  sourceComplete.city = false;
+  runCycle(cycle);
+  assert.equal(saving(), "A");
+}
+
+// An affordable lower-priority target cannot be bought while another family's sample is partial.
+{
+  const cycle = makeCycle({
+    city: [{ key: "unpriced", weighting: 100, cost: { Money: 200 } }],
+    arpa: [{ key: "cheap", weighting: 10, cost: { Money: 1 } }],
+    sourceComplete: { city: false, arpa: true },
+    holdings: { Money: 100 },
+  });
+  assert.equal(runCycle(cycle).status, "succeeded");
+  assert.deepEqual(cycle.bought, []);
+  assert.equal(cycle.adapter.observations.hasCompletedOrdering(), false);
+}
+
 // The Knowledge requirement is the top-weighted candidate that does not itself raise the cap, and
 // it describes the cycle that just began rather than the previous one.
 {
@@ -825,10 +881,18 @@ function runCycle(cycle) {
     const bought = [];
     const source = {
       family: "city",
-      beginCycle: () => [
-        { key: "wait", weighting: 20, cost: { Money: 200 }, important: false },
-        { key: "buy", weighting: 10, cost: { Money: 50 }, important: false },
-      ],
+      beginCycle: () => ({
+        complete: true,
+        candidates: [
+          {
+            key: "wait",
+            weighting: 20,
+            cost: { Money: 200 },
+            important: false,
+          },
+          { key: "buy", weighting: 10, cost: { Money: 50 }, important: false },
+        ],
+      }),
       execute(key) {
         bought.push(key);
         return {

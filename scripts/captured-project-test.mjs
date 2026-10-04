@@ -182,6 +182,7 @@ function makeAdapter({
   context = NO_PROJECT_CONTEXT,
   actionModes = {},
   onDiagnostic = undefined,
+  resourcesAvailable = true,
 } = {}) {
   if (catalog === undefined) {
     catalog = [offered("lhc", { rank: 1, progress, generation: 2 })];
@@ -247,6 +248,7 @@ function makeAdapter({
   };
   const resources = {
     readResources(ids) {
+      if (!resourcesAvailable) return undefined;
       return {
         resources: new Map(
           [...ids].map((id) => {
@@ -642,9 +644,19 @@ function makeAdapter({
   );
   assert.deepEqual(failed.calls, []);
   assert.equal(failed.reads(), 1);
+  assert.equal(failed.adapter.observations.hasCompletedOrdering(), false);
+  assert.throws(
+    () => failed.adapter.observations.readSavingTarget(),
+    /order is not established/,
+  );
   assert.ok(
     diagnostics.some((message) => message.includes("ARPA catalog unavailable")),
   );
+
+  const unpriced = makeAdapter({ resourcesAvailable: false });
+  assert.equal(runBuildAutomation(unpriced.adapter).status, "succeeded");
+  assert.equal(unpriced.adapter.observations.hasCompletedOrdering(), false);
+  assert.deepEqual(unpriced.calls, []);
 }
 
 // --- the run context: gates that are about the run, not about one project ------------------------

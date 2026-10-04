@@ -165,10 +165,11 @@ export function createCapturedBuildSource(
       return current?.pool === candidate.pool ? current?.cost : undefined;
     },
 
-    beginCycle(): readonly Readonly<ConstructionCandidate>[] {
+    beginCycle() {
       dependencies.ensureControls?.();
       const root = rootState.readRoot();
       const entries = new Map<string, CycleCandidate>();
+      let complete = true;
       for (const target of readTargets()) {
         const building = readBuilding(root, target);
         if (building === undefined) {
@@ -179,6 +180,7 @@ export function createCapturedBuildSource(
         const price = costs.readCost(target.elementId);
         if (price === undefined) {
           reportSkipped(target.key, "cost unavailable");
+          complete = false;
           continue;
         }
         entries.set(target.key, {
@@ -200,14 +202,17 @@ export function createCapturedBuildSource(
       }
       const queued = readQueuedIds(root, [...entries.values()]);
       cycle = entries;
-      return Object.freeze(
-        [...entries.values()].map((entry) =>
-          Object.freeze({
-            ...entry.candidate,
-            ignored: queued.has(entry.target.elementId),
-          }),
+      return Object.freeze({
+        complete,
+        candidates: Object.freeze(
+          [...entries.values()].map((entry) =>
+            Object.freeze({
+              ...entry.candidate,
+              ignored: queued.has(entry.target.elementId),
+            }),
+          ),
         ),
-      );
+      });
     },
 
     execute(key: string): BuildClickResult {

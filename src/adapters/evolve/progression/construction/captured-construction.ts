@@ -340,8 +340,11 @@ export function createCapturedConstructionAdapter(
       respectReservations = options.respectReservations;
       const entries: CycleEntry[] = [];
       const owners = new Map<string, string>();
+      let sourcesComplete = true;
       for (const source of sources) {
-        for (const candidate of source.beginCycle()) {
+        const sample = source.beginCycle();
+        if (!sample.complete) sourcesComplete = false;
+        for (const candidate of sample.candidates) {
           const owner = owners.get(candidate.key);
           if (owner !== undefined) {
             throw new TypeError(
@@ -355,18 +358,23 @@ export function createCapturedConstructionAdapter(
       // Highest weighting first; a stable sort keeps each family's own order, and the order the
       // families were given in, on ties.
       entries.sort((a, b) => b.candidate.weighting - a.candidate.weighting);
+      // A missing higher-priority price or family catalog makes competition incomplete. Keep
+      // previously published intent and refrain from spending from this partial list.
+      if (!sourcesComplete) entries.length = 0;
       cycle = Object.freeze(entries);
-      cycleReadyToPublish = true;
+      cycleReadyToPublish = sourcesComplete;
       // The Knowledge requirement needs only the sorted list, so it describes this cycle. Only the
       // highest-weighted candidate that does not itself raise the cap counts: a Knowledge building
       // is the answer to a capacity shortage, not evidence of one.
-      knowledgeRequirement = 0;
-      for (const entry of entries) {
-        if (entry.candidate.knowledge) continue;
-        const cost = entry.candidate.cost["Knowledge"];
-        knowledgeRequirement =
-          typeof cost === "number" && Number.isFinite(cost) ? cost : 0;
-        break;
+      if (sourcesComplete) {
+        knowledgeRequirement = 0;
+        for (const entry of entries) {
+          if (entry.candidate.knowledge) continue;
+          const cost = entry.candidate.cost["Knowledge"];
+          knowledgeRequirement =
+            typeof cost === "number" && Number.isFinite(cost) ? cost : 0;
+          break;
+        }
       }
       return Object.freeze({
         candidates: Object.freeze(

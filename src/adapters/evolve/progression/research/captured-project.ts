@@ -201,11 +201,11 @@ export function createCapturedProjectSource(
       );
     },
 
-    beginCycle(): readonly Readonly<ConstructionCandidate>[] {
+    beginCycle() {
       const settings = readSettings();
       if (!isProjectAutomationEnabled(settings)) {
         cycle = new Map();
-        return Object.freeze([]);
+        return Object.freeze({ complete: true, candidates: Object.freeze([]) });
       }
       const offered = catalog.readProjects();
       if (offered === undefined) {
@@ -213,14 +213,28 @@ export function createCapturedProjectSource(
         // spend against prices and offers the game may already have moved past.
         cycle = new Map();
         reportDiagnostic?.("ARPA catalog unavailable: no current offer sample");
-        return Object.freeze([]);
+        return Object.freeze({
+          complete: false,
+          candidates: Object.freeze([]),
+        });
       }
       const resourceIds = new Set(
         offered.flatMap((project) => Object.keys(project.cost)),
       );
-      const sample = resources.readResources(resourceIds);
+      const sample =
+        resourceIds.size === 0 ? null : resources.readResources(resourceIds);
+      if (resourceIds.size > 0 && sample === undefined) {
+        cycle = new Map();
+        reportDiagnostic?.(
+          "ARPA resources unavailable: no current capacity sample",
+        );
+        return Object.freeze({
+          complete: false,
+          candidates: Object.freeze([]),
+        });
+      }
       const capacities: Record<string, ProjectCapacityView> = {};
-      if (sample !== undefined) {
+      if (sample !== undefined && sample !== null) {
         for (const id of resourceIds) {
           const view = resourceView(sample, id);
           capacities[id] = Object.freeze({
@@ -272,9 +286,12 @@ export function createCapturedProjectSource(
         );
       }
       cycle = entries;
-      return Object.freeze(
-        [...entries.values()].map((entry) => entry.candidate),
-      );
+      return Object.freeze({
+        complete: true,
+        candidates: Object.freeze(
+          [...entries.values()].map((entry) => entry.candidate),
+        ),
+      });
     },
 
     execute(key: string): BuildClickResult {

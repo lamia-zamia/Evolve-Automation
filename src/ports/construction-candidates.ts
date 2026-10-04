@@ -37,8 +37,11 @@ export interface ConstructionCycleOptions {
 export interface ConstructionCandidateSource {
   /** Names the family in diagnostics; two sources may not offer the same candidate key. */
   readonly family: string;
-  /** Samples this family's candidates for one cycle, in its own preferred order. */
-  beginCycle(): readonly Readonly<ConstructionCandidate>[];
+  /** Samples this family's candidates and states whether its candidate set is authoritative. */
+  beginCycle(): Readonly<{
+    candidates: readonly Readonly<ConstructionCandidate>[];
+    complete: boolean;
+  }>;
   /** Publishes this source's completed candidate data for later read-only saving observations. */
   finishCycle?(): void;
   /** Current price for a previously ordered candidate; null means explicitly no longer wanted. */
