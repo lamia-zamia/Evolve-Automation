@@ -14,6 +14,7 @@ import type { GameControlHandle } from "../../../../ports/game-control-registry.
 import type { GameControlRegistry } from "../../../../ports/game-control-registry.ts";
 import type { GameRootStateSource } from "../../../../ports/game-root-state.ts";
 import type { CapturedGameMechanics } from "../../../../ports/captured-game-mechanics.ts";
+import type { GameKeyStateReader } from "../../../../ports/game-key-state.ts";
 import { finite, isRecord, readProperty } from "../../../validation.ts";
 import {
   readCapturedTradeQuote,
@@ -23,12 +24,14 @@ import type {
   MarketBoard,
   MarketBoardSource,
 } from "./captured-market-board.ts";
+import { isCapturedRouteMultiplierNeutral } from "./captured-route-multiplier.ts";
 
 interface CapturedTradeRoutesDependencies {
   readonly rootState: GameRootStateSource;
   readonly controls: GameControlRegistry;
   readonly board: MarketBoardSource;
   readonly mechanics: CapturedGameMechanics;
+  readonly keyState: GameKeyStateReader;
   readonly readSettings: () => unknown;
   readonly readDemand?: () => {
     readonly isDemanded: (resourceId: string) => boolean;
@@ -493,20 +496,6 @@ function applyRegionalTradeRoutes(
   if (captured === undefined) return;
   const result = planRegionalTradeRoutes(captured.input);
   if (result.operations.length === 0) return;
-  const multiplierHandle = captured.session.board.routeMultiplier;
-  const multiplier = multiplierHandle?.data;
-  if (
-    multiplierHandle !== undefined &&
-    dependencies.controls.resolve(multiplierHandle.elementId)?.generation !==
-      multiplierHandle.generation
-  )
-    return;
-  if (
-    isRecord(multiplier) &&
-    multiplier["multiplier"] !== undefined &&
-    multiplier["multiplier"] !== 1
-  )
-    return;
 
   const market = captured.session.market;
   let ownedZone = captured.session.selectedZone;
@@ -519,6 +508,13 @@ function applyRegionalTradeRoutes(
         if (
           dependencies.rootState.readRoot() !== captured.session.root ||
           !dependencies.board.isCurrent(captured.session.board) ||
+          !isCapturedRouteMultiplierNeutral({
+            root: captured.session.root,
+            boards: dependencies.board,
+            board: captured.session.board,
+            controls: dependencies.controls,
+            keyState: dependencies.keyState,
+          }) ||
           readProperty(
             readProperty(captured.session.root, "city"),
             "market",

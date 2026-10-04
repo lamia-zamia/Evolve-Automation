@@ -23,6 +23,7 @@ import type { GameRootStateSource } from "../../../ports/game-root-state.ts";
 import { rejected, stale, SUCCEEDED } from "../../command-outcomes.ts";
 import { finite, isRecord, readProperty } from "../../validation.ts";
 import { readCapturedAchievementStar } from "../captured-achievements.ts";
+import { readCapturedMultiplierKeys } from "../captured-multiplier-keys.ts";
 import {
   readCapturedHellGarrisonFromControl,
   resolveCapturedOrdinaryFortress,
@@ -408,33 +409,14 @@ function capturedBattleEmptyCycle(): BattleCycleInput {
   });
 }
 
-function capturedBattleModifierHeld(
-  root: unknown,
-  keyState: GameKeyStateReader | undefined,
-): boolean {
-  if (keyState === undefined) return false;
-  const settings = readProperty(root, "settings");
-  if (readProperty(settings, "mKeys") !== true) return false;
-  const keyMap = readProperty(settings, "keyMap");
-  for (const key of ["x10", "x25", "x100"] as const) {
-    const mapped = readProperty(keyMap, key);
-    if (
-      (typeof mapped === "string" || typeof mapped === "number") &&
-      keyState.readPressed(mapped) === true
-    ) {
-      return true;
-    }
-  }
-  return false;
-}
-
 function capturedBattleReadCycle(
   dependencies: CapturedBattleDependencies,
 ): CapturedBattleCycle | undefined {
   const root = dependencies.rootState.readRoot();
   if (!isRecord(root)) return undefined;
   const stateKey = capturedBattleRelevantState(root);
-  if (capturedBattleModifierHeld(root, dependencies.keyState)) return undefined;
+  if (readCapturedMultiplierKeys(root, dependencies.keyState) === "one-held")
+    return undefined;
 
   const settings = capturedBattleSettings(dependencies.readSettings());
   if (

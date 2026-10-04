@@ -1380,6 +1380,7 @@ export function startCapturedRuntime({
     controls: pageCapture.controls,
     board: marketBoard,
     mechanics: pageCapture.mechanics,
+    keyState: pageCapture.keyState,
     readSettings: () => settingsStore.readRaw(),
     readDemand: () => readDemand(),
     onUnavailable: (reason) =>

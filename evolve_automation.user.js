@@ -29795,6 +29795,40 @@
     )?.[0]?.receiver;
   }
 
+  // src/adapters/evolve/captured-multiplier-keys.ts
+  var MULTIPLIER_KEY_MAPPINGS = Object.freeze([
+    "x10",
+    "x25",
+    "x100"
+  ]);
+  function readCapturedMultiplierKeys(root, keyState) {
+    let settings = readProperty(root, "settings");
+    if (!readProperty(settings, "mKeys")) return "none-held";
+    if (keyState === void 0) return "unknown";
+    let keyMap = readProperty(settings, "keyMap");
+    if (!isRecord(keyMap)) return "unknown";
+    let answer = "none-held";
+    for (let mapping of MULTIPLIER_KEY_MAPPINGS) {
+      let configured = keyMap[mapping];
+      if (typeof configured != "string" && typeof configured != "number")
+        continue;
+      let pressed = keyState.readPressed(configured);
+      if (pressed === !0) return "one-held";
+      pressed === void 0 && (answer = "unknown");
+    }
+    return answer;
+  }
+
+  // src/adapters/evolve/economy/market/captured-route-multiplier.ts
+  function isCapturedRouteMultiplierNeutral(input) {
+    if (!input.boards.isCurrent(input.board)) return !1;
+    let picker = input.board.routeMultiplier;
+    if (picker === void 0 || input.controls.resolve(picker.elementId)?.generation !== picker.generation)
+      return !1;
+    let mobile = picker.data;
+    return !isRecord(mobile) || mobile.multiplier !== 1 ? !1 : readCapturedMultiplierKeys(input.root, input.keyState) === "none-held";
+  }
+
   // src/adapters/evolve/economy/market/captured-trade-routes.ts
   var REGIONAL_PRIORITY = Object.freeze([
     "Food",
@@ -30043,16 +30077,19 @@
     if (captured === void 0) return;
     let result = planRegionalTradeRoutes(captured.input);
     if (result.operations.length === 0) return;
-    let multiplierHandle = captured.session.board.routeMultiplier, multiplier = multiplierHandle?.data;
-    if (multiplierHandle !== void 0 && dependencies.controls.resolve(multiplierHandle.elementId)?.generation !== multiplierHandle.generation || isRecord(multiplier) && multiplier.multiplier !== void 0 && multiplier.multiplier !== 1)
-      return;
     let market = captured.session.market, ownedZone = captured.session.selectedZone, expectedTotal = captured.session.marketRouteCount;
     try {
       for (let operation2 of result.operations) {
         let control = captured.session.controls.get(operation2.resourceId);
         if (control === void 0) return;
         for (let index = 0; index < operation2.count; index += 1) {
-          if (dependencies.rootState.readRoot() !== captured.session.root || !dependencies.board.isCurrent(captured.session.board) || readProperty(
+          if (dependencies.rootState.readRoot() !== captured.session.root || !dependencies.board.isCurrent(captured.session.board) || !isCapturedRouteMultiplierNeutral({
+            root: captured.session.root,
+            boards: dependencies.board,
+            board: captured.session.board,
+            controls: dependencies.controls,
+            keyState: dependencies.keyState
+          }) || readProperty(
             readProperty(captured.session.root, "city"),
             "market"
           ) !== market || market.bmZone !== ownedZone || dependencies.controls.resolve(control.elementId)?.generation !== control.generation || !control.methods.includes("volume") || !control.methods.includes("more") || !control.methods.includes("less"))
@@ -50573,14 +50610,7 @@ Only continue if you trust the source. Injected code:
     return decision.kind === "hire-mercenary" && decision.expectedSoldiers === state.currentSoldiers && decision.expectedCost === state.mercenaryCost && decision.expectedMoneyCurrent === state.moneyCurrent && decision.expectedMoneySpare === state.moneySpare;
   }
   function capturedMercenaryModifierHeld(root, keyState) {
-    if (keyState === void 0) return !1;
-    let settings = readProperty(root, "settings");
-    if (readProperty(settings, "mKeys") !== !0) return !1;
-    let keyMap = readProperty(settings, "keyMap");
-    return ["x10", "x25", "x100"].some((key) => {
-      let mapped = readProperty(keyMap, key);
-      return (typeof mapped == "string" || typeof mapped == "number") && keyState.readPressed(mapped) === !0;
-    });
+    return readCapturedMultiplierKeys(root, keyState) === "one-held";
   }
   function createCapturedMercenary(dependencies) {
     let session, lastState, moneyIncomes = [], reportActivity = dependencies.onActivity ?? (() => {
@@ -50930,23 +50960,12 @@ Only continue if you trust the source. Injected code:
       occupyLast: !1
     });
   }
-  function capturedBattleModifierHeld(root, keyState) {
-    if (keyState === void 0) return !1;
-    let settings = readProperty(root, "settings");
-    if (readProperty(settings, "mKeys") !== !0) return !1;
-    let keyMap = readProperty(settings, "keyMap");
-    for (let key of ["x10", "x25", "x100"]) {
-      let mapped = readProperty(keyMap, key);
-      if ((typeof mapped == "string" || typeof mapped == "number") && keyState.readPressed(mapped) === !0)
-        return !0;
-    }
-    return !1;
-  }
   function capturedBattleReadCycle(dependencies) {
     let root = dependencies.rootState.readRoot();
     if (!isRecord(root)) return;
     let stateKey = capturedBattleRelevantState(root);
-    if (capturedBattleModifierHeld(root, dependencies.keyState)) return;
+    if (readCapturedMultiplierKeys(root, dependencies.keyState) === "one-held")
+      return;
     let settings = capturedBattleSettings(dependencies.readSettings());
     if (capturedBattleSettingBoolean(settings, "foreignPacifist", !1) || capturedForeignPacifistGuardActive(root, settings))
       return;
@@ -53711,6 +53730,7 @@ Only continue if you trust the source. Injected code:
       controls: pageCapture2.controls,
       board: marketBoard,
       mechanics: pageCapture2.mechanics,
+      keyState: pageCapture2.keyState,
       readSettings: () => settingsStore.readRaw(),
       readDemand: () => readDemand(),
       onUnavailable: (reason) => reportOnce(`trade routes unavailable: ${reason}`)

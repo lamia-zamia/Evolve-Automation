@@ -103,6 +103,7 @@ const registry = {
 function boardSource(gameRoot, controlRegistry, mode) {
   let snapshot;
   const redraw = () => {
+    const routeMultiplier = controlRegistry.resolve("marketRouteMultiplier");
     snapshot = {
       root: gameRoot,
       mode,
@@ -115,6 +116,7 @@ function boardSource(gameRoot, controlRegistry, mode) {
             id !== "market-qty",
         )
         .map((id) => controlRegistry.resolve(id)),
+      ...(routeMultiplier === undefined ? {} : { routeMultiplier }),
     };
   };
   redraw();
@@ -127,16 +129,21 @@ function boardSource(gameRoot, controlRegistry, mode) {
       board.rows.every(
         (row) =>
           controlRegistry.resolve(row.elementId)?.generation === row.generation,
-      ),
+      ) &&
+      (board.routeMultiplier === undefined ||
+        controlRegistry.resolve("marketRouteMultiplier")?.generation ===
+          board.routeMultiplier.generation),
   };
 }
 const ordinaryBoard = boardSource(root, registry, "global");
+const neutralKeyState = { readPressed: () => false };
 
 const routes = createCapturedTradeRoutes({
   rootState: { readRoot: () => root },
   controls: registry,
   board: ordinaryBoard,
   mechanics,
+  keyState: neutralKeyState,
   readSettings: () => settings,
   readDemand: () => ({
     isDemanded: () => false,
@@ -209,6 +216,7 @@ const staleRoutes = createCapturedTradeRoutes({
   controls: registry,
   board: ordinaryBoard,
   mechanics,
+  keyState: neutralKeyState,
   readSettings: () => ({}),
 });
 staleRoutes.adjust();
@@ -274,8 +282,8 @@ const regionalRoot = {
 };
 const regionalCalls = [];
 let regionalIronVolume = 10;
-const regionalControls = new Map(
-  ["Food", "Iron"].map((id) => [
+const regionalControls = new Map([
+  ...["Food", "Iron"].map((id) => [
     `bm-${id}`,
     {
       elementId: `bm-${id}`,
@@ -283,7 +291,16 @@ const regionalControls = new Map(
       methods: ["more", "less", "none", "volume"],
     },
   ]),
-);
+  [
+    "marketRouteMultiplier",
+    {
+      elementId: "marketRouteMultiplier",
+      generation: 1,
+      methods: ["set"],
+      data: { multiplier: 1 },
+    },
+  ],
+]);
 const regionalRegistry = {
   resolve: (id) => regionalControls.get(id),
   capturedElementIds: () => [...regionalControls.keys()],
@@ -321,6 +338,7 @@ const regionalRoutes = createCapturedTradeRoutes({
   controls: regionalRegistry,
   board: regionalBoard,
   mechanics,
+  keyState: neutralKeyState,
   readSettings: () => ({}),
 });
 regionalRoutes.adjust();
@@ -566,6 +584,7 @@ const coherentRoutes = createCapturedTradeRoutes({
   controls: registry,
   board: ordinaryBoard,
   mechanics,
+  keyState: neutralKeyState,
   readSettings: () => {
     routeSettingsReads += 1;
     return settings;

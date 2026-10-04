@@ -20,6 +20,7 @@ import type {
 import type { GameRootStateSource } from "../../../ports/game-root-state.ts";
 import { rejected, stale } from "../../command-outcomes.ts";
 import { readCapturedInflationSaveMoney } from "../economy/resources/captured-inflation-assist.ts";
+import { readCapturedMultiplierKeys } from "../captured-multiplier-keys.ts";
 import { finite, isRecord, readProperty } from "../../validation.ts";
 import { CAPTURED_CITY_GARRISON_CONTROLS } from "./captured-city-garrison.ts";
 
@@ -365,17 +366,7 @@ function capturedMercenaryModifierHeld(
   root: unknown,
   keyState: CapturedMercenaryDependencies["keyState"],
 ): boolean {
-  if (keyState === undefined) return false;
-  const settings = readProperty(root, "settings");
-  if (readProperty(settings, "mKeys") !== true) return false;
-  const keyMap = readProperty(settings, "keyMap");
-  return ["x10", "x25", "x100"].some((key) => {
-    const mapped = readProperty(keyMap, key);
-    return (
-      (typeof mapped === "string" || typeof mapped === "number") &&
-      keyState.readPressed(mapped) === true
-    );
-  });
+  return readCapturedMultiplierKeys(root, keyState) === "one-held";
 }
 
 export function createCapturedMercenary(
