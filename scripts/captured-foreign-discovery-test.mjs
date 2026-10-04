@@ -28,6 +28,10 @@ import {
   planForeignPanelDraw,
 } from "../src/adapters/evolve/combat/foreign-panel-draw.ts";
 import {
+  planGovernmentPanelDraw,
+  governmentPanelControlEstablished,
+} from "../src/adapters/evolve/civic/government-panel-draw.ts";
+import {
   DISPOSABLE_APP_MARKER,
   installVueCapture,
 } from "../src/adapters/evolve/vue-capture.ts";
@@ -244,7 +248,11 @@ function installCivicsGame(page, root) {
     govern.append(gov);
     vBind({
       el: "#govType",
-      methods: { vis: () => true, govern: () => "Democracy" },
+      methods: {
+        vis: () => true,
+        govern: () => "Democracy",
+        trigModal: () => {},
+      },
     });
   }
 
@@ -258,6 +266,22 @@ function installCivicsGame(page, root) {
       el: "#tax_rates",
       methods: { display: () => true, add: () => {}, sub: () => {} },
     });
+  }
+
+  /** `governor.js:defineGovernor` binds candidate appointment in `#r_govern1`. */
+  function defineGovernor() {
+    if (!root.genes.governor || !root.tech.governor) return;
+    if (
+      Object.hasOwn(root.race, "governor") &&
+      (!Object.hasOwn(root.race.governor, "candidates") ||
+        root.race.governor.candidates.length === 0)
+    )
+      return;
+    const candidates = $(
+      '<div id="candidates" class="governor candidates"></div>',
+    );
+    $("#r_govern1").append(candidates);
+    vBind({ el: "#candidates", methods: { appoint: () => {} } });
   }
 
   /** `civics.js:defineGarrison` — the full panel, gated on the *military* sub-tab. */
@@ -310,6 +334,7 @@ function installCivicsGame(page, root) {
       '<div id="c_garrison" v-show="g.display" class="garrison tile is-child"></div>',
     );
     $("#r_govern0").append(civGarrison);
+    defineGovernor();
   }
 
   /** `civics.js:foreignGov` — the Foreign component, appended into `#r_govern0` and bound. */
@@ -476,6 +501,7 @@ function makeRoot(overrides = {}) {
   });
   return {
     tech: { govern: 1, spy: 2, unify: 0, shadow: 0, ...overrides.tech },
+    genes: { ...overrides.genes },
     race: { species: "human", truepath: false, ...overrides.race },
     stats: { attacks: 0, achieve: {} },
     city: { morale: { current: 250 } },
@@ -553,6 +579,89 @@ function makeHarness(rootOverrides = {}) {
 }
 
 // --- the plan: eligibility, and exactly what the draw asks for ------------------
+
+{
+  const { root, capture, discovery } = makeHarness({
+    race: { species: "protoplasm" },
+  });
+  assert.equal(planForeignPanelDraw(root, capture.controls), undefined);
+  const draw = planGovernmentPanelDraw(root, capture.controls, "tax");
+  assert.notEqual(draw, undefined);
+  assert.deepEqual([...draw.options.mount], ["#government"]);
+  assert.equal(
+    discovery.discover(draw.path, draw.options).outcome.status,
+    "succeeded",
+  );
+  assert.equal(
+    governmentPanelControlEstablished(capture.controls, "tax"),
+    true,
+  );
+}
+
+{
+  const { root, capture, discovery } = makeHarness({
+    garrison: { display: false },
+    tech: { governor: 1 },
+    genes: { governor: 1 },
+  });
+  assert.equal(planForeignPanelDraw(root, capture.controls), undefined);
+  const type = planGovernmentPanelDraw(root, capture.controls, "type");
+  assert.notEqual(type, undefined);
+  assert.equal(
+    discovery.discover(type.path, type.options).outcome.status,
+    "succeeded",
+  );
+  assert.equal(
+    governmentPanelControlEstablished(capture.controls, "type"),
+    true,
+  );
+  const candidates = planGovernmentPanelDraw(
+    root,
+    capture.controls,
+    "candidates",
+  );
+  assert.notEqual(candidates, undefined);
+  assert.equal(
+    discovery.discover(candidates.path, candidates.options).outcome.status,
+    "succeeded",
+  );
+  assert.equal(
+    governmentPanelControlEstablished(capture.controls, "candidates"),
+    true,
+  );
+}
+
+{
+  const { root, capture } = makeHarness({
+    tech: { govern: 0, governor: 0 },
+    settings: { showGovernor: false },
+  });
+  root.civic.taxes.display = false;
+  assert.equal(
+    planGovernmentPanelDraw(root, capture.controls, "tax"),
+    undefined,
+  );
+  assert.equal(
+    planGovernmentPanelDraw(root, capture.controls, "type"),
+    undefined,
+  );
+  assert.equal(
+    planGovernmentPanelDraw(root, capture.controls, "candidates"),
+    undefined,
+  );
+}
+
+{
+  const { root, capture } = makeHarness({
+    genes: { governor: 1 },
+    tech: { governor: 1 },
+    race: { governor: { candidates: [] } },
+  });
+  assert.equal(
+    planGovernmentPanelDraw(root, capture.controls, "candidates"),
+    undefined,
+  );
+}
 
 {
   const { root, capture } = makeHarness();

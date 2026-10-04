@@ -30,19 +30,11 @@ import type {
   TabDiscoveryOptions,
   TabDiscoveryStep,
 } from "../../../ports/game-tab-discovery.ts";
-import {
-  GOV_TABS_SETTING,
-  GOV_TAB_INDEX,
-  MAIN_TAB_CONTROL,
-  MAIN_TAB_INDEX,
-  MAIN_TAB_SETTING,
-  SUB_TAB_CONTROLS,
-} from "../captured-tab-discovery.ts";
 import { isRecord, readProperty } from "../../validation.ts";
+import { governmentPanelDraw } from "../civic/government-panel-draw.ts";
 import {
   capturedForeignEstablished,
   capturedForeignPanelAvailable,
-  CAPTURED_FOREIGN_GOVERNMENT_PANEL,
 } from "./captured-foreign-state.ts";
 
 /** The attempt record this draw retires, so a later cycle does not spend it again. */
@@ -83,25 +75,7 @@ export function planForeignPanelDraw(
 ): ForeignPanelDraw | undefined {
   if (!foreignPanelDrawnUpstream(root)) return undefined;
   if (!capturedForeignPanelAvailable(root)) return undefined;
-  if (controls.resolve(MAIN_TAB_CONTROL) === undefined) return undefined;
-  const govTabs = SUB_TAB_CONTROLS[GOV_TABS_SETTING];
-  if (govTabs === undefined) return undefined;
-  return Object.freeze({
-    path: Object.freeze([
-      Object.freeze({
-        setting: MAIN_TAB_SETTING,
-        control: MAIN_TAB_CONTROL,
-        index: MAIN_TAB_INDEX.civic,
-      }),
-      Object.freeze({
-        setting: GOV_TABS_SETTING,
-        control: govTabs,
-        index: GOV_TAB_INDEX.civic,
-      }),
-    ]),
-    options: Object.freeze({
-      mount: Object.freeze([CAPTURED_FOREIGN_GOVERNMENT_PANEL]),
-      isPanelDrawn: () => capturedForeignEstablished(controls),
-    }),
-  });
+  return governmentPanelDraw(controls, () =>
+    capturedForeignEstablished(controls),
+  );
 }

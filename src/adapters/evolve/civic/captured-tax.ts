@@ -21,7 +21,7 @@ import { rejected, stale, SUCCEEDED } from "../../command-outcomes.ts";
 import { isRecord, readProperty } from "../../validation.ts";
 import { readCapturedMorale } from "./captured-morale.ts";
 
-const TAX_CONTROL = "tax_rates";
+export const TAX_CONTROL = "tax_rates";
 
 const DEFAULT_SETTINGS: Readonly<TaxSettings> = Object.freeze({
   requestedRate: -1,

@@ -20,8 +20,8 @@ import type { GameRootStateSource } from "../../../ports/game-root-state.ts";
 import { stale, SUCCEEDED } from "../../command-outcomes.ts";
 import { finite, isRecord, readProperty } from "../../validation.ts";
 
-const CANDIDATES_CONTROL = "candidates";
-const GOVERNMENT_CONTROL = "govType";
+export const CANDIDATES_CONTROL = "candidates";
+export const GOVERNMENT_CONTROL = "govType";
 const GOVERNMENT_MODAL_CONTROL = "govModal";
 
 export interface CapturedGovernmentAutomation {

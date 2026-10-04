@@ -15,6 +15,11 @@ import {
   createCapturedGovernmentAutomation,
   runCapturedGovernmentAutomation,
 } from "../adapters/evolve/civic/captured-government.ts";
+import {
+  governmentPanelControlEstablished,
+  planGovernmentPanelDraw,
+  type GovernmentPanelPurpose,
+} from "../adapters/evolve/civic/government-panel-draw.ts";
 import { createCapturedHellAutomation } from "../adapters/evolve/combat/captured-hell.ts";
 import {
   createCapturedGenetics,
@@ -1592,6 +1597,25 @@ export function startCapturedRuntime({
     }
     refreshDiscoveredSettings();
     settingsPanel.refreshSettings();
+  };
+  const ensureGovernmentPanelControls = (purpose: GovernmentPanelPurpose) => {
+    const satisfied = () =>
+      governmentPanelControlEstablished(pageCapture.controls, purpose);
+    if (satisfied()) return;
+    const draw = planGovernmentPanelDraw(
+      pageCapture.rootState.readRoot(),
+      pageCapture.controls,
+      purpose,
+    );
+    if (draw === undefined) return;
+    finishDiscovery(
+      `government-${purpose}`,
+      `Government ${purpose}`,
+      satisfied,
+      undefined,
+      draw.path,
+      draw.options,
+    );
   };
   /**
    * Draws the Government sub-tab, which is the only path to the Foreign panel's own controls.
@@ -3259,13 +3283,14 @@ export function startCapturedRuntime({
       // autoMerc → autoSpy → autoBattle → autoTax → autoGovernment tail where those controls exist.
       if (isEnabled(settings, "autoTax")) {
         runPhase("autoTax", () => {
-          ensureCivicControls();
+          ensureGovernmentPanelControls("tax");
           tax.autoTax();
         });
       }
       if (isEnabled(settings, "autoGovernment")) {
         runPhase("autoGovernment", () => {
-          ensureCivicControls();
+          ensureGovernmentPanelControls("type");
+          ensureGovernmentPanelControls("candidates");
           runCapturedGovernmentAutomation(government);
         });
       }

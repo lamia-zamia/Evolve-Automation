@@ -23,7 +23,6 @@ export const CAPTURED_FOREIGN_MAX_INDEX = 4;
  * materialises `#r_govern0` — the container `foreignGov()` appends `#foreign` into. One owner for
  * the id, because it is both what a discovery must really mount and what a check would name.
  */
-export const CAPTURED_FOREIGN_GOVERNMENT_PANEL = "#government";
 /**
  * The Foreign component method whose closure reaches the module-private `drawEspModal(gov)`. It is
  * the only route to the game's own espionage operations, and calling it is what captures them

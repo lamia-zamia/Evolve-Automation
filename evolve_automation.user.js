@@ -13186,6 +13186,68 @@
     return automation.executor.execute(planGovernment(automation.reader.read()));
   }
 
+  // src/adapters/evolve/civic/government-panel-draw.ts
+  var GOVERNMENT_PANEL_CONTAINER = "#government";
+  function governmentPanelControlEstablished(controls2, purpose) {
+    switch (purpose) {
+      case "tax": {
+        let methods = controls2.resolve(TAX_CONTROL)?.methods;
+        return methods?.includes("add") === !0 && methods.includes("sub");
+      }
+      case "type":
+        return controls2.resolve(GOVERNMENT_CONTROL)?.methods.includes("trigModal") === !0;
+      case "candidates":
+        return controls2.resolve(CANDIDATES_CONTROL)?.methods.includes("appoint") === !0;
+    }
+  }
+  function governmentPanelDraw(controls2, isPanelDrawn) {
+    if (controls2.resolve(MAIN_TAB_CONTROL) === void 0) return;
+    let govTabs = SUB_TAB_CONTROLS[GOV_TABS_SETTING];
+    if (govTabs !== void 0)
+      return Object.freeze({
+        path: Object.freeze([
+          Object.freeze({
+            setting: MAIN_TAB_SETTING,
+            control: MAIN_TAB_CONTROL,
+            index: MAIN_TAB_INDEX.civic
+          }),
+          Object.freeze({
+            setting: GOV_TABS_SETTING,
+            control: govTabs,
+            index: GOV_TAB_INDEX.civic
+          })
+        ]),
+        options: Object.freeze({
+          mount: Object.freeze([GOVERNMENT_PANEL_CONTAINER]),
+          isPanelDrawn
+        })
+      });
+  }
+  function planGovernmentPanelDraw(root, controls2, purpose) {
+    let tech = readProperty(root, "tech");
+    if (purpose === "tax") {
+      if (readProperty(
+        readProperty(readProperty(root, "civic"), "taxes"),
+        "display"
+      ) !== !0)
+        return;
+    } else if (purpose === "type") {
+      if (!readProperty(tech, "govern")) return;
+    } else {
+      if (!readProperty(readProperty(root, "genes"), "governor") || !readProperty(tech, "governor")) return;
+      let governor = readProperty(readProperty(root, "race"), "governor");
+      if (isRecord(governor)) {
+        let candidates = readProperty(governor, "candidates");
+        if (!Array.isArray(candidates) || candidates.length === 0)
+          return;
+      }
+    }
+    return governmentPanelDraw(
+      controls2,
+      () => governmentPanelControlEstablished(controls2, purpose)
+    );
+  }
+
   // src/domain/combat/hell.ts
   function freezeCommands(commands) {
     return Object.freeze(commands.map((command) => Object.freeze(command)));
@@ -19048,7 +19110,7 @@
   }
 
   // src/adapters/evolve/combat/captured-foreign-state.ts
-  var CAPTURED_FOREIGN_CONTROL = "foreign", CAPTURED_FOREIGN_MAX_INDEX = 4, CAPTURED_FOREIGN_GOVERNMENT_PANEL = "#government", CAPTURED_FOREIGN_ESPIONAGE_TRIGGER_METHOD = "trigModal", CAPTURED_FOREIGN_GARRISON_CONTROLS = [
+  var CAPTURED_FOREIGN_CONTROL = "foreign", CAPTURED_FOREIGN_MAX_INDEX = 4, CAPTURED_FOREIGN_ESPIONAGE_TRIGGER_METHOD = "trigModal", CAPTURED_FOREIGN_GARRISON_CONTROLS = [
     "garrison",
     "c_garrison"
   ], CAPTURED_FOREIGN_REQUIRED_METHODS = [
@@ -51355,27 +51417,11 @@ Only continue if you trust the source. Injected code:
     return isRecord(race) && readProperty(race, "species") !== "protoplasm" && readProperty(race, "start_cataclysm") !== !0;
   }
   function planForeignPanelDraw(root, controls2) {
-    if (!foreignPanelDrawnUpstream(root) || !capturedForeignPanelAvailable(root) || controls2.resolve(MAIN_TAB_CONTROL) === void 0) return;
-    let govTabs = SUB_TAB_CONTROLS[GOV_TABS_SETTING];
-    if (govTabs !== void 0)
-      return Object.freeze({
-        path: Object.freeze([
-          Object.freeze({
-            setting: MAIN_TAB_SETTING,
-            control: MAIN_TAB_CONTROL,
-            index: MAIN_TAB_INDEX.civic
-          }),
-          Object.freeze({
-            setting: GOV_TABS_SETTING,
-            control: govTabs,
-            index: GOV_TAB_INDEX.civic
-          })
-        ]),
-        options: Object.freeze({
-          mount: Object.freeze([CAPTURED_FOREIGN_GOVERNMENT_PANEL]),
-          isPanelDrawn: () => capturedForeignEstablished(controls2)
-        })
-      });
+    if (foreignPanelDrawnUpstream(root) && capturedForeignPanelAvailable(root))
+      return governmentPanelDraw(
+        controls2,
+        () => capturedForeignEstablished(controls2)
+      );
   }
 
   // src/adapters/browser/game-keyboard-handlers.ts
@@ -53602,6 +53648,22 @@ Only continue if you trust the source. Injected code:
           index: MAIN_TAB_INDEX.civic
         })
       ]) && (refreshDiscoveredSettings(), settingsPanel.refreshSettings());
+    }, ensureGovernmentPanelControls = (purpose) => {
+      let satisfied = () => governmentPanelControlEstablished(pageCapture2.controls, purpose);
+      if (satisfied()) return;
+      let draw = planGovernmentPanelDraw(
+        pageCapture2.rootState.readRoot(),
+        pageCapture2.controls,
+        purpose
+      );
+      draw !== void 0 && finishDiscovery(
+        `government-${purpose}`,
+        `Government ${purpose}`,
+        satisfied,
+        void 0,
+        draw.path,
+        draw.options
+      );
     }, reportCapturedGarrisonGap = () => {
       capturedForeignGarrisonEstablished(pageCapture2.controls) || reportOnce(
         "Foreign authority established without a Garrison campaign control; Battle stays dark until the civic military tab has been drawn"
@@ -54432,9 +54494,9 @@ Only continue if you trust the source. Injected code:
           }
         }
         isEnabled(settings, "autoTax") && runPhase("autoTax", () => {
-          ensureCivicControls(), tax.autoTax();
+          ensureGovernmentPanelControls("tax"), tax.autoTax();
         }), isEnabled(settings, "autoGovernment") && runPhase("autoGovernment", () => {
-          ensureCivicControls(), runCapturedGovernmentAutomation(government);
+          ensureGovernmentPanelControls("type"), ensureGovernmentPanelControls("candidates"), runCapturedGovernmentAutomation(government);
         }), isEnabled(settings, "autoNanite") && runPhase("autoNanite", () => {
           ensureNaniteControls(), refreshDiscoveredSettings(), nanite.run();
         }), isEnabled(settings, "autoSupply") && runPhase("autoSupply", () => {
