@@ -816,8 +816,8 @@ withScenario(
   },
 );
 
-// The shared ARPA scope reuses a same-rank price, then the rank tally forces a fresh draw. Market
-// and Storage consume the completed construction order before the next construction pass.
+// An enabled Construction phase invalidates its pre-Build ARPA offer even if rank stays fixed:
+// structure-state offer conditions can change without advancing the progression epoch.
 withScenario(
   {
     progress: 95,
@@ -835,7 +835,7 @@ withScenario(
     const drawsAtRankOne = scenario.draws.length;
     scenario.gameRoot.arpa.lhc.complete = 98;
     scenario.tick();
-    assert.equal(scenario.draws.length, drawsAtRankOne);
+    assert.equal(scenario.draws.length, drawsAtRankOne + 1);
     assert.deepEqual(scenario.calls, []);
   },
 );

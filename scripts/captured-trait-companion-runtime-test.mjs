@@ -1102,6 +1102,7 @@ for (const [slot, capacity, expected] of [
       geneSlots: {
         isGene: () => true,
         canRank: () => true,
+        atCap: () => false,
         rankUp: () => {},
       },
     },

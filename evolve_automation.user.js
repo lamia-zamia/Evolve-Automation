@@ -10675,6 +10675,10 @@
       diagnostics
     }), sampledBuildingUnlockScopes = /* @__PURE__ */ new Map(), resetBuildingUnlockSample = () => {
       sampledBuildingUnlockScopes.clear();
+    }, invalidateConstructionOffers = () => {
+      for (let scope of sampledBuildingUnlockScopes.keys())
+        scopes.invalidate(scope);
+      resetBuildingUnlockSample(), scopes.invalidate(ARPA_SCOPE), resetProjectSample();
     };
     rootState.subscribeRootReplaced(() => {
       scopes.invalidateAll(), clearResearchSample(), resetProjectSample(), resetBuildingUnlockSample();
@@ -10898,6 +10902,7 @@
       readCapturedBuildingUnlocked,
       readBuildingCapacity,
       resetBuildingUnlockSample,
+      invalidateConstructionOffers,
       observations: construction.observations,
       readManagedBuildTargets,
       readUnlockedStorageBuildTargets,
@@ -14555,6 +14560,17 @@
             "minor-trait-click-multiplier-held",
             "click multiplier is held or unavailable"
           );
+        let atCap = nativeBoolean(
+          dependencies.controls,
+          session.handle,
+          "atCap",
+          decision.slotIndex
+        );
+        if (atCap === void 0)
+          return stale(
+            "minor-trait-cap-unavailable",
+            "native slot cap unavailable"
+          );
         let bankId = readProperty(readProperty(session.root, "race"), "universe") === "antimatter" ? "AntiPlasmid" : "Plasmid", beforeBank = finite(
           readProperty(
             readProperty(readProperty(session.root, "prestige"), bankId),
@@ -14578,8 +14594,8 @@
             genes: decision.expectedGenes,
             bank: beforeBank
           }, SUCCEEDED;
-        if (result?.ok !== !0 || !coherentAfterAction(dependencies, session) || after === void 0 || after.gene !== decision.traitId || after.rank === null || after.rank <= decision.expectedRank || afterGenes === void 0 || afterGenes > decision.expectedGenes || beforeBank !== void 0 && (afterBank === void 0 || afterBank > beforeBank)) {
-          let reason = result?.ok !== !0 ? "native rankUp invocation failed" : coherentAfterAction(dependencies, session) ? after === void 0 || after.gene !== decision.traitId || after.rank === null || after.rank <= decision.expectedRank ? "native rankUp did not increase the expected slot" : "native rankUp left an invalid currency balance" : "native rankUp rebound without a coherent slot control";
+        if (result?.ok !== !0 || !coherentAfterAction(dependencies, session) || after === void 0 || after.gene !== decision.traitId || after.rank === null || after.rank !== decision.expectedRank + 1 || afterGenes === void 0 || afterGenes >= decision.expectedGenes || (atCap ? beforeBank === void 0 || afterBank === void 0 || afterBank >= beforeBank : beforeBank === void 0 || afterBank !== beforeBank)) {
+          let reason = result?.ok !== !0 ? "native rankUp invocation failed" : coherentAfterAction(dependencies, session) ? after === void 0 || after.gene !== decision.traitId || after.rank === null || after.rank !== decision.expectedRank + 1 ? "native rankUp did not buy exactly one rank" : "native rankUp left an invalid currency balance" : "native rankUp rebound without a coherent slot control";
           return blockedMinor = {
             root: session.root,
             generation: session.handle.generation,
@@ -54879,7 +54895,7 @@ Only continue if you trust the source. Injected code:
               constructionRunning = !1;
             }
           });
-          if (outcome !== void 0 && outcome.status !== "succeeded" && reportOnce(
+          if (progression.invalidateConstructionOffers(), outcome !== void 0 && outcome.status !== "succeeded" && reportOnce(
             `autoBuild: ${outcome.failure.code}: ${outcome.failure.message}`
           ), outcome?.status === "succeeded")
             try {

@@ -183,6 +183,8 @@ export interface CapturedProgressionControl {
   ) => boolean | undefined;
   /** Drops the shared building-unlock sample, for the same reason as the A.R.P.A. one. */
   readonly resetBuildingUnlockSample: () => void;
+  /** Construction changed offers without necessarily changing the progression epoch. */
+  readonly invalidateConstructionOffers: () => void;
   /** What the last construction cycle was saving for, for the features that read demand. */
   readonly observations: ConstructionObservations;
   /** Managed captured construction targets, used by production modes that weight against builds. */
@@ -581,6 +583,13 @@ export function createCapturedProgressionControl(
   const resetBuildingUnlockSample = () => {
     sampledBuildingUnlockScopes.clear();
   };
+  const invalidateConstructionOffers = () => {
+    for (const scope of sampledBuildingUnlockScopes.keys())
+      scopes.invalidate(scope);
+    resetBuildingUnlockSample();
+    scopes.invalidate(ARPA_SCOPE);
+    resetProjectSample();
+  };
   rootState.subscribeRootReplaced(() => {
     scopes.invalidateAll();
     clearResearchSample();
@@ -941,6 +950,7 @@ export function createCapturedProgressionControl(
     readCapturedBuildingUnlocked,
     readBuildingCapacity,
     resetBuildingUnlockSample,
+    invalidateConstructionOffers,
     observations: construction.observations,
     readManagedBuildTargets,
     readUnlockedStorageBuildTargets,

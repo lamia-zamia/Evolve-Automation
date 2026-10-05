@@ -159,6 +159,15 @@ assert.equal(control.readEstablishedProjects(), undefined);
     [],
     "an authoritative empty catalog is distinct from unknown",
   );
+  projectRowsEmpty = false;
+  projectControl.invalidateConstructionOffers();
+  assert.equal(projectControl.readEstablishedProjects(), undefined);
+  assert.equal(projectControl.readProjects()[0].projectId, "lhc");
+  assert.equal(
+    projectReads,
+    5,
+    "Construction invalidates the cached A.R.P.A. offer draw",
+  );
 }
 
 let root = {
@@ -545,6 +554,125 @@ assert.equal(researchControl.readGrantedTechs(), undefined);
       .readUnlockedStorageBuildTargets()
       .map(({ elementId }) => elementId),
     ["city-refinery"],
+  );
+}
+
+// Pinned truepath.js: the first space-titan_quarters increments only structure count; that
+// condition makes space-titan_mine appear without a tech change or progression epoch change.
+{
+  const titanRoot = {
+    settings: { civTabs: 3, spaceTabs: 2, animated: true, showSpace: true },
+    race: {},
+    tech: {},
+    space: { titan_quarters: { count: 0 }, titan_mine: { count: 0 } },
+    resource: {
+      Alloy: { amount: 0, max: 100, display: true, stackable: true },
+    },
+  };
+  const techBeforeBuild = JSON.stringify(titanRoot.tech);
+  let titanDraws = 0;
+  let researchDraws = 0;
+  const titanControl = createCapturedProgressionControl({
+    rootState: {
+      readRoot: () => titanRoot,
+      subscribeRootReplaced: () => () => {},
+    },
+    controls: withControlCaptureAuthority({
+      resolve: (elementId) => ({
+        elementId,
+        generation: 1,
+        data: {
+          act:
+            elementId === "space-titan_quarters"
+              ? titanRoot.space.titan_quarters
+              : titanRoot.space.titan_mine,
+        },
+      }),
+      invoke: () => ({ ok: true, value: undefined }),
+      capturedElementIds: () => ["space-titan_quarters", "space-titan_mine"],
+    }),
+    mountSuppression: { available: true, withoutMounting: (draw) => draw() },
+    panels: { open: () => ({ release: () => {}, isIntact: () => true }) },
+    drawnActions: {
+      exists: () => true,
+      read: (selector) => {
+        if (selector === "#tech .action") researchDraws++;
+        if (selector !== "#space .action") return [];
+        titanDraws++;
+        return [
+          { id: "space-titan_quarters" },
+          ...(titanRoot.space.titan_quarters.count > 0
+            ? [{ id: "space-titan_mine" }]
+            : []),
+        ];
+      },
+    },
+    drawnProjects: { read: () => [], exists: () => true },
+    readSettings: () => ({
+      autoBuild: true,
+      "batspace-titan_quarters": true,
+      "batspace-titan_mine": true,
+    }),
+    nowMs: () => 0,
+  });
+  const regions = new Set(["space"]);
+  assert.deepEqual(titanControl.sampleOfferedTechs(), []);
+  assert.deepEqual(
+    titanControl
+      .readUnlockedStorageBuildTargets()
+      .map(({ elementId }) => elementId),
+    ["space-titan_quarters"],
+  );
+  assert.deepEqual(
+    [...titanControl.readBuildingUnlocks(regions).unlocked],
+    ["space-titan_quarters"],
+  );
+  assert.equal(titanDraws, 1);
+  titanRoot.space.titan_quarters.count++;
+  assert.equal(JSON.stringify(titanRoot.tech), techBeforeBuild);
+  titanControl.invalidateConstructionOffers();
+  assert.deepEqual(titanControl.sampleOfferedTechs(), []);
+  assert.equal(
+    researchDraws,
+    1,
+    "Construction keeps unrelated Research discovery cached",
+  );
+  assert.equal(titanControl.readEstablishedBuildingUnlocks(regions), undefined);
+  const postBuild = titanControl.readBuildingUnlocks(regions);
+  assert.equal(
+    titanDraws,
+    2,
+    "post-Build discovery redraws the authoritative Building panel",
+  );
+  assert.equal(postBuild.unlocked.has("space-titan_mine"), true);
+  assert.deepEqual(
+    titanControl
+      .readUnlockedStorageBuildTargets()
+      .map(({ elementId }) => elementId),
+    ["space-titan_quarters", "space-titan_mine"],
+  );
+  const exactDemand = createCapturedResourceDemand({
+    rootState: { readRoot: () => titanRoot },
+    reservations: {
+      readReservations: () => ({ targets: [], unavailable: false }),
+    },
+    readBuildTargets: titanControl.readUnlockedStorageBuildTargets,
+    costs: {
+      readCost: (elementId) => ({
+        cost: { Alloy: elementId === "space-titan_mine" ? 500 : 100 },
+        pool: undefined,
+      }),
+    },
+    readSettings: () => ({}),
+  }).sample();
+  assert.ok(
+    exactDemand.storageRequired("Alloy") > 500,
+    "exact demand consumes Titan Mine's post-Build offer",
+  );
+  assert.equal(
+    titanDraws,
+    2,
+    "Power's demand reads the established catalog without discovery",
   );
 }
 

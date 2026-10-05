@@ -2699,6 +2699,13 @@ export function startCapturedRuntime({
     const hooks = readProperty(settingsHostWindow, "__EA_TEST_HOOKS__");
     if (isRecord(hooks)) {
       Reflect.set(hooks, "runPowerAutomation", () => powerAutomation.run());
+      Reflect.set(hooks, "readSpaceMinerHandoff", () => {
+        const plan = prospectiveSpaceMinerPlan;
+        return plan !== undefined &&
+          plan.root === pageCapture.rootState.readRoot()
+          ? plan.maximum
+          : undefined;
+      });
       Reflect.set(hooks, "readPowerAutomationState", () =>
         powerAutomation.readState(),
       );
@@ -3071,6 +3078,9 @@ export function startCapturedRuntime({
             constructionRunning = false;
           }
         });
+        // Structure state can change Building and A.R.P.A. offers without changing tech or the
+        // shared progression epoch (Titan Quarters unlocking Titan Mine is one such case).
+        progression.invalidateConstructionOffers();
         if (outcome !== undefined && outcome.status !== "succeeded") {
           reportOnce(
             `autoBuild: ${outcome.failure.code}: ${outcome.failure.message}`,

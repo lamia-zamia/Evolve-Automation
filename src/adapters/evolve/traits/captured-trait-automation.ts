@@ -444,6 +444,17 @@ export function createCapturedTraitAutomation(
             "minor-trait-click-multiplier-held",
             "click multiplier is held or unavailable",
           );
+        const atCap = nativeBoolean(
+          dependencies.controls,
+          session.handle,
+          "atCap",
+          decision.slotIndex,
+        );
+        if (atCap === undefined)
+          return stale(
+            "minor-trait-cap-unavailable",
+            "native slot cap unavailable",
+          );
         const bankId =
           readProperty(readProperty(session.root, "race"), "universe") ===
           "antimatter"
@@ -491,11 +502,14 @@ export function createCapturedTraitAutomation(
           after === undefined ||
           after.gene !== decision.traitId ||
           after.rank === null ||
-          after.rank <= decision.expectedRank ||
+          after.rank !== decision.expectedRank + 1 ||
           afterGenes === undefined ||
-          afterGenes > decision.expectedGenes ||
-          (beforeBank !== undefined &&
-            (afterBank === undefined || afterBank > beforeBank))
+          afterGenes >= decision.expectedGenes ||
+          (atCap
+            ? beforeBank === undefined ||
+              afterBank === undefined ||
+              afterBank >= beforeBank
+            : beforeBank === undefined || afterBank !== beforeBank)
         ) {
           const reason =
             result?.ok !== true
@@ -505,8 +519,8 @@ export function createCapturedTraitAutomation(
                 : after === undefined ||
                     after.gene !== decision.traitId ||
                     after.rank === null ||
-                    after.rank <= decision.expectedRank
-                  ? "native rankUp did not increase the expected slot"
+                    after.rank !== decision.expectedRank + 1
+                  ? "native rankUp did not buy exactly one rank"
                   : "native rankUp left an invalid currency balance";
           blockedMinor = {
             root: session.root,

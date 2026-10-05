@@ -58,6 +58,7 @@ export function runCapturedPhaseOrderCycle({
   logEvents = [],
   cycles = 1,
   settingsHostWindow = {},
+  afterCycle = () => {},
 }) {
   const trace = [];
   const errors = [];
@@ -67,6 +68,12 @@ export function runCapturedPhaseOrderCycle({
   const cycleErrors = [];
   const cycleInvocations = [];
   const handles = new Map();
+  let currentRoot = root;
+  const rootListeners = [];
+  const replaceRoot = (nextRoot) => {
+    currentRoot = nextRoot;
+    for (const listener of rootListeners) listener();
+  };
   for (const [elementId, spec] of Object.entries(controls)) {
     const methods = spec.methods ?? {};
     handles.set(elementId, {
@@ -82,6 +89,7 @@ export function runCapturedPhaseOrderCycle({
     });
   }
   controlSetup({
+    replaceRoot,
     rebind(elementId) {
       const handle = handles.get(elementId);
       if (handle !== undefined)
@@ -150,9 +158,12 @@ export function runCapturedPhaseOrderCycle({
   const pageCapture = {
     isComplete: () => true,
     rootState: {
-      readRoot: () => root,
+      readRoot: () => currentRoot,
       isReactivitySuppressed: () => false,
-      subscribeRootReplaced: () => () => {},
+      subscribeRootReplaced: (listener) => {
+        rootListeners.push(listener);
+        return () => {};
+      },
     },
     controls: registry,
     ...(mechanics === undefined ? {} : { mechanics }),
@@ -215,6 +226,7 @@ export function runCapturedPhaseOrderCycle({
       errors: cycleErrors.slice(errorBefore),
       invocations: cycleInvocations.slice(invocationBefore),
     });
+    afterCycle(cycle, { root: currentRoot, replaceRoot });
   }
   stop();
   return {
@@ -224,7 +236,7 @@ export function runCapturedPhaseOrderCycle({
     // Per-cycle slices of the same accumulated log, for a relation whose phases run in the cycle a
     // cross-cycle state change actually lands in rather than in the first one.
     cycleTrace,
-    root,
+    root: currentRoot,
     effectiveSettings:
       persisted.length === 0 ? {} : JSON.parse(persisted[persisted.length - 1]),
   };

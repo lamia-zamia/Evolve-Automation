@@ -1812,6 +1812,9 @@ function runTailChain() {
           canRank() {
             return true;
           },
+          atCap() {
+            return false;
+          },
           rankUp(slotIndex) {
             root.resource.Genes.amount -= 5;
             root.race.geneSlots[slotIndex].r += 1;

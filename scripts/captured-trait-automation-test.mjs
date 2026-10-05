@@ -21,6 +21,7 @@ function fixture({
   rebindOnAction = false,
   limitBreak = false,
   partialRank = false,
+  rankMutation,
   universe = "standard",
 } = {}) {
   const root = {
@@ -44,6 +45,7 @@ function fixture({
   const methods = [
     "isGene",
     "canRank",
+    "atCap",
     "rankUp",
     "pickable",
     "canCull",
@@ -65,9 +67,11 @@ function fixture({
           ok: true,
           value: root.race.geneSlots[first]?.g === "smart",
         };
+      if (method === "atCap") return { ok: true, value: limitBreak };
       if (method === "rankUp") {
         const bank = universe === "antimatter" ? "AntiPlasmid" : "Plasmid";
-        if (partialRank) root.resource.Genes.amount -= 1;
+        if (rankMutation) rankMutation(root, bank, first);
+        else if (partialRank) root.resource.Genes.amount -= 1;
         else if (
           !noop &&
           root.resource.Genes.amount >= 10 &&
@@ -140,9 +144,58 @@ function fixture({
   );
   assert.equal(f.root.race.geneSlots[0].r, 2);
   assert.equal(f.root.resource.Genes.amount, 90);
+  assert.equal(f.root.prestige.Plasmid.count, 100);
   assert.deepEqual(
     f.calls.filter((call) => call.method === "rankUp").map((call) => call.args),
     [[0]],
+  );
+}
+for (const [label, rankMutation] of [
+  ["unchanged Genes", (root, _bank, slot) => root.race.geneSlots[slot].r++],
+  [
+    "unexpected bank spend",
+    (root, bank, slot) => {
+      root.race.geneSlots[slot].r++;
+      root.resource.Genes.amount--;
+      root.prestige[bank].count--;
+    },
+  ],
+  [
+    "multiple ranks",
+    (root, _bank, slot) => {
+      root.race.geneSlots[slot].r += 2;
+      root.resource.Genes.amount -= 2;
+    },
+  ],
+]) {
+  const f = fixture({ rankMutation });
+  assert.equal(
+    runGeneticsMinorTraitAutomation(f.captured.minor).status,
+    "stale",
+    label,
+  );
+}
+{
+  const f = fixture({ limitBreak: true });
+  assert.equal(
+    runGeneticsMinorTraitAutomation(f.captured.minor).status,
+    "succeeded",
+  );
+  assert.equal(f.root.race.geneSlots[0].r, 2);
+  assert.equal(f.root.resource.Genes.amount, 90);
+  assert.equal(f.root.prestige.Plasmid.count, 90);
+}
+{
+  const f = fixture({
+    limitBreak: true,
+    rankMutation: (root, _bank, slot) => {
+      root.race.geneSlots[slot].r++;
+      root.resource.Genes.amount--;
+    },
+  });
+  assert.equal(
+    runGeneticsMinorTraitAutomation(f.captured.minor).status,
+    "stale",
   );
 }
 {
