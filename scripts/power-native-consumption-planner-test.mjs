@@ -67,19 +67,39 @@ const cycle = {
   supports: [],
   buildings: [
     building("galaxy-vitreloy_plant", 5, 6, [
-      { resourceId: "Money", currentTotal: 100000, enableRate: null },
-      { resourceId: "Bolognium", currentTotal: 5, enableRate: null },
-      { resourceId: "Stanene", currentTotal: 200, enableRate: null },
+      {
+        resourceId: "Money",
+        currentTotal: 100000,
+        unwindCredit: 100000,
+        enableRate: null,
+      },
+      {
+        resourceId: "Bolognium",
+        currentTotal: 5,
+        unwindCredit: 5,
+        enableRate: null,
+      },
+      {
+        resourceId: "Stanene",
+        currentTotal: 200,
+        unwindCredit: 200,
+        enableRate: null,
+      },
     ]),
     {
       ...building("galaxy-embassy", 4, 5, [
-        { resourceId: "Food", currentTotal: 0, enableRate: null },
+        {
+          resourceId: "Food",
+          currentTotal: 0,
+          unwindCredit: 0,
+          enableRate: null,
+        },
       ]),
       index: 1,
     },
     {
       ...building("galaxy-unrelated", 0, 1, [
-        { resourceId: "Food", currentTotal: 0, enableRate: 2 },
+        { resourceId: "Food", currentTotal: 0, unwindCredit: 0, enableRate: 2 },
       ]),
       index: 2,
     },
@@ -120,6 +140,91 @@ assert.equal(
   )?.amount,
   1,
   "one unavailable requirement does not freeze unrelated buildings",
+);
+const starvedOil = {
+  ...cycle,
+  resources: [resource("Power", 100), resource("Oil", -3)],
+  buildings: [
+    building("space-oil_consumer", 0, 1, [
+      { resourceId: "Oil", currentTotal: 0, unwindCredit: 0, enableRate: 1 },
+    ]),
+    building("city-oil_power", 10, 10, [
+      { resourceId: "Oil", currentTotal: 10, unwindCredit: 0, enableRate: 1 },
+    ]),
+  ],
+};
+const oilOperations = planPowerCycle(starvedOil, EMPTY_POWER_AUTOMATION_STATE)
+  .decision?.operations;
+assert.ok(oilOperations);
+assert.equal(
+  oilOperations.find(
+    (op) =>
+      op.kind === "adjust-building" && op.binding === "space-oil_consumer",
+  )?.amount,
+  0,
+  "the generator's pre-clamp observation cannot fund an earlier consumer",
+);
+assert.ok(
+  oilOperations
+    .filter((op) => op.kind === "set-resource-rate" && op.resourceId === "Oil")
+    .every((op) => op.value <= -3),
+  "Oil bookkeeping never creates the phantom positive budget",
+);
+const supportOil = {
+  ...starvedOil,
+  buildings: [
+    starvedOil.buildings[0],
+    building("space-support", 10, 10, [
+      { resourceId: "Oil", currentTotal: 10, unwindCredit: 0, enableRate: 1 },
+    ]),
+  ],
+};
+const supportOperations = planPowerCycle(
+  supportOil,
+  EMPTY_POWER_AUTOMATION_STATE,
+).decision?.operations;
+assert.ok(supportOperations);
+assert.equal(
+  supportOperations.find(
+    (op) =>
+      op.kind === "adjust-building" && op.binding === "space-oil_consumer",
+  )?.amount,
+  0,
+  "pre-clamp support fuel cannot finance another consumer",
+);
+assert.ok(
+  supportOperations
+    .filter((op) => op.kind === "set-resource-rate" && op.resourceId === "Oil")
+    .every((op) => op.value <= -3),
+);
+const unchanged = {
+  ...starvedOil,
+  resources: [resource("Power", 100), resource("Oil", 5)],
+  buildings: [
+    building("space-safe", 1, 1, [
+      { resourceId: "Oil", currentTotal: 2, unwindCredit: 2, enableRate: 2 },
+    ]),
+    building("space-observed", 1, 1, [
+      { resourceId: "Oil", currentTotal: 10, unwindCredit: 0, enableRate: 1 },
+    ]),
+  ],
+};
+const unchangedOperations = planPowerCycle(
+  unchanged,
+  EMPTY_POWER_AUTOMATION_STATE,
+).decision?.operations;
+assert.ok(unchangedOperations);
+assert.ok(
+  unchangedOperations
+    .filter((op) => op.kind === "adjust-building")
+    .every((op) => op.amount === 0),
+);
+assert.equal(
+  unchangedOperations
+    .filter((op) => op.kind === "set-resource-rate" && op.resourceId === "Oil")
+    .at(-1)?.value,
+  5,
+  "a no-change plan reconstructs the native rate across safe and observation-only rows",
 );
 console.log(
   "Power planner unwinds native totals and isolates unavailable marginal requirements",

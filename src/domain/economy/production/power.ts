@@ -34,6 +34,8 @@ export interface PowerConsumptionInput {
   readonly resourceId: string;
   /** Exact observed current total from the game's source-specific consumption ledger. */
   readonly currentTotal: number;
+  /** Proven part of the native rate that may be removed before replanning. */
+  readonly unwindCredit: number;
   /** Validated requirement for one more copy, or null when increase must fail closed. */
   readonly enableRate: number | null;
 }
@@ -1023,7 +1025,7 @@ export function planPowerCycle(
       appendRateOperation(
         operations,
         resource,
-        resource.rate + consumption.currentTotal,
+        resource.rate + consumption.unwindCredit,
       );
     }
     for (const change of building.supportChanges) {
@@ -1213,7 +1215,7 @@ export function planPowerCycle(
         }
         maximum = Math.min(
           maximum,
-          current + (resource.rate - consumption.currentTotal) / requirement,
+          current + (resource.rate - consumption.unwindCredit) / requirement,
         );
       }
     }
@@ -1311,7 +1313,7 @@ export function planPowerCycle(
         operations,
         resource,
         resource.rate -
-          consumption.currentTotal -
+          consumption.unwindCredit -
           Math.max(0, maximum - current) * (consumption.enableRate ?? 0),
       );
     }

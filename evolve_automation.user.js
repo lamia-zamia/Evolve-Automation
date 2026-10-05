@@ -24342,7 +24342,7 @@
         appendRateOperation(
           operations,
           resource,
-          resource.rate + consumption.currentTotal
+          resource.rate + consumption.unwindCredit
         );
       }
       for (let change of building.supportChanges) {
@@ -24448,7 +24448,7 @@
             continue;
           maximum = Math.min(
             maximum,
-            current + (resource.rate - consumption.currentTotal) / requirement
+            current + (resource.rate - consumption.unwindCredit) / requirement
           );
         }
       }
@@ -24513,7 +24513,7 @@
         appendRateOperation(
           operations,
           resource,
-          resource.rate - consumption.currentTotal - Math.max(0, maximum - current) * (consumption.enableRate ?? 0)
+          resource.rate - consumption.unwindCredit - Math.max(0, maximum - current) * (consumption.enableRate ?? 0)
         );
       }
       for (let change of building.supportChanges) {
@@ -25450,7 +25450,15 @@
   }
 
   // src/adapters/evolve/economy/production/captured-power-consumption.ts
-  var idle = (resourceId, base, sourceKey, fuel = null, huge = !1, linear = !0) => Object.freeze({ resourceId, base, sourceKey, fuel, huge, linear }), POWER_IDLE_CONSUMPTION_FALLBACK = Object.freeze({
+  var idle = (resourceId, base, sourceKey, fuel = null, huge = !1, linear = !0, ledgerCredit = "safe") => Object.freeze({
+    resourceId,
+    base,
+    sourceKey,
+    fuel,
+    huge,
+    linear,
+    ledgerCredit
+  }), POWER_IDLE_CONSUMPTION_FALLBACK = Object.freeze({
     "city-tourist_center": [idle("Food", 50, "tech_tourism", null, !0)],
     "interstellar-zoo": [idle("Food", 12e3, "tech_zoo", null, !0)],
     "space-spaceport": [
@@ -25458,10 +25466,28 @@
     ],
     "space-red_factory": [idle("Helium_3", 1, null, "space", !0)],
     "space-space_barracks": [
-      idle("Oil", 2, "tech_space_marines_bd", "space", !0),
+      idle(
+        "Oil",
+        2,
+        "tech_space_marines_bd",
+        "space",
+        !0,
+        !0,
+        "observation-only"
+      ),
       idle("Food", 10, "tech_space_marines_bd", null, !0)
     ],
-    "space-outpost": [idle("Oil", 2, "space_gas_moon_outpost_bd", "space", !0)],
+    "space-outpost": [
+      idle(
+        "Oil",
+        2,
+        "space_gas_moon_outpost_bd",
+        "space",
+        !0,
+        !0,
+        "observation-only"
+      )
+    ],
     "space-space_station": [
       idle("Food", 10, "space_belt_station_title", null, !0)
     ],
@@ -25478,7 +25504,15 @@
       )
     ],
     "interstellar-cruiser": [
-      idle("Helium_3", 6, "interstellar_cruiser_title", "interstellar", !0)
+      idle(
+        "Helium_3",
+        6,
+        "interstellar_cruiser_title",
+        "interstellar",
+        !0,
+        !0,
+        "observation-only"
+      )
     ],
     "interstellar-neutron_miner": [
       idle(
@@ -25486,7 +25520,9 @@
         3,
         "interstellar_neutron_miner_title",
         "interstellar",
-        !0
+        !0,
+        !0,
+        "observation-only"
       )
     ],
     "galaxy-starbase": [idle("Food", 250, "galaxy_starbase", null, !0)],
@@ -25499,8 +25535,20 @@
     "galaxy-foothold": [
       idle("Elerium", 2.5, "galaxy_foothold", null, !0, !1)
     ],
-    "space-fob": [idle("Helium_3", 125, "tech_fob", "space")],
-    "space-lander": [idle("Oil", 50, "space_lander_title", "space", !0)],
+    "space-fob": [
+      idle("Helium_3", 125, "tech_fob", "space", !1, !0, "observation-only")
+    ],
+    "space-lander": [
+      idle(
+        "Oil",
+        50,
+        "space_lander_title",
+        "space",
+        !0,
+        !0,
+        "observation-only"
+      )
+    ],
     // Ship fuel is reported only as one shared galaxy_fuel_consume row. It cannot be attributed
     // to an individual ship. Retain resource identity but never guess a per-ship marginal rate.
     "galaxy-bolognium_ship": [idle("Helium_3", null, null)],
@@ -25674,13 +25722,14 @@
     if (supportFuel.kind === "invalid") return;
     let supportAdjustmentDisabled = structure.readSupportFuelAdjustmentDisabled();
     if (supportAdjustmentDisabled.kind === "invalid") return;
-    let title = structure.readTitle(), result = /* @__PURE__ */ new Map(), observed2 = (resourceId, source) => readPowerNativeConsumption(production, resourceId, source), append = (resourceId, rate, source, adjustmentDisabled = !1, adjustmentMode = void 0) => {
+    let title = structure.readTitle(), result = /* @__PURE__ */ new Map(), observed2 = (resourceId, source) => readPowerNativeConsumption(production, resourceId, source), append = (resourceId, rate, source, ledgerCredit, adjustmentDisabled = !1, adjustmentMode = void 0) => {
       let adjustedRate = adjustmentDisabled || adjustmentMode === void 0 ? rate : readFuelRate(mechanics, resourceId, rate, adjustmentMode), currentTotal = source === null ? void 0 : observed2(resourceId, source), enableRate = adjustedRate !== void 0 && Number.isFinite(adjustedRate) && adjustedRate >= 0 && currentTotal !== void 0 ? adjustedRate : null, previous = result.get(resourceId);
       result.set(
         resourceId,
         Object.freeze({
           resourceId,
           currentTotal: (previous?.currentTotal ?? 0) + (currentTotal ?? 0),
+          unwindCredit: (previous?.unwindCredit ?? 0) + (ledgerCredit === "safe" ? currentTotal ?? 0 : 0),
           enableRate: enableRate === null || previous?.enableRate === null ? null : previous === void 0 ? enableRate : previous.enableRate + enableRate
         })
       );
@@ -25695,6 +25744,7 @@
           fuel.resourceId,
           fuel.amount,
           title.kind === "value" ? role === "consumer" ? `${title.value}+${structure.actionId}` : title.value : null,
+          role === "consumer" ? "safe" : "observation-only",
           !1,
           mode
         );
@@ -25708,6 +25758,7 @@
           fuel.resourceId,
           fuel.amount,
           title.kind === "value" ? `${title.value}+${structure.actionId}` : null,
+          "observation-only",
           adjustmentDisabled,
           mode
         );
@@ -25730,6 +25781,7 @@
         Object.freeze({
           resourceId: fallback.resourceId,
           currentTotal: currentTotal ?? 0,
+          unwindCredit: fallback.ledgerCredit === "safe" ? currentTotal ?? 0 : 0,
           enableRate
         })
       );

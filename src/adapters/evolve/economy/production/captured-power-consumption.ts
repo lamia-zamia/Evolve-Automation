@@ -15,6 +15,8 @@ export interface PowerIdleConsumptionFallback {
   readonly huge: boolean;
   /** Vitreloy and Foothold can consume fewer effective units than configured. */
   readonly linear: boolean;
+  /** Whether the pinned write path mirrors the resource-rate operation. */
+  readonly ledgerCredit: "safe" | "observation-only";
 }
 
 const idle = (
@@ -24,8 +26,17 @@ const idle = (
   fuel: PowerIdleConsumptionFallback["fuel"] = null,
   huge = false,
   linear = true,
+  ledgerCredit: PowerIdleConsumptionFallback["ledgerCredit"] = "safe",
 ): PowerIdleConsumptionFallback =>
-  Object.freeze({ resourceId, base, sourceKey, fuel, huge, linear });
+  Object.freeze({
+    resourceId,
+    base,
+    sourceKey,
+    fuel,
+    huge,
+    linear,
+    ledgerCredit,
+  });
 
 export const POWER_IDLE_CONSUMPTION_FALLBACK: Readonly<
   Record<string, readonly PowerIdleConsumptionFallback[]>
@@ -37,10 +48,28 @@ export const POWER_IDLE_CONSUMPTION_FALLBACK: Readonly<
   ],
   "space-red_factory": [idle("Helium_3", 1, null, "space", true)],
   "space-space_barracks": [
-    idle("Oil", 2, "tech_space_marines_bd", "space", true),
+    idle(
+      "Oil",
+      2,
+      "tech_space_marines_bd",
+      "space",
+      true,
+      true,
+      "observation-only",
+    ),
     idle("Food", 10, "tech_space_marines_bd", null, true),
   ],
-  "space-outpost": [idle("Oil", 2, "space_gas_moon_outpost_bd", "space", true)],
+  "space-outpost": [
+    idle(
+      "Oil",
+      2,
+      "space_gas_moon_outpost_bd",
+      "space",
+      true,
+      true,
+      "observation-only",
+    ),
+  ],
   "space-space_station": [
     idle("Food", 10, "space_belt_station_title", null, true),
   ],
@@ -57,7 +86,15 @@ export const POWER_IDLE_CONSUMPTION_FALLBACK: Readonly<
     ),
   ],
   "interstellar-cruiser": [
-    idle("Helium_3", 6, "interstellar_cruiser_title", "interstellar", true),
+    idle(
+      "Helium_3",
+      6,
+      "interstellar_cruiser_title",
+      "interstellar",
+      true,
+      true,
+      "observation-only",
+    ),
   ],
   "interstellar-neutron_miner": [
     idle(
@@ -66,6 +103,8 @@ export const POWER_IDLE_CONSUMPTION_FALLBACK: Readonly<
       "interstellar_neutron_miner_title",
       "interstellar",
       true,
+      true,
+      "observation-only",
     ),
   ],
   "galaxy-starbase": [idle("Food", 250, "galaxy_starbase", null, true)],
@@ -78,8 +117,20 @@ export const POWER_IDLE_CONSUMPTION_FALLBACK: Readonly<
   "galaxy-foothold": [
     idle("Elerium", 2.5, "galaxy_foothold", null, true, false),
   ],
-  "space-fob": [idle("Helium_3", 125, "tech_fob", "space")],
-  "space-lander": [idle("Oil", 50, "space_lander_title", "space", true)],
+  "space-fob": [
+    idle("Helium_3", 125, "tech_fob", "space", false, true, "observation-only"),
+  ],
+  "space-lander": [
+    idle(
+      "Oil",
+      50,
+      "space_lander_title",
+      "space",
+      true,
+      true,
+      "observation-only",
+    ),
+  ],
   // Ship fuel is reported only as one shared galaxy_fuel_consume row. It cannot be attributed
   // to an individual ship. Retain resource identity but never guess a per-ship marginal rate.
   "galaxy-bolognium_ship": [idle("Helium_3", null, null)],

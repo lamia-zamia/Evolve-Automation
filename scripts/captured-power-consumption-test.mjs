@@ -11,6 +11,12 @@ const labels = {
   tech_space_marines_bd: "Marines",
   interstellar_int_factory_title: "Fábrica interestelar",
   galaxy_vitreloy_plant_bd: "Vitreloy",
+  space_gas_moon_outpost_bd: "Outpost",
+  interstellar_cruiser_title: "Cruiser",
+  interstellar_neutron_miner_title: "Neutron Miner",
+  tech_fob: "FOB",
+  space_lander_title: "Lander",
+  galaxy_foothold: "Foothold",
 };
 const mechanics = {
   readLocalizedText: (key) =>
@@ -73,12 +79,86 @@ function sample(
 }
 const one = (rows, id) => rows?.find((row) => row.resourceId === id);
 
+const oilGenerator = one(
+  sample(
+    "city-oil_power",
+    10,
+    { Oil: { "Oil Power": -10 } },
+    {},
+    new Set(),
+    [{ resourceId: "Oil", amount: 1 }],
+    { role: "generator", region: "city", sector: "city", title: "Oil Power" },
+  ),
+  "Oil",
+);
+assert.deepEqual(oilGenerator, {
+  resourceId: "Oil",
+  currentTotal: 10,
+  unwindCredit: 0,
+  enableRate: 1,
+});
+const starvedSupport = one(
+  sample(
+    "space-support",
+    10,
+    { Oil: { "Support+space-support": -10 } },
+    {},
+    new Set(),
+    undefined,
+    {
+      role: "none",
+      title: "Support",
+      supportFuel: [{ resourceId: "Oil", amount: 1 }],
+      supportAdjustment: true,
+    },
+  ),
+  "Oil",
+);
+assert.deepEqual(starvedSupport, {
+  resourceId: "Oil",
+  currentTotal: 10,
+  unwindCredit: 0,
+  enableRate: 1,
+});
+for (const [binding, resourceId, source] of [
+  ["space-space_barracks", "Oil", "Marines"],
+  ["space-outpost", "Oil", "Outpost"],
+  ["interstellar-cruiser", "Helium_3", "Cruiser"],
+  ["interstellar-neutron_miner", "Helium_3", "Neutron Miner"],
+  ["space-fob", "Helium_3", "FOB"],
+  ["space-lander", "Oil", "Lander"],
+]) {
+  const row = one(
+    sample(binding, 1, { [resourceId]: { [source]: -10 } }),
+    resourceId,
+  );
+  assert.equal(row?.currentTotal, 10, `${binding} retains native demand`);
+  assert.equal(
+    row?.unwindCredit,
+    0,
+    `${binding} cannot credit pre-clamp demand`,
+  );
+}
+for (const [binding, resourceId, source] of [
+  ["space-space_barracks", "Food", "Marines"],
+  ["space-spaceport", "Food", "Puerto espacial"],
+  ["space-red_factory", "Helium_3", "space-red_factory"],
+  ["galaxy-foothold", "Elerium", "Foothold"],
+]) {
+  const row = one(
+    sample(binding, 1, { [resourceId]: { [source]: -10 } }),
+    resourceId,
+  );
+  assert.equal(row?.currentTotal, 10);
+  assert.equal(row?.unwindCredit, 10, `${binding} credits its applied rate`);
+}
+
 assert.deepEqual(
   one(
     sample("space-space_station", 0, {}, { race: { orbit_decayed: true } }),
     "Food",
   ),
-  { resourceId: "Food", currentTotal: 0, enableRate: 10 },
+  { resourceId: "Food", currentTotal: 0, unwindCredit: 0, enableRate: 10 },
   "orbit decay does not change pinned Space Station Food",
 );
 assert.equal(
@@ -130,18 +210,23 @@ for (const [binding, source] of [
       ),
       "Food",
     ),
-    { resourceId: "Food", currentTotal: 0, enableRate: null },
+    { resourceId: "Food", currentTotal: 0, unwindCredit: 0, enableRate: null },
     `${binding} does not fabricate consumption or enable behind an inactive Stargate`,
   );
 }
 assert.deepEqual(
   one(sample("galaxy-starbase", 2, { Food: { "Base estelar": -500 } }), "Food"),
-  { resourceId: "Food", currentTotal: 500, enableRate: 250 },
+  { resourceId: "Food", currentTotal: 500, unwindCredit: 500, enableRate: 250 },
   "a matching active native row validates the starbase marginal",
 );
 assert.deepEqual(
   one(sample("galaxy-embassy", 2, { Food: { Embajada: -15000 } }), "Food"),
-  { resourceId: "Food", currentTotal: 15000, enableRate: 7500 },
+  {
+    resourceId: "Food",
+    currentTotal: 15000,
+    unwindCredit: 15000,
+    enableRate: 7500,
+  },
 );
 assert.deepEqual(
   one(
@@ -153,7 +238,12 @@ assert.deepEqual(
     ),
     "Food",
   ),
-  { resourceId: "Food", currentTotal: 300, enableRate: null },
+  {
+    resourceId: "Food",
+    currentTotal: 300,
+    unwindCredit: 300,
+    enableRate: null,
+  },
   "Humongous current consumption comes from the game and idle scaling fails closed",
 );
 const barracks = sample(
@@ -168,6 +258,8 @@ const barracks = sample(
 assert.equal(one(barracks, "Oil")?.currentTotal, 6);
 assert.equal(one(barracks, "Food")?.currentTotal, 20);
 assert.equal(one(barracks, "Oil")?.enableRate, null);
+assert.equal(one(barracks, "Oil")?.unwindCredit, 0);
+assert.equal(one(barracks, "Food")?.unwindCredit, 20);
 const mine = {
   role: "consumer",
   region: "space",
@@ -193,7 +285,7 @@ assert.deepEqual(
     ),
     "Oil",
   ),
-  { resourceId: "Oil", currentTotal: 150, enableRate: 100 },
+  { resourceId: "Oil", currentTotal: 150, unwindCredit: 150, enableRate: 100 },
   "MakeMake powered mine reads only its native consumer source and space fuel adjustment",
 );
 assert.deepEqual(
@@ -211,7 +303,7 @@ assert.deepEqual(
     ),
     "Oil",
   ),
-  { resourceId: "Oil", currentTotal: 0, enableRate: 100 },
+  { resourceId: "Oil", currentTotal: 0, unwindCredit: 0, enableRate: 100 },
   "a title-only source is not attributed to a consumer",
 );
 assert.deepEqual(
@@ -229,7 +321,7 @@ assert.deepEqual(
     ),
     "Oil",
   ),
-  { resourceId: "Oil", currentTotal: 0, enableRate: null },
+  { resourceId: "Oil", currentTotal: 0, unwindCredit: 0, enableRate: null },
   "a malformed native consumer row freezes only its Oil capability",
 );
 for (const adjustment of [false, true, "invalid"]) {
@@ -248,7 +340,12 @@ for (const adjustment of [false, true, "invalid"]) {
       ),
       "Oil",
     ),
-    { resourceId: "Oil", currentTotal: 150, enableRate: 100 },
+    {
+      resourceId: "Oil",
+      currentTotal: 150,
+      unwindCredit: 150,
+      enableRate: 100,
+    },
     "consumer p_fuel ignores even malformed p_fuel_adjust",
   );
 }
@@ -274,7 +371,7 @@ assert.deepEqual(
     ),
     "Helium_3",
   ),
-  { resourceId: "Helium_3", currentTotal: 12, enableRate: 12 },
+  { resourceId: "Helium_3", currentTotal: 12, unwindCredit: 0, enableRate: 12 },
   "generator fuel remains raw without p_fuel_adjust",
 );
 assert.deepEqual(
@@ -296,7 +393,7 @@ assert.deepEqual(
     ),
     "Helium_3",
   ),
-  { resourceId: "Helium_3", currentTotal: 0, enableRate: 12 },
+  { resourceId: "Helium_3", currentTotal: 0, unwindCredit: 0, enableRate: 12 },
   "generator does not accept a consumer-shaped source",
 );
 for (const [region, sector, resourceId, expected] of [
@@ -349,7 +446,12 @@ assert.deepEqual(
     ),
     "Helium_3",
   ),
-  { resourceId: "Helium_3", currentTotal: 12, enableRate: 12 },
+  {
+    resourceId: "Helium_3",
+    currentTotal: 12,
+    unwindCredit: 12,
+    enableRate: 12,
+  },
 );
 assert.equal(
   one(
@@ -394,7 +496,12 @@ for (const [region, adjustment, expected] of [
       ),
       "Helium_3",
     ),
-    { resourceId: "Helium_3", currentTotal: 12, enableRate: expected },
+    {
+      resourceId: "Helium_3",
+      currentTotal: 12,
+      unwindCredit: 0,
+      enableRate: expected,
+    },
   );
 }
 assert.deepEqual(
@@ -410,7 +517,7 @@ assert.deepEqual(
     "consumer",
     new Set(),
   ),
-  [{ resourceId: "Oil", currentTotal: 0, enableRate: null }],
+  [{ resourceId: "Oil", currentTotal: 0, unwindCredit: 0, enableRate: null }],
   "an unavailable action source freezes only its consumption capability",
 );
 
@@ -419,7 +526,7 @@ assert.deepEqual(
     sample("space-red_factory", 2, { Helium_3: { "space-red_factory": -1 } }),
     "Helium_3",
   ),
-  { resourceId: "Helium_3", currentTotal: 1, enableRate: 0.5 },
+  { resourceId: "Helium_3", currentTotal: 1, unwindCredit: 1, enableRate: 0.5 },
 );
 assert.deepEqual(
   one(
@@ -428,7 +535,12 @@ assert.deepEqual(
     }),
     "Deuterium",
   ),
-  { resourceId: "Deuterium", currentTotal: 7.5, enableRate: 3.75 },
+  {
+    resourceId: "Deuterium",
+    currentTotal: 7.5,
+    unwindCredit: 7.5,
+    enableRate: 3.75,
+  },
 );
 const vitreloy = sample("galaxy-vitreloy_plant", 5, {
   Money: { Vitreloy: -100000 },
@@ -436,15 +548,16 @@ const vitreloy = sample("galaxy-vitreloy_plant", 5, {
   Stanene: { Vitreloy: -200 },
 });
 assert.deepEqual(
-  vitreloy?.map(({ resourceId, currentTotal, enableRate }) => [
+  vitreloy?.map(({ resourceId, currentTotal, unwindCredit, enableRate }) => [
     resourceId,
     currentTotal,
+    unwindCredit,
     enableRate,
   ]),
   [
-    ["Money", 100000, null],
-    ["Bolognium", 5, null],
-    ["Stanene", 200, null],
+    ["Money", 100000, 100000, null],
+    ["Bolognium", 5, 5, null],
+    ["Stanene", 200, 200, null],
   ],
 );
 assert.equal(one(sample("galaxy-vitreloy_plant", 0), "Money")?.currentTotal, 0);
@@ -492,7 +605,7 @@ assert.equal(
 );
 assert.deepEqual(
   one(sample("city-tourist_center", 1, { Food: { Turismo: 2 } }), "Food"),
-  { resourceId: "Food", currentTotal: 0, enableRate: null },
+  { resourceId: "Food", currentTotal: 0, unwindCredit: 0, enableRate: null },
   "positive source rows fail only the affected consumption closed",
 );
 assert.deepEqual(
@@ -500,7 +613,7 @@ assert.deepEqual(
     sample("city-tourist_center", 1, { Food: { Turismo: Number.NaN } }),
     "Food",
   ),
-  { resourceId: "Food", currentTotal: 0, enableRate: null },
+  { resourceId: "Food", currentTotal: 0, unwindCredit: 0, enableRate: null },
   "nonfinite source rows fail only the affected consumption closed",
 );
 console.log(

@@ -308,6 +308,7 @@ export function readCapturedPowerConsumptions(
     resourceId: string,
     rate: number,
     source: string | null,
+    ledgerCredit: "safe" | "observation-only",
     adjustmentDisabled = false,
     adjustmentMode: CapturedFuelAdjustmentMode | undefined = undefined,
   ) => {
@@ -330,6 +331,9 @@ export function readCapturedPowerConsumptions(
       Object.freeze({
         resourceId,
         currentTotal: (previous?.currentTotal ?? 0) + (currentTotal ?? 0),
+        unwindCredit:
+          (previous?.unwindCredit ?? 0) +
+          (ledgerCredit === "safe" ? (currentTotal ?? 0) : 0),
         enableRate:
           enableRate === null || previous?.enableRate === null
             ? null
@@ -373,6 +377,7 @@ export function readCapturedPowerConsumptions(
             ? `${title.value}+${structure.actionId}`
             : title.value
           : null,
+        role === "consumer" ? "safe" : "observation-only",
         false,
         mode,
       );
@@ -390,6 +395,7 @@ export function readCapturedPowerConsumptions(
         fuel.resourceId,
         fuel.amount,
         title.kind === "value" ? `${title.value}+${structure.actionId}` : null,
+        "observation-only",
         adjustmentDisabled,
         mode,
       );
@@ -464,6 +470,8 @@ export function readCapturedPowerConsumptions(
       Object.freeze({
         resourceId: fallback.resourceId,
         currentTotal: currentTotal ?? 0,
+        unwindCredit:
+          fallback.ledgerCredit === "safe" ? (currentTotal ?? 0) : 0,
         enableRate,
       }),
     );
