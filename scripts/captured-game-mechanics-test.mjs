@@ -885,6 +885,15 @@ assert.deepEqual(
   },
   "positive support output is a provider without appearing in consumer order",
 );
+scalarSupport.c_action.support = () => 0;
+assert.deepEqual(
+  scalarSupportDefinition.readNativeSupportGrids({
+    space: { provider: { on: 1 } },
+    support: { red: [] },
+  }),
+  { kind: "value", value: [] },
+  "zero-output Surface Farm shape is not a native support-loop participant",
+);
 scalarSupport.c_action.support = () => {
   throw new Error("native support failed");
 };

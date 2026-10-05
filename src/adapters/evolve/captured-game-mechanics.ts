@@ -832,6 +832,14 @@ function createMechanicsDefinition(
           return { kind: "invalid" as const };
         const output = readMechanicsSupportValue(action, type);
         if (output.kind !== "value") return { kind: "invalid" as const };
+        // initStructureGrids() places a zero-output action in neither native loop
+        // unless it is explicitly marked as a provider.
+        if (
+          !consumer &&
+          output.value <= 0 &&
+          !(provider.kind === "value" && provider.value)
+        )
+          continue;
         result.push(
           Object.freeze({
             type,

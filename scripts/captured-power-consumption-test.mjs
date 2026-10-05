@@ -74,6 +74,7 @@ function sample(
     { production: {}, consumption: rows },
     on,
     options.role ?? "none",
+    options.nativeSupportParticipant ?? false,
     stale,
   );
 }
@@ -110,6 +111,7 @@ const starvedSupport = one(
       title: "Support",
       supportFuel: [{ resourceId: "Oil", amount: 1 }],
       supportAdjustment: true,
+      nativeSupportParticipant: true,
     },
   ),
   "Oil",
@@ -120,6 +122,218 @@ assert.deepEqual(starvedSupport, {
   unwindCredit: 0,
   enableRate: 1,
 });
+const specialFuel = (resourceId, amount) => [{ resourceId, amount }];
+assert.deepEqual(
+  one(
+    sample(
+      "underground-mineshaft_vator",
+      1,
+      {
+        Oil: {
+          "Mineshaft Elevator": -100,
+          "Mineshaft Elevator+underground-mineshaft_vator": -999,
+        },
+      },
+      {},
+      new Set(),
+      undefined,
+      {
+        role: "consumer",
+        title: "Mineshaft Elevator",
+        supportFuel: specialFuel("Oil", 100),
+        nativeSupportParticipant: false,
+      },
+    ),
+    "Oil",
+  ),
+  { resourceId: "Oil", currentTotal: 100, unwindCredit: 0, enableRate: 100 },
+  "Mineshaft Elevator uses only the raw title-only Ice Age path",
+);
+assert.deepEqual(
+  one(
+    readCapturedPowerConsumptions(
+      {},
+      mechanics,
+      {
+        ...action("underground-mineshaft_vator", undefined, {
+          title: "Mineshaft Elevator",
+          supportFuel: specialFuel("Oil", 100),
+        }),
+        readSupportFuelAdjustmentDisabled: () =>
+          assert.fail("Ice Age fuel must not consult support_fuel_adjust"),
+      },
+      { production: {}, consumption: { Oil: { "Mineshaft Elevator": -100 } } },
+      1,
+      "consumer",
+      false,
+      new Set(),
+    ),
+    "Oil",
+  ),
+  { resourceId: "Oil", currentTotal: 100, unwindCredit: 0, enableRate: 100 },
+);
+assert.deepEqual(
+  one(
+    sample(
+      "surface-surface_zoo",
+      1,
+      { Food: { "Surface Zoo": -150 } },
+      {},
+      new Set(),
+      undefined,
+      {
+        role: "consumer",
+        title: "Surface Zoo",
+        supportFuel: specialFuel("Food", 150),
+        nativeSupportParticipant: false,
+      },
+    ),
+    "Food",
+  ),
+  { resourceId: "Food", currentTotal: 150, unwindCredit: 0, enableRate: 150 },
+  "Surface Zoo needs no generic support-grid row",
+);
+const watchTowerOptions = {
+  role: "consumer",
+  title: "Watch Tower",
+  supportFuel: specialFuel("Food", 25),
+  nativeSupportParticipant: true,
+};
+for (const [ledger, currentTotal] of [
+  [{ "Watch Tower+surface-watch_tower": -25, "Watch Tower": -25 }, 50],
+  [{ "Watch Tower+surface-watch_tower": -25 }, 25],
+  [{ "Watch Tower": -25 }, 25],
+]) {
+  assert.deepEqual(
+    one(
+      sample(
+        "surface-watch_tower",
+        1,
+        { Food: ledger },
+        {},
+        new Set(),
+        undefined,
+        watchTowerOptions,
+      ),
+      "Food",
+    ),
+    { resourceId: "Food", currentTotal, unwindCredit: 0, enableRate: 50 },
+    "each Watch Tower source is observed independently while both native marginals remain",
+  );
+}
+assert.deepEqual(
+  one(
+    sample(
+      "surface-water_pipe",
+      1,
+      { Water: { "Water Pipe+surface-water_pipe": -25, "Water Pipe": -25 } },
+      {},
+      new Set(),
+      undefined,
+      {
+        role: "consumer",
+        title: "Water Pipe",
+        supportFuel: specialFuel("Water", 25),
+        nativeSupportParticipant: true,
+      },
+    ),
+    "Water",
+  ),
+  { resourceId: "Water", currentTotal: 50, unwindCredit: 0, enableRate: 50 },
+  "Water Pipe is both a native support provider and an Ice Age fuel consumer",
+);
+for (const [nativeSupportParticipant, currentTotal, enableRate] of [
+  [true, 60, 60],
+  [false, 30, 30],
+]) {
+  assert.deepEqual(
+    one(
+      sample(
+        "surface-surface_farm",
+        1,
+        {
+          Water: {
+            "Surface Farm+surface-surface_farm": -30,
+            "Surface Farm": -30,
+          },
+        },
+        {},
+        new Set(),
+        undefined,
+        {
+          role: "consumer",
+          title: "Surface Farm",
+          supportFuel: specialFuel("Water", 30),
+          nativeSupportParticipant,
+        },
+      ),
+      "Water",
+    ),
+    { resourceId: "Water", currentTotal, unwindCredit: 0, enableRate },
+    "Surface Farm's native support participation controls its generic path",
+  );
+}
+assert.deepEqual(
+  one(
+    sample(
+      "underground-bonfire",
+      2,
+      { Lumber: { Bonfire: -12 } },
+      {},
+      new Set(),
+      undefined,
+      {
+        role: "consumer",
+        title: "Bonfire",
+        supportFuel: specialFuel("Lumber", 6),
+      },
+    ),
+    "Lumber",
+  ),
+  { resourceId: "Lumber", currentTotal: 12, unwindCredit: 0, enableRate: null },
+  "Bonfire's active-dependent native closure cannot supply a marginal",
+);
+assert.equal(
+  one(
+    sample(
+      "surface-watch_tower",
+      1,
+      {
+        Food: {
+          "Watch Tower+surface-watch_tower": Number.NaN,
+          "Watch Tower": -25,
+        },
+      },
+      {},
+      new Set(),
+      undefined,
+      watchTowerOptions,
+    ),
+    "Food",
+  )?.enableRate,
+  null,
+  "one malformed native mechanism blocks the combined marginal",
+);
+assert.deepEqual(
+  one(
+    sample(
+      "space-ordinary_support",
+      1,
+      { Oil: { "Ordinary+space-ordinary_support": -12, Ordinary: -99 } },
+      {},
+      new Set(),
+      undefined,
+      {
+        title: "Ordinary",
+        supportFuel: specialFuel("Oil", 12),
+        nativeSupportParticipant: true,
+      },
+    ),
+    "Oil",
+  ),
+  { resourceId: "Oil", currentTotal: 12, unwindCredit: 0, enableRate: 6 },
+  "ordinary support fuel keeps adjusted title-plus-ID semantics",
+);
 for (const [binding, resourceId, source] of [
   ["space-space_barracks", "Oil", "Marines"],
   ["space-outpost", "Oil", "Outpost"],
@@ -492,6 +706,7 @@ for (const [region, adjustment, expected] of [
           title: "Support",
           supportFuel: [{ resourceId: "Helium_3", amount: 12 }],
           supportAdjustment: !adjustment,
+          nativeSupportParticipant: true,
         },
       ),
       "Helium_3",
@@ -515,6 +730,7 @@ assert.deepEqual(
     { production: {}, consumption: {} },
     0,
     "consumer",
+    false,
     new Set(),
   ),
   [{ resourceId: "Oil", currentTotal: 0, unwindCredit: 0, enableRate: null }],

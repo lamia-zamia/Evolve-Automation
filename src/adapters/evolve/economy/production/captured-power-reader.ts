@@ -283,6 +283,21 @@ function readFuelRate(
   return adjustment.kind === "value" ? amount * adjustment.value : undefined;
 }
 
+// Literal Ice Age building loop in DeadSpace src/main.js at 6cc9ba8.
+// Membership only: action support_fuel() remains the amount authority.
+const ICEAGE_SPECIAL_FUEL_BINDINGS = new Set([
+  "underground-bonfire",
+  "underground-mineshaft_vator",
+  "underground-core_mine",
+  "underground-core_forge",
+  "underground-core_blacksmith",
+  "underground-core_refinery",
+  "surface-watch_tower",
+  "surface-water_pipe",
+  "surface-surface_farm",
+  "surface-surface_zoo",
+]);
+
 export function readCapturedPowerConsumptions(
   root: unknown,
   mechanics: CapturedGameMechanics,
@@ -290,16 +305,18 @@ export function readCapturedPowerConsumptions(
   production: CapturedProductionBreakdown,
   stateOn: number,
   role: "consumer" | "generator" | "none",
+  nativeSupportParticipant: boolean,
   invalidFallbacks: Set<string>,
 ): readonly PowerConsumptionInput[] | undefined {
   const binding = structure.actionId;
   const powerFuel = structure.readFuel();
   if (powerFuel.kind === "invalid") return undefined;
-  const supportFuel = structure.readSupportFuel();
-  if (supportFuel.kind === "invalid") return undefined;
-  const supportAdjustmentDisabled =
-    structure.readSupportFuelAdjustmentDisabled();
-  if (supportAdjustmentDisabled.kind === "invalid") return undefined;
+  const iceAgeSpecialFuel = ICEAGE_SPECIAL_FUEL_BINDINGS.has(binding);
+  const supportFuel =
+    nativeSupportParticipant || iceAgeSpecialFuel
+      ? structure.readSupportFuel()
+      : null;
+  if (supportFuel?.kind === "invalid") return undefined;
   const title = structure.readTitle();
   const result = new Map<string, PowerConsumptionInput>();
   const observed = (resourceId: string, source: string): number | undefined =>
@@ -311,6 +328,7 @@ export function readCapturedPowerConsumptions(
     ledgerCredit: "safe" | "observation-only",
     adjustmentDisabled = false,
     adjustmentMode: CapturedFuelAdjustmentMode | undefined = undefined,
+    marginalKnown = true,
   ) => {
     const adjustedRate =
       adjustmentDisabled || adjustmentMode === undefined
@@ -319,6 +337,7 @@ export function readCapturedPowerConsumptions(
     const currentTotal =
       source === null ? undefined : observed(resourceId, source);
     const enableRate =
+      marginalKnown &&
       adjustedRate !== undefined &&
       Number.isFinite(adjustedRate) &&
       adjustedRate >= 0 &&
@@ -383,7 +402,14 @@ export function readCapturedPowerConsumptions(
       );
     }
   }
-  if (supportFuel.kind === "value" && supportFuel.value !== false) {
+  if (
+    nativeSupportParticipant &&
+    supportFuel?.kind === "value" &&
+    supportFuel.value !== false
+  ) {
+    const supportAdjustmentDisabled =
+      structure.readSupportFuelAdjustmentDisabled();
+    if (supportAdjustmentDisabled.kind === "invalid") return undefined;
     const adjustmentDisabled =
       supportAdjustmentDisabled.kind === "value" &&
       supportAdjustmentDisabled.value;
@@ -398,6 +424,23 @@ export function readCapturedPowerConsumptions(
         "observation-only",
         adjustmentDisabled,
         mode,
+      );
+    }
+  }
+  if (
+    iceAgeSpecialFuel &&
+    supportFuel?.kind === "value" &&
+    supportFuel.value !== false
+  ) {
+    for (const fuel of supportFuel.value) {
+      append(
+        fuel.resourceId,
+        fuel.amount,
+        title.kind === "value" ? title.value : null,
+        "observation-only",
+        true,
+        undefined,
+        binding !== "underground-bonfire",
       );
     }
   }
@@ -1962,6 +2005,7 @@ function readPowerCycle(
       production,
       record.stateOn,
       role,
+      supportChanges.length > 0,
       invalidFallbacks,
     );
     const produces = capturedPowerProducerCapability(binding);

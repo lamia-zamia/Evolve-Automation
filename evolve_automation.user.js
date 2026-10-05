@@ -2016,7 +2016,7 @@
             return { kind: "invalid" };
           let output = readMechanicsSupportValue(action, type);
           if (output.kind !== "value") return { kind: "invalid" };
-          result.push(
+          !consumer && output.value <= 0 && !(provider.kind === "value" && provider.value) || result.push(
             Object.freeze({
               type,
               contribution: output.value,
@@ -25715,15 +25715,25 @@
     let adjustment = mechanics.readAdjustedFuelFactor(mode, resourceId);
     return adjustment.kind === "value" ? amount * adjustment.value : void 0;
   }
-  function readCapturedPowerConsumptions(root, mechanics, structure, production, stateOn, role, invalidFallbacks) {
+  var ICEAGE_SPECIAL_FUEL_BINDINGS = /* @__PURE__ */ new Set([
+    "underground-bonfire",
+    "underground-mineshaft_vator",
+    "underground-core_mine",
+    "underground-core_forge",
+    "underground-core_blacksmith",
+    "underground-core_refinery",
+    "surface-watch_tower",
+    "surface-water_pipe",
+    "surface-surface_farm",
+    "surface-surface_zoo"
+  ]);
+  function readCapturedPowerConsumptions(root, mechanics, structure, production, stateOn, role, nativeSupportParticipant, invalidFallbacks) {
     let binding = structure.actionId, powerFuel = structure.readFuel();
     if (powerFuel.kind === "invalid") return;
-    let supportFuel = structure.readSupportFuel();
-    if (supportFuel.kind === "invalid") return;
-    let supportAdjustmentDisabled = structure.readSupportFuelAdjustmentDisabled();
-    if (supportAdjustmentDisabled.kind === "invalid") return;
-    let title = structure.readTitle(), result = /* @__PURE__ */ new Map(), observed2 = (resourceId, source) => readPowerNativeConsumption(production, resourceId, source), append = (resourceId, rate, source, ledgerCredit, adjustmentDisabled = !1, adjustmentMode = void 0) => {
-      let adjustedRate = adjustmentDisabled || adjustmentMode === void 0 ? rate : readFuelRate(mechanics, resourceId, rate, adjustmentMode), currentTotal = source === null ? void 0 : observed2(resourceId, source), enableRate = adjustedRate !== void 0 && Number.isFinite(adjustedRate) && adjustedRate >= 0 && currentTotal !== void 0 ? adjustedRate : null, previous = result.get(resourceId);
+    let iceAgeSpecialFuel = ICEAGE_SPECIAL_FUEL_BINDINGS.has(binding), supportFuel = nativeSupportParticipant || iceAgeSpecialFuel ? structure.readSupportFuel() : null;
+    if (supportFuel?.kind === "invalid") return;
+    let title = structure.readTitle(), result = /* @__PURE__ */ new Map(), observed2 = (resourceId, source) => readPowerNativeConsumption(production, resourceId, source), append = (resourceId, rate, source, ledgerCredit, adjustmentDisabled = !1, adjustmentMode = void 0, marginalKnown = !0) => {
+      let adjustedRate = adjustmentDisabled || adjustmentMode === void 0 ? rate : readFuelRate(mechanics, resourceId, rate, adjustmentMode), currentTotal = source === null ? void 0 : observed2(resourceId, source), enableRate = marginalKnown && adjustedRate !== void 0 && Number.isFinite(adjustedRate) && adjustedRate >= 0 && currentTotal !== void 0 ? adjustedRate : null, previous = result.get(resourceId);
       result.set(
         resourceId,
         Object.freeze({
@@ -25750,7 +25760,9 @@
         );
       }
     }
-    if (supportFuel.kind === "value" && supportFuel.value !== !1) {
+    if (nativeSupportParticipant && supportFuel?.kind === "value" && supportFuel.value !== !1) {
+      let supportAdjustmentDisabled = structure.readSupportFuelAdjustmentDisabled();
+      if (supportAdjustmentDisabled.kind === "invalid") return;
       let adjustmentDisabled = supportAdjustmentDisabled.kind === "value" && supportAdjustmentDisabled.value;
       for (let fuel of supportFuel.value) {
         let mode = adjustmentDisabled ? void 0 : fuelModeFor(structure.region, fuel.resourceId);
@@ -25764,6 +25776,17 @@
         );
       }
     }
+    if (iceAgeSpecialFuel && supportFuel?.kind === "value" && supportFuel.value !== !1)
+      for (let fuel of supportFuel.value)
+        append(
+          fuel.resourceId,
+          fuel.amount,
+          title.kind === "value" ? title.value : null,
+          "observation-only",
+          !0,
+          void 0,
+          binding !== "underground-bonfire"
+        );
     for (let fallback of POWER_IDLE_CONSUMPTION_FALLBACK[binding] ?? []) {
       if (result.has(fallback.resourceId)) continue;
       let source = fallback.sourceKey === null ? binding === "space-red_factory" && title.kind === "value" ? title.value : null : mechanics.readLocalizedText(fallback.sourceKey), sourceLabel = typeof source == "string" ? source : source?.kind === "value" ? source.value : null, currentTotal = sourceLabel === null ? 0 : observed2(fallback.resourceId, sourceLabel), validCurrent = sourceLabel !== null && currentTotal !== void 0, gate = readPowerIdleGate(root, binding, fallback.resourceId), enableRate = fallback.base;
@@ -26678,6 +26701,7 @@
         production,
         record.stateOn,
         role,
+        supportChanges.length > 0,
         invalidFallbacks
       ), produces = capturedPowerProducerCapability(binding), powered = record.powered, title = record.structure.readTitle(), description = record.structure.readDescription();
       if (consumptions === void 0 || powered === void 0 || title.kind === "invalid" || description.kind === "invalid")
