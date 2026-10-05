@@ -25,7 +25,7 @@ import {
   createCapturedGenetics,
   GENETICS_CONTROL,
 } from "../adapters/evolve/traits/captured-genetics.ts";
-import { GENETICS_BREAKDOWN_CONTROL } from "../adapters/evolve/traits/captured-trait-automation.ts";
+import { GENE_SLOTS_CONTROL } from "../adapters/evolve/traits/captured-trait-automation.ts";
 import { runGeneticsAutomation } from "../application/genetics.ts";
 import { createCapturedTraitControl } from "./captured-trait-control.ts";
 import {
@@ -1012,7 +1012,6 @@ export function startCapturedRuntime({
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,
     keyState: pageCapture.keyState,
-    getDocument: () => document,
     readSettings: () => settingsStore.readRaw(),
   });
   const traitCompanions = createCapturedTraitCompanionControl({
@@ -1323,6 +1322,7 @@ export function startCapturedRuntime({
     fleet: fleetDemand,
   });
   let demandThisCycle: CapturedDemandSample | undefined;
+  let exactDemandUnavailableReason: string | undefined;
   readDemand = () => {
     if (demandThisCycle === undefined) {
       ensureDemandResearchObservation();
@@ -1451,22 +1451,20 @@ export function startCapturedRuntime({
       result = civicDiscovery.discover(steps, options);
     } catch (error) {
       discoveryAttempts.recordFailure(key, epoch);
-      logError(
-        `${label} discovery threw: ${String(error)} (${discoveryAttempts.describe(key, epoch)})`,
-      );
+      reportOnce(`${label} discovery threw: ${String(error)}`);
       return false;
     }
     if (result.outcome.status !== "succeeded") {
       discoveryAttempts.recordFailure(key, epoch);
-      logError(
-        `${label} discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status} (${discoveryAttempts.describe(key, epoch)})`,
+      reportOnce(
+        `${label} discovery skipped: ${result.outcome.failure?.message ?? result.outcome.status}`,
       );
       return false;
     }
     if (satisfied !== undefined && !satisfied()) {
       discoveryAttempts.recordFailure(key, epoch);
-      logError(
-        `${label} discovery drew its tab without capturing its control (${discoveryAttempts.describe(key, epoch)})`,
+      reportOnce(
+        `${label} discovery drew its tab without capturing its control`,
       );
       return false;
     }
@@ -1876,19 +1874,19 @@ export function startCapturedRuntime({
   });
   /**
    * Draws the A.R.P.A. tab, where `loadTab` calls `arpa('Genetics')` in the same pass that draws the
-   * project panel, and `genetics()` binds `#arpaSequence` plus the Genetics 2.0 `#geneticBreakdown`.
+   * project panel, and `genetics()` binds `#arpaSequence` and, above level 2, `#geneSlots`.
    * Both of its own gates are checked first:
    * `genetics()` returns before drawing anything unless `settings.arpa.genetics` is set, and the
    * sequencer panel itself exists only above `tech.genetics` 1.
    */
-  const ensureGeneticsControls = () => {
+  const ensureGeneticsControl = (
+    control: string,
+    key: string,
+    minimumLevel: number,
+  ) => {
     const root = pageCapture.rootState.readRoot();
     const level = readProperty(readProperty(root, "tech"), "genetics");
-    const satisfied = () =>
-      pageCapture.controls.resolve(GENETICS_CONTROL) !== undefined &&
-      (typeof level !== "number" ||
-        level <= 2 ||
-        pageCapture.controls.resolve(GENETICS_BREAKDOWN_CONTROL) !== undefined);
+    const satisfied = () => pageCapture.controls.resolve(control) !== undefined;
     if (satisfied()) return;
     const panelOffered = readProperty(
       readProperty(readProperty(root, "settings"), "arpa"),
@@ -1897,13 +1895,13 @@ export function startCapturedRuntime({
     if (
       typeof level !== "number" ||
       !Number.isFinite(level) ||
-      level < 2 ||
+      level < minimumLevel ||
       panelOffered !== true
     ) {
       return;
     }
     if (pageCapture.controls.resolve(MAIN_TAB_CONTROL) === undefined) return;
-    finishDiscovery("genetics", "genetics", satisfied, undefined, [
+    finishDiscovery(key, key, satisfied, undefined, [
       Object.freeze({
         setting: MAIN_TAB_SETTING,
         control: MAIN_TAB_CONTROL,
@@ -2614,6 +2612,7 @@ export function startCapturedRuntime({
     controls: pageCapture.controls,
     resources: createCapturedResourceSource(pageCapture.rootState),
     readDemand: () => demandThisCycle,
+    readDemandUnavailableReason: () => exactDemandUnavailableReason,
     readFleetNeededShips: fleet.readNeededShips,
     costs: buildCosts,
     readPurifierDescription: () =>
@@ -3159,6 +3158,7 @@ export function startCapturedRuntime({
         // shipyard cost, so it ends nothing.
         if (outerResult?.shipTargetChanged === true) {
           demandThisCycle = undefined;
+          exactDemandUnavailableReason = undefined;
         }
       }
       // After Build, so construction has first claim on the supplies a Mech reservation holds.
@@ -3186,7 +3186,8 @@ export function startCapturedRuntime({
         isEnabled(settings, "autoMutateTraits");
       if (geneticsAutomationEnabled) {
         runPhase("autoGenetics", () => {
-          ensureGeneticsControls();
+          if (isEnabled(settings, "autoGenetics"))
+            ensureGeneticsControl(GENETICS_CONTROL, "genetics-sequencer", 2);
           if (isEnabled(settings, "autoGenetics")) {
             runGeneticsAutomation(genetics);
           }
@@ -3195,7 +3196,7 @@ export function startCapturedRuntime({
       // A newly bought minor trait is usable right away, so this follows genetics.
       if (isEnabled(settings, "autoMinorTrait")) {
         const outcome = runPhase("autoMinorTrait", () => {
-          ensureGeneticsControls();
+          ensureGeneticsControl(GENE_SLOTS_CONTROL, "genetics-gene-slots", 3);
           return traits.autoMinorTrait();
         });
         if (outcome !== undefined && outcome.status !== "succeeded") {
@@ -3326,6 +3327,7 @@ export function startCapturedRuntime({
           // below reuses the catalogs progression already established and takes current holdings
           // from the root. Never discover panels here.
           demandThisCycle = undefined;
+          exactDemandUnavailableReason = undefined;
           // Earlier research/construction may have opened a reservation gate. Revalidate
           // its current prerequisites without drawing; an uncaptured new gate stays stale.
           const prerequisites =
@@ -3343,29 +3345,49 @@ export function startCapturedRuntime({
             isEnabled(settings, "autoBuild") ||
             isEnabled(settings, "autoStorage");
           if (
-            isRecord(
+            !isRecord(
               readProperty(pageCapture.rootState.readRoot(), "resource"),
-            ) &&
-            prerequisites !== undefined &&
-            prerequisites.spy !== "unavailable" &&
-            prerequisites.ai !== "unavailable" &&
-            (!isEnabled(settings, "autoTrigger") ||
-              triggerTargetsThisCycle !== undefined) &&
-            (!hasCapturedProjectStorageDemand(
+            )
+          )
+            exactDemandUnavailableReason = "root resource state unavailable";
+          else if (prerequisites === undefined)
+            exactDemandUnavailableReason = "demand prerequisites unavailable";
+          else if (prerequisites.spy === "unavailable")
+            exactDemandUnavailableReason =
+              "demand prerequisite spy unavailable";
+          else if (prerequisites.ai === "unavailable")
+            exactDemandUnavailableReason = "demand prerequisite ai unavailable";
+          else if (
+            isEnabled(settings, "autoTrigger") &&
+            triggerTargetsThisCycle === undefined
+          )
+            exactDemandUnavailableReason =
+              "trigger target snapshot unavailable";
+          else if (
+            hasCapturedProjectStorageDemand(
               settings,
               settingsStorage.readRaw(),
-            ) ||
-              progression.readEstablishedProjects() !== undefined) &&
-            (!buildDemandRequired ||
-              progression.readEstablishedStorageBuildTargets() !== undefined)
-          ) {
-            demandThisCycle = demand.sampleExact();
+            ) &&
+            progression.readEstablishedProjects() === undefined
+          )
+            exactDemandUnavailableReason =
+              "enabled project-storage catalog unavailable";
+          else if (
+            buildDemandRequired &&
+            progression.readEstablishedStorageBuildTargets() === undefined
+          )
+            exactDemandUnavailableReason =
+              "managed build target snapshot unavailable";
+          else {
+            const exact = demand.sampleExact();
+            if (exact.status === "ready") demandThisCycle = exact.sample;
+            else exactDemandUnavailableReason = exact.reason.message;
           }
           observePowerDemandPhase("power-ready");
           const outcome = powerAutomation.run();
           observePowerDemandPhase("power-complete", outcome);
           if (outcome.status !== "succeeded")
-            logError(
+            reportOnce(
               `autoPower: ${outcome.failure.code}: ${outcome.failure.message}`,
             );
         });
@@ -3440,7 +3462,7 @@ export function startCapturedRuntime({
       }
       if (isEnabled(settings, "autoMutateTraits")) {
         const outcome = runPhase("autoMutateTraits", () => {
-          ensureGeneticsControls();
+          ensureGeneticsControl(GENE_SLOTS_CONTROL, "genetics-gene-slots", 3);
           return traits.autoMutateTrait();
         });
         if (outcome !== undefined && outcome.status !== "succeeded") {

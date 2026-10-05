@@ -1574,6 +1574,7 @@ function runTailChain() {
       deconstructor: true,
       elusive: false,
       minor: { smart: 0 },
+      geneSlots: [{ g: "smart", r: 1 }],
       governor: { candidates: [{ bg: "soldier" }, { bg: "educator" }] },
       // The Craft gate reads the species citizens row the game keeps for the Crafting panel.
       species: "human",
@@ -1719,17 +1720,8 @@ function runTailChain() {
       },
     ],
     documentSetup: ({ body }) => {
-      const breakdown = element("div", { id: "geneticBreakdown" });
-      const minor = element("div", { id: "geneticMinor" });
-      const row = element("div");
-      row.classList.add("trait", "t-smart", "traitRow");
-      const heading = element("h4");
-      heading.textContent = "smart";
-      row.append(heading);
-      minor.append(row);
-      breakdown.append(minor);
       const craftAll = element("div", { id: "incPlywoodA" });
-      body.append(breakdown, craftAll);
+      body.append(craftAll);
     },
     settings: {
       autoGenetics: true,
@@ -1737,6 +1729,7 @@ function runTailChain() {
       geneticsBoost: "enabled",
       autoMinorTrait: true,
       mTrait_smart: true,
+      mTrait_p_smart: 0,
       mTrait_w_smart: 10,
       autoCraft: true,
       autoFight: true,
@@ -1810,28 +1803,27 @@ function runTailChain() {
           novo() {},
         },
       },
-      geneticBreakdown: {
-        events: { gene: "minorTrait" },
+      geneSlots: {
+        events: { rankUp: "minorTrait" },
         methods: {
-          genePurchasable() {
+          isGene() {
             return true;
           },
-          gene(traitId) {
-            root.resource.Genes.amount -= 5;
-            root.race.minor[traitId] += 1;
-            root.race[traitId] = (root.race[traitId] ?? 0) + 1;
+          canRank() {
+            return true;
           },
-          geneCost() {
-            return "Buy smart for 5 Genes";
+          rankUp(slotIndex) {
+            root.resource.Genes.amount -= 5;
+            root.race.geneSlots[slotIndex].r += 1;
+          },
+          pickable() {
+            return [];
+          },
+          canCull() {
+            return false;
           },
           gain() {},
-          purge() {},
-          addCost() {
-            return "gain for 10 Plasmids";
-          },
-          removeCost() {
-            return "purge for 10 Plasmids";
-          },
+          cullSlot() {},
         },
       },
       resPlywood: {
@@ -2010,7 +2002,7 @@ assert.equal(tail.trace.at(-1), "power", JSON.stringify(tail.trace));
 assert.deepEqual(
   tail.errors.filter((message) => message.startsWith("autoPower")),
   [
-    "autoPower: captured-power-cycle-unavailable: Authoritative Power cycle input is unavailable; retry on a later tick.",
+    "autoPower: captured-power-cycle-unavailable: exact demand unavailable: offered technology snapshot unavailable",
   ],
 );
 
@@ -2111,6 +2103,7 @@ function runPrestigeTraitChain() {
       species: "human",
       universe: "standard",
       minor: { smart: 0 },
+      geneSlots: [false],
     },
     tech: {},
     genes: {},
@@ -2146,10 +2139,6 @@ function runPrestigeTraitChain() {
   const ascendRow = element("div", { id: "interstellar-ascend" });
   ascendRow.classList.add("action");
   ascendPanel.append(ascendRow);
-  const breakdownPanel = element("div", { id: "geneticBreakdown" });
-  const mutationRow = classRow("traitRow");
-  mutationRow.append(classRow("addsmart basic-button"));
-  breakdownPanel.append(mutationRow);
 
   const run = runCapturedPhaseOrderCycle({
     root,
@@ -2192,7 +2181,7 @@ function runPrestigeTraitChain() {
           },
         };
       };
-      body.append(ascendPanel, breakdownPanel);
+      body.append(ascendPanel);
     },
     settings: {
       autoPower: true,
@@ -2312,28 +2301,29 @@ function runPrestigeTraitChain() {
           novo() {},
         },
       },
-      geneticBreakdown: {
+      geneSlots: {
         events: { gain: "mutateTrait" },
         methods: {
-          genePurchasable() {
-            return true;
+          isGene() {
+            return false;
           },
-          gene() {},
-          geneCost() {
-            return "Buy smart for 5 Genes";
+          canRank() {
+            return false;
           },
-          gain(traitId) {
+          rankUp() {},
+          pickable() {
+            return ["smart"];
+          },
+          canCull() {
+            return false;
+          },
+          gain(traitId, slotIndex) {
             root.race[traitId] = 1;
+            root.race.geneSlots[slotIndex] = { g: traitId, r: 1 };
             root.prestige.Plasmid.count -= 30;
             executed.push("mutateTrait");
           },
-          purge() {},
-          addCost() {
-            return "gain for 30 Plasmids";
-          },
-          removeCost() {
-            return "purge for 30 Plasmids";
-          },
+          cullSlot() {},
         },
       },
     },
@@ -2368,27 +2358,18 @@ function enforceOcularCapacity(config, stateKey) {
   }
 }
 
-/** A test element carrying `className` as a string, which is how the trait panel is read. */
-function classRow(className) {
-  const node = element("div", { className });
-  for (const token of className.split(/\s+/)) node.classList.add(token);
-  return node;
-}
-
 const chain = runPrestigeTraitChain();
 assert.deepEqual(
   chain.errors.filter((message) => message.includes("stopped:")),
   [],
   JSON.stringify(chain.errors),
 );
-// Power reports one unavailable cycle per cycle of the run and discovers nothing; every other phase
+// Power reports one persistent unavailable reason and discovers nothing; every other phase
 // either acted or stood down without reporting. Nothing else is tolerated here.
 assert.deepEqual(
   chain.errors,
   [
-    "autoPower: captured-power-cycle-unavailable: Authoritative Power cycle input is unavailable; retry on a later tick.",
-    "autoPower: captured-power-cycle-unavailable: Authoritative Power cycle input is unavailable; retry on a later tick.",
-    "autoPower: captured-power-cycle-unavailable: Authoritative Power cycle input is unavailable; retry on a later tick.",
+    "autoPower: captured-power-cycle-unavailable: captured structures unavailable",
   ],
   JSON.stringify(chain.errors),
 );
@@ -2405,8 +2386,8 @@ assert.deepEqual(
     { cycle: 0, trace: ["power"] },
     // The Ascension click, then the shape, and nothing after the shape: the runtime ended the cycle
     // because the shape really landed. Psychic was already eligible here and still did not run.
-    { cycle: 1, trace: ["power", "prestige", "shapeshift"] },
-    { cycle: 2, trace: ["power", "psychic", "wish", "mutateTrait"] },
+    { cycle: 1, trace: ["prestige", "shapeshift"] },
+    { cycle: 2, trace: ["psychic", "wish", "mutateTrait"] },
   ],
   JSON.stringify(chain.cycleTrace),
 );
@@ -2431,8 +2412,7 @@ assert.deepEqual(
   ],
   JSON.stringify(chain.executed),
 );
-// Power hands off to the prestige branch in the cycle the Ascension click lands in.
-assertRunsBefore(assert, chainCycles[1].trace, "power", "prestige");
+// The persistent Power failure is reported once while later phases continue to act.
 assertRunsBefore(assert, chain.executed, "prestige", "shapeshift");
 assertRunsBefore(assert, chain.executed, "shapeshift", "psychic");
 assertRunsBefore(assert, chain.executed, "psychic", "ocular");
@@ -2443,14 +2423,16 @@ assertRunsBefore(assert, chain.executed, "wish", "mutateTrait");
 // checkbox clicks are the two Ocular toggles the phase really made.
 assert.deepEqual(
   chain.invocations
-    .filter(({ elementId }) =>
-      [
-        "interstellar-ascend",
-        "sshifter",
-        "psychicKill",
-        "minorWish",
-        "geneticBreakdown",
-      ].includes(elementId),
+    .filter(
+      ({ elementId, method }) =>
+        [
+          "interstellar-ascend",
+          "sshifter",
+          "psychicKill",
+          "minorWish",
+          "geneSlots",
+        ].includes(elementId) &&
+        (elementId !== "geneSlots" || method === "gain"),
     )
     .map(({ elementId, method }) => `${elementId}.${method}`),
   [
@@ -2458,7 +2440,7 @@ assert.deepEqual(
     "sshifter.setShape",
     "psychicKill.murder",
     "minorWish.know",
-    "geneticBreakdown.gain",
+    "geneSlots.gain",
   ],
   JSON.stringify(chain.invocations),
 );

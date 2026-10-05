@@ -212,6 +212,7 @@ export function createCapturedQueueReservationSource(
       const settings = readProperty(root, "settings");
       const targets: ReservedCostTarget[] = [];
       let unavailable = false;
+      let unavailableReason: string | undefined;
 
       function reserve(
         item: QueuedItem,
@@ -224,6 +225,7 @@ export function createCapturedQueueReservationSource(
           // let the caller spend exactly the resources it cannot see the commitment to.
           reportUnavailable(item.id, reason);
           unavailable = true;
+          unavailableReason ??= `${item.id}: ${reason}`;
           return;
         }
         if (!couldBeStored(root, price)) return;
@@ -286,6 +288,7 @@ export function createCapturedQueueReservationSource(
       return Object.freeze({
         targets: Object.freeze(targets),
         unavailable,
+        ...(unavailableReason === undefined ? {} : { unavailableReason }),
       });
     },
   });

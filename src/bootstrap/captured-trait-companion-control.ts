@@ -29,8 +29,9 @@ export const CAPTURED_TRAIT_COMPANION_CONTROLS = Object.freeze({
 
 export interface CapturedTraitCompanionControlDependencies extends Pick<
   CapturedTraitAutomationDependencies,
-  "rootState" | "controls" | "getDocument" | "readSettings"
+  "rootState" | "controls" | "readSettings"
 > {
+  readonly getDocument: () => unknown;
   readonly ensureShapeshiftControls: () => boolean;
   readonly ensurePsychicControls: () => boolean;
   readonly ensureOcularPowerControls: () => boolean;

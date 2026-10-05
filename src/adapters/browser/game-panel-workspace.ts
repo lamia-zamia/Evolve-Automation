@@ -12,7 +12,7 @@
  *
  * So a workspace hides a panel by *name* instead. Every panel the game clears or draws into, it
  * finds by id — `clearTabPanels` keys on `#mTabCivil`, `drawCity` appends to `#city`, and each
- * teardown helper looks up `#grid<type>`, `#resQueue`, `#geneticMinor`, `#spyopConfig<gov>` — so a
+ * teardown helper looks up `#grid<type>`, `#resQueue`, `#geneSlots`, `#spyopConfig<gov>` — so a
  * panel whose ids are aliased for the length of the draw is a panel the draw cannot find, while its
  * nodes stay exactly where they were: same elements, same Vue instances, same listeners, same drag
  * handlers, same hover state, same scroll position. The scratch container then carries the target

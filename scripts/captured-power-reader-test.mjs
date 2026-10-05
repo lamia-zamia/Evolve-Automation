@@ -1467,6 +1467,10 @@ assert.equal(
   undefined,
   "invalid live mechanics ordering makes the cycle unavailable",
 );
+assert.deepEqual(badOrderReader.readUnavailableReason(), {
+  authority: "native-order",
+  message: "native Power/support order unavailable",
+});
 
 const missingAnchorRoot = { ...root, space: { ...root.space } };
 delete missingAnchorRoot.space.moon_anchor;

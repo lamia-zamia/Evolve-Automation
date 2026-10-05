@@ -84,6 +84,8 @@ assert.equal(
 
 function powerApplicationHarness() {
   let cycle = powerApplicationCycle;
+  let unavailableReason =
+    "exact demand unavailable: queue reservation unavailable: city-mine: queued item could not be priced";
   let warned = true;
   let enabled = true;
   let reject = false;
@@ -91,6 +93,10 @@ function powerApplicationHarness() {
   const automation = createPowerAutomation({
     reader: {
       readCycle: () => cycle,
+      readUnavailableReason: () => ({
+        authority: "exact-demand",
+        message: unavailableReason,
+      }),
       readWarnings: () =>
         warned
           ? [{ ...powerApplicationWarning, autoStateEnabled: enabled }]
@@ -113,6 +119,9 @@ function powerApplicationHarness() {
     executed,
     setCycle: (value) => {
       cycle = value;
+    },
+    setUnavailableReason: (value) => {
+      unavailableReason = value;
     },
     clearWarning: () => {
       warned = false;
@@ -166,8 +175,24 @@ function powerApplicationHarness() {
   const outcome = harness.automation.run();
   assert.equal(outcome.status, "stale");
   assert.equal(outcome.failure.code, "captured-power-cycle-unavailable");
+  assert.match(
+    outcome.failure.message,
+    /city-mine: queued item could not be priced/,
+  );
   assert.equal(harness.executed.length, 0);
   assert.equal(harness.automation.readState(), before);
+  harness.setUnavailableReason("production breakdown unavailable");
+  assert.equal(
+    harness.automation.run().failure.message,
+    "production breakdown unavailable",
+  );
+  harness.setCycle(powerApplicationCycle);
+  assert.equal(harness.automation.run().status, "succeeded");
+  assert.equal(
+    harness.executed.length > 0,
+    true,
+    "recovery executes the next valid cycle",
+  );
 }
 {
   const reservation = createMechSupplyReservation();

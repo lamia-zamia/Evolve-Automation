@@ -178,7 +178,26 @@ export interface CapturedResourceDemand {
   /** Plans the demand for one cycle. Callers sample once and share the result. */
   sample(): CapturedDemandSample;
   /** Plans only from established authorities, rejecting incomplete queue or technology input. */
-  sampleExact(): CapturedDemandSample | undefined;
+  sampleExact(): CapturedDemandExactResult;
+}
+
+export type CapturedDemandExactResult =
+  | { readonly status: "ready"; readonly sample: CapturedDemandSample }
+  | {
+      readonly status: "unavailable";
+      readonly reason: CapturedDemandUnavailableReason;
+    };
+
+export interface CapturedDemandUnavailableReason {
+  readonly code:
+    | "root-resource-state"
+    | "queue-reservation"
+    | "offered-technology"
+    | "managed-build-targets"
+    | "managed-build-price"
+    | "project-storage-catalog"
+    | "other-exact-prerequisite";
+  readonly message: string;
 }
 
 const NO_STORAGE_REQUIREMENT = 1;
@@ -1237,13 +1256,34 @@ function readDemandReservationSpyPurchaseMoney(
 export function createCapturedResourceDemand(
   dependencies: CapturedResourceDemandDependencies,
 ): CapturedResourceDemand {
+  let exactUnavailableReason: CapturedDemandUnavailableReason = {
+    code: "other-exact-prerequisite",
+    message: "exact demand prerequisite unavailable",
+  };
   const capturedDemandSampler = {
     sample(exact: boolean): CapturedDemandSample | undefined {
+      if (exact)
+        exactUnavailableReason = {
+          code: "other-exact-prerequisite",
+          message: "exact demand prerequisite unavailable",
+        };
       const root = dependencies.rootState.readRoot();
       const resources = readProperty(root, "resource");
-      if (!isRecord(resources)) return exact ? undefined : EMPTY_DEMAND_SAMPLE;
+      if (!isRecord(resources)) {
+        exactUnavailableReason = {
+          code: "root-resource-state",
+          message: "root resource state unavailable",
+        };
+        return exact ? undefined : EMPTY_DEMAND_SAMPLE;
+      }
       const reservationSample = dependencies.reservations.readReservations();
-      if (exact && reservationSample.unavailable) return undefined;
+      if (exact && reservationSample.unavailable) {
+        exactUnavailableReason = {
+          code: "queue-reservation",
+          message: `queue reservation unavailable: ${reservationSample.unavailableReason ?? "commitment could not be priced"}`,
+        };
+        return undefined;
+      }
       const queued = reservationSample.targets;
       const saving = dependencies.construction?.readSavingTarget() ?? null;
       const offered = dependencies.readOfferedTechs?.();
@@ -1251,8 +1291,13 @@ export function createCapturedResourceDemand(
         exact &&
         dependencies.readOfferedTechs !== undefined &&
         offered === undefined
-      )
+      ) {
+        exactUnavailableReason = {
+          code: "offered-technology",
+          message: "offered technology snapshot unavailable",
+        };
         return undefined;
+      }
       const settingsValue = dependencies.readSettings();
       const settings = isRecord(settingsValue) ? settingsValue : {};
       const fleet = dependencies.fleet?.read();
@@ -1504,14 +1549,21 @@ export function createCapturedResourceDemand(
         exact &&
         dependencies.readBuildTargets !== undefined &&
         managedBuildTargets === undefined
-      )
+      ) {
+        exactUnavailableReason = {
+          code: "managed-build-targets",
+          message: "managed build target snapshot unavailable",
+        };
         return undefined;
+      }
       let incompleteBuildStorageCosts = false;
+      let unpricedBuildTarget: string | undefined;
       const buildingStorageTargets = Object.freeze(
         (managedBuildTargets ?? []).flatMap((target) => {
           const price = dependencies.costs?.readCost(target.elementId);
           if (price === undefined) {
             incompleteBuildStorageCosts = true;
+            unpricedBuildTarget ??= target.elementId;
             return [];
           }
           const costs = toCosts(price.cost, price.pool);
@@ -1524,7 +1576,13 @@ export function createCapturedResourceDemand(
           ];
         }),
       );
-      if (exact && incompleteBuildStorageCosts) return undefined;
+      if (exact && incompleteBuildStorageCosts) {
+        exactUnavailableReason = {
+          code: "managed-build-price",
+          message: `managed build target cannot be priced: ${unpricedBuildTarget ?? "unknown"}`,
+        };
+        return undefined;
+      }
       const hasEnabledProjectStorageSetting =
         hasCapturedProjectStorageDemand(settings);
       const projects = hasEnabledProjectStorageSetting
@@ -1535,8 +1593,13 @@ export function createCapturedResourceDemand(
         hasEnabledProjectStorageSetting &&
         dependencies.readProjects !== undefined &&
         projects === undefined
-      )
+      ) {
+        exactUnavailableReason = {
+          code: "project-storage-catalog",
+          message: "enabled project-storage catalog unavailable",
+        };
         return undefined;
+      }
       const projectStorageTargets = Object.freeze(
         (projects ?? []).flatMap((project) => {
           if (settings[`arpa_${project.projectId}`] !== true) return [];
@@ -1734,6 +1797,14 @@ export function createCapturedResourceDemand(
   };
   return Object.freeze({
     sample: () => capturedDemandSampler.sample(false) ?? EMPTY_DEMAND_SAMPLE,
-    sampleExact: () => capturedDemandSampler.sample(true),
+    sampleExact: (): CapturedDemandExactResult => {
+      const sample = capturedDemandSampler.sample(true);
+      return sample === undefined
+        ? Object.freeze({
+            status: "unavailable",
+            reason: exactUnavailableReason,
+          })
+        : Object.freeze({ status: "ready", sample });
+    },
   });
 }

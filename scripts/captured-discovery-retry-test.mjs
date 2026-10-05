@@ -20,6 +20,115 @@ import {
   SUB_TAB_CONTROLS,
 } from "../src/adapters/evolve/captured-tab-discovery.ts";
 import { MARKET_QUANTITY_CONTROL } from "../src/adapters/evolve/economy/market/captured-market.ts";
+import { GENE_SLOTS_CONTROL } from "../src/adapters/evolve/traits/captured-trait-automation.ts";
+
+function runGeneticsDiscoveryFixture({ traitAutomation }) {
+  const root = {
+    settings: { civTabs: 0, arpa: { genetics: true }, animated: false },
+    tech: { genetics: 3 },
+    race: { species: "human", universe: "standard", geneSlots: [] },
+    resource: { Genes: { amount: 0 } },
+    arpa: { sequence: { on: false, boost: false, auto: false } },
+    prestige: { Plasmid: { count: 0 }, Phage: { count: 0 } },
+  };
+  let drawn = false;
+  let draws = 0;
+  let listener;
+  const errors = [];
+  const stop = startCapturedRuntime({
+    pageCapture: {
+      isComplete: () => true,
+      rootState: {
+        readRoot: () => root,
+        isReactivitySuppressed: () => false,
+        subscribeRootReplaced: () => () => {},
+      },
+      controls: withControlCaptureAuthority({
+        resolve: (elementId) =>
+          elementId === MAIN_TAB_CONTROL ||
+          (drawn &&
+            [
+              "arpaSequence",
+              ...(traitAutomation ? [GENE_SLOTS_CONTROL] : []),
+            ].includes(elementId))
+            ? {
+                elementId,
+                generation: 1,
+                methods: elementId === MAIN_TAB_CONTROL ? ["swapTab"] : [],
+              }
+            : undefined,
+        invoke: (handle, method) => {
+          if (handle.elementId === MAIN_TAB_CONTROL && method === "swapTab") {
+            draws += 1;
+            drawn = true;
+            return { ok: true };
+          }
+          return { ok: false, reason: "unknown-method" };
+        },
+        capturedElementIds: () =>
+          drawn
+            ? [
+                MAIN_TAB_CONTROL,
+                "arpaSequence",
+                ...(traitAutomation ? [GENE_SLOTS_CONTROL] : []),
+              ]
+            : [MAIN_TAB_CONTROL],
+      }),
+      controlUsage: { readUsage: () => [] },
+      periods: {
+        subscribe(next) {
+          listener = next;
+          return () => {};
+        },
+      },
+      mountSuppression: {
+        available: true,
+        withoutMounting: (draw) => draw(),
+        withMountingEnabled: (draw) => draw(),
+      },
+      uninstall: () => {},
+    },
+    document: stubDocument(),
+    mouseEvent: class {},
+    storage: {
+      getItem: () =>
+        JSON.stringify({
+          masterScriptToggle: true,
+          autoGenetics: true,
+          autoMinorTrait: traitAutomation,
+        }),
+      setItem: () => {},
+    },
+    logError: (message) => errors.push(message),
+  });
+  for (let i = 0; i < 8; i += 1) listener({ periods: 4 });
+  stop?.();
+  return { draws, errors, drawn };
+}
+
+for (const traitAutomation of [false, true]) {
+  const result = runGeneticsDiscoveryFixture({ traitAutomation });
+  assert.equal(result.drawn, true);
+  assert.equal(
+    result.draws,
+    2,
+    "one draw and one restoration, with no retry draws",
+  );
+  assert.equal(
+    result.errors.some((message) => message.startsWith("autoGenetics")),
+    false,
+    JSON.stringify(result.errors),
+  );
+  assert.equal(
+    result.errors.some(
+      (message) =>
+        message.includes("genetics") &&
+        message.includes("drew its tab without capturing its control"),
+    ),
+    false,
+    JSON.stringify(result.errors),
+  );
+}
 
 /* ---------------------------------------------------------------- shared semantics */
 
@@ -244,6 +353,13 @@ function runMarketFixture({
       message.includes("drew its tab without capturing its control"),
     ),
     `expected the uncaptured-capability diagnostic, saw ${JSON.stringify(errors)}`,
+  );
+  assert.equal(
+    errors.filter((message) =>
+      message.includes("drew its tab without capturing its control"),
+    ).length,
+    1,
+    "retry counters do not create new console errors",
   );
 }
 

@@ -1,14 +1,14 @@
 import type { CommandExecutionOutcome } from "../../../domain/commands.ts";
-import {
-  type GeneticsMinorTraitCandidate,
-  type GeneticsMinorTraitInput,
-  type GeneticsMinorTraitUpgradeDecision,
+import type {
+  GeneticsMinorTraitCandidate,
+  GeneticsMinorTraitInput,
+  GeneticsMinorTraitUpgradeDecision,
 } from "../../../domain/traits/minor-trait.ts";
-import {
-  type GeneticsMutationInput,
-  type GeneticsMutationOperation,
-  type GeneticsMutationDecision,
-  type MutationKind,
+import type {
+  GeneticsMutationInput,
+  GeneticsMutationOperation,
+  GeneticsMutationDecision,
+  MutationKind,
 } from "../../../domain/traits/mutation.ts";
 import type { DecisionExecutor } from "../../../ports/decision-executor.ts";
 import type {
@@ -24,73 +24,50 @@ import { stale, SUCCEEDED } from "../../command-outcomes.ts";
 import { finite, isRecord, readProperty } from "../../validation.ts";
 import { readCapturedClickMultiplierState } from "./captured-genetics.ts";
 
-/** The one Genetics 2.0 binding created by `genetics()` for the live breakdown. */
-export const GENETICS_BREAKDOWN_CONTROL = "geneticBreakdown";
+/** Bound by the pinned game's `geneSlotPanel()`. */
+export const GENE_SLOTS_CONTROL = "geneSlots";
+
+interface SlotIdentity {
+  readonly index: number;
+  readonly gene: string | null;
+  readonly rank: number | null;
+}
 
 interface MinorTarget {
   readonly candidate: GeneticsMinorTraitCandidate;
-  readonly handle: GameControlHandle;
-  readonly minor: Record<PropertyKey, unknown>;
-  readonly race: Record<PropertyKey, unknown>;
-  readonly expectedTotalRank: number;
-}
-
-interface MinorSession {
-  readonly root: unknown;
-  readonly genes: Record<PropertyKey, unknown>;
-  readonly targets: readonly MinorTarget[];
-}
-
-interface MutationAction {
-  readonly traitId: string;
-  readonly operation: MutationKind;
-  readonly rowIndex: number;
+  readonly slot: SlotIdentity;
 }
 
 interface MutationTarget {
   readonly operation: GeneticsMutationOperation;
-  readonly handle: GameControlHandle;
-  readonly race: Record<PropertyKey, unknown>;
-  readonly bank: Record<PropertyKey, unknown>;
+  readonly slot: SlotIdentity;
+  readonly priority: number;
 }
 
-interface MutationSession {
+interface SlotSession {
   readonly root: unknown;
+  readonly handle: GameControlHandle;
+  readonly slots: readonly unknown[];
+}
+
+interface MinorSession extends SlotSession {
+  readonly genes: Record<PropertyKey, unknown>;
+  readonly targets: readonly MinorTarget[];
+}
+
+interface MutationSession extends SlotSession {
   readonly race: Record<PropertyKey, unknown>;
   readonly bank: Record<PropertyKey, unknown>;
   readonly reserve: number;
   readonly targets: readonly MutationTarget[];
 }
 
-interface MinorBlock {
-  readonly root: unknown;
-  readonly generation: number;
-  readonly expectedGenes: number;
-}
-
-interface CapturedMinorPolicy {
-  readonly enabled: boolean | null;
-  readonly weighting: number | null;
-}
-
-interface MutationBlock {
-  readonly root: unknown;
-  readonly generation: number;
-  readonly expectedCurrencyQuantity: number;
-}
-
 export interface CapturedTraitAutomationDependencies {
   readonly rootState: GameRootStateSource;
   readonly controls: GameControlRegistry;
   readonly keyState: GameKeyStateReader;
-  readonly getDocument: () => unknown;
   readonly readSettings: () => unknown;
-  /**
-   * Optional structured numeric mutation-cost capability supplied by a game-owned adapter.
-   * `addCost` and `removeCost` are deliberately not used: the public Vue methods return localized
-   * presentation strings. Without this capability the executor can only safely act with a zero
-   * reserve, where the game's `gain`/`purge` method remains the affordability authority.
-   */
+  /** Native cost authority, when available; an unknown cost cannot promise a nonzero reserve. */
   readonly readMutationCost?: (
     root: unknown,
     traitId: string,
@@ -109,59 +86,30 @@ export interface CapturedTraitAutomation {
   };
 }
 
-function queryOne(owner: unknown, selector: string): unknown {
-  const query = readProperty(owner, "querySelector");
-  if (typeof query !== "function") return undefined;
-  try {
-    return Reflect.apply(query, owner, [selector]);
-  } catch {
+function slotIdentity(
+  slots: readonly unknown[],
+  index: number,
+): SlotIdentity | undefined {
+  const raw = slots[index];
+  if (raw === false || raw === null || raw === undefined) {
+    return Object.freeze({ index, gene: null, rank: null });
+  }
+  const gene = readProperty(raw, "g");
+  const rank = finite(readProperty(raw, "r"));
+  if (
+    typeof gene !== "string" ||
+    gene.length === 0 ||
+    rank === undefined ||
+    !Number.isSafeInteger(rank) ||
+    rank < 0
+  )
     return undefined;
-  }
+  return Object.freeze({ index, gene, rank });
 }
 
-function queryMany(
-  owner: unknown,
-  selector: string,
-): readonly unknown[] | undefined {
-  const query = readProperty(owner, "querySelectorAll");
-  if (typeof query !== "function") return undefined;
-  let result: unknown;
-  try {
-    result = Reflect.apply(query, owner, [selector]);
-  } catch {
-    return undefined;
-  }
-  const length = finite(readProperty(result, "length"));
-  if (length === undefined || !Number.isSafeInteger(length) || length < 0) {
-    return undefined;
-  }
-  const values: unknown[] = [];
-  for (let index = 0; index < length; index += 1) {
-    const value = readProperty(result, String(index));
-    if (value !== undefined && value !== null) values.push(value);
-  }
-  return Object.freeze(values);
-}
-
-function readElementText(element: unknown): string | undefined {
-  for (const key of ["textContent", "innerText"]) {
-    const value = readProperty(element, key);
-    if (typeof value === "string" && value.trim().length > 0) {
-      return value.trim();
-    }
-  }
-  return undefined;
-}
-
-function classTokens(element: unknown): readonly string[] {
-  const className = readProperty(element, "className");
-  return typeof className === "string"
-    ? Object.freeze(className.split(/\s+/).filter((token) => token.length > 0))
-    : Object.freeze([]);
-}
-
-function own(record: Record<PropertyKey, unknown>, key: string): boolean {
-  return Object.prototype.hasOwnProperty.call(record, key);
+function sameSlot(slots: readonly unknown[], expected: SlotIdentity): boolean {
+  const actual = slotIdentity(slots, expected.index);
+  return actual?.gene === expected.gene && actual.rank === expected.rank;
 }
 
 function invoke(
@@ -178,232 +126,142 @@ function invoke(
   }
 }
 
-function invokeBoolean(
+function nativeBoolean(
   controls: GameControlRegistry,
   handle: GameControlHandle,
   method: string,
-  args: readonly unknown[] = [],
+  index: number,
 ): boolean | undefined {
-  const result = invoke(controls, handle, method, args);
+  const result = invoke(controls, handle, method, [index]);
   return result?.ok === true && typeof result.value === "boolean"
     ? result.value
     : undefined;
 }
 
-function unavailableMinor(): GeneticsMinorTraitInput {
-  return Object.freeze({
-    available: false,
-    currentGenes: 0,
-    traits: Object.freeze([]),
-  });
-}
-
-function unavailableMutation(): GeneticsMutationInput {
-  return Object.freeze({
-    available: false,
-    currency: null,
-    operations: Object.freeze([]),
-  });
-}
-
-function readTraitGeneticsLevel(root: unknown): number | undefined {
-  return finite(readProperty(readProperty(root, "tech"), "genetics"));
-}
-
-function readGenes(root: unknown): Record<PropertyKey, unknown> | undefined {
-  const resource = readProperty(root, "resource");
-  const genes = readProperty(resource, "Genes");
-  return isRecord(genes) ? genes : undefined;
-}
-
-function readRace(root: unknown): Record<PropertyKey, unknown> | undefined {
-  const race = readProperty(root, "race");
-  return isRecord(race) ? race : undefined;
-}
-
-function readMinorOrder(root: unknown): readonly string[] | undefined {
-  const order = readProperty(readProperty(root, "settings"), "mtorder");
-  if (!Array.isArray(order)) return undefined;
-  const result: string[] = [];
-  const seen = new Set<string>();
-  for (const value of order) {
-    if (typeof value !== "string" || value.length === 0 || seen.has(value)) {
-      return undefined;
-    }
-    seen.add(value);
-    result.push(value);
-  }
-  return Object.freeze(result);
-}
-
-function readMinorRows(document: unknown): readonly unknown[] | undefined {
-  return queryMany(document, "#geneticBreakdown #geneticMinor .traitRow");
-}
-
-function readMinorTraitId(row: unknown): string | undefined {
-  return readElementText(queryOne(row, "h4"));
-}
-
-function readMinorPolicy(
-  settings: unknown,
-  traitId: string,
-): CapturedMinorPolicy {
-  const rawEnabled = readProperty(settings, `mTrait_${traitId}`);
-  const rawWeighting = finite(readProperty(settings, `mTrait_w_${traitId}`));
-  return Object.freeze({
-    enabled: typeof rawEnabled === "boolean" ? rawEnabled : null,
-    weighting:
-      rawWeighting !== undefined && rawWeighting >= 0 ? rawWeighting : null,
-  });
-}
-
-function sameMinorPolicy(
-  candidate: GeneticsMinorTraitCandidate,
-  settings: unknown,
-): boolean {
-  const policy = readMinorPolicy(settings, candidate.traitId);
-  return (
-    policy.enabled === candidate.enabled &&
-    policy.weighting === candidate.weighting
-  );
-}
-
-function readRaceRank(
-  race: Record<PropertyKey, unknown>,
-  traitId: string,
-): number | undefined {
-  const value = readProperty(race, traitId);
-  if (value === undefined) return 0;
-  const rank = finite(value);
-  return rank !== undefined && Number.isSafeInteger(rank) && rank >= 0
-    ? rank
-    : undefined;
-}
-
-function isBlockedMinor(
-  blocked: MinorBlock | null,
-  root: unknown,
+function nativeChoices(
+  controls: GameControlRegistry,
   handle: GameControlHandle,
-  genes: number,
+  index: number,
+): readonly string[] | undefined {
+  const result = invoke(controls, handle, "pickable", [index]);
+  if (
+    result?.ok !== true ||
+    !Array.isArray(result.value) ||
+    !result.value.every(
+      (item: unknown) => typeof item === "string" && item.length > 0,
+    )
+  )
+    return undefined;
+  return result.value;
+}
+
+function captureSlots(
+  dependencies: CapturedTraitAutomationDependencies,
+): SlotSession | undefined {
+  const root = dependencies.rootState.readRoot();
+  const level = finite(readProperty(readProperty(root, "tech"), "genetics"));
+  if (level === undefined || level <= 2) return undefined;
+  const slots = readProperty(readProperty(root, "race"), "geneSlots");
+  const handle = dependencies.controls.resolve(GENE_SLOTS_CONTROL);
+  if (!Array.isArray(slots) || handle === undefined) return undefined;
+  return { root, slots, handle };
+}
+
+function activeGeneSlotControl(
+  dependencies: CapturedTraitAutomationDependencies,
+  session: SlotSession,
 ): boolean {
+  const handle = dependencies.controls.resolve(GENE_SLOTS_CONTROL);
   return (
-    blocked !== null &&
-    blocked.root === root &&
-    blocked.generation === handle.generation &&
-    blocked.expectedGenes === genes
+    dependencies.rootState.readRoot() === session.root &&
+    readProperty(readProperty(session.root, "race"), "geneSlots") ===
+      session.slots &&
+    handle !== undefined &&
+    handle.generation === session.handle.generation
   );
 }
 
-function readMutationAction(
-  row: unknown,
-  rowIndex: number,
-): MutationAction | undefined {
-  const descendants = queryMany(row, "*");
-  const elements = descendants === undefined ? [row] : [row, ...descendants];
-  for (const element of elements) {
-    for (const token of classTokens(element)) {
-      if (token.startsWith("add") && token.length > 3) {
-        return Object.freeze({
-          traitId: token.slice(3),
-          operation: "gain",
-          rowIndex,
-        });
-      }
-      if (token.startsWith("remove") && token.length > 6) {
-        return Object.freeze({
-          traitId: token.slice(6),
-          operation: "purge",
-          rowIndex,
-        });
-      }
-    }
-  }
-  return undefined;
+/** Native genetics redraws its binding after a successful purchase. */
+function coherentAfterAction(
+  dependencies: CapturedTraitAutomationDependencies,
+  session: SlotSession,
+): boolean {
+  const handle = dependencies.controls.resolve(GENE_SLOTS_CONTROL);
+  return (
+    dependencies.rootState.readRoot() === session.root &&
+    readProperty(readProperty(session.root, "race"), "geneSlots") ===
+      session.slots &&
+    handle !== undefined &&
+    handle.elementId === session.handle.elementId &&
+    Number.isSafeInteger(handle.generation) &&
+    handle.generation >= session.handle.generation
+  );
 }
 
-function readMutationActions(
-  document: unknown,
-): readonly MutationAction[] | undefined {
-  const rows = queryMany(document, "#geneticBreakdown .traitRow");
-  if (rows === undefined) return undefined;
-  const actions: MutationAction[] = [];
-  for (let index = 0; index < rows.length; index += 1) {
-    const action = readMutationAction(rows[index], index);
-    if (action !== undefined) actions.push(action);
-  }
-  return Object.freeze(actions);
-}
-
-function readMutationReserve(
+function minorPolicy(
   settings: unknown,
-  root: unknown,
-): number | undefined {
-  const rawMinimum = readProperty(settings, "minimumPlasmidsToPreserve");
-  const minimum = rawMinimum === undefined ? 0 : finite(rawMinimum);
-  if (minimum === undefined || minimum < 0) return undefined;
+  gene: string,
+): {
+  enabled: boolean | null;
+  priority: number | null;
+  weighting: number | null;
+} {
+  const enabled = readProperty(settings, `mTrait_${gene}`);
+  const priority = finite(readProperty(settings, `mTrait_p_${gene}`));
+  const weighting = finite(readProperty(settings, `mTrait_w_${gene}`));
+  return {
+    enabled: typeof enabled === "boolean" ? enabled : null,
+    priority: priority !== undefined && priority >= 0 ? priority : null,
+    weighting: weighting !== undefined && weighting >= 0 ? weighting : null,
+  };
+}
 
-  const rawSoftcap = readProperty(settings, "doNotGoBelowPlasmidSoftcap");
-  const softcap = rawSoftcap === undefined ? true : rawSoftcap;
-  if (typeof softcap !== "boolean") return undefined;
-  if (!softcap) return minimum;
-
-  const phage = readProperty(readProperty(root, "prestige"), "Phage");
-  const phageCount = finite(readProperty(phage, "count"));
-  return phageCount === undefined || phageCount < 0
+function mutationReserve(settings: unknown, root: unknown): number | undefined {
+  const minimumRaw = readProperty(settings, "minimumPlasmidsToPreserve");
+  const minimum = minimumRaw === undefined ? 0 : finite(minimumRaw);
+  const softcapRaw = readProperty(settings, "doNotGoBelowPlasmidSoftcap");
+  if (
+    minimum === undefined ||
+    minimum < 0 ||
+    (softcapRaw !== undefined && typeof softcapRaw !== "boolean")
+  )
+    return undefined;
+  if (softcapRaw === false) return minimum;
+  const phage = finite(
+    readProperty(
+      readProperty(readProperty(root, "prestige"), "Phage"),
+      "count",
+    ),
+  );
+  return phage === undefined || phage < 0
     ? undefined
-    : Math.max(minimum, phageCount + 250);
+    : Math.max(minimum, phage + 250);
 }
 
-function readOptionalFlag(settings: unknown, key: string): boolean | undefined {
-  const value = readProperty(settings, key);
-  return value === undefined
-    ? false
-    : typeof value === "boolean"
-      ? value
-      : undefined;
-}
-
-function readPriority(settings: unknown, traitId: string): number | undefined {
-  return finite(readProperty(settings, `mutableTrait_p_${traitId}`));
-}
-
-function readAuthoritativeMutationCost(
+function mutationCost(
   dependencies: CapturedTraitAutomationDependencies,
   root: unknown,
   traitId: string,
-  operation: MutationKind,
+  kind: MutationKind,
 ): number | null {
-  const readCost = dependencies.readMutationCost;
-  if (readCost === undefined) return null;
   try {
-    const value = finite(readCost(root, traitId, operation));
+    const value = finite(dependencies.readMutationCost?.(root, traitId, kind));
     return value !== undefined && value >= 0 ? value : null;
   } catch {
     return null;
   }
 }
 
-function readCurrentMutationEligibility(
+function mutationPolicy(
   settings: unknown,
-  race: Record<PropertyKey, unknown>,
-  action: MutationAction,
-  handle: GameControlHandle,
-): boolean | null {
-  if (!handle.methods.includes(action.operation)) return null;
-  const gain = readOptionalFlag(
-    settings,
-    `mutableTrait_gain_${action.traitId}`,
-  );
-  const purge = readOptionalFlag(
-    settings,
-    `mutableTrait_purge_${action.traitId}`,
-  );
-  if (gain === undefined || purge === undefined) return null;
-  if (gain && purge) return false;
-  if (action.operation === "gain") {
-    return gain && !own(race, action.traitId) ? true : false;
-  }
-  return purge && own(race, action.traitId) ? true : false;
+  traitId: string,
+  kind: MutationKind,
+): boolean {
+  const gain = readProperty(settings, `mutableTrait_gain_${traitId}`);
+  const purge = readProperty(settings, `mutableTrait_purge_${traitId}`);
+  return kind === "gain"
+    ? gain === true && purge !== true
+    : purge === true && gain !== true;
 }
 
 export function createCapturedTraitAutomation(
@@ -411,115 +269,85 @@ export function createCapturedTraitAutomation(
 ): CapturedTraitAutomation {
   let minorSession: MinorSession | null = null;
   let mutationSession: MutationSession | null = null;
-  let blockedMinor: MinorBlock | null = null;
-  let blockedMutation: MutationBlock | null = null;
+  let blockedMinor: {
+    root: unknown;
+    generation: number;
+    genes: number;
+  } | null = null;
+  let blockedMutation: {
+    root: unknown;
+    generation: number;
+    currency: number;
+  } | null = null;
 
   const minorReader: GeneticsMinorTraitReader = Object.freeze({
     read(): GeneticsMinorTraitInput {
-      const root = dependencies.rootState.readRoot();
-      const level = readTraitGeneticsLevel(root);
-      const genes = readGenes(root);
-      const race = readRace(root);
-      const minor = readProperty(race, "minor");
-      const order = readMinorOrder(root);
-      const document = dependencies.getDocument();
-      const handle = dependencies.controls.resolve(GENETICS_BREAKDOWN_CONTROL);
+      const session = captureSlots(dependencies);
+      const genes = readProperty(
+        readProperty(session?.root, "resource"),
+        "Genes",
+      );
+      const currentGenes = finite(readProperty(genes, "amount"));
       if (
-        level === undefined ||
-        level <= 2 ||
-        genes === undefined ||
-        race === undefined ||
-        !isRecord(minor) ||
-        order === undefined ||
-        document === undefined ||
-        document === null ||
-        handle === undefined ||
-        !handle.methods.includes("gene") ||
-        !handle.methods.includes("genePurchasable")
+        session === undefined ||
+        !isRecord(genes) ||
+        currentGenes === undefined ||
+        currentGenes < 0 ||
+        !["isGene", "canRank", "rankUp"].every((method) =>
+          session.handle.methods.includes(method),
+        )
       ) {
         minorSession = null;
-        return unavailableMinor();
+        return { available: false, currentGenes: 0, traits: [] };
       }
-      const currentGenes = finite(readProperty(genes, "amount"));
-      if (currentGenes === undefined || currentGenes < 0) {
-        minorSession = null;
-        return unavailableMinor();
-      }
-      const rows = readMinorRows(document);
-      if (rows === undefined) {
-        minorSession = null;
-        return unavailableMinor();
-      }
-
-      const rowsByTrait = new Map<string, unknown>();
-      for (const row of rows) {
-        const traitId = readMinorTraitId(row);
-        if (traitId === undefined || rowsByTrait.has(traitId)) {
-          minorSession = null;
-          return unavailableMinor();
-        }
-        rowsByTrait.set(traitId, row);
-      }
-
-      const targets: MinorTarget[] = [];
-      const candidates: GeneticsMinorTraitCandidate[] = [];
       const settings = dependencies.readSettings();
-      for (const [orderIndex, traitId] of order.entries()) {
-        const row = rowsByTrait.get(traitId);
-        if (row === undefined) continue;
-        const rank = finite(readProperty(minor, traitId));
-        const expectedTotalRank = readRaceRank(race, traitId);
+      const candidates: GeneticsMinorTraitCandidate[] = [];
+      const targets: MinorTarget[] = [];
+      for (let index = 0; index < session.slots.length; index += 1) {
+        const slot = slotIdentity(session.slots, index);
+        if (slot?.gene === null || slot === undefined || slot.rank === null)
+          continue;
         if (
-          rank === undefined ||
-          !Number.isSafeInteger(rank) ||
-          rank < 0 ||
-          expectedTotalRank === undefined
-        ) {
-          minorSession = null;
-          return unavailableMinor();
-        }
-        const eligible = isBlockedMinor(
-          blockedMinor,
-          root,
-          handle,
-          currentGenes,
+          nativeBoolean(
+            dependencies.controls,
+            session.handle,
+            "isGene",
+            index,
+          ) !== true
         )
-          ? false
-          : (invokeBoolean(dependencies.controls, handle, "genePurchasable", [
-              traitId,
-            ]) ?? null);
-        const policy = readMinorPolicy(settings, traitId);
-        const candidate = Object.freeze({
-          traitId,
-          source: "genetic-breakdown" as const,
-          rank,
-          // geneCost() is localized; genePurchasable()/gene() own affordability and spending.
+          continue;
+        const policy = minorPolicy(settings, slot.gene);
+        const eligible =
+          blockedMinor !== null &&
+          blockedMinor.root === session.root &&
+          blockedMinor.generation === session.handle.generation &&
+          blockedMinor.genes === currentGenes
+            ? false
+            : (nativeBoolean(
+                dependencies.controls,
+                session.handle,
+                "canRank",
+                index,
+              ) ?? null);
+        const candidate: GeneticsMinorTraitCandidate = Object.freeze({
+          slotIndex: index,
+          controlGeneration: session.handle.generation,
+          traitId: slot.gene,
+          source: "gene-slot",
+          rank: slot.rank,
           cost: null,
           eligible,
-          enabled: policy.enabled,
-          priority: orderIndex,
-          weighting: policy.weighting,
+          ...policy,
         });
         candidates.push(candidate);
-        targets.push({
-          candidate,
-          handle,
-          minor,
-          race,
-          expectedTotalRank,
-        });
+        targets.push({ candidate, slot });
       }
-
-      minorSession = Object.freeze({
-        root,
-        genes,
-        targets: Object.freeze(targets),
-      });
-      return Object.freeze({
+      minorSession = { ...session, genes, targets };
+      return {
         available: true,
         currentGenes,
         traits: Object.freeze(candidates),
-      });
+      };
     },
   });
 
@@ -528,129 +356,126 @@ export function createCapturedTraitAutomation(
       execute(
         decision: Readonly<GeneticsMinorTraitUpgradeDecision>,
       ): CommandExecutionOutcome {
-        const active = minorSession;
-        if (active === null) {
-          return stale(
-            "minor-trait-session-missing",
-            "minor-trait session is missing",
-          );
-        }
-        if (dependencies.rootState.readRoot() !== active.root) {
-          return stale(
-            "minor-trait-root-changed",
-            "captured game root changed",
-          );
-        }
-        const actualGenes = finite(readProperty(active.genes, "amount"));
-        if (actualGenes !== decision.expectedGenes) {
-          return stale("minor-trait-genes-changed", "Genes balance changed");
-        }
-        const target = active.targets.find(
-          ({ candidate }) => candidate.traitId === decision.traitId,
-        );
-        if (target === undefined) {
-          return stale(
-            "minor-trait-target-changed",
-            "minor-trait target changed",
-          );
-        }
-        const currentHandle = dependencies.controls.resolve(
-          GENETICS_BREAKDOWN_CONTROL,
-        );
+        const session = minorSession;
         if (
-          currentHandle === undefined ||
-          currentHandle.generation !== target.handle.generation
-        ) {
+          session === null ||
+          decision.controlGeneration !== session.handle.generation ||
+          !activeGeneSlotControl(dependencies, session)
+        )
           return stale(
             "minor-trait-control-stale",
-            "genetics breakdown control was rebound",
+            "gene-slot control or root changed",
           );
-        }
-        const currentRank = finite(
-          readProperty(target.minor, target.candidate.traitId),
+        const target = session.targets.find(
+          ({ candidate }) =>
+            candidate.slotIndex === decision.slotIndex &&
+            candidate.traitId === decision.traitId,
         );
-        if (currentRank !== decision.expectedRank) {
-          return stale("minor-trait-rank-changed", "minor-trait rank changed");
-        }
-        const currentOrder = readMinorOrder(active.root);
         if (
-          currentOrder === undefined ||
-          currentOrder.indexOf(decision.traitId) !== target.candidate.priority
-        ) {
+          target === undefined ||
+          target.slot.rank !== decision.expectedRank ||
+          !sameSlot(session.slots, target.slot)
+        )
           return stale(
-            "minor-trait-order-changed",
-            "minor-trait order changed",
+            "minor-trait-slot-changed",
+            "gene slot identity or rank changed",
           );
-        }
-        if (!sameMinorPolicy(target.candidate, dependencies.readSettings())) {
+        if (
+          finite(readProperty(session.genes, "amount")) !==
+          decision.expectedGenes
+        )
+          return stale("minor-trait-genes-changed", "Genes balance changed");
+        const policy = minorPolicy(
+          dependencies.readSettings(),
+          decision.traitId,
+        );
+        if (
+          policy.enabled !== target.candidate.enabled ||
+          policy.priority !== target.candidate.priority ||
+          policy.weighting !== target.candidate.weighting
+        )
           return stale(
             "minor-trait-policy-changed",
             "minor-trait policy changed",
           );
-        }
-        const legal = invokeBoolean(
-          dependencies.controls,
-          target.handle,
-          "genePurchasable",
-          [decision.traitId],
-        );
-        if (legal !== true) {
+        if (
+          nativeBoolean(
+            dependencies.controls,
+            session.handle,
+            "isGene",
+            decision.slotIndex,
+          ) !== true ||
+          nativeBoolean(
+            dependencies.controls,
+            session.handle,
+            "canRank",
+            decision.slotIndex,
+          ) !== true
+        )
           return stale(
             "minor-trait-capability-changed",
-            "minor-trait capability changed",
+            "native gene rank is unavailable",
           );
-        }
         const multiplier = readCapturedClickMultiplierState(
-          active.root,
+          session.root,
           dependencies.keyState,
         );
-        if (multiplier !== false) {
+        if (multiplier !== false)
           return stale(
-            multiplier === true
-              ? "minor-trait-click-multiplier-held"
-              : "minor-trait-click-multiplier-unknown",
-            multiplier === true
-              ? "click multiplier is held"
-              : "click multiplier state is unavailable",
+            "minor-trait-click-multiplier-held",
+            "click multiplier is held or unavailable",
           );
-        }
-        const result = invoke(dependencies.controls, target.handle, "gene", [
-          decision.traitId,
-        ]);
-        if (result?.ok !== true) {
-          blockedMinor = Object.freeze({
-            root: active.root,
-            generation: target.handle.generation,
-            expectedGenes: decision.expectedGenes,
-          });
-          return stale(
-            "minor-trait-invocation-failed",
-            result?.reason ?? "minor-trait invocation failed",
-          );
-        }
-        const afterGenes = finite(readProperty(active.genes, "amount"));
-        const afterRank = finite(
-          readProperty(target.minor, target.candidate.traitId),
+        const bankId =
+          readProperty(readProperty(session.root, "race"), "universe") ===
+          "antimatter"
+            ? "AntiPlasmid"
+            : "Plasmid";
+        const beforeBank = finite(
+          readProperty(
+            readProperty(readProperty(session.root, "prestige"), bankId),
+            "count",
+          ),
         );
-        const afterTotalRank = readRaceRank(
-          target.race,
-          target.candidate.traitId,
+        const result = invoke(dependencies.controls, session.handle, "rankUp", [
+          decision.slotIndex,
+        ]);
+        const after = slotIdentity(session.slots, decision.slotIndex);
+        const afterGenes = finite(readProperty(session.genes, "amount"));
+        const afterBank = finite(
+          readProperty(
+            readProperty(readProperty(session.root, "prestige"), bankId),
+            "count",
+          ),
         );
         if (
+          result?.ok !== true ||
+          !coherentAfterAction(dependencies, session) ||
+          after === undefined ||
+          after.gene !== decision.traitId ||
+          after.rank === null ||
+          after.rank <= decision.expectedRank ||
           afterGenes === undefined ||
-          afterGenes >= decision.expectedGenes ||
-          afterRank !== decision.expectedRank + 1 ||
-          afterTotalRank !== target.expectedTotalRank + 1
+          afterGenes > decision.expectedGenes ||
+          (beforeBank !== undefined &&
+            (afterBank === undefined || afterBank > beforeBank))
         ) {
-          blockedMinor = Object.freeze({
-            root: active.root,
-            generation: target.handle.generation,
-            expectedGenes: decision.expectedGenes,
-          });
-          return stale(
-            "minor-trait-noop",
-            "minor-trait invocation produced no verified upgrade",
-          );
+          const reason =
+            result?.ok !== true
+              ? "native rankUp invocation failed"
+              : !coherentAfterAction(dependencies, session)
+                ? "native rankUp rebound without a coherent slot control"
+                : after === undefined ||
+                    after.gene !== decision.traitId ||
+                    after.rank === null ||
+                    after.rank <= decision.expectedRank
+                  ? "native rankUp did not increase the expected slot"
+                  : "native rankUp left an invalid currency balance";
+          blockedMinor = {
+            root: session.root,
+            generation: session.handle.generation,
+            genes: decision.expectedGenes,
+          };
+          return stale("minor-trait-noop", reason);
         }
         blockedMinor = null;
         return SUCCEEDED;
@@ -659,106 +484,108 @@ export function createCapturedTraitAutomation(
 
   const mutationReader: GeneticsMutationReader = Object.freeze({
     read(): GeneticsMutationInput {
-      const root = dependencies.rootState.readRoot();
-      const level = readTraitGeneticsLevel(root);
-      const race = readRace(root);
-      const prestige = readProperty(root, "prestige");
-      const universe = readProperty(race, "universe");
-      const currencyId = universe === "antimatter" ? "AntiPlasmid" : "Plasmid";
-      const bank = readProperty(prestige, currencyId);
-      const handle = dependencies.controls.resolve(GENETICS_BREAKDOWN_CONTROL);
-      const reserve = readMutationReserve(dependencies.readSettings(), root);
-      const currentQuantity = finite(readProperty(bank, "count"));
-      const document = dependencies.getDocument();
+      const session = captureSlots(dependencies);
+      const race = readProperty(session?.root, "race");
+      const currencyId =
+        readProperty(race, "universe") === "antimatter"
+          ? "AntiPlasmid"
+          : "Plasmid";
+      const bank = readProperty(
+        readProperty(session?.root, "prestige"),
+        currencyId,
+      );
+      const quantity = finite(readProperty(bank, "count"));
+      const settings = dependencies.readSettings();
+      const reserve = mutationReserve(settings, session?.root);
       if (
-        level === undefined ||
-        level <= 2 ||
-        race === undefined ||
-        typeof universe !== "string" ||
+        session === undefined ||
+        !isRecord(race) ||
         !isRecord(bank) ||
+        quantity === undefined ||
+        quantity < 0 ||
         reserve === undefined ||
-        currentQuantity === undefined ||
-        currentQuantity < 0 ||
-        handle === undefined ||
-        document === undefined ||
-        document === null ||
-        (!handle.methods.includes("gain") && !handle.methods.includes("purge"))
+        !["pickable", "canCull", "gain", "cullSlot"].every((method) =>
+          session.handle.methods.includes(method),
+        )
       ) {
         mutationSession = null;
-        return unavailableMutation();
+        return { available: false, currency: null, operations: [] };
       }
-      const actions = readMutationActions(document);
-      if (actions === undefined) {
-        mutationSession = null;
-        return unavailableMutation();
-      }
-
-      const settings = dependencies.readSettings();
-      const orderedActions = actions
-        .map((action) => {
-          const priority = readPriority(settings, action.traitId);
-          return priority === undefined ? undefined : { action, priority };
-        })
-        .filter(
-          (value): value is { action: MutationAction; priority: number } =>
-            value !== undefined,
-        )
-        .sort(
-          (left, right) =>
-            left.priority - right.priority ||
-            left.action.rowIndex - right.action.rowIndex,
-        );
-
       const targets: MutationTarget[] = [];
-      const operations: GeneticsMutationOperation[] = [];
-      for (const { action } of orderedActions) {
-        const eligible = readCurrentMutationEligibility(
-          settings,
-          race,
-          action,
-          handle,
-        );
-        const operation = Object.freeze({
-          traitId: action.traitId,
-          kind: action.operation,
-          cost: readAuthoritativeMutationCost(
-            dependencies,
-            root,
-            action.traitId,
-            action.operation,
-          ),
-          eligible,
-          fromPresent: action.operation === "purge",
-        });
-        operations.push(operation);
-        targets.push({ operation, handle, race, bank });
+      for (let index = 0; index < session.slots.length; index += 1) {
+        const slot = slotIdentity(session.slots, index);
+        if (slot === undefined) continue;
+        if (slot.gene === null) {
+          const choices = nativeChoices(
+            dependencies.controls,
+            session.handle,
+            index,
+          );
+          if (choices === undefined) continue;
+          for (const traitId of choices) {
+            const priority = finite(
+              readProperty(settings, `mutableTrait_p_${traitId}`),
+            );
+            if (
+              priority === undefined ||
+              !mutationPolicy(settings, traitId, "gain")
+            )
+              continue;
+            const operation: GeneticsMutationOperation = {
+              slotIndex: index,
+              controlGeneration: session.handle.generation,
+              traitId,
+              kind: "gain",
+              cost: mutationCost(dependencies, session.root, traitId, "gain"),
+              eligible: true,
+              fromPresent: false,
+            };
+            targets.push({ operation, slot, priority });
+          }
+        } else if (
+          nativeBoolean(
+            dependencies.controls,
+            session.handle,
+            "canCull",
+            index,
+          ) === true
+        ) {
+          const priority = finite(
+            readProperty(settings, `mutableTrait_p_${slot.gene}`),
+          );
+          if (
+            priority === undefined ||
+            !mutationPolicy(settings, slot.gene, "purge")
+          )
+            continue;
+          const operation: GeneticsMutationOperation = {
+            slotIndex: index,
+            controlGeneration: session.handle.generation,
+            traitId: slot.gene,
+            kind: "purge",
+            cost: mutationCost(dependencies, session.root, slot.gene, "purge"),
+            eligible: true,
+            fromPresent: true,
+          };
+          targets.push({ operation, slot, priority });
+        }
       }
-      const visibleOperations = operations.map((operation) => {
-        const blocked =
-          blockedMutation !== null &&
-          blockedMutation.root === root &&
-          blockedMutation.generation === handle.generation &&
-          blockedMutation.expectedCurrencyQuantity === currentQuantity;
-        return blocked
-          ? Object.freeze({ ...operation, eligible: false })
-          : operation;
-      });
-      mutationSession = Object.freeze({
-        root,
-        race,
-        bank,
-        reserve,
-        targets: Object.freeze(targets),
-      });
-      return Object.freeze({
+      targets.sort(
+        (a, b) => a.priority - b.priority || a.slot.index - b.slot.index,
+      );
+      const blocked =
+        blockedMutation !== null &&
+        blockedMutation.root === session.root &&
+        blockedMutation.generation === session.handle.generation &&
+        blockedMutation.currency === quantity;
+      mutationSession = { ...session, race, bank, reserve, targets };
+      return {
         available: true,
-        currency: Object.freeze({
-          id: currencyId,
-          currentQuantity,
-          reserve,
-        }),
-        operations: Object.freeze(visibleOperations),
-      });
+        currency: { id: currencyId, currentQuantity: quantity, reserve },
+        operations: targets.map(({ operation }) =>
+          blocked ? { ...operation, eligible: false } : operation,
+        ),
+      };
     },
   });
 
@@ -767,152 +594,131 @@ export function createCapturedTraitAutomation(
       execute(
         decision: Readonly<GeneticsMutationDecision>,
       ): CommandExecutionOutcome {
-        const active = mutationSession;
-        if (active === null) {
-          return stale(
-            "mutation-session-missing",
-            "mutation session is missing",
-          );
-        }
-        if (dependencies.rootState.readRoot() !== active.root) {
-          return stale("mutation-root-changed", "captured game root changed");
-        }
-        const actualUniverse = readProperty(active.race, "universe");
-        const actualCurrencyId =
-          actualUniverse === "antimatter" ? "AntiPlasmid" : "Plasmid";
-        const actualQuantity = finite(readProperty(active.bank, "count"));
-        const currentReserve = readMutationReserve(
-          dependencies.readSettings(),
-          active.root,
-        );
+        const session = mutationSession;
         if (
-          typeof actualUniverse !== "string" ||
-          actualCurrencyId !== decision.currencyId ||
-          actualQuantity !== decision.expectedCurrencyQuantity ||
-          currentReserve !== decision.reserve
-        ) {
-          return stale("mutation-state-changed", "mutation state changed");
-        }
-        const target = active.targets.find(
+          session === null ||
+          decision.controlGeneration !== session.handle.generation ||
+          !activeGeneSlotControl(dependencies, session)
+        )
+          return stale(
+            "mutation-control-stale",
+            "gene-slot control or root changed",
+          );
+        const target = session.targets.find(
           ({ operation }) =>
+            operation.slotIndex === decision.slotIndex &&
             operation.traitId === decision.traitId &&
             operation.kind === decision.operation,
         );
-        if (target === undefined) {
-          return stale("mutation-target-changed", "mutation target changed");
-        }
-        const currentHandle = dependencies.controls.resolve(
-          GENETICS_BREAKDOWN_CONTROL,
+        if (target === undefined || !sameSlot(session.slots, target.slot))
+          return stale("mutation-slot-changed", "gene slot identity changed");
+        const settings = dependencies.readSettings();
+        if (
+          !mutationPolicy(settings, decision.traitId, decision.operation) ||
+          finite(
+            readProperty(settings, `mutableTrait_p_${decision.traitId}`),
+          ) !== target.priority
+        )
+          return stale("mutation-policy-changed", "mutation policy changed");
+        const quantity = finite(readProperty(session.bank, "count"));
+        if (
+          quantity !== decision.expectedCurrencyQuantity ||
+          mutationReserve(settings, session.root) !== decision.reserve ||
+          decision.reserve !== session.reserve
+        )
+          return stale(
+            "mutation-state-changed",
+            "mutation currency or reserve changed",
+          );
+        const cost = mutationCost(
+          dependencies,
+          session.root,
+          decision.traitId,
+          decision.operation,
         );
         if (
-          currentHandle === undefined ||
-          currentHandle.generation !== target.handle.generation
-        ) {
+          cost !== decision.cost ||
+          (cost === null
+            ? decision.reserve !== 0
+            : quantity! - cost < decision.reserve)
+        )
           return stale(
-            "mutation-control-stale",
-            "genetics breakdown control was rebound",
+            "mutation-cost-changed",
+            "mutation cost or reserve changed",
           );
-        }
-        if (own(active.race, decision.traitId) !== decision.fromPresent) {
-          return stale("mutation-trait-changed", "mutation trait changed");
-        }
-        const currentActions = readMutationActions(dependencies.getDocument());
-        const currentAction = currentActions?.find(
-          (action) =>
-            action.traitId === decision.traitId &&
-            action.operation === decision.operation,
-        );
-        if (currentAction === undefined) {
+        if (decision.operation === "gain") {
+          if (
+            target.slot.gene !== null ||
+            readProperty(session.race, decision.traitId) !== undefined ||
+            !nativeChoices(
+              dependencies.controls,
+              session.handle,
+              decision.slotIndex,
+            )?.includes(decision.traitId)
+          )
+            return stale(
+              "mutation-capability-changed",
+              "native gain choice is unavailable",
+            );
+        } else if (
+          target.slot.gene !== decision.traitId ||
+          readProperty(session.race, decision.traitId) === undefined ||
+          nativeBoolean(
+            dependencies.controls,
+            session.handle,
+            "canCull",
+            decision.slotIndex,
+          ) !== true
+        )
           return stale(
             "mutation-capability-changed",
-            "mutation is no longer offered",
+            "native cull is unavailable",
           );
-        }
-        const currentEligibility = readCurrentMutationEligibility(
-          dependencies.readSettings(),
-          active.race,
-          currentAction,
-          target.handle,
-        );
-        if (currentEligibility !== true) {
+        if (
+          readCapturedClickMultiplierState(
+            session.root,
+            dependencies.keyState,
+          ) !== false
+        )
           return stale(
-            "mutation-policy-changed",
-            "mutation policy or capability changed",
+            "mutation-click-multiplier-held",
+            "click multiplier is held or unavailable",
           );
-        }
-        if (decision.cost !== null) {
-          const currentCost = readAuthoritativeMutationCost(
-            dependencies,
-            active.root,
-            decision.traitId,
-            decision.operation,
-          );
-          if (
-            currentCost === null ||
-            currentCost !== decision.cost ||
-            actualQuantity - currentCost < decision.reserve
-          ) {
-            return stale(
-              "mutation-cost-changed",
-              "mutation cost or reserve changed",
-            );
-          }
-        } else if (decision.reserve !== 0) {
-          return stale(
-            "mutation-cost-unknown",
-            "mutation cost is unknown while a reserve is configured",
-          );
-        }
-        const multiplier = readCapturedClickMultiplierState(
-          active.root,
-          dependencies.keyState,
-        );
-        if (multiplier !== false) {
-          return stale(
-            multiplier === true
-              ? "mutation-click-multiplier-held"
-              : "mutation-click-multiplier-unknown",
-            multiplier === true
-              ? "click multiplier is held"
-              : "click multiplier state is unavailable",
-          );
-        }
-        const result = invoke(
-          dependencies.controls,
-          target.handle,
-          decision.operation,
-          [decision.traitId],
-        );
-        if (result?.ok !== true) {
-          blockedMutation = Object.freeze({
-            root: active.root,
-            generation: target.handle.generation,
-            expectedCurrencyQuantity: decision.expectedCurrencyQuantity,
-          });
-          return stale(
-            "mutation-invocation-failed",
-            result?.reason ?? "mutation invocation failed",
-          );
-        }
-        const afterQuantity = finite(readProperty(active.bank, "count"));
-        const afterPresent = own(active.race, decision.traitId);
-        const postcondition =
-          afterQuantity !== undefined &&
-          afterQuantity >= decision.reserve &&
-          afterPresent === decision.toPresent &&
-          (decision.cost === null
-            ? afterQuantity <= decision.expectedCurrencyQuantity
-            : afterQuantity ===
-              decision.expectedCurrencyQuantity - decision.cost);
-        if (!postcondition) {
-          blockedMutation = Object.freeze({
-            root: active.root,
-            generation: target.handle.generation,
-            expectedCurrencyQuantity: decision.expectedCurrencyQuantity,
-          });
+        const result =
+          decision.operation === "gain"
+            ? invoke(dependencies.controls, session.handle, "gain", [
+                decision.traitId,
+                decision.slotIndex,
+              ])
+            : invoke(dependencies.controls, session.handle, "cullSlot", [
+                decision.slotIndex,
+              ]);
+        const after = slotIdentity(session.slots, decision.slotIndex);
+        const afterQuantity = finite(readProperty(session.bank, "count"));
+        const changed =
+          decision.operation === "gain"
+            ? after?.gene === decision.traitId &&
+              readProperty(session.race, decision.traitId) !== undefined
+            : after?.gene !== decision.traitId &&
+              readProperty(session.race, decision.traitId) === undefined;
+        if (
+          result?.ok !== true ||
+          !coherentAfterAction(dependencies, session) ||
+          !changed ||
+          afterQuantity === undefined ||
+          afterQuantity < decision.reserve ||
+          (cost === null
+            ? afterQuantity > quantity!
+            : afterQuantity !== quantity! - cost)
+        ) {
+          blockedMutation = {
+            root: session.root,
+            generation: session.handle.generation,
+            currency: decision.expectedCurrencyQuantity,
+          };
           return stale(
             "mutation-noop",
-            "mutation invocation produced no verified state change",
+            "native mutation produced no verified change",
           );
         }
         blockedMutation = null;

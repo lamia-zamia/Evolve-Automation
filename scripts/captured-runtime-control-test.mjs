@@ -4,6 +4,64 @@ import { startCapturedRuntime } from "../src/bootstrap/captured-runtime-control.
 import { createGameDrawnActionsReader } from "../src/adapters/browser/game-drawn-actions.ts";
 import { createTestDocument, element } from "./dom-fixture.mjs";
 
+// Power reports a persistent exact-demand failure once and a changed authority once.
+{
+  const root = { settings: {}, race: { species: "human" } };
+  const errors = [];
+  let cycle;
+  const stop = startCapturedRuntime({
+    pageCapture: {
+      isComplete: () => true,
+      mechanics: {
+        readStructures: () => undefined,
+        readProductionBreakdown: () => undefined,
+      },
+      rootState: {
+        readRoot: () => root,
+        isReactivitySuppressed: () => false,
+        subscribeRootReplaced: () => () => {},
+      },
+      controls: withControlCaptureAuthority({
+        resolve: () => undefined,
+        invoke: () => ({ ok: false, reason: "unknown-control" }),
+        capturedElementIds: () => [],
+      }),
+      controlUsage: { readUsage: () => [] },
+      periods: {
+        subscribe(next) {
+          cycle = next;
+          return () => {};
+        },
+      },
+      mountSuppression: { available: false, withoutMounting: () => undefined },
+      uninstall: () => {},
+    },
+    document: {},
+    mouseEvent: class {},
+    storage: {
+      getItem: () =>
+        JSON.stringify({ masterScriptToggle: true, autoPower: true }),
+    },
+    logError: (message) => errors.push(message),
+  });
+  for (let i = 0; i < 5; i++) cycle({ periods: 4 });
+  assert.deepEqual(
+    errors.filter((message) => message.startsWith("autoPower:")),
+    [
+      "autoPower: captured-power-cycle-unavailable: exact demand unavailable: root resource state unavailable",
+    ],
+    JSON.stringify(errors),
+  );
+  root.resource = {};
+  cycle({ periods: 4 });
+  assert.equal(
+    errors.filter((message) => message.startsWith("autoPower:")).length,
+    2,
+  );
+  assert.notEqual(errors.at(-1), errors[0]);
+  stop();
+}
+
 function cityOfferDocument(id) {
   const root = element("div", { id: "runtime-root" });
   const city = element("div", { id: "city" });

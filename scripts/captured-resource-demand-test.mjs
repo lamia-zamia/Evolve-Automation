@@ -74,16 +74,19 @@ const root = {
     readSettings: () => ({}),
   });
   assert.equal(
-    exactDemand.sampleExact(),
-    undefined,
+    exactDemand.sampleExact().reason.message,
+    "offered technology snapshot unavailable",
     "missing technology observation",
   );
   offered = [];
-  assert.equal(exactDemand.sampleExact().requestedQuantity("Stone"), 400);
+  assert.equal(
+    exactDemand.sampleExact().sample.requestedQuantity("Stone"),
+    400,
+  );
   reservationUnavailable = true;
   assert.equal(
-    exactDemand.sampleExact(),
-    undefined,
+    exactDemand.sampleExact().status,
+    "unavailable",
     "incomplete reservation set",
   );
   assert.equal(
@@ -94,13 +97,13 @@ const root = {
   reservationUnavailable = false;
   offered = undefined;
   assert.equal(
-    exactDemand.sampleExact(),
-    undefined,
+    exactDemand.sampleExact().reason.message,
+    "offered technology snapshot unavailable",
     "expired technology observation",
   );
   offered = [];
   assert.equal(
-    exactDemand.sampleExact().requestedQuantity("Stone"),
+    exactDemand.sampleExact().sample.requestedQuantity("Stone"),
     400,
     "authoritative empty technology observation",
   );
@@ -150,7 +153,16 @@ for (const [label, queuedRoot] of [
     readOfferedTechs: () => [],
     readSettings: () => ({}),
   });
-  assert.equal(exactDemand.sampleExact(), undefined, label);
+  assert.match(
+    exactDemand.sampleExact().reason.message,
+    /queue reservation unavailable/,
+    label,
+  );
+  assert.match(
+    exactDemand.sampleExact().reason.message,
+    /tech-mining|city-mine/,
+  );
+  assert.equal(exactDemand.sampleExact().reason.code, "queue-reservation");
 }
 
 function withTargets(targets, settings = {}, saving = null, craftCosts) {
@@ -182,14 +194,14 @@ for (const catalogKind of ["building", "project"]) {
       : { readProjects: () => catalog }),
   });
   assert.equal(
-    catalogDemand.sampleExact(),
-    undefined,
+    catalogDemand.sampleExact().status,
+    "unavailable",
     `missing ${catalogKind} catalog`,
   );
   assert.equal(catalogDemand.sample().requestedQuantity("Stone"), 0);
   catalog = [];
   assert.equal(
-    catalogDemand.sampleExact().requestedQuantity("Stone"),
+    catalogDemand.sampleExact().sample.requestedQuantity("Stone"),
     0,
     `empty ${catalogKind} catalog`,
   );
@@ -1587,13 +1599,13 @@ for (const [missionId, completionTech, completionLevel] of [
   assert.deepEqual(priced, ["city-foundry", "city-refinery", "city-unpriced"]);
   assert.equal(sample.storageRequired("Alloy"), 669.5);
   assert.equal(
-    managedBuildDemand.sampleExact(),
-    undefined,
+    managedBuildDemand.sampleExact().reason.message,
+    "managed build target cannot be priced: city-unpriced",
     "fresh build offers cannot replace missing costs",
   );
   missingBuildCost = false;
   assert.equal(
-    managedBuildDemand.sampleExact().storageRequired("Alloy"),
+    managedBuildDemand.sampleExact().sample.storageRequired("Alloy"),
     669.5,
   );
 }

@@ -29,7 +29,10 @@ import type { ResourceView } from "../../../../domain/game-world.ts";
 import type { GameActionCostReader } from "../../../../ports/game-action-costs.ts";
 import { capturedPowerProducerCapability } from "./captured-power-producer-capability.ts";
 import type { CapturedMechState } from "../../../../domain/combat/mech-state.ts";
-import type { PowerReader } from "../../../../ports/power.ts";
+import type {
+  PowerReader,
+  PowerUnavailableReason,
+} from "../../../../ports/power.ts";
 import { isRecord, readProperty } from "../../../validation.ts";
 import { readCapturedResourceLabel } from "../../captured-resource-metadata.ts";
 import {
@@ -85,6 +88,7 @@ export interface CapturedPowerReaderDependencies {
   readonly resources: GameResourceSource;
   /** Resource commitments and largest observed build cost from the shared demand phase. */
   readonly readDemand: () => CapturedDemandSample | undefined;
+  readonly readDemandUnavailableReason?: () => string | undefined;
   /** The current fleet planner's `neededShips`, when that result is available. */
   readonly readFleetNeededShips?: () =>
     Readonly<Record<string, number>> | null | undefined;
@@ -1850,6 +1854,10 @@ function readPowerCycle(
   runtime: CapturedPowerReaderRuntimeOptions,
   settings: Readonly<Record<string, unknown>>,
   invalidFallbacks: Set<string>,
+  unavailable: (
+    authority: PowerUnavailableReason["authority"],
+    message: string,
+  ) => undefined,
 ): PowerCycleInput | undefined {
   let jobCounts: CapturedJobCountSnapshot | undefined;
   try {
@@ -1862,30 +1870,38 @@ function readPowerCycle(
       "archaeologist",
     ]);
   } catch {
-    return undefined;
+    return unavailable("job-counts", "job counts unavailable");
   }
-  if (dependencies.rootState.readRoot() !== root) return undefined;
+  if (dependencies.rootState.readRoot() !== root)
+    return unavailable("root", "root changed during sampling");
   const structures = dependencies.mechanics.readStructures();
   const production = dependencies.mechanics.readProductionBreakdown();
   const demand = dependencies.readDemand();
-  if (demand === undefined) return undefined;
+  if (demand === undefined)
+    return unavailable(
+      "exact-demand",
+      `exact demand unavailable: ${dependencies.readDemandUnavailableReason?.() ?? "unknown prerequisite"}`,
+    );
   const nativeOrder =
     structures === undefined
       ? undefined
       : readOrderedMechanics(root, dependencies.mechanics, structures);
-  if (
-    structures === undefined ||
-    production === undefined ||
-    nativeOrder === undefined
-  ) {
-    return undefined;
-  }
+  if (structures === undefined)
+    return unavailable("structures", "captured structures unavailable");
+  if (production === undefined)
+    return unavailable("production", "production breakdown unavailable");
+  if (nativeOrder === undefined)
+    return unavailable(
+      "native-order",
+      "native Power/support order unavailable",
+    );
   const buildingStates = readCapturedSemanticBuildingStates(
     root,
     dependencies.controls,
     dependencies.mechanics,
   );
-  if (buildingStates === undefined) return undefined;
+  if (buildingStates === undefined)
+    return unavailable("building-state", "Building semantic state unavailable");
   const allCatalog = buildingStates.map((building) => building.catalog);
   const nativeOrderIndex = new Map(
     nativeOrder.map((structure, index) => [structure.entryKey, index]),
@@ -1914,7 +1930,8 @@ function readPowerCycle(
     dependencies.mechanics,
     structures,
   );
-  if (supports === undefined) return undefined;
+  if (supports === undefined)
+    return unavailable("native-support", "native support snapshot unavailable");
   const supportMap = new Map(supports.map((item) => [item.type, item]));
   const candidates: {
     readonly record: (typeof managed)[number];
@@ -1924,7 +1941,11 @@ function readPowerCycle(
   for (const record of managed) {
     const role = record.structure.readPowerGridRole(root, record.powered);
     const grids = record.structure.readNativeSupportGrids(root);
-    if (role.kind !== "value" || grids.kind !== "value") return undefined;
+    if (role.kind !== "value" || grids.kind !== "value")
+      return unavailable(
+        "native-support",
+        `native support snapshot/coherence unavailable: ${record.catalog.binding}`,
+      );
     if (role.value === "none" && grids.value.length === 0) continue;
     candidates.push({
       record,
@@ -1981,7 +2002,8 @@ function readPowerCycle(
   const fleetNeededShipsSample = autoFleet
     ? dependencies.readFleetNeededShips?.()
     : null;
-  if (autoFleet && fleetNeededShipsSample === undefined) return undefined;
+  if (autoFleet && fleetNeededShipsSample === undefined)
+    return unavailable("fleet", "Fleet needed-ships unavailable");
   const fleetNeededShips = fleetNeededShipsSample ?? null;
 
   const powers: PowerBuildingInput[] = [];
@@ -2042,7 +2064,7 @@ function readPowerCycle(
     waygateNeedsMechState &&
     mechState === undefined
   )
-    return undefined;
+    return unavailable("mech", "Mech state unavailable");
   const spireAvailable =
     spirePolicyCandidate &&
     (settings["autoMech"] !== true || mechState !== undefined);
@@ -2053,12 +2075,13 @@ function readPowerCycle(
     readProperty(readProperty(root, "race"), "decay") === true &&
     decayLabel.kind !== "value"
   )
-    return undefined;
+    return unavailable("localization", "required localization unavailable");
   const decaySource = decayLabel.kind === "value" ? decayLabel.value : "";
   const resourceIds = new Set<string>(["Power", "Population", "Supply"]);
   if (spireAvailable) resourceIds.add("Money");
   const gameResources = readProperty(root, "resource");
-  if (!isRecord(gameResources)) return undefined;
+  if (!isRecord(gameResources))
+    return unavailable("resources", "resource snapshot unavailable");
   const speciesId = readProperty(readProperty(root, "race"), "species");
   for (const resourceId of Object.keys(gameResources)) {
     if (resourceId !== speciesId && !resourceId.endsWith("_Support"))
@@ -2088,7 +2111,10 @@ function readPowerCycle(
       title.kind === "invalid" ||
       description.kind === "invalid"
     )
-      return undefined;
+      return unavailable(
+        "building-rule",
+        `building-specific rule authority unavailable: ${binding}`,
+      );
     for (const consumption of consumptions)
       resourceIds.add(consumption.resourceId);
     for (const resourceId of produces) resourceIds.add(resourceId);
@@ -2101,7 +2127,11 @@ function readPowerCycle(
       Object.hasOwn(fleetNeededShips, record.structure.struct)
     ) {
       const needed = asNumber(fleetNeededShips[record.structure.struct]);
-      if (needed === undefined) return undefined;
+      if (needed === undefined)
+        return unavailable(
+          "fleet",
+          `Fleet needed-ships unavailable: ${record.structure.struct}`,
+        );
       fleetMaximum = needed;
     }
     const input: PowerBuildingInput = Object.freeze({
@@ -2149,7 +2179,8 @@ function readPowerCycle(
     buildingStates,
     decaySource,
   );
-  if (resourceInputs === undefined) return undefined;
+  if (resourceInputs === undefined)
+    return unavailable("resources", "resource snapshot unavailable");
   const resourceMap = new Map(resourceInputs.map((item) => [item.id, item]));
   const rawSpecies = readProperty(readProperty(root, "race"), "species");
   const populationId =
@@ -2160,7 +2191,11 @@ function readPowerCycle(
     (item) => item.id === populationId,
   );
   const power = resourceMap.get("Power");
-  if (populationModel === undefined || power === undefined) return undefined;
+  if (populationModel === undefined || power === undefined)
+    return unavailable(
+      "resources",
+      "resource snapshot unavailable: Power or Population",
+    );
   resourceMap.set("Population", populationModel);
   const buildingCounts = new Map<string, number>();
   const buildingOns = new Map<string, number>();
@@ -2191,7 +2226,11 @@ function readPowerCycle(
       mechState,
       jobCounts,
     );
-    if (rule === undefined) return undefined;
+    if (rule === undefined)
+      return unavailable(
+        "building-rule",
+        `building-specific rule authority unavailable: ${building.binding}`,
+      );
     filledPowers.push(
       Object.freeze({
         ...building,
@@ -2253,7 +2292,9 @@ function readPowerCycle(
     lake: lakeAndSpire.lake,
     spire: lakeAndSpire.spire,
   });
-  return dependencies.rootState.readRoot() === root ? cycle : undefined;
+  return dependencies.rootState.readRoot() === root
+    ? cycle
+    : unavailable("root", "root changed during sampling");
 }
 
 /** Captured Power port with panel-independent semantic Building sampling. */
@@ -2264,6 +2305,7 @@ export function createCapturedPowerReader({
   controls,
   resources,
   readDemand,
+  readDemandUnavailableReason,
   readFleetNeededShips,
   costs,
   readPurifierDescription,
@@ -2274,6 +2316,17 @@ export function createCapturedPowerReader({
   readWarnings,
 }: CapturedPowerReaderDependencies): PowerReader {
   const invalidFallbacks = new Set<string>();
+  let unavailableReason: PowerUnavailableReason = {
+    authority: "root",
+    message: "Power cycle authority unavailable",
+  };
+  const unavailable = (
+    authority: PowerUnavailableReason["authority"],
+    message: string,
+  ): undefined => {
+    unavailableReason = { authority, message };
+    return undefined;
+  };
   let fallbackRoot: unknown;
   const dependencies: CapturedPowerReaderDependencies = {
     rootState,
@@ -2282,6 +2335,9 @@ export function createCapturedPowerReader({
     controls,
     resources,
     readDemand,
+    ...(readDemandUnavailableReason === undefined
+      ? {}
+      : { readDemandUnavailableReason }),
     ...(readFleetNeededShips === undefined ? {} : { readFleetNeededShips }),
     ...(costs === undefined ? {} : { costs }),
     ...(readPurifierDescription === undefined
@@ -2295,8 +2351,13 @@ export function createCapturedPowerReader({
   };
   return Object.freeze({
     readCycle(): PowerCycleInput | undefined {
+      unavailableReason = {
+        authority: "root",
+        message: "Power cycle authority unavailable",
+      };
       const root = rootState.readRoot();
-      if (root === undefined) return undefined;
+      if (root === undefined)
+        return unavailable("root", "captured root unavailable");
       if (root !== fallbackRoot) {
         invalidFallbacks.clear();
         fallbackRoot = root;
@@ -2307,17 +2368,25 @@ export function createCapturedPowerReader({
         raw = readSettingsRaw();
         runtime = readRuntimeOptions();
       } catch {
-        return undefined;
+        return unavailable("settings", "Power settings unavailable");
       }
       if (
         !isRecord(raw) ||
         runtime === undefined ||
         !Number.isFinite(runtime.consumptionBalanceMinimum)
       ) {
-        return undefined;
+        return unavailable("settings", "Power settings unavailable");
       }
-      return readPowerCycle(root, dependencies, runtime, raw, invalidFallbacks);
+      return readPowerCycle(
+        root,
+        dependencies,
+        runtime,
+        raw,
+        invalidFallbacks,
+        unavailable,
+      );
     },
+    readUnavailableReason: () => unavailableReason,
     readWarnings(domIds: readonly string[]): readonly PowerWarnBuildingInput[] {
       return readWarnings(domIds);
     },

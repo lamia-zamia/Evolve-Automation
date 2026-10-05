@@ -15,6 +15,8 @@ export interface CostReservationSample {
    * be incomplete, and a caller must treat spending as unsafe rather than as unreserved.
    */
   readonly unavailable: boolean;
+  /** First unavailable commitment, including its queued action identity when known. */
+  readonly unavailableReason?: string;
 }
 
 export interface CostReservationSource {

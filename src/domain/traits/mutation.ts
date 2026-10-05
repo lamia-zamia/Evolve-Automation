@@ -37,6 +37,8 @@ export interface MutationDecision {
 
 /** A gain or purge currently offered by the Genetics 2.0 mutation panel. */
 export interface GeneticsMutationOperation {
+  readonly slotIndex: number;
+  readonly controlGeneration: number;
   readonly traitId: string;
   readonly kind: MutationKind;
   readonly cost: number | null;
@@ -58,6 +60,8 @@ export interface GeneticsMutationInput {
 
 export interface GeneticsMutationDecision {
   readonly kind: "mutate-trait";
+  readonly slotIndex: number;
+  readonly controlGeneration: number;
   readonly operation: MutationKind;
   readonly traitId: string;
   readonly fromPresent: boolean;
@@ -137,6 +141,8 @@ export function planGeneticsMutation(
     }
     return Object.freeze({
       kind: "mutate-trait",
+      slotIndex: operation.slotIndex,
+      controlGeneration: operation.controlGeneration,
       operation: operation.kind,
       traitId: operation.traitId,
       fromPresent: operation.fromPresent,

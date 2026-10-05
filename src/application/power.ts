@@ -44,6 +44,7 @@ export function createPowerAutomation(
           failure: {
             code: "captured-power-cycle-unavailable",
             message:
+              dependencies.reader.readUnavailableReason?.().message ??
               "Authoritative Power cycle input is unavailable; retry on a later tick.",
           },
         };

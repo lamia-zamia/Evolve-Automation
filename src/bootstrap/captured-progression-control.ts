@@ -254,6 +254,12 @@ function combineReservations(
       const right = second.readReservations();
       return Object.freeze({
         unavailable: left.unavailable || right.unavailable,
+        ...((left.unavailableReason ?? right.unavailableReason) === undefined
+          ? {}
+          : {
+              unavailableReason:
+                left.unavailableReason ?? right.unavailableReason,
+            }),
         targets: Object.freeze([...left.targets, ...right.targets]),
       });
     },

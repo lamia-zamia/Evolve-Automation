@@ -31,10 +31,12 @@ export interface MinorTraitPurchaseDecision {
   readonly expectedGenes: number;
 }
 
-export type GeneticsMinorTraitSource = "genetic-breakdown";
+export type GeneticsMinorTraitSource = "gene-slot";
 
 /** A minor upgrade offered by the live Genetics 2.0 panels. */
 export interface GeneticsMinorTraitCandidate {
+  readonly slotIndex: number;
+  readonly controlGeneration: number;
   readonly traitId: string;
   readonly source: GeneticsMinorTraitSource;
   readonly rank: number;
@@ -43,7 +45,7 @@ export interface GeneticsMinorTraitCandidate {
   readonly eligible: boolean | null;
   /** Script policy remains separate from the live panel's affordability predicate. */
   readonly enabled: boolean | null;
-  /** Position in live `global.settings.mtorder`; this is not a script setting. */
+  /** Script-owned `mTrait_p_*` priority. */
   readonly priority: number | null;
   readonly weighting: number | null;
 }
@@ -51,12 +53,14 @@ export interface GeneticsMinorTraitCandidate {
 export interface GeneticsMinorTraitInput {
   readonly available: boolean;
   readonly currentGenes: number;
-  /** Ordered by the live global.settings.mtorder list; policy chooses among these candidates. */
+  /** Current occupied native gene slots. */
   readonly traits: readonly GeneticsMinorTraitCandidate[];
 }
 
 export interface GeneticsMinorTraitUpgradeDecision {
   readonly kind: "upgrade-minor-trait";
+  readonly slotIndex: number;
+  readonly controlGeneration: number;
   readonly traitId: string;
   readonly source: GeneticsMinorTraitSource;
   readonly expectedRank: number;
@@ -114,7 +118,7 @@ export function planMinorTraitPurchase(
 
 /**
  * Select one live Genetics 2.0 minor-trait upgrade using script policy over live game offers.
- * The live `global.settings.mtorder` position is the priority. Positive weighting keeps the
+ * The script's `mTrait_p_*` setting is the priority. Positive weighting keeps the
  * legacy enabled-by-policy gate; the current game does not expose a numeric minor cost, so this
  * planner does not invent a weighting/cost ratio.
  */
@@ -159,6 +163,8 @@ export function planGeneticsMinorTrait(
   if (selected !== undefined) {
     return Object.freeze({
       kind: "upgrade-minor-trait",
+      slotIndex: selected.slotIndex,
+      controlGeneration: selected.controlGeneration,
       traitId: selected.traitId,
       source: selected.source,
       expectedRank: selected.rank,
