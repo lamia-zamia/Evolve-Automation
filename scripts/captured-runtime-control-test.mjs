@@ -1023,9 +1023,9 @@ assert.equal(unsubscribeCount, 1);
   plannerToggle.dispatch("change");
   assert.equal(page.querySelectorAll("#ea-active-targets").length, 0);
   assert.equal(page.querySelectorAll("#ea-script-planner").length, 0);
-  // The first cycle has no reservation in force yet, so the cheap candidate is still bought.
+  // The read-only order protects the expensive target even on the first cycle.
   cycle({ periods: 4 });
-  assert.deepEqual(invoked, ["city-farm"]);
+  assert.deepEqual(invoked, []);
   stateLogSettingsHostWindow.eaExportStateLog();
   const noUiStateLogBlob = stateLogBlobs.get(stateLogLinks.at(-1).href);
   const noUiStateLog = JSON.parse(noUiStateLogBlob.parts[0]);
@@ -1259,7 +1259,7 @@ assert.equal(unsubscribeCount, 1);
   cycle({ periods: 4 });
   stopCycle();
   // Both construction and runtime listeners invalidate their observations on root replacement.
-  assert.deepEqual(invoked, ["city-farm", "city-farm"]);
+  assert.deepEqual(invoked, []);
 }
 
 // Startup evaluates Interface overrides before its first captured panel reconciliation, without
@@ -2482,6 +2482,7 @@ function runCapturedJobsMatrixScenario({
       // while the stub is still throwing.
       "demand prerequisites",
       "construction demand discovery",
+      "construction saving discovery",
       "autoResearch",
       "post-research construction demand discovery",
       "autoBuild",
@@ -3097,12 +3098,10 @@ function runCombatRuntime(autoFight) {
   );
   assert.equal(
     saving.invoked.includes("market-Food.purchase"),
-    false,
+    true,
     JSON.stringify(saving),
   );
-  assert.deepEqual(saving.errors, [
-    "autoMarket stopped: TypeError: construction saving order is not established",
-  ]);
+  assert.deepEqual(saving.errors, []);
   const affordable = runDemandSampleScenario(
     {
       autoMarket: true,

@@ -160,6 +160,11 @@ export interface CapturedGameMechanics {
   ): CapturedGameRead<readonly CapturedGameStructureDefinition[]>;
   /** `undefined` means the private production ledger has not been captured or validated. */
   readProductionBreakdown(): CapturedProductionBreakdown | undefined;
+  /** Native `p_on` after the generator pass has applied support and fuel clamps. */
+  readEffectiveGeneratorCount(
+    root: unknown,
+    entryKey: string,
+  ): CapturedGameRead<number>;
   /** Localize a game-owned key for matching its current production ledger label. */
   readLocalizedText(key: string): CapturedGameRead<string>;
   /** Factor observed by synchronously probing a game-owned action effect. */

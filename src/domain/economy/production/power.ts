@@ -38,6 +38,8 @@ export interface PowerConsumptionInput {
   readonly unwindCredit: number;
   /** Validated requirement for one more copy, or null when increase must fail closed. */
   readonly enableRate: number | null;
+  /** Generator fuel actually applied at native effective p_on; null freezes fuel planning. */
+  readonly appliedGeneratorFuel?: number | null;
 }
 
 export interface BusyWorkerInput {
@@ -228,6 +230,7 @@ export interface PowerSettingsInput {
   readonly showGalactic: boolean;
   readonly limitPowered: boolean;
   readonly autoFleet: boolean;
+  readonly autoJobs?: boolean;
   /**
    * Civilians to keep out of ship crew and available for jobs. 0 disables the
    * crew-reserve balancing entirely (legacy behavior). See planPowerCycle.
@@ -298,6 +301,8 @@ export interface PowerCycleInput {
   readonly civilianPopulation: number;
   /** Civilians currently assigned as ship crew (`civic.crew.workers`). */
   readonly currentCrew: number;
+  /** Jobs' current-cycle prospective capacity; absent when enabled Jobs could not establish it. */
+  readonly prospectiveSpaceMiners?: number | null | undefined;
   readonly settings: PowerSettingsInput;
   readonly resources: readonly PowerResourceInput[];
   readonly supports: readonly PowerSupportInput[];
@@ -1235,6 +1240,24 @@ function planPowerCycleCore(
         consumption.resourceId,
         `power resource ${consumption.resourceId}`,
       );
+      if (consumption.appliedGeneratorFuel === null) {
+        maximum = Math.min(maximum, current);
+        continue;
+      }
+      if (
+        consumption.appliedGeneratorFuel !== undefined &&
+        consumption.enableRate !== null &&
+        consumption.enableRate > 0
+      ) {
+        maximum = Math.min(
+          maximum,
+          Math.max(
+            0,
+            (resource.rate + consumption.appliedGeneratorFuel) /
+              consumption.enableRate,
+          ),
+        );
+      }
       if (maximum > current && consumption.enableRate === null) {
         maximum = current;
         continue;
@@ -1291,7 +1314,28 @@ function planPowerCycleCore(
           support.input.allocation !== "unconstrained" &&
           !(probeBelt && change.type === "belt")
         ) {
-          const supported = support.available / change.amount;
+          if (
+            change.type === "belt" &&
+            maximum > current &&
+            input.settings.autoJobs === true &&
+            input.prospectiveSpaceMiners === undefined
+          ) {
+            maximum = current;
+            continue;
+          }
+          const prospectiveExtra =
+            change.type === "belt" &&
+            maximum > current &&
+            input.settings.autoJobs === true &&
+            input.prospectiveSpaceMiners !== undefined &&
+            input.prospectiveSpaceMiners !== null
+              ? Math.max(
+                  0,
+                  input.prospectiveSpaceMiners - support.input.maximum,
+                )
+              : 0;
+          const supported =
+            (support.available + prospectiveExtra) / change.amount;
           maximum = Math.min(
             maximum,
             support.input.allocation === "round-up"

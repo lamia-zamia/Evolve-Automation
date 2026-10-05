@@ -180,10 +180,9 @@ try {
     10,
     "captured Gather must change the live root",
   );
-  assert.equal(
-    gatherDemandReads[0],
-    0,
-    "Gather must run before the first construction ordering exists",
+  assert.ok(
+    gatherDemandReads[0] > 0,
+    "read-only construction ordering establishes demand before Gather",
   );
   assert.equal(purchases, 0, "Market must see post-Gather holdings");
   assert.equal(root.resource.Food.amount, 50);
@@ -195,10 +194,10 @@ try {
     "pre-Gather demand must not be attempted before construction ordering exists",
   );
   assert.ok(
-    errors.includes(
-      "autoMarket stopped: TypeError: construction saving order is not established",
+    !errors.some((message) =>
+      message.includes("construction saving order is not established"),
     ),
-    "Market must fail closed while construction ordering is unavailable",
+    "Market receives the established saving order",
   );
 
   root.resource.Food.amount = 40;
@@ -225,7 +224,8 @@ try {
   assert.equal(gatherClicks, 20, "failed demand must skip Gather");
   assert.equal(root.resource.Food.amount, 50);
   assert.ok(
-    errors.includes("pre-Gather demand stopped: Error: demand sample failed"),
+    errors.some((message) => message.includes("demand sample failed")),
+    JSON.stringify(errors),
   );
 } finally {
   stop();

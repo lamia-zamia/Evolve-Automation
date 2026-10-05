@@ -860,6 +860,7 @@ withScenario(
   (scenario) => {
     scenario.tick();
     assert.equal(scenario.gameRoot.arpa.lhc.rank, 2);
+    const marketCallsBefore = scenario.marketCalls.length;
     const drawsBefore = scenario.draws.length;
     const phasesBefore = scenario.phases.length;
     const storageReadsBefore = scenario.storageReads();
@@ -916,7 +917,7 @@ withScenario(
       false,
       JSON.stringify(scenario.errors),
     );
-    assert.deepEqual(scenario.marketCalls, []);
+    assert.equal(scenario.marketCalls.length, marketCallsBefore);
   },
 );
 
@@ -947,7 +948,7 @@ withScenario(
     scenario.tick();
     assert.deepEqual(
       scenario.marketCalls,
-      ["purchase"],
+      ["purchase", "purchase"],
       JSON.stringify(scenario.errors),
     );
   },

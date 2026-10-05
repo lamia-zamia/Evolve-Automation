@@ -272,7 +272,11 @@ export function createCapturedTraitAutomation(
   let blockedMinor: {
     root: unknown;
     generation: number;
+    slotIndex: number;
+    traitId: string;
+    rank: number;
     genes: number;
+    bank: number | undefined;
   } | null = null;
   let blockedMutation: {
     root: unknown;
@@ -317,10 +321,25 @@ export function createCapturedTraitAutomation(
         )
           continue;
         const policy = minorPolicy(settings, slot.gene);
+        const bankId =
+          readProperty(readProperty(session.root, "race"), "universe") ===
+          "antimatter"
+            ? "AntiPlasmid"
+            : "Plasmid";
+        const currentBank = finite(
+          readProperty(
+            readProperty(readProperty(session.root, "prestige"), bankId),
+            "count",
+          ),
+        );
         const eligible =
           blockedMinor !== null &&
           blockedMinor.root === session.root &&
           blockedMinor.generation === session.handle.generation &&
+          blockedMinor.slotIndex === index &&
+          blockedMinor.traitId === slot.gene &&
+          blockedMinor.rank === slot.rank &&
+          blockedMinor.bank === currentBank &&
           blockedMinor.genes === currentGenes
             ? false
             : (nativeBoolean(
@@ -448,6 +467,25 @@ export function createCapturedTraitAutomation(
           ),
         );
         if (
+          result?.ok === true &&
+          coherentAfterAction(dependencies, session) &&
+          after?.gene === decision.traitId &&
+          after.rank === decision.expectedRank &&
+          afterGenes === decision.expectedGenes &&
+          afterBank === beforeBank
+        ) {
+          blockedMinor = {
+            root: session.root,
+            generation: session.handle.generation,
+            slotIndex: decision.slotIndex,
+            traitId: decision.traitId,
+            rank: decision.expectedRank,
+            genes: decision.expectedGenes,
+            bank: beforeBank,
+          };
+          return SUCCEEDED;
+        }
+        if (
           result?.ok !== true ||
           !coherentAfterAction(dependencies, session) ||
           after === undefined ||
@@ -473,7 +511,11 @@ export function createCapturedTraitAutomation(
           blockedMinor = {
             root: session.root,
             generation: session.handle.generation,
+            slotIndex: decision.slotIndex,
+            traitId: decision.traitId,
+            rank: decision.expectedRank,
             genes: decision.expectedGenes,
+            bank: beforeBank,
           };
           return stale("minor-trait-noop", reason);
         }

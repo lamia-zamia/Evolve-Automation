@@ -85,6 +85,7 @@ export interface CapturedPowerReaderDependencies {
     root: unknown,
     jobIds: readonly string[],
   ) => CapturedJobCountSnapshot | undefined;
+  readonly readProspectiveSpaceMiners?: (root: unknown) => number | undefined;
   readonly resources: GameResourceSource;
   /** Resource commitments and largest observed build cost from the shared demand phase. */
   readonly readDemand: () => CapturedDemandSample | undefined;
@@ -436,6 +437,12 @@ export function readCapturedPowerConsumptions(
   if (supportFuel?.kind === "invalid") return undefined;
   const title = structure.readTitle();
   const result = new Map<string, PowerConsumptionInput>();
+  const nativeEffective =
+    role === "generator" &&
+    powerFuel.kind === "value" &&
+    powerFuel.value !== false
+      ? mechanics.readEffectiveGeneratorCount?.(root, structure.entryKey)
+      : null;
   const observed = (resourceId: string, source: string): number | undefined =>
     readPowerNativeConsumption(production, resourceId, source);
   const append = (
@@ -446,6 +453,7 @@ export function readCapturedPowerConsumptions(
     adjustmentDisabled = false,
     adjustmentMode: CapturedFuelAdjustmentMode | undefined = undefined,
     marginalKnown = true,
+    nativeGeneratorFuel = false,
   ) => {
     const adjustedRate =
       adjustmentDisabled || adjustmentMode === undefined
@@ -462,6 +470,11 @@ export function readCapturedPowerConsumptions(
         ? adjustedRate
         : null;
     const previous = result.get(resourceId);
+    const appliedGeneratorFuel = nativeGeneratorFuel
+      ? nativeEffective?.kind === "value" && enableRate !== null
+        ? nativeEffective.value * enableRate
+        : null
+      : undefined;
     result.set(
       resourceId,
       Object.freeze({
@@ -476,6 +489,18 @@ export function readCapturedPowerConsumptions(
             : previous === undefined
               ? enableRate
               : previous.enableRate + enableRate,
+        ...(nativeGeneratorFuel
+          ? {
+              appliedGeneratorFuel:
+                appliedGeneratorFuel === null ||
+                previous?.appliedGeneratorFuel === null
+                  ? null
+                  : (previous?.appliedGeneratorFuel ?? 0) +
+                    (appliedGeneratorFuel ?? 0),
+            }
+          : previous?.appliedGeneratorFuel === undefined
+            ? {}
+            : { appliedGeneratorFuel: previous.appliedGeneratorFuel }),
       }),
     );
   };
@@ -516,6 +541,8 @@ export function readCapturedPowerConsumptions(
         role === "consumer" ? "safe" : "observation-only",
         false,
         mode,
+        true,
+        role === "generator",
       );
     }
   }
@@ -2090,10 +2117,18 @@ function readPowerCycle(
     supportSafe = next;
   }
   const autoFleet = settings["autoFleet"] === true;
+  const fleetCapRelevant =
+    autoFleet &&
+    candidates.some(
+      ({ record }) =>
+        record.structure.region === "galaxy" &&
+        record.catalog.smart &&
+        capturedPowerSmartEnabled(record.catalog.binding, settings),
+    );
   const fleetNeededShipsSample = autoFleet
     ? dependencies.readFleetNeededShips?.()
     : null;
-  if (autoFleet && fleetNeededShipsSample === undefined)
+  if (fleetCapRelevant && fleetNeededShipsSample === undefined)
     return unavailable("fleet", "Fleet needed-ships unavailable");
   const fleetNeededShips = fleetNeededShipsSample ?? null;
 
@@ -2339,6 +2374,7 @@ function readPowerCycle(
     showGalactic: Boolean(readProperty(gameSettings, "showGalactic")),
     limitPowered: settings["buildingsLimitPowered"] === true,
     autoFleet: settings["autoFleet"] === true,
+    autoJobs: settings["autoJobs"] === true,
     crewReserve: readCrewReserve(settings["crewReserve"], population),
   });
   const lakeAndSpire = readLakeAndSpire(
@@ -2376,6 +2412,10 @@ function readPowerCycle(
     consumptionBalanceMinimum: runtime.consumptionBalanceMinimum,
     civilianPopulation: population,
     currentCrew,
+    prospectiveSpaceMiners:
+      settings["autoJobs"] === true
+        ? dependencies.readProspectiveSpaceMiners?.(root)
+        : null,
     settings: settingsInput,
     resources: resourceInputs,
     supports,
@@ -2393,6 +2433,7 @@ export function createCapturedPowerReader({
   rootState,
   mechanics,
   readJobCounts,
+  readProspectiveSpaceMiners,
   controls,
   resources,
   readDemand,
@@ -2423,6 +2464,9 @@ export function createCapturedPowerReader({
     rootState,
     mechanics,
     ...(readJobCounts === undefined ? {} : { readJobCounts }),
+    ...(readProspectiveSpaceMiners === undefined
+      ? {}
+      : { readProspectiveSpaceMiners }),
     controls,
     resources,
     readDemand,

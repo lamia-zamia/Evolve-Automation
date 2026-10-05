@@ -288,6 +288,24 @@ const fourth = structureEntry({
 entries.set(fourth.key, fourth);
 const definitions = capture.mechanics.readStructures();
 assert.equal(definitions.length, 4);
+const nativeOn = new page.Object();
+nativeOn.coal_power = 2;
+entries.set("city:coal_power", {
+  key: "city:coal_power",
+  region: "city",
+  sector: "city",
+  struct: "coal_power",
+  c_action: { id: "city-coal_power", powered: () => -1 },
+  info: false,
+});
+assert.deepEqual(
+  capture.mechanics.readEffectiveGeneratorCount(
+    { city: { coal_power: { on: 5 } } },
+    "city:coal_power",
+  ),
+  { kind: "value", value: 2 },
+  "the captured native p_on count is after the game's fuel clamp",
+);
 assert.deepEqual(
   definitions.map(({ entryKey, region, sector, struct }) => ({
     entryKey,
@@ -1023,7 +1041,7 @@ unrelatedAfter.set(
     powered: () => 1,
   }),
 );
-assert.equal(capture.mechanics.readStructures().length, 16);
+assert.equal(capture.mechanics.readStructures().length, 17);
 
 let guardRating = 37.5;
 const guardOriginalRound = Object.getOwnPropertyDescriptor(page.Math, "round");

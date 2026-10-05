@@ -39,6 +39,7 @@ export interface CapturedCostConflictReader {
   evaluate(
     cost: Readonly<Record<string, number>>,
     pool?: string,
+    excludeTargetName?: string,
   ): CapturedCostConflict;
 }
 
@@ -69,6 +70,7 @@ export function createCapturedCostConflictReader(
     evaluate(
       cost: Readonly<Record<string, number>>,
       pool?: string,
+      excludeTargetName?: string,
     ): CapturedCostConflict {
       const sample = reservations.readReservations();
       const additional = additionalReservations?.readReservations();
@@ -76,7 +78,11 @@ export function createCapturedCostConflictReader(
       const targets = [
         ...sample.targets,
         ...(additional?.targets ?? []),
-      ].filter((target) => contendsWithPool(target.pool, pool));
+      ].filter(
+        (target) =>
+          target.name !== excludeTargetName &&
+          contendsWithPool(target.pool, pool),
+      );
       if (targets.length === 0) return NONE;
 
       // One holdings sample covers the action's own cost and every reserved cost, so the

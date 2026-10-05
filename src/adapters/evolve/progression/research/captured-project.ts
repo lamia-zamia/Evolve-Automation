@@ -185,7 +185,9 @@ export function createCapturedProjectSource(
         const view = resourceView(sample, id);
         if (
           !view.present ||
-          !Number.isFinite(view.max) ||
+          // An uninitialized resource.max (notably Money.max) becomes NaN here;
+          // native checkCosts treats that as no storage ceiling.
+          (!Number.isFinite(view.max) && !Number.isNaN(view.max)) ||
           !Number.isFinite(price) ||
           price <= 0
         )

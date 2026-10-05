@@ -19,18 +19,25 @@ function fixture({
   control = true,
   held = false,
   rebindOnAction = false,
+  limitBreak = false,
+  partialRank = false,
+  universe = "standard",
 } = {}) {
   const root = {
     tech: { genetics: 3 },
     settings: { mKeys: held, keyMap: { x10: "1", x25: "2", x100: "3" } },
     race: {
       species: "human",
-      universe: "standard",
+      universe,
       geneSlots: slots,
       strong: 1,
     },
     resource: { Genes: { amount: genes } },
-    prestige: { Plasmid: { count: plasmids }, Phage: { count: 0 } },
+    prestige: {
+      Plasmid: { count: plasmids },
+      AntiPlasmid: { count: plasmids },
+      Phage: { count: 0 },
+    },
   };
   let generation = 1;
   const calls = [];
@@ -56,14 +63,19 @@ function fixture({
       if (method === "canRank")
         return {
           ok: true,
-          value:
-            root.race.geneSlots[first]?.g === "smart" &&
-            root.resource.Genes.amount >= 10,
+          value: root.race.geneSlots[first]?.g === "smart",
         };
       if (method === "rankUp") {
-        if (!noop) {
+        const bank = universe === "antimatter" ? "AntiPlasmid" : "Plasmid";
+        if (partialRank) root.resource.Genes.amount -= 1;
+        else if (
+          !noop &&
+          root.resource.Genes.amount >= 10 &&
+          (!limitBreak || root.prestige[bank].count >= 10)
+        ) {
           root.race.geneSlots[first].r++;
           root.resource.Genes.amount -= 10;
+          if (limitBreak) root.prestige[bank].count -= 10;
           if (rebindOnAction) generation++;
         }
         return { ok: true };
@@ -139,6 +151,51 @@ function fixture({
     runGeneticsMinorTraitAutomation(f.captured.minor).status,
     "succeeded",
     "native redraw after rankUp is coherent",
+  );
+}
+{
+  const f = fixture({ genes: 0 });
+  assert.equal(
+    runGeneticsMinorTraitAutomation(f.captured.minor).status,
+    "succeeded",
+  );
+  assert.equal(
+    runGeneticsMinorTraitAutomation(f.captured.minor).status,
+    "succeeded",
+  );
+  assert.equal(f.calls.filter((call) => call.method === "rankUp").length, 1);
+  f.root.resource.Genes.amount = 20;
+  assert.equal(
+    runGeneticsMinorTraitAutomation(f.captured.minor).status,
+    "succeeded",
+  );
+  assert.equal(f.root.race.geneSlots[0].r, 2);
+  assert.equal(f.calls.filter((call) => call.method === "rankUp").length, 2);
+}
+for (const universe of ["standard", "antimatter"]) {
+  const f = fixture({ genes: 20, plasmids: 0, limitBreak: true, universe });
+  const bank = universe === "antimatter" ? "AntiPlasmid" : "Plasmid";
+  assert.equal(
+    runGeneticsMinorTraitAutomation(f.captured.minor).status,
+    "succeeded",
+  );
+  assert.equal(
+    runGeneticsMinorTraitAutomation(f.captured.minor).status,
+    "succeeded",
+  );
+  assert.equal(f.calls.filter((call) => call.method === "rankUp").length, 1);
+  f.root.prestige[bank].count = 20;
+  assert.equal(
+    runGeneticsMinorTraitAutomation(f.captured.minor).status,
+    "succeeded",
+  );
+  assert.equal(f.root.race.geneSlots[0].r, 2);
+}
+{
+  const f = fixture({ partialRank: true });
+  assert.equal(
+    runGeneticsMinorTraitAutomation(f.captured.minor).status,
+    "stale",
   );
 }
 {

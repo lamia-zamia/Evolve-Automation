@@ -1345,7 +1345,11 @@ assert.ok(
   "the captured Power decision contains an actual building operation",
 );
 
-const fleetSettings = { ...settings, autoFleet: true };
+const fleetSettings = {
+  ...settings,
+  autoFleet: true,
+  "bld_s2_galaxy-cruiser_ship": true,
+};
 const fleetReader = createCapturedPowerReader({
   rootState: { readRoot: () => root },
   mechanics: createMechanics(),
@@ -1380,6 +1384,55 @@ assert.equal(
     ?.fleetMaximum,
   null,
   "non-fleet buildings retain the legacy absence of a fleet cap",
+);
+const truepathRoot = { ...root, race: { ...root.race, truepath: 1 } };
+const truepathFleetReader = createCapturedPowerReader({
+  rootState: { readRoot: () => truepathRoot },
+  mechanics: createMechanics(),
+  controls: fakeControls,
+  resources,
+  readDemand: () => EMPTY_DEMAND_SAMPLE,
+  readFleetNeededShips: () => null,
+  readSettingsRaw: () => fleetSettings,
+  readRuntimeOptions: () => ({
+    settings: {
+      showGalactic: true,
+      limitPowered: false,
+      autoFleet: true,
+      crewReserve: 0,
+    },
+    debug: false,
+    consumptionBalanceMinimum: 60,
+  }),
+  readWarnings: () => [],
+});
+assert.ok(
+  truepathFleetReader.readCycle(),
+  "not-applicable Galaxy Fleet must not block True Path Power",
+);
+const missingFleetReader = createCapturedPowerReader({
+  rootState: { readRoot: () => root },
+  mechanics: createMechanics(),
+  controls: fakeControls,
+  resources,
+  readDemand: () => EMPTY_DEMAND_SAMPLE,
+  readFleetNeededShips: () => undefined,
+  readSettingsRaw: () => fleetSettings,
+  readRuntimeOptions: () => ({
+    settings: {
+      showGalactic: true,
+      limitPowered: false,
+      autoFleet: true,
+      crewReserve: 0,
+    },
+    debug: false,
+    consumptionBalanceMinimum: 60,
+  }),
+  readWarnings: () => [],
+});
+assert.ok(
+  missingFleetReader.readCycle(),
+  "ordinary Galaxy without a smart Fleet cap continues when neededShips is unavailable",
 );
 
 const disabledSettings = { ...settings, "bld_s_space-storehouse": false };

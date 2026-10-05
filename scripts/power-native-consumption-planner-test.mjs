@@ -226,6 +226,45 @@ assert.equal(
   5,
   "a no-change plan reconstructs the native rate across safe and observation-only rows",
 );
+const reactorPlan = (effective, netRate) => {
+  const input = {
+    ...cycle,
+    resources: [resource("Power", 100), resource("Elerium", netRate, 0)],
+    buildings: [
+      building("space-e_reactor", 10, 10, [
+        {
+          resourceId: "Elerium",
+          currentTotal: 10,
+          unwindCredit: 0,
+          enableRate: 1,
+          appliedGeneratorFuel: effective,
+        },
+      ]),
+    ],
+  };
+  return planPowerCycle(
+    input,
+    EMPTY_POWER_AUTOMATION_STATE,
+  ).decision?.operations.find(
+    (op) => op.kind === "adjust-building" && op.binding === "space-e_reactor",
+  )?.amount;
+};
+assert.equal(
+  reactorPlan(0, 0),
+  -10,
+  "native zero fuel reduces every configured reactor",
+);
+assert.equal(
+  reactorPlan(3, -1),
+  -8,
+  "partial native fuel supports only two reactors",
+);
+assert.equal(reactorPlan(10, 0), 0, "sustainable reactors remain configured");
+assert.equal(
+  reactorPlan(null, -10),
+  0,
+  "missing native effective count freezes the reactor",
+);
 console.log(
   "Power planner unwinds native totals and isolates unavailable marginal requirements",
 );

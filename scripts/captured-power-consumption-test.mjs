@@ -97,7 +97,26 @@ assert.deepEqual(oilGenerator, {
   currentTotal: 10,
   unwindCredit: 0,
   enableRate: 1,
+  appliedGeneratorFuel: null,
 });
+mechanics.readEffectiveGeneratorCount = () => ({ kind: "value", value: 3 });
+assert.equal(
+  one(
+    sample(
+      "city-oil_power",
+      10,
+      { Oil: { "Oil Power": -10 } },
+      {},
+      new Set(),
+      [{ resourceId: "Oil", amount: 1 }],
+      { role: "generator", region: "city", sector: "city", title: "Oil Power" },
+    ),
+    "Oil",
+  )?.appliedGeneratorFuel,
+  3,
+  "effective native operation, not the pre-clamp ledger, funds generator planning",
+);
+delete mechanics.readEffectiveGeneratorCount;
 const starvedSupport = one(
   sample(
     "space-support",
@@ -585,7 +604,13 @@ assert.deepEqual(
     ),
     "Helium_3",
   ),
-  { resourceId: "Helium_3", currentTotal: 12, unwindCredit: 0, enableRate: 12 },
+  {
+    resourceId: "Helium_3",
+    currentTotal: 12,
+    unwindCredit: 0,
+    enableRate: 12,
+    appliedGeneratorFuel: null,
+  },
   "generator fuel remains raw without p_fuel_adjust",
 );
 assert.deepEqual(
@@ -607,7 +632,13 @@ assert.deepEqual(
     ),
     "Helium_3",
   ),
-  { resourceId: "Helium_3", currentTotal: 0, unwindCredit: 0, enableRate: 12 },
+  {
+    resourceId: "Helium_3",
+    currentTotal: 0,
+    unwindCredit: 0,
+    enableRate: 12,
+    appliedGeneratorFuel: null,
+  },
   "generator does not accept a consumer-shaped source",
 );
 for (const [region, sector, resourceId, expected] of [

@@ -939,6 +939,7 @@ function emptyGameMechanics(): CapturedGameMechanics {
     readPowerOrder: () => ({ kind: "invalid" as const }),
     readSupportOrder: () => ({ kind: "invalid" as const }),
     readProductionBreakdown: () => undefined,
+    readEffectiveGeneratorCount: () => ({ kind: "invalid" as const }),
     readLocalizedText: () => ({ kind: "absent" as const }),
     readAdjustedFuelFactor: () => ({ kind: "invalid" as const }),
     readRoundedValues: () => ({ kind: "invalid" as const }),
@@ -1098,9 +1099,73 @@ export function installCapturedGameMechanics(
   let candidateStructureMap: Map<unknown, unknown> | undefined;
   let candidateStructureKeys = new Set<string>();
   let productionBreakdownOwner: Record<string, unknown> | undefined;
+  let nativePowerOn: Record<string, unknown> | undefined;
+  const retainNativePowerOn = (receiver: Record<string, unknown>): void => {
+    nativePowerOn = receiver;
+  };
   let stopped = false;
   let mapHook: CapturedGameCall | undefined;
   let consumeSetter: ((this: unknown, value: unknown) => void) | undefined;
+  let powerOnSetter: ((this: unknown, value: unknown) => void) | undefined;
+  const originalPowerOnProbeDescriptor = isNonArrayRecord(objectPrototype)
+    ? Object.getOwnPropertyDescriptor(objectPrototype, "coal_power")
+    : undefined;
+
+  function restorePowerOnProbe(): void {
+    if (
+      powerOnSetter !== undefined &&
+      isNonArrayRecord(objectPrototype) &&
+      Object.getOwnPropertyDescriptor(objectPrototype, "coal_power")?.set ===
+        powerOnSetter
+    ) {
+      if (originalPowerOnProbeDescriptor === undefined)
+        delete objectPrototype["coal_power"];
+      else
+        Object.defineProperty(
+          objectPrototype,
+          "coal_power",
+          originalPowerOnProbeDescriptor,
+        );
+    }
+    powerOnSetter = undefined;
+  }
+
+  // Pinned vars.js keeps p_on private. Its first generator pass writes coal_power (including zero)
+  // before any fuel-dependent generator. Observe that one ordinary own-property creation, then
+  // retain only the private object; the setter is removed after the first period.
+  if (
+    isNonArrayRecord(objectPrototype) &&
+    originalPowerOnProbeDescriptor === undefined &&
+    typeof objectDefineProperty === "function"
+  ) {
+    powerOnSetter = function capturedNativePowerOnProbe(
+      this: unknown,
+      value: unknown,
+    ): void {
+      Reflect.apply(
+        objectDefineProperty as CapturedGameCall,
+        objectConstructor,
+        [
+          this,
+          "coal_power",
+          { configurable: true, enumerable: true, writable: true, value },
+        ],
+      );
+      if (
+        nativePowerOn === undefined &&
+        isNonArrayRecord(this) &&
+        typeof value === "number" &&
+        Number.isSafeInteger(value) &&
+        value >= 0
+      )
+        retainNativePowerOn(this);
+    };
+    Object.defineProperty(objectPrototype, "coal_power", {
+      configurable: true,
+      enumerable: false,
+      set: powerOnSetter,
+    });
+  }
   let unsubscribeFirstPeriod: (() => void) | undefined;
 
   function restoreMapSet(): void {
@@ -1247,6 +1312,7 @@ export function installCapturedGameMechanics(
       powerCallbackQueue = callbackQueueCandidates.values().next().value;
     restoreMapSet();
     restorePowerCallbackHooks();
+    restorePowerOnProbe();
     if (productionBreakdownOwner === undefined) restoreConsumeSetter();
     unsubscribeFirstPeriod?.();
     unsubscribeFirstPeriod = undefined;
@@ -1405,6 +1471,35 @@ export function installCapturedGameMechanics(
         consumption,
         ...(capacity === undefined ? {} : { capacity }),
       });
+    },
+    readEffectiveGeneratorCount(
+      root: unknown,
+      entryKey: string,
+    ): CapturedGameRead<number> {
+      if (
+        stopped ||
+        nativePowerOn === undefined ||
+        structureEntries === undefined
+      )
+        return { kind: "invalid" };
+      const entry = structureEntries.get(entryKey);
+      const parsed = readMechanicsEntry(entryKey, entry);
+      if (parsed === undefined) return { kind: "invalid" };
+      const state = readMechanicsProperty(
+        readMechanicsProperty(root, parsed.region),
+        parsed.struct,
+      );
+      const configured = readMechanicsProperty(state, "on");
+      const effective = readMechanicsDataProperty(nativePowerOn, parsed.struct);
+      return typeof configured === "number" &&
+        Number.isSafeInteger(configured) &&
+        configured >= 0 &&
+        typeof effective === "number" &&
+        Number.isSafeInteger(effective) &&
+        effective >= 0 &&
+        effective <= configured
+        ? { kind: "value", value: effective }
+        : { kind: "invalid" };
     },
     readLocalizedText(key: string): CapturedGameRead<string> {
       if (stopped) return { kind: "invalid" };
@@ -1597,6 +1692,7 @@ export function installCapturedGameMechanics(
       unsubscribeFirstPeriod = undefined;
       restoreMapSet();
       restorePowerCallbackHooks();
+      restorePowerOnProbe();
       restoreConsumeSetter();
     },
   });

@@ -99,6 +99,8 @@ export interface CapturedConstructionControlDependencies {
 export interface CapturedConstructionControl {
   /** Runs one construction cycle. Safe to call before the game has created its state. */
   runCycle(): CommandExecutionOutcome;
+  /** Read-only complete order for demand consumers before the paid build phase. */
+  establishOrdering(): boolean;
   /** The most recently captured A.R.P.A. project snapshot, if one exists. */
   readonly readProjects: () => readonly Readonly<OfferedProject>[] | undefined;
   /** Previous completed order with current affordability, for demand consumers. */
@@ -188,56 +190,66 @@ export function createCapturedConstructionControl(
               onDiagnostic(`progression diagnostic arpa: ${reason}`),
           }),
     });
-  const { reader, executor, observations } = createCapturedConstructionAdapter({
-    // City buildings first, matching the game's own list order, so a project only outranks a
-    // building by weighting rather than by being sampled first.
-    sources: Object.freeze([
-      createCapturedBuildSource({
-        rootState,
-        controls,
-        costs,
-        readTargets: () => readPolicy().buildings,
-        readSettings,
-        ...(dependencies.ensureBuildControls === undefined
-          ? {}
-          : { ensureControls: dependencies.ensureBuildControls }),
-        ...(onSkipped === undefined ? {} : { onSkipped }),
-        ...(onDiagnostic === undefined ? {} : { onDiagnostic }),
-        ...(onActivity === undefined ? {} : { onActivity }),
-      }),
-      createCapturedProjectSource({
-        rootState,
-        catalog,
-        resources,
-        controls,
-        context: createCapturedProjectContextReader({
-          traits: createCapturedRaceTraitSource(rootState),
-          tech: createCapturedTechSource(rootState),
-          resources,
-          achievements: createCapturedAchievementSource(rootState),
+  const { reader, executor, observations, establishOrdering } =
+    createCapturedConstructionAdapter({
+      // City buildings first, matching the game's own list order, so a project only outranks a
+      // building by weighting rather than by being sampled first.
+      sources: Object.freeze([
+        createCapturedBuildSource({
+          rootState,
+          controls,
+          costs,
+          readTargets: () => readPolicy().buildings,
           readSettings,
+          ...(dependencies.ensureBuildControls === undefined
+            ? {}
+            : { ensureControls: dependencies.ensureBuildControls }),
+          ...(onSkipped === undefined ? {} : { onSkipped }),
+          ...(onDiagnostic === undefined ? {} : { onDiagnostic }),
+          ...(onActivity === undefined ? {} : { onActivity }),
         }),
-        readSettings,
-        ...(onActivity === undefined ? {} : { onActivity }),
-        ...(onDiagnostic === undefined ? {} : { onDiagnostic }),
-      }),
-    ]),
-    resources,
-    rootState,
-    conflicts,
-    readOptions: readPolicy,
-    ...(readKnowledgeGate === undefined ? {} : { readKnowledgeGate }),
-    ...(readStorageRequired === undefined ? {} : { readStorageRequired }),
-    readPresentationSettings,
-    ...(dependencies.readStateLogPlannerDetailsDue === undefined
-      ? {}
-      : {
-          readStateLogPlannerDetailsDue:
-            dependencies.readStateLogPlannerDetailsDue,
+        createCapturedProjectSource({
+          rootState,
+          catalog,
+          resources,
+          controls,
+          context: createCapturedProjectContextReader({
+            traits: createCapturedRaceTraitSource(rootState),
+            tech: createCapturedTechSource(rootState),
+            resources,
+            achievements: createCapturedAchievementSource(rootState),
+            readSettings,
+          }),
+          readSettings,
+          ...(onActivity === undefined ? {} : { onActivity }),
+          ...(onDiagnostic === undefined ? {} : { onDiagnostic }),
         }),
-  });
+      ]),
+      resources,
+      rootState,
+      conflicts,
+      readOptions: readPolicy,
+      ...(readKnowledgeGate === undefined ? {} : { readKnowledgeGate }),
+      ...(readStorageRequired === undefined ? {} : { readStorageRequired }),
+      readPresentationSettings,
+      ...(dependencies.readStateLogPlannerDetailsDue === undefined
+        ? {}
+        : {
+            readStateLogPlannerDetailsDue:
+              dependencies.readStateLogPlannerDetailsDue,
+          }),
+    });
 
   return Object.freeze({
+    establishOrdering(): boolean {
+      if (rootState.readRoot() === undefined) return false;
+      offeredThisCycle = undefined;
+      try {
+        return establishOrdering();
+      } finally {
+        offeredThisCycle = undefined;
+      }
+    },
     runCycle(): CommandExecutionOutcome {
       if (rootState.readRoot() === undefined) return NOT_CAPTURED;
       offeredThisCycle = undefined;

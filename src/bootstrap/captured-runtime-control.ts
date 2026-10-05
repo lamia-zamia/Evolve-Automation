@@ -2086,19 +2086,30 @@ export function startCapturedRuntime({
       pageCapture.controls.resolve(PYLON_CONTROL) !== undefined;
     if (satisfied()) return;
     const root = pageCapture.rootState.readRoot();
-    const tech = readProperty(root, "tech");
-    const magic = readProperty(tech, "magic");
-    if (typeof magic !== "number" || !Number.isFinite(magic) || magic < 3) {
+    if (!readProperty(readProperty(root, "race"), "casting")) return;
+    if (
+      !["city", "space", "tauceti"].some((region) =>
+        readProperty(readProperty(root, region), "pylon"),
+      )
+    )
       return;
-    }
-    if (pageCapture.controls.resolve(MAIN_TAB_CONTROL) === undefined) {
+    const govTabs = SUB_TAB_CONTROLS[GOV_TABS_SETTING];
+    if (
+      pageCapture.controls.resolve(MAIN_TAB_CONTROL) === undefined ||
+      govTabs === undefined ||
+      pageCapture.controls.resolve(govTabs) === undefined
+    )
       return;
-    }
     finishDiscovery("pylon", "pylon", satisfied, undefined, [
       Object.freeze({
         setting: MAIN_TAB_SETTING,
         control: MAIN_TAB_CONTROL,
-        index: MAIN_TAB_INDEX.civilization,
+        index: MAIN_TAB_INDEX.civic,
+      }),
+      Object.freeze({
+        setting: GOV_TABS_SETTING,
+        control: govTabs,
+        index: GOV_TAB_INDEX.industry,
       }),
     ]);
   };
@@ -2605,15 +2616,38 @@ export function startCapturedRuntime({
     log: (message) =>
       onActivity({ message, color: "has-text-info", tags: ["automation"] }),
   });
+  let prospectiveSpaceMinerPlan:
+    { readonly root: unknown; readonly maximum: number } | undefined;
+  pageCapture.rootState.subscribeRootReplaced?.(() => {
+    prospectiveSpaceMinerPlan = undefined;
+  });
+  const publishSpaceMinerPlan = (decision: {
+    readonly maximumSpaceMiners: number;
+  }) => {
+    const root = pageCapture.rootState.readRoot();
+    prospectiveSpaceMinerPlan =
+      root !== undefined && Number.isFinite(decision.maximumSpaceMiners)
+        ? { root, maximum: decision.maximumSpaceMiners }
+        : undefined;
+  };
   const powerReader = createCapturedPowerReader({
     rootState: pageCapture.rootState,
     mechanics: pageCapture.mechanics,
     readJobCounts: ordinaryJobs.readJobCounts,
+    readProspectiveSpaceMiners: (root) => {
+      const plan = prospectiveSpaceMinerPlan;
+      return plan !== undefined && plan.root === root
+        ? plan.maximum
+        : undefined;
+    },
     controls: pageCapture.controls,
     resources: createCapturedResourceSource(pageCapture.rootState),
     readDemand: () => demandThisCycle,
     readDemandUnavailableReason: () => exactDemandUnavailableReason,
-    readFleetNeededShips: fleet.readNeededShips,
+    readFleetNeededShips: () =>
+      isCapturedTruepath(pageCapture.rootState.readRoot())
+        ? null
+        : fleet.readNeededShips(),
     costs: buildCosts,
     readPurifierDescription: () =>
       capturedPowerExecution.readDescription("portal-purifier"),
@@ -2739,6 +2773,7 @@ export function startCapturedRuntime({
 
   const runCycle = () => {
     automationCycle += 1;
+    prospectiveSpaceMinerPlan = undefined;
     capturedResetCommittedThisCycle = false;
     currentStateLogConstructionSnapshot = null;
     stateLogPlannerDetailsDue = false;
@@ -2841,10 +2876,21 @@ export function startCapturedRuntime({
           else ensureGalaxyFleetControls();
         });
       }
+      const constructionDemandReady =
+        !isEnabled(settings, "autoBuild") && !isEnabled(settings, "autoARPA")
+          ? true
+          : runPhase("construction saving discovery", () => {
+              const ready = progression.establishConstructionOrdering();
+              if (!ready)
+                reportOnce(
+                  "construction saving authority unavailable: candidate catalog or current price incomplete",
+                );
+              return ready;
+            }) === true;
       const gatherEnabled =
         isEnabled(settings, "autoBuild") ||
         isEnabled(settings, "buildingAlwaysClick");
-      if (gatherEnabled) {
+      if (gatherEnabled && constructionDemandReady) {
         const needsConstructionSaving =
           isEnabled(settings, "autoBuild") || isEnabled(settings, "autoARPA");
         const savingOrderReady =
@@ -2861,7 +2907,7 @@ export function startCapturedRuntime({
           }
         }
       }
-      if (isEnabled(settings, "autoMarket")) {
+      if (constructionDemandReady && isEnabled(settings, "autoMarket")) {
         runPhase("autoMarket", () => {
           ensureMarketControls();
           refreshDiscoveredSettings();
@@ -2875,7 +2921,7 @@ export function startCapturedRuntime({
           hell.run();
         });
       }
-      if (isEnabled(settings, "autoGalaxyMarket")) {
+      if (constructionDemandReady && isEnabled(settings, "autoGalaxyMarket")) {
         runPhase("autoGalaxyMarket", () => {
           ensureGalaxyMarketControls();
           refreshDiscoveredSettings();
@@ -2894,7 +2940,7 @@ export function startCapturedRuntime({
           graphene.run();
         });
       }
-      if (isEnabled(settings, "autoAlchemy")) {
+      if (constructionDemandReady && isEnabled(settings, "autoAlchemy")) {
         runPhase("autoAlchemy", () => {
           ensureAlchemyControls();
           refreshDiscoveredSettings();
@@ -2940,7 +2986,7 @@ export function startCapturedRuntime({
           ratios.miningShip();
         });
       }
-      if (isEnabled(settings, "autoSmelter")) {
+      if (constructionDemandReady && isEnabled(settings, "autoSmelter")) {
         runPhase("autoSmelter", () => {
           ensureSmelterControls();
           refreshDiscoveredSettings();
@@ -2949,7 +2995,7 @@ export function startCapturedRuntime({
       }
       // Storage settles the quantum and storage allocation before Jobs, Fleet, Mech and Power
       // observe the resource ledger their own reads and allocations depend on.
-      if (isEnabled(settings, "autoStorage")) {
+      if (constructionDemandReady && isEnabled(settings, "autoStorage")) {
         runPhase("autoStorage", () => {
           ensureStorageControls();
           refreshDiscoveredSettings();
@@ -2966,7 +3012,7 @@ export function startCapturedRuntime({
         demandThisCycle = undefined;
         savingTargetThisCycle = undefined;
       }
-      if (isEnabled(settings, "autoReplicator")) {
+      if (constructionDemandReady && isEnabled(settings, "autoReplicator")) {
         runPhase("autoReplicator", () => {
           ensureReplicatorControls();
           replicator.run();
@@ -3114,7 +3160,11 @@ export function startCapturedRuntime({
           ensureCivicControls();
           refreshDiscoveredSettings();
           combinedJobs = fullJobs.isAvailable();
-          if (combinedJobs) runJobsAutomation(fullJobs, false);
+          if (combinedJobs)
+            runJobsAutomation(
+              { ...fullJobs, onCoherentPlan: publishSpaceMinerPlan },
+              false,
+            );
         });
         // The combined path owns this settings combination even when the sampled command fails;
         // split passes must not make a second decision in the same cycle.
@@ -3124,7 +3174,10 @@ export function startCapturedRuntime({
         runPhase("autoJobs", () => {
           ensureCivicControls();
           refreshDiscoveredSettings();
-          runJobsAutomation(ordinaryJobs, false);
+          runJobsAutomation(
+            { ...ordinaryJobs, onCoherentPlan: publishSpaceMinerPlan },
+            false,
+          );
         });
       }
       if (autoCraftsmen && !combinedJobs) {
@@ -3321,6 +3374,23 @@ export function startCapturedRuntime({
         runPhase("pre-Power research demand observation", () => {
           ensureDemandResearchObservation();
         });
+        if (
+          hasCapturedProjectStorageDemand(settings, settingsStorage.readRaw())
+        ) {
+          runPhase("pre-Power project demand discovery", () => {
+            progression.readProjects();
+            refreshDiscoveredSettings();
+          });
+        }
+        if (
+          isEnabled(settings, "autoBuild") ||
+          isEnabled(settings, "autoStorage")
+        ) {
+          runPhase("pre-Power building demand discovery", () => {
+            progression.readUnlockedStorageBuildTargets();
+            refreshDiscoveredSettings();
+          });
+        }
         runPhase("autoPower", () => {
           observePowerDemandPhase("power-handoff-start");
           // Power reads live holdings, Fleet and Building state at this phase, so the refresh

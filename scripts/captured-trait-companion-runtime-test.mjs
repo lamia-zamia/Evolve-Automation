@@ -13,6 +13,7 @@ function createFixture({
   settings = {},
   controls = {},
   documentSetup = () => {},
+  cycles = 1,
 }) {
   const invocations = [];
   const lookups = new Map();
@@ -108,7 +109,7 @@ function createFixture({
     storage,
     logError: (message) => errors.push(message),
   });
-  periodListener({ periods: 1 });
+  for (let cycle = 0; cycle < cycles; cycle++) periodListener({ periods: 1 });
   stop();
   return { root, handles, invocations, lookups, errors };
 }
@@ -1084,6 +1085,32 @@ for (const [slot, capacity, expected] of [
   assert.equal(lookupCount(fixture, "psychicBoost"), 0);
   assert.equal(lookupCount(fixture, "psychicKill"), 0);
   assert.equal(fixture.invocations.length, 0);
+}
+
+{
+  const root = coreRoot(
+    { geneSlots: [{ g: "smart", r: 1 }], universe: "standard" },
+    { genetics: 3 },
+    { Genes: resource(0, 100) },
+  );
+  root.prestige.Plasmid = { count: 0 };
+  const fixture = createFixture({
+    root,
+    cycles: 3,
+    settings: { mTrait_smart: true, mTrait_p_smart: 0, mTrait_w_smart: 1 },
+    controls: {
+      geneSlots: {
+        isGene: () => true,
+        canRank: () => true,
+        rankUp: () => {},
+      },
+    },
+  });
+  assert.equal(count(fixture, "geneSlots", "rankUp"), 1);
+  assert.ok(
+    !fixture.errors.some((message) => message.includes("minor-trait-noop")),
+    JSON.stringify(fixture.errors),
+  );
 }
 
 console.log("captured trait companion runtime tests passed");

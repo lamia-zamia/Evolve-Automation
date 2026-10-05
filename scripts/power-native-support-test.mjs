@@ -150,6 +150,8 @@ function beltPlan({
   ironCount = 0,
   manageElerium = true,
   frozen = false,
+  autoJobs = false,
+  prospectiveSpaceMiners,
 } = {}) {
   const station = {
     ...building("space-space_station", [
@@ -231,6 +233,7 @@ function beltPlan({
       showGalactic: true,
       limitPowered: true,
       autoFleet: false,
+      autoJobs,
       crewReserve: 0,
     },
     resources: [
@@ -255,6 +258,7 @@ function beltPlan({
         allocation: "strict",
       },
     ],
+    prospectiveSpaceMiners,
     buildings: frozen
       ? []
       : [
@@ -346,6 +350,29 @@ assert.equal(
   0,
 );
 assert.deepEqual(beltPlan({ frozen: true }), []);
+assert.equal(
+  beltPlan({ stationCount: 1, autoJobs: true, prospectiveSpaceMiners: 9 }).find(
+    ([id]) => id === "space-elerium_ship",
+  )?.[1],
+  1,
+  "Jobs' prospective headroom allows a Belt ship before its miners are assigned",
+);
+assert.equal(
+  beltPlan({
+    stationCount: 1,
+    autoJobs: false,
+    prospectiveSpaceMiners: 9,
+  }).find(([id]) => id === "space-elerium_ship")?.[1],
+  0,
+  "disabled Jobs uses only currently assigned miners",
+);
+assert.equal(
+  beltPlan({ stationCount: 1, autoJobs: true }).find(
+    ([id]) => id === "space-elerium_ship",
+  )?.[1],
+  0,
+  "missing Jobs headroom freezes the prospective ship increase",
+);
 assert.equal(
   beltPlan({ manageElerium: false }).find(
     ([id]) => id === "space-space_station",

@@ -141,6 +141,7 @@ export interface CapturedProgressionControl {
   /** Clears the prior offer observation and panel scopes for one enabled, processed cycle. */
   readonly beginProcessedCycle: () => void;
   readonly runConstructionCycle: () => CommandExecutionOutcome;
+  readonly establishConstructionOrdering: () => boolean;
   readonly runResearchCycle: () => CommandExecutionOutcome;
   /** The most recently captured offered-technology snapshot, if one exists. */
   readonly readOfferedTechs: () => readonly Readonly<OfferedTech>[] | undefined;
@@ -927,6 +928,7 @@ export function createCapturedProgressionControl(
         resetProjectSample();
       }
     },
+    establishConstructionOrdering: construction.establishOrdering,
     runResearchCycle: () => research.runCycle(),
     readOfferedTechs: readCurrentOfferedTechs,
     sampleOfferedTechs,

@@ -2088,6 +2088,7 @@
       readSupportOrder: () => ({ kind: "invalid" }),
       readProductionBreakdown: () => {
       },
+      readEffectiveGeneratorCount: () => ({ kind: "invalid" }),
       readLocalizedText: () => ({ kind: "absent" }),
       readAdjustedFuelFactor: () => ({ kind: "invalid" }),
       readRoundedValues: () => ({ kind: "invalid" }),
@@ -2150,7 +2151,32 @@
         value: callbackClearHook
       });
     }
-    let candidateStructureMap, candidateStructureKeys = /* @__PURE__ */ new Set(), productionBreakdownOwner, stopped = !1, mapHook, consumeSetter, unsubscribeFirstPeriod;
+    let candidateStructureMap, candidateStructureKeys = /* @__PURE__ */ new Set(), productionBreakdownOwner, nativePowerOn, retainNativePowerOn = (receiver) => {
+      nativePowerOn = receiver;
+    }, stopped = !1, mapHook, consumeSetter, powerOnSetter, originalPowerOnProbeDescriptor = isNonArrayRecord(objectPrototype) ? Object.getOwnPropertyDescriptor(objectPrototype, "coal_power") : void 0;
+    function restorePowerOnProbe() {
+      powerOnSetter !== void 0 && isNonArrayRecord(objectPrototype) && Object.getOwnPropertyDescriptor(objectPrototype, "coal_power")?.set === powerOnSetter && (originalPowerOnProbeDescriptor === void 0 ? delete objectPrototype.coal_power : Object.defineProperty(
+        objectPrototype,
+        "coal_power",
+        originalPowerOnProbeDescriptor
+      )), powerOnSetter = void 0;
+    }
+    isNonArrayRecord(objectPrototype) && originalPowerOnProbeDescriptor === void 0 && typeof objectDefineProperty == "function" && (powerOnSetter = function(value) {
+      Reflect.apply(
+        objectDefineProperty,
+        objectConstructor,
+        [
+          this,
+          "coal_power",
+          { configurable: !0, enumerable: !0, writable: !0, value }
+        ]
+      ), nativePowerOn === void 0 && isNonArrayRecord(this) && typeof value == "number" && Number.isSafeInteger(value) && value >= 0 && retainNativePowerOn(this);
+    }, Object.defineProperty(objectPrototype, "coal_power", {
+      configurable: !0,
+      enumerable: !1,
+      set: powerOnSetter
+    }));
+    let unsubscribeFirstPeriod;
     function restoreMapSet() {
       mapHook !== void 0 && isNonArrayRecord(mapPrototype) && Object.getOwnPropertyDescriptor(mapPrototype, "set")?.value === mapHook && mapSetDescriptor !== void 0 && Object.defineProperty(mapPrototype, "set", mapSetDescriptor), mapHook = void 0;
     }
@@ -2209,7 +2235,7 @@
       });
     }
     function restoreUnmatchedHooksAfterFirstPeriod() {
-      callbackQueueCandidates.size === 1 && (powerCallbackQueue = callbackQueueCandidates.values().next().value), restoreMapSet(), restorePowerCallbackHooks(), productionBreakdownOwner === void 0 && restoreConsumeSetter(), unsubscribeFirstPeriod?.(), unsubscribeFirstPeriod = void 0;
+      callbackQueueCandidates.size === 1 && (powerCallbackQueue = callbackQueueCandidates.values().next().value), restoreMapSet(), restorePowerCallbackHooks(), restorePowerOnProbe(), productionBreakdownOwner === void 0 && restoreConsumeSetter(), unsubscribeFirstPeriod?.(), unsubscribeFirstPeriod = void 0;
     }
     unsubscribeFirstPeriod = periods.subscribe(
       restoreUnmatchedHooksAfterFirstPeriod
@@ -2303,6 +2329,17 @@
           ...capacity === void 0 ? {} : { capacity }
         });
       },
+      readEffectiveGeneratorCount(root, entryKey) {
+        if (stopped || nativePowerOn === void 0 || structureEntries === void 0)
+          return { kind: "invalid" };
+        let entry = structureEntries.get(entryKey), parsed = readMechanicsEntry(entryKey, entry);
+        if (parsed === void 0) return { kind: "invalid" };
+        let state = readMechanicsProperty(
+          readMechanicsProperty(root, parsed.region),
+          parsed.struct
+        ), configured = readMechanicsProperty(state, "on"), effective = readMechanicsDataProperty(nativePowerOn, parsed.struct);
+        return typeof configured == "number" && Number.isSafeInteger(configured) && configured >= 0 && typeof effective == "number" && Number.isSafeInteger(effective) && effective >= 0 && effective <= configured ? { kind: "value", value: effective } : { kind: "invalid" };
+      },
       readLocalizedText(key) {
         if (stopped) return { kind: "invalid" };
         let game = readMechanicsProperty(pageWindow, "game"), localize = readMechanicsProperty(game, "loc");
@@ -2395,7 +2432,7 @@
     return Object.freeze({
       mechanics,
       uninstall() {
-        stopped || (stopped = !0, unsubscribeFirstPeriod?.(), unsubscribeFirstPeriod = void 0, restoreMapSet(), restorePowerCallbackHooks(), restoreConsumeSetter());
+        stopped || (stopped = !0, unsubscribeFirstPeriod?.(), unsubscribeFirstPeriod = void 0, restoreMapSet(), restorePowerCallbackHooks(), restorePowerOnProbe(), restoreConsumeSetter());
       }
     });
   }
@@ -5027,13 +5064,15 @@
   function createCapturedCostConflictReader(dependencies) {
     let { resources, reservations } = dependencies, additionalReservations = dependencies.additionalReservations;
     return Object.freeze({
-      evaluate(cost, pool) {
+      evaluate(cost, pool, excludeTargetName) {
         let sample = reservations.readReservations(), additional = additionalReservations?.readReservations();
         if (sample.unavailable || additional?.unavailable) return UNAVAILABLE2;
         let targets = [
           ...sample.targets,
           ...additional?.targets ?? []
-        ].filter((target) => contendsWithPool(target.pool, pool));
+        ].filter(
+          (target) => target.name !== excludeTargetName && contendsWithPool(target.pool, pool)
+        );
         if (targets.length === 0) return NONE;
         let wanted = new Set(Object.keys(cost));
         for (let target of targets)
@@ -5598,7 +5637,7 @@
     rootState.subscribeRootReplaced?.(() => {
       completedIntent = void 0, cycleReadyToPublish = !1;
     });
-    let knowledgeRequirement = 0, constructionCycleId = 0, uiPresentationMode = "off", capturePlannerDetails = !1, stateLogDetailsDue = !1, plannerAffordability = /* @__PURE__ */ new Map(), plannerResources = /* @__PURE__ */ new Map();
+    let knowledgeRequirement = 0, constructionCycleId = 0, orderingOnly = !1, uiPresentationMode = "off", capturePlannerDetails = !1, stateLogDetailsDue = !1, plannerAffordability = /* @__PURE__ */ new Map(), plannerResources = /* @__PURE__ */ new Map();
     function capturePlannerResources(index, candidate) {
       try {
         let resourceIds = Object.keys(candidate.cost), sample = resources.readResources(
@@ -5711,7 +5750,7 @@
       beginCycle() {
         cycleReadyToPublish = !1;
         let options = readOptions3();
-        constructionCycleId++;
+        orderingOnly || constructionCycleId++;
         let presentationSettings = dependencies.readPresentationSettings?.(), stateLogPlannerDetailsDue = dependencies.readStateLogPlannerDetailsDue?.() === !0;
         uiPresentationMode = presentationSettings?.buildPlannerUI === !0 ? "planner" : presentationSettings?.activeTargetsUI === !0 ? "targets" : "off", stateLogDetailsDue = stateLogPlannerDetailsDue, capturePlannerDetails = uiPresentationMode === "planner" || stateLogDetailsDue, plannerAffordability = /* @__PURE__ */ new Map(), plannerResources = /* @__PURE__ */ new Map(), respectReservations = options.respectReservations;
         let entries = [], owners = /* @__PURE__ */ new Map(), sourcesComplete = !0;
@@ -5781,7 +5820,11 @@
         let { candidate } = entryAt(index), important = candidate.important;
         if (!respectReservations)
           return Object.freeze({ conflict: null, important });
-        let evaluated = conflicts.evaluate(candidate.cost, candidate.pool);
+        let evaluated = conflicts.evaluate(
+          candidate.cost,
+          candidate.pool,
+          candidate.key
+        );
         return evaluated.status === "none" ? Object.freeze({ conflict: null, important }) : evaluated.status === "unavailable" ? Object.freeze({
           conflict: Object.freeze({
             unavailable: !0,
@@ -5889,6 +5932,14 @@
     return Object.freeze({
       reader,
       executor,
+      establishOrdering() {
+        orderingOnly = !0;
+        try {
+          return reader.beginCycle(), cycleReadyToPublish ? (reader.finishCycle?.(!0), !0) : !1;
+        } finally {
+          orderingOnly = !1;
+        }
+      },
       observations: Object.freeze({
         hasCompletedOrdering: () => completedIntent !== void 0,
         readSavingTarget() {
@@ -6243,7 +6294,9 @@
         );
         for (let [id, price] of Object.entries(perPercent)) {
           let view = resourceView(sample, id);
-          if (!view.present || !Number.isFinite(view.max) || !Number.isFinite(price) || price <= 0)
+          if (!view.present || // An uninitialized resource.max (notably Money.max) becomes NaN here;
+          // native checkCosts treats that as no storage ceiling.
+          !Number.isFinite(view.max) && !Number.isNaN(view.max) || !Number.isFinite(price) || price <= 0)
             return;
           view.max >= 0 && (steps = Math.min(steps, Math.floor(view.max / price)));
         }
@@ -6813,7 +6866,7 @@
       ...onDiagnostic === void 0 ? {} : {
         onDiagnostic: (reason) => onDiagnostic(`progression diagnostic arpa: ${reason}`)
       }
-    }), { reader, executor, observations } = createCapturedConstructionAdapter({
+    }), { reader, executor, observations, establishOrdering } = createCapturedConstructionAdapter({
       // City buildings first, matching the game's own list order, so a project only outranks a
       // building by weighting rather than by being sampled first.
       sources: Object.freeze([
@@ -6857,6 +6910,15 @@
       }
     });
     return Object.freeze({
+      establishOrdering() {
+        if (rootState.readRoot() === void 0) return !1;
+        offeredThisCycle = void 0;
+        try {
+          return establishOrdering();
+        } finally {
+          offeredThisCycle = void 0;
+        }
+      },
       runCycle() {
         if (rootState.readRoot() === void 0) return NOT_CAPTURED;
         offeredThisCycle = void 0;
@@ -10823,6 +10885,7 @@
           resetProjectSample();
         }
       },
+      establishConstructionOrdering: construction.establishOrdering,
       runResearchCycle: () => research.runCycle(),
       readOfferedTechs: readCurrentOfferedTechs,
       sampleOfferedTechs,
@@ -11446,7 +11509,9 @@
   });
   function runJobsAutomation(dependencies, craftOnly = !1) {
     let decision = planJobs(dependencies.reader.readCycle(craftOnly));
-    return decision === null ? SUCCEEDED5 : dependencies.executor.execute(decision);
+    if (decision === null) return SUCCEEDED5;
+    let outcome = dependencies.executor.execute(decision);
+    return outcome.status === "succeeded" && !craftOnly && dependencies.onCoherentPlan?.(decision), outcome;
   }
 
   // src/application/prestige.ts
@@ -14412,7 +14477,12 @@
             index
           ) !== !0)
             continue;
-          let policy = minorPolicy(settings, slot.gene), eligible = blockedMinor !== null && blockedMinor.root === session.root && blockedMinor.generation === session.handle.generation && blockedMinor.genes === currentGenes ? !1 : nativeBoolean(
+          let policy = minorPolicy(settings, slot.gene), bankId = readProperty(readProperty(session.root, "race"), "universe") === "antimatter" ? "AntiPlasmid" : "Plasmid", currentBank = finite(
+            readProperty(
+              readProperty(readProperty(session.root, "prestige"), bankId),
+              "count"
+            )
+          ), eligible = blockedMinor !== null && blockedMinor.root === session.root && blockedMinor.generation === session.handle.generation && blockedMinor.slotIndex === index && blockedMinor.traitId === slot.gene && blockedMinor.rank === slot.rank && blockedMinor.bank === currentBank && blockedMinor.genes === currentGenes ? !1 : nativeBoolean(
             dependencies.controls,
             session.handle,
             "canRank",
@@ -14498,12 +14568,26 @@
             "count"
           )
         );
+        if (result?.ok === !0 && coherentAfterAction(dependencies, session) && after?.gene === decision.traitId && after.rank === decision.expectedRank && afterGenes === decision.expectedGenes && afterBank === beforeBank)
+          return blockedMinor = {
+            root: session.root,
+            generation: session.handle.generation,
+            slotIndex: decision.slotIndex,
+            traitId: decision.traitId,
+            rank: decision.expectedRank,
+            genes: decision.expectedGenes,
+            bank: beforeBank
+          }, SUCCEEDED;
         if (result?.ok !== !0 || !coherentAfterAction(dependencies, session) || after === void 0 || after.gene !== decision.traitId || after.rank === null || after.rank <= decision.expectedRank || afterGenes === void 0 || afterGenes > decision.expectedGenes || beforeBank !== void 0 && (afterBank === void 0 || afterBank > beforeBank)) {
           let reason = result?.ok !== !0 ? "native rankUp invocation failed" : coherentAfterAction(dependencies, session) ? after === void 0 || after.gene !== decision.traitId || after.rank === null || after.rank <= decision.expectedRank ? "native rankUp did not increase the expected slot" : "native rankUp left an invalid currency balance" : "native rankUp rebound without a coherent slot control";
           return blockedMinor = {
             root: session.root,
             generation: session.handle.generation,
-            genes: decision.expectedGenes
+            slotIndex: decision.slotIndex,
+            traitId: decision.traitId,
+            rank: decision.expectedRank,
+            genes: decision.expectedGenes,
+            bank: beforeBank
           }, stale("minor-trait-noop", reason);
         }
         return blockedMinor = null, SUCCEEDED;
@@ -27139,7 +27223,17 @@
           consumption.resourceId,
           `power resource ${consumption.resourceId}`
         );
-        if (maximum > current && consumption.enableRate === null) {
+        if (consumption.appliedGeneratorFuel === null) {
+          maximum = Math.min(maximum, current);
+          continue;
+        }
+        if (consumption.appliedGeneratorFuel !== void 0 && consumption.enableRate !== null && consumption.enableRate > 0 && (maximum = Math.min(
+          maximum,
+          Math.max(
+            0,
+            (resource.rate + consumption.appliedGeneratorFuel) / consumption.enableRate
+          )
+        )), maximum > current && consumption.enableRate === null) {
           maximum = current;
           continue;
         }
@@ -27176,7 +27270,14 @@
             break;
           }
           if (support.input.allocation !== "unconstrained" && !(probeBelt && change.type === "belt")) {
-            let supported = support.available / change.amount;
+            if (change.type === "belt" && maximum > current && input.settings.autoJobs === !0 && input.prospectiveSpaceMiners === void 0) {
+              maximum = current;
+              continue;
+            }
+            let prospectiveExtra = change.type === "belt" && maximum > current && input.settings.autoJobs === !0 && input.prospectiveSpaceMiners !== void 0 && input.prospectiveSpaceMiners !== null ? Math.max(
+              0,
+              input.prospectiveSpaceMiners - support.input.maximum
+            ) : 0, supported = (support.available + prospectiveExtra) / change.amount;
             maximum = Math.min(
               maximum,
               support.input.allocation === "round-up" ? Math.ceil(supported) : supported
@@ -28494,15 +28595,18 @@
     if (powerFuel.kind === "invalid") return;
     let iceAgeSpecialFuel = ICEAGE_SPECIAL_FUEL_BINDINGS.has(binding), supportFuel = nativeSupportParticipant || iceAgeSpecialFuel ? structure.readSupportFuel() : null;
     if (supportFuel?.kind === "invalid") return;
-    let title = structure.readTitle(), result = /* @__PURE__ */ new Map(), observed2 = (resourceId, source) => readPowerNativeConsumption(production, resourceId, source), append = (resourceId, rate, source, ledgerCredit, adjustmentDisabled = !1, adjustmentMode = void 0, marginalKnown = !0) => {
-      let adjustedRate = adjustmentDisabled || adjustmentMode === void 0 ? rate : readFuelRate(mechanics, resourceId, rate, adjustmentMode), currentTotal = source === null ? void 0 : observed2(resourceId, source), enableRate = marginalKnown && adjustedRate !== void 0 && Number.isFinite(adjustedRate) && adjustedRate >= 0 && currentTotal !== void 0 ? adjustedRate : null, previous = result.get(resourceId);
+    let title = structure.readTitle(), result = /* @__PURE__ */ new Map(), nativeEffective = role === "generator" && powerFuel.kind === "value" && powerFuel.value !== !1 ? mechanics.readEffectiveGeneratorCount?.(root, structure.entryKey) : null, observed2 = (resourceId, source) => readPowerNativeConsumption(production, resourceId, source), append = (resourceId, rate, source, ledgerCredit, adjustmentDisabled = !1, adjustmentMode = void 0, marginalKnown = !0, nativeGeneratorFuel = !1) => {
+      let adjustedRate = adjustmentDisabled || adjustmentMode === void 0 ? rate : readFuelRate(mechanics, resourceId, rate, adjustmentMode), currentTotal = source === null ? void 0 : observed2(resourceId, source), enableRate = marginalKnown && adjustedRate !== void 0 && Number.isFinite(adjustedRate) && adjustedRate >= 0 && currentTotal !== void 0 ? adjustedRate : null, previous = result.get(resourceId), appliedGeneratorFuel = nativeGeneratorFuel ? nativeEffective?.kind === "value" && enableRate !== null ? nativeEffective.value * enableRate : null : void 0;
       result.set(
         resourceId,
         Object.freeze({
           resourceId,
           currentTotal: (previous?.currentTotal ?? 0) + (currentTotal ?? 0),
           unwindCredit: (previous?.unwindCredit ?? 0) + (ledgerCredit === "safe" ? currentTotal ?? 0 : 0),
-          enableRate: enableRate === null || previous?.enableRate === null ? null : previous === void 0 ? enableRate : previous.enableRate + enableRate
+          enableRate: enableRate === null || previous?.enableRate === null ? null : previous === void 0 ? enableRate : previous.enableRate + enableRate,
+          ...nativeGeneratorFuel ? {
+            appliedGeneratorFuel: appliedGeneratorFuel === null || previous?.appliedGeneratorFuel === null ? null : (previous?.appliedGeneratorFuel ?? 0) + (appliedGeneratorFuel ?? 0)
+          } : previous?.appliedGeneratorFuel === void 0 ? {} : { appliedGeneratorFuel: previous.appliedGeneratorFuel }
         })
       );
     };
@@ -28518,7 +28622,9 @@
           title.kind === "value" ? role === "consumer" ? `${title.value}+${structure.actionId}` : title.value : null,
           role === "consumer" ? "safe" : "observation-only",
           !1,
-          mode
+          mode,
+          !0,
+          role === "generator"
         );
       }
     }
@@ -29458,8 +29564,10 @@
       if (next.length === supportSafe.length) break;
       supportSafe = next;
     }
-    let autoFleet = settings.autoFleet === !0, fleetNeededShipsSample = autoFleet ? dependencies.readFleetNeededShips?.() : null;
-    if (autoFleet && fleetNeededShipsSample === void 0)
+    let autoFleet = settings.autoFleet === !0, fleetCapRelevant = autoFleet && candidates.some(
+      ({ record }) => record.structure.region === "galaxy" && record.catalog.smart && capturedPowerSmartEnabled(record.catalog.binding, settings)
+    ), fleetNeededShipsSample = autoFleet ? dependencies.readFleetNeededShips?.() : null;
+    if (fleetCapRelevant && fleetNeededShipsSample === void 0)
       return unavailable2("fleet", "Fleet needed-ships unavailable");
     let fleetNeededShips = fleetNeededShipsSample ?? null, powers = [], supportSafeBindings = new Set(
       supportSafe.map(({ record }) => record.catalog.binding)
@@ -29623,6 +29731,7 @@
       showGalactic: !!readProperty(gameSettings, "showGalactic"),
       limitPowered: settings.buildingsLimitPowered === !0,
       autoFleet: settings.autoFleet === !0,
+      autoJobs: settings.autoJobs === !0,
       crewReserve: readCrewReserve(settings.crewReserve, population)
     }), lakeAndSpire = readLakeAndSpire(
       root,
@@ -29653,6 +29762,7 @@
       consumptionBalanceMinimum: runtime.consumptionBalanceMinimum,
       civilianPopulation: population,
       currentCrew,
+      prospectiveSpaceMiners: settings.autoJobs === !0 ? dependencies.readProspectiveSpaceMiners?.(root) : null,
       settings: settingsInput,
       resources: resourceInputs,
       supports,
@@ -29666,6 +29776,7 @@
     rootState,
     mechanics,
     readJobCounts,
+    readProspectiveSpaceMiners,
     controls: controls2,
     resources,
     readDemand,
@@ -29688,6 +29799,7 @@
       rootState,
       mechanics,
       ...readJobCounts === void 0 ? {} : { readJobCounts },
+      ...readProspectiveSpaceMiners === void 0 ? {} : { readProspectiveSpaceMiners },
       controls: controls2,
       resources,
       readDemand,
@@ -54248,12 +54360,22 @@ Only continue if you trust the source. Injected code:
     }, ensurePylonControls = () => {
       let satisfied = () => pageCapture2.controls.resolve(PYLON_CONTROL) !== void 0;
       if (satisfied()) return;
-      let root = pageCapture2.rootState.readRoot(), tech = readProperty(root, "tech"), magic = readProperty(tech, "magic");
-      typeof magic != "number" || !Number.isFinite(magic) || magic < 3 || pageCapture2.controls.resolve(MAIN_TAB_CONTROL) !== void 0 && finishDiscovery("pylon", "pylon", satisfied, void 0, [
+      let root = pageCapture2.rootState.readRoot();
+      if (!readProperty(readProperty(root, "race"), "casting") || !["city", "space", "tauceti"].some(
+        (region) => readProperty(readProperty(root, region), "pylon")
+      ))
+        return;
+      let govTabs = SUB_TAB_CONTROLS[GOV_TABS_SETTING];
+      pageCapture2.controls.resolve(MAIN_TAB_CONTROL) === void 0 || govTabs === void 0 || pageCapture2.controls.resolve(govTabs) === void 0 || finishDiscovery("pylon", "pylon", satisfied, void 0, [
         Object.freeze({
           setting: MAIN_TAB_SETTING,
           control: MAIN_TAB_CONTROL,
-          index: MAIN_TAB_INDEX.civilization
+          index: MAIN_TAB_INDEX.civic
+        }),
+        Object.freeze({
+          setting: GOV_TABS_SETTING,
+          control: govTabs,
+          index: GOV_TAB_INDEX.industry
         })
       ]);
     }, ensureAlchemyControls = () => {
@@ -54589,15 +54711,26 @@ Only continue if you trust the source. Injected code:
       readMechSaveSupply: mechSupplyReservation.readSaveSupply,
       setMechSaveSupply: mechSupplyReservation.setSaveSupply,
       log: (message) => onActivity({ message, color: "has-text-info", tags: ["automation"] })
-    }), powerReader = createCapturedPowerReader({
+    }), prospectiveSpaceMinerPlan;
+    pageCapture2.rootState.subscribeRootReplaced?.(() => {
+      prospectiveSpaceMinerPlan = void 0;
+    });
+    let publishSpaceMinerPlan = (decision) => {
+      let root = pageCapture2.rootState.readRoot();
+      prospectiveSpaceMinerPlan = root !== void 0 && Number.isFinite(decision.maximumSpaceMiners) ? { root, maximum: decision.maximumSpaceMiners } : void 0;
+    }, powerReader = createCapturedPowerReader({
       rootState: pageCapture2.rootState,
       mechanics: pageCapture2.mechanics,
       readJobCounts: ordinaryJobs.readJobCounts,
+      readProspectiveSpaceMiners: (root) => {
+        let plan = prospectiveSpaceMinerPlan;
+        return plan !== void 0 && plan.root === root ? plan.maximum : void 0;
+      },
       controls: pageCapture2.controls,
       resources: createCapturedResourceSource(pageCapture2.rootState),
       readDemand: () => demandThisCycle,
       readDemandUnavailableReason: () => exactDemandUnavailableReason,
-      readFleetNeededShips: fleet.readNeededShips,
+      readFleetNeededShips: () => isCapturedTruepath(pageCapture2.rootState.readRoot()) ? null : fleet.readNeededShips(),
       costs: buildCosts,
       readPurifierDescription: () => capturedPowerExecution.readDescription("portal-purifier"),
       readMechSaveSupply: mechSupplyReservation.readSaveSupply,
@@ -54642,7 +54775,7 @@ Only continue if you trust the source. Injected code:
     });
     refreshEffectiveSettings(), refreshCapturedPlanningPanels();
     let runCycle = () => {
-      if (automationCycle += 1, capturedResetCommittedThisCycle = !1, currentStateLogConstructionSnapshot = null, stateLogPlannerDetailsDue = !1, constructionFreshness = latestConstructionSnapshot === null ? "none" : "stale", capturedMechCycleHasPendingWork = !1, demandThisCycle = void 0, savingTargetThisCycle = void 0, constructionSuppressedThisCycle = !1, triggerTargetsThisCycle = void 0, triggerDemandThisCycle = void 0, demandPrerequisitesThisCycle = void 0, settingsPanel.ensurePanel(), !pageCapture2.isComplete()) {
+      if (automationCycle += 1, prospectiveSpaceMinerPlan = void 0, capturedResetCommittedThisCycle = !1, currentStateLogConstructionSnapshot = null, stateLogPlannerDetailsDue = !1, constructionFreshness = latestConstructionSnapshot === null ? "none" : "stale", capturedMechCycleHasPendingWork = !1, demandThisCycle = void 0, savingTargetThisCycle = void 0, constructionSuppressedThisCycle = !1, triggerTargetsThisCycle = void 0, triggerDemandThisCycle = void 0, demandPrerequisitesThisCycle = void 0, settingsPanel.ensurePanel(), !pageCapture2.isComplete()) {
         refreshCapturedPlanningPanels();
         return;
       }
@@ -54663,7 +54796,7 @@ Only continue if you trust the source. Injected code:
             return;
           }
         }
-        if (runPhase("demand prerequisites", () => {
+        runPhase("demand prerequisites", () => {
           demandPrerequisitesThisCycle ??= ensureDemandPrerequisiteControls({
             root: pageCapture2.rootState.readRoot(),
             settings,
@@ -54679,21 +54812,28 @@ Only continue if you trust the source. Injected code:
           progression.ensureBuildControls(), refreshDiscoveredSettings(), readTriggerTargets();
         }), isEnabled(settings, "autoFleet") && runPhase("autoFleet discovery", () => {
           isCapturedTruepath(pageCapture2.rootState.readRoot()) ? ensureOuterFleetControls() : ensureGalaxyFleetControls();
-        }), isEnabled(settings, "autoBuild") || isEnabled(settings, "buildingAlwaysClick")) {
+        });
+        let constructionDemandReady = !isEnabled(settings, "autoBuild") && !isEnabled(settings, "autoARPA") ? !0 : runPhase("construction saving discovery", () => {
+          let ready = progression.establishConstructionOrdering();
+          return ready || reportOnce(
+            "construction saving authority unavailable: candidate catalog or current price incomplete"
+          ), ready;
+        }) === !0;
+        if ((isEnabled(settings, "autoBuild") || isEnabled(settings, "buildingAlwaysClick")) && constructionDemandReady) {
           let needsConstructionSaving = isEnabled(settings, "autoBuild") || isEnabled(settings, "autoARPA"), savingOrderReady = progression.observations.hasCompletedOrdering();
           needsConstructionSaving && !savingOrderReady ? runPhase("buildingAlwaysClick", () => gatherResources()) : runPhase("pre-Gather demand", () => (readDemand(), !0)) === !0 && runPhase("buildingAlwaysClick", () => gatherResources());
         }
-        isEnabled(settings, "autoMarket") && runPhase("autoMarket", () => {
+        constructionDemandReady && isEnabled(settings, "autoMarket") && runPhase("autoMarket", () => {
           ensureMarketControls(), refreshDiscoveredSettings(), marketAutomation.run();
         }), isEnabled(settings, "autoHell") && runPhase("autoHell", () => {
           ensureCivicControls(), ensureHellManagementControls(), hell.run();
-        }), isEnabled(settings, "autoGalaxyMarket") && runPhase("autoGalaxyMarket", () => {
+        }), constructionDemandReady && isEnabled(settings, "autoGalaxyMarket") && runPhase("autoGalaxyMarket", () => {
           ensureGalaxyMarketControls(), refreshDiscoveredSettings(), galaxyMarketAutomation.run();
         }), isEnabled(settings, "autoMiningDroid") && runPhase("autoMiningDroid", () => {
           ensureMiningDroidControls(), miningDroid.run();
         }), isEnabled(settings, "autoGraphenePlant") && runPhase("autoGraphenePlant", () => {
           ensureGrapheneControls(), graphene.run();
-        }), isEnabled(settings, "autoAlchemy") && runPhase("autoAlchemy", () => {
+        }), constructionDemandReady && isEnabled(settings, "autoAlchemy") && runPhase("autoAlchemy", () => {
           ensureAlchemyControls(), refreshDiscoveredSettings(), alchemy.run();
         }), isEnabled(settings, "autoPylon") && runPhase("autoPylon", () => {
           ensurePylonControls(), refreshDiscoveredSettings(), pylon.run();
@@ -54715,11 +54855,11 @@ Only continue if you trust the source. Injected code:
             MINING_SHIP_CONTROL,
             structureCount2("tauceti", "mining_ship") >= 1
           ), ratios.miningShip();
-        }), isEnabled(settings, "autoSmelter") && runPhase("autoSmelter", () => {
+        }), constructionDemandReady && isEnabled(settings, "autoSmelter") && runPhase("autoSmelter", () => {
           ensureSmelterControls(), refreshDiscoveredSettings(), smelter.run();
-        }), isEnabled(settings, "autoStorage") && (runPhase("autoStorage", () => {
+        }), constructionDemandReady && isEnabled(settings, "autoStorage") && (runPhase("autoStorage", () => {
           ensureStorageControls(), refreshDiscoveredSettings(), storageAutomation.run();
-        }), demandThisCycle = void 0, savingTargetThisCycle = void 0), isEnabled(settings, "autoReplicator") && runPhase("autoReplicator", () => {
+        }), demandThisCycle = void 0, savingTargetThisCycle = void 0), constructionDemandReady && isEnabled(settings, "autoReplicator") && runPhase("autoReplicator", () => {
           ensureReplicatorControls(), replicator.run();
         });
         let triggerActive = !1;
@@ -54760,9 +54900,15 @@ Only continue if you trust the source. Injected code:
         }), demandThisCycle = void 0, savingTargetThisCycle = void 0, observePowerDemandPhase("factory-invalidated");
         let autoJobs = isEnabled(settings, "autoJobs"), autoCraftsmen = isEnabled(settings, "autoCraftsmen"), combinedJobs = !1;
         if (autoJobs && autoCraftsmen && (runPhase("autoJobs with autoCraftsmen", () => {
-          ensureCivicControls(), refreshDiscoveredSettings(), combinedJobs = fullJobs.isAvailable(), combinedJobs && runJobsAutomation(fullJobs, !1);
+          ensureCivicControls(), refreshDiscoveredSettings(), combinedJobs = fullJobs.isAvailable(), combinedJobs && runJobsAutomation(
+            { ...fullJobs, onCoherentPlan: publishSpaceMinerPlan },
+            !1
+          );
         }) || (combinedJobs = !0)), autoJobs && !combinedJobs && runPhase("autoJobs", () => {
-          ensureCivicControls(), refreshDiscoveredSettings(), runJobsAutomation(ordinaryJobs, !1);
+          ensureCivicControls(), refreshDiscoveredSettings(), runJobsAutomation(
+            { ...ordinaryJobs, onCoherentPlan: publishSpaceMinerPlan },
+            !1
+          );
         }), autoCraftsmen && !combinedJobs && runPhase("autoCraftsmen", () => {
           ensureCivicControls(), runJobsAutomation(craftsmen, !0);
         }), isEnabled(settings, "autoFleet") && runPhase("autoFleet", () => {
@@ -54827,6 +54973,10 @@ Only continue if you trust the source. Injected code:
           ensureEjectorControls(), refreshDiscoveredSettings(), ejector.run();
         }), isEnabled(settings, "autoPower") && (runPhase("pre-Power research demand observation", () => {
           ensureDemandResearchObservation();
+        }), hasCapturedProjectStorageDemand(settings, settingsStorage.readRaw()) && runPhase("pre-Power project demand discovery", () => {
+          progression.readProjects(), refreshDiscoveredSettings();
+        }), (isEnabled(settings, "autoBuild") || isEnabled(settings, "autoStorage")) && runPhase("pre-Power building demand discovery", () => {
+          progression.readUnlockedStorageBuildTargets(), refreshDiscoveredSettings();
         }), runPhase("autoPower", () => {
           observePowerDemandPhase("power-handoff-start"), demandThisCycle = void 0, exactDemandUnavailableReason = void 0;
           let prerequisites = demandPrerequisitesThisCycle === void 0 ? void 0 : ensureDemandPrerequisiteControls({

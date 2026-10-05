@@ -83,6 +83,8 @@ export interface CapturedConstructionDependencies {
 export interface CapturedConstructionAdapter {
   readonly reader: BuildReader;
   readonly executor: BuildExecutor;
+  /** Samples and publishes the same complete candidate order without executing purchases. */
+  readonly establishOrdering: () => boolean;
   /** Previous completed ordering with affordability read from the current root. */
   readonly observations: ConstructionObservations;
 }
@@ -144,6 +146,7 @@ export function createCapturedConstructionAdapter(
   });
   let knowledgeRequirement = 0;
   let constructionCycleId = 0;
+  let orderingOnly = false;
   let uiPresentationMode: "off" | "targets" | "planner" = "off";
   let capturePlannerDetails = false;
   let stateLogDetailsDue = false;
@@ -322,7 +325,7 @@ export function createCapturedConstructionAdapter(
     beginCycle(): BuildCycleSetup {
       cycleReadyToPublish = false;
       const options = readOptions();
-      constructionCycleId++;
+      if (!orderingOnly) constructionCycleId++;
       const presentationSettings = dependencies.readPresentationSettings?.();
       const stateLogPlannerDetailsDue =
         dependencies.readStateLogPlannerDetailsDue?.() === true;
@@ -444,7 +447,11 @@ export function createCapturedConstructionAdapter(
       if (!respectReservations) {
         return Object.freeze({ conflict: null, important });
       }
-      const evaluated = conflicts.evaluate(candidate.cost, candidate.pool);
+      const evaluated = conflicts.evaluate(
+        candidate.cost,
+        candidate.pool,
+        candidate.key,
+      );
       if (evaluated.status === "none") {
         return Object.freeze({ conflict: null, important });
       }
@@ -611,6 +618,17 @@ export function createCapturedConstructionAdapter(
   return Object.freeze({
     reader,
     executor,
+    establishOrdering(): boolean {
+      orderingOnly = true;
+      try {
+        reader.beginCycle();
+        if (!cycleReadyToPublish) return false;
+        reader.finishCycle?.(true);
+        return true;
+      } finally {
+        orderingOnly = false;
+      }
+    },
     observations: Object.freeze({
       hasCompletedOrdering: (): boolean => completedIntent !== undefined,
       readSavingTarget(): SavingTarget | null {
