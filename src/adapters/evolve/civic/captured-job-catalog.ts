@@ -25,6 +25,7 @@ import {
 } from "../../validation.ts";
 import { readScriptCyclesPerSecond } from "../captured-tick-rate.ts";
 import { readCapturedMorale } from "./captured-morale.ts";
+import { readCapturedTraitRecessive } from "../traits/captured-trait-recessive.ts";
 import {
   readCapturedTaxLimits,
   readCapturedTaxTaskActive,
@@ -415,6 +416,7 @@ function readTraitScaleRank(
   root: unknown,
   traitId: string,
   traitKind: "major" | "genus" = "genus",
+  recessive = false,
 ): number | undefined {
   const race = readProperty(root, "race");
   const rank = readProperty(race, traitId);
@@ -423,17 +425,21 @@ function readTraitScaleRank(
   if (
     typeof rank !== "number" ||
     !Number.isFinite(rank) ||
-    rank <= 0 ||
+    rank < 0.1 ||
     rank > 2
   )
     return undefined;
   const empowered = readProperty(race, "empowered");
+  if (empowered === undefined || empowered === false || empowered === 0)
+    return rank;
   if (
     typeof empowered !== "number" ||
     !Number.isFinite(empowered) ||
-    empowered <= 0
+    empowered < 0.1 ||
+    empowered > 2
   )
-    return rank;
+    return undefined;
+  if (recessive) return rank;
   const empoweredRank = Math.min(2, empowered);
   const majorBonus = traitScaleVariable(empoweredRank, 0.01, 0.2, 0.4);
   const genusBonus = traitScaleVariable(empoweredRank, 0.005, 0.1, 0.2);
@@ -476,27 +482,16 @@ export function readCapturedHumongousEffectMultiplier(
   const raw = readProperty(race, "humongous");
   if (raw === undefined || raw === false || raw === 0) return 1;
   const empowered = readProperty(race, "empowered");
-  if (
-    empowered !== undefined &&
-    empowered !== false &&
-    (typeof empowered !== "number" || !Number.isFinite(empowered))
-  )
-    return undefined;
-  const effect = readCapturedTraitScaleVariable(
-    root,
-    "humongous",
-    0,
-    [1.01, 1.05, 1.1],
-    "major",
-  );
-  const cost = readCapturedTraitScaleVariable(
-    root,
-    "humongous",
-    1,
-    [2, 3, 4],
-    "major",
-  );
-  if (effect === undefined || cost === undefined) return undefined;
+  const hasEmpowered =
+    empowered !== undefined && empowered !== false && empowered !== 0;
+  const recessive = hasEmpowered
+    ? readCapturedTraitRecessive(root, "humongous")
+    : false;
+  if (recessive === undefined) return undefined;
+  const rank = readTraitScaleRank(root, "humongous", "major", recessive);
+  if (rank === undefined) return undefined;
+  const effect = traitScaleVariable(rank, 1.01, 1.05, 1.1);
+  const cost = traitScaleVariable(rank, 2, 3, 4);
   const multiplier = effect * Math.floor(cost);
   return Number.isFinite(multiplier) && multiplier > 0 ? multiplier : undefined;
 }

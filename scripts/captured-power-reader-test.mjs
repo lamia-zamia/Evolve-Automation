@@ -2387,6 +2387,97 @@ specialRoot.race.empowered = "invalid";
 assert.equal(readCapturedHumongousEffectMultiplier(specialRoot), undefined);
 delete specialRoot.race.empowered;
 delete specialRoot.race.humongous;
+const humongousSlots = Array.from({ length: 96 }, () => false);
+const humongousRankRoot = {
+  genes: { evolve: 0 },
+  race: {
+    species: "human",
+    strandGenus: ["humanoid"],
+    strandSpan: 48,
+    geneRecess: 1,
+    geneSlots: humongousSlots,
+    humongous: 1,
+  },
+};
+assert.equal(
+  readCapturedHumongousEffectMultiplier(humongousRankRoot),
+  3.1500000000000004,
+);
+humongousRankRoot.race.empowered = 2;
+assert.equal(readCapturedHumongousEffectMultiplier(humongousRankRoot), 3.21);
+humongousSlots[12] = { g: "humongous", r: 1 };
+assert.equal(
+  readCapturedHumongousEffectMultiplier(humongousRankRoot),
+  3.1500000000000004,
+);
+humongousSlots[12] = { g: "adaptable", r: 1 };
+assert.equal(readCapturedHumongousEffectMultiplier(humongousRankRoot), 3.21);
+humongousRankRoot.race.geneRecess = "invalid";
+assert.equal(
+  readCapturedHumongousEffectMultiplier(humongousRankRoot),
+  undefined,
+);
+humongousRankRoot.race.geneRecess = 1;
+humongousSlots[12] = "invalid";
+assert.equal(
+  readCapturedHumongousEffectMultiplier(humongousRankRoot),
+  undefined,
+);
+humongousSlots[12] = { r: 1 };
+assert.equal(
+  readCapturedHumongousEffectMultiplier(humongousRankRoot),
+  undefined,
+);
+humongousSlots[12] = { g: "adaptable", r: 1 };
+for (const empowered of [
+  -1,
+  Number.NaN,
+  Number.POSITIVE_INFINITY,
+  "invalid",
+  3,
+]) {
+  humongousRankRoot.race.empowered = empowered;
+  assert.equal(
+    readCapturedHumongousEffectMultiplier(humongousRankRoot),
+    undefined,
+  );
+}
+humongousRankRoot.race.empowered = 2;
+for (const humongous of [-1, 0.01, 3, Number.NaN, Number.POSITIVE_INFINITY]) {
+  humongousRankRoot.race.humongous = humongous;
+  assert.equal(
+    readCapturedHumongousEffectMultiplier(humongousRankRoot),
+    undefined,
+  );
+}
+humongousRankRoot.race.humongous = 1;
+specialRoot.race.humongous = 1;
+specialRoot.race.empowered = 2;
+specialRoot.race.species = "human";
+specialRoot.race.strandGenus = ["humanoid"];
+specialRoot.race.strandSpan = 48;
+specialRoot.race.geneRecess = 1;
+specialRoot.race.geneSlots = humongousSlots;
+specialRoot.genes = { evolve: 0 };
+overseerNativeValue = 16.55;
+funNativeValue = 17.8;
+assert.equal(currentSpecialRule("tauceti-overseer")?.requiredBuildings, 2);
+assert.equal(currentSpecialRule("tauceti-womling_fun")?.requiredBuildings, 2);
+humongousSlots[12] = { g: "humongous", r: 1 };
+assert.equal(currentSpecialRule("tauceti-overseer")?.requiredBuildings, 3);
+assert.equal(currentSpecialRule("tauceti-womling_fun")?.requiredBuildings, 3);
+specialRoot.race.geneRecess = "invalid";
+assert.equal(specialReader.readCycle(), undefined);
+delete specialRoot.race.humongous;
+delete specialRoot.race.empowered;
+delete specialRoot.race.strandGenus;
+delete specialRoot.race.strandSpan;
+delete specialRoot.race.geneRecess;
+delete specialRoot.race.geneSlots;
+delete specialRoot.genes;
+specialRoot.race.species = "Human";
+overseerNativeValue = 13;
+funNativeValue = 17;
 for (const workers of [8, 6, 13]) {
   pitNativeWorkers = workers;
   assert.equal(
