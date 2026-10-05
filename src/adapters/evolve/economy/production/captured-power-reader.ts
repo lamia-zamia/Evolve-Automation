@@ -60,8 +60,12 @@ import type { CapturedBuildingEntry } from "../../progression/build/captured-bui
 import {
   capturedPowerMetadataForBinding,
   capturedPowerSmartEnabled,
-  readCapturedPowerConsumptionRate,
 } from "./captured-power-metadata.ts";
+import {
+  POWER_IDLE_CONSUMPTION_FALLBACK,
+  readPowerIdleGate,
+  readPowerNativeConsumption,
+} from "./captured-power-consumption.ts";
 
 export interface CapturedPowerReaderRuntimeOptions {
   readonly settings: PowerSettingsInput;
@@ -279,42 +283,15 @@ function readFuelRate(
   return adjustment.kind === "value" ? amount * adjustment.value : undefined;
 }
 
-/** Retired Building.getFuelRate's metadata-declaration adjustment selection. */
-export function readCapturedPowerMetadataFuelMode(
-  binding: string,
-  region: string,
-  resourceId: string,
-): CapturedFuelAdjustmentMode | undefined {
-  if (binding === "interstellar-fusion") return undefined;
-  if (
-    region === "space" &&
-    (resourceId === "Oil" || resourceId === "Helium_3")
-  ) {
-    return "space";
-  }
-  if (
-    ["interstellar", "galaxy", "tauceti"].includes(region) &&
-    (resourceId === "Deuterium" || resourceId === "Helium_3")
-  ) {
-    return "interstellar";
-  }
-  return undefined;
-}
-
-function readFuelInputs(
+export function readCapturedPowerConsumptions(
   root: unknown,
   mechanics: CapturedGameMechanics,
   structure: CapturedGameStructureDefinition,
-  metadataConsumptions: readonly {
-    readonly resourceId: string;
-    readonly policy: import("./captured-power-metadata.ts").CapturedPowerRatePolicy;
-  }[],
+  production: CapturedProductionBreakdown,
+  stateOn: number,
+  invalidFallbacks: Set<string>,
 ): readonly PowerConsumptionInput[] | undefined {
   const binding = structure.actionId;
-  const definitions = metadataConsumptions.map((item) => ({
-    resourceId: item.resourceId,
-    rate: readCapturedPowerConsumptionRate(root, item),
-  }));
   const powerFuel = structure.readFuel();
   if (powerFuel.kind === "invalid") return undefined;
   const supportFuel = structure.readSupportFuel();
@@ -325,31 +302,45 @@ function readFuelInputs(
   const powerAdjustmentRequested = structure.readFuelAdjustmentRequested();
   if (powerAdjustmentRequested.kind === "invalid") return undefined;
 
-  const result: PowerConsumptionInput[] = [];
+  const title = structure.readTitle();
+  const result = new Map<string, PowerConsumptionInput>();
+  const observed = (resourceId: string, source: string): number | undefined =>
+    readPowerNativeConsumption(production, resourceId, source);
   const append = (
     resourceId: string,
     rate: number,
+    source: string | null,
     adjustmentDisabled = false,
     adjustmentMode: CapturedFuelAdjustmentMode | undefined = undefined,
   ) => {
-    const fuelRate =
+    const adjustedRate =
       adjustmentDisabled || adjustmentMode === undefined
         ? rate
         : readFuelRate(mechanics, resourceId, rate, adjustmentMode);
-    if (fuelRate === undefined) return false;
-    result.push(Object.freeze({ resourceId, rate, fuelRate }));
-    return true;
-  };
-  for (const definition of definitions) {
-    const mode = readCapturedPowerMetadataFuelMode(
-      binding,
-      structure.region,
-      definition.resourceId,
+    const currentTotal =
+      source === null ? undefined : observed(resourceId, source);
+    const enableRate =
+      adjustedRate !== undefined &&
+      Number.isFinite(adjustedRate) &&
+      adjustedRate >= 0 &&
+      currentTotal !== undefined
+        ? adjustedRate
+        : null;
+    const previous = result.get(resourceId);
+    result.set(
+      resourceId,
+      Object.freeze({
+        resourceId,
+        currentTotal: (previous?.currentTotal ?? 0) + (currentTotal ?? 0),
+        enableRate:
+          enableRate === null || previous?.enableRate === null
+            ? null
+            : previous === undefined
+              ? enableRate
+              : previous.enableRate + enableRate,
+      }),
     );
-    if (!append(definition.resourceId, definition.rate, false, mode)) {
-      return undefined;
-    }
-  }
+  };
   if (powerFuel.kind === "value" && powerFuel.value !== false) {
     const powerAdjustmentEnabled =
       powerAdjustmentRequested.kind === "value" &&
@@ -359,7 +350,13 @@ function readFuelInputs(
       const mode = powerAdjustmentEnabled
         ? fuelModeFor(structure.region, fuel.resourceId)
         : undefined;
-      if (!append(fuel.resourceId, fuel.amount, false, mode)) return undefined;
+      append(
+        fuel.resourceId,
+        fuel.amount,
+        title.kind === "value" ? title.value : null,
+        false,
+        mode,
+      );
     }
   }
   if (supportFuel.kind === "value" && supportFuel.value !== false) {
@@ -370,13 +367,89 @@ function readFuelInputs(
       const mode = adjustmentDisabled
         ? undefined
         : fuelModeFor(structure.region, fuel.resourceId);
-      if (!append(fuel.resourceId, fuel.amount, adjustmentDisabled, mode)) {
-        return undefined;
-      }
+      append(
+        fuel.resourceId,
+        fuel.amount,
+        title.kind === "value" ? `${title.value}+${structure.actionId}` : null,
+        adjustmentDisabled,
+        mode,
+      );
     }
   }
-
-  return Object.freeze(result);
+  for (const fallback of POWER_IDLE_CONSUMPTION_FALLBACK[binding] ?? []) {
+    // An action-owned declaration wins: the metadata must not reserve it twice.
+    if (result.has(fallback.resourceId)) continue;
+    const source =
+      fallback.sourceKey === null
+        ? binding === "space-red_factory" && title.kind === "value"
+          ? title.value
+          : null
+        : mechanics.readLocalizedText(fallback.sourceKey);
+    const sourceLabel =
+      typeof source === "string"
+        ? source
+        : source?.kind === "value"
+          ? source.value
+          : null;
+    const currentTotal =
+      sourceLabel === null ? 0 : observed(fallback.resourceId, sourceLabel);
+    const validCurrent = sourceLabel !== null && currentTotal !== undefined;
+    const gate = readPowerIdleGate(root, binding, fallback.resourceId);
+    let enableRate: number | null = fallback.base;
+    if (enableRate !== null && gate !== null) enableRate *= gate;
+    else enableRate = null;
+    if (enableRate !== null && fallback.fuel !== null) {
+      enableRate =
+        readFuelRate(
+          mechanics,
+          fallback.resourceId,
+          enableRate,
+          fallback.fuel,
+        ) ?? null;
+    }
+    const huge = Boolean(readProperty(readProperty(root, "race"), "humongous"));
+    if (huge && fallback.huge) {
+      // The private hugeAdjust closure has no structure-independent scalar port.
+      // Configured `on` need not equal the production pass's effective p_on.
+      enableRate = null;
+    }
+    if (!validCurrent || gate === 0) enableRate = null;
+    if (!fallback.linear) enableRate = null;
+    if (
+      (binding === "galaxy-starbase" ||
+        binding === "galaxy-embassy" ||
+        binding === "space-lander") &&
+      currentTotal === 0
+    )
+      enableRate = null;
+    if (stateOn > 0 && currentTotal === 0 && gate !== 0) enableRate = null;
+    const driftKey = `${binding}:${fallback.resourceId}`;
+    if (invalidFallbacks.has(driftKey)) enableRate = null;
+    if (
+      !huge &&
+      fallback.linear &&
+      gate !== null &&
+      gate > 0 &&
+      stateOn > 0 &&
+      validCurrent &&
+      currentTotal > 0 &&
+      enableRate !== null &&
+      Math.abs(currentTotal - stateOn * enableRate) >
+        1e-6 * Math.max(1, currentTotal)
+    ) {
+      invalidFallbacks.add(driftKey);
+      enableRate = null;
+    }
+    result.set(
+      fallback.resourceId,
+      Object.freeze({
+        resourceId: fallback.resourceId,
+        currentTotal: currentTotal ?? 0,
+        enableRate,
+      }),
+    );
+  }
+  return Object.freeze([...result.values()]);
 }
 
 export function readNativePowerSupports(
@@ -1636,6 +1709,7 @@ function readPowerCycle(
   dependencies: CapturedPowerReaderDependencies,
   runtime: CapturedPowerReaderRuntimeOptions,
   settings: Readonly<Record<string, unknown>>,
+  invalidFallbacks: Set<string>,
 ): PowerCycleInput | undefined {
   let jobCounts: CapturedJobCountSnapshot | undefined;
   try {
@@ -1852,11 +1926,13 @@ function readPowerCycle(
     const { record, supportChanges } = candidate;
     const binding = record.catalog.binding;
     const metadata = capturedPowerMetadataForBinding(binding);
-    const consumptions = readFuelInputs(
+    const consumptions = readCapturedPowerConsumptions(
       root,
       dependencies.mechanics,
       record.structure,
-      metadata.consumptions,
+      production,
+      record.stateOn,
+      invalidFallbacks,
     );
     const produces = capturedPowerProducerCapability(binding);
     const powered = record.powered;
@@ -2053,6 +2129,8 @@ export function createCapturedPowerReader({
   readRuntimeOptions,
   readWarnings,
 }: CapturedPowerReaderDependencies): PowerReader {
+  const invalidFallbacks = new Set<string>();
+  let fallbackRoot: unknown;
   const dependencies: CapturedPowerReaderDependencies = {
     rootState,
     mechanics,
@@ -2075,6 +2153,10 @@ export function createCapturedPowerReader({
     readCycle(): PowerCycleInput | undefined {
       const root = rootState.readRoot();
       if (root === undefined) return undefined;
+      if (root !== fallbackRoot) {
+        invalidFallbacks.clear();
+        fallbackRoot = root;
+      }
       let raw: unknown;
       let runtime: CapturedPowerReaderRuntimeOptions | undefined;
       try {
@@ -2090,7 +2172,7 @@ export function createCapturedPowerReader({
       ) {
         return undefined;
       }
-      return readPowerCycle(root, dependencies, runtime, raw);
+      return readPowerCycle(root, dependencies, runtime, raw, invalidFallbacks);
     },
     readWarnings(domIds: readonly string[]): readonly PowerWarnBuildingInput[] {
       return readWarnings(domIds);

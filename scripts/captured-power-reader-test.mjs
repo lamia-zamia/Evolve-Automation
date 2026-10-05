@@ -6,7 +6,6 @@ import {
 } from "../src/domain/economy/production/power.ts";
 import {
   createCapturedPowerReader,
-  readCapturedPowerMetadataFuelMode,
   readCapturedPowerOrdinaryResourceState,
   readNativePowerSupports,
 } from "../src/adapters/evolve/economy/production/captured-power-reader.ts";
@@ -1090,8 +1089,8 @@ assert.ok(
     ?.consumptions.some(
       (consumption) =>
         consumption.resourceId === "Oil" &&
-        consumption.rate === 8 &&
-        consumption.fuelRate === 4,
+        consumption.currentTotal === 0 &&
+        consumption.enableRate === 4,
     ),
   "the adjusted game fuel rate is separate from the raw p_fuel amount",
 );
@@ -1101,8 +1100,8 @@ assert.ok(
     ?.consumptions.some(
       (consumption) =>
         consumption.resourceId === "Helium_3" &&
-        consumption.rate === 10 &&
-        consumption.fuelRate === 7.5,
+        consumption.currentTotal === 0 &&
+        consumption.enableRate === 7.5,
     ),
   "the interstellar fuel adjustment mode produces its own exact rate",
 );
@@ -1123,13 +1122,13 @@ assert.deepEqual(
       ?.consumptions.find(
         (consumption) => consumption.resourceId === "Deuterium",
       ),
-  ].map((consumption) => [consumption?.rate, consumption?.fuelRate]),
+  ].map((consumption) => [consumption?.currentTotal, consumption?.enableRate]),
   [
-    [1, 0.5],
-    [5, 3.75],
-    [25, 18.75],
+    [0, null],
+    [0, null],
+    [0, null],
   ],
-  "metadata declarations use space H3 and interstellar Deuterium adjustments in all orbital regions",
+  "an active fallback without a native row cannot justify an increase; shared ship fuel has no per-ship authority",
 );
 assert.equal(
   cycle.resources.find((resource) => resource.id === "Power")?.maxQuantity,
@@ -1174,62 +1173,6 @@ assert.equal(
   false,
   "synthetic Supply is never sent through the generic resource reader",
 );
-assert.equal(
-  readCapturedPowerMetadataFuelMode("space-red_factory", "space", "Helium_3"),
-  "space",
-);
-assert.equal(
-  readCapturedPowerMetadataFuelMode(
-    "interstellar-int_factory",
-    "interstellar",
-    "Deuterium",
-  ),
-  "interstellar",
-);
-assert.equal(
-  readCapturedPowerMetadataFuelMode(
-    "galaxy-cruiser_ship",
-    "galaxy",
-    "Deuterium",
-  ),
-  "interstellar",
-);
-assert.equal(
-  readCapturedPowerMetadataFuelMode(
-    "tauceti-patrol_ship",
-    "tauceti",
-    "Deuterium",
-  ),
-  "interstellar",
-  "Tau Ceti metadata fuel keeps the retired interstellar adjustment selection",
-);
-assert.equal(
-  readCapturedPowerMetadataFuelMode(
-    "interstellar-cruiser",
-    "interstellar",
-    "Helium_3",
-  ),
-  "interstellar",
-);
-assert.equal(
-  readCapturedPowerMetadataFuelMode(
-    "interstellar-fusion",
-    "interstellar",
-    "Deuterium",
-  ),
-  undefined,
-  "Alpha Fusion retains the retired Building.getFuelRate exception",
-);
-assert.equal(
-  readCapturedPowerMetadataFuelMode(
-    "interstellar-fusion",
-    "interstellar",
-    "Helium_3",
-  ),
-  undefined,
-  "Alpha Fusion excludes both resources handled by the interstellar metadata path",
-);
-
 const demandSample = (overrides = {}) => ({
   savingTarget: null,
   requestedQuantity: () => 0,
@@ -1478,10 +1421,15 @@ const unavailableReader = createCapturedPowerReader({
   }),
   readWarnings: () => [],
 });
+const unavailableFuelCycle = unavailableReader.readCycle();
+assert.ok(unavailableFuelCycle);
 assert.equal(
-  unavailableReader.readCycle(),
-  undefined,
-  "an absent adjusted-fuel observation makes the entire cycle unavailable instead of using raw fuel",
+  unavailableFuelCycle.buildings
+    .find((building) => building.binding === "space-propellant_depot")
+    ?.consumptions.find((consumption) => consumption.resourceId === "Oil")
+    ?.enableRate,
+  null,
+  "an absent adjusted-fuel observation freezes only that enable capability",
 );
 
 const badOrderReader = createCapturedPowerReader({

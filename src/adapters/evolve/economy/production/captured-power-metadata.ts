@@ -6,18 +6,6 @@
  */
 
 import type { PowerBuildingRule } from "../../../../domain/economy/production/power.ts";
-import { readProperty } from "../../../validation.ts";
-
-export type CapturedPowerRatePolicy =
-  | { readonly kind: "fixed"; readonly value: number }
-  | { readonly kind: "cataclysm-food"; readonly normal: number }
-  | { readonly kind: "station-food" }
-  | { readonly kind: "embassy-food" };
-
-export interface CapturedPowerConsumptionMetadata {
-  readonly resourceId: string;
-  readonly policy: CapturedPowerRatePolicy;
-}
 
 export type CapturedPowerRuleKind = Exclude<
   PowerBuildingRule["kind"],
@@ -25,7 +13,6 @@ export type CapturedPowerRuleKind = Exclude<
 >;
 
 export interface CapturedPowerBuildingMetadata {
-  readonly consumptions: readonly CapturedPowerConsumptionMetadata[];
   readonly crewValueRank: number;
   readonly rule: CapturedPowerRuleKind | "ordinary";
   readonly singleState: boolean;
@@ -33,24 +20,10 @@ export interface CapturedPowerBuildingMetadata {
   readonly skipGroup: "none" | "lake" | "spire";
 }
 
-const fixedPowerRate = (value: number): CapturedPowerRatePolicy =>
-  Object.freeze({ kind: "fixed", value });
-
-function consumption(
-  resourceId: string,
-  policy: CapturedPowerRatePolicy | number,
-): CapturedPowerConsumptionMetadata {
-  return Object.freeze({
-    resourceId,
-    policy: typeof policy === "number" ? fixedPowerRate(policy) : policy,
-  });
-}
-
 function metadata(
   fields: Partial<CapturedPowerBuildingMetadata> = {},
 ): CapturedPowerBuildingMetadata {
   return Object.freeze({
-    consumptions: Object.freeze(fields.consumptions ?? []),
     crewValueRank: fields.crewValueRank ?? 1,
     rule: fields.rule ?? "ordinary",
     singleState: fields.singleState ?? false,
@@ -58,52 +31,6 @@ function metadata(
     skipGroup: fields.skipGroup ?? "none",
   });
 }
-
-const stationFood = Object.freeze({ kind: "station-food" } as const);
-const embassyFood = Object.freeze({ kind: "embassy-food" } as const);
-
-const POWER_PREENABLE_RESOURCE_RESERVATIONS: Readonly<
-  Record<string, readonly CapturedPowerConsumptionMetadata[]>
-> = Object.freeze({
-  "city-tourist_center": [consumption("Food", 50)],
-  "interstellar-zoo": [consumption("Food", 12000)],
-  "space-spaceport": [
-    consumption("Food", { kind: "cataclysm-food", normal: 25 }),
-  ],
-  "space-red_factory": [consumption("Helium_3", 1)],
-  "space-space_barracks": [
-    consumption("Oil", 2),
-    consumption("Food", { kind: "cataclysm-food", normal: 10 }),
-  ],
-  "space-outpost": [consumption("Oil", 2)],
-  "space-space_station": [consumption("Food", stationFood)],
-  "interstellar-starport": [consumption("Food", 100)],
-  "interstellar-int_factory": [consumption("Deuterium", 5)],
-  "interstellar-cruiser": [consumption("Helium_3", 6)],
-  "interstellar-neutron_miner": [consumption("Helium_3", 3)],
-  "galaxy-starbase": [consumption("Food", 250)],
-  "galaxy-bolognium_ship": [consumption("Helium_3", 5)],
-  "galaxy-scout_ship": [consumption("Helium_3", 6)],
-  "galaxy-corvette_ship": [consumption("Helium_3", 10)],
-  "galaxy-frigate_ship": [consumption("Helium_3", 25)],
-  "galaxy-cruiser_ship": [consumption("Deuterium", 25)],
-  "galaxy-dreadnought": [consumption("Deuterium", 80)],
-  "galaxy-embassy": [consumption("Food", embassyFood)],
-  "galaxy-freighter": [consumption("Helium_3", 12)],
-  "galaxy-vitreloy_plant": [
-    consumption("Bolognium", 2.5),
-    consumption("Stanene", 100),
-    consumption("Money", 50000),
-  ],
-  "galaxy-super_freighter": [consumption("Helium_3", 25)],
-  "galaxy-foothold": [consumption("Elerium", 2.5)],
-  "galaxy-armed_miner": [consumption("Helium_3", 10)],
-  "galaxy-scavenger": [consumption("Helium_3", 12)],
-  "galaxy-minelayer": [consumption("Helium_3", 8)],
-  "galaxy-raider": [consumption("Helium_3", 18)],
-  "space-fob": [consumption("Helium_3", 125)],
-  "space-lander": [consumption("Oil", 50)],
-});
 
 const POWER_RULE_BY_BINDING: Readonly<Record<string, CapturedPowerRuleKind>> =
   Object.freeze({
@@ -163,9 +90,6 @@ export function capturedPowerMetadataForBinding(
   binding: string,
 ): CapturedPowerBuildingMetadata {
   const base = metadata({
-    ...(POWER_PREENABLE_RESOURCE_RESERVATIONS[binding] === undefined
-      ? {}
-      : { consumptions: POWER_PREENABLE_RESOURCE_RESERVATIONS[binding] }),
     ...(POWER_CREW_SHEDDING_RANK[binding] === undefined
       ? {}
       : { crewValueRank: POWER_CREW_SHEDDING_RANK[binding] }),
@@ -183,40 +107,6 @@ export function capturedPowerMetadataForBinding(
         : "none",
   });
   return base;
-}
-
-function truthy(root: unknown, path: readonly string[]): boolean {
-  let value = root;
-  for (const key of path) value = readProperty(value, key);
-  return Boolean(value);
-}
-
-/** Evaluates the one retired addResourceConsumption declaration policy by its stable key. */
-export function readCapturedPowerConsumptionRate(
-  root: unknown,
-  consumption: CapturedPowerConsumptionMetadata,
-): number {
-  const policy = consumption.policy;
-  const race = ["race"] as const;
-  const fasting = truthy(root, [...race, "fasting"]);
-  switch (policy.kind) {
-    case "fixed":
-      return policy.value;
-    case "cataclysm-food":
-      return truthy(root, [...race, "cataclysm"]) ||
-        truthy(root, [...race, "orbit_decayed"])
-        ? policy.normal === 25
-          ? 2
-          : 0
-        : policy.normal;
-    case "station-food":
-      return truthy(root, [...race, "cataclysm"]) ||
-        truthy(root, [...race, "orbit_decayed"])
-        ? 1
-        : 10;
-    case "embassy-food":
-      return fasting ? 0 : 7500;
-  }
 }
 
 export function capturedPowerSmartEnabled(

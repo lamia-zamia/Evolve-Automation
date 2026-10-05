@@ -2044,7 +2044,7 @@
         let descriptor = Object.getOwnPropertyDescriptor(source, key);
         if (descriptor === void 0 || !("value" in descriptor)) continue;
         let value = descriptor.value;
-        (typeof value == "string" || typeof value == "number" && Number.isFinite(value)) && (result[key] = value);
+        (typeof value == "string" || typeof value == "number") && (result[key] = value);
       }
     } catch {
       return;
@@ -2275,7 +2275,7 @@
       readProductionBreakdown() {
         let owner = productionBreakdownOwner;
         if (owner === void 0 || stopped) return;
-        let consumption2 = readCapturedProductionLedger(
+        let consumption = readCapturedProductionLedger(
           readMechanicsDataProperty(owner, "consume")
         ), productionSource = /* @__PURE__ */ Object.create(
           null
@@ -2290,14 +2290,14 @@
           return;
         }
         let production = readCapturedProductionLedger(productionSource);
-        if (consumption2 === void 0 || production === void 0)
+        if (consumption === void 0 || production === void 0)
           return;
         let game = readMechanicsProperty(pageWindow, "game"), exposedBreakdown = readMechanicsProperty(pageWindow, "breakdown") ?? readMechanicsProperty(game, "breakdown"), capacity = readCapturedProductionLedger(readMechanicsDataProperty(owner, "c")) ?? readCapturedProductionLedger(
           readMechanicsProperty(exposedBreakdown, "c")
         );
         return Object.freeze({
           production,
-          consumption: consumption2,
+          consumption,
           ...capacity === void 0 ? {} : { capacity }
         });
       },
@@ -24086,7 +24086,7 @@
         ));
         break;
       case "exotic-zoo": {
-        let food = resources.get("Food"), perZoo = building.consumptions.find((entry) => entry.resourceId === "Food")?.rate ?? 0;
+        let food = resources.get("Food"), perZoo = building.consumptions.find((entry) => entry.resourceId === "Food")?.enableRate ?? 0;
         food !== void 0 && perZoo > 0 && (maximum = Math.min(
           maximum,
           Math.floor(food.rate / (perZoo * EXOTIC_ZOO_FOOD_MARGIN))
@@ -24332,17 +24332,17 @@
     ), availablePower = input.powerCurrent, missingSupportProvider = {}, consumedResourceIds = /* @__PURE__ */ new Set();
     for (let building of input.buildings) {
       availablePower += building.powered * building.stateOn;
-      for (let consumption2 of building.consumptions) {
-        consumption2.rate > 0 && consumedResourceIds.add(consumption2.resourceId);
+      for (let consumption of building.consumptions) {
+        (consumption.currentTotal > 0 || (consumption.enableRate ?? 0) > 0) && consumedResourceIds.add(consumption.resourceId);
         let resource = powerCycleMapValue(
           resources,
-          consumption2.resourceId,
-          `power resource ${consumption2.resourceId}`
+          consumption.resourceId,
+          `power resource ${consumption.resourceId}`
         );
         appendRateOperation(
           operations,
           resource,
-          resource.rate + consumption2.fuelRate * building.stateOn
+          resource.rate + consumption.currentTotal
         );
       }
       for (let change of building.supportChanges) {
@@ -24421,27 +24421,35 @@
         input.settings.autoFleet && building.fleetMaximum !== null && (maximum = Math.min(maximum, building.fleetMaximum));
       }
       let description = descriptionByBinding.get(building.binding) ?? building.extraDescription;
-      for (let consumption2 of building.consumptions) {
+      for (let consumption of building.consumptions) {
         let resource = powerCycleMapValue(
           resources,
-          consumption2.resourceId,
-          `power resource ${consumption2.resourceId}`
+          consumption.resourceId,
+          `power resource ${consumption.resourceId}`
         );
-        if (consumption2.rate > 0) {
+        if (maximum > current && consumption.enableRate === null) {
+          maximum = current;
+          continue;
+        }
+        if (maximum > current && consumption.enableRate !== null && consumption.enableRate > 0) {
+          let requirement = consumption.enableRate;
           if (!resource.input.unlocked) {
-            maximum = 0;
+            maximum = current;
             break;
           }
           if (resource.input.id === "Food") {
             if (input.fasting) {
-              maximum = 0;
+              maximum = current;
               break;
             }
             if (input.banquetStateOn > 0 || resource.input.storageRatio > 0.05 || input.hungryRace)
               continue;
-          } else if (current > 0 && (building.powered < 0 || resource.input.storageRatio >= 0.95) && resource.input.currentQuantity >= maximum * input.consumptionBalanceMinimum * consumption2.rate)
+          } else if (current > 0 && (building.powered < 0 || resource.input.storageRatio >= 0.95) && resource.input.currentQuantity >= (consumption.currentTotal + Math.max(0, maximum - current) * requirement) * input.consumptionBalanceMinimum)
             continue;
-          maximum = Math.min(maximum, resource.rate / consumption2.rate);
+          maximum = Math.min(
+            maximum,
+            current + (resource.rate - consumption.currentTotal) / requirement
+          );
         }
       }
       for (let change of building.supportChanges) {
@@ -24477,7 +24485,7 @@
         ticks <= 0 ? delete warningCaps[building.binding] : (warningCaps[building.binding] = { cap: warningCap.cap, ticks }, maximum = Math.min(maximum, warningCap.cap));
       }
       if (input.debug && maximum !== current) {
-        let consumption2 = building.consumptions.filter((entry) => entry.fuelRate > 0).map((entry) => {
+        let consumption = building.consumptions.filter((entry) => (entry.enableRate ?? 0) > 0).map((entry) => {
           let resource = powerCycleMapValue(
             resources,
             entry.resourceId,
@@ -24487,25 +24495,25 @@
             2
           )}, qty=${resource.input.currentQuantity.toFixed(
             0
-          )}, perUnit=${entry.fuelRate.toFixed(2)}, reserveTo=${(maximum * input.consumptionBalanceMinimum * entry.rate).toFixed(0)}`;
+          )}, perUnit=${entry.enableRate.toFixed(2)}, reserveTo=${((entry.currentTotal + Math.max(0, maximum - current) * entry.enableRate) * input.consumptionBalanceMinimum).toFixed(0)}`;
         }).join(" | "), delta = maximum - current;
         operations.push({
           kind: "log",
           message: `[power] ${building.binding}: on ${current}→${maximum} (Δ${delta >= 0 ? "+" : ""}${delta}), powered=${building.powered}, availPower≈${availablePower.toFixed(
             1
-          )}${reservedPower > 0 ? `, reserved≈${reservedPower.toFixed(1)}` : ""}${consumption2 ? " || " + consumption2 : ""}`
+          )}${reservedPower > 0 ? `, reserved≈${reservedPower.toFixed(1)}` : ""}${consumption ? " || " + consumption : ""}`
         });
       }
-      for (let consumption2 of building.consumptions) {
+      for (let consumption of building.consumptions) {
         let resource = powerCycleMapValue(
           resources,
-          consumption2.resourceId,
-          `power resource ${consumption2.resourceId}`
+          consumption.resourceId,
+          `power resource ${consumption.resourceId}`
         );
         appendRateOperation(
           operations,
           resource,
-          resource.rate - consumption2.fuelRate * maximum
+          resource.rate - consumption.currentTotal - Math.max(0, maximum - current) * (consumption.enableRate ?? 0)
         );
       }
       for (let change of building.supportChanges) {
@@ -25369,16 +25377,8 @@
   }
 
   // src/adapters/evolve/economy/production/captured-power-metadata.ts
-  var fixedPowerRate = (value) => Object.freeze({ kind: "fixed", value });
-  function consumption(resourceId, policy) {
-    return Object.freeze({
-      resourceId,
-      policy: typeof policy == "number" ? fixedPowerRate(policy) : policy
-    });
-  }
   function metadata(fields = {}) {
     return Object.freeze({
-      consumptions: Object.freeze(fields.consumptions ?? []),
       crewValueRank: fields.crewValueRank ?? 1,
       rule: fields.rule ?? "ordinary",
       singleState: fields.singleState ?? !1,
@@ -25386,46 +25386,7 @@
       skipGroup: fields.skipGroup ?? "none"
     });
   }
-  var stationFood = Object.freeze({ kind: "station-food" }), embassyFood = Object.freeze({ kind: "embassy-food" }), POWER_PREENABLE_RESOURCE_RESERVATIONS = Object.freeze({
-    "city-tourist_center": [consumption("Food", 50)],
-    "interstellar-zoo": [consumption("Food", 12e3)],
-    "space-spaceport": [
-      consumption("Food", { kind: "cataclysm-food", normal: 25 })
-    ],
-    "space-red_factory": [consumption("Helium_3", 1)],
-    "space-space_barracks": [
-      consumption("Oil", 2),
-      consumption("Food", { kind: "cataclysm-food", normal: 10 })
-    ],
-    "space-outpost": [consumption("Oil", 2)],
-    "space-space_station": [consumption("Food", stationFood)],
-    "interstellar-starport": [consumption("Food", 100)],
-    "interstellar-int_factory": [consumption("Deuterium", 5)],
-    "interstellar-cruiser": [consumption("Helium_3", 6)],
-    "interstellar-neutron_miner": [consumption("Helium_3", 3)],
-    "galaxy-starbase": [consumption("Food", 250)],
-    "galaxy-bolognium_ship": [consumption("Helium_3", 5)],
-    "galaxy-scout_ship": [consumption("Helium_3", 6)],
-    "galaxy-corvette_ship": [consumption("Helium_3", 10)],
-    "galaxy-frigate_ship": [consumption("Helium_3", 25)],
-    "galaxy-cruiser_ship": [consumption("Deuterium", 25)],
-    "galaxy-dreadnought": [consumption("Deuterium", 80)],
-    "galaxy-embassy": [consumption("Food", embassyFood)],
-    "galaxy-freighter": [consumption("Helium_3", 12)],
-    "galaxy-vitreloy_plant": [
-      consumption("Bolognium", 2.5),
-      consumption("Stanene", 100),
-      consumption("Money", 5e4)
-    ],
-    "galaxy-super_freighter": [consumption("Helium_3", 25)],
-    "galaxy-foothold": [consumption("Elerium", 2.5)],
-    "galaxy-armed_miner": [consumption("Helium_3", 10)],
-    "galaxy-scavenger": [consumption("Helium_3", 12)],
-    "galaxy-minelayer": [consumption("Helium_3", 8)],
-    "galaxy-raider": [consumption("Helium_3", 18)],
-    "space-fob": [consumption("Helium_3", 125)],
-    "space-lander": [consumption("Oil", 50)]
-  }), POWER_RULE_BY_BINDING = Object.freeze({
+  var POWER_RULE_BY_BINDING = Object.freeze({
     "interstellar-citadel": "neutron-citadel",
     "space-space_station": "belt-space-station",
     "city-cement_plant": "job-dependent",
@@ -25475,7 +25436,6 @@
   });
   function capturedPowerMetadataForBinding(binding) {
     return metadata({
-      ...POWER_PREENABLE_RESOURCE_RESERVATIONS[binding] === void 0 ? {} : { consumptions: POWER_PREENABLE_RESOURCE_RESERVATIONS[binding] },
       ...POWER_CREW_SHEDDING_RANK[binding] === void 0 ? {} : { crewValueRank: POWER_CREW_SHEDDING_RANK[binding] },
       ...POWER_RULE_BY_BINDING[binding] === void 0 ? {} : { rule: POWER_RULE_BY_BINDING[binding] },
       singleState: binding === "city-banquet",
@@ -25485,26 +25445,109 @@
       ) ? "spire" : ["portal-transport", "portal-bireme"].includes(binding) ? "lake" : "none"
     });
   }
-  function truthy3(root, path) {
-    let value = root;
-    for (let key of path) value = readProperty(value, key);
-    return !!value;
-  }
-  function readCapturedPowerConsumptionRate(root, consumption2) {
-    let policy = consumption2.policy, race = ["race"], fasting = truthy3(root, [...race, "fasting"]);
-    switch (policy.kind) {
-      case "fixed":
-        return policy.value;
-      case "cataclysm-food":
-        return truthy3(root, [...race, "cataclysm"]) || truthy3(root, [...race, "orbit_decayed"]) ? policy.normal === 25 ? 2 : 0 : policy.normal;
-      case "station-food":
-        return truthy3(root, [...race, "cataclysm"]) || truthy3(root, [...race, "orbit_decayed"]) ? 1 : 10;
-      case "embassy-food":
-        return fasting ? 0 : 7500;
-    }
-  }
   function capturedPowerSmartEnabled(binding, settings) {
     return settings[`bld_s2_${binding}`] === !0;
+  }
+
+  // src/adapters/evolve/economy/production/captured-power-consumption.ts
+  var idle = (resourceId, base, sourceKey, fuel = null, huge = !1, linear = !0) => Object.freeze({ resourceId, base, sourceKey, fuel, huge, linear }), POWER_IDLE_CONSUMPTION_FALLBACK = Object.freeze({
+    "city-tourist_center": [idle("Food", 50, "tech_tourism", null, !0)],
+    "interstellar-zoo": [idle("Food", 12e3, "tech_zoo", null, !0)],
+    "space-spaceport": [
+      idle("Food", 25, "space_red_spaceport_title", null, !0)
+    ],
+    "space-red_factory": [idle("Helium_3", 1, null, "space", !0)],
+    "space-space_barracks": [
+      idle("Oil", 2, "tech_space_marines_bd", "space", !0),
+      idle("Food", 10, "tech_space_marines_bd", null, !0)
+    ],
+    "space-outpost": [idle("Oil", 2, "space_gas_moon_outpost_bd", "space", !0)],
+    "space-space_station": [
+      idle("Food", 10, "space_belt_station_title", null, !0)
+    ],
+    "interstellar-starport": [
+      idle("Food", 100, "interstellar_alpha_starport_title", null, !0)
+    ],
+    "interstellar-int_factory": [
+      idle(
+        "Deuterium",
+        5,
+        "interstellar_int_factory_title",
+        "interstellar",
+        !0
+      )
+    ],
+    "interstellar-cruiser": [
+      idle("Helium_3", 6, "interstellar_cruiser_title", "interstellar", !0)
+    ],
+    "interstellar-neutron_miner": [
+      idle(
+        "Helium_3",
+        3,
+        "interstellar_neutron_miner_title",
+        "interstellar",
+        !0
+      )
+    ],
+    "galaxy-starbase": [idle("Food", 250, "galaxy_starbase", null, !0)],
+    "galaxy-embassy": [idle("Food", 7500, "galaxy_embassy")],
+    "galaxy-vitreloy_plant": [
+      idle("Money", 5e4, "galaxy_vitreloy_plant_bd", null, !0, !1),
+      idle("Bolognium", 2.5, "galaxy_vitreloy_plant_bd", null, !0, !1),
+      idle("Stanene", 100, "galaxy_vitreloy_plant_bd", null, !0, !1)
+    ],
+    "galaxy-foothold": [
+      idle("Elerium", 2.5, "galaxy_foothold", null, !0, !1)
+    ],
+    "space-fob": [idle("Helium_3", 125, "tech_fob", "space")],
+    "space-lander": [idle("Oil", 50, "space_lander_title", "space", !0)],
+    // Ship fuel is reported only as one shared galaxy_fuel_consume row. It cannot be attributed
+    // to an individual ship. Retain resource identity but never guess a per-ship marginal rate.
+    "galaxy-bolognium_ship": [idle("Helium_3", null, null)],
+    "galaxy-scout_ship": [idle("Helium_3", null, null)],
+    "galaxy-corvette_ship": [idle("Helium_3", null, null)],
+    "galaxy-frigate_ship": [idle("Helium_3", null, null)],
+    "galaxy-cruiser_ship": [idle("Deuterium", null, null)],
+    "galaxy-dreadnought": [idle("Deuterium", null, null)],
+    "galaxy-freighter": [idle("Helium_3", null, null)],
+    "galaxy-super_freighter": [idle("Helium_3", null, null)],
+    "galaxy-armed_miner": [idle("Helium_3", null, null)],
+    "galaxy-scavenger": [idle("Helium_3", null, null)],
+    "galaxy-minelayer": [idle("Helium_3", null, null)],
+    "galaxy-raider": [idle("Helium_3", null, null)]
+  });
+  function readPowerNativeConsumption(breakdown, resourceId, source) {
+    let row = breakdown.consumption[resourceId]?.[source];
+    if (row === void 0) return 0;
+    if (!(typeof row != "number" || !Number.isFinite(row) || row > 0))
+      return row === 0 ? 0 : -row;
+  }
+  function readPowerIdleGate(root, binding, resourceId) {
+    let race = readProperty(root, "race");
+    if (resourceId === "Food" && readProperty(race, "fasting")) return 0;
+    if (binding === "space-space_station")
+      return readProperty(race, "cataclysm") ? 0.1 : 1;
+    if (binding === "space-spaceport") {
+      let decayed = !!readProperty(race, "orbit_decayed"), isolation = !!readProperty(readProperty(root, "tech"), "isolation");
+      return readProperty(race, "cataclysm") || decayed && !isolation ? 2 / 25 : 1;
+    }
+    if (binding === "space-space_barracks" && readProperty(race, "fasting"))
+      return 0;
+    if (binding === "space-space_barracks" && resourceId === "Food")
+      return readProperty(race, "cataclysm") ? 0 : 1;
+    if (binding === "galaxy-starbase" || binding === "galaxy-embassy") {
+      let gate = readProperty(readProperty(root, "galaxy"), "s_gate"), on = readProperty(gate, "on");
+      return typeof on == "number" && Number.isFinite(on) && on >= 0 ? on : null;
+    }
+    if (binding === "galaxy-foothold") {
+      let gate = readProperty(readProperty(root, "galaxy"), "s_gate");
+      return typeof readProperty(gate, "on") == "number" ? Number(readProperty(gate, "on")) > 0 ? 1 : 0 : null;
+    }
+    if (binding === "space-lander") {
+      let fob = readProperty(readProperty(root, "space"), "fob");
+      return Number(readProperty(fob, "on")) > 0 ? 1 : 0;
+    }
+    return 1;
   }
 
   // src/adapters/evolve/economy/production/captured-power-reader.ts
@@ -25624,19 +25667,8 @@
     let adjustment = mechanics.readAdjustedFuelFactor(mode, resourceId);
     return adjustment.kind === "value" ? amount * adjustment.value : void 0;
   }
-  function readCapturedPowerMetadataFuelMode(binding, region, resourceId) {
-    if (binding !== "interstellar-fusion") {
-      if (region === "space" && (resourceId === "Oil" || resourceId === "Helium_3"))
-        return "space";
-      if (["interstellar", "galaxy", "tauceti"].includes(region) && (resourceId === "Deuterium" || resourceId === "Helium_3"))
-        return "interstellar";
-    }
-  }
-  function readFuelInputs(root, mechanics, structure, metadataConsumptions) {
-    let binding = structure.actionId, definitions = metadataConsumptions.map((item) => ({
-      resourceId: item.resourceId,
-      rate: readCapturedPowerConsumptionRate(root, item)
-    })), powerFuel = structure.readFuel();
+  function readCapturedPowerConsumptions(root, mechanics, structure, production, stateOn, invalidFallbacks) {
+    let binding = structure.actionId, powerFuel = structure.readFuel();
     if (powerFuel.kind === "invalid") return;
     let supportFuel = structure.readSupportFuel();
     if (supportFuel.kind === "invalid") return;
@@ -25644,35 +25676,65 @@
     if (supportAdjustmentDisabled.kind === "invalid") return;
     let powerAdjustmentRequested = structure.readFuelAdjustmentRequested();
     if (powerAdjustmentRequested.kind === "invalid") return;
-    let result = [], append = (resourceId, rate, adjustmentDisabled = !1, adjustmentMode = void 0) => {
-      let fuelRate = adjustmentDisabled || adjustmentMode === void 0 ? rate : readFuelRate(mechanics, resourceId, rate, adjustmentMode);
-      return fuelRate === void 0 ? !1 : (result.push(Object.freeze({ resourceId, rate, fuelRate })), !0);
-    };
-    for (let definition of definitions) {
-      let mode = readCapturedPowerMetadataFuelMode(
-        binding,
-        structure.region,
-        definition.resourceId
+    let title = structure.readTitle(), result = /* @__PURE__ */ new Map(), observed2 = (resourceId, source) => readPowerNativeConsumption(production, resourceId, source), append = (resourceId, rate, source, adjustmentDisabled = !1, adjustmentMode = void 0) => {
+      let adjustedRate = adjustmentDisabled || adjustmentMode === void 0 ? rate : readFuelRate(mechanics, resourceId, rate, adjustmentMode), currentTotal = source === null ? void 0 : observed2(resourceId, source), enableRate = adjustedRate !== void 0 && Number.isFinite(adjustedRate) && adjustedRate >= 0 && currentTotal !== void 0 ? adjustedRate : null, previous = result.get(resourceId);
+      result.set(
+        resourceId,
+        Object.freeze({
+          resourceId,
+          currentTotal: (previous?.currentTotal ?? 0) + (currentTotal ?? 0),
+          enableRate: enableRate === null || previous?.enableRate === null ? null : previous === void 0 ? enableRate : previous.enableRate + enableRate
+        })
       );
-      if (!append(definition.resourceId, definition.rate, !1, mode))
-        return;
-    }
+    };
     if (powerFuel.kind === "value" && powerFuel.value !== !1) {
       let powerAdjustmentEnabled = powerAdjustmentRequested.kind === "value" && powerAdjustmentRequested.value && structure.sector !== "city";
       for (let fuel of powerFuel.value) {
         let mode = powerAdjustmentEnabled ? fuelModeFor(structure.region, fuel.resourceId) : void 0;
-        if (!append(fuel.resourceId, fuel.amount, !1, mode)) return;
+        append(
+          fuel.resourceId,
+          fuel.amount,
+          title.kind === "value" ? title.value : null,
+          !1,
+          mode
+        );
       }
     }
     if (supportFuel.kind === "value" && supportFuel.value !== !1) {
       let adjustmentDisabled = supportAdjustmentDisabled.kind === "value" && supportAdjustmentDisabled.value;
       for (let fuel of supportFuel.value) {
         let mode = adjustmentDisabled ? void 0 : fuelModeFor(structure.region, fuel.resourceId);
-        if (!append(fuel.resourceId, fuel.amount, adjustmentDisabled, mode))
-          return;
+        append(
+          fuel.resourceId,
+          fuel.amount,
+          title.kind === "value" ? `${title.value}+${structure.actionId}` : null,
+          adjustmentDisabled,
+          mode
+        );
       }
     }
-    return Object.freeze(result);
+    for (let fallback of POWER_IDLE_CONSUMPTION_FALLBACK[binding] ?? []) {
+      if (result.has(fallback.resourceId)) continue;
+      let source = fallback.sourceKey === null ? binding === "space-red_factory" && title.kind === "value" ? title.value : null : mechanics.readLocalizedText(fallback.sourceKey), sourceLabel = typeof source == "string" ? source : source?.kind === "value" ? source.value : null, currentTotal = sourceLabel === null ? 0 : observed2(fallback.resourceId, sourceLabel), validCurrent = sourceLabel !== null && currentTotal !== void 0, gate = readPowerIdleGate(root, binding, fallback.resourceId), enableRate = fallback.base;
+      enableRate !== null && gate !== null ? enableRate *= gate : enableRate = null, enableRate !== null && fallback.fuel !== null && (enableRate = readFuelRate(
+        mechanics,
+        fallback.resourceId,
+        enableRate,
+        fallback.fuel
+      ) ?? null);
+      let huge = !!readProperty(readProperty(root, "race"), "humongous");
+      huge && fallback.huge && (enableRate = null), (!validCurrent || gate === 0) && (enableRate = null), fallback.linear || (enableRate = null), (binding === "galaxy-starbase" || binding === "galaxy-embassy" || binding === "space-lander") && currentTotal === 0 && (enableRate = null), stateOn > 0 && currentTotal === 0 && gate !== 0 && (enableRate = null);
+      let driftKey = `${binding}:${fallback.resourceId}`;
+      invalidFallbacks.has(driftKey) && (enableRate = null), !huge && fallback.linear && gate !== null && gate > 0 && stateOn > 0 && validCurrent && currentTotal > 0 && enableRate !== null && Math.abs(currentTotal - stateOn * enableRate) > 1e-6 * Math.max(1, currentTotal) && (invalidFallbacks.add(driftKey), enableRate = null), result.set(
+        fallback.resourceId,
+        Object.freeze({
+          resourceId: fallback.resourceId,
+          currentTotal: currentTotal ?? 0,
+          enableRate
+        })
+      );
+    }
+    return Object.freeze([...result.values()]);
   }
   function readNativePowerSupports(root, mechanics, structures) {
     let groups = /* @__PURE__ */ new Map();
@@ -26435,7 +26497,7 @@
     }
     return Object.freeze({ lake, spire });
   }
-  function readPowerCycle(root, dependencies, runtime, settings) {
+  function readPowerCycle(root, dependencies, runtime, settings, invalidFallbacks) {
     let jobCounts;
     try {
       jobCounts = dependencies.readJobCounts?.(root, [
@@ -26556,16 +26618,18 @@
     for (let resourceId of Object.keys(gameResources))
       resourceId !== speciesId && !resourceId.endsWith("_Support") && resourceIds.add(resourceId);
     for (let candidate of supportSafe) {
-      let { record, supportChanges } = candidate, binding = record.catalog.binding, metadata2 = capturedPowerMetadataForBinding(binding), consumptions = readFuelInputs(
+      let { record, supportChanges } = candidate, binding = record.catalog.binding, metadata2 = capturedPowerMetadataForBinding(binding), consumptions = readCapturedPowerConsumptions(
         root,
         dependencies.mechanics,
         record.structure,
-        metadata2.consumptions
+        production,
+        record.stateOn,
+        invalidFallbacks
       ), produces = capturedPowerProducerCapability(binding), powered = record.powered, title = record.structure.readTitle(), description = record.structure.readDescription();
       if (consumptions === void 0 || powered === void 0 || title.kind === "invalid" || description.kind === "invalid")
         return;
-      for (let consumption2 of consumptions)
-        resourceIds.add(consumption2.resourceId);
+      for (let consumption of consumptions)
+        resourceIds.add(consumption.resourceId);
       for (let resourceId of produces) resourceIds.add(resourceId);
       let state = readCapturedStructureState(root, record.structure), autoMaximumRaw = asNumber(settings[`bld_m_${binding}`]), fleetMaximum = null;
       if (autoFleet && fleetNeededShips !== null && Object.hasOwn(fleetNeededShips, record.structure.struct)) {
@@ -26674,7 +26738,7 @@
       fasting: !!readProperty(readProperty(root, "race"), "fasting"),
       hungryRace: filledPowers.some(
         (building) => building.rule.kind === "tourist-center" || building.consumptions.some(
-          (consumption2) => consumption2.resourceId === "Food"
+          (consumption) => consumption.resourceId === "Food"
         )
       ) && !!readProperty(readProperty(root, "race"), "hungry"),
       banquetStateOn: buildingOns.get("city-banquet") ?? 0,
@@ -26707,7 +26771,7 @@
     readRuntimeOptions,
     readWarnings
   }) {
-    let dependencies = {
+    let invalidFallbacks = /* @__PURE__ */ new Set(), fallbackRoot, dependencies = {
       rootState,
       mechanics,
       ...readJobCounts === void 0 ? {} : { readJobCounts },
@@ -26727,6 +26791,7 @@
       readCycle() {
         let root = rootState.readRoot();
         if (root === void 0) return;
+        root !== fallbackRoot && (invalidFallbacks.clear(), fallbackRoot = root);
         let raw, runtime;
         try {
           raw = readSettingsRaw(), runtime = readRuntimeOptions();
@@ -26734,7 +26799,7 @@
           return;
         }
         if (!(!isRecord(raw) || runtime === void 0 || !Number.isFinite(runtime.consumptionBalanceMinimum)))
-          return readPowerCycle(root, dependencies, runtime, raw);
+          return readPowerCycle(root, dependencies, runtime, raw, invalidFallbacks);
       },
       readWarnings(domIds) {
         return readWarnings(domIds);
@@ -27259,7 +27324,7 @@
     let number = finite(value);
     return number !== void 0 && number >= 0 ? number : void 0;
   }
-  function truthy4(value) {
+  function truthy3(value) {
     return !!value;
   }
   function emptyInput10() {
@@ -27280,12 +27345,12 @@
   }
   function readInput8(dependencies) {
     let root = dependencies.rootState.readRoot(), settingsValue = dependencies.readSettings(), settings = isRecord(settingsValue) ? settingsValue : {}, city = readProperty(root, "city"), race = readProperty(root, "race"), resources = readProperty(root, "resource"), factory = readProperty(city, "nanite_factory"), nanite = readProperty(resources, "Nanite"), control = dependencies.controls.resolve(NANITE_CONTROL);
-    if (settings.autoNanite !== !0 || !isRecord(race) || !isRecord(resources) || !isRecord(factory) || control === void 0 || !control.methods.includes("addItem") || !control.methods.includes("subItem") || !truthy4(race.deconstructor))
+    if (settings.autoNanite !== !0 || !isRecord(race) || !isRecord(resources) || !isRecord(factory) || control === void 0 || !control.methods.includes("addItem") || !control.methods.includes("subItem") || !truthy3(race.deconstructor))
       return Object.freeze({ root, input: emptyInput10() });
     let factoryCount = finite(factory.count), naniteAmount = finite(readProperty(nanite, "amount")), naniteMaximum = finite(readProperty(nanite, "max"));
     if (factoryCount === void 0 || !Number.isSafeInteger(factoryCount) || factoryCount < 0 || naniteAmount === void 0 || naniteMaximum === void 0)
       return Object.freeze({ root, input: emptyInput10() });
-    let demand = dependencies.readDemand(), ratios = readRatios3(settings), hungryRace = truthy4(race.carnivore) && !truthy4(race.herbivore) && !truthy4(race.artifical) || truthy4(race.ravenous), resourceViews = [], current = [];
+    let demand = dependencies.readDemand(), ratios = readRatios3(settings), hungryRace = truthy3(race.carnivore) && !truthy3(race.herbivore) && !truthy3(race.artifical) || truthy3(race.ravenous), resourceViews = [], current = [];
     for (let id of NANITE_RESOURCES) {
       let resource = readProperty(resources, id);
       if (!isRecord(resource) || resource.display !== !0) continue;

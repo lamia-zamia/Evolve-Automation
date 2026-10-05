@@ -32,8 +32,10 @@ export interface PowerSupportChangeInput {
 
 export interface PowerConsumptionInput {
   readonly resourceId: string;
-  readonly rate: number;
-  readonly fuelRate: number;
+  /** Exact observed current total from the game's source-specific consumption ledger. */
+  readonly currentTotal: number;
+  /** Validated requirement for one more copy, or null when increase must fail closed. */
+  readonly enableRate: number | null;
 }
 
 export interface BusyWorkerInput {
@@ -626,7 +628,7 @@ function applySmartRule(
       const food = resources.get("Food");
       const perZoo =
         building.consumptions.find((entry) => entry.resourceId === "Food")
-          ?.rate ?? 0;
+          ?.enableRate ?? 0;
       if (food !== undefined && perZoo > 0) {
         maximum = Math.min(
           maximum,
@@ -1010,7 +1012,7 @@ export function planPowerCycle(
   for (const building of input.buildings) {
     availablePower += building.powered * building.stateOn;
     for (const consumption of building.consumptions) {
-      if (consumption.rate > 0) {
+      if (consumption.currentTotal > 0 || (consumption.enableRate ?? 0) > 0) {
         consumedResourceIds.add(consumption.resourceId);
       }
       const resource = powerCycleMapValue(
@@ -1021,7 +1023,7 @@ export function planPowerCycle(
       appendRateOperation(
         operations,
         resource,
-        resource.rate + consumption.fuelRate * building.stateOn,
+        resource.rate + consumption.currentTotal,
       );
     }
     for (const change of building.supportChanges) {
@@ -1174,14 +1176,23 @@ export function planPowerCycle(
         consumption.resourceId,
         `power resource ${consumption.resourceId}`,
       );
-      if (consumption.rate > 0) {
+      if (maximum > current && consumption.enableRate === null) {
+        maximum = current;
+        continue;
+      }
+      if (
+        maximum > current &&
+        consumption.enableRate !== null &&
+        consumption.enableRate > 0
+      ) {
+        const requirement = consumption.enableRate;
         if (!resource.input.unlocked) {
-          maximum = 0;
+          maximum = current;
           break;
         }
         if (resource.input.id === "Food") {
           if (input.fasting) {
-            maximum = 0;
+            maximum = current;
             break;
           }
           if (input.banquetStateOn > 0) {
@@ -1194,11 +1205,16 @@ export function planPowerCycle(
           current > 0 &&
           (building.powered < 0 || resource.input.storageRatio >= 0.95) &&
           resource.input.currentQuantity >=
-            maximum * input.consumptionBalanceMinimum * consumption.rate
+            (consumption.currentTotal +
+              Math.max(0, maximum - current) * requirement) *
+              input.consumptionBalanceMinimum
         ) {
           continue;
         }
-        maximum = Math.min(maximum, resource.rate / consumption.rate);
+        maximum = Math.min(
+          maximum,
+          current + (resource.rate - consumption.currentTotal) / requirement,
+        );
       }
     }
     for (const change of building.supportChanges) {
@@ -1254,7 +1270,7 @@ export function planPowerCycle(
 
     if (input.debug && maximum !== current) {
       const consumption = building.consumptions
-        .filter((entry) => entry.fuelRate > 0)
+        .filter((entry) => (entry.enableRate ?? 0) > 0)
         .map((entry) => {
           const resource = powerCycleMapValue(
             resources,
@@ -1265,10 +1281,10 @@ export function planPowerCycle(
             2,
           )}, qty=${resource.input.currentQuantity.toFixed(
             0,
-          )}, perUnit=${entry.fuelRate.toFixed(2)}, reserveTo=${(
-            maximum *
-            input.consumptionBalanceMinimum *
-            entry.rate
+          )}, perUnit=${entry.enableRate!.toFixed(2)}, reserveTo=${(
+            (entry.currentTotal +
+              Math.max(0, maximum - current) * entry.enableRate!) *
+            input.consumptionBalanceMinimum
           ).toFixed(0)}`;
         })
         .join(" | ");
@@ -1294,7 +1310,9 @@ export function planPowerCycle(
       appendRateOperation(
         operations,
         resource,
-        resource.rate - consumption.fuelRate * maximum,
+        resource.rate -
+          consumption.currentTotal -
+          Math.max(0, maximum - current) * (consumption.enableRate ?? 0),
       );
     }
     for (const change of building.supportChanges) {

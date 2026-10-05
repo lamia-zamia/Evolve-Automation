@@ -866,7 +866,9 @@ function readCapturedProductionCells(
       if (descriptor === undefined || !("value" in descriptor)) continue;
       const value = descriptor.value;
       if (typeof value === "string") result[key] = value;
-      else if (typeof value === "number" && Number.isFinite(value)) {
+      else if (typeof value === "number") {
+        // Keep malformed source rows visible to the feature adapter so it can
+        // fail only the affected consumption capability closed.
         result[key] = value;
       }
     }
