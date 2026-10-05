@@ -2091,6 +2091,7 @@
       readLocalizedText: () => ({ kind: "absent" }),
       readAdjustedFuelFactor: () => ({ kind: "invalid" }),
       readRoundedValues: () => ({ kind: "invalid" }),
+      readEffectRoundedValues: () => ({ kind: "invalid" }),
       readMathRoundValues: () => ({ kind: "invalid" }),
       readGuardPostRating: () => ({ kind: "invalid" })
     });
@@ -2359,6 +2360,19 @@
         if (stopped) return { kind: "invalid" };
         let observations = probeScopedNumberToFixed(pageWindow, (seen) => (read(), seen));
         return observations === void 0 ? { kind: "invalid" } : { kind: "value", value: observations };
+      },
+      readEffectRoundedValues(entryKey, isCurrent) {
+        try {
+          let entries = structureEntries, candidate = entries?.get(entryKey), entry = readMechanicsEntry(entryKey, candidate), descriptor = entry === void 0 ? void 0 : Object.getOwnPropertyDescriptor(entry.action, "effect");
+          if (stopped || entries === void 0 || entry === void 0 || descriptor === void 0 || !("value" in descriptor) || typeof descriptor.value != "function" || isCurrent !== void 0 && !isCurrent())
+            return { kind: "invalid" };
+          let action = entry.action, effect = descriptor.value, observed2 = mechanics.readRoundedValues(() => {
+            Reflect.apply(effect, action, []);
+          }), currentEntry = readMechanicsEntry(entryKey, candidate);
+          return entries === structureEntries && entries.get(entryKey) === candidate && currentEntry?.action === action && currentEntry.actionId === entry.actionId && currentEntry.region === entry.region && currentEntry.sector === entry.sector && currentEntry.struct === entry.struct && readMechanicsMethod(action, "effect") === effect && (isCurrent === void 0 || isCurrent()) && observed2.kind === "value" ? observed2 : { kind: "invalid" };
+        } catch {
+          return { kind: "invalid" };
+        }
       },
       readMathRoundValues(read) {
         if (stopped) return { kind: "invalid" };
@@ -26878,8 +26892,19 @@
         maximum = Math.min(maximum, rule.requiredBuildings);
         break;
       case "tau-whaling-station": {
-        let income = 8 * (1 - (1 - rule.supportMaximum / rule.supportCurrent) ** 1.4) * rule.whalingShipsOn;
-        maximum = Math.min(maximum, Math.ceil(income / 12));
+        if (!Number.isFinite(rule.nativeStationProduction) || rule.nativeStationProduction <= 0 || !Number.isFinite(rule.nativeShipProduction) || rule.nativeShipProduction < 0) {
+          maximum = Math.min(maximum, current);
+          break;
+        }
+        let totalBlubber = rule.whalingShipsOn * rule.nativeShipProduction;
+        if (!Number.isFinite(totalBlubber) || totalBlubber < 0) {
+          maximum = Math.min(maximum, current);
+          break;
+        }
+        maximum = Math.min(
+          maximum,
+          Math.ceil(totalBlubber / rule.nativeStationProduction)
+        );
         break;
       }
       case "tau-mining-pit":
@@ -28286,6 +28311,47 @@
   }
 
   // src/adapters/evolve/economy/production/captured-power-reader.ts
+  var TAU_WHALING_EFFECT_ACTIONS = Object.freeze({
+    station: Object.freeze({
+      entryKey: "tau_gas:whaling_station",
+      actionId: "tauceti-whaling_station"
+    }),
+    ship: Object.freeze({
+      entryKey: "tau_roid:whaling_ship",
+      actionId: "tauceti-whaling_ship"
+    })
+  });
+  function readCapturedTauWhalingProduction(mechanics, structures, isCurrent) {
+    let observe = (entryKey, actionId) => {
+      if (!(structures.filter(
+        (structure) => structure.entryKey === entryKey || structure.actionId === actionId
+      ).length !== 1 || !structures.some(
+        (structure) => structure.entryKey === entryKey && structure.actionId === actionId
+      )))
+        try {
+          let result = mechanics.readEffectRoundedValues(entryKey, isCurrent);
+          return result.kind === "value" ? result.value : void 0;
+        } catch {
+          return;
+        }
+    }, station = observe(
+      TAU_WHALING_EFFECT_ACTIONS.station.entryKey,
+      TAU_WHALING_EFFECT_ACTIONS.station.actionId
+    ), ship = observe(
+      TAU_WHALING_EFFECT_ACTIONS.ship.entryKey,
+      TAU_WHALING_EFFECT_ACTIONS.ship.actionId
+    ), valid = (value) => Number.isFinite(value.receiver) && value.receiver >= 0 && value.text.trim().length > 0 && Number.isFinite(Number(value.text)), rootCurrent;
+    try {
+      rootCurrent = isCurrent();
+    } catch {
+      return;
+    }
+    if (!(station?.length !== 3 || ship?.length !== 2 || station[0]?.digits !== 2 || station[1]?.digits !== 2 || station[2]?.digits !== 2 || ship[0]?.digits !== 1 || ship[1]?.digits !== 2 || !station.every(valid) || !ship.every(valid) || !rootCurrent || station[0].receiver <= 0))
+      return Object.freeze({
+        nativeStationProduction: station[0].receiver,
+        nativeShipProduction: ship[1].receiver
+      });
+  }
   var EMPTY_LAKE = Object.freeze({
     enabled: !1,
     bloodSpireLevel: 0,
@@ -29134,13 +29200,20 @@
           )
         });
       }
-      case "tau-whaling-station":
-        return Object.freeze({
+      case "tau-whaling-station": {
+        if (!capturedPowerSmartEnabled(binding, settings))
+          return Object.freeze({ kind: "ordinary" });
+        let native = readCapturedTauWhalingProduction(
+          dependencies.mechanics,
+          structures,
+          () => dependencies.rootState.readRoot() === root
+        );
+        return Object.freeze(native === void 0 ? { kind: "unavailable-production" } : {
           kind: metadataRule,
-          supportMaximum: supports.get("tau_roid")?.maximum ?? 0,
-          supportCurrent: supports.get("tau_roid")?.current ?? 0,
-          whalingShipsOn: buildingOns.get("tauceti-whaling_ship") ?? 0
+          whalingShipsOn: buildingOns.get("tauceti-whaling_ship") ?? 0,
+          ...native
         });
+      }
       case "tau-mining-pit": {
         let workersPerPit = readCapturedMiningPitWorkers(structures, binding);
         return workersPerPit === void 0 ? void 0 : Object.freeze({

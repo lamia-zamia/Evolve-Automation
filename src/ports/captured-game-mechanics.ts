@@ -14,10 +14,8 @@ export type CapturedGameRead<T> =
 /**
  * One `Number.prototype.toFixed` call the page made while a probe held it.
  *
- * Some game answers have no other reachable expression: the fuel-adjustment factor is only ever a
- * rounded literal, and the Truepath `syndicate()` result keeps its remaining-defense ratio solely as
- * the string that ratio is subtracted from. Both are read by observing the rounding rather than by
- * re-deriving what was rounded.
+ * Some game answers have no other reachable expression. Fuel adjustment, Truepath syndicate, and
+ * structure effects can be read by observing native rounding rather than restating their rules.
  */
 export interface CapturedRoundedValue {
   /** The receiver as the page's own `Number` coercion of it, before rounding. */
@@ -177,6 +175,11 @@ export interface CapturedGameMechanics {
    */
   readRoundedValues(
     read: () => unknown,
+  ): CapturedGameRead<readonly CapturedRoundedValue[]>;
+  /** Observe one captured structure action's own synchronous `effect()` without exposing the action. */
+  readEffectRoundedValues(
+    entryKey: string,
+    isCurrent?: () => boolean,
   ): CapturedGameRead<readonly CapturedRoundedValue[]>;
   readMathRoundValues(
     read: () => unknown,

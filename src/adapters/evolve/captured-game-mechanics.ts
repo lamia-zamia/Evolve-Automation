@@ -942,6 +942,7 @@ function emptyGameMechanics(): CapturedGameMechanics {
     readLocalizedText: () => ({ kind: "absent" as const }),
     readAdjustedFuelFactor: () => ({ kind: "invalid" as const }),
     readRoundedValues: () => ({ kind: "invalid" as const }),
+    readEffectRoundedValues: () => ({ kind: "invalid" as const }),
     readMathRoundValues: () => ({ kind: "invalid" as const }),
     readGuardPostRating: () => ({ kind: "invalid" as const }),
   });
@@ -1494,6 +1495,51 @@ export function installCapturedGameMechanics(
       return observations === undefined
         ? { kind: "invalid" }
         : { kind: "value", value: observations };
+    },
+    readEffectRoundedValues(
+      entryKey: string,
+      isCurrent?: () => boolean,
+    ): CapturedGameRead<readonly CapturedRoundedValue[]> {
+      try {
+        const entries = structureEntries;
+        const candidate = entries?.get(entryKey);
+        const entry = readMechanicsEntry(entryKey, candidate);
+        const descriptor =
+          entry === undefined
+            ? undefined
+            : Object.getOwnPropertyDescriptor(entry.action, "effect");
+        if (
+          stopped ||
+          entries === undefined ||
+          entry === undefined ||
+          descriptor === undefined ||
+          !("value" in descriptor) ||
+          typeof descriptor.value !== "function" ||
+          (isCurrent !== undefined && !isCurrent())
+        )
+          return { kind: "invalid" };
+        const action = entry.action;
+        const effect = descriptor.value as CapturedGameCall;
+        const observed = mechanics.readRoundedValues(() => {
+          Reflect.apply(effect, action, []);
+        });
+        const currentEntry = readMechanicsEntry(entryKey, candidate);
+        const current =
+          entries === structureEntries &&
+          entries.get(entryKey) === candidate &&
+          currentEntry?.action === action &&
+          currentEntry.actionId === entry.actionId &&
+          currentEntry.region === entry.region &&
+          currentEntry.sector === entry.sector &&
+          currentEntry.struct === entry.struct &&
+          readMechanicsMethod(action, "effect") === effect &&
+          (isCurrent === undefined || isCurrent());
+        return current && observed.kind === "value"
+          ? observed
+          : { kind: "invalid" };
+      } catch {
+        return { kind: "invalid" };
+      }
     },
     readMathRoundValues(
       read: () => unknown,

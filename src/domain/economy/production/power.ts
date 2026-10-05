@@ -182,9 +182,9 @@ export type PowerBuildingRule =
     }
   | {
       readonly kind: "tau-whaling-station";
-      readonly supportMaximum: number;
-      readonly supportCurrent: number;
       readonly whalingShipsOn: number;
+      readonly nativeShipProduction: number;
+      readonly nativeStationProduction: number;
     }
   | {
       readonly kind: "tau-mining-pit";
@@ -786,10 +786,24 @@ function applySmartRule(
       maximum = Math.min(maximum, rule.requiredBuildings);
       break;
     case "tau-whaling-station": {
-      const efficiency =
-        1 - (1 - rule.supportMaximum / rule.supportCurrent) ** 1.4;
-      const income = 8 * efficiency * rule.whalingShipsOn;
-      maximum = Math.min(maximum, Math.ceil(income / 12));
+      if (
+        !Number.isFinite(rule.nativeStationProduction) ||
+        rule.nativeStationProduction <= 0 ||
+        !Number.isFinite(rule.nativeShipProduction) ||
+        rule.nativeShipProduction < 0
+      ) {
+        maximum = Math.min(maximum, current);
+        break;
+      }
+      const totalBlubber = rule.whalingShipsOn * rule.nativeShipProduction;
+      if (!Number.isFinite(totalBlubber) || totalBlubber < 0) {
+        maximum = Math.min(maximum, current);
+        break;
+      }
+      maximum = Math.min(
+        maximum,
+        Math.ceil(totalBlubber / rule.nativeStationProduction),
+      );
       break;
     }
     case "tau-mining-pit":

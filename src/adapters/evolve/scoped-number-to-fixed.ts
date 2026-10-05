@@ -1,11 +1,8 @@
 /**
  * One synchronous observation of the page's own `Number.prototype.toFixed`.
  *
- * Two features need to see what the game rounded rather than re-derive what it rounded *from*: the
- * fuel-adjustment factor, which has no other reachable expression, and the Truepath `syndicate()`
- * result, whose remaining-defense ratio exists only as the four-digit string that `p` is
- * subtracted from. Both run a game closure and watch the rounding it performs, because the values
- * the closure consumed are module-private and unreachable.
+ * Game-owned fuel, Truepath syndicate, and structure effects expose otherwise private answers
+ * through rounding. The scoped observer records those answers without reimplementing their rules.
  *
  * The wrapper is deliberately transparent. It records the receiver as a number, the requested
  * digit count and the string the game itself produced, then returns that string untouched, so the

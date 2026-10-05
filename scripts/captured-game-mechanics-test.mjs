@@ -1086,6 +1086,83 @@ assert.deepEqual(
   },
 );
 
+const effectToFixedBefore = Object.getOwnPropertyDescriptor(
+  page.Number.prototype,
+  "toFixed",
+);
+let effectCurrent = true;
+let effectBehavior = "valid";
+const effectAction = {
+  id: "tauceti-whaling_ship",
+  effect() {
+    page.Number.prototype.toFixed.call(14, 1);
+    page.Number.prototype.toFixed.call(7.25, 2);
+    if (effectBehavior === "throw") throw new Error("effect failed");
+    if (effectBehavior === "replace-root") effectCurrent = false;
+    if (effectBehavior === "replace-action")
+      effectEntry.c_action = { ...effectAction };
+    if (effectBehavior === "replace-entry")
+      entries.set(effectEntry.key, { ...effectEntry });
+    if (effectBehavior === "replace-registry-row")
+      entries.delete(effectEntry.key);
+    if (effectBehavior === "replace-method")
+      effectAction.effect = () => "replaced";
+    if (effectBehavior === "rename-action") effectAction.id = "other-action";
+    return "<div>ignored presentation</div>";
+  },
+};
+const effectEntry = {
+  key: "tau_roid:whaling_ship",
+  region: "tauceti",
+  sector: "tau_roid",
+  struct: "whaling_ship",
+  c_action: effectAction,
+  info: false,
+};
+const originalEffect = effectAction.effect;
+entries.set(effectEntry.key, effectEntry);
+const readEffect = () =>
+  capture.mechanics.readEffectRoundedValues(
+    effectEntry.key,
+    () => effectCurrent,
+  );
+assert.deepEqual(readEffect(), {
+  kind: "value",
+  value: [
+    { receiver: 14, digits: 1, text: "14.0" },
+    { receiver: 7.25, digits: 2, text: "7.25" },
+  ],
+});
+assert.deepEqual(
+  Object.getOwnPropertyDescriptor(page.Number.prototype, "toFixed"),
+  effectToFixedBefore,
+);
+for (const behavior of [
+  "throw",
+  "replace-root",
+  "replace-action",
+  "replace-entry",
+  "replace-registry-row",
+  "replace-method",
+  "rename-action",
+]) {
+  effectBehavior = behavior;
+  assert.deepEqual(readEffect(), { kind: "invalid" }, behavior);
+  assert.deepEqual(
+    Object.getOwnPropertyDescriptor(page.Number.prototype, "toFixed"),
+    effectToFixedBefore,
+    behavior,
+  );
+  effectCurrent = true;
+  effectAction.effect = originalEffect;
+  effectAction.id = "tauceti-whaling_ship";
+  effectEntry.c_action = effectAction;
+  entries.set(effectEntry.key, effectEntry);
+}
+delete effectAction.effect;
+assert.deepEqual(readEffect(), { kind: "invalid" });
+effectAction.effect = originalEffect;
+
 // One inherited assignment captures the p-ledger owner and then removes the prototype hook.
 const falseLedgerCandidate = new page.Object();
 falseLedgerCandidate.Global = {};

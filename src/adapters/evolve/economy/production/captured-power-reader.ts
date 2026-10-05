@@ -109,6 +109,88 @@ export interface CapturedPowerReaderDependencies {
   ) => readonly PowerWarnBuildingInput[];
 }
 
+const TAU_WHALING_EFFECT_ACTIONS = Object.freeze({
+  station: Object.freeze({
+    entryKey: "tau_gas:whaling_station",
+    actionId: "tauceti-whaling_station",
+  }),
+  ship: Object.freeze({
+    entryKey: "tau_roid:whaling_ship",
+    actionId: "tauceti-whaling_ship",
+  }),
+});
+
+/** Pinned truepath.js effects expose production before rounding, with no HTML interpretation. */
+export function readCapturedTauWhalingProduction(
+  mechanics: CapturedGameMechanics,
+  structures: readonly CapturedGameStructureDefinition[],
+  isCurrent: () => boolean,
+):
+  | {
+      readonly nativeStationProduction: number;
+      readonly nativeShipProduction: number;
+    }
+  | undefined {
+  const observe = (entryKey: string, actionId: string) => {
+    if (
+      structures.filter(
+        (structure) =>
+          structure.entryKey === entryKey || structure.actionId === actionId,
+      ).length !== 1 ||
+      !structures.some(
+        (structure) =>
+          structure.entryKey === entryKey && structure.actionId === actionId,
+      )
+    )
+      return undefined;
+    try {
+      const result = mechanics.readEffectRoundedValues(entryKey, isCurrent);
+      return result.kind === "value" ? result.value : undefined;
+    } catch {
+      return undefined;
+    }
+  };
+  const station = observe(
+    TAU_WHALING_EFFECT_ACTIONS.station.entryKey,
+    TAU_WHALING_EFFECT_ACTIONS.station.actionId,
+  );
+  const ship = observe(
+    TAU_WHALING_EFFECT_ACTIONS.ship.entryKey,
+    TAU_WHALING_EFFECT_ACTIONS.ship.actionId,
+  );
+  const valid = (value: { receiver: number; digits: number; text: string }) =>
+    Number.isFinite(value.receiver) &&
+    value.receiver >= 0 &&
+    value.text.trim().length > 0 &&
+    Number.isFinite(Number(value.text));
+  let rootCurrent: boolean;
+  try {
+    rootCurrent = isCurrent();
+  } catch {
+    return undefined;
+  }
+  if (
+    station?.length !== 3 ||
+    ship?.length !== 2 ||
+    station[0]?.digits !== 2 ||
+    station[1]?.digits !== 2 ||
+    station[2]?.digits !== 2 ||
+    ship[0]?.digits !== 1 ||
+    ship[1]?.digits !== 2 ||
+    !station.every(valid) ||
+    !ship.every(valid) ||
+    !rootCurrent ||
+    station[0]!.receiver <= 0
+  )
+    return undefined;
+  // Pinned station effect rounds production, stored blubber, then powered() via powerCostMod.
+  // Ship effect rounds adjusted support fuel, then production. The receiver retains native precision.
+  return Object.freeze({
+    nativeStationProduction: station[0]!.receiver,
+    nativeShipProduction: ship[1]!.receiver,
+  });
+}
+
 // Retired Power disables lake automation when either managed building fails its gate;
 // these remaining fields are inert because the planner reads them only while enabled.
 const EMPTY_LAKE: PowerLakeInput = Object.freeze({
@@ -1581,13 +1663,22 @@ function readBuildingRule(
         ),
       });
     }
-    case "tau-whaling-station":
+    case "tau-whaling-station": {
+      if (!capturedPowerSmartEnabled(binding, settings))
+        return Object.freeze({ kind: "ordinary" });
+      const native = readCapturedTauWhalingProduction(
+        dependencies.mechanics,
+        structures,
+        () => dependencies.rootState.readRoot() === root,
+      );
+      if (native === undefined)
+        return Object.freeze({ kind: "unavailable-production" });
       return Object.freeze({
         kind: metadataRule,
-        supportMaximum: supports.get("tau_roid")?.maximum ?? 0,
-        supportCurrent: supports.get("tau_roid")?.current ?? 0,
         whalingShipsOn: buildingOns.get("tauceti-whaling_ship") ?? 0,
+        ...native,
       });
+    }
     case "tau-mining-pit": {
       const workersPerPit = readCapturedMiningPitWorkers(structures, binding);
       if (workersPerPit === undefined) return undefined;
