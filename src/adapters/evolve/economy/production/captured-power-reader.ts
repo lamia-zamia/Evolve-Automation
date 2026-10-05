@@ -289,6 +289,7 @@ export function readCapturedPowerConsumptions(
   structure: CapturedGameStructureDefinition,
   production: CapturedProductionBreakdown,
   stateOn: number,
+  role: "consumer" | "generator" | "none",
   invalidFallbacks: Set<string>,
 ): readonly PowerConsumptionInput[] | undefined {
   const binding = structure.actionId;
@@ -299,9 +300,6 @@ export function readCapturedPowerConsumptions(
   const supportAdjustmentDisabled =
     structure.readSupportFuelAdjustmentDisabled();
   if (supportAdjustmentDisabled.kind === "invalid") return undefined;
-  const powerAdjustmentRequested = structure.readFuelAdjustmentRequested();
-  if (powerAdjustmentRequested.kind === "invalid") return undefined;
-
   const title = structure.readTitle();
   const result = new Map<string, PowerConsumptionInput>();
   const observed = (resourceId: string, source: string): number | undefined =>
@@ -341,19 +339,40 @@ export function readCapturedPowerConsumptions(
       }),
     );
   };
-  if (powerFuel.kind === "value" && powerFuel.value !== false) {
+  if (
+    powerFuel.kind === "value" &&
+    powerFuel.value !== false &&
+    role !== "none"
+  ) {
+    // DeadSpace src/main.js at 6cc9ba8: generators and powered consumers have
+    // different source identities and different p_fuel adjustment gates.
+    const powerAdjustmentRequested =
+      role === "generator" ? structure.readFuelAdjustmentRequested() : null;
+    if (powerAdjustmentRequested?.kind === "invalid") return undefined;
     const powerAdjustmentEnabled =
-      powerAdjustmentRequested.kind === "value" &&
+      role === "generator" &&
+      powerAdjustmentRequested?.kind === "value" &&
       powerAdjustmentRequested.value &&
       structure.sector !== "city";
     for (const fuel of powerFuel.value) {
-      const mode = powerAdjustmentEnabled
-        ? fuelModeFor(structure.region, fuel.resourceId)
-        : undefined;
+      const mode =
+        role === "consumer"
+          ? structure.region === "space" ||
+            structure.region === "underground" ||
+            structure.region === "surface"
+            ? fuelModeFor(structure.region, fuel.resourceId)
+            : undefined
+          : powerAdjustmentEnabled
+            ? fuelModeFor(structure.region, fuel.resourceId)
+            : undefined;
       append(
         fuel.resourceId,
         fuel.amount,
-        title.kind === "value" ? title.value : null,
+        title.kind === "value"
+          ? role === "consumer"
+            ? `${title.value}+${structure.actionId}`
+            : title.value
+          : null,
         false,
         mode,
       );
@@ -1778,6 +1797,7 @@ function readPowerCycle(
   const supportMap = new Map(supports.map((item) => [item.type, item]));
   const candidates: {
     readonly record: (typeof managed)[number];
+    readonly role: "consumer" | "generator" | "none";
     readonly supportChanges: readonly PowerSupportChangeInput[];
   }[] = [];
   for (const record of managed) {
@@ -1787,6 +1807,7 @@ function readPowerCycle(
     if (role.value === "none" && grids.value.length === 0) continue;
     candidates.push({
       record,
+      role: role.value,
       supportChanges: Object.freeze(
         grids.value.map((group) =>
           Object.freeze({ type: group.type, amount: -group.contribution }),
@@ -1923,7 +1944,7 @@ function readPowerCycle(
       resourceIds.add(resourceId);
   }
   for (const candidate of supportSafe) {
-    const { record, supportChanges } = candidate;
+    const { record, role, supportChanges } = candidate;
     const binding = record.catalog.binding;
     const metadata = capturedPowerMetadataForBinding(binding);
     const consumptions = readCapturedPowerConsumptions(
@@ -1932,6 +1953,7 @@ function readPowerCycle(
       record.structure,
       production,
       record.stateOn,
+      role,
       invalidFallbacks,
     );
     const produces = capturedPowerProducerCapability(binding);

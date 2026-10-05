@@ -22,20 +22,39 @@ const mechanics = {
     value: mode === "space" ? 0.5 : 0.75,
   }),
 };
-function action(binding, fuel) {
+function action(binding, fuel, options = {}) {
   return {
     actionId: binding,
-    region: binding.split("-")[0],
-    sector: binding.split("-")[0],
-    readTitle: () => ({ kind: "value", value: binding }),
+    region: options.region ?? binding.split("-")[0],
+    sector: options.sector ?? binding.split("-")[0],
+    readTitle: () => ({ kind: "value", value: options.title ?? binding }),
     readFuel: () =>
       fuel === undefined ? { kind: "absent" } : { kind: "value", value: fuel },
-    readSupportFuel: () => ({ kind: "absent" }),
-    readSupportFuelAdjustmentDisabled: () => ({ kind: "absent" }),
-    readFuelAdjustmentRequested: () => ({ kind: "absent" }),
+    readSupportFuel: () =>
+      options.supportFuel === undefined
+        ? { kind: "absent" }
+        : { kind: "value", value: options.supportFuel },
+    readSupportFuelAdjustmentDisabled: () =>
+      options.supportAdjustment === undefined
+        ? { kind: "absent" }
+        : { kind: "value", value: options.supportAdjustment },
+    readFuelAdjustmentRequested: () =>
+      options.adjustment === "invalid"
+        ? { kind: "invalid" }
+        : options.adjustment === undefined
+          ? { kind: "absent" }
+          : { kind: "value", value: options.adjustment },
   };
 }
-function sample(binding, on, rows = {}, state = {}, stale = new Set(), fuel) {
+function sample(
+  binding,
+  on,
+  rows = {},
+  state = {},
+  stale = new Set(),
+  fuel,
+  options = {},
+) {
   const root = {
     race: {},
     tech: {},
@@ -45,9 +64,10 @@ function sample(binding, on, rows = {}, state = {}, stale = new Set(), fuel) {
   return readCapturedPowerConsumptions(
     root,
     mechanics,
-    action(binding, fuel),
+    action(binding, fuel, options),
     { production: {}, consumption: rows },
     on,
+    options.role ?? "none",
     stale,
   );
 }
@@ -148,23 +168,235 @@ const barracks = sample(
 assert.equal(one(barracks, "Oil")?.currentTotal, 6);
 assert.equal(one(barracks, "Food")?.currentTotal, 20);
 assert.equal(one(barracks, "Oil")?.enableRate, null);
-const actionBarracks = sample(
-  "space-space_barracks",
-  2,
-  {
-    Oil: { "space-space_barracks": -4, Marines: -4 },
-    Food: { Marines: -20 },
-  },
-  {},
-  new Set(),
-  [{ resourceId: "Oil", amount: 2 }],
+const mine = {
+  role: "consumer",
+  region: "space",
+  sector: "spc_makemake",
+  title: "Orichalcum Mine",
+};
+const mineFuel = [{ resourceId: "Oil", amount: 200 }];
+assert.deepEqual(
+  one(
+    sample(
+      "space-orichalcum_mine",
+      1,
+      {
+        Oil: {
+          "Orichalcum Mine+space-orichalcum_mine": -150,
+          "Orichalcum Mine": -999,
+        },
+      },
+      {},
+      new Set(),
+      mineFuel,
+      mine,
+    ),
+    "Oil",
+  ),
+  { resourceId: "Oil", currentTotal: 150, enableRate: 100 },
+  "MakeMake powered mine reads only its native consumer source and space fuel adjustment",
+);
+assert.deepEqual(
+  one(
+    sample(
+      "space-orichalcum_mine",
+      1,
+      {
+        Oil: { "Orichalcum Mine": -999 },
+      },
+      {},
+      new Set(),
+      mineFuel,
+      mine,
+    ),
+    "Oil",
+  ),
+  { resourceId: "Oil", currentTotal: 0, enableRate: 100 },
+  "a title-only source is not attributed to a consumer",
+);
+assert.deepEqual(
+  one(
+    sample(
+      "space-orichalcum_mine",
+      1,
+      {
+        Oil: { "Orichalcum Mine+space-orichalcum_mine": Number.NaN },
+      },
+      {},
+      new Set(),
+      mineFuel,
+      mine,
+    ),
+    "Oil",
+  ),
+  { resourceId: "Oil", currentTotal: 0, enableRate: null },
+  "a malformed native consumer row freezes only its Oil capability",
+);
+for (const adjustment of [false, true, "invalid"]) {
+  assert.deepEqual(
+    one(
+      sample(
+        "space-orichalcum_mine",
+        1,
+        {
+          Oil: { "Orichalcum Mine+space-orichalcum_mine": -150 },
+        },
+        {},
+        new Set(),
+        mineFuel,
+        { ...mine, adjustment },
+      ),
+      "Oil",
+    ),
+    { resourceId: "Oil", currentTotal: 150, enableRate: 100 },
+    "consumer p_fuel ignores even malformed p_fuel_adjust",
+  );
+}
+assert.deepEqual(
+  one(
+    sample(
+      "space-geothermal",
+      1,
+      {
+        Helium_3: {
+          "Space Geothermal": -12,
+          "Space Geothermal+space-geothermal": -99,
+        },
+      },
+      {},
+      new Set(),
+      [{ resourceId: "Helium_3", amount: 12 }],
+      {
+        role: "generator",
+        title: "Space Geothermal",
+        sector: "spc_hell",
+      },
+    ),
+    "Helium_3",
+  ),
+  { resourceId: "Helium_3", currentTotal: 12, enableRate: 12 },
+  "generator fuel remains raw without p_fuel_adjust",
+);
+assert.deepEqual(
+  one(
+    sample(
+      "space-geothermal",
+      1,
+      {
+        Helium_3: { "Space Geothermal+space-geothermal": -99 },
+      },
+      {},
+      new Set(),
+      [{ resourceId: "Helium_3", amount: 12 }],
+      {
+        role: "generator",
+        title: "Space Geothermal",
+        sector: "spc_hell",
+      },
+    ),
+    "Helium_3",
+  ),
+  { resourceId: "Helium_3", currentTotal: 0, enableRate: 12 },
+  "generator does not accept a consumer-shaped source",
+);
+for (const [region, sector, resourceId, expected] of [
+  ["space", "spc_hell", "Helium_3", 6],
+  ["interstellar", "int_alpha", "Helium_3", 9],
+  ["space", "city", "Helium_3", 12],
+  ["space", "spc_hell", "Deuterium", 12],
+]) {
+  assert.equal(
+    one(
+      sample(
+        "space-synthetic_generator",
+        1,
+        {
+          [resourceId]: { Generator: -12 },
+        },
+        {},
+        new Set(),
+        [{ resourceId, amount: 12 }],
+        {
+          role: "generator",
+          region,
+          sector,
+          title: "Generator",
+          adjustment: true,
+        },
+      ),
+      resourceId,
+    )?.enableRate,
+    expected,
+  );
+}
+assert.deepEqual(
+  one(
+    sample(
+      "interstellar-synthetic_mine",
+      1,
+      {
+        Helium_3: { "Mine+interstellar-synthetic_mine": -12 },
+      },
+      {},
+      new Set(),
+      [{ resourceId: "Helium_3", amount: 12 }],
+      {
+        role: "consumer",
+        region: "interstellar",
+        title: "Mine",
+        adjustment: true,
+      },
+    ),
+    "Helium_3",
+  ),
+  { resourceId: "Helium_3", currentTotal: 12, enableRate: 12 },
 );
 assert.equal(
-  one(actionBarracks, "Oil")?.currentTotal,
-  4,
-  "p_fuel owns Oil without a second fallback",
+  one(
+    sample(
+      "space-unowned",
+      1,
+      {
+        Oil: { Unowned: -12, "Unowned+space-unowned": -12 },
+      },
+      {},
+      new Set(),
+      mineFuel,
+      { role: "none", title: "Unowned" },
+    ),
+    "Oil",
+  ),
+  undefined,
 );
-assert.equal(one(actionBarracks, "Oil")?.enableRate, 2);
+for (const [region, adjustment, expected] of [
+  ["space", false, 12],
+  ["space", true, 6],
+  ["interstellar", true, 9],
+]) {
+  assert.deepEqual(
+    one(
+      sample(
+        "space-support",
+        1,
+        {
+          Helium_3: { "Support+space-support": -12, Support: -99 },
+        },
+        {},
+        new Set(),
+        undefined,
+        {
+          role: "none",
+          region,
+          title: "Support",
+          supportFuel: [{ resourceId: "Helium_3", amount: 12 }],
+          supportAdjustment: !adjustment,
+        },
+      ),
+      "Helium_3",
+    ),
+    { resourceId: "Helium_3", currentTotal: 12, enableRate: expected },
+  );
+}
 assert.deepEqual(
   readCapturedPowerConsumptions(
     {},
@@ -175,6 +407,7 @@ assert.deepEqual(
     },
     { production: {}, consumption: {} },
     0,
+    "consumer",
     new Set(),
   ),
   [{ resourceId: "Oil", currentTotal: 0, enableRate: null }],

@@ -1101,6 +1101,11 @@ assert.notEqual(firstBreakdown.consumption.Food, ledger.consume.Food);
 assert.throws(() => {
   firstBreakdown.consumption.Food["coal plant"] = 99;
 }, TypeError);
+ledger.consume.Oil = { unrelated: Number.NaN };
+const malformedBreakdown = capture.mechanics.readProductionBreakdown();
+assert.equal(malformedBreakdown.consumption.Food["coal plant"], -3);
+assert.equal(Number.isNaN(malformedBreakdown.consumption.Oil.unrelated), true);
+assert.equal(malformedBreakdown.production.Food.workers, "4v");
 
 // A later normal production cycle recreates slots on the same captured owner.
 ledger.consume = { Food: { "coal plant": -8 } };

@@ -25667,15 +25667,13 @@
     let adjustment = mechanics.readAdjustedFuelFactor(mode, resourceId);
     return adjustment.kind === "value" ? amount * adjustment.value : void 0;
   }
-  function readCapturedPowerConsumptions(root, mechanics, structure, production, stateOn, invalidFallbacks) {
+  function readCapturedPowerConsumptions(root, mechanics, structure, production, stateOn, role, invalidFallbacks) {
     let binding = structure.actionId, powerFuel = structure.readFuel();
     if (powerFuel.kind === "invalid") return;
     let supportFuel = structure.readSupportFuel();
     if (supportFuel.kind === "invalid") return;
     let supportAdjustmentDisabled = structure.readSupportFuelAdjustmentDisabled();
     if (supportAdjustmentDisabled.kind === "invalid") return;
-    let powerAdjustmentRequested = structure.readFuelAdjustmentRequested();
-    if (powerAdjustmentRequested.kind === "invalid") return;
     let title = structure.readTitle(), result = /* @__PURE__ */ new Map(), observed2 = (resourceId, source) => readPowerNativeConsumption(production, resourceId, source), append = (resourceId, rate, source, adjustmentDisabled = !1, adjustmentMode = void 0) => {
       let adjustedRate = adjustmentDisabled || adjustmentMode === void 0 ? rate : readFuelRate(mechanics, resourceId, rate, adjustmentMode), currentTotal = source === null ? void 0 : observed2(resourceId, source), enableRate = adjustedRate !== void 0 && Number.isFinite(adjustedRate) && adjustedRate >= 0 && currentTotal !== void 0 ? adjustedRate : null, previous = result.get(resourceId);
       result.set(
@@ -25687,14 +25685,16 @@
         })
       );
     };
-    if (powerFuel.kind === "value" && powerFuel.value !== !1) {
-      let powerAdjustmentEnabled = powerAdjustmentRequested.kind === "value" && powerAdjustmentRequested.value && structure.sector !== "city";
+    if (powerFuel.kind === "value" && powerFuel.value !== !1 && role !== "none") {
+      let powerAdjustmentRequested = role === "generator" ? structure.readFuelAdjustmentRequested() : null;
+      if (powerAdjustmentRequested?.kind === "invalid") return;
+      let powerAdjustmentEnabled = role === "generator" && powerAdjustmentRequested?.kind === "value" && powerAdjustmentRequested.value && structure.sector !== "city";
       for (let fuel of powerFuel.value) {
-        let mode = powerAdjustmentEnabled ? fuelModeFor(structure.region, fuel.resourceId) : void 0;
+        let mode = role === "consumer" ? structure.region === "space" || structure.region === "underground" || structure.region === "surface" ? fuelModeFor(structure.region, fuel.resourceId) : void 0 : powerAdjustmentEnabled ? fuelModeFor(structure.region, fuel.resourceId) : void 0;
         append(
           fuel.resourceId,
           fuel.amount,
-          title.kind === "value" ? title.value : null,
+          title.kind === "value" ? role === "consumer" ? `${title.value}+${structure.actionId}` : title.value : null,
           !1,
           mode
         );
@@ -26541,6 +26541,7 @@
       if (role.kind !== "value" || grids.kind !== "value") return;
       role.value === "none" && grids.value.length === 0 || candidates.push({
         record,
+        role: role.value,
         supportChanges: Object.freeze(
           grids.value.map(
             (group) => Object.freeze({ type: group.type, amount: -group.contribution })
@@ -26618,12 +26619,13 @@
     for (let resourceId of Object.keys(gameResources))
       resourceId !== speciesId && !resourceId.endsWith("_Support") && resourceIds.add(resourceId);
     for (let candidate of supportSafe) {
-      let { record, supportChanges } = candidate, binding = record.catalog.binding, metadata2 = capturedPowerMetadataForBinding(binding), consumptions = readCapturedPowerConsumptions(
+      let { record, role, supportChanges } = candidate, binding = record.catalog.binding, metadata2 = capturedPowerMetadataForBinding(binding), consumptions = readCapturedPowerConsumptions(
         root,
         dependencies.mechanics,
         record.structure,
         production,
         record.stateOn,
+        role,
         invalidFallbacks
       ), produces = capturedPowerProducerCapability(binding), powered = record.powered, title = record.structure.readTitle(), description = record.structure.readDescription();
       if (consumptions === void 0 || powered === void 0 || title.kind === "invalid" || description.kind === "invalid")
