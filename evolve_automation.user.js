@@ -11237,7 +11237,7 @@
       return { cap: Number.MAX_SAFE_INTEGER, storedCap: null, debug: null };
     let storedCap = authority.previousCap, debug = null, entertainerIndex = indexOfToken(jobIndex, input.entertainerToken), entertainer = input.jobs[entertainerIndex];
     if (entertainer !== void 0 && authority.entertainerMorale === null && authority.superstarMorale === 0)
-      return { cap: 1, storedCap: 1, debug: null };
+      return { cap: 1, storedCap: null, debug: null };
     if (authority.moraleCeiling !== null && entertainer !== void 0) {
       let limits = [];
       if (authority.entertainerMorale !== null && authority.entertainerMorale > 0) {

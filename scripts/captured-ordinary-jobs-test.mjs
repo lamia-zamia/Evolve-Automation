@@ -312,7 +312,11 @@ for (const previousCap of [null, 0]) {
     1,
     "Authority permits exactly one bootstrap worker even with a stale zero cap",
   );
-  assert.equal(decision?.authorityEntertainerCap, 1);
+  assert.equal(
+    decision?.authorityEntertainerCap,
+    null,
+    "the synthetic bootstrap cap clears even a stale Authority cap",
+  );
 }
 zeroEntertainerRoot.civic.entertainer.assigned = 1;
 zeroEntertainerRoot.civic.entertainer.workers = 1;
@@ -327,6 +331,89 @@ assert.ok(
   }).authorityEntertainerCap > 1,
   "Authority resumes its native marginal calculation after the bootstrap",
 );
+
+// Follow the production reader, planner, and successful executor across the first native sample.
+// Tax recovery is available throughout, so Authority has no morale ceiling and must not retain
+// the synthetic one-worker bootstrap as hysteresis.
+const taxBootstrapRoot = structuredClone(authorityRoot);
+taxBootstrapRoot.resource.Authority.amount = 50;
+taxBootstrapRoot.resource.Population.amount = 6;
+taxBootstrapRoot.civic.unemployed.assigned = 6;
+taxBootstrapRoot.civic.unemployed.workers = 6;
+taxBootstrapRoot.civic.entertainer.assigned = 0;
+taxBootstrapRoot.civic.entertainer.workers = 0;
+taxBootstrapRoot.city.morale.entertain = 0;
+const taxBootstrapControls = {
+  capturedElementIds: () => ["civ-unemployed", "civ-farmer", "civ-entertainer"],
+  resolve: (elementId) =>
+    elementId.startsWith("civ-")
+      ? { elementId, generation: 1, methods: ["add", "sub", "setDefault"] }
+      : undefined,
+  invoke: (handle, method, args = []) => {
+    if (method === "setDefault") {
+      taxBootstrapRoot.civic.d_job = args[0];
+    } else {
+      const id = handle.elementId.slice("civ-".length);
+      taxBootstrapRoot.civic[id].workers += method === "add" ? 1 : -1;
+    }
+    return { ok: true, value: undefined };
+  },
+};
+const taxBootstrapAutomation = createCapturedOrdinaryJobsAutomation({
+  rootState: { readRoot: () => taxBootstrapRoot },
+  controls: taxBootstrapControls,
+  readSettings: () => ({
+    ...resetBreakpoints,
+    autoJobs: true,
+    autoTax: true,
+    authorityManage: true,
+    generalMinimumAuthority: 100,
+    job_unemployed: true,
+    job_farmer: true,
+    job_entertainer: true,
+    job_s_entertainer: true,
+    job_b1_unemployed: 0,
+    job_b2_unemployed: 0,
+    job_b3_unemployed: 0,
+    job_b1_farmer: 0,
+    job_b2_farmer: 0,
+    job_b3_farmer: 0,
+    job_b1_entertainer: 3,
+    job_b2_entertainer: 3,
+    job_b3_entertainer: 3,
+  }),
+});
+const taxBootstrapInput = taxBootstrapAutomation.reader.readCycle(false);
+assert.equal(taxBootstrapInput.available, true);
+assert.equal(taxBootstrapInput.authority.current, 50);
+assert.equal(taxBootstrapInput.authority.moraleCeiling, null);
+assert.equal(taxBootstrapInput.authority.entertainerMorale, null);
+const taxBootstrapDecision = planJobs(taxBootstrapInput);
+assert.equal(
+  taxBootstrapDecision.assignments.find(({ jobToken }) => jobToken === 19)
+    ?.workers,
+  1,
+);
+assert.equal(taxBootstrapDecision.authorityEntertainerCap, null);
+assert.equal(
+  taxBootstrapAutomation.executor.execute(taxBootstrapDecision).status,
+  "succeeded",
+);
+assert.equal(taxBootstrapRoot.civic.entertainer.workers, 1);
+taxBootstrapRoot.city.morale.entertain = 2.4;
+const sampledTaxInput = taxBootstrapAutomation.reader.readCycle(false);
+assert.equal(sampledTaxInput.authority.previousCap, null);
+assert.equal(sampledTaxInput.authority.entertainerMorale, 2.4);
+assert.equal(sampledTaxInput.authority.moraleCeiling, null);
+const sampledTaxDecision = planJobs(sampledTaxInput);
+assert.equal(
+  sampledTaxDecision.assignments.find(({ jobToken }) => jobToken === 19)
+    ?.workers,
+  3,
+  "Smart and the breakpoint may assign more than one once native morale is sampled",
+);
+assert.equal(sampledTaxDecision.authorityEntertainerCap, null);
+
 zeroEntertainerRoot.city.morale.entertain = 0;
 const provenZeroInput = zeroEntertainerAutomation.reader.readCycle(false);
 assert.equal(provenZeroInput.authority.entertainerMorale, 0);

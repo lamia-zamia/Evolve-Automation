@@ -360,7 +360,7 @@ function authorityMaximum(
     authority.entertainerMorale === null &&
     authority.superstarMorale === 0
   ) {
-    return { cap: 1, storedCap: 1, debug: null };
+    return { cap: 1, storedCap: null, debug: null };
   }
   if (authority.moraleCeiling !== null && entertainer !== undefined) {
     const limits: number[] = [];
