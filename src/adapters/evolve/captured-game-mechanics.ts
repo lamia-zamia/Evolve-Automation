@@ -767,6 +767,7 @@ function createMechanicsDefinition(
     readTitle: () => readMechanicsTitle(action),
     readDescription: () => readMechanicsDescription(action),
     readValue: () => readMechanicsPrimitive(action, "val"),
+    readWorkers: () => readMechanicsPrimitive(action, "workers"),
     readShipRating: () =>
       shipRecord === undefined
         ? { kind: "absent" as const }

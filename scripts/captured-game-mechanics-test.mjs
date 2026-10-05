@@ -329,6 +329,19 @@ assert.deepEqual(definitions[0].readTitle(), {
   value: "Relay",
 });
 assert.deepEqual(definitions[0].readPowered(), { kind: "value", value: -2 });
+assert.deepEqual(definitions[0].readWorkers(), { kind: "absent" });
+first.c_action.workers = function () {
+  assert.equal(this, first.c_action);
+  return "8";
+};
+assert.deepEqual(definitions[0].readWorkers(), { kind: "value", value: 8 });
+first.c_action.workers = () => Number.NaN;
+assert.deepEqual(definitions[0].readWorkers(), { kind: "invalid" });
+first.c_action.workers = () => {
+  throw new Error("workers failed");
+};
+assert.deepEqual(definitions[0].readWorkers(), { kind: "invalid" });
+delete first.c_action.workers;
 assert.equal(definitions[0].ownsPowered, true);
 assert.deepEqual(definitions[0].readSwitchable(), { kind: "absent" });
 liveGlobal = { space: { relay: { watts: -7 } } };

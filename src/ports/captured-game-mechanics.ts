@@ -80,6 +80,8 @@ export interface CapturedGameStructureDefinition {
   readDescription(): CapturedGameRead<string>;
   /** A game-owned `val()` result when an action defines one. */
   readValue(): CapturedGameRead<number>;
+  /** Game-owned workers() requirement, when the action defines it. */
+  readWorkers(): CapturedGameRead<number>;
   /** Nested ship rating exposed by actions such as `galaxy-minelayer.ship.rating()`. */
   readShipRating(): CapturedGameRead<number>;
   /** Action capability ownership, independent of the current `powered()` result. */

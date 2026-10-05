@@ -8,8 +8,11 @@ import {
   createCapturedPowerReader,
   readCapturedPowerOrdinaryResourceState,
   readNativePowerSupports,
+  readCapturedWomlingFarmFood,
+  readCapturedMiningPitWorkers,
 } from "../src/adapters/evolve/economy/production/captured-power-reader.ts";
 import {
+  readCapturedHumongousEffectMultiplier,
   readCapturedHighPopulationGrowthMultiplier,
   readCapturedJobStackMultiplier,
 } from "../src/adapters/evolve/civic/captured-job-catalog.ts";
@@ -43,6 +46,7 @@ function structure({
   title = actionId,
   description = actionId,
   value,
+  workers,
   shipRating,
 }) {
   // Arbitrary fixture actions belong to the automation catalog through captured controls.
@@ -61,7 +65,13 @@ function structure({
     readTitle: () => ({ kind: "value", value: title }),
     readDescription: () => ({ kind: "value", value: description }),
     readValue: () =>
-      value === undefined ? { kind: "absent" } : readNumber(value),
+      value === undefined
+        ? { kind: "absent" }
+        : readNumber(typeof value === "function" ? value() : value),
+    readWorkers: () =>
+      workers === undefined
+        ? { kind: "absent" }
+        : readNumber(typeof workers === "function" ? workers() : workers),
     readShipRating: () =>
       shipRating === undefined ? { kind: "absent" } : readNumber(shipRating),
     ownsPowered,
@@ -1496,6 +1506,9 @@ assert.equal(
 const stationKey = "spc_belt:space_station";
 const gatewayKey = "gxy_home:ship_dock";
 const overseerKey = "tau_home:overseer";
+let overseerNativeValue = 13;
+let funNativeValue = 17;
+let pitNativeWorkers = 8;
 const lakeAnchorKey = "prtl_lake:harbor";
 const spireAnchorKey = "prtl_spire:purifier";
 const spireStructure = (
@@ -1562,7 +1575,7 @@ const specialOverseer = spireStructure(
   "tauceti-overseer",
   "tau_red",
   overseerKey,
-  { value: 13 },
+  { value: () => overseerNativeValue },
 );
 const specialWomlingFun = spireStructure(
   "tauceti",
@@ -1571,8 +1584,25 @@ const specialWomlingFun = spireStructure(
   "tauceti-womling_fun",
   "tau_red",
   overseerKey,
-  { value: 17 },
+  { value: () => funNativeValue },
 );
+const specialMiningPit = structure({
+  entryKey: "tau_home:mining_pit",
+  region: "tauceti",
+  sector: "tau_home",
+  struct: "mining_pit",
+  actionId: "tauceti-mining_pit",
+  powered: -1,
+  workers: () => pitNativeWorkers,
+});
+const specialWomlingFarm = structure({
+  entryKey: "tau_home:womling_farm",
+  region: "tauceti",
+  sector: "tau_home",
+  struct: "womling_farm",
+  actionId: "tauceti-womling_farm",
+  powered: -1,
+});
 const specialLakeAnchor = spireStructure(
   "portal",
   "prtl_lake",
@@ -1718,6 +1748,8 @@ const specialStructures = Object.freeze([
   specialBologniumShip,
   specialOverseer,
   specialWomlingFun,
+  specialMiningPit,
+  specialWomlingFarm,
   structure({
     entryKey: "city:cement_plant",
     region: "city",
@@ -1842,6 +1874,7 @@ const specialRoot = {
     womling_mine: { count: 1, on: 1, miners: 6 },
     womling_farm: { count: 1, on: 1, farmers: 5 },
     womling_fun: { count: 1, on: 1 },
+    mining_pit: { count: 1, on: 1 },
   },
   civic: {
     cement_worker: { workers: 11 },
@@ -2144,7 +2177,7 @@ const specialRule = (binding, kind) => {
   assert.equal(
     building?.rule.kind,
     kind,
-    `${binding} retains its specialized rule`,
+    `${binding} retains its specialized rule: ${specialCycle.buildings.map((item) => item.binding).join(",")}`,
   );
   return building.rule;
 };
@@ -2237,12 +2270,150 @@ assert.equal(
 );
 assert.deepEqual(
   [
-    specialRule("tauceti-overseer", "womling-overseer").loyaltyPerBuilding,
-    specialRule("tauceti-womling_fun", "womling-fun").moralePerBuilding,
+    specialRule("tauceti-overseer", "womling-overseer").requiredBuildings,
+    specialRule("tauceti-womling_fun", "womling-fun").requiredBuildings,
+    specialRule("tauceti-mining_pit", "tau-mining-pit").workersPerPit,
+    specialRule("tauceti-womling_farm", "womling-farm").cropPerFarm,
   ],
-  [13, 17],
-  "Womling rates use each action's live value function",
+  [Math.ceil(106 / 13), Math.ceil(113 / 17), 8, 12],
+  "Womling caps use native action values and pit workers",
 );
+for (const [population, expected] of [
+  [undefined, 12],
+  [1, 16],
+  [2, 16],
+  [3, 20],
+  [4, 20],
+]) {
+  for (const gene of [undefined, 1]) {
+    const root = {
+      tech: {
+        ...(population === undefined ? {} : { womling_pop: population }),
+        ...(gene === undefined ? {} : { womling_gene: gene }),
+      },
+    };
+    assert.equal(readCapturedWomlingFarmFood(root), expected + (gene ? 4 : 0));
+  }
+}
+const currentSpecialRule = (binding) =>
+  specialReader
+    .readCycle()
+    ?.buildings.find((entry) => entry.binding === binding)?.rule;
+assert.equal(currentSpecialRule("tauceti-womling_farm")?.cropPerFarm, 12);
+specialRoot.tech.womling_pop = 3;
+specialRoot.tech.womling_gene = 1;
+assert.equal(currentSpecialRule("tauceti-womling_farm")?.cropPerFarm, 24);
+delete specialRoot.tech.womling_pop;
+delete specialRoot.tech.womling_gene;
+for (const [raceFlag, loyaltyBase, moraleBase] of [
+  ["womling_friend", 25, 75],
+  ["womling_god", 75, 40],
+  ["womling_lord", 0, 30],
+]) {
+  specialRoot.race[raceFlag] = 1;
+  assert.equal(
+    currentSpecialRule("tauceti-overseer")?.requiredBuildings,
+    Math.ceil((100 - loyaltyBase + 6) / 13),
+  );
+  assert.equal(
+    currentSpecialRule("tauceti-womling_fun")?.requiredBuildings,
+    Math.ceil((100 - moraleBase + 6 + 5 + 2) / 17),
+  );
+  delete specialRoot.race[raceFlag];
+}
+specialRoot.race.humongous = 1;
+assert.equal(
+  readCapturedHumongousEffectMultiplier(specialRoot),
+  3.1500000000000004,
+);
+assert.equal(
+  currentSpecialRule("tauceti-overseer")?.requiredBuildings,
+  Math.ceil(106 / (13 * 3.1500000000000004)),
+);
+assert.equal(
+  currentSpecialRule("tauceti-womling_fun")?.requiredBuildings,
+  Math.ceil(113 / (17 * 3.1500000000000004)),
+);
+overseerNativeValue = 26; // Overlord is already in val().
+funNativeValue = 34;
+assert.equal(
+  currentSpecialRule("tauceti-overseer")?.requiredBuildings,
+  Math.ceil(106 / (26 * 3.1500000000000004)),
+);
+assert.equal(
+  currentSpecialRule("tauceti-womling_fun")?.requiredBuildings,
+  Math.ceil(113 / (34 * 3.1500000000000004)),
+);
+overseerNativeValue = 7; // Lone Survivor's native val() is used as received.
+funNativeValue = 9;
+assert.equal(
+  currentSpecialRule("tauceti-overseer")?.requiredBuildings,
+  Math.ceil(106 / (7 * 3.1500000000000004)),
+);
+assert.equal(
+  currentSpecialRule("tauceti-womling_fun")?.requiredBuildings,
+  Math.ceil(113 / (9 * 3.1500000000000004)),
+);
+delete specialRoot.race.humongous;
+overseerNativeValue = 13;
+funNativeValue = 17;
+for (const invalidValue of [
+  undefined,
+  0,
+  -1,
+  Number.NaN,
+  Number.POSITIVE_INFINITY,
+]) {
+  overseerNativeValue = invalidValue;
+  assert.equal(specialReader.readCycle(), undefined);
+  overseerNativeValue = 13;
+  funNativeValue = invalidValue;
+  assert.equal(specialReader.readCycle(), undefined);
+  funNativeValue = 17;
+}
+for (const [rank, expected] of [
+  [0.1, 2.02],
+  [1, 3.1500000000000004],
+  [2, 4.4],
+]) {
+  specialRoot.race.humongous = rank;
+  assert.equal(readCapturedHumongousEffectMultiplier(specialRoot), expected);
+}
+specialRoot.race.humongous = "invalid";
+assert.equal(readCapturedHumongousEffectMultiplier(specialRoot), undefined);
+assert.equal(specialReader.readCycle(), undefined);
+specialRoot.race.humongous = 1;
+specialRoot.race.empowered = "invalid";
+assert.equal(readCapturedHumongousEffectMultiplier(specialRoot), undefined);
+delete specialRoot.race.empowered;
+delete specialRoot.race.humongous;
+for (const workers of [8, 6, 13]) {
+  pitNativeWorkers = workers;
+  assert.equal(
+    readCapturedMiningPitWorkers([specialMiningPit], "tauceti-mining_pit"),
+    workers,
+  );
+  assert.equal(
+    currentSpecialRule("tauceti-mining_pit")?.workersPerPit,
+    workers,
+  );
+}
+for (const workers of [
+  undefined,
+  0,
+  -1,
+  Number.NaN,
+  Number.POSITIVE_INFINITY,
+]) {
+  pitNativeWorkers = workers;
+  assert.equal(
+    readCapturedMiningPitWorkers([specialMiningPit], "tauceti-mining_pit"),
+    undefined,
+  );
+  assert.equal(specialReader.readCycle(), undefined);
+}
+assert.equal(readCapturedMiningPitWorkers([], "tauceti-mining_pit"), undefined);
+pitNativeWorkers = 8;
 assert.deepEqual(
   [
     specialCycle.lake.enabled,

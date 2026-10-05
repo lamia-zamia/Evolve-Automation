@@ -176,17 +176,11 @@ export type PowerBuildingRule =
     }
   | {
       readonly kind: "womling-overseer";
-      readonly loyaltyBase: number;
-      readonly loyaltyPerBuilding: number;
-      readonly miners: number;
+      readonly requiredBuildings: number;
     }
   | {
       readonly kind: "womling-fun";
-      readonly moraleBase: number;
-      readonly moralePerBuilding: number;
-      readonly miners: number;
-      readonly farmers: number;
-      readonly injured: number;
+      readonly requiredBuildings: number;
     }
   | {
       readonly kind: "tau-whaling-station";
@@ -194,7 +188,11 @@ export type PowerBuildingRule =
       readonly supportCurrent: number;
       readonly whalingShipsOn: number;
     }
-  | { readonly kind: "tau-mining-pit"; readonly populationMaximum: number };
+  | {
+      readonly kind: "tau-mining-pit";
+      readonly populationMaximum: number;
+      readonly workersPerPit: number;
+    };
 
 export interface PowerBuildingInput {
   readonly index: number;
@@ -785,22 +783,10 @@ function applySmartRule(
       );
       break;
     case "womling-overseer":
-      maximum = Math.min(
-        maximum,
-        Math.ceil(
-          (100 - (rule.loyaltyBase - rule.miners)) / rule.loyaltyPerBuilding,
-        ),
-      );
+      maximum = Math.min(maximum, rule.requiredBuildings);
       break;
     case "womling-fun":
-      maximum = Math.min(
-        maximum,
-        Math.ceil(
-          (100 -
-            (rule.moraleBase - (rule.miners + rule.farmers + rule.injured))) /
-            rule.moralePerBuilding,
-        ),
-      );
+      maximum = Math.min(maximum, rule.requiredBuildings);
       break;
     case "tau-whaling-station": {
       const efficiency =
@@ -810,7 +796,10 @@ function applySmartRule(
       break;
     }
     case "tau-mining-pit":
-      maximum = Math.min(maximum, Math.ceil(rule.populationMaximum / 6));
+      maximum = Math.min(
+        maximum,
+        Math.ceil(rule.populationMaximum / rule.workersPerPit),
+      );
       break;
     default:
       break;

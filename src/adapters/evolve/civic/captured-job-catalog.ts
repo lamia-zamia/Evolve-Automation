@@ -468,6 +468,39 @@ export function readCapturedTraitScaleVariable(
     : traitScaleVariable(rank, values[0], values[1], values[2]);
 }
 
+/** DeadSpace src/races.js `traits.humongous.vars()[0]` at 6cc9ba8. */
+export function readCapturedHumongousEffectMultiplier(
+  root: unknown,
+): number | undefined {
+  const race = readProperty(root, "race");
+  const raw = readProperty(race, "humongous");
+  if (raw === undefined || raw === false || raw === 0) return 1;
+  const empowered = readProperty(race, "empowered");
+  if (
+    empowered !== undefined &&
+    empowered !== false &&
+    (typeof empowered !== "number" || !Number.isFinite(empowered))
+  )
+    return undefined;
+  const effect = readCapturedTraitScaleVariable(
+    root,
+    "humongous",
+    0,
+    [1.01, 1.05, 1.1],
+    "major",
+  );
+  const cost = readCapturedTraitScaleVariable(
+    root,
+    "humongous",
+    1,
+    [2, 3, 4],
+    "major",
+  );
+  if (effect === undefined || cost === undefined) return undefined;
+  const multiplier = effect * Math.floor(cost);
+  return Number.isFinite(multiplier) && multiplier > 0 ? multiplier : undefined;
+}
+
 /** `traitVal("high_pop", 2, 1)` used by the retired Power `getHealingRate()`. */
 export function readCapturedHighPopulationGrowthMultiplier(
   root: unknown,

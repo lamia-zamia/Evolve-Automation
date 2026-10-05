@@ -1970,6 +1970,7 @@
       readTitle: () => readMechanicsTitle(action),
       readDescription: () => readMechanicsDescription(action),
       readValue: () => readMechanicsPrimitive(action, "val"),
+      readWorkers: () => readMechanicsPrimitive(action, "workers"),
       readShipRating: () => shipRecord === void 0 ? { kind: "absent" } : readMechanicsPrimitive(shipRecord, "rating"),
       ownsPowered: Object.prototype.hasOwnProperty.call(action, "powered"),
       readPowered: () => readMechanicsPrimitive(action, "powered"),
@@ -15863,6 +15864,33 @@
     let from = rank < 1 ? low : mid, to = rank < 1 ? mid : high, fraction = rank < 1 ? (rank - 0.1) / 0.9 : rank <= 2 ? rank - 1 : 1 + (rank - 2) / 2;
     return Number((from + (to - from) * fraction).toFixed(6));
   }
+  function readCapturedTraitScaleVariable(root, traitId, _index, values, traitKind) {
+    let rank = readTraitScaleRank(root, traitId, traitKind);
+    return rank === void 0 ? void 0 : traitScaleVariable(rank, values[0], values[1], values[2]);
+  }
+  function readCapturedHumongousEffectMultiplier(root) {
+    let race = readProperty(root, "race"), raw = readProperty(race, "humongous");
+    if (raw === void 0 || raw === !1 || raw === 0) return 1;
+    let empowered = readProperty(race, "empowered");
+    if (empowered !== void 0 && empowered !== !1 && (typeof empowered != "number" || !Number.isFinite(empowered)))
+      return;
+    let effect = readCapturedTraitScaleVariable(
+      root,
+      "humongous",
+      0,
+      [1.01, 1.05, 1.1],
+      "major"
+    ), cost = readCapturedTraitScaleVariable(
+      root,
+      "humongous",
+      1,
+      [2, 3, 4],
+      "major"
+    );
+    if (effect === void 0 || cost === void 0) return;
+    let multiplier = effect * Math.floor(cost);
+    return Number.isFinite(multiplier) && multiplier > 0 ? multiplier : void 0;
+  }
   function readHighPopulationFactors(root) {
     let rawRank = readProperty(readProperty(root, "race"), "high_pop"), rank = readTraitScaleRank(root, "high_pop");
     if (rawRank === void 0 || rawRank === !1) return null;
@@ -24202,20 +24230,10 @@
         );
         break;
       case "womling-overseer":
-        maximum = Math.min(
-          maximum,
-          Math.ceil(
-            (100 - (rule.loyaltyBase - rule.miners)) / rule.loyaltyPerBuilding
-          )
-        );
+        maximum = Math.min(maximum, rule.requiredBuildings);
         break;
       case "womling-fun":
-        maximum = Math.min(
-          maximum,
-          Math.ceil(
-            (100 - (rule.moraleBase - (rule.miners + rule.farmers + rule.injured))) / rule.moralePerBuilding
-          )
-        );
+        maximum = Math.min(maximum, rule.requiredBuildings);
         break;
       case "tau-whaling-station": {
         let income = 8 * (1 - (1 - rule.supportMaximum / rule.supportCurrent) ** 1.4) * rule.whalingShipsOn;
@@ -24223,7 +24241,10 @@
         break;
       }
       case "tau-mining-pit":
-        maximum = Math.min(maximum, Math.ceil(rule.populationMaximum / 6));
+        maximum = Math.min(
+          maximum,
+          Math.ceil(rule.populationMaximum / rule.workersPerPit)
+        );
         break;
       default:
         break;
@@ -25663,6 +25684,15 @@
     let value = readGamePath(root, path);
     return value == null ? fallback : asNumber(value);
   }
+  function readCapturedWomlingFarmFood(root) {
+    let tech = readProperty(root, "tech"), population = readProperty(tech, "womling_pop"), gene = readProperty(tech, "womling_gene");
+    if (!(population !== void 0 && (typeof population != "number" || !Number.isFinite(population) || population < 0) || gene !== void 0 && (typeof gene != "number" || !Number.isFinite(gene) || gene < 0)))
+      return (population ? population >= 3 ? 20 : 16 : 12) + (gene ? 4 : 0);
+  }
+  function readCapturedMiningPitWorkers(structures, binding) {
+    let workers = structures.find((structure) => structure.actionId === binding)?.readWorkers();
+    return workers?.kind === "value" && Number.isFinite(workers.value) && workers.value > 0 ? workers.value : void 0;
+  }
   function readCapturedStructureState(root, structure) {
     let region = readProperty(root, structure.region);
     return readProperty(region, structure.struct);
@@ -26383,38 +26413,60 @@
             obs("Helium_3", "interstellar-harvester")
           ])
         });
-      case "womling-farm":
-        return Object.freeze({
+      case "womling-farm": {
+        let cropPerFarm = readCapturedWomlingFarmFood(root);
+        return cropPerFarm === void 0 ? void 0 : Object.freeze({
           kind: metadataRule,
           supportMaximum: supports.get("tau_red")?.maximum ?? 0,
-          cropPerFarm: (Number(
-            readProperty(readProperty(root, "tech"), "womling_pop") ?? 0
-          ) > 0 ? 16 : 12) + (Number(
-            readProperty(readProperty(root, "tech"), "womling_gene") ?? 0
-          ) > 0 ? 4 : 0)
+          cropPerFarm
         });
+      }
       case "womling-overseer": {
         let value = structures.find(
           (structure) => structure.actionId === binding
-        )?.readValue();
-        return value?.kind !== "value" ? void 0 : Object.freeze({
+        )?.readValue(), multiplier = readCapturedHumongousEffectMultiplier(root);
+        if (value?.kind !== "value" || value.value <= 0 || multiplier === void 0)
+          return;
+        let contribution = value.value * multiplier;
+        if (!Number.isFinite(contribution) || contribution <= 0) return;
+        let loyaltyBase = readProperty(race, "womling_friend") ? 25 : readProperty(race, "womling_god") ? 75 : 0, miners = readGamePathNumber(
+          root,
+          ["tauceti", "womling_mine", "miners"],
+          0
+        );
+        return miners === void 0 ? void 0 : Object.freeze({
           kind: metadataRule,
-          loyaltyBase: readProperty(race, "womling_friend") ? 25 : readProperty(race, "womling_god") ? 75 : 0,
-          loyaltyPerBuilding: value.value,
-          miners: readGamePathNumber(root, ["tauceti", "womling_mine", "miners"], 0) ?? 0
+          requiredBuildings: Math.ceil(
+            (100 - (loyaltyBase - miners)) / contribution
+          )
         });
       }
       case "womling-fun": {
         let value = structures.find(
           (structure) => structure.actionId === binding
-        )?.readValue();
-        return value?.kind !== "value" ? void 0 : Object.freeze({
+        )?.readValue(), multiplier = readCapturedHumongousEffectMultiplier(root);
+        if (value?.kind !== "value" || value.value <= 0 || multiplier === void 0)
+          return;
+        let contribution = value.value * multiplier;
+        if (!Number.isFinite(contribution) || contribution <= 0) return;
+        let moraleBase = readProperty(race, "womling_friend") ? 75 : readProperty(race, "womling_god") ? 40 : readProperty(race, "womling_lord") ? 30 : 0, miners = readGamePathNumber(
+          root,
+          ["tauceti", "womling_mine", "miners"],
+          0
+        ), farmers = readGamePathNumber(
+          root,
+          ["tauceti", "womling_farm", "farmers"],
+          0
+        ), injured = readGamePathNumber(
+          root,
+          ["tauceti", "overseer", "injured"],
+          0
+        );
+        return miners === void 0 || farmers === void 0 || injured === void 0 ? void 0 : Object.freeze({
           kind: metadataRule,
-          moraleBase: readProperty(race, "womling_friend") ? 75 : readProperty(race, "womling_god") ? 40 : readProperty(race, "womling_lord") ? 30 : 0,
-          moralePerBuilding: value.value,
-          miners: readGamePathNumber(root, ["tauceti", "womling_mine", "miners"], 0) ?? 0,
-          farmers: readGamePathNumber(root, ["tauceti", "womling_farm", "farmers"], 0) ?? 0,
-          injured: readGamePathNumber(root, ["tauceti", "overseer", "injured"], 0) ?? 0
+          requiredBuildings: Math.ceil(
+            (100 - (moraleBase - miners - farmers - injured)) / contribution
+          )
         });
       }
       case "tau-whaling-station":
@@ -26424,11 +26476,14 @@
           supportCurrent: supports.get("tau_roid")?.current ?? 0,
           whalingShipsOn: buildingOns.get("tauceti-whaling_ship") ?? 0
         });
-      case "tau-mining-pit":
-        return Object.freeze({
+      case "tau-mining-pit": {
+        let workersPerPit = readCapturedMiningPitWorkers(structures, binding);
+        return workersPerPit === void 0 ? void 0 : Object.freeze({
           kind: metadataRule,
-          populationMaximum: resource("Population")?.maxQuantity ?? 0
+          populationMaximum: resource("Population")?.maxQuantity ?? 0,
+          workersPerPit
         });
+      }
       case "exotic-zoo":
         return Object.freeze({ kind: metadataRule });
       default:

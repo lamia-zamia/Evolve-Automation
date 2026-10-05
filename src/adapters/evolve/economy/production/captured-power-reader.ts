@@ -37,6 +37,7 @@ import {
   readCapturedHighPopulationPercent,
   readCapturedPopulationResource,
   readCapturedPoweredTraitValue,
+  readCapturedHumongousEffectMultiplier,
   type CapturedJobCountSnapshot,
 } from "../../civic/captured-job-catalog.ts";
 import { readCapturedGovernorTaskActive } from "../../civic/captured-tax.ts";
@@ -187,6 +188,36 @@ function readGamePathNumber(
 ): number | undefined {
   const value = readGamePath(root, path);
   return value === undefined || value === null ? fallback : asNumber(value);
+}
+
+/** DeadSpace src/truepath.js `womlingFarmFood()` at 6cc9ba8. */
+export function readCapturedWomlingFarmFood(root: unknown): number | undefined {
+  const tech = readProperty(root, "tech");
+  const population = readProperty(tech, "womling_pop");
+  const gene = readProperty(tech, "womling_gene");
+  if (
+    (population !== undefined &&
+      (typeof population !== "number" ||
+        !Number.isFinite(population) ||
+        population < 0)) ||
+    (gene !== undefined &&
+      (typeof gene !== "number" || !Number.isFinite(gene) || gene < 0))
+  )
+    return undefined;
+  return (population ? (population >= 3 ? 20 : 16) : 12) + (gene ? 4 : 0);
+}
+
+export function readCapturedMiningPitWorkers(
+  structures: readonly CapturedGameStructureDefinition[],
+  binding: string,
+): number | undefined {
+  const pit = structures.find((structure) => structure.actionId === binding);
+  const workers = pit?.readWorkers();
+  return workers?.kind === "value" &&
+    Number.isFinite(workers.value) &&
+    workers.value > 0
+    ? workers.value
+    : undefined;
 }
 
 function readCapturedStructureState(
@@ -1450,39 +1481,47 @@ function readBuildingRule(
           ReturnType<typeof obs>,
         ],
       });
-    case "womling-farm":
+    case "womling-farm": {
+      const cropPerFarm = readCapturedWomlingFarmFood(root);
+      if (cropPerFarm === undefined) return undefined;
       return Object.freeze({
         kind: metadataRule,
         supportMaximum: supports.get("tau_red")?.maximum ?? 0,
-        cropPerFarm:
-          (Number(
-            readProperty(readProperty(root, "tech"), "womling_pop") ?? 0,
-          ) > 0
-            ? 16
-            : 12) +
-          (Number(
-            readProperty(readProperty(root, "tech"), "womling_gene") ?? 0,
-          ) > 0
-            ? 4
-            : 0),
+        cropPerFarm,
       });
+    }
     case "womling-overseer": {
       const overseer = structures.find(
         (structure) => structure.actionId === binding,
       );
       const value = overseer?.readValue();
-      if (value?.kind !== "value") return undefined;
+      const multiplier = readCapturedHumongousEffectMultiplier(root);
+      if (
+        value?.kind !== "value" ||
+        value.value <= 0 ||
+        multiplier === undefined
+      )
+        return undefined;
+      const contribution = value.value * multiplier;
+      if (!Number.isFinite(contribution) || contribution <= 0) return undefined;
+      // DeadSpace src/main.js at 6cc9ba8 applies hugeAdjust() outside the
+      // already-adjusted native val() and subtracts current miners.
+      const loyaltyBase = readProperty(race, "womling_friend")
+        ? 25
+        : readProperty(race, "womling_god")
+          ? 75
+          : 0;
+      const miners = readGamePathNumber(
+        root,
+        ["tauceti", "womling_mine", "miners"],
+        0,
+      );
+      if (miners === undefined) return undefined;
       return Object.freeze({
         kind: metadataRule,
-        loyaltyBase: readProperty(race, "womling_friend")
-          ? 25
-          : readProperty(race, "womling_god")
-            ? 75
-            : 0,
-        loyaltyPerBuilding: value.value,
-        miners:
-          readGamePathNumber(root, ["tauceti", "womling_mine", "miners"], 0) ??
-          0,
+        requiredBuildings: Math.ceil(
+          (100 - (loyaltyBase - miners)) / contribution,
+        ),
       });
     }
     case "womling-fun": {
@@ -1490,25 +1529,48 @@ function readBuildingRule(
         (structure) => structure.actionId === binding,
       );
       const value = fun?.readValue();
-      if (value?.kind !== "value") return undefined;
+      const multiplier = readCapturedHumongousEffectMultiplier(root);
+      if (
+        value?.kind !== "value" ||
+        value.value <= 0 ||
+        multiplier === undefined
+      )
+        return undefined;
+      const contribution = value.value * multiplier;
+      if (!Number.isFinite(contribution) || contribution <= 0) return undefined;
+      const moraleBase = readProperty(race, "womling_friend")
+        ? 75
+        : readProperty(race, "womling_god")
+          ? 40
+          : readProperty(race, "womling_lord")
+            ? 30
+            : 0;
+      const miners = readGamePathNumber(
+        root,
+        ["tauceti", "womling_mine", "miners"],
+        0,
+      );
+      const farmers = readGamePathNumber(
+        root,
+        ["tauceti", "womling_farm", "farmers"],
+        0,
+      );
+      const injured = readGamePathNumber(
+        root,
+        ["tauceti", "overseer", "injured"],
+        0,
+      );
+      if (
+        miners === undefined ||
+        farmers === undefined ||
+        injured === undefined
+      )
+        return undefined;
       return Object.freeze({
         kind: metadataRule,
-        moraleBase: readProperty(race, "womling_friend")
-          ? 75
-          : readProperty(race, "womling_god")
-            ? 40
-            : readProperty(race, "womling_lord")
-              ? 30
-              : 0,
-        moralePerBuilding: value.value,
-        miners:
-          readGamePathNumber(root, ["tauceti", "womling_mine", "miners"], 0) ??
-          0,
-        farmers:
-          readGamePathNumber(root, ["tauceti", "womling_farm", "farmers"], 0) ??
-          0,
-        injured:
-          readGamePathNumber(root, ["tauceti", "overseer", "injured"], 0) ?? 0,
+        requiredBuildings: Math.ceil(
+          (100 - (moraleBase - miners - farmers - injured)) / contribution,
+        ),
       });
     }
     case "tau-whaling-station":
@@ -1518,11 +1580,15 @@ function readBuildingRule(
         supportCurrent: supports.get("tau_roid")?.current ?? 0,
         whalingShipsOn: buildingOns.get("tauceti-whaling_ship") ?? 0,
       });
-    case "tau-mining-pit":
+    case "tau-mining-pit": {
+      const workersPerPit = readCapturedMiningPitWorkers(structures, binding);
+      if (workersPerPit === undefined) return undefined;
       return Object.freeze({
         kind: metadataRule,
         populationMaximum: resource("Population")?.maxQuantity ?? 0,
+        workersPerPit,
       });
+    }
     case "exotic-zoo":
       return Object.freeze({ kind: metadataRule });
     default:
