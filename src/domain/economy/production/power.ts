@@ -49,6 +49,7 @@ export interface BusyWorkerInput {
 
 export type PowerBuildingRule =
   | { readonly kind: "ordinary" }
+  | { readonly kind: "unavailable-production" }
   | { readonly kind: "exotic-zoo" }
   | {
       readonly kind: "neutron-citadel";
@@ -59,9 +60,6 @@ export type PowerBuildingRule =
       readonly stationStorage: number;
       readonly eleriumMaximum: number;
       readonly eleriumMaximumCost: number;
-      readonly eleriumShipsOn: number;
-      readonly iridiumShipsOn: number;
-      readonly ironShipsOn: number;
     }
   | { readonly kind: "job-dependent"; readonly jobCount: number }
   | {
@@ -493,6 +491,7 @@ function applySmartRule(
   savingPower: boolean,
   availablePower: number,
   resources: ReadonlyMap<string, MutableResource>,
+  beltStationFloor: number,
 ): { readonly maximum: number; readonly adjusted: readonly string[] } {
   const rule = building.rule;
   if (savingPower) {
@@ -505,11 +504,9 @@ function applySmartRule(
                   rule.stationStorage,
               )
             : 0;
-        const minersNeeded =
-          rule.eleriumShipsOn * 2 + rule.iridiumShipsOn + rule.ironShipsOn;
         maximum = Math.min(
           maximum,
-          Math.max(current - extra, Math.ceil(minersNeeded / 3)),
+          Math.max(current - extra, beltStationFloor),
         );
         break;
       }
@@ -932,6 +929,59 @@ export function planPowerCycle(
   input: Readonly<PowerCycleInput>,
   state: Readonly<PowerAutomationState>,
 ): PowerCyclePlan {
+  const belt = input.supports.find((support) => support.type === "belt");
+  const station = input.buildings.find(
+    (building) => building.rule.kind === "belt-space-station",
+  );
+  let beltStationFloor = 0;
+  if (
+    belt !== undefined &&
+    belt.allocation === "strict" &&
+    station !== undefined &&
+    station.smartCategory &&
+    station.smartEnabled
+  ) {
+    // Run the ordinary policy once with only Belt capacity relaxed. The first
+    // eligible consumer in native Power order gets one prospective increment.
+    const probe = planPowerCycleCore(input, state, beltStationFloor, true);
+    const consumer = input.buildings.find((building) => {
+      const planned = probe.decision?.operations.find(
+        (operation) =>
+          operation.kind === "adjust-building" &&
+          operation.binding === building.binding,
+      );
+      return (
+        planned?.kind === "adjust-building" &&
+        planned.amount > 0 &&
+        building.supportChanges.some(
+          (change) => change.type === "belt" && change.amount > 0,
+        )
+      );
+    });
+    const unit = -(
+      station.supportChanges.find((change) => change.type === "belt")?.amount ??
+      0
+    );
+    const demand = consumer?.supportChanges.find(
+      (change) => change.type === "belt" && change.amount > 0,
+    )?.amount;
+    if (unit > 0) {
+      beltStationFloor = Math.max(
+        0,
+        station.stateOn +
+          Math.ceil((belt.current + (demand ?? 0) - belt.maximum) / unit),
+      );
+    }
+  }
+  return planPowerCycleCore(input, state, beltStationFloor, false);
+}
+
+function planPowerCycleCore(
+  input: Readonly<PowerCycleInput>,
+  state: Readonly<PowerAutomationState>,
+  beltStationFloor: number,
+  probeBelt: boolean,
+): PowerCyclePlan {
   if (!input.powerUnlocked || input.buildings.length === 0) {
     return Object.freeze({ decision: null, nextState: state });
   }
@@ -1143,6 +1193,7 @@ export function planPowerCycle(
         input.powerCurrent <= input.powerMaximum || input.replicatorAvailable,
         availablePower,
         resources,
+        beltStationFloor,
       );
       maximum = result.maximum;
       for (const resourceId of result.adjusted) {
@@ -1157,6 +1208,9 @@ export function planPowerCycle(
       if (input.settings.autoFleet && building.fleetMaximum !== null) {
         maximum = Math.min(maximum, building.fleetMaximum);
       }
+    }
+    if (building.rule.kind === "unavailable-production") {
+      maximum = Math.min(maximum, current);
     }
 
     let description =
@@ -1219,7 +1273,10 @@ export function planPowerCycle(
           maximum = 0;
           break;
         }
-        if (support.input.allocation !== "unconstrained") {
+        if (
+          support.input.allocation !== "unconstrained" &&
+          !(probeBelt && change.type === "belt")
+        ) {
           const supported = support.available / change.amount;
           maximum = Math.min(
             maximum,

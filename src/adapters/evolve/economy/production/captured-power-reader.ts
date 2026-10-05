@@ -979,18 +979,18 @@ const POWER_BUSY_SOURCE_LOCALIZATION_KEY: Readonly<Record<string, string>> =
   });
 
 function readLocalizedProductionSource(
-  root: unknown,
   sourceBinding: string,
   structures: readonly CapturedGameStructureDefinition[],
   controls: GameControlRegistry,
   mechanics: CapturedGameMechanics,
 ): string {
   if (sourceBinding === "job_space_miner") {
-    const name = readProperty(
-      readProperty(readProperty(root, "civic"), "space_miner"),
-      "name",
-    );
-    if (typeof name === "string") return name;
+    const localized = mechanics.readLocalizedText("job_space_miner");
+    return localized.kind === "value" &&
+      typeof localized.value === "string" &&
+      localized.value.trim() !== ""
+      ? localized.value
+      : "";
   }
   const localizationKey = POWER_BUSY_SOURCE_LOCALIZATION_KEY[sourceBinding];
   if (localizationKey !== undefined) {
@@ -1060,7 +1060,6 @@ function readBuildingRule(
         id,
         production,
         readLocalizedProductionSource(
-          root,
           sourceBinding,
           structures,
           controls,
@@ -1086,7 +1085,6 @@ function readBuildingRule(
       });
     case "belt-space-station": {
       const stationTitle = readLocalizedProductionSource(
-        root,
         "space-space_station",
         structures,
         controls,
@@ -1100,9 +1098,6 @@ function readBuildingRule(
         stationStorage,
         eleriumMaximum: resource("Elerium")?.maxQuantity ?? 0,
         eleriumMaximumCost: demand.maxCost("Elerium"),
-        eleriumShipsOn: buildingOns.get("space-elerium_ship") ?? 0,
-        iridiumShipsOn: buildingOns.get("space-iridium_ship") ?? 0,
-        ironShipsOn: buildingOns.get("space-iron_ship") ?? 0,
       });
     }
     case "job-dependent": {
@@ -1138,6 +1133,15 @@ function readBuildingRule(
       };
       const selected = selector[sourceBinding];
       if (selected === undefined) return undefined;
+      if (
+        readLocalizedProductionSource(
+          selected[1],
+          structures,
+          controls,
+          dependencies.mechanics,
+        ) === ""
+      )
+        return Object.freeze({ kind: "unavailable-production" });
       const active =
         sourceBinding === "space-iridium_ship" ||
         sourceBinding === "space-iron_ship"

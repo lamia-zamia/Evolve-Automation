@@ -26767,17 +26767,17 @@
     };
   }
   var EXOTIC_ZOO_FOOD_MARGIN = 2;
-  function applySmartRule(building, maximum, current, savingPower, availablePower, resources) {
+  function applySmartRule(building, maximum, current, savingPower, availablePower, resources, beltStationFloor) {
     let rule = building.rule;
     if (savingPower)
       switch (rule.kind) {
         case "belt-space-station": {
           let extra = rule.stationStorage > 0 ? Math.floor(
             (rule.eleriumMaximum - rule.eleriumMaximumCost) / rule.stationStorage
-          ) : 0, minersNeeded = rule.eleriumShipsOn * 2 + rule.iridiumShipsOn + rule.ironShipsOn;
+          ) : 0;
           maximum = Math.min(
             maximum,
-            Math.max(current - extra, Math.ceil(minersNeeded / 3))
+            Math.max(current - extra, beltStationFloor)
           );
           break;
         }
@@ -27036,6 +27036,28 @@
     resource.incomeAdjusted = !0;
   }
   function planPowerCycle(input, state) {
+    let belt = input.supports.find((support) => support.type === "belt"), station = input.buildings.find(
+      (building) => building.rule.kind === "belt-space-station"
+    ), beltStationFloor = 0;
+    if (belt !== void 0 && belt.allocation === "strict" && station !== void 0 && station.smartCategory && station.smartEnabled) {
+      let probe = planPowerCycleCore(input, state, beltStationFloor, !0), consumer = input.buildings.find((building) => {
+        let planned = probe.decision?.operations.find(
+          (operation2) => operation2.kind === "adjust-building" && operation2.binding === building.binding
+        );
+        return planned?.kind === "adjust-building" && planned.amount > 0 && building.supportChanges.some(
+          (change) => change.type === "belt" && change.amount > 0
+        );
+      }), unit = -(station.supportChanges.find((change) => change.type === "belt")?.amount ?? 0), demand = consumer?.supportChanges.find(
+        (change) => change.type === "belt" && change.amount > 0
+      )?.amount;
+      unit > 0 && (beltStationFloor = Math.max(
+        0,
+        station.stateOn + Math.ceil((belt.current + (demand ?? 0) - belt.maximum) / unit)
+      ));
+    }
+    return planPowerCycleCore(input, state, beltStationFloor, !1);
+  }
+  function planPowerCycleCore(input, state, beltStationFloor, probeBelt) {
     if (!input.powerUnlocked || input.buildings.length === 0)
       return Object.freeze({ decision: null, nextState: state });
     let operations = [], descriptionByBinding = /* @__PURE__ */ new Map(), appendDescription = (buildingId, binding, expected, value) => {
@@ -27157,7 +27179,8 @@
           current,
           input.powerCurrent <= input.powerMaximum || input.replicatorAvailable,
           availablePower,
-          resources
+          resources,
+          beltStationFloor
         );
         maximum = result.maximum;
         for (let resourceId of result.adjusted)
@@ -27170,6 +27193,7 @@
           );
         input.settings.autoFleet && building.fleetMaximum !== null && (maximum = Math.min(maximum, building.fleetMaximum));
       }
+      building.rule.kind === "unavailable-production" && (maximum = Math.min(maximum, current));
       let description = descriptionByBinding.get(building.binding) ?? building.extraDescription;
       for (let consumption of building.consumptions) {
         let resource = powerCycleMapValue(
@@ -27213,7 +27237,7 @@
             maximum = 0;
             break;
           }
-          if (support.input.allocation !== "unconstrained") {
+          if (support.input.allocation !== "unconstrained" && !(probeBelt && change.type === "belt")) {
             let supported = support.available / change.amount;
             maximum = Math.min(
               maximum,
@@ -28824,13 +28848,10 @@
     "galaxy-vitreloy_plant": "galaxy_vitreloy_plant_bd",
     "galaxy-armed_miner": "galaxy_armed_miner_bd"
   });
-  function readLocalizedProductionSource(root, sourceBinding, structures, controls2, mechanics) {
+  function readLocalizedProductionSource(sourceBinding, structures, controls2, mechanics) {
     if (sourceBinding === "job_space_miner") {
-      let name = readProperty(
-        readProperty(readProperty(root, "civic"), "space_miner"),
-        "name"
-      );
-      if (typeof name == "string") return name;
+      let localized = mechanics.readLocalizedText("job_space_miner");
+      return localized.kind === "value" && typeof localized.value == "string" && localized.value.trim() !== "" ? localized.value : "";
     }
     let localizationKey = POWER_BUSY_SOURCE_LOCALIZATION_KEY[sourceBinding];
     if (localizationKey !== void 0) {
@@ -28870,7 +28891,6 @@
           id,
           production,
           readLocalizedProductionSource(
-            root,
             sourceBinding,
             structures,
             controls2,
@@ -28895,7 +28915,6 @@
         });
       case "belt-space-station": {
         let stationTitle = readLocalizedProductionSource(
-          root,
           "space-space_station",
           structures,
           controls2,
@@ -28905,10 +28924,7 @@
           kind: metadataRule,
           stationStorage,
           eleriumMaximum: resource("Elerium")?.maxQuantity ?? 0,
-          eleriumMaximumCost: demand.maxCost("Elerium"),
-          eleriumShipsOn: buildingOns.get("space-elerium_ship") ?? 0,
-          iridiumShipsOn: buildingOns.get("space-iridium_ship") ?? 0,
-          ironShipsOn: buildingOns.get("space-iron_ship") ?? 0
+          eleriumMaximumCost: demand.maxCost("Elerium")
         });
       }
       case "job-dependent": {
@@ -28933,6 +28949,13 @@
           "space-elerium_ship": ["Elerium", "job_space_miner", !1]
         }[sourceBinding];
         if (selected === void 0) return;
+        if (readLocalizedProductionSource(
+          selected[1],
+          structures,
+          controls2,
+          dependencies.mechanics
+        ) === "")
+          return Object.freeze({ kind: "unavailable-production" });
         let active = sourceBinding === "space-iridium_ship" || sourceBinding === "space-iron_ship" ? !!resource("Elerium")?.unlocked : !0;
         return Object.freeze({
           kind: metadataRule,

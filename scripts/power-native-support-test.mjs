@@ -133,3 +133,226 @@ assert.deepEqual(
   ),
   [["rounded", 2]],
 );
+
+function beltPlan({
+  providerUnit = 5,
+  consumerUnit = 4,
+  stationCount = 2,
+  stationOn = 1,
+  stationMaximum = 10,
+  stationFuel = false,
+  stationPowered = 1,
+  powerCurrent = 100,
+  eleriumUseful = true,
+  eleriumSmart = true,
+  eleriumMaximum = 2,
+  eleriumUnavailable = false,
+  ironCount = 0,
+  manageElerium = true,
+  frozen = false,
+} = {}) {
+  const station = {
+    ...building("space-space_station", [
+      { type: "belt", amount: -providerUnit },
+    ]),
+    index: 0,
+    count: stationCount,
+    stateOn: stationOn,
+    powered: stationPowered,
+    autoMaximum: stationMaximum,
+    consumptions: stationFuel
+      ? [
+          {
+            resourceId: "Helium_3",
+            currentTotal: 0,
+            unwindCredit: 0,
+            enableRate: 10,
+          },
+        ]
+      : [],
+    smartCategory: true,
+    smartEnabled: true,
+    rule: {
+      kind: "belt-space-station",
+      stationStorage: 10,
+      eleriumMaximum: 100,
+      eleriumMaximumCost: 10,
+    },
+  };
+  const iridium = {
+    ...building("space-iridium_ship", [{ type: "belt", amount: providerUnit }]),
+    index: 1,
+    count: 1,
+    stateOn: 1,
+  };
+  const elerium = {
+    ...building("space-elerium_ship", [{ type: "belt", amount: consumerUnit }]),
+    index: 2,
+    count: 2,
+    stateOn: 0,
+    autoMaximum: eleriumMaximum,
+    smartCategory: true,
+    smartEnabled: eleriumSmart,
+    rule: eleriumUnavailable
+      ? { kind: "unavailable-production" }
+      : {
+          kind: "busy-resource",
+          active: true,
+          savingOnly: false,
+          observation: {
+            resourceId: "Elerium",
+            useful: eleriumUseful,
+            production: 0,
+            income: 0,
+          },
+        },
+  };
+  const iron = {
+    ...building("space-iron_ship", [{ type: "belt", amount: 2 }]),
+    index: 3,
+    count: ironCount,
+    stateOn: 0,
+  };
+  const maximum = stationOn * providerUnit;
+  const cycle = {
+    powerUnlocked: true,
+    powerResourceId: "Power",
+    powerCurrent,
+    powerMaximum: 100,
+    replicatorAvailable: false,
+    fasting: false,
+    hungryRace: false,
+    banquetStateOn: 0,
+    debug: false,
+    consumptionBalanceMinimum: 1,
+    civilianPopulation: 100,
+    currentCrew: 0,
+    settings: {
+      showGalactic: true,
+      limitPowered: true,
+      autoFleet: false,
+      crewReserve: 0,
+    },
+    resources: [
+      powerResource,
+      { ...powerResource, id: "Elerium" },
+      {
+        ...powerResource,
+        id: "Helium_3",
+        currentQuantity: 0,
+        storageRatio: 0,
+        rateOfChange: 0,
+      },
+    ],
+    supports: [
+      {
+        type: "belt",
+        title: "Belt",
+        current: providerUnit,
+        maximum,
+        available: maximum - providerUnit,
+        unlocked: true,
+        allocation: "strict",
+      },
+    ],
+    buildings: frozen
+      ? []
+      : [
+          station,
+          iridium,
+          ...(manageElerium ? [elerium] : []),
+          ...(ironCount ? [iron] : []),
+        ],
+    lake: { enabled: false },
+    spire: { available: false },
+  };
+  const operations = planPowerCycle(
+    cycle,
+    EMPTY_POWER_AUTOMATION_STATE,
+  ).decision?.operations.filter(
+    (operation) => operation.kind === "adjust-building",
+  );
+  return operations?.map(({ binding, amount }) => [binding, amount]) ?? [];
+}
+
+assert.deepEqual(beltPlan(), [
+  ["space-space_station", 1],
+  ["space-iridium_ship", 0],
+  ["space-elerium_ship", 1],
+]);
+const alteredBeltPlan = beltPlan({ providerUnit: 7, consumerUnit: 6 });
+assert.deepEqual(alteredBeltPlan, beltPlan());
+const alteredStationDelta = alteredBeltPlan.find(
+  ([id]) => id === "space-space_station",
+)?.[1];
+const alteredShipDelta = alteredBeltPlan.find(
+  ([id]) => id === "space-elerium_ship",
+)?.[1];
+assert.ok(
+  7 + alteredStationDelta * 7 >= 7 + alteredShipDelta * 6,
+  "the planned native Belt maximum covers the selected ship",
+);
+assert.deepEqual(beltPlan({ ironCount: 1 }), [
+  ["space-space_station", 1],
+  ["space-iridium_ship", 0],
+  ["space-elerium_ship", 1],
+  ["space-iron_ship", 0],
+]);
+assert.deepEqual(beltPlan({ ironCount: 1, eleriumMaximum: 0 }), [
+  ["space-space_station", 1],
+  ["space-iridium_ship", 0],
+  ["space-elerium_ship", 0],
+  ["space-iron_ship", 1],
+]);
+assert.equal(
+  beltPlan({ stationCount: 1 }).find(
+    ([id]) => id === "space-elerium_ship",
+  )?.[1],
+  0,
+);
+for (const blocked of [
+  { stationMaximum: 1 },
+  { stationFuel: true },
+  { powerCurrent: 0, stationPowered: 10 },
+]) {
+  assert.equal(
+    beltPlan(blocked).find(([id]) => id === "space-elerium_ship")?.[1],
+    0,
+    `a station that cannot legally increase supplies no bootstrap support: ${JSON.stringify(blocked)}`,
+  );
+}
+assert.equal(
+  beltPlan({ eleriumUseful: false }).find(
+    ([id]) => id === "space-space_station",
+  )?.[1],
+  0,
+);
+assert.equal(
+  beltPlan({ eleriumUnavailable: true }).find(
+    ([id]) => id === "space-elerium_ship",
+  )?.[1],
+  0,
+);
+assert.equal(
+  beltPlan({ eleriumSmart: false }).find(
+    ([id]) => id === "space-elerium_ship",
+  )?.[1],
+  1,
+);
+assert.equal(
+  beltPlan({ eleriumMaximum: 0 }).find(
+    ([id]) => id === "space-space_station",
+  )?.[1],
+  0,
+);
+assert.deepEqual(beltPlan({ frozen: true }), []);
+assert.equal(
+  beltPlan({ manageElerium: false }).find(
+    ([id]) => id === "space-space_station",
+  )?.[1],
+  0,
+);
+assert.equal(
+  beltPlan({ stationOn: 2 }).find(([id]) => id === "space-space_station")?.[1],
+  0,
+);

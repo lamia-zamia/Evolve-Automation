@@ -1552,6 +1552,22 @@ const specialEleriumShip = spireStructure(
   "belt",
   stationKey,
 );
+const specialIridiumShip = spireStructure(
+  "space",
+  "spc_belt",
+  "iridium_ship",
+  "space-iridium_ship",
+  "belt",
+  stationKey,
+);
+const specialIronShip = spireStructure(
+  "space",
+  "spc_belt",
+  "iron_ship",
+  "space-iron_ship",
+  "belt",
+  stationKey,
+);
 const specialGatewayAnchor = spireStructure(
   "galaxy",
   "gxy_home",
@@ -1679,6 +1695,8 @@ const specialStructures = Object.freeze([
   }),
   specialStation,
   specialEleriumShip,
+  specialIridiumShip,
+  specialIronShip,
   structure({
     entryKey: "space:lander",
     region: "space",
@@ -1813,6 +1831,8 @@ const specialRoot = {
   space: {
     space_station: { count: 3, on: 2, s_max: 2, support: 1 },
     elerium_ship: { count: 2, on: 1 },
+    iridium_ship: { count: 1, on: 0 },
+    iron_ship: { count: 1, on: 0 },
     lander: { count: 1, on: 1 },
     fob: { count: 1, on: 1 },
   },
@@ -1882,7 +1902,7 @@ const specialRoot = {
     coal_miner: { workers: 17 },
     farmer: { workers: 4 },
     hunter: { workers: 3 },
-    space_miner: { workers: 2, name: "Mineros espaciales" },
+    space_miner: { workers: 2 },
     archaeologist: { workers: 2 },
     garrison: { workers: 60, crew: 10, wounded: 4 },
     crew: { workers: 10 },
@@ -1930,7 +1950,11 @@ const specialRoot = {
     Deuterium: { amount: 100, max: 500, diff: 0, display: true },
   },
   support: {
-    belt: [specialEleriumShip.entryKey],
+    belt: [
+      specialEleriumShip.entryKey,
+      specialIridiumShip.entryKey,
+      specialIronShip.entryKey,
+    ],
     gateway: [specialBologniumShip.entryKey],
     alien2: [],
     tau_red: [specialWomlingFun.entryKey],
@@ -2058,13 +2082,15 @@ const specialReaderDependencies = {
         },
         Bolognium: { "Minero armado": "4" },
         Adamantite: { "Minero armado": "4" },
-        Iridium: { "Minero armado": "4" },
+        Iridium: { "Minero armado": "4", "Mineros espaciales": "3" },
+        Iron: { "Mineros espaciales": "5" },
         Global: { "Mejora global": "20%" },
       },
       consumption: {},
       capacity: { Elerium: { "Estación orbital": "18" } },
     },
     localizedText: {
+      job_space_miner: "Mineros espaciales",
       galaxy_vitreloy_plant_bd: "Fábrica de Vitreloy",
       galaxy_armed_miner_bd: "Minero armado",
     },
@@ -2196,6 +2222,47 @@ assert.ok(
   ) < 1e-9,
   "busy production resolves the localized BasicJob source, following percent rows, and global modifier",
 );
+for (const [binding, expected] of [
+  ["space-iridium_ship", 3.6],
+  ["space-iron_ship", 6],
+]) {
+  assert.ok(
+    Math.abs(
+      specialRule(binding, "busy-resource").observation.production - expected,
+    ) < 1e-9,
+    "all Belt mining ships use the captured Space Miner localization",
+  );
+}
+for (const localized of [
+  { kind: "absent" },
+  { kind: "value", value: "" },
+  { kind: "value", value: 42 },
+]) {
+  const missingSourceReader = createCapturedPowerReader({
+    ...specialReaderDependencies,
+    mechanics: {
+      ...specialReaderDependencies.mechanics,
+      readLocalizedText: (key) =>
+        key === "job_space_miner"
+          ? localized
+          : specialReaderDependencies.mechanics.readLocalizedText(key),
+    },
+  });
+  const missingSourceCycle = missingSourceReader.readCycle();
+  assert.ok(missingSourceCycle);
+  for (const binding of [
+    "space-elerium_ship",
+    "space-iridium_ship",
+    "space-iron_ship",
+  ]) {
+    assert.equal(
+      missingSourceCycle.buildings.find((entry) => entry.binding === binding)
+        ?.rule.kind,
+      "unavailable-production",
+      "missing Space Miner localization closes only the affected busy policy",
+    );
+  }
+}
 assert.ok(
   Math.abs(
     specialRule("galaxy-vitreloy_plant", "busy-resource").observation
