@@ -278,20 +278,70 @@ const zeroEntertainerAutomation = createCapturedOrdinaryJobsAutomation({
   controls: authorityControls,
   readSettings: () => ({
     ...resetBreakpoints,
+    job_b1_unemployed: 0,
+    job_b2_unemployed: 0,
+    job_b3_unemployed: 0,
+    job_b1_farmer: 0,
+    job_b2_farmer: 0,
+    job_b3_farmer: 0,
     authorityManage: true,
     generalMinimumAuthority: 100,
     job_unemployed: true,
     job_farmer: true,
     job_entertainer: true,
+    job_s_entertainer: true,
+    job_b1_entertainer: 2,
+    job_b2_entertainer: 5,
+    job_b3_entertainer: -1,
   }),
 });
 const zeroEntertainerInput = zeroEntertainerAutomation.reader.readCycle(false);
 assert.equal(zeroEntertainerInput.available, true);
 assert.equal(
   zeroEntertainerInput.authority.entertainerMorale,
-  0,
-  "zero Entertainers keep the authority contribution conservative",
+  null,
+  "zero Entertainers have no observed Authority marginal",
 );
+for (const previousCap of [null, 0]) {
+  const decision = planJobs({
+    ...zeroEntertainerInput,
+    authority: { ...zeroEntertainerInput.authority, previousCap },
+  });
+  assert.equal(
+    decision?.assignments.find(({ jobToken }) => jobToken === 19)?.workers,
+    1,
+    "Authority permits exactly one bootstrap worker even with a stale zero cap",
+  );
+  assert.equal(decision?.authorityEntertainerCap, 1);
+}
+zeroEntertainerRoot.civic.entertainer.assigned = 1;
+zeroEntertainerRoot.civic.entertainer.workers = 1;
+zeroEntertainerRoot.city.morale.entertain = 2.4;
+const observedAuthorityInput =
+  zeroEntertainerAutomation.reader.readCycle(false);
+assert.equal(observedAuthorityInput.authority.entertainerMorale, 2.4);
+assert.ok(
+  planJobs({
+    ...observedAuthorityInput,
+    authority: { ...observedAuthorityInput.authority, previousCap: 1 },
+  }).authorityEntertainerCap > 1,
+  "Authority resumes its native marginal calculation after the bootstrap",
+);
+zeroEntertainerRoot.city.morale.entertain = 0;
+const provenZeroInput = zeroEntertainerAutomation.reader.readCycle(false);
+assert.equal(provenZeroInput.authority.entertainerMorale, 0);
+assert.equal(
+  planJobs(provenZeroInput).assignments.find(({ jobToken }) => jobToken === 19)
+    ?.workers,
+  0,
+  "a proven zero contribution does not retain an Entertainer",
+);
+const authorityDisabledDecision = planJobs({
+  ...provenZeroInput,
+  authority: { ...provenZeroInput.authority, enabled: false, previousCap: 1 },
+});
+assert.equal(authorityDisabledDecision.authorityEntertainerCap, null);
+assert.equal(authorityDisabledDecision.clearAuthorityEntertainerCap, true);
 
 const uninitializedEntertainmentRoot = structuredClone(authorityRoot);
 delete uninitializedEntertainmentRoot.city.morale.entertain;

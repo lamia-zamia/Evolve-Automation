@@ -296,11 +296,10 @@ function readAuthorityInput(
   // DeadSpace writes a total to `city.morale.entertain`. `workerScale` is a multiplicative
   // worker-count adjustment, so dividing by the captured pool recovers the current per-worker
   // value without restating Theatre, traits, astronomy, or government effects. At zero workers
-  // that ratio has no answer; zero keeps authority conservative and prevents growth on an
-  // unproven contribution.
+  // that ratio has no answer; the pure policy permits one observation worker.
   const entertainerMorale =
     entertainerWorkers === 0
-      ? 0
+      ? null
       : morale.entertainment === undefined
         ? undefined
         : finite(morale.entertainment / entertainerWorkers);

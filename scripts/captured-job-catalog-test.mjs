@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { planJobs } from "../src/domain/civic/jobs.ts";
 import {
   createCapturedJobCatalogReader,
   toCapturedJobsCycleInput,
@@ -508,8 +509,121 @@ const zeroEntertainerReader = createCapturedJobCatalogReader({
 assert.equal(
   zeroEntertainerReader().jobs.find(({ id }) => id === "entertainer")
     ?.smartMaximum,
+  1,
+  "zero Entertainers receive one bounded observation bootstrap",
+);
+
+const priorityRoot = structuredClone(zeroEntertainerRoot);
+priorityRoot.civic.unemployed.assigned = 4;
+priorityRoot.civic.unemployed.workers = 4;
+priorityRoot.civic.farmer.assigned = 0;
+priorityRoot.civic.farmer.workers = 0;
+const prioritySettings = (entertainerPriority) => ({
+  job_unemployed: true,
+  job_farmer: true,
+  job_entertainer: true,
+  job_s_entertainer: true,
+  job_p_unemployed: 0,
+  job_p_entertainer: entertainerPriority,
+  job_p_farmer: entertainerPriority === 1 ? 2 : 1,
+  job_b1_unemployed: 0,
+  job_b2_unemployed: 0,
+  job_b3_unemployed: 0,
+  job_b1_farmer: 2,
+  job_b2_farmer: 5,
+  job_b3_farmer: -1,
+  job_b1_entertainer: 2,
+  job_b2_entertainer: 5,
+  job_b3_entertainer: -1,
+});
+for (const [priority, order] of [
+  [1, ["unemployed", "entertainer", "farmer"]],
+  [2, ["unemployed", "farmer", "entertainer"]],
+]) {
+  const priorityReader = createCapturedJobCatalogReader({
+    rootState: { readRoot: () => priorityRoot },
+    controls: {
+      ...controls,
+      capturedElementIds: () => [
+        "civ-unemployed",
+        "civ-farmer",
+        "civ-entertainer",
+      ],
+    },
+    readSettings: () => prioritySettings(priority),
+  });
+  const jobs = toCapturedJobsJobInputs(priorityReader());
+  assert.deepEqual(
+    jobs?.map(({ id }) => id),
+    order,
+  );
+  assert.equal(jobs?.find(({ id }) => id === "entertainer")?.smartMaximum, 1);
+  const decision = planJobs({
+    ...projectedCycle,
+    jobs,
+    entertainerToken: jobs.find(({ id }) => id === "entertainer").token,
+    population: 4,
+  });
+  assert.equal(
+    decision?.assignments.find(({ jobToken }) => jobToken === 19)?.workers,
+    1,
+    "priority changes allocation order while retaining the one-worker bootstrap",
+  );
+  assert.deepEqual(
+    decision?.assignments.map(
+      ({ jobToken }) => jobs.find(({ token }) => token === jobToken)?.id,
+    ),
+    order,
+    "the planner processes the captured priority order",
+  );
+}
+
+priorityRoot.civic.entertainer.max = 0;
+const unavailableReader = createCapturedJobCatalogReader({
+  rootState: { readRoot: () => priorityRoot },
+  controls: {
+    ...controls,
+    capturedElementIds: () => ["civ-unemployed", "civ-entertainer"],
+  },
+  readSettings: () => prioritySettings(1),
+});
+assert.deepEqual(
+  unavailableReader().jobs.find(({ id }) => id === "entertainer")?.breakpoints,
+  [0, 0, 0],
+  "an unavailable Entertainer keeps the normal job maximum",
+);
+priorityRoot.civic.entertainer.max = -1;
+
+const sampledEntertainerRoot = structuredClone(priorityRoot);
+sampledEntertainerRoot.civic.entertainer.assigned = 1;
+sampledEntertainerRoot.civic.entertainer.workers = 1;
+sampledEntertainerRoot.city.morale.entertain = 2.4;
+const sampledReader = createCapturedJobCatalogReader({
+  rootState: { readRoot: () => sampledEntertainerRoot },
+  controls: {
+    ...controls,
+    capturedElementIds: () => ["civ-unemployed", "civ-entertainer"],
+  },
+  readSettings: () => ({ job_s_entertainer: true }),
+});
+assert.equal(
+  sampledReader().jobs.find(({ id }) => id === "entertainer")?.smartMaximum,
+  85,
+  "the following cycle derives its cap from the native per-worker sample",
+);
+sampledEntertainerRoot.city.morale.entertain = 0;
+assert.equal(
+  sampledReader().jobs.find(({ id }) => id === "entertainer")?.smartMaximum,
   0,
-  "zero Entertainers retain a zero smart maximum",
+  "a measured zero contribution removes the bootstrap worker",
+);
+delete sampledEntertainerRoot.city.morale.entertain;
+assert.equal(sampledReader(), undefined, "missing native morale fails locally");
+sampledEntertainerRoot.city.morale.entertain = Number.NaN;
+assert.equal(
+  sampledReader(),
+  undefined,
+  "non-finite native morale fails locally",
 );
 
 const spaceMinerReader = createCapturedJobCatalogReader({

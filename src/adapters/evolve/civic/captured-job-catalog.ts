@@ -299,9 +299,8 @@ function readEntertainerSmartMaximum(
   // Superstar contributes a separate morale-cap term, so the legacy smart Entertainer rule does
   // not apply once that technology is active.
   if (superstar > 0) return null;
-  // With no current pool, the per-worker game answer is undefined. Retaining zero is the safe
-  // boundary: a smart setting cannot prove that the first worker is worthwhile from this sample.
-  if (count === 0) return 0;
+  // One worker bootstraps a native morale observation without allowing a large unsampled pool.
+  if (count === 0) return 1;
   const morale = readCapturedMorale(root);
   if (morale === undefined || morale.entertainment === undefined)
     return undefined;
@@ -317,7 +316,7 @@ function readEntertainerSmartMaximum(
   if (entertainerWorkers === 0) return count;
   const entertainerMorale = finite(morale.entertainment / entertainerWorkers);
   if (entertainerMorale === undefined) return undefined;
-  if (entertainerMorale <= 0) return count;
+  if (entertainerMorale <= 0) return 0;
 
   const taxes = readProperty(readProperty(root, "civic"), "taxes");
   const taxRate = finiteNonNegative(readProperty(taxes, "tax_rate"));

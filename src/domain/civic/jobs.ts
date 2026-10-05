@@ -62,7 +62,8 @@ export interface JobsAuthorityInput {
   readonly moralePotential: number;
   readonly moraleMaximum: number;
   readonly moraleCeiling: number | null;
-  readonly entertainerMorale: number;
+  /** Null until a regular Entertainer supplies a native morale sample. */
+  readonly entertainerMorale: number | null;
   readonly superstarMorale: number;
   readonly previousCap: number | null;
   readonly debug: boolean;
@@ -354,9 +355,19 @@ function authorityMaximum(
   let debug: string | null = null;
   const entertainerIndex = indexOfToken(jobIndex, input.entertainerToken);
   const entertainer = input.jobs[entertainerIndex];
+  if (
+    entertainer !== undefined &&
+    authority.entertainerMorale === null &&
+    authority.superstarMorale === 0
+  ) {
+    return { cap: 1, storedCap: 1, debug: null };
+  }
   if (authority.moraleCeiling !== null && entertainer !== undefined) {
     const limits: number[] = [];
-    if (authority.entertainerMorale > 0) {
+    if (
+      authority.entertainerMorale !== null &&
+      authority.entertainerMorale > 0
+    ) {
       const without =
         authority.moralePotential -
         entertainer.count * authority.entertainerMorale;

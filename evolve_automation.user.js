@@ -11236,9 +11236,11 @@
     if (!authority.enabled)
       return { cap: Number.MAX_SAFE_INTEGER, storedCap: null, debug: null };
     let storedCap = authority.previousCap, debug = null, entertainerIndex = indexOfToken(jobIndex, input.entertainerToken), entertainer = input.jobs[entertainerIndex];
+    if (entertainer !== void 0 && authority.entertainerMorale === null && authority.superstarMorale === 0)
+      return { cap: 1, storedCap: 1, debug: null };
     if (authority.moraleCeiling !== null && entertainer !== void 0) {
       let limits = [];
-      if (authority.entertainerMorale > 0) {
+      if (authority.entertainerMorale !== null && authority.entertainerMorale > 0) {
         let without = authority.moralePotential - entertainer.count * authority.entertainerMorale;
         limits.push(
           Math.floor(
@@ -18530,7 +18532,7 @@
     let superstarValue = readProperty(tech, "superstar"), superstar = superstarValue === void 0 ? 0 : finiteNonNegative(superstarValue);
     if (superstar === void 0) return;
     if (superstar > 0) return null;
-    if (count2 === 0) return 0;
+    if (count2 === 0) return 1;
     let morale = readCapturedMorale(root);
     if (morale === void 0 || morale.entertainment === void 0)
       return;
@@ -18544,7 +18546,7 @@
     if (entertainerWorkers === 0) return count2;
     let entertainerMorale = finite(morale.entertainment / entertainerWorkers);
     if (entertainerMorale === void 0) return;
-    if (entertainerMorale <= 0) return count2;
+    if (entertainerMorale <= 0) return 0;
     let taxes = readProperty(readProperty(root, "civic"), "taxes"), taxRate = finiteNonNegative(readProperty(taxes, "tax_rate"));
     if (taxRate === void 0) return;
     let taxTaskActive = readCapturedTaxTaskActive(root);
@@ -20184,7 +20186,7 @@
     );
     if (entertainerWorkers === void 0 || highPopulation === void 0)
       return;
-    let entertainerMorale = entertainerWorkers === 0 ? 0 : morale.entertainment === void 0 ? void 0 : finite(morale.entertainment / entertainerWorkers);
+    let entertainerMorale = entertainerWorkers === 0 ? null : morale.entertainment === void 0 ? void 0 : finite(morale.entertainment / entertainerWorkers);
     if (entertainerMorale === void 0) return;
     let superstarValue = readProperty(tech, "superstar"), superstar = superstarValue === void 0 ? 0 : finiteNonNegative(superstarValue);
     if (superstar === void 0) return;
