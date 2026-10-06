@@ -60,10 +60,7 @@ function readCapturedBuildingRootStateRecord(
     return undefined;
   }
   const matches = structures.filter(
-    (structure) =>
-      structure.actionId === binding &&
-      structure.region === parts.region &&
-      structure.struct === parts.id,
+    (structure) => bindingForBuildingElement(structure.actionId) === binding,
   );
   const states = matches.flatMap((structure) => {
     const region = readProperty(root, structure.region);
@@ -75,6 +72,7 @@ function readCapturedBuildingRootStateRecord(
   if (exactAct !== undefined) return exactAct.state;
   if (states.length === 1) return states[0]!.state;
   if (states.length > 1) return undefined;
+  if (matches.length > 0) return undefined;
 
   // Some captured control records hold the live state while the structure is not yet present in
   // its region grid. Preserve that existing catalog behavior when no mechanics entry can join it.
@@ -117,7 +115,7 @@ export function readCapturedBuildingEntries(
     const stateEntry = structures.find((structure) => {
       const region = readProperty(root, structure.region);
       return (
-        structure.actionId === binding &&
+        bindingForBuildingElement(structure.actionId) === binding &&
         readProperty(region, structure.struct) === state
       );
     });
@@ -147,20 +145,15 @@ export function readCapturedBuildingEntries(
     seen.add(binding);
   }
 
-  // Building controls are captured as their panels are drawn, while the mechanics registry is
-  // complete from game startup. Fill still-undrawn actions only when the automation owns that
-  // Building: registry membership alone does not add an automation entry. Priority ordering
-  // remains the shared stored-priority sorter used by Building settings.
+  // The mechanics registry is complete before Building controls are drawn. Add managed native
+  // structures from that registry even when no control exists; registry membership alone still
+  // does not add an automation entry. Priority ordering remains the shared stored-priority sorter.
   for (const structure of structures) {
-    const binding = structure.actionId;
+    const binding = bindingForBuildingElement(structure.actionId);
     if (seen.has(binding)) continue;
     if (!CAPTURED_AUTOMATION_BUILDING_BINDINGS.has(binding)) continue;
     const parts = splitActionId(binding);
-    if (
-      parts === undefined ||
-      !CAPTURED_BUILD_REGIONS.has(parts.region) ||
-      parts.region !== structure.region
-    ) {
+    if (parts === undefined || !CAPTURED_BUILD_REGIONS.has(parts.region)) {
       continue;
     }
     const region = readProperty(root, structure.region);
@@ -173,7 +166,7 @@ export function readCapturedBuildingEntries(
         binding,
         entryKey: structure.entryKey,
         elementId: binding,
-        region: structure.region,
+        region: parts.region,
         sector: structure.sector,
         id: structure.struct,
         label: title.kind === "value" && title.value ? title.value : binding,

@@ -2,6 +2,7 @@ import { withControlCaptureAuthority } from "./control-capture-fixture.mjs";
 import assert from "node:assert/strict";
 import { startCapturedRuntime } from "../src/bootstrap/captured-runtime-control.ts";
 import { createTestDocument, element } from "./dom-fixture.mjs";
+import { makeCapturedBuildingMechanics } from "./captured-building-test-fixtures.mjs";
 
 function attributes(values) {
   const items = Object.entries(values).map(([name, value]) => ({
@@ -221,6 +222,14 @@ function runOrderedCapturedCycle({ activeTrigger }) {
   const stop = startCapturedRuntime({
     pageCapture: {
       isComplete: () => true,
+      mechanics: makeCapturedBuildingMechanics(root, {
+        availability: (liveRoot, binding) => ({
+          kind: "value",
+          value:
+            binding === "city-foundry" &&
+            liveRoot.tech["polymer-reserve"] === 1,
+        }),
+      }),
       rootState: {
         readRoot: () => root,
         isReactivitySuppressed: () => false,

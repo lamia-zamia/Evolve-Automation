@@ -1021,7 +1021,7 @@ assert.deepEqual(
   [],
 );
 
-// --- BuildingUnlocked conditions draw only the regions they name -----------
+// --- BuildingUnlocked conditions share a semantic sample for named regions ---
 
 // The reader is asked for exactly the regions the configured conditions name, and nothing else.
 {
@@ -1051,12 +1051,13 @@ assert.deepEqual(
       return {
         unlocked: new Set(["city-bank"]),
         regions: new Set(["city"]),
+        switches: new Set(),
         states: new Map(),
       };
     },
   }).read();
-  // Only the two building regions the conditions name, asked for in one pass. The third row's
-  // `BuildingCount` requirement needs no panel and adds no region.
+  // Only the two building regions the conditions name, requested in one semantic read. The third
+  // row's `BuildingCount` requirement adds no region.
   assert.deepEqual(asked, [["city", "portal"]]);
   // The city condition is answered from the sample, so `city-mine` is a target. The portal one
   // names a region the sample could not speak for, so that trigger is dropped rather than treated
@@ -1066,8 +1067,7 @@ assert.deepEqual(
   ]);
 }
 
-// The switch operands are answered from the same rows, so they draw their region too — and the
-// pass that answers them is the one the unlock operand already pays for.
+// Switch operands use the same semantic region snapshot as BuildingUnlocked.
 {
   const asked = [];
   assert.deepEqual(
@@ -1085,6 +1085,7 @@ assert.deepEqual(
         return {
           unlocked: new Set(["portal-carport"]),
           regions: new Set(["portal"]),
+          switches: new Set(["portal-carport"]),
           states: new Map([["portal-carport", { on: 2, off: 3 }]]),
         };
       },
@@ -1094,8 +1095,8 @@ assert.deepEqual(
   assert.deepEqual(asked, [["portal"]]);
 }
 
-// A row the region drew without a switch has no power state, so `BuildingDisabled` reads zero and
-// a trigger waiting for an idle copy does not fire.
+// An offered action without native switch state reads zero for BuildingDisabled, so a trigger
+// waiting for an idle copy does not fire.
 assert.deepEqual(
   triggers({
     triggers: [
@@ -1109,27 +1110,28 @@ assert.deepEqual(
     readBuildingUnlocks: () => ({
       unlocked: new Set(["city-farm"]),
       regions: new Set(["city"]),
+      switches: new Set(),
       states: new Map(),
     }),
   }).read(),
   [],
 );
 
-// No BuildingUnlocked condition means no panel is drawn at all.
+// No BuildingUnlocked condition means no semantic Building sample is needed.
 assert.deepEqual(
   triggers({
     triggers: [trigger()],
     readBuildingUnlocks: () => {
       throw new Error(
-        "must not draw a region panel without a building condition",
+        "must not read semantic offers without a building condition",
       );
     },
   }).read(),
   [{ actionId: "city-mine", actionType: "build", cost: COSTS["city-mine"] }],
 );
 
-// A drawn region that did not draw the building answers a real false, which a condition asking for
-// the building to be absent tells apart from an unanswered one.
+// A valid region catalog that omits a building answers false, which a condition asking for the
+// building to be absent tells apart from an unanswered region.
 assert.deepEqual(
   triggers({
     triggers: [
@@ -1143,6 +1145,7 @@ assert.deepEqual(
     readBuildingUnlocks: () => ({
       unlocked: new Set(["city-farm"]),
       regions: new Set(["city"]),
+      switches: new Set(),
       states: new Map(),
     }),
   }).read(),

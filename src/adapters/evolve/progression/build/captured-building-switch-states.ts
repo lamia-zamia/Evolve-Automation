@@ -13,10 +13,9 @@
  * what `on_cap` needs; the closure itself reads the game's live `global` binding, so a root
  * replacement does not disturb it.
  *
- * Which buildings have a switch at all is not decided here. That comes from the catalog, where the
- * game answered it by drawing the two spans or not drawing them, and it is re-checked against the
- * state record's own `on` property before a count is reported: a building with no switch must stay
- * absent, never appear as fully switched off.
+ * Which buildings have a switch at all is not decided here. The semantic structure catalog reads
+ * the native `switchable()`/`powered` capability, and this pass re-checks the live state record's
+ * own `on` property before reporting counts: a building with no switch stays absent.
  *
  * Nothing in here can force a draw. A control that is missing, superseded or refuses to answer
  * leaves that one row unreported and is counted; it never invalidates the catalog.

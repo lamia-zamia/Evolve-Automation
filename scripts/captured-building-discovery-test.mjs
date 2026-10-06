@@ -3,8 +3,8 @@ import assert from "node:assert/strict";
 import { createCapturedProgressionControl } from "../src/bootstrap/captured-progression-control.ts";
 import { createGameDrawnActionsReader } from "../src/adapters/browser/game-drawn-actions.ts";
 import { installVueCapture } from "../src/adapters/evolve/vue-capture.ts";
-import { MIN_SAMPLE_AGE_MS } from "../src/adapters/evolve/discovery-scope-cache.ts";
 import { CAPTURED_MECH_BUILDINGS } from "../src/adapters/evolve/progression/build/captured-building-metadata.ts";
+import { makeCapturedBuildingMechanics } from "./captured-building-test-fixtures.mjs";
 import {
   MAIN_TAB_CONTROL,
   SPACE_TAB_INDEX,
@@ -26,6 +26,7 @@ function makeGame({
   scriptSettings = {},
   costs,
   capturedBuildPolicy = false,
+  nativeAvailability,
 } = {}) {
   const root = {
     // The player is looking at Research, so every civilization panel this reads has to be drawn
@@ -49,6 +50,8 @@ function makeGame({
   // Element id to the rendered row, keyed by container. Only what the reader looks at.
   const containers = new Map();
   const draws = [];
+  let domActionReads = 0;
+  let nativeAvailabilityReads = 0;
   const rootListeners = new Set();
 
   const renderRow = (id, state) => ({
@@ -109,11 +112,25 @@ function makeGame({
   const page = {
     querySelectorAll(selector) {
       if (selector.endsWith(" .action")) {
+        domActionReads += 1;
         return containers.get(selector.slice(0, -" .action".length)) ?? [];
       }
       return containers.has(selector) ? [{ id: selector.slice(1) }] : [];
     },
   };
+
+  const availabilityFromFixture = (_liveRoot, binding) => {
+    const offered = Object.values(regions).some((readRows) =>
+      readRows().some((row) => (Array.isArray(row) ? row[0] : row) === binding),
+    );
+    return { kind: "value", value: offered };
+  };
+  const mechanics = makeCapturedBuildingMechanics(root, {
+    availability: (liveRoot, binding) => {
+      nativeAvailabilityReads += 1;
+      return (nativeAvailability ?? availabilityFromFixture)(liveRoot, binding);
+    },
+  });
 
   let now = 0;
   const control = createCapturedProgressionControl({
@@ -125,6 +142,7 @@ function makeGame({
         return () => rootListeners.delete(listener);
       },
     },
+    mechanics,
     controls,
     mountSuppression: {
       available: true,
@@ -165,6 +183,7 @@ function makeGame({
     control,
     readCanExpandMechBay: () => control.readCanExpandMechBay(),
     draws,
+    readCounters: () => ({ domActionReads, nativeAvailabilityReads }),
     capturedElementIds: () => controls.capturedElementIds(),
     replaceRoot: () => {
       for (const listener of rootListeners) listener();
@@ -187,19 +206,35 @@ const cityOnly = {
   ],
 };
 
-// --- the offer set is drawn once; power state is restated every cycle for free ----------------
+// --- offers read native mechanics; control bootstrap remains a separate capability ------------
 {
   const game = makeGame({ regions: cityOnly });
   game.root.city.factory = { count: 5, on: 2 };
+  game.root.settings.showCity = true;
+
+  game.control.ensureBuildControls();
+  const bootstrapDraws = game.draws.length;
+  assert.ok(
+    bootstrapDraws > 0,
+    "the separate control sweep establishes on_cap",
+  );
+  const beforeOfferReads = game.readCounters();
 
   const first = game.cycle("city");
   assert.deepEqual([...first.unlocked].sort(), ["city-factory", "city-farm"]);
   assert.deepEqual(first.states.get("city-factory"), { on: 2, off: 3 });
   assert.equal(first.states.has("city-farm"), false);
-  const afterFirst = game.draws.length;
-  assert.ok(afterFirst > 0, "the first sample has to draw");
+  assert.equal(game.draws.length, bootstrapDraws);
+  assert.equal(
+    game.readCounters().domActionReads,
+    beforeOfferReads.domActionReads,
+  );
+  assert.ok(
+    game.readCounters().nativeAvailabilityReads >
+      beforeOfferReads.nativeAvailabilityReads,
+  );
 
-  // The steady state this whole split exists for: a configured building trigger costs no draw.
+  // Every owning read takes a current native semantic sample, with no panel or DOM-row work.
   for (let cycle = 0; cycle < 5; cycle += 1) {
     game.advance(100);
     assert.deepEqual(game.cycle("city").states.get("city-factory"), {
@@ -207,7 +242,7 @@ const cityOnly = {
       off: 3,
     });
   }
-  assert.equal(game.draws.length, afterFirst);
+  assert.equal(game.draws.length, bootstrapDraws);
 
   // Power moving is not a reason to draw, and neither is the built count moving.
   game.root.city.factory.on = 5;
@@ -222,49 +257,53 @@ const cityOnly = {
     on: 5,
     off: 4,
   });
-  assert.equal(game.draws.length, afterFirst);
-
-  // The epoch is deliberately not a complete account of what a region draw reads, so the sample
-  // still ages out. One resample that finds the same offer set doubles the interval before the
-  // next, which is what keeps an idle run's draw rate falling instead of settling at the floor.
-  game.advance(MIN_SAMPLE_AGE_MS);
-  game.cycle("city");
-  const afterAging = game.draws.length;
-  assert.ok(afterAging > afterFirst, "the sample ages out on its own");
-  game.advance(MIN_SAMPLE_AGE_MS);
-  game.cycle("city");
-  assert.equal(game.draws.length, afterAging);
-  game.advance(MIN_SAMPLE_AGE_MS);
-  game.cycle("city");
-  assert.ok(game.draws.length > afterAging);
+  assert.equal(game.draws.length, bootstrapDraws);
+  assert.equal(
+    game.readCounters().domActionReads,
+    beforeOfferReads.domActionReads,
+  );
+  assert.ok(
+    game.readCounters().nativeAvailabilityReads >
+      beforeOfferReads.nativeAvailabilityReads,
+  );
 }
 
-// --- progression is what reopens the panel ------------------------------------------------------
+// --- progression changes the semantic answer without drawing a Building panel -----------------
 {
-  let bankOffered = false;
   const game = makeGame({
-    regions: {
-      [SPACE_TAB_INDEX.city]: () =>
-        bankOffered ? [["city-farm"], ["city-bank"]] : [["city-farm"]],
-    },
+    regions: cityOnly,
+    nativeAvailability: (liveRoot, binding) => ({
+      kind: "value",
+      value:
+        binding === "city-farm" ||
+        (binding === "city-bank" && liveRoot.tech.currency >= 1),
+    }),
   });
   assert.deepEqual([...game.cycle("city").unlocked], ["city-farm"]);
-  const beforeProgress = game.draws.length;
+  const beforeProgress = game.readCounters();
 
-  // Nothing has moved, so nothing is drawn however many cycles run.
+  // The repeated fresh semantic read does no tab discovery or action-row access.
   game.advance(300);
   game.cycle("city");
-  assert.equal(game.draws.length, beforeProgress);
+  assert.equal(game.draws.length, 0);
+  assert.equal(
+    game.readCounters().domActionReads,
+    beforeProgress.domActionReads,
+  );
 
-  // A tech lands and the offer set is resampled on the next read, without waiting out any age.
-  bankOffered = true;
+  // A tech lands and the retained native action now reports a new offer. No row for it exists in
+  // the panel fixture, and no region draw is needed to see it.
   game.root.tech.currency = 1;
   game.advance(10);
   assert.deepEqual([...game.cycle("city").unlocked].sort(), [
     "city-bank",
     "city-farm",
   ]);
-  assert.ok(game.draws.length > beforeProgress);
+  assert.deepEqual(
+    game.readCounters().domActionReads,
+    beforeProgress.domActionReads,
+  );
+  assert.deepEqual(game.draws, []);
 }
 
 // --- the build-control sweep follows the game's own tab visibility ------------------------------
@@ -300,6 +339,14 @@ const cityOnly = {
   game.draws.length = 0;
   game.control.ensureBuildControls();
   assert.deepEqual(game.draws, []);
+
+  // Repeated offer reads after the capability sweep never repeat its region draws or read DOM rows.
+  const drawCountAfterSweep = game.draws.length;
+  const domReadsAfterSweep = game.readCounters().domActionReads;
+  assert.equal(game.cycle("city").unlocked.has("city-factory"), true);
+  assert.equal(game.cycle("city").unlocked.has("city-factory"), true);
+  assert.equal(game.draws.length, drawCountAfterSweep);
+  assert.equal(game.readCounters().domActionReads, domReadsAfterSweep);
 
   // Progression reopens every shown scope. The newly offered City control is captured even though
   // the player remains parked on Research.
@@ -342,13 +389,16 @@ const cityOnly = {
 {
   const game = makeGame({ regions: cityOnly });
   game.root.city.factory = { count: 4, on: 1 };
+  game.root.settings.showCity = true;
+  game.control.ensureBuildControls();
   assert.deepEqual(game.cycle("city").states.get("city-factory"), {
     on: 1,
     off: 3,
   });
   const drawn = game.draws.length;
-  // The player opens the tab: the game rebinds the row and the capture bumps its generation. The
-  // cached catalog still holds the handle it was taken at, and nothing about that forces a draw.
+  // Progression redraws the control and bumps its generation. The semantic offer read after that
+  // control capture does not cause another draw.
+  game.root.tech.primitive = 2;
   game.control.ensureBuildControls();
   game.draws.length = 0;
   game.advance(200);

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { createCapturedProgressionControl } from "../src/bootstrap/captured-progression-control.ts";
 import { createCapturedResourceDemand } from "../src/adapters/evolve/economy/resources/captured-resource-demand.ts";
 import { withControlCaptureAuthority } from "./control-capture-fixture.mjs";
+import { makeCapturedBuildingMechanics } from "./captured-building-test-fixtures.mjs";
 
 const emptyArpaMechanics = Object.freeze({
   ensureCaptured: () => ({ kind: "captured" }),
@@ -363,7 +364,7 @@ assert.equal(researchControl.sampleOfferedTechs(), undefined);
 assert.equal(researchControl.readGrantedTechs(), undefined);
 
 // Storage's build targets share the build-policy/settings authority but are filtered through the
-// game's drawn unlock catalog. A managed, locked row and an unlocked, disabled row do not reserve
+// native semantic offer catalog. A managed unavailable action and an offered disabled action do not reserve
 // capacity; every unlocked managed candidate does, whether or not construction is saving for it.
 {
   const buildSettings = {
@@ -371,17 +372,17 @@ assert.equal(researchControl.readGrantedTechs(), undefined);
     spaceTabs: 0,
     animated: true,
     autoBuild: true,
-    "batcity-disabled": false,
+    "batcity-bank": false,
   };
   const buildRoot = {
     settings: buildSettings,
     race: {},
-    tech: {},
+    tech: { currency: 1 },
     city: {
       foundry: { count: 0 },
-      refinery: { count: 0 },
-      locked: { count: 0 },
-      disabled: { count: 0 },
+      metal_refinery: { count: 0 },
+      library: { count: 0 },
+      bank: { count: 0 },
     },
     resource: {
       Crates: { amount: 5, max: 5, display: true },
@@ -390,27 +391,28 @@ assert.equal(researchControl.readGrantedTechs(), undefined);
       Alloy: { amount: 0, max: 100, display: true, stackable: true },
     },
   };
-  let unlockedRows = [
-    { id: "city-foundry" },
-    { id: "city-refinery" },
-    { id: "city-disabled" },
-  ];
   const buildRootListeners = [];
-  let buildingCatalogNow = 0;
   let buildingCatalogDraws = 0;
+  let semanticAvailabilityReads = 0;
+  let invalidNativeAnswer = false;
   const buildIds = [
     "civTabs",
     "spaceTabs",
     "city-foundry",
-    "city-refinery",
-    "city-locked",
-    "city-disabled",
+    "city-metal_refinery",
+    "city-library",
+    "city-bank",
   ];
+  const offeredBindings = new Set([
+    "city-foundry",
+    "city-metal_refinery",
+    "city-bank",
+  ]);
   const buildActs = new Map([
     ["city-foundry", buildRoot.city.foundry],
-    ["city-refinery", buildRoot.city.refinery],
-    ["city-locked", buildRoot.city.locked],
-    ["city-disabled", buildRoot.city.disabled],
+    ["city-metal_refinery", buildRoot.city.metal_refinery],
+    ["city-library", buildRoot.city.library],
+    ["city-bank", buildRoot.city.bank],
   ]);
   const buildControl = createCapturedProgressionControl({
     rootState: {
@@ -439,14 +441,27 @@ assert.equal(researchControl.readGrantedTechs(), undefined);
     drawnActions: {
       exists: (selector) =>
         ["#city", "#space", "#outerSol", "#interstellar"].includes(selector),
-      read: (selector) => {
+      read: () => {
         buildingCatalogDraws++;
-        return selector === "#city .action" ? unlockedRows : [];
+        return [];
       },
     },
+    mechanics: makeCapturedBuildingMechanics(buildRoot, {
+      availability: (liveRoot, binding) => {
+        semanticAvailabilityReads += 1;
+        if (invalidNativeAnswer && binding === "city-farm")
+          return { kind: "invalid" };
+        return {
+          kind: "value",
+          value:
+            offeredBindings.has(binding) &&
+            (binding !== "city-foundry" || liveRoot.tech.currency !== 0),
+        };
+      },
+    }),
     arpa: emptyArpaMechanics,
     readSettings: () => buildSettings,
-    nowMs: () => buildingCatalogNow,
+    nowMs: () => 0,
   });
   const priced = [];
   assert.equal(buildControl.readEstablishedStorageBuildTargets(), undefined);
@@ -457,15 +472,15 @@ assert.equal(researchControl.readGrantedTechs(), undefined);
   );
   assert.deepEqual(
     buildControl.readManagedBuildTargets().map(({ elementId }) => elementId),
-    ["city-foundry", "city-refinery"],
-    "production build policy intersects cumulative controls with the drawn city rows",
+    ["city-foundry", "city-metal_refinery"],
+    "production build policy intersects managed controls with semantic offers",
   );
   assert.equal(
     buildControl.readCapturedBuildingUnlocked("city-foundry", "city"),
     true,
   );
   assert.equal(
-    buildControl.readCapturedBuildingUnlocked("city-locked", "city"),
+    buildControl.readCapturedBuildingUnlocked("city-library", "city"),
     false,
   );
   assert.equal(
@@ -484,9 +499,9 @@ assert.equal(researchControl.readGrantedTechs(), undefined);
         const amount =
           elementId === "city-foundry"
             ? 500
-            : elementId === "city-refinery"
+            : elementId === "city-metal_refinery"
               ? 650
-              : elementId === "city-disabled"
+              : elementId === "city-bank"
                 ? 2000
                 : 3000;
         return { cost: { Alloy: amount }, pool: undefined };
@@ -494,13 +509,13 @@ assert.equal(researchControl.readGrantedTechs(), undefined);
     },
     readSettings: () => buildSettings,
   }).sample();
-  assert.deepEqual(priced, ["city-foundry", "city-refinery"]);
+  assert.deepEqual(priced, ["city-foundry", "city-metal_refinery"]);
   assert.equal(buildDemand.storageRequired("Alloy"), 669.5);
   assert.deepEqual(
     buildControl
       .readEstablishedStorageBuildTargets()
       .map(({ elementId }) => elementId),
-    ["city-foundry", "city-refinery"],
+    ["city-foundry", "city-metal_refinery"],
     "established offers remain readable without discovery",
   );
   const broadBuildingRegions = new Set(["city", "space", "interstellar"]);
@@ -514,11 +529,12 @@ assert.equal(researchControl.readGrantedTechs(), undefined);
     buildControl
       .readEstablishedStorageBuildTargets()
       .map(({ elementId }) => elementId),
-    ["city-foundry", "city-refinery"],
+    ["city-foundry", "city-metal_refinery"],
     "established construction demand survives a narrower trigger catalog",
   );
   buildIds.splice(-2);
   const drawsBeforeEstablishedLookup = buildingCatalogDraws;
+  const availabilityReadsBeforeEstablishedLookup = semanticAvailabilityReads;
   assert.equal(
     buildControl.readEstablishedBuildingUnlocks(broadBuildingRegions).unlocked,
     broadBuildingSample.unlocked,
@@ -540,25 +556,37 @@ assert.equal(researchControl.readGrantedTechs(), undefined);
     "unsampled coverage is unavailable",
   );
   assert.equal(buildingCatalogDraws, drawsBeforeEstablishedLookup);
-  buildingCatalogNow = 1_000;
+  assert.equal(
+    semanticAvailabilityReads,
+    availabilityReadsBeforeEstablishedLookup,
+  );
+  invalidNativeAnswer = true;
+  assert.equal(buildControl.readBuildingUnlocks(new Set(["city"])), undefined);
   assert.equal(
     buildControl.readEstablishedBuildingUnlocks(broadBuildingRegions),
     undefined,
+    "an invalid current read cannot fall back to an older compatible superset",
   );
+  invalidNativeAnswer = false;
+  const readsBeforeMissingSnapshot = semanticAvailabilityReads;
+  buildControl.resetBuildingUnlockSample();
   assert.equal(
-    buildingCatalogDraws,
-    drawsBeforeEstablishedLookup,
-    "expiry never discovers",
+    buildControl.readEstablishedBuildingUnlocks(broadBuildingRegions),
+    undefined,
+    "an established read never creates a missing semantic sample",
   );
+  assert.equal(semanticAvailabilityReads, readsBeforeMissingSnapshot);
+  assert.equal(buildingCatalogDraws, drawsBeforeEstablishedLookup);
   const refreshedBroadBuildingSample =
     buildControl.readBuildingUnlocks(broadBuildingRegions);
-  const drawsBeforeSupersetFallback = buildingCatalogDraws;
+  const readsBeforeEstablishedSuperset = semanticAvailabilityReads;
   assert.equal(
     buildControl.readEstablishedBuildingUnlocks(new Set(["city"])).unlocked,
     refreshedBroadBuildingSample.unlocked,
-    "an expired exact scope falls back to one fresh superset",
+    "one fresh semantic superset can answer a narrower request",
   );
-  assert.equal(buildingCatalogDraws, drawsBeforeSupersetFallback);
+  assert.equal(semanticAvailabilityReads, readsBeforeEstablishedSuperset);
+  assert.equal(buildingCatalogDraws, drawsBeforeEstablishedLookup);
   buildIds.push("portal-relay");
   assert.equal(
     buildControl.readEstablishedStorageBuildTargets(),
@@ -575,7 +603,7 @@ assert.equal(researchControl.readGrantedTechs(), undefined);
     undefined,
     "independent scopes are never combined into a synthetic catalog",
   );
-  unlockedRows = [{ id: "city-refinery" }];
+  buildRoot.tech.currency = 0;
   for (const listener of buildRootListeners) listener();
   assert.equal(
     buildControl.readEstablishedBuildingUnlocks(new Set(["city"])),
@@ -586,15 +614,17 @@ assert.equal(researchControl.readGrantedTechs(), undefined);
     undefined,
   );
   assert.deepEqual(
-    buildControl.readManagedBuildTargets().map(({ elementId }) => elementId),
-    ["city-refinery"],
-    "an old captured control leaves normal Auto Build after the new draw omits it",
+    buildControl
+      .readBuildingUnlocks(new Set(["city"]))
+      .unlocked.has("city-foundry"),
+    false,
+    "a fresh native sample observes changed root facts without a panel draw",
   );
   assert.deepEqual(
     buildControl
       .readUnlockedStorageBuildTargets()
       .map(({ elementId }) => elementId),
-    ["city-refinery"],
+    ["city-metal_refinery"],
   );
 }
 
@@ -648,6 +678,15 @@ assert.equal(researchControl.readGrantedTechs(), undefined);
         ];
       },
     },
+    mechanics: makeCapturedBuildingMechanics(titanRoot, {
+      availability: (_liveRoot, binding) => ({
+        kind: "value",
+        value:
+          binding === "space-titan_quarters" ||
+          (binding === "space-titan_mine" &&
+            titanRoot.space.titan_quarters.count > 0),
+      }),
+    }),
     arpa: emptyArpaMechanics,
     readSettings: () => ({
       autoBuild: true,
@@ -668,7 +707,7 @@ assert.equal(researchControl.readGrantedTechs(), undefined);
     [...titanControl.readBuildingUnlocks(regions).unlocked],
     ["space-titan_quarters"],
   );
-  assert.equal(titanDraws, 1);
+  assert.equal(titanDraws, 0, "Building offers do not read drawn action rows");
   titanRoot.space.titan_quarters.count++;
   assert.equal(JSON.stringify(titanRoot.tech), techBeforeBuild);
   titanControl.invalidateConstructionOffers();
@@ -682,8 +721,8 @@ assert.equal(researchControl.readGrantedTechs(), undefined);
   const postBuild = titanControl.readBuildingUnlocks(regions);
   assert.equal(
     titanDraws,
-    2,
-    "post-Build discovery redraws the authoritative Building panel",
+    0,
+    "post-Construction semantic sampling does not redraw the Building panel",
   );
   assert.equal(postBuild.unlocked.has("space-titan_mine"), true);
   assert.deepEqual(
@@ -712,8 +751,8 @@ assert.equal(researchControl.readGrantedTechs(), undefined);
   );
   assert.equal(
     titanDraws,
-    2,
-    "Power's demand reads the established catalog without discovery",
+    0,
+    "Power's demand reads the established semantic catalog without DOM rows",
   );
 }
 

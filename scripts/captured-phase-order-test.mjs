@@ -4,6 +4,7 @@ import {
   assertRunsBefore,
   runCapturedPhaseOrderCycle,
 } from "./captured-phase-order-fixture.mjs";
+import { makeCapturedBuildingMechanics } from "./captured-building-test-fixtures.mjs";
 import { element } from "./dom-fixture.mjs";
 
 const GALAXY_BUY_IDS = [
@@ -846,6 +847,12 @@ function runProgressionChain({ activeTrigger }) {
 
   return runCapturedPhaseOrderCycle({
     root,
+    mechanics: makeCapturedBuildingMechanics(root, {
+      availability: (_liveRoot, binding) => ({
+        kind: "value",
+        value: binding === "city-foundry",
+      }),
+    }),
     mount: true,
     documentSetup: ({ body }) => {
       body.append(cityPanel, portalPanel, researchPanel);
@@ -1261,8 +1268,8 @@ function runStorageReplicatorDemand({ offeredTechnology }) {
 
 // --- Storage's technology target, then Replicator's refreshed demand ---------------------------
 const storageDemand = runStorageReplicatorDemand({ offeredTechnology: true });
-// Only the Building-unlock discovery pass reports anything here, and it reports the same
-// unavailable tab control every other fixture in this file leaves uncaptured. No phase stopped.
+// This fixture has no captured native structure catalog, so its Building offer sample fails closed.
+// The disabled optional input does not stop Storage's technology-target phase.
 assert.deepEqual(
   storageDemand.errors.filter((message) => message.includes("stopped:")),
   [],
@@ -1271,9 +1278,9 @@ assert.deepEqual(
 assert.deepEqual(
   storageDemand.errors,
   [
-    "progression skipped building-unlocks city: no captured control for #mainColumn div.content",
+    "progression skipped building-unlocks *: the native structure catalog is unavailable",
   ],
-  "Storage must reach its technology target source with the Building catalog unavailable",
+  "Storage must reach its technology target source with semantic Building authority unavailable",
 );
 const demandCycles = storageDemand.cycleTrace.map((entry) => ({
   cycle: entry.cycle,
@@ -2149,13 +2156,20 @@ function runPrestigeTraitChain() {
     // takes the shape the runtime ends that cycle on, and the third is where the four phases behind
     // the Shapeshift phase get their turn.
     cycles: 3,
-    // The prestige branch reads its Building row out of the panel the interstellar region's own
-    // draw leaves on screen, so this is the one scenario in the file that has to let tabs draw.
+    // The prestige branch exercises the interstellar phase's native panel behavior; this is the
+    // one scenario in the file that has to let its tab control bootstrap draw.
     mount: true,
-    // No managed Building at all, so Power reports its retained unavailable cycle answer through
-    // the production error path rather than discovering a panel.
+    // Keep Power's production breakdown unavailable while giving prestige the native semantic
+    // offer it needs for Ascension. Building reads must not discover the interstellar panel.
     mechanics: {
-      readStructures: () => undefined,
+      ...makeCapturedBuildingMechanics(root, {
+        availability: (_liveRoot, binding) => ({
+          kind: "value",
+          value: binding === "interstellar-ascend",
+        }),
+      }),
+      readPowerOrder: () => ({ kind: "invalid" }),
+      readSupportOrder: () => ({ kind: "invalid" }),
       readProductionBreakdown: () => undefined,
     },
     logEvents: [
@@ -2367,12 +2381,12 @@ assert.deepEqual(
   [],
   JSON.stringify(chain.errors),
 );
-// Power reports one persistent unavailable reason and discovers nothing; every other phase
-// either acted or stood down without reporting. Nothing else is tolerated here.
+// Power reports its unavailable cycle, and the Building offer read reports missing semantic
+// authority. Every other phase either acted or stood down without reporting.
 assert.deepEqual(
   chain.errors,
   [
-    "autoPower: captured-power-cycle-unavailable: captured structures unavailable",
+    "autoPower: captured-power-cycle-unavailable: production breakdown unavailable",
   ],
   JSON.stringify(chain.errors),
 );

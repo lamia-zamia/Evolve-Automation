@@ -23,10 +23,10 @@
  * requirement of 1, a max cost of 0); with commitments it answers what the compatibility ordering
  * could never give its triggers.
  *
- * It also answers the operands the root cannot supply but a drawn panel can. The game's grant
- * keys live in its private action catalog, so `ResearchUnlocked` and `ResearchComplete` are read
- * from the research panel the cycle already drew; `ProjectUnlocked` is read the same way from the
- * A.R.P.A. panel, and `BuildingUnlocked` from the region panels the buildings are drawn into.
+ * It also answers the operands the root cannot supply directly. The game's grant keys live in its
+ * private action catalog, so `ResearchUnlocked` and `ResearchComplete` use the research panel the
+ * cycle already drew; `ProjectUnlocked` uses the A.R.P.A. panel, and `BuildingUnlocked` uses the
+ * retained native structure mechanics.
  * `BuildingAffordable` is the game's own `checkMaxCosts` over an already-adjusted cost the cycle
  * priced, and `BuildingCost` reads one entry of that same price. Those come in through
  * `CapturedConditionContext`, and a condition naming one goes
@@ -70,18 +70,18 @@ export interface CapturedConditionContext {
   /** Element ids the A.R.P.A. panel drew, e.g. `arpalhc`. */
   readonly unlockedProjects?: ReadonlySet<string>;
   /**
-   * The drawn building rows, with the regions the sample speaks for. Both halves travel together:
-   * the ids alone cannot say whether a missing one was absent from a panel or in a panel nobody
-   * drew.
+   * Offered native Building actions, with the regions the semantic sample speaks for. Both halves
+   * travel together so an unavailable action remains distinct from an unsampled region.
    */
   readonly buildingUnlocks?: {
     readonly unlocked: ReadonlySet<string>;
     readonly regions: ReadonlySet<string>;
     /**
-     * The on/off counts of the sampled rows that drew a power switch. A drawn row missing from
-     * here has no switch, which is the game's own answer and reads as zero of each; a row in a
-     * region nobody drew has no answer at all.
+     * Native switchable actions, independent of whether their captured `on_cap()` control can
+     * currently be invoked.
      */
+    readonly switches: ReadonlySet<string>;
+    /** Live counts when `on_cap()` is currently available; absence is unanswered for a switch. */
     readonly states: ReadonlyMap<string, Readonly<{ on: number; off: number }>>;
   };
   /**
@@ -379,12 +379,10 @@ function queueLength(root: unknown, key: string): number | undefined {
 }
 
 /**
- * One half of a building's rendered power switch. The switch exists only for a building whose own
- * gate passed — `switchable()`, or `powered` with `high_tech >= 2` and `checkPowerRequirements` —
- * and every input to that gate is the module-lexical action definition, so the drawn row is the
- * captured answer: a row the region pass sampled without a switch has no state, and the script's
- * own reader reports zero for exactly that case. A building in a region nobody drew, and one the
- * panel never offered, stay unanswered rather than reading as switched off.
+ * One half of a building's native power switch. The switch exists only for a building whose own
+ * gate passed — `switchable()`, or `powered` with `high_tech >= 2` and
+ * `checkPowerRequirements`. A native action without a switch reports zero; an action with a switch
+ * but no current `on_cap()` result stays unanswered.
  *
  * The off count is the game's own `on_cap() - on` rather than `count - on`, so a segmented
  * megastructure — a single machine the switch caps at one — reports the game's figure instead of
@@ -403,6 +401,11 @@ function switchedCount(
     return undefined;
   }
   if (!sample.unlocked.has(argument)) return undefined;
+  // A native switch with no current count means its separate on_cap capability is unavailable;
+  // do not report that as an unswitched (zero) building.
+  if (sample.switches?.has(argument) && !sample.states.has(argument)) {
+    return undefined;
+  }
   return sample.states.get(argument)?.[half] ?? 0;
 }
 
@@ -750,10 +753,8 @@ function readBoolean(
       return context?.unlockedProjects?.has(argument);
     }
     case "BuildingUnlocked": {
-      // A building row is drawn for exactly the buildings that passed the game's own offer gate,
-      // and it stays drawn once built, so panel membership is the answer. Regions are per-sub-tab
-      // and each costs a pass, so only the sampled ones can be spoken for: an id under any other
-      // region is unanswered rather than reported as locked.
+      // Captured native availability is the game's answer. Only regions with a valid semantic
+      // sample can be spoken for; other regions stay unanswered rather than being reported locked.
       if (typeof argument !== "string") return undefined;
       const parts = splitActionId(argument);
       if (parts === undefined) return undefined;
@@ -774,8 +775,8 @@ function readBoolean(
       return costFitsStorage(root, price.cost, { pool: price.pool });
     }
     case "BuildingClickable": {
-      // `isClickable()` is the action row's own conjunction. A locked building is a real false
-      // from the drawn row; an unlocked row still needs both its current cost and the queue oracle.
+      // `isClickable()` is the action's own conjunction. A locked building is a real false from
+      // native availability; an offered action still needs its current cost and queue oracle.
       if (typeof argument !== "string") return undefined;
       const parts = splitActionId(argument);
       const sample = context?.buildingUnlocks;

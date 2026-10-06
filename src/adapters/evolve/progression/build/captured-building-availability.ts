@@ -157,8 +157,8 @@ export function readCapturedSemanticBuildingStates(
   const structures = mechanics.readStructures();
   if (structures === undefined) return undefined;
   const result: CapturedBuildingState[] = [];
-  // The complete registry defines Power identities and order. Rendered controls must not
-  // promote unmanaged actions or move already drawn buildings ahead of unseen buildings.
+  // The complete registry defines Power identities and order. Controls do not promote unmanaged
+  // actions or reorder native structures.
   const semanticCatalog = readCapturedBuildingEntries(
     root,
     { ...controls, capturedElementIds: () => [] },

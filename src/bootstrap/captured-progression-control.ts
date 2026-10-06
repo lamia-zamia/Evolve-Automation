@@ -54,15 +54,13 @@ import type {
   BuildingUnlockCatalog,
   BuildingUnlockSample,
 } from "../ports/game-building-unlocks.ts";
-import {
-  createCapturedBuildingUnlocks,
-  sameBuildingUnlockCatalog,
-} from "../adapters/evolve/progression/build/captured-building-unlocks.ts";
+import { createCapturedBuildingUnlocks } from "../adapters/evolve/progression/build/captured-building-unlocks.ts";
 import { createCapturedBuildingSwitchStates } from "../adapters/evolve/progression/build/captured-building-switch-states.ts";
 import type { CapturedArpaMechanics } from "../ports/captured-arpa-mechanics.ts";
 import type { GameMountSuppression } from "../ports/game-mount-suppression.ts";
 import type { GamePanelWorkspace } from "../ports/game-panel-workspace.ts";
 import type { GameRootStateSource } from "../ports/game-root-state.ts";
+import type { CapturedGameMechanics } from "../ports/captured-game-mechanics.ts";
 import type { GameKeyboardHandlersPort } from "../ports/game-keyboard-handlers.ts";
 import type { GameKeyStateReader } from "../ports/game-key-state.ts";
 import type {
@@ -84,6 +82,8 @@ import { CAPTURED_MECH_BUILDINGS } from "../adapters/evolve/progression/build/ca
 export interface CapturedProgressionControlDependencies {
   readonly readMechPowerSupplyHold?: () => boolean | undefined;
   readonly rootState: GameRootStateSource;
+  /** Retained native action mechanics used as Building offer authority. */
+  readonly mechanics: CapturedGameMechanics;
   readonly controls: GameControlRegistry;
   readonly mountSuppression: GameMountSuppression;
   readonly panels: GamePanelWorkspace;
@@ -125,7 +125,7 @@ export interface CapturedProgressionControlDependencies {
     resourceIds: readonly string[],
     resourceScopes?: readonly BuildResourceScope[],
   ) => Readonly<Record<string, number>> | undefined;
-  /** Injected clock, for the sampled-panel caches' maximum age. */
+  /** Injected clock for discovery scopes that still retain drawn samples. */
   readonly nowMs: () => number;
   readonly diagnostics?: TickDiagnostics | undefined;
   /** Reports candidate and executor diagnostics when explicitly enabled by the caller. */
@@ -139,7 +139,7 @@ export interface CapturedProgressionControlDependencies {
 export interface CapturedProgressionControl {
   /** Current progression epoch, for retrying conditional discoveries after a game-state change. */
   readonly readProgressionEpoch: () => string;
-  /** Clears the prior offer observation and panel scopes for one enabled, processed cycle. */
+  /** Clears prior offer observations and discovery scopes for one processed cycle. */
   readonly beginProcessedCycle: () => void;
   readonly runConstructionCycle: () => CommandExecutionOutcome;
   readonly establishConstructionOrdering: () => boolean;
@@ -167,8 +167,8 @@ export interface CapturedProgressionControl {
    */
   readonly resetProjectSample: () => void;
   /**
-   * The drawn building rows for the named regions, sampled once per cycle. Each region costs a
-   * panel draw, so a caller asks only for what it needs and an unsampled region stays unanswered.
+   * Reads native semantic availability for the named regions and establishes that current offer
+   * observation. It does not draw a panel.
    */
   readonly readBuildingUnlocks: (
     regions: ReadonlySet<string>,
@@ -215,19 +215,10 @@ export interface CapturedProgressionControl {
   ) => ReadonlyMap<string, boolean | undefined>;
 }
 
-/**
- * The sampled panels that hold their answer between draws. Each is one game panel, named once here
- * so a caller cannot invent a second spelling of the same scope.
- */
+/** Research and A.R.P.A. offers still need discovery scopes; Building offers use mechanics. */
 const RESEARCH_SCOPE = "research";
 const RESEARCH_GRANTED_SCOPE = "research+granted";
 const ARPA_SCOPE = "arpa";
-/**
- * The offer set of one combination of building regions. The regions a caller asks for come from
- * the configured triggers, so this is one scope in practice; keying by them keeps a caller that
- * asks for a region an earlier one did not from being told that region is unanswerable.
- */
-const BUILDING_UNLOCK_SCOPE = "building-unlocks";
 /** The one-off sweep that makes the civilization sub-tabs bind their build controls. */
 const BUILD_CONTROLS_SCOPE = "build-controls";
 
@@ -275,6 +266,7 @@ export function createCapturedProgressionControl(
 ): CapturedProgressionControl {
   const {
     rootState,
+    mechanics,
     controls,
     mountSuppression,
     panels,
@@ -308,9 +300,8 @@ export function createCapturedProgressionControl(
     panels,
     diagnostics,
   });
-  // Which panel samples may be reused, and for how long. Every entry here is a `loadTab` draw that
-  // was otherwise paid for on every tick to re-derive an answer that had not moved;
-  // `discovery-scope-cache.ts` owns the age policy that bounds a stale one.
+  // Research and A.R.P.A. offer samples may be reused within their discovery scopes. Building
+  // offers are read directly from retained native mechanics for each owning observation.
   const epoch = createProgressionEpochReader(rootState);
   const buildCapacity =
     dependencies.keyboard === undefined || dependencies.keyState === undefined
@@ -364,9 +355,8 @@ export function createCapturedProgressionControl(
       );
       return false;
     };
-    // Same reason as the unlock catalog: without the tab component's own render there is no
-    // region container for the draw to fill, so `vBind` never reaches the action components and
-    // the sweep captures nothing at all.
+    // The component render creates the region container and lets `vBind` bind native action
+    // controls. This guarded sweep exists for mutation and on_cap capabilities, not offer reads.
     const civilizationPanel = MAIN_TAB_PANELS[MAIN_TAB_INDEX.civilization];
     if (civilizationPanel === undefined) {
       onSkipped?.("build-discovery", "civilization panel is unavailable");
@@ -521,6 +511,7 @@ export function createCapturedProgressionControl(
     scopes.invalidate(RESEARCH_GRANTED_SCOPE);
     scopes.invalidate(ARPA_SCOPE);
     resetProjectSample();
+    resetBuildingUnlockSample();
   };
   // Every field of a row now comes from live game state, so an established sample and a fresh one
   // are the same read; the scope only decides whether a caller may reuse the current cycle's sample.
@@ -562,8 +553,7 @@ export function createCapturedProgressionControl(
   };
   const buildingUnlocks = createCapturedBuildingUnlocks({
     rootState,
-    discovery,
-    drawnActions,
+    mechanics,
     controls,
     diagnostics,
     ...(onSkipped === undefined
@@ -571,8 +561,6 @@ export function createCapturedProgressionControl(
       : {
           onSkipped: (region: string, reason: string) =>
             onSkipped(`building-unlocks ${region}`, reason),
-          onUnlocatedSwitch: (elementId: string, detail: string) =>
-            onSkipped(`building-unlocks ${elementId}`, detail),
         }),
   });
   const buildingSwitchStates = createCapturedBuildingSwitchStates({
@@ -580,16 +568,22 @@ export function createCapturedProgressionControl(
     controls,
     diagnostics,
   });
-  // Every requested region set owns its own scope, so a later caller asking for a region the first
-  // one did not request takes a fresh pass instead of being told that region is unanswerable, and a
-  // narrow pass cannot displace the broad one that established the build catalog.
-  const sampledBuildingUnlockScopes = new Map<string, ReadonlySet<string>>();
+  // These semantic snapshots come from one mechanics read each and live only until a processed
+  // cycle, root, or Construction invalidation boundary. They never share DiscoveryScopeCache's TTL.
+  const establishedBuildingOffers = new Map<
+    string,
+    Readonly<{
+      regions: ReadonlySet<string>;
+      epoch: string;
+      catalog: Readonly<BuildingUnlockCatalog>;
+    }>
+  >();
+  const buildingOfferScopeKey = (regions: ReadonlySet<string>) =>
+    [...regions].sort().join(",");
   const resetBuildingUnlockSample = () => {
-    sampledBuildingUnlockScopes.clear();
+    establishedBuildingOffers.clear();
   };
   const invalidateConstructionOffers = () => {
-    for (const scope of sampledBuildingUnlockScopes.keys())
-      scopes.invalidate(scope);
     resetBuildingUnlockSample();
     resetProjectSample();
   };
@@ -600,45 +594,54 @@ export function createCapturedProgressionControl(
     resetBuildingUnlockSample();
   });
   const readBuildingUnlocks = (regions: ReadonlySet<string>) => {
-    const key = [...regions].sort().join(",");
-    const scope = `${BUILDING_UNLOCK_SCOPE} ${key}`;
-    sampledBuildingUnlockScopes.delete(scope);
-    sampledBuildingUnlockScopes.set(scope, new Set(regions));
-    // Which buildings are on offer is the only half a draw can answer, so it is the only half
-    // held between draws. The switch counts are restated from the live root and the captured
-    // `on_cap` afterwards, which is why a power change costs nothing and invalidates nothing.
-    const catalog = scopes.read(
-      scope,
-      () => buildingUnlocks.read(regions),
-      sameBuildingUnlockCatalog,
+    const key = buildingOfferScopeKey(regions);
+    const catalog = buildingUnlocks.read(regions);
+    if (catalog === undefined) {
+      // A failed current answer cannot fall back to a prior exact or superset observation for
+      // any affected region. Unrelated established regions remain independently readable.
+      for (const [establishedKey, sample] of establishedBuildingOffers) {
+        if ([...regions].some((region) => sample.regions.has(region))) {
+          establishedBuildingOffers.delete(establishedKey);
+        }
+      }
+      return undefined;
+    }
+    establishedBuildingOffers.delete(key);
+    establishedBuildingOffers.set(
+      key,
+      Object.freeze({
+        regions: new Set(regions),
+        epoch: epoch.read(),
+        catalog,
+      }),
     );
-    return catalog === undefined
-      ? undefined
-      : Object.freeze({
-          unlocked: catalog.unlocked,
-          regions: catalog.regions,
-          states: buildingSwitchStates.read(catalog),
-        });
+    return Object.freeze({
+      unlocked: catalog.unlocked,
+      regions: catalog.regions,
+      switches: new Set(catalog.switches.keys()),
+      states: buildingSwitchStates.read(catalog),
+    });
   };
   const readEstablishedBuildingUnlocks = (regions: ReadonlySet<string>) => {
-    const candidates = [...sampledBuildingUnlockScopes].reverse();
-    // One scope, one observation: an exact requested set wins over a superset, and independently
-    // sampled regions are never joined into a catalog nobody drew.
+    const candidates = [...establishedBuildingOffers.values()].reverse();
+    const currentEpoch = epoch.read();
+    // One semantic observation answers one compatible region set; independently sampled regions
+    // are never combined into a catalog no single mechanics read established.
     for (const exactOnly of [true, false]) {
-      for (const [scope, requestedRegions] of candidates) {
+      for (const sample of candidates) {
+        const requestedRegions = sample.regions;
         if (
           (requestedRegions.size === regions.size) !== exactOnly ||
           [...regions].some((region) => !requestedRegions.has(region))
         )
           continue;
-        const catalog = scopes.peek<Readonly<BuildingUnlockCatalog>>(scope);
-        if (
-          catalog !== undefined &&
-          [...regions].every((region) => catalog.regions.has(region))
-        ) {
+        if (sample.epoch !== currentEpoch) continue;
+        const catalog = sample.catalog;
+        if ([...regions].every((region) => catalog.regions.has(region))) {
           return Object.freeze({
             unlocked: catalog.unlocked,
             regions: catalog.regions,
+            switches: new Set(catalog.switches.keys()),
             states: buildingSwitchStates.read(catalog),
           });
         }
@@ -810,8 +813,8 @@ export function createCapturedProgressionControl(
   };
   const readEstablishedStorageBuildTargets = () => {
     const gameSettings = readProperty(rootState.readRoot(), "settings");
-    // Lazy game starts have no selected main tab yet, so no region's drawn unlock state can be
-    // trusted. The storage candidate sample is empty until `settings.civTabs` exists.
+    // Lazy game starts have not initialized the main-tab setting, so the captured build policy is
+    // not established yet. This gate does not determine semantic offer membership.
     if (
       !isRecord(gameSettings) ||
       typeof gameSettings[MAIN_TAB_SETTING] !== "number"
@@ -821,9 +824,9 @@ export function createCapturedProgressionControl(
     const policy = readEstablishedBuildPolicy();
     if (policy === undefined) return undefined;
     const targets = policy.buildings;
-    // The captured policy reads one authoritative region catalog and filters its own candidates
-    // through it, so there is nothing left to re-check; only a manager-provided policy needs the
-    // drawn offers again, and narrowing the catalog for it would swap that authority mid-read.
+    // The captured policy reads one authoritative semantic region catalog and filters its own
+    // candidates through it. A manager-provided policy needs that established catalog rechecked;
+    // narrowing the request mid-read would swap its authority.
     if (getBuildingManager === undefined) return targets;
     if (targets.length === 0) return targets;
     const regions = new Set(targets.map((target) => target.region));
@@ -846,8 +849,8 @@ export function createCapturedProgressionControl(
       return Object.freeze([]);
     ensureBuildControls();
     const targets = readPolicy().buildings;
-    // The captured policy needs every region it could offer from, including the ones this cycle
-    // drew no candidates for; narrowing the sample would leave later exactness checks unanswered.
+    // The captured policy needs every candidate region at once; a narrower semantic sample would
+    // leave later established reads without compatible coverage.
     if (getBuildingManager !== undefined && targets.length > 0)
       readBuildingUnlocks(new Set(targets.map((target) => target.region)));
     return readEstablishedStorageBuildTargets() ?? Object.freeze([]);
@@ -855,9 +858,9 @@ export function createCapturedProgressionControl(
 
   /**
    * Mirrors `src/adapters/evolve/combat/mech.ts`'s `canExpandBay` gate using captured facts. The
-   * game owns the offer and adjusted price; managed targets own the script's auto-build switches
-   * and cap, `checkAffordable(..., true)` is shared as `costFitsStorage`, and purifier switch state
-   * comes from the game's drawn row.
+   * game owns the semantic offer and adjusted price; managed targets own the script's auto-build
+   * switches and cap, `checkAffordable(..., true)` is shared as `costFitsStorage`, and purifier
+   * switch state comes from the root plus its captured native `on_cap()` control.
    */
   function readCanExpandMechBay(): boolean | undefined {
     return readCapturedMechBayExpansion(false);

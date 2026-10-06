@@ -888,6 +888,7 @@ export function startCapturedRuntime({
   const progression = createCapturedProgressionControl({
     readMechPowerSupplyHold: mechSupplyReservation.readPowerSupplyHold,
     rootState: pageCapture.rootState,
+    mechanics: pageCapture.mechanics,
     controls: pageCapture.controls,
     mountSuppression: pageCapture.mountSuppression,
     panels,
@@ -2860,7 +2861,7 @@ export function startCapturedRuntime({
         isEnabled(settings, "autoBuild") ||
         isEnabled(settings, "autoStorage")
       ) {
-        runPhase("construction demand discovery", () => {
+        runPhase("construction demand preparation", () => {
           progression.readUnlockedStorageBuildTargets();
           refreshDiscoveredSettings();
         });
@@ -2878,8 +2879,8 @@ export function startCapturedRuntime({
       }
       if (isEnabled(settings, "autoTrigger")) {
         runPhase("autoTrigger discovery", () => {
-          // Trigger targets are only the actions whose controls were captured, so the sample the
-          // demand model shares has to be taken after construction discovery, not before it.
+          // Trigger targets use captured action controls, so run the control sweep before sampling
+          // the targets shared with the demand model.
           progression.ensureBuildControls();
           refreshDiscoveredSettings();
           readTriggerTargets();
@@ -3062,14 +3063,14 @@ export function startCapturedRuntime({
       if (!triggerActive && isEnabled(settings, "autoResearch")) {
         runPhase("autoResearch", () => progression.runResearchCycle());
         observePowerDemandPhase("research-complete");
-        // The earlier demand discovery cannot answer offers unlocked by this research.
-        // Construction owns the next discovery and must sample the new tech state.
+        // The earlier offer snapshot cannot answer actions unlocked by this research. Construction
+        // must take its next direct semantic sample from the new tech state.
         progression.resetBuildingUnlockSample();
         if (
           isEnabled(settings, "autoBuild") ||
           isEnabled(settings, "autoStorage")
         ) {
-          runPhase("post-research construction demand discovery", () => {
+          runPhase("post-research construction demand preparation", () => {
             progression.readUnlockedStorageBuildTargets();
             refreshDiscoveredSettings();
           });
@@ -3405,7 +3406,7 @@ export function startCapturedRuntime({
           isEnabled(settings, "autoBuild") ||
           isEnabled(settings, "autoStorage")
         ) {
-          runPhase("pre-Power building demand discovery", () => {
+          runPhase("pre-Power build demand preparation", () => {
             progression.readUnlockedStorageBuildTargets();
             refreshDiscoveredSettings();
           });
@@ -3593,8 +3594,8 @@ export function startCapturedRuntime({
   // pays for, was re-made four times more often than the setting asks for.
   let pendingPeriods = 0;
   const unsubscribePeriods = pageCapture.periods.subscribe((period) => {
-    // Overrides need their context before this gate. Reset the cycle-held panel samples here so
-    // an override never answers from the previous cycle, and let a cycle that runs reuse this
+    // Overrides need their context before this gate. Reset cycle-held offer samples here so an
+    // override never answers from the previous cycle, and let a cycle that runs reuse this
     // same point-in-time sample for its trigger and progression work.
     progression.resetProjectSample();
     progression.resetBuildingUnlockSample();

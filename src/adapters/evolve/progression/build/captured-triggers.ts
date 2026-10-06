@@ -23,8 +23,8 @@
  * - Conditions are limited to the operands `../../captured-conditions.ts` answers. `ProjectUnlocked`
  *   is answered from the same captured project catalog the A.R.P.A. prices come from, so a trigger
  *   naming one establishes the native mechanics even when no trigger buys a project.
- *   `BuildingUnlocked` likewise draws the
- *   region panels its conditions name, and only those.
+ *   `BuildingUnlocked` likewise reads the retained native availability catalog for the regions
+ *   its conditions name, without drawing those panels.
  */
 
 import type {
@@ -112,8 +112,8 @@ export interface CapturedTriggersDependencies {
   readonly readOfferedProjects?: () =>
     readonly Readonly<OfferedProject>[] | undefined;
   /**
-   * Draws and reads the building region panels named by the configured `BuildingUnlocked`
-   * conditions. Absent leaves those conditions unanswered.
+   * Reads current native Building availability for the configured `BuildingUnlocked` regions and
+   * establishes that semantic sample. Absent leaves those conditions unanswered.
    */
   readonly readBuildingUnlocks?: (
     regions: ReadonlySet<string>,

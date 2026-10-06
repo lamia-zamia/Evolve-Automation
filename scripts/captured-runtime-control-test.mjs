@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { startCapturedRuntime } from "../src/bootstrap/captured-runtime-control.ts";
 import { createGameDrawnActionsReader } from "../src/adapters/browser/game-drawn-actions.ts";
 import { createTestDocument, element } from "./dom-fixture.mjs";
+import { makeCapturedBuildingMechanics } from "./captured-building-test-fixtures.mjs";
 
 // Power reports a persistent exact-demand failure once and a changed authority once.
 {
@@ -197,6 +198,12 @@ function runDemandSampleScenario(
   );
   const pageCapture = {
     isComplete: () => true,
+    mechanics: makeCapturedBuildingMechanics(root, {
+      availability: (_liveRoot, binding) => ({
+        kind: "value",
+        value: binding === "city-farm" || binding === "city-bank",
+      }),
+    }),
     rootState: {
       readRoot: () => root,
       isReactivitySuppressed: () => false,
@@ -298,16 +305,9 @@ function runDemandSampleScenario(
 }
 
 function assertDemandScenarioErrors(errors) {
-  // This focused fixture intentionally has no Civilization-tab control, so current Storage build
-  // discovery is unavailable. Research discovery must still succeed and demand must continue.
-  assert.ok(
-    errors.every(
-      (message) =>
-        message ===
-        "progression skipped building-unlocks city: no captured control for #mainColumn div.content",
-    ),
-    `demand scenario had an unexpected failure: ${JSON.stringify(errors)}`,
-  );
+  // These demand fixtures provide native offers directly; unavailable unrelated features must
+  // not turn a valid demand read into a failure.
+  assert.deepEqual(errors, []);
 }
 
 // The captured runtime gates its cycles on the script's own `tickRate`, which defaults to four game
@@ -574,6 +574,12 @@ assert.equal(unsubscribeCount, 1);
   const stopCycle = startCapturedRuntime({
     pageCapture: {
       isComplete: () => true,
+      mechanics: makeCapturedBuildingMechanics(root, {
+        availability: (_liveRoot, binding) => ({
+          kind: "value",
+          value: binding === "city-cottage",
+        }),
+      }),
       rootState: {
         readRoot: () => root,
         isReactivitySuppressed: () => false,
@@ -659,6 +665,12 @@ assert.equal(unsubscribeCount, 1);
   const stopCycle = startCapturedRuntime({
     pageCapture: {
       isComplete: () => true,
+      mechanics: makeCapturedBuildingMechanics(root, {
+        availability: (_liveRoot, binding) => ({
+          kind: "value",
+          value: binding === "city-cottage",
+        }),
+      }),
       rootState: {
         readRoot: () => root,
         isReactivitySuppressed: () => false,
@@ -763,6 +775,12 @@ assert.equal(unsubscribeCount, 1);
   const stopCycle = startCapturedRuntime({
     pageCapture: {
       isComplete: () => true,
+      mechanics: makeCapturedBuildingMechanics(root, {
+        availability: (_liveRoot, binding) => ({
+          kind: "value",
+          value: binding === "city-cottage",
+        }),
+      }),
       rootState: {
         readRoot: () => root,
         isReactivitySuppressed: () => false,
@@ -971,6 +989,12 @@ assert.equal(unsubscribeCount, 1);
   const stopCycle = startCapturedRuntime({
     pageCapture: {
       isComplete: () => true,
+      mechanics: makeCapturedBuildingMechanics(root, {
+        availability: (_liveRoot, binding) => ({
+          kind: "value",
+          value: binding === "city-bank" || binding === "city-farm",
+        }),
+      }),
       rootState: {
         readRoot: () => root,
         isReactivitySuppressed: () => false,
@@ -2481,10 +2505,10 @@ function runCapturedJobsMatrixScenario({
       // The demand-prerequisites phase reads the root first, so it is the first to report
       // while the stub is still throwing.
       "demand prerequisites",
-      "construction demand discovery",
+      "construction demand preparation",
       "construction saving discovery",
       "autoResearch",
-      "post-research construction demand discovery",
+      "post-research construction demand preparation",
       "autoBuild",
       "autoFight.mercenary",
       "autoFight.battle",

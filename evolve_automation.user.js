@@ -1171,15 +1171,15 @@
     let parts = splitActionId(binding);
     if (parts === void 0 || !CAPTURED_BUILD_REGIONS.has(parts.region))
       return;
-    let states = structures.filter(
-      (structure) => structure.actionId === binding && structure.region === parts.region && structure.struct === parts.id
-    ).flatMap((structure) => {
+    let matches = structures.filter(
+      (structure) => bindingForBuildingElement(structure.actionId) === binding
+    ), states = matches.flatMap((structure) => {
       let region = readProperty(root, structure.region), state = readProperty(region, structure.struct);
       return isRecord(state) ? [{ structure, state }] : [];
     }), exactAct = act === void 0 ? void 0 : states.find(({ state }) => state === act);
     if (exactAct !== void 0) return exactAct.state;
     if (states.length === 1) return states[0].state;
-    if (states.length > 1) return;
+    if (states.length > 1 || matches.length > 0) return;
     let candidate = readProperty(readProperty(root, parts.region), parts.id);
     return isRecord(candidate) && (act === void 0 || candidate === act) ? candidate : void 0;
   }
@@ -1202,7 +1202,7 @@
       if (state === void 0) continue;
       let stateEntry = structures.find((structure) => {
         let region = readProperty(root, structure.region);
-        return structure.actionId === binding && readProperty(region, structure.struct) === state;
+        return bindingForBuildingElement(structure.actionId) === binding && readProperty(region, structure.struct) === state;
       }), metadata2 = metadataForBuilding(binding), liveState = isRecord(act) ? act : state;
       entries.push(
         Object.freeze({
@@ -1222,10 +1222,10 @@
       ), seen.add(binding);
     }
     for (let structure of structures) {
-      let binding = structure.actionId;
+      let binding = bindingForBuildingElement(structure.actionId);
       if (seen.has(binding) || !CAPTURED_AUTOMATION_BUILDING_BINDINGS.has(binding)) continue;
       let parts = splitActionId(binding);
-      if (parts === void 0 || !CAPTURED_BUILD_REGIONS.has(parts.region) || parts.region !== structure.region)
+      if (parts === void 0 || !CAPTURED_BUILD_REGIONS.has(parts.region))
         continue;
       let region = readProperty(root, structure.region), state = readProperty(region, structure.struct);
       if (!isRecord(state)) continue;
@@ -1235,7 +1235,7 @@
           binding,
           entryKey: structure.entryKey,
           elementId: binding,
-          region: structure.region,
+          region: parts.region,
           sector: structure.sector,
           id: structure.struct,
           label: title.kind === "value" && title.value ? title.value : binding,
@@ -8177,97 +8177,13 @@
   }
 
   // src/adapters/evolve/progression/build/captured-building-unlocks.ts
-  var SHOW_UNDERGROUND_SETTING = shownBySetting(SPACE_TAB_INDEX.underground), SHOW_SURFACE_SETTING = shownBySetting(SPACE_TAB_INDEX.surface);
-  function shownBySetting(subTab) {
-    let setting = SPACE_TAB_SHOWN_BY[subTab];
-    if (setting === void 0)
-      throw new Error(`no visibility flag for spaceTabs ${subTab}`);
-    return setting;
-  }
-  function isPanelShown(gameSettings, flag) {
-    return isRecord(gameSettings) ? readProperty(gameSettings, flag) === !0 : !1;
-  }
-  function spacePanel(subTab, extra) {
-    let container = SPACE_TAB_PANELS[subTab];
-    if (container === void 0)
-      throw new Error(`no panel container for spaceTabs ${subTab}`);
-    return Object.freeze({
-      container,
-      mainTab: MAIN_TAB_INDEX.civilization,
-      subTabSetting: SPACE_TABS_SETTING,
-      subTab,
-      ...extra ?? {}
-    });
-  }
-  var REGION_PANELS = Object.freeze({
-    city: Object.freeze([spacePanel(SPACE_TAB_INDEX.city)]),
-    space: Object.freeze([
-      spacePanel(SPACE_TAB_INDEX.space),
-      spacePanel(SPACE_TAB_INDEX.outerSol)
-    ]),
-    interstellar: Object.freeze([spacePanel(SPACE_TAB_INDEX.interstellar)]),
-    galaxy: Object.freeze([spacePanel(SPACE_TAB_INDEX.galaxy)]),
-    portal: Object.freeze([spacePanel(SPACE_TAB_INDEX.portal)]),
-    tauceti: Object.freeze([spacePanel(SPACE_TAB_INDEX.tauceti)]),
-    eden: Object.freeze([spacePanel(SPACE_TAB_INDEX.eden)]),
-    underground: Object.freeze([
-      spacePanel(SPACE_TAB_INDEX.underground, {
-        shownBy: SHOW_UNDERGROUND_SETTING
-      }),
-      // The cave perks are a civics sub-tab, not a civilization one, and they carry the same
-      // `underground-` prefix as the rows above.
-      Object.freeze({
-        container: "#perkUnderground",
-        mainTab: MAIN_TAB_INDEX.civic,
-        subTabSetting: GOV_TABS_SETTING,
-        subTab: GOV_TAB_INDEX.perkUnderground
-      })
-    ]),
-    surface: Object.freeze([
-      spacePanel(SPACE_TAB_INDEX.surface, {
-        shownBy: SHOW_SURFACE_SETTING
-      })
-    ])
-  });
-  function locateBuildingState(root, elementId, act) {
-    if (!isRecord(root)) return "the game root is not a record";
-    let separator = elementId.indexOf("-"), type = separator > 0 ? elementId.slice(separator + 1) : "";
-    if (type.length > 0) {
-      let region = elementId.slice(0, separator);
-      if (readProperty(readProperty(root, region), type) === act)
-        return Object.freeze({ region, type });
-      for (let candidate of Object.keys(root)) {
-        let record = root[candidate];
-        if (isRecord(record) && readProperty(record, type) === act)
-          return Object.freeze({ region: candidate, type });
-      }
-    }
-    for (let candidate of Object.keys(root)) {
-      let record = root[candidate];
-      if (isRecord(record)) {
-        for (let key of Object.keys(record))
-          if (record[key] === act)
-            return Object.freeze({ region: candidate, type: key });
-      }
-    }
-    return "no record in the current root is that binding";
-  }
-  function sameBuildingUnlockCatalog(previous, next) {
-    if (previous.unlocked.size !== next.unlocked.size || previous.regions.size !== next.regions.size || previous.switches.size !== next.switches.size)
-      return !1;
-    for (let id of previous.unlocked) if (!next.unlocked.has(id)) return !1;
-    for (let region of previous.regions)
-      if (!next.regions.has(region)) return !1;
-    for (let [id, address] of previous.switches) {
-      let after = next.switches.get(id);
-      if (after === void 0 || after.region !== address.region || after.type !== address.type)
-        return !1;
-    }
-    return !0;
+  function readEntryForNativeStructure(entries, binding, entryKey) {
+    return entries.find(
+      (entry) => entry.binding === binding && entry.entryKey === entryKey
+    );
   }
   function createCapturedBuildingUnlocks(dependencies) {
-    let { rootState, discovery, drawnActions, controls: controls2, diagnostics } = dependencies, reportSkipped = dependencies.onSkipped ?? (() => {
-    }), reportUnlocated = dependencies.onUnlocatedSwitch ?? (() => {
+    let { rootState, mechanics, controls: controls2, diagnostics } = dependencies, reportSkipped = dependencies.onSkipped ?? (() => {
     });
     return Object.freeze({
       read(regions) {
@@ -8277,78 +8193,117 @@
           reportSkipped("*", "the game root has not been captured yet");
           return;
         }
-        let gameSettings = readProperty(root, "settings"), unlocked = /* @__PURE__ */ new Set(), sampled3 = /* @__PURE__ */ new Set(), switches = /* @__PURE__ */ new Map();
+        let structures;
+        try {
+          structures = mechanics.readStructures();
+        } catch {
+          structures = void 0;
+        }
+        if (structures === void 0) {
+          reportSkipped("*", "the native structure catalog is unavailable");
+          return;
+        }
+        let structuresByBinding = /* @__PURE__ */ new Map();
+        for (let structure of structures) {
+          let binding = bindingForBuildingElement(structure.actionId);
+          if (!CAPTURED_AUTOMATION_BUILDING_BINDINGS.has(binding)) continue;
+          let group = structuresByBinding.get(binding) ?? [];
+          group.push(structure), structuresByBinding.set(binding, group);
+        }
+        let stateAddressControls = {
+          ...controls2,
+          // Control captures are mutation capabilities. They must not decide which native
+          // structures the semantic catalog can identify.
+          capturedElementIds: () => []
+        }, entries;
+        try {
+          entries = readCapturedBuildingEntries(
+            root,
+            stateAddressControls,
+            structures
+          );
+        } catch {
+          reportSkipped("*", "the native structure state catalog is invalid");
+          return;
+        }
+        let unlocked = /* @__PURE__ */ new Set(), sampled3 = /* @__PURE__ */ new Set(), switches = /* @__PURE__ */ new Map();
         for (let region of regions) {
-          let panels = REGION_PANELS[region];
-          if (panels === void 0) {
-            reportSkipped(region, "not a building region");
+          if (!CAPTURED_BUILD_REGIONS.has(region)) {
+            reportSkipped(region, "not an automation Building region");
             continue;
           }
-          let ids = [], addresses = /* @__PURE__ */ new Map(), complete = !0;
-          for (let panel of panels) {
-            if (panel.shownBy !== void 0 && !isPanelShown(gameSettings, panel.shownBy))
-              continue;
-            let subTabControl = SUB_TAB_CONTROLS[panel.subTabSetting];
-            if (subTabControl === void 0) {
-              complete = !1, reportSkipped(
+          let regionBindings = [
+            ...CAPTURED_AUTOMATION_BUILDING_BINDINGS
+          ].filter((binding) => splitActionId(binding)?.region === region), regionUnlocked = /* @__PURE__ */ new Set(), regionSwitches = /* @__PURE__ */ new Map(), complete = !0;
+          for (let binding of regionBindings) {
+            let candidates = structuresByBinding.get(binding) ?? [], candidateEntries = entries.filter(
+              (entry2) => entry2.binding === binding && entry2.entryKey !== void 0
+            ), joined = candidates.length === 1 ? candidates : candidates.filter(
+              (structure2) => candidateEntries.some(
+                (entry2) => entry2.entryKey === structure2.entryKey
+              )
+            );
+            if (joined.length !== 1) {
+              complete = !1, tally.count("building-unlocks.unjoined-native-action"), reportSkipped(
                 region,
-                `the ${panel.subTabSetting} control is unavailable`
+                candidates.length === 0 ? `no captured native action for ${binding}` : `the captured native identity for ${binding} is ambiguous`
               );
               break;
             }
-            let path = Object.freeze([
+            let structure = joined[0], entry = readEntryForNativeStructure(
+              entries,
+              binding,
+              structure.entryKey
+            );
+            if (candidateEntries.length > 0 && (entry === void 0 || candidateEntries.length !== 1)) {
+              complete = !1, tally.count("building-unlocks.unjoined-state-identity"), reportSkipped(
+                region,
+                `the captured root state for ${binding} has no unique native entry key`
+              );
+              break;
+            }
+            let availability;
+            try {
+              availability = structure.readAvailability(root);
+            } catch {
+              availability = { kind: "invalid" };
+            }
+            if (availability.kind !== "value") {
+              complete = !1, tally.count("building-unlocks.invalid-availability"), reportSkipped(
+                region,
+                `native availability for ${binding} is ${availability.kind}`
+              );
+              break;
+            }
+            if (tally.count(
+              availability.value ? "building-unlocks.offered" : "building-unlocks.unavailable"
+            ), !availability.value || (regionUnlocked.add(binding), entry === void 0)) continue;
+            let state;
+            try {
+              state = readCapturedBuildingState(root, entry, structure, !0);
+            } catch {
+              state = void 0;
+            }
+            state?.hasState === !0 && regionSwitches.set(
+              binding,
               Object.freeze({
-                setting: MAIN_TAB_SETTING,
-                control: MAIN_TAB_CONTROL,
-                index: panel.mainTab
-              }),
-              Object.freeze({
-                setting: panel.subTabSetting,
-                control: subTabControl,
-                index: panel.subTab
+                region: structure.region,
+                type: structure.struct
               })
-            ]), panelComponent = MAIN_TAB_PANELS[panel.mainTab], read = !1, result = discovery.discover(path, {
-              ...panelComponent === void 0 ? {} : { mount: Object.freeze([`#${panelComponent}`]) },
-              isPanelDrawn: () => drawnActions.exists(panel.container),
-              whileDrawn: () => {
-                if (!drawnActions.exists(panel.container)) return;
-                let rows = drawnActions.read(`${panel.container} .action`);
-                tally.count(`building-unlocks.rows ${region}`, rows.length);
-                for (let action of rows) {
-                  ids.push(action.id);
-                  let act = readProperty(
-                    controls2.resolve(action.id)?.data,
-                    "act"
-                  );
-                  if (!isRecord(act)) {
-                    tally.count(`building-unlocks.stateless ${region}`);
-                    continue;
-                  }
-                  let address = locateBuildingState(root, action.id, act);
-                  typeof address == "string" ? (tally.count(`building-unlocks.unlocated ${region}`), reportUnlocated(action.id, address)) : (tally.count(`building-unlocks.addressed ${region}`), addresses.set(action.id, address));
-                }
-                read = !0;
-              }
-            });
-            if (result.outcome.status !== "succeeded" || !read) {
-              complete = !1, reportSkipped(
-                region,
-                result.outcome.status === "succeeded" ? `${panel.container} was not drawn` : result.outcome.failure?.message ?? result.outcome.status
-              );
-              break;
-            }
+            );
           }
           if (complete) {
-            for (let id of ids) unlocked.add(id);
-            for (let [id, address] of addresses) switches.set(id, address);
+            for (let binding of regionUnlocked) unlocked.add(binding);
+            for (let [binding, address] of regionSwitches)
+              switches.set(binding, address);
             sampled3.add(region);
           }
         }
         if (sampled3.size !== 0)
           return Object.freeze({
-            unlocked: Object.freeze(unlocked),
-            regions: Object.freeze(sampled3),
-            switches: Object.freeze(switches)
+            unlocked,
+            regions: sampled3,
+            switches
           });
       }
     });
@@ -10627,7 +10582,7 @@
   }
 
   // src/bootstrap/captured-progression-control.ts
-  var RESEARCH_SCOPE = "research", RESEARCH_GRANTED_SCOPE = "research+granted", ARPA_SCOPE = "arpa", BUILDING_UNLOCK_SCOPE = "building-unlocks", BUILD_CONTROLS_SCOPE = "build-controls", NO_RESERVATIONS3 = Object.freeze({
+  var RESEARCH_SCOPE = "research", RESEARCH_GRANTED_SCOPE = "research+granted", ARPA_SCOPE = "arpa", BUILD_CONTROLS_SCOPE = "build-controls", NO_RESERVATIONS3 = Object.freeze({
     targets: Object.freeze([]),
     unavailable: !1
   }), NO_OBSERVATIONS = Object.freeze({
@@ -10656,6 +10611,7 @@
   function createCapturedProgressionControl(dependencies) {
     let {
       rootState,
+      mechanics,
       controls: controls2,
       mountSuppression,
       panels,
@@ -10776,7 +10732,7 @@
     }), projectSampled = !1, lastProjects, establishedProjectEpoch, resetProjectSample = () => {
       projectSampled = !1, lastProjects = void 0, establishedProjectEpoch = void 0;
     }, beginProcessedCycle = () => {
-      clearResearchSample(), scopes.invalidate(RESEARCH_SCOPE), scopes.invalidate(RESEARCH_GRANTED_SCOPE), scopes.invalidate(ARPA_SCOPE), resetProjectSample();
+      clearResearchSample(), scopes.invalidate(RESEARCH_SCOPE), scopes.invalidate(RESEARCH_GRANTED_SCOPE), scopes.invalidate(ARPA_SCOPE), resetProjectSample(), resetBuildingUnlockSample();
     }, readEstablishedProjects = () => {
       if (projectSampled && establishedProjectEpoch !== epoch.read() || (projectSampled ? lastProjects : scopes.peek(ARPA_SCOPE)) === void 0) return;
       let currentProjects = projectCatalog.readProjects();
@@ -10798,52 +10754,56 @@
       return lastProjects;
     }, buildingUnlocks = createCapturedBuildingUnlocks({
       rootState,
-      discovery,
-      drawnActions,
+      mechanics,
       controls: controls2,
       diagnostics,
       ...onSkipped === void 0 ? {} : {
-        onSkipped: (region, reason) => onSkipped(`building-unlocks ${region}`, reason),
-        onUnlocatedSwitch: (elementId, detail) => onSkipped(`building-unlocks ${elementId}`, detail)
+        onSkipped: (region, reason) => onSkipped(`building-unlocks ${region}`, reason)
       }
     }), buildingSwitchStates = createCapturedBuildingSwitchStates({
       rootState,
       controls: controls2,
       diagnostics
-    }), sampledBuildingUnlockScopes = /* @__PURE__ */ new Map(), resetBuildingUnlockSample = () => {
-      sampledBuildingUnlockScopes.clear();
+    }), establishedBuildingOffers = /* @__PURE__ */ new Map(), buildingOfferScopeKey = (regions) => [...regions].sort().join(","), resetBuildingUnlockSample = () => {
+      establishedBuildingOffers.clear();
     }, invalidateConstructionOffers = () => {
-      for (let scope of sampledBuildingUnlockScopes.keys())
-        scopes.invalidate(scope);
       resetBuildingUnlockSample(), resetProjectSample();
     };
     rootState.subscribeRootReplaced(() => {
       scopes.invalidateAll(), clearResearchSample(), resetProjectSample(), resetBuildingUnlockSample();
     });
     let readBuildingUnlocks = (regions) => {
-      let key = [...regions].sort().join(","), scope = `${BUILDING_UNLOCK_SCOPE} ${key}`;
-      sampledBuildingUnlockScopes.delete(scope), sampledBuildingUnlockScopes.set(scope, new Set(regions));
-      let catalog = scopes.read(
-        scope,
-        () => buildingUnlocks.read(regions),
-        sameBuildingUnlockCatalog
-      );
-      return catalog === void 0 ? void 0 : Object.freeze({
+      let key = buildingOfferScopeKey(regions), catalog = buildingUnlocks.read(regions);
+      if (catalog === void 0) {
+        for (let [establishedKey, sample] of establishedBuildingOffers)
+          [...regions].some((region) => sample.regions.has(region)) && establishedBuildingOffers.delete(establishedKey);
+        return;
+      }
+      return establishedBuildingOffers.delete(key), establishedBuildingOffers.set(
+        key,
+        Object.freeze({
+          regions: new Set(regions),
+          epoch: epoch.read(),
+          catalog
+        })
+      ), Object.freeze({
         unlocked: catalog.unlocked,
         regions: catalog.regions,
+        switches: new Set(catalog.switches.keys()),
         states: buildingSwitchStates.read(catalog)
       });
     }, readEstablishedBuildingUnlocks = (regions) => {
-      let candidates = [...sampledBuildingUnlockScopes].reverse();
+      let candidates = [...establishedBuildingOffers.values()].reverse(), currentEpoch = epoch.read();
       for (let exactOnly of [!0, !1])
-        for (let [scope, requestedRegions] of candidates) {
-          if (requestedRegions.size === regions.size !== exactOnly || [...regions].some((region) => !requestedRegions.has(region)))
-            continue;
-          let catalog = scopes.peek(scope);
-          if (catalog !== void 0 && [...regions].every((region) => catalog.regions.has(region)))
+        for (let sample of candidates) {
+          let requestedRegions = sample.regions;
+          if (requestedRegions.size === regions.size !== exactOnly || [...regions].some((region) => !requestedRegions.has(region)) || sample.epoch !== currentEpoch) continue;
+          let catalog = sample.catalog;
+          if ([...regions].every((region) => catalog.regions.has(region)))
             return Object.freeze({
               unlocked: catalog.unlocked,
               regions: catalog.regions,
+              switches: new Set(catalog.switches.keys()),
               states: buildingSwitchStates.read(catalog)
             });
         }
@@ -15541,7 +15501,7 @@
     let parts = splitActionId(argument);
     if (parts === void 0) return;
     let sample = context?.buildingUnlocks;
-    if (!(sample === void 0 || !sample.regions.has(parts.region)) && sample.unlocked.has(argument))
+    if (!(sample === void 0 || !sample.regions.has(parts.region)) && sample.unlocked.has(argument) && !(sample.switches?.has(argument) && !sample.states.has(argument)))
       return sample.states.get(argument)?.[half] ?? 0;
   }
   function factorySlots(root) {
@@ -54317,6 +54277,7 @@ Only continue if you trust the source. Injected code:
     }), progression = createCapturedProgressionControl({
       readMechPowerSupplyHold: mechSupplyReservation.readPowerSupplyHold,
       rootState: pageCapture2.rootState,
+      mechanics: pageCapture2.mechanics,
       controls: pageCapture2.controls,
       mountSuppression: pageCapture2.mountSuppression,
       panels,
@@ -55494,7 +55455,7 @@ Only continue if you trust the source. Injected code:
             ensureForeignControls,
             ensureBuildControls: progression.ensureBuildControls
           });
-        }), (isEnabled(settings, "autoBuild") || isEnabled(settings, "autoStorage")) && runPhase("construction demand discovery", () => {
+        }), (isEnabled(settings, "autoBuild") || isEnabled(settings, "autoStorage")) && runPhase("construction demand preparation", () => {
           progression.readUnlockedStorageBuildTargets(), refreshDiscoveredSettings();
         }), hasCapturedProjectStorageDemand(settings, settingsStorage.readRaw()) && (isEnabled(settings, "autoBuild") || isEnabled(settings, "autoARPA") || isEnabled(settings, "autoStorage")) && runPhase("project demand discovery", () => {
           progression.readProjects(), refreshDiscoveredSettings();
@@ -55558,7 +55519,7 @@ Only continue if you trust the source. Injected code:
             reader: triggerActions.reader,
             executor: triggerActions.executor
           })
-        ), !0)) !== !0 && (triggerActive = !0), triggerActive && (isEnabled(settings, "autoBuild") || isEnabled(settings, "autoARPA")) && (constructionSuppressedThisCycle = !0), !triggerActive && isEnabled(settings, "autoResearch") && (runPhase("autoResearch", () => progression.runResearchCycle()), observePowerDemandPhase("research-complete"), progression.resetBuildingUnlockSample(), (isEnabled(settings, "autoBuild") || isEnabled(settings, "autoStorage")) && runPhase("post-research construction demand discovery", () => {
+        ), !0)) !== !0 && (triggerActive = !0), triggerActive && (isEnabled(settings, "autoBuild") || isEnabled(settings, "autoARPA")) && (constructionSuppressedThisCycle = !0), !triggerActive && isEnabled(settings, "autoResearch") && (runPhase("autoResearch", () => progression.runResearchCycle()), observePowerDemandPhase("research-complete"), progression.resetBuildingUnlockSample(), (isEnabled(settings, "autoBuild") || isEnabled(settings, "autoStorage")) && runPhase("post-research construction demand preparation", () => {
           progression.readUnlockedStorageBuildTargets(), refreshDiscoveredSettings();
         })), !triggerActive && (isEnabled(settings, "autoBuild") || isEnabled(settings, "autoARPA"))) {
           let outcome = runPhase("autoBuild", () => {
@@ -55665,7 +55626,7 @@ Only continue if you trust the source. Injected code:
           ensureDemandResearchObservation();
         }), hasCapturedProjectStorageDemand(settings, settingsStorage.readRaw()) && runPhase("pre-Power project demand discovery", () => {
           progression.readProjects(), refreshDiscoveredSettings();
-        }), (isEnabled(settings, "autoBuild") || isEnabled(settings, "autoStorage")) && runPhase("pre-Power building demand discovery", () => {
+        }), (isEnabled(settings, "autoBuild") || isEnabled(settings, "autoStorage")) && runPhase("pre-Power build demand preparation", () => {
           progression.readUnlockedStorageBuildTargets(), refreshDiscoveredSettings();
         }), runPhase("autoPower", () => {
           observePowerDemandPhase("power-handoff-start"), demandThisCycle = void 0, exactDemandUnavailableReason = void 0;

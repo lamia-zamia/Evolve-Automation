@@ -49,7 +49,7 @@ import {
 export interface CapturedBuildPolicyDependencies {
   readonly rootState: GameRootStateSource;
   readonly controls: GameControlRegistry;
-  /** Current rows from the game's suppressed panel draw, never the cumulative control registry. */
+  /** Current native semantic offers, never inferred from the cumulative control registry. */
   readonly readCurrentOffers: (
     regions: ReadonlySet<string>,
   ) => Readonly<Pick<BuildingUnlockSample, "regions" | "unlocked">> | undefined;
