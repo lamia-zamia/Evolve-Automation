@@ -1573,6 +1573,21 @@
         return;
       }
   }
+  var CUSTOM_PACK_STORAGE_KEY = "string_pack";
+  function hasActiveCustomStringPack(pageWindow, stringPackOn) {
+    if (stringPackOn !== !0) return !1;
+    let storage = readMechanicsProperty(pageWindow, "localStorage"), getItem = readMechanicsProperty(storage, "getItem");
+    if (typeof getItem != "function") return !0;
+    try {
+      return !!Reflect.apply(
+        getItem,
+        storage,
+        [CUSTOM_PACK_STORAGE_KEY]
+      );
+    } catch {
+      return !0;
+    }
+  }
   function readMechanicsEntry(mapKey, candidate) {
     if (!(!isNonArrayRecord(candidate) || typeof mapKey != "string"))
       try {
@@ -2188,7 +2203,8 @@
           return;
         }
       let root = rootState?.readRoot(), settings = readProperty(root, "settings");
-      if (readProperty(settings, "sPackOn") === !0) return;
+      if (hasActiveCustomStringPack(pageWindow, readProperty(settings, "sPackOn")))
+        return;
       let rawLocale = readProperty(settings, "locale"), locale = rawLocale === void 0 ? "en-US" : rawLocale;
       if (typeof locale != "string" || !/^[a-z]{2}-[A-Z]{2}$/u.test(locale))
         return;

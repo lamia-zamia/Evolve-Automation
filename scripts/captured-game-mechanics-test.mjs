@@ -1279,11 +1279,28 @@ effectAction.effect = originalEffect;
 function assetLocalizedFixture({
   locale = "en-US",
   assets,
-  customPack = false,
+  stringPackOn = false,
+  storedStringPack = null,
+  storage = "available",
 }) {
   const assetPage = makePage();
   delete assetPage.game.loc;
   assert.equal("loc" in assetPage.game, false);
+  if (storage === "absent") delete assetPage.localStorage;
+  else if (storage === "uncallable") assetPage.localStorage = { getItem: 7 };
+  else if (storage === "throwing")
+    assetPage.localStorage = {
+      getItem() {
+        throw new Error("page storage unavailable");
+      },
+    };
+  else
+    assetPage.localStorage = {
+      getItem(key) {
+        assert.equal(key, "string_pack");
+        return storedStringPack;
+      },
+    };
   const requests = [];
   assetPage.XMLHttpRequest = class {
     open(method, path, async) {
@@ -1297,7 +1314,7 @@ function assetLocalizedFixture({
       this.responseText = assets[this.path] ?? "";
     }
   };
-  const root = { settings: { locale, sPackOn: customPack } };
+  const root = { settings: { locale, sPackOn: stringPackOn } };
   const installed = installCapturedGameMechanics(
     assetPage,
     { subscribe: () => () => {} },
@@ -1341,6 +1358,36 @@ assert.deepEqual(baseFixture.read(), { kind: "value", value: [2.5, 100] });
 assert.deepEqual(baseFixture.requests, ["strings/strings.json"]);
 assert.equal("loc" in baseFixture.page.game, false);
 
+// DeadSpace vars.js defaults sPackOn to true for a profile that never installed a pack, so the
+// enabled toggle on its own must leave the served assets authoritative.
+const enabledWithoutStoredPack = assetLocalizedFixture({
+  assets: baseAsset,
+  stringPackOn: true,
+});
+assert.deepEqual(enabledWithoutStoredPack.read(), {
+  kind: "value",
+  value: [2.5, 100],
+});
+assert.deepEqual(enabledWithoutStoredPack.requests, ["strings/strings.json"]);
+
+// locale.js gates the override on the stored value as well, so a stored but disabled pack and an
+// empty stored value both keep the served assets authoritative.
+const disabledWithStoredPack = assetLocalizedFixture({
+  assets: baseAsset,
+  stringPackOn: false,
+  storedStringPack: "stored-pack-body",
+});
+assert.deepEqual(disabledWithStoredPack.read(), {
+  kind: "value",
+  value: [2.5, 100],
+});
+const emptyStoredPack = assetLocalizedFixture({
+  assets: baseAsset,
+  stringPackOn: true,
+  storedStringPack: "",
+});
+assert.deepEqual(emptyStoredPack.read(), { kind: "value", value: [2.5, 100] });
+
 const localeFixture = assetLocalizedFixture({
   locale: "fr-FR",
   assets: {
@@ -1382,12 +1429,48 @@ for (const [name, fixture] of [
     "unsupported locale",
     assetLocalizedFixture({ locale: "xx-XX", assets: baseAsset }),
   ],
+]) {
+  assert.deepEqual(fixture.read(), { kind: "invalid" }, name);
+}
+
+// An active pack, and an enabled toggle whose storage answer cannot be read, both fail closed
+// before any asset is served.
+const activeCustomPack = assetLocalizedFixture({
+  assets: baseAsset,
+  stringPackOn: true,
+  storedStringPack: "stored-pack-body",
+});
+assert.deepEqual(activeCustomPack.read(), { kind: "invalid" });
+assert.deepEqual(activeCustomPack.requests, []);
+
+for (const [name, fixture] of [
   [
-    "custom pack",
-    assetLocalizedFixture({ assets: baseAsset, customPack: true }),
+    "missing page storage",
+    assetLocalizedFixture({
+      assets: baseAsset,
+      stringPackOn: true,
+      storage: "absent",
+    }),
+  ],
+  [
+    "uncallable getItem",
+    assetLocalizedFixture({
+      assets: baseAsset,
+      stringPackOn: true,
+      storage: "uncallable",
+    }),
+  ],
+  [
+    "throwing getItem",
+    assetLocalizedFixture({
+      assets: baseAsset,
+      stringPackOn: true,
+      storage: "throwing",
+    }),
   ],
 ]) {
   assert.deepEqual(fixture.read(), { kind: "invalid" }, name);
+  assert.deepEqual(fixture.requests, [], name);
 }
 
 // One inherited assignment captures the p-ledger owner and then removes the prototype hook.

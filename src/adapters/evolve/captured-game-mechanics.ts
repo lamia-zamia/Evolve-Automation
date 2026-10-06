@@ -71,6 +71,37 @@ function readMechanicsDataProperty(owner: unknown, key: PropertyKey): unknown {
   }
 }
 
+// The page's own storage is the only authority for an installed string pack. DeadSpace
+// src/vars.js exports `save = window.localStorage`, and src/locale.js applies a pack only when
+// `save.getItem('string_pack') || false` is truthy and `settings.sPackOn` is on. vars.js also
+// defaults sPackOn to true for every fresh profile, so the toggle alone proves nothing.
+const CUSTOM_PACK_STORAGE_KEY = "string_pack";
+
+function hasActiveCustomStringPack(
+  pageWindow: unknown,
+  stringPackOn: unknown,
+): boolean {
+  // A disabled toggle leaves the served assets authoritative whatever storage holds.
+  if (stringPackOn !== true) return false;
+  const storage = readMechanicsProperty(pageWindow, "localStorage");
+  const getItem = readMechanicsProperty(storage, "getItem");
+  if (typeof getItem !== "function") return true;
+  try {
+    // locale.js coerces the stored value with `|| false`, so a missing key (null) and an empty
+    // string are both inert. The pack body is never needed: its existence alone means the served
+    // templates no longer match the strings the page resolves.
+    const stored: unknown = Reflect.apply(
+      getItem as CapturedGameCall,
+      storage,
+      [CUSTOM_PACK_STORAGE_KEY],
+    );
+    return Boolean(stored);
+  } catch {
+    // Without a readable answer the served assets cannot be proven authoritative.
+    return true;
+  }
+}
+
 function readMechanicsEntry(
   mapKey: unknown,
   candidate: unknown,
@@ -990,8 +1021,8 @@ export function installCapturedGameMechanics(
   }
 
   // DeadSpace keeps loc() module-private on the unmodified page. Read the same served template
-  // assets synchronously when game.loc is absent; custom string packs fail closed because their
-  // override cannot be identified from the root. Keep the asset cache inside this capture.
+  // assets synchronously when game.loc is absent; an active custom string pack fails closed because
+  // its override cannot be identified from the root. Keep the asset cache inside this capture.
   const templatePacks = new Map<string, Record<string, unknown> | undefined>();
   const loadTemplatePack = (
     path: string,
@@ -1027,7 +1058,10 @@ export function installCapturedGameMechanics(
     }
     const root = rootState?.readRoot();
     const settings = readProperty(root, "settings");
-    if (readProperty(settings, "sPackOn") === true) return undefined;
+    if (
+      hasActiveCustomStringPack(pageWindow, readProperty(settings, "sPackOn"))
+    )
+      return undefined;
     const rawLocale = readProperty(settings, "locale");
     const locale = rawLocale === undefined ? "en-US" : rawLocale;
     if (typeof locale !== "string" || !/^[a-z]{2}-[A-Z]{2}$/u.test(locale))
