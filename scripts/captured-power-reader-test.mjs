@@ -7,6 +7,7 @@ import {
 import {
   createCapturedPowerReader,
   readCapturedPowerOrdinaryResourceState,
+  readCapturedPoweredPopulationReserve,
   readNativePowerSupports,
   readCapturedWomlingFarmFood,
   readCapturedMiningPitWorkers,
@@ -1192,6 +1193,124 @@ assert.equal(
   requestedResourceIds.includes("Supply"),
   false,
   "synthetic Supply is never sent through the generic resource reader",
+);
+
+// DeadSpace src/main.js at 6cc9ba8 draws the Powered citizens from the species population and
+// raises that whole draw to 125% while Discharge is active. `race.powered: 1` interpolates the
+// native `traits.powered.vars()[0]` value 0.2, and rank 1.5 interpolates 0.125.
+function poweredRaceRoot(population, race = {}, cityPower = 15) {
+  const resources = { ...root.resource };
+  if (population === null) delete resources.Human;
+  else if (population !== undefined)
+    resources.Human = { ...root.resource.Human, ...population };
+  return {
+    ...root,
+    city: { ...root.city, power: cityPower },
+    race: { ...root.race, powered: 1, ...race },
+    resource: resources,
+  };
+}
+const poweredReserve = (population, race) =>
+  readCapturedPoweredPopulationReserve(poweredRaceRoot(population, race));
+const growth = { amount: 10, max: 20 };
+
+assert.equal(
+  poweredReserve(growth),
+  2,
+  "without Discharge the reserve is the population headroom times the native Powered value",
+);
+for (const [label, discharge] of [
+  ["a missing field", {}],
+  ["an inactive zero counter", { discharge: 0 }],
+  ["a spent negative counter", { discharge: -3 }],
+  ["an absent flag", { discharge: false }],
+]) {
+  assert.equal(
+    poweredReserve(growth, discharge),
+    2,
+    `Discharge ${label} takes the ordinary Powered branch`,
+  );
+}
+assert.equal(
+  poweredReserve(growth, { discharge: 4 }),
+  2.5,
+  "an active Discharge reserves the 125% full-population draw of 5 less the current draw of 2.5",
+);
+assert.equal(
+  poweredReserve({ amount: 1, max: 2 }, { powered: 1.5, discharge: 1 }),
+  0.157,
+  "Discharge rounds each population draw separately, so 0.313 - 0.156 is not 0.15625",
+);
+assert.notEqual(
+  poweredReserve({ amount: 1, max: 2 }, { powered: 1.5, discharge: 1 }),
+  +(1 * 0.125 * 1.25).toFixed(3),
+  "the reserve is not a separately rounded per-citizen approximation",
+);
+assert.equal(
+  poweredReserve(null),
+  0,
+  "a Powered race without an initialized population resource reserves nothing",
+);
+for (const [label, discharge] of [
+  ["a numeric string", { discharge: "3" }],
+  ["a NaN counter", { discharge: Number.NaN }],
+  ["an infinite counter", { discharge: Number.POSITIVE_INFINITY }],
+  ["a boolean flag", { discharge: true }],
+]) {
+  assert.equal(
+    poweredReserve(growth, discharge),
+    undefined,
+    `malformed Discharge state ${label} cannot fabricate a reserve`,
+  );
+}
+assert.equal(
+  poweredReserve({ amount: -1, max: 20 }),
+  undefined,
+  "a negative current population cannot fabricate a reserve",
+);
+assert.equal(
+  poweredReserve({ amount: 10, max: -1 }),
+  Number.MAX_SAFE_INTEGER * 0.2 - 2,
+  "an uncapped population maximum keeps its sentinel headroom",
+);
+function poweredCycle(population, race, cityPower) {
+  const sampleRoot = poweredRaceRoot(population, race, cityPower);
+  return createCapturedPowerReader({
+    ...readerDependencies,
+    rootState: { readRoot: () => sampleRoot },
+    resources: createResources(sampleRoot),
+  }).readCycle();
+}
+const poweredSample = poweredCycle(growth, { discharge: 7 }, 1234.5);
+assert.equal(
+  poweredSample.resources.find((resource) => resource.id === "Power")
+    ?.currentQuantity,
+  1234.5,
+  "synthetic Power current quantity stays the captured native value under a Powered race",
+);
+assert.equal(
+  poweredSample.resources.find((resource) => resource.id === "Power")
+    ?.maxQuantity,
+  cycle.resources.find((resource) => resource.id === "Power").maxQuantity + 2.5,
+  "the future Powered reserve affects only synthetic Power capacity",
+);
+const malformedDischargeReader = (() => {
+  const sampleRoot = poweredRaceRoot(growth, { discharge: "3" });
+  return createCapturedPowerReader({
+    ...readerDependencies,
+    rootState: { readRoot: () => sampleRoot },
+    resources: createResources(sampleRoot),
+  });
+})();
+assert.equal(
+  malformedDischargeReader.readCycle(),
+  undefined,
+  "a malformed Discharge counter makes the Power sample unavailable",
+);
+assert.equal(
+  malformedDischargeReader.readUnavailableReason()?.authority,
+  "resources",
+  "the unavailable authority names the resource snapshot",
 );
 const demandSample = (overrides = {}) => ({
   savingTarget: null,

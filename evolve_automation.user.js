@@ -28975,6 +28975,29 @@
   function readLegacySyntheticUseful(id, current, storageRatio2, settings, demand) {
     return storageRatio2 < 0.99 || demand.requestedQuantity(id) > current || settings[`res_storage_o_${id}`] === !0 && current < (asNumber(settings[`res_max_store${id}`]) ?? 0);
   }
+  var POWERED_DISCHARGE_MULTIPLIER = 1.25, POWERED_DISCHARGE_DIGITS = 3;
+  function readCapturedDischargeActive(root) {
+    let discharge = readProperty(readProperty(root, "race"), "discharge");
+    if (discharge == null || discharge === !1)
+      return !1;
+    if (!(typeof discharge != "number" || !Number.isFinite(discharge)))
+      return discharge > 0;
+  }
+  function readCapturedPoweredPopulationReserve(root) {
+    let population = readCapturedPopulationResource(root), current = asNumber(readProperty(population, "amount")) ?? 0, rawMaximum = asNumber(readProperty(population, "max")) ?? 0, maximum = rawMaximum < 0 ? Number.MAX_SAFE_INTEGER : rawMaximum;
+    if (current < 0) return;
+    let traitValue2 = readCapturedPoweredTraitValue(root);
+    if (traitValue2 === void 0) return;
+    let dischargeActive = readCapturedDischargeActive(root);
+    if (dischargeActive === void 0) return;
+    let draw = (headcount) => {
+      let citizens = traitValue2 * headcount;
+      return dischargeActive ? +(citizens * POWERED_DISCHARGE_MULTIPLIER).toFixed(
+        POWERED_DISCHARGE_DIGITS
+      ) : citizens;
+    };
+    return draw(maximum) - draw(current);
+  }
   function readPowerResourceState(root, id, settings, demand, production, view, buildingStates, decaySource) {
     if (id === "Power") {
       let city = readProperty(root, "city"), unlocked = readProperty(city, "powered") === !0;
@@ -28995,11 +29018,11 @@
           readProperty(readProperty(root, "race"), "replicator"),
           "pow"
         )
-      ) ?? 0 : 0, current = (asNumber(readProperty(city, "power")) ?? 0) + replicatorPower, populationRecord = readCapturedPopulationResource(root), populationCurrent = asNumber(readProperty(populationRecord, "amount")) ?? 0, populationRawMaximum = asNumber(readProperty(populationRecord, "max")) ?? 0, populationMaximum = populationRawMaximum < 0 ? Number.MAX_SAFE_INTEGER : populationRawMaximum, maximum = 0;
+      ) ?? 0 : 0, current = (asNumber(readProperty(city, "power")) ?? 0) + replicatorPower, maximum = 0;
       if (readProperty(readProperty(root, "race"), "powered")) {
-        let traitValue2 = readCapturedPoweredTraitValue(root);
-        if (traitValue2 === void 0) return;
-        maximum += (populationMaximum - populationCurrent) * traitValue2;
+        let reserve = readCapturedPoweredPopulationReserve(root);
+        if (reserve === void 0) return;
+        maximum += reserve;
       }
       for (let building of buildingStates) {
         let { count: count2, stateOn: on, powered } = building, missing = building.stateOff;

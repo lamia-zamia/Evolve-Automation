@@ -899,6 +899,56 @@ function readLegacySyntheticUseful(
   );
 }
 
+// Pinned src/main.js Discharge branch for the Powered citizens draw at 6cc9ba8.
+const POWERED_DISCHARGE_MULTIPLIER = 1.25;
+const POWERED_DISCHARGE_DIGITS = 3;
+
+// Pinned `discharge && discharge > 0` branch selection: a missing field is inactive, a finite
+// number at or below zero is inactive, and any other state is malformed rather than a branch.
+function readCapturedDischargeActive(root: unknown): boolean | undefined {
+  const discharge = readProperty(readProperty(root, "race"), "discharge");
+  if (discharge === undefined || discharge === null || discharge === false)
+    return false;
+  if (typeof discharge !== "number" || !Number.isFinite(discharge))
+    return undefined;
+  return discharge > 0;
+}
+
+/**
+ * Additional Power for a Powered population that does not exist yet.
+ *
+ * DeadSpace src/main.js at 6cc9ba8 draws `traits.powered.vars()[0] * amount` and, while Discharge
+ * is active, raises the whole population draw to 125% and rounds that total to three decimals. The
+ * captured `city.power` already contains the current draw, so the reserve is the difference between
+ * the full-population draw and the current one. Discharge rounding applies to each total, so a
+ * per-citizen multiplier is not equivalent.
+ */
+export function readCapturedPoweredPopulationReserve(
+  root: unknown,
+): number | undefined {
+  const population = readCapturedPopulationResource(root);
+  // The species counters are lazily absent before the population resource initializes; that state
+  // keeps the zero coercion, as does a non-numeric field. A negative maximum keeps the uncapped
+  // sentinel, which leaves both headcounts finite and nonnegative.
+  const current = asNumber(readProperty(population, "amount")) ?? 0;
+  const rawMaximum = asNumber(readProperty(population, "max")) ?? 0;
+  const maximum = rawMaximum < 0 ? Number.MAX_SAFE_INTEGER : rawMaximum;
+  if (current < 0) return undefined;
+  const traitValue = readCapturedPoweredTraitValue(root);
+  if (traitValue === undefined) return undefined;
+  const dischargeActive = readCapturedDischargeActive(root);
+  if (dischargeActive === undefined) return undefined;
+  const draw = (headcount: number): number => {
+    const citizens = traitValue * headcount;
+    return dischargeActive
+      ? +(citizens * POWERED_DISCHARGE_MULTIPLIER).toFixed(
+          POWERED_DISCHARGE_DIGITS,
+        )
+      : citizens;
+  };
+  return draw(maximum) - draw(current);
+}
+
 function readPowerResourceState(
   root: unknown,
   id: string,
@@ -938,18 +988,11 @@ function readPowerResourceState(
       : 0;
     const current =
       (asNumber(readProperty(city, "power")) ?? 0) + replicatorPower;
-    const populationRecord = readCapturedPopulationResource(root);
-    const populationCurrent =
-      asNumber(readProperty(populationRecord, "amount")) ?? 0;
-    const populationRawMaximum =
-      asNumber(readProperty(populationRecord, "max")) ?? 0;
-    const populationMaximum =
-      populationRawMaximum < 0 ? Number.MAX_SAFE_INTEGER : populationRawMaximum;
     let maximum = 0;
     if (readProperty(readProperty(root, "race"), "powered")) {
-      const traitValue = readCapturedPoweredTraitValue(root);
-      if (traitValue === undefined) return undefined;
-      maximum += (populationMaximum - populationCurrent) * traitValue;
+      const reserve = readCapturedPoweredPopulationReserve(root);
+      if (reserve === undefined) return undefined;
+      maximum += reserve;
     }
     for (const building of buildingStates) {
       const { count, stateOn: on, powered } = building;
