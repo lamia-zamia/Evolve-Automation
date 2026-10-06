@@ -116,6 +116,8 @@ function makeScenario({
   projectId = "lhc",
   progress = 20,
   rank = 0,
+  additionalProjectIds = [],
+  afterNativeBuild,
   currentTab = 2,
   initialProject = true,
   scriptSettings = {},
@@ -271,7 +273,13 @@ function makeScenario({
     city: marketStorage ? { market: { qty: 1, mtrade: 1, trade: 0 } } : {},
     civic: {},
     portal: {},
-    arpa: initialProject ? { [projectId]: { rank, complete: progress } } : {},
+    arpa: {
+      ...(initialProject ? { [projectId]: { rank, complete: progress } } : {}),
+      m_type: "Monolith",
+      ...Object.fromEntries(
+        additionalProjectIds.map((id) => [id, { rank: 1, complete: 23 }]),
+      ),
+    },
     queue: { queue },
   };
   for (const resourceId of extraNativeResources) {
@@ -306,18 +314,24 @@ function makeScenario({
     (manualCraftLumber === undefined
       ? { Money: 10.2, Knowledge: 3.2 }
       : { Lumber: 200 });
-  const nativeProjectDefinitions = {
-    [projectId]: {
-      reqs: {},
-      grant: "captured_arpa_test_grant",
-      cost: Object.fromEntries(
-        Object.keys(actualPerPercentCost).map((resourceId) => [
-          resourceId,
-          () => actualPerPercentCost[resourceId] * 100,
-        ]),
-      ),
-    },
-  };
+  const nativeProjectDefinitions = Object.fromEntries(
+    [projectId, ...additionalProjectIds].map((id) => [
+      id,
+      {
+        reqs: {},
+        grant:
+          id === projectId
+            ? "captured_arpa_test_grant"
+            : `captured_arpa_test_grant_${id}`,
+        cost: Object.fromEntries(
+          Object.keys(actualPerPercentCost).map((resourceId) => [
+            resourceId,
+            () => actualPerPercentCost[resourceId] * 100,
+          ]),
+        ),
+      },
+    ]),
+  );
   const adjustArpaCosts = (cost) =>
     Object.fromEntries(
       Object.entries(nativeCostAdjustment(cost, gameRoot)).map(
@@ -404,8 +418,12 @@ function makeScenario({
       if (state.complete >= 100) {
         state.rank += 1;
         state.complete = 0;
-        gameRoot.tech.captured_arpa_test_grant = state.rank;
+        const grant = nativeProjectDefinitions[builtProjectId].grant;
+        gameRoot.tech[grant] = state.rank;
+        // DeadSpace src/arpa.js at db38e2af831907d49aeb5348d678d8d8745d6c3f changes this metadata.
+        if (builtProjectId === "monument") gameRoot.arpa.m_type = "Statue";
       }
+      afterNativeBuild?.(gameRoot, builtProjectId);
       return true;
     };
     return createProjectRow({
@@ -1057,6 +1075,85 @@ withScenario(
       Math.abs(
         knowledgeBefore - scenario.gameRoot.resource.Knowledge.amount - 6.4,
       ) < 1e-9,
+    );
+  },
+);
+
+// DeadSpace db38e2af831907d49aeb5348d678d8d8745d6c3f's Monument completion changes global.arpa.m_type
+// metadata alongside the registered Monument project, without changing another project record.
+withScenario(
+  {
+    projectId: "monument",
+    progress: 99,
+    rank: 4,
+    scriptSettings: {
+      arpa_lhc: false,
+      arpa_monument: true,
+      arpa_p_monument: 0,
+      arpa_m_monument: -1,
+      arpa_w_monument: 1,
+      arpaStep: 5,
+    },
+  },
+  (scenario) => {
+    const moneyBefore = scenario.gameRoot.resource.Money.amount;
+    const knowledgeBefore = scenario.gameRoot.resource.Knowledge.amount;
+    scenario.tick();
+    assert.deepEqual(scenario.calls, [["monument", 1]]);
+    assert.equal(scenario.gameRoot.arpa.monument.rank, 5);
+    assert.equal(scenario.gameRoot.arpa.monument.complete, 0);
+    assert.equal(scenario.gameRoot.arpa.m_type, "Statue");
+    assert.equal(scenario.gameRoot.tech.captured_arpa_test_grant, 5);
+    assert.ok(
+      Math.abs(moneyBefore - scenario.gameRoot.resource.Money.amount - 10.2) <
+        1e-9,
+    );
+    assert.ok(
+      Math.abs(
+        knowledgeBefore - scenario.gameRoot.resource.Knowledge.amount - 3.2,
+      ) < 1e-9,
+    );
+    assert.equal(
+      scenario.logs.some((message) =>
+        message.includes("ARPA action failed/stale"),
+      ),
+      false,
+      JSON.stringify(scenario.logs),
+    );
+  },
+);
+
+// The same bracket still rejects a mutation to a second project in the captured registry.
+withScenario(
+  {
+    projectId: "monument",
+    additionalProjectIds: ["lhc"],
+    progress: 99,
+    rank: 4,
+    afterNativeBuild(gameRoot, builtProjectId) {
+      if (builtProjectId === "monument") gameRoot.arpa.lhc.complete += 1;
+    },
+    scriptSettings: {
+      arpa_lhc: false,
+      arpa_monument: true,
+      arpa_p_monument: 0,
+      arpa_m_monument: -1,
+      arpa_w_monument: 1,
+      arpaStep: 5,
+    },
+  },
+  (scenario) => {
+    scenario.tick();
+    assert.deepEqual(scenario.calls, [["monument", 1]]);
+    assert.equal(scenario.gameRoot.arpa.monument.rank, 5);
+    assert.equal(scenario.gameRoot.arpa.lhc.complete, 24);
+    assert.ok(
+      scenario.logs.some(
+        (message) =>
+          message ===
+          "ARPA action failed/stale: monument the native build changed an unrelated project record",
+      ),
+      JSON.stringify(scenario.logs),
     );
   },
 );

@@ -539,8 +539,10 @@ function createMechanics({
   }),
   invalidateFuel = false,
   guardPostRating = () => 1234,
-  // Effective support equals the configured count until a test models a starved consumer, which
-  // is exactly the live 0/5 case: configured on, effective zero.
+  effectivePower = (sample, member) =>
+    sample?.[member.region]?.[member.struct]?.on,
+  // Effective support normally follows configured `on`; starvation fixtures provide the native
+  // `support_on` value independently, as DeadSpace @ db38e2af writes it.
   effectiveSupport = (sample, member) =>
     sample?.[member.region]?.[member.struct]?.on,
 } = {}) {
@@ -567,12 +569,10 @@ function createMechanics({
     readProductionBreakdown: () => productionBreakdown,
     readEffectivePowerCount: (sample, key) => {
       const member = byKey.get(key);
-      const state =
-        member === undefined
-          ? undefined
-          : sample?.[member.region]?.[member.struct];
-      return typeof state?.on === "number"
-        ? { kind: "value", value: state.on }
+      const effective =
+        member === undefined ? undefined : effectivePower(sample, member);
+      return typeof effective === "number"
+        ? { kind: "value", value: effective }
         : { kind: "invalid" };
     },
     readEffectiveSupportCount: (sample, key) => {
@@ -937,6 +937,319 @@ assert.ok(
   planPowerCycle(coherentSupport, EMPTY_POWER_AUTOMATION_STATE).decision,
   "a reconciled native group proceeds into planning",
 );
+
+function capturedBeltStarvation({
+  stationCount = 5,
+  stationOn = 5,
+  consumerCount = 5,
+  consumerOn = 1,
+  powerCurrent = 100,
+  heliumAmount = 5000,
+  heliumRate = 100,
+} = {}) {
+  const stationKey = "spc_belt:space_station";
+  const iridiumKey = "spc_belt:iridium_ship";
+  const eleriumKey = "spc_belt:elerium_ship";
+  const station = structure({
+    entryKey: stationKey,
+    region: "space",
+    sector: "spc_belt",
+    struct: "space_station",
+    actionId: "space-space_station",
+    powered: 3,
+    support: 3,
+    supportFor: { belt: 3 },
+    supportTypes: "belt",
+    supportFuel: [{ resourceId: "Helium_3", amount: 2.5 }],
+    supportFuelAdjustmentDisabled: true,
+    title: "Space Station",
+  });
+  const iridium = structure({
+    entryKey: iridiumKey,
+    region: "space",
+    sector: "spc_belt",
+    struct: "iridium_ship",
+    actionId: "space-iridium_ship",
+    support: -1,
+    supportTypes: "belt",
+    supportTopology: {
+      anchorEntryKey: stationKey,
+      unlimited: false,
+      enabled: { kind: "value", value: true },
+    },
+    title: "Iridium Ship",
+  });
+  const elerium = structure({
+    entryKey: eleriumKey,
+    region: "space",
+    sector: "spc_belt",
+    struct: "elerium_ship",
+    actionId: "space-elerium_ship",
+    support: -2,
+    supportTypes: "belt",
+    supportTopology: {
+      anchorEntryKey: stationKey,
+      unlimited: false,
+      enabled: { kind: "value", value: true },
+    },
+    title: "Elerium Ship",
+  });
+  const beltStructures = [station, iridium, elerium];
+  const sampleRoot = {
+    ...root,
+    city: { ...root.city, power: powerCurrent },
+    space: {
+      ...root.space,
+      space_station: {
+        count: stationCount,
+        on: stationOn,
+        support: 0,
+        s_max: 0,
+      },
+      iridium_ship: { count: consumerCount, on: consumerOn },
+      elerium_ship: { count: consumerCount, on: consumerOn },
+    },
+    tech: { ...root.tech, asteroid: 5 },
+    resource: {
+      ...root.resource,
+      Food: {
+        name: "Food",
+        amount: 5000,
+        max: 5000,
+        diff: 100,
+        display: true,
+      },
+      Elerium: {
+        name: "Elerium",
+        amount: 0,
+        max: 100,
+        diff: 0,
+        display: true,
+      },
+      Helium_3: {
+        name: "Helium-3",
+        amount: heliumAmount,
+        max: 5000,
+        diff: heliumRate,
+        display: true,
+      },
+    },
+    power: [stationKey],
+    support: { ...root.support, belt: [iridiumKey, eleriumKey] },
+  };
+  const stationPower = (sample, member) =>
+    member.entryKey === stationKey
+      ? 0
+      : sample?.[member.region]?.[member.struct]?.on;
+  const stationSupport = () => 0;
+  const mechanics = Object.freeze({
+    ...createMechanics({
+      structures: beltStructures,
+      productionBreakdown: {
+        production: {},
+        consumption: {},
+      },
+      effectivePower: stationPower,
+      effectiveSupport: stationSupport,
+    }),
+    readEffectLocalizedNumericInputs: (entryKey) =>
+      entryKey === stationKey
+        ? { kind: "value", value: [10] }
+        : { kind: "absent" },
+  });
+  const managedSettings = Object.fromEntries(
+    Object.entries(settings).filter(
+      ([key]) => !key.startsWith("bld_s_") && !key.startsWith("bld_s2_"),
+    ),
+  );
+  Object.assign(managedSettings, {
+    "bld_s_space-space_station": true,
+    "bld_s_space-iridium_ship": true,
+    "bld_s_space-elerium_ship": true,
+    "bld_s2_space-space_station": true,
+    autoPower: true,
+    masterScriptToggle: true,
+    buildingsLimitPowered: true,
+  });
+  const reader = createCapturedPowerReader({
+    ...readerDependencies,
+    rootState: { readRoot: () => sampleRoot },
+    mechanics,
+    resources: createResources(sampleRoot, []),
+    readSettingsRaw: () => managedSettings,
+    readRuntimeOptions: () => ({
+      settings: {
+        showGalactic: true,
+        limitPowered: true,
+        autoFleet: false,
+        crewReserve: 0,
+      },
+      debug: false,
+      consumptionBalanceMinimum: 1,
+    }),
+  });
+  return { cycle: reader.readCycle(), mechanics, root: sampleRoot };
+}
+
+// DeadSpace @ db38e2af leaves `space_station.on` configured at five while native `p_on` and
+// `support_on` can both be zero. Sample this real reader-to-planner boundary with no recurring
+// Building-panel discovery and keep the configured Belt demand prospective during starvation.
+const beltStarvation = capturedBeltStarvation();
+assert.ok(
+  beltStarvation.cycle,
+  "native 0/5 starvation is a valid captured cycle",
+);
+assert.equal(
+  beltStarvation.root.space.space_station.on,
+  5,
+  "native configured Station state remains five during 0/5 starvation",
+);
+assert.deepEqual(
+  beltStarvation.mechanics.readEffectivePowerCount(
+    beltStarvation.root,
+    "spc_belt:space_station",
+  ),
+  { kind: "value", value: 0 },
+  "native effective Station p_on is zero independently of configured on",
+);
+for (const entryKey of ["spc_belt:iridium_ship", "spc_belt:elerium_ship"]) {
+  assert.deepEqual(
+    beltStarvation.mechanics.readEffectiveSupportCount(
+      beltStarvation.root,
+      entryKey,
+    ),
+    { kind: "value", value: 0 },
+    `native effective support_on is zero for ${entryKey}`,
+  );
+}
+assert.deepEqual(
+  beltStarvation.cycle.supports.find((item) => item.type === "belt"),
+  {
+    type: "belt",
+    title: "belt",
+    current: 0,
+    maximum: 0,
+    available: 0,
+    unlocked: true,
+    allocation: "strict",
+  },
+  "the captured native Belt authority reports zero effective capacity during starvation",
+);
+assert.equal(
+  beltStarvation.cycle.buildings.find(
+    (item) => item.binding === "space-space_station",
+  )?.stateOn,
+  5,
+  "configured Space Station count survives its zero native effective count",
+);
+assert.deepEqual(
+  beltStarvation.cycle.buildings.find(
+    (item) => item.binding === "space-space_station",
+  )?.supportChanges,
+  [{ type: "belt", amount: -3 }],
+  "the captured Space Station remains a Belt provider candidate",
+);
+assert.deepEqual(
+  beltStarvation.cycle.beltConsumers.map(
+    ({ binding, configured, supportPerUnit }) => [
+      binding,
+      configured,
+      supportPerUnit,
+    ],
+  ),
+  [
+    ["space-iridium_ship", 1, 1],
+    ["space-elerium_ship", 1, 2],
+  ],
+  "configured Belt demand remains visible with effective support_on at zero",
+);
+assert.equal(
+  beltStarvation.cycle.buildings
+    .find((item) => item.binding === "space-space_station")
+    ?.consumptions.find((item) => item.resourceId === "Helium_3")?.enableRate,
+  2.5,
+  "the native Station support-fuel requirement reaches Power planning",
+);
+assert.equal(beltStarvation.cycle.powerCurrent, 100);
+assert.equal(
+  beltStarvation.cycle.resources.find((item) => item.id === "Helium_3")
+    ?.rateOfChange,
+  100,
+  "the recovery sample has adequate Power headroom and Helium-3 rate",
+);
+const beltStarvationPlan = planPowerCycle(
+  beltStarvation.cycle,
+  EMPTY_POWER_AUTOMATION_STATE,
+);
+const plannedBeltState = (binding) => {
+  const operation = beltStarvationPlan.decision?.operations.find(
+    (candidate) =>
+      candidate.kind === "adjust-building" && candidate.binding === binding,
+  );
+  return operation?.kind === "adjust-building"
+    ? operation.expectedStateOn + operation.amount
+    : undefined;
+};
+assert.equal(
+  plannedBeltState("space-space_station"),
+  5,
+  "adequate Power and Helium-3 restore native Station operation without turning configured five down",
+);
+assert.equal(
+  plannedBeltState("space-iridium_ship"),
+  1,
+  "the planned Station recovery preserves configured Iridium Miner capacity",
+);
+assert.equal(
+  plannedBeltState("space-elerium_ship"),
+  1,
+  "the planned Station recovery preserves configured Elerium Miner capacity",
+);
+
+for (const blocked of [
+  { powerCurrent: -100, heliumAmount: 5000, heliumRate: 100 },
+  { powerCurrent: 100, heliumAmount: 0, heliumRate: 0 },
+]) {
+  const blockedSample = capturedBeltStarvation({
+    stationCount: 10,
+    stationOn: 5,
+    consumerCount: 10,
+    consumerOn: 6,
+    ...blocked,
+  });
+  assert.ok(blockedSample.cycle);
+  assert.equal(
+    blockedSample.cycle.supports.find((item) => item.type === "belt")?.maximum,
+    0,
+  );
+  const blockedPlan = planPowerCycle(
+    blockedSample.cycle,
+    EMPTY_POWER_AUTOMATION_STATE,
+  );
+  const target = (binding) => {
+    const operation = blockedPlan.decision?.operations.find(
+      (candidate) =>
+        candidate.kind === "adjust-building" && candidate.binding === binding,
+    );
+    return operation?.kind === "adjust-building"
+      ? operation.expectedStateOn + operation.amount
+      : undefined;
+  };
+  const powerBlocked = blocked.powerCurrent < 0;
+  assert.ok(
+    target("space-space_station") === (powerBlocked ? 0 : 5),
+    `insufficient Power or Station support fuel cannot raise configured Station five: ${JSON.stringify(blocked)}`,
+  );
+  assert.ok(
+    target("space-iridium_ship") <= 6,
+    `insufficient native Belt capacity cannot increase configured Iridium demand: ${JSON.stringify(blocked)}`,
+  );
+  assert.ok(
+    target("space-elerium_ship") <= 6,
+    `insufficient native Belt capacity cannot increase configured Elerium demand: ${JSON.stringify(blocked)}`,
+  );
+}
+
 function assertFrozenSupport(options, message) {
   const sample = sampleSupportCoherence(options);
   assert.ok(sample, message);
@@ -1229,7 +1542,7 @@ assert.equal(
   "synthetic Supply is never sent through the generic resource reader",
 );
 
-// DeadSpace src/main.js at 6cc9ba8 draws the Powered citizens from the species population and
+// DeadSpace src/main.js at db38e2af831907d49aeb5348d678d8d8745d6c3f draws the Powered citizens from the species population and
 // raises that whole draw to 125% while Discharge is active. `race.powered: 1` interpolates the
 // native `traits.powered.vars()[0]` value 0.2, and rank 1.5 interpolates 0.125.
 function poweredRaceRoot(population, race = {}, cityPower = 15) {

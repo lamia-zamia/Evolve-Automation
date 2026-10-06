@@ -672,9 +672,18 @@ export function createCapturedArpaMechanics(
         // Exactly the record pinned `addProject` writes before its first read of an offered project.
         arpa[plan.projectId] = { complete: 0, rank: 0 };
       }
+      // `global.arpa` also holds native metadata such as Monument's `m_type`. Only ids in the
+      // captured `arpaProjects` registry are project records whose mutation this bracket owns.
       const before = new Map<string, string>();
-      for (const key of Object.keys(arpa))
-        before.set(key, describeArpaRecord(arpa[key]));
+      for (const projectId of current.order) {
+        if (projectId === plan.projectId) continue;
+        before.set(
+          projectId,
+          Object.hasOwn(arpa, projectId)
+            ? `present:${describeArpaRecord(arpa[projectId])}`
+            : "absent",
+        );
+      }
       const beforeState = readProjectState(arpa, plan.projectId);
       if (beforeState === undefined)
         return { kind: "stale", reason: "the project state is unreadable" };
@@ -713,19 +722,19 @@ export function createCapturedArpaMechanics(
           reason: "the native build left an inconsistent project progress",
         };
       if (afterArpa !== undefined) {
-        for (const [key, value] of before) {
-          if (key === plan.projectId) continue;
-          if (describeArpaRecord(afterArpa[key]) !== value)
-            return {
-              kind: "stale",
-              reason: "the native build changed an unrelated project record",
-            };
-        }
-        for (const key of Object.keys(afterArpa)) {
-          if (key !== plan.projectId && !before.has(key))
+        for (const [projectId, value] of before) {
+          const afterValue = Object.hasOwn(afterArpa, projectId)
+            ? `present:${describeArpaRecord(afterArpa[projectId])}`
+            : "absent";
+          if (value === "absent" && afterValue !== "absent")
             return {
               kind: "stale",
               reason: "the native build added an unrelated project record",
+            };
+          if (afterValue !== value)
+            return {
+              kind: "stale",
+              reason: "the native build changed an unrelated project record",
             };
         }
       }

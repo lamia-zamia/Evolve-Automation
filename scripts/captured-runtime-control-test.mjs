@@ -63,6 +63,120 @@ import { makeCapturedBuildingMechanics } from "./captured-building-test-fixtures
   stop();
 }
 
+// The native chrysotile entry no longer blocks exact Power demand at managed-build preparation.
+{
+  const root = {
+    settings: { civTabs: 3, spaceTabs: 0 },
+    race: {},
+    tech: {},
+    city: {
+      farm: { count: 0 },
+      chrysotile: { count: 0 },
+    },
+    resource: {
+      Money: { amount: 1000, max: 10000, display: true, diff: 0 },
+      Polymer: { amount: 0, max: 1000, display: true, diff: 0 },
+    },
+  };
+  const errors = [];
+  const invoked = [];
+  let chrysotileAvailabilityReads = 0;
+  let cycle;
+  const buildingMechanics = makeCapturedBuildingMechanics(root, {
+    availability: (_liveRoot, binding) => {
+      if (binding === "city-chrysotile") chrysotileAvailabilityReads++;
+      return {
+        kind: "value",
+        value: binding === "city-farm" || binding === "city-chrysotile",
+      };
+    },
+    overrides: new Map([
+      [
+        "city-chrysotile",
+        {
+          entryKey: "city:chrysotile",
+          region: "city",
+          sector: "city",
+          struct: "chrysotile",
+          actionId: "undefined-chrysotile",
+        },
+      ],
+    ]),
+  });
+  const stop = startCapturedRuntime({
+    pageCapture: {
+      isComplete: () => true,
+      mechanics: {
+        ...buildingMechanics,
+        readProductionBreakdown: () => undefined,
+      },
+      rootState: {
+        readRoot: () => root,
+        isReactivitySuppressed: () => false,
+        subscribeRootReplaced: () => () => {},
+      },
+      controls: withControlCaptureAuthority({
+        resolve: (elementId) =>
+          elementId === "city-farm"
+            ? {
+                elementId,
+                generation: 1,
+                methods: ["action"],
+                data: { act: root.city.farm },
+              }
+            : undefined,
+        invoke: (handle, method) => {
+          invoked.push(`${handle.elementId}.${method}`);
+          return { ok: true, value: undefined };
+        },
+        capturedElementIds: () => ["city-farm"],
+      }),
+      controlUsage: { readUsage: () => [] },
+      periods: {
+        subscribe(next) {
+          cycle = next;
+          return () => {};
+        },
+      },
+      mountSuppression: {
+        available: false,
+        withoutMounting: () => {
+          throw new Error("Building preparation must not mount a panel");
+        },
+      },
+      uninstall: () => {},
+    },
+    document: createTestDocument(element("div", { id: "runtime-root" })),
+    mouseEvent: class {},
+    storage: {
+      getItem: () =>
+        JSON.stringify({
+          masterScriptToggle: true,
+          tickRate: 1,
+          autoStorage: true,
+          autoPower: true,
+          "batcity-farm": true,
+        }),
+    },
+    logError: (message) => errors.push(message),
+  });
+  cycle({ periods: 1 });
+  stop();
+
+  const powerError = errors.find((message) => message.startsWith("autoPower:"));
+  assert.ok(powerError, JSON.stringify(errors));
+  assert.match(
+    powerError,
+    /exact demand unavailable: offered technology snapshot unavailable/,
+  );
+  assert.ok(chrysotileAvailabilityReads > 0);
+  assert.equal(
+    invoked.some((call) => call.includes("swapTab")),
+    false,
+    "the runtime uses retained mechanics without recurring Building discovery",
+  );
+}
+
 function cityOfferDocument(id) {
   const root = element("div", { id: "runtime-root" });
   const city = element("div", { id: "city" });

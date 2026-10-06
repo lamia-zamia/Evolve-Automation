@@ -110,6 +110,7 @@ function runMinerBootstrap({
   replaceBeforePower = false,
   starved = false,
   liveStarvation = false,
+  configuredStationOn = false,
 } = {}) {
   const root = {
     settings: { civTabs: 1, spaceTabs: 0, showResearch: true, showSpace: true },
@@ -127,7 +128,7 @@ function runMinerBootstrap({
       elerium_ship: { count: 1, on: 0 },
       space_station: {
         count: liveStarvation ? 5 : 1,
-        on: liveStarvation ? 0 : 1,
+        on: liveStarvation ? (configuredStationOn ? 5 : 0) : 1,
         support: liveStarvation ? 0 : 3,
         s_max: liveStarvation || starved ? 0 : 3,
       },
@@ -514,6 +515,62 @@ assert.ok(
     liveStarvationBootstrap.afterCycles[0].ironEffective > 0 &&
     liveStarvationBootstrap.afterCycles[0].eleriumEffective > 0,
   "the next native support pass restores Belt capacity and serves its consumers",
+);
+
+// A live 0/5 Station preserves configured Space Miner demand through the Jobs -> Power handoff.
+const configuredStarvationBootstrap = runMinerBootstrap({
+  liveStarvation: true,
+  configuredStationOn: true,
+});
+const configuredStarvationSnapshot = configuredStarvationBootstrap.snapshots[0];
+assert.ok(configuredStarvationSnapshot);
+assert.equal(configuredStarvationSnapshot.stationCount, 5);
+assert.equal(configuredStarvationSnapshot.stationOn, 5);
+assert.equal(configuredStarvationSnapshot.stationEffective, 0);
+assert.equal(configuredStarvationSnapshot.stationSupport, 0);
+assert.equal(configuredStarvationSnapshot.ironOn, 3);
+assert.equal(configuredStarvationSnapshot.ironEffective, 0);
+assert.equal(
+  configuredStarvationSnapshot.power.cycle.supports.find(
+    ({ type }) => type === "belt",
+  )?.current,
+  0,
+);
+assert.equal(
+  configuredStarvationSnapshot.power.cycle.supports.find(
+    ({ type }) => type === "belt",
+  )?.maximum,
+  0,
+);
+assert.ok(configuredStarvationSnapshot.handoff > 0);
+assert.equal(
+  configuredStarvationSnapshot.power.cycle.prospectiveSpaceMiners,
+  configuredStarvationSnapshot.handoff,
+);
+const configuredStationChange =
+  configuredStarvationSnapshot.power.plan.decision.operations.find(
+    ({ kind, binding }) =>
+      kind === "adjust-building" && binding === "space-space_station",
+  );
+assert.ok(
+  configuredStationChange === undefined ||
+    configuredStationChange.expectedStateOn + configuredStationChange.amount >=
+      5,
+  "Power planning does not lower configured Station five because native operation is starved",
+);
+assert.ok(
+  configuredStarvationSnapshot.power.plan.decision.operations.some(
+    ({ kind, binding, amount }) =>
+      kind === "adjust-building" &&
+      binding === "space-elerium_ship" &&
+      amount > 0,
+  ),
+  "the prospective Space Miner handoff reaches Power while native support_on is zero",
+);
+assert.ok(
+  configuredStarvationBootstrap.afterCycles[0].beltCapacity > 0 &&
+    configuredStarvationBootstrap.afterCycles[0].eleriumEffective > 0,
+  "native support recovery serves the Power-reserved mining ship",
 );
 
 const stale = runMinerBootstrap({ staleJobs: true });

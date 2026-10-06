@@ -756,4 +756,112 @@ assert.equal(researchControl.readGrantedTechs(), undefined);
   );
 }
 
+// Building preparation joins the native City catalog before exact Power demand, without a panel draw.
+{
+  const root = {
+    settings: { civTabs: 3, spaceTabs: 0 },
+    race: {},
+    tech: {},
+    city: {
+      farm: { count: 0 },
+      chrysotile: { count: 0 },
+    },
+    resource: {
+      Money: { amount: 1000, max: 10000, display: true, diff: 0 },
+      Polymer: { amount: 0, max: 1000, display: true, diff: 0 },
+    },
+  };
+  const settings = {
+    autoBuild: false,
+    autoStorage: true,
+    "batcity-farm": true,
+    "bld_w_city-farm": 100,
+  };
+  let panelOpens = 0;
+  const mechanics = makeCapturedBuildingMechanics(root, {
+    availability: (_liveRoot, binding) => ({
+      kind: "value",
+      value: binding === "city-farm" || binding === "city-chrysotile",
+    }),
+    overrides: new Map([
+      [
+        "city-chrysotile",
+        {
+          entryKey: "city:chrysotile",
+          region: "city",
+          sector: "city",
+          struct: "chrysotile",
+          actionId: "undefined-chrysotile",
+        },
+      ],
+    ]),
+  });
+  const progression = createCapturedProgressionControl({
+    rootState: {
+      readRoot: () => root,
+      subscribeRootReplaced: () => () => {},
+    },
+    controls: withControlCaptureAuthority({
+      resolve: (elementId) =>
+        elementId === "city-farm"
+          ? {
+              elementId,
+              generation: 1,
+              data: { act: root.city.farm },
+            }
+          : undefined,
+      invoke: () => ({ ok: false, reason: "unexpected-control" }),
+      capturedElementIds: () => ["city-farm"],
+    }),
+    mountSuppression: {
+      available: false,
+      withoutMounting: () => {
+        throw new Error("Building preparation must not draw a panel");
+      },
+    },
+    panels: {
+      open: () => {
+        panelOpens++;
+        throw new Error("Building preparation must not open a panel");
+      },
+    },
+    drawnActions: {
+      exists: () => false,
+      read: () => {
+        throw new Error("Building preparation must not read DOM rows");
+      },
+    },
+    mechanics,
+    arpa: emptyArpaMechanics,
+    readSettings: () => settings,
+    nowMs: () => 0,
+  });
+
+  const targets = progression.readUnlockedStorageBuildTargets();
+  assert.deepEqual(
+    targets.map(({ elementId }) => elementId),
+    ["city-farm"],
+  );
+  assert.deepEqual(
+    progression
+      .readEstablishedStorageBuildTargets()
+      .map(({ elementId }) => elementId),
+    ["city-farm"],
+    "Building preparation establishes the managed target snapshot",
+  );
+  const exactDemand = createCapturedResourceDemand({
+    rootState: { readRoot: () => root },
+    reservations: {
+      readReservations: () => ({ targets: [], unavailable: false }),
+    },
+    readBuildTargets: progression.readEstablishedStorageBuildTargets,
+    costs: {
+      readCost: () => ({ cost: { Polymer: 200 }, pool: undefined }),
+    },
+    readSettings: () => settings,
+  }).sampleExact();
+  assert.equal(exactDemand.status, "ready");
+  assert.equal(panelOpens, 0);
+}
+
 console.log("captured-progression-control ok");

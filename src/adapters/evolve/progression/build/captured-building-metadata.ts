@@ -28,11 +28,12 @@ export const CAPTURED_MECH_BUILDINGS = Object.freeze({
   purifier: "portal-purifier",
 });
 
-/** DeadSpace 1.5.0's two city gather controls have an incorrect live element prefix. */
+/** DeadSpace 1.5.0's three city gather controls have an incorrect live element prefix. */
 export const CITY_ELEMENT_BINDING_ALIASES: Readonly<Record<string, string>> =
   Object.freeze({
     "undefined-food": "city-food",
     "undefined-stone": "city-stone",
+    "undefined-chrysotile": "city-chrysotile",
   });
 
 const SMART_BUILDING_BINDINGS: ReadonlySet<string> = new Set([

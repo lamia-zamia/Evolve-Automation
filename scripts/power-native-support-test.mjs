@@ -303,7 +303,7 @@ assert.deepEqual(
     ["space-iridium_ship", 0],
     ["space-elerium_ship", 2],
   ],
-  "the configured Belt floor recovers a disabled Station while Power has headroom",
+  "the configured Belt floor recovers a configured-off Station while Power has headroom",
 );
 const alteredBeltPlan = beltPlan({ providerUnit: 7, consumerUnit: 6 });
 assert.deepEqual(alteredBeltPlan, beltPlan());

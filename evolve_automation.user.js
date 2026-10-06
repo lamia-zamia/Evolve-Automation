@@ -1033,7 +1033,8 @@
     purifier: "portal-purifier"
   }), CITY_ELEMENT_BINDING_ALIASES = Object.freeze({
     "undefined-food": "city-food",
-    "undefined-stone": "city-stone"
+    "undefined-stone": "city-stone",
+    "undefined-chrysotile": "city-chrysotile"
   }), SMART_BUILDING_BINDINGS = /* @__PURE__ */ new Set([
     "city-mill",
     "city-cement_plant",
@@ -35330,8 +35331,11 @@
         }
         arpa[plan.projectId] === void 0 && (arpa[plan.projectId] = { complete: 0, rank: 0 });
         let before = /* @__PURE__ */ new Map();
-        for (let key of Object.keys(arpa))
-          before.set(key, describeArpaRecord(arpa[key]));
+        for (let projectId of current.order)
+          projectId !== plan.projectId && before.set(
+            projectId,
+            Object.hasOwn(arpa, projectId) ? `present:${describeArpaRecord(arpa[projectId])}` : "absent"
+          );
         let beforeState = readProjectState(arpa, plan.projectId);
         if (beforeState === void 0)
           return { kind: "stale", reason: "the project state is unreadable" };
@@ -35357,20 +35361,20 @@
             kind: "stale",
             reason: "the native build left an inconsistent project progress"
           };
-        if (afterArpa !== void 0) {
-          for (let [key, value] of before)
-            if (key !== plan.projectId && describeArpaRecord(afterArpa[key]) !== value)
-              return {
-                kind: "stale",
-                reason: "the native build changed an unrelated project record"
-              };
-          for (let key of Object.keys(afterArpa))
-            if (key !== plan.projectId && !before.has(key))
+        if (afterArpa !== void 0)
+          for (let [projectId, value] of before) {
+            let afterValue = Object.hasOwn(afterArpa, projectId) ? `present:${describeArpaRecord(afterArpa[projectId])}` : "absent";
+            if (value === "absent" && afterValue !== "absent")
               return {
                 kind: "stale",
                 reason: "the native build added an unrelated project record"
               };
-        }
+            if (afterValue !== value)
+              return {
+                kind: "stale",
+                reason: "the native build changed an unrelated project record"
+              };
+          }
         let charged = {};
         if (afterState.rank !== beforeState.rank) {
           let grant = readProperty(current.registry[plan.projectId], "grant");
