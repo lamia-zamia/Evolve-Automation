@@ -414,6 +414,101 @@ assert.equal(
 );
 assert.equal(sampledTaxDecision.authorityEntertainerCap, null);
 
+const cappedEntertainerRoot = structuredClone(authorityRoot);
+cappedEntertainerRoot.civic.unemployed.assigned = 15;
+cappedEntertainerRoot.civic.unemployed.workers = 15;
+cappedEntertainerRoot.civic.entertainer.assigned = 5;
+cappedEntertainerRoot.civic.entertainer.workers = 5;
+cappedEntertainerRoot.civic.entertainer.max = 5;
+cappedEntertainerRoot.resource.Population.amount = 20;
+const cappedEntertainerCalls = [];
+const cappedEntertainerAutomation = createCapturedOrdinaryJobsAutomation({
+  rootState: { readRoot: () => cappedEntertainerRoot },
+  controls: {
+    capturedElementIds: () => [
+      "civ-unemployed",
+      "civ-farmer",
+      "civ-entertainer",
+    ],
+    resolve: (elementId) => ({
+      elementId,
+      generation: 1,
+      methods: ["add", "sub", "setDefault"],
+    }),
+    invoke: (handle, method, args = []) => {
+      cappedEntertainerCalls.push({
+        elementId: handle.elementId,
+        method,
+        args,
+      });
+      if (method === "setDefault") {
+        cappedEntertainerRoot.civic.d_job = args[0];
+      } else {
+        const job = cappedEntertainerRoot.civic[handle.elementId.slice(4)];
+        if (method === "sub" && job.workers > 0) job.workers--;
+        if (method === "add" && (job.max === -1 || job.workers < job.max))
+          job.workers++;
+      }
+      return { ok: true, value: undefined };
+    },
+  },
+  readSettings: () => ({
+    ...resetBreakpoints,
+    job_b1_farmer: 0,
+    job_b2_farmer: 0,
+    job_b3_farmer: 0,
+    job_unemployed: true,
+    job_farmer: true,
+    job_entertainer: true,
+    job_s_entertainer: true,
+    job_b1_entertainer: 5,
+    job_b2_entertainer: 5,
+    job_b3_entertainer: 5,
+  }),
+});
+const cappedInput = cappedEntertainerAutomation.reader.readCycle(false);
+assert.equal(cappedInput.available, true);
+const cappedDecision = planJobs({
+  ...cappedInput,
+  jobs: cappedInput.jobs.map((job) =>
+    job.kind === "entertainer" ? { ...job, smartMaximum: 10 } : job,
+  ),
+});
+assert.equal(
+  cappedDecision.assignments.find(({ jobToken }) => jobToken === 19)?.workers,
+  5,
+);
+assert.equal(
+  cappedEntertainerAutomation.executor.execute(cappedDecision).status,
+  "succeeded",
+);
+assert.equal(cappedEntertainerRoot.civic.entertainer.workers, 5);
+assert.equal(
+  cappedEntertainerCalls.some(
+    ({ elementId, method }) =>
+      elementId === "civ-entertainer" && method === "add",
+  ),
+  false,
+  "native add would refuse an Entertainer beyond civic.entertainer.max",
+);
+const nextCappedInput = cappedEntertainerAutomation.reader.readCycle(false);
+const nextCappedDecision = planJobs({
+  ...nextCappedInput,
+  jobs: nextCappedInput.jobs.map((job) =>
+    job.kind === "entertainer" ? { ...job, smartMaximum: 10 } : job,
+  ),
+});
+assert.equal(
+  nextCappedDecision.assignments.find(({ jobToken }) => jobToken === 19)
+    ?.workers,
+  5,
+);
+assert.equal(
+  cappedEntertainerAutomation.executor.execute(nextCappedDecision).status,
+  "succeeded",
+  "a fresh cycle never retries the unreachable Entertainer target",
+);
+
 zeroEntertainerRoot.city.morale.entertain = 0;
 const provenZeroInput = zeroEntertainerAutomation.reader.readCycle(false);
 assert.equal(provenZeroInput.authority.entertainerMorale, 0);

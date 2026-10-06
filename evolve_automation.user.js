@@ -11502,7 +11502,11 @@
               );
             } else
               jobsToAssign = Math.min(jobsToAssign, minimumFarmers);
-          } else job.warlordMiner ? jobsToAssign = job.maximum : job.kind === "entertainer" && jobMaximums[index] !== null ? jobsToAssign = Math.min(availableEmployees, jobMaximums[index]) : jobMaximums[index] !== null && (jobsToAssign = Math.min(jobsToAssign, jobMaximums[index]));
+          } else job.warlordMiner ? jobsToAssign = job.maximum : job.kind === "entertainer" && jobMaximums[index] !== null ? jobsToAssign = Math.min(
+            availableEmployees,
+            jobMaximums[index],
+            job.maximum === -1 ? Number.MAX_SAFE_INTEGER : job.maximum
+          ) : jobMaximums[index] !== null && (jobsToAssign = Math.min(jobsToAssign, jobMaximums[index]));
           job.kind === "space-miner" && (maximumSpaceMiners = Math.max(
             maximumSpaceMiners,
             Math.min(availableEmployees, job.uncappedBreakpoints[pass])

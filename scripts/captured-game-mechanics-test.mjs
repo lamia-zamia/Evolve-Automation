@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { runInNewContext } from "node:vm";
 
 import { installPageCapture } from "../src/adapters/evolve/page-capture.ts";
+import { installCapturedGameMechanics } from "../src/adapters/evolve/captured-game-mechanics.ts";
 
 class FakeWorker {
   constructor(url) {
@@ -31,6 +32,7 @@ class FakeWorker {
 function makePage() {
   const page = runInNewContext(`
     (function() {
+      const templates = { probe_amount: "%0 units", probe_dual: "%0 and %1", probe_noise: "%0 noise" };
       function createProbe(region, sector, struct, actionId, resourceId, factor, behavior, state) {
         const action = {
           id: actionId,
@@ -54,14 +56,14 @@ function makePage() {
         return function() { return localize("probe_dual", [first, second]); };
       }
       function localize(key, variables) {
-        let result = key === "probe_amount" ? "%0 units" : key === "probe_dual" ? "%0 and %1" : key === "probe_noise" ? "%0 noise" : "translated:" + key;
+        let result = templates[key] ?? "translated:" + key;
         if (variables) for (let i = 0; i < variables.length; i++)
           result = result.replace(new RegExp("%" + i + "(?!\\\\d)", "g"), variables[i]);
         return result;
       }
       return {
         Map, Object, Array, Function, Number, String, Math, Proxy, createProbe, makeLocalizedEffect, makeDualLocalizedEffect,
-        game: { loc: localize },
+        game: { loc: localize }, setTemplate: (key, value) => { templates[key] = value; },
       };
     })()
   `);
@@ -1273,6 +1275,120 @@ assert.deepEqual(
   originalReplaceDescriptor,
 );
 effectAction.effect = originalEffect;
+
+function assetLocalizedFixture({
+  locale = "en-US",
+  assets,
+  customPack = false,
+}) {
+  const assetPage = makePage();
+  delete assetPage.game.loc;
+  assert.equal("loc" in assetPage.game, false);
+  const requests = [];
+  assetPage.XMLHttpRequest = class {
+    open(method, path, async) {
+      assert.equal(method, "GET");
+      assert.equal(async, false);
+      this.path = path;
+      requests.push(path);
+    }
+    send() {
+      this.status = Object.hasOwn(assets, this.path) ? 200 : 404;
+      this.responseText = assets[this.path] ?? "";
+    }
+  };
+  const root = { settings: { locale, sPackOn: customPack } };
+  const installed = installCapturedGameMechanics(
+    assetPage,
+    { subscribe: () => () => {} },
+    { readRoot: () => root },
+  );
+  const registry = new assetPage.Map();
+  for (const [region, sector, struct] of [
+    ["space", "spc_home", "relay"],
+    ["interstellar", "int_home", "relay"],
+    ["galaxy", "gxy_home", "relay"],
+  ]) {
+    const entry = assetPage.createProbe(
+      region,
+      sector,
+      struct,
+      `${region}-${sector}-${struct}`,
+      "Oil",
+      1,
+      "valid",
+      {},
+    );
+    entry.c_action.effect = assetPage.makeDualLocalizedEffect(2.5, 100);
+    registry.set(entry.key, entry);
+  }
+  assert.equal(installed.mechanics.readStructures()?.length, 3);
+  return {
+    read: () =>
+      installed.mechanics.readEffectLocalizedNumericInputs(
+        "spc_home:relay",
+        "probe_dual",
+      ),
+    page: assetPage,
+    requests,
+  };
+}
+
+const baseStrings = JSON.stringify({ probe_dual: "%0 and %1" });
+const baseAsset = { "strings/strings.json": baseStrings };
+const baseFixture = assetLocalizedFixture({ assets: baseAsset });
+assert.deepEqual(baseFixture.read(), { kind: "value", value: [2.5, 100] });
+assert.deepEqual(baseFixture.requests, ["strings/strings.json"]);
+assert.equal("loc" in baseFixture.page.game, false);
+
+const localeFixture = assetLocalizedFixture({
+  locale: "fr-FR",
+  assets: {
+    ...baseAsset,
+    "strings/strings.fr-FR.json": JSON.stringify({
+      probe_dual: "locale %1 puis %0",
+    }),
+  },
+});
+localeFixture.page.setTemplate("probe_dual", "locale %1 puis %0");
+assert.deepEqual(localeFixture.read(), { kind: "value", value: [2.5, 100] });
+assert.deepEqual(localeFixture.requests, [
+  "strings/strings.json",
+  "strings/strings.fr-FR.json",
+]);
+
+for (const [name, fixture] of [
+  ["missing base", assetLocalizedFixture({ assets: {} })],
+  [
+    "missing override",
+    assetLocalizedFixture({ locale: "fr-FR", assets: baseAsset }),
+  ],
+  [
+    "malformed base",
+    assetLocalizedFixture({ assets: { "strings/strings.json": "{" } }),
+  ],
+  [
+    "malformed override",
+    assetLocalizedFixture({
+      locale: "fr-FR",
+      assets: { ...baseAsset, "strings/strings.fr-FR.json": "{" },
+    }),
+  ],
+  [
+    "malformed locale",
+    assetLocalizedFixture({ locale: "fr/FR", assets: baseAsset }),
+  ],
+  [
+    "unsupported locale",
+    assetLocalizedFixture({ locale: "xx-XX", assets: baseAsset }),
+  ],
+  [
+    "custom pack",
+    assetLocalizedFixture({ assets: baseAsset, customPack: true }),
+  ],
+]) {
+  assert.deepEqual(fixture.read(), { kind: "invalid" }, name);
+}
 
 // One inherited assignment captures the p-ledger owner and then removes the prototype hook.
 const falseLedgerCandidate = new page.Object();

@@ -399,6 +399,23 @@ assert.equal(
   10,
   "smart morale raises Entertainers above breakpoint five before Quarry receives surplus",
 );
+const capacityBoundPlan = planJobs({
+  ...projectedCycle,
+  jobs: [{ ...entertainerTarget, maximum: 5 }, quarryFallback],
+  population: 80,
+  defaultJobToken: 5,
+});
+assert.equal(
+  capacityBoundPlan.assignments.find(({ jobToken }) => jobToken === 19)
+    ?.workers,
+  5,
+  "the smart target cannot exceed native Entertainer capacity",
+);
+assert.equal(
+  capacityBoundPlan.assignments.find(({ jobToken }) => jobToken === 5)?.workers,
+  75,
+  "surplus workers remain available to the Quarry fallback",
+);
 assert.deepEqual(
   projectedCycle?.jobs.map(({ id, token }) => ({ id, token })),
   [
