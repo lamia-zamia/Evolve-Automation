@@ -2242,6 +2242,10 @@
     let candidateStructureMap, candidateStructureKeys = /* @__PURE__ */ new Set(), productionBreakdownOwner, nativePowerOn, retainNativePowerOn = (receiver) => {
       nativePowerOn = receiver, installSupportOnProbe();
     }, nativeSupportOn, supportConsumerNames = /* @__PURE__ */ new Set(), supportOnFirstReceivers = /* @__PURE__ */ new Map(), supportOnProbeSetters = /* @__PURE__ */ new Map();
+    function registerSupportConsumer(entry) {
+      let support = readMechanicsPrimitive(entry.action, "support");
+      support.kind !== "value" || support.value >= 0 || (supportConsumerNames.add(entry.struct), installSupportOnProbe());
+    }
     function restoreSupportOnProbe() {
       for (let [name, setter] of supportOnProbeSetters)
         if (isNonArrayRecord(objectPrototype) && Object.getOwnPropertyDescriptor(objectPrototype, name)?.set === setter)
@@ -2252,7 +2256,7 @@
       supportOnProbeSetters.clear();
     }
     function retainSupportOn(receiver) {
-      nativeSupportOn = receiver, restoreSupportOnProbe();
+      nativeSupportOn = receiver, restoreSupportOnProbe(), restoreMapSet();
     }
     function observeSupportOnWrite(name, receiver, value) {
       if (!(nativeSupportOn !== void 0 || stopped) && !(typeof value != "number" || !Number.isSafeInteger(value) || value < 0 || !isNonArrayRecord(receiver) || receiver === nativePowerOn || supportOnFirstReceivers.has(name))) {
@@ -2263,18 +2267,9 @@
       }
     }
     function installSupportOnProbe() {
-      if (!(stopped || nativeSupportOn !== void 0 || nativePowerOn === void 0 || structureEntries === void 0 || supportOnProbeSetters.size > 0 || !isNonArrayRecord(objectPrototype) || typeof objectDefineProperty != "function")) {
-        for (let entry of structureEntries.values()) {
-          let parsed = readMechanicsEntry(
-            readMechanicsDataProperty(entry, "key"),
-            entry
-          );
-          if (parsed === void 0) continue;
-          let support = readMechanicsPrimitive(parsed.action, "support");
-          support.kind === "value" && support.value < 0 && supportConsumerNames.add(parsed.struct);
-        }
+      if (!(stopped || nativeSupportOn !== void 0 || nativePowerOn === void 0 || !isNonArrayRecord(objectPrototype) || typeof objectDefineProperty != "function"))
         for (let name of supportConsumerNames) {
-          if (Object.getOwnPropertyDescriptor(objectPrototype, name) !== void 0)
+          if (supportOnProbeSetters.has(name) || Object.getOwnPropertyDescriptor(objectPrototype, name) !== void 0)
             continue;
           let setter = function(value) {
             Reflect.apply(
@@ -2302,7 +2297,6 @@
             supportOnProbeSetters.delete(name);
           }
         }
-      }
     }
     let stopped = !1, mapHook, consumeSetter, powerOnSetter, originalPowerOnProbeDescriptor = isNonArrayRecord(objectPrototype) ? Object.getOwnPropertyDescriptor(objectPrototype, "coal_power") : void 0;
     function restorePowerOnProbe() {
@@ -2344,7 +2338,12 @@
     if (isNonArrayRecord(mapPrototype) && mapSetDescriptor !== void 0 && mapSetDescriptor.configurable === !0 && typeof mapSetDescriptor.value == "function") {
       let nativeMapSet = mapSetDescriptor.value, mapSetCapture = function(...args) {
         let result = Reflect.apply(nativeMapSet, this, args);
-        if (structureEntries === void 0 && args.length >= 2) {
+        if (structureEntries !== void 0) {
+          if (this === structureEntries && args.length >= 2) {
+            let entry = readMechanicsEntry(args[0], args[1]);
+            entry !== void 0 && registerSupportConsumer(entry);
+          }
+        } else if (args.length >= 2) {
           let entry = readMechanicsEntry(args[0], args[1]);
           if (entry !== void 0 && isNonArrayRecord(this)) {
             let candidateMap = this, size;
@@ -2353,7 +2352,10 @@
             } catch {
               size = void 0;
             }
-            candidateMap === candidateStructureMap ? candidateStructureKeys.has(entry.entryKey) || size !== candidateStructureKeys.size + 1 ? (candidateStructureMap = void 0, candidateStructureKeys = /* @__PURE__ */ new Set()) : (candidateStructureKeys.add(entry.entryKey), candidateStructureKeys.size >= structureMapCaptureThreshold && (structureEntries = candidateMap, restoreMapSet(), installSupportOnProbe())) : size === 1 && (candidateStructureMap = candidateMap, candidateStructureKeys = /* @__PURE__ */ new Set([entry.entryKey]));
+            candidateMap === candidateStructureMap ? candidateStructureKeys.has(entry.entryKey) || size !== candidateStructureKeys.size + 1 ? (candidateStructureMap = void 0, candidateStructureKeys = /* @__PURE__ */ new Set()) : (candidateStructureKeys.add(entry.entryKey), candidateStructureKeys.size >= structureMapCaptureThreshold && (structureEntries = candidateMap, candidateMap.forEach((candidate, key) => {
+              let retainedEntry = readMechanicsEntry(key, candidate);
+              retainedEntry !== void 0 && registerSupportConsumer(retainedEntry);
+            }))) : size === 1 && (candidateStructureMap = candidateMap, candidateStructureKeys = /* @__PURE__ */ new Set([entry.entryKey]));
           }
         }
         return result;
@@ -2386,7 +2388,7 @@
       });
     }
     function restoreUnmatchedHooksAfterFirstPeriod() {
-      callbackQueueCandidates.size === 1 && (powerCallbackQueue = callbackQueueCandidates.values().next().value), restoreMapSet(), restorePowerCallbackHooks(), restorePowerOnProbe(), productionBreakdownOwner === void 0 && restoreConsumeSetter(), unsubscribeFirstPeriod?.(), unsubscribeFirstPeriod = void 0;
+      callbackQueueCandidates.size === 1 && (powerCallbackQueue = callbackQueueCandidates.values().next().value), restoreMapSet(), restorePowerCallbackHooks(), restorePowerOnProbe(), restoreSupportOnProbe(), productionBreakdownOwner === void 0 && restoreConsumeSetter(), unsubscribeFirstPeriod?.(), unsubscribeFirstPeriod = void 0;
     }
     unsubscribeFirstPeriod = periods.subscribe(
       restoreUnmatchedHooksAfterFirstPeriod

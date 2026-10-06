@@ -285,13 +285,13 @@ const third = structureEntry({
   powered: () => -3,
 });
 entries.set(third.key, third);
-assert.deepEqual(
+assert.notDeepEqual(
   Object.getOwnPropertyDescriptor(page.Map.prototype, "set"),
   nativeMapSetDescriptor,
-  "the exact native Map.set descriptor is restored inside the third matching call",
+  "the retained structure Map stays observed until support_on is captured",
 );
 
-// The game keeps populating the retained Map after native behavior is restored.
+// The game keeps populating the retained Map while private support authority is pending.
 const fourth = structureEntry({
   region: "galaxy",
   sector: "gxy_home",
@@ -1584,10 +1584,12 @@ assert.deepEqual(
 );
 assert.equal("consume" in tornDownPage.Object.prototype, false);
 
-// Pinned DeadSpace writes every configured structure count into p_on while building the native
-// grid, then writes support-clamped consumer counts into a distinct private support_on object.
+// Pinned DeadSpace inserts city structures before Belt structures and captures p_on during that
+// first registry pass. Its later grid pass seeds support_on with configured counts before the support
+// pass overwrites them with clamped effective counts.
 const supportPage = makePage();
 let currentSupportRoot = {
+  city: { coal_power: { on: 0 } },
   space: {
     iron_ship: { on: 5 },
     iridium_ship: { on: 4 },
@@ -1599,13 +1601,36 @@ const supportRootState = {
   isReactivitySuppressed: () => false,
   subscribeRootReplaced: () => () => {},
 };
+const supportMapSetBeforeInitialization = Object.getOwnPropertyDescriptor(
+  supportPage.Map.prototype,
+  "set",
+);
 const supportCapture = installCapturedGameMechanics(
   supportPage,
   { subscribe: () => () => {} },
   supportRootState,
 );
 const supportEntries = new supportPage.Map();
-for (const entry of [
+const nativePowerOn = new supportPage.Object();
+const registryEntries = [
+  ...["farm", "lumberyard", "quarry"].map((struct) =>
+    structureEntry({
+      region: "city",
+      sector: "city",
+      struct,
+      actionId: `city-${struct}`,
+      powered: () => 0,
+      support: () => 0,
+    }),
+  ),
+  structureEntry({
+    region: "city",
+    sector: "city",
+    struct: "coal_power",
+    actionId: "city-coal_power",
+    powered: () => 10,
+    support: () => 0,
+  }),
   structureEntry({
     region: "space",
     sector: "spc_red",
@@ -1628,21 +1653,60 @@ for (const entry of [
     powered: () => -10,
     support: () => 6,
   }),
-]) {
+];
+for (const entry of registryEntries) {
   supportEntries.set(entry.key, entry);
+  if (entry.struct === "quarry") {
+    assert.notEqual(
+      Object.getOwnPropertyDescriptor(supportPage.Map.prototype, "set")?.value,
+      supportMapSetBeforeInitialization.value,
+      "the Map hook remains active when the city threshold is reached",
+    );
+    const unrelatedMap = new supportPage.Map();
+    const unrelatedConsumer = structureEntry({
+      region: "space",
+      sector: "spc_other",
+      struct: "unrelated_ship",
+      actionId: "space-spc_other-unrelated_ship",
+      powered: () => 1,
+    });
+    unrelatedMap.set(unrelatedConsumer.key, unrelatedConsumer);
+  }
+  if (entry.region === "space" && entry.struct !== "space_station") {
+    assert.equal(
+      Object.getOwnPropertyDescriptor(
+        supportPage.Object.prototype,
+        entry.struct,
+      )?.set instanceof Function,
+      true,
+      `the later ${entry.struct} probe is installed before its p_on write`,
+    );
+  }
+  const state = currentSupportRoot[entry.region]?.[entry.struct];
+  if (state && state.on !== undefined) nativePowerOn[entry.struct] = state.on;
 }
 
-const nativePowerOn = new supportPage.Object();
-nativePowerOn.coal_power = 0;
-nativePowerOn.iron_ship = 5;
-nativePowerOn.iridium_ship = 4;
+assert.notEqual(
+  Object.getOwnPropertyDescriptor(supportPage.Map.prototype, "set")?.value,
+  supportMapSetBeforeInitialization.value,
+  "the retained structure Map stays observed after the city threshold",
+);
+assert.equal(nativePowerOn.coal_power, 0, "city:coal_power identifies p_on");
+assert.equal(
+  Object.getOwnPropertyDescriptor(
+    supportPage.Object.prototype,
+    "unrelated_ship",
+  ),
+  undefined,
+  "an unrelated Map insert cannot extend the retained consumer set",
+);
 assert.deepEqual(
   supportCapture.mechanics.readEffectiveSupportCount(
     currentSupportRoot,
     "spc_red:iron_ship",
   ),
   { kind: "invalid" },
-  "configured p_on consumer writes do not identify support_on",
+  "the later Belt p_on writes do not identify support_on",
 );
 assert.equal(
   Object.getOwnPropertyDescriptor(supportPage.Object.prototype, "iron_ship")
@@ -1653,22 +1717,35 @@ assert.equal(
 
 const nativeSupportOn = new supportPage.Object();
 nativeSupportOn.iron_ship = 5;
-nativeSupportOn.iridium_ship = 4;
 assert.deepEqual(
   supportCapture.mechanics.readEffectiveSupportCount(
     currentSupportRoot,
     "spc_red:iron_ship",
   ),
   { kind: "value", value: 5 },
-  "the distinct support_on object is captured during grid initialization at configured counts",
+  "the later grid initialization identifies the distinct support_on receiver at configured count",
+);
+nativeSupportOn.iridium_ship = 4;
+assert.deepEqual(
+  supportCapture.mechanics.readEffectiveSupportCount(
+    currentSupportRoot,
+    "spc_red:iridium_ship",
+  ),
+  { kind: "value", value: 4 },
+  "later grid initialization writes remain on the retained receiver",
 );
 assert.equal(
   Object.getOwnPropertyDescriptor(supportPage.Object.prototype, "iron_ship"),
   undefined,
   "the private support_on identity probe is restored after capture",
 );
+assert.deepEqual(
+  Object.getOwnPropertyDescriptor(supportPage.Map.prototype, "set"),
+  supportMapSetBeforeInitialization,
+  "the completed structure Map hook is restored when support_on is retained",
+);
 
-// The native support pass later overwrites the retained object with the counts it could serve.
+// Later native support passes overwrite the configured counts with freshly clamped values.
 nativeSupportOn.iron_ship = 2;
 nativeSupportOn.iridium_ship = 1;
 assert.deepEqual(
@@ -1732,6 +1809,7 @@ delete nativeSupportOn.unexpected;
 
 const staleSupportRoot = currentSupportRoot;
 currentSupportRoot = {
+  city: { coal_power: { on: 0 } },
   space: {
     iron_ship: { on: 5 },
     iridium_ship: { on: 4 },
@@ -1754,3 +1832,72 @@ assert.deepEqual(
   { kind: "value", value: 2 },
 );
 supportCapture.uninstall();
+
+// If the first worker period arrives without a support_on receiver, every incremental consumer
+// probe and the retained Map hook are removed while support reads remain unavailable.
+const cleanupPage = makePage();
+const cleanupMapSetDescriptor = Object.getOwnPropertyDescriptor(
+  cleanupPage.Map.prototype,
+  "set",
+);
+const cleanupConsumerNames = ["iron_ship", "iridium_ship"];
+const cleanupConsumerDescriptors = new Map(
+  cleanupConsumerNames.map((name) => [
+    name,
+    Object.getOwnPropertyDescriptor(cleanupPage.Object.prototype, name),
+  ]),
+);
+const cleanupRoot = {
+  city: { coal_power: { on: 0 } },
+  space: { iron_ship: { on: 5 }, iridium_ship: { on: 4 } },
+};
+const firstWorkerPeriodSubscribers = new Set();
+const cleanupCapture = installCapturedGameMechanics(
+  cleanupPage,
+  {
+    subscribe(callback) {
+      firstWorkerPeriodSubscribers.add(callback);
+      return () => firstWorkerPeriodSubscribers.delete(callback);
+    },
+  },
+  { readRoot: () => cleanupRoot },
+);
+const cleanupRegistry = new cleanupPage.Map();
+const cleanupPowerOn = new cleanupPage.Object();
+for (const entry of registryEntries.filter(
+  ({ struct }) => struct !== "space_station",
+)) {
+  cleanupRegistry.set(entry.key, entry);
+  const state = cleanupRoot[entry.region]?.[entry.struct];
+  if (state && state.on !== undefined) cleanupPowerOn[entry.struct] = state.on;
+}
+for (const name of cleanupConsumerNames) {
+  assert.equal(
+    Object.getOwnPropertyDescriptor(cleanupPage.Object.prototype, name)
+      ?.set instanceof Function,
+    true,
+    `the ${name} probe is active before the first worker period`,
+  );
+}
+for (const subscriber of [...firstWorkerPeriodSubscribers]) subscriber();
+assert.deepEqual(
+  Object.getOwnPropertyDescriptor(cleanupPage.Map.prototype, "set"),
+  cleanupMapSetDescriptor,
+  "the retained structure Map hook is restored at the first worker period",
+);
+for (const [name, descriptor] of cleanupConsumerDescriptors) {
+  assert.deepEqual(
+    Object.getOwnPropertyDescriptor(cleanupPage.Object.prototype, name),
+    descriptor,
+    `the ${name} support probe restores its original Object.prototype descriptor`,
+  );
+}
+assert.deepEqual(
+  cleanupCapture.mechanics.readEffectiveSupportCount(
+    cleanupRoot,
+    "spc_red:iron_ship",
+  ),
+  { kind: "invalid" },
+  "missing support_on authority remains fail-closed after startup cleanup",
+);
+cleanupCapture.uninstall();

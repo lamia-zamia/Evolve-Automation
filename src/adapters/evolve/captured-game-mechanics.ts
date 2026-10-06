@@ -1225,6 +1225,13 @@ export function installCapturedGameMechanics(
     (this: unknown, value: unknown) => void
   >();
 
+  function registerSupportConsumer(entry: CapturedGridEntry): void {
+    const support = readMechanicsPrimitive(entry.action, "support");
+    if (support.kind !== "value" || support.value >= 0) return;
+    supportConsumerNames.add(entry.struct);
+    installSupportOnProbe();
+  }
+
   /**
    * Pinned vars.js keeps `support_on` private too, and no single struct name is written on every
    * pass, so one accessor cannot name it. Instead: learn which captured actions are support consumers
@@ -1236,8 +1243,10 @@ export function installCapturedGameMechanics(
    * `support_on`. The later native support pass overwrites `support_on[consumer.struct]` with the
    * clamped count before the `int_on`/`gal_on`/`spire_on` aliases. Excluding the already-retained
    * `p_on` object makes the first remaining consumer write identify the private `support_on` map;
-   * retaining that object captures its later effective-count writes as well. Every temporary
-   * accessor is removed as soon as that identity is observed.
+   * retaining that object captures its later effective-count writes as well. Since the pinned
+   * initializer fills every registry entry before that later support pass, the retained Map stays
+   * observed only until the first distinct receiver is identified. Every temporary accessor is
+   * removed at that seam.
    */
   function restoreSupportOnProbe(): void {
     for (const [name, setter] of supportOnProbeSetters) {
@@ -1258,6 +1267,7 @@ export function installCapturedGameMechanics(
   function retainSupportOn(receiver: Record<string, unknown>): void {
     nativeSupportOn = receiver;
     restoreSupportOnProbe();
+    restoreMapSet();
   }
 
   function observeSupportOnWrite(
@@ -1287,24 +1297,15 @@ export function installCapturedGameMechanics(
       stopped ||
       nativeSupportOn !== undefined ||
       nativePowerOn === undefined ||
-      structureEntries === undefined ||
-      supportOnProbeSetters.size > 0 ||
       !isNonArrayRecord(objectPrototype) ||
       typeof objectDefineProperty !== "function"
     )
       return;
-    for (const entry of structureEntries.values()) {
-      const parsed = readMechanicsEntry(
-        readMechanicsDataProperty(entry, "key"),
-        entry,
-      );
-      if (parsed === undefined) continue;
-      const support = readMechanicsPrimitive(parsed.action, "support");
-      if (support.kind === "value" && support.value < 0)
-        supportConsumerNames.add(parsed.struct);
-    }
     for (const name of supportConsumerNames) {
-      if (Object.getOwnPropertyDescriptor(objectPrototype, name) !== undefined)
+      if (
+        supportOnProbeSetters.has(name) ||
+        Object.getOwnPropertyDescriptor(objectPrototype, name) !== undefined
+      )
         continue;
       const setter = function capturedNativeSupportOnProbe(
         this: unknown,
@@ -1454,7 +1455,12 @@ export function installCapturedGameMechanics(
       ...args: unknown[]
     ): unknown {
       const result = Reflect.apply(nativeMapSet, this, args);
-      if (structureEntries === undefined && args.length >= 2) {
+      if (structureEntries !== undefined) {
+        if (this === structureEntries && args.length >= 2) {
+          const entry = readMechanicsEntry(args[0], args[1]);
+          if (entry !== undefined) registerSupportConsumer(entry);
+        }
+      } else if (args.length >= 2) {
         const entry = readMechanicsEntry(args[0], args[1]);
         if (entry !== undefined && isNonArrayRecord(this)) {
           const candidateMap = this as unknown as Map<unknown, unknown>;
@@ -1478,8 +1484,11 @@ export function installCapturedGameMechanics(
               candidateStructureKeys.add(entry.entryKey);
               if (candidateStructureKeys.size >= structureMapCaptureThreshold) {
                 structureEntries = candidateMap;
-                restoreMapSet();
-                installSupportOnProbe();
+                candidateMap.forEach((candidate, key) => {
+                  const retainedEntry = readMechanicsEntry(key, candidate);
+                  if (retainedEntry !== undefined)
+                    registerSupportConsumer(retainedEntry);
+                });
               }
             }
           } else if (size === 1) {
@@ -1549,6 +1558,7 @@ export function installCapturedGameMechanics(
     restoreMapSet();
     restorePowerCallbackHooks();
     restorePowerOnProbe();
+    restoreSupportOnProbe();
     if (productionBreakdownOwner === undefined) restoreConsumeSetter();
     unsubscribeFirstPeriod?.();
     unsubscribeFirstPeriod = undefined;
