@@ -808,16 +808,13 @@ withScenario(
     assert.deepEqual(scenario.calls, [["lhc", 5]]);
     assert.ok(
       scenario.errors.some((message) =>
-        message.includes(
-          "project panel, project rows, or captured build controls were unavailable",
-        ),
+        message.includes("the project panel was unavailable"),
       ),
     );
   },
 );
 
-// An enabled Construction phase invalidates its pre-Build ARPA offer even if rank stays fixed:
-// structure-state offer conditions can change without advancing the progression epoch.
+// A Building-only pass keeps the established ARPA price while rank and tech are unchanged.
 withScenario(
   {
     progress: 95,
@@ -835,7 +832,7 @@ withScenario(
     const drawsAtRankOne = scenario.draws.length;
     scenario.gameRoot.arpa.lhc.complete = 98;
     scenario.tick();
-    assert.equal(scenario.draws.length, drawsAtRankOne + 1);
+    assert.equal(scenario.draws.length, drawsAtRankOne);
     assert.deepEqual(scenario.calls, []);
   },
 );

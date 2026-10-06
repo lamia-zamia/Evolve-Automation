@@ -514,22 +514,25 @@
 
   // src/adapters/evolve/scoped-localized-numbers.ts
   var localizedNumberProbeInFlight = !1;
-  function probeScopedLocalizedNumbers(pageWindow, read) {
-    if (localizedNumberProbeInFlight) return;
+  function probeScopedLocalizedNumbers(pageWindow, template, read) {
+    if (localizedNumberProbeInFlight || !template.includes("%")) return;
     let stringPrototype = readProperty(
       readProperty(pageWindow, "String"),
       "prototype"
     ), descriptor = stringPrototype === void 0 ? void 0 : Object.getOwnPropertyDescriptor(stringPrototype, "replace");
     if (descriptor?.configurable !== !0 || !("value" in descriptor) || typeof descriptor.value != "function")
       return;
-    let original = descriptor.value, numbers = [], wrapper = function(...args) {
-      let output = Reflect.apply(original, this, args), pattern;
+    let original = descriptor.value, numbers = [], chain, starts = 0, ambiguous = !1, wrapper = function(...args) {
+      let input = String(this), output = Reflect.apply(original, this, args), pattern;
       try {
         pattern = readProperty(args[0], "source");
       } catch {
         pattern = void 0;
       }
-      return typeof pattern == "string" && /^%\d+\(\?!\\d\)/.test(pattern) && typeof args[1] == "number" && numbers.push(args[1]), output;
+      if (typeof pattern != "string" || !/^%(\d+)\(\?!\\d\)/u.test(pattern))
+        return output;
+      let index = Number(/^%(\d+)/u.exec(pattern)?.[1]);
+      return input === template && (starts++, starts > 1 && (ambiguous = !0), chain = template), chain !== void 0 && input === chain && !ambiguous && (typeof output != "string" || !Number.isSafeInteger(index) || numbers[index] !== void 0 && numbers[index] !== args[1] ? ambiguous = !0 : (typeof args[1] == "number" && (numbers[index] = args[1]), chain = output)), output;
     };
     localizedNumberProbeInFlight = !0;
     let invalid = !1;
@@ -546,7 +549,7 @@
     } catch {
       invalid = !0;
     }
-    return localizedNumberProbeInFlight = !1, Object.getOwnPropertyDescriptor(stringPrototype, "replace")?.value !== original && (invalid = !0), invalid ? void 0 : Object.freeze(numbers);
+    return localizedNumberProbeInFlight = !1, Object.getOwnPropertyDescriptor(stringPrototype, "replace")?.value !== original && (invalid = !0), invalid || ambiguous || starts !== 1 ? void 0 : Object.freeze(numbers);
   }
 
   // src/adapters/evolve/scoped-math-round.ts
@@ -2130,7 +2133,7 @@
       readAdjustedFuelFactor: () => ({ kind: "invalid" }),
       readRoundedValues: () => ({ kind: "invalid" }),
       readEffectRoundedValues: () => ({ kind: "invalid" }),
-      readEffectNumericInputs: () => ({ kind: "invalid" }),
+      readEffectLocalizedNumericInputs: () => ({ kind: "invalid" }),
       readMathRoundValues: () => ({ kind: "invalid" }),
       readGuardPostRating: () => ({ kind: "invalid" })
     });
@@ -2154,14 +2157,48 @@
       return { kind: "invalid" };
     }
   }
-  function installCapturedGameMechanics(pageWindow, periods) {
+  function installCapturedGameMechanics(pageWindow, periods, rootState) {
     if (!isNonArrayRecord(pageWindow))
       return Object.freeze({
         mechanics: emptyGameMechanics(),
         uninstall: () => {
         }
       });
-    let mapConstructor = readMechanicsProperty(pageWindow, "Map"), mapPrototype = readMechanicsProperty(mapConstructor, "prototype"), mapSetDescriptor = isNonArrayRecord(mapPrototype) ? Object.getOwnPropertyDescriptor(mapPrototype, "set") : void 0, mapSizeGetter = (isNonArrayRecord(mapPrototype) ? Object.getOwnPropertyDescriptor(mapPrototype, "size") : void 0)?.get, objectConstructor = readMechanicsProperty(pageWindow, "Object"), objectPrototype = readMechanicsProperty(objectConstructor, "prototype"), objectDefineProperty = readMechanicsDataProperty(
+    let templatePacks = /* @__PURE__ */ new Map(), loadTemplatePack = (path) => {
+      if (templatePacks.has(path)) return templatePacks.get(path);
+      let pack;
+      try {
+        let constructor = readMechanicsProperty(pageWindow, "XMLHttpRequest");
+        if (typeof constructor == "function") {
+          let request = Reflect.construct(constructor, []);
+          request.open("GET", path, !1), request.send();
+          let parsed = request.status === 200 ? JSON.parse(request.responseText) : void 0;
+          isNonArrayRecord(parsed) && (pack = parsed);
+        }
+      } catch {
+      }
+      return templatePacks.set(path, pack), pack;
+    }, readEffectTemplate = (key) => {
+      let game = readMechanicsProperty(pageWindow, "game"), localize = readMechanicsProperty(game, "loc");
+      if (typeof localize == "function")
+        try {
+          let value2 = Reflect.apply(localize, game, [key]);
+          return typeof value2 == "string" ? value2 : void 0;
+        } catch {
+          return;
+        }
+      let root = rootState?.readRoot(), settings = readProperty(root, "settings");
+      if (readProperty(settings, "sPackOn") === !0) return;
+      let rawLocale = readProperty(settings, "locale"), locale = rawLocale === void 0 ? "en-US" : rawLocale;
+      if (typeof locale != "string" || !/^[a-z]{2}-[A-Z]{2}$/u.test(locale))
+        return;
+      let base = loadTemplatePack("strings/strings.json");
+      if (base === void 0) return;
+      let override = locale === "en-US" ? void 0 : loadTemplatePack(`strings/strings.${locale}.json`);
+      if (locale !== "en-US" && override === void 0) return;
+      let value = override?.[key] ?? base[key];
+      return typeof value == "string" ? value : void 0;
+    }, mapConstructor = readMechanicsProperty(pageWindow, "Map"), mapPrototype = readMechanicsProperty(mapConstructor, "prototype"), mapSetDescriptor = isNonArrayRecord(mapPrototype) ? Object.getOwnPropertyDescriptor(mapPrototype, "set") : void 0, mapSizeGetter = (isNonArrayRecord(mapPrototype) ? Object.getOwnPropertyDescriptor(mapPrototype, "size") : void 0)?.get, objectConstructor = readMechanicsProperty(pageWindow, "Object"), objectPrototype = readMechanicsProperty(objectConstructor, "prototype"), objectDefineProperty = readMechanicsDataProperty(
       objectConstructor,
       "defineProperty"
     ), structureEntries, powerCallbackQueue, callbackQueueCandidates = /* @__PURE__ */ new Set(), callbackIteratorDescriptor = isNonArrayRecord(mapPrototype) ? Object.getOwnPropertyDescriptor(mapPrototype, Symbol.iterator) : void 0, callbackClearDescriptor = isNonArrayRecord(mapPrototype) ? Object.getOwnPropertyDescriptor(mapPrototype, "clear") : void 0, callbackSequence, callbackIteratorHook, callbackClearHook;
@@ -2449,15 +2486,22 @@
           return { kind: "invalid" };
         }
       },
-      readEffectNumericInputs(entryKey, isCurrent) {
+      readEffectLocalizedNumericInputs(entryKey, localizationKey, isCurrent) {
         try {
           let entries = structureEntries, candidate = entries?.get(entryKey), entry = readMechanicsEntry(entryKey, candidate), effect = entry && readMechanicsMethod(entry.action, "effect");
           if (stopped || entries === void 0 || entry === void 0 || effect === void 0 || isCurrent !== void 0 && !isCurrent())
             return { kind: "invalid" };
-          let observed2 = probeScopedLocalizedNumbers(pageWindow, () => {
-            if (typeof Reflect.apply(effect, entry.action, []) != "string")
-              throw new TypeError("native effect did not return text");
-          }), current = readMechanicsEntry(entryKey, candidate);
+          let template = readEffectTemplate(localizationKey);
+          if (template === void 0 || template === localizationKey)
+            return { kind: "invalid" };
+          let observed2 = probeScopedLocalizedNumbers(
+            pageWindow,
+            template,
+            () => {
+              if (typeof Reflect.apply(effect, entry.action, []) != "string")
+                throw new TypeError("native effect did not return text");
+            }
+          ), current = readMechanicsEntry(entryKey, candidate);
           return observed2 !== void 0 && entries === structureEntries && entries.get(entryKey) === candidate && current?.action === entry.action && current.actionId === entry.actionId && current.region === entry.region && current.sector === entry.sector && current.struct === entry.struct && readMechanicsMethod(entry.action, "effect") === effect && (isCurrent === void 0 || isCurrent()) ? { kind: "value", value: observed2 } : { kind: "invalid" };
         } catch {
           return { kind: "invalid" };
@@ -3035,7 +3079,11 @@
   function installPageCapture(pageWindow, options = {}) {
     let installed = readInstalledCapture(pageWindow);
     if (installed !== void 0) return installed;
-    let vue = installVueCapture(pageWindow, options), worker = installWorkerCapture(pageWindow, options), mechanics = installCapturedGameMechanics(pageWindow, worker.periods), keyState = createGameKeyStateCapture(
+    let vue = installVueCapture(pageWindow, options), worker = installWorkerCapture(pageWindow, options), mechanics = installCapturedGameMechanics(
+      pageWindow,
+      worker.periods,
+      vue.rootState
+    ), keyState = createGameKeyStateCapture(
       () => readProperty(pageWindow, "document"),
       {
         roots: vue.rootState,
@@ -4119,17 +4167,18 @@
           "game.resource"
         );
         requireNonArrayRecord(game.arpa, "game.arpa");
-        let projects, result = discovery.discover(ARPA_TAB_PATH, {
+        let projects, unavailableReason = "the project panel was unavailable", result = discovery.discover(ARPA_TAB_PATH, {
           isPanelDrawn: () => drawnProjects.exists(ARPA_PANEL_SELECTOR),
           whileDrawn: () => {
             if (!drawnProjects.exists(ARPA_PANEL_SELECTOR)) return;
+            unavailableReason = "the project rows were unreadable";
             let drawn = drawnProjects.read(
               PROJECT_SELECTOR,
               Object.keys(resources)
             );
             if (drawn === void 0) return;
             let current = readProjectState2();
-            current !== void 0 && (projects = priceProjectRows(drawn, current, controls2));
+            current !== void 0 && (unavailableReason = "a project row has no captured build control", projects = priceProjectRows(drawn, current, controls2));
           }
         });
         if (result.outcome.status !== "succeeded") {
@@ -4139,9 +4188,7 @@
           return;
         }
         if (projects === void 0) {
-          reportUnavailable(
-            "the project panel, project rows, or captured build controls were unavailable"
-          );
+          reportUnavailable(unavailableReason);
           return;
         }
         return projects;
@@ -10730,7 +10777,7 @@
     }, invalidateConstructionOffers = () => {
       for (let scope of sampledBuildingUnlockScopes.keys())
         scopes.invalidate(scope);
-      resetBuildingUnlockSample(), scopes.invalidate(ARPA_SCOPE), resetProjectSample();
+      resetBuildingUnlockSample(), resetProjectSample();
     };
     rootState.subscribeRootReplaced(() => {
       scopes.invalidateAll(), clearResearchSample(), resetProjectSample(), resetBuildingUnlockSample();
@@ -11455,7 +11502,7 @@
               );
             } else
               jobsToAssign = Math.min(jobsToAssign, minimumFarmers);
-          } else job.warlordMiner ? jobsToAssign = job.maximum : jobMaximums[index] !== null && (jobsToAssign = Math.min(jobsToAssign, jobMaximums[index]));
+          } else job.warlordMiner ? jobsToAssign = job.maximum : job.kind === "entertainer" && jobMaximums[index] !== null ? jobsToAssign = Math.min(availableEmployees, jobMaximums[index]) : jobMaximums[index] !== null && (jobsToAssign = Math.min(jobsToAssign, jobMaximums[index]));
           job.kind === "space-miner" && (maximumSpaceMiners = Math.max(
             maximumSpaceMiners,
             Math.min(availableEmployees, job.uncappedBreakpoints[pass])
@@ -18566,11 +18613,12 @@
     if (!isRecord(tech)) return;
     let superstarValue = readProperty(tech, "superstar"), superstar = superstarValue === void 0 ? 0 : finiteNonNegative(superstarValue);
     if (superstar === void 0) return;
-    if (superstar > 0) return null;
     if (count2 === 0) return 1;
     let morale = readCapturedMorale(root);
-    if (morale === void 0 || morale.entertainment === void 0)
-      return;
+    if (morale === void 0) return;
+    if (superstar > 0)
+      return morale.potential < morale.maximum ? count2 + 1 : count2;
+    if (morale.entertainment === void 0) return;
     let entertainerWorkers = finiteNonNegative(
       readProperty(
         readProperty(readProperty(root, "civic"), "entertainer"),
@@ -28331,10 +28379,10 @@
   }
 
   // src/adapters/evolve/economy/production/captured-power-consumption.ts
-  var powerIdleSourceIdentity = (resourceId, sourceKey, key = null, fromEnd = 0, ledgerCredit = "safe", clamped = !1, gate = null, rounded = !1) => Object.freeze({
+  var powerIdleSourceIdentity = (resourceId, sourceKey, key = null, variableIndex = 0, ledgerCredit = "safe", clamped = !1, gate = null, rounded = !1) => Object.freeze({
     resourceId,
     sourceKey,
-    observation: key === null ? null : Object.freeze({ upstreamLocalizationKey: key, fromEnd }),
+    observation: key === null ? null : Object.freeze({ upstreamLocalizationKey: key, variableIndex }),
     ledgerCredit,
     clamped,
     gate,
@@ -28354,7 +28402,7 @@
         "Helium_3",
         "@title",
         "space_red_factory_effect3",
-        1,
+        0,
         "safe",
         !1,
         null,
@@ -28379,7 +28427,7 @@
         "Oil",
         "space_gas_moon_outpost_bd",
         "space_gas_moon_outpost_effect3",
-        1,
+        0,
         "observation-only",
         !1,
         null,
@@ -28387,7 +28435,7 @@
       )
     ],
     "space-space_station": [
-      powerIdleSourceIdentity("Food", "@title", "space_belt_station_effect4", 1)
+      powerIdleSourceIdentity("Food", "@title", "space_belt_station_effect4", 0)
     ],
     "interstellar-starport": [
       powerIdleSourceIdentity(
@@ -28401,7 +28449,7 @@
         "Deuterium",
         "@title",
         "interstellar_fusion_effect",
-        1,
+        0,
         "safe",
         !1,
         null,
@@ -28425,7 +28473,7 @@
         "Helium_3",
         "@title",
         "interstellar_alpha_starport_effect2",
-        1,
+        0,
         "observation-only",
         !1,
         null,
@@ -28448,7 +28496,7 @@
         "Food",
         "@title",
         "interstellar_alpha_starport_effect3",
-        1,
+        0,
         "safe",
         !1,
         "stargate"
@@ -28459,7 +28507,7 @@
         "Money",
         "galaxy_vitreloy_plant_bd",
         "galaxy_vitreloy_plant_effect3",
-        1,
+        0,
         "safe",
         !0
       ),
@@ -28467,7 +28515,7 @@
         "Bolognium",
         "galaxy_vitreloy_plant_bd",
         "galaxy_vitreloy_plant_effect2",
-        3,
+        0,
         "safe",
         !0
       ),
@@ -28475,7 +28523,7 @@
         "Stanene",
         "galaxy_vitreloy_plant_bd",
         "galaxy_vitreloy_plant_effect2",
-        2,
+        1,
         "safe",
         !0
       )
@@ -28485,7 +28533,7 @@
         "Elerium",
         "@title",
         "galaxy_foothold_effect2",
-        1,
+        0,
         "safe",
         !0,
         "stargate"
@@ -28782,7 +28830,10 @@
         );
     for (let fallback of POWER_IDLE_CONSUMPTION_SOURCES[binding] ?? []) {
       if (result.has(fallback.resourceId)) continue;
-      let source = fallback.sourceKey === "@title" ? title.kind === "value" ? title.value : null : fallback.sourceKey === null ? null : mechanics.readLocalizedText(fallback.sourceKey), sourceLabel = typeof source == "string" ? source : source?.kind === "value" ? source.value : null, currentTotal = sourceLabel === null ? 0 : observed2(fallback.resourceId, sourceLabel), validCurrent = sourceLabel !== null && currentTotal !== void 0, nativeFoodSuppressed = fallback.resourceId === "Food" && Object.values(production.production.Food ?? {}).includes("-100%"), observedCost = fallback.observation === null ? null : mechanics.readEffectNumericInputs?.(structure.entryKey), observedIndex = observedCost?.kind === "value" && fallback.observation !== null ? observedCost.value.length - 1 - fallback.observation.fromEnd : -1, enableRate = observedCost?.kind === "value" && observedIndex >= 0 && typeof observedCost.value[observedIndex] == "number" && Number.isFinite(observedCost.value[observedIndex]) && observedCost.value[observedIndex] >= 0 ? observedCost.value[observedIndex] : null;
+      let source = fallback.sourceKey === "@title" ? title.kind === "value" ? title.value : null : fallback.sourceKey === null ? null : mechanics.readLocalizedText(fallback.sourceKey), sourceLabel = typeof source == "string" ? source : source?.kind === "value" ? source.value : null, currentTotal = sourceLabel === null ? 0 : observed2(fallback.resourceId, sourceLabel), validCurrent = sourceLabel !== null && currentTotal !== void 0, nativeFoodSuppressed = fallback.resourceId === "Food" && Object.values(production.production.Food ?? {}).includes("-100%"), observedCost = fallback.observation === null ? null : mechanics.readEffectLocalizedNumericInputs?.(
+        structure.entryKey,
+        fallback.observation.upstreamLocalizationKey
+      ), observedIndex = observedCost?.kind === "value" && fallback.observation !== null ? fallback.observation.variableIndex : -1, enableRate = observedCost?.kind === "value" && observedIndex >= 0 && typeof observedCost.value[observedIndex] == "number" && Number.isFinite(observedCost.value[observedIndex]) && observedCost.value[observedIndex] >= 0 ? observedCost.value[observedIndex] : null;
       if (enableRate !== null && fallback.rounded) {
         let rounded = mechanics.readEffectRoundedValues?.(structure.entryKey), matches = rounded?.kind === "value" ? rounded.value.filter(
           (item) => Number.isFinite(item.receiver) && Number.isFinite(Number(item.text)) && Number(item.text) === enableRate
@@ -28820,6 +28871,18 @@
     }
     let supports = [];
     for (let [type, members] of groups) {
+      let infiltrators = readProperty(
+        readProperty(readProperty(root, "race"), "alien"),
+        "infiltrators"
+      ), infiltrated = !1;
+      for (let member of members) {
+        let support = member.readSupportValue(type);
+        if (support.kind !== "value") return;
+        if (support.value <= 0) continue;
+        let sector = readProperty(infiltrators, member.sector), assignment = readProperty(sector, member.struct);
+        assignment !== void 0 && (typeof assignment != "number" || !Number.isFinite(assignment) || assignment > 0) && (infiltrated = !0);
+      }
+      if (infiltrated) continue;
       let ordered = mechanics.readSupportOrder(root, type);
       if (ordered.kind !== "value") return;
       let consumers = [], anchorKey = null, unlimited = !1, enabled = !0;
@@ -28840,10 +28903,10 @@
       let anchor = structures.find((member) => member.entryKey === anchorKey), state = anchor === void 0 ? void 0 : readCapturedStructureState(root, anchor), current = 0, maximum = 0;
       if (state != null) {
         if (!isRecord(state)) return;
-        let readCurrent = readGameNumber(state, "support"), readMaximum2 = readGameNumber(state, "s_max");
-        if (readCurrent === void 0 || readMaximum2 === void 0)
+        let readCurrent = readGameNumber(state, "support"), readMaximum2 = type === "belt" ? anchor?.readSupportValue(type) : null, effective = type === "belt" && anchor !== void 0 ? mechanics.readEffectivePowerCount(root, anchor.entryKey) : null, nativeMaximum = type === "belt" ? readMaximum2?.kind === "value" && effective?.kind === "value" ? readMaximum2.value * effective.value : void 0 : readGameNumber(state, "s_max");
+        if (readCurrent === void 0 || nativeMaximum === void 0)
           return;
-        current = readCurrent, maximum = readMaximum2;
+        current = readCurrent, maximum = nativeMaximum;
       }
       supports.push(
         Object.freeze({
@@ -29677,7 +29740,18 @@
         let modeledMaximum = 0, modeledCurrent = 0, touched = !1;
         for (let candidate of supportSafe)
           for (let change of candidate.supportChanges)
-            change.type === support.type && (touched = !0, change.amount < 0 ? modeledMaximum -= change.amount * candidate.record.stateOn : modeledCurrent += change.amount * candidate.record.stateOn);
+            if (change.type === support.type)
+              if (touched = !0, change.amount < 0) {
+                let effective = dependencies.mechanics.readEffectivePowerCount(
+                  root,
+                  candidate.record.structure.entryKey
+                );
+                if (effective.kind !== "value") {
+                  unsafeTypes.add(support.type);
+                  continue;
+                }
+                modeledMaximum -= change.amount * effective.value;
+              } else modeledCurrent += change.amount * candidate.record.stateOn;
         touched && (Math.abs(modeledMaximum - support.maximum) > 1e-9 || Math.abs(modeledCurrent - support.current) > 1e-9) && unsafeTypes.add(support.type);
       }
       if (unsafeTypes.size === 0) break;

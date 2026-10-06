@@ -95,7 +95,7 @@ for (const [region, id, anchorId, supportType] of [
     readSupportProvider: () => ({ kind: "absent" }),
     readSupportValue: () => ({
       kind: "value",
-      value: struct === id ? -1 : 1,
+      value: struct === id ? -1 : supportType === "belt" ? 4 : 1,
     }),
     readSupportTopology: () => ({
       kind: "value",
@@ -111,6 +111,7 @@ for (const [region, id, anchorId, supportType] of [
     rootState: { readRoot: () => supportRoot },
     mechanics: {
       readStructures: () => supportDefinitions,
+      readEffectivePowerCount: () => ({ kind: "value", value: 1 }),
       readSupportOrder: () => ({
         kind: "value",
         value: [supportDefinitions[0]],
@@ -148,7 +149,7 @@ for (const [region, id, anchorId, supportType] of [
     assert.equal(
       surplus.beltSupportMaximum,
       4,
-      "Belt warning uses the native anchor s_max",
+      "Belt warning uses effective native station support capacity",
     );
     assert.equal(
       planPowerWarningShutdown([surplus]),

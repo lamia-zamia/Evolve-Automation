@@ -4,10 +4,10 @@ import type { CapturedProductionBreakdown } from "../../../../ports/captured-gam
 export interface PowerIdleConsumptionSource {
   readonly resourceId: string;
   readonly sourceKey: string | null;
-  /** Pinned action call site for review; the unmodified page does not export loc(). */
+  /** Identity and variable position of the pinned native localization call. */
   readonly observation: {
     readonly upstreamLocalizationKey: string;
-    readonly fromEnd: number;
+    readonly variableIndex: number;
   } | null;
   readonly ledgerCredit: "safe" | "observation-only";
   readonly clamped: boolean;
@@ -19,7 +19,7 @@ const powerIdleSourceIdentity = (
   resourceId: string,
   sourceKey: string | null,
   key: string | null = null,
-  fromEnd = 0,
+  variableIndex = 0,
   ledgerCredit: PowerIdleConsumptionSource["ledgerCredit"] = "safe",
   clamped = false,
   gate: PowerIdleConsumptionSource["gate"] = null,
@@ -31,7 +31,7 @@ const powerIdleSourceIdentity = (
     observation:
       key === null
         ? null
-        : Object.freeze({ upstreamLocalizationKey: key, fromEnd }),
+        : Object.freeze({ upstreamLocalizationKey: key, variableIndex }),
     ledgerCredit,
     clamped,
     gate,
@@ -56,7 +56,7 @@ export const POWER_IDLE_CONSUMPTION_SOURCES: Readonly<
       "Helium_3",
       "@title",
       "space_red_factory_effect3",
-      1,
+      0,
       "safe",
       false,
       null,
@@ -81,7 +81,7 @@ export const POWER_IDLE_CONSUMPTION_SOURCES: Readonly<
       "Oil",
       "space_gas_moon_outpost_bd",
       "space_gas_moon_outpost_effect3",
-      1,
+      0,
       "observation-only",
       false,
       null,
@@ -89,7 +89,7 @@ export const POWER_IDLE_CONSUMPTION_SOURCES: Readonly<
     ),
   ],
   "space-space_station": [
-    powerIdleSourceIdentity("Food", "@title", "space_belt_station_effect4", 1),
+    powerIdleSourceIdentity("Food", "@title", "space_belt_station_effect4", 0),
   ],
   "interstellar-starport": [
     powerIdleSourceIdentity(
@@ -103,7 +103,7 @@ export const POWER_IDLE_CONSUMPTION_SOURCES: Readonly<
       "Deuterium",
       "@title",
       "interstellar_fusion_effect",
-      1,
+      0,
       "safe",
       false,
       null,
@@ -127,7 +127,7 @@ export const POWER_IDLE_CONSUMPTION_SOURCES: Readonly<
       "Helium_3",
       "@title",
       "interstellar_alpha_starport_effect2",
-      1,
+      0,
       "observation-only",
       false,
       null,
@@ -150,7 +150,7 @@ export const POWER_IDLE_CONSUMPTION_SOURCES: Readonly<
       "Food",
       "@title",
       "interstellar_alpha_starport_effect3",
-      1,
+      0,
       "safe",
       false,
       "stargate",
@@ -161,7 +161,7 @@ export const POWER_IDLE_CONSUMPTION_SOURCES: Readonly<
       "Money",
       "galaxy_vitreloy_plant_bd",
       "galaxy_vitreloy_plant_effect3",
-      1,
+      0,
       "safe",
       true,
     ),
@@ -169,7 +169,7 @@ export const POWER_IDLE_CONSUMPTION_SOURCES: Readonly<
       "Bolognium",
       "galaxy_vitreloy_plant_bd",
       "galaxy_vitreloy_plant_effect2",
-      3,
+      0,
       "safe",
       true,
     ),
@@ -177,7 +177,7 @@ export const POWER_IDLE_CONSUMPTION_SOURCES: Readonly<
       "Stanene",
       "galaxy_vitreloy_plant_bd",
       "galaxy_vitreloy_plant_effect2",
-      2,
+      1,
       "safe",
       true,
     ),
@@ -187,7 +187,7 @@ export const POWER_IDLE_CONSUMPTION_SOURCES: Readonly<
       "Elerium",
       "@title",
       "galaxy_foothold_effect2",
-      1,
+      0,
       "safe",
       true,
       "stargate",

@@ -560,6 +560,16 @@ function createMechanics({
         : { kind: "invalid" };
     },
     readProductionBreakdown: () => productionBreakdown,
+    readEffectivePowerCount: (sample, key) => {
+      const member = byKey.get(key);
+      const state =
+        member === undefined
+          ? undefined
+          : sample?.[member.region]?.[member.struct];
+      return typeof state?.on === "number"
+        ? { kind: "value", value: state.on }
+        : { kind: "invalid" };
+    },
     readLocalizedText: (key) =>
       Object.hasOwn(localizedText, key)
         ? { kind: "value", value: localizedText[key] }
@@ -2193,6 +2203,54 @@ assert.ok(
   specialCycle,
   "the complete special-rule fixture yields a captured Power cycle",
 );
+const lateBeltMaximum = specialRoot.space.space_station.s_max;
+const lateMinerWorkers = specialRoot.civic.space_miner.workers;
+specialRoot.space.space_station.s_max = 0;
+specialRoot.civic.space_miner.workers = 0;
+const recoveringBelt = specialReader.readCycle();
+assert.equal(
+  recoveringBelt?.supports.find(({ type }) => type === "belt")?.maximum,
+  2,
+  "late Space Miner worker count cannot replace native Belt provider capacity",
+);
+const effectiveStationMechanics = {
+  ...specialReaderDependencies.mechanics,
+  readEffectivePowerCount: (_sample, key) =>
+    key === stationKey
+      ? { kind: "value", value: 1 }
+      : specialReaderDependencies.mechanics.readEffectivePowerCount(
+          _sample,
+          key,
+        ),
+};
+assert.equal(
+  readNativePowerSupports(
+    specialRoot,
+    effectiveStationMechanics,
+    specialStructures,
+  )?.find(({ type }) => type === "belt")?.maximum,
+  1,
+  "Belt capacity follows effective native p_on rather than configured station on",
+);
+assert.ok(
+  recoveringBelt?.buildings.some(
+    ({ binding }) => binding === "space-space_station",
+  ),
+  "the required station remains managed while Space Miners recover",
+);
+specialRoot.space.space_station.s_max = lateBeltMaximum;
+specialRoot.civic.space_miner.workers = lateMinerWorkers;
+specialRoot.race.alien = { infiltrators: { spc_belt: { space_station: 1 } } };
+assert.equal(
+  readNativePowerSupports(
+    specialRoot,
+    specialReaderDependencies.mechanics,
+    specialStructures,
+  )?.some(({ type }) => type === "belt"),
+  false,
+  "an infiltrated provider freezes its group without copying the penalty",
+);
+delete specialRoot.race.alien;
 const panelIndependentJobs = createCapturedOrdinaryJobsAutomation({
   rootState: specialReaderDependencies.rootState,
   controls: specialControls,

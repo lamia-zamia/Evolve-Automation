@@ -62,6 +62,7 @@ const station = {
   readPowered: () => value(0),
   readPowerGridRole: () => value("none"),
   readSupport: () => value(3),
+  readSupportValue: () => value(3),
   readNativeSupportGrids: () =>
     value([
       {
@@ -104,6 +105,7 @@ function runMinerBootstrap({
   autoJobs = true,
   staleJobs = false,
   replaceBeforePower = false,
+  starved = false,
 } = {}) {
   const root = {
     settings: { civTabs: 1, spaceTabs: 0, showResearch: true, showSpace: true },
@@ -113,7 +115,7 @@ function runMinerBootstrap({
     city: { power: 10, powered: true },
     space: {
       elerium_ship: { count: 1, on: 0 },
-      space_station: { count: 1, on: 1, support: 3, s_max: 3 },
+      space_station: { count: 1, on: 1, support: 3, s_max: starved ? 0 : 3 },
       iridium_ship: { count: 0, on: 0 },
       iron_ship: { count: 3, on: 3 },
     },
@@ -121,15 +123,15 @@ function runMinerBootstrap({
       d_job: "unemployed",
       unemployed: {
         job: "unemployed",
-        assigned: 5,
-        workers: 5,
+        assigned: starved ? 8 : 5,
+        workers: starved ? 8 : 5,
         max: -1,
         display: true,
       },
       space_miner: {
         job: "space_miner",
-        assigned: 3,
-        workers: 3,
+        assigned: starved ? 0 : 3,
+        workers: starved ? 0 : 3,
         max: 8,
         display: true,
       },
@@ -154,6 +156,7 @@ function runMinerBootstrap({
       if (stage === "power-ready")
         snapshots.push({
           workers: root.civic.space_miner.workers,
+          lateMaximum: root.space.space_station.s_max,
           handoff: hooks.readSpaceMinerHandoff(),
           power: hooks.readPowerCycle(),
         });
@@ -199,6 +202,8 @@ function runMinerBootstrap({
       readPowerOrder: () => value([station, iron, ship]),
       readSupportOrder: (_root, type) =>
         value(type === "belt" ? [iron, ship] : []),
+      readEffectivePowerCount: (sample, key) =>
+        value(sample.space[key.split(":")[1]]?.on ?? 0),
       readProductionBreakdown: () => ({
         production: { Iron: { "Space Miner": 3 } },
         consumption: {},
@@ -319,6 +324,32 @@ assert.deepEqual(bootstrap.afterCycles, [
 assert.equal(bootstrap.snapshots[1].workers, 5);
 assert.equal(bootstrap.snapshots[1].power.cycle.prospectiveSpaceMiners, 5);
 assert.deepEqual(bootstrap.run.errors, []);
+
+const starvedBootstrap = runMinerBootstrap({ starved: true });
+assert.equal(starvedBootstrap.snapshots[0].lateMaximum, 0);
+assert.ok(
+  starvedBootstrap.snapshots[0].workers > 0,
+  "Jobs starts recovering workers from an initial zero pool before Power",
+);
+assert.equal(
+  starvedBootstrap.snapshots[0].power.cycle.supports.find(
+    ({ type }) => type === "belt",
+  )?.maximum,
+  3,
+);
+assert.ok(
+  starvedBootstrap.snapshots[0].power.plan.decision.operations.some(
+    ({ kind, binding, amount }) =>
+      kind === "adjust-building" &&
+      binding === "space-elerium_ship" &&
+      amount === 1,
+  ),
+  "Jobs to Power can reserve a mining ship while the late worker-owned s_max is zero",
+);
+assert.ok(
+  starvedBootstrap.afterCycles[1].workers > 0,
+  "the next Jobs phase recovers actual Space Miners",
+);
 
 const stale = runMinerBootstrap({ staleJobs: true });
 assert.equal(stale.root.civic.space_miner.workers, 4);

@@ -360,6 +360,45 @@ const projectedCycle = toCapturedJobsCycleInput(knownCatalog, {
   crafting: [],
 });
 assert.equal(projectedCycle?.available, true);
+const entertainerTarget = {
+  ...projectedCycle.jobs[0],
+  id: "entertainer",
+  kind: "entertainer",
+  token: 19,
+  workers: 5,
+  count: 5,
+  maximum: 100,
+  smart: true,
+  smartMaximum: 10,
+  breakpoints: [5, 5, 5],
+  uncappedBreakpoints: [5, 5, 5],
+  isDefault: false,
+};
+const quarryFallback = {
+  ...projectedCycle.jobs[0],
+  id: "quarry_worker",
+  kind: "quarry-worker",
+  token: 5,
+  workers: 75,
+  count: 75,
+  maximum: 100,
+  smart: false,
+  smartMaximum: null,
+  breakpoints: [0, 0, -1],
+  uncappedBreakpoints: [0, 0, -1],
+  isDefault: true,
+};
+const moraleTargetPlan = planJobs({
+  ...projectedCycle,
+  jobs: [entertainerTarget, quarryFallback],
+  population: 80,
+  defaultJobToken: 5,
+});
+assert.equal(
+  moraleTargetPlan.assignments.find(({ jobToken }) => jobToken === 19)?.workers,
+  10,
+  "smart morale raises Entertainers above breakpoint five before Quarry receives surplus",
+);
 assert.deepEqual(
   projectedCycle?.jobs.map(({ id, token }) => ({ id, token })),
   [
@@ -490,8 +529,15 @@ const superstarEntertainerReader = createCapturedJobCatalogReader({
 assert.equal(
   superstarEntertainerReader().jobs.find(({ id }) => id === "entertainer")
     ?.smartMaximum,
-  null,
-  "Superstar leaves Entertainer smart mode uncapped by the non-Superstar rule",
+  3,
+  "Superstar raises an insufficient native Entertainer pool one worker at a time",
+);
+superstarEntertainerRoot.city.morale.potential = 200;
+assert.equal(
+  superstarEntertainerReader().jobs.find(({ id }) => id === "entertainer")
+    ?.smartMaximum,
+  2,
+  "Superstar retains the current pool once native potential reaches the cap",
 );
 
 const zeroEntertainerRoot = structuredClone(entertainerRoot);

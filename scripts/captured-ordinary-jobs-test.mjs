@@ -409,8 +409,8 @@ const sampledTaxDecision = planJobs(sampledTaxInput);
 assert.equal(
   sampledTaxDecision.assignments.find(({ jobToken }) => jobToken === 19)
     ?.workers,
-  3,
-  "Smart and the breakpoint may assign more than one once native morale is sampled",
+  6,
+  "Smart can raise Entertainers above the configured breakpoint after a native sample",
 );
 assert.equal(sampledTaxDecision.authorityEntertainerCap, null);
 

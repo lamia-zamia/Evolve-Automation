@@ -296,14 +296,15 @@ function readEntertainerSmartMaximum(
   const superstar =
     superstarValue === undefined ? 0 : finiteNonNegative(superstarValue);
   if (superstar === undefined) return undefined;
-  // Superstar contributes a separate morale-cap term, so the legacy smart Entertainer rule does
-  // not apply once that technology is active.
-  if (superstar > 0) return null;
   // One worker bootstraps a native morale observation without allowing a large unsampled pool.
   if (count === 0) return 1;
   const morale = readCapturedMorale(root);
-  if (morale === undefined || morale.entertainment === undefined)
-    return undefined;
+  if (morale === undefined) return undefined;
+  // Native potential already includes ordinary Entertainer morale under Superstar. Increase
+  // conservatively until the native cap is reached, then retain the observed working pool.
+  if (superstar > 0)
+    return morale.potential < morale.maximum ? count + 1 : count;
+  if (morale.entertainment === undefined) return undefined;
   const entertainerWorkers = finiteNonNegative(
     readProperty(
       readProperty(readProperty(root, "civic"), "entertainer"),

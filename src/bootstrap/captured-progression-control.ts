@@ -587,7 +587,6 @@ export function createCapturedProgressionControl(
     for (const scope of sampledBuildingUnlockScopes.keys())
       scopes.invalidate(scope);
     resetBuildingUnlockSample();
-    scopes.invalidate(ARPA_SCOPE);
     resetProjectSample();
   };
   rootState.subscribeRootReplaced(() => {

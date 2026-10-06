@@ -69,7 +69,11 @@ export function installPageCapture(
 
   const vue = installVueCapture(pageWindow, options);
   const worker = installWorkerCapture(pageWindow, options);
-  const mechanics = installCapturedGameMechanics(pageWindow, worker.periods);
+  const mechanics = installCapturedGameMechanics(
+    pageWindow,
+    worker.periods,
+    vue.rootState,
+  );
   const keyState = createGameKeyStateCapture(
     () => readProperty(pageWindow, "document"),
     {

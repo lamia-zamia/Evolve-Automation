@@ -515,6 +515,8 @@ export function planJobs(
           }
         } else if (job.warlordMiner) {
           jobsToAssign = job.maximum;
+        } else if (job.kind === "entertainer" && jobMaximums[index] !== null) {
+          jobsToAssign = Math.min(availableEmployees, jobMaximums[index]!);
         } else if (jobMaximums[index] !== null) {
           jobsToAssign = Math.min(jobsToAssign, jobMaximums[index]!);
         }

@@ -249,17 +249,13 @@ function makeCatalogPage({
   );
   page.unavailable();
   assert.equal(page.catalog.readProjects(), undefined);
-  assert.deepEqual(page.reasons, [
-    "the project panel, project rows, or captured build controls were unavailable",
-  ]);
+  assert.deepEqual(page.reasons, ["the project rows were unreadable"]);
   page.fail({
     status: "rejected",
     failure: { code: "tab-control-missing", message: "no captured control" },
   });
   assert.equal(page.catalog.readProjects(), undefined);
-  assert.deepEqual(page.reasons, [
-    "the project panel, project rows, or captured build controls were unavailable",
-  ]);
+  assert.deepEqual(page.reasons, ["the project rows were unreadable"]);
   assert.deepEqual(page.diagnostics, ["no captured control"]);
 }
 
@@ -278,9 +274,7 @@ function makeCatalogPage({
     panelAvailable: false,
   });
   assert.equal(missingPanel.catalog.readProjects(), undefined);
-  assert.deepEqual(missingPanel.reasons, [
-    "the project panel, project rows, or captured build controls were unavailable",
-  ]);
+  assert.deepEqual(missingPanel.reasons, ["the project panel was unavailable"]);
 
   const missingBuild = makeCatalogPage({
     projects: [
@@ -297,7 +291,7 @@ function makeCatalogPage({
   });
   assert.equal(missingBuild.catalog.readProjects(), undefined);
   assert.deepEqual(missingBuild.reasons, [
-    "the project panel, project rows, or captured build controls were unavailable",
+    "a project row has no captured build control",
   ]);
 }
 

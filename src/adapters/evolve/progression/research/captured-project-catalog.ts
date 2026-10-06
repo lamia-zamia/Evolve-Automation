@@ -111,6 +111,7 @@ export function createCapturedProjectCatalog(
       );
       requireNonArrayRecord(game["arpa"], "game.arpa");
       let projects: readonly Readonly<OfferedProject>[] | undefined;
+      let unavailableReason = "the project panel was unavailable";
       const result = discovery.discover(ARPA_TAB_PATH, {
         isPanelDrawn: () => drawnProjects.exists(ARPA_PANEL_SELECTOR),
         whileDrawn: () => {
@@ -118,6 +119,7 @@ export function createCapturedProjectCatalog(
           // names. In particular, accepting the reader's empty result here would cache a failed
           // off-tab draw as a legitimate empty offer list.
           if (!drawnProjects.exists(ARPA_PANEL_SELECTOR)) return;
+          unavailableReason = "the project rows were unreadable";
           const drawn = drawnProjects.read(
             PROJECT_SELECTOR,
             Object.keys(resources),
@@ -125,6 +127,7 @@ export function createCapturedProjectCatalog(
           if (drawn === undefined) return;
           const current = readProjectState();
           if (current === undefined) return;
+          unavailableReason = "a project row has no captured build control";
           projects = priceProjectRows(drawn, current, controls);
         },
       });
@@ -135,9 +138,7 @@ export function createCapturedProjectCatalog(
         return undefined;
       }
       if (projects === undefined) {
-        reportUnavailable(
-          "the project panel, project rows, or captured build controls were unavailable",
-        );
+        reportUnavailable(unavailableReason);
         return undefined;
       }
       return projects;

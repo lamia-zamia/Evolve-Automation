@@ -5,6 +5,7 @@
  */
 
 import type { GamePeriodSource } from "../../ports/game-period-source.ts";
+import type { GameRootStateSource } from "../../ports/game-root-state.ts";
 import type {
   CapturedGameFuelInput,
   CapturedGameMechanics,
@@ -945,7 +946,7 @@ function emptyGameMechanics(): CapturedGameMechanics {
     readAdjustedFuelFactor: () => ({ kind: "invalid" as const }),
     readRoundedValues: () => ({ kind: "invalid" as const }),
     readEffectRoundedValues: () => ({ kind: "invalid" as const }),
-    readEffectNumericInputs: () => ({ kind: "invalid" as const }),
+    readEffectLocalizedNumericInputs: () => ({ kind: "invalid" as const }),
     readMathRoundValues: () => ({ kind: "invalid" as const }),
     readGuardPostRating: () => ({ kind: "invalid" as const }),
   });
@@ -979,6 +980,7 @@ function resolveCapturedStructureOrder(
 export function installCapturedGameMechanics(
   pageWindow: unknown,
   periods: GamePeriodSource,
+  rootState?: GameRootStateSource,
 ): CapturedGameMechanicsInstall {
   if (!isNonArrayRecord(pageWindow)) {
     return Object.freeze({
@@ -986,6 +988,60 @@ export function installCapturedGameMechanics(
       uninstall: () => {},
     });
   }
+
+  // DeadSpace keeps loc() module-private on the unmodified page. Read the same served template
+  // assets synchronously when game.loc is absent; custom string packs fail closed because their
+  // override cannot be identified from the root. Keep the asset cache inside this capture.
+  const templatePacks = new Map<string, Record<string, unknown> | undefined>();
+  const loadTemplatePack = (
+    path: string,
+  ): Record<string, unknown> | undefined => {
+    if (templatePacks.has(path)) return templatePacks.get(path);
+    let pack: Record<string, unknown> | undefined;
+    try {
+      const constructor = readMechanicsProperty(pageWindow, "XMLHttpRequest");
+      if (typeof constructor === "function") {
+        const request = Reflect.construct(constructor, []) as XMLHttpRequest;
+        request.open("GET", path, false);
+        request.send();
+        const parsed: unknown =
+          request.status === 200 ? JSON.parse(request.responseText) : undefined;
+        if (isNonArrayRecord(parsed)) pack = parsed;
+      }
+    } catch {
+      /* An unavailable native asset leaves the marginal unknown. */
+    }
+    templatePacks.set(path, pack);
+    return pack;
+  };
+  const readEffectTemplate = (key: string): string | undefined => {
+    const game = readMechanicsProperty(pageWindow, "game");
+    const localize = readMechanicsProperty(game, "loc");
+    if (typeof localize === "function") {
+      try {
+        const value = Reflect.apply(localize as CapturedGameCall, game, [key]);
+        return typeof value === "string" ? value : undefined;
+      } catch {
+        return undefined;
+      }
+    }
+    const root = rootState?.readRoot();
+    const settings = readProperty(root, "settings");
+    if (readProperty(settings, "sPackOn") === true) return undefined;
+    const rawLocale = readProperty(settings, "locale");
+    const locale = rawLocale === undefined ? "en-US" : rawLocale;
+    if (typeof locale !== "string" || !/^[a-z]{2}-[A-Z]{2}$/u.test(locale))
+      return undefined;
+    const base = loadTemplatePack("strings/strings.json");
+    if (base === undefined) return undefined;
+    const override =
+      locale === "en-US"
+        ? undefined
+        : loadTemplatePack(`strings/strings.${locale}.json`);
+    if (locale !== "en-US" && override === undefined) return undefined;
+    const value = override?.[key] ?? base[key];
+    return typeof value === "string" ? value : undefined;
+  };
 
   const mapConstructor = readMechanicsProperty(pageWindow, "Map");
   const mapPrototype = readMechanicsProperty(mapConstructor, "prototype");
@@ -1638,8 +1694,9 @@ export function installCapturedGameMechanics(
         return { kind: "invalid" };
       }
     },
-    readEffectNumericInputs(
+    readEffectLocalizedNumericInputs(
       entryKey: string,
+      localizationKey: string,
       isCurrent?: () => boolean,
     ): CapturedGameRead<readonly number[]> {
       try {
@@ -1655,10 +1712,17 @@ export function installCapturedGameMechanics(
           (isCurrent !== undefined && !isCurrent())
         )
           return { kind: "invalid" };
-        const observed = probeScopedLocalizedNumbers(pageWindow, () => {
-          if (typeof Reflect.apply(effect, entry.action, []) !== "string")
-            throw new TypeError("native effect did not return text");
-        });
+        const template = readEffectTemplate(localizationKey);
+        if (template === undefined || template === localizationKey)
+          return { kind: "invalid" };
+        const observed = probeScopedLocalizedNumbers(
+          pageWindow,
+          template,
+          () => {
+            if (typeof Reflect.apply(effect, entry.action, []) !== "string")
+              throw new TypeError("native effect did not return text");
+          },
+        );
         const current = readMechanicsEntry(entryKey, candidate);
         return observed !== undefined &&
           entries === structureEntries &&

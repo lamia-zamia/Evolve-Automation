@@ -614,10 +614,13 @@ export function readCapturedPowerConsumptions(
     const observedCost =
       fallback.observation === null
         ? null
-        : mechanics.readEffectNumericInputs?.(structure.entryKey);
+        : mechanics.readEffectLocalizedNumericInputs?.(
+            structure.entryKey,
+            fallback.observation.upstreamLocalizationKey,
+          );
     const observedIndex =
       observedCost?.kind === "value" && fallback.observation !== null
-        ? observedCost.value.length - 1 - fallback.observation.fromEnd
+        ? fallback.observation.variableIndex
         : -1;
     let enableRate: number | null =
       observedCost?.kind === "value" &&
@@ -715,6 +718,28 @@ export function readNativePowerSupports(
   }
   const supports: PowerSupportInput[] = [];
   for (const [type, members] of groups) {
+    // An infiltrated provider needs the game's private infiltratorFactor result. Without an
+    // oracle, leave this whole grid in the native baseline rather than copying its penalty.
+    const infiltrators = readProperty(
+      readProperty(readProperty(root, "race"), "alien"),
+      "infiltrators",
+    );
+    let infiltrated = false;
+    for (const member of members) {
+      const support = member.readSupportValue(type);
+      if (support.kind !== "value") return undefined;
+      if (support.value <= 0) continue;
+      const sector = readProperty(infiltrators, member.sector);
+      const assignment = readProperty(sector, member.struct);
+      if (
+        assignment !== undefined &&
+        (typeof assignment !== "number" ||
+          !Number.isFinite(assignment) ||
+          assignment > 0)
+      )
+        infiltrated = true;
+    }
+    if (infiltrated) continue;
     const ordered = mechanics.readSupportOrder(root, type);
     if (ordered.kind !== "value") return undefined;
     const consumers: CapturedGameStructureDefinition[] = [];
@@ -753,11 +778,22 @@ export function readNativePowerSupports(
     if (state !== undefined && state !== null) {
       if (!isRecord(state)) return undefined;
       const readCurrent = readGameNumber(state, "support");
-      const readMaximum = readGameNumber(state, "s_max");
-      if (readCurrent === undefined || readMaximum === undefined)
+      const readMaximum =
+        type === "belt" ? anchor?.readSupportValue(type) : null;
+      const effective =
+        type === "belt" && anchor !== undefined
+          ? mechanics.readEffectivePowerCount(root, anchor.entryKey)
+          : null;
+      const nativeMaximum =
+        type === "belt"
+          ? readMaximum?.kind === "value" && effective?.kind === "value"
+            ? readMaximum.value * effective.value
+            : undefined
+          : readGameNumber(state, "s_max");
+      if (readCurrent === undefined || nativeMaximum === undefined)
         return undefined;
       current = readCurrent;
-      maximum = readMaximum;
+      maximum = nativeMaximum;
     }
     supports.push(
       Object.freeze({
@@ -2122,9 +2158,17 @@ function readPowerCycle(
         for (const change of candidate.supportChanges) {
           if (change.type !== support.type) continue;
           touched = true;
-          if (change.amount < 0)
-            modeledMaximum -= change.amount * candidate.record.stateOn;
-          else modeledCurrent += change.amount * candidate.record.stateOn;
+          if (change.amount < 0) {
+            const effective = dependencies.mechanics.readEffectivePowerCount(
+              root,
+              candidate.record.structure.entryKey,
+            );
+            if (effective.kind !== "value") {
+              unsafeTypes.add(support.type);
+              continue;
+            }
+            modeledMaximum -= change.amount * effective.value;
+          } else modeledCurrent += change.amount * candidate.record.stateOn;
         }
       }
       if (

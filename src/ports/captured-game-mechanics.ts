@@ -186,9 +186,10 @@ export interface CapturedGameMechanics {
     entryKey: string,
     isCurrent?: () => boolean,
   ): CapturedGameRead<readonly CapturedRoundedValue[]>;
-  /** Numeric localization inputs from one captured action effect, before rendering. */
-  readEffectNumericInputs(
+  /** Numeric inputs in one uniquely identified native localization call. */
+  readEffectLocalizedNumericInputs(
     entryKey: string,
+    localizationKey: string,
     isCurrent?: () => boolean,
   ): CapturedGameRead<readonly number[]>;
   readMathRoundValues(

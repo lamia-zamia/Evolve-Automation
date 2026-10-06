@@ -160,14 +160,28 @@ assert.equal(control.readEstablishedProjects(), undefined);
     "an authoritative empty catalog is distinct from unknown",
   );
   projectRowsEmpty = false;
+  projectClock = 120000;
+  projectControl.resetProjectSample();
+  assert.equal(projectControl.readProjects()[0].projectId, "lhc");
+  const establishedReads = projectReads;
   projectControl.invalidateConstructionOffers();
-  assert.equal(projectControl.readEstablishedProjects(), undefined);
+  assert.equal(projectControl.readEstablishedProjects()[0].projectId, "lhc");
   assert.equal(projectControl.readProjects()[0].projectId, "lhc");
   assert.equal(
     projectReads,
-    5,
-    "Construction invalidates the cached A.R.P.A. offer draw",
+    establishedReads,
+    "a Building-only mutation reuses the A.R.P.A. authority",
   );
+  projectRoot.arpa.lhc.rank++;
+  projectControl.resetProjectSample();
+  assert.equal(projectControl.readEstablishedProjects(), undefined);
+  assert.equal(projectControl.readProjects()[0].rank, 3);
+  assert.equal(projectReads, establishedReads + 1);
+  projectRoot.tech.new_unlock = 1;
+  projectControl.resetProjectSample();
+  assert.equal(projectControl.readEstablishedProjects(), undefined);
+  assert.equal(projectControl.readProjects()[0].rank, 3);
+  assert.equal(projectReads, establishedReads + 2);
 }
 
 let root = {

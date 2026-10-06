@@ -31,7 +31,7 @@ const titleByBinding = {
   "galaxy-foothold": labels.galaxy_foothold,
 };
 const mechanics = {
-  readEffectNumericInputs: () => ({ kind: "invalid" }),
+  readEffectLocalizedNumericInputs: () => ({ kind: "invalid" }),
   readLocalizedText: (key) =>
     Object.hasOwn(labels, key)
       ? { kind: "value", value: labels[key] }
@@ -406,18 +406,39 @@ for (const [binding, resourceId, source] of [
 }
 
 // The mock supplies native action observations. Varying that answer varies the idle marginal.
-mechanics.readEffectNumericInputs = () => ({ kind: "value", value: [17] });
+mechanics.readEffectLocalizedNumericInputs = () => ({
+  kind: "value",
+  value: [17],
+});
 assert.equal(one(sample("space-spaceport", 0), "Food")?.enableRate, 17);
-mechanics.readEffectNumericInputs = () => ({ kind: "value", value: [3] });
+mechanics.readEffectLocalizedNumericInputs = (_entry, key) => {
+  assert.equal(key, "space_belt_station_effect4");
+  return { kind: "value", value: [10, 2, 91] };
+};
+assert.equal(
+  one(sample("space-space_station", 0), "Food")?.enableRate,
+  10,
+  "Food uses variable zero in the identified native station call",
+);
+mechanics.readEffectLocalizedNumericInputs = () => ({
+  kind: "value",
+  value: [3],
+});
 assert.equal(one(sample("space-spaceport", 0), "Food")?.enableRate, 3);
-mechanics.readEffectNumericInputs = () => ({ kind: "value", value: [150] });
+mechanics.readEffectLocalizedNumericInputs = () => ({
+  kind: "value",
+  value: [150],
+});
 assert.equal(
   one(sample("space-spaceport", 0, {}, { race: { humongous: true } }), "Food")
     ?.enableRate,
   150,
   "the native observation supplies adjusted numbers without adapter scaling",
 );
-mechanics.readEffectNumericInputs = () => ({ kind: "value", value: [2] });
+mechanics.readEffectLocalizedNumericInputs = () => ({
+  kind: "value",
+  value: [2],
+});
 assert.equal(
   one(sample("space-spaceport", 0, {}, { race: { cataclysm: true } }), "Food")
     ?.enableRate,
@@ -430,7 +451,10 @@ assert.equal(
   )?.enableRate,
   2,
 );
-mechanics.readEffectNumericInputs = () => ({ kind: "value", value: [25] });
+mechanics.readEffectLocalizedNumericInputs = () => ({
+  kind: "value",
+  value: [25],
+});
 assert.equal(
   one(
     sample(
@@ -443,15 +467,18 @@ assert.equal(
   )?.enableRate,
   25,
 );
-mechanics.readEffectNumericInputs = () => ({ kind: "invalid" });
+mechanics.readEffectLocalizedNumericInputs = () => ({ kind: "invalid" });
 assert.equal(one(sample("space-spaceport", 0), "Food")?.enableRate, null);
-mechanics.readEffectNumericInputs = () => ({
+mechanics.readEffectLocalizedNumericInputs = () => ({
   kind: "value",
   value: [Number.NaN],
 });
 assert.equal(one(sample("space-spaceport", 0), "Food")?.enableRate, null);
 assert.equal(one(sample("city-tourist_center", 0), "Food")?.enableRate, null);
-mechanics.readEffectNumericInputs = () => ({ kind: "value", value: [19] });
+mechanics.readEffectLocalizedNumericInputs = () => ({
+  kind: "value",
+  value: [19],
+});
 assert.equal(
   one(
     sample("space-spaceport", 0, {}, {}, new Set(), undefined, {
@@ -462,7 +489,7 @@ assert.equal(
   null,
   "the native production marker suppresses Food without a copied race gate",
 );
-mechanics.readEffectNumericInputs = () => ({ kind: "invalid" });
+mechanics.readEffectLocalizedNumericInputs = () => ({ kind: "invalid" });
 assert.equal(
   one(
     sample("space-space_station", 2, {
@@ -490,7 +517,10 @@ for (const [binding, source] of [
     "missing effective Stargate observation fails only this marginal closed",
   );
 }
-mechanics.readEffectNumericInputs = () => ({ kind: "value", value: [83] });
+mechanics.readEffectLocalizedNumericInputs = () => ({
+  kind: "value",
+  value: [83],
+});
 mechanics.readEffectivePowerCount = (_root, key) =>
   key === "int_blackhole:s_gate"
     ? { kind: "value", value: 0 }
@@ -516,7 +546,7 @@ assert.equal(
   "the effective native value owns the gate",
 );
 delete mechanics.readEffectivePowerCount;
-mechanics.readEffectNumericInputs = () => ({ kind: "invalid" });
+mechanics.readEffectLocalizedNumericInputs = () => ({ kind: "invalid" });
 const effectiveRequests = [];
 mechanics.readEffectivePowerCount = (_root, key) => {
   effectiveRequests.push(key);
@@ -851,7 +881,10 @@ assert.deepEqual(
     enableRate: null,
   },
 );
-mechanics.readEffectNumericInputs = () => ({ kind: "value", value: [3.75, 5] });
+mechanics.readEffectLocalizedNumericInputs = () => ({
+  kind: "value",
+  value: [3.75, 5],
+});
 mechanics.readEffectRoundedValues = () => ({
   kind: "value",
   value: [{ receiver: 3.749, digits: 2, text: "3.75" }],
@@ -865,7 +898,7 @@ assert.equal(
   )?.enableRate,
   3.749,
 );
-mechanics.readEffectNumericInputs = () => ({ kind: "invalid" });
+mechanics.readEffectLocalizedNumericInputs = () => ({ kind: "invalid" });
 delete mechanics.readEffectRoundedValues;
 const vitreloy = sample("galaxy-vitreloy_plant", 5, {
   Money: { Vitreloy: -100000 },

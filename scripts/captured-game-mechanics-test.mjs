@@ -48,14 +48,20 @@ function makePage() {
         return { key: sector + ":" + struct, region, sector, struct, c_action: action, info: false, state };
       }
       function makeLocalizedEffect(amount) {
-        return function() { return "%0 units".replace(/%0(?!\\d)/, amount); };
+        return function() { return localize("probe_amount", [amount]); };
       }
       function makeDualLocalizedEffect(first, second) {
-        return function() { return "%0 and %1".replace(/%0(?!\\d)/, first).replace(/%1(?!\\d)/, second); };
+        return function() { return localize("probe_dual", [first, second]); };
+      }
+      function localize(key, variables) {
+        let result = key === "probe_amount" ? "%0 units" : key === "probe_dual" ? "%0 and %1" : key === "probe_noise" ? "%0 noise" : "translated:" + key;
+        if (variables) for (let i = 0; i < variables.length; i++)
+          result = result.replace(new RegExp("%" + i + "(?!\\\\d)", "g"), variables[i]);
+        return result;
       }
       return {
         Map, Object, Array, Function, Number, String, Math, Proxy, createProbe, makeLocalizedEffect, makeDualLocalizedEffect,
-        game: { loc: function(key) { return key === "probe_amount" ? "%0 units" : key === "probe_dual" ? "%0 and %1" : "translated:" + key; } },
+        game: { loc: localize },
       };
     })()
   `);
@@ -1193,7 +1199,10 @@ const originalReplaceDescriptor = Object.getOwnPropertyDescriptor(
 );
 effectAction.effect = page.makeLocalizedEffect(37.25);
 assert.deepEqual(
-  capture.mechanics.readEffectNumericInputs(effectEntry.key),
+  capture.mechanics.readEffectLocalizedNumericInputs(
+    effectEntry.key,
+    "probe_amount",
+  ),
   { kind: "value", value: [37.25] },
   "the action's numeric localization input is observed before presentation",
 );
@@ -1202,21 +1211,63 @@ assert.deepEqual(
   originalReplaceDescriptor,
 );
 effectAction.effect = page.makeDualLocalizedEffect(2.5, 100);
-assert.deepEqual(capture.mechanics.readEffectNumericInputs(effectEntry.key), {
-  kind: "value",
-  value: [2.5, 100],
-});
+assert.deepEqual(
+  capture.mechanics.readEffectLocalizedNumericInputs(
+    effectEntry.key,
+    "probe_dual",
+  ),
+  {
+    kind: "value",
+    value: [2.5, 100],
+  },
+);
+effectAction.effect = () => {
+  page.game.loc("probe_noise", [91]);
+  const answer = page.game.loc("probe_dual", [2.5, 100]);
+  page.game.loc("probe_noise", [92]);
+  return answer;
+};
+assert.deepEqual(
+  capture.mechanics.readEffectLocalizedNumericInputs(
+    effectEntry.key,
+    "probe_dual",
+  ),
+  {
+    kind: "value",
+    value: [2.5, 100],
+  },
+  "numeric calls before and after the identified template cannot move its variables",
+);
+effectAction.effect = () =>
+  page.game.loc("probe_dual", [1, 2]) + page.game.loc("probe_dual", [3, 4]);
+assert.deepEqual(
+  capture.mechanics.readEffectLocalizedNumericInputs(
+    effectEntry.key,
+    "probe_dual",
+  ),
+  { kind: "invalid" },
+  "two calls of the intended template are ambiguous",
+);
 effectAction.effect = () => "no matching localization";
-assert.deepEqual(capture.mechanics.readEffectNumericInputs(effectEntry.key), {
-  kind: "value",
-  value: [],
-});
+assert.deepEqual(
+  capture.mechanics.readEffectLocalizedNumericInputs(
+    effectEntry.key,
+    "probe_dual",
+  ),
+  { kind: "invalid" },
+);
 effectAction.effect = () => {
   throw new Error("native effect failure");
 };
-assert.deepEqual(capture.mechanics.readEffectNumericInputs(effectEntry.key), {
-  kind: "invalid",
-});
+assert.deepEqual(
+  capture.mechanics.readEffectLocalizedNumericInputs(
+    effectEntry.key,
+    "probe_dual",
+  ),
+  {
+    kind: "invalid",
+  },
+);
 assert.deepEqual(
   Object.getOwnPropertyDescriptor(page.String.prototype, "replace"),
   originalReplaceDescriptor,
