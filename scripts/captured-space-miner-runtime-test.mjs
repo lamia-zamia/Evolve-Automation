@@ -59,10 +59,13 @@ const station = {
   entryKey: "spc_belt:space_station",
   struct: "space_station",
   actionId: "space-space_station",
-  readPowered: () => value(0),
+  readTitle: () => value("Space Station"),
+  readPowered: () => value(3),
   readPowerGridRole: () => value("none"),
   readSupport: () => value(3),
   readSupportValue: () => value(3),
+  readSupportFuel: () => value([{ resourceId: "Helium_3", amount: 2.5 }]),
+  readSupportFuelAdjustmentDisabled: () => value(true),
   readNativeSupportGrids: () =>
     value([
       {
@@ -106,6 +109,7 @@ function runMinerBootstrap({
   staleJobs = false,
   replaceBeforePower = false,
   starved = false,
+  liveStarvation = false,
 } = {}) {
   const root = {
     settings: { civTabs: 1, spaceTabs: 0, showResearch: true, showSpace: true },
@@ -114,8 +118,19 @@ function runMinerBootstrap({
     stats: {},
     city: { power: 10, powered: true },
     space: {
+      ...(liveStarvation
+        ? {
+            pOn: { space_station: 0 },
+            supportOn: { elerium_ship: 0, iron_ship: 0 },
+          }
+        : {}),
       elerium_ship: { count: 1, on: 0 },
-      space_station: { count: 1, on: 1, support: 3, s_max: starved ? 0 : 3 },
+      space_station: {
+        count: liveStarvation ? 5 : 1,
+        on: liveStarvation ? 0 : 1,
+        support: liveStarvation ? 0 : 3,
+        s_max: liveStarvation || starved ? 0 : 3,
+      },
       iridium_ship: { count: 0, on: 0 },
       iron_ship: { count: 3, on: 3 },
     },
@@ -142,6 +157,8 @@ function runMinerBootstrap({
       Power: { amount: 10, max: 10, diff: 10, display: true },
       Elerium: { amount: 100, max: 200, diff: 0, display: true },
       Iron: { amount: 0, max: 200, diff: 3, display: true },
+      Food: { amount: 100, max: 200, diff: 10, display: true },
+      Helium_3: { amount: 100, max: 200, diff: 10, display: true },
     },
     support: { belt: [ship.entryKey] },
     power: [ship.entryKey],
@@ -157,6 +174,12 @@ function runMinerBootstrap({
         snapshots.push({
           workers: root.civic.space_miner.workers,
           lateMaximum: root.space.space_station.s_max,
+          stationCount: root.space.space_station.count,
+          stationOn: root.space.space_station.on,
+          stationEffective: root.space.pOn?.space_station ?? null,
+          stationSupport: root.space.space_station.support,
+          ironOn: root.space.iron_ship.on,
+          ironEffective: root.space.supportOn?.iron_ship ?? null,
           handoff: hooks.readSpaceMinerHandoff(),
           power: hooks.readPowerCycle(),
         });
@@ -169,11 +192,41 @@ function runMinerBootstrap({
     controlSetup: (control) => {
       replaceRoot = control.replaceRoot;
     },
-    afterCycle: () =>
+    afterCycle: () => {
+      if (liveStarvation) {
+        const capacity =
+          root.space.space_station.on * station.readSupportValue("belt").value;
+        root.space.pOn.space_station = root.space.space_station.on;
+        root.space.space_station.s_max = capacity;
+        let used = 0;
+        for (const [struct, supportPerUnit] of [
+          ["iron_ship", 1],
+          ["elerium_ship", 2],
+        ]) {
+          const configured = root.space[struct].on;
+          const effective = Math.min(
+            configured,
+            Math.max(0, Math.floor((capacity - used) / supportPerUnit)),
+          );
+          root.space.supportOn[struct] = effective;
+          used += effective * supportPerUnit;
+        }
+        root.space.space_station.support = used;
+      }
       afterCycles.push({
         workers: root.civic.space_miner.workers,
         shipOn: root.space.elerium_ship.on,
-      }),
+        ...(liveStarvation
+          ? {
+              stationOn: root.space.space_station.on,
+              beltCapacity: root.space.space_station.s_max,
+              beltUsed: root.space.space_station.support,
+              ironEffective: root.space.supportOn.iron_ship,
+              eleriumEffective: root.space.supportOn.elerium_ship,
+            }
+          : {}),
+      });
+    },
     settingsHostWindow: { __EA_TEST_HOOKS__: hooks },
     settings: {
       autoJobs,
@@ -190,10 +243,13 @@ function runMinerBootstrap({
       job_b2_unemployed: -1,
       job_b3_unemployed: -1,
       "bld_s_space-elerium_ship": true,
+      "bld_s2_space-elerium_ship": true,
       "bld_p_space-elerium_ship": 1,
       "bld_s_space-space_station": true,
+      "bld_s2_space-space_station": true,
       "bld_p_space-space_station": 0,
-      "bld_s_space-iron_ship": true,
+      "bld_s_space-iron_ship": !liveStarvation,
+      "bld_s2_space-iron_ship": !liveStarvation,
       "bld_p_space-iron_ship": 2,
     },
     documentSetup: ({ body }) => body.append(element("div", { id: "tech" })),
@@ -203,7 +259,11 @@ function runMinerBootstrap({
       readSupportOrder: (_root, type) =>
         value(type === "belt" ? [iron, ship] : []),
       readEffectivePowerCount: (sample, key) =>
-        value(sample.space[key.split(":")[1]]?.on ?? 0),
+        value(
+          sample.space.pOn?.[key.split(":")[1]] ??
+            sample.space[key.split(":")[1]]?.on ??
+            0,
+        ),
       // Native support_on is the count the support pass actually served; the live 0/5 case has a
       // consumer configured on and effectively zero, so the default here follows the root's own
       // `supportOn` map when a scenario supplies one.
@@ -221,6 +281,11 @@ function runMinerBootstrap({
         production: { Iron: { "Space Miner": 3 } },
         consumption: {},
       }),
+      readEffectLocalizedNumericInputs: (entryKey, localizationKey) =>
+        entryKey === station.entryKey &&
+        localizationKey === "space_belt_station_effect4"
+          ? value([1])
+          : { kind: "absent" },
       readLocalizedText: (key) =>
         key === "job_space_miner" ? value("Space Miner") : absent(),
       readAdjustedFuelFactor: () => value(1),
@@ -362,6 +427,93 @@ assert.ok(
 assert.ok(
   starvedBootstrap.afterCycles[1].workers > 0,
   "the next Jobs phase recovers actual Space Miners",
+);
+
+const liveStarvationBootstrap = runMinerBootstrap({ liveStarvation: true });
+const liveStarvationSnapshot = liveStarvationBootstrap.snapshots[0];
+assert.ok(liveStarvationSnapshot);
+assert.equal(liveStarvationSnapshot.stationCount, 5);
+assert.equal(liveStarvationSnapshot.stationOn, 0);
+assert.equal(liveStarvationSnapshot.stationEffective, 0);
+assert.equal(liveStarvationSnapshot.stationSupport, 0);
+assert.equal(liveStarvationSnapshot.ironOn, 3);
+assert.equal(liveStarvationSnapshot.ironEffective, 0);
+assert.equal(liveStarvationSnapshot.lateMaximum, 0);
+assert.equal(
+  liveStarvationSnapshot.power.cycle.resources.find(({ id }) => id === "Power")
+    ?.currentQuantity,
+  10,
+);
+assert.equal(
+  liveStarvationSnapshot.power.cycle.resources.find(({ id }) => id === "Food")
+    ?.currentQuantity,
+  100,
+);
+assert.equal(
+  liveStarvationSnapshot.power.cycle.resources.find(
+    ({ id }) => id === "Helium_3",
+  )?.currentQuantity,
+  100,
+);
+assert.equal(
+  liveStarvationSnapshot.power.cycle.supports.find(
+    ({ type }) => type === "belt",
+  )?.maximum,
+  0,
+);
+assert.equal(
+  liveStarvationSnapshot.power.cycle.supports.find(
+    ({ type }) => type === "belt",
+  )?.current,
+  0,
+);
+assert.deepEqual(
+  liveStarvationSnapshot.power.cycle.beltConsumers,
+  [
+    {
+      binding: "space-elerium_ship",
+      configured: 0,
+      supportPerUnit: 2,
+      managed: true,
+    },
+    {
+      binding: "space-iron_ship",
+      configured: 3,
+      supportPerUnit: 1,
+      managed: false,
+    },
+  ],
+  "the full Belt grid includes the unmanaged configured miner",
+);
+assert.ok(
+  liveStarvationSnapshot.power.cycle.buildings.some(
+    ({ binding }) => binding === "space-space_station",
+  ),
+  "the configured Space Station stays in the managed Power set",
+);
+assert.ok(
+  liveStarvationSnapshot.power.plan.decision.operations.some(
+    ({ kind, binding, amount }) =>
+      kind === "adjust-building" &&
+      binding === "space-space_station" &&
+      amount === 2,
+  ),
+  "a disabled Station is raised to cover configured managed and unmanaged Belt demand",
+);
+assert.ok(
+  liveStarvationSnapshot.power.plan.decision.operations.some(
+    ({ kind, binding, amount }) =>
+      kind === "adjust-building" &&
+      binding === "space-elerium_ship" &&
+      amount > 0,
+  ),
+  "the relaxed probe reserves the newly staffed managed Belt ship",
+);
+assert.ok(
+  liveStarvationBootstrap.afterCycles[0].beltCapacity > 0 &&
+    liveStarvationBootstrap.afterCycles[0].ironEffective > 0 &&
+    liveStarvationBootstrap.afterCycles[0].eleriumEffective > 0,
+  "the next native support pass restores Belt capacity and serves its consumers",
 );
 
 const stale = runMinerBootstrap({ staleJobs: true });

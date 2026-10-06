@@ -60,6 +60,7 @@ const powerApplicationCycle = {
     },
   ],
   supports: [],
+  beltConsumers: [],
   buildings: [powerApplicationBuilding],
   lake: { enabled: false },
   spire: { available: false },

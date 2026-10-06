@@ -5,6 +5,7 @@ import type {
   PowerBuildingRule,
   PowerConsumptionInput,
   PowerCycleInput,
+  PowerBeltConsumerInput,
   PowerLakeInput,
   PowerResourceInput,
   PowerSupportInput,
@@ -2158,93 +2159,208 @@ function readPowerCycle(
   if (supports === undefined)
     return unavailable("native-support", "native support snapshot unavailable");
   const supportMap = new Map(supports.map((item) => [item.type, item]));
+  const nativeSupportParticipants: {
+    readonly structure: CapturedGameStructureDefinition;
+    readonly supportTypes: readonly string[];
+    readonly supportChanges: readonly PowerSupportChangeInput[];
+  }[] = [];
+  const unsafeSupportTypes = new Set<string>();
+  let unsafeEverySupportType = false;
+  const beltConsumers: PowerBeltConsumerInput[] = [];
+  for (const structure of structures) {
+    const state = readCapturedStructureState(root, structure);
+    if (state === undefined || state === null) continue;
+    const support = structure.readSupport();
+    const readTypes = structure.readSupportTypes();
+    const supportTypes =
+      readTypes.kind === "value" ? readTypes.value : Object.freeze([]);
+    if (readTypes.kind === "invalid") {
+      if (supportTypes.length === 0) unsafeEverySupportType = true;
+      for (const type of supportTypes) unsafeSupportTypes.add(type);
+    }
+    if (support.kind === "absent") continue;
+    if (support.kind === "invalid") {
+      if (supportTypes.length === 0) unsafeEverySupportType = true;
+      for (const type of supportTypes) unsafeSupportTypes.add(type);
+      nativeSupportParticipants.push({
+        structure,
+        supportTypes,
+        supportChanges: Object.freeze([]),
+      });
+      continue;
+    }
+    if (!isRecord(state)) {
+      if (supportTypes.length === 0) unsafeEverySupportType = true;
+      for (const type of supportTypes) unsafeSupportTypes.add(type);
+      nativeSupportParticipants.push({
+        structure,
+        supportTypes,
+        supportChanges: Object.freeze([]),
+      });
+      continue;
+    }
+    const grids = structure.readNativeSupportGrids(root);
+    if (grids.kind !== "value") {
+      if (supportTypes.length === 0) unsafeEverySupportType = true;
+      for (const type of supportTypes) unsafeSupportTypes.add(type);
+      nativeSupportParticipants.push({
+        structure,
+        supportTypes,
+        supportChanges: Object.freeze([]),
+      });
+      continue;
+    }
+    const participantTypes = new Set(supportTypes);
+    const supportChanges: PowerSupportChangeInput[] = [];
+    for (const grid of grids.value) {
+      if (!isRecord(grid)) {
+        if (participantTypes.size === 0) unsafeEverySupportType = true;
+        for (const type of participantTypes) unsafeSupportTypes.add(type);
+        continue;
+      }
+      const type = readProperty(grid, "type");
+      const contribution = readProperty(grid, "contribution");
+      const consumer = readProperty(grid, "consumer");
+      const provider = readProperty(grid, "provider");
+      if (typeof type === "string" && type.length > 0)
+        participantTypes.add(type);
+      if (
+        typeof type !== "string" ||
+        type.length === 0 ||
+        typeof contribution !== "number" ||
+        !Number.isFinite(contribution) ||
+        typeof consumer !== "boolean" ||
+        typeof provider !== "boolean" ||
+        (!consumer && !provider && contribution !== 0) ||
+        (consumer && support.value >= 0) ||
+        (provider && contribution < 0)
+      ) {
+        if (typeof type === "string" && type.length > 0)
+          unsafeSupportTypes.add(type);
+        else if (participantTypes.size === 0) unsafeEverySupportType = true;
+        else
+          for (const participantType of participantTypes)
+            unsafeSupportTypes.add(participantType);
+        continue;
+      }
+      if (provider) {
+        supportChanges.push(Object.freeze({ type, amount: -contribution }));
+      }
+      const consumerAmount = consumer ? -support.value : 0;
+      if (consumer) {
+        supportChanges.push(Object.freeze({ type, amount: consumerAmount }));
+      }
+      if (!consumer && !provider) {
+        supportChanges.push(Object.freeze({ type, amount: 0 }));
+      }
+      if (type === "belt" && consumer && consumerAmount > 0) {
+        const configured = readGameNumber(state, "on");
+        if (configured === undefined || configured < 0) {
+          unsafeSupportTypes.add(type);
+          continue;
+        }
+        beltConsumers.push(
+          Object.freeze({
+            binding: structure.actionId,
+            configured,
+            supportPerUnit: consumerAmount,
+            managed: settings[`bld_s_${structure.actionId}`] === true,
+          }),
+        );
+      }
+    }
+    nativeSupportParticipants.push({
+      structure,
+      supportTypes: Object.freeze([...participantTypes]),
+      supportChanges: Object.freeze(supportChanges),
+    });
+  }
+  if (unsafeEverySupportType)
+    for (const support of supports) unsafeSupportTypes.add(support.type);
   const candidates: {
     readonly record: (typeof managed)[number];
     readonly role: "consumer" | "generator" | "none";
+    readonly supportTypes: readonly string[];
     readonly supportChanges: readonly PowerSupportChangeInput[];
   }[] = [];
   for (const record of managed) {
     const role = record.structure.readPowerGridRole(root, record.powered);
-    const grids = record.structure.readNativeSupportGrids(root);
-    if (role.kind !== "value" || grids.kind !== "value")
-      return unavailable(
-        "native-support",
-        `native support snapshot/coherence unavailable: ${record.catalog.binding}`,
-      );
-    if (role.value === "none" && grids.value.length === 0) continue;
+    const participant = nativeSupportParticipants.find(
+      (candidate) => candidate.structure.entryKey === record.structure.entryKey,
+    );
+    if (role.kind !== "value" || participant === undefined) {
+      const types = participant?.supportTypes ?? [];
+      if (types.length === 0) unsafeEverySupportType = true;
+      for (const type of types) unsafeSupportTypes.add(type);
+      continue;
+    }
+    if (role.value === "none" && participant.supportChanges.length === 0)
+      continue;
     candidates.push({
       record,
       role: role.value,
-      supportChanges: Object.freeze(
-        grids.value.map((group) =>
-          Object.freeze({ type: group.type, amount: -group.contribution }),
-        ),
-      ),
+      supportTypes: participant.supportTypes,
+      supportChanges: participant.supportChanges,
     });
   }
-  // Once a group fails, its buildings stay in the native baseline. Removing a
-  // cross-group building can make another group's remaining model incomplete.
-  let supportSafe = candidates;
-  while (true) {
-    const unsafeTypes = new Set(
-      supportSafe.flatMap((candidate) =>
-        candidate.supportChanges
-          .filter((change) => !supportMap.has(change.type))
-          .map((change) => change.type),
-      ),
-    );
-    for (const support of supports) {
-      let modeledMaximum = 0;
-      let modeledCurrent = 0;
-      let touched = false;
-      for (const candidate of supportSafe) {
-        for (const change of candidate.supportChanges) {
-          if (change.type !== support.type) continue;
-          touched = true;
-          if (change.amount < 0) {
-            const effective = dependencies.mechanics.readEffectivePowerCount(
-              root,
-              candidate.record.structure.entryKey,
-            );
-            if (effective.kind !== "value") {
-              unsafeTypes.add(support.type);
-              continue;
-            }
-            modeledMaximum -= change.amount * effective.value;
-          } else {
-            // Pinned main.js clamps a consumer to the capacity actually available and then adds
-            // `active * supportSize` to the anchor's `support`, where `active` is what landed in the
-            // private `support_on`. Configured `state.on` is the requested count, so a starved
-            // consumer is a valid native state and must not be modelled as if it were served.
-            const effective = dependencies.mechanics.readEffectiveSupportCount(
-              root,
-              candidate.record.structure.entryKey,
-            );
-            if (effective.kind !== "value") {
-              unsafeTypes.add(support.type);
-              continue;
-            }
-            modeledCurrent += change.amount * effective.value;
+  if (unsafeEverySupportType)
+    for (const support of supports) unsafeSupportTypes.add(support.type);
+  for (const participant of nativeSupportParticipants) {
+    for (const type of participant.supportTypes) {
+      if (!supportMap.has(type)) unsafeSupportTypes.add(type);
+    }
+  }
+  for (const support of supports) {
+    let modeledMaximum = 0;
+    let modeledCurrent = 0;
+    for (const participant of nativeSupportParticipants) {
+      for (const change of participant.supportChanges) {
+        if (change.type !== support.type) continue;
+        if (change.amount < 0) {
+          const effective = dependencies.mechanics.readEffectivePowerCount(
+            root,
+            participant.structure.entryKey,
+          );
+          if (
+            effective.kind !== "value" ||
+            !Number.isFinite(effective.value) ||
+            effective.value < 0
+          ) {
+            unsafeSupportTypes.add(support.type);
+            continue;
           }
+          modeledMaximum -= change.amount * effective.value;
+        } else if (change.amount > 0) {
+          // Pinned main.js uses native p_on for provider capacity and private support_on for
+          // consumers actually served. Configured on remains the prospective Belt demand below.
+          const effective = dependencies.mechanics.readEffectiveSupportCount(
+            root,
+            participant.structure.entryKey,
+          );
+          if (
+            effective.kind !== "value" ||
+            !Number.isFinite(effective.value) ||
+            effective.value < 0
+          ) {
+            unsafeSupportTypes.add(support.type);
+            continue;
+          }
+          modeledCurrent += change.amount * effective.value;
         }
       }
-      if (
-        touched &&
-        (Math.abs(modeledMaximum - support.maximum) > 1e-9 ||
-          Math.abs(modeledCurrent - support.current) > 1e-9)
-      )
-        unsafeTypes.add(support.type);
     }
-    if (unsafeTypes.size === 0) break;
-    const next = supportSafe.filter(
-      (candidate) =>
-        !candidate.supportChanges.some((change) =>
-          unsafeTypes.has(change.type),
-        ),
-    );
-    if (next.length === supportSafe.length) break;
-    supportSafe = next;
+    if (
+      Math.abs(modeledMaximum - support.maximum) > 1e-9 ||
+      Math.abs(modeledCurrent - support.current) > 1e-9
+    )
+      unsafeSupportTypes.add(support.type);
   }
+  const supportSafe = candidates.filter(
+    (candidate) =>
+      !candidate.supportTypes.some(
+        (type) => unsafeSupportTypes.has(type) || !supportMap.has(type),
+      ),
+  );
   const autoFleet = settings["autoFleet"] === true;
   const fleetCapRelevant =
     autoFleet &&
@@ -2548,6 +2664,7 @@ function readPowerCycle(
     settings: settingsInput,
     resources: resourceInputs,
     supports,
+    beltConsumers: Object.freeze(beltConsumers),
     buildings: Object.freeze(filledPowers),
     lake: lakeAndSpire.lake,
     spire: lakeAndSpire.spire,

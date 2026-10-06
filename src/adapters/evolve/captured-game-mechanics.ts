@@ -1232,11 +1232,12 @@ export function installCapturedGameMechanics(
    * consumer struct on the page's `Object.prototype`, and take the first receiver each name reaches
    * that is not the already-identified `p_on`.
    *
-   * That is unambiguous because of pinned write order. `initStructureGrids` writes `p_on[struct]`
-   * immediately before `support_on[struct]`, and the production pass writes
-   * `support_on[consumer.struct]` before the `int_on`/`gal_on`/`spire_on` aliases that follow it —
-   * so the first receiver of a consumer name, once `p_on` is excluded, is `support_on`. Every
-   * consumer name must agree on one receiver, and every probe is removed on the first match.
+   * Pinned `industry.js::initStructureGrids` writes configured counts into both `p_on` and
+   * `support_on`. The later native support pass overwrites `support_on[consumer.struct]` with the
+   * clamped count before the `int_on`/`gal_on`/`spire_on` aliases. Excluding the already-retained
+   * `p_on` object makes the first remaining consumer write identify the private `support_on` map;
+   * retaining that object captures its later effective-count writes as well. Every temporary
+   * accessor is removed as soon as that identity is observed.
    */
   function restoreSupportOnProbe(): void {
     for (const [name, setter] of supportOnProbeSetters) {
@@ -1740,6 +1741,13 @@ export function installCapturedGameMechanics(
       root: unknown,
       entryKey: string,
     ): CapturedGameRead<number> {
+      if (rootState !== undefined) {
+        try {
+          if (rootState.readRoot() !== root) return { kind: "invalid" };
+        } catch {
+          return { kind: "invalid" };
+        }
+      }
       if (
         stopped ||
         nativeSupportOn === undefined ||

@@ -2492,6 +2492,12 @@
         return typeof configured == "number" && Number.isSafeInteger(configured) && configured >= 0 && typeof effective == "number" && Number.isSafeInteger(effective) && effective >= 0 && effective <= configured ? { kind: "value", value: effective } : { kind: "invalid" };
       },
       readEffectiveSupportCount(root, entryKey) {
+        if (rootState !== void 0)
+          try {
+            if (rootState.readRoot() !== root) return { kind: "invalid" };
+          } catch {
+            return { kind: "invalid" };
+          }
         if (stopped || nativeSupportOn === void 0 || structureEntries === void 0)
           return { kind: "invalid" };
         let entry = structureEntries.get(entryKey), parsed = readMechanicsEntry(entryKey, entry);
@@ -26949,7 +26955,7 @@
         default:
           break;
       }
-    switch (rule.kind) {
+    switch (rule.kind === "belt-space-station" && !savingPower && beltStationFloor > current && (maximum = Math.min(maximum, beltStationFloor)), rule.kind) {
       case "busy-resource":
         if (rule.active && !rule.savingOnly)
           return applyBusyCap(maximum, current, rule.observation, resources);
@@ -27198,15 +27204,11 @@
     ), beltStationFloor = 0;
     if (belt !== void 0 && belt.allocation === "strict" && station !== void 0 && station.smartCategory && station.smartEnabled) {
       let probe = planPowerCycleCore(input, state, beltStationFloor, !0), plannedDemand = 0;
-      for (let building of input.buildings) {
-        let change = building.supportChanges.find(
-          (candidate) => candidate.type === "belt" && candidate.amount > 0
-        );
-        if (change === void 0) continue;
-        let planned = probe.decision?.operations.find(
-          (operation2) => operation2.kind === "adjust-building" && operation2.binding === building.binding
-        ), configured = planned?.kind === "adjust-building" ? planned.expectedStateOn + planned.amount : building.stateOn;
-        !Number.isFinite(configured) || configured <= 0 || (plannedDemand += change.amount * configured);
+      for (let consumer of input.beltConsumers) {
+        let planned = consumer.managed ? probe.decision?.operations.find(
+          (operation2) => operation2.kind === "adjust-building" && operation2.binding === consumer.binding
+        ) : void 0, configured = planned?.kind === "adjust-building" ? planned.expectedStateOn + planned.amount : consumer.configured;
+        !Number.isFinite(configured) || configured <= 0 || (plannedDemand += consumer.supportPerUnit * configured);
       }
       let unit = -(station.supportChanges.find((change) => change.type === "belt")?.amount ?? 0);
       unit > 0 && plannedDemand > 0 && (beltStationFloor = Math.ceil(plannedDemand / unit));
@@ -29752,69 +29754,147 @@
     );
     if (supports === void 0)
       return unavailable2("native-support", "native support snapshot unavailable");
-    let supportMap = new Map(supports.map((item) => [item.type, item])), candidates = [];
-    for (let record of managed) {
-      let role = record.structure.readPowerGridRole(root, record.powered), grids = record.structure.readNativeSupportGrids(root);
-      if (role.kind !== "value" || grids.kind !== "value")
-        return unavailable2(
-          "native-support",
-          `native support snapshot/coherence unavailable: ${record.catalog.binding}`
-        );
-      role.value === "none" && grids.value.length === 0 || candidates.push({
-        record,
-        role: role.value,
-        supportChanges: Object.freeze(
-          grids.value.map(
-            (group) => Object.freeze({ type: group.type, amount: -group.contribution })
-          )
-        )
+    let supportMap = new Map(supports.map((item) => [item.type, item])), nativeSupportParticipants = [], unsafeSupportTypes = /* @__PURE__ */ new Set(), unsafeEverySupportType = !1, beltConsumers = [];
+    for (let structure of structures) {
+      let state = readCapturedStructureState(root, structure);
+      if (state == null) continue;
+      let support = structure.readSupport(), readTypes = structure.readSupportTypes(), supportTypes = readTypes.kind === "value" ? readTypes.value : Object.freeze([]);
+      if (readTypes.kind === "invalid") {
+        supportTypes.length === 0 && (unsafeEverySupportType = !0);
+        for (let type of supportTypes) unsafeSupportTypes.add(type);
+      }
+      if (support.kind === "absent") continue;
+      if (support.kind === "invalid") {
+        supportTypes.length === 0 && (unsafeEverySupportType = !0);
+        for (let type of supportTypes) unsafeSupportTypes.add(type);
+        nativeSupportParticipants.push({
+          structure,
+          supportTypes,
+          supportChanges: Object.freeze([])
+        });
+        continue;
+      }
+      if (!isRecord(state)) {
+        supportTypes.length === 0 && (unsafeEverySupportType = !0);
+        for (let type of supportTypes) unsafeSupportTypes.add(type);
+        nativeSupportParticipants.push({
+          structure,
+          supportTypes,
+          supportChanges: Object.freeze([])
+        });
+        continue;
+      }
+      let grids = structure.readNativeSupportGrids(root);
+      if (grids.kind !== "value") {
+        supportTypes.length === 0 && (unsafeEverySupportType = !0);
+        for (let type of supportTypes) unsafeSupportTypes.add(type);
+        nativeSupportParticipants.push({
+          structure,
+          supportTypes,
+          supportChanges: Object.freeze([])
+        });
+        continue;
+      }
+      let participantTypes = new Set(supportTypes), supportChanges = [];
+      for (let grid of grids.value) {
+        if (!isRecord(grid)) {
+          participantTypes.size === 0 && (unsafeEverySupportType = !0);
+          for (let type2 of participantTypes) unsafeSupportTypes.add(type2);
+          continue;
+        }
+        let type = readProperty(grid, "type"), contribution = readProperty(grid, "contribution"), consumer = readProperty(grid, "consumer"), provider = readProperty(grid, "provider");
+        if (typeof type == "string" && type.length > 0 && participantTypes.add(type), typeof type != "string" || type.length === 0 || typeof contribution != "number" || !Number.isFinite(contribution) || typeof consumer != "boolean" || typeof provider != "boolean" || !consumer && !provider && contribution !== 0 || consumer && support.value >= 0 || provider && contribution < 0) {
+          if (typeof type == "string" && type.length > 0)
+            unsafeSupportTypes.add(type);
+          else if (participantTypes.size === 0) unsafeEverySupportType = !0;
+          else
+            for (let participantType of participantTypes)
+              unsafeSupportTypes.add(participantType);
+          continue;
+        }
+        provider && supportChanges.push(Object.freeze({ type, amount: -contribution }));
+        let consumerAmount = consumer ? -support.value : 0;
+        if (consumer && supportChanges.push(Object.freeze({ type, amount: consumerAmount })), !consumer && !provider && supportChanges.push(Object.freeze({ type, amount: 0 })), type === "belt" && consumer && consumerAmount > 0) {
+          let configured = readGameNumber(state, "on");
+          if (configured === void 0 || configured < 0) {
+            unsafeSupportTypes.add(type);
+            continue;
+          }
+          beltConsumers.push(
+            Object.freeze({
+              binding: structure.actionId,
+              configured,
+              supportPerUnit: consumerAmount,
+              managed: settings[`bld_s_${structure.actionId}`] === !0
+            })
+          );
+        }
+      }
+      nativeSupportParticipants.push({
+        structure,
+        supportTypes: Object.freeze([...participantTypes]),
+        supportChanges: Object.freeze(supportChanges)
       });
     }
-    let supportSafe = candidates;
-    for (; ; ) {
-      let unsafeTypes = new Set(
-        supportSafe.flatMap(
-          (candidate) => candidate.supportChanges.filter((change) => !supportMap.has(change.type)).map((change) => change.type)
-        )
+    if (unsafeEverySupportType)
+      for (let support of supports) unsafeSupportTypes.add(support.type);
+    let candidates = [];
+    for (let record of managed) {
+      let role = record.structure.readPowerGridRole(root, record.powered), participant = nativeSupportParticipants.find(
+        (candidate) => candidate.structure.entryKey === record.structure.entryKey
       );
-      for (let support of supports) {
-        let modeledMaximum = 0, modeledCurrent = 0, touched = !1;
-        for (let candidate of supportSafe)
-          for (let change of candidate.supportChanges)
-            if (change.type === support.type)
-              if (touched = !0, change.amount < 0) {
-                let effective = dependencies.mechanics.readEffectivePowerCount(
-                  root,
-                  candidate.record.structure.entryKey
-                );
-                if (effective.kind !== "value") {
-                  unsafeTypes.add(support.type);
-                  continue;
-                }
-                modeledMaximum -= change.amount * effective.value;
-              } else {
-                let effective = dependencies.mechanics.readEffectiveSupportCount(
-                  root,
-                  candidate.record.structure.entryKey
-                );
-                if (effective.kind !== "value") {
-                  unsafeTypes.add(support.type);
-                  continue;
-                }
-                modeledCurrent += change.amount * effective.value;
-              }
-        touched && (Math.abs(modeledMaximum - support.maximum) > 1e-9 || Math.abs(modeledCurrent - support.current) > 1e-9) && unsafeTypes.add(support.type);
+      if (role.kind !== "value" || participant === void 0) {
+        let types = participant?.supportTypes ?? [];
+        types.length === 0 && (unsafeEverySupportType = !0);
+        for (let type of types) unsafeSupportTypes.add(type);
+        continue;
       }
-      if (unsafeTypes.size === 0) break;
-      let next = supportSafe.filter(
-        (candidate) => !candidate.supportChanges.some(
-          (change) => unsafeTypes.has(change.type)
-        )
-      );
-      if (next.length === supportSafe.length) break;
-      supportSafe = next;
+      role.value === "none" && participant.supportChanges.length === 0 || candidates.push({
+        record,
+        role: role.value,
+        supportTypes: participant.supportTypes,
+        supportChanges: participant.supportChanges
+      });
     }
-    let autoFleet = settings.autoFleet === !0, fleetCapRelevant = autoFleet && candidates.some(
+    if (unsafeEverySupportType)
+      for (let support of supports) unsafeSupportTypes.add(support.type);
+    for (let participant of nativeSupportParticipants)
+      for (let type of participant.supportTypes)
+        supportMap.has(type) || unsafeSupportTypes.add(type);
+    for (let support of supports) {
+      let modeledMaximum = 0, modeledCurrent = 0;
+      for (let participant of nativeSupportParticipants)
+        for (let change of participant.supportChanges)
+          if (change.type === support.type) {
+            if (change.amount < 0) {
+              let effective = dependencies.mechanics.readEffectivePowerCount(
+                root,
+                participant.structure.entryKey
+              );
+              if (effective.kind !== "value" || !Number.isFinite(effective.value) || effective.value < 0) {
+                unsafeSupportTypes.add(support.type);
+                continue;
+              }
+              modeledMaximum -= change.amount * effective.value;
+            } else if (change.amount > 0) {
+              let effective = dependencies.mechanics.readEffectiveSupportCount(
+                root,
+                participant.structure.entryKey
+              );
+              if (effective.kind !== "value" || !Number.isFinite(effective.value) || effective.value < 0) {
+                unsafeSupportTypes.add(support.type);
+                continue;
+              }
+              modeledCurrent += change.amount * effective.value;
+            }
+          }
+      (Math.abs(modeledMaximum - support.maximum) > 1e-9 || Math.abs(modeledCurrent - support.current) > 1e-9) && unsafeSupportTypes.add(support.type);
+    }
+    let supportSafe = candidates.filter(
+      (candidate) => !candidate.supportTypes.some(
+        (type) => unsafeSupportTypes.has(type) || !supportMap.has(type)
+      )
+    ), autoFleet = settings.autoFleet === !0, fleetCapRelevant = autoFleet && candidates.some(
       ({ record }) => record.structure.region === "galaxy" && record.catalog.smart && capturedPowerSmartEnabled(record.catalog.binding, settings)
     ), fleetNeededShipsSample = autoFleet ? dependencies.readFleetNeededShips?.() : null;
     if (fleetCapRelevant && fleetNeededShipsSample === void 0)
@@ -30016,6 +30096,7 @@
       settings: settingsInput,
       resources: resourceInputs,
       supports,
+      beltConsumers: Object.freeze(beltConsumers),
       buildings: Object.freeze(filledPowers),
       lake: lakeAndSpire.lake,
       spire: lakeAndSpire.spire
@@ -34962,6 +35043,65 @@
         }
     };
   }
+  function observeArpaFinalCostIteration(pageWindow, observe) {
+    let pageObject = readProperty(pageWindow, "Object"), nativeKeys = readProperty(pageObject, "keys"), numberConstructor = readProperty(pageWindow, "Number"), numberPrototype = readProperty(numberConstructor, "prototype"), nativeToFixed = readProperty(numberPrototype, "toFixed");
+    if (typeof pageObject != "function" || typeof nativeKeys != "function" || !isNonArrayRecord(numberPrototype) || typeof nativeToFixed != "function")
+      return;
+    let active = !0, activeReceiver, patchedArrays = [], keysProbe = function(...args) {
+      let result = Reflect.apply(
+        nativeKeys,
+        this,
+        args
+      );
+      if (!active || args.length !== 1 || !isNonArrayRecord(args[0]) || !Array.isArray(result))
+        return result;
+      let receiver = args[0], nativeForEach = readProperty(result, "forEach");
+      return typeof nativeForEach != "function" || Reflect.defineProperty(result, "forEach", {
+        configurable: !0,
+        writable: !0,
+        value: function(...iterationArgs) {
+          let callback = iterationArgs[0];
+          return this !== result || typeof callback != "function" ? Reflect.apply(nativeForEach, this, iterationArgs) : Reflect.apply(nativeForEach, this, [
+            function(...callbackArgs) {
+              let previousReceiver = activeReceiver;
+              activeReceiver = receiver;
+              try {
+                return Reflect.apply(callback, this, callbackArgs);
+              } finally {
+                activeReceiver = previousReceiver;
+              }
+            },
+            iterationArgs[1]
+          ]);
+        }
+      }) && patchedArrays.push(result), result;
+    }, toFixedProbe = function(...args) {
+      let result = Reflect.apply(
+        nativeToFixed,
+        this,
+        args
+      );
+      if (active && args[0] === 0 && activeReceiver !== void 0)
+        try {
+          observe(activeReceiver);
+        } catch {
+        }
+      return result;
+    };
+    if (Reflect.set(pageObject, "keys", keysProbe)) {
+      if (!Reflect.set(numberPrototype, "toFixed", toFixedProbe)) {
+        Reflect.set(pageObject, "keys", nativeKeys);
+        return;
+      }
+      return () => {
+        if (active) {
+          active = !1;
+          for (let array of patchedArrays) Reflect.deleteProperty(array, "forEach");
+          readProperty(pageObject, "keys") === keysProbe && Reflect.set(pageObject, "keys", nativeKeys), readProperty(numberPrototype, "toFixed") === toFixedProbe && Reflect.set(numberPrototype, "toFixed", nativeToFixed);
+        }
+      };
+    }
+  }
   function looksLikeArpaEntry(value) {
     return isNonArrayRecord(value) ? isNonArrayRecord(value.reqs) && isNonArrayRecord(value.cost) && typeof value.grant == "string" : !1;
   }
@@ -34985,38 +35125,33 @@
   }
   function createCapturedArpaMechanics(dependencies) {
     let { rootState, discovery, pageWindow, bindings } = dependencies, reportDiagnostic = dependencies.onDiagnostic ?? (() => {
-    }), authority, failedForRoot, retainedCosts = /* @__PURE__ */ new Map(), captureAdjustedCosts = (projectId) => {
+    }), authority, failedForRoot, captureAdjustedCosts = (projectId) => {
       let current = authority;
       if (current === void 0) return;
-      let nativeCost = readProperty(current.registry[projectId], "cost");
-      if (!isNonArrayRecord(nativeCost)) return;
-      let resources = new Set(Object.keys(nativeCost)), matches = [], restore2 = observePageKeys(pageWindow, (receiver, keys) => {
-        isNonArrayRecord(receiver) && (keys.length === 0 || !keys.every((key) => resources.has(key)) || keys.every((key) => typeof receiver[key] == "function") && matches.push(receiver));
+      let adjustedReceiver, conflictingReceivers = !1, restore2 = observeArpaFinalCostIteration(pageWindow, (receiver) => {
+        adjustedReceiver === void 0 ? adjustedReceiver = receiver : adjustedReceiver !== receiver && (conflictingReceivers = !0);
       });
       if (restore2 === void 0) return;
       try {
         Reflect.apply(current.nativeCosts, void 0, ["1", projectId]);
       } catch {
-        restore2();
         return;
+      } finally {
+        restore2();
       }
-      restore2();
-      let adjusted = matches[matches.length - 1];
-      if (!isNonArrayRecord(adjusted)) return;
+      if (conflictingReceivers || !isNonArrayRecord(adjustedReceiver) || Object.keys(adjustedReceiver).length === 0)
+        return;
       let costs = {};
-      for (let resource of Object.keys(adjusted)) {
-        let cost = adjusted[resource];
+      for (let resource of Object.keys(adjustedReceiver)) {
+        let cost = adjustedReceiver[resource];
         if (typeof cost != "function") return;
         costs[resource] = cost;
       }
       if (Object.keys(costs).length !== 0)
         return Object.freeze(costs);
     }, readPercentCosts = (projectId) => {
-      let functions = retainedCosts.get(projectId);
-      if (functions === void 0) {
-        if (functions = captureAdjustedCosts(projectId), functions === void 0) return;
-        retainedCosts.set(projectId, functions);
-      }
+      let functions = captureAdjustedCosts(projectId);
+      if (functions === void 0) return;
       let priced = {};
       for (let [resource, cost] of Object.entries(functions)) {
         let value;
@@ -35123,7 +35258,7 @@
         watching = !1, unobserve(), restoreKeys?.();
       }
       let captured = readDrawResult(bound, observed2);
-      return "reason" in captured ? (reportDiagnostic(`ARPA native capture: ${captured.reason}`), { kind: "unavailable", reason: captured.reason }) : (retainedCosts.clear(), authority = captured, reportDiagnostic(`ARPA native capture: ${captured.order.length} projects`), { kind: "captured" });
+      return "reason" in captured ? (reportDiagnostic(`ARPA native capture: ${captured.reason}`), { kind: "unavailable", reason: captured.reason }) : (authority = captured, reportDiagnostic(`ARPA native capture: ${captured.order.length} projects`), { kind: "captured" });
     };
     function isOffered(root, registry, projectId, tech, race) {
       let project = registry[projectId];
@@ -35250,7 +35385,7 @@
         if (afterState === void 0)
           return { kind: "stale", reason: "the project state vanished" };
         let paidSteps = afterState.rank * 100 + afterState.progress - (beforeState.rank * 100 + beforeState.progress);
-        if (paidSteps < 1 || paidSteps > plan.percent)
+        if (paidSteps !== plan.percent)
           return {
             kind: "stale",
             reason: `the native build moved ${paidSteps} of ${plan.percent} points`
@@ -35282,24 +35417,16 @@
               kind: "stale",
               reason: "the native build did not grant the completed rank"
             };
-          for (let resourceId of Object.keys(percentCosts)) {
-            let after = readResourceAmount(rootAfter, resourceId), beforeAmount = amounts[resourceId];
-            if (typeof after != "number" || typeof beforeAmount != "number" || after > beforeAmount)
-              return {
-                kind: "stale",
-                reason: `the native build did not spend ${resourceId}`
-              };
-          }
-        } else
-          for (let [resourceId, perPercent] of Object.entries(percentCosts)) {
-            let after = readResourceAmount(rootAfter, resourceId), beforeAmount = amounts[resourceId];
-            if (typeof after != "number" || typeof beforeAmount != "number" || !sameAmount(beforeAmount - after, perPercent * paidSteps))
-              return {
-                kind: "stale",
-                reason: `the native build spent an unexpected ${resourceId} amount`
-              };
-            charged[resourceId] = beforeAmount - after;
-          }
+        }
+        for (let [resourceId, perPercent] of Object.entries(percentCosts)) {
+          let after = readResourceAmount(rootAfter, resourceId), beforeAmount = amounts[resourceId];
+          if (typeof after != "number" || typeof beforeAmount != "number" || !sameAmount(beforeAmount - after, perPercent * plan.percent))
+            return {
+              kind: "stale",
+              reason: `the native build spent an unexpected ${resourceId} amount`
+            };
+          charged[resourceId] = beforeAmount - after;
+        }
         return Object.freeze({
           kind: "built",
           rank: afterState.rank,

@@ -216,6 +216,24 @@ function beltPlan({
     stateOn: 0,
   };
   const maximum = stationOn * providerUnit;
+  const buildings = frozen
+    ? []
+    : [
+        station,
+        iridium,
+        ...(manageElerium ? [elerium] : []),
+        ...(ironCount ? [iron] : []),
+      ];
+  const managedBindings = new Set(buildings.map(({ binding }) => binding));
+  const beltConsumers = [iridium, elerium, iron].map((consumer) => ({
+    binding: consumer.binding,
+    configured: consumer.stateOn,
+    supportPerUnit:
+      consumer.supportChanges.find(
+        ({ type, amount }) => type === "belt" && amount > 0,
+      )?.amount ?? 0,
+    managed: managedBindings.has(consumer.binding),
+  }));
   const cycle = {
     powerUnlocked: true,
     powerResourceId: "Power",
@@ -258,15 +276,9 @@ function beltPlan({
         allocation: "strict",
       },
     ],
+    beltConsumers,
     prospectiveSpaceMiners,
-    buildings: frozen
-      ? []
-      : [
-          station,
-          iridium,
-          ...(manageElerium ? [elerium] : []),
-          ...(ironCount ? [iron] : []),
-        ],
+    buildings,
     lake: { enabled: false },
     spire: { available: false },
   };
@@ -284,6 +296,15 @@ assert.deepEqual(beltPlan(), [
   ["space-iridium_ship", 0],
   ["space-elerium_ship", 1],
 ]);
+assert.deepEqual(
+  beltPlan({ stationCount: 5, stationOn: 0, powerCurrent: 101 }),
+  [
+    ["space-space_station", 3],
+    ["space-iridium_ship", 0],
+    ["space-elerium_ship", 2],
+  ],
+  "the configured Belt floor recovers a disabled Station while Power has headroom",
+);
 const alteredBeltPlan = beltPlan({ providerUnit: 7, consumerUnit: 6 });
 assert.deepEqual(alteredBeltPlan, beltPlan());
 const alteredStationDelta = alteredBeltPlan.find(

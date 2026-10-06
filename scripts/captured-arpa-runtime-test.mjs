@@ -126,6 +126,12 @@ function makeScenario({
   bindControl = true,
   marketStorage = false,
   manualCraftLumber,
+  nativePerPercentCost,
+  nativeCostAdjustment = (costs) => costs,
+  nativeCostDisplayText,
+  extraNativeResources = [],
+  nativeActualSteps,
+  nativeResourceDeductions,
 } = {}) {
   const pageBody = element("div", { id: "page" });
   const mainColumn = element("div", { id: "mainColumn" });
@@ -254,6 +260,7 @@ function makeScenario({
           }),
     },
     race: { species: "human", iceage: true },
+    genes: { engineer: 0 },
     stats: { days: 100, reset: 1, resets: 1 },
     tech: {
       mad: 1,
@@ -267,9 +274,19 @@ function makeScenario({
     arpa: initialProject ? { [projectId]: { rank, complete: progress } } : {},
     queue: { queue },
   };
+  for (const resourceId of extraNativeResources) {
+    gameRoot.resource[resourceId] = {
+      amount: 100000,
+      max: 1000000,
+      display: true,
+      diff: 100,
+      value: 1,
+    };
+  }
 
   const page = {
     Object,
+    Number,
     Worker: FakeWorker,
     document,
     location: { href: "https://evolvebeta.github.io/Evolve/" },
@@ -285,9 +302,10 @@ function makeScenario({
       ? { Money: 10, Knowledge: 3 }
       : { Lumber: 200 };
   let actualPerPercentCost =
-    manualCraftLumber === undefined
+    nativePerPercentCost ??
+    (manualCraftLumber === undefined
       ? { Money: 10.2, Knowledge: 3.2 }
-      : { Lumber: 200 };
+      : { Lumber: 200 });
   const nativeProjectDefinitions = {
     [projectId]: {
       reqs: {},
@@ -302,10 +320,9 @@ function makeScenario({
   };
   const adjustArpaCosts = (cost) =>
     Object.fromEntries(
-      Object.entries(cost).map(([resourceId, calculate]) => [
-        resourceId,
-        () => calculate(),
-      ]),
+      Object.entries(nativeCostAdjustment(cost, gameRoot)).map(
+        ([resourceId, calculate]) => [resourceId, () => calculate()],
+      ),
     );
   let shouldBindControl = bindControl;
   const calls = [];
@@ -316,6 +333,7 @@ function makeScenario({
   const swaps = [];
   const draws = [];
   const hoverEvents = [];
+  const nativeCostReads = [];
   let panelAvailable = true;
 
   if (manualCraftLumber !== undefined) {
@@ -342,13 +360,21 @@ function makeScenario({
       nativeProjectDefinitions[builtProjectId].cost,
     );
     let description = "";
-    page.Object.keys(costs).forEach((resourceId) => {
-      const amount = +(costs[resourceId]() * (Number(percent) / 100)).toFixed(
-        0,
-      );
+    const resources = page.Object.keys(costs);
+    const perPercentCosts = {};
+    resources.forEach((resourceId) => {
+      const fullCost = Number(costs[resourceId]());
+      perPercentCosts[resourceId] = fullCost / 100;
+      const amount = +(fullCost * (Number(percent) / 100)).toFixed(0);
       description += `${resourceId}: ${amount} `;
     });
-    return description;
+    const result = nativeCostDisplayText ?? description;
+    nativeCostReads.push({
+      resources: [...resources],
+      perPercentCosts,
+      result,
+    });
+    return result;
   };
   const bindProject = (drawnProjectId) => {
     const project = gameRoot.arpa[drawnProjectId];
@@ -358,20 +384,23 @@ function makeScenario({
     const build = (builtProjectId, steps) => {
       calls.push([builtProjectId, steps]);
       const state = gameRoot.arpa[builtProjectId];
-      const amounts = Object.entries(actualPerPercentCost).map(
-        ([resourceId, amount]) => [
-          resourceId,
-          gameRoot.resource[resourceId].amount,
-          amount * steps,
-        ],
+      const actualSteps = nativeActualSteps ?? steps;
+      const costs = adjustArpaCosts(
+        nativeProjectDefinitions[builtProjectId].cost,
       );
+      const amounts = Object.entries(costs).map(([resourceId, calculate]) => [
+        resourceId,
+        gameRoot.resource[resourceId].amount,
+        (Number(calculate()) / 100) * actualSteps,
+      ]);
       if (amounts.some(([, available, cost]) => available < cost)) {
         return false;
       }
       for (const [resourceId, , cost] of amounts) {
-        gameRoot.resource[resourceId].amount -= cost;
+        gameRoot.resource[resourceId].amount -=
+          nativeResourceDeductions?.[resourceId] ?? cost;
       }
-      state.complete += steps;
+      state.complete += actualSteps;
       if (state.complete >= 100) {
         state.rank += 1;
         state.complete = 0;
@@ -542,6 +571,7 @@ function makeScenario({
     captureComplete: pageCapture.isComplete(),
     draws,
     hoverEvents,
+    nativeCostReads,
     errors,
     logs,
     periodsSeen,
@@ -711,6 +741,172 @@ withScenario(
   },
 );
 
+// The native closure's final adjusted record can replace project resource ids. Its opaque returned
+// text and rounded display values are deliberately unusable as a price source.
+withScenario(
+  {
+    projectId: "lhc",
+    nativePerPercentCost: { Money: 10.24, Cement: 40.2 },
+    nativeCostAdjustment(costs, root) {
+      if (!root.race.flier) return costs;
+      const { Cement, ...remaining } = costs;
+      return {
+        ...remaining,
+        // Pinned rank-one traits.flier.vars()[0] is 5; flierAdjust rounds the substituted amount.
+        Stone: () => Math.round(Cement() * 1.75 * 0.95),
+      };
+    },
+    nativeCostDisplayText: "localized output with no resource amounts",
+    extraNativeResources: ["Stone"],
+    scriptSettings: {
+      prestigeMADIgnoreArpa: true,
+      arpa_lhc: true,
+      arpa_p_lhc: 0,
+      arpa_m_lhc: -1,
+      arpa_w_lhc: 2,
+    },
+  },
+  (scenario) => {
+    scenario.gameRoot.race.flier = true;
+    scenario.tick();
+    const nativeRead = scenario.nativeCostReads.at(-1);
+    assert.deepEqual(nativeRead.resources, ["Money", "Stone"]);
+    assert.equal(Object.hasOwn(nativeRead.perPercentCosts, "Cement"), false);
+    assert.deepEqual(nativeRead.perPercentCosts, {
+      Money: 10.24,
+      Stone: 66.83,
+    });
+    assert.equal(
+      nativeRead.result,
+      "localized output with no resource amounts",
+      "the native price text is opaque to the adapter",
+    );
+    assert.deepEqual(scenario.calls, [["lhc", 5]]);
+    assert.equal(scenario.gameRoot.resource.Stone.amount, 100000 - 66.83 * 5);
+    assert.equal(scenario.draws.length, 1);
+    assert.deepEqual(scenario.hoverEvents, []);
+  },
+);
+
+withScenario(
+  {
+    projectId: "stock_exchange",
+    nativePerPercentCost: { Money: 10.24, Plywood: 12.25 },
+    nativeCostAdjustment(costs, root) {
+      if (!root.race.smoldering) return costs;
+      const { Plywood, ...remaining } = costs;
+      return {
+        ...Object.fromEntries(
+          Object.entries(remaining).map(([resourceId, calculate]) => [
+            resourceId,
+            () => Math.round(calculate() * 0.9),
+          ]),
+        ),
+        // Pinned smolderAdjust rounds twice the native Plywood cost into Chrysotile.
+        Chrysotile: () => Math.round(Plywood() * 2) || 0,
+      };
+    },
+    nativeCostDisplayText: "localized output with no resource amounts",
+    extraNativeResources: ["Chrysotile"],
+    scriptSettings: {
+      prestigeMADIgnoreArpa: true,
+      arpa_stock_exchange: true,
+      arpa_p_stock_exchange: 0,
+      arpa_m_stock_exchange: -1,
+      arpa_w_stock_exchange: 2,
+    },
+  },
+  (scenario) => {
+    scenario.gameRoot.race.iceage = false;
+    scenario.gameRoot.race.smoldering = true;
+    scenario.tick();
+    const nativeRead = scenario.nativeCostReads.at(-1);
+    assert.deepEqual(nativeRead.resources, ["Money", "Chrysotile"]);
+    assert.equal(Object.hasOwn(nativeRead.perPercentCosts, "Plywood"), false);
+    assert.deepEqual(nativeRead.perPercentCosts, {
+      Money: 9.22,
+      Chrysotile: 24.5,
+    });
+    assert.equal(
+      nativeRead.result,
+      "localized output with no resource amounts",
+      "the native price text is opaque to the adapter",
+    );
+    assert.deepEqual(scenario.calls, [["stock_exchange", 5]]);
+    assert.equal(
+      scenario.gameRoot.resource.Chrysotile.amount,
+      100000 - 24.5 * 5,
+    );
+    assert.equal(scenario.draws.length, 1);
+    assert.deepEqual(scenario.hoverEvents, []);
+  },
+);
+
+// The closure's adjusted wrapper record is a current-state answer. A government or Engineer change
+// must be reflected on the next read without another Physics draw.
+withScenario(
+  {
+    projectId: "lhc",
+    nativePerPercentCost: { Knowledge: 10.24 },
+    nativeCostAdjustment(costs, root) {
+      let adjusted = costs;
+      // Pinned arpa.js::engineerAdjust creates this wrapper only when geneRank is active.
+      if (root.genes.engineer > 0) {
+        adjusted = Object.fromEntries(
+          Object.entries(adjusted).map(([resourceId, calculate]) => [
+            resourceId,
+            () => calculate() * (root.genes.engineer > 0 ? 0.98 : 1),
+          ]),
+        );
+      }
+      // At fixture high_tech 7, civics.js returns an 8% Knowledge discount.
+      if (root.civic.govern?.type === "technocracy") {
+        adjusted = Object.fromEntries(
+          Object.entries(adjusted).map(([resourceId, calculate]) => [
+            resourceId,
+            () =>
+              resourceId === "Knowledge"
+                ? Math.round(calculate() * 0.92)
+                : calculate(),
+          ]),
+        );
+      }
+      return adjusted;
+    },
+    scriptSettings: {
+      prestigeMADIgnoreArpa: true,
+      arpa_lhc: true,
+      arpa_p_lhc: 0,
+      arpa_m_lhc: -1,
+      arpa_w_lhc: 2,
+    },
+  },
+  (scenario) => {
+    const readCurrentNativePrice = () =>
+      scenario.nativeCostReads.at(-1).perPercentCosts.Knowledge;
+
+    scenario.tick();
+    assert.equal(readCurrentNativePrice(), 10.24);
+    const drawsAfterCapture = scenario.draws.length;
+
+    scenario.gameRoot.civic.govern = { type: "technocracy" };
+    scenario.tick();
+    assert.equal(readCurrentNativePrice(), 9.42);
+    assert.equal(scenario.draws.length, drawsAfterCapture);
+
+    scenario.gameRoot.civic.govern.type = "democracy";
+    scenario.tick();
+    assert.equal(readCurrentNativePrice(), 10.24);
+    assert.equal(scenario.draws.length, drawsAfterCapture);
+
+    scenario.gameRoot.genes.engineer = 1;
+    scenario.tick();
+    assert.equal(readCurrentNativePrice(), 10.0352);
+    assert.equal(scenario.draws.length, drawsAfterCapture);
+    assert.deepEqual(scenario.hoverEvents, []);
+  },
+);
+
 // An unreadable live project value invalidates the offer sample. Repairing it restores the same
 // retained authority, with no panel redraw.
 withScenario(
@@ -832,7 +1028,8 @@ withScenario(
   },
 );
 
-// The game wraps progress at 100 and advances rank. The executor treats that as a verified build.
+// The game wraps progress at 100 and advances rank. The executor verifies the exact sampled price,
+// including every resource and the grant, while reporting the native charge on the success path.
 withScenario(
   {
     progress: 98,
@@ -845,10 +1042,84 @@ withScenario(
     },
   },
   (scenario) => {
+    const moneyBefore = scenario.gameRoot.resource.Money.amount;
+    const knowledgeBefore = scenario.gameRoot.resource.Knowledge.amount;
     scenario.tick();
     assert.deepEqual(scenario.calls, [["lhc", 2]]);
     assert.equal(scenario.gameRoot.arpa.lhc.complete, 0);
     assert.equal(scenario.gameRoot.arpa.lhc.rank, 5);
+    assert.equal(scenario.gameRoot.tech.captured_arpa_test_grant, 5);
+    assert.ok(
+      Math.abs(moneyBefore - scenario.gameRoot.resource.Money.amount - 20.4) <
+        1e-9,
+    );
+    assert.ok(
+      Math.abs(
+        knowledgeBefore - scenario.gameRoot.resource.Knowledge.amount - 6.4,
+      ) < 1e-9,
+    );
+  },
+);
+
+// A verified command must execute every percentage point it priced. Partial, empty, and excess
+// native mutations are all stale even when the native closure returns normally.
+for (const actualSteps of [2, 0, 6]) {
+  withScenario(
+    {
+      progress: 20,
+      nativeActualSteps: actualSteps,
+      scriptSettings: {
+        arpa_lhc: true,
+        arpa_p_lhc: 0,
+        arpa_m_lhc: -1,
+        arpa_w_lhc: 2,
+      },
+    },
+    (scenario) => {
+      scenario.tick();
+      assert.deepEqual(scenario.calls, [["lhc", 5]]);
+      assert.equal(scenario.gameRoot.arpa.lhc.complete, 20 + actualSteps);
+      assert.ok(
+        scenario.logs.some(
+          (message) =>
+            message ===
+            `ARPA action failed/stale: lhc the native build moved ${actualSteps} of 5 points`,
+        ),
+        JSON.stringify(scenario.logs),
+      );
+    },
+  );
+}
+
+// Rank and grant completion do not excuse an incorrect deduction from any sampled resource.
+withScenario(
+  {
+    progress: 98,
+    rank: 4,
+    nativeResourceDeductions: { Knowledge: 0 },
+    scriptSettings: {
+      arpa_lhc: true,
+      arpa_p_lhc: 0,
+      arpa_m_lhc: -1,
+      arpa_w_lhc: 2,
+    },
+  },
+  (scenario) => {
+    const knowledgeBefore = scenario.gameRoot.resource.Knowledge.amount;
+    scenario.tick();
+    assert.deepEqual(scenario.calls, [["lhc", 2]]);
+    assert.equal(scenario.gameRoot.arpa.lhc.complete, 0);
+    assert.equal(scenario.gameRoot.arpa.lhc.rank, 5);
+    assert.equal(scenario.gameRoot.tech.captured_arpa_test_grant, 5);
+    assert.equal(scenario.gameRoot.resource.Knowledge.amount, knowledgeBefore);
+    assert.ok(
+      scenario.logs.some(
+        (message) =>
+          message ===
+          "ARPA action failed/stale: lhc the native build spent an unexpected Knowledge amount",
+      ),
+      JSON.stringify(scenario.logs),
+    );
   },
 );
 

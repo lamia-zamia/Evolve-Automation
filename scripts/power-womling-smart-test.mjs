@@ -61,6 +61,7 @@ const cycle = {
     },
   ],
   supports: [],
+  beltConsumers: [],
   buildings: [],
   lake: { enabled: false },
   spire: { available: false },

@@ -30,6 +30,14 @@ export interface PowerSupportChangeInput {
   readonly amount: number;
 }
 
+/** Native configured demand on the Belt grid, including structures outside Power management. */
+export interface PowerBeltConsumerInput {
+  readonly binding: string;
+  readonly configured: number;
+  readonly supportPerUnit: number;
+  readonly managed: boolean;
+}
+
 export interface PowerConsumptionInput {
   readonly resourceId: string;
   /** Exact observed current total from the game's source-specific consumption ledger. */
@@ -306,6 +314,7 @@ export interface PowerCycleInput {
   readonly settings: PowerSettingsInput;
   readonly resources: readonly PowerResourceInput[];
   readonly supports: readonly PowerSupportInput[];
+  readonly beltConsumers: readonly PowerBeltConsumerInput[];
   readonly buildings: readonly PowerBuildingInput[];
   readonly lake: PowerLakeInput;
   readonly spire: PowerSpireInput;
@@ -554,6 +563,16 @@ function applySmartRule(
       default:
         break;
     }
+  }
+
+  if (
+    rule.kind === "belt-space-station" &&
+    !savingPower &&
+    beltStationFloor > current
+  ) {
+    // Belt recovery is driven by configured native demand, even when Power has enough headroom
+    // that the ordinary savings rules are idle.
+    maximum = Math.min(maximum, beltStationFloor);
   }
 
   switch (rule.kind) {
@@ -964,26 +983,24 @@ export function planPowerCycle(
     // consumer's planned *configured* count out of that pass.
     const probe = planPowerCycleCore(input, state, beltStationFloor, true);
     let plannedDemand = 0;
-    for (const building of input.buildings) {
-      const change = building.supportChanges.find(
-        (candidate) => candidate.type === "belt" && candidate.amount > 0,
-      );
-      if (change === undefined) continue;
-      const planned = probe.decision?.operations.find(
-        (operation) =>
-          operation.kind === "adjust-building" &&
-          operation.binding === building.binding,
-      );
+    for (const consumer of input.beltConsumers) {
+      const planned = consumer.managed
+        ? probe.decision?.operations.find(
+            (operation) =>
+              operation.kind === "adjust-building" &&
+              operation.binding === consumer.binding,
+          )
+        : undefined;
       const configured =
         planned?.kind === "adjust-building"
           ? planned.expectedStateOn + planned.amount
-          : building.stateOn;
+          : consumer.configured;
       if (!Number.isFinite(configured) || configured <= 0) continue;
       // Pinned main.js accumulates `active * supportSize`, where the requirement is the absolute
       // value of the consumer's own `support()` and `active` is what the player has switched on.
       // Effective `support_on` is deliberately not used here: it is zero in exactly the state this
       // floor exists to recover.
-      plannedDemand += change.amount * configured;
+      plannedDemand += consumer.supportPerUnit * configured;
     }
     const unit = -(
       station.supportChanges.find((change) => change.type === "belt")?.amount ??

@@ -1583,3 +1583,174 @@ assert.deepEqual(
   tornDownConsume,
 );
 assert.equal("consume" in tornDownPage.Object.prototype, false);
+
+// Pinned DeadSpace writes every configured structure count into p_on while building the native
+// grid, then writes support-clamped consumer counts into a distinct private support_on object.
+const supportPage = makePage();
+let currentSupportRoot = {
+  space: {
+    iron_ship: { on: 5 },
+    iridium_ship: { on: 4 },
+    space_station: { on: 1 },
+  },
+};
+const supportRootState = {
+  readRoot: () => currentSupportRoot,
+  isReactivitySuppressed: () => false,
+  subscribeRootReplaced: () => () => {},
+};
+const supportCapture = installCapturedGameMechanics(
+  supportPage,
+  { subscribe: () => () => {} },
+  supportRootState,
+);
+const supportEntries = new supportPage.Map();
+for (const entry of [
+  structureEntry({
+    region: "space",
+    sector: "spc_red",
+    struct: "iron_ship",
+    actionId: "space-spc_red-iron_ship",
+    powered: () => 2,
+  }),
+  structureEntry({
+    region: "space",
+    sector: "spc_red",
+    struct: "iridium_ship",
+    actionId: "space-spc_red-iridium_ship",
+    powered: () => 2,
+  }),
+  structureEntry({
+    region: "space",
+    sector: "spc_red",
+    struct: "space_station",
+    actionId: "space-spc_red-space_station",
+    powered: () => -10,
+    support: () => 6,
+  }),
+]) {
+  supportEntries.set(entry.key, entry);
+}
+
+const nativePowerOn = new supportPage.Object();
+nativePowerOn.coal_power = 0;
+nativePowerOn.iron_ship = 5;
+nativePowerOn.iridium_ship = 4;
+assert.deepEqual(
+  supportCapture.mechanics.readEffectiveSupportCount(
+    currentSupportRoot,
+    "spc_red:iron_ship",
+  ),
+  { kind: "invalid" },
+  "configured p_on consumer writes do not identify support_on",
+);
+assert.equal(
+  Object.getOwnPropertyDescriptor(supportPage.Object.prototype, "iron_ship")
+    ?.set instanceof Function,
+  true,
+  "the support_on probe remains installed after p_on writes",
+);
+
+const nativeSupportOn = new supportPage.Object();
+nativeSupportOn.iron_ship = 5;
+nativeSupportOn.iridium_ship = 4;
+assert.deepEqual(
+  supportCapture.mechanics.readEffectiveSupportCount(
+    currentSupportRoot,
+    "spc_red:iron_ship",
+  ),
+  { kind: "value", value: 5 },
+  "the distinct support_on object is captured during grid initialization at configured counts",
+);
+assert.equal(
+  Object.getOwnPropertyDescriptor(supportPage.Object.prototype, "iron_ship"),
+  undefined,
+  "the private support_on identity probe is restored after capture",
+);
+
+// The native support pass later overwrites the retained object with the counts it could serve.
+nativeSupportOn.iron_ship = 2;
+nativeSupportOn.iridium_ship = 1;
+assert.deepEqual(
+  supportCapture.mechanics.readEffectiveSupportCount(
+    currentSupportRoot,
+    "spc_red:iron_ship",
+  ),
+  { kind: "value", value: 2 },
+  "the later native support pass overwrites support_on with its clamped effective count",
+);
+
+nativeSupportOn.iron_ship = 2.5;
+assert.deepEqual(
+  supportCapture.mechanics.readEffectiveSupportCount(
+    currentSupportRoot,
+    "spc_red:iron_ship",
+  ),
+  { kind: "invalid" },
+  "a noninteger native effective count fails closed",
+);
+nativeSupportOn.iron_ship = -1;
+assert.deepEqual(
+  supportCapture.mechanics.readEffectiveSupportCount(
+    currentSupportRoot,
+    "spc_red:iron_ship",
+  ),
+  { kind: "invalid" },
+  "a negative native effective count fails closed",
+);
+nativeSupportOn.iron_ship = 2;
+currentSupportRoot.space.iron_ship.on = 1;
+assert.deepEqual(
+  supportCapture.mechanics.readEffectiveSupportCount(
+    currentSupportRoot,
+    "spc_red:iron_ship",
+  ),
+  { kind: "invalid" },
+  "effective support above configured on fails closed",
+);
+currentSupportRoot.space.iron_ship.on = 5;
+delete nativeSupportOn.iridium_ship;
+assert.deepEqual(
+  supportCapture.mechanics.readEffectiveSupportCount(
+    currentSupportRoot,
+    "spc_red:iridium_ship",
+  ),
+  { kind: "invalid" },
+  "a missing queried native consumer entry fails closed",
+);
+nativeSupportOn.iridium_ship = 1;
+nativeSupportOn.unexpected = 0;
+assert.deepEqual(
+  supportCapture.mechanics.readEffectiveSupportCount(
+    currentSupportRoot,
+    "spc_red:iron_ship",
+  ),
+  { kind: "invalid" },
+  "an unexpected nonconsumer key invalidates the closed native authority",
+);
+delete nativeSupportOn.unexpected;
+
+const staleSupportRoot = currentSupportRoot;
+currentSupportRoot = {
+  space: {
+    iron_ship: { on: 5 },
+    iridium_ship: { on: 4 },
+    space_station: { on: 1 },
+  },
+};
+assert.deepEqual(
+  supportCapture.mechanics.readEffectiveSupportCount(
+    staleSupportRoot,
+    "spc_red:iron_ship",
+  ),
+  { kind: "invalid" },
+  "a replaced root cannot be paired with the current private support_on map",
+);
+assert.deepEqual(
+  supportCapture.mechanics.readEffectiveSupportCount(
+    currentSupportRoot,
+    "spc_red:iron_ship",
+  ),
+  { kind: "value", value: 2 },
+);
+supportCapture.uninstall();

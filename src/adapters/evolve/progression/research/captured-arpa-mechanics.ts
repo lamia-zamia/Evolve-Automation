@@ -128,6 +128,120 @@ function observePageKeys(
 }
 
 /**
+ * Observe the record whose `Object.keys(...).forEach(...)` loop encloses the native A.R.P.A.
+ * display's `toFixed(0)`. Adjustment stages can replace resource ids, so the raw project record
+ * cannot identify the final record. This hook exists only during one synchronous cost-closure call.
+ */
+function observeArpaFinalCostIteration(
+  pageWindow: unknown,
+  observe: (receiver: unknown) => void,
+): (() => void) | undefined {
+  const pageObject = readProperty(pageWindow, "Object");
+  const nativeKeys = readProperty(pageObject, "keys");
+  const numberConstructor = readProperty(pageWindow, "Number");
+  const numberPrototype = readProperty(numberConstructor, "prototype");
+  const nativeToFixed = readProperty(numberPrototype, "toFixed");
+  if (
+    typeof pageObject !== "function" ||
+    typeof nativeKeys !== "function" ||
+    !isNonArrayRecord(numberPrototype) ||
+    typeof nativeToFixed !== "function"
+  )
+    return undefined;
+
+  let active = true;
+  let activeReceiver: unknown;
+  const patchedArrays: object[] = [];
+  const keysProbe = function arpaFinalCostKeysProbe(
+    this: unknown,
+    ...args: unknown[]
+  ): unknown {
+    const result = Reflect.apply(
+      nativeKeys as (...rest: unknown[]) => unknown,
+      this,
+      args,
+    );
+    if (
+      !active ||
+      args.length !== 1 ||
+      !isNonArrayRecord(args[0]) ||
+      !Array.isArray(result)
+    )
+      return result;
+
+    const receiver = args[0];
+    const nativeForEach = readProperty(result, "forEach");
+    if (typeof nativeForEach !== "function") return result;
+    const forEachProbe = function arpaFinalCostForEachProbe(
+      this: unknown,
+      ...iterationArgs: unknown[]
+    ): unknown {
+      const callback = iterationArgs[0];
+      if (this !== result || typeof callback !== "function")
+        return Reflect.apply(nativeForEach, this, iterationArgs);
+      const forwardingCallback = function arpaFinalCostIterationCallback(
+        this: unknown,
+        ...callbackArgs: unknown[]
+      ): unknown {
+        const previousReceiver = activeReceiver;
+        activeReceiver = receiver;
+        try {
+          return Reflect.apply(callback, this, callbackArgs);
+        } finally {
+          activeReceiver = previousReceiver;
+        }
+      };
+      return Reflect.apply(nativeForEach, this, [
+        forwardingCallback,
+        iterationArgs[1],
+      ]);
+    };
+    if (
+      Reflect.defineProperty(result, "forEach", {
+        configurable: true,
+        writable: true,
+        value: forEachProbe,
+      })
+    )
+      patchedArrays.push(result);
+    return result;
+  };
+  const toFixedProbe = function arpaFinalCostToFixedProbe(
+    this: unknown,
+    ...args: unknown[]
+  ): unknown {
+    const result = Reflect.apply(
+      nativeToFixed as (...rest: unknown[]) => unknown,
+      this,
+      args,
+    );
+    if (active && args[0] === 0 && activeReceiver !== undefined) {
+      try {
+        observe(activeReceiver);
+      } catch {
+        /* An observation must never change the game's native formatting result. */
+      }
+    }
+    return result;
+  };
+
+  if (!Reflect.set(pageObject, "keys", keysProbe)) return undefined;
+  if (!Reflect.set(numberPrototype, "toFixed", toFixedProbe)) {
+    Reflect.set(pageObject, "keys", nativeKeys);
+    return undefined;
+  }
+  return () => {
+    if (!active) return;
+    active = false;
+    for (const array of patchedArrays) Reflect.deleteProperty(array, "forEach");
+    if (readProperty(pageObject, "keys") === keysProbe)
+      Reflect.set(pageObject, "keys", nativeKeys);
+    if (readProperty(numberPrototype, "toFixed") === toFixedProbe)
+      Reflect.set(numberPrototype, "toFixed", nativeToFixed);
+  };
+}
+
+/**
  * Whether a record is shaped like one `arpaProjects` entry. This runs on every `Object.keys` receiver
  * a draw produces, so it has to be cheap and specific: `reqs` names required levels, `grant` names the
  * tech key the project grants, and `cost` is the resource bag of cost functions.
@@ -182,51 +296,45 @@ export function createCapturedArpaMechanics(
   let authority: ArpaAuthority | undefined;
   /** The root the last bootstrap attempt failed against, so one failure is one draw. */
   let failedForRoot: unknown = undefined;
-  /** Adjusted native cost functions per project, retained once and re-read live on every price. */
-  const retainedCosts = new Map<
-    string,
-    Readonly<Record<string, () => number>>
-  >();
-
   /**
-   * The adjusted native cost record for one project, or `undefined` when the record the closure
-   * iterates could not be identified.
+   * The final adjusted native cost record for one project, or `undefined` when the record consumed
+   * by the native display loop could not be identified.
    *
-   * `arpaAdjustCosts` finishes by rebuilding the resource bag through `bindCostArgs`, and the closure
-   * then enumerates that rebuilt record — so the last function-valued cost record enumerated inside
-   * the probe is the one the native price is computed from. Nothing here parses the rendered string,
-   * and no Creative, Engineer, costMultiplier, fathom, or `adjustCosts` rule is restated: the retained
-   * functions answer those from the live game whenever they are called.
+   * The native closure enumerates this record for its final per-resource display loop and calls
+   * `toFixed(0)` within each callback. Observing that semantic boundary identifies the adjusted
+   * record even when an adjustment replaces resource ids. The captured functions are immediately
+   * evaluated for this read only: adjustment wrappers are constructed from current game state each
+   * time the native closure runs, so neither those wrappers nor their record can be cached.
    */
   const captureAdjustedCosts = (
     projectId: string,
   ): Readonly<Record<string, () => number>> | undefined => {
     const current = authority;
     if (current === undefined) return undefined;
-    const nativeCost = readProperty(current.registry[projectId], "cost");
-    if (!isNonArrayRecord(nativeCost)) return undefined;
-    const resources = new Set(Object.keys(nativeCost));
-    const matches: unknown[] = [];
-    const restore = observePageKeys(pageWindow, (receiver, keys) => {
-      if (!isNonArrayRecord(receiver)) return;
-      if (keys.length === 0 || !keys.every((key) => resources.has(key))) return;
-      if (!keys.every((key) => typeof receiver[key] === "function")) return;
-      matches.push(receiver);
+    let adjustedReceiver: unknown;
+    let conflictingReceivers = false;
+    const restore = observeArpaFinalCostIteration(pageWindow, (receiver) => {
+      if (adjustedReceiver === undefined) adjustedReceiver = receiver;
+      else if (adjustedReceiver !== receiver) conflictingReceivers = true;
     });
     if (restore === undefined) return undefined;
     try {
       // `'1'` avoids the `'100'` branch, the only path that reads project progress first.
       Reflect.apply(current.nativeCosts, undefined, ["1", projectId]);
     } catch {
-      restore();
       return undefined;
+    } finally {
+      restore();
     }
-    restore();
-    const adjusted = matches[matches.length - 1];
-    if (!isNonArrayRecord(adjusted)) return undefined;
+    if (
+      conflictingReceivers ||
+      !isNonArrayRecord(adjustedReceiver) ||
+      Object.keys(adjustedReceiver).length === 0
+    )
+      return undefined;
     const costs: Record<string, () => number> = {};
-    for (const resource of Object.keys(adjusted)) {
-      const cost = adjusted[resource];
+    for (const resource of Object.keys(adjustedReceiver)) {
+      const cost = adjustedReceiver[resource];
       if (typeof cost !== "function") return undefined;
       costs[resource] = cost as () => number;
     }
@@ -237,12 +345,8 @@ export function createCapturedArpaMechanics(
   const readPercentCosts = (
     projectId: string,
   ): Readonly<Record<string, number>> | undefined => {
-    let functions = retainedCosts.get(projectId);
-    if (functions === undefined) {
-      functions = captureAdjustedCosts(projectId);
-      if (functions === undefined) return undefined;
-      retainedCosts.set(projectId, functions);
-    }
+    const functions = captureAdjustedCosts(projectId);
+    if (functions === undefined) return undefined;
     const priced: Record<string, number> = {};
     for (const [resource, cost] of Object.entries(functions)) {
       let value: number;
@@ -418,7 +522,6 @@ export function createCapturedArpaMechanics(
       reportDiagnostic(`ARPA native capture: ${captured.reason}`);
       return { kind: "unavailable", reason: captured.reason };
     }
-    retainedCosts.clear();
     authority = captured;
     reportDiagnostic(`ARPA native capture: ${captured.order.length} projects`);
     return { kind: "captured" };
@@ -597,8 +700,9 @@ export function createCapturedArpaMechanics(
         afterState.rank * 100 +
         afterState.progress -
         (beforeState.rank * 100 + beforeState.progress);
-      // One decision buys the percentage points it priced and no more.
-      if (paidSteps < 1 || paidSteps > plan.percent)
+      // One decision buys exactly the percentage points it priced. A partial native purchase no
+      // longer matches the sampled reservation, and an excess purchase exceeds that authority.
+      if (paidSteps !== plan.percent)
         return {
           kind: "stale",
           reason: `the native build moved ${paidSteps} of ${plan.percent} points`,
@@ -627,8 +731,8 @@ export function createCapturedArpaMechanics(
       }
       const charged: Record<string, number> = {};
       if (afterState.rank !== beforeState.rank) {
-        // Crossing into a rank re-prices every later step, so the spent total is not this plan's
-        // per-percent cost times its length. The pinned grant postcondition is checkable exactly.
+        // The boundary point is paid before pinned `buildArpa` increments rank, so every requested
+        // point still uses the sampled old-rank per-percent cost.
         const grant = readProperty(current.registry[plan.projectId], "grant");
         if (
           typeof grant !== "string" ||
@@ -638,34 +742,20 @@ export function createCapturedArpaMechanics(
             kind: "stale",
             reason: "the native build did not grant the completed rank",
           };
-        for (const resourceId of Object.keys(percentCosts)) {
-          const after = readResourceAmount(rootAfter, resourceId);
-          const beforeAmount = amounts[resourceId];
-          if (
-            typeof after !== "number" ||
-            typeof beforeAmount !== "number" ||
-            after > beforeAmount
-          )
-            return {
-              kind: "stale",
-              reason: `the native build did not spend ${resourceId}`,
-            };
-        }
-      } else {
-        for (const [resourceId, perPercent] of Object.entries(percentCosts)) {
-          const after = readResourceAmount(rootAfter, resourceId);
-          const beforeAmount = amounts[resourceId];
-          if (
-            typeof after !== "number" ||
-            typeof beforeAmount !== "number" ||
-            !sameAmount(beforeAmount - after, perPercent * paidSteps)
-          )
-            return {
-              kind: "stale",
-              reason: `the native build spent an unexpected ${resourceId} amount`,
-            };
-          charged[resourceId] = beforeAmount - after;
-        }
+      }
+      for (const [resourceId, perPercent] of Object.entries(percentCosts)) {
+        const after = readResourceAmount(rootAfter, resourceId);
+        const beforeAmount = amounts[resourceId];
+        if (
+          typeof after !== "number" ||
+          typeof beforeAmount !== "number" ||
+          !sameAmount(beforeAmount - after, perPercent * plan.percent)
+        )
+          return {
+            kind: "stale",
+            reason: `the native build spent an unexpected ${resourceId} amount`,
+          };
+        charged[resourceId] = beforeAmount - after;
       }
       return Object.freeze({
         kind: "built" as const,

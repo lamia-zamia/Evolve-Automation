@@ -958,21 +958,40 @@ function assertFrozenSupport(options, message) {
     "unrelated Power still adjusts its ordinary building",
   );
 }
+function assertManagedSupportSurvivesUnmanaged(
+  options,
+  expectedBindings,
+  message,
+) {
+  const sample = sampleSupportCoherence(options);
+  assert.ok(sample, message);
+  assert.deepEqual(
+    sample.buildings.map((building) => building.binding).sort(),
+    expectedBindings,
+    message,
+  );
+}
 assertFrozenSupport(
   { managedProviders: [false], managedConsumers: [false], nativeMaximum: 2 },
   "a nonzero native group with no managed participants remains background state",
 );
-assertFrozenSupport(
+assertManagedSupportSurvivesUnmanaged(
   { managedProviders: [false] },
-  "an unmanaged provider freezes its managed consumer",
+  ["city-bank", "space-vr_center"],
+  "an unmanaged provider participates in coherent native support without being managed",
 );
-assertFrozenSupport(
+assertManagedSupportSurvivesUnmanaged(
   { managedConsumers: [false] },
-  "an unmanaged consumer freezes its managed provider",
+  ["city-bank", "space-nav_beacon"],
+  "an unmanaged consumer participates in coherent native support without being managed",
 );
 assertFrozenSupport(
-  { managedConsumers: [false], frozenFuelDependency: true },
-  "a frozen provider's unavailable fuel resource does not block Power",
+  {
+    managedProviders: [false],
+    managedConsumers: [false],
+    frozenFuelDependency: true,
+  },
+  "an unmanaged provider's unavailable fuel resource does not block Power",
 );
 assertFrozenSupport(
   { providerOns: [10], nativeMaximum: 10 },
@@ -1044,8 +1063,11 @@ assert.equal(
 );
 assert.deepEqual(
   navBeacon.supportChanges,
-  [{ type: "moon", amount: -6 }],
-  "the support_for[moon] value overrides support() for the typed support consumption",
+  [
+    { type: "moon", amount: -6 },
+    { type: "moon", amount: 2 },
+  ],
+  "native support_for[moon] provider output and support() consumer demand are both captured",
 );
 const redSupportConsumerInput = cycle.buildings.find(
   (building) => building.binding === redSupportConsumer.actionId,

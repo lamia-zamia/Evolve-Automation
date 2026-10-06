@@ -65,6 +65,7 @@ const cycle = {
     resource("Food", 20),
   ],
   supports: [],
+  beltConsumers: [],
   buildings: [
     building("galaxy-vitreloy_plant", 5, 6, [
       {
