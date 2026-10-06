@@ -1305,6 +1305,15 @@ function readBuildingRule(
         electromagneticField: Boolean(readProperty(race, "emfield")),
       });
     case "belt-space-station": {
+      const station = structures.find(
+        (candidate) => candidate.actionId === binding,
+      );
+      if (station === undefined) return undefined;
+      const support = station.readSupportValue("belt");
+      const effective = dependencies.mechanics.readEffectivePowerCount(
+        root,
+        station.entryKey,
+      );
       const stationTitle = readLocalizedProductionSource(
         "space-space_station",
         structures,
@@ -1313,12 +1322,23 @@ function readBuildingRule(
       );
       const capacity = production.capacity?.Elerium?.[stationTitle];
       const stationStorage = readCellNumber(capacity);
-      if (demand.maxCost === undefined) return undefined;
+      if (
+        demand.maxCost === undefined ||
+        support.kind !== "value" ||
+        !Number.isFinite(support.value) ||
+        support.value < 0 ||
+        effective.kind !== "value" ||
+        !Number.isFinite(effective.value) ||
+        effective.value < 0
+      )
+        return undefined;
       return Object.freeze({
         kind: metadataRule,
         stationStorage,
         eleriumMaximum: resource("Elerium")?.maxQuantity ?? 0,
         eleriumMaximumCost: demand.maxCost("Elerium"),
+        beltSupportPerStation: support.value,
+        effectiveStations: effective.value,
       });
     }
     case "job-dependent": {
@@ -2094,6 +2114,7 @@ function readPowerCycle(
       "farmer",
       "hunter",
       "archaeologist",
+      "space_miner",
     ]);
   } catch {
     return unavailable("job-counts", "job counts unavailable");
@@ -2283,24 +2304,56 @@ function readPowerCycle(
     readonly supportTypes: readonly string[];
     readonly supportChanges: readonly PowerSupportChangeInput[];
   }[] = [];
+  const beltConsumerByBinding = new Map(
+    beltConsumers.map((consumer) => [consumer.binding, consumer]),
+  );
   for (const record of managed) {
     const role = record.structure.readPowerGridRole(root, record.powered);
     const participant = nativeSupportParticipants.find(
       (candidate) => candidate.structure.entryKey === record.structure.entryKey,
     );
-    if (role.kind !== "value" || participant === undefined) {
+    const beltConsumer = beltConsumerByBinding.get(record.catalog.binding);
+    const powerlessBeltConsumer =
+      beltConsumer !== undefined && record.powered === 0;
+    if (
+      participant === undefined ||
+      (role.kind !== "value" && !powerlessBeltConsumer)
+    ) {
       const types = participant?.supportTypes ?? [];
       if (types.length === 0) unsafeEverySupportType = true;
       for (const type of types) unsafeSupportTypes.add(type);
       continue;
     }
-    if (role.value === "none" && participant.supportChanges.length === 0)
+    const nativeRole = role.kind === "value" ? role.value : "none";
+    if (
+      nativeRole === "none" &&
+      participant.supportChanges.length === 0 &&
+      beltConsumer === undefined
+    )
       continue;
+    const hasNativeBeltConsumer = participant.supportChanges.some(
+      (change) => change.type === "belt" && change.amount > 0,
+    );
+    const supportChanges =
+      beltConsumer !== undefined && !hasNativeBeltConsumer
+        ? Object.freeze([
+            ...participant.supportChanges,
+            Object.freeze({
+              type: "belt",
+              amount: beltConsumer.supportPerUnit,
+            }),
+          ])
+        : participant.supportChanges;
     candidates.push({
       record,
-      role: role.value,
+      // Belt miners draw no Power. Their captured native support demand stays eligible for
+      // prospective planning even when the Power-grid role probe is invalid in the disabled state.
+      role:
+        nativeRole === "none" && beltConsumer !== undefined
+          ? "consumer"
+          : nativeRole,
       supportTypes: participant.supportTypes,
-      supportChanges: participant.supportChanges,
+      supportChanges,
     });
   }
   if (unsafeEverySupportType)
@@ -2313,6 +2366,12 @@ function readPowerCycle(
   for (const support of supports) {
     let modeledMaximum = 0;
     let modeledCurrent = 0;
+    const hasNativeProviderModel = nativeSupportParticipants.some(
+      (participant) =>
+        participant.supportChanges.some(
+          (change) => change.type === support.type && change.amount < 0,
+        ),
+    );
     for (const participant of nativeSupportParticipants) {
       for (const change of participant.supportChanges) {
         if (change.type !== support.type) continue;
@@ -2350,10 +2409,12 @@ function readPowerCycle(
       }
     }
     if (
-      Math.abs(modeledMaximum - support.maximum) > 1e-9 ||
+      (hasNativeProviderModel &&
+        Math.abs(modeledMaximum - support.maximum) > 1e-9) ||
       Math.abs(modeledCurrent - support.current) > 1e-9
-    )
+    ) {
       unsafeSupportTypes.add(support.type);
+    }
   }
   const supportSafe = candidates.filter(
     (candidate) =>
@@ -2519,6 +2580,7 @@ function readPowerCycle(
       tab: record.structure.region,
       smartCategory: record.catalog.smart,
       smartEnabled: capturedPowerSmartEnabled(binding, settings),
+      autoStateManaged: settings[`bld_s_${binding}`] === true,
       crewShip: typeof readProperty(state, "crew") === "number",
       crewValueRank: metadata.crewValueRank,
       singleState: metadata.singleState,
@@ -2567,6 +2629,19 @@ function readPowerCycle(
       "resources",
       "resource snapshot unavailable: Power or Population",
     );
+  const actualSpaceMiners =
+    jobCounts?.readCount("space_miner") ??
+    readGamePathNumber(root, ["civic", "space_miner", "workers"]) ??
+    0;
+  const spaceMinerUsesSmartJobsCap =
+    settings["autoJobs"] === true &&
+    settings["job_space_miner"] === true &&
+    settings["job_s_space_miner"] === true;
+  // Space Miner worker rows can be absent before the Civic panel materializes them; the game
+  // treats that lazily initialized row as zero workers. Otherwise use the Jobs counter snapshot.
+  const spaceMinerSupportMaximum = spaceMinerUsesSmartJobsCap
+    ? dependencies.readProspectiveSpaceMiners?.(root)
+    : actualSpaceMiners;
   resourceMap.set("Population", populationModel);
   const buildingCounts = new Map<string, number>();
   const buildingOns = new Map<string, number>();
@@ -2619,6 +2694,7 @@ function readPowerCycle(
     showGalactic: Boolean(readProperty(gameSettings, "showGalactic")),
     limitPowered: settings["buildingsLimitPowered"] === true,
     autoFleet: settings["autoFleet"] === true,
+    autoPower: settings["autoPower"] === true,
     autoJobs: settings["autoJobs"] === true,
     crewReserve: readCrewReserve(settings["crewReserve"], population),
   });
@@ -2657,10 +2733,7 @@ function readPowerCycle(
     consumptionBalanceMinimum: runtime.consumptionBalanceMinimum,
     civilianPopulation: population,
     currentCrew,
-    prospectiveSpaceMiners:
-      settings["autoJobs"] === true
-        ? dependencies.readProspectiveSpaceMiners?.(root)
-        : null,
+    prospectiveSpaceMiners: spaceMinerSupportMaximum,
     settings: settingsInput,
     resources: resourceInputs,
     supports,

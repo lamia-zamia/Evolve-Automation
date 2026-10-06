@@ -3412,6 +3412,20 @@ assert.equal(
 );
 specialRoot.civic.coal_miner = absentCoal;
 specialJobCounts.set("coal_miner", 17);
+const absentSpaceMinerWorkers = specialRoot.civic.space_miner.workers;
+delete specialRoot.civic.space_miner.workers;
+const spaceMinerJobCount = specialJobCounts.get("space_miner");
+specialJobCounts.delete("space_miner");
+const absentSpaceMinerCycle = specialReader.readCycle();
+assert.equal(
+  absentSpaceMinerCycle?.prospectiveSpaceMiners,
+  0,
+  `a lazily absent Space Miner worker count contributes zero actual workers to the Belt ceiling (${JSON.stringify(specialReader.readUnavailableReason())})`,
+);
+specialRoot.civic.space_miner.workers = absentSpaceMinerWorkers;
+if (spaceMinerJobCount !== undefined) {
+  specialJobCounts.set("space_miner", spaceMinerJobCount);
+}
 specialJobCounts.set("cement_worker", 11);
 specialJobCounts.set("miner", 13);
 specialJobCounts.set("farmer", 12);

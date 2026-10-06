@@ -11448,19 +11448,42 @@
     };
   }
   function planJobs(input) {
+    let decision = planJobsAllocationOnce(input);
+    if (decision === null) return null;
+    let spaceMinerIndex = input.jobs.findIndex(
+      (job) => job.kind === "space-miner"
+    ), spaceMiner = input.jobs[spaceMinerIndex];
+    if (spaceMiner === void 0 || !spaceMiner.smart) return decision;
+    let uncappedInput = Object.freeze({
+      ...input,
+      jobs: Object.freeze(
+        input.jobs.map(
+          (job, index) => index === spaceMinerIndex ? Object.freeze({ ...job, smartMaximum: null }) : job
+        )
+      )
+    }), prospectiveAssignment = planJobsAllocationOnce(uncappedInput)?.assignments[spaceMinerIndex], prospectiveSpaceMiners = prospectiveAssignment === void 0 ? 0 : prospectiveAssignment.workers + prospectiveAssignment.servants * input.servantModifier;
+    return Object.freeze({
+      ...decision,
+      maximumSpaceMiners: prospectiveSpaceMiners
+    });
+  }
+  function planJobsAllocationOnce(input) {
     if (!input.available || input.jobs.length === 0) return null;
-    let jobIndex = createJobIndex(input), requiredWorkers = input.jobs.map(() => 0), requiredServants = input.jobs.map(() => 0), availableWorkers = input.jobs.reduce((sum, job) => sum + job.workers, 0), availableServants = input.manageServants ? input.servantsMaximum : 0, availableCraftsmen = input.craftsmenMaximum, farmerIndex = indexOfToken(jobIndex, input.farmerToken), hunterIndex = indexOfToken(jobIndex, input.hunterToken), defaultIndex = indexOfToken(jobIndex, input.defaultJobToken);
+    let jobIndex = createJobIndex(input), requiredWorkers = input.jobs.map(() => 0), requiredServants = input.jobs.map(() => 0), availableWorkers = input.jobs.reduce((sum, job) => sum + job.workers, 0), availableServants = input.manageServants ? input.servantsMaximum : 0, availableCraftsmen = input.craftsmenMaximum, reservedCraftsmen = 0, farmerIndex = indexOfToken(jobIndex, input.farmerToken), hunterIndex = indexOfToken(jobIndex, input.hunterToken), defaultIndex = indexOfToken(jobIndex, input.defaultJobToken);
     input.craftOnly ? (availableCraftsmen = Math.min(
       input.craftOnlyWorkerPool ?? availableWorkers,
       input.craftsmenMaximum
-    ), availableWorkers = 0, availableServants = 0) : input.autoCraftsmen && availableWorkers >= availableCraftsmen * (farmerIndex === -1 ? 1 : 2) ? availableWorkers -= availableCraftsmen : availableCraftsmen = 0;
-    let craft = craftPlan(
+    ), availableWorkers = 0, availableServants = 0) : input.autoCraftsmen && availableWorkers >= availableCraftsmen * (farmerIndex === -1 ? 1 : 2) ? (availableWorkers -= availableCraftsmen, reservedCraftsmen = availableCraftsmen) : availableCraftsmen = 0;
+    let workersBeforeCraftPlan = availableWorkers, craft = craftPlan(
       input,
       availableWorkers,
       availableCraftsmen,
       jobIndex
+    ), plannedCraftsmen = [...craft.workers.values()].reduce(
+      (total, workers) => total + workers,
+      0
     );
-    availableWorkers = craft.availableWorkers;
+    availableWorkers = input.craftOnly ? craft.availableWorkers : workersBeforeCraftPlan + reservedCraftsmen - plannedCraftsmen;
     for (let [token, count2] of craft.workers) {
       let index = indexOfToken(jobIndex, token);
       index !== -1 && (requiredWorkers[index] = count2);
@@ -11471,7 +11494,7 @@
     }
     let minerIndex = indexOfToken(jobIndex, input.minerToken);
     input.reserveMiner && availableWorkers > 1 && minerIndex !== -1 && input.jobs[minerIndex].smart && (requiredWorkers[minerIndex] = 1, availableWorkers--);
-    let authority = authorityMaximum(input, jobIndex), minimumFarmers = 0, maximumSpaceMiners = 0, jobMaximums = input.jobs.map((job) => job.smartMaximum);
+    let authority = authorityMaximum(input, jobIndex), minimumFarmers = 0, jobMaximums = input.jobs.map((job) => job.smartMaximum);
     for (let pass = 0; pass < 3; pass++) {
       for (let index = 0; index < input.jobs.length; index++) {
         let job = input.jobs[index];
@@ -11484,7 +11507,7 @@
           availableEmployees,
           Math.max(currentEmployees, job.breakpoints[pass])
         );
-        if (job.smart) {
+        if (job.smart)
           if (job.kind === "farmer" || job.kind === "hunter") {
             let maximum = jobMaximums[index] ?? Number.MAX_SAFE_INTEGER;
             if (minimumFarmers = job.farmerMinimum ?? maximum, job.demonicLumber) {
@@ -11504,11 +11527,6 @@
             jobMaximums[index],
             job.maximum === -1 ? Number.MAX_SAFE_INTEGER : job.maximum
           ) : jobMaximums[index] !== null && (jobsToAssign = Math.min(jobsToAssign, jobMaximums[index]));
-          job.kind === "space-miner" && (maximumSpaceMiners = Math.max(
-            maximumSpaceMiners,
-            Math.min(availableEmployees, job.uncappedBreakpoints[pass])
-          ));
-        }
         if (typeof job.storageBackedMinimum == "number" && (jobsToAssign = Math.max(
           jobsToAssign,
           Math.min(availableEmployees, job.storageBackedMinimum)
@@ -11597,7 +11615,7 @@
       selectedDefaultToken,
       moraleIncomeAdjusted: entertainerIndex !== -1 && requiredWorkers[entertainerIndex] !== input.jobs[entertainerIndex].count,
       ironIncomeAdjusted: minerIndex !== -1 && requiredWorkers[minerIndex] !== input.jobs[minerIndex].count,
-      maximumSpaceMiners,
+      maximumSpaceMiners: 0,
       lastPopulationCount: input.population,
       lastFarmerCount: farmerIndex === -1 ? 0 : requiredWorkers[farmerIndex] + requiredServants[farmerIndex] * input.servantModifier,
       authorityEntertainerCap: authority.storedCap,
@@ -20386,8 +20404,7 @@
     return Object.freeze({
       ...job,
       token,
-      workers: 0,
-      count: 0,
+      count: job.workers,
       servants,
       crafting: !0,
       serves: !0
@@ -20748,22 +20765,36 @@
             authorityCap
           ) : void 0, expectedDefaultId = decision.selectedDefaultToken === null ? session.catalog.defaultJobId : session.ordinaryJobs.find(
             (job) => job.token === decision.selectedDefaultToken
-          )?.id ?? "";
-          observed2 !== void 0 && observed2.catalog.defaultJobId === expectedDefaultId && decision.assignments.every((assignment) => {
+          )?.id ?? "", actualDefaultId = observed2?.catalog.defaultJobId, failedAssignments = decision.assignments.map((assignment) => {
             let before = session.input.jobs.find(
               (job) => job.token === assignment.jobToken
-            ), after = observed2.input.jobs.find(
+            ), after = observed2?.input.jobs.find(
               (job) => job.token === assignment.jobToken
-            ), foundry = observed2.foundry.samples.find(
+            ), foundry = observed2?.foundry.samples.find(
               (sample) => sample.id === before?.id
-            );
-            return before !== void 0 && after !== void 0 && (before.crafting ? foundry?.workers === assignment.workers : after.workers === assignment.workers) && after.servants === (session.input.manageServants ? assignment.servants : before.servants);
-          }) ? (historyRoot = currentRoot, history = Object.freeze({
+            ), expectedServants = session.input.manageServants ? assignment.servants : before?.servants, actualWorkers = before?.crafting === !0 ? foundry?.workers : after?.workers, actualServants = after?.servants;
+            return {
+              id: before?.id,
+              expectedWorkers: assignment.workers,
+              actualWorkers,
+              expectedServants,
+              actualServants,
+              matches: before !== void 0 && after !== void 0 && actualWorkers === assignment.workers && actualServants === expectedServants
+            };
+          }).filter((check) => !check.matches).slice(0, 5).map(({ matches: _matches, ...check }) => check);
+          observed2 !== void 0 && actualDefaultId === expectedDefaultId && failedAssignments.length === 0 ? (historyRoot = currentRoot, history = Object.freeze({
             lastPopulationCount: decision.lastPopulationCount,
             lastFarmerCount: decision.lastFarmerCount
           }), authorityCap = decision.clearAuthorityEntertainerCap ? null : decision.authorityEntertainerCap) : outcome = rejected(
             "full-jobs-postcondition-failed",
-            "ordinary or foundry assignment was not observed in captured root state"
+            `ordinary or foundry assignment was not observed in captured root state: ${JSON.stringify(
+              {
+                expectedDefaultId,
+                actualDefaultId,
+                observedAvailable: observed2 !== void 0,
+                failedAssignments
+              }
+            )}`
           );
         }
         return outcome;
@@ -27164,9 +27195,19 @@
   function planPowerCycle(input, state) {
     let belt = input.supports.find((support) => support.type === "belt"), station = input.buildings.find(
       (building) => building.rule.kind === "belt-space-station"
+    ), beltProspectiveMaximum = prospectiveBeltMaximumForCycle(
+      input,
+      belt,
+      station
     ), beltStationFloor = 0;
     if (belt !== void 0 && belt.allocation === "strict" && station !== void 0 && station.smartCategory && station.smartEnabled) {
-      let probe = planPowerCycleCore(input, state, beltStationFloor, !0), plannedDemand = 0;
+      let probe = planPowerCycleCore(
+        input,
+        state,
+        beltStationFloor,
+        !0,
+        beltProspectiveMaximum
+      ), plannedDemand = 0;
       for (let consumer of input.beltConsumers) {
         let planned = consumer.managed ? probe.decision?.operations.find(
           (operation2) => operation2.kind === "adjust-building" && operation2.binding === consumer.binding
@@ -27176,11 +27217,86 @@
       let unit = -(station.supportChanges.find((change) => change.type === "belt")?.amount ?? 0);
       unit > 0 && plannedDemand > 0 && (beltStationFloor = Math.ceil(plannedDemand / unit));
     }
-    return planPowerCycleCore(input, state, beltStationFloor, !1);
+    let plan = planPowerCycleCore(
+      input,
+      state,
+      beltStationFloor,
+      !1,
+      beltProspectiveMaximum
+    );
+    return Object.freeze({ ...plan, beltProspectiveMaximum });
   }
-  function planPowerCycleCore(input, state, beltStationFloor, probeBelt) {
+  function prospectiveBeltMaximumForCycle(input, belt, station) {
+    if (belt === void 0 || station === void 0) return;
+    let provider = station.supportChanges.find(
+      (change) => change.type === belt.type && change.amount < 0
+    ), stationRule = station.rule.kind === "belt-space-station" ? station.rule : void 0, supportPerStation = provider === void 0 ? stationRule?.beltSupportPerStation ?? 0 : Math.abs(provider.amount);
+    if (supportPerStation <= 0) return belt.current;
+    let configuredMaximumStations = input.settings.autoPower === !0 && station.autoStateManaged === !0 ? station.count : station.stateOn, currentStations = provider === void 0 ? stationRule?.effectiveStations == null ? null : Math.min(configuredMaximumStations, stationRule.effectiveStations) : Math.min(configuredMaximumStations, belt.maximum / supportPerStation);
+    if (currentStations === null) return belt.current;
+    let operableStations = Math.max(0, configuredMaximumStations);
+    station.powered > 0 && input.powerCurrent < station.powered && operableStations > currentStations && (operableStations = currentStations);
+    for (let consumption of station.consumptions) {
+      if (consumption.enableRate === null || consumption.enableRate <= 0)
+        continue;
+      let resource = input.resources.find(
+        (candidate) => candidate.id === consumption.resourceId
+      );
+      if (resource === void 0) {
+        operableStations = currentStations;
+        break;
+      }
+      operableStations = Math.max(
+        currentStations,
+        capPowerMaximumByConsumption(
+          operableStations,
+          currentStations,
+          station,
+          consumption,
+          { input: resource, rate: resource.rateOfChange },
+          input
+        )
+      );
+    }
+    let workersMaximum = input.prospectiveSpaceMiners;
+    if (workersMaximum == null)
+      return belt.current;
+    let providerMaximum = operableStations * supportPerStation;
+    return Math.max(belt.current, Math.min(providerMaximum, workersMaximum));
+  }
+  function capPowerMaximumByConsumption(maximum, current, building, consumption, resource, input) {
+    if (consumption.appliedGeneratorFuel === null)
+      return Math.min(maximum, current);
+    if (consumption.appliedGeneratorFuel !== void 0 && consumption.enableRate !== null && consumption.enableRate > 0 && (maximum = Math.min(
+      maximum,
+      Math.max(
+        0,
+        (resource.rate + consumption.appliedGeneratorFuel) / consumption.enableRate
+      )
+    )), maximum > current && consumption.enableRate === null) return current;
+    if (maximum > current && consumption.enableRate !== null && consumption.enableRate > 0) {
+      let requirement = consumption.enableRate;
+      if (!resource.input.unlocked) return current;
+      if (consumption.resourceId === "Food") {
+        if (input.fasting) return current;
+        if (input.banquetStateOn > 0 || resource.input.storageRatio > 0.05 || input.hungryRace)
+          return maximum;
+      } else if (current > 0 && (building.powered < 0 || resource.input.storageRatio >= 0.95) && resource.input.currentQuantity >= (consumption.currentTotal + Math.max(0, maximum - current) * requirement) * input.consumptionBalanceMinimum)
+        return maximum;
+      maximum = Math.min(
+        maximum,
+        current + (resource.rate - consumption.unwindCredit) / requirement
+      );
+    }
+    return maximum;
+  }
+  function planPowerCycleCore(input, state, beltStationFloor, probeBelt, beltProspectiveMaximum) {
     if (!input.powerUnlocked || input.buildings.length === 0)
-      return Object.freeze({ decision: null, nextState: state });
+      return Object.freeze({
+        decision: null,
+        nextState: state,
+        beltProspectiveMaximum
+      });
     let operations = [], descriptionByBinding = /* @__PURE__ */ new Map(), appendDescription = (buildingId, binding, expected, value) => {
       operations.push({
         kind: "set-description",
@@ -27208,6 +27324,12 @@
         available: support.available
       });
     }
+    let beltConsumerInputs = new Map(
+      input.beltConsumers.map((consumer) => [consumer.binding, consumer])
+    ), plannedBeltDemand = input.beltConsumers.reduce(
+      (total, consumer) => total + consumer.configured * consumer.supportPerUnit,
+      0
+    );
     if (new Set(
       input.buildings.map((building) => building.binding)
     ).size !== input.buildings.length)
@@ -27322,40 +27444,14 @@
           consumption.resourceId,
           `power resource ${consumption.resourceId}`
         );
-        if (consumption.appliedGeneratorFuel === null) {
-          maximum = Math.min(maximum, current);
-          continue;
-        }
-        if (consumption.appliedGeneratorFuel !== void 0 && consumption.enableRate !== null && consumption.enableRate > 0 && (maximum = Math.min(
+        maximum = capPowerMaximumByConsumption(
           maximum,
-          Math.max(
-            0,
-            (resource.rate + consumption.appliedGeneratorFuel) / consumption.enableRate
-          )
-        )), maximum > current && consumption.enableRate === null) {
-          maximum = current;
-          continue;
-        }
-        if (maximum > current && consumption.enableRate !== null && consumption.enableRate > 0) {
-          let requirement = consumption.enableRate;
-          if (!resource.input.unlocked) {
-            maximum = current;
-            break;
-          }
-          if (resource.input.id === "Food") {
-            if (input.fasting) {
-              maximum = current;
-              break;
-            }
-            if (input.banquetStateOn > 0 || resource.input.storageRatio > 0.05 || input.hungryRace)
-              continue;
-          } else if (current > 0 && (building.powered < 0 || resource.input.storageRatio >= 0.95) && resource.input.currentQuantity >= (consumption.currentTotal + Math.max(0, maximum - current) * requirement) * input.consumptionBalanceMinimum)
-            continue;
-          maximum = Math.min(
-            maximum,
-            current + (resource.rate - consumption.unwindCredit) / requirement
-          );
-        }
+          current,
+          building,
+          consumption,
+          resource,
+          input
+        );
       }
       for (let change of building.supportChanges) {
         let support = powerCycleMapValue(
@@ -27373,14 +27469,22 @@
               maximum = current;
               continue;
             }
-            let prospectiveExtra = change.type === "belt" && maximum > current && input.settings.autoJobs === !0 && input.prospectiveSpaceMiners !== void 0 && input.prospectiveSpaceMiners !== null ? Math.max(
-              0,
-              input.prospectiveSpaceMiners - support.input.maximum
-            ) : 0, supported = (support.available + prospectiveExtra) / change.amount;
-            maximum = Math.min(
-              maximum,
-              support.input.allocation === "round-up" ? Math.ceil(supported) : supported
-            );
+            let prospectiveExtra = change.type === "belt" && maximum > current && beltProspectiveMaximum !== void 0 ? Math.max(0, beltProspectiveMaximum - support.input.maximum) : 0, beltConsumer2 = change.type === "belt" ? beltConsumerInputs.get(building.binding) : void 0;
+            if (beltConsumer2 !== void 0 && maximum > current && beltProspectiveMaximum !== void 0) {
+              let otherDemand = Math.max(
+                0,
+                plannedBeltDemand - beltConsumer2.configured * beltConsumer2.supportPerUnit
+              ), remainingBeltDemand = Math.max(
+                0,
+                beltProspectiveMaximum - otherDemand
+              );
+              maximum = Math.min(
+                maximum,
+                Math.floor(remainingBeltDemand / change.amount)
+              );
+            }
+            let supported = (support.available + prospectiveExtra) / change.amount, supportedBuildingCount = change.type === "belt" && support.input.allocation === "strict" ? Math.floor(supported) : support.input.allocation === "round-up" ? Math.ceil(supported) : supported;
+            maximum = Math.min(maximum, supportedBuildingCount);
           }
           if (missingSupportProvider[change.type]) {
             let value = `Make sure all ${support.input.title} producers are above consumers in buildings list!<br>${description}`;
@@ -27396,7 +27500,11 @@
         let ticks = warningCap.ticks - 1;
         ticks <= 0 ? delete warningCaps[building.binding] : (warningCaps[building.binding] = { cap: warningCap.cap, ticks }, maximum = Math.min(maximum, warningCap.cap));
       }
-      if (input.debug && maximum !== current) {
+      let beltConsumer = beltConsumerInputs.get(building.binding);
+      if (beltConsumer !== void 0 && (plannedBeltDemand += (maximum - beltConsumer.configured) * beltConsumer.supportPerUnit, beltConsumerInputs.set(building.binding, {
+        ...beltConsumer,
+        configured: maximum
+      })), input.debug && maximum !== current) {
         let consumption = building.consumptions.filter((entry) => (entry.enableRate ?? 0) > 0).map((entry) => {
           let resource = powerCycleMapValue(
             resources,
@@ -27547,7 +27655,8 @@
         ),
         operations: Object.freeze(operations)
       }),
-      nextState: freezeState(oscillations, warningCaps)
+      nextState: freezeState(oscillations, warningCaps),
+      beltProspectiveMaximum
     });
   }
   function planPowerWarningShutdown(warnings) {
@@ -29193,17 +29302,26 @@
           electromagneticField: !!readProperty(race, "emfield")
         });
       case "belt-space-station": {
-        let stationTitle = readLocalizedProductionSource(
+        let station = structures.find(
+          (candidate) => candidate.actionId === binding
+        );
+        if (station === void 0) return;
+        let support = station.readSupportValue("belt"), effective = dependencies.mechanics.readEffectivePowerCount(
+          root,
+          station.entryKey
+        ), stationTitle = readLocalizedProductionSource(
           "space-space_station",
           structures,
           controls2,
           dependencies.mechanics
         ), capacity = production.capacity?.Elerium?.[stationTitle], stationStorage = readCellNumber(capacity);
-        return demand.maxCost === void 0 ? void 0 : Object.freeze({
+        return demand.maxCost === void 0 || support.kind !== "value" || !Number.isFinite(support.value) || support.value < 0 || effective.kind !== "value" || !Number.isFinite(effective.value) || effective.value < 0 ? void 0 : Object.freeze({
           kind: metadataRule,
           stationStorage,
           eleriumMaximum: resource("Elerium")?.maxQuantity ?? 0,
-          eleriumMaximumCost: demand.maxCost("Elerium")
+          eleriumMaximumCost: demand.maxCost("Elerium"),
+          beltSupportPerStation: support.value,
+          effectiveStations: effective.value
         });
       }
       case "job-dependent": {
@@ -29674,7 +29792,8 @@
         "coal_miner",
         "farmer",
         "hunter",
-        "archaeologist"
+        "archaeologist",
+        "space_miner"
       ]);
     } catch {
       return unavailable2("job-counts", "job counts unavailable");
@@ -29801,22 +29920,38 @@
     }
     if (unsafeEverySupportType)
       for (let support of supports) unsafeSupportTypes.add(support.type);
-    let candidates = [];
+    let candidates = [], beltConsumerByBinding = new Map(
+      beltConsumers.map((consumer) => [consumer.binding, consumer])
+    );
     for (let record of managed) {
       let role = record.structure.readPowerGridRole(root, record.powered), participant = nativeSupportParticipants.find(
         (candidate) => candidate.structure.entryKey === record.structure.entryKey
-      );
-      if (role.kind !== "value" || participant === void 0) {
+      ), beltConsumer = beltConsumerByBinding.get(record.catalog.binding), powerlessBeltConsumer = beltConsumer !== void 0 && record.powered === 0;
+      if (participant === void 0 || role.kind !== "value" && !powerlessBeltConsumer) {
         let types = participant?.supportTypes ?? [];
         types.length === 0 && (unsafeEverySupportType = !0);
         for (let type of types) unsafeSupportTypes.add(type);
         continue;
       }
-      role.value === "none" && participant.supportChanges.length === 0 || candidates.push({
+      let nativeRole = role.kind === "value" ? role.value : "none";
+      if (nativeRole === "none" && participant.supportChanges.length === 0 && beltConsumer === void 0)
+        continue;
+      let hasNativeBeltConsumer = participant.supportChanges.some(
+        (change) => change.type === "belt" && change.amount > 0
+      ), supportChanges = beltConsumer !== void 0 && !hasNativeBeltConsumer ? Object.freeze([
+        ...participant.supportChanges,
+        Object.freeze({
+          type: "belt",
+          amount: beltConsumer.supportPerUnit
+        })
+      ]) : participant.supportChanges;
+      candidates.push({
         record,
-        role: role.value,
+        // Belt miners draw no Power. Their captured native support demand stays eligible for
+        // prospective planning even when the Power-grid role probe is invalid in the disabled state.
+        role: nativeRole === "none" && beltConsumer !== void 0 ? "consumer" : nativeRole,
         supportTypes: participant.supportTypes,
-        supportChanges: participant.supportChanges
+        supportChanges
       });
     }
     if (unsafeEverySupportType)
@@ -29825,7 +29960,11 @@
       for (let type of participant.supportTypes)
         supportMap.has(type) || unsafeSupportTypes.add(type);
     for (let support of supports) {
-      let modeledMaximum = 0, modeledCurrent = 0;
+      let modeledMaximum = 0, modeledCurrent = 0, hasNativeProviderModel = nativeSupportParticipants.some(
+        (participant) => participant.supportChanges.some(
+          (change) => change.type === support.type && change.amount < 0
+        )
+      );
       for (let participant of nativeSupportParticipants)
         for (let change of participant.supportChanges)
           if (change.type === support.type) {
@@ -29851,7 +29990,7 @@
               modeledCurrent += change.amount * effective.value;
             }
           }
-      (Math.abs(modeledMaximum - support.maximum) > 1e-9 || Math.abs(modeledCurrent - support.current) > 1e-9) && unsafeSupportTypes.add(support.type);
+      (hasNativeProviderModel && Math.abs(modeledMaximum - support.maximum) > 1e-9 || Math.abs(modeledCurrent - support.current) > 1e-9) && unsafeSupportTypes.add(support.type);
     }
     let supportSafe = candidates.filter(
       (candidate) => !candidate.supportTypes.some(
@@ -29947,6 +30086,7 @@
         tab: record.structure.region,
         smartCategory: record.catalog.smart,
         smartEnabled: capturedPowerSmartEnabled(binding, settings),
+        autoStateManaged: settings[`bld_s_${binding}`] === !0,
         crewShip: typeof readProperty(state, "crew") == "number",
         crewValueRank: metadata2.crewValueRank,
         singleState: metadata2.singleState,
@@ -29982,6 +30122,7 @@
         "resources",
         "resource snapshot unavailable: Power or Population"
       );
+    let actualSpaceMiners = jobCounts?.readCount("space_miner") ?? readGamePathNumber(root, ["civic", "space_miner", "workers"]) ?? 0, spaceMinerSupportMaximum = settings.autoJobs === !0 && settings.job_space_miner === !0 && settings.job_s_space_miner === !0 ? dependencies.readProspectiveSpaceMiners?.(root) : actualSpaceMiners;
     resourceMap.set("Population", populationModel);
     let buildingCounts = /* @__PURE__ */ new Map(), buildingOns = /* @__PURE__ */ new Map();
     for (let building of buildingStates)
@@ -30024,6 +30165,7 @@
       showGalactic: !!readProperty(gameSettings, "showGalactic"),
       limitPowered: settings.buildingsLimitPowered === !0,
       autoFleet: settings.autoFleet === !0,
+      autoPower: settings.autoPower === !0,
       autoJobs: settings.autoJobs === !0,
       crewReserve: readCrewReserve(settings.crewReserve, population)
     }), lakeAndSpire = readLakeAndSpire(
@@ -30055,7 +30197,7 @@
       consumptionBalanceMinimum: runtime.consumptionBalanceMinimum,
       civilianPopulation: population,
       currentCrew,
-      prospectiveSpaceMiners: settings.autoJobs === !0 ? dependencies.readProspectiveSpaceMiners?.(root) : null,
+      prospectiveSpaceMiners: spaceMinerSupportMaximum,
       settings: settingsInput,
       resources: resourceInputs,
       supports,
@@ -55373,6 +55515,11 @@ Only continue if you trust the source. Injected code:
     let publishSpaceMinerPlan = (decision) => {
       let root = pageCapture2.rootState.readRoot();
       prospectiveSpaceMinerPlan = root !== void 0 && Number.isFinite(decision.maximumSpaceMiners) ? { root, maximum: decision.maximumSpaceMiners } : void 0;
+    }, runJobsPhase = (phase, dependencies, craftOnly = !1) => {
+      let outcome = runJobsAutomation(dependencies, craftOnly);
+      return outcome.status !== "succeeded" && reportOnce(
+        `${phase}: ${outcome.failure.code}: ${outcome.failure.message}`
+      ), outcome;
     }, powerReader = createCapturedPowerReader({
       rootState: pageCapture2.rootState,
       mechanics: pageCapture2.mechanics,
@@ -55555,17 +55702,19 @@ Only continue if you trust the source. Injected code:
         }), demandThisCycle = void 0, savingTargetThisCycle = void 0, observePowerDemandPhase("factory-invalidated");
         let autoJobs = isEnabled(settings, "autoJobs"), autoCraftsmen = isEnabled(settings, "autoCraftsmen"), combinedJobs = !1;
         if (autoJobs && autoCraftsmen && (runPhase("autoJobs with autoCraftsmen", () => {
-          ensureCivicControls(), refreshDiscoveredSettings(), combinedJobs = fullJobs.isAvailable(), combinedJobs && runJobsAutomation(
+          ensureCivicControls(), refreshDiscoveredSettings(), combinedJobs = fullJobs.isAvailable(), combinedJobs && runJobsPhase(
+            "autoJobs with autoCraftsmen",
             { ...fullJobs, onCoherentPlan: publishSpaceMinerPlan },
             !1
           );
         }) || (combinedJobs = !0)), autoJobs && !combinedJobs && runPhase("autoJobs", () => {
-          ensureCivicControls(), refreshDiscoveredSettings(), runJobsAutomation(
+          ensureCivicControls(), refreshDiscoveredSettings(), runJobsPhase(
+            "autoJobs",
             { ...ordinaryJobs, onCoherentPlan: publishSpaceMinerPlan },
             !1
           );
         }), autoCraftsmen && !combinedJobs && runPhase("autoCraftsmen", () => {
-          ensureCivicControls(), runJobsAutomation(craftsmen, !0);
+          ensureCivicControls(), runJobsPhase("autoCraftsmen", craftsmen, !0);
         }), isEnabled(settings, "autoFleet") && runPhase("autoFleet", () => {
           if (isCapturedTruepath(pageCapture2.rootState.readRoot()))
             return ensureOuterFleetControls(), ensureOuterFleetGarrison(), outerFleet.autoFleetOuter();

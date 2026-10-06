@@ -2639,6 +2639,38 @@ export function startCapturedRuntime({
       root !== undefined && Number.isFinite(decision.maximumSpaceMiners)
         ? { root, maximum: decision.maximumSpaceMiners }
         : undefined;
+    if (
+      typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
+      __EA_TEST_SURFACE_ENABLED__ === true
+    ) {
+      const observer = readProperty(
+        readProperty(settingsHostWindow, "__EA_TEST_HOOKS__"),
+        "observeSpaceMinerDecision",
+      );
+      if (typeof observer === "function") observer(decision.maximumSpaceMiners);
+    }
+  };
+  const runJobsPhase = (
+    phase: string,
+    dependencies: Parameters<typeof runJobsAutomation>[0],
+    craftOnly = false,
+  ) => {
+    const outcome = runJobsAutomation(dependencies, craftOnly);
+    if (
+      typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
+      __EA_TEST_SURFACE_ENABLED__ === true
+    ) {
+      const observer = readProperty(
+        readProperty(settingsHostWindow, "__EA_TEST_HOOKS__"),
+        "observeJobsAutomation",
+      );
+      if (typeof observer === "function") observer(phase, outcome);
+    }
+    if (outcome.status !== "succeeded")
+      reportOnce(
+        `${phase}: ${outcome.failure.code}: ${outcome.failure.message}`,
+      );
+    return outcome;
   };
   const powerReader = createCapturedPowerReader({
     rootState: pageCapture.rootState,
@@ -3181,7 +3213,8 @@ export function startCapturedRuntime({
           refreshDiscoveredSettings();
           combinedJobs = fullJobs.isAvailable();
           if (combinedJobs)
-            runJobsAutomation(
+            runJobsPhase(
+              "autoJobs with autoCraftsmen",
               { ...fullJobs, onCoherentPlan: publishSpaceMinerPlan },
               false,
             );
@@ -3194,7 +3227,8 @@ export function startCapturedRuntime({
         runPhase("autoJobs", () => {
           ensureCivicControls();
           refreshDiscoveredSettings();
-          runJobsAutomation(
+          runJobsPhase(
+            "autoJobs",
             { ...ordinaryJobs, onCoherentPlan: publishSpaceMinerPlan },
             false,
           );
@@ -3203,7 +3237,7 @@ export function startCapturedRuntime({
       if (autoCraftsmen && !combinedJobs) {
         runPhase("autoCraftsmen", () => {
           ensureCivicControls();
-          runJobsAutomation(craftsmen, true);
+          runJobsPhase("autoCraftsmen", craftsmen, true);
         });
       }
       // Fleet reassigns already-built ships and settles the defence ledger. Power reads that

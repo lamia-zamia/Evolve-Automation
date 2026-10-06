@@ -76,6 +76,7 @@ function adjustment(supports, buildings) {
     },
     resources: [powerResource],
     supports,
+    beltConsumers: [],
     buildings,
     lake: { enabled: false },
     spire: { available: false },
@@ -141,7 +142,7 @@ function beltPlan({
   stationOn = 1,
   stationMaximum = 10,
   stationFuel = false,
-  stationPowered = 1,
+  stationPowered = stationOn,
   powerCurrent = 100,
   eleriumUseful = true,
   eleriumSmart = true,
@@ -151,7 +152,8 @@ function beltPlan({
   manageElerium = true,
   frozen = false,
   autoJobs = false,
-  prospectiveSpaceMiners,
+  spaceMinerWorkersMaximum,
+  actualSpaceMiners = 9,
 } = {}) {
   const station = {
     ...building("space-space_station", [
@@ -162,6 +164,7 @@ function beltPlan({
     stateOn: stationOn,
     powered: stationPowered,
     autoMaximum: stationMaximum,
+    autoStateManaged: true,
     consumptions: stationFuel
       ? [
           {
@@ -179,6 +182,8 @@ function beltPlan({
       stationStorage: 10,
       eleriumMaximum: 100,
       eleriumMaximumCost: 10,
+      beltSupportPerStation: 3,
+      effectiveStations: stationOn,
     },
   };
   const iridium = {
@@ -215,7 +220,7 @@ function beltPlan({
     count: ironCount,
     stateOn: 0,
   };
-  const maximum = stationOn * providerUnit;
+  const maximum = stationPowered * providerUnit;
   const buildings = frozen
     ? []
     : [
@@ -251,6 +256,7 @@ function beltPlan({
       showGalactic: true,
       limitPowered: true,
       autoFleet: false,
+      autoPower: true,
       autoJobs,
       crewReserve: 0,
     },
@@ -269,15 +275,17 @@ function beltPlan({
       {
         type: "belt",
         title: "Belt",
-        current: providerUnit,
+        current: stationPowered > 0 ? providerUnit : 0,
         maximum,
-        available: maximum - providerUnit,
+        available: maximum - (stationPowered > 0 ? providerUnit : 0),
         unlocked: true,
         allocation: "strict",
       },
     ],
     beltConsumers,
-    prospectiveSpaceMiners,
+    prospectiveSpaceMiners: autoJobs
+      ? spaceMinerWorkersMaximum
+      : actualSpaceMiners,
     buildings,
     lake: { enabled: false },
     spire: { available: false },
@@ -301,11 +309,15 @@ assert.deepEqual(
   [
     ["space-space_station", 3],
     ["space-iridium_ship", 0],
-    ["space-elerium_ship", 2],
+    ["space-elerium_ship", 1],
   ],
   "the configured Belt floor recovers a configured-off Station while Power has headroom",
 );
-const alteredBeltPlan = beltPlan({ providerUnit: 7, consumerUnit: 6 });
+const alteredBeltPlan = beltPlan({
+  providerUnit: 7,
+  consumerUnit: 6,
+  actualSpaceMiners: 13,
+});
 assert.deepEqual(alteredBeltPlan, beltPlan());
 const alteredStationDelta = alteredBeltPlan.find(
   ([id]) => id === "space-space_station",
@@ -335,8 +347,14 @@ assert.equal(
   )?.[1],
   0,
 );
+assert.equal(
+  beltPlan({ stationMaximum: 1 }).find(
+    ([id]) => id === "space-elerium_ship",
+  )?.[1],
+  1,
+  "the Station s_max setting does not replace native built-count authority",
+);
 for (const blocked of [
-  { stationMaximum: 1 },
   { stationFuel: true },
   { powerCurrent: 0, stationPowered: 10 },
 ]) {
@@ -372,7 +390,7 @@ assert.equal(
 );
 assert.deepEqual(beltPlan({ frozen: true }), []);
 assert.equal(
-  beltPlan({ stationCount: 1, autoJobs: true, prospectiveSpaceMiners: 9 }).find(
+  beltPlan({ autoJobs: true, spaceMinerWorkersMaximum: 9 }).find(
     ([id]) => id === "space-elerium_ship",
   )?.[1],
   1,
@@ -381,9 +399,16 @@ assert.equal(
 assert.equal(
   beltPlan({
     stationCount: 1,
-    autoJobs: false,
-    prospectiveSpaceMiners: 9,
+    autoJobs: true,
+    spaceMinerWorkersMaximum: 9,
   }).find(([id]) => id === "space-elerium_ship")?.[1],
+  0,
+  "one active Station cannot supply configured consumers beyond its own native capacity",
+);
+assert.equal(
+  beltPlan({ autoJobs: false, actualSpaceMiners: 1 }).find(
+    ([id]) => id === "space-elerium_ship",
+  )?.[1],
   0,
   "disabled Jobs uses only currently assigned miners",
 );

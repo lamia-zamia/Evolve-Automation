@@ -266,6 +266,43 @@ assert.equal(
   0,
   "missing native effective count freezes the reactor",
 );
+const banquetCapacity = planPowerCycle(
+  {
+    ...cycle,
+    banquetStateOn: 1,
+    resources: [
+      resource("Power", 100),
+      { ...resource("Food", -100, 0), storageRatio: 0 },
+      resource("Oil", 100),
+    ],
+    buildings: [
+      building("space-banquet-consumer", 0, 1, [
+        {
+          resourceId: "Food",
+          currentTotal: 10,
+          unwindCredit: 0,
+          enableRate: 1,
+        },
+        {
+          resourceId: "Oil",
+          currentTotal: 0,
+          unwindCredit: 0,
+          enableRate: 1,
+        },
+      ]),
+    ],
+  },
+  EMPTY_POWER_AUTOMATION_STATE,
+).decision?.operations.find(
+  (operation) =>
+    operation.kind === "adjust-building" &&
+    operation.binding === "space-banquet-consumer",
+);
+assert.equal(
+  banquetCapacity?.kind === "adjust-building" ? banquetCapacity.amount : 0,
+  1,
+  "an active Banquet supplies Food while later resource requirements still constrain Power expansion",
+);
 console.log(
   "Power planner unwinds native totals and isolates unavailable marginal requirements",
 );

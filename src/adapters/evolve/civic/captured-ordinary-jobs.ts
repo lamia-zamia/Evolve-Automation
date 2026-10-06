@@ -483,14 +483,13 @@ function craftJob(
   token: number,
   servants: number,
 ): Readonly<JobsJobInput> {
-  // Foundry workers are a separate pool. Keeping them out of the planner's ordinary worker sum
-  // prevents the same worker from being counted once as a craftsman and again as a civic worker;
-  // the command session retains the live foundry count for its delta.
+  // Include current Foundry workers in the total population pool. The planner reserves the
+  // target Foundry delta before assigning ordinary Jobs, while the command session retains the
+  // live count for its delta.
   return Object.freeze({
     ...job,
     token,
-    workers: 0,
-    count: 0,
+    count: job.workers,
     servants,
     crafting: true,
     serves: true,
@@ -1107,35 +1106,55 @@ export function createCapturedFullJobsAutomation({
             : (session.ordinaryJobs.find(
                 (job) => job.token === decision.selectedDefaultToken,
               )?.id ?? "");
-        const matches =
-          observed !== undefined &&
-          observed.catalog.defaultJobId === expectedDefaultId &&
-          decision.assignments.every((assignment) => {
-            const before = session.input.jobs.find(
-              (job) => job.token === assignment.jobToken,
-            );
-            const after = observed.input.jobs.find(
-              (job) => job.token === assignment.jobToken,
-            );
-            const foundry = observed.foundry.samples.find(
-              (sample) => sample.id === before?.id,
-            );
-            return (
+        const actualDefaultId = observed?.catalog.defaultJobId;
+        const assignmentChecks = decision.assignments.map((assignment) => {
+          const before = session.input.jobs.find(
+            (job) => job.token === assignment.jobToken,
+          );
+          const after = observed?.input.jobs.find(
+            (job) => job.token === assignment.jobToken,
+          );
+          const foundry = observed?.foundry.samples.find(
+            (sample) => sample.id === before?.id,
+          );
+          const expectedServants = session.input.manageServants
+            ? assignment.servants
+            : before?.servants;
+          const actualWorkers =
+            before?.crafting === true ? foundry?.workers : after?.workers;
+          const actualServants = after?.servants;
+          return {
+            id: before?.id,
+            expectedWorkers: assignment.workers,
+            actualWorkers,
+            expectedServants,
+            actualServants,
+            matches:
               before !== undefined &&
               after !== undefined &&
-              (before.crafting
-                ? foundry?.workers === assignment.workers
-                : after.workers === assignment.workers) &&
-              after.servants ===
-                (session.input.manageServants
-                  ? assignment.servants
-                  : before.servants)
-            );
-          });
+              actualWorkers === assignment.workers &&
+              actualServants === expectedServants,
+          };
+        });
+        const failedAssignments = assignmentChecks
+          .filter((check) => !check.matches)
+          .slice(0, 5)
+          .map(({ matches: _matches, ...check }) => check);
+        const matches =
+          observed !== undefined &&
+          actualDefaultId === expectedDefaultId &&
+          failedAssignments.length === 0;
         if (!matches) {
           outcome = rejected(
             "full-jobs-postcondition-failed",
-            "ordinary or foundry assignment was not observed in captured root state",
+            `ordinary or foundry assignment was not observed in captured root state: ${JSON.stringify(
+              {
+                expectedDefaultId,
+                actualDefaultId,
+                observedAvailable: observed !== undefined,
+                failedAssignments,
+              },
+            )}`,
           );
         } else {
           historyRoot = currentRoot;

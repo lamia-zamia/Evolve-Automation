@@ -6,6 +6,7 @@ globalThis.__EA_TEST_SURFACE_ENABLED__ = true;
 
 const value = (value) => ({ kind: "value", value });
 const absent = () => ({ kind: "absent" });
+const invalid = () => ({ kind: "invalid" });
 const ship = {
   entryKey: "spc_belt:elerium_ship",
   region: "space",
@@ -19,8 +20,8 @@ const ship = {
   readValue: absent,
   readWorkers: absent,
   readShipRating: absent,
-  readPowered: () => value(1),
-  readPowerGridRole: () => value("consumer"),
+  readPowered: () => value(0),
+  readPowerGridRole: invalid,
   readSwitchable: absent,
   readPowerRequirements: absent,
   readFuel: absent,
@@ -61,8 +62,9 @@ const station = {
   actionId: "space-space_station",
   readTitle: () => value("Space Station"),
   readPowered: () => value(3),
-  readPowerGridRole: () => value("none"),
+  readPowerGridRole: () => value("consumer"),
   readSupport: () => value(3),
+  readSupportTypes: () => value(["belt"]),
   readSupportValue: () => value(3),
   readSupportFuel: () => value([{ resourceId: "Helium_3", amount: 2.5 }]),
   readSupportFuelAdjustmentDisabled: () => value(true),
@@ -74,7 +76,7 @@ const station = {
         consumer: false,
         provider: true,
         topology: {
-          anchorEntryKey: null,
+          anchorEntryKey: "spc_belt:space_station",
           unlimited: false,
           enabled: value(true),
         },
@@ -87,6 +89,8 @@ const iron = {
   struct: "iron_ship",
   actionId: "space-iron_ship",
   readTitle: () => value("Iron Ship"),
+  readPowered: () => value(0),
+  readPowerGridRole: invalid,
   readSupport: () => value(-1),
   readNativeSupportGrids: () =>
     value([
@@ -111,94 +115,261 @@ function runMinerBootstrap({
   starved = false,
   liveStarvation = false,
   configuredStationOn = false,
+  productionFaithful = false,
+  nativeSupportReady = false,
+  workerProfile = undefined,
+  insufficientPower = false,
+  insufficientFuel = false,
+  eleriumFull = false,
+  insufficientWorkers = false,
+  shipAutoState = true,
+  shipSmart = true,
+  spaceMinerEnabled = true,
+  spaceMinerSmart = true,
+  autoCraftsmen = false,
 } = {}) {
+  const jobWorkers =
+    workerProfile ??
+    (insufficientWorkers
+      ? { unemployed: 0, farmer: 0, scientist: 0, space_miner: 1 }
+      : { unemployed: 10, farmer: 4, scientist: 3, space_miner: 1 });
   const root = {
     settings: { civTabs: 1, spaceTabs: 0, showResearch: true, showSpace: true },
     race: {},
     tech: { high_tech: 2 },
     stats: {},
-    city: { power: 10, powered: true },
-    space: {
-      ...(liveStarvation
+    city: {
+      power: insufficientPower ? 0 : 10,
+      powered: !insufficientPower,
+      ...(autoCraftsmen
         ? {
-            pOn: { space_station: 0 },
-            supportOn: { elerium_ship: 0, iron_ship: 0 },
+            foundry: {
+              Plywood: 2,
+              Brick: 2,
+              crafting: 4,
+              cap: 4,
+              rcap: {},
+            },
+          }
+        : {}),
+    },
+    space: {
+      ...(liveStarvation || productionFaithful
+        ? {
+            pOn: { space_station: nativeSupportReady ? 1 : 0 },
+            supportOn: {
+              elerium_ship: 0,
+              iron_ship: nativeSupportReady ? 1 : 0,
+            },
           }
         : {}),
       elerium_ship: { count: 1, on: 0 },
       space_station: {
         count: liveStarvation ? 5 : 1,
         on: liveStarvation ? (configuredStationOn ? 5 : 0) : 1,
-        support: liveStarvation ? 0 : 3,
-        s_max: liveStarvation || starved ? 0 : 3,
+        support: nativeSupportReady
+          ? 1
+          : liveStarvation || productionFaithful
+            ? 0
+            : 3,
       },
       iridium_ship: { count: 0, on: 0 },
-      iron_ship: { count: 3, on: 3 },
+      iron_ship: {
+        count: productionFaithful ? 1 : 3,
+        on: productionFaithful ? 1 : 3,
+      },
     },
     civic: {
       d_job: "unemployed",
       unemployed: {
         job: "unemployed",
-        assigned: starved ? 8 : 5,
-        workers: starved ? 8 : 5,
+        assigned: productionFaithful ? jobWorkers.unemployed : starved ? 8 : 5,
+        workers: productionFaithful ? jobWorkers.unemployed : starved ? 8 : 5,
         max: -1,
         display: true,
       },
+      ...(productionFaithful
+        ? {
+            farmer: {
+              job: "farmer",
+              assigned: jobWorkers.farmer,
+              workers: jobWorkers.farmer,
+              max: -1,
+              display: true,
+            },
+            scientist: {
+              job: "scientist",
+              assigned: jobWorkers.scientist,
+              workers: jobWorkers.scientist,
+              max: -1,
+              display: true,
+            },
+          }
+        : {}),
       space_miner: {
         job: "space_miner",
-        assigned: starved ? 0 : 3,
-        workers: starved ? 0 : 3,
-        max: 8,
+        assigned: productionFaithful ? 1 : starved ? 0 : 3,
+        workers: productionFaithful ? 1 : starved ? 0 : 3,
+        max: productionFaithful ? 18 : 8,
         display: true,
       },
+      ...(autoCraftsmen ? { craftsman: { workers: 4, max: 4 } } : {}),
     },
     queue: { display: false, pause: false, queue: [] },
     resource: {
-      Population: { amount: 8, max: 20, diff: 0, display: true },
-      Power: { amount: 10, max: 10, diff: 10, display: true },
-      Elerium: { amount: 100, max: 200, diff: 0, display: true },
+      Population: {
+        amount: productionFaithful
+          ? insufficientWorkers
+            ? 1
+            : autoCraftsmen
+              ? 22
+              : 18
+          : 8,
+        max: productionFaithful ? 18 : 20,
+        diff: 0,
+        display: true,
+      },
+      Power: {
+        amount: insufficientPower ? 0 : 10,
+        max: 10,
+        diff: insufficientPower ? 0 : 10,
+        display: true,
+      },
+      Elerium: {
+        amount: eleriumFull ? 200 : 100,
+        max: 200,
+        diff: 0,
+        display: true,
+      },
       Iron: { amount: 0, max: 200, diff: 3, display: true },
-      Food: { amount: 100, max: 200, diff: 10, display: true },
-      Helium_3: { amount: 100, max: 200, diff: 10, display: true },
+      Food: {
+        amount: productionFaithful ? 130 : 100,
+        max: 200,
+        diff: 10,
+        display: true,
+      },
+      Helium_3: {
+        amount: insufficientFuel ? 0 : 100,
+        max: 200,
+        diff: insufficientFuel ? 0 : 10,
+        display: true,
+      },
+      ...(autoCraftsmen
+        ? {
+            Plywood: { amount: 100, max: 200, diff: 0, display: true },
+            Brick: { amount: 100, max: 200, diff: 0, display: true },
+          }
+        : {}),
     },
     support: { belt: [ship.entryKey] },
     power: [ship.entryKey],
   };
   const snapshots = [];
   const afterCycles = [];
+  const jobsExecutions = [];
+  const spaceMinerDecisions = [];
+  const capturedStation =
+    productionFaithful && nativeSupportReady
+      ? {
+          ...station,
+          readSupportTypes: absent,
+          readNativeSupportGrids: () => value([]),
+        }
+      : station;
   let replaceRoot = () => {};
   const hooks = {
+    observeJobsAutomation(phase, outcome) {
+      jobsExecutions.push({
+        phase,
+        status: outcome.status,
+        failure: outcome.failure,
+      });
+    },
+    observeSpaceMinerDecision(maximum) {
+      spaceMinerDecisions.push(maximum);
+    },
     observePowerDemandPhase(stage) {
       if (stage === "power-handoff-start" && replaceBeforePower)
         replaceRoot(structuredClone(root));
-      if (stage === "power-ready")
+      if (stage === "power-ready") {
+        const power = hooks.readPowerCycle();
+        const belt = power?.cycle.supports.find(({ type }) => type === "belt");
+        const elerium = power?.cycle.resources.find(
+          ({ id }) => id === "Elerium",
+        );
+        const powerResource = power?.cycle.resources.find(
+          ({ id }) => id === "Power",
+        );
+        const helium3 = power?.cycle.resources.find(
+          ({ id }) => id === "Helium_3",
+        );
+        const plannedTarget = (binding, current) => {
+          const operation = power?.plan.decision?.operations.find(
+            (candidate) =>
+              candidate.kind === "adjust-building" &&
+              candidate.binding === binding,
+          );
+          return operation?.kind === "adjust-building"
+            ? operation.expectedStateOn + operation.amount
+            : current;
+        };
+        const stationTarget = plannedTarget(
+          "space-space_station",
+          root.space.space_station.on,
+        );
+        const eleriumTarget = plannedTarget(
+          "space-elerium_ship",
+          root.space.elerium_ship.on,
+        );
         snapshots.push({
           workers: root.civic.space_miner.workers,
-          lateMaximum: root.space.space_station.s_max,
+          assigned: root.civic.space_miner.assigned,
+          spaceMinerMaximum: root.civic.space_miner.max,
           stationCount: root.space.space_station.count,
           stationOn: root.space.space_station.on,
           stationEffective: root.space.pOn?.space_station ?? null,
           stationSupport: root.space.space_station.support,
           ironOn: root.space.iron_ship.on,
           ironEffective: root.space.supportOn?.iron_ship ?? null,
+          eleriumShipCount: root.space.elerium_ship.count,
+          eleriumConfiguredOn: root.space.elerium_ship.on,
+          eleriumEffective: root.space.supportOn?.elerium_ship ?? null,
           handoff: hooks.readSpaceMinerHandoff(),
-          power: hooks.readPowerCycle(),
+          decisionMaximum: spaceMinerDecisions.at(-1),
+          jobsOutcome: jobsExecutions.at(-1),
+          eleriumUseful: elerium?.useful,
+          eleriumStorageRatio: elerium?.storageRatio,
+          powerQuantity: powerResource?.currentQuantity,
+          helium3Quantity: helium3?.currentQuantity,
+          beltCurrentSupport: belt?.current,
+          beltNativeMaximum: belt?.maximum,
+          beltProspectiveSupport: power?.plan.beltProspectiveMaximum,
+          plannedStationTarget: stationTarget,
+          plannedEleriumTarget: eleriumTarget,
+          power,
         });
+      }
     },
   };
   const run = runCapturedPhaseOrderCycle({
     root,
-    cycles: autoJobs && !staleJobs && !replaceBeforePower ? 2 : 1,
+    cycles:
+      autoJobs && !staleJobs && !replaceBeforePower && !insufficientWorkers
+        ? 2
+        : 1,
     mount: true,
     controlSetup: (control) => {
       replaceRoot = control.replaceRoot;
     },
     afterCycle: () => {
-      if (liveStarvation) {
-        const capacity =
-          root.space.space_station.on * station.readSupportValue("belt").value;
-        root.space.pOn.space_station = root.space.space_station.on;
-        root.space.space_station.s_max = capacity;
+      if (liveStarvation || productionFaithful) {
+        const stationEffective =
+          insufficientPower || insufficientFuel
+            ? 0
+            : root.space.space_station.on;
+        root.space.pOn.space_station = stationEffective;
+        const effectiveCapacity =
+          stationEffective * station.readSupportValue("belt").value;
         let used = 0;
         for (const [struct, supportPerUnit] of [
           ["iron_ship", 1],
@@ -207,7 +378,10 @@ function runMinerBootstrap({
           const configured = root.space[struct].on;
           const effective = Math.min(
             configured,
-            Math.max(0, Math.floor((capacity - used) / supportPerUnit)),
+            Math.max(
+              0,
+              Math.floor((effectiveCapacity - used) / supportPerUnit),
+            ),
           );
           root.space.supportOn[struct] = effective;
           used += effective * supportPerUnit;
@@ -217,10 +391,10 @@ function runMinerBootstrap({
       afterCycles.push({
         workers: root.civic.space_miner.workers,
         shipOn: root.space.elerium_ship.on,
-        ...(liveStarvation
+        ...(liveStarvation || productionFaithful
           ? {
               stationOn: root.space.space_station.on,
-              beltCapacity: root.space.space_station.s_max,
+              stationEffective: root.space.pOn.space_station,
               beltUsed: root.space.space_station.support,
               ironEffective: root.space.supportOn.iron_ship,
               eleriumEffective: root.space.supportOn.elerium_ship,
@@ -231,21 +405,46 @@ function runMinerBootstrap({
     settingsHostWindow: { __EA_TEST_HOOKS__: hooks },
     settings: {
       autoJobs,
+      autoCraftsmen,
       autoPower: true,
       job_unemployed: true,
-      job_space_miner: true,
-      job_p_space_miner: 0,
-      job_p_unemployed: 999,
-      job_s_space_miner: true,
-      job_b1_space_miner: 5,
-      job_b2_space_miner: 5,
-      job_b3_space_miner: 5,
-      job_b1_unemployed: -1,
-      job_b2_unemployed: -1,
-      job_b3_unemployed: -1,
-      "bld_s_space-elerium_ship": true,
-      "bld_s2_space-elerium_ship": true,
-      "bld_p_space-elerium_ship": 1,
+      job_space_miner: spaceMinerEnabled,
+      ...(productionFaithful
+        ? {
+            job_farmer: true,
+            job_scientist: true,
+            job_s_farmer: true,
+            job_s_scientist: false,
+            job_b1_farmer: 4,
+            job_b2_farmer: 4,
+            job_b3_farmer: 4,
+            job_b1_scientist: 3,
+            job_b2_scientist: 6,
+            job_b3_scientist: 0,
+            job_b1_space_miner: 1,
+            job_b2_space_miner: 3,
+            job_b3_space_miner: -1,
+          }
+        : {}),
+      job_s_space_miner: spaceMinerSmart,
+      ...(!productionFaithful
+        ? {
+            job_b1_space_miner: 1,
+            job_b2_space_miner: 3,
+            job_b3_space_miner: -1,
+            job_b1_unemployed: 0,
+            job_b2_unemployed: 0,
+            job_b3_unemployed: -1,
+          }
+        : {
+            job_b1_unemployed: 0,
+            job_b2_unemployed: 0,
+            job_b3_unemployed: -1,
+          }),
+      "bld_s_space-elerium_ship": shipAutoState,
+      "bld_s2_space-elerium_ship": shipSmart,
+      "bld_p_space-elerium_ship":
+        productionFaithful && (!shipSmart || eleriumFull) ? 0 : 1,
       "bld_s_space-space_station": true,
       "bld_s2_space-space_station": true,
       "bld_p_space-space_station": 0,
@@ -255,8 +454,8 @@ function runMinerBootstrap({
     },
     documentSetup: ({ body }) => body.append(element("div", { id: "tech" })),
     mechanics: {
-      readStructures: () => [ship, station, iron],
-      readPowerOrder: () => value([station, iron, ship]),
+      readStructures: () => [ship, capturedStation, iron],
+      readPowerOrder: () => value([capturedStation, iron, ship]),
       readSupportOrder: (_root, type) =>
         value(type === "belt" ? [iron, ship] : []),
       readEffectivePowerCount: (sample, key) =>
@@ -311,7 +510,6 @@ function runMinerBootstrap({
           if (entryKey === ship.entryKey) {
             root.space.space_station.support =
               root.space.iron_ship.on + target * 2;
-            root.space.space_station.s_max = root.space.space_station.support;
           }
         }
         return value(true);
@@ -374,38 +572,147 @@ function runMinerBootstrap({
           },
         },
       },
+      ...(productionFaithful
+        ? {
+            "civ-farmer": {
+              methods: {
+                add() {
+                  root.civic.farmer.workers++;
+                  root.civic.farmer.assigned++;
+                },
+                sub() {
+                  root.civic.farmer.workers--;
+                  root.civic.farmer.assigned--;
+                },
+                setDefault(id) {
+                  root.civic.d_job = id;
+                },
+              },
+            },
+            "civ-scientist": {
+              methods: {
+                add() {
+                  root.civic.scientist.workers++;
+                  root.civic.scientist.assigned++;
+                },
+                sub() {
+                  root.civic.scientist.workers--;
+                  root.civic.scientist.assigned--;
+                },
+                setDefault(id) {
+                  root.civic.d_job = id;
+                },
+              },
+            },
+          }
+        : {}),
+      ...(autoCraftsmen
+        ? {
+            foundry: {
+              methods: {
+                add(id) {
+                  root.city.foundry[id]++;
+                  root.city.foundry.crafting++;
+                  root.civic.craftsman.workers++;
+                  root.civic[root.civic.d_job].workers--;
+                },
+                sub(id) {
+                  root.city.foundry[id]--;
+                  root.city.foundry.crafting--;
+                  root.civic.craftsman.workers--;
+                  root.civic[root.civic.d_job].workers++;
+                },
+              },
+            },
+          }
+        : {}),
     },
   });
   return { run, snapshots, afterCycles, root };
 }
 
-const bootstrap = runMinerBootstrap();
+// Live bootstrap: one effectively served Iron ship caps actual workers at one, while the same Jobs
+// policy can support three if only that ship-derived smart cap is removed.
+const productionBootstrap = runMinerBootstrap({
+  productionFaithful: true,
+  nativeSupportReady: true,
+  workerProfile: { unemployed: 0, farmer: 10, scientist: 7, space_miner: 1 },
+});
+const productionSnapshot = productionBootstrap.snapshots[0];
+assert.ok(productionSnapshot);
+assert.equal(productionSnapshot.assigned, 1);
+assert.equal(productionSnapshot.spaceMinerMaximum, 18);
+assert.equal(productionSnapshot.eleriumShipCount, 1);
+assert.equal(productionSnapshot.eleriumConfiguredOn, 0);
+assert.equal(productionSnapshot.eleriumEffective, 0);
 assert.equal(
-  bootstrap.snapshots.length,
-  2,
-  JSON.stringify(bootstrap.run.errors),
+  productionSnapshot.workers,
+  1,
+  JSON.stringify({
+    productionSnapshot,
+    jobs: productionBootstrap.root.civic,
+    afterCycle: productionBootstrap.afterCycles[0],
+    errors: productionBootstrap.run.errors,
+  }),
 );
-assert.equal(bootstrap.snapshots[0].workers, 3);
-assert.equal(bootstrap.snapshots[0].handoff, 5);
-assert.equal(bootstrap.snapshots[0].power.cycle.prospectiveSpaceMiners, 5);
+assert.equal(productionSnapshot.stationCount, 1);
+assert.equal(productionSnapshot.stationOn, 1);
+assert.equal(productionSnapshot.stationEffective, 1);
+assert.equal(productionSnapshot.stationSupport, 1);
+assert.equal(productionSnapshot.ironOn, 1);
+assert.equal(productionSnapshot.ironEffective, 1);
 assert.ok(
-  bootstrap.snapshots[0].power.plan.decision.operations.some(
-    (operation) =>
-      operation.kind === "adjust-building" &&
-      operation.binding === "space-elerium_ship" &&
-      operation.amount === 1,
+  productionSnapshot.handoff >= 3,
+  "one configured Iron ship needs a three-miner prospective handoff under catalog job order",
+);
+assert.ok(
+  productionSnapshot.plannedEleriumTarget >= 1,
+  "Power must use the prospective worker handoff to plan the next useful Belt ship",
+);
+assert.equal(productionSnapshot.jobsOutcome?.phase, "autoJobs");
+assert.equal(productionSnapshot.jobsOutcome?.status, "succeeded");
+assert.ok(productionSnapshot.decisionMaximum >= 3);
+assert.equal(productionSnapshot.powerQuantity, 10);
+assert.equal(productionSnapshot.helium3Quantity, 100);
+assert.equal(productionSnapshot.eleriumUseful, true);
+assert.equal(productionSnapshot.eleriumStorageRatio, 0.5);
+assert.equal(productionSnapshot.beltCurrentSupport, 1);
+assert.equal(productionSnapshot.beltNativeMaximum, 3);
+assert.equal(
+  productionSnapshot.power.cycle.prospectiveSpaceMiners,
+  productionSnapshot.handoff,
+);
+const productionEleriumShip = productionSnapshot.power.cycle.buildings.find(
+  ({ binding }) => binding === "space-elerium_ship",
+);
+assert.ok(
+  productionEleriumShip,
+  "an inactive zero-watt Belt consumer remains available to prospective Power planning",
+);
+assert.equal(productionEleriumShip.stateOn, 0);
+assert.equal(productionEleriumShip.powered, 0);
+assert.equal(productionEleriumShip.autoStateManaged, true);
+assert.ok(
+  productionEleriumShip.supportChanges.some(
+    ({ type, amount }) => type === "belt" && amount === 2,
   ),
 );
-assert.deepEqual(bootstrap.afterCycles, [
-  { workers: 3, shipOn: 1 },
-  { workers: 5, shipOn: 1 },
-]);
-assert.equal(bootstrap.snapshots[1].workers, 5);
-assert.equal(bootstrap.snapshots[1].power.cycle.prospectiveSpaceMiners, 5);
-assert.deepEqual(bootstrap.run.errors, []);
+assert.ok(productionSnapshot.beltProspectiveSupport >= 3);
+assert.ok(productionSnapshot.plannedStationTarget >= 1);
+assert.equal(
+  productionBootstrap.afterCycles[0].eleriumEffective,
+  1,
+  JSON.stringify(productionBootstrap.afterCycles[0]),
+);
+assert.ok(
+  productionBootstrap.afterCycles[1].workers >= 3,
+  JSON.stringify({
+    afterCycles: productionBootstrap.afterCycles,
+    jobs: productionBootstrap.root.civic,
+  }),
+);
 
 const starvedBootstrap = runMinerBootstrap({ starved: true });
-assert.equal(starvedBootstrap.snapshots[0].lateMaximum, 0);
 assert.ok(
   starvedBootstrap.snapshots[0].workers > 0,
   "Jobs starts recovering workers from an initial zero pool before Power",
@@ -416,30 +723,25 @@ assert.equal(
   )?.maximum,
   3,
 );
-assert.ok(
-  starvedBootstrap.snapshots[0].power.plan.decision.operations.some(
-    ({ kind, binding, amount }) =>
-      kind === "adjust-building" &&
-      binding === "space-elerium_ship" &&
-      amount === 1,
-  ),
-  "Jobs to Power can reserve a mining ship while the late worker-owned s_max is zero",
-);
+assert.equal(starvedBootstrap.snapshots[0].plannedEleriumTarget, 0);
 assert.ok(
   starvedBootstrap.afterCycles[1].workers > 0,
   "the next Jobs phase recovers actual Space Miners",
 );
 
-const liveStarvationBootstrap = runMinerBootstrap({ liveStarvation: true });
+const liveStarvationBootstrap = runMinerBootstrap({
+  liveStarvation: true,
+  productionFaithful: true,
+  autoJobs: false,
+});
 const liveStarvationSnapshot = liveStarvationBootstrap.snapshots[0];
 assert.ok(liveStarvationSnapshot);
 assert.equal(liveStarvationSnapshot.stationCount, 5);
 assert.equal(liveStarvationSnapshot.stationOn, 0);
 assert.equal(liveStarvationSnapshot.stationEffective, 0);
 assert.equal(liveStarvationSnapshot.stationSupport, 0);
-assert.equal(liveStarvationSnapshot.ironOn, 3);
+assert.equal(liveStarvationSnapshot.ironOn, 1);
 assert.equal(liveStarvationSnapshot.ironEffective, 0);
-assert.equal(liveStarvationSnapshot.lateMaximum, 0);
 assert.equal(
   liveStarvationSnapshot.power.cycle.resources.find(({ id }) => id === "Power")
     ?.currentQuantity,
@@ -448,7 +750,7 @@ assert.equal(
 assert.equal(
   liveStarvationSnapshot.power.cycle.resources.find(({ id }) => id === "Food")
     ?.currentQuantity,
-  100,
+  130,
 );
 assert.equal(
   liveStarvationSnapshot.power.cycle.resources.find(
@@ -479,7 +781,7 @@ assert.deepEqual(
     },
     {
       binding: "space-iron_ship",
-      configured: 3,
+      configured: 1,
       supportPerUnit: 1,
       managed: false,
     },
@@ -497,94 +799,134 @@ assert.ok(
     ({ kind, binding, amount }) =>
       kind === "adjust-building" &&
       binding === "space-space_station" &&
-      amount === 2,
+      amount === 1,
   ),
-  "a disabled Station is raised to cover configured managed and unmanaged Belt demand",
+  "a disabled Station is raised to cover the configured Iron ship with the current one-miner ceiling",
 );
 assert.ok(
-  liveStarvationSnapshot.power.plan.decision.operations.some(
-    ({ kind, binding, amount }) =>
-      kind === "adjust-building" &&
-      binding === "space-elerium_ship" &&
-      amount > 0,
-  ),
-  "the relaxed probe reserves the newly staffed managed Belt ship",
+  liveStarvationBootstrap.afterCycles[0].ironEffective === 1 &&
+    liveStarvationBootstrap.afterCycles[0].eleriumEffective === 0,
+  "native support refresh restores only the already staffed Iron ship",
 );
-assert.ok(
-  liveStarvationBootstrap.afterCycles[0].beltCapacity > 0 &&
-    liveStarvationBootstrap.afterCycles[0].ironEffective > 0 &&
-    liveStarvationBootstrap.afterCycles[0].eleriumEffective > 0,
-  "the next native support pass restores Belt capacity and serves its consumers",
-);
+assert.equal(liveStarvationSnapshot.plannedEleriumTarget, 0);
 
-// A live 0/5 Station preserves configured Space Miner demand through the Jobs -> Power handoff.
-const configuredStarvationBootstrap = runMinerBootstrap({
-  liveStarvation: true,
-  configuredStationOn: true,
+const fullElerium = runMinerBootstrap({
+  productionFaithful: true,
+  nativeSupportReady: true,
+  eleriumFull: true,
 });
-const configuredStarvationSnapshot = configuredStarvationBootstrap.snapshots[0];
-assert.ok(configuredStarvationSnapshot);
-assert.equal(configuredStarvationSnapshot.stationCount, 5);
-assert.equal(configuredStarvationSnapshot.stationOn, 5);
-assert.equal(configuredStarvationSnapshot.stationEffective, 0);
-assert.equal(configuredStarvationSnapshot.stationSupport, 0);
-assert.equal(configuredStarvationSnapshot.ironOn, 3);
-assert.equal(configuredStarvationSnapshot.ironEffective, 0);
+assert.equal(fullElerium.snapshots[0].eleriumUseful, false);
+assert.ok(fullElerium.snapshots[0].eleriumStorageRatio >= 0.99);
+assert.equal(fullElerium.snapshots[0].plannedEleriumTarget, 0);
+
+const unmanagedElerium = runMinerBootstrap({
+  productionFaithful: true,
+  nativeSupportReady: true,
+  shipAutoState: false,
+  shipSmart: false,
+});
+assert.equal(unmanagedElerium.snapshots[0].plannedEleriumTarget, 0);
+
+const nonsmartSpaceMiner = runMinerBootstrap({
+  productionFaithful: true,
+  nativeSupportReady: true,
+  spaceMinerEnabled: false,
+  spaceMinerSmart: false,
+});
 assert.equal(
-  configuredStarvationSnapshot.power.cycle.supports.find(
-    ({ type }) => type === "belt",
-  )?.current,
+  nonsmartSpaceMiner.snapshots[0].power.cycle.prospectiveSpaceMiners,
+  1,
+);
+assert.equal(
+  nonsmartSpaceMiner.snapshots[0].beltProspectiveSupport,
+  1,
+  JSON.stringify(nonsmartSpaceMiner.snapshots[0]),
+);
+assert.equal(nonsmartSpaceMiner.snapshots[0].workers, 1);
+assert.equal(nonsmartSpaceMiner.snapshots[0].plannedEleriumTarget, 0);
+
+const jobsDisabled = runMinerBootstrap({
+  productionFaithful: true,
+  nativeSupportReady: true,
+  autoJobs: false,
+});
+assert.equal(jobsDisabled.snapshots[0].power.cycle.prospectiveSpaceMiners, 1);
+assert.equal(jobsDisabled.snapshots[0].beltProspectiveSupport, 1);
+assert.equal(jobsDisabled.snapshots[0].plannedEleriumTarget, 0);
+
+const powerInsufficient = runMinerBootstrap({
+  productionFaithful: true,
+  insufficientPower: true,
+});
+assert.equal(powerInsufficient.snapshots[0].plannedEleriumTarget, 0);
+
+const fuelInsufficient = runMinerBootstrap({
+  productionFaithful: true,
+  insufficientFuel: true,
+});
+assert.equal(
+  fuelInsufficient.snapshots[0].plannedEleriumTarget,
   0,
-);
-assert.equal(
-  configuredStarvationSnapshot.power.cycle.supports.find(
-    ({ type }) => type === "belt",
-  )?.maximum,
-  0,
-);
-assert.ok(configuredStarvationSnapshot.handoff > 0);
-assert.equal(
-  configuredStarvationSnapshot.power.cycle.prospectiveSpaceMiners,
-  configuredStarvationSnapshot.handoff,
-);
-const configuredStationChange =
-  configuredStarvationSnapshot.power.plan.decision.operations.find(
-    ({ kind, binding }) =>
-      kind === "adjust-building" && binding === "space-space_station",
-  );
-assert.ok(
-  configuredStationChange === undefined ||
-    configuredStationChange.expectedStateOn + configuredStationChange.amount >=
-      5,
-  "Power planning does not lower configured Station five because native operation is starved",
-);
-assert.ok(
-  configuredStarvationSnapshot.power.plan.decision.operations.some(
-    ({ kind, binding, amount }) =>
-      kind === "adjust-building" &&
-      binding === "space-elerium_ship" &&
-      amount > 0,
-  ),
-  "the prospective Space Miner handoff reaches Power while native support_on is zero",
-);
-assert.ok(
-  configuredStarvationBootstrap.afterCycles[0].beltCapacity > 0 &&
-    configuredStarvationBootstrap.afterCycles[0].eleriumEffective > 0,
-  "native support recovery serves the Power-reserved mining ship",
+  JSON.stringify({
+    cycle: fuelInsufficient.snapshots[0].power.cycle,
+    operations: fuelInsufficient.snapshots[0].power.plan.decision?.operations,
+  }),
 );
 
-const stale = runMinerBootstrap({ staleJobs: true });
-assert.equal(stale.root.civic.space_miner.workers, 4);
+const workersInsufficient = runMinerBootstrap({
+  productionFaithful: true,
+  nativeSupportReady: true,
+  insufficientWorkers: true,
+});
+assert.ok(workersInsufficient.snapshots[0].beltProspectiveSupport < 3);
+assert.equal(workersInsufficient.snapshots[0].plannedEleriumTarget, 0);
+
+const combinedJobs = runMinerBootstrap({
+  productionFaithful: true,
+  nativeSupportReady: true,
+  autoCraftsmen: true,
+  workerProfile: { unemployed: 0, farmer: 10, scientist: 7, space_miner: 1 },
+});
+assert.equal(
+  combinedJobs.snapshots[0].jobsOutcome?.phase,
+  "autoJobs with autoCraftsmen",
+);
+assert.equal(combinedJobs.snapshots[0].jobsOutcome?.status, "succeeded");
+assert.ok(combinedJobs.snapshots[0].decisionMaximum >= 3);
+assert.ok(combinedJobs.snapshots[0].handoff >= 3);
+assert.equal(
+  combinedJobs.snapshots[0].decisionMaximum,
+  productionSnapshot.decisionMaximum,
+);
+assert.equal(combinedJobs.snapshots[0].handoff, productionSnapshot.handoff);
+assert.ok(combinedJobs.snapshots[0].plannedEleriumTarget >= 1);
+
+const stale = runMinerBootstrap({
+  staleJobs: true,
+  productionFaithful: true,
+  nativeSupportReady: true,
+});
+assert.equal(stale.root.civic.space_miner.workers, 1);
+assert.equal(stale.snapshots[0].jobsOutcome?.phase, "autoJobs");
+assert.notEqual(stale.snapshots[0].jobsOutcome?.status, "succeeded");
 assert.equal(stale.snapshots[0].handoff, undefined);
 assert.equal(stale.snapshots[0].power.cycle.prospectiveSpaceMiners, undefined);
 assert.equal(stale.root.space.elerium_ship.on, 0);
+assert.equal(stale.snapshots[0].plannedEleriumTarget, 0);
+assert.equal(
+  stale.run.errors.filter((message) => message.includes("autoJobs")).length,
+  1,
+  "a rejected Jobs command is reported once through runtime diagnostics",
+);
 
-const replaced = runMinerBootstrap({ replaceBeforePower: true });
+const replaced = runMinerBootstrap({
+  replaceBeforePower: true,
+  productionFaithful: true,
+  nativeSupportReady: true,
+});
+assert.ok(replaced.snapshots[0].decisionMaximum >= 3);
 assert.equal(replaced.snapshots[0].handoff, undefined);
-
-const disabled = runMinerBootstrap({ autoJobs: false });
-assert.equal(disabled.snapshots[0].handoff, undefined);
-assert.equal(disabled.snapshots[0].power.cycle.prospectiveSpaceMiners, null);
-assert.equal(disabled.root.space.elerium_ship.on, 0);
+assert.equal(replaced.snapshots[0].power, undefined);
+assert.equal(replaced.snapshots[0].plannedEleriumTarget, 0);
 
 console.log("captured Space Miner runtime bootstrap passed");

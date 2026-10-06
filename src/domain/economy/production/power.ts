@@ -70,6 +70,8 @@ export type PowerBuildingRule =
       readonly stationStorage: number;
       readonly eleriumMaximum: number;
       readonly eleriumMaximumCost: number;
+      readonly beltSupportPerStation: number | null;
+      readonly effectiveStations: number | null;
     }
   | { readonly kind: "job-dependent"; readonly jobCount: number }
   | {
@@ -213,6 +215,8 @@ export interface PowerBuildingInput {
   readonly tab: string;
   readonly smartCategory: boolean;
   readonly smartEnabled: boolean;
+  /** State toggle controlled by Power when autoPower is enabled. */
+  readonly autoStateManaged?: boolean;
   /**
    * True when this building draws civilian ship crew (its game struct carries a
    * `crew` field). Only these are eligible for crew-reserve shedding.
@@ -238,6 +242,7 @@ export interface PowerSettingsInput {
   readonly showGalactic: boolean;
   readonly limitPowered: boolean;
   readonly autoFleet: boolean;
+  readonly autoPower?: boolean;
   readonly autoJobs?: boolean;
   /**
    * Civilians to keep out of ship crew and available for jobs. 0 disables the
@@ -961,6 +966,7 @@ function appendIncomeAdjusted(resource: MutableResource): void {
 export interface PowerCyclePlan {
   readonly decision: ApplyPowerCycleDecision | null;
   readonly nextState: PowerAutomationState;
+  readonly beltProspectiveMaximum: number | undefined;
 }
 
 export function planPowerCycle(
@@ -970,6 +976,11 @@ export function planPowerCycle(
   const belt = input.supports.find((support) => support.type === "belt");
   const station = input.buildings.find(
     (building) => building.rule.kind === "belt-space-station",
+  );
+  const beltProspectiveMaximum = prospectiveBeltMaximumForCycle(
+    input,
+    belt,
+    station,
   );
   let beltStationFloor = 0;
   if (
@@ -981,7 +992,13 @@ export function planPowerCycle(
   ) {
     // Run the ordinary policy once with only Belt capacity relaxed, then read every Belt support
     // consumer's planned *configured* count out of that pass.
-    const probe = planPowerCycleCore(input, state, beltStationFloor, true);
+    const probe = planPowerCycleCore(
+      input,
+      state,
+      beltStationFloor,
+      true,
+      beltProspectiveMaximum,
+    );
     let plannedDemand = 0;
     for (const consumer of input.beltConsumers) {
       const planned = consumer.managed
@@ -1013,7 +1030,138 @@ export function planPowerCycle(
       beltStationFloor = Math.ceil(plannedDemand / unit);
     }
   }
-  return planPowerCycleCore(input, state, beltStationFloor, false);
+  const plan = planPowerCycleCore(
+    input,
+    state,
+    beltStationFloor,
+    false,
+    beltProspectiveMaximum,
+  );
+  return Object.freeze({ ...plan, beltProspectiveMaximum });
+}
+
+function prospectiveBeltMaximumForCycle(
+  input: Readonly<PowerCycleInput>,
+  belt: Readonly<PowerSupportInput> | undefined,
+  station: Readonly<PowerBuildingInput> | undefined,
+): number | undefined {
+  if (belt === undefined || station === undefined) return undefined;
+  // DeadSpace main.js initStructureGrids() builds provider capacity from effective p_on for
+  // powered providers. Space Station omits generic s_type metadata, so retain its native
+  // support() and p_on facts from the dedicated captured rule instead of falling back to s_max.
+  const provider = station.supportChanges.find(
+    (change) => change.type === belt.type && change.amount < 0,
+  );
+  const stationRule =
+    station.rule.kind === "belt-space-station" ? station.rule : undefined;
+  const supportPerStation =
+    provider === undefined
+      ? (stationRule?.beltSupportPerStation ?? 0)
+      : Math.abs(provider.amount);
+  if (supportPerStation <= 0) return belt.current;
+
+  const configuredMaximumStations =
+    input.settings.autoPower === true && station.autoStateManaged === true
+      ? station.count
+      : station.stateOn;
+  const currentStations =
+    provider === undefined
+      ? stationRule?.effectiveStations == null
+        ? null
+        : Math.min(configuredMaximumStations, stationRule.effectiveStations)
+      : Math.min(configuredMaximumStations, belt.maximum / supportPerStation);
+  if (currentStations === null) return belt.current;
+  let operableStations = Math.max(0, configuredMaximumStations);
+  if (
+    station.powered > 0 &&
+    input.powerCurrent < station.powered &&
+    operableStations > currentStations
+  ) {
+    operableStations = currentStations;
+  }
+  for (const consumption of station.consumptions) {
+    if (consumption.enableRate === null || consumption.enableRate <= 0)
+      continue;
+    const resource = input.resources.find(
+      (candidate) => candidate.id === consumption.resourceId,
+    );
+    if (resource === undefined) {
+      operableStations = currentStations;
+      break;
+    }
+    operableStations = Math.max(
+      currentStations,
+      capPowerMaximumByConsumption(
+        operableStations,
+        currentStations,
+        station,
+        consumption,
+        { input: resource, rate: resource.rateOfChange },
+        input,
+      ),
+    );
+  }
+
+  const workersMaximum = input.prospectiveSpaceMiners;
+  if (workersMaximum === undefined || workersMaximum === null)
+    return belt.current;
+  const providerMaximum = operableStations * supportPerStation;
+  return Math.max(belt.current, Math.min(providerMaximum, workersMaximum));
+}
+
+function capPowerMaximumByConsumption(
+  maximum: number,
+  current: number,
+  building: Readonly<PowerBuildingInput>,
+  consumption: Readonly<PowerConsumptionInput>,
+  resource: Pick<MutableResource, "input" | "rate">,
+  input: Readonly<PowerCycleInput>,
+): number {
+  if (consumption.appliedGeneratorFuel === null)
+    return Math.min(maximum, current);
+  if (
+    consumption.appliedGeneratorFuel !== undefined &&
+    consumption.enableRate !== null &&
+    consumption.enableRate > 0
+  ) {
+    maximum = Math.min(
+      maximum,
+      Math.max(
+        0,
+        (resource.rate + consumption.appliedGeneratorFuel) /
+          consumption.enableRate,
+      ),
+    );
+  }
+  if (maximum > current && consumption.enableRate === null) return current;
+  if (
+    maximum > current &&
+    consumption.enableRate !== null &&
+    consumption.enableRate > 0
+  ) {
+    const requirement = consumption.enableRate;
+    if (!resource.input.unlocked) return current;
+    if (consumption.resourceId === "Food") {
+      if (input.fasting) return current;
+      if (input.banquetStateOn > 0) return maximum;
+      if (resource.input.storageRatio > 0.05 || input.hungryRace)
+        return maximum;
+    } else if (
+      current > 0 &&
+      (building.powered < 0 || resource.input.storageRatio >= 0.95) &&
+      resource.input.currentQuantity >=
+        (consumption.currentTotal +
+          Math.max(0, maximum - current) * requirement) *
+          input.consumptionBalanceMinimum
+    ) {
+      return maximum;
+    }
+    maximum = Math.min(
+      maximum,
+      current + (resource.rate - consumption.unwindCredit) / requirement,
+    );
+  }
+  return maximum;
 }
 
 function planPowerCycleCore(
@@ -1021,9 +1169,14 @@ function planPowerCycleCore(
   state: Readonly<PowerAutomationState>,
   beltStationFloor: number,
   probeBelt: boolean,
+  beltProspectiveMaximum: number | undefined,
 ): PowerCyclePlan {
   if (!input.powerUnlocked || input.buildings.length === 0) {
-    return Object.freeze({ decision: null, nextState: state });
+    return Object.freeze({
+      decision: null,
+      nextState: state,
+      beltProspectiveMaximum,
+    });
   }
 
   const operations: PowerOperation[] = [];
@@ -1064,6 +1217,13 @@ function planPowerCycleCore(
       available: support.available,
     });
   }
+  const beltConsumerInputs = new Map(
+    input.beltConsumers.map((consumer) => [consumer.binding, consumer]),
+  );
+  let plannedBeltDemand = input.beltConsumers.reduce(
+    (total, consumer) => total + consumer.configured * consumer.supportPerUnit,
+    0,
+  );
   // Identity is the Vue binding, not the game's short structure id. Ids repeat
   // across regions - the Alpha and Titan Graphene Plants are both `g_factory` -
   // and a True Path run owns both from Titan onward.
@@ -1261,64 +1421,14 @@ function planPowerCycleCore(
         consumption.resourceId,
         `power resource ${consumption.resourceId}`,
       );
-      if (consumption.appliedGeneratorFuel === null) {
-        maximum = Math.min(maximum, current);
-        continue;
-      }
-      if (
-        consumption.appliedGeneratorFuel !== undefined &&
-        consumption.enableRate !== null &&
-        consumption.enableRate > 0
-      ) {
-        maximum = Math.min(
-          maximum,
-          Math.max(
-            0,
-            (resource.rate + consumption.appliedGeneratorFuel) /
-              consumption.enableRate,
-          ),
-        );
-      }
-      if (maximum > current && consumption.enableRate === null) {
-        maximum = current;
-        continue;
-      }
-      if (
-        maximum > current &&
-        consumption.enableRate !== null &&
-        consumption.enableRate > 0
-      ) {
-        const requirement = consumption.enableRate;
-        if (!resource.input.unlocked) {
-          maximum = current;
-          break;
-        }
-        if (resource.input.id === "Food") {
-          if (input.fasting) {
-            maximum = current;
-            break;
-          }
-          if (input.banquetStateOn > 0) {
-            continue;
-          }
-          if (resource.input.storageRatio > 0.05 || input.hungryRace) {
-            continue;
-          }
-        } else if (
-          current > 0 &&
-          (building.powered < 0 || resource.input.storageRatio >= 0.95) &&
-          resource.input.currentQuantity >=
-            (consumption.currentTotal +
-              Math.max(0, maximum - current) * requirement) *
-              input.consumptionBalanceMinimum
-        ) {
-          continue;
-        }
-        maximum = Math.min(
-          maximum,
-          current + (resource.rate - consumption.unwindCredit) / requirement,
-        );
-      }
+      maximum = capPowerMaximumByConsumption(
+        maximum,
+        current,
+        building,
+        consumption,
+        resource,
+        input,
+      );
     }
     for (const change of building.supportChanges) {
       const support = powerCycleMapValue(
@@ -1347,22 +1457,41 @@ function planPowerCycleCore(
           const prospectiveExtra =
             change.type === "belt" &&
             maximum > current &&
-            input.settings.autoJobs === true &&
-            input.prospectiveSpaceMiners !== undefined &&
-            input.prospectiveSpaceMiners !== null
-              ? Math.max(
-                  0,
-                  input.prospectiveSpaceMiners - support.input.maximum,
-                )
+            beltProspectiveMaximum !== undefined
+              ? Math.max(0, beltProspectiveMaximum - support.input.maximum)
               : 0;
+          const beltConsumer =
+            change.type === "belt"
+              ? beltConsumerInputs.get(building.binding)
+              : undefined;
+          if (
+            beltConsumer !== undefined &&
+            maximum > current &&
+            beltProspectiveMaximum !== undefined
+          ) {
+            const otherDemand = Math.max(
+              0,
+              plannedBeltDemand -
+                beltConsumer.configured * beltConsumer.supportPerUnit,
+            );
+            const remainingBeltDemand = Math.max(
+              0,
+              beltProspectiveMaximum - otherDemand,
+            );
+            maximum = Math.min(
+              maximum,
+              Math.floor(remainingBeltDemand / change.amount),
+            );
+          }
           const supported =
             (support.available + prospectiveExtra) / change.amount;
-          maximum = Math.min(
-            maximum,
-            support.input.allocation === "round-up"
-              ? Math.ceil(supported)
-              : supported,
-          );
+          const supportedBuildingCount =
+            change.type === "belt" && support.input.allocation === "strict"
+              ? Math.floor(supported)
+              : support.input.allocation === "round-up"
+                ? Math.ceil(supported)
+                : supported;
+          maximum = Math.min(maximum, supportedBuildingCount);
         }
         if (missingSupportProvider[change.type]) {
           const value = `Make sure all ${support.input.title} producers are above consumers in buildings list!<br>${description}`;
@@ -1393,6 +1522,15 @@ function planPowerCycleCore(
         warningCaps[building.binding] = { cap: warningCap.cap, ticks };
         maximum = Math.min(maximum, warningCap.cap);
       }
+    }
+    const beltConsumer = beltConsumerInputs.get(building.binding);
+    if (beltConsumer !== undefined) {
+      plannedBeltDemand +=
+        (maximum - beltConsumer.configured) * beltConsumer.supportPerUnit;
+      beltConsumerInputs.set(building.binding, {
+        ...beltConsumer,
+        configured: maximum,
+      });
     }
 
     if (input.debug && maximum !== current) {
@@ -1649,6 +1787,7 @@ function planPowerCycleCore(
       operations: Object.freeze(operations),
     }),
     nextState: freezeState(oscillations, warningCaps),
+    beltProspectiveMaximum,
   });
 }
 

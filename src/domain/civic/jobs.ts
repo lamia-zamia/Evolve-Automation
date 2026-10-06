@@ -411,6 +411,43 @@ function authorityMaximum(
 export function planJobs(
   input: Readonly<JobsCycleInput>,
 ): Readonly<JobsDecision> | null {
+  const decision = planJobsAllocationOnce(input);
+  if (decision === null) return null;
+  const spaceMinerIndex = input.jobs.findIndex(
+    (job) => job.kind === "space-miner",
+  );
+  const spaceMiner = input.jobs[spaceMinerIndex];
+  if (spaceMiner === undefined || !spaceMiner.smart) return decision;
+
+  // Prospective Belt staffing asks what this same policy could assign with the circular ship cap
+  // removed. Re-run the plan so priorities, breakpoints, reserves, floors and every other cap still
+  // constrain the answer.
+  const uncappedInput: JobsCycleInput = Object.freeze({
+    ...input,
+    jobs: Object.freeze(
+      input.jobs.map((job, index) =>
+        index === spaceMinerIndex
+          ? Object.freeze({ ...job, smartMaximum: null })
+          : job,
+      ),
+    ),
+  });
+  const prospective = planJobsAllocationOnce(uncappedInput);
+  const prospectiveAssignment = prospective?.assignments[spaceMinerIndex];
+  const prospectiveSpaceMiners =
+    prospectiveAssignment === undefined
+      ? 0
+      : prospectiveAssignment.workers +
+        prospectiveAssignment.servants * input.servantModifier;
+  return Object.freeze({
+    ...decision,
+    maximumSpaceMiners: prospectiveSpaceMiners,
+  });
+}
+
+function planJobsAllocationOnce(
+  input: Readonly<JobsCycleInput>,
+): Readonly<JobsDecision> | null {
   if (!input.available || input.jobs.length === 0) return null;
   const jobIndex = createJobIndex(input);
   const requiredWorkers = input.jobs.map(() => 0);
@@ -418,6 +455,7 @@ export function planJobs(
   let availableWorkers = input.jobs.reduce((sum, job) => sum + job.workers, 0);
   let availableServants = input.manageServants ? input.servantsMaximum : 0;
   let availableCraftsmen = input.craftsmenMaximum;
+  let reservedCraftsmen = 0;
   const farmerIndex = indexOfToken(jobIndex, input.farmerToken);
   const hunterIndex = indexOfToken(jobIndex, input.hunterToken);
   const defaultIndex = indexOfToken(jobIndex, input.defaultJobToken);
@@ -434,17 +472,28 @@ export function planJobs(
     availableWorkers >= availableCraftsmen * (farmerIndex === -1 ? 1 : 2)
   ) {
     availableWorkers -= availableCraftsmen;
+    reservedCraftsmen = availableCraftsmen;
   } else {
     availableCraftsmen = 0;
   }
 
+  const workersBeforeCraftPlan = availableWorkers;
   const craft = craftPlan(
     input,
     availableWorkers,
     availableCraftsmen,
     jobIndex,
   );
-  availableWorkers = craft.availableWorkers;
+  const plannedCraftsmen = [...craft.workers.values()].reduce(
+    (total, workers) => total + workers,
+    0,
+  );
+  // Full Jobs captures existing Foundry workers in the initial worker pool. Reserve only the
+  // change from that pool's starting Foundry count to the plan's target; subtracting the full
+  // Foundry capacity again would count already assigned Craftsmen twice.
+  availableWorkers = input.craftOnly
+    ? craft.availableWorkers
+    : workersBeforeCraftPlan + reservedCraftsmen - plannedCraftsmen;
   for (const [token, count] of craft.workers) {
     const index = indexOfToken(jobIndex, token);
     if (index !== -1) requiredWorkers[index] = count;
@@ -467,7 +516,6 @@ export function planJobs(
 
   const authority = authorityMaximum(input, jobIndex);
   let minimumFarmers = 0;
-  let maximumSpaceMiners = 0;
   const jobMaximums = input.jobs.map((job) => job.smartMaximum);
   for (let pass = 0; pass < 3; pass++) {
     for (let index = 0; index < input.jobs.length; index++) {
@@ -523,12 +571,6 @@ export function planJobs(
           );
         } else if (jobMaximums[index] !== null) {
           jobsToAssign = Math.min(jobsToAssign, jobMaximums[index]!);
-        }
-        if (job.kind === "space-miner") {
-          maximumSpaceMiners = Math.max(
-            maximumSpaceMiners,
-            Math.min(availableEmployees, job.uncappedBreakpoints[pass]!),
-          );
         }
       }
       // A storage-backed job is floored before any cap below, because the
@@ -718,7 +760,7 @@ export function planJobs(
     ironIncomeAdjusted:
       minerIndex !== -1 &&
       requiredWorkers[minerIndex] !== input.jobs[minerIndex]!.count,
-    maximumSpaceMiners,
+    maximumSpaceMiners: 0,
     lastPopulationCount: input.population,
     lastFarmerCount:
       farmerIndex === -1
