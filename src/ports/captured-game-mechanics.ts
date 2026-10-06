@@ -161,7 +161,7 @@ export interface CapturedGameMechanics {
   /** `undefined` means the private production ledger has not been captured or validated. */
   readProductionBreakdown(): CapturedProductionBreakdown | undefined;
   /** Native `p_on` after the generator pass has applied support and fuel clamps. */
-  readEffectiveGeneratorCount(
+  readEffectivePowerCount(
     root: unknown,
     entryKey: string,
   ): CapturedGameRead<number>;
@@ -186,6 +186,11 @@ export interface CapturedGameMechanics {
     entryKey: string,
     isCurrent?: () => boolean,
   ): CapturedGameRead<readonly CapturedRoundedValue[]>;
+  /** Numeric localization inputs from one captured action effect, before rendering. */
+  readEffectNumericInputs(
+    entryKey: string,
+    isCurrent?: () => boolean,
+  ): CapturedGameRead<readonly number[]>;
   readMathRoundValues(
     read: () => unknown,
   ): CapturedGameRead<readonly CapturedMathRoundValue[]>;

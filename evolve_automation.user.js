@@ -512,6 +512,43 @@
     return (current?.configurable !== original.configurable || current.enumerable !== original.enumerable || current.writable !== original.writable || current.value !== original.value || current.get !== original.get || current.set !== original.set) && (unusable = !0), unusable ? void 0 : Object.freeze(observations);
   }
 
+  // src/adapters/evolve/scoped-localized-numbers.ts
+  var localizedNumberProbeInFlight = !1;
+  function probeScopedLocalizedNumbers(pageWindow, read) {
+    if (localizedNumberProbeInFlight) return;
+    let stringPrototype = readProperty(
+      readProperty(pageWindow, "String"),
+      "prototype"
+    ), descriptor = stringPrototype === void 0 ? void 0 : Object.getOwnPropertyDescriptor(stringPrototype, "replace");
+    if (descriptor?.configurable !== !0 || !("value" in descriptor) || typeof descriptor.value != "function")
+      return;
+    let original = descriptor.value, numbers = [], wrapper = function(...args) {
+      let output = Reflect.apply(original, this, args), pattern;
+      try {
+        pattern = readProperty(args[0], "source");
+      } catch {
+        pattern = void 0;
+      }
+      return typeof pattern == "string" && /^%\d+\(\?!\\d\)/.test(pattern) && typeof args[1] == "number" && numbers.push(args[1]), output;
+    };
+    localizedNumberProbeInFlight = !0;
+    let invalid = !1;
+    try {
+      Object.defineProperty(stringPrototype, "replace", {
+        ...descriptor,
+        value: wrapper
+      }), read();
+    } catch {
+      invalid = !0;
+    }
+    try {
+      Object.getOwnPropertyDescriptor(stringPrototype, "replace")?.value === wrapper && Object.defineProperty(stringPrototype, "replace", descriptor);
+    } catch {
+      invalid = !0;
+    }
+    return localizedNumberProbeInFlight = !1, Object.getOwnPropertyDescriptor(stringPrototype, "replace")?.value !== original && (invalid = !0), invalid ? void 0 : Object.freeze(numbers);
+  }
+
   // src/adapters/evolve/scoped-math-round.ts
   var mathRoundProbeInFlight = !1;
   function probeScopedMathRound(pageWindow, read) {
@@ -2088,11 +2125,12 @@
       readSupportOrder: () => ({ kind: "invalid" }),
       readProductionBreakdown: () => {
       },
-      readEffectiveGeneratorCount: () => ({ kind: "invalid" }),
+      readEffectivePowerCount: () => ({ kind: "invalid" }),
       readLocalizedText: () => ({ kind: "absent" }),
       readAdjustedFuelFactor: () => ({ kind: "invalid" }),
       readRoundedValues: () => ({ kind: "invalid" }),
       readEffectRoundedValues: () => ({ kind: "invalid" }),
+      readEffectNumericInputs: () => ({ kind: "invalid" }),
       readMathRoundValues: () => ({ kind: "invalid" }),
       readGuardPostRating: () => ({ kind: "invalid" })
     });
@@ -2329,7 +2367,7 @@
           ...capacity === void 0 ? {} : { capacity }
         });
       },
-      readEffectiveGeneratorCount(root, entryKey) {
+      readEffectivePowerCount(root, entryKey) {
         if (stopped || nativePowerOn === void 0 || structureEntries === void 0)
           return { kind: "invalid" };
         let entry = structureEntries.get(entryKey), parsed = readMechanicsEntry(entryKey, entry);
@@ -2407,6 +2445,20 @@
             Reflect.apply(effect, action, []);
           }), currentEntry = readMechanicsEntry(entryKey, candidate);
           return entries === structureEntries && entries.get(entryKey) === candidate && currentEntry?.action === action && currentEntry.actionId === entry.actionId && currentEntry.region === entry.region && currentEntry.sector === entry.sector && currentEntry.struct === entry.struct && readMechanicsMethod(action, "effect") === effect && (isCurrent === void 0 || isCurrent()) && observed2.kind === "value" ? observed2 : { kind: "invalid" };
+        } catch {
+          return { kind: "invalid" };
+        }
+      },
+      readEffectNumericInputs(entryKey, isCurrent) {
+        try {
+          let entries = structureEntries, candidate = entries?.get(entryKey), entry = readMechanicsEntry(entryKey, candidate), effect = entry && readMechanicsMethod(entry.action, "effect");
+          if (stopped || entries === void 0 || entry === void 0 || effect === void 0 || isCurrent !== void 0 && !isCurrent())
+            return { kind: "invalid" };
+          let observed2 = probeScopedLocalizedNumbers(pageWindow, () => {
+            if (typeof Reflect.apply(effect, entry.action, []) != "string")
+              throw new TypeError("native effect did not return text");
+          }), current = readMechanicsEntry(entryKey, candidate);
+          return observed2 !== void 0 && entries === structureEntries && entries.get(entryKey) === candidate && current?.action === entry.action && current.actionId === entry.actionId && current.region === entry.region && current.sector === entry.sector && current.struct === entry.struct && readMechanicsMethod(entry.action, "effect") === effect && (isCurrent === void 0 || isCurrent()) ? { kind: "value", value: observed2 } : { kind: "invalid" };
         } catch {
           return { kind: "invalid" };
         }
@@ -28279,152 +28331,209 @@
   }
 
   // src/adapters/evolve/economy/production/captured-power-consumption.ts
-  var idle = (resourceId, base, sourceKey, fuel = null, huge = !1, linear = !0, ledgerCredit = "safe") => Object.freeze({
+  var powerIdleSourceIdentity = (resourceId, sourceKey, key = null, fromEnd = 0, ledgerCredit = "safe", clamped = !1, gate = null, rounded = !1) => Object.freeze({
     resourceId,
-    base,
     sourceKey,
-    fuel,
-    huge,
-    linear,
-    ledgerCredit
-  }), POWER_IDLE_CONSUMPTION_FALLBACK = Object.freeze({
-    "city-tourist_center": [idle("Food", 50, "tech_tourism", null, !0)],
-    "interstellar-zoo": [idle("Food", 12e3, "tech_zoo", null, !0)],
-    "space-spaceport": [
-      idle("Food", 25, "space_red_spaceport_title", null, !0)
+    observation: key === null ? null : Object.freeze({ upstreamLocalizationKey: key, fromEnd }),
+    ledgerCredit,
+    clamped,
+    gate,
+    rounded
+  }), POWER_IDLE_CONSUMPTION_SOURCES = Object.freeze({
+    "city-tourist_center": [powerIdleSourceIdentity("Food", "tech_tourism")],
+    "interstellar-zoo": [
+      powerIdleSourceIdentity(
+        "Food",
+        "@title",
+        "interstellar_alpha_starport_effect3"
+      )
     ],
-    "space-red_factory": [idle("Helium_3", 1, null, "space", !0)],
+    "space-spaceport": [powerIdleSourceIdentity("Food", "@title", "spend")],
+    "space-red_factory": [
+      powerIdleSourceIdentity(
+        "Helium_3",
+        "@title",
+        "space_red_factory_effect3",
+        1,
+        "safe",
+        !1,
+        null,
+        !0
+      )
+    ],
     "space-space_barracks": [
-      idle(
+      powerIdleSourceIdentity(
         "Oil",
-        2,
         "tech_space_marines_bd",
-        "space",
-        !0,
-        !0,
-        "observation-only"
+        "space_red_space_barracks_effect2",
+        0,
+        "observation-only",
+        !1,
+        null,
+        !0
       ),
-      idle("Food", 10, "tech_space_marines_bd", null, !0)
+      powerIdleSourceIdentity("Food", "tech_space_marines_bd")
     ],
     "space-outpost": [
-      idle(
+      powerIdleSourceIdentity(
         "Oil",
-        2,
         "space_gas_moon_outpost_bd",
-        "space",
-        !0,
-        !0,
-        "observation-only"
+        "space_gas_moon_outpost_effect3",
+        1,
+        "observation-only",
+        !1,
+        null,
+        !0
       )
     ],
     "space-space_station": [
-      idle("Food", 10, "space_belt_station_title", null, !0)
+      powerIdleSourceIdentity("Food", "@title", "space_belt_station_effect4", 1)
     ],
     "interstellar-starport": [
-      idle("Food", 100, "interstellar_alpha_starport_title", null, !0)
+      powerIdleSourceIdentity(
+        "Food",
+        "@title",
+        "interstellar_alpha_starport_effect3"
+      )
     ],
     "interstellar-int_factory": [
-      idle(
+      powerIdleSourceIdentity(
         "Deuterium",
-        5,
-        "interstellar_int_factory_title",
-        "interstellar",
+        "@title",
+        "interstellar_fusion_effect",
+        1,
+        "safe",
+        !1,
+        null,
         !0
       )
     ],
     "interstellar-cruiser": [
-      idle(
+      powerIdleSourceIdentity(
         "Helium_3",
-        6,
-        "interstellar_cruiser_title",
-        "interstellar",
-        !0,
-        !0,
-        "observation-only"
+        "@title",
+        "space_belt_station_effect3",
+        0,
+        "observation-only",
+        !1,
+        null,
+        !0
       )
     ],
     "interstellar-neutron_miner": [
-      idle(
+      powerIdleSourceIdentity(
         "Helium_3",
-        3,
-        "interstellar_neutron_miner_title",
-        "interstellar",
-        !0,
-        !0,
-        "observation-only"
+        "@title",
+        "interstellar_alpha_starport_effect2",
+        1,
+        "observation-only",
+        !1,
+        null,
+        !0
       )
     ],
-    "galaxy-starbase": [idle("Food", 250, "galaxy_starbase", null, !0)],
-    "galaxy-embassy": [idle("Food", 7500, "galaxy_embassy")],
+    "galaxy-starbase": [
+      powerIdleSourceIdentity(
+        "Food",
+        "@title",
+        "interstellar_alpha_starport_effect3",
+        0,
+        "safe",
+        !1,
+        "stargate"
+      )
+    ],
+    "galaxy-embassy": [
+      powerIdleSourceIdentity(
+        "Food",
+        "@title",
+        "interstellar_alpha_starport_effect3",
+        1,
+        "safe",
+        !1,
+        "stargate"
+      )
+    ],
     "galaxy-vitreloy_plant": [
-      idle("Money", 5e4, "galaxy_vitreloy_plant_bd", null, !0, !1),
-      idle("Bolognium", 2.5, "galaxy_vitreloy_plant_bd", null, !0, !1),
-      idle("Stanene", 100, "galaxy_vitreloy_plant_bd", null, !0, !1)
+      powerIdleSourceIdentity(
+        "Money",
+        "galaxy_vitreloy_plant_bd",
+        "galaxy_vitreloy_plant_effect3",
+        1,
+        "safe",
+        !0
+      ),
+      powerIdleSourceIdentity(
+        "Bolognium",
+        "galaxy_vitreloy_plant_bd",
+        "galaxy_vitreloy_plant_effect2",
+        3,
+        "safe",
+        !0
+      ),
+      powerIdleSourceIdentity(
+        "Stanene",
+        "galaxy_vitreloy_plant_bd",
+        "galaxy_vitreloy_plant_effect2",
+        2,
+        "safe",
+        !0
+      )
     ],
     "galaxy-foothold": [
-      idle("Elerium", 2.5, "galaxy_foothold", null, !0, !1)
-    ],
-    "space-fob": [
-      idle("Helium_3", 125, "tech_fob", "space", !1, !0, "observation-only")
-    ],
-    "space-lander": [
-      idle(
-        "Oil",
-        50,
-        "space_lander_title",
-        "space",
+      powerIdleSourceIdentity(
+        "Elerium",
+        "@title",
+        "galaxy_foothold_effect2",
+        1,
+        "safe",
         !0,
-        !0,
-        "observation-only"
+        "stargate"
       )
     ],
-    // Ship fuel is reported only as one shared galaxy_fuel_consume row. It cannot be attributed
-    // to an individual ship. Retain resource identity but never guess a per-ship marginal rate.
-    "galaxy-bolognium_ship": [idle("Helium_3", null, null)],
-    "galaxy-scout_ship": [idle("Helium_3", null, null)],
-    "galaxy-corvette_ship": [idle("Helium_3", null, null)],
-    "galaxy-frigate_ship": [idle("Helium_3", null, null)],
-    "galaxy-cruiser_ship": [idle("Deuterium", null, null)],
-    "galaxy-dreadnought": [idle("Deuterium", null, null)],
-    "galaxy-freighter": [idle("Helium_3", null, null)],
-    "galaxy-super_freighter": [idle("Helium_3", null, null)],
-    "galaxy-armed_miner": [idle("Helium_3", null, null)],
-    "galaxy-scavenger": [idle("Helium_3", null, null)],
-    "galaxy-minelayer": [idle("Helium_3", null, null)],
-    "galaxy-raider": [idle("Helium_3", null, null)]
+    "space-fob": [
+      powerIdleSourceIdentity(
+        "Helium_3",
+        "tech_fob",
+        "requires_power_combo_effect",
+        0,
+        "observation-only",
+        !1,
+        null,
+        !0
+      )
+    ],
+    "space-lander": [
+      powerIdleSourceIdentity(
+        "Oil",
+        "@title",
+        "space_red_space_barracks_effect2",
+        0,
+        "observation-only",
+        !0,
+        "fob",
+        !0
+      )
+    ],
+    // The game's galaxy_fuel_consume rows aggregate all ships.
+    "galaxy-bolognium_ship": [powerIdleSourceIdentity("Helium_3", null)],
+    "galaxy-scout_ship": [powerIdleSourceIdentity("Helium_3", null)],
+    "galaxy-corvette_ship": [powerIdleSourceIdentity("Helium_3", null)],
+    "galaxy-frigate_ship": [powerIdleSourceIdentity("Helium_3", null)],
+    "galaxy-cruiser_ship": [powerIdleSourceIdentity("Deuterium", null)],
+    "galaxy-dreadnought": [powerIdleSourceIdentity("Deuterium", null)],
+    "galaxy-freighter": [powerIdleSourceIdentity("Helium_3", null)],
+    "galaxy-super_freighter": [powerIdleSourceIdentity("Helium_3", null)],
+    "galaxy-armed_miner": [powerIdleSourceIdentity("Helium_3", null)],
+    "galaxy-scavenger": [powerIdleSourceIdentity("Helium_3", null)],
+    "galaxy-minelayer": [powerIdleSourceIdentity("Helium_3", null)],
+    "galaxy-raider": [powerIdleSourceIdentity("Helium_3", null)]
   });
-  function readPowerNativeConsumption(breakdown, resourceId, source) {
-    let row = breakdown.consumption[resourceId]?.[source];
+  function readPowerNativeConsumption(breakdown, resourceId, sourceLabel) {
+    let row = breakdown.consumption[resourceId]?.[sourceLabel];
     if (row === void 0) return 0;
     if (!(typeof row != "number" || !Number.isFinite(row) || row > 0))
       return row === 0 ? 0 : -row;
-  }
-  function readPowerIdleGate(root, binding, resourceId) {
-    let race = readProperty(root, "race");
-    if (resourceId === "Food" && readProperty(race, "fasting")) return 0;
-    if (binding === "space-space_station")
-      return readProperty(race, "cataclysm") ? 0.1 : 1;
-    if (binding === "space-spaceport") {
-      let decayed = !!readProperty(race, "orbit_decayed"), isolation = !!readProperty(readProperty(root, "tech"), "isolation");
-      return readProperty(race, "cataclysm") || decayed && !isolation ? 2 / 25 : 1;
-    }
-    if (binding === "space-space_barracks" && readProperty(race, "fasting"))
-      return 0;
-    if (binding === "space-space_barracks" && resourceId === "Food")
-      return readProperty(race, "cataclysm") ? 0 : 1;
-    if (binding === "galaxy-starbase" || binding === "galaxy-embassy") {
-      let gate = readProperty(readProperty(root, "galaxy"), "s_gate"), on = readProperty(gate, "on");
-      return typeof on == "number" && Number.isFinite(on) && on >= 0 ? on : null;
-    }
-    if (binding === "galaxy-foothold") {
-      let gate = readProperty(readProperty(root, "galaxy"), "s_gate");
-      return typeof readProperty(gate, "on") == "number" ? Number(readProperty(gate, "on")) > 0 ? 1 : 0 : null;
-    }
-    if (binding === "space-lander") {
-      let fob = readProperty(readProperty(root, "space"), "fob");
-      return Number(readProperty(fob, "on")) > 0 ? 1 : 0;
-    }
-    return 1;
   }
 
   // src/adapters/evolve/economy/production/captured-power-reader.ts
@@ -28611,7 +28720,7 @@
     if (powerFuel.kind === "invalid") return;
     let iceAgeSpecialFuel = ICEAGE_SPECIAL_FUEL_BINDINGS.has(binding), supportFuel = nativeSupportParticipant || iceAgeSpecialFuel ? structure.readSupportFuel() : null;
     if (supportFuel?.kind === "invalid") return;
-    let title = structure.readTitle(), result = /* @__PURE__ */ new Map(), nativeEffective = role === "generator" && powerFuel.kind === "value" && powerFuel.value !== !1 ? mechanics.readEffectiveGeneratorCount?.(root, structure.entryKey) : null, observed2 = (resourceId, source) => readPowerNativeConsumption(production, resourceId, source), append = (resourceId, rate, source, ledgerCredit, adjustmentDisabled = !1, adjustmentMode = void 0, marginalKnown = !0, nativeGeneratorFuel = !1) => {
+    let title = structure.readTitle(), result = /* @__PURE__ */ new Map(), nativeEffective = role === "generator" && powerFuel.kind === "value" && powerFuel.value !== !1 ? mechanics.readEffectivePowerCount?.(root, structure.entryKey) : null, observed2 = (resourceId, source) => readPowerNativeConsumption(production, resourceId, source), append = (resourceId, rate, source, ledgerCredit, adjustmentDisabled = !1, adjustmentMode = void 0, marginalKnown = !0, nativeGeneratorFuel = !1) => {
       let adjustedRate = adjustmentDisabled || adjustmentMode === void 0 ? rate : readFuelRate(mechanics, resourceId, rate, adjustmentMode), currentTotal = source === null ? void 0 : observed2(resourceId, source), enableRate = marginalKnown && adjustedRate !== void 0 && Number.isFinite(adjustedRate) && adjustedRate >= 0 && currentTotal !== void 0 ? adjustedRate : null, previous = result.get(resourceId), appliedGeneratorFuel = nativeGeneratorFuel ? nativeEffective?.kind === "value" && enableRate !== null ? nativeEffective.value * enableRate : null : void 0;
       result.set(
         resourceId,
@@ -28671,19 +28780,19 @@
           void 0,
           binding !== "underground-bonfire"
         );
-    for (let fallback of POWER_IDLE_CONSUMPTION_FALLBACK[binding] ?? []) {
+    for (let fallback of POWER_IDLE_CONSUMPTION_SOURCES[binding] ?? []) {
       if (result.has(fallback.resourceId)) continue;
-      let source = fallback.sourceKey === null ? binding === "space-red_factory" && title.kind === "value" ? title.value : null : mechanics.readLocalizedText(fallback.sourceKey), sourceLabel = typeof source == "string" ? source : source?.kind === "value" ? source.value : null, currentTotal = sourceLabel === null ? 0 : observed2(fallback.resourceId, sourceLabel), validCurrent = sourceLabel !== null && currentTotal !== void 0, gate = readPowerIdleGate(root, binding, fallback.resourceId), enableRate = fallback.base;
-      enableRate !== null && gate !== null ? enableRate *= gate : enableRate = null, enableRate !== null && fallback.fuel !== null && (enableRate = readFuelRate(
-        mechanics,
-        fallback.resourceId,
-        enableRate,
-        fallback.fuel
-      ) ?? null);
-      let huge = !!readProperty(readProperty(root, "race"), "humongous");
-      huge && fallback.huge && (enableRate = null), (!validCurrent || gate === 0) && (enableRate = null), fallback.linear || (enableRate = null), (binding === "galaxy-starbase" || binding === "galaxy-embassy" || binding === "space-lander") && currentTotal === 0 && (enableRate = null), stateOn > 0 && currentTotal === 0 && gate !== 0 && (enableRate = null);
+      let source = fallback.sourceKey === "@title" ? title.kind === "value" ? title.value : null : fallback.sourceKey === null ? null : mechanics.readLocalizedText(fallback.sourceKey), sourceLabel = typeof source == "string" ? source : source?.kind === "value" ? source.value : null, currentTotal = sourceLabel === null ? 0 : observed2(fallback.resourceId, sourceLabel), validCurrent = sourceLabel !== null && currentTotal !== void 0, nativeFoodSuppressed = fallback.resourceId === "Food" && Object.values(production.production.Food ?? {}).includes("-100%"), observedCost = fallback.observation === null ? null : mechanics.readEffectNumericInputs?.(structure.entryKey), observedIndex = observedCost?.kind === "value" && fallback.observation !== null ? observedCost.value.length - 1 - fallback.observation.fromEnd : -1, enableRate = observedCost?.kind === "value" && observedIndex >= 0 && typeof observedCost.value[observedIndex] == "number" && Number.isFinite(observedCost.value[observedIndex]) && observedCost.value[observedIndex] >= 0 ? observedCost.value[observedIndex] : null;
+      if (enableRate !== null && fallback.rounded) {
+        let rounded = mechanics.readEffectRoundedValues?.(structure.entryKey), matches = rounded?.kind === "value" ? rounded.value.filter(
+          (item) => Number.isFinite(item.receiver) && Number.isFinite(Number(item.text)) && Number(item.text) === enableRate
+        ) : [];
+        enableRate = matches.length === 1 ? matches[0].receiver : null;
+      }
+      let gateKey = fallback.gate === "stargate" ? "int_blackhole:s_gate" : fallback.gate === "fob" ? "spc_triton:fob" : null, gate = gateKey === null ? 1 : mechanics.readEffectivePowerCount?.(root, gateKey), gateValue = typeof gate == "number" ? gate : gate?.kind === "value" ? gate.value : null;
+      enableRate !== null && gateValue !== null ? enableRate *= gateValue : enableRate = null, (!validCurrent || gateValue === 0 || fallback.clamped || nativeFoodSuppressed) && (enableRate = null), stateOn > 0 && currentTotal === 0 && gateValue !== 0 && (enableRate = null);
       let driftKey = `${binding}:${fallback.resourceId}`;
-      invalidFallbacks.has(driftKey) && (enableRate = null), !huge && fallback.linear && gate !== null && gate > 0 && stateOn > 0 && validCurrent && currentTotal > 0 && enableRate !== null && Math.abs(currentTotal - stateOn * enableRate) > 1e-6 * Math.max(1, currentTotal) && (invalidFallbacks.add(driftKey), enableRate = null), result.set(
+      invalidFallbacks.has(driftKey) && (enableRate = null), !fallback.clamped && gateValue !== null && gateValue > 0 && stateOn > 0 && validCurrent && currentTotal > 0 && enableRate !== null && Math.abs(currentTotal - stateOn * enableRate) > 1e-6 * Math.max(1, currentTotal) && (invalidFallbacks.add(driftKey), enableRate = null), result.set(
         fallback.resourceId,
         Object.freeze({
           resourceId: fallback.resourceId,

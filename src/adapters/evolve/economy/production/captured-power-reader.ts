@@ -66,8 +66,7 @@ import {
   capturedPowerSmartEnabled,
 } from "./captured-power-metadata.ts";
 import {
-  POWER_IDLE_CONSUMPTION_FALLBACK,
-  readPowerIdleGate,
+  POWER_IDLE_CONSUMPTION_SOURCES,
   readPowerNativeConsumption,
 } from "./captured-power-consumption.ts";
 
@@ -441,7 +440,7 @@ export function readCapturedPowerConsumptions(
     role === "generator" &&
     powerFuel.kind === "value" &&
     powerFuel.value !== false
-      ? mechanics.readEffectiveGeneratorCount?.(root, structure.entryKey)
+      ? mechanics.readEffectivePowerCount?.(root, structure.entryKey)
       : null;
   const observed = (resourceId: string, source: string): number | undefined =>
     readPowerNativeConsumption(production, resourceId, source);
@@ -588,15 +587,17 @@ export function readCapturedPowerConsumptions(
       );
     }
   }
-  for (const fallback of POWER_IDLE_CONSUMPTION_FALLBACK[binding] ?? []) {
+  for (const fallback of POWER_IDLE_CONSUMPTION_SOURCES[binding] ?? []) {
     // An action-owned declaration wins: the metadata must not reserve it twice.
     if (result.has(fallback.resourceId)) continue;
     const source =
-      fallback.sourceKey === null
-        ? binding === "space-red_factory" && title.kind === "value"
+      fallback.sourceKey === "@title"
+        ? title.kind === "value"
           ? title.value
           : null
-        : mechanics.readLocalizedText(fallback.sourceKey);
+        : fallback.sourceKey === null
+          ? null
+          : mechanics.readLocalizedText(fallback.sourceKey);
     const sourceLabel =
       typeof source === "string"
         ? source
@@ -606,42 +607,69 @@ export function readCapturedPowerConsumptions(
     const currentTotal =
       sourceLabel === null ? 0 : observed(fallback.resourceId, sourceLabel);
     const validCurrent = sourceLabel !== null && currentTotal !== undefined;
-    const gate = readPowerIdleGate(root, binding, fallback.resourceId);
-    let enableRate: number | null = fallback.base;
-    if (enableRate !== null && gate !== null) enableRate *= gate;
+    // DeadSpace's Food pass emits its own Fasting suppression row as -100%.
+    const nativeFoodSuppressed =
+      fallback.resourceId === "Food" &&
+      Object.values(production.production.Food ?? {}).includes("-100%");
+    const observedCost =
+      fallback.observation === null
+        ? null
+        : mechanics.readEffectNumericInputs?.(structure.entryKey);
+    const observedIndex =
+      observedCost?.kind === "value" && fallback.observation !== null
+        ? observedCost.value.length - 1 - fallback.observation.fromEnd
+        : -1;
+    let enableRate: number | null =
+      observedCost?.kind === "value" &&
+      observedIndex >= 0 &&
+      typeof observedCost.value[observedIndex] === "number" &&
+      Number.isFinite(observedCost.value[observedIndex]) &&
+      observedCost.value[observedIndex]! >= 0
+        ? observedCost.value[observedIndex]!
+        : null;
+    if (enableRate !== null && fallback.rounded) {
+      const rounded = mechanics.readEffectRoundedValues?.(structure.entryKey);
+      const matches =
+        rounded?.kind === "value"
+          ? rounded.value.filter(
+              (item) =>
+                Number.isFinite(item.receiver) &&
+                Number.isFinite(Number(item.text)) &&
+                Number(item.text) === enableRate,
+            )
+          : [];
+      enableRate = matches.length === 1 ? matches[0]!.receiver : null;
+    }
+    const gateKey =
+      fallback.gate === "stargate"
+        ? "int_blackhole:s_gate"
+        : fallback.gate === "fob"
+          ? "spc_triton:fob"
+          : null;
+    const gate =
+      gateKey === null ? 1 : mechanics.readEffectivePowerCount?.(root, gateKey);
+    const gateValue =
+      typeof gate === "number"
+        ? gate
+        : gate?.kind === "value"
+          ? gate.value
+          : null;
+    if (enableRate !== null && gateValue !== null) enableRate *= gateValue;
     else enableRate = null;
-    if (enableRate !== null && fallback.fuel !== null) {
-      enableRate =
-        readFuelRate(
-          mechanics,
-          fallback.resourceId,
-          enableRate,
-          fallback.fuel,
-        ) ?? null;
-    }
-    const huge = Boolean(readProperty(readProperty(root, "race"), "humongous"));
-    if (huge && fallback.huge) {
-      // The private hugeAdjust closure has no structure-independent scalar port.
-      // Configured `on` need not equal the production pass's effective p_on.
-      enableRate = null;
-    }
-    if (!validCurrent || gate === 0) enableRate = null;
-    if (!fallback.linear) enableRate = null;
     if (
-      (binding === "galaxy-starbase" ||
-        binding === "galaxy-embassy" ||
-        binding === "space-lander") &&
-      currentTotal === 0
+      !validCurrent ||
+      gateValue === 0 ||
+      fallback.clamped ||
+      nativeFoodSuppressed
     )
       enableRate = null;
-    if (stateOn > 0 && currentTotal === 0 && gate !== 0) enableRate = null;
+    if (stateOn > 0 && currentTotal === 0 && gateValue !== 0) enableRate = null;
     const driftKey = `${binding}:${fallback.resourceId}`;
     if (invalidFallbacks.has(driftKey)) enableRate = null;
     if (
-      !huge &&
-      fallback.linear &&
-      gate !== null &&
-      gate > 0 &&
+      !fallback.clamped &&
+      gateValue !== null &&
+      gateValue > 0 &&
       stateOn > 0 &&
       validCurrent &&
       currentTotal > 0 &&

@@ -47,9 +47,15 @@ function makePage() {
         };
         return { key: sector + ":" + struct, region, sector, struct, c_action: action, info: false, state };
       }
+      function makeLocalizedEffect(amount) {
+        return function() { return "%0 units".replace(/%0(?!\\d)/, amount); };
+      }
+      function makeDualLocalizedEffect(first, second) {
+        return function() { return "%0 and %1".replace(/%0(?!\\d)/, first).replace(/%1(?!\\d)/, second); };
+      }
       return {
-        Map, Object, Array, Function, Number, Math, Proxy, createProbe,
-        game: { loc: function(key) { return "translated:" + key; } },
+        Map, Object, Array, Function, Number, String, Math, Proxy, createProbe, makeLocalizedEffect, makeDualLocalizedEffect,
+        game: { loc: function(key) { return key === "probe_amount" ? "%0 units" : key === "probe_dual" ? "%0 and %1" : "translated:" + key; } },
       };
     })()
   `);
@@ -299,7 +305,7 @@ entries.set("city:coal_power", {
   info: false,
 });
 assert.deepEqual(
-  capture.mechanics.readEffectiveGeneratorCount(
+  capture.mechanics.readEffectivePowerCount(
     { city: { coal_power: { on: 5 } } },
     "city:coal_power",
   ),
@@ -1179,6 +1185,42 @@ for (const behavior of [
 }
 delete effectAction.effect;
 assert.deepEqual(readEffect(), { kind: "invalid" });
+effectAction.effect = originalEffect;
+
+const originalReplaceDescriptor = Object.getOwnPropertyDescriptor(
+  page.String.prototype,
+  "replace",
+);
+effectAction.effect = page.makeLocalizedEffect(37.25);
+assert.deepEqual(
+  capture.mechanics.readEffectNumericInputs(effectEntry.key),
+  { kind: "value", value: [37.25] },
+  "the action's numeric localization input is observed before presentation",
+);
+assert.deepEqual(
+  Object.getOwnPropertyDescriptor(page.String.prototype, "replace"),
+  originalReplaceDescriptor,
+);
+effectAction.effect = page.makeDualLocalizedEffect(2.5, 100);
+assert.deepEqual(capture.mechanics.readEffectNumericInputs(effectEntry.key), {
+  kind: "value",
+  value: [2.5, 100],
+});
+effectAction.effect = () => "no matching localization";
+assert.deepEqual(capture.mechanics.readEffectNumericInputs(effectEntry.key), {
+  kind: "value",
+  value: [],
+});
+effectAction.effect = () => {
+  throw new Error("native effect failure");
+};
+assert.deepEqual(capture.mechanics.readEffectNumericInputs(effectEntry.key), {
+  kind: "invalid",
+});
+assert.deepEqual(
+  Object.getOwnPropertyDescriptor(page.String.prototype, "replace"),
+  originalReplaceDescriptor,
+);
 effectAction.effect = originalEffect;
 
 // One inherited assignment captures the p-ledger owner and then removes the prototype hook.

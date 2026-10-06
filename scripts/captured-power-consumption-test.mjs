@@ -3,6 +3,7 @@ import { readCapturedPowerConsumptions } from "../src/adapters/evolve/economy/pr
 import { readPowerNativeConsumption } from "../src/adapters/evolve/economy/production/captured-power-consumption.ts";
 
 const labels = {
+  evo_challenge_fasting: "Fasting",
   space_belt_station_title: "Estación orbital",
   space_red_spaceport_title: "Puerto espacial",
   galaxy_starbase: "Base estelar",
@@ -18,7 +19,19 @@ const labels = {
   space_lander_title: "Lander",
   galaxy_foothold: "Foothold",
 };
+const titleByBinding = {
+  "space-spaceport": labels.space_red_spaceport_title,
+  "space-space_station": labels.space_belt_station_title,
+  "galaxy-starbase": labels.galaxy_starbase,
+  "galaxy-embassy": labels.galaxy_embassy,
+  "interstellar-int_factory": labels.interstellar_int_factory_title,
+  "interstellar-cruiser": labels.interstellar_cruiser_title,
+  "interstellar-neutron_miner": labels.interstellar_neutron_miner_title,
+  "space-lander": labels.space_lander_title,
+  "galaxy-foothold": labels.galaxy_foothold,
+};
 const mechanics = {
+  readEffectNumericInputs: () => ({ kind: "invalid" }),
   readLocalizedText: (key) =>
     Object.hasOwn(labels, key)
       ? { kind: "value", value: labels[key] }
@@ -31,9 +44,15 @@ const mechanics = {
 function action(binding, fuel, options = {}) {
   return {
     actionId: binding,
+    entryKey:
+      options.entryKey ??
+      `${options.sector ?? binding.split("-")[0]}:${binding.split("-").slice(1).join("-")}`,
     region: options.region ?? binding.split("-")[0],
     sector: options.sector ?? binding.split("-")[0],
-    readTitle: () => ({ kind: "value", value: options.title ?? binding }),
+    readTitle: () => ({
+      kind: "value",
+      value: options.title ?? titleByBinding[binding] ?? binding,
+    }),
     readFuel: () =>
       fuel === undefined ? { kind: "absent" } : { kind: "value", value: fuel },
     readSupportFuel: () =>
@@ -71,7 +90,7 @@ function sample(
     root,
     mechanics,
     action(binding, fuel, options),
-    { production: {}, consumption: rows },
+    { production: options.production ?? {}, consumption: rows },
     on,
     options.role ?? "none",
     options.nativeSupportParticipant ?? false,
@@ -99,7 +118,7 @@ assert.deepEqual(oilGenerator, {
   enableRate: 1,
   appliedGeneratorFuel: null,
 });
-mechanics.readEffectiveGeneratorCount = () => ({ kind: "value", value: 3 });
+mechanics.readEffectivePowerCount = () => ({ kind: "value", value: 3 });
 assert.equal(
   one(
     sample(
@@ -116,7 +135,7 @@ assert.equal(
   3,
   "effective native operation, not the pre-clamp ledger, funds generator planning",
 );
-delete mechanics.readEffectiveGeneratorCount;
+delete mechanics.readEffectivePowerCount;
 const starvedSupport = one(
   sample(
     "space-support",
@@ -386,29 +405,32 @@ for (const [binding, resourceId, source] of [
   assert.equal(row?.unwindCredit, 10, `${binding} credits its applied rate`);
 }
 
-assert.deepEqual(
-  one(
-    sample("space-space_station", 0, {}, { race: { orbit_decayed: true } }),
-    "Food",
-  ),
-  { resourceId: "Food", currentTotal: 0, unwindCredit: 0, enableRate: 10 },
-  "orbit decay does not change pinned Space Station Food",
+// The mock supplies native action observations. Varying that answer varies the idle marginal.
+mechanics.readEffectNumericInputs = () => ({ kind: "value", value: [17] });
+assert.equal(one(sample("space-spaceport", 0), "Food")?.enableRate, 17);
+mechanics.readEffectNumericInputs = () => ({ kind: "value", value: [3] });
+assert.equal(one(sample("space-spaceport", 0), "Food")?.enableRate, 3);
+mechanics.readEffectNumericInputs = () => ({ kind: "value", value: [150] });
+assert.equal(
+  one(sample("space-spaceport", 0, {}, { race: { humongous: true } }), "Food")
+    ?.enableRate,
+  150,
+  "the native observation supplies adjusted numbers without adapter scaling",
+);
+mechanics.readEffectNumericInputs = () => ({ kind: "value", value: [2] });
+assert.equal(
+  one(sample("space-spaceport", 0, {}, { race: { cataclysm: true } }), "Food")
+    ?.enableRate,
+  2,
 );
 assert.equal(
   one(
-    sample("space-space_station", 0, {}, { race: { cataclysm: true } }),
+    sample("space-spaceport", 0, {}, { race: { orbit_decayed: true } }),
     "Food",
   )?.enableRate,
-  1,
+  2,
 );
-assert.equal(
-  one(
-    sample("space-space_station", 2, { Food: { "Estación orbital": -20 } }),
-    "Food",
-  )?.currentTotal,
-  20,
-  "the localized source key resolves the native ledger, not parsed prose",
-);
+mechanics.readEffectNumericInputs = () => ({ kind: "value", value: [25] });
 assert.equal(
   one(
     sample(
@@ -420,47 +442,102 @@ assert.equal(
     "Food",
   )?.enableRate,
   25,
-  "decayPerks is disabled by native Isolation tech",
 );
+mechanics.readEffectNumericInputs = () => ({ kind: "invalid" });
+assert.equal(one(sample("space-spaceport", 0), "Food")?.enableRate, null);
+mechanics.readEffectNumericInputs = () => ({
+  kind: "value",
+  value: [Number.NaN],
+});
+assert.equal(one(sample("space-spaceport", 0), "Food")?.enableRate, null);
+assert.equal(one(sample("city-tourist_center", 0), "Food")?.enableRate, null);
+mechanics.readEffectNumericInputs = () => ({ kind: "value", value: [19] });
 assert.equal(
   one(
-    sample("space-spaceport", 0, {}, { race: { orbit_decayed: true } }),
+    sample("space-spaceport", 0, {}, {}, new Set(), undefined, {
+      production: { Food: { Fasting: "-100%" } },
+    }),
     "Food",
   )?.enableRate,
-  2,
+  null,
+  "the native production marker suppresses Food without a copied race gate",
+);
+mechanics.readEffectNumericInputs = () => ({ kind: "invalid" });
+assert.equal(
+  one(
+    sample("space-space_station", 2, {
+      Food: { [labels.space_belt_station_title]: -20 },
+    }),
+    "Food",
+  )?.currentTotal,
+  20,
 );
 for (const [binding, source] of [
   ["galaxy-starbase", "Base estelar"],
   ["galaxy-embassy", "Embajada"],
 ]) {
-  assert.deepEqual(
+  assert.equal(
     one(
       sample(
         binding,
         4,
-        { Food: { [source]: 0 } },
-        { galaxy: { s_gate: { on: 0 } } },
+        { Food: { [source]: -1000 } },
+        { galaxy: { s_gate: { on: 1 } } },
       ),
       "Food",
-    ),
-    { resourceId: "Food", currentTotal: 0, unwindCredit: 0, enableRate: null },
-    `${binding} does not fabricate consumption or enable behind an inactive Stargate`,
+    )?.enableRate,
+    null,
+    "missing effective Stargate observation fails only this marginal closed",
   );
 }
-assert.deepEqual(
-  one(sample("galaxy-starbase", 2, { Food: { "Base estelar": -500 } }), "Food"),
-  { resourceId: "Food", currentTotal: 500, unwindCredit: 500, enableRate: 250 },
-  "a matching active native row validates the starbase marginal",
+mechanics.readEffectNumericInputs = () => ({ kind: "value", value: [83] });
+mechanics.readEffectivePowerCount = (_root, key) =>
+  key === "int_blackhole:s_gate"
+    ? { kind: "value", value: 0 }
+    : { kind: "invalid" };
+assert.equal(
+  one(
+    sample("galaxy-starbase", 0, {}, { interstellar: { s_gate: { on: 1 } } }),
+    "Food",
+  )?.enableRate,
+  null,
+  "configured Stargate on cannot override the effective native zero",
 );
-assert.deepEqual(
-  one(sample("galaxy-embassy", 2, { Food: { Embajada: -15000 } }), "Food"),
-  {
-    resourceId: "Food",
-    currentTotal: 15000,
-    unwindCredit: 15000,
-    enableRate: 7500,
-  },
+mechanics.readEffectivePowerCount = (_root, key) =>
+  key === "int_blackhole:s_gate"
+    ? { kind: "value", value: 1 }
+    : { kind: "invalid" };
+assert.equal(
+  one(
+    sample("galaxy-starbase", 0, {}, { interstellar: { s_gate: { on: 2 } } }),
+    "Food",
+  )?.enableRate,
+  83,
+  "the effective native value owns the gate",
 );
+delete mechanics.readEffectivePowerCount;
+mechanics.readEffectNumericInputs = () => ({ kind: "invalid" });
+const effectiveRequests = [];
+mechanics.readEffectivePowerCount = (_root, key) => {
+  effectiveRequests.push(key);
+  return { kind: "value", value: 0 };
+};
+assert.equal(
+  one(
+    sample(
+      "space-lander",
+      1,
+      { Oil: { Lander: -20 } },
+      {
+        space: { fob: { on: 1 } },
+      },
+    ),
+    "Oil",
+  )?.enableRate,
+  null,
+);
+assert.deepEqual(effectiveRequests, ["spc_triton:fob"]);
+delete mechanics.readEffectivePowerCount;
 assert.deepEqual(
   one(
     sample(
@@ -477,17 +554,11 @@ assert.deepEqual(
     unwindCredit: 300,
     enableRate: null,
   },
-  "Humongous current consumption comes from the game and idle scaling fails closed",
 );
-const barracks = sample(
-  "space-space_barracks",
-  2,
-  {
-    Oil: { Marines: -6 },
-    Food: { Marines: -20 },
-  },
-  { race: { humongous: true } },
-);
+const barracks = sample("space-space_barracks", 2, {
+  Oil: { Marines: -6 },
+  Food: { Marines: -20 },
+});
 assert.equal(one(barracks, "Oil")?.currentTotal, 6);
 assert.equal(one(barracks, "Food")?.currentTotal, 20);
 assert.equal(one(barracks, "Oil")?.enableRate, null);
@@ -773,27 +844,53 @@ assert.deepEqual(
     sample("space-red_factory", 2, { Helium_3: { "space-red_factory": -1 } }),
     "Helium_3",
   ),
-  { resourceId: "Helium_3", currentTotal: 1, unwindCredit: 1, enableRate: 0.5 },
-);
-assert.deepEqual(
-  one(
-    sample("interstellar-int_factory", 2, {
-      Deuterium: { "Fábrica interestelar": -7.5 },
-    }),
-    "Deuterium",
-  ),
   {
-    resourceId: "Deuterium",
-    currentTotal: 7.5,
-    unwindCredit: 7.5,
-    enableRate: 3.75,
+    resourceId: "Helium_3",
+    currentTotal: 1,
+    unwindCredit: 1,
+    enableRate: null,
   },
 );
+mechanics.readEffectNumericInputs = () => ({ kind: "value", value: [3.75, 5] });
+mechanics.readEffectRoundedValues = () => ({
+  kind: "value",
+  value: [{ receiver: 3.749, digits: 2, text: "3.75" }],
+});
+assert.equal(
+  one(
+    sample("interstellar-int_factory", 2, {
+      Deuterium: { [labels.interstellar_int_factory_title]: -7.498 },
+    }),
+    "Deuterium",
+  )?.enableRate,
+  3.749,
+);
+mechanics.readEffectNumericInputs = () => ({ kind: "invalid" });
+delete mechanics.readEffectRoundedValues;
 const vitreloy = sample("galaxy-vitreloy_plant", 5, {
   Money: { Vitreloy: -100000 },
   Bolognium: { Vitreloy: -5 },
   Stanene: { Vitreloy: -200 },
 });
+assert.equal(
+  one(sample("galaxy-foothold", 0, { Elerium: { Foothold: -2.5 } }), "Elerium")
+    ?.enableRate,
+  null,
+  "resource-clamped Foothold keeps an unknown marginal",
+);
+assert.deepEqual(
+  one(
+    sample("galaxy-scout_ship", 1, { Helium_3: { "Galaxy fuel": -99 } }),
+    "Helium_3",
+  ),
+  {
+    resourceId: "Helium_3",
+    currentTotal: 0,
+    unwindCredit: 0,
+    enableRate: null,
+  },
+  "a shared galaxy fuel row is never attributed to one ship",
+);
 assert.deepEqual(
   vitreloy?.map(({ resourceId, currentTotal, unwindCredit, enableRate }) => [
     resourceId,
@@ -813,26 +910,10 @@ assert.equal(
   null,
 );
 
-const stale = new Set();
 assert.equal(
-  one(
-    sample("city-tourist_center", 2, { Food: { Turismo: -150 } }, {}, stale),
-    "Food",
-  )?.enableRate,
+  one(sample("city-tourist_center", 2, { Food: { Turismo: -100 } }), "Food")
+    ?.enableRate,
   null,
-);
-assert.equal(
-  one(
-    sample("city-tourist_center", 2, { Food: { Turismo: -100 } }, {}, stale),
-    "Food",
-  )?.enableRate,
-  null,
-  "drift disables only that fallback for the root/session",
-);
-assert.equal(
-  one(sample("space-space_station", 0), "Food")?.enableRate,
-  10,
-  "other structures remain available after drift",
 );
 assert.equal(
   readPowerNativeConsumption(

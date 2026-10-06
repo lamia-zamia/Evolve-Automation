@@ -1,204 +1,245 @@
-/**
- * Source identity and irreducible idle requirements from DeadSpace src/main.js at 6cc9ba8.
- * The production ledger is the authority for current totals. These base values are only
- * candidates for a future enable step; dynamic gates and drift checks live in the reader.
- */
-
+/** Ledger attribution and action-owned observation identity for pinned DeadSpace src/main.js. */
 import type { CapturedProductionBreakdown } from "../../../../ports/captured-game-mechanics.ts";
-import { readProperty } from "../../../validation.ts";
 
-export interface PowerIdleConsumptionFallback {
+export interface PowerIdleConsumptionSource {
   readonly resourceId: string;
-  readonly base: number | null;
   readonly sourceKey: string | null;
-  readonly fuel: "space" | "interstellar" | null;
-  readonly huge: boolean;
-  /** Vitreloy and Foothold can consume fewer effective units than configured. */
-  readonly linear: boolean;
-  /** Whether the pinned write path mirrors the resource-rate operation. */
+  /** Pinned action call site for review; the unmodified page does not export loc(). */
+  readonly observation: {
+    readonly upstreamLocalizationKey: string;
+    readonly fromEnd: number;
+  } | null;
   readonly ledgerCredit: "safe" | "observation-only";
+  readonly clamped: boolean;
+  readonly gate: "stargate" | "fob" | null;
+  readonly rounded: boolean;
 }
 
-const idle = (
+const powerIdleSourceIdentity = (
   resourceId: string,
-  base: number | null,
   sourceKey: string | null,
-  fuel: PowerIdleConsumptionFallback["fuel"] = null,
-  huge = false,
-  linear = true,
-  ledgerCredit: PowerIdleConsumptionFallback["ledgerCredit"] = "safe",
-): PowerIdleConsumptionFallback =>
+  key: string | null = null,
+  fromEnd = 0,
+  ledgerCredit: PowerIdleConsumptionSource["ledgerCredit"] = "safe",
+  clamped = false,
+  gate: PowerIdleConsumptionSource["gate"] = null,
+  rounded = false,
+): PowerIdleConsumptionSource =>
   Object.freeze({
     resourceId,
-    base,
     sourceKey,
-    fuel,
-    huge,
-    linear,
+    observation:
+      key === null
+        ? null
+        : Object.freeze({ upstreamLocalizationKey: key, fromEnd }),
     ledgerCredit,
+    clamped,
+    gate,
+    rounded,
   });
 
-export const POWER_IDLE_CONSUMPTION_FALLBACK: Readonly<
-  Record<string, readonly PowerIdleConsumptionFallback[]>
+/** Null observations have no native per-unit authority; their ledger rows remain observable. */
+export const POWER_IDLE_CONSUMPTION_SOURCES: Readonly<
+  Record<string, readonly PowerIdleConsumptionSource[]>
 > = Object.freeze({
-  "city-tourist_center": [idle("Food", 50, "tech_tourism", null, true)],
-  "interstellar-zoo": [idle("Food", 12000, "tech_zoo", null, true)],
-  "space-spaceport": [
-    idle("Food", 25, "space_red_spaceport_title", null, true),
-  ],
-  "space-red_factory": [idle("Helium_3", 1, null, "space", true)],
-  "space-space_barracks": [
-    idle(
-      "Oil",
-      2,
-      "tech_space_marines_bd",
-      "space",
-      true,
-      true,
-      "observation-only",
+  "city-tourist_center": [powerIdleSourceIdentity("Food", "tech_tourism")],
+  "interstellar-zoo": [
+    powerIdleSourceIdentity(
+      "Food",
+      "@title",
+      "interstellar_alpha_starport_effect3",
     ),
-    idle("Food", 10, "tech_space_marines_bd", null, true),
+  ],
+  "space-spaceport": [powerIdleSourceIdentity("Food", "@title", "spend")],
+  "space-red_factory": [
+    powerIdleSourceIdentity(
+      "Helium_3",
+      "@title",
+      "space_red_factory_effect3",
+      1,
+      "safe",
+      false,
+      null,
+      true,
+    ),
+  ],
+  "space-space_barracks": [
+    powerIdleSourceIdentity(
+      "Oil",
+      "tech_space_marines_bd",
+      "space_red_space_barracks_effect2",
+      0,
+      "observation-only",
+      false,
+      null,
+      true,
+    ),
+    powerIdleSourceIdentity("Food", "tech_space_marines_bd"),
   ],
   "space-outpost": [
-    idle(
+    powerIdleSourceIdentity(
       "Oil",
-      2,
       "space_gas_moon_outpost_bd",
-      "space",
-      true,
-      true,
+      "space_gas_moon_outpost_effect3",
+      1,
       "observation-only",
+      false,
+      null,
+      true,
     ),
   ],
   "space-space_station": [
-    idle("Food", 10, "space_belt_station_title", null, true),
+    powerIdleSourceIdentity("Food", "@title", "space_belt_station_effect4", 1),
   ],
   "interstellar-starport": [
-    idle("Food", 100, "interstellar_alpha_starport_title", null, true),
+    powerIdleSourceIdentity(
+      "Food",
+      "@title",
+      "interstellar_alpha_starport_effect3",
+    ),
   ],
   "interstellar-int_factory": [
-    idle(
+    powerIdleSourceIdentity(
       "Deuterium",
-      5,
-      "interstellar_int_factory_title",
-      "interstellar",
+      "@title",
+      "interstellar_fusion_effect",
+      1,
+      "safe",
+      false,
+      null,
       true,
     ),
   ],
   "interstellar-cruiser": [
-    idle(
+    powerIdleSourceIdentity(
       "Helium_3",
-      6,
-      "interstellar_cruiser_title",
-      "interstellar",
-      true,
-      true,
+      "@title",
+      "space_belt_station_effect3",
+      0,
       "observation-only",
+      false,
+      null,
+      true,
     ),
   ],
   "interstellar-neutron_miner": [
-    idle(
+    powerIdleSourceIdentity(
       "Helium_3",
-      3,
-      "interstellar_neutron_miner_title",
-      "interstellar",
-      true,
-      true,
+      "@title",
+      "interstellar_alpha_starport_effect2",
+      1,
       "observation-only",
+      false,
+      null,
+      true,
     ),
   ],
-  "galaxy-starbase": [idle("Food", 250, "galaxy_starbase", null, true)],
-  "galaxy-embassy": [idle("Food", 7500, "galaxy_embassy")],
+  "galaxy-starbase": [
+    powerIdleSourceIdentity(
+      "Food",
+      "@title",
+      "interstellar_alpha_starport_effect3",
+      0,
+      "safe",
+      false,
+      "stargate",
+    ),
+  ],
+  "galaxy-embassy": [
+    powerIdleSourceIdentity(
+      "Food",
+      "@title",
+      "interstellar_alpha_starport_effect3",
+      1,
+      "safe",
+      false,
+      "stargate",
+    ),
+  ],
   "galaxy-vitreloy_plant": [
-    idle("Money", 50000, "galaxy_vitreloy_plant_bd", null, true, false),
-    idle("Bolognium", 2.5, "galaxy_vitreloy_plant_bd", null, true, false),
-    idle("Stanene", 100, "galaxy_vitreloy_plant_bd", null, true, false),
+    powerIdleSourceIdentity(
+      "Money",
+      "galaxy_vitreloy_plant_bd",
+      "galaxy_vitreloy_plant_effect3",
+      1,
+      "safe",
+      true,
+    ),
+    powerIdleSourceIdentity(
+      "Bolognium",
+      "galaxy_vitreloy_plant_bd",
+      "galaxy_vitreloy_plant_effect2",
+      3,
+      "safe",
+      true,
+    ),
+    powerIdleSourceIdentity(
+      "Stanene",
+      "galaxy_vitreloy_plant_bd",
+      "galaxy_vitreloy_plant_effect2",
+      2,
+      "safe",
+      true,
+    ),
   ],
   "galaxy-foothold": [
-    idle("Elerium", 2.5, "galaxy_foothold", null, true, false),
-  ],
-  "space-fob": [
-    idle("Helium_3", 125, "tech_fob", "space", false, true, "observation-only"),
-  ],
-  "space-lander": [
-    idle(
-      "Oil",
-      50,
-      "space_lander_title",
-      "space",
+    powerIdleSourceIdentity(
+      "Elerium",
+      "@title",
+      "galaxy_foothold_effect2",
+      1,
+      "safe",
       true,
-      true,
-      "observation-only",
+      "stargate",
     ),
   ],
-  // Ship fuel is reported only as one shared galaxy_fuel_consume row. It cannot be attributed
-  // to an individual ship. Retain resource identity but never guess a per-ship marginal rate.
-  "galaxy-bolognium_ship": [idle("Helium_3", null, null)],
-  "galaxy-scout_ship": [idle("Helium_3", null, null)],
-  "galaxy-corvette_ship": [idle("Helium_3", null, null)],
-  "galaxy-frigate_ship": [idle("Helium_3", null, null)],
-  "galaxy-cruiser_ship": [idle("Deuterium", null, null)],
-  "galaxy-dreadnought": [idle("Deuterium", null, null)],
-  "galaxy-freighter": [idle("Helium_3", null, null)],
-  "galaxy-super_freighter": [idle("Helium_3", null, null)],
-  "galaxy-armed_miner": [idle("Helium_3", null, null)],
-  "galaxy-scavenger": [idle("Helium_3", null, null)],
-  "galaxy-minelayer": [idle("Helium_3", null, null)],
-  "galaxy-raider": [idle("Helium_3", null, null)],
+  "space-fob": [
+    powerIdleSourceIdentity(
+      "Helium_3",
+      "tech_fob",
+      "requires_power_combo_effect",
+      0,
+      "observation-only",
+      false,
+      null,
+      true,
+    ),
+  ],
+  "space-lander": [
+    powerIdleSourceIdentity(
+      "Oil",
+      "@title",
+      "space_red_space_barracks_effect2",
+      0,
+      "observation-only",
+      true,
+      "fob",
+      true,
+    ),
+  ],
+  // The game's galaxy_fuel_consume rows aggregate all ships.
+  "galaxy-bolognium_ship": [powerIdleSourceIdentity("Helium_3", null)],
+  "galaxy-scout_ship": [powerIdleSourceIdentity("Helium_3", null)],
+  "galaxy-corvette_ship": [powerIdleSourceIdentity("Helium_3", null)],
+  "galaxy-frigate_ship": [powerIdleSourceIdentity("Helium_3", null)],
+  "galaxy-cruiser_ship": [powerIdleSourceIdentity("Deuterium", null)],
+  "galaxy-dreadnought": [powerIdleSourceIdentity("Deuterium", null)],
+  "galaxy-freighter": [powerIdleSourceIdentity("Helium_3", null)],
+  "galaxy-super_freighter": [powerIdleSourceIdentity("Helium_3", null)],
+  "galaxy-armed_miner": [powerIdleSourceIdentity("Helium_3", null)],
+  "galaxy-scavenger": [powerIdleSourceIdentity("Helium_3", null)],
+  "galaxy-minelayer": [powerIdleSourceIdentity("Helium_3", null)],
+  "galaxy-raider": [powerIdleSourceIdentity("Helium_3", null)],
 });
 
-/** A native source row is absent while off; absence says nothing about its idle requirement. */
 export function readPowerNativeConsumption(
   breakdown: CapturedProductionBreakdown,
   resourceId: string,
-  source: string,
+  sourceLabel: string,
 ): number | undefined {
-  const row = breakdown.consumption[resourceId]?.[source];
+  const row = breakdown.consumption[resourceId]?.[sourceLabel];
   if (row === undefined) return 0;
   if (typeof row !== "number" || !Number.isFinite(row) || row > 0)
     return undefined;
   return row === 0 ? 0 : -row;
-}
-
-/** Only gates proven from the pinned production pass are represented here. */
-export function readPowerIdleGate(
-  root: unknown,
-  binding: string,
-  resourceId: string,
-): number | null {
-  const race = readProperty(root, "race");
-  if (resourceId === "Food" && readProperty(race, "fasting")) return 0;
-  if (binding === "space-space_station")
-    return readProperty(race, "cataclysm") ? 0.1 : 1;
-  if (binding === "space-spaceport") {
-    const decayed = Boolean(readProperty(race, "orbit_decayed"));
-    const isolation = Boolean(
-      readProperty(readProperty(root, "tech"), "isolation"),
-    );
-    return Boolean(readProperty(race, "cataclysm")) || (decayed && !isolation)
-      ? 2 / 25
-      : 1;
-  }
-  if (binding === "space-space_barracks" && readProperty(race, "fasting"))
-    return 0;
-  if (binding === "space-space_barracks" && resourceId === "Food")
-    return readProperty(race, "cataclysm") ? 0 : 1;
-  if (binding === "galaxy-starbase" || binding === "galaxy-embassy") {
-    const gate = readProperty(readProperty(root, "galaxy"), "s_gate");
-    const on = readProperty(gate, "on");
-    return typeof on === "number" && Number.isFinite(on) && on >= 0 ? on : null;
-  }
-  if (binding === "galaxy-foothold") {
-    const gate = readProperty(readProperty(root, "galaxy"), "s_gate");
-    return typeof readProperty(gate, "on") === "number"
-      ? Number(readProperty(gate, "on")) > 0
-        ? 1
-        : 0
-      : null;
-  }
-  if (binding === "space-lander") {
-    const fob = readProperty(readProperty(root, "space"), "fob");
-    return Number(readProperty(fob, "on")) > 0 ? 1 : 0;
-  }
-  return 1;
 }

@@ -23,6 +23,7 @@ import type {
 } from "../../ports/captured-game-mechanics.ts";
 import { isNonArrayRecord, readProperty } from "../validation.ts";
 import { probeScopedNumberToFixed } from "./scoped-number-to-fixed.ts";
+import { probeScopedLocalizedNumbers } from "./scoped-localized-numbers.ts";
 import { probeScopedMathRound } from "./scoped-math-round.ts";
 import { readCapturedActionAvailability } from "./progression/build/captured-building-availability.ts";
 
@@ -939,11 +940,12 @@ function emptyGameMechanics(): CapturedGameMechanics {
     readPowerOrder: () => ({ kind: "invalid" as const }),
     readSupportOrder: () => ({ kind: "invalid" as const }),
     readProductionBreakdown: () => undefined,
-    readEffectiveGeneratorCount: () => ({ kind: "invalid" as const }),
+    readEffectivePowerCount: () => ({ kind: "invalid" as const }),
     readLocalizedText: () => ({ kind: "absent" as const }),
     readAdjustedFuelFactor: () => ({ kind: "invalid" as const }),
     readRoundedValues: () => ({ kind: "invalid" as const }),
     readEffectRoundedValues: () => ({ kind: "invalid" as const }),
+    readEffectNumericInputs: () => ({ kind: "invalid" as const }),
     readMathRoundValues: () => ({ kind: "invalid" as const }),
     readGuardPostRating: () => ({ kind: "invalid" as const }),
   });
@@ -1472,7 +1474,7 @@ export function installCapturedGameMechanics(
         ...(capacity === undefined ? {} : { capacity }),
       });
     },
-    readEffectiveGeneratorCount(
+    readEffectivePowerCount(
       root: unknown,
       entryKey: string,
     ): CapturedGameRead<number> {
@@ -1631,6 +1633,44 @@ export function installCapturedGameMechanics(
           (isCurrent === undefined || isCurrent());
         return current && observed.kind === "value"
           ? observed
+          : { kind: "invalid" };
+      } catch {
+        return { kind: "invalid" };
+      }
+    },
+    readEffectNumericInputs(
+      entryKey: string,
+      isCurrent?: () => boolean,
+    ): CapturedGameRead<readonly number[]> {
+      try {
+        const entries = structureEntries;
+        const candidate = entries?.get(entryKey);
+        const entry = readMechanicsEntry(entryKey, candidate);
+        const effect = entry && readMechanicsMethod(entry.action, "effect");
+        if (
+          stopped ||
+          entries === undefined ||
+          entry === undefined ||
+          effect === undefined ||
+          (isCurrent !== undefined && !isCurrent())
+        )
+          return { kind: "invalid" };
+        const observed = probeScopedLocalizedNumbers(pageWindow, () => {
+          if (typeof Reflect.apply(effect, entry.action, []) !== "string")
+            throw new TypeError("native effect did not return text");
+        });
+        const current = readMechanicsEntry(entryKey, candidate);
+        return observed !== undefined &&
+          entries === structureEntries &&
+          entries.get(entryKey) === candidate &&
+          current?.action === entry.action &&
+          current.actionId === entry.actionId &&
+          current.region === entry.region &&
+          current.sector === entry.sector &&
+          current.struct === entry.struct &&
+          readMechanicsMethod(entry.action, "effect") === effect &&
+          (isCurrent === undefined || isCurrent())
+          ? { kind: "value", value: observed }
           : { kind: "invalid" };
       } catch {
         return { kind: "invalid" };
