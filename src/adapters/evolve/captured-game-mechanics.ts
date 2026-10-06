@@ -174,6 +174,25 @@ function readMechanicsCall(
   }
 }
 
+/**
+ * Whether a retained receiver still only holds what the private support map holds: whole
+ * non-negative counts, keyed by captured consumer struct names. Anything else means the probe
+ * retained the wrong object, and the read answers invalid rather than a stranger's number.
+ */
+function isSupportOnAuthority(
+  value: Record<string, unknown>,
+  supportConsumerNames: ReadonlySet<string>,
+): boolean {
+  if (!isNonArrayRecord(value)) return false;
+  for (const key of Object.keys(value)) {
+    if (!supportConsumerNames.has(key)) return false;
+    const count = readMechanicsDataProperty(value, key);
+    if (typeof count !== "number" || !Number.isSafeInteger(count) || count < 0)
+      return false;
+  }
+  return true;
+}
+
 function readMechanicsPrimitive(
   action: Record<string, unknown>,
   name: string,
@@ -973,6 +992,7 @@ function emptyGameMechanics(): CapturedGameMechanics {
     readSupportOrder: () => ({ kind: "invalid" as const }),
     readProductionBreakdown: () => undefined,
     readEffectivePowerCount: () => ({ kind: "invalid" as const }),
+    readEffectiveSupportCount: () => ({ kind: "invalid" as const }),
     readLocalizedText: () => ({ kind: "absent" as const }),
     readAdjustedFuelFactor: () => ({ kind: "invalid" as const }),
     readRoundedValues: () => ({ kind: "invalid" as const }),
@@ -1194,7 +1214,129 @@ export function installCapturedGameMechanics(
   let nativePowerOn: Record<string, unknown> | undefined;
   const retainNativePowerOn = (receiver: Record<string, unknown>): void => {
     nativePowerOn = receiver;
+    installSupportOnProbe();
   };
+  let nativeSupportOn: Record<string, unknown> | undefined;
+  /** Consumer struct names, from the captured action definitions; the probe is keyed on them. */
+  const supportConsumerNames = new Set<string>();
+  const supportOnFirstReceivers = new Map<string, Record<string, unknown>>();
+  const supportOnProbeSetters = new Map<
+    string,
+    (this: unknown, value: unknown) => void
+  >();
+
+  /**
+   * Pinned vars.js keeps `support_on` private too, and no single struct name is written on every
+   * pass, so one accessor cannot name it. Instead: learn which captured actions are support consumers
+   * (`support()` is negative in pinned `initStructureGrids`), install one temporary accessor per
+   * consumer struct on the page's `Object.prototype`, and take the first receiver each name reaches
+   * that is not the already-identified `p_on`.
+   *
+   * That is unambiguous because of pinned write order. `initStructureGrids` writes `p_on[struct]`
+   * immediately before `support_on[struct]`, and the production pass writes
+   * `support_on[consumer.struct]` before the `int_on`/`gal_on`/`spire_on` aliases that follow it —
+   * so the first receiver of a consumer name, once `p_on` is excluded, is `support_on`. Every
+   * consumer name must agree on one receiver, and every probe is removed on the first match.
+   */
+  function restoreSupportOnProbe(): void {
+    for (const [name, setter] of supportOnProbeSetters) {
+      if (
+        isNonArrayRecord(objectPrototype) &&
+        Object.getOwnPropertyDescriptor(objectPrototype, name)?.set === setter
+      ) {
+        try {
+          delete (objectPrototype as unknown as Record<string, unknown>)[name];
+        } catch {
+          /* A non-configurable probe is left in place; it forwards the ordinary write. */
+        }
+      }
+    }
+    supportOnProbeSetters.clear();
+  }
+
+  function retainSupportOn(receiver: Record<string, unknown>): void {
+    nativeSupportOn = receiver;
+    restoreSupportOnProbe();
+  }
+
+  function observeSupportOnWrite(
+    name: string,
+    receiver: unknown,
+    value: unknown,
+  ): void {
+    if (nativeSupportOn !== undefined || stopped) return;
+    if (
+      typeof value !== "number" ||
+      !Number.isSafeInteger(value) ||
+      value < 0 ||
+      !isNonArrayRecord(receiver) ||
+      receiver === nativePowerOn ||
+      supportOnFirstReceivers.has(name)
+    )
+      return;
+    supportOnFirstReceivers.set(name, receiver);
+    for (const candidate of supportOnFirstReceivers.values()) {
+      if (candidate !== receiver) return;
+    }
+    retainSupportOn(receiver);
+  }
+
+  function installSupportOnProbe(): void {
+    if (
+      stopped ||
+      nativeSupportOn !== undefined ||
+      nativePowerOn === undefined ||
+      structureEntries === undefined ||
+      supportOnProbeSetters.size > 0 ||
+      !isNonArrayRecord(objectPrototype) ||
+      typeof objectDefineProperty !== "function"
+    )
+      return;
+    for (const entry of structureEntries.values()) {
+      const parsed = readMechanicsEntry(
+        readMechanicsDataProperty(entry, "key"),
+        entry,
+      );
+      if (parsed === undefined) continue;
+      const support = readMechanicsPrimitive(parsed.action, "support");
+      if (support.kind === "value" && support.value < 0)
+        supportConsumerNames.add(parsed.struct);
+    }
+    for (const name of supportConsumerNames) {
+      if (Object.getOwnPropertyDescriptor(objectPrototype, name) !== undefined)
+        continue;
+      const setter = function capturedNativeSupportOnProbe(
+        this: unknown,
+        value: unknown,
+      ): void {
+        Reflect.apply(
+          objectDefineProperty as CapturedGameCall,
+          objectConstructor,
+          [
+            this,
+            name,
+            { configurable: true, enumerable: true, writable: true, value },
+          ],
+        );
+        try {
+          observeSupportOnWrite(name, this, value);
+        } catch {
+          /* A probe must never disturb the game's own write. */
+        }
+      };
+      supportOnProbeSetters.set(name, setter);
+      try {
+        Object.defineProperty(objectPrototype, name, {
+          configurable: true,
+          enumerable: false,
+          set: setter,
+        });
+      } catch {
+        supportOnProbeSetters.delete(name);
+      }
+    }
+  }
+
   let stopped = false;
   let mapHook: CapturedGameCall | undefined;
   let consumeSetter: ((this: unknown, value: unknown) => void) | undefined;
@@ -1336,6 +1478,7 @@ export function installCapturedGameMechanics(
               if (candidateStructureKeys.size >= structureMapCaptureThreshold) {
                 structureEntries = candidateMap;
                 restoreMapSet();
+                installSupportOnProbe();
               }
             }
           } else if (size === 1) {
@@ -1593,6 +1736,44 @@ export function installCapturedGameMechanics(
         ? { kind: "value", value: effective }
         : { kind: "invalid" };
     },
+    readEffectiveSupportCount(
+      root: unknown,
+      entryKey: string,
+    ): CapturedGameRead<number> {
+      if (
+        stopped ||
+        nativeSupportOn === undefined ||
+        structureEntries === undefined
+      )
+        return { kind: "invalid" };
+      const entry = structureEntries.get(entryKey);
+      const parsed = readMechanicsEntry(entryKey, entry);
+      if (parsed === undefined) return { kind: "invalid" };
+      const support = readMechanicsPrimitive(parsed.action, "support");
+      // Only a consumer is clamped into support_on; a provider's contribution is its p_on count.
+      if (support.kind !== "value" || support.value >= 0)
+        return { kind: "invalid" };
+      if (!isSupportOnAuthority(nativeSupportOn, supportConsumerNames))
+        return { kind: "invalid" };
+      const state = readMechanicsProperty(
+        readMechanicsProperty(root, parsed.region),
+        parsed.struct,
+      );
+      const configured = readMechanicsProperty(state, "on");
+      const effective = readMechanicsDataProperty(
+        nativeSupportOn,
+        parsed.struct,
+      );
+      return typeof configured === "number" &&
+        Number.isSafeInteger(configured) &&
+        configured >= 0 &&
+        typeof effective === "number" &&
+        Number.isSafeInteger(effective) &&
+        effective >= 0 &&
+        effective <= configured
+        ? { kind: "value", value: effective }
+        : { kind: "invalid" };
+    },
     readLocalizedText(key: string): CapturedGameRead<string> {
       if (stopped) return { kind: "invalid" };
       const game = readMechanicsProperty(pageWindow, "game");
@@ -1831,6 +2012,7 @@ export function installCapturedGameMechanics(
       restoreMapSet();
       restorePowerCallbackHooks();
       restorePowerOnProbe();
+      restoreSupportOnProbe();
       restoreConsumeSetter();
     },
   });

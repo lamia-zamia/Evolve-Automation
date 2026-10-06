@@ -3,8 +3,8 @@ export interface ProjectOffer {
   readonly projectId: string;
   readonly rank: number;
   readonly progress: number;
+  /** Exact native cost of one percentage point, in the native resource order. */
   readonly cost: Readonly<Record<string, number>>;
-  readonly generation: number;
 }
 
 export interface ProjectAutomationTarget {
@@ -64,11 +64,13 @@ export interface ProjectPlanningInput {
 export interface PlannedProject {
   readonly elementId: string;
   readonly projectId: string;
-  readonly generation: number;
   readonly rank: number;
   readonly progress: number;
   readonly steps: number;
   readonly weighting: number;
+  /** The exact native per-percent price this decision was priced against. */
+  readonly percentCosts: Readonly<Record<string, number>>;
+  /** What `steps` percentage points reserve, which is `percentCosts` times `steps`. */
   readonly cost: Readonly<Record<string, number>>;
 }
 
@@ -224,11 +226,11 @@ export function planProjectsWithRejections(
       project: Object.freeze({
         elementId: offered.elementId,
         projectId: offered.projectId,
-        generation: offered.generation,
         rank: offered.rank,
         progress: offered.progress,
         steps,
         weighting,
+        percentCosts: offered.cost,
         cost: Object.freeze(cost),
       }),
     });

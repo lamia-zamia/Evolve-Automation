@@ -960,36 +960,40 @@ export function planPowerCycle(
     station.smartCategory &&
     station.smartEnabled
   ) {
-    // Run the ordinary policy once with only Belt capacity relaxed. The first
-    // eligible consumer in native Power order gets one prospective increment.
+    // Run the ordinary policy once with only Belt capacity relaxed, then read every Belt support
+    // consumer's planned *configured* count out of that pass.
     const probe = planPowerCycleCore(input, state, beltStationFloor, true);
-    const consumer = input.buildings.find((building) => {
+    let plannedDemand = 0;
+    for (const building of input.buildings) {
+      const change = building.supportChanges.find(
+        (candidate) => candidate.type === "belt" && candidate.amount > 0,
+      );
+      if (change === undefined) continue;
       const planned = probe.decision?.operations.find(
         (operation) =>
           operation.kind === "adjust-building" &&
           operation.binding === building.binding,
       );
-      return (
-        planned?.kind === "adjust-building" &&
-        planned.amount > 0 &&
-        building.supportChanges.some(
-          (change) => change.type === "belt" && change.amount > 0,
-        )
-      );
-    });
+      const configured =
+        planned?.kind === "adjust-building"
+          ? planned.expectedStateOn + planned.amount
+          : building.stateOn;
+      if (!Number.isFinite(configured) || configured <= 0) continue;
+      // Pinned main.js accumulates `active * supportSize`, where the requirement is the absolute
+      // value of the consumer's own `support()` and `active` is what the player has switched on.
+      // Effective `support_on` is deliberately not used here: it is zero in exactly the state this
+      // floor exists to recover.
+      plannedDemand += change.amount * configured;
+    }
     const unit = -(
       station.supportChanges.find((change) => change.type === "belt")?.amount ??
       0
     );
-    const demand = consumer?.supportChanges.find(
-      (change) => change.type === "belt" && change.amount > 0,
-    )?.amount;
-    if (unit > 0) {
-      beltStationFloor = Math.max(
-        0,
-        station.stateOn +
-          Math.ceil((belt.current + (demand ?? 0) - belt.maximum) / unit),
-      );
+    if (unit > 0 && plannedDemand > 0) {
+      // The Belt grid's only provider is this station, so the configured count that can carry the
+      // planned demand is the whole floor. The station's own shed rule may still take it lower when
+      // there is no demand at all.
+      beltStationFloor = Math.ceil(plannedDemand / unit);
     }
   }
   return planPowerCycleCore(input, state, beltStationFloor, false);

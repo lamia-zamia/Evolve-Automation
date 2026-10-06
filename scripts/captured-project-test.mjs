@@ -20,7 +20,6 @@ const offered = (id, overrides = {}) => ({
   rank: 0,
   progress: 0,
   cost: { Money: 10 },
-  generation: 1,
   ...overrides,
 });
 
@@ -65,7 +64,6 @@ const offered = (id, overrides = {}) => ({
     planned.map((project) => ({
       elementId: project.elementId,
       projectId: project.projectId,
-      generation: project.generation,
       rank: project.rank,
       progress: project.progress,
       steps: project.steps,
@@ -75,7 +73,6 @@ const offered = (id, overrides = {}) => ({
       {
         elementId: "arpalhc",
         projectId: "lhc",
-        generation: 1,
         rank: 0,
         progress: 95,
         steps: 3,
@@ -174,7 +171,7 @@ const offered = (id, overrides = {}) => ({
 
 function makeAdapter({
   progress = 20,
-  generation = 2,
+  buildVerdict = "built",
   conflict = { status: "none" },
   queue = [],
   catalog = undefined,
@@ -185,7 +182,7 @@ function makeAdapter({
   resourcesAvailable = true,
 } = {}) {
   if (catalog === undefined) {
-    catalog = [offered("lhc", { rank: 1, progress, generation: 2 })];
+    catalog = [offered("lhc", { rank: 1, progress })];
   }
   settings ??= {
     autoARPA: true,
@@ -209,36 +206,72 @@ function makeAdapter({
   };
   const calls = [];
   const activity = [];
-  const controls = {
-    resolve: (elementId) => ({
-      elementId,
-      generation,
-      methods: ["build"],
-      data: { title: "Large Hadron Collider" },
-    }),
-    capturedElementIds: () => entries.map((project) => project.elementId),
-    invoke(handle, method, args = []) {
-      calls.push([handle.elementId, method, ...args]);
-      if (handle.generation !== generation)
-        return { ok: false, reason: "stale-control" };
-      const project = entries.find((entry) => entry.projectId === args[0]);
+  // The running bundle's own project build, as the captured mechanics answer it. The authority
+  // bracket lives in the real adapter; this fake only performs the native mutation.
+  const mechanics = {
+    ensureCaptured: () => ({ kind: "captured" }),
+    readOffers: () =>
+      entries.map((project) => ({
+        projectId: project.projectId,
+        rank: root.arpa[project.projectId]?.rank ?? 0,
+        progress: root.arpa[project.projectId]?.complete ?? 0,
+        percentCosts: project.cost,
+      })),
+    buildPercent(sample, plan) {
+      if (sample !== root)
+        return { kind: "stale", reason: "the game root was replaced" };
+      if (buildVerdict === "unavailable")
+        return {
+          kind: "unavailable",
+          reason: "the native build is unavailable",
+        };
+      const project = entries.find(
+        (entry) => entry.projectId === plan.projectId,
+      );
       if (project === undefined)
-        return { ok: false, reason: "unknown-control" };
-      if (actionModes[project.projectId] === "no-op") {
-        return { ok: true, value: undefined };
+        return {
+          kind: "stale",
+          reason: "the project left the native registry",
+        };
+      const current = root.arpa[plan.projectId] ?? { rank: 0, complete: 0 };
+      if (current.rank !== plan.rank || current.complete !== plan.progress)
+        return {
+          kind: "stale",
+          reason: "the project moved after it was sampled",
+        };
+      calls.push([
+        `arpa${plan.projectId}`,
+        "build",
+        plan.projectId,
+        plan.percent,
+      ]);
+      if (actionModes[plan.projectId] === "no-op") {
+        return {
+          kind: "stale",
+          reason: "the native build moved 0 of 1 points",
+        };
       }
-      const steps = args[1];
+      const state = root.arpa[plan.projectId];
       const price = project.cost.Money ?? 0;
-      if (root.resource.Money.amount < steps * price)
-        return { ok: true, value: undefined };
-      root.resource.Money.amount -= steps * price;
-      const state = root.arpa[project.projectId];
-      state.complete += steps;
-      if (state.complete >= 100) {
-        state.rank++;
-        state.complete = 0;
+      let steps = 0;
+      for (let index = 0; index < plan.percent; index++) {
+        if (root.resource.Money.amount < price) break;
+        root.resource.Money.amount -= price;
+        state.complete += 1;
+        if (state.complete >= 100) {
+          state.rank++;
+          state.complete = 0;
+        }
+        steps++;
       }
-      return { ok: true, value: undefined };
+      if (steps === 0)
+        return { kind: "stale", reason: "the native build moved 0 points" };
+      return {
+        kind: "built",
+        rank: state.rank,
+        progress: state.complete,
+        charged: { Money: steps * price },
+      };
     },
   };
   const rootState = {
@@ -294,7 +327,8 @@ function makeAdapter({
           },
         },
         resources,
-        controls,
+        mechanics,
+        readProjectLabel: () => "Large Hadron Collider",
         context: { readContext: () => context },
         readSettings: () => settings,
         onActivity: (activityEntry) => activity.push(activityEntry.message),
@@ -463,13 +497,13 @@ function makeAdapter({
   }
 }
 
-// A successful project invocation that leaves both project progress and the expected queue entry
-// unchanged is unverified, so the lower-ranked project is not invoked.
+// A native build that moves nothing is not a purchase: the authority bracket fails it stale, and
+// the lower-ranked project is not invoked behind an unverified mutation.
 {
   const page = makeAdapter({
     catalog: [
-      offered("lhc", { rank: 1, progress: 20, generation: 2 }),
-      offered("monument", { rank: 1, progress: 20, generation: 2 }),
+      offered("lhc", { rank: 1, progress: 20 }),
+      offered("monument", { rank: 1, progress: 20 }),
     ],
     settings: {
       autoARPA: true,
@@ -487,7 +521,8 @@ function makeAdapter({
     actionModes: { lhc: "no-op" },
   });
   const outcome = runBuildAutomation(page.adapter);
-  assert.equal(outcome.status, "succeeded");
+  assert.equal(outcome.status, "stale");
+  assert.equal(outcome.failure.code, "stale-project-state");
   assert.deepEqual(page.calls, [["arpalhc", "build", "lhc", 5]]);
   assert.equal(page.root.arpa.monument.complete, 20);
 }
@@ -570,14 +605,14 @@ function makeAdapter({
   );
 }
 
-// The executor refuses a redrawn closure and a project whose rank/progress moved after planning.
+// The executor refuses an unavailable native build and a project whose rank/progress moved after planning.
 {
   const actionDiagnostics = [];
   const redrawn = makeAdapter({
-    generation: 3,
+    buildVerdict: "unavailable",
     catalog: [
-      offered("lhc", { rank: 1, progress: 20, generation: 2 }),
-      offered("monument", { rank: 1, progress: 20, generation: 2 }),
+      offered("lhc", { rank: 1, progress: 20 }),
+      offered("monument", { rank: 1, progress: 20 }),
     ],
     settings: {
       autoARPA: true,
@@ -595,8 +630,9 @@ function makeAdapter({
     onDiagnostic: (message) => actionDiagnostics.push(message),
   });
   const redrawnOutcome = runBuildAutomation(redrawn.adapter);
-  assert.equal(redrawnOutcome.status, "stale");
-  assert.equal(redrawnOutcome.failure.code, "stale-project-control");
+  assert.equal(redrawnOutcome.status, "rejected");
+  assert.equal(redrawnOutcome.failure.code, "project-build-failed");
+  // A refusal from the mutation authority is caught by its own bracket, so nothing is invoked.
   assert.deepEqual(redrawn.calls, []);
   assert.ok(
     actionDiagnostics.some((message) =>
@@ -612,6 +648,8 @@ function makeAdapter({
       .failure.code,
     "stale-project-state",
   );
+  // The stale sample is caught by the mutation authority's own bracket, so the native build is
+  // never invoked.
   assert.deepEqual(moved.calls, []);
 }
 

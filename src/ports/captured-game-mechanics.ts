@@ -165,6 +165,15 @@ export interface CapturedGameMechanics {
     root: unknown,
     entryKey: string,
   ): CapturedGameRead<number>;
+  /**
+   * Native `support_on` after the support pass has clamped a consumer to the capacity actually
+   * available. Configured `state.on` is the requested count; this is the effective one, and
+   * configured above effective is a starved grid rather than an inconsistent model.
+   */
+  readEffectiveSupportCount(
+    root: unknown,
+    entryKey: string,
+  ): CapturedGameRead<number>;
   /** Localize a game-owned key for matching its current production ledger label. */
   readLocalizedText(key: string): CapturedGameRead<string>;
   /** Factor observed by synchronously probing a game-owned action effect. */

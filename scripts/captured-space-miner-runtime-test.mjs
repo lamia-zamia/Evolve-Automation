@@ -204,6 +204,19 @@ function runMinerBootstrap({
         value(type === "belt" ? [iron, ship] : []),
       readEffectivePowerCount: (sample, key) =>
         value(sample.space[key.split(":")[1]]?.on ?? 0),
+      // Native support_on is the count the support pass actually served; the live 0/5 case has a
+      // consumer configured on and effectively zero, so the default here follows the root's own
+      // `supportOn` map when a scenario supplies one.
+      readEffectiveSupportCount: (sample, key) => {
+        const struct = key.split(":")[1];
+        const configured = sample.space[struct]?.on;
+        const effective = sample.space.supportOn?.[struct] ?? configured;
+        return Number.isSafeInteger(effective) &&
+          effective >= 0 &&
+          effective <= configured
+          ? value(effective)
+          : { kind: "invalid" };
+      },
       readProductionBreakdown: () => ({
         production: { Iron: { "Space Miner": 3 } },
         consumption: {},

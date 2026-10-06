@@ -2211,7 +2211,21 @@ function readPowerCycle(
               continue;
             }
             modeledMaximum -= change.amount * effective.value;
-          } else modeledCurrent += change.amount * candidate.record.stateOn;
+          } else {
+            // Pinned main.js clamps a consumer to the capacity actually available and then adds
+            // `active * supportSize` to the anchor's `support`, where `active` is what landed in the
+            // private `support_on`. Configured `state.on` is the requested count, so a starved
+            // consumer is a valid native state and must not be modelled as if it were served.
+            const effective = dependencies.mechanics.readEffectiveSupportCount(
+              root,
+              candidate.record.structure.entryKey,
+            );
+            if (effective.kind !== "value") {
+              unsafeTypes.add(support.type);
+              continue;
+            }
+            modeledCurrent += change.amount * effective.value;
+          }
         }
       }
       if (

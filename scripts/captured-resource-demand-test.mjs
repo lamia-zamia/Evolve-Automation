@@ -232,7 +232,6 @@ function arpaProductionScenario({
     rank: 0,
     progress,
     cost: perPercentCosts,
-    generation: 3,
   };
   const settings = {
     autoTrigger,
@@ -391,7 +390,6 @@ function arpaProductionScenario({
         projectId: "lhc",
         steps: 100 - progress,
         progress,
-        generation: 1,
       },
     ],
   });
@@ -1640,7 +1638,6 @@ for (const [missionId, completionTech, completionLevel] of [
         rank: 0,
         progress: 0,
         cost: { Iron: 100 },
-        generation: 1,
       },
       {
         elementId: "arpadisabled",
@@ -1648,7 +1645,6 @@ for (const [missionId, completionTech, completionLevel] of [
         rank: 0,
         progress: 0,
         cost: { Iron: 2000 },
-        generation: 1,
       },
       // Locked projects are absent from the game's current offered catalog.
     ],
@@ -1765,7 +1761,6 @@ for (const [missionId, completionTech, completionLevel] of [
           rank: 0,
           progress,
           cost: { Iron: 100 },
-          generation: 1,
         },
       ],
     }).sample();
@@ -1804,7 +1799,6 @@ for (const [missionId, completionTech, completionLevel] of [
           projectId: "lhc",
           steps: 80,
           progress: 20,
-          generation: 1,
         },
       ],
     },
@@ -1815,7 +1809,6 @@ for (const [missionId, completionTech, completionLevel] of [
         rank: 0,
         progress: 20,
         cost: { Iron: 100 },
-        generation: 1,
       },
     ],
   }).sample();
@@ -1835,7 +1828,7 @@ for (const [missionId, completionTech, completionLevel] of [
       projectId: "lhc",
       steps: 10,
       progress: 20,
-      generation: 3,
+      percentCosts: { Iron: 100 },
     },
   ]);
   assert.equal(sample.maxCost?.("Iron"), 1000);

@@ -45,7 +45,7 @@ const PROJECTS = [
     rank: 0,
     progress: 10,
     cost: { Money: 100, Lumber: 50 },
-    generation: 3,
+    percentCosts: { Money: 100, Lumber: 50 },
   },
 ];
 
@@ -56,7 +56,7 @@ const ARPA_TARGET = {
   projectId: "launch_facility",
   steps: 90,
   progress: 10,
-  generation: 3,
+  percentCosts: { Money: 100, Lumber: 50 },
 };
 
 function trigger(overrides = {}) {
@@ -325,7 +325,7 @@ assert.deepEqual(
         rank: 0,
         progress: 10,
         cost: { Money: 100, Lumber: 60 },
-        generation: 3,
+        percentCosts: { Money: 100, Lumber: 60 },
       },
     ],
   }).read(),
@@ -337,7 +337,7 @@ assert.deepEqual(
       projectId: "launch_facility",
       steps: 83,
       progress: 10,
-      generation: 3,
+      percentCosts: { Money: 100, Lumber: 60 },
     },
   ],
 );
@@ -356,17 +356,13 @@ assert.deepEqual(
   [],
 );
 
-// A project whose control was never captured is not one the executor could press.
+// A project the captured mechanics no longer offer raises no demand, whatever its trigger row says.
 assert.deepEqual(
   triggers({
     triggers: [
       trigger({ actionType: "arpa", actionId: "arpalaunch_facility" }),
     ],
-    controls: {
-      resolve: () => undefined,
-      invoke: () => ({ ok: true, value: undefined }),
-      capturedElementIds: () => [],
-    },
+    readOfferedProjects: () => [],
   }).read(),
   [],
 );

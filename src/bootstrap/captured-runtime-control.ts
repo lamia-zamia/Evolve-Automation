@@ -175,7 +175,7 @@ import {
   type CraftingDocument,
 } from "../adapters/evolve/economy/production/captured-crafting.ts";
 import { createGameDrawnActionsReader } from "../adapters/browser/game-drawn-actions.ts";
-import { createGameDrawnProjectsReader } from "../adapters/browser/game-drawn-projects.ts";
+import { createCapturedArpaMechanics } from "../adapters/evolve/progression/research/captured-arpa-mechanics.ts";
 import { createGamePanelWorkspace } from "../adapters/browser/game-panel-workspace.ts";
 import { createGameModalCloser } from "../adapters/browser/game-modal.ts";
 import { createSettingsStore } from "../adapters/browser/settings-store.ts";
@@ -271,12 +271,8 @@ type WorkspaceDocument = ReturnType<
 type DrawnActionsDocument = ReturnType<
   Parameters<typeof createGameDrawnActionsReader>[0]["getDocument"]
 >;
-type DrawnProjectsDocument = ReturnType<
-  Parameters<typeof createGameDrawnProjectsReader>[0]["getDocument"]
->;
 type CapturedDocument = WorkspaceDocument &
   DrawnActionsDocument &
-  DrawnProjectsDocument &
   CraftingDocument & {
     querySelector(selector: string): { click?(): void } | null;
   };
@@ -874,6 +870,21 @@ export function startCapturedRuntime({
   let demandPrerequisitesThisCycle: DemandPrerequisiteReport | undefined;
   const readDemandPrerequisites = () => demandPrerequisitesThisCycle;
   const mechSupplyReservation = createMechSupplyReservation();
+  const arpa = createCapturedArpaMechanics({
+    rootState: pageCapture.rootState,
+    discovery: createCapturedTabDiscovery({
+      rootState: pageCapture.rootState,
+      controls: pageCapture.controls,
+      mountSuppression: pageCapture.mountSuppression,
+      panels,
+      ...(diagnostics === undefined ? {} : { diagnostics }),
+    }),
+    pageWindow: settingsHostWindow,
+    bindings: pageCapture.bindings,
+    ...(diagnostics === undefined
+      ? {}
+      : { onDiagnostic: (message: string) => reportDiagnostic(message) }),
+  });
   const progression = createCapturedProgressionControl({
     readMechPowerSupplyHold: mechSupplyReservation.readPowerSupplyHold,
     rootState: pageCapture.rootState,
@@ -885,10 +896,7 @@ export function startCapturedRuntime({
     drawnActions: createGameDrawnActionsReader({
       getDocument: () => document,
     }),
-    drawnProjects: createGameDrawnProjectsReader({
-      getDocument: () => document,
-      createMouseEvent: (type) => new mouseEvent(type),
-    }),
+    arpa,
     costs: buildCosts,
     readSettings: () => settingsStore.readRaw(),
     readInterfacePresentationSettings: readEffectiveInterfacePresentation,
@@ -1296,6 +1304,7 @@ export function startCapturedRuntime({
     readSettings: () => settingsStore.readRaw(),
     readOfferedTechs: progression.readOfferedTechs,
     readOfferedProjects: progression.readProjects,
+    arpa,
   });
   const demand = createCapturedResourceDemand({
     rootState: pageCapture.rootState,

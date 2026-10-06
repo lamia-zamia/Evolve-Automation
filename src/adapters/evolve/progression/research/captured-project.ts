@@ -16,11 +16,11 @@ import {
 } from "../../../../domain/progression/research/project.ts";
 import { resourceView } from "../../../../domain/game-world.ts";
 import type { BuildClickResult } from "../../../../ports/build.ts";
+import type { CapturedArpaMechanics } from "../../../../ports/captured-arpa-mechanics.ts";
 import type {
   ConstructionCandidate,
   ConstructionCandidateSource,
 } from "../../../../ports/construction-candidates.ts";
-import type { GameControlRegistry } from "../../../../ports/game-control-registry.ts";
 import type { GameActivitySink } from "../../../../ports/game-message-log.ts";
 import type {
   GameProjectCatalog,
@@ -30,16 +30,17 @@ import type { GameRootStateSource } from "../../../../ports/game-root-state.ts";
 import type { CapturedProjectContextReader } from "./captured-project-context.ts";
 import type { GameResourceSource } from "../../../../ports/game-world-state.ts";
 import { rejected, stale, SUCCEEDED } from "../../../command-outcomes.ts";
-import { readCapturedControlLabel } from "../../captured-control-label.ts";
-import { readCapturedBuildQueueEntryCount } from "../../captured-queue-reservations.ts";
 import { isNonArrayRecord, readProperty } from "../../../validation.ts";
 
 export interface CapturedProjectDependencies {
   readonly rootState: GameRootStateSource;
-  /** Only the drawing half: this source plans from one sample and never restates one. */
+  /** Only the reading half: this source plans from one sample and never restates one. */
   readonly catalog: Pick<GameProjectCatalog, "readProjects">;
   readonly resources: GameResourceSource;
-  readonly controls: GameControlRegistry;
+  /** The running bundle's own project build and cost closures. */
+  readonly mechanics: CapturedArpaMechanics;
+  /** The game's own bound project title, for the activity message a verified build reports. */
+  readonly readProjectLabel: (projectId: string) => string;
   /** What the prestige plan, challenge and race say about projects this run. */
   readonly context: CapturedProjectContextReader;
   /** Persisted script settings are external input and are normalized here. */
@@ -105,22 +106,6 @@ export function readCapturedProjectSettings(
   });
 }
 
-function projectState(
-  root: unknown,
-  id: string,
-): { rank: number; progress: number } | undefined {
-  const state = readProperty(readProperty(root, "arpa"), id);
-  if (!isNonArrayRecord(state)) return undefined;
-  const rank = Number(state["rank"]);
-  const progress = Number(state["complete"]);
-  return Number.isSafeInteger(rank) &&
-    rank >= 0 &&
-    Number.isSafeInteger(progress) &&
-    progress >= 0
-    ? { rank, progress }
-    : undefined;
-}
-
 function queuedIds(root: unknown): ReadonlySet<string> {
   const queue = readProperty(readProperty(root, "queue"), "queue");
   if (!Array.isArray(queue)) return new Set();
@@ -135,7 +120,7 @@ function queuedIds(root: unknown): ReadonlySet<string> {
 export function createCapturedProjectSource(
   dependencies: CapturedProjectDependencies,
 ): ConstructionCandidateSource {
-  const { rootState, catalog, resources, controls, context, readSettings } =
+  const { rootState, catalog, resources, mechanics, context, readSettings } =
     dependencies;
   const reportActivity = dependencies.onActivity ?? (() => {});
   const reportDiagnostic = dependencies.onDiagnostic;
@@ -211,8 +196,8 @@ export function createCapturedProjectSource(
       }
       const offered = catalog.readProjects();
       if (offered === undefined) {
-        // A discovery pass that failed leaves no catalog. Planning from the previous one would
-        // spend against prices and offers the game may already have moved past.
+        // A native catalog read that failed leaves no current offer. Planning from the previous one
+        // would spend against prices and offers the game may already have moved past.
         cycle = new Map();
         reportDiagnostic?.("ARPA catalog unavailable: no current offer sample");
         return Object.freeze({
@@ -314,117 +299,60 @@ export function createCapturedProjectSource(
           ...base,
         });
       }
-      const handle = controls.resolve(candidate.project.elementId);
-      if (handle === undefined) {
+      const root = rootState.readRoot();
+      if (root === undefined) {
         reportDiagnostic?.(
-          `ARPA action failed/stale: missing control ${candidate.project.projectId}`,
-        );
-        return Object.freeze({
-          outcome: rejected(
-            "project-control-missing",
-            `no captured control for ${candidate.project.elementId}`,
-          ),
-          disposition: "stopped" as const,
-          ...base,
-        });
-      }
-      if (handle.generation !== candidate.project.generation) {
-        reportDiagnostic?.(
-          `ARPA action failed/stale: redrawn control ${candidate.project.projectId}`,
-        );
-        return Object.freeze({
-          outcome: stale(
-            "stale-project-control",
-            `${candidate.project.elementId} was redrawn`,
-          ),
-          disposition: "stopped" as const,
-          ...base,
-        });
-      }
-      const before = projectState(
-        rootState.readRoot(),
-        candidate.project.projectId,
-      );
-      if (
-        before === undefined ||
-        before.rank !== candidate.project.rank ||
-        before.progress !== candidate.project.progress
-      ) {
-        reportDiagnostic?.(
-          `ARPA action failed/stale: project state changed ${candidate.project.projectId}`,
+          `ARPA action failed/stale: no game root ${candidate.project.projectId}`,
         );
         return Object.freeze({
           outcome: stale(
             "stale-project-state",
-            `${candidate.project.projectId} moved after sampling`,
+            "the game root has not been captured",
           ),
           disposition: "stopped" as const,
           ...base,
         });
       }
-      const rootBefore = rootState.readRoot();
-      const queueBefore = readCapturedBuildQueueEntryCount(
-        rootBefore,
-        candidate.project.elementId,
-      );
       reportDiagnostic?.(
         `ARPA action invoked: ${candidate.project.projectId} ${candidate.project.steps}%`,
       );
-      const result = controls.invoke(handle, "build", [
-        candidate.project.projectId,
-        candidate.project.steps,
-      ]);
-      const rootAfter = rootState.readRoot();
-      const after = projectState(rootAfter, candidate.project.projectId);
-      const progressed =
-        after !== undefined &&
-        (after.rank > before.rank || after.progress > before.progress);
-      const queueAfter = readCapturedBuildQueueEntryCount(
-        rootAfter,
-        candidate.project.elementId,
-      );
-      const queued = queueAfter > queueBefore;
-      if (!result.ok) {
+      // Every authority the decision was priced against — same root, same project state, same exact
+      // native cost, same offer — is rechecked inside the adapter around the native build, and the
+      // root mutation itself is verified there. The closure's answer is never taken on trust.
+      const built = mechanics.buildPercent(root, {
+        projectId: candidate.project.projectId,
+        rank: candidate.project.rank,
+        progress: candidate.project.progress,
+        percent: candidate.project.steps,
+        percentCosts: candidate.project.percentCosts,
+      });
+      if (built.kind !== "built") {
+        const detail = built.reason;
         reportDiagnostic?.(
-          `ARPA action failed/stale: ${candidate.project.projectId} ${result.reason}`,
+          `ARPA action failed/stale: ${candidate.project.projectId} ${detail}`,
         );
         return Object.freeze({
           outcome:
-            result.reason === "stale-control"
-              ? stale("stale-project-control", result.detail ?? result.reason)
-              : rejected(
-                  "project-build-failed",
-                  result.detail ?? result.reason,
-                ),
+            built.kind === "unavailable"
+              ? rejected("project-build-failed", detail)
+              : stale("stale-project-state", detail),
           disposition: "stopped" as const,
           ...base,
         });
       }
-      const clicked = progressed || queued;
-      if (!clicked) {
-        reportDiagnostic?.(
-          `ARPA action failed/stale: no verified progress ${candidate.project.projectId}`,
-        );
-      }
-      if (progressed) {
-        const label = readCapturedControlLabel(
-          handle,
-          candidate.project.projectId,
-        );
-        reportActivity({
-          message: `Built ${label} (${after.rank}:${after.progress}%)`,
-          color: "success",
-          tags: Object.freeze(["queue", "building_queue"]),
-        });
-      }
+      reportActivity({
+        message: `Built ${dependencies.readProjectLabel(candidate.project.projectId)} (${built.rank}:${built.progress}%)`,
+        color: "success",
+        tags: Object.freeze(["queue", "building_queue"]),
+      });
       return Object.freeze({
         outcome: SUCCEEDED,
-        clicked,
+        // The native build spends and advances in place, so a verified mutation is the whole effect.
+        // Nothing enters the build queue; `beginCycle` is what keeps a queued project out of here.
+        clicked: true,
         mission: false,
         consumption: NO_CONSUMPTION,
-        disposition: clicked
-          ? ("verified-success" as const)
-          : ("invoked-but-unverified" as const),
+        disposition: "verified-success" as const,
       });
     },
   });

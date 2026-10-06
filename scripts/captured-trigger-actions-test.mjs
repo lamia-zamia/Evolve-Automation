@@ -23,7 +23,7 @@ const ARPA = Object.freeze({
   projectId: "launch_facility",
   steps: 90,
   progress: 10,
-  generation: 1,
+  percentCosts: { Money: 100 },
 });
 const ARPA_OFFER = Object.freeze({
   elementId: "arpalaunch_facility",
@@ -31,7 +31,6 @@ const ARPA_OFFER = Object.freeze({
   rank: 0,
   progress: 10,
   cost: { Money: 100 },
-  generation: 1,
 });
 
 function makeRoot(overrides = {}) {
@@ -72,9 +71,47 @@ function actions({
   ],
   projects = [ARPA_OFFER],
   onInvoke = () => {},
+  arpaBuild = "built",
 } = {}) {
   const invoked = [];
   const calls = [];
+  const builds = [];
+  // The running bundle's own project build, bracketed the way the captured mechanics bracket it.
+  const arpa = {
+    ensureCaptured: () => ({ kind: "captured" }),
+    readOffers: () => projects ?? [],
+    buildPercent(sample, plan) {
+      builds.push(plan);
+      if (arpaBuild === "unavailable")
+        return {
+          kind: "unavailable",
+          reason: "the native build is unavailable",
+        };
+      const state = sample.arpa?.[plan.projectId];
+      if (
+        state === undefined ||
+        state.rank !== plan.rank ||
+        state.complete !== plan.progress
+      )
+        return {
+          kind: "stale",
+          reason: "the project moved after it was sampled",
+        };
+      invoked.push(`${plan.projectId}.build`);
+      calls.push({
+        elementId: `arpa${plan.projectId}`,
+        method: "build",
+        args: [plan.projectId, plan.percent],
+      });
+      onInvoke(undefined, "build", sample);
+      return {
+        kind: "built",
+        rank: state.rank,
+        progress: state.complete,
+        charged: {},
+      };
+    },
+  };
   const adapter = createCapturedTriggerActions({
     rootState: { readRoot: () => root },
     resources: {
@@ -109,12 +146,13 @@ function actions({
       },
       capturedElementIds: () => Object.keys(generations),
     },
+    arpa,
     readTargets: () => targets,
     readSettings: () => settings,
     readOfferedTechs: () => (offered === null ? undefined : offered),
     readOfferedProjects: () => (projects === null ? undefined : projects),
   });
-  return { ...adapter, invoked, calls, root };
+  return { ...adapter, invoked, calls, builds, root };
 }
 
 // The reader walks the cycle's own target list and stops at its end.
@@ -362,7 +400,6 @@ function arpaRoot(overrides = {}) {
   const { executor, invoked, calls, root } = actions({
     root: arpaRoot(),
     targets: [ARPA],
-    generations: { arpalaunch_facility: 1 },
     onInvoke: (_handle, _method, current) => {
       current.arpa.launch_facility.complete += 90;
     },
@@ -372,25 +409,26 @@ function arpaRoot(overrides = {}) {
     index: 0,
     targetId: "arpalaunch_facility",
   });
-  assert.deepEqual(invoked, ["arpalaunch_facility.build"]);
+  assert.deepEqual(invoked, ["launch_facility.build"]);
   assert.deepEqual(calls[0].args, ["launch_facility", 90]);
   assert.equal(result.outcome.status, "succeeded");
   assert.equal(result.clicked, true);
   assert.equal(root.arpa.launch_facility.complete, 100);
 }
 
-// A project press the game declined bought nothing; it is a decision, not a failure.
+// An unavailable native build is a rejected purchase, never a silent success.
 {
   const result = actions({
     root: arpaRoot(),
     targets: [ARPA],
-    generations: { arpalaunch_facility: 1 },
+    arpaBuild: "unavailable",
   }).executor.execute({
     kind: "click",
     index: 0,
     targetId: "arpalaunch_facility",
   });
-  assert.equal(result.outcome.status, "succeeded");
+  assert.equal(result.outcome.status, "rejected");
+  assert.equal(result.outcome.failure.code, "project-build-failed");
   assert.equal(result.clicked, false);
 }
 
@@ -407,12 +445,11 @@ function arpaRoot(overrides = {}) {
   assert.deepEqual(adapter.invoked, []);
 }
 
-// A project the game no longer offers, or has redrawn, is not pressed through the old closure.
+// A project the captured mechanics no longer offer is not pressed through the old closure.
 {
   const withdrawn = actions({
     root: arpaRoot(),
     targets: [ARPA],
-    generations: { arpalaunch_facility: 1 },
     projects: [],
   }).executor.execute({
     kind: "click",
@@ -421,18 +458,6 @@ function arpaRoot(overrides = {}) {
   });
   assert.equal(withdrawn.outcome.status, "stale");
   assert.equal(withdrawn.outcome.failure.code, "stale-trigger-offer");
-
-  const redrawn = actions({
-    root: arpaRoot(),
-    targets: [ARPA],
-    generations: { arpalaunch_facility: 2 },
-  }).executor.execute({
-    kind: "click",
-    index: 0,
-    targetId: "arpalaunch_facility",
-  });
-  assert.equal(redrawn.outcome.status, "stale");
-  assert.equal(redrawn.outcome.failure.code, "stale-trigger-control");
 }
 
 // A project that moved after it was priced is repriced next cycle, not pressed at the old price.
@@ -442,7 +467,6 @@ function arpaRoot(overrides = {}) {
   const adapter = actions({
     root: moved,
     targets: [ARPA],
-    generations: { arpalaunch_facility: 1 },
   });
   const result = adapter.executor.execute({
     kind: "click",

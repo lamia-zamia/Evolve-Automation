@@ -115,13 +115,6 @@
       );
     return value;
   }
-  function requireNonArrayRecord(value, path) {
-    if (Array.isArray(value))
-      throw new TypeError(
-        `${path} must be an object, got ${describeValue(value)}`
-      );
-    return requireRecord(value, path);
-  }
   function requireNumber(value, path) {
     if (typeof value != "number" || !Number.isFinite(value))
       throw new TypeError(
@@ -131,13 +124,6 @@
   }
   function coerceNumber(value) {
     return Number(value);
-  }
-  function requireCount(value, path) {
-    if (typeof value != "number" || !Number.isSafeInteger(value) || value < 0)
-      throw new TypeError(
-        `${path} must be a non-negative safe integer, got ${describeValue(value)}`
-      );
-    return value;
   }
   function requireBoolean(value, path) {
     if (typeof value != "boolean")
@@ -1621,6 +1607,16 @@
       return { kind: "invalid" };
     }
   }
+  function isSupportOnAuthority(value, supportConsumerNames) {
+    if (!isNonArrayRecord(value)) return !1;
+    for (let key of Object.keys(value)) {
+      if (!supportConsumerNames.has(key)) return !1;
+      let count2 = readMechanicsDataProperty(value, key);
+      if (typeof count2 != "number" || !Number.isSafeInteger(count2) || count2 < 0)
+        return !1;
+    }
+    return !0;
+  }
   function readMechanicsPrimitive(action, name) {
     let read = readMechanicsCall(action, name);
     if (read.kind !== "value") return read;
@@ -2144,6 +2140,7 @@
       readProductionBreakdown: () => {
       },
       readEffectivePowerCount: () => ({ kind: "invalid" }),
+      readEffectiveSupportCount: () => ({ kind: "invalid" }),
       readLocalizedText: () => ({ kind: "absent" }),
       readAdjustedFuelFactor: () => ({ kind: "invalid" }),
       readRoundedValues: () => ({ kind: "invalid" }),
@@ -2243,8 +2240,71 @@
       });
     }
     let candidateStructureMap, candidateStructureKeys = /* @__PURE__ */ new Set(), productionBreakdownOwner, nativePowerOn, retainNativePowerOn = (receiver) => {
-      nativePowerOn = receiver;
-    }, stopped = !1, mapHook, consumeSetter, powerOnSetter, originalPowerOnProbeDescriptor = isNonArrayRecord(objectPrototype) ? Object.getOwnPropertyDescriptor(objectPrototype, "coal_power") : void 0;
+      nativePowerOn = receiver, installSupportOnProbe();
+    }, nativeSupportOn, supportConsumerNames = /* @__PURE__ */ new Set(), supportOnFirstReceivers = /* @__PURE__ */ new Map(), supportOnProbeSetters = /* @__PURE__ */ new Map();
+    function restoreSupportOnProbe() {
+      for (let [name, setter] of supportOnProbeSetters)
+        if (isNonArrayRecord(objectPrototype) && Object.getOwnPropertyDescriptor(objectPrototype, name)?.set === setter)
+          try {
+            delete objectPrototype[name];
+          } catch {
+          }
+      supportOnProbeSetters.clear();
+    }
+    function retainSupportOn(receiver) {
+      nativeSupportOn = receiver, restoreSupportOnProbe();
+    }
+    function observeSupportOnWrite(name, receiver, value) {
+      if (!(nativeSupportOn !== void 0 || stopped) && !(typeof value != "number" || !Number.isSafeInteger(value) || value < 0 || !isNonArrayRecord(receiver) || receiver === nativePowerOn || supportOnFirstReceivers.has(name))) {
+        supportOnFirstReceivers.set(name, receiver);
+        for (let candidate of supportOnFirstReceivers.values())
+          if (candidate !== receiver) return;
+        retainSupportOn(receiver);
+      }
+    }
+    function installSupportOnProbe() {
+      if (!(stopped || nativeSupportOn !== void 0 || nativePowerOn === void 0 || structureEntries === void 0 || supportOnProbeSetters.size > 0 || !isNonArrayRecord(objectPrototype) || typeof objectDefineProperty != "function")) {
+        for (let entry of structureEntries.values()) {
+          let parsed = readMechanicsEntry(
+            readMechanicsDataProperty(entry, "key"),
+            entry
+          );
+          if (parsed === void 0) continue;
+          let support = readMechanicsPrimitive(parsed.action, "support");
+          support.kind === "value" && support.value < 0 && supportConsumerNames.add(parsed.struct);
+        }
+        for (let name of supportConsumerNames) {
+          if (Object.getOwnPropertyDescriptor(objectPrototype, name) !== void 0)
+            continue;
+          let setter = function(value) {
+            Reflect.apply(
+              objectDefineProperty,
+              objectConstructor,
+              [
+                this,
+                name,
+                { configurable: !0, enumerable: !0, writable: !0, value }
+              ]
+            );
+            try {
+              observeSupportOnWrite(name, this, value);
+            } catch {
+            }
+          };
+          supportOnProbeSetters.set(name, setter);
+          try {
+            Object.defineProperty(objectPrototype, name, {
+              configurable: !0,
+              enumerable: !1,
+              set: setter
+            });
+          } catch {
+            supportOnProbeSetters.delete(name);
+          }
+        }
+      }
+    }
+    let stopped = !1, mapHook, consumeSetter, powerOnSetter, originalPowerOnProbeDescriptor = isNonArrayRecord(objectPrototype) ? Object.getOwnPropertyDescriptor(objectPrototype, "coal_power") : void 0;
     function restorePowerOnProbe() {
       powerOnSetter !== void 0 && isNonArrayRecord(objectPrototype) && Object.getOwnPropertyDescriptor(objectPrototype, "coal_power")?.set === powerOnSetter && (originalPowerOnProbeDescriptor === void 0 ? delete objectPrototype.coal_power : Object.defineProperty(
         objectPrototype,
@@ -2293,7 +2353,7 @@
             } catch {
               size = void 0;
             }
-            candidateMap === candidateStructureMap ? candidateStructureKeys.has(entry.entryKey) || size !== candidateStructureKeys.size + 1 ? (candidateStructureMap = void 0, candidateStructureKeys = /* @__PURE__ */ new Set()) : (candidateStructureKeys.add(entry.entryKey), candidateStructureKeys.size >= structureMapCaptureThreshold && (structureEntries = candidateMap, restoreMapSet())) : size === 1 && (candidateStructureMap = candidateMap, candidateStructureKeys = /* @__PURE__ */ new Set([entry.entryKey]));
+            candidateMap === candidateStructureMap ? candidateStructureKeys.has(entry.entryKey) || size !== candidateStructureKeys.size + 1 ? (candidateStructureMap = void 0, candidateStructureKeys = /* @__PURE__ */ new Set()) : (candidateStructureKeys.add(entry.entryKey), candidateStructureKeys.size >= structureMapCaptureThreshold && (structureEntries = candidateMap, restoreMapSet(), installSupportOnProbe())) : size === 1 && (candidateStructureMap = candidateMap, candidateStructureKeys = /* @__PURE__ */ new Set([entry.entryKey]));
           }
         }
         return result;
@@ -2431,6 +2491,25 @@
         ), configured = readMechanicsProperty(state, "on"), effective = readMechanicsDataProperty(nativePowerOn, parsed.struct);
         return typeof configured == "number" && Number.isSafeInteger(configured) && configured >= 0 && typeof effective == "number" && Number.isSafeInteger(effective) && effective >= 0 && effective <= configured ? { kind: "value", value: effective } : { kind: "invalid" };
       },
+      readEffectiveSupportCount(root, entryKey) {
+        if (stopped || nativeSupportOn === void 0 || structureEntries === void 0)
+          return { kind: "invalid" };
+        let entry = structureEntries.get(entryKey), parsed = readMechanicsEntry(entryKey, entry);
+        if (parsed === void 0) return { kind: "invalid" };
+        let support = readMechanicsPrimitive(parsed.action, "support");
+        if (support.kind !== "value" || support.value >= 0)
+          return { kind: "invalid" };
+        if (!isSupportOnAuthority(nativeSupportOn, supportConsumerNames))
+          return { kind: "invalid" };
+        let state = readMechanicsProperty(
+          readMechanicsProperty(root, parsed.region),
+          parsed.struct
+        ), configured = readMechanicsProperty(state, "on"), effective = readMechanicsDataProperty(
+          nativeSupportOn,
+          parsed.struct
+        );
+        return typeof configured == "number" && Number.isSafeInteger(configured) && configured >= 0 && typeof effective == "number" && Number.isSafeInteger(effective) && effective >= 0 && effective <= configured ? { kind: "value", value: effective } : { kind: "invalid" };
+      },
       readLocalizedText(key) {
         if (stopped) return { kind: "invalid" };
         let game = readMechanicsProperty(pageWindow, "game"), localize = readMechanicsProperty(game, "loc");
@@ -2544,7 +2623,7 @@
     return Object.freeze({
       mechanics,
       uninstall() {
-        stopped || (stopped = !0, unsubscribeFirstPeriod?.(), unsubscribeFirstPeriod = void 0, restoreMapSet(), restorePowerCallbackHooks(), restorePowerOnProbe(), restoreConsumeSetter());
+        stopped || (stopped = !0, unsubscribeFirstPeriod?.(), unsubscribeFirstPeriod = void 0, restoreMapSet(), restorePowerCallbackHooks(), restorePowerOnProbe(), restoreSupportOnProbe(), restoreConsumeSetter());
       }
     });
   }
@@ -2648,6 +2727,8 @@
         available: !1,
         invoke: () => ({ ok: !1, reason: "unknown-control" })
       }),
+      observeBindings: () => () => {
+      },
       uninstall: () => {
       }
     });
@@ -2657,7 +2738,7 @@
     let isRootCandidate = options.isRootCandidate ?? isGameRootShape, reportError = options.onCaptureError ?? (() => {
     }), existingDescriptor = Object.getOwnPropertyDescriptor(pageWindow, "Vue"), existingMarker = readMarker(readProperty(readProperty(pageWindow, "Vue"), "reactive")) ?? readMarker(existingDescriptor?.get);
     if (existingMarker?.capture !== void 0) return existingMarker.capture;
-    let marker = { capture: void 0 }, root, rootRaw, suppressed = !1, stopped = !1, rootListeners = /* @__PURE__ */ new Set(), controls2 = /* @__PURE__ */ new Map(), controlCheckpoints = /* @__PURE__ */ new WeakMap(), captureOrder = [], usage = /* @__PURE__ */ new Map(), createAppHooked = !1, mountingEnabled = 0, suppressionScopes = [], mountedInScope = [], restoreVue;
+    let marker = { capture: void 0 }, root, rootRaw, suppressed = !1, stopped = !1, rootListeners = /* @__PURE__ */ new Set(), controls2 = /* @__PURE__ */ new Map(), controlCheckpoints = /* @__PURE__ */ new WeakMap(), captureOrder = [], usage = /* @__PURE__ */ new Map(), bindingListeners = /* @__PURE__ */ new Set(), createAppHooked = !1, mountingEnabled = 0, suppressionScopes = [], mountedInScope = [], restoreVue;
     function notifyRootReplaced() {
       for (let listener of [...rootListeners])
         try {
@@ -2685,7 +2766,14 @@
         method !== void 0 && (methods[key] = method);
       }
       if (Object.keys(methods).length === 0) return;
-      let elementId = BARE_ID.test(elementSelector) ? elementSelector.slice(1) : elementSelector, existing = controls2.get(elementId);
+      let elementId = BARE_ID.test(elementSelector) ? elementSelector.slice(1) : elementSelector;
+      for (let listener of bindingListeners)
+        try {
+          listener(elementId, methods);
+        } catch (error) {
+          reportError("binding-listener", String(error));
+        }
+      let existing = controls2.get(elementId);
       if (existing === void 0) {
         captureOrder.push(elementId), controls2.set(elementId, {
           elementId,
@@ -2981,8 +3069,13 @@
       controlUsage,
       mountSuppression,
       synthesis,
+      observeBindings(listener) {
+        return bindingListeners.add(listener), () => {
+          bindingListeners.delete(listener);
+        };
+      },
       uninstall() {
-        stopped = !0, marker.capture = void 0, rootListeners.clear(), restoreVue?.(), restoreVue = void 0;
+        stopped = !0, marker.capture = void 0, rootListeners.clear(), bindingListeners.clear(), restoreVue?.(), restoreVue = void 0;
       }
     });
     return marker.capture = capture, capture;
@@ -3113,6 +3206,7 @@
       controlUsage: vue.controlUsage,
       periods: worker.periods,
       mechanics: mechanics.mechanics,
+      bindings: vue.observeBindings,
       mountSuppression: vue.mountSuppression,
       synthesis: vue.synthesis,
       isComplete: () => vue.rootState.readRoot() !== void 0 && worker.isCaptured(),
@@ -4125,100 +4219,53 @@
     });
   }
 
-  // src/adapters/evolve/progression/research/captured-project-catalog.ts
-  var ARPA_PANEL_SELECTOR = "#arpaPhysics", PROJECT_SELECTOR = "#arpaPhysics .arpaProject", ARPA_TAB_PATH = Object.freeze([
-    Object.freeze({
-      setting: MAIN_TAB_SETTING,
-      control: MAIN_TAB_CONTROL,
-      index: MAIN_TAB_INDEX.arpa
-    })
-  ]);
-  function priceProjectRows(rows, arpa, controls2) {
-    let priced = [];
-    for (let project of rows) {
-      let handle = controls2.resolve(project.elementId);
-      if (handle === void 0 || !handle.methods.includes("build"))
-        return;
-      let state = requireNonArrayRecord(
-        arpa[project.projectId],
-        `game.arpa.${project.projectId}`
-      );
-      priced.push(
-        Object.freeze({
-          elementId: project.elementId,
-          projectId: project.projectId,
-          cost: project.cost,
-          rank: requireCount(
-            state.rank,
-            `game.arpa.${project.projectId}.rank`
-          ),
-          progress: requireCount(
-            state.complete,
-            `game.arpa.${project.projectId}.complete`
-          ),
-          generation: handle.generation
-        })
-      );
-    }
-    return Object.freeze(priced);
+  // src/adapters/evolve/progression/research/arpa-project-identity.ts
+  var NON_PROJECT_ARPA_IDS = Object.freeze(["sequence", "m_type", "Sequence"]), ARPA_ELEMENT_PREFIX = "arpa";
+  function isBuildableArpaProjectId(projectId) {
+    return projectId.length > 0 && !NON_PROJECT_ARPA_IDS.some((key) => key === projectId);
   }
+  function arpaProjectElementId(projectId) {
+    return `${ARPA_ELEMENT_PREFIX}${projectId}`;
+  }
+  function arpaProjectIdFromElementId(elementId) {
+    return elementId.startsWith(ARPA_ELEMENT_PREFIX) ? elementId.slice(ARPA_ELEMENT_PREFIX.length) : void 0;
+  }
+
+  // src/adapters/evolve/progression/research/captured-project-catalog.ts
   function createCapturedProjectCatalog(dependencies) {
-    let { rootState, discovery, drawnProjects, controls: controls2 } = dependencies, reportUnavailable = dependencies.onUnavailable ?? (() => {
+    let { rootState, mechanics } = dependencies, reportUnavailable = dependencies.onUnavailable ?? (() => {
     }), reportDiagnostic = dependencies.onDiagnostic ?? (() => {
-    }), readProjectState2 = () => {
-      let root = rootState.readRoot();
-      if (root === void 0) return;
-      let game = requireNonArrayRecord(root, "game root");
-      return requireNonArrayRecord(game.arpa, "game.arpa");
-    };
+    });
     return Object.freeze({
       readProjects() {
+        let capture = mechanics.ensureCaptured();
+        if (capture.kind !== "captured") {
+          reportUnavailable(`native A.R.P.A. capture failed: ${capture.reason}`);
+          return;
+        }
         let root = rootState.readRoot();
         if (root === void 0) {
           reportUnavailable("the game root has not been captured yet");
           return;
         }
-        let game = requireNonArrayRecord(root, "game root"), resources = requireNonArrayRecord(
-          game.resource,
-          "game.resource"
-        );
-        requireNonArrayRecord(game.arpa, "game.arpa");
-        let projects, unavailableReason = "the project panel was unavailable", result = discovery.discover(ARPA_TAB_PATH, {
-          isPanelDrawn: () => drawnProjects.exists(ARPA_PANEL_SELECTOR),
-          whileDrawn: () => {
-            if (!drawnProjects.exists(ARPA_PANEL_SELECTOR)) return;
-            unavailableReason = "the project rows were unreadable";
-            let drawn = drawnProjects.read(
-              PROJECT_SELECTOR,
-              Object.keys(resources)
-            );
-            if (drawn === void 0) return;
-            let current = readProjectState2();
-            current !== void 0 && (unavailableReason = "a project row has no captured build control", projects = priceProjectRows(drawn, current, controls2));
-          }
-        });
-        if (result.outcome.status !== "succeeded") {
+        let offers = mechanics.readOffers(root);
+        if (offers === void 0) {
           reportDiagnostic(
-            result.outcome.failure?.message ?? result.outcome.status
+            "the offered project catalog is unreadable against the captured registry"
           );
           return;
         }
-        if (projects === void 0) {
-          reportUnavailable(unavailableReason);
-          return;
-        }
-        return projects;
-      },
-      restate(projects) {
-        let arpa = readProjectState2();
-        if (arpa === void 0) {
-          reportUnavailable("the game root has not been captured yet");
-          return;
-        }
-        let restated = priceProjectRows(projects, arpa, controls2);
-        return restated === void 0 && reportUnavailable(
-          "a cached project no longer has a captured build control"
-        ), restated;
+        return Object.freeze(
+          offers.map(
+            (offer) => Object.freeze({
+              elementId: arpaProjectElementId(offer.projectId),
+              projectId: offer.projectId,
+              cost: offer.percentCosts,
+              rank: offer.rank,
+              progress: offer.progress
+            })
+          )
+        );
       }
     });
   }
@@ -6098,6 +6145,25 @@
     });
   }
 
+  // src/adapters/evolve/progression/research/captured-project-settings-catalog.ts
+  function readCapturedProjectSettingsEntries(root, controls2) {
+    let arpa = readProperty(root, "arpa");
+    if (!isRecord(arpa)) return Object.freeze([]);
+    let entries = [];
+    for (let projectId of Object.keys(arpa)) {
+      if (!isBuildableArpaProjectId(projectId)) continue;
+      let elementId = `arpa${projectId}`, handle = controls2.resolve(elementId);
+      entries.push(
+        Object.freeze({
+          projectId,
+          elementId,
+          label: handle === void 0 ? projectId : readCapturedControlLabel(handle, projectId)
+        })
+      );
+    }
+    return Object.freeze(entries);
+  }
+
   // src/domain/game-achievements.ts
   function sampled2(values, id, kind) {
     let value = values.get(id);
@@ -6305,11 +6371,11 @@
         project: Object.freeze({
           elementId: offered.elementId,
           projectId: offered.projectId,
-          generation: offered.generation,
           rank: offered.rank,
           progress: offered.progress,
           steps,
           weighting,
+          percentCosts: offered.cost,
           cost: Object.freeze(cost)
         })
       });
@@ -6357,12 +6423,6 @@
       )
     });
   }
-  function projectState(root, id) {
-    let state = readProperty(readProperty(root, "arpa"), id);
-    if (!isNonArrayRecord(state)) return;
-    let rank = Number(state.rank), progress = Number(state.complete);
-    return Number.isSafeInteger(rank) && rank >= 0 && Number.isSafeInteger(progress) && progress >= 0 ? { rank, progress } : void 0;
-  }
   function queuedIds(root) {
     let queue = readProperty(readProperty(root, "queue"), "queue");
     if (!Array.isArray(queue)) return /* @__PURE__ */ new Set();
@@ -6374,7 +6434,7 @@
     return ids;
   }
   function createCapturedProjectSource(dependencies) {
-    let { rootState, catalog, resources, controls: controls2, context, readSettings } = dependencies, reportActivity = dependencies.onActivity ?? (() => {
+    let { rootState, catalog, resources, mechanics, context, readSettings } = dependencies, reportActivity = dependencies.onActivity ?? (() => {
     }), reportDiagnostic = dependencies.onDiagnostic, cycle = /* @__PURE__ */ new Map(), savingCycle = /* @__PURE__ */ new Map();
     return Object.freeze({
       family: "arpa",
@@ -6507,89 +6567,50 @@
             disposition: "stopped",
             ...base
           });
-        let handle = controls2.resolve(candidate.project.elementId);
-        if (handle === void 0)
+        let root = rootState.readRoot();
+        if (root === void 0)
           return reportDiagnostic?.(
-            `ARPA action failed/stale: missing control ${candidate.project.projectId}`
-          ), Object.freeze({
-            outcome: rejected(
-              "project-control-missing",
-              `no captured control for ${candidate.project.elementId}`
-            ),
-            disposition: "stopped",
-            ...base
-          });
-        if (handle.generation !== candidate.project.generation)
-          return reportDiagnostic?.(
-            `ARPA action failed/stale: redrawn control ${candidate.project.projectId}`
-          ), Object.freeze({
-            outcome: stale(
-              "stale-project-control",
-              `${candidate.project.elementId} was redrawn`
-            ),
-            disposition: "stopped",
-            ...base
-          });
-        let before = projectState(
-          rootState.readRoot(),
-          candidate.project.projectId
-        );
-        if (before === void 0 || before.rank !== candidate.project.rank || before.progress !== candidate.project.progress)
-          return reportDiagnostic?.(
-            `ARPA action failed/stale: project state changed ${candidate.project.projectId}`
+            `ARPA action failed/stale: no game root ${candidate.project.projectId}`
           ), Object.freeze({
             outcome: stale(
               "stale-project-state",
-              `${candidate.project.projectId} moved after sampling`
+              "the game root has not been captured"
             ),
             disposition: "stopped",
             ...base
           });
-        let rootBefore = rootState.readRoot(), queueBefore = readCapturedBuildQueueEntryCount(
-          rootBefore,
-          candidate.project.elementId
-        );
         reportDiagnostic?.(
           `ARPA action invoked: ${candidate.project.projectId} ${candidate.project.steps}%`
         );
-        let result = controls2.invoke(handle, "build", [
-          candidate.project.projectId,
-          candidate.project.steps
-        ]), rootAfter = rootState.readRoot(), after = projectState(rootAfter, candidate.project.projectId), progressed = after !== void 0 && (after.rank > before.rank || after.progress > before.progress), queued = readCapturedBuildQueueEntryCount(
-          rootAfter,
-          candidate.project.elementId
-        ) > queueBefore;
-        if (!result.ok)
+        let built = mechanics.buildPercent(root, {
+          projectId: candidate.project.projectId,
+          rank: candidate.project.rank,
+          progress: candidate.project.progress,
+          percent: candidate.project.steps,
+          percentCosts: candidate.project.percentCosts
+        });
+        if (built.kind !== "built") {
+          let detail = built.reason;
           return reportDiagnostic?.(
-            `ARPA action failed/stale: ${candidate.project.projectId} ${result.reason}`
+            `ARPA action failed/stale: ${candidate.project.projectId} ${detail}`
           ), Object.freeze({
-            outcome: result.reason === "stale-control" ? stale("stale-project-control", result.detail ?? result.reason) : rejected(
-              "project-build-failed",
-              result.detail ?? result.reason
-            ),
+            outcome: built.kind === "unavailable" ? rejected("project-build-failed", detail) : stale("stale-project-state", detail),
             disposition: "stopped",
             ...base
           });
-        let clicked = progressed || queued;
-        if (clicked || reportDiagnostic?.(
-          `ARPA action failed/stale: no verified progress ${candidate.project.projectId}`
-        ), progressed) {
-          let label = readCapturedControlLabel(
-            handle,
-            candidate.project.projectId
-          );
-          reportActivity({
-            message: `Built ${label} (${after.rank}:${after.progress}%)`,
-            color: "success",
-            tags: Object.freeze(["queue", "building_queue"])
-          });
         }
-        return Object.freeze({
+        return reportActivity({
+          message: `Built ${dependencies.readProjectLabel(candidate.project.projectId)} (${built.rank}:${built.progress}%)`,
+          color: "success",
+          tags: Object.freeze(["queue", "building_queue"])
+        }), Object.freeze({
           outcome: SUCCEEDED,
-          clicked,
+          // The native build spends and advances in place, so a verified mutation is the whole effect.
+          // Nothing enters the build queue; `beginCycle` is what keeps a queued project out of here.
+          clicked: !0,
           mission: !1,
           consumption: NO_CONSUMPTION3,
-          disposition: clicked ? "verified-success" : "invoked-but-unverified"
+          disposition: "verified-success"
         });
       }
     });
@@ -6947,9 +6968,7 @@
     let {
       rootState,
       controls: controls2,
-      mountSuppression,
-      panels,
-      drawnProjects,
+      arpa,
       readPolicy,
       readSettings,
       readPresentationSettings,
@@ -6969,19 +6988,20 @@
       ...scriptReservations === void 0 ? {} : { additionalReservations: scriptReservations }
     }), catalog = dependencies.projectCatalog ?? createCapturedProjectCatalog({
       rootState,
-      discovery: createCapturedTabDiscovery({
-        rootState,
-        controls: controls2,
-        mountSuppression,
-        panels
-      }),
-      drawnProjects,
-      controls: controls2,
+      mechanics: arpa,
       ...onSkipped === void 0 ? {} : { onUnavailable: (reason) => onSkipped("arpa", reason) },
       ...onDiagnostic === void 0 ? {} : {
         onDiagnostic: (reason) => onDiagnostic(`progression diagnostic arpa: ${reason}`)
       }
-    }), { reader, executor, observations, establishOrdering } = createCapturedConstructionAdapter({
+    }), projectLabels = /* @__PURE__ */ new Map(), readProjectLabel = (projectId) => {
+      let known = projectLabels.get(projectId);
+      if (known !== void 0) return known;
+      let label = readCapturedProjectSettingsEntries(
+        rootState.readRoot(),
+        controls2
+      ).find((candidate) => candidate.projectId === projectId)?.label ?? projectId;
+      return projectLabels.set(projectId, label), label;
+    }, { reader, executor, observations, establishOrdering } = createCapturedConstructionAdapter({
       // City buildings first, matching the game's own list order, so a project only outranks a
       // building by weighting rather than by being sampled first.
       sources: Object.freeze([
@@ -7000,7 +7020,8 @@
           rootState,
           catalog,
           resources,
-          controls: controls2,
+          mechanics: arpa,
+          readProjectLabel,
           context: createCapturedProjectContextReader({
             traits: createCapturedRaceTraitSource(rootState),
             tech: createCapturedTechSource(rootState),
@@ -10631,7 +10652,7 @@
       mountSuppression,
       panels,
       drawnActions,
-      drawnProjects,
+      arpa,
       getBuildingManager,
       readSettings,
       getState,
@@ -10708,9 +10729,7 @@
       lastOffered = void 0, lastGranted = void 0, offeredSampleAttempted = !1, grantedSampleAttempted = !1, offeredSampleEpoch = void 0, heldOfferedSnapshot = void 0;
     }, heldOfferBindingsAreCurrent = (snapshot2) => snapshot2.offered.every(
       (offer) => (controls2.resolve(offer.elementId)?.generation ?? 0) === offer.generation
-    ), beginProcessedCycle = () => {
-      clearResearchSample(), scopes.invalidate(RESEARCH_SCOPE), scopes.invalidate(RESEARCH_GRANTED_SCOPE);
-    }, invalidateStaleCapturedResearchObservation = (currentEpoch) => {
+    ), invalidateStaleCapturedResearchObservation = (currentEpoch) => {
       let epochChanged = offeredSampleEpoch !== void 0 && offeredSampleEpoch !== currentEpoch, rowBindingsChanged = heldOfferedSnapshot !== void 0 && !heldOfferBindingsAreCurrent(heldOfferedSnapshot);
       !epochChanged && !rowBindingsChanged || (clearResearchSample(), offeredSampleEpoch = currentEpoch, scopes.invalidate(RESEARCH_SCOPE), scopes.invalidate(RESEARCH_GRANTED_SCOPE));
     }, readCurrentOfferedTechs = () => (invalidateStaleCapturedResearchObservation(epoch.read()), lastOffered), sampleOfferedTechs = () => {
@@ -10741,37 +10760,32 @@
       ...onUnavailable === void 0 ? {} : { onUnavailable }
     }), projectCatalog = createCapturedProjectCatalog({
       rootState,
-      discovery,
-      drawnProjects,
-      controls: controls2,
+      mechanics: arpa,
       ...onSkipped === void 0 ? {} : { onUnavailable: (reason) => onSkipped("arpa", reason) },
       ...onDiagnostic === void 0 ? {} : {
         onDiagnostic: (reason) => onDiagnostic(`progression diagnostic arpa: ${reason}`)
       }
     }), projectSampled = !1, lastProjects, establishedProjectEpoch, resetProjectSample = () => {
       projectSampled = !1, lastProjects = void 0, establishedProjectEpoch = void 0;
+    }, beginProcessedCycle = () => {
+      clearResearchSample(), scopes.invalidate(RESEARCH_SCOPE), scopes.invalidate(RESEARCH_GRANTED_SCOPE), scopes.invalidate(ARPA_SCOPE), resetProjectSample();
     }, readEstablishedProjects = () => {
-      if (projectSampled && establishedProjectEpoch !== epoch.read())
+      if (projectSampled && establishedProjectEpoch !== epoch.read() || (projectSampled ? lastProjects : scopes.peek(ARPA_SCOPE)) === void 0) return;
+      let currentProjects = projectCatalog.readProjects();
+      if (currentProjects === void 0) {
+        lastProjects = void 0, scopes.invalidate(ARPA_SCOPE);
         return;
-      let establishedProjects = projectSampled ? lastProjects : scopes.peek(ARPA_SCOPE);
-      if (establishedProjects !== void 0)
-        return projectCatalog.restate(establishedProjects);
+      }
+      return projectSampled || (projectSampled = !0, establishedProjectEpoch = epoch.read()), lastProjects = currentProjects, currentProjects;
     }, readProjects2 = () => {
       if (!projectSampled) {
         projectSampled = !0, establishedProjectEpoch = epoch.read();
-        let held = scopes.read(
+        let sampled3 = scopes.read(
           ARPA_SCOPE,
           () => projectCatalog.readProjects(),
           sameOfferPrices
         );
-        if (held === void 0)
-          lastProjects = void 0;
-        else
-          try {
-            lastProjects = projectCatalog.restate(held);
-          } finally {
-            lastProjects === void 0 && scopes.invalidate(ARPA_SCOPE);
-          }
+        lastProjects = sampled3, sampled3 === void 0 && scopes.invalidate(ARPA_SCOPE);
       }
       return lastProjects;
     }, buildingUnlocks = createCapturedBuildingUnlocks({
@@ -10890,10 +10904,8 @@
     }), readStorageRequired = getResources === void 0 ? dependencies.readCapturedStorageRequired : createScriptStorageRequirementReader({ getResources }), construction = createCapturedConstructionControl({
       rootState,
       controls: controls2,
-      mountSuppression,
-      panels,
-      drawnProjects,
       projectCatalog: Object.freeze({ readProjects: readProjects2 }),
+      arpa,
       readPolicy,
       readSettings,
       readPresentationSettings: readFallbackInterfacePresentation,
@@ -26234,7 +26246,7 @@
   // src/adapters/evolve/progression/build/captured-triggers.ts
   var NO_TARGETS = Object.freeze(
     []
-  ), ARPA_PREFIX = "arpa";
+  );
   function readRow(raw) {
     if (!isRecord(raw)) return;
     let priority = finite(readProperty(raw, "priority")), requirementType = readProperty(raw, "requirementType"), actionType = readProperty(raw, "actionType"), actionId = readProperty(raw, "actionId"), actionCount = finite(readProperty(raw, "actionCount"));
@@ -26332,7 +26344,7 @@
             return count2 === void 0 ? void 0 : count2 >= row.actionCount;
           }
           if (row.actionType === "arpa") {
-            let projectId = row.actionId.startsWith(ARPA_PREFIX) ? row.actionId.slice(ARPA_PREFIX.length) : void 0, rank = finite(
+            let projectId = arpaProjectIdFromElementId(row.actionId), rank = finite(
               readProperty(
                 readProperty(readProperty(root, "arpa"), projectId ?? ""),
                 "rank"
@@ -26364,7 +26376,7 @@
             return costs.readCost(row.actionId);
         }, priceArpa = (row) => {
           let project = offeredProjectsById?.get(row.actionId);
-          if (project === void 0 || controls2.resolve(row.actionId) === void 0) return;
+          if (project === void 0) return;
           let remaining = 100 - project.progress;
           if (!Number.isFinite(remaining) || remaining <= 0 || remaining > 100)
             return;
@@ -26399,7 +26411,7 @@
               projectId: project.projectId,
               steps: effective.steps,
               progress: project.progress,
-              generation: project.generation
+              percentCosts: project.cost
             });
         }, targets = [], claimed = /* @__PURE__ */ new Set(), claim = (target) => {
           let resourceIds = Object.keys(target.cost);
@@ -26447,12 +26459,6 @@
     );
     return typeof count2 == "number" && Number.isFinite(count2) ? count2 : void 0;
   }
-  function readProjectState(root, projectId) {
-    let state = readProperty(readProperty(root, "arpa"), projectId);
-    if (!isRecord(state)) return;
-    let rank = readProperty(state, "rank"), progress = readProperty(state, "complete");
-    return typeof rank == "number" && Number.isFinite(rank) && typeof progress == "number" && Number.isFinite(progress) ? { rank, progress } : void 0;
-  }
   function createCapturedTriggerActions(dependencies) {
     let { rootState, controls: controls2, resources, readTargets, readSettings } = dependencies, reader = Object.freeze({
       read(index) {
@@ -26488,6 +26494,42 @@
         let sample = resources.readResources(Object.keys(target.cost));
         if (sample === void 0 || !canAfford(sample, target.cost))
           return triggerExecutionResult(SUCCEEDED, !1);
+        if (target.actionType === "arpa") {
+          let offer = dependencies.readOfferedProjects?.()?.find((project) => project.projectId === target.projectId);
+          if (offer === void 0)
+            return triggerExecutionResult(
+              stale(
+                "stale-trigger-offer",
+                `${target.actionId} is no longer offered`,
+                { targetId: decision.targetId, index: decision.index }
+              ),
+              !1
+            );
+          let root = rootState.readRoot();
+          if (root === void 0)
+            return triggerExecutionResult(
+              stale("stale-trigger-state", "the game root has gone", {
+                targetId: decision.targetId
+              }),
+              !1
+            );
+          let built = dependencies.arpa.buildPercent(root, {
+            projectId: target.projectId,
+            rank: offer.rank,
+            progress: offer.progress,
+            percent: target.steps,
+            percentCosts: target.percentCosts
+          });
+          return built.kind === "unavailable" ? triggerExecutionResult(
+            rejected("project-build-failed", built.reason),
+            !1
+          ) : built.kind === "stale" ? triggerExecutionResult(
+            stale("stale-trigger-state", built.reason, {
+              targetId: decision.targetId
+            }),
+            !1
+          ) : triggerExecutionResult(SUCCEEDED, !0);
+        }
         let handle = controls2.resolve(target.actionId);
         if (handle === void 0)
           return triggerExecutionResult(
@@ -26497,7 +26539,8 @@
             ),
             !1
           );
-        if (target.actionType === "research") {
+        let research = target.actionType === "research";
+        if (research) {
           let offer = dependencies.readOfferedTechs?.()?.find((tech) => tech.elementId === target.actionId);
           if (offer === void 0)
             return triggerExecutionResult(
@@ -26518,41 +26561,7 @@
               !1
             );
         }
-        if (target.actionType === "arpa") {
-          let offer = dependencies.readOfferedProjects?.()?.find((project2) => project2.elementId === target.actionId);
-          if (offer === void 0)
-            return triggerExecutionResult(
-              stale(
-                "stale-trigger-offer",
-                `${target.actionId} is no longer offered`,
-                { targetId: decision.targetId, index: decision.index }
-              ),
-              !1
-            );
-          if (handle.generation !== target.generation)
-            return triggerExecutionResult(
-              stale(
-                "stale-trigger-control",
-                `${target.actionId} generation ${offer.generation}, current ${handle.generation}`,
-                { targetId: decision.targetId }
-              ),
-              !1
-            );
-          let state = readProjectState(rootState.readRoot(), target.projectId);
-          if (state === void 0 || state.rank !== offer.rank || state.progress !== offer.progress)
-            return triggerExecutionResult(
-              stale(
-                "stale-trigger-state",
-                `${target.projectId} moved after sampling`,
-                { targetId: decision.targetId }
-              ),
-              !1
-            );
-        }
-        let research = target.actionType === "research", project = target.actionType === "arpa" ? target : void 0, beforeTech = research ? readCapturedTechState(rootState.readRoot()) : "", beforeCount = research || project !== void 0 ? void 0 : readActionCount(rootState.readRoot(), target.actionId), beforeProject = project === void 0 ? void 0 : readProjectState(rootState.readRoot(), project.projectId), invocation = project === void 0 ? controls2.invoke(handle, "action") : controls2.invoke(handle, "build", [
-          project.projectId,
-          project.steps
-        ]);
+        let beforeTech = research ? readCapturedTechState(rootState.readRoot()) : "", beforeCount = research ? void 0 : readActionCount(rootState.readRoot(), target.actionId), invocation = controls2.invoke(handle, "action");
         if (!invocation.ok)
           return triggerExecutionResult(
             invocation.reason === "stale-control" ? stale(
@@ -26570,16 +26579,6 @@
             SUCCEEDED,
             readCapturedTechState(rootState.readRoot()) !== beforeTech
           );
-        if (project !== void 0) {
-          let afterProject = readProjectState(
-            rootState.readRoot(),
-            project.projectId
-          );
-          return triggerExecutionResult(
-            SUCCEEDED,
-            beforeProject !== void 0 && afterProject !== void 0 && (afterProject.rank > beforeProject.rank || afterProject.progress > beforeProject.progress)
-          );
-        }
         let afterCount = readActionCount(rootState.readRoot(), target.actionId);
         return triggerExecutionResult(
           SUCCEEDED,
@@ -27198,20 +27197,19 @@
       (building) => building.rule.kind === "belt-space-station"
     ), beltStationFloor = 0;
     if (belt !== void 0 && belt.allocation === "strict" && station !== void 0 && station.smartCategory && station.smartEnabled) {
-      let probe = planPowerCycleCore(input, state, beltStationFloor, !0), consumer = input.buildings.find((building) => {
+      let probe = planPowerCycleCore(input, state, beltStationFloor, !0), plannedDemand = 0;
+      for (let building of input.buildings) {
+        let change = building.supportChanges.find(
+          (candidate) => candidate.type === "belt" && candidate.amount > 0
+        );
+        if (change === void 0) continue;
         let planned = probe.decision?.operations.find(
           (operation2) => operation2.kind === "adjust-building" && operation2.binding === building.binding
-        );
-        return planned?.kind === "adjust-building" && planned.amount > 0 && building.supportChanges.some(
-          (change) => change.type === "belt" && change.amount > 0
-        );
-      }), unit = -(station.supportChanges.find((change) => change.type === "belt")?.amount ?? 0), demand = consumer?.supportChanges.find(
-        (change) => change.type === "belt" && change.amount > 0
-      )?.amount;
-      unit > 0 && (beltStationFloor = Math.max(
-        0,
-        station.stateOn + Math.ceil((belt.current + (demand ?? 0) - belt.maximum) / unit)
-      ));
+        ), configured = planned?.kind === "adjust-building" ? planned.expectedStateOn + planned.amount : building.stateOn;
+        !Number.isFinite(configured) || configured <= 0 || (plannedDemand += change.amount * configured);
+      }
+      let unit = -(station.supportChanges.find((change) => change.type === "belt")?.amount ?? 0);
+      unit > 0 && plannedDemand > 0 && (beltStationFloor = Math.ceil(plannedDemand / unit));
     }
     return planPowerCycleCore(input, state, beltStationFloor, !1);
   }
@@ -29794,7 +29792,17 @@
                   continue;
                 }
                 modeledMaximum -= change.amount * effective.value;
-              } else modeledCurrent += change.amount * candidate.record.stateOn;
+              } else {
+                let effective = dependencies.mechanics.readEffectiveSupportCount(
+                  root,
+                  candidate.record.structure.entryKey
+                );
+                if (effective.kind !== "value") {
+                  unsafeTypes.add(support.type);
+                  continue;
+                }
+                modeledCurrent += change.amount * effective.value;
+              }
         touched && (Math.abs(modeledMaximum - support.maximum) > 1e-9 || Math.abs(modeledCurrent - support.current) > 1e-9) && unsafeTypes.add(support.type);
       }
       if (unsafeTypes.size === 0) break;
@@ -34916,68 +34924,394 @@
     });
   }
 
-  // src/adapters/browser/game-tooltip-element.ts
-  var GAME_TOOLTIP_ID = "popper", GAME_TOOLTIP_SELECTOR = `#${GAME_TOOLTIP_ID}`, GAME_TOOLTIP_ANCHOR_ATTRIBUTE = "data-id";
-
-  // src/adapters/browser/game-drawn-projects.ts
-  var POPPER_SELECTOR = GAME_TOOLTIP_SELECTOR;
-  function collectCost(popper, resources) {
-    let cost = {}, elements = [
-      popper,
-      ...Array.from(popper.querySelectorAll?.("*") ?? [])
-    ];
-    for (let element of elements)
-      for (let attribute of Array.from(element.attributes ?? [])) {
-        if (!attribute.name.startsWith("data-")) continue;
-        let resource = resources.get(attribute.name.slice(5).toLowerCase()), amount = Number(attribute.value);
-        resource !== void 0 && Number.isFinite(amount) && amount > 0 && (cost[resource] = amount);
-      }
-    return cost;
-  }
-  function createGameDrawnProjectsReader({
-    getDocument,
-    createMouseEvent
-  }) {
-    return Object.freeze({
-      read(selector, resourceNames) {
-        let document = getDocument();
-        if (document.querySelectorAll(POPPER_SELECTOR).length > 0)
-          return;
-        let resources = new Map(
-          resourceNames.map((name) => [name.toLowerCase(), name])
-        ), projects = [];
-        for (let row of Array.from(document.querySelectorAll(selector))) {
-          let elementId = row.id, button = row.querySelector?.(".buy .x1") ?? null;
-          if (typeof elementId != "string" || !elementId.startsWith("arpa") || elementId.length === 4 || button === null || typeof button.dispatchEvent != "function")
-            return;
-          button.dispatchEvent(createMouseEvent("mouseover"));
-          try {
-            let poppers = Array.from(
-              document.querySelectorAll(POPPER_SELECTOR)
-            );
-            if (poppers.length !== 1) return;
-            let cost = collectCost(poppers[0], resources);
-            if (Object.keys(cost).length === 0) return;
-            projects.push(
-              Object.freeze({
-                elementId,
-                projectId: elementId.slice(4),
-                cost: Object.freeze(cost)
-              })
-            );
-          } finally {
-            button.dispatchEvent(createMouseEvent("mouseout"));
-          }
-          if (document.querySelectorAll(POPPER_SELECTOR).length > 0)
-            return;
+  // src/adapters/evolve/progression/research/captured-arpa-mechanics.ts
+  var ARPA_BUILD_METHOD = "build", ARPA_NATIVE_COST_METHOD = "arpaProjectSRCosts", ARPA_TAB_PATH = Object.freeze([
+    Object.freeze({
+      setting: MAIN_TAB_SETTING,
+      control: MAIN_TAB_CONTROL,
+      index: MAIN_TAB_INDEX.arpa
+    })
+  ]);
+  function observePageKeys(pageWindow, observe) {
+    let pageObject = readProperty(pageWindow, "Object"), nativeKeys = readProperty(pageObject, "keys");
+    if (typeof pageObject != "function" || typeof nativeKeys != "function")
+      return;
+    let active = !0, probe = function(...args) {
+      let result = Reflect.apply(
+        nativeKeys,
+        this,
+        args
+      );
+      if (active && args.length === 1 && Array.isArray(result))
+        try {
+          observe(args[0], result);
+        } catch {
         }
-        return Object.freeze(projects);
+      return result;
+    };
+    try {
+      Reflect.set(pageObject, "keys", probe);
+    } catch {
+      return;
+    }
+    return () => {
+      if (active = !1, readProperty(pageObject, "keys") === probe)
+        try {
+          Reflect.set(pageObject, "keys", nativeKeys);
+        } catch {
+        }
+    };
+  }
+  function looksLikeArpaEntry(value) {
+    return isNonArrayRecord(value) ? isNonArrayRecord(value.reqs) && isNonArrayRecord(value.cost) && typeof value.grant == "string" : !1;
+  }
+  function looksLikeArpaRegistry(value) {
+    if (!isNonArrayRecord(value)) return !1;
+    let keys = Object.keys(value);
+    return keys.length > 0 && keys.every((key) => looksLikeArpaEntry(value[key]));
+  }
+  function arpaContentPath(race) {
+    return race.iceage ? "iceage" : race.truepath ? "truepath" : "standard";
+  }
+  function describeArpaRecord(value) {
+    return isNonArrayRecord(value) ? `${String(value.rank)}/${String(value.complete)}` : JSON.stringify(value) ?? "undefined";
+  }
+  function sameAmount(actual, expected) {
+    return actual === expected ? !0 : Math.abs(actual - expected) <= Math.abs(expected) * 1e-9 + 1e-9;
+  }
+  function sameCosts(current, sampled3) {
+    let keys = Object.keys(current);
+    return keys.length !== Object.keys(sampled3).length ? !1 : keys.every((key) => current[key] === sampled3[key]);
+  }
+  function createCapturedArpaMechanics(dependencies) {
+    let { rootState, discovery, pageWindow, bindings } = dependencies, reportDiagnostic = dependencies.onDiagnostic ?? (() => {
+    }), authority, failedForRoot, retainedCosts = /* @__PURE__ */ new Map(), captureAdjustedCosts = (projectId) => {
+      let current = authority;
+      if (current === void 0) return;
+      let nativeCost = readProperty(current.registry[projectId], "cost");
+      if (!isNonArrayRecord(nativeCost)) return;
+      let resources = new Set(Object.keys(nativeCost)), matches = [], restore2 = observePageKeys(pageWindow, (receiver, keys) => {
+        isNonArrayRecord(receiver) && (keys.length === 0 || !keys.every((key) => resources.has(key)) || keys.every((key) => typeof receiver[key] == "function") && matches.push(receiver));
+      });
+      if (restore2 === void 0) return;
+      try {
+        Reflect.apply(current.nativeCosts, void 0, ["1", projectId]);
+      } catch {
+        restore2();
+        return;
+      }
+      restore2();
+      let adjusted = matches[matches.length - 1];
+      if (!isNonArrayRecord(adjusted)) return;
+      let costs = {};
+      for (let resource of Object.keys(adjusted)) {
+        let cost = adjusted[resource];
+        if (typeof cost != "function") return;
+        costs[resource] = cost;
+      }
+      if (Object.keys(costs).length !== 0)
+        return Object.freeze(costs);
+    }, readPercentCosts = (projectId) => {
+      let functions = retainedCosts.get(projectId);
+      if (functions === void 0) {
+        if (functions = captureAdjustedCosts(projectId), functions === void 0) return;
+        retainedCosts.set(projectId, functions);
+      }
+      let priced = {};
+      for (let [resource, cost] of Object.entries(functions)) {
+        let value;
+        try {
+          value = Number(cost());
+        } catch {
+          return;
+        }
+        let perPercent = value / 100;
+        if (!Number.isFinite(perPercent) || perPercent < 0) return;
+        perPercent > 0 && (priced[resource] = perPercent);
+      }
+      return Object.freeze(priced);
+    }, readArpaRecords = (root) => {
+      let arpa = readProperty(root, "arpa");
+      return isNonArrayRecord(arpa) ? arpa : void 0;
+    }, readTechRecords = (root) => {
+      let tech = readProperty(root, "tech");
+      return isNonArrayRecord(tech) ? tech : void 0;
+    }, readResourceAmount = (root, resourceId) => readProperty(
+      readProperty(readProperty(root, "resource"), resourceId),
+      "amount"
+    ), readProjectState = (arpa, projectId) => {
+      let state = arpa[projectId];
+      if (state === void 0) return { rank: 0, progress: 0 };
+      if (!isNonArrayRecord(state)) return;
+      let rank = state.rank, progress = state.complete;
+      return typeof rank == "number" && Number.isSafeInteger(rank) && rank >= 0 && typeof progress == "number" && Number.isSafeInteger(progress) && progress >= 0 ? { rank, progress } : void 0;
+    }, readOffers = (root) => {
+      let current = authority;
+      if (current === void 0) return;
+      let arpa = readArpaRecords(root), tech = readTechRecords(root), race = readProperty(root, "race");
+      if (arpa === void 0 || tech === void 0 || !isNonArrayRecord(race))
+        return;
+      let offers = [];
+      for (let projectId of current.order) {
+        let offered = isOffered(root, current.registry, projectId, tech, race);
+        if (offered === void 0) return;
+        if (!offered) continue;
+        let state = readProjectState(arpa, projectId);
+        if (state === void 0) return;
+        let percentCosts = readPercentCosts(projectId);
+        if (percentCosts === void 0) return;
+        offers.push(
+          Object.freeze({
+            projectId,
+            rank: state.rank,
+            progress: state.progress,
+            percentCosts
+          })
+        );
+      }
+      return Object.freeze(offers);
+    }, readDrawResult = (bound, observed2) => {
+      let matching = observed2.filter(looksLikeArpaRegistry).filter(
+        (candidate) => [...bound.keys()].every(
+          (projectId) => Object.hasOwn(candidate, projectId)
+        )
+      );
+      if (matching.length !== 1)
+        return {
+          reason: matching.length === 0 ? "the native project registry was not observed on the Physics draw" : "the Physics draw exposed more than one candidate project registry"
+        };
+      for (let [projectId, methods] of bound) {
+        let build = methods[ARPA_BUILD_METHOD], nativeCosts = methods[ARPA_NATIVE_COST_METHOD];
+        if (typeof build != "function" || typeof nativeCosts != "function")
+          return {
+            reason: `the native binding for ${projectId} declares no project build or cost method`
+          };
+        let registry = matching[0];
+        return Object.freeze({
+          registry,
+          order: Object.freeze(Object.keys(registry)),
+          build,
+          nativeCosts
+        });
+      }
+      return { reason: "the Physics draw bound no A.R.P.A. project row" };
+    }, attemptCapture = () => {
+      let bound = /* @__PURE__ */ new Map(), observed2 = [], watching = !0, unobserve = bindings((elementId, methods) => {
+        if (!watching) return;
+        let projectId = arpaProjectIdFromElementId(elementId);
+        projectId !== void 0 && isBuildableArpaProjectId(projectId) && !bound.has(projectId) && bound.set(projectId, methods);
+      }), restoreKeys = observePageKeys(pageWindow, (receiver) => {
+        watching && observed2.push(receiver);
+      });
+      try {
+        if (restoreKeys === void 0)
+          return {
+            kind: "unavailable",
+            reason: "the page realm exposes no Object.keys to observe"
+          };
+        let result = discovery.discover(ARPA_TAB_PATH, {
+          // The capture is the point of this draw, so a panel the player already has open still has to
+          // be rebuilt: only `physics()` enumerates the registry.
+          forceDraw: !0
+        });
+        if (watching = !1, result.outcome.status !== "succeeded")
+          return {
+            kind: "unavailable",
+            reason: `the Physics draw failed: ${result.outcome.failure?.message ?? result.outcome.status}`
+          };
+      } finally {
+        watching = !1, unobserve(), restoreKeys?.();
+      }
+      let captured = readDrawResult(bound, observed2);
+      return "reason" in captured ? (reportDiagnostic(`ARPA native capture: ${captured.reason}`), { kind: "unavailable", reason: captured.reason }) : (retainedCosts.clear(), authority = captured, reportDiagnostic(`ARPA native capture: ${captured.order.length} projects`), { kind: "captured" });
+    };
+    function isOffered(root, registry, projectId, tech, race) {
+      let project = registry[projectId];
+      if (!isNonArrayRecord(project)) return !1;
+      let condition = project.condition;
+      if (typeof condition == "function" && !condition()) return !1;
+      if (Object.hasOwn(project, "path")) {
+        let paths = project.path;
+        if (!Array.isArray(paths) || !paths.includes(arpaContentPath(race)))
+          return !1;
+      }
+      let reqs = project.reqs;
+      if (!isNonArrayRecord(reqs)) return !1;
+      for (let requirement of Object.keys(reqs)) {
+        let level = tech[requirement];
+        if (!level || Number(level) < Number(reqs[requirement])) return !1;
+      }
+      let arpa = readArpaRecords(root), state = arpa === void 0 ? void 0 : readProjectState(arpa, projectId);
+      if (state === void 0) return;
+      let cap = project.rank;
+      return !cap || state.rank < Number(cap);
+    }
+    return Object.freeze({
+      ensureCaptured() {
+        if (authority !== void 0) return { kind: "captured" };
+        let root = rootState.readRoot();
+        return root === void 0 ? {
+          kind: "unavailable",
+          reason: "the game root has not been captured yet"
+        } : failedForRoot === root ? {
+          kind: "unavailable",
+          reason: "the native A.R.P.A. capture already failed for this root"
+        } : (failedForRoot = root, attemptCapture());
       },
-      exists(selector) {
-        return getDocument().querySelectorAll(selector).length > 0;
+      readOffers(root) {
+        return readOffers(root);
+      },
+      buildPercent(root, plan) {
+        let current = authority;
+        if (current === void 0)
+          return {
+            kind: "unavailable",
+            reason: "the native A.R.P.A. mechanics have not been captured"
+          };
+        if (rootState.readRoot() !== root)
+          return { kind: "stale", reason: "the game root was replaced" };
+        let arpa = readArpaRecords(root), tech = readTechRecords(root), race = readProperty(root, "race");
+        if (arpa === void 0 || tech === void 0 || !isNonArrayRecord(race) || !Object.hasOwn(current.registry, plan.projectId))
+          return {
+            kind: "stale",
+            reason: "the project left the native registry"
+          };
+        let offered = isOffered(
+          root,
+          current.registry,
+          plan.projectId,
+          tech,
+          race
+        );
+        if (offered === void 0)
+          return {
+            kind: "stale",
+            reason: "the project offer state is unreadable"
+          };
+        if (!offered)
+          return { kind: "stale", reason: "the project is no longer offered" };
+        let state = readProjectState(arpa, plan.projectId);
+        if (state === void 0)
+          return { kind: "stale", reason: "the project state is unreadable" };
+        if (state.rank !== plan.rank || state.progress !== plan.progress)
+          return {
+            kind: "stale",
+            reason: `${plan.projectId} moved from ${plan.rank}:${plan.progress} to ${state.rank}:${state.progress} after sampling`
+          };
+        if (!Number.isSafeInteger(plan.percent) || plan.percent < 1 || plan.percent > 100 - state.progress)
+          return {
+            kind: "stale",
+            reason: "the requested step crosses the rank boundary it was priced for"
+          };
+        let percentCosts = readPercentCosts(plan.projectId);
+        if (percentCosts === void 0)
+          return {
+            kind: "unavailable",
+            reason: "the exact native cost record is unreadable"
+          };
+        if (!sameCosts(percentCosts, plan.percentCosts))
+          return {
+            kind: "stale",
+            reason: "the exact native cost changed after it was sampled"
+          };
+        if (!isNonArrayRecord(readProperty(root, "resource")))
+          return { kind: "stale", reason: "the resource ledger is unreadable" };
+        let amounts = {};
+        for (let [resourceId, perPercent] of Object.entries(percentCosts)) {
+          let amount = readResourceAmount(root, resourceId);
+          if (typeof amount != "number" || !Number.isFinite(amount))
+            return {
+              kind: "stale",
+              reason: `the ${resourceId} ledger is unreadable`
+            };
+          if (amount < perPercent * plan.percent)
+            return {
+              kind: "stale",
+              reason: `the project can no longer afford its ${resourceId} cost`
+            };
+          amounts[resourceId] = amount;
+        }
+        arpa[plan.projectId] === void 0 && (arpa[plan.projectId] = { complete: 0, rank: 0 });
+        let before = /* @__PURE__ */ new Map();
+        for (let key of Object.keys(arpa))
+          before.set(key, describeArpaRecord(arpa[key]));
+        let beforeState = readProjectState(arpa, plan.projectId);
+        if (beforeState === void 0)
+          return { kind: "stale", reason: "the project state is unreadable" };
+        let failure2;
+        try {
+          Reflect.apply(current.build, void 0, [plan.projectId, plan.percent]);
+        } catch (error) {
+          failure2 = String(error);
+        }
+        let rootAfter = rootState.readRoot(), afterArpa = readArpaRecords(rootAfter), afterState = afterArpa === void 0 ? void 0 : readProjectState(afterArpa, plan.projectId);
+        if (failure2 !== void 0)
+          return { kind: "stale", reason: `the native build threw: ${failure2}` };
+        if (afterState === void 0)
+          return { kind: "stale", reason: "the project state vanished" };
+        let paidSteps = afterState.rank * 100 + afterState.progress - (beforeState.rank * 100 + beforeState.progress);
+        if (paidSteps < 1 || paidSteps > plan.percent)
+          return {
+            kind: "stale",
+            reason: `the native build moved ${paidSteps} of ${plan.percent} points`
+          };
+        if (afterState.progress >= 100)
+          return {
+            kind: "stale",
+            reason: "the native build left an inconsistent project progress"
+          };
+        if (afterArpa !== void 0) {
+          for (let [key, value] of before)
+            if (key !== plan.projectId && describeArpaRecord(afterArpa[key]) !== value)
+              return {
+                kind: "stale",
+                reason: "the native build changed an unrelated project record"
+              };
+          for (let key of Object.keys(afterArpa))
+            if (key !== plan.projectId && !before.has(key))
+              return {
+                kind: "stale",
+                reason: "the native build added an unrelated project record"
+              };
+        }
+        let charged = {};
+        if (afterState.rank !== beforeState.rank) {
+          let grant = readProperty(current.registry[plan.projectId], "grant");
+          if (typeof grant != "string" || readProperty(tech, grant) !== afterState.rank)
+            return {
+              kind: "stale",
+              reason: "the native build did not grant the completed rank"
+            };
+          for (let resourceId of Object.keys(percentCosts)) {
+            let after = readResourceAmount(rootAfter, resourceId), beforeAmount = amounts[resourceId];
+            if (typeof after != "number" || typeof beforeAmount != "number" || after > beforeAmount)
+              return {
+                kind: "stale",
+                reason: `the native build did not spend ${resourceId}`
+              };
+          }
+        } else
+          for (let [resourceId, perPercent] of Object.entries(percentCosts)) {
+            let after = readResourceAmount(rootAfter, resourceId), beforeAmount = amounts[resourceId];
+            if (typeof after != "number" || typeof beforeAmount != "number" || !sameAmount(beforeAmount - after, perPercent * paidSteps))
+              return {
+                kind: "stale",
+                reason: `the native build spent an unexpected ${resourceId} amount`
+              };
+            charged[resourceId] = beforeAmount - after;
+          }
+        return Object.freeze({
+          kind: "built",
+          rank: afterState.rank,
+          progress: afterState.progress,
+          charged: Object.freeze(charged)
+        });
       }
     });
   }
+
+  // src/adapters/browser/game-tooltip-element.ts
+  var GAME_TOOLTIP_ID = "popper", GAME_TOOLTIP_SELECTOR = `#${GAME_TOOLTIP_ID}`, GAME_TOOLTIP_ANCHOR_ATTRIBUTE = "data-id";
 
   // src/adapters/browser/game-panel-workspace.ts
   var ALIAS_PREFIX = "ea-aside-", ASIDE_STYLE = "position:absolute;left:-100000px;top:0;visibility:hidden;pointer-events:none";
@@ -35141,12 +35475,6 @@
       let handle = controls2.resolve(elementId);
       return handle === void 0 ? elementId : readCapturedControlLabel(handle, elementId);
     };
-  }
-
-  // src/adapters/evolve/progression/research/arpa-project-identity.ts
-  var NON_PROJECT_ARPA_KEYS = Object.freeze(["sequence", "m_type"]);
-  function isBuildableArpaProjectId(projectId) {
-    return projectId.length > 0 && !NON_PROJECT_ARPA_KEYS.some((key) => key === projectId);
   }
 
   // src/adapters/evolve/captured-settings-defaults.ts
@@ -38854,25 +39182,6 @@
         }
       }
     });
-  }
-
-  // src/adapters/evolve/progression/research/captured-project-settings-catalog.ts
-  function readCapturedProjectSettingsEntries(root, controls2) {
-    let arpa = readProperty(root, "arpa");
-    if (!isRecord(arpa)) return Object.freeze([]);
-    let entries = [];
-    for (let projectId of Object.keys(arpa)) {
-      if (!isBuildableArpaProjectId(projectId)) continue;
-      let elementId = `arpa${projectId}`, handle = controls2.resolve(elementId);
-      entries.push(
-        Object.freeze({
-          projectId,
-          elementId,
-          label: handle === void 0 ? projectId : readCapturedControlLabel(handle, projectId)
-        })
-      );
-    }
-    return Object.freeze(entries);
   }
 
   // src/adapters/evolve/progression/research/captured-project-settings.ts
@@ -48802,7 +49111,7 @@ Only continue if you trust the source. Injected code:
   }
 
   // src/adapters/browser/planet-metadata.ts
-  var POPPER_SELECTOR2 = "#popper", TITLE_SELECTOR = ".aTitle", GEOLOGY_ROW_SELECTOR = ".pGeo";
+  var POPPER_SELECTOR = "#popper", TITLE_SELECTOR = ".aTitle", GEOLOGY_ROW_SELECTOR = ".pGeo";
   function elementText(value) {
     let text = readProperty(value, "textContent");
     return typeof text == "string" ? text.trim() : void 0;
@@ -48877,7 +49186,7 @@ Only continue if you trust the source. Injected code:
         };
         dispatch("mouseover");
         try {
-          let popper = queryOne(document, POPPER_SELECTOR2), ownerId = readDataId(popper);
+          let popper = queryOne(document, POPPER_SELECTOR), ownerId = readDataId(popper);
           if (!isRecord(popper) || ownerId !== elementId) return;
           let summary = elementText(queryOne(popper, "div"));
           if (summary === void 0) return;
@@ -53864,7 +54173,19 @@ Only continue if you trust the source. Injected code:
         reportOnce(`${name} stopped: ${String(error)}`);
         return;
       }
-    }, readDemand = () => EMPTY_DEMAND_SAMPLE, demandPrerequisitesThisCycle, readDemandPrerequisites = () => demandPrerequisitesThisCycle, mechSupplyReservation = createMechSupplyReservation(), progression = createCapturedProgressionControl({
+    }, readDemand = () => EMPTY_DEMAND_SAMPLE, demandPrerequisitesThisCycle, readDemandPrerequisites = () => demandPrerequisitesThisCycle, mechSupplyReservation = createMechSupplyReservation(), arpa = createCapturedArpaMechanics({
+      rootState: pageCapture2.rootState,
+      discovery: createCapturedTabDiscovery({
+        rootState: pageCapture2.rootState,
+        controls: pageCapture2.controls,
+        mountSuppression: pageCapture2.mountSuppression,
+        panels,
+        ...diagnostics === void 0 ? {} : { diagnostics }
+      }),
+      pageWindow: settingsHostWindow2,
+      bindings: pageCapture2.bindings,
+      ...diagnostics === void 0 ? {} : { onDiagnostic: (message) => reportDiagnostic(message) }
+    }), progression = createCapturedProgressionControl({
       readMechPowerSupplyHold: mechSupplyReservation.readPowerSupplyHold,
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
@@ -53875,10 +54196,7 @@ Only continue if you trust the source. Injected code:
       drawnActions: createGameDrawnActionsReader({
         getDocument: () => document
       }),
-      drawnProjects: createGameDrawnProjectsReader({
-        getDocument: () => document,
-        createMouseEvent: (type) => new mouseEvent(type)
-      }),
+      arpa,
       costs: buildCosts,
       readSettings: () => settingsStore.readRaw(),
       readInterfacePresentationSettings: readEffectiveInterfacePresentation,
@@ -54135,7 +54453,8 @@ Only continue if you trust the source. Injected code:
       readTargets: readTriggerTargets,
       readSettings: () => settingsStore.readRaw(),
       readOfferedTechs: progression.readOfferedTechs,
-      readOfferedProjects: progression.readProjects
+      readOfferedProjects: progression.readProjects,
+      arpa
     }), demand = createCapturedResourceDemand({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,

@@ -223,9 +223,10 @@ function noProjects() {
       withoutMounting: unused("withoutMounting"),
     },
     panels: { open: unused("open") },
-    drawnProjects: {
-      read: unused("read"),
-      exists: unused("exists"),
+    arpa: {
+      ensureCaptured: unused("ensureCaptured"),
+      readOffers: unused("readOffers"),
+      buildPercent: unused("buildPercent"),
     },
   };
 }

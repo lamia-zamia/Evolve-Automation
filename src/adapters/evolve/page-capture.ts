@@ -20,7 +20,11 @@ import { isRecord, readProperty } from "../validation.ts";
 import { createGameKeyStateCapture } from "../browser/game-key-state.ts";
 import { installCapturedGameMechanics } from "./captured-game-mechanics.ts";
 import { readCapturedMultiplierMapping } from "./captured-multiplier-keys.ts";
-import { installVueCapture, type VueCaptureOptions } from "./vue-capture.ts";
+import {
+  installVueCapture,
+  type VueBindingObserver,
+  type VueCaptureOptions,
+} from "./vue-capture.ts";
 import {
   installWorkerCapture,
   type WorkerCaptureOptions,
@@ -35,6 +39,8 @@ export interface PageCapture {
   readonly periods: GamePeriodSource;
   /** Safe read access to DeadSpace's private grid definitions and current production ledger. */
   readonly mechanics: CapturedGameMechanics;
+  /** Each recorded `vBind` configuration with the game-owned closures it declared. Capture-layer. */
+  readonly bindings: VueBindingObserver;
   /** Scoped suppression of temporary component mounting, for a discovery draw. */
   readonly mountSuppression: GameMountSuppression;
   /** One-shot invocation of a captured game method with a synthetic receiver. */
@@ -90,6 +96,7 @@ export function installPageCapture(
     controlUsage: vue.controlUsage,
     periods: worker.periods,
     mechanics: mechanics.mechanics,
+    bindings: vue.observeBindings,
     mountSuppression: vue.mountSuppression,
     synthesis: vue.synthesis,
     isComplete: () =>

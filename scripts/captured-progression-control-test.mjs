@@ -3,6 +3,15 @@ import { createCapturedProgressionControl } from "../src/bootstrap/captured-prog
 import { createCapturedResourceDemand } from "../src/adapters/evolve/economy/resources/captured-resource-demand.ts";
 import { withControlCaptureAuthority } from "./control-capture-fixture.mjs";
 
+const emptyArpaMechanics = Object.freeze({
+  ensureCaptured: () => ({ kind: "captured" }),
+  readOffers: () => [],
+  buildPercent: () => ({
+    kind: "unavailable",
+    reason: "project builds are not exercised by this test",
+  }),
+});
+
 const control = createCapturedProgressionControl({
   rootState: {
     readRoot: () => undefined,
@@ -21,10 +30,7 @@ const control = createCapturedProgressionControl({
     read: () => [],
     exists: () => false,
   },
-  drawnProjects: {
-    read: () => undefined,
-    exists: () => false,
-  },
+  arpa: emptyArpaMechanics,
   getBuildingManager: () => {
     throw new Error("must not read the manager before a cycle");
   },
@@ -52,7 +58,7 @@ assert.deepEqual(control.readUnlockedStorageBuildTargets(), []);
 assert.equal(control.readEstablishedStorageBuildTargets(), undefined);
 assert.equal(control.readEstablishedProjects(), undefined);
 
-// Only the owner draws project rows. Consumers restate the live fields or preserve unknown.
+// The captured native authority survives a panel draw; established reads restate live project fields.
 {
   const projectRoot = {
     settings: { civTabs: 5 },
@@ -63,9 +69,7 @@ assert.equal(control.readEstablishedProjects(), undefined);
   };
   let projectClock = 0;
   let projectReads = 0;
-  let projectPanelAvailable = true;
-  let projectGeneration = 7;
-  let projectHandleAvailable = true;
+  let projectOfferSampleAvailable = true;
   let projectRowsEmpty = false;
   const projectReplacements = [];
   const projectControl = createCapturedProgressionControl({
@@ -77,14 +81,11 @@ assert.equal(control.readEstablishedProjects(), undefined);
       },
     },
     controls: withControlCaptureAuthority({
-      resolve: (id) =>
-        projectHandleAvailable && id === "arpalhc"
-          ? { elementId: id, generation: projectGeneration, methods: ["build"] }
-          : undefined,
+      resolve: () => undefined,
       invoke: () => {
-        throw new Error("established projects must not swap tabs");
+        throw new Error("project mechanics do not invoke row controls");
       },
-      capturedElementIds: () => ["arpalhc"],
+      capturedElementIds: () => [],
     }),
     mountSuppression: {
       available: false,
@@ -98,14 +99,26 @@ assert.equal(control.readEstablishedProjects(), undefined);
       },
     },
     drawnActions: { read: () => [], exists: () => false },
-    drawnProjects: {
-      exists: () => projectPanelAvailable,
-      read: () => {
+    arpa: {
+      ensureCaptured: () => ({ kind: "captured" }),
+      readOffers: () => {
         projectReads++;
+        if (!projectOfferSampleAvailable) return undefined;
         return projectRowsEmpty
           ? []
-          : [{ elementId: "arpalhc", projectId: "lhc", cost: { Money: 10 } }];
+          : [
+              {
+                projectId: "lhc",
+                rank: projectRoot.arpa.lhc.rank,
+                progress: projectRoot.arpa.lhc.complete,
+                percentCosts: { Money: 10 },
+              },
+            ];
       },
+      buildPercent: () => ({
+        kind: "unavailable",
+        reason: "project builds are not exercised by this test",
+      }),
     },
     readSettings: () => ({}),
     nowMs: () => projectClock,
@@ -114,16 +127,18 @@ assert.equal(control.readEstablishedProjects(), undefined);
   assert.equal(projectReads, 0);
   assert.equal(projectControl.readProjects()[0].progress, 35);
   projectRoot.arpa.lhc.complete = 40;
-  projectGeneration++;
   assert.deepEqual(projectControl.readEstablishedProjects()[0], {
     elementId: "arpalhc",
     projectId: "lhc",
     cost: { Money: 10 },
     rank: 2,
     progress: 40,
-    generation: 8,
   });
-  assert.equal(projectReads, 1);
+  assert.equal(
+    projectReads,
+    2,
+    "established reads use the current native project state",
+  );
   projectRoot.arpa.lhc.rank++;
   assert.equal(
     projectControl.readEstablishedProjects(),
@@ -132,25 +147,37 @@ assert.equal(control.readEstablishedProjects(), undefined);
   );
   projectRoot.arpa.lhc.rank--;
   projectControl.resetProjectSample();
-  assert.equal(projectControl.readEstablishedProjects()[0].progress, 40);
+  assert.equal(
+    projectControl.readProjects()[0].progress,
+    35,
+    "the current cycle keeps its established ARPA sample",
+  );
   projectClock = 60000;
-  assert.equal(projectControl.readEstablishedProjects(), undefined);
-  assert.equal(projectReads, 1, "expired scopes cannot refresh in a consumer");
+  const readsBeforeFreshEstablishedSample = projectReads;
+  assert.equal(projectControl.readEstablishedProjects()[0].progress, 40);
+  assert.equal(
+    projectReads,
+    readsBeforeFreshEstablishedSample + 1,
+    "established reads refresh state and native price without a panel draw",
+  );
   assert.equal(projectControl.readProjects()[0].progress, 40);
-  projectHandleAvailable = false;
+  projectRoot.arpa.lhc.complete = 45;
+  projectControl.beginProcessedCycle();
+  assert.equal(
+    projectControl.readProjects()[0].progress,
+    45,
+    "a new processed cycle refreshes progress when price and offer membership are unchanged",
+  );
+  projectOfferSampleAvailable = false;
   assert.equal(projectControl.readEstablishedProjects(), undefined);
   projectControl.resetProjectSample();
   assert.equal(projectControl.readProjects(), undefined);
   assert.equal(projectControl.readEstablishedProjects(), undefined);
-  projectHandleAvailable = true;
+  projectOfferSampleAvailable = true;
   projectControl.resetProjectSample();
   projectControl.readProjects();
   for (const listener of projectReplacements) listener();
   assert.equal(projectControl.readEstablishedProjects(), undefined);
-  projectPanelAvailable = false;
-  assert.equal(projectControl.readProjects(), undefined);
-  assert.equal(projectControl.readEstablishedProjects(), undefined);
-  projectPanelAvailable = true;
   projectRowsEmpty = true;
   projectControl.resetProjectSample();
   assert.deepEqual(projectControl.readProjects(), []);
@@ -169,19 +196,19 @@ assert.equal(control.readEstablishedProjects(), undefined);
   assert.equal(projectControl.readProjects()[0].projectId, "lhc");
   assert.equal(
     projectReads,
-    establishedReads,
-    "a Building-only mutation reuses the A.R.P.A. authority",
+    establishedReads + 1,
+    "Building-only invalidation reuses the captured authority for a live read",
   );
   projectRoot.arpa.lhc.rank++;
   projectControl.resetProjectSample();
   assert.equal(projectControl.readEstablishedProjects(), undefined);
   assert.equal(projectControl.readProjects()[0].rank, 3);
-  assert.equal(projectReads, establishedReads + 1);
+  assert.equal(projectReads, establishedReads + 2);
   projectRoot.tech.new_unlock = 1;
   projectControl.resetProjectSample();
   assert.equal(projectControl.readEstablishedProjects(), undefined);
   assert.equal(projectControl.readProjects()[0].rank, 3);
-  assert.equal(projectReads, establishedReads + 2);
+  assert.equal(projectReads, establishedReads + 3);
 }
 
 let root = {
@@ -227,7 +254,7 @@ const researchControl = createCapturedProgressionControl({
       return [{ id: "tech-old-mining", cost: {} }];
     },
   },
-  drawnProjects: { read: () => undefined, exists: () => false },
+  arpa: emptyArpaMechanics,
   readSettings: () => ({}),
   needGrantedTechs: () => true,
   onUnavailable: (reason) => unavailable.push(reason),
@@ -417,7 +444,7 @@ assert.equal(researchControl.readGrantedTechs(), undefined);
         return selector === "#city .action" ? unlockedRows : [];
       },
     },
-    drawnProjects: { read: () => undefined, exists: () => false },
+    arpa: emptyArpaMechanics,
     readSettings: () => buildSettings,
     nowMs: () => buildingCatalogNow,
   });
@@ -621,7 +648,7 @@ assert.equal(researchControl.readGrantedTechs(), undefined);
         ];
       },
     },
-    drawnProjects: { read: () => [], exists: () => true },
+    arpa: emptyArpaMechanics,
     readSettings: () => ({
       autoBuild: true,
       "batspace-titan_quarters": true,

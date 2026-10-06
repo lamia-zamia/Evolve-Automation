@@ -1,8 +1,15 @@
 import assert from "node:assert/strict";
 
 import { installPageCapture } from "../src/adapters/evolve/page-capture.ts";
+import {
+  arpaProjectIdFromElementId,
+  isBuildableArpaProjectId,
+} from "../src/adapters/evolve/progression/research/arpa-project-identity.ts";
 import { startCapturedRuntime } from "../src/bootstrap/captured-runtime-control.ts";
 import { createTestDocument, element } from "./dom-fixture.mjs";
+
+assert.equal(arpaProjectIdFromElementId("arpaSequence"), "Sequence");
+assert.equal(isBuildableArpaProjectId("Sequence"), false);
 
 class FakeWorker {
   constructor(url) {
@@ -65,6 +72,7 @@ function createProjectRow({
   id,
   displayCost,
   onBuild,
+  onProjectCosts,
   vue,
   bindControl,
   hoverEvents,
@@ -97,7 +105,9 @@ function createProjectRow({
   vue.createApp({
     el: `#arpa${id}`,
     data: { title: id },
-    methods: bindControl ? { build: onBuild } : { other: () => undefined },
+    methods: bindControl
+      ? { build: onBuild, arpaProjectSRCosts: onProjectCosts }
+      : { other: () => undefined },
   });
   return row;
 }
@@ -245,7 +255,12 @@ function makeScenario({
     },
     race: { species: "human", iceage: true },
     stats: { days: 100, reset: 1, resets: 1 },
-    tech: { mad: 1, high_tech: 7, ...(marketStorage ? { trade: true } : {}) },
+    tech: {
+      mad: 1,
+      high_tech: 7,
+      genetics: 2,
+      ...(marketStorage ? { trade: true } : {}),
+    },
     city: marketStorage ? { market: { qty: 1, mtrade: 1, trade: 0 } } : {},
     civic: {},
     portal: {},
@@ -254,6 +269,7 @@ function makeScenario({
   };
 
   const page = {
+    Object,
     Worker: FakeWorker,
     document,
     location: { href: "https://evolvebeta.github.io/Evolve/" },
@@ -272,6 +288,25 @@ function makeScenario({
     manualCraftLumber === undefined
       ? { Money: 10.2, Knowledge: 3.2 }
       : { Lumber: 200 };
+  const nativeProjectDefinitions = {
+    [projectId]: {
+      reqs: {},
+      grant: "captured_arpa_test_grant",
+      cost: Object.fromEntries(
+        Object.keys(actualPerPercentCost).map((resourceId) => [
+          resourceId,
+          () => actualPerPercentCost[resourceId] * 100,
+        ]),
+      ),
+    },
+  };
+  const adjustArpaCosts = (cost) =>
+    Object.fromEntries(
+      Object.entries(cost).map(([resourceId, calculate]) => [
+        resourceId,
+        () => calculate(),
+      ]),
+    );
   let shouldBindControl = bindControl;
   const calls = [];
   const craftCalls = [];
@@ -302,10 +337,23 @@ function makeScenario({
     });
   }
 
-  const bindProject = () => {
-    const project = gameRoot.arpa[projectId];
+  const projectCosts = (percent, builtProjectId) => {
+    const costs = adjustArpaCosts(
+      nativeProjectDefinitions[builtProjectId].cost,
+    );
+    let description = "";
+    page.Object.keys(costs).forEach((resourceId) => {
+      const amount = +(costs[resourceId]() * (Number(percent) / 100)).toFixed(
+        0,
+      );
+      description += `${resourceId}: ${amount} `;
+    });
+    return description;
+  };
+  const bindProject = (drawnProjectId) => {
+    const project = gameRoot.arpa[drawnProjectId];
     if (project === undefined) {
-      gameRoot.arpa[projectId] = { rank: 0, complete: progress };
+      gameRoot.arpa[drawnProjectId] = { rank: 0, complete: progress };
     }
     const build = (builtProjectId, steps) => {
       calls.push([builtProjectId, steps]);
@@ -327,13 +375,15 @@ function makeScenario({
       if (state.complete >= 100) {
         state.rank += 1;
         state.complete = 0;
+        gameRoot.tech.captured_arpa_test_grant = state.rank;
       }
       return true;
     };
     return createProjectRow({
       document,
-      id: projectId,
+      id: drawnProjectId,
       onBuild: build,
+      onProjectCosts: projectCosts,
       vue,
       bindControl: shouldBindControl,
       hoverEvents,
@@ -354,10 +404,15 @@ function makeScenario({
     parent.replaceChildren();
     const physics = element("div", { id: "arpaPhysics" });
     parent.appendChild(physics);
-    const eligible =
-      projectId !== "surface_elevator" ||
-      (gameRoot.tech.high_tech >= 7 && gameRoot.race.iceage === true);
-    if (eligible) physics.appendChild(bindProject());
+    for (const drawnProjectId of page.Object.keys(nativeProjectDefinitions)) {
+      const eligible =
+        drawnProjectId !== "surface_elevator" ||
+        (gameRoot.tech.high_tech >= 7 && gameRoot.race.iceage === true);
+      if (eligible) physics.appendChild(bindProject(drawnProjectId));
+    }
+    if (gameRoot.tech.genetics > 1) {
+      vue.createApp({ el: "#arpaSequence", methods: { toggle() {} } });
+    }
     draws.push({
       parentId: parent.id,
       physics: document.querySelectorAll("#arpaPhysics").length,
@@ -601,8 +656,8 @@ withScenario(
   },
 );
 
-// When a cached offer can no longer be restated, the next cycle must draw again. Otherwise a
-// rebound control could make the old price look usable after the panel's price has changed.
+// The captured native closures survive row redraws, and their live cost functions reprice without
+// another panel draw or a replacement build control.
 withScenario(
   {
     progress: 20,
@@ -623,12 +678,18 @@ withScenario(
       perPercentCost: { Money: 20.2, Knowledge: 6.2 },
       bindControl: false,
     });
+    const drawsAfterManualRedraw = scenario.draws.length;
     scenario.tick();
     assert.deepEqual(
       scenario.calls,
-      [["lhc", 5]],
-      "an offer without a current build handle must not act",
+      [
+        ["lhc", 5],
+        ["lhc", 5],
+      ],
+      "the retained native build remains usable after the row is redrawn",
     );
+    assert.equal(scenario.draws.length, drawsAfterManualRedraw);
+    assert.deepEqual(scenario.hoverEvents, []);
 
     scenario.redrawProject({
       displayCost: { Money: 20, Knowledge: 6 },
@@ -638,21 +699,20 @@ withScenario(
     scenario.gameRoot.resource.Money.amount = 75;
     const drawsBeforeRetry = scenario.draws.length;
     scenario.tick();
-    assert.equal(
-      scenario.draws.length,
-      drawsBeforeRetry + 1,
-      "a failed restatement must invalidate the held panel sample",
-    );
+    assert.equal(scenario.draws.length, drawsBeforeRetry);
     assert.deepEqual(
       scenario.calls,
-      [["lhc", 5]],
-      "the refreshed price must gate an unaffordable project before invocation",
+      [
+        ["lhc", 5],
+        ["lhc", 5],
+      ],
+      "the current native price must gate an unaffordable project",
     );
   },
 );
 
-// A malformed live project value throws during restatement. That still invalidates the held offer,
-// so repairing the state cannot make a stale price usable on the following cycle.
+// An unreadable live project value invalidates the offer sample. Repairing it restores the same
+// retained authority, with no panel redraw.
 withScenario(
   {
     progress: 20,
@@ -669,7 +729,12 @@ withScenario(
     scenario.gameRoot.arpa.lhc.complete = "invalid";
     const errorsBeforeFailure = scenario.errors.length;
     scenario.tick();
-    assert.ok(scenario.errors.length > errorsBeforeFailure);
+    assert.ok(
+      scenario.errors.length > errorsBeforeFailure ||
+        scenario.logs.some((message) =>
+          message.includes("offered project catalog is unreadable"),
+        ),
+    );
 
     scenario.gameRoot.arpa.lhc.complete = 25;
     scenario.redrawProject({
@@ -680,17 +745,17 @@ withScenario(
     scenario.gameRoot.resource.Money.amount = 75;
     const drawsBeforeRetry = scenario.draws.length;
     scenario.tick();
-    assert.equal(scenario.draws.length, drawsBeforeRetry + 1);
+    assert.equal(scenario.draws.length, drawsBeforeRetry);
     assert.deepEqual(
       scenario.calls,
       [["lhc", 5]],
-      "a thrown restatement must not leave a stale project price cached",
+      "an unaffordable fresh native price is not bought",
     );
   },
 );
 
-// On the player's selected ARPA tab, the project catalog observes its current draw. A separate
-// research observation can use its own off-tab workspace, but it never redraws ARPA.
+// On the player's selected ARPA tab, capture forces one draw to observe the native registry.
+// Later price and project reads use the retained closures.
 withScenario(
   {
     currentTab: 5,
@@ -714,7 +779,7 @@ withScenario(
         swaps: scenario.swaps,
       }),
     );
-    assert.equal(scenario.swaps.includes(5), false);
+    assert.equal(scenario.swaps.includes(5), true);
   },
 );
 
@@ -787,8 +852,7 @@ withScenario(
   },
 );
 
-// A missing physics panel after a previously successful build is an unavailable catalog, not a
-// valid empty list and never a reason to reuse the prior project's offer.
+// Once captured, native project mechanics remain usable without a mounted Physics panel.
 withScenario(
   {
     progress: 95,
@@ -804,13 +868,14 @@ withScenario(
     assert.equal(scenario.gameRoot.arpa.lhc.complete, 0);
     assert.equal(scenario.gameRoot.arpa.lhc.rank, 1);
     scenario.setPanelAvailable(false);
+    const drawsBeforeNextCycle = scenario.draws.length;
     scenario.tick();
-    assert.deepEqual(scenario.calls, [["lhc", 5]]);
-    assert.ok(
-      scenario.errors.some((message) =>
-        message.includes("the project panel was unavailable"),
-      ),
-    );
+    assert.deepEqual(scenario.calls, [
+      ["lhc", 5],
+      ["lhc", 5],
+    ]);
+    assert.equal(scenario.draws.length, drawsBeforeNextCycle);
+    assert.deepEqual(scenario.errors, []);
   },
 );
 
@@ -869,7 +934,7 @@ withScenario(
     scenario.gameRoot.resource.Money.amount = 75;
     scenario.tick();
     const nextPhases = scenario.phases.slice(phasesBefore);
-    assert.equal(scenario.draws.length, drawsBefore + 1);
+    assert.equal(scenario.draws.length, drawsBefore);
     assert.ok(
       nextPhases.indexOf("autoMarket.adjustTradeRoutes") <
         nextPhases.indexOf("autoBuild.beginCycle"),

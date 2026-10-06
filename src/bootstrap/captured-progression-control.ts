@@ -59,7 +59,7 @@ import {
   sameBuildingUnlockCatalog,
 } from "../adapters/evolve/progression/build/captured-building-unlocks.ts";
 import { createCapturedBuildingSwitchStates } from "../adapters/evolve/progression/build/captured-building-switch-states.ts";
-import type { GameDrawnProjectsReader } from "../ports/game-drawn-projects.ts";
+import type { CapturedArpaMechanics } from "../ports/captured-arpa-mechanics.ts";
 import type { GameMountSuppression } from "../ports/game-mount-suppression.ts";
 import type { GamePanelWorkspace } from "../ports/game-panel-workspace.ts";
 import type { GameRootStateSource } from "../ports/game-root-state.ts";
@@ -91,7 +91,8 @@ export interface CapturedProgressionControlDependencies {
   readonly keyboard?: GameKeyboardHandlersPort;
   readonly keyState?: GameKeyStateReader;
   readonly drawnActions: GameDrawnActionsReader;
-  readonly drawnProjects: GameDrawnProjectsReader;
+  /** The running bundle's own A.R.P.A. project mechanics, captured by the project catalog. */
+  readonly arpa: CapturedArpaMechanics;
   /** Prices captured mission controls for the build weighting adapter. */
   readonly costs?: GameActionCostReader;
   /** Persisted script settings. Required: without them nothing is managed and nothing is built. */
@@ -155,7 +156,7 @@ export interface CapturedProgressionControl {
   readonly readGrantedTechs: () => ReadonlySet<string> | undefined;
   /** A fresh captured A.R.P.A. project snapshot, if it can be read. */
   readonly readProjects: () => readonly Readonly<OfferedProject>[] | undefined;
-  /** Restates an established project catalog; never discovers or refreshes a panel. */
+  /** Reads current fields and prices from the established native catalog without redrawing a panel. */
   readonly readEstablishedProjects: () =>
     readonly Readonly<OfferedProject>[] | undefined;
   /**
@@ -278,7 +279,7 @@ export function createCapturedProgressionControl(
     mountSuppression,
     panels,
     drawnActions,
-    drawnProjects,
+    arpa,
     getBuildingManager,
     readSettings,
     getState,
@@ -420,11 +421,6 @@ export function createCapturedProgressionControl(
         (controls.resolve(offer.elementId)?.generation ?? 0) ===
         offer.generation,
     );
-  const beginProcessedCycle = () => {
-    clearResearchSample();
-    scopes.invalidate(RESEARCH_SCOPE);
-    scopes.invalidate(RESEARCH_GRANTED_SCOPE);
-  };
   const invalidateStaleCapturedResearchObservation = (currentEpoch: string) => {
     // Research completion changes the progression epoch; a redraw can also rebind an offer row
     // without a detectable epoch change. Either means the held catalog no longer names live offers.
@@ -497,9 +493,7 @@ export function createCapturedProgressionControl(
   });
   const projectCatalog: GameProjectCatalog = createCapturedProjectCatalog({
     rootState,
-    discovery,
-    drawnProjects,
-    controls,
+    mechanics: arpa,
     ...(onSkipped === undefined
       ? {}
       : { onUnavailable: (reason: string) => onSkipped("arpa", reason) }),
@@ -510,9 +504,9 @@ export function createCapturedProgressionControl(
             onDiagnostic(`progression diagnostic arpa: ${reason}`),
         }),
   });
-  // One sample per cycle still, so the trigger phase and construction price from the same list even
-  // if the scope's age happens to expire between them. The scope below decides whether that sample
-  // costs a draw.
+  // One sample per processed cycle keeps Trigger and established readers on the same list. That
+  // cycle invalidates this cheap native read because ARPA progress can change without a price change;
+  // after initial capture, refreshing it reads retained functions, not panels.
   let projectSampled = false;
   let lastProjects: readonly Readonly<OfferedProject>[] | undefined;
   let establishedProjectEpoch: string | undefined;
@@ -521,6 +515,15 @@ export function createCapturedProgressionControl(
     lastProjects = undefined;
     establishedProjectEpoch = undefined;
   };
+  const beginProcessedCycle = () => {
+    clearResearchSample();
+    scopes.invalidate(RESEARCH_SCOPE);
+    scopes.invalidate(RESEARCH_GRANTED_SCOPE);
+    scopes.invalidate(ARPA_SCOPE);
+    resetProjectSample();
+  };
+  // Every field of a row now comes from live game state, so an established sample and a fresh one
+  // are the same read; the scope only decides whether a caller may reuse the current cycle's sample.
   const readEstablishedProjects = () => {
     if (projectSampled && establishedProjectEpoch !== epoch.read())
       return undefined;
@@ -528,31 +531,32 @@ export function createCapturedProgressionControl(
       ? lastProjects
       : scopes.peek<readonly Readonly<OfferedProject>[]>(ARPA_SCOPE);
     if (establishedProjects === undefined) return undefined;
-    return projectCatalog.restate(establishedProjects);
+    const currentProjects = projectCatalog.readProjects();
+    if (currentProjects === undefined) {
+      lastProjects = undefined;
+      scopes.invalidate(ARPA_SCOPE);
+      return undefined;
+    }
+    if (!projectSampled) {
+      projectSampled = true;
+      establishedProjectEpoch = epoch.read();
+    }
+    lastProjects = currentProjects;
+    return currentProjects;
   };
   const readProjects = () => {
     if (!projectSampled) {
       projectSampled = true;
       establishedProjectEpoch = epoch.read();
-      const held = scopes.read(
+      const sampled = scopes.read(
         ARPA_SCOPE,
         () => projectCatalog.readProjects(),
         sameOfferPrices,
       );
-      if (held === undefined) {
-        lastProjects = undefined;
-      } else {
-        // Rank, progress and generation live in `game.arpa` and the control registry; only the
-        // per-percent price came from the popover, and that moves with rank alone.
-        try {
-          lastProjects = projectCatalog.restate(held);
-        } finally {
-          // A held row that cannot be restated is no longer a usable answer. Drop the raw offer
-          // whether the catalog reports it unavailable or validation throws, so a later cycle
-          // draws again instead of carrying a stale price forward.
-          if (lastProjects === undefined) scopes.invalidate(ARPA_SCOPE);
-        }
-      }
+      // An unavailable read drops the held offer rather than reusing data the live game could not
+      // confirm. A successful sample replaces it with current native state and price.
+      lastProjects = sampled;
+      if (sampled === undefined) scopes.invalidate(ARPA_SCOPE);
     }
     return lastProjects;
   };
@@ -764,10 +768,8 @@ export function createCapturedProgressionControl(
   const construction = createCapturedConstructionControl({
     rootState,
     controls,
-    mountSuppression,
-    panels,
-    drawnProjects,
     projectCatalog: Object.freeze({ readProjects }),
+    arpa,
     readPolicy,
     readSettings,
     readPresentationSettings: readFallbackInterfacePresentation,

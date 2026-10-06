@@ -138,7 +138,14 @@ function makeGame({
       }),
     },
     drawnActions: createGameDrawnActionsReader({ getDocument: () => page }),
-    drawnProjects: { read: () => undefined, exists: () => false },
+    arpa: {
+      ensureCaptured: () => ({ kind: "captured" }),
+      readOffers: () => [],
+      buildPercent: () => ({
+        kind: "unavailable",
+        reason: "project builds are not exercised by this test",
+      }),
+    },
     costs,
     ...(capturedBuildPolicy
       ? {}

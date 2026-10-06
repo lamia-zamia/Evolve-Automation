@@ -77,6 +77,27 @@ const BARE_ID = /^#[\w-]+$/;
 /** A dotted `this` path a synthetic receiver may name, e.g. `$buefy.modal.open`. */
 const RECEIVER_PATH = /^[$A-Z_a-z][\w$]*(?:\.[$A-Z_a-z][\w$]*)*$/;
 
+/** One method the game declared in a component's own `methods` bag. */
+export type CapturedBindingMethod = (
+  this: unknown,
+  ...args: unknown[]
+) => unknown;
+
+/**
+ * Observes every `vBind` configuration the capture records, with the game-owned closures it declared.
+ *
+ * A control handle is superseded by the next redraw of its element, so invoking through one is only
+ * valid until then. A caller that needs the lexical authority *behind* a binding — the closures the
+ * bundle closed over, which keep working after the component is torn down — observes the draw that
+ * produced it and keeps what it needs. Capture-layer only; nothing here is a game mechanic.
+ */
+export type VueBindingListener = (
+  elementId: string,
+  methods: Readonly<Record<string, CapturedBindingMethod>>,
+) => void;
+
+export type VueBindingObserver = (listener: VueBindingListener) => () => void;
+
 export interface VueCapture {
   readonly rootState: GameRootStateSource;
   readonly controls: GameControlRegistry;
@@ -84,6 +105,8 @@ export interface VueCapture {
   readonly mountSuppression: GameMountSuppression;
   /** One-shot invocation of a captured method with a synthetic receiver. Capture-layer only. */
   readonly synthesis: GameControlSynthesis;
+  /** Registers a listener for each recorded binding; returns the removal. Capture-layer only. */
+  readonly observeBindings: VueBindingObserver;
   /** True when the Vue methods are wrapped; false for an inert capture with no Vue to hook. */
   readonly installed: boolean;
   /** Restores every wrapped Vue method and stops recording. Idempotent. */
@@ -182,6 +205,7 @@ function inertCapture(): VueCapture {
       available: false,
       invoke: () => ({ ok: false, reason: "unknown-control" }) as const,
     }),
+    observeBindings: () => () => {},
     uninstall: () => {},
   });
 }
@@ -217,6 +241,7 @@ export function installVueCapture(
   >();
   const captureOrder: string[] = [];
   const usage = new Map<string, GameControlUsage>();
+  const bindingListeners = new Set<VueBindingListener>();
 
   let createAppHooked = false;
   let mountingEnabled = 0;
@@ -274,6 +299,13 @@ export function installVueCapture(
     const elementId = BARE_ID.test(elementSelector)
       ? elementSelector.slice(1)
       : elementSelector;
+    for (const listener of bindingListeners) {
+      try {
+        listener(elementId, methods);
+      } catch (error) {
+        reportError("binding-listener", String(error));
+      }
+    }
     const existing = controls.get(elementId);
     if (existing === undefined) {
       captureOrder.push(elementId);
@@ -734,10 +766,17 @@ export function installVueCapture(
     controlUsage,
     mountSuppression,
     synthesis,
+    observeBindings(listener: VueBindingListener) {
+      bindingListeners.add(listener);
+      return () => {
+        bindingListeners.delete(listener);
+      };
+    },
     uninstall() {
       stopped = true;
       marker.capture = undefined;
       rootListeners.clear();
+      bindingListeners.clear();
       restoreVue?.();
       restoreVue = undefined;
     },

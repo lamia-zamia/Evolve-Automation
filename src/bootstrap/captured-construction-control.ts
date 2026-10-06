@@ -11,7 +11,6 @@ import { createCapturedActionCostReader } from "../adapters/evolve/captured-acti
 import { createCapturedAchievementSource } from "../adapters/evolve/captured-achievement-state.ts";
 import { createCapturedCostConflictReader } from "../adapters/evolve/captured-cost-conflict.ts";
 import { createCapturedQueueReservationSource } from "../adapters/evolve/captured-queue-reservations.ts";
-import { createCapturedTabDiscovery } from "../adapters/evolve/captured-tab-discovery.ts";
 import {
   createCapturedRaceTraitSource,
   createCapturedResourceSource,
@@ -21,6 +20,7 @@ import { createCapturedBuildSource } from "../adapters/evolve/progression/build/
 import type { CapturedBuildTarget } from "../adapters/evolve/progression/build/captured-build.ts";
 import { createCapturedConstructionAdapter } from "../adapters/evolve/progression/construction/captured-construction.ts";
 import { createCapturedProjectCatalog } from "../adapters/evolve/progression/research/captured-project-catalog.ts";
+import { readCapturedProjectSettingsEntries } from "../adapters/evolve/progression/research/captured-project-settings-catalog.ts";
 import { createCapturedProjectContextReader } from "../adapters/evolve/progression/research/captured-project-context.ts";
 import { createCapturedProjectSource } from "../adapters/evolve/progression/research/captured-project.ts";
 import { runBuildAutomation } from "../application/build.ts";
@@ -31,9 +31,7 @@ import type { InterfaceSettingsState } from "../domain/interface-settings.ts";
 import type { BuildResourceScope } from "../domain/progression/build/build.ts";
 import type { GameControlRegistry } from "../ports/game-control-registry.ts";
 import type { GameActivitySink } from "../ports/game-message-log.ts";
-import type { GameDrawnProjectsReader } from "../ports/game-drawn-projects.ts";
-import type { GameMountSuppression } from "../ports/game-mount-suppression.ts";
-import type { GamePanelWorkspace } from "../ports/game-panel-workspace.ts";
+import type { CapturedArpaMechanics } from "../ports/captured-arpa-mechanics.ts";
 import type { CostReservationSource } from "../ports/game-cost-reservations.ts";
 import type { GameRootStateSource } from "../ports/game-root-state.ts";
 import type {
@@ -52,13 +50,11 @@ export interface CapturedConstructionPolicy extends ConstructionCycleOptions {
 export interface CapturedConstructionControlDependencies {
   readonly rootState: GameRootStateSource;
   readonly controls: GameControlRegistry;
-  readonly mountSuppression: GameMountSuppression;
-  readonly panels: GamePanelWorkspace;
-  readonly drawnProjects: GameDrawnProjectsReader;
-  /** Shared project catalog, so storage and construction consume one panel sample per cycle. */
+  /** The running bundle's own A.R.P.A. project mechanics, captured once by the project catalog. */
+  readonly arpa: CapturedArpaMechanics;
   /**
-   * Only the drawing half is used here; a caller that already owns a cached catalog passes its
-   * `readProjects` and keeps the restatement on its own side.
+   * Shared project catalog, so storage and construction consume one sample per cycle. A caller that
+   * already owns the cycle's sample passes its `readProjects` instead of building a second reader.
    */
   readonly projectCatalog?: Pick<GameProjectCatalog, "readProjects">;
   /** Optional one-time discovery of the game's Civilization action controls. */
@@ -121,9 +117,7 @@ export function createCapturedConstructionControl(
   const {
     rootState,
     controls,
-    mountSuppression,
-    panels,
-    drawnProjects,
+    arpa,
     readPolicy,
     readSettings,
     readPresentationSettings,
@@ -172,14 +166,7 @@ export function createCapturedConstructionControl(
     dependencies.projectCatalog ??
     createCapturedProjectCatalog({
       rootState,
-      discovery: createCapturedTabDiscovery({
-        rootState,
-        controls,
-        mountSuppression,
-        panels,
-      }),
-      drawnProjects,
-      controls,
+      mechanics: arpa,
       ...(onSkipped === undefined
         ? {}
         : { onUnavailable: (reason: string) => onSkipped("arpa", reason) }),
@@ -190,6 +177,19 @@ export function createCapturedConstructionControl(
               onDiagnostic(`progression diagnostic arpa: ${reason}`),
           }),
     });
+  // The game's own bound title for each project, read from the same binding the physics draw left.
+  const projectLabels = new Map<string, string>();
+  const readProjectLabel = (projectId: string): string => {
+    const known = projectLabels.get(projectId);
+    if (known !== undefined) return known;
+    const entry = readCapturedProjectSettingsEntries(
+      rootState.readRoot(),
+      controls,
+    ).find((candidate) => candidate.projectId === projectId);
+    const label = entry?.label ?? projectId;
+    projectLabels.set(projectId, label);
+    return label;
+  };
   const { reader, executor, observations, establishOrdering } =
     createCapturedConstructionAdapter({
       // City buildings first, matching the game's own list order, so a project only outranks a
@@ -212,7 +212,8 @@ export function createCapturedConstructionControl(
           rootState,
           catalog,
           resources,
-          controls,
+          mechanics: arpa,
+          readProjectLabel,
           context: createCapturedProjectContextReader({
             traits: createCapturedRaceTraitSource(rootState),
             tech: createCapturedTechSource(rootState),

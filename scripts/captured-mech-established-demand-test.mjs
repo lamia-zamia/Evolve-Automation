@@ -79,7 +79,14 @@ const establishedMechControl = createCapturedProgressionControl({
       throw new Error("demand must not discover offers");
     },
   },
-  drawnProjects: { read: () => undefined, exists: () => false },
+  arpa: {
+    ensureCaptured: () => ({ kind: "captured" }),
+    readOffers: () => [],
+    buildPercent: () => ({
+      kind: "unavailable",
+      reason: "project builds are not exercised by this test",
+    }),
+  },
   readSettings: () => ({
     autoMech: true,
     mechBuild: "user",

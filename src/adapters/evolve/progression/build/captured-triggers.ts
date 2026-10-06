@@ -12,18 +12,18 @@
  * surface cannot answer is dropped rather than guessed at, so a missing part of the model can only
  * leave a resource looking undemanded.
  *
- * Known gaps, each of which drops the trigger instead of approximating it:
+ * Known limits, each of which drops the trigger instead of approximating it:
  *
- * - A trigger's effective step is limited by the drawn panel's per-percent cost and each resource's
- *   current capacity. The drawn 1% price is rounded for display while the game charges the
- *   unrounded fraction per step, so the product slightly overstates the charge — the safe direction
- *   for both saving and the executor's affordability gate.
+ * - A trigger's effective step is limited by each resource's current capacity. Its per-percent
+ *   price comes from the retained arpaProjectSRCosts closure and adjusted native cost functions,
+ *   matching the unrounded amount payArpaCosts charges rather than the displayed tooltip.
  * - A technology the current path never draws — one belonging to another tech path, say — is in
  *   neither half of the research panel, so a trigger naming it is dropped. The compatibility
  *   runtime's DOM read reported the same technology as simply not researched.
  * - Conditions are limited to the operands `../../captured-conditions.ts` answers. `ProjectUnlocked`
- *   is answered from the same drawn panel the A.R.P.A. prices come from, so a trigger naming one
- *   draws the panel even when no trigger buys a project. `BuildingUnlocked` likewise draws the
+ *   is answered from the same captured project catalog the A.R.P.A. prices come from, so a trigger
+ *   naming one establishes the native mechanics even when no trigger buys a project.
+ *   `BuildingUnlocked` likewise draws the
  *   region panels its conditions name, and only those.
  */
 
@@ -58,13 +58,15 @@ import {
   splitActionId,
 } from "../../../validation.ts";
 import { calculateArpaProjectStepCosts } from "../../../../domain/economy/arpa-project-costs.ts";
+import { arpaProjectIdFromElementId } from "../research/arpa-project-identity.ts";
 
 /**
  * One trigger action the game could buy now, priced at the game's own current cost.
  *
- * A.R.P.A. targets carry the sampled project state the executor's stale checks and the demand
- * model's project rule need: `cost` is the drawn per-percent price times the effective `steps`,
- * and `progress` is the `complete` percent it was priced from.
+ * A.R.P.A. targets carry the sampled project state the executor's authority checks and the demand
+ * model's project rule need: `cost` is the exact native per-percent price times the effective
+ * `steps`, `percentCosts` is that price alone, and `progress` is the `complete` percent it was
+ * priced from.
  */
 export type CapturedTriggerTarget =
   | {
@@ -84,7 +86,8 @@ export type CapturedTriggerTarget =
       readonly steps: number;
       /** The project's current `complete` percent. */
       readonly progress: number;
-      readonly generation: number;
+      /** The exact native per-percent price this target was priced against. */
+      readonly percentCosts: Readonly<Record<string, number>>;
     };
 
 export interface CapturedTriggers {
@@ -148,8 +151,6 @@ interface TriggerRow {
 const NO_TARGETS: readonly Readonly<CapturedTriggerTarget>[] = Object.freeze(
   [],
 );
-
-const ARPA_PREFIX = "arpa";
 
 /**
  * Validates one stored trigger. The editor writes every field, so a row missing one is a broken
@@ -337,10 +338,7 @@ export function createCapturedTriggers(
           return count === undefined ? undefined : count >= row.actionCount;
         }
         if (row.actionType === "arpa") {
-          // A.R.P.A. ids are stored as the panel binding, `arpa` followed by the project id.
-          const projectId = row.actionId.startsWith(ARPA_PREFIX)
-            ? row.actionId.slice(ARPA_PREFIX.length)
-            : undefined;
+          const projectId = arpaProjectIdFromElementId(row.actionId);
           const rank = finite(
             readProperty(
               readProperty(readProperty(root, "arpa"), projectId ?? ""),
@@ -391,8 +389,8 @@ export function createCapturedTriggers(
       };
 
       /**
-       * A trigger buys the largest capacity-limited project step, priced from the drawn panel's
-       * per-percent cost. A project the panel is not offering — locked, or finished past its rank
+       * A trigger buys the largest capacity-limited project step, priced from the native offer's
+       * per-percent cost. A project the game is not offering — locked, or finished past its rank
        * gate — is not one the game could buy now, so it raises no demand rather than guessing a
        * price.
        */
@@ -401,9 +399,6 @@ export function createCapturedTriggers(
       ): Readonly<CapturedTriggerTarget> | undefined => {
         const project = offeredProjectsById?.get(row.actionId);
         if (project === undefined) return undefined;
-        // The target list only carries actions whose control was captured, so the executor can
-        // press them; the panel draw above captures the project controls as it prices them.
-        if (controls.resolve(row.actionId) === undefined) return undefined;
         const remaining = 100 - project.progress;
         if (!Number.isFinite(remaining) || remaining <= 0 || remaining > 100) {
           return undefined;
@@ -453,7 +448,7 @@ export function createCapturedTriggers(
           projectId: project.projectId,
           steps: effective.steps,
           progress: project.progress,
-          generation: project.generation,
+          percentCosts: project.cost,
         } as const);
       };
 

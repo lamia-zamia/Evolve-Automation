@@ -1,197 +1,46 @@
 import assert from "node:assert/strict";
 import { priceLookup } from "./test-support/action-price.mjs";
 
-import { createGameDrawnProjectsReader } from "../src/adapters/browser/game-drawn-projects.ts";
 import { createCapturedProjectCatalog } from "../src/adapters/evolve/progression/research/captured-project-catalog.ts";
 import { createCapturedTriggers } from "../src/adapters/evolve/progression/build/captured-triggers.ts";
-import {
-  MAIN_TAB_CONTROL,
-  MAIN_TAB_SETTING,
-} from "../src/adapters/evolve/captured-tab-discovery.ts";
-
-function attributesOf(attributes) {
-  return Object.entries(attributes).map(([name, value]) => ({
-    name,
-    value: String(value),
-  }));
-}
-
-function makeProjectDocument(projects, { existingPopper = false } = {}) {
-  let popper = existingPopper
-    ? { attributes: [], querySelectorAll: () => [] }
-    : undefined;
-  let events = 0;
-  const rows = projects.map(({ id, cost }) => {
-    const button = {
-      dispatchEvent(event) {
-        events++;
-        if (event.type === "mouseover") {
-          popper = {
-            attributes: [],
-            querySelectorAll: () => [
-              {
-                attributes: attributesOf(
-                  Object.fromEntries(
-                    Object.entries(cost).map(([resource, amount]) => [
-                      `data-${resource.toLowerCase()}`,
-                      amount,
-                    ]),
-                  ),
-                ),
-              },
-            ],
-          };
-        } else {
-          popper = undefined;
-        }
-        return true;
-      },
-    };
-    return {
-      id: `arpa${id}`,
-      querySelector: () => button,
-    };
-  });
-  const document = {
-    querySelectorAll(selector) {
-      if (selector === "#popper") return popper === undefined ? [] : [popper];
-      if (selector === "#arpaPhysics .arpaProject") return rows;
-      if (selector === "#arpaPhysics") return [{}];
-      return [];
-    },
-  };
-  return {
-    document,
-    events: () => events,
-    hasPopper: () => popper !== undefined,
-  };
-}
-
-const mouseEvent = (type) => ({ type });
-
-{
-  const page = makeProjectDocument([
-    { id: "lhc", cost: { Money: 26250, Helium_3: 126 } },
-    { id: "stock_exchange", cost: { Plywood: 265, Wrought_Iron: 106 } },
-  ]);
-  const reader = createGameDrawnProjectsReader({
-    getDocument: () => page.document,
-    createMouseEvent: mouseEvent,
-  });
-  assert.deepEqual(
-    reader.read("#arpaPhysics .arpaProject", [
-      "Money",
-      "Helium_3",
-      "Plywood",
-      "Wrought_Iron",
-    ]),
-    [
-      {
-        elementId: "arpalhc",
-        projectId: "lhc",
-        cost: { Money: 26250, Helium_3: 126 },
-      },
-      {
-        elementId: "arpastock_exchange",
-        projectId: "stock_exchange",
-        cost: { Plywood: 265, Wrought_Iron: 106 },
-      },
-    ],
-  );
-  assert.equal(page.events(), 4);
-  assert.equal(page.hasPopper(), false);
-  assert.equal(reader.exists("#arpaPhysics"), true);
-}
-
-{
-  const page = makeProjectDocument([{ id: "lhc", cost: { Money: 1 } }], {
-    existingPopper: true,
-  });
-  const reader = createGameDrawnProjectsReader({
-    getDocument: () => page.document,
-    createMouseEvent: mouseEvent,
-  });
-  assert.equal(reader.read("#arpaPhysics .arpaProject", ["Money"]), undefined);
-  assert.equal(page.events(), 0, "the player's popover is not replaced");
-}
-
-{
-  const page = makeProjectDocument([{ id: "lhc", cost: {} }]);
-  const reader = createGameDrawnProjectsReader({
-    getDocument: () => page.document,
-    createMouseEvent: mouseEvent,
-  });
-  assert.equal(reader.read("#arpaPhysics .arpaProject", ["Money"]), undefined);
-  assert.equal(
-    page.hasPopper(),
-    false,
-    "a rejected sample still closes its popover",
-  );
-}
 
 function makeCatalogPage({
-  projects = [],
-  generations = {},
-  methodsByElement = {},
-  panelAvailable = true,
+  offers = [],
+  capture = { kind: "captured" },
+  offerReadAvailable = true,
+  rootAvailable = true,
 } = {}) {
   const root = {
-    settings: { civTabs: 4 },
-    resource: { Money: { amount: 1 }, Knowledge: { amount: 1 } },
+    race: {},
+    tech: {},
+    city: { mine: { count: 0 }, apartment: { count: 0 } },
+    resource: { Money: { amount: 500000, max: 1000000, display: true } },
     arpa: Object.fromEntries(
-      projects.map((project) => [
-        project.projectId,
-        { rank: project.rank, complete: project.progress },
+      offers.map((offer) => [
+        offer.projectId,
+        { rank: offer.rank, complete: offer.progress },
       ]),
     ),
   };
-  const paths = [];
-  const panelChecks = [];
+  let currentOffers = offers;
   const reasons = [];
   const diagnostics = [];
-  let unavailable = false;
-  let failure;
+  const calls = { capture: 0, offers: 0 };
   const catalog = createCapturedProjectCatalog({
-    rootState: {
-      readRoot: () => root,
-      isReactivitySuppressed: () => false,
-      subscribeRootReplaced: () => () => {},
-    },
-    discovery: {
-      discover(path, options = {}) {
-        paths.push(
-          path.map((step) => [step.setting, step.control, step.index]),
-        );
-        panelChecks.push(options.isPanelDrawn?.());
-        if (failure !== undefined) return { outcome: failure, discovered: [] };
-        options.whileDrawn?.();
-        return { outcome: { status: "succeeded" }, discovered: [] };
+    rootState: { readRoot: () => (rootAvailable ? root : undefined) },
+    mechanics: {
+      ensureCaptured() {
+        calls.capture++;
+        return capture;
       },
-    },
-    drawnProjects: {
-      exists: () => panelAvailable,
-      read: (_selector, resourceNames) => {
-        assert.deepEqual(resourceNames, ["Money", "Knowledge"]);
-        return unavailable
-          ? undefined
-          : projects.map((project) => ({
-              elementId: project.elementId,
-              projectId: project.projectId,
-              cost: project.cost,
-            }));
+      readOffers(sample) {
+        calls.offers++;
+        if (sample !== root || !offerReadAvailable) return undefined;
+        return currentOffers;
       },
-    },
-    controls: {
-      resolve: (elementId) =>
-        generations[elementId] === undefined
-          ? undefined
-          : {
-              elementId,
-              generation: generations[elementId],
-              methods: methodsByElement[elementId] ?? ["build"],
-            },
-      invoke: () => ({ ok: false, reason: "unknown-control" }),
-      capturedElementIds: () => Object.keys(generations),
+      buildPercent() {
+        throw new Error("catalog reads do not build projects");
+      },
     },
     onUnavailable: (reason) => reasons.push(reason),
     onDiagnostic: (reason) => diagnostics.push(reason),
@@ -199,32 +48,31 @@ function makeCatalogPage({
   return {
     catalog,
     root,
-    generations,
-    paths,
-    panelChecks,
+    calls,
     reasons,
     diagnostics,
-    unavailable: () => {
-      unavailable = true;
-    },
-    fail: (outcome) => {
-      failure = outcome;
+    setOffers(value) {
+      currentOffers = value;
     },
   };
 }
 
 {
   const page = makeCatalogPage({
-    projects: [
+    offers: [
       {
-        elementId: "arpalhc",
         projectId: "lhc",
         rank: 2,
         progress: 35,
-        cost: { Money: 10, Knowledge: 5 },
+        percentCosts: { Money: 10, Knowledge: 5 },
+      },
+      {
+        projectId: "stock_exchange",
+        rank: 1,
+        progress: 0,
+        percentCosts: { Money: 20 },
       },
     ],
-    generations: { arpalhc: 7 },
   });
   assert.deepEqual(page.catalog.readProjects(), [
     {
@@ -233,11 +81,16 @@ function makeCatalogPage({
       rank: 2,
       progress: 35,
       cost: { Money: 10, Knowledge: 5 },
-      generation: 7,
+    },
+    {
+      elementId: "arpastock_exchange",
+      projectId: "stock_exchange",
+      rank: 1,
+      progress: 0,
+      cost: { Money: 20 },
     },
   ]);
-  assert.deepEqual(page.paths, [[[MAIN_TAB_SETTING, MAIN_TAB_CONTROL, 5]]]);
-  assert.deepEqual(page.panelChecks, [true]);
+  assert.deepEqual(page.calls, { capture: 1, offers: 1 });
 }
 
 {
@@ -245,122 +98,90 @@ function makeCatalogPage({
   assert.deepEqual(
     page.catalog.readProjects(),
     [],
-    "no available project is a valid catalog",
+    "an empty offer list is authoritative",
   );
-  page.unavailable();
-  assert.equal(page.catalog.readProjects(), undefined);
-  assert.deepEqual(page.reasons, ["the project rows were unreadable"]);
-  page.fail({
-    status: "rejected",
-    failure: { code: "tab-control-missing", message: "no captured control" },
-  });
-  assert.equal(page.catalog.readProjects(), undefined);
-  assert.deepEqual(page.reasons, ["the project rows were unreadable"]);
-  assert.deepEqual(page.diagnostics, ["no captured control"]);
 }
 
 {
-  const missingPanel = makeCatalogPage({
-    projects: [
-      {
-        elementId: "arpalhc",
-        projectId: "lhc",
-        rank: 0,
-        progress: 0,
-        cost: { Money: 10, Knowledge: 5 },
-      },
-    ],
-    generations: { arpalhc: 7 },
-    panelAvailable: false,
+  const page = makeCatalogPage({
+    capture: {
+      kind: "unavailable",
+      reason: "the page realm has no Object.keys",
+    },
   });
-  assert.equal(missingPanel.catalog.readProjects(), undefined);
-  assert.deepEqual(missingPanel.reasons, ["the project panel was unavailable"]);
+  assert.equal(page.catalog.readProjects(), undefined);
+  assert.deepEqual(page.reasons, [
+    "native A.R.P.A. capture failed: the page realm has no Object.keys",
+  ]);
+  assert.equal(page.calls.offers, 0);
+}
 
-  const missingBuild = makeCatalogPage({
-    projects: [
-      {
-        elementId: "arpalhc",
-        projectId: "lhc",
-        rank: 0,
-        progress: 0,
-        cost: { Money: 10, Knowledge: 5 },
-      },
-    ],
-    generations: { arpalhc: 7 },
-    methodsByElement: { arpalhc: [] },
-  });
-  assert.equal(missingBuild.catalog.readProjects(), undefined);
-  assert.deepEqual(missingBuild.reasons, [
-    "a project row has no captured build control",
+{
+  const page = makeCatalogPage({ offerReadAvailable: false });
+  assert.equal(page.catalog.readProjects(), undefined);
+  assert.deepEqual(page.diagnostics, [
+    "the offered project catalog is unreadable against the captured registry",
   ]);
 }
 
 {
-  const reasons = [];
-  const catalog = createCapturedProjectCatalog({
-    rootState: {
-      readRoot: () => undefined,
-      isReactivitySuppressed: () => false,
-      subscribeRootReplaced: () => () => {},
-    },
-    discovery: { discover: () => assert.fail("must not draw without a root") },
-    drawnProjects: { read: () => [], exists: () => false },
-    controls: {
-      resolve: () => undefined,
-      invoke: () => ({ ok: false, reason: "unknown-control" }),
-      capturedElementIds: () => [],
-    },
-    onUnavailable: (reason) => reasons.push(reason),
-  });
-  assert.equal(catalog.readProjects(), undefined);
-  assert.deepEqual(reasons, ["the game root has not been captured yet"]);
+  const page = makeCatalogPage({ rootAvailable: false });
+  assert.equal(page.catalog.readProjects(), undefined);
+  assert.deepEqual(page.reasons, ["the game root has not been captured yet"]);
+  assert.equal(page.calls.offers, 0);
 }
 
-// A `ProjectUnlocked` condition is answered by the rows this panel actually drew, through the
-// real drawn-projects reader and the real catalog: panel membership is the whole answer.
 {
-  const page = makeProjectDocument([
-    { id: "lhc", cost: { Money: 26250 } },
-    { id: "stock_exchange", cost: { Money: 1500 } },
-  ]);
-  const root = {
-    city: { mine: { count: 0 }, apartment: { count: 0 } },
-    arpa: {
-      lhc: { rank: 0, complete: 10 },
-      stock_exchange: { rank: 1, complete: 0 },
+  const page = makeCatalogPage({
+    offers: [
+      {
+        projectId: "lhc",
+        rank: 2,
+        progress: 35,
+        percentCosts: { Money: 10 },
+      },
+    ],
+  });
+  const held = page.catalog.readProjects();
+  page.root.arpa.lhc.complete = 40;
+  page.setOffers([
+    {
+      projectId: "lhc",
+      rank: 2,
+      progress: 40,
+      percentCosts: { Money: 10 },
     },
-    resource: { Money: { amount: 500000, max: 1000000, display: true } },
-  };
-  const BUILD_COSTS = {
+  ]);
+  assert.equal(page.catalog.readProjects()[0].progress, 40);
+  assert.equal(
+    held[0].progress,
+    35,
+    "a fresh sample does not mutate the held row",
+  );
+}
+
+// ProjectUnlocked uses the same offered-project catalog as construction saving.
+{
+  const page = makeCatalogPage({
+    offers: [
+      {
+        projectId: "lhc",
+        rank: 0,
+        progress: 10,
+        percentCosts: { Money: 26250 },
+      },
+      {
+        projectId: "stock_exchange",
+        rank: 1,
+        progress: 0,
+        percentCosts: { Money: 1500 },
+      },
+    ],
+  });
+  const buildCosts = {
     "city-apartment": { Money: 875 },
     "city-mine": { Money: 60 },
   };
-  const catalog = createCapturedProjectCatalog({
-    rootState: {
-      readRoot: () => root,
-      isReactivitySuppressed: () => false,
-      subscribeRootReplaced: () => () => {},
-    },
-    discovery: {
-      discover(_path, options = {}) {
-        options.whileDrawn?.();
-        return { outcome: { status: "succeeded" }, discovered: [] };
-      },
-    },
-    drawnProjects: createGameDrawnProjectsReader({
-      getDocument: () => page.document,
-      createMouseEvent: mouseEvent,
-    }),
-    controls: {
-      resolve: (elementId) => ({
-        elementId,
-        generation: 1,
-        methods: ["build"],
-      }),
-      invoke: () => ({ ok: false, reason: "unknown-control" }),
-      capturedElementIds: () => [],
-    },
-  });
   const projectTrigger = (requirementId, requirementCount, actionId) => ({
     seq: 0,
     priority: 0,
@@ -373,33 +194,30 @@ function makeCatalogPage({
   });
   const triggersFor = (rows) =>
     createCapturedTriggers({
-      rootState: { readRoot: () => root },
+      rootState: { readRoot: () => page.root },
       controls: {
         resolve: (elementId) =>
-          elementId in BUILD_COSTS
+          elementId in buildCosts
             ? { elementId, generation: 1, methods: [] }
             : undefined,
         invoke: () => ({ ok: true, value: undefined }),
-        capturedElementIds: () => Object.keys(BUILD_COSTS),
+        capturedElementIds: () => Object.keys(buildCosts),
       },
-      costs: { readCost: priceLookup(BUILD_COSTS) },
+      costs: { readCost: priceLookup(buildCosts) },
       readSettings: () => ({ autoTrigger: true, triggers: rows }),
-      readOfferedProjects: () => catalog.readProjects(),
+      readOfferedProjects: () => page.catalog.readProjects(),
     });
 
-  // A project the panel drew is unlocked.
   assert.deepEqual(
     triggersFor([projectTrigger("arpalhc", 1, "city-apartment")]).read(),
     [
       {
         actionId: "city-apartment",
         actionType: "build",
-        cost: BUILD_COSTS["city-apartment"],
+        cost: buildCosts["city-apartment"],
       },
     ],
   );
-  // One it did not draw is not, so the condition fails rather than going unanswered — which a
-  // condition asking for the project to be absent proves, since an unanswered one would drop.
   assert.deepEqual(
     triggersFor([projectTrigger("arpamonument", 1, "city-mine")]).read(),
     [],
@@ -410,104 +228,10 @@ function makeCatalogPage({
       {
         actionId: "city-mine",
         actionType: "build",
-        cost: BUILD_COSTS["city-mine"],
+        cost: buildCosts["city-mine"],
       },
     ],
   );
-  // The panel is left as it was found: every hover is undone.
-  assert.equal(page.hasPopper(), false);
-}
-
-// --- restating a held sample ------------------------------------------------
-
-{
-  // Only the per-percent price comes from the popover, and that moves with rank alone. Rank,
-  // progress and the control generation live in the game and in the registry, so a sample held
-  // across ticks restates them instead of paying for another hover over the A.R.P.A. panel.
-  const page = makeCatalogPage({
-    projects: [
-      {
-        elementId: "arpalhc",
-        projectId: "lhc",
-        rank: 2,
-        progress: 40,
-        cost: { Money: 26250 },
-      },
-    ],
-    generations: { arpalhc: 5 },
-  });
-  const held = page.catalog.readProjects();
-  assert.deepEqual(held, [
-    {
-      elementId: "arpalhc",
-      projectId: "lhc",
-      cost: { Money: 26250 },
-      rank: 2,
-      progress: 40,
-      generation: 5,
-    },
-  ]);
-  const drawsBefore = page.paths.length;
-
-  // The script buys a percentage point and the game redraws the row, rebinding its control.
-  page.root.arpa.lhc.complete = 73;
-  page.generations["arpalhc"] = 6;
-  const restated = page.catalog.restate(held);
-  assert.equal(
-    page.paths.length,
-    drawsBefore,
-    "restating must not draw the A.R.P.A. panel",
-  );
-  assert.deepEqual(restated, [
-    {
-      elementId: "arpalhc",
-      projectId: "lhc",
-      cost: { Money: 26250 },
-      rank: 2,
-      progress: 73,
-      generation: 6,
-    },
-  ]);
-  assert.equal(held[0].progress, 40, "the held sample is not mutated");
-}
-
-{
-  // Before the game has built its state there is nothing to restate from, and an unanswerable
-  // read is reported rather than served from the sample handed in.
-  const reasons = [];
-  const catalog = createCapturedProjectCatalog({
-    rootState: {
-      readRoot: () => undefined,
-      isReactivitySuppressed: () => false,
-      subscribeRootReplaced: () => () => {},
-    },
-    discovery: {
-      discover() {
-        throw new Error("must not draw while restating");
-      },
-    },
-    drawnProjects: { exists: () => false, read: () => undefined },
-    controls: {
-      resolve: () => undefined,
-      invoke: () => ({ ok: false, reason: "unknown-control" }),
-      capturedElementIds: () => [],
-    },
-    onUnavailable: (reason) => reasons.push(reason),
-  });
-  assert.equal(
-    catalog.restate([
-      {
-        elementId: "arpalhc",
-        projectId: "lhc",
-        cost: {},
-        rank: 1,
-        progress: 0,
-        generation: 1,
-      },
-    ]),
-    undefined,
-  );
-  assert.deepEqual(reasons, ["the game root has not been captured yet"]);
 }
 
 console.log("captured-project-catalog ok");

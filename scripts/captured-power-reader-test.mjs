@@ -539,6 +539,10 @@ function createMechanics({
   }),
   invalidateFuel = false,
   guardPostRating = () => 1234,
+  // Effective support equals the configured count until a test models a starved consumer, which
+  // is exactly the live 0/5 case: configured on, effective zero.
+  effectiveSupport = (sample, member) =>
+    sample?.[member.region]?.[member.struct]?.on,
 } = {}) {
   const byKey = new Map(structureSample.map((item) => [item.entryKey, item]));
   const resolve = (keys) =>
@@ -569,6 +573,14 @@ function createMechanics({
           : sample?.[member.region]?.[member.struct];
       return typeof state?.on === "number"
         ? { kind: "value", value: state.on }
+        : { kind: "invalid" };
+    },
+    readEffectiveSupportCount: (sample, key) => {
+      const member = byKey.get(key);
+      if (member === undefined) return { kind: "invalid" };
+      const effective = effectiveSupport(sample, member);
+      return typeof effective === "number"
+        ? { kind: "value", value: effective }
         : { kind: "invalid" };
     },
     readLocalizedText: (key) =>
