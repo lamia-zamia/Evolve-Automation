@@ -638,20 +638,25 @@ assert.equal(
 assert.deepEqual(
   cycle.buildings.map((building) => building.binding),
   [
-    "city-coal_power",
     "city-bank",
+    "city-coal_power",
     "space-gas_mining",
     "space-propellant_depot",
     "interstellar-cargo_yard",
     "space-nav_beacon",
+    "space-vr_center",
     "space-storehouse",
     "interstellar-warehouse",
     "space-red_factory",
     "interstellar-int_factory",
     "galaxy-cruiser_ship",
-    "space-vr_center",
   ],
-  "captured native power and support orders control the Power cycle",
+  "bld_p settings priority orders managed Power buildings independently of native grid order",
+);
+assert.deepEqual(
+  root.power.slice(0, 3),
+  [cityGenerator.entryKey, "stale:power", cityConsumer.entryKey],
+  "the captured native Power order remains unchanged for upstream processing",
 );
 assert.ok(
   cycle.buildings.every((building) => building.binding !== "space-garage"),

@@ -15,6 +15,7 @@ import type {
   PowerSpireInput,
   PowerWarnBuildingInput,
 } from "../../../../domain/economy/production/power.ts";
+import { sortByStoredPriority } from "../../../../domain/settings-priority-order.ts";
 import { type CapturedBuildingState } from "../../progression/build/captured-building-state.ts";
 import { readCapturedSemanticBuildingStates } from "../../progression/build/captured-building-availability.ts";
 import type { GameControlRegistry } from "../../../../ports/game-control-registry.ts";
@@ -2150,11 +2151,8 @@ function readPowerCycle(
   if (buildingStates === undefined)
     return unavailable("building-state", "Building semantic state unavailable");
   const allCatalog = buildingStates.map((building) => building.catalog);
-  const nativeOrderIndex = new Map(
-    nativeOrder.map((structure, index) => [structure.entryKey, index]),
-  );
-  const managed = buildingStates
-    .filter(
+  const managed = sortByStoredPriority(
+    buildingStates.filter(
       (
         building,
       ): building is CapturedBuildingState & {
@@ -2164,14 +2162,10 @@ function readPowerCycle(
         building.hasState &&
         settings["bld_s_" + building.catalog.binding] === true &&
         building.count > 0,
-    )
-    .sort(
-      (left, right) =>
-        (nativeOrderIndex.get(left.structure.entryKey) ??
-          Number.MAX_SAFE_INTEGER) -
-        (nativeOrderIndex.get(right.structure.entryKey) ??
-          Number.MAX_SAFE_INTEGER),
-    );
+    ),
+    settings,
+    (building) => `bld_p_${building.catalog.binding}`,
+  );
   const supports = readNativePowerSupports(
     root,
     dependencies.mechanics,

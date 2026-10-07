@@ -124,6 +124,11 @@ function runMinerBootstrap({
   insufficientWorkers = false,
   shipAutoState = true,
   shipSmart = true,
+  shipPriority = 1,
+  ironCount = productionFaithful ? 1 : 3,
+  ironOn = productionFaithful ? 1 : 3,
+  ironAutoState = !liveStarvation,
+  ironPriority = 2,
   spaceMinerEnabled = true,
   spaceMinerSmart = true,
   autoCraftsmen = false,
@@ -159,7 +164,7 @@ function runMinerBootstrap({
             pOn: { space_station: nativeSupportReady ? 1 : 0 },
             supportOn: {
               elerium_ship: 0,
-              iron_ship: nativeSupportReady ? 1 : 0,
+              iron_ship: nativeSupportReady ? ironOn : 0,
             },
           }
         : {}),
@@ -168,15 +173,15 @@ function runMinerBootstrap({
         count: liveStarvation ? 5 : 1,
         on: liveStarvation ? (configuredStationOn ? 5 : 0) : 1,
         support: nativeSupportReady
-          ? 1
+          ? ironOn
           : liveStarvation || productionFaithful
             ? 0
             : 3,
       },
       iridium_ship: { count: 0, on: 0 },
       iron_ship: {
-        count: productionFaithful ? 1 : 3,
-        on: productionFaithful ? 1 : 3,
+        count: ironCount,
+        on: ironOn,
       },
     },
     civic: {
@@ -261,8 +266,8 @@ function runMinerBootstrap({
           }
         : {}),
     },
-    support: { belt: [ship.entryKey] },
-    power: [ship.entryKey],
+    support: { belt: [iron.entryKey, ship.entryKey] },
+    power: [station.entryKey],
   };
   const snapshots = [];
   const afterCycles = [];
@@ -321,6 +326,10 @@ function runMinerBootstrap({
           "space-elerium_ship",
           root.space.elerium_ship.on,
         );
+        const ironTarget = plannedTarget(
+          "space-iron_ship",
+          root.space.iron_ship.on,
+        );
         snapshots.push({
           workers: root.civic.space_miner.workers,
           assigned: root.civic.space_miner.assigned,
@@ -346,6 +355,7 @@ function runMinerBootstrap({
           beltProspectiveSupport: power?.plan.beltProspectiveMaximum,
           plannedStationTarget: stationTarget,
           plannedEleriumTarget: eleriumTarget,
+          plannedIronTarget: ironTarget,
           power,
         });
       }
@@ -444,20 +454,30 @@ function runMinerBootstrap({
       "bld_s_space-elerium_ship": shipAutoState,
       "bld_s2_space-elerium_ship": shipSmart,
       "bld_p_space-elerium_ship":
-        productionFaithful && (!shipSmart || eleriumFull) ? 0 : 1,
+        productionFaithful && (!shipSmart || eleriumFull) ? 0 : shipPriority,
       "bld_s_space-space_station": true,
       "bld_s2_space-space_station": true,
       "bld_p_space-space_station": 0,
-      "bld_s_space-iron_ship": !liveStarvation,
-      "bld_s2_space-iron_ship": !liveStarvation,
-      "bld_p_space-iron_ship": 2,
+      "bld_s_space-iron_ship": ironAutoState,
+      "bld_s2_space-iron_ship": ironAutoState,
+      "bld_p_space-iron_ship": ironPriority,
     },
     documentSetup: ({ body }) => body.append(element("div", { id: "tech" })),
     mechanics: {
       readStructures: () => [ship, capturedStation, iron],
-      readPowerOrder: () => value([capturedStation, iron, ship]),
-      readSupportOrder: (_root, type) =>
-        value(type === "belt" ? [iron, ship] : []),
+      readPowerOrder: () => value([capturedStation]),
+      readSupportOrder: (sample, type) =>
+        value(
+          type === "belt"
+            ? sample.support.belt.flatMap((key) =>
+                key === iron.entryKey
+                  ? [iron]
+                  : key === ship.entryKey
+                    ? [ship]
+                    : [],
+              )
+            : [],
+        ),
       readEffectivePowerCount: (sample, key) =>
         value(
           sample.space.pOn?.[key.split(":")[1]] ??
@@ -712,6 +732,155 @@ assert.ok(
   }),
 );
 
+const livePriorityBootstrap = runMinerBootstrap({
+  productionFaithful: true,
+  nativeSupportReady: true,
+  workerProfile: { unemployed: 0, farmer: 10, scientist: 7, space_miner: 3 },
+  ironCount: 3,
+  ironOn: 3,
+  spaceMinerEnabled: true,
+  spaceMinerSmart: true,
+});
+const livePrioritySnapshot = livePriorityBootstrap.snapshots[0];
+assert.ok(livePrioritySnapshot);
+assert.equal(livePrioritySnapshot.workers, 3);
+assert.equal(livePrioritySnapshot.spaceMinerMaximum, 18);
+assert.equal(livePrioritySnapshot.stationCount, 1);
+assert.equal(livePrioritySnapshot.stationOn, 1);
+assert.equal(livePrioritySnapshot.stationEffective, 1);
+assert.equal(livePrioritySnapshot.ironOn, 3);
+assert.equal(livePrioritySnapshot.ironEffective, 3);
+assert.equal(livePrioritySnapshot.eleriumConfiguredOn, 0);
+assert.equal(livePrioritySnapshot.eleriumEffective, 0);
+assert.ok(livePrioritySnapshot.power.cycle.prospectiveSpaceMiners >= 3);
+assert.equal(livePrioritySnapshot.beltProspectiveSupport, 3);
+assert.equal(livePrioritySnapshot.powerQuantity, 10);
+assert.equal(livePrioritySnapshot.helium3Quantity, 100);
+assert.equal(livePrioritySnapshot.eleriumUseful, true);
+assert.deepEqual(
+  livePriorityBootstrap.root.support.belt,
+  [iron.entryKey, ship.entryKey],
+  "native Belt support order deliberately puts Iron before Elerium",
+);
+const livePriorityBuildings = livePrioritySnapshot.power.cycle.buildings.map(
+  ({ binding }) => binding,
+);
+assert.ok(
+  livePriorityBuildings.indexOf("space-elerium_ship") <
+    livePriorityBuildings.indexOf("space-iron_ship"),
+  "managed Power decisions follow Elerium's higher bld_p priority over native Belt order",
+);
+const liveEleriumShip = livePrioritySnapshot.power.cycle.buildings.find(
+  ({ binding }) => binding === "space-elerium_ship",
+);
+const liveIronShip = livePrioritySnapshot.power.cycle.buildings.find(
+  ({ binding }) => binding === "space-iron_ship",
+);
+const liveStation = livePrioritySnapshot.power.cycle.buildings.find(
+  ({ binding }) => binding === "space-space_station",
+);
+assert.equal(liveEleriumShip?.autoStateManaged, true);
+assert.equal(liveEleriumShip?.smartEnabled, true);
+assert.equal(liveIronShip?.autoStateManaged, true);
+assert.equal(liveIronShip?.smartEnabled, true);
+assert.equal(liveIronShip?.rule.kind, "busy-resource");
+assert.equal(
+  liveIronShip?.rule.kind === "busy-resource"
+    ? liveIronShip.rule.observation.useful
+    : false,
+  true,
+);
+assert.equal(liveStation?.rule.kind, "belt-space-station");
+assert.equal(
+  liveStation?.rule.kind === "belt-space-station"
+    ? liveStation.rule.beltSupportPerStation
+    : undefined,
+  3,
+);
+const plannedAdjustment = (snapshot, binding) =>
+  snapshot.power.plan.decision?.operations.find(
+    (operation) =>
+      operation.kind === "adjust-building" && operation.binding === binding,
+  );
+assert.deepEqual(
+  [
+    plannedAdjustment(livePrioritySnapshot, "space-elerium_ship")
+      ?.expectedStateOn,
+    plannedAdjustment(livePrioritySnapshot, "space-elerium_ship")?.amount,
+    plannedAdjustment(livePrioritySnapshot, "space-iron_ship")?.expectedStateOn,
+    plannedAdjustment(livePrioritySnapshot, "space-iron_ship")?.amount,
+  ],
+  [0, 1, 3, -2],
+  "Elerium gets two Belt support and Iron gives up two for a total of three",
+);
+assert.equal(livePriorityBootstrap.afterCycles[0].eleriumEffective, 1);
+assert.equal(livePriorityBootstrap.afterCycles[0].ironEffective, 1);
+assert.equal(livePriorityBootstrap.afterCycles[0].workers, 3);
+assert.deepEqual(livePriorityBootstrap.root.power, [station.entryKey]);
+assert.deepEqual(
+  livePriorityBootstrap.root.support.belt,
+  [iron.entryKey, ship.entryKey],
+  "Power planning leaves native support order intact after refresh",
+);
+
+const reversedPriorityBootstrap = runMinerBootstrap({
+  productionFaithful: true,
+  nativeSupportReady: true,
+  workerProfile: { unemployed: 0, farmer: 10, scientist: 7, space_miner: 3 },
+  ironCount: 3,
+  ironOn: 3,
+  shipPriority: 2,
+  ironPriority: 1,
+});
+const reversedPrioritySnapshot = reversedPriorityBootstrap.snapshots[0];
+assert.ok(reversedPrioritySnapshot);
+assert.ok(
+  reversedPrioritySnapshot.power.cycle.buildings.findIndex(
+    ({ binding }) => binding === "space-iron_ship",
+  ) <
+    reversedPrioritySnapshot.power.cycle.buildings.findIndex(
+      ({ binding }) => binding === "space-elerium_ship",
+    ),
+  "reversing bld_p priorities reverses managed Power processing order",
+);
+assert.equal(reversedPrioritySnapshot.plannedIronTarget, 3);
+assert.equal(reversedPrioritySnapshot.plannedEleriumTarget, 0);
+assert.equal(reversedPriorityBootstrap.afterCycles[0].ironEffective, 3);
+assert.equal(reversedPriorityBootstrap.afterCycles[0].eleriumEffective, 0);
+
+const unmanagedIronBootstrap = runMinerBootstrap({
+  productionFaithful: true,
+  nativeSupportReady: true,
+  workerProfile: { unemployed: 0, farmer: 10, scientist: 7, space_miner: 3 },
+  ironCount: 3,
+  ironOn: 3,
+  ironAutoState: false,
+  shipPriority: 0,
+  ironPriority: 1,
+});
+const unmanagedIronSnapshot = unmanagedIronBootstrap.snapshots[0];
+assert.ok(unmanagedIronSnapshot);
+assert.equal(
+  unmanagedIronSnapshot.power.cycle.buildings.some(
+    ({ binding }) => binding === "space-iron_ship",
+  ),
+  false,
+);
+assert.equal(
+  unmanagedIronSnapshot.power.cycle.beltConsumers.find(
+    ({ binding }) => binding === "space-iron_ship",
+  )?.managed,
+  false,
+);
+assert.equal(unmanagedIronSnapshot.plannedIronTarget, 3);
+assert.equal(
+  unmanagedIronSnapshot.plannedEleriumTarget,
+  0,
+  "higher-priority Elerium cannot reserve support from unmanaged Iron",
+);
+assert.equal(unmanagedIronBootstrap.afterCycles[0].ironEffective, 3);
+assert.equal(unmanagedIronBootstrap.afterCycles[0].eleriumEffective, 0);
+
 const starvedBootstrap = runMinerBootstrap({ starved: true });
 assert.ok(
   starvedBootstrap.snapshots[0].workers > 0,
@@ -723,7 +892,11 @@ assert.equal(
   )?.maximum,
   3,
 );
-assert.equal(starvedBootstrap.snapshots[0].plannedEleriumTarget, 0);
+assert.equal(
+  starvedBootstrap.snapshots[0].plannedEleriumTarget,
+  1,
+  "the recovered three-miner Belt capacity follows configured building priority",
+);
 assert.ok(
   starvedBootstrap.afterCycles[1].workers > 0,
   "the next Jobs phase recovers actual Space Miners",

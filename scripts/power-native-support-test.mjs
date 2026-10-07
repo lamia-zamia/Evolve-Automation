@@ -144,11 +144,17 @@ function beltPlan({
   stationFuel = false,
   stationPowered = stationOn,
   powerCurrent = 100,
+  iridiumOn = 1,
+  commandIridium = true,
   eleriumUseful = true,
   eleriumSmart = true,
   eleriumMaximum = 2,
   eleriumUnavailable = false,
   ironCount = 0,
+  ironOn = 0,
+  ironSupportPerUnit = 2,
+  commandIron = true,
+  ironManaged = undefined,
   manageElerium = true,
   frozen = false,
   autoJobs = false,
@@ -190,7 +196,7 @@ function beltPlan({
     ...building("space-iridium_ship", [{ type: "belt", amount: providerUnit }]),
     index: 1,
     count: 1,
-    stateOn: 1,
+    stateOn: iridiumOn,
   };
   const elerium = {
     ...building("space-elerium_ship", [{ type: "belt", amount: consumerUnit }]),
@@ -215,19 +221,21 @@ function beltPlan({
         },
   };
   const iron = {
-    ...building("space-iron_ship", [{ type: "belt", amount: 2 }]),
+    ...building("space-iron_ship", [
+      { type: "belt", amount: ironSupportPerUnit },
+    ]),
     index: 3,
     count: ironCount,
-    stateOn: 0,
+    stateOn: ironOn,
   };
   const maximum = stationPowered * providerUnit;
   const buildings = frozen
     ? []
     : [
         station,
-        iridium,
+        ...(commandIridium ? [iridium] : []),
         ...(manageElerium ? [elerium] : []),
-        ...(ironCount ? [iron] : []),
+        ...(ironCount && commandIron ? [iron] : []),
       ];
   const managedBindings = new Set(buildings.map(({ binding }) => binding));
   const beltConsumers = [iridium, elerium, iron].map((consumer) => ({
@@ -237,7 +245,10 @@ function beltPlan({
       consumer.supportChanges.find(
         ({ type, amount }) => type === "belt" && amount > 0,
       )?.amount ?? 0,
-    managed: managedBindings.has(consumer.binding),
+    managed:
+      consumer.binding === "space-iron_ship" && ironManaged !== undefined
+        ? ironManaged
+        : managedBindings.has(consumer.binding),
   }));
   const cycle = {
     powerUnlocked: true,
@@ -341,6 +352,25 @@ assert.deepEqual(beltPlan({ ironCount: 1, eleriumMaximum: 0 }), [
   ["space-elerium_ship", 0],
   ["space-iron_ship", 1],
 ]);
+assert.deepEqual(
+  beltPlan({
+    providerUnit: 3,
+    consumerUnit: 2,
+    stationCount: 1,
+    stationOn: 1,
+    stationMaximum: 1,
+    iridiumOn: 0,
+    commandIridium: false,
+    ironCount: 3,
+    ironOn: 3,
+    ironSupportPerUnit: 1,
+    commandIron: false,
+    ironManaged: true,
+    actualSpaceMiners: 3,
+  }).filter(([binding]) => binding === "space-elerium_ship"),
+  [["space-elerium_ship", 0]],
+  "a Belt consumer marked managed but absent from the commandable cycle keeps its configured demand fixed",
+);
 assert.equal(
   beltPlan({ stationCount: 1 }).find(
     ([id]) => id === "space-elerium_ship",

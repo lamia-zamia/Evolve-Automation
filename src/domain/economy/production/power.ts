@@ -1220,19 +1220,24 @@ function planPowerCycleCore(
   const beltConsumerInputs = new Map(
     input.beltConsumers.map((consumer) => [consumer.binding, consumer]),
   );
-  let plannedBeltDemand = input.beltConsumers.reduce(
-    (total, consumer) => total + consumer.configured * consumer.supportPerUnit,
-    0,
-  );
-  // Identity is the Vue binding, not the game's short structure id. Ids repeat
-  // across regions - the Alpha and Titan Graphene Plants are both `g_factory` -
-  // and a True Path run owns both from Titan onward.
+  // Current managed Belt counts are unwound from native support above this planning loop. Only
+  // consumers Power cannot command in this cycle remain fixed demand here.
+  // Identity is the Vue binding, not the game's short structure id. Ids repeat across regions,
+  // and a True Path run may own both structures with the same short id.
   const buildingBindings = new Set(
     input.buildings.map((building) => building.binding),
   );
   if (buildingBindings.size !== input.buildings.length) {
     throw new TypeError("duplicate power building binding");
   }
+  let plannedBeltDemand = input.beltConsumers.reduce(
+    (total, consumer) =>
+      total +
+      (consumer.managed && buildingBindings.has(consumer.binding)
+        ? 0
+        : consumer.configured * consumer.supportPerUnit),
+    0,
+  );
   const oscillations: Record<string, MutableOscillationEntry> =
     Object.fromEntries(
       Object.entries(state.oscillations).map(([key, value]) => [
@@ -1466,17 +1471,14 @@ function planPowerCycleCore(
               : undefined;
           if (
             beltConsumer !== undefined &&
+            beltConsumer.managed &&
+            buildingBindings.has(building.binding) &&
             maximum > current &&
             beltProspectiveMaximum !== undefined
           ) {
-            const otherDemand = Math.max(
-              0,
-              plannedBeltDemand -
-                beltConsumer.configured * beltConsumer.supportPerUnit,
-            );
             const remainingBeltDemand = Math.max(
               0,
-              beltProspectiveMaximum - otherDemand,
+              beltProspectiveMaximum - plannedBeltDemand,
             );
             maximum = Math.min(
               maximum,
@@ -1524,9 +1526,12 @@ function planPowerCycleCore(
       }
     }
     const beltConsumer = beltConsumerInputs.get(building.binding);
-    if (beltConsumer !== undefined) {
-      plannedBeltDemand +=
-        (maximum - beltConsumer.configured) * beltConsumer.supportPerUnit;
+    if (
+      beltConsumer !== undefined &&
+      beltConsumer.managed &&
+      buildingBindings.has(building.binding)
+    ) {
+      plannedBeltDemand += maximum * beltConsumer.supportPerUnit;
       beltConsumerInputs.set(building.binding, {
         ...beltConsumer,
         configured: maximum,

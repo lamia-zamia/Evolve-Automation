@@ -27326,15 +27326,15 @@
     }
     let beltConsumerInputs = new Map(
       input.beltConsumers.map((consumer) => [consumer.binding, consumer])
-    ), plannedBeltDemand = input.beltConsumers.reduce(
-      (total, consumer) => total + consumer.configured * consumer.supportPerUnit,
-      0
-    );
-    if (new Set(
+    ), buildingBindings = new Set(
       input.buildings.map((building) => building.binding)
-    ).size !== input.buildings.length)
+    );
+    if (buildingBindings.size !== input.buildings.length)
       throw new TypeError("duplicate power building binding");
-    let oscillations = Object.fromEntries(
+    let plannedBeltDemand = input.beltConsumers.reduce(
+      (total, consumer) => total + (consumer.managed && buildingBindings.has(consumer.binding) ? 0 : consumer.configured * consumer.supportPerUnit),
+      0
+    ), oscillations = Object.fromEntries(
       Object.entries(state.oscillations).map(([key, value]) => [
         key,
         { ...value }
@@ -27470,13 +27470,10 @@
               continue;
             }
             let prospectiveExtra = change.type === "belt" && maximum > current && beltProspectiveMaximum !== void 0 ? Math.max(0, beltProspectiveMaximum - support.input.maximum) : 0, beltConsumer2 = change.type === "belt" ? beltConsumerInputs.get(building.binding) : void 0;
-            if (beltConsumer2 !== void 0 && maximum > current && beltProspectiveMaximum !== void 0) {
-              let otherDemand = Math.max(
+            if (beltConsumer2 !== void 0 && beltConsumer2.managed && buildingBindings.has(building.binding) && maximum > current && beltProspectiveMaximum !== void 0) {
+              let remainingBeltDemand = Math.max(
                 0,
-                plannedBeltDemand - beltConsumer2.configured * beltConsumer2.supportPerUnit
-              ), remainingBeltDemand = Math.max(
-                0,
-                beltProspectiveMaximum - otherDemand
+                beltProspectiveMaximum - plannedBeltDemand
               );
               maximum = Math.min(
                 maximum,
@@ -27501,7 +27498,7 @@
         ticks <= 0 ? delete warningCaps[building.binding] : (warningCaps[building.binding] = { cap: warningCap.cap, ticks }, maximum = Math.min(maximum, warningCap.cap));
       }
       let beltConsumer = beltConsumerInputs.get(building.binding);
-      if (beltConsumer !== void 0 && (plannedBeltDemand += (maximum - beltConsumer.configured) * beltConsumer.supportPerUnit, beltConsumerInputs.set(building.binding, {
+      if (beltConsumer !== void 0 && beltConsumer.managed && buildingBindings.has(building.binding) && (plannedBeltDemand += maximum * beltConsumer.supportPerUnit, beltConsumerInputs.set(building.binding, {
         ...beltConsumer,
         configured: maximum
       })), input.debug && maximum !== current) {
@@ -27860,6 +27857,33 @@
     return Object.freeze({
       executor,
       readDescription: (binding) => descriptions.get(binding)
+    });
+  }
+
+  // src/domain/settings-priority-order.ts
+  function storedPriority(value, fallback) {
+    return typeof value == "number" && Number.isFinite(value) ? value : fallback;
+  }
+  function sortByStoredPriority(entries, raw, prioritySettingName) {
+    return Object.freeze(
+      entries.map((entry, index) => ({
+        entry,
+        index,
+        priority: storedPriority(raw[prioritySettingName(entry)], index)
+      })).sort(
+        (left, right) => left.priority - right.priority || left.index - right.index
+      ).map(({ entry }) => entry)
+    );
+  }
+  function writeDefaultPriorityOrder(raw, ids, prioritySettingName) {
+    ids.forEach((id, index) => {
+      raw[prioritySettingName(id)] = index;
+    });
+  }
+  function writeExplicitPriorityOrder(raw, requestedIds, knownIds, prioritySettingName) {
+    let known = knownIds instanceof Set ? knownIds : new Set(knownIds);
+    requestedIds.forEach((id, index) => {
+      known.has(id) && (raw[prioritySettingName(id)] = index);
     });
   }
 
@@ -29823,12 +29847,12 @@
     );
     if (buildingStates === void 0)
       return unavailable2("building-state", "Building semantic state unavailable");
-    let allCatalog = buildingStates.map((building) => building.catalog), nativeOrderIndex = new Map(
-      nativeOrder.map((structure, index) => [structure.entryKey, index])
-    ), managed = buildingStates.filter(
-      (building) => building.structure !== void 0 && building.hasState && settings["bld_s_" + building.catalog.binding] === !0 && building.count > 0
-    ).sort(
-      (left, right) => (nativeOrderIndex.get(left.structure.entryKey) ?? Number.MAX_SAFE_INTEGER) - (nativeOrderIndex.get(right.structure.entryKey) ?? Number.MAX_SAFE_INTEGER)
+    let allCatalog = buildingStates.map((building) => building.catalog), managed = sortByStoredPriority(
+      buildingStates.filter(
+        (building) => building.structure !== void 0 && building.hasState && settings["bld_s_" + building.catalog.binding] === !0 && building.count > 0
+      ),
+      settings,
+      (building) => `bld_p_${building.catalog.binding}`
     ), supports = readNativePowerSupports(
       root,
       dependencies.mechanics,
@@ -39058,33 +39082,6 @@
             return;
         }
       }
-    });
-  }
-
-  // src/domain/settings-priority-order.ts
-  function storedPriority(value, fallback) {
-    return typeof value == "number" && Number.isFinite(value) ? value : fallback;
-  }
-  function sortByStoredPriority(entries, raw, prioritySettingName) {
-    return Object.freeze(
-      entries.map((entry, index) => ({
-        entry,
-        index,
-        priority: storedPriority(raw[prioritySettingName(entry)], index)
-      })).sort(
-        (left, right) => left.priority - right.priority || left.index - right.index
-      ).map(({ entry }) => entry)
-    );
-  }
-  function writeDefaultPriorityOrder(raw, ids, prioritySettingName) {
-    ids.forEach((id, index) => {
-      raw[prioritySettingName(id)] = index;
-    });
-  }
-  function writeExplicitPriorityOrder(raw, requestedIds, knownIds, prioritySettingName) {
-    let known = knownIds instanceof Set ? knownIds : new Set(knownIds);
-    requestedIds.forEach((id, index) => {
-      known.has(id) && (raw[prioritySettingName(id)] = index);
     });
   }
 
