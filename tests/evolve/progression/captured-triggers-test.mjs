@@ -1,0 +1,1345 @@
+import assert from "node:assert/strict";
+import { priceLookup } from "../../support/action-price.mjs";
+
+import {
+  createCapturedTriggers,
+  triggersNeedDemandSample,
+  triggersNeedGrantedTechs,
+  triggersNeedTechKnowledge,
+} from "../../../src/adapters/evolve/progression/build/captured-triggers.ts";
+
+const root = {
+  race: { species: "human" },
+  city: {
+    farm: { count: 3 },
+    mine: { count: 0 },
+    apartment: { count: 0 },
+  },
+  civic: {
+    farmer: { workers: 3, max: 5, display: true },
+  },
+  arpa: { launch_facility: { rank: 0, complete: 10 } },
+  resource: {
+    Money: { amount: 500, max: 100000, display: true },
+    Lumber: { amount: 100, max: 5000, display: true },
+    Knowledge: { amount: 50, max: 1000, display: true },
+    Stone: { amount: 0, max: 60, display: true },
+  },
+};
+
+const COSTS = {
+  "city-mine": { Money: 60, Lumber: 175 },
+  "city-apartment": { Money: 875, Lumber: 600 },
+  "city-amphitheatre": { Money: 500, Stone: 200 },
+  "space-swarm_satellite": { Money: 5000, Copper: 2500 },
+};
+
+const OFFERED = [
+  { elementId: "tech-mad", cost: { Knowledge: 600 }, generation: 1 },
+];
+
+const PROJECTS = [
+  {
+    elementId: "arpalaunch_facility",
+    projectId: "launch_facility",
+    rank: 0,
+    progress: 10,
+    cost: { Money: 100, Lumber: 50 },
+    percentCosts: { Money: 100, Lumber: 50 },
+  },
+];
+
+const ARPA_TARGET = {
+  actionId: "arpalaunch_facility",
+  actionType: "arpa",
+  cost: { Money: 9000, Lumber: 4500 },
+  projectId: "launch_facility",
+  steps: 90,
+  progress: 10,
+  percentCosts: { Money: 100, Lumber: 50 },
+};
+
+function trigger(overrides = {}) {
+  return {
+    seq: 0,
+    priority: 0,
+    requirementType: "BuildingCount",
+    requirementId: "city-farm",
+    requirementCount: 3,
+    actionType: "build",
+    actionId: "city-mine",
+    actionCount: 1,
+    ...overrides,
+  };
+}
+
+function triggers({
+  settings = {},
+  triggers: rows = [],
+  rootValue = root,
+  offered = OFFERED,
+  granted,
+  projects = PROJECTS,
+  readOfferedProjects,
+  readBuildingUnlocks,
+  readBuildingCapacity,
+  demandSample,
+  techKnowledge,
+  readHellGarrison,
+  costs,
+  controls,
+} = {}) {
+  const offeredProjects = projects === null ? undefined : projects;
+  return createCapturedTriggers({
+    rootState: { readRoot: () => rootValue },
+    controls: controls ?? {
+      resolve: (elementId) =>
+        elementId in COSTS ||
+        (offeredProjects ?? []).some(
+          (project) => project.elementId === elementId,
+        )
+          ? { elementId, generation: 1, methods: [] }
+          : undefined,
+      invoke: () => ({ ok: true, value: undefined }),
+      capturedElementIds: () => Object.keys(COSTS),
+    },
+    costs: { readCost: costs ?? priceLookup(COSTS) },
+    readSettings: () => ({ autoTrigger: true, triggers: rows, ...settings }),
+    readOfferedTechs: () => (offered === null ? undefined : offered),
+    readGrantedTechs: () => granted,
+    readOfferedProjects: readOfferedProjects ?? (() => offeredProjects),
+    ...(readBuildingUnlocks === undefined ? {} : { readBuildingUnlocks }),
+    ...(readBuildingCapacity === undefined ? {} : { readBuildingCapacity }),
+    ...(demandSample === undefined
+      ? {}
+      : { readDemandSample: () => demandSample }),
+    ...(techKnowledge === undefined
+      ? {}
+      : { readTechKnowledge: () => techKnowledge }),
+    ...(readHellGarrison === undefined ? {} : { readHellGarrison }),
+  });
+}
+
+// A met requirement makes the action a target, at the game's own current cost.
+{
+  let reads = 0;
+  let defenders = 2;
+  const readHellGarrison = () => {
+    reads++;
+    return defenders;
+  };
+  const row = trigger({
+    requirementType: "Soldiers",
+    requirementId: "hellGarrison",
+    requirementCount: 2,
+  });
+  const subject = triggers({
+    triggers: [row, { ...row, priority: 1 }],
+    readHellGarrison,
+  });
+  assert.equal(subject.read().length, 1);
+  assert.equal(reads, 1, "all Hell conditions share one sample");
+  defenders = 1;
+  assert.deepEqual(subject.read(), []);
+  defenders = undefined;
+  assert.deepEqual(subject.read(), []);
+  defenders = 0;
+  assert.equal(
+    triggers({
+      triggers: [{ ...row, requirementCount: 0 }],
+      readHellGarrison,
+    }).read().length,
+    1,
+  );
+  assert.deepEqual(triggers({ triggers: [row] }).read(), []);
+  reads = 0;
+  triggers({ triggers: [trigger()], readHellGarrison }).read();
+  triggers({
+    triggers: [row],
+    settings: { autoTrigger: false },
+    readHellGarrison,
+  }).read();
+  assert.equal(
+    reads,
+    0,
+    "unrelated or disabled triggers do not query fortress controls",
+  );
+}
+
+assert.deepEqual(triggers({ triggers: [trigger()] }).read(), [
+  { actionId: "city-mine", actionType: "build", cost: COSTS["city-mine"] },
+]);
+
+// The feature is off unless the player turned it on.
+assert.deepEqual(
+  triggers({ triggers: [trigger()], settings: { autoTrigger: false } }).read(),
+  [],
+);
+assert.deepEqual(triggers({ triggers: [] }).read(), []);
+
+// An unmet requirement, and one the captured root cannot answer, both raise no demand.
+assert.deepEqual(
+  triggers({ triggers: [trigger({ requirementCount: 4 })] }).read(),
+  [],
+);
+// A `ResearchComplete` requirement is answered from the granted half of the research pass, and is
+// unanswerable — so the trigger is dropped — when that half was not kept.
+const researchRequirement = [
+  trigger({
+    requirementType: "ResearchComplete",
+    requirementId: "tech-mad",
+    // A boolean operand matches its stored count rather than exceeding it.
+    requirementCount: 1,
+  }),
+];
+assert.deepEqual(triggers({ triggers: researchRequirement }).read(), []);
+assert.deepEqual(
+  triggers({
+    triggers: researchRequirement,
+    granted: new Set(["tech-mad"]),
+  }).read(),
+  [{ actionId: "city-mine", actionType: "build", cost: COSTS["city-mine"] }],
+);
+assert.deepEqual(
+  triggers({ triggers: researchRequirement, granted: new Set() }).read(),
+  [],
+);
+
+// Job, governor, and fleet requirements are answered from the captured root.
+assert.deepEqual(
+  triggers({
+    triggers: [
+      trigger({
+        requirementType: "JobWorkers",
+        requirementId: "farmer",
+        requirementCount: 3,
+      }),
+    ],
+  }).read(),
+  [{ actionId: "city-mine", actionType: "build", cost: COSTS["city-mine"] }],
+);
+assert.deepEqual(
+  triggers({
+    triggers: [
+      trigger({
+        requirementType: "JobWorkers",
+        requirementId: "farmer",
+        requirementCount: 4,
+      }),
+    ],
+  }).read(),
+  [],
+);
+
+// An action the game has already carried out is done with, and so is a malformed row.
+assert.deepEqual(
+  triggers({
+    triggers: [trigger({ actionId: "city-farm", actionCount: 3 })],
+  }).read(),
+  [],
+);
+assert.deepEqual(triggers({ triggers: [trigger({ actionId: 7 })] }).read(), []);
+
+// A build action is only possible while the game has built its control and can price it.
+assert.deepEqual(
+  triggers({
+    triggers: [trigger()],
+    controls: {
+      resolve: () => undefined,
+      invoke: () => ({ ok: true, value: undefined }),
+      capturedElementIds: () => [],
+    },
+  }).read(),
+  [],
+);
+assert.deepEqual(
+  triggers({ triggers: [trigger({ actionId: "city-sawmill" })] }).read(),
+  [],
+);
+
+// A cost that does not fit in current storage is not a target: it could never be paid for.
+assert.deepEqual(
+  triggers({ triggers: [trigger({ actionId: "city-amphitheatre" })] }).read(),
+  [],
+);
+
+// Research targets are priced from the offered catalog, and an unoffered technology is unknown.
+assert.deepEqual(
+  triggers({
+    triggers: [trigger({ actionType: "research", actionId: "tech-mad" })],
+  }).read(),
+  [{ actionId: "tech-mad", actionType: "research", cost: { Knowledge: 600 } }],
+);
+assert.deepEqual(
+  triggers({
+    triggers: [trigger({ actionType: "research", actionId: "tech-wheel" })],
+  }).read(),
+  [],
+);
+assert.deepEqual(
+  triggers({
+    triggers: [trigger({ actionType: "research", actionId: "tech-mad" })],
+    offered: null,
+  }).read(),
+  [],
+);
+
+// A.R.P.A. triggers use the full remaining project when it fits the drawn per-percent price.
+assert.deepEqual(
+  triggers({
+    triggers: [
+      trigger({ actionType: "arpa", actionId: "arpalaunch_facility" }),
+    ],
+  }).read(),
+  [ARPA_TARGET],
+);
+
+// A project the panel is not offering, or whose panel cannot be read, raises no demand.
+assert.deepEqual(
+  triggers({
+    triggers: [trigger({ actionType: "arpa", actionId: "arpalhc" })],
+  }).read(),
+  [],
+);
+assert.deepEqual(
+  triggers({
+    triggers: [
+      trigger({ actionType: "arpa", actionId: "arpalaunch_facility" }),
+    ],
+    projects: null,
+  }).read(),
+  [],
+);
+
+// A project whose whole remainder does not fit is still a target at the largest capacity-fitting
+// step across all of its resources.
+assert.deepEqual(
+  triggers({
+    triggers: [
+      trigger({ actionType: "arpa", actionId: "arpalaunch_facility" }),
+    ],
+    projects: [
+      {
+        elementId: "arpalaunch_facility",
+        projectId: "launch_facility",
+        rank: 0,
+        progress: 10,
+        cost: { Money: 100, Lumber: 60 },
+        percentCosts: { Money: 100, Lumber: 60 },
+      },
+    ],
+  }).read(),
+  [
+    {
+      actionId: "arpalaunch_facility",
+      actionType: "arpa",
+      cost: { Money: 8300, Lumber: 4980 },
+      projectId: "launch_facility",
+      steps: 83,
+      progress: 10,
+      percentCosts: { Money: 100, Lumber: 60 },
+    },
+  ],
+);
+
+// A project already at its configured rank is done, like a finished building count.
+assert.deepEqual(
+  triggers({
+    triggers: [
+      trigger({
+        actionType: "arpa",
+        actionId: "arpalaunch_facility",
+        actionCount: 0,
+      }),
+    ],
+  }).read(),
+  [],
+);
+
+// A project the captured mechanics no longer offer raises no demand, whatever its trigger row says.
+assert.deepEqual(
+  triggers({
+    triggers: [
+      trigger({ actionType: "arpa", actionId: "arpalaunch_facility" }),
+    ],
+    readOfferedProjects: () => [],
+  }).read(),
+  [],
+);
+
+// The project panel stays undrawn when no configured trigger names an A.R.P.A. action.
+assert.deepEqual(
+  triggers({
+    triggers: [trigger()],
+    readOfferedProjects: () => {
+      throw new Error("the panel must not be drawn without an arpa trigger");
+    },
+  }).read(),
+  [{ actionId: "city-mine", actionType: "build", cost: COSTS["city-mine"] }],
+);
+
+// A `ProjectUnlocked` condition needs the same panel, so it draws it on its own.
+const projectUnlockedTrigger = [
+  trigger({
+    requirementType: "ProjectUnlocked",
+    requirementId: "arpalaunch_facility",
+    requirementCount: 1,
+  }),
+];
+assert.deepEqual(triggers({ triggers: projectUnlockedTrigger }).read(), [
+  { actionId: "city-mine", actionType: "build", cost: COSTS["city-mine"] },
+]);
+// A project the panel did not draw is not unlocked, which is a real answer: the condition fails
+// and the trigger raises no demand.
+assert.deepEqual(
+  triggers({
+    triggers: [
+      trigger({
+        requirementType: "ProjectUnlocked",
+        requirementId: "arpalhc",
+        requirementCount: 1,
+      }),
+    ],
+  }).read(),
+  [],
+);
+// A drawn panel and an unreadable one are not the same thing, which a condition asking for a
+// project that is *not* unlocked tells apart: an empty panel answers it, an unread one does not.
+const projectLockedTrigger = [
+  trigger({
+    requirementType: "ProjectUnlocked",
+    requirementId: "arpalaunch_facility",
+    requirementCount: 0,
+  }),
+];
+assert.deepEqual(
+  triggers({ triggers: projectLockedTrigger, projects: [] }).read(),
+  [{ actionId: "city-mine", actionType: "build", cost: COSTS["city-mine"] }],
+);
+assert.deepEqual(
+  triggers({ triggers: projectLockedTrigger, projects: null }).read(),
+  [],
+);
+
+// --- BuildingAffordable conditions are priced from the cycle's cost reader --
+
+// A named building is priced once for the condition pass however many rows name it, and the
+// answer is the game's storage-capacity comparison over that price.
+{
+  const asked = [];
+  const result = triggers({
+    triggers: [
+      trigger({
+        priority: 0,
+        requirementType: "BuildingAffordable",
+        requirementId: "city-apartment",
+        requirementCount: 1,
+        actionId: "city-mine",
+      }),
+      trigger({
+        priority: 1,
+        requirementType: "BuildingAffordable",
+        requirementId: "city-apartment",
+        requirementCount: 1,
+        actionId: "city-amphitheatre",
+      }),
+    ],
+    costs: (actionId) => {
+      asked.push(actionId);
+      return priceLookup(COSTS)(actionId);
+    },
+  }).read();
+  // Both rows name the same building, and the condition pass prices it once.
+  assert.equal(asked.filter((id) => id === "city-apartment").length, 1);
+  // The apartment fits under Money and Lumber capacity, so both conditions hold; `city-mine`
+  // then claims Money and Lumber and the amphitheatre loses the ordinary conflict on Money.
+  assert.deepEqual(result, [
+    { actionId: "city-mine", actionType: "build", cost: COSTS["city-mine"] },
+  ]);
+}
+
+// Stone capacity is 60, well under the 200 the amphitheatre costs, so the condition is a real
+// refusal rather than unanswered, and the trigger is dropped.
+assert.deepEqual(
+  triggers({
+    triggers: [
+      trigger({
+        requirementType: "BuildingAffordable",
+        requirementId: "city-amphitheatre",
+        requirementCount: 1,
+        actionId: "city-mine",
+      }),
+    ],
+  }).read(),
+  [],
+);
+// Asking for it to be unaffordable is answered, which is what separates a refusal from an
+// unanswered pass.
+assert.deepEqual(
+  triggers({
+    triggers: [
+      trigger({
+        requirementType: "BuildingAffordable",
+        requirementId: "city-amphitheatre",
+        requirementCount: 0,
+        actionId: "city-mine",
+      }),
+    ],
+  }).read(),
+  [{ actionId: "city-mine", actionType: "build", cost: COSTS["city-mine"] }],
+);
+
+// A building whose control the game never bound cannot be probed for a price, so its condition is
+// unanswered and the trigger is dropped rather than treated as unaffordable.
+assert.deepEqual(
+  triggers({
+    triggers: [
+      trigger({
+        requirementType: "BuildingAffordable",
+        requirementId: "space-never_bound",
+        requirementCount: 0,
+        actionId: "city-mine",
+      }),
+    ],
+  }).read(),
+  [],
+);
+
+// No cost condition means nothing is priced for one: only the trigger's own action is.
+{
+  const asked = [];
+  triggers({
+    triggers: [trigger()],
+    costs: (actionId) => {
+      asked.push(actionId);
+      return priceLookup(COSTS)(actionId);
+    },
+  }).read();
+  assert.deepEqual(asked, ["city-mine"]);
+}
+
+// --- BuildingClickable conditions use the game's capacity oracle separately ----------------
+
+{
+  const asked = [];
+  let capacityReads = 0;
+  const result = triggers({
+    triggers: [
+      trigger({
+        requirementType: "BuildingClickable",
+        requirementId: "city-mine",
+        requirementCount: 1,
+        actionId: "city-mine",
+      }),
+    ],
+    readBuildingUnlocks: (regions) => {
+      assert.deepEqual([...regions], ["city"]);
+      return {
+        unlocked: new Set(["city-mine"]),
+        regions: new Set(["city"]),
+        states: new Map(),
+      };
+    },
+    readBuildingCapacity: (ids) => {
+      capacityReads += 1;
+      assert.deepEqual([...ids], ["city-mine"]);
+      return new Map([["city-mine", true]]);
+    },
+    costs: (actionId) => {
+      asked.push(actionId);
+      return actionId === "city-mine"
+        ? { cost: { Money: 60, Lumber: 50 }, pool: undefined }
+        : priceLookup(COSTS)(actionId);
+    },
+  }).read();
+  assert.equal(capacityReads, 1);
+  assert.deepEqual(asked, ["city-mine", "city-mine"]);
+  assert.deepEqual(result, [
+    {
+      actionId: "city-mine",
+      actionType: "build",
+      cost: { Money: 60, Lumber: 50 },
+    },
+  ]);
+}
+
+// The capacity result is not an affordability result: a false capacity rejects the condition even
+// when the current price fits, while an unaffordable price rejects it even when capacity is true.
+assert.deepEqual(
+  triggers({
+    triggers: [
+      trigger({
+        requirementType: "BuildingClickable",
+        requirementId: "city-mine",
+        requirementCount: 1,
+        actionId: "city-mine",
+      }),
+    ],
+    readBuildingUnlocks: () => ({
+      unlocked: new Set(["city-mine"]),
+      regions: new Set(["city"]),
+      states: new Map(),
+    }),
+    readBuildingCapacity: () => new Map([["city-mine", false]]),
+    costs: () => ({ cost: { Money: 60, Lumber: 50 }, pool: undefined }),
+  }).read(),
+  [],
+);
+assert.deepEqual(
+  triggers({
+    triggers: [
+      trigger({
+        requirementType: "BuildingClickable",
+        requirementId: "city-mine",
+        requirementCount: 1,
+        actionId: "city-mine",
+      }),
+    ],
+    readBuildingUnlocks: () => ({
+      unlocked: new Set(["city-mine"]),
+      regions: new Set(["city"]),
+      states: new Map(),
+    }),
+    readBuildingCapacity: () => new Map([["city-mine", true]]),
+    costs: () => ({ cost: { Money: 501 }, pool: undefined }),
+  }).read(),
+  [],
+);
+
+// --- BuildingCost conditions read one entry of the same priced pass --------
+
+// The dotted pair's building half is priced once for the condition pass, and the answer is that
+// price's entry for the resource half.
+{
+  const asked = [];
+  const result = triggers({
+    triggers: [
+      trigger({
+        priority: 0,
+        requirementType: "BuildingCost",
+        requirementId: "city-apartment.Money",
+        requirementCount: 875,
+        actionId: "city-mine",
+      }),
+      trigger({
+        priority: 1,
+        requirementType: "BuildingCost",
+        requirementId: "city-apartment.Lumber",
+        requirementCount: 601,
+        actionId: "city-amphitheatre",
+      }),
+    ],
+    costs: (actionId) => {
+      asked.push(actionId);
+      return priceLookup(COSTS)(actionId);
+    },
+  }).read();
+  // Both rows name the same building, and the condition pass prices it once.
+  assert.equal(asked.filter((id) => id === "city-apartment").length, 1);
+  // The apartment's Money price is exactly 875, so the first condition holds; its Lumber price is
+  // 600 against 601, so the second trigger is dropped — and `city-mine` is the only target.
+  assert.deepEqual(result, [
+    { actionId: "city-mine", actionType: "build", cost: COSTS["city-mine"] },
+  ]);
+}
+
+// A priced building missing the named resource costs nothing in it, so asking for zero holds.
+assert.deepEqual(
+  triggers({
+    triggers: [
+      trigger({
+        requirementType: "BuildingCost",
+        requirementId: "city-mine.Stone",
+        requirementCount: 0,
+        actionId: "city-mine",
+      }),
+    ],
+  }).read(),
+  [{ actionId: "city-mine", actionType: "build", cost: COSTS["city-mine"] }],
+);
+
+// An argument naming no building half cannot be priced, so the trigger is dropped rather than
+// read as free.
+assert.deepEqual(
+  triggers({
+    triggers: [
+      trigger({
+        requirementType: "BuildingCost",
+        requirementId: "city-mine",
+        requirementCount: 0,
+        actionId: "city-mine",
+      }),
+    ],
+  }).read(),
+  [],
+);
+
+// --- BuildingQueued conditions read the captured game queue ------------------
+
+// The requirement needs no priced pass and no panel: the displayed queue's first entry answers
+// it straight from the root.
+assert.deepEqual(
+  triggers({
+    triggers: [
+      trigger({
+        requirementType: "BuildingQueued",
+        requirementId: "city-farm",
+        requirementCount: 1,
+        actionId: "city-mine",
+      }),
+    ],
+    rootValue: {
+      ...root,
+      queue: { display: true, queue: [{ id: "city-farm" }] },
+    },
+  }).read(),
+  [{ actionId: "city-mine", actionType: "build", cost: COSTS["city-mine"] }],
+);
+// Asking for a building the queue does not hold drops the trigger.
+assert.deepEqual(
+  triggers({
+    triggers: [
+      trigger({
+        requirementType: "BuildingQueued",
+        requirementId: "city-bank",
+        requirementCount: 1,
+        actionId: "city-mine",
+      }),
+    ],
+    rootValue: {
+      ...root,
+      queue: { display: true, queue: [{ id: "city-farm" }] },
+    },
+  }).read(),
+  [],
+);
+
+// --- Other/satcost conditions price the swarm satellite ----------------------
+
+// A satcost condition prices the satellite through the same probe pass, once however many rows
+// name it, and answers the Money entry.
+{
+  const asked = [];
+  const result = triggers({
+    triggers: [
+      trigger({
+        priority: 0,
+        requirementType: "Other",
+        requirementId: "satcost",
+        requirementCount: 5000,
+        actionId: "city-mine",
+      }),
+      trigger({
+        priority: 1,
+        requirementType: "Other",
+        requirementId: "satcost",
+        requirementCount: 5001,
+        actionId: "city-amphitheatre",
+      }),
+    ],
+    costs: (actionId) => {
+      asked.push(actionId);
+      return priceLookup(COSTS)(actionId);
+    },
+  }).read();
+  assert.equal(asked.filter((id) => id === "space-swarm_satellite").length, 1);
+  // The satellite's Money price is exactly 5000, so the first condition holds and the second
+  // trigger is dropped — and `city-mine` is the only target.
+  assert.deepEqual(result, [
+    { actionId: "city-mine", actionType: "build", cost: COSTS["city-mine"] },
+  ]);
+}
+
+// A satellite the cost reader cannot price leaves the condition unanswered rather than free.
+assert.deepEqual(
+  triggers({
+    triggers: [
+      trigger({
+        requirementType: "Other",
+        requirementId: "satcost",
+        requirementCount: 0,
+        actionId: "city-mine",
+      }),
+    ],
+    costs: () => undefined,
+  }).read(),
+  [],
+);
+
+// --- Stored-settings conditions read the trigger sample's own settings ------
+
+// The configured prestige type, a numeric setting, and the evolution-queue length are answered
+// from the stored settings the rows came from.
+assert.deepEqual(
+  triggers({
+    triggers: [
+      trigger({
+        requirementType: "ResetType",
+        requirementId: "mad",
+        requirementCount: 1,
+        actionId: "city-mine",
+      }),
+    ],
+    settings: { prestigeType: "mad" },
+  }).read(),
+  [{ actionId: "city-mine", actionType: "build", cost: COSTS["city-mine"] }],
+);
+assert.deepEqual(
+  triggers({
+    triggers: [
+      trigger({
+        requirementType: "ResetType",
+        requirementId: "bioseed",
+        requirementCount: 1,
+        actionId: "city-mine",
+      }),
+    ],
+    settings: { prestigeType: "mad" },
+  }).read(),
+  [],
+);
+assert.deepEqual(
+  triggers({
+    triggers: [
+      trigger({
+        requirementType: "SettingCurrent",
+        requirementId: "tickRate",
+        requirementCount: 8,
+        actionId: "city-mine",
+      }),
+    ],
+    settings: { tickRate: 8 },
+  }).read(),
+  [{ actionId: "city-mine", actionType: "build", cost: COSTS["city-mine"] }],
+);
+// Stored defaults read the same blob the rows came from.
+assert.deepEqual(
+  triggers({
+    triggers: [
+      trigger({
+        requirementType: "SettingDefault",
+        requirementId: "tickRate",
+        requirementCount: 8,
+        actionId: "city-mine",
+      }),
+    ],
+    settings: { tickRate: 8 },
+  }).read(),
+  [{ actionId: "city-mine", actionType: "build", cost: COSTS["city-mine"] }],
+);
+assert.deepEqual(
+  triggers({
+    triggers: [
+      trigger({
+        requirementType: "Queue",
+        requirementId: "evo",
+        requirementCount: 2,
+        actionId: "city-mine",
+      }),
+    ],
+    settings: { evolutionQueue: ["human", "elven"] },
+  }).read(),
+  [{ actionId: "city-mine", actionType: "build", cost: COSTS["city-mine"] }],
+);
+
+// --- Demand-reading conditions ride the trigger-excluding sample ------------
+
+// The predicate fires only for the four demand operands with the feature on.
+assert.equal(
+  triggersNeedDemandSample({
+    autoTrigger: true,
+    triggers: [trigger({ requirementType: "ResourceDemanded" })],
+  }),
+  true,
+);
+assert.equal(
+  triggersNeedDemandSample({
+    autoTrigger: true,
+    triggers: [trigger({ requirementType: "ResourceSatisfied" })],
+  }),
+  true,
+);
+assert.equal(
+  triggersNeedDemandSample({
+    autoTrigger: true,
+    triggers: [trigger({ requirementType: "ResourceSatisfyRatio" })],
+  }),
+  true,
+);
+assert.equal(
+  triggersNeedDemandSample({
+    autoTrigger: true,
+    triggers: [trigger({ requirementType: "ResourceMaxCost" })],
+  }),
+  true,
+);
+assert.equal(
+  triggersNeedDemandSample({ autoTrigger: true, triggers: [trigger()] }),
+  false,
+);
+assert.equal(
+  triggersNeedDemandSample({
+    autoTrigger: false,
+    triggers: [trigger({ requirementType: "ResourceDemanded" })],
+  }),
+  false,
+);
+assert.equal(triggersNeedDemandSample({}), false);
+
+// A demanded resource makes its trigger a target through the shared sample.
+const demandSample = {
+  isDemanded: (id) => id === "Lumber",
+  storageRequired: () => 1,
+  maxCost: () => 0,
+};
+assert.deepEqual(
+  triggers({
+    triggers: [
+      trigger({
+        requirementType: "ResourceDemanded",
+        requirementId: "Lumber",
+        requirementCount: 1,
+        actionId: "city-mine",
+      }),
+    ],
+    demandSample,
+  }).read(),
+  [{ actionId: "city-mine", actionType: "build", cost: COSTS["city-mine"] }],
+);
+// An undemanded resource drops the trigger, and without the sample both drop.
+assert.deepEqual(
+  triggers({
+    triggers: [
+      trigger({
+        requirementType: "ResourceDemanded",
+        requirementId: "Money",
+        requirementCount: 1,
+        actionId: "city-mine",
+      }),
+    ],
+    demandSample,
+  }).read(),
+  [],
+);
+assert.deepEqual(
+  triggers({
+    triggers: [
+      trigger({
+        requirementType: "ResourceDemanded",
+        requirementId: "Lumber",
+        requirementCount: 1,
+        actionId: "city-mine",
+      }),
+    ],
+  }).read(),
+  [],
+);
+// The numeric demand operands travel the same context.
+assert.deepEqual(
+  triggers({
+    triggers: [
+      trigger({
+        requirementType: "ResourceMaxCost",
+        requirementId: "Lumber",
+        requirementCount: 0,
+        actionId: "city-mine",
+      }),
+    ],
+    demandSample: {
+      ...demandSample,
+      maxCost: (id) => (id === "Lumber" ? 175 : 0),
+    },
+  }).read(),
+  [{ actionId: "city-mine", actionType: "build", cost: COSTS["city-mine"] }],
+);
+
+// --- Tech Knowledge conditions read the knowledge gate's figure --------------
+
+// The predicate fires only for a tknow condition with the feature on.
+assert.equal(
+  triggersNeedTechKnowledge({
+    autoTrigger: true,
+    triggers: [trigger({ requirementType: "Other", requirementId: "tknow" })],
+  }),
+  true,
+);
+assert.equal(
+  triggersNeedTechKnowledge({
+    autoTrigger: true,
+    triggers: [trigger()],
+  }),
+  false,
+);
+assert.equal(
+  triggersNeedTechKnowledge({
+    autoTrigger: false,
+    triggers: [trigger({ requirementType: "Other", requirementId: "tknow" })],
+  }),
+  false,
+);
+assert.equal(triggersNeedTechKnowledge({}), false);
+// The figure answers the condition straight from the supplier, with no other pass.
+assert.deepEqual(
+  triggers({
+    triggers: [
+      trigger({
+        requirementType: "Other",
+        requirementId: "tknow",
+        requirementCount: 12000,
+        actionId: "city-mine",
+      }),
+    ],
+    techKnowledge: 12000,
+  }).read(),
+  [{ actionId: "city-mine", actionType: "build", cost: COSTS["city-mine"] }],
+);
+assert.deepEqual(
+  triggers({
+    triggers: [
+      trigger({
+        requirementType: "Other",
+        requirementId: "tknow",
+        requirementCount: 12001,
+        actionId: "city-mine",
+      }),
+    ],
+    techKnowledge: 12000,
+  }).read(),
+  [],
+);
+assert.deepEqual(
+  triggers({
+    triggers: [
+      trigger({
+        requirementType: "Other",
+        requirementId: "tknow",
+        requirementCount: 0,
+        actionId: "city-mine",
+      }),
+    ],
+  }).read(),
+  [],
+);
+
+// --- BuildingUnlocked conditions share a semantic sample for named regions ---
+
+// The reader is asked for exactly the regions the configured conditions name, and nothing else.
+{
+  const asked = [];
+  const rows = [
+    trigger({
+      priority: 0,
+      requirementType: "BuildingUnlocked",
+      requirementId: "city-bank",
+      requirementCount: 1,
+      actionId: "city-mine",
+    }),
+    trigger({
+      priority: 1,
+      requirementType: "BuildingUnlocked",
+      requirementId: "portal-carport",
+      requirementCount: 1,
+      actionId: "city-apartment",
+    }),
+    // A requirement on something other than a building adds no region to the pass.
+    trigger({ priority: 2, actionId: "city-amphitheatre" }),
+  ];
+  const result = triggers({
+    triggers: rows,
+    readBuildingUnlocks: (regions) => {
+      asked.push([...regions].sort());
+      return {
+        unlocked: new Set(["city-bank"]),
+        regions: new Set(["city"]),
+        switches: new Set(),
+        states: new Map(),
+      };
+    },
+  }).read();
+  // Only the two building regions the conditions name, requested in one semantic read. The third
+  // row's `BuildingCount` requirement adds no region.
+  assert.deepEqual(asked, [["city", "portal"]]);
+  // The city condition is answered from the sample, so `city-mine` is a target. The portal one
+  // names a region the sample could not speak for, so that trigger is dropped rather than treated
+  // as locked — and `city-amphitheatre` then loses the ordinary cost conflict on Money.
+  assert.deepEqual(result, [
+    { actionId: "city-mine", actionType: "build", cost: COSTS["city-mine"] },
+  ]);
+}
+
+// Switch operands use the same semantic region snapshot as BuildingUnlocked.
+{
+  const asked = [];
+  assert.deepEqual(
+    triggers({
+      triggers: [
+        trigger({
+          requirementType: "BuildingEnabled",
+          requirementId: "portal-carport",
+          requirementCount: 2,
+          actionId: "city-mine",
+        }),
+      ],
+      readBuildingUnlocks: (regions) => {
+        asked.push([...regions].sort());
+        return {
+          unlocked: new Set(["portal-carport"]),
+          regions: new Set(["portal"]),
+          switches: new Set(["portal-carport"]),
+          states: new Map([["portal-carport", { on: 2, off: 3 }]]),
+        };
+      },
+    }).read(),
+    [{ actionId: "city-mine", actionType: "build", cost: COSTS["city-mine"] }],
+  );
+  assert.deepEqual(asked, [["portal"]]);
+}
+
+// An offered action without native switch state reads zero for BuildingDisabled, so a trigger
+// waiting for an idle copy does not fire.
+assert.deepEqual(
+  triggers({
+    triggers: [
+      trigger({
+        requirementType: "BuildingDisabled",
+        requirementId: "city-farm",
+        requirementCount: 1,
+        actionId: "city-mine",
+      }),
+    ],
+    readBuildingUnlocks: () => ({
+      unlocked: new Set(["city-farm"]),
+      regions: new Set(["city"]),
+      switches: new Set(),
+      states: new Map(),
+    }),
+  }).read(),
+  [],
+);
+
+// No BuildingUnlocked condition means no semantic Building sample is needed.
+assert.deepEqual(
+  triggers({
+    triggers: [trigger()],
+    readBuildingUnlocks: () => {
+      throw new Error(
+        "must not read semantic offers without a building condition",
+      );
+    },
+  }).read(),
+  [{ actionId: "city-mine", actionType: "build", cost: COSTS["city-mine"] }],
+);
+
+// A valid region catalog that omits a building answers false, which a condition asking for the
+// building to be absent tells apart from an unanswered region.
+assert.deepEqual(
+  triggers({
+    triggers: [
+      trigger({
+        requirementType: "BuildingUnlocked",
+        requirementId: "city-bank",
+        requirementCount: 0,
+        actionId: "city-mine",
+      }),
+    ],
+    readBuildingUnlocks: () => ({
+      unlocked: new Set(["city-farm"]),
+      regions: new Set(["city"]),
+      switches: new Set(),
+      states: new Map(),
+    }),
+  }).read(),
+  [{ actionId: "city-mine", actionType: "build", cost: COSTS["city-mine"] }],
+);
+// An unreadable pass leaves it unanswered, so the same trigger is dropped.
+assert.deepEqual(
+  triggers({
+    triggers: [
+      trigger({
+        requirementType: "BuildingUnlocked",
+        requirementId: "city-bank",
+        requirementCount: 0,
+        actionId: "city-mine",
+      }),
+    ],
+    readBuildingUnlocks: () => undefined,
+  }).read(),
+  [],
+);
+
+// A project trigger competes for its cost resources like any other trigger.
+assert.deepEqual(
+  triggers({
+    triggers: [
+      trigger({ priority: 0, actionId: "city-mine" }),
+      trigger({
+        priority: 1,
+        actionType: "arpa",
+        actionId: "arpalaunch_facility",
+      }),
+    ],
+  }).read(),
+  [{ actionId: "city-mine", actionType: "build", cost: COSTS["city-mine"] }],
+);
+assert.deepEqual(
+  triggers({
+    triggers: [
+      trigger({
+        priority: 0,
+        actionType: "arpa",
+        actionId: "arpalaunch_facility",
+      }),
+      trigger({
+        priority: 1,
+        actionType: "research",
+        actionId: "tech-mad",
+      }),
+    ],
+  }).read(),
+  [
+    ARPA_TARGET,
+    { actionId: "tech-mad", actionType: "research", cost: { Knowledge: 600 } },
+  ],
+);
+
+// Chained triggers wait for the trigger before them to finish.
+const chained = [
+  trigger({ priority: 0, actionId: "city-farm", actionCount: 3 }),
+  trigger({
+    priority: 1,
+    requirementType: "chain",
+    requirementId: "",
+    requirementCount: 0,
+    actionId: "city-mine",
+  }),
+];
+assert.deepEqual(triggers({ triggers: chained }).read(), [
+  { actionId: "city-mine", actionType: "build", cost: COSTS["city-mine"] },
+]);
+assert.deepEqual(
+  triggers({
+    triggers: [
+      trigger({ priority: 0, actionId: "city-apartment", actionCount: 1 }),
+      chained[1],
+    ],
+  }).read(),
+  [
+    {
+      actionId: "city-apartment",
+      actionType: "build",
+      cost: COSTS["city-apartment"],
+    },
+  ],
+);
+// A research action still being offered has demonstrably not been researched, so what is chained
+// behind it waits.
+const chainedBehindResearch = [
+  trigger({ priority: 0, actionType: "research", actionId: "tech-mad" }),
+  chained[1],
+];
+assert.deepEqual(triggers({ triggers: chainedBehindResearch }).read(), [
+  { actionId: "tech-mad", actionType: "research", cost: { Knowledge: 600 } },
+]);
+// Once the pass reports it granted, the research trigger is done and the chain moves on.
+assert.deepEqual(
+  triggers({
+    triggers: chainedBehindResearch,
+    granted: new Set(["tech-mad"]),
+  }).read(),
+  [{ actionId: "city-mine", actionType: "build", cost: COSTS["city-mine"] }],
+);
+// A technology in neither half of the draw is off the current tech path: it is not decidable, so
+// the trigger and everything chained behind it are dropped.
+assert.deepEqual(
+  triggers({
+    triggers: [
+      trigger({ priority: 0, actionType: "research", actionId: "tech-wheel" }),
+      chained[1],
+    ],
+    granted: new Set(["tech-mad"]),
+  }).read(),
+  [],
+);
+
+// Which passes a configured trigger list needs. Keeping the granted half of the research draw is
+// the larger part of it, so only a research action or a `ResearchComplete` condition asks for it.
+assert.equal(triggersNeedGrantedTechs(undefined), false);
+assert.equal(
+  triggersNeedGrantedTechs({ autoTrigger: true, triggers: [trigger()] }),
+  false,
+);
+assert.equal(
+  triggersNeedGrantedTechs({
+    autoTrigger: false,
+    triggers: chainedBehindResearch,
+  }),
+  false,
+);
+assert.equal(
+  triggersNeedGrantedTechs({
+    autoTrigger: true,
+    triggers: chainedBehindResearch,
+  }),
+  true,
+);
+assert.equal(
+  triggersNeedGrantedTechs({
+    autoTrigger: true,
+    triggers: researchRequirement,
+  }),
+  true,
+);
+assert.equal(
+  triggersNeedGrantedTechs({
+    autoTrigger: true,
+    triggers: [
+      trigger({
+        requirementType: "ResearchUnlocked",
+        requirementId: "tech-mad",
+      }),
+    ],
+  }),
+  false,
+);
+
+// Two triggers competing for the same resource: only the higher-priority one is a target.
+assert.deepEqual(
+  triggers({
+    triggers: [
+      trigger({ priority: 1, actionId: "city-apartment" }),
+      trigger({ priority: 0, actionId: "city-mine" }),
+    ],
+  }).read(),
+  [{ actionId: "city-mine", actionType: "build", cost: COSTS["city-mine"] }],
+);
+// Costs that share nothing are both targets, in the player's priority order.
+assert.deepEqual(
+  triggers({
+    triggers: [
+      trigger({ priority: 1, actionType: "research", actionId: "tech-mad" }),
+      trigger({ priority: 0, actionId: "city-mine" }),
+    ],
+  }).read(),
+  [
+    { actionId: "city-mine", actionType: "build", cost: COSTS["city-mine"] },
+    { actionId: "tech-mad", actionType: "research", cost: { Knowledge: 600 } },
+  ],
+);
+
+// The game's own `checkMaxCosts` refuses a positive cost in a resource it is not displaying,
+// whatever that resource's stored maximum says.
+assert.deepEqual(
+  triggers({
+    triggers: [trigger()],
+    rootValue: {
+      ...root,
+      resource: {
+        ...root.resource,
+        Lumber: { amount: 100, max: 5000, display: false },
+      },
+    },
+  }).read(),
+  [],
+);
+
+console.log("Captured trigger source tests passed");

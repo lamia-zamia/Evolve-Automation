@@ -14,20 +14,24 @@ Everything goes to stdout and the exit code carries the verdict, so
 `npm run check | grep FAILED` is a complete triage. Pass `--verbose`
 (`node scripts/check.mjs --verbose`) to see the passing steps' output too.
 
-`npm test` (`scripts/test.mjs`) runs the ~365 test files across a worker pool,
-one process per file as before but `os.availableParallelism()` at a time. It
-follows the same rule: only failing files print, under a `FAILED <file>` header,
-and the run ends with a summary of which files failed.
+`npm test` (`scripts/test.mjs`) recursively runs `tests/**/*-test.mjs` across a
+worker pool, with one process per file to preserve isolation. Standalone runs
+use `os.availableParallelism()` workers by default. Each run reports its total
+time, selected file count, worker count, and the 15 slowest files using paths
+relative to `tests/`. Passing files stay quiet; a failure prints its captured
+output as soon as it finishes.
 
-- `npm test -- storage mech` runs only test files whose names contain `storage`
-  or `mech`, which is the fast loop while working on one area.
+- `npm test -- storage mech` runs only files whose relative paths or filenames
+  contain `storage` or `mech`.
+- `npm test -- evolve/economy` filters by a directory path.
 - `npm test -- --jobs=1` forces sequential execution when a failure looks
   order- or contention-dependent.
+- `npm test -- --verbose` prints timing information for every selected file.
 
 Two things keep this fast, and both are worth knowing if timings ever regress:
 
 - On Node 22.18+ the runner uses Node's built-in TypeScript stripping instead of
-  loading `tsx` into all ~365 processes. It falls back to `tsx` automatically on
+  loading `tsx` into every process. It falls back to `tsx` automatically on
   older runtimes, so `src` must stay free of non-erasable TypeScript (`enum`,
   `namespace`, parameter properties). `verbatimModuleSyntax` already enforces the
   import side of that.

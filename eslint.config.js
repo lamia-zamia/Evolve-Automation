@@ -36,7 +36,7 @@ export default defineConfig(
     },
   },
   {
-    files: ["*.{js,mjs}", "scripts/**/*.mjs"],
+    files: ["*.{js,mjs}", "scripts/**/*.mjs", "tests/**/*.mjs"],
     extends: [js.configs.recommended, prettierConfig],
     languageOptions: {
       ecmaVersion: "latest",

@@ -4,7 +4,7 @@
  *
  * The shipped IIFE exposes no callable `shipBound` or read-only bound-destination control. Its
  * `shipMoving`, `shipPort`, `shipDestination`, `legsOf` and `legPlace` helpers therefore define this
- * small reader, guarded by the snapshot regression in `scripts/captured-ship-route-test.mjs`.
+ * small reader, guarded by the snapshot regression in `tests/evolve/space/captured-ship-route-test.mjs`.
  * A moving ship keeps the port it left in `location`; only its final leg names its assignment.
  * Unreadable structures are unavailable so a matching hull cannot silently free a target slot.
  */

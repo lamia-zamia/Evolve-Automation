@@ -1,0 +1,464 @@
+import assert from "node:assert/strict";
+import { runJobsAutomation } from "../../../src/application/jobs.ts";
+import { planJobs } from "../../../src/domain/civic/jobs.ts";
+import { createCapturedCraftsmenAutomation } from "../../../src/adapters/evolve/civic/captured-craftsmen.ts";
+import { priceLookup } from "../../support/action-price.mjs";
+
+function source(root) {
+  return {
+    readRoot: () => root,
+    isReactivitySuppressed: () => false,
+    subscribeRootReplaced: () => () => {},
+  };
+}
+
+function controlsFor(root, includeFoundry = true) {
+  const calls = [];
+  const handle = includeFoundry
+    ? { elementId: "foundry", generation: 1, methods: ["add", "sub"] }
+    : undefined;
+  const skilledServantsHandle = {
+    elementId: "skilledServants",
+    generation: 1,
+    methods: ["add", "sub"],
+  };
+  const jobHandle = {
+    elementId: "civ-job",
+    generation: 1,
+    methods: ["add", "sub", "setDefault"],
+  };
+  return {
+    calls,
+    controls: {
+      resolve: (elementId) =>
+        elementId === "foundry"
+          ? handle
+          : elementId === "skilledServants"
+            ? skilledServantsHandle
+            : elementId.startsWith("civ-")
+              ? jobHandle
+              : undefined,
+      invoke: (current, method, args = []) => {
+        calls.push({ elementId: current.elementId, method, id: args[0] });
+        const id = args[0];
+        if (id === undefined) return { ok: false, reason: "threw" };
+        if (current.elementId === "skilledServants") {
+          root.race.servants.sjobs[id] =
+            (root.race.servants.sjobs[id] ?? 0) + (method === "add" ? 1 : -1);
+          root.race.servants.sused += method === "add" ? 1 : -1;
+        } else if (method === "sub") {
+          root.city.foundry[id] -= 1;
+          root.city.foundry.crafting -= 1;
+          root.civic.craftsman.workers -= 1;
+          root.civic[root.civic.d_job].workers += 1;
+        } else {
+          root.city.foundry[id] += 1;
+          root.city.foundry.crafting += 1;
+          root.civic.craftsman.workers += 1;
+          root.civic[root.civic.d_job].workers -= 1;
+        }
+        return { ok: true, value: undefined };
+      },
+      capturedElementIds: () =>
+        handle === undefined ? [] : ["foundry", `civ-${root.civic.d_job}`],
+    },
+  };
+}
+
+function makeRoot() {
+  return {
+    city: {
+      foundry: {
+        Plywood: 2,
+        Brick: 0,
+        Bronze: 0,
+        crafting: 2,
+        cap: 4,
+        rcap: {},
+      },
+    },
+    civic: {
+      d_job: "unemployed",
+      unemployed: {
+        job: "unemployed",
+        assigned: 5,
+        workers: 5,
+        max: 0,
+        display: true,
+      },
+      craftsman: { workers: 2, max: 4 },
+    },
+    resource: {
+      Plywood: { amount: 100 },
+      Brick: { amount: 0 },
+      Bronze: { amount: 0 },
+      Iron: { amount: 100 },
+    },
+  };
+}
+
+const costs = {
+  read: (id) => (id === "Plywood" ? new Map([["Iron", 1]]) : undefined),
+};
+
+const buildCosts = {
+  readCost: priceLookup({
+    "city-high": { Plywood: 10 },
+    "city-low": { Plywood: 10 },
+  }),
+};
+
+const root = makeRoot();
+const captured = controlsFor(root);
+const adapter = createCapturedCraftsmenAutomation({
+  rootState: source(root),
+  controls: captured.controls,
+  costs,
+  readSettings: () => ({
+    autoCraftsmen: true,
+    craftPlywood: true,
+    job_Plywood: true,
+    foundry_w_Plywood: 1,
+    craftBrick: true,
+    job_Brick: true,
+    foundry_w_Brick: 1,
+  }),
+});
+
+const initialInput = adapter.reader.readCycle(true);
+assert.equal(initialInput.craftsmenMaximum, 4);
+assert.equal(
+  initialInput.crafting.find(({ jobToken }) => jobToken === 0).affordability,
+  100,
+);
+const firstRun = runJobsAutomation(adapter, true);
+assert.equal(firstRun.status, "succeeded");
+assert.equal(root.city.foundry.Plywood, 0);
+assert.equal(root.city.foundry.Brick, 4);
+assert.equal(root.civic.unemployed.workers, 3);
+assert.deepEqual(captured.calls, [
+  { elementId: "foundry", method: "sub", id: "Plywood" },
+  { elementId: "foundry", method: "sub", id: "Plywood" },
+  { elementId: "foundry", method: "add", id: "Brick" },
+  { elementId: "foundry", method: "add", id: "Brick" },
+  { elementId: "foundry", method: "add", id: "Brick" },
+  { elementId: "foundry", method: "add", id: "Brick" },
+]);
+
+const demandedRoot = makeRoot();
+const demandedControls = controlsFor(demandedRoot);
+const demandedAdapter = createCapturedCraftsmenAutomation({
+  rootState: source(demandedRoot),
+  controls: demandedControls.controls,
+  costs,
+  readSettings: () => ({
+    productionFoundryWeighting: "demanded",
+    craftPlywood: true,
+    job_Plywood: true,
+    foundry_w_Plywood: 1,
+    craftBrick: true,
+    job_Brick: true,
+    foundry_w_Brick: 1,
+  }),
+  readDemand: () => ({
+    isDemanded: (id) => id === "Brick",
+    storageRequired: (id) => (id === "Plywood" ? 150 : 1),
+    requestedQuantity: () => 0,
+  }),
+});
+const demandedInput = demandedAdapter.reader.readCycle(true);
+assert.equal(demandedInput.foundryWeighting, "demanded");
+assert.equal(
+  demandedInput.crafting.find(({ jobToken }) => jobToken === 0).useful,
+  true,
+);
+assert.equal(
+  demandedInput.crafting.find(({ jobToken }) => jobToken === 1).demanded,
+  true,
+);
+
+const buildingRoot = makeRoot();
+buildingRoot.resource.Plywood.amount = 15;
+const buildingControls = controlsFor(buildingRoot);
+const buildingAdapter = createCapturedCraftsmenAutomation({
+  rootState: source(buildingRoot),
+  controls: buildingControls.controls,
+  costs,
+  buildCosts,
+  readBuildTargets: () => [
+    { key: "city-low", elementId: "city-low", weighting: 5 },
+    { key: "city-high", elementId: "city-high", weighting: 20 },
+  ],
+  readSettings: () => ({
+    productionFoundryWeighting: "buildings",
+    craftPlywood: true,
+    job_Plywood: true,
+    foundry_w_Plywood: 1,
+  }),
+});
+const buildingInput = buildingAdapter.reader.readCycle(true);
+assert.equal(buildingInput.foundryWeighting, "buildings");
+assert.equal(
+  buildingInput.crafting.find(({ jobToken }) => jobToken === 0).weighting,
+  5,
+);
+assert.equal(
+  buildingInput.crafting.find(({ jobToken }) => jobToken === 0).driver,
+  "city-low@5.0×1",
+);
+
+const settingRoot = makeRoot();
+const settingControls = controlsFor(settingRoot);
+let settingMode = "other";
+const settingAdapter = createCapturedCraftsmenAutomation({
+  rootState: source(settingRoot),
+  controls: settingControls.controls,
+  costs,
+  readSettings: () => ({
+    productionFoundryWeighting: settingMode,
+    craftPlywood: true,
+    job_Plywood: true,
+    craftBrick: true,
+    job_Brick: true,
+  }),
+});
+const settingDecision = planJobs(settingAdapter.reader.readCycle(true));
+settingMode = "demanded";
+assert.equal(
+  settingAdapter.executor.execute(settingDecision).status,
+  "stale",
+  "a foundry weighting setting change invalidates the sampled craftsmen command",
+);
+
+const cappedRoot = makeRoot();
+cappedRoot.city.foundry.Plywood = 0;
+cappedRoot.city.foundry.Scarletite = 2;
+cappedRoot.city.foundry.crafting = 2;
+cappedRoot.city.foundry.rcap.Scarletite = 1;
+cappedRoot.resource.Scarletite = { amount: 0 };
+const cappedControls = controlsFor(cappedRoot);
+const cappedAdapter = createCapturedCraftsmenAutomation({
+  rootState: source(cappedRoot),
+  controls: cappedControls.controls,
+  costs,
+  readSettings: () => ({
+    craftScarletite: true,
+    job_Scarletite: true,
+    foundry_w_Scarletite: 1,
+  }),
+});
+const cappedInput = cappedAdapter.reader.readCycle(true);
+assert.equal(
+  cappedInput.crafting.find(
+    ({ jobToken }) => cappedInput.jobs[jobToken].id === "Scarletite",
+  ).buildingCapacity,
+  1,
+);
+assert.equal(cappedInput.craftsmenMaximum, 4);
+assert.equal(cappedInput.craftOnlyWorkerPool, 4);
+
+const inconsistentRoot = makeRoot();
+inconsistentRoot.civic.craftsman.workers = 1;
+const inconsistentControls = controlsFor(inconsistentRoot);
+const inconsistentAdapter = createCapturedCraftsmenAutomation({
+  rootState: source(inconsistentRoot),
+  controls: inconsistentControls.controls,
+  costs,
+  readSettings: () => ({ craftPlywood: true, job_Plywood: true }),
+});
+assert.equal(inconsistentAdapter.reader.readCycle(true).available, false);
+
+const malformedRoot = makeRoot();
+const malformedControls = controlsFor(malformedRoot);
+const malformedAdapter = createCapturedCraftsmenAutomation({
+  rootState: source(malformedRoot),
+  controls: malformedControls.controls,
+  costs,
+  readSettings: () => ({
+    craftPlywood: true,
+    job_Plywood: true,
+    foundry_w_Plywood: "not-a-number",
+    craftBrick: false,
+    job_Brick: true,
+  }),
+});
+assert.equal(runJobsAutomation(malformedAdapter, true).status, "succeeded");
+assert.equal(malformedRoot.city.foundry.Plywood, 4);
+assert.equal(malformedRoot.city.foundry.Brick, 0);
+assert.equal(malformedRoot.civic.unemployed.workers, 3);
+
+const staleRoot = makeRoot();
+const staleControls = controlsFor(staleRoot);
+const staleAdapter = createCapturedCraftsmenAutomation({
+  rootState: source(staleRoot),
+  controls: staleControls.controls,
+  costs,
+  readSettings: () => ({ craftPlywood: true, job_Plywood: true }),
+});
+const staleInput = staleAdapter.reader.readCycle(true);
+const staleDecision = planJobs(staleInput);
+staleRoot.city.foundry.Plywood = 1;
+assert.equal(staleAdapter.executor.execute(staleDecision).status, "stale");
+
+const demandStaleRoot = makeRoot();
+const demandStaleControls = controlsFor(demandStaleRoot);
+let demandStale = false;
+const demandStaleAdapter = createCapturedCraftsmenAutomation({
+  rootState: source(demandStaleRoot),
+  controls: demandStaleControls.controls,
+  costs,
+  readSettings: () => ({ craftPlywood: true, job_Plywood: true }),
+  readDemand: () => ({
+    isDemanded: (id) => demandStale && id === "Plywood",
+    storageRequired: () => 1,
+    requestedQuantity: () => 0,
+  }),
+});
+const demandStaleDecision = planJobs(demandStaleAdapter.reader.readCycle(true));
+demandStale = true;
+assert.equal(
+  demandStaleAdapter.executor.execute(demandStaleDecision).status,
+  "stale",
+);
+
+const poolRoot = makeRoot();
+const poolControls = controlsFor(poolRoot);
+const poolAdapter = createCapturedCraftsmenAutomation({
+  rootState: source(poolRoot),
+  controls: poolControls.controls,
+  costs,
+  readSettings: () => ({ craftPlywood: true, job_Plywood: true }),
+});
+const poolDecision = planJobs(poolAdapter.reader.readCycle(true));
+poolRoot.civic.craftsman.workers = 1;
+assert.equal(poolAdapter.executor.execute(poolDecision).status, "stale");
+
+const defaultJobRoot = makeRoot();
+const defaultJobControls = controlsFor(defaultJobRoot);
+const defaultJobAdapter = createCapturedCraftsmenAutomation({
+  rootState: source(defaultJobRoot),
+  controls: defaultJobControls.controls,
+  costs,
+  readSettings: () => ({ craftPlywood: true, job_Plywood: true }),
+});
+const defaultJobDecision = planJobs(defaultJobAdapter.reader.readCycle(true));
+defaultJobRoot.civic.unemployed.workers = 4;
+assert.equal(
+  defaultJobAdapter.executor.execute(defaultJobDecision).status,
+  "stale",
+);
+
+const defaultJobSelectionRoot = makeRoot();
+const defaultJobSelectionControls = controlsFor(defaultJobSelectionRoot);
+const defaultJobSelectionAdapter = createCapturedCraftsmenAutomation({
+  rootState: source(defaultJobSelectionRoot),
+  controls: defaultJobSelectionControls.controls,
+  costs,
+  readSettings: () => ({ craftPlywood: true, job_Plywood: true }),
+});
+const defaultJobSelectionDecision = planJobs(
+  defaultJobSelectionAdapter.reader.readCycle(true),
+);
+defaultJobSelectionRoot.civic.d_job = "farmer";
+defaultJobSelectionRoot.civic.farmer = { workers: 5 };
+assert.equal(
+  defaultJobSelectionAdapter.executor.execute(defaultJobSelectionDecision)
+    .status,
+  "stale",
+);
+
+const uninitializedRoot = makeRoot();
+delete uninitializedRoot.civic.d_job;
+const uninitializedControls = controlsFor(uninitializedRoot);
+const uninitializedAdapter = createCapturedCraftsmenAutomation({
+  rootState: source(uninitializedRoot),
+  controls: uninitializedControls.controls,
+  costs,
+  readSettings: () => ({ craftPlywood: true, job_Plywood: true }),
+});
+assert.equal(uninitializedAdapter.reader.readCycle(true).available, false);
+assert.equal(runJobsAutomation(uninitializedAdapter, true).status, "succeeded");
+
+const missingRoot = makeRoot();
+const missingControls = controlsFor(missingRoot, false);
+const missingAdapter = createCapturedCraftsmenAutomation({
+  rootState: source(missingRoot),
+  controls: missingControls.controls,
+  costs,
+  readSettings: () => ({}),
+});
+assert.equal(runJobsAutomation(missingAdapter, true).status, "succeeded");
+
+const skilledRoot = makeRoot();
+skilledRoot.race = {
+  high_pop: 1,
+  servants: {
+    jobs: {},
+    sjobs: { Plywood: 1, Brick: 0 },
+    max: 0,
+    used: 0,
+    smax: 2,
+    sused: 1,
+  },
+};
+const skilledControls = controlsFor(skilledRoot);
+const skilledAdapter = createCapturedCraftsmenAutomation({
+  rootState: source(skilledRoot),
+  controls: skilledControls.controls,
+  costs,
+  readSettings: () => ({
+    autoCraftsmen: true,
+    jobManageServants: true,
+    productionCraftsmen: "always",
+    craftPlywood: true,
+    job_Plywood: true,
+    foundry_w_Plywood: 1,
+    craftBrick: true,
+    job_Brick: true,
+    foundry_w_Brick: 1,
+  }),
+});
+const skilledInput = skilledAdapter.reader.readCycle(true);
+assert.equal(skilledInput.available, true);
+assert.equal(skilledInput.manageServants, true);
+assert.equal(skilledInput.servantsMaximum, 0);
+assert.equal(skilledInput.skilledServantsMaximum, 2);
+assert.equal(
+  skilledInput.servantModifier,
+  4,
+  "high_pop servant effectiveness uses the first legacy trait value (job stack)",
+);
+assert.equal(runJobsAutomation(skilledAdapter, true).status, "succeeded");
+assert.ok(
+  skilledControls.calls.some(
+    ({ elementId }) => elementId === "skilledServants",
+  ),
+  "craftsmen-only planning can reassign skilled servants through the shared captured component",
+);
+
+const skilledlessRoot = makeRoot();
+const skilledlessControls = controlsFor(skilledlessRoot);
+const skilledlessAdapter = createCapturedCraftsmenAutomation({
+  rootState: source(skilledlessRoot),
+  controls: skilledlessControls.controls,
+  costs,
+  readSettings: () => ({
+    autoCraftsmen: true,
+    jobManageServants: true,
+    craftPlywood: true,
+    job_Plywood: true,
+  }),
+});
+const skilledlessInput = skilledlessAdapter.reader.readCycle(true);
+assert.equal(skilledlessInput.available, true);
+assert.equal(skilledlessInput.skilledServantsMaximum, 0);
+assert.equal(runJobsAutomation(skilledlessAdapter, true).status, "succeeded");
+assert.equal(
+  skilledlessControls.calls.some(
+    ({ id }) => id === "Brick" || id === "Plywood",
+  ) && skilledlessControls.calls.length > 0,
+  true,
+  "a race without servants still completes the craftsmen cycle",
+);
+
+console.log("captured-craftsmen ok");

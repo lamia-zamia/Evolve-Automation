@@ -1,12 +1,16 @@
 import { spawn } from "node:child_process";
+import { availableParallelism } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const scriptsDir = dirname(fileURLToPath(import.meta.url));
 const projectDir = resolve(scriptsDir, "..");
+const logicalCpuCount = availableParallelism();
+const reservedCpuCount = Math.min(4, Math.ceil(logicalCpuCount / 2));
+const testWorkerCount = Math.max(1, logicalCpuCount - reservedCpuCount);
 
-// Every step is independent, so they all run at once: the three single-threaded
-// checkers finish while the test runner is still working through its own pool.
+// All checkers start together; the test pool reserves capacity for the four
+// other processes instead of taking every logical CPU.
 const steps = [
   {
     name: "typecheck",
@@ -44,11 +48,15 @@ const steps = [
       "--cache",
     ],
   },
-  { name: "test", args: [join("scripts", "test.mjs")] },
+  {
+    name: "test",
+    args: [join("scripts", "test.mjs"), `--jobs=${testWorkerCount}`],
+    reportOutputOnSuccess: true,
+  },
 ];
 
-// Passing steps stay silent unless asked for, so anything on stdout is a
-// problem and a grep for "FAILED" is enough to triage a run.
+// The test report includes the suite timings and slowest files on every run;
+// other passing steps stay silent unless asked for.
 const verbose = process.argv.includes("--verbose");
 
 function runStep(step) {
@@ -71,7 +79,7 @@ function runStep(step) {
       };
       // Report a failure the moment it lands rather than at the end, so a run
       // that still has minutes of tests left already shows what broke.
-      if (result.status !== 0 || verbose) {
+      if (result.status !== 0 || verbose || step.reportOutputOnSuccess) {
         const mark = result.status === 0 ? "ok" : "FAILED";
         const header = `\n=== ${result.name}: ${mark} (${result.seconds.toFixed(1)}s)`;
         const body = result.output ? `${header}\n${result.output}` : header;
