@@ -259,6 +259,7 @@ assert.deepEqual(regionalPlan.operations, [
 
 const regionalRoot = {
   race: {
+    supplyZones: true,
     supplySplit: true,
     governor: {
       g: { bg: "none" },

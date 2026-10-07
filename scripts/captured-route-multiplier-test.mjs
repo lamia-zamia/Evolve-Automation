@@ -24,6 +24,7 @@ const nativeKeyMap = { x10: false, x25: false, x100: false, q: false };
 function regionalRoot(mKeys, keyMap) {
   return {
     race: {
+      supplyZones: true,
       supplySplit: true,
       governor: {
         g: { bg: "none" },

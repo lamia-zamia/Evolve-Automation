@@ -15,12 +15,13 @@ function makePage({
   buyAnyQueued = false,
   researchQueue,
   shadow,
+  supplyZones = false,
   supplySplit = false,
   touch = false,
 }) {
   const root = {
     settings: { expose: false, qAny: buyAnyQueued, touch },
-    race: { species: "human", supplySplit },
+    race: { species: "human", supplyZones, supplySplit },
     stats: { days: 100 },
     resource: {},
     city: {},
@@ -478,6 +479,7 @@ function queued(id, label = id) {
       },
     },
     shadow: 5,
+    supplyZones: true,
     supplySplit: true,
   });
   const control = makeControl({

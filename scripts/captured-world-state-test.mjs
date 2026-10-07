@@ -260,7 +260,7 @@ assert.equal(
   const sample = createCapturedResourceSource(
     rootSource({
       tech: { shadow: 5 },
-      race: { supplySplit: true },
+      race: { supplyZones: true, supplySplit: true },
       resource: {
         Money: {
           display: true,

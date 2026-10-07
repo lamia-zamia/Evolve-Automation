@@ -19,7 +19,7 @@ function makeHarness({
 } = {}) {
   const root = {
     settings: {},
-    race: regional ? { supplySplit: true } : {},
+    race: regional ? { supplyZones: true, supplySplit: true } : {},
     tech: regional ? { shadow: 5 } : {},
     stats: {},
     city: { library: { count: 0 } },

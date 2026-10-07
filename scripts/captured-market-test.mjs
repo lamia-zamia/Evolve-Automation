@@ -120,13 +120,13 @@ assert.deepEqual(ports.reader.readGate(), {
   noTrade: false,
 });
 
-// Once the game splits resources by supply zone the ordinary trade market is gone: the market tab
+// Once legacy Supply Zones split resources the ordinary trade market is gone: the market tab
 // draws a per-zone black market and never creates `#market-qty`, so there is nothing to automate.
 // The gate closes rather than letting the session read throw once per cycle.
 {
   const regionalRoot = {
     ...root,
-    race: { ...(root.race ?? {}), supplySplit: true },
+    race: { ...(root.race ?? {}), supplyZones: true, supplySplit: true },
     tech: { ...(root.tech ?? {}), shadow: 5 },
   };
   const regionalPorts = createCapturedMarketPorts({

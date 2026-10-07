@@ -13,7 +13,7 @@ if (!upstreamArgument?.slice("--upstream=".length)) {
   );
 }
 const upstream = resolve(upstreamArgument.slice("--upstream=".length));
-const commit = "6cc9ba8ce714e9ef474b468be93b4c7edfb98830";
+const commit = "db38e2af831907d49aeb5348d678d8d8745d6c3f";
 const initialGrantCommit = "6cc9ba8ce714e9ef474b468be93b4c7edfb98830";
 const legacyManagerCommit = "a4777a2b39325baa700fc1facf5635e526dac4d4";
 const sources = [

@@ -1092,7 +1092,7 @@ for (const [missionId, completionTech, completionLevel] of [
 // ledger must fail closed even when the civilization-wide cap could hold it.
 {
   const regionalRoot = {
-    race: { supplySplit: true },
+    race: { supplyZones: true, supplySplit: true },
     tech: { shadow: 5 },
     resource: {
       Iron: {

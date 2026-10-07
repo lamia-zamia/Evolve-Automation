@@ -209,7 +209,7 @@ function runCycle(cycle) {
 {
   const root = {
     tech: { shadow: 5 },
-    race: { supplySplit: true },
+    race: { supplyZones: true, supplySplit: true },
     resource: {
       Money: {
         display: true,
@@ -819,7 +819,7 @@ function runCycle(cycle) {
   const requestedPools = [];
   const root = {
     tech: { shadow: 5 },
-    race: { supplySplit: true },
+    race: { supplyZones: true, supplySplit: true },
     resource: {
       Money: {
         amount: 100,

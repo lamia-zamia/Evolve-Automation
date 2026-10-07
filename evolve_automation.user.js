@@ -1352,6 +1352,8 @@
       legacyUnmanaged: !0
     },
     "space-sun_mission": { technology: "solar", completedAtLevel: 1 },
+    "space-sybase_attack": { technology: "shadow", completedAtLevel: 20 },
+    "space-sybase_search": { technology: "shadow", completedAtLevel: 21 },
     "space-test_launch": { technology: "space", completedAtLevel: 2 },
     "space-titan_mission": { technology: "titan", completedAtLevel: 1 },
     "space-triton_mission": { technology: "triton", completedAtLevel: 1 },
@@ -3404,8 +3406,8 @@
 
   // src/adapters/evolve/captured-affordability.ts
   function isRegionalSupply(root) {
-    let shadow = finite(readProperty(readProperty(root, "tech"), "shadow"));
-    return shadow !== void 0 && shadow >= 5 && readProperty(readProperty(root, "race"), "supplySplit") === !0;
+    let shadow = finite(readProperty(readProperty(root, "tech"), "shadow")), race = readProperty(root, "race");
+    return shadow !== void 0 && shadow >= 5 && !!readProperty(race, "supplyZones") && !!readProperty(race, "supplySplit");
   }
   var ANYWHERE_POOL = "*";
   function hasRegionalLedger(resource) {

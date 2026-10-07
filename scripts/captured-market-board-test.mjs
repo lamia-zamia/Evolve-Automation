@@ -4,7 +4,7 @@ import { createCapturedMarketBoard } from "../src/adapters/evolve/economy/market
 function fixture(regional) {
   let root = {
     tech: { shadow: regional ? 5 : 4 },
-    race: { supplySplit: regional },
+    race: { supplyZones: regional, supplySplit: regional },
     resource: { Food: { display: true }, Iron: { display: false } },
   };
   const controls = new Map();
@@ -97,24 +97,54 @@ for (const regional of [false, true]) {
   );
 }
 
-for (const [shadow, split, expected] of [
-  [4, false, "global"],
-  [5, false, "global"],
-  [5, true, "regional"],
+for (const [shadow, supplyZones, split, expected] of [
+  [5, false, true, "global"],
+  [5, true, true, "regional"],
+  [5, true, "sol", "regional"],
+  [5, true, false, "global"],
+  [4, true, "sol", "global"],
+  [5, false, "sol", "global"],
 ]) {
-  const sample = fixture(false);
+  const sample = fixture(expected === "regional");
   sample.root().tech.shadow = shadow;
+  sample.root().race.supplyZones = supplyZones;
   sample.root().race.supplySplit = split;
+  if (!supplyZones && split) {
+    sample.bind("bm-Food");
+    sample.bind("bm-Iron");
+  }
   const board = sample.draw(
     expected === "regional" ? ["bm-Food"] : ["market-qty", "market-Food"],
   );
   assert.equal(board?.mode, expected);
-  if (shadow < 5) sample.root().tech.shadow = 5;
-  sample.root().race.supplySplit = !split;
+  if (expected === "regional") {
+    sample.root().race.supplyZones = false;
+  } else if (shadow < 5) {
+    sample.root().tech.shadow = 5;
+  } else if (!supplyZones) {
+    sample.root().race.supplyZones = true;
+  } else {
+    sample.root().race.supplySplit = "sol";
+  }
   assert.equal(
     sample.board.current(),
     undefined,
     "supply mode change requires rediscovery",
+  );
+}
+
+{
+  const sample = fixture(false);
+  sample.root().tech.shadow = 5;
+  sample.root().race.supplySplit = true;
+  sample.root().race.supplyZones = false;
+  sample.bind("bm-Food");
+  const board = sample.draw(["market-qty", "market-Food"]);
+  assert.equal(board?.mode, "global");
+  assert.deepEqual(
+    board?.rows.map((row) => row.elementId),
+    ["market-Food"],
+    "stale Black Market controls do not change the Logistics board mode",
   );
 }
 

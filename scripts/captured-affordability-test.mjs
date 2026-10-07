@@ -4,6 +4,7 @@ import {
   costFitsNow,
   costFitsStorage,
   isRegionalSupply,
+  readCapturedResourceView,
 } from "../src/adapters/evolve/captured-affordability.ts";
 
 const root = {
@@ -167,7 +168,7 @@ assert.equal(
   costFitsNow(
     {
       tech: { shadow: 5 },
-      race: { supplySplit: true },
+      race: { supplyZones: true, supplySplit: true },
       resource: {
         Money: {
           amount: 900,
@@ -187,7 +188,7 @@ assert.equal(
   costFitsNow(
     {
       tech: { shadow: 5 },
-      race: { supplySplit: true },
+      race: { supplyZones: true, supplySplit: true },
       resource: {
         Money: {
           amount: 900,
@@ -207,7 +208,7 @@ assert.equal(
   costFitsNow(
     {
       tech: { shadow: 5 },
-      race: { supplySplit: true },
+      race: { supplyZones: true, supplySplit: true },
       resource: {
         Money: { amount: 900, max: 10000, display: true, reg: {} },
       },
@@ -218,21 +219,108 @@ assert.equal(
   false,
 );
 
-// Below `tech.shadow >= 5` the civilization-wide comparison is the game's own.
+const logisticsRoot = {
+  tech: { shadow: 5 },
+  race: { supplyZones: false, supplySplit: true },
+  resource: {
+    Money: {
+      amount: 100,
+      max: 200,
+      diff: 17,
+      display: true,
+      reg: { spc_home: 0 },
+      regMax: { spc_home: 20 },
+      regDiff: { spc_home: 99 },
+    },
+  },
+};
+assert.equal(isRegionalSupply(logisticsRoot), false);
+assert.equal(
+  costFitsNow(logisticsRoot, { Money: 50 }, { pool: "spc_home" }),
+  true,
+  "dormant Supply Zones leave civilization-wide holdings authoritative",
+);
+assert.equal(
+  costFitsStorage(logisticsRoot, { Money: 50 }, { pool: "spc_home" }),
+  true,
+  "dormant Supply Zones leave civilization-wide capacity authoritative",
+);
+assert.deepEqual(
+  readCapturedResourceView(logisticsRoot, "Money", "spc_home"),
+  {
+    present: true,
+    unlocked: true,
+    amount: 100,
+    max: 200,
+    rateOfChange: 17,
+    storageRatio: 0.5,
+  },
+  "Logistics reads the native resource totals and rate without a second multiplier",
+);
+
+const legacySupplyRoot = {
+  ...logisticsRoot,
+  race: { ...logisticsRoot.race, supplyZones: true, supplySplit: "sol" },
+};
+assert.equal(isRegionalSupply(legacySupplyRoot), true);
+assert.equal(
+  costFitsNow(legacySupplyRoot, { Money: 50 }, { pool: "spc_home" }),
+  false,
+  "enabled Supply Zones use the insufficient regional holdings",
+);
+assert.equal(
+  costFitsStorage(legacySupplyRoot, { Money: 50 }, { pool: "spc_home" }),
+  false,
+  "enabled Supply Zones use the insufficient regional capacity",
+);
+assert.deepEqual(
+  readCapturedResourceView(legacySupplyRoot, "Money", "spc_home"),
+  {
+    present: true,
+    unlocked: true,
+    amount: 0,
+    max: 20,
+    rateOfChange: 99,
+    storageRatio: 0,
+  },
+);
+assert.equal(
+  isRegionalSupply({
+    ...legacySupplyRoot,
+    race: { ...legacySupplyRoot.race, supplySplit: true },
+  }),
+  true,
+  "migrated saves with boolean supplySplit remain regional",
+);
+
+// Supply Zones remain authoritative only at Shadow 5+, even when split holds a truthy stage value.
 assert.equal(isRegionalSupply(root), false);
 assert.equal(isRegionalSupply({ tech: {} }), false);
 assert.equal(isRegionalSupply({ tech: { shadow: 4 } }), false);
-// At and above it the game checks the paying region's share instead.
 assert.equal(
-  isRegionalSupply({ tech: { shadow: 5 }, race: { supplySplit: false } }),
+  isRegionalSupply({ tech: { shadow: 5 }, race: { supplySplit: "sol" } }),
+  false,
+  "regional ledgers and split stage alone do not activate dormant Supply Zones",
+);
+assert.equal(
+  isRegionalSupply({
+    tech: { shadow: 5 },
+    race: { supplyZones: true, supplySplit: false },
+  }),
   false,
 );
 assert.equal(
-  isRegionalSupply({ tech: { shadow: 5 }, race: { supplySplit: true } }),
+  isRegionalSupply({
+    tech: { shadow: 5 },
+    race: { supplyZones: true, supplySplit: "sol" },
+  }),
   true,
 );
 assert.equal(
-  isRegionalSupply({ tech: { shadow: 6 }, race: { supplySplit: true } }),
+  isRegionalSupply({
+    tech: { shadow: 6 },
+    race: { supplyZones: true, supplySplit: true },
+  }),
   true,
 );
 assert.equal(isRegionalSupply(undefined), false);

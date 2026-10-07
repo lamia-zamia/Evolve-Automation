@@ -19,16 +19,18 @@ import type { ResourceView } from "../../domain/game-world.ts";
 import { ABSENT_RESOURCE } from "../../domain/game-world.ts";
 
 /**
- * Whether the game has split its resources into per-region supply pools — upstream `supplyMode()`
- * requires both `supplyUnlocked()` and `race.supplySplit`. Below it `poolCap` is the civilization's
- * own `max` for every resource, whatever pool is named.
+ * Whether upstream `supplyMode()` is regional: `supplyZones`, Shadow 5, and a truthy
+ * `supplySplit` stage are all required. Below it `poolCap` is the civilization's own `max` for
+ * every resource, whatever pool is named.
  */
 export function isRegionalSupply(root: unknown): boolean {
   const shadow = finite(readProperty(readProperty(root, "tech"), "shadow"));
+  const race = readProperty(root, "race");
   return (
     shadow !== undefined &&
     shadow >= 5 &&
-    readProperty(readProperty(root, "race"), "supplySplit") === true
+    Boolean(readProperty(race, "supplyZones")) &&
+    Boolean(readProperty(race, "supplySplit"))
   );
 }
 

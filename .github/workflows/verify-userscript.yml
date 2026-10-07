@@ -59,11 +59,11 @@ jobs:
       - name: Rebuild and verify committed output
         run: npm run verify
 
-      - name: Fetch pinned DeadSpace source for explicit manifest verification
+      - name: Fetch current and initial pinned DeadSpace sources for grant-manifest verification
         run: |
           git init "$RUNNER_TEMP/evolve-source"
           git -C "$RUNNER_TEMP/evolve-source" remote add origin https://github.com/pmotschmann/Evolve.git
-          git -C "$RUNNER_TEMP/evolve-source" fetch --depth=1 origin 6cc9ba8ce714e9ef474b468be93b4c7edfb98830
+          git -C "$RUNNER_TEMP/evolve-source" fetch --depth=1 origin 6cc9ba8ce714e9ef474b468be93b4c7edfb98830 db38e2af831907d49aeb5348d678d8d8745d6c3f
 
       - name: Verify the grant manifest against the pinned upstream input
         run: node scripts/generate-captured-grant-actions.mjs --upstream="$RUNNER_TEMP/evolve-source" --check

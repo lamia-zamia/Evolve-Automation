@@ -14,6 +14,8 @@ for (const [id, technology, level] of [
   ["space-gas_moon_mission", "space", 6],
   ["space-belt_mission", "asteroid", 1],
   ["space-dwarf_mission", "dwarf", 1],
+  ["space-sybase_attack", "shadow", 20],
+  ["space-sybase_search", "shadow", 21],
   ["interstellar-jump_ship", "stargate", 2],
   ["interstellar-sirius_b", "ascension", 4],
   ["galaxy-gateway_mission", "gateway", 2],

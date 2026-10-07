@@ -641,13 +641,13 @@ assert.equal(
 );
 // --- once the game splits resources by supply zone ---
 
-// Above `tech.shadow >= 5` the capacity compared against is the paying pool's share, which the same
+// With Supply Zones enabled above `tech.shadow >= 5` the capacity compared against is the paying pool's share, which the same
 // probe that priced the building reported. A resource whose `regMax` ledger has any entry in it is
 // one the game has split (upstream's own `capsKnown`), and the named pool's share is the ceiling.
 {
   const regional = {
     ...root,
-    race: { ...root.race, supplySplit: true },
+    race: { ...root.race, supplyZones: true, supplySplit: true },
     tech: { shadow: 5 },
     resource: {
       ...root.resource,
