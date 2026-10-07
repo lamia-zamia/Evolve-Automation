@@ -113,6 +113,22 @@ function makePage({
       })),
     exists: () => root.settings.civTabs === 3,
   };
+  const definitions = Object.freeze(
+    [...new Map(offered.map((entry) => [entry.id, entry])).values()].map(
+      (entry) =>
+        Object.freeze({
+          registryKey: entry.grant,
+          actionId: entry.id,
+          grantTechnology:
+            typeof entry.grant === "string" ? entry.grant : "fixture",
+          grantLevel: 1,
+        }),
+    ),
+  );
+  const mechanics = Object.freeze({
+    captureTechDefinitionsDuring: (draw) => draw(),
+    readTechDefinitions: () => definitions,
+  });
 
   /** The scope the discovery draw runs in; the page never mounts a temporary component. */
   const mountSuppression = {
@@ -137,6 +153,7 @@ function makePage({
         isReactivitySuppressed: () => false,
         subscribeRootReplaced: () => () => {},
       },
+      mechanics,
       controls: registry,
       drawnActions,
       mountSuppression,
@@ -385,6 +402,10 @@ const SMELTING = {
       resolve: () => undefined,
       capturedElementIds: () => [],
       invoke: () => ({ ok: false, reason: "unknown-control" }),
+    }),
+    mechanics: Object.freeze({
+      captureTechDefinitionsDuring: (draw) => draw(),
+      readTechDefinitions: () => [],
     }),
     drawnActions: { read: () => [], exists: () => false },
     mountSuppression: { available: true, withoutMounting: (draw) => draw() },

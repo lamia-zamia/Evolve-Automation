@@ -6,6 +6,7 @@ import {
   isBuildableArpaProjectId,
 } from "../src/adapters/evolve/progression/research/arpa-project-identity.ts";
 import { startCapturedRuntime } from "../src/bootstrap/captured-runtime-control.ts";
+import { withCapturedTechMechanicsFixture } from "./captured-tech-mechanics-fixture.mjs";
 import { createTestDocument, element } from "./dom-fixture.mjs";
 
 assert.equal(arpaProjectIdFromElementId("arpaSequence"), "Sequence");
@@ -560,7 +561,7 @@ function makeScenario({
     flushPerformance: () => {},
   };
   const stop = startCapturedRuntime({
-    pageCapture,
+    pageCapture: withCapturedTechMechanicsFixture(pageCapture),
     document,
     settingsHostWindow: page,
     keyboardEvent: class {},

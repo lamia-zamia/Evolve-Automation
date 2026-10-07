@@ -479,6 +479,7 @@ export function createCapturedProgressionControl(
     discovery,
     drawnActions,
     controls,
+    mechanics,
     ...(onUnavailable === undefined ? {} : { onUnavailable }),
   });
   const projectCatalog: GameProjectCatalog = createCapturedProjectCatalog({
@@ -794,6 +795,7 @@ export function createCapturedProgressionControl(
   });
   const research = createCapturedResearchControl({
     rootState,
+    mechanics,
     controls,
     readSettings,
     drawnActions,

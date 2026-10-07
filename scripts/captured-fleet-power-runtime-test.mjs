@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { installPageCapture } from "../src/adapters/evolve/page-capture.ts";
 import { startCapturedRuntime } from "../src/bootstrap/captured-runtime-control.ts";
 import { createTestDocument, element } from "./dom-fixture.mjs";
+import { withCapturedTechMechanicsFixture } from "./captured-tech-mechanics-fixture.mjs";
 
 class FakeWorker {
   listeners = [];
@@ -136,7 +137,7 @@ assert.deepEqual(capture.controls.resolve("galaxy-minelayer")?.methods, [
 
 const errors = [];
 const stop = startCapturedRuntime({
-  pageCapture: capture,
+  pageCapture: withCapturedTechMechanicsFixture(capture),
   document,
   settingsHostWindow: page,
   mouseEvent: class {},

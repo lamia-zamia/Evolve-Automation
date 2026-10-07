@@ -14,14 +14,14 @@
  * technology is complete, so a caller that needs that asks for it and pays for it; every other
  * caller drops the container before the game fills it.
  *
- * **Every call asks the game again.** There is no cross-tick cache and there does not need to be:
- * the pass keeps the player's panel instead of rebuilding it and, unless the granted set was
- * asked for, drops the half of the draw nobody reads, which measured 8 ms on an early save and
- * 14 ms on a late one — and 1.5 ms when the player is already on Research. A cache would have to
- * be a heuristic, because the offered set depends on
+ * Registry identity is captured once for the page lifetime; offer membership still goes through
+ * discovery for every catalog read. The game-maintained Research panel is observed when selected,
+ * and an off-tab request uses the protected draw that restores the player's view. The first request
+ * forces that protected draw even when Research is already selected so the private registry is
+ * observed. Unless granted rows were requested, the unused old-tech container is discarded before
+ * the game fills it. A signature over `global.tech` cannot replace this: the offer also depends on
  * `checkTechPath`, arbitrary action `condition()` functions, research-queue prediction and adjusted
- * prices, none of which a signature over `global.tech` covers. Take the snapshot once per
- * application cycle and let it die with that cycle.
+ * prices.
  */
 
 import type {
@@ -34,6 +34,10 @@ import type { GameControlRegistry } from "../../../../ports/game-control-registr
 import type { GameDrawnActionsReader } from "../../../../ports/game-drawn-actions.ts";
 import type { GameRootStateSource } from "../../../../ports/game-root-state.ts";
 import type { GameTabDiscovery } from "../../../../ports/game-tab-discovery.ts";
+import type {
+  CapturedGameMechanics,
+  CapturedTechDefinition,
+} from "../../../../ports/captured-game-mechanics.ts";
 import {
   MAIN_TAB_CONTROL,
   MAIN_TAB_INDEX,
@@ -82,6 +86,11 @@ export interface CapturedTechCatalogDependencies {
   readonly discovery: GameTabDiscovery;
   readonly drawnActions: GameDrawnActionsReader;
   readonly controls: GameControlRegistry;
+  /** Retained native identity behind every Research row the game renders. */
+  readonly mechanics: Pick<
+    CapturedGameMechanics,
+    "captureTechDefinitionsDuring" | "readTechDefinitions"
+  >;
   /** Reports a pass that could not produce a catalog. The caller gets `undefined`, never stale. */
   readonly onUnavailable?: (reason: string) => void;
 }
@@ -89,7 +98,8 @@ export interface CapturedTechCatalogDependencies {
 export function createCapturedTechCatalog(
   dependencies: CapturedTechCatalogDependencies,
 ): GameTechCatalog {
-  const { rootState, discovery, drawnActions, controls } = dependencies;
+  const { rootState, discovery, drawnActions, controls, mechanics } =
+    dependencies;
   const reportUnavailable = dependencies.onUnavailable ?? (() => {});
 
   return Object.freeze({
@@ -105,39 +115,46 @@ export function createCapturedTechCatalog(
       let drawn: Readonly<TechCatalogSnapshot> | undefined;
       let result: ReturnType<typeof discovery.discover>;
       try {
-        result = discovery.discover(RESEARCH_TAB_PATH, {
-          isPanelDrawn: () => drawnActions.exists(RESEARCH_PANEL_SELECTOR),
-          ...(includeGranted ? {} : { discard: UNREAD_RESEARCH_CONTENT }),
-          whileDrawn: () => {
-            const offered: readonly Readonly<OfferedTech>[] = Object.freeze(
-              drawnActions.read(OFFERED_TECH_SELECTOR).map((action) =>
-                Object.freeze({
-                  elementId: action.id,
-                  cost: action.cost,
-                  nativeAffordable: action.nativeAffordable === true,
-                  // Which binding of this control the offer belongs to. The game rebinds an action
-                  // every time it draws it, and a superseded closure keeps working, so recording the
-                  // generation here is what lets the executor refuse one from an older draw.
-                  generation: controls.resolve(action.id)?.generation ?? 0,
-                }),
-              ),
-            );
-            drawn = Object.freeze(
-              includeGranted
-                ? {
-                    offered,
-                    granted: Object.freeze(
-                      new Set(
-                        drawnActions
-                          .read(GRANTED_TECH_SELECTOR)
-                          .map((action) => action.id),
-                      ),
-                    ) as ReadonlySet<string>,
-                  }
-                : { offered },
-            );
-          },
-        });
+        const definitionsAlreadyCaptured =
+          mechanics.readTechDefinitions() !== undefined;
+        result = mechanics.captureTechDefinitionsDuring(() =>
+          discovery.discover(RESEARCH_TAB_PATH, {
+            // The first capture must see drawTech even when the player already has Research open.
+            // The discovery workspace keeps that panel intact while it redraws the scratch copy.
+            forceDraw: !definitionsAlreadyCaptured,
+            isPanelDrawn: () => drawnActions.exists(RESEARCH_PANEL_SELECTOR),
+            ...(includeGranted ? {} : { discard: UNREAD_RESEARCH_CONTENT }),
+            whileDrawn: () => {
+              const offered: readonly Readonly<OfferedTech>[] = Object.freeze(
+                drawnActions.read(OFFERED_TECH_SELECTOR).map((action) =>
+                  Object.freeze({
+                    elementId: action.id,
+                    cost: action.cost,
+                    nativeAffordable: action.nativeAffordable === true,
+                    // Which binding of this control the offer belongs to. The game rebinds an action
+                    // every time it draws it, and a superseded closure keeps working, so recording the
+                    // generation here is what lets the executor refuse one from an older draw.
+                    generation: controls.resolve(action.id)?.generation ?? 0,
+                  }),
+                ),
+              );
+              drawn = Object.freeze(
+                includeGranted
+                  ? {
+                      offered,
+                      granted: Object.freeze(
+                        new Set(
+                          drawnActions
+                            .read(GRANTED_TECH_SELECTOR)
+                            .map((action) => action.id),
+                        ),
+                      ) as ReadonlySet<string>,
+                    }
+                  : { offered },
+              );
+            },
+          }),
+        );
       } catch (error) {
         reportUnavailable(`research offer discovery failed: ${String(error)}`);
         return undefined;
@@ -161,6 +178,47 @@ export function createCapturedTechCatalog(
             : (result.outcome.failure?.message ?? result.outcome.status),
         );
         return undefined;
+      }
+
+      const definitions = mechanics.readTechDefinitions();
+      if (definitions === undefined) {
+        reportUnavailable(
+          "the native technology registry was not captured or is no longer valid",
+        );
+        return undefined;
+      }
+      const definitionsById = new Map<string, CapturedTechDefinition>();
+      for (const definition of definitions) {
+        if (definitionsById.has(definition.actionId)) {
+          reportUnavailable(
+            "the native technology registry has duplicate action ids",
+          );
+          return undefined;
+        }
+        definitionsById.set(definition.actionId, definition);
+      }
+      for (const offer of drawn.offered) {
+        const definition = definitionsById.get(offer.elementId);
+        if (
+          definition === undefined ||
+          definition.actionId !== offer.elementId
+        ) {
+          reportUnavailable(
+            `rendered research offer ${offer.elementId} has no unique native definition`,
+          );
+          return undefined;
+        }
+      }
+      if (drawn.granted !== undefined) {
+        for (const actionId of drawn.granted) {
+          const definition = definitionsById.get(actionId);
+          if (definition === undefined || definition.actionId !== actionId) {
+            reportUnavailable(
+              `rendered granted research ${actionId} has no unique native definition`,
+            );
+            return undefined;
+          }
+        }
       }
       return drawn;
     },

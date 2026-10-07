@@ -1569,6 +1569,53 @@
 
   // src/adapters/evolve/captured-game-mechanics.ts
   var structureMapCaptureThreshold = 3;
+  function readNativeTechRegistrySnapshot(registry, rawKeys) {
+    if (!isNonArrayRecord(registry) || !Array.isArray(rawKeys) || rawKeys.length === 0)
+      return;
+    let keys = [], definitions = [], seenActionIds = /* @__PURE__ */ new Set();
+    for (let rawKey of rawKeys) {
+      if (typeof rawKey != "string" || rawKey.length === 0 || rawKey.trim() !== rawKey)
+        return;
+      let action = readMechanicsDataProperty(registry, rawKey);
+      if (!isNonArrayRecord(action)) return;
+      let actionId = readMechanicsDataProperty(action, "id"), grant = readMechanicsDataProperty(action, "grant");
+      if (typeof actionId != "string" || actionId.trim() !== actionId || !actionId.startsWith("tech-") || actionId.length === 5 || seenActionIds.has(actionId) || !Array.isArray(grant) || readMechanicsDataProperty(grant, "length") !== 2)
+        return;
+      let grantTechnology = readMechanicsDataProperty(grant, "0"), grantLevel = readMechanicsDataProperty(grant, "1");
+      if (typeof grantTechnology != "string" || grantTechnology.trim().length === 0 || typeof grantLevel != "number" || !Number.isFinite(grantLevel) || grantLevel < 0)
+        return;
+      keys.push(rawKey), seenActionIds.add(actionId), definitions.push(
+        Object.freeze({
+          registryKey: rawKey,
+          actionId,
+          grantTechnology,
+          grantLevel,
+          action
+        })
+      );
+    }
+    return Object.freeze({
+      registry,
+      keys: Object.freeze(keys),
+      definitions: Object.freeze(definitions),
+      publicDefinitions: Object.freeze(
+        definitions.map(
+          (definition) => Object.freeze({
+            registryKey: definition.registryKey,
+            actionId: definition.actionId,
+            grantTechnology: definition.grantTechnology,
+            grantLevel: definition.grantLevel
+          })
+        )
+      )
+    });
+  }
+  function sameNativeTechRegistrySnapshot(first, second) {
+    return first.registry === second.registry && first.keys.length === second.keys.length && first.keys.every((key, index) => key === second.keys[index]) && first.definitions.length === second.definitions.length && first.definitions.every((definition, index) => {
+      let other = second.definitions[index];
+      return other !== void 0 && definition.action === other.action && definition.actionId === other.actionId && definition.grantTechnology === other.grantTechnology && definition.grantLevel === other.grantLevel;
+    });
+  }
   function readMechanicsProperty(owner, key) {
     try {
       return readProperty(owner, key);
@@ -2159,6 +2206,9 @@
   function emptyGameMechanics() {
     return Object.freeze({
       adjustPower: () => ({ kind: "invalid" }),
+      captureTechDefinitionsDuring: (draw) => draw(),
+      readTechDefinitions: () => {
+      },
       readStructures: () => {
       },
       readStructureIdentities: () => {
@@ -2326,7 +2376,7 @@
           }
         }
     }
-    let stopped = !1, mapHook, consumeSetter, powerOnSetter, originalPowerOnProbeDescriptor = isNonArrayRecord(objectPrototype) ? Object.getOwnPropertyDescriptor(objectPrototype, "coal_power") : void 0;
+    let stopped = !1, capturedTechRegistry, capturedTechRegistryObjectKeys, mapHook, consumeSetter, powerOnSetter, originalPowerOnProbeDescriptor = isNonArrayRecord(objectPrototype) ? Object.getOwnPropertyDescriptor(objectPrototype, "coal_power") : void 0;
     function restorePowerOnProbe() {
       powerOnSetter !== void 0 && isNonArrayRecord(objectPrototype) && Object.getOwnPropertyDescriptor(objectPrototype, "coal_power")?.set === powerOnSetter && (originalPowerOnProbeDescriptor === void 0 ? delete objectPrototype.coal_power : Object.defineProperty(
         objectPrototype,
@@ -2422,6 +2472,89 @@
       restoreUnmatchedHooksAfterFirstPeriod
     );
     let mechanics = Object.freeze({
+      captureTechDefinitionsDuring(draw) {
+        if (stopped || capturedTechRegistry !== void 0 || typeof objectConstructor != "function" || typeof objectDefineProperty != "function")
+          return draw();
+        let originalDescriptor;
+        try {
+          originalDescriptor = Object.getOwnPropertyDescriptor(
+            objectConstructor,
+            "keys"
+          );
+        } catch {
+          return draw();
+        }
+        if (originalDescriptor === void 0 || !("value" in originalDescriptor) || typeof originalDescriptor.value != "function" || originalDescriptor.configurable !== !0)
+          return draw();
+        let originalObjectKeys = originalDescriptor.value, candidates = /* @__PURE__ */ new Map(), candidateChanged = !1, scopedObjectKeys = function(...args) {
+          let keys = Reflect.apply(originalObjectKeys, this, args), candidate;
+          try {
+            candidate = readNativeTechRegistrySnapshot(args[0], keys);
+          } catch {
+            return keys;
+          }
+          if (candidate !== void 0) {
+            let previous = candidates.get(candidate.registry);
+            previous === void 0 ? candidates.set(candidate.registry, candidate) : sameNativeTechRegistrySnapshot(previous, candidate) || (candidateChanged = !0);
+          }
+          return keys;
+        };
+        try {
+          Reflect.apply(
+            objectDefineProperty,
+            objectConstructor,
+            [
+              objectConstructor,
+              "keys",
+              { ...originalDescriptor, value: scopedObjectKeys }
+            ]
+          );
+        } catch {
+          return draw();
+        }
+        let result;
+        try {
+          result = draw();
+        } finally {
+          Reflect.apply(
+            objectDefineProperty,
+            objectConstructor,
+            [objectConstructor, "keys", originalDescriptor]
+          );
+        }
+        if (!candidateChanged && candidates.size === 1) {
+          let candidate = candidates.values().next().value;
+          if (candidate !== void 0)
+            try {
+              let finalKeys = Reflect.apply(
+                originalObjectKeys,
+                objectConstructor,
+                [candidate.registry]
+              ), finalSnapshot = readNativeTechRegistrySnapshot(
+                candidate.registry,
+                finalKeys
+              );
+              finalSnapshot !== void 0 && sameNativeTechRegistrySnapshot(candidate, finalSnapshot) && (capturedTechRegistry = candidate, capturedTechRegistryObjectKeys = originalObjectKeys);
+            } catch {
+            }
+        }
+        return result;
+      },
+      readTechDefinitions() {
+        let retained = capturedTechRegistry, originalObjectKeys = capturedTechRegistryObjectKeys;
+        if (!(stopped || retained === void 0 || originalObjectKeys === void 0))
+          try {
+            let rawKeys = Reflect.apply(originalObjectKeys, objectConstructor, [
+              retained.registry
+            ]), current = readNativeTechRegistrySnapshot(
+              retained.registry,
+              rawKeys
+            );
+            return current !== void 0 && sameNativeTechRegistrySnapshot(retained, current) ? retained.publicDefinitions : void 0;
+          } catch {
+            return;
+          }
+      },
       adjustPower(root, entryKey, expectedStateOn, targetStateOn, isCurrent = () => !0, preflightOnly = !1) {
         let entries = structureEntries, entry = entries === void 0 ? void 0 : readMechanicsEntry(entryKey, entries.get(entryKey));
         if (stopped || entry === void 0 || !Number.isSafeInteger(expectedStateOn) || !Number.isSafeInteger(targetStateOn) || targetStateOn < 0)
@@ -2681,7 +2814,7 @@
     return Object.freeze({
       mechanics,
       uninstall() {
-        stopped || (stopped = !0, unsubscribeFirstPeriod?.(), unsubscribeFirstPeriod = void 0, restoreMapSet(), restorePowerCallbackHooks(), restorePowerOnProbe(), restoreSupportOnProbe(), restoreConsumeSetter());
+        stopped || (stopped = !0, capturedTechRegistry = void 0, capturedTechRegistryObjectKeys = void 0, unsubscribeFirstPeriod?.(), unsubscribeFirstPeriod = void 0, restoreMapSet(), restorePowerCallbackHooks(), restorePowerOnProbe(), restoreSupportOnProbe(), restoreConsumeSetter());
       }
     });
   }
@@ -4208,7 +4341,7 @@
     })
   ]);
   function createCapturedTechCatalog(dependencies) {
-    let { rootState, discovery, drawnActions, controls: controls2 } = dependencies, reportUnavailable = dependencies.onUnavailable ?? (() => {
+    let { rootState, discovery, drawnActions, controls: controls2, mechanics } = dependencies, reportUnavailable = dependencies.onUnavailable ?? (() => {
     });
     return Object.freeze({
       read(options) {
@@ -4218,35 +4351,41 @@
         }
         let includeGranted = options?.includeGranted === !0, drawn, result;
         try {
-          result = discovery.discover(RESEARCH_TAB_PATH, {
-            isPanelDrawn: () => drawnActions.exists(RESEARCH_PANEL_SELECTOR),
-            ...includeGranted ? {} : { discard: UNREAD_RESEARCH_CONTENT },
-            whileDrawn: () => {
-              let offered = Object.freeze(
-                drawnActions.read(OFFERED_TECH_SELECTOR).map(
-                  (action) => Object.freeze({
-                    elementId: action.id,
-                    cost: action.cost,
-                    nativeAffordable: action.nativeAffordable === !0,
-                    // Which binding of this control the offer belongs to. The game rebinds an action
-                    // every time it draws it, and a superseded closure keeps working, so recording the
-                    // generation here is what lets the executor refuse one from an older draw.
-                    generation: controls2.resolve(action.id)?.generation ?? 0
-                  })
-                )
-              );
-              drawn = Object.freeze(
-                includeGranted ? {
-                  offered,
-                  granted: Object.freeze(
-                    new Set(
-                      drawnActions.read(GRANTED_TECH_SELECTOR).map((action) => action.id)
-                    )
+          let definitionsAlreadyCaptured = mechanics.readTechDefinitions() !== void 0;
+          result = mechanics.captureTechDefinitionsDuring(
+            () => discovery.discover(RESEARCH_TAB_PATH, {
+              // The first capture must see drawTech even when the player already has Research open.
+              // The discovery workspace keeps that panel intact while it redraws the scratch copy.
+              forceDraw: !definitionsAlreadyCaptured,
+              isPanelDrawn: () => drawnActions.exists(RESEARCH_PANEL_SELECTOR),
+              ...includeGranted ? {} : { discard: UNREAD_RESEARCH_CONTENT },
+              whileDrawn: () => {
+                let offered = Object.freeze(
+                  drawnActions.read(OFFERED_TECH_SELECTOR).map(
+                    (action) => Object.freeze({
+                      elementId: action.id,
+                      cost: action.cost,
+                      nativeAffordable: action.nativeAffordable === !0,
+                      // Which binding of this control the offer belongs to. The game rebinds an action
+                      // every time it draws it, and a superseded closure keeps working, so recording the
+                      // generation here is what lets the executor refuse one from an older draw.
+                      generation: controls2.resolve(action.id)?.generation ?? 0
+                    })
                   )
-                } : { offered }
-              );
-            }
-          });
+                );
+                drawn = Object.freeze(
+                  includeGranted ? {
+                    offered,
+                    granted: Object.freeze(
+                      new Set(
+                        drawnActions.read(GRANTED_TECH_SELECTOR).map((action) => action.id)
+                      )
+                    )
+                  } : { offered }
+                );
+              }
+            })
+          );
         } catch (error) {
           reportUnavailable(`research offer discovery failed: ${String(error)}`);
           return;
@@ -4259,6 +4398,42 @@
           );
           return;
         }
+        let definitions = mechanics.readTechDefinitions();
+        if (definitions === void 0) {
+          reportUnavailable(
+            "the native technology registry was not captured or is no longer valid"
+          );
+          return;
+        }
+        let definitionsById = /* @__PURE__ */ new Map();
+        for (let definition of definitions) {
+          if (definitionsById.has(definition.actionId)) {
+            reportUnavailable(
+              "the native technology registry has duplicate action ids"
+            );
+            return;
+          }
+          definitionsById.set(definition.actionId, definition);
+        }
+        for (let offer of drawn.offered) {
+          let definition = definitionsById.get(offer.elementId);
+          if (definition === void 0 || definition.actionId !== offer.elementId) {
+            reportUnavailable(
+              `rendered research offer ${offer.elementId} has no unique native definition`
+            );
+            return;
+          }
+        }
+        if (drawn.granted !== void 0)
+          for (let actionId of drawn.granted) {
+            let definition = definitionsById.get(actionId);
+            if (definition === void 0 || definition.actionId !== actionId) {
+              reportUnavailable(
+                `rendered granted research ${actionId} has no unique native definition`
+              );
+              return;
+            }
+          }
         return drawn;
       },
       restate(snapshot2) {
@@ -8162,6 +8337,7 @@
   function createCapturedResearchControl(dependencies) {
     let {
       rootState,
+      mechanics,
       controls: controls2,
       drawnActions,
       mountSuppression,
@@ -8169,6 +8345,7 @@
       diagnostics
     } = dependencies, onUnavailable = dependencies.onUnavailable, onActivity = dependencies.onActivity, sharedReadOfferedTechs = dependencies.readOfferedTechs, resources = createCapturedResourceSource(rootState), catalog = createCapturedTechCatalog({
       rootState,
+      mechanics,
       discovery: createCapturedTabDiscovery({
         rootState,
         controls: controls2,
@@ -10771,6 +10948,7 @@
       discovery,
       drawnActions,
       controls: controls2,
+      mechanics,
       ...onUnavailable === void 0 ? {} : { onUnavailable }
     }), projectCatalog = createCapturedProjectCatalog({
       rootState,
@@ -10941,6 +11119,7 @@
       diagnostics
     }), research = createCapturedResearchControl({
       rootState,
+      mechanics,
       controls: controls2,
       readSettings,
       drawnActions,

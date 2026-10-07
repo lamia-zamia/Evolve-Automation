@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
+import { runInNewContext } from "node:vm";
 
 import { createGameDrawnActionsReader } from "../src/adapters/browser/game-drawn-actions.ts";
 import { createCapturedTechCatalog } from "../src/adapters/evolve/progression/research/captured-tech-catalog.ts";
+import { installCapturedGameMechanics } from "../src/adapters/evolve/captured-game-mechanics.ts";
 import {
   MAIN_TAB_CONTROL,
   MAIN_TAB_SETTING,
@@ -49,6 +51,26 @@ function documentOf(elements, bySelector = {}) {
   return {
     querySelectorAll: (selector) => bySelector[selector] ?? elements,
   };
+}
+
+function mechanicsForActionIds(actionIds) {
+  const ids = [...new Set(actionIds)];
+  if (ids.length === 0) ids.push("tech-unused");
+  const definitions = Object.freeze(
+    ids.map((actionId) => {
+      const registryKey = actionId.slice("tech-".length);
+      return Object.freeze({
+        registryKey,
+        actionId,
+        grantTechnology: registryKey,
+        grantLevel: 1,
+      });
+    }),
+  );
+  return Object.freeze({
+    captureTechDefinitionsDuring: (draw) => draw(),
+    readTechDefinitions: () => definitions,
+  });
 }
 
 {
@@ -121,17 +143,24 @@ function documentOf(elements, bySelector = {}) {
  * how often it ran and what it was asked. The last entry repeats, so a read that skipped the draw
  * shows up as a pass that never happened.
  */
-function makePage({ offered = [[]], granted = [], generations = {} } = {}) {
+function makePage({
+  offered = [[]],
+  granted = [],
+  generations = {},
+  mechanics = undefined,
+} = {}) {
   const root = { tech: { primitive: 3 }, settings: { civTabs: 4 } };
   const passes = [];
   const panelChecks = [];
   const discards = [];
+  const forceDraws = [];
   let drawn = [];
   let failure;
 
   const discovery = {
     discover(path, options = {}) {
       passes.push(path.map((step) => [step.setting, step.control, step.index]));
+      forceDraws.push(options.forceDraw === true);
       if (options.isPanelDrawn !== undefined) {
         panelChecks.push(options.isPanelDrawn());
       }
@@ -146,6 +175,12 @@ function makePage({ offered = [[]], granted = [], generations = {} } = {}) {
   };
 
   const reasons = [];
+  const capturedMechanics =
+    mechanics ??
+    mechanicsForActionIds([
+      ...offered.flat().map((action) => action.id),
+      ...granted.map((action) => action.id),
+    ]);
   const catalog = createCapturedTechCatalog({
     rootState: {
       readRoot: () => root,
@@ -153,6 +188,7 @@ function makePage({ offered = [[]], granted = [], generations = {} } = {}) {
       subscribeRootReplaced: () => () => {},
     },
     discovery,
+    mechanics: capturedMechanics,
     drawnActions: createGameDrawnActionsReader({
       getDocument: () =>
         documentOf(drawn, { "#oldTech .action": granted, "#tech": drawn }),
@@ -177,6 +213,8 @@ function makePage({ offered = [[]], granted = [], generations = {} } = {}) {
     },
     panelChecks,
     discards,
+    forceDraws,
+    mechanics: capturedMechanics,
     reasons,
     isDrawn: () => drawn.length > 0,
     fail(outcome) {
@@ -355,6 +393,7 @@ function makePage({ offered = [[]], granted = [], generations = {} } = {}) {
   // current catalog and must never abort demand consumers or expose a held offer.
   const reasons = [];
   const catalog = createCapturedTechCatalog({
+    mechanics: mechanicsForActionIds([]),
     rootState: {
       readRoot: () => ({ tech: {}, settings: {} }),
       isReactivitySuppressed: () => false,
@@ -452,6 +491,7 @@ function makePage({ offered = [[]], granted = [], generations = {} } = {}) {
   // A control the game has since dropped resolves to nothing, which is generation 0 — the same
   // answer a draw would have given for an action bound to no control.
   const forgotten = createCapturedTechCatalog({
+    mechanics: mechanicsForActionIds([]),
     rootState: {
       readRoot: () => ({ settings: {} }),
       isReactivitySuppressed: () => false,
@@ -491,6 +531,158 @@ function makePage({ offered = [[]], granted = [], generations = {} } = {}) {
     "granted" in page.catalog.restate(withoutGranted),
     false,
     "absent means not read, and restating must not turn that into an empty set",
+  );
+}
+
+{
+  const page = runInNewContext(
+    `({ Object, Map, Array, Function, Number, String, Math, Proxy })`,
+  );
+  const nativeObjectKeys = page.Object.keys;
+  const nativeDefineProperty = page.Object.defineProperty;
+  let interceptionInstallations = 0;
+  page.Object.defineProperty = function (target, key, descriptor) {
+    if (
+      target === page.Object &&
+      key === "keys" &&
+      descriptor.value !== nativeObjectKeys
+    ) {
+      interceptionInstallations += 1;
+    }
+    return Reflect.apply(nativeDefineProperty, this, [target, key, descriptor]);
+  };
+
+  const registry = {
+    alpha: { id: "tech-alpha", grant: ["alpha", 1] },
+    beta: { id: "tech-beta", grant: ["beta", 1] },
+  };
+  const actions = { tech: registry };
+  const root = { settings: { civTabs: 4 } };
+  const mechanicsInstall = installCapturedGameMechanics(
+    page,
+    { subscribe: () => () => {} },
+    { readRoot: () => root },
+  );
+  let drawnOffers = [];
+  let drawnGranted = [];
+  const offerPasses = [];
+  const nativeOrders = [];
+  const forceDraws = [];
+  const unavailable = [];
+  const offersByPass = [
+    [element("tech-alpha", { Knowledge: 10 })],
+    [element("tech-beta", { Knowledge: 20 })],
+    [element("tech-gamma", { Knowledge: 30 })],
+  ];
+  let grantedByPass = [];
+  const catalog = createCapturedTechCatalog({
+    rootState: {
+      readRoot: () => root,
+      isReactivitySuppressed: () => false,
+      subscribeRootReplaced: () => () => {},
+    },
+    mechanics: mechanicsInstall.mechanics,
+    discovery: {
+      discover(_path, options = {}) {
+        offerPasses.push(offerPasses.length + 1);
+        forceDraws.push(options.forceDraw === true);
+        page.Object.keys({ beforeDraw: true });
+        const order = [];
+        page.Object.keys(actions.tech).forEach((key) => order.push(key));
+        nativeOrders.push(order);
+        page.Object.keys({ afterDraw: true });
+        drawnOffers =
+          offersByPass[
+            Math.min(offerPasses.length - 1, offersByPass.length - 1)
+          ];
+        drawnGranted = grantedByPass;
+        options.whileDrawn?.();
+        return { outcome: { status: "succeeded" }, discovered: [] };
+      },
+    },
+    drawnActions: createGameDrawnActionsReader({
+      getDocument: () =>
+        documentOf(drawnOffers, { "#oldTech .action": drawnGranted }),
+    }),
+    controls: {
+      resolve: (elementId) => ({ elementId, generation: 1, methods: [] }),
+      invoke: () => ({ ok: false, reason: "unknown-control" }),
+      capturedElementIds: () => [],
+    },
+    onUnavailable: (reason) => unavailable.push(reason),
+  });
+
+  assert.deepEqual(
+    catalog.read().offered.map(({ elementId }) => elementId),
+    ["tech-alpha"],
+  );
+  assert.deepEqual(
+    catalog.read().offered.map(({ elementId }) => elementId),
+    ["tech-beta"],
+  );
+  assert.equal(interceptionInstallations, 1);
+  assert.equal(offerPasses.length, 2, "offer discovery still runs per read");
+  assert.deepEqual(nativeOrders, [
+    ["alpha", "beta"],
+    ["alpha", "beta"],
+  ]);
+  assert.deepEqual(forceDraws, [true, false]);
+  assert.equal(page.Object.keys, nativeObjectKeys);
+
+  assert.equal(
+    catalog.read(),
+    undefined,
+    "an unknown offered id rejects the full read",
+  );
+  assert.match(unavailable.at(-1), /tech-gamma/u);
+  assert.equal(
+    interceptionInstallations,
+    1,
+    "a retained registry is never recaptured",
+  );
+  assert.equal(offerPasses.length, 3);
+
+  offersByPass.push([element("tech-alpha", { Knowledge: 10 })]);
+  grantedByPass = [element("tech-beta")];
+  const withGranted = catalog.read({ includeGranted: true });
+  assert.deepEqual([...withGranted.granted], ["tech-beta"]);
+  grantedByPass = [element("tech-gamma")];
+  assert.equal(
+    catalog.read({ includeGranted: true }),
+    undefined,
+    "an unknown granted id rejects the granted snapshot rather than becoming empty",
+  );
+  assert.match(unavailable.at(-1), /granted research tech-gamma/u);
+  assert.equal(interceptionInstallations, 1);
+  mechanicsInstall.uninstall();
+}
+
+{
+  const definitions = [
+    {
+      registryKey: "alpha",
+      actionId: "tech-alpha",
+      grantTechnology: "alpha",
+      grantLevel: 1,
+    },
+    {
+      registryKey: "beta",
+      actionId: "tech-alpha",
+      grantTechnology: "beta",
+      grantLevel: 1,
+    },
+  ];
+  const page = makePage({
+    offered: [[element("tech-alpha", { Knowledge: 1 })]],
+    mechanics: Object.freeze({
+      captureTechDefinitionsDuring: (draw) => draw(),
+      readTechDefinitions: () => definitions,
+    }),
+  });
+  assert.equal(
+    page.catalog.read(),
+    undefined,
+    "duplicate native action ids make the complete authority unavailable",
   );
 }
 

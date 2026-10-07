@@ -1,13 +1,14 @@
 import { CAPTURED_AUTOMATION_BUILDING_BINDINGS } from "../src/adapters/evolve/progression/build/captured-building-bindings.generated.ts";
 import { bindingForBuildingElement } from "../src/adapters/evolve/progression/build/captured-building-metadata.ts";
 import { splitActionId } from "../src/adapters/validation.ts";
+import { makeCapturedTechMechanicsFixture } from "./captured-tech-mechanics-fixture.mjs";
 
 const absent = Object.freeze({ kind: "absent" });
 const nativeRead = (value) => Object.freeze({ kind: "value", value });
 
 /** Test mechanics catalog derived from the production-owned managed binding set. */
 export function makeCapturedBuildingMechanics(
-  _root,
+  root,
   {
     availability = () => nativeRead(false),
     omitBindings = new Set(),
@@ -53,6 +54,9 @@ export function makeCapturedBuildingMechanics(
       ),
     );
   return Object.freeze({
+    ...makeCapturedTechMechanicsFixture(
+      Object.keys(root?.tech ?? {}).map((technology) => `tech-${technology}`),
+    ),
     readStructures: () => Object.freeze(structures),
     readStructureIdentities,
   });

@@ -1,9 +1,26 @@
 import { withControlCaptureAuthority } from "./control-capture-fixture.mjs";
 import assert from "node:assert/strict";
-import { startCapturedRuntime } from "../src/bootstrap/captured-runtime-control.ts";
+import { startCapturedRuntime as startCapturedRuntimeFromSource } from "../src/bootstrap/captured-runtime-control.ts";
 import { createGameDrawnActionsReader } from "../src/adapters/browser/game-drawn-actions.ts";
 import { createTestDocument, element } from "./dom-fixture.mjs";
 import { makeCapturedBuildingMechanics } from "./captured-building-test-fixtures.mjs";
+import { withCapturedTechMechanicsFixture } from "./captured-tech-mechanics-fixture.mjs";
+
+const capturedTestTechIds = [
+  "tech-polymer-reserve",
+  "tech-polymer-heavy",
+  "tech-redrawn-after-storage",
+];
+
+function startCapturedRuntime(dependencies) {
+  return startCapturedRuntimeFromSource({
+    ...dependencies,
+    pageCapture: withCapturedTechMechanicsFixture(
+      dependencies.pageCapture,
+      capturedTestTechIds,
+    ),
+  });
+}
 
 // Power reports a persistent exact-demand failure once and a changed authority once.
 {

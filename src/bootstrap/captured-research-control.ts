@@ -22,11 +22,16 @@ import type { GameDrawnActionsReader } from "../ports/game-drawn-actions.ts";
 import type { GameMountSuppression } from "../ports/game-mount-suppression.ts";
 import type { GamePanelWorkspace } from "../ports/game-panel-workspace.ts";
 import type { GameRootStateSource } from "../ports/game-root-state.ts";
+import type { CapturedGameMechanics } from "../ports/captured-game-mechanics.ts";
 import type { OfferedTech } from "../ports/game-tech-catalog.ts";
 import type { TickDiagnostics } from "../ports/tick.ts";
 
 export interface CapturedResearchControlDependencies {
   readonly rootState: GameRootStateSource;
+  readonly mechanics: Pick<
+    CapturedGameMechanics,
+    "captureTechDefinitionsDuring" | "readTechDefinitions"
+  >;
   readonly controls: GameControlRegistry;
   /** The effective settings the research exclusions decide on. */
   readonly readSettings: () => unknown;
@@ -61,6 +66,7 @@ export function createCapturedResearchControl(
 ): CapturedResearchControl {
   const {
     rootState,
+    mechanics,
     controls,
     drawnActions,
     mountSuppression,
@@ -73,6 +79,7 @@ export function createCapturedResearchControl(
   const resources = createCapturedResourceSource(rootState);
   const catalog = createCapturedTechCatalog({
     rootState,
+    mechanics,
     discovery: createCapturedTabDiscovery({
       rootState,
       controls,

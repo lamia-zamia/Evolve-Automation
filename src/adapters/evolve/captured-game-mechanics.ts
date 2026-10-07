@@ -10,6 +10,7 @@ import type {
   CapturedGameFuelInput,
   CapturedGameMechanics,
   CapturedGameRead,
+  CapturedTechDefinition,
   CapturedGameStructureIdentity,
   CapturedGameStructureDefinition,
   CapturedPowerBalanceRule,
@@ -31,6 +32,119 @@ import { readCapturedActionAvailability } from "./progression/build/captured-bui
 
 type CapturedGameCall = (this: unknown, ...args: unknown[]) => unknown;
 const structureMapCaptureThreshold = 3;
+
+interface CapturedNativeTechDefinitionIdentity extends CapturedTechDefinition {
+  readonly action: Record<string, unknown>;
+}
+
+interface CapturedNativeTechRegistrySnapshot {
+  readonly registry: Record<string, unknown>;
+  readonly keys: readonly string[];
+  readonly definitions: readonly CapturedNativeTechDefinitionIdentity[];
+  readonly publicDefinitions: readonly CapturedTechDefinition[];
+}
+
+function readNativeTechRegistrySnapshot(
+  registry: unknown,
+  rawKeys: unknown,
+): CapturedNativeTechRegistrySnapshot | undefined {
+  if (
+    !isNonArrayRecord(registry) ||
+    !Array.isArray(rawKeys) ||
+    rawKeys.length === 0
+  ) {
+    return undefined;
+  }
+
+  const keys: string[] = [];
+  const definitions: CapturedNativeTechDefinitionIdentity[] = [];
+  const seenActionIds = new Set<string>();
+  for (const rawKey of rawKeys) {
+    if (
+      typeof rawKey !== "string" ||
+      rawKey.length === 0 ||
+      rawKey.trim() !== rawKey
+    ) {
+      return undefined;
+    }
+    const action = readMechanicsDataProperty(registry, rawKey);
+    if (!isNonArrayRecord(action)) return undefined;
+    const actionId = readMechanicsDataProperty(action, "id");
+    const grant = readMechanicsDataProperty(action, "grant");
+    if (
+      typeof actionId !== "string" ||
+      actionId.trim() !== actionId ||
+      !actionId.startsWith("tech-") ||
+      actionId.length === "tech-".length ||
+      seenActionIds.has(actionId) ||
+      !Array.isArray(grant) ||
+      readMechanicsDataProperty(grant, "length") !== 2
+    ) {
+      return undefined;
+    }
+    const grantTechnology = readMechanicsDataProperty(grant, "0");
+    const grantLevel = readMechanicsDataProperty(grant, "1");
+    if (
+      typeof grantTechnology !== "string" ||
+      grantTechnology.trim().length === 0 ||
+      typeof grantLevel !== "number" ||
+      !Number.isFinite(grantLevel) ||
+      grantLevel < 0
+    ) {
+      return undefined;
+    }
+
+    keys.push(rawKey);
+    seenActionIds.add(actionId);
+    definitions.push(
+      Object.freeze({
+        registryKey: rawKey,
+        actionId,
+        grantTechnology,
+        grantLevel,
+        action,
+      }),
+    );
+  }
+
+  return Object.freeze({
+    registry: registry as Record<string, unknown>,
+    keys: Object.freeze(keys),
+    definitions: Object.freeze(definitions),
+    publicDefinitions: Object.freeze(
+      definitions.map((definition) =>
+        Object.freeze({
+          registryKey: definition.registryKey,
+          actionId: definition.actionId,
+          grantTechnology: definition.grantTechnology,
+          grantLevel: definition.grantLevel,
+        }),
+      ),
+    ),
+  });
+}
+
+function sameNativeTechRegistrySnapshot(
+  first: CapturedNativeTechRegistrySnapshot,
+  second: CapturedNativeTechRegistrySnapshot,
+): boolean {
+  return (
+    first.registry === second.registry &&
+    first.keys.length === second.keys.length &&
+    first.keys.every((key, index) => key === second.keys[index]) &&
+    first.definitions.length === second.definitions.length &&
+    first.definitions.every((definition, index) => {
+      const other = second.definitions[index];
+      return (
+        other !== undefined &&
+        definition.action === other.action &&
+        definition.actionId === other.actionId &&
+        definition.grantTechnology === other.grantTechnology &&
+        definition.grantLevel === other.grantLevel
+      );
+    })
+  );
+}
 
 interface CapturedGridEntry {
   readonly entryKey: string;
@@ -988,6 +1102,8 @@ function isProductionConsumeOwner(owner: unknown, assigned: unknown): boolean {
 function emptyGameMechanics(): CapturedGameMechanics {
   return Object.freeze({
     adjustPower: () => ({ kind: "invalid" as const }),
+    captureTechDefinitionsDuring: <T>(draw: () => T): T => draw(),
+    readTechDefinitions: () => undefined,
     readStructures: () => undefined,
     readStructureIdentities: () => undefined,
     readPowerOrder: () => ({ kind: "invalid" as const }),
@@ -1342,6 +1458,8 @@ export function installCapturedGameMechanics(
   }
 
   let stopped = false;
+  let capturedTechRegistry: CapturedNativeTechRegistrySnapshot | undefined;
+  let capturedTechRegistryObjectKeys: CapturedGameCall | undefined;
   let mapHook: CapturedGameCall | undefined;
   let consumeSetter: ((this: unknown, value: unknown) => void) | undefined;
   let powerOnSetter: ((this: unknown, value: unknown) => void) | undefined;
@@ -1570,6 +1688,140 @@ export function installCapturedGameMechanics(
   );
 
   const mechanics: CapturedGameMechanics = Object.freeze({
+    captureTechDefinitionsDuring<T>(draw: () => T): T {
+      if (stopped || capturedTechRegistry !== undefined) return draw();
+      if (
+        typeof objectConstructor !== "function" ||
+        typeof objectDefineProperty !== "function"
+      ) {
+        return draw();
+      }
+
+      let originalDescriptor: PropertyDescriptor | undefined;
+      try {
+        originalDescriptor = Object.getOwnPropertyDescriptor(
+          objectConstructor,
+          "keys",
+        );
+      } catch {
+        return draw();
+      }
+      if (
+        originalDescriptor === undefined ||
+        !("value" in originalDescriptor) ||
+        typeof originalDescriptor.value !== "function" ||
+        originalDescriptor.configurable !== true
+      ) {
+        return draw();
+      }
+
+      const originalObjectKeys = originalDescriptor.value as CapturedGameCall;
+      const candidates = new Map<
+        Record<string, unknown>,
+        CapturedNativeTechRegistrySnapshot
+      >();
+      let candidateChanged = false;
+      const scopedObjectKeys: CapturedGameCall = function (
+        this: unknown,
+        ...args: unknown[]
+      ): unknown {
+        const keys = Reflect.apply(originalObjectKeys, this, args);
+        let candidate: CapturedNativeTechRegistrySnapshot | undefined;
+        try {
+          candidate = readNativeTechRegistrySnapshot(args[0], keys);
+        } catch {
+          // An unrelated proxy must not change the result of the game's Object.keys call.
+          return keys;
+        }
+        if (candidate !== undefined) {
+          const previous = candidates.get(candidate.registry);
+          if (previous === undefined) {
+            candidates.set(candidate.registry, candidate);
+          } else if (!sameNativeTechRegistrySnapshot(previous, candidate)) {
+            candidateChanged = true;
+          }
+        }
+        return keys;
+      };
+
+      try {
+        Reflect.apply(
+          objectDefineProperty as CapturedGameCall,
+          objectConstructor,
+          [
+            objectConstructor,
+            "keys",
+            { ...originalDescriptor, value: scopedObjectKeys },
+          ],
+        );
+      } catch {
+        return draw();
+      }
+
+      let result: T;
+      try {
+        result = draw();
+      } finally {
+        Reflect.apply(
+          objectDefineProperty as CapturedGameCall,
+          objectConstructor,
+          [objectConstructor, "keys", originalDescriptor],
+        );
+      }
+
+      if (!candidateChanged && candidates.size === 1) {
+        const candidate = candidates.values().next().value;
+        if (candidate !== undefined) {
+          try {
+            const finalKeys = Reflect.apply(
+              originalObjectKeys,
+              objectConstructor,
+              [candidate.registry],
+            );
+            const finalSnapshot = readNativeTechRegistrySnapshot(
+              candidate.registry,
+              finalKeys,
+            );
+            if (
+              finalSnapshot !== undefined &&
+              sameNativeTechRegistrySnapshot(candidate, finalSnapshot)
+            ) {
+              capturedTechRegistry = candidate;
+              capturedTechRegistryObjectKeys = originalObjectKeys;
+            }
+          } catch {
+            /* A registry that changed during the draw has no retained authority. */
+          }
+        }
+      }
+      return result;
+    },
+    readTechDefinitions(): readonly CapturedTechDefinition[] | undefined {
+      const retained = capturedTechRegistry;
+      const originalObjectKeys = capturedTechRegistryObjectKeys;
+      if (
+        stopped ||
+        retained === undefined ||
+        originalObjectKeys === undefined
+      ) {
+        return undefined;
+      }
+      try {
+        const rawKeys = Reflect.apply(originalObjectKeys, objectConstructor, [
+          retained.registry,
+        ]);
+        const current = readNativeTechRegistrySnapshot(
+          retained.registry,
+          rawKeys,
+        );
+        return current !== undefined &&
+          sameNativeTechRegistrySnapshot(retained, current)
+          ? retained.publicDefinitions
+          : undefined;
+      } catch {
+        return undefined;
+      }
+    },
     adjustPower(
       root: unknown,
       entryKey: string,
@@ -2051,6 +2303,8 @@ export function installCapturedGameMechanics(
     uninstall() {
       if (stopped) return;
       stopped = true;
+      capturedTechRegistry = undefined;
+      capturedTechRegistryObjectKeys = undefined;
       unsubscribeFirstPeriod?.();
       unsubscribeFirstPeriod = undefined;
       restoreMapSet();

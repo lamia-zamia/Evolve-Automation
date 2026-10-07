@@ -3,6 +3,7 @@ import { createCapturedProgressionControl } from "../src/bootstrap/captured-prog
 import { createCapturedResourceDemand } from "../src/adapters/evolve/economy/resources/captured-resource-demand.ts";
 import { withControlCaptureAuthority } from "./control-capture-fixture.mjs";
 import { makeCapturedBuildingMechanics } from "./captured-building-test-fixtures.mjs";
+import { makeCapturedTechMechanicsFixture } from "./captured-tech-mechanics-fixture.mjs";
 
 const emptyArpaMechanics = Object.freeze({
   ensureCaptured: () => ({ kind: "captured" }),
@@ -23,6 +24,7 @@ const control = createCapturedProgressionControl({
     invoke: () => ({ ok: false, reason: "unknown-control" }),
     capturedElementIds: () => [],
   }),
+  mechanics: makeCapturedBuildingMechanics(undefined),
   mountSuppression: {
     begin: () => undefined,
   },
@@ -243,6 +245,19 @@ const researchControl = createCapturedProgressionControl({
     invoke: () => ({ ok: false, reason: "unknown-control" }),
     capturedElementIds: () => [...techHandles.keys()],
   }),
+  mechanics: {
+    ...makeCapturedBuildingMechanics(root),
+    ...makeCapturedTechMechanicsFixture([
+      "tech-mining",
+      "tech-old-mining",
+      "tech-current-cycle",
+      "tech-redrawn-later",
+      "tech-after-progression",
+      "tech-after-control-rebind",
+      "tech-next-cycle",
+      "tech-last-successful-cycle",
+    ]),
+  },
   mountSuppression: { available: false, withoutMounting: () => undefined },
   panels: { open: () => ({ close: () => {} }) },
   drawnActions: {

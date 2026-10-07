@@ -1,8 +1,16 @@
 import assert from "node:assert/strict";
 
-import { startCapturedRuntime } from "../src/bootstrap/captured-runtime-control.ts";
+import { startCapturedRuntime as startCapturedRuntimeFromSource } from "../src/bootstrap/captured-runtime-control.ts";
 import { createTestDocument, element } from "./dom-fixture.mjs";
 import { withControlCaptureAuthority } from "./control-capture-fixture.mjs";
+import { withCapturedTechMechanicsFixture } from "./captured-tech-mechanics-fixture.mjs";
+
+function startCapturedRuntime(dependencies) {
+  return startCapturedRuntimeFromSource({
+    ...dependencies,
+    pageCapture: withCapturedTechMechanicsFixture(dependencies.pageCapture),
+  });
+}
 
 function createPanelPage() {
   const pageRoot = element("div", { id: "root" });

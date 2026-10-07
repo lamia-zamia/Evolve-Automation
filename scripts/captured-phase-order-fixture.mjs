@@ -1,4 +1,5 @@
 import { withControlCaptureAuthority } from "./control-capture-fixture.mjs";
+import { makeCapturedTechMechanicsFixture } from "./captured-tech-mechanics-fixture.mjs";
 /**
  * Shared fixture for the captured runtime's phase-order regressions.
  *
@@ -166,9 +167,18 @@ export function runCapturedPhaseOrderCycle({
       },
     },
     controls: registry,
-    mechanics: mechanics ?? {
-      readStructures: () => undefined,
-      readStructureIdentities: () => undefined,
+    mechanics: {
+      ...makeCapturedTechMechanicsFixture([
+        ...Object.keys(currentRoot?.tech ?? {}).map(
+          (technology) => `tech-${technology}`,
+        ),
+        "tech-polymer-reserve",
+        "tech-elerium-reserve",
+      ]),
+      ...(mechanics ?? {}),
+      readStructures: mechanics?.readStructures ?? (() => undefined),
+      readStructureIdentities:
+        mechanics?.readStructureIdentities ?? (() => undefined),
     },
     keyState: { readPressed: () => false },
     controlUsage: { readUsage: () => [] },

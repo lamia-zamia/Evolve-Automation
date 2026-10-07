@@ -63,6 +63,14 @@ export interface CapturedGameStructureIdentity {
 
 export type CapturedFuelAdjustmentMode = "space" | "interstellar";
 
+/** Identity metadata from the running page's private `actions.tech` registry. */
+export interface CapturedTechDefinition {
+  readonly registryKey: string;
+  readonly actionId: string;
+  readonly grantTechnology: string;
+  readonly grantLevel: number;
+}
+
 export interface CapturedNativeSupportGrid {
   readonly type: string;
   readonly contribution: number;
@@ -147,6 +155,13 @@ export interface CapturedProductionBreakdown {
  * Raw actions and callbacks never cross this boundary.
  */
 export interface CapturedGameMechanics {
+  /**
+   * Temporarily observes page-realm `Object.keys` during one controlled Research draw until the
+   * native registry is captured. The callback remains synchronous and its result is untouched.
+   */
+  captureTechDefinitionsDuring<T>(draw: () => T): T;
+  /** `undefined` means the retained private technology registry is absent or no longer valid. */
+  readTechDefinitions(): readonly CapturedTechDefinition[] | undefined;
   /** Exact target switch using the action's cap and the game's deferred postPower queue. */
   adjustPower(
     root: unknown,

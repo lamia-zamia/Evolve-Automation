@@ -1912,3 +1912,181 @@ assert.deepEqual(
   "missing support_on authority remains fail-closed after startup cleanup",
 );
 cleanupCapture.uninstall();
+
+// A controlled Research draw is the only place the private native registry can be identified.
+function techRegistryPage(registry) {
+  const techPage = makePage();
+  const root = { settings: { civTabs: 4 } };
+  const installed = installCapturedGameMechanics(
+    techPage,
+    { subscribe: () => () => {} },
+    { readRoot: () => root },
+  );
+  return { page: techPage, root, registry, installed };
+}
+
+function validTechRegistry() {
+  return {
+    alpha: { id: "tech-alpha", grant: ["alpha", 1] },
+    beta: { id: "tech-beta", grant: ["beta", 2] },
+  };
+}
+
+{
+  const fixture = techRegistryPage(validTechRegistry());
+  const actions = { tech: fixture.registry };
+  const originalKeys = fixture.page.Object.keys;
+  const originalDescriptor = Object.getOwnPropertyDescriptor(
+    fixture.page.Object,
+    "keys",
+  );
+  const before = ["before-z", "before-a"];
+  const after = ["after-z", "after-a"];
+  const observed = fixture.installed.mechanics.captureTechDefinitionsDuring(
+    () => {
+      const beforeKeys = fixture.page.Object.keys({
+        "before-z": true,
+        "before-a": true,
+      });
+      const unrelatedAction = Proxy.revocable({}, {});
+      const unrelatedProxyKeys = fixture.page.Object.keys({
+        unrelated: unrelatedAction.proxy,
+      });
+      unrelatedAction.revoke();
+      const actionOrder = fixture.page.Object.keys(actions.tech);
+      const iteratedOrder = [];
+      actionOrder.forEach((key) => iteratedOrder.push(key));
+      const afterKeys = fixture.page.Object.keys({
+        "after-z": true,
+        "after-a": true,
+      });
+      return {
+        beforeKeys: Array.from(beforeKeys),
+        unrelatedProxyKeys: Array.from(unrelatedProxyKeys),
+        actionOrder: Array.from(actionOrder),
+        iteratedOrder,
+        afterKeys: Array.from(afterKeys),
+      };
+    },
+  );
+  assert.deepEqual(observed.beforeKeys, before);
+  assert.deepEqual(observed.unrelatedProxyKeys, ["unrelated"]);
+  assert.deepEqual(observed.actionOrder, ["alpha", "beta"]);
+  assert.deepEqual(observed.iteratedOrder, ["alpha", "beta"]);
+  assert.deepEqual(observed.afterKeys, after);
+  assert.deepEqual(
+    fixture.installed.mechanics
+      .readTechDefinitions()
+      ?.map((definition) => [
+        definition.registryKey,
+        definition.actionId,
+        definition.grantTechnology,
+        definition.grantLevel,
+      ]),
+    [
+      ["alpha", "tech-alpha", "alpha", 1],
+      ["beta", "tech-beta", "beta", 2],
+    ],
+  );
+  assert.equal(fixture.page.Object.keys, originalKeys);
+  assert.deepEqual(
+    Object.getOwnPropertyDescriptor(fixture.page.Object, "keys"),
+    originalDescriptor,
+  );
+  fixture.registry.alpha = {
+    id: "tech-alpha",
+    grant: ["alpha", 1],
+  };
+  assert.equal(
+    fixture.installed.mechanics.readTechDefinitions(),
+    undefined,
+    "replacing a native action object invalidates retained authority",
+  );
+  fixture.installed.uninstall();
+}
+
+{
+  const fixture = techRegistryPage(validTechRegistry());
+  const originalKeys = fixture.page.Object.keys;
+  assert.throws(() =>
+    fixture.installed.mechanics.captureTechDefinitionsDuring(() => {
+      fixture.page.Object.keys({ unrelated: true });
+      fixture.page.Object.keys({ tech: fixture.registry });
+      fixture.page.Object.keys(fixture.registry);
+      throw new Error("research draw failed");
+    }),
+  );
+  assert.equal(fixture.page.Object.keys, originalKeys);
+  assert.equal(
+    fixture.installed.mechanics.readTechDefinitions(),
+    undefined,
+    "a thrown draw does not retain a partial candidate",
+  );
+  fixture.installed.uninstall();
+}
+
+{
+  const fixture = techRegistryPage(validTechRegistry());
+  const otherRegistry = {
+    gamma: { id: "tech-gamma", grant: ["gamma", 3] },
+  };
+  fixture.installed.mechanics.captureTechDefinitionsDuring(() => {
+    fixture.page.Object.keys(fixture.registry);
+    fixture.page.Object.keys(otherRegistry);
+  });
+  assert.equal(
+    fixture.installed.mechanics.readTechDefinitions(),
+    undefined,
+    "two complete registry-shaped objects make the attempt ambiguous",
+  );
+  fixture.installed.uninstall();
+}
+
+for (const malformed of [
+  {},
+  { alpha: [{ id: "tech-alpha", grant: ["alpha", 1] }] },
+  { alpha: { id: "action-alpha", grant: ["alpha", 1] } },
+  { alpha: { id: "tech-alpha", grant: "alpha" } },
+  { alpha: { id: "tech-alpha", grant: [1, 1] } },
+  { alpha: { id: "tech-alpha", grant: ["alpha", Infinity] } },
+  { alpha: { id: "tech-alpha", grant: ["alpha", Number.NaN] } },
+  { alpha: { id: "tech-alpha", grant: ["alpha", -1] } },
+  {
+    alpha: { id: "tech-duplicate", grant: ["alpha", 1] },
+    beta: { id: "tech-duplicate", grant: ["beta", 1] },
+  },
+]) {
+  const fixture = techRegistryPage(malformed);
+  fixture.installed.mechanics.captureTechDefinitionsDuring(() =>
+    fixture.page.Object.keys(fixture.registry),
+  );
+  assert.equal(fixture.installed.mechanics.readTechDefinitions(), undefined);
+  fixture.installed.uninstall();
+}
+
+{
+  const fixture = techRegistryPage(validTechRegistry());
+  const originalKeys = fixture.page.Object.keys;
+  fixture.installed.mechanics.captureTechDefinitionsDuring(() => {
+    fixture.page.Object.keys(fixture.registry);
+    fixture.registry.beta = {
+      id: "tech-beta-replaced-during-draw",
+      grant: ["beta", 2],
+    };
+  });
+  assert.equal(fixture.page.Object.keys, originalKeys);
+  assert.equal(
+    fixture.installed.mechanics.readTechDefinitions(),
+    undefined,
+    "registry changes during the draw invalidate the candidate",
+  );
+  fixture.installed.uninstall();
+}
+
+{
+  const fixture = techRegistryPage(validTechRegistry());
+  const originalKeys = fixture.page.Object.keys;
+  fixture.installed.uninstall();
+  assert.equal(fixture.installed.mechanics.readTechDefinitions(), undefined);
+  assert.equal(fixture.page.Object.keys, originalKeys);
+}
