@@ -169,6 +169,7 @@ function createPage(
     defaults: createCapturedSettingsDefaults({
       rootState: { readRoot: () => gameRoot },
       controls: { capturedElementIds: () => [] },
+      mechanics: { readStructures: () => undefined },
     }),
   });
   const effectiveSettings = settingsLifecycle.readEffective();
@@ -1278,6 +1279,7 @@ const mechInfoOverride = (result) => ({
       defaults: createCapturedSettingsDefaults({
         rootState: { readRoot: () => ({}) },
         controls: { capturedElementIds: () => [] },
+        mechanics: { readStructures: () => undefined },
       }),
     }),
     logError: (message) => logged.push(message),

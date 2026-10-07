@@ -23,6 +23,7 @@ import { readCapturedMechQueueKeyHeld } from "../src/adapters/evolve/combat/capt
 import { EMPTY_DEMAND_SAMPLE } from "../src/adapters/evolve/economy/resources/captured-resource-demand.ts";
 import { readCapturedBuildingState } from "../src/adapters/evolve/progression/build/captured-building-state.ts";
 import { createCapturedOrdinaryJobsAutomation } from "../src/adapters/evolve/civic/captured-ordinary-jobs.ts";
+import { createSettingsFixture } from "./test-support/captured-settings.mjs";
 
 const capturedPowerFixtureControlIds = new Set();
 
@@ -939,6 +940,88 @@ assert.equal(
   1,
   "the native Space Power state reaches the planned target",
 );
+
+// Dynamic settings lifecycle -> Power reader -> planner -> semantic executor, with no Space
+// Building control and no fixture-supplied per-building settings.
+const lifecyclePowerRoot = {
+  ...powerOnlyRoot,
+  city: { ...powerOnlyRoot.city, power: 999 },
+  space: {
+    ...powerOnlyRoot.space,
+    atmo_terraformer: { ...powerOnlyRoot.space.atmo_terraformer, on: 0 },
+  },
+};
+const noBuildingControls = Object.freeze({
+  capturedElementIds: () => Object.freeze([]),
+  resolve: () => undefined,
+  invoke: () => ({ ok: false, reason: "unknown-control" }),
+});
+const lifecycleSettings = createSettingsFixture({
+  gameRoot: lifecyclePowerRoot,
+  controlIds: [],
+  mechanics: powerOnlyMechanics,
+});
+lifecycleSettings.lifecycle.initialize();
+lifecycleSettings.lifecycle.ensureDynamicDefaults();
+lifecycleSettings.settings.readRaw().autoPower = true;
+lifecycleSettings.settings.persist();
+const lifecycleRaw = lifecycleSettings.settings.readRaw();
+assert.equal(lifecycleRaw["bld_s_space-atmo_terraformer"], true);
+assert.ok(Number.isFinite(lifecycleRaw["bld_p_space-atmo_terraformer"]));
+assert.equal(
+  noBuildingControls.capturedElementIds().includes("space-atmo_terraformer"),
+  false,
+);
+assert.ok(
+  JSON.parse(lifecycleSettings.saved.read())["bld_s_space-atmo_terraformer"],
+  "the semantic Building defaults are persisted before Power reads them",
+);
+const lifecyclePowerReader = createCapturedPowerReader({
+  ...readerDependencies,
+  rootState: { readRoot: () => lifecyclePowerRoot },
+  controls: noBuildingControls,
+  mechanics: powerOnlyMechanics,
+  resources: createResources(lifecyclePowerRoot, []),
+  readSettingsRaw: () => lifecycleSettings.settings.readRaw(),
+});
+const lifecyclePowerCycle = lifecyclePowerReader.readCycle();
+assert.ok(lifecyclePowerCycle);
+assert.ok(
+  lifecyclePowerCycle.buildings.some(
+    (building) => building.binding === "space-atmo_terraformer",
+  ),
+  "the lifecycle-created setting admits the native Space structure to Power",
+);
+const lifecyclePowerPlan = planPowerCycle(
+  lifecyclePowerCycle,
+  EMPTY_POWER_AUTOMATION_STATE,
+);
+assert.ok(lifecyclePowerPlan.decision?.kind === "apply-power-cycle");
+assert.ok(
+  lifecyclePowerPlan.decision.operations.some(
+    (operation) =>
+      operation.kind === "adjust-building" &&
+      operation.binding === "space-atmo_terraformer" &&
+      operation.amount === 1,
+  ),
+  "Power planning turns on the off native Space building",
+);
+const lifecyclePowerExecutor = createCapturedPowerExecutor({
+  rootState: {
+    readRoot: () => lifecyclePowerRoot,
+    subscribeRootReplaced: () => () => {},
+  },
+  controls: noBuildingControls,
+  mechanics: powerOnlyMechanics,
+  readMechSaveSupply: () => false,
+  setMechSaveSupply: () => false,
+  log: () => {},
+});
+assert.equal(
+  lifecyclePowerExecutor.executor.execute(lifecyclePowerPlan.decision).status,
+  "succeeded",
+);
+assert.equal(lifecyclePowerRoot.space.atmo_terraformer.on, 1);
 
 function sampleSupportCoherence({
   providerOns = [1],

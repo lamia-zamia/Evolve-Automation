@@ -31,6 +31,7 @@ import type {
 } from "../../ports/captured-settings-defaults.ts";
 import type { GameControlRegistry } from "../../ports/game-control-registry.ts";
 import type { GameRootStateSource } from "../../ports/game-root-state.ts";
+import type { CapturedGameMechanics } from "../../ports/captured-game-mechanics.ts";
 import {
   readCapturedMinorTraitContext,
   readCapturedMutableTraitContext,
@@ -63,6 +64,7 @@ import { isBuildableArpaProjectId } from "./progression/research/arpa-project-id
 export interface CapturedSettingsDefaultsDependencies {
   readonly rootState: GameRootStateSource;
   readonly controls: GameControlRegistry;
+  readonly mechanics: Pick<CapturedGameMechanics, "readStructures">;
 }
 
 function readRootSafely(rootState: GameRootStateSource): unknown {
@@ -278,8 +280,13 @@ function readProjects(root: unknown): ProjectResetContext {
 function readBuildingContext(
   root: unknown,
   controls: GameControlRegistry,
+  mechanics: Pick<CapturedGameMechanics, "readStructures">,
 ): BuildingResetContext {
-  const entries = readCapturedBuildingEntries(root, controls);
+  const entries = readCapturedBuildingEntries(
+    root,
+    controls,
+    mechanics.readStructures(),
+  );
   return {
     buildings: entries.map((entry) => ({
       binding: entry.binding,
@@ -380,6 +387,7 @@ export function readEjector(
 export function createCapturedSettingsDefaults({
   rootState,
   controls,
+  mechanics,
 }: CapturedSettingsDefaultsDependencies): CapturedSettingsDefaults {
   const reader: SettingsResetReader = {
     readGovernment,
@@ -401,7 +409,7 @@ export function createCapturedSettingsDefaults({
       readCapturedMutableTraitContext(),
     readJob: (): JobResetContext => readCapturedJobResetContext(controls),
     readBuilding: () =>
-      readBuildingContext(readRootSafely(rootState), controls),
+      readBuildingContext(readRootSafely(rootState), controls, mechanics),
     readProject: () => readProjects(readRootSafely(rootState)),
     readMagic: (): MagicResetContext => readMagicResetContext(controls),
     readProduction: () => readProduction(readRootSafely(rootState)),
@@ -447,7 +455,7 @@ export function createCapturedSettingsDefaults({
 
   const readMigrationCatalogs = (): CapturedSettingsMigrationCatalogs => {
     const root = readRootSafely(rootState);
-    const buildingContext = readBuildingContext(root, controls);
+    const buildingContext = readBuildingContext(root, controls, mechanics);
     const productionContext = readProduction(root);
     const foundryResourceIds = new Set(
       Object.values(productionContext.foundryResourceIdByKey),
@@ -508,6 +516,7 @@ export function createCapturedSettingsDefaults({
     buildings: readBuildingContext(
       readRootSafely(rootState),
       controls,
+      mechanics,
     ).buildings.map((building) => ({
       vueBinding: building.binding,
       switchable: building.switchable,

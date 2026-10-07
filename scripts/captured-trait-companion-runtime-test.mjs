@@ -61,6 +61,7 @@ function createFixture({
   };
   const pageCapture = {
     isComplete: () => true,
+    mechanics: { readStructures: () => undefined },
     rootState: {
       readRoot: () => root,
       isReactivitySuppressed: () => false,
@@ -298,6 +299,7 @@ function createCapturedOcularFixture({
         };
       },
     },
+    mechanics: { readStructures: () => undefined },
   };
   const storage = {
     getItem: () =>

@@ -197,6 +197,7 @@ const preparationControls = {
 const preparationStop = startCapturedRuntime({
   pageCapture: {
     isComplete: () => true,
+    mechanics: { readStructures: () => undefined },
     rootState: {
       readRoot: () => preparationRoot,
       isReactivitySuppressed: () => false,

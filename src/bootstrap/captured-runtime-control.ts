@@ -383,6 +383,7 @@ export function startCapturedRuntime({
     defaults: createCapturedSettingsDefaults({
       rootState: pageCapture.rootState,
       controls: pageCapture.controls,
+      mechanics: pageCapture.mechanics,
     }),
   });
   settingsLifecycle.initialize();

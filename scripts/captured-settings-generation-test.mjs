@@ -16,6 +16,18 @@ import {
   DEFAULT_CONTROL_IDS,
 } from "./test-support/captured-settings.mjs";
 
+function nativeBuilding(binding) {
+  const struct = binding.slice(binding.indexOf("-") + 1);
+  return Object.freeze({
+    entryKey: `spc_belt:${struct}`,
+    region: "space",
+    sector: "spc_belt",
+    struct,
+    actionId: binding,
+    readTitle: () => ({ kind: "value", value: binding }),
+  });
+}
+
 // --- startup initializes exactly once, and a redrawn UI does not redo it ------------------------
 
 {
@@ -95,6 +107,157 @@ import {
   // And then settle again.
   lifecycle.ensureDynamicDefaults();
   assert.equal(lifecycle.stats().dynamicDefaultRuns, 2);
+}
+
+// --- native Space settings exist before a Building panel control is ever captured ----------------
+
+{
+  const binding = "space-atmo_terraformer";
+  const structure = nativeBuilding(binding);
+  const gameRoot = createSettingsRoot({
+    space: { atmo_terraformer: { count: 1, on: 0 } },
+  });
+  let structures;
+  const mechanics = { readStructures: () => structures };
+  const capturedIds = [...DEFAULT_CONTROL_IDS];
+  const { lifecycle, settings, controls, saved } = createSettingsFixture({
+    gameRoot,
+    controlIds: capturedIds,
+    mechanics,
+  });
+
+  // Settings initializes while the private native registry is not ready yet.
+  lifecycle.initialize();
+  structures = [structure];
+  lifecycle.ensureDynamicDefaults();
+
+  const raw = settings.readRaw();
+  assert.equal(raw[`bat${binding}`], true);
+  assert.equal(raw[`bld_s_${binding}`], true);
+  assert.equal(raw[`bld_m_${binding}`], -1);
+  assert.equal(raw[`bld_w_${binding}`], 100);
+  assert.ok(Number.isFinite(raw[`bld_p_${binding}`]));
+  assert.equal(
+    JSON.parse(saved.read())[`bld_s_${binding}`],
+    true,
+    "dynamic defaults are persisted in the raw settings record",
+  );
+  assert.equal(
+    controls.capturedElementIds().some((id) => id.startsWith("space-")),
+    false,
+    "semantic defaults must not need a Space Building control or panel discovery",
+  );
+}
+
+// --- semantic settings use the existing smart metadata and Belt special defaults ----------------
+
+{
+  const bindings = [
+    "space-space_station",
+    "space-elerium_ship",
+    "space-iridium_ship",
+    "space-iron_ship",
+  ];
+  const gameRoot = createSettingsRoot({
+    space: Object.fromEntries(
+      bindings.map((binding) => [
+        binding.slice("space-".length),
+        { count: 1, on: 0 },
+      ]),
+    ),
+  });
+  const { lifecycle, settings, controls } = createSettingsFixture({
+    gameRoot,
+    controlIds: [],
+    mechanics: { readStructures: () => bindings.map(nativeBuilding) },
+  });
+  lifecycle.initialize();
+  lifecycle.ensureDynamicDefaults();
+
+  const raw = settings.readRaw();
+  for (const binding of bindings) {
+    assert.equal(raw[`bld_s_${binding}`], true);
+    assert.equal(raw[`bld_s2_${binding}`], true);
+  }
+  assert.equal(raw["bld_m_space-elerium_ship"], 15);
+  assert.equal(raw["bld_m_space-iridium_ship"], 15);
+  assert.deepEqual(controls.capturedElementIds(), []);
+}
+
+// --- dynamic defaults fill absent keys without overwriting existing Space choices -----------------
+
+{
+  const binding = "space-atmo_terraformer";
+  const gameRoot = createSettingsRoot({
+    space: { atmo_terraformer: { count: 1, on: 0 } },
+  });
+  const controlIds = [];
+  const { lifecycle, settings, saved } = createSettingsFixture({
+    rawText: JSON.stringify({
+      [`bld_s_${binding}`]: false,
+      [`bld_s2_${binding}`]: false,
+      [`bld_p_${binding}`]: 91,
+      [`bld_m_${binding}`]: 4,
+      [`bld_w_${binding}`]: 17,
+    }),
+    gameRoot,
+    controlIds,
+    mechanics: { readStructures: () => [nativeBuilding(binding)] },
+  });
+  lifecycle.initialize();
+  lifecycle.ensureDynamicDefaults();
+
+  const raw = settings.readRaw();
+  assert.equal(raw[`bld_s_${binding}`], false);
+  assert.equal(raw[`bld_s2_${binding}`], false);
+  assert.equal(raw[`bld_p_${binding}`], 91);
+  assert.equal(raw[`bld_m_${binding}`], 4);
+  assert.equal(raw[`bld_w_${binding}`], 17);
+  assert.equal(raw[`bat${binding}`], true);
+
+  controlIds.push(binding);
+  lifecycle.ensureDynamicDefaults();
+  assert.equal(settings.readRaw()[`bld_p_${binding}`], 91);
+  assert.equal(
+    JSON.parse(saved.read())[`bld_p_${binding}`],
+    91,
+    "capturing a control later must not reorder a stored automation priority",
+  );
+}
+
+// --- semantic catalog growth advances generation without any control growth ----------------------
+
+{
+  const first = nativeBuilding("space-atmo_terraformer");
+  const second = nativeBuilding("space-space_station");
+  const gameRoot = createSettingsRoot({
+    space: {
+      atmo_terraformer: { count: 1, on: 0 },
+      space_station: { count: 1, on: 0 },
+    },
+  });
+  let structures = [first];
+  const controlIds = [...DEFAULT_CONTROL_IDS];
+  const { lifecycle, settings, defaults, controls } = createSettingsFixture({
+    gameRoot,
+    controlIds,
+    mechanics: { readStructures: () => structures },
+  });
+  lifecycle.initialize();
+  lifecycle.ensureDynamicDefaults();
+  const firstGeneration = defaults.readCatalogGeneration();
+  const controlCount = controls.capturedElementIds().length;
+
+  structures = [first, second];
+  assert.notEqual(
+    defaults.readCatalogGeneration(),
+    firstGeneration,
+    "a native Building added by mechanics must change catalog generation",
+  );
+  assert.equal(controls.capturedElementIds().length, controlCount);
+  lifecycle.ensureDynamicDefaults();
+  assert.equal(settings.readRaw()["bld_s_space-space_station"], true);
+  assert.ok(Number.isFinite(settings.readRaw()["bld_p_space-space_station"]));
 }
 
 // --- import forces reinitialization --------------------------------------------------------------

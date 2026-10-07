@@ -56,6 +56,7 @@ export function createCapturedSettingsPage(stored = {}) {
     defaults: createCapturedSettingsDefaults({
       rootState: { readRoot: () => gameRoot },
       controls: { capturedElementIds: () => [] },
+      mechanics: { readStructures: () => undefined },
     }),
   });
   const effective = settingsLifecycle.readEffective();

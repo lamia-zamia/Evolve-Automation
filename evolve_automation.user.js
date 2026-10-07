@@ -35839,8 +35839,12 @@
     let projects = readProperty(root, "arpa"), projectIds = isRecord(projects) ? Object.keys(projects).filter(isBuildableArpaProjectId) : [];
     return { projectIds, idByKey: projectIdByKey(projectIds) };
   }
-  function readBuildingContext(root, controls2) {
-    let entries = readCapturedBuildingEntries(root, controls2);
+  function readBuildingContext(root, controls2, mechanics) {
+    let entries = readCapturedBuildingEntries(
+      root,
+      controls2,
+      mechanics.readStructures()
+    );
     return {
       buildings: entries.map((entry) => ({
         binding: entry.binding,
@@ -35902,7 +35906,8 @@
   }
   function createCapturedSettingsDefaults({
     rootState,
-    controls: controls2
+    controls: controls2,
+    mechanics
   }) {
     let reader = {
       readGovernment,
@@ -35919,7 +35924,7 @@
       readMinorTrait: () => readCapturedMinorTraitContext(),
       readMutableTrait: () => readCapturedMutableTraitContext(),
       readJob: () => readCapturedJobResetContext(controls2),
-      readBuilding: () => readBuildingContext(readRootSafely(rootState), controls2),
+      readBuilding: () => readBuildingContext(readRootSafely(rootState), controls2, mechanics),
       readProject: () => readProjects(readRootSafely(rootState)),
       readMagic: () => readMagicResetContext(controls2),
       readProduction: () => readProduction(readRootSafely(rootState)),
@@ -35962,7 +35967,7 @@
       },
       rebuildDefaultTriggers: () => []
     }, readMigrationCatalogs = () => {
-      let root = readRootSafely(rootState), buildingContext = readBuildingContext(root, controls2), productionContext = readProduction(root), foundryResourceIds = new Set(
+      let root = readRootSafely(rootState), buildingContext = readBuildingContext(root, controls2, mechanics), productionContext = readProduction(root), foundryResourceIds = new Set(
         Object.values(productionContext.foundryResourceIdByKey)
       );
       return {
@@ -36007,7 +36012,8 @@
       projectIds: [],
       buildings: readBuildingContext(
         readRootSafely(rootState),
-        controls2
+        controls2,
+        mechanics
       ).buildings.map((building) => ({
         vueBinding: building.binding,
         switchable: building.switchable
@@ -54086,7 +54092,8 @@ Only continue if you trust the source. Injected code:
       settings: settingsStorage,
       defaults: createCapturedSettingsDefaults({
         rootState: pageCapture2.rootState,
-        controls: pageCapture2.controls
+        controls: pageCapture2.controls,
+        mechanics: pageCapture2.mechanics
       })
     });
     settingsLifecycle.initialize();

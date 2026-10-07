@@ -166,7 +166,7 @@ export function runCapturedPhaseOrderCycle({
       },
     },
     controls: registry,
-    ...(mechanics === undefined ? {} : { mechanics }),
+    mechanics: mechanics ?? { readStructures: () => undefined },
     keyState: { readPressed: () => false },
     controlUsage: { readUsage: () => [] },
     periods: {

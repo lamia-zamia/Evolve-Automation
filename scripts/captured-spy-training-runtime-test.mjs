@@ -89,6 +89,7 @@ const foreign = {
 const stop = startCapturedRuntime({
   pageCapture: {
     isComplete: () => true,
+    mechanics: { readStructures: () => undefined },
     rootState: {
       readRoot: () => root,
       isReactivitySuppressed: () => false,

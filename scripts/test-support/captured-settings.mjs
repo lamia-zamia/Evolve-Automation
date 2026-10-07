@@ -102,17 +102,22 @@ export function createSettingsFixture({
   rawText = null,
   controlIds = DEFAULT_CONTROL_IDS,
   gameRoot = createSettingsRoot(),
+  mechanics = { readStructures: () => undefined },
   saved = createFakeStorage(rawText),
   settings = createSettingsStore({ storage: saved }),
 } = {}) {
+  const rootState = { readRoot: () => gameRoot };
+  const controls = createControlRegistry(controlIds);
+  const defaults = createCapturedSettingsDefaults({
+    rootState,
+    controls,
+    mechanics,
+  });
   const lifecycle = createCapturedSettingsLifecycle({
     settings,
-    defaults: createCapturedSettingsDefaults({
-      rootState: { readRoot: () => gameRoot },
-      controls: createControlRegistry(controlIds),
-    }),
+    defaults,
   });
-  return { saved, settings, lifecycle, gameRoot };
+  return { saved, settings, lifecycle, gameRoot, controls, defaults };
 }
 
 /** One valid, always-true override definition — the shape the editor and the store accept. */
@@ -150,13 +155,22 @@ export function seedOverrides(settings, keys) {
  * reset is the lifecycle's job, so a test that asserts what a reset writes drives it from here
  * rather than from the adapter under test.
  */
-export function createRecordSettingsLifecycle({ raw, rootState, controls }) {
+export function createRecordSettingsLifecycle({
+  raw,
+  rootState,
+  controls,
+  mechanics = { readStructures: () => undefined },
+}) {
   return createCapturedSettingsLifecycle({
     settings: {
       readRaw: () => raw,
       persist: () => {},
       replaceRaw: () => {},
     },
-    defaults: createCapturedSettingsDefaults({ rootState, controls }),
+    defaults: createCapturedSettingsDefaults({
+      rootState,
+      controls,
+      mechanics,
+    }),
   });
 }
