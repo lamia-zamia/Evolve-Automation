@@ -14,6 +14,7 @@ import { createCapturedResourceSource } from "../adapters/evolve/captured-world-
 import { createCapturedTabDiscovery } from "../adapters/evolve/captured-tab-discovery.ts";
 import { createCapturedActionCostReader } from "../adapters/evolve/captured-action-costs.ts";
 import { createCapturedTechCatalog } from "../adapters/evolve/progression/research/captured-tech-catalog.ts";
+import { createCapturedResearchTechPriceReader } from "../adapters/evolve/progression/research/captured-tech-costs.ts";
 import { createCapturedResearchAdapter } from "../adapters/evolve/progression/research/captured-research.ts";
 import { createCapturedTechConflictReader } from "../adapters/evolve/progression/research/captured-tech-conflicts.ts";
 import type { GameControlRegistry } from "../ports/game-control-registry.ts";
@@ -31,7 +32,9 @@ export interface CapturedResearchControlDependencies {
   readonly rootState: GameRootStateSource;
   readonly mechanics: Pick<
     CapturedGameMechanics,
-    "captureTechDefinitionsDuring" | "readTechDefinitions"
+    | "captureTechDefinitionsDuring"
+    | "readTechDefinitions"
+    | "withTechQueueCostAlias"
   >;
   readonly controls: GameControlRegistry;
   readonly bindings: VueBindingObserver;
@@ -80,6 +83,16 @@ export function createCapturedResearchControl(
   const onActivity = dependencies.onActivity;
   const sharedReadOfferedTechs = dependencies.readOfferedTechs;
   const resources = createCapturedResourceSource(rootState);
+  const costs = createCapturedActionCostReader({
+    rootState,
+    controls,
+    ...(onUnavailable === undefined
+      ? {}
+      : {
+          onUnavailable: (id: string, reason: string) =>
+            onUnavailable(`${id}: ${reason}`),
+        }),
+  });
   const catalog = createCapturedTechCatalog({
     rootState,
     mechanics,
@@ -92,6 +105,7 @@ export function createCapturedResearchControl(
     drawnActions,
     bindings,
     controls,
+    nativePrices: createCapturedResearchTechPriceReader({ mechanics, costs }),
     ...(onUnavailable === undefined ? {} : { onUnavailable }),
   });
   // One catalog read per cycle serves the planner and the research queue's own reservations; the
@@ -100,16 +114,7 @@ export function createCapturedResearchControl(
   const reservations = createCapturedQueueReservationSource({
     rootState,
     readOfferedTechs: () => offeredThisCycle,
-    costs: createCapturedActionCostReader({
-      rootState,
-      controls,
-      ...(onUnavailable === undefined
-        ? {}
-        : {
-            onUnavailable: (id: string, reason: string) =>
-              onUnavailable(`${id}: ${reason}`),
-          }),
-    }),
+    costs,
     ...(onUnavailable === undefined
       ? {}
       : {

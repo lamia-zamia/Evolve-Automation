@@ -162,6 +162,11 @@ export interface CapturedGameMechanics {
   captureTechDefinitionsDuring<T>(draw: () => T): T;
   /** `undefined` means the retained private technology registry is absent or no longer valid. */
   readTechDefinitions(): readonly CapturedTechDefinition[] | undefined;
+  /** Temporarily exposes one retained technology through the queue's native lookup, then restores it. */
+  withTechQueueCostAlias<T>(
+    actionId: string,
+    readProbeCost: (probeActionId: string) => T,
+  ): T | undefined;
   /** Exact target switch using the action's cap and the game's deferred postPower queue. */
   adjustPower(
     root: unknown,

@@ -155,6 +155,9 @@ function runOrderedCapturedCycle({ activeTrigger }) {
     invoke(handle, method, args = []) {
       if (handle.elementId === "buildQueue" && method === "setData") {
         const entry = root.queue.queue[args[0]];
+        if (entry?.id === "tech-__ea_research_cost_probe__") {
+          return { ok: true, value: { "data-Polymer": 1 } };
+        }
         if (entry?.id === "tech-polymer-reserve") {
           return { ok: true, value: { "data-Polymer": 1 } };
         }

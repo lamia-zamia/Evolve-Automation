@@ -358,6 +358,12 @@ function runDemandSampleScenario(
         }
         if (handle.elementId === "buildQueue" && method === "setData") {
           const id = root.queue.queue.at(-1)?.id;
+          if (id === "tech-__ea_research_cost_probe__") {
+            return {
+              ok: true,
+              value: { "data-Polymer": 100 },
+            };
+          }
           return {
             ok: true,
             value: constructionCase
@@ -3027,16 +3033,13 @@ function runCombatRuntime(autoFight) {
     const row = element("div");
     row.classList.add("action");
     Object.defineProperty(row, "id", { value: id });
-    row.attributes = [
-      { name: "id", value: id },
-      { name: "class", value: "action" },
-    ];
+    applyResearchDrawnAttributes(row, { id, class: "action" });
     const price = element("button");
     Object.defineProperty(price, "id", { value: "" });
-    price.attributes = [
-      { name: "class", value: "button res-Polymer" },
-      { name: "data-polymer", value: String(amount) },
-    ];
+    applyResearchDrawnAttributes(price, {
+      class: "button res-Polymer",
+      "data-polymer": amount,
+    });
     row.appendChild(price);
     return row;
   };
@@ -3052,6 +3055,7 @@ function runCombatRuntime(autoFight) {
   );
   const root = {
     settings: { civTabs: 3, showStorage: true },
+    queue: { queue: [] },
     race: {},
     tech: { "polymer-heavy": 0 },
     civic: {},
@@ -3093,6 +3097,14 @@ function runCombatRuntime(autoFight) {
       },
     ],
     [
+      "buildQueue",
+      {
+        elementId: "buildQueue",
+        generation: 1,
+        methods: ["setData"],
+      },
+    ],
+    [
       "stack-Polymer",
       {
         elementId: "stack-Polymer",
@@ -3113,6 +3125,19 @@ function runCombatRuntime(autoFight) {
     resolve: (id) => handles.get(id),
     invoke: (handle, method) => {
       storageCalls.push([handle.elementId, method]);
+      if (handle.elementId === "buildQueue" && method === "setData") {
+        const probeId = root.queue.queue.at(-1)?.id;
+        const amount =
+          probeId === "tech-__ea_research_cost_probe__"
+            ? nativeResearchBindings[0] === "tech-polymer-heavy"
+              ? 700
+              : 900
+            : 0;
+        return {
+          ok: true,
+          value: amount > 0 ? { "data-Polymer": amount } : {},
+        };
+      }
       if (method === "buildCrateDesc") {
         return { ok: true, value: "Build 1 Plywood crate for 350 storage" };
       }

@@ -17,6 +17,11 @@ export function makeCapturedTechMechanicsFixture(actionIds = []) {
   return Object.freeze({
     captureTechDefinitionsDuring: (draw) => draw(),
     readTechDefinitions: () => definitions,
+    withTechQueueCostAlias: (actionId, readProbeCost) =>
+      definitions.filter((definition) => definition.actionId === actionId)
+        .length === 1
+        ? readProbeCost("tech-__ea_research_cost_probe__")
+        : undefined,
   });
 }
 

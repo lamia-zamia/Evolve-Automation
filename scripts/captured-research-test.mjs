@@ -145,6 +145,38 @@ function makePage({
   const mechanics = Object.freeze({
     captureTechDefinitionsDuring: (draw) => draw(),
     readTechDefinitions: () => definitions,
+    withTechQueueCostAlias: (actionId, readProbeCost) => {
+      if (!definitions.some((definition) => definition.actionId === actionId))
+        return undefined;
+      activeTechPriceActionId = actionId;
+      try {
+        return readProbeCost("tech-__ea_research_cost_probe__");
+      } finally {
+        activeTechPriceActionId = undefined;
+      }
+    },
+  });
+  let activeTechPriceActionId;
+  controls.set("buildQueue", {
+    generation: 1,
+    methods: {
+      setData: (index, prefix) => {
+        const entry = root.queue.queue[index];
+        const action = offered.find(
+          (candidate) => candidate.id === activeTechPriceActionId,
+        );
+        const cost =
+          entry?.id === "tech-__ea_research_cost_probe__"
+            ? (action?.cost ?? {})
+            : {};
+        return Object.fromEntries(
+          Object.entries(cost).map(([resourceId, amount]) => [
+            `${prefix}-${resourceId}`,
+            amount,
+          ]),
+        );
+      },
+    },
   });
 
   /** The scope the discovery draw runs in; the page never mounts a temporary component. */
@@ -317,7 +349,12 @@ const SMELTING = {
   page.controls.set("buildQueue", {
     generation: 1,
     methods: {
-      setData: (_index, prefix) => ({ [`${prefix}-Knowledge`]: 800 }),
+      setData: (index, prefix) => ({
+        [`${prefix}-Knowledge`]:
+          page.root.queue.queue[index]?.id === "tech-__ea_research_cost_probe__"
+            ? THEOLOGY.cost.Knowledge
+            : 800,
+      }),
     },
   });
   assert.equal(page.control.runCycle().status, "succeeded");
@@ -335,7 +372,12 @@ const SMELTING = {
   page.controls.set("buildQueue", {
     generation: 1,
     methods: {
-      setData: (_index, prefix) => ({ [`${prefix}-Knowledge`]: 800 }),
+      setData: (index, prefix) => ({
+        [`${prefix}-Knowledge`]:
+          page.root.queue.queue[index]?.id === "tech-__ea_research_cost_probe__"
+            ? THEOLOGY.cost.Knowledge
+            : 800,
+      }),
     },
   });
   assert.equal(page.control.runCycle().status, "succeeded");

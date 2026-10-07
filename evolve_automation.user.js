@@ -1568,7 +1568,7 @@
   }
 
   // src/adapters/evolve/captured-game-mechanics.ts
-  var structureMapCaptureThreshold = 3;
+  var structureMapCaptureThreshold = 3, researchTechQueueCostAlias = "__ea_research_cost_probe__";
   function readNativeTechRegistrySnapshot(registry, rawKeys) {
     if (!isNonArrayRecord(registry) || !Array.isArray(rawKeys) || rawKeys.length === 0)
       return;
@@ -2209,6 +2209,8 @@
       captureTechDefinitionsDuring: (draw) => draw(),
       readTechDefinitions: () => {
       },
+      withTechQueueCostAlias: () => {
+      },
       readStructures: () => {
       },
       readStructureIdentities: () => {
@@ -2376,7 +2378,7 @@
           }
         }
     }
-    let stopped = !1, capturedTechRegistry, capturedTechRegistryObjectKeys, mapHook, consumeSetter, powerOnSetter, originalPowerOnProbeDescriptor = isNonArrayRecord(objectPrototype) ? Object.getOwnPropertyDescriptor(objectPrototype, "coal_power") : void 0;
+    let stopped = !1, capturedTechRegistry, capturedTechRegistryObjectKeys, capturedTechAuthorityInvalid = !1, mapHook, consumeSetter, powerOnSetter, originalPowerOnProbeDescriptor = isNonArrayRecord(objectPrototype) ? Object.getOwnPropertyDescriptor(objectPrototype, "coal_power") : void 0;
     function restorePowerOnProbe() {
       powerOnSetter !== void 0 && isNonArrayRecord(objectPrototype) && Object.getOwnPropertyDescriptor(objectPrototype, "coal_power")?.set === powerOnSetter && (originalPowerOnProbeDescriptor === void 0 ? delete objectPrototype.coal_power : Object.defineProperty(
         objectPrototype,
@@ -2471,9 +2473,24 @@
     unsubscribeFirstPeriod = periods.subscribe(
       restoreUnmatchedHooksAfterFirstPeriod
     );
+    function readRetainedNativeTechRegistry() {
+      let retained = capturedTechRegistry, originalObjectKeys = capturedTechRegistryObjectKeys;
+      if (!(stopped || capturedTechAuthorityInvalid || retained === void 0 || originalObjectKeys === void 0))
+        try {
+          let rawKeys = Reflect.apply(originalObjectKeys, objectConstructor, [
+            retained.registry
+          ]), current = readNativeTechRegistrySnapshot(
+            retained.registry,
+            rawKeys
+          );
+          return current !== void 0 && sameNativeTechRegistrySnapshot(retained, current) ? current : void 0;
+        } catch {
+          return;
+        }
+    }
     let mechanics = Object.freeze({
       captureTechDefinitionsDuring(draw) {
-        if (stopped || capturedTechRegistry !== void 0 || typeof objectConstructor != "function" || typeof objectDefineProperty != "function")
+        if (stopped || capturedTechAuthorityInvalid || capturedTechRegistry !== void 0 || typeof objectConstructor != "function" || typeof objectDefineProperty != "function")
           return draw();
         let originalDescriptor;
         try {
@@ -2541,19 +2558,87 @@
         return result;
       },
       readTechDefinitions() {
-        let retained = capturedTechRegistry, originalObjectKeys = capturedTechRegistryObjectKeys;
-        if (!(stopped || retained === void 0 || originalObjectKeys === void 0))
-          try {
-            let rawKeys = Reflect.apply(originalObjectKeys, objectConstructor, [
-              retained.registry
-            ]), current = readNativeTechRegistrySnapshot(
-              retained.registry,
-              rawKeys
-            );
-            return current !== void 0 && sameNativeTechRegistrySnapshot(retained, current) ? retained.publicDefinitions : void 0;
-          } catch {
+        return readRetainedNativeTechRegistry()?.publicDefinitions;
+      },
+      withTechQueueCostAlias(actionId, readProbeCost) {
+        let retained = readRetainedNativeTechRegistry();
+        if (retained === void 0 || typeof readProbeCost != "function")
+          return;
+        let targetDefinitions = retained.definitions.filter(
+          (definition) => definition.actionId === actionId
+        ), targetAction = targetDefinitions.length === 1 ? targetDefinitions[0]?.action : void 0, hostAction = retained.definitions[0]?.action;
+        if (targetAction === void 0 || hostAction === void 0)
+          return;
+        try {
+          if (!retained.definitions.every(
+            (definition) => Object.getOwnPropertyDescriptor(
+              definition.action,
+              researchTechQueueCostAlias
+            ) === void 0
+          ))
             return;
+        } catch {
+          return;
+        }
+        let installationAttempted = !1, installationVerified = !1, cleanupProven = !0, callbackResult, callbackFailed = !1, callbackFailure;
+        try {
+          installationAttempted = !0, Reflect.apply(
+            objectDefineProperty,
+            objectConstructor,
+            [
+              hostAction,
+              researchTechQueueCostAlias,
+              {
+                configurable: !0,
+                enumerable: !1,
+                value: targetAction
+              }
+            ]
+          );
+          let descriptor = Object.getOwnPropertyDescriptor(
+            hostAction,
+            researchTechQueueCostAlias
+          );
+          if (installationVerified = descriptor !== void 0 && descriptor?.configurable === !0 && descriptor.enumerable === !1 && "value" in descriptor && descriptor.value === targetAction, installationVerified)
+            try {
+              callbackResult = readProbeCost(
+                "tech-" + researchTechQueueCostAlias
+              );
+            } catch (error) {
+              callbackFailed = !0, callbackFailure = error;
+            }
+        } catch {
+        } finally {
+          if (installationAttempted) {
+            for (let definition of retained.definitions)
+              try {
+                Object.getOwnPropertyDescriptor(
+                  definition.action,
+                  researchTechQueueCostAlias
+                ) !== void 0 && !Reflect.deleteProperty(
+                  definition.action,
+                  researchTechQueueCostAlias
+                ) && (cleanupProven = !1);
+              } catch {
+                cleanupProven = !1;
+              }
+            try {
+              retained.definitions.every(
+                (definition) => Object.getOwnPropertyDescriptor(
+                  definition.action,
+                  researchTechQueueCostAlias
+                ) === void 0
+              ) || (cleanupProven = !1);
+            } catch {
+              cleanupProven = !1;
+            }
           }
+        }
+        cleanupProven || (capturedTechAuthorityInvalid = !0, capturedTechRegistry = void 0, capturedTechRegistryObjectKeys = void 0);
+        let current = cleanupProven && installationAttempted ? readRetainedNativeTechRegistry() : void 0, registryStillValid = current !== void 0 && sameNativeTechRegistrySnapshot(retained, current);
+        if (callbackFailed) throw callbackFailure;
+        if (!(!cleanupProven || !installationVerified || !registryStillValid))
+          return callbackResult;
       },
       adjustPower(root, entryKey, expectedStateOn, targetStateOn, isCurrent = () => !0, preflightOnly = !1) {
         let entries = structureEntries, entry = entries === void 0 ? void 0 : readMechanicsEntry(entryKey, entries.get(entryKey));
@@ -4340,8 +4425,23 @@
       index: MAIN_TAB_INDEX.research
     })
   ]);
+  function sameResearchPriceRecord(nativePrice, renderedPrice) {
+    let nativeKeys = Object.keys(nativePrice), renderedKeys = Object.keys(renderedPrice);
+    return nativeKeys.length !== renderedKeys.length ? !1 : nativeKeys.every((key) => {
+      let amount = nativePrice[key];
+      return Object.prototype.hasOwnProperty.call(renderedPrice, key) && typeof amount == "number" && Number.isFinite(amount) && amount === renderedPrice[key];
+    });
+  }
   function createCapturedTechCatalog(dependencies) {
-    let { rootState, discovery, drawnActions, bindings, controls: controls2, mechanics } = dependencies, reportUnavailable = dependencies.onUnavailable ?? (() => {
+    let {
+      rootState,
+      discovery,
+      drawnActions,
+      bindings,
+      controls: controls2,
+      mechanics,
+      nativePrices
+    } = dependencies, reportUnavailable = dependencies.onUnavailable ?? (() => {
     });
     return Object.freeze({
       read(options) {
@@ -4513,10 +4613,31 @@
             );
             return;
           }
+          let nativePrice;
+          try {
+            nativePrice = nativePrices.readTechCost(definition.actionId);
+          } catch (error) {
+            reportUnavailable(
+              `native Research price read failed for ${definition.actionId}: ${String(error)}`
+            );
+            return;
+          }
+          if (nativePrice === void 0) {
+            reportUnavailable(
+              `native Research price is unavailable for ${definition.actionId}`
+            );
+            return;
+          }
+          if (!sameResearchPriceRecord(nativePrice, row.cost)) {
+            reportUnavailable(
+              `native and rendered Research prices disagree for ${definition.actionId}`
+            );
+            return;
+          }
           matchedOffers.push(
             Object.freeze({
               elementId: definition.actionId,
-              cost: row.cost,
+              cost: Object.freeze({ ...nativePrice }),
               nativeAffordable: row.nativeAffordable === !0,
               generation: drawn.generations.get(definition.actionId) ?? 0
             })
@@ -4540,6 +4661,19 @@
         return Object.freeze(
           snapshot2.granted === void 0 ? { offered } : { offered, granted: snapshot2.granted }
         );
+      }
+    });
+  }
+
+  // src/adapters/evolve/progression/research/captured-tech-costs.ts
+  function createCapturedResearchTechPriceReader(dependencies) {
+    let { mechanics, costs } = dependencies;
+    return Object.freeze({
+      readTechCost(actionId) {
+        return costs === void 0 ? void 0 : mechanics.withTechQueueCostAlias(
+          actionId,
+          (probeId) => costs.readCost(probeId)
+        )?.cost;
       }
     });
   }
@@ -8436,7 +8570,13 @@
       mountSuppression,
       panels,
       diagnostics
-    } = dependencies, onUnavailable = dependencies.onUnavailable, onActivity = dependencies.onActivity, sharedReadOfferedTechs = dependencies.readOfferedTechs, resources = createCapturedResourceSource(rootState), catalog = createCapturedTechCatalog({
+    } = dependencies, onUnavailable = dependencies.onUnavailable, onActivity = dependencies.onActivity, sharedReadOfferedTechs = dependencies.readOfferedTechs, resources = createCapturedResourceSource(rootState), costs = createCapturedActionCostReader({
+      rootState,
+      controls: controls2,
+      ...onUnavailable === void 0 ? {} : {
+        onUnavailable: (id, reason) => onUnavailable(`${id}: ${reason}`)
+      }
+    }), catalog = createCapturedTechCatalog({
       rootState,
       mechanics,
       discovery: createCapturedTabDiscovery({
@@ -8448,17 +8588,12 @@
       drawnActions,
       bindings,
       controls: controls2,
+      nativePrices: createCapturedResearchTechPriceReader({ mechanics, costs }),
       ...onUnavailable === void 0 ? {} : { onUnavailable }
     }), offeredThisCycle, reservations = createCapturedQueueReservationSource({
       rootState,
       readOfferedTechs: () => offeredThisCycle,
-      costs: createCapturedActionCostReader({
-        rootState,
-        controls: controls2,
-        ...onUnavailable === void 0 ? {} : {
-          onUnavailable: (id, reason) => onUnavailable(`${id}: ${reason}`)
-        }
-      }),
+      costs,
       ...onUnavailable === void 0 ? {} : {
         onUnavailable: (id, reason) => onUnavailable(`${id}: ${reason}`)
       }
@@ -11045,6 +11180,10 @@
       bindings,
       controls: controls2,
       mechanics,
+      nativePrices: createCapturedResearchTechPriceReader({
+        mechanics,
+        ...dependencies.costs === void 0 ? {} : { costs: dependencies.costs }
+      }),
       ...onUnavailable === void 0 ? {} : { onUnavailable }
     }), projectCatalog = createCapturedProjectCatalog({
       rootState,

@@ -40,6 +40,7 @@ function element(id, prices = {}, extraAttributes = {}, unavailable = false) {
   };
   return {
     id,
+    priceFixture: prices,
     attributes: attributesOf({
       class: unavailable ? "action cna cnam" : "action",
       "data-v-app": "",
@@ -178,6 +179,7 @@ function makePage({
   granted = [],
   generations = {},
   mechanics = undefined,
+  nativePrices = undefined,
   bindingSequences = undefined,
   nativeDraw = undefined,
 } = {}) {
@@ -240,6 +242,10 @@ function makePage({
       ...offered.flat().map((action) => action.id),
       ...granted.map((action) => action.id),
     ]);
+  const capturedNativePrices = nativePrices ?? {
+    readTechCost: (actionId) =>
+      drawn.find((action) => action.id === actionId)?.priceFixture,
+  };
   const catalog = createCapturedTechCatalog({
     rootState: {
       readRoot: () => root,
@@ -248,6 +254,7 @@ function makePage({
     },
     discovery,
     mechanics: capturedMechanics,
+    nativePrices: capturedNativePrices,
     drawnActions: createGameDrawnActionsReader({
       getDocument: () => {
         if (readError !== undefined) throw readError;
@@ -695,6 +702,7 @@ for (const [name, bindingSequence, fail] of [
   const reasons = [];
   const catalog = createCapturedTechCatalog({
     mechanics: mechanicsForActionIds([]),
+    nativePrices: { readTechCost: () => undefined },
     rootState: {
       readRoot: () => ({ tech: {}, settings: {} }),
       isReactivitySuppressed: () => false,
@@ -795,6 +803,7 @@ for (const [name, bindingSequence, fail] of [
   // answer a draw would have given for an action bound to no control.
   const forgotten = createCapturedTechCatalog({
     mechanics: mechanicsForActionIds([]),
+    nativePrices: { readTechCost: () => undefined },
     rootState: {
       readRoot: () => ({ settings: {} }),
       isReactivitySuppressed: () => false,
@@ -887,6 +896,10 @@ for (const [name, bindingSequence, fail] of [
       subscribeRootReplaced: () => () => {},
     },
     mechanics: mechanicsInstall.mechanics,
+    nativePrices: {
+      readTechCost: (actionId) =>
+        drawnOffers.find((action) => action.id === actionId)?.priceFixture,
+    },
     discovery: {
       discover(_path, options = {}) {
         offerPasses.push(offerPasses.length + 1);
@@ -1002,6 +1015,51 @@ for (const [name, bindingSequence, fail] of [
     undefined,
     "duplicate native action ids make the complete authority unavailable",
   );
+}
+
+{
+  const rendered = element("tech-alpha", { Knowledge: 150 });
+  const nativeCost = Object.freeze({ Knowledge: 150 });
+  const priceReads = [];
+  const page = makePage({
+    offered: [[rendered]],
+    nativePrices: {
+      readTechCost: (actionId) => {
+        priceReads.push(actionId);
+        return nativeCost;
+      },
+    },
+  });
+  const snapshot = page.catalog.read();
+  assert.deepEqual(snapshot.offered[0].cost, { Knowledge: 150 });
+  assert.notStrictEqual(snapshot.offered[0].cost, rendered.cost);
+  assert.deepEqual(priceReads, ["tech-alpha"]);
+  assert.deepEqual(page.reasons, []);
+}
+
+for (const { renderedCost, nativeCost, expectedReason } of [
+  {
+    renderedCost: { Knowledge: 149 },
+    nativeCost: { Knowledge: 150 },
+    expectedReason: /prices disagree/u,
+  },
+  {
+    renderedCost: { Knowledge: 150 },
+    nativeCost: { Money: 150 },
+    expectedReason: /prices disagree/u,
+  },
+  {
+    renderedCost: { Knowledge: 150 },
+    nativeCost: undefined,
+    expectedReason: /price is unavailable/u,
+  },
+]) {
+  const page = makePage({
+    offered: [[element("tech-alpha", renderedCost)]],
+    nativePrices: { readTechCost: () => nativeCost },
+  });
+  assert.equal(page.catalog.read(), undefined);
+  assert.match(page.reasons.at(-1), expectedReason);
 }
 
 console.log("captured-tech-catalog ok");

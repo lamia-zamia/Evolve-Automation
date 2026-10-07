@@ -32,6 +32,7 @@ import {
 import { createScriptCostReservationSource } from "../adapters/evolve/script-cost-reservations.ts";
 import { createScriptBuildPolicyReader } from "../adapters/evolve/progression/build/script-build-policy.ts";
 import { createCapturedTechCatalog } from "../adapters/evolve/progression/research/captured-tech-catalog.ts";
+import { createCapturedResearchTechPriceReader } from "../adapters/evolve/progression/research/captured-tech-costs.ts";
 import { createCapturedProjectCatalog } from "../adapters/evolve/progression/research/captured-project-catalog.ts";
 import {
   createCapturedBuildPolicyReader,
@@ -484,6 +485,12 @@ export function createCapturedProgressionControl(
     bindings,
     controls,
     mechanics,
+    nativePrices: createCapturedResearchTechPriceReader({
+      mechanics,
+      ...(dependencies.costs === undefined
+        ? {}
+        : { costs: dependencies.costs }),
+    }),
     ...(onUnavailable === undefined ? {} : { onUnavailable }),
   });
   const projectCatalog: GameProjectCatalog = createCapturedProjectCatalog({

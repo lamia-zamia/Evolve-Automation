@@ -288,6 +288,12 @@ const researchControl = createCapturedProgressionControl({
       "tech-last-successful-cycle",
     ]),
   },
+  costs: {
+    readCost: () => ({
+      cost: offeredRows[0]?.cost ?? {},
+      pool: undefined,
+    }),
+  },
   mountSuppression: { available: true, withoutMounting: (draw) => draw() },
   panels: {
     open: () => ({

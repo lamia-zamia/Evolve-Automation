@@ -839,9 +839,22 @@ function runProgressionChain({ activeTrigger }) {
   const researchRow = element("div");
   researchRow.classList.add("action");
   researchRow.id = "tech-polymer-reserve";
+  const researchAttributes = [
+    { name: "id", value: "tech-polymer-reserve" },
+    { name: "class", value: "action" },
+  ];
+  researchAttributes.get = (name) =>
+    researchAttributes.find((attribute) => attribute.name === name)?.value;
+  researchRow.attributes = researchAttributes;
   const price = element("button");
   price.classList.add("button", "res-Polymer");
-  price.attributes.set("data-polymer", 1);
+  const priceAttributes = [
+    { name: "class", value: "button res-Polymer" },
+    { name: "data-polymer", value: "1" },
+  ];
+  priceAttributes.get = (name) =>
+    priceAttributes.find((attribute) => attribute.name === name)?.value;
+  price.attributes = priceAttributes;
   researchRow.append(price);
   researchPanel.append(researchRow);
 
@@ -915,8 +928,13 @@ function runProgressionChain({ activeTrigger }) {
       },
       buildQueue: {
         methods: {
-          setData() {
-            return { ok: true, value: { "data-Money": 10 } };
+          setData(index, prefix) {
+            if (
+              root.queue.queue[index]?.id === "tech-__ea_research_cost_probe__"
+            ) {
+              return { [`${prefix}-Polymer`]: 1 };
+            }
+            return { [`${prefix}-Money`]: 10 };
           },
         },
       },
@@ -1149,16 +1167,22 @@ function runStorageReplicatorDemand({ offeredTechnology }) {
     const row = element("div");
     row.classList.add("action");
     Object.defineProperty(row, "id", { value: "tech-elerium-reserve" });
-    row.attributes = [
+    const rowAttributes = [
       { name: "id", value: "tech-elerium-reserve" },
       { name: "class", value: "action" },
     ];
+    rowAttributes.get = (name) =>
+      rowAttributes.find((attribute) => attribute.name === name)?.value;
+    row.attributes = rowAttributes;
     const price = element("button");
     Object.defineProperty(price, "id", { value: "" });
-    price.attributes = [
+    const priceAttributes = [
       { name: "class", value: "button res-Elerium" },
       { name: "data-elerium", value: "400" },
     ];
+    priceAttributes.get = (name) =>
+      priceAttributes.find((attribute) => attribute.name === name)?.value;
+    price.attributes = priceAttributes;
     row.append(price);
     researchPanel.append(row);
   }
@@ -1209,6 +1233,19 @@ function runStorageReplicatorDemand({ offeredTechnology }) {
           methods: {
             action() {
               root.resource.Plywood.amount += 1;
+            },
+          },
+        },
+        buildQueue: {
+          methods: {
+            setData(index, prefix) {
+              if (
+                root.queue.queue[index]?.id ===
+                "tech-__ea_research_cost_probe__"
+              ) {
+                return { [`${prefix}-Elerium`]: 400 };
+              }
+              return {};
             },
           },
         },

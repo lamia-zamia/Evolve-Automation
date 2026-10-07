@@ -32,6 +32,7 @@ import { readCapturedActionAvailability } from "./progression/build/captured-bui
 
 type CapturedGameCall = (this: unknown, ...args: unknown[]) => unknown;
 const structureMapCaptureThreshold = 3;
+const researchTechQueueCostAlias = "__ea_research_cost_probe__";
 
 interface CapturedNativeTechDefinitionIdentity extends CapturedTechDefinition {
   readonly action: Record<string, unknown>;
@@ -1104,6 +1105,7 @@ function emptyGameMechanics(): CapturedGameMechanics {
     adjustPower: () => ({ kind: "invalid" as const }),
     captureTechDefinitionsDuring: <T>(draw: () => T): T => draw(),
     readTechDefinitions: () => undefined,
+    withTechQueueCostAlias: () => undefined,
     readStructures: () => undefined,
     readStructureIdentities: () => undefined,
     readPowerOrder: () => ({ kind: "invalid" as const }),
@@ -1460,6 +1462,7 @@ export function installCapturedGameMechanics(
   let stopped = false;
   let capturedTechRegistry: CapturedNativeTechRegistrySnapshot | undefined;
   let capturedTechRegistryObjectKeys: CapturedGameCall | undefined;
+  let capturedTechAuthorityInvalid = false;
   let mapHook: CapturedGameCall | undefined;
   let consumeSetter: ((this: unknown, value: unknown) => void) | undefined;
   let powerOnSetter: ((this: unknown, value: unknown) => void) | undefined;
@@ -1687,9 +1690,42 @@ export function installCapturedGameMechanics(
     restoreUnmatchedHooksAfterFirstPeriod,
   );
 
+  function readRetainedNativeTechRegistry():
+    CapturedNativeTechRegistrySnapshot | undefined {
+    const retained = capturedTechRegistry;
+    const originalObjectKeys = capturedTechRegistryObjectKeys;
+    if (
+      stopped ||
+      capturedTechAuthorityInvalid ||
+      retained === undefined ||
+      originalObjectKeys === undefined
+    )
+      return undefined;
+    try {
+      const rawKeys = Reflect.apply(originalObjectKeys, objectConstructor, [
+        retained.registry,
+      ]);
+      const current = readNativeTechRegistrySnapshot(
+        retained.registry,
+        rawKeys,
+      );
+      return current !== undefined &&
+        sameNativeTechRegistrySnapshot(retained, current)
+        ? current
+        : undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
   const mechanics: CapturedGameMechanics = Object.freeze({
     captureTechDefinitionsDuring<T>(draw: () => T): T {
-      if (stopped || capturedTechRegistry !== undefined) return draw();
+      if (
+        stopped ||
+        capturedTechAuthorityInvalid ||
+        capturedTechRegistry !== undefined
+      )
+        return draw();
       if (
         typeof objectConstructor !== "function" ||
         typeof objectDefineProperty !== "function"
@@ -1797,30 +1833,137 @@ export function installCapturedGameMechanics(
       return result;
     },
     readTechDefinitions(): readonly CapturedTechDefinition[] | undefined {
-      const retained = capturedTechRegistry;
-      const originalObjectKeys = capturedTechRegistryObjectKeys;
-      if (
-        stopped ||
-        retained === undefined ||
-        originalObjectKeys === undefined
-      ) {
+      return readRetainedNativeTechRegistry()?.publicDefinitions;
+    },
+    withTechQueueCostAlias<T>(
+      actionId: string,
+      readProbeCost: (probeActionId: string) => T,
+    ): T | undefined {
+      const retained = readRetainedNativeTechRegistry();
+      if (retained === undefined || typeof readProbeCost !== "function")
         return undefined;
-      }
-      try {
-        const rawKeys = Reflect.apply(originalObjectKeys, objectConstructor, [
-          retained.registry,
-        ]);
-        const current = readNativeTechRegistrySnapshot(
-          retained.registry,
-          rawKeys,
-        );
-        return current !== undefined &&
-          sameNativeTechRegistrySnapshot(retained, current)
-          ? retained.publicDefinitions
+      const targetDefinitions = retained.definitions.filter(
+        (definition) => definition.actionId === actionId,
+      );
+      const targetAction =
+        targetDefinitions.length === 1
+          ? targetDefinitions[0]?.action
           : undefined;
+      const hostAction = retained.definitions[0]?.action;
+      if (targetAction === undefined || hostAction === undefined)
+        return undefined;
+
+      try {
+        if (
+          !retained.definitions.every(
+            (definition) =>
+              Object.getOwnPropertyDescriptor(
+                definition.action,
+                researchTechQueueCostAlias,
+              ) === undefined,
+          )
+        )
+          return undefined;
       } catch {
         return undefined;
       }
+
+      let installationAttempted = false;
+      let installationVerified = false;
+      let cleanupProven = true;
+      let callbackResult: T | undefined;
+      let callbackFailed = false;
+      let callbackFailure: unknown;
+      try {
+        installationAttempted = true;
+        Reflect.apply(
+          objectDefineProperty as CapturedGameCall,
+          objectConstructor,
+          [
+            hostAction,
+            researchTechQueueCostAlias,
+            {
+              configurable: true,
+              enumerable: false,
+              value: targetAction,
+            },
+          ],
+        );
+        const descriptor = Object.getOwnPropertyDescriptor(
+          hostAction,
+          researchTechQueueCostAlias,
+        );
+        installationVerified =
+          descriptor !== undefined &&
+          descriptor?.configurable === true &&
+          descriptor.enumerable === false &&
+          "value" in descriptor &&
+          descriptor.value === targetAction;
+        if (installationVerified) {
+          try {
+            callbackResult = readProbeCost(
+              "tech-" + researchTechQueueCostAlias,
+            );
+          } catch (error) {
+            callbackFailed = true;
+            callbackFailure = error;
+          }
+        }
+      } catch {
+        // A failed definition leaves the probe unavailable; cleanup still runs below.
+      } finally {
+        if (installationAttempted) {
+          for (const definition of retained.definitions) {
+            try {
+              if (
+                Object.getOwnPropertyDescriptor(
+                  definition.action,
+                  researchTechQueueCostAlias,
+                ) !== undefined &&
+                !Reflect.deleteProperty(
+                  definition.action,
+                  researchTechQueueCostAlias,
+                )
+              ) {
+                cleanupProven = false;
+              }
+            } catch {
+              cleanupProven = false;
+            }
+          }
+          try {
+            if (
+              !retained.definitions.every(
+                (definition) =>
+                  Object.getOwnPropertyDescriptor(
+                    definition.action,
+                    researchTechQueueCostAlias,
+                  ) === undefined,
+              )
+            )
+              cleanupProven = false;
+          } catch {
+            cleanupProven = false;
+          }
+        }
+      }
+
+      if (!cleanupProven) {
+        capturedTechAuthorityInvalid = true;
+        capturedTechRegistry = undefined;
+        capturedTechRegistryObjectKeys = undefined;
+      }
+      const current =
+        cleanupProven && installationAttempted
+          ? readRetainedNativeTechRegistry()
+          : undefined;
+      const registryStillValid =
+        current !== undefined &&
+        sameNativeTechRegistrySnapshot(retained, current);
+      if (callbackFailed) throw callbackFailure;
+      if (!cleanupProven || !installationVerified || !registryStillValid)
+        return undefined;
+      return callbackResult;
     },
     adjustPower(
       root: unknown,

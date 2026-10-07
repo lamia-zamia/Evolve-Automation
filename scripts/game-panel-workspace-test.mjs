@@ -228,6 +228,7 @@ function workspaceFor(page) {
         },
       ],
     },
+    nativePrices: { readTechCost: () => ({ Knowledge: 10 }) },
   });
 
   const snapshot = catalog.read();
