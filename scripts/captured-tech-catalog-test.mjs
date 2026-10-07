@@ -4,6 +4,7 @@ import { runInNewContext } from "node:vm";
 import { createGameDrawnActionsReader } from "../src/adapters/browser/game-drawn-actions.ts";
 import { createCapturedTechCatalog } from "../src/adapters/evolve/progression/research/captured-tech-catalog.ts";
 import { installCapturedGameMechanics } from "../src/adapters/evolve/captured-game-mechanics.ts";
+import { installVueCapture } from "../src/adapters/evolve/vue-capture.ts";
 import {
   MAIN_TAB_CONTROL,
   MAIN_TAB_SETTING,
@@ -71,6 +72,35 @@ function mechanicsForActionIds(actionIds) {
     captureTechDefinitionsDuring: (draw) => draw(),
     readTechDefinitions: () => definitions,
   });
+}
+
+function makeBindingCapture() {
+  const vue = {
+    reactive: (target) => target,
+    toRaw: (value) => value,
+    createApp: (options) => ({ options, unmount() {} }),
+  };
+  const capture = installVueCapture({ Vue: vue });
+  let scopes = 0;
+  let active = 0;
+  const bindings = (listener) => {
+    scopes += 1;
+    active += 1;
+    const unobserve = capture.observeBindings(listener);
+    return () => {
+      active -= 1;
+      unobserve();
+    };
+  };
+  const emit = (elementId) =>
+    vue.createApp({ el: `#${elementId}`, methods: { action() {} } });
+  return {
+    bindings,
+    capture,
+    emit,
+    readScopes: () => scopes,
+    readActive: () => active,
+  };
 }
 
 {
@@ -148,14 +178,20 @@ function makePage({
   granted = [],
   generations = {},
   mechanics = undefined,
+  bindingSequences = undefined,
+  nativeDraw = undefined,
 } = {}) {
   const root = { tech: { primitive: 3 }, settings: { civTabs: 4 } };
   const passes = [];
   const panelChecks = [];
   const discards = [];
   const forceDraws = [];
+  const suppressedBindings = [];
+  const bindingCapture = makeBindingCapture();
   let drawn = [];
   let failure;
+  let discoveryError;
+  let readError;
 
   const discovery = {
     discover(path, options = {}) {
@@ -165,10 +201,33 @@ function makePage({
         panelChecks.push(options.isPanelDrawn());
       }
       if (options.discard !== undefined) discards.push(options.discard);
+      if (discoveryError !== undefined) throw discoveryError;
       if (failure !== undefined) {
         return { outcome: failure, discovered: [] };
       }
       drawn = offered[Math.min(passes.length - 1, offered.length - 1)] ?? [];
+      const grantRows = options.discard === undefined ? granted : [];
+      const defaultBindings = [
+        ...drawn.map((action) => action.id),
+        ...grantRows.map((action) => action.id),
+      ];
+      const bindingSequence =
+        bindingSequences?.[
+          Math.min(passes.length - 1, bindingSequences.length - 1)
+        ] ?? defaultBindings;
+      const renderedGrantedIds = new Set(granted.map((action) => action.id));
+      const bindAction = (actionId) => {
+        if (options.discard !== undefined && renderedGrantedIds.has(actionId)) {
+          suppressedBindings.push(actionId);
+          return;
+        }
+        bindingCapture.emit(actionId);
+      };
+      if (nativeDraw !== undefined) {
+        nativeDraw({ drawn, granted: grantRows, bindAction });
+      } else {
+        for (const actionId of bindingSequence) bindAction(actionId);
+      }
       if (options.whileDrawn !== undefined) options.whileDrawn();
       return { outcome: { status: "succeeded" }, discovered: [] };
     },
@@ -190,9 +249,15 @@ function makePage({
     discovery,
     mechanics: capturedMechanics,
     drawnActions: createGameDrawnActionsReader({
-      getDocument: () =>
-        documentOf(drawn, { "#oldTech .action": granted, "#tech": drawn }),
+      getDocument: () => {
+        if (readError !== undefined) throw readError;
+        return documentOf(drawn, {
+          "#oldTech .action": granted,
+          "#tech": drawn,
+        });
+      },
     }),
+    bindings: bindingCapture.bindings,
     controls: {
       resolve: (elementId) =>
         generations[elementId] === undefined
@@ -215,12 +280,250 @@ function makePage({
     discards,
     forceDraws,
     mechanics: capturedMechanics,
+    bindingCapture,
     reasons,
+    suppressedBindings,
     isDrawn: () => drawn.length > 0,
     fail(outcome) {
       failure = outcome;
     },
+    throwDiscovery(error) {
+      discoveryError = error;
+    },
+    throwRead(error) {
+      readError = error;
+    },
   };
+}
+
+{
+  const page = makePage({
+    offered: [
+      [
+        element("tech-alpha", { Knowledge: 10 }),
+        element("tech-beta", { Knowledge: 20 }),
+      ],
+    ],
+    bindingSequences: [
+      ["unrelated-before", "tech-alpha", "tech-beta", "unrelated-after"],
+    ],
+  });
+  assert.deepEqual(
+    page.catalog.read().offered.map(({ elementId }) => elementId),
+    ["tech-alpha", "tech-beta"],
+  );
+  assert.equal(page.bindingCapture.readScopes(), 1);
+  assert.equal(page.bindingCapture.readActive(), 0);
+}
+
+{
+  // drawTech's first phase can consider beta, but setAction's second qualification prevents any
+  // binding. The observer sees only the surviving native binding.
+  const eligibleBeforeSecondQualification = ["tech-alpha", "tech-beta"];
+  const passesSecondQualification = new Set(["tech-alpha"]);
+  const page = makePage({
+    offered: [[element("tech-alpha", { Knowledge: 10 })]],
+    mechanics: mechanicsForActionIds(["tech-alpha", "tech-beta"]),
+    nativeDraw: ({ bindAction }) => {
+      for (const actionId of eligibleBeforeSecondQualification) {
+        if (passesSecondQualification.has(actionId)) bindAction(actionId);
+      }
+    },
+  });
+  assert.deepEqual(
+    page.catalog.read().offered.map(({ elementId }) => elementId),
+    ["tech-alpha"],
+  );
+  assert.equal(
+    page.bindingCapture.capture.controls.resolve("tech-beta"),
+    undefined,
+    "beta never reached the final native binding",
+  );
+}
+
+{
+  const page = makePage({
+    offered: [[element("tech-alpha", { Knowledge: 10 })]],
+    granted: [element("tech-old-one")],
+    bindingSequences: [["unrelated", "tech-alpha", "tech-old-one"]],
+  });
+  const snapshot = page.catalog.read();
+  assert.deepEqual(
+    snapshot.offered.map(({ elementId }) => elementId),
+    ["tech-alpha"],
+  );
+  assert.equal(snapshot.granted, undefined);
+  assert.deepEqual(page.suppressedBindings, ["tech-old-one"]);
+  assert.equal(
+    page.bindingCapture.capture.controls.resolve("tech-old-one"),
+    undefined,
+    "discarded #oldTech has no target for vBind to capture",
+  );
+}
+
+for (const [name, setup] of [
+  [
+    "unknown native technology binding",
+    {
+      offered: [[]],
+      mechanics: mechanicsForActionIds(["tech-alpha"]),
+      bindingSequences: [["tech-unknown"]],
+    },
+  ],
+  [
+    "duplicate native technology binding",
+    {
+      offered: [[element("tech-alpha", { Knowledge: 10 })]],
+      bindingSequences: [["tech-alpha", "tech-alpha"]],
+    },
+  ],
+  [
+    "missing rendered detail",
+    {
+      offered: [[]],
+      mechanics: mechanicsForActionIds(["tech-alpha"]),
+      bindingSequences: [["tech-alpha"]],
+    },
+  ],
+  [
+    "extra rendered offer row",
+    {
+      offered: [
+        [
+          element("tech-alpha", { Knowledge: 10 }),
+          element("tech-beta", { Knowledge: 20 }),
+        ],
+      ],
+      bindingSequences: [["tech-alpha"]],
+    },
+  ],
+  [
+    "DOM order disagreement",
+    {
+      offered: [
+        [
+          element("tech-beta", { Knowledge: 20 }),
+          element("tech-alpha", { Knowledge: 10 }),
+        ],
+      ],
+      bindingSequences: [["tech-alpha", "tech-beta"]],
+    },
+  ],
+]) {
+  const page = makePage(setup);
+  assert.equal(page.catalog.read(), undefined, name);
+  assert.equal(
+    page.bindingCapture.readActive(),
+    0,
+    `${name} removes its listener`,
+  );
+}
+
+{
+  const page = makePage({
+    offered: [
+      [
+        element("tech-alpha", { Knowledge: 10 }),
+        element("tech-beta", { Knowledge: 20 }),
+      ],
+    ],
+    granted: [element("tech-old-one"), element("tech-old-two")],
+    bindingSequences: [
+      ["tech-alpha", "tech-beta", "tech-old-one", "tech-old-two"],
+    ],
+  });
+  const snapshot = page.catalog.read({ includeGranted: true });
+  assert.deepEqual(
+    snapshot.offered.map(({ elementId }) => elementId),
+    ["tech-alpha", "tech-beta"],
+  );
+  assert.deepEqual([...snapshot.granted], ["tech-old-one", "tech-old-two"]);
+}
+
+for (const [name, setup] of [
+  [
+    "granted binding before a later offer",
+    {
+      offered: [[element("tech-alpha", { Knowledge: 10 })]],
+      granted: [element("tech-old-one")],
+      bindingSequences: [["tech-old-one", "tech-alpha"]],
+    },
+  ],
+  [
+    "rendered granted id missing from the binding stream",
+    {
+      offered: [[element("tech-alpha", { Knowledge: 10 })]],
+      granted: [element("tech-old-one")],
+      bindingSequences: [["tech-alpha"]],
+    },
+  ],
+  [
+    "joined binding absent from both rendered classifications",
+    {
+      offered: [[element("tech-alpha", { Knowledge: 10 })]],
+      mechanics: mechanicsForActionIds(["tech-alpha", "tech-beta"]),
+      bindingSequences: [["tech-alpha", "tech-beta"]],
+    },
+  ],
+  [
+    "duplicate granted binding",
+    {
+      offered: [[element("tech-alpha", { Knowledge: 10 })]],
+      granted: [element("tech-old-one")],
+      bindingSequences: [["tech-alpha", "tech-old-one", "tech-old-one"]],
+    },
+  ],
+  [
+    "unknown rendered granted id",
+    {
+      offered: [[element("tech-alpha", { Knowledge: 10 })]],
+      granted: [element("tech-unknown")],
+      mechanics: mechanicsForActionIds(["tech-alpha"]),
+      bindingSequences: [["tech-alpha"]],
+    },
+  ],
+  [
+    "same technology classified as offered and granted",
+    {
+      offered: [[element("tech-alpha", { Knowledge: 10 })]],
+      granted: [element("tech-alpha")],
+      bindingSequences: [["tech-alpha"]],
+    },
+  ],
+]) {
+  const page = makePage(setup);
+  assert.equal(page.catalog.read({ includeGranted: true }), undefined, name);
+  assert.equal(
+    page.bindingCapture.readActive(),
+    0,
+    `${name} removes its listener`,
+  );
+}
+
+for (const [name, bindingSequence, fail] of [
+  [
+    "discovery throw",
+    ["tech-alpha"],
+    (page) => page.throwDiscovery(new Error("draw failed")),
+  ],
+  [
+    "DOM detail throw",
+    ["tech-alpha"],
+    (page) => page.throwRead(new Error("DOM read failed")),
+  ],
+  ["observer validation failure", ["tech-unknown"], () => {}],
+]) {
+  const page = makePage({
+    offered: [[element("tech-alpha", { Knowledge: 10 })]],
+    bindingSequences: [bindingSequence],
+  });
+  fail(page);
+  assert.equal(page.catalog.read(), undefined, name);
+  assert.equal(
+    page.bindingCapture.readActive(),
+    0,
+    `${name} removes its listener`,
+  );
 }
 
 {
@@ -334,15 +637,13 @@ function makePage({
 }
 
 {
-  // The pass is given a way to tell whether the Research panel is already there, so it can skip
-  // drawing one the player is looking at.
+  // A visible Research panel still requires a fresh controlled draw for binding authority.
   const page = makePage({ offered: [[element("tech-a", { Knowledge: 1 })]] });
   assert.deepEqual(page.panelChecks, []);
   page.catalog.read();
-  assert.deepEqual(page.panelChecks, [false]);
-  // Once the panel has been drawn, the same check answers true on the next read.
+  assert.deepEqual(page.forceDraws, [true]);
   page.catalog.read();
-  assert.deepEqual(page.panelChecks, [false, true]);
+  assert.deepEqual(page.forceDraws, [true, true]);
 }
 
 {
@@ -404,7 +705,8 @@ function makePage({
         throw new Error("the game has not recorded settings.civTabs");
       },
     },
-    drawnActions: { read: () => [], exists: () => false },
+    drawnActions: { read: () => [], count: () => 0, exists: () => false },
+    bindings: () => () => {},
     controls: {
       resolve: () => undefined,
       invoke: () => ({ ok: false, reason: "unknown-control" }),
@@ -439,7 +741,8 @@ function makePage({
         throw new Error("must not draw without a root");
       },
     },
-    drawnActions: { read: () => [], exists: () => false },
+    drawnActions: { read: () => [], count: () => 0, exists: () => false },
+    bindings: () => () => {},
     controls: {
       resolve: () => undefined,
       invoke: () => ({ ok: false, reason: "unknown-control" }),
@@ -502,7 +805,8 @@ function makePage({
         throw new Error("must not draw while restating");
       },
     },
-    drawnActions: { read: () => [], exists: () => false },
+    drawnActions: { read: () => [], count: () => 0, exists: () => false },
+    bindings: () => () => {},
     controls: {
       resolve: () => undefined,
       invoke: () => ({ ok: false, reason: "unknown-control" }),
@@ -568,6 +872,7 @@ function makePage({
   const offerPasses = [];
   const nativeOrders = [];
   const forceDraws = [];
+  const bindingCapture = makeBindingCapture();
   const unavailable = [];
   const offersByPass = [
     [element("tech-alpha", { Knowledge: 10 })],
@@ -596,6 +901,13 @@ function makePage({
             Math.min(offerPasses.length - 1, offersByPass.length - 1)
           ];
         drawnGranted = grantedByPass;
+        const bindingIds = [
+          ...drawnOffers.map(({ id }) => id),
+          ...(options.discard === undefined
+            ? drawnGranted.map(({ id }) => id)
+            : []),
+        ];
+        for (const id of bindingIds) bindingCapture.emit(id);
         options.whileDrawn?.();
         return { outcome: { status: "succeeded" }, discovered: [] };
       },
@@ -604,6 +916,7 @@ function makePage({
       getDocument: () =>
         documentOf(drawnOffers, { "#oldTech .action": drawnGranted }),
     }),
+    bindings: bindingCapture.bindings,
     controls: {
       resolve: (elementId) => ({ elementId, generation: 1, methods: [] }),
       invoke: () => ({ ok: false, reason: "unknown-control" }),
@@ -626,7 +939,7 @@ function makePage({
     ["alpha", "beta"],
     ["alpha", "beta"],
   ]);
-  assert.deepEqual(forceDraws, [true, false]);
+  assert.deepEqual(forceDraws, [true, true]);
   assert.equal(page.Object.keys, nativeObjectKeys);
 
   assert.equal(
@@ -652,8 +965,13 @@ function makePage({
     undefined,
     "an unknown granted id rejects the granted snapshot rather than becoming empty",
   );
-  assert.match(unavailable.at(-1), /granted research tech-gamma/u);
+  assert.match(unavailable.at(-1), /tech-gamma/u);
   assert.equal(interceptionInstallations, 1);
+  assert.equal(bindingCapture.readScopes(), offerPasses.length);
+  assert.ok(bindingCapture.readScopes() > 1);
+  assert.ok(offerPasses.length > 1);
+  assert.equal(forceDraws.every(Boolean), true);
+  assert.equal(bindingCapture.readActive(), 0);
   mechanicsInstall.uninstall();
 }
 

@@ -1,5 +1,8 @@
 import { withControlCaptureAuthority } from "./control-capture-fixture.mjs";
-import { makeCapturedTechMechanicsFixture } from "./captured-tech-mechanics-fixture.mjs";
+import {
+  makeCapturedTechBindingFixture,
+  makeCapturedTechMechanicsFixture,
+} from "./captured-tech-mechanics-fixture.mjs";
 /**
  * Shared fixture for the captured runtime's phase-order regressions.
  *
@@ -167,6 +170,7 @@ export function runCapturedPhaseOrderCycle({
       },
     },
     controls: registry,
+    bindings: makeCapturedTechBindingFixture(registry),
     mechanics: {
       ...makeCapturedTechMechanicsFixture([
         ...Object.keys(currentRoot?.tech ?? {}).map(

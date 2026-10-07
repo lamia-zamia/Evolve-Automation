@@ -191,6 +191,9 @@ export function createGameDrawnActionsReader({
       }
       return Object.freeze(actions);
     },
+    count(selector: string): number {
+      return getDocument().querySelectorAll(selector).length;
+    },
     exists(selector: string): boolean {
       return getDocument().querySelectorAll(selector).length > 0;
     },

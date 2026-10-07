@@ -891,6 +891,7 @@ export function startCapturedRuntime({
     rootState: pageCapture.rootState,
     mechanics: pageCapture.mechanics,
     controls: pageCapture.controls,
+    bindings: pageCapture.bindings,
     mountSuppression: pageCapture.mountSuppression,
     panels,
     ...(keyboard === undefined ? {} : { keyboard }),

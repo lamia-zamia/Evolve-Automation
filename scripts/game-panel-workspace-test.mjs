@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 
 import { createGamePanelWorkspace } from "../src/adapters/browser/game-panel-workspace.ts";
+import { createCapturedTechCatalog } from "../src/adapters/evolve/progression/research/captured-tech-catalog.ts";
+import { installVueCapture } from "../src/adapters/evolve/vue-capture.ts";
+import { createCapturedTabDiscovery } from "../src/adapters/evolve/captured-tab-discovery.ts";
 
 /**
  * Enough of a document to hide panels by name in: ids, parents, order, containment, connectivity,
@@ -125,6 +128,143 @@ function makePage() {
 
 function workspaceFor(page) {
   return createGamePanelWorkspace({ getDocument: () => page.dom });
+}
+
+{
+  const dom = makeDocument();
+  const wrapper = dom.element("item-mTabResearch");
+  const researchPanel = dom.element("mTabResearch");
+  const playerContent = dom.element("resContent");
+  const playerTech = dom.element("tech");
+  const playerOldTech = dom.element("oldTech");
+  const playerOldRow = dom.element("tech-old-one");
+  playerOldTech.append(playerOldRow);
+  playerContent.append(playerTech, playerOldTech);
+  researchPanel.append(playerContent);
+  wrapper.append(researchPanel);
+  dom.body.append(wrapper);
+
+  const settings = { civTabs: 3, resTabs: 1, animated: true };
+  const root = { settings };
+  const actualApps = [];
+  const tabSwaps = [];
+  let oldTechBindingAttempted = false;
+  const vue = {
+    reactive: (target) => target,
+    toRaw: (value) => value,
+    createApp(options) {
+      actualApps.push(options.el);
+      return { options, unmount() {} };
+    },
+  };
+  const capture = installVueCapture({ Vue: vue });
+  const vBindIfTargetExists = (elementId, methods) => {
+    if (dom.getElementById(elementId) === null) return false;
+    vue.createApp({ el: `#${elementId}`, methods });
+    return true;
+  };
+  const drawResearch = () => {
+    const scratch = dom.getElementById("mTabResearch");
+    const content = dom.element("resContent");
+    const tech = dom.element("tech");
+    const offer = dom.element("tech-alpha");
+    const oldTech = dom.element("oldTech");
+    oldTech.append(dom.element("tech-old-one"));
+    tech.append(offer);
+    content.append(tech, oldTech);
+    scratch.append(content);
+
+    vBindIfTargetExists("resContent", { loadTab() {} });
+    vBindIfTargetExists("tech-alpha", { action() {} });
+    oldTechBindingAttempted = true;
+    assert.equal(
+      vBindIfTargetExists("tech-old-one", { action() {} }),
+      false,
+      "the discarded oldTech target suppresses its native binding",
+    );
+  };
+  vue.createApp({
+    el: "#mainColumn div.content",
+    methods: {
+      swapTab(index) {
+        tabSwaps.push(index);
+        if (index === 3) drawResearch();
+        return index;
+      },
+    },
+  });
+
+  const rootState = {
+    readRoot: () => root,
+    isReactivitySuppressed: () => false,
+    subscribeRootReplaced: () => () => {},
+  };
+  const rows = [
+    { id: "tech-alpha", cost: { Knowledge: 10 }, nativeAffordable: true },
+  ];
+  const catalog = createCapturedTechCatalog({
+    rootState,
+    discovery: createCapturedTabDiscovery({
+      rootState,
+      controls: capture.controls,
+      mountSuppression: capture.mountSuppression,
+      panels: workspaceFor({ dom }),
+    }),
+    drawnActions: {
+      read: (selector) => (selector === "#tech .action" ? rows : []),
+      count: (selector) => (selector === "#tech .action" ? rows.length : 0),
+      exists: () => false,
+    },
+    bindings: capture.observeBindings,
+    controls: capture.controls,
+    mechanics: {
+      captureTechDefinitionsDuring: (draw) => draw(),
+      readTechDefinitions: () => [
+        {
+          registryKey: "alpha",
+          actionId: "tech-alpha",
+          grantTechnology: "alpha",
+          grantLevel: 1,
+        },
+      ],
+    },
+  });
+
+  const snapshot = catalog.read();
+  assert.deepEqual(
+    snapshot.offered.map(({ elementId }) => elementId),
+    ["tech-alpha"],
+  );
+  assert.deepEqual(
+    tabSwaps,
+    [3],
+    "a fresh native binding stream forces the Research draw",
+  );
+  assert.equal(settings.civTabs, 3);
+  assert.equal(
+    settings.resTabs,
+    1,
+    "the selected Research sub-tab stays selected",
+  );
+  assert.equal(settings.animated, true);
+  assert.equal(dom.getElementById("mTabResearch"), researchPanel);
+  assert.equal(dom.getElementById("resContent"), playerContent);
+  assert.equal(dom.getElementById("tech"), playerTech);
+  assert.equal(dom.getElementById("oldTech"), playerOldTech);
+  assert.equal(dom.getElementById("tech-old-one"), playerOldRow);
+  assert.equal(oldTechBindingAttempted, true);
+  assert.equal(
+    dom.body.children
+      .flatMap((node) => node.children)
+      .filter((node) => node.id === "mTabResearch").length,
+    1,
+    "the scratch Research panel is removed",
+  );
+  assert.deepEqual(
+    actualApps,
+    ["#mainColumn div.content"],
+    "temporary bindings were observed without mounting their apps",
+  );
 }
 
 // --- keeping the player's panel and scratching the target ------------------------------------

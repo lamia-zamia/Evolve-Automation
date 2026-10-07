@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { startCapturedRuntime } from "../src/bootstrap/captured-runtime-control.ts";
 import { createTestDocument, element } from "./dom-fixture.mjs";
 import { makeCapturedBuildingMechanics } from "./captured-building-test-fixtures.mjs";
+import { makeCapturedTechBindingFixture } from "./captured-tech-mechanics-fixture.mjs";
 
 function attributes(values) {
   const items = Object.entries(values).map(([name, value]) => ({
@@ -236,6 +237,7 @@ function runOrderedCapturedCycle({ activeTrigger }) {
         subscribeRootReplaced: () => () => {},
       },
       controls,
+      bindings: makeCapturedTechBindingFixture(controls),
       controlUsage: { readUsage: () => [] },
       periods: {
         subscribe(next) {

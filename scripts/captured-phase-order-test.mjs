@@ -1167,6 +1167,7 @@ function runStorageReplicatorDemand({ offeredTechnology }) {
     ...runCapturedPhaseOrderCycle({
       root,
       cycles: 3,
+      mount: true,
       settings: {
         // Gather is the phase that samples demand before anything else runs, so the cycle carries
         // a frozen sample into Storage rather than letting Storage create its own.
@@ -1196,6 +1197,13 @@ function runStorageReplicatorDemand({ offeredTechnology }) {
         body.append(researchPanel, city);
       },
       controls: {
+        "#mainColumn div.content": {
+          methods: {
+            swapTab(index) {
+              root.settings.civTabs = index;
+            },
+          },
+        },
         "city-food": {
           event: "gather",
           methods: {
@@ -1278,9 +1286,11 @@ assert.deepEqual(
 assert.deepEqual(
   storageDemand.errors,
   [
+    "progression skipped build-discovery: no captured control for mTabCivil",
     "progression skipped building-unlocks *: the native structure catalog is unavailable",
+    "replicator discovery skipped: the game has not recorded settings.govTabs",
   ],
-  "Storage must reach its technology target source with semantic Building authority unavailable",
+  "Storage must reach its technology target source while the controlled Research draw runs",
 );
 const demandCycles = storageDemand.cycleTrace.map((entry) => ({
   cycle: entry.cycle,

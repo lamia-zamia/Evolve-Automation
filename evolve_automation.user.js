@@ -4330,7 +4330,7 @@
   }
 
   // src/adapters/evolve/progression/research/captured-tech-catalog.ts
-  var OFFERED_TECH_SELECTOR = "#tech .action", GRANTED_TECH_SELECTOR = "#oldTech .action", RESEARCH_PANEL_SELECTOR = "#tech", UNREAD_RESEARCH_CONTENT = Object.freeze({
+  var OFFERED_TECH_SELECTOR = "#tech .action", RESEARCH_ACTION_ID_PREFIX = "tech-", GRANTED_TECH_SELECTOR = "#oldTech .action", UNREAD_RESEARCH_CONTENT = Object.freeze({
     afterBinding: "#resContent",
     containers: Object.freeze(["oldTech"])
   }), RESEARCH_TAB_PATH = Object.freeze([
@@ -4341,7 +4341,7 @@
     })
   ]);
   function createCapturedTechCatalog(dependencies) {
-    let { rootState, discovery, drawnActions, controls: controls2, mechanics } = dependencies, reportUnavailable = dependencies.onUnavailable ?? (() => {
+    let { rootState, discovery, drawnActions, bindings, controls: controls2, mechanics } = dependencies, reportUnavailable = dependencies.onUnavailable ?? (() => {
     });
     return Object.freeze({
       read(options) {
@@ -4349,45 +4349,54 @@
           reportUnavailable("the game root has not been captured yet");
           return;
         }
-        let includeGranted = options?.includeGranted === !0, drawn, result;
+        let includeGranted = options?.includeGranted === !0, drawn, result, observedBindingIds = [], collecting = !0, stopObserving = () => {
+        };
         try {
-          let definitionsAlreadyCaptured = mechanics.readTechDefinitions() !== void 0;
-          result = mechanics.captureTechDefinitionsDuring(
+          stopObserving = bindings((elementId) => {
+            collecting && observedBindingIds.push(elementId);
+          }), result = mechanics.captureTechDefinitionsDuring(
             () => discovery.discover(RESEARCH_TAB_PATH, {
-              // The first capture must see drawTech even when the player already has Research open.
-              // The discovery workspace keeps that panel intact while it redraws the scratch copy.
-              forceDraw: !definitionsAlreadyCaptured,
-              isPanelDrawn: () => drawnActions.exists(RESEARCH_PANEL_SELECTOR),
+              // A current DOM cannot establish a fresh binding stream, even if Research is selected.
+              // The panel workspace preserves that view while this scratch draw runs.
+              forceDraw: !0,
               ...includeGranted ? {} : { discard: UNREAD_RESEARCH_CONTENT },
               whileDrawn: () => {
-                let offered = Object.freeze(
-                  drawnActions.read(OFFERED_TECH_SELECTOR).map(
-                    (action) => Object.freeze({
-                      elementId: action.id,
-                      cost: action.cost,
-                      nativeAffordable: action.nativeAffordable === !0,
-                      // Which binding of this control the offer belongs to. The game rebinds an action
-                      // every time it draws it, and a superseded closure keeps working, so recording the
-                      // generation here is what lets the executor refuse one from an older draw.
-                      generation: controls2.resolve(action.id)?.generation ?? 0
-                    })
-                  )
-                );
-                drawn = Object.freeze(
-                  includeGranted ? {
-                    offered,
-                    granted: Object.freeze(
-                      new Set(
-                        drawnActions.read(GRANTED_TECH_SELECTOR).map((action) => action.id)
-                      )
-                    )
-                  } : { offered }
-                );
+                try {
+                  let offeredRows = drawnActions.read(OFFERED_TECH_SELECTOR);
+                  if (drawnActions.count(OFFERED_TECH_SELECTOR) !== offeredRows.length)
+                    throw new Error(
+                      "a rendered Research offer row has no readable id"
+                    );
+                  let grantedRows = includeGranted ? drawnActions.read(GRANTED_TECH_SELECTOR) : void 0;
+                  if (grantedRows !== void 0 && drawnActions.count(GRANTED_TECH_SELECTOR) !== grantedRows.length)
+                    throw new Error(
+                      "a rendered granted Research row has no readable id"
+                    );
+                  let generations = /* @__PURE__ */ new Map();
+                  for (let elementId of observedBindingIds)
+                    generations.set(
+                      elementId,
+                      controls2.resolve(elementId)?.generation ?? 0
+                    );
+                  drawn = Object.freeze({
+                    offeredRows,
+                    ...grantedRows === void 0 ? {} : { grantedRows },
+                    generations
+                  });
+                } finally {
+                  collecting = !1;
+                }
               }
             })
           );
         } catch (error) {
           reportUnavailable(`research offer discovery failed: ${String(error)}`);
+          return;
+        } finally {
+          collecting = !1, stopObserving();
+        }
+        if (result === void 0) {
+          reportUnavailable("the research panel discovery returned no result");
           return;
         }
         if (result.outcome.status !== "succeeded" || drawn === void 0) {
@@ -4415,26 +4424,109 @@
           }
           definitionsById.set(definition.actionId, definition);
         }
-        for (let offer of drawn.offered) {
-          let definition = definitionsById.get(offer.elementId);
-          if (definition === void 0 || definition.actionId !== offer.elementId) {
+        let observedTechnologyIds = observedBindingIds.filter(
+          (elementId) => elementId.startsWith(RESEARCH_ACTION_ID_PREFIX) || definitionsById.has(elementId)
+        ), observedDefinitions = [], observedIds = /* @__PURE__ */ new Set();
+        for (let actionId of observedTechnologyIds) {
+          let definition = definitionsById.get(actionId);
+          if (definition === void 0 || definition.actionId !== actionId) {
             reportUnavailable(
-              `rendered research offer ${offer.elementId} has no unique native definition`
+              `native Research binding ${actionId} has no unique registry definition`
             );
             return;
           }
+          if (observedIds.has(actionId)) {
+            reportUnavailable(
+              `native Research binding ${actionId} is duplicated`
+            );
+            return;
+          }
+          observedIds.add(actionId), observedDefinitions.push(definition);
         }
-        if (drawn.granted !== void 0)
-          for (let actionId of drawn.granted) {
-            let definition = definitionsById.get(actionId);
-            if (definition === void 0 || definition.actionId !== actionId) {
+        let offeredRowsById = /* @__PURE__ */ new Map();
+        for (let row of drawn.offeredRows) {
+          if (offeredRowsById.has(row.id)) {
+            reportUnavailable(`rendered Research offer ${row.id} is duplicated`);
+            return;
+          }
+          offeredRowsById.set(row.id, row);
+        }
+        let grantedIds = /* @__PURE__ */ new Set();
+        if (drawn.grantedRows !== void 0)
+          for (let row of drawn.grantedRows) {
+            if (grantedIds.has(row.id)) {
               reportUnavailable(
-                `rendered granted research ${actionId} has no unique native definition`
+                `rendered granted Research row ${row.id} is duplicated`
+              );
+              return;
+            }
+            grantedIds.add(row.id);
+            let definition = definitionsById.get(row.id);
+            if (definition === void 0 || definition.actionId !== row.id) {
+              reportUnavailable(
+                `rendered granted research ${row.id} has no unique native definition`
               );
               return;
             }
           }
-        return drawn;
+        if ([...grantedIds].some((actionId) => offeredRowsById.has(actionId))) {
+          reportUnavailable("a Research action is both offered and granted");
+          return;
+        }
+        let offeredCount = observedDefinitions.length;
+        if (drawn.grantedRows !== void 0) {
+          for (let index = 0; index < observedDefinitions.length; index++) {
+            let actionId = observedDefinitions[index]?.actionId;
+            if (actionId !== void 0 && grantedIds.has(actionId)) {
+              offeredCount = index;
+              break;
+            }
+          }
+          for (let index = offeredCount; index < observedDefinitions.length; index++) {
+            let actionId = observedDefinitions[index]?.actionId;
+            if (actionId === void 0 || !grantedIds.has(actionId)) {
+              reportUnavailable(
+                "native granted Research bindings do not follow all offered bindings"
+              );
+              return;
+            }
+          }
+          if (observedDefinitions.length - offeredCount !== grantedIds.size || [...grantedIds].some((actionId) => !observedIds.has(actionId))) {
+            reportUnavailable(
+              "rendered granted Research rows do not match the native binding stream"
+            );
+            return;
+          }
+        }
+        if (offeredCount !== drawn.offeredRows.length) {
+          reportUnavailable(
+            "native Research offers and rendered offer details have different membership"
+          );
+          return;
+        }
+        let matchedOffers = [];
+        for (let index = 0; index < offeredCount; index++) {
+          let definition = observedDefinitions[index], row = drawn.offeredRows[index];
+          if (definition === void 0 || row === void 0 || row.id !== definition.actionId || !offeredRowsById.has(definition.actionId)) {
+            reportUnavailable(
+              "native Research offer order disagrees with rendered detail rows"
+            );
+            return;
+          }
+          matchedOffers.push(
+            Object.freeze({
+              elementId: definition.actionId,
+              cost: row.cost,
+              nativeAffordable: row.nativeAffordable === !0,
+              generation: drawn.generations.get(definition.actionId) ?? 0
+            })
+          );
+        }
+        let frozenOffered = Object.freeze(matchedOffers);
+        return drawn.grantedRows === void 0 ? Object.freeze({ offered: frozenOffered }) : Object.freeze({
+          offered: frozenOffered,
+          granted: Object.freeze(grantedIds)
+        });
       },
       restate(snapshot2) {
         let offered = Object.freeze(
@@ -8339,6 +8431,7 @@
       rootState,
       mechanics,
       controls: controls2,
+      bindings,
       drawnActions,
       mountSuppression,
       panels,
@@ -8353,6 +8446,7 @@
         panels
       }),
       drawnActions,
+      bindings,
       controls: controls2,
       ...onUnavailable === void 0 ? {} : { onUnavailable }
     }), offeredThisCycle, reservations = createCapturedQueueReservationSource({
@@ -10840,6 +10934,7 @@
       rootState,
       mechanics,
       controls: controls2,
+      bindings,
       mountSuppression,
       panels,
       drawnActions,
@@ -10947,6 +11042,7 @@
       rootState,
       discovery,
       drawnActions,
+      bindings,
       controls: controls2,
       mechanics,
       ...onUnavailable === void 0 ? {} : { onUnavailable }
@@ -11121,6 +11217,7 @@
       rootState,
       mechanics,
       controls: controls2,
+      bindings,
       readSettings,
       drawnActions,
       mountSuppression,
@@ -35352,6 +35449,9 @@
         }
         return Object.freeze(actions);
       },
+      count(selector) {
+        return getDocument().querySelectorAll(selector).length;
+      },
       exists(selector) {
         return getDocument().querySelectorAll(selector).length > 0;
       }
@@ -54714,6 +54814,7 @@ Only continue if you trust the source. Injected code:
       rootState: pageCapture2.rootState,
       mechanics: pageCapture2.mechanics,
       controls: pageCapture2.controls,
+      bindings: pageCapture2.bindings,
       mountSuppression: pageCapture2.mountSuppression,
       panels,
       ...keyboard === void 0 ? {} : { keyboard },

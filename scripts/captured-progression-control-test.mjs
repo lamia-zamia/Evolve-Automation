@@ -13,6 +13,7 @@ const emptyArpaMechanics = Object.freeze({
     reason: "project builds are not exercised by this test",
   }),
 });
+const inertBindings = () => () => {};
 
 const control = createCapturedProgressionControl({
   rootState: {
@@ -24,6 +25,7 @@ const control = createCapturedProgressionControl({
     invoke: () => ({ ok: false, reason: "unknown-control" }),
     capturedElementIds: () => [],
   }),
+  bindings: inertBindings,
   mechanics: makeCapturedBuildingMechanics(undefined),
   mountSuppression: {
     begin: () => undefined,
@@ -31,6 +33,7 @@ const control = createCapturedProgressionControl({
   panels: { open: () => undefined },
   drawnActions: {
     read: () => [],
+    count: () => 0,
     exists: () => false,
   },
   arpa: emptyArpaMechanics,
@@ -101,7 +104,8 @@ assert.equal(control.readEstablishedProjects(), undefined);
         throw new Error("must not open panels");
       },
     },
-    drawnActions: { read: () => [], exists: () => false },
+    drawnActions: { read: () => [], count: () => 0, exists: () => false },
+    bindings: inertBindings,
     arpa: {
       ensureCaptured: () => ({ kind: "captured" }),
       readOffers: () => {
@@ -226,10 +230,21 @@ let root = {
 let nowMs = 0;
 const unavailable = [];
 let researchPanelVisible = true;
+let researchDrawAvailable = true;
 let offeredRows = [{ id: "tech-mining", cost: { Knowledge: 5 } }];
 let researchDraws = 0;
 const rootReplacementListeners = [];
+const researchBindingListeners = new Set();
+const observeResearchBindings = (listener) => {
+  researchBindingListeners.add(listener);
+  return () => researchBindingListeners.delete(listener);
+};
+const emitResearchBinding = (id) => {
+  for (const listener of researchBindingListeners) listener(id, {});
+};
+const researchMainTabId = "#mainColumn div.content";
 const techHandles = new Map([
+  [researchMainTabId, { elementId: researchMainTabId, generation: 1 }],
   ["tech-mining", { elementId: "tech-mining", generation: 1 }],
 ]);
 const researchControl = createCapturedProgressionControl({
@@ -242,9 +257,24 @@ const researchControl = createCapturedProgressionControl({
   },
   controls: withControlCaptureAuthority({
     resolve: (id) => techHandles.get(id),
-    invoke: () => ({ ok: false, reason: "unknown-control" }),
+    invoke: (handle, method, args = []) => {
+      if (handle.elementId === researchMainTabId && method === "swapTab") {
+        if (!researchDrawAvailable)
+          return {
+            ok: false,
+            reason: "threw",
+            detail: "Research draw unavailable",
+          };
+        if (args[0] === 3)
+          for (const row of [...offeredRows, { id: "tech-old-mining" }])
+            emitResearchBinding(row.id);
+        return { ok: true, value: args[0] };
+      }
+      return { ok: false, reason: "unknown-control" };
+    },
     capturedElementIds: () => [...techHandles.keys()],
   }),
+  bindings: observeResearchBindings,
   mechanics: {
     ...makeCapturedBuildingMechanics(root),
     ...makeCapturedTechMechanicsFixture([
@@ -258,8 +288,14 @@ const researchControl = createCapturedProgressionControl({
       "tech-last-successful-cycle",
     ]),
   },
-  mountSuppression: { available: false, withoutMounting: () => undefined },
-  panels: { open: () => ({ close: () => {} }) },
+  mountSuppression: { available: true, withoutMounting: (draw) => draw() },
+  panels: {
+    open: () => ({
+      discard: () => true,
+      release: () => {},
+      isIntact: () => true,
+    }),
+  },
   drawnActions: {
     exists: (selector) => selector === "#tech" && researchPanelVisible,
     read: (selector) => {
@@ -269,6 +305,8 @@ const researchControl = createCapturedProgressionControl({
       }
       return [{ id: "tech-old-mining", cost: {} }];
     },
+    count: (selector) =>
+      selector === "#tech .action" ? offeredRows.length : 1,
   },
   arpa: emptyArpaMechanics,
   readSettings: () => ({}),
@@ -362,7 +400,7 @@ assert.deepEqual(
 );
 assert.equal(demand.sample().storageRequired("Polymer"), 721);
 researchControl.beginProcessedCycle?.();
-researchPanelVisible = false;
+researchDrawAvailable = false;
 assert.equal(researchControl.sampleOfferedTechs(), undefined);
 assert.equal(researchControl.readOfferedTechs(), undefined);
 assert.equal(demand.sample().storageRequired("Polymer"), 1);
@@ -446,6 +484,7 @@ assert.equal(researchControl.readGrantedTechs(), undefined);
       invoke: () => ({ ok: true, value: undefined }),
       capturedElementIds: () => buildIds,
     }),
+    bindings: inertBindings,
     mountSuppression: {
       available: true,
       withoutMounting: (action) => action(),
@@ -460,6 +499,7 @@ assert.equal(researchControl.readGrantedTechs(), undefined);
         buildingCatalogDraws++;
         return [];
       },
+      count: () => 0,
     },
     mechanics: makeCapturedBuildingMechanics(buildRoot, {
       availability: (liveRoot, binding) => {
@@ -677,6 +717,7 @@ assert.equal(researchControl.readGrantedTechs(), undefined);
       invoke: () => ({ ok: true, value: undefined }),
       capturedElementIds: () => ["space-titan_quarters", "space-titan_mine"],
     }),
+    bindings: inertBindings,
     mountSuppression: { available: true, withoutMounting: (draw) => draw() },
     panels: { open: () => ({ release: () => {}, isIntact: () => true }) },
     drawnActions: {
@@ -692,6 +733,12 @@ assert.equal(researchControl.readGrantedTechs(), undefined);
             : []),
         ];
       },
+      count: (selector) =>
+        selector === "#tech .action"
+          ? 0
+          : selector === "#space .action"
+            ? 1 + Number(titanRoot.space.titan_quarters.count > 0)
+            : 0,
     },
     mechanics: makeCapturedBuildingMechanics(titanRoot, {
       availability: (_liveRoot, binding) => ({
@@ -828,6 +875,7 @@ assert.equal(researchControl.readGrantedTechs(), undefined);
       invoke: () => ({ ok: false, reason: "unexpected-control" }),
       capturedElementIds: () => ["city-farm"],
     }),
+    bindings: inertBindings,
     mountSuppression: {
       available: false,
       withoutMounting: () => {
@@ -844,6 +892,9 @@ assert.equal(researchControl.readGrantedTechs(), undefined);
       exists: () => false,
       read: () => {
         throw new Error("Building preparation must not read DOM rows");
+      },
+      count: () => {
+        throw new Error("Building preparation must not count DOM rows");
       },
     },
     mechanics,

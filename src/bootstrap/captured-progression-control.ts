@@ -61,6 +61,7 @@ import type { GameMountSuppression } from "../ports/game-mount-suppression.ts";
 import type { GamePanelWorkspace } from "../ports/game-panel-workspace.ts";
 import type { GameRootStateSource } from "../ports/game-root-state.ts";
 import type { CapturedGameMechanics } from "../ports/captured-game-mechanics.ts";
+import type { VueBindingObserver } from "../adapters/evolve/vue-capture.ts";
 import type { GameKeyboardHandlersPort } from "../ports/game-keyboard-handlers.ts";
 import type { GameKeyStateReader } from "../ports/game-key-state.ts";
 import type {
@@ -85,6 +86,7 @@ export interface CapturedProgressionControlDependencies {
   /** Retained native action mechanics used as Building offer authority. */
   readonly mechanics: CapturedGameMechanics;
   readonly controls: GameControlRegistry;
+  readonly bindings: VueBindingObserver;
   readonly mountSuppression: GameMountSuppression;
   readonly panels: GamePanelWorkspace;
   /** Native queue-key events and observed key state for the semantic build-capacity probe. */
@@ -268,6 +270,7 @@ export function createCapturedProgressionControl(
     rootState,
     mechanics,
     controls,
+    bindings,
     mountSuppression,
     panels,
     drawnActions,
@@ -478,6 +481,7 @@ export function createCapturedProgressionControl(
     rootState,
     discovery,
     drawnActions,
+    bindings,
     controls,
     mechanics,
     ...(onUnavailable === undefined ? {} : { onUnavailable }),
@@ -797,6 +801,7 @@ export function createCapturedProgressionControl(
     rootState,
     mechanics,
     controls,
+    bindings,
     readSettings,
     drawnActions,
     mountSuppression,

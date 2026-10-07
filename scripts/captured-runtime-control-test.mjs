@@ -297,12 +297,7 @@ function runDemandSampleScenario(
   researchPanel.appendChild(row);
   documentRoot.appendChild(researchPanel);
   const document = createTestDocument(documentRoot);
-  let researchOfferReads = 0;
-  const queryAll = document.querySelectorAll;
-  document.querySelectorAll = (selector) => {
-    if (selector === "#tech .action") researchOfferReads += 1;
-    return queryAll(selector);
-  };
+  let researchCatalogReads = 0;
   const handles = new Map(
     [
       ["buildQueue", ["setData"]],
@@ -379,6 +374,11 @@ function runDemandSampleScenario(
       },
       capturedElementIds: () => [...handles.keys()],
     }),
+    bindings(listener) {
+      researchCatalogReads += 1;
+      listener("tech-polymer-reserve", Object.freeze({}));
+      return () => {};
+    },
     keyState: { readPressed: () => false },
     controlUsage: { readUsage: () => [] },
     periods: {
@@ -433,7 +433,13 @@ function runDemandSampleScenario(
     pageCaptureCycle({ periods: 1 });
   }
   stop();
-  return { invoked, phases, researchOfferReads, errors, root };
+  return {
+    invoked,
+    phases,
+    researchOfferReads: researchCatalogReads,
+    errors,
+    root,
+  };
 }
 
 function assertDemandScenarioErrors(errors) {
@@ -3037,19 +3043,13 @@ function runCombatRuntime(autoFight) {
   researchPanel.appendChild(researchRow("tech-polymer-heavy", 700));
   documentRoot.appendChild(researchPanel);
   const document = createTestDocument(documentRoot);
-  let researchOfferReads = 0;
-  const queryAll = document.querySelectorAll;
-  document.querySelectorAll = (selector) => {
-    if (selector === "#tech .action") researchOfferReads += 1;
-    return queryAll(selector);
-  };
+  let researchCatalogReads = 0;
   assert.deepEqual(
     createGameDrawnActionsReader({ getDocument: () => document }).read(
       "#tech .action",
     )[0]?.cost,
     { Polymer: 700 },
   );
-  researchOfferReads = 0;
   const root = {
     settings: { civTabs: 3, showStorage: true },
     race: {},
@@ -3074,7 +3074,16 @@ function runCombatRuntime(autoFight) {
   const storageCalls = [];
   const researchActions = [];
   const errors = [];
+  let nativeResearchBindings = ["tech-polymer-heavy"];
   const handles = new Map([
+    [
+      "#mainColumn div.content",
+      {
+        elementId: "#mainColumn div.content",
+        generation: 1,
+        methods: ["swapTab"],
+      },
+    ],
     [
       "createHead",
       {
@@ -3120,6 +3129,12 @@ function runCombatRuntime(autoFight) {
         researchPanel.replaceChildren(
           researchRow("tech-redrawn-after-storage", 900),
         );
+        nativeResearchBindings = ["tech-redrawn-after-storage"];
+        handles.set("tech-redrawn-after-storage", {
+          elementId: "tech-redrawn-after-storage",
+          generation: 1,
+          methods: ["action"],
+        });
         return { ok: true, value: undefined };
       }
       if (handle.elementId === "tech-polymer-heavy" && method === "action") {
@@ -3133,29 +3148,43 @@ function runCombatRuntime(autoFight) {
   });
   let cycle;
   const stop = startCapturedRuntime({
-    pageCapture: {
-      isComplete: () => true,
-      rootState: {
-        readRoot: () => root,
-        isReactivitySuppressed: () => false,
-        subscribeRootReplaced: () => () => {},
-      },
-      controls,
-      keyState: { readPressed: () => false },
-      controlUsage: { readUsage: () => [] },
-      periods: {
-        subscribe(next) {
-          cycle = next;
+    pageCapture: withCapturedTechMechanicsFixture(
+      {
+        isComplete: () => true,
+        rootState: {
+          readRoot: () => root,
+          isReactivitySuppressed: () => false,
+          subscribeRootReplaced: () => () => {},
+        },
+        controls,
+        bindings(listener) {
+          researchCatalogReads += 1;
+          for (const elementId of nativeResearchBindings) {
+            listener(elementId, Object.freeze({}));
+          }
           return () => {};
         },
+        keyState: { readPressed: () => false },
+        controlUsage: { readUsage: () => [] },
+        periods: {
+          subscribe(next) {
+            cycle = next;
+            return () => {};
+          },
+        },
+        mountSuppression: {
+          available: true,
+          withoutMounting: (draw) => draw(),
+          withMountingEnabled: (draw) => draw(),
+        },
+        uninstall: () => {},
+        mechanics: {
+          readStructures: () => undefined,
+          readStructureIdentities: () => undefined,
+        },
       },
-      mountSuppression: { available: false, withoutMounting: () => undefined },
-      uninstall: () => {},
-      mechanics: {
-        readStructures: () => undefined,
-        readStructureIdentities: () => undefined,
-      },
-    },
+      ["tech-polymer-heavy", "tech-redrawn-after-storage"],
+    ),
     document,
     mouseEvent: class {},
     storage: {
@@ -3177,9 +3206,9 @@ function runCombatRuntime(autoFight) {
   });
   const offerReadsPerCycle = [];
   for (let index = 0; index < 3; index += 1) {
-    const readsBefore = researchOfferReads;
+    const readsBefore = researchCatalogReads;
     cycle({ periods: 1 });
-    offerReadsPerCycle.push(researchOfferReads - readsBefore);
+    offerReadsPerCycle.push(researchCatalogReads - readsBefore);
   }
   stop();
 

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 
 import { createCapturedResearchControl } from "../src/bootstrap/captured-research-control.ts";
+import { installVueCapture } from "../src/adapters/evolve/vue-capture.ts";
 import { withControlCaptureAuthority } from "./control-capture-fixture.mjs";
 
 /**
@@ -18,6 +19,14 @@ function makePage({
   race = {},
   stats = {},
 }) {
+  const vue = {
+    reactive: (target) => target,
+    toRaw: (value) => value,
+    createApp: (options) => ({ options, unmount() {} }),
+  };
+  const vueCapture = installVueCapture({ Vue: vue });
+  const emitBinding = (elementId) =>
+    vue.createApp({ el: `#${elementId}`, methods: { action() {} } });
   const root = {
     settings: { civTabs: 4, animated: true, qAny: false },
     // No `gods`: upstream creates it lazily and carries it across a race replacement only
@@ -40,7 +49,12 @@ function makePage({
   // The main-tab component the discovery pass starts from.
   controls.set("#mainColumn div.content", {
     generation: 1,
-    methods: { swapTab: (index) => index },
+    methods: {
+      swapTab(index) {
+        if (index === 3) for (const entry of drawn()) emitBinding(entry.id);
+        return index;
+      },
+    },
   });
 
   /** Only the technologies the game still offers: a granted one leaves the panel. */
@@ -105,12 +119,15 @@ function makePage({
 
   /** The markup `setAction` writes: prices as a case-preserving class and a lower-cased attribute. */
   const drawnActions = {
-    read: () =>
-      drawn().map((entry) => ({
-        id: entry.id,
-        cost: Object.freeze({ ...entry.cost }),
-        nativeAffordable: entry.nativeAffordable?.(root) !== false,
-      })),
+    read: (selector) =>
+      selector === "#tech .action"
+        ? drawn().map((entry) => ({
+            id: entry.id,
+            cost: Object.freeze({ ...entry.cost }),
+            nativeAffordable: entry.nativeAffordable?.(root) !== false,
+          }))
+        : [],
+    count: (selector) => (selector === "#tech .action" ? drawn().length : 0),
     exists: () => root.settings.civTabs === 3,
   };
   const definitions = Object.freeze(
@@ -155,6 +172,7 @@ function makePage({
       },
       mechanics,
       controls: registry,
+      bindings: vueCapture.observeBindings,
       drawnActions,
       mountSuppression,
       panels,
@@ -407,7 +425,8 @@ const SMELTING = {
       captureTechDefinitionsDuring: (draw) => draw(),
       readTechDefinitions: () => [],
     }),
-    drawnActions: { read: () => [], exists: () => false },
+    drawnActions: { read: () => [], count: () => 0, exists: () => false },
+    bindings: () => () => {},
     mountSuppression: { available: true, withoutMounting: (draw) => draw() },
     panels: { open: () => undefined },
     readSettings: () => ({}),

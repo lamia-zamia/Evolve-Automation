@@ -23,6 +23,7 @@ import type { GameMountSuppression } from "../ports/game-mount-suppression.ts";
 import type { GamePanelWorkspace } from "../ports/game-panel-workspace.ts";
 import type { GameRootStateSource } from "../ports/game-root-state.ts";
 import type { CapturedGameMechanics } from "../ports/captured-game-mechanics.ts";
+import type { VueBindingObserver } from "../adapters/evolve/vue-capture.ts";
 import type { OfferedTech } from "../ports/game-tech-catalog.ts";
 import type { TickDiagnostics } from "../ports/tick.ts";
 
@@ -33,6 +34,7 @@ export interface CapturedResearchControlDependencies {
     "captureTechDefinitionsDuring" | "readTechDefinitions"
   >;
   readonly controls: GameControlRegistry;
+  readonly bindings: VueBindingObserver;
   /** The effective settings the research exclusions decide on. */
   readonly readSettings: () => unknown;
   readonly drawnActions: GameDrawnActionsReader;
@@ -68,6 +70,7 @@ export function createCapturedResearchControl(
     rootState,
     mechanics,
     controls,
+    bindings,
     drawnActions,
     mountSuppression,
     panels,
@@ -87,6 +90,7 @@ export function createCapturedResearchControl(
       panels,
     }),
     drawnActions,
+    bindings,
     controls,
     ...(onUnavailable === undefined ? {} : { onUnavailable }),
   });

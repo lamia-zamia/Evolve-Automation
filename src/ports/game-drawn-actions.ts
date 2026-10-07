@@ -5,7 +5,8 @@
  * computed with its own `adjustCosts` at draw time, and orders the elements the way it wants them
  * offered. For the panels whose contents have no other captured route — research above all, where
  * the offered set comes from `checkTechRequirements` and the catalog is module-lexical — that
- * rendered markup is the game's own answer, not a guess about it.
+ * rendered markup carries the game's computed price and affordability. When another native
+ * observation owns membership or order, callers join that observation to these row details.
  *
  * These reads are only meaningful while the panel is mounted and only accurate immediately after
  * it was drawn, so a caller takes them inside a discovery pass and treats the result as a
@@ -43,6 +44,8 @@ export interface DrawnAction {
 export interface GameDrawnActionsReader {
   /** Action elements currently matching `selector`, in document order. */
   read(selector: string): readonly Readonly<DrawnAction>[];
+  /** Number of matching action elements, including rows whose id cannot be read. */
+  count(selector: string): number;
   /**
    * Whether anything matches `selector` right now. Answers "is this panel drawn" without paying to
    * read what is in it, which is what decides whether a panel has to be drawn at all.
