@@ -52,6 +52,15 @@ export interface CapturedPowerRequirement {
   readonly level: number;
 }
 
+/** Native structure identity without the game-owned readers attached to a full definition. */
+export interface CapturedGameStructureIdentity {
+  readonly entryKey: string;
+  readonly region: string;
+  readonly sector: string;
+  readonly struct: string;
+  readonly actionId: string;
+}
+
 export type CapturedFuelAdjustmentMode = "space" | "interstellar";
 
 export interface CapturedNativeSupportGrid {
@@ -149,6 +158,9 @@ export interface CapturedGameMechanics {
   ): CapturedGameRead<boolean>;
   /** `undefined` means the private registry has not been captured or failed validation. */
   readStructures(): readonly CapturedGameStructureDefinition[] | undefined;
+  /** Identity-only view for catalog guards that do not need native action readers. */
+  readStructureIdentities():
+    readonly CapturedGameStructureIdentity[] | undefined;
   /** Resolve the live root Power list; unknown/stale keys are skipped, never Map-ordered. */
   readPowerOrder(
     root: unknown,

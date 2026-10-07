@@ -46,7 +46,16 @@ export function makeCapturedBuildingMechanics(
     structures.push(Object.freeze(native));
   }
   structures.push(...extraStructures);
-  return Object.freeze({ readStructures: () => Object.freeze(structures) });
+  const readStructureIdentities = () =>
+    Object.freeze(
+      structures.map(({ entryKey, region, sector, struct, actionId }) =>
+        Object.freeze({ entryKey, region, sector, struct, actionId }),
+      ),
+    );
+  return Object.freeze({
+    readStructures: () => Object.freeze(structures),
+    readStructureIdentities,
+  });
 }
 
 export function availableWhenBindings(...bindings) {

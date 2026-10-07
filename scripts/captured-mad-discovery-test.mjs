@@ -80,7 +80,10 @@ const controls = withControlCaptureAuthority({
 const stop = startCapturedRuntime({
   pageCapture: {
     isComplete: () => true,
-    mechanics: { readStructures: () => undefined },
+    mechanics: {
+      readStructures: () => undefined,
+      readStructureIdentities: () => undefined,
+    },
     rootState: {
       readRoot: () => root,
       isReactivitySuppressed: () => false,

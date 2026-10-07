@@ -15,6 +15,7 @@ import { makeCapturedBuildingMechanics } from "./captured-building-test-fixtures
       isComplete: () => true,
       mechanics: {
         readStructures: () => undefined,
+        readStructureIdentities: () => undefined,
         readProductionBreakdown: () => undefined,
       },
       rootState: {
@@ -455,7 +456,10 @@ const stop = startCapturedRuntime({
     },
     mountSuppression: { available: false, withoutMounting: () => undefined },
     uninstall: () => {},
-    mechanics: { readStructures: () => undefined },
+    mechanics: {
+      readStructures: () => undefined,
+      readStructureIdentities: () => undefined,
+    },
   },
   document: {},
   mouseEvent: class {},
@@ -614,7 +618,10 @@ assert.equal(unsubscribeCount, 1);
       withMountingEnabled: (draw) => draw(),
     },
     uninstall: () => {},
-    mechanics: { readStructures: () => undefined },
+    mechanics: {
+      readStructures: () => undefined,
+      readStructureIdentities: () => undefined,
+    },
   };
   const firstStop = startCapturedRuntime({
     pageCapture,
@@ -982,7 +989,10 @@ assert.equal(unsubscribeCount, 1);
       },
       mountSuppression: { available: false, withoutMounting: () => undefined },
       uninstall: () => {},
-      mechanics: { readStructures: () => undefined },
+      mechanics: {
+        readStructures: () => undefined,
+        readStructureIdentities: () => undefined,
+      },
     },
     document: { getElementById: () => null, querySelectorAll: () => [] },
     mouseEvent: class {},
@@ -1474,7 +1484,10 @@ assert.equal(unsubscribeCount, 1);
       },
       mountSuppression: { available: false, withoutMounting: () => undefined },
       uninstall: () => {},
-      mechanics: { readStructures: () => undefined },
+      mechanics: {
+        readStructures: () => undefined,
+        readStructureIdentities: () => undefined,
+      },
     },
     document,
     settingsHostWindow: {
@@ -1517,6 +1530,7 @@ assert.equal(unsubscribeCount, 1);
       isComplete: () => true,
       mechanics: {
         readStructures: () => undefined,
+        readStructureIdentities: () => undefined,
         readProductionBreakdown: () => undefined,
       },
       rootState: {
@@ -1623,7 +1637,10 @@ assert.equal(unsubscribeCount, 1);
       },
       mountSuppression: { available: false, withoutMounting: () => undefined },
       uninstall: () => {},
-      mechanics: { readStructures: () => undefined },
+      mechanics: {
+        readStructures: () => undefined,
+        readStructureIdentities: () => undefined,
+      },
     },
     document: {},
     mouseEvent: class {},
@@ -1765,7 +1782,10 @@ assert.equal(unsubscribeCount, 1);
       },
       mountSuppression: { available: false, withoutMounting: () => undefined },
       uninstall: () => {},
-      mechanics: { readStructures: () => undefined },
+      mechanics: {
+        readStructures: () => undefined,
+        readStructureIdentities: () => undefined,
+      },
     },
     document: {},
     mouseEvent: class {},
@@ -1953,7 +1973,10 @@ function runCapturedJobsMatrixScenario({
       },
       mountSuppression: { available: false, withoutMounting: () => undefined },
       uninstall: () => {},
-      mechanics: { readStructures: () => undefined },
+      mechanics: {
+        readStructures: () => undefined,
+        readStructureIdentities: () => undefined,
+      },
     },
     document: {},
     mouseEvent: class {},
@@ -2166,6 +2189,7 @@ function runCapturedJobsMatrixScenario({
       isComplete: () => true,
       mechanics: {
         readStructures: () => undefined,
+        readStructureIdentities: () => undefined,
         readProductionBreakdown: () => undefined,
       },
       rootState: {
@@ -2272,7 +2296,10 @@ function runCapturedJobsMatrixScenario({
           withoutMounting: () => undefined,
         },
         uninstall: () => {},
-        mechanics: { readStructures: () => undefined },
+        mechanics: {
+          readStructures: () => undefined,
+          readStructureIdentities: () => undefined,
+        },
       },
       document: { getElementById: () => null, querySelectorAll: () => [] },
       mouseEvent: class {},
@@ -2387,7 +2414,10 @@ function runCapturedJobsMatrixScenario({
       },
       mountSuppression: { available: false, withoutMounting: () => undefined },
       uninstall: () => {},
-      mechanics: { readStructures: () => undefined },
+      mechanics: {
+        readStructures: () => undefined,
+        readStructureIdentities: () => undefined,
+      },
     },
     document: {},
     mouseEvent: class {},
@@ -2566,7 +2596,10 @@ function runCapturedJobsMatrixScenario({
       },
       mountSuppression: { available: false, withoutMounting: () => undefined },
       uninstall: () => {},
-      mechanics: { readStructures: () => undefined },
+      mechanics: {
+        readStructures: () => undefined,
+        readStructureIdentities: () => undefined,
+      },
     },
     document: {},
     mouseEvent: class {},
@@ -2725,7 +2758,10 @@ function runCombatRuntime(autoFight) {
       },
       mountSuppression: { available: false, withoutMounting: () => undefined },
       uninstall: () => {},
-      mechanics: { readStructures: () => undefined },
+      mechanics: {
+        readStructures: () => undefined,
+        readStructureIdentities: () => undefined,
+      },
     },
     document: {},
     mouseEvent: class {},
@@ -2899,7 +2935,10 @@ function runCombatRuntime(autoFight) {
       },
       mountSuppression: { available: false, withoutMounting: () => undefined },
       uninstall: () => {},
-      mechanics: { readStructures: () => undefined },
+      mechanics: {
+        readStructures: () => undefined,
+        readStructureIdentities: () => undefined,
+      },
     },
     document: {
       getElementById: () => null,
@@ -3095,7 +3134,10 @@ function runCombatRuntime(autoFight) {
       },
       mountSuppression: { available: false, withoutMounting: () => undefined },
       uninstall: () => {},
-      mechanics: { readStructures: () => undefined },
+      mechanics: {
+        readStructures: () => undefined,
+        readStructureIdentities: () => undefined,
+      },
     },
     document,
     mouseEvent: class {},

@@ -28,6 +28,19 @@ function nativeBuilding(binding) {
   });
 }
 
+function nativeBuildingIdentity(structure) {
+  const { entryKey, region, sector, struct, actionId } = structure;
+  return Object.freeze({ entryKey, region, sector, struct, actionId });
+}
+
+function nativeMechanics(readStructures) {
+  return {
+    readStructures,
+    readStructureIdentities: () =>
+      readStructures()?.map(nativeBuildingIdentity),
+  };
+}
+
 // --- startup initializes exactly once, and a redrawn UI does not redo it ------------------------
 
 {
@@ -118,7 +131,7 @@ function nativeBuilding(binding) {
     space: { atmo_terraformer: { count: 1, on: 0 } },
   });
   let structures;
-  const mechanics = { readStructures: () => structures };
+  const mechanics = nativeMechanics(() => structures);
   const capturedIds = [...DEFAULT_CONTROL_IDS];
   const { lifecycle, settings, controls, saved } = createSettingsFixture({
     gameRoot,
@@ -169,7 +182,7 @@ function nativeBuilding(binding) {
   const { lifecycle, settings, controls } = createSettingsFixture({
     gameRoot,
     controlIds: [],
-    mechanics: { readStructures: () => bindings.map(nativeBuilding) },
+    mechanics: nativeMechanics(() => bindings.map(nativeBuilding)),
   });
   lifecycle.initialize();
   lifecycle.ensureDynamicDefaults();
@@ -202,7 +215,7 @@ function nativeBuilding(binding) {
     }),
     gameRoot,
     controlIds,
-    mechanics: { readStructures: () => [nativeBuilding(binding)] },
+    mechanics: nativeMechanics(() => [nativeBuilding(binding)]),
   });
   lifecycle.initialize();
   lifecycle.ensureDynamicDefaults();
@@ -241,7 +254,7 @@ function nativeBuilding(binding) {
   const { lifecycle, settings, defaults, controls } = createSettingsFixture({
     gameRoot,
     controlIds,
-    mechanics: { readStructures: () => structures },
+    mechanics: nativeMechanics(() => structures),
   });
   lifecycle.initialize();
   lifecycle.ensureDynamicDefaults();
@@ -258,6 +271,194 @@ function nativeBuilding(binding) {
   lifecycle.ensureDynamicDefaults();
   assert.equal(settings.readRaw()["bld_s_space-space_station"], true);
   assert.ok(Number.isFinite(settings.readRaw()["bld_p_space-space_station"]));
+}
+
+// --- generation reads identities without materializing native Building entries ------------------
+
+{
+  const binding = "space-atmo_terraformer";
+  const gameRoot = createSettingsRoot({
+    space: { atmo_terraformer: { count: 1, on: 0 } },
+  });
+  let structureReads = 0;
+  let titleReads = 0;
+  let structures;
+  const structure = Object.freeze({
+    ...nativeBuilding(binding),
+    readTitle: () => {
+      titleReads += 1;
+      return { kind: "value", value: "Atmospheric Terraformer" };
+    },
+  });
+  const mechanics = {
+    readStructures: () => {
+      structureReads += 1;
+      return structures;
+    },
+    readStructureIdentities: () => structures?.map(nativeBuildingIdentity),
+  };
+  const { defaults } = createSettingsFixture({
+    gameRoot,
+    controlIds: [],
+    mechanics,
+  });
+  structures = [structure];
+  const readsBeforeGeneration = structureReads;
+
+  assert.doesNotThrow(() => defaults.readCatalogGeneration());
+  assert.equal(titleReads, 0, "generation must not read native titles");
+  assert.equal(
+    structureReads,
+    readsBeforeGeneration,
+    "generation must not build full mechanics definitions",
+  );
+
+  const catalogs = defaults.readMigrationCatalogs();
+  assert.equal(titleReads, 1, "the full migration catalog may read its title");
+  assert.deepEqual(catalogs.buildings, [
+    { vueBinding: binding, switchable: true },
+  ]);
+}
+
+// --- an owned native structure gaining a root state advances generation ---------------------------
+
+{
+  const binding = "space-atmo_terraformer";
+  const gameRoot = createSettingsRoot();
+  const structure = nativeBuilding(binding);
+  const { lifecycle, settings, defaults } = createSettingsFixture({
+    gameRoot,
+    controlIds: [],
+    mechanics: nativeMechanics(() => [structure]),
+  });
+  lifecycle.initialize();
+  lifecycle.ensureDynamicDefaults();
+  const beforeState = defaults.readCatalogGeneration();
+
+  gameRoot.space = { atmo_terraformer: { count: 1, on: 0 } };
+  assert.notEqual(
+    defaults.readCatalogGeneration(),
+    beforeState,
+    "a live root state can introduce native Building defaults",
+  );
+  lifecycle.ensureDynamicDefaults();
+  assert.equal(settings.readRaw()[`bld_s_${binding}`], true);
+  assert.ok(Number.isFinite(settings.readRaw()[`bld_p_${binding}`]));
+}
+
+// --- an owned native state gaining its own `on` adds the switch setting ----------------------------
+
+{
+  const binding = "space-atmo_terraformer";
+  const state = { count: 1 };
+  const gameRoot = createSettingsRoot({
+    space: { atmo_terraformer: state },
+  });
+  const { lifecycle, settings, defaults } = createSettingsFixture({
+    rawText: JSON.stringify({
+      [`bld_p_${binding}`]: 83,
+      [`bld_m_${binding}`]: 7,
+      [`bld_w_${binding}`]: 19,
+    }),
+    gameRoot,
+    controlIds: [],
+    mechanics: nativeMechanics(() => [nativeBuilding(binding)]),
+  });
+  lifecycle.initialize();
+  lifecycle.ensureDynamicDefaults();
+  assert.equal(settings.readRaw()[`bld_s_${binding}`], undefined);
+  const beforeSwitchable = defaults.readCatalogGeneration();
+
+  state.on = 0;
+  assert.notEqual(
+    defaults.readCatalogGeneration(),
+    beforeSwitchable,
+    "owning `on` makes the Building switchable and adds a setting key",
+  );
+  lifecycle.ensureDynamicDefaults();
+  const raw = settings.readRaw();
+  assert.equal(raw[`bld_s_${binding}`], true);
+  assert.equal(raw[`bld_p_${binding}`], 83);
+  assert.equal(raw[`bld_m_${binding}`], 7);
+  assert.equal(raw[`bld_w_${binding}`], 19);
+}
+
+// --- a control-only owned Building still advances generation and adds defaults --------------------
+
+{
+  const binding = "space-space_station";
+  const gameRoot = createSettingsRoot({
+    space: { space_station: { count: 1, on: 0 } },
+  });
+  const controlIds = [];
+  const { lifecycle, settings, defaults } = createSettingsFixture({
+    gameRoot,
+    controlIds,
+    mechanics: nativeMechanics(() => []),
+  });
+  lifecycle.initialize();
+  lifecycle.ensureDynamicDefaults();
+  assert.equal(settings.readRaw()[`bld_s_${binding}`], undefined);
+  const beforeControl = defaults.readCatalogGeneration();
+
+  controlIds.push(binding);
+  assert.notEqual(
+    defaults.readCatalogGeneration(),
+    beforeControl,
+    "a captured control-only Building can introduce defaults",
+  );
+  lifecycle.ensureDynamicDefaults();
+  assert.equal(settings.readRaw()[`bld_s_${binding}`], true);
+  assert.ok(Number.isFinite(settings.readRaw()[`bld_p_${binding}`]));
+}
+
+// --- stable generations do not repeat full Building reads or the defaults sweep -------------------
+
+{
+  const binding = "space-atmo_terraformer";
+  const structure = nativeBuilding(binding);
+  let structureReads = 0;
+  let identityReads = 0;
+  let titleReads = 0;
+  const titledStructure = Object.freeze({
+    ...structure,
+    readTitle: () => {
+      titleReads += 1;
+      return { kind: "value", value: binding };
+    },
+  });
+  const mechanics = {
+    readStructures: () => {
+      structureReads += 1;
+      return [titledStructure];
+    },
+    readStructureIdentities: () => {
+      identityReads += 1;
+      return [nativeBuildingIdentity(titledStructure)];
+    },
+  };
+  const { lifecycle } = createSettingsFixture({
+    gameRoot: createSettingsRoot({
+      space: { atmo_terraformer: { count: 1, on: 0 } },
+    }),
+    controlIds: [],
+    mechanics,
+  });
+  lifecycle.initialize();
+  lifecycle.ensureDynamicDefaults();
+  const settled = {
+    structureReads,
+    identityReads,
+    titleReads,
+    runs: lifecycle.stats().dynamicDefaultRuns,
+  };
+
+  for (let call = 0; call < 24; call += 1) lifecycle.ensureDynamicDefaults();
+  assert.equal(structureReads, settled.structureReads);
+  assert.equal(titleReads, settled.titleReads);
+  assert.equal(identityReads, settled.identityReads + 24);
+  assert.equal(lifecycle.stats().dynamicDefaultRuns, settled.runs);
+  assert.equal(lifecycle.stats().dynamicDefaultSkips, 24);
 }
 
 // --- import forces reinitialization --------------------------------------------------------------

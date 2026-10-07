@@ -49,24 +49,115 @@ export interface CapturedBuildingEntry {
   readonly state: Readonly<Record<string, unknown>>;
 }
 
+interface CapturedBuildingStructureIndex {
+  readonly structuresByBinding: ReadonlyMap<
+    string,
+    readonly CapturedBuildingStructureDefinition[]
+  >;
+  readonly statesByBinding: ReadonlyMap<
+    string,
+    readonly {
+      readonly structure: CapturedBuildingStructureDefinition;
+      readonly state: Readonly<Record<string, unknown>>;
+    }[]
+  >;
+  readonly firstStructureByBindingAndState: ReadonlyMap<
+    string,
+    ReadonlyMap<
+      Readonly<Record<string, unknown>>,
+      CapturedBuildingStructureDefinition
+    >
+  >;
+  readonly stateByStructure: ReadonlyMap<
+    CapturedBuildingStructureDefinition,
+    Readonly<Record<string, unknown>>
+  >;
+}
+
+function indexCapturedBuildingStructures(
+  root: unknown,
+  elementIds: readonly string[],
+  structures: readonly CapturedBuildingStructureDefinition[],
+): CapturedBuildingStructureIndex {
+  const structuresByBinding = new Map<
+    string,
+    CapturedBuildingStructureDefinition[]
+  >();
+  const relevantBindings = new Set(CAPTURED_AUTOMATION_BUILDING_BINDINGS);
+  for (const elementId of elementIds) {
+    const binding = bindingForBuildingElement(elementId);
+    const parts = splitActionId(binding);
+    if (parts !== undefined && CAPTURED_BUILD_REGIONS.has(parts.region)) {
+      relevantBindings.add(binding);
+    }
+  }
+  for (const structure of structures) {
+    const binding = bindingForBuildingElement(structure.actionId);
+    const matches = structuresByBinding.get(binding);
+    if (matches === undefined) structuresByBinding.set(binding, [structure]);
+    else matches.push(structure);
+  }
+
+  const statesByBinding = new Map<
+    string,
+    {
+      structure: CapturedBuildingStructureDefinition;
+      state: Readonly<Record<string, unknown>>;
+    }[]
+  >();
+  const firstStructureByBindingAndState = new Map<
+    string,
+    Map<Readonly<Record<string, unknown>>, CapturedBuildingStructureDefinition>
+  >();
+  const stateByStructure = new Map<
+    CapturedBuildingStructureDefinition,
+    Readonly<Record<string, unknown>>
+  >();
+  for (const [binding, matches] of structuresByBinding) {
+    if (!relevantBindings.has(binding)) continue;
+    const states: {
+      structure: CapturedBuildingStructureDefinition;
+      state: Readonly<Record<string, unknown>>;
+    }[] = [];
+    const firstStructureByState = new Map<
+      Readonly<Record<string, unknown>>,
+      CapturedBuildingStructureDefinition
+    >();
+    for (const structure of matches) {
+      const region = readProperty(root, structure.region);
+      const state = readProperty(region, structure.struct);
+      if (!isRecord(state)) continue;
+      states.push({ structure, state });
+      if (!firstStructureByState.has(state)) {
+        firstStructureByState.set(state, structure);
+      }
+      stateByStructure.set(structure, state);
+    }
+    if (states.length > 0) statesByBinding.set(binding, states);
+    if (firstStructureByState.size > 0) {
+      firstStructureByBindingAndState.set(binding, firstStructureByState);
+    }
+  }
+  return {
+    structuresByBinding,
+    statesByBinding,
+    firstStructureByBindingAndState,
+    stateByStructure,
+  };
+}
+
 function readCapturedBuildingRootStateRecord(
   root: unknown,
   binding: string,
   act: Readonly<Record<string, unknown>> | undefined,
-  structures: readonly CapturedBuildingStructureDefinition[],
+  structureIndex: CapturedBuildingStructureIndex,
 ): Readonly<Record<string, unknown>> | undefined {
   const parts = splitActionId(binding);
   if (parts === undefined || !CAPTURED_BUILD_REGIONS.has(parts.region)) {
     return undefined;
   }
-  const matches = structures.filter(
-    (structure) => bindingForBuildingElement(structure.actionId) === binding,
-  );
-  const states = matches.flatMap((structure) => {
-    const region = readProperty(root, structure.region);
-    const state = readProperty(region, structure.struct);
-    return isRecord(state) ? [{ structure, state }] : [];
-  });
+  const matches = structureIndex.structuresByBinding.get(binding) ?? [];
+  const states = structureIndex.statesByBinding.get(binding) ?? [];
   const exactAct =
     act === undefined ? undefined : states.find(({ state }) => state === act);
   if (exactAct !== undefined) return exactAct.state;
@@ -96,7 +187,13 @@ export function readCapturedBuildingEntries(
 ): readonly Readonly<CapturedBuildingEntry>[] {
   const entries: CapturedBuildingEntry[] = [];
   const seen = new Set<string>();
-  for (const elementId of controls.capturedElementIds()) {
+  const elementIds = controls.capturedElementIds();
+  const structureIndex = indexCapturedBuildingStructures(
+    root,
+    elementIds,
+    structures,
+  );
+  for (const elementId of elementIds) {
     const binding = bindingForBuildingElement(elementId);
     const parts = splitActionId(binding);
     if (parts === undefined || !CAPTURED_BUILD_REGIONS.has(parts.region)) {
@@ -109,16 +206,12 @@ export function readCapturedBuildingEntries(
       root,
       binding,
       isRecord(act) ? act : undefined,
-      structures,
+      structureIndex,
     );
     if (state === undefined) continue;
-    const stateEntry = structures.find((structure) => {
-      const region = readProperty(root, structure.region);
-      return (
-        bindingForBuildingElement(structure.actionId) === binding &&
-        readProperty(region, structure.struct) === state
-      );
-    });
+    const stateEntry = structureIndex.firstStructureByBindingAndState
+      .get(binding)
+      ?.get(state);
     const metadata = metadataForBuilding(binding);
     const liveState = isRecord(act) ? act : state;
     entries.push(
@@ -156,9 +249,8 @@ export function readCapturedBuildingEntries(
     if (parts === undefined || !CAPTURED_BUILD_REGIONS.has(parts.region)) {
       continue;
     }
-    const region = readProperty(root, structure.region);
-    const state = readProperty(region, structure.struct);
-    if (!isRecord(state)) continue;
+    const state = structureIndex.stateByStructure.get(structure);
+    if (state === undefined) continue;
     const title = structure.readTitle();
     const metadata = metadataForBuilding(binding);
     entries.push(

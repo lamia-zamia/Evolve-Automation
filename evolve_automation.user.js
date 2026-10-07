@@ -1168,16 +1168,38 @@
   }
 
   // src/adapters/evolve/progression/build/captured-building-catalog.ts
-  function readCapturedBuildingRootStateRecord(root, binding, act, structures) {
+  function indexCapturedBuildingStructures(root, elementIds, structures) {
+    let structuresByBinding = /* @__PURE__ */ new Map(), relevantBindings = new Set(CAPTURED_AUTOMATION_BUILDING_BINDINGS);
+    for (let elementId of elementIds) {
+      let binding = bindingForBuildingElement(elementId), parts = splitActionId(binding);
+      parts !== void 0 && CAPTURED_BUILD_REGIONS.has(parts.region) && relevantBindings.add(binding);
+    }
+    for (let structure of structures) {
+      let binding = bindingForBuildingElement(structure.actionId), matches = structuresByBinding.get(binding);
+      matches === void 0 ? structuresByBinding.set(binding, [structure]) : matches.push(structure);
+    }
+    let statesByBinding = /* @__PURE__ */ new Map(), firstStructureByBindingAndState = /* @__PURE__ */ new Map(), stateByStructure = /* @__PURE__ */ new Map();
+    for (let [binding, matches] of structuresByBinding) {
+      if (!relevantBindings.has(binding)) continue;
+      let states = [], firstStructureByState = /* @__PURE__ */ new Map();
+      for (let structure of matches) {
+        let region = readProperty(root, structure.region), state = readProperty(region, structure.struct);
+        isRecord(state) && (states.push({ structure, state }), firstStructureByState.has(state) || firstStructureByState.set(state, structure), stateByStructure.set(structure, state));
+      }
+      states.length > 0 && statesByBinding.set(binding, states), firstStructureByState.size > 0 && firstStructureByBindingAndState.set(binding, firstStructureByState);
+    }
+    return {
+      structuresByBinding,
+      statesByBinding,
+      firstStructureByBindingAndState,
+      stateByStructure
+    };
+  }
+  function readCapturedBuildingRootStateRecord(root, binding, act, structureIndex) {
     let parts = splitActionId(binding);
     if (parts === void 0 || !CAPTURED_BUILD_REGIONS.has(parts.region))
       return;
-    let matches = structures.filter(
-      (structure) => bindingForBuildingElement(structure.actionId) === binding
-    ), states = matches.flatMap((structure) => {
-      let region = readProperty(root, structure.region), state = readProperty(region, structure.struct);
-      return isRecord(state) ? [{ structure, state }] : [];
-    }), exactAct = act === void 0 ? void 0 : states.find(({ state }) => state === act);
+    let matches = structureIndex.structuresByBinding.get(binding) ?? [], states = structureIndex.statesByBinding.get(binding) ?? [], exactAct = act === void 0 ? void 0 : states.find(({ state }) => state === act);
     if (exactAct !== void 0) return exactAct.state;
     if (states.length === 1) return states[0].state;
     if (states.length > 1 || matches.length > 0) return;
@@ -1189,8 +1211,12 @@
     return isRecord(data) ? data : void 0;
   }
   function readCapturedBuildingEntries(root, controls2, structures = []) {
-    let entries = [], seen = /* @__PURE__ */ new Set();
-    for (let elementId of controls2.capturedElementIds()) {
+    let entries = [], seen = /* @__PURE__ */ new Set(), elementIds = controls2.capturedElementIds(), structureIndex = indexCapturedBuildingStructures(
+      root,
+      elementIds,
+      structures
+    );
+    for (let elementId of elementIds) {
       let binding = bindingForBuildingElement(elementId), parts = splitActionId(binding);
       if (parts === void 0 || !CAPTURED_BUILD_REGIONS.has(parts.region))
         continue;
@@ -1198,13 +1224,10 @@
         root,
         binding,
         isRecord(act) ? act : void 0,
-        structures
+        structureIndex
       );
       if (state === void 0) continue;
-      let stateEntry = structures.find((structure) => {
-        let region = readProperty(root, structure.region);
-        return bindingForBuildingElement(structure.actionId) === binding && readProperty(region, structure.struct) === state;
-      }), metadata2 = metadataForBuilding(binding), liveState = isRecord(act) ? act : state;
+      let stateEntry = structureIndex.firstStructureByBindingAndState.get(binding)?.get(state), metadata2 = metadataForBuilding(binding), liveState = isRecord(act) ? act : state;
       entries.push(
         Object.freeze({
           binding,
@@ -1228,8 +1251,8 @@
       let parts = splitActionId(binding);
       if (parts === void 0 || !CAPTURED_BUILD_REGIONS.has(parts.region))
         continue;
-      let region = readProperty(root, structure.region), state = readProperty(region, structure.struct);
-      if (!isRecord(state)) continue;
+      let state = structureIndex.stateByStructure.get(structure);
+      if (state === void 0) continue;
       let title = structure.readTitle(), metadata2 = metadataForBuilding(binding);
       entries.push(
         Object.freeze({
@@ -2136,6 +2159,8 @@
       adjustPower: () => ({ kind: "invalid" }),
       readStructures: () => {
       },
+      readStructureIdentities: () => {
+      },
       readPowerOrder: () => ({ kind: "invalid" }),
       readSupportOrder: () => ({ kind: "invalid" }),
       readProductionBreakdown: () => {
@@ -2434,6 +2459,28 @@
             for (let [key, value] of entries) {
               let entry = readMechanicsEntry(key, value);
               entry !== void 0 && result.push(createMechanicsDefinition(entry, entries));
+            }
+            return Object.freeze(result);
+          } catch {
+            return;
+          }
+      },
+      readStructureIdentities() {
+        let entries = structureEntries;
+        if (!(entries === void 0 || stopped))
+          try {
+            let result = [];
+            for (let [key, value] of entries) {
+              let entry = readMechanicsEntry(key, value);
+              entry !== void 0 && result.push(
+                Object.freeze({
+                  entryKey: entry.entryKey,
+                  region: entry.region,
+                  sector: entry.sector,
+                  struct: entry.struct,
+                  actionId: entry.actionId
+                })
+              );
             }
             return Object.freeze(result);
           } catch {
@@ -35690,6 +35737,61 @@
     });
   }
 
+  // src/adapters/evolve/progression/build/captured-building-generation.ts
+  function sortBuildingGenerationFacts(facts) {
+    return facts.sort((left, right) => {
+      let leftKey = JSON.stringify(left), rightKey = JSON.stringify(right);
+      return leftKey < rightKey ? -1 : leftKey > rightKey ? 1 : 0;
+    }), facts;
+  }
+  function capturedBuildingGenerationControlFacts(root, elementIds, controls2) {
+    let facts = [];
+    for (let elementId of elementIds) {
+      let binding = bindingForBuildingElement(elementId), parts = splitActionId(binding);
+      if (parts === void 0 || !CAPTURED_BUILD_REGIONS.has(parts.region))
+        continue;
+      let data = controls2.resolve(elementId)?.data, act = readProperty(data, "act"), actRecord = isRecord(act) ? act : void 0, candidate = readProperty(readProperty(root, parts.region), parts.id), candidateRecord = isRecord(candidate) ? candidate : void 0;
+      facts.push([
+        binding,
+        actRecord !== void 0,
+        actRecord !== void 0 && Object.hasOwn(actRecord, "on"),
+        candidateRecord !== void 0,
+        candidateRecord !== void 0 && Object.hasOwn(candidateRecord, "on"),
+        act === void 0 || candidate === act
+      ]);
+    }
+    return sortBuildingGenerationFacts(facts);
+  }
+  function capturedBuildingGenerationNativeFacts(root, elementIds, identities) {
+    if (identities === void 0) return null;
+    let capturedBindings = new Set(elementIds.map(bindingForBuildingElement)), facts = [];
+    for (let identity of identities) {
+      let binding = bindingForBuildingElement(identity.actionId), parts = splitActionId(binding);
+      if (parts === void 0 || !CAPTURED_BUILD_REGIONS.has(parts.region) || !CAPTURED_AUTOMATION_BUILDING_BINDINGS.has(binding) && !capturedBindings.has(binding))
+        continue;
+      let state = readProperty(
+        readProperty(root, identity.region),
+        identity.struct
+      ), liveState = isRecord(state) ? state : void 0;
+      facts.push([
+        identity.entryKey,
+        identity.region,
+        identity.sector,
+        identity.struct,
+        binding,
+        liveState !== void 0,
+        liveState !== void 0 && Object.hasOwn(liveState, "on")
+      ]);
+    }
+    return sortBuildingGenerationFacts(facts);
+  }
+  function readCapturedBuildingGenerationWitness(root, controls2, elementIds, identities) {
+    return JSON.stringify([
+      capturedBuildingGenerationControlFacts(root, elementIds, controls2),
+      capturedBuildingGenerationNativeFacts(root, elementIds, identities)
+    ]);
+  }
+
   // src/adapters/evolve/progression/research/captured-research-settings-catalog.ts
   function readTechElementId(rootKey) {
     return rootKey.startsWith("tech-") ? rootKey : `tech-${rootKey}`;
@@ -35989,16 +36091,22 @@
         )
       };
     }, readCatalogGeneration = () => {
-      let catalogs = readMigrationCatalogs();
+      let root = readRootSafely(rootState), controlIds = controls2.capturedElementIds(), productionContext = readProduction(root), foundryResourceIds = new Set(
+        Object.values(productionContext.foundryResourceIdByKey)
+      );
       return [
-        Object.keys(catalogs.techIds).length,
-        catalogs.marketPriorityIds.length,
-        catalogs.resourceIds.length,
-        catalogs.projectIds.length,
-        catalogs.buildings.length,
-        catalogs.buildings.filter((building) => building.switchable).length,
-        catalogs.crafterOriginalIds.length,
-        controls2.capturedElementIds().length
+        Object.keys(readTechIds(root)).length,
+        mergeResourceIds(root, "tradable", controls2, "market-").length,
+        readResources(root).length,
+        readProjects(root).projectIds.length,
+        readCapturedBuildingGenerationWitness(
+          root,
+          controls2,
+          controlIds,
+          mechanics.readStructureIdentities()
+        ),
+        CRAFTER_RESOURCE_KEYS.filter((key) => foundryResourceIds.has(key)).length,
+        controlIds.length
       ].join(":");
     };
     return {

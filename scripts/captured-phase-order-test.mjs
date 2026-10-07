@@ -1718,6 +1718,7 @@ function runTailChain() {
     // production error path, without discovering a panel.
     mechanics: {
       readStructures: () => undefined,
+      readStructureIdentities: () => undefined,
       readProductionBreakdown: () => undefined,
     },
     logEvents: [

@@ -465,6 +465,16 @@ function runMinerBootstrap({
     documentSetup: ({ body }) => body.append(element("div", { id: "tech" })),
     mechanics: {
       readStructures: () => [ship, capturedStation, iron],
+      readStructureIdentities: () =>
+        [ship, capturedStation, iron].map(
+          ({ entryKey, region, sector, struct, actionId }) => ({
+            entryKey,
+            region,
+            sector,
+            struct,
+            actionId,
+          }),
+        ),
       readPowerOrder: () => value([capturedStation]),
       readSupportOrder: (sample, type) =>
         value(

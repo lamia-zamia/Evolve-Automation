@@ -59,7 +59,10 @@ function createCapturedPage(root, handles, settings, log = () => {}) {
   let cycle;
   const pageCapture = {
     isComplete: () => true,
-    mechanics: { readStructures: () => undefined },
+    mechanics: {
+      readStructures: () => undefined,
+      readStructureIdentities: () => undefined,
+    },
     rootState: {
       readRoot: () => root,
       isReactivitySuppressed: () => false,
@@ -328,7 +331,10 @@ let missingCycle;
 const missingRuntime = startCapturedRuntime({
   pageCapture: {
     isComplete: () => true,
-    mechanics: { readStructures: () => undefined },
+    mechanics: {
+      readStructures: () => undefined,
+      readStructureIdentities: () => undefined,
+    },
     rootState: {
       readRoot: () => ({
         race: { species: "human", governor: { tasks: {} } },

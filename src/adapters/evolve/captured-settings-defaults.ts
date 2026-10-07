@@ -57,6 +57,7 @@ import {
   readCapturedBuildingBindingMap,
   readCapturedBuildingEntries,
 } from "./progression/build/captured-building-catalog.ts";
+import { readCapturedBuildingGenerationWitness } from "./progression/build/captured-building-generation.ts";
 import { readTechElementId } from "./progression/research/captured-research-settings-catalog.ts";
 import { CRAFTER_RESOURCE_KEYS } from "../../domain/economy/production/crafter-resources.ts";
 import { isBuildableArpaProjectId } from "./progression/research/arpa-project-identity.ts";
@@ -64,7 +65,10 @@ import { isBuildableArpaProjectId } from "./progression/research/arpa-project-id
 export interface CapturedSettingsDefaultsDependencies {
   readonly rootState: GameRootStateSource;
   readonly controls: GameControlRegistry;
-  readonly mechanics: Pick<CapturedGameMechanics, "readStructures">;
+  readonly mechanics: Pick<
+    CapturedGameMechanics,
+    "readStructures" | "readStructureIdentities"
+  >;
 }
 
 function readRootSafely(rootState: GameRootStateSource): unknown {
@@ -481,26 +485,29 @@ export function createCapturedSettingsDefaults({
   };
 
   /**
-   * Counts rather than contents.
-   *
-   * Every dynamic settings key is named after an entry in one of these catalogs, so a key the
-   * record does not have yet implies a catalog that has grown. The game only ever adds ids to
-   * these lists — a resource, tech, project, building or captured control appears and stays — so
-   * a length is a sufficient witness and a rename at constant length is not a shape the game
-   * produces. Buildings also carry a switchable flag, which decides whether `bld_s_` keys exist
-   * at all, so the switchable count is carried separately.
+   * The Building witness uses only native identities and live state shape. The other catalog
+   * counts retain their existing growth contract without materializing full Building entries.
    */
   const readCatalogGeneration = (): string => {
-    const catalogs = readMigrationCatalogs();
+    const root = readRootSafely(rootState);
+    const controlIds = controls.capturedElementIds();
+    const productionContext = readProduction(root);
+    const foundryResourceIds = new Set(
+      Object.values(productionContext.foundryResourceIdByKey),
+    );
     return [
-      Object.keys(catalogs.techIds).length,
-      catalogs.marketPriorityIds.length,
-      catalogs.resourceIds.length,
-      catalogs.projectIds.length,
-      catalogs.buildings.length,
-      catalogs.buildings.filter((building) => building.switchable).length,
-      catalogs.crafterOriginalIds.length,
-      controls.capturedElementIds().length,
+      Object.keys(readTechIds(root)).length,
+      mergeResourceIds(root, "tradable", controls, "market-").length,
+      readResources(root).length,
+      readProjects(root).projectIds.length,
+      readCapturedBuildingGenerationWitness(
+        root,
+        controls,
+        controlIds,
+        mechanics.readStructureIdentities(),
+      ),
+      CRAFTER_RESOURCE_KEYS.filter((key) => foundryResourceIds.has(key)).length,
+      controlIds.length,
     ].join(":");
   };
 

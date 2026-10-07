@@ -64,6 +64,24 @@ export function createControlRegistry(ids = []) {
   };
 }
 
+function settingsMechanics(mechanics) {
+  return {
+    readStructures: () => mechanics.readStructures(),
+    readStructureIdentities: mechanics.readStructureIdentities
+      ? () => mechanics.readStructureIdentities()
+      : () =>
+          mechanics
+            .readStructures()
+            ?.map(({ entryKey, region, sector, struct, actionId }) => ({
+              entryKey,
+              region,
+              sector,
+              struct,
+              actionId,
+            })),
+  };
+}
+
 function job(name, extra = {}) {
   return {
     job: name,
@@ -102,7 +120,10 @@ export function createSettingsFixture({
   rawText = null,
   controlIds = DEFAULT_CONTROL_IDS,
   gameRoot = createSettingsRoot(),
-  mechanics = { readStructures: () => undefined },
+  mechanics = {
+    readStructures: () => undefined,
+    readStructureIdentities: () => undefined,
+  },
   saved = createFakeStorage(rawText),
   settings = createSettingsStore({ storage: saved }),
 } = {}) {
@@ -111,7 +132,7 @@ export function createSettingsFixture({
   const defaults = createCapturedSettingsDefaults({
     rootState,
     controls,
-    mechanics,
+    mechanics: settingsMechanics(mechanics),
   });
   const lifecycle = createCapturedSettingsLifecycle({
     settings,
@@ -159,7 +180,10 @@ export function createRecordSettingsLifecycle({
   raw,
   rootState,
   controls,
-  mechanics = { readStructures: () => undefined },
+  mechanics = {
+    readStructures: () => undefined,
+    readStructureIdentities: () => undefined,
+  },
 }) {
   return createCapturedSettingsLifecycle({
     settings: {
@@ -170,7 +194,7 @@ export function createRecordSettingsLifecycle({
     defaults: createCapturedSettingsDefaults({
       rootState,
       controls,
-      mechanics,
+      mechanics: settingsMechanics(mechanics),
     }),
   });
 }

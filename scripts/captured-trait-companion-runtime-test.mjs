@@ -61,7 +61,10 @@ function createFixture({
   };
   const pageCapture = {
     isComplete: () => true,
-    mechanics: { readStructures: () => undefined },
+    mechanics: {
+      readStructures: () => undefined,
+      readStructureIdentities: () => undefined,
+    },
     rootState: {
       readRoot: () => root,
       isReactivitySuppressed: () => false,
@@ -299,7 +302,10 @@ function createCapturedOcularFixture({
         };
       },
     },
-    mechanics: { readStructures: () => undefined },
+    mechanics: {
+      readStructures: () => undefined,
+      readStructureIdentities: () => undefined,
+    },
   };
   const storage = {
     getItem: () =>

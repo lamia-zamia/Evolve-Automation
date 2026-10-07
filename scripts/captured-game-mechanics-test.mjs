@@ -302,6 +302,17 @@ const fourth = structureEntry({
 entries.set(fourth.key, fourth);
 const definitions = capture.mechanics.readStructures();
 assert.equal(definitions.length, 4);
+assert.deepEqual(
+  capture.mechanics.readStructureIdentities(),
+  definitions.map(({ entryKey, region, sector, struct, actionId }) => ({
+    entryKey,
+    region,
+    sector,
+    struct,
+    actionId,
+  })),
+  "the lightweight identity view preserves full keys for duplicate short names",
+);
 const nativeOn = new page.Object();
 nativeOn.coal_power = 2;
 entries.set("city:coal_power", {

@@ -38,7 +38,10 @@ function runGeneticsDiscoveryFixture({ traitAutomation }) {
   const stop = startCapturedRuntime({
     pageCapture: {
       isComplete: () => true,
-      mechanics: { readStructures: () => undefined },
+      mechanics: {
+        readStructures: () => undefined,
+        readStructureIdentities: () => undefined,
+      },
       rootState: {
         readRoot: () => root,
         isReactivitySuppressed: () => false,
@@ -269,7 +272,10 @@ function runMarketFixture({
   const stop = startCapturedRuntime({
     pageCapture: {
       isComplete: () => true,
-      mechanics: { readStructures: () => undefined },
+      mechanics: {
+        readStructures: () => undefined,
+        readStructureIdentities: () => undefined,
+      },
       rootState: {
         readRoot: () => root,
         isReactivitySuppressed: () => false,
@@ -394,7 +400,10 @@ function runMarketFixture({
   startCapturedRuntime({
     pageCapture: {
       isComplete: () => true,
-      mechanics: { readStructures: () => undefined },
+      mechanics: {
+        readStructures: () => undefined,
+        readStructureIdentities: () => undefined,
+      },
       rootState: {
         readRoot: () => root,
         isReactivitySuppressed: () => false,
@@ -472,7 +481,10 @@ function runMarketFixture({
   startCapturedRuntime({
     pageCapture: {
       isComplete: () => true,
-      mechanics: { readStructures: () => undefined },
+      mechanics: {
+        readStructures: () => undefined,
+        readStructureIdentities: () => undefined,
+      },
       rootState: {
         readRoot: () => root,
         isReactivitySuppressed: () => false,
@@ -652,7 +664,10 @@ function runMarketFixture({
   const stop = startCapturedRuntime({
     pageCapture: {
       isComplete: () => true,
-      mechanics: { readStructures: () => undefined },
+      mechanics: {
+        readStructures: () => undefined,
+        readStructureIdentities: () => undefined,
+      },
       rootState: {
         readRoot: () => root,
         isReactivitySuppressed: () => false,

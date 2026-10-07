@@ -10,6 +10,7 @@ import type {
   CapturedGameFuelInput,
   CapturedGameMechanics,
   CapturedGameRead,
+  CapturedGameStructureIdentity,
   CapturedGameStructureDefinition,
   CapturedPowerBalanceRule,
   CapturedPowerRequirement,
@@ -988,6 +989,7 @@ function emptyGameMechanics(): CapturedGameMechanics {
   return Object.freeze({
     adjustPower: () => ({ kind: "invalid" as const }),
     readStructures: () => undefined,
+    readStructureIdentities: () => undefined,
     readPowerOrder: () => ({ kind: "invalid" as const }),
     readSupportOrder: () => ({ kind: "invalid" as const }),
     readProductionBreakdown: () => undefined,
@@ -1653,6 +1655,30 @@ export function installCapturedGameMechanics(
           const entry = readMechanicsEntry(key, value);
           if (entry !== undefined)
             result.push(createMechanicsDefinition(entry, entries));
+        }
+        return Object.freeze(result);
+      } catch {
+        return undefined;
+      }
+    },
+    readStructureIdentities():
+      readonly CapturedGameStructureIdentity[] | undefined {
+      const entries = structureEntries;
+      if (entries === undefined || stopped) return undefined;
+      try {
+        const result: CapturedGameStructureIdentity[] = [];
+        for (const [key, value] of entries) {
+          const entry = readMechanicsEntry(key, value);
+          if (entry === undefined) continue;
+          result.push(
+            Object.freeze({
+              entryKey: entry.entryKey,
+              region: entry.region,
+              sector: entry.sector,
+              struct: entry.struct,
+              actionId: entry.actionId,
+            }),
+          );
         }
         return Object.freeze(result);
       } catch {
