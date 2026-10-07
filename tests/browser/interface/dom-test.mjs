@@ -96,6 +96,51 @@ import {
   ]);
 }
 
+// Indexed simple selectors stay scoped and in tree order as elements move or change attributes.
+{
+  const outer = element("main");
+  const outside = element("span", { id: "shared-id" });
+  const root = element("section");
+  outer.append(outside, root);
+  const document = createTestDocument(root);
+  const first = element("span", { id: "shared-id" });
+  first.classList.add("shared");
+  const nested = element("div");
+  const second = element("span", { id: "shared-id" });
+  second.classList.add("shared");
+  nested.appendChild(second);
+  root.append(first, nested);
+
+  assert.deepEqual(root.querySelectorAll("#shared-id"), [first, second]);
+  assert.deepEqual(root.querySelectorAll(".shared"), [first, second]);
+  assert.deepEqual(nested.querySelectorAll("#shared-id"), [second]);
+  assert.equal(document.getElementById("shared-id"), first);
+
+  root.appendChild(first);
+  assert.deepEqual(root.querySelectorAll("#shared-id"), [second, first]);
+  assert.deepEqual(outer.querySelectorAll("#shared-id"), [
+    outside,
+    second,
+    first,
+  ]);
+
+  second.id = "renamed";
+  second.classList.remove("shared");
+  assert.deepEqual(root.querySelectorAll("#shared-id"), [first]);
+  assert.deepEqual(root.querySelectorAll(".shared"), [first]);
+  assert.deepEqual(root.querySelectorAll("#renamed"), [second]);
+
+  nested.removeChild(second);
+  second.setAttribute("id", "replacement");
+  assert.deepEqual(root.querySelectorAll("#replacement"), []);
+  const replacement = element("span", { id: "replacement" });
+  replacement.classList.add("shared");
+  root.replaceChildren(replacement, first);
+  assert.deepEqual(root.querySelectorAll("#replacement"), [replacement]);
+  assert.deepEqual(root.querySelectorAll(".shared"), [replacement, first]);
+  assert.equal(document.getElementById("replacement"), replacement);
+}
+
 // --- attributes, properties, and content -----------------------------------------------------
 
 {

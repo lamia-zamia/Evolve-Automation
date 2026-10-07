@@ -4,7 +4,7 @@ set -eu
 root=$(git rev-parse --show-toplevel)
 cd "$root"
 
-build_inputs="src scripts .github build.mjs eslint.config.js package.json package-lock.json README.md tsconfig.json .prettierrc.json .prettierignore"
+build_inputs="src tests scripts .github build.mjs eslint.config.js package.json package-lock.json README.md tsconfig.json .prettierrc.json .prettierignore"
 build_outputs="evolve_automation.user.js evolve_automation.meta.js"
 
 if ! git diff --quiet -- $build_inputs; then

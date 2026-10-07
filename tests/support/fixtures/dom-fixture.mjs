@@ -10,6 +10,73 @@
 
 import { createDomQuery } from "../../../src/adapters/browser/dom.ts";
 
+const indexedElementsById = new Map();
+const indexedElementsByClass = new Map();
+const elementReferences = new WeakMap();
+
+function referenceForElement(element) {
+  let reference = elementReferences.get(element);
+  if (reference === undefined) {
+    reference = new WeakRef(element);
+    elementReferences.set(element, reference);
+  }
+  return reference;
+}
+
+function addToSelectorIndex(index, key, element) {
+  if (key === "") return;
+  let elements = index.get(key);
+  if (elements === undefined) {
+    elements = new Set();
+    index.set(key, elements);
+  }
+  elements.add(referenceForElement(element));
+}
+
+function removeFromSelectorIndex(index, key, element) {
+  if (key === "") return;
+  const elements = index.get(key);
+  if (elements === undefined) return;
+  elements.delete(referenceForElement(element));
+  if (elements.size === 0) index.delete(key);
+}
+
+function isStrictDescendantOf(root, element) {
+  let node = element.parentElement;
+  while (node !== null) {
+    if (node === root) return true;
+    node = node.parentElement;
+  }
+  return false;
+}
+
+function indexedUniqueDescendants(root, token) {
+  const idMatch = /^#([\w-]+)$/.exec(token);
+  const classMatch = /^\.([\w-]+)$/.exec(token);
+  const index = idMatch === null ? indexedElementsByClass : indexedElementsById;
+  const key = idMatch === null ? classMatch?.[1] : idMatch[1];
+  if (key === undefined) return null;
+
+  const elements = index.get(key);
+  if (elements === undefined) return [];
+
+  const matches = [];
+  for (const reference of elements) {
+    const candidate = reference.deref();
+    if (candidate === undefined) {
+      elements.delete(reference);
+      continue;
+    }
+    if (!isStrictDescendantOf(root, candidate)) continue;
+    matches.push(candidate);
+    // The index does not encode tree order. Fall back to the traversal for duplicates.
+    if (matches.length > 1) return null;
+  }
+  return matches;
+}
+
+const compiledSimpleMatchers = new Map();
+
 export function parseSimple(token) {
   const match = /^(\*|[a-zA-Z][\w-]*)?(#[\w-]+)?((?:\.[\w-]+)*)$/.exec(token);
   if (match === null) throw new Error(`unsupported test selector: ${token}`);
@@ -27,9 +94,17 @@ function matchesParsedSimple(element, { tag, id, classes }) {
 }
 
 function compileSimpleMatcher(token) {
-  if (token === "[id]") return (element) => element.id !== "";
+  const cached = compiledSimpleMatchers.get(token);
+  if (cached !== undefined) return cached;
+  if (token === "[id]") {
+    const matcher = (element) => element.id !== "";
+    compiledSimpleMatchers.set(token, matcher);
+    return matcher;
+  }
   const parsed = parseSimple(token);
-  return (element) => matchesParsedSimple(element, parsed);
+  const matcher = (element) => matchesParsedSimple(element, parsed);
+  compiledSimpleMatchers.set(token, matcher);
+  return matcher;
 }
 
 function* descendants(node) {
@@ -67,6 +142,17 @@ export class TestElement {
     this.offsetHeight = 10;
     this.listeners = [];
     const classes = new Set();
+    const addClass = (name) => {
+      if (!classes.has(name)) {
+        classes.add(name);
+        addToSelectorIndex(indexedElementsByClass, name, this);
+      }
+    };
+    const removeClass = (name) => {
+      if (classes.delete(name)) {
+        removeFromSelectorIndex(indexedElementsByClass, name, this);
+      }
+    };
     // DOMTokenList is variadic and rejects empty or whitespace-bearing tokens.
     const checkToken = (name) => {
       if (name === "") throw new Error("The token provided must not be empty.");
@@ -76,15 +162,15 @@ export class TestElement {
       return name;
     };
     this.classList = {
-      add: (...names) => names.forEach((name) => classes.add(checkToken(name))),
+      add: (...names) => names.forEach((name) => addClass(checkToken(name))),
       remove: (...names) =>
-        names.forEach((name) => classes.delete(checkToken(name))),
+        names.forEach((name) => removeClass(checkToken(name))),
       contains: (name) => classes.has(name),
       toggle: (name, force) => {
         checkToken(name);
         const wanted = force === undefined ? !classes.has(name) : force;
-        if (wanted) classes.add(name);
-        else classes.delete(name);
+        if (wanted) addClass(name);
+        else removeClass(name);
         return wanted;
       },
       values: () => [...classes],
@@ -106,7 +192,15 @@ export class TestElement {
   }
 
   set id(value) {
+    const previous = this.id;
+    if (previous === value) return;
+    if (typeof previous === "string") {
+      removeFromSelectorIndex(indexedElementsById, previous, this);
+    }
     this.attributes.set("id", value);
+    if (typeof value === "string") {
+      addToSelectorIndex(indexedElementsById, value, this);
+    }
   }
 
   getAttribute(name) {
@@ -117,6 +211,10 @@ export class TestElement {
   }
 
   setAttribute(name, value) {
+    if (name.toLowerCase() === "id") {
+      this.id = value;
+      return;
+    }
     if (name === "class") {
       for (const className of this.classList.values())
         this.classList.remove(className);
@@ -153,6 +251,7 @@ export class TestElement {
         this.textContent += String(node.textContent ?? "");
         continue;
       }
+      if (node.parentElement !== null) node.remove();
       node.parentElement = this;
       this.children.push(node);
     }
@@ -160,21 +259,36 @@ export class TestElement {
 
   prepend(...nodes) {
     for (const node of [...nodes].reverse()) {
+      if (node.parentElement !== null) node.remove();
       node.parentElement = this;
       this.children.unshift(node);
     }
   }
 
   before(...nodes) {
-    const siblings = this.parentElement.children;
-    siblings.splice(siblings.indexOf(this), 0, ...nodes);
-    for (const node of nodes) node.parentElement = this.parentElement;
+    const parent = this.parentElement;
+    if (parent === null) return;
+    for (const node of nodes) {
+      if (node === this) continue;
+      if (node.parentElement !== null) node.remove();
+      const siblings = parent.children;
+      node.parentElement = parent;
+      siblings.splice(siblings.indexOf(this), 0, node);
+    }
   }
 
   after(...nodes) {
-    const siblings = this.parentElement.children;
-    siblings.splice(siblings.indexOf(this) + 1, 0, ...nodes);
-    for (const node of nodes) node.parentElement = this.parentElement;
+    const parent = this.parentElement;
+    if (parent === null) return;
+    let previous = this;
+    for (const node of nodes) {
+      if (node === this) continue;
+      if (node.parentElement !== null) node.remove();
+      const siblings = parent.children;
+      node.parentElement = parent;
+      siblings.splice(siblings.indexOf(previous) + 1, 0, node);
+      previous = node;
+    }
   }
 
   appendChild(node) {
@@ -232,10 +346,9 @@ export class TestElement {
     for (const token of selector.trim().split(/\s+/)) {
       if (token === ":scope") continue;
       if (current.length === 0) continue;
-      const matcher = compileSimpleMatcher(
-        token.startsWith(">") ? token.slice(1) : token,
-      );
       const directChild = token.startsWith(">");
+      const simpleToken = directChild ? token.slice(1) : token;
+      const matcher = compileSimpleMatcher(simpleToken);
       const matches = [];
       for (const node of current) {
         if (directChild) {
@@ -243,6 +356,11 @@ export class TestElement {
             if (matcher(child)) matches.push(child);
           }
         } else {
+          const indexed = indexedUniqueDescendants(node, simpleToken);
+          if (indexed !== null) {
+            matches.push(...indexed);
+            continue;
+          }
           for (const child of descendants(node)) {
             if (matcher(child)) matches.push(child);
           }
