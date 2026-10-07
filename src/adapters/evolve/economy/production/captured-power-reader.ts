@@ -2186,6 +2186,7 @@ function readPowerCycle(
     const state = readCapturedStructureState(root, structure);
     if (state === undefined || state === null) continue;
     const support = structure.readSupport();
+    if (support.kind === "absent") continue;
     const readTypes = structure.readSupportTypes();
     const supportTypes =
       readTypes.kind === "value" ? readTypes.value : Object.freeze([]);
@@ -2193,7 +2194,6 @@ function readPowerCycle(
       if (supportTypes.length === 0) unsafeEverySupportType = true;
       for (const type of supportTypes) unsafeSupportTypes.add(type);
     }
-    if (support.kind === "absent") continue;
     if (support.kind === "invalid") {
       if (supportTypes.length === 0) unsafeEverySupportType = true;
       for (const type of supportTypes) unsafeSupportTypes.add(type);
@@ -2308,36 +2308,34 @@ function readPowerCycle(
     );
     const beltConsumer = beltConsumerByBinding.get(record.catalog.binding);
     const powerlessBeltConsumer =
-      beltConsumer !== undefined && record.powered === 0;
-    if (
-      participant === undefined ||
-      (role.kind !== "value" && !powerlessBeltConsumer)
-    ) {
-      const types = participant?.supportTypes ?? [];
-      if (types.length === 0) unsafeEverySupportType = true;
-      for (const type of types) unsafeSupportTypes.add(type);
-      continue;
-    }
+      role.kind === "invalid" &&
+      record.powered === 0 &&
+      beltConsumer !== undefined &&
+      participant?.supportTypes.includes("belt") === true;
+    if (role.kind !== "value" && !powerlessBeltConsumer) continue;
     const nativeRole = role.kind === "value" ? role.value : "none";
+    const supportTypes = participant?.supportTypes ?? Object.freeze([]);
+    const nativeSupportChanges =
+      participant?.supportChanges ?? Object.freeze([]);
     if (
       nativeRole === "none" &&
-      participant.supportChanges.length === 0 &&
+      nativeSupportChanges.length === 0 &&
       beltConsumer === undefined
     )
       continue;
-    const hasNativeBeltConsumer = participant.supportChanges.some(
+    const hasNativeBeltConsumer = nativeSupportChanges.some(
       (change) => change.type === "belt" && change.amount > 0,
     );
     const supportChanges =
       beltConsumer !== undefined && !hasNativeBeltConsumer
         ? Object.freeze([
-            ...participant.supportChanges,
+            ...nativeSupportChanges,
             Object.freeze({
               type: "belt",
               amount: beltConsumer.supportPerUnit,
             }),
           ])
-        : participant.supportChanges;
+        : nativeSupportChanges;
     candidates.push({
       record,
       // Belt miners draw no Power. Their captured native support demand stays eligible for
@@ -2346,7 +2344,7 @@ function readPowerCycle(
         nativeRole === "none" && beltConsumer !== undefined
           ? "consumer"
           : nativeRole,
-      supportTypes: participant.supportTypes,
+      supportTypes,
       supportChanges,
     });
   }

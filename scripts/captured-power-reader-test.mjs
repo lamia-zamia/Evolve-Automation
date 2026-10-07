@@ -12,6 +12,7 @@ import {
   readCapturedWomlingFarmFood,
   readCapturedMiningPitWorkers,
 } from "../src/adapters/evolve/economy/production/captured-power-reader.ts";
+import { createCapturedPowerExecutor } from "../src/adapters/evolve/economy/production/captured-power-executor.ts";
 import {
   readCapturedHumongousEffectMultiplier,
   readCapturedHighPopulationGrowthMultiplier,
@@ -42,6 +43,7 @@ function structure({
   supportFor,
   supportProvider,
   supportTopology,
+  supportAbsent = false,
   fuelAdjustmentRequested,
   supportFuelAdjustmentDisabled,
   title = actionId,
@@ -49,6 +51,7 @@ function structure({
   value,
   workers,
   shipRating,
+  checkPowerMembership = false,
 }) {
   // Arbitrary fixture actions belong to the automation catalog through captured controls.
   // This one deliberately represents an upstream-only registry action.
@@ -77,14 +80,19 @@ function structure({
       shipRating === undefined ? { kind: "absent" } : readNumber(shipRating),
     ownsPowered,
     readPowered: () => readNumber(powered),
-    readPowerGridRole: (sample, sampledPowered = powered) =>
-      readNumber(
-        Number(sampledPowered) > 0
-          ? "consumer"
-          : Number(sampledPowered) < 0
-            ? "generator"
-            : "none",
-      ),
+    readPowerGridRole: (sample, sampledPowered = powered) => {
+      const watts = Number(sampledPowered);
+      if (
+        checkPowerMembership &&
+        (!Array.isArray(sample?.power) ||
+          sample.power.includes(entryKey) !== watts > 0)
+      ) {
+        return { kind: "invalid" };
+      }
+      return readNumber(
+        watts > 0 ? "consumer" : watts < 0 ? "generator" : "none",
+      );
+    },
     readSwitchable: () =>
       switchable === undefined
         ? { kind: "absent" }
@@ -99,9 +107,10 @@ function structure({
       fuelAdjustmentRequested === undefined
         ? { kind: "absent" }
         : readNumber(fuelAdjustmentRequested),
-    readSupport: () => readNumber(support),
+    readSupport: () =>
+      supportAbsent ? { kind: "absent" } : readNumber(support),
     readSupportTypes: () =>
-      supportTypes === undefined
+      supportAbsent || supportTypes === undefined
         ? { kind: "absent" }
         : {
             kind: "value",
@@ -120,26 +129,29 @@ function structure({
         enabled: { kind: "value", value: true },
       },
     }),
-    readNativeSupportGrids: () => ({
-      kind: "value",
-      value: (supportTypes === undefined
-        ? []
-        : Array.isArray(supportTypes)
-          ? supportTypes
-          : [supportTypes]
-      ).map((type) => ({
-        type,
-        contribution: supportFor?.[type] ?? support,
-        consumer: support < 0,
-        provider:
-          (supportFor?.[type] ?? support) > 0 || supportProvider === true,
-        topology: supportTopology ?? {
-          anchorEntryKey: null,
-          unlimited: false,
-          enabled: { kind: "value", value: true },
-        },
-      })),
-    }),
+    readNativeSupportGrids: () =>
+      supportAbsent
+        ? { kind: "absent" }
+        : {
+            kind: "value",
+            value: (supportTypes === undefined
+              ? []
+              : Array.isArray(supportTypes)
+                ? supportTypes
+                : [supportTypes]
+            ).map((type) => ({
+              type,
+              contribution: supportFor?.[type] ?? support,
+              consumer: support < 0,
+              provider:
+                (supportFor?.[type] ?? support) > 0 || supportProvider === true,
+              topology: supportTopology ?? {
+                anchorEntryKey: null,
+                unlimited: false,
+                enabled: { kind: "value", value: true },
+              },
+            })),
+          },
     readSupportFuel: () =>
       supportFuel === undefined ? { kind: "absent" } : readNumber(supportFuel),
     readSupportFuelAdjustmentDisabled: () =>
@@ -555,6 +567,24 @@ function createMechanics({
       }),
     );
   return Object.freeze({
+    adjustPower(
+      sample,
+      entryKey,
+      expected,
+      target,
+      isCurrent = () => true,
+      preflightOnly = false,
+    ) {
+      const member = byKey.get(entryKey);
+      const state =
+        member === undefined
+          ? undefined
+          : sample?.[member.region]?.[member.struct];
+      if (!state || state.on !== expected || !isCurrent())
+        return { kind: "value", value: false };
+      if (!preflightOnly) state.on = target;
+      return { kind: "value", value: true };
+    },
     readStructures: () => structureSample,
     readPowerOrder: (sample) =>
       Array.isArray(powerOrder(sample))
@@ -786,6 +816,130 @@ assert.deepEqual(
   "both producer capabilities survive an off multi-output harvester",
 );
 
+// DeadSpace @ db38e2af's space-atmo_terraformer declares powered() but no support().
+// Power membership and support participation must remain independent authorities.
+const spacePowerOnly = structure({
+  entryKey: "spc_red:atmo_terraformer",
+  region: "space",
+  sector: "spc_red",
+  struct: "atmo_terraformer",
+  actionId: "space-atmo_terraformer",
+  powered: 4,
+  supportAbsent: true,
+  checkPowerMembership: true,
+});
+const cityPowerOnly = structure({
+  entryKey: "city:coal_power",
+  region: "city",
+  sector: "city",
+  struct: "coal_power",
+  actionId: "city-coal_power",
+  powered: -5,
+  supportAbsent: true,
+  checkPowerMembership: true,
+});
+const powerOnlyStructures = [spacePowerOnly, cityPowerOnly];
+const powerOnlyRoot = {
+  ...root,
+  city: { ...root.city, coal_power: { count: 1, on: 0 } },
+  space: { ...root.space, atmo_terraformer: { count: 1, on: 0 } },
+  settings: { ...root.settings, showCity: true, showSpace: true },
+  power: [spacePowerOnly.entryKey],
+  support: {},
+};
+const powerOnlySettings = {
+  ...settings,
+  autoPower: true,
+  "bld_s_space-atmo_terraformer": true,
+  "bld_p_space-atmo_terraformer": 0,
+  "bld_s_city-coal_power": true,
+  "bld_p_city-coal_power": 1,
+};
+const powerOnlyMechanics = createMechanics({
+  structures: powerOnlyStructures,
+  productionBreakdown: { production: {}, consumption: {} },
+});
+const powerOnlyReader = createCapturedPowerReader({
+  ...readerDependencies,
+  rootState: { readRoot: () => powerOnlyRoot },
+  mechanics: powerOnlyMechanics,
+  resources: createResources(powerOnlyRoot, []),
+  readSettingsRaw: () => powerOnlySettings,
+});
+const powerOnlyCycle = powerOnlyReader.readCycle();
+assert.ok(
+  powerOnlyCycle,
+  "a managed powered-only structure produces a cycle without support authority",
+);
+assert.equal(spacePowerOnly.readSupport().kind, "absent");
+assert.equal(spacePowerOnly.readSupportTypes().kind, "absent");
+assert.deepEqual(spacePowerOnly.readPowerGridRole(powerOnlyRoot, 4), {
+  kind: "value",
+  value: "consumer",
+});
+assert.ok(powerOnlyRoot.power.includes(spacePowerOnly.entryKey));
+assert.ok(
+  !powerOnlyRoot.power.includes(cityPowerOnly.entryKey),
+  "a native City generator is classified separately from positive Power consumers",
+);
+const spacePowerOnlyInput = powerOnlyCycle.buildings.find(
+  (building) => building.binding === "space-atmo_terraformer",
+);
+assert.ok(
+  spacePowerOnlyInput,
+  "a managed ordinary Space Power structure is not silently omitted when support is absent",
+);
+assert.equal(spacePowerOnlyInput.powered, 4);
+assert.deepEqual(spacePowerOnlyInput.supportChanges, []);
+assert.deepEqual(
+  powerOnlyCycle.buildings.find(
+    (building) => building.binding === "city-coal_power",
+  )?.supportChanges,
+  [],
+  "the City generator control also needs no support participation",
+);
+assert.deepEqual(
+  powerOnlyCycle.buildings.map((building) => building.binding),
+  ["space-atmo_terraformer", "city-coal_power"],
+  "bld_p priority orders Power-only candidates independently of native Power order",
+);
+const powerOnlyPlan = planPowerCycle(
+  powerOnlyCycle,
+  EMPTY_POWER_AUTOMATION_STATE,
+);
+assert.ok(powerOnlyPlan.decision?.kind === "apply-power-cycle");
+const spacePowerOnlyOperation = powerOnlyPlan.decision.operations.find(
+  (operation) =>
+    operation.kind === "adjust-building" &&
+    operation.binding === "space-atmo_terraformer",
+);
+assert.ok(
+  spacePowerOnlyOperation?.kind === "adjust-building" &&
+    spacePowerOnlyOperation.amount === 1,
+  "planPowerCycle turns on the native powered-only Space consumer",
+);
+const powerOnlyExecutor = createCapturedPowerExecutor({
+  rootState: {
+    readRoot: () => powerOnlyRoot,
+    subscribeRootReplaced: () => () => {},
+  },
+  controls: fakeControls,
+  mechanics: powerOnlyMechanics,
+  readMechSaveSupply: () => false,
+  setMechSaveSupply: () => false,
+  log: () => {},
+});
+assert.equal(
+  powerOnlyExecutor.executor.execute(powerOnlyPlan.decision).status,
+  "succeeded",
+  "the captured Power executor applies the planned powered-only operation",
+);
+assert.equal(
+  powerOnlyRoot.space.atmo_terraformer.on,
+  1,
+  "the native Space Power state reaches the planned target",
+);
+
 function sampleSupportCoherence({
   providerOns = [1],
   providerValues = [2],
@@ -948,9 +1102,13 @@ function capturedBeltStarvation({
   stationOn = 5,
   consumerCount = 5,
   consumerOn = 1,
+  iridiumOn = consumerOn,
+  eleriumOn = consumerOn,
   powerCurrent = 100,
   heliumAmount = 5000,
   heliumRate = 100,
+  includePowerOnly = false,
+  invalidBeltPowerRole = false,
 } = {}) {
   const stationKey = "spc_belt:space_station";
   const iridiumKey = "spc_belt:iridium_ship";
@@ -962,6 +1120,7 @@ function capturedBeltStarvation({
     struct: "space_station",
     actionId: "space-space_station",
     powered: 3,
+    checkPowerMembership: true,
     support: 3,
     supportFor: { belt: 3 },
     supportTypes: "belt",
@@ -977,6 +1136,7 @@ function capturedBeltStarvation({
     actionId: "space-iridium_ship",
     support: -1,
     supportTypes: "belt",
+    checkPowerMembership: true,
     supportTopology: {
       anchorEntryKey: stationKey,
       unlimited: false,
@@ -992,6 +1152,7 @@ function capturedBeltStarvation({
     actionId: "space-elerium_ship",
     support: -2,
     supportTypes: "belt",
+    checkPowerMembership: true,
     supportTopology: {
       anchorEntryKey: stationKey,
       unlimited: false,
@@ -999,10 +1160,49 @@ function capturedBeltStarvation({
     },
     title: "Elerium Ship",
   });
-  const beltStructures = [station, iridium, elerium];
+  const ordinarySpace = includePowerOnly
+    ? structure({
+        entryKey: "spc_red:atmo_terraformer",
+        region: "space",
+        sector: "spc_red",
+        struct: "atmo_terraformer",
+        actionId: "space-atmo_terraformer",
+        powered: 4,
+        supportAbsent: true,
+        checkPowerMembership: true,
+      })
+    : undefined;
+  const ordinaryCity = includePowerOnly
+    ? structure({
+        entryKey: "city:coal_power",
+        region: "city",
+        sector: "city",
+        struct: "coal_power",
+        actionId: "city-coal_power",
+        powered: -5,
+        supportAbsent: true,
+        checkPowerMembership: true,
+      })
+    : undefined;
+  const beltStructures = [
+    station,
+    iridium,
+    elerium,
+    ...(ordinarySpace === undefined ? [] : [ordinarySpace]),
+    ...(ordinaryCity === undefined ? [] : [ordinaryCity]),
+  ];
   const sampleRoot = {
     ...root,
-    city: { ...root.city, power: powerCurrent },
+    city: {
+      ...root.city,
+      power: powerCurrent,
+      ...(ordinaryCity === undefined
+        ? {}
+        : { coal_power: { count: 1, on: 0 } }),
+    },
+    settings: includePowerOnly
+      ? { ...root.settings, showCity: true, showSpace: true }
+      : root.settings,
     space: {
       ...root.space,
       space_station: {
@@ -1011,8 +1211,11 @@ function capturedBeltStarvation({
         support: 0,
         s_max: 0,
       },
-      iridium_ship: { count: consumerCount, on: consumerOn },
-      elerium_ship: { count: consumerCount, on: consumerOn },
+      iridium_ship: { count: consumerCount, on: iridiumOn },
+      elerium_ship: { count: consumerCount, on: eleriumOn },
+      ...(ordinarySpace === undefined
+        ? {}
+        : { atmo_terraformer: { count: 1, on: 0 } }),
     },
     tech: { ...root.tech, asteroid: 5 },
     resource: {
@@ -1039,7 +1242,11 @@ function capturedBeltStarvation({
         display: true,
       },
     },
-    power: [stationKey],
+    power: [
+      stationKey,
+      ...(ordinarySpace === undefined ? [] : [ordinarySpace.entryKey]),
+      ...(invalidBeltPowerRole ? [iridiumKey] : []),
+    ],
     support: { ...root.support, belt: [iridiumKey, eleriumKey] },
   };
   const stationPower = (sample, member) =>
@@ -1051,9 +1258,17 @@ function capturedBeltStarvation({
     ...createMechanics({
       structures: beltStructures,
       productionBreakdown: {
-        production: {},
+        production: includePowerOnly
+          ? {
+              Elerium: { "Mineros espaciales": "8" },
+              Iridium: { "Mineros espaciales": "3" },
+            }
+          : {},
         consumption: {},
       },
+      localizedText: includePowerOnly
+        ? { job_space_miner: "Mineros espaciales" }
+        : {},
       effectivePower: stationPower,
       effectiveSupport: stationSupport,
     }),
@@ -1076,11 +1291,25 @@ function capturedBeltStarvation({
     masterScriptToggle: true,
     buildingsLimitPowered: true,
   });
+  if (includePowerOnly) {
+    Object.assign(managedSettings, {
+      "bld_s_space-atmo_terraformer": true,
+      "bld_p_space-atmo_terraformer": 2,
+      "bld_s_city-coal_power": true,
+      "bld_p_city-coal_power": 3,
+      "bld_p_space-elerium_ship": 0,
+      "bld_p_space-iridium_ship": 1,
+      autoJobs: true,
+      job_space_miner: true,
+      job_s_space_miner: true,
+    });
+  }
   const reader = createCapturedPowerReader({
     ...readerDependencies,
     rootState: { readRoot: () => sampleRoot },
     mechanics,
     resources: createResources(sampleRoot, []),
+    ...(includePowerOnly ? { readProspectiveSpaceMiners: () => 3 } : {}),
     readSettingsRaw: () => managedSettings,
     readRuntimeOptions: () => ({
       settings: {
@@ -1182,6 +1411,26 @@ assert.equal(
   100,
   "the recovery sample has adequate Power headroom and Helium-3 rate",
 );
+const invalidBeltPowerRole = capturedBeltStarvation({
+  invalidBeltPowerRole: true,
+});
+assert.ok(invalidBeltPowerRole.cycle);
+assert.ok(
+  invalidBeltPowerRole.root.power.includes("spc_belt:iridium_ship"),
+  "the fixture makes native Power membership contradict the zero-watt Belt consumer",
+);
+assert.ok(
+  invalidBeltPowerRole.cycle.buildings.some(
+    (item) => item.binding === "space-iridium_ship",
+  ),
+  "an exact native Belt consumer survives the narrow invalid-role exception",
+);
+assert.equal(
+  invalidBeltPowerRole.cycle.supports.find((item) => item.type === "belt")
+    ?.allocation,
+  "strict",
+  "the narrow invalid-role exception does not make Belt support unsafe",
+);
 const beltStarvationPlan = planPowerCycle(
   beltStarvation.cycle,
   EMPTY_POWER_AUTOMATION_STATE,
@@ -1254,6 +1503,73 @@ for (const blocked of [
     `insufficient native Belt capacity cannot increase configured Elerium demand: ${JSON.stringify(blocked)}`,
   );
 }
+
+const mixedPowerBelt = capturedBeltStarvation({
+  stationCount: 10,
+  consumerCount: 10,
+  iridiumOn: 3,
+  eleriumOn: 0,
+  includePowerOnly: true,
+});
+assert.ok(mixedPowerBelt.cycle);
+const mixedPowerBeltBindings = mixedPowerBelt.cycle.buildings.map(
+  (building) => building.binding,
+);
+for (const binding of [
+  "space-atmo_terraformer",
+  "space-space_station",
+  "space-iridium_ship",
+  "space-elerium_ship",
+  "city-coal_power",
+]) {
+  assert.ok(
+    mixedPowerBeltBindings.includes(binding),
+    `${binding} remains managed in the mixed Power and Belt cycle`,
+  );
+}
+assert.deepEqual(
+  mixedPowerBelt.cycle.buildings.find(
+    (building) => building.binding === "space-atmo_terraformer",
+  )?.supportChanges,
+  [],
+  "the ordinary Space Power consumer carries no support changes",
+);
+assert.ok(
+  mixedPowerBelt.cycle.supports.find((support) => support.type === "belt")
+    ?.allocation === "strict",
+  "the ordinary Space Power consumer does not poison the native Belt grid",
+);
+assert.ok(
+  mixedPowerBeltBindings.indexOf("space-elerium_ship") <
+    mixedPowerBeltBindings.indexOf("space-iridium_ship"),
+  "Elerium has higher captured Building priority than Iron",
+);
+const mixedPowerBeltPlan = planPowerCycle(
+  mixedPowerBelt.cycle,
+  EMPTY_POWER_AUTOMATION_STATE,
+);
+assert.ok(mixedPowerBeltPlan.decision?.kind === "apply-power-cycle");
+const mixedPowerBeltTargets = new Map(
+  mixedPowerBeltPlan.decision.operations.flatMap((operation) =>
+    operation.kind === "adjust-building"
+      ? [[operation.binding, operation.expectedStateOn + operation.amount]]
+      : [],
+  ),
+);
+assert.equal(
+  mixedPowerBeltTargets.get("space-atmo_terraformer"),
+  1,
+  "the mixed cycle plans an ordinary Space Power adjustment",
+);
+assert.ok(
+  mixedPowerBeltTargets.get("space-elerium_ship") === 1,
+  "the mixed cycle allocates Belt capacity to Elerium before Iron",
+);
+assert.equal(
+  mixedPowerBeltTargets.get("space-iridium_ship"),
+  1,
+  "priority reallocation lowers Iron from three to one in the mixed cycle",
+);
 
 function assertFrozenSupport(options, message) {
   const sample = sampleSupportCoherence(options);

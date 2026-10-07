@@ -29864,12 +29864,13 @@
     for (let structure of structures) {
       let state = readCapturedStructureState(root, structure);
       if (state == null) continue;
-      let support = structure.readSupport(), readTypes = structure.readSupportTypes(), supportTypes = readTypes.kind === "value" ? readTypes.value : Object.freeze([]);
+      let support = structure.readSupport();
+      if (support.kind === "absent") continue;
+      let readTypes = structure.readSupportTypes(), supportTypes = readTypes.kind === "value" ? readTypes.value : Object.freeze([]);
       if (readTypes.kind === "invalid") {
         supportTypes.length === 0 && (unsafeEverySupportType = !0);
         for (let type of supportTypes) unsafeSupportTypes.add(type);
       }
-      if (support.kind === "absent") continue;
       if (support.kind === "invalid") {
         supportTypes.length === 0 && (unsafeEverySupportType = !0);
         for (let type of supportTypes) unsafeSupportTypes.add(type);
@@ -29950,31 +29951,26 @@
     for (let record of managed) {
       let role = record.structure.readPowerGridRole(root, record.powered), participant = nativeSupportParticipants.find(
         (candidate) => candidate.structure.entryKey === record.structure.entryKey
-      ), beltConsumer = beltConsumerByBinding.get(record.catalog.binding), powerlessBeltConsumer = beltConsumer !== void 0 && record.powered === 0;
-      if (participant === void 0 || role.kind !== "value" && !powerlessBeltConsumer) {
-        let types = participant?.supportTypes ?? [];
-        types.length === 0 && (unsafeEverySupportType = !0);
-        for (let type of types) unsafeSupportTypes.add(type);
+      ), beltConsumer = beltConsumerByBinding.get(record.catalog.binding), powerlessBeltConsumer = role.kind === "invalid" && record.powered === 0 && beltConsumer !== void 0 && participant?.supportTypes.includes("belt") === !0;
+      if (role.kind !== "value" && !powerlessBeltConsumer) continue;
+      let nativeRole = role.kind === "value" ? role.value : "none", supportTypes = participant?.supportTypes ?? Object.freeze([]), nativeSupportChanges = participant?.supportChanges ?? Object.freeze([]);
+      if (nativeRole === "none" && nativeSupportChanges.length === 0 && beltConsumer === void 0)
         continue;
-      }
-      let nativeRole = role.kind === "value" ? role.value : "none";
-      if (nativeRole === "none" && participant.supportChanges.length === 0 && beltConsumer === void 0)
-        continue;
-      let hasNativeBeltConsumer = participant.supportChanges.some(
+      let hasNativeBeltConsumer = nativeSupportChanges.some(
         (change) => change.type === "belt" && change.amount > 0
       ), supportChanges = beltConsumer !== void 0 && !hasNativeBeltConsumer ? Object.freeze([
-        ...participant.supportChanges,
+        ...nativeSupportChanges,
         Object.freeze({
           type: "belt",
           amount: beltConsumer.supportPerUnit
         })
-      ]) : participant.supportChanges;
+      ]) : nativeSupportChanges;
       candidates.push({
         record,
         // Belt miners draw no Power. Their captured native support demand stays eligible for
         // prospective planning even when the Power-grid role probe is invalid in the disabled state.
         role: nativeRole === "none" && beltConsumer !== void 0 ? "consumer" : nativeRole,
-        supportTypes: participant.supportTypes,
+        supportTypes,
         supportChanges
       });
     }
