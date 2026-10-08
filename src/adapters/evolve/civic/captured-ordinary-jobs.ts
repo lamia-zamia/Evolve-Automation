@@ -9,7 +9,11 @@ import {
 import type { CommandExecutionOutcome } from "../../../domain/commands.ts";
 import type { GameActionCostReader } from "../../../ports/game-action-costs.ts";
 import type { GameBuildTarget } from "../../../ports/game-build-targets.ts";
-import type { JobsExecutor, JobsReader } from "../../../ports/jobs.ts";
+import type {
+  JobsExecutor,
+  JobsReader,
+  PreparedJobsExecution,
+} from "../../../ports/jobs.ts";
 import type {
   GameControlHandle,
   GameControlRegistry,
@@ -24,6 +28,7 @@ import {
 } from "../../validation.ts";
 import {
   createCapturedJobCatalogReader,
+  readCapturedJobCatalog,
   readCapturedJobCountSnapshot,
   readCapturedMinerReservation,
   readCapturedPopulationResource,
@@ -44,11 +49,40 @@ import {
 } from "./captured-craftsmen.ts";
 import type { CapturedCraftCosts } from "../economy/production/captured-craft-costs.ts";
 import type { CapturedDemandSample } from "../economy/resources/captured-resource-demand.ts";
+import {
+  createCountTally,
+  type MeasurePhase,
+  type PhaseTimingSink,
+} from "../../../utils/performance.ts";
 import { readCapturedMorale } from "./captured-morale.ts";
 import {
   readCapturedTaxLimits,
   readCapturedTaxTaskActive,
 } from "./captured-tax.ts";
+
+const runUnmeasuredJobs: MeasurePhase = (_phase, action) => action();
+
+function createExclusiveJobsMeasure(
+  diagnostics: PhaseTimingSink | undefined,
+): MeasurePhase {
+  if (diagnostics === undefined || !diagnostics.readPerformanceEnabled())
+    return runUnmeasuredJobs;
+  const frames: { childMs: number }[] = [];
+  return (phase, action) => {
+    const startedAt = diagnostics.nowMs();
+    const frame = { childMs: 0 };
+    frames.push(frame);
+    try {
+      return action();
+    } finally {
+      frames.pop();
+      const elapsedMs = diagnostics.nowMs() - startedAt;
+      const parent = frames.at(-1);
+      if (parent !== undefined) parent.childMs += elapsedMs;
+      diagnostics.recordPerformance(phase, elapsedMs - frame.childMs);
+    }
+  };
+}
 
 export interface CapturedOrdinaryJobsDependencies {
   readonly rootState: GameRootStateSource;
@@ -62,6 +96,7 @@ export interface CapturedFullJobsDependencies extends CapturedOrdinaryJobsDepend
   readonly costs: CapturedCraftCosts;
   readonly readBuildTargets?: () => readonly Readonly<GameBuildTarget>[];
   readonly buildCosts?: GameActionCostReader;
+  readonly diagnostics?: PhaseTimingSink;
 }
 
 interface OrdinaryJobsSession {
@@ -499,12 +534,18 @@ function craftJob(
 function readFullCycle(
   root: unknown,
   settingsValue: unknown,
-  catalogReader: () => CapturedJobCatalog | undefined,
+  catalogReader: (
+    root: unknown,
+    settingsValue: unknown,
+    readDemand: (() => CapturedDemandSample) | undefined,
+  ) => CapturedJobCatalog | undefined,
   costs: CapturedCraftCosts,
   readDemand: (() => CapturedDemandSample) | undefined,
   readBuildTargets: (() => readonly Readonly<GameBuildTarget>[]) | undefined,
   buildCosts: GameActionCostReader | undefined,
   previousAuthorityCap: number | null,
+  measure: MeasurePhase,
+  tally = createCountTally(undefined),
 ):
   | {
       readonly catalog: Readonly<CapturedJobCatalog>;
@@ -515,23 +556,35 @@ function readFullCycle(
       >[];
     }
   | undefined {
-  const ordinary = readCycle(
-    root,
-    settingsValue,
-    catalogReader,
-    readDemand,
-    previousAuthorityCap,
+  const demand = measure("jobs.full.demand", () => readDemand?.());
+  const sharedDemand = demand === undefined ? undefined : () => demand;
+  const catalog = measure("jobs.full.catalog", () =>
+    catalogReader(root, settingsValue, sharedDemand),
+  );
+  if (catalog === undefined) return undefined;
+  const sharedCatalog = () => catalog;
+  const ordinary = measure("jobs.full.ordinary", () =>
+    readCycle(
+      root,
+      settingsValue,
+      sharedCatalog,
+      sharedDemand,
+      previousAuthorityCap,
+    ),
   );
   if (ordinary === undefined) return undefined;
-  const foundry = readCapturedCraftsmenCycle(
-    root,
-    settingsValue,
-    costs,
-    catalogReader,
-    readDemand,
-    readBuildTargets,
-    buildCosts,
-  );
+  const foundry = measure("jobs.full.craftsmen", () => {
+    tally.count("jobs.full.craftsmenCycleReads");
+    return readCapturedCraftsmenCycle(
+      root,
+      settingsValue,
+      costs,
+      sharedCatalog,
+      sharedDemand,
+      readBuildTargets,
+      buildCosts,
+    );
+  });
   if (
     foundry === undefined ||
     foundry.input.jobs.length !== foundry.input.crafting.length ||
@@ -599,6 +652,7 @@ function executeFullDecision(
   controls: GameControlRegistry,
   session: Readonly<FullJobsSession>,
   decision: Readonly<JobsDecision>,
+  measure: MeasurePhase,
 ): CommandExecutionOutcome {
   const ordinary = new Map(session.ordinaryJobs.map((job) => [job.token, job]));
   const foundry = new Map(
@@ -702,20 +756,25 @@ function executeFullDecision(
     requireMethod(`civ-${selectedDefault.id}`, "setDefault");
   }
   const handles = new Map<string, GameControlHandle>();
-  for (const [elementId, methods] of requiredMethods) {
-    const handle = controls.resolve(elementId);
-    if (
-      handle === undefined ||
-      handle.elementId !== elementId ||
-      [...methods].some((method) => !handle.methods.includes(method))
-    ) {
-      return rejected(
-        "full-jobs-controls-incomplete",
-        `missing required method on ${elementId}`,
-      );
+  const preflightFailure = measure("jobs.full.preflight", () => {
+    for (const [elementId, methods] of requiredMethods) {
+      const handle = controls.resolve(elementId);
+      if (
+        handle === undefined ||
+        handle.elementId !== elementId ||
+        [...methods].some((method) => !handle.methods.includes(method))
+      ) {
+        return elementId;
+      }
+      handles.set(elementId, handle);
     }
-    handles.set(elementId, handle);
-  }
+    return undefined;
+  });
+  if (preflightFailure !== undefined)
+    return rejected(
+      "full-jobs-controls-incomplete",
+      `missing required method on ${preflightFailure}`,
+    );
   const invoke = (
     elementId: string,
     method: "add" | "sub" | "setDefault",
@@ -787,6 +846,219 @@ function executeFullDecision(
     );
   }
   return SUCCEEDED;
+}
+
+function liveCount(value: unknown): number | undefined {
+  if (value === undefined || value === false) return 0;
+  return finiteNonNegative(value);
+}
+
+/** Checks only mutable facts the prepared assignment commands depend on. */
+function isFullJobsStateCurrent(
+  root: unknown,
+  session: Readonly<FullJobsSession>,
+): string | undefined {
+  if (root !== session.root) return "root-identity";
+  const civic = readProperty(root, "civic");
+  const population = finiteNonNegative(
+    readProperty(readCapturedPopulationResource(root), "amount"),
+  );
+  if (!isRecord(civic)) return "civic-state";
+  if (population !== session.input.population) return "population";
+  if (readProperty(civic, "d_job") !== session.catalog.defaultJobId)
+    return "default-job";
+  const servants = readProperty(readProperty(root, "race"), "servants");
+  const ordinaryServants = readProperty(servants, "jobs");
+  const skilledServants = readProperty(servants, "sjobs");
+  const capturedServants = session.catalog.servantState;
+  if (
+    session.input.manageServants &&
+    capturedServants !== null &&
+    (liveCount(readProperty(servants, "max")) !== capturedServants.maximum ||
+      liveCount(readProperty(servants, "used")) !== capturedServants.used)
+  )
+    return "ordinary-servant-pool";
+  for (const job of session.catalog.jobs) {
+    if (JOBS_WITHOUT_ORDINARY_CONTROL.has(job.id)) continue;
+    const liveJob = readProperty(civic, job.id);
+    if (
+      !isRecord(liveJob) ||
+      readProperty(liveJob, "job") !== job.id ||
+      finiteNonNegative(readProperty(liveJob, "workers")) !== job.workers
+    )
+      return `ordinary-job:${job.id}`;
+    if (
+      session.input.manageServants &&
+      liveCount(readProperty(ordinaryServants, job.id)) !== job.servants
+    )
+      return `ordinary-servants:${job.id}`;
+  }
+  const foundry = readProperty(readProperty(root, "city"), "foundry");
+  const craftsman = readProperty(civic, "craftsman");
+  if (!isRecord(foundry) || !isRecord(craftsman)) return "foundry-or-craftsman";
+  const foundryWorkers = session.foundry.samples.reduce((sum, sample) => {
+    const workers = finiteNonNegative(readProperty(foundry, sample.id));
+    return workers === undefined ? Number.NaN : sum + workers;
+  }, 0);
+  if (
+    !Number.isFinite(foundryWorkers) ||
+    finiteNonNegative(readProperty(craftsman, "workers")) !== foundryWorkers ||
+    finiteNonNegative(readProperty(foundry, "crafting")) !== foundryWorkers ||
+    finiteNonNegative(readProperty(foundry, "cap")) !==
+      session.input.craftsmenMaximum
+  )
+    return "craftsman-pool";
+  const capturedDefaultJob = session.foundry.defaultJob;
+  if (capturedDefaultJob === undefined) return "default-job-sample";
+  const defaultWorkers = finiteNonNegative(
+    readProperty(readProperty(civic, capturedDefaultJob.id), "workers"),
+  );
+  if (defaultWorkers !== capturedDefaultJob.workers)
+    return "default-job-workers";
+  const capacity = readProperty(foundry, "rcap");
+  for (const sample of session.foundry.samples) {
+    const current = finiteNonNegative(readProperty(foundry, sample.id));
+    const currentCapacity = isRecord(capacity)
+      ? finiteNonNegative(readProperty(capacity, sample.id))
+      : undefined;
+    if (
+      current !== sample.workers ||
+      (sample.buildingCapacity !== null &&
+        currentCapacity !== sample.buildingCapacity)
+    )
+      return `foundry-product:${sample.id}`;
+  }
+  if (
+    liveCount(readProperty(servants, "sused")) !==
+      session.foundry.skilledUsed ||
+    liveCount(readProperty(servants, "smax")) !== session.foundry.skilledMaximum
+  )
+    return "skilled-servant-pool";
+  const changedSkilled = session.foundry.skilledSamples.find(
+    (sample) =>
+      liveCount(readProperty(skilledServants, sample.id)) !== sample.servants,
+  );
+  return changedSkilled === undefined
+    ? undefined
+    : `skilled-servants:${changedSkilled.id}`;
+}
+
+/** Observes just the named assignment fields after native controls have run. */
+function fullJobsPostcondition(
+  root: unknown,
+  session: Readonly<FullJobsSession>,
+  decision: Readonly<JobsDecision>,
+): boolean {
+  const civic = readProperty(root, "civic");
+  const foundry = readProperty(readProperty(root, "city"), "foundry");
+  const servants = readProperty(readProperty(root, "race"), "servants");
+  if (!isRecord(civic) || !isRecord(foundry)) return false;
+  const expectedDefault =
+    decision.selectedDefaultToken === null
+      ? session.catalog.defaultJobId
+      : session.ordinaryJobs.find(
+          (job) => job.token === decision.selectedDefaultToken,
+        )?.id;
+  if (
+    expectedDefault === undefined ||
+    readProperty(civic, "d_job") !== expectedDefault
+  )
+    return false;
+  const foundryTokens = new Set(
+    session.foundry.input.jobs.map(
+      (_, index) =>
+        session.input.jobs[session.ordinaryJobs.length + index]!.token,
+    ),
+  );
+  const foundryWorkerDelta = decision.assignments.reduce(
+    (total, assignment) => {
+      if (!foundryTokens.has(assignment.jobToken)) return total;
+      const before = session.input.jobs.find(
+        (job) => job.token === assignment.jobToken,
+      );
+      return before === undefined
+        ? total
+        : total + assignment.workers - before.workers;
+    },
+    0,
+  );
+  const defaultAssignment = decision.assignments.find((assignment) =>
+    session.ordinaryJobs.some(
+      (job) =>
+        job.token === assignment.jobToken &&
+        job.id === session.catalog.defaultJobId,
+    ),
+  );
+  const expectedDefaultWorkers =
+    defaultAssignment?.workers ??
+    (session.foundry.defaultJob?.workers ?? 0) - foundryWorkerDelta;
+  if (
+    finiteNonNegative(
+      readProperty(
+        readProperty(civic, session.catalog.defaultJobId),
+        "workers",
+      ),
+    ) !== expectedDefaultWorkers
+  )
+    return false;
+  return decision.assignments.every((assignment) => {
+    const before = session.input.jobs.find(
+      (job) => job.token === assignment.jobToken,
+    );
+    if (before === undefined) return false;
+    const workerOwner = before.crafting
+      ? foundry
+      : readProperty(civic, before.id);
+    const liveWorkers = finiteNonNegative(
+      readProperty(workerOwner, before.crafting ? before.id : "workers"),
+    );
+    const servantState = readProperty(
+      servants,
+      before.crafting ? "sjobs" : "jobs",
+    );
+    const liveServants = liveCount(readProperty(servantState, before.id));
+    return (
+      liveWorkers === assignment.workers &&
+      liveServants ===
+        (session.input.manageServants ? assignment.servants : before.servants)
+    );
+  });
+}
+
+function fullDecisionChangesState(
+  session: Readonly<FullJobsSession>,
+  decision: Readonly<JobsDecision>,
+): boolean {
+  const foundry = new Map(
+    session.foundry.input.jobs.map((_job, index) => [
+      session.input.jobs[session.ordinaryJobs.length + index]!.token,
+      session.foundry.samples[index]!.workers,
+    ]),
+  );
+  const foundryDelta = decision.assignments.reduce((total, assignment) => {
+    const current = foundry.get(assignment.jobToken);
+    return current === undefined ? total : total + assignment.workers - current;
+  }, 0);
+  if (foundryDelta !== 0) return true;
+  for (const assignment of decision.assignments) {
+    const before = session.input.jobs.find(
+      (job) => job.token === assignment.jobToken,
+    );
+    if (before === undefined) return true;
+    const currentWorkers =
+      before.id === session.catalog.defaultJobId
+        ? before.workers - foundryDelta
+        : before.workers;
+    if (assignment.workers !== currentWorkers) return true;
+    if (session.input.manageServants && assignment.servants !== before.servants)
+      return true;
+  }
+  return (
+    decision.selectedDefaultToken !== null &&
+    session.ordinaryJobs.find(
+      (job) => job.token === decision.selectedDefaultToken,
+    )?.id !== session.catalog.defaultJobId
+  );
 }
 
 export function createCapturedOrdinaryJobsAutomation({
@@ -976,188 +1248,145 @@ export function createCapturedFullJobsAutomation({
   readDemand,
   readBuildTargets,
   buildCosts,
+  diagnostics,
 }: CapturedFullJobsDependencies): {
-  readonly reader: JobsReader;
-  readonly executor: JobsExecutor;
-  readonly isAvailable: () => boolean;
+  readonly prepare: () =>
+    | { readonly status: "unavailable" }
+    | {
+        readonly status: "ready";
+        readonly input: Readonly<JobsCycleInput>;
+        readonly execution: Readonly<PreparedJobsExecution>;
+      };
 } {
   let history: CapturedJobHistory | undefined;
   let historyRoot: unknown;
   let authorityCap: number | null = null;
-  const catalogReader = createCapturedJobCatalogReader({
-    rootState,
-    controls,
-    readSettings,
-    ...(onSkipped === undefined ? {} : { onSkipped }),
-    readJobHistory: () =>
-      historyRoot === rootState.readRoot() ? history : undefined,
-    ...(readDemand === undefined ? {} : { readDemand }),
-  });
-  const sessionRef: { value: FullJobsSession | undefined } = {
-    value: undefined,
-  };
-  const reader: JobsReader = Object.freeze({
-    readCycle(craftOnly: boolean) {
-      if (craftOnly) {
-        sessionRef.value = undefined;
-        return unavailableInput();
-      }
-      const root = rootState.readRoot();
-      const sampled = readFullCycle(
-        root,
-        readSettings(),
-        catalogReader,
-        costs,
-        readDemand,
-        readBuildTargets,
-        buildCosts,
-        authorityCap,
-      );
-      if (sampled === undefined) {
-        sessionRef.value = undefined;
-        return unavailableInput();
-      }
-      sessionRef.value = Object.freeze({
-        root,
-        catalog: sampled.catalog,
-        foundry: sampled.foundry,
-        input: sampled.input,
-        ordinaryJobs: sampled.ordinaryJobs,
-      });
-      return sampled.input;
-    },
-  });
-  const executor: JobsExecutor = Object.freeze({
-    execute(decision: Readonly<JobsDecision>): CommandExecutionOutcome {
-      const session = sessionRef.value;
-      if (session === undefined)
-        return stale(
-          "full-jobs-session-missing",
-          "full jobs session is missing",
-        );
-      if (rootState.readRoot() !== session.root) {
-        sessionRef.value = undefined;
-        return stale("full-jobs-root-changed", "captured game root changed");
-      }
-      const currentCatalog = catalogReader();
-      const currentFoundry = readCapturedCraftsmenCycle(
-        session.root,
-        readSettings(),
-        costs,
-        catalogReader,
-        readDemand,
-        readBuildTargets,
-        buildCosts,
-      );
-      if (
-        currentCatalog === undefined ||
-        JSON.stringify(currentCatalog) !== JSON.stringify(session.catalog) ||
-        currentFoundry === undefined ||
-        JSON.stringify(currentFoundry.samples) !==
-          JSON.stringify(session.foundry.samples) ||
-        JSON.stringify(currentFoundry.skilledSamples) !==
-          JSON.stringify(session.foundry.skilledSamples) ||
-        currentFoundry.skilledMaximum !== session.foundry.skilledMaximum ||
-        currentFoundry.skilledUsed !== session.foundry.skilledUsed ||
-        currentFoundry.input.manageServants !==
-          session.foundry.input.manageServants ||
-        currentFoundry.input.servantModifier !==
-          session.foundry.input.servantModifier ||
-        JSON.stringify(currentFoundry.input.crafting) !==
-          JSON.stringify(session.foundry.input.crafting)
-      ) {
-        sessionRef.value = undefined;
-        return stale(
-          "full-jobs-state-changed",
-          "ordinary or foundry state changed",
-        );
-      }
-      const expected = planJobs(session.input);
-      if (
-        expected === null ||
-        JSON.stringify(expected) !== JSON.stringify(decision)
-      ) {
-        sessionRef.value = undefined;
-        return rejected(
-          "invalid-full-jobs-decision",
-          "full jobs decision does not match the sampled plan",
-        );
-      }
-      sessionRef.value = undefined;
-      let outcome = executeFullDecision(controls, session, decision);
-      if (outcome.status === "succeeded") {
-        const currentRoot = rootState.readRoot();
-        const observed =
-          currentRoot === session.root
-            ? readFullCycle(
-                currentRoot,
-                readSettings(),
-                catalogReader,
-                costs,
-                readDemand,
-                readBuildTargets,
-                buildCosts,
-                authorityCap,
-              )
-            : undefined;
-        const expectedDefaultId =
-          decision.selectedDefaultToken === null
-            ? session.catalog.defaultJobId
-            : (session.ordinaryJobs.find(
-                (job) => job.token === decision.selectedDefaultToken,
-              )?.id ?? "");
-        const actualDefaultId = observed?.catalog.defaultJobId;
-        const assignmentChecks = decision.assignments.map((assignment) => {
-          const before = session.input.jobs.find(
-            (job) => job.token === assignment.jobToken,
-          );
-          const after = observed?.input.jobs.find(
-            (job) => job.token === assignment.jobToken,
-          );
-          const foundry = observed?.foundry.samples.find(
-            (sample) => sample.id === before?.id,
-          );
-          const expectedServants = session.input.manageServants
-            ? assignment.servants
-            : before?.servants;
-          const actualWorkers =
-            before?.crafting === true ? foundry?.workers : after?.workers;
-          const actualServants = after?.servants;
-          return {
-            id: before?.id,
-            expectedWorkers: assignment.workers,
-            actualWorkers,
-            expectedServants,
-            actualServants,
-            matches:
-              before !== undefined &&
-              after !== undefined &&
-              actualWorkers === assignment.workers &&
-              actualServants === expectedServants,
+  let prepareGeneration = 0;
+  const catalogReader = (
+    root: unknown,
+    settingsValue: unknown,
+    demandReader: (() => CapturedDemandSample) | undefined,
+  ) =>
+    readCapturedJobCatalog(
+      root,
+      controls,
+      settingsValue,
+      demandReader,
+      () => (historyRoot === root ? history : undefined),
+      onSkipped ?? (() => {}),
+    );
+  const prepare = () => {
+    const generation = ++prepareGeneration;
+    const tally = createCountTally(diagnostics);
+    const measure = createExclusiveJobsMeasure(diagnostics);
+    tally.count("jobs.full.readFullCycleCalls");
+    const root = rootState.readRoot();
+    const settings = readSettings();
+    const countedCatalogReader = (
+      sampledRoot: unknown,
+      sampledSettings: unknown,
+      demandReader: (() => CapturedDemandSample) | undefined,
+    ) => {
+      tally.count("jobs.full.jobCatalogReads");
+      return catalogReader(sampledRoot, sampledSettings, demandReader);
+    };
+    let demandRead = false;
+    const countedDemand =
+      readDemand === undefined
+        ? undefined
+        : () => {
+            if (!demandRead) {
+              tally.count("jobs.full.demandReads");
+              demandRead = true;
+            }
+            return readDemand();
           };
-        });
-        const failedAssignments = assignmentChecks
-          .filter((check) => !check.matches)
-          .slice(0, 5)
-          .map(({ matches: _matches, ...check }) => check);
-        const matches =
-          observed !== undefined &&
-          actualDefaultId === expectedDefaultId &&
-          failedAssignments.length === 0;
-        if (!matches) {
-          outcome = rejected(
-            "full-jobs-postcondition-failed",
-            `ordinary or foundry assignment was not observed in captured root state: ${JSON.stringify(
-              {
-                expectedDefaultId,
-                actualDefaultId,
-                observedAvailable: observed !== undefined,
-                failedAssignments,
-              },
-            )}`,
+    const countedCosts: CapturedCraftCosts = Object.freeze({
+      read(id: string) {
+        tally.count("jobs.full.craftCostReads");
+        return measure("jobs.full.craftCosts", () => costs.read(id));
+      },
+    });
+    const countedBuildTargets =
+      readBuildTargets === undefined
+        ? undefined
+        : () => {
+            tally.count("jobs.full.buildTargetReads");
+            return measure("jobs.full.buildWeighting", () =>
+              readBuildTargets(),
+            );
+          };
+    const countedBuildCosts =
+      buildCosts === undefined
+        ? undefined
+        : Object.freeze({
+            readCost(id: string) {
+              tally.count("jobs.full.buildCostReads");
+              return measure("jobs.full.buildWeighting", () =>
+                buildCosts.readCost(id),
+              );
+            },
+          });
+    const sampled = measure("jobs.full.read", () =>
+      readFullCycle(
+        root,
+        settings,
+        countedCatalogReader,
+        countedCosts,
+        countedDemand,
+        countedBuildTargets,
+        countedBuildCosts,
+        authorityCap,
+        measure,
+        tally,
+      ),
+    );
+    const available = measure(
+      "jobs.full.availability",
+      () => sampled !== undefined,
+    );
+    if (!available || sampled === undefined)
+      return Object.freeze({ status: "unavailable" as const });
+    const decision = measure("jobs.full.plan", () => {
+      tally.count("jobs.full.planCalls");
+      return planJobs(sampled.input);
+    });
+    const session: Readonly<FullJobsSession> = Object.freeze({
+      root,
+      catalog: sampled.catalog,
+      foundry: sampled.foundry,
+      input: sampled.input,
+      ordinaryJobs: sampled.ordinaryJobs,
+    });
+    let consumed = false;
+    const execution: PreparedJobsExecution = Object.freeze({
+      decision,
+      execute(): CommandExecutionOutcome {
+        if (generation !== prepareGeneration)
+          return stale(
+            "full-jobs-session-superseded",
+            "a newer prepared jobs session replaced this one",
           );
-        } else {
-          historyRoot = currentRoot;
+        if (consumed)
+          return stale(
+            "full-jobs-session-consumed",
+            "prepared jobs session was already consumed",
+          );
+        consumed = true;
+        const executionRoot = rootState.readRoot();
+        if (executionRoot !== session.root)
+          return stale("full-jobs-root-changed", "captured game root changed");
+        if (decision === null) return SUCCEEDED;
+        const staleState = measure("jobs.full.staleCheck", () =>
+          isFullJobsStateCurrent(executionRoot, session),
+        );
+        if (staleState !== undefined)
+          return stale(
+            "full-jobs-state-changed",
+            `ordinary or foundry state changed: ${staleState}`,
+          );
+        if (!fullDecisionChangesState(session, decision)) {
+          historyRoot = session.root;
           history = Object.freeze({
             lastPopulationCount: decision.lastPopulationCount,
             lastFarmerCount: decision.lastFarmerCount,
@@ -1165,21 +1394,63 @@ export function createCapturedFullJobsAutomation({
           authorityCap = decision.clearAuthorityEntertainerCap
             ? null
             : decision.authorityEntertainerCap;
+          return SUCCEEDED;
         }
-      }
-      return outcome;
-    },
-  });
-  const isAvailable = (): boolean =>
-    readFullCycle(
-      rootState.readRoot(),
-      readSettings(),
-      catalogReader,
-      costs,
-      readDemand,
-      readBuildTargets,
-      buildCosts,
-      authorityCap,
-    ) !== undefined;
-  return Object.freeze({ reader, executor, isAvailable });
+        const outcome = measure("jobs.full.execute", () =>
+          executeFullDecision(controls, session, decision, measure),
+        );
+        if (outcome.status !== "succeeded") return outcome;
+        const currentRoot = rootState.readRoot();
+        const postcondition = measure(
+          "jobs.full.postcondition",
+          () =>
+            currentRoot === session.root &&
+            fullJobsPostcondition(currentRoot, session, decision),
+        );
+        if (!postcondition)
+          return rejected(
+            "full-jobs-postcondition-failed",
+            `ordinary or foundry assignment was not observed in captured root state: ${JSON.stringify(
+              decision.assignments.map((assignment) => {
+                const job = session.input.jobs.find(
+                  (candidate) => candidate.token === assignment.jobToken,
+                );
+                const owner = job?.crafting
+                  ? readProperty(readProperty(currentRoot, "city"), "foundry")
+                  : readProperty(
+                      readProperty(currentRoot, "civic"),
+                      job?.id ?? "",
+                    );
+                const servantOwner = readProperty(
+                  readProperty(readProperty(currentRoot, "race"), "servants"),
+                  job?.crafting ? "sjobs" : "jobs",
+                );
+                return {
+                  id: job?.id,
+                  targetWorkers: assignment.workers,
+                  actualWorkers: readProperty(owner, job?.id ?? ""),
+                  targetServants: assignment.servants,
+                  actualServants: readProperty(servantOwner, job?.id ?? ""),
+                };
+              }),
+            )}`,
+          );
+        historyRoot = currentRoot;
+        history = Object.freeze({
+          lastPopulationCount: decision.lastPopulationCount,
+          lastFarmerCount: decision.lastFarmerCount,
+        });
+        authorityCap = decision.clearAuthorityEntertainerCap
+          ? null
+          : decision.authorityEntertainerCap;
+        return outcome;
+      },
+    });
+    return Object.freeze({
+      status: "ready" as const,
+      input: sampled.input,
+      execution,
+    });
+  };
+  return Object.freeze({ prepare });
 }

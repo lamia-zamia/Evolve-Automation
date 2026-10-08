@@ -1867,6 +1867,7 @@ function runCapturedJobsMatrixScenario({
   autoCraftsmen,
   jobManageServants,
   hasServants = true,
+  invalidCraftsmanPool = false,
 }) {
   const root = {
     civic: {
@@ -1885,7 +1886,7 @@ function runCapturedJobsMatrixScenario({
         max: -1,
         display: true,
       },
-      craftsman: { workers: 1, max: 2 },
+      craftsman: { workers: invalidCraftsmanPool ? 0 : 1, max: 2 },
     },
     city: {
       foundry: {
@@ -1916,6 +1917,7 @@ function runCapturedJobsMatrixScenario({
     },
   };
   const invoked = [];
+  const phases = [];
   let cycle;
   const controlIds = [
     "civ-unemployed",
@@ -2014,6 +2016,13 @@ function runCapturedJobsMatrixScenario({
     document: {},
     mouseEvent: class {},
     storage: { getItem: () => JSON.stringify(settings) },
+    diagnostics: {
+      readPerformanceEnabled: () => true,
+      nowMs: () => 0,
+      recordPerformance: (name) => phases.push(name),
+      recordCount: () => {},
+      flushPerformance: () => {},
+    },
     logError: (message) => {
       throw new Error(message);
     },
@@ -2021,12 +2030,32 @@ function runCapturedJobsMatrixScenario({
   const servantsBefore = structuredClone(root.race.servants ?? null);
   cycle({ periods: 4 });
   stopCycle();
-  return { root, invoked, servantsBefore };
+  return { root, invoked, servantsBefore, phases };
 }
 
 // The remaining settings combinations route to exactly one captured family and obey
 // jobManageServants in both ordinary and craftsmen-only mode.
 {
+  const splitFallback = runCapturedJobsMatrixScenario({
+    autoJobs: true,
+    autoCraftsmen: true,
+    jobManageServants: true,
+    invalidCraftsmanPool: true,
+  });
+  assert.ok(
+    splitFallback.phases.includes("autoJobs"),
+    JSON.stringify({
+      phases: splitFallback.phases,
+      invoked: splitFallback.invoked,
+    }),
+  );
+  assert.ok(splitFallback.phases.includes("autoCraftsmen"));
+  assert.equal(
+    splitFallback.phases.includes("autoJobs with autoCraftsmen"),
+    true,
+    "the unavailable combined attempt is followed by both split phases",
+  );
+
   const combinedWithoutServants = runCapturedJobsMatrixScenario({
     autoJobs: true,
     autoCraftsmen: true,

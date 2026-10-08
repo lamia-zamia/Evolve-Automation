@@ -12521,10 +12521,19 @@
     status: "succeeded"
   });
   function runJobsAutomation(dependencies, craftOnly = !1) {
+    let diagnostics = dependencies.diagnostics, measuring = diagnostics?.readPerformanceEnabled() === !0, startedAt = measuring ? diagnostics.nowMs() : 0;
+    measuring && diagnostics.recordCount("jobs.full.planCalls", 1);
     let decision = planJobs(dependencies.reader.readCycle(craftOnly));
-    if (decision === null) return SUCCEEDED5;
+    if (measuring && diagnostics.recordPerformance(
+      "jobs.full.plan",
+      diagnostics.nowMs() - startedAt
+    ), decision === null) return SUCCEEDED5;
     let outcome = dependencies.executor.execute(decision);
     return outcome.status === "succeeded" && !craftOnly && dependencies.onCoherentPlan?.(decision), outcome;
+  }
+  function runPreparedJobsAutomation(prepared, onCoherentPlan) {
+    let outcome = prepared.execute();
+    return outcome.status === "succeeded" && prepared.decision !== null && onCoherentPlan?.(prepared.decision), outcome;
   }
 
   // src/application/prestige.ts
@@ -20166,7 +20175,7 @@
       uncapped: Object.freeze(uncapped)
     };
   }
-  function readCatalog(root, controls2, settingsValue, readDemand, readJobHistory, onSkipped) {
+  function readCapturedJobCatalog(root, controls2, settingsValue, readDemand, readJobHistory, onSkipped) {
     let civic = readProperty(root, "civic");
     if (!isRecord(civic)) return;
     let defaultJobId = readProperty(civic, "d_job");
@@ -20373,7 +20382,7 @@
   }) {
     let reportSkipped = onSkipped ?? (() => {
     });
-    return () => readCatalog(
+    return () => readCapturedJobCatalog(
       rootState.readRoot(),
       controls2,
       readSettings(),
@@ -20516,10 +20525,11 @@
       return;
     let ordered = [...targets].sort(
       (left, right) => right.weighting - left.weighting
-    ), samples = [];
+    ), samples = [], prices = /* @__PURE__ */ new Map();
     for (let target of ordered) {
       if (!Number.isFinite(target.weighting)) return;
-      let price = costs.readCost(target.elementId);
+      prices.has(target.elementId) || prices.set(target.elementId, costs.readCost(target.elementId));
+      let price = prices.get(target.elementId);
       if (price === void 0) return;
       samples.push(Object.freeze({ target, cost: price.cost }));
     }
@@ -21026,6 +21036,23 @@
   }
 
   // src/adapters/evolve/civic/captured-ordinary-jobs.ts
+  var runUnmeasuredJobs = (_phase, action) => action();
+  function createExclusiveJobsMeasure(diagnostics) {
+    if (diagnostics === void 0 || !diagnostics.readPerformanceEnabled())
+      return runUnmeasuredJobs;
+    let frames = [];
+    return (phase, action) => {
+      let startedAt = diagnostics.nowMs(), frame = { childMs: 0 };
+      frames.push(frame);
+      try {
+        return action();
+      } finally {
+        frames.pop();
+        let elapsedMs = diagnostics.nowMs() - startedAt, parent = frames.at(-1);
+        parent !== void 0 && (parent.childMs += elapsedMs), diagnostics.recordPerformance(phase, elapsedMs - frame.childMs);
+      }
+    };
+  }
   function hasMethod(controls2, elementId, method) {
     let handle = controls2.resolve(elementId);
     return handle !== void 0 && handle.methods.includes(method);
@@ -21300,24 +21327,32 @@
       serves: !0
     });
   }
-  function readFullCycle(root, settingsValue, catalogReader, costs, readDemand, readBuildTargets, buildCosts, previousAuthorityCap) {
-    let ordinary = readCycle(
-      root,
-      settingsValue,
-      catalogReader,
-      readDemand,
-      previousAuthorityCap
+  function readFullCycle(root, settingsValue, catalogReader, costs, readDemand, readBuildTargets, buildCosts, previousAuthorityCap, measure, tally = createCountTally(void 0)) {
+    let demand = measure("jobs.full.demand", () => readDemand?.()), sharedDemand = demand === void 0 ? void 0 : () => demand, catalog = measure(
+      "jobs.full.catalog",
+      () => catalogReader(root, settingsValue, sharedDemand)
+    );
+    if (catalog === void 0) return;
+    let sharedCatalog = () => catalog, ordinary = measure(
+      "jobs.full.ordinary",
+      () => readCycle(
+        root,
+        settingsValue,
+        sharedCatalog,
+        sharedDemand,
+        previousAuthorityCap
+      )
     );
     if (ordinary === void 0) return;
-    let foundry = readCapturedCraftsmenCycle(
+    let foundry = measure("jobs.full.craftsmen", () => (tally.count("jobs.full.craftsmenCycleReads"), readCapturedCraftsmenCycle(
       root,
       settingsValue,
       costs,
-      catalogReader,
-      readDemand,
+      sharedCatalog,
+      sharedDemand,
       readBuildTargets,
       buildCosts
-    );
+    )));
     if (foundry === void 0 || foundry.input.jobs.length !== foundry.input.crafting.length || foundry.skilledSamples.some(
       (sample) => !foundry.input.jobs.some((job) => job.id === sample.id)
     ))
@@ -21350,7 +21385,7 @@
       ordinaryJobs: ordinary.commandState.jobs
     });
   }
-  function executeFullDecision(controls2, session, decision) {
+  function executeFullDecision(controls2, session, decision, measure) {
     let ordinary = new Map(session.ordinaryJobs.map((job) => [job.token, job])), foundry = new Map(
       session.foundry.input.jobs.map((job, index) => [
         session.input.jobs[session.ordinaryJobs.length + index].token,
@@ -21402,16 +21437,19 @@
         "add"
       );
     selectedDefault !== void 0 && requireMethod(`civ-${selectedDefault.id}`, "setDefault");
-    let handles = /* @__PURE__ */ new Map();
-    for (let [elementId, methods] of requiredMethods) {
-      let handle = controls2.resolve(elementId);
-      if (handle === void 0 || handle.elementId !== elementId || [...methods].some((method) => !handle.methods.includes(method)))
-        return rejected(
-          "full-jobs-controls-incomplete",
-          `missing required method on ${elementId}`
-        );
-      handles.set(elementId, handle);
-    }
+    let handles = /* @__PURE__ */ new Map(), preflightFailure = measure("jobs.full.preflight", () => {
+      for (let [elementId, methods] of requiredMethods) {
+        let handle = controls2.resolve(elementId);
+        if (handle === void 0 || handle.elementId !== elementId || [...methods].some((method) => !handle.methods.includes(method)))
+          return elementId;
+        handles.set(elementId, handle);
+      }
+    });
+    if (preflightFailure !== void 0)
+      return rejected(
+        "full-jobs-controls-incomplete",
+        `missing required method on ${preflightFailure}`
+      );
     let invoke2 = (elementId, method, count2, args) => {
       let handle = handles.get(elementId);
       if (handle === void 0 || !Number.isFinite(count2)) return !1;
@@ -21461,6 +21499,125 @@
       "full-default-job-control-failed",
       `could not select ${selectedDefault.id} as the default job`
     ) : SUCCEEDED;
+  }
+  function liveCount(value) {
+    return value === void 0 || value === !1 ? 0 : finiteNonNegative(value);
+  }
+  function isFullJobsStateCurrent(root, session) {
+    if (root !== session.root) return "root-identity";
+    let civic = readProperty(root, "civic"), population = finiteNonNegative(
+      readProperty(readCapturedPopulationResource(root), "amount")
+    );
+    if (!isRecord(civic)) return "civic-state";
+    if (population !== session.input.population) return "population";
+    if (readProperty(civic, "d_job") !== session.catalog.defaultJobId)
+      return "default-job";
+    let servants = readProperty(readProperty(root, "race"), "servants"), ordinaryServants = readProperty(servants, "jobs"), skilledServants = readProperty(servants, "sjobs"), capturedServants = session.catalog.servantState;
+    if (session.input.manageServants && capturedServants !== null && (liveCount(readProperty(servants, "max")) !== capturedServants.maximum || liveCount(readProperty(servants, "used")) !== capturedServants.used))
+      return "ordinary-servant-pool";
+    for (let job of session.catalog.jobs) {
+      if (JOBS_WITHOUT_ORDINARY_CONTROL.has(job.id)) continue;
+      let liveJob = readProperty(civic, job.id);
+      if (!isRecord(liveJob) || readProperty(liveJob, "job") !== job.id || finiteNonNegative(readProperty(liveJob, "workers")) !== job.workers)
+        return `ordinary-job:${job.id}`;
+      if (session.input.manageServants && liveCount(readProperty(ordinaryServants, job.id)) !== job.servants)
+        return `ordinary-servants:${job.id}`;
+    }
+    let foundry = readProperty(readProperty(root, "city"), "foundry"), craftsman = readProperty(civic, "craftsman");
+    if (!isRecord(foundry) || !isRecord(craftsman)) return "foundry-or-craftsman";
+    let foundryWorkers = session.foundry.samples.reduce((sum, sample) => {
+      let workers = finiteNonNegative(readProperty(foundry, sample.id));
+      return workers === void 0 ? Number.NaN : sum + workers;
+    }, 0);
+    if (!Number.isFinite(foundryWorkers) || finiteNonNegative(readProperty(craftsman, "workers")) !== foundryWorkers || finiteNonNegative(readProperty(foundry, "crafting")) !== foundryWorkers || finiteNonNegative(readProperty(foundry, "cap")) !== session.input.craftsmenMaximum)
+      return "craftsman-pool";
+    let capturedDefaultJob = session.foundry.defaultJob;
+    if (capturedDefaultJob === void 0) return "default-job-sample";
+    if (finiteNonNegative(
+      readProperty(readProperty(civic, capturedDefaultJob.id), "workers")
+    ) !== capturedDefaultJob.workers)
+      return "default-job-workers";
+    let capacity = readProperty(foundry, "rcap");
+    for (let sample of session.foundry.samples) {
+      let current = finiteNonNegative(readProperty(foundry, sample.id)), currentCapacity = isRecord(capacity) ? finiteNonNegative(readProperty(capacity, sample.id)) : void 0;
+      if (current !== sample.workers || sample.buildingCapacity !== null && currentCapacity !== sample.buildingCapacity)
+        return `foundry-product:${sample.id}`;
+    }
+    if (liveCount(readProperty(servants, "sused")) !== session.foundry.skilledUsed || liveCount(readProperty(servants, "smax")) !== session.foundry.skilledMaximum)
+      return "skilled-servant-pool";
+    let changedSkilled = session.foundry.skilledSamples.find(
+      (sample) => liveCount(readProperty(skilledServants, sample.id)) !== sample.servants
+    );
+    return changedSkilled === void 0 ? void 0 : `skilled-servants:${changedSkilled.id}`;
+  }
+  function fullJobsPostcondition(root, session, decision) {
+    let civic = readProperty(root, "civic"), foundry = readProperty(readProperty(root, "city"), "foundry"), servants = readProperty(readProperty(root, "race"), "servants");
+    if (!isRecord(civic) || !isRecord(foundry)) return !1;
+    let expectedDefault = decision.selectedDefaultToken === null ? session.catalog.defaultJobId : session.ordinaryJobs.find(
+      (job) => job.token === decision.selectedDefaultToken
+    )?.id;
+    if (expectedDefault === void 0 || readProperty(civic, "d_job") !== expectedDefault)
+      return !1;
+    let foundryTokens = new Set(
+      session.foundry.input.jobs.map(
+        (_, index) => session.input.jobs[session.ordinaryJobs.length + index].token
+      )
+    ), foundryWorkerDelta = decision.assignments.reduce(
+      (total, assignment) => {
+        if (!foundryTokens.has(assignment.jobToken)) return total;
+        let before = session.input.jobs.find(
+          (job) => job.token === assignment.jobToken
+        );
+        return before === void 0 ? total : total + assignment.workers - before.workers;
+      },
+      0
+    ), expectedDefaultWorkers = decision.assignments.find(
+      (assignment) => session.ordinaryJobs.some(
+        (job) => job.token === assignment.jobToken && job.id === session.catalog.defaultJobId
+      )
+    )?.workers ?? (session.foundry.defaultJob?.workers ?? 0) - foundryWorkerDelta;
+    return finiteNonNegative(
+      readProperty(
+        readProperty(civic, session.catalog.defaultJobId),
+        "workers"
+      )
+    ) !== expectedDefaultWorkers ? !1 : decision.assignments.every((assignment) => {
+      let before = session.input.jobs.find(
+        (job) => job.token === assignment.jobToken
+      );
+      if (before === void 0) return !1;
+      let workerOwner = before.crafting ? foundry : readProperty(civic, before.id), liveWorkers = finiteNonNegative(
+        readProperty(workerOwner, before.crafting ? before.id : "workers")
+      ), servantState = readProperty(
+        servants,
+        before.crafting ? "sjobs" : "jobs"
+      ), liveServants = liveCount(readProperty(servantState, before.id));
+      return liveWorkers === assignment.workers && liveServants === (session.input.manageServants ? assignment.servants : before.servants);
+    });
+  }
+  function fullDecisionChangesState(session, decision) {
+    let foundry = new Map(
+      session.foundry.input.jobs.map((_job, index) => [
+        session.input.jobs[session.ordinaryJobs.length + index].token,
+        session.foundry.samples[index].workers
+      ])
+    ), foundryDelta = decision.assignments.reduce((total, assignment) => {
+      let current = foundry.get(assignment.jobToken);
+      return current === void 0 ? total : total + assignment.workers - current;
+    }, 0);
+    if (foundryDelta !== 0) return !0;
+    for (let assignment of decision.assignments) {
+      let before = session.input.jobs.find(
+        (job) => job.token === assignment.jobToken
+      );
+      if (before === void 0) return !0;
+      let currentWorkers = before.id === session.catalog.defaultJobId ? before.workers - foundryDelta : before.workers;
+      if (assignment.workers !== currentWorkers || session.input.manageServants && assignment.servants !== before.servants)
+        return !0;
+    }
+    return decision.selectedDefaultToken !== null && session.ordinaryJobs.find(
+      (job) => job.token === decision.selectedDefaultToken
+    )?.id !== session.catalog.defaultJobId;
   }
   function createCapturedOrdinaryJobsAutomation({
     rootState,
@@ -21578,128 +21735,136 @@
     costs,
     readDemand,
     readBuildTargets,
-    buildCosts
+    buildCosts,
+    diagnostics
   }) {
-    let history, historyRoot, authorityCap = null, catalogReader = createCapturedJobCatalogReader({
-      rootState,
-      controls: controls2,
-      readSettings,
-      ...onSkipped === void 0 ? {} : { onSkipped },
-      readJobHistory: () => historyRoot === rootState.readRoot() ? history : void 0,
-      ...readDemand === void 0 ? {} : { readDemand }
-    }), sessionRef = {
-      value: void 0
-    }, reader = Object.freeze({
-      readCycle(craftOnly) {
-        if (craftOnly)
-          return sessionRef.value = void 0, unavailableInput();
-        let root = rootState.readRoot(), sampled3 = readFullCycle(
+    let history, historyRoot, authorityCap = null, prepareGeneration = 0, catalogReader = (root, settingsValue, demandReader) => readCapturedJobCatalog(
+      root,
+      controls2,
+      settingsValue,
+      demandReader,
+      () => historyRoot === root ? history : void 0,
+      onSkipped ?? (() => {
+      })
+    );
+    return Object.freeze({ prepare: () => {
+      let generation = ++prepareGeneration, tally = createCountTally(diagnostics), measure = createExclusiveJobsMeasure(diagnostics);
+      tally.count("jobs.full.readFullCycleCalls");
+      let root = rootState.readRoot(), settings = readSettings(), countedCatalogReader = (sampledRoot, sampledSettings, demandReader) => (tally.count("jobs.full.jobCatalogReads"), catalogReader(sampledRoot, sampledSettings, demandReader)), demandRead = !1, countedDemand = readDemand === void 0 ? void 0 : () => (demandRead || (tally.count("jobs.full.demandReads"), demandRead = !0), readDemand()), countedCosts = Object.freeze({
+        read(id) {
+          return tally.count("jobs.full.craftCostReads"), measure("jobs.full.craftCosts", () => costs.read(id));
+        }
+      }), countedBuildTargets = readBuildTargets === void 0 ? void 0 : () => (tally.count("jobs.full.buildTargetReads"), measure(
+        "jobs.full.buildWeighting",
+        () => readBuildTargets()
+      )), countedBuildCosts = buildCosts === void 0 ? void 0 : Object.freeze({
+        readCost(id) {
+          return tally.count("jobs.full.buildCostReads"), measure(
+            "jobs.full.buildWeighting",
+            () => buildCosts.readCost(id)
+          );
+        }
+      }), sampled3 = measure(
+        "jobs.full.read",
+        () => readFullCycle(
           root,
-          readSettings(),
-          catalogReader,
-          costs,
-          readDemand,
-          readBuildTargets,
-          buildCosts,
-          authorityCap
-        );
-        return sampled3 === void 0 ? (sessionRef.value = void 0, unavailableInput()) : (sessionRef.value = Object.freeze({
-          root,
-          catalog: sampled3.catalog,
-          foundry: sampled3.foundry,
-          input: sampled3.input,
-          ordinaryJobs: sampled3.ordinaryJobs
-        }), sampled3.input);
-      }
-    }), executor = Object.freeze({
-      execute(decision) {
-        let session = sessionRef.value;
-        if (session === void 0)
-          return stale(
-            "full-jobs-session-missing",
-            "full jobs session is missing"
+          settings,
+          countedCatalogReader,
+          countedCosts,
+          countedDemand,
+          countedBuildTargets,
+          countedBuildCosts,
+          authorityCap,
+          measure,
+          tally
+        )
+      );
+      if (!measure(
+        "jobs.full.availability",
+        () => sampled3 !== void 0
+      ) || sampled3 === void 0)
+        return Object.freeze({ status: "unavailable" });
+      let decision = measure("jobs.full.plan", () => (tally.count("jobs.full.planCalls"), planJobs(sampled3.input))), session = Object.freeze({
+        root,
+        catalog: sampled3.catalog,
+        foundry: sampled3.foundry,
+        input: sampled3.input,
+        ordinaryJobs: sampled3.ordinaryJobs
+      }), consumed = !1, execution = Object.freeze({
+        decision,
+        execute() {
+          if (generation !== prepareGeneration)
+            return stale(
+              "full-jobs-session-superseded",
+              "a newer prepared jobs session replaced this one"
+            );
+          if (consumed)
+            return stale(
+              "full-jobs-session-consumed",
+              "prepared jobs session was already consumed"
+            );
+          consumed = !0;
+          let executionRoot = rootState.readRoot();
+          if (executionRoot !== session.root)
+            return stale("full-jobs-root-changed", "captured game root changed");
+          if (decision === null) return SUCCEEDED;
+          let staleState = measure(
+            "jobs.full.staleCheck",
+            () => isFullJobsStateCurrent(executionRoot, session)
           );
-        if (rootState.readRoot() !== session.root)
-          return sessionRef.value = void 0, stale("full-jobs-root-changed", "captured game root changed");
-        let currentCatalog = catalogReader(), currentFoundry = readCapturedCraftsmenCycle(
-          session.root,
-          readSettings(),
-          costs,
-          catalogReader,
-          readDemand,
-          readBuildTargets,
-          buildCosts
-        );
-        if (currentCatalog === void 0 || JSON.stringify(currentCatalog) !== JSON.stringify(session.catalog) || currentFoundry === void 0 || JSON.stringify(currentFoundry.samples) !== JSON.stringify(session.foundry.samples) || JSON.stringify(currentFoundry.skilledSamples) !== JSON.stringify(session.foundry.skilledSamples) || currentFoundry.skilledMaximum !== session.foundry.skilledMaximum || currentFoundry.skilledUsed !== session.foundry.skilledUsed || currentFoundry.input.manageServants !== session.foundry.input.manageServants || currentFoundry.input.servantModifier !== session.foundry.input.servantModifier || JSON.stringify(currentFoundry.input.crafting) !== JSON.stringify(session.foundry.input.crafting))
-          return sessionRef.value = void 0, stale(
-            "full-jobs-state-changed",
-            "ordinary or foundry state changed"
+          if (staleState !== void 0)
+            return stale(
+              "full-jobs-state-changed",
+              `ordinary or foundry state changed: ${staleState}`
+            );
+          if (!fullDecisionChangesState(session, decision))
+            return historyRoot = session.root, history = Object.freeze({
+              lastPopulationCount: decision.lastPopulationCount,
+              lastFarmerCount: decision.lastFarmerCount
+            }), authorityCap = decision.clearAuthorityEntertainerCap ? null : decision.authorityEntertainerCap, SUCCEEDED;
+          let outcome = measure(
+            "jobs.full.execute",
+            () => executeFullDecision(controls2, session, decision, measure)
           );
-        let expected = planJobs(session.input);
-        if (expected === null || JSON.stringify(expected) !== JSON.stringify(decision))
-          return sessionRef.value = void 0, rejected(
-            "invalid-full-jobs-decision",
-            "full jobs decision does not match the sampled plan"
-          );
-        sessionRef.value = void 0;
-        let outcome = executeFullDecision(controls2, session, decision);
-        if (outcome.status === "succeeded") {
-          let currentRoot = rootState.readRoot(), observed2 = currentRoot === session.root ? readFullCycle(
-            currentRoot,
-            readSettings(),
-            catalogReader,
-            costs,
-            readDemand,
-            readBuildTargets,
-            buildCosts,
-            authorityCap
-          ) : void 0, expectedDefaultId = decision.selectedDefaultToken === null ? session.catalog.defaultJobId : session.ordinaryJobs.find(
-            (job) => job.token === decision.selectedDefaultToken
-          )?.id ?? "", actualDefaultId = observed2?.catalog.defaultJobId, failedAssignments = decision.assignments.map((assignment) => {
-            let before = session.input.jobs.find(
-              (job) => job.token === assignment.jobToken
-            ), after = observed2?.input.jobs.find(
-              (job) => job.token === assignment.jobToken
-            ), foundry = observed2?.foundry.samples.find(
-              (sample) => sample.id === before?.id
-            ), expectedServants = session.input.manageServants ? assignment.servants : before?.servants, actualWorkers = before?.crafting === !0 ? foundry?.workers : after?.workers, actualServants = after?.servants;
-            return {
-              id: before?.id,
-              expectedWorkers: assignment.workers,
-              actualWorkers,
-              expectedServants,
-              actualServants,
-              matches: before !== void 0 && after !== void 0 && actualWorkers === assignment.workers && actualServants === expectedServants
-            };
-          }).filter((check) => !check.matches).slice(0, 5).map(({ matches: _matches, ...check }) => check);
-          observed2 !== void 0 && actualDefaultId === expectedDefaultId && failedAssignments.length === 0 ? (historyRoot = currentRoot, history = Object.freeze({
+          if (outcome.status !== "succeeded") return outcome;
+          let currentRoot = rootState.readRoot();
+          return measure(
+            "jobs.full.postcondition",
+            () => currentRoot === session.root && fullJobsPostcondition(currentRoot, session, decision)
+          ) ? (historyRoot = currentRoot, history = Object.freeze({
             lastPopulationCount: decision.lastPopulationCount,
             lastFarmerCount: decision.lastFarmerCount
-          }), authorityCap = decision.clearAuthorityEntertainerCap ? null : decision.authorityEntertainerCap) : outcome = rejected(
+          }), authorityCap = decision.clearAuthorityEntertainerCap ? null : decision.authorityEntertainerCap, outcome) : rejected(
             "full-jobs-postcondition-failed",
             `ordinary or foundry assignment was not observed in captured root state: ${JSON.stringify(
-              {
-                expectedDefaultId,
-                actualDefaultId,
-                observedAvailable: observed2 !== void 0,
-                failedAssignments
-              }
+              decision.assignments.map((assignment) => {
+                let job = session.input.jobs.find(
+                  (candidate) => candidate.token === assignment.jobToken
+                ), owner = job?.crafting ? readProperty(readProperty(currentRoot, "city"), "foundry") : readProperty(
+                  readProperty(currentRoot, "civic"),
+                  job?.id ?? ""
+                ), servantOwner = readProperty(
+                  readProperty(readProperty(currentRoot, "race"), "servants"),
+                  job?.crafting ? "sjobs" : "jobs"
+                );
+                return {
+                  id: job?.id,
+                  targetWorkers: assignment.workers,
+                  actualWorkers: readProperty(owner, job?.id ?? ""),
+                  targetServants: assignment.servants,
+                  actualServants: readProperty(servantOwner, job?.id ?? "")
+                };
+              })
             )}`
           );
         }
-        return outcome;
-      }
-    });
-    return Object.freeze({ reader, executor, isAvailable: () => readFullCycle(
-      rootState.readRoot(),
-      readSettings(),
-      catalogReader,
-      costs,
-      readDemand,
-      readBuildTargets,
-      buildCosts,
-      authorityCap
-    ) !== void 0 });
+      });
+      return Object.freeze({
+        status: "ready",
+        input: sampled3.input,
+        execution
+      });
+    } });
   }
 
   // src/domain/economy/production/pylon.ts
@@ -55894,7 +56059,8 @@ Only continue if you trust the source. Injected code:
       costs,
       readDemand: () => readDemand(),
       readBuildTargets: progression.readManagedBuildTargets,
-      buildCosts
+      buildCosts,
+      ...diagnostics === void 0 ? {} : { diagnostics }
     }), pylon = createCapturedPylonAutomation({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
@@ -56877,6 +57043,11 @@ Only continue if you trust the source. Injected code:
       return outcome.status !== "succeeded" && reportOnce(
         `${phase}: ${outcome.failure.code}: ${outcome.failure.message}`
       ), outcome;
+    }, runPreparedJobsPhase = (phase, prepared) => {
+      let outcome = runPreparedJobsAutomation(prepared, publishSpaceMinerPlan);
+      return outcome.status !== "succeeded" && reportOnce(
+        `${phase}: ${outcome.failure.code}: ${outcome.failure.message}`
+      ), outcome;
     }, powerReader = createCapturedPowerReader({
       rootState: pageCapture2.rootState,
       mechanics: pageCapture2.mechanics,
@@ -57074,11 +57245,12 @@ Only continue if you trust the source. Injected code:
         }), demandThisCycle = void 0, savingTargetThisCycle = void 0, observePowerDemandPhase("factory-invalidated");
         let autoJobs = isEnabled(settings, "autoJobs"), autoCraftsmen = isEnabled(settings, "autoCraftsmen"), combinedJobs = !1;
         if (autoJobs && autoCraftsmen && (runPhase("autoJobs with autoCraftsmen", () => {
-          ensureCivicControls(), refreshDiscoveredSettings(), combinedJobs = fullJobs.isAvailable(), combinedJobs && runJobsPhase(
+          ensureCivicControls(), refreshDiscoveredSettings();
+          let prepared = fullJobs.prepare();
+          return combinedJobs = prepared.status === "ready", prepared.status === "ready" && runPreparedJobsPhase(
             "autoJobs with autoCraftsmen",
-            { ...fullJobs, onCoherentPlan: publishSpaceMinerPlan },
-            !1
-          );
+            prepared.execution
+          ), !0;
         }) || (combinedJobs = !0)), autoJobs && !combinedJobs && runPhase("autoJobs", () => {
           ensureCivicControls(), refreshDiscoveredSettings(), runJobsPhase(
             "autoJobs",

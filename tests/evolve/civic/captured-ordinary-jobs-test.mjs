@@ -700,8 +700,8 @@ const fullRoot = {
     },
     farmer: {
       job: "farmer",
-      assigned: 0,
-      workers: 0,
+      assigned: 1,
+      workers: 1,
       max: -1,
       display: true,
     },
@@ -716,13 +716,13 @@ const fullRoot = {
       display: true,
     },
     // DeadSpace keeps Craftsman in civic state but exposes its worker control through #foundry.
-    craftsman: { job: "craftsman", workers: 1, max: 2 },
+    craftsman: { job: "craftsman", workers: 0, max: 2 },
   },
   city: {
     foundry: {
-      Plywood: 1,
+      Plywood: 0,
       Brick: 0,
-      crafting: 1,
+      crafting: 0,
       cap: 2,
       rcap: {},
     },
@@ -730,15 +730,15 @@ const fullRoot = {
   race: {
     servants: {
       jobs: { farmer: 0 },
-      sjobs: { Plywood: 1 },
+      sjobs: { Plywood: 0 },
       max: 1,
       used: 0,
       smax: 1,
-      sused: 1,
+      sused: 0,
     },
   },
   resource: {
-    Population: { amount: 4, max: 10 },
+    Population: { amount: 5, max: 10 },
     Food: { amount: 10, max: 100, diff: 0 },
     Plywood: { amount: 100 },
     Brick: { amount: 0 },
@@ -747,6 +747,7 @@ const fullRoot = {
 };
 const fullCalls = [];
 let fullControlFailure;
+let fullIgnoreControls = false;
 const fullControls = {
   capturedElementIds: () => [
     "civ-unemployed",
@@ -786,6 +787,7 @@ const fullControls = {
   },
   invoke: (handle, method, args = []) => {
     fullCalls.push({ elementId: handle.elementId, method, args });
+    if (fullIgnoreControls) return { ok: true, value: undefined };
     if (handle.elementId === "skilledServants") {
       const id = args[0];
       fullRoot.race.servants.sjobs[id] =
@@ -813,8 +815,25 @@ const fullControls = {
   },
 };
 let fullManageServants = true;
+let fullBuildingWeighting = false;
+let fullRootIdentity;
+let fullBuildTargetReads = 0;
+let fullBuildCostReads = 0;
+const fullPerfCounts = new Map();
+const fullPerfPhases = new Map();
+let fullDemandReads = 0;
+let fullCraftCostReads = 0;
+const fullDiagnostics = {
+  readPerformanceEnabled: () => true,
+  nowMs: () => performance.now(),
+  recordPerformance: (phase, duration) =>
+    fullPerfPhases.set(phase, (fullPerfPhases.get(phase) ?? 0) + duration),
+  recordCount: (name, amount) =>
+    fullPerfCounts.set(name, (fullPerfCounts.get(name) ?? 0) + amount),
+  flushPerformance: () => {},
+};
 const fullAutomation = createCapturedFullJobsAutomation({
-  rootState: { readRoot: () => fullRoot },
+  rootState: { readRoot: () => fullRootIdentity ?? fullRoot },
   controls: fullControls,
   readSettings: () => ({
     ...resetBreakpoints,
@@ -831,15 +850,76 @@ const fullAutomation = createCapturedFullJobsAutomation({
     craftBrick: true,
     job_Brick: true,
     foundry_w_Brick: 1,
+    productionFoundryWeighting: fullBuildingWeighting
+      ? "buildings"
+      : "demanded",
   }),
   costs: {
-    read: (id) =>
-      id === "Plywood" || id === "Brick" ? new Map([["Iron", 1]]) : undefined,
+    read: (id) => {
+      fullCraftCostReads++;
+      return id === "Plywood" || id === "Brick"
+        ? new Map([["Iron", 1]])
+        : undefined;
+    },
   },
+  readDemand: () => {
+    fullDemandReads++;
+    return {
+      isDemanded: () => true,
+      storageRequired: () => 100,
+    };
+  },
+  readBuildTargets: () => {
+    fullBuildTargetReads++;
+    return [{ key: "housing", elementId: "city-housing", weighting: 1 }];
+  },
+  buildCosts: {
+    readCost: () => {
+      fullBuildCostReads++;
+      return { cost: { Plywood: 1 }, pool: undefined };
+    },
+  },
+  diagnostics: fullDiagnostics,
 });
-const fullInput = fullAutomation.reader.readCycle(false);
+const fullPrepared = fullAutomation.prepare();
+assert.equal(fullPrepared.status, "ready");
+assert.equal(fullPerfCounts.get("jobs.full.readFullCycleCalls"), 1);
+assert.equal(fullPerfCounts.get("jobs.full.jobCatalogReads"), 1);
+assert.equal(fullPerfCounts.get("jobs.full.craftsmenCycleReads"), 1);
+assert.equal(fullPerfCounts.get("jobs.full.demandReads"), 1);
+assert.equal(fullPerfCounts.get("jobs.full.planCalls"), 1);
+assert.equal(
+  fullDemandReads,
+  1,
+  "ordinary jobs and Foundry share the exact demand sample",
+);
+assert.equal(
+  fullCraftCostReads,
+  2,
+  "each present product captures its recipe cost once",
+);
+assert.equal(fullPerfCounts.get("jobs.full.buildTargetReads") ?? 0, 0);
+assert.equal(fullPerfCounts.get("jobs.full.buildCostReads") ?? 0, 0);
+assert.ok(fullPerfPhases.has("jobs.full.read"));
+assert.ok(fullPerfPhases.has("jobs.full.craftsmen"));
+assert.deepEqual(
+  planJobs(fullPrepared.input),
+  fullPrepared.execution.decision,
+  "the prepared decision is the planner result for its authoritative snapshot",
+);
+fullBuildingWeighting = true;
+const readsBeforeBuildings = fullBuildTargetReads;
+const costsBeforeBuildings = fullBuildCostReads;
+const weightedPrepared = fullAutomation.prepare();
+assert.equal(weightedPrepared.status, "ready");
+assert.equal(fullBuildTargetReads, readsBeforeBuildings + 1);
+assert.equal(fullBuildCostReads, costsBeforeBuildings + 1);
+assert.equal(fullPerfCounts.get("jobs.full.buildTargetReads"), 1);
+assert.equal(fullPerfCounts.get("jobs.full.buildCostReads"), 1);
+fullBuildingWeighting = false;
+const fullInput = fullPrepared.input;
 assert.equal(fullInput.available, true);
-const fullDecision = planJobs(fullInput);
+const fullDecision = fullPrepared.execution.decision;
 assert.ok(fullDecision);
 assert.equal(
   fullDecision.assignments.some(
@@ -853,7 +933,7 @@ fullControlFailure = {
   missingControl: true,
 };
 assert.equal(
-  fullAutomation.executor.execute(fullDecision).status,
+  weightedPrepared.execution.execute().status,
   "rejected",
   "a missing later skilled-servant control rejects the whole full decision",
 );
@@ -867,7 +947,9 @@ assert.deepEqual(fullRoot, fullStateBeforePreflight);
 // The full executor must not commit lastPopulation/lastFarmer history when preflight rejects.
 fullRoot.resource.Population.amount = fullDecision.lastPopulationCount + 2;
 fullRoot.civic.farmer.workers = fullDecision.lastFarmerCount + 2;
-const afterRejectedHistoryInput = fullAutomation.reader.readCycle(false);
+const afterRejectedHistoryPrepared = fullAutomation.prepare();
+assert.equal(afterRejectedHistoryPrepared.status, "ready");
+const afterRejectedHistoryInput = afterRejectedHistoryPrepared.input;
 assert.equal(afterRejectedHistoryInput.available, true);
 assert.equal(
   afterRejectedHistoryInput.jobs.find(({ id }) => id === "farmer")
@@ -882,10 +964,10 @@ fullControlFailure = {
   elementId: "skilledServants",
   missingMethod: "add",
 };
-const retryInput = fullAutomation.reader.readCycle(false);
-const retryDecision = planJobs(retryInput);
+const retryPrepared = fullAutomation.prepare();
+assert.equal(retryPrepared.status, "ready");
 assert.equal(
-  fullAutomation.executor.execute(retryDecision).status,
+  retryPrepared.execution.execute().status,
   "rejected",
   "an existing captured handle without the required method also rejects before mutation",
 );
@@ -893,11 +975,31 @@ assert.deepEqual(fullCalls, []);
 assert.deepEqual(fullRoot, fullStateBeforePreflight);
 
 fullControlFailure = undefined;
-const fullOutcome = fullAutomation.executor.execute(
-  planJobs(fullAutomation.reader.readCycle(false)),
+const readsBeforeSuccessfulPrepare = fullPerfCounts.get(
+  "jobs.full.readFullCycleCalls",
 );
-assert.equal(fullOutcome.status, "succeeded");
+const successfulPrepared = fullAutomation.prepare();
+assert.equal(successfulPrepared.status, "ready");
+const fullOutcome = successfulPrepared.execution.execute();
+assert.equal(fullOutcome.status, "succeeded", JSON.stringify(fullOutcome));
 assert.equal(fullRoot.city.foundry.Brick, 2);
+assert.equal(
+  fullRoot.civic.unemployed.workers,
+  fullDecision.assignments.find(({ jobToken }) => jobToken === 0)?.workers,
+  "Foundry's worker transfer is included in the default-job target",
+);
+assert.equal(
+  fullCalls.filter(
+    ({ elementId, method }) => elementId === "foundry" && method === "add",
+  ).length,
+  2,
+  "the Foundry gain transfers both workers through the default job before its own delta",
+);
+assert.equal(
+  fullPerfCounts.get("jobs.full.readFullCycleCalls"),
+  readsBeforeSuccessfulPrepare + 1,
+  "one read per explicit prepare; execute and postcondition do not resample",
+);
 assert.equal(
   fullCalls.some(({ elementId }) => elementId === "foundry"),
   true,
@@ -916,17 +1018,165 @@ assert.equal(
   "a switched-off job is left alone rather than commanded",
 );
 assert.equal(fullRoot.civic.lumberjack.workers, 0);
+const fullPostSuccessState = structuredClone(fullRoot);
+const successfulMethods = [
+  ...new Map(
+    fullCalls.map(({ elementId, method }) => [method, { elementId, method }]),
+  ).values(),
+];
+for (const method of ["add", "sub", "setDefault"]) {
+  const requirement = successfulMethods.find(
+    (entry) => entry.method === method,
+  );
+  assert.ok(requirement, `the combined fixture exercises ${method}`);
+  for (const key of Object.keys(fullRoot)) delete fullRoot[key];
+  Object.assign(fullRoot, structuredClone(fullStateBeforePreflight));
+  fullControlFailure = undefined;
+  const missingPrepared = fullAutomation.prepare();
+  assert.equal(missingPrepared.status, "ready");
+  fullControlFailure = {
+    elementId: requirement.elementId,
+    missingMethod: requirement.method,
+  };
+  const callsBeforeMissingCapability = fullCalls.length;
+  assert.equal(
+    missingPrepared.execution.execute().failure?.code,
+    "full-jobs-controls-incomplete",
+    `missing ${method} must reject before the first mutation`,
+  );
+  assert.equal(fullCalls.length, callsBeforeMissingCapability);
+  assert.deepEqual(fullRoot, fullStateBeforePreflight);
+}
+fullControlFailure = undefined;
+fullIgnoreControls = true;
+for (const key of Object.keys(fullRoot)) delete fullRoot[key];
+Object.assign(fullRoot, structuredClone(fullStateBeforePreflight));
+const ignoredMutationPrepared = fullAutomation.prepare();
+assert.equal(ignoredMutationPrepared.status, "ready");
+assert.equal(
+  ignoredMutationPrepared.execution.execute().failure?.code,
+  "full-jobs-postcondition-failed",
+  "successful native return values do not replace the live assignment postcondition",
+);
+assert.deepEqual(fullRoot, fullStateBeforePreflight);
+fullIgnoreControls = false;
+for (const key of Object.keys(fullRoot)) delete fullRoot[key];
+Object.assign(fullRoot, fullPostSuccessState);
+
+const callsBeforeNoop = fullCalls.length;
+const postconditionsBeforeNoop = fullPerfPhases.get("jobs.full.postcondition");
+const noopPrepared = fullAutomation.prepare();
+assert.equal(noopPrepared.status, "ready");
+assert.equal(noopPrepared.execution.execute().status, "succeeded");
+assert.equal(
+  fullCalls.length,
+  callsBeforeNoop,
+  "a no-op plan invokes no controls",
+);
+assert.equal(
+  fullPerfPhases.get("jobs.full.postcondition"),
+  postconditionsBeforeNoop,
+  "a no-op plan does not resample a postcondition",
+);
+assert.equal(
+  noopPrepared.execution.execute().failure?.code,
+  "full-jobs-session-consumed",
+  "a prepared session is one-shot",
+);
+
+const callsBeforeSuperseded = fullCalls.length;
+const supersededPrepared = fullAutomation.prepare();
+assert.equal(supersededPrepared.status, "ready");
+const currentPrepared = fullAutomation.prepare();
+assert.equal(currentPrepared.status, "ready");
+assert.equal(
+  supersededPrepared.execution.execute().failure?.code,
+  "full-jobs-session-superseded",
+  "a newer prepare invalidates every older prepared session",
+);
+assert.equal(fullCalls.length, callsBeforeSuperseded);
+
+const callsBeforeStale = fullCalls.length;
+const staleRootPrepared = fullAutomation.prepare();
+assert.equal(staleRootPrepared.status, "ready");
+fullRootIdentity = structuredClone(fullRoot);
+assert.equal(
+  staleRootPrepared.execution.execute().failure?.code,
+  "full-jobs-root-changed",
+);
+fullRootIdentity = undefined;
+assert.equal(
+  fullCalls.length,
+  callsBeforeStale,
+  "root replacement rejects before mutation",
+);
+
+const staleWorkerPrepared = fullAutomation.prepare();
+assert.equal(staleWorkerPrepared.status, "ready");
+fullRoot.civic.farmer.workers++;
+assert.equal(
+  staleWorkerPrepared.execution.execute().failure?.code,
+  "full-jobs-state-changed",
+);
+fullRoot.civic.farmer.workers--;
+assert.equal(
+  fullCalls.length,
+  callsBeforeStale,
+  "changed ordinary workers reject before mutation",
+);
+
+const staleFoundryPrepared = fullAutomation.prepare();
+assert.equal(staleFoundryPrepared.status, "ready");
+fullRoot.city.foundry.Plywood++;
+assert.equal(
+  staleFoundryPrepared.execution.execute().failure?.code,
+  "full-jobs-state-changed",
+);
+fullRoot.city.foundry.Plywood--;
+assert.equal(
+  fullCalls.length,
+  callsBeforeStale,
+  "changed Foundry workers reject before mutation",
+);
+
+const staleServantPrepared = fullAutomation.prepare();
+assert.equal(staleServantPrepared.status, "ready");
+fullRoot.race.servants.jobs.farmer++;
+assert.equal(
+  staleServantPrepared.execution.execute().failure?.code,
+  "full-jobs-state-changed",
+);
+fullRoot.race.servants.jobs.farmer--;
+assert.equal(
+  fullCalls.length,
+  callsBeforeStale,
+  "changed servants reject before mutation",
+);
+
+const staleSkilledPrepared = fullAutomation.prepare();
+assert.equal(staleSkilledPrepared.status, "ready");
+fullRoot.race.servants.sjobs.Plywood++;
+assert.equal(
+  staleSkilledPrepared.execution.execute().failure?.code,
+  "full-jobs-state-changed",
+);
+fullRoot.race.servants.sjobs.Plywood--;
+assert.equal(
+  fullCalls.length,
+  callsBeforeStale,
+  "changed skilled servants reject before mutation",
+);
 
 const servantsBeforeDisabling = structuredClone(fullRoot.race.servants);
 const callsBeforeDisabling = fullCalls.length;
 fullManageServants = false;
-const servantsDisabledInput = fullAutomation.reader.readCycle(false);
+const servantsDisabledPrepared = fullAutomation.prepare();
+assert.equal(servantsDisabledPrepared.status, "ready");
+const servantsDisabledInput = servantsDisabledPrepared.input;
 assert.equal(servantsDisabledInput.manageServants, false);
 assert.equal(servantsDisabledInput.servantsMaximum, 0);
 assert.equal(servantsDisabledInput.skilledServantsMaximum, 0);
-const servantsDisabledOutcome = fullAutomation.executor.execute(
-  planJobs(servantsDisabledInput),
-);
+const servantsDisabledOutcome = servantsDisabledPrepared.execution.execute();
 assert.equal(servantsDisabledOutcome.status, "succeeded");
 assert.equal(
   fullCalls

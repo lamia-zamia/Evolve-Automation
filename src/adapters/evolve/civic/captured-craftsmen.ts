@@ -177,9 +177,15 @@ function readBuildingCosts(
     (left, right) => right.weighting - left.weighting,
   );
   const samples: BuildingCostSample[] = [];
+  const prices = new Map<
+    string,
+    ReturnType<GameActionCostReader["readCost"]>
+  >();
   for (const target of ordered) {
     if (!Number.isFinite(target.weighting)) return undefined;
-    const price = costs.readCost(target.elementId);
+    if (!prices.has(target.elementId))
+      prices.set(target.elementId, costs.readCost(target.elementId));
+    const price = prices.get(target.elementId);
     if (price === undefined) return undefined;
     samples.push(Object.freeze({ target, cost: price.cost }));
   }

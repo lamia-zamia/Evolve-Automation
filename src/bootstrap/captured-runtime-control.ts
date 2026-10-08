@@ -7,7 +7,11 @@ import type { BuildResourceScope } from "../domain/progression/build/build.ts";
 import { storageRequirementScopeKey } from "../domain/economy/storage/storage-requirements.ts";
 import { readPeriodsPerScriptCycle } from "../adapters/evolve/captured-tick-rate.ts";
 import { runCraftAutomation } from "../application/craft.ts";
-import { runJobsAutomation } from "../application/jobs.ts";
+import {
+  runJobsAutomation,
+  runPreparedJobsAutomation,
+} from "../application/jobs.ts";
+import type { PreparedJobsExecution } from "../ports/jobs.ts";
 import { createCapturedPrestigeControl } from "./captured-prestige-control.ts";
 import { createCapturedGatherResourcesControl } from "./captured-gather-resources-control.ts";
 import { createCapturedTaxControl } from "./captured-tax-control.ts";
@@ -1094,6 +1098,7 @@ export function startCapturedRuntime({
     readDemand: () => readDemand(),
     readBuildTargets: progression.readManagedBuildTargets,
     buildCosts,
+    ...(diagnostics === undefined ? {} : { diagnostics }),
   });
   const pylon = createCapturedPylonAutomation({
     rootState: pageCapture.rootState,
@@ -2724,6 +2729,27 @@ export function startCapturedRuntime({
       );
     return outcome;
   };
+  const runPreparedJobsPhase = (
+    phase: string,
+    prepared: Readonly<PreparedJobsExecution>,
+  ) => {
+    const outcome = runPreparedJobsAutomation(prepared, publishSpaceMinerPlan);
+    if (
+      typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
+      __EA_TEST_SURFACE_ENABLED__ === true
+    ) {
+      const observer = readProperty(
+        readProperty(settingsHostWindow, "__EA_TEST_HOOKS__"),
+        "observeJobsAutomation",
+      );
+      if (typeof observer === "function") observer(phase, outcome);
+    }
+    if (outcome.status !== "succeeded")
+      reportOnce(
+        `${phase}: ${outcome.failure.code}: ${outcome.failure.message}`,
+      );
+    return outcome;
+  };
   const powerReader = createCapturedPowerReader({
     rootState: pageCapture.rootState,
     mechanics: pageCapture.mechanics,
@@ -3288,13 +3314,14 @@ export function startCapturedRuntime({
         const completed = runPhase("autoJobs with autoCraftsmen", () => {
           ensureCivicControls();
           refreshDiscoveredSettings();
-          combinedJobs = fullJobs.isAvailable();
-          if (combinedJobs)
-            runJobsPhase(
+          const prepared = fullJobs.prepare();
+          combinedJobs = prepared.status === "ready";
+          if (prepared.status === "ready")
+            runPreparedJobsPhase(
               "autoJobs with autoCraftsmen",
-              { ...fullJobs, onCoherentPlan: publishSpaceMinerPlan },
-              false,
+              prepared.execution,
             );
+          return true;
         });
         // The combined path owns this settings combination even when the sampled command fails;
         // split passes must not make a second decision in the same cycle.

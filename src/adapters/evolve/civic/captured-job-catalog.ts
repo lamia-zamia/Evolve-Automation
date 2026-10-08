@@ -1595,7 +1595,7 @@ function normalizeBreakpoints(
   };
 }
 
-function readCatalog(
+export function readCapturedJobCatalog(
   root: unknown,
   controls: GameControlRegistry,
   settingsValue: unknown,
@@ -1857,7 +1857,7 @@ export function createCapturedJobCatalogReader({
 }: CapturedJobCatalogReaderDependencies): () => CapturedJobCatalog | undefined {
   const reportSkipped = onSkipped ?? (() => {});
   return () =>
-    readCatalog(
+    readCapturedJobCatalog(
       rootState.readRoot(),
       controls,
       readSettings(),
