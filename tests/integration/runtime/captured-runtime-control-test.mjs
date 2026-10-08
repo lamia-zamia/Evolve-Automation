@@ -433,6 +433,7 @@ function runDemandSampleScenario(
       : undefined,
     logError: (message) => errors.push(message),
   });
+  const initialResearchCatalogReads = researchCatalogReads;
   pageCaptureCycle({ periods: 1 });
   if (constructionCase) {
     root.resource.Polymer.amount = 200;
@@ -445,7 +446,7 @@ function runDemandSampleScenario(
   return {
     invoked,
     phases,
-    researchOfferReads: researchCatalogReads,
+    researchOfferReads: researchCatalogReads - initialResearchCatalogReads,
     errors,
     root,
   };
@@ -3341,6 +3342,13 @@ function runCombatRuntime(autoFight) {
     false,
     true,
   );
+  for (const phase of [
+    "settingsPanel.ensurePanel",
+    "settings.refreshEffective",
+    "planningPanels.refresh",
+  ]) {
+    assert.ok(saving.phases.includes(phase), `${phase} must be profiled`);
+  }
   assert.ok(
     saving.phases.includes("autoBuild.beginCycle"),
     JSON.stringify(saving),

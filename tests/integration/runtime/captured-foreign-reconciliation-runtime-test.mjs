@@ -107,6 +107,7 @@ const foreign = {
 
 const stop = startCapturedRuntime({
   pageCapture: {
+    bindings: () => () => {},
     isComplete: () => true,
     mechanics: {
       readStructures: () => undefined,

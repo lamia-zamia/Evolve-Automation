@@ -65,38 +65,41 @@ export function createAutomationContainer({
   getActions,
 }: AutomationContainerDependencies) {
   function ensureAutomationContainer() {
-    const settingsRaw = getSettingsRaw();
     const $ = getJQuery();
-    const safeMode = getSafeMode();
-    const overrideKeyLabel = getOverrideKeyLabel();
-    const {
-      createSettingToggle,
-      persistSettings,
-      buildScriptSettings,
-      removeScriptSettings,
-      showMechInfo,
-      hideMechInfo,
-      createCraftToggles,
-      removeCraftToggles,
-      createBuildingToggles,
-      removeBuildingToggles,
-      createArpaToggles,
-      removeArpaToggles,
-      createStorageToggles,
-      removeStorageToggles,
-      createMarketToggles,
-      removeMarketToggles,
-      createEjectToggles,
-      removeEjectToggles,
-      createSupplyToggles,
-      removeSupplyToggles,
-      bulkSell,
-    } = getActions();
-    let created = false;
     const scriptNode = $("#autoScriptContainer");
+    let created = false;
     if (scriptNode.length === 0) {
+      const resourcesNode = $("#resources");
+      if (resourcesNode.length === 0) return { scriptNode, created };
+
+      const settingsRaw = getSettingsRaw();
+      const safeMode = getSafeMode();
+      const overrideKeyLabel = getOverrideKeyLabel();
+      const {
+        createSettingToggle,
+        persistSettings,
+        buildScriptSettings,
+        removeScriptSettings,
+        showMechInfo,
+        hideMechInfo,
+        createCraftToggles,
+        removeCraftToggles,
+        createBuildingToggles,
+        removeBuildingToggles,
+        createArpaToggles,
+        removeArpaToggles,
+        createStorageToggles,
+        removeStorageToggles,
+        createMarketToggles,
+        removeMarketToggles,
+        createEjectToggles,
+        removeEjectToggles,
+        createSupplyToggles,
+        removeSupplyToggles,
+        bulkSell,
+      } = getActions();
       created = true;
-      $("#resources").append(`
+      resourcesNode.append(`
               <div id="autoScriptContainer" style="margin-top: 10px;">
                 <h3 id="toggleSettingsCollapsed" class="script-collapsible text-center has-text-success">Automation</h3>
                 <div id="scriptToggles">
@@ -105,7 +108,7 @@ export function createAutomationContainer({
               </div>`);
 
       if (safeMode) {
-        $("#resources").append(
+        resourcesNode.append(
           `<p>⚠️ Safe mode active, masterScriptToggle is disabled</p>`,
         );
       }
@@ -345,7 +348,6 @@ export function createAutomationContainer({
       );
       $("#bulk-sell").on("mouseup", bulkSell);
     }
-
     return { scriptNode, created };
   }
 

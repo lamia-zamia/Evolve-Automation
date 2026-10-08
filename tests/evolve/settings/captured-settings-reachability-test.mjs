@@ -254,6 +254,8 @@ function readFleet(page) {
   const fleet = element("div", { id: "hfleet" });
   fleet.appendChild(element("h3"));
   page.root.appendChild(fleet);
+  page.notifyGameBinding("government");
+  page.notifyGameBinding("hfleet");
   page.panel.ensurePanel();
 
   // The ordinary page drew each section once; the secondary surface is a second rendering of the

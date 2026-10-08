@@ -541,22 +541,34 @@ export function startCapturedRuntime({
     display: { publish: () => {} },
   });
   const refreshEffectiveSettings = () => {
-    // A few discoveries can refresh settings while the composition is still being assembled.
-    // Until the condition sampler exists, keep the stored layer visible and defer overrides to
-    // the next refresh instead of reporting context-dependent operands as unavailable.
-    if (readOverrideConditionContext === undefined) {
-      overrideSettings.syncStoredSettings();
-      return;
-    }
-    const raw = settingsLifecycle.readRaw();
-    const overrides = raw.overrides;
-    if (
-      readSafeMode() ||
-      (isRecord(overrides) && Object.keys(overrides).length > 0)
-    ) {
-      overrideSettings.updateOverrides();
-    } else {
-      overrideSettings.syncStoredSettings();
+    const profiling =
+      diagnostics?.readPerformanceEnabled() === true ? diagnostics : undefined;
+    const startedAtMs = profiling?.nowMs();
+    try {
+      // A few discoveries can refresh settings while the composition is still being assembled.
+      // Until the condition sampler exists, keep the stored layer visible and defer overrides to
+      // the next refresh instead of reporting context-dependent operands as unavailable.
+      if (readOverrideConditionContext === undefined) {
+        overrideSettings.syncStoredSettings();
+        return;
+      }
+      const raw = settingsLifecycle.readRaw();
+      const overrides = raw.overrides;
+      if (
+        readSafeMode() ||
+        (isRecord(overrides) && Object.keys(overrides).length > 0)
+      ) {
+        overrideSettings.updateOverrides();
+      } else {
+        overrideSettings.syncStoredSettings();
+      }
+    } finally {
+      if (profiling !== undefined && startedAtMs !== undefined) {
+        profiling.recordPerformance(
+          "settings.refreshEffective",
+          profiling.nowMs() - startedAtMs,
+        );
+      }
     }
   };
   const refreshDiscoveredSettings = () => {
@@ -594,6 +606,8 @@ export function startCapturedRuntime({
     settingsLifecycle,
     customRaceLab,
     refreshEffectiveSettings,
+    observeGameBindings: (listener) =>
+      pageCapture.bindings((elementId) => listener(elementId)),
     readInterfacePresentationSettings: readEffectiveInterfacePresentation,
     interfaceEffects: {
       syncActiveTargetsUI: () => refreshCapturedPlanningPanels(),
@@ -1222,6 +1236,9 @@ export function startCapturedRuntime({
     onError: reportPlanningUiError,
   });
   refreshCapturedPlanningPanels = () => {
+    const profiling =
+      diagnostics?.readPerformanceEnabled() === true ? diagnostics : undefined;
+    const startedAtMs = profiling?.nowMs();
     try {
       const rawSettings = settingsLifecycle.readRaw();
       const presentation = readEffectiveInterfacePresentation();
@@ -1273,6 +1290,13 @@ export function startCapturedRuntime({
       );
     } catch (error) {
       reportPlanningUiError(error);
+    } finally {
+      if (profiling !== undefined && startedAtMs !== undefined) {
+        profiling.recordPerformance(
+          "planningPanels.refresh",
+          profiling.nowMs() - startedAtMs,
+        );
+      }
     }
   };
   const invalidateCapturedCyclePlanning = () => {
@@ -1289,6 +1313,7 @@ export function startCapturedRuntime({
     mechSupplyReservation.reset();
     savingTargetThisCycle = undefined;
     settingsLifecycle.invalidateDynamicDefaults();
+    settingsPanel.invalidate();
     // Attempts and readouts belong to the replaced root, even when its day/reset are unchanged.
     discoveryAttempts.invalidate();
     latestConstructionSnapshot = null;
@@ -2816,13 +2841,16 @@ export function startCapturedRuntime({
     }
   }
 
-  // The settings panel prepares the raw layer before this composition has an override context.
-  // Resolve it after all condition readers and their lazy control helpers are ready, before the
-  // first planning-panel reconciliation or period callback.
+  // Resolve overrides after all condition readers and their lazy control helpers are ready, before
+  // the first planning-panel reconciliation or period callback. The settings lifecycle itself was
+  // initialized above, before any settings UI or feature reader was constructed.
   refreshEffectiveSettings();
   refreshCapturedPlanningPanels();
 
   const runCycle = () => {
+    const profiling =
+      diagnostics?.readPerformanceEnabled() === true ? diagnostics : undefined;
+    const workStartedAtMs = profiling?.nowMs();
     automationCycle += 1;
     prospectiveSpaceMinerPlan = undefined;
     capturedResetCommittedThisCycle = false;
@@ -2837,15 +2865,29 @@ export function startCapturedRuntime({
     triggerTargetsThisCycle = undefined;
     triggerDemandThisCycle = undefined;
     demandPrerequisitesThisCycle = undefined;
-    // Drawn before the master-toggle guard below, and before any automation runs: a fresh profile
-    // carries no settings at all, so a script that only drew its interface while already enabled
-    // could never be switched on.
-    settingsPanel.ensurePanel();
     if (!pageCapture.isComplete()) {
+      const panelStartedAtMs = profiling?.nowMs();
+      settingsPanel.ensurePanel();
+      if (profiling !== undefined && panelStartedAtMs !== undefined) {
+        profiling.recordPerformance(
+          "settingsPanel.ensurePanel",
+          profiling.nowMs() - panelStartedAtMs,
+        );
+      }
       refreshCapturedPlanningPanels();
       return;
     }
     refreshDiscoveredSettings();
+    // The container is drawn before the master-toggle guard, so a fresh profile can enable the
+    // script. Dynamic overrides have already refreshed above, keeping Mech Info in step.
+    const panelStartedAtMs = profiling?.nowMs();
+    settingsPanel.ensurePanel();
+    if (profiling !== undefined && panelStartedAtMs !== undefined) {
+      profiling.recordPerformance(
+        "settingsPanel.ensurePanel",
+        profiling.nowMs() - panelStartedAtMs,
+      );
+    }
     const settings = settingsStore.readRaw();
     if (
       !pageCapture.isComplete() ||
@@ -2858,9 +2900,6 @@ export function startCapturedRuntime({
     // The captured runtime is its own tick loop, so it owns the `tick` phase and the flush the
     // diagnostics adapter counts work ticks against. Without them `window.eaPerformance` records
     // samples on the production path and never emits a single summary.
-    const profiling =
-      diagnostics?.readPerformanceEnabled() === true ? diagnostics : undefined;
-    const workStartedAtMs = profiling?.nowMs();
     try {
       progression.beginProcessedCycle();
       // Evolution is a separate game phase: while the root still carries the protoplasm species,

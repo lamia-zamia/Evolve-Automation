@@ -63,6 +63,7 @@ function createFixture({
     setItem: () => {},
   };
   const pageCapture = {
+    bindings: () => () => {},
     isComplete: () => true,
     mechanics: {
       readStructures: () => undefined,
@@ -295,6 +296,7 @@ function createCapturedOcularFixture({
   let periodListener;
   const pageCapture = {
     ...capture,
+    bindings: () => () => {},
     isComplete: () => true,
     keyState: { readPressed: () => false },
     periods: {

@@ -9,6 +9,9 @@ interface JQueryNode {
 
 type JQuery = (selector: unknown) => JQueryNode;
 
+const ARPA_PANEL_SELECTOR = "#arpaPhysics";
+const ARPA_TOGGLE_SELECTOR = `${ARPA_PANEL_SELECTOR} .ea-arpa-toggle`;
+
 export interface ArpaToggleBrowserDependencies {
   readonly getJQuery: () => JQuery;
   readonly reader: ArpaToggleReader;
@@ -20,8 +23,8 @@ export interface ArpaToggleBrowserDependencies {
 
 export interface ArpaToggleBrowserAdapter {
   createArpaToggles(): void;
-  ensureArpaToggles(): void;
-  removeArpaToggles(): void;
+  ensureArpaToggles(): boolean;
+  removeArpaToggles(): boolean;
 }
 
 function createToggleMarkup(item: ArpaToggleItem): string {
@@ -58,21 +61,24 @@ export function createArpaToggleBrowserAdapter({
     lastCreatedArpaCount = count;
   }
 
-  function ensureArpaToggles(): void {
+  function ensureArpaToggles(): boolean {
     const $ = getJQuery();
-    if ($("#arpaPhysics").length === 0) {
-      if (lastCreatedArpaCount !== 0) removeArpaToggles();
-      return;
+    if ($(ARPA_PANEL_SELECTOR).length === 0) {
+      return false;
     }
-    const currentCount = $("#arpaPhysics .ea-arpa-toggle").length;
+    const currentCount = $(ARPA_TOGGLE_SELECTOR).length;
     if (currentCount === 0 || currentCount !== lastCreatedArpaCount) {
       createArpaToggles();
     }
+    return true;
   }
 
-  function removeArpaToggles(): void {
-    getJQuery()("#arpaPhysics .ea-arpa-toggle").remove();
+  function removeArpaToggles(): boolean {
+    const $ = getJQuery();
+    if ($(ARPA_PANEL_SELECTOR).length === 0) return false;
+    $(ARPA_TOGGLE_SELECTOR).remove();
     lastCreatedArpaCount = 0;
+    return true;
   }
 
   return Object.freeze({

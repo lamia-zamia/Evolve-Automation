@@ -90,6 +90,7 @@ import {
   assert.equal(page.notes().length, 1);
 
   page.gameRoot.race.species = "human";
+  page.refreshEffectiveSettings();
   page.panel.ensurePanel();
   assert.equal(page.settings.readRaw().autoMech, true);
   assert.equal(page.effectiveSettings.autoMech, false);
@@ -112,6 +113,7 @@ import {
   const originalRows = [...page.list.children];
 
   page.gameRoot.race.species = "elf";
+  page.refreshEffectiveSettings();
   page.panel.ensurePanel();
   assert.equal(page.settings.readRaw().autoMech, true);
   assert.equal(page.effectiveSettings.autoMech, true);

@@ -37,6 +37,7 @@ function runGeneticsDiscoveryFixture({ traitAutomation }) {
   const errors = [];
   const stop = startCapturedRuntime({
     pageCapture: {
+      bindings: () => () => {},
       isComplete: () => true,
       mechanics: {
         readStructures: () => undefined,
@@ -271,6 +272,7 @@ function runMarketFixture({
       : [MAIN_TAB_CONTROL, MARKET_SUB_TAB_CONTROL];
   const stop = startCapturedRuntime({
     pageCapture: {
+      bindings: () => () => {},
       isComplete: () => true,
       mechanics: {
         readStructures: () => undefined,
@@ -399,6 +401,7 @@ function runMarketFixture({
       : [MAIN_TAB_CONTROL, MARKET_SUB_TAB_CONTROL];
   startCapturedRuntime({
     pageCapture: {
+      bindings: () => () => {},
       isComplete: () => true,
       mechanics: {
         readStructures: () => undefined,
@@ -480,6 +483,7 @@ function runMarketFixture({
       : [MAIN_TAB_CONTROL, MARKET_SUB_TAB_CONTROL];
   startCapturedRuntime({
     pageCapture: {
+      bindings: () => () => {},
       isComplete: () => true,
       mechanics: {
         readStructures: () => undefined,
@@ -663,6 +667,7 @@ function runMarketFixture({
   );
   const stop = startCapturedRuntime({
     pageCapture: {
+      bindings: () => () => {},
       isComplete: () => true,
       mechanics: {
         readStructures: () => undefined,

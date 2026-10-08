@@ -458,6 +458,10 @@ export interface CapturedSettingsPanelDependencies {
   readonly customRaceLab?: GameCustomRaceLabPort;
   /** Recomputes the effective layer after a UI mutation of the raw record. */
   readonly refreshEffectiveSettings?: () => void;
+  /** Reports the game-owned bindings whose generations identify panel redraws. */
+  readonly observeGameBindings?: (
+    listener: (elementId: string) => void,
+  ) => () => void;
   /** Shared resolved Interface values used by the runtime's planning panels. */
   readonly readInterfacePresentationSettings?: () => Readonly<InterfaceSettingsState>;
   readonly interfaceEffects?: Readonly<{
@@ -527,6 +531,8 @@ export interface CapturedSettingsPanel {
    * Safe to call every tick: the container's own guard is a single selector lookup.
    */
   ensurePanel(): void;
+  /** Invalidates DOM augmentations after the captured game root is replaced. */
+  invalidate(): void;
   /** Rebuilds only the script-owned settings section after a queued settings load. */
   refreshSettings(): void;
 }
@@ -605,6 +611,7 @@ export function createCapturedSettingsPanel({
   settingsLifecycle,
   customRaceLab,
   refreshEffectiveSettings,
+  observeGameBindings,
   readInterfacePresentationSettings,
   prestigeSettings: capturedPrestigeSettings,
   evolutionSettings: capturedEvolutionSettings,
@@ -627,6 +634,84 @@ export function createCapturedSettingsPanel({
 }: CapturedSettingsPanelDependencies): CapturedSettingsPanel {
   const documentValue = readProperty(capturedPanelWindow, "document");
   const reportedSections = new Set<string>();
+  type CapturedSettingsPanelAugmentation =
+    | "building"
+    | "arpa"
+    | "storage"
+    | "market"
+    | "eject"
+    | "supply"
+    | "mechInfo";
+  type CapturedSettingsPanelReconciliationStatus =
+    "dirty" | "clean" | "waiting";
+  const augmentationReconciliation: Record<
+    CapturedSettingsPanelAugmentation,
+    {
+      desired: boolean | undefined;
+      status: CapturedSettingsPanelReconciliationStatus;
+    }
+  > = {
+    building: { desired: undefined, status: "dirty" },
+    arpa: { desired: undefined, status: "dirty" },
+    storage: { desired: undefined, status: "dirty" },
+    market: { desired: undefined, status: "dirty" },
+    eject: { desired: undefined, status: "dirty" },
+    supply: { desired: undefined, status: "dirty" },
+    mechInfo: { desired: undefined, status: "dirty" },
+  };
+  let settingsUi: SettingsUi | undefined;
+  let scriptSettingsVisible: boolean | undefined;
+  let scriptSettingsDirty = true;
+  let optionsButtonsDirty = true;
+  const invalidateAugmentation = (name: CapturedSettingsPanelAugmentation) => {
+    augmentationReconciliation[name].status = "dirty";
+  };
+  const invalidateAllAugmentations = () => {
+    for (const name of Object.keys(
+      augmentationReconciliation,
+    ) as CapturedSettingsPanelAugmentation[]) {
+      invalidateAugmentation(name);
+    }
+    scriptSettingsDirty = true;
+    optionsButtonsDirty = true;
+  };
+  const reconcileAugmentation = (
+    name: CapturedSettingsPanelAugmentation,
+    desired: boolean,
+    reconcile: () => boolean | void,
+  ) => {
+    const state = augmentationReconciliation[name];
+    if (state.desired !== desired) {
+      state.desired = desired;
+      state.status = "dirty";
+    }
+    if (state.status !== "dirty") return;
+    if (!desired && settingsUi === undefined) {
+      state.status = "clean";
+      return;
+    }
+    state.status = reconcile() === false ? "waiting" : "clean";
+  };
+  const invalidateChangedAugmentations = (
+    raw: Readonly<Record<string, unknown>>,
+  ) => {
+    const settings: ReadonlyArray<
+      readonly [CapturedSettingsPanelAugmentation, string]
+    > = [
+      ["building", "autoBuild"],
+      ["arpa", "autoARPA"],
+      ["storage", "autoStorage"],
+      ["market", "autoMarket"],
+      ["eject", "autoEject"],
+      ["supply", "autoSupply"],
+    ];
+    for (const [augmentation, setting] of settings) {
+      const current = augmentationReconciliation[augmentation].desired;
+      if (current !== undefined && current !== (raw[setting] === true)) {
+        invalidateAugmentation(augmentation);
+      }
+    }
+  };
   // Built on first use, not at construction: `createBrowserDomQuery` throws when the page has no
   // document, and a missing interface must never cost the automation its startup. A page without a
   // document simply has no panel.
@@ -666,11 +751,11 @@ export function createCapturedSettingsPanel({
   });
 
   const syncMechInfo = () => {
-    if (settingsLifecycle.readEffective()["autoMech"] === true) {
-      mechInfo.createMechInfo();
-    } else {
-      mechInfo.removeMechInfo();
-    }
+    const enabled = settingsLifecycle.readEffective()["autoMech"] === true;
+    reconcileAugmentation("mechInfo", enabled, () => {
+      if (enabled) mechInfo.createMechInfo();
+      else mechInfo.removeMechInfo();
+    });
   };
 
   const reportNoFileDownload = () => {
@@ -681,7 +766,15 @@ export function createCapturedSettingsPanel({
 
   const persistSettings = () => {
     settings.persist();
+    invalidateChangedAugmentations(settings.readRaw());
     refreshEffectiveSettings?.();
+    if (
+      augmentationReconciliation.mechInfo.desired !== undefined &&
+      augmentationReconciliation.mechInfo.desired !==
+        (settingsLifecycle.readEffective()["autoMech"] === true)
+    ) {
+      invalidateAugmentation("mechInfo");
+    }
   };
 
   const prepareSettingsForUi = () => {
@@ -689,7 +782,6 @@ export function createCapturedSettingsPanel({
     // supplies no runtime defaults of its own; by the time anything is drawn the lifecycle has
     // already shaped, migrated and defaulted the record the UI edits.
     settingsLifecycle.initialize();
-    refreshEffectiveSettings?.();
   };
 
   /**
@@ -749,8 +841,6 @@ export function createCapturedSettingsPanel({
       }),
     });
   };
-
-  let settingsUi: SettingsUi | undefined;
 
   const ensureSettingsUi = (dom: ReturnType<typeof createBrowserDomQuery>) => {
     if (settingsUi !== undefined) return settingsUi;
@@ -1580,7 +1670,10 @@ export function createCapturedSettingsPanel({
         effects: {
           resetCheckboxes: () =>
             controls.resetCheckbox("autoBuild", "autoPower"),
-          removeBuildingToggles: () => buildingToggles?.removeBuildingToggles(),
+          removeBuildingToggles: () => {
+            buildingToggles?.removeBuildingToggles();
+            invalidateAugmentation("building");
+          },
         },
       });
       buildingToggles = createBuildingToggleBrowserAdapter({
@@ -1811,7 +1904,10 @@ export function createCapturedSettingsPanel({
         renderSettingsContent: () => storage?.updateStorageSettingsContent(),
         effects: {
           resetCheckbox: () => controls.resetCheckbox("autoStorage"),
-          removeStorageToggles: () => storageToggles?.removeStorageToggles(),
+          removeStorageToggles: () => {
+            storageToggles?.removeStorageToggles();
+            invalidateAugmentation("storage");
+          },
         },
       });
       storageToggles = createResourceToggleBrowserAdapter({
@@ -1864,7 +1960,10 @@ export function createCapturedSettingsPanel({
         effects: {
           resetCheckboxes: () =>
             controls.resetCheckbox("autoMarket", "autoGalaxyMarket"),
-          removeMarketToggles: () => marketToggles?.removeMarketToggles(),
+          removeMarketToggles: () => {
+            marketToggles?.removeMarketToggles();
+            invalidateAugmentation("market");
+          },
         },
       });
       marketToggles = createResourceToggleBrowserAdapter({
@@ -1917,8 +2016,14 @@ export function createCapturedSettingsPanel({
         effects: {
           resetCheckboxes: () =>
             controls.resetCheckbox("autoEject", "autoSupply", "autoNanite"),
-          removeEjectToggles: () => ejectToggles?.removeEjectToggles(),
-          removeSupplyToggles: () => supplyToggles?.removeSupplyToggles(),
+          removeEjectToggles: () => {
+            ejectToggles?.removeEjectToggles();
+            invalidateAugmentation("eject");
+          },
+          removeSupplyToggles: () => {
+            supplyToggles?.removeSupplyToggles();
+            invalidateAugmentation("supply");
+          },
         },
       });
       ejectToggles = createEjectToggleBrowserAdapter({
@@ -2067,6 +2172,7 @@ export function createCapturedSettingsPanel({
       craftToggles,
       shell,
     };
+    invalidateAllAugmentations();
     return settingsUi;
   };
 
@@ -2090,6 +2196,8 @@ export function createCapturedSettingsPanel({
     }
     settingsLifecycle.replaceAndInitialize(inspection.settings);
     refreshEffectiveSettings?.();
+    invalidateAllAugmentations();
+    scriptSettingsVisible = undefined;
     const importedInterfaceSettings =
       readInterfacePresentationSettings?.() ??
       (() => {
@@ -2116,7 +2224,7 @@ export function createCapturedSettingsPanel({
 
   const buildScriptSettings = () => {
     const dom = getQuery();
-    if (dom === undefined || dom(".settings").length === 0) return;
+    if (dom === undefined || dom(".settings").length === 0) return false;
     const ui = ensureSettingsUi(dom);
     ui.shell.buildImportExport();
     if (dom("#script_settings").length === 0) {
@@ -2124,7 +2232,7 @@ export function createCapturedSettingsPanel({
         '<div id="script_settings" style="margin-top: 30px;"></div>',
       );
     }
-    if (dom("#script_generalSettings").length !== 0) return;
+    if (dom("#script_generalSettings").length !== 0) return true;
     ui.general.buildGeneralSettings();
     ui.interface.buildInterfaceSettings();
     ui.stateLog.buildStateLogSettings();
@@ -2173,10 +2281,23 @@ export function createCapturedSettingsPanel({
     ui.magic?.buildMagicSettings();
     ui.production?.buildProductionSettings();
     ui.trait?.buildTraitSettings();
+    return true;
   };
 
   const removeScriptSettings = () => {
     getQuery()?.("#script_settings").remove();
+  };
+
+  const reconcileScriptSettings = (show: boolean) => {
+    if (scriptSettingsVisible !== show) scriptSettingsDirty = true;
+    if (!scriptSettingsDirty) return;
+    if (show) {
+      if (!buildScriptSettings()) return;
+    } else {
+      removeScriptSettings();
+    }
+    scriptSettingsVisible = show;
+    scriptSettingsDirty = false;
   };
 
   /**
@@ -2187,64 +2308,132 @@ export function createCapturedSettingsPanel({
   const inlineToggleStrip = <TAdapter>(
     name: string,
     select: (ui: SettingsUi) => TAdapter | undefined,
-    create: (adapter: TAdapter) => void,
-    remove: (adapter: TAdapter) => void,
+    ensure: (adapter: TAdapter) => boolean,
+    remove: (adapter: TAdapter) => boolean,
   ) => {
-    const run = (act: (adapter: TAdapter) => void) => () => {
-      const dom = getQuery();
-      const adapter =
-        dom === undefined ? undefined : select(ensureSettingsUi(dom));
-      if (adapter === undefined) {
-        unported(name)();
-        return;
-      }
-      act(adapter);
-    };
-    return { create: run(create), remove: run(remove) };
+    const run =
+      (act: (adapter: TAdapter) => boolean, enabled: boolean) => () => {
+        if (!enabled && settingsUi === undefined) return true;
+        const dom = getQuery();
+        const adapter =
+          dom === undefined ? undefined : select(ensureSettingsUi(dom));
+        if (adapter === undefined) {
+          if (enabled) {
+            unported(name)();
+            return false;
+          }
+          return true;
+        }
+        return act(adapter);
+      };
+    return { ensure: run(ensure, true), remove: run(remove, false) };
   };
 
   const arpaStrip = inlineToggleStrip(
     "ARPA toggles",
     (ui) => ui.arpaToggles,
-    (adapter) => adapter.createArpaToggles(),
+    (adapter) => adapter.ensureArpaToggles(),
     (adapter) => adapter.removeArpaToggles(),
   );
   const marketStrip = inlineToggleStrip(
     "market toggles",
     (ui) => ui.marketToggles,
-    (adapter) => adapter.createMarketToggles(),
+    (adapter) => adapter.ensureMarketToggles(),
     (adapter) => adapter.removeMarketToggles(),
   );
   const ejectStrip = inlineToggleStrip(
     "eject toggles",
     (ui) => ui.ejectToggles,
-    (adapter) => adapter.createEjectToggles(),
+    (adapter) => adapter.ensureEjectToggles(),
     (adapter) => adapter.removeEjectToggles(),
   );
   const supplyStrip = inlineToggleStrip(
     "supply toggles",
     (ui) => ui.supplyToggles,
-    (adapter) => adapter.createSupplyToggles(),
+    (adapter) => adapter.ensureSupplyToggles(),
     (adapter) => adapter.removeSupplyToggles(),
   );
   const storageStrip = inlineToggleStrip(
     "storage toggles",
     (ui) => ui.storageToggles,
-    (adapter) => adapter.createStorageToggles(),
+    (adapter) => adapter.ensureStorageToggles(),
     (adapter) => adapter.removeStorageToggles(),
   );
   const craftStrip = inlineToggleStrip(
     "craft toggles",
     (ui) => ui.craftToggles,
-    (adapter) => adapter.createCraftToggles(),
-    (adapter) => adapter.removeCraftToggles(),
+    (adapter) => {
+      adapter.createCraftToggles();
+      return true;
+    },
+    (adapter) => {
+      adapter.removeCraftToggles();
+      return true;
+    },
   );
   const buildingStrip = inlineToggleStrip(
     "building toggles",
     (ui) => ui.buildingToggles,
-    (adapter) => adapter.createBuildingToggles(),
+    (adapter) => adapter.ensureBuildingToggles(),
     (adapter) => adapter.removeBuildingToggles(),
   );
+
+  const reconcileBuildingToggles = (enabled: boolean) =>
+    reconcileAugmentation(
+      "building",
+      enabled,
+      enabled ? buildingStrip.ensure : buildingStrip.remove,
+    );
+  const reconcileArpaToggles = (enabled: boolean) =>
+    reconcileAugmentation(
+      "arpa",
+      enabled,
+      enabled ? arpaStrip.ensure : arpaStrip.remove,
+    );
+  const reconcileStorageToggles = (enabled: boolean) =>
+    reconcileAugmentation(
+      "storage",
+      enabled,
+      enabled ? storageStrip.ensure : storageStrip.remove,
+    );
+  const reconcileMarketToggles = (enabled: boolean) =>
+    reconcileAugmentation(
+      "market",
+      enabled,
+      enabled ? marketStrip.ensure : marketStrip.remove,
+    );
+  const reconcileEjectToggles = (enabled: boolean) =>
+    reconcileAugmentation(
+      "eject",
+      enabled,
+      enabled ? ejectStrip.ensure : ejectStrip.remove,
+    );
+  const reconcileSupplyToggles = (enabled: boolean) =>
+    reconcileAugmentation(
+      "supply",
+      enabled,
+      enabled ? supplyStrip.ensure : supplyStrip.remove,
+    );
+
+  const observePanelBinding = (elementId: string) => {
+    if (elementId === "settings") {
+      scriptSettingsDirty = true;
+      scriptSettingsVisible = undefined;
+    }
+    if (elementId === "mechList") invalidateAugmentation("mechInfo");
+    if (elementId.startsWith("city-")) invalidateAugmentation("building");
+    if (elementId.startsWith("arpa")) invalidateAugmentation("arpa");
+    if (elementId.startsWith("stack-")) invalidateAugmentation("storage");
+    if (elementId.startsWith("market-")) {
+      if (elementId === "market-qty") {
+        settingsUi?.marketToggles?.invalidateMarketPanel();
+      }
+      invalidateAugmentation("market");
+    }
+    if (elementId.startsWith("eject")) invalidateAugmentation("eject");
+    if (elementId.startsWith("supply")) invalidateAugmentation("supply");
+    if (optionsModal.isPanelBinding(elementId)) optionsButtonsDirty = true;
+  };
 
   let openOverrideModal: OptionsModalDependencies["openOverrideModal"] = (
     event,
@@ -2338,6 +2527,7 @@ export function createCapturedSettingsPanel({
     }),
     openOverrideModal: (event) => openOverrideModal(event),
   });
+  observeGameBindings?.(observePanelBinding);
 
   const { ensureAutomationContainer } = createAutomationContainer({
     getSettingsRaw: () => settings.readRaw(),
@@ -2353,28 +2543,32 @@ export function createCapturedSettingsPanel({
           node as unknown as OptionsModalNode,
           settingName,
           title,
-          onEnable,
-          onDisable,
+          settingName === "showSettings"
+            ? () => reconcileScriptSettings(true)
+            : onEnable,
+          settingName === "showSettings"
+            ? () => reconcileScriptSettings(false)
+            : onDisable,
         ),
       persistSettings: persistSettings,
-      buildScriptSettings,
-      removeScriptSettings,
+      buildScriptSettings: () => reconcileScriptSettings(true),
+      removeScriptSettings: () => reconcileScriptSettings(false),
       showMechInfo: syncMechInfo,
       hideMechInfo: syncMechInfo,
-      createCraftToggles: craftStrip.create,
+      createCraftToggles: craftStrip.ensure,
       removeCraftToggles: craftStrip.remove,
-      createBuildingToggles: buildingStrip.create,
-      removeBuildingToggles: buildingStrip.remove,
-      createArpaToggles: arpaStrip.create,
-      removeArpaToggles: arpaStrip.remove,
-      createStorageToggles: storageStrip.create,
-      removeStorageToggles: storageStrip.remove,
-      createMarketToggles: marketStrip.create,
-      removeMarketToggles: marketStrip.remove,
-      createEjectToggles: ejectStrip.create,
-      removeEjectToggles: ejectStrip.remove,
-      createSupplyToggles: supplyStrip.create,
-      removeSupplyToggles: supplyStrip.remove,
+      createBuildingToggles: () => reconcileBuildingToggles(true),
+      removeBuildingToggles: () => reconcileBuildingToggles(false),
+      createArpaToggles: () => reconcileArpaToggles(true),
+      removeArpaToggles: () => reconcileArpaToggles(false),
+      createStorageToggles: () => reconcileStorageToggles(true),
+      removeStorageToggles: () => reconcileStorageToggles(false),
+      createMarketToggles: () => reconcileMarketToggles(true),
+      removeMarketToggles: () => reconcileMarketToggles(false),
+      createEjectToggles: () => reconcileEjectToggles(true),
+      removeEjectToggles: () => reconcileEjectToggles(false),
+      createSupplyToggles: () => reconcileSupplyToggles(true),
+      removeSupplyToggles: () => reconcileSupplyToggles(false),
       bulkSell: onBulkSell,
     }),
   });
@@ -2383,59 +2577,44 @@ export function createCapturedSettingsPanel({
     ensurePanel() {
       if (getQuery() === undefined) return;
       try {
-        prepareSettingsForUi();
         ensureAutomationContainer();
         syncMechInfo();
-        if (settings.readRaw()["autoBuild"] === true) {
-          settingsUi?.buildingToggles?.ensureBuildingToggles();
-        } else {
-          settingsUi?.buildingToggles?.removeBuildingToggles();
-        }
-        if (settings.readRaw()["autoARPA"] === true) {
-          settingsUi?.arpaToggles?.ensureArpaToggles();
-        } else {
-          settingsUi?.arpaToggles?.removeArpaToggles();
-        }
-        if (settings.readRaw()["autoStorage"] === true) {
-          settingsUi?.storageToggles?.ensureStorageToggles();
-        } else {
-          settingsUi?.storageToggles?.removeStorageToggles();
-        }
-        if (settings.readRaw()["autoMarket"] === true) {
-          settingsUi?.marketToggles?.ensureMarketToggles();
-        } else {
-          settingsUi?.marketToggles?.removeMarketToggles();
-        }
-        if (settings.readRaw()["autoEject"] === true) {
-          settingsUi?.ejectToggles?.ensureEjectToggles();
-        } else {
-          settingsUi?.ejectToggles?.removeEjectToggles();
-        }
-        if (settings.readRaw()["autoSupply"] === true) {
-          settingsUi?.supplyToggles?.ensureSupplyToggles();
-        } else {
-          settingsUi?.supplyToggles?.removeSupplyToggles();
-        }
+        const raw = settings.readRaw();
+        reconcileBuildingToggles(raw["autoBuild"] === true);
+        reconcileArpaToggles(raw["autoARPA"] === true);
+        reconcileStorageToggles(raw["autoStorage"] === true);
+        reconcileMarketToggles(raw["autoMarket"] === true);
+        reconcileEjectToggles(raw["autoEject"] === true);
+        reconcileSupplyToggles(raw["autoSupply"] === true);
         optionsModal.createOptionsModal();
         // The four secondary-option buttons the game's own panels carry. Each is a second
         // rendering of a section the captured panel already owns, so they are added here rather
         // than in the compatibility UI refresh; `addOptionDefinition` is idempotent and skips a
         // panel the game has not drawn yet.
-        optionsModal.updateOptionsUI();
-        if (settings.readRaw()["showSettings"] === true) buildScriptSettings();
+        if (optionsButtonsDirty) {
+          optionsModal.updateOptionsUI();
+          optionsButtonsDirty = false;
+        }
+        reconcileScriptSettings(raw["showSettings"] === true);
       } catch (error) {
         // A panel that fails to draw must never stop the automation tick.
         logError(`settings panel could not be drawn: ${String(error)}`);
       }
     },
     refreshSettings() {
+      scriptSettingsDirty = true;
       if (settings.readRaw()["showSettings"] !== true) return;
       try {
         removeScriptSettings();
-        buildScriptSettings();
+        scriptSettingsVisible = false;
+        reconcileScriptSettings(true);
       } catch (error) {
         logError(`settings panel could not be refreshed: ${String(error)}`);
       }
+    },
+    invalidate() {
+      invalidateAllAugmentations();
+      scriptSettingsVisible = undefined;
     },
   });
 }

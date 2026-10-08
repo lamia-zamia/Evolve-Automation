@@ -132,6 +132,10 @@ const settings = createOptionsModalBrowserAdapter({
   openOverrideModal: (event) => writerTrace.push(`override:${event.data.name}`),
 });
 
+assert.equal(settings.isPanelBinding("government"), true);
+assert.equal(settings.isPanelBinding("c_garrison"), true);
+assert.equal(settings.isPanelBinding("unrelated"), false);
+
 settings.updateOptionsUI();
 assert.deepEqual(
   trace.filter((entry) => entry.startsWith("prepend:")),

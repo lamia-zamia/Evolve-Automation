@@ -108,6 +108,8 @@ export interface OptionsModalBrowserAdapter {
     buildOptionsFunction: OptionsBuilder,
   ): void;
   createOptionsModal(): void;
+  /** Whether a captured game binding redraws one of the option-button hosts. */
+  isPanelBinding(elementId: string): boolean;
 }
 
 function getBuilder(
@@ -263,11 +265,18 @@ export function createOptionsModalBrowserAdapter({
     });
   }
 
+  function isPanelBinding(elementId: string): boolean {
+    return getOptionsModalButtonDefinitions().some((definition) =>
+      definition.selector.startsWith(`#${elementId} `),
+    );
+  }
+
   return Object.freeze({
     createSettingToggle,
     updateOptionsUI,
     addOptionUI,
     openOptionsModal,
     createOptionsModal,
+    isPanelBinding,
   });
 }

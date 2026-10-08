@@ -38878,37 +38878,40 @@
     getActions
   }) {
     function ensureAutomationContainer() {
-      let settingsRaw = getSettingsRaw(), $ = getJQuery(), safeMode = getSafeMode(), overrideKeyLabel = getOverrideKeyLabel(), {
-        createSettingToggle,
-        persistSettings,
-        buildScriptSettings,
-        removeScriptSettings,
-        showMechInfo,
-        hideMechInfo,
-        createCraftToggles,
-        removeCraftToggles,
-        createBuildingToggles,
-        removeBuildingToggles,
-        createArpaToggles,
-        removeArpaToggles,
-        createStorageToggles,
-        removeStorageToggles,
-        createMarketToggles,
-        removeMarketToggles,
-        createEjectToggles,
-        removeEjectToggles,
-        createSupplyToggles,
-        removeSupplyToggles,
-        bulkSell
-      } = getActions(), created = !1, scriptNode = $("#autoScriptContainer");
+      let $ = getJQuery(), scriptNode = $("#autoScriptContainer"), created = !1;
       if (scriptNode.length === 0) {
-        created = !0, $("#resources").append(`
+        let resourcesNode = $("#resources");
+        if (resourcesNode.length === 0) return { scriptNode, created };
+        let settingsRaw = getSettingsRaw(), safeMode = getSafeMode(), overrideKeyLabel = getOverrideKeyLabel(), {
+          createSettingToggle,
+          persistSettings,
+          buildScriptSettings,
+          removeScriptSettings,
+          showMechInfo,
+          hideMechInfo,
+          createCraftToggles,
+          removeCraftToggles,
+          createBuildingToggles,
+          removeBuildingToggles,
+          createArpaToggles,
+          removeArpaToggles,
+          createStorageToggles,
+          removeStorageToggles,
+          createMarketToggles,
+          removeMarketToggles,
+          createEjectToggles,
+          removeEjectToggles,
+          createSupplyToggles,
+          removeSupplyToggles,
+          bulkSell
+        } = getActions();
+        created = !0, resourcesNode.append(`
               <div id="autoScriptContainer" style="margin-top: 10px;">
                 <h3 id="toggleSettingsCollapsed" class="script-collapsible text-center has-text-success">Automation</h3>
                 <div id="scriptToggles">
                   <label>More script options available in Settings tab<br>${overrideKeyLabel}+click options to open <span class="inactive-row">advanced configuration</span></label><br>
                 </div>
-              </div>`), safeMode && $("#resources").append(
+              </div>`), safeMode && resourcesNode.append(
           "<p>⚠️ Safe mode active, masterScriptToggle is disabled</p>"
         );
         let collapsibleNode = $("#toggleSettingsCollapsed"), togglesNode = $("#scriptToggles");
@@ -39795,6 +39798,7 @@
   }
 
   // src/adapters/browser/building-toggles.ts
+  var BUILDING_PANEL_SELECTOR = "#city", BUILDING_TOGGLE_SELECTOR = `${BUILDING_PANEL_SELECTOR} .ea-building-toggle`;
   function createToggleMarkup2(item) {
     return `
                   <label tabindex="0" class="switch ea-building-toggle" style="position:absolute; margin-top: 24px; left:10%;">
@@ -39824,15 +39828,14 @@
       setCount(count2);
     }
     function ensureBuildingToggles() {
-      if (!reader.readVisible()) {
-        lastCreatedCount !== 0 && removeBuildingToggles();
-        return;
-      }
-      let currentCount3 = getJQuery()("#mTabCivil .ea-building-toggle").length;
-      (currentCount3 === 0 || currentCount3 !== lastCreatedCount) && createBuildingToggles();
+      if (getJQuery()(BUILDING_PANEL_SELECTOR).length === 0 || !reader.readVisible())
+        return !1;
+      let currentCount3 = getJQuery()(BUILDING_TOGGLE_SELECTOR).length;
+      return (currentCount3 === 0 || currentCount3 !== lastCreatedCount) && createBuildingToggles(), !0;
     }
     function removeBuildingToggles() {
-      getJQuery()("#mTabCivil .ea-building-toggle").remove(), setCount(0);
+      let $ = getJQuery();
+      return $(BUILDING_PANEL_SELECTOR).length === 0 ? !1 : ($(BUILDING_TOGGLE_SELECTOR).remove(), setCount(0), !0);
     }
     return Object.freeze({
       createBuildingToggles,
@@ -40021,6 +40024,7 @@
   }
 
   // src/adapters/browser/arpa-toggles.ts
+  var ARPA_PANEL_SELECTOR = "#arpaPhysics", ARPA_TOGGLE_SELECTOR = `${ARPA_PANEL_SELECTOR} .ea-arpa-toggle`;
   function createToggleMarkup3(item) {
     return `
                   <label tabindex="0" class="switch ea-arpa-toggle" style="position:relative; max-width:75px; margin-top:-36px; left:59%; float:left;">
@@ -40047,15 +40051,14 @@
     }
     function ensureArpaToggles() {
       let $ = getJQuery();
-      if ($("#arpaPhysics").length === 0) {
-        lastCreatedArpaCount !== 0 && removeArpaToggles();
-        return;
-      }
-      let currentCount3 = $("#arpaPhysics .ea-arpa-toggle").length;
-      (currentCount3 === 0 || currentCount3 !== lastCreatedArpaCount) && createArpaToggles();
+      if ($(ARPA_PANEL_SELECTOR).length === 0)
+        return !1;
+      let currentCount3 = $(ARPA_TOGGLE_SELECTOR).length;
+      return (currentCount3 === 0 || currentCount3 !== lastCreatedArpaCount) && createArpaToggles(), !0;
     }
     function removeArpaToggles() {
-      getJQuery()("#arpaPhysics .ea-arpa-toggle").remove(), lastCreatedArpaCount = 0;
+      let $ = getJQuery();
+      return $(ARPA_PANEL_SELECTOR).length === 0 ? !1 : ($(ARPA_TOGGLE_SELECTOR).remove(), lastCreatedArpaCount = 0, !0);
     }
     return Object.freeze({
       createArpaToggles,
@@ -40391,20 +40394,20 @@ If script is allowed to reassign non-empty storage it might waste time producing
     storageReader,
     addToggleCallbacks
   }) {
-    let lastCreatedStorageCount = 0, lastCreatedMarketCount = 0, stashedMarketLabels;
+    let lastCreatedStorageCount = 0, lastCreatedMarketCount = 0, stashedMarketLabels, marketPresentationChanged = !1;
     function removeMarketElements(jquery) {
       jquery("#market .ea-market-toggle").remove(), jquery("#script_market_top_row").remove();
     }
     function createMarketToggles() {
       let jquery = getJQuery(), view = marketReader.readMarket();
-      view.noTrade ? stashedMarketLabels = void 0 : stashedMarketLabels = Object.freeze({
+      view.noTrade ? (stashedMarketLabels = void 0, marketPresentationChanged = !1) : (stashedMarketLabels = Object.freeze({
         buy: jquery("#market .market-item[id] .buy span").text(),
         sell: jquery("#market .market-item[id] .sell span").text(),
         routes: jquery("#market .market-item[id] .trade > :first-child").text(),
         cancelRoutes: jquery("#market .market-item[id] .trade .zero").text()
-      }), removeMarketElements(jquery);
+      }), marketPresentationChanged = !0), removeMarketElements(jquery);
       let count2 = 0;
-      view.noTrade ? stashedMarketLabels = void 0 : (jquery("#market .market-item[id] .res").width("5rem"), jquery("#market .market-item[id] .buy span").text("B"), jquery("#market .market-item[id] .sell span").text("S"), jquery("#market .market-item[id] .trade > :first-child").text("R"), jquery("#market .market-item[id] .trade .zero").text("×")), jquery("#market-qty").after(createMarketHeader(view));
+      view.noTrade ? (stashedMarketLabels = void 0, marketPresentationChanged = !1) : (jquery("#market .market-item[id] .res").width("5rem"), jquery("#market .market-item[id] .buy span").text("B"), jquery("#market .market-item[id] .sell span").text("S"), jquery("#market .market-item[id] .trade > :first-child").text("R"), jquery("#market .market-item[id] .trade .zero").text("×")), jquery("#market-qty").after(createMarketHeader(view));
       for (let item of view.items) {
         let marketElement = jquery(`#market-${item.resourceId}`);
         marketElement.length !== 0 && (createMarketRow(view, item, jquery, addToggleCallbacks).appendTo(
@@ -40415,20 +40418,25 @@ If script is allowed to reassign non-empty storage it might waste time producing
     }
     function ensureMarketToggles() {
       let jquery = getJQuery();
-      if (jquery("#market").length === 0) {
-        lastCreatedMarketCount !== 0 && removeMarketToggles();
-        return;
-      }
+      if (jquery("#market").length === 0)
+        return !1;
       let currentCount3 = jquery("#market .ea-market-toggle").length;
-      (currentCount3 === 0 || currentCount3 !== lastCreatedMarketCount) && createMarketToggles();
+      return (currentCount3 === 0 || currentCount3 !== lastCreatedMarketCount) && createMarketToggles(), !0;
     }
     function removeMarketToggles() {
-      let jquery = getJQuery(), view = marketReader.readMarket();
-      removeMarketElements(jquery), lastCreatedMarketCount = 0;
-      let labels = stashedMarketLabels ?? view.labels;
-      stashedMarketLabels = void 0, !view.noTrade && (jquery("#market .market-item[id] .res").width("7.5rem"), jquery("#market .market-item[id] .buy span").text(labels.buy), jquery("#market .market-item[id] .sell span").text(labels.sell), jquery("#market .market-item[id] .trade > :first-child").text(
+      let jquery = getJQuery();
+      if (jquery("#market").length === 0) return !1;
+      if (!(lastCreatedMarketCount !== 0 || stashedMarketLabels !== void 0 || jquery("#market .ea-market-toggle").length !== 0 || jquery("#script_market_top_row").length !== 0)) return !0;
+      if (removeMarketElements(jquery), lastCreatedMarketCount = 0, !marketPresentationChanged)
+        return stashedMarketLabels = void 0, !0;
+      let labels = stashedMarketLabels ?? marketReader.readMarket().labels;
+      return stashedMarketLabels = void 0, marketPresentationChanged = !1, jquery("#market .market-item[id] .res").width("7.5rem"), jquery("#market .market-item[id] .buy span").text(labels.buy), jquery("#market .market-item[id] .sell span").text(labels.sell), jquery("#market .market-item[id] .trade > :first-child").text(
         labels.routes
-      ), jquery("#market .market-item[id] .trade .zero").text(labels.cancelRoutes));
+      ), jquery("#market .market-item[id] .trade .zero").text(labels.cancelRoutes), !0;
+    }
+    function invalidateMarketPanel() {
+      let jquery = getJQuery();
+      jquery("#market .ea-market-toggle").length !== 0 || jquery("#script_market_top_row").length !== 0 || (lastCreatedMarketCount = 0, stashedMarketLabels = void 0, marketPresentationChanged = !1);
     }
     function createStorageToggles() {
       removeStorageToggles();
@@ -40450,21 +40458,20 @@ If script is allowed to reassign non-empty storage it might waste time producing
     }
     function ensureStorageToggles() {
       let jquery = getJQuery();
-      if (jquery("#resStorage").length === 0) {
-        lastCreatedStorageCount !== 0 && removeStorageToggles();
-        return;
-      }
+      if (jquery("#resStorage").length === 0)
+        return !1;
       let currentCount3 = jquery("#resStorage .ea-storage-toggle").length;
-      (currentCount3 === 0 || currentCount3 !== lastCreatedStorageCount) && createStorageToggles();
+      return (currentCount3 === 0 || currentCount3 !== lastCreatedStorageCount) && createStorageToggles(), !0;
     }
     function removeStorageToggles() {
       let jquery = getJQuery();
-      jquery("#resStorage .ea-storage-toggle").remove(), jquery("#script_storage_top_row").remove(), lastCreatedStorageCount = 0;
+      return jquery("#resStorage").length === 0 ? !1 : (jquery("#resStorage .ea-storage-toggle").remove(), jquery("#script_storage_top_row").remove(), lastCreatedStorageCount = 0, !0);
     }
     return Object.freeze({
       createMarketToggles,
       ensureMarketToggles,
       removeMarketToggles,
+      invalidateMarketPanel,
       createStorageToggles,
       ensureStorageToggles,
       removeStorageToggles
@@ -41060,6 +41067,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
   }
 
   // src/adapters/browser/eject-toggles.ts
+  var EJECT_PANEL_SELECTOR = "#resEjector", EJECT_TOGGLE_SELECTOR = `${EJECT_PANEL_SELECTOR} .ea-eject-toggle`;
   function createToggleMarkup4(item) {
     return `
                   <label tabindex="0" title="Enable ejecting of this resource. When to eject is set in the Prestige Settings tab." class="switch ea-eject-toggle" style="margin-left:auto; margin-right:0.2rem;">
@@ -41090,16 +41098,14 @@ If script is allowed to reassign non-empty storage it might waste time producing
       lastCreatedEjectCount = count2;
     }
     function ensureEjectToggles() {
-      if (getJQuery()("#resEjector").length === 0) {
-        lastCreatedEjectCount !== 0 && removeEjectToggles();
-        return;
-      }
-      let currentCount3 = getJQuery()("#resEjector .ea-eject-toggle").length;
-      (currentCount3 === 0 || currentCount3 !== lastCreatedEjectCount) && createEjectToggles();
+      if (getJQuery()(EJECT_PANEL_SELECTOR).length === 0)
+        return !1;
+      let currentCount3 = getJQuery()(EJECT_TOGGLE_SELECTOR).length;
+      return (currentCount3 === 0 || currentCount3 !== lastCreatedEjectCount) && createEjectToggles(), !0;
     }
     function removeEjectToggles() {
       let $ = getJQuery();
-      $("#resEjector .ea-eject-toggle").remove(), $("#script_eject_top_row").remove(), lastCreatedEjectCount = 0;
+      return $(EJECT_PANEL_SELECTOR).length === 0 ? !1 : ($(EJECT_TOGGLE_SELECTOR).remove(), $("#script_eject_top_row").remove(), lastCreatedEjectCount = 0, !0);
     }
     return Object.freeze({
       createEjectToggles,
@@ -41139,6 +41145,7 @@ If script is allowed to reassign non-empty storage it might waste time producing
   }
 
   // src/adapters/browser/supply-toggles.ts
+  var SUPPLY_PANEL_SELECTOR = "#resCargo", SUPPLY_TOGGLE_SELECTOR = `${SUPPLY_PANEL_SELECTOR} .ea-supply-toggle`;
   function createToggleMarkup5(item) {
     return `
                   <label tabindex="0" title="Enable supply of this resource."  class="switch ea-supply-toggle" style="margin-left:auto; margin-right:0.2rem;">
@@ -41169,16 +41176,14 @@ If script is allowed to reassign non-empty storage it might waste time producing
       lastCreatedSupplyCount = count2;
     }
     function ensureSupplyToggles() {
-      if (getJQuery()("#resCargo").length === 0) {
-        lastCreatedSupplyCount !== 0 && removeSupplyToggles();
-        return;
-      }
-      let currentCount3 = getJQuery()("#resCargo .ea-supply-toggle").length;
-      (currentCount3 === 0 || currentCount3 !== lastCreatedSupplyCount) && createSupplyToggles();
+      if (getJQuery()(SUPPLY_PANEL_SELECTOR).length === 0)
+        return !1;
+      let currentCount3 = getJQuery()(SUPPLY_TOGGLE_SELECTOR).length;
+      return (currentCount3 === 0 || currentCount3 !== lastCreatedSupplyCount) && createSupplyToggles(), !0;
     }
     function removeSupplyToggles() {
       let $ = getJQuery();
-      $("#resCargo .ea-supply-toggle").remove(), $("#script_supply_top_row").remove(), lastCreatedSupplyCount = 0;
+      return $(SUPPLY_PANEL_SELECTOR).length === 0 ? !1 : ($(SUPPLY_TOGGLE_SELECTOR).remove(), $("#script_supply_top_row").remove(), lastCreatedSupplyCount = 0, !0);
     }
     return Object.freeze({
       createSupplyToggles,
@@ -46756,12 +46761,18 @@ If script is allowed to reassign non-empty storage it might waste time producing
         ), jquery("html").css("overflow-y", "scroll"));
       });
     }
+    function isPanelBinding(elementId) {
+      return getOptionsModalButtonDefinitions().some(
+        (definition) => definition.selector.startsWith(`#${elementId} `)
+      );
+    }
     return Object.freeze({
       createSettingToggle,
       updateOptionsUI,
       addOptionUI,
       openOptionsModal,
-      createOptionsModal
+      createOptionsModal,
+      isPanelBinding
     });
   }
 
@@ -48601,6 +48612,7 @@ Efficiency above '1' is useful to save resources for more desperate times, or to
     settingsLifecycle,
     customRaceLab,
     refreshEffectiveSettings,
+    observeGameBindings,
     readInterfacePresentationSettings,
     prestigeSettings: capturedPrestigeSettings,
     evolutionSettings: capturedEvolutionSettings,
@@ -48624,7 +48636,45 @@ Efficiency above '1' is useful to save resources for more desperate times, or to
     logError = () => {
     }
   }) {
-    let documentValue = readProperty(capturedPanelWindow, "document"), reportedSections = /* @__PURE__ */ new Set(), query, queryUnavailable = !1, getQuery = () => {
+    let documentValue = readProperty(capturedPanelWindow, "document"), reportedSections = /* @__PURE__ */ new Set(), augmentationReconciliation = {
+      building: { desired: void 0, status: "dirty" },
+      arpa: { desired: void 0, status: "dirty" },
+      storage: { desired: void 0, status: "dirty" },
+      market: { desired: void 0, status: "dirty" },
+      eject: { desired: void 0, status: "dirty" },
+      supply: { desired: void 0, status: "dirty" },
+      mechInfo: { desired: void 0, status: "dirty" }
+    }, settingsUi, scriptSettingsVisible, scriptSettingsDirty = !0, optionsButtonsDirty = !0, invalidateAugmentation = (name) => {
+      augmentationReconciliation[name].status = "dirty";
+    }, invalidateAllAugmentations = () => {
+      for (let name of Object.keys(
+        augmentationReconciliation
+      ))
+        invalidateAugmentation(name);
+      scriptSettingsDirty = !0, optionsButtonsDirty = !0;
+    }, reconcileAugmentation = (name, desired, reconcile) => {
+      let state = augmentationReconciliation[name];
+      if (state.desired !== desired && (state.desired = desired, state.status = "dirty"), state.status === "dirty") {
+        if (!desired && settingsUi === void 0) {
+          state.status = "clean";
+          return;
+        }
+        state.status = reconcile() === !1 ? "waiting" : "clean";
+      }
+    }, invalidateChangedAugmentations = (raw) => {
+      let settings2 = [
+        ["building", "autoBuild"],
+        ["arpa", "autoARPA"],
+        ["storage", "autoStorage"],
+        ["market", "autoMarket"],
+        ["eject", "autoEject"],
+        ["supply", "autoSupply"]
+      ];
+      for (let [augmentation, setting] of settings2) {
+        let current = augmentationReconciliation[augmentation].desired;
+        current !== void 0 && current !== (raw[setting] === !0) && invalidateAugmentation(augmentation);
+      }
+    }, query, queryUnavailable = !1, getQuery = () => {
       if (query === void 0 && !queryUnavailable)
         try {
           query = createBrowserDomQuery(capturedPanelWindow);
@@ -48643,13 +48693,16 @@ Efficiency above '1' is useful to save resources for more desperate times, or to
       }),
       observer: createBrowserMechInfoObserver(() => capturedPanelWindow)
     }), syncMechInfo = () => {
-      settingsLifecycle.readEffective().autoMech === !0 ? mechInfo.createMechInfo() : mechInfo.removeMechInfo();
+      let enabled = settingsLifecycle.readEffective().autoMech === !0;
+      reconcileAugmentation("mechInfo", enabled, () => {
+        enabled ? mechInfo.createMechInfo() : mechInfo.removeMechInfo();
+      });
     }, reportNoFileDownload = () => {
       reportedSections.has("settings file download") || (reportedSections.add("settings file download"), logError("this page cannot offer a settings file download"));
     }, persistSettings = () => {
-      settings.persist(), refreshEffectiveSettings?.();
+      settings.persist(), invalidateChangedAugmentations(settings.readRaw()), refreshEffectiveSettings?.(), augmentationReconciliation.mechInfo.desired !== void 0 && augmentationReconciliation.mechInfo.desired !== (settingsLifecycle.readEffective().autoMech === !0) && invalidateAugmentation("mechInfo");
     }, prepareSettingsForUi = () => {
-      settingsLifecycle.initialize(), refreshEffectiveSettings?.();
+      settingsLifecycle.initialize();
     }, resetSection = (section) => () => settingsLifecycle.resetSection(section), capturedJobCatalogReader = capturedCraftToggles === void 0 ? void 0 : createCapturedJobCatalogReader({
       rootState: capturedCraftToggles.rootState,
       controls: capturedCraftToggles.controls,
@@ -48676,7 +48729,7 @@ Efficiency above '1' is useful to save resources for more desperate times, or to
           };
         })
       });
-    }, settingsUi, ensureSettingsUi = (dom) => {
+    }, ensureSettingsUi = (dom) => {
       if (settingsUi !== void 0) return settingsUi;
       let documentForUi = documentValue, autocomplete = createAutocomplete({
         getDocument: () => documentValue
@@ -49235,7 +49288,9 @@ Efficiency above '1' is useful to save resources for more desperate times, or to
           renderSettingsContent: () => building?.updateBuildingSettingsContent(),
           effects: {
             resetCheckboxes: () => controls2.resetCheckbox("autoBuild", "autoPower"),
-            removeBuildingToggles: () => buildingToggles?.removeBuildingToggles()
+            removeBuildingToggles: () => {
+              buildingToggles?.removeBuildingToggles(), invalidateAugmentation("building");
+            }
           }
         }), buildingToggles = createBuildingToggleBrowserAdapter({
           getJQuery: () => getJQuery(),
@@ -49430,7 +49485,9 @@ Efficiency above '1' is useful to save resources for more desperate times, or to
           renderSettingsContent: () => storage?.updateStorageSettingsContent(),
           effects: {
             resetCheckbox: () => controls2.resetCheckbox("autoStorage"),
-            removeStorageToggles: () => storageToggles?.removeStorageToggles()
+            removeStorageToggles: () => {
+              storageToggles?.removeStorageToggles(), invalidateAugmentation("storage");
+            }
           }
         }), storageToggles = createResourceToggleBrowserAdapter({
           getJQuery: () => getJQuery(),
@@ -49474,7 +49531,9 @@ Efficiency above '1' is useful to save resources for more desperate times, or to
           renderSettingsContent: () => market?.updateMarketSettingsContent(),
           effects: {
             resetCheckboxes: () => controls2.resetCheckbox("autoMarket", "autoGalaxyMarket"),
-            removeMarketToggles: () => marketToggles?.removeMarketToggles()
+            removeMarketToggles: () => {
+              marketToggles?.removeMarketToggles(), invalidateAugmentation("market");
+            }
           }
         }), marketToggles = createResourceToggleBrowserAdapter({
           getJQuery: () => getJQuery(),
@@ -49517,8 +49576,12 @@ Efficiency above '1' is useful to save resources for more desperate times, or to
           renderSettingsContent: () => ejector?.updateEjectorSettingsContent(),
           effects: {
             resetCheckboxes: () => controls2.resetCheckbox("autoEject", "autoSupply", "autoNanite"),
-            removeEjectToggles: () => ejectToggles?.removeEjectToggles(),
-            removeSupplyToggles: () => supplyToggles?.removeSupplyToggles()
+            removeEjectToggles: () => {
+              ejectToggles?.removeEjectToggles(), invalidateAugmentation("eject");
+            },
+            removeSupplyToggles: () => {
+              supplyToggles?.removeSupplyToggles(), invalidateAugmentation("supply");
+            }
           }
         }), ejectToggles = createEjectToggleBrowserAdapter({
           getJQuery: () => getJQuery(),
@@ -49651,7 +49714,7 @@ Efficiency above '1' is useful to save resources for more desperate times, or to
         trait,
         craftToggles,
         shell
-      }, settingsUi;
+      }, invalidateAllAugmentations(), settingsUi;
     }, importScriptSettings = (serialized) => {
       let inspection = inspectImportedSettings(serialized);
       if (!inspection.ok)
@@ -49664,7 +49727,7 @@ Only continue if you trust the source. Injected code:
 `)
       ))
         return !1;
-      settingsLifecycle.replaceAndInitialize(inspection.settings), refreshEffectiveSettings?.();
+      settingsLifecycle.replaceAndInitialize(inspection.settings), refreshEffectiveSettings?.(), invalidateAllAugmentations(), scriptSettingsVisible = void 0;
       let importedInterfaceSettings = readInterfacePresentationSettings?.() ?? (() => {
         let effective = settingsLifecycle.readEffective();
         return {
@@ -49681,11 +49744,11 @@ Only continue if you trust the source. Injected code:
       return dom?.("#script_settings").remove(), dom?.("#autoScriptContainer").remove(), !0;
     }, buildScriptSettings = () => {
       let dom = getQuery();
-      if (dom === void 0 || dom(".settings").length === 0) return;
+      if (dom === void 0 || dom(".settings").length === 0) return !1;
       let ui = ensureSettingsUi(dom);
-      ui.shell.buildImportExport(), dom("#script_settings").length === 0 && dom(".settings").append(
+      return ui.shell.buildImportExport(), dom("#script_settings").length === 0 && dom(".settings").append(
         '<div id="script_settings" style="margin-top: 30px;"></div>'
-      ), dom("#script_generalSettings").length === 0 && (ui.general.buildGeneralSettings(), ui.interface.buildInterfaceSettings(), ui.stateLog.buildStateLogSettings(), ui.achievementGuard.buildAchievementGuardSettings(), ui.challengeHelper.buildChallengeHelperSettings(), ui.government?.buildGovernmentSettings(
+      ), dom("#script_generalSettings").length !== 0 || (ui.general.buildGeneralSettings(), ui.interface.buildInterfaceSettings(), ui.stateLog.buildStateLogSettings(), ui.achievementGuard.buildAchievementGuardSettings(), ui.challengeHelper.buildChallengeHelperSettings(), ui.government?.buildGovernmentSettings(
         dom("#script_settings"),
         ""
       ), ui.authority.buildAuthoritySettings(), ui.prestige.buildPrestigeSettings(
@@ -49697,55 +49760,86 @@ Only continue if you trust the source. Injected code:
       ), ui.fleet?.buildFleetSettings(
         dom("#script_settings"),
         ""
-      ), ui.weighting.buildWeightingSettings(), capturedJobCatalogReader?.() !== void 0 && ui.job.buildJobSettings(), ui.building?.buildBuildingSettings(), ui.project?.buildProjectSettings(), ui.storage?.buildStorageSettings(), ui.market?.buildMarketSettings(), ui.ejector?.buildEjectorSettings(), ui.magic?.buildMagicSettings(), ui.production?.buildProductionSettings(), ui.trait?.buildTraitSettings());
+      ), ui.weighting.buildWeightingSettings(), capturedJobCatalogReader?.() !== void 0 && ui.job.buildJobSettings(), ui.building?.buildBuildingSettings(), ui.project?.buildProjectSettings(), ui.storage?.buildStorageSettings(), ui.market?.buildMarketSettings(), ui.ejector?.buildEjectorSettings(), ui.magic?.buildMagicSettings(), ui.production?.buildProductionSettings(), ui.trait?.buildTraitSettings()), !0;
     }, removeScriptSettings = () => {
       getQuery()?.("#script_settings").remove();
-    }, inlineToggleStrip = (name, select, create, remove) => {
-      let run = (act) => () => {
+    }, reconcileScriptSettings = (show) => {
+      if (scriptSettingsVisible !== show && (scriptSettingsDirty = !0), !!scriptSettingsDirty) {
+        if (show) {
+          if (!buildScriptSettings()) return;
+        } else
+          removeScriptSettings();
+        scriptSettingsVisible = show, scriptSettingsDirty = !1;
+      }
+    }, inlineToggleStrip = (name, select, ensure, remove) => {
+      let run = (act, enabled) => () => {
+        if (!enabled && settingsUi === void 0) return !0;
         let dom = getQuery(), adapter = dom === void 0 ? void 0 : select(ensureSettingsUi(dom));
-        if (adapter === void 0) {
-          unported(name)();
-          return;
-        }
-        act(adapter);
+        return adapter === void 0 ? enabled ? (unported(name)(), !1) : !0 : act(adapter);
       };
-      return { create: run(create), remove: run(remove) };
+      return { ensure: run(ensure, !0), remove: run(remove, !1) };
     }, arpaStrip = inlineToggleStrip(
       "ARPA toggles",
       (ui) => ui.arpaToggles,
-      (adapter) => adapter.createArpaToggles(),
+      (adapter) => adapter.ensureArpaToggles(),
       (adapter) => adapter.removeArpaToggles()
     ), marketStrip = inlineToggleStrip(
       "market toggles",
       (ui) => ui.marketToggles,
-      (adapter) => adapter.createMarketToggles(),
+      (adapter) => adapter.ensureMarketToggles(),
       (adapter) => adapter.removeMarketToggles()
     ), ejectStrip = inlineToggleStrip(
       "eject toggles",
       (ui) => ui.ejectToggles,
-      (adapter) => adapter.createEjectToggles(),
+      (adapter) => adapter.ensureEjectToggles(),
       (adapter) => adapter.removeEjectToggles()
     ), supplyStrip = inlineToggleStrip(
       "supply toggles",
       (ui) => ui.supplyToggles,
-      (adapter) => adapter.createSupplyToggles(),
+      (adapter) => adapter.ensureSupplyToggles(),
       (adapter) => adapter.removeSupplyToggles()
     ), storageStrip = inlineToggleStrip(
       "storage toggles",
       (ui) => ui.storageToggles,
-      (adapter) => adapter.createStorageToggles(),
+      (adapter) => adapter.ensureStorageToggles(),
       (adapter) => adapter.removeStorageToggles()
     ), craftStrip = inlineToggleStrip(
       "craft toggles",
       (ui) => ui.craftToggles,
-      (adapter) => adapter.createCraftToggles(),
-      (adapter) => adapter.removeCraftToggles()
+      (adapter) => (adapter.createCraftToggles(), !0),
+      (adapter) => (adapter.removeCraftToggles(), !0)
     ), buildingStrip = inlineToggleStrip(
       "building toggles",
       (ui) => ui.buildingToggles,
-      (adapter) => adapter.createBuildingToggles(),
+      (adapter) => adapter.ensureBuildingToggles(),
       (adapter) => adapter.removeBuildingToggles()
-    ), openOverrideModal = (event) => {
+    ), reconcileBuildingToggles = (enabled) => reconcileAugmentation(
+      "building",
+      enabled,
+      enabled ? buildingStrip.ensure : buildingStrip.remove
+    ), reconcileArpaToggles = (enabled) => reconcileAugmentation(
+      "arpa",
+      enabled,
+      enabled ? arpaStrip.ensure : arpaStrip.remove
+    ), reconcileStorageToggles = (enabled) => reconcileAugmentation(
+      "storage",
+      enabled,
+      enabled ? storageStrip.ensure : storageStrip.remove
+    ), reconcileMarketToggles = (enabled) => reconcileAugmentation(
+      "market",
+      enabled,
+      enabled ? marketStrip.ensure : marketStrip.remove
+    ), reconcileEjectToggles = (enabled) => reconcileAugmentation(
+      "eject",
+      enabled,
+      enabled ? ejectStrip.ensure : ejectStrip.remove
+    ), reconcileSupplyToggles = (enabled) => reconcileAugmentation(
+      "supply",
+      enabled,
+      enabled ? supplyStrip.ensure : supplyStrip.remove
+    ), observePanelBinding = (elementId) => {
+      elementId === "settings" && (scriptSettingsDirty = !0, scriptSettingsVisible = void 0), elementId === "mechList" && invalidateAugmentation("mechInfo"), elementId.startsWith("city-") && invalidateAugmentation("building"), elementId.startsWith("arpa") && invalidateAugmentation("arpa"), elementId.startsWith("stack-") && invalidateAugmentation("storage"), elementId.startsWith("market-") && (elementId === "market-qty" && settingsUi?.marketToggles?.invalidateMarketPanel(), invalidateAugmentation("market")), elementId.startsWith("eject") && invalidateAugmentation("eject"), elementId.startsWith("supply") && invalidateAugmentation("supply"), optionsModal.isPanelBinding(elementId) && (optionsButtonsDirty = !0);
+    }, openOverrideModal = (event) => {
       let dom = getQuery();
       dom !== void 0 && (ensureSettingsUi(dom), openOverrideModal(event));
     }, optionsModal = createOptionsModalBrowserAdapter({
@@ -49814,7 +49908,9 @@ Only continue if you trust the source. Injected code:
         }
       }),
       openOverrideModal: (event) => openOverrideModal(event)
-    }), { ensureAutomationContainer } = createAutomationContainer({
+    });
+    observeGameBindings?.(observePanelBinding);
+    let { ensureAutomationContainer } = createAutomationContainer({
       getSettingsRaw: () => settings.readRaw(),
       getJQuery: () => getQuery(),
       getSafeMode: () => safeModeFor(capturedPanelWindow),
@@ -49827,28 +49923,28 @@ Only continue if you trust the source. Injected code:
           node,
           settingName,
           title,
-          onEnable,
-          onDisable
+          settingName === "showSettings" ? () => reconcileScriptSettings(!0) : onEnable,
+          settingName === "showSettings" ? () => reconcileScriptSettings(!1) : onDisable
         ),
         persistSettings,
-        buildScriptSettings,
-        removeScriptSettings,
+        buildScriptSettings: () => reconcileScriptSettings(!0),
+        removeScriptSettings: () => reconcileScriptSettings(!1),
         showMechInfo: syncMechInfo,
         hideMechInfo: syncMechInfo,
-        createCraftToggles: craftStrip.create,
+        createCraftToggles: craftStrip.ensure,
         removeCraftToggles: craftStrip.remove,
-        createBuildingToggles: buildingStrip.create,
-        removeBuildingToggles: buildingStrip.remove,
-        createArpaToggles: arpaStrip.create,
-        removeArpaToggles: arpaStrip.remove,
-        createStorageToggles: storageStrip.create,
-        removeStorageToggles: storageStrip.remove,
-        createMarketToggles: marketStrip.create,
-        removeMarketToggles: marketStrip.remove,
-        createEjectToggles: ejectStrip.create,
-        removeEjectToggles: ejectStrip.remove,
-        createSupplyToggles: supplyStrip.create,
-        removeSupplyToggles: supplyStrip.remove,
+        createBuildingToggles: () => reconcileBuildingToggles(!0),
+        removeBuildingToggles: () => reconcileBuildingToggles(!1),
+        createArpaToggles: () => reconcileArpaToggles(!0),
+        removeArpaToggles: () => reconcileArpaToggles(!1),
+        createStorageToggles: () => reconcileStorageToggles(!0),
+        removeStorageToggles: () => reconcileStorageToggles(!1),
+        createMarketToggles: () => reconcileMarketToggles(!0),
+        removeMarketToggles: () => reconcileMarketToggles(!1),
+        createEjectToggles: () => reconcileEjectToggles(!0),
+        removeEjectToggles: () => reconcileEjectToggles(!1),
+        createSupplyToggles: () => reconcileSupplyToggles(!0),
+        removeSupplyToggles: () => reconcileSupplyToggles(!1),
         bulkSell: onBulkSell
       })
     });
@@ -49856,18 +49952,23 @@ Only continue if you trust the source. Injected code:
       ensurePanel() {
         if (getQuery() !== void 0)
           try {
-            prepareSettingsForUi(), ensureAutomationContainer(), syncMechInfo(), settings.readRaw().autoBuild === !0 ? settingsUi?.buildingToggles?.ensureBuildingToggles() : settingsUi?.buildingToggles?.removeBuildingToggles(), settings.readRaw().autoARPA === !0 ? settingsUi?.arpaToggles?.ensureArpaToggles() : settingsUi?.arpaToggles?.removeArpaToggles(), settings.readRaw().autoStorage === !0 ? settingsUi?.storageToggles?.ensureStorageToggles() : settingsUi?.storageToggles?.removeStorageToggles(), settings.readRaw().autoMarket === !0 ? settingsUi?.marketToggles?.ensureMarketToggles() : settingsUi?.marketToggles?.removeMarketToggles(), settings.readRaw().autoEject === !0 ? settingsUi?.ejectToggles?.ensureEjectToggles() : settingsUi?.ejectToggles?.removeEjectToggles(), settings.readRaw().autoSupply === !0 ? settingsUi?.supplyToggles?.ensureSupplyToggles() : settingsUi?.supplyToggles?.removeSupplyToggles(), optionsModal.createOptionsModal(), optionsModal.updateOptionsUI(), settings.readRaw().showSettings === !0 && buildScriptSettings();
+            ensureAutomationContainer(), syncMechInfo();
+            let raw = settings.readRaw();
+            reconcileBuildingToggles(raw.autoBuild === !0), reconcileArpaToggles(raw.autoARPA === !0), reconcileStorageToggles(raw.autoStorage === !0), reconcileMarketToggles(raw.autoMarket === !0), reconcileEjectToggles(raw.autoEject === !0), reconcileSupplyToggles(raw.autoSupply === !0), optionsModal.createOptionsModal(), optionsButtonsDirty && (optionsModal.updateOptionsUI(), optionsButtonsDirty = !1), reconcileScriptSettings(raw.showSettings === !0);
           } catch (error) {
             logError(`settings panel could not be drawn: ${String(error)}`);
           }
       },
       refreshSettings() {
-        if (settings.readRaw().showSettings === !0)
+        if (scriptSettingsDirty = !0, settings.readRaw().showSettings === !0)
           try {
-            removeScriptSettings(), buildScriptSettings();
+            removeScriptSettings(), scriptSettingsVisible = !1, reconcileScriptSettings(!0);
           } catch (error) {
             logError(`settings panel could not be refreshed: ${String(error)}`);
           }
+      },
+      invalidate() {
+        invalidateAllAugmentations(), scriptSettingsVisible = void 0;
       }
     });
   }
@@ -54716,12 +54817,20 @@ Only continue if you trust the source. Injected code:
       display: { publish: () => {
       } }
     }), refreshEffectiveSettings = () => {
-      if (readOverrideConditionContext === void 0) {
-        overrideSettings.syncStoredSettings();
-        return;
+      let profiling = diagnostics?.readPerformanceEnabled() === !0 ? diagnostics : void 0, startedAtMs = profiling?.nowMs();
+      try {
+        if (readOverrideConditionContext === void 0) {
+          overrideSettings.syncStoredSettings();
+          return;
+        }
+        let overrides = settingsLifecycle.readRaw().overrides;
+        readSafeMode() || isRecord(overrides) && Object.keys(overrides).length > 0 ? overrideSettings.updateOverrides() : overrideSettings.syncStoredSettings();
+      } finally {
+        profiling !== void 0 && startedAtMs !== void 0 && profiling.recordPerformance(
+          "settings.refreshEffective",
+          profiling.nowMs() - startedAtMs
+        );
       }
-      let overrides = settingsLifecycle.readRaw().overrides;
-      readSafeMode() || isRecord(overrides) && Object.keys(overrides).length > 0 ? overrideSettings.updateOverrides() : overrideSettings.syncStoredSettings();
     }, refreshDiscoveredSettings = () => {
       settingsLifecycle.ensureDynamicDefaults(), refreshEffectiveSettings();
     }, settingsStore = Object.freeze({
@@ -54747,6 +54856,7 @@ Only continue if you trust the source. Injected code:
       settingsLifecycle,
       customRaceLab,
       refreshEffectiveSettings,
+      observeGameBindings: (listener) => pageCapture2.bindings((elementId) => listener(elementId)),
       readInterfacePresentationSettings: readEffectiveInterfacePresentation,
       interfaceEffects: {
         syncActiveTargetsUI: () => refreshCapturedPlanningPanels(),
@@ -55181,6 +55291,7 @@ Only continue if you trust the source. Injected code:
       },
       onError: reportPlanningUiError
     }), refreshCapturedPlanningPanels = () => {
+      let profiling = diagnostics?.readPerformanceEnabled() === !0 ? diagnostics : void 0, startedAtMs = profiling?.nowMs();
       try {
         let rawSettings = settingsLifecycle.readRaw(), presentation = readEffectiveInterfacePresentation(), activeTargetsEnabled = presentation.activeTargetsUI, plannerEnabled = presentation.buildPlannerUI, currentRun = latestConstructionSnapshot !== null && (activeTargetsEnabled || plannerEnabled) ? readCapturedPlannerRun() : void 0;
         if (latestConstructionSnapshot !== null && latestConstructionRun !== void 0 && currentRun !== void 0 && (latestConstructionRun.reset !== currentRun.reset || latestConstructionRun.day > currentRun.day) && (latestConstructionSnapshot = null, latestConstructionRun = void 0, constructionFreshness = "none"), planningPanels?.syncActiveTargetsUI(activeTargetsEnabled), planningPanels?.syncBuildPlannerUI(plannerEnabled), !activeTargetsEnabled && !plannerEnabled) return;
@@ -55203,13 +55314,18 @@ Only continue if you trust the source. Injected code:
         );
       } catch (error) {
         reportPlanningUiError(error);
+      } finally {
+        profiling !== void 0 && startedAtMs !== void 0 && profiling.recordPerformance(
+          "planningPanels.refresh",
+          profiling.nowMs() - startedAtMs
+        );
       }
     };
     let invalidateCapturedCyclePlanning = () => {
       latestConstructionSnapshot = null, latestConstructionRun = void 0, currentStateLogConstructionSnapshot = null, constructionFreshness = "none", triggerTargetsThisCycle = void 0, triggerDemandThisCycle = void 0, demandThisCycle = void 0, demandPrerequisitesThisCycle = void 0;
     };
     pageCapture2.rootState.subscribeRootReplaced(() => {
-      mechSupplyReservation.reset(), savingTargetThisCycle = void 0, settingsLifecycle.invalidateDynamicDefaults(), discoveryAttempts.invalidate(), latestConstructionSnapshot = null, latestConstructionRun = void 0, constructionFreshness = "none", triggerTargetsThisCycle = void 0, refreshCapturedPlanningPanels();
+      mechSupplyReservation.reset(), savingTargetThisCycle = void 0, settingsLifecycle.invalidateDynamicDefaults(), settingsPanel.invalidate(), discoveryAttempts.invalidate(), latestConstructionSnapshot = null, latestConstructionRun = void 0, constructionFreshness = "none", triggerTargetsThisCycle = void 0, refreshCapturedPlanningPanels();
     });
     let triggerActions = createCapturedTriggerActions({
       rootState: pageCapture2.rootState,
@@ -56106,18 +56222,27 @@ Only continue if you trust the source. Injected code:
     });
     refreshEffectiveSettings(), refreshCapturedPlanningPanels();
     let runCycle = () => {
-      if (automationCycle += 1, prospectiveSpaceMinerPlan = void 0, capturedResetCommittedThisCycle = !1, currentStateLogConstructionSnapshot = null, stateLogPlannerDetailsDue = !1, constructionFreshness = latestConstructionSnapshot === null ? "none" : "stale", capturedMechCycleHasPendingWork = !1, demandThisCycle = void 0, savingTargetThisCycle = void 0, constructionSuppressedThisCycle = !1, triggerTargetsThisCycle = void 0, triggerDemandThisCycle = void 0, demandPrerequisitesThisCycle = void 0, settingsPanel.ensurePanel(), !pageCapture2.isComplete()) {
-        refreshCapturedPlanningPanels();
+      let profiling = diagnostics?.readPerformanceEnabled() === !0 ? diagnostics : void 0, workStartedAtMs = profiling?.nowMs();
+      if (automationCycle += 1, prospectiveSpaceMinerPlan = void 0, capturedResetCommittedThisCycle = !1, currentStateLogConstructionSnapshot = null, stateLogPlannerDetailsDue = !1, constructionFreshness = latestConstructionSnapshot === null ? "none" : "stale", capturedMechCycleHasPendingWork = !1, demandThisCycle = void 0, savingTargetThisCycle = void 0, constructionSuppressedThisCycle = !1, triggerTargetsThisCycle = void 0, triggerDemandThisCycle = void 0, demandPrerequisitesThisCycle = void 0, !pageCapture2.isComplete()) {
+        let panelStartedAtMs2 = profiling?.nowMs();
+        settingsPanel.ensurePanel(), profiling !== void 0 && panelStartedAtMs2 !== void 0 && profiling.recordPerformance(
+          "settingsPanel.ensurePanel",
+          profiling.nowMs() - panelStartedAtMs2
+        ), refreshCapturedPlanningPanels();
         return;
       }
       refreshDiscoveredSettings();
+      let panelStartedAtMs = profiling?.nowMs();
+      settingsPanel.ensurePanel(), profiling !== void 0 && panelStartedAtMs !== void 0 && profiling.recordPerformance(
+        "settingsPanel.ensurePanel",
+        profiling.nowMs() - panelStartedAtMs
+      );
       let settings = settingsStore.readRaw();
       if (!pageCapture2.isComplete() || !isEnabled(settings, "masterScriptToggle")) {
         refreshCapturedPlanningPanels();
         return;
       }
       stateLogPlannerDetailsDue = stateLogRecorder.isNextSampleDue(settings);
-      let profiling = diagnostics?.readPerformanceEnabled() === !0 ? diagnostics : void 0, workStartedAtMs = profiling?.nowMs();
       try {
         if (progression.beginProcessedCycle(), isEnabled(settings, "autoEvolution")) {
           let species = capturedEvolution.reader.sampleSpecies();

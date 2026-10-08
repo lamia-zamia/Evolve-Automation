@@ -9,6 +9,9 @@ interface JQueryNode {
 
 type JQuery = (selector: unknown) => JQueryNode;
 
+const EJECT_PANEL_SELECTOR = "#resEjector";
+const EJECT_TOGGLE_SELECTOR = `${EJECT_PANEL_SELECTOR} .ea-eject-toggle`;
+
 export interface EjectToggleBrowserDependencies {
   readonly getJQuery: () => JQuery;
   readonly reader: EjectToggleReader;
@@ -20,8 +23,8 @@ export interface EjectToggleBrowserDependencies {
 
 export interface EjectToggleBrowserAdapter {
   createEjectToggles(): void;
-  ensureEjectToggles(): void;
-  removeEjectToggles(): void;
+  ensureEjectToggles(): boolean;
+  removeEjectToggles(): boolean;
 }
 
 function createToggleMarkup(item: EjectToggleItem): string {
@@ -62,22 +65,24 @@ export function createEjectToggleBrowserAdapter({
     lastCreatedEjectCount = count;
   }
 
-  function ensureEjectToggles(): void {
-    if (getJQuery()("#resEjector").length === 0) {
-      if (lastCreatedEjectCount !== 0) removeEjectToggles();
-      return;
+  function ensureEjectToggles(): boolean {
+    if (getJQuery()(EJECT_PANEL_SELECTOR).length === 0) {
+      return false;
     }
-    const currentCount = getJQuery()("#resEjector .ea-eject-toggle").length;
+    const currentCount = getJQuery()(EJECT_TOGGLE_SELECTOR).length;
     if (currentCount === 0 || currentCount !== lastCreatedEjectCount) {
       createEjectToggles();
     }
+    return true;
   }
 
-  function removeEjectToggles(): void {
+  function removeEjectToggles(): boolean {
     const $ = getJQuery();
-    $("#resEjector .ea-eject-toggle").remove();
+    if ($(EJECT_PANEL_SELECTOR).length === 0) return false;
+    $(EJECT_TOGGLE_SELECTOR).remove();
     $("#script_eject_top_row").remove();
     lastCreatedEjectCount = 0;
+    return true;
   }
 
   return Object.freeze({

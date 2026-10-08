@@ -76,6 +76,7 @@ export function createPage(
     allSections = false,
     interfaceEffects,
     mechInfoReader,
+    onGameRootRead,
   } = {},
 ) {
   const storedText = collapsed
@@ -135,7 +136,10 @@ export function createPage(
     ? createFullGameRoot()
     : { race: { governor: { tasks: {} } } };
   const rootState = {
-    readRoot: () => gameRoot,
+    readRoot: () => {
+      onGameRootRead?.();
+      return gameRoot;
+    },
     isReactivitySuppressed: () => false,
     subscribeRootReplaced: () => () => {},
   };
@@ -171,6 +175,7 @@ export function createPage(
       },
     }),
   });
+  settingsLifecycle.initialize();
   const effectiveSettings = settingsLifecycle.readEffective();
   const overrideSettings = createOverrideSettings({
     getSafeMode: () => false,
@@ -188,12 +193,18 @@ export function createPage(
     display: { publish: () => {} },
   });
   const refreshEffectiveSettings = () => overrideSettings.updateOverrides();
+  refreshEffectiveSettings();
+  const gameBindingListeners = new Set();
   const panel = createCapturedSettingsPanel({
     capturedPanelWindow: pageWindow,
     fileDownload: createPageFileDownload(pageWindow, document),
     settings,
     settingsLifecycle,
     refreshEffectiveSettings,
+    observeGameBindings: (listener) => {
+      gameBindingListeners.add(listener);
+      return () => gameBindingListeners.delete(listener);
+    },
     interfaceEffects,
     mechInfoReader,
     ...gameBackedSections,
@@ -216,6 +227,9 @@ export function createPage(
     effectiveSettings,
     gameRoot,
     refreshEffectiveSettings,
+    notifyGameBinding: (elementId) => {
+      for (const listener of gameBindingListeners) listener(elementId);
+    },
   };
 }
 
@@ -230,6 +244,7 @@ export function createMechInfoPanel(settingsRecord, species) {
     },
   });
   page.gameRoot.race.species = species;
+  page.refreshEffectiveSettings();
 
   const list = element("div", { id: "mechList" });
   const row = element("div");

@@ -12,6 +12,9 @@ interface JQueryNode {
 
 type JQuery = (selector: unknown) => JQueryNode;
 
+const BUILDING_PANEL_SELECTOR = "#city";
+const BUILDING_TOGGLE_SELECTOR = `${BUILDING_PANEL_SELECTOR} .ea-building-toggle`;
+
 export interface BuildingToggleBrowserDependencies {
   readonly getJQuery: () => JQuery;
   readonly reader: BuildingToggleReader;
@@ -24,8 +27,8 @@ export interface BuildingToggleBrowserDependencies {
 
 export interface BuildingToggleBrowserAdapter {
   createBuildingToggles(): void;
-  ensureBuildingToggles(): void;
-  removeBuildingToggles(): void;
+  ensureBuildingToggles(): boolean;
+  removeBuildingToggles(): boolean;
 }
 
 function createToggleMarkup(item: BuildingToggleItem): string {
@@ -69,20 +72,24 @@ export function createBuildingToggleBrowserAdapter({
     setCount(count);
   }
 
-  function ensureBuildingToggles(): void {
+  function ensureBuildingToggles(): boolean {
+    if (getJQuery()(BUILDING_PANEL_SELECTOR).length === 0) return false;
     if (!reader.readVisible()) {
-      if (lastCreatedCount !== 0) removeBuildingToggles();
-      return;
+      return false;
     }
-    const currentCount = getJQuery()("#mTabCivil .ea-building-toggle").length;
+    const currentCount = getJQuery()(BUILDING_TOGGLE_SELECTOR).length;
     if (currentCount === 0 || currentCount !== lastCreatedCount) {
       createBuildingToggles();
     }
+    return true;
   }
 
-  function removeBuildingToggles(): void {
-    getJQuery()("#mTabCivil .ea-building-toggle").remove();
+  function removeBuildingToggles(): boolean {
+    const $ = getJQuery();
+    if ($(BUILDING_PANEL_SELECTOR).length === 0) return false;
+    $(BUILDING_TOGGLE_SELECTOR).remove();
     setCount(0);
+    return true;
   }
 
   return Object.freeze({

@@ -78,18 +78,26 @@ function indexedUniqueDescendants(root, token) {
 const compiledSimpleMatchers = new Map();
 
 export function parseSimple(token) {
-  const match = /^(\*|[a-zA-Z][\w-]*)?(#[\w-]+)?((?:\.[\w-]+)*)$/.exec(token);
+  const match =
+    /^(\*|[a-zA-Z][\w-]*)?(#[\w-]+)?((?:\.[\w-]+)*)(\[id\])?(:first-child)?$/.exec(
+      token,
+    );
   if (match === null) throw new Error(`unsupported test selector: ${token}`);
   return {
     tag: match[1] === undefined || match[1] === "*" ? null : match[1],
     id: match[2] === undefined ? null : match[2].slice(1),
     classes: match[3] === "" ? [] : match[3].slice(1).split("."),
+    hasId: match[4] !== undefined,
+    firstChild: match[5] !== undefined,
   };
 }
 
-function matchesParsedSimple(element, { tag, id, classes }) {
+function matchesParsedSimple(element, { tag, id, classes, hasId, firstChild }) {
   if (tag !== null && element.tagName !== tag) return false;
   if (id !== null && element.id !== id) return false;
+  if (hasId && element.id === "") return false;
+  if (firstChild && element.parentElement?.children[0] !== element)
+    return false;
   return classes.every((className) => element.classList.contains(className));
 }
 
@@ -343,7 +351,8 @@ export class TestElement {
 
   querySelectorAll(selector) {
     let current = [this];
-    for (const token of selector.trim().split(/\s+/)) {
+    const tokens = selector.trim().replace(/>\s*/g, ">").split(/\s+/);
+    for (const token of tokens) {
       if (token === ":scope") continue;
       if (current.length === 0) continue;
       const directChild = token.startsWith(">");

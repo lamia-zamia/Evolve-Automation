@@ -53,6 +53,16 @@ const EXPECTED_CONTROLS = {
 {
   const page = createCapturedSettingsPage();
   addHostPanels(page);
+  for (const hostId of [
+    "garrison",
+    "c_garrison",
+    "gFort",
+    "prtl_fortress",
+    "government",
+    "hfleet",
+  ]) {
+    page.notifyGameBinding(hostId);
+  }
   // The buttons are added on a redraw, once the game has drawn the panels they attach to.
   page.panel.ensurePanel();
 

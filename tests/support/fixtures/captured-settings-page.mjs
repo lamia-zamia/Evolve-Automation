@@ -62,6 +62,7 @@ export function createCapturedSettingsPage(stored = {}) {
       },
     }),
   });
+  settingsLifecycle.initialize();
   const effective = settingsLifecycle.readEffective();
   const overrideSettings = createOverrideSettings({
     getSafeMode: () => false,
@@ -78,6 +79,8 @@ export function createCapturedSettingsPage(stored = {}) {
     reporter: { report: () => {} },
     display: { publish: () => {} },
   });
+  overrideSettings.updateOverrides();
+  const gameBindingListeners = new Set();
   // The game-backed capture the Fleet and Research surfaces need. An empty control registry is
   // enough: the Fleet read model is static copy plus settings-record priorities, and Research
   // localizes through the registry and lists whatever technologies the captured root names.
@@ -96,6 +99,10 @@ export function createCapturedSettingsPage(stored = {}) {
       controls: sectionControls,
     },
     refreshEffectiveSettings: () => overrideSettings.updateOverrides(),
+    observeGameBindings: (listener) => {
+      gameBindingListeners.add(listener);
+      return () => gameBindingListeners.delete(listener);
+    },
     onDiagnostic: (message) => diagnostics.push(message),
     logError: (message) => logged.push(message),
   });
@@ -109,6 +116,9 @@ export function createCapturedSettingsPage(stored = {}) {
     diagnostics,
     logged,
     refreshEffectiveSettings: () => overrideSettings.updateOverrides(),
+    notifyGameBinding: (elementId) => {
+      for (const listener of gameBindingListeners) listener(elementId);
+    },
   };
 }
 

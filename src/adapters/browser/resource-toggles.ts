@@ -33,11 +33,13 @@ export interface ResourceToggleBrowserDependencies {
 
 export interface ResourceToggleBrowserAdapter {
   createMarketToggles(): void;
-  ensureMarketToggles(): void;
-  removeMarketToggles(): void;
+  ensureMarketToggles(): boolean;
+  removeMarketToggles(): boolean;
+  /** Drops Market presentation facts after upstream has redrawn the whole Market panel. */
+  invalidateMarketPanel(): void;
   createStorageToggles(): void;
-  ensureStorageToggles(): void;
-  removeStorageToggles(): void;
+  ensureStorageToggles(): boolean;
+  removeStorageToggles(): boolean;
 }
 
 function createMarketHeader(view: MarketToggleView): string {
@@ -185,6 +187,7 @@ export function createResourceToggleBrowserAdapter({
         cancelRoutes: string;
       }>
     | undefined;
+  let marketPresentationChanged = false;
 
   function removeMarketElements(jquery: JQuery): void {
     jquery("#market .ea-market-toggle").remove();
@@ -201,8 +204,10 @@ export function createResourceToggleBrowserAdapter({
         routes: jquery("#market .market-item[id] .trade > :first-child").text(),
         cancelRoutes: jquery("#market .market-item[id] .trade .zero").text(),
       });
+      marketPresentationChanged = true;
     } else {
       stashedMarketLabels = undefined;
+      marketPresentationChanged = false;
     }
     removeMarketElements(jquery);
     let count = 0;
@@ -214,6 +219,7 @@ export function createResourceToggleBrowserAdapter({
       jquery("#market .market-item[id] .trade .zero").text("×");
     } else {
       stashedMarketLabels = undefined;
+      marketPresentationChanged = false;
     }
     jquery("#market-qty").after(createMarketHeader(view));
     for (const item of view.items) {
@@ -227,26 +233,37 @@ export function createResourceToggleBrowserAdapter({
     lastCreatedMarketCount = count;
   }
 
-  function ensureMarketToggles(): void {
+  function ensureMarketToggles(): boolean {
     const jquery = getJQuery();
     if (jquery("#market").length === 0) {
-      if (lastCreatedMarketCount !== 0) removeMarketToggles();
-      return;
+      return false;
     }
     const currentCount = jquery("#market .ea-market-toggle").length;
     if (currentCount === 0 || currentCount !== lastCreatedMarketCount) {
       createMarketToggles();
     }
+    return true;
   }
 
-  function removeMarketToggles(): void {
+  function removeMarketToggles(): boolean {
     const jquery = getJQuery();
-    const view = marketReader.readMarket();
+    if (jquery("#market").length === 0) return false;
+    const hasMarketAugmentation =
+      lastCreatedMarketCount !== 0 ||
+      stashedMarketLabels !== undefined ||
+      jquery("#market .ea-market-toggle").length !== 0 ||
+      jquery("#script_market_top_row").length !== 0;
+    if (!hasMarketAugmentation) return true;
+
     removeMarketElements(jquery);
     lastCreatedMarketCount = 0;
-    const labels = stashedMarketLabels ?? view.labels;
+    if (!marketPresentationChanged) {
+      stashedMarketLabels = undefined;
+      return true;
+    }
+    const labels = stashedMarketLabels ?? marketReader.readMarket().labels;
     stashedMarketLabels = undefined;
-    if (view.noTrade) return;
+    marketPresentationChanged = false;
     jquery("#market .market-item[id] .res").width("7.5rem");
     jquery("#market .market-item[id] .buy span").text(labels.buy);
     jquery("#market .market-item[id] .sell span").text(labels.sell);
@@ -254,6 +271,20 @@ export function createResourceToggleBrowserAdapter({
       labels.routes,
     );
     jquery("#market .market-item[id] .trade .zero").text(labels.cancelRoutes);
+    return true;
+  }
+
+  function invalidateMarketPanel(): void {
+    const jquery = getJQuery();
+    if (
+      jquery("#market .ea-market-toggle").length !== 0 ||
+      jquery("#script_market_top_row").length !== 0
+    ) {
+      return;
+    }
+    lastCreatedMarketCount = 0;
+    stashedMarketLabels = undefined;
+    marketPresentationChanged = false;
   }
 
   function createStorageToggles(): void {
@@ -279,29 +310,32 @@ export function createResourceToggleBrowserAdapter({
     lastCreatedStorageCount = count;
   }
 
-  function ensureStorageToggles(): void {
+  function ensureStorageToggles(): boolean {
     const jquery = getJQuery();
     if (jquery("#resStorage").length === 0) {
-      if (lastCreatedStorageCount !== 0) removeStorageToggles();
-      return;
+      return false;
     }
     const currentCount = jquery("#resStorage .ea-storage-toggle").length;
     if (currentCount === 0 || currentCount !== lastCreatedStorageCount) {
       createStorageToggles();
     }
+    return true;
   }
 
-  function removeStorageToggles(): void {
+  function removeStorageToggles(): boolean {
     const jquery = getJQuery();
+    if (jquery("#resStorage").length === 0) return false;
     jquery("#resStorage .ea-storage-toggle").remove();
     jquery("#script_storage_top_row").remove();
     lastCreatedStorageCount = 0;
+    return true;
   }
 
   return Object.freeze({
     createMarketToggles,
     ensureMarketToggles,
     removeMarketToggles,
+    invalidateMarketPanel,
     createStorageToggles,
     ensureStorageToggles,
     removeStorageToggles,

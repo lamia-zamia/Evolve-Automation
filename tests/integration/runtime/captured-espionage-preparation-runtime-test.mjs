@@ -199,6 +199,7 @@ const preparationControls = {
 
 const preparationStop = startCapturedRuntime({
   pageCapture: {
+    bindings: () => () => {},
     isComplete: () => true,
     mechanics: {
       readStructures: () => undefined,

@@ -9,6 +9,9 @@ interface JQueryNode {
 
 type JQuery = (selector: unknown) => JQueryNode;
 
+const SUPPLY_PANEL_SELECTOR = "#resCargo";
+const SUPPLY_TOGGLE_SELECTOR = `${SUPPLY_PANEL_SELECTOR} .ea-supply-toggle`;
+
 export interface SupplyToggleBrowserDependencies {
   readonly getJQuery: () => JQuery;
   readonly reader: SupplyToggleReader;
@@ -20,8 +23,8 @@ export interface SupplyToggleBrowserDependencies {
 
 export interface SupplyToggleBrowserAdapter {
   createSupplyToggles(): void;
-  ensureSupplyToggles(): void;
-  removeSupplyToggles(): void;
+  ensureSupplyToggles(): boolean;
+  removeSupplyToggles(): boolean;
 }
 
 function createToggleMarkup(item: SupplyToggleItem): string {
@@ -62,22 +65,24 @@ export function createSupplyToggleBrowserAdapter({
     lastCreatedSupplyCount = count;
   }
 
-  function ensureSupplyToggles(): void {
-    if (getJQuery()("#resCargo").length === 0) {
-      if (lastCreatedSupplyCount !== 0) removeSupplyToggles();
-      return;
+  function ensureSupplyToggles(): boolean {
+    if (getJQuery()(SUPPLY_PANEL_SELECTOR).length === 0) {
+      return false;
     }
-    const currentCount = getJQuery()("#resCargo .ea-supply-toggle").length;
+    const currentCount = getJQuery()(SUPPLY_TOGGLE_SELECTOR).length;
     if (currentCount === 0 || currentCount !== lastCreatedSupplyCount) {
       createSupplyToggles();
     }
+    return true;
   }
 
-  function removeSupplyToggles(): void {
+  function removeSupplyToggles(): boolean {
     const $ = getJQuery();
-    $("#resCargo .ea-supply-toggle").remove();
+    if ($(SUPPLY_PANEL_SELECTOR).length === 0) return false;
+    $(SUPPLY_TOGGLE_SELECTOR).remove();
     $("#script_supply_top_row").remove();
     lastCreatedSupplyCount = 0;
+    return true;
   }
 
   return Object.freeze({

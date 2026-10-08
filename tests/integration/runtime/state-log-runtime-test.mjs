@@ -123,6 +123,7 @@ function makeRuntime({
   const errors = [];
   const stop = startCapturedRuntime({
     pageCapture: {
+      bindings: () => () => {},
       isComplete: () => true,
       mechanics: {
         readStructures: () => undefined,
