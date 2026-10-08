@@ -66,6 +66,7 @@ function structure({
     sector,
     struct,
     actionId,
+    matchesCurrentIdentity: () => true,
     readAvailability: () => ({ kind: "value", value: true }),
     readTitle: () => ({ kind: "value", value: title }),
     readDescription: () => ({ kind: "value", value: description }),

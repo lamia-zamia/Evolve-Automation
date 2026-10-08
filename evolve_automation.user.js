@@ -1540,19 +1540,26 @@
       return { kind: "invalid" };
     }
   }
-  function readCapturedSemanticBuildingStates(root, controls2, mechanics) {
+  function readCapturedSemanticBuildingSample(root, controls2, mechanics, isCurrent = () => !0) {
     let structures = mechanics.readStructures();
     if (structures === void 0) return;
-    let result = [], semanticCatalog = readCapturedBuildingEntries(
+    let structuresByAction = /* @__PURE__ */ new Map(), structuresByActionAndEntryKey = /* @__PURE__ */ new Map();
+    for (let structure of structures) {
+      let actionMatches = structuresByAction.get(structure.actionId);
+      actionMatches === void 0 ? structuresByAction.set(structure.actionId, [structure]) : actionMatches.push(structure);
+      let keyedMatches = structuresByActionAndEntryKey.get(structure.actionId);
+      keyedMatches === void 0 && (keyedMatches = /* @__PURE__ */ new Map(), structuresByActionAndEntryKey.set(structure.actionId, keyedMatches));
+      let entryMatches = keyedMatches.get(structure.entryKey);
+      entryMatches === void 0 ? keyedMatches.set(structure.entryKey, [structure]) : entryMatches.push(structure);
+    }
+    let result = [], statesByBinding = /* @__PURE__ */ new Map(), semanticCatalog = readCapturedBuildingEntries(
       root,
       { ...controls2, capturedElementIds: () => [] },
       structures
     );
     for (let entry of semanticCatalog) {
-      let candidates = structures.filter(
-        (structure2) => structure2.actionId === entry.binding && (entry.entryKey === void 0 || structure2.entryKey === entry.entryKey)
-      );
-      if (candidates.length !== 1) return;
+      let candidates = entry.entryKey === void 0 ? structuresByAction.get(entry.binding) : structuresByActionAndEntryKey.get(entry.binding)?.get(entry.entryKey);
+      if (candidates === void 0 || candidates.length !== 1) return;
       let structure = candidates[0], available = structure.readAvailability(root);
       if (available.kind !== "value") return;
       let state = readCapturedBuildingState(
@@ -1561,10 +1568,33 @@
         structure,
         available.value
       );
-      if (state === void 0) return;
-      result.push(state);
+      if (state === void 0 || statesByBinding.has(entry.binding)) return;
+      statesByBinding.set(entry.binding, state), result.push(state);
     }
-    return Object.freeze(result);
+    let buildings = Object.freeze(result);
+    return Object.freeze({
+      buildings,
+      readCurrent(expected) {
+        if (!isCurrent()) return;
+        let sampled3 = statesByBinding.get(expected.binding), structure = sampled3?.structure;
+        if (sampled3 === void 0 || sampled3.catalog.id !== expected.id || structure === void 0 || !structure.matchesCurrentIdentity() || readProperty(
+          readProperty(root, structure.region),
+          structure.struct
+        ) !== sampled3.catalog.state) return;
+        let currentAvailability = structure.readAvailability(root);
+        if (currentAvailability.kind !== "value") return;
+        let current = readCapturedBuildingState(
+          root,
+          sampled3.catalog,
+          structure,
+          currentAvailability.value
+        );
+        return current !== void 0 && isCurrent() && structure.matchesCurrentIdentity() ? current : void 0;
+      }
+    });
+  }
+  function readCapturedSemanticBuildingStates(root, controls2, mechanics) {
+    return readCapturedSemanticBuildingSample(root, controls2, mechanics)?.buildings;
   }
 
   // src/adapters/evolve/captured-game-mechanics.ts
@@ -2054,16 +2084,16 @@
     }
     return result;
   }
-  function createMechanicsDefinition(entry, registry) {
-    let action = entry.action, ship = readMechanicsDataProperty(action, "ship"), shipRecord = isNonArrayRecord(ship) ? ship : void 0, currentState = (root) => {
-      let liveEntry = readMechanicsEntry(
-        entry.entryKey,
-        registry.get(entry.entryKey)
-      ), state = readMechanicsProperty(
+  function createMechanicsDefinition(entry, registry, candidate) {
+    let action = entry.action, ship = readMechanicsDataProperty(action, "ship"), shipRecord = isNonArrayRecord(ship) ? ship : void 0, matchesCurrentIdentity = () => {
+      let liveCandidate = registry.get(entry.entryKey), liveEntry = readMechanicsEntry(entry.entryKey, liveCandidate);
+      return liveCandidate === candidate && liveEntry?.action === action && liveEntry.region === entry.region && liveEntry.sector === entry.sector && liveEntry.struct === entry.struct && liveEntry.actionId === entry.actionId && liveEntry.info === entry.info;
+    }, currentState = (root) => {
+      let state = readMechanicsProperty(
         readMechanicsProperty(root, entry.region),
         entry.struct
       ), stateOn = readMechanicsProperty(state, "on");
-      return liveEntry?.action === action && liveEntry.region === entry.region && liveEntry.sector === entry.sector && liveEntry.struct === entry.struct && liveEntry.actionId === entry.actionId && isNonArrayRecord(state) && typeof stateOn == "number" && Number.isFinite(stateOn);
+      return matchesCurrentIdentity() && isNonArrayRecord(state) && typeof stateOn == "number" && Number.isFinite(stateOn);
     }, orderedKeys = (source) => {
       if (!Array.isArray(source)) return;
       let keys = /* @__PURE__ */ new Set();
@@ -2083,6 +2113,7 @@
       sector: entry.sector,
       struct: entry.struct,
       actionId: entry.actionId,
+      matchesCurrentIdentity,
       readAvailability: (root) => readCapturedActionAvailability(
         root,
         action,
@@ -2242,7 +2273,7 @@
         if (candidate === void 0) continue;
         let entry = readMechanicsEntry(key, candidate);
         if (entry === void 0) return { kind: "invalid" };
-        result.push(createMechanicsDefinition(entry, registry));
+        result.push(createMechanicsDefinition(entry, registry, candidate));
       }
       return { kind: "value", value: Object.freeze(result) };
     } catch {
@@ -2640,9 +2671,9 @@
         if (!(!cleanupProven || !installationVerified || !registryStillValid))
           return callbackResult;
       },
-      adjustPower(root, entryKey, expectedStateOn, targetStateOn, isCurrent = () => !0, preflightOnly = !1) {
+      adjustPower(root, entryKey, expectedStateOn, targetStateOn, isCurrent = () => !0, preflightOnly = !1, expectedStructure) {
         let entries = structureEntries, entry = entries === void 0 ? void 0 : readMechanicsEntry(entryKey, entries.get(entryKey));
-        if (stopped || entry === void 0 || !Number.isSafeInteger(expectedStateOn) || !Number.isSafeInteger(targetStateOn) || targetStateOn < 0)
+        if (stopped || entry === void 0 || expectedStructure !== void 0 && (expectedStructure.entryKey !== entry.entryKey || expectedStructure.region !== entry.region || expectedStructure.sector !== entry.sector || expectedStructure.struct !== entry.struct || expectedStructure.actionId !== entry.actionId || !expectedStructure.matchesCurrentIdentity()) || !Number.isSafeInteger(expectedStateOn) || !Number.isSafeInteger(targetStateOn) || targetStateOn < 0)
           return { kind: "invalid" };
         let state = readMechanicsProperty(
           readMechanicsProperty(root, entry.region),
@@ -2653,17 +2684,18 @@
         let capRead = targetStateOn > expectedStateOn ? readMechanicsPrimitive(entry.action, "on_cap") : { kind: "value", value: expectedStateOn }, cap = capRead.kind === "absent" ? readMechanicsProperty(state, "count") : capRead.kind === "value" ? capRead.value : void 0, postPower = readMechanicsDataProperty(entry.action, "postPower");
         if (typeof cap != "number" || !Number.isFinite(cap) || targetStateOn > expectedStateOn && targetStateOn > Math.ceil(cap) || postPower !== void 0 && (typeof postPower != "function" || powerCallbackQueue === void 0))
           return { kind: "invalid" };
-        if (!isCurrent()) return { kind: "invalid" };
+        if (!isCurrent() || expectedStructure !== void 0 && !expectedStructure.matchesCurrentIdentity())
+          return { kind: "invalid" };
         if (preflightOnly) return { kind: "value", value: !0 };
         let direction = targetStateOn > expectedStateOn ? 1 : -1;
         try {
           for (let on = expectedStateOn; on !== targetStateOn; on += direction) {
-            if (!isCurrent() || readMechanicsProperty(state, "on") !== on)
+            if (!isCurrent() || expectedStructure !== void 0 && !expectedStructure.matchesCurrentIdentity() || readMechanicsProperty(state, "on") !== on)
               return { kind: "invalid" };
-            if (state.on = on + direction, !isCurrent() || readMechanicsProperty(state, "on") !== on + direction)
+            if (state.on = on + direction, !isCurrent() || expectedStructure !== void 0 && !expectedStructure.matchesCurrentIdentity() || readMechanicsProperty(state, "on") !== on + direction)
               return { kind: "invalid" };
           }
-          return postPower !== void 0 && targetStateOn !== expectedStateOn && powerCallbackQueue.set([entry.action, "postPower"], [direction > 0]), {
+          return postPower !== void 0 && targetStateOn !== expectedStateOn && powerCallbackQueue.set([entry.action, "postPower"], [direction > 0]), !isCurrent() || expectedStructure !== void 0 && !expectedStructure.matchesCurrentIdentity() ? { kind: "invalid" } : {
             kind: "value",
             value: readMechanicsProperty(state, "on") === targetStateOn
           };
@@ -2678,7 +2710,7 @@
             let result = [];
             for (let [key, value] of entries) {
               let entry = readMechanicsEntry(key, value);
-              entry !== void 0 && result.push(createMechanicsDefinition(entry, entries));
+              entry !== void 0 && result.push(createMechanicsDefinition(entry, entries, value));
             }
             return Object.freeze(result);
           } catch {
@@ -28209,7 +28241,7 @@
   }
 
   // src/adapters/evolve/economy/production/captured-power-executor.ts
-  var capturedPowerExecutionSuccess = Object.freeze({
+  var CAPTURED_POWER_EXECUTOR_FULL_SAMPLE_COUNT = "autoPower.execute.fullSemanticBuildingScans", CAPTURED_POWER_EXECUTOR_CYCLE_SAMPLE_COUNT = "autoPower.execute.cycleSemanticBuildingScans", CAPTURED_POWER_EXECUTOR_TARGET_READ_COUNT = "autoPower.execute.targetRereads", CAPTURED_POWER_EXECUTOR_SWITCH_COUNT = "autoPower.execute.buildingSwitchOperations", capturedPowerExecutionSuccess = Object.freeze({
     status: "succeeded"
   });
   function capturedPowerExecutionStale(message) {
@@ -28223,22 +28255,28 @@
     dependencies.rootState.subscribeRootReplaced(() => {
       generation++, descriptions.clear(), resourceRates.clear(), powerModels.clear();
     });
-    let sample = () => readCapturedSemanticBuildingStates(
-      dependencies.rootState.readRoot(),
-      dependencies.controls,
-      dependencies.mechanics
-    ), executor = Object.freeze({
+    let executor = Object.freeze({
       execute(decision) {
-        let initialGeneration = generation, root = dependencies.rootState.readRoot(), buildings = sample();
-        if (buildings === void 0)
+        let measure = createPhaseMeasure(dependencies.diagnostics), tally = createCountTally(dependencies.diagnostics), initialGeneration = generation, root = dependencies.rootState.readRoot(), isCurrent = () => generation === initialGeneration && dependencies.rootState.readRoot() === root, buildingSample = measure(
+          "autoPower.execute.initialBuildingSample",
+          () => readCapturedSemanticBuildingSample(
+            root,
+            dependencies.controls,
+            dependencies.mechanics,
+            isCurrent
+          )
+        );
+        if (tally.count(CAPTURED_POWER_EXECUTOR_FULL_SAMPLE_COUNT), decision.kind === "apply-power-cycle" && tally.count(CAPTURED_POWER_EXECUTOR_CYCLE_SAMPLE_COUNT), buildingSample === void 0 || !isCurrent())
           return capturedPowerExecutionStale(
             "Building qualification unavailable"
           );
-        if ((decision.kind === "apply-power-cycle" ? decision.expectedBuildings : [{ id: decision.buildingId, binding: decision.binding }]).some(
-          (expected) => !buildings.some(
-            (building) => building.catalog.id === expected.id && building.catalog.binding === expected.binding && building.available && building.hasState
-          )
-        ))
+        let buildings = buildingSample.buildings, buildingsByBinding = new Map(
+          buildings.map((building) => [building.catalog.binding, building])
+        );
+        if ((decision.kind === "apply-power-cycle" ? decision.expectedBuildings : [{ id: decision.buildingId, binding: decision.binding }]).some((expected) => {
+          let building = buildingsByBinding.get(expected.binding);
+          return building === void 0 || building.catalog.id !== expected.id || !building.available || !building.hasState;
+        }))
           return capturedPowerExecutionStale("Building binding changed");
         let operations = decision.kind === "apply-power-cycle" ? decision.operations : [
           {
@@ -28263,46 +28301,70 @@
             plannedMechSaveSupply = operation2.value;
           }
           if (operation2.kind !== "adjust-building") continue;
-          let building = buildings.find(
-            (candidate) => candidate.catalog.binding === operation2.binding && candidate.catalog.id === operation2.buildingId
-          );
-          if (building === void 0 || !building.available || !building.hasState || plannedOn.get(operation2.binding) !== operation2.expectedStateOn || !Number.isSafeInteger(operation2.amount) || operation2.expectedStateOn + operation2.amount < 0)
+          let building = buildingsByBinding.get(operation2.binding);
+          if (building === void 0 || building.catalog.id !== operation2.buildingId || !building.available || !building.hasState || plannedOn.get(operation2.binding) !== operation2.expectedStateOn || !Number.isSafeInteger(operation2.amount) || operation2.expectedStateOn + operation2.amount < 0)
             return capturedPowerExecutionStale("Planned switch state changed");
-          if (plannedOn.set(
+          plannedOn.set(
             operation2.binding,
             operation2.expectedStateOn + operation2.amount
-          ), building.structure === void 0)
+          );
+          let structure = building.structure;
+          if (structure === void 0)
             return capturedPowerExecutionStale("Switch definition unavailable");
-          let ready = dependencies.mechanics.adjustPower(
-            root,
-            building.structure.entryKey,
-            operation2.expectedStateOn,
-            operation2.expectedStateOn + operation2.amount,
-            () => generation === initialGeneration && dependencies.rootState.readRoot() === root,
-            !0
+          let ready = measure(
+            "autoPower.execute.adjust",
+            () => dependencies.mechanics.adjustPower(
+              root,
+              structure.entryKey,
+              operation2.expectedStateOn,
+              operation2.expectedStateOn + operation2.amount,
+              isCurrent,
+              !0,
+              structure
+            )
           );
           if (ready.kind !== "value" || !ready.value)
             return capturedPowerExecutionStale("Switch mechanics unavailable");
         }
         for (let operation2 of operations) {
-          if (generation !== initialGeneration || dependencies.rootState.readRoot() !== root)
+          if (!isCurrent())
             return capturedPowerExecutionStale("Game generation changed");
           if (operation2.kind === "adjust-building") {
-            let current = sample()?.find(
-              (candidate) => candidate.catalog.binding === operation2.binding && candidate.catalog.id === operation2.buildingId
+            tally.count(CAPTURED_POWER_EXECUTOR_TARGET_READ_COUNT);
+            let current = measure(
+              "autoPower.execute.targetRead",
+              () => buildingSample.readCurrent({
+                id: operation2.buildingId,
+                binding: operation2.binding
+              })
             );
-            if (current === void 0 || !current.available || !current.hasState || current.stateOn !== operation2.expectedStateOn || current.structure === void 0)
+            if (!isCurrent() || current === void 0 || !current.available || !current.hasState || current.stateOn !== operation2.expectedStateOn || current.structure === void 0)
               return capturedPowerExecutionStale("Switch state changed");
-            let target = operation2.expectedStateOn + operation2.amount, outcome = dependencies.mechanics.adjustPower(
-              root,
-              current.structure.entryKey,
-              operation2.expectedStateOn,
-              target,
-              () => generation === initialGeneration && dependencies.rootState.readRoot() === root
-            ), after = sample()?.find(
-              (candidate) => candidate.catalog.binding === operation2.binding && candidate.catalog.id === operation2.buildingId
+            let target = operation2.expectedStateOn + operation2.amount, structure = current.structure;
+            if (structure === void 0)
+              return capturedPowerExecutionStale("Switch definition unavailable");
+            tally.count(CAPTURED_POWER_EXECUTOR_SWITCH_COUNT);
+            let outcome = measure(
+              "autoPower.execute.adjust",
+              () => dependencies.mechanics.adjustPower(
+                root,
+                structure.entryKey,
+                operation2.expectedStateOn,
+                target,
+                isCurrent,
+                !1,
+                structure
+              )
             );
-            if (outcome.kind !== "value" || !outcome.value || generation !== initialGeneration || dependencies.rootState.readRoot() !== root || after === void 0 || !after.available || !after.hasState || after.stateOn !== target)
+            tally.count(CAPTURED_POWER_EXECUTOR_TARGET_READ_COUNT);
+            let after = measure(
+              "autoPower.execute.targetRead",
+              () => buildingSample.readCurrent({
+                id: operation2.buildingId,
+                binding: operation2.binding
+              })
+            );
+            if (outcome.kind !== "value" || !outcome.value || !isCurrent() || after === void 0 || !after.available || !after.hasState || after.stateOn !== target)
               return capturedPowerExecutionStale(
                 "Switch did not reach planned state"
               );
@@ -56152,6 +56214,7 @@ Only continue if you trust the source. Injected code:
       mechanics: pageCapture2.mechanics,
       readMechSaveSupply: mechSupplyReservation.readSaveSupply,
       setMechSaveSupply: mechSupplyReservation.setSaveSupply,
+      diagnostics,
       log: (message) => onActivity({ message, color: "has-text-info", tags: ["automation"] })
     }), prospectiveSpaceMinerPlan;
     pageCapture2.rootState.subscribeRootReplaced?.(() => {

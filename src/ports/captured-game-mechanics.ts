@@ -87,6 +87,8 @@ export interface CapturedGameStructureDefinition {
   readonly struct: string;
   /** The current Vue control id declared by the game action definition. */
   readonly actionId: string;
+  /** Whether this exact captured registry entry still owns its key and coordinates. */
+  matchesCurrentIdentity(): boolean;
   /** Semantic offer qualification, independent of rendered panels. Invalid fails the whole cycle. */
   readAvailability(root: unknown): CapturedGameRead<boolean>;
   /** The game-owned display key used by its source-specific production ledger. */
@@ -175,6 +177,7 @@ export interface CapturedGameMechanics {
     targetStateOn: number,
     isCurrent?: () => boolean,
     preflightOnly?: boolean,
+    expectedStructure?: CapturedGameStructureDefinition,
   ): CapturedGameRead<boolean>;
   /** `undefined` means the private registry has not been captured or failed validation. */
   readStructures(): readonly CapturedGameStructureDefinition[] | undefined;

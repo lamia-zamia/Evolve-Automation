@@ -879,26 +879,32 @@ function readFuelProbeResult(
 function createMechanicsDefinition(
   entry: CapturedGridEntry,
   registry: Map<unknown, unknown>,
+  candidate: unknown,
 ): CapturedGameStructureDefinition {
   const action = entry.action;
   const ship = readMechanicsDataProperty(action, "ship");
   const shipRecord = isNonArrayRecord(ship) ? ship : undefined;
-  const currentState = (root: unknown): boolean => {
-    const liveEntry = readMechanicsEntry(
-      entry.entryKey,
-      registry.get(entry.entryKey),
+  const matchesCurrentIdentity = (): boolean => {
+    const liveCandidate = registry.get(entry.entryKey);
+    const liveEntry = readMechanicsEntry(entry.entryKey, liveCandidate);
+    return (
+      liveCandidate === candidate &&
+      liveEntry?.action === action &&
+      liveEntry.region === entry.region &&
+      liveEntry.sector === entry.sector &&
+      liveEntry.struct === entry.struct &&
+      liveEntry.actionId === entry.actionId &&
+      liveEntry.info === entry.info
     );
+  };
+  const currentState = (root: unknown): boolean => {
     const state = readMechanicsProperty(
       readMechanicsProperty(root, entry.region),
       entry.struct,
     );
     const stateOn = readMechanicsProperty(state, "on");
     return (
-      liveEntry?.action === action &&
-      liveEntry.region === entry.region &&
-      liveEntry.sector === entry.sector &&
-      liveEntry.struct === entry.struct &&
-      liveEntry.actionId === entry.actionId &&
+      matchesCurrentIdentity() &&
       isNonArrayRecord(state) &&
       typeof stateOn === "number" &&
       Number.isFinite(stateOn)
@@ -923,6 +929,7 @@ function createMechanicsDefinition(
     sector: entry.sector,
     struct: entry.struct,
     actionId: entry.actionId,
+    matchesCurrentIdentity,
     readAvailability: (root: unknown) =>
       readCapturedActionAvailability(
         root,
@@ -1140,7 +1147,7 @@ function resolveCapturedStructureOrder(
       if (candidate === undefined) continue;
       const entry = readMechanicsEntry(key, candidate);
       if (entry === undefined) return { kind: "invalid" };
-      result.push(createMechanicsDefinition(entry, registry));
+      result.push(createMechanicsDefinition(entry, registry, candidate));
     }
     return { kind: "value", value: Object.freeze(result) };
   } catch {
@@ -1972,6 +1979,7 @@ export function installCapturedGameMechanics(
       targetStateOn: number,
       isCurrent: () => boolean = () => true,
       preflightOnly = false,
+      expectedStructure?: CapturedGameStructureDefinition,
     ): CapturedGameRead<boolean> {
       const entries = structureEntries;
       const entry =
@@ -1981,6 +1989,13 @@ export function installCapturedGameMechanics(
       if (
         stopped ||
         entry === undefined ||
+        (expectedStructure !== undefined &&
+          (expectedStructure.entryKey !== entry.entryKey ||
+            expectedStructure.region !== entry.region ||
+            expectedStructure.sector !== entry.sector ||
+            expectedStructure.struct !== entry.struct ||
+            expectedStructure.actionId !== entry.actionId ||
+            !expectedStructure.matchesCurrentIdentity())) ||
         !Number.isSafeInteger(expectedStateOn) ||
         !Number.isSafeInteger(targetStateOn) ||
         targetStateOn < 0
@@ -2015,24 +2030,42 @@ export function installCapturedGameMechanics(
           (typeof postPower !== "function" || powerCallbackQueue === undefined))
       )
         return { kind: "invalid" };
-      if (!isCurrent()) return { kind: "invalid" };
+      if (
+        !isCurrent() ||
+        (expectedStructure !== undefined &&
+          !expectedStructure.matchesCurrentIdentity())
+      )
+        return { kind: "invalid" };
       if (preflightOnly) return { kind: "value", value: true };
       // actions.js setAction's power_on/off: one unit per iteration, game on_cap,
       // then deferred postPower. An explicit target avoids keyboard multiplier overshoot.
       const direction = targetStateOn > expectedStateOn ? 1 : -1;
       try {
         for (let on = expectedStateOn; on !== targetStateOn; on += direction) {
-          if (!isCurrent() || readMechanicsProperty(state, "on") !== on)
+          if (
+            !isCurrent() ||
+            (expectedStructure !== undefined &&
+              !expectedStructure.matchesCurrentIdentity()) ||
+            readMechanicsProperty(state, "on") !== on
+          )
             return { kind: "invalid" };
           state["on"] = on + direction;
           if (
             !isCurrent() ||
+            (expectedStructure !== undefined &&
+              !expectedStructure.matchesCurrentIdentity()) ||
             readMechanicsProperty(state, "on") !== on + direction
           )
             return { kind: "invalid" };
         }
         if (postPower !== undefined && targetStateOn !== expectedStateOn)
           powerCallbackQueue!.set([entry.action, "postPower"], [direction > 0]);
+        if (
+          !isCurrent() ||
+          (expectedStructure !== undefined &&
+            !expectedStructure.matchesCurrentIdentity())
+        )
+          return { kind: "invalid" };
         return {
           kind: "value",
           value: readMechanicsProperty(state, "on") === targetStateOn,
@@ -2049,7 +2082,7 @@ export function installCapturedGameMechanics(
         for (const [key, value] of entries) {
           const entry = readMechanicsEntry(key, value);
           if (entry !== undefined)
-            result.push(createMechanicsDefinition(entry, entries));
+            result.push(createMechanicsDefinition(entry, entries, value));
         }
         return Object.freeze(result);
       } catch {

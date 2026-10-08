@@ -7,7 +7,21 @@ import type { DecisionExecutor } from "../../../../ports/decision-executor.ts";
 import type { GameRootStateSource } from "../../../../ports/game-root-state.ts";
 import type { GameControlRegistry } from "../../../../ports/game-control-registry.ts";
 import type { CapturedGameMechanics } from "../../../../ports/captured-game-mechanics.ts";
-import { readCapturedSemanticBuildingStates } from "../../progression/build/captured-building-availability.ts";
+import type { PhaseTimingSink } from "../../../../utils/performance.ts";
+import {
+  createCountTally,
+  createPhaseMeasure,
+} from "../../../../utils/performance.ts";
+import { readCapturedSemanticBuildingSample } from "../../progression/build/captured-building-availability.ts";
+
+const CAPTURED_POWER_EXECUTOR_FULL_SAMPLE_COUNT =
+  "autoPower.execute.fullSemanticBuildingScans";
+const CAPTURED_POWER_EXECUTOR_CYCLE_SAMPLE_COUNT =
+  "autoPower.execute.cycleSemanticBuildingScans";
+const CAPTURED_POWER_EXECUTOR_TARGET_READ_COUNT =
+  "autoPower.execute.targetRereads";
+const CAPTURED_POWER_EXECUTOR_SWITCH_COUNT =
+  "autoPower.execute.buildingSwitchOperations";
 
 export interface CapturedPowerExecutorDependencies {
   readonly rootState: GameRootStateSource;
@@ -16,6 +30,7 @@ export interface CapturedPowerExecutorDependencies {
   readonly readMechSaveSupply: () => boolean;
   readonly setMechSaveSupply: (expected: boolean, value: boolean) => boolean;
   readonly log: (message: string) => void;
+  readonly diagnostics?: PhaseTimingSink | undefined;
 }
 
 const capturedPowerExecutionSuccess: CommandExecutionOutcome = Object.freeze({
@@ -45,36 +60,50 @@ export function createCapturedPowerExecutor(
     resourceRates.clear();
     powerModels.clear();
   });
-  const sample = () =>
-    readCapturedSemanticBuildingStates(
-      dependencies.rootState.readRoot(),
-      dependencies.controls,
-      dependencies.mechanics,
-    );
   const executor: DecisionExecutor<PowerDecision> = Object.freeze({
     execute(decision: Readonly<PowerDecision>): CommandExecutionOutcome {
+      const measure = createPhaseMeasure(dependencies.diagnostics);
+      const tally = createCountTally(dependencies.diagnostics);
       const initialGeneration = generation;
       const root = dependencies.rootState.readRoot();
-      const buildings = sample();
-      if (buildings === undefined)
+      const isCurrent = () =>
+        generation === initialGeneration &&
+        dependencies.rootState.readRoot() === root;
+      const buildingSample = measure(
+        "autoPower.execute.initialBuildingSample",
+        () =>
+          readCapturedSemanticBuildingSample(
+            root,
+            dependencies.controls,
+            dependencies.mechanics,
+            isCurrent,
+          ),
+      );
+      tally.count(CAPTURED_POWER_EXECUTOR_FULL_SAMPLE_COUNT);
+      if (decision.kind === "apply-power-cycle")
+        tally.count(CAPTURED_POWER_EXECUTOR_CYCLE_SAMPLE_COUNT);
+      if (buildingSample === undefined || !isCurrent())
         return capturedPowerExecutionStale(
           "Building qualification unavailable",
         );
+      const buildings = buildingSample.buildings;
+      const buildingsByBinding = new Map(
+        buildings.map((building) => [building.catalog.binding, building]),
+      );
       const expectedBuildings =
         decision.kind === "apply-power-cycle"
           ? decision.expectedBuildings
           : [{ id: decision.buildingId, binding: decision.binding }];
       if (
-        expectedBuildings.some(
-          (expected) =>
-            !buildings.some(
-              (building) =>
-                building.catalog.id === expected.id &&
-                building.catalog.binding === expected.binding &&
-                building.available &&
-                building.hasState,
-            ),
-        )
+        expectedBuildings.some((expected) => {
+          const building = buildingsByBinding.get(expected.binding);
+          return (
+            building === undefined ||
+            building.catalog.id !== expected.id ||
+            !building.available ||
+            !building.hasState
+          );
+        })
       )
         return capturedPowerExecutionStale("Building binding changed");
       const operations: readonly PowerOperation[] =
@@ -106,13 +135,10 @@ export function createCapturedPowerExecutor(
           plannedMechSaveSupply = operation.value;
         }
         if (operation.kind !== "adjust-building") continue;
-        const building = buildings.find(
-          (candidate) =>
-            candidate.catalog.binding === operation.binding &&
-            candidate.catalog.id === operation.buildingId,
-        );
+        const building = buildingsByBinding.get(operation.binding);
         if (
           building === undefined ||
+          building.catalog.id !== operation.buildingId ||
           !building.available ||
           !building.hasState ||
           plannedOn.get(operation.binding) !== operation.expectedStateOn ||
@@ -124,34 +150,36 @@ export function createCapturedPowerExecutor(
           operation.binding,
           operation.expectedStateOn + operation.amount,
         );
-        if (building.structure === undefined)
+        const structure = building.structure;
+        if (structure === undefined)
           return capturedPowerExecutionStale("Switch definition unavailable");
-        const ready = dependencies.mechanics.adjustPower(
-          root,
-          building.structure.entryKey,
-          operation.expectedStateOn,
-          operation.expectedStateOn + operation.amount,
-          () =>
-            generation === initialGeneration &&
-            dependencies.rootState.readRoot() === root,
-          true,
+        const ready = measure("autoPower.execute.adjust", () =>
+          dependencies.mechanics.adjustPower(
+            root,
+            structure.entryKey,
+            operation.expectedStateOn,
+            operation.expectedStateOn + operation.amount,
+            isCurrent,
+            true,
+            structure,
+          ),
         );
         if (ready.kind !== "value" || !ready.value)
           return capturedPowerExecutionStale("Switch mechanics unavailable");
       }
       for (const operation of operations) {
-        if (
-          generation !== initialGeneration ||
-          dependencies.rootState.readRoot() !== root
-        )
+        if (!isCurrent())
           return capturedPowerExecutionStale("Game generation changed");
         if (operation.kind === "adjust-building") {
-          const current = sample()?.find(
-            (candidate) =>
-              candidate.catalog.binding === operation.binding &&
-              candidate.catalog.id === operation.buildingId,
+          tally.count(CAPTURED_POWER_EXECUTOR_TARGET_READ_COUNT);
+          const current = measure("autoPower.execute.targetRead", () =>
+            buildingSample.readCurrent({
+              id: operation.buildingId,
+              binding: operation.binding,
+            }),
           );
           if (
+            !isCurrent() ||
             current === undefined ||
             !current.available ||
             !current.hasState ||
@@ -160,25 +188,32 @@ export function createCapturedPowerExecutor(
           )
             return capturedPowerExecutionStale("Switch state changed");
           const target = operation.expectedStateOn + operation.amount;
-          const outcome = dependencies.mechanics.adjustPower(
-            root,
-            current.structure.entryKey,
-            operation.expectedStateOn,
-            target,
-            () =>
-              generation === initialGeneration &&
-              dependencies.rootState.readRoot() === root,
+          const structure = current.structure;
+          if (structure === undefined)
+            return capturedPowerExecutionStale("Switch definition unavailable");
+          tally.count(CAPTURED_POWER_EXECUTOR_SWITCH_COUNT);
+          const outcome = measure("autoPower.execute.adjust", () =>
+            dependencies.mechanics.adjustPower(
+              root,
+              structure.entryKey,
+              operation.expectedStateOn,
+              target,
+              isCurrent,
+              false,
+              structure,
+            ),
           );
-          const after = sample()?.find(
-            (candidate) =>
-              candidate.catalog.binding === operation.binding &&
-              candidate.catalog.id === operation.buildingId,
+          tally.count(CAPTURED_POWER_EXECUTOR_TARGET_READ_COUNT);
+          const after = measure("autoPower.execute.targetRead", () =>
+            buildingSample.readCurrent({
+              id: operation.buildingId,
+              binding: operation.binding,
+            }),
           );
           if (
             outcome.kind !== "value" ||
             !outcome.value ||
-            generation !== initialGeneration ||
-            dependencies.rootState.readRoot() !== root ||
+            !isCurrent() ||
             after === undefined ||
             !after.available ||
             !after.hasState ||

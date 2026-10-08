@@ -2650,6 +2650,7 @@ export function startCapturedRuntime({
     mechanics: pageCapture.mechanics,
     readMechSaveSupply: mechSupplyReservation.readSaveSupply,
     setMechSaveSupply: mechSupplyReservation.setSaveSupply,
+    diagnostics,
     log: (message) =>
       onActivity({ message, color: "has-text-info", tags: ["automation"] }),
   });

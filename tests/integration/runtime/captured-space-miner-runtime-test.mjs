@@ -13,6 +13,7 @@ const ship = {
   sector: "spc_belt",
   struct: "elerium_ship",
   actionId: "space-elerium_ship",
+  matchesCurrentIdentity: () => true,
   ownsPowered: true,
   readAvailability: () => value(true),
   readTitle: () => value("Elerium Ship"),

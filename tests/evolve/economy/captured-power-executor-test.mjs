@@ -3,7 +3,11 @@ import { runInNewContext } from "node:vm";
 import { installCapturedGameMechanics } from "../../../src/adapters/evolve/captured-game-mechanics.ts";
 import { createCapturedPowerExecutor } from "../../../src/adapters/evolve/economy/production/captured-power-executor.ts";
 
-function powerExecutorFixture(region = "city", structId = "coal_power") {
+function powerExecutorFixture(
+  region = "city",
+  structId = "coal_power",
+  additionalStructIds = [],
+) {
   const page = runInNewContext("({ Map, Object, Array, Function, Number })");
   let period;
   const install = installCapturedGameMechanics(page, {
@@ -12,37 +16,53 @@ function powerExecutorFixture(region = "city", structId = "coal_power") {
       return () => {};
     },
   });
-  const root = {
+  let root = {
     race: {},
     tech: { high_tech: 2 },
     city: { coal_power: { count: 8, on: 1 } },
     resource: { Coal: { diff: 12 } },
     settings: { showCity: true },
   };
-  const binding = `${region}-${structId}`;
   root.settings.showPortal = true;
-  root[region] = { [structId]: { count: 8, on: 1 } };
-  const action = {
-    id: binding,
-    reqs: {},
-    powered: () => -5,
-    title: "Coal",
-    on_cap: () => 5,
-    postPower: () => false,
-  };
+  const buildingSpecs = [
+    { region, structId },
+    ...additionalStructIds.map((additionalStructId) => ({
+      region: "city",
+      structId: additionalStructId,
+    })),
+  ];
+  const actions = [];
   const entries = new page.Map();
-  for (const [struct, currentAction] of [
-    [structId, action],
-    ["unused1", { id: `${region}-unused1`, reqs: {} }],
-    ["unused2", { id: `${region}-unused2`, reqs: {} }],
-  ]) {
+  for (const spec of buildingSpecs) {
+    root[spec.region] = root[spec.region] ?? {};
+    root[spec.region][spec.structId] = { count: 8, on: 1 };
+    const currentAction = {
+      id: `${spec.region}-${spec.structId}`,
+      reqs: {},
+      powered: () => -5,
+      title: spec.structId,
+      on_cap: () => 5,
+      postPower: () => false,
+    };
+    actions.push(currentAction);
+    const key = `${spec.region}:${spec.structId}`;
+    entries.set(key, {
+      key,
+      region: spec.region,
+      sector: spec.region,
+      struct: spec.structId,
+      c_action: currentAction,
+      info: false,
+    });
+  }
+  for (const struct of ["unused1", "unused2"]) {
     const key = `${region}:${struct}`;
     entries.set(key, {
       key,
       region,
       sector: region,
       struct,
-      c_action: currentAction,
+      c_action: { id: `${region}-${struct}`, reqs: {} },
       info: false,
     });
   }
@@ -60,6 +80,29 @@ function powerExecutorFixture(region = "city", structId = "coal_power") {
   let replaced;
   let saveSupply = false;
   const logs = [];
+  const phases = new Map();
+  const counts = new Map();
+  let clock = 0;
+  const diagnostics = {
+    readPerformanceEnabled: () => true,
+    nowMs: () => ++clock,
+    recordPerformance(phase) {
+      phases.set(phase, (phases.get(phase) ?? 0) + 1);
+    },
+    recordCount(name, amount) {
+      counts.set(name, (counts.get(name) ?? 0) + amount);
+    },
+  };
+  const nativeMechanics = install.mechanics;
+  let readStructureEntries = () => nativeMechanics.readStructures();
+  let semanticScanCount = 0;
+  const mechanics = {
+    ...nativeMechanics,
+    readStructures() {
+      semanticScanCount++;
+      return readStructureEntries();
+    },
+  };
   const session = createCapturedPowerExecutor({
     rootState: {
       readRoot: () => root,
@@ -69,7 +112,7 @@ function powerExecutorFixture(region = "city", structId = "coal_power") {
       },
     },
     controls: { capturedElementIds: () => [], resolve: () => undefined },
-    mechanics: install.mechanics,
+    mechanics,
     readMechSaveSupply: () => saveSupply,
     setMechSaveSupply(expected, value) {
       if (expected !== saveSupply) return false;
@@ -77,33 +120,58 @@ function powerExecutorFixture(region = "city", structId = "coal_power") {
       return true;
     },
     log: (message) => logs.push(message),
+    diagnostics,
   });
-  const adjust = (expectedStateOn, amount) => ({
-    kind: "adjust-building",
-    buildingId: structId,
-    binding,
-    expectedStateOn,
-    amount,
-  });
+  const adjust = (expectedStateOn, amount, index = 0) => {
+    const spec = buildingSpecs[index];
+    return {
+      kind: "adjust-building",
+      buildingId: spec.structId,
+      binding: `${spec.region}-${spec.structId}`,
+      expectedStateOn,
+      amount,
+    };
+  };
   const execute = (...operations) =>
     session.executor.execute({
       kind: "apply-power-cycle",
-      expectedBuildings: [{ id: structId, binding }],
+      expectedBuildings: buildingSpecs.map((spec) => ({
+        id: spec.structId,
+        binding: `${spec.region}-${spec.structId}`,
+      })),
       operations,
     });
   return {
     runCallbacks,
     page,
     root,
-    action,
+    action: actions[0],
+    actions,
     callbacks,
+    entries,
     session,
     adjust,
     execute,
+    counts,
+    phases,
+    semanticScanCount: () => semanticScanCount,
+    setStructureReader: (reader) => {
+      readStructureEntries = reader;
+    },
     period: () => period(),
     replaced: () => replaced(),
+    replaceRoot: (replacement) => {
+      root = replacement;
+      replaced();
+    },
     saveSupply: () => saveSupply,
     logs,
+    primeCallbackQueue() {
+      callbacks.set([actions[0], "postPower"], [true]);
+      callbacks.clear();
+      runCallbacks();
+      period();
+    },
     install,
   };
 }
@@ -283,4 +351,161 @@ assert.equal(
 );
 assert.equal(ambiguousStartup.root.city.coal_power.on, 1);
 ambiguousStartup.install.uninstall();
+
+const multiple = powerExecutorFixture("city", "coal_power", [
+  "oil_power",
+  "fission_power",
+]);
+multiple.primeCallbackQueue();
+assert.equal(
+  multiple.execute(
+    multiple.adjust(1, 2, 0),
+    multiple.adjust(1, -1, 1),
+    multiple.adjust(1, 1, 2),
+  ).status,
+  "succeeded",
+  "distinct switches use the initial catalog and verify each target",
+);
+assert.equal(multiple.root.city.coal_power.on, 3);
+assert.equal(multiple.root.city.oil_power.on, 0);
+assert.equal(multiple.root.city.fission_power.on, 2);
+assert.equal(multiple.semanticScanCount(), 1);
+assert.equal(
+  multiple.counts.get("autoPower.execute.fullSemanticBuildingScans"),
+  1,
+);
+assert.equal(
+  multiple.counts.get("autoPower.execute.cycleSemanticBuildingScans"),
+  1,
+);
+assert.equal(multiple.counts.get("autoPower.execute.targetRereads"), 6);
+assert.equal(
+  multiple.counts.get("autoPower.execute.buildingSwitchOperations"),
+  3,
+);
+assert.equal(multiple.phases.get("autoPower.execute.initialBuildingSample"), 1);
+assert.equal(multiple.phases.get("autoPower.execute.targetRead"), 6);
+
+const repeatedBinding = powerExecutorFixture();
+repeatedBinding.primeCallbackQueue();
+assert.equal(
+  repeatedBinding.execute(
+    repeatedBinding.adjust(1, 2),
+    repeatedBinding.adjust(3, -1),
+  ).status,
+  "succeeded",
+  "sequential operations against one binding chain through planned state",
+);
+assert.equal(repeatedBinding.root.city.coal_power.on, 2);
+assert.equal(repeatedBinding.semanticScanCount(), 1);
+
+const changedBeforeSwitch = powerExecutorFixture();
+changedBeforeSwitch.root.city.coal_power.on = 2;
+assert.equal(
+  changedBeforeSwitch.execute(changedBeforeSwitch.adjust(1, 1)).status,
+  "stale",
+);
+assert.equal(changedBeforeSwitch.root.city.coal_power.on, 2);
+assert.equal(changedBeforeSwitch.semanticScanCount(), 1);
+
+const preflightFailure = powerExecutorFixture("city", "coal_power", [
+  "oil_power",
+]);
+preflightFailure.primeCallbackQueue();
+preflightFailure.actions[1].on_cap = () => Number.NaN;
+assert.equal(
+  preflightFailure.execute(
+    preflightFailure.adjust(1, 1, 0),
+    preflightFailure.adjust(1, 1, 1),
+  ).status,
+  "stale",
+  "a later native preflight failure prevents earlier planned switches",
+);
+assert.equal(preflightFailure.root.city.coal_power.on, 1);
+assert.equal(preflightFailure.root.city.oil_power.on, 1);
+
+const ambiguousIdentity = powerExecutorFixture();
+ambiguousIdentity.primeCallbackQueue();
+const uniqueStructures = ambiguousIdentity.install.mechanics.readStructures();
+const coalStructure = uniqueStructures.find(
+  (structure) => structure.entryKey === "city:coal_power",
+);
+ambiguousIdentity.setStructureReader(() => [
+  ...uniqueStructures,
+  coalStructure,
+]);
+assert.equal(
+  ambiguousIdentity.execute(ambiguousIdentity.adjust(1, 1)).status,
+  "stale",
+  "a non-unique initial structure identity fails closed",
+);
+assert.equal(ambiguousIdentity.root.city.coal_power.on, 1);
+assert.equal(ambiguousIdentity.semanticScanCount(), 1);
+
+const driftingIdentity = powerExecutorFixture();
+driftingIdentity.primeCallbackQueue();
+let availabilityReads = 0;
+driftingIdentity.action.condition = () => {
+  availabilityReads++;
+  if (availabilityReads === 2)
+    driftingIdentity.entries.delete("city:coal_power");
+  return true;
+};
+assert.equal(
+  driftingIdentity.execute(driftingIdentity.adjust(1, 1)).status,
+  "stale",
+  "a target structure that disappears during execution is not reused",
+);
+assert.equal(driftingIdentity.root.city.coal_power.on, 1);
+assert.equal(driftingIdentity.semanticScanCount(), 1);
+
+const replacedStructureIdentity = powerExecutorFixture();
+replacedStructureIdentity.primeCallbackQueue();
+replacedStructureIdentity.root.portal = {
+  coal_power: { count: 8, on: 1 },
+};
+replacedStructureIdentity.action.condition = () => {
+  const entry = replacedStructureIdentity.entries.get("city:coal_power");
+  replacedStructureIdentity.entries.set("city:coal_power", {
+    ...entry,
+    region: "portal",
+  });
+  return true;
+};
+assert.equal(
+  replacedStructureIdentity.execute(replacedStructureIdentity.adjust(1, 1))
+    .status,
+  "stale",
+  "same-key structure coordinate drift fails before native mutation",
+);
+assert.equal(replacedStructureIdentity.root.city.coal_power.on, 1);
+assert.equal(
+  replacedStructureIdentity.root.portal.coal_power.on,
+  1,
+  "the replacement structure is never switched through a stale snapshot",
+);
+
+const replacedRoot = powerExecutorFixture();
+replacedRoot.primeCallbackQueue();
+const newRoot = {
+  ...replacedRoot.root,
+  city: {
+    ...replacedRoot.root.city,
+    coal_power: { ...replacedRoot.root.city.coal_power },
+  },
+};
+let rootAvailabilityReads = 0;
+replacedRoot.action.condition = () => {
+  rootAvailabilityReads++;
+  if (rootAvailabilityReads === 2) replacedRoot.replaceRoot(newRoot);
+  return true;
+};
+assert.equal(
+  replacedRoot.execute(replacedRoot.adjust(1, 1)).status,
+  "stale",
+  "root replacement during a target read aborts the execution",
+);
+assert.equal(replacedRoot.root.city.coal_power.on, 1);
+assert.equal(newRoot.city.coal_power.on, 1);
+
 console.log("captured Power executor tests passed");

@@ -5,6 +5,7 @@
 import type {
   CapturedGameRead,
   CapturedGameMechanics,
+  CapturedGameStructureDefinition,
 } from "../../../../ports/captured-game-mechanics.ts";
 import type { GameControlRegistry } from "../../../../ports/game-control-registry.ts";
 import { isNonArrayRecord, readProperty } from "../../../validation.ts";
@@ -13,6 +14,14 @@ import {
   readCapturedBuildingState,
   type CapturedBuildingState,
 } from "./captured-building-state.ts";
+
+export interface CapturedSemanticBuildingSample {
+  readonly buildings: readonly CapturedBuildingState[];
+  readCurrent(expected: {
+    readonly id: string;
+    readonly binding: string;
+  }): CapturedBuildingState | undefined;
+}
 
 export function readCapturedActionAvailability(
   root: unknown,
@@ -149,14 +158,39 @@ export function readCapturedActionAvailability(
   }
 }
 
-export function readCapturedSemanticBuildingStates(
+export function readCapturedSemanticBuildingSample(
   root: unknown,
   controls: GameControlRegistry,
   mechanics: CapturedGameMechanics,
-): readonly CapturedBuildingState[] | undefined {
+  isCurrent: () => boolean = () => true,
+): CapturedSemanticBuildingSample | undefined {
   const structures = mechanics.readStructures();
   if (structures === undefined) return undefined;
+  const structuresByAction = new Map<
+    string,
+    CapturedGameStructureDefinition[]
+  >();
+  const structuresByActionAndEntryKey = new Map<
+    string,
+    Map<string, CapturedGameStructureDefinition[]>
+  >();
+  for (const structure of structures) {
+    const actionMatches = structuresByAction.get(structure.actionId);
+    if (actionMatches === undefined)
+      structuresByAction.set(structure.actionId, [structure]);
+    else actionMatches.push(structure);
+    let keyedMatches = structuresByActionAndEntryKey.get(structure.actionId);
+    if (keyedMatches === undefined) {
+      keyedMatches = new Map();
+      structuresByActionAndEntryKey.set(structure.actionId, keyedMatches);
+    }
+    const entryMatches = keyedMatches.get(structure.entryKey);
+    if (entryMatches === undefined)
+      keyedMatches.set(structure.entryKey, [structure]);
+    else entryMatches.push(structure);
+  }
   const result: CapturedBuildingState[] = [];
+  const statesByBinding = new Map<string, CapturedBuildingState>();
   // The complete registry defines Power identities and discovery fallback order. Controls do not
   // promote unmanaged actions or mutate native grid order.
   const semanticCatalog = readCapturedBuildingEntries(
@@ -165,12 +199,11 @@ export function readCapturedSemanticBuildingStates(
     structures,
   );
   for (const entry of semanticCatalog) {
-    const candidates = structures.filter(
-      (structure) =>
-        structure.actionId === entry.binding &&
-        (entry.entryKey === undefined || structure.entryKey === entry.entryKey),
-    );
-    if (candidates.length !== 1) return undefined;
+    const candidates =
+      entry.entryKey === undefined
+        ? structuresByAction.get(entry.binding)
+        : structuresByActionAndEntryKey.get(entry.binding)?.get(entry.entryKey);
+    if (candidates === undefined || candidates.length !== 1) return undefined;
     const structure = candidates[0]!;
     const available = structure.readAvailability(root);
     if (available.kind !== "value") return undefined;
@@ -181,7 +214,54 @@ export function readCapturedSemanticBuildingStates(
       available.value,
     );
     if (state === undefined) return undefined;
+    if (statesByBinding.has(entry.binding)) return undefined;
+    statesByBinding.set(entry.binding, state);
     result.push(state);
   }
-  return Object.freeze(result);
+  const buildings = Object.freeze(result);
+  return Object.freeze({
+    buildings,
+    readCurrent(expected: {
+      readonly id: string;
+      readonly binding: string;
+    }): CapturedBuildingState | undefined {
+      if (!isCurrent()) return undefined;
+      const sampled = statesByBinding.get(expected.binding);
+      const structure = sampled?.structure;
+      if (
+        sampled === undefined ||
+        sampled.catalog.id !== expected.id ||
+        structure === undefined ||
+        !structure.matchesCurrentIdentity()
+      )
+        return undefined;
+      const liveState = readProperty(
+        readProperty(root, structure.region),
+        structure.struct,
+      );
+      if (liveState !== sampled.catalog.state) return undefined;
+      const currentAvailability = structure.readAvailability(root);
+      if (currentAvailability.kind !== "value") return undefined;
+      const current = readCapturedBuildingState(
+        root,
+        sampled.catalog,
+        structure,
+        currentAvailability.value,
+      );
+      return current !== undefined &&
+        isCurrent() &&
+        structure.matchesCurrentIdentity()
+        ? current
+        : undefined;
+    },
+  });
+}
+
+export function readCapturedSemanticBuildingStates(
+  root: unknown,
+  controls: GameControlRegistry,
+  mechanics: CapturedGameMechanics,
+): readonly CapturedBuildingState[] | undefined {
+  return readCapturedSemanticBuildingSample(root, controls, mechanics)
+    ?.buildings;
 }
