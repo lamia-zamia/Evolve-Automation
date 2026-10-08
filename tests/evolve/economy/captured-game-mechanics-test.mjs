@@ -709,6 +709,37 @@ const reorderedRoot = {
     moon: [second.key, "stale:support", first.key, "not-captured:entry"],
   },
 };
+const orderSnapshot = capture.mechanics.readStructures();
+assert.ok(orderSnapshot);
+const orderSnapshotByEntryKey = new Map(
+  orderSnapshot.map((entry) => [entry.entryKey, entry]),
+);
+const snapshotPowerOrder = capture.mechanics.readPowerOrder(
+  reorderedRoot,
+  orderSnapshotByEntryKey,
+);
+assert.equal(snapshotPowerOrder.kind, "value");
+assert.equal(
+  snapshotPowerOrder.value[0],
+  orderSnapshotByEntryKey.get(fourth.key),
+  "snapshot-aware Power order returns the exact supplied definition",
+);
+assert.deepEqual(
+  snapshotPowerOrder.value.map((entry) => entry.entryKey),
+  [fourth.key, first.key, second.key],
+  "the supplied native order C/A-style sequence remains authoritative",
+);
+const snapshotSupportOrder = capture.mechanics.readSupportOrder(
+  reorderedRoot,
+  "moon",
+  orderSnapshotByEntryKey,
+);
+assert.equal(snapshotSupportOrder.kind, "value");
+assert.equal(
+  snapshotSupportOrder.value[0],
+  orderSnapshotByEntryKey.get(second.key),
+  "snapshot-aware support order returns the exact supplied definition",
+);
 assert.deepEqual(
   capture.mechanics
     .readPowerOrder(reorderedRoot)
@@ -729,6 +760,14 @@ assert.deepEqual(capture.mechanics.readPowerOrder({ power: "bad" }), {
 assert.deepEqual(capture.mechanics.readSupportOrder({}, "moon"), {
   kind: "absent",
 });
+assert.deepEqual(
+  capture.mechanics.readPowerOrder(
+    { power: [fourth.key, fourth.key] },
+    orderSnapshotByEntryKey,
+  ),
+  { kind: "invalid" },
+  "snapshot-aware order resolution rejects duplicate keys",
+);
 
 const currentGridRoot = {
   space: { relay: { on: 1 } },

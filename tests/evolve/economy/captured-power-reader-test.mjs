@@ -22,6 +22,7 @@ import { readCapturedMechState } from "../../../src/domain/combat/mech-state.ts"
 import { readCapturedMechQueueKeyHeld } from "../../../src/adapters/evolve/combat/captured-mech.ts";
 import { EMPTY_DEMAND_SAMPLE } from "../../../src/adapters/evolve/economy/resources/captured-resource-demand.ts";
 import { readCapturedBuildingState } from "../../../src/adapters/evolve/progression/build/captured-building-state.ts";
+import { readCapturedSemanticBuildingSampleFromStructures } from "../../../src/adapters/evolve/progression/build/captured-building-availability.ts";
 import { createCapturedOrdinaryJobsAutomation } from "../../../src/adapters/evolve/civic/captured-ordinary-jobs.ts";
 import { createSettingsFixture } from "../../support/captured-settings.mjs";
 
@@ -53,6 +54,7 @@ function structure({
   workers,
   shipRating,
   checkPowerMembership = false,
+  matchesCurrentIdentity = () => true,
 }) {
   // Arbitrary fixture actions belong to the automation catalog through captured controls.
   // This one deliberately represents an upstream-only registry action.
@@ -66,7 +68,7 @@ function structure({
     sector,
     struct,
     actionId,
-    matchesCurrentIdentity: () => true,
+    matchesCurrentIdentity,
     readAvailability: () => ({ kind: "value", value: true }),
     readTitle: () => ({ kind: "value", value: title }),
     readDescription: () => ({ kind: "value", value: description }),
@@ -540,6 +542,7 @@ const resources = createResources(root);
 
 function createMechanics({
   structures: structureSample = structures,
+  getStructures = () => structureSample,
   productionBreakdown = {
     production: { Global: { "Mejora global": "20%" } },
     consumption: {},
@@ -559,15 +562,27 @@ function createMechanics({
   // `support_on` value independently, as DeadSpace @ db38e2af writes it.
   effectiveSupport = (sample, member) =>
     sample?.[member.region]?.[member.struct]?.on,
+  onStructuresRead = () => {},
+  onPowerOrder = () => {},
+  onSupportOrder = () => {},
 } = {}) {
-  const byKey = new Map(structureSample.map((item) => [item.entryKey, item]));
+  const readSample = () => getStructures();
   const resolve = (keys) =>
-    Object.freeze(
-      keys.flatMap((key) => {
-        const item = byKey.get(key);
-        return item === undefined ? [] : [item];
-      }),
-    );
+    Array.isArray(keys) && new Set(keys).size === keys.length
+      ? {
+          kind: "value",
+          value: Object.freeze(
+            keys.flatMap((key) => {
+              const item = new Map(
+                readSample().map((member) => [member.entryKey, member]),
+              ).get(key);
+              return item === undefined ? [] : [item];
+            }),
+          ),
+        }
+      : { kind: "invalid" };
+  const currentByKey = (key) =>
+    readSample().find((item) => item.entryKey === key);
   return Object.freeze({
     adjustPower(
       sample,
@@ -577,7 +592,7 @@ function createMechanics({
       isCurrent = () => true,
       preflightOnly = false,
     ) {
-      const member = byKey.get(entryKey);
+      const member = currentByKey(entryKey);
       const state =
         member === undefined
           ? undefined
@@ -587,20 +602,32 @@ function createMechanics({
       if (!preflightOnly) state.on = target;
       return { kind: "value", value: true };
     },
-    readStructures: () => structureSample,
-    readPowerOrder: (sample) =>
-      Array.isArray(powerOrder(sample))
-        ? { kind: "value", value: resolve(powerOrder(sample)) }
-        : { kind: "invalid" },
+    readStructures: () => {
+      onStructuresRead();
+      return readSample();
+    },
+    readPowerOrder: (sample, structuresByEntryKey) => {
+      onPowerOrder();
+      const result = resolve(powerOrder(sample));
+      return result.kind !== "value" || structuresByEntryKey === undefined
+        ? result
+        : {
+            kind: "value",
+            value: Object.freeze(
+              result.value.map(
+                (member) => structuresByEntryKey.get(member.entryKey) ?? member,
+              ),
+            ),
+          };
+    },
     readSupportOrder: (sample, type) => {
+      onSupportOrder(type);
       const order = supportOrder(sample, type);
-      return Array.isArray(order)
-        ? { kind: "value", value: resolve(order) }
-        : { kind: "invalid" };
+      return resolve(order);
     },
     readProductionBreakdown: () => productionBreakdown,
     readEffectivePowerCount: (sample, key) => {
-      const member = byKey.get(key);
+      const member = currentByKey(key);
       const effective =
         member === undefined ? undefined : effectivePower(sample, member);
       return typeof effective === "number"
@@ -608,7 +635,7 @@ function createMechanics({
         : { kind: "invalid" };
     },
     readEffectiveSupportCount: (sample, key) => {
-      const member = byKey.get(key);
+      const member = currentByKey(key);
       if (member === undefined) return { kind: "invalid" };
       const effective = effectiveSupport(sample, member);
       return typeof effective === "number"
@@ -655,6 +682,19 @@ assert.ok(
   "complete captured mechanics and live state produce a full cycle",
 );
 assert.ok(Object.isFrozen(cycle) && Object.isFrozen(cycle.buildings));
+const suppliedSemanticSample = readCapturedSemanticBuildingSampleFromStructures(
+  root,
+  fakeControls,
+  structures,
+);
+assert.ok(suppliedSemanticSample);
+assert.equal(
+  suppliedSemanticSample.buildings.find(
+    (building) => building.catalog.binding === "city-coal_power",
+  )?.structure,
+  structures.find((member) => member.entryKey === "city:coal_power"),
+  "semantic Building sampling retains the exact supplied structure object",
+);
 assert.equal(
   cycle.buildings.find((building) => building.binding === "city-bank")?.powered,
   5,
@@ -667,6 +707,170 @@ assert.equal(
   -12,
   "a new native generator is managed without Power binding metadata",
 );
+
+// The production read cycle uses one call-scoped structure set for semantic state and all native
+// orders, and resolves every native support list only once per support type.
+{
+  let structureReads = 0;
+  let powerReads = 0;
+  const supportReads = new Map();
+  const baseMechanics = createMechanics({
+    onStructuresRead: () => structureReads++,
+    onPowerOrder: () => powerReads++,
+    onSupportOrder: (type) =>
+      supportReads.set(type, (supportReads.get(type) ?? 0) + 1),
+  });
+  const identityMechanics = {
+    ...baseMechanics,
+    readPowerOrder(sample, byEntryKey) {
+      const resolved = baseMechanics.readPowerOrder(sample, byEntryKey);
+      assert.equal(resolved.kind, "value");
+      for (const member of resolved.value) {
+        assert.equal(
+          member,
+          byEntryKey.get(member.entryKey),
+          "Power order returns exact snapshot definitions",
+        );
+      }
+      return resolved;
+    },
+    readSupportOrder(sample, type, byEntryKey) {
+      const resolved = baseMechanics.readSupportOrder(sample, type, byEntryKey);
+      assert.equal(resolved.kind, "value");
+      for (const member of resolved.value) {
+        assert.equal(
+          member,
+          byEntryKey.get(member.entryKey),
+          "support order returns exact snapshot definitions",
+        );
+      }
+      return resolved;
+    },
+  };
+  const phases = new Map();
+  const counts = new Map();
+  let now = 0;
+  const reader = createCapturedPowerReader({
+    ...readerDependencies,
+    mechanics: identityMechanics,
+    diagnostics: {
+      readPerformanceEnabled: () => true,
+      nowMs: () => now++,
+      recordPerformance: (phase, duration) => phases.set(phase, duration),
+      recordCount: (name, amount) =>
+        counts.set(name, (counts.get(name) ?? 0) + amount),
+    },
+  });
+  assert.ok(reader.readCycle());
+  assert.equal(structureReads, 1);
+  assert.equal(powerReads, 1);
+  assert.deepEqual(
+    [...supportReads.entries()].sort(),
+    [
+      ["gateway", 1],
+      ["moon", 1],
+      ["red", 1],
+    ],
+    "each discovered support type is resolved once per cycle",
+  );
+  assert.equal(counts.get("autoPower.readCycle.structureRegistryReads"), 1);
+  assert.equal(counts.get("autoPower.readCycle.powerOrderResolutions"), 1);
+  assert.equal(counts.get("autoPower.readCycle.supportOrderResolutions"), 3);
+  for (const phase of [
+    "autoPower.readCycle.structures",
+    "autoPower.readCycle.semanticBuildings",
+    "autoPower.readCycle.nativeOrdering",
+    "autoPower.readCycle.nativeSupports",
+  ])
+    assert.ok(phases.has(phase), `records ${phase}`);
+}
+
+// Native saved order validation still rejects duplicates and skips stale keys absent from the
+// retained registry, matching resolveCapturedStructureOrder's production contract.
+{
+  const mechanics = createMechanics();
+  const snapshotIndex = new Map(
+    structures.map((member) => [member.entryKey, member]),
+  );
+  assert.equal(
+    mechanics.readPowerOrder(
+      { ...root, power: [...root.power, root.power[0]] },
+      snapshotIndex,
+    ).kind,
+    "invalid",
+  );
+  const withStaleKey = mechanics.readPowerOrder(
+    { ...root, power: [...root.power, "stale:new-power"] },
+    snapshotIndex,
+  );
+  assert.equal(withStaleKey.kind, "value");
+  assert.equal(
+    withStaleKey.value.length,
+    root.power.filter((key) => snapshotIndex.has(key)).length,
+    "stale saved order keys are ignored as before",
+  );
+}
+
+// The per-cycle structure snapshot is discarded after each read; the next cycle sees the updated
+// registry ordering. An identity change observed during a cycle fails closed.
+{
+  let activeStructures = structures;
+  let structureReads = 0;
+  const mechanics = createMechanics({
+    getStructures: () => activeStructures,
+    onStructuresRead: () => structureReads++,
+  });
+  const reader = createCapturedPowerReader({
+    ...readerDependencies,
+    mechanics,
+  });
+  assert.ok(reader.readCycle());
+  activeStructures = Object.freeze([...structures].reverse());
+  assert.ok(reader.readCycle());
+  assert.equal(structureReads, 2);
+
+  const duplicateRegistryReader = createCapturedPowerReader({
+    ...readerDependencies,
+    mechanics: createMechanics({
+      structures: Object.freeze([...structures, structures[0]]),
+    }),
+  });
+  assert.equal(
+    duplicateRegistryReader.readCycle(),
+    undefined,
+    "duplicate snapshot entry keys fail closed",
+  );
+
+  let current = true;
+  const drifting = Object.freeze([
+    structure({
+      entryKey: structures[0].entryKey,
+      region: structures[0].region,
+      sector: structures[0].sector,
+      struct: structures[0].struct,
+      actionId: structures[0].actionId,
+      powered: 15,
+      matchesCurrentIdentity: () => current,
+    }),
+    ...structures.slice(1),
+  ]);
+  const driftMechanics = createMechanics({
+    structures: drifting,
+    onPowerOrder: () => {
+      current = false;
+    },
+  });
+  const driftReader = createCapturedPowerReader({
+    ...readerDependencies,
+    mechanics: driftMechanics,
+  });
+  assert.equal(driftReader.readCycle(), undefined);
+  assert.equal(
+    driftReader.readUnavailableReason().authority,
+    "building-state",
+    "identity drift makes semantic Building sampling unavailable",
+  );
+}
 assert.deepEqual(
   cycle.buildings.map((building) => building.binding),
   [
@@ -3074,6 +3278,30 @@ assert.ok(
   specialCycle,
   "the complete special-rule fixture yields a captured Power cycle",
 );
+{
+  let structureReads = 0;
+  const originalMechanics = specialReaderDependencies.mechanics;
+  const fallbackMechanics = {
+    ...originalMechanics,
+    readStructures() {
+      structureReads++;
+      return originalMechanics.readStructures();
+    },
+  };
+  const fallbackReader = createCapturedPowerReader({
+    ...specialReaderDependencies,
+    mechanics: fallbackMechanics,
+    readPurifierDescription: undefined,
+  });
+  const fallbackCycle = fallbackReader.readCycle();
+  assert.ok(fallbackCycle?.spire.available);
+  assert.equal(structureReads, 1);
+  assert.equal(
+    fallbackCycle.spire.purifierDescription,
+    specialCycle.spire.purifierDescription,
+    "purifier description fallback reads the definition in the current cycle snapshot",
+  );
+}
 const lateBeltMaximum = specialRoot.space.space_station.s_max;
 const lateMinerWorkers = specialRoot.civic.space_miner.workers;
 specialRoot.space.space_station.s_max = 0;

@@ -2704,6 +2704,7 @@ export function startCapturedRuntime({
   const powerReader = createCapturedPowerReader({
     rootState: pageCapture.rootState,
     mechanics: pageCapture.mechanics,
+    ...(diagnostics === undefined ? {} : { diagnostics }),
     readJobCounts: ordinaryJobs.readJobCounts,
     readProspectiveSpaceMiners: (root) => {
       const plan = prospectiveSpaceMinerPlan;

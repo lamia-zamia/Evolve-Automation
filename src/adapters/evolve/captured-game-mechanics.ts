@@ -1146,6 +1146,7 @@ function emptyGameMechanics(): CapturedGameMechanics {
 function resolveCapturedStructureOrder(
   registry: Map<unknown, unknown>,
   rawOrder: unknown,
+  structuresByEntryKey?: ReadonlyMap<string, CapturedGameStructureDefinition>,
 ): CapturedGameRead<readonly CapturedGameStructureDefinition[]> {
   if (!Array.isArray(rawOrder)) return { kind: "invalid" };
   const result: CapturedGameStructureDefinition[] = [];
@@ -1158,9 +1159,19 @@ function resolveCapturedStructureOrder(
       const candidate = registry.get(key);
       // A stale root-list key has no live registry entry and is ignored by support processing.
       if (candidate === undefined) continue;
-      const entry = readMechanicsEntry(key, candidate);
-      if (entry === undefined) return { kind: "invalid" };
-      result.push(createMechanicsDefinition(entry, registry, candidate));
+      if (structuresByEntryKey === undefined) {
+        const entry = readMechanicsEntry(key, candidate);
+        if (entry === undefined) return { kind: "invalid" };
+        result.push(createMechanicsDefinition(entry, registry, candidate));
+      } else {
+        const snapshotDefinition = structuresByEntryKey.get(key);
+        if (
+          snapshotDefinition === undefined ||
+          !snapshotDefinition.matchesCurrentIdentity()
+        )
+          return { kind: "invalid" };
+        result.push(snapshotDefinition);
+      }
     }
     return { kind: "value", value: Object.freeze(result) };
   } catch {
@@ -2128,17 +2139,25 @@ export function installCapturedGameMechanics(
     },
     readPowerOrder(
       root: unknown,
+      structuresByEntryKey?: ReadonlyMap<
+        string,
+        CapturedGameStructureDefinition
+      >,
     ): CapturedGameRead<readonly CapturedGameStructureDefinition[]> {
       const entries = structureEntries;
       if (entries === undefined || stopped) return { kind: "invalid" };
       const order = readMechanicsProperty(root, "power");
       return order === undefined
         ? { kind: "absent" }
-        : resolveCapturedStructureOrder(entries, order);
+        : resolveCapturedStructureOrder(entries, order, structuresByEntryKey);
     },
     readSupportOrder(
       root: unknown,
       type: string,
+      structuresByEntryKey?: ReadonlyMap<
+        string,
+        CapturedGameStructureDefinition
+      >,
     ): CapturedGameRead<readonly CapturedGameStructureDefinition[]> {
       const entries = structureEntries;
       if (entries === undefined || stopped) return { kind: "invalid" };
@@ -2147,7 +2166,7 @@ export function installCapturedGameMechanics(
       const order = readMechanicsProperty(support, type);
       return order === undefined
         ? { kind: "absent" }
-        : resolveCapturedStructureOrder(entries, order);
+        : resolveCapturedStructureOrder(entries, order, structuresByEntryKey);
     },
     readProductionBreakdown(): CapturedProductionBreakdown | undefined {
       const owner = productionBreakdownOwner;

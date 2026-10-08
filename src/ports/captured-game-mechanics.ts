@@ -192,11 +192,13 @@ export interface CapturedGameMechanics {
   /** Resolve the live root Power list; unknown/stale keys are skipped, never Map-ordered. */
   readPowerOrder(
     root: unknown,
+    structuresByEntryKey?: ReadonlyMap<string, CapturedGameStructureDefinition>,
   ): CapturedGameRead<readonly CapturedGameStructureDefinition[]>;
   /** Resolve one live root support list with the same full-key ordering semantics. */
   readSupportOrder(
     root: unknown,
     type: string,
+    structuresByEntryKey?: ReadonlyMap<string, CapturedGameStructureDefinition>,
   ): CapturedGameRead<readonly CapturedGameStructureDefinition[]>;
   /** `undefined` means the private production ledger has not been captured or validated. */
   readProductionBreakdown(): CapturedProductionBreakdown | undefined;

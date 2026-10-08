@@ -1953,7 +1953,15 @@
   }
   function readCapturedSemanticBuildingSample(root, controls2, mechanics, isCurrent = () => !0) {
     let structures = mechanics.readStructures();
-    if (structures === void 0) return;
+    if (structures !== void 0)
+      return readCapturedSemanticBuildingSampleFromStructures(
+        root,
+        controls2,
+        structures,
+        isCurrent
+      );
+  }
+  function readCapturedSemanticBuildingSampleFromStructures(root, controls2, structures, isCurrent = () => !0) {
     let structuresByAction = /* @__PURE__ */ new Map(), structuresByActionAndEntryKey = /* @__PURE__ */ new Map();
     for (let structure of structures) {
       let actionMatches = structuresByAction.get(structure.actionId);
@@ -1982,6 +1990,7 @@
       if (state === void 0 || statesByBinding.has(entry.binding)) return;
       statesByBinding.set(entry.binding, state), result.push(state);
     }
+    if (!isCurrent()) return;
     let buildings = Object.freeze(result);
     return Object.freeze({
       buildings,
@@ -2681,7 +2690,7 @@
       readGuardPostRating: () => ({ kind: "invalid" })
     });
   }
-  function resolveCapturedStructureOrder(registry, rawOrder) {
+  function resolveCapturedStructureOrder(registry, rawOrder, structuresByEntryKey) {
     if (!Array.isArray(rawOrder)) return { kind: "invalid" };
     let result = [], seen = /* @__PURE__ */ new Set();
     try {
@@ -2690,10 +2699,17 @@
         if (seen.has(key)) return { kind: "invalid" };
         seen.add(key);
         let candidate = registry.get(key);
-        if (candidate === void 0) continue;
-        let entry = readMechanicsEntry(key, candidate);
-        if (entry === void 0) return { kind: "invalid" };
-        result.push(createMechanicsDefinition(entry, registry, candidate));
+        if (candidate !== void 0)
+          if (structuresByEntryKey === void 0) {
+            let entry = readMechanicsEntry(key, candidate);
+            if (entry === void 0) return { kind: "invalid" };
+            result.push(createMechanicsDefinition(entry, registry, candidate));
+          } else {
+            let snapshotDefinition = structuresByEntryKey.get(key);
+            if (snapshotDefinition === void 0 || !snapshotDefinition.matchesCurrentIdentity())
+              return { kind: "invalid" };
+            result.push(snapshotDefinition);
+          }
       }
       return { kind: "value", value: Object.freeze(result) };
     } catch {
@@ -3159,19 +3175,19 @@
             return;
           }
       },
-      readPowerOrder(root) {
+      readPowerOrder(root, structuresByEntryKey) {
         let entries = structureEntries;
         if (entries === void 0 || stopped) return { kind: "invalid" };
         let order = readMechanicsProperty(root, "power");
-        return order === void 0 ? { kind: "absent" } : resolveCapturedStructureOrder(entries, order);
+        return order === void 0 ? { kind: "absent" } : resolveCapturedStructureOrder(entries, order, structuresByEntryKey);
       },
-      readSupportOrder(root, type) {
+      readSupportOrder(root, type, structuresByEntryKey) {
         let entries = structureEntries;
         if (entries === void 0 || stopped) return { kind: "invalid" };
         let support = readMechanicsProperty(root, "support");
         if (support === void 0) return { kind: "absent" };
         let order = readMechanicsProperty(support, type);
-        return order === void 0 ? { kind: "absent" } : resolveCapturedStructureOrder(entries, order);
+        return order === void 0 ? { kind: "absent" } : resolveCapturedStructureOrder(entries, order, structuresByEntryKey);
       },
       readProductionBreakdown() {
         let owner = productionBreakdownOwner;
@@ -29697,11 +29713,19 @@
     let region = readProperty(root, structure.region);
     return readProperty(region, structure.struct);
   }
-  function readOrderedMechanics(root, mechanics, structures) {
-    let powerOrder = mechanics.readPowerOrder(root);
-    if (powerOrder.kind !== "value") return;
-    let types = /* @__PURE__ */ new Set();
+  function createCapturedPowerMechanicsSnapshot(structures, root, rootState) {
+    let byEntryKey = /* @__PURE__ */ new Map();
     for (let structure of structures) {
+      if (byEntryKey.has(structure.entryKey)) return;
+      byEntryKey.set(structure.entryKey, structure);
+    }
+    return Object.freeze({ structures, byEntryKey, isCurrent: () => rootState.readRoot() === root && structures.every((structure) => structure.matchesCurrentIdentity()) });
+  }
+  function readOrderedMechanics(root, mechanics, snapshot2, count2) {
+    let powerOrder = mechanics.readPowerOrder(root, snapshot2.byEntryKey);
+    if (count2("autoPower.readCycle.powerOrderResolutions"), powerOrder.kind !== "value") return;
+    let types = /* @__PURE__ */ new Set();
+    for (let structure of snapshot2.structures) {
       let support = structure.readSupport();
       if (support.kind === "invalid") return;
       if (support.kind === "absent") continue;
@@ -29712,19 +29736,27 @@
       let provider = structure.readSupportProvider(), topology = structure.readSupportTopology();
       if (provider.kind === "invalid" || topology.kind !== "value" || topology.value.enabled.kind === "invalid") return;
     }
-    let ordered = [], seen = /* @__PURE__ */ new Set(), add = (structure) => {
+    let ordered = [], supportOrders = /* @__PURE__ */ new Map(), seen = /* @__PURE__ */ new Set(), add = (structure) => {
       seen.has(structure.entryKey) || (ordered.push(structure), seen.add(structure.entryKey));
     };
     powerOrder.value.forEach(add);
     for (let type of types) {
-      let ordered2 = mechanics.readSupportOrder(root, type);
-      if (ordered2.kind !== "value") return;
-      for (let structure of ordered2.value) {
+      let supportOrder = mechanics.readSupportOrder(
+        root,
+        type,
+        snapshot2.byEntryKey
+      );
+      if (count2("autoPower.readCycle.supportOrderResolutions"), supportOrder.kind !== "value") return;
+      supportOrders.set(type, supportOrder.value);
+      for (let structure of supportOrder.value) {
         if (structure.readSupportValue(type).kind !== "value") return;
         add(structure);
       }
     }
-    return structures.forEach(add), Object.freeze(ordered);
+    return snapshot2.structures.forEach(add), Object.freeze({
+      ordered: Object.freeze(ordered),
+      supportOrders
+    });
   }
   function readCrewReserve(raw, population) {
     if (typeof raw == "number") return Number.isFinite(raw) ? raw : 0;
@@ -29849,7 +29881,7 @@
     }
     return Object.freeze([...result.values()]);
   }
-  function readNativePowerSupports(root, mechanics, structures) {
+  function readNativePowerSupports(root, mechanics, structures, supportOrders, byEntryKey) {
     let groups = /* @__PURE__ */ new Map();
     for (let structure of structures) {
       let support = structure.readSupport();
@@ -29877,8 +29909,11 @@
         assignment !== void 0 && (typeof assignment != "number" || !Number.isFinite(assignment) || assignment > 0) && (infiltrated = !0);
       }
       if (infiltrated) continue;
-      let ordered = mechanics.readSupportOrder(root, type);
-      if (ordered.kind !== "value") return;
+      let resolvedOrder = supportOrders === void 0 ? (() => {
+        let result = mechanics.readSupportOrder(root, type, byEntryKey);
+        return result.kind === "value" ? result.value : void 0;
+      })() : supportOrders.get(type);
+      if (resolvedOrder === void 0) return;
       let consumers = [], anchorKey = null, unlimited = !1, enabled = !0;
       for (let member of members) {
         let generic = member.readSupport();
@@ -29890,11 +29925,11 @@
           return;
         anchorKey === null && topology.value.anchorEntryKey !== null && (anchorKey = topology.value.anchorEntryKey, unlimited = topology.value.unlimited, enabled = topology.value.enabled.value);
       }
-      if (ordered.value.length !== consumers.length || ordered.value.some(
+      if (resolvedOrder.length !== consumers.length || resolvedOrder.some(
         (member) => !consumers.some((consumer) => consumer.entryKey === member.entryKey)
       ))
         return;
-      let anchor = structures.find((member) => member.entryKey === anchorKey), state = anchor === void 0 ? void 0 : readCapturedStructureState(root, anchor), current = 0, maximum = 0;
+      let anchor = byEntryKey?.get(anchorKey ?? "") ?? (byEntryKey === void 0 ? structures.find((member) => member.entryKey === anchorKey) : void 0), state = anchor === void 0 ? void 0 : readCapturedStructureState(root, anchor), current = 0, maximum = 0;
       if (state != null) {
         if (!isRecord(state)) return;
         let readCurrent = readGameNumber(state, "support"), readMaximum2 = type === "belt" ? anchor?.readSupportValue(type) : null, effective = type === "belt" && anchor !== void 0 ? mechanics.readEffectivePowerCount(root, anchor.entryKey) : null, nativeMaximum = type === "belt" ? readMaximum2?.kind === "value" && effective?.kind === "value" ? readMaximum2.value * effective.value : void 0 : readGameNumber(state, "s_max");
@@ -30576,7 +30611,7 @@
     let entry = snapshot2.catalog, unlocked = snapshot2.available, gameSettings = readProperty(root, "settings");
     return (entry.region === "portal" ? readProperty(gameSettings, "showPortal") === !0 : entry.region === "space" ? readProperty(gameSettings, "showSpace") === !0 || readProperty(gameSettings, "showOuter") === !0 : entry.region === "galaxy" ? readProperty(gameSettings, "showGalactic") === !0 : entry.region === "interstellar" ? readProperty(gameSettings, "showDeep") === !0 : entry.region === "tauceti" ? readProperty(gameSettings, "showTau") === !0 : !0) && unlocked && settings.autoPower === !0 && settings[`bld_s_${binding}`] === !0 && capturedPowerSmartEnabled(binding, settings);
   }
-  function readLakeAndSpire(root, settings, runtime, allRecords, resourceMap, dependencies, mechState, buildingStates, lakeEnabled, spireAvailable, spireStateBalancingEnabled) {
+  function readLakeAndSpire(root, settings, runtime, allRecords, resourceMap, dependencies, mechState, buildingStates, structures, lakeEnabled, spireAvailable, spireStateBalancingEnabled) {
     let lakeBireme = allRecords.find(
       (entry) => entry.binding === "portal-bireme"
     ), lakeTransport = allRecords.find(
@@ -30647,7 +30682,9 @@
         return Object.freeze({ lake, spire });
       let design = autoMech && mechState !== void 0 ? designAutoChoice(mechState, () => 0) : null, purifierDescription = dependencies.readPurifierDescription?.();
       if (purifierDescription === void 0) {
-        let description = dependencies.mechanics.readStructures()?.find((structure) => structure.actionId === "portal-purifier")?.readDescription();
+        let description = structures.find(
+          (structure) => structure.actionId === "portal-purifier"
+        )?.readDescription();
         if (description?.kind !== "value") return Object.freeze({ lake, spire });
         purifierDescription = description.value;
       }
@@ -30686,7 +30723,7 @@
     return Object.freeze({ lake, spire });
   }
   function readPowerCycle(root, dependencies, runtime, settings, invalidFallbacks, unavailable2) {
-    let jobCounts;
+    let measure = createPhaseMeasure(dependencies.diagnostics), tally = createCountTally(dependencies.diagnostics), jobCounts;
     try {
       jobCounts = dependencies.readJobCounts?.(root, [
         "cement_worker",
@@ -30702,27 +30739,44 @@
     }
     if (dependencies.rootState.readRoot() !== root)
       return unavailable2("root", "root changed during sampling");
-    let structures = dependencies.mechanics.readStructures(), production = dependencies.mechanics.readProductionBreakdown(), demand = dependencies.readDemand();
+    let structures = measure("autoPower.readCycle.structures", () => {
+      let captured = dependencies.mechanics.readStructures();
+      return tally.count("autoPower.readCycle.structureRegistryReads"), captured;
+    }), production = dependencies.mechanics.readProductionBreakdown(), demand = dependencies.readDemand();
     if (demand === void 0)
       return unavailable2(
         "exact-demand",
         `exact demand unavailable: ${dependencies.readDemandUnavailableReason?.() ?? "unknown prerequisite"}`
       );
-    let nativeOrder = structures === void 0 ? void 0 : readOrderedMechanics(root, dependencies.mechanics, structures);
     if (structures === void 0)
       return unavailable2("structures", "captured structures unavailable");
+    let snapshot2 = createCapturedPowerMechanicsSnapshot(
+      structures,
+      root,
+      dependencies.rootState
+    );
+    if (snapshot2 === void 0)
+      return unavailable2("structures", "captured structure identities ambiguous");
+    let nativeOrdering = measure(
+      "autoPower.readCycle.nativeOrdering",
+      () => readOrderedMechanics(root, dependencies.mechanics, snapshot2, tally.count)
+    );
     if (production === void 0)
       return unavailable2("production", "production breakdown unavailable");
-    if (nativeOrder === void 0)
+    if (nativeOrdering === void 0)
       return unavailable2(
         "native-order",
         "native Power/support order unavailable"
       );
-    let buildingStates = readCapturedSemanticBuildingStates(
-      root,
-      dependencies.controls,
-      dependencies.mechanics
-    );
+    let buildingStates = measure(
+      "autoPower.readCycle.semanticBuildings",
+      () => readCapturedSemanticBuildingSampleFromStructures(
+        root,
+        dependencies.controls,
+        snapshot2.structures,
+        snapshot2.isCurrent
+      )
+    )?.buildings;
     if (buildingStates === void 0)
       return unavailable2("building-state", "Building semantic state unavailable");
     let allCatalog = buildingStates.map((building) => building.catalog), managed = sortByStoredPriority(
@@ -30731,10 +30785,15 @@
       ),
       settings,
       (building) => `bld_p_${building.catalog.binding}`
-    ), supports = readNativePowerSupports(
-      root,
-      dependencies.mechanics,
-      structures
+    ), supports = measure(
+      "autoPower.readCycle.nativeSupports",
+      () => readNativePowerSupports(
+        root,
+        dependencies.mechanics,
+        snapshot2.structures,
+        nativeOrdering.supportOrders,
+        snapshot2.byEntryKey
+      )
     );
     if (supports === void 0)
       return unavailable2("native-support", "native support snapshot unavailable");
@@ -31075,6 +31134,7 @@
       dependencies,
       mechState,
       buildingStates,
+      snapshot2.structures,
       lakeGroupManaged,
       spireAvailable,
       spireStateBalancingEnabled
@@ -31104,11 +31164,15 @@
       lake: lakeAndSpire.lake,
       spire: lakeAndSpire.spire
     });
-    return dependencies.rootState.readRoot() === root ? cycle : unavailable2("root", "root changed during sampling");
+    return snapshot2.isCurrent() ? cycle : unavailable2(
+      "root",
+      "root or captured structure identity changed during sampling"
+    );
   }
   function createCapturedPowerReader({
     rootState,
     mechanics,
+    diagnostics,
     readJobCounts,
     readProspectiveSpaceMiners,
     controls: controls2,
@@ -31132,6 +31196,7 @@
     }, fallbackRoot, dependencies = {
       rootState,
       mechanics,
+      ...diagnostics === void 0 ? {} : { diagnostics },
       ...readJobCounts === void 0 ? {} : { readJobCounts },
       ...readProspectiveSpaceMiners === void 0 ? {} : { readProspectiveSpaceMiners },
       controls: controls2,
@@ -31180,11 +31245,11 @@
         let root = rootState.readRoot(), structures = mechanics.readStructures();
         if (root === void 0 || structures === void 0)
           throw new TypeError("captured Power structure registry is unavailable");
-        let building = readCapturedSemanticBuildingStates(
+        let building = readCapturedSemanticBuildingSampleFromStructures(
           root,
           controls2,
-          mechanics
-        )?.find(
+          structures
+        )?.buildings?.find(
           (entry) => entry.catalog.binding === binding || entry.structure?.entryKey === binding
         );
         if (building === void 0)
@@ -56545,6 +56610,7 @@ Only continue if you trust the source. Injected code:
     }, powerReader = createCapturedPowerReader({
       rootState: pageCapture2.rootState,
       mechanics: pageCapture2.mechanics,
+      ...diagnostics === void 0 ? {} : { diagnostics },
       readJobCounts: ordinaryJobs.readJobCounts,
       readProspectiveSpaceMiners: (root) => {
         let plan = prospectiveSpaceMinerPlan;

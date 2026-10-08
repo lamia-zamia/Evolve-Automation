@@ -17,7 +17,7 @@ import type {
 } from "../../../../domain/economy/production/power.ts";
 import { sortByStoredPriority } from "../../../../domain/settings-priority-order.ts";
 import { type CapturedBuildingState } from "../../progression/build/captured-building-state.ts";
-import { readCapturedSemanticBuildingStates } from "../../progression/build/captured-building-availability.ts";
+import { readCapturedSemanticBuildingSampleFromStructures } from "../../progression/build/captured-building-availability.ts";
 import type { GameControlRegistry } from "../../../../ports/game-control-registry.ts";
 import type { GameRootStateSource } from "../../../../ports/game-root-state.ts";
 import type {
@@ -35,6 +35,11 @@ import type {
   PowerReader,
   PowerUnavailableReason,
 } from "../../../../ports/power.ts";
+import type { PhaseTimingSink } from "../../../../utils/performance.ts";
+import {
+  createCountTally,
+  createPhaseMeasure,
+} from "../../../../utils/performance.ts";
 import { isRecord, readProperty } from "../../../validation.ts";
 import { readCapturedResourceLabel } from "../../captured-resource-metadata.ts";
 import {
@@ -82,6 +87,7 @@ export interface CapturedPowerReaderDependencies {
   readonly rootState: GameRootStateSource;
   readonly controls: GameControlRegistry;
   readonly mechanics: CapturedGameMechanics;
+  readonly diagnostics?: PhaseTimingSink;
   readonly readJobCounts?: (
     root: unknown,
     jobIds: readonly string[],
@@ -319,16 +325,48 @@ function readCapturedStructureState(
   return readProperty(region, structure.struct);
 }
 
+interface CapturedPowerMechanicsSnapshot {
+  readonly structures: readonly CapturedGameStructureDefinition[];
+  readonly byEntryKey: ReadonlyMap<string, CapturedGameStructureDefinition>;
+  readonly isCurrent: () => boolean;
+}
+
+interface CapturedPowerMechanicsOrdering {
+  readonly ordered: readonly CapturedGameStructureDefinition[];
+  readonly supportOrders: ReadonlyMap<
+    string,
+    readonly CapturedGameStructureDefinition[]
+  >;
+}
+
+function createCapturedPowerMechanicsSnapshot(
+  structures: readonly CapturedGameStructureDefinition[],
+  root: unknown,
+  rootState: GameRootStateSource,
+): CapturedPowerMechanicsSnapshot | undefined {
+  const byEntryKey = new Map<string, CapturedGameStructureDefinition>();
+  for (const structure of structures) {
+    if (byEntryKey.has(structure.entryKey)) return undefined;
+    byEntryKey.set(structure.entryKey, structure);
+  }
+  const isCurrent = () =>
+    rootState.readRoot() === root &&
+    structures.every((structure) => structure.matchesCurrentIdentity());
+  return Object.freeze({ structures, byEntryKey, isCurrent });
+}
+
 function readOrderedMechanics(
   root: unknown,
   mechanics: CapturedGameMechanics,
-  structures: readonly CapturedGameStructureDefinition[],
-): readonly CapturedGameStructureDefinition[] | undefined {
-  const powerOrder = mechanics.readPowerOrder(root);
+  snapshot: CapturedPowerMechanicsSnapshot,
+  count: (name: string) => void,
+): CapturedPowerMechanicsOrdering | undefined {
+  const powerOrder = mechanics.readPowerOrder(root, snapshot.byEntryKey);
+  count("autoPower.readCycle.powerOrderResolutions");
   if (powerOrder.kind !== "value") return undefined;
 
   const types = new Set<string>();
-  for (const structure of structures) {
+  for (const structure of snapshot.structures) {
     const support = structure.readSupport();
     if (support.kind === "invalid") return undefined;
     if (support.kind === "absent") continue;
@@ -344,6 +382,10 @@ function readOrderedMechanics(
     if (topology.value.enabled.kind === "invalid") return undefined;
   }
   const ordered: CapturedGameStructureDefinition[] = [];
+  const supportOrders = new Map<
+    string,
+    readonly CapturedGameStructureDefinition[]
+  >();
   const seen = new Set<string>();
   const add = (structure: CapturedGameStructureDefinition) => {
     if (!seen.has(structure.entryKey)) {
@@ -353,17 +395,26 @@ function readOrderedMechanics(
   };
   powerOrder.value.forEach(add);
   for (const type of types) {
-    const ordered = mechanics.readSupportOrder(root, type);
-    if (ordered.kind !== "value") return undefined;
-    for (const structure of ordered.value) {
+    const supportOrder = mechanics.readSupportOrder(
+      root,
+      type,
+      snapshot.byEntryKey,
+    );
+    count("autoPower.readCycle.supportOrderResolutions");
+    if (supportOrder.kind !== "value") return undefined;
+    supportOrders.set(type, supportOrder.value);
+    for (const structure of supportOrder.value) {
       if (structure.readSupportValue(type).kind !== "value") return undefined;
       add(structure);
     }
   }
   // Generators and support providers have no saved user order in initStructureGrids().
   // Its captured registry supplies their native discovery order.
-  structures.forEach(add);
-  return Object.freeze(ordered);
+  snapshot.structures.forEach(add);
+  return Object.freeze({
+    ordered: Object.freeze(ordered),
+    supportOrders,
+  });
 }
 
 function readCrewReserve(raw: unknown, population: number): number {
@@ -703,6 +754,11 @@ export function readNativePowerSupports(
   root: unknown,
   mechanics: CapturedGameMechanics,
   structures: readonly CapturedGameStructureDefinition[],
+  supportOrders?: ReadonlyMap<
+    string,
+    readonly CapturedGameStructureDefinition[]
+  >,
+  byEntryKey?: ReadonlyMap<string, CapturedGameStructureDefinition>,
 ): readonly PowerSupportInput[] | undefined {
   const groups = new Map<string, CapturedGameStructureDefinition[]>();
   for (const structure of structures) {
@@ -742,8 +798,14 @@ export function readNativePowerSupports(
         infiltrated = true;
     }
     if (infiltrated) continue;
-    const ordered = mechanics.readSupportOrder(root, type);
-    if (ordered.kind !== "value") return undefined;
+    const resolvedOrder =
+      supportOrders === undefined
+        ? (() => {
+            const result = mechanics.readSupportOrder(root, type, byEntryKey);
+            return result.kind === "value" ? result.value : undefined;
+          })()
+        : supportOrders.get(type);
+    if (resolvedOrder === undefined) return undefined;
     const consumers: CapturedGameStructureDefinition[] = [];
     let anchorKey: string | null = null;
     let unlimited = false;
@@ -763,14 +825,18 @@ export function readNativePowerSupports(
       }
     }
     if (
-      ordered.value.length !== consumers.length ||
-      ordered.value.some(
+      resolvedOrder.length !== consumers.length ||
+      resolvedOrder.some(
         (member) =>
           !consumers.some((consumer) => consumer.entryKey === member.entryKey),
       )
     )
       return undefined;
-    const anchor = structures.find((member) => member.entryKey === anchorKey);
+    const anchor =
+      byEntryKey?.get(anchorKey ?? "") ??
+      (byEntryKey === undefined
+        ? structures.find((member) => member.entryKey === anchorKey)
+        : undefined);
     const state =
       anchor === undefined
         ? undefined
@@ -1941,6 +2007,7 @@ function readLakeAndSpire(
   dependencies: CapturedPowerReaderDependencies,
   mechState: CapturedMechState | undefined,
   buildingStates: readonly CapturedBuildingState[],
+  structures: readonly CapturedGameStructureDefinition[],
   lakeEnabled: boolean,
   spireAvailable: boolean,
   spireStateBalancingEnabled: boolean,
@@ -2042,9 +2109,9 @@ function readLakeAndSpire(
         : null;
     let purifierDescription = dependencies.readPurifierDescription?.();
     if (purifierDescription === undefined) {
-      const purifierDefinition = dependencies.mechanics
-        .readStructures()
-        ?.find((structure) => structure.actionId === "portal-purifier");
+      const purifierDefinition = structures.find(
+        (structure) => structure.actionId === "portal-purifier",
+      );
       const description = purifierDefinition?.readDescription();
       if (description?.kind !== "value") return Object.freeze({ lake, spire });
       purifierDescription = description.value;
@@ -2106,6 +2173,8 @@ function readPowerCycle(
     message: string,
   ) => undefined,
 ): PowerCycleInput | undefined {
+  const measure = createPhaseMeasure(dependencies.diagnostics);
+  const tally = createCountTally(dependencies.diagnostics);
   let jobCounts: CapturedJobCountSnapshot | undefined;
   try {
     jobCounts = dependencies.readJobCounts?.(root, [
@@ -2122,7 +2191,11 @@ function readPowerCycle(
   }
   if (dependencies.rootState.readRoot() !== root)
     return unavailable("root", "root changed during sampling");
-  const structures = dependencies.mechanics.readStructures();
+  const structures = measure("autoPower.readCycle.structures", () => {
+    const captured = dependencies.mechanics.readStructures();
+    tally.count("autoPower.readCycle.structureRegistryReads");
+    return captured;
+  });
   const production = dependencies.mechanics.readProductionBreakdown();
   const demand = dependencies.readDemand();
   if (demand === undefined)
@@ -2130,24 +2203,34 @@ function readPowerCycle(
       "exact-demand",
       `exact demand unavailable: ${dependencies.readDemandUnavailableReason?.() ?? "unknown prerequisite"}`,
     );
-  const nativeOrder =
-    structures === undefined
-      ? undefined
-      : readOrderedMechanics(root, dependencies.mechanics, structures);
   if (structures === undefined)
     return unavailable("structures", "captured structures unavailable");
+  const snapshot = createCapturedPowerMechanicsSnapshot(
+    structures,
+    root,
+    dependencies.rootState,
+  );
+  if (snapshot === undefined)
+    return unavailable("structures", "captured structure identities ambiguous");
+  const nativeOrdering = measure("autoPower.readCycle.nativeOrdering", () =>
+    readOrderedMechanics(root, dependencies.mechanics, snapshot, tally.count),
+  );
   if (production === undefined)
     return unavailable("production", "production breakdown unavailable");
-  if (nativeOrder === undefined)
+  if (nativeOrdering === undefined)
     return unavailable(
       "native-order",
       "native Power/support order unavailable",
     );
-  const buildingStates = readCapturedSemanticBuildingStates(
-    root,
-    dependencies.controls,
-    dependencies.mechanics,
+  const buildingSample = measure("autoPower.readCycle.semanticBuildings", () =>
+    readCapturedSemanticBuildingSampleFromStructures(
+      root,
+      dependencies.controls,
+      snapshot.structures,
+      snapshot.isCurrent,
+    ),
   );
+  const buildingStates = buildingSample?.buildings;
   if (buildingStates === undefined)
     return unavailable("building-state", "Building semantic state unavailable");
   const allCatalog = buildingStates.map((building) => building.catalog);
@@ -2166,10 +2249,14 @@ function readPowerCycle(
     settings,
     (building) => `bld_p_${building.catalog.binding}`,
   );
-  const supports = readNativePowerSupports(
-    root,
-    dependencies.mechanics,
-    structures,
+  const supports = measure("autoPower.readCycle.nativeSupports", () =>
+    readNativePowerSupports(
+      root,
+      dependencies.mechanics,
+      snapshot.structures,
+      nativeOrdering.supportOrders,
+      snapshot.byEntryKey,
+    ),
   );
   if (supports === undefined)
     return unavailable("native-support", "native support snapshot unavailable");
@@ -2699,6 +2786,7 @@ function readPowerCycle(
     dependencies,
     mechState,
     buildingStates,
+    snapshot.structures,
     lakeGroupManaged,
     spireAvailable,
     spireStateBalancingEnabled,
@@ -2734,15 +2822,19 @@ function readPowerCycle(
     lake: lakeAndSpire.lake,
     spire: lakeAndSpire.spire,
   });
-  return dependencies.rootState.readRoot() === root
+  return snapshot.isCurrent()
     ? cycle
-    : unavailable("root", "root changed during sampling");
+    : unavailable(
+        "root",
+        "root or captured structure identity changed during sampling",
+      );
 }
 
 /** Captured Power port with panel-independent semantic Building sampling. */
 export function createCapturedPowerReader({
   rootState,
   mechanics,
+  diagnostics,
   readJobCounts,
   readProspectiveSpaceMiners,
   controls,
@@ -2774,6 +2866,7 @@ export function createCapturedPowerReader({
   const dependencies: CapturedPowerReaderDependencies = {
     rootState,
     mechanics,
+    ...(diagnostics === undefined ? {} : { diagnostics }),
     ...(readJobCounts === undefined ? {} : { readJobCounts }),
     ...(readProspectiveSpaceMiners === undefined
       ? {}
@@ -2842,11 +2935,11 @@ export function createCapturedPowerReader({
       if (root === undefined || structures === undefined) {
         throw new TypeError("captured Power structure registry is unavailable");
       }
-      const snapshots = readCapturedSemanticBuildingStates(
+      const snapshots = readCapturedSemanticBuildingSampleFromStructures(
         root,
         controls,
-        mechanics,
-      );
+        structures,
+      )?.buildings;
       const building = snapshots?.find(
         (entry) =>
           entry.catalog.binding === binding ||

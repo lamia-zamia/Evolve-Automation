@@ -335,6 +335,20 @@ export function readCapturedSemanticBuildingSample(
 ): CapturedSemanticBuildingSample | undefined {
   const structures = mechanics.readStructures();
   if (structures === undefined) return undefined;
+  return readCapturedSemanticBuildingSampleFromStructures(
+    root,
+    controls,
+    structures,
+    isCurrent,
+  );
+}
+
+export function readCapturedSemanticBuildingSampleFromStructures(
+  root: unknown,
+  controls: GameControlRegistry,
+  structures: readonly CapturedGameStructureDefinition[],
+  isCurrent: () => boolean = () => true,
+): CapturedSemanticBuildingSample | undefined {
   const structuresByAction = new Map<
     string,
     CapturedGameStructureDefinition[]
@@ -387,6 +401,7 @@ export function readCapturedSemanticBuildingSample(
     statesByBinding.set(entry.binding, state);
     result.push(state);
   }
+  if (!isCurrent()) return undefined;
   const buildings = Object.freeze(result);
   return Object.freeze({
     buildings,
