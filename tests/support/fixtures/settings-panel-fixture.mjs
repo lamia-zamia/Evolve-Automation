@@ -74,8 +74,10 @@ export function createPage(
     confirmAnswer = true,
     collapsed = false,
     allSections = false,
+    capturedJobControlIds = [],
     interfaceEffects,
     mechInfoReader,
+    onEffectiveSettingsRefresh,
     onGameRootRead,
   } = {},
 ) {
@@ -144,9 +146,16 @@ export function createPage(
     subscribeRootReplaced: () => () => {},
   };
   const sectionControls = {
-    resolve: () => undefined,
+    resolve: (elementId) =>
+      capturedJobControlIds.includes(elementId)
+        ? {
+            elementId,
+            generation: 1,
+            methods: ["add", "sub", "setDefault"],
+          }
+        : undefined,
     invoke: () => ({ ok: false, reason: "unknown-method" }),
-    capturedElementIds: () => [],
+    capturedElementIds: () => capturedJobControlIds,
   };
   // Every game-backed section, wired to one minimal root. These sections are skipped entirely
   // when their capture is absent, so without this the panel's whole lower half goes untested.
@@ -168,7 +177,7 @@ export function createPage(
     settings,
     defaults: createCapturedSettingsDefaults({
       rootState: { readRoot: () => gameRoot },
-      controls: { capturedElementIds: () => [] },
+      controls: { capturedElementIds: () => capturedJobControlIds },
       mechanics: {
         readStructures: () => undefined,
         readStructureIdentities: () => undefined,
@@ -192,7 +201,10 @@ export function createPage(
     reporter: { report: () => {} },
     display: { publish: () => {} },
   });
-  const refreshEffectiveSettings = () => overrideSettings.updateOverrides();
+  const refreshEffectiveSettings = () => {
+    overrideSettings.updateOverrides();
+    onEffectiveSettingsRefresh?.();
+  };
   refreshEffectiveSettings();
   const gameBindingListeners = new Set();
   const panel = createCapturedSettingsPanel({

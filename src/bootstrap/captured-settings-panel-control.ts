@@ -1575,7 +1575,7 @@ export function createCapturedSettingsPanel({
     const jobIntent = createJobSettingsIntentHandler({
       writer: {
         resetToDefaults: resetSection("job"),
-        persist: () => settings.persist(),
+        persist: persistSettings,
         resetPriorities: () => {
           writeDefaultPriorityOrder(
             settings.readRaw(),

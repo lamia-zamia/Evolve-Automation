@@ -278,4 +278,45 @@ import { createPage } from "../../support/fixtures/settings-panel-fixture.mjs";
   assert.equal(page.settings.readRaw().overrides.Shared, undefined);
 }
 
+// Resetting Jobs removes its dynamic overrides and refreshes the effective layer immediately.
+{
+  let effectiveRefreshes = 0;
+  const page = createPage(
+    JSON.stringify({
+      autoCraftsmen: false,
+      overrides: {
+        autoCraftsmen: [
+          {
+            type1: "Boolean",
+            arg1: false,
+            type2: "Boolean",
+            arg2: false,
+            cmp: "==",
+            ret: true,
+          },
+        ],
+      },
+    }),
+    {
+      allSections: true,
+      capturedJobControlIds: ["civ-unemployed", "civ-farmer"],
+      onEffectiveSettingsRefresh: () => effectiveRefreshes++,
+    },
+  );
+  page.gameRoot.civic.unemployed.assigned = 0;
+  page.gameRoot.civic.farmer.assigned = 0;
+  page.panel.ensurePanel();
+  assert.equal(page.effectiveSettings.autoCraftsmen, true);
+  const reset = page.root.querySelectorAll("#script_resetjob")[0];
+  assert.ok(reset, "the captured Jobs settings section should be available");
+
+  const beforeReset = effectiveRefreshes;
+  reset.dispatch("click");
+
+  assert.equal(page.settings.readRaw().autoCraftsmen, false);
+  assert.equal(page.settings.readRaw().overrides.autoCraftsmen, undefined);
+  assert.equal(page.effectiveSettings.autoCraftsmen, false);
+  assert.equal(effectiveRefreshes, beforeReset + 1);
+}
+
 console.log("captured-settings-panel-override-lifecycle passed");

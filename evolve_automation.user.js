@@ -49546,7 +49546,7 @@ Efficiency above '1' is useful to save resources for more desperate times, or to
       let jobIntent = createJobSettingsIntentHandler({
         writer: {
           resetToDefaults: resetSection("job"),
-          persist: () => settings.persist(),
+          persist: persistSettings,
           resetPriorities: () => {
             writeDefaultPriorityOrder(
               settings.readRaw(),
