@@ -13,6 +13,8 @@ import type {
   CapturedTechDefinition,
   CapturedGameStructureIdentity,
   CapturedGameStructureDefinition,
+  CapturedSupportAnchorResolver,
+  CapturedSupportMechanicsSample,
   CapturedPowerBalanceRule,
   CapturedPowerRequirement,
   CapturedFuelAdjustmentMode,
@@ -440,7 +442,7 @@ function readMechanicsSupportProvider(
 
 function readMechanicsSupportTopology(
   entry: CapturedGridEntry,
-  registry: Map<unknown, unknown>,
+  resolveAnchor?: CapturedSupportAnchorResolver,
 ): CapturedGameRead<CapturedSupportTopology> {
   const { info } = entry;
   if (info === false) {
@@ -450,6 +452,7 @@ function readMechanicsSupportTopology(
         anchorEntryKey: null,
         unlimited: false,
         enabled: { kind: "value", value: true } as const,
+        conditionEvaluated: false,
       }),
     };
   }
@@ -477,17 +480,9 @@ function readMechanicsSupportTopology(
   let anchorEntryKey: string | null = null;
   if (support) {
     if (typeof support !== "string") return { kind: "invalid" };
-    for (const [key, value] of registry) {
-      const candidate = readMechanicsEntry(key, value);
-      if (
-        candidate !== undefined &&
-        candidate.region === entry.region &&
-        candidate.struct === support
-      ) {
-        anchorEntryKey = candidate.entryKey;
-        break;
-      }
-    }
+    const resolved = resolveAnchor?.(entry.region, support);
+    if (resolved?.kind === "invalid") return { kind: "invalid" };
+    if (resolved?.kind === "value") anchorEntryKey = resolved.value;
     // `initStructureGrids()` keeps a false anchor when the info.support name has no matching
     // action in the same region. The live support pass then disables that group, so null is a
     // complete observation rather than a malformed mechanics read.
@@ -502,6 +497,7 @@ function readMechanicsSupportTopology(
     return { kind: "invalid" };
   }
   let enabled: CapturedGameRead<boolean> = { kind: "value", value: true };
+  let conditionEvaluated = false;
   if (conditionDescriptor !== undefined) {
     if (!("value" in conditionDescriptor)) {
       enabled = { kind: "invalid" };
@@ -509,6 +505,7 @@ function readMechanicsSupportTopology(
       if (typeof conditionDescriptor.value !== "function") {
         enabled = { kind: "invalid" };
       } else {
+        conditionEvaluated = true;
         try {
           enabled = {
             kind: "value",
@@ -536,6 +533,7 @@ function readMechanicsSupportTopology(
       anchorEntryKey,
       unlimited: Boolean(unlimitedValue),
       enabled,
+      conditionEvaluated,
     }),
   };
 }
@@ -883,6 +881,10 @@ function createMechanicsDefinition(
   entry: CapturedGridEntry,
   registry: Map<unknown, unknown>,
   candidate: unknown,
+  resolveCapturedAnchor: CapturedSupportAnchorResolver = () => ({
+    kind: "value",
+    value: null,
+  }),
 ): CapturedGameStructureDefinition {
   const action = entry.action;
   const ship = readMechanicsDataProperty(action, "ship");
@@ -995,21 +997,31 @@ function createMechanicsDefinition(
     readSupportTypes: () => readMechanicsSupportTypes(action),
     readSupportValue: (type: string) => readMechanicsSupportValue(action, type),
     readSupportProvider: () => readMechanicsSupportProvider(action),
-    readSupportTopology: () => readMechanicsSupportTopology(entry, registry),
-    readNativeSupportGrids: (root: unknown) => {
+    readSupportTopology: (resolveAnchor?: CapturedSupportAnchorResolver) =>
+      readMechanicsSupportTopology(
+        entry,
+        resolveAnchor ?? resolveCapturedAnchor,
+      ),
+    readNativeSupportGrids: (
+      root: unknown,
+      sample?: CapturedSupportMechanicsSample,
+    ) => {
       if (!currentState(root)) return { kind: "invalid" as const };
-      const support = readMechanicsPrimitive(action, "support");
+      const support =
+        sample?.support ?? readMechanicsPrimitive(action, "support");
       if (support.kind === "invalid") return support;
       if (support.kind === "absent")
         return { kind: "value" as const, value: Object.freeze([]) };
-      const types = readMechanicsSupportTypes(action);
+      const types = sample?.supportTypes ?? readMechanicsSupportTypes(action);
       if (types.kind !== "value")
         return types.kind === "absent"
           ? { kind: "value" as const, value: Object.freeze([]) }
           : types;
-      const provider = readMechanicsSupportProvider(action);
+      const provider = sample?.provider ?? readMechanicsSupportProvider(action);
       if (provider.kind === "invalid") return provider;
-      const topology = readMechanicsSupportTopology(entry, registry);
+      const topology =
+        sample?.topology ??
+        readMechanicsSupportTopology(entry, resolveCapturedAnchor);
       if (topology.kind !== "value") return topology;
       const nativeSupport = readMechanicsProperty(root, "support");
       const result: CapturedNativeSupportGrid[] = [];
@@ -1019,7 +1031,10 @@ function createMechanicsDefinition(
         const consumer = support.value < 0;
         if (ordered.has(entry.entryKey) !== consumer)
           return { kind: "invalid" as const };
-        const output = readMechanicsSupportValue(action, type);
+        const output =
+          sample === undefined
+            ? readMechanicsSupportValue(action, type)
+            : (sample.supportValues.get(type) ?? { kind: "invalid" as const });
         if (output.kind !== "value") return { kind: "invalid" as const };
         // initStructureGrids() places a zero-output action in neither native loop
         // unless it is explicitly marked as a provider.
@@ -2102,12 +2117,49 @@ export function installCapturedGameMechanics(
       const entries = structureEntries;
       if (entries === undefined || stopped) return undefined;
       try {
+        let anchorResolver: CapturedSupportAnchorResolver = () => ({
+          kind: "value",
+          value: null,
+        });
         const result: CapturedGameStructureDefinition[] = [];
         for (const [key, value] of entries) {
           const entry = readMechanicsEntry(key, value);
           if (entry !== undefined)
-            result.push(createMechanicsDefinition(entry, entries, value));
+            result.push(
+              createMechanicsDefinition(entry, entries, value, (...args) =>
+                anchorResolver(...args),
+              ),
+            );
         }
+        const byRegion = new Map<
+          string,
+          Map<string, CapturedGameStructureDefinition | null>
+        >();
+        for (const definition of result) {
+          let byStruct = byRegion.get(definition.region);
+          if (byStruct === undefined) {
+            byStruct = new Map();
+            byRegion.set(definition.region, byStruct);
+          }
+          if (byStruct.has(definition.struct))
+            byStruct.set(definition.struct, null);
+          else byStruct.set(definition.struct, definition);
+        }
+        anchorResolver = (region, struct) => {
+          const byStruct = byRegion.get(region);
+          if (byStruct === undefined || !byStruct.has(struct))
+            return { kind: "value", value: null };
+          const candidate = byStruct.get(struct);
+          if (
+            candidate === null ||
+            candidate === undefined ||
+            candidate.region !== region ||
+            candidate.struct !== struct ||
+            !candidate.matchesCurrentIdentity()
+          )
+            return { kind: "invalid" };
+          return { kind: "value", value: candidate.entryKey };
+        };
         return Object.freeze(result);
       } catch {
         return undefined;

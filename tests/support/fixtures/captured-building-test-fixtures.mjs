@@ -46,6 +46,14 @@ export function makeCapturedBuildingMechanics(
       readPowerRequirements: () => absent,
       readFuel: () => absent,
       readFuelAdjustmentRequested: () => nativeRead(false),
+      // These generated building bindings do not provide native support metadata. Keep the
+      // captured Power contract explicit so compatibility tests exercise the same absent state.
+      readSupport: () => absent,
+      readSupportTypes: () => absent,
+      readSupportProvider: () => absent,
+      readSupportTopology: () => absent,
+      readSupportValue: () => absent,
+      readNativeSupportGrids: () => absent,
       ...(override ?? {}),
     };
     structures.push(Object.freeze(native));

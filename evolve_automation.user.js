@@ -2230,7 +2230,7 @@
     }
     return descriptor === void 0 ? { kind: "absent" } : "value" in descriptor ? { kind: "value", value: !!descriptor.value } : { kind: "invalid" };
   }
-  function readMechanicsSupportTopology(entry, registry) {
+  function readMechanicsSupportTopology(entry, resolveAnchor) {
     let { info } = entry;
     if (info === !1)
       return {
@@ -2238,7 +2238,8 @@
         value: Object.freeze({
           anchorEntryKey: null,
           unlimited: !1,
-          enabled: { kind: "value", value: !0 }
+          enabled: { kind: "value", value: !0 },
+          conditionEvaluated: !1
         })
       };
     let supportDescriptor, unlimitedDescriptor;
@@ -2255,13 +2256,9 @@
     let support = supportDescriptor !== void 0 && "value" in supportDescriptor ? supportDescriptor.value : void 0, anchorEntryKey = null;
     if (support) {
       if (typeof support != "string") return { kind: "invalid" };
-      for (let [key, value] of registry) {
-        let candidate = readMechanicsEntry(key, value);
-        if (candidate !== void 0 && candidate.region === entry.region && candidate.struct === support) {
-          anchorEntryKey = candidate.entryKey;
-          break;
-        }
-      }
+      let resolved = resolveAnchor?.(entry.region, support);
+      if (resolved?.kind === "invalid") return { kind: "invalid" };
+      resolved?.kind === "value" && (anchorEntryKey = resolved.value);
     }
     let conditionDescriptor;
     try {
@@ -2272,14 +2269,15 @@
     } catch {
       return { kind: "invalid" };
     }
-    let enabled = { kind: "value", value: !0 };
+    let enabled = { kind: "value", value: !0 }, conditionEvaluated = !1;
     if (conditionDescriptor !== void 0) {
       if (!("value" in conditionDescriptor))
         enabled = { kind: "invalid" };
       else if (conditionDescriptor.value)
         if (typeof conditionDescriptor.value != "function")
           enabled = { kind: "invalid" };
-        else
+        else {
+          conditionEvaluated = !0;
           try {
             enabled = {
               kind: "value",
@@ -2292,6 +2290,7 @@
           } catch {
             enabled = { kind: "invalid" };
           }
+        }
     }
     let unlimitedValue = unlimitedDescriptor !== void 0 && "value" in unlimitedDescriptor ? unlimitedDescriptor.value : void 0;
     return {
@@ -2299,7 +2298,8 @@
       value: Object.freeze({
         anchorEntryKey,
         unlimited: !!unlimitedValue,
-        enabled
+        enabled,
+        conditionEvaluated
       })
     };
   }
@@ -2504,7 +2504,10 @@
     }
     return result;
   }
-  function createMechanicsDefinition(entry, registry, candidate) {
+  function createMechanicsDefinition(entry, registry, candidate, resolveCapturedAnchor = () => ({
+    kind: "value",
+    value: null
+  })) {
     let action = entry.action, ship = readMechanicsDataProperty(action, "ship"), shipRecord = isNonArrayRecord(ship) ? ship : void 0, matchesCurrentIdentity = () => {
       let liveCandidate = registry.get(entry.entryKey), liveEntry = readMechanicsEntry(entry.entryKey, liveCandidate);
       return liveCandidate === candidate && liveEntry?.action === action && liveEntry.region === entry.region && liveEntry.sector === entry.sector && liveEntry.struct === entry.struct && liveEntry.actionId === entry.actionId && liveEntry.info === entry.info;
@@ -2578,19 +2581,22 @@
       readSupportTypes: () => readMechanicsSupportTypes(action),
       readSupportValue: (type) => readMechanicsSupportValue(action, type),
       readSupportProvider: () => readMechanicsSupportProvider(action),
-      readSupportTopology: () => readMechanicsSupportTopology(entry, registry),
-      readNativeSupportGrids: (root) => {
+      readSupportTopology: (resolveAnchor) => readMechanicsSupportTopology(
+        entry,
+        resolveAnchor ?? resolveCapturedAnchor
+      ),
+      readNativeSupportGrids: (root, sample) => {
         if (!currentState(root)) return { kind: "invalid" };
-        let support = readMechanicsPrimitive(action, "support");
+        let support = sample?.support ?? readMechanicsPrimitive(action, "support");
         if (support.kind === "invalid") return support;
         if (support.kind === "absent")
           return { kind: "value", value: Object.freeze([]) };
-        let types = readMechanicsSupportTypes(action);
+        let types = sample?.supportTypes ?? readMechanicsSupportTypes(action);
         if (types.kind !== "value")
           return types.kind === "absent" ? { kind: "value", value: Object.freeze([]) } : types;
-        let provider = readMechanicsSupportProvider(action);
+        let provider = sample?.provider ?? readMechanicsSupportProvider(action);
         if (provider.kind === "invalid") return provider;
-        let topology = readMechanicsSupportTopology(entry, registry);
+        let topology = sample?.topology ?? readMechanicsSupportTopology(entry, resolveCapturedAnchor);
         if (topology.kind !== "value") return topology;
         let nativeSupport = readMechanicsProperty(root, "support"), result = [];
         for (let type of types.value) {
@@ -2599,7 +2605,7 @@
           let consumer = support.value < 0;
           if (ordered.has(entry.entryKey) !== consumer)
             return { kind: "invalid" };
-          let output = readMechanicsSupportValue(action, type);
+          let output = sample === void 0 ? readMechanicsSupportValue(action, type) : sample.supportValues.get(type) ?? { kind: "invalid" };
           if (output.kind !== "value") return { kind: "invalid" };
           !consumer && output.value <= 0 && !(provider.kind === "value" && provider.value) || result.push(
             Object.freeze({
@@ -3143,12 +3149,33 @@
         let entries = structureEntries;
         if (!(entries === void 0 || stopped))
           try {
-            let result = [];
+            let anchorResolver = () => ({
+              kind: "value",
+              value: null
+            }), result = [];
             for (let [key, value] of entries) {
               let entry = readMechanicsEntry(key, value);
-              entry !== void 0 && result.push(createMechanicsDefinition(entry, entries, value));
+              entry !== void 0 && result.push(
+                createMechanicsDefinition(
+                  entry,
+                  entries,
+                  value,
+                  (...args) => anchorResolver(...args)
+                )
+              );
             }
-            return Object.freeze(result);
+            let byRegion = /* @__PURE__ */ new Map();
+            for (let definition of result) {
+              let byStruct = byRegion.get(definition.region);
+              byStruct === void 0 && (byStruct = /* @__PURE__ */ new Map(), byRegion.set(definition.region, byStruct)), byStruct.has(definition.struct) ? byStruct.set(definition.struct, null) : byStruct.set(definition.struct, definition);
+            }
+            return anchorResolver = (region, struct) => {
+              let byStruct = byRegion.get(region);
+              if (byStruct === void 0 || !byStruct.has(struct))
+                return { kind: "value", value: null };
+              let candidate = byStruct.get(struct);
+              return candidate == null || candidate.region !== region || candidate.struct !== struct || !candidate.matchesCurrentIdentity() ? { kind: "invalid" } : { kind: "value", value: candidate.entryKey };
+            }, Object.freeze(result);
           } catch {
             return;
           }
@@ -29721,40 +29748,106 @@
     }
     return Object.freeze({ structures, byEntryKey, isCurrent: () => rootState.readRoot() === root && structures.every((structure) => structure.matchesCurrentIdentity()) });
   }
-  function readOrderedMechanics(root, mechanics, snapshot2, count2) {
-    let powerOrder = mechanics.readPowerOrder(root, snapshot2.byEntryKey);
-    if (count2("autoPower.readCycle.powerOrderResolutions"), powerOrder.kind !== "value") return;
-    let types = /* @__PURE__ */ new Set();
+  function createCapturedPowerSupportSnapshot(snapshot2, count2) {
+    let anchors = /* @__PURE__ */ new Map();
+    for (let structure of snapshot2.structures) {
+      let byStruct = anchors.get(structure.region);
+      byStruct === void 0 && (byStruct = /* @__PURE__ */ new Map(), anchors.set(structure.region, byStruct)), byStruct.has(structure.struct) ? byStruct.set(structure.struct, null) : byStruct.set(structure.struct, structure);
+    }
+    let resolveAnchor = (region, struct) => {
+      let byStruct = anchors.get(region);
+      if (byStruct === void 0 || !byStruct.has(struct))
+        return { kind: "value", value: null };
+      let candidate = byStruct.get(struct);
+      return candidate == null || candidate.region !== region || candidate.struct !== struct || !candidate.matchesCurrentIdentity() ? { kind: "invalid" } : { kind: "value", value: candidate.entryKey };
+    }, supportTypes = /* @__PURE__ */ new Set(), sampledStructures = [], byEntryKey = /* @__PURE__ */ new Map();
     for (let structure of snapshot2.structures) {
       let support = structure.readSupport();
       if (support.kind === "invalid") return;
-      if (support.kind === "absent") continue;
-      let supportTypes = structure.readSupportTypes();
-      if (supportTypes.kind === "invalid") return;
-      if (supportTypes.kind === "value")
-        for (let type of supportTypes.value) types.add(type);
-      let provider = structure.readSupportProvider(), topology = structure.readSupportTopology();
-      if (provider.kind === "invalid" || topology.kind !== "value" || topology.value.enabled.kind === "invalid") return;
+      if (support.kind === "absent") {
+        let sampled4 = Object.freeze({
+          structure,
+          support,
+          supportTypes: { kind: "absent" },
+          provider: { kind: "absent" },
+          topology: { kind: "absent" },
+          supportValues: /* @__PURE__ */ new Map()
+        });
+        sampledStructures.push(sampled4), byEntryKey.set(structure.entryKey, sampled4);
+        continue;
+      }
+      count2("autoPower.readCycle.supportMetadataStructures");
+      let types = structure.readSupportTypes(), provider = structure.readSupportProvider(), topology = structure.readSupportTopology(resolveAnchor);
+      if (count2("autoPower.readCycle.supportTopologyReads"), types.kind === "invalid" || provider.kind === "invalid" || (topology.kind === "value" && topology.value.conditionEvaluated && count2("autoPower.readCycle.supportConditionReads"), topology.kind !== "value" || topology.value.enabled.kind === "invalid"))
+        return;
+      let supportValues = /* @__PURE__ */ new Map();
+      if (types.kind === "value")
+        for (let type of types.value) {
+          supportTypes.add(type);
+          let value = structure.readSupportValue(type);
+          if (supportValues.set(type, value), count2("autoPower.readCycle.supportValueReads"), value.kind !== "value") return;
+        }
+      let sampled3 = Object.freeze({
+        structure,
+        support,
+        supportTypes: types,
+        provider,
+        topology,
+        supportValues
+      });
+      sampledStructures.push(sampled3), byEntryKey.set(structure.entryKey, sampled3);
     }
-    let ordered = [], supportOrders = /* @__PURE__ */ new Map(), seen = /* @__PURE__ */ new Set(), add = (structure) => {
+    return count2("autoPower.readCycle.supportTypes", supportTypes.size), count2("autoPower.readCycle.supportRegistryScans", 0), Object.freeze({
+      structures: Object.freeze(sampledStructures),
+      byEntryKey,
+      supportTypes: Object.freeze([...supportTypes]),
+      supportOrderByType: /* @__PURE__ */ new Map()
+    });
+  }
+  function readOrderedMechanics(root, mechanics, snapshot2, supportSnapshot, count2) {
+    let powerOrder = mechanics.readPowerOrder(root, snapshot2.byEntryKey);
+    if (count2("autoPower.readCycle.powerOrderResolutions"), powerOrder.kind !== "value") return;
+    let ordered = [], supportOrders = /* @__PURE__ */ new Map(), sampledByEntryKey = new Map(supportSnapshot.byEntryKey), seen = /* @__PURE__ */ new Set(), add = (structure) => {
       seen.has(structure.entryKey) || (ordered.push(structure), seen.add(structure.entryKey));
     };
     powerOrder.value.forEach(add);
-    for (let type of types) {
-      let supportOrder = mechanics.readSupportOrder(
+    for (let type of supportSnapshot.supportTypes) {
+      let resolvedOrder = mechanics.readSupportOrder(
         root,
         type,
         snapshot2.byEntryKey
       );
-      if (count2("autoPower.readCycle.supportOrderResolutions"), supportOrder.kind !== "value") return;
-      supportOrders.set(type, supportOrder.value);
-      for (let structure of supportOrder.value) {
-        if (structure.readSupportValue(type).kind !== "value") return;
+      if (count2("autoPower.readCycle.supportOrderResolutions"), resolvedOrder.kind !== "value") return;
+      let supportOrder = resolvedOrder.value;
+      supportOrders.set(type, supportOrder);
+      for (let structure of supportOrder) {
+        count2("autoPower.readCycle.supportOrderEntries");
+        let sampled3 = sampledByEntryKey.get(structure.entryKey);
+        if (sampled3 === void 0) return;
+        let supportValue = sampled3.supportValues.get(type);
+        if (supportValue === void 0) {
+          supportValue = structure.readSupportValue(type);
+          let supportValues = new Map(sampled3.supportValues);
+          supportValues.set(type, supportValue), sampled3 = Object.freeze({ ...sampled3, supportValues }), sampledByEntryKey.set(structure.entryKey, sampled3), count2("autoPower.readCycle.supportValueReads");
+        }
+        if (supportValue.kind !== "value") return;
         add(structure);
       }
     }
-    return snapshot2.structures.forEach(add), Object.freeze({
+    snapshot2.structures.forEach(add);
+    let resolvedSupportSnapshot = Object.freeze({
+      ...supportSnapshot,
+      structures: Object.freeze(
+        supportSnapshot.structures.map(
+          ({ structure }) => sampledByEntryKey.get(structure.entryKey)
+        )
+      ),
+      byEntryKey: sampledByEntryKey,
+      supportOrderByType: supportOrders
+    });
+    return Object.freeze({
       ordered: Object.freeze(ordered),
+      supportSnapshot: resolvedSupportSnapshot,
       supportOrders
     });
   }
@@ -29881,13 +29974,14 @@
     }
     return Object.freeze([...result.values()]);
   }
-  function readNativePowerSupports(root, mechanics, structures, supportOrders, byEntryKey) {
+  function readNativePowerSupports(root, mechanics, structures, supportOrders, byEntryKey, supportSnapshot, count2 = () => {
+  }) {
     let groups = /* @__PURE__ */ new Map();
     for (let structure of structures) {
-      let support = structure.readSupport();
+      let sampled3 = supportSnapshot?.byEntryKey.get(structure.entryKey), support = sampled3?.support ?? structure.readSupport();
       if (support.kind === "invalid") return;
       if (support.kind === "absent") continue;
-      let types = structure.readSupportTypes();
+      let types = sampled3?.supportTypes ?? structure.readSupportTypes();
       if (types.kind === "invalid") return;
       if (types.kind === "value")
         for (let type of types.value) {
@@ -29902,8 +29996,9 @@
         "infiltrators"
       ), infiltrated = !1;
       for (let member of members) {
-        let support = member.readSupportValue(type);
-        if (support.kind !== "value") return;
+        count2("autoPower.readCycle.supportGroupEntries");
+        let sampled3 = supportSnapshot?.byEntryKey.get(member.entryKey), support = sampled3 === void 0 ? member.readSupportValue(type) : sampled3.supportValues.get(type);
+        if (support === void 0 || support.kind !== "value") return;
         if (support.value <= 0) continue;
         let sector = readProperty(infiltrators, member.sector), assignment = readProperty(sector, member.struct);
         assignment !== void 0 && (typeof assignment != "number" || !Number.isFinite(assignment) || assignment > 0) && (infiltrated = !0);
@@ -29916,14 +30011,14 @@
       if (resolvedOrder === void 0) return;
       let consumers = [], anchorKey = null, unlimited = !1, enabled = !0;
       for (let member of members) {
-        let generic = member.readSupport();
+        let sampled3 = supportSnapshot?.byEntryKey.get(member.entryKey), generic = sampled3?.support ?? member.readSupport();
         if (generic.kind !== "value") return;
         if (generic.value >= 0) continue;
-        consumers.push(member);
-        let topology = member.readSupportTopology();
+        consumers.push(member), count2("autoPower.readCycle.supportConsumerTopologyEntries");
+        let topology = sampled3?.topology ?? member.readSupportTopology();
         if (topology.kind !== "value" || topology.value.enabled.kind !== "value")
           return;
-        anchorKey === null && topology.value.anchorEntryKey !== null && (anchorKey = topology.value.anchorEntryKey, unlimited = topology.value.unlimited, enabled = topology.value.enabled.value);
+        topology.value.conditionEvaluated && count2("autoPower.readCycle.supportConsumerConditionEntries"), anchorKey === null && topology.value.anchorEntryKey !== null && (anchorKey = topology.value.anchorEntryKey, unlimited = topology.value.unlimited, enabled = topology.value.enabled.value);
       }
       if (resolvedOrder.length !== consumers.length || resolvedOrder.some(
         (member) => !consumers.some((consumer) => consumer.entryKey === member.entryKey)
@@ -30757,9 +30852,21 @@
     );
     if (snapshot2 === void 0)
       return unavailable2("structures", "captured structure identities ambiguous");
+    let supportMetadata = measure(
+      "autoPower.readCycle.supportMetadata",
+      () => createCapturedPowerSupportSnapshot(snapshot2, tally.count)
+    );
+    if (supportMetadata === void 0)
+      return unavailable2("native-support", "support metadata unavailable");
     let nativeOrdering = measure(
       "autoPower.readCycle.nativeOrdering",
-      () => readOrderedMechanics(root, dependencies.mechanics, snapshot2, tally.count)
+      () => readOrderedMechanics(
+        root,
+        dependencies.mechanics,
+        snapshot2,
+        supportMetadata,
+        tally.count
+      )
     );
     if (production === void 0)
       return unavailable2("production", "production breakdown unavailable");
@@ -30792,95 +30899,117 @@
         dependencies.mechanics,
         snapshot2.structures,
         nativeOrdering.supportOrders,
-        snapshot2.byEntryKey
+        snapshot2.byEntryKey,
+        nativeOrdering.supportSnapshot,
+        tally.count
       )
     );
     if (supports === void 0)
       return unavailable2("native-support", "native support snapshot unavailable");
     let supportMap = new Map(supports.map((item) => [item.type, item])), nativeSupportParticipants = [], unsafeSupportTypes = /* @__PURE__ */ new Set(), unsafeEverySupportType = !1, beltConsumers = [];
-    for (let structure of structures) {
-      let state = readCapturedStructureState(root, structure);
-      if (state == null) continue;
-      let support = structure.readSupport();
-      if (support.kind === "absent") continue;
-      let readTypes = structure.readSupportTypes(), supportTypes = readTypes.kind === "value" ? readTypes.value : Object.freeze([]);
-      if (readTypes.kind === "invalid") {
-        supportTypes.length === 0 && (unsafeEverySupportType = !0);
-        for (let type of supportTypes) unsafeSupportTypes.add(type);
-      }
-      if (support.kind === "invalid") {
-        supportTypes.length === 0 && (unsafeEverySupportType = !0);
-        for (let type of supportTypes) unsafeSupportTypes.add(type);
-        nativeSupportParticipants.push({
-          structure,
-          supportTypes,
-          supportChanges: Object.freeze([])
-        });
-        continue;
-      }
-      if (!isRecord(state)) {
-        supportTypes.length === 0 && (unsafeEverySupportType = !0);
-        for (let type of supportTypes) unsafeSupportTypes.add(type);
-        nativeSupportParticipants.push({
-          structure,
-          supportTypes,
-          supportChanges: Object.freeze([])
-        });
-        continue;
-      }
-      let grids = structure.readNativeSupportGrids(root);
-      if (grids.kind !== "value") {
-        supportTypes.length === 0 && (unsafeEverySupportType = !0);
-        for (let type of supportTypes) unsafeSupportTypes.add(type);
-        nativeSupportParticipants.push({
-          structure,
-          supportTypes,
-          supportChanges: Object.freeze([])
-        });
-        continue;
-      }
-      let participantTypes = new Set(supportTypes), supportChanges = [];
-      for (let grid of grids.value) {
-        if (!isRecord(grid)) {
-          participantTypes.size === 0 && (unsafeEverySupportType = !0);
-          for (let type2 of participantTypes) unsafeSupportTypes.add(type2);
+    if (measure("autoPower.readCycle.supportParticipants", () => {
+      let participantStructures = 0, participantGridCalls = 0, participantTypeEntries = 0, participantConditionStructures = 0;
+      for (let structure of structures) {
+        let state = readCapturedStructureState(root, structure);
+        if (state == null) continue;
+        let sampled3 = nativeOrdering.supportSnapshot.byEntryKey.get(
+          structure.entryKey
+        );
+        if (sampled3 === void 0) return;
+        let support = sampled3.support;
+        if (support.kind === "absent") continue;
+        let readTypes = sampled3.supportTypes, supportTypes = readTypes.kind === "value" ? readTypes.value : Object.freeze([]);
+        if (readTypes.kind === "invalid") {
+          supportTypes.length === 0 && (unsafeEverySupportType = !0);
+          for (let type of supportTypes) unsafeSupportTypes.add(type);
+        }
+        if (support.kind === "invalid") {
+          supportTypes.length === 0 && (unsafeEverySupportType = !0);
+          for (let type of supportTypes) unsafeSupportTypes.add(type);
+          nativeSupportParticipants.push({
+            structure,
+            supportTypes,
+            supportChanges: Object.freeze([])
+          });
           continue;
         }
-        let type = readProperty(grid, "type"), contribution = readProperty(grid, "contribution"), consumer = readProperty(grid, "consumer"), provider = readProperty(grid, "provider");
-        if (typeof type == "string" && type.length > 0 && participantTypes.add(type), typeof type != "string" || type.length === 0 || typeof contribution != "number" || !Number.isFinite(contribution) || typeof consumer != "boolean" || typeof provider != "boolean" || !consumer && !provider && contribution !== 0 || consumer && support.value >= 0 || provider && contribution < 0) {
-          if (typeof type == "string" && type.length > 0)
-            unsafeSupportTypes.add(type);
-          else if (participantTypes.size === 0) unsafeEverySupportType = !0;
-          else
-            for (let participantType of participantTypes)
-              unsafeSupportTypes.add(participantType);
+        if (!isRecord(state)) {
+          supportTypes.length === 0 && (unsafeEverySupportType = !0);
+          for (let type of supportTypes) unsafeSupportTypes.add(type);
+          nativeSupportParticipants.push({
+            structure,
+            supportTypes,
+            supportChanges: Object.freeze([])
+          });
           continue;
         }
-        provider && supportChanges.push(Object.freeze({ type, amount: -contribution }));
-        let consumerAmount = consumer ? -support.value : 0;
-        if (consumer && supportChanges.push(Object.freeze({ type, amount: consumerAmount })), !consumer && !provider && supportChanges.push(Object.freeze({ type, amount: 0 })), type === "belt" && consumer && consumerAmount > 0) {
-          let configured = readGameNumber(state, "on");
-          if (configured === void 0 || configured < 0) {
-            unsafeSupportTypes.add(type);
+        participantStructures++, readTypes.kind === "value" && (participantTypeEntries += readTypes.value.length);
+        let grids = structure.readNativeSupportGrids(root, sampled3);
+        if (participantGridCalls++, readTypes.kind === "value" && sampled3.topology.kind === "value" && sampled3.topology.value.conditionEvaluated && participantConditionStructures++, grids.kind !== "value") {
+          supportTypes.length === 0 && (unsafeEverySupportType = !0);
+          for (let type of supportTypes) unsafeSupportTypes.add(type);
+          nativeSupportParticipants.push({
+            structure,
+            supportTypes,
+            supportChanges: Object.freeze([])
+          });
+          continue;
+        }
+        let participantTypes = new Set(supportTypes), supportChanges = [];
+        for (let grid of grids.value) {
+          if (!isRecord(grid)) {
+            participantTypes.size === 0 && (unsafeEverySupportType = !0);
+            for (let type2 of participantTypes) unsafeSupportTypes.add(type2);
             continue;
           }
-          beltConsumers.push(
-            Object.freeze({
-              binding: structure.actionId,
-              configured,
-              supportPerUnit: consumerAmount,
-              managed: settings[`bld_s_${structure.actionId}`] === !0
-            })
-          );
+          let type = readProperty(grid, "type"), contribution = readProperty(grid, "contribution"), consumer = readProperty(grid, "consumer"), provider = readProperty(grid, "provider");
+          if (typeof type == "string" && type.length > 0 && participantTypes.add(type), typeof type != "string" || type.length === 0 || typeof contribution != "number" || !Number.isFinite(contribution) || typeof consumer != "boolean" || typeof provider != "boolean" || !consumer && !provider && contribution !== 0 || consumer && support.value >= 0 || provider && contribution < 0) {
+            if (typeof type == "string" && type.length > 0)
+              unsafeSupportTypes.add(type);
+            else if (participantTypes.size === 0) unsafeEverySupportType = !0;
+            else
+              for (let participantType of participantTypes)
+                unsafeSupportTypes.add(participantType);
+            continue;
+          }
+          provider && supportChanges.push(Object.freeze({ type, amount: -contribution }));
+          let consumerAmount = consumer ? -support.value : 0;
+          if (consumer && supportChanges.push(Object.freeze({ type, amount: consumerAmount })), !consumer && !provider && supportChanges.push(Object.freeze({ type, amount: 0 })), type === "belt" && consumer && consumerAmount > 0) {
+            let configured = readGameNumber(state, "on");
+            if (configured === void 0 || configured < 0) {
+              unsafeSupportTypes.add(type);
+              continue;
+            }
+            beltConsumers.push(
+              Object.freeze({
+                binding: structure.actionId,
+                configured,
+                supportPerUnit: consumerAmount,
+                managed: settings[`bld_s_${structure.actionId}`] === !0
+              })
+            );
+          }
         }
+        nativeSupportParticipants.push({
+          structure,
+          supportTypes: Object.freeze([...participantTypes]),
+          supportChanges: Object.freeze(supportChanges)
+        });
       }
-      nativeSupportParticipants.push({
-        structure,
-        supportTypes: Object.freeze([...participantTypes]),
-        supportChanges: Object.freeze(supportChanges)
-      });
-    }
-    if (unsafeEverySupportType)
+      tally.count(
+        "autoPower.readCycle.supportParticipantStructures",
+        participantStructures
+      ), tally.count(
+        "autoPower.readCycle.supportParticipantGridCalls",
+        participantGridCalls
+      ), tally.count(
+        "autoPower.readCycle.supportParticipantTypeEntries",
+        participantTypeEntries
+      ), tally.count(
+        "autoPower.readCycle.supportParticipantConditionStructures",
+        participantConditionStructures
+      );
+    }), unsafeEverySupportType)
       for (let support of supports) unsafeSupportTypes.add(support.type);
     let candidates = [], beltConsumerByBinding = new Map(
       beltConsumers.map((consumer) => [consumer.binding, consumer])
@@ -55479,9 +55608,19 @@ Only continue if you trust the source. Injected code:
     settingsPanel.ensurePanel();
     let reported = /* @__PURE__ */ new Set(), reportOnce = (message) => {
       reported.has(message) || (reported.add(message), logError(message));
-    }, runPhase = (name, body) => {
+    }, measurePhase = (name, body) => {
+      let phaseDiagnostics = diagnostics?.readPerformanceEnabled() === !0 ? diagnostics : void 0, startedAtMs = phaseDiagnostics?.nowMs();
       try {
         return body();
+      } finally {
+        phaseDiagnostics !== void 0 && startedAtMs !== void 0 && phaseDiagnostics.recordPerformance(
+          name,
+          phaseDiagnostics.nowMs() - startedAtMs
+        );
+      }
+    }, runPhase = (name, body) => {
+      try {
+        return measurePhase(name, body);
       } catch (error) {
         reportOnce(`${name} stopped: ${String(error)}`);
         return;
@@ -56665,13 +56804,18 @@ Only continue if you trust the source. Injected code:
     });
     refreshEffectiveSettings(), refreshCapturedPlanningPanels();
     let runCycle = () => {
-      let profiling = diagnostics?.readPerformanceEnabled() === !0 ? diagnostics : void 0, workStartedAtMs = profiling?.nowMs();
+      let profiling = diagnostics?.readPerformanceEnabled() === !0 ? diagnostics : void 0, workStartedAtMs = profiling?.nowMs(), recordPreamble = (startedAtMs) => {
+        profiling !== void 0 && startedAtMs !== void 0 && profiling.recordPerformance(
+          "tick.preamble",
+          profiling.nowMs() - startedAtMs
+        );
+      };
       if (automationCycle += 1, prospectiveSpaceMinerPlan = void 0, capturedResetCommittedThisCycle = !1, currentStateLogConstructionSnapshot = null, stateLogPlannerDetailsDue = !1, constructionFreshness = latestConstructionSnapshot === null ? "none" : "stale", capturedMechCycleHasPendingWork = !1, demandThisCycle = void 0, savingTargetThisCycle = void 0, constructionSuppressedThisCycle = !1, triggerTargetsThisCycle = void 0, triggerDemandThisCycle = void 0, demandPrerequisitesThisCycle = void 0, !pageCapture2.isComplete()) {
         let panelStartedAtMs2 = profiling?.nowMs();
         settingsPanel.ensurePanel(), profiling !== void 0 && panelStartedAtMs2 !== void 0 && profiling.recordPerformance(
           "settingsPanel.ensurePanel",
           profiling.nowMs() - panelStartedAtMs2
-        ), refreshCapturedPlanningPanels();
+        ), refreshCapturedPlanningPanels(), recordPreamble(workStartedAtMs);
         return;
       }
       refreshDiscoveredSettings();
@@ -56682,10 +56826,10 @@ Only continue if you trust the source. Injected code:
       );
       let settings = settingsStore.readRaw();
       if (!pageCapture2.isComplete() || !isEnabled(settings, "masterScriptToggle")) {
-        refreshCapturedPlanningPanels();
+        refreshCapturedPlanningPanels(), recordPreamble(workStartedAtMs);
         return;
       }
-      stateLogPlannerDetailsDue = stateLogRecorder.isNextSampleDue(settings);
+      stateLogPlannerDetailsDue = stateLogRecorder.isNextSampleDue(settings), recordPreamble(workStartedAtMs);
       try {
         if (progression.beginProcessedCycle(), isEnabled(settings, "autoEvolution")) {
           let species = capturedEvolution.reader.sampleSpecies();
@@ -56879,44 +57023,49 @@ Only continue if you trust the source. Injected code:
         }), (isEnabled(settings, "autoBuild") || isEnabled(settings, "autoStorage")) && runPhase("pre-Power build demand preparation", () => {
           progression.readUnlockedStorageBuildTargets(), refreshDiscoveredSettings();
         }), runPhase("autoPower", () => {
-          observePowerDemandPhase("power-handoff-start"), demandThisCycle = void 0, exactDemandUnavailableReason = void 0;
-          let prerequisites = demandPrerequisitesThisCycle === void 0 ? void 0 : ensureDemandPrerequisiteControls({
-            root: pageCapture2.rootState.readRoot(),
-            settings,
-            controls: pageCapture2.controls,
-            ensureForeignControls: () => {
-            },
-            ensureBuildControls: () => {
+          measurePhase("autoPower.demandPreparation", () => {
+            observePowerDemandPhase("power-handoff-start"), demandThisCycle = void 0, exactDemandUnavailableReason = void 0;
+            let prerequisites = demandPrerequisitesThisCycle === void 0 ? void 0 : ensureDemandPrerequisiteControls({
+              root: pageCapture2.rootState.readRoot(),
+              settings,
+              controls: pageCapture2.controls,
+              ensureForeignControls: () => {
+              },
+              ensureBuildControls: () => {
+              }
+            });
+            demandPrerequisitesThisCycle = prerequisites;
+            let buildDemandRequired = isEnabled(settings, "autoBuild") || isEnabled(settings, "autoStorage");
+            if (!isRecord(
+              readProperty(pageCapture2.rootState.readRoot(), "resource")
+            ))
+              exactDemandUnavailableReason = "root resource state unavailable";
+            else if (prerequisites === void 0)
+              exactDemandUnavailableReason = "demand prerequisites unavailable";
+            else if (prerequisites.spy === "unavailable")
+              exactDemandUnavailableReason = "demand prerequisite spy unavailable";
+            else if (prerequisites.ai === "unavailable")
+              exactDemandUnavailableReason = "demand prerequisite ai unavailable";
+            else if (isEnabled(settings, "autoTrigger") && triggerTargetsThisCycle === void 0)
+              exactDemandUnavailableReason = "trigger target snapshot unavailable";
+            else if (hasCapturedProjectStorageDemand(
+              settings,
+              settingsStorage.readRaw()
+            ) && progression.readEstablishedProjects() === void 0)
+              exactDemandUnavailableReason = "enabled project-storage catalog unavailable";
+            else if (buildDemandRequired && progression.readEstablishedStorageBuildTargets() === void 0)
+              exactDemandUnavailableReason = "managed build target snapshot unavailable";
+            else {
+              let exact = demand.sampleExact();
+              exact.status === "ready" ? demandThisCycle = exact.sample : exactDemandUnavailableReason = exact.reason.message;
             }
+            observePowerDemandPhase("power-ready");
           });
-          demandPrerequisitesThisCycle = prerequisites;
-          let buildDemandRequired = isEnabled(settings, "autoBuild") || isEnabled(settings, "autoStorage");
-          if (!isRecord(
-            readProperty(pageCapture2.rootState.readRoot(), "resource")
-          ))
-            exactDemandUnavailableReason = "root resource state unavailable";
-          else if (prerequisites === void 0)
-            exactDemandUnavailableReason = "demand prerequisites unavailable";
-          else if (prerequisites.spy === "unavailable")
-            exactDemandUnavailableReason = "demand prerequisite spy unavailable";
-          else if (prerequisites.ai === "unavailable")
-            exactDemandUnavailableReason = "demand prerequisite ai unavailable";
-          else if (isEnabled(settings, "autoTrigger") && triggerTargetsThisCycle === void 0)
-            exactDemandUnavailableReason = "trigger target snapshot unavailable";
-          else if (hasCapturedProjectStorageDemand(
-            settings,
-            settingsStorage.readRaw()
-          ) && progression.readEstablishedProjects() === void 0)
-            exactDemandUnavailableReason = "enabled project-storage catalog unavailable";
-          else if (buildDemandRequired && progression.readEstablishedStorageBuildTargets() === void 0)
-            exactDemandUnavailableReason = "managed build target snapshot unavailable";
-          else {
-            let exact = demand.sampleExact();
-            exact.status === "ready" ? demandThisCycle = exact.sample : exactDemandUnavailableReason = exact.reason.message;
-          }
-          observePowerDemandPhase("power-ready");
-          let outcome = powerAutomation.run();
-          observePowerDemandPhase("power-complete", outcome), outcome.status !== "succeeded" && reportOnce(
+          let outcome = measurePhase(
+            "autoPower.runner",
+            () => powerAutomation.run()
+          );
+          observePowerDemandPhase("power-complete", outcome), outcome !== void 0 && outcome.status !== "succeeded" && reportOnce(
             `autoPower: ${outcome.failure.code}: ${outcome.failure.message}`
           );
         }));
@@ -56967,7 +57116,11 @@ Only continue if you trust the source. Injected code:
       } catch (error) {
         logError(String(error));
       } finally {
-        refreshCapturedPlanningPanels(), stateLogRecorder.recordProcessedCycle(automationCycle, settings), currentStateLogConstructionSnapshot = null, stateLogPlannerDetailsDue = !1, profiling !== void 0 && workStartedAtMs !== void 0 && (profiling.recordPerformance(
+        let finalizationStartedAtMs = profiling?.nowMs();
+        refreshCapturedPlanningPanels(), stateLogRecorder.recordProcessedCycle(automationCycle, settings), currentStateLogConstructionSnapshot = null, stateLogPlannerDetailsDue = !1, profiling !== void 0 && finalizationStartedAtMs !== void 0 && profiling.recordPerformance(
+          "tick.finalization",
+          profiling.nowMs() - finalizationStartedAtMs
+        ), profiling !== void 0 && workStartedAtMs !== void 0 && (profiling.recordPerformance(
           "tick",
           profiling.nowMs() - workStartedAtMs
         ), profiling.flushPerformance());

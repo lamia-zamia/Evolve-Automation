@@ -62,6 +62,45 @@ function structure({
     capturedPowerFixtureControlIds.add(actionId);
   }
   const readNumber = (value) => ({ kind: "value", value });
+  const supportMethodCalls = new Map();
+  const supportGridSamples = [];
+  const countSupportRead = (name) =>
+    supportMethodCalls.set(name, (supportMethodCalls.get(name) ?? 0) + 1);
+  const readSupport = () => {
+    countSupportRead("readSupport");
+    return supportAbsent ? { kind: "absent" } : readNumber(support);
+  };
+  const readSupportTypes = () => {
+    countSupportRead("readSupportTypes");
+    return supportAbsent || supportTypes === undefined
+      ? { kind: "absent" }
+      : {
+          kind: "value",
+          value: Array.isArray(supportTypes) ? supportTypes : [supportTypes],
+        };
+  };
+  const readSupportProvider = () => {
+    countSupportRead("readSupportProvider");
+    return supportProvider === undefined
+      ? { kind: "absent" }
+      : { kind: "value", value: supportProvider };
+  };
+  const readSupportTopology = () => {
+    countSupportRead("readSupportTopology");
+    const topology =
+      typeof supportTopology === "function"
+        ? supportTopology()
+        : supportTopology;
+    return {
+      kind: "value",
+      value: topology ?? {
+        anchorEntryKey: null,
+        unlimited: false,
+        enabled: { kind: "value", value: true },
+        conditionEvaluated: false,
+      },
+    };
+  };
   return Object.freeze({
     entryKey,
     region,
@@ -111,51 +150,54 @@ function structure({
       fuelAdjustmentRequested === undefined
         ? { kind: "absent" }
         : readNumber(fuelAdjustmentRequested),
-    readSupport: () =>
-      supportAbsent ? { kind: "absent" } : readNumber(support),
-    readSupportTypes: () =>
-      supportAbsent || supportTypes === undefined
+    supportMethodCalls,
+    supportGridSamples,
+    readSupport,
+    readSupportTypes,
+    readSupportValue: (type) => {
+      countSupportRead(`readSupportValue:${type}`);
+      return readNumber(supportFor?.[type] ?? support);
+    },
+    readSupportProvider,
+    readSupportTopology,
+    readNativeSupportGrids: (_root, sampled) => {
+      countSupportRead("readNativeSupportGrids");
+      supportGridSamples.push(sampled);
+      const sampledSupport = sampled?.support ?? readSupport();
+      const sampledTypes = sampled?.supportTypes ?? readSupportTypes();
+      const sampledProvider = sampled?.provider ?? readSupportProvider();
+      const sampledTopology = sampled?.topology ?? readSupportTopology();
+      return sampledSupport.kind === "absent"
         ? { kind: "absent" }
-        : {
-            kind: "value",
-            value: Array.isArray(supportTypes) ? supportTypes : [supportTypes],
-          },
-    readSupportValue: (type) => readNumber(supportFor?.[type] ?? support),
-    readSupportProvider: () =>
-      supportProvider === undefined
-        ? { kind: "absent" }
-        : { kind: "value", value: supportProvider },
-    readSupportTopology: () => ({
-      kind: "value",
-      value: supportTopology ?? {
-        anchorEntryKey: null,
-        unlimited: false,
-        enabled: { kind: "value", value: true },
-      },
-    }),
-    readNativeSupportGrids: () =>
-      supportAbsent
-        ? { kind: "absent" }
-        : {
-            kind: "value",
-            value: (supportTypes === undefined
-              ? []
-              : Array.isArray(supportTypes)
-                ? supportTypes
-                : [supportTypes]
-            ).map((type) => ({
-              type,
-              contribution: supportFor?.[type] ?? support,
-              consumer: support < 0,
-              provider:
-                (supportFor?.[type] ?? support) > 0 || supportProvider === true,
-              topology: supportTopology ?? {
-                anchorEntryKey: null,
-                unlimited: false,
-                enabled: { kind: "value", value: true },
-              },
-            })),
-          },
+        : sampledSupport.kind !== "value" || sampledTypes.kind === "invalid"
+          ? { kind: "invalid" }
+          : {
+              kind: "value",
+              value: (sampledTypes.kind !== "value"
+                ? []
+                : sampledTypes.value
+              ).map((type) => ({
+                type,
+                contribution:
+                  sampled?.supportValues.get(type)?.kind === "value"
+                    ? sampled.supportValues.get(type).value
+                    : (supportFor?.[type] ?? support),
+                consumer: sampledSupport.value < 0,
+                provider:
+                  (supportFor?.[type] ?? support) > 0 ||
+                  (sampledProvider.kind === "value" && sampledProvider.value),
+                topology:
+                  sampledTopology.kind === "value"
+                    ? sampledTopology.value
+                    : (supportTopology ?? {
+                        anchorEntryKey: null,
+                        unlimited: false,
+                        enabled: { kind: "value", value: true },
+                        conditionEvaluated: false,
+                      }),
+              })),
+            };
+    },
     readSupportFuel: () =>
       supportFuel === undefined ? { kind: "absent" } : readNumber(supportFuel),
     readSupportFuelAdjustmentDisabled: () =>
@@ -761,6 +803,7 @@ assert.equal(
         counts.set(name, (counts.get(name) ?? 0) + amount),
     },
   });
+  for (const member of structures) member.supportMethodCalls.clear();
   assert.ok(reader.readCycle());
   assert.equal(structureReads, 1);
   assert.equal(powerReads, 1);
@@ -774,15 +817,152 @@ assert.equal(
     "each discovered support type is resolved once per cycle",
   );
   assert.equal(counts.get("autoPower.readCycle.structureRegistryReads"), 1);
+  const supportCapableStructures = structures.filter((member) =>
+    member.supportMethodCalls.has("readSupportTopology"),
+  ).length;
+  assert.equal(
+    counts.get("autoPower.readCycle.supportMetadataStructures"),
+    supportCapableStructures,
+  );
+  assert.equal(
+    counts.get("autoPower.readCycle.supportTopologyReads"),
+    supportCapableStructures,
+  );
+  assert.equal(counts.get("autoPower.readCycle.supportRegistryScans"), 0);
   assert.equal(counts.get("autoPower.readCycle.powerOrderResolutions"), 1);
   assert.equal(counts.get("autoPower.readCycle.supportOrderResolutions"), 3);
+  for (const name of [
+    "autoPower.readCycle.supportOrderEntries",
+    "autoPower.readCycle.supportGroupEntries",
+    "autoPower.readCycle.supportParticipantStructures",
+    "autoPower.readCycle.supportParticipantGridCalls",
+  ])
+    assert.ok((counts.get(name) ?? 0) > 0, `${name} consumed the sample`);
+  for (const member of structures) {
+    for (const method of [
+      "readSupport",
+      "readSupportTypes",
+      "readSupportProvider",
+      "readSupportTopology",
+    ]) {
+      assert.ok(
+        (member.supportMethodCalls.get(method) ?? 0) <= 1,
+        `${member.entryKey} ${method} is sampled no more than once per cycle`,
+      );
+    }
+  }
+  assert.ok(
+    structures.some(
+      (member) => member.supportMethodCalls.get("readNativeSupportGrids") === 1,
+    ),
+    "the sampled support metadata reaches participant construction",
+  );
+  assert.ok(
+    structures.some((member) =>
+      member.supportGridSamples.some(
+        (sampled) =>
+          sampled !== undefined &&
+          sampled.support.kind === "value" &&
+          sampled.supportValues instanceof Map,
+      ),
+    ),
+    "participants receive the call-scoped support value map",
+  );
+  assert.ok(
+    structures.every((member) =>
+      [...member.supportMethodCalls.entries()]
+        .filter(([name]) => name.startsWith("readSupportValue:"))
+        .every(([, calls]) => calls <= 1),
+    ),
+    "native ordering, support totals, and participants reuse each sampled value",
+  );
   for (const phase of [
     "autoPower.readCycle.structures",
+    "autoPower.readCycle.supportMetadata",
     "autoPower.readCycle.semanticBuildings",
     "autoPower.readCycle.nativeOrdering",
     "autoPower.readCycle.nativeSupports",
+    "autoPower.readCycle.supportParticipants",
   ])
     assert.ok(phases.has(phase), `records ${phase}`);
+}
+
+// `support_condition` is a call-scoped observation: one evaluation per Power read, and a later
+// read observes a changed answer without retaining the previous cycle's topology.
+{
+  let enabled = true;
+  let conditionReads = 0;
+  const anchor = structure({
+    entryKey: "space:condition_anchor",
+    region: "space",
+    sector: "space",
+    struct: "condition_anchor",
+    actionId: "space-condition_anchor",
+    support: 2,
+    supportTypes: "moon",
+    supportProvider: true,
+  });
+  const member = structure({
+    entryKey: "space:condition_consumer",
+    region: "space",
+    sector: "space",
+    struct: "condition_consumer",
+    actionId: "space-condition_consumer",
+    support: -1,
+    supportTypes: "moon",
+    supportTopology: () => {
+      conditionReads++;
+      return {
+        anchorEntryKey: anchor.entryKey,
+        unlimited: false,
+        enabled: { kind: "value", value: enabled },
+        conditionEvaluated: true,
+      };
+    },
+  });
+  const conditionRoot = {
+    ...root,
+    space: {
+      ...root.space,
+      condition_anchor: { on: 1, support: 0, s_max: 2 },
+      condition_consumer: { on: 1, support: 0, s_max: 0 },
+    },
+    power: [],
+    support: { moon: [member.entryKey] },
+  };
+  const counts = new Map();
+  const reader = createCapturedPowerReader({
+    ...readerDependencies,
+    rootState: { readRoot: () => conditionRoot },
+    mechanics: createMechanics({
+      structures: [anchor, member],
+      powerOrder: () => [],
+      supportOrder: (sample) => sample.support.moon,
+    }),
+    diagnostics: {
+      readPerformanceEnabled: () => true,
+      nowMs: () => 0,
+      recordPerformance: () => {},
+      recordCount: (name, amount) =>
+        counts.set(name, (counts.get(name) ?? 0) + amount),
+    },
+  });
+  const firstCycle = reader.readCycle();
+  assert.ok(firstCycle);
+  assert.equal(
+    firstCycle.supports.find((item) => item.type === "moon")?.allocation,
+    "strict",
+  );
+  enabled = false;
+  const secondCycle = reader.readCycle();
+  assert.ok(secondCycle);
+  assert.equal(
+    secondCycle.supports.find((item) => item.type === "moon")?.allocation,
+    "unconstrained",
+  );
+  assert.equal(conditionReads, 2);
+  assert.equal(member.supportMethodCalls.get("readSupportTopology"), 2);
+  assert.equal(counts.get("autoPower.readCycle.supportConditionReads"), 2);
 }
 
 // Native saved order validation still rejects duplicates and skips stale keys absent from the

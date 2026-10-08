@@ -427,6 +427,7 @@ assert.deepEqual(definitions[0].readSupportTopology(), {
     anchorEntryKey: null,
     unlimited: false,
     enabled: { kind: "value", value: true },
+    conditionEvaluated: false,
   },
 });
 assert.equal("c_action" in definitions[0], false);
@@ -439,7 +440,7 @@ assert.equal("uninstall" in capture.mechanics, false);
 const falseResultAction = structureEntry({
   region: "space",
   sector: "spc_elsewhere",
-  struct: "relay",
+  struct: "elsewhere_relay",
   actionId: "space-spc_elsewhere-relay",
   powered: () => false,
 });
@@ -513,7 +514,7 @@ assert.deepEqual(falseResultDefinition.readPowerLimit(), { kind: "absent" });
 const invalidResultAction = structureEntry({
   region: "space",
   sector: "spc_invalid",
-  struct: "relay",
+  struct: "invalid_relay",
   actionId: "space-spc_invalid-relay",
   powered: () => Number.NaN,
 });
@@ -768,6 +769,7 @@ assert.deepEqual(
   { kind: "invalid" },
   "snapshot-aware order resolution rejects duplicate keys",
 );
+entries.delete(third.key);
 
 const currentGridRoot = {
   space: { relay: { on: 1 } },
@@ -827,6 +829,7 @@ assert.deepEqual(nativeConsumerDefinition.readNativeSupportGrids(dynamicRoot), {
         anchorEntryKey: first.key,
         unlimited: true,
         enabled: { kind: "value", value: true },
+        conditionEvaluated: false,
       },
     },
     {
@@ -838,10 +841,28 @@ assert.deepEqual(nativeConsumerDefinition.readNativeSupportGrids(dynamicRoot), {
         anchorEntryKey: first.key,
         unlimited: true,
         enabled: { kind: "value", value: true },
+        conditionEvaluated: false,
       },
     },
   ],
 });
+const duplicateAnchor = structureEntry({
+  region: "space",
+  sector: "spc_duplicate_anchor",
+  struct: "relay",
+  actionId: "space-spc_duplicate_anchor-relay",
+  powered: () => 0,
+});
+entries.set(duplicateAnchor.key, duplicateAnchor);
+const duplicateAnchorConsumer = capture.mechanics
+  .readStructures()
+  .find((entry) => entry.entryKey === nativeConsumer.key);
+assert.deepEqual(
+  duplicateAnchorConsumer.readSupportTopology(),
+  { kind: "invalid" },
+  "two same-region struct candidates make the anchor ambiguous and fail closed",
+);
+entries.delete(duplicateAnchor.key);
 nativeConsumerWatts = 0;
 assert.deepEqual(
   nativeConsumerDefinition.readPowerGridRole(dynamicRoot),
@@ -933,6 +954,7 @@ assert.deepEqual(typedSupportDefinition.readSupportTopology(), {
     anchorEntryKey: first.key,
     unlimited: true,
     enabled: { kind: "value", value: true },
+    conditionEvaluated: true,
   },
 });
 
@@ -974,6 +996,7 @@ assert.deepEqual(
           anchorEntryKey: null,
           unlimited: false,
           enabled: { kind: "value", value: true },
+          conditionEvaluated: false,
         },
       },
     ],
@@ -1045,6 +1068,10 @@ assert.deepEqual(
   { kind: "value", value: false },
   "falsey support conditions disable the group using game truthiness",
 );
+assert.equal(
+  disabledSupportDefinition.readSupportTopology().value.conditionEvaluated,
+  true,
+);
 
 const invalidCondition = structureEntry({
   region: "space",
@@ -1068,6 +1095,10 @@ assert.deepEqual(
   { kind: "invalid" },
   "a throwing support condition remains unavailable instead of becoming enabled",
 );
+assert.equal(
+  invalidConditionDefinition.readSupportTopology().value.conditionEvaluated,
+  true,
+);
 
 const unresolvedSupportAnchor = structureEntry({
   region: "space",
@@ -1089,6 +1120,7 @@ assert.deepEqual(
       anchorEntryKey: null,
       unlimited: false,
       enabled: { kind: "value", value: true },
+      conditionEvaluated: false,
     },
   },
   "the game retains a false anchor when info.support does not resolve in the region",
@@ -1105,7 +1137,7 @@ unrelatedAfter.set(
     powered: () => 1,
   }),
 );
-assert.equal(capture.mechanics.readStructures().length, 17);
+assert.equal(capture.mechanics.readStructures().length, 16);
 
 let guardRating = 37.5;
 const guardOriginalRound = Object.getOwnPropertyDescriptor(page.Math, "round");

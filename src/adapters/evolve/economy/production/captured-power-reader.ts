@@ -23,6 +23,7 @@ import type { GameRootStateSource } from "../../../../ports/game-root-state.ts";
 import type {
   CapturedGameMechanics,
   CapturedGameStructureDefinition,
+  CapturedSupportMechanicsSample,
   CapturedFuelAdjustmentMode,
   CapturedProductionBreakdown,
 } from "../../../../ports/captured-game-mechanics.ts";
@@ -331,8 +332,31 @@ interface CapturedPowerMechanicsSnapshot {
   readonly isCurrent: () => boolean;
 }
 
+interface CapturedPowerSupportStructureSample {
+  readonly structure: CapturedGameStructureDefinition;
+  readonly support: CapturedSupportMechanicsSample["support"];
+  readonly supportTypes: CapturedSupportMechanicsSample["supportTypes"];
+  readonly provider: CapturedSupportMechanicsSample["provider"];
+  readonly topology: CapturedSupportMechanicsSample["topology"];
+  readonly supportValues: ReadonlyMap<
+    string,
+    CapturedSupportMechanicsSample["support"]
+  >;
+}
+
+interface CapturedPowerSupportSnapshot {
+  readonly structures: readonly CapturedPowerSupportStructureSample[];
+  readonly byEntryKey: ReadonlyMap<string, CapturedPowerSupportStructureSample>;
+  readonly supportTypes: readonly string[];
+  readonly supportOrderByType: ReadonlyMap<
+    string,
+    readonly CapturedGameStructureDefinition[]
+  >;
+}
+
 interface CapturedPowerMechanicsOrdering {
   readonly ordered: readonly CapturedGameStructureDefinition[];
+  readonly supportSnapshot: CapturedPowerSupportSnapshot;
   readonly supportOrders: ReadonlyMap<
     string,
     readonly CapturedGameStructureDefinition[]
@@ -355,37 +379,119 @@ function createCapturedPowerMechanicsSnapshot(
   return Object.freeze({ structures, byEntryKey, isCurrent });
 }
 
+function createCapturedPowerSupportSnapshot(
+  snapshot: CapturedPowerMechanicsSnapshot,
+  count: (name: string, amount?: number) => void,
+): CapturedPowerSupportSnapshot | undefined {
+  const anchors = new Map<
+    string,
+    Map<string, CapturedGameStructureDefinition | null>
+  >();
+  for (const structure of snapshot.structures) {
+    let byStruct = anchors.get(structure.region);
+    if (byStruct === undefined) {
+      byStruct = new Map();
+      anchors.set(structure.region, byStruct);
+    }
+    if (byStruct.has(structure.struct)) byStruct.set(structure.struct, null);
+    else byStruct.set(structure.struct, structure);
+  }
+  const resolveAnchor = (region: string, struct: string) => {
+    const byStruct = anchors.get(region);
+    if (byStruct === undefined || !byStruct.has(struct))
+      return { kind: "value", value: null } as const;
+    const candidate = byStruct.get(struct);
+    if (
+      candidate === null ||
+      candidate === undefined ||
+      candidate.region !== region ||
+      candidate.struct !== struct ||
+      !candidate.matchesCurrentIdentity()
+    )
+      return { kind: "invalid" } as const;
+    return { kind: "value", value: candidate.entryKey } as const;
+  };
+  const supportTypes = new Set<string>();
+  const sampledStructures: CapturedPowerSupportStructureSample[] = [];
+  const byEntryKey = new Map<string, CapturedPowerSupportStructureSample>();
+  for (const structure of snapshot.structures) {
+    const support = structure.readSupport();
+    if (support.kind === "invalid") return undefined;
+    if (support.kind === "absent") {
+      const sampled = Object.freeze({
+        structure,
+        support,
+        supportTypes: { kind: "absent" } as const,
+        provider: { kind: "absent" } as const,
+        topology: { kind: "absent" } as const,
+        supportValues: new Map(),
+      });
+      sampledStructures.push(sampled);
+      byEntryKey.set(structure.entryKey, sampled);
+      continue;
+    }
+    count("autoPower.readCycle.supportMetadataStructures");
+    const types = structure.readSupportTypes();
+    const provider = structure.readSupportProvider();
+    const topology = structure.readSupportTopology(resolveAnchor);
+    count("autoPower.readCycle.supportTopologyReads");
+    if (types.kind === "invalid" || provider.kind === "invalid")
+      return undefined;
+    if (topology.kind === "value" && topology.value.conditionEvaluated)
+      count("autoPower.readCycle.supportConditionReads");
+    if (topology.kind !== "value" || topology.value.enabled.kind === "invalid")
+      return undefined;
+    const supportValues = new Map<
+      string,
+      CapturedPowerSupportStructureSample["support"]
+    >();
+    if (types.kind === "value") {
+      for (const type of types.value) {
+        supportTypes.add(type);
+        const value = structure.readSupportValue(type);
+        supportValues.set(type, value);
+        count("autoPower.readCycle.supportValueReads");
+        if (value.kind !== "value") return undefined;
+      }
+    }
+    const sampled = Object.freeze({
+      structure,
+      support,
+      supportTypes: types,
+      provider,
+      topology,
+      supportValues,
+    });
+    sampledStructures.push(sampled);
+    byEntryKey.set(structure.entryKey, sampled);
+  }
+  count("autoPower.readCycle.supportTypes", supportTypes.size);
+  count("autoPower.readCycle.supportRegistryScans", 0);
+  return Object.freeze({
+    structures: Object.freeze(sampledStructures),
+    byEntryKey,
+    supportTypes: Object.freeze([...supportTypes]),
+    supportOrderByType: new Map(),
+  });
+}
+
 function readOrderedMechanics(
   root: unknown,
   mechanics: CapturedGameMechanics,
   snapshot: CapturedPowerMechanicsSnapshot,
-  count: (name: string) => void,
+  supportSnapshot: CapturedPowerSupportSnapshot,
+  count: (name: string, amount?: number) => void,
 ): CapturedPowerMechanicsOrdering | undefined {
   const powerOrder = mechanics.readPowerOrder(root, snapshot.byEntryKey);
   count("autoPower.readCycle.powerOrderResolutions");
   if (powerOrder.kind !== "value") return undefined;
 
-  const types = new Set<string>();
-  for (const structure of snapshot.structures) {
-    const support = structure.readSupport();
-    if (support.kind === "invalid") return undefined;
-    if (support.kind === "absent") continue;
-    const supportTypes = structure.readSupportTypes();
-    if (supportTypes.kind === "invalid") return undefined;
-    if (supportTypes.kind === "value") {
-      for (const type of supportTypes.value) types.add(type);
-    }
-    const provider = structure.readSupportProvider();
-    const topology = structure.readSupportTopology();
-    if (provider.kind === "invalid" || topology.kind !== "value")
-      return undefined;
-    if (topology.value.enabled.kind === "invalid") return undefined;
-  }
   const ordered: CapturedGameStructureDefinition[] = [];
   const supportOrders = new Map<
     string,
     readonly CapturedGameStructureDefinition[]
   >();
+  const sampledByEntryKey = new Map(supportSnapshot.byEntryKey);
   const seen = new Set<string>();
   const add = (structure: CapturedGameStructureDefinition) => {
     if (!seen.has(structure.entryKey)) {
@@ -394,25 +500,49 @@ function readOrderedMechanics(
     }
   };
   powerOrder.value.forEach(add);
-  for (const type of types) {
-    const supportOrder = mechanics.readSupportOrder(
+  for (const type of supportSnapshot.supportTypes) {
+    const resolvedOrder = mechanics.readSupportOrder(
       root,
       type,
       snapshot.byEntryKey,
     );
     count("autoPower.readCycle.supportOrderResolutions");
-    if (supportOrder.kind !== "value") return undefined;
-    supportOrders.set(type, supportOrder.value);
-    for (const structure of supportOrder.value) {
-      if (structure.readSupportValue(type).kind !== "value") return undefined;
+    if (resolvedOrder.kind !== "value") return undefined;
+    const supportOrder = resolvedOrder.value;
+    supportOrders.set(type, supportOrder);
+    for (const structure of supportOrder) {
+      count("autoPower.readCycle.supportOrderEntries");
+      let sampled = sampledByEntryKey.get(structure.entryKey);
+      if (sampled === undefined) return undefined;
+      let supportValue = sampled.supportValues.get(type);
+      if (supportValue === undefined) {
+        supportValue = structure.readSupportValue(type);
+        const supportValues = new Map(sampled.supportValues);
+        supportValues.set(type, supportValue);
+        sampled = Object.freeze({ ...sampled, supportValues });
+        sampledByEntryKey.set(structure.entryKey, sampled);
+        count("autoPower.readCycle.supportValueReads");
+      }
+      if (supportValue.kind !== "value") return undefined;
       add(structure);
     }
   }
   // Generators and support providers have no saved user order in initStructureGrids().
   // Its captured registry supplies their native discovery order.
   snapshot.structures.forEach(add);
+  const resolvedSupportSnapshot = Object.freeze({
+    ...supportSnapshot,
+    structures: Object.freeze(
+      supportSnapshot.structures.map(({ structure }) =>
+        sampledByEntryKey.get(structure.entryKey)!,
+      ),
+    ),
+    byEntryKey: sampledByEntryKey,
+    supportOrderByType: supportOrders,
+  });
   return Object.freeze({
     ordered: Object.freeze(ordered),
+    supportSnapshot: resolvedSupportSnapshot,
     supportOrders,
   });
 }
@@ -759,13 +889,16 @@ export function readNativePowerSupports(
     readonly CapturedGameStructureDefinition[]
   >,
   byEntryKey?: ReadonlyMap<string, CapturedGameStructureDefinition>,
+  supportSnapshot?: CapturedPowerSupportSnapshot,
+  count: (name: string, amount?: number) => void = () => {},
 ): readonly PowerSupportInput[] | undefined {
   const groups = new Map<string, CapturedGameStructureDefinition[]>();
   for (const structure of structures) {
-    const support = structure.readSupport();
+    const sampled = supportSnapshot?.byEntryKey.get(structure.entryKey);
+    const support = sampled?.support ?? structure.readSupport();
     if (support.kind === "invalid") return undefined;
     if (support.kind === "absent") continue;
-    const types = structure.readSupportTypes();
+    const types = sampled?.supportTypes ?? structure.readSupportTypes();
     if (types.kind === "invalid") return undefined;
     if (types.kind !== "value") continue;
     for (const type of types.value) {
@@ -784,7 +917,13 @@ export function readNativePowerSupports(
     );
     let infiltrated = false;
     for (const member of members) {
-      const support = member.readSupportValue(type);
+      count("autoPower.readCycle.supportGroupEntries");
+      const sampled = supportSnapshot?.byEntryKey.get(member.entryKey);
+      const support =
+        sampled === undefined
+          ? member.readSupportValue(type)
+          : sampled.supportValues.get(type);
+      if (support === undefined) return undefined;
       if (support.kind !== "value") return undefined;
       if (support.value <= 0) continue;
       const sector = readProperty(infiltrators, member.sector);
@@ -811,13 +950,17 @@ export function readNativePowerSupports(
     let unlimited = false;
     let enabled = true;
     for (const member of members) {
-      const generic = member.readSupport();
+      const sampled = supportSnapshot?.byEntryKey.get(member.entryKey);
+      const generic = sampled?.support ?? member.readSupport();
       if (generic.kind !== "value") return undefined;
       if (generic.value >= 0) continue;
       consumers.push(member);
-      const topology = member.readSupportTopology();
+      count("autoPower.readCycle.supportConsumerTopologyEntries");
+      const topology = sampled?.topology ?? member.readSupportTopology();
       if (topology.kind !== "value" || topology.value.enabled.kind !== "value")
         return undefined;
+      if (topology.value.conditionEvaluated)
+        count("autoPower.readCycle.supportConsumerConditionEntries");
       if (anchorKey === null && topology.value.anchorEntryKey !== null) {
         anchorKey = topology.value.anchorEntryKey;
         unlimited = topology.value.unlimited;
@@ -2212,8 +2355,19 @@ function readPowerCycle(
   );
   if (snapshot === undefined)
     return unavailable("structures", "captured structure identities ambiguous");
+  const supportMetadata = measure("autoPower.readCycle.supportMetadata", () =>
+    createCapturedPowerSupportSnapshot(snapshot, tally.count),
+  );
+  if (supportMetadata === undefined)
+    return unavailable("native-support", "support metadata unavailable");
   const nativeOrdering = measure("autoPower.readCycle.nativeOrdering", () =>
-    readOrderedMechanics(root, dependencies.mechanics, snapshot, tally.count),
+    readOrderedMechanics(
+      root,
+      dependencies.mechanics,
+      snapshot,
+      supportMetadata,
+      tally.count,
+    ),
   );
   if (production === undefined)
     return unavailable("production", "production breakdown unavailable");
@@ -2256,6 +2410,8 @@ function readPowerCycle(
       snapshot.structures,
       nativeOrdering.supportOrders,
       snapshot.byEntryKey,
+      nativeOrdering.supportSnapshot,
+      tally.count,
     ),
   );
   if (supports === undefined)
@@ -2269,114 +2425,150 @@ function readPowerCycle(
   const unsafeSupportTypes = new Set<string>();
   let unsafeEverySupportType = false;
   const beltConsumers: PowerBeltConsumerInput[] = [];
-  for (const structure of structures) {
-    const state = readCapturedStructureState(root, structure);
-    if (state === undefined || state === null) continue;
-    const support = structure.readSupport();
-    if (support.kind === "absent") continue;
-    const readTypes = structure.readSupportTypes();
-    const supportTypes =
-      readTypes.kind === "value" ? readTypes.value : Object.freeze([]);
-    if (readTypes.kind === "invalid") {
-      if (supportTypes.length === 0) unsafeEverySupportType = true;
-      for (const type of supportTypes) unsafeSupportTypes.add(type);
-    }
-    if (support.kind === "invalid") {
-      if (supportTypes.length === 0) unsafeEverySupportType = true;
-      for (const type of supportTypes) unsafeSupportTypes.add(type);
-      nativeSupportParticipants.push({
-        structure,
-        supportTypes,
-        supportChanges: Object.freeze([]),
-      });
-      continue;
-    }
-    if (!isRecord(state)) {
-      if (supportTypes.length === 0) unsafeEverySupportType = true;
-      for (const type of supportTypes) unsafeSupportTypes.add(type);
-      nativeSupportParticipants.push({
-        structure,
-        supportTypes,
-        supportChanges: Object.freeze([]),
-      });
-      continue;
-    }
-    const grids = structure.readNativeSupportGrids(root);
-    if (grids.kind !== "value") {
-      if (supportTypes.length === 0) unsafeEverySupportType = true;
-      for (const type of supportTypes) unsafeSupportTypes.add(type);
-      nativeSupportParticipants.push({
-        structure,
-        supportTypes,
-        supportChanges: Object.freeze([]),
-      });
-      continue;
-    }
-    const participantTypes = new Set(supportTypes);
-    const supportChanges: PowerSupportChangeInput[] = [];
-    for (const grid of grids.value) {
-      if (!isRecord(grid)) {
-        if (participantTypes.size === 0) unsafeEverySupportType = true;
-        for (const type of participantTypes) unsafeSupportTypes.add(type);
+  measure("autoPower.readCycle.supportParticipants", () => {
+    let participantStructures = 0;
+    let participantGridCalls = 0;
+    let participantTypeEntries = 0;
+    let participantConditionStructures = 0;
+    for (const structure of structures) {
+      const state = readCapturedStructureState(root, structure);
+      if (state === undefined || state === null) continue;
+      const sampled = nativeOrdering.supportSnapshot.byEntryKey.get(
+        structure.entryKey,
+      );
+      if (sampled === undefined) return;
+      const support = sampled.support;
+      if (support.kind === "absent") continue;
+      const readTypes = sampled.supportTypes;
+      const supportTypes =
+        readTypes.kind === "value" ? readTypes.value : Object.freeze([]);
+      if (readTypes.kind === "invalid") {
+        if (supportTypes.length === 0) unsafeEverySupportType = true;
+        for (const type of supportTypes) unsafeSupportTypes.add(type);
+      }
+      if (support.kind === "invalid") {
+        if (supportTypes.length === 0) unsafeEverySupportType = true;
+        for (const type of supportTypes) unsafeSupportTypes.add(type);
+        nativeSupportParticipants.push({
+          structure,
+          supportTypes,
+          supportChanges: Object.freeze([]),
+        });
         continue;
       }
-      const type = readProperty(grid, "type");
-      const contribution = readProperty(grid, "contribution");
-      const consumer = readProperty(grid, "consumer");
-      const provider = readProperty(grid, "provider");
-      if (typeof type === "string" && type.length > 0)
-        participantTypes.add(type);
+      if (!isRecord(state)) {
+        if (supportTypes.length === 0) unsafeEverySupportType = true;
+        for (const type of supportTypes) unsafeSupportTypes.add(type);
+        nativeSupportParticipants.push({
+          structure,
+          supportTypes,
+          supportChanges: Object.freeze([]),
+        });
+        continue;
+      }
+      participantStructures++;
+      if (readTypes.kind === "value")
+        participantTypeEntries += readTypes.value.length;
+      const grids = structure.readNativeSupportGrids(root, sampled);
+      participantGridCalls++;
       if (
-        typeof type !== "string" ||
-        type.length === 0 ||
-        typeof contribution !== "number" ||
-        !Number.isFinite(contribution) ||
-        typeof consumer !== "boolean" ||
-        typeof provider !== "boolean" ||
-        (!consumer && !provider && contribution !== 0) ||
-        (consumer && support.value >= 0) ||
-        (provider && contribution < 0)
-      ) {
-        if (typeof type === "string" && type.length > 0)
-          unsafeSupportTypes.add(type);
-        else if (participantTypes.size === 0) unsafeEverySupportType = true;
-        else
-          for (const participantType of participantTypes)
-            unsafeSupportTypes.add(participantType);
+        readTypes.kind === "value" &&
+        sampled.topology.kind === "value" &&
+        sampled.topology.value.conditionEvaluated
+      )
+        participantConditionStructures++;
+      if (grids.kind !== "value") {
+        if (supportTypes.length === 0) unsafeEverySupportType = true;
+        for (const type of supportTypes) unsafeSupportTypes.add(type);
+        nativeSupportParticipants.push({
+          structure,
+          supportTypes,
+          supportChanges: Object.freeze([]),
+        });
         continue;
       }
-      if (provider) {
-        supportChanges.push(Object.freeze({ type, amount: -contribution }));
-      }
-      const consumerAmount = consumer ? -support.value : 0;
-      if (consumer) {
-        supportChanges.push(Object.freeze({ type, amount: consumerAmount }));
-      }
-      if (!consumer && !provider) {
-        supportChanges.push(Object.freeze({ type, amount: 0 }));
-      }
-      if (type === "belt" && consumer && consumerAmount > 0) {
-        const configured = readGameNumber(state, "on");
-        if (configured === undefined || configured < 0) {
-          unsafeSupportTypes.add(type);
+      const participantTypes = new Set(supportTypes);
+      const supportChanges: PowerSupportChangeInput[] = [];
+      for (const grid of grids.value) {
+        if (!isRecord(grid)) {
+          if (participantTypes.size === 0) unsafeEverySupportType = true;
+          for (const type of participantTypes) unsafeSupportTypes.add(type);
           continue;
         }
-        beltConsumers.push(
-          Object.freeze({
-            binding: structure.actionId,
-            configured,
-            supportPerUnit: consumerAmount,
-            managed: settings[`bld_s_${structure.actionId}`] === true,
-          }),
-        );
+        const type = readProperty(grid, "type");
+        const contribution = readProperty(grid, "contribution");
+        const consumer = readProperty(grid, "consumer");
+        const provider = readProperty(grid, "provider");
+        if (typeof type === "string" && type.length > 0)
+          participantTypes.add(type);
+        if (
+          typeof type !== "string" ||
+          type.length === 0 ||
+          typeof contribution !== "number" ||
+          !Number.isFinite(contribution) ||
+          typeof consumer !== "boolean" ||
+          typeof provider !== "boolean" ||
+          (!consumer && !provider && contribution !== 0) ||
+          (consumer && support.value >= 0) ||
+          (provider && contribution < 0)
+        ) {
+          if (typeof type === "string" && type.length > 0)
+            unsafeSupportTypes.add(type);
+          else if (participantTypes.size === 0) unsafeEverySupportType = true;
+          else
+            for (const participantType of participantTypes)
+              unsafeSupportTypes.add(participantType);
+          continue;
+        }
+        if (provider) {
+          supportChanges.push(Object.freeze({ type, amount: -contribution }));
+        }
+        const consumerAmount = consumer ? -support.value : 0;
+        if (consumer) {
+          supportChanges.push(Object.freeze({ type, amount: consumerAmount }));
+        }
+        if (!consumer && !provider) {
+          supportChanges.push(Object.freeze({ type, amount: 0 }));
+        }
+        if (type === "belt" && consumer && consumerAmount > 0) {
+          const configured = readGameNumber(state, "on");
+          if (configured === undefined || configured < 0) {
+            unsafeSupportTypes.add(type);
+            continue;
+          }
+          beltConsumers.push(
+            Object.freeze({
+              binding: structure.actionId,
+              configured,
+              supportPerUnit: consumerAmount,
+              managed: settings[`bld_s_${structure.actionId}`] === true,
+            }),
+          );
+        }
       }
+      nativeSupportParticipants.push({
+        structure,
+        supportTypes: Object.freeze([...participantTypes]),
+        supportChanges: Object.freeze(supportChanges),
+      });
     }
-    nativeSupportParticipants.push({
-      structure,
-      supportTypes: Object.freeze([...participantTypes]),
-      supportChanges: Object.freeze(supportChanges),
-    });
-  }
+    tally.count(
+      "autoPower.readCycle.supportParticipantStructures",
+      participantStructures,
+    );
+    tally.count(
+      "autoPower.readCycle.supportParticipantGridCalls",
+      participantGridCalls,
+    );
+    tally.count(
+      "autoPower.readCycle.supportParticipantTypeEntries",
+      participantTypeEntries,
+    );
+    tally.count(
+      "autoPower.readCycle.supportParticipantConditionStructures",
+      participantConditionStructures,
+    );
+  });
   if (unsafeEverySupportType)
     for (const support of supports) unsafeSupportTypes.add(support.type);
   const candidates: {

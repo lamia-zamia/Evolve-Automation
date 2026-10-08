@@ -858,6 +858,21 @@ export function startCapturedRuntime({
     reported.add(message);
     logError(message);
   };
+  const measurePhase = <T>(name: string, body: () => T): T => {
+    const phaseDiagnostics =
+      diagnostics?.readPerformanceEnabled() === true ? diagnostics : undefined;
+    const startedAtMs = phaseDiagnostics?.nowMs();
+    try {
+      return body();
+    } finally {
+      if (phaseDiagnostics !== undefined && startedAtMs !== undefined) {
+        phaseDiagnostics.recordPerformance(
+          name,
+          phaseDiagnostics.nowMs() - startedAtMs,
+        );
+      }
+    }
+  };
   /**
    * One feature's phase of the cycle. A throw inside it is reported once and skips that feature for
    * this cycle; every phase after it still runs, because a control that has gone missing in one
@@ -870,7 +885,7 @@ export function startCapturedRuntime({
    */
   const runPhase = <T>(name: string, body: () => T): T | undefined => {
     try {
-      return body();
+      return measurePhase(name, body);
     } catch (error) {
       reportOnce(`${name} stopped: ${String(error)}`);
       return undefined;
@@ -2854,6 +2869,13 @@ export function startCapturedRuntime({
     const profiling =
       diagnostics?.readPerformanceEnabled() === true ? diagnostics : undefined;
     const workStartedAtMs = profiling?.nowMs();
+    const recordPreamble = (startedAtMs: number | undefined) => {
+      if (profiling !== undefined && startedAtMs !== undefined)
+        profiling.recordPerformance(
+          "tick.preamble",
+          profiling.nowMs() - startedAtMs,
+        );
+    };
     automationCycle += 1;
     prospectiveSpaceMinerPlan = undefined;
     capturedResetCommittedThisCycle = false;
@@ -2878,6 +2900,7 @@ export function startCapturedRuntime({
         );
       }
       refreshCapturedPlanningPanels();
+      recordPreamble(workStartedAtMs);
       return;
     }
     refreshDiscoveredSettings();
@@ -2897,9 +2920,11 @@ export function startCapturedRuntime({
       !isEnabled(settings, "masterScriptToggle")
     ) {
       refreshCapturedPlanningPanels();
+      recordPreamble(workStartedAtMs);
       return;
     }
     stateLogPlannerDetailsDue = stateLogRecorder.isNextSampleDue(settings);
+    recordPreamble(workStartedAtMs);
     // The captured runtime is its own tick loop, so it owns the `tick` phase and the flush the
     // diagnostics adapter counts work ticks against. Without them `window.eaPerformance` records
     // samples on the production path and never emits a single summary.
@@ -3490,71 +3515,76 @@ export function startCapturedRuntime({
           });
         }
         runPhase("autoPower", () => {
-          observePowerDemandPhase("power-handoff-start");
-          // Power reads live holdings, Fleet and Building state at this phase, so the refresh
-          // below reuses the catalogs progression already established and takes current holdings
-          // from the root. Never discover panels here.
-          demandThisCycle = undefined;
-          exactDemandUnavailableReason = undefined;
-          // Earlier research/construction may have opened a reservation gate. Revalidate
-          // its current prerequisites without drawing; an uncaptured new gate stays stale.
-          const prerequisites =
-            demandPrerequisitesThisCycle === undefined
-              ? undefined
-              : ensureDemandPrerequisiteControls({
-                  root: pageCapture.rootState.readRoot(),
-                  settings,
-                  controls: pageCapture.controls,
-                  ensureForeignControls: () => undefined,
-                  ensureBuildControls: () => undefined,
-                });
-          demandPrerequisitesThisCycle = prerequisites;
-          const buildDemandRequired =
-            isEnabled(settings, "autoBuild") ||
-            isEnabled(settings, "autoStorage");
-          if (
-            !isRecord(
-              readProperty(pageCapture.rootState.readRoot(), "resource"),
+          measurePhase("autoPower.demandPreparation", () => {
+            observePowerDemandPhase("power-handoff-start");
+            // Power reads live holdings, Fleet and Building state at this phase, so the refresh
+            // below reuses the catalogs progression already established and takes current holdings
+            // from the root. Never discover panels here.
+            demandThisCycle = undefined;
+            exactDemandUnavailableReason = undefined;
+            // Earlier research/construction may have opened a reservation gate. Revalidate
+            // its current prerequisites without drawing; an uncaptured new gate stays stale.
+            const prerequisites =
+              demandPrerequisitesThisCycle === undefined
+                ? undefined
+                : ensureDemandPrerequisiteControls({
+                    root: pageCapture.rootState.readRoot(),
+                    settings,
+                    controls: pageCapture.controls,
+                    ensureForeignControls: () => undefined,
+                    ensureBuildControls: () => undefined,
+                  });
+            demandPrerequisitesThisCycle = prerequisites;
+            const buildDemandRequired =
+              isEnabled(settings, "autoBuild") ||
+              isEnabled(settings, "autoStorage");
+            if (
+              !isRecord(
+                readProperty(pageCapture.rootState.readRoot(), "resource"),
+              )
             )
-          )
-            exactDemandUnavailableReason = "root resource state unavailable";
-          else if (prerequisites === undefined)
-            exactDemandUnavailableReason = "demand prerequisites unavailable";
-          else if (prerequisites.spy === "unavailable")
-            exactDemandUnavailableReason =
-              "demand prerequisite spy unavailable";
-          else if (prerequisites.ai === "unavailable")
-            exactDemandUnavailableReason = "demand prerequisite ai unavailable";
-          else if (
-            isEnabled(settings, "autoTrigger") &&
-            triggerTargetsThisCycle === undefined
-          )
-            exactDemandUnavailableReason =
-              "trigger target snapshot unavailable";
-          else if (
-            hasCapturedProjectStorageDemand(
-              settings,
-              settingsStorage.readRaw(),
-            ) &&
-            progression.readEstablishedProjects() === undefined
-          )
-            exactDemandUnavailableReason =
-              "enabled project-storage catalog unavailable";
-          else if (
-            buildDemandRequired &&
-            progression.readEstablishedStorageBuildTargets() === undefined
-          )
-            exactDemandUnavailableReason =
-              "managed build target snapshot unavailable";
-          else {
-            const exact = demand.sampleExact();
-            if (exact.status === "ready") demandThisCycle = exact.sample;
-            else exactDemandUnavailableReason = exact.reason.message;
-          }
-          observePowerDemandPhase("power-ready");
-          const outcome = powerAutomation.run();
+              exactDemandUnavailableReason = "root resource state unavailable";
+            else if (prerequisites === undefined)
+              exactDemandUnavailableReason = "demand prerequisites unavailable";
+            else if (prerequisites.spy === "unavailable")
+              exactDemandUnavailableReason =
+                "demand prerequisite spy unavailable";
+            else if (prerequisites.ai === "unavailable")
+              exactDemandUnavailableReason =
+                "demand prerequisite ai unavailable";
+            else if (
+              isEnabled(settings, "autoTrigger") &&
+              triggerTargetsThisCycle === undefined
+            )
+              exactDemandUnavailableReason =
+                "trigger target snapshot unavailable";
+            else if (
+              hasCapturedProjectStorageDemand(
+                settings,
+                settingsStorage.readRaw(),
+              ) &&
+              progression.readEstablishedProjects() === undefined
+            )
+              exactDemandUnavailableReason =
+                "enabled project-storage catalog unavailable";
+            else if (
+              buildDemandRequired &&
+              progression.readEstablishedStorageBuildTargets() === undefined
+            )
+              exactDemandUnavailableReason =
+                "managed build target snapshot unavailable";
+            else {
+              const exact = demand.sampleExact();
+              if (exact.status === "ready") demandThisCycle = exact.sample;
+              else exactDemandUnavailableReason = exact.reason.message;
+            }
+            observePowerDemandPhase("power-ready");
+          });
+          const outcome = measurePhase("autoPower.runner", () =>
+            powerAutomation.run(),
+          );
           observePowerDemandPhase("power-complete", outcome);
-          if (outcome.status !== "succeeded")
+          if (outcome !== undefined && outcome.status !== "succeeded")
             reportOnce(
               `autoPower: ${outcome.failure.code}: ${outcome.failure.message}`,
             );
@@ -3644,10 +3674,17 @@ export function startCapturedRuntime({
       // reaching here means the cycle's own scaffolding failed and there is no one feature to blame.
       logError(String(error));
     } finally {
+      const finalizationStartedAtMs = profiling?.nowMs();
       refreshCapturedPlanningPanels();
       stateLogRecorder.recordProcessedCycle(automationCycle, settings);
       currentStateLogConstructionSnapshot = null;
       stateLogPlannerDetailsDue = false;
+      if (profiling !== undefined && finalizationStartedAtMs !== undefined) {
+        profiling.recordPerformance(
+          "tick.finalization",
+          profiling.nowMs() - finalizationStartedAtMs,
+        );
+      }
       if (profiling !== undefined && workStartedAtMs !== undefined) {
         profiling.recordPerformance(
           "tick",

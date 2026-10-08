@@ -45,7 +45,23 @@ export interface CapturedSupportTopology {
   readonly unlimited: boolean;
   /** Absent support_condition means enabled, matching the normal support pass. */
   readonly enabled: CapturedGameRead<boolean>;
+  /** Whether this sample invoked the live native `support_condition` callback. */
+  readonly conditionEvaluated: boolean;
 }
+
+/** One call-scoped sample of action/registry support metadata for a Power read. */
+export interface CapturedSupportMechanicsSample {
+  readonly support: CapturedGameRead<number>;
+  readonly supportTypes: CapturedGameRead<readonly string[]>;
+  readonly provider: CapturedGameRead<boolean>;
+  readonly topology: CapturedGameRead<CapturedSupportTopology>;
+  readonly supportValues: ReadonlyMap<string, CapturedGameRead<number>>;
+}
+
+export type CapturedSupportAnchorResolver = (
+  region: string,
+  struct: string,
+) => CapturedGameRead<string | null>;
 
 export interface CapturedPowerRequirement {
   readonly techId: string;
@@ -131,10 +147,13 @@ export interface CapturedGameStructureDefinition {
   /** Truthy `support_provider` marker; absence remains distinct and means no marker. */
   readSupportProvider(): CapturedGameRead<boolean>;
   /** Semantic subset of the group info, without exposing `info` or its callback. */
-  readSupportTopology(): CapturedGameRead<CapturedSupportTopology>;
+  readSupportTopology(
+    resolveAnchor?: CapturedSupportAnchorResolver,
+  ): CapturedGameRead<CapturedSupportTopology>;
   /** Native support groups with live consumer order and current action output. */
   readNativeSupportGrids(
     root: unknown,
+    sample?: CapturedSupportMechanicsSample,
   ): CapturedGameRead<readonly CapturedNativeSupportGrid[]>;
   readSupportFuel(): CapturedGameRead<readonly CapturedGameFuelInput[] | false>;
   readSupportFuelAdjustmentDisabled(): CapturedGameRead<boolean>;
