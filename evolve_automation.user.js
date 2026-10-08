@@ -4378,53 +4378,90 @@
   }
 
   // src/adapters/evolve/progression/build/captured-build-control-coverage.ts
-  var CAPTURED_BUILD_ACTION_METHOD = "action", CAPTURED_BUILD_ON_CAP_METHOD = "on_cap";
-  function isCapturedStructureOnTab(structure, tabIndex) {
-    let location = SPACE_TAB_ACTION_LOCATIONS[tabIndex];
-    if (location !== void 0)
-      return structure.region === location.region;
-  }
-  function readCapturedBuildControlCoverage(root, tabIndex, controls2, mechanics) {
-    if (SPACE_TAB_ACTION_LOCATIONS[tabIndex] === void 0)
-      return Object.freeze({ kind: "unknown" });
-    let structures = mechanics.readStructures();
-    if (structures === void 0 || structures.length === 0)
-      return Object.freeze({ kind: "unknown" });
-    let missing = /* @__PURE__ */ new Set();
-    for (let structure of structures) {
-      let binding = bindingForBuildingElement(structure.actionId);
-      if (!CAPTURED_AUTOMATION_BUILDING_BINDINGS.has(binding)) continue;
-      let parts = splitActionId(binding);
-      if (parts === void 0 || parts.region !== structure.region)
-        return Object.freeze({ kind: "unknown" });
-      let onTab = isCapturedStructureOnTab(structure, tabIndex);
-      if (onTab === void 0) return Object.freeze({ kind: "unknown" });
-      if (onTab)
-        try {
-          if (!structure.matchesCurrentIdentity())
-            return Object.freeze({ kind: "unknown" });
-          let handle = controls2.resolve(structure.actionId), hasAction = handle?.methods.includes(CAPTURED_BUILD_ACTION_METHOD) ?? !1, missingOnCap = !1;
-          if (hasAction && !handle?.methods.includes(CAPTURED_BUILD_ON_CAP_METHOD)) {
-            let switchable = structure.readSwitchable();
-            if (switchable.kind === "invalid")
-              return Object.freeze({ kind: "unknown" });
-            missingOnCap = switchable.kind === "value" && switchable.value;
-          }
-          if (hasAction && !missingOnCap) continue;
-          let availability = structure.readControlAvailabilityForTab(
-            root,
-            tabIndex
-          );
-          if (availability.kind !== "value")
-            return Object.freeze({ kind: "unknown" });
-          availability.value && missing.add(binding);
-        } catch {
-          return Object.freeze({ kind: "unknown" });
-        }
+  var CAPTURED_BUILD_ACTION_METHOD = "action", CAPTURED_BUILD_ON_CAP_METHOD = "on_cap", UNKNOWN_CAPTURED_BUILD_CONTROL_COVERAGE = Object.freeze({
+    kind: "unknown"
+  }), COMPLETE_CAPTURED_BUILD_CONTROL_COVERAGE = Object.freeze({
+    kind: "complete"
+  });
+  function createIndexedCapturedBuildControlCoverageReader(tabIndexes, controls2, mechanics) {
+    let requestedTabs = /* @__PURE__ */ new Set(), requestedRegions = /* @__PURE__ */ new Set();
+    for (let tabIndex of tabIndexes) {
+      let location = SPACE_TAB_ACTION_LOCATIONS[tabIndex];
+      location !== void 0 && (requestedTabs.add(tabIndex), requestedRegions.add(location.region));
     }
-    return missing.size === 0 ? Object.freeze({ kind: "complete" }) : Object.freeze({
-      kind: "missing",
-      bindings: Object.freeze([...missing].sort())
+    if (requestedTabs.size === 0)
+      return Object.freeze({
+        read: () => UNKNOWN_CAPTURED_BUILD_CONTROL_COVERAGE
+      });
+    let structures;
+    try {
+      structures = mechanics.readStructures();
+    } catch {
+      structures = void 0;
+    }
+    if (structures === void 0 || structures.length === 0)
+      return Object.freeze({
+        read: () => UNKNOWN_CAPTURED_BUILD_CONTROL_COVERAGE
+      });
+    let mutableStructuresByRegion = /* @__PURE__ */ new Map(), inconsistentRegions = /* @__PURE__ */ new Set();
+    try {
+      for (let structure of structures) {
+        let binding = bindingForBuildingElement(structure.actionId);
+        if (!CAPTURED_AUTOMATION_BUILDING_BINDINGS.has(binding)) continue;
+        let parts = splitActionId(binding), nativeRegion = structure.region;
+        if (parts === void 0 || parts.region !== nativeRegion) {
+          requestedRegions.has(nativeRegion) && inconsistentRegions.add(nativeRegion), parts !== void 0 && requestedRegions.has(parts.region) && inconsistentRegions.add(parts.region);
+          continue;
+        }
+        if (!requestedRegions.has(nativeRegion)) continue;
+        let candidates = mutableStructuresByRegion.get(nativeRegion), candidate = Object.freeze({ structure, binding });
+        candidates === void 0 ? mutableStructuresByRegion.set(nativeRegion, [candidate]) : candidates.push(candidate);
+      }
+    } catch {
+      return Object.freeze({
+        read: () => UNKNOWN_CAPTURED_BUILD_CONTROL_COVERAGE
+      });
+    }
+    let structuresByRegion = /* @__PURE__ */ new Map();
+    for (let [region, candidates] of mutableStructuresByRegion)
+      structuresByRegion.set(region, Object.freeze(candidates));
+    return Object.freeze({
+      read: (root, tabIndex) => {
+        if (!requestedTabs.has(tabIndex))
+          return UNKNOWN_CAPTURED_BUILD_CONTROL_COVERAGE;
+        let location = SPACE_TAB_ACTION_LOCATIONS[tabIndex];
+        if (location === void 0 || inconsistentRegions.has(location.region))
+          return UNKNOWN_CAPTURED_BUILD_CONTROL_COVERAGE;
+        let missing = /* @__PURE__ */ new Set();
+        for (let { structure, binding } of structuresByRegion.get(
+          location.region
+        ) ?? [])
+          try {
+            if (!structure.matchesCurrentIdentity())
+              return UNKNOWN_CAPTURED_BUILD_CONTROL_COVERAGE;
+            let handle = controls2.resolve(structure.actionId), hasAction = handle?.methods.includes(CAPTURED_BUILD_ACTION_METHOD) ?? !1, missingOnCap = !1;
+            if (hasAction && !handle?.methods.includes(CAPTURED_BUILD_ON_CAP_METHOD)) {
+              let switchable = structure.readSwitchable();
+              if (switchable.kind === "invalid")
+                return UNKNOWN_CAPTURED_BUILD_CONTROL_COVERAGE;
+              missingOnCap = switchable.kind === "value" && switchable.value;
+            }
+            if (hasAction && !missingOnCap) continue;
+            let availability = structure.readControlAvailabilityForTab(
+              root,
+              tabIndex
+            );
+            if (availability.kind !== "value")
+              return UNKNOWN_CAPTURED_BUILD_CONTROL_COVERAGE;
+            availability.value && missing.add(binding);
+          } catch {
+            return UNKNOWN_CAPTURED_BUILD_CONTROL_COVERAGE;
+          }
+        return missing.size === 0 ? COMPLETE_CAPTURED_BUILD_CONTROL_COVERAGE : Object.freeze({
+          kind: "missing",
+          bindings: Object.freeze([...missing].sort())
+        });
+      }
     });
   }
 
@@ -11436,16 +11473,25 @@
       return report(result);
     }, ensureBuildControls = () => {
       if (controls2.resolve(MAIN_TAB_CONTROL) === void 0) return;
-      let tally = createCountTally(diagnostics), measure = createPhaseMeasure(diagnostics);
+      let tally = createCountTally(diagnostics), measure = createPhaseMeasure(diagnostics), shownTabs = [];
       for (let index of shownSpaceTabs()) {
         let path = buildControlPath(index);
         if (path === void 0) continue;
-        let pathLabel = tally.enabled ? describeTabPath(path) : void 0, profileLabel = pathLabel === void 0 ? void 0 : `build-controls ${pathLabel}`, readCoverage = () => readCapturedBuildControlCoverage(
-          rootState.readRoot(),
-          index,
+        let profileLabel = tally.enabled ? `build-controls ${describeTabPath(path)}` : void 0;
+        shownTabs.push({ index, profileLabel });
+      }
+      if (shownTabs.length === 0) return;
+      tally.enabled && tally.count("discovery.capability-snapshot build-controls");
+      let coverageReader = measure(
+        "discovery.capability-snapshot build-controls",
+        () => createIndexedCapturedBuildControlCoverageReader(
+          shownTabs.map(({ index }) => index),
           controls2,
           mechanics
-        ), measureCoverage = () => profileLabel === void 0 ? readCoverage() : (tally.count(`discovery.capability-check ${profileLabel}`), measure(
+        )
+      );
+      for (let { index, profileLabel } of shownTabs) {
+        let readCoverage = () => coverageReader.read(rootState.readRoot(), index), measureCoverage = () => profileLabel === void 0 ? readCoverage() : (tally.count(`discovery.capability-check ${profileLabel}`), measure(
           `discovery.capability-check ${profileLabel}`,
           readCoverage
         )), coverage = measureCoverage(), attemptKey = `${BUILD_CONTROLS_SCOPE} ${index}`;

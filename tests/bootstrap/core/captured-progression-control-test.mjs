@@ -979,20 +979,28 @@ assert.equal(researchControl.readGrantedTechs(), undefined);
   const ids = new Set([MAIN_TAB_CONTROL, SUB_TAB_CONTROLS[SPACE_TABS_SETTING]]);
   const listeners = [];
   const performanceCounts = new Map();
+  const performancePhases = new Map();
   const diagnostics = {
     readPerformanceEnabled: () => true,
     nowMs: () => 0,
-    recordPerformance: () => {},
+    recordPerformance: (name) =>
+      performancePhases.set(name, (performancePhases.get(name) ?? 0) + 1),
     recordCount: (name, amount) =>
       performanceCounts.set(name, (performanceCounts.get(name) ?? 0) + amount),
   };
   const attempts = createDiscoveryAttempts({ readCycle: () => cycle });
+  let includeCityMine = false;
   const mechanics = makeCapturedBuildingMechanics(root, {
+    structureSnapshot: (structures) =>
+      includeCityMine
+        ? structures
+        : structures.filter((structure) => structure.actionId !== "city-mine"),
     availability: (currentRoot, binding) => ({
       kind: "value",
       value:
         (binding === "city-farm" && currentRoot.tech.farming === 1) ||
         (binding === "city-bank" && currentRoot.tech.bank === 1) ||
+        (binding === "city-mine" && currentRoot.tech.mining === 1) ||
         (binding === "space-titan_mine" &&
           currentRoot.space.titan_quarters.count > 0),
     }),
@@ -1029,6 +1037,7 @@ assert.equal(researchControl.readGrantedTechs(), undefined);
           if (args[0] === 0 && root.tech.farming === 1) ids.add("city-farm");
           if (args[0] === 0 && root.tech.bank === 1 && !failBankCapture)
             ids.add("city-bank");
+          if (args[0] === 0 && root.tech.mining === 1) ids.add("city-mine");
           if (args[0] === 1 && root.space.titan_quarters.count > 0)
             ids.add("space-titan_mine");
         }
@@ -1051,44 +1060,70 @@ assert.equal(researchControl.readGrantedTechs(), undefined);
     nowMs: () => now,
   });
 
-  buildControl.ensureBuildControls();
+  const ensureBuildControlsAndAssertOneRead = () => {
+    const priorReads = mechanics.readStructureCallCount();
+    buildControl.ensureBuildControls();
+    assert.equal(
+      mechanics.readStructureCallCount(),
+      priorReads + 1,
+      "one ensureBuildControls call reads and indexes one native structure snapshot",
+    );
+  };
+
+  ensureBuildControlsAndAssertOneRead();
   assert.equal(draws, 0, "no native offered building needs a missing control");
-  buildControl.ensureBuildControls();
+  assert.equal(
+    performancePhases.get("discovery.capability-snapshot build-controls"),
+    1,
+    "one call-scoped structure snapshot has its own phase attribution",
+  );
+  for (const setting of [
+    "showDeep",
+    "showGalactic",
+    "showPortal",
+    "showOuter",
+    "showTau",
+    "showEden",
+    "showUnderground",
+    "showSurface",
+  ])
+    root.settings[setting] = true;
+  ensureBuildControlsAndAssertOneRead();
   assert.equal(draws, 0, "a complete capability set stays retired");
   root.arpa.lhc.rank++;
-  buildControl.ensureBuildControls();
+  ensureBuildControlsAndAssertOneRead();
   assert.equal(draws, 0, "unrelated A.R.P.A. rank progress does not draw");
   root.tech.mining = 1;
-  buildControl.ensureBuildControls();
+  ensureBuildControlsAndAssertOneRead();
   assert.equal(draws, 0, "unrelated technology progress does not draw");
 
   root.tech.farming = 1;
-  buildControl.ensureBuildControls();
+  ensureBuildControlsAndAssertOneRead();
   assert.equal(draws, 1, "a newly offered city action gets one panel draw");
   assert.equal(ids.has("city-farm"), true);
-  buildControl.ensureBuildControls();
+  ensureBuildControlsAndAssertOneRead();
   assert.equal(draws, 1, "the captured action retires city discovery");
 
   root.space.titan_quarters.count = 1;
-  buildControl.ensureBuildControls();
+  ensureBuildControlsAndAssertOneRead();
   assert.equal(
     draws,
     2,
     "native count availability reopens the inner-space path",
   );
   assert.equal(ids.has("space-titan_mine"), true);
-  buildControl.ensureBuildControls();
+  ensureBuildControlsAndAssertOneRead();
   assert.equal(draws, 2, "the Titan Mine control retires its path");
 
   root.tech.bank = 1;
-  buildControl.ensureBuildControls();
+  ensureBuildControlsAndAssertOneRead();
   assert.equal(draws, 3, "a second newly offered city action gets one draw");
   assert.equal(
     ids.has("city-bank"),
     false,
     "the failed native capture stays absent",
   );
-  buildControl.ensureBuildControls();
+  ensureBuildControlsAndAssertOneRead();
   assert.equal(draws, 3, "a failed attempt respects same-cycle retry backoff");
   assert.equal(
     performanceCounts.get(
@@ -1099,7 +1134,7 @@ assert.equal(researchControl.readGrantedTechs(), undefined);
   );
   cycle += 1;
   failBankCapture = false;
-  buildControl.ensureBuildControls();
+  ensureBuildControlsAndAssertOneRead();
   assert.equal(
     draws,
     4,
@@ -1110,13 +1145,21 @@ assert.equal(researchControl.readGrantedTechs(), undefined);
   ids.delete("city-farm");
   attempts.invalidate();
   for (const listener of listeners) listener();
-  buildControl.ensureBuildControls();
+  ensureBuildControlsAndAssertOneRead();
   assert.equal(
     draws,
     5,
     "root replacement invalidates retired control authority",
   );
   assert.equal(ids.has("city-farm"), true);
+
+  includeCityMine = true;
+  ensureBuildControlsAndAssertOneRead();
+  assert.equal(
+    ids.has("city-mine"),
+    true,
+    "a changed native registry is read on the next ensure call",
+  );
 }
 
 console.log("captured-progression-control ok");

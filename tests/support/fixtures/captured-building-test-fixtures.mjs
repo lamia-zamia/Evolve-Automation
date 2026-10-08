@@ -14,6 +14,7 @@ export function makeCapturedBuildingMechanics(
     omitBindings = new Set(),
     overrides = new Map(),
     extraStructures = [],
+    structureSnapshot,
   } = {},
 ) {
   const structures = [];
@@ -50,6 +51,7 @@ export function makeCapturedBuildingMechanics(
     structures.push(Object.freeze(native));
   }
   structures.push(...extraStructures);
+  let structureReadCount = 0;
   const readStructureIdentities = () =>
     Object.freeze(
       structures.map(({ entryKey, region, sector, struct, actionId }) =>
@@ -60,7 +62,14 @@ export function makeCapturedBuildingMechanics(
     ...makeCapturedTechMechanicsFixture(
       Object.keys(root?.tech ?? {}).map((technology) => `tech-${technology}`),
     ),
-    readStructures: () => Object.freeze(structures),
+    readStructures: () => {
+      structureReadCount += 1;
+      const currentStructures = Object.freeze(structures);
+      return structureSnapshot === undefined
+        ? currentStructures
+        : structureSnapshot(currentStructures);
+    },
+    readStructureCallCount: () => structureReadCount,
     readStructureIdentities,
   });
 }

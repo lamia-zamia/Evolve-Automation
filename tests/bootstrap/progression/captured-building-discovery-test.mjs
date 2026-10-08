@@ -4,7 +4,10 @@ import { createCapturedProgressionControl } from "../../../src/bootstrap/capture
 import { createGameDrawnActionsReader } from "../../../src/adapters/browser/game-drawn-actions.ts";
 import { installVueCapture } from "../../../src/adapters/evolve/vue-capture.ts";
 import { readCapturedActionControlAvailabilityForTab } from "../../../src/adapters/evolve/progression/build/captured-building-availability.ts";
-import { readCapturedBuildControlCoverage } from "../../../src/adapters/evolve/progression/build/captured-build-control-coverage.ts";
+import {
+  createIndexedCapturedBuildControlCoverageReader,
+  readCapturedBuildControlCoverage,
+} from "../../../src/adapters/evolve/progression/build/captured-build-control-coverage.ts";
 import { CAPTURED_MECH_BUILDINGS } from "../../../src/adapters/evolve/progression/build/captured-building-metadata.ts";
 import { makeCapturedBuildingMechanics } from "../../support/fixtures/captured-building-test-fixtures.mjs";
 import {
@@ -215,6 +218,158 @@ const cityOnly = {
     ["city-factory", "city", "factory"],
   ],
 };
+
+// One structural snapshot indexes by native region. The two Space tabs share candidates, while
+// their live renderer answers still come from the requested tab's zone rules.
+{
+  const root = {
+    race: { truepath: true },
+    genes: {},
+    tech: { electricity: 1 },
+    settings: {
+      showCity: true,
+      showSpace: true,
+      showOuter: true,
+      space: { home: true, gas: true },
+    },
+  };
+  const action = { reqs: { electricity: 1 } };
+  const availabilityRequests = [];
+  const mechanics = makeCapturedBuildingMechanics(root, {
+    availability: (liveRoot, binding, tabIndex) => {
+      availabilityRequests.push({ binding, tabIndex });
+      if (binding === "city-farm")
+        return readCapturedActionControlAvailabilityForTab(
+          liveRoot,
+          action,
+          "city",
+          "city",
+          "farm",
+          false,
+          tabIndex,
+        );
+      if (binding === "space-moon_base")
+        return readCapturedActionControlAvailabilityForTab(
+          liveRoot,
+          action,
+          "space",
+          "spc_home",
+          "moon_base",
+          { zone: "inner" },
+          tabIndex,
+        );
+      if (binding === "space-gas_mission")
+        return readCapturedActionControlAvailabilityForTab(
+          liveRoot,
+          action,
+          "space",
+          "spc_gas",
+          "gas_mission",
+          { zone: "outer" },
+          tabIndex,
+        );
+      return { kind: "value", value: false };
+    },
+  });
+  const coverageReader = createIndexedCapturedBuildControlCoverageReader(
+    [SPACE_TAB_INDEX.city, SPACE_TAB_INDEX.space, SPACE_TAB_INDEX.outerSol],
+    { resolve: () => undefined },
+    mechanics,
+  );
+
+  assert.equal(mechanics.readStructureCallCount(), 1);
+  assert.deepEqual(coverageReader.read(root, SPACE_TAB_INDEX.city), {
+    kind: "missing",
+    bindings: ["city-farm"],
+  });
+  assert.deepEqual(
+    coverageReader.read(root, SPACE_TAB_INDEX.space),
+    { kind: "missing", bindings: ["space-moon_base"] },
+    "the inner tab sees its inner-zone native offer",
+  );
+  assert.deepEqual(
+    coverageReader.read(root, SPACE_TAB_INDEX.outerSol),
+    { kind: "missing", bindings: ["space-gas_mission"] },
+    "the outer tab shares the space registry but sees its outer-zone offer",
+  );
+  assert.equal(mechanics.readStructureCallCount(), 1);
+
+  const cityCandidates = availabilityRequests.filter(
+    ({ tabIndex }) => tabIndex === SPACE_TAB_INDEX.city,
+  );
+  const innerCandidates = availabilityRequests.filter(
+    ({ tabIndex }) => tabIndex === SPACE_TAB_INDEX.space,
+  );
+  const outerCandidates = availabilityRequests.filter(
+    ({ tabIndex }) => tabIndex === SPACE_TAB_INDEX.outerSol,
+  );
+  assert.ok(cityCandidates.length > 0);
+  assert.ok(cityCandidates.every(({ binding }) => binding.startsWith("city-")));
+  assert.ok(
+    innerCandidates.every(({ binding }) => binding.startsWith("space-")),
+  );
+  assert.deepEqual(
+    outerCandidates.map(({ binding }) => binding),
+    innerCandidates.map(({ binding }) => binding),
+    "Inner Space and Outer System evaluate the same native space candidates",
+  );
+}
+
+// A malformed City identity fails City closed without turning Space's independent candidates into
+// successful City coverage or unknown eligibility.
+{
+  const root = { settings: { showCity: true, showSpace: true } };
+  const mechanics = makeCapturedBuildingMechanics(root, {
+    availability: (_liveRoot, binding) => ({
+      kind: "value",
+      value: binding === "city-bank",
+    }),
+    overrides: new Map([
+      ["city-bank", { matchesCurrentIdentity: () => false }],
+    ]),
+    structureSnapshot: (structures) =>
+      structures.filter(
+        ({ actionId }) =>
+          actionId === "city-bank" || actionId === "space-moon_base",
+      ),
+  });
+  const coverageReader = createIndexedCapturedBuildControlCoverageReader(
+    [SPACE_TAB_INDEX.city, SPACE_TAB_INDEX.space],
+    { resolve: () => undefined },
+    mechanics,
+  );
+  assert.deepEqual(
+    coverageReader.read(root, SPACE_TAB_INDEX.city),
+    { kind: "unknown" },
+    "a relevant stale structure identity cannot establish complete coverage",
+  );
+  assert.deepEqual(
+    coverageReader.read(root, SPACE_TAB_INDEX.space),
+    { kind: "complete" },
+    "a malformed City structure cannot manufacture Space eligibility",
+  );
+}
+
+// A registry read failure is batch-wide unknown, never complete.
+{
+  const mechanics = makeCapturedBuildingMechanics(
+    {},
+    {
+      structureSnapshot: () => undefined,
+    },
+  );
+  const coverageReader = createIndexedCapturedBuildControlCoverageReader(
+    [SPACE_TAB_INDEX.city, SPACE_TAB_INDEX.space],
+    { resolve: () => undefined },
+    mechanics,
+  );
+  assert.deepEqual(coverageReader.read({}, SPACE_TAB_INDEX.city), {
+    kind: "unknown",
+  });
+  assert.deepEqual(coverageReader.read({}, SPACE_TAB_INDEX.space), {
+    kind: "unknown",
+  });
+}
 
 function assertRendererGateDiscovery({
   binding,

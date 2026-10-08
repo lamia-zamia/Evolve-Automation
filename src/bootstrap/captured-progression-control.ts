@@ -26,7 +26,7 @@ import {
   SPACE_TAB_SWEEP,
   SUB_TAB_CONTROLS,
 } from "../adapters/evolve/captured-tab-discovery.ts";
-import { readCapturedBuildControlCoverage } from "../adapters/evolve/progression/build/captured-build-control-coverage.ts";
+import { createIndexedCapturedBuildControlCoverageReader } from "../adapters/evolve/progression/build/captured-build-control-coverage.ts";
 import {
   createScriptKnowledgeGateReader,
   createScriptStorageRequirementReader,
@@ -399,19 +399,35 @@ export function createCapturedProgressionControl(
     if (controls.resolve(MAIN_TAB_CONTROL) === undefined) return;
     const tally = createCountTally(diagnostics);
     const measure = createPhaseMeasure(diagnostics);
+    const shownTabs: {
+      readonly index: number;
+      readonly profileLabel: string | undefined;
+    }[] = [];
     for (const index of shownSpaceTabs()) {
       const path = buildControlPath(index);
       if (path === undefined) continue;
-      const pathLabel = tally.enabled ? describeTabPath(path) : undefined;
-      const profileLabel =
-        pathLabel === undefined ? undefined : `build-controls ${pathLabel}`;
-      const readCoverage = () =>
-        readCapturedBuildControlCoverage(
-          rootState.readRoot(),
-          index,
+      const profileLabel = tally.enabled
+        ? `build-controls ${describeTabPath(path)}`
+        : undefined;
+      shownTabs.push({ index, profileLabel });
+    }
+    if (shownTabs.length === 0) return;
+
+    if (tally.enabled)
+      tally.count("discovery.capability-snapshot build-controls");
+    const coverageReader = measure(
+      "discovery.capability-snapshot build-controls",
+      () =>
+        createIndexedCapturedBuildControlCoverageReader(
+          shownTabs.map(({ index }) => index),
           controls,
           mechanics,
-        );
+        ),
+    );
+
+    for (const { index, profileLabel } of shownTabs) {
+      const readCoverage = () =>
+        coverageReader.read(rootState.readRoot(), index);
       const measureCoverage = () => {
         if (profileLabel === undefined) return readCoverage();
         tally.count(`discovery.capability-check ${profileLabel}`);
