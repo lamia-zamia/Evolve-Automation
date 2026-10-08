@@ -240,6 +240,7 @@ let researchPanelVisible = true;
 let researchDrawAvailable = true;
 let offeredRows = [{ id: "tech-mining", cost: { Knowledge: 5 } }];
 let researchDraws = 0;
+let researchHandleResolutions = 0;
 const rootReplacementListeners = [];
 const researchBindingListeners = new Set();
 const observeResearchBindings = (listener) => {
@@ -263,7 +264,10 @@ const researchControl = createCapturedProgressionControl({
     },
   },
   controls: withControlCaptureAuthority({
-    resolve: (id) => techHandles.get(id),
+    resolve: (id) => {
+      researchHandleResolutions += 1;
+      return techHandles.get(id);
+    },
     invoke: (handle, method, args = []) => {
       if (handle.elementId === researchMainTabId && method === "swapTab") {
         if (!researchDrawAvailable)
@@ -359,6 +363,12 @@ assert.equal(demand.sample().storageRequired("Polymer"), 721);
 offeredRows = [{ id: "tech-redrawn-later", cost: { Knowledge: 5 } }];
 nowMs = 20_000;
 researchControl.runResearchCycle();
+const beforeRepeatedResearchSample = researchHandleResolutions;
+assert.deepEqual(
+  researchControl.sampleOfferedTechs()?.map(({ elementId }) => elementId),
+  ["tech-current-cycle"],
+);
+assert.equal(researchHandleResolutions - beforeRepeatedResearchSample, 1);
 assert.equal(
   researchControl.readOfferedTechs()?.[0]?.elementId,
   "tech-current-cycle",

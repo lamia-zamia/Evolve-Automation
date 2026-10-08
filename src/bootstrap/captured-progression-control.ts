@@ -546,10 +546,10 @@ export function createCapturedProgressionControl(
         lastGranted = undefined;
         return undefined;
       }
-      const value = offered.restate(heldOfferedSnapshot);
-      lastOffered = value.offered;
-      lastGranted = value.granted;
-      return value.offered;
+      // invalidateStaleCapturedResearchObservation just checked every binding generation. The
+      // already-restated value is therefore still current; restating it here would resolve every
+      // offer a second time on each demand read without adding freshness.
+      return lastOffered;
     }
     // The granted half is a different sample, so it is a different scope: a pass that dropped it
     // must never answer the caller that asked for it.

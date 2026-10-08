@@ -11587,8 +11587,7 @@
           lastOffered = void 0, lastGranted = void 0;
           return;
         }
-        let value = offered.restate(heldOfferedSnapshot);
-        return lastOffered = value.offered, lastGranted = value.granted, value.offered;
+        return lastOffered;
       }
       let held = scopes.read(
         includeGranted ? RESEARCH_GRANTED_SCOPE : RESEARCH_SCOPE,
@@ -22978,7 +22977,7 @@
   function projectDoubles(target) {
     return target.isProject && target.progress !== null && target.progress < 99;
   }
-  function planDemandPrioritization(input) {
+  function prepareDemandPrioritization(input) {
     let { settings, consumptionBalanceTarget: balance } = input, requests = [], removedMissionIndices = [], request = (resourceId, amount) => {
       requests.push({ resourceId, amount });
     };
@@ -23000,25 +22999,40 @@
       for (let cost of task.costs)
         request(cost.resourceId, cost.amount * multiplier);
     }
-    let savingCost = {};
-    if (input.savingTarget !== null)
-      for (let cost of input.savingTarget.costs)
+    return Object.freeze({
+      requests: Object.freeze(requests.map((entry) => Object.freeze(entry))),
+      removedMissionIndices: Object.freeze(removedMissionIndices),
+      settings,
+      balance,
+      spyPurchaseMoney: input.spyPurchaseMoney,
+      fleet: input.fleet,
+      availableCrafters: input.availableCrafters,
+      crafters: input.crafters,
+      vitreloyPlant: input.vitreloyPlant
+    });
+  }
+  function evaluateDemandPrioritization(prepared, variant) {
+    let requests = [...prepared.requests], { settings, balance } = prepared, request = (resourceId, amount) => {
+      requests.push({ resourceId, amount });
+    }, savingCost = {};
+    if (variant.savingTarget !== null)
+      for (let cost of variant.savingTarget.costs)
         request(cost.resourceId, cost.amount), savingCost[cost.resourceId] = cost.amount;
-    for (let cost of input.mechCosts)
+    for (let cost of variant.mechCosts)
       request(cost.resourceId, cost.amount);
-    if (input.spyPurchaseMoney && settings.prioritizeUnify.includes("req") && request("Money", input.spyPurchaseMoney), settings.autoFleet && input.fleet.nextShipAffordable && settings.prioritizeOuterFleet.includes("req"))
-      for (let cost of input.fleet.nextShipCost)
+    if (prepared.spyPurchaseMoney && settings.prioritizeUnify.includes("req") && request("Money", prepared.spyPurchaseMoney), settings.autoFleet && prepared.fleet.nextShipAffordable && settings.prioritizeOuterFleet.includes("req"))
+      for (let cost of prepared.fleet.nextShipCost)
         request(cost.resourceId, cost.amount);
-    for (let crafter of input.crafters)
+    for (let crafter of prepared.crafters)
       if ((settings.productionFactoryFocusMaterials || crafter.isDemanded) && crafter.isUnlocked)
         for (let cost of crafter.costs) {
-          let minExpected = cost.materialMaxQuantity * crafter.craftPreserve + input.availableCrafters * 0.007142857142857143 * balance * cost.amount;
+          let minExpected = cost.materialMaxQuantity * crafter.craftPreserve + prepared.availableCrafters * 0.007142857142857143 * balance * cost.amount;
           request(cost.resourceId, minExpected);
         }
-    let { vitreloyPlant } = input, vitPlantCount = settings.autoPower && vitreloyPlant.autoStateEnabled ? vitreloyPlant.count : vitreloyPlant.stateOnCount;
-    if (vitPlantCount > 0 && request("Stanene", vitPlantCount * balance * 100), input.factoryCount > 0) {
-      let multiplier = input.factoryCount * balance, storageThreshold = settings.productionFactoryMinIngredients;
-      for (let production of input.factoryProductions)
+    let { vitreloyPlant } = prepared, vitPlantCount = settings.autoPower && vitreloyPlant.autoStateEnabled ? vitreloyPlant.count : vitreloyPlant.stateOnCount;
+    if (vitPlantCount > 0 && request("Stanene", vitPlantCount * balance * 100), variant.factoryCount > 0) {
+      let multiplier = variant.factoryCount * balance, storageThreshold = settings.productionFactoryMinIngredients;
+      for (let production of variant.factoryProductions)
         if ((settings.productionFactoryFocusMaterials || production.isDemanded) && production.unlocked && production.enabled && production.weighting)
           for (let cost of production.costs)
             request(
@@ -23027,12 +23041,12 @@
             );
     }
     return Object.freeze({
-      savingConflict: input.savingTarget === null ? null : Object.freeze({
-        name: input.savingTarget.name,
+      savingConflict: variant.savingTarget === null ? null : Object.freeze({
+        name: variant.savingTarget.name,
         cost: Object.freeze(savingCost)
       }),
       requests: Object.freeze(requests.map((entry) => Object.freeze(entry))),
-      removedMissionIndices: Object.freeze(removedMissionIndices)
+      removedMissionIndices: prepared.removedMissionIndices
     });
   }
 
@@ -23725,7 +23739,7 @@
       completionLevel: 4
     })
   ]);
-  function readCapturedSpaceMissionDemand(root, settings, controls2, costs) {
+  function readCapturedSpaceMissionDemand(root, settings, controls2, costs, onActionCostRead) {
     if (controls2 === void 0 || costs === void 0 || settingBoolean3(settings, "missionRequest", !0) === !1)
       return Object.freeze([]);
     let tech = readProperty(root, "tech");
@@ -23735,6 +23749,7 @@
       let actionId = mission.actionId, completion = finite(readProperty(tech, mission.completionTech));
       if (controls2.resolve(actionId) === void 0 || settingBoolean3(settings, `bat${actionId}`, !0) === !1 || completion === void 0 || completion >= mission.completionLevel)
         continue;
+      onActionCostRead();
       let price = costs.readCost(actionId);
       if (price === void 0) continue;
       let missionCosts = toCosts(price.cost, price.pool);
@@ -24014,14 +24029,15 @@
     let value = finite(readProperty(entry, field));
     return value === void 0 || value < 0 ? void 0 : value;
   }
-  function readDemandReservationSpaceMoney(costs, actionId) {
+  function readDemandReservationSpaceMoney(costs, actionId, onActionCostRead) {
     if (costs === void 0) return null;
+    onActionCostRead();
     let price = costs.readCost(actionId);
     if (price === void 0) return null;
     let money = finite(price.cost.Money);
     return money === void 0 || money < 0 ? null : money;
   }
-  function readDemandReservationTruepathAiTarget(root, settings, controls2, costs, report) {
+  function readDemandReservationTruepathAiTarget(root, settings, controls2, costs, report, onActionCostRead) {
     if (!isCapturedTruepath(root)) return { status: "not-needed" };
     if (settings.prestigeType !== "apocalypse")
       return { status: "not-needed" };
@@ -24050,14 +24066,21 @@
       return report === void 0 ? { status: "not-needed" } : { status: "unavailable" };
     let decoderMoneyCost = readDemandReservationSpaceMoney(
       costs,
-      "space-decoder"
+      "space-decoder",
+      onActionCostRead
     ), colonistMoneyCost = readDemandReservationSpaceMoney(
       costs,
-      "space-ai_colonist"
+      "space-ai_colonist",
+      onActionCostRead
     ), trooperMoneyCost = readDemandReservationSpaceMoney(
       costs,
-      "space-shock_trooper"
-    ), tankMoneyCost = readDemandReservationSpaceMoney(costs, "space-tank"), moneyCosts = Object.freeze({
+      "space-shock_trooper",
+      onActionCostRead
+    ), tankMoneyCost = readDemandReservationSpaceMoney(
+      costs,
+      "space-tank",
+      onActionCostRead
+    ), moneyCosts = Object.freeze({
       TitanDecoder: decoderMoneyCost,
       TitanAIColonist: colonistMoneyCost,
       ErisTrooper: trooperMoneyCost,
@@ -24150,22 +24173,41 @@
     };
   }
   function createCapturedResourceDemand(dependencies) {
-    let exactUnavailableReason = {
+    let measure = (name, body) => {
+      let diagnostics = dependencies.diagnostics, start = diagnostics?.readPerformanceEnabled() === !0 ? diagnostics.nowMs() : void 0;
+      try {
+        return body();
+      } finally {
+        start !== void 0 && diagnostics?.recordPerformance(name, diagnostics.nowMs() - start);
+      }
+    }, count2 = (name, amount = 1) => dependencies.diagnostics?.recordCount(name, amount), exactUnavailableReason = {
       code: "other-exact-prerequisite",
       message: "exact demand prerequisite unavailable"
     }, capturedDemandSampler = {
       sample(exact) {
-        exact && (exactUnavailableReason = {
+        let sampleMeasure = (name, body) => measure(
+          exact ? name.replace("demand.sample.", "demand.sampleExact.") : name,
+          body
+        ), sampleCount = (name, amount = 1) => count2(
+          exact ? name.replace("demand.sample.", "demand.sampleExact.") : name,
+          amount
+        );
+        sampleCount("demand.sample.samples"), sampleCount("demand.sample.planCalls", 0), exact && (exactUnavailableReason = {
           code: "other-exact-prerequisite",
           message: "exact demand prerequisite unavailable"
         });
-        let root = dependencies.rootState.readRoot(), resources = readProperty(root, "resource");
+        let root = sampleMeasure(
+          "demand.sample.inputs",
+          () => dependencies.rootState.readRoot()
+        );
+        sampleCount("demand.sample.structureRegistryReads", 0);
+        let resources = readProperty(root, "resource");
         if (!isRecord(resources))
           return exactUnavailableReason = {
             code: "root-resource-state",
             message: "root resource state unavailable"
           }, exact ? void 0 : EMPTY_DEMAND_SAMPLE;
-        let reservationSample = dependencies.reservations.readReservations();
+        let reservationSample = sampleMeasure("demand.sample.queue", () => (sampleCount("demand.sample.queueReservationReads"), dependencies.reservations.readReservations()));
         if (exact && reservationSample.unavailable) {
           exactUnavailableReason = {
             code: "queue-reservation",
@@ -24173,7 +24215,13 @@
           };
           return;
         }
-        let queued = reservationSample.targets, saving = dependencies.construction?.readSavingTarget() ?? null, offered = dependencies.readOfferedTechs?.();
+        let queued = reservationSample.targets, saving = sampleMeasure(
+          "demand.sample.build",
+          () => dependencies.construction?.readSavingTarget() ?? null
+        ), offered = sampleMeasure("demand.sample.research", () => (sampleCount(
+          "demand.sample.offeredTechnologyReads",
+          dependencies.readOfferedTechs === void 0 ? 0 : 1
+        ), dependencies.readOfferedTechs?.()));
         if (exact && dependencies.readOfferedTechs !== void 0 && offered === void 0) {
           exactUnavailableReason = {
             code: "offered-technology",
@@ -24181,52 +24229,104 @@
           };
           return;
         }
-        let settingsValue = dependencies.readSettings(), settings = isRecord(settingsValue) ? settingsValue : {}, fleet = dependencies.fleet?.read(), capturedTriggerTargets = dependencies.triggers?.read() ?? [], storageResources = readStorageResources(resources, root, settings), triggerTargets = Object.freeze(
-          capturedTriggerTargets.map(
-            (target) => Object.freeze({
-              // A project trigger reserves the whole remaining project, so it takes the same
-              // doubling the pure planner gives any part-built project target.
-              isProject: target.actionType === "arpa",
-              progress: target.actionType === "arpa" ? target.progress : null,
-              ..."pool" in target && target.pool !== void 0 ? { pool: target.pool } : {},
-              costs: toCosts(
-                target.cost,
-                "pool" in target ? target.pool : void 0
-              )
-            })
+        let settingsValue = sampleMeasure(
+          "demand.sample.inputs",
+          () => dependencies.readSettings()
+        ), settings = isRecord(settingsValue) ? settingsValue : {}, fleet = sampleMeasure(
+          "demand.sample.fleet",
+          () => dependencies.fleet?.read()
+        ), capturedTriggerTargets = sampleMeasure(
+          "demand.sample.inputs",
+          () => dependencies.triggers?.read() ?? []
+        ), storageResources = sampleMeasure(
+          "demand.sample.inputs",
+          () => readStorageResources(resources, root, settings)
+        ), triggerTargets = sampleMeasure(
+          "demand.sample.inputs",
+          () => Object.freeze(
+            capturedTriggerTargets.map(
+              (target) => Object.freeze({
+                // A project trigger reserves the whole remaining project, so it takes the same
+                // doubling the pure planner gives any part-built project target.
+                isProject: target.actionType === "arpa",
+                progress: target.actionType === "arpa" ? target.progress : null,
+                ..."pool" in target && target.pool !== void 0 ? { pool: target.pool } : {},
+                costs: toCosts(
+                  target.cost,
+                  "pool" in target ? target.pool : void 0
+                )
+              })
+            )
           )
-        ), missions = readCapturedSpaceMissionDemand(
-          root,
-          settings,
-          dependencies.controls,
-          dependencies.costs
-        ), crafterDemand = settings.productionFactoryFocusMaterials === !0 ? readCapturedCrafterDemand(
-          root,
-          resources,
-          settings,
-          dependencies.craftCosts
-        ) : void 0, factoryCatalog = readCapturedFactoryDemand(root, settings), hasFactoryDemand = factoryCatalog?.productions.some(
+        ), missions = sampleMeasure(
+          "demand.sample.missions",
+          () => readCapturedSpaceMissionDemand(
+            root,
+            settings,
+            dependencies.controls,
+            dependencies.costs,
+            () => sampleCount("demand.sample.actionCostReads")
+          )
+        ), crafterDemand = settings.productionFactoryFocusMaterials === !0 ? sampleMeasure(
+          "demand.sample.crafters",
+          () => readCapturedCrafterDemand(
+            root,
+            resources,
+            settings,
+            dependencies.craftCosts
+          )
+        ) : void 0, factoryCatalog = sampleMeasure(
+          "demand.sample.factory",
+          () => readCapturedFactoryDemand(root, settings)
+        ), hasFactoryDemand = factoryCatalog?.productions.some(
           (production) => production.unlocked && production.enabled && production.weighting > 0
         ) ?? !1, hasCrafterDemand = (crafterDemand?.crafters.length ?? 0) > 0, hasFleetDemand = settingBoolean3(settings, "autoFleet", !1) && settingString(settings, "prioritizeOuterFleet", "ignore").includes(
           "req"
-        ) && fleet?.nextShipAffordable === !0 && fleet.nextShipCost.length > 0, inflationMoney = readDemandReservationInflationMoney(
+        ) && fleet?.nextShipAffordable === !0 && fleet.nextShipCost.length > 0, inflationMoney = sampleMeasure(
+          "demand.sample.prerequisite-reservations",
+          () => readDemandReservationInflationMoney(root, settings)
+        ), retirementGraphene = sampleMeasure(
+          "demand.sample.prerequisite-reservations",
+          () => readDemandReservationRetirementGraphene(root, settings)
+        ), prerequisites = sampleMeasure(
+          "demand.sample.prerequisite-reservations",
+          () => dependencies.readPrerequisites?.()
+        ), truepathAiReservation = sampleMeasure(
+          "demand.sample.prerequisite-reservations",
+          () => readDemandReservationTruepathAiTarget(
+            root,
+            settings,
+            dependencies.controls,
+            dependencies.costs,
+            prerequisites,
+            () => sampleCount("demand.sample.actionCostReads")
+          )
+        ), truepathAiBuildingTarget = truepathAiReservation.status === "ready" ? truepathAiReservation.value : null, spyReservation = sampleMeasure(
+          "demand.sample.prerequisite-reservations",
+          () => readDemandReservationSpyPurchaseMoney(
+            root,
+            settings,
+            dependencies.controls,
+            prerequisites
+          )
+        ), spyPurchaseReservation = spyReservation.status === "ready" ? spyReservation.value : EMPTY_SPY_PURCHASE_RESERVATION, sampledSpyPurchaseReservation = spyReservation.status === "unavailable" ? void 0 : spyPurchaseReservation, spyPurchaseMoney = spyPurchaseReservation.purchaseMoney, sampledSpyPurchaseMoney = sampledSpyPurchaseReservation?.purchaseMoney, moneyEnvelope = truepathAiReservation.status === "unavailable" || spyReservation.status === "unavailable", savingCosts = saving === null ? null : toCosts(saving.cost, saving.pool), queuedTargets = sampleMeasure("demand.sample.queue", () => (sampleCount("demand.sample.queueTargetConversions"), toTargets(queued))), demandInputSnapshot = Object.freeze({
           root,
-          settings
-        ), retirementGraphene = readDemandReservationRetirementGraphene(
-          root,
-          settings
-        ), prerequisites = dependencies.readPrerequisites?.(), truepathAiReservation = readDemandReservationTruepathAiTarget(
-          root,
+          resources,
           settings,
-          dependencies.controls,
-          dependencies.costs,
-          prerequisites
-        ), truepathAiBuildingTarget = truepathAiReservation.status === "ready" ? truepathAiReservation.value : null, spyReservation = readDemandReservationSpyPurchaseMoney(
-          root,
-          settings,
-          dependencies.controls,
-          prerequisites
-        ), spyPurchaseReservation = spyReservation.status === "ready" ? spyReservation.value : EMPTY_SPY_PURCHASE_RESERVATION, sampledSpyPurchaseReservation = spyReservation.status === "unavailable" ? void 0 : spyPurchaseReservation, spyPurchaseMoney = spyPurchaseReservation.purchaseMoney, sampledSpyPurchaseMoney = sampledSpyPurchaseReservation?.purchaseMoney, moneyEnvelope = truepathAiReservation.status === "unavailable" || spyReservation.status === "unavailable", savingCosts = saving === null ? null : toCosts(saving.cost, saving.pool), baseInput = Object.freeze({
+          queuedTargets,
+          saving,
+          offered,
+          fleet,
+          capturedTriggerTargets,
+          missions,
+          crafterDemand,
+          factoryCatalog,
+          inflationMoney,
+          retirementGraphene,
+          prerequisites,
+          truepathAiBuildingTarget,
+          spyPurchaseMoney
+        }), baseInput = Object.freeze({
           settings: readSettingsInput(settingsValue),
           // The captured offer list is the game's own technology qualification result. The reader
           // only recomputes affordability from current holdings; it never recreates tech gates.
@@ -24235,7 +24335,7 @@
           truepathAiBuildingTarget,
           inflationMoney,
           retirementGraphene,
-          queuedTargets: toTargets(queued),
+          queuedTargets: demandInputSnapshot.queuedTargets,
           triggerTargets,
           savingTarget: saving === null || savingCosts === null ? null : Object.freeze({
             name: saving.name,
@@ -24243,7 +24343,10 @@
             costs: savingCosts
           }),
           missions,
-          unlockedTechs: toOfferedTechs(resources, offered),
+          unlockedTechs: sampleMeasure(
+            "demand.sample.research",
+            () => toOfferedTechs(resources, demandInputSnapshot.offered)
+          ),
           spyPurchaseMoney,
           mechCosts: Object.freeze([]),
           fleet: fleet ?? Object.freeze({
@@ -24259,13 +24362,19 @@
           }),
           factoryCount: 0,
           factoryProductions: Object.freeze([])
-        }), baseResult = planDemandPrioritization(baseInput), baseRequested = capturedResourceRequestQuantities(
-          baseResult.requests,
-          resources
-        ), inputWithoutConstructionSaving = saving === null ? baseInput : Object.freeze({ ...baseInput, savingTarget: null }), resultWithoutConstructionSaving = saving === null ? baseResult : planDemandPrioritization(inputWithoutConstructionSaving), requestedWithoutConstructionSaving = saving === null ? baseRequested : capturedResourceRequestQuantities(
+        }), prepared = sampleMeasure("demand.sample.prioritization", () => (sampleCount("demand.sample.commonPreparations"), prepareDemandPrioritization(baseInput))), baseResult = sampleMeasure("demand.sample.prioritization", () => (sampleCount("demand.sample.evaluateCalls"), evaluateDemandPrioritization(prepared, baseInput))), baseRequested = sampleMeasure(
+          "demand.sample.prioritization",
+          () => (sampleCount("demand.sample.requestQuantityEvaluations"), capturedResourceRequestQuantities(
+            baseResult.requests,
+            resources
+          ))
+        ), inputWithoutConstructionSaving = saving === null ? baseInput : Object.freeze({ ...baseInput, savingTarget: null }), resultWithoutConstructionSaving = saving === null ? baseResult : sampleMeasure("demand.sample.prioritization", () => (sampleCount("demand.sample.evaluateCalls"), evaluateDemandPrioritization(
+          prepared,
+          inputWithoutConstructionSaving
+        ))), requestedWithoutConstructionSaving = saving === null ? baseRequested : sampleMeasure("demand.sample.prioritization", () => (sampleCount("demand.sample.requestQuantityEvaluations"), capturedResourceRequestQuantities(
           resultWithoutConstructionSaving.requests,
           resources
-        ), capturedFactoryProductionsForRequests = (requestedBase) => Object.freeze(factoryCatalog === void 0 ? [] : factoryCatalog.productions.map((production) => {
+        ))), capturedFactoryProductionsForRequests = (requestedBase) => Object.freeze(factoryCatalog === void 0 ? [] : factoryCatalog.productions.map((production) => {
           let amount = finite(
             readProperty(
               readProperty(resources, production.outputResourceId),
@@ -24276,26 +24385,35 @@
             ...production,
             isDemanded: amount !== void 0 && (requestedBase.get(production.outputResourceId) ?? 0) > amount
           });
-        })), factoryProductions = capturedFactoryProductionsForRequests(baseRequested), nonMechResult = factoryCatalog !== void 0 && hasFactoryDemand ? planDemandPrioritization({
+        })), factoryProductions = capturedFactoryProductionsForRequests(baseRequested), nonMechResult = factoryCatalog !== void 0 && hasFactoryDemand ? sampleMeasure("demand.sample.prioritization", () => (sampleCount("demand.sample.evaluateCalls"), evaluateDemandPrioritization(prepared, {
           ...baseInput,
           factoryCount: factoryCatalog.count,
           factoryProductions
-        }) : baseResult, otherRequested = capturedResourceRequestQuantities(
-          nonMechResult.requests,
-          resources
-        ), otherResultForMechPriority = factoryCatalog !== void 0 && hasFactoryDemand ? planDemandPrioritization({
+        }))) : baseResult, otherRequested = sampleMeasure(
+          "demand.sample.prioritization",
+          () => (sampleCount("demand.sample.requestQuantityEvaluations"), capturedResourceRequestQuantities(
+            nonMechResult.requests,
+            resources
+          ))
+        ), otherResultForMechPriority = factoryCatalog !== void 0 && hasFactoryDemand ? sampleMeasure("demand.sample.prioritization", () => (sampleCount("demand.sample.evaluateCalls"), evaluateDemandPrioritization(prepared, {
           ...inputWithoutConstructionSaving,
           factoryCount: factoryCatalog.count,
           factoryProductions: capturedFactoryProductionsForRequests(
             requestedWithoutConstructionSaving
           )
-        }) : resultWithoutConstructionSaving, requestedForMechPriority = capturedResourceRequestQuantities(
-          otherResultForMechPriority.requests,
-          resources
+        }))) : resultWithoutConstructionSaving, requestedForMechPriority = sampleMeasure(
+          "demand.sample.prioritization",
+          () => (sampleCount("demand.sample.requestQuantityEvaluations"), capturedResourceRequestQuantities(
+            otherResultForMechPriority.requests,
+            resources
+          ))
         ), reservedForOthers = Object.freeze({
           supply: otherRequested.get("Supply") ?? 0,
           soulGems: otherRequested.get("Soul_Gem") ?? 0
-        }), mechDemandPlan = dependencies.mechDemand?.read(reservedForOthers)?.plan ?? planMechDemandCosts({
+        }), mechDemandPlan = sampleMeasure(
+          "demand.sample.mech",
+          () => dependencies.mechDemand?.read(reservedForOthers)
+        )?.plan ?? planMechDemandCosts({
           state: withCapturedMechReservations(
             readCapturedMechState({
               root,
@@ -24315,7 +24433,10 @@
             let costs = toCosts(technology.cost);
             return costs.length === 0 ? [] : [Object.freeze({ costs })];
           })
-        ), managedBuildTargets = dependencies.readBuildTargets?.();
+        ), managedBuildTargets = sampleMeasure("demand.sample.build", () => (sampleCount(
+          "demand.sample.buildingCatalogReads",
+          dependencies.readBuildTargets === void 0 ? 0 : 1
+        ), dependencies.readBuildTargets?.()));
         if (exact && dependencies.readBuildTargets !== void 0 && managedBuildTargets === void 0) {
           exactUnavailableReason = {
             code: "managed-build-targets",
@@ -24323,19 +24444,23 @@
           };
           return;
         }
-        let incompleteBuildStorageCosts = !1, unpricedBuildTarget, buildingStorageTargets = Object.freeze(
-          (managedBuildTargets ?? []).flatMap((target) => {
-            let price = dependencies.costs?.readCost(target.elementId);
-            if (price === void 0)
-              return incompleteBuildStorageCosts = !0, unpricedBuildTarget ??= target.elementId, [];
-            let costs = toCosts(price.cost, price.pool);
-            return costs.length === 0 ? [] : [
-              Object.freeze({
-                ...price.pool === void 0 ? {} : { pool: price.pool },
-                costs
-              })
-            ];
-          })
+        let incompleteBuildStorageCosts = !1, unpricedBuildTarget, buildingStorageTargets = sampleMeasure(
+          "demand.sample.build",
+          () => Object.freeze(
+            (managedBuildTargets ?? []).flatMap((target) => {
+              sampleCount("demand.sample.actionCostReads");
+              let price = dependencies.costs?.readCost(target.elementId);
+              if (price === void 0)
+                return incompleteBuildStorageCosts = !0, unpricedBuildTarget ??= target.elementId, [];
+              let costs = toCosts(price.cost, price.pool);
+              return costs.length === 0 ? [] : [
+                Object.freeze({
+                  ...price.pool === void 0 ? {} : { pool: price.pool },
+                  costs
+                })
+              ];
+            })
+          )
         );
         if (exact && incompleteBuildStorageCosts) {
           exactUnavailableReason = {
@@ -24344,7 +24469,10 @@
           };
           return;
         }
-        let hasEnabledProjectStorageSetting = hasCapturedProjectStorageDemand(settings), projects = hasEnabledProjectStorageSetting ? dependencies.readProjects?.() : [];
+        let hasEnabledProjectStorageSetting = hasCapturedProjectStorageDemand(settings), projects = hasEnabledProjectStorageSetting ? sampleMeasure(
+          "demand.sample.projects",
+          () => dependencies.readProjects?.()
+        ) : [];
         if (exact && hasEnabledProjectStorageSetting && dependencies.readProjects !== void 0 && projects === void 0) {
           exactUnavailableReason = {
             code: "project-storage-catalog",
@@ -24352,31 +24480,30 @@
           };
           return;
         }
-        let projectStorageTargets = Object.freeze(
-          (projects ?? []).flatMap((project) => {
-            if (settings[`arpa_${project.projectId}`] !== !0) return [];
-            let costs = calculateArpaStorageTargetCosts({
-              perPercentCosts: toCosts(project.cost),
-              progress: project.progress,
-              stepPercent: finite(settings.arpaStep) ?? 5,
-              isTriggerTarget: capturedTriggerTargets.some(
-                (target) => target.actionType === "arpa" && target.actionId === project.elementId
-              ),
-              resources: storageResources
-            });
-            return costs.length === 0 ? [] : [Object.freeze({ costs })];
-          })
+        let projectStorageTargets = sampleMeasure(
+          "demand.sample.projects",
+          () => Object.freeze(
+            (projects ?? []).flatMap((project) => {
+              if (settings[`arpa_${project.projectId}`] !== !0) return [];
+              let costs = calculateArpaStorageTargetCosts({
+                perPercentCosts: toCosts(project.cost),
+                progress: project.progress,
+                stepPercent: finite(settings.arpaStep) ?? 5,
+                isTriggerTarget: capturedTriggerTargets.some(
+                  (target) => target.actionType === "arpa" && target.actionId === project.elementId
+                ),
+                resources: storageResources
+              });
+              return costs.length === 0 ? [] : [Object.freeze({ costs })];
+            })
+          )
         ), fleetStorageTargets = settingBoolean3(settings, "autoFleet", !1) && settingString(settings, "prioritizeOuterFleet", "ignore") !== "ignore" && fleet?.nextShipExpandable === !0 && fleet.nextShipCost.length > 0 ? Object.freeze([Object.freeze({ costs: fleet.nextShipCost })]) : Object.freeze([]);
         if (queued.length === 0 && triggerTargets.length === 0 && saving === null && (offered === void 0 || offered.length === 0) && !hasFactoryDemand && !hasCrafterDemand && missions.length === 0 && !hasFleetDemand && inflationMoney === null && retirementGraphene === null && truepathAiBuildingTarget === null && spyPurchaseMoney === 0 && mechCosts.length === 0 && technologyStorageTargets.length === 0 && buildingStorageTargets.length === 0 && projectStorageTargets.length === 0 && fleetStorageTargets.length === 0 && !moneyEnvelope)
           return EMPTY_DEMAND_SAMPLE;
-        let finalInput = Object.freeze({ ...baseInput, mechCosts }), result = factoryCatalog !== void 0 && hasFactoryDemand ? planDemandPrioritization({
+        let finalInput = Object.freeze({ ...baseInput, mechCosts }), result = sampleMeasure("demand.sample.prioritization", () => (sampleCount("demand.sample.evaluateCalls"), evaluateDemandPrioritization(prepared, {
           ...finalInput,
-          factoryCount: factoryCatalog.count,
-          factoryProductions
-        }) : planDemandPrioritization(finalInput), requested = capturedResourceRequestQuantities(
-          result.requests,
-          resources
-        ), requestedExcludingMech = new Map(otherRequested);
+          ...factoryCatalog !== void 0 && hasFactoryDemand ? { factoryCount: factoryCatalog.count, factoryProductions } : {}
+        }))), requested = sampleMeasure("demand.sample.prioritization", () => (sampleCount("demand.sample.requestQuantityEvaluations"), capturedResourceRequestQuantities(result.requests, resources))), requestedExcludingMech = new Map(otherRequested);
         if (mechDemandPlan.status === "unavailable")
           for (let resourceId of ["Supply", "Soul_Gem"]) {
             let maximum = finite(
@@ -24406,7 +24533,7 @@
               )
             )
           })
-        ), storage = planStorageRequirements({
+        ), storage = sampleMeasure("demand.sample.storage", () => (sampleCount("demand.sample.planStorageCalls"), planStorageRequirements({
           storageAssignExtra: settings.storageAssignExtra !== !1,
           autoMarket: settings.autoMarket === !0,
           noTrade: !!readProperty(readProperty(root, "race"), "no_trade"),
@@ -24415,7 +24542,7 @@
           requestLists: Object.freeze([
             fleetStorageTargets,
             technologyStorageTargets,
-            toTargets(queued),
+            queuedTargets,
             Object.freeze(savingCosts === null ? [] : [
               Object.freeze({
                 ...saving === null || saving.pool === void 0 ? {} : { pool: saving.pool },
@@ -24442,7 +24569,7 @@
           resources: storageResources,
           inflationMoney,
           retirementGraphene
-        }), required = new Map(
+        }))), required = new Map(
           storage.resources.map((resource) => [
             storageRequirementScopeKey(resource.id, resource.pool),
             resource.storageRequired
@@ -55935,9 +56062,13 @@ Only continue if you trust the source. Injected code:
       mechDemand: progression.mechDemand,
       readPrerequisites: readDemandPrerequisites,
       craftCosts: costs,
-      fleet: fleetDemand
+      fleet: fleetDemand,
+      ...diagnostics === void 0 ? {} : { diagnostics }
     }), demandThisCycle, exactDemandUnavailableReason;
-    readDemand = () => (demandThisCycle === void 0 && (ensureDemandResearchObservation(), demandThisCycle = demand.sample()), demandThisCycle);
+    readDemand = () => measurePhase("demand.read", () => (demandThisCycle === void 0 && (demandThisCycle = measurePhase("demand.read.compute", () => (measurePhase(
+      "demand.sample.research-observation",
+      ensureDemandResearchObservation
+    ), measurePhase("demand.sample.total", () => demand.sample())))), demandThisCycle));
     let storagePorts = createCapturedStoragePorts({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,

@@ -1373,15 +1373,23 @@ export function startCapturedRuntime({
     readPrerequisites: readDemandPrerequisites,
     craftCosts: costs,
     fleet: fleetDemand,
+    ...(diagnostics === undefined ? {} : { diagnostics }),
   });
   let demandThisCycle: CapturedDemandSample | undefined;
   let exactDemandUnavailableReason: string | undefined;
   readDemand = () => {
-    if (demandThisCycle === undefined) {
-      ensureDemandResearchObservation();
-      demandThisCycle = demand.sample();
-    }
-    return demandThisCycle;
+    return measurePhase("demand.read", () => {
+      if (demandThisCycle === undefined) {
+        demandThisCycle = measurePhase("demand.read.compute", () => {
+          measurePhase(
+            "demand.sample.research-observation",
+            ensureDemandResearchObservation,
+          );
+          return measurePhase("demand.sample.total", () => demand.sample());
+        });
+      }
+      return demandThisCycle;
+    });
   };
   const storagePorts = createCapturedStoragePorts({
     rootState: pageCapture.rootState,

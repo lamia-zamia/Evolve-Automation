@@ -39,7 +39,8 @@ import {
 import type { StorageResourceState } from "../../../../domain/economy/storage/storage-requirements.ts";
 import { CONSUMPTION_BALANCE_TARGET } from "../../../../config.ts";
 import {
-  planDemandPrioritization,
+  evaluateDemandPrioritization,
+  prepareDemandPrioritization,
   type DemandCost,
   type DemandCrafter,
   type DemandCrafterCost,
@@ -129,6 +130,10 @@ export interface CapturedResourceDemandDependencies {
   readonly readPrerequisites?: () => DemandPrerequisiteReport | undefined;
   /** The shared captured Mech target, when that demand phase is available. */
   readonly mechDemand?: CapturedMechDemandSource;
+  readonly diagnostics?: Pick<
+    import("../../../browser/diagnostics.ts").BrowserDiagnostics,
+    "nowMs" | "readPerformanceEnabled" | "recordPerformance" | "recordCount"
+  >;
 }
 
 /** Persisted project switches also request storage when autoARPA itself is disabled. */
@@ -498,6 +503,7 @@ function readCapturedSpaceMissionDemand(
   settings: Record<PropertyKey, unknown>,
   controls: GameControlRegistry | undefined,
   costs: GameActionCostReader | undefined,
+  onActionCostRead: () => void,
 ): readonly DemandMission[] {
   if (
     controls === undefined ||
@@ -520,6 +526,7 @@ function readCapturedSpaceMissionDemand(
     ) {
       continue;
     }
+    onActionCostRead();
     const price = costs.readCost(actionId);
     if (price === undefined) continue;
     const missionCosts = toCosts(price.cost, price.pool);
@@ -1004,8 +1011,10 @@ function readDemandReservationSpaceCount(
 function readDemandReservationSpaceMoney(
   costs: GameActionCostReader | undefined,
   actionId: string,
+  onActionCostRead: () => void,
 ): number | null {
   if (costs === undefined) return null;
+  onActionCostRead();
   const price = costs.readCost(actionId);
   if (price === undefined) return null;
   const money = finite(price.cost["Money"]);
@@ -1031,6 +1040,7 @@ function readDemandReservationTruepathAiTarget(
   controls: GameControlRegistry | undefined,
   costs: GameActionCostReader | undefined,
   report: DemandPrerequisiteReport | undefined,
+  onActionCostRead: () => void,
 ): DemandReservationOutcome<DemandTarget> {
   if (!isCapturedTruepath(root)) return { status: "not-needed" };
   if (settings["prestigeType"] !== "apocalypse")
@@ -1079,16 +1089,23 @@ function readDemandReservationTruepathAiTarget(
   const decoderMoneyCost = readDemandReservationSpaceMoney(
     costs,
     "space-decoder",
+    onActionCostRead,
   );
   const colonistMoneyCost = readDemandReservationSpaceMoney(
     costs,
     "space-ai_colonist",
+    onActionCostRead,
   );
   const trooperMoneyCost = readDemandReservationSpaceMoney(
     costs,
     "space-shock_trooper",
+    onActionCostRead,
   );
-  const tankMoneyCost = readDemandReservationSpaceMoney(costs, "space-tank");
+  const tankMoneyCost = readDemandReservationSpaceMoney(
+    costs,
+    "space-tank",
+    onActionCostRead,
+  );
   // Every eligible competitor's Money price feeds the ranking; one uncaptured eligible
   // price stands the target down, because a missing candidate must never win by absence
   // the way a present one wins by price. Ineligible targets simply deal nulls, which the
@@ -1256,18 +1273,49 @@ function readDemandReservationSpyPurchaseMoney(
 export function createCapturedResourceDemand(
   dependencies: CapturedResourceDemandDependencies,
 ): CapturedResourceDemand {
+  const measure = <T>(name: string, body: () => T): T => {
+    const diagnostics = dependencies.diagnostics;
+    const start =
+      diagnostics?.readPerformanceEnabled() === true
+        ? diagnostics.nowMs()
+        : undefined;
+    try {
+      return body();
+    } finally {
+      if (start !== undefined) {
+        diagnostics?.recordPerformance(name, diagnostics.nowMs() - start);
+      }
+    }
+  };
+  const count = (name: string, amount = 1) =>
+    dependencies.diagnostics?.recordCount(name, amount);
   let exactUnavailableReason: CapturedDemandUnavailableReason = {
     code: "other-exact-prerequisite",
     message: "exact demand prerequisite unavailable",
   };
   const capturedDemandSampler = {
     sample(exact: boolean): CapturedDemandSample | undefined {
+      const sampleMeasure = <T>(name: string, body: () => T): T =>
+        measure(
+          exact ? name.replace("demand.sample.", "demand.sampleExact.") : name,
+          body,
+        );
+      const sampleCount = (name: string, amount = 1) =>
+        count(
+          exact ? name.replace("demand.sample.", "demand.sampleExact.") : name,
+          amount,
+        );
+      sampleCount("demand.sample.samples");
+      sampleCount("demand.sample.planCalls", 0);
       if (exact)
         exactUnavailableReason = {
           code: "other-exact-prerequisite",
           message: "exact demand prerequisite unavailable",
         };
-      const root = dependencies.rootState.readRoot();
+      const root = sampleMeasure("demand.sample.inputs", () =>
+        dependencies.rootState.readRoot(),
+      );
+      sampleCount("demand.sample.structureRegistryReads", 0);
       const resources = readProperty(root, "resource");
       if (!isRecord(resources)) {
         exactUnavailableReason = {
@@ -1276,7 +1324,10 @@ export function createCapturedResourceDemand(
         };
         return exact ? undefined : EMPTY_DEMAND_SAMPLE;
       }
-      const reservationSample = dependencies.reservations.readReservations();
+      const reservationSample = sampleMeasure("demand.sample.queue", () => {
+        sampleCount("demand.sample.queueReservationReads");
+        return dependencies.reservations.readReservations();
+      });
       if (exact && reservationSample.unavailable) {
         exactUnavailableReason = {
           code: "queue-reservation",
@@ -1285,8 +1336,17 @@ export function createCapturedResourceDemand(
         return undefined;
       }
       const queued = reservationSample.targets;
-      const saving = dependencies.construction?.readSavingTarget() ?? null;
-      const offered = dependencies.readOfferedTechs?.();
+      const saving = sampleMeasure(
+        "demand.sample.build",
+        () => dependencies.construction?.readSavingTarget() ?? null,
+      );
+      const offered = sampleMeasure("demand.sample.research", () => {
+        sampleCount(
+          "demand.sample.offeredTechnologyReads",
+          dependencies.readOfferedTechs === undefined ? 0 : 1,
+        );
+        return dependencies.readOfferedTechs?.();
+      });
       if (
         exact &&
         dependencies.readOfferedTechs !== undefined &&
@@ -1298,44 +1358,62 @@ export function createCapturedResourceDemand(
         };
         return undefined;
       }
-      const settingsValue = dependencies.readSettings();
+      const settingsValue = sampleMeasure("demand.sample.inputs", () =>
+        dependencies.readSettings(),
+      );
       const settings = isRecord(settingsValue) ? settingsValue : {};
-      const fleet = dependencies.fleet?.read();
-      const capturedTriggerTargets = dependencies.triggers?.read() ?? [];
-      const storageResources = readStorageResources(resources, root, settings);
-      const triggerTargets = Object.freeze(
-        capturedTriggerTargets.map((target) =>
-          Object.freeze({
-            // A project trigger reserves the whole remaining project, so it takes the same
-            // doubling the pure planner gives any part-built project target.
-            isProject: target.actionType === "arpa",
-            progress: target.actionType === "arpa" ? target.progress : null,
-            ...("pool" in target && target.pool !== undefined
-              ? { pool: target.pool }
-              : {}),
-            costs: toCosts(
-              target.cost,
-              "pool" in target ? target.pool : undefined,
-            ),
-          }),
+      const fleet = sampleMeasure("demand.sample.fleet", () =>
+        dependencies.fleet?.read(),
+      );
+      const capturedTriggerTargets = sampleMeasure(
+        "demand.sample.inputs",
+        () => dependencies.triggers?.read() ?? [],
+      );
+      const storageResources = sampleMeasure("demand.sample.inputs", () =>
+        readStorageResources(resources, root, settings),
+      );
+      const triggerTargets = sampleMeasure("demand.sample.inputs", () =>
+        Object.freeze(
+          capturedTriggerTargets.map((target) =>
+            Object.freeze({
+              // A project trigger reserves the whole remaining project, so it takes the same
+              // doubling the pure planner gives any part-built project target.
+              isProject: target.actionType === "arpa",
+              progress: target.actionType === "arpa" ? target.progress : null,
+              ...("pool" in target && target.pool !== undefined
+                ? { pool: target.pool }
+                : {}),
+              costs: toCosts(
+                target.cost,
+                "pool" in target ? target.pool : undefined,
+              ),
+            }),
+          ),
         ),
       );
-      const missions = readCapturedSpaceMissionDemand(
-        root,
-        settings,
-        dependencies.controls,
-        dependencies.costs,
+      const missions = sampleMeasure("demand.sample.missions", () =>
+        readCapturedSpaceMissionDemand(
+          root,
+          settings,
+          dependencies.controls,
+          dependencies.costs,
+          () => sampleCount("demand.sample.actionCostReads"),
+        ),
       );
       const crafterDemand =
         settings["productionFactoryFocusMaterials"] === true
-          ? readCapturedCrafterDemand(
-              root,
-              resources,
-              settings,
-              dependencies.craftCosts,
+          ? sampleMeasure("demand.sample.crafters", () =>
+              readCapturedCrafterDemand(
+                root,
+                resources,
+                settings,
+                dependencies.craftCosts,
+              ),
             )
           : undefined;
-      const factoryCatalog = readCapturedFactoryDemand(root, settings);
+      const factoryCatalog = sampleMeasure("demand.sample.factory", () =>
+        readCapturedFactoryDemand(root, settings),
+      );
       const hasFactoryDemand =
         factoryCatalog?.productions.some(
           (production) =>
@@ -1351,31 +1429,43 @@ export function createCapturedResourceDemand(
         ) &&
         fleet?.nextShipAffordable === true &&
         fleet.nextShipCost.length > 0;
-      const inflationMoney = readDemandReservationInflationMoney(
-        root,
-        settings,
+      const inflationMoney = sampleMeasure(
+        "demand.sample.prerequisite-reservations",
+        () => readDemandReservationInflationMoney(root, settings),
       );
-      const retirementGraphene = readDemandReservationRetirementGraphene(
-        root,
-        settings,
+      const retirementGraphene = sampleMeasure(
+        "demand.sample.prerequisite-reservations",
+        () => readDemandReservationRetirementGraphene(root, settings),
       );
-      const prerequisites = dependencies.readPrerequisites?.();
-      const truepathAiReservation = readDemandReservationTruepathAiTarget(
-        root,
-        settings,
-        dependencies.controls,
-        dependencies.costs,
-        prerequisites,
+      const prerequisites = sampleMeasure(
+        "demand.sample.prerequisite-reservations",
+        () => dependencies.readPrerequisites?.(),
+      );
+      const truepathAiReservation = sampleMeasure(
+        "demand.sample.prerequisite-reservations",
+        () =>
+          readDemandReservationTruepathAiTarget(
+            root,
+            settings,
+            dependencies.controls,
+            dependencies.costs,
+            prerequisites,
+            () => sampleCount("demand.sample.actionCostReads"),
+          ),
       );
       const truepathAiBuildingTarget =
         truepathAiReservation.status === "ready"
           ? truepathAiReservation.value
           : null;
-      const spyReservation = readDemandReservationSpyPurchaseMoney(
-        root,
-        settings,
-        dependencies.controls,
-        prerequisites,
+      const spyReservation = sampleMeasure(
+        "demand.sample.prerequisite-reservations",
+        () =>
+          readDemandReservationSpyPurchaseMoney(
+            root,
+            settings,
+            dependencies.controls,
+            prerequisites,
+          ),
       );
       const spyPurchaseReservation =
         spyReservation.status === "ready"
@@ -1397,6 +1487,28 @@ export function createCapturedResourceDemand(
       const savingCosts =
         saving === null ? null : toCosts(saving.cost, saving.pool);
 
+      const queuedTargets = sampleMeasure("demand.sample.queue", () => {
+        sampleCount("demand.sample.queueTargetConversions");
+        return toTargets(queued);
+      });
+      const demandInputSnapshot = Object.freeze({
+        root,
+        resources,
+        settings,
+        queuedTargets,
+        saving,
+        offered,
+        fleet,
+        capturedTriggerTargets,
+        missions,
+        crafterDemand,
+        factoryCatalog,
+        inflationMoney,
+        retirementGraphene,
+        prerequisites,
+        truepathAiBuildingTarget,
+        spyPurchaseMoney,
+      });
       const baseInput = Object.freeze({
         settings: readSettingsInput(settingsValue),
         // The captured offer list is the game's own technology qualification result. The reader
@@ -1406,7 +1518,7 @@ export function createCapturedResourceDemand(
         truepathAiBuildingTarget,
         inflationMoney,
         retirementGraphene,
-        queuedTargets: toTargets(queued),
+        queuedTargets: demandInputSnapshot.queuedTargets,
         triggerTargets,
         savingTarget:
           saving === null || savingCosts === null
@@ -1417,7 +1529,9 @@ export function createCapturedResourceDemand(
                 costs: savingCosts,
               }),
         missions,
-        unlockedTechs: toOfferedTechs(resources, offered),
+        unlockedTechs: sampleMeasure("demand.sample.research", () =>
+          toOfferedTechs(resources, demandInputSnapshot.offered),
+        ),
         spyPurchaseMoney,
         mechCosts: Object.freeze([]),
         fleet:
@@ -1436,10 +1550,23 @@ export function createCapturedResourceDemand(
         factoryCount: 0,
         factoryProductions: Object.freeze([]),
       });
-      const baseResult = planDemandPrioritization(baseInput);
-      const baseRequested = capturedResourceRequestQuantities(
-        baseResult.requests,
-        resources,
+      const prepared = sampleMeasure("demand.sample.prioritization", () => {
+        sampleCount("demand.sample.commonPreparations");
+        return prepareDemandPrioritization(baseInput);
+      });
+      const baseResult = sampleMeasure("demand.sample.prioritization", () => {
+        sampleCount("demand.sample.evaluateCalls");
+        return evaluateDemandPrioritization(prepared, baseInput);
+      });
+      const baseRequested = sampleMeasure(
+        "demand.sample.prioritization",
+        () => {
+          sampleCount("demand.sample.requestQuantityEvaluations");
+          return capturedResourceRequestQuantities(
+            baseResult.requests,
+            resources,
+          );
+        },
       );
       const inputWithoutConstructionSaving =
         saving === null
@@ -1448,14 +1575,23 @@ export function createCapturedResourceDemand(
       const resultWithoutConstructionSaving =
         saving === null
           ? baseResult
-          : planDemandPrioritization(inputWithoutConstructionSaving);
+          : sampleMeasure("demand.sample.prioritization", () => {
+              sampleCount("demand.sample.evaluateCalls");
+              return evaluateDemandPrioritization(
+                prepared,
+                inputWithoutConstructionSaving,
+              );
+            });
       const requestedWithoutConstructionSaving =
         saving === null
           ? baseRequested
-          : capturedResourceRequestQuantities(
-              resultWithoutConstructionSaving.requests,
-              resources,
-            );
+          : sampleMeasure("demand.sample.prioritization", () => {
+              sampleCount("demand.sample.requestQuantityEvaluations");
+              return capturedResourceRequestQuantities(
+                resultWithoutConstructionSaving.requests,
+                resources,
+              );
+            });
       const capturedFactoryProductionsForRequests = (
         requestedBase: ReadonlyMap<string, number>,
       ) =>
@@ -1482,29 +1618,47 @@ export function createCapturedResourceDemand(
         capturedFactoryProductionsForRequests(baseRequested);
       const nonMechResult =
         factoryCatalog !== undefined && hasFactoryDemand
-          ? planDemandPrioritization({
-              ...baseInput,
-              factoryCount: factoryCatalog.count,
-              factoryProductions,
+          ? sampleMeasure("demand.sample.prioritization", () => {
+              sampleCount("demand.sample.evaluateCalls");
+              return evaluateDemandPrioritization(prepared, {
+                ...baseInput,
+                factoryCount: factoryCatalog.count,
+                factoryProductions,
+              });
             })
           : baseResult;
-      const otherRequested = capturedResourceRequestQuantities(
-        nonMechResult.requests,
-        resources,
+      const otherRequested = sampleMeasure(
+        "demand.sample.prioritization",
+        () => {
+          sampleCount("demand.sample.requestQuantityEvaluations");
+          return capturedResourceRequestQuantities(
+            nonMechResult.requests,
+            resources,
+          );
+        },
       );
       const otherResultForMechPriority =
         factoryCatalog !== undefined && hasFactoryDemand
-          ? planDemandPrioritization({
-              ...inputWithoutConstructionSaving,
-              factoryCount: factoryCatalog.count,
-              factoryProductions: capturedFactoryProductionsForRequests(
-                requestedWithoutConstructionSaving,
-              ),
+          ? sampleMeasure("demand.sample.prioritization", () => {
+              sampleCount("demand.sample.evaluateCalls");
+              return evaluateDemandPrioritization(prepared, {
+                ...inputWithoutConstructionSaving,
+                factoryCount: factoryCatalog.count,
+                factoryProductions: capturedFactoryProductionsForRequests(
+                  requestedWithoutConstructionSaving,
+                ),
+              });
             })
           : resultWithoutConstructionSaving;
-      const requestedForMechPriority = capturedResourceRequestQuantities(
-        otherResultForMechPriority.requests,
-        resources,
+      const requestedForMechPriority = sampleMeasure(
+        "demand.sample.prioritization",
+        () => {
+          sampleCount("demand.sample.requestQuantityEvaluations");
+          return capturedResourceRequestQuantities(
+            otherResultForMechPriority.requests,
+            resources,
+          );
+        },
       );
       const reservedForOthers: CapturedMechReservedResources = Object.freeze({
         supply: otherRequested.get("Supply") ?? 0,
@@ -1512,8 +1666,9 @@ export function createCapturedResourceDemand(
       });
       // The Mech planner receives the same max-combined targets the rest of the
       // cycle shares, with its own target excluded from this budget.
-      const capturedMechDemand =
-        dependencies.mechDemand?.read(reservedForOthers);
+      const capturedMechDemand = sampleMeasure("demand.sample.mech", () =>
+        dependencies.mechDemand?.read(reservedForOthers),
+      );
       const mechDemandPlan =
         capturedMechDemand?.plan ??
         planMechDemandCosts({
@@ -1544,7 +1699,13 @@ export function createCapturedResourceDemand(
           return costs.length === 0 ? [] : [Object.freeze({ costs })];
         }),
       );
-      const managedBuildTargets = dependencies.readBuildTargets?.();
+      const managedBuildTargets = sampleMeasure("demand.sample.build", () => {
+        sampleCount(
+          "demand.sample.buildingCatalogReads",
+          dependencies.readBuildTargets === undefined ? 0 : 1,
+        );
+        return dependencies.readBuildTargets?.();
+      });
       if (
         exact &&
         dependencies.readBuildTargets !== undefined &&
@@ -1558,23 +1719,26 @@ export function createCapturedResourceDemand(
       }
       let incompleteBuildStorageCosts = false;
       let unpricedBuildTarget: string | undefined;
-      const buildingStorageTargets = Object.freeze(
-        (managedBuildTargets ?? []).flatMap((target) => {
-          const price = dependencies.costs?.readCost(target.elementId);
-          if (price === undefined) {
-            incompleteBuildStorageCosts = true;
-            unpricedBuildTarget ??= target.elementId;
-            return [];
-          }
-          const costs = toCosts(price.cost, price.pool);
-          if (costs.length === 0) return [];
-          return [
-            Object.freeze({
-              ...(price.pool === undefined ? {} : { pool: price.pool }),
-              costs,
-            }),
-          ];
-        }),
+      const buildingStorageTargets = sampleMeasure("demand.sample.build", () =>
+        Object.freeze(
+          (managedBuildTargets ?? []).flatMap((target) => {
+            sampleCount("demand.sample.actionCostReads");
+            const price = dependencies.costs?.readCost(target.elementId);
+            if (price === undefined) {
+              incompleteBuildStorageCosts = true;
+              unpricedBuildTarget ??= target.elementId;
+              return [];
+            }
+            const costs = toCosts(price.cost, price.pool);
+            if (costs.length === 0) return [];
+            return [
+              Object.freeze({
+                ...(price.pool === undefined ? {} : { pool: price.pool }),
+                costs,
+              }),
+            ];
+          }),
+        ),
       );
       if (exact && incompleteBuildStorageCosts) {
         exactUnavailableReason = {
@@ -1586,7 +1750,9 @@ export function createCapturedResourceDemand(
       const hasEnabledProjectStorageSetting =
         hasCapturedProjectStorageDemand(settings);
       const projects = hasEnabledProjectStorageSetting
-        ? dependencies.readProjects?.()
+        ? sampleMeasure("demand.sample.projects", () =>
+            dependencies.readProjects?.(),
+          )
         : [];
       if (
         exact &&
@@ -1600,22 +1766,26 @@ export function createCapturedResourceDemand(
         };
         return undefined;
       }
-      const projectStorageTargets = Object.freeze(
-        (projects ?? []).flatMap((project) => {
-          if (settings[`arpa_${project.projectId}`] !== true) return [];
-          const costs = calculateArpaStorageTargetCosts({
-            perPercentCosts: toCosts(project.cost),
-            progress: project.progress,
-            stepPercent: finite(settings["arpaStep"]) ?? 5,
-            isTriggerTarget: capturedTriggerTargets.some(
-              (target) =>
-                target.actionType === "arpa" &&
-                target.actionId === project.elementId,
-            ),
-            resources: storageResources,
-          });
-          return costs.length === 0 ? [] : [Object.freeze({ costs })];
-        }),
+      const projectStorageTargets = sampleMeasure(
+        "demand.sample.projects",
+        () =>
+          Object.freeze(
+            (projects ?? []).flatMap((project) => {
+              if (settings[`arpa_${project.projectId}`] !== true) return [];
+              const costs = calculateArpaStorageTargetCosts({
+                perPercentCosts: toCosts(project.cost),
+                progress: project.progress,
+                stepPercent: finite(settings["arpaStep"]) ?? 5,
+                isTriggerTarget: capturedTriggerTargets.some(
+                  (target) =>
+                    target.actionType === "arpa" &&
+                    target.actionId === project.elementId,
+                ),
+                resources: storageResources,
+              });
+              return costs.length === 0 ? [] : [Object.freeze({ costs })];
+            }),
+          ),
       );
       const fleetStorageTargets =
         settingBoolean(settings, "autoFleet", false) &&
@@ -1648,21 +1818,22 @@ export function createCapturedResourceDemand(
         return EMPTY_DEMAND_SAMPLE;
       }
       const finalInput = Object.freeze({ ...baseInput, mechCosts });
-      const result =
-        factoryCatalog !== undefined && hasFactoryDemand
-          ? planDemandPrioritization({
-              ...finalInput,
-              factoryCount: factoryCatalog.count,
-              factoryProductions,
-            })
-          : planDemandPrioritization(finalInput);
+      const result = sampleMeasure("demand.sample.prioritization", () => {
+        sampleCount("demand.sample.evaluateCalls");
+        return evaluateDemandPrioritization(prepared, {
+          ...finalInput,
+          ...(factoryCatalog !== undefined && hasFactoryDemand
+            ? { factoryCount: factoryCatalog.count, factoryProductions }
+            : {}),
+        });
+      });
 
       // The script's own `requestQuantity`: requests combine by maximum, and none can exceed what
       // the resource's storage holds.
-      const requested = capturedResourceRequestQuantities(
-        result.requests,
-        resources,
-      );
+      const requested = sampleMeasure("demand.sample.prioritization", () => {
+        sampleCount("demand.sample.requestQuantityEvaluations");
+        return capturedResourceRequestQuantities(result.requests, resources);
+      });
       const requestedExcludingMech = new Map(otherRequested);
       if (mechDemandPlan.status === "unavailable") {
         for (const resourceId of ["Supply", "Soul_Gem"]) {
@@ -1712,49 +1883,54 @@ export function createCapturedResourceDemand(
             ),
           }),
         );
-      const storage = planStorageRequirements({
-        storageAssignExtra: settings["storageAssignExtra"] !== false,
-        autoMarket: settings["autoMarket"] === true,
-        noTrade: Boolean(readProperty(readProperty(root, "race"), "no_trade")),
-        // Restore the old fleet / research / queue / managed-target inputs, then retain the
-        // additional captured commitments this demand slice already supported.
-        requestLists: Object.freeze([
-          fleetStorageTargets,
-          technologyStorageTargets,
-          toTargets(queued),
-          savingCosts === null
-            ? Object.freeze([])
-            : Object.freeze([
-                Object.freeze({
-                  ...(saving === null || saving.pool === undefined
-                    ? {}
-                    : { pool: saving.pool }),
-                  costs: savingCosts,
-                }),
-              ]),
-          triggerTargets,
-          buildingStorageTargets,
-          projectStorageTargets,
-          factoryStorageTargets,
-          Object.freeze([
-            Object.freeze({
-              costs:
-                mechDemandPlan.status === "ready"
-                  ? mechCosts
-                  : Object.freeze([]),
-            }),
+      const storage = sampleMeasure("demand.sample.storage", () => {
+        sampleCount("demand.sample.planStorageCalls");
+        return planStorageRequirements({
+          storageAssignExtra: settings["storageAssignExtra"] !== false,
+          autoMarket: settings["autoMarket"] === true,
+          noTrade: Boolean(
+            readProperty(readProperty(root, "race"), "no_trade"),
+          ),
+          // Restore the old fleet / research / queue / managed-target inputs, then retain the
+          // additional captured commitments this demand slice already supported.
+          requestLists: Object.freeze([
+            fleetStorageTargets,
+            technologyStorageTargets,
+            queuedTargets,
+            savingCosts === null
+              ? Object.freeze([])
+              : Object.freeze([
+                  Object.freeze({
+                    ...(saving === null || saving.pool === undefined
+                      ? {}
+                      : { pool: saving.pool }),
+                    costs: savingCosts,
+                  }),
+                ]),
+            triggerTargets,
+            buildingStorageTargets,
+            projectStorageTargets,
+            factoryStorageTargets,
+            Object.freeze([
+              Object.freeze({
+                costs:
+                  mechDemandPlan.status === "ready"
+                    ? mechCosts
+                    : Object.freeze([]),
+              }),
+            ]),
           ]),
-        ]),
-        // Per-resource research prices above use the shared current-cycle offer sample. The
-        // separate Knowledge-level estimate remains owned by its captured Knowledge reader.
-        knowledge: Object.freeze({
-          techKnowledgeCosts: Object.freeze([]),
-          reservedTargets: Object.freeze([]),
-          buildCandidates: Object.freeze([]),
-        }),
-        resources: storageResources,
-        inflationMoney,
-        retirementGraphene,
+          // Per-resource research prices above use the shared current-cycle offer sample. The
+          // separate Knowledge-level estimate remains owned by its captured Knowledge reader.
+          knowledge: Object.freeze({
+            techKnowledgeCosts: Object.freeze([]),
+            reservedTargets: Object.freeze([]),
+            buildCandidates: Object.freeze([]),
+          }),
+          resources: storageResources,
+          inflationMoney,
+          retirementGraphene,
+        });
       });
       const required = new Map(
         storage.resources.map((resource) => [

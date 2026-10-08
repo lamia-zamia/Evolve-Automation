@@ -1987,4 +1987,219 @@ for (const [missionId, completionTech, completionLevel] of [
   assert.equal(sample.storageRequired("Soul_Gem"), 309);
 }
 
+// The three Mech-facing views intentionally use different reservations: ordinary demand includes
+// Mech, its budget excludes Mech, and Mech-first priority also excludes construction saving.
+{
+  const sample = createCapturedResourceDemand({
+    rootState: {
+      readRoot: () => ({
+        race: {},
+        resource: {
+          Iron: { amount: 0, max: 1000 },
+          Stone: { amount: 0, max: 1000 },
+          Supply: { amount: 0, max: 1000 },
+        },
+      }),
+    },
+    reservations: {
+      readReservations: () => ({
+        targets: [{ name: "queue", cause: "Queue", cost: { Iron: 200 } }],
+        unavailable: false,
+      }),
+    },
+    construction: {
+      readSavingTarget: () => ({ name: "build", cost: { Stone: 500 } }),
+    },
+    mechDemand: {
+      read: (reserved) => {
+        assert.deepEqual(reserved, { supply: 0, soulGems: 0 });
+        return {
+          plan: { status: "ready", cost: { supply: 300, gems: 0, space: 1 } },
+          immediatePlan: { status: "none" },
+        };
+      },
+    },
+    readSettings: () => ({ prioritizeQueue: "req" }),
+  }).sample();
+  assert.equal(sample.requestedQuantity("Supply"), 300);
+  assert.equal(sample.requestedQuantityExcludingMech("Supply"), 0);
+  assert.equal(sample.requestedQuantity("Stone"), 500);
+  assert.equal(sample.requestedQuantityForMechPriority("Stone"), 0);
+  assert.equal(sample.requestedQuantityForMechPriority("Iron"), 200);
+}
+
+// One sample owns each mutable authority read; the next sample sees all updated values.
+{
+  let queueCost = 100;
+  let techCost = 120;
+  let buildCost = 140;
+  let savingCost = 160;
+  let maximum = 1000;
+  const calls = {
+    queue: 0,
+    offered: 0,
+    build: 0,
+    projects: 0,
+    fleet: 0,
+    saving: 0,
+  };
+  const demand = createCapturedResourceDemand({
+    rootState: {
+      readRoot: () => ({
+        race: {},
+        resource: {
+          Iron: { amount: 0, max: maximum },
+          Stone: { amount: 0, max: maximum },
+          Research: { amount: 0, max: maximum },
+          Wood: { amount: 0, max: maximum },
+        },
+      }),
+    },
+    reservations: {
+      readReservations: () => {
+        calls.queue++;
+        return {
+          targets: [
+            { name: "queue", cause: "Queue", cost: { Iron: queueCost } },
+          ],
+          unavailable: false,
+        };
+      },
+    },
+    construction: {
+      readSavingTarget: () => {
+        calls.saving++;
+        return { name: "saving", cost: { Stone: savingCost } };
+      },
+    },
+    readOfferedTechs: () => {
+      calls.offered++;
+      return [{ elementId: "tech-test", cost: { Research: techCost } }];
+    },
+    readBuildTargets: () => {
+      calls.build++;
+      return [{ key: "city-test", elementId: "city-test", weighting: 1 }];
+    },
+    readProjects: () => {
+      calls.projects++;
+      return [];
+    },
+    costs: { readCost: () => ({ cost: { Wood: buildCost } }) },
+    fleet: {
+      read: () => {
+        calls.fleet++;
+        return {
+          nextShipAffordable: false,
+          nextShipExpandable: false,
+          nextShipCost: [],
+        };
+      },
+    },
+    readSettings: () => ({
+      prioritizeQueue: "req",
+      researchRequest: true,
+      autoBuild: true,
+      arpa_lhc: true,
+    }),
+  });
+  const first = demand.sample();
+  assert.deepEqual(calls, {
+    queue: 1,
+    offered: 1,
+    build: 1,
+    projects: 1,
+    fleet: 1,
+    saving: 1,
+  });
+  assert.equal(first.requestedQuantity("Iron"), 100);
+  assert.ok(Math.abs(first.storageRequired("Wood") - 144.2) < 1e-9);
+  queueCost = 210;
+  techCost = 220;
+  buildCost = 230;
+  savingCost = 240;
+  maximum = 200;
+  const second = demand.sample();
+  assert.deepEqual(calls, {
+    queue: 2,
+    offered: 2,
+    build: 2,
+    projects: 2,
+    fleet: 2,
+    saving: 2,
+  });
+  assert.equal(second.requestedQuantity("Iron"), 200);
+  assert.equal(second.requestedQuantity("Stone"), 200);
+  assert.equal(second.storageRequired("Wood"), 1);
+}
+
+// Factory material feedback uses the base request map: a requested output demands its recipe,
+// while an output with no base request leaves those ingredients unrequested.
+{
+  const factorySample = (targets) =>
+    createCapturedResourceDemand({
+      rootState: {
+        readRoot: () => ({
+          race: {},
+          tech: { factory: 1 },
+          city: { factory: { on: 1 } },
+          resource: {
+            Alloy: { amount: 0, max: 1000 },
+            Copper: { amount: 0, max: 1000 },
+            Aluminium: { amount: 0, max: 1000 },
+            Furs: { amount: 0, max: 1000 },
+            Stone: { amount: 0, max: 1000 },
+          },
+        }),
+      },
+      reservations: {
+        readReservations: () => ({ targets, unavailable: false }),
+      },
+      readSettings: () => ({
+        prioritizeQueue: "req",
+        production_Alloy: true,
+        productionFactoryMinIngredients: 0,
+      }),
+    }).sample();
+  const feedback = factorySample([
+    { name: "alloy", cause: "Queue", cost: { Alloy: 400 } },
+  ]);
+  assert.equal(feedback.requestedQuantity("Copper"), 139.4);
+  assert.equal(
+    factorySample([
+      { name: "stone", cause: "Queue", cost: { Stone: 400 } },
+    ]).requestedQuantity("Copper"),
+    0,
+  );
+}
+
+// The sampler prepares common planner work once and reports its per-sample operations.
+{
+  const counts = new Map();
+  const diagnostics = {
+    nowMs: () => 0,
+    readPerformanceEnabled: () => true,
+    recordPerformance: () => {},
+    recordCount: (name, amount) =>
+      counts.set(name, (counts.get(name) ?? 0) + amount),
+  };
+  createCapturedResourceDemand({
+    rootState: { readRoot: () => root },
+    reservations: {
+      readReservations: () => ({
+        targets: [{ name: "queued", cause: "Queue", cost: { Stone: 100 } }],
+        unavailable: false,
+      }),
+    },
+    readSettings: () => ({ prioritizeQueue: "req" }),
+    diagnostics,
+  }).sample();
+  assert.equal(counts.get("demand.sample.planCalls"), 0);
+  assert.equal(counts.get("demand.sample.commonPreparations"), 1);
+  assert.equal(counts.get("demand.sample.queueReservationReads"), 1);
+  assert.equal(counts.get("demand.sample.queueTargetConversions"), 1);
+  assert.equal(counts.get("demand.sample.requestQuantityEvaluations"), 4);
+  assert.equal(counts.get("demand.sample.planStorageCalls"), 1);
+  assert.equal(counts.get("demand.sample.structureRegistryReads"), 0);
+}
+
 console.log("Captured resource-demand adapter tests passed");

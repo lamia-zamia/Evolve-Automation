@@ -168,13 +168,25 @@ export interface DemandPrioritizationResult {
   readonly removedMissionIndices: readonly number[];
 }
 
+export interface PreparedDemandPrioritization {
+  readonly requests: readonly DemandRequest[];
+  readonly removedMissionIndices: readonly number[];
+  readonly settings: DemandPrioritizationSettings;
+  readonly balance: number;
+  readonly spyPurchaseMoney: number;
+  readonly fleet: DemandFleet;
+  readonly availableCrafters: number;
+  readonly crafters: readonly DemandCrafter[];
+  readonly vitreloyPlant: DemandVitreloyPlant;
+}
+
 function projectDoubles(target: DemandTarget): boolean {
   return target.isProject && target.progress !== null && target.progress < 99;
 }
 
-export function planDemandPrioritization(
+export function prepareDemandPrioritization(
   input: Readonly<DemandPrioritizationInput>,
-): DemandPrioritizationResult {
+): PreparedDemandPrioritization {
   const { settings, consumptionBalanceTarget: balance } = input;
   const requests: DemandRequest[] = [];
   const removedMissionIndices: number[] = [];
@@ -245,36 +257,64 @@ export function planDemandPrioritization(
     }
   }
 
+  return Object.freeze({
+    requests: Object.freeze(requests.map((entry) => Object.freeze(entry))),
+    removedMissionIndices: Object.freeze(removedMissionIndices),
+    settings,
+    balance,
+    spyPurchaseMoney: input.spyPurchaseMoney,
+    fleet: input.fleet,
+    availableCrafters: input.availableCrafters,
+    crafters: input.crafters,
+    vitreloyPlant: input.vitreloyPlant,
+  });
+}
+
+export function evaluateDemandPrioritization(
+  prepared: Readonly<PreparedDemandPrioritization>,
+  variant: Readonly<
+    Pick<
+      DemandPrioritizationInput,
+      "savingTarget" | "mechCosts" | "factoryCount" | "factoryProductions"
+    >
+  >,
+): DemandPrioritizationResult {
+  const requests = [...prepared.requests];
+  const { settings, balance } = prepared;
+  const request = (resourceId: string, amount: number) => {
+    requests.push({ resourceId, amount });
+  };
+
   // Additive rather than part of `prioritizedTasks`: an explicit queue still
   // decides what the fallback research request does, and requests are combined
   // by maximum, so saving for a target can only raise a demand, never lower one.
   const savingCost: Record<string, number> = {};
-  if (input.savingTarget !== null) {
-    for (const cost of input.savingTarget.costs) {
+  if (variant.savingTarget !== null) {
+    for (const cost of variant.savingTarget.costs) {
       request(cost.resourceId, cost.amount);
       savingCost[cost.resourceId] = cost.amount;
     }
   }
 
-  for (const cost of input.mechCosts) {
+  for (const cost of variant.mechCosts) {
     request(cost.resourceId, cost.amount);
   }
 
-  if (input.spyPurchaseMoney && settings.prioritizeUnify.includes("req")) {
-    request("Money", input.spyPurchaseMoney);
+  if (prepared.spyPurchaseMoney && settings.prioritizeUnify.includes("req")) {
+    request("Money", prepared.spyPurchaseMoney);
   }
 
   if (
     settings.autoFleet &&
-    input.fleet.nextShipAffordable &&
+    prepared.fleet.nextShipAffordable &&
     settings.prioritizeOuterFleet.includes("req")
   ) {
-    for (const cost of input.fleet.nextShipCost) {
+    for (const cost of prepared.fleet.nextShipCost) {
       request(cost.resourceId, cost.amount);
     }
   }
 
-  for (const crafter of input.crafters) {
+  for (const crafter of prepared.crafters) {
     if (
       (settings.productionFactoryFocusMaterials || crafter.isDemanded) &&
       crafter.isUnlocked
@@ -282,13 +322,13 @@ export function planDemandPrioritization(
       for (const cost of crafter.costs) {
         const minExpected =
           cost.materialMaxQuantity * crafter.craftPreserve +
-          input.availableCrafters * (1 / 140) * balance * cost.amount;
+          prepared.availableCrafters * (1 / 140) * balance * cost.amount;
         request(cost.resourceId, minExpected);
       }
     }
   }
 
-  const { vitreloyPlant } = input;
+  const { vitreloyPlant } = prepared;
   const vitPlantCount =
     settings.autoPower && vitreloyPlant.autoStateEnabled
       ? vitreloyPlant.count
@@ -297,10 +337,10 @@ export function planDemandPrioritization(
     request("Stanene", vitPlantCount * balance * 100);
   }
 
-  if (input.factoryCount > 0) {
-    const multiplier = input.factoryCount * balance;
+  if (variant.factoryCount > 0) {
+    const multiplier = variant.factoryCount * balance;
     const storageThreshold = settings.productionFactoryMinIngredients;
-    for (const production of input.factoryProductions) {
+    for (const production of variant.factoryProductions) {
       if (
         (settings.productionFactoryFocusMaterials || production.isDemanded) &&
         production.unlocked &&
@@ -321,13 +361,22 @@ export function planDemandPrioritization(
 
   return Object.freeze({
     savingConflict:
-      input.savingTarget === null
+      variant.savingTarget === null
         ? null
         : Object.freeze({
-            name: input.savingTarget.name,
+            name: variant.savingTarget.name,
             cost: Object.freeze(savingCost),
           }),
     requests: Object.freeze(requests.map((entry) => Object.freeze(entry))),
-    removedMissionIndices: Object.freeze(removedMissionIndices),
+    removedMissionIndices: prepared.removedMissionIndices,
   });
+}
+
+export function planDemandPrioritization(
+  input: Readonly<DemandPrioritizationInput>,
+): DemandPrioritizationResult {
+  return evaluateDemandPrioritization(
+    prepareDemandPrioritization(input),
+    input,
+  );
 }
