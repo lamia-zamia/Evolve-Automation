@@ -3,6 +3,8 @@ import assert from "node:assert/strict";
 import { createCapturedProgressionControl } from "../../../src/bootstrap/captured-progression-control.ts";
 import { createGameDrawnActionsReader } from "../../../src/adapters/browser/game-drawn-actions.ts";
 import { installVueCapture } from "../../../src/adapters/evolve/vue-capture.ts";
+import { readCapturedActionControlAvailabilityForTab } from "../../../src/adapters/evolve/progression/build/captured-building-availability.ts";
+import { readCapturedBuildControlCoverage } from "../../../src/adapters/evolve/progression/build/captured-build-control-coverage.ts";
 import { CAPTURED_MECH_BUILDINGS } from "../../../src/adapters/evolve/progression/build/captured-building-metadata.ts";
 import { makeCapturedBuildingMechanics } from "../../support/fixtures/captured-building-test-fixtures.mjs";
 import {
@@ -27,6 +29,8 @@ function makeGame({
   costs,
   capturedBuildPolicy = false,
   nativeAvailability,
+  mechanicsOverrides = new Map(),
+  actionControlIds = new Set(),
 } = {}) {
   const root = {
     // The player is looking at Research, so every civilization panel this reads has to be drawn
@@ -85,7 +89,10 @@ function makeGame({
         buildingVue.createApp({
           el: `#${id}`,
           data: { act: state },
-          methods: { on_cap: () => state.count },
+          methods: {
+            ...(actionControlIds.has(id) ? { action: () => true } : {}),
+            on_cap: () => state.count,
+          },
         });
         return renderRow(id, state);
       }),
@@ -126,6 +133,7 @@ function makeGame({
     return { kind: "value", value: offered };
   };
   const mechanics = makeCapturedBuildingMechanics(root, {
+    overrides: mechanicsOverrides,
     availability: (liveRoot, binding) => {
       nativeAvailabilityReads += 1;
       return (nativeAvailability ?? availabilityFromFixture)(liveRoot, binding);
@@ -196,6 +204,8 @@ function makeGame({
       control.resetBuildingUnlockSample();
       return control.readBuildingUnlocks(new Set(regionKeys));
     },
+    coverage: (index) =>
+      readCapturedBuildControlCoverage(root, index, controls, mechanics),
   };
 }
 
@@ -205,6 +215,127 @@ const cityOnly = {
     ["city-factory", "city", "factory"],
   ],
 };
+
+function assertRendererGateDiscovery({
+  binding,
+  region,
+  sector,
+  struct,
+  tabIndex,
+  tabSetting,
+  settingsKey,
+  settingKey,
+  techKey,
+  techLevel,
+}) {
+  let game;
+  const action = { reqs: { electricity: 1 } };
+  const mechanicsOverrides = new Map([
+    [
+      binding,
+      {
+        region,
+        sector,
+        struct,
+        readControlAvailabilityForTab: (root, index) =>
+          readCapturedActionControlAvailabilityForTab(
+            root,
+            action,
+            region,
+            sector,
+            struct,
+            false,
+            index,
+          ),
+      },
+    ],
+  ]);
+  game = makeGame({
+    tech: {
+      primitive: 1,
+      electricity: 1,
+      ...(techKey === undefined ? {} : { [techKey]: techLevel }),
+    },
+    regions: {
+      [tabIndex]: () =>
+        game.root.settings[settingsKey]?.[settingKey]
+          ? [[binding, region, struct]]
+          : [],
+    },
+    mechanicsOverrides,
+    actionControlIds: new Set([binding]),
+  });
+  game.root.settings[tabSetting] = true;
+  game.root.settings[settingsKey] = { [settingKey]: false };
+  game.root[region][struct] = { count: 2, on: 0 };
+
+  assert.deepEqual(
+    game.coverage(tabIndex),
+    { kind: "complete" },
+    `${binding} is not currently renderable while its native region setting is hidden`,
+  );
+  game.control.ensureBuildControls();
+  assert.deepEqual(
+    game.draws,
+    [],
+    `${binding} must not trigger a hidden-region draw`,
+  );
+
+  game.root.settings[settingsKey][settingKey] = true;
+  assert.deepEqual(game.coverage(tabIndex), {
+    kind: "missing",
+    bindings: [binding],
+  });
+  game.control.ensureBuildControls();
+  assert.deepEqual(
+    game.draws,
+    [tabIndex],
+    `${binding} is drawn as soon as it is visible`,
+  );
+  assert.equal(game.capturedElementIds().includes(binding), true);
+  assert.deepEqual(game.coverage(tabIndex), { kind: "complete" });
+  game.draws.length = 0;
+  game.control.ensureBuildControls();
+  assert.deepEqual(game.draws, [], `${binding} remains complete after capture`);
+}
+
+// A hidden native category is complete for discovery. Changing only its renderer-owned setting
+// makes the missing action immediately eligible, and the same ensure call captures it.
+for (const rendererCase of [
+  {
+    binding: "interstellar-cargo_yard",
+    region: "interstellar",
+    sector: "int_proxima",
+    struct: "cargo_yard",
+    tabIndex: SPACE_TAB_INDEX.interstellar,
+    tabSetting: "showDeep",
+    settingsKey: "space",
+    settingKey: "proxima",
+  },
+  {
+    binding: "galaxy-alien2_mission",
+    region: "galaxy",
+    sector: "gxy_alien2",
+    struct: "alien2_mission",
+    tabIndex: SPACE_TAB_INDEX.galaxy,
+    tabSetting: "showGalactic",
+    settingsKey: "space",
+    settingKey: "alien2",
+  },
+  {
+    binding: "portal-mechbay",
+    region: "portal",
+    sector: "prtl_spire",
+    struct: "mechbay",
+    tabIndex: SPACE_TAB_INDEX.portal,
+    tabSetting: "showPortal",
+    settingsKey: "portal",
+    settingKey: "spire",
+    techKey: "portal",
+    techLevel: 2,
+  },
+])
+  assertRendererGateDiscovery(rendererCase);
 
 // --- offers read native mechanics; control bootstrap remains a separate capability ------------
 {

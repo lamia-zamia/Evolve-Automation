@@ -1,4 +1,4 @@
-/** DeadSpace 6cc9ba8c: checkRequirements, checkTechQualifications, checkCityRequirements,
+/** DeadSpace db38e2af: checkRequirements, checkTechQualifications, checkCityRequirements,
  * gridEnabled region gates and the retired Building's high-level visibility gates.
  * Action callbacks remain inside the mechanics adapter; no panel discovery is needed.
  */
@@ -12,6 +12,7 @@ import { isNonArrayRecord, readProperty } from "../../../validation.ts";
 import {
   SPACE_TAB_ACTION_LOCATIONS,
   SPACE_TAB_INDEX,
+  SPACE_TAB_SHOWN_BY,
 } from "../../captured-tab-discovery.ts";
 import { readCapturedBuildingEntries } from "./captured-building-catalog.ts";
 import {
@@ -180,6 +181,68 @@ function capturedSpaceSectorSetting(sector: string): string {
     : sector;
 }
 
+interface CapturedBuildingControlRendererGate {
+  readonly sectorPrefix: string;
+  readonly settingsKey: string;
+  readonly techGate?: {
+    readonly key: string;
+    readonly minimumLevel: number;
+  };
+}
+
+/** The exact per-region gates used by these DeadSpace renderers before their action loop. */
+const CAPTURED_BUILD_CONTROL_RENDERER_GATES: Readonly<
+  Record<string, CapturedBuildingControlRendererGate>
+> = Object.freeze({
+  interstellar: Object.freeze({ sectorPrefix: "int_", settingsKey: "space" }),
+  galaxy: Object.freeze({ sectorPrefix: "gxy_", settingsKey: "space" }),
+  portal: Object.freeze({
+    sectorPrefix: "prtl_",
+    settingsKey: "portal",
+    techGate: Object.freeze({ key: "portal", minimumLevel: 2 }),
+  }),
+  tauceti: Object.freeze({
+    sectorPrefix: "tau_",
+    settingsKey: "tau",
+    techGate: Object.freeze({ key: "tauceti", minimumLevel: 2 }),
+  }),
+  eden: Object.freeze({
+    sectorPrefix: "eden_",
+    settingsKey: "eden",
+    techGate: Object.freeze({ key: "edenic", minimumLevel: 3 }),
+  }),
+});
+
+function readCapturedBuildingControlRendererGate(
+  root: unknown,
+  sector: string,
+  gate: Readonly<CapturedBuildingControlRendererGate>,
+): CapturedGameRead<boolean> {
+  if (gate.techGate !== undefined) {
+    const tech = readProperty(root, "tech");
+    if (!isNonArrayRecord(tech)) return { kind: "invalid" };
+    const level = readProperty(tech, gate.techGate.key);
+    // The pinned `portal`, `tauceti`, and `edenic` renderer gates treat an uninitialized tech
+    // field as hidden through `if (!global.tech[field] || global.tech[field] < N)`.
+    if (level === undefined || level === 0)
+      return { kind: "value", value: false };
+    if (typeof level !== "number" || !Number.isFinite(level))
+      return { kind: "invalid" };
+    if (level < gate.techGate.minimumLevel)
+      return { kind: "value", value: false };
+  }
+
+  const settings = readProperty(root, "settings");
+  const regions = readProperty(settings, gate.settingsKey);
+  if (!isNonArrayRecord(regions)) return { kind: "invalid" };
+  const key = sector.replace(gate.sectorPrefix, "");
+  // Each native renderer uses `if (settings.<regions>[show])`; a missing key is hidden.
+  return {
+    kind: "value",
+    value: Boolean(readProperty(regions, key)),
+  };
+}
+
 /**
  * DeadSpace `renderSpace()` first applies action qualification, then `settings.space[show]`, and
  * only filters `info.zone` when `race.truepath` draws separate inner/outer panels. On standard
@@ -196,6 +259,13 @@ export function readCapturedActionControlAvailabilityForTab(
 ): CapturedGameRead<boolean> {
   const location = SPACE_TAB_ACTION_LOCATIONS[tabIndex];
   if (location === undefined) return { kind: "invalid" };
+  if (location.region !== region) return { kind: "value", value: false };
+  const settings = readProperty(root, "settings");
+  if (!isNonArrayRecord(settings)) return { kind: "invalid" };
+  const shownBy = SPACE_TAB_SHOWN_BY[tabIndex];
+  if (shownBy === undefined) return { kind: "invalid" };
+  // The discovery sweep only draws a native Civilization sub-tab the game currently exposes.
+  if (!readProperty(settings, shownBy)) return { kind: "value", value: false };
   const race = readProperty(root, "race");
   const tech = readProperty(root, "tech");
   const truepath = Boolean(readProperty(race, "truepath"));
@@ -209,6 +279,18 @@ export function readCapturedActionControlAvailabilityForTab(
         !readProperty(tech, "resettle")))
   )
     return { kind: "value", value: false };
+
+  const rendererGate = CAPTURED_BUILD_CONTROL_RENDERER_GATES[region];
+  if (rendererGate !== undefined) {
+    const renderability = readCapturedBuildingControlRendererGate(
+      root,
+      sector,
+      rendererGate,
+    );
+    if (renderability.kind !== "value" || !renderability.value)
+      return renderability;
+  }
+
   const ignoreOuterTabVisibility =
     region === "space" && tabIndex === SPACE_TAB_INDEX.space && !truepath;
   const availability = readCapturedActionAvailability(
@@ -222,7 +304,6 @@ export function readCapturedActionControlAvailabilityForTab(
   );
   if (availability.kind !== "value" || !availability.value) return availability;
   if (region !== "space") return availability;
-  const settings = readProperty(root, "settings");
   if (!readProperty(settings, "showSpace"))
     return { kind: "value", value: false };
 

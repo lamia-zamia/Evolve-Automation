@@ -31,7 +31,8 @@ export function makeCapturedBuildingMechanics(
       actionId,
       matchesCurrentIdentity: () => true,
       readAvailability: (root) => availability(root, binding),
-      readControlAvailabilityForTab: (root) => availability(root, binding),
+      readControlAvailabilityForTab: (root, tabIndex) =>
+        availability(root, binding, tabIndex),
       readTitle: () => nativeRead(binding),
       readDescription: () => nativeRead(""),
       readValue: () => absent,

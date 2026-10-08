@@ -1861,12 +1861,67 @@
   function capturedSpaceSectorSetting(sector) {
     return sector.startsWith(SPACE_SECTOR_PANEL_PREFIX) ? sector.slice(SPACE_SECTOR_PANEL_PREFIX.length) : sector;
   }
+  var CAPTURED_BUILD_CONTROL_RENDERER_GATES = Object.freeze({
+    interstellar: Object.freeze({ sectorPrefix: "int_", settingsKey: "space" }),
+    galaxy: Object.freeze({ sectorPrefix: "gxy_", settingsKey: "space" }),
+    portal: Object.freeze({
+      sectorPrefix: "prtl_",
+      settingsKey: "portal",
+      techGate: Object.freeze({ key: "portal", minimumLevel: 2 })
+    }),
+    tauceti: Object.freeze({
+      sectorPrefix: "tau_",
+      settingsKey: "tau",
+      techGate: Object.freeze({ key: "tauceti", minimumLevel: 2 })
+    }),
+    eden: Object.freeze({
+      sectorPrefix: "eden_",
+      settingsKey: "eden",
+      techGate: Object.freeze({ key: "edenic", minimumLevel: 3 })
+    })
+  });
+  function readCapturedBuildingControlRendererGate(root, sector, gate) {
+    if (gate.techGate !== void 0) {
+      let tech = readProperty(root, "tech");
+      if (!isNonArrayRecord(tech)) return { kind: "invalid" };
+      let level = readProperty(tech, gate.techGate.key);
+      if (level === void 0 || level === 0)
+        return { kind: "value", value: !1 };
+      if (typeof level != "number" || !Number.isFinite(level))
+        return { kind: "invalid" };
+      if (level < gate.techGate.minimumLevel)
+        return { kind: "value", value: !1 };
+    }
+    let settings = readProperty(root, "settings"), regions = readProperty(settings, gate.settingsKey);
+    if (!isNonArrayRecord(regions)) return { kind: "invalid" };
+    let key = sector.replace(gate.sectorPrefix, "");
+    return {
+      kind: "value",
+      value: !!readProperty(regions, key)
+    };
+  }
   function readCapturedActionControlAvailabilityForTab(root, action, region, sector, struct, info, tabIndex) {
     let location = SPACE_TAB_ACTION_LOCATIONS[tabIndex];
     if (location === void 0) return { kind: "invalid" };
+    if (location.region !== region) return { kind: "value", value: !1 };
+    let settings = readProperty(root, "settings");
+    if (!isNonArrayRecord(settings)) return { kind: "invalid" };
+    let shownBy = SPACE_TAB_SHOWN_BY[tabIndex];
+    if (shownBy === void 0) return { kind: "invalid" };
+    if (!readProperty(settings, shownBy)) return { kind: "value", value: !1 };
     let race = readProperty(root, "race"), tech = readProperty(root, "tech"), truepath = !!readProperty(race, "truepath");
     if (region === "space" && sector === "spc_home" && (readProperty(race, "cataclysm") || readProperty(race, "orbit_decayed") && !readProperty(tech, "resettle")))
       return { kind: "value", value: !1 };
+    let rendererGate = CAPTURED_BUILD_CONTROL_RENDERER_GATES[region];
+    if (rendererGate !== void 0) {
+      let renderability = readCapturedBuildingControlRendererGate(
+        root,
+        sector,
+        rendererGate
+      );
+      if (renderability.kind !== "value" || !renderability.value)
+        return renderability;
+    }
     let ignoreOuterTabVisibility = region === "space" && tabIndex === SPACE_TAB_INDEX.space && !truepath, availability = readCapturedActionAvailability(
       root,
       action,
@@ -1877,7 +1932,6 @@
       { ignoreOuterTabVisibility }
     );
     if (availability.kind !== "value" || !availability.value || region !== "space") return availability;
-    let settings = readProperty(root, "settings");
     if (!readProperty(settings, "showSpace"))
       return { kind: "value", value: !1 };
     if (!truepath && tabIndex !== SPACE_TAB_INDEX.space)

@@ -20,6 +20,8 @@ const availabilityRoot = {
     showPortal: true,
     showTau: true,
     showEden: true,
+    showUnderground: true,
+    showSurface: true,
   },
 };
 const availabilityAction = { reqs: { electricity: 1 } };
@@ -242,6 +244,237 @@ assert.deepEqual(
   { kind: "value", value: true },
   "Resettle restores the home action row on orbit-decayed runs",
 );
+const rendererGateRoot = {
+  ...availabilityRoot,
+  tech: {
+    ...availabilityRoot.tech,
+    portal: 2,
+    tauceti: 2,
+    edenic: 3,
+  },
+  settings: {
+    ...availabilityRoot.settings,
+    space: { proxima: false, alien2: false },
+    portal: { spire: false },
+    tau: { home: false },
+    eden: { asphodel: false },
+  },
+};
+assert.deepEqual(
+  readCapturedActionControlAvailabilityForTab(
+    availabilityRoot,
+    spaceAction,
+    "city",
+    "city",
+    "farm",
+    false,
+    SPACE_TAB_INDEX.city,
+  ),
+  { kind: "value", value: true },
+  "City actions remain owned by the City sub-tab",
+);
+assert.deepEqual(
+  readCapturedActionControlAvailabilityForTab(
+    rendererGateRoot,
+    spaceAction,
+    "interstellar",
+    "int_nebula",
+    "cargo_yard",
+    false,
+    SPACE_TAB_INDEX.galaxy,
+  ),
+  { kind: "value", value: false },
+  "an Interstellar action is not offered by the Galaxy sub-tab reader",
+);
+for (const rendererCase of [
+  {
+    region: "interstellar",
+    sector: "int_proxima",
+    struct: "cargo_yard",
+    tabIndex: SPACE_TAB_INDEX.interstellar,
+    settingsKey: "space",
+    settingKey: "proxima",
+  },
+  {
+    region: "galaxy",
+    sector: "gxy_alien2",
+    struct: "alien2_mission",
+    tabIndex: SPACE_TAB_INDEX.galaxy,
+    settingsKey: "space",
+    settingKey: "alien2",
+  },
+  {
+    region: "portal",
+    sector: "prtl_spire",
+    struct: "mechbay",
+    tabIndex: SPACE_TAB_INDEX.portal,
+    settingsKey: "portal",
+    settingKey: "spire",
+  },
+  {
+    region: "tauceti",
+    sector: "tau_home",
+    struct: "colony",
+    tabIndex: SPACE_TAB_INDEX.tauceti,
+    settingsKey: "tau",
+    settingKey: "home",
+  },
+  {
+    region: "eden",
+    sector: "eden_asphodel",
+    struct: "rune_gate",
+    tabIndex: SPACE_TAB_INDEX.eden,
+    settingsKey: "eden",
+    settingKey: "asphodel",
+  },
+]) {
+  assert.deepEqual(
+    readCapturedActionControlAvailabilityForTab(
+      rendererGateRoot,
+      spaceAction,
+      rendererCase.region,
+      rendererCase.sector,
+      rendererCase.struct,
+      false,
+      rendererCase.tabIndex,
+    ),
+    { kind: "value", value: false },
+    `${rendererCase.region} honors its own hidden renderer region setting`,
+  );
+  const visibleSettings = {
+    ...rendererGateRoot.settings,
+    [rendererCase.settingsKey]: {
+      ...rendererGateRoot.settings[rendererCase.settingsKey],
+      [rendererCase.settingKey]: true,
+    },
+  };
+  assert.deepEqual(
+    readCapturedActionControlAvailabilityForTab(
+      { ...rendererGateRoot, settings: visibleSettings },
+      spaceAction,
+      rendererCase.region,
+      rendererCase.sector,
+      rendererCase.struct,
+      false,
+      rendererCase.tabIndex,
+    ),
+    { kind: "value", value: true },
+    `${rendererCase.region} becomes renderable when its own region setting is enabled`,
+  );
+  const missingRegionFlag = Object.fromEntries(
+    Object.entries(rendererGateRoot.settings[rendererCase.settingsKey]).filter(
+      ([key]) => key !== rendererCase.settingKey,
+    ),
+  );
+  assert.deepEqual(
+    readCapturedActionControlAvailabilityForTab(
+      {
+        ...rendererGateRoot,
+        settings: {
+          ...rendererGateRoot.settings,
+          [rendererCase.settingsKey]: missingRegionFlag,
+        },
+      },
+      spaceAction,
+      rendererCase.region,
+      rendererCase.sector,
+      rendererCase.struct,
+      false,
+      rendererCase.tabIndex,
+    ),
+    { kind: "value", value: false },
+    `${rendererCase.region}'s absent lazy region flag stays hidden like the native renderer`,
+  );
+}
+for (const [region, sector, struct, tabIndex, techKey, minimumLevel] of [
+  ["portal", "prtl_spire", "mechbay", SPACE_TAB_INDEX.portal, "portal", 2],
+  ["tauceti", "tau_home", "colony", SPACE_TAB_INDEX.tauceti, "tauceti", 2],
+  ["eden", "eden_asphodel", "rune_gate", SPACE_TAB_INDEX.eden, "edenic", 3],
+]) {
+  const tech = { ...rendererGateRoot.tech, [techKey]: minimumLevel - 1 };
+  const settingsKey =
+    region === "portal" ? "portal" : region === "tauceti" ? "tau" : "eden";
+  const settingKey =
+    region === "portal" ? "spire" : region === "tauceti" ? "home" : "asphodel";
+  assert.deepEqual(
+    readCapturedActionControlAvailabilityForTab(
+      {
+        ...rendererGateRoot,
+        tech,
+        settings: {
+          ...rendererGateRoot.settings,
+          [settingsKey]: { [settingKey]: true },
+        },
+      },
+      spaceAction,
+      region,
+      sector,
+      struct,
+      false,
+      tabIndex,
+    ),
+    { kind: "value", value: false },
+    `${region} keeps the native renderer's minimum tech-level gate`,
+  );
+  assert.deepEqual(
+    readCapturedActionControlAvailabilityForTab(
+      {
+        ...rendererGateRoot,
+        tech: Object.fromEntries(
+          Object.entries(rendererGateRoot.tech).filter(
+            ([key]) => key !== techKey,
+          ),
+        ),
+        settings: {
+          ...rendererGateRoot.settings,
+          [settingsKey]: { [settingKey]: true },
+        },
+      },
+      spaceAction,
+      region,
+      sector,
+      struct,
+      false,
+      tabIndex,
+    ),
+    { kind: "value", value: false },
+    `${region}'s absent initial tech level stays hidden like the native renderer`,
+  );
+}
+for (const [region, tabIndex, shownBy] of [
+  ["underground", SPACE_TAB_INDEX.underground, "showUnderground"],
+  ["surface", SPACE_TAB_INDEX.surface, "showSurface"],
+]) {
+  assert.deepEqual(
+    readCapturedActionControlAvailabilityForTab(
+      rendererGateRoot,
+      spaceAction,
+      region,
+      region,
+      "sample",
+      false,
+      tabIndex,
+    ),
+    { kind: "value", value: true },
+    `${region} has no per-region category toggle`,
+  );
+  assert.deepEqual(
+    readCapturedActionControlAvailabilityForTab(
+      {
+        ...rendererGateRoot,
+        settings: { ...rendererGateRoot.settings, [shownBy]: false },
+      },
+      spaceAction,
+      region,
+      region,
+      "sample",
+      false,
+      tabIndex,
+    ),
+    { kind: "value", value: false },
+    `${region} still honors its renderer-owned tab gate`,
+  );
+}
 assert.deepEqual(
   qualifyAvailability(
     availabilityAction,
@@ -316,6 +549,7 @@ for (const actionId of ["undefined-food", "undefined-stone"]) {
   );
 }
 {
+  let switchable = false;
   const switchableStructure = {
     actionId: "city-coal_power",
     region: "city",
@@ -323,14 +557,22 @@ for (const actionId of ["undefined-food", "undefined-stone"]) {
     struct: "coal_power",
     matchesCurrentIdentity: () => true,
     readControlAvailabilityForTab: () => ({ kind: "value", value: true }),
-    readSwitchable: () => ({ kind: "value", value: true }),
+    readSwitchable: () => ({ kind: "value", value: switchable }),
   };
-  const missingOnCap = readCapturedBuildControlCoverage(
-    availabilityRoot,
-    SPACE_TAB_INDEX.city,
-    { resolve: () => ({ methods: ["action"] }) },
-    { readStructures: () => [switchableStructure] },
+  const readCoverage = () =>
+    readCapturedBuildControlCoverage(
+      availabilityRoot,
+      SPACE_TAB_INDEX.city,
+      { resolve: () => ({ methods: ["action"] }) },
+      { readStructures: () => [switchableStructure] },
+    );
+  assert.deepEqual(
+    readCoverage(),
+    { kind: "complete" },
+    "an offered action does not need on_cap while its semantic Building state is unswitchable",
   );
+  switchable = true;
+  const missingOnCap = readCoverage();
   assert.deepEqual(missingOnCap, {
     kind: "missing",
     bindings: ["city-coal_power"],
