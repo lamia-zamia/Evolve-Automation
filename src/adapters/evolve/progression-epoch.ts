@@ -30,6 +30,8 @@ import { isRecord, readProperty } from "../validation.ts";
 /** A value that is equal across two reads exactly when no sampled panel's offers can have moved. */
 export interface ProgressionEpochReader {
   read(): string;
+  /** Changes when a Civilization draw could offer a different set of building controls. */
+  readBuildControls(): string;
   /** Releases the root-replacement subscription. */
   release(): void;
 }
@@ -85,35 +87,47 @@ export function createProgressionEpochReader(
     rootReplacements += 1;
   });
 
+  const readEpoch = (includeProjectRanks: boolean): string => {
+    const root = rootState.readRoot();
+    if (root === undefined) return `${rootReplacements}|no-root`;
+    const race = readProperty(root, "race");
+    const stats = readProperty(root, "stats");
+    const settings = readProperty(root, "settings");
+    const civic = readProperty(root, "civic");
+    const parts = [
+      rootReplacements,
+      // The dominant gate on every tech and project offer. Monotone within a run, and it drops
+      // on a reset, so the sum alone separates one run's progression from the next.
+      tallyRecord(readProperty(root, "tech")),
+      tallyRecord(readProperty(root, "genes")),
+      // Trait values are not all numbers, so traits are counted rather than summed. A trait that
+      // only changes rank keeps the same offers; one that appears or disappears does not.
+      countKeys(race),
+      scalarToken(readProperty(race, "species")),
+      scalarToken(readProperty(race, "universe")),
+      countKeys(readProperty(stats, "achieve")),
+      scalarToken(readProperty(stats, "psykill")),
+      // The script swaps the government form itself under autoGovernment, and a tech condition
+      // reads it.
+      scalarToken(readProperty(readProperty(civic, "govern"), "type")),
+      scalarToken(readProperty(settings, "showCivic")),
+      scalarToken(readProperty(settings, "showUnderground")),
+      scalarToken(readProperty(settings, "showSurface")),
+    ];
+    if (includeProjectRanks) {
+      // Native project prices scale with A.R.P.A. rank. City/space action rendering does not read
+      // that state, so build-control scopes intentionally use the narrower epoch above.
+      parts.push(tallyProjectRanks(readProperty(root, "arpa")));
+    }
+    return parts.join("|");
+  };
+
   return Object.freeze({
     read(): string {
-      const root = rootState.readRoot();
-      if (root === undefined) return `${rootReplacements}|no-root`;
-      const race = readProperty(root, "race");
-      const stats = readProperty(root, "stats");
-      const settings = readProperty(root, "settings");
-      const civic = readProperty(root, "civic");
-      return [
-        rootReplacements,
-        // The dominant gate on every tech and project offer. Monotone within a run, and it drops
-        // on a reset, so the sum alone separates one run's progression from the next.
-        tallyRecord(readProperty(root, "tech")),
-        tallyRecord(readProperty(root, "genes")),
-        // Trait values are not all numbers, so traits are counted rather than summed. A trait that
-        // only changes rank keeps the same offers; one that appears or disappears does not.
-        countKeys(race),
-        scalarToken(readProperty(race, "species")),
-        scalarToken(readProperty(race, "universe")),
-        countKeys(readProperty(stats, "achieve")),
-        scalarToken(readProperty(stats, "psykill")),
-        // The script swaps the government form itself under autoGovernment, and a tech condition
-        // reads it.
-        scalarToken(readProperty(readProperty(civic, "govern"), "type")),
-        scalarToken(readProperty(settings, "showCivic")),
-        scalarToken(readProperty(settings, "showUnderground")),
-        scalarToken(readProperty(settings, "showSurface")),
-        tallyProjectRanks(readProperty(root, "arpa")),
-      ].join("|");
+      return readEpoch(true);
+    },
+    readBuildControls(): string {
+      return readEpoch(false);
     },
     release: unsubscribe,
   });

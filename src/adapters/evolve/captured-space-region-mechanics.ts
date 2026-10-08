@@ -88,6 +88,8 @@ export function createCapturedSpaceRegionMechanics(
               },
             ],
             {
+              purpose: "space-region-metadata",
+              measurement: true,
               forceDraw: true,
               ...(panel === undefined ? {} : { mount: [`#${panel}`] }),
             },

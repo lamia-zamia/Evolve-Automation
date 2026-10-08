@@ -500,6 +500,8 @@ export function createCapturedArpaMechanics(
           reason: "the page realm exposes no Object.keys to observe",
         };
       const result = discovery.discover(ARPA_TAB_PATH, {
+        purpose: "arpa-physics",
+        measurement: true,
         // The capture is the point of this draw, so a panel the player already has open still has to
         // be rebuilt: only `physics()` enumerates the registry.
         forceDraw: true,

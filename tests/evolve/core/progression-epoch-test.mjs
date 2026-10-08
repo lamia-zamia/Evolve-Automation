@@ -65,6 +65,29 @@ function freshRoot() {
   }
 }
 
+// Research and build-control scopes have different authorities: project rank changes its native
+// price table, but the Civilization draw path is gated by technology and race state.
+{
+  const root = freshRoot();
+  const { source } = rootSourceOf(root);
+  const epoch = createProgressionEpochReader(source);
+  const fullBefore = epoch.read();
+  const buildControlsBefore = epoch.readBuildControls();
+  root.arpa.lhc.rank++;
+  assert.notEqual(epoch.read(), fullBefore, "A.R.P.A. prices use project rank");
+  assert.equal(
+    epoch.readBuildControls(),
+    buildControlsBefore,
+    "A.R.P.A. rank progress does not invalidate Civilization control samples",
+  );
+  root.tech.mining++;
+  assert.notEqual(
+    epoch.readBuildControls(),
+    buildControlsBefore,
+    "a technology change can alter the actions rendered in Civilization",
+  );
+}
+
 // A prestige, a save load and a reactivity restore all arrive as a root replacement, and the
 // reactive wrapper is cached by raw target — so the root may be the very same object.
 {
@@ -72,11 +95,17 @@ function freshRoot() {
   const { source, replaceRoot } = rootSourceOf(root);
   const epoch = createProgressionEpochReader(source);
   const before = epoch.read();
+  const buildControlsBefore = epoch.readBuildControls();
   replaceRoot();
   assert.notEqual(
     epoch.read(),
     before,
     "a root replacement must move the epoch even when nothing else did",
+  );
+  assert.notEqual(
+    epoch.readBuildControls(),
+    buildControlsBefore,
+    "a root replacement must invalidate build-control authority too",
   );
 }
 
@@ -87,6 +116,7 @@ function freshRoot() {
   const { source } = rootSourceOf(root);
   const epoch = createProgressionEpochReader(source);
   const before = epoch.read();
+  const buildControlsBefore = epoch.readBuildControls();
   // Every one of these moves on an ordinary tick. None of them changes what a panel offers, and an
   // epoch that reacted to them would buy back the per-tick draw this reader exists to avoid.
   root.resource.Food.amount = 999_999;
@@ -100,6 +130,11 @@ function freshRoot() {
     epoch.read(),
     before,
     "production, storage, jobs, building counts and project progress must not move the epoch",
+  );
+  assert.equal(
+    epoch.readBuildControls(),
+    buildControlsBefore,
+    "the build-control epoch ignores unrelated live amounts and counts",
   );
 }
 

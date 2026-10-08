@@ -575,6 +575,323 @@
     return invalid || malformed ? void 0 : Object.freeze(observations);
   }
 
+  // src/adapters/command-outcomes.ts
+  var SUCCEEDED = Object.freeze({
+    status: "succeeded"
+  });
+  function rejected(code, message) {
+    return { status: "rejected", failure: { code, message } };
+  }
+  function stale(code, message, context) {
+    return context === void 0 ? { status: "stale", failure: { code, message } } : { status: "stale", failure: { code, message, context } };
+  }
+
+  // src/utils/performance.ts
+  var runUnmeasured = (_phase, action) => action();
+  function createPhaseMeasure(diagnostics) {
+    return diagnostics === void 0 || !diagnostics.readPerformanceEnabled() ? runUnmeasured : (phase, action) => {
+      let startedAtMs = diagnostics.nowMs();
+      try {
+        return action();
+      } finally {
+        diagnostics.recordPerformance(phase, diagnostics.nowMs() - startedAtMs);
+      }
+    };
+  }
+  var INERT_TALLY = Object.freeze({
+    enabled: !1,
+    count: () => {
+    }
+  });
+  function createCountTally(diagnostics) {
+    return diagnostics === void 0 || !diagnostics.readPerformanceEnabled() ? INERT_TALLY : Object.freeze({
+      enabled: !0,
+      count: (name, amount = 1) => diagnostics.recordCount(name, amount)
+    });
+  }
+
+  // src/adapters/evolve/captured-tab-discovery.ts
+  var MAIN_TAB_CONTROL = "#mainColumn div.content", MAIN_TAB_SETTING = "civTabs", SPACE_TABS_SETTING = "spaceTabs", GOV_TABS_SETTING = "govTabs", MARKET_TABS_SETTING = "marketTabs", SUB_TAB_CONTROLS = Object.freeze(
+    {
+      [SPACE_TABS_SETTING]: "mTabCivil",
+      [GOV_TABS_SETTING]: "mTabCivic",
+      [MARKET_TABS_SETTING]: "mTabResource"
+    }
+  ), MAIN_TAB_PANELS = Object.freeze({
+    1: "mTabCivil",
+    2: "mTabCivic",
+    3: "mTabResearch",
+    4: "mTabResource",
+    5: "mTabArpa",
+    6: "mTabStats"
+  }), MAIN_TAB_INDEX = Object.freeze({
+    civilization: 1,
+    civic: 2,
+    research: 3,
+    resources: 4,
+    arpa: 5,
+    stats: 6
+  }), SPACE_TAB_INDEX = Object.freeze({
+    city: 0,
+    space: 1,
+    interstellar: 2,
+    galaxy: 3,
+    portal: 4,
+    outerSol: 5,
+    tauceti: 6,
+    eden: 7,
+    underground: 8,
+    surface: 9
+  }), SPACE_TAB_ACTION_LOCATIONS = Object.freeze({
+    [SPACE_TAB_INDEX.city]: Object.freeze({ region: "city" }),
+    [SPACE_TAB_INDEX.space]: Object.freeze({ region: "space", zone: "inner" }),
+    [SPACE_TAB_INDEX.interstellar]: Object.freeze({ region: "interstellar" }),
+    [SPACE_TAB_INDEX.galaxy]: Object.freeze({ region: "galaxy" }),
+    [SPACE_TAB_INDEX.portal]: Object.freeze({ region: "portal" }),
+    [SPACE_TAB_INDEX.outerSol]: Object.freeze({ region: "space", zone: "outer" }),
+    [SPACE_TAB_INDEX.tauceti]: Object.freeze({ region: "tauceti" }),
+    [SPACE_TAB_INDEX.eden]: Object.freeze({ region: "eden" }),
+    [SPACE_TAB_INDEX.underground]: Object.freeze({ region: "underground" }),
+    [SPACE_TAB_INDEX.surface]: Object.freeze({ region: "surface" })
+  }), SPACE_TAB_PANELS = Object.freeze(
+    {
+      [SPACE_TAB_INDEX.city]: "#city",
+      [SPACE_TAB_INDEX.space]: "#space",
+      [SPACE_TAB_INDEX.interstellar]: "#interstellar",
+      [SPACE_TAB_INDEX.galaxy]: "#galaxy",
+      [SPACE_TAB_INDEX.portal]: "#portal",
+      [SPACE_TAB_INDEX.outerSol]: "#outerSol",
+      [SPACE_TAB_INDEX.tauceti]: "#tauceti",
+      [SPACE_TAB_INDEX.eden]: "#eden",
+      [SPACE_TAB_INDEX.underground]: "#underground",
+      [SPACE_TAB_INDEX.surface]: "#surface"
+    }
+  ), SPACE_TAB_SHOWN_BY = Object.freeze({
+    [SPACE_TAB_INDEX.city]: "showCity",
+    [SPACE_TAB_INDEX.space]: "showSpace",
+    [SPACE_TAB_INDEX.interstellar]: "showDeep",
+    [SPACE_TAB_INDEX.galaxy]: "showGalactic",
+    [SPACE_TAB_INDEX.portal]: "showPortal",
+    [SPACE_TAB_INDEX.outerSol]: "showOuter",
+    [SPACE_TAB_INDEX.tauceti]: "showTau",
+    [SPACE_TAB_INDEX.eden]: "showEden",
+    [SPACE_TAB_INDEX.underground]: "showUnderground",
+    [SPACE_TAB_INDEX.surface]: "showSurface"
+  }), SPACE_TAB_SWEEP = Object.freeze(
+    Object.values(SPACE_TAB_INDEX)
+  ), GOV_TAB_INDEX = Object.freeze({
+    civic: 0,
+    industry: 1,
+    powerGrid: 2,
+    military: 3,
+    mechLab: 4,
+    dwarfShipYard: 5,
+    perkUnderground: 6,
+    psychicPowers: 7,
+    supernatural: 8
+  }), MARKET_TAB_INDEX = Object.freeze({
+    market: 0,
+    storage: 1,
+    ejector: 2,
+    supply: 3,
+    alchemy: 4,
+    supplyZones: 5
+  }), NOTHING = Object.freeze([]);
+  function describeTabPath(path) {
+    return path.map((step2) => `${step2.setting}:${step2.index}`).join("/");
+  }
+  function failure(code, message) {
+    return Object.freeze({
+      outcome: rejected(code, message),
+      discovered: NOTHING
+    });
+  }
+  function observed(whileDrawn, recordObserverStatus) {
+    if (whileDrawn !== void 0)
+      try {
+        let result = whileDrawn();
+        recordObserverStatus(
+          result === !0 ? "result" : result === !1 ? "no-result" : "unreported"
+        );
+      } catch (error) {
+        return recordObserverStatus("no-result"), failure("tab-observer-failed", String(error));
+      }
+    return Object.freeze({ outcome: SUCCEEDED, discovered: NOTHING });
+  }
+  function isValidStep(step2) {
+    let index = readProperty(step2, "index");
+    return typeof readProperty(step2, "setting") == "string" && typeof readProperty(step2, "control") == "string" && typeof index == "number" && Number.isSafeInteger(index) && index >= 0;
+  }
+  function createCapturedTabDiscovery(dependencies) {
+    let { rootState, controls: controls2, mountSuppression, panels, diagnostics } = dependencies;
+    return Object.freeze({
+      discover(path, options = {}) {
+        let tally = createCountTally(diagnostics), measureDraw = createPhaseMeasure(diagnostics), purpose = options.purpose ?? "unattributed", pathLabel, countDiscovery = (metric, amount = 1) => {
+          tally.enabled && (tally.count(`discovery.${metric} ${purpose}`, amount), pathLabel !== void 0 && tally.count(`discovery.${metric} ${purpose} ${pathLabel}`, amount));
+        };
+        tally.count("discovery.request"), countDiscovery("request");
+        let refused = (code, message) => (tally.count("discovery.refused"), countDiscovery("refused"), failure(code, message)), {
+          whileDrawn,
+          isPanelDrawn,
+          discard,
+          mount,
+          measurement = !1
+        } = options, first = path[0];
+        if (first === void 0)
+          return refused("empty-tab-path", "a discovery path names no panel");
+        if (!path.every(isValidStep))
+          return refused(
+            "invalid-tab-step",
+            "a discovery step needs a setting, a control, and a non-negative index"
+          );
+        pathLabel = tally.enabled ? describeTabPath(path) : void 0, tally.enabled && (tally.count(`discovery.request ${purpose} ${pathLabel}`), tally.count(`discovery.request ${pathLabel}`));
+        let settings = readProperty(rootState.readRoot(), "settings");
+        if (!isRecord(settings))
+          return refused(
+            "game-state-not-captured",
+            "the game has not created its settings yet"
+          );
+        if (!options.forceDraw && path.every((step2) => settings[step2.setting] === step2.index) && (isPanelDrawn === void 0 || isPanelDrawn())) {
+          tally.count("discovery.observed");
+          let observerState = {
+            status: whileDrawn === void 0 ? "not-requested" : "unreported"
+          }, result = observed(whileDrawn, (succeeded) => {
+            observerState.status = succeeded;
+          });
+          return countDiscovery("observed-without-draw"), result.outcome.status === "succeeded" ? observerState.status === "result" && countDiscovery("observer-without-draw") : countDiscovery("failed"), observerState.status === "no-result" ? countDiscovery("observer-no-result-without-draw") : observerState.status === "unreported" && countDiscovery("observer-unreported-without-draw"), result;
+        }
+        let playerTabs = /* @__PURE__ */ new Map();
+        for (let step2 of path) {
+          let current = settings[step2.setting];
+          if (typeof current != "number" || !Number.isFinite(current))
+            return refused(
+              "unknown-player-tab",
+              `the game has not recorded settings.${step2.setting}`
+            );
+          playerTabs.has(step2.setting) || playerTabs.set(step2.setting, current);
+        }
+        if (controls2.resolve(first.control) === void 0)
+          return refused(
+            "tab-control-missing",
+            `no captured control for ${first.control}`
+          );
+        if (!mountSuppression.available)
+          return refused(
+            "mount-suppression-unavailable",
+            "temporary component mounting cannot be suppressed"
+          );
+        let outermost = { control: first.control, setting: first.setting };
+        function restorePlayerView() {
+          let handle = controls2.resolve(outermost.control);
+          if (handle === void 0)
+            return `no captured control for ${outermost.control}`;
+          let restore2 = controls2.invoke(handle, "swapTab", [
+            playerTabs.get(outermost.setting)
+          ]);
+          return restore2.ok ? void 0 : restore2.detail ?? restore2.reason;
+        }
+        let mountScope = mount === void 0 || mount.length === 0 ? {} : { shouldMount: (selector) => mount.includes(selector) }, discardScope = discard === void 0 ? {} : {
+          onComponentBound: (selector) => {
+            if (selector === discard.afterBinding)
+              for (let container of discard.containers)
+                workspace?.discard(container);
+          }
+        }, playerPanel = MAIN_TAB_PANELS[playerTabs.get(MAIN_TAB_SETTING) ?? -1], targetPanel = MAIN_TAB_PANELS[first.index], checkpoint = controls2.checkpoint(), passSucceeded = !1, targetThroughCheckpoint, fallbackRestorationSucceeded = !1, workspace;
+        try {
+          targetPanel !== void 0 && (workspace = panels.open({ keep: playerPanel, scratch: targetPanel }));
+          let beforeIds = controls2.capturedElementIds(), before = new Set(beforeIds), beforeGenerations;
+          if (tally.enabled) {
+            beforeGenerations = /* @__PURE__ */ new Map();
+            for (let id of beforeIds) {
+              let generation = controls2.resolve(id)?.generation;
+              generation !== void 0 && beforeGenerations.set(id, generation);
+            }
+          }
+          let playerAnimation = settings.animated, stepFailure, restoreFailure, observerFailure, observerState = {
+            status: whileDrawn === void 0 ? "not-requested" : "unreported"
+          };
+          tally.enabled && (tally.count("discovery.draw"), tally.count(`discovery.draw ${pathLabel}`), countDiscovery("actual-draw"));
+          let keyedDrawPhase = tally.enabled ? `discovery.draw ${purpose} ${pathLabel}` : void 0, keyedDrawStartedAt = keyedDrawPhase === void 0 ? void 0 : diagnostics?.nowMs();
+          try {
+            measureDraw("discovery.draw", () => {
+              try {
+                settings.animated = !1, mountSuppression.withoutMounting(
+                  () => {
+                    for (let step2 of path) {
+                      let handle = controls2.resolve(step2.control);
+                      if (handle === void 0) {
+                        stepFailure = failure(
+                          "tab-control-missing",
+                          `no captured control for ${step2.control}`
+                        );
+                        break;
+                      }
+                      settings[step2.setting] = step2.index;
+                      let swap = controls2.invoke(handle, "swapTab", [
+                        step2.index
+                      ]);
+                      if (!swap.ok) {
+                        let detail = swap.detail ?? swap.reason;
+                        stepFailure = Object.freeze({
+                          outcome: swap.reason === "stale-control" ? stale("stale-tab-control", detail) : rejected("tab-draw-failed", detail),
+                          discovered: NOTHING
+                        });
+                        break;
+                      }
+                    }
+                    if (stepFailure === void 0 && whileDrawn !== void 0)
+                      try {
+                        let observerResult = whileDrawn();
+                        observerState.status = observerResult === !0 ? "result" : observerResult === !1 ? "no-result" : "unreported";
+                      } catch (error) {
+                        observerState.status = "no-result", observerFailure = String(error);
+                      }
+                  },
+                  { ...discardScope, ...mountScope }
+                );
+              } finally {
+                targetThroughCheckpoint = controls2.checkpoint();
+                try {
+                  for (let [setting, value] of playerTabs)
+                    settings[setting] = value;
+                  workspace === void 0 ? (restoreFailure = restorePlayerView(), fallbackRestorationSucceeded = restoreFailure === void 0) : (workspace.release(), workspace.isIntact() || (restoreFailure = "the workspace could not put the panels back"));
+                } finally {
+                  settings.animated = playerAnimation;
+                }
+              }
+            });
+          } catch (error) {
+            throw tally.count("discovery.draw.failed"), countDiscovery("failed"), error;
+          } finally {
+            keyedDrawPhase !== void 0 && keyedDrawStartedAt !== void 0 && diagnostics !== void 0 && diagnostics.recordPerformance(
+              keyedDrawPhase,
+              diagnostics.nowMs() - keyedDrawStartedAt
+            );
+          }
+          if (stepFailure !== void 0)
+            return tally.count("discovery.draw.failed"), countDiscovery("failed"), stepFailure;
+          let discovered = controls2.capturedElementIds().filter((id) => !before.has(id)), refreshedControlCount = 0;
+          if (beforeGenerations !== void 0)
+            for (let [id, generation] of beforeGenerations) {
+              let currentGeneration = controls2.resolve(id)?.generation;
+              currentGeneration !== void 0 && currentGeneration !== generation && (refreshedControlCount += 1);
+            }
+          tally.enabled && (discovered.length === 0 ? (tally.count("discovery.no-new-control"), tally.count(`discovery.no-new-control ${pathLabel}`), countDiscovery("no-new-control-draw")) : (tally.count("discovery.found", discovered.length), tally.count(`discovery.found ${pathLabel}`, discovered.length), countDiscovery("new-control-draw")), refreshedControlCount > 0 && countDiscovery("refreshed-control-draw"), refreshedControlCount > 0 && countDiscovery("refreshed-controls", refreshedControlCount), observerState.status === "result" ? countDiscovery("observer-result-draw") : observerState.status === "no-result" ? countDiscovery("observer-no-result-draw") : observerState.status === "unreported" && countDiscovery("observer-unreported-draw"));
+          let result = Object.freeze({
+            outcome: observerFailure !== void 0 ? rejected("tab-observer-failed", observerFailure) : restoreFailure === void 0 ? SUCCEEDED : rejected("tab-restore-failed", restoreFailure),
+            discovered: Object.freeze(discovered)
+          });
+          return result.outcome.status === "succeeded" ? (measurement && countDiscovery("measurement-result-draw"), discovered.length === 0 && (observerState.status === "result" ? countDiscovery("observation-only-draw") : measurement ? countDiscovery("measurement-only-draw") : observerState.status === "not-requested" && refreshedControlCount === 0 && countDiscovery("true-no-op-draw"))) : countDiscovery("failed"), passSucceeded = result.outcome.status === "succeeded", result;
+        } finally {
+          passSucceeded || controls2.rejectChanges(
+            checkpoint,
+            fallbackRestorationSucceeded ? targetThroughCheckpoint : void 0
+          );
+        }
+      }
+    });
+  }
+
   // src/adapters/evolve/captured-control-label.ts
   function readCapturedControlLabel(handle, fallback) {
     let data = handle.data;
@@ -1457,7 +1774,7 @@
   }
 
   // src/adapters/evolve/progression/build/captured-building-availability.ts
-  function readCapturedActionAvailability(root, action, region, sector, struct, info) {
+  function readCapturedActionAvailability(root, action, region, sector, struct, info, options = {}) {
     try {
       let race = readProperty(root, "race"), tech = readProperty(root, "tech"), genes = readProperty(root, "genes"), settings = readProperty(root, "settings");
       if (!isNonArrayRecord(race) || !isNonArrayRecord(tech) || !isNonArrayRecord(settings))
@@ -1471,7 +1788,7 @@
         tauceti: "showTau",
         eden: "showEden"
       }, visible = region === "space" && info && readProperty(info, "zone") === "outer" ? "showOuter" : visibility[region];
-      if (visible !== void 0 && !readProperty(settings, visible))
+      if (visible !== void 0 && !readProperty(settings, visible) && !(options.ignoreOuterTabVisibility && visible === "showOuter"))
         return { kind: "value", value: !1 };
       if (region === "city" && !(struct === "replicator" && flag("replicator")) && (flag("cataclysm") || flag("orbit_decayed") || readProperty(tech, "isolation") || flag("warlord") || flag("iceage")))
         return { kind: "value", value: !1 };
@@ -1539,6 +1856,46 @@
     } catch {
       return { kind: "invalid" };
     }
+  }
+  var SPACE_SECTOR_PANEL_PREFIX = "spc_";
+  function capturedSpaceSectorSetting(sector) {
+    return sector.startsWith(SPACE_SECTOR_PANEL_PREFIX) ? sector.slice(SPACE_SECTOR_PANEL_PREFIX.length) : sector;
+  }
+  function readCapturedActionControlAvailabilityForTab(root, action, region, sector, struct, info, tabIndex) {
+    let location = SPACE_TAB_ACTION_LOCATIONS[tabIndex];
+    if (location === void 0) return { kind: "invalid" };
+    let race = readProperty(root, "race"), tech = readProperty(root, "tech"), truepath = !!readProperty(race, "truepath");
+    if (region === "space" && sector === "spc_home" && (readProperty(race, "cataclysm") || readProperty(race, "orbit_decayed") && !readProperty(tech, "resettle")))
+      return { kind: "value", value: !1 };
+    let ignoreOuterTabVisibility = region === "space" && tabIndex === SPACE_TAB_INDEX.space && !truepath, availability = readCapturedActionAvailability(
+      root,
+      action,
+      region,
+      sector,
+      struct,
+      info,
+      { ignoreOuterTabVisibility }
+    );
+    if (availability.kind !== "value" || !availability.value || region !== "space") return availability;
+    let settings = readProperty(root, "settings");
+    if (!readProperty(settings, "showSpace"))
+      return { kind: "value", value: !1 };
+    if (!truepath && tabIndex !== SPACE_TAB_INDEX.space)
+      return { kind: "value", value: !1 };
+    if (truepath) {
+      if (info === !1) return { kind: "invalid" };
+      let rawZone = readProperty(info, "zone");
+      if (rawZone === void 0) return { kind: "value", value: !1 };
+      if (rawZone !== "inner" && rawZone !== "outer") return { kind: "invalid" };
+      if (location.zone !== rawZone) return { kind: "value", value: !1 };
+    }
+    let sectorSettings = readProperty(settings, "space");
+    if (!isNonArrayRecord(sectorSettings)) return { kind: "invalid" };
+    let show = capturedSpaceSectorSetting(sector);
+    return {
+      kind: "value",
+      value: !!readProperty(sectorSettings, show)
+    };
   }
   function readCapturedSemanticBuildingSample(root, controls2, mechanics, isCurrent = () => !0) {
     let structures = mechanics.readStructures();
@@ -2121,6 +2478,15 @@
         entry.sector,
         entry.struct,
         entry.info
+      ),
+      readControlAvailabilityForTab: (root, tabIndex) => readCapturedActionControlAvailabilityForTab(
+        root,
+        action,
+        entry.region,
+        entry.sector,
+        entry.struct,
+        entry.info,
+        tabIndex
       ),
       readTitle: () => readMechanicsTitle(action),
       readDescription: () => readMechanicsDescription(action),
@@ -3841,30 +4207,6 @@
     });
   }
 
-  // src/utils/performance.ts
-  var runUnmeasured = (_phase, action) => action();
-  function createPhaseMeasure(diagnostics) {
-    return diagnostics === void 0 || !diagnostics.readPerformanceEnabled() ? runUnmeasured : (phase, action) => {
-      let startedAtMs = diagnostics.nowMs();
-      try {
-        return action();
-      } finally {
-        diagnostics.recordPerformance(phase, diagnostics.nowMs() - startedAtMs);
-      }
-    };
-  }
-  var INERT_TALLY = Object.freeze({
-    enabled: !1,
-    count: () => {
-    }
-  });
-  function createCountTally(diagnostics) {
-    return diagnostics === void 0 || !diagnostics.readPerformanceEnabled() ? INERT_TALLY : Object.freeze({
-      enabled: !0,
-      count: (name, amount = 1) => diagnostics.recordCount(name, amount)
-    });
-  }
-
   // src/adapters/evolve/discovery-scope-cache.ts
   var MIN_SAMPLE_AGE_MS = 1e3, MAX_SAMPLE_AGE_MS = 16e3;
   function sameOfferPrices(previous, next) {
@@ -3945,268 +4287,90 @@
   function createProgressionEpochReader(rootState) {
     let rootReplacements = 0, unsubscribe = rootState.subscribeRootReplaced(() => {
       rootReplacements += 1;
-    });
+    }), readEpoch = (includeProjectRanks) => {
+      let root = rootState.readRoot();
+      if (root === void 0) return `${rootReplacements}|no-root`;
+      let race = readProperty(root, "race"), stats = readProperty(root, "stats"), settings = readProperty(root, "settings"), civic = readProperty(root, "civic"), parts = [
+        rootReplacements,
+        // The dominant gate on every tech and project offer. Monotone within a run, and it drops
+        // on a reset, so the sum alone separates one run's progression from the next.
+        tallyRecord(readProperty(root, "tech")),
+        tallyRecord(readProperty(root, "genes")),
+        // Trait values are not all numbers, so traits are counted rather than summed. A trait that
+        // only changes rank keeps the same offers; one that appears or disappears does not.
+        countKeys(race),
+        scalarToken(readProperty(race, "species")),
+        scalarToken(readProperty(race, "universe")),
+        countKeys(readProperty(stats, "achieve")),
+        scalarToken(readProperty(stats, "psykill")),
+        // The script swaps the government form itself under autoGovernment, and a tech condition
+        // reads it.
+        scalarToken(readProperty(readProperty(civic, "govern"), "type")),
+        scalarToken(readProperty(settings, "showCivic")),
+        scalarToken(readProperty(settings, "showUnderground")),
+        scalarToken(readProperty(settings, "showSurface"))
+      ];
+      return includeProjectRanks && parts.push(tallyProjectRanks(readProperty(root, "arpa"))), parts.join("|");
+    };
     return Object.freeze({
       read() {
-        let root = rootState.readRoot();
-        if (root === void 0) return `${rootReplacements}|no-root`;
-        let race = readProperty(root, "race"), stats = readProperty(root, "stats"), settings = readProperty(root, "settings"), civic = readProperty(root, "civic");
-        return [
-          rootReplacements,
-          // The dominant gate on every tech and project offer. Monotone within a run, and it drops
-          // on a reset, so the sum alone separates one run's progression from the next.
-          tallyRecord(readProperty(root, "tech")),
-          tallyRecord(readProperty(root, "genes")),
-          // Trait values are not all numbers, so traits are counted rather than summed. A trait that
-          // only changes rank keeps the same offers; one that appears or disappears does not.
-          countKeys(race),
-          scalarToken(readProperty(race, "species")),
-          scalarToken(readProperty(race, "universe")),
-          countKeys(readProperty(stats, "achieve")),
-          scalarToken(readProperty(stats, "psykill")),
-          // The script swaps the government form itself under autoGovernment, and a tech condition
-          // reads it.
-          scalarToken(readProperty(readProperty(civic, "govern"), "type")),
-          scalarToken(readProperty(settings, "showCivic")),
-          scalarToken(readProperty(settings, "showUnderground")),
-          scalarToken(readProperty(settings, "showSurface")),
-          tallyProjectRanks(readProperty(root, "arpa"))
-        ].join("|");
+        return readEpoch(!0);
+      },
+      readBuildControls() {
+        return readEpoch(!1);
       },
       release: unsubscribe
     });
   }
 
-  // src/adapters/command-outcomes.ts
-  var SUCCEEDED = Object.freeze({
-    status: "succeeded"
-  });
-  function rejected(code, message) {
-    return { status: "rejected", failure: { code, message } };
+  // src/adapters/evolve/progression/build/captured-build-control-coverage.ts
+  var CAPTURED_BUILD_ACTION_METHOD = "action", CAPTURED_BUILD_ON_CAP_METHOD = "on_cap";
+  function isCapturedStructureOnTab(structure, tabIndex) {
+    let location = SPACE_TAB_ACTION_LOCATIONS[tabIndex];
+    if (location !== void 0)
+      return structure.region === location.region;
   }
-  function stale(code, message, context) {
-    return context === void 0 ? { status: "stale", failure: { code, message } } : { status: "stale", failure: { code, message, context } };
-  }
-
-  // src/adapters/evolve/captured-tab-discovery.ts
-  var MAIN_TAB_CONTROL = "#mainColumn div.content", MAIN_TAB_SETTING = "civTabs", SPACE_TABS_SETTING = "spaceTabs", GOV_TABS_SETTING = "govTabs", MARKET_TABS_SETTING = "marketTabs", SUB_TAB_CONTROLS = Object.freeze(
-    {
-      [SPACE_TABS_SETTING]: "mTabCivil",
-      [GOV_TABS_SETTING]: "mTabCivic",
-      [MARKET_TABS_SETTING]: "mTabResource"
-    }
-  ), MAIN_TAB_PANELS = Object.freeze({
-    1: "mTabCivil",
-    2: "mTabCivic",
-    3: "mTabResearch",
-    4: "mTabResource",
-    5: "mTabArpa",
-    6: "mTabStats"
-  }), MAIN_TAB_INDEX = Object.freeze({
-    civilization: 1,
-    civic: 2,
-    research: 3,
-    resources: 4,
-    arpa: 5,
-    stats: 6
-  }), SPACE_TAB_INDEX = Object.freeze({
-    city: 0,
-    space: 1,
-    interstellar: 2,
-    galaxy: 3,
-    portal: 4,
-    outerSol: 5,
-    tauceti: 6,
-    eden: 7,
-    underground: 8,
-    surface: 9
-  }), SPACE_TAB_PANELS = Object.freeze(
-    {
-      [SPACE_TAB_INDEX.city]: "#city",
-      [SPACE_TAB_INDEX.space]: "#space",
-      [SPACE_TAB_INDEX.interstellar]: "#interstellar",
-      [SPACE_TAB_INDEX.galaxy]: "#galaxy",
-      [SPACE_TAB_INDEX.portal]: "#portal",
-      [SPACE_TAB_INDEX.outerSol]: "#outerSol",
-      [SPACE_TAB_INDEX.tauceti]: "#tauceti",
-      [SPACE_TAB_INDEX.eden]: "#eden",
-      [SPACE_TAB_INDEX.underground]: "#underground",
-      [SPACE_TAB_INDEX.surface]: "#surface"
-    }
-  ), SPACE_TAB_SHOWN_BY = Object.freeze({
-    [SPACE_TAB_INDEX.city]: "showCity",
-    [SPACE_TAB_INDEX.space]: "showSpace",
-    [SPACE_TAB_INDEX.interstellar]: "showDeep",
-    [SPACE_TAB_INDEX.galaxy]: "showGalactic",
-    [SPACE_TAB_INDEX.portal]: "showPortal",
-    [SPACE_TAB_INDEX.outerSol]: "showOuter",
-    [SPACE_TAB_INDEX.tauceti]: "showTau",
-    [SPACE_TAB_INDEX.eden]: "showEden",
-    [SPACE_TAB_INDEX.underground]: "showUnderground",
-    [SPACE_TAB_INDEX.surface]: "showSurface"
-  }), SPACE_TAB_SWEEP = Object.freeze(
-    Object.values(SPACE_TAB_INDEX)
-  ), GOV_TAB_INDEX = Object.freeze({
-    civic: 0,
-    industry: 1,
-    powerGrid: 2,
-    military: 3,
-    mechLab: 4,
-    dwarfShipYard: 5,
-    perkUnderground: 6,
-    psychicPowers: 7,
-    supernatural: 8
-  }), MARKET_TAB_INDEX = Object.freeze({
-    market: 0,
-    storage: 1,
-    ejector: 2,
-    supply: 3,
-    alchemy: 4,
-    supplyZones: 5
-  }), NOTHING = Object.freeze([]);
-  function describeTabPath(path) {
-    return path.map((step2) => `${step2.setting}:${step2.index}`).join("/");
-  }
-  function failure(code, message) {
-    return Object.freeze({
-      outcome: rejected(code, message),
-      discovered: NOTHING
-    });
-  }
-  function observed(whileDrawn) {
-    if (whileDrawn !== void 0)
-      try {
-        whileDrawn();
-      } catch (error) {
-        return failure("tab-observer-failed", String(error));
-      }
-    return Object.freeze({ outcome: SUCCEEDED, discovered: NOTHING });
-  }
-  function isValidStep(step2) {
-    let index = readProperty(step2, "index");
-    return typeof readProperty(step2, "setting") == "string" && typeof readProperty(step2, "control") == "string" && typeof index == "number" && Number.isSafeInteger(index) && index >= 0;
-  }
-  function createCapturedTabDiscovery(dependencies) {
-    let { rootState, controls: controls2, mountSuppression, panels, diagnostics } = dependencies;
-    return Object.freeze({
-      discover(path, options = {}) {
-        let tally = createCountTally(diagnostics), measureDraw = createPhaseMeasure(diagnostics);
-        tally.count("discovery.request");
-        let refused = (code, message) => (tally.count("discovery.refused"), failure(code, message)), { whileDrawn, isPanelDrawn, discard, mount } = options, first = path[0];
-        if (first === void 0)
-          return refused("empty-tab-path", "a discovery path names no panel");
-        if (!path.every(isValidStep))
-          return refused(
-            "invalid-tab-step",
-            "a discovery step needs a setting, a control, and a non-negative index"
-          );
-        let settings = readProperty(rootState.readRoot(), "settings");
-        if (!isRecord(settings))
-          return refused(
-            "game-state-not-captured",
-            "the game has not created its settings yet"
-          );
-        if (!options.forceDraw && path.every((step2) => settings[step2.setting] === step2.index) && (isPanelDrawn === void 0 || isPanelDrawn()))
-          return tally.count("discovery.observed"), observed(whileDrawn);
-        let playerTabs = /* @__PURE__ */ new Map();
-        for (let step2 of path) {
-          let current = settings[step2.setting];
-          if (typeof current != "number" || !Number.isFinite(current))
-            return refused(
-              "unknown-player-tab",
-              `the game has not recorded settings.${step2.setting}`
-            );
-          playerTabs.has(step2.setting) || playerTabs.set(step2.setting, current);
-        }
-        if (controls2.resolve(first.control) === void 0)
-          return refused(
-            "tab-control-missing",
-            `no captured control for ${first.control}`
-          );
-        if (!mountSuppression.available)
-          return refused(
-            "mount-suppression-unavailable",
-            "temporary component mounting cannot be suppressed"
-          );
-        let outermost = { control: first.control, setting: first.setting };
-        function restorePlayerView() {
-          let handle = controls2.resolve(outermost.control);
-          if (handle === void 0)
-            return `no captured control for ${outermost.control}`;
-          let restore2 = controls2.invoke(handle, "swapTab", [
-            playerTabs.get(outermost.setting)
-          ]);
-          return restore2.ok ? void 0 : restore2.detail ?? restore2.reason;
-        }
-        let mountScope = mount === void 0 || mount.length === 0 ? {} : { shouldMount: (selector) => mount.includes(selector) }, discardScope = discard === void 0 ? {} : {
-          onComponentBound: (selector) => {
-            if (selector === discard.afterBinding)
-              for (let container of discard.containers)
-                workspace?.discard(container);
-          }
-        }, playerPanel = MAIN_TAB_PANELS[playerTabs.get(MAIN_TAB_SETTING) ?? -1], targetPanel = MAIN_TAB_PANELS[first.index], checkpoint = controls2.checkpoint(), passSucceeded = !1, targetThroughCheckpoint, fallbackRestorationSucceeded = !1, workspace;
+  function readCapturedBuildControlCoverage(root, tabIndex, controls2, mechanics) {
+    if (SPACE_TAB_ACTION_LOCATIONS[tabIndex] === void 0)
+      return Object.freeze({ kind: "unknown" });
+    let structures = mechanics.readStructures();
+    if (structures === void 0 || structures.length === 0)
+      return Object.freeze({ kind: "unknown" });
+    let missing = /* @__PURE__ */ new Set();
+    for (let structure of structures) {
+      let binding = bindingForBuildingElement(structure.actionId);
+      if (!CAPTURED_AUTOMATION_BUILDING_BINDINGS.has(binding)) continue;
+      let parts = splitActionId(binding);
+      if (parts === void 0 || parts.region !== structure.region)
+        return Object.freeze({ kind: "unknown" });
+      let onTab = isCapturedStructureOnTab(structure, tabIndex);
+      if (onTab === void 0) return Object.freeze({ kind: "unknown" });
+      if (onTab)
         try {
-          targetPanel !== void 0 && (workspace = panels.open({ keep: playerPanel, scratch: targetPanel }));
-          let before = new Set(controls2.capturedElementIds()), playerAnimation = settings.animated, stepFailure, restoreFailure, observerFailure, drawnPath = tally.enabled ? describeTabPath(path) : "";
-          if (tally.enabled && (tally.count("discovery.draw"), tally.count(`discovery.draw ${drawnPath}`)), measureDraw("discovery.draw", () => {
-            try {
-              settings.animated = !1, mountSuppression.withoutMounting(
-                () => {
-                  for (let step2 of path) {
-                    let handle = controls2.resolve(step2.control);
-                    if (handle === void 0) {
-                      stepFailure = failure(
-                        "tab-control-missing",
-                        `no captured control for ${step2.control}`
-                      );
-                      break;
-                    }
-                    settings[step2.setting] = step2.index;
-                    let swap = controls2.invoke(handle, "swapTab", [step2.index]);
-                    if (!swap.ok) {
-                      let detail = swap.detail ?? swap.reason;
-                      stepFailure = Object.freeze({
-                        outcome: swap.reason === "stale-control" ? stale("stale-tab-control", detail) : rejected("tab-draw-failed", detail),
-                        discovered: NOTHING
-                      });
-                      break;
-                    }
-                  }
-                  if (stepFailure === void 0 && whileDrawn !== void 0)
-                    try {
-                      whileDrawn();
-                    } catch (error) {
-                      observerFailure = String(error);
-                    }
-                },
-                { ...discardScope, ...mountScope }
-              );
-            } finally {
-              targetThroughCheckpoint = controls2.checkpoint();
-              try {
-                for (let [setting, value] of playerTabs)
-                  settings[setting] = value;
-                workspace === void 0 ? (restoreFailure = restorePlayerView(), fallbackRestorationSucceeded = restoreFailure === void 0) : (workspace.release(), workspace.isIntact() || (restoreFailure = "the workspace could not put the panels back"));
-              } finally {
-                settings.animated = playerAnimation;
-              }
-            }
-          }), stepFailure !== void 0)
-            return tally.count("discovery.draw.failed"), stepFailure;
-          let discovered = controls2.capturedElementIds().filter((id) => !before.has(id));
-          tally.enabled && (discovered.length === 0 ? tally.count("discovery.barren") : (tally.count("discovery.found", discovered.length), tally.count(`discovery.found ${drawnPath}`, discovered.length)));
-          let result = Object.freeze({
-            outcome: observerFailure !== void 0 ? rejected("tab-observer-failed", observerFailure) : restoreFailure === void 0 ? SUCCEEDED : rejected("tab-restore-failed", restoreFailure),
-            discovered: Object.freeze(discovered)
-          });
-          return passSucceeded = result.outcome.status === "succeeded", result;
-        } finally {
-          passSucceeded || controls2.rejectChanges(
-            checkpoint,
-            fallbackRestorationSucceeded ? targetThroughCheckpoint : void 0
+          if (!structure.matchesCurrentIdentity())
+            return Object.freeze({ kind: "unknown" });
+          let handle = controls2.resolve(structure.actionId), hasAction = handle?.methods.includes(CAPTURED_BUILD_ACTION_METHOD) ?? !1, missingOnCap = !1;
+          if (hasAction && !handle?.methods.includes(CAPTURED_BUILD_ON_CAP_METHOD)) {
+            let switchable = structure.readSwitchable();
+            if (switchable.kind === "invalid")
+              return Object.freeze({ kind: "unknown" });
+            missingOnCap = switchable.kind === "value" && switchable.value;
+          }
+          if (hasAction && !missingOnCap) continue;
+          let availability = structure.readControlAvailabilityForTab(
+            root,
+            tabIndex
           );
+          if (availability.kind !== "value")
+            return Object.freeze({ kind: "unknown" });
+          availability.value && missing.add(binding);
+        } catch {
+          return Object.freeze({ kind: "unknown" });
         }
-      }
+    }
+    return missing.size === 0 ? Object.freeze({ kind: "complete" }) : Object.freeze({
+      kind: "missing",
+      bindings: Object.freeze([...missing].sort())
     });
   }
 
@@ -4488,6 +4652,7 @@
             collecting && observedBindingIds.push(elementId);
           }), result = mechanics.captureTechDefinitionsDuring(
             () => discovery.discover(RESEARCH_TAB_PATH, {
+              purpose: "research-catalog",
               // A current DOM cannot establish a fresh binding stream, even if Research is selected.
               // The panel workspace preserves that view while this scratch draw runs.
               forceDraw: !0,
@@ -4510,11 +4675,11 @@
                       elementId,
                       controls2.resolve(elementId)?.generation ?? 0
                     );
-                  drawn = Object.freeze({
+                  return drawn = Object.freeze({
                     offeredRows,
                     ...grantedRows === void 0 ? {} : { grantedRows },
                     generations
-                  });
+                  }), !0;
                 } finally {
                   collecting = !1;
                 }
@@ -8851,6 +9016,46 @@
     });
   }
 
+  // src/bootstrap/discovery-attempts.ts
+  function discoveryRetryDelay(failures) {
+    return Math.min(2 ** Math.max(0, failures - 1), 32);
+  }
+  function createDiscoveryAttempts({
+    readCycle: readCycle2
+  }) {
+    let records = /* @__PURE__ */ new Map(), currentEpoch = (epoch) => epoch ?? "", read = (key, epoch) => {
+      let record = records.get(key);
+      return record !== void 0 && record.epoch === currentEpoch(epoch) ? record : void 0;
+    }, write = (key, epoch, satisfied) => {
+      let previous = read(key, epoch), failures = satisfied ? 0 : (previous?.failures ?? 0) + 1;
+      records.set(key, {
+        epoch: currentEpoch(epoch),
+        satisfied,
+        failures,
+        nextCycle: satisfied ? 0 : readCycle2() + discoveryRetryDelay(failures)
+      });
+    };
+    return Object.freeze({
+      shouldAttempt(key, epoch) {
+        let record = read(key, epoch);
+        return record === void 0 ? !0 : record.satisfied ? !1 : readCycle2() >= record.nextCycle;
+      },
+      recordSuccess(key, epoch) {
+        write(key, epoch, !0);
+      },
+      recordFailure(key, epoch) {
+        write(key, epoch, !1);
+      },
+      invalidate() {
+        records.clear();
+      },
+      describe(key, epoch) {
+        let record = read(key, epoch);
+        return record === void 0 ? "never-tried" : record.satisfied ? "satisfied" : `failed(${record.failures}) retry-at-${record.nextCycle}`;
+      }
+    });
+  }
+
   // src/adapters/evolve/captured-build-capacity.ts
   var BUILD_QUEUE_PANEL = "buildQueue", MESSAGE_QUEUE_PANEL = "msgQueue", QUEUE_KEY_SETTING = "q", CAPACITY_CACHE_AGE_MS = 1e3;
   function snapshotRecord(value) {
@@ -11112,7 +11317,7 @@
       getResources,
       nowMs,
       diagnostics
-    } = dependencies, readFallbackInterfacePresentation = dependencies.readInterfacePresentationSettings ?? (() => {
+    } = dependencies, fallbackDiscoveryCycle = 0, discoveryAttempts = dependencies.discoveryAttempts ?? createDiscoveryAttempts({ readCycle: () => fallbackDiscoveryCycle }), readFallbackInterfacePresentation = dependencies.readInterfacePresentationSettings ?? (() => {
       let settings = readSettings();
       return Object.freeze({
         activeTargetsUI: readProperty(settings, "activeTargetsUI") === !0,
@@ -11144,40 +11349,87 @@
         let shownBy = SPACE_TAB_SHOWN_BY[index];
         return shownBy !== void 0 && readProperty(gameSettings, shownBy) === !0;
       });
-    }, sweepBuildControls = (index) => {
+    }, buildControlPath = (index) => {
       let spaceTabControl = SUB_TAB_CONTROLS[SPACE_TABS_SETTING];
-      if (spaceTabControl === void 0)
-        return onSkipped?.("build-discovery", "space-tab control is unavailable"), "unavailable";
+      if (spaceTabControl === void 0) {
+        onSkipped?.("build-discovery", "space-tab control is unavailable");
+        return;
+      }
       let main = Object.freeze({
         setting: MAIN_TAB_SETTING,
         control: MAIN_TAB_CONTROL,
         index: MAIN_TAB_INDEX.civilization
-      }), report = (result2) => result2.outcome.status === "succeeded" ? !0 : (onSkipped?.(
+      }), sub = Object.freeze({
+        setting: SPACE_TABS_SETTING,
+        control: spaceTabControl,
+        index
+      });
+      return Object.freeze([main, sub]);
+    }, sweepBuildControls = (index) => {
+      let path = buildControlPath(index);
+      if (path === void 0) return !1;
+      let report = (result2) => result2.outcome.status === "succeeded" ? !0 : (onSkipped?.(
         "build-discovery",
         result2.outcome.failure?.message ?? result2.outcome.status
       ), !1), civilizationPanel = MAIN_TAB_PANELS[MAIN_TAB_INDEX.civilization];
       if (civilizationPanel === void 0)
-        return onSkipped?.("build-discovery", "civilization panel is unavailable"), "unavailable";
-      let result = discovery.discover(
-        Object.freeze([
-          main,
-          Object.freeze({
-            setting: SPACE_TABS_SETTING,
-            control: spaceTabControl,
-            index
-          })
-        ]),
-        { mount: Object.freeze([`#${civilizationPanel}`]) }
-      );
-      return report(result) ? result.discovered.join(",") : "failed";
+        return onSkipped?.("build-discovery", "civilization panel is unavailable"), !1;
+      let result = discovery.discover(path, {
+        purpose: "build-controls",
+        measurement: !0,
+        mount: Object.freeze([`#${civilizationPanel}`])
+      });
+      return report(result);
     }, ensureBuildControls = () => {
-      if (controls2.resolve(MAIN_TAB_CONTROL) !== void 0)
-        for (let index of shownSpaceTabs())
-          scopes.read(
-            `${BUILD_CONTROLS_SCOPE} ${index}`,
-            () => sweepBuildControls(index),
-            (previous, next) => previous === next
+      if (controls2.resolve(MAIN_TAB_CONTROL) === void 0) return;
+      let tally = createCountTally(diagnostics), measure = createPhaseMeasure(diagnostics);
+      for (let index of shownSpaceTabs()) {
+        let path = buildControlPath(index);
+        if (path === void 0) continue;
+        let pathLabel = tally.enabled ? describeTabPath(path) : void 0, profileLabel = pathLabel === void 0 ? void 0 : `build-controls ${pathLabel}`, readCoverage = () => readCapturedBuildControlCoverage(
+          rootState.readRoot(),
+          index,
+          controls2,
+          mechanics
+        ), measureCoverage = () => profileLabel === void 0 ? readCoverage() : (tally.count(`discovery.capability-check ${profileLabel}`), measure(
+          `discovery.capability-check ${profileLabel}`,
+          readCoverage
+        )), coverage = measureCoverage(), attemptKey = `${BUILD_CONTROLS_SCOPE} ${index}`;
+        if (coverage.kind === "complete") {
+          discoveryAttempts.shouldAttempt(attemptKey, "complete") && discoveryAttempts.recordSuccess(attemptKey, "complete"), profileLabel !== void 0 && tally.count(
+            `discovery.capability-satisfied-without-draw ${profileLabel}`
           );
+          continue;
+        }
+        if (profileLabel !== void 0)
+          if (coverage.kind === "unknown")
+            tally.count(
+              `discovery.capability-eligibility-unknown ${profileLabel}`
+            );
+          else
+            for (let binding of coverage.bindings)
+              tally.count(`discovery.capability-gap ${profileLabel} ${binding}`);
+        let attemptEpoch = coverage.kind === "missing" ? `missing:${coverage.bindings.join("")}` : `unknown:${epoch.readBuildControls()}`;
+        if (!discoveryAttempts.shouldAttempt(attemptKey, attemptEpoch)) {
+          profileLabel !== void 0 && tally.count(`discovery.attempt-backed-off ${profileLabel}`);
+          continue;
+        }
+        let succeeded = sweepBuildControls(index), afterDraw = measureCoverage();
+        if (succeeded && afterDraw.kind === "complete")
+          discoveryAttempts.recordSuccess(attemptKey, "complete");
+        else {
+          if (profileLabel !== void 0)
+            if (tally.count(
+              `discovery.capability-unsatisfied-after-draw ${profileLabel}`
+            ), afterDraw.kind === "missing")
+              for (let binding of afterDraw.bindings)
+                tally.count(
+                  `discovery.capability-remains-missing ${profileLabel} ${binding}`
+                );
+            else afterDraw.kind === "unknown" && tally.count(`discovery.capability-remains-unknown ${profileLabel}`);
+          discoveryAttempts.recordFailure(attemptKey, attemptEpoch);
+        }
+      }
     }, lastOffered, lastGranted, offeredSampleAttempted = !1, grantedSampleAttempted = !1, offeredSampleEpoch, heldOfferedSnapshot, clearResearchSample = () => {
       lastOffered = void 0, lastGranted = void 0, offeredSampleAttempted = !1, grantedSampleAttempted = !1, offeredSampleEpoch = void 0, heldOfferedSnapshot = void 0;
     }, heldOfferBindingsAreCurrent = (snapshot2) => snapshot2.offered.every(
@@ -11227,7 +11479,7 @@
     }), projectSampled = !1, lastProjects, establishedProjectEpoch, resetProjectSample = () => {
       projectSampled = !1, lastProjects = void 0, establishedProjectEpoch = void 0;
     }, beginProcessedCycle = () => {
-      clearResearchSample(), scopes.invalidate(RESEARCH_SCOPE), scopes.invalidate(RESEARCH_GRANTED_SCOPE), scopes.invalidate(ARPA_SCOPE), resetProjectSample(), resetBuildingUnlockSample();
+      dependencies.discoveryAttempts === void 0 && (fallbackDiscoveryCycle += 1), clearResearchSample(), scopes.invalidate(RESEARCH_SCOPE), scopes.invalidate(RESEARCH_GRANTED_SCOPE), scopes.invalidate(ARPA_SCOPE), resetProjectSample(), resetBuildingUnlockSample();
     }, readEstablishedProjects = () => {
       if (projectSampled && establishedProjectEpoch !== epoch.read() || (projectSampled ? lastProjects : scopes.peek(ARPA_SCOPE)) === void 0) return;
       let currentProjects = projectCatalog.readProjects();
@@ -11265,7 +11517,7 @@
       resetBuildingUnlockSample(), resetProjectSample();
     };
     rootState.subscribeRootReplaced(() => {
-      scopes.invalidateAll(), clearResearchSample(), resetProjectSample(), resetBuildingUnlockSample();
+      scopes.invalidateAll(), discoveryAttempts.invalidate(), clearResearchSample(), resetProjectSample(), resetBuildingUnlockSample();
     });
     let readBuildingUnlocks = (regions) => {
       let key = buildingOfferScopeKey(regions), catalog = buildingUnlocks.read(regions);
@@ -30844,46 +31096,6 @@
     });
   }
 
-  // src/bootstrap/discovery-attempts.ts
-  function discoveryRetryDelay(failures) {
-    return Math.min(2 ** Math.max(0, failures - 1), 32);
-  }
-  function createDiscoveryAttempts({
-    readCycle: readCycle2
-  }) {
-    let records = /* @__PURE__ */ new Map(), currentEpoch = (epoch) => epoch ?? "", read = (key, epoch) => {
-      let record = records.get(key);
-      return record !== void 0 && record.epoch === currentEpoch(epoch) ? record : void 0;
-    }, write = (key, epoch, satisfied) => {
-      let previous = read(key, epoch), failures = satisfied ? 0 : (previous?.failures ?? 0) + 1;
-      records.set(key, {
-        epoch: currentEpoch(epoch),
-        satisfied,
-        failures,
-        nextCycle: satisfied ? 0 : readCycle2() + discoveryRetryDelay(failures)
-      });
-    };
-    return Object.freeze({
-      shouldAttempt(key, epoch) {
-        let record = read(key, epoch);
-        return record === void 0 ? !0 : record.satisfied ? !1 : readCycle2() >= record.nextCycle;
-      },
-      recordSuccess(key, epoch) {
-        write(key, epoch, !0);
-      },
-      recordFailure(key, epoch) {
-        write(key, epoch, !1);
-      },
-      invalidate() {
-        records.clear();
-      },
-      describe(key, epoch) {
-        let record = read(key, epoch);
-        return record === void 0 ? "never-tried" : record.satisfied ? "satisfied" : `failed(${record.failures}) retry-at-${record.nextCycle}`;
-      }
-    });
-  }
-
   // src/adapters/evolve/economy/production/captured-power-warnings.ts
   function warningDocument(value) {
     if (!(!isRecord(value) || typeof value.querySelectorAll != "function"))
@@ -33444,10 +33656,10 @@
         return pending = { root, epoch, before }, !0;
       },
       observeDraw() {
-        if (pending === void 0) return;
+        if (pending === void 0) return !1;
         let { root, epoch, before } = pending;
         if (rootState.readRoot() !== root || marketDiscoveryEpoch(root) !== epoch)
-          return;
+          return !1;
         let mode = isRegionalSupply(root) ? "regional" : "global", changed = [];
         for (let id of controls2.capturedElementIds()) {
           if (!marketControl(id)) continue;
@@ -33459,14 +33671,14 @@
         ), quantity = mode === "global" ? changed.find((handle) => handle.elementId === MARKET_QUANTITY_ID) : void 0, routeMultiplier = changed.find(
           (handle) => handle.elementId === ROUTE_MULTIPLIER_ID
         );
-        pending.observed = Object.freeze({
+        return pending.observed = Object.freeze({
           root,
           epoch,
           mode,
           rows: Object.freeze(rows),
           ...quantity === void 0 ? {} : { quantity },
           ...routeMultiplier === void 0 ? {} : { routeMultiplier }
-        });
+        }), !0;
       },
       hasObservedRows() {
         let observed2 = pending?.observed;
@@ -35899,6 +36111,8 @@
             reason: "the page realm exposes no Object.keys to observe"
           };
         let result = discovery.discover(ARPA_TAB_PATH, {
+          purpose: "arpa-physics",
+          measurement: !0,
           // The capture is the point of this draw, so a panel the player already has open still has to
           // be rebuilt: only `physics()` enumerates the registry.
           forceDraw: !0
@@ -52105,19 +52319,16 @@ Only continue if you trust the source. Injected code:
           })
         ]),
         {
+          purpose: "syndicate-scan",
           forceDraw: !0,
           ...panel === void 0 ? {} : { mount: Object.freeze([`#${panel}`]) },
           whileDrawn: () => {
             let captured = controls2.resolve(control);
             drawnGeneration = captured?.generation;
             let row = Reflect.apply(getElement, document, [region]);
-            if (!isRecord(row) || row === previousRow) return;
+            if (!isRecord(row) || row === previousRow) return !1;
             let child = Reflect.apply(getElement, document, [control]);
-            if (child === null) {
-              state.syndicateEnabled && (drawn = { kind: "inactive" });
-              return;
-            }
-            !isRecord(child) || child === previousChild || captured === void 0 || !captured.methods.includes(SYNDICATE_SCAN_METHOD) || captured.generation === previousHandle?.generation || (drawn = Object.freeze({ kind: "captured", handle: captured }));
+            return child === null ? state.syndicateEnabled ? (drawn = { kind: "inactive" }, !0) : !1 : !isRecord(child) || child === previousChild || captured === void 0 || !captured.methods.includes(SYNDICATE_SCAN_METHOD) || captured.generation === previousHandle?.generation ? !1 : (drawn = Object.freeze({ kind: "captured", handle: captured }), !0);
           }
         }
       ).outcome.status !== "succeeded" ? READOUT_PASS_FAILED : (drawn.kind === "captured" ? refusedReadoutGenerations.delete(control) : drawnGeneration !== void 0 && refusedReadoutGenerations.set(control, drawnGeneration), drawn);
@@ -52239,6 +52450,8 @@ Only continue if you trust the source. Injected code:
                 }
               ],
               {
+                purpose: "space-region-metadata",
+                measurement: !0,
                 forceDraw: !0,
                 ...panel === void 0 ? {} : { mount: [`#${panel}`] }
               }
@@ -55128,6 +55341,7 @@ Only continue if you trust the source. Injected code:
       bindings: pageCapture2.bindings,
       mountSuppression: pageCapture2.mountSuppression,
       panels,
+      discoveryAttempts,
       ...keyboard === void 0 ? {} : { keyboard },
       keyState: pageCapture2.keyState,
       drawnActions: createGameDrawnActionsReader({
@@ -55501,7 +55715,7 @@ Only continue if you trust the source. Injected code:
       if (!discoveryAttempts.shouldAttempt(key, epoch)) return !1;
       let result;
       try {
-        result = civicDiscovery.discover(steps, options);
+        result = civicDiscovery.discover(steps, { ...options, purpose: key });
       } catch (error) {
         return discoveryAttempts.recordFailure(key, epoch), reportOnce(`${label} discovery threw: ${String(error)}`), !1;
       }

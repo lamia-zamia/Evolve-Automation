@@ -348,15 +348,15 @@ const cityOnly = {
   assert.equal(game.draws.length, drawCountAfterSweep);
   assert.equal(game.readCounters().domActionReads, domReadsAfterSweep);
 
-  // Progression reopens every shown scope. The newly offered City control is captured even though
-  // the player remains parked on Research.
+  // The newly offered City control is captured even though the player remains parked on Research.
+  // The already-complete Space tab stays established while its offer epoch is unchanged.
   bankOffered = true;
   game.root.tech.dimensional_tear = 1;
   game.draws.length = 0;
   game.control.ensureBuildControls();
   assert.deepEqual(
     game.draws.sort((left, right) => left - right),
-    [SPACE_TAB_INDEX.city, SPACE_TAB_INDEX.space],
+    [SPACE_TAB_INDEX.city],
   );
   assert.equal(game.capturedElementIds().includes("city-bank"), true);
 

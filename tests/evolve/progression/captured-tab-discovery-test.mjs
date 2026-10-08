@@ -253,12 +253,13 @@ function makePage({
   };
 }
 
-function discoveryFor(page) {
+function discoveryFor(page, diagnostics) {
   return createCapturedTabDiscovery({
     rootState: page.rootState,
     controls: page.registry,
     mountSuppression: page.suppression,
     panels: page.panels,
+    diagnostics,
   });
 }
 
@@ -1040,6 +1041,253 @@ assert.deepEqual(
   const page = makePage({ civTabs: 4 });
   discoveryFor(page).discover(mainTab(3));
   assert.equal(page.suppression.scopeSeen.shouldMount, undefined);
+}
+
+// Zero new control ids can still be a fresh observation or a refreshed native binding. Profiling
+// keeps those separate from a successful draw that produced neither result.
+{
+  const counts = new Map();
+  const phases = new Map();
+  let now = 0;
+  const diagnostics = {
+    readPerformanceEnabled: () => true,
+    nowMs: () => ++now,
+    recordPerformance: (name, duration) => phases.set(name, duration),
+    recordCount: (name, amount) =>
+      counts.set(name, (counts.get(name) ?? 0) + amount),
+  };
+  const emptyPanelPage = makePage({
+    civTabs: 4,
+    panels: { ...PANELS, 3: [] },
+  });
+  const emptyPanelDiscovery = discoveryFor(emptyPanelPage, diagnostics);
+  const observation = emptyPanelDiscovery.discover(mainTab(3), {
+    purpose: "rendered-observation",
+    forceDraw: true,
+    whileDrawn: () => true,
+  });
+  assert.equal(observation.outcome.status, "succeeded");
+  assert.equal(
+    counts.get(
+      "discovery.observation-only-draw rendered-observation civTabs:3",
+    ),
+    1,
+  );
+  assert.equal(
+    counts.get("discovery.true-no-op-draw rendered-observation civTabs:3"),
+    undefined,
+  );
+  assert.equal(
+    counts.get("discovery.request rendered-observation civTabs:3"),
+    1,
+  );
+  assert.equal(
+    phases.get("discovery.draw rendered-observation civTabs:3") > 0,
+    true,
+  );
+
+  const refreshedObservation = emptyPanelDiscovery.discover(mainTab(3), {
+    purpose: "refreshed-observation",
+    forceDraw: true,
+    whileDrawn: () => true,
+  });
+  assert.equal(refreshedObservation.outcome.status, "succeeded");
+  assert.equal(
+    counts.get(
+      "discovery.observation-only-draw refreshed-observation civTabs:3",
+    ),
+    1,
+    "rebinding existing controls does not erase the useful observation result",
+  );
+  assert.equal(
+    counts.get("discovery.true-no-op-draw refreshed-observation civTabs:3"),
+    undefined,
+  );
+
+  const currentPanelPage = makePage({ civTabs: 2 });
+  const currentObservation = discoveryFor(
+    currentPanelPage,
+    diagnostics,
+  ).discover(mainTab(2), {
+    purpose: "current-panel",
+    isPanelDrawn: () => true,
+    whileDrawn: () => true,
+  });
+  assert.equal(currentObservation.outcome.status, "succeeded");
+  assert.equal(
+    counts.get("discovery.observed-without-draw current-panel civTabs:2"),
+    1,
+  );
+  assert.equal(
+    counts.get("discovery.observer-without-draw current-panel civTabs:2"),
+    1,
+  );
+
+  const unreportedObserver = emptyPanelDiscovery.discover(mainTab(3), {
+    purpose: "unreported-observation",
+    forceDraw: true,
+    whileDrawn: () => {},
+  });
+  assert.equal(unreportedObserver.outcome.status, "succeeded");
+  assert.equal(
+    counts.get(
+      "discovery.observer-unreported-draw unreported-observation civTabs:3",
+    ),
+    1,
+  );
+  assert.equal(
+    counts.get("discovery.true-no-op-draw unreported-observation civTabs:3"),
+    undefined,
+    "an observer without an explicit result is not called a redundant draw",
+  );
+
+  const unsuccessfulObserver = emptyPanelDiscovery.discover(mainTab(3), {
+    purpose: "no-result-observation",
+    forceDraw: true,
+    whileDrawn: () => false,
+  });
+  assert.equal(unsuccessfulObserver.outcome.status, "succeeded");
+  assert.equal(
+    counts.get(
+      "discovery.observer-no-result-draw no-result-observation civTabs:3",
+    ),
+    1,
+  );
+  assert.equal(
+    counts.get("discovery.true-no-op-draw no-result-observation civTabs:3"),
+    undefined,
+  );
+
+  const unreportedCurrentPanel = discoveryFor(
+    makePage({ civTabs: 2 }),
+    diagnostics,
+  ).discover(mainTab(2), {
+    purpose: "unreported-current-panel",
+    isPanelDrawn: () => true,
+    whileDrawn: () => {},
+  });
+  assert.equal(unreportedCurrentPanel.outcome.status, "succeeded");
+  assert.equal(
+    counts.get(
+      "discovery.observer-unreported-without-draw unreported-current-panel civTabs:2",
+    ),
+    1,
+  );
+
+  const refusedPage = makePage();
+  refusedPage.suppression.available = false;
+  const refused = discoveryFor(refusedPage, diagnostics).discover(mainTab(2), {
+    purpose: "mount-refused",
+  });
+  assert.equal(refused.outcome.status, "rejected");
+  assert.equal(counts.get("discovery.refused mount-refused civTabs:2"), 1);
+  assert.equal(
+    counts.get("discovery.actual-draw mount-refused civTabs:2"),
+    undefined,
+  );
+
+  const measurement = emptyPanelDiscovery.discover(mainTab(3), {
+    purpose: "control-set-measurement",
+    forceDraw: true,
+    measurement: true,
+  });
+  assert.equal(measurement.outcome.status, "succeeded");
+  assert.equal(
+    counts.get(
+      "discovery.measurement-result-draw control-set-measurement civTabs:3",
+    ),
+    1,
+  );
+  assert.equal(
+    counts.get(
+      "discovery.measurement-only-draw control-set-measurement civTabs:3",
+    ),
+    1,
+  );
+  assert.equal(
+    counts.get("discovery.true-no-op-draw control-set-measurement civTabs:3"),
+    undefined,
+  );
+
+  const failed = emptyPanelDiscovery.discover(mainTab(3), {
+    purpose: "observer-failed",
+    forceDraw: true,
+    whileDrawn: () => {
+      throw new Error("observation failed");
+    },
+  });
+  assert.equal(failed.outcome.status, "rejected");
+  assert.equal(counts.get("discovery.failed observer-failed civTabs:3"), 1);
+  assert.equal(
+    counts.get("discovery.observer-no-result-draw observer-failed civTabs:3"),
+    1,
+    "a throwing observer failed to establish its observation",
+  );
+  assert.equal(
+    counts.get("discovery.observer-unreported-draw observer-failed civTabs:3"),
+    undefined,
+  );
+
+  const noOp = emptyPanelDiscovery.discover(mainTab(3), {
+    purpose: "empty-panel",
+    forceDraw: true,
+  });
+  assert.equal(noOp.outcome.status, "succeeded");
+  assert.equal(
+    counts.get("discovery.true-no-op-draw empty-panel civTabs:3"),
+    1,
+  );
+
+  const refreshedPage = makePage({
+    civTabs: 4,
+    panels: {
+      ...PANELS,
+      2: ["mTabCivic", "shared-native-control"],
+      4: ["mTabResource", "shared-native-control"],
+    },
+  });
+  const refreshedDiscovery = discoveryFor(refreshedPage, diagnostics);
+  refreshedDiscovery.discover(mainTab(2), {
+    purpose: "shared-panel",
+    forceDraw: true,
+  });
+  const refreshed = refreshedDiscovery.discover(mainTab(2), {
+    purpose: "shared-panel",
+    forceDraw: true,
+  });
+  assert.equal(refreshed.outcome.status, "succeeded");
+  assert.equal(
+    counts.get("discovery.no-new-control-draw shared-panel civTabs:2"),
+    1,
+  );
+  assert.equal(
+    counts.get("discovery.refreshed-control-draw shared-panel civTabs:2"),
+    2,
+  );
+  assert.equal(
+    counts.get("discovery.refreshed-controls shared-panel civTabs:2"),
+    3,
+  );
+  assert.equal(
+    counts.get("discovery.true-no-op-draw shared-panel civTabs:2"),
+    undefined,
+  );
+
+  let separateObservationCount = 0;
+  const separateObserver = refreshedDiscovery.discover(mainTab(2), {
+    purpose: "distinct-observer",
+    forceDraw: true,
+    whileDrawn: () => {
+      separateObservationCount += 1;
+      return true;
+    },
+  });
+  assert.equal(separateObserver.outcome.status, "succeeded");
+  assert.equal(
+    separateObservationCount,
+    1,
+    "a later request with a distinct rendered observation still draws and runs its observer",
+  );
 }
 
 console.log("captured-tab-discovery ok");

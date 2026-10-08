@@ -9,6 +9,10 @@ import type {
 } from "../../../../ports/captured-game-mechanics.ts";
 import type { GameControlRegistry } from "../../../../ports/game-control-registry.ts";
 import { isNonArrayRecord, readProperty } from "../../../validation.ts";
+import {
+  SPACE_TAB_ACTION_LOCATIONS,
+  SPACE_TAB_INDEX,
+} from "../../captured-tab-discovery.ts";
 import { readCapturedBuildingEntries } from "./captured-building-catalog.ts";
 import {
   readCapturedBuildingState,
@@ -23,6 +27,10 @@ export interface CapturedSemanticBuildingSample {
   }): CapturedBuildingState | undefined;
 }
 
+interface CapturedActionAvailabilityOptions {
+  readonly ignoreOuterTabVisibility?: boolean;
+}
+
 export function readCapturedActionAvailability(
   root: unknown,
   action: Readonly<Record<string, unknown>>,
@@ -30,6 +38,7 @@ export function readCapturedActionAvailability(
   sector: string,
   struct: string,
   info: Readonly<Record<string, unknown>> | false,
+  options: Readonly<CapturedActionAvailabilityOptions> = {},
 ): CapturedGameRead<boolean> {
   try {
     const race = readProperty(root, "race");
@@ -56,7 +65,11 @@ export function readCapturedActionAvailability(
       region === "space" && info && readProperty(info, "zone") === "outer"
         ? "showOuter"
         : visibility[region];
-    if (visible !== undefined && !readProperty(settings, visible))
+    if (
+      visible !== undefined &&
+      !readProperty(settings, visible) &&
+      !(options.ignoreOuterTabVisibility && visible === "showOuter")
+    )
       return { kind: "value", value: false };
     // gridEnabled keeps the racial replicator available on otherwise suppressed city paths.
     if (
@@ -156,6 +169,81 @@ export function readCapturedActionAvailability(
   } catch {
     return { kind: "invalid" };
   }
+}
+
+const SPACE_SECTOR_PANEL_PREFIX = "spc_";
+
+function capturedSpaceSectorSetting(sector: string): string {
+  // DeadSpace `renderSpace()` derives the user-facing panel toggle by removing this prefix.
+  return sector.startsWith(SPACE_SECTOR_PANEL_PREFIX)
+    ? sector.slice(SPACE_SECTOR_PANEL_PREFIX.length)
+    : sector;
+}
+
+/**
+ * DeadSpace `renderSpace()` first applies action qualification, then `settings.space[show]`, and
+ * only filters `info.zone` when `race.truepath` draws separate inner/outer panels. On standard
+ * routes, the inner render can contain rows whose info zone is outer.
+ */
+export function readCapturedActionControlAvailabilityForTab(
+  root: unknown,
+  action: Readonly<Record<string, unknown>>,
+  region: string,
+  sector: string,
+  struct: string,
+  info: Readonly<Record<string, unknown>> | false,
+  tabIndex: number,
+): CapturedGameRead<boolean> {
+  const location = SPACE_TAB_ACTION_LOCATIONS[tabIndex];
+  if (location === undefined) return { kind: "invalid" };
+  const race = readProperty(root, "race");
+  const tech = readProperty(root, "tech");
+  const truepath = Boolean(readProperty(race, "truepath"));
+  // DeadSpace `renderSpace()` deliberately leaves the home panel without action rows on cataclysm
+  // runs and on orbit-decayed runs until Resettle restores Earth.
+  if (
+    region === "space" &&
+    sector === "spc_home" &&
+    (Boolean(readProperty(race, "cataclysm")) ||
+      (Boolean(readProperty(race, "orbit_decayed")) &&
+        !readProperty(tech, "resettle")))
+  )
+    return { kind: "value", value: false };
+  const ignoreOuterTabVisibility =
+    region === "space" && tabIndex === SPACE_TAB_INDEX.space && !truepath;
+  const availability = readCapturedActionAvailability(
+    root,
+    action,
+    region,
+    sector,
+    struct,
+    info,
+    { ignoreOuterTabVisibility },
+  );
+  if (availability.kind !== "value" || !availability.value) return availability;
+  if (region !== "space") return availability;
+  const settings = readProperty(root, "settings");
+  if (!readProperty(settings, "showSpace"))
+    return { kind: "value", value: false };
+
+  if (!truepath && tabIndex !== SPACE_TAB_INDEX.space)
+    return { kind: "value", value: false };
+  if (truepath) {
+    if (info === false) return { kind: "invalid" };
+    const rawZone = readProperty(info, "zone");
+    if (rawZone === undefined) return { kind: "value", value: false };
+    if (rawZone !== "inner" && rawZone !== "outer") return { kind: "invalid" };
+    if (location.zone !== rawZone) return { kind: "value", value: false };
+  }
+
+  const sectorSettings = readProperty(settings, "space");
+  if (!isNonArrayRecord(sectorSettings)) return { kind: "invalid" };
+  const show = capturedSpaceSectorSetting(sector);
+  // Upstream uses `if (global.settings.space[show])`; a lazy absent sector flag is hidden.
+  return {
+    kind: "value",
+    value: Boolean(readProperty(sectorSettings, show)),
+  };
 }
 
 export function readCapturedSemanticBuildingSample(

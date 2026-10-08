@@ -1,9 +1,16 @@
 import assert from "node:assert/strict";
 import { createCapturedProgressionControl } from "../../../src/bootstrap/captured-progression-control.ts";
+import { createDiscoveryAttempts } from "../../../src/bootstrap/discovery-attempts.ts";
 import { createCapturedResourceDemand } from "../../../src/adapters/evolve/economy/resources/captured-resource-demand.ts";
 import { withControlCaptureAuthority } from "../../support/fixtures/control-capture-fixture.mjs";
 import { makeCapturedBuildingMechanics } from "../../support/fixtures/captured-building-test-fixtures.mjs";
 import { makeCapturedTechMechanicsFixture } from "../../support/fixtures/captured-tech-mechanics-fixture.mjs";
+import {
+  MAIN_TAB_CONTROL,
+  MAIN_TAB_SETTING,
+  SPACE_TABS_SETTING,
+  SUB_TAB_CONTROLS,
+} from "../../../src/adapters/evolve/captured-tab-discovery.ts";
 
 const emptyArpaMechanics = Object.freeze({
   ensureCaptured: () => ({ kind: "captured" }),
@@ -934,6 +941,182 @@ assert.equal(researchControl.readGrantedTechs(), undefined);
   }).sampleExact();
   assert.equal(exactDemand.status, "ready");
   assert.equal(panelOpens, 0);
+}
+
+// Native action availability keeps build-control discovery retired until an offered building needs
+// a captured mutation capability. Volatile native conditions are checked live, so a count-gated
+// action such as Titan Mine does not need an age-driven panel draw.
+{
+  const root = {
+    settings: {
+      civTabs: 3,
+      spaceTabs: 0,
+      animated: true,
+      showCity: true,
+      showSpace: true,
+      showDeep: false,
+      showGalactic: false,
+      showPortal: false,
+      showOuter: false,
+      showTau: false,
+      showEden: false,
+      showUnderground: false,
+      showSurface: false,
+    },
+    race: { species: "human", universe: "standard" },
+    tech: {},
+    genes: {},
+    stats: { achieve: {}, psykill: 0 },
+    civic: { govern: { type: "democracy" } },
+    arpa: { lhc: { rank: 1, complete: 0 } },
+    city: {},
+    space: { titan_quarters: { count: 0 } },
+  };
+  let now = 0;
+  let cycle = 0;
+  let draws = 0;
+  let failBankCapture = true;
+  const ids = new Set([MAIN_TAB_CONTROL, SUB_TAB_CONTROLS[SPACE_TABS_SETTING]]);
+  const listeners = [];
+  const performanceCounts = new Map();
+  const diagnostics = {
+    readPerformanceEnabled: () => true,
+    nowMs: () => 0,
+    recordPerformance: () => {},
+    recordCount: (name, amount) =>
+      performanceCounts.set(name, (performanceCounts.get(name) ?? 0) + amount),
+  };
+  const attempts = createDiscoveryAttempts({ readCycle: () => cycle });
+  const mechanics = makeCapturedBuildingMechanics(root, {
+    availability: (currentRoot, binding) => ({
+      kind: "value",
+      value:
+        (binding === "city-farm" && currentRoot.tech.farming === 1) ||
+        (binding === "city-bank" && currentRoot.tech.bank === 1) ||
+        (binding === "space-titan_mine" &&
+          currentRoot.space.titan_quarters.count > 0),
+    }),
+  });
+  const buildControl = createCapturedProgressionControl({
+    rootState: {
+      readRoot: () => root,
+      subscribeRootReplaced: (listener) => {
+        listeners.push(listener);
+        return () => {};
+      },
+    },
+    controls: withControlCaptureAuthority({
+      resolve: (elementId) =>
+        ids.has(elementId)
+          ? {
+              elementId,
+              generation: 1,
+              methods:
+                elementId === MAIN_TAB_CONTROL ||
+                elementId === SUB_TAB_CONTROLS[SPACE_TABS_SETTING]
+                  ? ["swapTab"]
+                  : ["action", "on_cap"],
+            }
+          : undefined,
+      invoke: (handle, method, args = []) => {
+        if (method !== "swapTab")
+          return { ok: false, reason: "unknown-method" };
+        if (handle.elementId === MAIN_TAB_CONTROL) {
+          root.settings[MAIN_TAB_SETTING] = args[0];
+        } else {
+          root.settings[SPACE_TABS_SETTING] = args[0];
+          draws += 1;
+          if (args[0] === 0 && root.tech.farming === 1) ids.add("city-farm");
+          if (args[0] === 0 && root.tech.bank === 1 && !failBankCapture)
+            ids.add("city-bank");
+          if (args[0] === 1 && root.space.titan_quarters.count > 0)
+            ids.add("space-titan_mine");
+        }
+        return { ok: true, value: undefined };
+      },
+      capturedElementIds: () => [...ids],
+    }),
+    bindings: inertBindings,
+    mountSuppression: {
+      available: true,
+      withoutMounting: (draw) => draw(),
+    },
+    panels: { open: () => ({ release: () => {}, isIntact: () => true }) },
+    drawnActions: { exists: () => true, read: () => [], count: () => 0 },
+    mechanics,
+    discoveryAttempts: attempts,
+    diagnostics,
+    arpa: emptyArpaMechanics,
+    readSettings: () => ({}),
+    nowMs: () => now,
+  });
+
+  buildControl.ensureBuildControls();
+  assert.equal(draws, 0, "no native offered building needs a missing control");
+  buildControl.ensureBuildControls();
+  assert.equal(draws, 0, "a complete capability set stays retired");
+  root.arpa.lhc.rank++;
+  buildControl.ensureBuildControls();
+  assert.equal(draws, 0, "unrelated A.R.P.A. rank progress does not draw");
+  root.tech.mining = 1;
+  buildControl.ensureBuildControls();
+  assert.equal(draws, 0, "unrelated technology progress does not draw");
+
+  root.tech.farming = 1;
+  buildControl.ensureBuildControls();
+  assert.equal(draws, 1, "a newly offered city action gets one panel draw");
+  assert.equal(ids.has("city-farm"), true);
+  buildControl.ensureBuildControls();
+  assert.equal(draws, 1, "the captured action retires city discovery");
+
+  root.space.titan_quarters.count = 1;
+  buildControl.ensureBuildControls();
+  assert.equal(
+    draws,
+    2,
+    "native count availability reopens the inner-space path",
+  );
+  assert.equal(ids.has("space-titan_mine"), true);
+  buildControl.ensureBuildControls();
+  assert.equal(draws, 2, "the Titan Mine control retires its path");
+
+  root.tech.bank = 1;
+  buildControl.ensureBuildControls();
+  assert.equal(draws, 3, "a second newly offered city action gets one draw");
+  assert.equal(
+    ids.has("city-bank"),
+    false,
+    "the failed native capture stays absent",
+  );
+  buildControl.ensureBuildControls();
+  assert.equal(draws, 3, "a failed attempt respects same-cycle retry backoff");
+  assert.equal(
+    performanceCounts.get(
+      "discovery.capability-remains-missing build-controls civTabs:1/spaceTabs:0 city-bank",
+    ),
+    1,
+    "profiling identifies the still-missing native building capability",
+  );
+  cycle += 1;
+  failBankCapture = false;
+  buildControl.ensureBuildControls();
+  assert.equal(
+    draws,
+    4,
+    "the failed control is retried and captured next cycle",
+  );
+  assert.equal(ids.has("city-bank"), true);
+
+  ids.delete("city-farm");
+  attempts.invalidate();
+  for (const listener of listeners) listener();
+  buildControl.ensureBuildControls();
+  assert.equal(
+    draws,
+    5,
+    "root replacement invalidates retired control authority",
+  );
+  assert.equal(ids.has("city-farm"), true);
 }
 
 console.log("captured-progression-control ok");

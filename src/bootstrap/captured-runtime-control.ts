@@ -908,6 +908,7 @@ export function startCapturedRuntime({
     bindings: pageCapture.bindings,
     mountSuppression: pageCapture.mountSuppression,
     panels,
+    discoveryAttempts,
     ...(keyboard === undefined ? {} : { keyboard }),
     keyState: pageCapture.keyState,
     drawnActions: createGameDrawnActionsReader({
@@ -1485,7 +1486,7 @@ export function startCapturedRuntime({
     // redrawing its tab on every cycle forever.
     let result;
     try {
-      result = civicDiscovery.discover(steps, options);
+      result = civicDiscovery.discover(steps, { ...options, purpose: key });
     } catch (error) {
       discoveryAttempts.recordFailure(key, epoch);
       reportOnce(`${label} discovery threw: ${String(error)}`);

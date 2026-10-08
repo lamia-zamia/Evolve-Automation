@@ -28,7 +28,10 @@ import { isNonArrayRecord, readProperty } from "../validation.ts";
 import { probeScopedNumberToFixed } from "./scoped-number-to-fixed.ts";
 import { probeScopedLocalizedNumbers } from "./scoped-localized-numbers.ts";
 import { probeScopedMathRound } from "./scoped-math-round.ts";
-import { readCapturedActionAvailability } from "./progression/build/captured-building-availability.ts";
+import {
+  readCapturedActionAvailability,
+  readCapturedActionControlAvailabilityForTab,
+} from "./progression/build/captured-building-availability.ts";
 
 type CapturedGameCall = (this: unknown, ...args: unknown[]) => unknown;
 const structureMapCaptureThreshold = 3;
@@ -938,6 +941,16 @@ function createMechanicsDefinition(
         entry.sector,
         entry.struct,
         entry.info,
+      ),
+    readControlAvailabilityForTab: (root: unknown, tabIndex: number) =>
+      readCapturedActionControlAvailabilityForTab(
+        root,
+        action,
+        entry.region,
+        entry.sector,
+        entry.struct,
+        entry.info,
+        tabIndex,
       ),
     readTitle: () => readMechanicsTitle(action),
     readDescription: () => readMechanicsDescription(action),

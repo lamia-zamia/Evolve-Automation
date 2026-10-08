@@ -101,6 +101,8 @@ function spaceMechanicsTestValue(adapter, region) {
         },
       ],
       scope: {
+        purpose: "space-region-metadata",
+        measurement: true,
         forceDraw: true,
         mount: [`#${MAIN_TAB_PANELS[MAIN_TAB_INDEX.civilization]}`],
       },

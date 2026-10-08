@@ -22,7 +22,7 @@ export interface MarketBoardSource {
   current(): MarketBoard | undefined;
   isCurrent(board: MarketBoard): boolean;
   beginDraw(): boolean;
-  observeDraw(): void;
+  observeDraw(): boolean;
   hasObservedRows(): boolean;
   completeDraw(succeeded: boolean): MarketBoard | undefined;
 }
@@ -127,11 +127,11 @@ export function createCapturedMarketBoard(
       pending = { root, epoch, before };
       return true;
     },
-    observeDraw(): void {
-      if (pending === undefined) return;
+    observeDraw(): boolean {
+      if (pending === undefined) return false;
       const { root, epoch, before } = pending;
       if (rootState.readRoot() !== root || marketDiscoveryEpoch(root) !== epoch)
-        return;
+        return false;
       const mode: MarketBoardMode = isRegionalSupply(root)
         ? "regional"
         : "global";
@@ -163,6 +163,7 @@ export function createCapturedMarketBoard(
         ...(quantity === undefined ? {} : { quantity }),
         ...(routeMultiplier === undefined ? {} : { routeMultiplier }),
       });
+      return true;
     },
     hasObservedRows(): boolean {
       const observed = pending?.observed;

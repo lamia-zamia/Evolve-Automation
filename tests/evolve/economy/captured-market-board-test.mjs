@@ -39,6 +39,24 @@ function fixture(regional) {
   };
 }
 
+{
+  const sample = fixture(false);
+  assert.equal(
+    sample.board.observeDraw(),
+    false,
+    "no open draw has no observation",
+  );
+  assert.equal(sample.board.beginDraw(), true);
+  sample.bind("market-qty");
+  sample.bind("market-Food");
+  assert.equal(
+    sample.board.observeDraw(),
+    true,
+    "the rendered market was sampled",
+  );
+  assert.ok(sample.board.completeDraw(sample.board.hasObservedRows()));
+}
+
 for (const regional of [false, true]) {
   const sample = fixture(regional);
   const prefix = regional ? "bm-" : "market-";

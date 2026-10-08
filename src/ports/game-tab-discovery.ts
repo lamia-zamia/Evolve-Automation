@@ -29,6 +29,10 @@ export interface TabDiscoveryResult {
 }
 
 export interface TabDiscoveryOptions {
+  /** Stable logical owner for diagnostics; it never changes the draw decision. */
+  readonly purpose?: string;
+  /** The caller consumes a fresh authoritative sample during this draw, even if it is empty. */
+  readonly measurement?: boolean;
   /** Require a protected render even when the player already has this panel drawn. */
   readonly forceDraw?: boolean;
   /**
@@ -36,7 +40,11 @@ export interface TabDiscoveryOptions {
    * document order — is both present and freshly computed. It runs inside the pass, so it must not
    * wait, and throwing from it does not skip the restore.
    */
-  readonly whileDrawn?: () => void;
+  /**
+   * Returns true only when it produced an authoritative observation, false when it checked and
+   * could not, and undefined when the caller does not report whether the rendered result was useful.
+   */
+  readonly whileDrawn?: () => void | boolean;
   /**
    * Answers whether the panel this path names is drawn right now. It is consulted only when the
    * game is already showing that panel, to decide whether the pass can be skipped entirely; a path

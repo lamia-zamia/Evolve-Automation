@@ -492,6 +492,15 @@ function makeRoot(overrides = {}) {
     "the compact Garrison is the same draw",
   );
   assert.equal(capturedForeignGarrisonEstablished(captured.registry), true);
+  const tabSwitchesAfterSharedDraw = captured.usage.filter((entry) =>
+    entry.endsWith(".swapTab"),
+  ).length;
+  ensureForeignControls();
+  assert.equal(
+    captured.usage.filter((entry) => entry.endsWith(".swapTab")).length,
+    tabSwitchesAfterSharedDraw,
+    "the shared Government draw is retired once both controls are captured",
+  );
   assert.equal(
     battle.reader.readCycle().available,
     true,

@@ -91,6 +91,11 @@ export interface CapturedGameStructureDefinition {
   matchesCurrentIdentity(): boolean;
   /** Semantic offer qualification, independent of rendered panels. Invalid fails the whole cycle. */
   readAvailability(root: unknown): CapturedGameRead<boolean>;
+  /** Whether the action row can be rendered by the named Civilization sub-tab right now. */
+  readControlAvailabilityForTab(
+    root: unknown,
+    tabIndex: number,
+  ): CapturedGameRead<boolean>;
   /** The game-owned display key used by its source-specific production ledger. */
   readTitle(): CapturedGameRead<string>;
   /** The current game-owned action description, preserving the active locale. */

@@ -16,6 +16,7 @@ import { finite, isRecord, readProperty } from "../adapters/validation.ts";
 import { costFitsStorage } from "../adapters/evolve/captured-affordability.ts";
 import {
   createCapturedTabDiscovery,
+  describeTabPath,
   MAIN_TAB_CONTROL,
   MAIN_TAB_INDEX,
   MAIN_TAB_PANELS,
@@ -25,6 +26,7 @@ import {
   SPACE_TAB_SWEEP,
   SUB_TAB_CONTROLS,
 } from "../adapters/evolve/captured-tab-discovery.ts";
+import { readCapturedBuildControlCoverage } from "../adapters/evolve/progression/build/captured-build-control-coverage.ts";
 import {
   createScriptKnowledgeGateReader,
   createScriptStorageRequirementReader,
@@ -74,8 +76,11 @@ import type {
   TechCatalogSnapshot,
 } from "../ports/game-tech-catalog.ts";
 import type { TickDiagnostics } from "../ports/tick.ts";
+import type { DiscoveryAttemptTracker } from "./discovery-attempts.ts";
+import { createDiscoveryAttempts } from "./discovery-attempts.ts";
 import type { BuildResourceScope } from "../domain/progression/build/build.ts";
 import { createCapturedBuildCapacity } from "../adapters/evolve/captured-build-capacity.ts";
+import { createCountTally, createPhaseMeasure } from "../utils/performance.ts";
 import { createCapturedMechReservationSource } from "../adapters/evolve/combat/captured-mech-reservations.ts";
 import { createCapturedMechDemandSource } from "../adapters/evolve/combat/captured-mech-demand.ts";
 import type { CapturedMechDemandSource } from "../ports/captured-mech.ts";
@@ -90,6 +95,8 @@ export interface CapturedProgressionControlDependencies {
   readonly bindings: VueBindingObserver;
   readonly mountSuppression: GameMountSuppression;
   readonly panels: GamePanelWorkspace;
+  /** Shared retry lifecycle for native controls that may become available later. */
+  readonly discoveryAttempts?: DiscoveryAttemptTracker;
   /** Native queue-key events and observed key state for the semantic build-capacity probe. */
   readonly keyboard?: GameKeyboardHandlersPort;
   readonly keyState?: GameKeyStateReader;
@@ -283,6 +290,10 @@ export function createCapturedProgressionControl(
     nowMs,
     diagnostics,
   } = dependencies;
+  let fallbackDiscoveryCycle = 0;
+  const discoveryAttempts =
+    dependencies.discoveryAttempts ??
+    createDiscoveryAttempts({ readCycle: () => fallbackDiscoveryCycle });
   const readFallbackInterfacePresentation =
     dependencies.readInterfacePresentationSettings ??
     (() => {
@@ -339,18 +350,29 @@ export function createCapturedProgressionControl(
       );
     });
   };
-  /** One explicit pass over a shown space tab. */
-  const sweepBuildControls = (index: number): string => {
+  /** One explicit path to a shown space tab. */
+  const buildControlPath = (index: number) => {
     const spaceTabControl = SUB_TAB_CONTROLS[SPACE_TABS_SETTING];
     if (spaceTabControl === undefined) {
       onSkipped?.("build-discovery", "space-tab control is unavailable");
-      return "unavailable";
+      return undefined;
     }
     const main = Object.freeze({
       setting: MAIN_TAB_SETTING,
       control: MAIN_TAB_CONTROL,
       index: MAIN_TAB_INDEX.civilization,
     });
+    const sub = Object.freeze({
+      setting: SPACE_TABS_SETTING,
+      control: spaceTabControl,
+      index,
+    });
+    return Object.freeze([main, sub]);
+  };
+  /** One explicit pass over a shown space tab. */
+  const sweepBuildControls = (index: number): boolean => {
+    const path = buildControlPath(index);
+    if (path === undefined) return false;
     const report = (result: { readonly outcome: CommandExecutionOutcome }) => {
       if (result.outcome.status === "succeeded") return true;
       onSkipped?.(
@@ -364,29 +386,90 @@ export function createCapturedProgressionControl(
     const civilizationPanel = MAIN_TAB_PANELS[MAIN_TAB_INDEX.civilization];
     if (civilizationPanel === undefined) {
       onSkipped?.("build-discovery", "civilization panel is unavailable");
-      return "unavailable";
+      return false;
     }
-    const result = discovery.discover(
-      Object.freeze([
-        main,
-        Object.freeze({
-          setting: SPACE_TABS_SETTING,
-          control: spaceTabControl,
-          index,
-        }),
-      ]),
-      { mount: Object.freeze([`#${civilizationPanel}`]) },
-    );
-    return report(result) ? result.discovered.join(",") : "failed";
+    const result = discovery.discover(path, {
+      purpose: "build-controls",
+      measurement: true,
+      mount: Object.freeze([`#${civilizationPanel}`]),
+    });
+    return report(result);
   };
   const ensureBuildControls = () => {
     if (controls.resolve(MAIN_TAB_CONTROL) === undefined) return;
+    const tally = createCountTally(diagnostics);
+    const measure = createPhaseMeasure(diagnostics);
     for (const index of shownSpaceTabs()) {
-      scopes.read(
-        `${BUILD_CONTROLS_SCOPE} ${index}`,
-        () => sweepBuildControls(index),
-        (previous, next) => previous === next,
-      );
+      const path = buildControlPath(index);
+      if (path === undefined) continue;
+      const pathLabel = tally.enabled ? describeTabPath(path) : undefined;
+      const profileLabel =
+        pathLabel === undefined ? undefined : `build-controls ${pathLabel}`;
+      const readCoverage = () =>
+        readCapturedBuildControlCoverage(
+          rootState.readRoot(),
+          index,
+          controls,
+          mechanics,
+        );
+      const measureCoverage = () => {
+        if (profileLabel === undefined) return readCoverage();
+        tally.count(`discovery.capability-check ${profileLabel}`);
+        return measure(
+          `discovery.capability-check ${profileLabel}`,
+          readCoverage,
+        );
+      };
+      const coverage = measureCoverage();
+      const attemptKey = `${BUILD_CONTROLS_SCOPE} ${index}`;
+      if (coverage.kind === "complete") {
+        if (discoveryAttempts.shouldAttempt(attemptKey, "complete"))
+          discoveryAttempts.recordSuccess(attemptKey, "complete");
+        if (profileLabel !== undefined)
+          tally.count(
+            `discovery.capability-satisfied-without-draw ${profileLabel}`,
+          );
+        continue;
+      }
+      if (profileLabel !== undefined) {
+        if (coverage.kind === "unknown")
+          tally.count(
+            `discovery.capability-eligibility-unknown ${profileLabel}`,
+          );
+        else
+          for (const binding of coverage.bindings)
+            tally.count(`discovery.capability-gap ${profileLabel} ${binding}`);
+      }
+
+      const attemptEpoch =
+        coverage.kind === "missing"
+          ? `missing:${coverage.bindings.join("\u001f")}`
+          : `unknown:${epoch.readBuildControls()}`;
+      if (!discoveryAttempts.shouldAttempt(attemptKey, attemptEpoch)) {
+        if (profileLabel !== undefined)
+          tally.count(`discovery.attempt-backed-off ${profileLabel}`);
+        continue;
+      }
+
+      const succeeded = sweepBuildControls(index);
+      const afterDraw = measureCoverage();
+      if (succeeded && afterDraw.kind === "complete")
+        discoveryAttempts.recordSuccess(attemptKey, "complete");
+      else {
+        if (profileLabel !== undefined) {
+          tally.count(
+            `discovery.capability-unsatisfied-after-draw ${profileLabel}`,
+          );
+          if (afterDraw.kind === "missing")
+            for (const binding of afterDraw.bindings)
+              tally.count(
+                `discovery.capability-remains-missing ${profileLabel} ${binding}`,
+              );
+          else if (afterDraw.kind === "unknown")
+            tally.count(`discovery.capability-remains-unknown ${profileLabel}`);
+        }
+        discoveryAttempts.recordFailure(attemptKey, attemptEpoch);
+      }
     }
   };
   // The catalog a discovery pass already paid for, shared with the Knowledge gate so it never buys
@@ -518,6 +601,8 @@ export function createCapturedProgressionControl(
     establishedProjectEpoch = undefined;
   };
   const beginProcessedCycle = () => {
+    if (dependencies.discoveryAttempts === undefined)
+      fallbackDiscoveryCycle += 1;
     clearResearchSample();
     scopes.invalidate(RESEARCH_SCOPE);
     scopes.invalidate(RESEARCH_GRANTED_SCOPE);
@@ -601,6 +686,7 @@ export function createCapturedProgressionControl(
   };
   rootState.subscribeRootReplaced(() => {
     scopes.invalidateAll();
+    discoveryAttempts.invalidate();
     clearResearchSample();
     resetProjectSample();
     resetBuildingUnlockSample();

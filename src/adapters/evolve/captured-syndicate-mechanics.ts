@@ -159,26 +159,31 @@ export function createCapturedSyndicateMechanics(
         }),
       ]),
       {
+        purpose: "syndicate-scan",
         forceDraw: true,
         ...(panel === undefined ? {} : { mount: Object.freeze([`#${panel}`]) }),
         whileDrawn: () => {
           const captured = controls.resolve(control);
           drawnGeneration = captured?.generation;
           const row = Reflect.apply(getElement, document, [region]);
-          if (!isRecord(row) || row === previousRow) return;
+          if (!isRecord(row) || row === previousRow) return false;
           const child = Reflect.apply(getElement, document, [control]);
           if (child === null) {
-            if (state.syndicateEnabled) drawn = { kind: "inactive" };
-            return;
+            if (state.syndicateEnabled) {
+              drawn = { kind: "inactive" };
+              return true;
+            }
+            return false;
           }
-          if (!isRecord(child) || child === previousChild) return;
+          if (!isRecord(child) || child === previousChild) return false;
           if (
             captured === undefined ||
             !captured.methods.includes(SYNDICATE_SCAN_METHOD) ||
             captured.generation === previousHandle?.generation
           )
-            return;
+            return false;
           drawn = Object.freeze({ kind: "captured", handle: captured });
+          return true;
         },
       },
     );

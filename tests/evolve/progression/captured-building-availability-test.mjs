@@ -1,8 +1,11 @@
 import assert from "node:assert/strict";
 import {
+  readCapturedActionControlAvailabilityForTab,
   readCapturedActionAvailability,
   readCapturedSemanticBuildingStates,
 } from "../../../src/adapters/evolve/progression/build/captured-building-availability.ts";
+import { readCapturedBuildControlCoverage } from "../../../src/adapters/evolve/progression/build/captured-build-control-coverage.ts";
+import { SPACE_TAB_INDEX } from "../../../src/adapters/evolve/captured-tab-discovery.ts";
 
 const availabilityRoot = {
   race: {},
@@ -111,6 +114,134 @@ assert.deepEqual(
   ),
   { kind: "value", value: false },
 );
+const spaceAction = { reqs: { electricity: 1 } };
+const standardSpaceRoot = {
+  ...availabilityRoot,
+  settings: {
+    ...availabilityRoot.settings,
+    showOuter: false,
+    space: { gas: true },
+  },
+};
+assert.deepEqual(
+  readCapturedActionControlAvailabilityForTab(
+    standardSpaceRoot,
+    spaceAction,
+    "space",
+    "spc_gas",
+    "gas_mission",
+    { zone: "outer" },
+    SPACE_TAB_INDEX.space,
+  ),
+  { kind: "value", value: true },
+  "standard-route inner rendering can include an enabled outer-zone row",
+);
+assert.deepEqual(
+  readCapturedActionControlAvailabilityForTab(
+    standardSpaceRoot,
+    spaceAction,
+    "space",
+    "spc_gas",
+    "gas_mission",
+    { zone: "outer" },
+    SPACE_TAB_INDEX.outerSol,
+  ),
+  { kind: "value", value: false },
+  "the outer sub-tab is not rendered by a standard route",
+);
+assert.deepEqual(
+  readCapturedActionControlAvailabilityForTab(
+    {
+      ...standardSpaceRoot,
+      race: { truepath: true },
+      settings: { ...standardSpaceRoot.settings, showOuter: true },
+    },
+    spaceAction,
+    "space",
+    "spc_gas",
+    "gas_mission",
+    { zone: "outer" },
+    SPACE_TAB_INDEX.space,
+  ),
+  { kind: "value", value: false },
+  "truepath separates outer-zone controls from the inner sub-tab",
+);
+assert.deepEqual(
+  readCapturedActionControlAvailabilityForTab(
+    {
+      ...standardSpaceRoot,
+      race: { truepath: true },
+      settings: { ...standardSpaceRoot.settings, showOuter: true },
+    },
+    spaceAction,
+    "space",
+    "spc_gas",
+    "gas_mission",
+    { zone: "outer" },
+    SPACE_TAB_INDEX.outerSol,
+  ),
+  { kind: "value", value: true },
+  "truepath renders the matching outer-zone control in its outer sub-tab",
+);
+assert.deepEqual(
+  readCapturedActionControlAvailabilityForTab(
+    {
+      ...standardSpaceRoot,
+      settings: { ...standardSpaceRoot.settings, space: {} },
+    },
+    spaceAction,
+    "space",
+    "spc_gas",
+    "gas_mission",
+    { zone: "outer" },
+    SPACE_TAB_INDEX.space,
+  ),
+  { kind: "value", value: false },
+  "an absent settings.space sector flag follows renderSpace's lenient false gate",
+);
+for (const race of [{ cataclysm: true }, { orbit_decayed: true }]) {
+  assert.deepEqual(
+    readCapturedActionControlAvailabilityForTab(
+      {
+        ...standardSpaceRoot,
+        race,
+        settings: {
+          ...standardSpaceRoot.settings,
+          space: { home: true },
+        },
+      },
+      spaceAction,
+      "space",
+      "spc_home",
+      "home_structure",
+      { zone: "inner" },
+      SPACE_TAB_INDEX.space,
+    ),
+    { kind: "value", value: false },
+    "renderSpace suppresses home action rows on cataclysm and before orbit-decayed Resettle",
+  );
+}
+assert.deepEqual(
+  readCapturedActionControlAvailabilityForTab(
+    {
+      ...standardSpaceRoot,
+      race: { orbit_decayed: true },
+      tech: { ...standardSpaceRoot.tech, resettle: 1 },
+      settings: {
+        ...standardSpaceRoot.settings,
+        space: { home: true },
+      },
+    },
+    spaceAction,
+    "space",
+    "spc_home",
+    "home_structure",
+    { zone: "inner" },
+    SPACE_TAB_INDEX.space,
+  ),
+  { kind: "value", value: true },
+  "Resettle restores the home action row on orbit-decayed runs",
+);
 assert.deepEqual(
   qualifyAvailability(
     availabilityAction,
@@ -142,6 +273,69 @@ assert.deepEqual(
   { kind: "value", value: false },
   "city special handling still applies setAction qualifications",
 );
+for (const actionId of ["undefined-food", "undefined-stone"]) {
+  let availabilityReads = 0;
+  const structure = {
+    actionId,
+    region: "city",
+    sector: "city",
+    struct: actionId.slice("undefined-".length),
+    matchesCurrentIdentity: () => true,
+    readControlAvailabilityForTab: () => {
+      availabilityReads += 1;
+      return { kind: "value", value: true };
+    },
+    readSwitchable: () => ({ kind: "value", value: false }),
+  };
+  const resolvedIds = [];
+  const coverage = readCapturedBuildControlCoverage(
+    availabilityRoot,
+    SPACE_TAB_INDEX.city,
+    {
+      resolve: (id) => {
+        resolvedIds.push(id);
+        return id === actionId ? { methods: ["action"] } : undefined;
+      },
+    },
+    { readStructures: () => [structure] },
+  );
+  assert.deepEqual(
+    coverage,
+    { kind: "complete" },
+    `${actionId} is already captured`,
+  );
+  assert.deepEqual(
+    resolvedIds,
+    [actionId],
+    "resolve uses the native element id",
+  );
+  assert.equal(
+    availabilityReads,
+    0,
+    "complete captured controls skip native offer polling",
+  );
+}
+{
+  const switchableStructure = {
+    actionId: "city-coal_power",
+    region: "city",
+    sector: "city",
+    struct: "coal_power",
+    matchesCurrentIdentity: () => true,
+    readControlAvailabilityForTab: () => ({ kind: "value", value: true }),
+    readSwitchable: () => ({ kind: "value", value: true }),
+  };
+  const missingOnCap = readCapturedBuildControlCoverage(
+    availabilityRoot,
+    SPACE_TAB_INDEX.city,
+    { resolve: () => ({ methods: ["action"] }) },
+    { readStructures: () => [switchableStructure] },
+  );
+  assert.deepEqual(missingOnCap, {
+    kind: "missing",
+    bindings: ["city-coal_power"],
+  });
+}
 console.log("captured Building semantic availability passed");
 for (const cityPath of ["cataclysm", "orbit_decayed", "warlord", "iceage"]) {
   const cityPathRoot = {

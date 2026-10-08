@@ -146,6 +146,7 @@ export function createCapturedTechCatalog(
         });
         result = mechanics.captureTechDefinitionsDuring(() =>
           discovery.discover(RESEARCH_TAB_PATH, {
+            purpose: "research-catalog",
             // A current DOM cannot establish a fresh binding stream, even if Research is selected.
             // The panel workspace preserves that view while this scratch draw runs.
             forceDraw: true,
@@ -182,6 +183,7 @@ export function createCapturedTechCatalog(
                   ...(grantedRows === undefined ? {} : { grantedRows }),
                   generations,
                 });
+                return true;
               } finally {
                 // Exclude any player-view restoration after the controlled target draw.
                 collecting = false;
