@@ -27,4 +27,8 @@ export interface GameActionCostReader {
    * not resolve.
    */
   readCost(actionId: string): GameActionPrice | undefined;
+  /** One native queue operation for a group of action prices when the adapter supports it. */
+  readCosts?(
+    actionIds: readonly string[],
+  ): readonly (GameActionPrice | undefined)[] | undefined;
 }

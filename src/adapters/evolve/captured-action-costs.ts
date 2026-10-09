@@ -21,6 +21,11 @@ import type {
 import type { GameControlRegistry } from "../../ports/game-control-registry.ts";
 import type { GameRootStateSource } from "../../ports/game-root-state.ts";
 import { isRecord, readProperty, splitActionId } from "../validation.ts";
+import {
+  createCountTally,
+  createPhaseMeasure,
+  type PhaseTimingSink,
+} from "../../utils/performance.ts";
 
 const QUEUE_ELEMENT_ID = "buildQueue";
 /**
@@ -38,6 +43,7 @@ export interface CapturedActionCostsDependencies {
   readonly controls: GameControlRegistry;
   /** Reports a probe that could not run. Costs are simply unavailable for that call. */
   readonly onUnavailable?: (actionId: string, reason: string) => void;
+  readonly diagnostics?: PhaseTimingSink | undefined;
 }
 
 function readQueueArray(rootState: GameRootStateSource): unknown[] | undefined {
@@ -89,6 +95,24 @@ function parsePrice(value: unknown): GameActionPrice | undefined {
   });
 }
 
+function probePrice(
+  controls: GameControlRegistry,
+  handle: NonNullable<ReturnType<GameControlRegistry["resolve"]>>,
+  index: number,
+  actionId: string,
+  reportUnavailable: (actionId: string, reason: string) => void,
+): GameActionPrice | undefined {
+  const result = controls.invoke(handle, "setData", [index, COST_PREFIX]);
+  if (!result.ok) {
+    reportUnavailable(actionId, `${result.reason}: ${result.detail ?? ""}`);
+    return undefined;
+  }
+  const price = parsePrice(result.value);
+  if (price === undefined)
+    reportUnavailable(actionId, "cost result was not a record");
+  return price;
+}
+
 export function createCapturedActionCostReader(
   dependencies: CapturedActionCostsDependencies,
 ): GameActionCostReader {
@@ -109,25 +133,70 @@ export function createCapturedActionCostReader(
       }
       const index = entries.length;
       entries.push(probeEntry(actionId));
-      let result;
+      let price: GameActionPrice | undefined;
       try {
-        result = controls.invoke(handle, "setData", [index, COST_PREFIX]);
+        price = probePrice(
+          controls,
+          handle,
+          index,
+          actionId,
+          reportUnavailable,
+        );
       } finally {
         // Remove by identity rather than by index: a defensive splice of the wrong slot would
         // delete a player's queued item.
         if (entries.length > index)
           entries.splice(index, entries.length - index);
       }
-      if (!result.ok) {
-        reportUnavailable(actionId, `${result.reason}: ${result.detail ?? ""}`);
-        return undefined;
-      }
-      const price = parsePrice(result.value);
-      if (price === undefined) {
-        reportUnavailable(actionId, "cost result was not a record");
-        return undefined;
-      }
       return price;
+    },
+    readCosts(
+      actionIds: readonly string[],
+    ): readonly (GameActionPrice | undefined)[] | undefined {
+      if (actionIds.length === 0) return Object.freeze([]);
+      const tally = createCountTally(dependencies.diagnostics);
+      const measure = createPhaseMeasure(dependencies.diagnostics);
+      tally.count("action-cost.native-batch.probes", actionIds.length);
+      return measure("action-cost.native-batch", () => {
+        const handle = controls.resolve(QUEUE_ELEMENT_ID);
+        if (handle === undefined) {
+          reportUnavailable(
+            actionIds[0] ?? "",
+            "build queue control not captured",
+          );
+          return undefined;
+        }
+        const entries = readQueueArray(rootState);
+        if (entries === undefined) {
+          reportUnavailable(actionIds[0] ?? "", "game queue unavailable");
+          return undefined;
+        }
+        const start = entries.length;
+        const results: (GameActionPrice | undefined)[] = Array(
+          actionIds.length,
+        ).fill(undefined);
+        try {
+          entries.push(...actionIds.map(probeEntry));
+          for (let offset = 0; offset < actionIds.length; offset += 1) {
+            const actionId = actionIds[offset];
+            if (actionId === undefined) break;
+            const price = probePrice(
+              controls,
+              handle,
+              start + offset,
+              actionId,
+              reportUnavailable,
+            );
+            results[offset] = price;
+            if (price === undefined) break;
+          }
+        } finally {
+          // The native `setData` only reads its queue row; discard this contiguous probe suffix once.
+          if (entries.length > start)
+            entries.splice(start, entries.length - start);
+        }
+        return Object.freeze(results);
+      });
     },
   });
 }

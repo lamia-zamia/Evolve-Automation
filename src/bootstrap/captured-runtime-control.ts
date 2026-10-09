@@ -613,6 +613,7 @@ export function startCapturedRuntime({
   const buildCosts = createCapturedActionCostReader({
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,
+    diagnostics: phaseDiagnostics,
   });
   let ensureCapturedBuildingControls: () => void = () => {};
   const reportDiagnostic = (message: string) => {
@@ -1194,7 +1195,7 @@ export function startCapturedRuntime({
     readSettings: () => settingsStore.readRaw(),
   });
   const ensureDemandResearchObservation = () => {
-    progression.sampleOfferedTechs();
+    progression.sampleOfferedTechs("resource-demand");
   };
   // The trigger conditions read what something else is accumulating, which needs the demand
   // commitments without the trigger targets. Sampling the cycle's own demand from a condition
@@ -1223,7 +1224,7 @@ export function startCapturedRuntime({
   };
   const conditionContextReader = createCapturedConditionContextReader({
     costs: buildCosts,
-    readOfferedTechs: progression.sampleOfferedTechs,
+    readOfferedTechs: () => progression.sampleOfferedTechs("condition-context"),
     readGrantedTechs: progression.readGrantedTechs,
     readProjects: progression.readProjects,
     readBuildingUnlocks: progression.readBuildingUnlocks,
@@ -1270,7 +1271,7 @@ export function startCapturedRuntime({
     controls: pageCapture.controls,
     costs: buildCosts,
     readSettings: () => settingsStore.readRaw(),
-    readOfferedTechs: progression.sampleOfferedTechs,
+    readOfferedTechs: () => progression.sampleOfferedTechs("triggers"),
     readGrantedTechs: progression.readGrantedTechs,
     readOfferedProjects: progression.readProjects,
     readBuildingUnlocks: progression.readBuildingUnlocks,
@@ -1602,6 +1603,9 @@ export function startCapturedRuntime({
     },
     onSkipped: (key, reason) => reportOnce(`storage skipped ${key}: ${reason}`),
     nowMs: () => Date.now(),
+    ...(phaseDiagnostics === undefined
+      ? {}
+      : { diagnostics: phaseDiagnostics }),
   });
   const storageAutomation = createStorageAllocationAutomation({
     ...storagePorts,

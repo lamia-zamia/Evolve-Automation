@@ -154,7 +154,13 @@ export function createCapturedTechCatalog(
       let stopObserving = () => {};
       try {
         stopObserving = bindings((elementId) => {
-          if (collecting) observedBindingIds.push(elementId);
+          if (!collecting) return;
+          if (tally.enabled) {
+            tally.count("research.binding.capture.events");
+            measure("research.binding.capture", () =>
+              observedBindingIds.push(elementId),
+            );
+          } else observedBindingIds.push(elementId);
         });
         result = mechanics.captureTechDefinitionsDuring(() =>
           discovery.discover(RESEARCH_TAB_PATH, {
@@ -165,7 +171,10 @@ export function createCapturedTechCatalog(
             ...(includeGranted ? {} : { discard: UNREAD_RESEARCH_CONTENT }),
             whileDrawn: () => {
               try {
-                const offeredRows = drawnActions.read(OFFERED_TECH_SELECTOR);
+                const offeredRows = measure(
+                  "research.dom.capture.offered",
+                  () => drawnActions.read(OFFERED_TECH_SELECTOR),
+                );
                 if (
                   drawnActions.count(OFFERED_TECH_SELECTOR) !==
                   offeredRows.length
@@ -174,7 +183,9 @@ export function createCapturedTechCatalog(
                     "a rendered Research offer row has no readable id",
                   );
                 const grantedRows = includeGranted
-                  ? drawnActions.read(GRANTED_TECH_SELECTOR)
+                  ? measure("research.dom.capture.granted", () =>
+                      drawnActions.read(GRANTED_TECH_SELECTOR),
+                    )
                   : undefined;
                 if (
                   grantedRows !== undefined &&
@@ -185,11 +196,13 @@ export function createCapturedTechCatalog(
                     "a rendered granted Research row has no readable id",
                   );
                 const generations = new Map<string, number>();
-                for (const elementId of observedBindingIds)
-                  generations.set(
-                    elementId,
-                    controls.resolve(elementId)?.generation ?? 0,
-                  );
+                measure("research.binding.generation-capture", () => {
+                  for (const elementId of observedBindingIds)
+                    generations.set(
+                      elementId,
+                      controls.resolve(elementId)?.generation ?? 0,
+                    );
+                });
                 drawn = Object.freeze({
                   offeredRows,
                   ...(grantedRows === undefined ? {} : { grantedRows }),

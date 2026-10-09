@@ -159,8 +159,9 @@ export interface CapturedProgressionControl {
   /** The most recently captured offered-technology snapshot, if one exists. */
   readonly readOfferedTechs: () => readonly Readonly<OfferedTech>[] | undefined;
   /** Take or reuse the current offer snapshot, running a grant pass when one is required. */
-  readonly sampleOfferedTechs: () =>
-    readonly Readonly<OfferedTech>[] | undefined;
+  readonly sampleOfferedTechs: (
+    requester?: string,
+  ) => readonly Readonly<OfferedTech>[] | undefined;
   /**
    * The granted-technology set from the last catalog pass, or `undefined` when that pass did not
    * keep it. Absent is "not read", never "nothing granted".
@@ -536,6 +537,11 @@ export function createCapturedProgressionControl(
       }
     }
     if (!epochChanged && !rowBindingsChanged) return;
+    const tally = createCountTally(diagnostics);
+    if (epochChanged)
+      tally.count("research.observation.invalidated.progression");
+    if (rowBindingsChanged)
+      tally.count("research.observation.invalidated.bindings");
     clearResearchSample();
     offeredSampleEpoch = currentEpoch;
     scopes.invalidate(RESEARCH_SCOPE);
@@ -545,9 +551,10 @@ export function createCapturedProgressionControl(
     invalidateStaleCapturedResearchObservation(epoch.read());
     return lastOffered;
   };
-  const sampleOfferedTechs = () => {
+  const sampleOfferedTechs = (requester = "direct") => {
     const tally = createCountTally(diagnostics);
     tally.count("research.observation.requests");
+    tally.count(`research.observation.requester.${requester}`);
     const includeGranted = dependencies.needGrantedTechs?.() === true;
     const currentEpoch = epoch.read();
     invalidateStaleCapturedResearchObservation(currentEpoch);
@@ -568,6 +575,12 @@ export function createCapturedProgressionControl(
       return lastOffered;
     }
     tally.count("research.observation.samples");
+    tally.count(`research.observation.sample-requester.${requester}`);
+    tally.count(
+      includeGranted
+        ? "research.observation.sample.with-granted"
+        : "research.observation.sample.offers-only",
+    );
     // The granted half is a different sample, so it is a different scope: a pass that dropped it
     // must never answer the caller that asked for it.
     const held = scopes.read(
@@ -640,6 +653,9 @@ export function createCapturedProgressionControl(
   const beginProcessedCycle = () => {
     if (dependencies.discoveryAttempts === undefined)
       fallbackDiscoveryCycle += 1;
+    createCountTally(diagnostics).count(
+      "research.observation.invalidated.processed-cycle",
+    );
     clearResearchSample();
     scopes.invalidate(RESEARCH_SCOPE);
     scopes.invalidate(RESEARCH_GRANTED_SCOPE);
@@ -724,6 +740,9 @@ export function createCapturedProgressionControl(
   rootState.subscribeRootReplaced(() => {
     scopes.invalidateAll();
     discoveryAttempts.invalidate();
+    createCountTally(diagnostics).count(
+      "research.observation.invalidated.root-replacement",
+    );
     clearResearchSample();
     resetProjectSample();
     resetBuildingUnlockSample();
@@ -921,7 +940,7 @@ export function createCapturedProgressionControl(
     scriptReservations,
     readKnowledgeGate,
     ...(readStorageRequired === undefined ? {} : { readStorageRequired }),
-    readOfferedTechs: sampleOfferedTechs,
+    readOfferedTechs: () => sampleOfferedTechs("construction"),
     ...(dependencies.onConstructionMutation === undefined
       ? {}
       : { onMutation: dependencies.onConstructionMutation }),
@@ -939,7 +958,7 @@ export function createCapturedProgressionControl(
     drawnActions,
     mountSuppression,
     panels,
-    readOfferedTechs: sampleOfferedTechs,
+    readOfferedTechs: () => sampleOfferedTechs("auto-research"),
     ...(onUnavailable === undefined ? {} : { onUnavailable }),
     ...(onActivity === undefined ? {} : { onActivity }),
     diagnostics,

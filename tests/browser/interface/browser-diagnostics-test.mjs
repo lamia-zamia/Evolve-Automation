@@ -21,6 +21,19 @@ const browserGlobal = {
 };
 const diagnostics = createBrowserDiagnostics(browserGlobal);
 
+const diagnosticsClockGlobal = {
+  performance,
+  eaDiagnosticsNow() {
+    assert.equal(this, diagnosticsClockGlobal);
+    return 42.25;
+  },
+};
+assert.equal(
+  createBrowserDiagnostics(diagnosticsClockGlobal).nowMs(),
+  42.25,
+  "the exact runner can measure work against the real browser clock",
+);
+
 assert.equal(diagnostics.readMechDebugEnabled(), true);
 assert.equal(diagnostics.nowMs(), 12.5);
 assert.equal(diagnostics.readPerformanceEnabled(), false);

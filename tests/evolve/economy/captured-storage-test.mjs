@@ -10,6 +10,7 @@ function makeHarness({
   regional = false,
   buildTargets = [],
   buildCosts = {},
+  costReader,
   offeredTechs,
   projects,
   autoResearch = false,
@@ -128,7 +129,7 @@ function makeHarness({
     }),
     readBuildTargets: () => buildTargets,
     onMutation: () => mutationReports++,
-    costs: {
+    costs: costReader ?? {
       readCost: (elementId) => {
         costLookups.push(elementId);
         return priceLookup(buildCosts)(elementId);
@@ -273,6 +274,43 @@ function makeHarness({
     ],
   });
   assert.deepEqual(costLookups, ["undefined-food"]);
+  assert.deepEqual(skipped, []);
+}
+
+{
+  const batches = [];
+  let singleReads = 0;
+  const { ports, skipped } = makeHarness({
+    buildTargets: [
+      { key: "city-food", elementId: "city-food", weighting: 10 },
+      { key: "city-iron", elementId: "city-iron", weighting: 8 },
+    ],
+    costReader: {
+      readCost() {
+        singleReads += 1;
+        return undefined;
+      },
+      readCosts(actionIds) {
+        batches.push([...actionIds]);
+        return actionIds.map((actionId) => ({
+          cost: { [actionId === "city-food" ? "Food" : "Iron"]: 20 },
+          pool: undefined,
+        }));
+      },
+    },
+  });
+  const source = ports.reader
+    .read()
+    .targetSources.find(({ kind }) => kind === "building");
+  assert.deepEqual(batches, [["city-food", "city-iron"]]);
+  assert.equal(singleReads, 0);
+  assert.deepEqual(
+    source.targets.map(({ label, costs }) => [label, costs[0].resourceId]),
+    [
+      ["city-food", "Food"],
+      ["city-iron", "Iron"],
+    ],
+  );
   assert.deepEqual(skipped, []);
 }
 

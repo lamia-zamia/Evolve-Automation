@@ -32,6 +32,11 @@ import { createSnapshotMetadata } from "../../../../domain/snapshot.ts";
 import { rejected, stale, SUCCEEDED } from "../../../command-outcomes.ts";
 import { finite, isRecord, readProperty } from "../../../validation.ts";
 import { isRegionalSupply } from "../../captured-affordability.ts";
+import {
+  createCountTally,
+  createPhaseMeasure,
+  type PhaseTimingSink,
+} from "../../../../utils/performance.ts";
 
 export const STORAGE_CONSTRUCTION_CONTROL = "createHead";
 
@@ -55,6 +60,7 @@ interface CapturedStorageDependencies {
   readonly onMutation?: () => void;
   readonly onSkipped?: (key: string, reason: string) => void;
   readonly nowMs: () => number;
+  readonly diagnostics?: PhaseTimingSink | undefined;
 }
 
 interface StorageSession {
@@ -276,8 +282,8 @@ function readBuildingTargets(
     dependencies.costs === undefined
   )
     return undefined;
-  const result: StorageTargetInput[] = [];
-  for (const target of dependencies.readBuildTargets()) {
+  const targets = dependencies.readBuildTargets();
+  for (const target of targets) {
     if (
       typeof target.key !== "string" ||
       typeof target.elementId !== "string" ||
@@ -290,7 +296,36 @@ function readBuildingTargets(
       );
       return undefined;
     }
-    const price = dependencies.costs.readCost(target.elementId);
+  }
+  const prices =
+    dependencies.costs.readCosts === undefined
+      ? undefined
+      : dependencies.costs.readCosts(targets.map((target) => target.elementId));
+  const tally = createCountTally(dependencies.diagnostics);
+  tally.count("autoStorage.building-target-price-probes", targets.length);
+  if (prices !== undefined && prices.length !== targets.length) {
+    dependencies.onSkipped?.(
+      "storage-building",
+      "captured build target price batch is incomplete",
+    );
+    return undefined;
+  }
+  if (dependencies.costs.readCosts !== undefined && prices === undefined) {
+    const firstTarget = targets[0];
+    dependencies.onSkipped?.(
+      firstTarget?.key ?? "storage-building",
+      "captured build target cost is unavailable",
+    );
+    return undefined;
+  }
+  const result: StorageTargetInput[] = [];
+  for (let index = 0; index < targets.length; index += 1) {
+    const target = targets[index];
+    if (target === undefined) continue;
+    const price =
+      prices === undefined
+        ? dependencies.costs.readCost(target.elementId)
+        : prices[index];
     if (price === undefined) {
       dependencies.onSkipped?.(
         target.key,
@@ -396,6 +431,8 @@ function readInput(dependencies: CapturedStorageDependencies): {
   readonly input: StorageAllocationInput;
   readonly session: StorageSession | null;
 } {
+  const tally = createCountTally(dependencies.diagnostics);
+  const measure = createPhaseMeasure(dependencies.diagnostics);
   const root = dependencies.rootState.readRoot();
   const resources = readProperty(root, "resource");
   const race = readProperty(root, "race");
@@ -460,36 +497,41 @@ function readInput(dependencies: CapturedStorageDependencies): {
   }
   const settings = settingsRecord(dependencies.readSettings());
   const ids = Object.keys(resources);
-  const priorityResourceIds = ids
-    .map((id, index) => ({
-      id,
-      index,
-      priority:
-        finite(settings[`res_storage_p_${id}`]) ?? Number.MAX_SAFE_INTEGER,
-    }))
-    .sort(
-      (left, right) =>
-        left.priority - right.priority || left.index - right.index,
-    )
-    .map(({ id }) => id);
+  const priorityResourceIds = measure("autoStorage.read.resource-order", () =>
+    ids
+      .map((id, index) => ({
+        id,
+        index,
+        priority:
+          finite(settings[`res_storage_p_${id}`]) ?? Number.MAX_SAFE_INTEGER,
+      }))
+      .sort(
+        (left, right) =>
+          left.priority - right.priority || left.index - right.index,
+      )
+      .map(({ id }) => id),
+  );
   const regional = isRegionalSupply(root);
-  const resourceInputs = priorityResourceIds.flatMap((id) => {
-    const resource = readProperty(resources, id);
-    const regMax = readProperty(resource, "regMax");
-    const pools = regional && isRecord(regMax) ? Object.keys(regMax) : [];
-    return [
-      readResource(resources, settings, id, dependencies.readStorageRequired),
-      ...pools.map((pool) =>
-        readResource(
-          resources,
-          settings,
-          id,
-          dependencies.readStorageRequired,
-          pool,
+  const resourceInputs = measure("autoStorage.read.resource-inputs", () =>
+    priorityResourceIds.flatMap((id) => {
+      const resource = readProperty(resources, id);
+      const regMax = readProperty(resource, "regMax");
+      const pools = regional && isRecord(regMax) ? Object.keys(regMax) : [];
+      return [
+        readResource(resources, settings, id, dependencies.readStorageRequired),
+        ...pools.map((pool) =>
+          readResource(
+            resources,
+            settings,
+            id,
+            dependencies.readStorageRequired,
+            pool,
+          ),
         ),
-      ),
-    ];
-  });
+      ];
+    }),
+  );
+  tally.count("autoStorage.resources.input", resourceInputs.length);
   if (resourceInputs.some((resource) => resource === undefined)) {
     return {
       input: Object.freeze({
@@ -514,17 +556,20 @@ function readInput(dependencies: CapturedStorageDependencies): {
   const resourcesInput = Object.freeze(
     resourceInputs as readonly StorageAllocationResourceInput[],
   );
-  const targets: StorageTargetInput[] = [];
-  const reservations = dependencies.reservations.readReservations();
-  if (!reservations.unavailable) {
-    for (const target of reservations.targets) {
-      targets.push(targetFromCost(target.name, target.cost, target.pool));
+  const targets = measure("autoStorage.read.queue-targets", () => {
+    const result: StorageTargetInput[] = [];
+    const reservations = dependencies.reservations.readReservations();
+    if (!reservations.unavailable) {
+      for (const target of reservations.targets) {
+        result.push(targetFromCost(target.name, target.cost, target.pool));
+      }
     }
-  }
-  const saving = dependencies.readSavingTarget?.() ?? null;
-  if (saving !== null) {
-    targets.push(targetFromCost(saving.name, saving.cost, saving.pool));
-  }
+    const saving = dependencies.readSavingTarget?.() ?? null;
+    if (saving !== null) {
+      result.push(targetFromCost(saving.name, saving.cost, saving.pool));
+    }
+    return result;
+  });
   const requiredTargets = resourcesInput
     .filter((resource) => resource.unlocked && resource.managed)
     .map((resource) =>
@@ -536,15 +581,25 @@ function readInput(dependencies: CapturedStorageDependencies): {
         resource.pool,
       ),
     );
-  const buildingTargets = readBuildingTargets(dependencies);
-  const technologyTargets =
-    settings["autoResearch"] === true
-      ? readTechnologyTargets(dependencies)
-      : Object.freeze([]);
-  const projectTargets =
+  const buildingTargets = measure("autoStorage.read.building-targets", () =>
+    readBuildingTargets(dependencies),
+  );
+  const technologyTargets = measure(
+    "autoStorage.read.technology-targets",
+    () =>
+      settings["autoResearch"] === true
+        ? readTechnologyTargets(dependencies)
+        : Object.freeze([]),
+  );
+  const projectTargets = measure("autoStorage.read.project-targets", () =>
     settings["autoARPA"] === true
       ? readProjectTargets(dependencies, settings)
-      : Object.freeze([]);
+      : Object.freeze([]),
+  );
+  tally.count("autoStorage.targets.queue", targets.length);
+  tally.count("autoStorage.targets.building", buildingTargets?.length ?? 0);
+  tally.count("autoStorage.targets.technology", technologyTargets?.length ?? 0);
+  tally.count("autoStorage.targets.project", projectTargets?.length ?? 0);
   const input = Object.freeze({
     initialized: true,
     crateValue,

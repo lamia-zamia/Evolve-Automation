@@ -316,6 +316,10 @@ export function createCapturedTabDiscovery(
       const tally = createCountTally(diagnostics);
       const measureDraw = createPhaseMeasure(diagnostics);
       const purpose = options.purpose ?? "unattributed";
+      const researchMeasurement =
+        purpose === "research-catalog" && tally.enabled;
+      const measureResearch = <T>(phase: string, action: () => T): T =>
+        measureDraw(`research.draw.${phase}`, action);
       let pathLabel: string | undefined;
       const countDiscovery = (metric: string, amount = 1): void => {
         if (!tally.enabled) return;
@@ -459,17 +463,27 @@ export function createCapturedTabDiscovery(
       const playerPanel =
         MAIN_TAB_PANELS[playerTabs.get(MAIN_TAB_SETTING) ?? -1];
       const targetPanel = MAIN_TAB_PANELS[first.index];
-      const checkpoint = controls.checkpoint();
+      const checkpoint = researchMeasurement
+        ? measureResearch("preparation", () => controls.checkpoint())
+        : controls.checkpoint();
       let passSucceeded = false;
       let targetThroughCheckpoint: ControlCaptureCheckpoint | undefined;
       let fallbackRestorationSucceeded = false;
       let workspace: PanelWorkspace | undefined;
       try {
         if (targetPanel !== undefined) {
-          workspace = panels.open({ keep: playerPanel, scratch: targetPanel });
+          workspace = researchMeasurement
+            ? (measureResearch("workspace-create", () =>
+                panels.open({ keep: playerPanel, scratch: targetPanel }),
+              ) as PanelWorkspace | undefined)
+            : panels.open({ keep: playerPanel, scratch: targetPanel });
         }
 
-        const beforeIds = controls.capturedElementIds();
+        const beforeIds = researchMeasurement
+          ? (measureResearch("control-snapshot-preparation", () =>
+              controls.capturedElementIds(),
+            ) as readonly string[])
+          : controls.capturedElementIds();
         const before = new Set(beforeIds);
         let beforeGenerations: Map<string, number> | undefined;
         if (tally.enabled) {
@@ -501,68 +515,104 @@ export function createCapturedTabDiscovery(
               settings["animated"] = false;
               // Only the target draw. Where the player's panel had to be redrawn instead of kept, that
               // rebuild happens in the restore below, outside this scope, with real Vue.
-              mountSuppression.withoutMounting(
-                () => {
-                  for (const step of path) {
-                    // Each step is drawn by the one before it, so its control is resolved at its turn: a
-                    // sub-tab component does not exist until its main tab has been built.
-                    const handle = controls.resolve(step.control);
-                    if (handle === undefined) {
-                      stepFailure = failure(
-                        "tab-control-missing",
-                        `no captured control for ${step.control}`,
-                      );
-                      break;
+              const drawTarget = () =>
+                mountSuppression.withoutMounting(
+                  () => {
+                    for (const step of path) {
+                      // Each step is drawn by the one before it, so its control is resolved at its turn: a
+                      // sub-tab component does not exist until its main tab has been built.
+                      const handle = researchMeasurement
+                        ? measureResearch("control-resolution", () =>
+                            controls.resolve(step.control),
+                          )
+                        : controls.resolve(step.control);
+                      if (handle === undefined) {
+                        stepFailure = failure(
+                          "tab-control-missing",
+                          `no captured control for ${step.control}`,
+                        );
+                        break;
+                      }
+                      // The game's tab components write this through their own `v-model`; called directly,
+                      // the caller owns it.
+                      settings[step.setting] = step.index;
+                      const swap = researchMeasurement
+                        ? measureResearch(
+                            "native-switch-drawTech-and-dom-generation",
+                            () =>
+                              controls.invoke(handle, "swapTab", [step.index]),
+                          )
+                        : controls.invoke(handle, "swapTab", [step.index]);
+                      if (!swap.ok) {
+                        const detail = swap.detail ?? swap.reason;
+                        stepFailure = Object.freeze({
+                          outcome:
+                            swap.reason === "stale-control"
+                              ? stale("stale-tab-control", detail)
+                              : rejected("tab-draw-failed", detail),
+                          discovered: NOTHING,
+                        });
+                        break;
+                      }
                     }
-                    // The game's tab components write this through their own `v-model`; called directly,
-                    // the caller owns it.
-                    settings[step.setting] = step.index;
-                    const swap = controls.invoke(handle, "swapTab", [
-                      step.index,
-                    ]);
-                    if (!swap.ok) {
-                      const detail = swap.detail ?? swap.reason;
-                      stepFailure = Object.freeze({
-                        outcome:
-                          swap.reason === "stale-control"
-                            ? stale("stale-tab-control", detail)
-                            : rejected("tab-draw-failed", detail),
-                        discovered: NOTHING,
-                      });
-                      break;
+                    if (stepFailure === undefined && whileDrawn !== undefined) {
+                      // The only moment the panel’s rendered detail is both present and freshly computed.
+                      // An observer that throws is its own problem; it must not cost the player their tab.
+                      try {
+                        const observerResult = researchMeasurement
+                          ? measureResearch(
+                              "binding-and-dom-observation",
+                              whileDrawn,
+                            )
+                          : whileDrawn();
+                        observerState.status =
+                          observerResult === true
+                            ? "result"
+                            : observerResult === false
+                              ? "no-result"
+                              : "unreported";
+                      } catch (error) {
+                        observerState.status = "no-result";
+                        observerFailure = String(error);
+                      }
                     }
-                  }
-                  if (stepFailure === undefined && whileDrawn !== undefined) {
-                    // The only moment the panel’s rendered detail is both present and freshly computed.
-                    // An observer that throws is its own problem; it must not cost the player their tab.
-                    try {
-                      const observerResult = whileDrawn();
-                      observerState.status =
-                        observerResult === true
-                          ? "result"
-                          : observerResult === false
-                            ? "no-result"
-                            : "unreported";
-                    } catch (error) {
-                      observerState.status = "no-result";
-                      observerFailure = String(error);
-                    }
-                  }
-                },
-                { ...discardScope, ...mountScope },
-              );
+                  },
+                  { ...discardScope, ...mountScope },
+                );
+              if (researchMeasurement)
+                measureResearch(
+                  "mount-suppression-and-native-draw",
+                  drawTarget,
+                );
+              else drawTarget();
             } finally {
               // Fence target output even while unwinding: the fallback's real redraw is later authority.
               targetThroughCheckpoint = controls.checkpoint();
               try {
-                for (const [setting, value] of playerTabs)
-                  settings[setting] = value;
+                const restoreSettings = () => {
+                  for (const [setting, value] of playerTabs)
+                    settings[setting] = value;
+                };
+                if (researchMeasurement)
+                  measureResearch("settings-restoration", restoreSettings);
+                else restoreSettings();
                 if (workspace === undefined) {
-                  restoreFailure = restorePlayerView();
+                  restoreFailure = researchMeasurement
+                    ? measureResearch(
+                        "player-view-restoration",
+                        restorePlayerView,
+                      )
+                    : restorePlayerView();
                   fallbackRestorationSucceeded = restoreFailure === undefined;
                 } else {
-                  workspace.release();
-                  if (!workspace.isIntact()) {
+                  const releaseWorkspace = () => {
+                    workspace?.release();
+                    return workspace?.isIntact() === true;
+                  };
+                  const workspaceIntact = researchMeasurement
+                    ? measureResearch("workspace-release", releaseWorkspace)
+                    : releaseWorkspace();
+                  if (!workspaceIntact) {
                     restoreFailure =
                       "the workspace could not put the panels back";
                   }

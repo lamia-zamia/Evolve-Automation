@@ -20,6 +20,11 @@ export function createBrowserDiagnostics(
       ? globalObject["performance"]
       : undefined;
   const performanceNow = performance?.["now"];
+  const externalDiagnosticsNow =
+    isRecord(globalObject) &&
+    typeof globalObject["eaDiagnosticsNow"] === "function"
+      ? globalObject["eaDiagnosticsNow"]
+      : undefined;
   const consoleObject =
     isRecord(globalObject) && isRecord(globalObject["console"])
       ? globalObject["console"]
@@ -39,6 +44,14 @@ export function createBrowserDiagnostics(
     isRecord(globalObject) && globalObject["eaPerformance"] === true;
 
   const nowMs = () => {
+    if (externalDiagnosticsNow !== undefined) {
+      try {
+        const value = Reflect.apply(externalDiagnosticsNow, globalObject, []);
+        if (typeof value === "number" && Number.isFinite(value)) return value;
+      } catch {
+        // A harness clock is optional; use the page clock if it cannot answer.
+      }
+    }
     if (typeof performanceNow === "function") {
       try {
         const value = Reflect.apply(performanceNow, performance, []);

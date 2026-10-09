@@ -106,6 +106,15 @@ assert.deepEqual(costs.readCost("space-spaceport"), {
   cost: { Money: 47500, Iridium: 1750 },
   pool: "spc_home",
 });
+assert.deepEqual(costs.readCosts(["city-basic_housing", "space-spaceport"]), [
+  { cost: { Money: 119, Lumber: 109 }, pool: undefined },
+  { cost: { Money: 47500, Iridium: 1750 }, pool: "spc_home" },
+]);
+assert.deepEqual(
+  seen.slice(-2).map(({ index }) => index),
+  [1, 2],
+);
+assert.equal(root.queue.queue.length, 1, "the batch removes its probe suffix");
 
 // An id with no dash stands in for both halves, so the probe still runs.
 assert.deepEqual(costs.readCost("storehouse"), {
@@ -135,6 +144,17 @@ assert.deepEqual(
 );
 assert.equal(unavailable.at(-1)[0], "tech-foundry");
 assert.match(unavailable.at(-1)[1], /threw/);
+assert.deepEqual(
+  costs.readCosts(["city-basic_housing", "tech-foundry", "space-spaceport"]),
+  [
+    { cost: { Money: 119, Lumber: 109 }, pool: undefined },
+    undefined,
+    undefined,
+  ],
+);
+assert.deepEqual(root.queue.queue, [
+  { id: "city-farm", label: "player's own queued item" },
+]);
 
 // --- an action with no cost at all ------------------------------------------------------------------
 

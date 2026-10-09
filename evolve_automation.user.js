@@ -157,10 +157,16 @@
 
   // src/adapters/browser/diagnostics.ts
   function createBrowserDiagnostics(globalObject) {
-    let readMechDebugEnabled = () => isRecord(globalObject) && globalObject.mechDebug === !0, performance = isRecord(globalObject) && isRecord(globalObject.performance) ? globalObject.performance : void 0, performanceNow = performance?.now, consoleObject = isRecord(globalObject) && isRecord(globalObject.console) ? globalObject.console : void 0, consoleLog = consoleObject?.log, samples = /* @__PURE__ */ new Map(), counters = /* @__PURE__ */ new Map(), pendingTicks = 0, readPerformanceEnabled = () => isRecord(globalObject) && globalObject.eaPerformance === !0;
+    let readMechDebugEnabled = () => isRecord(globalObject) && globalObject.mechDebug === !0, performance = isRecord(globalObject) && isRecord(globalObject.performance) ? globalObject.performance : void 0, performanceNow = performance?.now, externalDiagnosticsNow = isRecord(globalObject) && typeof globalObject.eaDiagnosticsNow == "function" ? globalObject.eaDiagnosticsNow : void 0, consoleObject = isRecord(globalObject) && isRecord(globalObject.console) ? globalObject.console : void 0, consoleLog = consoleObject?.log, samples = /* @__PURE__ */ new Map(), counters = /* @__PURE__ */ new Map(), pendingTicks = 0, readPerformanceEnabled = () => isRecord(globalObject) && globalObject.eaPerformance === !0;
     return Object.freeze({
       readMechDebugEnabled,
       nowMs: () => {
+        if (externalDiagnosticsNow !== void 0)
+          try {
+            let value = Reflect.apply(externalDiagnosticsNow, globalObject, []);
+            if (typeof value == "number" && Number.isFinite(value)) return value;
+          } catch {
+          }
         if (typeof performanceNow == "function")
           try {
             let value = Reflect.apply(performanceNow, performance, []);
@@ -766,7 +772,7 @@
     let { rootState, controls: controls2, mountSuppression, panels, diagnostics } = dependencies;
     return Object.freeze({
       discover(path, options = {}) {
-        let tally = createCountTally(diagnostics), measureDraw = createPhaseMeasure(diagnostics), purpose = options.purpose ?? "unattributed", pathLabel, countDiscovery = (metric, amount = 1) => {
+        let tally = createCountTally(diagnostics), measureDraw = createPhaseMeasure(diagnostics), purpose = options.purpose ?? "unattributed", researchMeasurement = purpose === "research-catalog" && tally.enabled, measureResearch = (phase, action) => measureDraw(`research.draw.${phase}`, action), pathLabel, countDiscovery = (metric, amount = 1) => {
           tally.enabled && (tally.count(`discovery.${metric} ${purpose}`, amount), pathLabel !== void 0 && tally.count(`discovery.${metric} ${purpose} ${pathLabel}`, amount));
         };
         tally.count("discovery.request"), countDiscovery("request");
@@ -836,10 +842,16 @@
               for (let container of discard.containers)
                 workspace?.discard(container);
           }
-        }, playerPanel = MAIN_TAB_PANELS[playerTabs.get(MAIN_TAB_SETTING) ?? -1], targetPanel = MAIN_TAB_PANELS[first.index], checkpoint = controls2.checkpoint(), passSucceeded = !1, targetThroughCheckpoint, fallbackRestorationSucceeded = !1, workspace;
+        }, playerPanel = MAIN_TAB_PANELS[playerTabs.get(MAIN_TAB_SETTING) ?? -1], targetPanel = MAIN_TAB_PANELS[first.index], checkpoint = researchMeasurement ? measureResearch("preparation", () => controls2.checkpoint()) : controls2.checkpoint(), passSucceeded = !1, targetThroughCheckpoint, fallbackRestorationSucceeded = !1, workspace;
         try {
-          targetPanel !== void 0 && (workspace = panels.open({ keep: playerPanel, scratch: targetPanel }));
-          let beforeIds = controls2.capturedElementIds(), before = new Set(beforeIds), beforeGenerations;
+          targetPanel !== void 0 && (workspace = researchMeasurement ? measureResearch(
+            "workspace-create",
+            () => panels.open({ keep: playerPanel, scratch: targetPanel })
+          ) : panels.open({ keep: playerPanel, scratch: targetPanel }));
+          let beforeIds = researchMeasurement ? measureResearch(
+            "control-snapshot-preparation",
+            () => controls2.capturedElementIds()
+          ) : controls2.capturedElementIds(), before = new Set(beforeIds), beforeGenerations;
           if (tally.enabled) {
             beforeGenerations = /* @__PURE__ */ new Map();
             for (let id of beforeIds) {
@@ -855,10 +867,14 @@
           try {
             measureDraw(drawPhase, () => {
               try {
-                settings.animated = !1, mountSuppression.withoutMounting(
+                settings.animated = !1;
+                let drawTarget = () => mountSuppression.withoutMounting(
                   () => {
                     for (let step2 of path) {
-                      let handle = controls2.resolve(step2.control);
+                      let handle = researchMeasurement ? measureResearch(
+                        "control-resolution",
+                        () => controls2.resolve(step2.control)
+                      ) : controls2.resolve(step2.control);
                       if (handle === void 0) {
                         stepFailure = failure(
                           "tab-control-missing",
@@ -867,9 +883,10 @@
                         break;
                       }
                       settings[step2.setting] = step2.index;
-                      let swap = controls2.invoke(handle, "swapTab", [
-                        step2.index
-                      ]);
+                      let swap = researchMeasurement ? measureResearch(
+                        "native-switch-drawTech-and-dom-generation",
+                        () => controls2.invoke(handle, "swapTab", [step2.index])
+                      ) : controls2.invoke(handle, "swapTab", [step2.index]);
                       if (!swap.ok) {
                         let detail = swap.detail ?? swap.reason;
                         stepFailure = Object.freeze({
@@ -881,7 +898,10 @@
                     }
                     if (stepFailure === void 0 && whileDrawn !== void 0)
                       try {
-                        let observerResult = whileDrawn();
+                        let observerResult = researchMeasurement ? measureResearch(
+                          "binding-and-dom-observation",
+                          whileDrawn
+                        ) : whileDrawn();
                         observerState.status = observerResult === !0 ? "result" : observerResult === !1 ? "no-result" : "unreported";
                       } catch (error) {
                         observerState.status = "no-result", observerFailure = String(error);
@@ -889,12 +909,26 @@
                   },
                   { ...discardScope, ...mountScope }
                 );
+                researchMeasurement ? measureResearch(
+                  "mount-suppression-and-native-draw",
+                  drawTarget
+                ) : drawTarget();
               } finally {
                 targetThroughCheckpoint = controls2.checkpoint();
                 try {
-                  for (let [setting, value] of playerTabs)
-                    settings[setting] = value;
-                  workspace === void 0 ? (restoreFailure = restorePlayerView(), fallbackRestorationSucceeded = restoreFailure === void 0) : (workspace.release(), workspace.isIntact() || (restoreFailure = "the workspace could not put the panels back"));
+                  let restoreSettings = () => {
+                    for (let [setting, value] of playerTabs)
+                      settings[setting] = value;
+                  };
+                  if (researchMeasurement ? measureResearch("settings-restoration", restoreSettings) : restoreSettings(), workspace === void 0)
+                    restoreFailure = researchMeasurement ? measureResearch(
+                      "player-view-restoration",
+                      restorePlayerView
+                    ) : restorePlayerView(), fallbackRestorationSucceeded = restoreFailure === void 0;
+                  else {
+                    let releaseWorkspace = () => (workspace?.release(), workspace?.isIntact() === !0);
+                    (researchMeasurement ? measureResearch("workspace-release", releaseWorkspace) : releaseWorkspace()) || (restoreFailure = "the workspace could not put the panels back");
+                  }
                 } finally {
                   settings.animated = playerAnimation;
                 }
@@ -4863,7 +4897,10 @@
         };
         try {
           stopObserving = bindings((elementId) => {
-            collecting && observedBindingIds.push(elementId);
+            collecting && (tally.enabled ? (tally.count("research.binding.capture.events"), measure(
+              "research.binding.capture",
+              () => observedBindingIds.push(elementId)
+            )) : observedBindingIds.push(elementId));
           }), result = mechanics.captureTechDefinitionsDuring(
             () => discovery.discover(RESEARCH_TAB_PATH, {
               purpose: "research-catalog",
@@ -4873,23 +4910,30 @@
               ...includeGranted ? {} : { discard: UNREAD_RESEARCH_CONTENT },
               whileDrawn: () => {
                 try {
-                  let offeredRows = drawnActions.read(OFFERED_TECH_SELECTOR);
+                  let offeredRows = measure(
+                    "research.dom.capture.offered",
+                    () => drawnActions.read(OFFERED_TECH_SELECTOR)
+                  );
                   if (drawnActions.count(OFFERED_TECH_SELECTOR) !== offeredRows.length)
                     throw new Error(
                       "a rendered Research offer row has no readable id"
                     );
-                  let grantedRows = includeGranted ? drawnActions.read(GRANTED_TECH_SELECTOR) : void 0;
+                  let grantedRows = includeGranted ? measure(
+                    "research.dom.capture.granted",
+                    () => drawnActions.read(GRANTED_TECH_SELECTOR)
+                  ) : void 0;
                   if (grantedRows !== void 0 && drawnActions.count(GRANTED_TECH_SELECTOR) !== grantedRows.length)
                     throw new Error(
                       "a rendered granted Research row has no readable id"
                     );
                   let generations = /* @__PURE__ */ new Map();
-                  for (let elementId of observedBindingIds)
-                    generations.set(
-                      elementId,
-                      controls2.resolve(elementId)?.generation ?? 0
-                    );
-                  return drawn = Object.freeze({
+                  return measure("research.binding.generation-capture", () => {
+                    for (let elementId of observedBindingIds)
+                      generations.set(
+                        elementId,
+                        controls2.resolve(elementId)?.generation ?? 0
+                      );
+                  }), drawn = Object.freeze({
                     offeredRows,
                     ...grantedRows === void 0 ? {} : { grantedRows },
                     generations
@@ -5992,6 +6036,15 @@
       pool: typeof pool == "string" && pool.length > 0 ? pool : void 0
     });
   }
+  function probePrice(controls2, handle, index, actionId, reportUnavailable) {
+    let result = controls2.invoke(handle, "setData", [index, COST_PREFIX]);
+    if (!result.ok) {
+      reportUnavailable(actionId, `${result.reason}: ${result.detail ?? ""}`);
+      return;
+    }
+    let price = parsePrice(result.value);
+    return price === void 0 && reportUnavailable(actionId, "cost result was not a record"), price;
+  }
   function createCapturedActionCostReader(dependencies) {
     let { rootState, controls: controls2 } = dependencies, reportUnavailable = dependencies.onUnavailable ?? (() => {
     });
@@ -6009,22 +6062,59 @@
         }
         let index = entries.length;
         entries.push(probeEntry(actionId));
-        let result;
+        let price;
         try {
-          result = controls2.invoke(handle, "setData", [index, COST_PREFIX]);
+          price = probePrice(
+            controls2,
+            handle,
+            index,
+            actionId,
+            reportUnavailable
+          );
         } finally {
           entries.length > index && entries.splice(index, entries.length - index);
         }
-        if (!result.ok) {
-          reportUnavailable(actionId, `${result.reason}: ${result.detail ?? ""}`);
-          return;
-        }
-        let price = parsePrice(result.value);
-        if (price === void 0) {
-          reportUnavailable(actionId, "cost result was not a record");
-          return;
-        }
         return price;
+      },
+      readCosts(actionIds) {
+        if (actionIds.length === 0) return Object.freeze([]);
+        let tally = createCountTally(dependencies.diagnostics), measure = createPhaseMeasure(dependencies.diagnostics);
+        return tally.count("action-cost.native-batch.probes", actionIds.length), measure("action-cost.native-batch", () => {
+          let handle = controls2.resolve(QUEUE_ELEMENT_ID);
+          if (handle === void 0) {
+            reportUnavailable(
+              actionIds[0] ?? "",
+              "build queue control not captured"
+            );
+            return;
+          }
+          let entries = readQueueArray(rootState);
+          if (entries === void 0) {
+            reportUnavailable(actionIds[0] ?? "", "game queue unavailable");
+            return;
+          }
+          let start = entries.length, results = Array(
+            actionIds.length
+          ).fill(void 0);
+          try {
+            entries.push(...actionIds.map(probeEntry));
+            for (let offset = 0; offset < actionIds.length; offset += 1) {
+              let actionId = actionIds[offset];
+              if (actionId === void 0) break;
+              let price = probePrice(
+                controls2,
+                handle,
+                start + offset,
+                actionId,
+                reportUnavailable
+              );
+              if (results[offset] = price, price === void 0) break;
+            }
+          } finally {
+            entries.length > start && entries.splice(start, entries.length - start);
+          }
+          return Object.freeze(results);
+        });
       }
     });
   }
@@ -11696,10 +11786,12 @@
         let currentControlRevision = controls2.readRevision?.();
         (currentControlRevision === void 0 || currentControlRevision !== heldOfferControlRevision) && (rowBindingsChanged = !heldOfferBindingsAreCurrent(heldOfferedSnapshot), heldOfferControlRevision = currentControlRevision);
       }
-      !epochChanged && !rowBindingsChanged || (clearResearchSample(), offeredSampleEpoch = currentEpoch, scopes.invalidate(RESEARCH_SCOPE), scopes.invalidate(RESEARCH_GRANTED_SCOPE));
-    }, readCurrentOfferedTechs = () => (invalidateStaleCapturedResearchObservation(epoch.read()), lastOffered), sampleOfferedTechs = () => {
+      if (!epochChanged && !rowBindingsChanged) return;
       let tally = createCountTally(diagnostics);
-      tally.count("research.observation.requests");
+      epochChanged && tally.count("research.observation.invalidated.progression"), rowBindingsChanged && tally.count("research.observation.invalidated.bindings"), clearResearchSample(), offeredSampleEpoch = currentEpoch, scopes.invalidate(RESEARCH_SCOPE), scopes.invalidate(RESEARCH_GRANTED_SCOPE);
+    }, readCurrentOfferedTechs = () => (invalidateStaleCapturedResearchObservation(epoch.read()), lastOffered), sampleOfferedTechs = (requester = "direct") => {
+      let tally = createCountTally(diagnostics);
+      tally.count("research.observation.requests"), tally.count(`research.observation.requester.${requester}`);
       let includeGranted = dependencies.needGrantedTechs?.() === !0, currentEpoch = epoch.read();
       if (invalidateStaleCapturedResearchObservation(currentEpoch), offeredSampleEpoch === void 0 && (offeredSampleEpoch = currentEpoch), offeredSampleAttempted && !(includeGranted && !grantedSampleAttempted)) {
         if (tally.count("research.observation.cache-hits"), heldOfferedSnapshot === void 0) {
@@ -11708,7 +11800,9 @@
         }
         return lastOffered;
       }
-      tally.count("research.observation.samples");
+      tally.count("research.observation.samples"), tally.count(`research.observation.sample-requester.${requester}`), tally.count(
+        includeGranted ? "research.observation.sample.with-granted" : "research.observation.sample.offers-only"
+      );
       let held = scopes.read(
         includeGranted ? RESEARCH_GRANTED_SCOPE : RESEARCH_SCOPE,
         () => offered.read(includeGranted ? { includeGranted } : void 0),
@@ -11743,7 +11837,9 @@
     }), projectSampled = !1, lastProjects, establishedProjectEpoch, resetProjectSample = () => {
       projectSampled = !1, lastProjects = void 0, establishedProjectEpoch = void 0;
     }, beginProcessedCycle = () => {
-      dependencies.discoveryAttempts === void 0 && (fallbackDiscoveryCycle += 1), clearResearchSample(), scopes.invalidate(RESEARCH_SCOPE), scopes.invalidate(RESEARCH_GRANTED_SCOPE), scopes.invalidate(ARPA_SCOPE), resetProjectSample(), resetBuildingUnlockSample();
+      dependencies.discoveryAttempts === void 0 && (fallbackDiscoveryCycle += 1), createCountTally(diagnostics).count(
+        "research.observation.invalidated.processed-cycle"
+      ), clearResearchSample(), scopes.invalidate(RESEARCH_SCOPE), scopes.invalidate(RESEARCH_GRANTED_SCOPE), scopes.invalidate(ARPA_SCOPE), resetProjectSample(), resetBuildingUnlockSample();
     }, readEstablishedProjects = () => {
       if (projectSampled && establishedProjectEpoch !== epoch.read() || (projectSampled ? lastProjects : scopes.peek(ARPA_SCOPE)) === void 0) return;
       let currentProjects = projectCatalog.readProjects();
@@ -11781,7 +11877,9 @@
       resetBuildingUnlockSample(), resetProjectSample();
     };
     rootState.subscribeRootReplaced(() => {
-      scopes.invalidateAll(), discoveryAttempts.invalidate(), clearResearchSample(), resetProjectSample(), resetBuildingUnlockSample();
+      scopes.invalidateAll(), discoveryAttempts.invalidate(), createCountTally(diagnostics).count(
+        "research.observation.invalidated.root-replacement"
+      ), clearResearchSample(), resetProjectSample(), resetBuildingUnlockSample();
     });
     let readBuildingUnlocks = (regions) => {
       let key = buildingOfferScopeKey(regions), catalog = buildingUnlocks.read(regions);
@@ -11895,7 +11993,7 @@
       scriptReservations,
       readKnowledgeGate,
       ...readStorageRequired === void 0 ? {} : { readStorageRequired },
-      readOfferedTechs: sampleOfferedTechs,
+      readOfferedTechs: () => sampleOfferedTechs("construction"),
       ...dependencies.onConstructionMutation === void 0 ? {} : { onMutation: dependencies.onConstructionMutation },
       ...onDiagnostic === void 0 ? {} : { onDiagnostic },
       ...onActivity === void 0 ? {} : { onActivity },
@@ -11910,7 +12008,7 @@
       drawnActions,
       mountSuppression,
       panels,
-      readOfferedTechs: sampleOfferedTechs,
+      readOfferedTechs: () => sampleOfferedTechs("auto-research"),
       ...onUnavailable === void 0 ? {} : { onUnavailable },
       ...onActivity === void 0 ? {} : { onActivity },
       diagnostics
@@ -33268,8 +33366,8 @@
   function readBuildingTargets(dependencies) {
     if (dependencies.readBuildTargets === void 0 || dependencies.costs === void 0)
       return;
-    let result = [];
-    for (let target of dependencies.readBuildTargets()) {
+    let targets = dependencies.readBuildTargets();
+    for (let target of targets)
       if (typeof target.key != "string" || typeof target.elementId != "string" || target.key.length === 0 || target.elementId.length === 0) {
         dependencies.onSkipped?.(
           "storage-building",
@@ -33277,7 +33375,27 @@
         );
         return;
       }
-      let price = dependencies.costs.readCost(target.elementId);
+    let prices = dependencies.costs.readCosts === void 0 ? void 0 : dependencies.costs.readCosts(targets.map((target) => target.elementId));
+    if (createCountTally(dependencies.diagnostics).count("autoStorage.building-target-price-probes", targets.length), prices !== void 0 && prices.length !== targets.length) {
+      dependencies.onSkipped?.(
+        "storage-building",
+        "captured build target price batch is incomplete"
+      );
+      return;
+    }
+    if (dependencies.costs.readCosts !== void 0 && prices === void 0) {
+      let firstTarget = targets[0];
+      dependencies.onSkipped?.(
+        firstTarget?.key ?? "storage-building",
+        "captured build target cost is unavailable"
+      );
+      return;
+    }
+    let result = [];
+    for (let index = 0; index < targets.length; index += 1) {
+      let target = targets[index];
+      if (target === void 0) continue;
+      let price = prices === void 0 ? dependencies.costs.readCost(target.elementId) : prices[index];
       if (price === void 0) {
         dependencies.onSkipped?.(
           target.key,
@@ -33338,7 +33456,7 @@
     return finite(value === void 0 ? 0 : value);
   }
   function readInput10(dependencies) {
-    let root = dependencies.rootState.readRoot(), resources = readProperty(root, "resource"), race = readProperty(root, "race");
+    let tally = createCountTally(dependencies.diagnostics), measure = createPhaseMeasure(dependencies.diagnostics), root = dependencies.rootState.readRoot(), resources = readProperty(root, "resource"), race = readProperty(root, "race");
     if (!isRecord(resources) || !isRecord(race))
       return {
         input: Object.freeze({
@@ -33386,28 +33504,34 @@
         }),
         session: null
       };
-    let settings = settingsRecord(dependencies.readSettings()), priorityResourceIds = Object.keys(resources).map((id, index) => ({
-      id,
-      index,
-      priority: finite(settings[`res_storage_p_${id}`]) ?? Number.MAX_SAFE_INTEGER
-    })).sort(
-      (left, right) => left.priority - right.priority || left.index - right.index
-    ).map(({ id }) => id), regional = isRegionalSupply(root), resourceInputs = priorityResourceIds.flatMap((id) => {
-      let resource = readProperty(resources, id), regMax = readProperty(resource, "regMax"), pools = regional && isRecord(regMax) ? Object.keys(regMax) : [];
-      return [
-        readResource4(resources, settings, id, dependencies.readStorageRequired),
-        ...pools.map(
-          (pool) => readResource4(
-            resources,
-            settings,
-            id,
-            dependencies.readStorageRequired,
-            pool
+    let settings = settingsRecord(dependencies.readSettings()), ids = Object.keys(resources), priorityResourceIds = measure(
+      "autoStorage.read.resource-order",
+      () => ids.map((id, index) => ({
+        id,
+        index,
+        priority: finite(settings[`res_storage_p_${id}`]) ?? Number.MAX_SAFE_INTEGER
+      })).sort(
+        (left, right) => left.priority - right.priority || left.index - right.index
+      ).map(({ id }) => id)
+    ), regional = isRegionalSupply(root), resourceInputs = measure(
+      "autoStorage.read.resource-inputs",
+      () => priorityResourceIds.flatMap((id) => {
+        let resource = readProperty(resources, id), regMax = readProperty(resource, "regMax"), pools = regional && isRecord(regMax) ? Object.keys(regMax) : [];
+        return [
+          readResource4(resources, settings, id, dependencies.readStorageRequired),
+          ...pools.map(
+            (pool) => readResource4(
+              resources,
+              settings,
+              id,
+              dependencies.readStorageRequired,
+              pool
+            )
           )
-        )
-      ];
-    });
-    if (resourceInputs.some((resource) => resource === void 0))
+        ];
+      })
+    );
+    if (tally.count("autoStorage.resources.input", resourceInputs.length), resourceInputs.some((resource) => resource === void 0))
       return {
         input: Object.freeze({
           initialized: !1,
@@ -33429,13 +33553,14 @@
       };
     let resourcesInput = Object.freeze(
       resourceInputs
-    ), targets = [], reservations = dependencies.reservations.readReservations();
-    if (!reservations.unavailable)
-      for (let target of reservations.targets)
-        targets.push(targetFromCost(target.name, target.cost, target.pool));
-    let saving = dependencies.readSavingTarget?.() ?? null;
-    saving !== null && targets.push(targetFromCost(saving.name, saving.cost, saving.pool));
-    let requiredTargets = resourcesInput.filter((resource) => resource.unlocked && resource.managed).map(
+    ), targets = measure("autoStorage.read.queue-targets", () => {
+      let result = [], reservations = dependencies.reservations.readReservations();
+      if (!reservations.unavailable)
+        for (let target of reservations.targets)
+          result.push(targetFromCost(target.name, target.cost, target.pool));
+      let saving = dependencies.readSavingTarget?.() ?? null;
+      return saving !== null && result.push(targetFromCost(saving.name, saving.cost, saving.pool)), result;
+    }), requiredTargets = resourcesInput.filter((resource) => resource.unlocked && resource.managed).map(
       (resource) => targetFromCost(
         `storageRequired/${resource.id}`,
         {
@@ -33443,8 +33568,17 @@
         },
         resource.pool
       )
-    ), buildingTargets = readBuildingTargets(dependencies), technologyTargets = settings.autoResearch === !0 ? readTechnologyTargets(dependencies) : Object.freeze([]), projectTargets = settings.autoARPA === !0 ? readProjectTargets(dependencies, settings) : Object.freeze([]);
-    return {
+    ), buildingTargets = measure(
+      "autoStorage.read.building-targets",
+      () => readBuildingTargets(dependencies)
+    ), technologyTargets = measure(
+      "autoStorage.read.technology-targets",
+      () => settings.autoResearch === !0 ? readTechnologyTargets(dependencies) : Object.freeze([])
+    ), projectTargets = measure(
+      "autoStorage.read.project-targets",
+      () => settings.autoARPA === !0 ? readProjectTargets(dependencies, settings) : Object.freeze([])
+    );
+    return tally.count("autoStorage.targets.queue", targets.length), tally.count("autoStorage.targets.building", buildingTargets?.length ?? 0), tally.count("autoStorage.targets.technology", technologyTargets?.length ?? 0), tally.count("autoStorage.targets.project", projectTargets?.length ?? 0), {
       input: Object.freeze({
         initialized: !0,
         crateValue,
@@ -55893,7 +56027,8 @@ Only continue if you trust the source. Injected code:
       persist: settingsStorage.persist
     }), buildCosts = createCapturedActionCostReader({
       rootState: pageCapture2.rootState,
-      controls: pageCapture2.controls
+      controls: pageCapture2.controls,
+      diagnostics: phaseDiagnostics
     }), ensureCapturedBuildingControls = () => {
     }, reportDiagnostic = (message) => {
       diagnostics?.readPerformanceEnabled() === !0 && log(message);
@@ -56280,7 +56415,7 @@ Only continue if you trust the source. Injected code:
       shipyard: outerFleetShipyard,
       readSettings: () => settingsStore.readRaw()
     }), ensureDemandResearchObservation = () => {
-      progression.sampleOfferedTechs();
+      progression.sampleOfferedTechs("resource-demand");
     }, triggerDemand = createCapturedResourceDemand({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
@@ -56295,7 +56430,7 @@ Only continue if you trust the source. Injected code:
       fleet: fleetDemand
     }), triggerDemandThisCycle, readTriggerDemand = () => (triggerDemandThisCycle === void 0 && (ensureDemandResearchObservation(), triggerDemandThisCycle = triggerDemand.sample()), triggerDemandThisCycle), conditionContextReader = createCapturedConditionContextReader({
       costs: buildCosts,
-      readOfferedTechs: progression.sampleOfferedTechs,
+      readOfferedTechs: () => progression.sampleOfferedTechs("condition-context"),
       readGrantedTechs: progression.readGrantedTechs,
       readProjects: progression.readProjects,
       readBuildingUnlocks: progression.readBuildingUnlocks,
@@ -56329,7 +56464,7 @@ Only continue if you trust the source. Injected code:
       controls: pageCapture2.controls,
       costs: buildCosts,
       readSettings: () => settingsStore.readRaw(),
-      readOfferedTechs: progression.sampleOfferedTechs,
+      readOfferedTechs: () => progression.sampleOfferedTechs("triggers"),
       readGrantedTechs: progression.readGrantedTechs,
       readOfferedProjects: progression.readProjects,
       readBuildingUnlocks: progression.readBuildingUnlocks,
@@ -56509,7 +56644,8 @@ Only continue if you trust the source. Injected code:
         storageMutationObserved = !0;
       },
       onSkipped: (key, reason) => reportOnce(`storage skipped ${key}: ${reason}`),
-      nowMs: () => Date.now()
+      nowMs: () => Date.now(),
+      ...phaseDiagnostics === void 0 ? {} : { diagnostics: phaseDiagnostics }
     }), storageAutomation = createStorageAllocationAutomation({
       ...storagePorts,
       diagnostics: phaseDiagnostics
