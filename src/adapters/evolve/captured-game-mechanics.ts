@@ -37,7 +37,6 @@ import {
 
 type CapturedGameCall = (this: unknown, ...args: unknown[]) => unknown;
 const structureMapCaptureThreshold = 3;
-const researchTechQueueCostAlias = "__ea_research_cost_probe__";
 
 interface CapturedNativeTechDefinitionIdentity extends CapturedTechDefinition {
   readonly action: Record<string, unknown>;
@@ -1149,8 +1148,6 @@ function emptyGameMechanics(): CapturedGameMechanics {
     adjustPower: () => ({ kind: "invalid" as const }),
     captureTechDefinitionsDuring: <T>(draw: () => T): T => draw(),
     readTechDefinitions: () => undefined,
-    withTechQueueCostAlias: () => undefined,
-    withTechQueueCostAliases: () => undefined,
     readStructures: () => undefined,
     readStructureIdentities: () => undefined,
     readPowerOrder: () => ({ kind: "invalid" as const }),
@@ -1774,176 +1771,6 @@ export function installCapturedGameMechanics(
     }
   }
 
-  function withNativeTechQueueCostAliases<T>(
-    actionIds: readonly string[],
-    readProbeCost: (actionId: string, probeActionId: string) => T,
-  ): readonly T[] | undefined {
-    const retained = readRetainedNativeTechRegistry();
-    if (
-      retained === undefined ||
-      typeof readProbeCost !== "function" ||
-      actionIds.some(
-        (actionId, index) =>
-          typeof actionId !== "string" ||
-          retained.definitionsByActionId?.get(actionId) === undefined ||
-          actionIds.indexOf(actionId) !== index,
-      )
-    )
-      return undefined;
-    if (actionIds.length === 0) return Object.freeze([]);
-
-    const hostAction = retained.definitions[0]?.action;
-    if (hostAction === undefined) return undefined;
-    try {
-      if (
-        !retained.definitions.every(
-          (definition) =>
-            Object.getOwnPropertyDescriptor(
-              definition.action,
-              researchTechQueueCostAlias,
-            ) === undefined,
-        )
-      )
-        return undefined;
-    } catch {
-      return undefined;
-    }
-
-    const results: T[] = [];
-    let installationAttempted = false;
-    let installationVerified = true;
-    let cleanupProven = true;
-    let callbackFailed = false;
-    let callbackFailure: unknown;
-    try {
-      for (const actionId of actionIds) {
-        const targetAction =
-          retained.definitionsByActionId?.get(actionId)?.action;
-        if (targetAction === undefined) {
-          installationVerified = false;
-          break;
-        }
-        let installed = false;
-        try {
-          installationAttempted = true;
-          try {
-            Reflect.apply(
-              objectDefineProperty as CapturedGameCall,
-              objectConstructor,
-              [
-                hostAction,
-                researchTechQueueCostAlias,
-                {
-                  configurable: true,
-                  enumerable: false,
-                  value: targetAction,
-                },
-              ],
-            );
-          } catch {
-            installationVerified = false;
-          }
-          let descriptor: PropertyDescriptor | undefined;
-          try {
-            descriptor = Object.getOwnPropertyDescriptor(
-              hostAction,
-              researchTechQueueCostAlias,
-            );
-          } catch {
-            installationVerified = false;
-          }
-          installed =
-            descriptor !== undefined &&
-            descriptor.configurable === true &&
-            descriptor.enumerable === false &&
-            "value" in descriptor &&
-            descriptor.value === targetAction;
-          installationVerified = installationVerified && installed;
-          if (installed) {
-            try {
-              results.push(
-                readProbeCost(actionId, "tech-" + researchTechQueueCostAlias),
-              );
-            } catch (error) {
-              callbackFailed = true;
-              callbackFailure = error;
-            }
-          }
-        } finally {
-          if (installed) {
-            try {
-              if (
-                !Reflect.deleteProperty(hostAction, researchTechQueueCostAlias)
-              )
-                cleanupProven = false;
-            } catch {
-              cleanupProven = false;
-            }
-          }
-        }
-        if (!installationVerified || !cleanupProven || callbackFailed) break;
-      }
-    } finally {
-      // The native callback is trusted to read the alias, but any unexpected alias mutation
-      // anywhere in the registry invalidates this whole batch and must be removed before return.
-      if (installationAttempted) {
-        for (const definition of retained.definitions) {
-          try {
-            if (
-              Object.getOwnPropertyDescriptor(
-                definition.action,
-                researchTechQueueCostAlias,
-              ) !== undefined &&
-              !Reflect.deleteProperty(
-                definition.action,
-                researchTechQueueCostAlias,
-              )
-            )
-              cleanupProven = false;
-          } catch {
-            cleanupProven = false;
-          }
-        }
-        try {
-          if (
-            !retained.definitions.every(
-              (definition) =>
-                Object.getOwnPropertyDescriptor(
-                  definition.action,
-                  researchTechQueueCostAlias,
-                ) === undefined,
-            )
-          )
-            cleanupProven = false;
-        } catch {
-          cleanupProven = false;
-        }
-      }
-    }
-
-    if (!cleanupProven) {
-      capturedTechAuthorityInvalid = true;
-      capturedTechRegistry = undefined;
-      capturedTechRegistryObjectKeys = undefined;
-    }
-    const current =
-      cleanupProven && installationAttempted
-        ? readRetainedNativeTechRegistry()
-        : undefined;
-    const registryStillValid =
-      current !== undefined &&
-      sameNativeTechRegistrySnapshot(retained, current);
-    if (callbackFailed) throw callbackFailure;
-    if (
-      !cleanupProven ||
-      !installationVerified ||
-      !registryStillValid ||
-      results.length !== actionIds.length
-    )
-      return undefined;
-    return Object.freeze(results);
-  }
-
   const mechanics: CapturedGameMechanics = Object.freeze({
     captureTechDefinitionsDuring<T>(draw: () => T): T {
       if (
@@ -2061,16 +1888,6 @@ export function installCapturedGameMechanics(
     readTechDefinitions(): readonly CapturedTechDefinition[] | undefined {
       return readRetainedNativeTechRegistry()?.publicDefinitions;
     },
-    withTechQueueCostAlias<T>(
-      actionId: string,
-      readProbeCost: (probeActionId: string) => T,
-    ): T | undefined {
-      const result = withNativeTechQueueCostAliases([actionId], (_, probeId) =>
-        readProbeCost(probeId),
-      );
-      return result?.[0];
-    },
-    withTechQueueCostAliases: withNativeTechQueueCostAliases,
     adjustPower(
       root: unknown,
       entryKey: string,

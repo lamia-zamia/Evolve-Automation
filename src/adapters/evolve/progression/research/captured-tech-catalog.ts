@@ -2,8 +2,8 @@
  * Research action identity comes from the retained native registry, and final offer membership and
  * order come from the native Vue bindings produced by `drawTech`/`setAction`. A fresh catalog read
  * forces a protected draw even while Research is selected, then joins that binding stream to the
- * rendered rows. Price comes from the native queue cost path and is checked against the same-draw
- * markup; the row's `cna` verdict remains native affordability authority.
+ * rendered rows. The same-draw markup carries the game's computed price; the row's `cna` verdict
+ * remains native affordability authority.
  *
  * The already-researched half is drawn under `#oldTech`. When requested, its rendered ids classify
  * the trailing native bindings, preserving `checkOldTech` special cases without restating them.
@@ -29,7 +29,6 @@ import type {
   CapturedTechDefinition,
 } from "../../../../ports/captured-game-mechanics.ts";
 import type { VueBindingObserver } from "../../vue-capture.ts";
-import type { ResearchTechPriceReader } from "./captured-tech-costs.ts";
 import {
   createCountTally,
   createPhaseMeasure,
@@ -41,7 +40,7 @@ import {
   MAIN_TAB_SETTING,
 } from "../../captured-tab-discovery.ts";
 
-/** Rows with the same-draw price cross-check and native-affordability details. */
+/** Rows with the same-draw native price and affordability details. */
 const OFFERED_TECH_SELECTOR = "#tech .action";
 
 /** Native Research actions use this prefix; other bindings from the same draw are ignored. */
@@ -86,29 +85,9 @@ export interface CapturedTechCatalogDependencies {
     CapturedGameMechanics,
     "captureTechDefinitionsDuring" | "readTechDefinitions"
   >;
-  readonly nativePrices: ResearchTechPriceReader;
   readonly diagnostics?: PhaseTimingSink | undefined;
   /** Reports a pass that could not produce a catalog. The caller gets `undefined`, never stale. */
   readonly onUnavailable?: (reason: string) => void;
-}
-
-/** Transitional equality guard; native queue pricing remains the only price owner. */
-function sameResearchPriceRecord(
-  nativePrice: Readonly<Record<string, number>>,
-  renderedPrice: Readonly<Record<string, number>>,
-): boolean {
-  const nativeKeys = Object.keys(nativePrice);
-  const renderedKeys = Object.keys(renderedPrice);
-  if (nativeKeys.length !== renderedKeys.length) return false;
-  return nativeKeys.every((key) => {
-    const amount = nativePrice[key];
-    return (
-      Object.prototype.hasOwnProperty.call(renderedPrice, key) &&
-      typeof amount === "number" &&
-      Number.isFinite(amount) &&
-      amount === renderedPrice[key]
-    );
-  });
 }
 
 interface ResearchDrawDetails {
@@ -120,15 +99,8 @@ interface ResearchDrawDetails {
 export function createCapturedTechCatalog(
   dependencies: CapturedTechCatalogDependencies,
 ): GameTechCatalog {
-  const {
-    rootState,
-    discovery,
-    drawnActions,
-    bindings,
-    controls,
-    mechanics,
-    nativePrices,
-  } = dependencies;
+  const { rootState, discovery, drawnActions, bindings, controls, mechanics } =
+    dependencies;
   const reportUnavailable = dependencies.onUnavailable ?? (() => {});
   let indexedTechDefinitions: readonly CapturedTechDefinition[] | undefined;
   let indexedTechDefinitionsById:
@@ -380,31 +352,6 @@ export function createCapturedTechCatalog(
         return undefined;
       }
       const matchedOffers: OfferedTech[] = [];
-      let nativePricesByOffer:
-        readonly (Readonly<Record<string, number>> | undefined)[] | undefined;
-      if (offeredCount === 0) {
-        nativePricesByOffer = Object.freeze([]);
-      } else {
-        try {
-          nativePricesByOffer = nativePrices.readTechCosts(
-            observedDefinitions
-              .slice(0, offeredCount)
-              .map((definition) => definition.actionId),
-          );
-        } catch (error) {
-          reportUnavailable(
-            `native Research price read failed: ${String(error)}`,
-          );
-          return undefined;
-        }
-      }
-      if (
-        nativePricesByOffer === undefined ||
-        nativePricesByOffer.length !== offeredCount
-      ) {
-        reportUnavailable("native Research prices are unavailable");
-        return undefined;
-      }
       for (let index = 0; index < offeredCount; index++) {
         const definition = observedDefinitions[index];
         const row = drawn.offeredRows[index];
@@ -419,23 +366,16 @@ export function createCapturedTechCatalog(
           );
           return undefined;
         }
-        const nativePrice = nativePricesByOffer[index];
-        if (nativePrice === undefined) {
+        if (!row.costComplete) {
           reportUnavailable(
-            `native Research price is unavailable for ${definition.actionId}`,
-          );
-          return undefined;
-        }
-        if (!sameResearchPriceRecord(nativePrice, row.cost)) {
-          reportUnavailable(
-            `native and rendered Research prices disagree for ${definition.actionId}`,
+            `rendered Research price is incomplete for ${definition.actionId}`,
           );
           return undefined;
         }
         matchedOffers.push(
           Object.freeze({
             elementId: definition.actionId,
-            cost: Object.freeze({ ...nativePrice }),
+            cost: Object.freeze({ ...row.cost }),
             nativeAffordable: row.nativeAffordable === true,
             generation: drawn.generations.get(definition.actionId) ?? 0,
           }),

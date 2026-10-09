@@ -929,11 +929,6 @@ function runProgressionChain({ activeTrigger }) {
       buildQueue: {
         methods: {
           setData(index, prefix) {
-            if (
-              root.queue.queue[index]?.id === "tech-__ea_research_cost_probe__"
-            ) {
-              return { [`${prefix}-Polymer`]: 1 };
-            }
             return { [`${prefix}-Money`]: 10 };
           },
         },
@@ -1238,13 +1233,7 @@ function runStorageReplicatorDemand({ offeredTechnology }) {
         },
         buildQueue: {
           methods: {
-            setData(index, prefix) {
-              if (
-                root.queue.queue[index]?.id ===
-                "tech-__ea_research_cost_probe__"
-              ) {
-                return { [`${prefix}-Elerium`]: 400 };
-              }
+            setData() {
               return {};
             },
           },

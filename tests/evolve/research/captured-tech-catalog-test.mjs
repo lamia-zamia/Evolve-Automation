@@ -127,9 +127,11 @@ function makeBindingCapture() {
     ["tech-mining", "tech-oil_well", "tech-theology", "tech-free"],
   );
   assert.deepEqual(actions[1].cost, { Knowledge: 18000, Helium_3: 500 });
+  assert.equal(actions[1].costComplete, true);
   assert.deepEqual(actions[2].cost, { Knowledge: 900 });
   // Vue’s own mount marker has no paired class either.
   assert.deepEqual(actions[3].cost, {});
+  assert.equal(actions[3].costComplete, true);
   assert.equal(actions[3].nativeAffordable, true);
 }
 
@@ -165,6 +167,7 @@ function makeBindingCapture() {
     ["tech-x"],
   );
   assert.deepEqual(actions[0].cost, { Money: 5 });
+  assert.equal(actions[0].costComplete, false);
 }
 
 // --- the catalog -----------------------------------------------------------
@@ -179,7 +182,6 @@ function makePage({
   granted = [],
   generations = {},
   mechanics = undefined,
-  nativePrices = undefined,
   bindingSequences = undefined,
   nativeDraw = undefined,
 } = {}) {
@@ -242,19 +244,6 @@ function makePage({
       ...offered.flat().map((action) => action.id),
       ...granted.map((action) => action.id),
     ]);
-  const capturedNativePrices = nativePrices ?? {
-    readTechCost: (actionId) =>
-      drawn.find((action) => action.id === actionId)?.priceFixture,
-  };
-  const batchedNativePrices = {
-    ...capturedNativePrices,
-    readTechCosts:
-      capturedNativePrices.readTechCosts ??
-      ((actionIds) =>
-        actionIds.map((actionId) =>
-          capturedNativePrices.readTechCost(actionId),
-        )),
-  };
   const catalog = createCapturedTechCatalog({
     rootState: {
       readRoot: () => root,
@@ -263,7 +252,6 @@ function makePage({
     },
     discovery,
     mechanics: capturedMechanics,
-    nativePrices: batchedNativePrices,
     drawnActions: createGameDrawnActionsReader({
       getDocument: () => {
         if (readError !== undefined) throw readError;
@@ -711,7 +699,6 @@ for (const [name, bindingSequence, fail] of [
   const reasons = [];
   const catalog = createCapturedTechCatalog({
     mechanics: mechanicsForActionIds([]),
-    nativePrices: { readTechCost: () => undefined },
     rootState: {
       readRoot: () => ({ tech: {}, settings: {} }),
       isReactivitySuppressed: () => false,
@@ -812,7 +799,6 @@ for (const [name, bindingSequence, fail] of [
   // answer a draw would have given for an action bound to no control.
   const forgotten = createCapturedTechCatalog({
     mechanics: mechanicsForActionIds([]),
-    nativePrices: { readTechCost: () => undefined },
     rootState: {
       readRoot: () => ({ settings: {} }),
       isReactivitySuppressed: () => false,
@@ -905,16 +891,6 @@ for (const [name, bindingSequence, fail] of [
       subscribeRootReplaced: () => () => {},
     },
     mechanics: mechanicsInstall.mechanics,
-    nativePrices: {
-      readTechCost: (actionId) =>
-        drawnOffers.find((action) => action.id === actionId)?.priceFixture,
-      readTechCosts: (actionIds) =>
-        mechanicsInstall.mechanics.withTechQueueCostAliases(
-          actionIds,
-          (actionId) =>
-            drawnOffers.find((action) => action.id === actionId)?.priceFixture,
-        ),
-    },
     discovery: {
       discover(_path, options = {}) {
         offerPasses.push(offerPasses.length + 1);
@@ -1033,48 +1009,29 @@ for (const [name, bindingSequence, fail] of [
 }
 
 {
-  const rendered = element("tech-alpha", { Knowledge: 150 });
-  const nativeCost = Object.freeze({ Knowledge: 150 });
-  const priceReads = [];
   const page = makePage({
-    offered: [[rendered]],
-    nativePrices: {
-      readTechCost: (actionId) => {
-        priceReads.push(actionId);
-        return nativeCost;
-      },
-    },
+    offered: [[element("tech-alpha", { Knowledge: 150 })]],
   });
   const snapshot = page.catalog.read();
   assert.deepEqual(snapshot.offered[0].cost, { Knowledge: 150 });
-  assert.notStrictEqual(snapshot.offered[0].cost, rendered.cost);
-  assert.deepEqual(priceReads, ["tech-alpha"]);
+  assert.equal(snapshot.offered[0].generation, 0);
   assert.deepEqual(page.reasons, []);
 }
 
-for (const { renderedCost, nativeCost, expectedReason } of [
+for (const malformed of [
   {
-    renderedCost: { Knowledge: 149 },
-    nativeCost: { Knowledge: 150 },
-    expectedReason: /prices disagree/u,
+    id: "tech-alpha",
+    attributes: attributesOf({ class: "action" }),
+    querySelectorAll: () => [
+      { attributes: attributesOf({ class: "button res-Knowledge" }) },
+    ],
   },
-  {
-    renderedCost: { Knowledge: 150 },
-    nativeCost: { Money: 150 },
-    expectedReason: /prices disagree/u,
-  },
-  {
-    renderedCost: { Knowledge: 150 },
-    nativeCost: undefined,
-    expectedReason: /price is unavailable/u,
-  },
+  element("tech-alpha", { Knowledge: "not-a-number" }),
+  element("tech-alpha", { Knowledge: 0 }),
 ]) {
-  const page = makePage({
-    offered: [[element("tech-alpha", renderedCost)]],
-    nativePrices: { readTechCost: () => nativeCost },
-  });
+  const page = makePage({ offered: [[malformed]] });
   assert.equal(page.catalog.read(), undefined);
-  assert.match(page.reasons.at(-1), expectedReason);
+  assert.match(page.reasons.at(-1), /price is incomplete/u);
 }
 
 console.log("captured-tech-catalog ok");

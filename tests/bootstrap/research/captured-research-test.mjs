@@ -124,6 +124,7 @@ function makePage({
         ? drawn().map((entry) => ({
             id: entry.id,
             cost: Object.freeze({ ...entry.cost }),
+            costComplete: true,
             nativeAffordable: entry.nativeAffordable?.(root) !== false,
           }))
         : [],
@@ -145,53 +146,11 @@ function makePage({
   const mechanics = Object.freeze({
     captureTechDefinitionsDuring: (draw) => draw(),
     readTechDefinitions: () => definitions,
-    withTechQueueCostAlias: (actionId, readProbeCost) => {
-      if (!definitions.some((definition) => definition.actionId === actionId))
-        return undefined;
-      activeTechPriceActionId = actionId;
-      try {
-        return readProbeCost("tech-__ea_research_cost_probe__");
-      } finally {
-        activeTechPriceActionId = undefined;
-      }
-    },
-    withTechQueueCostAliases: (actionIds, readProbeCost) => {
-      const prices = [];
-      for (const actionId of actionIds) {
-        if (!definitions.some((definition) => definition.actionId === actionId))
-          return undefined;
-        activeTechPriceActionId = actionId;
-        try {
-          prices.push(
-            readProbeCost(actionId, "tech-__ea_research_cost_probe__"),
-          );
-        } finally {
-          activeTechPriceActionId = undefined;
-        }
-      }
-      return Object.freeze(prices);
-    },
   });
-  let activeTechPriceActionId;
   controls.set("buildQueue", {
     generation: 1,
     methods: {
-      setData: (index, prefix) => {
-        const entry = root.queue.queue[index];
-        const action = offered.find(
-          (candidate) => candidate.id === activeTechPriceActionId,
-        );
-        const cost =
-          entry?.id === "tech-__ea_research_cost_probe__"
-            ? (action?.cost ?? {})
-            : {};
-        return Object.fromEntries(
-          Object.entries(cost).map(([resourceId, amount]) => [
-            `${prefix}-${resourceId}`,
-            amount,
-          ]),
-        );
-      },
+      setData: () => ({}),
     },
   });
 
@@ -366,10 +325,7 @@ const SMELTING = {
     generation: 1,
     methods: {
       setData: (index, prefix) => ({
-        [`${prefix}-Knowledge`]:
-          page.root.queue.queue[index]?.id === "tech-__ea_research_cost_probe__"
-            ? THEOLOGY.cost.Knowledge
-            : 800,
+        [`${prefix}-Knowledge`]: 800,
       }),
     },
   });
@@ -389,10 +345,7 @@ const SMELTING = {
     generation: 1,
     methods: {
       setData: (index, prefix) => ({
-        [`${prefix}-Knowledge`]:
-          page.root.queue.queue[index]?.id === "tech-__ea_research_cost_probe__"
-            ? THEOLOGY.cost.Knowledge
-            : 800,
+        [`${prefix}-Knowledge`]: 800,
       }),
     },
   });

@@ -139,7 +139,10 @@ function readSpanCount(
   return Number.isSafeInteger(count) ? count : undefined;
 }
 
-function readCost(element: DrawnElement): Record<string, number> {
+function readCost(element: DrawnElement): {
+  readonly cost: Record<string, number>;
+  readonly complete: boolean;
+} {
   const markup: PriceMarkup = { names: new Set(), amounts: new Map() };
   collect(element, markup);
   const descendants = element.querySelectorAll?.("*");
@@ -150,14 +153,19 @@ function readCost(element: DrawnElement): Record<string, number> {
     }
   }
   const cost: Record<string, number> = {};
+  let complete = true;
   for (const resource of markup.names) {
     const raw = markup.amounts.get(resource.toLowerCase());
-    if (raw === undefined) continue;
+    if (raw === undefined) {
+      complete = false;
+      continue;
+    }
     const amount = Number(raw);
     // The game writes a price only when it is above zero, so anything else is not one.
     if (Number.isFinite(amount) && amount > 0) cost[resource] = amount;
+    else complete = false;
   }
-  return cost;
+  return { cost, complete };
 }
 
 export function createGameDrawnActionsReader({
@@ -180,10 +188,12 @@ export function createGameDrawnActionsReader({
         }
         const state = readSwitchState(element);
         const nativeAffordable = readNativeAffordability(element);
+        const price = readCost(element);
         actions.push(
           Object.freeze({
             id,
-            cost: Object.freeze(readCost(element)),
+            cost: Object.freeze(price.cost),
+            costComplete: price.complete,
             ...(nativeAffordable === undefined ? {} : { nativeAffordable }),
             ...(state === undefined ? {} : { state }),
           }),

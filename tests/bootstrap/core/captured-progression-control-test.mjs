@@ -238,7 +238,9 @@ let nowMs = 0;
 const unavailable = [];
 let researchPanelVisible = true;
 let researchDrawAvailable = true;
-let offeredRows = [{ id: "tech-mining", cost: { Knowledge: 5 } }];
+let offeredRows = [
+  { id: "tech-mining", cost: { Knowledge: 5 }, costComplete: true },
+];
 let researchDraws = 0;
 let researchHandleResolutions = 0;
 let researchControlRevision = 0;
@@ -354,7 +356,11 @@ assert.deepEqual([...researchControl.readGrantedTechs()], ["tech-old-mining"]);
 researchControl.beginProcessedCycle?.();
 assert.equal(researchControl.readOfferedTechs(), undefined);
 offeredRows = [
-  { id: "tech-current-cycle", cost: { Knowledge: 5, Polymer: 700 } },
+  {
+    id: "tech-current-cycle",
+    cost: { Knowledge: 5, Polymer: 700 },
+    costComplete: true,
+  },
 ];
 assert.deepEqual(
   researchControl.sampleOfferedTechs()?.map(({ elementId }) => elementId),
@@ -362,7 +368,13 @@ assert.deepEqual(
 );
 assert.equal(researchDraws, 2);
 assert.equal(demand.sample().storageRequired("Polymer"), 721);
-offeredRows = [{ id: "tech-redrawn-later", cost: { Knowledge: 5 } }];
+offeredRows = [
+  {
+    id: "tech-redrawn-later",
+    cost: { Knowledge: 5 },
+    costComplete: true,
+  },
+];
 nowMs = 20_000;
 researchControl.runResearchCycle();
 const beforeRepeatedResearchSample = researchHandleResolutions;
@@ -381,7 +393,11 @@ assert.equal(researchDraws, 2);
 // newly offered technology instead of keeping the pre-action catalog indefinitely.
 root.tech["research-completed"] = 1;
 offeredRows = [
-  { id: "tech-after-progression", cost: { Knowledge: 5, Polymer: 800 } },
+  {
+    id: "tech-after-progression",
+    cost: { Knowledge: 5, Polymer: 800 },
+    costComplete: true,
+  },
 ];
 assert.equal(researchControl.readOfferedTechs(), undefined);
 assert.deepEqual(
@@ -399,7 +415,13 @@ techHandles.set("tech-after-progression", {
 });
 researchControlRevision += 1;
 assert.equal(researchControl.readOfferedTechs(), undefined);
-offeredRows = [{ id: "tech-after-control-rebind", cost: { Knowledge: 5 } }];
+offeredRows = [
+  {
+    id: "tech-after-control-rebind",
+    cost: { Knowledge: 5 },
+    costComplete: true,
+  },
+];
 assert.deepEqual(
   researchControl.sampleOfferedTechs()?.map(({ elementId }) => elementId),
   ["tech-after-control-rebind"],
@@ -409,7 +431,13 @@ assert.equal(researchDraws, 4);
 // The next processed cycle samples its own offers, even if the progression epoch did not change.
 researchControl.beginProcessedCycle?.();
 assert.equal(researchControl.readOfferedTechs(), undefined);
-offeredRows = [{ id: "tech-next-cycle", cost: { Knowledge: 5, Polymer: 900 } }];
+offeredRows = [
+  {
+    id: "tech-next-cycle",
+    cost: { Knowledge: 5, Polymer: 900 },
+    costComplete: true,
+  },
+];
 assert.deepEqual(
   researchControl.sampleOfferedTechs()?.map(({ elementId }) => elementId),
   ["tech-next-cycle"],
@@ -419,7 +447,13 @@ assert.equal(demand.sample().storageRequired("Polymer"), 927);
 
 // A failed current sample is unknown; it cannot fall back to the previous cycle's catalog.
 researchControl.beginProcessedCycle?.();
-offeredRows = [{ id: "tech-last-successful-cycle", cost: { Polymer: 700 } }];
+offeredRows = [
+  {
+    id: "tech-last-successful-cycle",
+    cost: { Polymer: 700 },
+    costComplete: true,
+  },
+];
 assert.deepEqual(
   researchControl.sampleOfferedTechs()?.map(({ elementId }) => elementId),
   ["tech-last-successful-cycle"],

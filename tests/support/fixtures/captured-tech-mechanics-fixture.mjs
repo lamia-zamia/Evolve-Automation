@@ -17,26 +17,6 @@ export function makeCapturedTechMechanicsFixture(actionIds = []) {
   return Object.freeze({
     captureTechDefinitionsDuring: (draw) => draw(),
     readTechDefinitions: () => definitions,
-    withTechQueueCostAlias: (actionId, readProbeCost) =>
-      definitions.filter((definition) => definition.actionId === actionId)
-        .length === 1
-        ? readProbeCost("tech-__ea_research_cost_probe__")
-        : undefined,
-    withTechQueueCostAliases: (actionIds, readProbeCost) => {
-      if (
-        actionIds.some(
-          (actionId) =>
-            definitions.filter((definition) => definition.actionId === actionId)
-              .length !== 1,
-        )
-      )
-        return undefined;
-      return Object.freeze(
-        actionIds.map((actionId) =>
-          readProbeCost(actionId, "tech-__ea_research_cost_probe__"),
-        ),
-      );
-    },
   });
 }
 

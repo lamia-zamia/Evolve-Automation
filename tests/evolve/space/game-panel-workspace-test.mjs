@@ -200,7 +200,12 @@ function workspaceFor(page) {
     subscribeRootReplaced: () => () => {},
   };
   const rows = [
-    { id: "tech-alpha", cost: { Knowledge: 10 }, nativeAffordable: true },
+    {
+      id: "tech-alpha",
+      cost: { Knowledge: 10 },
+      costComplete: true,
+      nativeAffordable: true,
+    },
   ];
   const catalog = createCapturedTechCatalog({
     rootState,
@@ -227,10 +232,6 @@ function workspaceFor(page) {
           grantLevel: 1,
         },
       ],
-    },
-    nativePrices: {
-      readTechCost: () => ({ Knowledge: 10 }),
-      readTechCosts: (actionIds) => actionIds.map(() => ({ Knowledge: 10 })),
     },
   });
 

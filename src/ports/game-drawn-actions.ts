@@ -27,6 +27,8 @@ export interface DrawnAction {
   readonly id: string;
   /** `data-<Resource>` costs, keyed by the game's resource names. */
   readonly cost: Readonly<Record<string, number>>;
+  /** Every `res-*` class had a matching positive finite `data-*` price. */
+  readonly costComplete: boolean;
   /** The row's native current affordability, or absent if its class could not be read. */
   readonly nativeAffordable?: boolean;
   /**

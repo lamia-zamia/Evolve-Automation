@@ -361,12 +361,6 @@ function runDemandSampleScenario(
         }
         if (handle.elementId === "buildQueue" && method === "setData") {
           const id = root.queue.queue.at(-1)?.id;
-          if (id === "tech-__ea_research_cost_probe__") {
-            return {
-              ok: true,
-              value: { "data-Polymer": 100 },
-            };
-          }
           return {
             ok: true,
             value: constructionCase
@@ -3158,17 +3152,7 @@ function runCombatRuntime(autoFight) {
     invoke: (handle, method) => {
       storageCalls.push([handle.elementId, method]);
       if (handle.elementId === "buildQueue" && method === "setData") {
-        const probeId = root.queue.queue.at(-1)?.id;
-        const amount =
-          probeId === "tech-__ea_research_cost_probe__"
-            ? nativeResearchBindings[0] === "tech-polymer-heavy"
-              ? 700
-              : 900
-            : 0;
-        return {
-          ok: true,
-          value: amount > 0 ? { "data-Polymer": amount } : {},
-        };
+        return { ok: true, value: {} };
       }
       if (method === "buildCrateDesc") {
         return { ok: true, value: "Build 1 Plywood crate for 350 storage" };
