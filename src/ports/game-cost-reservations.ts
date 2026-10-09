@@ -7,6 +7,8 @@
  */
 
 import type { ReservedCostTarget } from "../domain/cost-conflicts.ts";
+import type { GameActionCostReader } from "./game-action-costs.ts";
+import type { OfferedTech } from "./game-tech-catalog.ts";
 
 export interface CostReservationSample {
   readonly targets: readonly Readonly<ReservedCostTarget>[];
@@ -19,6 +21,12 @@ export interface CostReservationSample {
   readonly unavailableReason?: string;
 }
 
+export interface CostReservationReadOptions {
+  readonly costs?: GameActionCostReader;
+  readonly readOfferedTechs?: () =>
+    readonly Readonly<OfferedTech>[] | undefined;
+}
+
 export interface CostReservationSource {
-  readReservations(): CostReservationSample;
+  readReservations(options?: CostReservationReadOptions): CostReservationSample;
 }

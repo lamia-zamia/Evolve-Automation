@@ -2055,12 +2055,12 @@ assertRunsBefore(assert, tail.trace, "supply", "eject");
 assertRunsBefore(assert, tail.trace, "eject", "power");
 assertRunsBefore(assert, tail.trace, "fleet", "power");
 assert.equal(tail.trace.at(-1), "power", JSON.stringify(tail.trace));
-// Power performs no panel discovery on this path: the only thing it reports is the retained
-// unavailable answer for a capture with no managed Building.
+// Power performs no panel discovery on this path: it rejects the missing managed Building
+// snapshot before requesting exact demand, retaining the same fail-closed outcome.
 assert.deepEqual(
   tail.errors.filter((message) => message.startsWith("autoPower")),
   [
-    "autoPower: captured-power-cycle-unavailable: exact demand unavailable: offered technology snapshot unavailable",
+    "autoPower: captured-power-cycle-unavailable: captured structures unavailable",
   ],
 );
 

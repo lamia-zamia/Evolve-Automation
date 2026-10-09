@@ -39,6 +39,8 @@ export interface CapturedFactoryDependencies {
   readonly readBuildTargets?: () => readonly Readonly<GameBuildTarget>[];
   /** Prices captured build targets through the game's own cost path. */
   readonly buildCosts?: GameActionCostReader;
+  /** Reports the first successful native factory allocation action in a run. */
+  readonly onMutation?: () => void;
 }
 
 interface FactorySession {
@@ -579,6 +581,7 @@ export function createCapturedFactoryAutomation({
   readDemand,
   readBuildTargets,
   buildCosts,
+  onMutation,
 }: CapturedFactoryDependencies): {
   readonly run: () => CommandExecutionOutcome;
 } {
@@ -596,6 +599,7 @@ export function createCapturedFactoryAutomation({
         buildCosts,
       );
       const session: FactorySession = Object.freeze({ root, input, fullInput });
+      let mutationAttempted = false;
       const decision =
         fullInput === undefined ? undefined : planFactory(fullInput);
       const adjustments =
@@ -666,6 +670,7 @@ export function createCapturedFactoryAutomation({
               result.detail ?? result.reason,
             );
           }
+          mutationAttempted = true;
         }
         return undefined;
       };
@@ -698,6 +703,7 @@ export function createCapturedFactoryAutomation({
             );
           }
         }
+        if (mutationAttempted) onMutation?.();
         return SUCCEEDED;
       }
       const remaining = totalAssigned(session.root);
@@ -707,6 +713,7 @@ export function createCapturedFactoryAutomation({
           "factory allocation did not reach captured capacity",
         );
       }
+      if (mutationAttempted) onMutation?.();
       return SUCCEEDED;
     },
   });

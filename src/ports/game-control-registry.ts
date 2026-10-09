@@ -36,6 +36,10 @@ export interface ControlCaptureCheckpoint {
 export interface GameControlRegistry {
   /** The current authoritative handle; absent and rejected generations answer `undefined`. */
   resolve(elementId: string): GameControlHandle | undefined;
+  /** Allocation-free check for a captured generation and its rejection state. */
+  isCurrent?(elementId: string, generation: number): boolean;
+  /** Revision changes when a captured binding generation changes or is rejected. */
+  readRevision?(): number;
   checkpoint(): ControlCaptureCheckpoint;
   /** Reject changed current generations, optionally bounded before a later legitimate redraw. */
   rejectChanges(

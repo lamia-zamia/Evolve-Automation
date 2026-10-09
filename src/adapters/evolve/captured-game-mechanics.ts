@@ -1757,7 +1757,7 @@ export function installCapturedGameMechanics(
       );
       return current !== undefined &&
         sameNativeTechRegistrySnapshot(retained, current)
-        ? current
+        ? retained
         : undefined;
     } catch {
       return undefined;

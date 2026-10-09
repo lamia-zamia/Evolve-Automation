@@ -180,6 +180,16 @@ export interface PreparedDemandPrioritization {
   readonly vitreloyPlant: DemandVitreloyPlant;
 }
 
+export type DemandPrioritizationVariant = Pick<
+  DemandPrioritizationInput,
+  "savingTarget" | "mechCosts" | "factoryCount" | "factoryProductions"
+>;
+
+export interface DemandPrioritizationDelta {
+  readonly requests: readonly DemandRequest[];
+  readonly savingConflict: DemandPrioritizationResult["savingConflict"];
+}
+
 function projectDoubles(target: DemandTarget): boolean {
   return target.isProject && target.progress !== null && target.progress < 99;
 }
@@ -270,104 +280,103 @@ export function prepareDemandPrioritization(
   });
 }
 
-export function evaluateDemandPrioritization(
+export function evaluateDemandPrioritizationVariants(
   prepared: Readonly<PreparedDemandPrioritization>,
-  variant: Readonly<
-    Pick<
-      DemandPrioritizationInput,
-      "savingTarget" | "mechCosts" | "factoryCount" | "factoryProductions"
-    >
-  >,
-): DemandPrioritizationResult {
-  const requests = [...prepared.requests];
+  variants: readonly Readonly<DemandPrioritizationVariant>[],
+): readonly DemandPrioritizationDelta[] {
   const { settings, balance } = prepared;
-  const request = (resourceId: string, amount: number) => {
-    requests.push({ resourceId, amount });
-  };
-
-  // Additive rather than part of `prioritizedTasks`: an explicit queue still
-  // decides what the fallback research request does, and requests are combined
-  // by maximum, so saving for a target can only raise a demand, never lower one.
-  const savingCost: Record<string, number> = {};
-  if (variant.savingTarget !== null) {
-    for (const cost of variant.savingTarget.costs) {
-      request(cost.resourceId, cost.amount);
-      savingCost[cost.resourceId] = cost.amount;
-    }
-  }
-
-  for (const cost of variant.mechCosts) {
-    request(cost.resourceId, cost.amount);
-  }
-
-  if (prepared.spyPurchaseMoney && settings.prioritizeUnify.includes("req")) {
-    request("Money", prepared.spyPurchaseMoney);
-  }
-
-  if (
-    settings.autoFleet &&
-    prepared.fleet.nextShipAffordable &&
-    settings.prioritizeOuterFleet.includes("req")
-  ) {
-    for (const cost of prepared.fleet.nextShipCost) {
-      request(cost.resourceId, cost.amount);
-    }
-  }
-
-  for (const crafter of prepared.crafters) {
-    if (
-      (settings.productionFactoryFocusMaterials || crafter.isDemanded) &&
-      crafter.isUnlocked
-    ) {
-      for (const cost of crafter.costs) {
-        const minExpected =
-          cost.materialMaxQuantity * crafter.craftPreserve +
-          prepared.availableCrafters * (1 / 140) * balance * cost.amount;
-        request(cost.resourceId, minExpected);
-      }
-    }
-  }
-
-  const { vitreloyPlant } = prepared;
-  const vitPlantCount =
-    settings.autoPower && vitreloyPlant.autoStateEnabled
-      ? vitreloyPlant.count
-      : vitreloyPlant.stateOnCount;
-  if (vitPlantCount > 0) {
-    request("Stanene", vitPlantCount * balance * 100);
-  }
-
-  if (variant.factoryCount > 0) {
-    const multiplier = variant.factoryCount * balance;
-    const storageThreshold = settings.productionFactoryMinIngredients;
-    for (const production of variant.factoryProductions) {
-      if (
-        (settings.productionFactoryFocusMaterials || production.isDemanded) &&
-        production.unlocked &&
-        production.enabled &&
-        production.weighting
-      ) {
-        for (const cost of production.costs) {
-          request(
-            cost.resourceId,
-            cost.quantity * multiplier +
-              cost.minRateOfChange +
-              storageThreshold * cost.resourceMaxQuantity,
-          );
+  return Object.freeze(
+    variants.map((variant) => {
+      const requests: DemandRequest[] = [];
+      const request = (resourceId: string, amount: number) => {
+        requests.push(Object.freeze({ resourceId, amount }));
+      };
+      const savingCost: Record<string, number> = {};
+      if (variant.savingTarget !== null) {
+        for (const cost of variant.savingTarget.costs) {
+          request(cost.resourceId, cost.amount);
+          savingCost[cost.resourceId] = cost.amount;
         }
       }
-    }
-  }
+      for (const cost of variant.mechCosts)
+        request(cost.resourceId, cost.amount);
+      if (prepared.spyPurchaseMoney && settings.prioritizeUnify.includes("req"))
+        request("Money", prepared.spyPurchaseMoney);
+      if (
+        settings.autoFleet &&
+        prepared.fleet.nextShipAffordable &&
+        settings.prioritizeOuterFleet.includes("req")
+      ) {
+        for (const cost of prepared.fleet.nextShipCost)
+          request(cost.resourceId, cost.amount);
+      }
+      for (const crafter of prepared.crafters) {
+        if (
+          (settings.productionFactoryFocusMaterials || crafter.isDemanded) &&
+          crafter.isUnlocked
+        ) {
+          for (const cost of crafter.costs) {
+            request(
+              cost.resourceId,
+              cost.materialMaxQuantity * crafter.craftPreserve +
+                prepared.availableCrafters * (1 / 140) * balance * cost.amount,
+            );
+          }
+        }
+      }
+      const { vitreloyPlant } = prepared;
+      const vitPlantCount =
+        settings.autoPower && vitreloyPlant.autoStateEnabled
+          ? vitreloyPlant.count
+          : vitreloyPlant.stateOnCount;
+      if (vitPlantCount > 0) request("Stanene", vitPlantCount * balance * 100);
+      if (variant.factoryCount > 0) {
+        const multiplier = variant.factoryCount * balance;
+        const storageThreshold = settings.productionFactoryMinIngredients;
+        for (const production of variant.factoryProductions) {
+          if (
+            (settings.productionFactoryFocusMaterials ||
+              production.isDemanded) &&
+            production.unlocked &&
+            production.enabled &&
+            production.weighting
+          ) {
+            for (const cost of production.costs) {
+              request(
+                cost.resourceId,
+                cost.quantity * multiplier +
+                  cost.minRateOfChange +
+                  storageThreshold * cost.resourceMaxQuantity,
+              );
+            }
+          }
+        }
+      }
+      return Object.freeze({
+        requests: Object.freeze(requests),
+        savingConflict:
+          variant.savingTarget === null
+            ? null
+            : Object.freeze({
+                name: variant.savingTarget.name,
+                cost: Object.freeze(savingCost),
+              }),
+      });
+    }),
+  );
+}
 
+export function evaluateDemandPrioritization(
+  prepared: Readonly<PreparedDemandPrioritization>,
+  variant: Readonly<DemandPrioritizationVariant>,
+): DemandPrioritizationResult {
+  const [delta] = evaluateDemandPrioritizationVariants(prepared, [variant]);
   return Object.freeze({
-    savingConflict:
-      variant.savingTarget === null
-        ? null
-        : Object.freeze({
-            name: variant.savingTarget.name,
-            cost: Object.freeze(savingCost),
-          }),
-    requests: Object.freeze(requests.map((entry) => Object.freeze(entry))),
+    savingConflict: delta?.savingConflict ?? null,
+    requests: Object.freeze([
+      ...(prepared.requests ?? []),
+      ...(delta?.requests ?? []),
+    ]),
     removedMissionIndices: prepared.removedMissionIndices,
   });
 }

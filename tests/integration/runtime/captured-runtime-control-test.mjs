@@ -2545,7 +2545,7 @@ function runCapturedJobsMatrixScenario({
   // espionage phase asks the Governor-ownership question before it stands down, which is one more
   // read of its own. Re-tune by sweeping this number if the tick changes how often it reads the
   // root.
-  let remainingRootFailures = 15;
+  let remainingRootFailures = 14;
   let validCombatRootReads = 0;
   const root = {
     tech: { spy: 2 },
@@ -2727,7 +2727,6 @@ function runCapturedJobsMatrixScenario({
       "construction demand preparation",
       "construction saving discovery",
       "autoResearch",
-      "post-research construction demand preparation",
       "autoBuild",
       "autoFight.mercenary",
       "autoFight.battle",
@@ -3307,7 +3306,11 @@ function runCombatRuntime(autoFight) {
       },
     ],
   });
-  assert.equal(trigger.researchOfferReads, 1);
+  assert.equal(
+    trigger.researchOfferReads,
+    2,
+    "a successful trigger click refreshes its dependent offer reservation",
+  );
   assert.ok(
     trigger.invoked.includes("city-farm.action"),
     "a demand-based build trigger must see the current research reservation without a tech operand",
@@ -3334,8 +3337,8 @@ function runCombatRuntime(autoFight) {
   });
   assert.equal(
     combined.researchOfferReads,
-    1,
-    "Market and trigger demand consumers must share one current offer observation",
+    2,
+    "the trigger re-reads its dependent offer reservation after a successful click",
   );
   assert.ok(combined.invoked.includes("city-farm.action"));
   assertDemandScenarioErrors(combined.errors);

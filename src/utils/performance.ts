@@ -8,6 +8,8 @@ export interface PhaseTimingSink {
   readPerformanceEnabled(): boolean;
   nowMs(): number;
   recordPerformance(phase: string, durationMs: number): void;
+  /** Optional shared nesting context for callers that compose phase measurements. */
+  readonly measurePhase?: <T>(phase: string, action: () => T) => T;
   /**
    * Adds to a named tally. Counters answer "how many", not "how long": how
    * many candidates a loop saw, how many an early rule discarded, how many
@@ -20,7 +22,59 @@ export interface PhaseTimingSink {
 /** Runs one action under a named phase and returns its result unchanged. */
 export type MeasurePhase = <T>(phase: string, action: () => T) => T;
 
+export interface ExclusivePhaseMeasure {
+  readonly measure: MeasurePhase;
+  readonly record: (phase: string, durationMs: number) => void;
+  readonly readTotalMs: () => number;
+}
+
 const runUnmeasured: MeasurePhase = (_phase, action) => action();
+
+const INERT_EXCLUSIVE_MEASURE: ExclusivePhaseMeasure = Object.freeze({
+  measure: runUnmeasured,
+  record: () => {},
+  readTotalMs: () => 0,
+});
+
+/**
+ * Measures named work as exclusive time. Child phases subtract their full duration from the
+ * parent, so the total of all recorded phases does not count nested work twice. `record` admits
+ * an externally timed, non-nested section into the same ownership total.
+ */
+export function createExclusivePhaseMeasure(
+  diagnostics: PhaseTimingSink | undefined,
+): ExclusivePhaseMeasure {
+  if (diagnostics === undefined || !diagnostics.readPerformanceEnabled()) {
+    return INERT_EXCLUSIVE_MEASURE;
+  }
+
+  const stack: { childMs: number }[] = [];
+  let totalMs = 0;
+  const record = (phase: string, durationMs: number) => {
+    if (!Number.isFinite(durationMs)) return;
+    totalMs += durationMs;
+    const parent = stack[stack.length - 1];
+    if (parent !== undefined) parent.childMs += durationMs;
+    diagnostics.recordPerformance(phase, durationMs);
+  };
+  const measure: MeasurePhase = (phase, action) => {
+    const startedAtMs = diagnostics.nowMs();
+    const frame = { childMs: 0 };
+    stack.push(frame);
+    try {
+      return action();
+    } finally {
+      const elapsedMs = diagnostics.nowMs() - startedAtMs;
+      stack.pop();
+      const exclusiveMs = Math.max(0, elapsedMs - frame.childMs);
+      totalMs += exclusiveMs;
+      const parent = stack[stack.length - 1];
+      if (parent !== undefined) parent.childMs += elapsedMs;
+      diagnostics.recordPerformance(phase, exclusiveMs);
+    }
+  };
+  return Object.freeze({ measure, record, readTotalMs: () => totalMs });
+}
 
 /**
  * Builds the phase timer for one automation run or cycle.
@@ -40,12 +94,24 @@ export function createPhaseMeasure(
   if (diagnostics === undefined || !diagnostics.readPerformanceEnabled()) {
     return runUnmeasured;
   }
+  if (diagnostics.measurePhase !== undefined) {
+    const measurePhase = diagnostics.measurePhase;
+    return (phase, action) => measurePhase(phase, action);
+  }
+  const stack: { childMs: number }[] = [];
   return (phase, action) => {
     const startedAtMs = diagnostics.nowMs();
+    const frame = { childMs: 0 };
+    stack.push(frame);
     try {
       return action();
     } finally {
-      diagnostics.recordPerformance(phase, diagnostics.nowMs() - startedAtMs);
+      const elapsedMs = diagnostics.nowMs() - startedAtMs;
+      stack.pop();
+      const exclusiveMs = Math.max(0, elapsedMs - frame.childMs);
+      const parent = stack[stack.length - 1];
+      if (parent !== undefined) parent.childMs += elapsedMs;
+      diagnostics.recordPerformance(phase, exclusiveMs);
     }
   };
 }

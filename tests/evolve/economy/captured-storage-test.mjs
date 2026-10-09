@@ -49,6 +49,7 @@ function makeHarness({
   const calls = [];
   const skipped = [];
   const costLookups = [];
+  let mutationReports = 0;
   const controls = new Map([
     [
       "createHead",
@@ -126,6 +127,7 @@ function makeHarness({
       ...(savingPool === undefined ? {} : { pool: savingPool }),
     }),
     readBuildTargets: () => buildTargets,
+    onMutation: () => mutationReports++,
     costs: {
       readCost: (elementId) => {
         costLookups.push(elementId);
@@ -140,7 +142,15 @@ function makeHarness({
     nowMs: () => 1,
   });
   const automation = createStorageAllocationAutomation(ports);
-  return { root, calls, automation, ports, skipped, costLookups };
+  return {
+    root,
+    calls,
+    automation,
+    ports,
+    skipped,
+    costLookups,
+    readMutationReports: () => mutationReports,
+  };
 }
 
 {
@@ -318,15 +328,20 @@ function makeHarness({
 }
 
 {
-  const { root, calls, automation } = makeHarness();
+  const { root, calls, automation, readMutationReports } = makeHarness();
   assert.equal(automation.run().status, "succeeded");
   assert.equal(root.resource.Crates.amount, 2);
   assert.equal(root.resource.Plywood.amount, 80);
   assert.deepEqual(calls.filter((call) => call[1] === "crate").length, 2);
+  assert.equal(
+    readMutationReports(),
+    1,
+    "confirmed expansion invalidates demand",
+  );
 }
 
 {
-  const { root, calls, automation } = makeHarness({
+  const { root, calls, automation, readMutationReports } = makeHarness({
     freeCrates: 1,
     savingCost: { Iron: 300 },
   });
@@ -337,6 +352,13 @@ function makeHarness({
   assert.equal(root.resource.Iron.crates, 1);
   assert.equal(root.resource.Iron.max, 350);
   assert.deepEqual(calls.at(-1), ["stack-Iron", "addCrate", "Iron"]);
+  assert.equal(readMutationReports(), 1);
+  automation.run();
+  assert.equal(
+    readMutationReports(),
+    1,
+    "read-only allocation does not invalidate demand",
+  );
 }
 
 {
@@ -390,7 +412,7 @@ function makeHarness({
 }
 
 {
-  const { automation } = makeHarness({
+  const { automation, readMutationReports } = makeHarness({
     freeCrates: 1,
     savingCost: { Iron: 300 },
     mutateAssignments: false,
@@ -398,6 +420,7 @@ function makeHarness({
   automation.run();
   automation.run();
   assert.equal(automation.run().status, "rejected");
+  assert.equal(readMutationReports(), 0, "failed allocation is not a mutation");
 }
 
 console.log("captured storage tests passed");

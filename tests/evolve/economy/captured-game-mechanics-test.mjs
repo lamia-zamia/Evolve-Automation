@@ -2045,19 +2045,24 @@ function validTechRegistry() {
   assert.deepEqual(observed.actionOrder, ["alpha", "beta"]);
   assert.deepEqual(observed.iteratedOrder, ["alpha", "beta"]);
   assert.deepEqual(observed.afterKeys, after);
+  const retainedTechDefinitions =
+    fixture.installed.mechanics.readTechDefinitions();
   assert.deepEqual(
-    fixture.installed.mechanics
-      .readTechDefinitions()
-      ?.map((definition) => [
-        definition.registryKey,
-        definition.actionId,
-        definition.grantTechnology,
-        definition.grantLevel,
-      ]),
+    retainedTechDefinitions?.map((definition) => [
+      definition.registryKey,
+      definition.actionId,
+      definition.grantTechnology,
+      definition.grantLevel,
+    ]),
     [
       ["alpha", "tech-alpha", "alpha", 1],
       ["beta", "tech-beta", "beta", 2],
     ],
+  );
+  assert.equal(
+    fixture.installed.mechanics.readTechDefinitions(),
+    retainedTechDefinitions,
+    "an unchanged native registry reuses its immutable validated snapshot",
   );
   assert.equal(fixture.page.Object.keys, originalKeys);
   assert.deepEqual(

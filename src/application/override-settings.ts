@@ -25,7 +25,26 @@ export function createOverrideSettings({
   reporter,
   display,
 }: OverrideSettingsDependencies) {
-  function updateOverrides(): void {
+  let lastResolved: Readonly<Record<string, unknown>> | undefined;
+  const publishResolution = (resolution: Readonly<Record<string, unknown>>) => {
+    const changed =
+      lastResolved === undefined
+        ? Object.keys(resolution).length > 0
+        : Object.keys(lastResolved).length !== Object.keys(resolution).length ||
+          Object.entries(resolution).some(([key, value]) => {
+            const previous = lastResolved?.[key];
+            return Array.isArray(value) && Array.isArray(previous)
+              ? value.length !== previous.length ||
+                  value.some(
+                    (entry, index) => !Object.is(entry, previous[index]),
+                  )
+              : !Object.is(value, previous);
+          });
+    lastResolved = Object.freeze({ ...resolution });
+    return changed;
+  };
+
+  function updateOverrides(): boolean {
     const settings = getSettings();
     const settingsRaw = getSettingsRaw();
 
@@ -34,7 +53,7 @@ export function createOverrideSettings({
     // Safe mode doesn't update overrides and always disables script toggle
     if (getSafeMode()) {
       settings.masterScriptToggle = false;
-      return;
+      return publishResolution({});
     }
 
     const resolution = resolveOverrides({
@@ -50,10 +69,12 @@ export function createOverrideSettings({
 
     reporter.report(resolution.failures);
     display.publish();
+    return publishResolution({ ...resolution.values, ...resolution.lists });
   }
 
-  function syncStoredSettings(): void {
+  function syncStoredSettings(): boolean {
     layerSettingsOver(getSettings(), getSettingsRaw());
+    return publishResolution({});
   }
 
   return { updateOverrides, syncStoredSettings };

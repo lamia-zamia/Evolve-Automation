@@ -135,6 +135,8 @@ export interface CapturedProgressionControlDependencies {
     resourceIds: readonly string[],
     resourceScopes?: readonly BuildResourceScope[],
   ) => Readonly<Record<string, number>> | undefined;
+  /** Reports a native construction action that can change demand authority. */
+  readonly onConstructionMutation?: () => void;
   /** Injected clock for discovery scopes that still retain drawn samples. */
   readonly nowMs: () => number;
   readonly diagnostics?: TickDiagnostics | undefined;
@@ -498,6 +500,7 @@ export function createCapturedProgressionControl(
   let grantedSampleAttempted = false;
   let offeredSampleEpoch: string | undefined;
   let heldOfferedSnapshot: Readonly<TechCatalogSnapshot> | undefined;
+  let heldOfferControlRevision: number | undefined;
   const clearResearchSample = () => {
     lastOffered = undefined;
     lastGranted = undefined;
@@ -505,23 +508,33 @@ export function createCapturedProgressionControl(
     grantedSampleAttempted = false;
     offeredSampleEpoch = undefined;
     heldOfferedSnapshot = undefined;
+    heldOfferControlRevision = undefined;
   };
   const heldOfferBindingsAreCurrent = (
     snapshot: Readonly<TechCatalogSnapshot>,
   ): boolean =>
     snapshot.offered.every(
       (offer) =>
+        controls.isCurrent?.(offer.elementId, offer.generation) ??
         (controls.resolve(offer.elementId)?.generation ?? 0) ===
-        offer.generation,
+          offer.generation,
     );
   const invalidateStaleCapturedResearchObservation = (currentEpoch: string) => {
     // Research completion changes the progression epoch; a redraw can also rebind an offer row
     // without a detectable epoch change. Either means the held catalog no longer names live offers.
     const epochChanged =
       offeredSampleEpoch !== undefined && offeredSampleEpoch !== currentEpoch;
-    const rowBindingsChanged =
-      heldOfferedSnapshot !== undefined &&
-      !heldOfferBindingsAreCurrent(heldOfferedSnapshot);
+    let rowBindingsChanged = false;
+    if (heldOfferedSnapshot !== undefined) {
+      const currentControlRevision = controls.readRevision?.();
+      if (
+        currentControlRevision === undefined ||
+        currentControlRevision !== heldOfferControlRevision
+      ) {
+        rowBindingsChanged = !heldOfferBindingsAreCurrent(heldOfferedSnapshot);
+        heldOfferControlRevision = currentControlRevision;
+      }
+    }
     if (!epochChanged && !rowBindingsChanged) return;
     clearResearchSample();
     offeredSampleEpoch = currentEpoch;
@@ -567,12 +580,14 @@ export function createCapturedProgressionControl(
       // capture records that without being asked. Re-resolving beats re-drawing.
       const value = offered.restate(held);
       heldOfferedSnapshot = held;
+      heldOfferControlRevision = controls.readRevision?.();
       lastOffered = value.offered;
       lastGranted = value.granted;
       return value.offered;
     }
     // A failed current sample must not let the previous pass answer a context-dependent condition.
     heldOfferedSnapshot = undefined;
+    heldOfferControlRevision = undefined;
     lastOffered = undefined;
     lastGranted = undefined;
     return undefined;
@@ -901,6 +916,9 @@ export function createCapturedProgressionControl(
     readKnowledgeGate,
     ...(readStorageRequired === undefined ? {} : { readStorageRequired }),
     readOfferedTechs: sampleOfferedTechs,
+    ...(dependencies.onConstructionMutation === undefined
+      ? {}
+      : { onMutation: dependencies.onConstructionMutation }),
     ...(onDiagnostic === undefined ? {} : { onDiagnostic }),
     ...(onActivity === undefined ? {} : { onActivity }),
     ...(onSkipped === undefined ? {} : { onSkipped }),

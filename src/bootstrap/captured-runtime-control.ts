@@ -263,6 +263,10 @@ import { createGameTerraformLab } from "../adapters/browser/game-terraform-lab.t
 import type { TickDiagnostics } from "../ports/tick.ts";
 import type { GameActivitySink } from "../ports/game-message-log.ts";
 import { isRecord, readProperty } from "../adapters/validation.ts";
+import {
+  createCountTally,
+  createExclusivePhaseMeasure,
+} from "../utils/performance.ts";
 import { overrideComparisons } from "../domain/override-comparators.ts";
 import {
   CAPTURED_TRAIT_COMPANION_CONTROLS,
@@ -544,39 +548,58 @@ export function startCapturedRuntime({
     },
     display: { publish: () => {} },
   });
-  const refreshEffectiveSettings = () => {
-    const profiling =
-      diagnostics?.readPerformanceEnabled() === true ? diagnostics : undefined;
-    const startedAtMs = profiling?.nowMs();
-    try {
-      // A few discoveries can refresh settings while the composition is still being assembled.
-      // Until the condition sampler exists, keep the stored layer visible and defer overrides to
-      // the next refresh instead of reporting context-dependent operands as unavailable.
-      if (readOverrideConditionContext === undefined) {
-        overrideSettings.syncStoredSettings();
-        return;
-      }
-      const raw = settingsLifecycle.readRaw();
-      const overrides = raw.overrides;
-      if (
-        readSafeMode() ||
-        (isRecord(overrides) && Object.keys(overrides).length > 0)
-      ) {
-        overrideSettings.updateOverrides();
-      } else {
-        overrideSettings.syncStoredSettings();
-      }
-    } finally {
-      if (profiling !== undefined && startedAtMs !== undefined) {
-        profiling.recordPerformance(
-          "settings.refreshEffective",
-          profiling.nowMs() - startedAtMs,
-        );
-      }
-    }
-  };
+  let activeRuntimeMeasure = createExclusivePhaseMeasure(undefined);
+  const phaseDiagnostics: TickDiagnostics | undefined =
+    diagnostics === undefined
+      ? undefined
+      : Object.freeze({
+          readPerformanceEnabled: () => diagnostics.readPerformanceEnabled(),
+          nowMs: () => diagnostics.nowMs(),
+          measurePhase: <T>(phase: string, action: () => T) =>
+            activeRuntimeMeasure.measure(phase, action),
+          recordPerformance: (phase: string, durationMs: number) =>
+            activeRuntimeMeasure.record(phase, durationMs),
+          recordCount: (name: string, amount: number) =>
+            diagnostics.recordCount(name, amount),
+          flushPerformance: () => diagnostics.flushPerformance(),
+        });
+  let invalidateDemandSettings: () => void = () => {};
+  const refreshEffectiveSettings = (periodWake = false) =>
+    activeRuntimeMeasure.measure(
+      periodWake
+        ? "period.settings.refreshEffective"
+        : "settings.refreshEffective",
+      () => {
+        // A few discoveries can refresh settings while the composition is still being assembled.
+        // Until the condition sampler exists, keep the stored layer visible and defer overrides to
+        // the next refresh instead of reporting context-dependent operands as unavailable.
+        if (readOverrideConditionContext === undefined) {
+          if (overrideSettings.syncStoredSettings()) invalidateDemandSettings();
+          return;
+        }
+        const raw = settingsLifecycle.readRaw();
+        const overrides = raw.overrides;
+        if (
+          readSafeMode() ||
+          (isRecord(overrides) && Object.keys(overrides).length > 0)
+        ) {
+          const changed = activeRuntimeMeasure.measure(
+            periodWake
+              ? "period.settings.overrideEvaluation"
+              : "settings.overrideEvaluation",
+            () => overrideSettings.updateOverrides(),
+          );
+          if (changed) invalidateDemandSettings();
+        } else {
+          if (overrideSettings.syncStoredSettings()) invalidateDemandSettings();
+        }
+      },
+    );
   const refreshDiscoveredSettings = () => {
+    const previousRuns = settingsLifecycle.stats().dynamicDefaultRuns;
     settingsLifecycle.ensureDynamicDefaults();
+    if (settingsLifecycle.stats().dynamicDefaultRuns !== previousRuns)
+      invalidateDemandSettings();
     refreshEffectiveSettings();
   };
   // Feature adapters retain their existing SettingsStore-shaped capability, but its read is now
@@ -721,7 +744,8 @@ export function startCapturedRuntime({
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,
     readSettings: () => settingsStore.readRaw(),
-    readPurchaseMoney: () => readDemand().spyPurchaseReservation?.purchaseMoney,
+    readPurchaseMoney: () =>
+      readDemand("SpyTraining").spyPurchaseReservation?.purchaseMoney,
   });
   // Espionage runs the game's own operations, which live behind a Buefy modal the game builds.
   // The capture reaches them through `foreign.trigModal` with a no-op `$buefy` and a throwaway
@@ -809,7 +833,8 @@ export function startCapturedRuntime({
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,
     readSettings: () => settingsStore.readRaw(),
-    readPurchaseReservation: () => readDemand().spyPurchaseReservation,
+    readPurchaseReservation: () =>
+      readDemand("Espionage").spyPurchaseReservation,
     operations: capturedEspionageOperations,
     onActivity,
   });
@@ -832,8 +857,10 @@ export function startCapturedRuntime({
     controls: pageCapture.controls,
     readSettings: () => settingsStore.readRaw(),
     readGoal: () => capturedPrestigeGoal,
-    readMoneyRequested: () => readDemand().requestedQuantity("Money"),
-    readMoneyStorageRequired: () => readDemand().storageRequired("Money"),
+    readMoneyRequested: () =>
+      readDemand("Mercenary").requestedQuantity("Money"),
+    readMoneyStorageRequired: () =>
+      readDemand("Mercenary").storageRequired("Money"),
     keyState: pageCapture.keyState,
     onActivity,
   });
@@ -863,19 +890,7 @@ export function startCapturedRuntime({
     logError(message);
   };
   const measurePhase = <T>(name: string, body: () => T): T => {
-    const phaseDiagnostics =
-      diagnostics?.readPerformanceEnabled() === true ? diagnostics : undefined;
-    const startedAtMs = phaseDiagnostics?.nowMs();
-    try {
-      return body();
-    } finally {
-      if (phaseDiagnostics !== undefined && startedAtMs !== undefined) {
-        phaseDiagnostics.recordPerformance(
-          name,
-          phaseDiagnostics.nowMs() - startedAtMs,
-        );
-      }
-    }
+    return activeRuntimeMeasure.measure(name, body);
   };
   /**
    * One feature's phase of the cycle. A throw inside it is reported once and skips that feature for
@@ -889,7 +904,7 @@ export function startCapturedRuntime({
    */
   const runPhase = <T>(name: string, body: () => T): T | undefined => {
     try {
-      return measurePhase(name, body);
+      return activeRuntimeMeasure.measure(name, body);
     } catch (error) {
       reportOnce(`${name} stopped: ${String(error)}`);
       return undefined;
@@ -898,7 +913,30 @@ export function startCapturedRuntime({
   // The demand sample both reads the construction cycle's observations and answers its storage
   // question, so one of the two has to be late-bound. This one is, with a real empty sample until
   // the cycle exists, rather than a mutable object either side could hold a stale reference to.
-  let readDemand: () => CapturedDemandSample = () => EMPTY_DEMAND_SAMPLE;
+  type DemandSampleOwner =
+    | "pre-Gather"
+    | "Build"
+    | "Market"
+    | "Storage"
+    | "Jobs"
+    | "Power"
+    | "SpyTraining"
+    | "Espionage"
+    | "Mercenary"
+    | "Mech"
+    | "Genetics"
+    | "Replicator"
+    | "ProductionRatios"
+    | "Craft"
+    | "Smelter"
+    | "Nanite"
+    | "Ejector"
+    | "Supply"
+    | "Factory"
+    | "Fleet";
+  let readDemand: (owner: DemandSampleOwner) => CapturedDemandSample = () =>
+    EMPTY_DEMAND_SAMPLE;
+  const readDemandFor = (owner: DemandSampleOwner) => () => readDemand(owner);
   // Overrides may need the prerequisite report before the period gate; the cycle then keeps and
   // reuses it for its demand consumers. Reset it with the cycle's other samples.
   let demandPrerequisitesThisCycle: DemandPrerequisiteReport | undefined;
@@ -911,7 +949,9 @@ export function startCapturedRuntime({
       controls: pageCapture.controls,
       mountSuppression: pageCapture.mountSuppression,
       panels,
-      ...(diagnostics === undefined ? {} : { diagnostics }),
+      ...(phaseDiagnostics === undefined
+        ? {}
+        : { diagnostics: phaseDiagnostics }),
     }),
     pageWindow: settingsHostWindow,
     bindings: pageCapture.bindings,
@@ -919,6 +959,8 @@ export function startCapturedRuntime({
       ? {}
       : { onDiagnostic: (message: string) => reportDiagnostic(message) }),
   });
+  let constructionMutationObserved = false;
+  let storageMutationObserved = false;
   const progression = createCapturedProgressionControl({
     readMechPowerSupplyHold: mechSupplyReservation.readPowerSupplyHold,
     rootState: pageCapture.rootState,
@@ -939,7 +981,7 @@ export function startCapturedRuntime({
     readInterfacePresentationSettings: readEffectiveInterfacePresentation,
     readStateLogPlannerDetailsDue: () => stateLogPlannerDetailsDue,
     readReservedQuantityForMechPriority: (resourceId) =>
-      readDemand().requestedQuantityForMechPriority(resourceId),
+      readDemand("Mech").requestedQuantityForMechPriority(resourceId),
     // The already-granted half of the research draw is only worth its cost to a configured
     // trigger or override, so those stored conditions decide whether the pass keeps it.
     needGrantedTechs: () => {
@@ -950,7 +992,7 @@ export function startCapturedRuntime({
       );
     },
     readCapturedStorageRequired: (_resourceIds, resourceScopes = []) => {
-      const sample = readDemand();
+      const sample = readDemand("Build");
       const scopes: readonly BuildResourceScope[] =
         resourceScopes.length > 0
           ? resourceScopes
@@ -964,13 +1006,16 @@ export function startCapturedRuntime({
         ),
       );
     },
+    onConstructionMutation: () => {
+      constructionMutationObserved = true;
+    },
     // Reported once per distinct reason: a candidate the cycle cannot price or a catalog it cannot
     // read is otherwise dropped in silence, which is how a composition gap survives a whole session.
     onSkipped: (key, reason) =>
       reportOnce(`progression skipped ${key}: ${reason}`),
     onUnavailable: (reason) => reportOnce(`progression unavailable: ${reason}`),
     nowMs: () => Date.now(),
-    diagnostics,
+    diagnostics: phaseDiagnostics,
     onDiagnostic: reportDiagnostic,
     onActivity,
   });
@@ -999,7 +1044,7 @@ export function startCapturedRuntime({
     },
   });
   const readCapturedMechReservation = (resourceId: string): number => {
-    const demandSample = readDemand();
+    const demandSample = readDemand("Mech");
     // Re-evaluate Mech-first with the priority budget: the normal sample still contains the
     // construction saving target that this priority is meant to preempt.
     const priorityDemand = progression.mechDemand.read({
@@ -1051,7 +1096,7 @@ export function startCapturedRuntime({
     keyState: pageCapture.keyState,
     controls: pageCapture.controls,
     readSettings: () => settingsStore.readRaw(),
-    readDemand: () => readDemand(),
+    readDemand: readDemandFor("Genetics"),
   });
   const traits = createCapturedTraitControl({
     rootState: pageCapture.rootState,
@@ -1078,7 +1123,7 @@ export function startCapturedRuntime({
     controls: pageCapture.controls,
     costs,
     readSettings: () => settingsStore.readRaw(),
-    readDemand: () => readDemand(),
+    readDemand: readDemandFor("Jobs"),
     readBuildTargets: progression.readManagedBuildTargets,
     buildCosts,
   });
@@ -1086,7 +1131,7 @@ export function startCapturedRuntime({
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,
     readSettings: () => settingsStore.readRaw(),
-    readDemand: () => readDemand(),
+    readDemand: readDemandFor("Jobs"),
     onSkipped: (key, reason) => reportOnce(`jobs skipped ${key}: ${reason}`),
   });
   const fullJobs = createCapturedFullJobsAutomation({
@@ -1095,10 +1140,12 @@ export function startCapturedRuntime({
     readSettings: () => settingsStore.readRaw(),
     onSkipped: (key, reason) => reportOnce(`jobs skipped ${key}: ${reason}`),
     costs,
-    readDemand: () => readDemand(),
+    readDemand: readDemandFor("Jobs"),
     readBuildTargets: progression.readManagedBuildTargets,
     buildCosts,
-    ...(diagnostics === undefined ? {} : { diagnostics }),
+    ...(phaseDiagnostics === undefined
+      ? {}
+      : { diagnostics: phaseDiagnostics }),
   });
   const pylon = createCapturedPylonAutomation({
     rootState: pageCapture.rootState,
@@ -1123,7 +1170,7 @@ export function startCapturedRuntime({
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,
     readSettings: () => settingsStore.readRaw(),
-    readDemand: () => readDemand(),
+    readDemand: readDemandFor("Replicator"),
   });
   // Demand is shared within a mutation phase; construction and Factory invalidate it below.
   // The research offer snapshot is already captured by progression; sharing it here keeps queue
@@ -1320,6 +1367,141 @@ export function startCapturedRuntime({
       }
     }
   };
+  let demandThisCycle: CapturedDemandSample | undefined;
+  let exactDemandUnavailableReason: string | undefined;
+  let demandEpoch = 0;
+  let actionCostEpoch = 0;
+  let demandSampleEpoch = -1;
+  const invalidateDemandSample = (actionCostsMayChange = true) => {
+    demandEpoch += 1;
+    if (actionCostsMayChange) actionCostEpoch += 1;
+    demandSampleEpoch = -1;
+    demandThisCycle = undefined;
+    exactDemandUnavailableReason = undefined;
+  };
+  invalidateDemandSettings = () => {
+    invalidateDemandSample(false);
+    savingTargetThisCycle = undefined;
+    triggerTargetsThisCycle = undefined;
+    triggerDemandThisCycle = undefined;
+    demandPrerequisitesThisCycle = undefined;
+    if (settingsLifecycle.readEffective()["autoTrigger"] === true) {
+      try {
+        triggerTargetsThisCycle = triggers.read();
+      } catch {
+        triggerTargetsThisCycle = undefined;
+      }
+    }
+  };
+  const invalidateDemandAfterMutation = (
+    constructionAuthority = false,
+    actionCostsMayChange = true,
+  ) => {
+    invalidateDemandSample(actionCostsMayChange);
+    savingTargetThisCycle = undefined;
+    triggerDemandThisCycle = undefined;
+    demandPrerequisitesThisCycle = undefined;
+    if (constructionAuthority) progression.invalidateConstructionOffers();
+    if (settingsLifecycle.readEffective()["autoTrigger"] === true) {
+      try {
+        triggerTargetsThisCycle = triggers.read();
+      } catch {
+        triggerTargetsThisCycle = undefined;
+      }
+    }
+  };
+  // Upstream functions.js `adjustCosts` reads race traits, the `genes.evolve` price special case,
+  // technology and the active
+  // government while composing native prices. Snapshot those fields around the later mutators so
+  // a no-op phase keeps price answers, while an actual change closes their reuse window.
+  const captureNativePriceAuthority = () => {
+    const root = pageCapture.rootState.readRoot();
+    const copyFields = (value: unknown) =>
+      isRecord(value)
+        ? Object.freeze(
+            Object.keys(value).map((key) =>
+              Object.freeze([key, readProperty(value, key)] as const),
+            ),
+          )
+        : Object.freeze([] as readonly (readonly [string, unknown])[]);
+    return Object.freeze({
+      race: copyFields(readProperty(root, "race")),
+      genes: Object.freeze([
+        Object.freeze([
+          "evolve",
+          readProperty(readProperty(root, "genes"), "evolve"),
+        ] as const),
+      ]),
+      tech: copyFields(readProperty(root, "tech")),
+      government: copyFields(
+        readProperty(readProperty(root, "civic"), "govern"),
+      ),
+      captiveHousing: readProperty(
+        readProperty(root, "city"),
+        "captive_housing",
+      ),
+      torturerWorkers: readProperty(
+        readProperty(readProperty(root, "civic"), "torturer"),
+        "workers",
+      ),
+      nightmareMetaGene: readProperty(
+        readProperty(
+          readProperty(readProperty(root, "stats"), "achieve"),
+          "nightmare",
+        ),
+        "mg",
+      ),
+    });
+  };
+  const nativePriceAuthorityChanged = (
+    before: ReturnType<typeof captureNativePriceAuthority>,
+    after: ReturnType<typeof captureNativePriceAuthority>,
+  ) => {
+    const fields = ["race", "genes", "tech", "government"] as const;
+    return (
+      fields.some((field) => {
+        const prior = before[field];
+        const current = after[field];
+        return (
+          prior.length !== current.length ||
+          prior.some(
+            ([key, value], index) =>
+              current[index]?.[0] !== key ||
+              !Object.is(current[index]?.[1], value),
+          )
+        );
+      }) ||
+      !Object.is(before.captiveHousing, after.captiveHousing) ||
+      !Object.is(before.torturerWorkers, after.torturerWorkers) ||
+      !Object.is(before.nightmareMetaGene, after.nightmareMetaGene)
+    );
+  };
+  const runPriceSensitivePhase = <T>(
+    name: string,
+    body: () => T,
+  ): T | undefined =>
+    runPhase(name, () => {
+      const before = captureNativePriceAuthority();
+      let outcome:
+        | Readonly<{ status: "succeeded"; value: T }>
+        | Readonly<{ status: "failed"; error: unknown }>;
+      try {
+        outcome = Object.freeze({ status: "succeeded", value: body() });
+      } catch (error) {
+        outcome = Object.freeze({ status: "failed", error });
+      }
+      try {
+        if (nativePriceAuthorityChanged(before, captureNativePriceAuthority()))
+          invalidateDemandSample();
+      } catch (error) {
+        // The feature may already have changed native price inputs. If the after-snapshot is no
+        // longer readable, expire the sample before the normal phase boundary reports failure.
+        invalidateDemandSample();
+        throw error;
+      }
+      if (outcome.status === "failed") throw outcome.error;
+      return outcome.value;
+    });
   const invalidateCapturedCyclePlanning = () => {
     latestConstructionSnapshot = null;
     latestConstructionRun = undefined;
@@ -1327,7 +1509,7 @@ export function startCapturedRuntime({
     constructionFreshness = "none";
     triggerTargetsThisCycle = undefined;
     triggerDemandThisCycle = undefined;
-    demandThisCycle = undefined;
+    invalidateDemandSample();
     demandPrerequisitesThisCycle = undefined;
   };
   pageCapture.rootState.subscribeRootReplaced(() => {
@@ -1341,6 +1523,9 @@ export function startCapturedRuntime({
     latestConstructionRun = undefined;
     constructionFreshness = "none";
     triggerTargetsThisCycle = undefined;
+    triggerDemandThisCycle = undefined;
+    invalidateDemandSample();
+    demandPrerequisitesThisCycle = undefined;
     // Planner statistics stay keyed to the captured day/reset identity; this event also fires
     // when the game restores reactivity around the same raw run.
     refreshCapturedPlanningPanels();
@@ -1357,6 +1542,8 @@ export function startCapturedRuntime({
   });
   const demand = createCapturedResourceDemand({
     rootState: pageCapture.rootState,
+    readDemandEpoch: () => demandEpoch,
+    readActionCostEpoch: () => actionCostEpoch,
     controls: pageCapture.controls,
     costs: buildCosts,
     triggers: Object.freeze({
@@ -1378,13 +1565,14 @@ export function startCapturedRuntime({
     readPrerequisites: readDemandPrerequisites,
     craftCosts: costs,
     fleet: fleetDemand,
-    ...(diagnostics === undefined ? {} : { diagnostics }),
+    ...(phaseDiagnostics === undefined
+      ? {}
+      : { diagnostics: phaseDiagnostics }),
   });
-  let demandThisCycle: CapturedDemandSample | undefined;
-  let exactDemandUnavailableReason: string | undefined;
-  readDemand = () => {
+  readDemand = (owner) => {
     return measurePhase("demand.read", () => {
-      if (demandThisCycle === undefined) {
+      if (demandThisCycle === undefined || demandSampleEpoch !== demandEpoch) {
+        diagnostics?.recordCount(`demand.sampleOwner.${owner}`, 1);
         demandThisCycle = measurePhase("demand.read.compute", () => {
           measurePhase(
             "demand.sample.research-observation",
@@ -1392,6 +1580,7 @@ export function startCapturedRuntime({
           );
           return measurePhase("demand.sample.total", () => demand.sample());
         });
+        demandSampleEpoch = demandEpoch;
       }
       return demandThisCycle;
     });
@@ -1401,25 +1590,28 @@ export function startCapturedRuntime({
     controls: pageCapture.controls,
     readSettings: () => settingsStore.readRaw(),
     readStorageRequired: (resourceId, pool) =>
-      readDemand().storageRequired(resourceId, pool),
+      readDemand("Storage").storageRequired(resourceId, pool),
     reservations: queueReservations,
-    readSavingTarget: () => readDemand().savingTarget,
+    readSavingTarget: () => readDemand("Storage").savingTarget,
     readBuildTargets: progression.readUnlockedStorageBuildTargets,
     readOfferedTechs: progression.readOfferedTechs,
     readProjects: progression.readProjects,
     costs: buildCosts,
+    onMutation: () => {
+      storageMutationObserved = true;
+    },
     onSkipped: (key, reason) => reportOnce(`storage skipped ${key}: ${reason}`),
     nowMs: () => Date.now(),
   });
   const storageAutomation = createStorageAllocationAutomation({
     ...storagePorts,
-    diagnostics,
+    diagnostics: phaseDiagnostics,
   });
   const galaxyMarketPorts = createCapturedGalaxyMarketPorts({
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,
     readSettings: () => settingsStore.readRaw(),
-    readDemand: () => readDemand(),
+    readDemand: readDemandFor("Market"),
   });
   const galaxyMarketAutomation = Object.freeze({
     run: () =>
@@ -1437,7 +1629,7 @@ export function startCapturedRuntime({
     controls: pageCapture.controls,
     board: marketBoard,
     readSettings: () => settingsStore.readRaw(),
-    readDemand: () => readDemand(),
+    readDemand: readDemandFor("Market"),
     onUnavailable: (resourceId, reason) =>
       reportOnce(`market skipped ${resourceId}: ${reason}`),
   });
@@ -1448,7 +1640,7 @@ export function startCapturedRuntime({
     mechanics: pageCapture.mechanics,
     keyState: pageCapture.keyState,
     readSettings: () => settingsStore.readRaw(),
-    readDemand: () => readDemand(),
+    readDemand: readDemandFor("Market"),
     onUnavailable: (reason) =>
       reportOnce(`trade routes unavailable: ${reason}`),
   });
@@ -1459,7 +1651,7 @@ export function startCapturedRuntime({
           reader: marketPorts.reader,
           executor: marketPorts.executor,
           tradeRoutes,
-          diagnostics,
+          diagnostics: phaseDiagnostics,
         },
         bulkSell,
         ignoreSellRatio,
@@ -1469,7 +1661,7 @@ export function startCapturedRuntime({
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,
     readSettings: () => settingsStore.readRaw(),
-    readDemand: () => readDemand(),
+    readDemand: readDemandFor("ProductionRatios"),
   });
   const craftDependencies = {
     rootState: pageCapture.rootState,
@@ -1477,7 +1669,7 @@ export function startCapturedRuntime({
     costs,
     getDocument: () => document,
     readSettings: () => settingsStore.readRaw(),
-    readDemand: () => readDemand(),
+    readDemand: readDemandFor("Craft"),
   };
   const craft = Object.freeze({
     reader: createCapturedCraftReader(craftDependencies),
@@ -1488,7 +1680,7 @@ export function startCapturedRuntime({
     controls: pageCapture.controls,
     mountSuppression: pageCapture.mountSuppression,
     panels,
-    diagnostics,
+    diagnostics: phaseDiagnostics,
   });
   /**
    * The one place a captured feature spends a tab draw. Callers check their own eligibility first
@@ -2639,31 +2831,35 @@ export function startCapturedRuntime({
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,
     readSettings: () => settingsStore.readRaw(),
-    readDemand: () => readDemand(),
+    readDemand: readDemandFor("Smelter"),
   });
   const nanite = createCapturedNaniteAutomation({
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,
     readSettings: () => settingsStore.readRaw(),
-    readDemand: () => readDemand(),
+    readDemand: readDemandFor("Nanite"),
   });
   const ejector = createCapturedEjectorAutomation({
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,
     readSettings: () => settingsStore.readRaw(),
-    readDemand: () => readDemand(),
+    readDemand: readDemandFor("Ejector"),
   });
   const supply = createCapturedSupplyAutomation({
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,
     readSettings: () => settingsStore.readRaw(),
-    readDemand: () => readDemand(),
+    readDemand: readDemandFor("Supply"),
   });
+  let factoryMutationObserved = false;
   const factory = createCapturedFactoryAutomation({
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,
     readSettings: () => settingsStore.readRaw(),
-    readDemand: () => readDemand(),
+    readDemand: readDemandFor("Factory"),
+    onMutation: () => {
+      factoryMutationObserved = true;
+    },
     readBuildTargets: progression.readManagedBuildTargets,
     buildCosts,
   });
@@ -2671,7 +2867,7 @@ export function startCapturedRuntime({
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,
     readSettings: () => settingsStore.readRaw(),
-    readDemand: () => readDemand(),
+    readDemand: readDemandFor("Fleet"),
   });
   const capturedPowerExecution = createCapturedPowerExecutor({
     rootState: pageCapture.rootState,
@@ -2679,7 +2875,7 @@ export function startCapturedRuntime({
     mechanics: pageCapture.mechanics,
     readMechSaveSupply: mechSupplyReservation.readSaveSupply,
     setMechSaveSupply: mechSupplyReservation.setSaveSupply,
-    diagnostics,
+    diagnostics: phaseDiagnostics,
     log: (message) =>
       onActivity({ message, color: "has-text-info", tags: ["automation"] }),
   });
@@ -2753,7 +2949,9 @@ export function startCapturedRuntime({
   const powerReader = createCapturedPowerReader({
     rootState: pageCapture.rootState,
     mechanics: pageCapture.mechanics,
-    ...(diagnostics === undefined ? {} : { diagnostics }),
+    ...(phaseDiagnostics === undefined
+      ? {}
+      : { diagnostics: phaseDiagnostics }),
     readJobCounts: ordinaryJobs.readJobCounts,
     readProspectiveSpaceMiners: (root) => {
       const plan = prospectiveSpaceMinerPlan;
@@ -2791,7 +2989,7 @@ export function startCapturedRuntime({
     reader: powerReader,
     executor: capturedPowerExecution.executor,
     warnings: powerWarnings,
-    diagnostics,
+    diagnostics: phaseDiagnostics,
   });
   const observePowerDemandPhase = (
     stage: string,
@@ -2902,15 +3100,21 @@ export function startCapturedRuntime({
   const runCycle = () => {
     const profiling =
       diagnostics?.readPerformanceEnabled() === true ? diagnostics : undefined;
+    const cycleMeasure = createExclusivePhaseMeasure(profiling);
+    activeRuntimeMeasure = cycleMeasure;
     const workStartedAtMs = profiling?.nowMs();
     const recordPreamble = (startedAtMs: number | undefined) => {
-      if (profiling !== undefined && startedAtMs !== undefined)
-        profiling.recordPerformance(
-          "tick.preamble",
-          profiling.nowMs() - startedAtMs,
-        );
+      if (profiling === undefined || startedAtMs === undefined) return;
+      const elapsedMs = profiling.nowMs() - startedAtMs;
+      cycleMeasure.record(
+        "tick.preamble",
+        Math.max(0, elapsedMs - cycleMeasure.readTotalMs()),
+      );
     };
     automationCycle += 1;
+    constructionMutationObserved = false;
+    storageMutationObserved = false;
+    factoryMutationObserved = false;
     prospectiveSpaceMinerPlan = undefined;
     capturedResetCommittedThisCycle = false;
     currentStateLogConstructionSnapshot = null;
@@ -2918,21 +3122,16 @@ export function startCapturedRuntime({
     constructionFreshness =
       latestConstructionSnapshot === null ? "none" : "stale";
     capturedMechCycleHasPendingWork = false;
-    demandThisCycle = undefined;
+    invalidateDemandSample();
     savingTargetThisCycle = undefined;
     constructionSuppressedThisCycle = false;
     triggerTargetsThisCycle = undefined;
     triggerDemandThisCycle = undefined;
     demandPrerequisitesThisCycle = undefined;
     if (!pageCapture.isComplete()) {
-      const panelStartedAtMs = profiling?.nowMs();
-      settingsPanel.ensurePanel();
-      if (profiling !== undefined && panelStartedAtMs !== undefined) {
-        profiling.recordPerformance(
-          "settingsPanel.ensurePanel",
-          profiling.nowMs() - panelStartedAtMs,
-        );
-      }
+      cycleMeasure.measure("settingsPanel.ensurePanel", () =>
+        settingsPanel.ensurePanel(),
+      );
       refreshCapturedPlanningPanels();
       recordPreamble(workStartedAtMs);
       return;
@@ -2940,14 +3139,9 @@ export function startCapturedRuntime({
     refreshDiscoveredSettings();
     // The container is drawn before the master-toggle guard, so a fresh profile can enable the
     // script. Dynamic overrides have already refreshed above, keeping Mech Info in step.
-    const panelStartedAtMs = profiling?.nowMs();
-    settingsPanel.ensurePanel();
-    if (profiling !== undefined && panelStartedAtMs !== undefined) {
-      profiling.recordPerformance(
-        "settingsPanel.ensurePanel",
-        profiling.nowMs() - panelStartedAtMs,
-      );
-    }
+    cycleMeasure.measure("settingsPanel.ensurePanel", () =>
+      settingsPanel.ensurePanel(),
+    );
     const settings = settingsStore.readRaw();
     if (
       !pageCapture.isComplete() ||
@@ -3051,7 +3245,7 @@ export function startCapturedRuntime({
           runPhase("buildingAlwaysClick", () => gatherResources());
         } else {
           const demandReady = runPhase("pre-Gather demand", () => {
-            readDemand();
+            readDemand("pre-Gather");
             return true;
           });
           if (demandReady === true) {
@@ -3148,21 +3342,17 @@ export function startCapturedRuntime({
       // Storage settles the quantum and storage allocation before Jobs, Fleet, Mech and Power
       // observe the resource ledger their own reads and allocations depend on.
       if (constructionDemandReady && isEnabled(settings, "autoStorage")) {
+        storageMutationObserved = false;
         runPhase("autoStorage", () => {
           ensureStorageControls();
           refreshDiscoveredSettings();
           storageAutomation.run();
         });
-        // Storage owns the capacity facts a demand sample freezes. It reallocates crates and
-        // containers and changes `resource[id].max` and the regional maxima, and the sample clamps
-        // every requested quantity against `max` and builds `storageRequired` from it, while the
-        // memoized construction saving target re-tests its costs against it too. A sample created
-        // by an earlier consumer — Gather, Market, Galaxy Market, a production ratio, or Smelter —
-        // therefore answers Replicator and everything after it from a capacity that no longer
-        // exists. The phase has had its opportunity to mutate by the time it returns, so the
-        // boundary is the phase and not its outcome.
-        demandThisCycle = undefined;
-        savingTargetThisCycle = undefined;
+        // Capacity affects quantity clamping and storage requirements. The adapter reports only
+        // assignments and expansions whose postconditions confirmed a changed capacity.
+        if (storageMutationObserved) {
+          invalidateDemandAfterMutation(false, false);
+        }
       }
       if (constructionDemandReady && isEnabled(settings, "autoReplicator")) {
         runPhase("autoReplicator", () => {
@@ -3188,6 +3378,12 @@ export function startCapturedRuntime({
         // it — which is what the whole-cycle `try` did for this case, and the only part of that
         // behavior worth keeping.
         if (completed !== true) triggerActive = true;
+        if (triggerActive) {
+          // A successful trigger click can change queue reservations, progression offers, and
+          // native prices. A failed phase can also have completed earlier clicks before failing.
+          // Re-establish its dependent inputs before Factory or Power can read the new epoch.
+          invalidateDemandAfterMutation(true);
+        }
       }
       if (
         triggerActive &&
@@ -3196,19 +3392,44 @@ export function startCapturedRuntime({
         constructionSuppressedThisCycle = true;
       }
       if (!triggerActive && isEnabled(settings, "autoResearch")) {
-        runPhase("autoResearch", () => progression.runResearchCycle());
-        observePowerDemandPhase("research-complete");
-        // The earlier offer snapshot cannot answer actions unlocked by this research. Construction
-        // must take its next direct semantic sample from the new tech state.
-        progression.resetBuildingUnlockSample();
-        if (
-          isEnabled(settings, "autoBuild") ||
-          isEnabled(settings, "autoStorage")
-        ) {
-          runPhase("post-research construction demand preparation", () => {
-            progression.readUnlockedStorageBuildTargets();
-            refreshDiscoveredSettings();
-          });
+        let researchProgressionChanged = false;
+        runPhase("autoResearch", () => {
+          const progressionBeforeResearch = progression.readProgressionEpoch();
+          let researchFailed = false;
+          let researchFailure: unknown;
+          try {
+            progression.runResearchCycle();
+          } catch (error) {
+            researchFailed = true;
+            researchFailure = error;
+          }
+          // Keep both authority reads inside the feature boundary. A read-only or rejected pass
+          // leaves the epoch unchanged; a partial mutation still expires the sample. If the
+          // post-read itself is unavailable, fail closed by expiring it before propagating.
+          try {
+            researchProgressionChanged =
+              progression.readProgressionEpoch() !== progressionBeforeResearch;
+            if (researchProgressionChanged) invalidateDemandAfterMutation(true);
+          } catch (error) {
+            invalidateDemandAfterMutation(true);
+            throw error;
+          }
+          if (researchFailed) throw researchFailure;
+        });
+        if (researchProgressionChanged) {
+          observePowerDemandPhase("research-complete");
+          // A changed progression epoch can unlock controls and alter project prices. A read-only
+          // Research pass keeps the current catalogs and saving target established.
+          progression.resetBuildingUnlockSample();
+          if (
+            isEnabled(settings, "autoBuild") ||
+            isEnabled(settings, "autoStorage")
+          ) {
+            runPhase("post-research construction demand preparation", () => {
+              progression.readUnlockedStorageBuildTargets();
+              refreshDiscoveredSettings();
+            });
+          }
         }
       }
       if (
@@ -3223,9 +3444,6 @@ export function startCapturedRuntime({
             constructionRunning = false;
           }
         });
-        // Structure state can change Building and A.R.P.A. offers without changing tech or the
-        // shared progression epoch (Titan Quarters unlocking Titan Mine is one such case).
-        progression.invalidateConstructionOffers();
         if (outcome !== undefined && outcome.status !== "succeeded") {
           reportOnce(
             `autoBuild: ${outcome.failure.code}: ${outcome.failure.message}`,
@@ -3260,11 +3478,8 @@ export function startCapturedRuntime({
           }
         }
       }
-      // Construction and Factory each end the current sample's lifetime, including when an enabled
-      // phase turns out to be a no-op: both own facts the sample freezes. Construction publishes a
-      // new wanted order, spends holdings, moves queue entries and can grant a Building, so it
-      // moves the offered catalogs, the build targets and the saving target. Factory re-reads
-      // factory building counts, which scale its own demand block.
+      // Only a native action attempt can change construction or Factory demand authority. A
+      // read-only/no-op phase keeps the prepared demand sample for later consumers.
       //
       // Between Factory and Power the sample is shared by Jobs, Fleet, Mech, Genetics, Minor
       // Trait, Craft, the combat block, Tax, Government, Nanite, Supply and Eject, and that share
@@ -3293,10 +3508,11 @@ export function startCapturedRuntime({
       //   * Tax and Government change the tax rate and `civic.govern`/`race.governor`, none of which
       //     the sample reads.
       //   * Nanite, Supply and Eject change their own allocation ledgers. Power reads those live.
+      if (constructionMutationObserved) {
+        invalidateDemandAfterMutation(true);
+        observePowerDemandPhase("construction-invalidated");
+      }
       observePowerDemandPhase("construction-complete");
-      demandThisCycle = undefined;
-      savingTargetThisCycle = undefined;
-      observePowerDemandPhase("construction-invalidated");
       if (isEnabled(settings, "autoFactory")) {
         runPhase("autoFactory", () => {
           ensureFactoryControls();
@@ -3304,31 +3520,35 @@ export function startCapturedRuntime({
           factory.run();
         });
       }
-      demandThisCycle = undefined;
-      savingTargetThisCycle = undefined;
+      if (factoryMutationObserved) {
+        invalidateDemandAfterMutation(false, false);
+      }
       observePowerDemandPhase("factory-invalidated");
       const autoJobs = isEnabled(settings, "autoJobs");
       const autoCraftsmen = isEnabled(settings, "autoCraftsmen");
       let combinedJobs = false;
       if (autoJobs && autoCraftsmen) {
-        const completed = runPhase("autoJobs with autoCraftsmen", () => {
-          ensureCivicControls();
-          refreshDiscoveredSettings();
-          const prepared = fullJobs.prepare();
-          combinedJobs = prepared.status === "ready";
-          if (prepared.status === "ready")
-            runPreparedJobsPhase(
-              "autoJobs with autoCraftsmen",
-              prepared.execution,
-            );
-          return true;
-        });
+        const completed = runPriceSensitivePhase(
+          "autoJobs with autoCraftsmen",
+          () => {
+            ensureCivicControls();
+            refreshDiscoveredSettings();
+            const prepared = fullJobs.prepare();
+            combinedJobs = prepared.status === "ready";
+            if (prepared.status === "ready")
+              runPreparedJobsPhase(
+                "autoJobs with autoCraftsmen",
+                prepared.execution,
+              );
+            return true;
+          },
+        );
         // The combined path owns this settings combination even when the sampled command fails;
         // split passes must not make a second decision in the same cycle.
         if (!completed) combinedJobs = true;
       }
       if (autoJobs && !combinedJobs) {
-        runPhase("autoJobs", () => {
+        runPriceSensitivePhase("autoJobs", () => {
           ensureCivicControls();
           refreshDiscoveredSettings();
           runJobsPhase(
@@ -3339,7 +3559,7 @@ export function startCapturedRuntime({
         });
       }
       if (autoCraftsmen && !combinedJobs) {
-        runPhase("autoCraftsmen", () => {
+        runPriceSensitivePhase("autoCraftsmen", () => {
           ensureCivicControls();
           runJobsPhase("autoCraftsmen", craftsmen, true);
         });
@@ -3368,8 +3588,7 @@ export function startCapturedRuntime({
         // ordinary galaxy pass never touches the blueprint or the ship count, and never reads that
         // shipyard cost, so it ends nothing.
         if (outerResult?.shipTargetChanged === true) {
-          demandThisCycle = undefined;
-          exactDemandUnavailableReason = undefined;
+          invalidateDemandAfterMutation(false, false);
         }
       }
       // After Build, so construction has first claim on the supplies a Mech reservation holds.
@@ -3382,6 +3601,8 @@ export function startCapturedRuntime({
           });
           capturedMechCycleHasPendingWork = result.hasPendingWork;
           const outcome = result.outcome;
+          if (outcome.status === "succeeded" && result.hasPendingWork)
+            invalidateDemandAfterMutation(false, false);
           if (outcome.status !== "succeeded") {
             reportOnce(
               `autoMech: ${outcome.failure.code}: ${outcome.failure.message}`,
@@ -3396,7 +3617,7 @@ export function startCapturedRuntime({
         isEnabled(settings, "autoMinorTrait") ||
         isEnabled(settings, "autoMutateTraits");
       if (geneticsAutomationEnabled) {
-        runPhase("autoGenetics", () => {
+        runPriceSensitivePhase("autoGenetics", () => {
           if (isEnabled(settings, "autoGenetics"))
             ensureGeneticsControl(GENETICS_CONTROL, "genetics-sequencer", 2);
           if (isEnabled(settings, "autoGenetics")) {
@@ -3406,7 +3627,7 @@ export function startCapturedRuntime({
       }
       // A newly bought minor trait is usable right away, so this follows genetics.
       if (isEnabled(settings, "autoMinorTrait")) {
-        const outcome = runPhase("autoMinorTrait", () => {
+        const outcome = runPriceSensitivePhase("autoMinorTrait", () => {
           ensureGeneticsControl(GENE_SLOTS_CONTROL, "genetics-gene-slots", 3);
           return traits.autoMinorTrait();
         });
@@ -3499,7 +3720,7 @@ export function startCapturedRuntime({
         });
       }
       if (isEnabled(settings, "autoGovernment")) {
-        runPhase("autoGovernment", () => {
+        runPriceSensitivePhase("autoGovernment", () => {
           ensureGovernmentPanelControls("type");
           ensureGovernmentPanelControls("candidates");
           runCapturedGovernmentAutomation(government);
@@ -3550,13 +3771,12 @@ export function startCapturedRuntime({
           });
         }
         runPhase("autoPower", () => {
-          measurePhase("autoPower.demandPreparation", () => {
+          activeRuntimeMeasure.measure("autoPower.demandPreparation", () => {
             observePowerDemandPhase("power-handoff-start");
-            // Power reads live holdings, Fleet and Building state at this phase, so the refresh
-            // below reuses the catalogs progression already established and takes current holdings
-            // from the root. Never discover panels here.
-            demandThisCycle = undefined;
-            exactDemandUnavailableReason = undefined;
+            // The owning mutators have already expired demand authority when its captured inputs
+            // changed. Power may reuse that prepared input when the epoch is unchanged; its live
+            // holding checks read the current root, and exactness uses the retained completeness
+            // metadata instead of capturing the same catalogs again.
             // Earlier research/construction may have opened a reservation gate. Revalidate
             // its current prerequisites without drawing; an uncaptured new gate stays stale.
             const prerequisites =
@@ -3609,13 +3829,16 @@ export function startCapturedRuntime({
               exactDemandUnavailableReason =
                 "managed build target snapshot unavailable";
             else {
+              diagnostics?.recordCount("demand.sampleOwner.Power", 1);
               const exact = demand.sampleExact();
-              if (exact.status === "ready") demandThisCycle = exact.sample;
-              else exactDemandUnavailableReason = exact.reason.message;
+              if (exact.status === "ready") {
+                demandThisCycle = exact.sample;
+                demandSampleEpoch = demandEpoch;
+              } else exactDemandUnavailableReason = exact.reason.message;
             }
             observePowerDemandPhase("power-ready");
           });
-          const outcome = measurePhase("autoPower.runner", () =>
+          const outcome = activeRuntimeMeasure.measure("autoPower.runner", () =>
             powerAutomation.run(),
           );
           observePowerDemandPhase("power-complete", outcome);
@@ -3709,24 +3932,26 @@ export function startCapturedRuntime({
       // reaching here means the cycle's own scaffolding failed and there is no one feature to blame.
       logError(String(error));
     } finally {
-      const finalizationStartedAtMs = profiling?.nowMs();
-      refreshCapturedPlanningPanels();
-      stateLogRecorder.recordProcessedCycle(automationCycle, settings);
-      currentStateLogConstructionSnapshot = null;
-      stateLogPlannerDetailsDue = false;
-      if (profiling !== undefined && finalizationStartedAtMs !== undefined) {
-        profiling.recordPerformance(
-          "tick.finalization",
-          profiling.nowMs() - finalizationStartedAtMs,
+      cycleMeasure.measure("tick.finalization", () => {
+        cycleMeasure.measure("planning-panel refresh", () =>
+          refreshCapturedPlanningPanels(),
         );
-      }
+        cycleMeasure.measure("State Log work", () =>
+          stateLogRecorder.recordProcessedCycle(automationCycle, settings),
+        );
+        currentStateLogConstructionSnapshot = null;
+        stateLogPlannerDetailsDue = false;
+      });
       if (profiling !== undefined && workStartedAtMs !== undefined) {
-        profiling.recordPerformance(
-          "tick",
-          profiling.nowMs() - workStartedAtMs,
+        const elapsedMs = profiling.nowMs() - workStartedAtMs;
+        cycleMeasure.record(
+          "tick.scaffolding",
+          Math.max(0, elapsedMs - cycleMeasure.readTotalMs()),
         );
+        profiling.recordPerformance("tick", elapsedMs);
         profiling.flushPerformance();
       }
+      activeRuntimeMeasure = createExclusivePhaseMeasure(undefined);
     }
   };
 
@@ -3744,21 +3969,37 @@ export function startCapturedRuntime({
   // pays for, was re-made four times more often than the setting asks for.
   let pendingPeriods = 0;
   const unsubscribePeriods = pageCapture.periods.subscribe((period) => {
+    const periodCounts = createCountTally(diagnostics);
+    activeRuntimeMeasure = createExclusivePhaseMeasure(diagnostics);
     // Overrides need their context before this gate. Reset cycle-held offer samples here so an
     // override never answers from the previous cycle, and let a cycle that runs reuse this
     // same point-in-time sample for its trigger and progression work.
-    progression.resetProjectSample();
-    progression.resetBuildingUnlockSample();
-    // The gate is the first effective-settings consumer after a browser wake. Refresh before it
-    // reads tickRate so an override can change cadence without waiting for a completed cycle.
-    refreshEffectiveSettings();
-    const gate = advancePeriodGate({
-      pendingPeriods,
-      completedPeriods: period.periods,
-      periodsPerCycle: readPeriodsPerScriptCycle(settingsStore.readRaw()),
+    periodCounts.count("period.totalPeriods");
+    const gate = activeRuntimeMeasure.measure("period.wake", () => {
+      activeRuntimeMeasure.measure("period.resetProjectSample", () =>
+        progression.resetProjectSample(),
+      );
+      activeRuntimeMeasure.measure("period.resetBuildingUnlockSample", () =>
+        progression.resetBuildingUnlockSample(),
+      );
+      // The gate is the first effective-settings consumer after a browser wake. Refresh before it
+      // reads tickRate so an override can change cadence without waiting for a completed cycle.
+      refreshEffectiveSettings(true);
+      const next = activeRuntimeMeasure.measure("period.cadenceGate", () =>
+        advancePeriodGate({
+          pendingPeriods,
+          completedPeriods: period.periods,
+          periodsPerCycle: readPeriodsPerScriptCycle(settingsStore.readRaw()),
+        }),
+      );
+      pendingPeriods = next.pendingPeriods;
+      return next;
     });
-    pendingPeriods = gate.pendingPeriods;
-    if (!gate.run) return;
+    if (!gate.run) {
+      periodCounts.count("period.skippedPeriods");
+      return;
+    }
+    periodCounts.count("period.workingPeriods");
     runCycle();
   });
   return () => {

@@ -78,10 +78,15 @@ settingsRaw = {
     ],
   },
 };
-updateOverrides();
+assert.equal(updateOverrides(), true);
 assert.equal(settings.autoBuild, true);
 // round(5.3 * 2) / 2 = 5.5, clamped to [1, 240].
 assert.equal(settings.tickRate, 5.5);
+assert.equal(
+  updateOverrides(),
+  false,
+  "an unchanged override result is stable",
+);
 
 // --- A list override is written back without touching the stored list ---
 settings = {};
@@ -109,9 +114,14 @@ settingsRaw = {
     ],
   },
 };
-updateOverrides();
+assert.equal(updateOverrides(), true);
 assert.deepEqual(settings.ignoredList, ["a", "c", "d"]);
 assert.deepEqual(settingsRaw.ignoredList, ["a", "b", "c"]);
+assert.equal(
+  updateOverrides(),
+  false,
+  "equal list override contents are stable",
+);
 
 // --- The forced-task answers come from the port, not from a task id in this layer ---
 settings = {};

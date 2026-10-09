@@ -587,14 +587,54 @@
   }
 
   // src/utils/performance.ts
-  var runUnmeasured = (_phase, action) => action();
-  function createPhaseMeasure(diagnostics) {
-    return diagnostics === void 0 || !diagnostics.readPerformanceEnabled() ? runUnmeasured : (phase, action) => {
-      let startedAtMs = diagnostics.nowMs();
+  var runUnmeasured = (_phase, action) => action(), INERT_EXCLUSIVE_MEASURE = Object.freeze({
+    measure: runUnmeasured,
+    record: () => {
+    },
+    readTotalMs: () => 0
+  });
+  function createExclusivePhaseMeasure(diagnostics) {
+    if (diagnostics === void 0 || !diagnostics.readPerformanceEnabled())
+      return INERT_EXCLUSIVE_MEASURE;
+    let stack = [], totalMs = 0;
+    return Object.freeze({ measure: (phase, action) => {
+      let startedAtMs = diagnostics.nowMs(), frame = { childMs: 0 };
+      stack.push(frame);
       try {
         return action();
       } finally {
-        diagnostics.recordPerformance(phase, diagnostics.nowMs() - startedAtMs);
+        let elapsedMs = diagnostics.nowMs() - startedAtMs;
+        stack.pop();
+        let exclusiveMs = Math.max(0, elapsedMs - frame.childMs);
+        totalMs += exclusiveMs;
+        let parent = stack[stack.length - 1];
+        parent !== void 0 && (parent.childMs += elapsedMs), diagnostics.recordPerformance(phase, exclusiveMs);
+      }
+    }, record: (phase, durationMs) => {
+      if (!Number.isFinite(durationMs)) return;
+      totalMs += durationMs;
+      let parent = stack[stack.length - 1];
+      parent !== void 0 && (parent.childMs += durationMs), diagnostics.recordPerformance(phase, durationMs);
+    }, readTotalMs: () => totalMs });
+  }
+  function createPhaseMeasure(diagnostics) {
+    if (diagnostics === void 0 || !diagnostics.readPerformanceEnabled())
+      return runUnmeasured;
+    if (diagnostics.measurePhase !== void 0) {
+      let measurePhase = diagnostics.measurePhase;
+      return (phase, action) => measurePhase(phase, action);
+    }
+    let stack = [];
+    return (phase, action) => {
+      let startedAtMs = diagnostics.nowMs(), frame = { childMs: 0 };
+      stack.push(frame);
+      try {
+        return action();
+      } finally {
+        let elapsedMs = diagnostics.nowMs() - startedAtMs;
+        stack.pop();
+        let exclusiveMs = Math.max(0, elapsedMs - frame.childMs), parent = stack[stack.length - 1];
+        parent !== void 0 && (parent.childMs += elapsedMs), diagnostics.recordPerformance(phase, exclusiveMs);
       }
     };
   }
@@ -811,9 +851,9 @@
             status: whileDrawn === void 0 ? "not-requested" : "unreported"
           };
           tally.enabled && (tally.count("discovery.draw"), tally.count(`discovery.draw ${pathLabel}`), countDiscovery("actual-draw"));
-          let keyedDrawPhase = tally.enabled ? `discovery.draw ${purpose} ${pathLabel}` : void 0, keyedDrawStartedAt = keyedDrawPhase === void 0 ? void 0 : diagnostics?.nowMs();
+          let drawPhase = (tally.enabled ? `discovery.draw ${purpose} ${pathLabel}` : void 0) ?? "discovery.draw";
           try {
-            measureDraw("discovery.draw", () => {
+            measureDraw(drawPhase, () => {
               try {
                 settings.animated = !1, mountSuppression.withoutMounting(
                   () => {
@@ -862,11 +902,6 @@
             });
           } catch (error) {
             throw tally.count("discovery.draw.failed"), countDiscovery("failed"), error;
-          } finally {
-            keyedDrawPhase !== void 0 && keyedDrawStartedAt !== void 0 && diagnostics !== void 0 && diagnostics.recordPerformance(
-              keyedDrawPhase,
-              diagnostics.nowMs() - keyedDrawStartedAt
-            );
           }
           if (stepFailure !== void 0)
             return tally.count("discovery.draw.failed"), countDiscovery("failed"), stepFailure;
@@ -2956,7 +2991,7 @@
             retained.registry,
             rawKeys
           );
-          return current !== void 0 && sameNativeTechRegistrySnapshot(retained, current) ? current : void 0;
+          return current !== void 0 && sameNativeTechRegistrySnapshot(retained, current) ? retained : void 0;
         } catch {
           return;
         }
@@ -3509,7 +3544,7 @@
     let isRootCandidate = options.isRootCandidate ?? isGameRootShape, reportError = options.onCaptureError ?? (() => {
     }), existingDescriptor = Object.getOwnPropertyDescriptor(pageWindow, "Vue"), existingMarker = readMarker(readProperty(readProperty(pageWindow, "Vue"), "reactive")) ?? readMarker(existingDescriptor?.get);
     if (existingMarker?.capture !== void 0) return existingMarker.capture;
-    let marker = { capture: void 0 }, root, rootRaw, suppressed = !1, stopped = !1, rootListeners = /* @__PURE__ */ new Set(), controls2 = /* @__PURE__ */ new Map(), controlCheckpoints = /* @__PURE__ */ new WeakMap(), captureOrder = [], usage = /* @__PURE__ */ new Map(), bindingListeners = /* @__PURE__ */ new Set(), createAppHooked = !1, mountingEnabled = 0, suppressionScopes = [], mountedInScope = [], restoreVue;
+    let marker = { capture: void 0 }, root, rootRaw, suppressed = !1, stopped = !1, rootListeners = /* @__PURE__ */ new Set(), controls2 = /* @__PURE__ */ new Map(), controlCheckpoints = /* @__PURE__ */ new WeakMap(), captureOrder = [], controlRevision = 0, usage = /* @__PURE__ */ new Map(), bindingListeners = /* @__PURE__ */ new Set(), createAppHooked = !1, mountingEnabled = 0, suppressionScopes = [], mountedInScope = [], restoreVue;
     function notifyRootReplaced() {
       for (let listener of [...rootListeners])
         try {
@@ -3546,7 +3581,7 @@
         }
       let existing = controls2.get(elementId);
       if (existing === void 0) {
-        captureOrder.push(elementId), controls2.set(elementId, {
+        captureOrder.push(elementId), controlRevision += 1, controls2.set(elementId, {
           elementId,
           generation: 1,
           methods,
@@ -3556,7 +3591,7 @@
         });
         return;
       }
-      existing.generation += 1, existing.methods = methods, existing.data = readProperty(optionsValue, "data"), existing.materialized = void 0, existing.receiver = void 0;
+      existing.generation += 1, controlRevision += 1, existing.methods = methods, existing.data = readProperty(optionsValue, "data"), existing.materialized = void 0, existing.receiver = void 0;
     }
     function bindingData(control) {
       if (control.materialized === void 0) {
@@ -3759,6 +3794,11 @@
         rootListeners.delete(listener);
       })
     }), registry = Object.freeze({
+      isCurrent(elementId, generation) {
+        let control = controls2.get(elementId);
+        return control !== void 0 && control.generation === generation && control.rejectedGeneration !== generation;
+      },
+      readRevision: () => controlRevision,
       checkpoint() {
         let controlCheckpoint = Object.freeze({});
         return controlCheckpoints.set(
@@ -3770,8 +3810,10 @@
         let checkpointGenerations = controlCheckpoints.get(checkpoint), throughGenerations = through === void 0 ? void 0 : controlCheckpoints.get(through);
         if (checkpointGenerations === void 0 || through !== void 0 && throughGenerations === void 0)
           throw new Error("control checkpoint belongs to another capture");
+        let rejected2 = !1;
         for (let [id, control] of controls2)
-          checkpointGenerations.get(id) !== control.generation && (throughGenerations === void 0 || throughGenerations.get(id) === control.generation) && (control.rejectedGeneration = control.generation);
+          checkpointGenerations.get(id) !== control.generation && (throughGenerations === void 0 || throughGenerations.get(id) === control.generation) && (control.rejectedGeneration = control.generation, rejected2 = !0);
+        rejected2 && (controlRevision += 1);
       },
       resolve(elementId) {
         let control = controls2.get(elementId);
@@ -4772,7 +4814,7 @@
       mechanics,
       nativePrices
     } = dependencies, reportUnavailable = dependencies.onUnavailable ?? (() => {
-    });
+    }), indexedTechDefinitions, indexedTechDefinitionsById;
     return Object.freeze({
       read(options) {
         if (rootState.readRoot() === void 0) {
@@ -4845,15 +4887,19 @@
           );
           return;
         }
-        let definitionsById = /* @__PURE__ */ new Map();
-        for (let definition of definitions) {
-          if (definitionsById.has(definition.actionId)) {
-            reportUnavailable(
-              "the native technology registry has duplicate action ids"
-            );
-            return;
+        let definitionsById = definitions === indexedTechDefinitions ? indexedTechDefinitionsById : void 0;
+        if (definitionsById === void 0) {
+          let nextDefinitionsById = /* @__PURE__ */ new Map();
+          for (let definition of definitions) {
+            if (nextDefinitionsById.has(definition.actionId)) {
+              reportUnavailable(
+                "the native technology registry has duplicate action ids"
+              );
+              return;
+            }
+            nextDefinitionsById.set(definition.actionId, definition);
           }
-          definitionsById.set(definition.actionId, definition);
+          definitionsById = nextDefinitionsById, Object.isFrozen(definitions) && definitions.every((definition) => Object.isFrozen(definition)) && (indexedTechDefinitions = definitions, indexedTechDefinitionsById = definitionsById);
         }
         let observedTechnologyIds = observedBindingIds.filter(
           (elementId) => elementId.startsWith(RESEARCH_ACTION_ID_PREFIX) || definitionsById.has(elementId)
@@ -6135,10 +6181,10 @@
           research: readPresentationQueueEntries(root, "r_queue")
         });
       },
-      readReservations() {
+      readReservations(options) {
         let root = rootState.readRoot();
         if (root === void 0) return NO_RESERVATIONS2;
-        let settings = readProperty(root, "settings"), targets = [], unavailable2 = !1, unavailableReason;
+        let sampleCosts = options?.costs ?? costs, sampleReadOfferedTechs = options?.readOfferedTechs ?? readOfferedTechs, settings = readProperty(root, "settings"), targets = [], unavailable2 = !1, unavailableReason;
         function reserve(item, cause, price, reason) {
           if (price === void 0) {
             reportUnavailable(item.id, reason), unavailable2 = !0, unavailableReason ??= `${item.id}: ${reason}`;
@@ -6160,16 +6206,16 @@
           reserve(
             item,
             QUEUE_CAUSE,
-            costs.readCost(item.id),
+            sampleCosts.readCost(item.id),
             "queued item could not be priced"
           );
-        if (readOfferedTechs !== void 0) {
+        if (sampleReadOfferedTechs !== void 0) {
           let queued = reserving(
             readQueuedResearch(root) ?? [],
             !!readProperty(settings, "qAny_res")
           );
           if (queued.length > 0) {
-            let offered = readOfferedTechs(), prices = offered === void 0 ? void 0 : (
+            let offered = sampleReadOfferedTechs(), prices = offered === void 0 ? void 0 : (
               // Research draws on the whole civilization — upstream `supplyOf` returns its ANYWHERE
               // sentinel for every `tech-` action — so no pool narrows the comparison.
               new Map(
@@ -7730,7 +7776,7 @@
         "autoBuild.executeClick",
         () => executor.executeClick(competition.decision)
       );
-      if (reportDiagnostic(`autoBuild.outcome ${result.outcome.status}`), result.outcome.status !== "succeeded")
+      if (result.clicked && dependencies.onMutation?.(), reportDiagnostic(`autoBuild.outcome ${result.outcome.status}`), result.outcome.status !== "succeeded")
         return result.outcome;
       if (result.disposition === "candidate-rejected")
         continue;
@@ -7763,7 +7809,7 @@
       readSettings,
       readPresentationSettings,
       diagnostics
-    } = dependencies, onSkipped = dependencies.onSkipped, readOfferedTechs = dependencies.readOfferedTechs, scriptReservations = dependencies.scriptReservations, readKnowledgeGate = dependencies.readKnowledgeGate, readStorageRequired = dependencies.readStorageRequired, onDiagnostic = dependencies.onDiagnostic, onActivity = dependencies.onActivity, offeredThisCycle, readOfferedTechsOnce = () => (offeredThisCycle ??= { value: readOfferedTechs?.() }, offeredThisCycle.value), resources = createCapturedResourceSource(rootState), costs = createCapturedActionCostReader({
+    } = dependencies, onSkipped = dependencies.onSkipped, readOfferedTechs = dependencies.readOfferedTechs, scriptReservations = dependencies.scriptReservations, readKnowledgeGate = dependencies.readKnowledgeGate, readStorageRequired = dependencies.readStorageRequired, onDiagnostic = dependencies.onDiagnostic, onActivity = dependencies.onActivity, onMutation = dependencies.onMutation, offeredThisCycle, readOfferedTechsOnce = () => (offeredThisCycle ??= { value: readOfferedTechs?.() }, offeredThisCycle.value), resources = createCapturedResourceSource(rootState), costs = createCapturedActionCostReader({
       rootState,
       controls: controls2,
       ...onSkipped === void 0 ? {} : { onUnavailable: onSkipped }
@@ -7853,6 +7899,7 @@
             reader,
             executor,
             diagnostics,
+            ...onMutation === void 0 ? {} : { onMutation },
             ...onDiagnostic === void 0 ? {} : { onDiagnostic }
           });
         } finally {
@@ -11573,12 +11620,16 @@
           discoveryAttempts.recordFailure(attemptKey, attemptEpoch);
         }
       }
-    }, lastOffered, lastGranted, offeredSampleAttempted = !1, grantedSampleAttempted = !1, offeredSampleEpoch, heldOfferedSnapshot, clearResearchSample = () => {
-      lastOffered = void 0, lastGranted = void 0, offeredSampleAttempted = !1, grantedSampleAttempted = !1, offeredSampleEpoch = void 0, heldOfferedSnapshot = void 0;
+    }, lastOffered, lastGranted, offeredSampleAttempted = !1, grantedSampleAttempted = !1, offeredSampleEpoch, heldOfferedSnapshot, heldOfferControlRevision, clearResearchSample = () => {
+      lastOffered = void 0, lastGranted = void 0, offeredSampleAttempted = !1, grantedSampleAttempted = !1, offeredSampleEpoch = void 0, heldOfferedSnapshot = void 0, heldOfferControlRevision = void 0;
     }, heldOfferBindingsAreCurrent = (snapshot2) => snapshot2.offered.every(
-      (offer) => (controls2.resolve(offer.elementId)?.generation ?? 0) === offer.generation
+      (offer) => controls2.isCurrent?.(offer.elementId, offer.generation) ?? (controls2.resolve(offer.elementId)?.generation ?? 0) === offer.generation
     ), invalidateStaleCapturedResearchObservation = (currentEpoch) => {
-      let epochChanged = offeredSampleEpoch !== void 0 && offeredSampleEpoch !== currentEpoch, rowBindingsChanged = heldOfferedSnapshot !== void 0 && !heldOfferBindingsAreCurrent(heldOfferedSnapshot);
+      let epochChanged = offeredSampleEpoch !== void 0 && offeredSampleEpoch !== currentEpoch, rowBindingsChanged = !1;
+      if (heldOfferedSnapshot !== void 0) {
+        let currentControlRevision = controls2.readRevision?.();
+        (currentControlRevision === void 0 || currentControlRevision !== heldOfferControlRevision) && (rowBindingsChanged = !heldOfferBindingsAreCurrent(heldOfferedSnapshot), heldOfferControlRevision = currentControlRevision);
+      }
       !epochChanged && !rowBindingsChanged || (clearResearchSample(), offeredSampleEpoch = currentEpoch, scopes.invalidate(RESEARCH_SCOPE), scopes.invalidate(RESEARCH_GRANTED_SCOPE));
     }, readCurrentOfferedTechs = () => (invalidateStaleCapturedResearchObservation(epoch.read()), lastOffered), sampleOfferedTechs = () => {
       let includeGranted = dependencies.needGrantedTechs?.() === !0, currentEpoch = epoch.read();
@@ -11596,9 +11647,9 @@
       );
       if (offeredSampleAttempted = !0, offeredSampleEpoch = currentEpoch, includeGranted && (grantedSampleAttempted = !0), held !== void 0) {
         let value = offered.restate(held);
-        return heldOfferedSnapshot = held, lastOffered = value.offered, lastGranted = value.granted, value.offered;
+        return heldOfferedSnapshot = held, heldOfferControlRevision = controls2.readRevision?.(), lastOffered = value.offered, lastGranted = value.granted, value.offered;
       }
-      heldOfferedSnapshot = void 0, lastOffered = void 0, lastGranted = void 0;
+      heldOfferedSnapshot = void 0, heldOfferControlRevision = void 0, lastOffered = void 0, lastGranted = void 0;
     }, offered = createCapturedTechCatalog({
       rootState,
       discovery,
@@ -11774,6 +11825,7 @@
       readKnowledgeGate,
       ...readStorageRequired === void 0 ? {} : { readStorageRequired },
       readOfferedTechs: sampleOfferedTechs,
+      ...dependencies.onConstructionMutation === void 0 ? {} : { onMutation: dependencies.onConstructionMutation },
       ...onDiagnostic === void 0 ? {} : { onDiagnostic },
       ...onActivity === void 0 ? {} : { onActivity },
       ...onSkipped === void 0 ? {} : { onSkipped },
@@ -23176,43 +23228,48 @@
       vitreloyPlant: input.vitreloyPlant
     });
   }
-  function evaluateDemandPrioritization(prepared, variant) {
-    let requests = [...prepared.requests], { settings, balance } = prepared, request = (resourceId, amount) => {
-      requests.push({ resourceId, amount });
-    }, savingCost = {};
-    if (variant.savingTarget !== null)
-      for (let cost of variant.savingTarget.costs)
-        request(cost.resourceId, cost.amount), savingCost[cost.resourceId] = cost.amount;
-    for (let cost of variant.mechCosts)
-      request(cost.resourceId, cost.amount);
-    if (prepared.spyPurchaseMoney && settings.prioritizeUnify.includes("req") && request("Money", prepared.spyPurchaseMoney), settings.autoFleet && prepared.fleet.nextShipAffordable && settings.prioritizeOuterFleet.includes("req"))
-      for (let cost of prepared.fleet.nextShipCost)
-        request(cost.resourceId, cost.amount);
-    for (let crafter of prepared.crafters)
-      if ((settings.productionFactoryFocusMaterials || crafter.isDemanded) && crafter.isUnlocked)
-        for (let cost of crafter.costs) {
-          let minExpected = cost.materialMaxQuantity * crafter.craftPreserve + prepared.availableCrafters * 0.007142857142857143 * balance * cost.amount;
-          request(cost.resourceId, minExpected);
+  function evaluateDemandPrioritizationVariants(prepared, variants) {
+    let { settings, balance } = prepared;
+    return Object.freeze(
+      variants.map((variant) => {
+        let requests = [], request = (resourceId, amount) => {
+          requests.push(Object.freeze({ resourceId, amount }));
+        }, savingCost = {};
+        if (variant.savingTarget !== null)
+          for (let cost of variant.savingTarget.costs)
+            request(cost.resourceId, cost.amount), savingCost[cost.resourceId] = cost.amount;
+        for (let cost of variant.mechCosts)
+          request(cost.resourceId, cost.amount);
+        if (prepared.spyPurchaseMoney && settings.prioritizeUnify.includes("req") && request("Money", prepared.spyPurchaseMoney), settings.autoFleet && prepared.fleet.nextShipAffordable && settings.prioritizeOuterFleet.includes("req"))
+          for (let cost of prepared.fleet.nextShipCost)
+            request(cost.resourceId, cost.amount);
+        for (let crafter of prepared.crafters)
+          if ((settings.productionFactoryFocusMaterials || crafter.isDemanded) && crafter.isUnlocked)
+            for (let cost of crafter.costs)
+              request(
+                cost.resourceId,
+                cost.materialMaxQuantity * crafter.craftPreserve + prepared.availableCrafters * (1 / 140) * balance * cost.amount
+              );
+        let { vitreloyPlant } = prepared, vitPlantCount = settings.autoPower && vitreloyPlant.autoStateEnabled ? vitreloyPlant.count : vitreloyPlant.stateOnCount;
+        if (vitPlantCount > 0 && request("Stanene", vitPlantCount * balance * 100), variant.factoryCount > 0) {
+          let multiplier = variant.factoryCount * balance, storageThreshold = settings.productionFactoryMinIngredients;
+          for (let production of variant.factoryProductions)
+            if ((settings.productionFactoryFocusMaterials || production.isDemanded) && production.unlocked && production.enabled && production.weighting)
+              for (let cost of production.costs)
+                request(
+                  cost.resourceId,
+                  cost.quantity * multiplier + cost.minRateOfChange + storageThreshold * cost.resourceMaxQuantity
+                );
         }
-    let { vitreloyPlant } = prepared, vitPlantCount = settings.autoPower && vitreloyPlant.autoStateEnabled ? vitreloyPlant.count : vitreloyPlant.stateOnCount;
-    if (vitPlantCount > 0 && request("Stanene", vitPlantCount * balance * 100), variant.factoryCount > 0) {
-      let multiplier = variant.factoryCount * balance, storageThreshold = settings.productionFactoryMinIngredients;
-      for (let production of variant.factoryProductions)
-        if ((settings.productionFactoryFocusMaterials || production.isDemanded) && production.unlocked && production.enabled && production.weighting)
-          for (let cost of production.costs)
-            request(
-              cost.resourceId,
-              cost.quantity * multiplier + cost.minRateOfChange + storageThreshold * cost.resourceMaxQuantity
-            );
-    }
-    return Object.freeze({
-      savingConflict: variant.savingTarget === null ? null : Object.freeze({
-        name: variant.savingTarget.name,
-        cost: Object.freeze(savingCost)
-      }),
-      requests: Object.freeze(requests.map((entry) => Object.freeze(entry))),
-      removedMissionIndices: prepared.removedMissionIndices
-    });
+        return Object.freeze({
+          requests: Object.freeze(requests),
+          savingConflict: variant.savingTarget === null ? null : Object.freeze({
+            name: variant.savingTarget.name,
+            cost: Object.freeze(savingCost)
+          })
+        });
+      })
+    );
   }
 
   // src/adapters/evolve/economy/resources/captured-inflation-assist.ts
@@ -23695,6 +23752,23 @@
     }
     return requested;
   }
+  function extendCapturedResourceRequestQuantities(base, requests, resources) {
+    let requested = new Map(base);
+    for (let request of requests) {
+      let amount = finite(request.amount);
+      if (amount === void 0) continue;
+      let current = requested.get(request.resourceId) ?? 0;
+      if (amount <= current) continue;
+      let maximum = finite(
+        readProperty(readProperty(resources, request.resourceId), "max")
+      );
+      requested.set(
+        request.resourceId,
+        maximum === void 0 || maximum < 0 ? amount : Math.min(amount, maximum)
+      );
+    }
+    return requested;
+  }
   function settingString(settings, key, fallback) {
     let value = settings[key];
     return typeof value == "string" ? value : fallback;
@@ -23904,7 +23978,7 @@
       completionLevel: 4
     })
   ]);
-  function readCapturedSpaceMissionDemand(root, settings, controls2, costs, onActionCostRead) {
+  function readCapturedSpaceMissionDemand(root, settings, controls2, costs) {
     if (controls2 === void 0 || costs === void 0 || settingBoolean3(settings, "missionRequest", !0) === !1)
       return Object.freeze([]);
     let tech = readProperty(root, "tech");
@@ -23914,7 +23988,6 @@
       let actionId = mission.actionId, completion = finite(readProperty(tech, mission.completionTech));
       if (controls2.resolve(actionId) === void 0 || settingBoolean3(settings, `bat${actionId}`, !0) === !1 || completion === void 0 || completion >= mission.completionLevel)
         continue;
-      onActionCostRead();
       let price = costs.readCost(actionId);
       if (price === void 0) continue;
       let missionCosts = toCosts(price.cost, price.pool);
@@ -23995,7 +24068,7 @@
     "Super_Fuel",
     "Thermite"
   ]);
-  function readCapturedCrafterDemand(root, resources, settings, craftCosts) {
+  function readCapturedCrafterDemand(root, resources, settings, craftCosts, onRecipeRead) {
     if (craftCosts === void 0 || !isRecord(readProperty(readProperty(root, "city"), "foundry")))
       return;
     let maximum = finite(
@@ -24012,6 +24085,7 @@
       let resource = readProperty(resources, id);
       if (!isRecord(resource) || readProperty(resource, "display") !== !0)
         continue;
+      onRecipeRead();
       let recipe = craftCosts.read(id);
       if (recipe === void 0) continue;
       let costs = [], valid = !0;
@@ -24194,15 +24268,14 @@
     let value = finite(readProperty(entry, field));
     return value === void 0 || value < 0 ? void 0 : value;
   }
-  function readDemandReservationSpaceMoney(costs, actionId, onActionCostRead) {
+  function readDemandReservationSpaceMoney(costs, actionId) {
     if (costs === void 0) return null;
-    onActionCostRead();
     let price = costs.readCost(actionId);
     if (price === void 0) return null;
     let money = finite(price.cost.Money);
     return money === void 0 || money < 0 ? null : money;
   }
-  function readDemandReservationTruepathAiTarget(root, settings, controls2, costs, report, onActionCostRead) {
+  function readDemandReservationTruepathAiTarget(root, settings, controls2, costs, report) {
     if (!isCapturedTruepath(root)) return { status: "not-needed" };
     if (settings.prestigeType !== "apocalypse")
       return { status: "not-needed" };
@@ -24231,21 +24304,14 @@
       return report === void 0 ? { status: "not-needed" } : { status: "unavailable" };
     let decoderMoneyCost = readDemandReservationSpaceMoney(
       costs,
-      "space-decoder",
-      onActionCostRead
+      "space-decoder"
     ), colonistMoneyCost = readDemandReservationSpaceMoney(
       costs,
-      "space-ai_colonist",
-      onActionCostRead
+      "space-ai_colonist"
     ), trooperMoneyCost = readDemandReservationSpaceMoney(
       costs,
-      "space-shock_trooper",
-      onActionCostRead
-    ), tankMoneyCost = readDemandReservationSpaceMoney(
-      costs,
-      "space-tank",
-      onActionCostRead
-    ), moneyCosts = Object.freeze({
+      "space-shock_trooper"
+    ), tankMoneyCost = readDemandReservationSpaceMoney(costs, "space-tank"), moneyCosts = Object.freeze({
       TitanDecoder: decoderMoneyCost,
       TitanAIColonist: colonistMoneyCost,
       ErisTrooper: trooperMoneyCost,
@@ -24338,29 +24404,34 @@
     };
   }
   function createCapturedResourceDemand(dependencies) {
-    let measure = (name, body) => {
+    let actionCostEpoch, epochActionPrices = /* @__PURE__ */ new Map(), measure = (name, body) => {
       let diagnostics = dependencies.diagnostics, start = diagnostics?.readPerformanceEnabled() === !0 ? diagnostics.nowMs() : void 0;
       try {
         return body();
       } finally {
         start !== void 0 && diagnostics?.recordPerformance(name, diagnostics.nowMs() - start);
       }
-    }, count2 = (name, amount = 1) => dependencies.diagnostics?.recordCount(name, amount), exactUnavailableReason = {
+    }, count2 = (name, amount = 1) => dependencies.diagnostics?.recordCount(name, amount), lastSampleCaptureComplete = !1, exactUnavailableReason = {
       code: "other-exact-prerequisite",
       message: "exact demand prerequisite unavailable"
     }, capturedDemandSampler = {
       sample(exact) {
-        let sampleMeasure = (name, body) => measure(
+        lastSampleCaptureComplete = !1;
+        let diagnosticsEnabled = dependencies.diagnostics?.readPerformanceEnabled() === !0, currentActionCostEpoch = dependencies.readActionCostEpoch?.();
+        currentActionCostEpoch !== void 0 && actionCostEpoch !== currentActionCostEpoch && (actionCostEpoch = currentActionCostEpoch, epochActionPrices = /* @__PURE__ */ new Map());
+        let sampleMeasure = (name, body) => diagnosticsEnabled ? measure(
           exact ? name.replace("demand.sample.", "demand.sampleExact.") : name,
           body
-        ), sampleCount = (name, amount = 1) => count2(
-          exact ? name.replace("demand.sample.", "demand.sampleExact.") : name,
-          amount
-        );
-        sampleCount("demand.sample.samples"), sampleCount("demand.sample.planCalls", 0), exact && (exactUnavailableReason = {
+        ) : body(), sampleCount = (name, amount = 1) => {
+          diagnosticsEnabled && count2(
+            exact ? name.replace("demand.sample.", "demand.sampleExact.") : name,
+            amount
+          );
+        };
+        sampleCount("demand.sample.samples"), sampleCount("demand.sample.planCalls", 0), exactUnavailableReason = {
           code: "other-exact-prerequisite",
           message: "exact demand prerequisite unavailable"
-        });
+        };
         let root = sampleMeasure(
           "demand.sample.inputs",
           () => dependencies.rootState.readRoot()
@@ -24372,35 +24443,40 @@
             code: "root-resource-state",
             message: "root resource state unavailable"
           }, exact ? void 0 : EMPTY_DEMAND_SAMPLE;
-        let reservationSample = sampleMeasure("demand.sample.queue", () => (sampleCount("demand.sample.queueReservationReads"), dependencies.reservations.readReservations()));
-        if (exact && reservationSample.unavailable) {
-          exactUnavailableReason = {
-            code: "queue-reservation",
-            message: `queue reservation unavailable: ${reservationSample.unavailableReason ?? "commitment could not be priced"}`
-          };
+        sampleCount("demand.sample.inputCaptures");
+        let offeredLoaded = !1, offeredValue, readOfferedSnapshot = () => (offeredLoaded || (offeredLoaded = !0, dependencies.readOfferedTechs !== void 0 && (sampleCount("demand.sample.offeredTechnologyReads"), offeredValue = dependencies.readOfferedTechs())), offeredValue), actionPrices = currentActionCostEpoch === void 0 ? /* @__PURE__ */ new Map() : epochActionPrices, sampleCosts = dependencies.costs === void 0 ? void 0 : Object.freeze({
+          readCost: (actionId) => {
+            if (actionPrices.has(actionId))
+              return sampleCount("demand.sample.actionCostCacheHits"), actionPrices.get(actionId);
+            sampleCount("demand.sample.actionCostReads");
+            let price = dependencies.costs?.readCost(actionId);
+            return actionPrices.set(actionId, price), price;
+          }
+        }), reservationSample = sampleMeasure("demand.sample.queue", () => (sampleCount("demand.sample.queueReservationReads"), dependencies.reservations.readReservations({
+          ...sampleCosts === void 0 ? {} : { costs: sampleCosts },
+          ...dependencies.readOfferedTechs === void 0 ? {} : { readOfferedTechs: readOfferedSnapshot }
+        })));
+        if (reservationSample.unavailable && (exactUnavailableReason = {
+          code: "queue-reservation",
+          message: `queue reservation unavailable: ${reservationSample.unavailableReason ?? "commitment could not be priced"}`
+        }, exact))
           return;
-        }
         let queued = reservationSample.targets, saving = sampleMeasure(
           "demand.sample.build",
           () => dependencies.construction?.readSavingTarget() ?? null
-        ), offered = sampleMeasure("demand.sample.research", () => (sampleCount(
-          "demand.sample.offeredTechnologyReads",
-          dependencies.readOfferedTechs === void 0 ? 0 : 1
-        ), dependencies.readOfferedTechs?.()));
-        if (exact && dependencies.readOfferedTechs !== void 0 && offered === void 0) {
-          exactUnavailableReason = {
-            code: "offered-technology",
-            message: "offered technology snapshot unavailable"
-          };
+        ), offered = sampleMeasure("demand.sample.research", () => readOfferedSnapshot());
+        if (dependencies.readOfferedTechs !== void 0 && offered === void 0 && (exactUnavailableReason = {
+          code: "offered-technology",
+          message: "offered technology snapshot unavailable"
+        }, exact))
           return;
-        }
         let settingsValue = sampleMeasure(
           "demand.sample.inputs",
           () => dependencies.readSettings()
-        ), settings = isRecord(settingsValue) ? settingsValue : {}, fleet = sampleMeasure(
-          "demand.sample.fleet",
-          () => dependencies.fleet?.read()
-        ), capturedTriggerTargets = sampleMeasure(
+        ), settings = isRecord(settingsValue) ? settingsValue : {}, fleet = sampleMeasure("demand.sample.fleet", () => (sampleCount(
+          "demand.sample.fleetDemandReads",
+          dependencies.fleet === void 0 ? 0 : 1
+        ), dependencies.fleet?.read())), capturedTriggerTargets = sampleMeasure(
           "demand.sample.inputs",
           () => dependencies.triggers?.read() ?? []
         ), storageResources = sampleMeasure(
@@ -24429,8 +24505,7 @@
             root,
             settings,
             dependencies.controls,
-            dependencies.costs,
-            () => sampleCount("demand.sample.actionCostReads")
+            sampleCosts
           )
         ), crafterDemand = settings.productionFactoryFocusMaterials === !0 ? sampleMeasure(
           "demand.sample.crafters",
@@ -24438,12 +24513,10 @@
             root,
             resources,
             settings,
-            dependencies.craftCosts
+            dependencies.craftCosts,
+            () => sampleCount("demand.sample.crafterRecipeReads")
           )
-        ) : void 0, factoryCatalog = sampleMeasure(
-          "demand.sample.factory",
-          () => readCapturedFactoryDemand(root, settings)
-        ), hasFactoryDemand = factoryCatalog?.productions.some(
+        ) : void 0, factoryCatalog = sampleMeasure("demand.sample.factory", () => (sampleCount("demand.sample.factoryCatalogReads"), readCapturedFactoryDemand(root, settings))), hasFactoryDemand = factoryCatalog?.productions.some(
           (production) => production.unlocked && production.enabled && production.weighting > 0
         ) ?? !1, hasCrafterDemand = (crafterDemand?.crafters.length ?? 0) > 0, hasFleetDemand = settingBoolean3(settings, "autoFleet", !1) && settingString(settings, "prioritizeOuterFleet", "ignore").includes(
           "req"
@@ -24455,16 +24528,18 @@
           () => readDemandReservationRetirementGraphene(root, settings)
         ), prerequisites = sampleMeasure(
           "demand.sample.prerequisite-reservations",
-          () => dependencies.readPrerequisites?.()
+          () => (sampleCount(
+            "demand.sample.prerequisiteReads",
+            dependencies.readPrerequisites === void 0 ? 0 : 1
+          ), dependencies.readPrerequisites?.())
         ), truepathAiReservation = sampleMeasure(
           "demand.sample.prerequisite-reservations",
           () => readDemandReservationTruepathAiTarget(
             root,
             settings,
             dependencies.controls,
-            dependencies.costs,
-            prerequisites,
-            () => sampleCount("demand.sample.actionCostReads")
+            sampleCosts,
+            prerequisites
           )
         ), truepathAiBuildingTarget = truepathAiReservation.status === "ready" ? truepathAiReservation.value : null, spyReservation = sampleMeasure(
           "demand.sample.prerequisite-reservations",
@@ -24527,17 +24602,28 @@
           }),
           factoryCount: 0,
           factoryProductions: Object.freeze([])
-        }), prepared = sampleMeasure("demand.sample.prioritization", () => (sampleCount("demand.sample.commonPreparations"), prepareDemandPrioritization(baseInput))), baseResult = sampleMeasure("demand.sample.prioritization", () => (sampleCount("demand.sample.evaluateCalls"), evaluateDemandPrioritization(prepared, baseInput))), baseRequested = sampleMeasure(
+        }), prepared = sampleMeasure("demand.sample.prioritization", () => (sampleCount("demand.sample.commonPreparations"), prepareDemandPrioritization(baseInput))), inputWithoutConstructionSaving = saving === null ? baseInput : Object.freeze({ ...baseInput, savingTarget: null }), [baseDelta, withoutSavingDelta] = sampleMeasure(
+          "demand.sample.prioritization",
+          () => (sampleCount("demand.sample.evaluateCalls"), evaluateDemandPrioritizationVariants(prepared, [
+            baseInput,
+            inputWithoutConstructionSaving
+          ]))
+        ), preparedRequestQuantities = sampleMeasure(
           "demand.sample.prioritization",
           () => (sampleCount("demand.sample.requestQuantityEvaluations"), capturedResourceRequestQuantities(
-            baseResult.requests,
+            prepared.requests,
             resources
           ))
-        ), inputWithoutConstructionSaving = saving === null ? baseInput : Object.freeze({ ...baseInput, savingTarget: null }), resultWithoutConstructionSaving = saving === null ? baseResult : sampleMeasure("demand.sample.prioritization", () => (sampleCount("demand.sample.evaluateCalls"), evaluateDemandPrioritization(
-          prepared,
-          inputWithoutConstructionSaving
-        ))), requestedWithoutConstructionSaving = saving === null ? baseRequested : sampleMeasure("demand.sample.prioritization", () => (sampleCount("demand.sample.requestQuantityEvaluations"), capturedResourceRequestQuantities(
-          resultWithoutConstructionSaving.requests,
+        ), baseRequested = sampleMeasure(
+          "demand.sample.prioritization",
+          () => (sampleCount("demand.sample.requestQuantityEvaluations"), extendCapturedResourceRequestQuantities(
+            preparedRequestQuantities,
+            baseDelta?.requests ?? Object.freeze([]),
+            resources
+          ))
+        ), requestedWithoutConstructionSaving = saving === null ? baseRequested : sampleMeasure("demand.sample.prioritization", () => (sampleCount("demand.sample.requestQuantityEvaluations"), extendCapturedResourceRequestQuantities(
+          preparedRequestQuantities,
+          withoutSavingDelta?.requests ?? Object.freeze([]),
           resources
         ))), capturedFactoryProductionsForRequests = (requestedBase) => Object.freeze(factoryCatalog === void 0 ? [] : factoryCatalog.productions.map((production) => {
           let amount = finite(
@@ -24550,35 +24636,40 @@
             ...production,
             isDemanded: amount !== void 0 && (requestedBase.get(production.outputResourceId) ?? 0) > amount
           });
-        })), factoryProductions = capturedFactoryProductionsForRequests(baseRequested), nonMechResult = factoryCatalog !== void 0 && hasFactoryDemand ? sampleMeasure("demand.sample.prioritization", () => (sampleCount("demand.sample.evaluateCalls"), evaluateDemandPrioritization(prepared, {
-          ...baseInput,
-          factoryCount: factoryCatalog.count,
-          factoryProductions
-        }))) : baseResult, otherRequested = sampleMeasure(
+        })), factoryProductions = capturedFactoryProductionsForRequests(baseRequested), factoryDemandDeltas = factoryCatalog !== void 0 && hasFactoryDemand ? sampleMeasure("demand.sample.prioritization", () => (sampleCount("demand.sample.evaluateCalls"), evaluateDemandPrioritizationVariants(prepared, [
+          Object.freeze({
+            ...baseInput,
+            factoryCount: factoryCatalog.count,
+            factoryProductions
+          }),
+          Object.freeze({
+            ...inputWithoutConstructionSaving,
+            factoryCount: factoryCatalog.count,
+            factoryProductions: capturedFactoryProductionsForRequests(
+              requestedWithoutConstructionSaving
+            )
+          })
+        ]))) : Object.freeze([baseDelta, withoutSavingDelta]), otherRequested = sampleMeasure(
           "demand.sample.prioritization",
-          () => (sampleCount("demand.sample.requestQuantityEvaluations"), capturedResourceRequestQuantities(
-            nonMechResult.requests,
+          () => factoryCatalog === void 0 || !hasFactoryDemand ? baseRequested : (sampleCount("demand.sample.requestQuantityEvaluations"), extendCapturedResourceRequestQuantities(
+            preparedRequestQuantities,
+            factoryDemandDeltas[0]?.requests ?? Object.freeze([]),
             resources
           ))
-        ), otherResultForMechPriority = factoryCatalog !== void 0 && hasFactoryDemand ? sampleMeasure("demand.sample.prioritization", () => (sampleCount("demand.sample.evaluateCalls"), evaluateDemandPrioritization(prepared, {
-          ...inputWithoutConstructionSaving,
-          factoryCount: factoryCatalog.count,
-          factoryProductions: capturedFactoryProductionsForRequests(
-            requestedWithoutConstructionSaving
-          )
-        }))) : resultWithoutConstructionSaving, requestedForMechPriority = sampleMeasure(
+        ), requestedForMechPriority = sampleMeasure(
           "demand.sample.prioritization",
-          () => (sampleCount("demand.sample.requestQuantityEvaluations"), capturedResourceRequestQuantities(
-            otherResultForMechPriority.requests,
+          () => factoryCatalog === void 0 || !hasFactoryDemand ? requestedWithoutConstructionSaving : (sampleCount("demand.sample.requestQuantityEvaluations"), extendCapturedResourceRequestQuantities(
+            preparedRequestQuantities,
+            factoryDemandDeltas[1]?.requests ?? Object.freeze([]),
             resources
           ))
         ), reservedForOthers = Object.freeze({
           supply: otherRequested.get("Supply") ?? 0,
           soulGems: otherRequested.get("Soul_Gem") ?? 0
-        }), mechDemandPlan = sampleMeasure(
-          "demand.sample.mech",
-          () => dependencies.mechDemand?.read(reservedForOthers)
-        )?.plan ?? planMechDemandCosts({
+        }), mechDemandPlan = sampleMeasure("demand.sample.mech", () => (sampleCount(
+          "demand.sample.mechDemandReads",
+          dependencies.mechDemand === void 0 ? 0 : 1
+        ), dependencies.mechDemand?.read(reservedForOthers)))?.plan ?? planMechDemandCosts({
           state: withCapturedMechReservations(
             readCapturedMechState({
               root,
@@ -24602,19 +24693,16 @@
           "demand.sample.buildingCatalogReads",
           dependencies.readBuildTargets === void 0 ? 0 : 1
         ), dependencies.readBuildTargets?.()));
-        if (exact && dependencies.readBuildTargets !== void 0 && managedBuildTargets === void 0) {
-          exactUnavailableReason = {
-            code: "managed-build-targets",
-            message: "managed build target snapshot unavailable"
-          };
+        if (dependencies.readBuildTargets !== void 0 && managedBuildTargets === void 0 && (exactUnavailableReason = {
+          code: "managed-build-targets",
+          message: "managed build target snapshot unavailable"
+        }, exact))
           return;
-        }
         let incompleteBuildStorageCosts = !1, unpricedBuildTarget, buildingStorageTargets = sampleMeasure(
           "demand.sample.build",
           () => Object.freeze(
             (managedBuildTargets ?? []).flatMap((target) => {
-              sampleCount("demand.sample.actionCostReads");
-              let price = dependencies.costs?.readCost(target.elementId);
+              let price = sampleCosts?.readCost(target.elementId);
               if (price === void 0)
                 return incompleteBuildStorageCosts = !0, unpricedBuildTarget ??= target.elementId, [];
               let costs = toCosts(price.cost, price.pool);
@@ -24627,24 +24715,17 @@
             })
           )
         );
-        if (exact && incompleteBuildStorageCosts) {
-          exactUnavailableReason = {
-            code: "managed-build-price",
-            message: `managed build target cannot be priced: ${unpricedBuildTarget ?? "unknown"}`
-          };
+        if (incompleteBuildStorageCosts && (exactUnavailableReason = {
+          code: "managed-build-price",
+          message: `managed build target cannot be priced: ${unpricedBuildTarget ?? "unknown"}`
+        }, exact))
           return;
-        }
-        let hasEnabledProjectStorageSetting = hasCapturedProjectStorageDemand(settings), projects = hasEnabledProjectStorageSetting ? sampleMeasure(
-          "demand.sample.projects",
-          () => dependencies.readProjects?.()
-        ) : [];
-        if (exact && hasEnabledProjectStorageSetting && dependencies.readProjects !== void 0 && projects === void 0) {
-          exactUnavailableReason = {
-            code: "project-storage-catalog",
-            message: "enabled project-storage catalog unavailable"
-          };
+        let hasEnabledProjectStorageSetting = hasCapturedProjectStorageDemand(settings), projects = hasEnabledProjectStorageSetting ? sampleMeasure("demand.sample.projects", () => (sampleCount("demand.sample.projectCatalogReads"), dependencies.readProjects?.())) : [];
+        if (hasEnabledProjectStorageSetting && dependencies.readProjects !== void 0 && projects === void 0 && (exactUnavailableReason = {
+          code: "project-storage-catalog",
+          message: "enabled project-storage catalog unavailable"
+        }, exact))
           return;
-        }
         let projectStorageTargets = sampleMeasure(
           "demand.sample.projects",
           () => Object.freeze(
@@ -24664,11 +24745,18 @@
           )
         ), fleetStorageTargets = settingBoolean3(settings, "autoFleet", !1) && settingString(settings, "prioritizeOuterFleet", "ignore") !== "ignore" && fleet?.nextShipExpandable === !0 && fleet.nextShipCost.length > 0 ? Object.freeze([Object.freeze({ costs: fleet.nextShipCost })]) : Object.freeze([]);
         if (queued.length === 0 && triggerTargets.length === 0 && saving === null && (offered === void 0 || offered.length === 0) && !hasFactoryDemand && !hasCrafterDemand && missions.length === 0 && !hasFleetDemand && inflationMoney === null && retirementGraphene === null && truepathAiBuildingTarget === null && spyPurchaseMoney === 0 && mechCosts.length === 0 && technologyStorageTargets.length === 0 && buildingStorageTargets.length === 0 && projectStorageTargets.length === 0 && fleetStorageTargets.length === 0 && !moneyEnvelope)
-          return EMPTY_DEMAND_SAMPLE;
-        let finalInput = Object.freeze({ ...baseInput, mechCosts }), result = sampleMeasure("demand.sample.prioritization", () => (sampleCount("demand.sample.evaluateCalls"), evaluateDemandPrioritization(prepared, {
-          ...finalInput,
+          return lastSampleCaptureComplete = !0, EMPTY_DEMAND_SAMPLE;
+        let finalVariant = Object.freeze({
+          ...baseInput,
+          mechCosts,
           ...factoryCatalog !== void 0 && hasFactoryDemand ? { factoryCount: factoryCatalog.count, factoryProductions } : {}
-        }))), requested = sampleMeasure("demand.sample.prioritization", () => (sampleCount("demand.sample.requestQuantityEvaluations"), capturedResourceRequestQuantities(result.requests, resources))), requestedExcludingMech = new Map(otherRequested);
+        }), finalDelta = sampleMeasure("demand.sample.prioritization", () => (sampleCount("demand.sample.evaluateCalls"), evaluateDemandPrioritizationVariants(prepared, [
+          finalVariant
+        ])[0])), requested = sampleMeasure("demand.sample.prioritization", () => (sampleCount("demand.sample.requestQuantityEvaluations"), extendCapturedResourceRequestQuantities(
+          preparedRequestQuantities,
+          finalDelta?.requests ?? Object.freeze([]),
+          resources
+        ))), requestedExcludingMech = new Map(otherRequested);
         if (mechDemandPlan.status === "unavailable")
           for (let resourceId of ["Supply", "Soul_Gem"]) {
             let maximum = finite(
@@ -24745,7 +24833,7 @@
             resource.maxCost
           ])
         );
-        return Object.freeze({
+        return lastSampleCaptureComplete = !0, Object.freeze({
           savingTarget: saving,
           spyPurchaseMoney: sampledSpyPurchaseMoney,
           spyPurchaseReservation: sampledSpyPurchaseReservation,
@@ -24764,12 +24852,28 @@
           }
         });
       }
+    }, preparedDemandEpoch, preparedDemandSample, preparedExactUnavailableReason, rememberPreparedSample = (sample, epoch) => {
+      epoch !== void 0 && (preparedDemandEpoch = epoch, preparedDemandSample = sample, preparedExactUnavailableReason = exactUnavailableReason.code === "other-exact-prerequisite" ? void 0 : exactUnavailableReason);
+    }, recordPreparedReuse = (exact) => {
+      dependencies.diagnostics?.readPerformanceEnabled() === !0 && (exact && dependencies.diagnostics.recordCount("demand.sampleExact.samples", 1), dependencies.diagnostics.recordCount(
+        exact ? "demand.sampleExact.preparedReuseHits" : "demand.sample.preparedReuseHits",
+        1
+      ));
     };
     return Object.freeze({
-      sample: () => capturedDemandSampler.sample(!1) ?? EMPTY_DEMAND_SAMPLE,
+      sample: () => {
+        let sample = capturedDemandSampler.sample(!1) ?? EMPTY_DEMAND_SAMPLE;
+        return lastSampleCaptureComplete && rememberPreparedSample(sample, dependencies.readDemandEpoch?.()), sample;
+      },
       sampleExact: () => {
+        let currentDemandEpoch = dependencies.readDemandEpoch?.();
+        if (currentDemandEpoch !== void 0 && preparedDemandEpoch === currentDemandEpoch && preparedDemandSample !== void 0)
+          return recordPreparedReuse(!0), Object.freeze(preparedExactUnavailableReason === void 0 ? { status: "ready", sample: preparedDemandSample } : {
+            status: "unavailable",
+            reason: preparedExactUnavailableReason
+          });
         let sample = capturedDemandSampler.sample(!0);
-        return Object.freeze(sample === void 0 ? {
+        return sample !== void 0 && lastSampleCaptureComplete && rememberPreparedSample(sample, currentDemandEpoch), Object.freeze(sample === void 0 ? {
           status: "unavailable",
           reason: exactUnavailableReason
         } : { status: "ready", sample });
@@ -32793,7 +32897,8 @@
     readSettings,
     readDemand,
     readBuildTargets,
-    buildCosts
+    buildCosts,
+    onMutation
   }) {
     return Object.freeze({
       run() {
@@ -32806,7 +32911,7 @@
           readDemand(),
           readBuildTargets,
           buildCosts
-        ), session = Object.freeze({ root, input, fullInput }), adjustments = (fullInput === void 0 ? void 0 : planFactory(fullInput))?.adjustments.filter((adjustment) => adjustment.delta !== 0) ?? planCapturedFactoryTrim(session.input).map(
+        ), session = Object.freeze({ root, input, fullInput }), mutationAttempted = !1, adjustments = (fullInput === void 0 ? void 0 : planFactory(fullInput))?.adjustments.filter((adjustment) => adjustment.delta !== 0) ?? planCapturedFactoryTrim(session.input).map(
           (adjustment) => Object.freeze({
             productionId: adjustment.id,
             outputResourceId: adjustment.id,
@@ -32848,6 +32953,7 @@
                 "captured-factory-control-failed",
                 result.detail ?? result.reason
               );
+            mutationAttempted = !0;
           }
         };
         for (let adjustment of adjustments) {
@@ -32875,13 +32981,13 @@
                 "captured-factory-allocation-unchanged",
                 "factory allocation did not reach the planned allocation"
               );
-          return SUCCEEDED;
+          return mutationAttempted && onMutation?.(), SUCCEEDED;
         }
         let remaining = totalAssigned(session.root);
         return remaining === void 0 || remaining > session.input.maximum ? stale(
           "captured-factory-allocation-unchanged",
           "factory allocation did not reach captured capacity"
-        ) : SUCCEEDED;
+        ) : (mutationAttempted && onMutation?.(), SUCCEEDED);
       }
     });
   }
@@ -33420,7 +33526,7 @@
         built += after - before;
       }
     }
-    return built > 0;
+    return built <= 0 ? !1 : (dependencies.onMutation?.(), !0);
   }
   function storageExecutor(dependencies, readSession) {
     return Object.freeze({
@@ -33562,7 +33668,9 @@
               `${adjustment.resourceId}: allocation did not match the requested change`
             );
         }
-        return SUCCEEDED;
+        return adjustments.some(
+          (adjustment) => adjustment.crateDelta !== 0 || adjustment.containerDelta !== 0
+        ) && dependencies.onMutation?.(), SUCCEEDED;
       }
     });
   }
@@ -38032,12 +38140,19 @@
     reporter,
     display
   }) {
+    let lastResolved, publishResolution = (resolution) => {
+      let changed = lastResolved === void 0 ? Object.keys(resolution).length > 0 : Object.keys(lastResolved).length !== Object.keys(resolution).length || Object.entries(resolution).some(([key, value]) => {
+        let previous = lastResolved?.[key];
+        return Array.isArray(value) && Array.isArray(previous) ? value.length !== previous.length || value.some(
+          (entry, index) => !Object.is(entry, previous[index])
+        ) : !Object.is(value, previous);
+      });
+      return lastResolved = Object.freeze({ ...resolution }), changed;
+    };
     function updateOverrides() {
       let settings = getSettings(), settingsRaw = getSettingsRaw();
-      if (layerSettingsOver(settings, settingsRaw), getSafeMode()) {
-        settings.masterScriptToggle = !1;
-        return;
-      }
+      if (layerSettingsOver(settings, settingsRaw), getSafeMode())
+        return settings.masterScriptToggle = !1, publishResolution({});
       let resolution = resolveOverrides({
         settingsRaw,
         evaluator: source.sampleEvaluator(),
@@ -38046,10 +38161,10 @@
       Object.assign(settings, resolution.values);
       for (let [key, list] of Object.entries(resolution.lists))
         settings[key] = list;
-      reporter.report(resolution.failures), display.publish();
+      return reporter.report(resolution.failures), display.publish(), publishResolution({ ...resolution.values, ...resolution.lists });
     }
     function syncStoredSettings() {
-      layerSettingsOver(getSettings(), getSettingsRaw());
+      return layerSettingsOver(getSettings(), getSettingsRaw()), publishResolution({});
     }
     return { updateOverrides, syncStoredSettings };
   }
@@ -55677,23 +55792,30 @@ Only continue if you trust the source. Injected code:
       },
       display: { publish: () => {
       } }
-    }), refreshEffectiveSettings = () => {
-      let profiling = diagnostics?.readPerformanceEnabled() === !0 ? diagnostics : void 0, startedAtMs = profiling?.nowMs();
-      try {
+    }), activeRuntimeMeasure = createExclusivePhaseMeasure(void 0), phaseDiagnostics = diagnostics === void 0 ? void 0 : Object.freeze({
+      readPerformanceEnabled: () => diagnostics.readPerformanceEnabled(),
+      nowMs: () => diagnostics.nowMs(),
+      measurePhase: (phase, action) => activeRuntimeMeasure.measure(phase, action),
+      recordPerformance: (phase, durationMs) => activeRuntimeMeasure.record(phase, durationMs),
+      recordCount: (name, amount) => diagnostics.recordCount(name, amount),
+      flushPerformance: () => diagnostics.flushPerformance()
+    }), invalidateDemandSettings = () => {
+    }, refreshEffectiveSettings = (periodWake = !1) => activeRuntimeMeasure.measure(
+      periodWake ? "period.settings.refreshEffective" : "settings.refreshEffective",
+      () => {
         if (readOverrideConditionContext === void 0) {
-          overrideSettings.syncStoredSettings();
+          overrideSettings.syncStoredSettings() && invalidateDemandSettings();
           return;
         }
         let overrides = settingsLifecycle.readRaw().overrides;
-        readSafeMode() || isRecord(overrides) && Object.keys(overrides).length > 0 ? overrideSettings.updateOverrides() : overrideSettings.syncStoredSettings();
-      } finally {
-        profiling !== void 0 && startedAtMs !== void 0 && profiling.recordPerformance(
-          "settings.refreshEffective",
-          profiling.nowMs() - startedAtMs
-        );
+        readSafeMode() || isRecord(overrides) && Object.keys(overrides).length > 0 ? activeRuntimeMeasure.measure(
+          periodWake ? "period.settings.overrideEvaluation" : "settings.overrideEvaluation",
+          () => overrideSettings.updateOverrides()
+        ) && invalidateDemandSettings() : overrideSettings.syncStoredSettings() && invalidateDemandSettings();
       }
-    }, refreshDiscoveredSettings = () => {
-      settingsLifecycle.ensureDynamicDefaults(), refreshEffectiveSettings();
+    ), refreshDiscoveredSettings = () => {
+      let previousRuns = settingsLifecycle.stats().dynamicDefaultRuns;
+      settingsLifecycle.ensureDynamicDefaults(), settingsLifecycle.stats().dynamicDefaultRuns !== previousRuns && invalidateDemandSettings(), refreshEffectiveSettings();
     }, settingsStore = Object.freeze({
       readRaw: settingsLifecycle.readEffective,
       replaceRaw: settingsStorage.replaceRaw,
@@ -55820,7 +55942,7 @@ Only continue if you trust the source. Injected code:
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
       readSettings: () => settingsStore.readRaw(),
-      readPurchaseMoney: () => readDemand().spyPurchaseReservation?.purchaseMoney
+      readPurchaseMoney: () => readDemand("SpyTraining").spyPurchaseReservation?.purchaseMoney
     }), capturedEspionageOperations = createCapturedEspionageOperationCapture({
       controls: pageCapture2.controls,
       synthesis: pageCapture2.synthesis,
@@ -55867,7 +55989,7 @@ Only continue if you trust the source. Injected code:
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
       readSettings: () => settingsStore.readRaw(),
-      readPurchaseReservation: () => readDemand().spyPurchaseReservation,
+      readPurchaseReservation: () => readDemand("Espionage").spyPurchaseReservation,
       operations: capturedEspionageOperations,
       onActivity
     }), runCapturedEspionageCycle = createCapturedEspionageRunner(capturedEspionage), capturedBattle = createCapturedBattle({
@@ -55881,8 +56003,8 @@ Only continue if you trust the source. Injected code:
       controls: pageCapture2.controls,
       readSettings: () => settingsStore.readRaw(),
       readGoal: () => capturedPrestigeGoal,
-      readMoneyRequested: () => readDemand().requestedQuantity("Money"),
-      readMoneyStorageRequired: () => readDemand().storageRequired("Money"),
+      readMoneyRequested: () => readDemand("Mercenary").requestedQuantity("Money"),
+      readMoneyStorageRequired: () => readDemand("Mercenary").storageRequired("Money"),
       keyState: pageCapture2.keyState,
       onActivity
     }), runCapturedEvolution = () => runEvolution({
@@ -55900,36 +56022,26 @@ Only continue if you trust the source. Injected code:
     settingsPanel.ensurePanel();
     let reported = /* @__PURE__ */ new Set(), reportOnce = (message) => {
       reported.has(message) || (reported.add(message), logError(message));
-    }, measurePhase = (name, body) => {
-      let phaseDiagnostics = diagnostics?.readPerformanceEnabled() === !0 ? diagnostics : void 0, startedAtMs = phaseDiagnostics?.nowMs();
+    }, measurePhase = (name, body) => activeRuntimeMeasure.measure(name, body), runPhase = (name, body) => {
       try {
-        return body();
-      } finally {
-        phaseDiagnostics !== void 0 && startedAtMs !== void 0 && phaseDiagnostics.recordPerformance(
-          name,
-          phaseDiagnostics.nowMs() - startedAtMs
-        );
-      }
-    }, runPhase = (name, body) => {
-      try {
-        return measurePhase(name, body);
+        return activeRuntimeMeasure.measure(name, body);
       } catch (error) {
         reportOnce(`${name} stopped: ${String(error)}`);
         return;
       }
-    }, readDemand = () => EMPTY_DEMAND_SAMPLE, demandPrerequisitesThisCycle, readDemandPrerequisites = () => demandPrerequisitesThisCycle, mechSupplyReservation = createMechSupplyReservation(), arpa = createCapturedArpaMechanics({
+    }, readDemand = () => EMPTY_DEMAND_SAMPLE, readDemandFor = (owner) => () => readDemand(owner), demandPrerequisitesThisCycle, readDemandPrerequisites = () => demandPrerequisitesThisCycle, mechSupplyReservation = createMechSupplyReservation(), arpa = createCapturedArpaMechanics({
       rootState: pageCapture2.rootState,
       discovery: createCapturedTabDiscovery({
         rootState: pageCapture2.rootState,
         controls: pageCapture2.controls,
         mountSuppression: pageCapture2.mountSuppression,
         panels,
-        ...diagnostics === void 0 ? {} : { diagnostics }
+        ...phaseDiagnostics === void 0 ? {} : { diagnostics: phaseDiagnostics }
       }),
       pageWindow: settingsHostWindow2,
       bindings: pageCapture2.bindings,
       ...diagnostics === void 0 ? {} : { onDiagnostic: (message) => reportDiagnostic(message) }
-    }), progression = createCapturedProgressionControl({
+    }), constructionMutationObserved = !1, storageMutationObserved = !1, progression = createCapturedProgressionControl({
       readMechPowerSupplyHold: mechSupplyReservation.readPowerSupplyHold,
       rootState: pageCapture2.rootState,
       mechanics: pageCapture2.mechanics,
@@ -55948,7 +56060,7 @@ Only continue if you trust the source. Injected code:
       readSettings: () => settingsStore.readRaw(),
       readInterfacePresentationSettings: readEffectiveInterfacePresentation,
       readStateLogPlannerDetailsDue: () => stateLogPlannerDetailsDue,
-      readReservedQuantityForMechPriority: (resourceId) => readDemand().requestedQuantityForMechPriority(resourceId),
+      readReservedQuantityForMechPriority: (resourceId) => readDemand("Mech").requestedQuantityForMechPriority(resourceId),
       // The already-granted half of the research draw is only worth its cost to a configured
       // trigger or override, so those stored conditions decide whether the pass keeps it.
       needGrantedTechs: () => {
@@ -55956,7 +56068,7 @@ Only continue if you trust the source. Injected code:
         return triggersNeedGrantedTechs(settings) || capturedOverridesNeedGrantedTechs(settings);
       },
       readCapturedStorageRequired: (_resourceIds, resourceScopes = []) => {
-        let sample = readDemand(), scopes = resourceScopes.length > 0 ? resourceScopes : _resourceIds.map((resourceId) => ({ resourceId }));
+        let sample = readDemand("Build"), scopes = resourceScopes.length > 0 ? resourceScopes : _resourceIds.map((resourceId) => ({ resourceId }));
         return Object.freeze(
           Object.fromEntries(
             scopes.map((scope) => [
@@ -55966,12 +56078,15 @@ Only continue if you trust the source. Injected code:
           )
         );
       },
+      onConstructionMutation: () => {
+        constructionMutationObserved = !0;
+      },
       // Reported once per distinct reason: a candidate the cycle cannot price or a catalog it cannot
       // read is otherwise dropped in silence, which is how a composition gap survives a whole session.
       onSkipped: (key, reason) => reportOnce(`progression skipped ${key}: ${reason}`),
       onUnavailable: (reason) => reportOnce(`progression unavailable: ${reason}`),
       nowMs: () => Date.now(),
-      diagnostics,
+      diagnostics: phaseDiagnostics,
       onDiagnostic: reportDiagnostic,
       onActivity
     }), savingTargetThisCycle, constructionRunning = !1, constructionSuppressedThisCycle = !1, cycleConstructionObservations = Object.freeze({
@@ -55981,7 +56096,7 @@ Only continue if you trust the source. Injected code:
         return settings.autoBuild !== !0 && settings.autoARPA !== !0 || constructionSuppressedThisCycle || constructionRunning && !progression.observations.hasCompletedOrdering() ? null : (savingTargetThisCycle === void 0 && (savingTargetThisCycle = progression.observations.readSavingTarget()), savingTargetThisCycle);
       }
     }), readCapturedMechReservation = (resourceId) => {
-      let demandSample = readDemand(), priorityDemand = progression.mechDemand.read({
+      let demandSample = readDemand("Mech"), priorityDemand = progression.mechDemand.read({
         supply: demandSample.requestedQuantityForMechPriority("Supply"),
         soulGems: demandSample.requestedQuantityForMechPriority("Soul_Gem")
       });
@@ -56019,7 +56134,7 @@ Only continue if you trust the source. Injected code:
       keyState: pageCapture2.keyState,
       controls: pageCapture2.controls,
       readSettings: () => settingsStore.readRaw(),
-      readDemand: () => readDemand()
+      readDemand: readDemandFor("Genetics")
     }), traits = createCapturedTraitControl({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
@@ -56042,14 +56157,14 @@ Only continue if you trust the source. Injected code:
       controls: pageCapture2.controls,
       costs,
       readSettings: () => settingsStore.readRaw(),
-      readDemand: () => readDemand(),
+      readDemand: readDemandFor("Jobs"),
       readBuildTargets: progression.readManagedBuildTargets,
       buildCosts
     }), ordinaryJobs = createCapturedOrdinaryJobsAutomation({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
       readSettings: () => settingsStore.readRaw(),
-      readDemand: () => readDemand(),
+      readDemand: readDemandFor("Jobs"),
       onSkipped: (key, reason) => reportOnce(`jobs skipped ${key}: ${reason}`)
     }), fullJobs = createCapturedFullJobsAutomation({
       rootState: pageCapture2.rootState,
@@ -56057,10 +56172,10 @@ Only continue if you trust the source. Injected code:
       readSettings: () => settingsStore.readRaw(),
       onSkipped: (key, reason) => reportOnce(`jobs skipped ${key}: ${reason}`),
       costs,
-      readDemand: () => readDemand(),
+      readDemand: readDemandFor("Jobs"),
       readBuildTargets: progression.readManagedBuildTargets,
       buildCosts,
-      ...diagnostics === void 0 ? {} : { diagnostics }
+      ...phaseDiagnostics === void 0 ? {} : { diagnostics: phaseDiagnostics }
     }), pylon = createCapturedPylonAutomation({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
@@ -56080,7 +56195,7 @@ Only continue if you trust the source. Injected code:
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
       readSettings: () => settingsStore.readRaw(),
-      readDemand: () => readDemand()
+      readDemand: readDemandFor("Replicator")
     }), queueReservations = createCapturedQueueReservationSource({
       rootState: pageCapture2.rootState,
       readOfferedTechs: progression.readOfferedTechs,
@@ -56194,11 +56309,82 @@ Only continue if you trust the source. Injected code:
         );
       }
     };
-    let invalidateCapturedCyclePlanning = () => {
-      latestConstructionSnapshot = null, latestConstructionRun = void 0, currentStateLogConstructionSnapshot = null, constructionFreshness = "none", triggerTargetsThisCycle = void 0, triggerDemandThisCycle = void 0, demandThisCycle = void 0, demandPrerequisitesThisCycle = void 0;
+    let demandThisCycle, exactDemandUnavailableReason, demandEpoch = 0, actionCostEpoch = 0, demandSampleEpoch = -1, invalidateDemandSample = (actionCostsMayChange = !0) => {
+      demandEpoch += 1, actionCostsMayChange && (actionCostEpoch += 1), demandSampleEpoch = -1, demandThisCycle = void 0, exactDemandUnavailableReason = void 0;
+    };
+    invalidateDemandSettings = () => {
+      if (invalidateDemandSample(!1), savingTargetThisCycle = void 0, triggerTargetsThisCycle = void 0, triggerDemandThisCycle = void 0, demandPrerequisitesThisCycle = void 0, settingsLifecycle.readEffective().autoTrigger === !0)
+        try {
+          triggerTargetsThisCycle = triggers.read();
+        } catch {
+          triggerTargetsThisCycle = void 0;
+        }
+    };
+    let invalidateDemandAfterMutation = (constructionAuthority = !1, actionCostsMayChange = !0) => {
+      if (invalidateDemandSample(actionCostsMayChange), savingTargetThisCycle = void 0, triggerDemandThisCycle = void 0, demandPrerequisitesThisCycle = void 0, constructionAuthority && progression.invalidateConstructionOffers(), settingsLifecycle.readEffective().autoTrigger === !0)
+        try {
+          triggerTargetsThisCycle = triggers.read();
+        } catch {
+          triggerTargetsThisCycle = void 0;
+        }
+    }, captureNativePriceAuthority = () => {
+      let root = pageCapture2.rootState.readRoot(), copyFields = (value) => isRecord(value) ? Object.freeze(
+        Object.keys(value).map(
+          (key) => Object.freeze([key, readProperty(value, key)])
+        )
+      ) : Object.freeze([]);
+      return Object.freeze({
+        race: copyFields(readProperty(root, "race")),
+        genes: Object.freeze([
+          Object.freeze([
+            "evolve",
+            readProperty(readProperty(root, "genes"), "evolve")
+          ])
+        ]),
+        tech: copyFields(readProperty(root, "tech")),
+        government: copyFields(
+          readProperty(readProperty(root, "civic"), "govern")
+        ),
+        captiveHousing: readProperty(
+          readProperty(root, "city"),
+          "captive_housing"
+        ),
+        torturerWorkers: readProperty(
+          readProperty(readProperty(root, "civic"), "torturer"),
+          "workers"
+        ),
+        nightmareMetaGene: readProperty(
+          readProperty(
+            readProperty(readProperty(root, "stats"), "achieve"),
+            "nightmare"
+          ),
+          "mg"
+        )
+      });
+    }, nativePriceAuthorityChanged = (before, after) => ["race", "genes", "tech", "government"].some((field) => {
+      let prior = before[field], current = after[field];
+      return prior.length !== current.length || prior.some(
+        ([key, value], index) => current[index]?.[0] !== key || !Object.is(current[index]?.[1], value)
+      );
+    }) || !Object.is(before.captiveHousing, after.captiveHousing) || !Object.is(before.torturerWorkers, after.torturerWorkers) || !Object.is(before.nightmareMetaGene, after.nightmareMetaGene), runPriceSensitivePhase = (name, body) => runPhase(name, () => {
+      let before = captureNativePriceAuthority(), outcome;
+      try {
+        outcome = Object.freeze({ status: "succeeded", value: body() });
+      } catch (error) {
+        outcome = Object.freeze({ status: "failed", error });
+      }
+      try {
+        nativePriceAuthorityChanged(before, captureNativePriceAuthority()) && invalidateDemandSample();
+      } catch (error) {
+        throw invalidateDemandSample(), error;
+      }
+      if (outcome.status === "failed") throw outcome.error;
+      return outcome.value;
+    }), invalidateCapturedCyclePlanning = () => {
+      latestConstructionSnapshot = null, latestConstructionRun = void 0, currentStateLogConstructionSnapshot = null, constructionFreshness = "none", triggerTargetsThisCycle = void 0, triggerDemandThisCycle = void 0, invalidateDemandSample(), demandPrerequisitesThisCycle = void 0;
     };
     pageCapture2.rootState.subscribeRootReplaced(() => {
-      mechSupplyReservation.reset(), savingTargetThisCycle = void 0, settingsLifecycle.invalidateDynamicDefaults(), settingsPanel.invalidate(), discoveryAttempts.invalidate(), latestConstructionSnapshot = null, latestConstructionRun = void 0, constructionFreshness = "none", triggerTargetsThisCycle = void 0, refreshCapturedPlanningPanels();
+      mechSupplyReservation.reset(), savingTargetThisCycle = void 0, settingsLifecycle.invalidateDynamicDefaults(), settingsPanel.invalidate(), discoveryAttempts.invalidate(), latestConstructionSnapshot = null, latestConstructionRun = void 0, constructionFreshness = "none", triggerTargetsThisCycle = void 0, triggerDemandThisCycle = void 0, invalidateDemandSample(), demandPrerequisitesThisCycle = void 0, refreshCapturedPlanningPanels();
     });
     let triggerActions = createCapturedTriggerActions({
       rootState: pageCapture2.rootState,
@@ -56211,6 +56397,8 @@ Only continue if you trust the source. Injected code:
       arpa
     }), demand = createCapturedResourceDemand({
       rootState: pageCapture2.rootState,
+      readDemandEpoch: () => demandEpoch,
+      readActionCostEpoch: () => actionCostEpoch,
       controls: pageCapture2.controls,
       costs: buildCosts,
       triggers: Object.freeze({
@@ -56229,33 +56417,36 @@ Only continue if you trust the source. Injected code:
       readPrerequisites: readDemandPrerequisites,
       craftCosts: costs,
       fleet: fleetDemand,
-      ...diagnostics === void 0 ? {} : { diagnostics }
-    }), demandThisCycle, exactDemandUnavailableReason;
-    readDemand = () => measurePhase("demand.read", () => (demandThisCycle === void 0 && (demandThisCycle = measurePhase("demand.read.compute", () => (measurePhase(
+      ...phaseDiagnostics === void 0 ? {} : { diagnostics: phaseDiagnostics }
+    });
+    readDemand = (owner) => measurePhase("demand.read", () => ((demandThisCycle === void 0 || demandSampleEpoch !== demandEpoch) && (diagnostics?.recordCount(`demand.sampleOwner.${owner}`, 1), demandThisCycle = measurePhase("demand.read.compute", () => (measurePhase(
       "demand.sample.research-observation",
       ensureDemandResearchObservation
-    ), measurePhase("demand.sample.total", () => demand.sample())))), demandThisCycle));
+    ), measurePhase("demand.sample.total", () => demand.sample()))), demandSampleEpoch = demandEpoch), demandThisCycle));
     let storagePorts = createCapturedStoragePorts({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
       readSettings: () => settingsStore.readRaw(),
-      readStorageRequired: (resourceId, pool) => readDemand().storageRequired(resourceId, pool),
+      readStorageRequired: (resourceId, pool) => readDemand("Storage").storageRequired(resourceId, pool),
       reservations: queueReservations,
-      readSavingTarget: () => readDemand().savingTarget,
+      readSavingTarget: () => readDemand("Storage").savingTarget,
       readBuildTargets: progression.readUnlockedStorageBuildTargets,
       readOfferedTechs: progression.readOfferedTechs,
       readProjects: progression.readProjects,
       costs: buildCosts,
+      onMutation: () => {
+        storageMutationObserved = !0;
+      },
       onSkipped: (key, reason) => reportOnce(`storage skipped ${key}: ${reason}`),
       nowMs: () => Date.now()
     }), storageAutomation = createStorageAllocationAutomation({
       ...storagePorts,
-      diagnostics
+      diagnostics: phaseDiagnostics
     }), galaxyMarketPorts = createCapturedGalaxyMarketPorts({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
       readSettings: () => settingsStore.readRaw(),
-      readDemand: () => readDemand()
+      readDemand: readDemandFor("Market")
     }), galaxyMarketAutomation = Object.freeze({
       run: () => runGalaxyMarketAutomation({
         reader: galaxyMarketPorts.reader,
@@ -56269,7 +56460,7 @@ Only continue if you trust the source. Injected code:
       controls: pageCapture2.controls,
       board: marketBoard,
       readSettings: () => settingsStore.readRaw(),
-      readDemand: () => readDemand(),
+      readDemand: readDemandFor("Market"),
       onUnavailable: (resourceId, reason) => reportOnce(`market skipped ${resourceId}: ${reason}`)
     }), tradeRoutes = createCapturedTradeRoutes({
       rootState: pageCapture2.rootState,
@@ -56278,7 +56469,7 @@ Only continue if you trust the source. Injected code:
       mechanics: pageCapture2.mechanics,
       keyState: pageCapture2.keyState,
       readSettings: () => settingsStore.readRaw(),
-      readDemand: () => readDemand(),
+      readDemand: readDemandFor("Market"),
       onUnavailable: (reason) => reportOnce(`trade routes unavailable: ${reason}`)
     }), marketAutomation = Object.freeze({
       run: (bulkSell = !1, ignoreSellRatio = !1) => runMarketAutomation(
@@ -56286,7 +56477,7 @@ Only continue if you trust the source. Injected code:
           reader: marketPorts.reader,
           executor: marketPorts.executor,
           tradeRoutes,
-          diagnostics
+          diagnostics: phaseDiagnostics
         },
         bulkSell,
         ignoreSellRatio
@@ -56295,14 +56486,14 @@ Only continue if you trust the source. Injected code:
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
       readSettings: () => settingsStore.readRaw(),
-      readDemand: () => readDemand()
+      readDemand: readDemandFor("ProductionRatios")
     }), craftDependencies = {
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
       costs,
       getDocument: () => document,
       readSettings: () => settingsStore.readRaw(),
-      readDemand: () => readDemand()
+      readDemand: readDemandFor("Craft")
     }, craft = Object.freeze({
       reader: createCapturedCraftReader(craftDependencies),
       executor: createCapturedCraftExecutor(craftDependencies)
@@ -56311,7 +56502,7 @@ Only continue if you trust the source. Injected code:
       controls: pageCapture2.controls,
       mountSuppression: pageCapture2.mountSuppression,
       panels,
-      diagnostics
+      diagnostics: phaseDiagnostics
     }), finishDiscovery = (key, label, satisfied, epoch, steps, options = void 0) => {
       if (!discoveryAttempts.shouldAttempt(key, epoch)) return !1;
       let result;
@@ -56995,41 +57186,44 @@ Only continue if you trust the source. Injected code:
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
       readSettings: () => settingsStore.readRaw(),
-      readDemand: () => readDemand()
+      readDemand: readDemandFor("Smelter")
     }), nanite = createCapturedNaniteAutomation({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
       readSettings: () => settingsStore.readRaw(),
-      readDemand: () => readDemand()
+      readDemand: readDemandFor("Nanite")
     }), ejector = createCapturedEjectorAutomation({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
       readSettings: () => settingsStore.readRaw(),
-      readDemand: () => readDemand()
+      readDemand: readDemandFor("Ejector")
     }), supply = createCapturedSupplyAutomation({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
       readSettings: () => settingsStore.readRaw(),
-      readDemand: () => readDemand()
-    }), factory = createCapturedFactoryAutomation({
+      readDemand: readDemandFor("Supply")
+    }), factoryMutationObserved = !1, factory = createCapturedFactoryAutomation({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
       readSettings: () => settingsStore.readRaw(),
-      readDemand: () => readDemand(),
+      readDemand: readDemandFor("Factory"),
+      onMutation: () => {
+        factoryMutationObserved = !0;
+      },
       readBuildTargets: progression.readManagedBuildTargets,
       buildCosts
     }), fleet = createCapturedFleetAutomation({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
       readSettings: () => settingsStore.readRaw(),
-      readDemand: () => readDemand()
+      readDemand: readDemandFor("Fleet")
     }), capturedPowerExecution = createCapturedPowerExecutor({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
       mechanics: pageCapture2.mechanics,
       readMechSaveSupply: mechSupplyReservation.readSaveSupply,
       setMechSaveSupply: mechSupplyReservation.setSaveSupply,
-      diagnostics,
+      diagnostics: phaseDiagnostics,
       log: (message) => onActivity({ message, color: "has-text-info", tags: ["automation"] })
     }), prospectiveSpaceMinerPlan;
     pageCapture2.rootState.subscribeRootReplaced?.(() => {
@@ -57051,7 +57245,7 @@ Only continue if you trust the source. Injected code:
     }, powerReader = createCapturedPowerReader({
       rootState: pageCapture2.rootState,
       mechanics: pageCapture2.mechanics,
-      ...diagnostics === void 0 ? {} : { diagnostics },
+      ...phaseDiagnostics === void 0 ? {} : { diagnostics: phaseDiagnostics },
       readJobCounts: ordinaryJobs.readJobCounts,
       readProspectiveSpaceMiners: (root) => {
         let plan = prospectiveSpaceMinerPlan;
@@ -57082,7 +57276,7 @@ Only continue if you trust the source. Injected code:
       reader: powerReader,
       executor: capturedPowerExecution.executor,
       warnings: powerWarnings,
-      diagnostics
+      diagnostics: phaseDiagnostics
     }), observePowerDemandPhase = (stage, outcome) => {
     }, outerFleetRegions = createCapturedSpaceRegionMechanics({
       pageWindow: settingsHostWindow2,
@@ -57106,25 +57300,26 @@ Only continue if you trust the source. Injected code:
     });
     refreshEffectiveSettings(), refreshCapturedPlanningPanels();
     let runCycle = () => {
-      let profiling = diagnostics?.readPerformanceEnabled() === !0 ? diagnostics : void 0, workStartedAtMs = profiling?.nowMs(), recordPreamble = (startedAtMs) => {
-        profiling !== void 0 && startedAtMs !== void 0 && profiling.recordPerformance(
+      let profiling = diagnostics?.readPerformanceEnabled() === !0 ? diagnostics : void 0, cycleMeasure = createExclusivePhaseMeasure(profiling);
+      activeRuntimeMeasure = cycleMeasure;
+      let workStartedAtMs = profiling?.nowMs(), recordPreamble = (startedAtMs) => {
+        if (profiling === void 0 || startedAtMs === void 0) return;
+        let elapsedMs = profiling.nowMs() - startedAtMs;
+        cycleMeasure.record(
           "tick.preamble",
-          profiling.nowMs() - startedAtMs
+          Math.max(0, elapsedMs - cycleMeasure.readTotalMs())
         );
       };
-      if (automationCycle += 1, prospectiveSpaceMinerPlan = void 0, capturedResetCommittedThisCycle = !1, currentStateLogConstructionSnapshot = null, stateLogPlannerDetailsDue = !1, constructionFreshness = latestConstructionSnapshot === null ? "none" : "stale", capturedMechCycleHasPendingWork = !1, demandThisCycle = void 0, savingTargetThisCycle = void 0, constructionSuppressedThisCycle = !1, triggerTargetsThisCycle = void 0, triggerDemandThisCycle = void 0, demandPrerequisitesThisCycle = void 0, !pageCapture2.isComplete()) {
-        let panelStartedAtMs2 = profiling?.nowMs();
-        settingsPanel.ensurePanel(), profiling !== void 0 && panelStartedAtMs2 !== void 0 && profiling.recordPerformance(
+      if (automationCycle += 1, constructionMutationObserved = !1, storageMutationObserved = !1, factoryMutationObserved = !1, prospectiveSpaceMinerPlan = void 0, capturedResetCommittedThisCycle = !1, currentStateLogConstructionSnapshot = null, stateLogPlannerDetailsDue = !1, constructionFreshness = latestConstructionSnapshot === null ? "none" : "stale", capturedMechCycleHasPendingWork = !1, invalidateDemandSample(), savingTargetThisCycle = void 0, constructionSuppressedThisCycle = !1, triggerTargetsThisCycle = void 0, triggerDemandThisCycle = void 0, demandPrerequisitesThisCycle = void 0, !pageCapture2.isComplete()) {
+        cycleMeasure.measure(
           "settingsPanel.ensurePanel",
-          profiling.nowMs() - panelStartedAtMs2
+          () => settingsPanel.ensurePanel()
         ), refreshCapturedPlanningPanels(), recordPreamble(workStartedAtMs);
         return;
       }
-      refreshDiscoveredSettings();
-      let panelStartedAtMs = profiling?.nowMs();
-      settingsPanel.ensurePanel(), profiling !== void 0 && panelStartedAtMs !== void 0 && profiling.recordPerformance(
+      refreshDiscoveredSettings(), cycleMeasure.measure(
         "settingsPanel.ensurePanel",
-        profiling.nowMs() - panelStartedAtMs
+        () => settingsPanel.ensurePanel()
       );
       let settings = settingsStore.readRaw();
       if (!pageCapture2.isComplete() || !isEnabled(settings, "masterScriptToggle")) {
@@ -57166,7 +57361,7 @@ Only continue if you trust the source. Injected code:
         }) === !0;
         if ((isEnabled(settings, "autoBuild") || isEnabled(settings, "buildingAlwaysClick")) && constructionDemandReady) {
           let needsConstructionSaving = isEnabled(settings, "autoBuild") || isEnabled(settings, "autoARPA"), savingOrderReady = progression.observations.hasCompletedOrdering();
-          needsConstructionSaving && !savingOrderReady ? runPhase("buildingAlwaysClick", () => gatherResources()) : runPhase("pre-Gather demand", () => (readDemand(), !0)) === !0 && runPhase("buildingAlwaysClick", () => gatherResources());
+          needsConstructionSaving && !savingOrderReady ? runPhase("buildingAlwaysClick", () => gatherResources()) : runPhase("pre-Gather demand", () => (readDemand("pre-Gather"), !0)) === !0 && runPhase("buildingAlwaysClick", () => gatherResources());
         }
         constructionDemandReady && isEnabled(settings, "autoMarket") && runPhase("autoMarket", () => {
           ensureMarketControls(), refreshDiscoveredSettings(), marketAutomation.run();
@@ -57202,20 +57397,37 @@ Only continue if you trust the source. Injected code:
           ), ratios.miningShip();
         }), constructionDemandReady && isEnabled(settings, "autoSmelter") && runPhase("autoSmelter", () => {
           ensureSmelterControls(), refreshDiscoveredSettings(), smelter.run();
-        }), constructionDemandReady && isEnabled(settings, "autoStorage") && (runPhase("autoStorage", () => {
+        }), constructionDemandReady && isEnabled(settings, "autoStorage") && (storageMutationObserved = !1, runPhase("autoStorage", () => {
           ensureStorageControls(), refreshDiscoveredSettings(), storageAutomation.run();
-        }), demandThisCycle = void 0, savingTargetThisCycle = void 0), constructionDemandReady && isEnabled(settings, "autoReplicator") && runPhase("autoReplicator", () => {
+        }), storageMutationObserved && invalidateDemandAfterMutation(!1, !1)), constructionDemandReady && isEnabled(settings, "autoReplicator") && runPhase("autoReplicator", () => {
           ensureReplicatorControls(), replicator.run();
         });
         let triggerActive = !1;
-        if (isEnabled(settings, "autoTrigger") && runPhase("autoTrigger", () => (triggerActive = triggerPhaseActive(
+        if (isEnabled(settings, "autoTrigger") && (runPhase("autoTrigger", () => (triggerActive = triggerPhaseActive(
           runTriggerAutomation({
             reader: triggerActions.reader,
             executor: triggerActions.executor
           })
-        ), !0)) !== !0 && (triggerActive = !0), triggerActive && (isEnabled(settings, "autoBuild") || isEnabled(settings, "autoARPA")) && (constructionSuppressedThisCycle = !0), !triggerActive && isEnabled(settings, "autoResearch") && (runPhase("autoResearch", () => progression.runResearchCycle()), observePowerDemandPhase("research-complete"), progression.resetBuildingUnlockSample(), (isEnabled(settings, "autoBuild") || isEnabled(settings, "autoStorage")) && runPhase("post-research construction demand preparation", () => {
-          progression.readUnlockedStorageBuildTargets(), refreshDiscoveredSettings();
-        })), !triggerActive && (isEnabled(settings, "autoBuild") || isEnabled(settings, "autoARPA"))) {
+        ), !0)) !== !0 && (triggerActive = !0), triggerActive && invalidateDemandAfterMutation(!0)), triggerActive && (isEnabled(settings, "autoBuild") || isEnabled(settings, "autoARPA")) && (constructionSuppressedThisCycle = !0), !triggerActive && isEnabled(settings, "autoResearch")) {
+          let researchProgressionChanged = !1;
+          runPhase("autoResearch", () => {
+            let progressionBeforeResearch = progression.readProgressionEpoch(), researchFailed = !1, researchFailure;
+            try {
+              progression.runResearchCycle();
+            } catch (error) {
+              researchFailed = !0, researchFailure = error;
+            }
+            try {
+              researchProgressionChanged = progression.readProgressionEpoch() !== progressionBeforeResearch, researchProgressionChanged && invalidateDemandAfterMutation(!0);
+            } catch (error) {
+              throw invalidateDemandAfterMutation(!0), error;
+            }
+            if (researchFailed) throw researchFailure;
+          }), researchProgressionChanged && (observePowerDemandPhase("research-complete"), progression.resetBuildingUnlockSample(), (isEnabled(settings, "autoBuild") || isEnabled(settings, "autoStorage")) && runPhase("post-research construction demand preparation", () => {
+            progression.readUnlockedStorageBuildTargets(), refreshDiscoveredSettings();
+          }));
+        }
+        if (!triggerActive && (isEnabled(settings, "autoBuild") || isEnabled(settings, "autoARPA"))) {
           let outcome = runPhase("autoBuild", () => {
             constructionRunning = !0;
             try {
@@ -57224,7 +57436,7 @@ Only continue if you trust the source. Injected code:
               constructionRunning = !1;
             }
           });
-          if (progression.invalidateConstructionOffers(), outcome !== void 0 && outcome.status !== "succeeded" && reportOnce(
+          if (outcome !== void 0 && outcome.status !== "succeeded" && reportOnce(
             `autoBuild: ${outcome.failure.code}: ${outcome.failure.message}`
           ), outcome?.status === "succeeded")
             try {
@@ -57240,24 +57452,27 @@ Only continue if you trust the source. Injected code:
               );
             }
         }
-        observePowerDemandPhase("construction-complete"), demandThisCycle = void 0, savingTargetThisCycle = void 0, observePowerDemandPhase("construction-invalidated"), isEnabled(settings, "autoFactory") && runPhase("autoFactory", () => {
+        constructionMutationObserved && (invalidateDemandAfterMutation(!0), observePowerDemandPhase("construction-invalidated")), observePowerDemandPhase("construction-complete"), isEnabled(settings, "autoFactory") && runPhase("autoFactory", () => {
           ensureFactoryControls(), refreshDiscoveredSettings(), factory.run();
-        }), demandThisCycle = void 0, savingTargetThisCycle = void 0, observePowerDemandPhase("factory-invalidated");
+        }), factoryMutationObserved && invalidateDemandAfterMutation(!1, !1), observePowerDemandPhase("factory-invalidated");
         let autoJobs = isEnabled(settings, "autoJobs"), autoCraftsmen = isEnabled(settings, "autoCraftsmen"), combinedJobs = !1;
-        if (autoJobs && autoCraftsmen && (runPhase("autoJobs with autoCraftsmen", () => {
-          ensureCivicControls(), refreshDiscoveredSettings();
-          let prepared = fullJobs.prepare();
-          return combinedJobs = prepared.status === "ready", prepared.status === "ready" && runPreparedJobsPhase(
-            "autoJobs with autoCraftsmen",
-            prepared.execution
-          ), !0;
-        }) || (combinedJobs = !0)), autoJobs && !combinedJobs && runPhase("autoJobs", () => {
+        if (autoJobs && autoCraftsmen && (runPriceSensitivePhase(
+          "autoJobs with autoCraftsmen",
+          () => {
+            ensureCivicControls(), refreshDiscoveredSettings();
+            let prepared = fullJobs.prepare();
+            return combinedJobs = prepared.status === "ready", prepared.status === "ready" && runPreparedJobsPhase(
+              "autoJobs with autoCraftsmen",
+              prepared.execution
+            ), !0;
+          }
+        ) || (combinedJobs = !0)), autoJobs && !combinedJobs && runPriceSensitivePhase("autoJobs", () => {
           ensureCivicControls(), refreshDiscoveredSettings(), runJobsPhase(
             "autoJobs",
             { ...ordinaryJobs, onCoherentPlan: publishSpaceMinerPlan },
             !1
           );
-        }), autoCraftsmen && !combinedJobs && runPhase("autoCraftsmen", () => {
+        }), autoCraftsmen && !combinedJobs && runPriceSensitivePhase("autoCraftsmen", () => {
           ensureCivicControls(), runJobsPhase("autoCraftsmen", craftsmen, !0);
         }), isEnabled(settings, "autoFleet") && runPhase("autoFleet", () => {
           if (isCapturedTruepath(pageCapture2.rootState.readRoot()))
@@ -57266,7 +57481,7 @@ Only continue if you trust the source. Injected code:
             reader: fleet.reader,
             executor: fleet.executor
           });
-        })?.shipTargetChanged === !0 && (demandThisCycle = void 0, exactDemandUnavailableReason = void 0), isEnabled(settings, "autoMech") && runPhase("autoMech", () => {
+        })?.shipTargetChanged === !0 && invalidateDemandAfterMutation(!1, !1), isEnabled(settings, "autoMech") && runPhase("autoMech", () => {
           ensureMechControls();
           let result = runCapturedMechAutomationWithActivity({
             ...capturedMech,
@@ -57274,13 +57489,13 @@ Only continue if you trust the source. Injected code:
           });
           capturedMechCycleHasPendingWork = result.hasPendingWork;
           let outcome = result.outcome;
-          outcome.status !== "succeeded" && reportOnce(
+          outcome.status === "succeeded" && result.hasPendingWork && invalidateDemandAfterMutation(!1, !1), outcome.status !== "succeeded" && reportOnce(
             `autoMech: ${outcome.failure.code}: ${outcome.failure.message}`
           );
-        }), (isEnabled(settings, "autoGenetics") || isEnabled(settings, "autoMinorTrait") || isEnabled(settings, "autoMutateTraits")) && runPhase("autoGenetics", () => {
+        }), (isEnabled(settings, "autoGenetics") || isEnabled(settings, "autoMinorTrait") || isEnabled(settings, "autoMutateTraits")) && runPriceSensitivePhase("autoGenetics", () => {
           isEnabled(settings, "autoGenetics") && ensureGeneticsControl(GENETICS_CONTROL, "genetics-sequencer", 2), isEnabled(settings, "autoGenetics") && runGeneticsAutomation(genetics);
         }), isEnabled(settings, "autoMinorTrait")) {
-          let outcome = runPhase("autoMinorTrait", () => (ensureGeneticsControl(GENE_SLOTS_CONTROL, "genetics-gene-slots", 3), traits.autoMinorTrait()));
+          let outcome = runPriceSensitivePhase("autoMinorTrait", () => (ensureGeneticsControl(GENE_SLOTS_CONTROL, "genetics-gene-slots", 3), traits.autoMinorTrait()));
           outcome !== void 0 && outcome.status !== "succeeded" && reportOnce(
             `autoMinorTrait: ${outcome.failure.code}: ${outcome.failure.message}`
           );
@@ -57311,7 +57526,7 @@ Only continue if you trust the source. Injected code:
         }
         isEnabled(settings, "autoTax") && runPhase("autoTax", () => {
           ensureGovernmentPanelControls("tax"), tax.autoTax();
-        }), isEnabled(settings, "autoGovernment") && runPhase("autoGovernment", () => {
+        }), isEnabled(settings, "autoGovernment") && runPriceSensitivePhase("autoGovernment", () => {
           ensureGovernmentPanelControls("type"), ensureGovernmentPanelControls("candidates"), runCapturedGovernmentAutomation(government);
         }), isEnabled(settings, "autoNanite") && runPhase("autoNanite", () => {
           ensureNaniteControls(), refreshDiscoveredSettings(), nanite.run();
@@ -57326,8 +57541,8 @@ Only continue if you trust the source. Injected code:
         }), (isEnabled(settings, "autoBuild") || isEnabled(settings, "autoStorage")) && runPhase("pre-Power build demand preparation", () => {
           progression.readUnlockedStorageBuildTargets(), refreshDiscoveredSettings();
         }), runPhase("autoPower", () => {
-          measurePhase("autoPower.demandPreparation", () => {
-            observePowerDemandPhase("power-handoff-start"), demandThisCycle = void 0, exactDemandUnavailableReason = void 0;
+          activeRuntimeMeasure.measure("autoPower.demandPreparation", () => {
+            observePowerDemandPhase("power-handoff-start");
             let prerequisites = demandPrerequisitesThisCycle === void 0 ? void 0 : ensureDemandPrerequisiteControls({
               root: pageCapture2.rootState.readRoot(),
               settings,
@@ -57359,12 +57574,13 @@ Only continue if you trust the source. Injected code:
             else if (buildDemandRequired && progression.readEstablishedStorageBuildTargets() === void 0)
               exactDemandUnavailableReason = "managed build target snapshot unavailable";
             else {
+              diagnostics?.recordCount("demand.sampleOwner.Power", 1);
               let exact = demand.sampleExact();
-              exact.status === "ready" ? demandThisCycle = exact.sample : exactDemandUnavailableReason = exact.reason.message;
+              exact.status === "ready" ? (demandThisCycle = exact.sample, demandSampleEpoch = demandEpoch) : exactDemandUnavailableReason = exact.reason.message;
             }
             observePowerDemandPhase("power-ready");
           });
-          let outcome = measurePhase(
+          let outcome = activeRuntimeMeasure.measure(
             "autoPower.runner",
             () => powerAutomation.run()
           );
@@ -57419,23 +57635,47 @@ Only continue if you trust the source. Injected code:
       } catch (error) {
         logError(String(error));
       } finally {
-        let finalizationStartedAtMs = profiling?.nowMs();
-        refreshCapturedPlanningPanels(), stateLogRecorder.recordProcessedCycle(automationCycle, settings), currentStateLogConstructionSnapshot = null, stateLogPlannerDetailsDue = !1, profiling !== void 0 && finalizationStartedAtMs !== void 0 && profiling.recordPerformance(
-          "tick.finalization",
-          profiling.nowMs() - finalizationStartedAtMs
-        ), profiling !== void 0 && workStartedAtMs !== void 0 && (profiling.recordPerformance(
-          "tick",
-          profiling.nowMs() - workStartedAtMs
-        ), profiling.flushPerformance());
+        if (cycleMeasure.measure("tick.finalization", () => {
+          cycleMeasure.measure(
+            "planning-panel refresh",
+            () => refreshCapturedPlanningPanels()
+          ), cycleMeasure.measure(
+            "State Log work",
+            () => stateLogRecorder.recordProcessedCycle(automationCycle, settings)
+          ), currentStateLogConstructionSnapshot = null, stateLogPlannerDetailsDue = !1;
+        }), profiling !== void 0 && workStartedAtMs !== void 0) {
+          let elapsedMs = profiling.nowMs() - workStartedAtMs;
+          cycleMeasure.record(
+            "tick.scaffolding",
+            Math.max(0, elapsedMs - cycleMeasure.readTotalMs())
+          ), profiling.recordPerformance("tick", elapsedMs), profiling.flushPerformance();
+        }
+        activeRuntimeMeasure = createExclusivePhaseMeasure(void 0);
       }
     }, pendingPeriods = 0, unsubscribePeriods = pageCapture2.periods.subscribe((period) => {
-      progression.resetProjectSample(), progression.resetBuildingUnlockSample(), refreshEffectiveSettings();
-      let gate = advancePeriodGate({
-        pendingPeriods,
-        completedPeriods: period.periods,
-        periodsPerCycle: readPeriodsPerScriptCycle(settingsStore.readRaw())
-      });
-      pendingPeriods = gate.pendingPeriods, gate.run && runCycle();
+      let periodCounts = createCountTally(diagnostics);
+      if (activeRuntimeMeasure = createExclusivePhaseMeasure(diagnostics), periodCounts.count("period.totalPeriods"), !activeRuntimeMeasure.measure("period.wake", () => {
+        activeRuntimeMeasure.measure(
+          "period.resetProjectSample",
+          () => progression.resetProjectSample()
+        ), activeRuntimeMeasure.measure(
+          "period.resetBuildingUnlockSample",
+          () => progression.resetBuildingUnlockSample()
+        ), refreshEffectiveSettings(!0);
+        let next = activeRuntimeMeasure.measure(
+          "period.cadenceGate",
+          () => advancePeriodGate({
+            pendingPeriods,
+            completedPeriods: period.periods,
+            periodsPerCycle: readPeriodsPerScriptCycle(settingsStore.readRaw())
+          })
+        );
+        return pendingPeriods = next.pendingPeriods, next;
+      }).run) {
+        periodCounts.count("period.skippedPeriods");
+        return;
+      }
+      periodCounts.count("period.workingPeriods"), runCycle();
     });
     return () => {
       unsubscribePeriods(), removeStateLogExport();

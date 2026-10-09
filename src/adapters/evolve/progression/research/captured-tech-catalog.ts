@@ -124,6 +124,9 @@ export function createCapturedTechCatalog(
     nativePrices,
   } = dependencies;
   const reportUnavailable = dependencies.onUnavailable ?? (() => {});
+  let indexedTechDefinitions: readonly CapturedTechDefinition[] | undefined;
+  let indexedTechDefinitionsById:
+    ReadonlyMap<string, CapturedTechDefinition> | undefined;
 
   return Object.freeze({
     read(
@@ -230,15 +233,29 @@ export function createCapturedTechCatalog(
         );
         return undefined;
       }
-      const definitionsById = new Map<string, CapturedTechDefinition>();
-      for (const definition of definitions) {
-        if (definitionsById.has(definition.actionId)) {
-          reportUnavailable(
-            "the native technology registry has duplicate action ids",
-          );
-          return undefined;
+      let definitionsById =
+        definitions === indexedTechDefinitions
+          ? indexedTechDefinitionsById
+          : undefined;
+      if (definitionsById === undefined) {
+        const nextDefinitionsById = new Map<string, CapturedTechDefinition>();
+        for (const definition of definitions) {
+          if (nextDefinitionsById.has(definition.actionId)) {
+            reportUnavailable(
+              "the native technology registry has duplicate action ids",
+            );
+            return undefined;
+          }
+          nextDefinitionsById.set(definition.actionId, definition);
         }
-        definitionsById.set(definition.actionId, definition);
+        definitionsById = nextDefinitionsById;
+        if (
+          Object.isFrozen(definitions) &&
+          definitions.every((definition) => Object.isFrozen(definition))
+        ) {
+          indexedTechDefinitions = definitions;
+          indexedTechDefinitionsById = definitionsById;
+        }
       }
       const observedTechnologyIds = observedBindingIds.filter(
         (elementId) =>

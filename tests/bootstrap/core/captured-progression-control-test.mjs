@@ -241,6 +241,7 @@ let researchDrawAvailable = true;
 let offeredRows = [{ id: "tech-mining", cost: { Knowledge: 5 } }];
 let researchDraws = 0;
 let researchHandleResolutions = 0;
+let researchControlRevision = 0;
 const rootReplacementListeners = [];
 const researchBindingListeners = new Set();
 const observeResearchBindings = (listener) => {
@@ -264,6 +265,7 @@ const researchControl = createCapturedProgressionControl({
     },
   },
   controls: withControlCaptureAuthority({
+    readRevision: () => researchControlRevision,
     resolve: (id) => {
       researchHandleResolutions += 1;
       return techHandles.get(id);
@@ -368,7 +370,7 @@ assert.deepEqual(
   researchControl.sampleOfferedTechs()?.map(({ elementId }) => elementId),
   ["tech-current-cycle"],
 );
-assert.equal(researchHandleResolutions - beforeRepeatedResearchSample, 1);
+assert.equal(researchHandleResolutions - beforeRepeatedResearchSample, 0);
 assert.equal(
   researchControl.readOfferedTechs()?.[0]?.elementId,
   "tech-current-cycle",
@@ -395,6 +397,7 @@ techHandles.set("tech-after-progression", {
   elementId: "tech-after-progression",
   generation: 9,
 });
+researchControlRevision += 1;
 assert.equal(researchControl.readOfferedTechs(), undefined);
 offeredRows = [{ id: "tech-after-control-rebind", cost: { Knowledge: 5 } }];
 assert.deepEqual(

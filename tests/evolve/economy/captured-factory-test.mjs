@@ -55,6 +55,7 @@ const root = {
   },
 };
 const calls = [];
+let mutationReports = 0;
 const automation = createCapturedFactoryAutomation({
   rootState: { readRoot: () => root },
   controls: {
@@ -76,9 +77,11 @@ const automation = createCapturedFactoryAutomation({
     isDemanded: () => false,
     storageRequired: () => 1,
   }),
+  onMutation: () => mutationReports++,
 });
 assert.deepEqual(automation.run(), { status: "succeeded" });
 assert.deepEqual(calls, [["subItem", "Lux"]]);
+assert.equal(mutationReports, 1);
 assert.equal(root.city.factory.Lux + root.city.factory.Furs, 2);
 
 const missingControl = createCapturedFactoryAutomation({
@@ -115,11 +118,17 @@ const laterFactory = createCapturedFactoryAutomation({
     isDemanded: () => false,
     storageRequired: () => 1,
   }),
+  onMutation: () => mutationReports++,
 });
 assert.deepEqual(
   laterFactory.run(),
   { status: "succeeded" },
   "a later-region factory contributes capacity when the current allocation fits",
+);
+assert.equal(
+  mutationReports,
+  1,
+  "a read-only factory pass preserves demand authority",
 );
 
 const productIds = [

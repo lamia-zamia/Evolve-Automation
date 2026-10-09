@@ -240,6 +240,7 @@ export function installVueCapture(
     ReadonlyMap<string, number>
   >();
   const captureOrder: string[] = [];
+  let controlRevision = 0;
   const usage = new Map<string, GameControlUsage>();
   const bindingListeners = new Set<VueBindingListener>();
 
@@ -309,6 +310,7 @@ export function installVueCapture(
     const existing = controls.get(elementId);
     if (existing === undefined) {
       captureOrder.push(elementId);
+      controlRevision += 1;
       controls.set(elementId, {
         elementId,
         generation: 1,
@@ -320,6 +322,7 @@ export function installVueCapture(
       return;
     }
     existing.generation += 1;
+    controlRevision += 1;
     existing.methods = methods;
     existing.data = readProperty(optionsValue, "data");
     existing.materialized = undefined;
@@ -635,6 +638,15 @@ export function installVueCapture(
   });
 
   const registry: GameControlRegistry = Object.freeze({
+    isCurrent(elementId: string, generation: number): boolean {
+      const control = controls.get(elementId);
+      return (
+        control !== undefined &&
+        control.generation === generation &&
+        control.rejectedGeneration !== generation
+      );
+    },
+    readRevision: () => controlRevision,
     checkpoint(): ControlCaptureCheckpoint {
       const controlCheckpoint = Object.freeze({}) as ControlCaptureCheckpoint;
       controlCheckpoints.set(
@@ -655,6 +667,7 @@ export function installVueCapture(
         (through !== undefined && throughGenerations === undefined)
       )
         throw new Error("control checkpoint belongs to another capture");
+      let rejected = false;
       for (const [id, control] of controls) {
         if (
           checkpointGenerations.get(id) !== control.generation &&
@@ -662,8 +675,10 @@ export function installVueCapture(
             throughGenerations.get(id) === control.generation)
         ) {
           control.rejectedGeneration = control.generation;
+          rejected = true;
         }
       }
+      if (rejected) controlRevision += 1;
     },
     resolve(elementId: string): GameControlHandle | undefined {
       const control = controls.get(elementId);

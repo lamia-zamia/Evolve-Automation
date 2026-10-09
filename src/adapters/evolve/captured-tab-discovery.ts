@@ -494,10 +494,9 @@ export function createCapturedTabDiscovery(
         const keyedDrawPhase = tally.enabled
           ? `discovery.draw ${purpose} ${pathLabel}`
           : undefined;
-        const keyedDrawStartedAt =
-          keyedDrawPhase === undefined ? undefined : diagnostics?.nowMs();
+        const drawPhase = keyedDrawPhase ?? "discovery.draw";
         try {
-          measureDraw("discovery.draw", () => {
+          measureDraw(drawPhase, () => {
             try {
               settings["animated"] = false;
               // Only the target draw. Where the player's panel had to be redrawn instead of kept, that
@@ -577,16 +576,6 @@ export function createCapturedTabDiscovery(
           tally.count("discovery.draw.failed");
           countDiscovery("failed");
           throw error;
-        } finally {
-          if (
-            keyedDrawPhase !== undefined &&
-            keyedDrawStartedAt !== undefined &&
-            diagnostics !== undefined
-          )
-            diagnostics.recordPerformance(
-              keyedDrawPhase,
-              diagnostics.nowMs() - keyedDrawStartedAt,
-            );
         }
 
         if (stepFailure !== undefined) {

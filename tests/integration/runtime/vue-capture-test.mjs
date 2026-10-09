@@ -45,6 +45,7 @@ function makeRoot(days) {
 for (const rebound of [false, true]) {
   const vue = makeVue();
   const capture = installVueCapture({ Vue: vue });
+  assert.equal(capture.controls.readRevision(), 0);
   let invoked = 0;
   const bind = (id) =>
     vue.createApp({
@@ -53,14 +54,19 @@ for (const rebound of [false, true]) {
       methods: { action: () => ++invoked },
     });
   bind("survivor");
+  assert.equal(capture.controls.readRevision(), 1);
   const survivor = capture.controls.resolve("survivor");
   if (rebound) bind("foo");
   const original = capture.controls.resolve("foo");
   const checkpoint = capture.controls.checkpoint();
   bind("foo");
+  assert.equal(capture.controls.readRevision(), rebound ? 3 : 2);
+  assert.equal(capture.controls.isCurrent("foo", rebound ? 2 : 1), true);
   const failed = capture.controls.resolve("foo");
   assert.equal(failed.generation, rebound ? 2 : 1);
   capture.controls.rejectChanges(checkpoint);
+  assert.equal(capture.controls.readRevision(), (rebound ? 3 : 2) + 1);
+  assert.equal(capture.controls.isCurrent("foo", rebound ? 2 : 1), false);
   assert.equal(capture.controls.resolve("foo"), undefined);
   assert.equal(
     failed.data,

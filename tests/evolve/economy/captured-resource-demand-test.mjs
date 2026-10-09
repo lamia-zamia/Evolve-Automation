@@ -165,6 +165,51 @@ for (const [label, queuedRoot] of [
   assert.equal(exactDemand.sampleExact().reason.code, "queue-reservation");
 }
 
+// A single prepared sample prices the same native action once across its queue and managed-build
+// readers. The queue and Building catalog are independent authorities, but the action price is not.
+{
+  let nativePriceReads = 0;
+  let demandEpoch = 0;
+  const queuedRoot = {
+    ...root,
+    settings: { qAny: true },
+    queue: {
+      display: true,
+      pause: false,
+      queue: [{ id: "city-mine", label: "Mine" }],
+    },
+  };
+  const costs = {
+    readCost(actionId) {
+      nativePriceReads += 1;
+      assert.equal(actionId, "city-mine");
+      return actionPrice({ Stone: 10 });
+    },
+  };
+  const reservations = createCapturedQueueReservationSource({
+    rootState: { readRoot: () => queuedRoot },
+    costs,
+  });
+  const demand = createCapturedResourceDemand({
+    rootState: { readRoot: () => queuedRoot },
+    readActionCostEpoch: () => demandEpoch,
+    reservations,
+    costs,
+    readSettings: () => ({}),
+    readBuildTargets: () => [{ elementId: "city-mine", label: "Mine" }],
+  });
+  demand.sample();
+  demand.sample();
+  assert.equal(nativePriceReads, 1);
+  demandEpoch += 1;
+  demand.sample();
+  assert.equal(
+    nativePriceReads,
+    2,
+    "a new demand epoch re-reads native prices",
+  );
+}
+
 function withTargets(targets, settings = {}, saving = null, craftCosts) {
   return createCapturedResourceDemand({
     rootState: { readRoot: () => root },
@@ -2197,9 +2242,81 @@ for (const [missionId, completionTech, completionLevel] of [
   assert.equal(counts.get("demand.sample.commonPreparations"), 1);
   assert.equal(counts.get("demand.sample.queueReservationReads"), 1);
   assert.equal(counts.get("demand.sample.queueTargetConversions"), 1);
-  assert.equal(counts.get("demand.sample.requestQuantityEvaluations"), 4);
+  assert.equal(counts.get("demand.sample.evaluateCalls"), 2);
+  assert.equal(counts.get("demand.sample.requestQuantityEvaluations"), 3);
   assert.equal(counts.get("demand.sample.planStorageCalls"), 1);
   assert.equal(counts.get("demand.sample.structureRegistryReads"), 0);
+}
+
+// Ordinary and exact views share one completeness-checked input capture in an unchanged epoch.
+{
+  const counts = new Map();
+  let epoch = 0;
+  let queueReads = 0;
+  const diagnostics = {
+    nowMs: () => 0,
+    readPerformanceEnabled: () => true,
+    recordPerformance: () => {},
+    recordCount: (name, amount) =>
+      counts.set(name, (counts.get(name) ?? 0) + amount),
+  };
+  const demand = createCapturedResourceDemand({
+    rootState: { readRoot: () => root },
+    readDemandEpoch: () => epoch,
+    reservations: {
+      readReservations: () => {
+        queueReads += 1;
+        return { targets: [], unavailable: false };
+      },
+    },
+    readSettings: () => ({ prioritizeQueue: "req" }),
+    diagnostics,
+  });
+  demand.sample();
+  assert.equal(demand.sampleExact().status, "ready");
+  assert.equal(queueReads, 1);
+  assert.equal(counts.get("demand.sample.inputCaptures"), 1);
+  assert.equal(counts.get("demand.sampleExact.inputCaptures"), undefined);
+  assert.equal(counts.get("demand.sampleExact.preparedReuseHits"), 1);
+
+  epoch += 1;
+  assert.equal(demand.sampleExact().status, "ready");
+  assert.equal(
+    queueReads,
+    2,
+    "an invalidated epoch performs one new exact capture",
+  );
+}
+
+// Exact reuse retains unavailable authority metadata; it cannot turn a missing offer catalog empty.
+{
+  let epoch = 0;
+  let offerReads = 0;
+  let queueReads = 0;
+  const demand = createCapturedResourceDemand({
+    rootState: { readRoot: () => root },
+    readDemandEpoch: () => epoch,
+    reservations: {
+      readReservations: () => {
+        queueReads += 1;
+        return { targets: [], unavailable: false };
+      },
+    },
+    readSettings: () => ({ prioritizeQueue: "req" }),
+    readOfferedTechs: () => {
+      offerReads += 1;
+      return undefined;
+    },
+  });
+  demand.sample();
+  assert.equal(demand.sampleExact().status, "unavailable");
+  assert.equal(demand.sampleExact().status, "unavailable");
+  assert.equal(offerReads, 1);
+  assert.equal(queueReads, 1);
+
+  epoch += 1;
+  assert.equal(demand.sampleExact().status, "unavailable");
+  assert.equal(offerReads, 2, "a new epoch retries unavailable authority once");
 }
 
 console.log("Captured resource-demand adapter tests passed");

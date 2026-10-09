@@ -18,6 +18,8 @@ export interface BuildAutomationDependencies {
   readonly executor: BuildExecutor;
   readonly diagnostics?: TickDiagnostics | undefined;
   readonly onDiagnostic?: (message: string) => void;
+  /** Called when a captured game action was actually clicked during this cycle. */
+  readonly onMutation?: () => void;
 }
 
 const SUCCEEDED: CommandExecutionOutcome = Object.freeze({
@@ -145,6 +147,7 @@ function runBuildCycle(
     const result = measure("autoBuild.executeClick", () =>
       executor.executeClick(competition.decision),
     );
+    if (result.clicked) dependencies.onMutation?.();
     reportDiagnostic(`autoBuild.outcome ${result.outcome.status}`);
     if (result.outcome.status !== "succeeded") {
       return result.outcome;

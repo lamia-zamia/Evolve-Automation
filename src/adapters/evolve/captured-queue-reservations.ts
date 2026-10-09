@@ -29,6 +29,7 @@ import type {
 } from "../../ports/game-action-costs.ts";
 import type {
   CostReservationSample,
+  CostReservationReadOptions,
   CostReservationSource,
 } from "../../ports/game-cost-reservations.ts";
 import type {
@@ -206,9 +207,14 @@ export function createCapturedQueueReservationSource(
         research: readPresentationQueueEntries(root, "r_queue"),
       });
     },
-    readReservations(): CostReservationSample {
+    readReservations(
+      options?: CostReservationReadOptions,
+    ): CostReservationSample {
       const root = rootState.readRoot();
       if (root === undefined) return NO_RESERVATIONS;
+      const sampleCosts = options?.costs ?? costs;
+      const sampleReadOfferedTechs =
+        options?.readOfferedTechs ?? readOfferedTechs;
       const settings = readProperty(root, "settings");
       const targets: ReservedCostTarget[] = [];
       let unavailable = false;
@@ -246,12 +252,12 @@ export function createCapturedQueueReservationSource(
         reserve(
           item,
           QUEUE_CAUSE,
-          costs.readCost(item.id),
+          sampleCosts.readCost(item.id),
           "queued item could not be priced",
         );
       }
 
-      if (readOfferedTechs !== undefined) {
+      if (sampleReadOfferedTechs !== undefined) {
         const queued = reserving(
           readQueuedResearch(root) ?? [],
           Boolean(readProperty(settings, "qAny_res")),
@@ -259,13 +265,13 @@ export function createCapturedQueueReservationSource(
         // Only ask for the offered technologies once something is waiting on one of them: reading
         // that catalog costs a discovery pass, and an unused research queue must not buy one.
         if (queued.length > 0) {
-          const offered = readOfferedTechs();
+          const offered = sampleReadOfferedTechs();
           const prices =
             offered === undefined
               ? undefined
               : // Research draws on the whole civilization — upstream `supplyOf` returns its ANYWHERE
                 // sentinel for every `tech-` action — so no pool narrows the comparison.
-                new Map(
+                new Map<string, GameActionPrice>(
                   offered.map((tech) => [
                     tech.elementId,
                     { cost: tech.cost, pool: undefined },

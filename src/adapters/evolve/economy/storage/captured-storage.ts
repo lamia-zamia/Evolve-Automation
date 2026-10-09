@@ -51,6 +51,8 @@ interface CapturedStorageDependencies {
     readonly Readonly<OfferedTech>[] | undefined;
   /** A fresh captured A.R.P.A. project sample, when project automation is enabled. */
   readonly readProjects?: () => readonly Readonly<OfferedProject>[] | undefined;
+  /** Called only after an allocation or expansion postcondition confirms a state change. */
+  readonly onMutation?: () => void;
   readonly onSkipped?: (key: string, reason: string) => void;
   readonly nowMs: () => number;
 }
@@ -733,7 +735,9 @@ function executeExpansion(
       built += after - before;
     }
   }
-  return built > 0;
+  if (built <= 0) return false;
+  dependencies.onMutation?.();
+  return true;
 }
 
 function storageExecutor(
@@ -921,6 +925,13 @@ function storageExecutor(
             `${adjustment.resourceId}: allocation did not match the requested change`,
           );
       }
+      if (
+        adjustments.some(
+          (adjustment) =>
+            adjustment.crateDelta !== 0 || adjustment.containerDelta !== 0,
+        )
+      )
+        dependencies.onMutation?.();
       return SUCCEEDED;
     },
   });

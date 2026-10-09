@@ -88,6 +88,8 @@ export interface CapturedConstructionControlDependencies {
   readonly onDiagnostic?: (message: string) => void;
   /** Reports successful captured activity after the game state changed. */
   readonly onActivity?: GameActivitySink;
+  /** Reports a native build action attempt that can change construction demand authority. */
+  readonly onMutation?: () => void;
   /** Reports a candidate, price, or catalog the capture could not supply. */
   readonly onSkipped?: (key: string, reason: string) => void;
 }
@@ -130,6 +132,7 @@ export function createCapturedConstructionControl(
   const readStorageRequired = dependencies.readStorageRequired;
   const onDiagnostic = dependencies.onDiagnostic;
   const onActivity = dependencies.onActivity;
+  const onMutation = dependencies.onMutation;
   // The offered-technology catalog is asked for at most once per cycle, and only if something in
   // the cycle actually needs it. Every candidate consults the same reservations, so without this
   // the cycle would pay for one discovery pass per candidate.
@@ -259,6 +262,7 @@ export function createCapturedConstructionControl(
           reader,
           executor,
           diagnostics,
+          ...(onMutation === undefined ? {} : { onMutation }),
           ...(onDiagnostic === undefined ? {} : { onDiagnostic }),
         });
       } finally {

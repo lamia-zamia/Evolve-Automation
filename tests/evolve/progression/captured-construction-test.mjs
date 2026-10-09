@@ -180,10 +180,11 @@ function makeCycle({
   return { adapter, bought, holdings, evaluatedPools };
 }
 
-function runCycle(cycle) {
+function runCycle(cycle, onMutation) {
   return runBuildAutomation({
     reader: cycle.adapter.reader,
     executor: cycle.adapter.executor,
+    ...(onMutation === undefined ? {} : { onMutation }),
   });
 }
 
@@ -194,7 +195,9 @@ function runCycle(cycle) {
     { key: "stale", weighting: 10, cost: { Money: 1 } },
   ];
   const cycle = makeCycle({ city, holdings: { Money: 100 } });
-  assert.equal(runCycle(cycle).status, "succeeded");
+  let mutationReports = 0;
+  assert.equal(runCycle(cycle, () => mutationReports++).status, "succeeded");
+  assert.equal(mutationReports, 1);
   assert.deepEqual(cycle.bought, ["grant"]);
   city.splice(0, city.length, {
     key: "newly-unlocked",
@@ -236,8 +239,17 @@ function runCycle(cycle) {
       subscribeRootReplaced: () => () => {},
     },
   });
-  assert.equal(runBuildAutomation(cycle.adapter).status, "succeeded");
+  let mutationReports = 0;
+  assert.equal(
+    runBuildAutomation({
+      reader: cycle.adapter.reader,
+      executor: cycle.adapter.executor,
+      onMutation: () => mutationReports++,
+    }).status,
+    "succeeded",
+  );
   assert.deepEqual(cycle.bought, []);
+  assert.equal(mutationReports, 0);
 }
 
 // Per-resource consumption is sampled from the managed candidate and is remembered after the

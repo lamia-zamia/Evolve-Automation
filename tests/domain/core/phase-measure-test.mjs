@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 
-import { createPhaseMeasure } from "../../../src/utils/performance.ts";
+import {
+  createExclusivePhaseMeasure,
+  createPhaseMeasure,
+} from "../../../src/utils/performance.ts";
 
 function createSink(enabled) {
   let clock = 0;
@@ -58,7 +61,7 @@ assert.equal(
 assert.deepEqual(enabled.records, [["autoResearch.read", 5]]);
 assert.equal(enabled.nowCalls, 2);
 
-// Nested phases each record, and the outer duration spans the inner one.
+// Nested phases each record exclusively, without counting the inner duration twice.
 const nested = createSink(true);
 const measureNested = createPhaseMeasure(nested);
 measureNested("autoBuild.beginCycle", () => {
@@ -66,7 +69,7 @@ measureNested("autoBuild.beginCycle", () => {
 });
 assert.deepEqual(nested.records, [
   ["autoBuild.beginCycle.readSnapshot", 5],
-  ["autoBuild.beginCycle", 15],
+  ["autoBuild.beginCycle", 10],
 ]);
 
 // A phase that throws is still timed, and the original error propagates.
@@ -99,5 +102,29 @@ assert.deepEqual(toggledOn.records, []);
 // start of a run rather than where a factory is constructed.
 createPhaseMeasure(toggledOn)("autoJobs", () => undefined);
 assert.deepEqual(toggledOn.records, [["autoJobs", 5]]);
+
+const exclusive = createSink(true);
+const exclusiveMeasure = createExclusivePhaseMeasure(exclusive);
+exclusiveMeasure.measure("cycle", () => {
+  exclusiveMeasure.measure("cycle.storage", () => undefined);
+});
+assert.deepEqual(exclusive.records, [
+  ["cycle.storage", 5],
+  ["cycle", 10],
+]);
+assert.equal(exclusiveMeasure.readTotalMs(), 15);
+
+const external = createSink(true);
+const externalMeasure = createExclusivePhaseMeasure(external);
+externalMeasure.record("period.reset", 2);
+assert.deepEqual(external.records, [["period.reset", 2]]);
+assert.equal(externalMeasure.readTotalMs(), 2);
+
+const inertExclusive = createExclusivePhaseMeasure(undefined);
+assert.equal(
+  inertExclusive.measure("cycle", () => 9),
+  9,
+);
+assert.equal(inertExclusive.readTotalMs(), 0);
 
 console.log("Phase measurement tests passed");
