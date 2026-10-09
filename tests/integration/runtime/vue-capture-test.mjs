@@ -88,6 +88,11 @@ for (const rebound of [false, true]) {
     );
   if (original) assert.equal(original.data, undefined);
   assert.equal(invoked, 0);
+  assert.deepEqual(
+    capture.controlUsage.readUsage(),
+    [],
+    "rejected and stale controls are not counted as native invocations",
+  );
   const unchangedCheckpoint = capture.controls.checkpoint();
   capture.controls.rejectChanges(unchangedCheckpoint);
   assert.equal(
@@ -106,6 +111,10 @@ for (const rebound of [false, true]) {
     capture.synthesis.invoke({ elementId: "foo", method: "action" }).ok,
     true,
   );
+  assert.deepEqual(capture.controlUsage.readUsage(), [
+    { elementId: "survivor", method: "action", returned: 1, threw: 0 },
+    { elementId: "foo", method: "action", returned: 2, threw: 0 },
+  ]);
   capture.uninstall();
 }
 
@@ -285,6 +294,11 @@ function makeActionMethods(id, state) {
       state.on = Math.min(state.on + 1, this.on_cap());
       return state.on;
     },
+    receiverProbe() {
+      const previous = this.marker;
+      this.marker = (previous ?? 0) + 1;
+      return { receiver: this, previous, siblingCount: this.on_cap() };
+    },
     boom() {
       throw new Error("game threw");
     },
@@ -319,6 +333,7 @@ assert.deepEqual([...farm.methods].sort(), [
   "boom",
   "on_cap",
   "power_on",
+  "receiverProbe",
 ]);
 
 assert.deepEqual(
@@ -333,12 +348,24 @@ assert.equal(farmState.count, 4);
 assert.deepEqual(capture.controlUsage.readUsage(), [
   { elementId: "city-farm", method: "action", returned: 1, threw: 0 },
 ]);
+const firstUsageSnapshot = capture.controlUsage.readUsage();
+assert.equal(Object.isFrozen(firstUsageSnapshot), true);
+assert.equal(Object.isFrozen(firstUsageSnapshot[0]), true);
+assert.deepEqual(Object.keys(firstUsageSnapshot[0]).sort(), [
+  "elementId",
+  "method",
+  "returned",
+  "threw",
+]);
 
 // `this` is a bag of self-bound siblings: no component data, no DOM node, no effect scope.
 assert.deepEqual(capture.controls.invoke(farm, "power_on"), {
   ok: true,
   value: 1,
 });
+assert.deepEqual(firstUsageSnapshot, [
+  { elementId: "city-farm", method: "action", returned: 1, threw: 0 },
+]);
 
 const unknownMethod = capture.controls.invoke(farm, "nope");
 assert.equal(unknownMethod.ok, false);
@@ -385,6 +412,33 @@ assert.deepEqual(capture.controlUsage.readUsage(), [
   { elementId: "city-farm", method: "power_on", returned: 1, threw: 0 },
   { elementId: "city-farm", method: "boom", returned: 0, threw: 1 },
 ]);
+assert.deepEqual(firstUsageSnapshot, [
+  { elementId: "city-farm", method: "action", returned: 1, threw: 0 },
+]);
+const receiverFirst = capture.controls.invoke(redrawn, "receiverProbe");
+const receiverSecond = capture.controls.invoke(redrawn, "receiverProbe");
+assert.equal(receiverFirst.ok, true);
+assert.equal(receiverSecond.ok, true);
+assert.notEqual(
+  receiverFirst.value.receiver,
+  receiverSecond.value.receiver,
+  "each invocation receives its own receiver object",
+);
+assert.equal(receiverFirst.value.previous, undefined);
+assert.equal(receiverSecond.value.previous, undefined);
+assert.equal(receiverFirst.value.receiver.marker, 1);
+assert.equal(receiverSecond.value.receiver.marker, 1);
+assert.equal(receiverFirst.value.siblingCount, 5);
+assert.equal(receiverSecond.value.siblingCount, 5);
+assert.deepEqual(firstUsageSnapshot, [
+  { elementId: "city-farm", method: "action", returned: 1, threw: 0 },
+]);
+assert.deepEqual(capture.controlUsage.readUsage().at(-1), {
+  elementId: "city-farm",
+  method: "receiverProbe",
+  returned: 2,
+  threw: 0,
+});
 
 // --- duplicate installation --------------------------------------------------------------------
 
