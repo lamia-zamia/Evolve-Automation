@@ -79,6 +79,37 @@ function nativeMechanics(readStructures) {
   );
 }
 
+// --- a discovery-order change can only cause a harmless extra defaults sweep ----------------------
+
+{
+  const gameRoot = createSettingsRoot();
+  gameRoot.city ??= {};
+  gameRoot.city.mill = { count: 1, on: 0 };
+  gameRoot.city.mine = { count: 1, on: 0 };
+  const controlIds = ["city-mill", "city-mine"];
+  const { lifecycle, settings } = createSettingsFixture({
+    gameRoot,
+    controlIds,
+  });
+  lifecycle.initialize();
+  lifecycle.ensureDynamicDefaults();
+  const beforeReorder = structuredClone(settings.readRaw());
+
+  controlIds.reverse();
+  lifecycle.ensureDynamicDefaults();
+
+  assert.equal(
+    lifecycle.stats().dynamicDefaultRuns,
+    2,
+    "a reordered witness may conservatively request another sweep",
+  );
+  assert.deepEqual(
+    settings.readRaw(),
+    beforeReorder,
+    "the repeated sweep must not change existing defaults or player settings",
+  );
+}
+
 // --- a newly discovered control still adds its dynamic defaults ----------------------------------
 
 {

@@ -9,17 +9,6 @@ import {
   CAPTURED_BUILD_REGIONS,
 } from "./captured-building-metadata.ts";
 
-function sortBuildingGenerationFacts(
-  facts: (readonly unknown[])[],
-): readonly (readonly unknown[])[] {
-  facts.sort((left, right) => {
-    const leftKey = JSON.stringify(left);
-    const rightKey = JSON.stringify(right);
-    return leftKey < rightKey ? -1 : leftKey > rightKey ? 1 : 0;
-  });
-  return facts;
-}
-
 function capturedBuildingGenerationControlFacts(
   root: unknown,
   elementIds: readonly string[],
@@ -46,7 +35,9 @@ function capturedBuildingGenerationControlFacts(
       act === undefined || candidate === act,
     ]);
   }
-  return sortBuildingGenerationFacts(facts);
+  // Order is only a conservative generation witness: a registry reorder can request another
+  // idempotent defaults sweep, while every newly discovered binding remains represented here.
+  return facts;
 }
 
 function capturedBuildingGenerationNativeFacts(
@@ -83,7 +74,8 @@ function capturedBuildingGenerationNativeFacts(
       liveState !== undefined && Object.hasOwn(liveState, "on"),
     ]);
   }
-  return sortBuildingGenerationFacts(facts);
+  // Each fact carries its native entry identity, so additions and shape changes remain visible.
+  return facts;
 }
 
 export function readCapturedBuildingGenerationWitness(

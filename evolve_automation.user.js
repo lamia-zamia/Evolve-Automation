@@ -37333,12 +37333,6 @@
   }
 
   // src/adapters/evolve/progression/build/captured-building-generation.ts
-  function sortBuildingGenerationFacts(facts) {
-    return facts.sort((left, right) => {
-      let leftKey = JSON.stringify(left), rightKey = JSON.stringify(right);
-      return leftKey < rightKey ? -1 : leftKey > rightKey ? 1 : 0;
-    }), facts;
-  }
   function capturedBuildingGenerationControlFacts(root, elementIds, controls2) {
     let facts = [];
     for (let elementId of elementIds) {
@@ -37355,7 +37349,7 @@
         act === void 0 || candidate === act
       ]);
     }
-    return sortBuildingGenerationFacts(facts);
+    return facts;
   }
   function capturedBuildingGenerationNativeFacts(root, elementIds, identities) {
     if (identities === void 0) return null;
@@ -37378,7 +37372,7 @@
         liveState !== void 0 && Object.hasOwn(liveState, "on")
       ]);
     }
-    return sortBuildingGenerationFacts(facts);
+    return facts;
   }
   function readCapturedBuildingGenerationWitness(root, controls2, elementIds, identities) {
     return JSON.stringify([
