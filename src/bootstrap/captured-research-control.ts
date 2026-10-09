@@ -34,7 +34,7 @@ export interface CapturedResearchControlDependencies {
     CapturedGameMechanics,
     | "captureTechDefinitionsDuring"
     | "readTechDefinitions"
-    | "withTechQueueCostAlias"
+    | "withTechQueueCostAliases"
   >;
   readonly controls: GameControlRegistry;
   readonly bindings: VueBindingObserver;

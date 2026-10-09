@@ -31,6 +31,11 @@ import type {
 import type { VueBindingObserver } from "../../vue-capture.ts";
 import type { ResearchTechPriceReader } from "./captured-tech-costs.ts";
 import {
+  createCountTally,
+  createPhaseMeasure,
+  type PhaseTimingSink,
+} from "../../../../utils/performance.ts";
+import {
   MAIN_TAB_CONTROL,
   MAIN_TAB_INDEX,
   MAIN_TAB_SETTING,
@@ -82,6 +87,7 @@ export interface CapturedTechCatalogDependencies {
     "captureTechDefinitionsDuring" | "readTechDefinitions"
   >;
   readonly nativePrices: ResearchTechPriceReader;
+  readonly diagnostics?: PhaseTimingSink | undefined;
   /** Reports a pass that could not produce a catalog. The caller gets `undefined`, never stale. */
   readonly onUnavailable?: (reason: string) => void;
 }
@@ -132,6 +138,9 @@ export function createCapturedTechCatalog(
     read(
       options?: Readonly<TechCatalogReadOptions>,
     ): Readonly<TechCatalogSnapshot> | undefined {
+      const tally = createCountTally(dependencies.diagnostics);
+      const measure = createPhaseMeasure(dependencies.diagnostics);
+      tally.count("research.catalog.observations");
       if (rootState.readRoot() === undefined) {
         reportUnavailable("the game root has not been captured yet");
         return undefined;
@@ -226,7 +235,11 @@ export function createCapturedTechCatalog(
         return undefined;
       }
 
-      const definitions = mechanics.readTechDefinitions();
+      const definitions = measure("research.catalog.registry-read", () =>
+        mechanics.readTechDefinitions(),
+      );
+      if (definitions !== undefined)
+        tally.count("research.registry.validations");
       if (definitions === undefined) {
         reportUnavailable(
           "the native technology registry was not captured or is no longer valid",
@@ -354,6 +367,31 @@ export function createCapturedTechCatalog(
         return undefined;
       }
       const matchedOffers: OfferedTech[] = [];
+      let nativePricesByOffer:
+        readonly (Readonly<Record<string, number>> | undefined)[] | undefined;
+      if (offeredCount === 0) {
+        nativePricesByOffer = Object.freeze([]);
+      } else {
+        try {
+          nativePricesByOffer = nativePrices.readTechCosts(
+            observedDefinitions
+              .slice(0, offeredCount)
+              .map((definition) => definition.actionId),
+          );
+        } catch (error) {
+          reportUnavailable(
+            `native Research price read failed: ${String(error)}`,
+          );
+          return undefined;
+        }
+      }
+      if (
+        nativePricesByOffer === undefined ||
+        nativePricesByOffer.length !== offeredCount
+      ) {
+        reportUnavailable("native Research prices are unavailable");
+        return undefined;
+      }
       for (let index = 0; index < offeredCount; index++) {
         const definition = observedDefinitions[index];
         const row = drawn.offeredRows[index];
@@ -368,15 +406,7 @@ export function createCapturedTechCatalog(
           );
           return undefined;
         }
-        let nativePrice: Readonly<Record<string, number>> | undefined;
-        try {
-          nativePrice = nativePrices.readTechCost(definition.actionId);
-        } catch (error) {
-          reportUnavailable(
-            `native Research price read failed for ${definition.actionId}: ${String(error)}`,
-          );
-          return undefined;
-        }
+        const nativePrice = nativePricesByOffer[index];
         if (nativePrice === undefined) {
           reportUnavailable(
             `native Research price is unavailable for ${definition.actionId}`,
@@ -397,6 +427,7 @@ export function createCapturedTechCatalog(
             generation: drawn.generations.get(definition.actionId) ?? 0,
           }),
         );
+        tally.count("research.offers.matched");
       }
       const frozenOffered = Object.freeze(matchedOffers);
       return drawn.grantedRows === undefined
@@ -409,22 +440,27 @@ export function createCapturedTechCatalog(
     restate(
       snapshot: Readonly<TechCatalogSnapshot>,
     ): Readonly<TechCatalogSnapshot> {
+      const tally = createCountTally(dependencies.diagnostics);
+      const measure = createPhaseMeasure(dependencies.diagnostics);
       // One rule, one place: an offer's generation is whatever the registry holds for its element
       // right now. The draw above records it at the moment of the draw and this records it at the
       // moment of use, and both go through `controls.resolve`.
-      const offered = Object.freeze(
-        snapshot.offered.map((offer) =>
-          Object.freeze({
-            ...offer,
-            generation: controls.resolve(offer.elementId)?.generation ?? 0,
-          }),
-        ),
-      );
-      return Object.freeze(
-        snapshot.granted === undefined
-          ? { offered }
-          : { offered, granted: snapshot.granted },
-      );
+      return measure("research.binding.restate", () => {
+        tally.count("research.binding.restatements", snapshot.offered.length);
+        const offered = Object.freeze(
+          snapshot.offered.map((offer) =>
+            Object.freeze({
+              ...offer,
+              generation: controls.resolve(offer.elementId)?.generation ?? 0,
+            }),
+          ),
+        );
+        return Object.freeze(
+          snapshot.granted === undefined
+            ? { offered }
+            : { offered, granted: snapshot.granted },
+        );
+      });
     },
   });
 }

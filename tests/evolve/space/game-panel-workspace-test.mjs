@@ -228,7 +228,10 @@ function workspaceFor(page) {
         },
       ],
     },
-    nativePrices: { readTechCost: () => ({ Knowledge: 10 }) },
+    nativePrices: {
+      readTechCost: () => ({ Knowledge: 10 }),
+      readTechCosts: (actionIds) => actionIds.map(() => ({ Knowledge: 10 })),
+    },
   });
 
   const snapshot = catalog.read();

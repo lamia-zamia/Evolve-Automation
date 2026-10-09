@@ -193,6 +193,11 @@ export interface CapturedGameMechanics {
     actionId: string,
     readProbeCost: (probeActionId: string) => T,
   ): T | undefined;
+  /** Reads several native queue prices under one retained-registry validation window. */
+  withTechQueueCostAliases<T>(
+    actionIds: readonly string[],
+    readProbeCost: (actionId: string, probeActionId: string) => T,
+  ): readonly T[] | undefined;
   /** Exact target switch using the action's cap and the game's deferred postPower queue. */
   adjustPower(
     root: unknown,

@@ -246,6 +246,15 @@ function makePage({
     readTechCost: (actionId) =>
       drawn.find((action) => action.id === actionId)?.priceFixture,
   };
+  const batchedNativePrices = {
+    ...capturedNativePrices,
+    readTechCosts:
+      capturedNativePrices.readTechCosts ??
+      ((actionIds) =>
+        actionIds.map((actionId) =>
+          capturedNativePrices.readTechCost(actionId),
+        )),
+  };
   const catalog = createCapturedTechCatalog({
     rootState: {
       readRoot: () => root,
@@ -254,7 +263,7 @@ function makePage({
     },
     discovery,
     mechanics: capturedMechanics,
-    nativePrices: capturedNativePrices,
+    nativePrices: batchedNativePrices,
     drawnActions: createGameDrawnActionsReader({
       getDocument: () => {
         if (readError !== undefined) throw readError;
@@ -899,6 +908,12 @@ for (const [name, bindingSequence, fail] of [
     nativePrices: {
       readTechCost: (actionId) =>
         drawnOffers.find((action) => action.id === actionId)?.priceFixture,
+      readTechCosts: (actionIds) =>
+        mechanicsInstall.mechanics.withTechQueueCostAliases(
+          actionIds,
+          (actionId) =>
+            drawnOffers.find((action) => action.id === actionId)?.priceFixture,
+        ),
     },
     discovery: {
       discover(_path, options = {}) {

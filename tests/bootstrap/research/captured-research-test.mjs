@@ -155,6 +155,22 @@ function makePage({
         activeTechPriceActionId = undefined;
       }
     },
+    withTechQueueCostAliases: (actionIds, readProbeCost) => {
+      const prices = [];
+      for (const actionId of actionIds) {
+        if (!definitions.some((definition) => definition.actionId === actionId))
+          return undefined;
+        activeTechPriceActionId = actionId;
+        try {
+          prices.push(
+            readProbeCost(actionId, "tech-__ea_research_cost_probe__"),
+          );
+        } finally {
+          activeTechPriceActionId = undefined;
+        }
+      }
+      return Object.freeze(prices);
+    },
   });
   let activeTechPriceActionId;
   controls.set("buildQueue", {

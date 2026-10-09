@@ -2054,10 +2054,10 @@
 
   // src/adapters/evolve/captured-game-mechanics.ts
   var structureMapCaptureThreshold = 3, researchTechQueueCostAlias = "__ea_research_cost_probe__";
-  function readNativeTechRegistrySnapshot(registry, rawKeys) {
+  function readNativeTechRegistrySnapshot(registry, rawKeys, retainActionIndex = !1) {
     if (!isNonArrayRecord(registry) || !Array.isArray(rawKeys) || rawKeys.length === 0)
       return;
-    let keys = [], definitions = [], seenActionIds = /* @__PURE__ */ new Set();
+    let keys = [], definitions = [], definitionsByActionId = retainActionIndex ? /* @__PURE__ */ new Map() : void 0, seenActionIds = /* @__PURE__ */ new Set();
     for (let rawKey of rawKeys) {
       if (typeof rawKey != "string" || rawKey.length === 0 || rawKey.trim() !== rawKey)
         return;
@@ -2069,20 +2069,21 @@
       let grantTechnology = readMechanicsDataProperty(grant, "0"), grantLevel = readMechanicsDataProperty(grant, "1");
       if (typeof grantTechnology != "string" || grantTechnology.trim().length === 0 || typeof grantLevel != "number" || !Number.isFinite(grantLevel) || grantLevel < 0)
         return;
-      keys.push(rawKey), seenActionIds.add(actionId), definitions.push(
-        Object.freeze({
-          registryKey: rawKey,
-          actionId,
-          grantTechnology,
-          grantLevel,
-          action
-        })
-      );
+      keys.push(rawKey), seenActionIds.add(actionId);
+      let definition = Object.freeze({
+        registryKey: rawKey,
+        actionId,
+        grantTechnology,
+        grantLevel,
+        action
+      });
+      definitions.push(definition), definitionsByActionId?.set(actionId, definition);
     }
     return Object.freeze({
       registry,
       keys: Object.freeze(keys),
       definitions: Object.freeze(definitions),
+      ...definitionsByActionId === void 0 ? {} : { definitionsByActionId },
       publicDefinitions: Object.freeze(
         definitions.map(
           (definition) => Object.freeze({
@@ -2712,6 +2713,8 @@
       },
       withTechQueueCostAlias: () => {
       },
+      withTechQueueCostAliases: () => {
+      },
       readStructures: () => {
       },
       readStructureIdentities: () => {
@@ -2996,6 +2999,113 @@
           return;
         }
     }
+    function withNativeTechQueueCostAliases(actionIds, readProbeCost) {
+      let retained = readRetainedNativeTechRegistry();
+      if (retained === void 0 || typeof readProbeCost != "function" || actionIds.some(
+        (actionId, index) => typeof actionId != "string" || retained.definitionsByActionId?.get(actionId) === void 0 || actionIds.indexOf(actionId) !== index
+      ))
+        return;
+      if (actionIds.length === 0) return Object.freeze([]);
+      let hostAction = retained.definitions[0]?.action;
+      if (hostAction === void 0) return;
+      try {
+        if (!retained.definitions.every(
+          (definition) => Object.getOwnPropertyDescriptor(
+            definition.action,
+            researchTechQueueCostAlias
+          ) === void 0
+        ))
+          return;
+      } catch {
+        return;
+      }
+      let results = [], installationAttempted = !1, installationVerified = !0, cleanupProven = !0, callbackFailed = !1, callbackFailure;
+      try {
+        for (let actionId of actionIds) {
+          let targetAction = retained.definitionsByActionId?.get(actionId)?.action;
+          if (targetAction === void 0) {
+            installationVerified = !1;
+            break;
+          }
+          let installed = !1;
+          try {
+            installationAttempted = !0;
+            try {
+              Reflect.apply(
+                objectDefineProperty,
+                objectConstructor,
+                [
+                  hostAction,
+                  researchTechQueueCostAlias,
+                  {
+                    configurable: !0,
+                    enumerable: !1,
+                    value: targetAction
+                  }
+                ]
+              );
+            } catch {
+              installationVerified = !1;
+            }
+            let descriptor;
+            try {
+              descriptor = Object.getOwnPropertyDescriptor(
+                hostAction,
+                researchTechQueueCostAlias
+              );
+            } catch {
+              installationVerified = !1;
+            }
+            if (installed = descriptor !== void 0 && descriptor.configurable === !0 && descriptor.enumerable === !1 && "value" in descriptor && descriptor.value === targetAction, installationVerified = installationVerified && installed, installed)
+              try {
+                results.push(
+                  readProbeCost(actionId, "tech-" + researchTechQueueCostAlias)
+                );
+              } catch (error) {
+                callbackFailed = !0, callbackFailure = error;
+              }
+          } finally {
+            if (installed)
+              try {
+                Reflect.deleteProperty(hostAction, researchTechQueueCostAlias) || (cleanupProven = !1);
+              } catch {
+                cleanupProven = !1;
+              }
+          }
+          if (!installationVerified || !cleanupProven || callbackFailed) break;
+        }
+      } finally {
+        if (installationAttempted) {
+          for (let definition of retained.definitions)
+            try {
+              Object.getOwnPropertyDescriptor(
+                definition.action,
+                researchTechQueueCostAlias
+              ) !== void 0 && !Reflect.deleteProperty(
+                definition.action,
+                researchTechQueueCostAlias
+              ) && (cleanupProven = !1);
+            } catch {
+              cleanupProven = !1;
+            }
+          try {
+            retained.definitions.every(
+              (definition) => Object.getOwnPropertyDescriptor(
+                definition.action,
+                researchTechQueueCostAlias
+              ) === void 0
+            ) || (cleanupProven = !1);
+          } catch {
+            cleanupProven = !1;
+          }
+        }
+      }
+      cleanupProven || (capturedTechAuthorityInvalid = !0, capturedTechRegistry = void 0, capturedTechRegistryObjectKeys = void 0);
+      let current = cleanupProven && installationAttempted ? readRetainedNativeTechRegistry() : void 0, registryStillValid = current !== void 0 && sameNativeTechRegistrySnapshot(retained, current);
+      if (callbackFailed) throw callbackFailure;
+      if (!(!cleanupProven || !installationVerified || !registryStillValid || results.length !== actionIds.length))
+        return Object.freeze(results);
+    }
     let mechanics = Object.freeze({
       captureTechDefinitionsDuring(draw) {
         if (stopped || capturedTechAuthorityInvalid || capturedTechRegistry !== void 0 || typeof objectConstructor != "function" || typeof objectDefineProperty != "function")
@@ -3014,7 +3124,7 @@
         let originalObjectKeys = originalDescriptor.value, candidates = /* @__PURE__ */ new Map(), candidateChanged = !1, scopedObjectKeys = function(...args) {
           let keys = Reflect.apply(originalObjectKeys, this, args), candidate;
           try {
-            candidate = readNativeTechRegistrySnapshot(args[0], keys);
+            candidate = readNativeTechRegistrySnapshot(args[0], keys, !0);
           } catch {
             return keys;
           }
@@ -3069,85 +3179,12 @@
         return readRetainedNativeTechRegistry()?.publicDefinitions;
       },
       withTechQueueCostAlias(actionId, readProbeCost) {
-        let retained = readRetainedNativeTechRegistry();
-        if (retained === void 0 || typeof readProbeCost != "function")
-          return;
-        let targetDefinitions = retained.definitions.filter(
-          (definition) => definition.actionId === actionId
-        ), targetAction = targetDefinitions.length === 1 ? targetDefinitions[0]?.action : void 0, hostAction = retained.definitions[0]?.action;
-        if (targetAction === void 0 || hostAction === void 0)
-          return;
-        try {
-          if (!retained.definitions.every(
-            (definition) => Object.getOwnPropertyDescriptor(
-              definition.action,
-              researchTechQueueCostAlias
-            ) === void 0
-          ))
-            return;
-        } catch {
-          return;
-        }
-        let installationAttempted = !1, installationVerified = !1, cleanupProven = !0, callbackResult, callbackFailed = !1, callbackFailure;
-        try {
-          installationAttempted = !0, Reflect.apply(
-            objectDefineProperty,
-            objectConstructor,
-            [
-              hostAction,
-              researchTechQueueCostAlias,
-              {
-                configurable: !0,
-                enumerable: !1,
-                value: targetAction
-              }
-            ]
-          );
-          let descriptor = Object.getOwnPropertyDescriptor(
-            hostAction,
-            researchTechQueueCostAlias
-          );
-          if (installationVerified = descriptor !== void 0 && descriptor?.configurable === !0 && descriptor.enumerable === !1 && "value" in descriptor && descriptor.value === targetAction, installationVerified)
-            try {
-              callbackResult = readProbeCost(
-                "tech-" + researchTechQueueCostAlias
-              );
-            } catch (error) {
-              callbackFailed = !0, callbackFailure = error;
-            }
-        } catch {
-        } finally {
-          if (installationAttempted) {
-            for (let definition of retained.definitions)
-              try {
-                Object.getOwnPropertyDescriptor(
-                  definition.action,
-                  researchTechQueueCostAlias
-                ) !== void 0 && !Reflect.deleteProperty(
-                  definition.action,
-                  researchTechQueueCostAlias
-                ) && (cleanupProven = !1);
-              } catch {
-                cleanupProven = !1;
-              }
-            try {
-              retained.definitions.every(
-                (definition) => Object.getOwnPropertyDescriptor(
-                  definition.action,
-                  researchTechQueueCostAlias
-                ) === void 0
-              ) || (cleanupProven = !1);
-            } catch {
-              cleanupProven = !1;
-            }
-          }
-        }
-        cleanupProven || (capturedTechAuthorityInvalid = !0, capturedTechRegistry = void 0, capturedTechRegistryObjectKeys = void 0);
-        let current = cleanupProven && installationAttempted ? readRetainedNativeTechRegistry() : void 0, registryStillValid = current !== void 0 && sameNativeTechRegistrySnapshot(retained, current);
-        if (callbackFailed) throw callbackFailure;
-        if (!(!cleanupProven || !installationVerified || !registryStillValid))
-          return callbackResult;
+        return withNativeTechQueueCostAliases(
+          [actionId],
+          (_, probeId) => readProbeCost(probeId)
+        )?.[0];
       },
+      withTechQueueCostAliases: withNativeTechQueueCostAliases,
       adjustPower(root, entryKey, expectedStateOn, targetStateOn, isCurrent = () => !0, preflightOnly = !1, expectedStructure) {
         let entries = structureEntries, entry = entries === void 0 ? void 0 : readMechanicsEntry(entryKey, entries.get(entryKey));
         if (stopped || entry === void 0 || expectedStructure !== void 0 && (expectedStructure.entryKey !== entry.entryKey || expectedStructure.region !== entry.region || expectedStructure.sector !== entry.sector || expectedStructure.struct !== entry.struct || expectedStructure.actionId !== entry.actionId || !expectedStructure.matchesCurrentIdentity()) || !Number.isSafeInteger(expectedStateOn) || !Number.isSafeInteger(targetStateOn) || targetStateOn < 0)
@@ -4817,7 +4854,8 @@
     }), indexedTechDefinitions, indexedTechDefinitionsById;
     return Object.freeze({
       read(options) {
-        if (rootState.readRoot() === void 0) {
+        let tally = createCountTally(dependencies.diagnostics), measure = createPhaseMeasure(dependencies.diagnostics);
+        if (tally.count("research.catalog.observations"), rootState.readRoot() === void 0) {
           reportUnavailable("the game root has not been captured yet");
           return;
         }
@@ -4880,8 +4918,11 @@
           );
           return;
         }
-        let definitions = mechanics.readTechDefinitions();
-        if (definitions === void 0) {
+        let definitions = measure(
+          "research.catalog.registry-read",
+          () => mechanics.readTechDefinitions()
+        );
+        if (definitions !== void 0 && tally.count("research.registry.validations"), definitions === void 0) {
           reportUnavailable(
             "the native technology registry was not captured or is no longer valid"
           );
@@ -4981,7 +5022,24 @@
           );
           return;
         }
-        let matchedOffers = [];
+        let matchedOffers = [], nativePricesByOffer;
+        if (offeredCount === 0)
+          nativePricesByOffer = Object.freeze([]);
+        else
+          try {
+            nativePricesByOffer = nativePrices.readTechCosts(
+              observedDefinitions.slice(0, offeredCount).map((definition) => definition.actionId)
+            );
+          } catch (error) {
+            reportUnavailable(
+              `native Research price read failed: ${String(error)}`
+            );
+            return;
+          }
+        if (nativePricesByOffer === void 0 || nativePricesByOffer.length !== offeredCount) {
+          reportUnavailable("native Research prices are unavailable");
+          return;
+        }
         for (let index = 0; index < offeredCount; index++) {
           let definition = observedDefinitions[index], row = drawn.offeredRows[index];
           if (definition === void 0 || row === void 0 || row.id !== definition.actionId || !offeredRowsById.has(definition.actionId)) {
@@ -4990,15 +5048,7 @@
             );
             return;
           }
-          let nativePrice;
-          try {
-            nativePrice = nativePrices.readTechCost(definition.actionId);
-          } catch (error) {
-            reportUnavailable(
-              `native Research price read failed for ${definition.actionId}: ${String(error)}`
-            );
-            return;
-          }
+          let nativePrice = nativePricesByOffer[index];
           if (nativePrice === void 0) {
             reportUnavailable(
               `native Research price is unavailable for ${definition.actionId}`
@@ -5018,7 +5068,7 @@
               nativeAffordable: row.nativeAffordable === !0,
               generation: drawn.generations.get(definition.actionId) ?? 0
             })
-          );
+          ), tally.count("research.offers.matched");
         }
         let frozenOffered = Object.freeze(matchedOffers);
         return drawn.grantedRows === void 0 ? Object.freeze({ offered: frozenOffered }) : Object.freeze({
@@ -5027,17 +5077,21 @@
         });
       },
       restate(snapshot2) {
-        let offered = Object.freeze(
-          snapshot2.offered.map(
-            (offer) => Object.freeze({
-              ...offer,
-              generation: controls2.resolve(offer.elementId)?.generation ?? 0
-            })
-          )
-        );
-        return Object.freeze(
-          snapshot2.granted === void 0 ? { offered } : { offered, granted: snapshot2.granted }
-        );
+        let tally = createCountTally(dependencies.diagnostics);
+        return createPhaseMeasure(dependencies.diagnostics)("research.binding.restate", () => {
+          tally.count("research.binding.restatements", snapshot2.offered.length);
+          let offered = Object.freeze(
+            snapshot2.offered.map(
+              (offer) => Object.freeze({
+                ...offer,
+                generation: controls2.resolve(offer.elementId)?.generation ?? 0
+              })
+            )
+          );
+          return Object.freeze(
+            snapshot2.granted === void 0 ? { offered } : { offered, granted: snapshot2.granted }
+          );
+        });
       }
     });
   }
@@ -5045,13 +5099,25 @@
   // src/adapters/evolve/progression/research/captured-tech-costs.ts
   function createCapturedResearchTechPriceReader(dependencies) {
     let { mechanics, costs } = dependencies;
+    function readTechCosts(actionIds) {
+      if (costs === void 0) return;
+      if (actionIds.length === 0) return Object.freeze([]);
+      let tally = createCountTally(dependencies.diagnostics), measure = createPhaseMeasure(dependencies.diagnostics);
+      tally.count("research.native-price-reads", actionIds.length);
+      let prices = measure(
+        "research.native-price-probe",
+        () => mechanics.withTechQueueCostAliases(
+          actionIds,
+          (_actionId, probeId) => costs.readCost(probeId)
+        )
+      );
+      return tally.count("research.registry.validations", 2), prices?.map((result) => result?.cost);
+    }
     return Object.freeze({
       readTechCost(actionId) {
-        return costs === void 0 ? void 0 : mechanics.withTechQueueCostAlias(
-          actionId,
-          (probeId) => costs.readCost(probeId)
-        )?.cost;
-      }
+        return readTechCosts([actionId])?.[0];
+      },
+      readTechCosts
     });
   }
 
@@ -11632,14 +11698,17 @@
       }
       !epochChanged && !rowBindingsChanged || (clearResearchSample(), offeredSampleEpoch = currentEpoch, scopes.invalidate(RESEARCH_SCOPE), scopes.invalidate(RESEARCH_GRANTED_SCOPE));
     }, readCurrentOfferedTechs = () => (invalidateStaleCapturedResearchObservation(epoch.read()), lastOffered), sampleOfferedTechs = () => {
+      let tally = createCountTally(diagnostics);
+      tally.count("research.observation.requests");
       let includeGranted = dependencies.needGrantedTechs?.() === !0, currentEpoch = epoch.read();
       if (invalidateStaleCapturedResearchObservation(currentEpoch), offeredSampleEpoch === void 0 && (offeredSampleEpoch = currentEpoch), offeredSampleAttempted && !(includeGranted && !grantedSampleAttempted)) {
-        if (heldOfferedSnapshot === void 0) {
+        if (tally.count("research.observation.cache-hits"), heldOfferedSnapshot === void 0) {
           lastOffered = void 0, lastGranted = void 0;
           return;
         }
         return lastOffered;
       }
+      tally.count("research.observation.samples");
       let held = scopes.read(
         includeGranted ? RESEARCH_GRANTED_SCOPE : RESEARCH_SCOPE,
         () => offered.read(includeGranted ? { includeGranted } : void 0),
@@ -11657,8 +11726,10 @@
       bindings,
       controls: controls2,
       mechanics,
+      diagnostics,
       nativePrices: createCapturedResearchTechPriceReader({
         mechanics,
+        diagnostics,
         ...dependencies.costs === void 0 ? {} : { costs: dependencies.costs }
       }),
       ...onUnavailable === void 0 ? {} : { onUnavailable }

@@ -546,6 +546,8 @@ export function createCapturedProgressionControl(
     return lastOffered;
   };
   const sampleOfferedTechs = () => {
+    const tally = createCountTally(diagnostics);
+    tally.count("research.observation.requests");
     const includeGranted = dependencies.needGrantedTechs?.() === true;
     const currentEpoch = epoch.read();
     invalidateStaleCapturedResearchObservation(currentEpoch);
@@ -554,6 +556,7 @@ export function createCapturedProgressionControl(
     // sample by design; never repeat it once that attempt (including a failed one) has happened.
     const needsGrantedSample = includeGranted && !grantedSampleAttempted;
     if (offeredSampleAttempted && !needsGrantedSample) {
+      tally.count("research.observation.cache-hits");
       if (heldOfferedSnapshot === undefined) {
         lastOffered = undefined;
         lastGranted = undefined;
@@ -564,6 +567,7 @@ export function createCapturedProgressionControl(
       // offer a second time on each demand read without adding freshness.
       return lastOffered;
     }
+    tally.count("research.observation.samples");
     // The granted half is a different sample, so it is a different scope: a pass that dropped it
     // must never answer the caller that asked for it.
     const held = scopes.read(
@@ -599,8 +603,10 @@ export function createCapturedProgressionControl(
     bindings,
     controls,
     mechanics,
+    diagnostics,
     nativePrices: createCapturedResearchTechPriceReader({
       mechanics,
+      diagnostics,
       ...(dependencies.costs === undefined
         ? {}
         : { costs: dependencies.costs }),

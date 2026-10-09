@@ -24,8 +24,9 @@ function makeAction(id, cost) {
 
 function makeFixture() {
   const { page, readRegistryInterceptions } = makePage();
+  let alphaKnowledge = 100;
   const rawCosts = {
-    Knowledge: () => 100,
+    Knowledge: () => alphaKnowledge,
     Helium_3: () => 20,
     Free: () => 0,
     Debt: () => -5,
@@ -175,6 +176,9 @@ function makeFixture() {
     setReplaceRegistryDuringCostRead: (value) => {
       replaceRegistryDuringCostRead = value;
     },
+    setAlphaKnowledge: (value) => {
+      alphaKnowledge = value;
+    },
   };
 }
 
@@ -250,6 +254,49 @@ function assertAliasAbsent(fixture) {
       ?.map(({ actionId }) => actionId),
     ["tech-alpha", "tech-beta"],
   );
+  fixture.installed.uninstall();
+}
+
+{
+  const fixture = makeFixture();
+  const sequentialPrices = [
+    fixture.nativePrices.readTechCost("tech-alpha"),
+    fixture.nativePrices.readTechCost("tech-beta"),
+  ];
+  assert.deepEqual(
+    fixture.nativePrices.readTechCosts(["tech-alpha", "tech-beta"]),
+    sequentialPrices,
+    "single-id and batch interfaces return the same native queue prices",
+  );
+  fixture.setAlphaKnowledge(200);
+  assert.equal(
+    fixture.nativePrices.readTechCosts(["tech-alpha"])[0].Knowledge,
+    300,
+    "a native price dependency change is read on the next batch",
+  );
+  assertAliasAbsent(fixture);
+  assertQueueRestored(fixture);
+  fixture.installed.uninstall();
+}
+
+{
+  const fixture = makeFixture();
+  const prices = fixture.nativePrices.readTechCosts([
+    "tech-alpha",
+    "tech-beta",
+  ]);
+  assert.deepEqual(prices, [
+    { Knowledge: 150, Helium_3: 30 },
+    { Knowledge: 600 },
+  ]);
+  assert.equal(fixture.readSetDataCalls(), 2);
+  assert.equal(
+    fixture.readRegistryInterceptions(),
+    fixture.interceptsAfterCapture,
+    "price probes do not reinstall the capture-time Object.keys observer",
+  );
+  assertAliasAbsent(fixture);
+  assertQueueRestored(fixture);
   fixture.installed.uninstall();
 }
 
@@ -356,6 +403,21 @@ for (const invalidate of [
   fixture.setReplaceRegistryDuringCostRead(true);
   assert.equal(fixture.nativePrices.readTechCost("tech-alpha"), undefined);
   assert.equal(fixture.readSetDataCalls(), 1);
+  assertAliasAbsent(fixture);
+  assertQueueRestored(fixture);
+  assert.equal(fixture.installed.mechanics.readTechDefinitions(), undefined);
+  fixture.installed.uninstall();
+}
+
+{
+  const fixture = makeFixture();
+  fixture.setReplaceRegistryDuringCostRead(true);
+  assert.equal(
+    fixture.nativePrices.readTechCosts(["tech-alpha", "tech-beta"]),
+    undefined,
+    "a registry replacement during any price probe invalidates the complete batch",
+  );
+  assert.equal(fixture.readSetDataCalls(), 2);
   assertAliasAbsent(fixture);
   assertQueueRestored(fixture);
   assert.equal(fixture.installed.mechanics.readTechDefinitions(), undefined);
