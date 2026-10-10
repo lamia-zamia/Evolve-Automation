@@ -322,7 +322,17 @@ const fourth = structureEntry({
   powered: () => -5,
 });
 entries.set(fourth.key, fourth);
-const definitions = capture.mechanics.readStructures();
+let definitions = capture.mechanics.readStructures();
+assert.equal(definitions.length, 4);
+const invalidStructureKey = "city:invalid_structure";
+entries.set(invalidStructureKey, { key: invalidStructureKey });
+assert.equal(
+  capture.mechanics.readStructures(),
+  undefined,
+  "one invalid native entry rejects the entire Building catalog capture",
+);
+entries.delete(invalidStructureKey);
+definitions = capture.mechanics.readStructures();
 assert.equal(definitions.length, 4);
 assert.equal(
   capture.mechanics.readStructureIdentities(),
@@ -332,6 +342,11 @@ assert.equal(
 const capturedWorker = new page.Worker("evolve/evolve.js");
 capturedWorker.addEventListener("message", () => {});
 const nativeIdentitySnapshot = capture.mechanics.readStructureIdentities();
+assert.equal(
+  capture.mechanics.readStructures(),
+  definitions,
+  "unchanged native initialization reuses the captured structure definitions",
+);
 assert.deepEqual(
   nativeIdentitySnapshot,
   definitions.map(({ entryKey, region, sector, struct, actionId }) => ({
@@ -353,6 +368,11 @@ entries.set("city:coal_power", {
   c_action: { id: "city-coal_power", powered: () => -1 },
   info: false,
 });
+assert.notEqual(
+  capture.mechanics.readStructures(),
+  definitions,
+  "a native registry identity change rebuilds the reusable definition snapshot",
+);
 assert.equal(
   capture.mechanics.readStructureIdentities(),
   nativeIdentitySnapshot,

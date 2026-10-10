@@ -2535,41 +2535,17 @@ function runCapturedJobsMatrixScenario({
   );
 }
 
-// The production captured cycle is a separate orchestration boundary from runTick. These phase
-// failures make its actual order observable without relying on source-text ordering or a test-only
-// expected-phase constant. Because the first live settings catalog sample is unavailable, dynamic
-// defaults stay owed and combat phases that require fresh root authority do not invoke controls.
+// The production captured cycle is a separate orchestration boundary from runTick. Keep this
+// fail-closed case independent from the healthy combat-order case below: root authority remains
+// unavailable for the whole tick, so the combat controls must never be invoked.
 {
   const phaseFailures = [];
   const observedPhases = [];
-  // Startup reads the root freely; only the reads the tick itself makes are scripted below. This
-  // used to be a fixed read budget, which made the case fail whenever startup changed how many
-  // times it looked at the root.
+  // Startup reads the root freely. After startup, every root read in this cycle fails closed.
   let bootstrapping = true;
-  // Tuned to the tick's own read schedule: the first reads of the tick throw so the earlier
-  // phases report failures, and the next four succeed so the espionage and battle phases run. The
-  // espionage phase asks the Governor-ownership question before it stands down, which is one more
-  // read of its own. Re-tune by sweeping this number if the tick changes how often it reads the
-  // root.
-  let remainingRootFailures = 14;
-  let validCombatRootReads = 0;
   const root = {
     tech: { spy: 2 },
-    civic: {
-      foreign: {
-        gov0: {
-          mil: 10,
-          spy: 3,
-          sab: 0,
-          hstl: 0,
-          unrest: 0,
-          eco: 1,
-          occ: false,
-          anx: false,
-          buy: false,
-        },
-      },
-    },
+    civic: { foreign: {} },
   };
   const foreign = {
     elementId: "foreign",
@@ -2601,15 +2577,7 @@ function runCapturedJobsMatrixScenario({
       rootState: {
         readRoot: () => {
           if (bootstrapping) return root;
-          if (remainingRootFailures > 0) {
-            remainingRootFailures -= 1;
-            throw new Error("phase stub");
-          }
-          if (validCombatRootReads < 4) {
-            validCombatRootReads += 1;
-            return root;
-          }
-          throw new Error("battle phase stub");
+          throw new Error("root unavailable for this tick");
         },
         isReactivitySuppressed: () => false,
         subscribeRootReplaced: () => () => {},
@@ -2707,14 +2675,18 @@ function runCapturedJobsMatrixScenario({
   cycle({ periods: 1 });
   stopCycle();
 
-  assert.deepEqual(observedPhases, [
-    "autoResearch",
-    "autoBuild",
-    "autoFight.mercenary",
-    "autoFight.spy",
-    "autoTax",
-    "autoGovernment",
-  ]);
+  assert.deepEqual(
+    observedPhases,
+    [
+      "autoResearch",
+      "autoBuild",
+      "autoFight.mercenary",
+      "autoFight.spy",
+      "autoTax",
+      "autoGovernment",
+    ],
+    JSON.stringify({ phaseFailures, controlCalls }),
+  );
   assert.deepEqual(
     controlCalls,
     [],
@@ -2742,6 +2714,170 @@ function runCapturedJobsMatrixScenario({
       "autoTax",
       "autoGovernment",
     ],
+  );
+}
+
+// A separate healthy-root cycle characterizes the Spy -> Espionage -> Battle order. Root access
+// is enabled by the autoBuild failure report, so this fixture does not depend on how many times
+// startup or an earlier phase reads it. The earlier Research failure must not suppress later
+// combat control invocations.
+{
+  const phaseFailures = [];
+  const observedPhases = [];
+  let bootstrapping = true;
+  let rootAvailable = false;
+  const root = {
+    tech: { spy: 2 },
+    civic: { foreign: {} },
+  };
+  const foreign = {
+    elementId: "foreign",
+    generation: 1,
+    methods: ["vis", "gvis", "trigModal", "spy_disabled", "spy"],
+  };
+  const garrison = {
+    elementId: "garrison",
+    generation: 1,
+    methods: [
+      "vis",
+      "hire",
+      "hell",
+      "s_max",
+      "campaign",
+      "next",
+      "last",
+      "aNext",
+      "aLast",
+      "rating",
+    ],
+  };
+  const controlCalls = [];
+  const controlPhases = [];
+  let mercenaryPhaseObserved = false;
+  let cycle;
+  const stopCycle = startCapturedRuntime({
+    pageCapture: {
+      isComplete: () => true,
+      rootState: {
+        readRoot: () => {
+          if (bootstrapping || rootAvailable) return root;
+          throw new Error("root unavailable until autoBuild reports");
+        },
+        isReactivitySuppressed: () => false,
+        subscribeRootReplaced: () => () => {},
+      },
+      controls: withControlCaptureAuthority({
+        resolve: (id) => {
+          if (
+            id === "garrison" &&
+            !mercenaryPhaseObserved &&
+            observedPhases[observedPhases.length - 1] === "autoBuild"
+          ) {
+            mercenaryPhaseObserved = true;
+            observedPhases.push("autoFight.mercenary");
+          }
+          return id === "foreign"
+            ? foreign
+            : id === "garrison"
+              ? garrison
+              : undefined;
+        },
+        invoke: (handle, method, args = []) => {
+          if (handle.elementId === "foreign" && method === "vis") {
+            const previous = observedPhases[observedPhases.length - 1];
+            if (previous === "autoFight.mercenary") {
+              observedPhases.push("autoFight.spy");
+              controlPhases.push("autoFight.spy");
+            } else if (previous === "autoFight.spy") {
+              observedPhases.push("autoFight.espionage");
+              controlPhases.push("autoFight.espionage");
+            } else if (previous === "autoFight.espionage") {
+              controlPhases.push("autoFight.battle");
+            }
+          }
+          controlCalls.push([handle.elementId, method, ...args]);
+          if (handle === foreign && method === "vis") {
+            return { ok: true, value: true };
+          }
+          if (handle === foreign && method === "gvis") {
+            return { ok: true, value: args[0] === 0 };
+          }
+          return { ok: true, value: false };
+        },
+        capturedElementIds: () => ["foreign"],
+      }),
+      controlUsage: { readUsage: () => [] },
+      periods: {
+        subscribe(next) {
+          cycle = next;
+          return () => {};
+        },
+      },
+      mountSuppression: { available: false, withoutMounting: () => undefined },
+      uninstall: () => {},
+      mechanics: {
+        readStructures: () => undefined,
+        readStructureIdentities: () => [],
+      },
+    },
+    document: {},
+    mouseEvent: class {},
+    storage: {
+      getItem: () =>
+        JSON.stringify({
+          masterScriptToggle: true,
+          tickRate: 1,
+          autoResearch: true,
+          autoBuild: true,
+          autoFight: true,
+          autoTax: true,
+          autoGovernment: true,
+          foreignPolicyInferior: "Ignore",
+          foreignPolicySuperior: "Ignore",
+          foreignPolicyRival: "Ignore",
+        }),
+    },
+    logError: (message) => {
+      phaseFailures.push(message);
+      const phase = message.slice(0, message.indexOf(" stopped: "));
+      if (
+        [
+          "autoResearch",
+          "autoBuild",
+          "autoFight.spy",
+          "autoFight.espionage",
+          "autoFight.battle",
+          "autoTax",
+          "autoGovernment",
+        ].includes(phase)
+      ) {
+        observedPhases.push(phase);
+      }
+      if (phase === "autoBuild") rootAvailable = true;
+    },
+  });
+  bootstrapping = false;
+  cycle({ periods: 1 });
+  stopCycle();
+
+  assert.deepEqual(controlPhases, [
+    "autoFight.spy",
+    "autoFight.espionage",
+    "autoFight.battle",
+  ]);
+  assert.ok(
+    controlCalls.some(([id, method]) => id === "foreign" && method === "vis"),
+    "combat must invoke the captured native foreign control",
+  );
+  assert.ok(
+    phaseFailures.some((message) =>
+      message.startsWith("autoResearch stopped: "),
+    ),
+    "the injected earlier phase failure must be reported",
+  );
+  assert.ok(
+    phaseFailures.some((message) => message.startsWith("autoBuild stopped: ")),
+    "the root-unavailable Building phase must be reported before root access is restored",
   );
 }
 

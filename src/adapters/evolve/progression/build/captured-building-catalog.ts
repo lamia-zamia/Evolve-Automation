@@ -74,15 +74,17 @@ interface CapturedBuildingStructureIndex {
   >;
 }
 
+type CapturedBuildingStructuresByBinding = ReadonlyMap<
+  string,
+  readonly CapturedBuildingStructureDefinition[]
+>;
+
 function indexCapturedBuildingStructures(
   root: unknown,
   elementIds: readonly string[],
   structures: readonly CapturedBuildingStructureDefinition[],
+  reusableStructuresByBinding?: CapturedBuildingStructuresByBinding,
 ): CapturedBuildingStructureIndex {
-  const structuresByBinding = new Map<
-    string,
-    CapturedBuildingStructureDefinition[]
-  >();
   const relevantBindings = new Set(CAPTURED_AUTOMATION_BUILDING_BINDINGS);
   for (const elementId of elementIds) {
     const binding = bindingForBuildingElement(elementId);
@@ -91,11 +93,18 @@ function indexCapturedBuildingStructures(
       relevantBindings.add(binding);
     }
   }
-  for (const structure of structures) {
-    const binding = bindingForBuildingElement(structure.actionId);
-    const matches = structuresByBinding.get(binding);
-    if (matches === undefined) structuresByBinding.set(binding, [structure]);
-    else matches.push(structure);
+  let structuresByBinding: CapturedBuildingStructuresByBinding;
+  if (reusableStructuresByBinding !== undefined) {
+    structuresByBinding = reusableStructuresByBinding;
+  } else {
+    const indexed = new Map<string, CapturedBuildingStructureDefinition[]>();
+    for (const structure of structures) {
+      const binding = bindingForBuildingElement(structure.actionId);
+      const matches = indexed.get(binding);
+      if (matches === undefined) indexed.set(binding, [structure]);
+      else matches.push(structure);
+    }
+    structuresByBinding = indexed;
   }
 
   const statesByBinding = new Map<
@@ -184,6 +193,7 @@ export function readCapturedBuildingEntries(
   root: unknown,
   controls: GameControlRegistry,
   structures: readonly CapturedBuildingStructureDefinition[] = [],
+  reusableStructuresByBinding?: CapturedBuildingStructuresByBinding,
 ): readonly Readonly<CapturedBuildingEntry>[] {
   const entries: CapturedBuildingEntry[] = [];
   const seen = new Set<string>();
@@ -192,6 +202,7 @@ export function readCapturedBuildingEntries(
     root,
     elementIds,
     structures,
+    reusableStructuresByBinding,
   );
   for (const elementId of elementIds) {
     const binding = bindingForBuildingElement(elementId);

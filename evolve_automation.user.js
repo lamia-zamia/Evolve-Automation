@@ -1554,15 +1554,22 @@
   }
 
   // src/adapters/evolve/progression/build/captured-building-catalog.ts
-  function indexCapturedBuildingStructures(root, elementIds, structures) {
-    let structuresByBinding = /* @__PURE__ */ new Map(), relevantBindings = new Set(CAPTURED_AUTOMATION_BUILDING_BINDINGS);
+  function indexCapturedBuildingStructures(root, elementIds, structures, reusableStructuresByBinding) {
+    let relevantBindings = new Set(CAPTURED_AUTOMATION_BUILDING_BINDINGS);
     for (let elementId of elementIds) {
       let binding = bindingForBuildingElement(elementId), parts = splitActionId(binding);
       parts !== void 0 && CAPTURED_BUILD_REGIONS.has(parts.region) && relevantBindings.add(binding);
     }
-    for (let structure of structures) {
-      let binding = bindingForBuildingElement(structure.actionId), matches = structuresByBinding.get(binding);
-      matches === void 0 ? structuresByBinding.set(binding, [structure]) : matches.push(structure);
+    let structuresByBinding;
+    if (reusableStructuresByBinding !== void 0)
+      structuresByBinding = reusableStructuresByBinding;
+    else {
+      let indexed = /* @__PURE__ */ new Map();
+      for (let structure of structures) {
+        let binding = bindingForBuildingElement(structure.actionId), matches = indexed.get(binding);
+        matches === void 0 ? indexed.set(binding, [structure]) : matches.push(structure);
+      }
+      structuresByBinding = indexed;
     }
     let statesByBinding = /* @__PURE__ */ new Map(), firstStructureByBindingAndState = /* @__PURE__ */ new Map(), stateByStructure = /* @__PURE__ */ new Map();
     for (let [binding, matches] of structuresByBinding) {
@@ -1596,11 +1603,12 @@
     let data = handle?.data;
     return isRecord(data) ? data : void 0;
   }
-  function readCapturedBuildingEntries(root, controls2, structures = []) {
+  function readCapturedBuildingEntries(root, controls2, structures = [], reusableStructuresByBinding) {
     let entries = [], seen = /* @__PURE__ */ new Set(), elementIds = controls2.capturedElementIds(), structureIndex = indexCapturedBuildingStructures(
       root,
       elementIds,
-      structures
+      structures,
+      reusableStructuresByBinding
     );
     for (let elementId of elementIds) {
       let binding = bindingForBuildingElement(elementId), parts = splitActionId(binding);
@@ -2629,7 +2637,9 @@
       readValue: () => readMechanicsPrimitive(action, "val"),
       readWorkers: () => readMechanicsPrimitive(action, "workers"),
       readShipRating: () => shipRecord === void 0 ? { kind: "absent" } : readMechanicsPrimitive(shipRecord, "rating"),
-      ownsPowered: Object.prototype.hasOwnProperty.call(action, "powered"),
+      get ownsPowered() {
+        return Object.prototype.hasOwnProperty.call(action, "powered");
+      },
       readPowered: () => readMechanicsPrimitive(action, "powered"),
       readPowerGridRole: (root, sampledPowered) => {
         if (!currentState(root)) return { kind: "invalid" };
@@ -2835,7 +2845,7 @@
     }, mapConstructor = readMechanicsProperty(pageWindow, "Map"), mapPrototype = readMechanicsProperty(mapConstructor, "prototype"), mapSetDescriptor = isNonArrayRecord(mapPrototype) ? Object.getOwnPropertyDescriptor(mapPrototype, "set") : void 0, mapSizeGetter = (isNonArrayRecord(mapPrototype) ? Object.getOwnPropertyDescriptor(mapPrototype, "size") : void 0)?.get, objectConstructor = readMechanicsProperty(pageWindow, "Object"), objectPrototype = readMechanicsProperty(objectConstructor, "prototype"), objectDefineProperty = readMechanicsDataProperty(
       objectConstructor,
       "defineProperty"
-    ), structureEntries, structureIdentitySnapshot, powerCallbackQueue, callbackQueueCandidates = /* @__PURE__ */ new Set(), callbackIteratorDescriptor = isNonArrayRecord(mapPrototype) ? Object.getOwnPropertyDescriptor(mapPrototype, Symbol.iterator) : void 0, callbackClearDescriptor = isNonArrayRecord(mapPrototype) ? Object.getOwnPropertyDescriptor(mapPrototype, "clear") : void 0, callbackSequence, callbackIteratorHook, callbackClearHook;
+    ), structureEntries, structureDefinitionSnapshot, structureIdentitySnapshot, powerCallbackQueue, callbackQueueCandidates = /* @__PURE__ */ new Set(), callbackIteratorDescriptor = isNonArrayRecord(mapPrototype) ? Object.getOwnPropertyDescriptor(mapPrototype, Symbol.iterator) : void 0, callbackClearDescriptor = isNonArrayRecord(mapPrototype) ? Object.getOwnPropertyDescriptor(mapPrototype, "clear") : void 0, callbackSequence, callbackIteratorHook, callbackClearHook;
     function restorePowerCallbackHooks() {
       isNonArrayRecord(mapPrototype) && (callbackIteratorHook !== void 0 && Object.getOwnPropertyDescriptor(mapPrototype, Symbol.iterator)?.value === callbackIteratorHook && callbackIteratorDescriptor !== void 0 && Object.defineProperty(
         mapPrototype,
@@ -3137,13 +3147,27 @@
         let entries = structureEntries;
         if (!(entries === void 0 || stopped))
           try {
+            let cached = structureDefinitionSnapshot;
+            if (cached !== void 0 && cached.length === entries.size) {
+              let current = !0;
+              for (let definition of cached)
+                if (!definition.matchesCurrentIdentity()) {
+                  current = !1;
+                  break;
+                }
+              if (current) return cached;
+            }
             let anchorResolver = () => ({
               kind: "value",
               value: null
             }), result = [];
             for (let [key, value] of entries) {
               let entry = readMechanicsEntry(key, value);
-              entry !== void 0 && result.push(
+              if (entry === void 0) {
+                structureDefinitionSnapshot = void 0;
+                return;
+              }
+              result.push(
                 createMechanicsDefinition(
                   entry,
                   entries,
@@ -3157,14 +3181,17 @@
               let byStruct = byRegion.get(definition.region);
               byStruct === void 0 && (byStruct = /* @__PURE__ */ new Map(), byRegion.set(definition.region, byStruct)), byStruct.has(definition.struct) ? byStruct.set(definition.struct, null) : byStruct.set(definition.struct, definition);
             }
-            return anchorResolver = (region, struct) => {
+            anchorResolver = (region, struct) => {
               let byStruct = byRegion.get(region);
               if (byStruct === void 0 || !byStruct.has(struct))
                 return { kind: "value", value: null };
               let candidate = byStruct.get(struct);
               return candidate == null || candidate.region !== region || candidate.struct !== struct || !candidate.matchesCurrentIdentity() ? { kind: "invalid" } : { kind: "value", value: candidate.entryKey };
-            }, Object.freeze(result);
+            };
+            let snapshot2 = Object.freeze(result);
+            return structureDefinitionSnapshot = snapshot2.length === entries.size ? snapshot2 : void 0, snapshot2;
           } catch {
+            structureDefinitionSnapshot = void 0;
             return;
           }
       },
@@ -3179,7 +3206,11 @@
             let result = [];
             for (let [key, value] of entries) {
               let entry = readMechanicsEntry(key, value);
-              entry !== void 0 && result.push(
+              if (entry === void 0) {
+                structureIdentitySnapshot = void 0;
+                return;
+              }
+              result.push(
                 Object.freeze({
                   entryKey: entry.entryKey,
                   region: entry.region,
@@ -9038,14 +9069,32 @@
   }
 
   // src/adapters/evolve/progression/build/captured-building-unlocks.ts
-  function readEntryForNativeStructure(entries, binding, entryKey) {
-    return entries.find(
-      (entry) => entry.binding === binding && entry.entryKey === entryKey
-    );
-  }
   function createCapturedBuildingUnlocks(dependencies) {
     let { rootState, mechanics, controls: controls2, diagnostics } = dependencies, reportSkipped = dependencies.onSkipped ?? (() => {
-    });
+    }), bindingsByRegion = /* @__PURE__ */ new Map();
+    for (let binding of CAPTURED_AUTOMATION_BUILDING_BINDINGS) {
+      let region = splitActionId(binding)?.region;
+      if (region === void 0) continue;
+      let bindings = bindingsByRegion.get(region) ?? [];
+      bindingsByRegion.set(region, [...bindings, binding]);
+    }
+    let indexedStructures, structuresByBinding, readStructuresByBinding = (structures) => {
+      if (indexedStructures === structures && structuresByBinding !== void 0)
+        return structuresByBinding;
+      let indexed = /* @__PURE__ */ new Map();
+      for (let structure of structures) {
+        let binding = bindingForBuildingElement(structure.actionId);
+        if (!CAPTURED_AUTOMATION_BUILDING_BINDINGS.has(binding)) continue;
+        let group = indexed.get(binding);
+        group === void 0 ? indexed.set(binding, [structure]) : group.push(structure);
+      }
+      return indexedStructures = structures, structuresByBinding = indexed, indexed;
+    }, stateAddressControls = {
+      ...controls2,
+      // Control captures are mutation capabilities. They must not decide which native
+      // structures the semantic catalog can identify.
+      capturedElementIds: () => []
+    };
     return Object.freeze({
       read(regions) {
         if (regions.size === 0) return;
@@ -9064,41 +9113,32 @@
           reportSkipped("*", "the native structure catalog is unavailable");
           return;
         }
-        let structuresByBinding = /* @__PURE__ */ new Map();
-        for (let structure of structures) {
-          let binding = bindingForBuildingElement(structure.actionId);
-          if (!CAPTURED_AUTOMATION_BUILDING_BINDINGS.has(binding)) continue;
-          let group = structuresByBinding.get(binding) ?? [];
-          group.push(structure), structuresByBinding.set(binding, group);
-        }
-        let stateAddressControls = {
-          ...controls2,
-          // Control captures are mutation capabilities. They must not decide which native
-          // structures the semantic catalog can identify.
-          capturedElementIds: () => []
-        }, entries;
+        let nativeStructuresByBinding = readStructuresByBinding(structures), entries;
         try {
           entries = readCapturedBuildingEntries(
             root,
             stateAddressControls,
-            structures
+            structures,
+            nativeStructuresByBinding
           );
         } catch {
           reportSkipped("*", "the native structure state catalog is invalid");
           return;
         }
-        let unlocked = /* @__PURE__ */ new Set(), sampled3 = /* @__PURE__ */ new Set(), switches = /* @__PURE__ */ new Map();
+        let unlocked = /* @__PURE__ */ new Set(), sampled3 = /* @__PURE__ */ new Set(), switches = /* @__PURE__ */ new Map(), entriesByBinding = /* @__PURE__ */ new Map();
+        for (let entry of entries) {
+          let group = entriesByBinding.get(entry.binding);
+          group === void 0 ? entriesByBinding.set(entry.binding, [entry]) : group.push(entry);
+        }
         for (let region of regions) {
           if (!CAPTURED_BUILD_REGIONS.has(region)) {
             reportSkipped(region, "not an automation Building region");
             continue;
           }
-          let regionBindings = [
-            ...CAPTURED_AUTOMATION_BUILDING_BINDINGS
-          ].filter((binding) => splitActionId(binding)?.region === region), regionUnlocked = /* @__PURE__ */ new Set(), regionSwitches = /* @__PURE__ */ new Map(), complete = !0;
+          let regionBindings = bindingsByRegion.get(region) ?? [], regionUnlocked = /* @__PURE__ */ new Set(), regionSwitches = /* @__PURE__ */ new Map(), complete = !0;
           for (let binding of regionBindings) {
-            let candidates = structuresByBinding.get(binding) ?? [], candidateEntries = entries.filter(
-              (entry2) => entry2.binding === binding && entry2.entryKey !== void 0
+            let candidates = nativeStructuresByBinding.get(binding) ?? [], candidateEntries = (entriesByBinding.get(binding) ?? []).filter(
+              (entry2) => entry2.entryKey !== void 0
             ), joined = candidates.length === 1 ? candidates : candidates.filter(
               (structure2) => candidateEntries.some(
                 (entry2) => entry2.entryKey === structure2.entryKey
@@ -9111,10 +9151,8 @@
               );
               break;
             }
-            let structure = joined[0], entry = readEntryForNativeStructure(
-              entries,
-              binding,
-              structure.entryKey
+            let structure = joined[0], entry = candidateEntries.find(
+              (candidate) => candidate.entryKey === structure.entryKey
             );
             if (candidateEntries.length > 0 && (entry === void 0 || candidateEntries.length !== 1)) {
               complete = !1, tally.count("building-unlocks.unjoined-state-identity"), reportSkipped(

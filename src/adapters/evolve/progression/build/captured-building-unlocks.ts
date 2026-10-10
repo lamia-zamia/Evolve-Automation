@@ -39,21 +39,44 @@ export interface CapturedBuildingUnlocksDependencies {
   readonly diagnostics?: PhaseTimingSink | undefined;
 }
 
-function readEntryForNativeStructure(
-  entries: readonly Readonly<CapturedBuildingEntry>[],
-  binding: string,
-  entryKey: string,
-): Readonly<CapturedBuildingEntry> | undefined {
-  return entries.find(
-    (entry) => entry.binding === binding && entry.entryKey === entryKey,
-  );
-}
-
 export function createCapturedBuildingUnlocks(
   dependencies: CapturedBuildingUnlocksDependencies,
 ): GameBuildingUnlockCatalogReader {
   const { rootState, mechanics, controls, diagnostics } = dependencies;
   const reportSkipped = dependencies.onSkipped ?? (() => {});
+  const bindingsByRegion = new Map<string, readonly string[]>();
+  for (const binding of CAPTURED_AUTOMATION_BUILDING_BINDINGS) {
+    const region = splitActionId(binding)?.region;
+    if (region === undefined) continue;
+    const bindings = bindingsByRegion.get(region) ?? [];
+    bindingsByRegion.set(region, [...bindings, binding]);
+  }
+  let indexedStructures: readonly CapturedGameStructureDefinition[] | undefined;
+  let structuresByBinding:
+    ReadonlyMap<string, readonly CapturedGameStructureDefinition[]> | undefined;
+  const readStructuresByBinding = (
+    structures: readonly CapturedGameStructureDefinition[],
+  ): ReadonlyMap<string, readonly CapturedGameStructureDefinition[]> => {
+    if (indexedStructures === structures && structuresByBinding !== undefined)
+      return structuresByBinding;
+    const indexed = new Map<string, CapturedGameStructureDefinition[]>();
+    for (const structure of structures) {
+      const binding = bindingForBuildingElement(structure.actionId);
+      if (!CAPTURED_AUTOMATION_BUILDING_BINDINGS.has(binding)) continue;
+      const group = indexed.get(binding);
+      if (group === undefined) indexed.set(binding, [structure]);
+      else group.push(structure);
+    }
+    indexedStructures = structures;
+    structuresByBinding = indexed;
+    return indexed;
+  };
+  const stateAddressControls: GameControlRegistry = {
+    ...controls,
+    // Control captures are mutation capabilities. They must not decide which native
+    // structures the semantic catalog can identify.
+    capturedElementIds: () => [],
+  };
 
   return Object.freeze({
     read(
@@ -77,29 +100,14 @@ export function createCapturedBuildingUnlocks(
         return undefined;
       }
 
-      const structuresByBinding = new Map<
-        string,
-        CapturedGameStructureDefinition[]
-      >();
-      for (const structure of structures) {
-        const binding = bindingForBuildingElement(structure.actionId);
-        if (!CAPTURED_AUTOMATION_BUILDING_BINDINGS.has(binding)) continue;
-        const group = structuresByBinding.get(binding) ?? [];
-        group.push(structure);
-        structuresByBinding.set(binding, group);
-      }
-      const stateAddressControls: GameControlRegistry = {
-        ...controls,
-        // Control captures are mutation capabilities. They must not decide which native
-        // structures the semantic catalog can identify.
-        capturedElementIds: () => [],
-      };
+      const nativeStructuresByBinding = readStructuresByBinding(structures);
       let entries: readonly Readonly<CapturedBuildingEntry>[];
       try {
         entries = readCapturedBuildingEntries(
           root,
           stateAddressControls,
           structures,
+          nativeStructuresByBinding,
         );
       } catch {
         reportSkipped("*", "the native structure state catalog is invalid");
@@ -109,14 +117,21 @@ export function createCapturedBuildingUnlocks(
       const unlocked = new Set<string>();
       const sampled = new Set<string>();
       const switches = new Map<string, Readonly<BuildingStateAddress>>();
+      const entriesByBinding = new Map<
+        string,
+        Readonly<CapturedBuildingEntry>[]
+      >();
+      for (const entry of entries) {
+        const group = entriesByBinding.get(entry.binding);
+        if (group === undefined) entriesByBinding.set(entry.binding, [entry]);
+        else group.push(entry);
+      }
       for (const region of regions) {
         if (!CAPTURED_BUILD_REGIONS.has(region)) {
           reportSkipped(region, "not an automation Building region");
           continue;
         }
-        const regionBindings = [
-          ...CAPTURED_AUTOMATION_BUILDING_BINDINGS,
-        ].filter((binding) => splitActionId(binding)?.region === region);
+        const regionBindings = bindingsByRegion.get(region) ?? [];
         const regionUnlocked = new Set<string>();
         const regionSwitches = new Map<
           string,
@@ -124,10 +139,9 @@ export function createCapturedBuildingUnlocks(
         >();
         let complete = true;
         for (const binding of regionBindings) {
-          const candidates = structuresByBinding.get(binding) ?? [];
-          const candidateEntries = entries.filter(
-            (entry) =>
-              entry.binding === binding && entry.entryKey !== undefined,
+          const candidates = nativeStructuresByBinding.get(binding) ?? [];
+          const candidateEntries = (entriesByBinding.get(binding) ?? []).filter(
+            (entry) => entry.entryKey !== undefined,
           );
           const joined =
             candidates.length === 1
@@ -149,10 +163,8 @@ export function createCapturedBuildingUnlocks(
             break;
           }
           const structure = joined[0]!;
-          const entry = readEntryForNativeStructure(
-            entries,
-            binding,
-            structure.entryKey,
+          const entry = candidateEntries.find(
+            (candidate) => candidate.entryKey === structure.entryKey,
           );
           if (
             candidateEntries.length > 0 &&

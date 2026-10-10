@@ -970,7 +970,9 @@ function createMechanicsDefinition(
       shipRecord === undefined
         ? { kind: "absent" as const }
         : readMechanicsPrimitive(shipRecord, "rating"),
-    ownsPowered: Object.prototype.hasOwnProperty.call(action, "powered"),
+    get ownsPowered() {
+      return Object.prototype.hasOwnProperty.call(action, "powered");
+    },
     readPowered: () => readMechanicsPrimitive(action, "powered"),
     readPowerGridRole: (root: unknown, sampledPowered?: number) => {
       if (!currentState(root)) return { kind: "invalid" as const };
@@ -1288,6 +1290,8 @@ export function installCapturedGameMechanics(
   );
 
   let structureEntries: Map<unknown, unknown> | undefined;
+  let structureDefinitionSnapshot:
+    readonly CapturedGameStructureDefinition[] | undefined;
   let structureIdentitySnapshot:
     readonly CapturedGameStructureIdentity[] | undefined;
   let powerCallbackQueue: Map<unknown, unknown> | undefined;
@@ -1997,6 +2001,20 @@ export function installCapturedGameMechanics(
       const entries = structureEntries;
       if (entries === undefined || stopped) return undefined;
       try {
+        const cached = structureDefinitionSnapshot;
+        // Pinned DeadSpace industry.js initializes registry.entries once from its static action
+        // definitions. Reuse immutable definitions when registry identities still match; the
+        // identity check keeps capture rejection and out-of-contract replacement fail-closed.
+        if (cached !== undefined && cached.length === entries.size) {
+          let current = true;
+          for (const definition of cached) {
+            if (!definition.matchesCurrentIdentity()) {
+              current = false;
+              break;
+            }
+          }
+          if (current) return cached;
+        }
         let anchorResolver: CapturedSupportAnchorResolver = () => ({
           kind: "value",
           value: null,
@@ -2004,12 +2022,15 @@ export function installCapturedGameMechanics(
         const result: CapturedGameStructureDefinition[] = [];
         for (const [key, value] of entries) {
           const entry = readMechanicsEntry(key, value);
-          if (entry !== undefined)
-            result.push(
-              createMechanicsDefinition(entry, entries, value, (...args) =>
-                anchorResolver(...args),
-              ),
-            );
+          if (entry === undefined) {
+            structureDefinitionSnapshot = undefined;
+            return undefined;
+          }
+          result.push(
+            createMechanicsDefinition(entry, entries, value, (...args) =>
+              anchorResolver(...args),
+            ),
+          );
         }
         const byRegion = new Map<
           string,
@@ -2040,8 +2061,12 @@ export function installCapturedGameMechanics(
             return { kind: "invalid" };
           return { kind: "value", value: candidate.entryKey };
         };
-        return Object.freeze(result);
+        const snapshot = Object.freeze(result);
+        structureDefinitionSnapshot =
+          snapshot.length === entries.size ? snapshot : undefined;
+        return snapshot;
       } catch {
+        structureDefinitionSnapshot = undefined;
         return undefined;
       }
     },
@@ -2057,7 +2082,10 @@ export function installCapturedGameMechanics(
         const result: CapturedGameStructureIdentity[] = [];
         for (const [key, value] of entries) {
           const entry = readMechanicsEntry(key, value);
-          if (entry === undefined) continue;
+          if (entry === undefined) {
+            structureIdentitySnapshot = undefined;
+            return undefined;
+          }
           result.push(
             Object.freeze({
               entryKey: entry.entryKey,
