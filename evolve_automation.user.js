@@ -57563,7 +57563,7 @@ Only continue if you trust the source. Injected code:
         }), runPhase("autoPower", () => {
           activeRuntimeMeasure.measure("autoPower.demandPreparation", () => {
             observePowerDemandPhase("power-handoff-start");
-            let prerequisites = demandPrerequisitesThisCycle === void 0 ? void 0 : ensureDemandPrerequisiteControls({
+            let prerequisites = ensureDemandPrerequisiteControls({
               root: pageCapture2.rootState.readRoot(),
               settings,
               controls: pageCapture2.controls,

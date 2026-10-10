@@ -3011,7 +3011,7 @@ export function startCapturedRuntime({
         "observePowerDemandPhase",
       );
       if (typeof observer === "function")
-        observer(stage, demandThisCycle, outcome);
+        observer(stage, demandThisCycle, outcome, demandPrerequisitesThisCycle);
     }
   };
   // The live characterization bundle opts into this inert hook by defining both the build
@@ -3783,16 +3783,16 @@ export function startCapturedRuntime({
             // metadata instead of capturing the same catalogs again.
             // Earlier research/construction may have opened a reservation gate. Revalidate
             // its current prerequisites without drawing; an uncaptured new gate stays stale.
-            const prerequisites =
-              demandPrerequisitesThisCycle === undefined
-                ? undefined
-                : ensureDemandPrerequisiteControls({
-                    root: pageCapture.rootState.readRoot(),
-                    settings,
-                    controls: pageCapture.controls,
-                    ensureForeignControls: () => undefined,
-                    ensureBuildControls: () => undefined,
-                  });
+            // Earlier mutations can clear the cycle-start report. Rebuild its status from the
+            // controls already captured by their owning phases; no discovery is allowed here,
+            // so a newly required but absent authority still fails closed as unavailable.
+            const prerequisites = ensureDemandPrerequisiteControls({
+              root: pageCapture.rootState.readRoot(),
+              settings,
+              controls: pageCapture.controls,
+              ensureForeignControls: () => undefined,
+              ensureBuildControls: () => undefined,
+            });
             demandPrerequisitesThisCycle = prerequisites;
             const buildDemandRequired =
               isEnabled(settings, "autoBuild") ||

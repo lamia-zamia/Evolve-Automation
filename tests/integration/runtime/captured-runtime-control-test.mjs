@@ -9,6 +9,8 @@ import {
 import { makeCapturedBuildingMechanics } from "../../support/fixtures/captured-building-test-fixtures.mjs";
 import { withCapturedTechMechanicsFixture } from "../../support/fixtures/captured-tech-mechanics-fixture.mjs";
 
+globalThis.__EA_TEST_SURFACE_ENABLED__ = true;
+
 const capturedTestTechIds = [
   "tech-polymer-reserve",
   "tech-polymer-heavy",
@@ -226,6 +228,7 @@ function runDemandSampleScenario(
 ) {
   const invoked = [];
   const phases = [];
+  const powerPrerequisiteReports = [];
   const root = {
     race: {},
     tech: { mad: spaceEra ? 1 : 0, trade: true },
@@ -401,6 +404,14 @@ function runDemandSampleScenario(
   const errors = [];
   const stop = startCapturedRuntime({
     pageCapture,
+    settingsHostWindow: {
+      __EA_TEST_HOOKS__: {
+        observePowerDemandPhase(stage, _demand, _outcome, prerequisites) {
+          if (stage === "power-ready")
+            powerPrerequisiteReports.push(prerequisites);
+        },
+      },
+    },
     document,
     mouseEvent: class {},
     storage: {
@@ -441,6 +452,7 @@ function runDemandSampleScenario(
     invoked,
     phases,
     researchOfferReads: researchCatalogReads - initialResearchCatalogReads,
+    powerPrerequisiteReports,
     errors,
     root,
   };
@@ -3300,6 +3312,37 @@ function runCombatRuntime(autoFight) {
     "a demand-based build trigger must see the current research reservation without a tech operand",
   );
   assertDemandScenarioErrors(trigger.errors);
+}
+
+{
+  const triggerPower = runDemandSampleScenario({
+    autoTrigger: true,
+    autoPower: true,
+    triggers: [
+      {
+        priority: 0,
+        requirementType: "ResourceMaxCost",
+        requirementId: "Polymer",
+        requirementCount: 100,
+        actionType: "build",
+        actionId: "city-farm",
+        actionCount: 1,
+      },
+    ],
+  });
+  assert.ok(triggerPower.invoked.includes("city-farm.action"));
+  assert.equal(triggerPower.powerPrerequisiteReports.length, 1);
+  assert.deepEqual(triggerPower.powerPrerequisiteReports, [
+    { spy: "not-needed", ai: "not-needed" },
+  ]);
+  assert.ok(
+    !triggerPower.errors.some((message) =>
+      message.includes(
+        "exact demand unavailable: demand prerequisites unavailable",
+      ),
+    ),
+    `Power must revalidate prerequisite status after a trigger invalidates the cycle report: ${JSON.stringify(triggerPower.errors)}`,
+  );
 }
 
 {
