@@ -98,6 +98,15 @@ export type VueBindingListener = (
 
 export type VueBindingObserver = (listener: VueBindingListener) => () => void;
 
+/** A synchronous Vue effect used only to observe adapter-owned structural facts. */
+export interface VueReactiveObserver {
+  observe(
+    read: () => readonly (() => unknown)[],
+    onChange: () => void,
+    onError: () => void,
+  ): (() => void) | undefined;
+}
+
 export interface VueCapture {
   readonly rootState: GameRootStateSource;
   readonly controls: GameControlRegistry;
@@ -105,6 +114,8 @@ export interface VueCapture {
   readonly mountSuppression: GameMountSuppression;
   /** One-shot invocation of a captured method with a synthetic receiver. Capture-layer only. */
   readonly synthesis: GameControlSynthesis;
+  /** Vue-backed structural dependency tracking; unavailable when the native watcher cannot be used. */
+  readonly reactiveObserver: VueReactiveObserver;
   /** Registers a listener for each recorded binding; returns the removal. Capture-layer only. */
   readonly observeBindings: VueBindingObserver;
   /** True when the Vue methods are wrapped; false for an inert capture with no Vue to hook. */
@@ -205,6 +216,7 @@ function inertCapture(): VueCapture {
       available: false,
       invoke: () => ({ ok: false, reason: "unknown-control" }) as const,
     }),
+    reactiveObserver: Object.freeze({ observe: () => undefined }),
     observeBindings: () => () => {},
     uninstall: () => {},
   });
@@ -254,6 +266,7 @@ export function installVueCapture(
   }> = [];
 
   let restoreVue: (() => void) | undefined;
+  let vueWatch: AnyFunction | undefined;
 
   function notifyRootReplaced(): void {
     for (const listener of [...rootListeners]) {
@@ -509,6 +522,8 @@ export function installVueCapture(
   function hookVue(vue: unknown): void {
     if (!isRecord(vue) || stopped) return;
     if (readMarker(vue["reactive"]) !== undefined) return;
+
+    vueWatch = asFunction(vue["watch"]);
 
     const restores: Array<() => void> = [];
 
@@ -774,6 +789,61 @@ export function installVueCapture(
     },
   });
 
+  const reactiveObserver: VueReactiveObserver = Object.freeze({
+    observe(
+      read: () => readonly (() => unknown)[],
+      onChange: () => void,
+      onError: () => void,
+    ) {
+      if (stopped || suppressed || root === undefined || vueWatch === undefined)
+        return undefined;
+      let stop: (() => void) | undefined;
+      try {
+        const sources = read().map((source) => (): unknown => {
+          if (stopped || suppressed) {
+            onError();
+            return undefined;
+          }
+          try {
+            return source();
+          } catch {
+            onError();
+            return undefined;
+          }
+        });
+        const result = Reflect.apply(
+          vueWatch,
+          readProperty(pageWindow, "Vue"),
+          [
+            sources,
+            () => {
+              if (stopped || suppressed) {
+                onError();
+                return;
+              }
+              try {
+                onChange();
+              } catch {
+                onError();
+              }
+            },
+            { flush: "sync" },
+          ],
+        );
+        if (typeof result !== "function") return undefined;
+        stop = result as () => void;
+        return () => {
+          stop?.();
+          stop = undefined;
+        };
+      } catch {
+        stop?.();
+        onError();
+        return undefined;
+      }
+    },
+  });
+
   const capture: VueCapture = Object.freeze({
     installed: true,
     rootState,
@@ -781,6 +851,7 @@ export function installVueCapture(
     controlUsage,
     mountSuppression,
     synthesis,
+    reactiveObserver,
     observeBindings(listener: VueBindingListener) {
       bindingListeners.add(listener);
       return () => {

@@ -1205,6 +1205,7 @@ export function installCapturedGameMechanics(
   pageWindow: unknown,
   periods: GamePeriodSource,
   rootState?: GameRootStateSource,
+  isCaptureComplete: () => boolean = () => true,
 ): CapturedGameMechanicsInstall {
   if (!isNonArrayRecord(pageWindow)) {
     return Object.freeze({
@@ -1287,6 +1288,8 @@ export function installCapturedGameMechanics(
   );
 
   let structureEntries: Map<unknown, unknown> | undefined;
+  let structureIdentitySnapshot:
+    readonly CapturedGameStructureIdentity[] | undefined;
   let powerCallbackQueue: Map<unknown, unknown> | undefined;
   const callbackQueueCandidates = new Set<Map<unknown, unknown>>();
   const callbackIteratorDescriptor = isNonArrayRecord(mapPrototype)
@@ -2044,8 +2047,12 @@ export function installCapturedGameMechanics(
     },
     readStructureIdentities():
       readonly CapturedGameStructureIdentity[] | undefined {
+      if (stopped || rootState?.isReactivitySuppressed() === true)
+        return undefined;
+      if (structureIdentitySnapshot !== undefined)
+        return structureIdentitySnapshot;
       const entries = structureEntries;
-      if (entries === undefined || stopped) return undefined;
+      if (entries === undefined || !isCaptureComplete()) return undefined;
       try {
         const result: CapturedGameStructureIdentity[] = [];
         for (const [key, value] of entries) {
@@ -2061,7 +2068,8 @@ export function installCapturedGameMechanics(
             }),
           );
         }
-        return Object.freeze(result);
+        structureIdentitySnapshot = Object.freeze(result);
+        return structureIdentitySnapshot;
       } catch {
         return undefined;
       }

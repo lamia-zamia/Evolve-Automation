@@ -24,6 +24,7 @@ import {
   installVueCapture,
   type VueBindingObserver,
   type VueCaptureOptions,
+  type VueReactiveObserver,
 } from "./vue-capture.ts";
 import {
   installWorkerCapture,
@@ -41,6 +42,8 @@ export interface PageCapture {
   readonly mechanics: CapturedGameMechanics;
   /** Each recorded `vBind` configuration with the game-owned closures it declared. Capture-layer. */
   readonly bindings: VueBindingObserver;
+  /** Vue's real dependency tracker for narrow structural observation. */
+  readonly reactiveObserver: VueReactiveObserver;
   /** Scoped suppression of temporary component mounting, for a discovery draw. */
   readonly mountSuppression: GameMountSuppression;
   /** One-shot invocation of a captured game method with a synthetic receiver. */
@@ -79,6 +82,7 @@ export function installPageCapture(
     pageWindow,
     worker.periods,
     vue.rootState,
+    () => vue.rootState.readRoot() !== undefined && worker.isCaptured(),
   );
   const keyState = createGameKeyStateCapture(
     () => readProperty(pageWindow, "document"),
@@ -97,6 +101,7 @@ export function installPageCapture(
     periods: worker.periods,
     mechanics: mechanics.mechanics,
     bindings: vue.observeBindings,
+    reactiveObserver: vue.reactiveObserver,
     mountSuppression: vue.mountSuppression,
     synthesis: vue.synthesis,
     isComplete: () =>

@@ -41,5 +41,5 @@ export interface CapturedSettingsDefaults {
    * name before. The lifecycle skips its migration and default work while this is unchanged, so
    * it must be cheap — cheaper than the work it guards — and it must never miss a growth.
    */
-  readonly readCatalogGeneration: () => string;
+  readonly readCatalogGeneration: () => string | undefined;
 }

@@ -9,12 +9,20 @@
  */
 
 import assert from "node:assert/strict";
+import { createRequire } from "node:module";
+import { resolve } from "node:path";
 
+import { createCapturedSettingsDefaults } from "../../../src/adapters/evolve/captured-settings-defaults.ts";
 import {
   createSettingsFixture,
   createSettingsRoot,
   DEFAULT_CONTROL_IDS,
 } from "../../support/captured-settings.mjs";
+
+const requireTools = createRequire(
+  resolve(import.meta.dirname, "../../../tools/package.json"),
+);
+const vue = requireTools("vue");
 
 function nativeBuilding(binding) {
   const struct = binding.slice(binding.indexOf("-") + 1);
@@ -490,6 +498,122 @@ function nativeMechanics(readStructures) {
   assert.equal(identityReads, settled.identityReads + 24);
   assert.equal(lifecycle.stats().dynamicDefaultRuns, settled.runs);
   assert.equal(lifecycle.stats().dynamicDefaultSkips, 24);
+}
+
+// --- the live Building revision reuses tracked facts and invalidates before the next read ---------
+
+{
+  const binding = "space-atmo_terraformer";
+  let root = vue.reactive(
+    createSettingsRoot({
+      space: { atmo_terraformer: { count: 1, on: 0 } },
+    }),
+  );
+  let suppressed = false;
+  let controlRevision = 0;
+  let identityReads = 0;
+  let rootReplacement;
+  let observationCount = 0;
+  let controlData = vue.reactive({ act: { on: 0 } });
+  const controls = {
+    capturedElementIds: () => [binding],
+    readRevision: () => controlRevision,
+    resolve: () => ({ data: controlData }),
+  };
+  const rootState = {
+    readRoot: () => root,
+    isReactivitySuppressed: () => suppressed,
+    subscribeRootReplaced: (listener) => {
+      rootReplacement = listener;
+      return () => {};
+    },
+  };
+  const defaults = createCapturedSettingsDefaults({
+    rootState,
+    controls,
+    reactiveObserver: {
+      observe(read, onChange, onError) {
+        observationCount += 1;
+        try {
+          return vue.watch(
+            read().map((source) => () => source()),
+            onChange,
+            {
+              flush: "sync",
+            },
+          );
+        } catch {
+          onError();
+          return undefined;
+        }
+      },
+    },
+    mechanics: {
+      readStructures: () => [],
+      readStructureIdentities: () => {
+        identityReads += 1;
+        return [nativeBuildingIdentity(nativeBuilding(binding))];
+      },
+    },
+  });
+
+  const initial = defaults.readCatalogGeneration();
+  const settledIdentityReads = identityReads;
+  for (let index = 0; index < 10; index += 1) {
+    assert.equal(defaults.readCatalogGeneration(), initial);
+  }
+  assert.equal(identityReads, settledIdentityReads);
+
+  root.space.atmo_terraformer.on = 1;
+  assert.equal(
+    defaults.readCatalogGeneration(),
+    initial,
+    "numeric `on` updates do not change the switchability facts",
+  );
+  delete root.space.atmo_terraformer.on;
+  const onRemoved = defaults.readCatalogGeneration();
+  assert.notEqual(
+    onRemoved,
+    initial,
+    "own `on` changes publish before the next consumer",
+  );
+  root.space.atmo_terraformer.on = 1;
+  const onRestored = defaults.readCatalogGeneration();
+
+  root.space.atmo_terraformer = { count: 1, on: 1 };
+  const sameFactsReplacement = defaults.readCatalogGeneration();
+  assert.notEqual(
+    sameFactsReplacement,
+    onRestored,
+    "same-shape structure replacement still advances currentness",
+  );
+
+  suppressed = true;
+  assert.equal(defaults.readCatalogGeneration(), undefined);
+  suppressed = false;
+  rootReplacement();
+  const restored = defaults.readCatalogGeneration();
+  assert.notEqual(restored, sameFactsReplacement);
+
+  const beforeRedraw = observationCount;
+  controlData = vue.reactive({ act: root.space.atmo_terraformer });
+  controlRevision += 1;
+  const committedControlGeneration = defaults.readCatalogGeneration();
+  assert.notEqual(committedControlGeneration, restored);
+  assert.equal(
+    observationCount,
+    beforeRedraw + 1,
+    "same-ID redraw replaces the old Vue subscription",
+  );
+  const beforeRedrawnActChange = defaults.readCatalogGeneration();
+  controlData.act = 0;
+  const afterRedrawnActChange = defaults.readCatalogGeneration();
+  assert.notEqual(
+    afterRedrawnActChange,
+    beforeRedrawnActChange,
+    "act changes on the redrawn control invalidate the revision",
+  );
+  assert.equal(identityReads, settledIdentityReads + 3);
 }
 
 // --- import forces reinitialization --------------------------------------------------------------

@@ -32,6 +32,7 @@ import type {
 import type { GameControlRegistry } from "../../ports/game-control-registry.ts";
 import type { GameRootStateSource } from "../../ports/game-root-state.ts";
 import type { CapturedGameMechanics } from "../../ports/captured-game-mechanics.ts";
+import type { VueReactiveObserver } from "./vue-capture.ts";
 import {
   readCapturedMinorTraitContext,
   readCapturedMutableTraitContext,
@@ -57,7 +58,12 @@ import {
   readCapturedBuildingBindingMap,
   readCapturedBuildingEntries,
 } from "./progression/build/captured-building-catalog.ts";
-import { readCapturedBuildingGenerationWitness } from "./progression/build/captured-building-generation.ts";
+import {
+  readCapturedBuildingControlWitness,
+  readCapturedBuildingNativeWitness,
+  readCapturedBuildingGenerationWitness,
+  trackCapturedBuildingGenerationStructure,
+} from "./progression/build/captured-building-generation.ts";
 import { readTechElementId } from "./progression/research/captured-research-settings-catalog.ts";
 import { CRAFTER_RESOURCE_KEYS } from "../../domain/economy/production/crafter-resources.ts";
 import { isBuildableArpaProjectId } from "./progression/research/arpa-project-identity.ts";
@@ -65,6 +71,7 @@ import { isBuildableArpaProjectId } from "./progression/research/arpa-project-id
 export interface CapturedSettingsDefaultsDependencies {
   readonly rootState: GameRootStateSource;
   readonly controls: GameControlRegistry;
+  readonly reactiveObserver?: VueReactiveObserver;
   readonly mechanics: Pick<
     CapturedGameMechanics,
     "readStructures" | "readStructureIdentities"
@@ -391,6 +398,7 @@ export function readEjector(
 export function createCapturedSettingsDefaults({
   rootState,
   controls,
+  reactiveObserver,
   mechanics,
 }: CapturedSettingsDefaultsDependencies): CapturedSettingsDefaults {
   const reader: SettingsResetReader = {
@@ -488,24 +496,208 @@ export function createCapturedSettingsDefaults({
    * The Building witness uses only native identities and live state shape. The other catalog
    * counts retain their existing growth contract without materializing full Building entries.
    */
-  const readCatalogGeneration = (): string => {
-    const root = readRootSafely(rootState);
+  let buildingControlFacts: string | undefined;
+  let buildingNativeFacts: string | undefined;
+  let buildingRoot: unknown;
+  let buildingControlRevision: number | undefined;
+  let buildingElementIds: readonly string[] | undefined;
+  let stopBuildingObservation: (() => void) | undefined;
+  let buildingObservationFailed = false;
+  let buildingStructuralRevision = 0;
+
+  const readBuildingSources = (
+    root: unknown,
+    controls: GameControlRegistry,
+    elementIds: readonly string[],
+    identities: Parameters<typeof trackCapturedBuildingGenerationStructure>[3],
+  ): readonly (() => unknown)[] => {
+    return trackCapturedBuildingGenerationStructure(
+      root,
+      controls,
+      elementIds,
+      identities,
+    );
+  };
+
+  const stopBuildingTracker = (): void => {
+    stopBuildingObservation?.();
+    stopBuildingObservation = undefined;
+    buildingRoot = undefined;
+    buildingControlRevision = undefined;
+    buildingElementIds = undefined;
+  };
+
+  rootState.subscribeRootReplaced?.(() => {
+    buildingStructuralRevision += 1;
+    stopBuildingTracker();
+  });
+
+  const readBuildingFacts = (
+    root: unknown,
+    elementIds: readonly string[],
+  ): string | undefined => {
+    const identities = mechanics.readStructureIdentities();
+    if (identities === undefined) return undefined;
+    return readCapturedBuildingGenerationWitness(
+      root,
+      controls,
+      elementIds,
+      identities,
+    );
+  };
+
+  const readCurrentBuildingFacts = (): string | undefined => {
+    if (rootState.isReactivitySuppressed?.() === true) {
+      stopBuildingTracker();
+      return undefined;
+    }
+    const root = rootState.readRoot();
+    if (root === undefined) {
+      stopBuildingTracker();
+      return undefined;
+    }
+    const controlRevision = controls.readRevision?.();
+    if (controlRevision === undefined || reactiveObserver === undefined) {
+      stopBuildingTracker();
+      const facts = readBuildingFacts(root, controls.capturedElementIds());
+      return facts === undefined
+        ? undefined
+        : `${facts}:${buildingStructuralRevision}:${controlRevision ?? "untracked"}`;
+    }
+
+    const elementIds = [...controls.capturedElementIds()];
+    const rootChanged = buildingRoot !== root;
+    const elementIdsChanged =
+      buildingElementIds === undefined ||
+      buildingElementIds.length !== elementIds.length ||
+      buildingElementIds.some((id, index) => id !== elementIds[index]);
+    const mustResample =
+      buildingControlFacts === undefined ||
+      buildingNativeFacts === undefined ||
+      rootChanged ||
+      buildingObservationFailed;
+
+    if (mustResample) {
+      const previousControlFacts = buildingControlFacts;
+      const previousNativeFacts = buildingNativeFacts;
+      stopBuildingTracker();
+      buildingObservationFailed = false;
+      buildingRoot = root;
+      buildingControlRevision = controlRevision;
+      buildingElementIds = elementIds;
+      const identities = mechanics.readStructureIdentities();
+      if (identities === undefined) return undefined;
+      buildingControlFacts = readCapturedBuildingControlWitness(
+        root,
+        controls,
+        elementIds,
+      );
+      buildingNativeFacts = readCapturedBuildingNativeWitness(
+        root,
+        elementIds,
+        identities,
+      );
+      if (
+        previousControlFacts !== undefined &&
+        previousControlFacts !== buildingControlFacts
+      ) {
+        buildingStructuralRevision += 1;
+      }
+      if (
+        previousNativeFacts !== undefined &&
+        previousNativeFacts !== buildingNativeFacts
+      ) {
+        buildingStructuralRevision += 1;
+      }
+    } else if (
+      buildingControlRevision !== controlRevision ||
+      elementIdsChanged
+    ) {
+      const controlsChanged = buildingControlRevision !== controlRevision;
+      const nextControlFacts = readCapturedBuildingControlWitness(
+        root,
+        controls,
+        elementIds,
+      );
+      if (nextControlFacts !== buildingControlFacts) {
+        buildingControlFacts = nextControlFacts;
+        buildingStructuralRevision += 1;
+      }
+      buildingControlRevision = controlRevision;
+      // A same-ID redraw replaces the control's reactive data object. Rebind the watcher after
+      // every committed/rejected registry revision so its sources subscribe to current handles.
+      if (controlsChanged || elementIdsChanged) {
+        stopBuildingTracker();
+        buildingRoot = root;
+        buildingControlRevision = controlRevision;
+        buildingElementIds = elementIds;
+      }
+    }
+
+    if (stopBuildingObservation === undefined) {
+      const identities = mechanics.readStructureIdentities();
+      if (identities === undefined) return undefined;
+      const stop = reactiveObserver.observe(
+        () => readBuildingSources(root, controls, elementIds, identities),
+        () => {
+          const currentElementIds = buildingElementIds ?? [];
+          const nextControl = readCapturedBuildingControlWitness(
+            root,
+            controls,
+            currentElementIds,
+          );
+          const next = readCapturedBuildingNativeWitness(
+            root,
+            currentElementIds,
+            identities,
+          );
+          buildingControlFacts = nextControl;
+          buildingNativeFacts = next;
+          buildingStructuralRevision += 1;
+        },
+        () => {
+          buildingObservationFailed = true;
+        },
+      );
+      if (stop === undefined || buildingObservationFailed) {
+        buildingObservationFailed = true;
+        stopBuildingTracker();
+        return readBuildingFacts(root, elementIds);
+      }
+      stopBuildingObservation = stop;
+    }
+    return `${buildingStructuralRevision}`;
+  };
+
+  const readCatalogGeneration = (): string | undefined => {
+    if (rootState.isReactivitySuppressed?.() === true) {
+      stopBuildingTracker();
+      return undefined;
+    }
+    let root: unknown;
+    try {
+      root = rootState.readRoot();
+    } catch {
+      stopBuildingTracker();
+      return undefined;
+    }
+    if (root === undefined) {
+      stopBuildingTracker();
+      return undefined;
+    }
     const controlIds = controls.capturedElementIds();
     const productionContext = readProduction(root);
     const foundryResourceIds = new Set(
       Object.values(productionContext.foundryResourceIdByKey),
     );
+    const buildingGeneration = readCurrentBuildingFacts();
+    if (buildingGeneration === undefined) return undefined;
     return [
       Object.keys(readTechIds(root)).length,
       mergeResourceIds(root, "tradable", controls, "market-").length,
       readResources(root).length,
       readProjects(root).projectIds.length,
-      readCapturedBuildingGenerationWitness(
-        root,
-        controls,
-        controlIds,
-        mechanics.readStructureIdentities(),
-      ),
+      buildingGeneration,
       CRAFTER_RESOURCE_KEYS.filter((key) => foundryResourceIds.has(key)).length,
       controlIds.length,
     ].join(":");

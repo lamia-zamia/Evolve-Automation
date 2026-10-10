@@ -2790,7 +2790,7 @@
       return { kind: "invalid" };
     }
   }
-  function installCapturedGameMechanics(pageWindow, periods, rootState) {
+  function installCapturedGameMechanics(pageWindow, periods, rootState, isCaptureComplete = () => !0) {
     if (!isNonArrayRecord(pageWindow))
       return Object.freeze({
         mechanics: emptyGameMechanics(),
@@ -2835,7 +2835,7 @@
     }, mapConstructor = readMechanicsProperty(pageWindow, "Map"), mapPrototype = readMechanicsProperty(mapConstructor, "prototype"), mapSetDescriptor = isNonArrayRecord(mapPrototype) ? Object.getOwnPropertyDescriptor(mapPrototype, "set") : void 0, mapSizeGetter = (isNonArrayRecord(mapPrototype) ? Object.getOwnPropertyDescriptor(mapPrototype, "size") : void 0)?.get, objectConstructor = readMechanicsProperty(pageWindow, "Object"), objectPrototype = readMechanicsProperty(objectConstructor, "prototype"), objectDefineProperty = readMechanicsDataProperty(
       objectConstructor,
       "defineProperty"
-    ), structureEntries, powerCallbackQueue, callbackQueueCandidates = /* @__PURE__ */ new Set(), callbackIteratorDescriptor = isNonArrayRecord(mapPrototype) ? Object.getOwnPropertyDescriptor(mapPrototype, Symbol.iterator) : void 0, callbackClearDescriptor = isNonArrayRecord(mapPrototype) ? Object.getOwnPropertyDescriptor(mapPrototype, "clear") : void 0, callbackSequence, callbackIteratorHook, callbackClearHook;
+    ), structureEntries, structureIdentitySnapshot, powerCallbackQueue, callbackQueueCandidates = /* @__PURE__ */ new Set(), callbackIteratorDescriptor = isNonArrayRecord(mapPrototype) ? Object.getOwnPropertyDescriptor(mapPrototype, Symbol.iterator) : void 0, callbackClearDescriptor = isNonArrayRecord(mapPrototype) ? Object.getOwnPropertyDescriptor(mapPrototype, "clear") : void 0, callbackSequence, callbackIteratorHook, callbackClearHook;
     function restorePowerCallbackHooks() {
       isNonArrayRecord(mapPrototype) && (callbackIteratorHook !== void 0 && Object.getOwnPropertyDescriptor(mapPrototype, Symbol.iterator)?.value === callbackIteratorHook && callbackIteratorDescriptor !== void 0 && Object.defineProperty(
         mapPrototype,
@@ -3169,8 +3169,12 @@
           }
       },
       readStructureIdentities() {
+        if (stopped || rootState?.isReactivitySuppressed() === !0)
+          return;
+        if (structureIdentitySnapshot !== void 0)
+          return structureIdentitySnapshot;
         let entries = structureEntries;
-        if (!(entries === void 0 || stopped))
+        if (!(entries === void 0 || !isCaptureComplete()))
           try {
             let result = [];
             for (let [key, value] of entries) {
@@ -3185,7 +3189,7 @@
                 })
               );
             }
-            return Object.freeze(result);
+            return structureIdentitySnapshot = Object.freeze(result), structureIdentitySnapshot;
           } catch {
             return;
           }
@@ -3486,6 +3490,8 @@
         available: !1,
         invoke: () => ({ ok: !1, reason: "unknown-control" })
       }),
+      reactiveObserver: Object.freeze({ observe: () => {
+      } }),
       observeBindings: () => () => {
       },
       uninstall: () => {
@@ -3497,7 +3503,7 @@
     let isRootCandidate = options.isRootCandidate ?? isGameRootShape, reportError = options.onCaptureError ?? (() => {
     }), existingDescriptor = Object.getOwnPropertyDescriptor(pageWindow, "Vue"), existingMarker = readMarker(readProperty(readProperty(pageWindow, "Vue"), "reactive")) ?? readMarker(existingDescriptor?.get);
     if (existingMarker?.capture !== void 0) return existingMarker.capture;
-    let marker = { capture: void 0 }, root, rootRaw, suppressed = !1, stopped = !1, rootListeners = /* @__PURE__ */ new Set(), controls2 = /* @__PURE__ */ new Map(), controlCheckpoints = /* @__PURE__ */ new WeakMap(), captureOrder = [], controlRevision = 0, usage = /* @__PURE__ */ new Map(), bindingListeners = /* @__PURE__ */ new Set(), createAppHooked = !1, mountingEnabled = 0, suppressionScopes = [], mountedInScope = [], restoreVue;
+    let marker = { capture: void 0 }, root, rootRaw, suppressed = !1, stopped = !1, rootListeners = /* @__PURE__ */ new Set(), controls2 = /* @__PURE__ */ new Map(), controlCheckpoints = /* @__PURE__ */ new WeakMap(), captureOrder = [], controlRevision = 0, usage = /* @__PURE__ */ new Map(), bindingListeners = /* @__PURE__ */ new Set(), createAppHooked = !1, mountingEnabled = 0, suppressionScopes = [], mountedInScope = [], restoreVue, vueWatch;
     function notifyRootReplaced() {
       for (let listener of [...rootListeners])
         try {
@@ -3660,6 +3666,7 @@
     }
     function hookVue(vue) {
       if (!isRecord(vue) || stopped || readMarker(vue.reactive) !== void 0) return;
+      vueWatch = asFunction(vue.watch);
       let restores = [], restoreReactive = wrap(vue, "reactive", (original) => function(...args) {
         let proxy = Reflect.apply(original, this, args);
         try {
@@ -3828,6 +3835,50 @@
           mountingEnabled -= 1;
         }
       }
+    }), reactiveObserver = Object.freeze({
+      observe(read, onChange, onError) {
+        if (stopped || suppressed || root === void 0 || vueWatch === void 0)
+          return;
+        let stop;
+        try {
+          let sources = read().map((source) => () => {
+            if (stopped || suppressed) {
+              onError();
+              return;
+            }
+            try {
+              return source();
+            } catch {
+              onError();
+              return;
+            }
+          }), result = Reflect.apply(
+            vueWatch,
+            readProperty(pageWindow, "Vue"),
+            [
+              sources,
+              () => {
+                if (stopped || suppressed) {
+                  onError();
+                  return;
+                }
+                try {
+                  onChange();
+                } catch {
+                  onError();
+                }
+              },
+              { flush: "sync" }
+            ]
+          );
+          return typeof result != "function" ? void 0 : (stop = result, () => {
+            stop?.(), stop = void 0;
+          });
+        } catch {
+          stop?.(), onError();
+          return;
+        }
+      }
     }), capture = Object.freeze({
       installed: !0,
       rootState,
@@ -3835,6 +3886,7 @@
       controlUsage,
       mountSuppression,
       synthesis,
+      reactiveObserver,
       observeBindings(listener) {
         return bindingListeners.add(listener), () => {
           bindingListeners.delete(listener);
@@ -3957,7 +4009,8 @@
     let vue = installVueCapture(pageWindow, options), worker = installWorkerCapture(pageWindow, options), mechanics = installCapturedGameMechanics(
       pageWindow,
       worker.periods,
-      vue.rootState
+      vue.rootState,
+      () => vue.rootState.readRoot() !== void 0 && worker.isCaptured()
     ), keyState = createGameKeyStateCapture(
       () => readProperty(pageWindow, "document"),
       {
@@ -3973,6 +4026,7 @@
       periods: worker.periods,
       mechanics: mechanics.mechanics,
       bindings: vue.observeBindings,
+      reactiveObserver: vue.reactiveObserver,
       mountSuppression: vue.mountSuppression,
       synthesis: vue.synthesis,
       isComplete: () => vue.rootState.readRoot() !== void 0 && worker.isCaptured(),
@@ -37215,6 +37269,54 @@
       capturedBuildingGenerationNativeFacts(root, elementIds, identities)
     ]);
   }
+  function readCapturedBuildingControlWitness(root, controls2, elementIds) {
+    return JSON.stringify(
+      capturedBuildingGenerationControlFacts(root, elementIds, controls2)
+    );
+  }
+  function readCapturedBuildingNativeWitness(root, elementIds, identities) {
+    return JSON.stringify(
+      capturedBuildingGenerationNativeFacts(root, elementIds, identities)
+    );
+  }
+  function trackCapturedBuildingGenerationStructure(root, controls2, elementIds, identities) {
+    let sources = [], structuresByRegion = /* @__PURE__ */ new Map();
+    for (let identity of identities) {
+      let binding = bindingForBuildingElement(identity.actionId), parts = splitActionId(binding);
+      if (parts === void 0 || !CAPTURED_BUILD_REGIONS.has(parts.region) || !CAPTURED_AUTOMATION_BUILDING_BINDINGS.has(binding) && !elementIds.some(
+        (elementId) => bindingForBuildingElement(elementId) === binding
+      ))
+        continue;
+      let structures = structuresByRegion.get(identity.region);
+      structures === void 0 && (structures = /* @__PURE__ */ new Set(), structuresByRegion.set(identity.region, structures)), structures.add(identity.struct);
+    }
+    for (let elementId of elementIds) {
+      let parts = splitActionId(bindingForBuildingElement(elementId));
+      if (parts !== void 0 && CAPTURED_BUILD_REGIONS.has(parts.region)) {
+        let structures = structuresByRegion.get(parts.region);
+        structures === void 0 && (structures = /* @__PURE__ */ new Set(), structuresByRegion.set(parts.region, structures)), structures.add(parts.id);
+      }
+    }
+    for (let [regionName, structureNames] of structuresByRegion) {
+      sources.push(() => readProperty(root, regionName));
+      for (let structureName of structureNames)
+        sources.push(() => {
+          let region = readProperty(root, regionName);
+          return readProperty(region, structureName);
+        }), sources.push(() => {
+          let region = readProperty(root, regionName), structure = readProperty(region, structureName);
+          return isRecord(structure) && "on" in structure;
+        });
+    }
+    for (let elementId of elementIds) {
+      let parts = splitActionId(bindingForBuildingElement(elementId));
+      parts === void 0 || !CAPTURED_BUILD_REGIONS.has(parts.region) || (sources.push(() => readProperty(controls2.resolve(elementId)?.data, "act")), sources.push(() => {
+        let act = readProperty(controls2.resolve(elementId)?.data, "act");
+        return isRecord(act) && "on" in act;
+      }));
+    }
+    return sources;
+  }
 
   // src/adapters/evolve/progression/research/captured-research-settings-catalog.ts
   function readTechElementId(rootKey) {
@@ -37433,6 +37535,7 @@
   function createCapturedSettingsDefaults({
     rootState,
     controls: controls2,
+    reactiveObserver,
     mechanics
   }) {
     let reader = {
@@ -37514,24 +37617,120 @@
           (key) => foundryResourceIds.has(key)
         )
       };
-    }, readCatalogGeneration = () => {
-      let root = readRootSafely(rootState), controlIds = controls2.capturedElementIds(), productionContext = readProduction(root), foundryResourceIds = new Set(
-        Object.values(productionContext.foundryResourceIdByKey)
-      );
-      return [
-        Object.keys(readTechIds(root)).length,
-        mergeResourceIds(root, "tradable", controls2, "market-").length,
-        readResources(root).length,
-        readProjects(root).projectIds.length,
-        readCapturedBuildingGenerationWitness(
+    }, buildingControlFacts, buildingNativeFacts, buildingRoot, buildingControlRevision, buildingElementIds, stopBuildingObservation, buildingObservationFailed = !1, buildingStructuralRevision = 0, readBuildingSources = (root, controls3, elementIds, identities) => trackCapturedBuildingGenerationStructure(
+      root,
+      controls3,
+      elementIds,
+      identities
+    ), stopBuildingTracker = () => {
+      stopBuildingObservation?.(), stopBuildingObservation = void 0, buildingRoot = void 0, buildingControlRevision = void 0, buildingElementIds = void 0;
+    };
+    rootState.subscribeRootReplaced?.(() => {
+      buildingStructuralRevision += 1, stopBuildingTracker();
+    });
+    let readBuildingFacts = (root, elementIds) => {
+      let identities = mechanics.readStructureIdentities();
+      if (identities !== void 0)
+        return readCapturedBuildingGenerationWitness(
           root,
           controls2,
-          controlIds,
-          mechanics.readStructureIdentities()
-        ),
-        CRAFTER_RESOURCE_KEYS.filter((key) => foundryResourceIds.has(key)).length,
-        controlIds.length
-      ].join(":");
+          elementIds,
+          identities
+        );
+    }, readCurrentBuildingFacts = () => {
+      if (rootState.isReactivitySuppressed?.() === !0) {
+        stopBuildingTracker();
+        return;
+      }
+      let root = rootState.readRoot();
+      if (root === void 0) {
+        stopBuildingTracker();
+        return;
+      }
+      let controlRevision = controls2.readRevision?.();
+      if (controlRevision === void 0 || reactiveObserver === void 0) {
+        stopBuildingTracker();
+        let facts = readBuildingFacts(root, controls2.capturedElementIds());
+        return facts === void 0 ? void 0 : `${facts}:${buildingStructuralRevision}:${controlRevision ?? "untracked"}`;
+      }
+      let elementIds = [...controls2.capturedElementIds()], rootChanged = buildingRoot !== root, elementIdsChanged = buildingElementIds === void 0 || buildingElementIds.length !== elementIds.length || buildingElementIds.some((id, index) => id !== elementIds[index]);
+      if (buildingControlFacts === void 0 || buildingNativeFacts === void 0 || rootChanged || buildingObservationFailed) {
+        let previousControlFacts = buildingControlFacts, previousNativeFacts = buildingNativeFacts;
+        stopBuildingTracker(), buildingObservationFailed = !1, buildingRoot = root, buildingControlRevision = controlRevision, buildingElementIds = elementIds;
+        let identities = mechanics.readStructureIdentities();
+        if (identities === void 0) return;
+        buildingControlFacts = readCapturedBuildingControlWitness(
+          root,
+          controls2,
+          elementIds
+        ), buildingNativeFacts = readCapturedBuildingNativeWitness(
+          root,
+          elementIds,
+          identities
+        ), previousControlFacts !== void 0 && previousControlFacts !== buildingControlFacts && (buildingStructuralRevision += 1), previousNativeFacts !== void 0 && previousNativeFacts !== buildingNativeFacts && (buildingStructuralRevision += 1);
+      } else if (buildingControlRevision !== controlRevision || elementIdsChanged) {
+        let controlsChanged = buildingControlRevision !== controlRevision, nextControlFacts = readCapturedBuildingControlWitness(
+          root,
+          controls2,
+          elementIds
+        );
+        nextControlFacts !== buildingControlFacts && (buildingControlFacts = nextControlFacts, buildingStructuralRevision += 1), buildingControlRevision = controlRevision, (controlsChanged || elementIdsChanged) && (stopBuildingTracker(), buildingRoot = root, buildingControlRevision = controlRevision, buildingElementIds = elementIds);
+      }
+      if (stopBuildingObservation === void 0) {
+        let identities = mechanics.readStructureIdentities();
+        if (identities === void 0) return;
+        let stop = reactiveObserver.observe(
+          () => readBuildingSources(root, controls2, elementIds, identities),
+          () => {
+            let currentElementIds = buildingElementIds ?? [], nextControl = readCapturedBuildingControlWitness(
+              root,
+              controls2,
+              currentElementIds
+            ), next = readCapturedBuildingNativeWitness(
+              root,
+              currentElementIds,
+              identities
+            );
+            buildingControlFacts = nextControl, buildingNativeFacts = next, buildingStructuralRevision += 1;
+          },
+          () => {
+            buildingObservationFailed = !0;
+          }
+        );
+        if (stop === void 0 || buildingObservationFailed)
+          return buildingObservationFailed = !0, stopBuildingTracker(), readBuildingFacts(root, elementIds);
+        stopBuildingObservation = stop;
+      }
+      return `${buildingStructuralRevision}`;
+    }, readCatalogGeneration = () => {
+      if (rootState.isReactivitySuppressed?.() === !0) {
+        stopBuildingTracker();
+        return;
+      }
+      let root;
+      try {
+        root = rootState.readRoot();
+      } catch {
+        stopBuildingTracker();
+        return;
+      }
+      if (root === void 0) {
+        stopBuildingTracker();
+        return;
+      }
+      let controlIds = controls2.capturedElementIds(), productionContext = readProduction(root), foundryResourceIds = new Set(
+        Object.values(productionContext.foundryResourceIdByKey)
+      ), buildingGeneration = readCurrentBuildingFacts();
+      if (buildingGeneration !== void 0)
+        return [
+          Object.keys(readTechIds(root)).length,
+          mergeResourceIds(root, "tradable", controls2, "market-").length,
+          readResources(root).length,
+          readProjects(root).projectIds.length,
+          buildingGeneration,
+          CRAFTER_RESOURCE_KEYS.filter((key) => foundryResourceIds.has(key)).length,
+          controlIds.length
+        ].join(":");
     };
     return {
       startupReader,
@@ -38135,7 +38334,7 @@
       },
       ensureDynamicDefaults() {
         let generation = defaults.readCatalogGeneration();
-        if (initialized && appliedGeneration === generation) {
+        if (generation !== void 0 && initialized && appliedGeneration === generation) {
           dynamicDefaultSkips += 1;
           return;
         }
@@ -55735,6 +55934,7 @@ Only continue if you trust the source. Injected code:
       defaults: createCapturedSettingsDefaults({
         rootState: pageCapture2.rootState,
         controls: pageCapture2.controls,
+        reactiveObserver: pageCapture2.reactiveObserver,
         mechanics: pageCapture2.mechanics
       })
     });

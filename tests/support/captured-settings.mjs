@@ -122,7 +122,7 @@ export function createSettingsFixture({
   gameRoot = createSettingsRoot(),
   mechanics = {
     readStructures: () => undefined,
-    readStructureIdentities: () => undefined,
+    readStructureIdentities: () => [],
   },
   saved = createFakeStorage(rawText),
   settings = createSettingsStore({ storage: saved }),

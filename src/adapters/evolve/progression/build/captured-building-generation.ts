@@ -89,3 +89,97 @@ export function readCapturedBuildingGenerationWitness(
     capturedBuildingGenerationNativeFacts(root, elementIds, identities),
   ]);
 }
+
+export function readCapturedBuildingControlWitness(
+  root: unknown,
+  controls: Pick<GameControlRegistry, "resolve">,
+  elementIds: readonly string[],
+): string {
+  return JSON.stringify(
+    capturedBuildingGenerationControlFacts(root, elementIds, controls),
+  );
+}
+
+export function readCapturedBuildingNativeWitness(
+  root: unknown,
+  elementIds: readonly string[],
+  identities: readonly CapturedGameStructureIdentity[],
+): string {
+  return JSON.stringify(
+    capturedBuildingGenerationNativeFacts(root, elementIds, identities),
+  );
+}
+
+/**
+ * Establishes Vue dependencies for exactly the Building facts represented above. Vue tracks own
+ * key iteration for additions/deletions; `Object.hasOwn` and `in` do not meet this contract because
+ * they respectively miss changes or also subscribe to ordinary numeric writes.
+ */
+export function trackCapturedBuildingGenerationStructure(
+  root: unknown,
+  controls: Pick<GameControlRegistry, "resolve">,
+  elementIds: readonly string[],
+  identities: readonly CapturedGameStructureIdentity[],
+): readonly (() => unknown)[] {
+  const sources: Array<() => unknown> = [];
+  const structuresByRegion = new Map<string, Set<string>>();
+  for (const identity of identities) {
+    const binding = bindingForBuildingElement(identity.actionId);
+    const parts = splitActionId(binding);
+    if (
+      parts === undefined ||
+      !CAPTURED_BUILD_REGIONS.has(parts.region) ||
+      (!CAPTURED_AUTOMATION_BUILDING_BINDINGS.has(binding) &&
+        !elementIds.some(
+          (elementId) => bindingForBuildingElement(elementId) === binding,
+        ))
+    )
+      continue;
+    let structures = structuresByRegion.get(identity.region);
+    if (structures === undefined) {
+      structures = new Set<string>();
+      structuresByRegion.set(identity.region, structures);
+    }
+    structures.add(identity.struct);
+  }
+  for (const elementId of elementIds) {
+    const parts = splitActionId(bindingForBuildingElement(elementId));
+    if (parts !== undefined && CAPTURED_BUILD_REGIONS.has(parts.region)) {
+      let structures = structuresByRegion.get(parts.region);
+      if (structures === undefined) {
+        structures = new Set<string>();
+        structuresByRegion.set(parts.region, structures);
+      }
+      structures.add(parts.id);
+    }
+  }
+  for (const [regionName, structureNames] of structuresByRegion) {
+    // Vue tracks GET for each exact native region and structure key, including a missing key, so
+    // additions, deletion, and same-count substitutions are observed without iterating catalogs.
+    sources.push(() => readProperty(root, regionName));
+    for (const structureName of structureNames) {
+      sources.push(() => {
+        const region = readProperty(root, regionName);
+        return readProperty(region, structureName);
+      });
+      sources.push(() => {
+        const region = readProperty(root, regionName);
+        const structure = readProperty(region, structureName);
+        return isRecord(structure) && "on" in structure;
+      });
+    }
+  }
+  // Resolve each handle inside the source on every evaluation. The registry may replace a
+  // control during redraw, so retaining its current data object would leave a stale subscription.
+  for (const elementId of elementIds) {
+    const parts = splitActionId(bindingForBuildingElement(elementId));
+    if (parts === undefined || !CAPTURED_BUILD_REGIONS.has(parts.region))
+      continue;
+    sources.push(() => readProperty(controls.resolve(elementId)?.data, "act"));
+    sources.push(() => {
+      const act = readProperty(controls.resolve(elementId)?.data, "act");
+      return isRecord(act) && "on" in act;
+    });
+  }
+  return sources;
+}

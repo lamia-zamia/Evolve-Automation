@@ -394,6 +394,7 @@ export function startCapturedRuntime({
     defaults: createCapturedSettingsDefaults({
       rootState: pageCapture.rootState,
       controls: pageCapture.controls,
+      reactiveObserver: pageCapture.reactiveObserver,
       mechanics: pageCapture.mechanics,
     }),
   });

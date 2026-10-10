@@ -113,6 +113,15 @@ function structureEntry({
 }
 
 const page = makePage();
+page.Vue = {
+  reactive: (value) => value,
+  toRaw: (value) => value,
+  watchEffect: (effect) => {
+    effect();
+    return () => {};
+  },
+  createApp: () => ({ mount: () => ({}), unmount: () => {} }),
+};
 const nativeMapSetDescriptor = Object.getOwnPropertyDescriptor(
   page.Map.prototype,
   "set",
@@ -122,7 +131,20 @@ const nativeConsumeDescriptor = Object.getOwnPropertyDescriptor(
   "consume",
 );
 const capture = installPageCapture(page);
+page.Vue.reactive({
+  resource: {},
+  race: {},
+  stats: {},
+  tech: {},
+  city: {},
+  civic: {},
+});
 assert.equal(capture.mechanics.readStructures(), undefined);
+assert.equal(
+  capture.mechanics.readStructureIdentities(),
+  undefined,
+  "native identity authority is unavailable before worker capture completes",
+);
 assert.equal(capture.mechanics.readProductionBreakdown(), undefined);
 assert.deepEqual(capture.mechanics.readLocalizedText("probe_source"), {
   kind: "value",
@@ -302,8 +324,16 @@ const fourth = structureEntry({
 entries.set(fourth.key, fourth);
 const definitions = capture.mechanics.readStructures();
 assert.equal(definitions.length, 4);
-assert.deepEqual(
+assert.equal(
   capture.mechanics.readStructureIdentities(),
+  undefined,
+  "the identity snapshot waits until the root and worker captures are complete",
+);
+const capturedWorker = new page.Worker("evolve/evolve.js");
+capturedWorker.addEventListener("message", () => {});
+const nativeIdentitySnapshot = capture.mechanics.readStructureIdentities();
+assert.deepEqual(
+  nativeIdentitySnapshot,
   definitions.map(({ entryKey, region, sector, struct, actionId }) => ({
     entryKey,
     region,
@@ -323,6 +353,11 @@ entries.set("city:coal_power", {
   c_action: { id: "city-coal_power", powered: () => -1 },
   info: false,
 });
+assert.equal(
+  capture.mechanics.readStructureIdentities(),
+  nativeIdentitySnapshot,
+  "the native registry is not re-enumerated after its initialization snapshot",
+);
 assert.deepEqual(
   capture.mechanics.readEffectivePowerCount(
     { city: { coal_power: { on: 5 } } },
