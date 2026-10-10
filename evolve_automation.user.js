@@ -9068,9 +9068,29 @@
     });
   }
 
+  // src/adapters/evolve/progression/build/captured-building-unlock-observation.ts
+  function readCapturedBuildingUnlockStateRecords(root, structuresByBinding) {
+    let records = /* @__PURE__ */ new Map();
+    for (let [binding, structures] of structuresByBinding)
+      for (let structure of structures) {
+        let state = readProperty(
+          readProperty(root, structure.region),
+          structure.struct
+        );
+        if (isRecord(state)) {
+          records.set(
+            binding,
+            Object.freeze({ entryKey: structure.entryKey, state })
+          );
+          break;
+        }
+      }
+    return records;
+  }
+
   // src/adapters/evolve/progression/build/captured-building-unlocks.ts
   function createCapturedBuildingUnlocks(dependencies) {
-    let { rootState, mechanics, controls: controls2, diagnostics } = dependencies, reportSkipped = dependencies.onSkipped ?? (() => {
+    let { rootState, mechanics, diagnostics } = dependencies, reportSkipped = dependencies.onSkipped ?? (() => {
     }), bindingsByRegion = /* @__PURE__ */ new Map();
     for (let binding of CAPTURED_AUTOMATION_BUILDING_BINDINGS) {
       let region = splitActionId(binding)?.region;
@@ -9089,11 +9109,6 @@
         group === void 0 ? indexed.set(binding, [structure]) : group.push(structure);
       }
       return indexedStructures = structures, structuresByBinding = indexed, indexed;
-    }, stateAddressControls = {
-      ...controls2,
-      // Control captures are mutation capabilities. They must not decide which native
-      // structures the semantic catalog can identify.
-      capturedElementIds: () => []
     };
     return Object.freeze({
       read(regions) {
@@ -9113,23 +9128,17 @@
           reportSkipped("*", "the native structure catalog is unavailable");
           return;
         }
-        let nativeStructuresByBinding = readStructuresByBinding(structures), entries;
+        let nativeStructuresByBinding = readStructuresByBinding(structures), stateRecords;
         try {
-          entries = readCapturedBuildingEntries(
+          stateRecords = readCapturedBuildingUnlockStateRecords(
             root,
-            stateAddressControls,
-            structures,
             nativeStructuresByBinding
           );
         } catch {
           reportSkipped("*", "the native structure state catalog is invalid");
           return;
         }
-        let unlocked = /* @__PURE__ */ new Set(), sampled3 = /* @__PURE__ */ new Set(), switches = /* @__PURE__ */ new Map(), entriesByBinding = /* @__PURE__ */ new Map();
-        for (let entry of entries) {
-          let group = entriesByBinding.get(entry.binding);
-          group === void 0 ? entriesByBinding.set(entry.binding, [entry]) : group.push(entry);
-        }
+        let unlocked = /* @__PURE__ */ new Set(), sampled3 = /* @__PURE__ */ new Set(), switches = /* @__PURE__ */ new Map();
         for (let region of regions) {
           if (!CAPTURED_BUILD_REGIONS.has(region)) {
             reportSkipped(region, "not an automation Building region");
@@ -9137,12 +9146,8 @@
           }
           let regionBindings = bindingsByRegion.get(region) ?? [], regionUnlocked = /* @__PURE__ */ new Set(), regionSwitches = /* @__PURE__ */ new Map(), complete = !0;
           for (let binding of regionBindings) {
-            let candidates = nativeStructuresByBinding.get(binding) ?? [], candidateEntries = (entriesByBinding.get(binding) ?? []).filter(
-              (entry2) => entry2.entryKey !== void 0
-            ), joined = candidates.length === 1 ? candidates : candidates.filter(
-              (structure2) => candidateEntries.some(
-                (entry2) => entry2.entryKey === structure2.entryKey
-              )
+            let candidates = nativeStructuresByBinding.get(binding) ?? [], stateRecord = stateRecords.get(binding), joined = candidates.length === 1 ? candidates : stateRecord === void 0 ? [] : candidates.filter(
+              (structure2) => structure2.entryKey === stateRecord.entryKey
             );
             if (joined.length !== 1) {
               complete = !1, tally.count("building-unlocks.unjoined-native-action"), reportSkipped(
@@ -9151,17 +9156,7 @@
               );
               break;
             }
-            let structure = joined[0], entry = candidateEntries.find(
-              (candidate) => candidate.entryKey === structure.entryKey
-            );
-            if (candidateEntries.length > 0 && (entry === void 0 || candidateEntries.length !== 1)) {
-              complete = !1, tally.count("building-unlocks.unjoined-state-identity"), reportSkipped(
-                region,
-                `the captured root state for ${binding} has no unique native entry key`
-              );
-              break;
-            }
-            let availability;
+            let structure = joined[0], entry = stateRecord?.entryKey === structure.entryKey, availability;
             try {
               availability = structure.readAvailability(root);
             } catch {
@@ -9176,14 +9171,19 @@
             }
             if (tally.count(
               availability.value ? "building-unlocks.offered" : "building-unlocks.unavailable"
-            ), !availability.value || (regionUnlocked.add(binding), entry === void 0)) continue;
-            let state;
+            ), !availability.value || (regionUnlocked.add(binding), !entry || stateRecord === void 0)) continue;
+            let hasState;
             try {
-              state = readCapturedBuildingState(root, entry, structure, !0);
+              hasState = readCapturedBuildingState(
+                root,
+                { binding, state: stateRecord.state },
+                structure,
+                !0
+              )?.hasState;
             } catch {
-              state = void 0;
+              hasState = void 0;
             }
-            state?.hasState === !0 && regionSwitches.set(
+            hasState === !0 && regionSwitches.set(
               binding,
               Object.freeze({
                 region: structure.region,
@@ -11766,7 +11766,6 @@
     }, buildingUnlocks = createCapturedBuildingUnlocks({
       rootState,
       mechanics,
-      controls: controls2,
       diagnostics,
       ...onSkipped === void 0 ? {} : {
         onSkipped: (region, reason) => onSkipped(`building-unlocks ${region}`, reason)

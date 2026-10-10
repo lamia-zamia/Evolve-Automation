@@ -7,8 +7,10 @@ import {
   readCapturedGrantActionCount,
 } from "./captured-grant-action.ts";
 
-export interface CapturedBuildingState {
-  readonly catalog: Readonly<CapturedBuildingEntry>;
+export interface CapturedBuildingState<
+  T extends CapturedBuildingStateInput = CapturedBuildingEntry,
+> {
+  readonly catalog: Readonly<T>;
   readonly structure: CapturedGameStructureDefinition | undefined;
   readonly available: boolean;
   readonly count: number;
@@ -16,6 +18,11 @@ export interface CapturedBuildingState {
   readonly stateOn: number;
   readonly stateOff: number;
   readonly powered: number;
+}
+
+export interface CapturedBuildingStateInput {
+  readonly binding: string;
+  readonly state: Readonly<Record<string, unknown>>;
 }
 
 function capturedBuildingStateNumber(value: unknown): number | undefined {
@@ -59,12 +66,12 @@ export function readCapturedBuildingPowered(
   return powered.kind === "value" ? powered.value : undefined;
 }
 
-export function readCapturedBuildingState(
+export function readCapturedBuildingState<T extends CapturedBuildingStateInput>(
   root: unknown,
-  catalog: Readonly<CapturedBuildingEntry>,
+  catalog: Readonly<T>,
   structure: CapturedGameStructureDefinition | undefined,
   available: boolean,
-): Readonly<CapturedBuildingState> | undefined {
+): Readonly<CapturedBuildingState<T>> | undefined {
   const grant = readCapturedGrantAction(catalog.binding);
   const shellCount =
     grant !== undefined || !available

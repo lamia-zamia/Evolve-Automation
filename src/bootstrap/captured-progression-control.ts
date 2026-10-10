@@ -696,7 +696,6 @@ export function createCapturedProgressionControl(
   const buildingUnlocks = createCapturedBuildingUnlocks({
     rootState,
     mechanics,
-    controls,
     diagnostics,
     ...(onSkipped === undefined
       ? {}

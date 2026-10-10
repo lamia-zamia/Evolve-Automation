@@ -5,7 +5,6 @@ import type {
   CapturedGameRead,
   CapturedGameStructureDefinition,
 } from "../../../../ports/captured-game-mechanics.ts";
-import type { GameControlRegistry } from "../../../../ports/game-control-registry.ts";
 import type { GameRootStateSource } from "../../../../ports/game-root-state.ts";
 import type {
   BuildingStateAddress,
@@ -13,19 +12,13 @@ import type {
   GameBuildingUnlockCatalogReader,
 } from "../../../../ports/game-building-unlocks.ts";
 import { splitActionId } from "../../../validation.ts";
-import {
-  readCapturedBuildingEntries,
-  type CapturedBuildingEntry,
-} from "./captured-building-catalog.ts";
+import { readCapturedBuildingUnlockStateRecords } from "./captured-building-unlock-observation.ts";
 import {
   CAPTURED_BUILD_REGIONS,
   bindingForBuildingElement,
 } from "./captured-building-metadata.ts";
 import { CAPTURED_AUTOMATION_BUILDING_BINDINGS } from "./captured-building-bindings.generated.ts";
-import {
-  readCapturedBuildingState,
-  type CapturedBuildingState,
-} from "./captured-building-state.ts";
+import { readCapturedBuildingState } from "./captured-building-state.ts";
 import {
   createCountTally,
   type PhaseTimingSink,
@@ -34,7 +27,6 @@ import {
 export interface CapturedBuildingUnlocksDependencies {
   readonly rootState: GameRootStateSource;
   readonly mechanics: CapturedGameMechanics;
-  readonly controls: GameControlRegistry;
   readonly onSkipped?: (region: string, reason: string) => void;
   readonly diagnostics?: PhaseTimingSink | undefined;
 }
@@ -42,7 +34,7 @@ export interface CapturedBuildingUnlocksDependencies {
 export function createCapturedBuildingUnlocks(
   dependencies: CapturedBuildingUnlocksDependencies,
 ): GameBuildingUnlockCatalogReader {
-  const { rootState, mechanics, controls, diagnostics } = dependencies;
+  const { rootState, mechanics, diagnostics } = dependencies;
   const reportSkipped = dependencies.onSkipped ?? (() => {});
   const bindingsByRegion = new Map<string, readonly string[]>();
   for (const binding of CAPTURED_AUTOMATION_BUILDING_BINDINGS) {
@@ -71,13 +63,6 @@ export function createCapturedBuildingUnlocks(
     structuresByBinding = indexed;
     return indexed;
   };
-  const stateAddressControls: GameControlRegistry = {
-    ...controls,
-    // Control captures are mutation capabilities. They must not decide which native
-    // structures the semantic catalog can identify.
-    capturedElementIds: () => [],
-  };
-
   return Object.freeze({
     read(
       regions: ReadonlySet<string>,
@@ -101,12 +86,13 @@ export function createCapturedBuildingUnlocks(
       }
 
       const nativeStructuresByBinding = readStructuresByBinding(structures);
-      let entries: readonly Readonly<CapturedBuildingEntry>[];
+      let stateRecords: ReadonlyMap<
+        string,
+        Readonly<{ entryKey: string; state: Readonly<Record<string, unknown>> }>
+      >;
       try {
-        entries = readCapturedBuildingEntries(
+        stateRecords = readCapturedBuildingUnlockStateRecords(
           root,
-          stateAddressControls,
-          structures,
           nativeStructuresByBinding,
         );
       } catch {
@@ -117,15 +103,6 @@ export function createCapturedBuildingUnlocks(
       const unlocked = new Set<string>();
       const sampled = new Set<string>();
       const switches = new Map<string, Readonly<BuildingStateAddress>>();
-      const entriesByBinding = new Map<
-        string,
-        Readonly<CapturedBuildingEntry>[]
-      >();
-      for (const entry of entries) {
-        const group = entriesByBinding.get(entry.binding);
-        if (group === undefined) entriesByBinding.set(entry.binding, [entry]);
-        else group.push(entry);
-      }
       for (const region of regions) {
         if (!CAPTURED_BUILD_REGIONS.has(region)) {
           reportSkipped(region, "not an automation Building region");
@@ -140,17 +117,15 @@ export function createCapturedBuildingUnlocks(
         let complete = true;
         for (const binding of regionBindings) {
           const candidates = nativeStructuresByBinding.get(binding) ?? [];
-          const candidateEntries = (entriesByBinding.get(binding) ?? []).filter(
-            (entry) => entry.entryKey !== undefined,
-          );
+          const stateRecord = stateRecords.get(binding);
           const joined =
             candidates.length === 1
               ? candidates
-              : candidates.filter((structure) =>
-                  candidateEntries.some(
-                    (entry) => entry.entryKey === structure.entryKey,
-                  ),
-                );
+              : stateRecord === undefined
+                ? []
+                : candidates.filter(
+                    (structure) => structure.entryKey === stateRecord.entryKey,
+                  );
           if (joined.length !== 1) {
             complete = false;
             tally.count("building-unlocks.unjoined-native-action");
@@ -163,21 +138,7 @@ export function createCapturedBuildingUnlocks(
             break;
           }
           const structure = joined[0]!;
-          const entry = candidateEntries.find(
-            (candidate) => candidate.entryKey === structure.entryKey,
-          );
-          if (
-            candidateEntries.length > 0 &&
-            (entry === undefined || candidateEntries.length !== 1)
-          ) {
-            complete = false;
-            tally.count("building-unlocks.unjoined-state-identity");
-            reportSkipped(
-              region,
-              `the captured root state for ${binding} has no unique native entry key`,
-            );
-            break;
-          }
+          const entry = stateRecord?.entryKey === structure.entryKey;
 
           let availability: CapturedGameRead<boolean>;
           try {
@@ -202,14 +163,19 @@ export function createCapturedBuildingUnlocks(
           if (!availability.value) continue;
 
           regionUnlocked.add(binding);
-          if (entry === undefined) continue;
-          let state: Readonly<CapturedBuildingState> | undefined;
+          if (!entry || stateRecord === undefined) continue;
+          let hasState: boolean | undefined;
           try {
-            state = readCapturedBuildingState(root, entry, structure, true);
+            hasState = readCapturedBuildingState(
+              root,
+              { binding, state: stateRecord.state },
+              structure,
+              true,
+            )?.hasState;
           } catch {
-            state = undefined;
+            hasState = undefined;
           }
-          if (state?.hasState === true) {
+          if (hasState === true) {
             regionSwitches.set(
               binding,
               Object.freeze({

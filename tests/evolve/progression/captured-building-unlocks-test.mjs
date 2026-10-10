@@ -5,6 +5,12 @@ import { createCapturedBuildingSwitchStates } from "../../../src/adapters/evolve
 import { readCapturedActionAvailability } from "../../../src/adapters/evolve/progression/build/captured-building-availability.ts";
 import { readCapturedBuildingEntries } from "../../../src/adapters/evolve/progression/build/captured-building-catalog.ts";
 import {
+  CAPTURED_BUILD_REGIONS,
+  bindingForBuildingElement,
+} from "../../../src/adapters/evolve/progression/build/captured-building-metadata.ts";
+import { CAPTURED_AUTOMATION_BUILDING_BINDINGS } from "../../../src/adapters/evolve/progression/build/captured-building-bindings.generated.ts";
+import { readCapturedBuildingState } from "../../../src/adapters/evolve/progression/build/captured-building-state.ts";
+import {
   makeCapturedBuildingMechanics,
   availableWhenBindings,
 } from "../../support/fixtures/captured-building-test-fixtures.mjs";
@@ -29,20 +35,140 @@ function controls({ capturedElementIds = [], resolve = () => undefined } = {}) {
 
 function makeUnlockReader({
   currentRoot = root,
+  readRoot = () => currentRoot,
   mechanics,
-  gameControls = controls(),
   onSkipped,
 } = {}) {
   return createCapturedBuildingUnlocks({
     rootState: {
-      readRoot: () => currentRoot,
+      readRoot,
       isReactivitySuppressed: () => false,
       subscribeRootReplaced: () => () => {},
     },
     mechanics,
-    controls: gameControls,
     ...(onSkipped === undefined ? {} : { onSkipped }),
   });
+}
+
+// Differential oracle for the former empty-control route: derive state identities through the
+// generic settings catalog, then apply the unchanged availability and Building-state semantics.
+function readGenericCatalogReference(root, regions, mechanics) {
+  let structures;
+  try {
+    structures = mechanics.readStructures();
+  } catch {
+    return undefined;
+  }
+  if (structures === undefined) return undefined;
+  const structuresByBinding = new Map();
+  for (const structure of structures) {
+    const binding = bindingForBuildingElement(structure.actionId);
+    if (!CAPTURED_AUTOMATION_BUILDING_BINDINGS.has(binding)) continue;
+    const group = structuresByBinding.get(binding) ?? [];
+    group.push(structure);
+    structuresByBinding.set(binding, group);
+  }
+  let entries;
+  try {
+    entries = readCapturedBuildingEntries(
+      root,
+      controls(),
+      structures,
+      structuresByBinding,
+    );
+  } catch {
+    return undefined;
+  }
+  const entriesByBinding = new Map();
+  for (const entry of entries) {
+    const group = entriesByBinding.get(entry.binding) ?? [];
+    group.push(entry);
+    entriesByBinding.set(entry.binding, group);
+  }
+  const bindingsByRegion = new Map();
+  for (const binding of CAPTURED_AUTOMATION_BUILDING_BINDINGS) {
+    const region = binding.slice(0, binding.indexOf("-"));
+    const group = bindingsByRegion.get(region) ?? [];
+    group.push(binding);
+    bindingsByRegion.set(region, group);
+  }
+  const unlocked = new Set();
+  const sampled = new Set();
+  const switches = new Map();
+  for (const region of regions) {
+    if (!CAPTURED_BUILD_REGIONS.has(region)) continue;
+    const regionUnlocked = new Set();
+    const regionSwitches = new Map();
+    let complete = true;
+    for (const binding of bindingsByRegion.get(region) ?? []) {
+      const candidates = structuresByBinding.get(binding) ?? [];
+      const candidateEntries = (entriesByBinding.get(binding) ?? []).filter(
+        (entry) => entry.entryKey !== undefined,
+      );
+      const joined =
+        candidates.length === 1
+          ? candidates
+          : candidates.filter((structure) =>
+              candidateEntries.some(
+                (entry) => entry.entryKey === structure.entryKey,
+              ),
+            );
+      if (joined.length !== 1) {
+        complete = false;
+        break;
+      }
+      const structure = joined[0];
+      const entry = candidateEntries.find(
+        (candidate) => candidate.entryKey === structure.entryKey,
+      );
+      if (
+        candidateEntries.length > 0 &&
+        (entry === undefined || candidateEntries.length !== 1)
+      ) {
+        complete = false;
+        break;
+      }
+      let availability;
+      try {
+        availability = structure.readAvailability(root);
+      } catch {
+        availability = { kind: "invalid" };
+      }
+      if (availability.kind !== "value") {
+        complete = false;
+        break;
+      }
+      if (!availability.value) continue;
+      regionUnlocked.add(binding);
+      if (entry === undefined) continue;
+      let state;
+      try {
+        state = readCapturedBuildingState(root, entry, structure, true);
+      } catch {
+        state = undefined;
+      }
+      if (state?.hasState === true) {
+        regionSwitches.set(
+          binding,
+          Object.freeze({ region: structure.region, type: structure.struct }),
+        );
+      }
+    }
+    if (!complete) continue;
+    for (const binding of regionUnlocked) unlocked.add(binding);
+    for (const [binding, address] of regionSwitches)
+      switches.set(binding, address);
+    sampled.add(region);
+  }
+  if (sampled.size === 0) return undefined;
+  return Object.freeze({ unlocked, regions: sampled, switches });
+}
+
+function assertUnlockMatchesGenericCatalog(root, regions, mechanics, reader) {
+  assert.deepEqual(
+    reader.read(regions),
+    readGenericCatalogReference(root, regions, mechanics),
+  );
 }
 
 // A native true is an offer before the action has ever acquired a rendered control or DOM row.
@@ -55,6 +181,139 @@ function makeUnlockReader({
   const catalog = reader.read(new Set(["city"]));
   assert.equal(catalog.unlocked.has("city-farm"), true);
   assert.deepEqual([...catalog.regions], ["city"]);
+}
+
+// Requested regions scope the returned catalog; every managed region can also be sampled.
+{
+  const mechanics = makeCapturedBuildingMechanics(root);
+  const reader = makeUnlockReader({ mechanics });
+  const all = reader.read(new Set(["city", "space", "portal"]));
+  assertUnlockMatchesGenericCatalog(
+    root,
+    new Set(["city", "space", "portal"]),
+    mechanics,
+    reader,
+  );
+  assert.deepEqual([...all.regions], ["city", "space", "portal"]);
+  const partial = reader.read(new Set(["space"]));
+  assertUnlockMatchesGenericCatalog(
+    root,
+    new Set(["space"]),
+    mechanics,
+    reader,
+  );
+  assert.deepEqual([...partial.regions], ["space"]);
+  assert.equal(partial.unlocked.has("city-farm"), false);
+}
+
+// Root replacement, temporarily missing roots, and native root-state records are observed fresh.
+{
+  let currentRoot = { ...root, city: { farm: { count: 0, on: 0 } } };
+  let suppressed = false;
+  const mechanics = makeCapturedBuildingMechanics(root, {
+    availability: (_liveRoot, binding) => ({
+      kind: "value",
+      value: binding === "city-farm",
+    }),
+  });
+  const reader = makeUnlockReader({
+    mechanics,
+    readRoot: () => (suppressed ? undefined : currentRoot),
+  });
+  assertUnlockMatchesGenericCatalog(
+    currentRoot,
+    new Set(["city"]),
+    mechanics,
+    reader,
+  );
+  assert.equal(reader.read(new Set(["city"])).switches.has("city-farm"), true);
+  suppressed = true;
+  assert.equal(reader.read(new Set(["city"])), undefined);
+  suppressed = false;
+  currentRoot = { ...root, city: {} };
+  assertUnlockMatchesGenericCatalog(
+    currentRoot,
+    new Set(["city"]),
+    mechanics,
+    reader,
+  );
+  const missingState = reader.read(new Set(["city"]));
+  assert.equal(missingState.unlocked.has("city-farm"), true);
+  assert.equal(missingState.switches.has("city-farm"), false);
+  currentRoot = { ...root, city: { farm: { count: 4, on: 2 } } };
+  assertUnlockMatchesGenericCatalog(
+    currentRoot,
+    new Set(["city"]),
+    mechanics,
+    reader,
+  );
+  const replacedState = reader.read(new Set(["city"]));
+  assert.equal(replacedState.switches.has("city-farm"), true);
+}
+
+// Native structure-reader failures remain unavailable and recover on a later read.
+{
+  let fail = true;
+  const mechanics = makeCapturedBuildingMechanics(root, {
+    availability: availableWhenBindings("city-farm"),
+    structureSnapshot: (structures) => {
+      if (fail) throw new Error("native reader unavailable");
+      return structures;
+    },
+  });
+  const reader = makeUnlockReader({ mechanics });
+  assert.equal(reader.read(new Set(["city"])), undefined);
+  fail = false;
+  assert.equal(reader.read(new Set(["city"])).unlocked.has("city-farm"), true);
+}
+
+// Unlock sampling never localizes a native-only settings label; that lazy reader is not part of
+// BuildingUnlockCatalog and can fail independently without invalidating the observation.
+{
+  const currentRoot = { ...root, city: { farm: { count: 0, on: 0 } } };
+  const mechanics = makeCapturedBuildingMechanics(currentRoot, {
+    availability: availableWhenBindings("city-farm"),
+    overrides: new Map([
+      [
+        "city-farm",
+        {
+          readTitle: () => {
+            throw new Error("localization must not run");
+          },
+        },
+      ],
+    ]),
+  });
+  const catalog = makeUnlockReader({ currentRoot, mechanics }).read(
+    new Set(["city"]),
+  );
+  assert.deepEqual([...catalog.regions], ["city"]);
+  assert.equal(catalog.unlocked.has("city-farm"), true);
+  assert.deepEqual(catalog.switches.get("city-farm"), {
+    region: "city",
+    type: "farm",
+  });
+}
+
+// Keep the original state evaluator's fail-closed validation even though unlock membership is
+// already known. Invalid counts or native requirements suppress only the switch address.
+{
+  const currentRoot = {
+    ...root,
+    city: { farm: { count: Number.NaN, on: 0 } },
+  };
+  const invalidRequirements = makeCapturedBuildingMechanics(currentRoot, {
+    availability: availableWhenBindings("city-farm"),
+    overrides: new Map([
+      ["city-farm", { readPowerRequirements: () => ({ kind: "invalid" }) }],
+    ]),
+  });
+  const catalog = makeUnlockReader({
+    currentRoot,
+    mechanics: invalidRequirements,
+  }).read(new Set(["city"]));
+  assert.equal(catalog.unlocked.has("city-farm"), true);
+  assert.equal(catalog.switches.has("city-farm"), false);
 }
 
 // A valid native false is unavailable; it is not an offer that happens to lack a row.
@@ -150,8 +409,20 @@ function makeUnlockReader({
     }),
   });
   const reader = makeUnlockReader({ currentRoot, mechanics });
+  assertUnlockMatchesGenericCatalog(
+    currentRoot,
+    new Set(["city"]),
+    mechanics,
+    reader,
+  );
   assert.equal(reader.read(new Set(["city"])).unlocked.has("city-bank"), false);
   currentRoot.tech.currency = 1;
+  assertUnlockMatchesGenericCatalog(
+    currentRoot,
+    new Set(["city"]),
+    mechanics,
+    reader,
+  );
   assert.equal(reader.read(new Set(["city"])).unlocked.has("city-bank"), true);
 }
 
