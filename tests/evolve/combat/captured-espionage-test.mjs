@@ -259,6 +259,7 @@ for (const activeTask of ["combo_spy", "spyop"]) {
   const counted = countCapturedCalls(testCase.adapter);
   const outcome = runCapturedEspionage(counted.adapter);
   assert.equal(outcome.status, "succeeded");
+  assert.equal(shouldRunCapturedBattleAfterEspionage(outcome), true);
   assert.equal(counted.calls.reader, 0);
   assert.equal(counted.calls.executor, 0);
   assert.equal(testCase.controls.invokeCalls, 0);
@@ -269,64 +270,49 @@ for (const activeTask of ["combo_spy", "spyop"]) {
 // A pending native espionage timer does not own the garrison campaign control. Battle may use the
 // freshly resampled government and garrison state in the same working cycle.
 assert.equal(
-  shouldRunCapturedBattleAfterEspionage(
-    {
-      status: "stale",
-      failure: {
-        code: "captured-espionage-postcondition-pending",
-        message: "native operation is still running",
-      },
+  shouldRunCapturedBattleAfterEspionage({
+    status: "stale",
+    failure: {
+      code: "captured-espionage-postcondition-pending",
+      message: "native operation is still running",
     },
-    true,
-  ),
+  }),
   true,
 );
 assert.equal(
-  shouldRunCapturedBattleAfterEspionage(
-    {
-      status: "stale",
-      failure: {
-        code: "captured-espionage-modal-conflict",
-        message: "player modal is open",
-      },
+  shouldRunCapturedBattleAfterEspionage({
+    status: "stale",
+    failure: {
+      code: "captured-espionage-modal-conflict",
+      message: "player modal is open",
     },
-    false,
-  ),
+  }),
   false,
 );
 assert.equal(
-  shouldRunCapturedBattleAfterEspionage(
-    {
-      status: "stale",
-      failure: {
-        code: "captured-espionage-state-changed",
-        message: "the foreign state changed",
-      },
+  shouldRunCapturedBattleAfterEspionage({
+    status: "stale",
+    failure: {
+      code: "captured-espionage-state-changed",
+      message: "the foreign state changed",
     },
-    false,
-  ),
+  }),
   false,
 );
-assert.equal(shouldRunCapturedBattleAfterEspionage(undefined, false), false);
+assert.equal(shouldRunCapturedBattleAfterEspionage(undefined), false);
 assert.equal(
-  shouldRunCapturedBattleAfterEspionage(
-    {
-      status: "succeeded",
-    },
-    false,
-  ),
+  shouldRunCapturedBattleAfterEspionage({
+    status: "succeeded",
+  }),
   true,
 );
 assert.equal(
-  shouldRunCapturedBattleAfterEspionage(
-    {
-      status: "succeeded",
-    },
-    true,
-  ),
+  shouldRunCapturedBattleAfterEspionage({
+    status: "rejected",
+    failure: { code: "captured-espionage-rejected", message: "rejected" },
+  }),
   false,
 );
-
 // --- one capture, one invocation, no waiting ----------------------------------------------------
 
 {

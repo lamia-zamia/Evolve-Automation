@@ -35,9 +35,8 @@ export function runCapturedEspionage(dependencies: {
  */
 export function shouldRunCapturedBattleAfterEspionage(
   outcome: CommandExecutionOutcome | undefined,
-  espionageIsBusy: boolean,
 ): boolean {
-  if (outcome?.status === "succeeded") return !espionageIsBusy;
+  if (outcome?.status === "succeeded") return true;
   return (
     outcome?.status === "stale" &&
     outcome.failure.code === "captured-espionage-postcondition-pending"

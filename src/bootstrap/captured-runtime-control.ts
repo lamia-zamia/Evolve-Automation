@@ -3697,12 +3697,7 @@ export function startCapturedRuntime({
             `autoFight.espionage: ${espionageOutcome.failure.code}: ${espionageOutcome.failure.message}`,
           );
         }
-        if (
-          shouldRunCapturedBattleAfterEspionage(
-            espionageOutcome,
-            capturedEspionage.isBusy(),
-          )
-        ) {
+        if (shouldRunCapturedBattleAfterEspionage(espionageOutcome)) {
           const battleOutcome = runPhase("autoFight.battle", () => {
             // Foreign and the compact Garrison come out of the same Government draw, so this is
             // one pass rather than a Civic draw plus a Government one.

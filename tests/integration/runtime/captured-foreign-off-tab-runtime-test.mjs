@@ -27,7 +27,10 @@ import {
 } from "../../../src/adapters/evolve/combat/foreign-panel-draw.ts";
 import { ensureDemandPrerequisiteControls } from "../../../src/adapters/evolve/economy/resources/captured-demand-prerequisites.ts";
 import { runBattleAutomation } from "../../../src/application/battle.ts";
-import { runCapturedEspionage } from "../../../src/application/captured-espionage.ts";
+import {
+  createCapturedEspionageRunner,
+  shouldRunCapturedBattleAfterEspionage,
+} from "../../../src/application/captured-espionage.ts";
 import { runCapturedSpyTraining } from "../../../src/application/captured-spy-training.ts";
 import { createDiscoveryAttempts } from "../../../src/bootstrap/discovery-attempts.ts";
 import {
@@ -352,6 +355,7 @@ function makeRoot(overrides = {}) {
   const harness = makeOffTabRuntime();
   const { captured, root, page, ensureForeignControls } = harness;
   const faults = [];
+  let suppressOtherEspionage = false;
   const operations = createCapturedEspionageOperationCapture({
     controls: captured.registry,
     // The game's own `drawEspModal(gov)`, reached through the closure `trigModal` closes over.
@@ -409,7 +413,7 @@ function makeRoot(overrides = {}) {
     controls: captured.registry,
     readSettings: () => ({
       foreignPowerRequired: 75,
-      foreignPolicyInferior: "Influence",
+      foreignPolicyInferior: suppressOtherEspionage ? "Ignore" : "Influence",
       foreignPolicySuperior: "Ignore",
       foreignPolicyRival: "Ignore",
       foreignForceSabotage: false,
@@ -429,7 +433,23 @@ function makeRoot(overrides = {}) {
     cycle.governmentId >= 0,
     "Espionage must plan against the established Foreign panel",
   );
-  const outcome = runCapturedEspionage(espionage);
+  const runEspionageCycle = createCapturedEspionageRunner(espionage);
+  const battle = createCapturedBattle({
+    rootState: harness.rootState,
+    controls: captured.registry,
+    keyState: { readPressed: () => false },
+    readSettings: () => ({
+      foreignProtect: "never",
+      foreignPacifist: false,
+      foreignPolicyInferior: "Influence",
+      foreignPolicySuperior: "Ignore",
+      foreignPolicyRival: "Ignore",
+      achievementGuards: false,
+    }),
+    onActivity: () => {},
+  });
+
+  const outcome = runEspionageCycle();
   // The game queued the operation and its own timer has not reached zero, which is the pending
   // outcome the runtime treats as normal rather than as a failure.
   assert.equal(outcome.status, "stale", JSON.stringify(outcome));
@@ -438,21 +458,54 @@ function makeRoot(overrides = {}) {
     "captured-espionage-postcondition-pending",
   );
   assert.equal(espionage.isBusy(), true);
+  const operated = [0, 1, 2].filter(
+    (index) => root.civic.foreign[`gov${index}`].act === "influence",
+  );
+  assert.equal(operated.length, 1, "exactly one government was operated on");
+  assert.equal(root.civic.foreign[`gov${operated[0]}`].sab, 300);
+  suppressOtherEspionage = true;
+  assert.equal(shouldRunCapturedBattleAfterEspionage(outcome), true);
+  const firstBattle = runBattleAutomation(battle);
+  assert.equal(firstBattle.status, "succeeded", JSON.stringify(firstBattle));
+  const attacksAfterFirstCycle = root.stats.attacks;
+  assert.ok(attacksAfterFirstCycle > 0, "Battle ran beside the native timer");
+
+  // On the next working cycle the same native timer remains pending, but the planner has no new
+  // Espionage operation. Its ordinary success must still allow Battle to resample and act.
+  const noOperation = runEspionageCycle();
+  assert.equal(noOperation.status, "succeeded", JSON.stringify(noOperation));
+  assert.equal(espionage.isBusy(), true);
+  assert.equal(shouldRunCapturedBattleAfterEspionage(noOperation), true);
+  const secondBattle = runBattleAutomation(battle);
+  assert.equal(secondBattle.status, "succeeded", JSON.stringify(secondBattle));
+  assert.ok(
+    root.stats.attacks > attacksAfterFirstCycle,
+    "Battle acts again on the next cycle while the native Espionage timer remains pending",
+  );
+
+  // Completing the native operation changes foreign state. Battle must sample after that change,
+  // rather than use the first cycle's captured government/garrison decision.
+  const operatedGovernment = root.civic.foreign[`gov${operated[0]}`];
+  operatedGovernment.sab = 0;
+  operatedGovernment.act = "none";
+  operatedGovernment.hstl += 5;
+  const completion = runEspionageCycle();
+  assert.equal(completion.status, "succeeded", JSON.stringify(completion));
+  assert.equal(espionage.isBusy(), false);
+  assert.equal(shouldRunCapturedBattleAfterEspionage(completion), true);
+  const beforeFreshBattle = root.stats.attacks;
+  const freshBattle = runBattleAutomation(battle);
+  assert.equal(freshBattle.status, "succeeded", JSON.stringify(freshBattle));
+  assert.ok(
+    root.stats.attacks > beforeFreshBattle,
+    "fresh Battle sample still finds an independent campaign opportunity",
+  );
   assert.deepEqual(faults, [], JSON.stringify(faults));
   // The game's own state moved, through the closure `trigModal` closes over...
   assert.ok(
     captured.usage.includes("foreign.trigModal"),
     JSON.stringify(captured.usage),
   );
-  const operated = [0, 1, 2].filter(
-    (index) => root.civic.foreign[`gov${index}`].act === "influence",
-  );
-  assert.deepEqual(
-    operated.length,
-    1,
-    "exactly one government was operated on",
-  );
-  assert.equal(root.civic.foreign[`gov${operated[0]}`].sab, 300);
   // ...and no modal of any kind was built.
   assert.equal(page.document.querySelectorAll(".modal.is-active").length, 0);
   assert.equal(page.document.querySelectorAll(".modal-background").length, 0);
