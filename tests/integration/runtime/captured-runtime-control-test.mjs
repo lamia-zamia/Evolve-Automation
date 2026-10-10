@@ -225,14 +225,17 @@ function runDemandSampleScenario(
   spaceEra = false,
   constructionCase = false,
   moneyAfterFirst,
+  lifecycle = {},
 ) {
   const invoked = [];
   const phases = [];
   const powerPrerequisiteReports = [];
   const root = {
-    race: {},
-    tech: { mad: spaceEra ? 1 : 0, trade: true },
-    civic: {},
+    race: { ...lifecycle.race },
+    tech: { mad: spaceEra ? 1 : 0, trade: true, ...lifecycle.tech },
+    civic: {
+      ...(lifecycle.spyPanel ? { garrison: { display: true } } : {}),
+    },
     settings: {
       civTabs: 3,
       spaceTabs: 0,
@@ -375,6 +378,7 @@ function runDemandSampleScenario(
         }
         if (handle.elementId === "city-farm" && method === "action") {
           root.city.farm.count += 1;
+          lifecycle.afterFarmAction?.(root);
         }
         return { ok: true, value: undefined };
       },
@@ -3342,6 +3346,69 @@ function runCombatRuntime(autoFight) {
       ),
     ),
     `Power must revalidate prerequisite status after a trigger invalidates the cycle report: ${JSON.stringify(triggerPower.errors)}`,
+  );
+}
+
+for (const [label, lifecycle] of [
+  [
+    "Spy reservation",
+    {
+      spyPanel: true,
+      afterFarmAction: (root) => {
+        root.tech.unify = 1;
+      },
+    },
+  ],
+  [
+    "True Path AI reservation",
+    {
+      race: { truepath: true },
+      afterFarmAction: (root) => {
+        root.tech.titan_ai_core = 3;
+      },
+    },
+  ],
+]) {
+  const settings = {
+    autoTrigger: true,
+    autoPower: true,
+    ...(label === "Spy reservation"
+      ? { autoFight: true }
+      : { prestigeType: "apocalypse" }),
+    triggers: [
+      {
+        priority: 0,
+        requirementType: "ResourceMaxCost",
+        requirementId: "Polymer",
+        requirementCount: 100,
+        actionType: "build",
+        actionId: "city-farm",
+        actionCount: 1,
+      },
+    ],
+  };
+  const result = runDemandSampleScenario(
+    settings,
+    false,
+    false,
+    undefined,
+    lifecycle,
+  );
+  assert.ok(result.invoked.includes("city-farm.action"));
+  assert.deepEqual(
+    result.powerPrerequisiteReports,
+    [
+      {
+        spy: label === "Spy reservation" ? "unavailable" : "not-needed",
+        ai: label === "True Path AI reservation" ? "unavailable" : "not-needed",
+      },
+    ],
+    `${label} must be revalidated from already captured controls without discovery`,
+  );
+  assert.equal(
+    result.invoked.some((entry) => /\.power_(on|off)$/.test(entry)),
+    false,
+    `${label} cannot permit a Power switch mutation while its newly required authority is absent`,
   );
 }
 

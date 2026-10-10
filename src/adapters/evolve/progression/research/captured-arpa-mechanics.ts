@@ -27,6 +27,7 @@ import type {
   CapturedArpaOffer,
 } from "../../../../ports/captured-arpa-mechanics.ts";
 import type { GameRootStateSource } from "../../../../ports/game-root-state.ts";
+import type { GameControlRegistry } from "../../../../ports/game-control-registry.ts";
 import type { GameTabDiscovery } from "../../../../ports/game-tab-discovery.ts";
 import type { VueBindingObserver } from "../../vue-capture.ts";
 import {
@@ -70,7 +71,10 @@ type ArpaCaptureFailure = { readonly reason: string };
 
 export interface CapturedArpaMechanicsDependencies {
   readonly rootState: GameRootStateSource;
+  readonly controls: GameControlRegistry;
   readonly discovery: GameTabDiscovery;
+  /** Progression changes can make a later native Physics draw offer a project. */
+  readonly readReadinessEpoch: () => string;
   /** The page realm, for the `Object.keys` the draw is observed through. */
   readonly pageWindow: unknown;
   /** Every `vBind` configuration the capture records, with the game-owned closures it declared. */
@@ -291,11 +295,13 @@ export function createCapturedArpaMechanics(
   dependencies: CapturedArpaMechanicsDependencies,
 ): CapturedArpaMechanics {
   const { rootState, discovery, pageWindow, bindings } = dependencies;
+  const { controls, readReadinessEpoch } = dependencies;
   const reportDiagnostic = dependencies.onDiagnostic ?? (() => {});
 
   let authority: ArpaAuthority | undefined;
-  /** The root the last bootstrap attempt failed against, so one failure is one draw. */
+  /** Failed attempts are held until the root or native offer readiness changes. */
   let failedForRoot: unknown = undefined;
+  let failedReadinessEpoch: string | undefined;
   /**
    * The final adjusted native cost record for one project, or `undefined` when the record consumed
    * by the native display loop could not be identified.
@@ -476,6 +482,25 @@ export function createCapturedArpaMechanics(
     return { reason: "the Physics draw bound no A.R.P.A. project row" };
   };
 
+  const readCaptureReadiness = (): string => {
+    const tabGeneration = controls.resolve(MAIN_TAB_CONTROL)?.generation;
+    const projectBindings = controls
+      .capturedElementIds()
+      .filter(
+        (elementId) => arpaProjectIdFromElementId(elementId) !== undefined,
+      )
+      .map((elementId) => {
+        const generation = controls.resolve(elementId)?.generation;
+        return `${elementId}:${generation ?? "absent"}`;
+      })
+      .sort();
+    return [
+      readReadinessEpoch(),
+      `tab:${tabGeneration ?? "absent"}`,
+      `projects:${projectBindings.join(",")}`,
+    ].join("|");
+  };
+
   const attemptCapture = (): CapturedArpaCapture => {
     const bound = new Map<string, Readonly<Record<string, unknown>>>();
     const observed: unknown[] = [];
@@ -572,13 +597,23 @@ export function createCapturedArpaMechanics(
           kind: "unavailable",
           reason: "the game root has not been captured yet",
         };
-      if (failedForRoot === root)
+      const readiness = readCaptureReadiness();
+      if (failedForRoot === root && failedReadinessEpoch === readiness)
         return {
           kind: "unavailable",
           reason: "the native A.R.P.A. capture already failed for this root",
         };
-      failedForRoot = root;
-      return attemptCapture();
+      const capture = attemptCapture();
+      if (capture.kind === "captured") {
+        failedForRoot = undefined;
+        failedReadinessEpoch = undefined;
+      } else {
+        failedForRoot = root;
+        // Record after the attempt: bindings created by an incomplete draw are not a readiness
+        // transition that should immediately schedule another costly Physics draw.
+        failedReadinessEpoch = readCaptureReadiness();
+      }
+      return capture;
     },
 
     readOffers(root: unknown) {

@@ -121,6 +121,9 @@ function makeScenario({
   progress = 20,
   rank = 0,
   additionalProjectIds = [],
+  gameTechHighTech = 7,
+  mainTabReady = true,
+  ambiguousRegistryObservation = false,
   afterNativeBuild,
   currentTab = 2,
   initialProject = true,
@@ -270,7 +273,7 @@ function makeScenario({
     stats: { days: 100, reset: 1, resets: 1 },
     tech: {
       mad: 1,
-      high_tech: 7,
+      high_tech: gameTechHighTech,
       genetics: 2,
       ...(marketStorage ? { trade: true } : {}),
     },
@@ -472,16 +475,22 @@ function makeScenario({
     });
   };
 
-  vue.createApp({
-    el: "#mainColumn div.content",
-    methods: {
-      swapTab(index) {
-        swaps.push(index);
-        if (index === 5) drawArpaPanel();
-        return index;
+  const bindMainTab = () =>
+    vue.createApp({
+      el: "#mainColumn div.content",
+      methods: {
+        swapTab(index) {
+          swaps.push(index);
+          if (index === 5) {
+            if (ambiguousRegistryObservation)
+              page.Object.keys({ lhc: nativeProjectDefinitions.lhc });
+            drawArpaPanel();
+          }
+          return index;
+        },
       },
-    },
-  });
+    });
+  if (mainTabReady) bindMainTab();
   if (currentTab === 5) drawArpaPanel();
   if (marketStorage) {
     gameRoot.resource.Crates = { amount: 0, max: 100, display: false };
@@ -603,6 +612,7 @@ function makeScenario({
     setPanelAvailable(value) {
       panelAvailable = value;
     },
+    bindMainTab,
     redrawProject({ displayCost, perPercentCost, bindControl: bind }) {
       drawnDisplayCost = displayCost;
       actualPerPercentCost = perPercentCost;
@@ -633,6 +643,116 @@ function withScenario(options, run) {
     scenario.dispose();
   }
 }
+
+// A missing main-tab control is not memoized as a permanent failure for the root. Capturing the
+// native tab binding is a readiness transition and permits one subsequent Physics attempt.
+withScenario(
+  {
+    mainTabReady: false,
+    scriptSettings: {
+      autoARPA: true,
+      arpa_lhc: true,
+      arpa_p_lhc: 0,
+      arpa_m_lhc: -1,
+      arpa_w_lhc: 2,
+    },
+  },
+  (scenario) => {
+    scenario.tick();
+    assert.deepEqual(scenario.calls, []);
+    assert.deepEqual(scenario.draws, []);
+    scenario.bindMainTab();
+    scenario.tick();
+    assert.deepEqual(scenario.calls, [["lhc", 5]]);
+    assert.equal(scenario.gameRoot.settings.civTabs, 2);
+    assert.ok(scenario.swaps.includes(5));
+  },
+);
+
+// A refused Physics draw stays fail-closed on unchanged state; a later progression epoch allows
+// one retry and establishes the registry together with its native project binding.
+withScenario(
+  {
+    scriptSettings: {
+      autoARPA: true,
+      arpa_lhc: true,
+      arpa_p_lhc: 0,
+      arpa_m_lhc: -1,
+      arpa_w_lhc: 2,
+    },
+  },
+  (scenario) => {
+    scenario.setPanelAvailable(false);
+    scenario.tick();
+    assert.deepEqual(scenario.calls, []);
+    assert.deepEqual(scenario.draws, ["panel-disabled"]);
+    scenario.tick();
+    assert.deepEqual(
+      scenario.draws,
+      ["panel-disabled"],
+      "unchanged cycles do not redraw Physics",
+    );
+    scenario.setPanelAvailable(true);
+    scenario.gameRoot.tech.high_tech += 1;
+    scenario.tick();
+    assert.deepEqual(scenario.calls, [["lhc", 5]]);
+    assert.equal(scenario.gameRoot.settings.civTabs, 2);
+  },
+);
+
+// A successful Physics enumeration with no offered rows is not sufficient authority. The newly
+// offered project is captured after its native high-tech gate changes on the same root.
+withScenario(
+  {
+    projectId: "surface_elevator",
+    gameTechHighTech: 6,
+    scriptSettings: {
+      autoARPA: true,
+      arpa_surface_elevator: true,
+      arpa_p_surface_elevator: 0,
+      arpa_m_surface_elevator: -1,
+      arpa_w_surface_elevator: 1,
+    },
+  },
+  (scenario) => {
+    scenario.tick();
+    assert.deepEqual(scenario.calls, []);
+    assert.equal(scenario.draws.at(-1).rows, 0);
+    const drawsAfterEmptyOffer = scenario.draws.length;
+    scenario.tick();
+    assert.equal(scenario.draws.length, drawsAfterEmptyOffer);
+    scenario.gameRoot.tech.high_tech = 7;
+    scenario.tick();
+    assert.deepEqual(scenario.calls, [["surface_elevator", 5]]);
+    assert.equal(scenario.gameRoot.settings.civTabs, 2);
+  },
+);
+
+// Ambiguous Object.keys observations remain unavailable and do not cause per-cycle retries.
+withScenario(
+  {
+    ambiguousRegistryObservation: true,
+    scriptSettings: {
+      autoARPA: true,
+      arpa_lhc: true,
+      arpa_p_lhc: 0,
+      arpa_m_lhc: -1,
+      arpa_w_lhc: 2,
+    },
+  },
+  (scenario) => {
+    scenario.tick();
+    assert.deepEqual(scenario.calls, []);
+    const failedDraws = scenario.draws.length;
+    scenario.tick();
+    assert.equal(scenario.draws.length, failedDraws);
+    assert.ok(
+      scenario.logs.some((message) =>
+        message.includes("more than one candidate project registry"),
+      ),
+    );
+  },
+);
 
 // This is the reported blocker in its production composition: the actual game starts with an
 // empty portal record before Mech Bay is built. Mech-first demand must not suppress the LHC build.

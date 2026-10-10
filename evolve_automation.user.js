@@ -36705,8 +36705,8 @@
     return keys.length !== Object.keys(sampled3).length ? !1 : keys.every((key) => current[key] === sampled3[key]);
   }
   function createCapturedArpaMechanics(dependencies) {
-    let { rootState, discovery, pageWindow, bindings } = dependencies, reportDiagnostic = dependencies.onDiagnostic ?? (() => {
-    }), authority, failedForRoot, captureAdjustedCosts = (projectId) => {
+    let { rootState, discovery, pageWindow, bindings } = dependencies, { controls: controls2, readReadinessEpoch } = dependencies, reportDiagnostic = dependencies.onDiagnostic ?? (() => {
+    }), authority, failedForRoot, failedReadinessEpoch, captureAdjustedCosts = (projectId) => {
       let current = authority;
       if (current === void 0) return;
       let adjustedReceiver, conflictingReceivers = !1, restore2 = observeArpaFinalCostIteration(pageWindow, (receiver) => {
@@ -36811,6 +36811,18 @@
         });
       }
       return { reason: "the Physics draw bound no A.R.P.A. project row" };
+    }, readCaptureReadiness = () => {
+      let tabGeneration = controls2.resolve(MAIN_TAB_CONTROL)?.generation, projectBindings = controls2.capturedElementIds().filter(
+        (elementId) => arpaProjectIdFromElementId(elementId) !== void 0
+      ).map((elementId) => {
+        let generation = controls2.resolve(elementId)?.generation;
+        return `${elementId}:${generation ?? "absent"}`;
+      }).sort();
+      return [
+        readReadinessEpoch(),
+        `tab:${tabGeneration ?? "absent"}`,
+        `projects:${projectBindings.join(",")}`
+      ].join("|");
     }, attemptCapture = () => {
       let bound = /* @__PURE__ */ new Map(), observed2 = [], watching = !0, unobserve = bindings((elementId, methods) => {
         if (!watching) return;
@@ -36868,13 +36880,19 @@
       ensureCaptured() {
         if (authority !== void 0) return { kind: "captured" };
         let root = rootState.readRoot();
-        return root === void 0 ? {
-          kind: "unavailable",
-          reason: "the game root has not been captured yet"
-        } : failedForRoot === root ? {
-          kind: "unavailable",
-          reason: "the native A.R.P.A. capture already failed for this root"
-        } : (failedForRoot = root, attemptCapture());
+        if (root === void 0)
+          return {
+            kind: "unavailable",
+            reason: "the game root has not been captured yet"
+          };
+        let readiness = readCaptureReadiness();
+        if (failedForRoot === root && failedReadinessEpoch === readiness)
+          return {
+            kind: "unavailable",
+            reason: "the native A.R.P.A. capture already failed for this root"
+          };
+        let capture = attemptCapture();
+        return capture.kind === "captured" ? (failedForRoot = void 0, failedReadinessEpoch = void 0) : (failedForRoot = root, failedReadinessEpoch = readCaptureReadiness()), capture;
       },
       readOffers(root) {
         return readOffers(root);
@@ -56048,8 +56066,10 @@ Only continue if you trust the source. Injected code:
         reportOnce(`${name} stopped: ${String(error)}`);
         return;
       }
-    }, readDemand = () => EMPTY_DEMAND_SAMPLE, readDemandFor = (owner) => () => readDemand(owner), demandPrerequisitesThisCycle, readDemandPrerequisites = () => demandPrerequisitesThisCycle, mechSupplyReservation = createMechSupplyReservation(), arpa = createCapturedArpaMechanics({
+    }, readDemand = () => EMPTY_DEMAND_SAMPLE, readDemandFor = (owner) => () => readDemand(owner), demandPrerequisitesThisCycle, readDemandPrerequisites = () => demandPrerequisitesThisCycle, mechSupplyReservation = createMechSupplyReservation(), readArpaReadinessEpoch = () => "progression-not-ready", arpa = createCapturedArpaMechanics({
       rootState: pageCapture2.rootState,
+      controls: pageCapture2.controls,
+      readReadinessEpoch: () => readArpaReadinessEpoch(),
       discovery: createCapturedTabDiscovery({
         rootState: pageCapture2.rootState,
         controls: pageCapture2.controls,
@@ -56108,7 +56128,9 @@ Only continue if you trust the source. Injected code:
       diagnostics: phaseDiagnostics,
       onDiagnostic: reportDiagnostic,
       onActivity
-    }), savingTargetThisCycle, constructionRunning = !1, constructionSuppressedThisCycle = !1, cycleConstructionObservations = Object.freeze({
+    });
+    readArpaReadinessEpoch = progression.readProgressionEpoch;
+    let savingTargetThisCycle, constructionRunning = !1, constructionSuppressedThisCycle = !1, cycleConstructionObservations = Object.freeze({
       ...progression.observations,
       readSavingTarget() {
         let settings = settingsStore.readRaw();

@@ -946,8 +946,11 @@ export function startCapturedRuntime({
   let demandPrerequisitesThisCycle: DemandPrerequisiteReport | undefined;
   const readDemandPrerequisites = () => demandPrerequisitesThisCycle;
   const mechSupplyReservation = createMechSupplyReservation();
+  let readArpaReadinessEpoch: () => string = () => "progression-not-ready";
   const arpa = createCapturedArpaMechanics({
     rootState: pageCapture.rootState,
+    controls: pageCapture.controls,
+    readReadinessEpoch: () => readArpaReadinessEpoch(),
     discovery: createCapturedTabDiscovery({
       rootState: pageCapture.rootState,
       controls: pageCapture.controls,
@@ -1023,6 +1026,7 @@ export function startCapturedRuntime({
     onDiagnostic: reportDiagnostic,
     onActivity,
   });
+  readArpaReadinessEpoch = progression.readProgressionEpoch;
   let savingTargetThisCycle: SavingTarget | null | undefined;
   let constructionRunning = false;
   let constructionSuppressedThisCycle = false;
