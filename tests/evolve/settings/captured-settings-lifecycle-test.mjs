@@ -248,6 +248,84 @@ function createLifecycle(rawText = null, ids = DEFAULT_CONTROL_IDS) {
   assert.notEqual(settings.readRaw().overrides.tickRate, undefined);
 }
 
+// Unavailable live catalogs defer dynamic migrations/defaults without discarding edits. Startup
+// initialization and explicit import/reset remain active, and recovery pays the owed sweep once.
+{
+  const { lifecycle, settings, defaults, saved } = createLifecycle(
+    JSON.stringify({ masterScriptToggle: true, autoBuild: false }),
+  );
+  let generation;
+  let migrationCatalogReads = 0;
+  defaults.readCatalogGeneration = () => generation;
+  const readMigrationCatalogs = defaults.readMigrationCatalogs;
+  defaults.readMigrationCatalogs = () => {
+    migrationCatalogReads += 1;
+    return readMigrationCatalogs();
+  };
+
+  lifecycle.ensureDynamicDefaults();
+  assert.equal(
+    lifecycle.stats().initializations,
+    1,
+    "startup initialization still runs",
+  );
+  assert.equal(lifecycle.stats().dynamicDefaultRuns, 0);
+  for (let read = 0; read < 5; read += 1) lifecycle.ensureDynamicDefaults();
+  assert.equal(
+    lifecycle.stats().dynamicDefaultRuns,
+    0,
+    "incomplete initial capture stays owed",
+  );
+
+  generation = "complete";
+  lifecycle.ensureDynamicDefaults();
+  const completeRuns = lifecycle.stats().dynamicDefaultRuns;
+  settings.readRaw().job_b1_farmer = 17;
+
+  for (const unavailableReason of [
+    "incomplete capture",
+    "offline suppression",
+  ]) {
+    generation = undefined;
+    for (let read = 0; read < 5; read += 1) lifecycle.ensureDynamicDefaults();
+    assert.equal(lifecycle.stats().dynamicDefaultRuns, completeRuns);
+    assert.equal(settings.readRaw().job_b1_farmer, 17);
+    assert.equal(
+      migrationCatalogReads,
+      1,
+      `${unavailableReason} must not read live catalogs`,
+    );
+  }
+
+  generation = "restored";
+  lifecycle.ensureDynamicDefaults();
+  assert.equal(lifecycle.stats().dynamicDefaultRuns, completeRuns + 1);
+  assert.equal(settings.readRaw().job_b1_farmer, 17);
+
+  generation = undefined;
+  lifecycle.replaceAndInitialize({ masterScriptToggle: true, autoBuild: true });
+  assert.equal(
+    settings.readRaw().autoBuild,
+    true,
+    "import initialization remains authoritative",
+  );
+  lifecycle.ensureDynamicDefaults();
+  assert.equal(lifecycle.stats().dynamicDefaultRuns, completeRuns + 1);
+  generation = "after-import";
+  lifecycle.ensureDynamicDefaults();
+  assert.equal(settings.readRaw().job_b1_farmer, -1);
+
+  generation = undefined;
+  lifecycle.resetSection("job");
+  const afterReset = lifecycle.stats().dynamicDefaultRuns;
+  lifecycle.ensureDynamicDefaults();
+  assert.equal(lifecycle.stats().dynamicDefaultRuns, afterReset);
+  generation = "after-reset";
+  lifecycle.ensureDynamicDefaults();
+  assert.equal(lifecycle.stats().dynamicDefaultRuns, afterReset + 1);
+  assert.notEqual(saved.read(), null);
+}
+
 // An empty object is a valid partial import: initialization supplies the missing defaults.
 {
   const inspection = inspectImportedSettings("{}");

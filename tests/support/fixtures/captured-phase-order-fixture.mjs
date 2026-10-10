@@ -181,8 +181,7 @@ export function runCapturedPhaseOrderCycle({
       ]),
       ...(mechanics ?? {}),
       readStructures: mechanics?.readStructures ?? (() => undefined),
-      readStructureIdentities:
-        mechanics?.readStructureIdentities ?? (() => undefined),
+      readStructureIdentities: mechanics?.readStructureIdentities ?? (() => []),
     },
     keyState: { readPressed: () => false },
     controlUsage: { readUsage: () => [] },

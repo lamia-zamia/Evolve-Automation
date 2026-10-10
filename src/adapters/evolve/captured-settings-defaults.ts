@@ -501,6 +501,8 @@ export function createCapturedSettingsDefaults({
   let buildingRoot: unknown;
   let buildingControlRevision: number | undefined;
   let buildingElementIds: readonly string[] | undefined;
+  let buildingIdentities:
+    Parameters<typeof trackCapturedBuildingGenerationStructure>[3] | undefined;
   let stopBuildingObservation: (() => void) | undefined;
   let buildingObservationFailed = false;
   let buildingStructuralRevision = 0;
@@ -587,6 +589,7 @@ export function createCapturedSettingsDefaults({
       buildingElementIds = elementIds;
       const identities = mechanics.readStructureIdentities();
       if (identities === undefined) return undefined;
+      buildingIdentities = identities;
       buildingControlFacts = readCapturedBuildingControlWitness(
         root,
         controls,
@@ -614,6 +617,25 @@ export function createCapturedSettingsDefaults({
       elementIdsChanged
     ) {
       const controlsChanged = buildingControlRevision !== controlRevision;
+      if (controlsChanged || elementIdsChanged) {
+        // Native inclusion depends on captured control membership. Refresh this comparatively
+        // rare boundary, while keeping unchanged reads free of a native identity scan.
+        const identities = mechanics.readStructureIdentities();
+        if (identities === undefined) {
+          stopBuildingTracker();
+          return undefined;
+        }
+        const nextNativeFacts = readCapturedBuildingNativeWitness(
+          root,
+          elementIds,
+          identities,
+        );
+        if (nextNativeFacts !== buildingNativeFacts) {
+          buildingNativeFacts = nextNativeFacts;
+          buildingStructuralRevision += 1;
+        }
+        buildingIdentities = identities;
+      }
       const nextControlFacts = readCapturedBuildingControlWitness(
         root,
         controls,
@@ -635,7 +657,8 @@ export function createCapturedSettingsDefaults({
     }
 
     if (stopBuildingObservation === undefined) {
-      const identities = mechanics.readStructureIdentities();
+      const identities =
+        buildingIdentities ?? mechanics.readStructureIdentities();
       if (identities === undefined) return undefined;
       const stop = reactiveObserver.observe(
         () => readBuildingSources(root, controls, elementIds, identities),

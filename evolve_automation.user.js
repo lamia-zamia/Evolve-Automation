@@ -37617,7 +37617,7 @@
           (key) => foundryResourceIds.has(key)
         )
       };
-    }, buildingControlFacts, buildingNativeFacts, buildingRoot, buildingControlRevision, buildingElementIds, stopBuildingObservation, buildingObservationFailed = !1, buildingStructuralRevision = 0, readBuildingSources = (root, controls3, elementIds, identities) => trackCapturedBuildingGenerationStructure(
+    }, buildingControlFacts, buildingNativeFacts, buildingRoot, buildingControlRevision, buildingElementIds, buildingIdentities, stopBuildingObservation, buildingObservationFailed = !1, buildingStructuralRevision = 0, readBuildingSources = (root, controls3, elementIds, identities) => trackCapturedBuildingGenerationStructure(
       root,
       controls3,
       elementIds,
@@ -37659,7 +37659,7 @@
         stopBuildingTracker(), buildingObservationFailed = !1, buildingRoot = root, buildingControlRevision = controlRevision, buildingElementIds = elementIds;
         let identities = mechanics.readStructureIdentities();
         if (identities === void 0) return;
-        buildingControlFacts = readCapturedBuildingControlWitness(
+        buildingIdentities = identities, buildingControlFacts = readCapturedBuildingControlWitness(
           root,
           controls2,
           elementIds
@@ -37669,7 +37669,21 @@
           identities
         ), previousControlFacts !== void 0 && previousControlFacts !== buildingControlFacts && (buildingStructuralRevision += 1), previousNativeFacts !== void 0 && previousNativeFacts !== buildingNativeFacts && (buildingStructuralRevision += 1);
       } else if (buildingControlRevision !== controlRevision || elementIdsChanged) {
-        let controlsChanged = buildingControlRevision !== controlRevision, nextControlFacts = readCapturedBuildingControlWitness(
+        let controlsChanged = buildingControlRevision !== controlRevision;
+        if (controlsChanged || elementIdsChanged) {
+          let identities = mechanics.readStructureIdentities();
+          if (identities === void 0) {
+            stopBuildingTracker();
+            return;
+          }
+          let nextNativeFacts = readCapturedBuildingNativeWitness(
+            root,
+            elementIds,
+            identities
+          );
+          nextNativeFacts !== buildingNativeFacts && (buildingNativeFacts = nextNativeFacts, buildingStructuralRevision += 1), buildingIdentities = identities;
+        }
+        let nextControlFacts = readCapturedBuildingControlWitness(
           root,
           controls2,
           elementIds
@@ -37677,7 +37691,7 @@
         nextControlFacts !== buildingControlFacts && (buildingControlFacts = nextControlFacts, buildingStructuralRevision += 1), buildingControlRevision = controlRevision, (controlsChanged || elementIdsChanged) && (stopBuildingTracker(), buildingRoot = root, buildingControlRevision = controlRevision, buildingElementIds = elementIds);
       }
       if (stopBuildingObservation === void 0) {
-        let identities = mechanics.readStructureIdentities();
+        let identities = buildingIdentities ?? mechanics.readStructureIdentities();
         if (identities === void 0) return;
         let stop = reactiveObserver.observe(
           () => readBuildingSources(root, controls2, elementIds, identities),
@@ -38334,7 +38348,11 @@
       },
       ensureDynamicDefaults() {
         let generation = defaults.readCatalogGeneration();
-        if (generation !== void 0 && initialized && appliedGeneration === generation) {
+        if (generation === void 0) {
+          initialized || initialize(), appliedGeneration = void 0;
+          return;
+        }
+        if (initialized && appliedGeneration === generation) {
           dynamicDefaultSkips += 1;
           return;
         }

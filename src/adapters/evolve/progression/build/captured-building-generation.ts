@@ -111,9 +111,11 @@ export function readCapturedBuildingNativeWitness(
 }
 
 /**
- * Establishes Vue dependencies for exactly the Building facts represented above. Vue tracks own
- * key iteration for additions/deletions; `Object.hasOwn` and `in` do not meet this contract because
- * they respectively miss changes or also subscribe to ordinary numeric writes.
+ * Establishes Vue dependencies for exactly the Building facts represented above. At pinned
+ * DeadSpace `db38e2af`, `vars.js` creates game state as object literals and `save.js` restores
+ * JSON-parsed records before `functions.js` wraps that same state with Vue. Native Building records
+ * therefore do not inherit `on`; Vue's named `in` dependency matches the witness's own-property test
+ * without tracking every structural key or ordinary numeric writes.
  */
 export function trackCapturedBuildingGenerationStructure(
   root: unknown,

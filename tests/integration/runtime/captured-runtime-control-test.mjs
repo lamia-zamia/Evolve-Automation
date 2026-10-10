@@ -663,7 +663,7 @@ assert.equal(unsubscribeCount, 1);
     uninstall: () => {},
     mechanics: {
       readStructures: () => undefined,
-      readStructureIdentities: () => undefined,
+      readStructureIdentities: () => [],
     },
   };
   const firstStop = startCapturedRuntime({
@@ -2537,12 +2537,8 @@ function runCapturedJobsMatrixScenario({
 
 // The production captured cycle is a separate orchestration boundary from runTick. These phase
 // failures make its actual order observable without relying on source-text ordering or a test-only
-// expected-phase constant. The always-on building preflight consumes the first root failure, and
-// the captured mercenary phase is included before the existing spy/espionage/battle sequence. The
-// extra bootstrap reads are the captured settings catalogs sampled before feature phases; they
-// return the root unchanged so the original phase-failure boundary remains observable. The count
-// is exact: the storage reset context samples the root once, so adding or removing a bootstrap
-// root read moves the failure window and this number moves with it.
+// expected-phase constant. Because the first live settings catalog sample is unavailable, dynamic
+// defaults stay owed and combat phases that require fresh root authority do not invoke controls.
 {
   const phaseFailures = [];
   const observedPhases = [];
@@ -2670,7 +2666,7 @@ function runCapturedJobsMatrixScenario({
       uninstall: () => {},
       mechanics: {
         readStructures: () => undefined,
-        readStructureIdentities: () => undefined,
+        readStructureIdentities: () => [],
       },
     },
     document: {},
@@ -2716,12 +2712,14 @@ function runCapturedJobsMatrixScenario({
     "autoBuild",
     "autoFight.mercenary",
     "autoFight.spy",
-    "autoFight.espionage",
-    "autoFight.battle",
     "autoTax",
     "autoGovernment",
   ]);
-  assert.deepEqual(controlCalls[0], ["foreign", "vis"]);
+  assert.deepEqual(
+    controlCalls,
+    [],
+    "combat actions must not use controls while the live root catalog is unavailable",
+  );
   assert.deepEqual(
     phaseFailures
       .filter(
@@ -2739,7 +2737,8 @@ function runCapturedJobsMatrixScenario({
       "autoResearch",
       "autoBuild",
       "autoFight.mercenary",
-      "autoFight.battle",
+      "autoFight.spy",
+      "autoFight.espionage",
       "autoTax",
       "autoGovernment",
     ],

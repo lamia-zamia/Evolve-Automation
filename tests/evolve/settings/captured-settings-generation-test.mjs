@@ -13,6 +13,11 @@ import { createRequire } from "node:module";
 import { resolve } from "node:path";
 
 import { createCapturedSettingsDefaults } from "../../../src/adapters/evolve/captured-settings-defaults.ts";
+import { installVueCapture } from "../../../src/adapters/evolve/vue-capture.ts";
+import {
+  readCapturedBuildingGenerationWitness,
+  readCapturedBuildingNativeWitness,
+} from "../../../src/adapters/evolve/progression/build/captured-building-generation.ts";
 import {
   createSettingsFixture,
   createSettingsRoot,
@@ -47,6 +52,79 @@ function nativeMechanics(readStructures) {
     readStructureIdentities: () =>
       readStructures()?.map(nativeBuildingIdentity),
   };
+}
+
+// The real Vue capture brackets raw offline simulation, even when the same proxy is restored on a
+// later MessageChannel task. The first trusted read must resample changes made while nonreactive.
+{
+  const pageVue = { ...vue };
+  const capture = installVueCapture({ Vue: pageVue });
+  const root = pageVue.reactive(
+    createSettingsRoot({
+      stats: {},
+      city: {},
+      space: { offline_building: { count: 1 } },
+    }),
+  );
+  const defaults = createCapturedSettingsDefaults({
+    rootState: capture.rootState,
+    controls: capture.controls,
+    reactiveObserver: {
+      observe(read, onChange, onError) {
+        try {
+          return vue.watch(
+            read().map((source) => () => source()),
+            onChange,
+            {
+              flush: "sync",
+            },
+          );
+        } catch {
+          onError();
+          return undefined;
+        }
+      },
+    },
+    mechanics: nativeMechanics(() => [
+      nativeBuilding("space-offline_building"),
+    ]),
+  });
+  const beforeOffline = defaults.readCatalogGeneration();
+  const rawRoot = pageVue.toRaw(root);
+  assert.equal(capture.rootState.isReactivitySuppressed(), true);
+  assert.equal(defaults.readCatalogGeneration(), undefined);
+
+  const channel = new MessageChannel();
+  await new Promise((resolve) => {
+    channel.port1.onmessage = () => {
+      delete rawRoot.space.offline_building.on;
+      rawRoot.space.offline_building = { count: 2, on: 0 };
+      const restored = pageVue.reactive(rawRoot);
+      assert.equal(restored, root, "Vue restores the cached same proxy");
+      assert.equal(capture.rootState.isReactivitySuppressed(), false);
+      const afterOffline = defaults.readCatalogGeneration();
+      assert.notEqual(afterOffline, beforeOffline);
+      channel.port1.close();
+      channel.port2.close();
+      resolve();
+    };
+    channel.port2.postMessage("restore");
+  });
+  const beforeRootReplacement = defaults.readCatalogGeneration();
+  const replacement = pageVue.reactive(
+    createSettingsRoot({
+      stats: {},
+      city: {},
+      space: { offline_building: { count: 3, on: 0 } },
+    }),
+  );
+  assert.notEqual(replacement, root);
+  assert.notEqual(
+    defaults.readCatalogGeneration(),
+    beforeRootReplacement,
+    "a newly captured native root is fully resampled",
+  );
+  capture.uninstall();
 }
 
 // --- startup initializes exactly once, and a redrawn UI does not redo it ------------------------
@@ -613,7 +691,156 @@ function nativeMechanics(readStructures) {
     beforeRedrawnActChange,
     "act changes on the redrawn control invalidate the revision",
   );
-  assert.equal(identityReads, settledIdentityReads + 3);
+  assert.equal(identityReads, settledIdentityReads + 2);
+}
+
+// A native-only identity becomes part of the witness when a control is committed. The transition
+// scans identities once, then the replacement watcher follows the current same-ID control handle.
+{
+  const binding = "space-native_only_building";
+  const secondBinding = "space-native_only_building_2";
+  let root = vue.reactive(
+    createSettingsRoot({
+      space: {
+        native_only_building: { count: 1 },
+        native_only_building_2: { count: 1, on: 0 },
+      },
+    }),
+  );
+  const firstNative = nativeBuilding(binding);
+  const secondNative = nativeBuilding(secondBinding);
+  let identities = [firstNative, secondNative].map(nativeBuildingIdentity);
+  let ids = [];
+  let controlRevision = 0;
+  let controlData = vue.reactive({ act: root.space.native_only_building });
+  let identityReads = 0;
+  let observationCount = 0;
+  const controls = {
+    capturedElementIds: () => [...ids],
+    readRevision: () => controlRevision,
+    resolve: (id) => (id === binding ? { data: controlData } : undefined),
+  };
+  const defaults = createCapturedSettingsDefaults({
+    rootState: {
+      readRoot: () => root,
+      isReactivitySuppressed: () => false,
+      subscribeRootReplaced: () => () => {},
+    },
+    controls,
+    reactiveObserver: {
+      observe(read, onChange, onError) {
+        observationCount += 1;
+        try {
+          return vue.watch(
+            read().map((source) => () => source()),
+            onChange,
+            {
+              flush: "sync",
+            },
+          );
+        } catch {
+          onError();
+          return undefined;
+        }
+      },
+    },
+    mechanics: {
+      readStructures: () => [],
+      readStructureIdentities: () => {
+        identityReads += 1;
+        return identities;
+      },
+    },
+  });
+
+  const originalBefore = readCapturedBuildingGenerationWitness(
+    root,
+    controls,
+    ids,
+    identities,
+  );
+  const nativeBefore = readCapturedBuildingNativeWitness(root, ids, identities);
+  const initial = defaults.readCatalogGeneration();
+  assert.equal(identityReads, 1);
+  for (let read = 0; read < 10; read += 1) {
+    assert.equal(defaults.readCatalogGeneration(), initial);
+  }
+  assert.equal(
+    identityReads,
+    1,
+    "unchanged reads do not rescan native identities",
+  );
+  assert.equal(nativeBefore, "[]", "uncaptured native-only rows are excluded");
+
+  ids = [binding];
+  controlRevision += 1;
+  const committed = defaults.readCatalogGeneration();
+  assert.notEqual(committed, initial);
+  assert.notEqual(
+    readCapturedBuildingNativeWitness(root, ids, identities),
+    nativeBefore,
+    "the newly captured control includes its native identity",
+  );
+  assert.notEqual(
+    readCapturedBuildingGenerationWitness(root, controls, ids, identities),
+    originalBefore,
+    "the full witness detects the same membership transition",
+  );
+  assert.equal(
+    identityReads,
+    2,
+    "one native scan is allowed at control revision",
+  );
+  assert.equal(
+    observationCount,
+    2,
+    "watcher sources are rebuilt for the new control",
+  );
+
+  const sameIdBeforeRedraw = defaults.readCatalogGeneration();
+  controlData = vue.reactive({ act: root.space.native_only_building });
+  controlRevision += 1;
+  const redrawn = defaults.readCatalogGeneration();
+  assert.equal(
+    redrawn,
+    sameIdBeforeRedraw,
+    "same-ID redraw retains equivalent facts",
+  );
+  assert.equal(
+    observationCount,
+    3,
+    "same-ID redraw watches the replacement handle",
+  );
+  controlData.act.on = 0;
+  const afterOwnOnAddition = defaults.readCatalogGeneration();
+  assert.notEqual(afterOwnOnAddition, redrawn);
+  controlData.act.on = 1;
+  assert.equal(defaults.readCatalogGeneration(), afterOwnOnAddition);
+
+  // A rejected control revision keeps the committed ID and rebinds to its retained handle.
+  controlRevision += 1;
+  const afterRejection = defaults.readCatalogGeneration();
+  assert.equal(afterRejection, afterOwnOnAddition);
+  assert.equal(observationCount, 4);
+  controlData.act = 0;
+  assert.notEqual(defaults.readCatalogGeneration(), afterRejection);
+
+  const beforeAddition = defaults.readCatalogGeneration();
+  ids = [binding, secondBinding];
+  controlRevision += 1;
+  const withAddedId = defaults.readCatalogGeneration();
+  assert.notEqual(
+    withAddedId,
+    beforeAddition,
+    "captured ID additions remain observable",
+  );
+  ids = [secondBinding, binding];
+  controlRevision += 1;
+  assert.notEqual(
+    defaults.readCatalogGeneration(),
+    withAddedId,
+    "captured ID ordering remains observable",
+  );
 }
 
 // --- import forces reinitialization --------------------------------------------------------------

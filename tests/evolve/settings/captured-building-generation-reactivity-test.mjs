@@ -12,6 +12,40 @@ const requireTools = createRequire(resolve(root, "tools/package.json"));
 const vue = requireTools("vue");
 assert.equal(requireTools("vue/package.json").version, "3.5.22");
 
+// Native game Building records are created as object literals and restored from JSON. Vue's `in`
+// dependency tracks the named key precisely; own-property membership is equivalent under that
+// upstream contract, unlike an object supplied with an inherited `on` property.
+const inherited = vue.reactive(
+  Object.assign(Object.create({ on: 0 }), { count: 1 }),
+);
+assert.equal(Object.hasOwn(inherited, "on"), false);
+assert.equal("on" in inherited, true);
+let inheritedKeyChanges = 0;
+const stopInheritedKeyWatch = vue.watch(
+  () => "on" in inherited,
+  () => {
+    inheritedKeyChanges += 1;
+  },
+  { flush: "sync" },
+);
+inherited.on = 0;
+assert.equal(Object.hasOwn(inherited, "on"), true);
+assert.equal("on" in inherited, true);
+assert.equal(
+  inheritedKeyChanges,
+  0,
+  "pinned Vue does not distinguish own `on` shadowing an inherited key",
+);
+delete inherited.on;
+assert.equal(Object.hasOwn(inherited, "on"), false);
+assert.equal("on" in inherited, true);
+assert.equal(
+  inheritedKeyChanges,
+  0,
+  "pinned Vue does not notify when an inherited `on` becomes own-absent",
+);
+stopInheritedKeyWatch();
+
 const binding = "city-mill";
 const identities = [
   {

@@ -41,6 +41,8 @@ export function withCapturedTechMechanicsFixture(pageCapture, actionIds = []) {
     mechanics: Object.freeze({
       ...pageCapture.mechanics,
       ...makeCapturedTechMechanicsFixture(actionIds),
+      // This fixture models no native Buildings; an empty identity list is its complete catalog.
+      readStructureIdentities: () => [],
     }),
   });
 }

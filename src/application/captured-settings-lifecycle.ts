@@ -199,11 +199,14 @@ export function createCapturedSettingsLifecycle({
     },
     ensureDynamicDefaults() {
       const generation = defaults.readCatalogGeneration();
-      if (
-        generation !== undefined &&
-        initialized &&
-        appliedGeneration === generation
-      ) {
+      if (generation === undefined) {
+        // Keep startup migration/defaulting available, but do not use an incomplete or suppressed
+        // live catalog as migration authority. Leave the dynamic sweep owed until trust returns.
+        if (!initialized) initialize();
+        appliedGeneration = undefined;
+        return;
+      }
+      if (initialized && appliedGeneration === generation) {
         // Nothing the dynamic defaults are named after has appeared since the last sweep, and a
         // player edit cannot create a key a catalog does not name. This is the common case: the
         // tick calls this after every discovery phase.
