@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 
-import { runCapturedEspionage } from "../../../src/application/captured-espionage.ts";
+import {
+  runCapturedEspionage,
+  shouldRunCapturedBattleAfterEspionage,
+} from "../../../src/application/captured-espionage.ts";
 import { createCapturedEspionage } from "../../../src/adapters/evolve/combat/captured-espionage.ts";
 import { planCapturedEspionage } from "../../../src/domain/combat/captured-espionage.ts";
 
@@ -262,6 +265,67 @@ for (const activeTask of ["combo_spy", "spyop"]) {
   assert.deepEqual(testCase.operations.captures, []);
   assert.equal(testCase.adapter.isBusy(), false);
 }
+
+// A pending native espionage timer does not own the garrison campaign control. Battle may use the
+// freshly resampled government and garrison state in the same working cycle.
+assert.equal(
+  shouldRunCapturedBattleAfterEspionage(
+    {
+      status: "stale",
+      failure: {
+        code: "captured-espionage-postcondition-pending",
+        message: "native operation is still running",
+      },
+    },
+    true,
+  ),
+  true,
+);
+assert.equal(
+  shouldRunCapturedBattleAfterEspionage(
+    {
+      status: "stale",
+      failure: {
+        code: "captured-espionage-modal-conflict",
+        message: "player modal is open",
+      },
+    },
+    false,
+  ),
+  false,
+);
+assert.equal(
+  shouldRunCapturedBattleAfterEspionage(
+    {
+      status: "stale",
+      failure: {
+        code: "captured-espionage-state-changed",
+        message: "the foreign state changed",
+      },
+    },
+    false,
+  ),
+  false,
+);
+assert.equal(shouldRunCapturedBattleAfterEspionage(undefined, false), false);
+assert.equal(
+  shouldRunCapturedBattleAfterEspionage(
+    {
+      status: "succeeded",
+    },
+    false,
+  ),
+  true,
+);
+assert.equal(
+  shouldRunCapturedBattleAfterEspionage(
+    {
+      status: "succeeded",
+    },
+    true,
+  ),
+  false,
+);
 
 // --- one capture, one invocation, no waiting ----------------------------------------------------
 

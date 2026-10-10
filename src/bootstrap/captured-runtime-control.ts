@@ -209,7 +209,10 @@ import {
 import { runEvolution } from "../application/evolution.ts";
 import { runCapturedPlanetSelection } from "../application/captured-planet-selection.ts";
 import { runCapturedSpyTraining } from "../application/captured-spy-training.ts";
-import { createCapturedEspionageRunner } from "../application/captured-espionage.ts";
+import {
+  createCapturedEspionageRunner,
+  shouldRunCapturedBattleAfterEspionage,
+} from "../application/captured-espionage.ts";
 import { runMercenaryAutomation } from "../application/mercenary.ts";
 import { runBattleAutomation } from "../application/battle.ts";
 import { challenges as evolutionChallengeCatalog } from "../adapters/evolve/runtime-catalogs.ts";
@@ -3695,8 +3698,10 @@ export function startCapturedRuntime({
           );
         }
         if (
-          espionageOutcome?.status === "succeeded" &&
-          !capturedEspionage.isBusy()
+          shouldRunCapturedBattleAfterEspionage(
+            espionageOutcome,
+            capturedEspionage.isBusy(),
+          )
         ) {
           const battleOutcome = runPhase("autoFight.battle", () => {
             // Foreign and the compact Garrison come out of the same Government draw, so this is

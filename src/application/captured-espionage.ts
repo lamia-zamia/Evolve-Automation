@@ -28,6 +28,22 @@ export function runCapturedEspionage(dependencies: {
   return dependencies.executor.execute(decision);
 }
 
+/**
+ * Espionage's native timer does not own the garrison campaign control. A queued operation may
+ * leave its postcondition pending while Battle independently resamples and validates the current
+ * government and garrison before invoking that control.
+ */
+export function shouldRunCapturedBattleAfterEspionage(
+  outcome: CommandExecutionOutcome | undefined,
+  espionageIsBusy: boolean,
+): boolean {
+  if (outcome?.status === "succeeded") return !espionageIsBusy;
+  return (
+    outcome?.status === "stale" &&
+    outcome.failure.code === "captured-espionage-postcondition-pending"
+  );
+}
+
 export function createCapturedEspionageRunner(dependencies: {
   readonly reader: CapturedEspionageReader;
   readonly executor: CapturedEspionageExecutor;

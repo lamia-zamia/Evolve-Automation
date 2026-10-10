@@ -51413,6 +51413,9 @@ Only continue if you trust the source. Injected code:
   var CAPTURED_ESPIONAGE_SUCCEEDED = Object.freeze({
     status: "succeeded"
   });
+  function shouldRunCapturedBattleAfterEspionage(outcome, espionageIsBusy) {
+    return outcome?.status === "succeeded" ? !espionageIsBusy : outcome?.status === "stale" && outcome.failure.code === "captured-espionage-postcondition-pending";
+  }
   function createCapturedEspionageRunner(dependencies) {
     let nextGovernmentId = 0;
     return () => {
@@ -57534,7 +57537,10 @@ Only continue if you trust the source. Injected code:
             "captured-espionage-modal-conflict"
           ].includes(espionageOutcome.failure.code) && reportOnce(
             `autoFight.espionage: ${espionageOutcome.failure.code}: ${espionageOutcome.failure.message}`
-          ), espionageOutcome?.status === "succeeded" && !capturedEspionage.isBusy()) {
+          ), shouldRunCapturedBattleAfterEspionage(
+            espionageOutcome,
+            capturedEspionage.isBusy()
+          )) {
             let battleOutcome = runPhase("autoFight.battle", () => (ensureForeignControls(), isEnabled(settings, "autoHell") && ensureHellGarrisonControls(), runBattleAutomation(capturedBattle)));
             battleOutcome !== void 0 && battleOutcome.status !== "succeeded" && reportOnce(
               `autoFight.battle: ${battleOutcome.failure.code}: ${battleOutcome.failure.message}`
