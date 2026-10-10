@@ -482,8 +482,10 @@ export function createCapturedArpaMechanics(
     return { reason: "the Physics draw bound no A.R.P.A. project row" };
   };
 
-  const readCaptureReadiness = (): string => {
+  const readCaptureReadiness = (root: unknown): string => {
     const tabGeneration = controls.resolve(MAIN_TAB_CONTROL)?.generation;
+    const preloadTabs =
+      readProperty(readProperty(root, "settings"), "tabLoad") === true;
     const projectBindings = controls
       .capturedElementIds()
       .filter(
@@ -496,6 +498,7 @@ export function createCapturedArpaMechanics(
       .sort();
     return [
       readReadinessEpoch(),
+      `preload:${preloadTabs}`,
       `tab:${tabGeneration ?? "absent"}`,
       `projects:${projectBindings.join(",")}`,
     ].join("|");
@@ -597,7 +600,7 @@ export function createCapturedArpaMechanics(
           kind: "unavailable",
           reason: "the game root has not been captured yet",
         };
-      const readiness = readCaptureReadiness();
+      const readiness = readCaptureReadiness(root);
       if (failedForRoot === root && failedReadinessEpoch === readiness)
         return {
           kind: "unavailable",
@@ -611,7 +614,7 @@ export function createCapturedArpaMechanics(
         failedForRoot = root;
         // Record after the attempt: bindings created by an incomplete draw are not a readiness
         // transition that should immediately schedule another costly Physics draw.
-        failedReadinessEpoch = readCaptureReadiness();
+        failedReadinessEpoch = readCaptureReadiness(root);
       }
       return capture;
     },

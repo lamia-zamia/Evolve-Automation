@@ -126,6 +126,7 @@ function makeScenario({
   ambiguousRegistryObservation = false,
   afterNativeBuild,
   currentTab = 2,
+  tabLoad = false,
   initialProject = true,
   scriptSettings = {},
   money = 100000,
@@ -170,7 +171,7 @@ function makeScenario({
   const gameRoot = {
     settings: {
       expose: false,
-      tabLoad: false,
+      tabLoad,
       civTabs: currentTab,
       spaceTabs: 0,
       govTabs: 0,
@@ -481,7 +482,7 @@ function makeScenario({
       methods: {
         swapTab(index) {
           swaps.push(index);
-          if (index === 5) {
+          if (index === 5 && !gameRoot.settings.tabLoad) {
             if (ambiguousRegistryObservation)
               page.Object.keys({ lhc: nativeProjectDefinitions.lhc });
             drawArpaPanel();
@@ -666,6 +667,38 @@ withScenario(
     assert.deepEqual(scenario.calls, [["lhc", 5]]);
     assert.equal(scenario.gameRoot.settings.civTabs, 2);
     assert.ok(scenario.swaps.includes(5));
+  },
+);
+
+// Preloaded tabs suppress a normal ARPA discovery draw. Changing the game setting is a readiness
+// transition, so the next attempt can establish the registry and its native project binding.
+withScenario(
+  {
+    tabLoad: true,
+    scriptSettings: {
+      autoARPA: true,
+      arpa_lhc: true,
+      arpa_p_lhc: 0,
+      arpa_m_lhc: -1,
+      arpa_w_lhc: 2,
+    },
+  },
+  (scenario) => {
+    scenario.tick();
+    assert.deepEqual(scenario.calls, []);
+    assert.deepEqual(scenario.draws, []);
+    scenario.tick();
+    assert.deepEqual(
+      scenario.draws,
+      [],
+      "unchanged preload state stays latched",
+    );
+
+    // The game's Preload Tab Content switch changes this root setting before the next cycle.
+    scenario.gameRoot.settings.tabLoad = false;
+    scenario.tick();
+    assert.deepEqual(scenario.calls, [["lhc", 5]]);
+    assert.equal(scenario.gameRoot.settings.civTabs, 2);
   },
 );
 

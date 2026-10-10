@@ -36811,8 +36811,8 @@
         });
       }
       return { reason: "the Physics draw bound no A.R.P.A. project row" };
-    }, readCaptureReadiness = () => {
-      let tabGeneration = controls2.resolve(MAIN_TAB_CONTROL)?.generation, projectBindings = controls2.capturedElementIds().filter(
+    }, readCaptureReadiness = (root) => {
+      let tabGeneration = controls2.resolve(MAIN_TAB_CONTROL)?.generation, preloadTabs = readProperty(readProperty(root, "settings"), "tabLoad") === !0, projectBindings = controls2.capturedElementIds().filter(
         (elementId) => arpaProjectIdFromElementId(elementId) !== void 0
       ).map((elementId) => {
         let generation = controls2.resolve(elementId)?.generation;
@@ -36820,6 +36820,7 @@
       }).sort();
       return [
         readReadinessEpoch(),
+        `preload:${preloadTabs}`,
         `tab:${tabGeneration ?? "absent"}`,
         `projects:${projectBindings.join(",")}`
       ].join("|");
@@ -36885,14 +36886,14 @@
             kind: "unavailable",
             reason: "the game root has not been captured yet"
           };
-        let readiness = readCaptureReadiness();
+        let readiness = readCaptureReadiness(root);
         if (failedForRoot === root && failedReadinessEpoch === readiness)
           return {
             kind: "unavailable",
             reason: "the native A.R.P.A. capture already failed for this root"
           };
         let capture = attemptCapture();
-        return capture.kind === "captured" ? (failedForRoot = void 0, failedReadinessEpoch = void 0) : (failedForRoot = root, failedReadinessEpoch = readCaptureReadiness()), capture;
+        return capture.kind === "captured" ? (failedForRoot = void 0, failedReadinessEpoch = void 0) : (failedForRoot = root, failedReadinessEpoch = readCaptureReadiness(root)), capture;
       },
       readOffers(root) {
         return readOffers(root);
