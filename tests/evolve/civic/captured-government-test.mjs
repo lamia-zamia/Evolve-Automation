@@ -130,6 +130,24 @@ for (const [label, change, expected] of [
     (root) => (root.stats.achieve.trade = { l: 1 }),
     "democracy",
   ],
+  [
+    "achievement data unavailable",
+    (root) => delete root.stats.achieve,
+    "democracy",
+  ],
+  [
+    "malformed achievement star",
+    (root) => (root.stats.achieve.trade = { l: "bad" }),
+    "democracy",
+  ],
+  [
+    "achievement earned in another universe",
+    (root) => {
+      root.race.universe = "evil";
+      root.stats.achieve.trade = { l: 1 };
+    },
+    "federation",
+  ],
   ["master achievement guard override", null, "democracy"],
   ["Trade Federation guard override", null, "democracy"],
   [

@@ -8305,14 +8305,14 @@
     }
   }
   function readCapturedAchievementStar(root, achievementId) {
-    let achievement = readProperty(
-      readProperty(readProperty(root, "stats"), "achieve"),
-      achievementId
-    ), affix = readCapturedUniverseAffix(root);
-    if (achievement == null) return 0;
-    if (!isRecord(achievement) || affix === void 0) return;
+    let stats = readProperty(root, "stats"), achievements = readProperty(stats, "achieve"), race = readProperty(root, "race");
+    if (!isNonArrayRecord(stats) || !isNonArrayRecord(achievements) || !isNonArrayRecord(race))
+      return;
+    let achievement = readProperty(achievements, achievementId), affix = readCapturedUniverseAffix(root);
+    if (achievement === void 0) return 0;
+    if (!isNonArrayRecord(achievement) || affix === void 0) return;
     let star = readProperty(achievement, affix);
-    return star == null ? 0 : finiteStar(star);
+    return star === void 0 ? 0 : finiteStar(star);
   }
   function isCapturedAchievementUnlocked(root, achievementId, starLevel) {
     let star = readCapturedAchievementStar(root, achievementId);

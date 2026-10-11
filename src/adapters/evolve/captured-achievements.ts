@@ -9,7 +9,7 @@
  * Mirrors `universeAffix()` in `src/achieve.js` at the port reference commit.
  */
 
-import { isRecord, readProperty } from "../validation.ts";
+import { isNonArrayRecord, readProperty } from "../validation.ts";
 
 function finiteStar(value: unknown): number | undefined {
   return typeof value === "number" && Number.isFinite(value)
@@ -54,15 +54,22 @@ export function readCapturedAchievementStar(
   root: unknown,
   achievementId: string,
 ): number | undefined {
-  const achievement = readProperty(
-    readProperty(readProperty(root, "stats"), "achieve"),
-    achievementId,
-  );
+  const stats = readProperty(root, "stats");
+  const achievements = readProperty(stats, "achieve");
+  const race = readProperty(root, "race");
+  if (
+    !isNonArrayRecord(stats) ||
+    !isNonArrayRecord(achievements) ||
+    !isNonArrayRecord(race)
+  ) {
+    return undefined;
+  }
+  const achievement = readProperty(achievements, achievementId);
   const affix = readCapturedUniverseAffix(root);
-  if (achievement === undefined || achievement === null) return 0;
-  if (!isRecord(achievement) || affix === undefined) return undefined;
+  if (achievement === undefined) return 0;
+  if (!isNonArrayRecord(achievement) || affix === undefined) return undefined;
   const star = readProperty(achievement, affix);
-  return star === undefined || star === null ? 0 : finiteStar(star);
+  return star === undefined ? 0 : finiteStar(star);
 }
 
 /** Whether `achievementId` is already earned at `starLevel` or better. */
