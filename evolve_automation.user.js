@@ -11743,7 +11743,7 @@
     }, beginProcessedCycle = () => {
       dependencies.discoveryAttempts === void 0 && (fallbackDiscoveryCycle += 1), createCountTally(diagnostics).count(
         "research.observation.invalidated.processed-cycle"
-      ), clearResearchSample(), scopes.invalidate(RESEARCH_SCOPE), scopes.invalidate(RESEARCH_GRANTED_SCOPE), scopes.invalidate(ARPA_SCOPE), resetProjectSample(), resetBuildingUnlockSample();
+      ), clearResearchSample(), scopes.invalidate(ARPA_SCOPE), resetProjectSample(), resetBuildingUnlockSample();
     }, readEstablishedProjects = () => {
       if (projectSampled && establishedProjectEpoch !== epoch.read() || (projectSampled ? lastProjects : scopes.peek(ARPA_SCOPE)) === void 0) return;
       let currentProjects = projectCatalog.readProjects();

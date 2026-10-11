@@ -351,10 +351,22 @@ assert.deepEqual(
 );
 assert.deepEqual([...researchControl.readGrantedTechs()], ["tech-old-mining"]);
 
-// A processed cycle starts with no carried offer. Its one sample remains coherent for Storage
-// and later Research even when the discovery scope's ordinary age expires.
+// A processed cycle starts with no established offer, but re-establishing it inside the panel
+// scope's age and progression epoch restates the held catalog instead of redrawing Research.
 researchControl.beginProcessedCycle?.();
 assert.equal(researchControl.readOfferedTechs(), undefined);
+assert.deepEqual(
+  researchControl.sampleOfferedTechs()?.map(({ elementId }) => elementId),
+  ["tech-mining"],
+);
+assert.equal(researchDraws, 1);
+
+// Once the scope has aged out, the next cycle redraws and sees an offer the epoch could not
+// announce. That one sample then stays coherent for Storage and later Research even when the
+// scope's age expires again mid-cycle.
+researchControl.beginProcessedCycle?.();
+assert.equal(researchControl.readOfferedTechs(), undefined);
+nowMs = 1_000;
 offeredRows = [
   {
     id: "tech-current-cycle",
@@ -428,9 +440,10 @@ assert.deepEqual(
 );
 assert.equal(researchDraws, 4);
 
-// The next processed cycle samples its own offers, even if the progression epoch did not change.
+// With the progression epoch unchanged, a later processed cycle resamples once the scope ages out.
 researchControl.beginProcessedCycle?.();
 assert.equal(researchControl.readOfferedTechs(), undefined);
+nowMs = 21_000;
 offeredRows = [
   {
     id: "tech-next-cycle",
@@ -447,6 +460,7 @@ assert.equal(demand.sample().storageRequired("Polymer"), 927);
 
 // A failed current sample is unknown; it cannot fall back to the previous cycle's catalog.
 researchControl.beginProcessedCycle?.();
+nowMs = 22_000;
 offeredRows = [
   {
     id: "tech-last-successful-cycle",
@@ -460,6 +474,7 @@ assert.deepEqual(
 );
 assert.equal(demand.sample().storageRequired("Polymer"), 721);
 researchControl.beginProcessedCycle?.();
+nowMs = 23_000;
 researchDrawAvailable = false;
 assert.equal(researchControl.sampleOfferedTechs(), undefined);
 assert.equal(researchControl.readOfferedTechs(), undefined);
