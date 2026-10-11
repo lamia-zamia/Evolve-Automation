@@ -38,6 +38,7 @@ interface PendingGovernmentModal {
   readonly root: unknown;
   readonly government: string;
   readonly startingGeneration: number;
+  nativeHandle: unknown;
   wrapper: GovernmentModalElement | null;
   observer: MutationObserver | null;
   canceled: boolean;
@@ -114,6 +115,86 @@ function mountedGovernmentProxy(
     : undefined;
 }
 
+/** Buefy's `ModalProgrammatic.open` returns the Vue instance for this exact modal. */
+function invokeGovernmentTriggerWithHandle(
+  active: PendingGovernmentModal,
+  mounted: {
+    readonly proxy: object;
+    readonly trigger: (...args: unknown[]) => unknown;
+  },
+): void {
+  const modalApi = readProperty(readProperty(mounted.proxy, "$buefy"), "modal");
+  const open = readProperty(modalApi, "open");
+  if (!isRecord(modalApi) || typeof open !== "function") {
+    throw new Error("Buefy modal.open is unavailable for ownership capture");
+  }
+  const previousDescriptor = Object.getOwnPropertyDescriptor(modalApi, "open");
+  let captured = false;
+  const captureOpen = function (this: unknown, ...args: unknown[]): unknown {
+    const handle = Reflect.apply(open, this, args);
+    active.nativeHandle = handle;
+    captured = true;
+    return handle;
+  };
+  let installed = false;
+  let restoreFailed = false;
+  let triggerFailed = false;
+  let triggerError: unknown;
+  try {
+    installed = Reflect.set(modalApi, "open", captureOpen, modalApi);
+    if (!installed) {
+      throw new Error("Buefy modal.open could not be wrapped safely");
+    }
+    Reflect.apply(mounted.trigger, mounted.proxy, []);
+  } catch (error) {
+    triggerFailed = true;
+    triggerError = error;
+  } finally {
+    if (installed) {
+      try {
+        if (previousDescriptor === undefined) {
+          restoreFailed = !Reflect.deleteProperty(modalApi, "open");
+        } else {
+          Object.defineProperty(modalApi, "open", previousDescriptor);
+        }
+      } catch {
+        restoreFailed = true;
+      }
+    }
+  }
+  if (restoreFailed) {
+    throw new Error("Buefy modal.open wrapper could not be restored");
+  }
+  if (triggerFailed) throw triggerError;
+  if (!captured) {
+    throw new Error("Government opener did not return its Buefy modal handle");
+  }
+}
+
+function governmentModalWrapperFromHandle(
+  active: PendingGovernmentModal,
+): GovernmentModalElement | undefined {
+  const element = readProperty(active.nativeHandle, "$el");
+  const matches = readProperty(element, "matches");
+  if (
+    !isRecord(element) ||
+    readProperty(element, "nodeType") !== 1 ||
+    readProperty(element, "isConnected") !== true ||
+    typeof matches !== "function"
+  ) {
+    return undefined;
+  }
+  try {
+    return Reflect.apply(matches, element, [
+      GOVERNMENT_MODAL_WRAPPER_SELECTOR,
+    ]) === true
+      ? (element as unknown as GovernmentModalElement)
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export function createCapturedGovernmentModalControl(dependencies: {
   readonly controls: GameControlRegistry;
   readonly rootState: GameRootStateSource;
@@ -124,16 +205,6 @@ export function createCapturedGovernmentModalControl(dependencies: {
   let pending: PendingGovernmentModal | null = null;
   let blockedRoot: unknown;
   let disposed = false;
-
-  const newlyOpenedModal = (
-    document: GovernmentModalDocument,
-    before: readonly GovernmentModalElement[],
-  ): GovernmentModalElement | undefined => {
-    const added = modalWrappers(document).filter(
-      (modal) => !before.includes(modal),
-    );
-    return added.length === 1 ? added[0] : undefined;
-  };
 
   const deferClose = (active: PendingGovernmentModal): void => {
     const wrapper = active.wrapper;
@@ -154,7 +225,6 @@ export function createCapturedGovernmentModalControl(dependencies: {
 
   const watchModalCreation = (
     document: GovernmentModalDocument,
-    before: readonly GovernmentModalElement[],
     active: PendingGovernmentModal,
   ): void => {
     if (
@@ -166,25 +236,14 @@ export function createCapturedGovernmentModalControl(dependencies: {
     }
     const observer = new MutationObserver(() => {
       if (active.wrapper !== null || active.ownershipFailed) return;
-      const added = modalWrappers(document).filter(
-        (modal) =>
-          !before.includes(modal) &&
-          modal.querySelector(GOVERNMENT_MODAL_BOX_SELECTOR) !== null,
-      );
-      if (added.length > 1) {
-        active.ownershipFailed = true;
-        observer.disconnect();
-        active.observer = null;
-        return;
-      }
-      if (added.length === 1) {
-        active.wrapper = added[0] ?? null;
-        observer.disconnect();
-        active.observer = null;
-        if (active.canceled) {
-          pending = null;
-          deferClose(active);
-        }
+      const wrapper = governmentModalWrapperFromHandle(active);
+      if (wrapper === undefined) return;
+      active.wrapper = wrapper;
+      observer.disconnect();
+      active.observer = null;
+      if (active.canceled) {
+        pending = null;
+        deferClose(active);
       }
     });
     active.observer = observer;
@@ -219,7 +278,6 @@ export function createCapturedGovernmentModalControl(dependencies: {
     root: unknown,
     document: GovernmentModalDocument,
   ): PendingGovernmentModal | CommandExecutionOutcome => {
-    const before = modalWrappers(document);
     const startingGeneration =
       dependencies.controls.resolve(GOVERNMENT_MODAL_CONTROL)?.generation ?? 0;
     const opened: PendingGovernmentModal = {
@@ -227,6 +285,7 @@ export function createCapturedGovernmentModalControl(dependencies: {
       root,
       government,
       startingGeneration,
+      nativeHandle: undefined,
       wrapper: null,
       observer: null,
       canceled: false,
@@ -237,17 +296,17 @@ export function createCapturedGovernmentModalControl(dependencies: {
     };
     const currentProxy = mountedGovernmentProxy(document);
     if (currentProxy !== undefined) {
-      watchModalCreation(document, before, opened);
+      watchModalCreation(document, opened);
       try {
         if (dependencies.mountSuppression.available) {
           dependencies.mountSuppression.withMountingEnabled(() => {
-            Reflect.apply(currentProxy.trigger, currentProxy.proxy, []);
+            invokeGovernmentTriggerWithHandle(opened, currentProxy);
           });
         } else {
-          Reflect.apply(currentProxy.trigger, currentProxy.proxy, []);
+          invokeGovernmentTriggerWithHandle(opened, currentProxy);
         }
       } catch (error) {
-        opened.wrapper = newlyOpenedModal(document, before) ?? null;
+        opened.wrapper = governmentModalWrapperFromHandle(opened) ?? null;
         opened.canceled = true;
         if (opened.wrapper !== null) {
           opened.ownershipFailed = false;
@@ -262,11 +321,8 @@ export function createCapturedGovernmentModalControl(dependencies: {
             : `native Government modal opener failed: ${String(error)}; its partially opened modal was closed`,
         );
       }
-      opened.wrapper = newlyOpenedModal(document, before) ?? null;
-      if (opened.wrapper === null) {
-        if (opened.observer === null)
-          watchModalCreation(document, before, opened);
-      } else {
+      opened.wrapper = governmentModalWrapperFromHandle(opened) ?? null;
+      if (opened.wrapper !== null) {
         opened.ownershipFailed = false;
         opened.observer?.disconnect();
         opened.observer = null;
@@ -289,7 +345,6 @@ export function createCapturedGovernmentModalControl(dependencies: {
     let triggerFailure: string | undefined;
     let openedModal: PendingGovernmentModal | undefined;
     let partialCleanupClosed = false;
-    let beforeTrigger: readonly GovernmentModalElement[] = [];
     const result = dependencies.discovery.discover(draw.path, {
       ...draw.options,
       whileDrawn: () => {
@@ -308,12 +363,12 @@ export function createCapturedGovernmentModalControl(dependencies: {
           return false;
         }
         try {
-          beforeTrigger = modalWrappers(document);
-          openedModal = {
+          const activeModal: PendingGovernmentModal = {
             document,
             root,
             government,
             startingGeneration,
+            nativeHandle: undefined,
             wrapper: null,
             observer: null,
             canceled: false,
@@ -322,22 +377,23 @@ export function createCapturedGovernmentModalControl(dependencies: {
             cleanupWaitChecks: 0,
             creationChecks: 0,
           };
-          watchModalCreation(document, beforeTrigger, openedModal);
+          openedModal = activeModal;
+          watchModalCreation(document, activeModal);
           dependencies.mountSuppression.withMountingEnabled(() => {
-            Reflect.apply(mounted.trigger, mounted.proxy, []);
+            invokeGovernmentTriggerWithHandle(activeModal, mounted);
           });
-          openedModal.wrapper =
-            newlyOpenedModal(document, beforeTrigger) ?? null;
-          if (openedModal.wrapper !== null) {
-            openedModal.ownershipFailed = false;
-            openedModal.observer?.disconnect();
-            openedModal.observer = null;
+          activeModal.wrapper =
+            governmentModalWrapperFromHandle(activeModal) ?? null;
+          if (activeModal.wrapper !== null) {
+            activeModal.ownershipFailed = false;
+            activeModal.observer?.disconnect();
+            activeModal.observer = null;
           }
           return true;
         } catch (error) {
           if (openedModal !== undefined) {
             openedModal.wrapper =
-              newlyOpenedModal(document, beforeTrigger) ?? null;
+              governmentModalWrapperFromHandle(openedModal) ?? null;
             openedModal.canceled = true;
             if (openedModal.wrapper !== null) {
               openedModal.observer?.disconnect();

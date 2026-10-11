@@ -14729,13 +14729,47 @@
       trigger
     } : void 0;
   }
+  function invokeGovernmentTriggerWithHandle(active, mounted) {
+    let modalApi = readProperty(readProperty(mounted.proxy, "$buefy"), "modal"), open = readProperty(modalApi, "open");
+    if (!isRecord(modalApi) || typeof open != "function")
+      throw new Error("Buefy modal.open is unavailable for ownership capture");
+    let previousDescriptor = Object.getOwnPropertyDescriptor(modalApi, "open"), captured = !1, captureOpen = function(...args) {
+      let handle = Reflect.apply(open, this, args);
+      return active.nativeHandle = handle, captured = !0, handle;
+    }, installed = !1, restoreFailed = !1, triggerFailed = !1, triggerError;
+    try {
+      if (installed = Reflect.set(modalApi, "open", captureOpen, modalApi), !installed)
+        throw new Error("Buefy modal.open could not be wrapped safely");
+      Reflect.apply(mounted.trigger, mounted.proxy, []);
+    } catch (error) {
+      triggerFailed = !0, triggerError = error;
+    } finally {
+      if (installed)
+        try {
+          previousDescriptor === void 0 ? restoreFailed = !Reflect.deleteProperty(modalApi, "open") : Object.defineProperty(modalApi, "open", previousDescriptor);
+        } catch {
+          restoreFailed = !0;
+        }
+    }
+    if (restoreFailed)
+      throw new Error("Buefy modal.open wrapper could not be restored");
+    if (triggerFailed) throw triggerError;
+    if (!captured)
+      throw new Error("Government opener did not return its Buefy modal handle");
+  }
+  function governmentModalWrapperFromHandle(active) {
+    let element = readProperty(active.nativeHandle, "$el"), matches = readProperty(element, "matches");
+    if (!(!isRecord(element) || readProperty(element, "nodeType") !== 1 || readProperty(element, "isConnected") !== !0 || typeof matches != "function"))
+      try {
+        return Reflect.apply(matches, element, [
+          GOVERNMENT_MODAL_WRAPPER_SELECTOR
+        ]) === !0 ? element : void 0;
+      } catch {
+        return;
+      }
+  }
   function createCapturedGovernmentModalControl(dependencies) {
-    let pending = null, blockedRoot, disposed = !1, newlyOpenedModal = (document, before) => {
-      let added = modalWrappers(document).filter(
-        (modal) => !before.includes(modal)
-      );
-      return added.length === 1 ? added[0] : void 0;
-    }, deferClose = (active) => {
+    let pending = null, blockedRoot, disposed = !1, deferClose = (active) => {
       let wrapper = active.wrapper;
       wrapper === null || active.cleanupScheduled || (active.cleanupScheduled = !0, setTimeout(() => {
         if (active.cleanupScheduled = !1, !!modalWrappers(active.document).includes(wrapper)) {
@@ -14747,21 +14781,15 @@
           closeOwnedModal(active);
         }
       }, 75));
-    }, watchModalCreation = (document, before, active) => {
+    }, watchModalCreation = (document, active) => {
       if (typeof MutationObserver != "function" || readProperty(document, "nodeType") !== 9) {
         active.ownershipFailed = !0;
         return;
       }
       let observer = new MutationObserver(() => {
         if (active.wrapper !== null || active.ownershipFailed) return;
-        let added = modalWrappers(document).filter(
-          (modal) => !before.includes(modal) && modal.querySelector(GOVERNMENT_MODAL_BOX_SELECTOR) !== null
-        );
-        if (added.length > 1) {
-          active.ownershipFailed = !0, observer.disconnect(), active.observer = null;
-          return;
-        }
-        added.length === 1 && (active.wrapper = added[0] ?? null, observer.disconnect(), active.observer = null, active.canceled && (pending = null, deferClose(active)));
+        let wrapper = governmentModalWrapperFromHandle(active);
+        wrapper !== void 0 && (active.wrapper = wrapper, observer.disconnect(), active.observer = null, active.canceled && (pending = null, deferClose(active)));
       });
       active.observer = observer, observer.observe(document, {
         childList: !0,
@@ -14773,11 +14801,12 @@
       code,
       `${message}; the owned modal stays open until #modalBoxTitle proves the native poll has stopped (cleanup gives up after 30 checks)`
     )), openNativeModal = (government, root, document) => {
-      let before = modalWrappers(document), startingGeneration = dependencies.controls.resolve(GOVERNMENT_MODAL_CONTROL)?.generation ?? 0, opened = {
+      let startingGeneration = dependencies.controls.resolve(GOVERNMENT_MODAL_CONTROL)?.generation ?? 0, opened = {
         document,
         root,
         government,
         startingGeneration,
+        nativeHandle: void 0,
         wrapper: null,
         observer: null,
         canceled: !1,
@@ -14787,20 +14816,20 @@
         creationChecks: 0
       }, currentProxy = mountedGovernmentProxy(document);
       if (currentProxy !== void 0) {
-        watchModalCreation(document, before, opened);
+        watchModalCreation(document, opened);
         try {
           dependencies.mountSuppression.available ? dependencies.mountSuppression.withMountingEnabled(() => {
-            Reflect.apply(currentProxy.trigger, currentProxy.proxy, []);
-          }) : Reflect.apply(currentProxy.trigger, currentProxy.proxy, []);
+            invokeGovernmentTriggerWithHandle(opened, currentProxy);
+          }) : invokeGovernmentTriggerWithHandle(opened, currentProxy);
         } catch (error) {
-          opened.wrapper = newlyOpenedModal(document, before) ?? null, opened.canceled = !0, opened.wrapper !== null && (opened.ownershipFailed = !1, opened.observer?.disconnect(), opened.observer = null);
+          opened.wrapper = governmentModalWrapperFromHandle(opened) ?? null, opened.canceled = !0, opened.wrapper !== null && (opened.ownershipFailed = !1, opened.observer?.disconnect(), opened.observer = null);
           let closed = opened.wrapper !== null && closeOwnedModal(opened);
           return stale(
             "government-modal-open-failed",
             closed ? `native Government modal opener failed: ${String(error)}; its partially opened modal was closed` : `native Government modal opener failed: ${String(error)}; modal ownership and cleanup could not be established`
           );
         }
-        return opened.wrapper = newlyOpenedModal(document, before) ?? null, opened.wrapper === null ? opened.observer === null && watchModalCreation(document, before, opened) : (opened.ownershipFailed = !1, opened.observer?.disconnect(), opened.observer = null), opened;
+        return opened.wrapper = governmentModalWrapperFromHandle(opened) ?? null, opened.wrapper !== null && (opened.ownershipFailed = !1, opened.observer?.disconnect(), opened.observer = null), opened;
       }
       if (!dependencies.mountSuppression.available)
         return stale(
@@ -14813,7 +14842,7 @@
           "government-controls-unavailable",
           "Government tab controls are not captured"
         );
-      let triggerFailure, openedModal, partialCleanupClosed = !1, beforeTrigger = [], result = dependencies.discovery.discover(draw.path, {
+      let triggerFailure, openedModal, partialCleanupClosed = !1, result = dependencies.discovery.discover(draw.path, {
         ...draw.options,
         whileDrawn: () => {
           if (dependencies.rootState.readRoot() !== root)
@@ -14824,11 +14853,12 @@
           if (mounted === void 0)
             return triggerFailure = "mounted Government Vue receiver is unavailable", !1;
           try {
-            return beforeTrigger = modalWrappers(document), openedModal = {
+            let activeModal = {
               document,
               root,
               government,
               startingGeneration,
+              nativeHandle: void 0,
               wrapper: null,
               observer: null,
               canceled: !1,
@@ -14836,11 +14866,12 @@
               cleanupScheduled: !1,
               cleanupWaitChecks: 0,
               creationChecks: 0
-            }, watchModalCreation(document, beforeTrigger, openedModal), dependencies.mountSuppression.withMountingEnabled(() => {
-              Reflect.apply(mounted.trigger, mounted.proxy, []);
-            }), openedModal.wrapper = newlyOpenedModal(document, beforeTrigger) ?? null, openedModal.wrapper !== null && (openedModal.ownershipFailed = !1, openedModal.observer?.disconnect(), openedModal.observer = null), !0;
+            };
+            return openedModal = activeModal, watchModalCreation(document, activeModal), dependencies.mountSuppression.withMountingEnabled(() => {
+              invokeGovernmentTriggerWithHandle(activeModal, mounted);
+            }), activeModal.wrapper = governmentModalWrapperFromHandle(activeModal) ?? null, activeModal.wrapper !== null && (activeModal.ownershipFailed = !1, activeModal.observer?.disconnect(), activeModal.observer = null), !0;
           } catch (error) {
-            return openedModal !== void 0 && (openedModal.wrapper = newlyOpenedModal(document, beforeTrigger) ?? null, openedModal.canceled = !0, openedModal.wrapper !== null && (openedModal.observer?.disconnect(), openedModal.observer = null, partialCleanupClosed = closeOwnedModal(openedModal))), triggerFailure = `native Government modal opener failed: ${String(error)}`, !1;
+            return openedModal !== void 0 && (openedModal.wrapper = governmentModalWrapperFromHandle(openedModal) ?? null, openedModal.canceled = !0, openedModal.wrapper !== null && (openedModal.observer?.disconnect(), openedModal.observer = null, partialCleanupClosed = closeOwnedModal(openedModal))), triggerFailure = `native Government modal opener failed: ${String(error)}`, !1;
           }
         }
       });

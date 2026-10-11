@@ -46,6 +46,9 @@ function makeEnvironment({
       },
     };
     const wrapper = {
+      nodeType: 1,
+      isConnected: true,
+      matches: (selector) => selector === ".modal",
       querySelector(selector) {
         if (selector === "#modalBox") return hasBox ? box : null;
         if (selector === "#modalBoxTitle")
@@ -58,21 +61,23 @@ function makeEnvironment({
   }
   if (activeModal) active.push(makeWrapper());
   const openOwned = () => {
-    active.push(makeWrapper());
+    const wrapper = makeWrapper();
+    active.push(wrapper);
     hasBox = createBox;
-    if (throwAfterOpen) throw new Error("partial open");
+    return wrapper;
   };
   const govTypeProxy = {
     $buefy: {
       modal: {
         open() {
           opens += 1;
-          openOwned();
+          return { $el: openOwned() };
         },
       },
     },
     trigModal() {
       this.$buefy.modal.open();
+      if (throwAfterOpen) throw new Error("partial open");
     },
   };
   const govTypeElement = {
@@ -351,6 +356,148 @@ for (const rejectedBinding of [false, true]) {
   await new Promise((resolve) => setTimeout(resolve, 90));
   assert.equal(environment.state().closes, 0);
   assert.equal(environment.activeModals(), 1);
+}
+
+// Async ownership follows Buefy's returned modal root even when a player modal appears first.
+{
+  const originalMutationObserver = globalThis.MutationObserver;
+  let mutationCallback;
+  let ownedWrapper;
+  let setterCalls = 0;
+  const wrappers = [];
+  const closes = [];
+  const player = { name: "player", active: true, hasTitle: false };
+  const owned = { name: "owned", active: true, hasTitle: false };
+  const makeWrapper = (state) => {
+    const box = {
+      querySelector(selector) {
+        return selector === "#modalBoxTitle" && state.hasTitle ? {} : null;
+      },
+    };
+    const background = {
+      click() {
+        state.active = false;
+        closes.push(state.name);
+      },
+    };
+    return {
+      nodeType: 1,
+      isConnected: true,
+      matches: (selector) => selector === ".modal",
+      querySelector(selector) {
+        if (selector === "#modalBox") return box;
+        if (selector === "#modalBoxTitle") return state.hasTitle ? {} : null;
+        if (selector === ".modal-background") return background;
+        return null;
+      },
+    };
+  };
+  const playerWrapper = makeWrapper(player);
+  const document = {
+    nodeType: 9,
+    getElementById(id) {
+      return id === "govType"
+        ? { __vue_proxy__: proxy, isConnected: true }
+        : null;
+    },
+    querySelectorAll(selector) {
+      if (selector === ".modal") return wrappers.slice();
+      if (selector === ".modal.is-active")
+        return wrappers.filter((wrapper) =>
+          wrapper === playerWrapper ? player.active : owned.active,
+        );
+      return [];
+    },
+  };
+  const comment = { nodeType: 8 };
+  const nativeHandle = {
+    get $el() {
+      return ownedWrapper ?? comment;
+    },
+  };
+  const proxy = {
+    $buefy: { modal: { open: () => nativeHandle } },
+    trigModal() {
+      this.$buefy.modal.open({ content: '<div id="modalBox"></div>' });
+    },
+  };
+  class AsyncOwnershipObserver {
+    constructor(callback) {
+      mutationCallback = callback;
+    }
+    observe() {}
+    disconnect() {}
+  }
+  globalThis.MutationObserver = AsyncOwnershipObserver;
+  try {
+    const controls = {
+      resolve(elementId) {
+        if (
+          elementId === MAIN_TAB_CONTROL ||
+          elementId === SUB_TAB_CONTROLS[GOV_TABS_SETTING]
+        ) {
+          return { elementId, generation: 1, methods: ["swapTab"] };
+        }
+        if (elementId === "govType") {
+          return { elementId, generation: 1, methods: ["trigModal"] };
+        }
+        return undefined;
+      },
+      invoke() {
+        setterCalls += 1;
+        return { ok: true, value: undefined };
+      },
+      checkpoint: () => ({}),
+      rejectChanges() {},
+      capturedElementIds: () => [],
+    };
+    const root = { civic: { govern: { type: "democracy", rev: 0 } } };
+    const control = createCapturedGovernmentModalControl({
+      controls,
+      rootState: { readRoot: () => root },
+      discovery: {
+        discover(_path, options) {
+          assert.equal(options.whileDrawn(), true);
+          return { outcome: { status: "succeeded" }, discovered: [] };
+        },
+      },
+      mountSuppression: {
+        available: true,
+        withoutMounting: (draw) => draw(),
+        withMountingEnabled: (draw) => draw(),
+      },
+      getDocument: () => document,
+    });
+
+    assert.deepEqual(control.apply("autocracy", root), { status: "succeeded" });
+    wrappers.push(playerWrapper);
+    mutationCallback();
+    control.cancel();
+    ownedWrapper = makeWrapper(owned);
+    wrappers.push(ownedWrapper);
+    player.hasTitle = true;
+    owned.hasTitle = true;
+    mutationCallback();
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    assert.deepEqual(closes, ["owned"]);
+    assert.equal(
+      player.active,
+      true,
+      "cancellation must leave the player modal open",
+    );
+    assert.equal(
+      setterCalls,
+      0,
+      "canceled ownership must not resolve a setter",
+    );
+  } finally {
+    if (originalMutationObserver === undefined) {
+      delete globalThis.MutationObserver;
+    } else {
+      globalThis.MutationObserver = originalMutationObserver;
+    }
+  }
 }
 
 console.log("Captured native government modal tests passed");
