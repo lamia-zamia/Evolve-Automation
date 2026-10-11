@@ -280,6 +280,7 @@ function createLifecycle(rawText = null, ids = DEFAULT_CONTROL_IDS) {
   generation = "complete";
   lifecycle.ensureDynamicDefaults();
   const completeRuns = lifecycle.stats().dynamicDefaultRuns;
+  const trustedGeneration = generation;
   settings.readRaw().job_b1_farmer = 17;
 
   for (const unavailableReason of [
@@ -297,10 +298,13 @@ function createLifecycle(rawText = null, ids = DEFAULT_CONTROL_IDS) {
     );
   }
 
-  generation = "restored";
+  // Restoration can return to the same trusted generation. It still owes reconciliation because
+  // the catalog may have changed while authority was unavailable.
+  generation = trustedGeneration;
   lifecycle.ensureDynamicDefaults();
   assert.equal(lifecycle.stats().dynamicDefaultRuns, completeRuns + 1);
   assert.equal(settings.readRaw().job_b1_farmer, 17);
+  const restoredRuns = lifecycle.stats().dynamicDefaultRuns;
 
   generation = undefined;
   lifecycle.replaceAndInitialize({ masterScriptToggle: true, autoBuild: true });
@@ -310,7 +314,7 @@ function createLifecycle(rawText = null, ids = DEFAULT_CONTROL_IDS) {
     "import initialization remains authoritative",
   );
   lifecycle.ensureDynamicDefaults();
-  assert.equal(lifecycle.stats().dynamicDefaultRuns, completeRuns + 1);
+  assert.equal(lifecycle.stats().dynamicDefaultRuns, restoredRuns);
   generation = "after-import";
   lifecycle.ensureDynamicDefaults();
   assert.equal(settings.readRaw().job_b1_farmer, -1);
