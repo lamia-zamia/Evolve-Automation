@@ -3743,6 +3743,8 @@ export function startCapturedRuntime({
           ensureGovernmentPanelControls("candidates");
           runCapturedGovernmentAutomation(government);
         });
+      } else {
+        government.cancelPending();
       }
       if (isEnabled(settings, "autoNanite")) {
         runPhase("autoNanite", () => {

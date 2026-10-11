@@ -31,7 +31,7 @@ function makeControls(invoked, available = true) {
 }
 
 function makeModal(apply = () => ({ status: "succeeded" })) {
-  return { apply, dispose() {} };
+  return { apply, cancel() {}, dispose() {} };
 }
 
 // A configured, unappointed governor selects the matching captured candidate.
@@ -132,6 +132,37 @@ for (const [government, revision] of [
   const outcome = runCapturedGovernmentAutomation(automation);
   if (revision > 0) assert.equal(outcome.status, "stale");
   assert.deepEqual(modalCalls, []);
+}
+
+// A removed planner target and an explicit runtime disable cancel existing modal work.
+{
+  const root = makeRoot();
+  root.tech.govern = 1;
+  root.civic = { govern: { type: "anarchy", rev: 0 } };
+  const calls = [];
+  let settings = {
+    autoGovernment: true,
+    govInterim: "democracy",
+    govGovernor: "none",
+  };
+  const automation = createCapturedGovernmentAutomation({
+    rootState: { readRoot: () => root },
+    controls: makeControls([]),
+    modal: {
+      apply: (government) => {
+        calls.push(["apply", government]);
+        return { status: "succeeded" };
+      },
+      cancel: () => calls.push(["cancel"]),
+      dispose() {},
+    },
+    readSettings: () => settings,
+  });
+  runCapturedGovernmentAutomation(automation);
+  settings = { ...settings, govInterim: "none" };
+  runCapturedGovernmentAutomation(automation);
+  automation.cancelPending();
+  assert.deepEqual(calls, [["apply", "democracy"], ["cancel"], ["cancel"]]);
 }
 
 console.log("Captured government adapter tests passed");

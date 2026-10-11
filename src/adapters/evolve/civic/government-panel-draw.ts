@@ -26,6 +26,8 @@ export const GOVERNMENT_TYPE_SELECTOR = `#${GOVERNMENT_CONTROL}`;
 export const GOVERNMENT_MODAL_CONTAINER_SELECTOR = `#${GOVERNMENT_MODAL_CONTROL}`;
 export const GOVERNMENT_MODAL_BOX_ID = "modalBox";
 export const GOVERNMENT_MODAL_BOX_SELECTOR = `#${GOVERNMENT_MODAL_BOX_ID}`;
+export const GOVERNMENT_MODAL_TITLE_SELECTOR = "#modalBoxTitle";
+export const GOVERNMENT_MODAL_WRAPPER_SELECTOR = ".modal";
 export const GOVERNMENT_MODAL_SELECTOR = ".modal.is-active";
 
 export type GovernmentPanelPurpose = "tax" | "type" | "candidates";

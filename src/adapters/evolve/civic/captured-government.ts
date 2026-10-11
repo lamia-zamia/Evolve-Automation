@@ -28,6 +28,7 @@ export const GOVERNMENT_MODAL_CONTROL = "govModal";
 export interface CapturedGovernmentAutomation {
   readonly reader: GovernmentReader;
   readonly executor: DecisionExecutor<GovernmentDecision>;
+  cancelPending(): void;
   dispose(): void;
 }
 
@@ -191,9 +192,11 @@ export function createCapturedGovernmentAutomation(dependencies: {
 
   const executor: DecisionExecutor<GovernmentDecision> = Object.freeze({
     execute(decision: Readonly<GovernmentDecision>): CommandExecutionOutcome {
-      if (decision.government !== null) {
+      if (decision.government === null) dependencies.modal.cancel();
+      else {
         const active = session;
         if (active === null) {
+          dependencies.modal.cancel();
           return stale(
             "government-session-missing",
             "government state was not sampled",
@@ -201,12 +204,14 @@ export function createCapturedGovernmentAutomation(dependencies: {
         }
         const root = dependencies.rootState.readRoot();
         if (root !== active.root) {
+          dependencies.modal.cancel();
           return stale(
             "government-root-changed",
             "game root changed after sampling",
           );
         }
         if (readCurrentGovernment(root) === decision.government) {
+          dependencies.modal.cancel();
           // The compatibility manager treats this as a successful no-op.
         } else {
           const revision = finite(
@@ -216,12 +221,14 @@ export function createCapturedGovernmentAutomation(dependencies: {
             ),
           );
           if (revision === undefined || revision > 0) {
+            dependencies.modal.cancel();
             return stale(
               "government-revolution-pending",
               "government cannot change while its revolution is pending",
             );
           }
           if (!governmentUnlocked(root, decision.government)) {
+            dependencies.modal.cancel();
             return stale(
               "government-locked",
               "planned government became locked",
@@ -283,6 +290,7 @@ export function createCapturedGovernmentAutomation(dependencies: {
   return Object.freeze({
     reader,
     executor,
+    cancelPending: () => dependencies.modal.cancel(),
     dispose: () => dependencies.modal.dispose(),
   });
 }
