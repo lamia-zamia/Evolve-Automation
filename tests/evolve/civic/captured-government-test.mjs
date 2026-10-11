@@ -7,8 +7,13 @@ import {
 
 function makeRoot() {
   return {
-    tech: { governor: 1 },
+    tech: { governor: 1, govern: 1, gov_fed: 1 },
+    city: { market: { trade: 0 } },
+    galaxy: { trade: { cur: 0 } },
+    stats: { achieve: {} },
+    civic: { govern: { type: "autocracy", rev: 0 } },
     race: {
+      universe: "standard",
       governor: {
         candidates: [{ bg: "soldier" }, { bg: "educator" }],
       },
@@ -83,8 +88,7 @@ function makeModal(apply = () => ({ status: "succeeded" })) {
 // Government type selection delegates its native modal lifecycle to the modal controller.
 {
   const root = makeRoot();
-  root.tech.govern = 1;
-  root.civic = { govern: { type: "anarchy", rev: 0 } };
+  root.civic.govern.type = "anarchy";
   const modalCalls = [];
   const automation = createCapturedGovernmentAutomation({
     rootState: { readRoot: () => root },
@@ -107,14 +111,129 @@ function makeModal(apply = () => ({ status: "succeeded" })) {
   assert.deepEqual(modalCalls, ["democracy"]);
 }
 
-// A pending revolution and a locked target never open the native modal.
+// The legacy achievement guard temporarily selects Federation once both native route counters
+// meet the achievement thresholds, even when a configured government is also eligible.
+for (const [label, change, expected] of [
+  ["ready", () => {}, "federation"],
+  [
+    "city routes below threshold",
+    (root) => (root.city.market.trade = 749),
+    "democracy",
+  ],
+  [
+    "galaxy routes below threshold",
+    (root) => (root.galaxy.trade.cur = 49),
+    "democracy",
+  ],
+  [
+    "achievement already earned",
+    (root) => (root.stats.achieve.trade = { l: 1 }),
+    "democracy",
+  ],
+  ["master achievement guard override", null, "democracy"],
+  ["Trade Federation guard override", null, "democracy"],
+  [
+    "Federation technology locked",
+    (root) => (root.tech.gov_fed = 0),
+    "democracy",
+  ],
+  ["warlord locks Federation", (root) => (root.race.warlord = true), null],
+]) {
+  const root = makeRoot();
+  root.city.market.trade = 750;
+  root.galaxy.trade.cur = 50;
+  if (change !== null) change(root);
+  const modalCalls = [];
+  const settings = {
+    autoGovernment: true,
+    govInterim: "democracy",
+    govGovernor: "none",
+  };
+  if (label === "master achievement guard override") {
+    settings.achievementGuards = false;
+  }
+  if (label === "Trade Federation guard override") {
+    settings.guardTradeFederation = false;
+  }
+  const automation = createCapturedGovernmentAutomation({
+    rootState: { readRoot: () => root },
+    controls: makeControls([]),
+    modal: makeModal((government) => {
+      modalCalls.push(government);
+      return { status: "succeeded" };
+    }),
+    readSettings: () => settings,
+  });
+  assert.equal(
+    automation.reader.read().tradeFederationReady,
+    expected === "federation",
+    label,
+  );
+  runCapturedGovernmentAutomation(automation);
+  assert.deepEqual(modalCalls, expected === null ? [] : [expected], label);
+}
+
+// A pending revolution rejects an otherwise ready Federation command before opening the modal.
+{
+  const root = makeRoot();
+  root.city.market.trade = 750;
+  root.galaxy.trade.cur = 50;
+  root.civic.govern.rev = 10;
+  const modalCalls = [];
+  const automation = createCapturedGovernmentAutomation({
+    rootState: { readRoot: () => root },
+    controls: makeControls([]),
+    modal: makeModal((target) => {
+      modalCalls.push(target);
+      return { status: "succeeded" };
+    }),
+    readSettings: () => ({
+      autoGovernment: true,
+      govInterim: "democracy",
+      govGovernor: "none",
+    }),
+  });
+  const outcome = runCapturedGovernmentAutomation(automation);
+  assert.equal(automation.reader.read().tradeFederationReady, true);
+  assert.equal(outcome.status, "stale");
+  assert.equal(outcome.failure.code, "government-revolution-pending");
+  assert.deepEqual(modalCalls, []);
+}
+
+// An already selected Federation is left alone; the achievement path does not reopen its modal.
+{
+  const root = makeRoot();
+  root.city.market.trade = 750;
+  root.galaxy.trade.cur = 50;
+  root.civic.govern.type = "federation";
+  const modalCalls = [];
+  const automation = createCapturedGovernmentAutomation({
+    rootState: { readRoot: () => root },
+    controls: makeControls([]),
+    modal: makeModal((target) => {
+      modalCalls.push(target);
+      return { status: "succeeded" };
+    }),
+    readSettings: () => ({
+      autoGovernment: true,
+      govInterim: "democracy",
+      govGovernor: "none",
+    }),
+  });
+  assert.deepEqual(runCapturedGovernmentAutomation(automation), {
+    status: "succeeded",
+  });
+  assert.deepEqual(modalCalls, []);
+}
+
+// A pending revolution and a locked configured target never open the native modal.
 for (const [government, revision] of [
   ["democracy", 10],
   ["republic", 0],
 ]) {
   const root = makeRoot();
-  root.tech.govern = 1;
-  root.civic = { govern: { type: "anarchy", rev: revision } };
+  root.civic.govern.type = "anarchy";
+  root.civic.govern.rev = revision;
   const modalCalls = [];
   const automation = createCapturedGovernmentAutomation({
     rootState: { readRoot: () => root },

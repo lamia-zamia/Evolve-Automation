@@ -18,6 +18,7 @@ import type { GovernmentReader } from "../../../ports/government.ts";
 import type { GameControlRegistry } from "../../../ports/game-control-registry.ts";
 import type { GameRootStateSource } from "../../../ports/game-root-state.ts";
 import type { GovernmentModalControl } from "../../../ports/government-modal-control.ts";
+import { isCapturedAchievementUnlocked } from "../captured-achievements.ts";
 import { stale, SUCCEEDED } from "../../command-outcomes.ts";
 import { finite, isRecord, readProperty } from "../../validation.ts";
 
@@ -65,6 +66,31 @@ function readCurrentGovernment(root: unknown): string {
     "type",
   );
   return typeof government === "string" ? government : "none";
+}
+
+function readTradeFederationReadiness(
+  root: unknown,
+  settings: Record<string, unknown>,
+): boolean {
+  if (
+    settings["achievementGuards"] === false ||
+    settings["guardTradeFederation"] === false
+  ) {
+    return false;
+  }
+  const cityRoutes = finite(
+    readProperty(readProperty(readProperty(root, "city"), "market"), "trade"),
+  );
+  const galaxyTrade = readProperty(readProperty(root, "galaxy"), "trade");
+  const galaxyRoutes = finite(readProperty(galaxyTrade, "cur"));
+  return (
+    cityRoutes !== undefined &&
+    cityRoutes >= 750 &&
+    galaxyRoutes !== undefined &&
+    galaxyRoutes >= 50 &&
+    isCapturedAchievementUnlocked(root, "trade", 1) === false &&
+    governmentUnlocked(root, "federation")
+  );
 }
 
 function governmentUnlocked(root: unknown, government: string): boolean {
@@ -145,7 +171,8 @@ function readGovernmentInput(
     govFinalUnlocked: govFinal !== "none" && governmentUnlocked(root, govFinal),
     govInterimUnlocked:
       govInterim !== "none" && governmentUnlocked(root, govInterim),
-    tradeFederationReady: false,
+    tradeFederationReady:
+      !guardAnarchist && readTradeFederationReadiness(root, settings),
     candidateBackgrounds: readCandidateBackgrounds(root),
   };
   return Object.freeze(input);

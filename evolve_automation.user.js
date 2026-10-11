@@ -14456,6 +14456,14 @@
     );
     return typeof government == "string" ? government : "none";
   }
+  function readTradeFederationReadiness(root, settings) {
+    if (settings.achievementGuards === !1 || settings.guardTradeFederation === !1)
+      return !1;
+    let cityRoutes = finite(
+      readProperty(readProperty(readProperty(root, "city"), "market"), "trade")
+    ), galaxyTrade = readProperty(readProperty(root, "galaxy"), "trade"), galaxyRoutes = finite(readProperty(galaxyTrade, "cur"));
+    return cityRoutes !== void 0 && cityRoutes >= 750 && galaxyRoutes !== void 0 && galaxyRoutes >= 50 && isCapturedAchievementUnlocked(root, "trade", 1) === !1 && governmentUnlocked(root, "federation");
+  }
   function governmentUnlocked(root, government) {
     let tech = readProperty(root, "tech"), race = readProperty(root, "race"), govern = finite(readProperty(tech, "govern"));
     if (government === "dictator")
@@ -14501,7 +14509,7 @@
       govSpaceUnlocked: govSpace !== "none" && governmentUnlocked(root, govSpace),
       govFinalUnlocked: govFinal !== "none" && governmentUnlocked(root, govFinal),
       govInterimUnlocked: govInterim !== "none" && governmentUnlocked(root, govInterim),
-      tradeFederationReady: !1,
+      tradeFederationReady: !guardAnarchist && readTradeFederationReadiness(root, settings),
       candidateBackgrounds: readCandidateBackgrounds(root)
     };
     return Object.freeze(input);
