@@ -3404,8 +3404,7 @@ function runCombatRuntime(autoFight) {
   }
   stop();
 
-  // Later cycles restate the held Research catalog while its panel scope is still current.
-  assert.deepEqual(offerReadsPerCycle, [1, 0, 0]);
+  assert.deepEqual(offerReadsPerCycle, [1, 1, 1]);
   assert.deepEqual(errors, []);
   assert.ok(
     storageCalls.some(
@@ -3444,8 +3443,8 @@ function runCombatRuntime(autoFight) {
   });
   assert.equal(
     trigger.researchOfferReads,
-    1,
-    "the post-click demand refresh restates the Research catalog the cycle already drew",
+    2,
+    "a successful trigger click refreshes its dependent offer reservation",
   );
   assert.ok(
     trigger.invoked.includes("city-farm.action"),
@@ -3567,8 +3566,8 @@ for (const [label, lifecycle] of [
   });
   assert.equal(
     combined.researchOfferReads,
-    1,
-    "the post-click demand refresh restates the Research catalog the cycle already drew",
+    2,
+    "the trigger re-reads its dependent offer reservation after a successful click",
   );
   assert.ok(combined.invoked.includes("city-farm.action"));
   assertDemandScenarioErrors(combined.errors);

@@ -648,10 +648,9 @@ export function createCapturedProgressionControl(
     createCountTally(diagnostics).count(
       "research.observation.invalidated.processed-cycle",
     );
-    // The Research panel scopes survive the cycle boundary: a drawTech pass is the most expensive
-    // observation the runtime makes, and the scope cache already re-takes it on a progression epoch
-    // change, a rebound offer row, or its adaptive maximum age.
     clearResearchSample();
+    scopes.invalidate(RESEARCH_SCOPE);
+    scopes.invalidate(RESEARCH_GRANTED_SCOPE);
     scopes.invalidate(ARPA_SCOPE);
     resetProjectSample();
     resetBuildingUnlockSample();
