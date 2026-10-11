@@ -14563,29 +14563,8 @@
                 "planned government became locked",
                 { government: decision.government }
               );
-            let modal = dependencies.controls.resolve(GOVERNMENT_MODAL_CONTROL);
-            if (modal !== void 0) {
-              let result2 = dependencies.controls.invoke(modal, "setGov", [
-                decision.government
-              ]);
-              if (!result2.ok)
-                return stale(
-                  "government-controls-unavailable",
-                  `government modal control failed: ${result2.reason}`
-                );
-            } else {
-              let control = dependencies.controls.resolve(GOVERNMENT_CONTROL);
-              if (control === void 0)
-                return stale(
-                  "government-controls-unavailable",
-                  "government selection controls are not captured"
-                );
-              let result2 = dependencies.controls.invoke(control, "trigModal");
-              return result2.ok ? SUCCEEDED : stale(
-                "government-controls-unavailable",
-                `government modal opener failed: ${result2.reason}`
-              );
-            }
+            let result2 = dependencies.modal.apply(decision.government, root2);
+            if (result2.status !== "succeeded") return result2;
           }
         }
         if (decision.appointCandidate === null) return SUCCEEDED;
@@ -14624,14 +14603,18 @@
         );
       }
     });
-    return Object.freeze({ reader, executor });
+    return Object.freeze({
+      reader,
+      executor,
+      dispose: () => dependencies.modal.dispose()
+    });
   }
   function runCapturedGovernmentAutomation(automation) {
     return automation.executor.execute(planGovernment(automation.reader.read()));
   }
 
   // src/adapters/evolve/civic/government-panel-draw.ts
-  var GOVERNMENT_PANEL_CONTAINER = "#government";
+  var GOVERNMENT_PANEL_CONTAINER = "#government", GOVERNMENT_TYPE_SELECTOR = `#${GOVERNMENT_CONTROL}`, GOVERNMENT_MODAL_CONTAINER_SELECTOR = `#${GOVERNMENT_MODAL_CONTROL}`, GOVERNMENT_MODAL_BOX_ID = "modalBox", GOVERNMENT_MODAL_BOX_SELECTOR = `#${GOVERNMENT_MODAL_BOX_ID}`, GOVERNMENT_MODAL_SELECTOR = ".modal.is-active";
   function governmentPanelControlEstablished(controls2, purpose) {
     switch (purpose) {
       case "tax": {
@@ -14667,6 +14650,22 @@
         })
       });
   }
+  function governmentModalDraw(controls2) {
+    let draw = governmentPanelDraw(controls2, () => !1);
+    if (draw !== void 0)
+      return Object.freeze({
+        path: draw.path,
+        options: Object.freeze({
+          ...draw.options,
+          purpose: "government-modal",
+          forceDraw: !0,
+          mount: Object.freeze([
+            GOVERNMENT_PANEL_CONTAINER,
+            GOVERNMENT_TYPE_SELECTOR
+          ])
+        })
+      });
+  }
   function planGovernmentPanelDraw(root, controls2, purpose) {
     let tech = readProperty(root, "tech");
     if (purpose === "tax") {
@@ -14690,6 +14689,219 @@
       controls2,
       () => governmentPanelControlEstablished(controls2, purpose)
     );
+  }
+
+  // src/adapters/evolve/civic/captured-government-modal.ts
+  function governmentDocument(value) {
+    return isRecord(value) && typeof value.getElementById == "function" && typeof value.querySelector == "function" ? value : void 0;
+  }
+  function visibleModal(document) {
+    return document.querySelector(GOVERNMENT_MODAL_SELECTOR);
+  }
+  function modalBoxFor(document, wrapper) {
+    return wrapper?.querySelector(GOVERNMENT_MODAL_BOX_SELECTOR) ?? document.getElementById(GOVERNMENT_MODAL_BOX_ID);
+  }
+  function closeOwnedModal(document, pending) {
+    let box = modalBoxFor(document, pending.wrapper), background = (pending.wrapper ?? box?.closest(GOVERNMENT_MODAL_SELECTOR))?.querySelector(".modal-background");
+    if (background == null) return !1;
+    try {
+      return background.click(), !0;
+    } catch {
+      return !1;
+    }
+  }
+  function mountedGovernmentProxy(document, requireConnected = !0) {
+    let element = document.getElementById(GOVERNMENT_CONTROL);
+    if (element === null || requireConnected && readProperty(element, "isConnected") !== !0)
+      return;
+    let proxy = readProperty(element, "__vue_proxy__"), trigger = readProperty(proxy, "trigModal");
+    return isRecord(proxy) && typeof trigger == "function" ? {
+      proxy,
+      trigger
+    } : void 0;
+  }
+  function createCapturedGovernmentModalControl(dependencies) {
+    let pending = null, blockedRoot, disposed = !1, failAndClose = (document, active, code, message) => (closeOwnedModal(document, active), pending = null, blockedRoot = active.root, stale(code, message)), openNativeModal = (government, root, document) => {
+      let startingGeneration = dependencies.controls.resolve(GOVERNMENT_MODAL_CONTROL)?.generation ?? 0, currentProxy = mountedGovernmentProxy(document);
+      if (currentProxy !== void 0) {
+        try {
+          dependencies.mountSuppression.available ? dependencies.mountSuppression.withMountingEnabled(() => {
+            Reflect.apply(currentProxy.trigger, currentProxy.proxy, []);
+          }) : Reflect.apply(currentProxy.trigger, currentProxy.proxy, []);
+        } catch (error) {
+          return stale(
+            "government-modal-open-failed",
+            `native Government modal opener failed: ${String(error)}`
+          );
+        }
+        return {
+          root,
+          government,
+          startingGeneration,
+          wrapper: visibleModal(document),
+          canceled: !1,
+          creationChecks: 0
+        };
+      }
+      if (!dependencies.mountSuppression.available)
+        return stale(
+          "government-modal-mount-unavailable",
+          "native Government modal requires protected Vue mounting"
+        );
+      let draw = governmentModalDraw(dependencies.controls);
+      if (draw === void 0)
+        return stale(
+          "government-controls-unavailable",
+          "Government tab controls are not captured"
+        );
+      let triggerFailure, result = dependencies.discovery.discover(draw.path, {
+        ...draw.options,
+        whileDrawn: () => {
+          if (dependencies.rootState.readRoot() !== root)
+            return triggerFailure = "game root changed while drawing Government", !1;
+          if (dependencies.controls.resolve(GOVERNMENT_CONTROL)?.methods.includes("trigModal") !== !0)
+            return triggerFailure = "native Government trigger was not captured", !1;
+          let mounted = mountedGovernmentProxy(document, !1);
+          if (mounted === void 0)
+            return triggerFailure = "mounted Government Vue receiver is unavailable", !1;
+          try {
+            return dependencies.mountSuppression.withMountingEnabled(() => {
+              Reflect.apply(mounted.trigger, mounted.proxy, []);
+            }), !0;
+          } catch (error) {
+            return triggerFailure = `native Government modal opener failed: ${String(error)}`, !1;
+          }
+        }
+      });
+      if (dependencies.rootState.readRoot() !== root) {
+        blockedRoot = root;
+        let abandoned = {
+          root,
+          government,
+          startingGeneration,
+          wrapper: visibleModal(document),
+          canceled: !0,
+          creationChecks: 0
+        };
+        return closeOwnedModal(document, abandoned), stale(
+          "government-root-changed",
+          "game root changed while opening the native Government modal"
+        );
+      }
+      return triggerFailure !== void 0 ? stale("government-modal-open-failed", triggerFailure) : result.outcome.status !== "succeeded" ? result.outcome : {
+        root,
+        government,
+        startingGeneration,
+        wrapper: visibleModal(document),
+        canceled: !1,
+        creationChecks: 0
+      };
+    };
+    return Object.freeze({
+      apply(government, sampledRoot) {
+        if (disposed)
+          return stale(
+            "government-modal-disposed",
+            "Government modal control is stopped"
+          );
+        if (dependencies.rootState.readRoot() !== sampledRoot)
+          return stale(
+            "government-root-changed",
+            "game root changed after sampling"
+          );
+        if (pending !== null && ((pending.root !== sampledRoot || pending.government !== government) && (pending.canceled = !0), pending.canceled)) {
+          let canceledRoot = pending.root, document2 = governmentDocument(dependencies.getDocument());
+          return document2 !== void 0 && closeOwnedModal(document2, pending), pending = null, blockedRoot = canceledRoot, stale(
+            "government-modal-canceled",
+            "pending native Government modal no longer matches the sampled request"
+          );
+        }
+        let document = governmentDocument(dependencies.getDocument());
+        if (document === void 0)
+          return stale(
+            "government-modal-document-unavailable",
+            "page document is unavailable"
+          );
+        if (pending === null) {
+          if (blockedRoot === sampledRoot)
+            return stale(
+              "government-modal-retry-suppressed",
+              "native Government modal previously failed for this game root"
+            );
+          if (visibleModal(document) !== null)
+            return stale(
+              "government-modal-already-open",
+              "a player-visible modal is already open"
+            );
+          let opened = openNativeModal(government, sampledRoot, document);
+          return "status" in opened ? (blockedRoot = sampledRoot, opened) : (pending = { ...opened, government }, SUCCEEDED);
+        }
+        let active = pending, currentWrapper = visibleModal(document);
+        if (active.wrapper === null && currentWrapper !== null && (active.wrapper = currentWrapper), currentWrapper !== null && active.wrapper !== currentWrapper)
+          return failAndClose(
+            document,
+            active,
+            "government-modal-replaced",
+            "another modal replaced the automation-owned Government modal"
+          );
+        let box = modalBoxFor(document, active.wrapper);
+        if (box === null)
+          return active.creationChecks += 1, active.creationChecks < 3 ? SUCCEEDED : failAndClose(
+            document,
+            active,
+            "government-modal-missing",
+            "native Government modal content was not created"
+          );
+        let modalElement = box.querySelector(
+          GOVERNMENT_MODAL_CONTAINER_SELECTOR
+        ), modal = dependencies.controls.resolve(GOVERNMENT_MODAL_CONTROL);
+        if (modalElement === null || modal === void 0 || modal.generation <= active.startingGeneration)
+          return active.creationChecks += 1, active.creationChecks < 3 ? SUCCEEDED : failAndClose(
+            document,
+            active,
+            "government-modal-binding-missing",
+            "native Government modal did not produce a current setGov binding"
+          );
+        if (dependencies.rootState.readRoot() !== active.root)
+          return failAndClose(
+            document,
+            active,
+            "government-root-changed",
+            "game root changed while the native Government modal was opening"
+          );
+        if (!modal.methods.includes("setGov"))
+          return failAndClose(
+            document,
+            active,
+            "government-modal-setter-missing",
+            "native Government modal binding has no setGov method"
+          );
+        let result = dependencies.controls.invoke(modal, "setGov", [
+          government
+        ]);
+        return result.ok ? (pending = null, dependencies.rootState.readRoot() !== active.root ? stale(
+          "government-root-changed",
+          "game root changed while applying the native Government setter"
+        ) : readProperty(
+          readProperty(readProperty(active.root, "civic"), "govern"),
+          "type"
+        ) !== government ? (closeOwnedModal(document, active), blockedRoot = active.root, stale(
+          "government-native-setter-noop",
+          "native Government setGov returned without applying the requested government"
+        )) : SUCCEEDED) : failAndClose(
+          document,
+          active,
+          "government-modal-setter-failed",
+          `native Government setGov failed: ${result.detail ?? result.reason}`
+        );
+      },
+      dispose() {
+        if (disposed) return;
+        disposed = !0;
+        let document = governmentDocument(dependencies.getDocument());
+        pending !== null && document !== void 0 && closeOwnedModal(document, pending), pending = null;
+      }
+    });
   }
 
   // src/domain/combat/hell.ts
@@ -56417,10 +56629,6 @@ Only continue if you trust the source. Injected code:
       controls: pageCapture2.controls,
       readSettings: () => settingsStore.readRaw(),
       nowMs: () => Date.now()
-    }), government = createCapturedGovernmentAutomation({
-      rootState: pageCapture2.rootState,
-      controls: pageCapture2.controls,
-      readSettings: () => settingsStore.readRaw()
     }), hell = createCapturedHellAutomation({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
@@ -56801,6 +57009,17 @@ Only continue if you trust the source. Injected code:
       mountSuppression: pageCapture2.mountSuppression,
       panels,
       diagnostics: phaseDiagnostics
+    }), governmentModal = createCapturedGovernmentModalControl({
+      rootState: pageCapture2.rootState,
+      controls: pageCapture2.controls,
+      discovery: civicDiscovery,
+      mountSuppression: pageCapture2.mountSuppression,
+      getDocument: () => document
+    }), government = createCapturedGovernmentAutomation({
+      rootState: pageCapture2.rootState,
+      controls: pageCapture2.controls,
+      modal: governmentModal,
+      readSettings: () => settingsStore.readRaw()
     }), finishDiscovery = (key, label, satisfied, epoch, steps, options = void 0) => {
       if (!discoveryAttempts.shouldAttempt(key, epoch)) return !1;
       let result;
@@ -57976,7 +58195,7 @@ Only continue if you trust the source. Injected code:
       periodCounts.count("period.workingPeriods"), runCycle();
     });
     return () => {
-      unsubscribePeriods(), removeStateLogExport();
+      unsubscribePeriods(), removeStateLogExport(), government.dispose();
     };
   }
 

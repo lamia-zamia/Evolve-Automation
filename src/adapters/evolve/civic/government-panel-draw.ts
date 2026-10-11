@@ -18,9 +18,15 @@ import { TAX_CONTROL } from "./captured-tax.ts";
 import {
   CANDIDATES_CONTROL,
   GOVERNMENT_CONTROL,
+  GOVERNMENT_MODAL_CONTROL,
 } from "./captured-government.ts";
 
 export const GOVERNMENT_PANEL_CONTAINER = "#government";
+export const GOVERNMENT_TYPE_SELECTOR = `#${GOVERNMENT_CONTROL}`;
+export const GOVERNMENT_MODAL_CONTAINER_SELECTOR = `#${GOVERNMENT_MODAL_CONTROL}`;
+export const GOVERNMENT_MODAL_BOX_ID = "modalBox";
+export const GOVERNMENT_MODAL_BOX_SELECTOR = `#${GOVERNMENT_MODAL_BOX_ID}`;
+export const GOVERNMENT_MODAL_SELECTOR = ".modal.is-active";
 
 export type GovernmentPanelPurpose = "tax" | "type" | "candidates";
 
@@ -76,6 +82,26 @@ export function governmentPanelDraw(
     options: Object.freeze({
       mount: Object.freeze([GOVERNMENT_PANEL_CONTAINER]),
       isPanelDrawn,
+    }),
+  });
+}
+
+/** A protected draw that briefly mounts the real `govType` Vue proxy for its Buefy receiver. */
+export function governmentModalDraw(
+  controls: GameControlRegistry,
+): GovernmentPanelDraw | undefined {
+  const draw = governmentPanelDraw(controls, () => false);
+  if (draw === undefined) return undefined;
+  return Object.freeze({
+    path: draw.path,
+    options: Object.freeze({
+      ...draw.options,
+      purpose: "government-modal",
+      forceDraw: true,
+      mount: Object.freeze([
+        GOVERNMENT_PANEL_CONTAINER,
+        GOVERNMENT_TYPE_SELECTOR,
+      ]),
     }),
   });
 }

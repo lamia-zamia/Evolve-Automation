@@ -17,16 +17,18 @@ import type { DecisionExecutor } from "../../../ports/decision-executor.ts";
 import type { GovernmentReader } from "../../../ports/government.ts";
 import type { GameControlRegistry } from "../../../ports/game-control-registry.ts";
 import type { GameRootStateSource } from "../../../ports/game-root-state.ts";
+import type { GovernmentModalControl } from "../../../ports/government-modal-control.ts";
 import { stale, SUCCEEDED } from "../../command-outcomes.ts";
 import { finite, isRecord, readProperty } from "../../validation.ts";
 
 export const CANDIDATES_CONTROL = "candidates";
 export const GOVERNMENT_CONTROL = "govType";
-const GOVERNMENT_MODAL_CONTROL = "govModal";
+export const GOVERNMENT_MODAL_CONTROL = "govModal";
 
 export interface CapturedGovernmentAutomation {
   readonly reader: GovernmentReader;
   readonly executor: DecisionExecutor<GovernmentDecision>;
+  dispose(): void;
 }
 
 interface AppointmentSession {
@@ -151,6 +153,7 @@ function readGovernmentInput(
 export function createCapturedGovernmentAutomation(dependencies: {
   readonly rootState: GameRootStateSource;
   readonly controls: GameControlRegistry;
+  readonly modal: GovernmentModalControl;
   readonly readSettings: () => unknown;
 }): CapturedGovernmentAutomation {
   let session: AppointmentSession | null = null;
@@ -225,35 +228,8 @@ export function createCapturedGovernmentAutomation(dependencies: {
               { government: decision.government },
             );
           }
-          const modal = dependencies.controls.resolve(GOVERNMENT_MODAL_CONTROL);
-          if (modal !== undefined) {
-            const result = dependencies.controls.invoke(modal, "setGov", [
-              decision.government,
-            ]);
-            if (!result.ok) {
-              return stale(
-                "government-controls-unavailable",
-                `government modal control failed: ${result.reason}`,
-              );
-            }
-          } else {
-            const control = dependencies.controls.resolve(GOVERNMENT_CONTROL);
-            if (control === undefined) {
-              return stale(
-                "government-controls-unavailable",
-                "government selection controls are not captured",
-              );
-            }
-            const result = dependencies.controls.invoke(control, "trigModal");
-            if (!result.ok) {
-              return stale(
-                "government-controls-unavailable",
-                `government modal opener failed: ${result.reason}`,
-              );
-            }
-            // The modal component is mounted asynchronously; the next cycle will commit it.
-            return SUCCEEDED;
-          }
+          const result = dependencies.modal.apply(decision.government, root);
+          if (result.status !== "succeeded") return result;
         }
       }
       if (decision.appointCandidate === null) return SUCCEEDED;
@@ -304,7 +280,11 @@ export function createCapturedGovernmentAutomation(dependencies: {
     },
   });
 
-  return Object.freeze({ reader, executor });
+  return Object.freeze({
+    reader,
+    executor,
+    dispose: () => dependencies.modal.dispose(),
+  });
 }
 
 export function runCapturedGovernmentAutomation(

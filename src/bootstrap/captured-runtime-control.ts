@@ -19,6 +19,7 @@ import {
   createCapturedGovernmentAutomation,
   runCapturedGovernmentAutomation,
 } from "../adapters/evolve/civic/captured-government.ts";
+import { createCapturedGovernmentModalControl } from "../adapters/evolve/civic/captured-government-modal.ts";
 import {
   governmentPanelControlEstablished,
   planGovernmentPanelDraw,
@@ -1089,11 +1090,6 @@ export function startCapturedRuntime({
     readSettings: () => settingsStore.readRaw(),
     nowMs: () => Date.now(),
   });
-  const government = createCapturedGovernmentAutomation({
-    rootState: pageCapture.rootState,
-    controls: pageCapture.controls,
-    readSettings: () => settingsStore.readRaw(),
-  });
   const hell = createCapturedHellAutomation({
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,
@@ -1693,6 +1689,19 @@ export function startCapturedRuntime({
     mountSuppression: pageCapture.mountSuppression,
     panels,
     diagnostics: phaseDiagnostics,
+  });
+  const governmentModal = createCapturedGovernmentModalControl({
+    rootState: pageCapture.rootState,
+    controls: pageCapture.controls,
+    discovery: civicDiscovery,
+    mountSuppression: pageCapture.mountSuppression,
+    getDocument: () => document,
+  });
+  const government = createCapturedGovernmentAutomation({
+    rootState: pageCapture.rootState,
+    controls: pageCapture.controls,
+    modal: governmentModal,
+    readSettings: () => settingsStore.readRaw(),
   });
   /**
    * The one place a captured feature spends a tab draw. Callers check their own eligibility first
@@ -4014,5 +4023,6 @@ export function startCapturedRuntime({
   return () => {
     unsubscribePeriods();
     removeStateLogExport();
+    government.dispose();
   };
 }

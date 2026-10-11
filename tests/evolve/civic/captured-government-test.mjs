@@ -30,6 +30,10 @@ function makeControls(invoked, available = true) {
   };
 }
 
+function makeModal(apply = () => ({ status: "succeeded" })) {
+  return { apply, dispose() {} };
+}
+
 // A configured, unappointed governor selects the matching captured candidate.
 {
   const root = makeRoot();
@@ -37,6 +41,7 @@ function makeControls(invoked, available = true) {
   const automation = createCapturedGovernmentAutomation({
     rootState: { readRoot: () => root },
     controls: makeControls(invoked),
+    modal: makeModal(),
     readSettings: () => ({ autoGovernment: true, govGovernor: "educator" }),
   });
   const outcome = runCapturedGovernmentAutomation(automation);
@@ -52,6 +57,7 @@ function makeControls(invoked, available = true) {
   const automation = createCapturedGovernmentAutomation({
     rootState: { readRoot: () => root },
     controls: makeControls(invoked),
+    modal: makeModal(),
     readSettings: () => ({ autoGovernment: true, govGovernor: "educator" }),
   });
   assert.deepEqual(runCapturedGovernmentAutomation(automation), {
@@ -66,6 +72,7 @@ function makeControls(invoked, available = true) {
   const automation = createCapturedGovernmentAutomation({
     rootState: { readRoot: () => root },
     controls: makeControls([], false),
+    modal: makeModal(),
     readSettings: () => ({ autoGovernment: true, govGovernor: "educator" }),
   });
   const outcome = runCapturedGovernmentAutomation(automation);
@@ -73,34 +80,20 @@ function makeControls(invoked, available = true) {
   assert.equal(outcome.failure.code, "governor-controls-unavailable");
 }
 
-// Government type selection uses the captured government component in two phases: open the
-// upstream modal, then commit through its mounted modal component on the next cycle.
+// Government type selection delegates its native modal lifecycle to the modal controller.
 {
   const root = makeRoot();
   root.tech.govern = 1;
   root.civic = { govern: { type: "anarchy", rev: 0 } };
-  let modalOpen = false;
-  const invoked = [];
+  const modalCalls = [];
   const automation = createCapturedGovernmentAutomation({
     rootState: { readRoot: () => root },
-    controls: {
-      resolve: (elementId) => {
-        if (elementId === "govType" && !modalOpen) {
-          return { elementId, generation: 1, methods: ["trigModal"] };
-        }
-        if (elementId === "govModal" && modalOpen) {
-          return { elementId, generation: 1, methods: ["setGov"] };
-        }
-        return undefined;
-      },
-      invoke: (_handle, method, args) => {
-        invoked.push({ method, args });
-        if (method === "trigModal") modalOpen = true;
-        if (method === "setGov") root.civic.govern.type = args[0];
-        return { ok: true, value: undefined };
-      },
-      capturedElementIds: () => [],
-    },
+    controls: makeControls([]),
+    modal: makeModal((government) => {
+      modalCalls.push(government);
+      root.civic.govern.type = government;
+      return { status: "succeeded" };
+    }),
     readSettings: () => ({
       autoGovernment: true,
       govInterim: "democracy",
@@ -110,14 +103,35 @@ function makeControls(invoked, available = true) {
   assert.deepEqual(runCapturedGovernmentAutomation(automation), {
     status: "succeeded",
   });
-  assert.deepEqual(runCapturedGovernmentAutomation(automation), {
-    status: "succeeded",
-  });
   assert.equal(root.civic.govern.type, "democracy");
-  assert.deepEqual(invoked, [
-    { method: "trigModal", args: undefined },
-    { method: "setGov", args: ["democracy"] },
-  ]);
+  assert.deepEqual(modalCalls, ["democracy"]);
+}
+
+// A pending revolution and a locked target never open the native modal.
+for (const [government, revision] of [
+  ["democracy", 10],
+  ["republic", 0],
+]) {
+  const root = makeRoot();
+  root.tech.govern = 1;
+  root.civic = { govern: { type: "anarchy", rev: revision } };
+  const modalCalls = [];
+  const automation = createCapturedGovernmentAutomation({
+    rootState: { readRoot: () => root },
+    controls: makeControls([]),
+    modal: makeModal((target) => {
+      modalCalls.push(target);
+      return { status: "succeeded" };
+    }),
+    readSettings: () => ({
+      autoGovernment: true,
+      govInterim: government,
+      govGovernor: "none",
+    }),
+  });
+  const outcome = runCapturedGovernmentAutomation(automation);
+  if (revision > 0) assert.equal(outcome.status, "stale");
+  assert.deepEqual(modalCalls, []);
 }
 
 console.log("Captured government adapter tests passed");
