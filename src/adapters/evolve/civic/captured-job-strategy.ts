@@ -182,6 +182,15 @@ export function readCapturedJobStrategyPair(
       reasons.push(`paired ${base.resourceId} stock contains invalid values`);
       continue;
     }
+    if (
+      base.amountBefore !== changed.amountBefore ||
+      base.capacityBefore !== changed.capacityBefore
+    ) {
+      reasons.push(
+        `paired ${base.resourceId} observations do not share the same starting stock and capacity`,
+      );
+      continue;
+    }
     const period = baseline.productionWindow;
     const baseAmount = base.amountBefore;
     const baseCapacity = base.capacityBefore;

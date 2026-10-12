@@ -88,6 +88,46 @@ const pair = (changes = {}) => ({
 }
 
 {
+  const mismatchedStart = readCapturedJobStrategyPair(
+    pair({
+      intervention: cell({
+        jobsBefore: { scientist: 3, quarry_worker: 59 },
+        jobsAfter: { scientist: 4, quarry_worker: 58 },
+        resources: [
+          resource("Knowledge", 20_001, 21_460),
+          resource("Stone", 100_000, 107_568),
+        ],
+      }),
+    }),
+  );
+  assert.equal(mismatchedStart.candidate.productionChanges, undefined);
+  assert.ok(
+    mismatchedStart.unavailableReasons.includes(
+      "paired Knowledge observations do not share the same starting stock and capacity",
+    ),
+  );
+
+  const mismatchedCapacity = readCapturedJobStrategyPair(
+    pair({
+      intervention: cell({
+        jobsBefore: { scientist: 3, quarry_worker: 59 },
+        jobsAfter: { scientist: 4, quarry_worker: 58 },
+        resources: [
+          resource("Knowledge", 20_000, 21_459, 900_000),
+          resource("Stone", 100_000, 107_568),
+        ],
+      }),
+    }),
+  );
+  assert.equal(mismatchedCapacity.candidate.productionChanges, undefined);
+  assert.ok(
+    mismatchedCapacity.unavailableReasons.includes(
+      "paired Knowledge observations do not share the same starting stock and capacity",
+    ),
+  );
+}
+
+{
   const unavailable = readCapturedJobStrategyPair(
     pair({ targetPermitted: false }),
   );
