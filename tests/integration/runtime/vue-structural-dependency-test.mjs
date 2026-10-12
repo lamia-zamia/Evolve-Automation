@@ -1,11 +1,7 @@
 import assert from "node:assert/strict";
 
-import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
-import {
-  createChromiumRunner,
-  parseSave,
-} from "../../../tools/chromium-evolve-runner.mjs";
+import { createChromiumRunner } from "../../../tools/chromium-evolve-runner.mjs";
 
 const root = resolve(import.meta.dirname, "../../..");
 const runner = await createChromiumRunner({
@@ -15,16 +11,8 @@ let session;
 try {
   session = await runner.openSession({
     bundle: resolve(root, "evolve_automation.user.js"),
-    save: parseSave(
-      await readFile(
-        resolve(root, "test-artifacts/benchmark/saves/ds-late-2809.txt"),
-        "utf8",
-      ),
-    ),
-    settings: await readFile(
-      resolve(root, "test-artifacts/benchmark/settings/late-2809.json"),
-      "utf8",
-    ),
+    save: null,
+    settings: {},
     seed: 42,
   });
   const result = await session.evaluate(() => {

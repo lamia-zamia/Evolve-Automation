@@ -11,6 +11,7 @@ import {
   CAPTURED_WHITEHOLE_REPAIR_TECH,
   CAPTURED_CELESTIAL_LAB,
   createCapturedMadPrestige,
+  observeCapturedMadGoal,
   readCapturedMadBranch,
 } from "../../../src/adapters/evolve/progression/prestige/captured-mad.ts";
 import {
@@ -46,6 +47,82 @@ const settings = {
   prestigeMADWait: true,
   prestigeMADPopulation: 28,
 };
+
+// The goal observation follows the selected outcome through the current native offer and its
+// current Knowledge blocker without reading a panel or changing an automation decision.
+{
+  const root = buildRoot({
+    tech: {},
+    civic: {
+      mad: { display: false, armed: false },
+      garrison: { workers: 12, max: 20, crew: 2 },
+    },
+    resource: {
+      Population: { amount: 30, max: 30 },
+      Knowledge: { amount: 20_000, max: 200_000, diff: 12 },
+    },
+  });
+  const offer = Object.freeze({
+    elementId: "tech-mad",
+    cost: Object.freeze({ Knowledge: 120_000 }),
+    nativeAffordable: false,
+    generation: 9,
+  });
+  const plan = observeCapturedMadGoal(
+    root,
+    { ...settings, prestigeType: "mad", autoPrestige: false },
+    [offer],
+    false,
+    17,
+    "run:4",
+  );
+  assert.equal(plan.selectedGoal.id, "prestige:mad");
+  assert.equal(plan.currentSubgoal, "tech-mad");
+  assert.deepEqual(plan.blockers, [
+    "automation-permission-disabled",
+    "Knowledge:stock-below-native-price",
+  ]);
+  assert.deepEqual(plan.quantitativeRequirements, [
+    {
+      resourceId: "Knowledge",
+      amount: 120_000,
+      held: 20_000,
+      capacity: 200_000,
+      netRate: 12,
+    },
+  ]);
+  assert.equal(plan.freshness.offerGeneration, 9);
+
+  const replacedRootPlan = observeCapturedMadGoal(
+    buildRoot({
+      tech: {},
+      civic: {
+        mad: { display: false, armed: false },
+        garrison: { workers: 0, max: 0, crew: 0 },
+      },
+    }),
+    { ...settings, prestigeType: "mad" },
+    undefined,
+    false,
+    18,
+    "run:5",
+  );
+  assert.match(
+    replacedRootPlan.unavailableFacts.join(" "),
+    /tech\.mad level is unavailable/,
+  );
+  assert.equal(replacedRootPlan.freshness.progressionEpoch, "run:5");
+
+  const completed = observeCapturedMadGoal(
+    root,
+    { ...settings, prestigeType: "mad" },
+    undefined,
+    true,
+    19,
+    "run:4",
+  );
+  assert.equal(completed.status, "satisfied");
+}
 
 function reusableCustomRaceLab(root, trace, resetStat = "ascend") {
   const session = { identity: {} };

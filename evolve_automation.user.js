@@ -12917,6 +12917,82 @@
   // src/ports/game-custom-race-lab.ts
   var CUSTOM_RACE_LAB_CONTROL_ID = CELESTIAL_LAB_CONTROL_ID, CUSTOM_RACE_LAB_PANEL_SELECTOR = CELESTIAL_LAB_PANEL_SELECTOR, CUSTOM_RACE_LAB_STRAND_ID = "#traitSlots .labStrand", CUSTOM_RACE_FILE_INPUT_ID = "customFile";
 
+  // src/domain/progression/goal-planning.ts
+  var MAD_TERMINAL_GOAL_ID = "prestige:mad", MAD_RESEARCH_GOAL_ID = "research:mad";
+  function planMadGoal(input) {
+    let unavailableFacts = [], blockers = [], quantitativeRequirements = [], nativePriceBlockerObserved = !1;
+    input.selectedPrestige !== "mad" && unavailableFacts.push("MAD is not the selected terminal objective"), input.madResearchLevel === void 0 && unavailableFacts.push("native tech.mad level is unavailable"), !input.offerCatalogAvailable && input.madResearchLevel !== void 0 && input.madResearchLevel < 1 && unavailableFacts.push("current Research offer catalog is unavailable");
+    let researchSatisfied = input.madResearchGate === !0 && input.madResearchLevel !== void 0 && input.madResearchLevel > 0, selectedMad = input.selectedPrestige === "mad", status2 = selectedMad ? input.resetConfirmed ? "satisfied" : input.madResearchGate === void 0 || input.madResetGate === void 0 ? "unavailable" : !researchSatisfied || !input.madResetGate || !input.prestigePermission || input.manualOwnership ? "blocked" : "unsatisfied" : "unavailable", chain = [MAD_TERMINAL_GOAL_ID];
+    selectedMad && !input.resetConfirmed && (input.prestigePermission || blockers.push("automation-permission-disabled"), input.manualOwnership && blockers.push("MAD is armed or otherwise manually owned"));
+    let currentSubgoal;
+    if (selectedMad && !input.resetConfirmed)
+      if (researchSatisfied)
+        currentSubgoal = "prestige:mad-reset-gate", chain.push(currentSubgoal), input.madResetGate || blockers.push("native soldier or population reset gate is unsatisfied");
+      else if (chain.push(MAD_RESEARCH_GOAL_ID), currentSubgoal = MAD_RESEARCH_GOAL_ID, input.offeredMadTech !== void 0) {
+        chain.push(input.offeredMadTech.action.nativeId), currentSubgoal = input.offeredMadTech.action.nativeId;
+        for (let [resourceId, amount] of Object.entries(
+          input.offeredMadTech.costs
+        )) {
+          if (!Number.isFinite(amount) || amount <= 0) continue;
+          let resource = input.resources.get(resourceId);
+          if (resource === void 0) {
+            unavailableFacts.push(
+              `native price resource ${resourceId} is unavailable`
+            );
+            continue;
+          }
+          chain.push(`resource:${resourceId}`), quantitativeRequirements.push(
+            Object.freeze({
+              resourceId,
+              amount,
+              ...resource.amount === void 0 ? {} : { held: resource.amount },
+              ...resource.capacity === void 0 ? {} : { capacity: resource.capacity },
+              ...resource.netRate === void 0 ? {} : { netRate: resource.netRate }
+            })
+          ), resource.amount === void 0 ? unavailableFacts.push(
+            `current stock for ${resourceId} is unavailable`
+          ) : resource.amount < amount && (nativePriceBlockerObserved = !0, blockers.push(`${resourceId}:stock-below-native-price`), resource.capacity === void 0 && unavailableFacts.push(
+            `current capacity for ${resourceId} is unavailable`
+          ), resource.capacity !== void 0 && resource.capacity >= 0 && resource.capacity < amount && blockers.push(`${resourceId}:capacity-below-native-price`), resource.netRate !== void 0 && resource.netRate <= 0 && blockers.push(`${resourceId}:nonpositive-net-production`), resource.netRate === void 0 && unavailableFacts.push(
+            `net production for ${resourceId} is unavailable`
+          ));
+        }
+        !input.offeredMadTech.nativeAffordable && !nativePriceBlockerObserved && unavailableFacts.push(
+          "native affordability is false but captured costs do not explain it"
+        );
+      } else input.offerCatalogAvailable && unavailableFacts.push(
+        "tech-mad is not currently offered; its locked dependencies are unavailable here"
+      );
+    let selectedGoal = Object.freeze({
+      id: MAD_TERMINAL_GOAL_ID,
+      scope: "run",
+      predicate: "confirmed-mad-reset",
+      provenance: "player-selected",
+      reason: "selected prestigeType=mad",
+      status: status2,
+      prerequisites: Object.freeze({
+        operator: "all",
+        goalIds: Object.freeze([MAD_RESEARCH_GOAL_ID])
+      }),
+      ...unavailableFacts.length === 0 ? {} : { unavailableFacts: Object.freeze([...unavailableFacts]) }
+    });
+    return Object.freeze({
+      selectedGoal,
+      status: status2,
+      currentSubgoal,
+      verifiedChain: Object.freeze(chain),
+      blockers: Object.freeze(blockers),
+      ...input.offeredMadTech === void 0 ? {} : { action: input.offeredMadTech },
+      quantitativeRequirements: Object.freeze(quantitativeRequirements),
+      unavailableFacts: Object.freeze(unavailableFacts),
+      freshness: Object.freeze({
+        cycle: input.cycle,
+        progressionEpoch: input.progressionEpoch,
+        ...input.offeredMadTech === void 0 ? {} : { offerGeneration: input.offeredMadTech.generation }
+      })
+    });
+  }
+
   // src/adapters/evolve/progression/prestige/captured-mad.ts
   var CAPTURED_MAD_CONTROL = "mad", CAPTURED_CELESTIAL_LAB_SUBMISSION_OBSERVATION_LIMIT = 8, CAPTURED_CATACLYSM_TECH = "tech-dial_it_to_11", CAPTURED_APOCALYPSE_TECHS = Object.freeze({
     first: "tech-protocol66",
@@ -13219,6 +13295,43 @@
         "prestigeMADPopulation",
         1
       )
+    });
+  }
+  function observeCapturedMadGoal(root, rawSettings, offers, resetConfirmed, cycle, progressionEpoch) {
+    let settings = capturedMadSettingsRecord(rawSettings), branch = readCapturedMadBranch(root, rawSettings), techLevel3 = coerceNumber(
+      readProperty(readProperty(root, "tech"), "mad")
+    ), madOffer = offers?.find((offer) => offer.elementId === "tech-mad"), resources = /* @__PURE__ */ new Map();
+    if (madOffer !== void 0)
+      for (let resourceId of Object.keys(madOffer.cost)) {
+        let view = readCapturedResourceView(root, resourceId, ANYWHERE_POOL);
+        view.present && resources.set(
+          resourceId,
+          Object.freeze({
+            ...Number.isFinite(view.amount) ? { amount: view.amount } : {},
+            ...Number.isFinite(view.max) ? { capacity: view.max } : {},
+            ...Number.isFinite(view.rateOfChange) ? { netRate: view.rateOfChange } : {}
+          })
+        );
+      }
+    let resetGate = planPrestige({ goal: "Reset", branch });
+    return planMadGoal({
+      selectedPrestige: typeof settings.prestigeType == "string" ? settings.prestigeType : "none",
+      prestigePermission: settings.autoPrestige === !0,
+      manualOwnership: branch.type === "mad" && branch.armed,
+      resetConfirmed,
+      madResearchLevel: Number.isFinite(techLevel3) ? techLevel3 : void 0,
+      madResearchGate: branch.type === "mad" ? branch.eligible : void 0,
+      madResetGate: branch.type === "mad" ? resetGate.some((command) => command.kind === "launch-mad") : void 0,
+      offeredMadTech: madOffer === void 0 ? void 0 : Object.freeze({
+        action: Object.freeze({ family: "research", nativeId: "tech-mad" }),
+        costs: madOffer.cost,
+        nativeAffordable: madOffer.nativeAffordable,
+        generation: madOffer.generation
+      }),
+      offerCatalogAvailable: offers !== void 0,
+      resources,
+      cycle,
+      progressionEpoch
     });
   }
   function invokeMadControl(controls2, method) {
@@ -56757,7 +56870,7 @@ Only continue if you trust the source. Injected code:
       keyState: pageCapture2.keyState,
       readSettings: () => settingsStore.readRaw(),
       onActivity
-    }), capturedPrestigeGoal = "Standard", capturedResetCommittedThisCycle = !1, capturedMechCycleHasPendingWork = !1, capturedMercenary = createCapturedMercenary({
+    }), capturedPrestigeGoal = "Standard", capturedResetCommittedThisCycle = !1, lastMadGoalDiagnostic = "", capturedMechCycleHasPendingWork = !1, capturedMercenary = createCapturedMercenary({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
       readSettings: () => settingsStore.readRaw(),
@@ -58368,7 +58481,42 @@ Only continue if you trust the source. Injected code:
               return;
           }
           prestige.run();
-        }), capturedResetCommittedThisCycle) return;
+        }), settings.prestigeType === "mad" && diagnostics?.readPerformanceEnabled() === !0) {
+          let plan = observeCapturedMadGoal(
+            pageCapture2.rootState.readRoot(),
+            settings,
+            progression.readOfferedTechs(),
+            capturedResetCommittedThisCycle,
+            automationCycle,
+            progression.readProgressionEpoch()
+          ), signature = JSON.stringify({
+            selectedGoal: plan.selectedGoal.id,
+            status: plan.status,
+            currentSubgoal: plan.currentSubgoal,
+            verifiedChain: plan.verifiedChain,
+            blockers: plan.blockers,
+            unavailableFacts: plan.unavailableFacts,
+            requirements: plan.quantitativeRequirements.map((requirement) => ({
+              resourceId: requirement.resourceId,
+              amount: requirement.amount,
+              stock: requirement.held === void 0 ? "unknown" : requirement.held < requirement.amount ? "below" : "enough",
+              capacity: requirement.capacity === void 0 ? "unknown" : requirement.capacity < requirement.amount ? "below" : "enough",
+              production: requirement.netRate === void 0 ? "unknown" : requirement.netRate <= 0 ? "nonpositive" : "positive"
+            }))
+          });
+          if (signature !== lastMadGoalDiagnostic) {
+            lastMadGoalDiagnostic = signature;
+            let goalQuantityDisplay = (value) => value === void 0 ? "?" : String(Math.round(value)), requirements = plan.quantitativeRequirements.map(
+              (requirement) => `${requirement.resourceId}:${goalQuantityDisplay(requirement.held)}/${goalQuantityDisplay(requirement.amount)}@${goalQuantityDisplay(requirement.capacity)}#${goalQuantityDisplay(requirement.netRate)}`
+            ).join(";");
+            reportDiagnostic(
+              `goal.mad status=${plan.status} selected=${plan.selectedGoal.id} subgoal=${plan.currentSubgoal ?? "none"} chain=${plan.verifiedChain.join(">")} blockers=${plan.blockers.join(",")}`
+            ), reportDiagnostic(`goal.mad requirements=${requirements}`), reportDiagnostic(
+              `goal.mad unavailable=${plan.unavailableFacts.join(";")} freshness=cycle:${plan.freshness.cycle},offer:${plan.freshness.offerGeneration ?? "none"}`
+            );
+          }
+        }
+        if (capturedResetCommittedThisCycle) return;
         if (isEnabled(settings, "autoMinorTrait")) {
           let shapeshift = runPhase(
             "autoShapeshift",

@@ -42,6 +42,7 @@ import {
 import {
   CAPTURED_MAD_CONTROL,
   isCapturedBuildingPrestigeType,
+  observeCapturedMadGoal,
 } from "../adapters/evolve/progression/prestige/captured-mad.ts";
 import { createCapturedCraftsmenAutomation } from "../adapters/evolve/civic/captured-craftsmen.ts";
 import {
@@ -857,6 +858,7 @@ export function startCapturedRuntime({
   // only the one-tick handoff used by the captured prestige planner and is discarded on reload.
   let capturedPrestigeGoal = "Standard";
   let capturedResetCommittedThisCycle = false;
+  let lastMadGoalDiagnostic = "";
   let capturedMechCycleHasPendingWork = false;
   const capturedMercenary = createCapturedMercenary({
     rootState: pageCapture.rootState,
@@ -3894,6 +3896,67 @@ export function startCapturedRuntime({
           }
           prestige.run();
         });
+      }
+      if (
+        settings["prestigeType"] === "mad" &&
+        diagnostics?.readPerformanceEnabled() === true
+      ) {
+        const plan = observeCapturedMadGoal(
+          pageCapture.rootState.readRoot(),
+          settings,
+          progression.readOfferedTechs(),
+          capturedResetCommittedThisCycle,
+          automationCycle,
+          progression.readProgressionEpoch(),
+        );
+        const signature = JSON.stringify({
+          selectedGoal: plan.selectedGoal.id,
+          status: plan.status,
+          currentSubgoal: plan.currentSubgoal,
+          verifiedChain: plan.verifiedChain,
+          blockers: plan.blockers,
+          unavailableFacts: plan.unavailableFacts,
+          requirements: plan.quantitativeRequirements.map((requirement) => ({
+            resourceId: requirement.resourceId,
+            amount: requirement.amount,
+            stock:
+              requirement.held === undefined
+                ? "unknown"
+                : requirement.held < requirement.amount
+                  ? "below"
+                  : "enough",
+            capacity:
+              requirement.capacity === undefined
+                ? "unknown"
+                : requirement.capacity < requirement.amount
+                  ? "below"
+                  : "enough",
+            production:
+              requirement.netRate === undefined
+                ? "unknown"
+                : requirement.netRate <= 0
+                  ? "nonpositive"
+                  : "positive",
+          })),
+        });
+        if (signature !== lastMadGoalDiagnostic) {
+          lastMadGoalDiagnostic = signature;
+          const goalQuantityDisplay = (value: number | undefined) =>
+            value === undefined ? "?" : String(Math.round(value));
+          const requirements = plan.quantitativeRequirements
+            .map(
+              (requirement) =>
+                `${requirement.resourceId}:${goalQuantityDisplay(requirement.held)}/${goalQuantityDisplay(requirement.amount)}@${goalQuantityDisplay(requirement.capacity)}#${goalQuantityDisplay(requirement.netRate)}`,
+            )
+            .join(";");
+          reportDiagnostic(
+            `goal.mad status=${plan.status} selected=${plan.selectedGoal.id} subgoal=${plan.currentSubgoal ?? "none"} chain=${plan.verifiedChain.join(">")} blockers=${plan.blockers.join(",")}`,
+          );
+          reportDiagnostic(`goal.mad requirements=${requirements}`);
+          reportDiagnostic(
+            `goal.mad unavailable=${plan.unavailableFacts.join(";")} freshness=cycle:${plan.freshness.cycle},offer:${plan.freshness.offerGeneration ?? "none"}`,
+          );
+        }
       }
       // A confirmed reset changes the live run out from under every later feature. A planned
       // one-tick `Reset` goal does not: it remains eligible for the old companion ordering.

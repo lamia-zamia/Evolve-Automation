@@ -19,6 +19,7 @@ import {
 import {
   WHITEHOLE_REPAIR_TECH_ID,
   WHITEHOLE_RESET_LEVEL,
+  planPrestige,
   type CelestialLabMode,
   type PrestigeBranch,
   type PrestigeCommand,
@@ -57,6 +58,15 @@ import { readCapturedMechPotential } from "../../../../domain/combat/mech-auto-c
 import { readCapturedMechState } from "../../../../domain/combat/mech-state.ts";
 import type { GameResourceSource } from "../../../../ports/game-world-state.ts";
 import type { OfferedTech } from "../../../../ports/game-tech-catalog.ts";
+import {
+  ANYWHERE_POOL,
+  readCapturedResourceView,
+} from "../../captured-affordability.ts";
+import {
+  planMadGoal,
+  type GoalResourceObservation,
+  type MadGoalPlan,
+} from "../../../../domain/progression/goal-planning.ts";
 import { readCapturedAscensionLevel } from "../../ascension-level.ts";
 import {
   coerceNumber,
@@ -744,6 +754,70 @@ export function readCapturedMadBranch(
       "prestigeMADPopulation",
       1,
     ),
+  });
+}
+
+/** Reads the selected MAD goal from current capture and already-drawn Research facts only. */
+export function observeCapturedMadGoal(
+  root: unknown,
+  rawSettings: unknown,
+  offers: readonly Readonly<OfferedTech>[] | undefined,
+  resetConfirmed: boolean,
+  cycle: number,
+  progressionEpoch: string,
+): MadGoalPlan {
+  const settings = capturedMadSettingsRecord(rawSettings);
+  const branch = readCapturedMadBranch(root, rawSettings);
+  const techLevel = coerceNumber(
+    readProperty(readProperty(root, "tech"), "mad"),
+  );
+  const madOffer = offers?.find((offer) => offer.elementId === "tech-mad");
+  const resources = new Map<string, Readonly<GoalResourceObservation>>();
+  if (madOffer !== undefined) {
+    for (const resourceId of Object.keys(madOffer.cost)) {
+      const view = readCapturedResourceView(root, resourceId, ANYWHERE_POOL);
+      if (view.present) {
+        resources.set(
+          resourceId,
+          Object.freeze({
+            ...(Number.isFinite(view.amount) ? { amount: view.amount } : {}),
+            ...(Number.isFinite(view.max) ? { capacity: view.max } : {}),
+            ...(Number.isFinite(view.rateOfChange)
+              ? { netRate: view.rateOfChange }
+              : {}),
+          }),
+        );
+      }
+    }
+  }
+  const resetGate = planPrestige({ goal: "Reset", branch });
+  return planMadGoal({
+    selectedPrestige:
+      typeof settings["prestigeType"] === "string"
+        ? settings["prestigeType"]
+        : "none",
+    prestigePermission: settings["autoPrestige"] === true,
+    manualOwnership: branch.type === "mad" && branch.armed,
+    resetConfirmed,
+    madResearchLevel: Number.isFinite(techLevel) ? techLevel : undefined,
+    madResearchGate: branch.type === "mad" ? branch.eligible : undefined,
+    madResetGate:
+      branch.type === "mad"
+        ? resetGate.some((command) => command.kind === "launch-mad")
+        : undefined,
+    offeredMadTech:
+      madOffer === undefined
+        ? undefined
+        : Object.freeze({
+            action: Object.freeze({ family: "research", nativeId: "tech-mad" }),
+            costs: madOffer.cost,
+            nativeAffordable: madOffer.nativeAffordable,
+            generation: madOffer.generation,
+          }),
+    offerCatalogAvailable: offers !== undefined,
+    resources,
+    cycle,
+    progressionEpoch,
   });
 }
 
