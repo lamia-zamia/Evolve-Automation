@@ -282,6 +282,23 @@ const goalById = (plan, id) => plan.goals.find((entry) => entry.id === id);
   assert.equal(waitNotMet.currentSubgoal, "prestige:mad-population-soldiers");
   assert.equal(waitNotMet.status, "unsatisfied");
 
+  const readyButUnconfirmed = planMadGoal(
+    madInput({
+      madResearchLevel: 1,
+      madControlDisplay: true,
+      madControlBound: true,
+      madArmed: false,
+      madCataclysm: false,
+      madWaitPolicyGate: true,
+      resetConfirmed: false,
+    }),
+  );
+  assert.equal(
+    goalById(readyButUnconfirmed, "prestige:mad-reset-eligibility").status,
+    "satisfied",
+  );
+  assert.equal(readyButUnconfirmed.status, "unsatisfied");
+
   assert.equal(
     planMadGoal(
       madInput({

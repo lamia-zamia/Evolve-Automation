@@ -3955,6 +3955,27 @@ export function startCapturedRuntime({
                 blockers: plan.blockers,
                 unavailableFacts: plan.unavailableFacts,
                 affordability: plan.affordability,
+                strategyComparison:
+                  plan.strategyComparison === undefined
+                    ? undefined
+                    : {
+                        goalId: plan.strategyComparison.goalId,
+                        winner: plan.strategyComparison.winner,
+                        rankedStrategyIds:
+                          plan.strategyComparison.rankedStrategyIds,
+                        strategies: plan.strategyComparison.strategies.map(
+                          (strategy) => ({
+                            id: strategy.id,
+                            status: strategy.status,
+                            rankable: strategy.rankable,
+                            completionTime:
+                              strategy.completionTime === undefined
+                                ? undefined
+                                : strategy.completionTime.toFixed(2),
+                            unavailableReasons: strategy.unavailableReasons,
+                          }),
+                        ),
+                      },
                 requirements: plan.quantitativeRequirements.map(
                   (requirement) => ({
                     resourceId: requirement.resourceId,
@@ -3989,6 +4010,8 @@ export function startCapturedRuntime({
                   value !== undefined && value < 0
                     ? "unlimited"
                     : goalQuantityDisplay(value);
+                const goalEtaDisplay = (value: number | undefined) =>
+                  value === undefined ? "?" : `${value.toFixed(2)}s`;
                 const requirements = plan.quantitativeRequirements
                   .map(
                     (requirement) =>
@@ -4001,6 +4024,23 @@ export function startCapturedRuntime({
                 reportDiagnostic(
                   `goal.mad affordability=${plan.affordability} requirements=${requirements}`,
                 );
+                if (plan.strategyComparison !== undefined) {
+                  const wait = plan.strategyComparison.strategies.find(
+                    (strategy) => strategy.id === "wait",
+                  );
+                  reportDiagnostic(
+                    `goal.mad comparison goal=${plan.strategyComparison.goalId} winner=${plan.strategyComparison.winner ?? "none"} ranked=${plan.strategyComparison.rankedStrategyIds.join(",")} wait=${goalEtaDisplay(wait?.completionTime)}`,
+                  );
+                  reportDiagnostic(
+                    `goal.mad forecast native-diff=resource/second future-stock=forecast-only rate=constant-rate assumption; observed-rate uncertainty applies`,
+                  );
+                  for (const strategy of plan.strategyComparison.strategies) {
+                    if (strategy.id === "wait") continue;
+                    reportDiagnostic(
+                      `goal.mad strategy ${strategy.id} status=${strategy.status} rankable=${strategy.rankable} reason=${strategy.unavailableReasons.join("|")}`,
+                    );
+                  }
+                }
                 reportDiagnostic(
                   `goal.mad unavailable=${plan.unavailableFacts.join(";")} freshness=cycle:${plan.freshness.cycle},offer:${plan.freshness.offerGeneration ?? "none"}`,
                 );

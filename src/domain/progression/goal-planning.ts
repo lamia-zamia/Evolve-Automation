@@ -1,5 +1,13 @@
 /** Small immutable goal graphs shared by terminal objectives and generated subgoals. */
 
+import {
+  compareGoalStrategies,
+  hasSufficientGoalCapacity,
+  type GoalStrategyComparison,
+  type GoalResourceNeed,
+  type GoalResourceStock,
+} from "../economy/goal-feasibility.ts";
+
 export type GoalScope = "run" | "account" | "campaign";
 export type GoalStatus =
   "satisfied" | "unsatisfied" | "blocked" | "unavailable";
@@ -115,6 +123,7 @@ export interface MadGoalPlan {
   readonly action?: Readonly<MadTechOfferObservation>;
   readonly affordability: "consistent" | "inconsistent" | "unavailable";
   readonly quantitativeRequirements: readonly Readonly<GoalQuantityRequirement>[];
+  readonly strategyComparison?: Readonly<GoalStrategyComparison>;
   readonly unavailableFacts: readonly string[];
   readonly freshness: Readonly<{
     readonly cycle: number;
@@ -232,7 +241,7 @@ export function planMadGoal(
         if (resource.capacity === undefined) {
           hasCompletePriceCapture = false;
           offerFacts.push(`current capacity for ${resourceId} is unavailable`);
-        } else if (resource.capacity >= 0 && resource.capacity < amount) {
+        } else if (!hasSufficientGoalCapacity(resource.capacity, amount)) {
           resourceAffordable = false;
           capturedAllPricesAffordable = false;
           blockers.push(`${resourceId}:capacity-below-native-price`);
@@ -519,10 +528,15 @@ export function planMadGoal(
     ? "unavailable"
     : input.resetConfirmed
       ? "satisfied"
-      : combinePrerequisiteStatuses("all", [
-          researchStatus,
-          resetEligibilityStatus,
-        ]);
+      : (() => {
+          const readiness = combinePrerequisiteStatuses("all", [
+            researchStatus,
+            resetEligibilityStatus,
+          ]);
+          // Research and reset eligibility describe readiness; only the observed reset
+          // transition completes the player-selected terminal goal.
+          return readiness === "satisfied" ? "unsatisfied" : readiness;
+        })();
   const selectedGoal = makeGoal({
     id: MAD_TERMINAL_GOAL_ID,
     scope: "run",
@@ -580,6 +594,81 @@ export function planMadGoal(
     }
   }
 
+  let strategyComparison: GoalStrategyComparison | undefined;
+  if (input.offeredMadTech !== undefined && !researchGranted) {
+    const feasibilityEpoch = `${input.progressionEpoch}|cycle:${input.cycle}|offer:${input.offeredMadTech.generation}`;
+    const requirements: GoalResourceNeed[] = quantitativeRequirements.map(
+      (requirement) => ({
+        resourceId: requirement.resourceId,
+        poolId: "anywhere",
+        amount: requirement.amount,
+      }),
+    );
+    const stocks: GoalResourceStock[] = quantitativeRequirements.flatMap(
+      (requirement) => {
+        const resource = input.resources.get(requirement.resourceId);
+        if (
+          resource?.amount === undefined ||
+          resource.capacity === undefined ||
+          resource.netRate === undefined
+        ) {
+          return [];
+        }
+        return [
+          {
+            resourceId: requirement.resourceId,
+            poolId: "anywhere",
+            amount: resource.amount,
+            capacity: resource.capacity,
+            netRate: resource.netRate,
+            rateConfidence: "observed",
+            validityEpoch: feasibilityEpoch,
+          },
+        ];
+      },
+    );
+    strategyComparison = compareGoalStrategies(
+      input.offeredMadTech.action.nativeId,
+      requirements,
+      stocks,
+      [],
+      [
+        {
+          id: "scientist-reassignment",
+          goalId: input.offeredMadTech.action.nativeId,
+          preconditions: {
+            satisfied: false,
+            reasons: [
+              "available workers, displaced-job output and food safety are not captured together",
+            ],
+          },
+          acquisitionCosts: [],
+          productionChanges: undefined,
+          unavailableReasons: [
+            "no safe native marginal authority for reassigned Scientists was observed",
+          ],
+        },
+        {
+          id: "city-library",
+          goalId: input.offeredMadTech.action.nativeId,
+          preconditions: {
+            satisfied: false,
+            reasons: [
+              "current Library offer, adjusted cost and purchase verdict are not captured",
+            ],
+          },
+          acquisitionCosts: [],
+          productionChanges: undefined,
+          unavailableReasons: [
+            "one-copy Library Knowledge production and capacity effects are not captured",
+          ],
+        },
+      ],
+      feasibilityEpoch,
+      false,
+    );
+  }
+
   return Object.freeze({
     selectedGoal,
     goals: Object.freeze([...goals.values()]),
@@ -592,6 +681,7 @@ export function planMadGoal(
       : { action: input.offeredMadTech }),
     affordability,
     quantitativeRequirements: Object.freeze(quantitativeRequirements),
+    ...(strategyComparison === undefined ? {} : { strategyComparison }),
     unavailableFacts: Object.freeze(unavailableFacts),
     freshness: Object.freeze({
       cycle: input.cycle,

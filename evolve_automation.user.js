@@ -12917,6 +12917,318 @@
   // src/ports/game-custom-race-lab.ts
   var CUSTOM_RACE_LAB_CONTROL_ID = CELESTIAL_LAB_CONTROL_ID, CUSTOM_RACE_LAB_PANEL_SELECTOR = CELESTIAL_LAB_PANEL_SELECTOR, CUSTOM_RACE_LAB_STRAND_ID = "#traitSlots .labStrand", CUSTOM_RACE_FILE_INPUT_ID = "customFile";
 
+  // src/domain/economy/goal-feasibility.ts
+  function resourceKey(resourceId, poolId) {
+    return `${poolId}\0${resourceId}`;
+  }
+  function combineGoalResourceNeeds(needs) {
+    let combined = /* @__PURE__ */ new Map();
+    for (let need of needs) {
+      let key = resourceKey(need.resourceId, need.poolId), previous = combined.get(key), amount = !isFiniteNonnegative(need.amount) || previous !== void 0 && !isFiniteNonnegative(previous.amount) ? Number.NaN : (previous?.amount ?? 0) + need.amount;
+      combined.set(
+        key,
+        Object.freeze({
+          resourceId: need.resourceId,
+          poolId: need.poolId,
+          amount
+        })
+      );
+    }
+    return Object.freeze([...combined.values()]);
+  }
+  function combineGoalProductionChanges(changes) {
+    let combined = /* @__PURE__ */ new Map();
+    for (let change of changes) {
+      let key = resourceKey(change.resourceId, change.poolId), previous = combined.get(key);
+      combined.set(
+        key,
+        Object.freeze({
+          resourceId: change.resourceId,
+          poolId: change.poolId,
+          netRateDelta: (previous?.netRateDelta ?? 0) + change.netRateDelta,
+          ...previous?.capacityDelta === void 0 && change.capacityDelta === void 0 ? {} : {
+            capacityDelta: (previous?.capacityDelta ?? 0) + (change.capacityDelta ?? 0)
+          }
+        })
+      );
+    }
+    return Object.freeze([...combined.values()]);
+  }
+  function isFiniteNonnegative(value) {
+    return Number.isFinite(value) && value >= 0;
+  }
+  function hasSufficientGoalCapacity(capacity, requirement) {
+    return Number.isFinite(capacity) && (capacity < 0 || capacity >= requirement);
+  }
+  function evaluateGoalFeasibility(goalId, requirements, stocks, commitments, validityEpoch, commitmentsKnown = !0) {
+    let stockByKey = new Map(
+      stocks.map((stock) => [resourceKey(stock.resourceId, stock.poolId), stock])
+    ), committedByKey = /* @__PURE__ */ new Map(), limitingConstraints = [], reasons = [], assumptions = [
+      "future production is forecast only and is not spendable current stock",
+      "rates and capacity are held constant during the projection",
+      "requirements in separate resource pools accumulate in parallel"
+    ];
+    commitmentsKnown || (assumptions.push("current external resource commitments were not observed"), reasons.push("current resource commitments are unavailable"));
+    let hasUnavailable = !1, hasInfeasible = !1, hasUncertain = !commitmentsKnown, hasUnestimatedRequirement = !1, estimatedTime = 0;
+    for (let commitment of commitments) {
+      if (!isFiniteNonnegative(commitment.amount)) {
+        reasons.push(
+          `invalid commitment for ${commitment.resourceId} in ${commitment.poolId}`
+        ), hasUnavailable = !0;
+        continue;
+      }
+      let key = resourceKey(commitment.resourceId, commitment.poolId);
+      committedByKey.set(key, (committedByKey.get(key) ?? 0) + commitment.amount);
+    }
+    let unmetRequirements = combineGoalResourceNeeds(requirements).map(
+      (requirement) => {
+        let constraints = [], key = resourceKey(requirement.resourceId, requirement.poolId), stock = stockByKey.get(key), reserved = committedByKey.get(key) ?? 0;
+        if (!isFiniteNonnegative(requirement.amount))
+          return constraints.push("invalid goal requirement"), reasons.push(
+            `goal ${goalId} has an invalid quantity for ${requirement.resourceId}`
+          ), hasUnavailable = !0, Object.freeze({
+            ...requirement,
+            status: "unavailable",
+            constraints: Object.freeze(constraints)
+          });
+        if (stock === void 0)
+          return constraints.push("resource-pool observation unavailable"), reasons.push(
+            `${requirement.resourceId} in ${requirement.poolId} has no validated stock observation`
+          ), hasUnavailable = !0, Object.freeze({
+            ...requirement,
+            status: "unavailable",
+            constraints: Object.freeze(constraints)
+          });
+        if (stock.validityEpoch !== validityEpoch || !Number.isFinite(stock.amount) || !Number.isFinite(stock.capacity) || !Number.isFinite(stock.netRate))
+          return constraints.push("stale-or-invalid-resource-observation"), reasons.push(
+            `${requirement.resourceId} in ${requirement.poolId} is stale or invalid`
+          ), hasUnavailable = !0, Object.freeze({
+            ...requirement,
+            status: "unavailable",
+            constraints: Object.freeze(constraints)
+          });
+        let availableStock = Math.max(0, stock.amount - reserved), shortfall = Math.max(0, requirement.amount - availableStock);
+        if (reserved > 0 && (constraints.push(`reserved-stock:${reserved}`), assumptions.push(
+          `${requirement.resourceId} commitments remain reserved during the projection`
+        )), reserved > stock.amount)
+          return constraints.push("commitments-exceed-observed-stock"), reasons.push(
+            `${requirement.resourceId} commitments exceed observed stock in ${requirement.poolId}`
+          ), hasUnavailable = !0, Object.freeze({
+            ...requirement,
+            availableStock,
+            shortfall,
+            status: "unavailable",
+            constraints: Object.freeze(constraints)
+          });
+        if (shortfall === 0)
+          return Object.freeze({
+            ...requirement,
+            availableStock,
+            shortfall,
+            timeToRequirement: 0,
+            status: "feasible",
+            constraints: Object.freeze(constraints)
+          });
+        let totalRequiredStock = requirement.amount + reserved;
+        if (!hasSufficientGoalCapacity(stock.capacity, totalRequiredStock))
+          return constraints.push("capacity-below-requirement"), limitingConstraints.push(
+            `${requirement.resourceId} capacity ${stock.capacity} is below required ${totalRequiredStock}`
+          ), hasInfeasible = !0, Object.freeze({
+            ...requirement,
+            availableStock,
+            shortfall,
+            status: "infeasible",
+            constraints: Object.freeze(constraints)
+          });
+        if (stock.netRate <= 0)
+          return constraints.push(
+            stock.netRate === 0 ? "zero-net-production" : "negative-net-production"
+          ), limitingConstraints.push(
+            `${requirement.resourceId} cannot accumulate at observed net rate ${stock.netRate}`
+          ), stock.rateConfidence === "stable" ? hasInfeasible = !0 : (hasUncertain = !0, hasUnestimatedRequirement = !0, reasons.push(
+            `${requirement.resourceId} has no safe ETA from a nonpositive single-sample rate`
+          )), Object.freeze({
+            ...requirement,
+            availableStock,
+            shortfall,
+            status: stock.rateConfidence === "stable" ? "infeasible" : "uncertain",
+            constraints: Object.freeze(constraints)
+          });
+        let timeToRequirement = shortfall / stock.netRate;
+        return estimatedTime = Math.max(estimatedTime, timeToRequirement), stock.rateConfidence === "observed" && (constraints.push("single-sample-rate"), reasons.push(
+          `${requirement.resourceId} ETA uses one observed net-rate sample`
+        ), hasUncertain = !0), Object.freeze({
+          ...requirement,
+          availableStock,
+          shortfall,
+          timeToRequirement,
+          status: stock.rateConfidence === "stable" ? "feasible" : "uncertain",
+          constraints: Object.freeze(constraints)
+        });
+      }
+    ), status2 = hasUnavailable ? "unavailable" : hasInfeasible ? "infeasible" : hasUncertain ? "uncertain" : "feasible";
+    return (status2 === "infeasible" || status2 === "unavailable") && (estimatedTime = Number.NaN), hasUnestimatedRequirement && (estimatedTime = Number.NaN), Number.isFinite(estimatedTime) || (estimatedTime = Number.NaN), Object.freeze({
+      status: status2,
+      estimatedTime: Number.isFinite(estimatedTime) ? estimatedTime : void 0,
+      unmetRequirements: Object.freeze(unmetRequirements),
+      limitingConstraints: Object.freeze(limitingConstraints),
+      assumptions: Object.freeze([...new Set(assumptions)]),
+      validityEpoch,
+      reasons: Object.freeze(reasons)
+    });
+  }
+  function compareGoalStrategies(goalId, requirements, stocks, commitments, candidates, validityEpoch, commitmentsKnown = !0) {
+    let baseline = evaluateGoalFeasibility(
+      goalId,
+      requirements,
+      stocks,
+      commitments,
+      validityEpoch,
+      commitmentsKnown
+    ), evaluations = [
+      Object.freeze({
+        id: "wait",
+        goalId,
+        status: baseline.status,
+        acquisitionTime: 0,
+        completionTime: baseline.estimatedTime,
+        rankable: baseline.estimatedTime !== void 0,
+        feasibility: baseline,
+        opportunityCosts: Object.freeze([]),
+        unavailableReasons: baseline.reasons
+      })
+    ], stockByKey = new Map(
+      stocks.map((stock) => [resourceKey(stock.resourceId, stock.poolId), stock])
+    );
+    for (let candidate of candidates) {
+      let unavailableReasons = [...candidate.unavailableReasons];
+      if (candidate.goalId !== goalId && unavailableReasons.push("candidate targets a different goal"), candidate.preconditions.satisfied || unavailableReasons.push(...candidate.preconditions.reasons), candidate.productionChanges === void 0 && unavailableReasons.push("marginal production effect is not established"), unavailableReasons.length > 0) {
+        let unavailable2 = evaluateGoalFeasibility(
+          goalId,
+          requirements,
+          stocks,
+          commitments,
+          validityEpoch,
+          commitmentsKnown
+        );
+        evaluations.push(
+          Object.freeze({
+            id: candidate.id,
+            goalId,
+            status: "unavailable",
+            acquisitionTime: void 0,
+            completionTime: void 0,
+            rankable: !1,
+            feasibility: unavailable2,
+            opportunityCosts: Object.freeze([]),
+            unavailableReasons: Object.freeze([...new Set(unavailableReasons)])
+          })
+        );
+        continue;
+      }
+      let acquisition = evaluateGoalFeasibility(
+        candidate.id,
+        candidate.acquisitionCosts,
+        stocks,
+        commitments,
+        validityEpoch,
+        commitmentsKnown
+      ), acquisitionTime = acquisition.estimatedTime;
+      if (acquisitionTime === void 0 || acquisition.status === "infeasible") {
+        evaluations.push(
+          Object.freeze({
+            id: candidate.id,
+            goalId,
+            status: acquisition.status,
+            acquisitionTime: void 0,
+            completionTime: void 0,
+            rankable: !1,
+            feasibility: acquisition,
+            opportunityCosts: Object.freeze([]),
+            unavailableReasons: Object.freeze([
+              ...acquisition.reasons,
+              "candidate acquisition cost cannot be projected"
+            ])
+          })
+        );
+        continue;
+      }
+      let acquisitionCostByKey = /* @__PURE__ */ new Map();
+      for (let cost of candidate.acquisitionCosts) {
+        let key = resourceKey(cost.resourceId, cost.poolId);
+        acquisitionCostByKey.set(
+          key,
+          (acquisitionCostByKey.get(key) ?? 0) + cost.amount
+        );
+      }
+      let productionChanges = combineGoalProductionChanges(
+        candidate.productionChanges ?? []
+      ), changedStocks = stocks.map((stock) => {
+        let cap = stock.capacity < 0 ? Number.POSITIVE_INFINITY : stock.capacity, duringAcquisition = Math.min(
+          cap,
+          Math.max(0, stock.amount + stock.netRate * acquisitionTime)
+        ), key = resourceKey(stock.resourceId, stock.poolId), afterCost = Math.max(
+          0,
+          duringAcquisition - (acquisitionCostByKey.get(key) ?? 0)
+        ), change = productionChanges.find(
+          (entry) => resourceKey(entry.resourceId, entry.poolId) === key
+        );
+        return Object.freeze({
+          ...stock,
+          amount: afterCost,
+          capacity: change?.capacityDelta === void 0 || stock.capacity < 0 ? stock.capacity : stock.capacity + change.capacityDelta,
+          netRate: stock.netRate + (change?.netRateDelta ?? 0)
+        });
+      }), unsupportedEffect = [...new Set(
+        productionChanges.map(
+          (change) => resourceKey(change.resourceId, change.poolId)
+        ) ?? []
+      )].some(
+        (key) => !stockByKey.has(key)
+      ), feasibility = evaluateGoalFeasibility(
+        goalId,
+        requirements,
+        changedStocks,
+        commitments,
+        validityEpoch,
+        commitmentsKnown
+      ), totalTime = feasibility.estimatedTime === void 0 ? void 0 : acquisitionTime + feasibility.estimatedTime, status2 = unsupportedEffect ? "unavailable" : feasibility.status;
+      evaluations.push(
+        Object.freeze({
+          id: candidate.id,
+          goalId,
+          status: status2,
+          acquisitionTime,
+          completionTime: totalTime,
+          rankable: totalTime !== void 0 && !unsupportedEffect,
+          feasibility,
+          opportunityCosts: Object.freeze(
+            productionChanges.filter(
+              (change) => change.netRateDelta < 0 || (change.capacityDelta ?? 0) < 0
+            ) ?? []
+          ),
+          unavailableReasons: Object.freeze(
+            unsupportedEffect ? ["candidate changes an unobserved resource pool"] : []
+          )
+        })
+      );
+    }
+    let rankedStrategyIds = evaluations.filter((evaluation) => evaluation.rankable).sort((left, right) => {
+      let timeDifference = (left.completionTime ?? Number.POSITIVE_INFINITY) - (right.completionTime ?? Number.POSITIVE_INFINITY);
+      return timeDifference !== 0 ? timeDifference : left.id === "wait" ? -1 : right.id === "wait" ? 1 : left.id.localeCompare(right.id);
+    }).map((evaluation) => evaluation.id), comparisonComplete = evaluations.slice(1).every(
+      (evaluation) => evaluation.rankable || evaluation.status === "infeasible"
+    );
+    return Object.freeze({
+      goalId,
+      // An unsupported candidate is omitted from ordering and also prevents a global winner claim.
+      winner: comparisonComplete ? rankedStrategyIds[0] : void 0,
+      rankedStrategyIds: Object.freeze(rankedStrategyIds),
+      strategies: Object.freeze(evaluations),
+      validityEpoch
+    });
+  }
+
   // src/domain/progression/goal-planning.ts
   function combinePrerequisiteStatuses(operator, statuses) {
     return statuses.length === 0 ? "unavailable" : operator === "all" && statuses.every((status2) => status2 === "satisfied") || operator === "any" && statuses.some((status2) => status2 === "satisfied") ? "satisfied" : operator === "all" && statuses.some((status2) => status2 === "blocked") || operator === "any" && statuses.every((status2) => status2 === "blocked") ? "blocked" : statuses.some((status2) => status2 === "unavailable") ? "unavailable" : "unsatisfied";
@@ -12965,7 +13277,7 @@
           hasUnrecognizedOrMissingPrice = !0, hasCompletePriceCapture = !1, offerFacts.push(`native price resource ${resourceId} is unavailable`);
         else {
           let resourceAffordable = !0;
-          resource.amount === void 0 ? (hasCompletePriceCapture = !1, offerFacts.push(`current stock for ${resourceId} is unavailable`)) : resource.amount < amount && (resourceAffordable = !1, capturedAllPricesAffordable = !1, blockers.push(`${resourceId}:stock-below-native-price`)), resource.capacity === void 0 ? (hasCompletePriceCapture = !1, offerFacts.push(`current capacity for ${resourceId} is unavailable`)) : resource.capacity >= 0 && resource.capacity < amount && (resourceAffordable = !1, capturedAllPricesAffordable = !1, blockers.push(`${resourceId}:capacity-below-native-price`)), resourceStatus = resource.amount === void 0 || resource.capacity === void 0 ? resourceAffordable ? "unavailable" : "unsatisfied" : resourceAffordable ? "satisfied" : "unsatisfied", resource.amount !== void 0 && resource.amount < amount && (resource.netRate === void 0 ? offerFacts.push(`net production for ${resourceId} is unavailable`) : resource.netRate <= 0 && blockers.push(`${resourceId}:nonpositive-net-production`));
+          resource.amount === void 0 ? (hasCompletePriceCapture = !1, offerFacts.push(`current stock for ${resourceId} is unavailable`)) : resource.amount < amount && (resourceAffordable = !1, capturedAllPricesAffordable = !1, blockers.push(`${resourceId}:stock-below-native-price`)), resource.capacity === void 0 ? (hasCompletePriceCapture = !1, offerFacts.push(`current capacity for ${resourceId} is unavailable`)) : hasSufficientGoalCapacity(resource.capacity, amount) || (resourceAffordable = !1, capturedAllPricesAffordable = !1, blockers.push(`${resourceId}:capacity-below-native-price`)), resourceStatus = resource.amount === void 0 || resource.capacity === void 0 ? resourceAffordable ? "unavailable" : "unsatisfied" : resourceAffordable ? "satisfied" : "unsatisfied", resource.amount !== void 0 && resource.amount < amount && (resource.netRate === void 0 ? offerFacts.push(`net production for ${resourceId} is unavailable`) : resource.netRate <= 0 && blockers.push(`${resourceId}:nonpositive-net-production`));
         }
         goals.set(
           resourceGoalId,
@@ -13136,10 +13448,13 @@
         })
       })
     );
-    let status2 = selectedMad ? input.resetConfirmed ? "satisfied" : combinePrerequisiteStatuses("all", [
-      researchStatus,
-      resetEligibilityStatus
-    ]) : "unavailable", selectedGoal = makeGoal({
+    let status2 = selectedMad ? input.resetConfirmed ? "satisfied" : (() => {
+      let readiness = combinePrerequisiteStatuses("all", [
+        researchStatus,
+        resetEligibilityStatus
+      ]);
+      return readiness === "satisfied" ? "unsatisfied" : readiness;
+    })() : "unavailable", selectedGoal = makeGoal({
       id: MAD_TERMINAL_GOAL_ID,
       scope: "run",
       predicate: "confirmed-mad-reset",
@@ -13176,6 +13491,71 @@
     for (let goal of goals.values())
       for (let fact of goal.unavailableFacts ?? [])
         unavailableFacts.includes(fact) || unavailableFacts.push(fact);
+    let strategyComparison;
+    if (input.offeredMadTech !== void 0 && !researchGranted) {
+      let feasibilityEpoch = `${input.progressionEpoch}|cycle:${input.cycle}|offer:${input.offeredMadTech.generation}`, requirements = quantitativeRequirements.map(
+        (requirement) => ({
+          resourceId: requirement.resourceId,
+          poolId: "anywhere",
+          amount: requirement.amount
+        })
+      ), stocks = quantitativeRequirements.flatMap(
+        (requirement) => {
+          let resource = input.resources.get(requirement.resourceId);
+          return resource?.amount === void 0 || resource.capacity === void 0 || resource.netRate === void 0 ? [] : [
+            {
+              resourceId: requirement.resourceId,
+              poolId: "anywhere",
+              amount: resource.amount,
+              capacity: resource.capacity,
+              netRate: resource.netRate,
+              rateConfidence: "observed",
+              validityEpoch: feasibilityEpoch
+            }
+          ];
+        }
+      );
+      strategyComparison = compareGoalStrategies(
+        input.offeredMadTech.action.nativeId,
+        requirements,
+        stocks,
+        [],
+        [
+          {
+            id: "scientist-reassignment",
+            goalId: input.offeredMadTech.action.nativeId,
+            preconditions: {
+              satisfied: !1,
+              reasons: [
+                "available workers, displaced-job output and food safety are not captured together"
+              ]
+            },
+            acquisitionCosts: [],
+            productionChanges: void 0,
+            unavailableReasons: [
+              "no safe native marginal authority for reassigned Scientists was observed"
+            ]
+          },
+          {
+            id: "city-library",
+            goalId: input.offeredMadTech.action.nativeId,
+            preconditions: {
+              satisfied: !1,
+              reasons: [
+                "current Library offer, adjusted cost and purchase verdict are not captured"
+              ]
+            },
+            acquisitionCosts: [],
+            productionChanges: void 0,
+            unavailableReasons: [
+              "one-copy Library Knowledge production and capacity effects are not captured"
+            ]
+          }
+        ],
+        feasibilityEpoch,
+        !1
+      );
+    }
     return Object.freeze({
       selectedGoal,
       goals: Object.freeze([...goals.values()]),
@@ -13186,6 +13566,7 @@
       ...input.offeredMadTech === void 0 || researchGranted ? {} : { action: input.offeredMadTech },
       affordability,
       quantitativeRequirements: Object.freeze(quantitativeRequirements),
+      ...strategyComparison === void 0 ? {} : { strategyComparison },
       unavailableFacts: Object.freeze(unavailableFacts),
       freshness: Object.freeze({
         cycle: input.cycle,
@@ -58788,6 +59169,20 @@ Only continue if you trust the source. Injected code:
                 blockers: plan.blockers,
                 unavailableFacts: plan.unavailableFacts,
                 affordability: plan.affordability,
+                strategyComparison: plan.strategyComparison === void 0 ? void 0 : {
+                  goalId: plan.strategyComparison.goalId,
+                  winner: plan.strategyComparison.winner,
+                  rankedStrategyIds: plan.strategyComparison.rankedStrategyIds,
+                  strategies: plan.strategyComparison.strategies.map(
+                    (strategy) => ({
+                      id: strategy.id,
+                      status: strategy.status,
+                      rankable: strategy.rankable,
+                      completionTime: strategy.completionTime === void 0 ? void 0 : strategy.completionTime.toFixed(2),
+                      unavailableReasons: strategy.unavailableReasons
+                    })
+                  )
+                },
                 requirements: plan.quantitativeRequirements.map(
                   (requirement) => ({
                     resourceId: requirement.resourceId,
@@ -58800,14 +59195,28 @@ Only continue if you trust the source. Injected code:
               });
               if (signature !== lastMadGoalDiagnostic) {
                 lastMadGoalDiagnostic = signature;
-                let goalQuantityDisplay = (value) => value === void 0 ? "?" : String(Math.round(value)), goalCapacityDisplay = (value) => value !== void 0 && value < 0 ? "unlimited" : goalQuantityDisplay(value), requirements = plan.quantitativeRequirements.map(
+                let goalQuantityDisplay = (value) => value === void 0 ? "?" : String(Math.round(value)), goalCapacityDisplay = (value) => value !== void 0 && value < 0 ? "unlimited" : goalQuantityDisplay(value), goalEtaDisplay = (value) => value === void 0 ? "?" : `${value.toFixed(2)}s`, requirements = plan.quantitativeRequirements.map(
                   (requirement) => `${requirement.resourceId}:${goalQuantityDisplay(requirement.held)}/${goalQuantityDisplay(requirement.amount)}@${goalCapacityDisplay(requirement.capacity)}#${goalQuantityDisplay(requirement.netRate)}`
                 ).join(";");
-                reportDiagnostic(
+                if (reportDiagnostic(
                   `goal.mad status=${plan.status} selected=${plan.selectedGoal.id} subgoal=${plan.currentSubgoal ?? "none"} frontier=${plan.frontierTrace.join(">")} blockers=${plan.blockers.join(",")}`
                 ), reportDiagnostic(
                   `goal.mad affordability=${plan.affordability} requirements=${requirements}`
-                ), reportDiagnostic(
+                ), plan.strategyComparison !== void 0) {
+                  let wait = plan.strategyComparison.strategies.find(
+                    (strategy) => strategy.id === "wait"
+                  );
+                  reportDiagnostic(
+                    `goal.mad comparison goal=${plan.strategyComparison.goalId} winner=${plan.strategyComparison.winner ?? "none"} ranked=${plan.strategyComparison.rankedStrategyIds.join(",")} wait=${goalEtaDisplay(wait?.completionTime)}`
+                  ), reportDiagnostic(
+                    "goal.mad forecast native-diff=resource/second future-stock=forecast-only rate=constant-rate assumption; observed-rate uncertainty applies"
+                  );
+                  for (let strategy of plan.strategyComparison.strategies)
+                    strategy.id !== "wait" && reportDiagnostic(
+                      `goal.mad strategy ${strategy.id} status=${strategy.status} rankable=${strategy.rankable} reason=${strategy.unavailableReasons.join("|")}`
+                    );
+                }
+                reportDiagnostic(
                   `goal.mad unavailable=${plan.unavailableFacts.join(";")} freshness=cycle:${plan.freshness.cycle},offer:${plan.freshness.offerGeneration ?? "none"}`
                 );
               }
