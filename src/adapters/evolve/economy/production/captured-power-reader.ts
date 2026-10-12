@@ -466,10 +466,65 @@ function createCapturedPowerSupportSnapshot(
     byEntryKey.set(structure.entryKey, sampled);
   }
   count("autoPower.readCycle.supportTypes", supportTypes.size);
+  // Pinned `initStructureGrids()` finds a support provider through each consumer
+  // group's `info.support` anchor. Provider actions such as Space Station have
+  // no `s_type`, so recover their native grid membership from consumer topology.
+  const providerTypesByEntryKey = new Map<string, Set<string>>();
+  for (const sampled of sampledStructures) {
+    if (
+      sampled.support.kind !== "value" ||
+      sampled.support.value >= 0 ||
+      sampled.supportTypes.kind !== "value" ||
+      sampled.topology.kind !== "value"
+    )
+      continue;
+    const anchorEntryKey = sampled.topology.value.anchorEntryKey;
+    if (anchorEntryKey === null) continue;
+    let types = providerTypesByEntryKey.get(anchorEntryKey);
+    if (types === undefined) {
+      types = new Set<string>();
+      providerTypesByEntryKey.set(anchorEntryKey, types);
+    }
+    for (const type of sampled.supportTypes.value) types.add(type);
+  }
+  const resolvedStructures = sampledStructures.map((sampled) => {
+    const inferredTypes = providerTypesByEntryKey.get(
+      sampled.structure.entryKey,
+    );
+    if (inferredTypes === undefined || inferredTypes.size === 0) return sampled;
+    const types = new Set(
+      sampled.supportTypes.kind === "value" ? sampled.supportTypes.value : [],
+    );
+    for (const type of inferredTypes) types.add(type);
+    const supportValues = new Map(sampled.supportValues);
+    for (const type of inferredTypes) {
+      if (supportValues.has(type)) continue;
+      const value = sampled.structure.readSupportValue(type);
+      if (value.kind !== "value") return undefined;
+      supportValues.set(type, value);
+    }
+    return Object.freeze({
+      ...sampled,
+      supportTypes: {
+        kind: "value" as const,
+        value: Object.freeze([...types]),
+      },
+      supportValues,
+    });
+  });
+  if (resolvedStructures.some((sampled) => sampled === undefined))
+    return undefined;
+  const resolvedByEntryKey = new Map(
+    (resolvedStructures as CapturedPowerSupportStructureSample[]).map(
+      (sampled) => [sampled.structure.entryKey, sampled],
+    ),
+  );
   count("autoPower.readCycle.supportRegistryScans", 0);
   return Object.freeze({
-    structures: Object.freeze(sampledStructures),
-    byEntryKey,
+    structures: Object.freeze(
+      resolvedStructures as CapturedPowerSupportStructureSample[],
+    ),
+    byEntryKey: resolvedByEntryKey,
     supportTypes: Object.freeze([...supportTypes]),
     supportOrderByType: new Map(),
   });
@@ -2437,6 +2492,10 @@ function readPowerCycle(
         structure.entryKey,
       );
       if (sampled === undefined) return;
+      // `initStructureGrids()` only assigns a group through a consumer's s_type.
+      // An absent s_type therefore means this action is outside the generic native
+      // support arrays unless the earlier anchor pass inferred its provider group.
+      if (sampled.supportTypes.kind === "absent") continue;
       const support = sampled.support;
       if (support.kind === "absent") continue;
       const readTypes = sampled.supportTypes;

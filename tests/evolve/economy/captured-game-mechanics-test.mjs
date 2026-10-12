@@ -1478,6 +1478,7 @@ function assetLocalizedFixture({
   }
   assert.equal(installed.mechanics.readStructures()?.length, 3);
   return {
+    mechanics: installed.mechanics,
     read: () =>
       installed.mechanics.readEffectLocalizedNumericInputs(
         "spc_home:relay",
@@ -1488,12 +1489,19 @@ function assetLocalizedFixture({
   };
 }
 
-const baseStrings = JSON.stringify({ probe_dual: "%0 and %1" });
+const baseStrings = JSON.stringify({
+  probe_dual: "%0 and %1",
+  job_space_miner: "Space Miner",
+});
 const baseAsset = { "strings/strings.json": baseStrings };
 const baseFixture = assetLocalizedFixture({ assets: baseAsset });
 assert.deepEqual(baseFixture.read(), { kind: "value", value: [2.5, 100] });
 assert.deepEqual(baseFixture.requests, ["strings/strings.json"]);
 assert.equal("loc" in baseFixture.page.game, false);
+assert.deepEqual(baseFixture.mechanics.readLocalizedText("job_space_miner"), {
+  kind: "value",
+  value: "Space Miner",
+});
 
 // DeadSpace vars.js defaults sPackOn to true for a profile that never installed a pack, so the
 // enabled toggle on its own must leave the served assets authoritative.
@@ -1579,6 +1587,11 @@ const activeCustomPack = assetLocalizedFixture({
 });
 assert.deepEqual(activeCustomPack.read(), { kind: "invalid" });
 assert.deepEqual(activeCustomPack.requests, []);
+assert.deepEqual(
+  activeCustomPack.mechanics.readLocalizedText("job_space_miner"),
+  { kind: "absent" },
+  "an active custom pack keeps native localization unavailable without reading served defaults",
+);
 
 for (const [name, fixture] of [
   [

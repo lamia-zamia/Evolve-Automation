@@ -3307,7 +3307,10 @@
       readLocalizedText(key) {
         if (stopped) return { kind: "invalid" };
         let game = readMechanicsProperty(pageWindow, "game"), localize = readMechanicsProperty(game, "loc");
-        if (localize === void 0) return { kind: "absent" };
+        if (localize === void 0) {
+          let value = readEffectTemplate(key);
+          return value === void 0 ? { kind: "absent" } : { kind: "value", value };
+        }
         if (typeof localize != "function") return { kind: "invalid" };
         try {
           let value = Reflect.apply(localize, game, [key]);
@@ -30610,9 +30613,54 @@
       });
       sampledStructures.push(sampled3), byEntryKey.set(structure.entryKey, sampled3);
     }
-    return count2("autoPower.readCycle.supportTypes", supportTypes.size), count2("autoPower.readCycle.supportRegistryScans", 0), Object.freeze({
-      structures: Object.freeze(sampledStructures),
-      byEntryKey,
+    count2("autoPower.readCycle.supportTypes", supportTypes.size);
+    let providerTypesByEntryKey = /* @__PURE__ */ new Map();
+    for (let sampled3 of sampledStructures) {
+      if (sampled3.support.kind !== "value" || sampled3.support.value >= 0 || sampled3.supportTypes.kind !== "value" || sampled3.topology.kind !== "value")
+        continue;
+      let anchorEntryKey = sampled3.topology.value.anchorEntryKey;
+      if (anchorEntryKey === null) continue;
+      let types = providerTypesByEntryKey.get(anchorEntryKey);
+      types === void 0 && (types = /* @__PURE__ */ new Set(), providerTypesByEntryKey.set(anchorEntryKey, types));
+      for (let type of sampled3.supportTypes.value) types.add(type);
+    }
+    let resolvedStructures = sampledStructures.map((sampled3) => {
+      let inferredTypes = providerTypesByEntryKey.get(
+        sampled3.structure.entryKey
+      );
+      if (inferredTypes === void 0 || inferredTypes.size === 0) return sampled3;
+      let types = new Set(
+        sampled3.supportTypes.kind === "value" ? sampled3.supportTypes.value : []
+      );
+      for (let type of inferredTypes) types.add(type);
+      let supportValues = new Map(sampled3.supportValues);
+      for (let type of inferredTypes) {
+        if (supportValues.has(type)) continue;
+        let value = sampled3.structure.readSupportValue(type);
+        if (value.kind !== "value") return;
+        supportValues.set(type, value);
+      }
+      return Object.freeze({
+        ...sampled3,
+        supportTypes: {
+          kind: "value",
+          value: Object.freeze([...types])
+        },
+        supportValues
+      });
+    });
+    if (resolvedStructures.some((sampled3) => sampled3 === void 0))
+      return;
+    let resolvedByEntryKey = new Map(
+      resolvedStructures.map(
+        (sampled3) => [sampled3.structure.entryKey, sampled3]
+      )
+    );
+    return count2("autoPower.readCycle.supportRegistryScans", 0), Object.freeze({
+      structures: Object.freeze(
+        resolvedStructures
+      ),
+      byEntryKey: resolvedByEntryKey,
       supportTypes: Object.freeze([...supportTypes]),
       supportOrderByType: /* @__PURE__ */ new Map()
     });
@@ -31729,6 +31777,7 @@
           structure.entryKey
         );
         if (sampled3 === void 0) return;
+        if (sampled3.supportTypes.kind === "absent") continue;
         let support = sampled3.support;
         if (support.kind === "absent") continue;
         let readTypes = sampled3.supportTypes, supportTypes = readTypes.kind === "value" ? readTypes.value : Object.freeze([]);

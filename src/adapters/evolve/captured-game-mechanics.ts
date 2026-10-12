@@ -2247,7 +2247,12 @@ export function installCapturedGameMechanics(
       if (stopped) return { kind: "invalid" };
       const game = readMechanicsProperty(pageWindow, "game");
       const localize = readMechanicsProperty(game, "loc");
-      if (localize === undefined) return { kind: "absent" };
+      if (localize === undefined) {
+        const value = readEffectTemplate(key);
+        return value === undefined
+          ? { kind: "absent" }
+          : { kind: "value", value };
+      }
       if (typeof localize !== "function") return { kind: "invalid" };
       try {
         const value = Reflect.apply(localize as CapturedGameCall, game, [key]);

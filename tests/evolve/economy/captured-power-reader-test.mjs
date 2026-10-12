@@ -1572,6 +1572,7 @@ function capturedBeltStarvation({
   consumerOn = 1,
   iridiumOn = consumerOn,
   eleriumOn = consumerOn,
+  stationEffectivePower = 0,
   powerCurrent = 100,
   heliumAmount = 5000,
   heliumRate = 100,
@@ -1591,7 +1592,8 @@ function capturedBeltStarvation({
     checkPowerMembership: true,
     support: 3,
     supportFor: { belt: 3 },
-    supportTypes: "belt",
+    // Native Space Station is the sector support anchor; its action has no s_type.
+    // initStructureGrids() discovers its grid type from Belt consumers' sector info.
     supportFuel: [{ resourceId: "Helium_3", amount: 2.5 }],
     supportFuelAdjustmentDisabled: true,
     title: "Space Station",
@@ -1719,7 +1721,7 @@ function capturedBeltStarvation({
   };
   const stationPower = (sample, member) =>
     member.entryKey === stationKey
-      ? 0
+      ? stationEffectivePower
       : sample?.[member.region]?.[member.struct]?.on;
   const stationSupport = () => 0;
   const mechanics = Object.freeze({
@@ -1898,6 +1900,26 @@ assert.equal(
     ?.allocation,
   "strict",
   "the narrow invalid-role exception does not make Belt support unsafe",
+);
+const staffedBeltProvider = capturedBeltStarvation({
+  stationCount: 5,
+  stationOn: 5,
+  consumerCount: 5,
+  consumerOn: 0,
+  stationEffectivePower: 5,
+});
+assert.ok(staffedBeltProvider.cycle);
+assert.equal(
+  staffedBeltProvider.cycle.supports.find((item) => item.type === "belt")
+    ?.maximum,
+  15,
+  "the native Belt provider anchor is modeled through its consumer sector info despite lacking s_type",
+);
+assert.ok(
+  staffedBeltProvider.cycle.buildings.some(
+    (item) => item.binding === "space-iridium_ship",
+  ),
+  "a managed support-only consumer remains eligible with a coherent native provider",
 );
 const beltStarvationPlan = planPowerCycle(
   beltStarvation.cycle,
