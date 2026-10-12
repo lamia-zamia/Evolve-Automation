@@ -506,6 +506,12 @@ export function createCapturedSettingsDefaults({
   let stopBuildingObservation: (() => void) | undefined;
   let buildingObservationFailed = false;
   let buildingStructuralRevision = 0;
+  let nonBuildingCatalogRoot: unknown;
+  let nonBuildingCatalogControlRevision: number | undefined;
+  let nonBuildingCatalogSignature: string | undefined;
+  let stopNonBuildingCatalogObservation: (() => void) | undefined;
+  let nonBuildingCatalogObservationFailed = false;
+  let nonBuildingCatalogRevision = 0;
 
   const readBuildingSources = (
     root: unknown,
@@ -529,9 +535,164 @@ export function createCapturedSettingsDefaults({
     buildingElementIds = undefined;
   };
 
+  const stopNonBuildingCatalogTracker = (): void => {
+    stopNonBuildingCatalogObservation?.();
+    stopNonBuildingCatalogObservation = undefined;
+  };
+
+  const invalidateNonBuildingCatalogTracker = (): void => {
+    if (
+      nonBuildingCatalogRoot !== undefined ||
+      nonBuildingCatalogSignature !== undefined
+    ) {
+      nonBuildingCatalogRevision += 1;
+    }
+    stopNonBuildingCatalogTracker();
+    nonBuildingCatalogRoot = undefined;
+    nonBuildingCatalogControlRevision = undefined;
+    nonBuildingCatalogSignature = undefined;
+    nonBuildingCatalogObservationFailed = false;
+  };
+
+  const readNonBuildingCatalogGenerationSignature = (root: unknown): string => {
+    const productionContext = readProduction(root);
+    const foundryResourceIds = new Set(
+      Object.values(productionContext.foundryResourceIdByKey),
+    );
+    return JSON.stringify([
+      Object.keys(readTechIds(root)),
+      mergeResourceIds(root, "tradable", controls, "market-"),
+      readResources(root).map(([id]) => id),
+      readProjects(root).projectIds,
+      CRAFTER_RESOURCE_KEYS.filter((key) => foundryResourceIds.has(key)),
+      controls.capturedElementIds(),
+    ]);
+  };
+
+  const readNonBuildingCatalogSources = (
+    root: unknown,
+  ): readonly (() => unknown)[] => [
+    () => Object.keys(readTechIds(root)),
+    () => mergeResourceIds(root, "tradable", controls, "market-"),
+    () =>
+      readResources(root).map(([id, resource]) => [
+        id,
+        readProperty(resource, "tradable") === true,
+      ]),
+    () => readProjects(root).projectIds,
+  ];
+
+  const publishNonBuildingCatalogSignature = (signature: string): void => {
+    if (
+      nonBuildingCatalogSignature === undefined ||
+      nonBuildingCatalogSignature !== signature
+    ) {
+      nonBuildingCatalogRevision += 1;
+      nonBuildingCatalogSignature = signature;
+    }
+  };
+
+  const readNonBuildingCatalogGeneration = (
+    root: unknown,
+  ): string | undefined => {
+    const controlRevision = controls.readRevision?.();
+    const canObserve =
+      controlRevision !== undefined && reactiveObserver !== undefined;
+    const rootChanged = nonBuildingCatalogRoot !== root;
+    if (rootChanged) {
+      stopNonBuildingCatalogTracker();
+      nonBuildingCatalogRoot = root;
+      nonBuildingCatalogControlRevision = undefined;
+      nonBuildingCatalogSignature = undefined;
+      nonBuildingCatalogObservationFailed = false;
+    }
+
+    if (!canObserve) {
+      stopNonBuildingCatalogTracker();
+      try {
+        publishNonBuildingCatalogSignature(
+          readNonBuildingCatalogGenerationSignature(root),
+        );
+      } catch {
+        return undefined;
+      }
+      nonBuildingCatalogControlRevision = controlRevision;
+      return `${nonBuildingCatalogRevision}`;
+    }
+
+    const controlsChanged =
+      nonBuildingCatalogControlRevision !== controlRevision;
+    if (
+      nonBuildingCatalogSignature === undefined ||
+      controlsChanged ||
+      nonBuildingCatalogObservationFailed
+    ) {
+      if (nonBuildingCatalogObservationFailed) {
+        stopNonBuildingCatalogTracker();
+      }
+      try {
+        publishNonBuildingCatalogSignature(
+          readNonBuildingCatalogGenerationSignature(root),
+        );
+      } catch {
+        nonBuildingCatalogObservationFailed = true;
+        return undefined;
+      }
+      nonBuildingCatalogControlRevision = controlRevision;
+      nonBuildingCatalogObservationFailed = false;
+    }
+
+    if (stopNonBuildingCatalogObservation === undefined) {
+      const stop = reactiveObserver.observe(
+        () => readNonBuildingCatalogSources(root),
+        () => {
+          if (
+            rootState.isReactivitySuppressed?.() === true ||
+            rootState.readRoot() !== root
+          ) {
+            nonBuildingCatalogObservationFailed = true;
+            return;
+          }
+          try {
+            publishNonBuildingCatalogSignature(
+              readNonBuildingCatalogGenerationSignature(root),
+            );
+          } catch {
+            nonBuildingCatalogObservationFailed = true;
+          }
+        },
+        () => {
+          nonBuildingCatalogObservationFailed = true;
+        },
+      );
+      if (stop === undefined || nonBuildingCatalogObservationFailed) {
+        nonBuildingCatalogObservationFailed = true;
+        stopNonBuildingCatalogTracker();
+      } else {
+        stopNonBuildingCatalogObservation = stop;
+      }
+    }
+
+    if (
+      nonBuildingCatalogObservationFailed ||
+      stopNonBuildingCatalogObservation === undefined
+    ) {
+      try {
+        publishNonBuildingCatalogSignature(
+          readNonBuildingCatalogGenerationSignature(root),
+        );
+      } catch {
+        return undefined;
+      }
+    }
+    nonBuildingCatalogControlRevision = controlRevision;
+    return `${nonBuildingCatalogRevision}`;
+  };
+
   rootState.subscribeRootReplaced?.(() => {
     buildingStructuralRevision += 1;
     stopBuildingTracker();
+    invalidateNonBuildingCatalogTracker();
   });
 
   const readBuildingFacts = (
@@ -695,6 +856,7 @@ export function createCapturedSettingsDefaults({
   const readCatalogGeneration = (): string | undefined => {
     if (rootState.isReactivitySuppressed?.() === true) {
       stopBuildingTracker();
+      invalidateNonBuildingCatalogTracker();
       return undefined;
     }
     let root: unknown;
@@ -702,28 +864,23 @@ export function createCapturedSettingsDefaults({
       root = rootState.readRoot();
     } catch {
       stopBuildingTracker();
+      invalidateNonBuildingCatalogTracker();
       return undefined;
     }
     if (root === undefined) {
       stopBuildingTracker();
+      invalidateNonBuildingCatalogTracker();
       return undefined;
     }
-    const controlIds = controls.capturedElementIds();
-    const productionContext = readProduction(root);
-    const foundryResourceIds = new Set(
-      Object.values(productionContext.foundryResourceIdByKey),
-    );
+    const nonBuildingGeneration = readNonBuildingCatalogGeneration(root);
     const buildingGeneration = readCurrentBuildingFacts();
-    if (buildingGeneration === undefined) return undefined;
-    return [
-      Object.keys(readTechIds(root)).length,
-      mergeResourceIds(root, "tradable", controls, "market-").length,
-      readResources(root).length,
-      readProjects(root).projectIds.length,
-      buildingGeneration,
-      CRAFTER_RESOURCE_KEYS.filter((key) => foundryResourceIds.has(key)).length,
-      controlIds.length,
-    ].join(":");
+    if (
+      nonBuildingGeneration === undefined ||
+      buildingGeneration === undefined
+    ) {
+      return undefined;
+    }
+    return `${nonBuildingGeneration}:${buildingGeneration}`;
   };
 
   return {

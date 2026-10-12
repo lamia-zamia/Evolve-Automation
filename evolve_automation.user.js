@@ -38048,16 +38048,98 @@
           (key) => foundryResourceIds.has(key)
         )
       };
-    }, buildingControlFacts, buildingNativeFacts, buildingRoot, buildingControlRevision, buildingElementIds, buildingIdentities, stopBuildingObservation, buildingObservationFailed = !1, buildingStructuralRevision = 0, readBuildingSources = (root, controls3, elementIds, identities) => trackCapturedBuildingGenerationStructure(
+    }, buildingControlFacts, buildingNativeFacts, buildingRoot, buildingControlRevision, buildingElementIds, buildingIdentities, stopBuildingObservation, buildingObservationFailed = !1, buildingStructuralRevision = 0, nonBuildingCatalogRoot, nonBuildingCatalogControlRevision, nonBuildingCatalogSignature, stopNonBuildingCatalogObservation, nonBuildingCatalogObservationFailed = !1, nonBuildingCatalogRevision = 0, readBuildingSources = (root, controls3, elementIds, identities) => trackCapturedBuildingGenerationStructure(
       root,
       controls3,
       elementIds,
       identities
     ), stopBuildingTracker = () => {
       stopBuildingObservation?.(), stopBuildingObservation = void 0, buildingRoot = void 0, buildingControlRevision = void 0, buildingElementIds = void 0;
+    }, stopNonBuildingCatalogTracker = () => {
+      stopNonBuildingCatalogObservation?.(), stopNonBuildingCatalogObservation = void 0;
+    }, invalidateNonBuildingCatalogTracker = () => {
+      (nonBuildingCatalogRoot !== void 0 || nonBuildingCatalogSignature !== void 0) && (nonBuildingCatalogRevision += 1), stopNonBuildingCatalogTracker(), nonBuildingCatalogRoot = void 0, nonBuildingCatalogControlRevision = void 0, nonBuildingCatalogSignature = void 0, nonBuildingCatalogObservationFailed = !1;
+    }, readNonBuildingCatalogGenerationSignature = (root) => {
+      let productionContext = readProduction(root), foundryResourceIds = new Set(
+        Object.values(productionContext.foundryResourceIdByKey)
+      );
+      return JSON.stringify([
+        Object.keys(readTechIds(root)),
+        mergeResourceIds(root, "tradable", controls2, "market-"),
+        readResources(root).map(([id]) => id),
+        readProjects(root).projectIds,
+        CRAFTER_RESOURCE_KEYS.filter((key) => foundryResourceIds.has(key)),
+        controls2.capturedElementIds()
+      ]);
+    }, readNonBuildingCatalogSources = (root) => [
+      () => Object.keys(readTechIds(root)),
+      () => mergeResourceIds(root, "tradable", controls2, "market-"),
+      () => readResources(root).map(([id, resource]) => [
+        id,
+        readProperty(resource, "tradable") === !0
+      ]),
+      () => readProjects(root).projectIds
+    ], publishNonBuildingCatalogSignature = (signature) => {
+      (nonBuildingCatalogSignature === void 0 || nonBuildingCatalogSignature !== signature) && (nonBuildingCatalogRevision += 1, nonBuildingCatalogSignature = signature);
+    }, readNonBuildingCatalogGeneration = (root) => {
+      let controlRevision = controls2.readRevision?.(), canObserve = controlRevision !== void 0 && reactiveObserver !== void 0;
+      if (nonBuildingCatalogRoot !== root && (stopNonBuildingCatalogTracker(), nonBuildingCatalogRoot = root, nonBuildingCatalogControlRevision = void 0, nonBuildingCatalogSignature = void 0, nonBuildingCatalogObservationFailed = !1), !canObserve) {
+        stopNonBuildingCatalogTracker();
+        try {
+          publishNonBuildingCatalogSignature(
+            readNonBuildingCatalogGenerationSignature(root)
+          );
+        } catch {
+          return;
+        }
+        return nonBuildingCatalogControlRevision = controlRevision, `${nonBuildingCatalogRevision}`;
+      }
+      if (nonBuildingCatalogSignature === void 0 || nonBuildingCatalogControlRevision !== controlRevision || nonBuildingCatalogObservationFailed) {
+        nonBuildingCatalogObservationFailed && stopNonBuildingCatalogTracker();
+        try {
+          publishNonBuildingCatalogSignature(
+            readNonBuildingCatalogGenerationSignature(root)
+          );
+        } catch {
+          nonBuildingCatalogObservationFailed = !0;
+          return;
+        }
+        nonBuildingCatalogControlRevision = controlRevision, nonBuildingCatalogObservationFailed = !1;
+      }
+      if (stopNonBuildingCatalogObservation === void 0) {
+        let stop = reactiveObserver.observe(
+          () => readNonBuildingCatalogSources(root),
+          () => {
+            if (rootState.isReactivitySuppressed?.() === !0 || rootState.readRoot() !== root) {
+              nonBuildingCatalogObservationFailed = !0;
+              return;
+            }
+            try {
+              publishNonBuildingCatalogSignature(
+                readNonBuildingCatalogGenerationSignature(root)
+              );
+            } catch {
+              nonBuildingCatalogObservationFailed = !0;
+            }
+          },
+          () => {
+            nonBuildingCatalogObservationFailed = !0;
+          }
+        );
+        stop === void 0 || nonBuildingCatalogObservationFailed ? (nonBuildingCatalogObservationFailed = !0, stopNonBuildingCatalogTracker()) : stopNonBuildingCatalogObservation = stop;
+      }
+      if (nonBuildingCatalogObservationFailed || stopNonBuildingCatalogObservation === void 0)
+        try {
+          publishNonBuildingCatalogSignature(
+            readNonBuildingCatalogGenerationSignature(root)
+          );
+        } catch {
+          return;
+        }
+      return nonBuildingCatalogControlRevision = controlRevision, `${nonBuildingCatalogRevision}`;
     };
     rootState.subscribeRootReplaced?.(() => {
-      buildingStructuralRevision += 1, stopBuildingTracker();
+      buildingStructuralRevision += 1, stopBuildingTracker(), invalidateNonBuildingCatalogTracker();
     });
     let readBuildingFacts = (root, elementIds) => {
       let identities = mechanics.readStructureIdentities();
@@ -38149,33 +38231,23 @@
       return `${buildingStructuralRevision}`;
     }, readCatalogGeneration = () => {
       if (rootState.isReactivitySuppressed?.() === !0) {
-        stopBuildingTracker();
+        stopBuildingTracker(), invalidateNonBuildingCatalogTracker();
         return;
       }
       let root;
       try {
         root = rootState.readRoot();
       } catch {
-        stopBuildingTracker();
+        stopBuildingTracker(), invalidateNonBuildingCatalogTracker();
         return;
       }
       if (root === void 0) {
-        stopBuildingTracker();
+        stopBuildingTracker(), invalidateNonBuildingCatalogTracker();
         return;
       }
-      let controlIds = controls2.capturedElementIds(), productionContext = readProduction(root), foundryResourceIds = new Set(
-        Object.values(productionContext.foundryResourceIdByKey)
-      ), buildingGeneration = readCurrentBuildingFacts();
-      if (buildingGeneration !== void 0)
-        return [
-          Object.keys(readTechIds(root)).length,
-          mergeResourceIds(root, "tradable", controls2, "market-").length,
-          readResources(root).length,
-          readProjects(root).projectIds.length,
-          buildingGeneration,
-          CRAFTER_RESOURCE_KEYS.filter((key) => foundryResourceIds.has(key)).length,
-          controlIds.length
-        ].join(":");
+      let nonBuildingGeneration = readNonBuildingCatalogGeneration(root), buildingGeneration = readCurrentBuildingFacts();
+      if (!(nonBuildingGeneration === void 0 || buildingGeneration === void 0))
+        return `${nonBuildingGeneration}:${buildingGeneration}`;
     };
     return {
       startupReader,

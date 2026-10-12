@@ -54,6 +54,23 @@ function nativeMechanics(readStructures) {
   };
 }
 
+function observeReactiveCatalogs() {
+  return {
+    observe(read, onChange, onError) {
+      try {
+        return vue.watch(
+          read().map((source) => () => source()),
+          onChange,
+          { flush: "sync" },
+        );
+      } catch {
+        onError();
+        return undefined;
+      }
+    },
+  };
+}
+
 // The real Vue capture brackets raw offline simulation, even when the same proxy is restored on a
 // later MessageChannel task. The first trusted read must resample changes made while nonreactive.
 {
@@ -681,7 +698,7 @@ function nativeMechanics(readStructures) {
   assert.equal(
     observationCount,
     beforeRedraw + 1,
-    "same-ID redraw replaces the old Vue subscription",
+    "catalog subscription is rebound after root replacement",
   );
   const beforeRedrawnActChange = defaults.readCatalogGeneration();
   controlData.act = 0;
@@ -793,7 +810,7 @@ function nativeMechanics(readStructures) {
   );
   assert.equal(
     observationCount,
-    2,
+    3,
     "watcher sources are rebuilt for the new control",
   );
 
@@ -808,7 +825,7 @@ function nativeMechanics(readStructures) {
   );
   assert.equal(
     observationCount,
-    3,
+    4,
     "same-ID redraw watches the replacement handle",
   );
   controlData.act.on = 0;
@@ -821,7 +838,7 @@ function nativeMechanics(readStructures) {
   controlRevision += 1;
   const afterRejection = defaults.readCatalogGeneration();
   assert.equal(afterRejection, afterOwnOnAddition);
-  assert.equal(observationCount, 4);
+  assert.equal(observationCount, 5);
   controlData.act = 0;
   assert.notEqual(defaults.readCatalogGeneration(), afterRejection);
 
@@ -840,6 +857,160 @@ function nativeMechanics(readStructures) {
     defaults.readCatalogGeneration(),
     withAddedId,
     "captured ID ordering remains observable",
+  );
+}
+
+// Unchanged catalog generations reuse the reactive structural revision. Exact identities and
+// immediately available additions still advance it, including same-length substitutions.
+{
+  let techEnumerations = 0;
+  const tech = new Proxy(
+    {},
+    {
+      ownKeys(target) {
+        techEnumerations += 1;
+        return Reflect.ownKeys(target);
+      },
+    },
+  );
+  const root = vue.reactive(
+    createSettingsRoot({
+      tech,
+      resource: { Copper: { tradable: true } },
+      arpa: { lhc: { count: 0 } },
+    }),
+  );
+  const defaults = createCapturedSettingsDefaults({
+    rootState: {
+      readRoot: () => root,
+      isReactivitySuppressed: () => false,
+      subscribeRootReplaced: () => () => {},
+    },
+    controls: {
+      capturedElementIds: () => [],
+      readRevision: () => 0,
+      resolve: () => undefined,
+    },
+    reactiveObserver: observeReactiveCatalogs(),
+    mechanics: { readStructures: () => [], readStructureIdentities: () => [] },
+  });
+
+  let generation = defaults.readCatalogGeneration();
+  const settledEnumerations = techEnumerations;
+  for (let call = 0; call < 10; call += 1) {
+    assert.equal(defaults.readCatalogGeneration(), generation);
+  }
+  assert.equal(
+    techEnumerations,
+    settledEnumerations,
+    "unchanged repeated reads must not rescan the Tech catalog",
+  );
+
+  root.tech.future_technology = 1;
+  const afterTechAddition = defaults.readCatalogGeneration();
+  assert.notEqual(afterTechAddition, generation, "new Tech rows are immediate");
+  generation = afterTechAddition;
+
+  delete root.tech.future_technology;
+  root.tech.replacement_technology = 1;
+  const afterSameCountTechReplacement = defaults.readCatalogGeneration();
+  assert.notEqual(
+    afterSameCountTechReplacement,
+    generation,
+    "same-count Tech identity substitutions are immediate",
+  );
+  generation = afterSameCountTechReplacement;
+
+  root.resource.Titanium = { tradable: true };
+  const afterResourceAddition = defaults.readCatalogGeneration();
+  assert.notEqual(
+    afterResourceAddition,
+    generation,
+    "new resource and Foundry rows are immediate",
+  );
+  generation = afterResourceAddition;
+
+  root.arpa.tp_depot = { count: 0 };
+  assert.notEqual(
+    defaults.readCatalogGeneration(),
+    generation,
+    "new buildable projects are immediate",
+  );
+}
+
+// Root replacement and control capture revisions resample full ordered identities, not lengths.
+{
+  let root = vue.reactive(createSettingsRoot({ tech: { first: 1 } }));
+  let controlIds = ["civ-farmer"];
+  let controlRevision = 0;
+  const rootListeners = new Set();
+  const controls = {
+    capturedElementIds: () => [...controlIds],
+    readRevision: () => controlRevision,
+    resolve: () => undefined,
+  };
+  const defaults = createCapturedSettingsDefaults({
+    rootState: {
+      readRoot: () => root,
+      isReactivitySuppressed: () => false,
+      subscribeRootReplaced(listener) {
+        rootListeners.add(listener);
+        return () => rootListeners.delete(listener);
+      },
+    },
+    controls,
+    reactiveObserver: observeReactiveCatalogs(),
+    mechanics: { readStructures: () => [], readStructureIdentities: () => [] },
+  });
+
+  const initial = defaults.readCatalogGeneration();
+  controlIds = ["civ-teamster"];
+  controlRevision += 1;
+  const controlSwap = defaults.readCatalogGeneration();
+  assert.notEqual(controlSwap, initial, "same-count control identity changes");
+
+  // A same-ID redraw invalidates control authority but retains equivalent catalog facts.
+  controlRevision += 1;
+  assert.equal(defaults.readCatalogGeneration(), controlSwap);
+
+  root = vue.reactive(createSettingsRoot({ tech: { replacement: 1 } }));
+  for (const listener of rootListeners) listener();
+  assert.notEqual(
+    defaults.readCatalogGeneration(),
+    controlSwap,
+    "replacement roots with same-length catalogs are resampled",
+  );
+}
+
+// If Vue observation fails, every generation read fingerprints the catalogs; no stale authority
+// survives a same-count native replacement.
+{
+  const root = createSettingsRoot({ tech: { before: 1 } });
+  const defaults = createCapturedSettingsDefaults({
+    rootState: {
+      readRoot: () => root,
+      isReactivitySuppressed: () => false,
+      subscribeRootReplaced: () => () => {},
+    },
+    controls: {
+      capturedElementIds: () => [],
+      readRevision: () => 0,
+      resolve: () => undefined,
+    },
+    reactiveObserver: {
+      observe(_read, _onChange, onError) {
+        onError();
+        return undefined;
+      },
+    },
+    mechanics: { readStructures: () => [], readStructureIdentities: () => [] },
+  });
+  const before = defaults.readCatalogGeneration();
+  root.tech = { after: 1 };
+  assert.notEqual(
+    defaults.readCatalogGeneration(),
+    before,
+    "observer failure falls back to fresh identity reads",
   );
 }
 
