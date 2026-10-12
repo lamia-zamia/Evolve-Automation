@@ -32,6 +32,7 @@ const madInput = (overrides = {}) => ({
   offeredMadTech: {
     action: { family: "research", nativeId: "tech-mad" },
     costs: { Knowledge: 120_000 },
+    priceComplete: true,
     nativeAffordable: false,
     generation: 7,
   },
@@ -92,6 +93,7 @@ const goalById = (plan, id) => plan.goals.find((entry) => entry.id === id);
       offeredMadTech: {
         action: { family: "research", nativeId: "tech-mad" },
         costs: { Knowledge: 120_000, Oil: 8_500, Uranium: 1_250 },
+        priceComplete: true,
         nativeAffordable: false,
         generation: 7,
       },
@@ -335,6 +337,7 @@ const goalById = (plan, id) => plan.goals.find((entry) => entry.id === id);
       offeredMadTech: {
         action: { family: "research", nativeId: "tech-mad" },
         costs: { Knowledge: 120_000 },
+        priceComplete: true,
         nativeAffordable: true,
         generation: 7,
       },
@@ -353,12 +356,14 @@ const goalById = (plan, id) => plan.goals.find((entry) => entry.id === id);
       fact.includes("disagrees with captured stock and capacity"),
     ),
   );
+  assert.equal(disagreement.strategyComparison, undefined);
 
   const capacityLimited = planMadGoal(
     madInput({
       offeredMadTech: {
         action: { family: "research", nativeId: "tech-mad" },
         costs: { Knowledge: 120_000 },
+        priceComplete: true,
         nativeAffordable: false,
         generation: 7,
       },
@@ -381,6 +386,7 @@ const goalById = (plan, id) => plan.goals.find((entry) => entry.id === id);
       offeredMadTech: {
         action: { family: "research", nativeId: "tech-mad" },
         costs: { Knowledge: 10, Army: 2 },
+        priceComplete: true,
         nativeAffordable: false,
         generation: 7,
       },
@@ -396,6 +402,45 @@ const goalById = (plan, id) => plan.goals.find((entry) => entry.id === id);
       fact.includes("Army is unavailable"),
     ),
   );
+  assert.equal(unknownPrice.strategyComparison, undefined);
+
+  const partiallyInvalidPrice = planMadGoal(
+    madInput({
+      offeredMadTech: {
+        action: { family: "research", nativeId: "tech-mad" },
+        costs: { Knowledge: 120_000, Uranium: -1 },
+        priceComplete: true,
+        nativeAffordable: false,
+        generation: 7,
+      },
+      resources: new Map([
+        ["Knowledge", { amount: 20_000, capacity: 200_000, netRate: 25 }],
+        ["Uranium", { amount: 0, capacity: 10_000, netRate: 10 }],
+      ]),
+    }),
+  );
+  assert.equal(partiallyInvalidPrice.affordability, "unavailable");
+  assert.equal(partiallyInvalidPrice.quantitativeRequirements.length, 1);
+  assert.equal(partiallyInvalidPrice.strategyComparison, undefined);
+  assert.ok(
+    partiallyInvalidPrice.unavailableFacts.some((fact) =>
+      fact.includes("strategy comparison unavailable"),
+    ),
+  );
+
+  const explicitlyIncomplete = planMadGoal(
+    madInput({
+      offeredMadTech: {
+        action: { family: "research", nativeId: "tech-mad" },
+        costs: { Knowledge: 120_000 },
+        priceComplete: false,
+        nativeAffordable: false,
+        generation: 7,
+      },
+    }),
+  );
+  assert.equal(explicitlyIncomplete.affordability, "unavailable");
+  assert.equal(explicitlyIncomplete.strategyComparison, undefined);
 }
 
 {

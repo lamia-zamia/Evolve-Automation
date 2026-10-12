@@ -3,6 +3,9 @@
 export type FeasibilityStatus =
   "feasible" | "infeasible" | "uncertain" | "unavailable";
 
+export type GoalEstimateAuthority =
+  "unavailable" | "diagnostic" | "provisional" | "validated";
+
 export interface GoalResourceNeed {
   readonly resourceId: string;
   readonly poolId: string;
@@ -37,8 +40,11 @@ export interface GoalResourceShortfall extends GoalResourceNeed {
 
 export interface GoalFeasibility {
   readonly status: FeasibilityStatus;
-  /** Parallel requirements complete at the slowest resource, not their summed ETAs. */
+  /** Partial numerical projection for diagnosis; never sufficient to rank by itself. */
+  readonly diagnosticEstimatedTime: number | undefined;
+  /** Complete projection over known inputs; may still be provisional. */
   readonly estimatedTime: number | undefined;
+  readonly authority: GoalEstimateAuthority;
   readonly unmetRequirements: readonly GoalResourceShortfall[];
   readonly limitingConstraints: readonly string[];
   readonly assumptions: readonly string[];
@@ -63,6 +69,11 @@ export interface GoalStrategyCandidate {
   readonly acquisitionCosts: readonly GoalResourceNeed[];
   /** Undefined means no independently established marginal effect is available. */
   readonly productionChanges: readonly GoalProductionChange[] | undefined;
+  /** False means the captured effects omit a possible collateral output or cost. */
+  readonly effectsComplete: boolean;
+  readonly effectAuthority: "provisional" | "validated";
+  /** Root, controls and production sample epoch that established this marginal. */
+  readonly validityEpoch: string;
   readonly unavailableReasons: readonly string[];
 }
 
@@ -73,6 +84,8 @@ export interface GoalStrategyEvaluation {
   readonly acquisitionTime: number | undefined;
   readonly completionTime: number | undefined;
   readonly rankable: boolean;
+  readonly actionable: boolean;
+  readonly authority: GoalEstimateAuthority;
   readonly feasibility: GoalFeasibility;
   readonly opportunityCosts: readonly GoalProductionChange[];
   readonly unavailableReasons: readonly string[];
@@ -81,6 +94,7 @@ export interface GoalStrategyEvaluation {
 export interface GoalStrategyComparison {
   readonly goalId: string;
   readonly winner: string | undefined;
+  readonly provisionalWinner: string | undefined;
   readonly rankedStrategyIds: readonly string[];
   readonly strategies: readonly GoalStrategyEvaluation[];
   readonly validityEpoch: string;
@@ -164,9 +178,13 @@ export function evaluateGoalFeasibility(
   validityEpoch: string,
   commitmentsKnown = true,
 ): GoalFeasibility {
-  const stockByKey = new Map(
-    stocks.map((stock) => [resourceKey(stock.resourceId, stock.poolId), stock]),
-  );
+  const duplicateStockKeys = new Set<string>();
+  const stockByKey = new Map<string, GoalResourceStock>();
+  for (const stock of stocks) {
+    const key = resourceKey(stock.resourceId, stock.poolId);
+    if (stockByKey.has(key)) duplicateStockKeys.add(key);
+    else stockByKey.set(key, stock);
+  }
   const committedByKey = new Map<string, number>();
   const limitingConstraints: string[] = [];
   const reasons: string[] = [];
@@ -184,6 +202,12 @@ export function evaluateGoalFeasibility(
   let hasUncertain = !commitmentsKnown;
   let hasUnestimatedRequirement = false;
   let estimatedTime = 0;
+  let diagnosticEstimatedTime = 0;
+  let hasDiagnosticEstimate = false;
+  if (duplicateStockKeys.size > 0) {
+    hasUnavailable = true;
+    reasons.push("duplicate stock observations exist for a resource pool");
+  }
 
   for (const commitment of commitments) {
     if (!isFiniteNonnegative(commitment.amount)) {
@@ -201,6 +225,18 @@ export function evaluateGoalFeasibility(
     (requirement) => {
       const constraints: string[] = [];
       const key = resourceKey(requirement.resourceId, requirement.poolId);
+      if (duplicateStockKeys.has(key)) {
+        constraints.push("duplicate-resource-pool-observation");
+        reasons.push(
+          `${requirement.resourceId} in ${requirement.poolId} has duplicate stock observations`,
+        );
+        hasUnavailable = true;
+        return Object.freeze({
+          ...requirement,
+          status: "unavailable" as const,
+          constraints: Object.freeze(constraints),
+        });
+      }
       const stock = stockByKey.get(key);
       const reserved = committedByKey.get(key) ?? 0;
       if (!isFiniteNonnegative(requirement.amount)) {
@@ -323,6 +359,11 @@ export function evaluateGoalFeasibility(
       }
 
       const timeToRequirement = shortfall / stock.netRate;
+      diagnosticEstimatedTime = Math.max(
+        diagnosticEstimatedTime,
+        timeToRequirement,
+      );
+      hasDiagnosticEstimate = true;
       estimatedTime = Math.max(estimatedTime, timeToRequirement);
       if (stock.rateConfidence === "observed") {
         constraints.push("single-sample-rate");
@@ -353,9 +394,24 @@ export function evaluateGoalFeasibility(
     estimatedTime = Number.NaN;
   if (hasUnestimatedRequirement) estimatedTime = Number.NaN;
   if (!Number.isFinite(estimatedTime)) estimatedTime = Number.NaN;
+  if (!Number.isFinite(diagnosticEstimatedTime))
+    diagnosticEstimatedTime = Number.NaN;
+  const authority: GoalEstimateAuthority =
+    status === "unavailable" || status === "infeasible"
+      ? hasDiagnosticEstimate
+        ? "diagnostic"
+        : "unavailable"
+      : status === "uncertain"
+        ? "provisional"
+        : "validated";
   return Object.freeze({
     status,
+    diagnosticEstimatedTime:
+      hasDiagnosticEstimate && Number.isFinite(diagnosticEstimatedTime)
+        ? diagnosticEstimatedTime
+        : undefined,
     estimatedTime: Number.isFinite(estimatedTime) ? estimatedTime : undefined,
+    authority,
     unmetRequirements: Object.freeze(unmetRequirements),
     limitingConstraints: Object.freeze(limitingConstraints),
     assumptions: Object.freeze([...new Set(assumptions)]),
@@ -390,19 +446,28 @@ export function compareGoalStrategies(
       acquisitionTime: 0,
       completionTime: baseline.estimatedTime,
       rankable: baseline.estimatedTime !== undefined,
+      actionable: baseline.authority === "validated",
+      authority: baseline.authority,
       feasibility: baseline,
       opportunityCosts: Object.freeze([]),
       unavailableReasons: baseline.reasons,
     }),
   ];
-  const stockByKey = new Map(
-    stocks.map((stock) => [resourceKey(stock.resourceId, stock.poolId), stock]),
+  const stockKeys = new Set(
+    stocks.map((stock) => resourceKey(stock.resourceId, stock.poolId)),
   );
 
   for (const candidate of candidates) {
     const unavailableReasons = [...candidate.unavailableReasons];
+    const provisionalReasons: string[] = [];
     if (candidate.goalId !== goalId) {
       unavailableReasons.push("candidate targets a different goal");
+    }
+    if (candidate.validityEpoch !== validityEpoch) {
+      unavailableReasons.push("candidate marginal observation is stale");
+    }
+    if (!candidate.effectsComplete) {
+      provisionalReasons.push("candidate collateral effects are incomplete");
     }
     if (!candidate.preconditions.satisfied) {
       unavailableReasons.push(...candidate.preconditions.reasons);
@@ -427,6 +492,8 @@ export function compareGoalStrategies(
           acquisitionTime: undefined,
           completionTime: undefined,
           rankable: false,
+          actionable: false,
+          authority: "unavailable",
           feasibility: unavailable,
           opportunityCosts: Object.freeze([]),
           unavailableReasons: Object.freeze([...new Set(unavailableReasons)]),
@@ -453,6 +520,8 @@ export function compareGoalStrategies(
           acquisitionTime: undefined,
           completionTime: undefined,
           rankable: false,
+          actionable: false,
+          authority: "unavailable",
           feasibility: acquisition,
           opportunityCosts: Object.freeze([]),
           unavailableReasons: Object.freeze([
@@ -506,7 +575,7 @@ export function compareGoalStrategies(
       ) ?? [],
     );
     const unsupportedEffect = [...changedKeys].some(
-      (key) => !stockByKey.has(key),
+      (key) => !stockKeys.has(key),
     );
     const feasibility = evaluateGoalFeasibility(
       goalId,
@@ -531,6 +600,22 @@ export function compareGoalStrategies(
         acquisitionTime,
         completionTime: totalTime,
         rankable: totalTime !== undefined && !unsupportedEffect,
+        actionable:
+          totalTime !== undefined &&
+          !unsupportedEffect &&
+          candidate.effectsComplete &&
+          candidate.effectAuthority === "validated" &&
+          acquisition.authority === "validated" &&
+          feasibility.authority === "validated",
+        authority:
+          totalTime === undefined || unsupportedEffect
+            ? "unavailable"
+            : candidate.effectAuthority === "validated" &&
+                candidate.effectsComplete &&
+                acquisition.authority === "validated" &&
+                feasibility.authority === "validated"
+              ? "validated"
+              : "provisional",
         feasibility,
         opportunityCosts: Object.freeze(
           productionChanges.filter(
@@ -538,11 +623,12 @@ export function compareGoalStrategies(
               change.netRateDelta < 0 || (change.capacityDelta ?? 0) < 0,
           ) ?? [],
         ),
-        unavailableReasons: Object.freeze(
-          unsupportedEffect
+        unavailableReasons: Object.freeze([
+          ...provisionalReasons,
+          ...(unsupportedEffect
             ? ["candidate changes an unobserved resource pool"]
-            : [],
-        ),
+            : []),
+        ]),
       }),
     );
   }
@@ -564,10 +650,23 @@ export function compareGoalStrategies(
     .every(
       (evaluation) => evaluation.rankable || evaluation.status === "infeasible",
     );
+  const provisionalWinner = comparisonComplete
+    ? (rankedStrategyIds[0] ?? undefined)
+    : undefined;
+  const winner =
+    provisionalWinner !== undefined &&
+    evaluations
+      .filter((evaluation) => evaluation.rankable)
+      .every((evaluation) => evaluation.actionable) &&
+    evaluations.find((evaluation) => evaluation.id === provisionalWinner)
+      ?.actionable === true
+      ? provisionalWinner
+      : undefined;
   return Object.freeze({
     goalId,
     // An unsupported candidate is omitted from ordering and also prevents a global winner claim.
-    winner: comparisonComplete ? rankedStrategyIds[0] : undefined,
+    winner,
+    provisionalWinner,
     rankedStrategyIds: Object.freeze(rankedStrategyIds),
     strategies: Object.freeze(evaluations),
     validityEpoch,

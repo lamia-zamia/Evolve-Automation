@@ -3961,6 +3961,8 @@ export function startCapturedRuntime({
                     : {
                         goalId: plan.strategyComparison.goalId,
                         winner: plan.strategyComparison.winner,
+                        provisionalWinner:
+                          plan.strategyComparison.provisionalWinner,
                         rankedStrategyIds:
                           plan.strategyComparison.rankedStrategyIds,
                         strategies: plan.strategyComparison.strategies.map(
@@ -3968,6 +3970,8 @@ export function startCapturedRuntime({
                             id: strategy.id,
                             status: strategy.status,
                             rankable: strategy.rankable,
+                            actionable: strategy.actionable,
+                            authority: strategy.authority,
                             completionTime:
                               strategy.completionTime === undefined
                                 ? undefined
@@ -4029,7 +4033,7 @@ export function startCapturedRuntime({
                     (strategy) => strategy.id === "wait",
                   );
                   reportDiagnostic(
-                    `goal.mad comparison goal=${plan.strategyComparison.goalId} winner=${plan.strategyComparison.winner ?? "none"} ranked=${plan.strategyComparison.rankedStrategyIds.join(",")} wait=${goalEtaDisplay(wait?.completionTime)}`,
+                    `goal.mad comparison goal=${plan.strategyComparison.goalId} winner=${plan.strategyComparison.winner ?? "none"} provisional=${plan.strategyComparison.provisionalWinner ?? "none"} ranked=${plan.strategyComparison.rankedStrategyIds.join(",")} wait=${goalEtaDisplay(wait?.completionTime)} authority=${wait?.authority ?? "unavailable"}`,
                   );
                   reportDiagnostic(
                     `goal.mad forecast native-diff=resource/second future-stock=forecast-only rate=constant-rate assumption; observed-rate uncertainty applies`,
@@ -4037,7 +4041,7 @@ export function startCapturedRuntime({
                   for (const strategy of plan.strategyComparison.strategies) {
                     if (strategy.id === "wait") continue;
                     reportDiagnostic(
-                      `goal.mad strategy ${strategy.id} status=${strategy.status} rankable=${strategy.rankable} reason=${strategy.unavailableReasons.join("|")}`,
+                      `goal.mad strategy ${strategy.id} status=${strategy.status} rankable=${strategy.rankable} actionable=${strategy.actionable} authority=${strategy.authority} reason=${strategy.unavailableReasons.join("|")}`,
                     );
                   }
                 }

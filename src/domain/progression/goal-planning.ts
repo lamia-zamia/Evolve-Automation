@@ -78,6 +78,8 @@ export function combinePrerequisiteStatuses(
 export interface MadTechOfferObservation {
   readonly action: GoalActionIdentity;
   readonly costs: Readonly<Record<string, number>>;
+  /** True only when the adapter captured every native price entry from the current draw. */
+  readonly priceComplete: boolean;
   /** The captured verdict from the drawn native action row. */
   readonly nativeAffordable: boolean;
   readonly generation: number;
@@ -194,7 +196,7 @@ export function planMadGoal(
   const offerFacts: string[] = [];
   let hasUnrecognizedOrMissingPrice = false;
   let capturedAllPricesAffordable = true;
-  let hasCompletePriceCapture = input.offeredMadTech !== undefined;
+  let hasCompletePriceCapture = input.offeredMadTech?.priceComplete === true;
 
   if (input.offeredMadTech !== undefined && !researchGranted) {
     for (const [resourceId, amount] of Object.entries(
@@ -595,7 +597,12 @@ export function planMadGoal(
   }
 
   let strategyComparison: GoalStrategyComparison | undefined;
-  if (input.offeredMadTech !== undefined && !researchGranted) {
+  if (
+    input.offeredMadTech !== undefined &&
+    !researchGranted &&
+    input.offeredMadTech.priceComplete &&
+    affordability === "consistent"
+  ) {
     const feasibilityEpoch = `${input.progressionEpoch}|cycle:${input.cycle}|offer:${input.offeredMadTech.generation}`;
     const requirements: GoalResourceNeed[] = quantitativeRequirements.map(
       (requirement) => ({
@@ -644,6 +651,9 @@ export function planMadGoal(
           },
           acquisitionCosts: [],
           productionChanges: undefined,
+          effectsComplete: false,
+          effectAuthority: "provisional",
+          validityEpoch: feasibilityEpoch,
           unavailableReasons: [
             "no safe native marginal authority for reassigned Scientists was observed",
           ],
@@ -659,6 +669,9 @@ export function planMadGoal(
           },
           acquisitionCosts: [],
           productionChanges: undefined,
+          effectsComplete: false,
+          effectAuthority: "provisional",
+          validityEpoch: feasibilityEpoch,
           unavailableReasons: [
             "one-copy Library Knowledge production and capacity effects are not captured",
           ],
@@ -666,6 +679,10 @@ export function planMadGoal(
       ],
       feasibilityEpoch,
       false,
+    );
+  } else if (input.offeredMadTech !== undefined && !researchGranted) {
+    unavailableFacts.push(
+      "strategy comparison unavailable: native MAD Research price is incomplete or contradictory",
     );
   }
 

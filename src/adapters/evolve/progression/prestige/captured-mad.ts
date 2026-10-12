@@ -864,6 +864,7 @@ export function observeCapturedMadGoal(
               nativeId: CAPTURED_MAD_RESEARCH_TECH,
             }),
             costs: madOffer.cost,
+            priceComplete: true,
             nativeAffordable: madOffer.nativeAffordable,
             generation: madOffer.generation,
           }),
