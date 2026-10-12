@@ -12918,52 +12918,228 @@
   var CUSTOM_RACE_LAB_CONTROL_ID = CELESTIAL_LAB_CONTROL_ID, CUSTOM_RACE_LAB_PANEL_SELECTOR = CELESTIAL_LAB_PANEL_SELECTOR, CUSTOM_RACE_LAB_STRAND_ID = "#traitSlots .labStrand", CUSTOM_RACE_FILE_INPUT_ID = "customFile";
 
   // src/domain/progression/goal-planning.ts
-  var MAD_TERMINAL_GOAL_ID = "prestige:mad", MAD_RESEARCH_GOAL_ID = "research:mad";
+  function combinePrerequisiteStatuses(operator, statuses) {
+    return statuses.length === 0 ? "unavailable" : operator === "all" && statuses.every((status2) => status2 === "satisfied") || operator === "any" && statuses.some((status2) => status2 === "satisfied") ? "satisfied" : operator === "all" && statuses.some((status2) => status2 === "blocked") || operator === "any" && statuses.every((status2) => status2 === "blocked") ? "blocked" : statuses.some((status2) => status2 === "unavailable") ? "unavailable" : "unsatisfied";
+  }
+  var MAD_TERMINAL_GOAL_ID = "prestige:mad", MAD_RESEARCH_GOAL_ID = "research:mad", MAD_RESET_ELIGIBILITY_GOAL_ID = "prestige:mad-reset-eligibility", MAD_CONTROL_GOAL_ID = "prestige:mad-control", MAD_NATIVE_LAUNCH_GOAL_ID = "prestige:mad-native-launch-gate", MAD_POPULATION_SOLDIER_GOAL_ID = "prestige:mad-population-soldiers", MAD_OFFER_GOAL_ID = "research:mad:current-offer", MAD_AUTOMATION_GOAL_ID = "prestige:mad-automation-permission", MAD_GRAPH_TRACE_LIMITS = Object.freeze({
+    maxDepth: 8,
+    maxGoals: 32
+  });
+  function makeGoal(value) {
+    return Object.freeze({
+      ...value,
+      ...value.prerequisites === void 0 ? {} : {
+        prerequisites: Object.freeze({
+          operator: value.prerequisites.operator,
+          goalIds: Object.freeze([...value.prerequisites.goalIds])
+        })
+      },
+      ...value.unavailableFacts === void 0 ? {} : { unavailableFacts: Object.freeze([...value.unavailableFacts]) }
+    });
+  }
   function planMadGoal(input) {
-    let unavailableFacts = [], blockers = [], quantitativeRequirements = [], nativePriceBlockerObserved = !1;
-    input.selectedPrestige !== "mad" && unavailableFacts.push("MAD is not the selected terminal objective"), input.madResearchLevel === void 0 && unavailableFacts.push("native tech.mad level is unavailable"), !input.offerCatalogAvailable && input.madResearchLevel !== void 0 && input.madResearchLevel < 1 && unavailableFacts.push("current Research offer catalog is unavailable");
-    let researchSatisfied = input.madResearchGate === !0 && input.madResearchLevel !== void 0 && input.madResearchLevel > 0, selectedMad = input.selectedPrestige === "mad", status2 = selectedMad ? input.resetConfirmed ? "satisfied" : input.madResearchGate === void 0 || input.madResetGate === void 0 ? "unavailable" : !researchSatisfied || !input.madResetGate || !input.prestigePermission || input.manualOwnership ? "blocked" : "unsatisfied" : "unavailable", chain = [MAD_TERMINAL_GOAL_ID];
-    selectedMad && !input.resetConfirmed && (input.prestigePermission || blockers.push("automation-permission-disabled"), input.manualOwnership && blockers.push("MAD is armed or otherwise manually owned"));
-    let currentSubgoal;
-    if (selectedMad && !input.resetConfirmed)
-      if (researchSatisfied)
-        currentSubgoal = "prestige:mad-reset-gate", chain.push(currentSubgoal), input.madResetGate || blockers.push("native soldier or population reset gate is unsatisfied");
-      else if (chain.push(MAD_RESEARCH_GOAL_ID), currentSubgoal = MAD_RESEARCH_GOAL_ID, input.offeredMadTech !== void 0) {
-        chain.push(input.offeredMadTech.action.nativeId), currentSubgoal = input.offeredMadTech.action.nativeId;
-        for (let [resourceId, amount] of Object.entries(
-          input.offeredMadTech.costs
-        )) {
-          if (!Number.isFinite(amount) || amount <= 0) continue;
-          let resource = input.resources.get(resourceId);
-          if (resource === void 0) {
-            unavailableFacts.push(
-              `native price resource ${resourceId} is unavailable`
-            );
-            continue;
-          }
-          chain.push(`resource:${resourceId}`), quantitativeRequirements.push(
-            Object.freeze({
-              resourceId,
-              amount,
-              ...resource.amount === void 0 ? {} : { held: resource.amount },
-              ...resource.capacity === void 0 ? {} : { capacity: resource.capacity },
-              ...resource.netRate === void 0 ? {} : { netRate: resource.netRate }
-            })
-          ), resource.amount === void 0 ? unavailableFacts.push(
-            `current stock for ${resourceId} is unavailable`
-          ) : resource.amount < amount && (nativePriceBlockerObserved = !0, blockers.push(`${resourceId}:stock-below-native-price`), resource.capacity === void 0 && unavailableFacts.push(
-            `current capacity for ${resourceId} is unavailable`
-          ), resource.capacity !== void 0 && resource.capacity >= 0 && resource.capacity < amount && blockers.push(`${resourceId}:capacity-below-native-price`), resource.netRate !== void 0 && resource.netRate <= 0 && blockers.push(`${resourceId}:nonpositive-net-production`), resource.netRate === void 0 && unavailableFacts.push(
-            `net production for ${resourceId} is unavailable`
-          ));
+    let unavailableFacts = [], blockers = [], quantitativeRequirements = [], goals = /* @__PURE__ */ new Map(), selectedMad = input.selectedPrestige === "mad", researchGranted = input.madResearchLevel !== void 0 && input.madResearchLevel > 0, researchMissing = input.madResearchLevel !== void 0 && input.madResearchLevel <= 0;
+    selectedMad || unavailableFacts.push("MAD is not the selected terminal objective"), input.madResearchLevel === void 0 && unavailableFacts.push("native tech.mad level is unavailable"), !input.offerCatalogAvailable && !researchGranted && selectedMad && !input.resetConfirmed && unavailableFacts.push("current Research offer catalog is unavailable");
+    let affordability = "unavailable", requirementGoalIds = [], offerFacts = [], hasUnrecognizedOrMissingPrice = !1, capturedAllPricesAffordable = !0, hasCompletePriceCapture = input.offeredMadTech !== void 0;
+    if (input.offeredMadTech !== void 0 && !researchGranted) {
+      for (let [resourceId, amount] of Object.entries(
+        input.offeredMadTech.costs
+      )) {
+        if (!Number.isFinite(amount) || amount < 0) {
+          hasUnrecognizedOrMissingPrice = !0, hasCompletePriceCapture = !1, offerFacts.push(`native price for ${resourceId} is invalid`);
+          continue;
         }
-        !input.offeredMadTech.nativeAffordable && !nativePriceBlockerObserved && unavailableFacts.push(
-          "native affordability is false but captured costs do not explain it"
+        if (amount === 0) continue;
+        let resource = input.resources.get(resourceId), requirement = Object.freeze({
+          resourceId,
+          amount,
+          ...resource?.amount === void 0 ? {} : { held: resource.amount },
+          ...resource?.capacity === void 0 ? {} : { capacity: resource.capacity },
+          ...resource?.netRate === void 0 ? {} : { netRate: resource.netRate }
+        });
+        quantitativeRequirements.push(requirement);
+        let resourceGoalId = `resource:${resourceId}`;
+        requirementGoalIds.push(resourceGoalId);
+        let resourceStatus = "unavailable";
+        if (resource === void 0)
+          hasUnrecognizedOrMissingPrice = !0, hasCompletePriceCapture = !1, offerFacts.push(`native price resource ${resourceId} is unavailable`);
+        else {
+          let resourceAffordable = !0;
+          resource.amount === void 0 ? (hasCompletePriceCapture = !1, offerFacts.push(`current stock for ${resourceId} is unavailable`)) : resource.amount < amount && (resourceAffordable = !1, capturedAllPricesAffordable = !1, blockers.push(`${resourceId}:stock-below-native-price`)), resource.capacity === void 0 ? (hasCompletePriceCapture = !1, offerFacts.push(`current capacity for ${resourceId} is unavailable`)) : resource.capacity >= 0 && resource.capacity < amount && (resourceAffordable = !1, capturedAllPricesAffordable = !1, blockers.push(`${resourceId}:capacity-below-native-price`)), resourceStatus = resource.amount === void 0 || resource.capacity === void 0 ? resourceAffordable ? "unavailable" : "unsatisfied" : resourceAffordable ? "satisfied" : "unsatisfied", resource.amount !== void 0 && resource.amount < amount && (resource.netRate === void 0 ? offerFacts.push(`net production for ${resourceId} is unavailable`) : resource.netRate <= 0 && blockers.push(`${resourceId}:nonpositive-net-production`));
+        }
+        goals.set(
+          resourceGoalId,
+          makeGoal({
+            id: resourceGoalId,
+            scope: "run",
+            predicate: "native-resource-quantity",
+            provenance: "derived-requirement",
+            reason: `current native price requires ${amount} ${resourceId}`,
+            status: resourceStatus,
+            quantity: requirement,
+            ...resourceStatus === "unavailable" ? {
+              unavailableFacts: [
+                `resource view for ${resourceId} is incomplete`
+              ]
+            } : {}
+          })
         );
-      } else input.offerCatalogAvailable && unavailableFacts.push(
-        "tech-mad is not currently offered; its locked dependencies are unavailable here"
+      }
+      if (hasCompletePriceCapture && !hasUnrecognizedOrMissingPrice) {
+        let capturedVerdict = capturedAllPricesAffordable;
+        capturedVerdict !== input.offeredMadTech.nativeAffordable ? (affordability = "inconsistent", offerFacts.push(
+          `native affordability (${input.offeredMadTech.nativeAffordable}) disagrees with captured stock and capacity (${capturedVerdict})`
+        )) : affordability = "consistent";
+      } else
+        offerFacts.push(
+          "native affordability cannot be reconciled with incomplete price views"
+        );
+      let offerStatus = affordability === "inconsistent" || hasUnrecognizedOrMissingPrice || !hasCompletePriceCapture ? "unavailable" : "unsatisfied";
+      goals.set(
+        MAD_OFFER_GOAL_ID,
+        makeGoal({
+          id: MAD_OFFER_GOAL_ID,
+          scope: "run",
+          predicate: "complete-current-native-offer",
+          provenance: "native-prerequisite",
+          reason: "the currently drawn native Research action for MAD",
+          status: offerStatus,
+          action: input.offeredMadTech.action,
+          prerequisites: Object.freeze({
+            operator: "all",
+            goalIds: requirementGoalIds
+          }),
+          ...offerFacts.length === 0 ? {} : { unavailableFacts: offerFacts }
+        })
       );
-    let selectedGoal = Object.freeze({
+    } else !researchGranted && input.offerCatalogAvailable ? (offerFacts.push(
+      "tech-mad is not currently offered; locked requirements are unavailable here"
+    ), goals.set(
+      MAD_OFFER_GOAL_ID,
+      makeGoal({
+        id: MAD_OFFER_GOAL_ID,
+        scope: "run",
+        predicate: "current-native-offer",
+        provenance: "native-prerequisite",
+        reason: "no current tech-mad offer was observed",
+        status: "unavailable",
+        unavailableFacts: offerFacts
+      })
+    )) : researchGranted || (offerFacts.push("current Research offer catalog is unavailable"), goals.set(
+      MAD_OFFER_GOAL_ID,
+      makeGoal({
+        id: MAD_OFFER_GOAL_ID,
+        scope: "run",
+        predicate: "current-native-offer",
+        provenance: "native-prerequisite",
+        reason: "no current Research catalog observation",
+        status: "unavailable",
+        unavailableFacts: offerFacts
+      })
+    ));
+    let researchStatus = researchGranted ? "satisfied" : researchMissing ? "unsatisfied" : "unavailable";
+    goals.set(
+      MAD_RESEARCH_GOAL_ID,
+      makeGoal({
+        id: MAD_RESEARCH_GOAL_ID,
+        scope: "run",
+        predicate: "granted-tech-mad",
+        provenance: "native-prerequisite",
+        reason: "native tech.mad grant",
+        status: researchStatus,
+        ...researchMissing && !researchGranted ? {
+          prerequisites: Object.freeze({
+            operator: "all",
+            goalIds: Object.freeze([MAD_OFFER_GOAL_ID])
+          })
+        } : {},
+        ...input.madResearchLevel === void 0 ? { unavailableFacts: ["native tech.mad level is unavailable"] } : {}
+      })
+    );
+    let controlStatus = input.madControlDisplay === void 0 ? "unavailable" : input.madControlDisplay ? input.madControlBound === void 0 ? "unavailable" : input.madControlBound ? "satisfied" : "unsatisfied" : "unsatisfied", controlFacts = input.madControlDisplay === void 0 ? ["native civic.mad.display is unavailable"] : input.madControlDisplay ? input.madControlBound === void 0 ? ["current MAD control binding is unavailable"] : input.madControlBound ? researchGranted ? [] : [
+      "MAD control is displayed without a positively established tech.mad grant"
+    ] : [
+      "MAD is displayed but the current native control binding is absent"
+    ] : [];
+    goals.set(
+      MAD_CONTROL_GOAL_ID,
+      makeGoal({
+        id: MAD_CONTROL_GOAL_ID,
+        scope: "run",
+        predicate: "native-mad-control-available",
+        provenance: "native-prerequisite",
+        reason: "native civic.mad.display gate",
+        status: controlStatus,
+        ...controlFacts.length === 0 ? {} : { unavailableFacts: controlFacts }
+      })
+    );
+    let nativeLaunchStatus = controlStatus !== "satisfied" ? controlStatus : input.madArmed === void 0 || input.madCataclysm === void 0 ? "unavailable" : input.madArmed || input.madCataclysm ? "unsatisfied" : "satisfied", nativeLaunchFacts = controlStatus === "satisfied" && (input.madArmed === void 0 || input.madCataclysm === void 0) ? ["native armed/cataclysm launch gate is unavailable"] : [];
+    goals.set(
+      MAD_NATIVE_LAUNCH_GOAL_ID,
+      makeGoal({
+        id: MAD_NATIVE_LAUNCH_GOAL_ID,
+        scope: "run",
+        predicate: "native-mad-warhead-launch-gate",
+        provenance: "native-prerequisite",
+        reason: "native launch and warhead require an unarmed non-Cataclysm state",
+        status: nativeLaunchStatus,
+        prerequisites: Object.freeze({
+          operator: "all",
+          goalIds: Object.freeze([MAD_CONTROL_GOAL_ID])
+        }),
+        ...nativeLaunchFacts.length === 0 ? {} : { unavailableFacts: nativeLaunchFacts }
+      })
+    );
+    let populationSoldierStatus = input.madWaitPolicyGate === void 0 ? "unavailable" : input.madWaitPolicyGate ? "satisfied" : "unsatisfied", populationSoldierFacts = input.madWaitPolicyGate === void 0 ? ["automation population/soldier wait-policy result is unavailable"] : [];
+    goals.set(
+      MAD_POPULATION_SOLDIER_GOAL_ID,
+      makeGoal({
+        id: MAD_POPULATION_SOLDIER_GOAL_ID,
+        scope: "run",
+        predicate: "automation-mad-population-soldier-wait-policy",
+        provenance: "derived-requirement",
+        reason: "applicable automation population and soldier wait policy",
+        status: populationSoldierStatus,
+        ...populationSoldierFacts.length === 0 ? {} : { unavailableFacts: populationSoldierFacts }
+      })
+    );
+    let permissionGoal = makeGoal({
+      id: MAD_AUTOMATION_GOAL_ID,
+      scope: "run",
+      predicate: "automatic-prestige-permission",
+      provenance: "derived-requirement",
+      reason: "autoPrestige setting",
+      status: input.prestigePermission ? "satisfied" : "blocked"
+    });
+    goals.set(MAD_AUTOMATION_GOAL_ID, permissionGoal), selectedMad && !input.resetConfirmed && (input.prestigePermission || blockers.push("automation-permission-disabled"), controlStatus === "satisfied" && input.madArmed === !0 && blockers.push("native-mad-warhead-armed"), controlStatus === "satisfied" && input.madCataclysm === !0 && blockers.push("native-mad-launch-disabled-for-cataclysm"));
+    let resetEligibilityStatus = input.resetConfirmed ? "satisfied" : combinePrerequisiteStatuses("all", [
+      populationSoldierStatus,
+      nativeLaunchStatus,
+      permissionGoal.status
+    ]);
+    goals.set(
+      MAD_RESET_ELIGIBILITY_GOAL_ID,
+      makeGoal({
+        id: MAD_RESET_ELIGIBILITY_GOAL_ID,
+        scope: "run",
+        predicate: "native-mad-reset-eligibility-and-ownership",
+        provenance: "native-prerequisite",
+        reason: "native MAD control, reset conditions, and automation ownership",
+        status: resetEligibilityStatus,
+        prerequisites: Object.freeze({
+          operator: "all",
+          goalIds: Object.freeze([
+            MAD_POPULATION_SOLDIER_GOAL_ID,
+            MAD_NATIVE_LAUNCH_GOAL_ID,
+            MAD_AUTOMATION_GOAL_ID
+          ])
+        })
+      })
+    );
+    let status2 = selectedMad ? input.resetConfirmed ? "satisfied" : combinePrerequisiteStatuses("all", [
+      researchStatus,
+      resetEligibilityStatus
+    ]) : "unavailable", selectedGoal = makeGoal({
       id: MAD_TERMINAL_GOAL_ID,
       scope: "run",
       predicate: "confirmed-mad-reset",
@@ -12972,29 +13148,88 @@
       status: status2,
       prerequisites: Object.freeze({
         operator: "all",
-        goalIds: Object.freeze([MAD_RESEARCH_GOAL_ID])
+        goalIds: Object.freeze([
+          MAD_RESEARCH_GOAL_ID,
+          MAD_RESET_ELIGIBILITY_GOAL_ID
+        ])
       }),
-      ...unavailableFacts.length === 0 ? {} : { unavailableFacts: Object.freeze([...unavailableFacts]) }
+      ...unavailableFacts.length === 0 ? {} : { unavailableFacts }
     });
+    goals.set(MAD_TERMINAL_GOAL_ID, selectedGoal);
+    let currentSubgoal;
+    selectedMad && !input.resetConfirmed && (researchGranted ? controlStatus !== "satisfied" ? currentSubgoal = MAD_CONTROL_GOAL_ID : nativeLaunchStatus !== "satisfied" ? currentSubgoal = MAD_NATIVE_LAUNCH_GOAL_ID : populationSoldierStatus !== "satisfied" ? currentSubgoal = MAD_POPULATION_SOLDIER_GOAL_ID : input.prestigePermission || (currentSubgoal = MAD_AUTOMATION_GOAL_ID) : currentSubgoal = input.offeredMadTech?.action.nativeId ?? MAD_RESEARCH_GOAL_ID);
+    let traversal = traverseGoalGraph(
+      MAD_TERMINAL_GOAL_ID,
+      goals,
+      MAD_GRAPH_TRACE_LIMITS
+    ), frontierTrace = Object.freeze(
+      traversal.visited.map(
+        (goalId) => `${goalId}:${goals.get(goalId)?.status ?? "missing"}`
+      )
+    );
+    for (let goalId of traversal.missing)
+      unavailableFacts.push(`goal graph references missing node ${goalId}`);
+    for (let limit of traversal.limits)
+      unavailableFacts.push(`goal graph traversal stopped at ${limit}`);
+    for (let cycle of traversal.cycles)
+      unavailableFacts.push(`goal graph cycle ${cycle.join(" -> ")}`);
+    for (let goal of goals.values())
+      for (let fact of goal.unavailableFacts ?? [])
+        unavailableFacts.includes(fact) || unavailableFacts.push(fact);
     return Object.freeze({
       selectedGoal,
+      goals: Object.freeze([...goals.values()]),
       status: status2,
       currentSubgoal,
-      verifiedChain: Object.freeze(chain),
+      frontierTrace,
       blockers: Object.freeze(blockers),
-      ...input.offeredMadTech === void 0 ? {} : { action: input.offeredMadTech },
+      ...input.offeredMadTech === void 0 || researchGranted ? {} : { action: input.offeredMadTech },
+      affordability,
       quantitativeRequirements: Object.freeze(quantitativeRequirements),
       unavailableFacts: Object.freeze(unavailableFacts),
       freshness: Object.freeze({
         cycle: input.cycle,
         progressionEpoch: input.progressionEpoch,
-        ...input.offeredMadTech === void 0 ? {} : { offerGeneration: input.offeredMadTech.generation }
+        ...input.offeredMadTech === void 0 || researchGranted ? {} : { offerGeneration: input.offeredMadTech.generation }
       })
+    });
+  }
+  function traverseGoalGraph(rootId, goals, limits) {
+    let visited = [], visiting = [], visitedSet = /* @__PURE__ */ new Set(), cycles = [], bounded = [], missing = /* @__PURE__ */ new Set(), visit = (id, depth) => {
+      let cycleAt = visiting.indexOf(id);
+      if (cycleAt >= 0) {
+        cycles.push([...visiting.slice(cycleAt), id]);
+        return;
+      }
+      if (visitedSet.has(id)) return;
+      if (depth > limits.maxDepth) {
+        bounded.push(`depth:${id}`);
+        return;
+      }
+      if (visited.length >= limits.maxGoals) {
+        bounded.push(`goals:${id}`);
+        return;
+      }
+      let goal = goals.get(id);
+      if (goal === void 0) {
+        missing.add(id);
+        return;
+      }
+      visitedSet.add(id), visited.push(id), visiting.push(id);
+      for (let child of goal.prerequisites?.goalIds ?? [])
+        visit(child, depth + 1);
+      visiting.pop();
+    };
+    return visit(rootId, 0), Object.freeze({
+      visited: Object.freeze(visited),
+      cycles: Object.freeze(cycles.map((cycle) => Object.freeze(cycle))),
+      limits: Object.freeze(bounded),
+      missing: Object.freeze([...missing])
     });
   }
 
   // src/adapters/evolve/progression/prestige/captured-mad.ts
-  var CAPTURED_MAD_CONTROL = "mad", CAPTURED_CELESTIAL_LAB_SUBMISSION_OBSERVATION_LIMIT = 8, CAPTURED_CATACLYSM_TECH = "tech-dial_it_to_11", CAPTURED_APOCALYPSE_TECHS = Object.freeze({
+  var CAPTURED_MAD_CONTROL = "mad", CAPTURED_MAD_RESEARCH_TECH = "tech-mad", CAPTURED_CELESTIAL_LAB_SUBMISSION_OBSERVATION_LIMIT = 8, CAPTURED_CATACLYSM_TECH = "tech-dial_it_to_11", CAPTURED_APOCALYPSE_TECHS = Object.freeze({
     first: "tech-protocol66",
     final: "tech-protocol66a"
   }), CAPTURED_DEMONIC_TECHS = Object.freeze({
@@ -13297,10 +13532,16 @@
       )
     });
   }
-  function observeCapturedMadGoal(root, rawSettings, offers, resetConfirmed, cycle, progressionEpoch) {
-    let settings = capturedMadSettingsRecord(rawSettings), branch = readCapturedMadBranch(root, rawSettings), techLevel3 = coerceNumber(
-      readProperty(readProperty(root, "tech"), "mad")
-    ), madOffer = offers?.find((offer) => offer.elementId === "tech-mad"), resources = /* @__PURE__ */ new Map();
+  function observeCapturedMadGoal(root, rawSettings, offers, resetConfirmed, cycle, progressionEpoch, madControlBound) {
+    let settings = capturedMadSettingsRecord(rawSettings), branch = readCapturedMadBranch(root, rawSettings), nativeTechLevel = readProperty(readProperty(root, "tech"), "mad"), techLevel3 = typeof nativeTechLevel == "number" && Number.isFinite(nativeTechLevel) ? nativeTechLevel : void 0, madDisplayValue = readProperty(
+      readProperty(readProperty(root, "civic"), "mad"),
+      "display"
+    ), madControlDisplay = typeof madDisplayValue == "boolean" ? madDisplayValue : void 0, armedValue = readProperty(
+      readProperty(readProperty(root, "civic"), "mad"),
+      "armed"
+    ), madArmed = typeof armedValue == "boolean" ? armedValue : void 0, cataclysmValue = readProperty(readProperty(root, "race"), "cataclysm"), madCataclysm = typeof cataclysmValue == "boolean" ? cataclysmValue : void 0, madOffer = offers?.find(
+      (offer) => offer.elementId === CAPTURED_MAD_RESEARCH_TECH
+    ), resources = /* @__PURE__ */ new Map();
     if (madOffer !== void 0)
       for (let resourceId of Object.keys(madOffer.cost)) {
         let view = readCapturedResourceView(root, resourceId, ANYWHERE_POOL);
@@ -13313,17 +13554,43 @@
           })
         );
       }
-    let resetGate = planPrestige({ goal: "Reset", branch });
+    let resetGate = planPrestige({ goal: "Reset", branch }), waitGateHasNativeInputs = !branch.waitForPopulation || [
+      readProperty(
+        readProperty(readProperty(root, "civic"), "garrison"),
+        "workers"
+      ),
+      readProperty(
+        readProperty(readProperty(root, "civic"), "garrison"),
+        "max"
+      ),
+      readProperty(
+        readProperty(readProperty(root, "civic"), "garrison"),
+        "crew"
+      ),
+      readProperty(
+        readProperty(readProperty(root, "resource"), "Population"),
+        "amount"
+      ),
+      readProperty(
+        readProperty(readProperty(root, "resource"), "Population"),
+        "max"
+      )
+    ].every((value) => typeof value == "number" && Number.isFinite(value));
     return planMadGoal({
       selectedPrestige: typeof settings.prestigeType == "string" ? settings.prestigeType : "none",
       prestigePermission: settings.autoPrestige === !0,
-      manualOwnership: branch.type === "mad" && branch.armed,
       resetConfirmed,
-      madResearchLevel: Number.isFinite(techLevel3) ? techLevel3 : void 0,
-      madResearchGate: branch.type === "mad" ? branch.eligible : void 0,
-      madResetGate: branch.type === "mad" ? resetGate.some((command) => command.kind === "launch-mad") : void 0,
+      madResearchLevel: techLevel3,
+      madControlDisplay,
+      madControlBound,
+      madArmed,
+      madCataclysm,
+      madWaitPolicyGate: branch.type === "mad" && waitGateHasNativeInputs && madControlDisplay === !0 && techLevel3 !== void 0 && techLevel3 > 0 ? resetGate.some((command) => command.kind === "launch-mad") : void 0,
       offeredMadTech: madOffer === void 0 ? void 0 : Object.freeze({
-        action: Object.freeze({ family: "research", nativeId: "tech-mad" }),
+        action: Object.freeze({
+          family: "research",
+          nativeId: CAPTURED_MAD_RESEARCH_TECH
+        }),
         costs: madOffer.cost,
         nativeAffordable: madOffer.nativeAffordable,
         generation: madOffer.generation
@@ -16780,6 +17047,18 @@
         executor: captured.mutation.executor
       })
     });
+  }
+
+  // src/bootstrap/captured-diagnostic.ts
+  function runCapturedDiagnosticSafely(observe, onFailure) {
+    try {
+      observe();
+    } catch (error) {
+      try {
+        onFailure(error);
+      } catch {
+      }
+    }
   }
 
   // src/adapters/evolve/economy/production/captured-factory-capacity.ts
@@ -58481,42 +58760,63 @@ Only continue if you trust the source. Injected code:
               return;
           }
           prestige.run();
-        }), settings.prestigeType === "mad" && diagnostics?.readPerformanceEnabled() === !0) {
-          let plan = observeCapturedMadGoal(
-            pageCapture2.rootState.readRoot(),
-            settings,
-            progression.readOfferedTechs(),
-            capturedResetCommittedThisCycle,
-            automationCycle,
-            progression.readProgressionEpoch()
-          ), signature = JSON.stringify({
-            selectedGoal: plan.selectedGoal.id,
-            status: plan.status,
-            currentSubgoal: plan.currentSubgoal,
-            verifiedChain: plan.verifiedChain,
-            blockers: plan.blockers,
-            unavailableFacts: plan.unavailableFacts,
-            requirements: plan.quantitativeRequirements.map((requirement) => ({
-              resourceId: requirement.resourceId,
-              amount: requirement.amount,
-              stock: requirement.held === void 0 ? "unknown" : requirement.held < requirement.amount ? "below" : "enough",
-              capacity: requirement.capacity === void 0 ? "unknown" : requirement.capacity < requirement.amount ? "below" : "enough",
-              production: requirement.netRate === void 0 ? "unknown" : requirement.netRate <= 0 ? "nonpositive" : "positive"
-            }))
-          });
-          if (signature !== lastMadGoalDiagnostic) {
-            lastMadGoalDiagnostic = signature;
-            let goalQuantityDisplay = (value) => value === void 0 ? "?" : String(Math.round(value)), requirements = plan.quantitativeRequirements.map(
-              (requirement) => `${requirement.resourceId}:${goalQuantityDisplay(requirement.held)}/${goalQuantityDisplay(requirement.amount)}@${goalQuantityDisplay(requirement.capacity)}#${goalQuantityDisplay(requirement.netRate)}`
-            ).join(";");
-            reportDiagnostic(
-              `goal.mad status=${plan.status} selected=${plan.selectedGoal.id} subgoal=${plan.currentSubgoal ?? "none"} chain=${plan.verifiedChain.join(">")} blockers=${plan.blockers.join(",")}`
-            ), reportDiagnostic(`goal.mad requirements=${requirements}`), reportDiagnostic(
-              `goal.mad unavailable=${plan.unavailableFacts.join(";")} freshness=cycle:${plan.freshness.cycle},offer:${plan.freshness.offerGeneration ?? "none"}`
-            );
-          }
-        }
-        if (capturedResetCommittedThisCycle) return;
+        }), settings.prestigeType === "mad" && diagnostics?.readPerformanceEnabled() === !0 && runCapturedDiagnosticSafely(
+          () => {
+            let root = pageCapture2.rootState.readRoot(), progressionEpoch = progression.readProgressionEpoch(), offers = progression.readOfferedTechs(), madControl = pageCapture2.controls.resolve(CAPTURED_MAD_CONTROL), plan = observeCapturedMadGoal(
+              root,
+              settings,
+              offers,
+              capturedResetCommittedThisCycle,
+              automationCycle,
+              progressionEpoch,
+              madControl !== void 0 && madControl.methods.includes("arm") && madControl.methods.includes("launch")
+            ), currentTechMad = progression.readOfferedTechs()?.find(
+              (offer) => offer.elementId === CAPTURED_MAD_RESEARCH_TECH
+            ), currentTechMadControl = pageCapture2.controls.resolve(
+              CAPTURED_MAD_RESEARCH_TECH
+            ), rootIsCurrent = pageCapture2.rootState.readRoot() === root, progressionIsCurrent = progression.readProgressionEpoch() === progressionEpoch, madBindingIsCurrent = pageCapture2.controls.resolve(CAPTURED_MAD_CONTROL)?.generation === madControl?.generation, researchBindingIsCurrent = currentTechMad === void 0 || currentTechMadControl?.generation === currentTechMad.generation;
+            if (!rootIsCurrent || !progressionIsCurrent || !madBindingIsCurrent || !researchBindingIsCurrent)
+              reportOnce(
+                "goal.mad unavailable=observation crossed a root, progression, or binding generation"
+              );
+            else {
+              let signature = JSON.stringify({
+                selectedGoal: plan.selectedGoal.id,
+                status: plan.status,
+                currentSubgoal: plan.currentSubgoal,
+                frontierTrace: plan.frontierTrace,
+                blockers: plan.blockers,
+                unavailableFacts: plan.unavailableFacts,
+                affordability: plan.affordability,
+                requirements: plan.quantitativeRequirements.map(
+                  (requirement) => ({
+                    resourceId: requirement.resourceId,
+                    amount: requirement.amount,
+                    stock: requirement.held === void 0 ? "unknown" : requirement.held < requirement.amount ? "below" : "enough",
+                    capacity: requirement.capacity === void 0 || requirement.capacity < 0 ? "unlimited-or-unknown" : requirement.capacity < requirement.amount ? "below" : "enough",
+                    production: requirement.netRate === void 0 ? "unknown" : requirement.netRate <= 0 ? "nonpositive" : "positive"
+                  })
+                )
+              });
+              if (signature !== lastMadGoalDiagnostic) {
+                lastMadGoalDiagnostic = signature;
+                let goalQuantityDisplay = (value) => value === void 0 ? "?" : String(Math.round(value)), goalCapacityDisplay = (value) => value !== void 0 && value < 0 ? "unlimited" : goalQuantityDisplay(value), requirements = plan.quantitativeRequirements.map(
+                  (requirement) => `${requirement.resourceId}:${goalQuantityDisplay(requirement.held)}/${goalQuantityDisplay(requirement.amount)}@${goalCapacityDisplay(requirement.capacity)}#${goalQuantityDisplay(requirement.netRate)}`
+                ).join(";");
+                reportDiagnostic(
+                  `goal.mad status=${plan.status} selected=${plan.selectedGoal.id} subgoal=${plan.currentSubgoal ?? "none"} frontier=${plan.frontierTrace.join(">")} blockers=${plan.blockers.join(",")}`
+                ), reportDiagnostic(
+                  `goal.mad affordability=${plan.affordability} requirements=${requirements}`
+                ), reportDiagnostic(
+                  `goal.mad unavailable=${plan.unavailableFacts.join(";")} freshness=cycle:${plan.freshness.cycle},offer:${plan.freshness.offerGeneration ?? "none"}`
+                );
+              }
+            }
+          },
+          (error) => reportOnce(
+            `goal.mad observation failed: ${error instanceof Error ? error.message : String(error)}`
+          )
+        ), capturedResetCommittedThisCycle) return;
         if (isEnabled(settings, "autoMinorTrait")) {
           let shapeshift = runPhase(
             "autoShapeshift",

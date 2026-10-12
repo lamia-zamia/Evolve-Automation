@@ -9,6 +9,7 @@ const runner = await createChromiumRunner({
 });
 let session;
 try {
+  // This probes the pinned page's Vue contract directly; it makes no save or runtime assertions.
   session = await runner.openSession({
     bundle: resolve(root, "evolve_automation.user.js"),
     save: null,

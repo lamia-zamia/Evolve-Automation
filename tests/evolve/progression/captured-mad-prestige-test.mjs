@@ -28,6 +28,7 @@ function buildRoot(overrides = {}) {
       mad: { display: true, armed: true },
       garrison: { workers: 12, max: 20, crew: 2 },
     },
+    race: { cataclysm: false },
     tech: { mad: 1 },
     stats: {
       terraform: 0,
@@ -75,12 +76,13 @@ const settings = {
     false,
     17,
     "run:4",
+    true,
   );
   assert.equal(plan.selectedGoal.id, "prestige:mad");
   assert.equal(plan.currentSubgoal, "tech-mad");
   assert.deepEqual(plan.blockers, [
-    "automation-permission-disabled",
     "Knowledge:stock-below-native-price",
+    "automation-permission-disabled",
   ]);
   assert.deepEqual(plan.quantitativeRequirements, [
     {
@@ -106,6 +108,7 @@ const settings = {
     false,
     18,
     "run:5",
+    undefined,
   );
   assert.match(
     replacedRootPlan.unavailableFacts.join(" "),
@@ -113,13 +116,50 @@ const settings = {
   );
   assert.equal(replacedRootPlan.freshness.progressionEpoch, "run:5");
 
+  const grantedWithMissingMadBag = observeCapturedMadGoal(
+    buildRoot({
+      tech: { mad: 1 },
+      civic: { garrison: { workers: 12, max: 20, crew: 2 } },
+    }),
+    { ...settings, prestigeType: "mad", autoPrestige: true },
+    undefined,
+    false,
+    19,
+    "run:6",
+    undefined,
+  );
+  assert.equal(
+    grantedWithMissingMadBag.goals.find((entry) => entry.id === "research:mad")
+      .status,
+    "satisfied",
+  );
+  assert.equal(grantedWithMissingMadBag.currentSubgoal, "prestige:mad-control");
+  assert.ok(
+    grantedWithMissingMadBag.unavailableFacts.some((fact) =>
+      fact.includes("civic.mad.display"),
+    ),
+  );
+
+  const absentRoot = observeCapturedMadGoal(
+    undefined,
+    { ...settings, prestigeType: "mad", autoPrestige: true },
+    undefined,
+    false,
+    20,
+    "run:7",
+    undefined,
+  );
+  assert.equal(absentRoot.status, "unavailable");
+  assert.equal(absentRoot.blockers.length, 0);
+
   const completed = observeCapturedMadGoal(
     root,
     { ...settings, prestigeType: "mad" },
     undefined,
     true,
-    19,
+    21,
     "run:4",
+    true,
   );
   assert.equal(completed.status, "satisfied");
 }

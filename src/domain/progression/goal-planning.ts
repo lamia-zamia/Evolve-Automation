@@ -70,6 +70,7 @@ export function combinePrerequisiteStatuses(
 export interface MadTechOfferObservation {
   readonly action: GoalActionIdentity;
   readonly costs: Readonly<Record<string, number>>;
+  /** The captured verdict from the drawn native action row. */
   readonly nativeAffordable: boolean;
   readonly generation: number;
 }
@@ -83,13 +84,18 @@ export interface GoalResourceObservation {
 export interface MadGoalPlanningInput {
   readonly selectedPrestige: string;
   readonly prestigePermission: boolean;
-  readonly manualOwnership: boolean;
   readonly resetConfirmed: boolean;
+  /** Only a present numeric tech.mad value establishes a grant or a missing grant. */
   readonly madResearchLevel: number | undefined;
-  /** Captured MAD research/display gate from the existing native branch reader. */
-  readonly madResearchGate: boolean | undefined;
-  /** Existing prestige planner's population and soldier gate. */
-  readonly madResetGate: boolean | undefined;
+  /** Native civic.mad.display, separate from the research grant. */
+  readonly madControlDisplay: boolean | undefined;
+  /** Captured native Vue methods on the currently bound MAD control. */
+  readonly madControlBound: boolean | undefined;
+  /** Native warhead gate inputs. `armed` is a safety latch, not manual ownership. */
+  readonly madArmed: boolean | undefined;
+  readonly madCataclysm: boolean | undefined;
+  /** Existing automation's optional population/soldier wait policy. */
+  readonly madWaitPolicyGate: boolean | undefined;
   /** Undefined is an unavailable catalog, while an empty array means a current draw had no offer. */
   readonly offeredMadTech: MadTechOfferObservation | undefined;
   readonly offerCatalogAvailable: boolean;
@@ -100,11 +106,14 @@ export interface MadGoalPlanningInput {
 
 export interface MadGoalPlan {
   readonly selectedGoal: Readonly<GoalDefinition>;
+  readonly goals: readonly Readonly<GoalDefinition>[];
   readonly status: GoalStatus;
   readonly currentSubgoal: string | undefined;
-  readonly verifiedChain: readonly string[];
+  /** Bounded diagnostic trace derived from goals; graph edges remain authoritative. */
+  readonly frontierTrace: readonly string[];
   readonly blockers: readonly string[];
   readonly action?: Readonly<MadTechOfferObservation>;
+  readonly affordability: "consistent" | "inconsistent" | "unavailable";
   readonly quantitativeRequirements: readonly Readonly<GoalQuantityRequirement>[];
   readonly unavailableFacts: readonly string[];
   readonly freshness: Readonly<{
@@ -116,135 +125,405 @@ export interface MadGoalPlan {
 
 const MAD_TERMINAL_GOAL_ID = "prestige:mad";
 const MAD_RESEARCH_GOAL_ID = "research:mad";
+const MAD_RESET_ELIGIBILITY_GOAL_ID = "prestige:mad-reset-eligibility";
+const MAD_CONTROL_GOAL_ID = "prestige:mad-control";
+const MAD_NATIVE_LAUNCH_GOAL_ID = "prestige:mad-native-launch-gate";
+const MAD_POPULATION_SOLDIER_GOAL_ID = "prestige:mad-population-soldiers";
+const MAD_OFFER_GOAL_ID = "research:mad:current-offer";
+const MAD_AUTOMATION_GOAL_ID = "prestige:mad-automation-permission";
+const MAD_GRAPH_TRACE_LIMITS: GoalGraphLimits = Object.freeze({
+  maxDepth: 8,
+  maxGoals: 32,
+});
 
-/** Builds a read-only MAD frontier from current native facts; absent offers stay unknown. */
+function makeGoal(value: GoalDefinition): Readonly<GoalDefinition> {
+  return Object.freeze({
+    ...value,
+    ...(value.prerequisites === undefined
+      ? {}
+      : {
+          prerequisites: Object.freeze({
+            operator: value.prerequisites.operator,
+            goalIds: Object.freeze([...value.prerequisites.goalIds]),
+          }),
+        }),
+    ...(value.unavailableFacts === undefined
+      ? {}
+      : { unavailableFacts: Object.freeze([...value.unavailableFacts]) }),
+  });
+}
+
+/** Builds a read-only MAD graph from current native facts; absent offers stay unknown. */
 export function planMadGoal(
   input: Readonly<MadGoalPlanningInput>,
 ): MadGoalPlan {
   const unavailableFacts: string[] = [];
   const blockers: string[] = [];
   const quantitativeRequirements: GoalQuantityRequirement[] = [];
-  let nativePriceBlockerObserved = false;
-  if (input.selectedPrestige !== "mad") {
+  const goals = new Map<string, Readonly<GoalDefinition>>();
+  const selectedMad = input.selectedPrestige === "mad";
+  const researchGranted =
+    input.madResearchLevel !== undefined && input.madResearchLevel > 0;
+  const researchMissing =
+    input.madResearchLevel !== undefined && input.madResearchLevel <= 0;
+
+  if (!selectedMad)
     unavailableFacts.push("MAD is not the selected terminal objective");
-  }
-  if (input.madResearchLevel === undefined) {
+  if (input.madResearchLevel === undefined)
     unavailableFacts.push("native tech.mad level is unavailable");
-  }
   if (
     !input.offerCatalogAvailable &&
-    input.madResearchLevel !== undefined &&
-    input.madResearchLevel < 1
+    !researchGranted &&
+    selectedMad &&
+    !input.resetConfirmed
   ) {
     unavailableFacts.push("current Research offer catalog is unavailable");
   }
 
-  const researchSatisfied =
-    input.madResearchGate === true &&
-    input.madResearchLevel !== undefined &&
-    input.madResearchLevel > 0;
-  const selectedMad = input.selectedPrestige === "mad";
+  let affordability: MadGoalPlan["affordability"] = "unavailable";
+  const requirementGoalIds: string[] = [];
+  const offerFacts: string[] = [];
+  let hasUnrecognizedOrMissingPrice = false;
+  let capturedAllPricesAffordable = true;
+  let hasCompletePriceCapture = input.offeredMadTech !== undefined;
+
+  if (input.offeredMadTech !== undefined && !researchGranted) {
+    for (const [resourceId, amount] of Object.entries(
+      input.offeredMadTech.costs,
+    )) {
+      if (!Number.isFinite(amount) || amount < 0) {
+        hasUnrecognizedOrMissingPrice = true;
+        hasCompletePriceCapture = false;
+        offerFacts.push(`native price for ${resourceId} is invalid`);
+        continue;
+      }
+      if (amount === 0) continue;
+      const resource = input.resources.get(resourceId);
+      const requirement: GoalQuantityRequirement = Object.freeze({
+        resourceId,
+        amount,
+        ...(resource?.amount === undefined ? {} : { held: resource.amount }),
+        ...(resource?.capacity === undefined
+          ? {}
+          : { capacity: resource.capacity }),
+        ...(resource?.netRate === undefined
+          ? {}
+          : { netRate: resource.netRate }),
+      });
+      quantitativeRequirements.push(requirement);
+      const resourceGoalId = `resource:${resourceId}`;
+      requirementGoalIds.push(resourceGoalId);
+
+      let resourceStatus: GoalStatus = "unavailable";
+      if (resource === undefined) {
+        hasUnrecognizedOrMissingPrice = true;
+        hasCompletePriceCapture = false;
+        offerFacts.push(`native price resource ${resourceId} is unavailable`);
+      } else {
+        let resourceAffordable = true;
+        if (resource.amount === undefined) {
+          hasCompletePriceCapture = false;
+          offerFacts.push(`current stock for ${resourceId} is unavailable`);
+        } else if (resource.amount < amount) {
+          resourceAffordable = false;
+          capturedAllPricesAffordable = false;
+          blockers.push(`${resourceId}:stock-below-native-price`);
+        }
+        if (resource.capacity === undefined) {
+          hasCompletePriceCapture = false;
+          offerFacts.push(`current capacity for ${resourceId} is unavailable`);
+        } else if (resource.capacity >= 0 && resource.capacity < amount) {
+          resourceAffordable = false;
+          capturedAllPricesAffordable = false;
+          blockers.push(`${resourceId}:capacity-below-native-price`);
+        }
+        resourceStatus =
+          resource.amount === undefined || resource.capacity === undefined
+            ? resourceAffordable
+              ? "unavailable"
+              : "unsatisfied"
+            : resourceAffordable
+              ? "satisfied"
+              : "unsatisfied";
+        if (resource.amount !== undefined && resource.amount < amount) {
+          if (resource.netRate === undefined) {
+            offerFacts.push(`net production for ${resourceId} is unavailable`);
+          } else if (resource.netRate <= 0) {
+            blockers.push(`${resourceId}:nonpositive-net-production`);
+          }
+        }
+      }
+      goals.set(
+        resourceGoalId,
+        makeGoal({
+          id: resourceGoalId,
+          scope: "run",
+          predicate: "native-resource-quantity",
+          provenance: "derived-requirement",
+          reason: `current native price requires ${amount} ${resourceId}`,
+          status: resourceStatus,
+          quantity: requirement,
+          ...(resourceStatus === "unavailable"
+            ? {
+                unavailableFacts: [
+                  `resource view for ${resourceId} is incomplete`,
+                ],
+              }
+            : {}),
+        }),
+      );
+    }
+
+    if (hasCompletePriceCapture && !hasUnrecognizedOrMissingPrice) {
+      const capturedVerdict = capturedAllPricesAffordable;
+      if (capturedVerdict !== input.offeredMadTech.nativeAffordable) {
+        affordability = "inconsistent";
+        offerFacts.push(
+          `native affordability (${input.offeredMadTech.nativeAffordable}) disagrees with captured stock and capacity (${capturedVerdict})`,
+        );
+      } else {
+        affordability = "consistent";
+      }
+    } else {
+      offerFacts.push(
+        "native affordability cannot be reconciled with incomplete price views",
+      );
+    }
+
+    const offerStatus =
+      affordability === "inconsistent" ||
+      hasUnrecognizedOrMissingPrice ||
+      !hasCompletePriceCapture
+        ? "unavailable"
+        : "unsatisfied";
+    goals.set(
+      MAD_OFFER_GOAL_ID,
+      makeGoal({
+        id: MAD_OFFER_GOAL_ID,
+        scope: "run",
+        predicate: "complete-current-native-offer",
+        provenance: "native-prerequisite",
+        reason: "the currently drawn native Research action for MAD",
+        status: offerStatus,
+        action: input.offeredMadTech.action,
+        prerequisites: Object.freeze({
+          operator: "all",
+          goalIds: requirementGoalIds,
+        }),
+        ...(offerFacts.length === 0 ? {} : { unavailableFacts: offerFacts }),
+      }),
+    );
+  } else if (!researchGranted && input.offerCatalogAvailable) {
+    offerFacts.push(
+      "tech-mad is not currently offered; locked requirements are unavailable here",
+    );
+    goals.set(
+      MAD_OFFER_GOAL_ID,
+      makeGoal({
+        id: MAD_OFFER_GOAL_ID,
+        scope: "run",
+        predicate: "current-native-offer",
+        provenance: "native-prerequisite",
+        reason: "no current tech-mad offer was observed",
+        status: "unavailable",
+        unavailableFacts: offerFacts,
+      }),
+    );
+  } else if (!researchGranted) {
+    offerFacts.push("current Research offer catalog is unavailable");
+    goals.set(
+      MAD_OFFER_GOAL_ID,
+      makeGoal({
+        id: MAD_OFFER_GOAL_ID,
+        scope: "run",
+        predicate: "current-native-offer",
+        provenance: "native-prerequisite",
+        reason: "no current Research catalog observation",
+        status: "unavailable",
+        unavailableFacts: offerFacts,
+      }),
+    );
+  }
+
+  const researchStatus: GoalStatus = researchGranted
+    ? "satisfied"
+    : researchMissing
+      ? "unsatisfied"
+      : "unavailable";
+  goals.set(
+    MAD_RESEARCH_GOAL_ID,
+    makeGoal({
+      id: MAD_RESEARCH_GOAL_ID,
+      scope: "run",
+      predicate: "granted-tech-mad",
+      provenance: "native-prerequisite",
+      reason: "native tech.mad grant",
+      status: researchStatus,
+      ...(researchMissing && !researchGranted
+        ? {
+            prerequisites: Object.freeze({
+              operator: "all",
+              goalIds: Object.freeze([MAD_OFFER_GOAL_ID]),
+            }),
+          }
+        : {}),
+      ...(input.madResearchLevel === undefined
+        ? { unavailableFacts: ["native tech.mad level is unavailable"] }
+        : {}),
+    }),
+  );
+
+  const controlStatus: GoalStatus =
+    input.madControlDisplay === undefined
+      ? "unavailable"
+      : !input.madControlDisplay
+        ? "unsatisfied"
+        : input.madControlBound === undefined
+          ? "unavailable"
+          : input.madControlBound
+            ? "satisfied"
+            : "unsatisfied";
+  const controlFacts =
+    input.madControlDisplay === undefined
+      ? ["native civic.mad.display is unavailable"]
+      : !input.madControlDisplay
+        ? []
+        : input.madControlBound === undefined
+          ? ["current MAD control binding is unavailable"]
+          : !input.madControlBound
+            ? [
+                "MAD is displayed but the current native control binding is absent",
+              ]
+            : !researchGranted
+              ? [
+                  "MAD control is displayed without a positively established tech.mad grant",
+                ]
+              : [];
+  goals.set(
+    MAD_CONTROL_GOAL_ID,
+    makeGoal({
+      id: MAD_CONTROL_GOAL_ID,
+      scope: "run",
+      predicate: "native-mad-control-available",
+      provenance: "native-prerequisite",
+      reason: "native civic.mad.display gate",
+      status: controlStatus,
+      ...(controlFacts.length === 0 ? {} : { unavailableFacts: controlFacts }),
+    }),
+  );
+
+  const nativeLaunchStatus: GoalStatus =
+    controlStatus !== "satisfied"
+      ? controlStatus
+      : input.madArmed === undefined || input.madCataclysm === undefined
+        ? "unavailable"
+        : input.madArmed || input.madCataclysm
+          ? "unsatisfied"
+          : "satisfied";
+  const nativeLaunchFacts =
+    controlStatus === "satisfied" &&
+    (input.madArmed === undefined || input.madCataclysm === undefined)
+      ? ["native armed/cataclysm launch gate is unavailable"]
+      : [];
+  goals.set(
+    MAD_NATIVE_LAUNCH_GOAL_ID,
+    makeGoal({
+      id: MAD_NATIVE_LAUNCH_GOAL_ID,
+      scope: "run",
+      predicate: "native-mad-warhead-launch-gate",
+      provenance: "native-prerequisite",
+      reason:
+        "native launch and warhead require an unarmed non-Cataclysm state",
+      status: nativeLaunchStatus,
+      prerequisites: Object.freeze({
+        operator: "all",
+        goalIds: Object.freeze([MAD_CONTROL_GOAL_ID]),
+      }),
+      ...(nativeLaunchFacts.length === 0
+        ? {}
+        : { unavailableFacts: nativeLaunchFacts }),
+    }),
+  );
+
+  const populationSoldierStatus: GoalStatus =
+    input.madWaitPolicyGate === undefined
+      ? "unavailable"
+      : input.madWaitPolicyGate
+        ? "satisfied"
+        : "unsatisfied";
+  const populationSoldierFacts =
+    input.madWaitPolicyGate === undefined
+      ? ["automation population/soldier wait-policy result is unavailable"]
+      : [];
+  goals.set(
+    MAD_POPULATION_SOLDIER_GOAL_ID,
+    makeGoal({
+      id: MAD_POPULATION_SOLDIER_GOAL_ID,
+      scope: "run",
+      predicate: "automation-mad-population-soldier-wait-policy",
+      provenance: "derived-requirement",
+      reason: "applicable automation population and soldier wait policy",
+      status: populationSoldierStatus,
+      ...(populationSoldierFacts.length === 0
+        ? {}
+        : { unavailableFacts: populationSoldierFacts }),
+    }),
+  );
+
+  const permissionGoal = makeGoal({
+    id: MAD_AUTOMATION_GOAL_ID,
+    scope: "run",
+    predicate: "automatic-prestige-permission",
+    provenance: "derived-requirement",
+    reason: "autoPrestige setting",
+    status: input.prestigePermission ? "satisfied" : "blocked",
+  });
+  goals.set(MAD_AUTOMATION_GOAL_ID, permissionGoal);
+  if (selectedMad && !input.resetConfirmed) {
+    if (!input.prestigePermission)
+      blockers.push("automation-permission-disabled");
+    if (controlStatus === "satisfied" && input.madArmed === true)
+      blockers.push("native-mad-warhead-armed");
+    if (controlStatus === "satisfied" && input.madCataclysm === true)
+      blockers.push("native-mad-launch-disabled-for-cataclysm");
+  }
+
+  const resetEligibilityStatus = input.resetConfirmed
+    ? "satisfied"
+    : combinePrerequisiteStatuses("all", [
+        populationSoldierStatus,
+        nativeLaunchStatus,
+        permissionGoal.status,
+      ]);
+  goals.set(
+    MAD_RESET_ELIGIBILITY_GOAL_ID,
+    makeGoal({
+      id: MAD_RESET_ELIGIBILITY_GOAL_ID,
+      scope: "run",
+      predicate: "native-mad-reset-eligibility-and-ownership",
+      provenance: "native-prerequisite",
+      reason: "native MAD control, reset conditions, and automation ownership",
+      status: resetEligibilityStatus,
+      prerequisites: Object.freeze({
+        operator: "all",
+        goalIds: Object.freeze([
+          MAD_POPULATION_SOLDIER_GOAL_ID,
+          MAD_NATIVE_LAUNCH_GOAL_ID,
+          MAD_AUTOMATION_GOAL_ID,
+        ]),
+      }),
+    }),
+  );
+
   const status: GoalStatus = !selectedMad
     ? "unavailable"
     : input.resetConfirmed
       ? "satisfied"
-      : input.madResearchGate === undefined || input.madResetGate === undefined
-        ? "unavailable"
-        : !researchSatisfied ||
-            !input.madResetGate ||
-            !input.prestigePermission ||
-            input.manualOwnership
-          ? "blocked"
-          : "unsatisfied";
-
-  const chain = [MAD_TERMINAL_GOAL_ID];
-  if (selectedMad && !input.resetConfirmed) {
-    if (!input.prestigePermission)
-      blockers.push("automation-permission-disabled");
-    if (input.manualOwnership)
-      blockers.push("MAD is armed or otherwise manually owned");
-  }
-  let currentSubgoal: string | undefined;
-  if (selectedMad && !input.resetConfirmed) {
-    if (!researchSatisfied) {
-      chain.push(MAD_RESEARCH_GOAL_ID);
-      currentSubgoal = MAD_RESEARCH_GOAL_ID;
-      if (input.offeredMadTech !== undefined) {
-        chain.push(input.offeredMadTech.action.nativeId);
-        currentSubgoal = input.offeredMadTech.action.nativeId;
-        for (const [resourceId, amount] of Object.entries(
-          input.offeredMadTech.costs,
-        )) {
-          if (!Number.isFinite(amount) || amount <= 0) continue;
-          const resource = input.resources.get(resourceId);
-          if (resource === undefined) {
-            unavailableFacts.push(
-              `native price resource ${resourceId} is unavailable`,
-            );
-            continue;
-          }
-          chain.push(`resource:${resourceId}`);
-          quantitativeRequirements.push(
-            Object.freeze({
-              resourceId,
-              amount,
-              ...(resource.amount === undefined
-                ? {}
-                : { held: resource.amount }),
-              ...(resource.capacity === undefined
-                ? {}
-                : { capacity: resource.capacity }),
-              ...(resource.netRate === undefined
-                ? {}
-                : { netRate: resource.netRate }),
-            }),
-          );
-          if (resource.amount === undefined) {
-            unavailableFacts.push(
-              `current stock for ${resourceId} is unavailable`,
-            );
-          } else if (resource.amount < amount) {
-            nativePriceBlockerObserved = true;
-            blockers.push(`${resourceId}:stock-below-native-price`);
-            if (resource.capacity === undefined)
-              unavailableFacts.push(
-                `current capacity for ${resourceId} is unavailable`,
-              );
-            if (
-              resource.capacity !== undefined &&
-              resource.capacity >= 0 &&
-              resource.capacity < amount
-            )
-              blockers.push(`${resourceId}:capacity-below-native-price`);
-            if (resource.netRate !== undefined && resource.netRate <= 0)
-              blockers.push(`${resourceId}:nonpositive-net-production`);
-            if (resource.netRate === undefined)
-              unavailableFacts.push(
-                `net production for ${resourceId} is unavailable`,
-              );
-          }
-        }
-        if (
-          !input.offeredMadTech.nativeAffordable &&
-          !nativePriceBlockerObserved
-        )
-          unavailableFacts.push(
-            "native affordability is false but captured costs do not explain it",
-          );
-      } else if (input.offerCatalogAvailable) {
-        unavailableFacts.push(
-          "tech-mad is not currently offered; its locked dependencies are unavailable here",
-        );
-      }
-    } else {
-      currentSubgoal = "prestige:mad-reset-gate";
-      chain.push(currentSubgoal);
-      if (!input.madResetGate)
-        blockers.push("native soldier or population reset gate is unsatisfied");
-    }
-  }
-
-  const selectedGoal: GoalDefinition = Object.freeze({
+      : combinePrerequisiteStatuses("all", [
+          researchStatus,
+          resetEligibilityStatus,
+        ]);
+  const selectedGoal = makeGoal({
     id: MAD_TERMINAL_GOAL_ID,
     scope: "run",
     predicate: "confirmed-mad-reset",
@@ -253,27 +532,71 @@ export function planMadGoal(
     status,
     prerequisites: Object.freeze({
       operator: "all",
-      goalIds: Object.freeze([MAD_RESEARCH_GOAL_ID]),
+      goalIds: Object.freeze([
+        MAD_RESEARCH_GOAL_ID,
+        MAD_RESET_ELIGIBILITY_GOAL_ID,
+      ]),
     }),
-    ...(unavailableFacts.length === 0
-      ? {}
-      : { unavailableFacts: Object.freeze([...unavailableFacts]) }),
+    ...(unavailableFacts.length === 0 ? {} : { unavailableFacts }),
   });
+  goals.set(MAD_TERMINAL_GOAL_ID, selectedGoal);
+
+  let currentSubgoal: string | undefined;
+  if (selectedMad && !input.resetConfirmed) {
+    if (!researchGranted) {
+      currentSubgoal =
+        input.offeredMadTech?.action.nativeId ?? MAD_RESEARCH_GOAL_ID;
+    } else if (controlStatus !== "satisfied") {
+      currentSubgoal = MAD_CONTROL_GOAL_ID;
+    } else if (nativeLaunchStatus !== "satisfied") {
+      currentSubgoal = MAD_NATIVE_LAUNCH_GOAL_ID;
+    } else if (populationSoldierStatus !== "satisfied") {
+      currentSubgoal = MAD_POPULATION_SOLDIER_GOAL_ID;
+    } else if (!input.prestigePermission) {
+      currentSubgoal = MAD_AUTOMATION_GOAL_ID;
+    }
+  }
+
+  const traversal = traverseGoalGraph(
+    MAD_TERMINAL_GOAL_ID,
+    goals,
+    MAD_GRAPH_TRACE_LIMITS,
+  );
+  const frontierTrace = Object.freeze(
+    traversal.visited.map(
+      (goalId) => `${goalId}:${goals.get(goalId)?.status ?? "missing"}`,
+    ),
+  );
+  for (const goalId of traversal.missing)
+    unavailableFacts.push(`goal graph references missing node ${goalId}`);
+  for (const limit of traversal.limits)
+    unavailableFacts.push(`goal graph traversal stopped at ${limit}`);
+  for (const cycle of traversal.cycles)
+    unavailableFacts.push(`goal graph cycle ${cycle.join(" -> ")}`);
+
+  for (const goal of goals.values()) {
+    for (const fact of goal.unavailableFacts ?? []) {
+      if (!unavailableFacts.includes(fact)) unavailableFacts.push(fact);
+    }
+  }
+
   return Object.freeze({
     selectedGoal,
+    goals: Object.freeze([...goals.values()]),
     status,
     currentSubgoal,
-    verifiedChain: Object.freeze(chain),
+    frontierTrace,
     blockers: Object.freeze(blockers),
-    ...(input.offeredMadTech === undefined
+    ...(input.offeredMadTech === undefined || researchGranted
       ? {}
       : { action: input.offeredMadTech }),
+    affordability,
     quantitativeRequirements: Object.freeze(quantitativeRequirements),
     unavailableFacts: Object.freeze(unavailableFacts),
     freshness: Object.freeze({
       cycle: input.cycle,
       progressionEpoch: input.progressionEpoch,
-      ...(input.offeredMadTech === undefined
+      ...(input.offeredMadTech === undefined || researchGranted
         ? {}
         : { offerGeneration: input.offeredMadTech.generation }),
     }),

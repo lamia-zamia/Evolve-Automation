@@ -41,9 +41,11 @@ import {
 } from "../adapters/evolve/combat/captured-hell-garrison.ts";
 import {
   CAPTURED_MAD_CONTROL,
+  CAPTURED_MAD_RESEARCH_TECH,
   isCapturedBuildingPrestigeType,
   observeCapturedMadGoal,
 } from "../adapters/evolve/progression/prestige/captured-mad.ts";
+import { runCapturedDiagnosticSafely } from "./captured-diagnostic.ts";
 import { createCapturedCraftsmenAutomation } from "../adapters/evolve/civic/captured-craftsmen.ts";
 import {
   createCapturedFullJobsAutomation,
@@ -3901,62 +3903,115 @@ export function startCapturedRuntime({
         settings["prestigeType"] === "mad" &&
         diagnostics?.readPerformanceEnabled() === true
       ) {
-        const plan = observeCapturedMadGoal(
-          pageCapture.rootState.readRoot(),
-          settings,
-          progression.readOfferedTechs(),
-          capturedResetCommittedThisCycle,
-          automationCycle,
-          progression.readProgressionEpoch(),
+        runCapturedDiagnosticSafely(
+          () => {
+            const root = pageCapture.rootState.readRoot();
+            const progressionEpoch = progression.readProgressionEpoch();
+            const offers = progression.readOfferedTechs();
+            const madControl =
+              pageCapture.controls.resolve(CAPTURED_MAD_CONTROL);
+            const plan = observeCapturedMadGoal(
+              root,
+              settings,
+              offers,
+              capturedResetCommittedThisCycle,
+              automationCycle,
+              progressionEpoch,
+              madControl !== undefined &&
+                madControl.methods.includes("arm") &&
+                madControl.methods.includes("launch"),
+            );
+            const currentOffers = progression.readOfferedTechs();
+            const currentTechMad = currentOffers?.find(
+              (offer) => offer.elementId === CAPTURED_MAD_RESEARCH_TECH,
+            );
+            const currentTechMadControl = pageCapture.controls.resolve(
+              CAPTURED_MAD_RESEARCH_TECH,
+            );
+            const rootIsCurrent = pageCapture.rootState.readRoot() === root;
+            const progressionIsCurrent =
+              progression.readProgressionEpoch() === progressionEpoch;
+            const madBindingIsCurrent =
+              pageCapture.controls.resolve(CAPTURED_MAD_CONTROL)?.generation ===
+              madControl?.generation;
+            const researchBindingIsCurrent =
+              currentTechMad === undefined ||
+              currentTechMadControl?.generation === currentTechMad.generation;
+            if (
+              !rootIsCurrent ||
+              !progressionIsCurrent ||
+              !madBindingIsCurrent ||
+              !researchBindingIsCurrent
+            ) {
+              reportOnce(
+                `goal.mad unavailable=observation crossed a root, progression, or binding generation`,
+              );
+            } else {
+              const signature = JSON.stringify({
+                selectedGoal: plan.selectedGoal.id,
+                status: plan.status,
+                currentSubgoal: plan.currentSubgoal,
+                frontierTrace: plan.frontierTrace,
+                blockers: plan.blockers,
+                unavailableFacts: plan.unavailableFacts,
+                affordability: plan.affordability,
+                requirements: plan.quantitativeRequirements.map(
+                  (requirement) => ({
+                    resourceId: requirement.resourceId,
+                    amount: requirement.amount,
+                    stock:
+                      requirement.held === undefined
+                        ? "unknown"
+                        : requirement.held < requirement.amount
+                          ? "below"
+                          : "enough",
+                    capacity:
+                      requirement.capacity === undefined ||
+                      requirement.capacity < 0
+                        ? "unlimited-or-unknown"
+                        : requirement.capacity < requirement.amount
+                          ? "below"
+                          : "enough",
+                    production:
+                      requirement.netRate === undefined
+                        ? "unknown"
+                        : requirement.netRate <= 0
+                          ? "nonpositive"
+                          : "positive",
+                  }),
+                ),
+              });
+              if (signature !== lastMadGoalDiagnostic) {
+                lastMadGoalDiagnostic = signature;
+                const goalQuantityDisplay = (value: number | undefined) =>
+                  value === undefined ? "?" : String(Math.round(value));
+                const goalCapacityDisplay = (value: number | undefined) =>
+                  value !== undefined && value < 0
+                    ? "unlimited"
+                    : goalQuantityDisplay(value);
+                const requirements = plan.quantitativeRequirements
+                  .map(
+                    (requirement) =>
+                      `${requirement.resourceId}:${goalQuantityDisplay(requirement.held)}/${goalQuantityDisplay(requirement.amount)}@${goalCapacityDisplay(requirement.capacity)}#${goalQuantityDisplay(requirement.netRate)}`,
+                  )
+                  .join(";");
+                reportDiagnostic(
+                  `goal.mad status=${plan.status} selected=${plan.selectedGoal.id} subgoal=${plan.currentSubgoal ?? "none"} frontier=${plan.frontierTrace.join(">")} blockers=${plan.blockers.join(",")}`,
+                );
+                reportDiagnostic(
+                  `goal.mad affordability=${plan.affordability} requirements=${requirements}`,
+                );
+                reportDiagnostic(
+                  `goal.mad unavailable=${plan.unavailableFacts.join(";")} freshness=cycle:${plan.freshness.cycle},offer:${plan.freshness.offerGeneration ?? "none"}`,
+                );
+              }
+            }
+          },
+          (error) =>
+            reportOnce(
+              `goal.mad observation failed: ${error instanceof Error ? error.message : String(error)}`,
+            ),
         );
-        const signature = JSON.stringify({
-          selectedGoal: plan.selectedGoal.id,
-          status: plan.status,
-          currentSubgoal: plan.currentSubgoal,
-          verifiedChain: plan.verifiedChain,
-          blockers: plan.blockers,
-          unavailableFacts: plan.unavailableFacts,
-          requirements: plan.quantitativeRequirements.map((requirement) => ({
-            resourceId: requirement.resourceId,
-            amount: requirement.amount,
-            stock:
-              requirement.held === undefined
-                ? "unknown"
-                : requirement.held < requirement.amount
-                  ? "below"
-                  : "enough",
-            capacity:
-              requirement.capacity === undefined
-                ? "unknown"
-                : requirement.capacity < requirement.amount
-                  ? "below"
-                  : "enough",
-            production:
-              requirement.netRate === undefined
-                ? "unknown"
-                : requirement.netRate <= 0
-                  ? "nonpositive"
-                  : "positive",
-          })),
-        });
-        if (signature !== lastMadGoalDiagnostic) {
-          lastMadGoalDiagnostic = signature;
-          const goalQuantityDisplay = (value: number | undefined) =>
-            value === undefined ? "?" : String(Math.round(value));
-          const requirements = plan.quantitativeRequirements
-            .map(
-              (requirement) =>
-                `${requirement.resourceId}:${goalQuantityDisplay(requirement.held)}/${goalQuantityDisplay(requirement.amount)}@${goalQuantityDisplay(requirement.capacity)}#${goalQuantityDisplay(requirement.netRate)}`,
-            )
-            .join(";");
-          reportDiagnostic(
-            `goal.mad status=${plan.status} selected=${plan.selectedGoal.id} subgoal=${plan.currentSubgoal ?? "none"} chain=${plan.verifiedChain.join(">")} blockers=${plan.blockers.join(",")}`,
-          );
-          reportDiagnostic(`goal.mad requirements=${requirements}`);
-          reportDiagnostic(
-            `goal.mad unavailable=${plan.unavailableFacts.join(";")} freshness=cycle:${plan.freshness.cycle},offer:${plan.freshness.offerGeneration ?? "none"}`,
-          );
-        }
       }
       // A confirmed reset changes the live run out from under every later feature. A planned
       // one-tick `Reset` goal does not: it remains eligible for the old companion ordering.

@@ -77,6 +77,7 @@ import {
 import { readCapturedControlLabel } from "../../captured-control-label.ts";
 
 export const CAPTURED_MAD_CONTROL = "mad";
+export const CAPTURED_MAD_RESEARCH_TECH = "tech-mad";
 
 type CapturedCelestialLabOutcome =
   | "waiting-lab"
@@ -765,13 +766,32 @@ export function observeCapturedMadGoal(
   resetConfirmed: boolean,
   cycle: number,
   progressionEpoch: string,
+  madControlBound: boolean | undefined,
 ): MadGoalPlan {
   const settings = capturedMadSettingsRecord(rawSettings);
   const branch = readCapturedMadBranch(root, rawSettings);
-  const techLevel = coerceNumber(
-    readProperty(readProperty(root, "tech"), "mad"),
+  const nativeTechLevel = readProperty(readProperty(root, "tech"), "mad");
+  const techLevel =
+    typeof nativeTechLevel === "number" && Number.isFinite(nativeTechLevel)
+      ? nativeTechLevel
+      : undefined;
+  const madDisplayValue = readProperty(
+    readProperty(readProperty(root, "civic"), "mad"),
+    "display",
   );
-  const madOffer = offers?.find((offer) => offer.elementId === "tech-mad");
+  const madControlDisplay =
+    typeof madDisplayValue === "boolean" ? madDisplayValue : undefined;
+  const armedValue = readProperty(
+    readProperty(readProperty(root, "civic"), "mad"),
+    "armed",
+  );
+  const madArmed = typeof armedValue === "boolean" ? armedValue : undefined;
+  const cataclysmValue = readProperty(readProperty(root, "race"), "cataclysm");
+  const madCataclysm =
+    typeof cataclysmValue === "boolean" ? cataclysmValue : undefined;
+  const madOffer = offers?.find(
+    (offer) => offer.elementId === CAPTURED_MAD_RESEARCH_TECH,
+  );
   const resources = new Map<string, Readonly<GoalResourceObservation>>();
   if (madOffer !== undefined) {
     for (const resourceId of Object.keys(madOffer.cost)) {
@@ -791,25 +811,58 @@ export function observeCapturedMadGoal(
     }
   }
   const resetGate = planPrestige({ goal: "Reset", branch });
+  const waitGateHasNativeInputs =
+    !branch.waitForPopulation ||
+    [
+      readProperty(
+        readProperty(readProperty(root, "civic"), "garrison"),
+        "workers",
+      ),
+      readProperty(
+        readProperty(readProperty(root, "civic"), "garrison"),
+        "max",
+      ),
+      readProperty(
+        readProperty(readProperty(root, "civic"), "garrison"),
+        "crew",
+      ),
+      readProperty(
+        readProperty(readProperty(root, "resource"), "Population"),
+        "amount",
+      ),
+      readProperty(
+        readProperty(readProperty(root, "resource"), "Population"),
+        "max",
+      ),
+    ].every((value) => typeof value === "number" && Number.isFinite(value));
   return planMadGoal({
     selectedPrestige:
       typeof settings["prestigeType"] === "string"
         ? settings["prestigeType"]
         : "none",
     prestigePermission: settings["autoPrestige"] === true,
-    manualOwnership: branch.type === "mad" && branch.armed,
     resetConfirmed,
-    madResearchLevel: Number.isFinite(techLevel) ? techLevel : undefined,
-    madResearchGate: branch.type === "mad" ? branch.eligible : undefined,
-    madResetGate:
-      branch.type === "mad"
+    madResearchLevel: techLevel,
+    madControlDisplay,
+    madControlBound,
+    madArmed,
+    madCataclysm,
+    madWaitPolicyGate:
+      branch.type === "mad" &&
+      waitGateHasNativeInputs &&
+      madControlDisplay === true &&
+      techLevel !== undefined &&
+      techLevel > 0
         ? resetGate.some((command) => command.kind === "launch-mad")
         : undefined,
     offeredMadTech:
       madOffer === undefined
         ? undefined
         : Object.freeze({
-            action: Object.freeze({ family: "research", nativeId: "tech-mad" }),
+            action: Object.freeze({
+              family: "research",
+              nativeId: CAPTURED_MAD_RESEARCH_TECH,
+            }),
             costs: madOffer.cost,
             nativeAffordable: madOffer.nativeAffordable,
             generation: madOffer.generation,
