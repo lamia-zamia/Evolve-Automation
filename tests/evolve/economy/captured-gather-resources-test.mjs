@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { admitResourceClaim } from "../../../src/domain/economy/resources/resource-claims.ts";
+import { planGatherResources } from "../../../src/domain/economy/resources/gather-resources.ts";
 
 globalThis.__EA_TEST_SURFACE_ENABLED__ = true;
 const { createCapturedGatherResourcesAdapter } =
@@ -336,28 +337,20 @@ const unverifiedFoodEmergencyAdapter = createCapturedGatherResourcesAdapter({
   readSettings: () => settings,
   readTestIntervention: claimIntervention,
 });
-assert.equal(
-  unverifiedFoodEmergencyAdapter.reader.read().resourceClaimLedger
-    .spendableStock,
-  0,
+const zeroFoodClaimInput = unverifiedFoodEmergencyAdapter.reader.read();
+assert.equal(zeroFoodClaimInput.resourceClaimLedger.spendableStock, 0);
+const zeroFoodClaimPlan = planGatherResources(zeroFoodClaimInput);
+assert.ok(
+  zeroFoodClaimPlan?.operations.some(
+    (operation) => operation.actionId === "food",
+  ),
+  "the planner treats zero Food as an emergency even with no claim spend budget",
 );
 assert.equal(
-  unverifiedFoodEmergencyAdapter.executor.execute({
-    operations: [
-      {
-        actionId: "food",
-        amount: 1,
-        beforeAction: [
-          { resourceId: "Mana", expectedQuantity: 50, quantity: 50 },
-          { resourceId: "Food", expectedQuantity: 0, quantity: 0 },
-        ],
-        afterAction: [
-          { resourceId: "Mana", expectedQuantity: 50, quantity: 49 },
-          { resourceId: "Food", expectedQuantity: 0, quantity: 1 },
-        ],
-      },
-    ],
-  }).failure.code,
+  zeroFoodClaimPlan === null
+    ? "no-plan"
+    : unverifiedFoodEmergencyAdapter.executor.execute(zeroFoodClaimPlan).failure
+        .code,
   "gather-claim-budget-exhausted",
 );
 assert.equal(unverifiedFoodEmergencyCalls, 0);

@@ -1,0 +1,475 @@
+{
+  "protocol": "Stage 3F goal-derived Mana claim experiment",
+  "runner": "tools/chromium-evolve-runner.mjs",
+  "execution": {
+    "command": "node experiments/stage3f-mana-claim.mjs",
+    "inputs": "Paths and SHA-256 hashes are recorded below; settings are loaded with autoResearch=true.",
+    "variants": "A/A baseline, manually seeded Stage 3E B, then goal-derived C; each opens a fresh exact-runner session.",
+    "output": "experiments/stage3f-mana-claim-manifest.json (or --out=<path>)"
+  },
+  "upstreamCommit": "db38e2af",
+  "periods": 200,
+  "seed": 42,
+  "epoch": "2026-09-21T00:00:00.000Z",
+  "inputs": {
+    "gameSnapshot": {
+      "path": "test-artifacts/game/evolve-deadspace.js",
+      "sha256": "f25222da11bd9d7bdbe640c8574c4619931ba6db2afbd6bbe2a62e205b6c5553"
+    },
+    "save": {
+      "path": "test-artifacts/benchmark/slice0/saves/stage2f-fixed-progression-export.json",
+      "sha256": "b1f22205b78d043a98f914924d965a1ab04af791f1f3d7ce6e0179849892662e"
+    },
+    "settings": {
+      "path": "test-artifacts/benchmark/slice0/settings/stage2e-integrated-mad-no-triggers.json",
+      "sha256": "fbf75da786f5aa841212eea5c5848a7a532a9a8afe8d7ccd14f5781895601131"
+    },
+    "testBundle": {
+      "path": "test-artifacts/benchmark/tmp/stage3f-test.user.js",
+      "sha256": "1016b86584606d0c2b6fe2df613c4b020b5ae4ee06389d3892aa683c93b272a4"
+    },
+    "runner": "23383ea302dcbe5545ba83c8aa72e0d8f231a96135fd31b60d9bc95bd9102257"
+  },
+  "conditions": {
+    "A": "no goal-directed Mana protection",
+    "B": "Stage 3E current claim seeded from tech-mad_science native evidence",
+    "C": "test-only goal-derived mode; no target or admitted claim injected"
+  },
+  "preservedSettings": {
+    "autoResearch": true,
+    "autoAlchemy": false,
+    "autoPylon": false,
+    "autoBuild": true,
+    "autoJobs": true,
+    "autoCraftsmen": true,
+    "autoCraft": true,
+    "autoFactory": true,
+    "autoStorage": true
+  },
+  "baselineAA": {
+    "finalExportEqual": true,
+    "exportHash": "8b2d7639e7f7917ce7a06dec295510c83a839269180e8f8356b5af5816d9fd0f"
+  },
+  "results": {
+    "A": {
+      "periods": 200,
+      "finalExportHash": "8b2d7639e7f7917ce7a06dec295510c83a839269180e8f8356b5af5816d9fd0f",
+      "highTechLevel": 0,
+      "selectedClaim": null,
+      "selectionTimeline": [],
+      "lifecycle": [],
+      "claimLedger": { "statusCounts": { "no-ledger": 25 }, "sample": null },
+      "gatherClaimActions": {
+        "permitted": 2500,
+        "deferred": 0,
+        "actualManaSpent": 249
+      },
+      "gatherSummary": {
+        "city-lumber": { "clicks": 1250, "manaSpent": 249, "gathered": 6982 },
+        "undefined-stone": { "clicks": 1250, "manaSpent": 0, "gathered": 2500 }
+      },
+      "firstNativeHighTechGrant": null,
+      "firstGatherAfterGrant": null,
+      "researchAttempts": [
+        {
+          "cycle": 25,
+          "actionId": "tech-bessemer_process",
+          "grantTechnology": "smelting",
+          "grantLevel": 4,
+          "grantBefore": 3,
+          "grantAfter": 4,
+          "disposition": "researched",
+          "manaBefore": 0.0875469537689959,
+          "manaAfter": 0.0875469537689959,
+          "manaSpent": 0
+        }
+      ],
+      "nativeHighTechTrace": [],
+      "researchDrawCounts": {
+        "research.observation.samples": {
+          "total": 26,
+          "perTick": 1.04,
+          "max": 1
+        },
+        "research.observation.sample-requester.resource-demand": {
+          "total": 26,
+          "perTick": 1.04,
+          "max": 1
+        },
+        "research.observation.sample.offers-only": {
+          "total": 26,
+          "perTick": 1.04,
+          "max": 1
+        },
+        "research.catalog.observations": {
+          "total": 26,
+          "perTick": 1.04,
+          "max": 1
+        }
+      },
+      "workTicks": 25,
+      "tickPhaseMsBy25TickWindow": [85]
+    },
+    "B": {
+      "periods": 200,
+      "finalExportHash": "591f0dcbc3c1f98e8639977b1885c7a6cefa1d5db193f2fc3dae2b19d328ac3a",
+      "highTechLevel": 1,
+      "selectedClaim": {
+        "target": "tech-mad_science",
+        "provenance": "verified-native-prerequisite",
+        "offerObservationId": "research-offers-1",
+        "offerBindingGeneration": 1,
+        "resourceId": "Mana",
+        "amount": 50,
+        "observedStock": 3.350900133229694,
+        "graphFrontier": [
+          "tech-mad_science",
+          "tech-steel_containers",
+          "tech-barns",
+          "tech-black_powder"
+        ]
+      },
+      "selectionTimeline": [],
+      "lifecycle": [
+        {
+          "state": "active",
+          "reason": "same-native-offer",
+          "firstCycle": 1,
+          "lastCycle": 8,
+          "occurrences": 8
+        },
+        {
+          "state": "suspended",
+          "reason": "research-owner-observation-not-fresh",
+          "firstCycle": 1,
+          "lastCycle": 7,
+          "occurrences": 7
+        },
+        {
+          "state": "completed",
+          "reason": "current-research-grant-completed",
+          "firstCycle": 8,
+          "lastCycle": 8,
+          "occurrences": 1
+        }
+      ],
+      "claimLedger": {
+        "statusCounts": { "current": 8, "no-ledger": 17 },
+        "sample": {
+          "currentMana": 10.830856041265669,
+          "reservedCurrentStock": 10.830856041265669,
+          "remainingAccumulation": 39.16914395873433,
+          "spendableStock": 0,
+          "status": "current",
+          "claimControlBinding": {
+            "elementId": "tech-mad_science",
+            "generation": 2
+          },
+          "currentControlBinding": {
+            "elementId": "tech-mad_science",
+            "generation": 2,
+            "actionCapable": true
+          }
+        }
+      },
+      "gatherClaimActions": {
+        "permitted": 1705,
+        "deferred": 0,
+        "actualManaSpent": 183
+      },
+      "gatherSummary": {
+        "city-lumber": { "clicks": 855, "manaSpent": 183, "gathered": 5004 },
+        "undefined-stone": { "clicks": 850, "manaSpent": 0, "gathered": 1700 }
+      },
+      "firstNativeHighTechGrant": {
+        "period": 64,
+        "actionId": "tech-mad_science",
+        "highTechBefore": 0,
+        "highTechAfter": 1,
+        "manaBefore": 50.53565810078872,
+        "manaAfter": 0.5356581007887229
+      },
+      "firstGatherAfterGrant": {
+        "period": 72,
+        "actionId": "city-lumber",
+        "manaBefore": 10.49348696643488,
+        "manaAfter": 9.49348696643488,
+        "manaSpent": 1,
+        "gatheredResourceDelta": 20
+      },
+      "researchAttempts": [
+        {
+          "cycle": 3,
+          "actionId": "tech-rituals",
+          "grantTechnology": "magic",
+          "grantLevel": 3,
+          "grantBefore": 2,
+          "grantAfter": 3,
+          "disposition": "researched",
+          "manaBefore": 30.746513772557968,
+          "manaAfter": 5.746513772557968,
+          "manaSpent": 25
+        },
+        {
+          "cycle": 8,
+          "actionId": "tech-mad_science",
+          "grantTechnology": "high_tech",
+          "grantLevel": 1,
+          "grantBefore": 0,
+          "grantAfter": 1,
+          "disposition": "researched",
+          "manaBefore": 50.53565810078872,
+          "manaAfter": 0.5356581007887229,
+          "manaSpent": 50
+        },
+        {
+          "cycle": 9,
+          "actionId": "tech-espionage",
+          "grantTechnology": "spy",
+          "grantLevel": 2,
+          "grantBefore": 1,
+          "grantAfter": 2,
+          "disposition": "researched",
+          "manaBefore": 0.49348696643487955,
+          "manaAfter": 0.49348696643487955,
+          "manaSpent": 0
+        },
+        {
+          "cycle": 12,
+          "actionId": "tech-reinforced_crates",
+          "grantTechnology": "container",
+          "grantLevel": 2,
+          "grantBefore": 1,
+          "grantAfter": 2,
+          "disposition": "researched",
+          "manaBefore": 0.3669735633733495,
+          "manaAfter": 0.3669735633733495,
+          "manaSpent": 0
+        },
+        {
+          "cycle": 25,
+          "actionId": "tech-magic",
+          "grantTechnology": "theatre",
+          "grantLevel": 3,
+          "grantBefore": 2,
+          "grantAfter": 3,
+          "disposition": "researched",
+          "manaBefore": 0.12524546868193553,
+          "manaAfter": 0.12524546868193553,
+          "manaSpent": 0
+        }
+      ],
+      "nativeHighTechTrace": [
+        {
+          "period": 64,
+          "actionId": "tech-mad_science",
+          "manaBefore": 50.53565810078872,
+          "manaAfter": 0.5356581007887229,
+          "manaSpent": 50,
+          "highTechBefore": 0,
+          "highTechAfter": 1
+        }
+      ],
+      "researchDrawCounts": {
+        "research.observation.samples": {
+          "total": 31,
+          "perTick": 1.24,
+          "max": 1
+        },
+        "research.observation.sample-requester.auto-research": {
+          "total": 1,
+          "perTick": 0.04,
+          "max": 1
+        },
+        "research.observation.sample.offers-only": {
+          "total": 31,
+          "perTick": 1.24,
+          "max": 1
+        },
+        "research.catalog.observations": {
+          "total": 31,
+          "perTick": 1.24,
+          "max": 1
+        },
+        "research.observation.sample-requester.resource-claim-before-gather": {
+          "total": 8,
+          "perTick": 0.32,
+          "max": 1
+        },
+        "research.observation.sample-requester.resource-demand": {
+          "total": 22,
+          "perTick": 0.88,
+          "max": 1
+        }
+      },
+      "workTicks": 25,
+      "tickPhaseMsBy25TickWindow": [56.14]
+    },
+    "C": {
+      "periods": 200,
+      "finalExportHash": "8b2d7639e7f7917ce7a06dec295510c83a839269180e8f8356b5af5816d9fd0f",
+      "highTechLevel": 0,
+      "selectedClaim": {
+        "cycle": 25,
+        "status": "ambiguous",
+        "reason": "multiple verified prerequisite offers require Mana",
+        "candidates": ["tech-black_powder", "tech-mad_science"],
+        "offerObservationId": "research-offers-25",
+        "offerSetIdentitySha256": "1ac44d2f2fa13035476ec6369ada06fd32fbda6442d47fe2c92342c47afc22dc",
+        "researchPermission": true,
+        "playerQueues": "empty",
+        "nativeOfferCount": 13,
+        "rootGeneration": 0,
+        "progressionGeneration": "0|39:86|22:58|49|human|magic|178|0|anarchy|1|0|0|0",
+        "evaluatedCandidates": [
+          {
+            "actionId": "tech-black_powder",
+            "relevance": "verified-prerequisite",
+            "dependencyRelation": "declared-prerequisite",
+            "pathApplicability": "eligible",
+            "actionability": "current-native-offer",
+            "evidenceFresh": true,
+            "resourceAffordability": "insufficient",
+            "cost": {
+              "Knowledge": 4500,
+              "Mana": 100,
+              "Crystal": 250,
+              "Coal": 300
+            },
+            "manaAmount": 10.087546953768996,
+            "manaRequired": 100,
+            "nonManaAffordable": true,
+            "frontier": true,
+            "offerObservationId": "research-offers-25",
+            "offerSetIdentitySha256": "1ac44d2f2fa13035476ec6369ada06fd32fbda6442d47fe2c92342c47afc22dc",
+            "controlGeneration": 25,
+            "offerGeneration": 25,
+            "ownerEligibility": "eligible",
+            "reasons": [
+              "action lies on a statically declared prerequisite path; terminal applicability is separate",
+              "native queue precognition and game-specific requirement exceptions were not evaluated",
+              "native condition function was not evaluated",
+              "route restriction applicability was not evaluated",
+              "trait, gene, or exclusion restriction applicability was not evaluated",
+              "chain tech-mad -> tech-anfo -> tech-dynamite -> tech-black_powder",
+              "native affordability verdict is false",
+              "captured resources are insufficient for this price"
+            ]
+          },
+          {
+            "actionId": "tech-mad_science",
+            "relevance": "verified-prerequisite",
+            "dependencyRelation": "declared-prerequisite",
+            "pathApplicability": "eligible",
+            "actionability": "current-native-offer",
+            "evidenceFresh": true,
+            "resourceAffordability": "insufficient",
+            "cost": {
+              "Money": 10000,
+              "Mana": 50,
+              "Knowledge": 6750,
+              "Crystal": 1000,
+              "Aluminium": 750
+            },
+            "manaAmount": 10.087546953768996,
+            "manaRequired": 50,
+            "nonManaAffordable": true,
+            "frontier": true,
+            "offerObservationId": "research-offers-25",
+            "offerSetIdentitySha256": "1ac44d2f2fa13035476ec6369ada06fd32fbda6442d47fe2c92342c47afc22dc",
+            "controlGeneration": 25,
+            "offerGeneration": 25,
+            "ownerEligibility": "eligible",
+            "reasons": [
+              "action lies on a statically declared prerequisite path; terminal applicability is separate",
+              "native queue precognition and game-specific requirement exceptions were not evaluated",
+              "native condition function was not evaluated",
+              "route restriction applicability was not evaluated",
+              "trait, gene, or exclusion restriction applicability was not evaluated",
+              "chain tech-mad -> tech-uranium -> tech-electronics -> tech-industrialization -> tech-electricity -> tech-mad_science",
+              "native affordability verdict is false",
+              "captured resources are insufficient for this price"
+            ]
+          }
+        ]
+      },
+      "selectionTimeline": [
+        {
+          "status": "ambiguous",
+          "reason": "multiple verified prerequisite offers require Mana",
+          "candidates": ["tech-black_powder", "tech-mad_science"],
+          "firstCycle": 1,
+          "lastCycle": 25,
+          "occurrences": 25,
+          "firstOfferObservationId": "research-offers-1",
+          "lastOfferObservationId": "research-offers-25"
+        }
+      ],
+      "lifecycle": [
+        {
+          "state": "suspended",
+          "reason": "goal-prerequisite-selection-ambiguous",
+          "firstCycle": 1,
+          "lastCycle": 25,
+          "occurrences": 25
+        }
+      ],
+      "claimLedger": { "statusCounts": { "no-ledger": 25 }, "sample": null },
+      "gatherClaimActions": {
+        "permitted": 2500,
+        "deferred": 0,
+        "actualManaSpent": 249
+      },
+      "gatherSummary": {
+        "city-lumber": { "clicks": 1250, "manaSpent": 249, "gathered": 6982 },
+        "undefined-stone": { "clicks": 1250, "manaSpent": 0, "gathered": 2500 }
+      },
+      "firstNativeHighTechGrant": null,
+      "firstGatherAfterGrant": null,
+      "researchAttempts": [
+        {
+          "cycle": 25,
+          "actionId": "tech-bessemer_process",
+          "grantTechnology": "smelting",
+          "grantLevel": 4,
+          "grantBefore": 3,
+          "grantAfter": 4,
+          "disposition": "researched",
+          "manaBefore": 0.0875469537689959,
+          "manaAfter": 0.0875469537689959,
+          "manaSpent": 0
+        }
+      ],
+      "nativeHighTechTrace": [],
+      "researchDrawCounts": {
+        "research.observation.samples": {
+          "total": 26,
+          "perTick": 1.04,
+          "max": 1
+        },
+        "research.observation.sample-requester.resource-claim-before-gather": {
+          "total": 25,
+          "perTick": 1,
+          "max": 1
+        },
+        "research.observation.sample.offers-only": {
+          "total": 26,
+          "perTick": 1.04,
+          "max": 1
+        },
+        "research.catalog.observations": {
+          "total": 26,
+          "perTick": 1.04,
+          "max": 1
+        },
+        "research.observation.sample-requester.resource-demand": {
+          "total": 1,
+          "perTick": 0.04,
+          "max": 1
+        }
+      },
+      "workTicks": 25,
+      "tickPhaseMsBy25TickWindow": [51.44]
+    }
+  }
+}

@@ -58,6 +58,7 @@ import {
 } from "../domain/economy/resources/resource-claims.ts";
 import { decideResearchSpend } from "../domain/progression/research-spending-decision.ts";
 import type { GoalResourceStock } from "../domain/economy/goal-feasibility.ts";
+import { canAfford } from "../domain/game-world.ts";
 import { createCapturedTechPrerequisiteLevelReader } from "../adapters/evolve/progression/research/captured-tech-prerequisite-levels.ts";
 import { readCapturedTechApplicability } from "../adapters/evolve/progression/research/captured-tech-applicability.ts";
 import type { CapturedTechDefinition } from "../ports/captured-game-mechanics.ts";
@@ -1217,6 +1218,56 @@ export function startCapturedRuntime({
     }
   }
   researchOwnerSelectionObserver = (selection) => {
+    if (
+      typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
+      __EA_TEST_SURFACE_ENABLED__ === true
+    ) {
+      const hooks = readProperty(settingsHostWindow, "__EA_TEST_HOOKS__");
+      const root = pageCapture.rootState.readRoot();
+      const definitions = progression.readResearchActionDefinitions();
+      const definition = definitions?.find(
+        (entry) => entry.actionId === selection.decision.techId,
+      );
+      const manaBeforeValue = Number(
+        readProperty(
+          readProperty(readProperty(root, "resource"), "Mana"),
+          "amount",
+        ),
+      );
+      const manaBefore = Number.isFinite(manaBeforeValue)
+        ? manaBeforeValue
+        : undefined;
+      const grantBefore =
+        definition === undefined ||
+        root === undefined ||
+        definitions === undefined
+          ? undefined
+          : readResearchGrantLevels(root, definitions)?.get(
+              definition.grantTechnology,
+            );
+      if (isRecord(hooks)) {
+        Reflect.set(
+          hooks,
+          "researchOwnerSelectionLast",
+          Object.freeze({
+            cycle: automationCycle,
+            actionId: selection.decision.techId,
+            grantTechnology: definition?.grantTechnology,
+            grantLevel: definition?.grantLevel,
+            grantBefore,
+            manaBefore,
+            observed: selection.observed.map((candidate) => ({
+              actionId: candidate.id,
+              affordable: candidate.affordable,
+              nativeAffordable: candidate.nativeAffordable,
+              resourceAffordable: candidate.resourceAffordable,
+              reservation: candidate.costConflictEvidence,
+              exclusion: candidate.exclusionEvidence,
+            })),
+          }),
+        );
+      }
+    }
     const diagnosticClock = phaseDiagnostics;
     if (
       settingsStore.readRaw()["prestigeType"] !== "mad" ||
@@ -1541,6 +1592,55 @@ export function startCapturedRuntime({
     );
   };
   researchOwnerSelectionResultObserver = (result) => {
+    if (
+      typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
+      __EA_TEST_SURFACE_ENABLED__ === true
+    ) {
+      const hooks = readProperty(settingsHostWindow, "__EA_TEST_HOOKS__");
+      const prior = readProperty(hooks, "researchOwnerSelectionLast");
+      const root = pageCapture.rootState.readRoot();
+      const definitions = progression.readResearchActionDefinitions();
+      const definition = definitions?.find(
+        (entry) => entry.actionId === result.decision.techId,
+      );
+      const grantAfter =
+        definition === undefined ||
+        root === undefined ||
+        definitions === undefined
+          ? undefined
+          : readResearchGrantLevels(root, definitions)?.get(
+              definition.grantTechnology,
+            );
+      const manaAfterValue = Number(
+        readProperty(
+          readProperty(readProperty(root, "resource"), "Mana"),
+          "amount",
+        ),
+      );
+      const manaAfter = Number.isFinite(manaAfterValue)
+        ? manaAfterValue
+        : undefined;
+      const manaBefore = Number(readProperty(prior, "manaBefore"));
+      if (isRecord(hooks)) {
+        const events = readProperty(hooks, "researchOwnerSelectionEvents");
+        const history = Array.isArray(events) ? events : [];
+        history.push(
+          Object.freeze({
+            ...(isRecord(prior) ? prior : {}),
+            cycle: automationCycle,
+            actionId: result.decision.techId,
+            disposition: result.disposition,
+            grantAfter,
+            manaAfter,
+            manaSpent:
+              Number.isFinite(manaBefore) && manaAfter !== undefined
+                ? Math.max(0, manaBefore - manaAfter)
+                : undefined,
+          }),
+        );
+        Reflect.set(hooks, "researchOwnerSelectionEvents", history);
+      }
+    }
     if (result.disposition === "candidate-rejected") {
       pendingResearchOwnerSelectionSummary = undefined;
       pendingResearchOwnerSelectionDetails = [];
@@ -1843,6 +1943,7 @@ export function startCapturedRuntime({
                     isRecord(decision)
                       ? Object.freeze({
                           ...decision,
+                          cycle: automationCycle,
                           gatherReadId,
                           ledgerStatus: ledgerStatusForGatherCycle,
                         })
@@ -1866,6 +1967,7 @@ export function startCapturedRuntime({
                     isRecord(event)
                       ? Object.freeze({
                           ...event,
+                          cycle: automationCycle,
                           gatherReadId,
                           ledgerStatus: ledgerStatusForGatherCycle,
                         })
@@ -1941,6 +2043,7 @@ export function startCapturedRuntime({
       if (state === "suspended" && unavailableCount >= 3)
         evidence = { ...evidence, recoveryRequired: true, unavailableCount };
       const status = Object.freeze({
+        cycle: automationCycle,
         state,
         reason,
         previousOfferObservationId: previousClaim?.offerObservationId,
@@ -1969,6 +2072,410 @@ export function startCapturedRuntime({
       return;
     }
     if (previousClaim === undefined) {
+      if (resourceClaimMode === "goal-derived") {
+        if (ownerObservation === undefined) return;
+        const root = pageCapture.rootState.readRoot();
+        const settings = settingsStore.readRaw();
+        const offers = ownerObservation.offers;
+        const definitions = progression.readResearchActionDefinitions();
+        const rootGeneration = progression.readRootGeneration();
+        const progressionGeneration = progression.readProgressionEpoch();
+        const selectionRecord = (
+          status: string,
+          reason: string,
+          candidates: readonly string[] = [],
+          evidence: Readonly<Record<string, unknown>> = {},
+        ) => {
+          const selection = Object.freeze({
+            cycle: automationCycle,
+            status,
+            reason,
+            candidates,
+            ...evidence,
+          });
+          Reflect.set(testHooks, "resourceClaimSelection", selection);
+          const events = readProperty(
+            testHooks,
+            "resourceClaimSelectionEvents",
+          );
+          const history = Array.isArray(events) ? events : [];
+          history.push(selection);
+          Reflect.set(testHooks, "resourceClaimSelectionEvents", history);
+        };
+        if (
+          !isRecord(root) ||
+          !isRecord(settings) ||
+          settings["prestigeType"] !== "mad" ||
+          settings["autoResearch"] !== true ||
+          settings["autoTrigger"] === true
+        ) {
+          selectionRecord(
+            "unavailable",
+            "MAD goal or Research permission is not current",
+          );
+          setTestClaimStatus(
+            "invalidated",
+            "research-permission-or-goal-unavailable",
+          );
+          return;
+        }
+        const queueEvidence = (["queue", "r_queue"] as const).every(
+          (queueId) => {
+            const entries = readProperty(readProperty(root, queueId), "queue");
+            return Array.isArray(entries) && entries.length === 0;
+          },
+        );
+        if (
+          !queueEvidence ||
+          offers === undefined ||
+          definitions === undefined
+        ) {
+          selectionRecord(
+            "unavailable",
+            "current native offers, definitions, or empty player queues are unavailable",
+          );
+          setTestClaimStatus(
+            "suspended",
+            "research-owner-observation-or-queue-unavailable",
+          );
+          return;
+        }
+        const offerGenerations = new Map(
+          offers.map((offer) => [offer.elementId, offer.generation]),
+        );
+        const grantLevels = readResearchGrantLevels(root, definitions);
+        const applicability = readCapturedTechApplicability(root, definitions);
+        const graph = planNativeResearchPrerequisites({
+          targetActionId: CAPTURED_MAD_RESEARCH_TECH,
+          definitions: definitions.map((definition) => ({
+            actionId: definition.actionId,
+            grantTechnology: definition.grantTechnology,
+            grantLevel: definition.grantLevel,
+            prerequisites: definition.prerequisites,
+            hasNativeCondition: definition.eligibility.hasNativeCondition,
+            routeRestrictions: definition.eligibility.routeRestrictions,
+            restrictions: definition.eligibility.restrictions,
+          })),
+          grantLevels,
+          ...(applicability === undefined
+            ? {}
+            : { applicabilityByActionId: applicability }),
+          offeredActionIds: new Set(offers.map((offer) => offer.elementId)),
+          offerGenerations,
+          cycle: automationCycle,
+          progressionEpoch: progressionGeneration,
+          rootGeneration,
+          maxDepth: 16,
+          maxActions: 256,
+        });
+        const resourceSource = createCapturedResourceSource(
+          pageCapture.rootState,
+        );
+        const evaluation = evaluateResearchGoalCandidates({
+          goalId: "prestige:mad",
+          targetActionId: CAPTURED_MAD_RESEARCH_TECH,
+          goalSatisfied: graph.targetStatus === "satisfied",
+          graph,
+          cycle: automationCycle,
+          progressionEpoch: progressionGeneration,
+          rootGeneration,
+          offers: offers.map((offer, index) => {
+            const sample = resourceSource.readResources(
+              Object.keys(offer.cost),
+            );
+            const eligibility =
+              progression.readResearchOwnerOfferEligibility?.(offer);
+            return {
+              actionId: offer.elementId,
+              grantTechnology: offer.grantTechnology,
+              grantLevel: offer.grantLevel,
+              index,
+              generation: offer.generation,
+              cost: offer.cost,
+              nativeAffordable: offer.nativeAffordable,
+              resourceAffordable:
+                sample === undefined
+                  ? undefined
+                  : canAfford(sample, offer.cost),
+              hasCostConflict: queueEvidence ? false : undefined,
+              reservationEvidence: queueEvidence
+                ? ("none" as const)
+                : ("unavailable" as const),
+              hasExplicitExclusion:
+                eligibility === "eligible"
+                  ? false
+                  : eligibility === "excluded"
+                    ? true
+                    : undefined,
+              explicitExclusionEvidence:
+                eligibility === "eligible"
+                  ? ("none" as const)
+                  : eligibility === "excluded"
+                    ? ("excluded" as const)
+                    : ("unavailable" as const),
+            };
+          }),
+          baselineSelectedActionId: undefined,
+        });
+        const eligibleCandidates = evaluation.candidates.filter((candidate) => {
+          const offer = offers.find(
+            (entry) => entry.elementId === candidate.actionId,
+          );
+          const control = pageCapture.controls.resolve(candidate.actionId);
+          const mana = resourceSource
+            .readResources(["Mana"])
+            ?.resources.get("Mana");
+          return (
+            candidate.relevance === "verified-prerequisite" &&
+            candidate.dependencyRelation === "declared-prerequisite" &&
+            candidate.pathApplicability === "eligible" &&
+            candidate.actionability === "current-native-offer" &&
+            candidate.evidenceFresh &&
+            candidate.nativeAffordable === false &&
+            candidate.resourceAffordability === "insufficient" &&
+            graph.actionableFrontier.includes(candidate.actionId) &&
+            candidate.reservationEvidence === "none" &&
+            candidate.explicitExclusionEvidence === "none" &&
+            offer !== undefined &&
+            offer.cost.Mana !== undefined &&
+            mana !== undefined &&
+            mana.amount < offer.cost.Mana &&
+            mana.max >= offer.cost.Mana &&
+            progression.readResearchOwnerOfferEligibility?.(offer) ===
+              "eligible" &&
+            control !== undefined &&
+            control.elementId === offer.elementId &&
+            control.generation === offer.generation &&
+            control.methods.includes("action")
+          );
+        });
+        if (eligibleCandidates.length !== 1) {
+          const ids = eligibleCandidates.map((candidate) => candidate.actionId);
+          setTestClaimStatus(
+            "suspended",
+            ids.length > 1
+              ? "goal-prerequisite-selection-ambiguous"
+              : "goal-prerequisite-selection-unavailable",
+          );
+          selectionRecord(
+            ids.length > 1 ? "ambiguous" : "unavailable",
+            ids.length > 1
+              ? "multiple verified prerequisite offers require Mana"
+              : "no uniquely verified Mana-blocked prerequisite offer",
+            ids,
+            {
+              researchPermission: true,
+              playerQueues: "empty",
+              nativeOfferCount: offers.length,
+              offerObservationId: offers[0]?.offerObservationId,
+              offerSetIdentity: offers[0]?.offerSetIdentity,
+              rootGeneration,
+              progressionGeneration,
+              evaluatedCandidates: evaluation.candidates
+                .filter(
+                  (candidate) =>
+                    candidate.dependencyRelation !== "none" ||
+                    candidate.relevance === "unavailable",
+                )
+                .map((candidate) => {
+                  const offer = offers.find(
+                    (entry) => entry.elementId === candidate.actionId,
+                  );
+                  const mana = resourceSource
+                    .readResources(["Mana"])
+                    ?.resources.get("Mana");
+                  const nonManaSample =
+                    offer === undefined
+                      ? undefined
+                      : resourceSource.readResources(
+                          Object.keys(offer.cost).filter(
+                            (resourceId) => resourceId !== "Mana",
+                          ),
+                        );
+                  const control = pageCapture.controls.resolve(
+                    candidate.actionId,
+                  );
+                  return {
+                    actionId: candidate.actionId,
+                    relevance: candidate.relevance,
+                    dependencyRelation: candidate.dependencyRelation,
+                    pathApplicability: candidate.pathApplicability,
+                    actionability: candidate.actionability,
+                    evidenceFresh: candidate.evidenceFresh,
+                    resourceAffordability: candidate.resourceAffordability,
+                    reservationEvidence: candidate.reservationEvidence,
+                    exclusionEvidence: candidate.explicitExclusionEvidence,
+                    reasons: candidate.reasons,
+                    cost: offer?.cost,
+                    manaAmount: mana?.amount,
+                    manaRequired: offer?.cost.Mana,
+                    nonManaAffordable:
+                      nonManaSample === undefined || offer === undefined
+                        ? undefined
+                        : canAfford(
+                            nonManaSample,
+                            Object.fromEntries(
+                              Object.entries(offer.cost).filter(
+                                ([resourceId]) => resourceId !== "Mana",
+                              ),
+                            ),
+                          ),
+                    frontier: graph.actionableFrontier.includes(
+                      candidate.actionId,
+                    ),
+                    offerObservationId: offer?.offerObservationId,
+                    offerSetIdentity: offer?.offerSetIdentity,
+                    controlGeneration: control?.generation,
+                    offerGeneration: offer?.generation,
+                    ownerEligibility:
+                      offer === undefined
+                        ? undefined
+                        : progression.readResearchOwnerOfferEligibility?.(
+                            offer,
+                          ),
+                  };
+                }),
+            },
+          );
+          return;
+        }
+        const selected = eligibleCandidates[0];
+        const offer = offers.find(
+          (entry) => entry.elementId === selected?.actionId,
+        );
+        const control =
+          offer === undefined
+            ? undefined
+            : pageCapture.controls.resolve(offer.elementId);
+        const mana = resourceSource
+          .readResources(["Mana"])
+          ?.resources.get("Mana");
+        if (
+          selected === undefined ||
+          offer === undefined ||
+          control === undefined ||
+          mana === undefined ||
+          typeof offer.offerObservationId !== "string" ||
+          offer.offerObservationId === "" ||
+          typeof offer.offerSetIdentity !== "string" ||
+          offer.offerSetIdentity === ""
+        ) {
+          selectionRecord(
+            "unavailable",
+            "selected native offer lacks current identity or Mana evidence",
+          );
+          setTestClaimStatus(
+            "suspended",
+            "goal-prerequisite-offer-evidence-unavailable",
+          );
+          return;
+        }
+        const claim = admitResourceClaim({
+          terminalGoalId: "prestige:mad",
+          immediateGoalId: `research:${offer.elementId}`,
+          owner: "goal-planner",
+          provenance: "verified-native-prerequisite",
+          prerequisiteRelation: "verified",
+          nativeActionId: offer.elementId,
+          targetGrantTechnology: offer.grantTechnology,
+          targetGrantLevel: offer.grantLevel,
+          resourceId: "Mana",
+          poolId: "anywhere",
+          requiredQuantity: offer.cost.Mana ?? Number.NaN,
+          observedStock: mana.amount,
+          observedCapacity: mana.max,
+          observedNativePrice: offer.cost.Mana ?? Number.NaN,
+          offerSetIdentity: offer.offerSetIdentity,
+          offerObservationId: offer.offerObservationId,
+          controlBinding: Object.freeze({
+            elementId: control.elementId,
+            generation: control.generation,
+          }),
+          offerBindingGeneration: offer.generation,
+          nativeOfferCurrent: true,
+          nativeActionEligible: true,
+          researchPermission: true,
+          queueEvidence: "empty",
+          rootGeneration,
+          progressionGeneration,
+          observationValid:
+            pageCapture.rootState.readRoot() === root &&
+            progression.readRootGeneration() === rootGeneration &&
+            progression.readProgressionEpoch() === progressionGeneration &&
+            offers.every(
+              (entry) =>
+                pageCapture.controls.resolve(entry.elementId)?.generation ===
+                entry.generation,
+            ) &&
+            pageCapture.controls.resolve(offer.elementId)?.generation ===
+              control.generation,
+          precedence: "terminal-prerequisite",
+          allocationAuthority: {
+            kind: "selected-alternative",
+            groupId: "prestige:mad:research-frontier",
+            selectedActionId: offer.elementId,
+            authorityId: "unique-current-verified-native-frontier",
+          },
+          forecastProductionPerSecond: undefined,
+          uncertaintyReasons: [],
+          unavailableReasons: [],
+        });
+        if (claim === undefined) {
+          selectionRecord(
+            "unavailable",
+            "admitResourceClaim rejected the captured native evidence",
+            [offer.elementId],
+          );
+          setTestClaimStatus(
+            "suspended",
+            "goal-prerequisite-claim-admission-failed",
+          );
+          return;
+        }
+        selectionRecord(
+          "selected",
+          "unique current verified native prerequisite frontier",
+          [offer.elementId],
+          {
+            researchPermission: true,
+            playerQueues: "empty",
+            nativeOfferCount: offers.length,
+            rootGeneration,
+            progressionGeneration,
+            terminalGoalId: "prestige:mad",
+            immediateGoalId: `research:${offer.elementId}`,
+            provenance: claim.provenance,
+            prerequisiteRelation: claim.prerequisiteRelation,
+            nativeActionId: claim.nativeActionId,
+            targetGrantTechnology: claim.targetGrantTechnology,
+            targetGrantLevel: claim.targetGrantLevel,
+            resourceId: claim.resourceId,
+            requiredQuantity: claim.requiredQuantity,
+            observedStock: claim.observedStock,
+            observedCapacity: claim.observedCapacity,
+            offerObservationId: claim.offerObservationId,
+            offerSetIdentity: claim.offerSetIdentity,
+            offerBindingGeneration: claim.offerBindingGeneration,
+            controlBinding: claim.controlBinding,
+            chainActionIds: selected.chainActionIds,
+            allocationAuthority: claim.allocationAuthority,
+          },
+        );
+        Reflect.set(testHooks, "gatherIntervention", {
+          ...intervention,
+          resourceClaim: claim,
+        });
+        setTestClaimStatus("active", "goal-derived-native-prerequisite", {
+          nativeActionId: offer.elementId,
+          offerBindingGeneration: offer.generation,
+          controlGeneration: control.generation,
+          rootGeneration,
+          progressionGeneration,
+          offerObservationId: offer.offerObservationId,
+          offerSetIdentity: offer.offerSetIdentity,
+        });
+        return;
+      }
       if (readProperty(intervention, "resourceClaim") !== undefined) {
         replaceTestClaim(undefined);
         setTestClaimStatus("released", "invalid-claim-evidence");
@@ -2080,6 +2587,13 @@ export function startCapturedRuntime({
       !currentControl.methods.includes("action")
     ) {
       setTestClaimStatus("suspended", "current-action-binding-unavailable");
+      return;
+    }
+    if (offer.generation !== currentControl.generation) {
+      setTestClaimStatus("suspended", "current-offer-binding-mismatch", {
+        offerBindingGeneration: offer.generation,
+        currentControlGeneration: currentControl.generation,
+      });
       return;
     }
     const manaPrice = offer.cost[previousClaim.resourceId];
@@ -4399,8 +4913,9 @@ export function startCapturedRuntime({
           );
           const claimMode = readProperty(intervention, "resourceClaimMode");
           if (
-            claim !== undefined &&
-            (claimMode === undefined || claimMode === "current")
+            claimMode === "goal-derived" ||
+            (claim !== undefined &&
+              (claimMode === undefined || claimMode === "current"))
           ) {
             // Sample once before Gather so its claim uses the current native binding. AutoResearch
             // reuses this same catalog later in the cycle; no second draw or executor is added.
