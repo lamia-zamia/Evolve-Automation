@@ -14847,13 +14847,14 @@
       "observedCapacity",
       "observedNativePrice",
       "targetGrantLevel",
-      "rootGeneration"
+      "rootGeneration",
+      "offerBindingGeneration"
     ].some((field) => typeof value[field] != "number") || typeof value.nativeOfferCurrent != "boolean" || typeof value.nativeActionEligible != "boolean" || typeof value.researchPermission != "boolean" || typeof value.observationValid != "boolean" || !Array.isArray(value.uncertaintyReasons) || !value.uncertaintyReasons.every(
       (reason) => typeof reason == "string"
     ) || !Array.isArray(value.unavailableReasons) || !value.unavailableReasons.every((reason) => typeof reason == "string"))
       return;
     let controlBinding = value.controlBinding;
-    if (!isRecordValue(controlBinding) || controlBinding.elementId !== value.nativeActionId || typeof controlBinding.generation != "number" || !Number.isSafeInteger(controlBinding.generation))
+    if (!isRecordValue(controlBinding) || controlBinding.elementId !== value.nativeActionId || typeof controlBinding.generation != "number" || !Number.isSafeInteger(controlBinding.generation) || typeof value.offerBindingGeneration != "number" || !Number.isSafeInteger(value.offerBindingGeneration))
       return;
     let precedence = value.precedence;
     if (precedence !== "safety" && precedence !== "player-commitment" && precedence !== "terminal-prerequisite")
@@ -14861,16 +14862,24 @@
     let queueEvidence = value.queueEvidence;
     if (queueEvidence !== "empty" && queueEvidence !== "same-target" && queueEvidence !== "conflict" && queueEvidence !== "unavailable")
       return;
+    let allocationAuthority = value.allocationAuthority;
+    if (!isRecordValue(allocationAuthority)) return;
+    if (allocationAuthority.kind !== "independent") {
+      if (!(allocationAuthority.kind === "selected-alternative" && typeof allocationAuthority.groupId == "string" && allocationAuthority.groupId !== "" && typeof allocationAuthority.selectedActionId == "string" && allocationAuthority.selectedActionId !== "" && typeof allocationAuthority.authorityId == "string" && allocationAuthority.authorityId !== ""))
+        return;
+    }
     let forecastProductionPerSecond = value.forecastProductionPerSecond;
     return forecastProductionPerSecond !== void 0 && typeof forecastProductionPerSecond != "number" ? void 0 : admitResourceClaim(value);
   }
   function admitResourceClaim(evidence) {
-    if (!evidence.terminalGoalId || !evidence.immediateGoalId || !evidence.owner || !evidence.nativeActionId || !evidence.targetGrantTechnology || !validNonNegative(evidence.targetGrantLevel) || !evidence.resourceId || !evidence.poolId || evidence.provenance !== "verified-native-prerequisite" || evidence.prerequisiteRelation !== "verified" || !validNonNegative(evidence.requiredQuantity) || !validNonNegative(evidence.observedStock) || !validNonNegative(evidence.observedCapacity) || evidence.observedStock > evidence.observedCapacity || evidence.requiredQuantity > evidence.observedCapacity || !validNonNegative(evidence.observedNativePrice) || evidence.forecastProductionPerSecond !== void 0 && !validNonNegative(evidence.forecastProductionPerSecond) || evidence.observedNativePrice !== evidence.requiredQuantity || !evidence.nativeOfferCurrent || !evidence.nativeActionEligible || !evidence.researchPermission || evidence.queueEvidence !== "empty" || !Number.isSafeInteger(evidence.rootGeneration) || !evidence.progressionGeneration || !evidence.offerObservationId || !evidence.offerSetIdentity || evidence.controlBinding.elementId !== evidence.nativeActionId || !Number.isSafeInteger(evidence.controlBinding.generation) || !evidence.observationValid || evidence.unavailableReasons.length > 0)
+    if (!evidence.terminalGoalId || !evidence.immediateGoalId || !evidence.owner || !evidence.nativeActionId || !evidence.targetGrantTechnology || !validNonNegative(evidence.targetGrantLevel) || !evidence.resourceId || !evidence.poolId || evidence.provenance !== "verified-native-prerequisite" || evidence.prerequisiteRelation !== "verified" || !validNonNegative(evidence.requiredQuantity) || !validNonNegative(evidence.observedStock) || !validNonNegative(evidence.observedCapacity) || evidence.observedStock > evidence.observedCapacity || evidence.requiredQuantity > evidence.observedCapacity || !validNonNegative(evidence.observedNativePrice) || evidence.forecastProductionPerSecond !== void 0 && !validNonNegative(evidence.forecastProductionPerSecond) || evidence.observedNativePrice !== evidence.requiredQuantity || !evidence.nativeOfferCurrent || !evidence.nativeActionEligible || !evidence.researchPermission || evidence.queueEvidence !== "empty" || !Number.isSafeInteger(evidence.rootGeneration) || !evidence.progressionGeneration || !evidence.offerObservationId || !evidence.offerSetIdentity || evidence.controlBinding.elementId !== evidence.nativeActionId || !Number.isSafeInteger(evidence.controlBinding.generation) || !Number.isSafeInteger(evidence.offerBindingGeneration) || evidence.allocationAuthority.kind === "selected-alternative" && (evidence.allocationAuthority.groupId === "" || evidence.allocationAuthority.selectedActionId === "" || evidence.allocationAuthority.authorityId === "") || !evidence.observationValid || evidence.unavailableReasons.length > 0)
       return;
     let claimId = [
       evidence.terminalGoalId,
       evidence.immediateGoalId,
       evidence.nativeActionId,
+      evidence.targetGrantTechnology,
+      String(evidence.targetGrantLevel),
       evidence.resourceId,
       evidence.poolId
     ].join("|");
@@ -15045,7 +15054,7 @@
           );
         if (rootState.readRoot() !== active.root)
           return stale("gather-root-changed", "captured game root changed");
-        let claimActionObserver = void 0, previousIndex = -1, remainingClaimSpend = active.resourceClaimLedger?.spendableStock ?? 1 / 0, foodSafetyManaAllowance = active.resourceClaimLedger === void 0 ? 0 : 1;
+        let claimActionObserver = void 0, previousIndex = -1, remainingClaimSpend = active.resourceClaimLedger?.spendableStock ?? 1 / 0;
         for (let operation2 of decision.operations) {
           let actionIndex = ACTION_ORDER.indexOf(operation2.actionId);
           if (actionIndex <= previousIndex || !Number.isFinite(operation2.amount) || !Number.isSafeInteger(Math.ceil(operation2.amount)))
@@ -15081,8 +15090,8 @@
               let manaBefore = readResource(
                 beforeClickRoot,
                 "Mana"
-              ).currentQuantity, conjuring = operation2.actionId === "food" ? active.foodConjuring : active.materialConjuring, foodSafetyOverride = operation2.actionId === "food" && readResource(beforeClickRoot, "Food").currentQuantity <= 0, expectedManaSpend = conjuring && manaBefore >= 1, proposedManaSpend = expectedManaSpend ? 1 : 0;
-              if (active.resourceClaimLedger !== void 0 && expectedManaSpend && remainingClaimSpend + (foodSafetyOverride ? foodSafetyManaAllowance : 0) < 1)
+              ).currentQuantity, expectedManaSpend = (operation2.actionId === "food" ? active.foodConjuring : active.materialConjuring) && manaBefore >= 1, proposedManaSpend = expectedManaSpend ? 1 : 0;
+              if (active.resourceClaimLedger !== void 0 && expectedManaSpend && remainingClaimSpend < 1)
                 return typeof claimActionObserver == "function" && claimActionObserver(
                   Object.freeze({
                     phase: "deferred",
@@ -15136,19 +15145,16 @@
                     "gather-mana-postcondition",
                     `Mana changed unexpectedly after ${operation2.actionId}`
                   );
-                let claimBudgetBeforeClick = remainingClaimSpend, claimBudgetOverage = Math.max(
+                let claimBudgetBeforeClick = remainingClaimSpend;
+                if (Math.max(
                   0,
                   actualManaSpend - claimBudgetBeforeClick
-                );
-                if (claimBudgetOverage > (foodSafetyOverride ? foodSafetyManaAllowance : 0) + 1e-9)
+                ) > 1e-9)
                   return stale(
                     "gather-claim-budget-exceeded",
                     `Mana claim budget was exceeded by ${operation2.actionId}`
                   );
-                foodSafetyOverride && (foodSafetyManaAllowance = Math.max(
-                  0,
-                  foodSafetyManaAllowance - claimBudgetOverage
-                )), remainingClaimSpend = Math.max(
+                remainingClaimSpend = Math.max(
                   0,
                   claimBudgetBeforeClick - actualManaSpend
                 ), typeof claimActionObserver == "function" && claimActionObserver(

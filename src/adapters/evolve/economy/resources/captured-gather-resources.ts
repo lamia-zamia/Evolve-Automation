@@ -359,10 +359,11 @@ export function createCapturedGatherResourcesAdapter({
           resourceClaimLedger = planResourceClaimLedger({
             claims: [claim],
             freshness,
-            controlBinding:
-              currentClaimControl === undefined
+            controlBindings:
+              currentClaimControl === undefined ||
+              currentControlBinding === undefined
                 ? undefined
-                : currentControlBinding,
+                : [currentControlBinding],
             stock: resources.Mana.currentQuantity,
             knownReservations:
               observationAvailable && !queues.includes("unavailable")
@@ -374,7 +375,10 @@ export function createCapturedGatherResourcesAdapter({
           resourceClaimLedger = planResourceClaimLedger({
             claims: [claim],
             freshness,
-            controlBinding: currentControlBinding,
+            controlBindings:
+              currentControlBinding === undefined
+                ? undefined
+                : [currentControlBinding],
             stock: resources.Mana.currentQuantity,
             knownReservations: undefined,
             forecastProductionPerSecond: claim.forecastProductionPerSecond,
@@ -495,8 +499,6 @@ export function createCapturedGatherResourcesAdapter({
       let previousIndex = -1;
       let remainingClaimSpend =
         active.resourceClaimLedger?.spendableStock ?? Infinity;
-      let foodSafetyManaAllowance =
-        active.resourceClaimLedger === undefined ? 0 : 1;
       for (const operation of decision.operations) {
         const actionIndex = ACTION_ORDER.indexOf(operation.actionId);
         if (
@@ -551,17 +553,12 @@ export function createCapturedGatherResourcesAdapter({
               operation.actionId === "food"
                 ? active.foodConjuring
                 : active.materialConjuring;
-            const foodSafetyOverride =
-              operation.actionId === "food" &&
-              readResource(beforeClickRoot, "Food").currentQuantity <= 0;
             const expectedManaSpend = conjuring && manaBefore >= 1;
             const proposedManaSpend = expectedManaSpend ? 1 : 0;
             if (
               active.resourceClaimLedger !== undefined &&
               expectedManaSpend &&
-              remainingClaimSpend +
-                (foodSafetyOverride ? foodSafetyManaAllowance : 0) <
-                1
+              remainingClaimSpend < 1
             ) {
               if (typeof claimActionObserver === "function")
                 claimActionObserver(
@@ -638,20 +635,12 @@ export function createCapturedGatherResourcesAdapter({
                 0,
                 actualManaSpend - claimBudgetBeforeClick,
               );
-              const allowedSafetyOverage = foodSafetyOverride
-                ? foodSafetyManaAllowance
-                : 0;
-              if (claimBudgetOverage > allowedSafetyOverage + 1e-9) {
+              if (claimBudgetOverage > 1e-9) {
                 return stale(
                   "gather-claim-budget-exceeded",
                   `Mana claim budget was exceeded by ${operation.actionId}`,
                 );
               }
-              if (foodSafetyOverride)
-                foodSafetyManaAllowance = Math.max(
-                  0,
-                  foodSafetyManaAllowance - claimBudgetOverage,
-                );
               remainingClaimSpend = Math.max(
                 0,
                 claimBudgetBeforeClick - actualManaSpend,

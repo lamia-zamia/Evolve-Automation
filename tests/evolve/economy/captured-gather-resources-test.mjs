@@ -151,6 +151,7 @@ const manaClaim = admitResourceClaim({
   observedNativePrice: 50,
   offerSetIdentity: "high-tech-1-native-offers",
   offerObservationId: "research-offers-1",
+  offerBindingGeneration: 1,
   controlBinding: { elementId: "tech-mad_science", generation: 1 },
   nativeOfferCurrent: true,
   nativeActionEligible: true,
@@ -160,6 +161,7 @@ const manaClaim = admitResourceClaim({
   progressionGeneration: "epoch-1",
   observationValid: true,
   precedence: "terminal-prerequisite",
+  allocationAuthority: { kind: "independent" },
   forecastProductionPerSecond: 4.94,
   uncertaintyReasons: [],
   unavailableReasons: [],
@@ -210,10 +212,7 @@ handles.set("tech-mad_science", {
 });
 researchOwnerObservationCurrent = false;
 const reboundBeforeOwnerObservation = claimedAdapter.reader.read();
-assert.equal(
-  reboundBeforeOwnerObservation.resourceClaimLedger.status,
-  "unavailable",
-);
+assert.equal(reboundBeforeOwnerObservation.resourceClaimLedger.status, "stale");
 assert.equal(
   reboundBeforeOwnerObservation.resourceClaimLedger.spendableStock,
   0,
@@ -322,6 +321,47 @@ assert.equal(claimedGatherCalls, 1);
 assert.equal(root.resource.Mana.amount, 50);
 assert.equal(root.resource.Food.amount, 1);
 assert.equal(root.resource.Lumber.amount, 0);
+root.resource.Food.amount = 0;
+root.resource.Mana.amount = 50;
+let unverifiedFoodEmergencyCalls = 0;
+const unverifiedFoodEmergencyAdapter = createCapturedGatherResourcesAdapter({
+  rootState,
+  controls: {
+    ...budgetedControls,
+    invoke() {
+      unverifiedFoodEmergencyCalls += 1;
+      return { ok: true, value: true };
+    },
+  },
+  readSettings: () => settings,
+  readTestIntervention: claimIntervention,
+});
+assert.equal(
+  unverifiedFoodEmergencyAdapter.reader.read().resourceClaimLedger
+    .spendableStock,
+  0,
+);
+assert.equal(
+  unverifiedFoodEmergencyAdapter.executor.execute({
+    operations: [
+      {
+        actionId: "food",
+        amount: 1,
+        beforeAction: [
+          { resourceId: "Mana", expectedQuantity: 50, quantity: 50 },
+          { resourceId: "Food", expectedQuantity: 0, quantity: 0 },
+        ],
+        afterAction: [
+          { resourceId: "Mana", expectedQuantity: 50, quantity: 49 },
+          { resourceId: "Food", expectedQuantity: 0, quantity: 1 },
+        ],
+      },
+    ],
+  }).failure.code,
+  "gather-claim-budget-exhausted",
+);
+assert.equal(unverifiedFoodEmergencyCalls, 0);
+root.resource.Mana.amount = 51;
 root.resource.Food.amount = 2;
 root.resource.Lumber.amount = 10;
 root.resource.Mana.amount = 51;

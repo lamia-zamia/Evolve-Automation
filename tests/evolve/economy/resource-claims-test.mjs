@@ -22,6 +22,7 @@ const evidence = (overrides = {}) => ({
   observedNativePrice: 50,
   offerSetIdentity: '[["tech-mad_science",[["Mana",50]]]]',
   offerObservationId: "research-offers-9",
+  offerBindingGeneration: 9,
   controlBinding: { elementId: "tech-mad_science", generation: 9 },
   nativeOfferCurrent: true,
   nativeActionEligible: true,
@@ -31,6 +32,7 @@ const evidence = (overrides = {}) => ({
   progressionGeneration: "epoch-17",
   observationValid: true,
   precedence: "terminal-prerequisite",
+  allocationAuthority: { kind: "independent" },
   forecastProductionPerSecond: 4.94,
   uncertaintyReasons: [],
   unavailableReasons: [],
@@ -41,7 +43,7 @@ const claim = admitResourceClaim(evidence());
 assert.ok(claim);
 assert.equal(
   claim.claimId,
-  "prestige:mad|research:tech-mad_science|tech-mad_science|Mana|anywhere",
+  "prestige:mad|research:tech-mad_science|tech-mad_science|high_tech|1|Mana|anywhere",
 );
 assert.equal(
   admitResourceClaim(evidence({ prerequisiteRelation: "unverified" })),
@@ -98,7 +100,7 @@ const freshness = {
 const underfunded = planResourceClaimLedger({
   claims: [claim],
   freshness,
-  controlBinding: { ...claim.controlBinding, actionCapable: true },
+  controlBindings: [{ ...claim.controlBinding, actionCapable: true }],
   stock: 0.85,
   knownReservations: [],
   forecastProductionPerSecond: 4.94,
@@ -112,7 +114,7 @@ assert.equal(underfunded.spendableStock, 0);
 const accumulated = planResourceClaimLedger({
   claims: [claim],
   freshness,
-  controlBinding: { ...claim.controlBinding, actionCapable: true },
+  controlBindings: [{ ...claim.controlBinding, actionCapable: true }],
   stock: 37,
   knownReservations: [],
   forecastProductionPerSecond: 4.94,
@@ -124,7 +126,7 @@ assert.equal(accumulated.spendableStock, 0);
 const funded = planResourceClaimLedger({
   claims: [claim],
   freshness,
-  controlBinding: { ...claim.controlBinding, actionCapable: true },
+  controlBindings: [{ ...claim.controlBinding, actionCapable: true }],
   stock: 60,
   knownReservations: [],
   forecastProductionPerSecond: 4.94,
@@ -132,10 +134,37 @@ const funded = planResourceClaimLedger({
 assert.equal(funded.currentStockReserved, 50);
 assert.equal(funded.remainingAccumulation, 0);
 assert.equal(funded.spendableStock, 10);
+const duplicateClaim = planResourceClaimLedger({
+  claims: [claim, claim],
+  freshness,
+  controlBindings: [{ ...claim.controlBinding, actionCapable: true }],
+  stock: 60,
+  knownReservations: [],
+  forecastProductionPerSecond: undefined,
+});
+assert.equal(duplicateClaim.currentStockReserved, 50);
+assert.equal(duplicateClaim.spendableStock, 10);
+const conflictingDuplicate = admitResourceClaim(
+  evidence({ requiredQuantity: 51, observedNativePrice: 51 }),
+);
+assert.ok(conflictingDuplicate);
+assert.equal(conflictingDuplicate.claimId, claim.claimId);
+assert.equal(
+  planResourceClaimLedger({
+    claims: [claim, conflictingDuplicate],
+    freshness,
+    controlBindings: [{ ...claim.controlBinding, actionCapable: true }],
+    stock: 60,
+    knownReservations: [],
+    forecastProductionPerSecond: undefined,
+  }).status,
+  "unavailable",
+);
 
 const rebound = admitResourceClaim(
   evidence({
     offerObservationId: "research-offers-10",
+    offerBindingGeneration: 10,
     controlBinding: { elementId: "tech-mad_science", generation: 10 },
   }),
 );
@@ -149,7 +178,7 @@ const reboundLedger = planResourceClaimLedger({
     ...freshness,
     offerObservationId: "research-offers-10",
   },
-  controlBinding: { ...rebound.controlBinding, actionCapable: true },
+  controlBindings: [{ ...rebound.controlBinding, actionCapable: true }],
   stock: 60,
   knownReservations: [],
   forecastProductionPerSecond: undefined,
@@ -157,6 +186,50 @@ const reboundLedger = planResourceClaimLedger({
 assert.equal(reboundLedger.status, "current");
 assert.equal(reboundLedger.currentStockReserved, 50);
 assert.equal(reboundLedger.spendableStock, 10);
+const ownerConfirmedRebind = admitResourceClaim(
+  evidence({
+    offerObservationId: "research-offers-12",
+    offerBindingGeneration: 9,
+    controlBinding: { elementId: "tech-mad_science", generation: 10 },
+  }),
+);
+assert.ok(ownerConfirmedRebind);
+const ownerConfirmedRebindLedger = planResourceClaimLedger({
+  claims: [ownerConfirmedRebind],
+  freshness: {
+    ...freshness,
+    offerObservationId: "research-offers-12",
+  },
+  controlBindings: [
+    { ...ownerConfirmedRebind.controlBinding, actionCapable: true },
+  ],
+  stock: 60,
+  knownReservations: [],
+  forecastProductionPerSecond: undefined,
+});
+assert.equal(ownerConfirmedRebindLedger.status, "current");
+assert.equal(ownerConfirmedRebindLedger.spendableStock, 10);
+assert.equal(
+  planResourceClaimLedger({
+    claims: [ownerConfirmedRebind],
+    freshness: {
+      ...freshness,
+      offerObservationId: "research-offers-12",
+    },
+    controlBindings: [
+      {
+        ...ownerConfirmedRebind.controlBinding,
+        generation: 11,
+        actionCapable: true,
+      },
+    ],
+    stock: 60,
+    knownReservations: [],
+    forecastProductionPerSecond: undefined,
+  }).status,
+  "stale",
+  "a binding change after the owner-confirmed rebind suspends the claim",
+);
 
 const changedPrice = admitResourceClaim(
   evidence({
@@ -164,25 +237,47 @@ const changedPrice = admitResourceClaim(
     observedNativePrice: 55,
     offerSetIdentity: '[["tech-mad_science",[["Mana",55]]]]',
     offerObservationId: "research-offers-11",
+    offerBindingGeneration: 11,
     controlBinding: { elementId: "tech-mad_science", generation: 11 },
   }),
 );
 assert.ok(changedPrice, "fresh native price replaces the former requirement");
 assert.equal(changedPrice.requiredQuantity, 55);
+assert.equal(changedPrice.claimId, claim.claimId);
+const changedGrant = admitResourceClaim(
+  evidence({ targetGrantTechnology: "high_tech", targetGrantLevel: 2 }),
+);
+assert.ok(changedGrant);
+assert.notEqual(changedGrant.claimId, claim.claimId);
+assert.equal(
+  planResourceClaimLedger({
+    claims: [claim],
+    freshness: {
+      ...freshness,
+      offerObservationId: changedPrice.offerObservationId,
+      offerSetIdentity: changedPrice.offerSetIdentity,
+    },
+    controlBindings: [{ ...claim.controlBinding, actionCapable: true }],
+    stock: 60,
+    knownReservations: [],
+    forecastProductionPerSecond: undefined,
+  }).status,
+  "stale",
+);
 const reboundWithoutOffer = planResourceClaimLedger({
   claims: [claim],
   freshness,
-  controlBinding: { ...rebound.controlBinding, actionCapable: true },
+  controlBindings: [{ ...rebound.controlBinding, actionCapable: true }],
   stock: 60,
   knownReservations: [],
   forecastProductionPerSecond: undefined,
 });
-assert.equal(reboundWithoutOffer.status, "current");
-assert.equal(reboundWithoutOffer.spendableStock, 10);
+assert.equal(reboundWithoutOffer.status, "stale");
+assert.equal(reboundWithoutOffer.spendableStock, 0);
 const missingControl = planResourceClaimLedger({
   claims: [claim],
   freshness,
-  controlBinding: undefined,
+  controlBindings: undefined,
   stock: 60,
   knownReservations: [],
   forecastProductionPerSecond: undefined,
@@ -191,10 +286,12 @@ assert.equal(missingControl.status, "unavailable");
 const nonActionControl = planResourceClaimLedger({
   claims: [claim],
   freshness,
-  controlBinding: {
-    ...claim.controlBinding,
-    actionCapable: false,
-  },
+  controlBindings: [
+    {
+      ...claim.controlBinding,
+      actionCapable: false,
+    },
+  ],
   stock: 60,
   knownReservations: [],
   forecastProductionPerSecond: undefined,
@@ -203,10 +300,12 @@ assert.equal(nonActionControl.status, "unavailable");
 const missingOfferObservation = planResourceClaimLedger({
   claims: [claim],
   freshness: undefined,
-  controlBinding: {
-    ...claim.controlBinding,
-    actionCapable: true,
-  },
+  controlBindings: [
+    {
+      ...claim.controlBinding,
+      actionCapable: true,
+    },
+  ],
   stock: 60,
   knownReservations: [],
   forecastProductionPerSecond: undefined,
@@ -218,7 +317,7 @@ const changedOfferSet = planResourceClaimLedger({
     ...freshness,
     offerSetIdentity: "different-membership-or-price",
   },
-  controlBinding: { ...claim.controlBinding, actionCapable: true },
+  controlBindings: [{ ...claim.controlBinding, actionCapable: true }],
   stock: 60,
   knownReservations: [],
   forecastProductionPerSecond: undefined,
@@ -236,7 +335,7 @@ assert.ok(overcommitted);
 const multipleClaims = planResourceClaimLedger({
   claims: [overcommitted, claim],
   freshness,
-  controlBinding: { ...claim.controlBinding, actionCapable: true },
+  controlBindings: [{ ...claim.controlBinding, actionCapable: true }],
   stock: 60,
   knownReservations: [],
   forecastProductionPerSecond: 100,
@@ -246,10 +345,123 @@ assert.equal(multipleClaims.remainingAccumulation, 20);
 assert.equal(multipleClaims.spendableStock, 0);
 assert.deepEqual(multipleClaims.claimIds, [...multipleClaims.claimIds].sort());
 
+const researchA = admitResourceClaim(
+  evidence({
+    immediateGoalId: "research:tech-a",
+    nativeActionId: "tech-a",
+    targetGrantTechnology: "tech_a",
+    requiredQuantity: 50,
+    observedNativePrice: 50,
+    offerSetIdentity: "research-alternatives-v1",
+    controlBinding: { elementId: "tech-a", generation: 9 },
+    allocationAuthority: {
+      kind: "selected-alternative",
+      groupId: "research-frontier",
+      selectedActionId: "tech-b",
+      authorityId: "research-owner-cycle-7",
+    },
+  }),
+);
+const researchB = admitResourceClaim(
+  evidence({
+    immediateGoalId: "research:tech-b",
+    nativeActionId: "tech-b",
+    targetGrantTechnology: "tech_b",
+    requiredQuantity: 20,
+    observedNativePrice: 20,
+    offerSetIdentity: "research-alternatives-v1",
+    allocationAuthority: {
+      kind: "selected-alternative",
+      groupId: "research-frontier",
+      selectedActionId: "tech-b",
+      authorityId: "research-owner-cycle-7",
+    },
+    controlBinding: { elementId: "tech-b", generation: 4 },
+  }),
+);
+assert.ok(researchA);
+assert.ok(researchB);
+const selectedAlternative = planResourceClaimLedger({
+  claims: [researchA, researchB],
+  freshness: {
+    ...freshness,
+    offerSetIdentity: "research-alternatives-v1",
+  },
+  controlBindings: [
+    { elementId: "tech-a", generation: 9, actionCapable: true },
+    { elementId: "tech-b", generation: 4, actionCapable: true },
+  ],
+  stock: 60,
+  knownReservations: [{ resourceId: "Mana", poolId: "anywhere", quantity: 10 }],
+  forecastProductionPerSecond: undefined,
+});
+assert.equal(selectedAlternative.currentStockReserved, 20);
+assert.equal(selectedAlternative.remainingAccumulation, 0);
+assert.equal(selectedAlternative.spendableStock, 30);
+assert.deepEqual(selectedAlternative.claimIds, [researchB.claimId]);
+
+const ambiguousAlternatives = planResourceClaimLedger({
+  claims: [researchA],
+  freshness: {
+    ...freshness,
+    offerSetIdentity: "research-alternatives-v1",
+  },
+  controlBindings: [
+    { elementId: "tech-a", generation: 9, actionCapable: true },
+  ],
+  stock: 60,
+  knownReservations: [],
+  forecastProductionPerSecond: undefined,
+});
+assert.equal(ambiguousAlternatives.status, "unavailable");
+assert.equal(ambiguousAlternatives.spendableStock, 0);
+
+const independentResearchA = admitResourceClaim(
+  evidence({
+    immediateGoalId: "research:tech-a",
+    nativeActionId: "tech-a",
+    targetGrantTechnology: "tech_a",
+    requiredQuantity: 50,
+    observedNativePrice: 50,
+    offerSetIdentity: "research-independent-v1",
+    controlBinding: { elementId: "tech-a", generation: 2 },
+  }),
+);
+const independentResearchB = admitResourceClaim(
+  evidence({
+    immediateGoalId: "research:tech-b",
+    nativeActionId: "tech-b",
+    targetGrantTechnology: "tech_b",
+    requiredQuantity: 20,
+    observedNativePrice: 20,
+    offerSetIdentity: "research-independent-v1",
+    controlBinding: { elementId: "tech-b", generation: 5 },
+  }),
+);
+assert.ok(independentResearchA);
+assert.ok(independentResearchB);
+const independentClaims = planResourceClaimLedger({
+  claims: [independentResearchA, independentResearchB],
+  freshness: {
+    ...freshness,
+    offerSetIdentity: "research-independent-v1",
+  },
+  controlBindings: [
+    { elementId: "tech-a", generation: 2, actionCapable: true },
+    { elementId: "tech-b", generation: 5, actionCapable: true },
+  ],
+  stock: 60,
+  knownReservations: [{ resourceId: "Mana", poolId: "anywhere", quantity: 10 }],
+  forecastProductionPerSecond: undefined,
+});
+assert.equal(independentClaims.currentStockReserved, 50);
+assert.equal(independentClaims.remainingAccumulation, 20);
+assert.equal(independentClaims.spendableStock, 0);
+
 const knownCommitment = planResourceClaimLedger({
   claims: [claim],
   freshness,
-  controlBinding: { ...claim.controlBinding, actionCapable: true },
+  controlBindings: [{ ...claim.controlBinding, actionCapable: true }],
   stock: 60,
   knownReservations: [{ resourceId: "Mana", poolId: "anywhere", quantity: 20 }],
   forecastProductionPerSecond: undefined,
@@ -261,7 +473,7 @@ assert.equal(knownCommitment.spendableStock, 0);
 const unknownExternalCommitment = planResourceClaimLedger({
   claims: [claim],
   freshness,
-  controlBinding: { ...claim.controlBinding, actionCapable: true },
+  controlBindings: [{ ...claim.controlBinding, actionCapable: true }],
   stock: 60,
   knownReservations: undefined,
   forecastProductionPerSecond: 100,
@@ -273,7 +485,7 @@ assert.equal(unknownExternalCommitment.forecastProductionPerSecond, 100);
 const stale = planResourceClaimLedger({
   claims: [claim],
   freshness: { ...freshness, rootGeneration: 5 },
-  controlBinding: { ...claim.controlBinding, actionCapable: true },
+  controlBindings: [{ ...claim.controlBinding, actionCapable: true }],
   stock: 60,
   knownReservations: [],
   forecastProductionPerSecond: undefined,
@@ -288,7 +500,7 @@ assert.equal(
   planResourceClaimLedger({
     claims: [],
     freshness,
-    controlBinding: undefined,
+    controlBindings: undefined,
     stock: 60,
     knownReservations: [],
     forecastProductionPerSecond: 100,

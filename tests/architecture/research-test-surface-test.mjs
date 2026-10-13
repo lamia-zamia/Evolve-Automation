@@ -26,7 +26,9 @@ const testSurfaceMarkers = [
   "resourceClaimActionEvents",
   "resourceClaimActionObserver",
   "resourceClaimLifecycleEvents",
-  "stale-diagnostic",
+  "research-owner-observation-unavailable",
+  "selected-goal-changed",
+  "current-research-grant-completed",
   "test-control-hook",
 ];
 

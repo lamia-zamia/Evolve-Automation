@@ -53,6 +53,7 @@ import { evaluateResearchGoalCandidates } from "../domain/progression/research-g
 import {
   admitResourceClaim,
   readAdmittedResourceClaim,
+  type ResourceClaimLifecycleState,
   type ResourceClaim,
 } from "../domain/economy/resources/resource-claims.ts";
 import { decideResearchSpend } from "../domain/progression/research-spending-decision.ts";
@@ -1670,7 +1671,7 @@ export function startCapturedRuntime({
                 ? pageCapture.controls.resolve(nativeActionId)
                 : undefined;
             const observationAvailable =
-              statusState === "current" &&
+              statusState === "active" &&
               isRecord(resourceClaim) &&
               statusOfferObservationId ===
                 readProperty(resourceClaim, "offerObservationId") &&
@@ -1712,6 +1713,26 @@ export function startCapturedRuntime({
                   settingsHostWindow,
                   "__EA_TEST_HOOKS__",
                 );
+                const currentStatus = readProperty(
+                  hooks,
+                  "resourceClaimStatus",
+                );
+                if (
+                  isRecord(hooks) &&
+                  isRecord(currentStatus) &&
+                  readProperty(currentStatus, "state") === "active" &&
+                  (ledgerStatusForGatherCycle === "stale" ||
+                    ledgerStatusForGatherCycle === "unavailable")
+                )
+                  Reflect.set(
+                    hooks,
+                    "resourceClaimStatus",
+                    Object.freeze({
+                      ...currentStatus,
+                      state: "suspended" satisfies ResourceClaimLifecycleState,
+                      reason: `gather-ledger-${ledgerStatusForGatherCycle}`,
+                    }),
+                  );
                 if (isRecord(hooks))
                   Reflect.set(
                     hooks,
@@ -1896,7 +1917,7 @@ export function startCapturedRuntime({
         resourceClaim: claim,
       });
     const setTestClaimStatus = (
-      state: string,
+      state: ResourceClaimLifecycleState,
       reason: string,
       evidence: Readonly<Record<string, unknown>> = {},
     ) => {
@@ -1904,23 +1925,15 @@ export function startCapturedRuntime({
         readProperty(testHooks, "resourceClaimUnavailableCount"),
       );
       const unavailableCount =
-        state === "unavailable"
+        state === "suspended"
           ? (Number.isSafeInteger(previousUnavailableCount) &&
             previousUnavailableCount >= 0
               ? previousUnavailableCount
               : 0) + 1
           : 0;
       Reflect.set(testHooks, "resourceClaimUnavailableCount", unavailableCount);
-      if (state === "unavailable" && unavailableCount >= 3 && previousClaim) {
-        const unavailableReason = reason;
-        replaceTestClaim(undefined);
-        state = "released";
-        reason = "unavailable-observation-expired";
-        evidence = {
-          cause: evidence["cause"] ?? unavailableReason,
-          unavailableCount,
-        };
-      }
+      if (state === "suspended" && unavailableCount >= 3)
+        evidence = { ...evidence, recoveryRequired: true, unavailableCount };
       const status = Object.freeze({
         state,
         reason,
@@ -1934,19 +1947,19 @@ export function startCapturedRuntime({
       history.push(status);
       Reflect.set(testHooks, "resourceClaimLifecycleEvents", history);
     };
-    if (
-      readProperty(intervention, "resourceClaimMode") === "stale-diagnostic"
-    ) {
-      setTestClaimStatus(
-        "diagnostic-stale",
-        "diagnostic-stale-claim-retained",
-        {
-          rootGeneration: previousClaim?.rootGeneration,
-          progressionGeneration: previousClaim?.progressionGeneration,
-          offerObservationId: "diagnostic-stale-observation",
-          offerSetIdentity: "diagnostic-stale-offer-set",
-        },
-      );
+    const resourceClaimMode = readProperty(intervention, "resourceClaimMode");
+    if (resourceClaimMode === "owner-unavailable") {
+      setTestClaimStatus("suspended", "research-owner-observation-unavailable");
+      return;
+    }
+    if (resourceClaimMode === "offer-disappeared") {
+      replaceTestClaim(undefined);
+      setTestClaimStatus("released", "native-offer-disappeared");
+      return;
+    }
+    if (resourceClaimMode === "goal-cancelled") {
+      replaceTestClaim(undefined);
+      setTestClaimStatus("invalidated", "selected-goal-changed");
       return;
     }
     if (previousClaim === undefined) {
@@ -1959,17 +1972,20 @@ export function startCapturedRuntime({
     const root = pageCapture.rootState.readRoot();
     const settings = settingsStore.readRaw();
     if (!isRecord(root) || !isRecord(settings)) {
-      setTestClaimStatus("unavailable", "root-or-settings-unavailable");
+      setTestClaimStatus("suspended", "root-or-settings-unavailable");
       return;
     }
     if (settings["prestigeType"] !== "mad") {
       replaceTestClaim(undefined);
-      setTestClaimStatus("released", "selected-goal-changed");
+      setTestClaimStatus("invalidated", "selected-goal-changed");
       return;
     }
     if (settings["autoResearch"] !== true || settings["autoTrigger"] === true) {
       replaceTestClaim(undefined);
-      setTestClaimStatus("released", "research-permission-or-trigger-changed");
+      setTestClaimStatus(
+        "invalidated",
+        "research-permission-or-trigger-changed",
+      );
       return;
     }
     const queueStates = (["queue", "r_queue"] as const).map((queueId) => {
@@ -1982,35 +1998,51 @@ export function startCapturedRuntime({
     });
     if (queueStates.includes("active")) {
       replaceTestClaim(undefined);
-      setTestClaimStatus("released", "player-queue-present");
+      setTestClaimStatus("invalidated", "player-queue-present");
       return;
     }
     if (queueStates.includes("unavailable")) {
-      setTestClaimStatus("unavailable", "player-queue-observation-unavailable");
+      setTestClaimStatus("suspended", "player-queue-observation-unavailable");
       return;
     }
     const rootGeneration = progression.readRootGeneration();
     if (previousClaim.rootGeneration !== rootGeneration) {
       replaceTestClaim(undefined);
-      setTestClaimStatus("released", "root-replaced");
+      setTestClaimStatus("invalidated", "root-replaced");
       return;
     }
     const offers = progression.readLastResearchOwnerOffers?.();
     const definitions = progression.readResearchActionDefinitions();
     if (offers === undefined || definitions === undefined) {
-      setTestClaimStatus(
-        "unavailable",
-        "research-owner-observation-unavailable",
-      );
+      setTestClaimStatus("suspended", "research-owner-observation-unavailable");
       return;
     }
     const progressionGeneration = progression.readProgressionEpoch();
     const grantLevels = readResearchGrantLevels(root, definitions);
     const targetActionId = previousClaim.nativeActionId;
+    const currentTargetGrant = grantLevels?.get(
+      previousClaim.targetGrantTechnology,
+    );
+    if (currentTargetGrant === undefined) {
+      setTestClaimStatus("suspended", "target-grant-observation-unavailable");
+      return;
+    }
+    if (currentTargetGrant >= previousClaim.targetGrantLevel) {
+      replaceTestClaim(undefined);
+      setTestClaimStatus("completed", "current-research-grant-completed");
+      return;
+    }
     const offer = offers.find((entry) => entry.elementId === targetActionId);
     if (offer === undefined) {
       replaceTestClaim(undefined);
       setTestClaimStatus("released", "native-offer-disappeared");
+      return;
+    }
+    if (
+      typeof offer.offerObservationId !== "string" ||
+      offer.offerObservationId === previousClaim.offerObservationId
+    ) {
+      setTestClaimStatus("suspended", "research-owner-observation-not-fresh");
       return;
     }
     const actionEligibility =
@@ -2021,7 +2053,7 @@ export function startCapturedRuntime({
       return;
     }
     if (actionEligibility !== "eligible") {
-      setTestClaimStatus("unavailable", "native-offer-eligibility-unavailable");
+      setTestClaimStatus("suspended", "native-offer-eligibility-unavailable");
       return;
     }
     if (
@@ -2038,7 +2070,7 @@ export function startCapturedRuntime({
       currentControl.elementId !== targetActionId ||
       !currentControl.methods.includes("action")
     ) {
-      setTestClaimStatus("unavailable", "current-action-binding-unavailable");
+      setTestClaimStatus("suspended", "current-action-binding-unavailable");
       return;
     }
     const manaPrice = offer.cost[previousClaim.resourceId];
@@ -2048,18 +2080,6 @@ export function startCapturedRuntime({
     );
     const amount = Number(readProperty(manaResource, "amount"));
     const capacity = Number(readProperty(manaResource, "max"));
-    const currentTargetGrant = grantLevels?.get(
-      previousClaim.targetGrantTechnology,
-    );
-    if (currentTargetGrant === undefined) {
-      setTestClaimStatus("unavailable", "target-grant-observation-unavailable");
-      return;
-    }
-    if (currentTargetGrant >= previousClaim.targetGrantLevel) {
-      replaceTestClaim(undefined);
-      setTestClaimStatus("released", "current-research-grant-completed");
-      return;
-    }
     const claim = admitResourceClaim({
       terminalGoalId: previousClaim.terminalGoalId,
       immediateGoalId: `research:${targetActionId}`,
@@ -2081,6 +2101,7 @@ export function startCapturedRuntime({
         elementId: targetActionId,
         generation: currentControl.generation,
       }),
+      offerBindingGeneration: offer.generation,
       nativeOfferCurrent: true,
       nativeActionEligible: true,
       researchPermission: true,
@@ -2094,13 +2115,13 @@ export function startCapturedRuntime({
         pageCapture.controls.resolve(targetActionId)?.generation ===
           currentControl.generation,
       precedence: previousClaim.precedence,
+      allocationAuthority: previousClaim.allocationAuthority,
       forecastProductionPerSecond: previousClaim.forecastProductionPerSecond,
       uncertaintyReasons: [],
       unavailableReasons: [],
     });
     if (claim === undefined) {
-      replaceTestClaim(undefined);
-      setTestClaimStatus("released", "current-offer-cannot-be-reserved");
+      setTestClaimStatus("suspended", "current-offer-cannot-be-reserved");
       return;
     }
     const savingTarget = readDemand("pre-Gather").savingTarget;
@@ -2118,7 +2139,7 @@ export function startCapturedRuntime({
           ])
         : Object.freeze([]);
     setTestClaimStatus(
-      "current",
+      "active",
       offer.cost[previousClaim.resourceId] === previousClaim.requiredQuantity
         ? "same-native-offer"
         : "native-price-updated",

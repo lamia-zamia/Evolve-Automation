@@ -1,6 +1,18 @@
 export type ResourceClaimPrecedence =
   "safety" | "player-commitment" | "terminal-prerequisite";
 
+export type ResourceClaimLifecycleState =
+  "active" | "suspended" | "released" | "completed" | "invalidated";
+
+export type ResourceClaimAllocationAuthority =
+  | Readonly<{ kind: "independent" }>
+  | Readonly<{
+      kind: "selected-alternative";
+      groupId: string;
+      selectedActionId: string;
+      authorityId: string;
+    }>;
+
 export interface ResourceClaimEvidence {
   readonly terminalGoalId: string;
   readonly immediateGoalId: string;
@@ -22,6 +34,7 @@ export interface ResourceClaimEvidence {
     elementId: string;
     generation: number;
   }>;
+  readonly offerBindingGeneration: number;
   readonly nativeOfferCurrent: boolean;
   readonly nativeActionEligible: boolean;
   readonly researchPermission: boolean;
@@ -30,6 +43,7 @@ export interface ResourceClaimEvidence {
   readonly progressionGeneration: string;
   readonly observationValid: boolean;
   readonly precedence: ResourceClaimPrecedence;
+  readonly allocationAuthority: ResourceClaimAllocationAuthority;
   readonly forecastProductionPerSecond: number | undefined;
   readonly uncertaintyReasons: readonly string[];
   readonly unavailableReasons: readonly string[];
@@ -56,12 +70,12 @@ export interface ResourceClaimReservation {
 export interface ResourceClaimLedgerInput {
   readonly claims: readonly Readonly<ResourceClaim>[];
   readonly freshness: Readonly<ResourceClaimFreshness> | undefined;
-  readonly controlBinding:
-    | Readonly<{
+  readonly controlBindings:
+    | readonly Readonly<{
         elementId: string;
         generation: number;
         actionCapable: boolean;
-      }>
+      }>[]
     | undefined;
   readonly stock: number;
   readonly knownReservations:
@@ -124,6 +138,7 @@ export function readAdmittedResourceClaim(
       "observedNativePrice",
       "targetGrantLevel",
       "rootGeneration",
+      "offerBindingGeneration",
     ].some((field) => typeof value[field] !== "number") ||
     typeof value["nativeOfferCurrent"] !== "boolean" ||
     typeof value["nativeActionEligible"] !== "boolean" ||
@@ -142,7 +157,9 @@ export function readAdmittedResourceClaim(
     !isRecordValue(controlBinding) ||
     controlBinding["elementId"] !== value["nativeActionId"] ||
     typeof controlBinding["generation"] !== "number" ||
-    !Number.isSafeInteger(controlBinding["generation"])
+    !Number.isSafeInteger(controlBinding["generation"]) ||
+    typeof value["offerBindingGeneration"] !== "number" ||
+    !Number.isSafeInteger(value["offerBindingGeneration"])
   )
     return undefined;
   const precedence = value["precedence"];
@@ -160,6 +177,21 @@ export function readAdmittedResourceClaim(
     queueEvidence !== "unavailable"
   )
     return undefined;
+  const allocationAuthority = value["allocationAuthority"];
+  if (!isRecordValue(allocationAuthority)) return undefined;
+  if (allocationAuthority["kind"] === "independent") {
+    // Additive intent is explicit; no path selection is implied.
+  } else if (
+    allocationAuthority["kind"] === "selected-alternative" &&
+    typeof allocationAuthority["groupId"] === "string" &&
+    allocationAuthority["groupId"] !== "" &&
+    typeof allocationAuthority["selectedActionId"] === "string" &&
+    allocationAuthority["selectedActionId"] !== "" &&
+    typeof allocationAuthority["authorityId"] === "string" &&
+    allocationAuthority["authorityId"] !== ""
+  ) {
+    // The named owner supplies selection authority; the ledger never chooses a path.
+  } else return undefined;
   const forecastProductionPerSecond = value["forecastProductionPerSecond"];
   if (
     forecastProductionPerSecond !== undefined &&
@@ -204,6 +236,11 @@ export function admitResourceClaim(
     !evidence.offerSetIdentity ||
     evidence.controlBinding.elementId !== evidence.nativeActionId ||
     !Number.isSafeInteger(evidence.controlBinding.generation) ||
+    !Number.isSafeInteger(evidence.offerBindingGeneration) ||
+    (evidence.allocationAuthority.kind === "selected-alternative" &&
+      (evidence.allocationAuthority.groupId === "" ||
+        evidence.allocationAuthority.selectedActionId === "" ||
+        evidence.allocationAuthority.authorityId === "")) ||
     !evidence.observationValid ||
     evidence.unavailableReasons.length > 0
   )
@@ -213,6 +250,8 @@ export function admitResourceClaim(
     evidence.terminalGoalId,
     evidence.immediateGoalId,
     evidence.nativeActionId,
+    evidence.targetGrantTechnology,
+    String(evidence.targetGrantLevel),
     evidence.resourceId,
     evidence.poolId,
   ].join("|");
@@ -231,11 +270,46 @@ function matchesFreshness(
   );
 }
 
+function sameClaimObligation(
+  left: Readonly<ResourceClaim>,
+  right: Readonly<ResourceClaim>,
+): boolean {
+  return (
+    left.requiredQuantity === right.requiredQuantity &&
+    left.observedNativePrice === right.observedNativePrice &&
+    left.targetGrantTechnology === right.targetGrantTechnology &&
+    left.targetGrantLevel === right.targetGrantLevel &&
+    left.offerSetIdentity === right.offerSetIdentity &&
+    left.offerObservationId === right.offerObservationId &&
+    left.controlBinding.generation === right.controlBinding.generation &&
+    left.offerBindingGeneration === right.offerBindingGeneration &&
+    JSON.stringify(left.allocationAuthority) ===
+      JSON.stringify(right.allocationAuthority)
+  );
+}
+
 /** Accounts for each admitted claim once; forecast output never increases spendable stock. */
 export function planResourceClaimLedger(
   input: Readonly<ResourceClaimLedgerInput>,
 ): Readonly<ResourceClaimLedger> {
-  const claims = input.claims
+  const claimsById = new Map<string, Readonly<ResourceClaim>>();
+  for (const claim of input.claims) {
+    const existing = claimsById.get(claim.claimId);
+    if (existing !== undefined && !sameClaimObligation(existing, claim)) {
+      return Object.freeze({
+        status: "unavailable",
+        currentStock: validNonNegative(input.stock) ? input.stock : 0,
+        currentStockReserved: 0,
+        remainingAccumulation: 0,
+        forecastProductionPerSecond: input.forecastProductionPerSecond,
+        spendableStock: 0,
+        claimIds: Object.freeze([claim.claimId]),
+        reasons: Object.freeze(["duplicate claim ID has conflicting evidence"]),
+      });
+    }
+    if (existing === undefined) claimsById.set(claim.claimId, claim);
+  }
+  const claims = [...claimsById.values()]
     .filter(
       (claim) =>
         claim.resourceId !== "" &&
@@ -306,13 +380,18 @@ export function planResourceClaimLedger(
     });
   }
 
+  const bindingById = new Map(
+    (input.controlBindings ?? []).map((binding) => [
+      binding.elementId,
+      binding,
+    ]),
+  );
   if (
-    input.controlBinding === undefined ||
-    !input.controlBinding.actionCapable ||
-    claims.some(
-      (claim) =>
-        claim.controlBinding.elementId !== input.controlBinding?.elementId,
-    )
+    input.controlBindings === undefined ||
+    claims.some((claim) => {
+      const binding = bindingById.get(claim.nativeActionId);
+      return binding === undefined || !binding.actionCapable;
+    })
   ) {
     return Object.freeze({
       status: "unavailable",
@@ -324,6 +403,26 @@ export function planResourceClaimLedger(
       claimIds: Object.freeze(claims.map((claim) => claim.claimId)),
       reasons: Object.freeze([
         "current control binding does not resolve the claimed action",
+      ]),
+    });
+  }
+  if (
+    claims.some(
+      (claim) =>
+        bindingById.get(claim.nativeActionId)?.generation !==
+        claim.controlBinding.generation,
+    )
+  ) {
+    return Object.freeze({
+      status: "stale",
+      currentStock: input.stock,
+      currentStockReserved: 0,
+      remainingAccumulation: 0,
+      forecastProductionPerSecond: input.forecastProductionPerSecond,
+      spendableStock: 0,
+      claimIds: Object.freeze(claims.map((claim) => claim.claimId)),
+      reasons: Object.freeze([
+        "current control binding differs from the owner offer observation",
       ]),
     });
   }
@@ -343,10 +442,54 @@ export function planResourceClaimLedger(
     });
   }
 
-  const first = claims[0];
+  const claimsByAuthorityGroup = new Map<string, Readonly<ResourceClaim>[]>();
+  for (const claim of claims) {
+    if (claim.allocationAuthority.kind !== "selected-alternative") continue;
+    const group = claimsByAuthorityGroup.get(claim.allocationAuthority.groupId);
+    if (group === undefined)
+      claimsByAuthorityGroup.set(claim.allocationAuthority.groupId, [claim]);
+    else group.push(claim);
+  }
+  const selectedAlternativeIds = new Set<string>();
+  for (const group of claimsByAuthorityGroup.values()) {
+    const firstAuthority = group[0]?.allocationAuthority;
+    if (firstAuthority?.kind !== "selected-alternative") continue;
+    const consistent = group.every(
+      (claim) =>
+        claim.allocationAuthority.kind === "selected-alternative" &&
+        claim.allocationAuthority.selectedActionId ===
+          firstAuthority.selectedActionId &&
+        claim.allocationAuthority.authorityId === firstAuthority.authorityId,
+    );
+    const selected = group.filter(
+      (claim) => claim.nativeActionId === firstAuthority.selectedActionId,
+    );
+    if (!consistent || selected.length !== 1) {
+      return Object.freeze({
+        status: "unavailable",
+        currentStock: input.stock,
+        currentStockReserved: 0,
+        remainingAccumulation: 0,
+        forecastProductionPerSecond: input.forecastProductionPerSecond,
+        spendableStock: 0,
+        claimIds: Object.freeze(claims.map((claim) => claim.claimId)),
+        reasons: Object.freeze([
+          "alternative claims lack one verified selected path",
+        ]),
+      });
+    }
+    const chosen = selected[0];
+    if (chosen !== undefined) selectedAlternativeIds.add(chosen.claimId);
+  }
+  const allocatedClaims = claims.filter(
+    (claim) =>
+      claim.allocationAuthority.kind === "independent" ||
+      selectedAlternativeIds.has(claim.claimId),
+  );
+  const first = allocatedClaims[0];
   if (first === undefined) throw new TypeError("claim set unexpectedly empty");
   if (
-    claims.some(
+    allocatedClaims.some(
       (claim) =>
         claim.resourceId !== first.resourceId || claim.poolId !== first.poolId,
     )
@@ -358,7 +501,7 @@ export function planResourceClaimLedger(
       remainingAccumulation: 0,
       forecastProductionPerSecond: input.forecastProductionPerSecond,
       spendableStock: 0,
-      claimIds: Object.freeze(claims.map((claim) => claim.claimId)),
+      claimIds: Object.freeze(allocatedClaims.map((claim) => claim.claimId)),
       reasons: Object.freeze(["ledger input mixes resource pools"]),
     });
   }
@@ -390,7 +533,7 @@ export function planResourceClaimLedger(
   let available = Math.max(0, input.stock - reservationTotal);
   let currentStockReserved = 0;
   let remainingAccumulation = 0;
-  for (const claim of claims) {
+  for (const claim of allocatedClaims) {
     const reserved = Math.min(available, claim.requiredQuantity);
     available -= reserved;
     currentStockReserved += reserved;
@@ -403,9 +546,9 @@ export function planResourceClaimLedger(
     remainingAccumulation,
     forecastProductionPerSecond: input.forecastProductionPerSecond,
     spendableStock: available,
-    claimIds: Object.freeze(claims.map((claim) => claim.claimId)),
+    claimIds: Object.freeze(allocatedClaims.map((claim) => claim.claimId)),
     reasons: Object.freeze([
-      ...new Set(claims.flatMap((claim) => claim.uncertaintyReasons)),
+      ...new Set(allocatedClaims.flatMap((claim) => claim.uncertaintyReasons)),
     ]),
   });
 }
