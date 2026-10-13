@@ -1047,6 +1047,8 @@ assert.equal(researchControl.readGrantedTechs(), undefined);
   let cycle = 0;
   let draws = 0;
   let failBankCapture = true;
+  let unknownAvailabilityOnce = false;
+  let postDrawUnknownUsed = false;
   const ids = new Set([MAIN_TAB_CONTROL, SUB_TAB_CONTROLS[SPACE_TABS_SETTING]]);
   const listeners = [];
   const performanceCounts = new Map();
@@ -1066,15 +1068,21 @@ assert.equal(researchControl.readGrantedTechs(), undefined);
       includeCityMine
         ? structures
         : structures.filter((structure) => structure.actionId !== "city-mine"),
-    availability: (currentRoot, binding) => ({
-      kind: "value",
-      value:
-        (binding === "city-farm" && currentRoot.tech.farming === 1) ||
-        (binding === "city-bank" && currentRoot.tech.bank === 1) ||
-        (binding === "city-mine" && currentRoot.tech.mining === 1) ||
-        (binding === "space-titan_mine" &&
-          currentRoot.space.titan_quarters.count > 0),
-    }),
+    availability: (currentRoot, binding) => {
+      if (unknownAvailabilityOnce) {
+        unknownAvailabilityOnce = false;
+        return { kind: "unknown" };
+      }
+      return {
+        kind: "value",
+        value:
+          (binding === "city-farm" && currentRoot.tech.farming === 1) ||
+          (binding === "city-bank" && currentRoot.tech.bank === 1) ||
+          (binding === "city-mine" && currentRoot.tech.mining === 1) ||
+          (binding === "space-titan_mine" &&
+            currentRoot.space.titan_quarters.count > 0),
+      };
+    },
   });
   const buildControl = createCapturedProgressionControl({
     rootState: {
@@ -1105,6 +1113,10 @@ assert.equal(researchControl.readGrantedTechs(), undefined);
         } else {
           root.settings[SPACE_TABS_SETTING] = args[0];
           draws += 1;
+          if (args[0] === 0 && root.tech.bank === 1 && !postDrawUnknownUsed) {
+            unknownAvailabilityOnce = true;
+            postDrawUnknownUsed = true;
+          }
           if (args[0] === 0 && root.tech.farming === 1) ids.add("city-farm");
           if (args[0] === 0 && root.tech.bank === 1 && !failBankCapture)
             ids.add("city-bank");
@@ -1144,9 +1156,17 @@ assert.equal(researchControl.readGrantedTechs(), undefined);
   ensureBuildControlsAndAssertReaderRefresh(1);
   assert.equal(draws, 0, "no native offered building needs a missing control");
   assert.equal(
-    performancePhases.get("discovery.capability-snapshot build-controls"),
+    performancePhases.get("discovery.capability-index-build build-controls"),
     1,
     "the cached native structure index has its own phase attribution",
+  );
+  assert.equal(
+    performanceCounts.get("discovery.capability-request build-controls"),
+    1,
+  );
+  assert.equal(
+    performanceCounts.get("discovery.capability-index-build build-controls"),
+    1,
   );
   for (const setting of [
     "showDeep",
@@ -1164,6 +1184,11 @@ assert.equal(researchControl.readGrantedTechs(), undefined);
   root.arpa.lhc.rank++;
   ensureBuildControlsAndAssertReaderRefresh();
   assert.equal(draws, 0, "unrelated A.R.P.A. rank progress does not draw");
+  assert.equal(
+    performanceCounts.get("discovery.capability-index-reuse build-controls"),
+    1,
+    "a repeated coverage request reuses the structural index",
+  );
   root.tech.mining = 1;
   ensureBuildControlsAndAssertReaderRefresh();
   assert.equal(draws, 0, "unrelated technology progress does not draw");
@@ -1189,6 +1214,12 @@ assert.equal(researchControl.readGrantedTechs(), undefined);
   root.tech.bank = 1;
   ensureBuildControlsAndAssertReaderRefresh();
   assert.equal(draws, 3, "a second newly offered city action gets one draw");
+  ensureBuildControlsAndAssertReaderRefresh(1);
+  assert.equal(
+    draws,
+    3,
+    "unknown post-draw coverage invalidates the index without bypassing retry backoff",
+  );
   assert.equal(
     ids.has("city-bank"),
     false,
@@ -1198,7 +1229,7 @@ assert.equal(researchControl.readGrantedTechs(), undefined);
   assert.equal(draws, 3, "a failed attempt respects same-cycle retry backoff");
   assert.equal(
     performanceCounts.get(
-      "discovery.capability-remains-missing build-controls civTabs:1/spaceTabs:0 city-bank",
+      "discovery.capability-remains-unknown build-controls civTabs:1/spaceTabs:0",
     ),
     1,
     "profiling identifies the still-missing native building capability",

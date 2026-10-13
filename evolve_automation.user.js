@@ -11888,16 +11888,16 @@
         shownTabs.push({ index, profileLabel });
       }
       if (shownTabs.length === 0) return;
-      tally.enabled && tally.count("discovery.capability-snapshot build-controls");
+      tally.enabled && tally.count("discovery.capability-request build-controls");
       let coverageTabs = shownTabs.map(({ index }) => index).join(",");
-      (buildControlCoverageReader === void 0 || buildControlCoverageTabs !== coverageTabs) && (buildControlCoverageReader = measure(
-        "discovery.capability-snapshot build-controls",
+      buildControlCoverageReader === void 0 || buildControlCoverageTabs !== coverageTabs ? (tally.enabled && tally.count("discovery.capability-index-build build-controls"), buildControlCoverageReader = measure(
+        "discovery.capability-index-build build-controls",
         () => createIndexedCapturedBuildControlCoverageReader(
           shownTabs.map(({ index }) => index),
           controls2,
           mechanics
         )
-      ), buildControlCoverageTabs = coverageTabs);
+      ), buildControlCoverageTabs = coverageTabs) : tally.enabled && tally.count("discovery.capability-index-reuse build-controls");
       let coverageReader = buildControlCoverageReader;
       for (let { index, profileLabel } of shownTabs) {
         let readCoverage = () => coverageReader.read(rootState.readRoot(), index), measureCoverage = () => profileLabel === void 0 ? readCoverage() : (tally.count(`discovery.capability-check ${profileLabel}`), measure(
@@ -11926,7 +11926,7 @@
           continue;
         }
         let succeeded = sweepBuildControls(index), afterDraw = measureCoverage();
-        if (succeeded && afterDraw.kind === "complete")
+        if (afterDraw.kind === "unknown" && resetBuildControlCoverageReader(), succeeded && afterDraw.kind === "complete")
           discoveryAttempts.recordSuccess(attemptKey, "complete");
         else {
           if (profileLabel !== void 0)

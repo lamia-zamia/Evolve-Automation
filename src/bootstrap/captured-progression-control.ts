@@ -452,14 +452,16 @@ export function createCapturedProgressionControl(
     if (shownTabs.length === 0) return;
 
     if (tally.enabled)
-      tally.count("discovery.capability-snapshot build-controls");
+      tally.count("discovery.capability-request build-controls");
     const coverageTabs = shownTabs.map(({ index }) => index).join(",");
     if (
       buildControlCoverageReader === undefined ||
       buildControlCoverageTabs !== coverageTabs
     ) {
+      if (tally.enabled)
+        tally.count("discovery.capability-index-build build-controls");
       buildControlCoverageReader = measure(
-        "discovery.capability-snapshot build-controls",
+        "discovery.capability-index-build build-controls",
         () =>
           createIndexedCapturedBuildControlCoverageReader(
             shownTabs.map(({ index }) => index),
@@ -468,7 +470,8 @@ export function createCapturedProgressionControl(
           ),
       );
       buildControlCoverageTabs = coverageTabs;
-    }
+    } else if (tally.enabled)
+      tally.count("discovery.capability-index-reuse build-controls");
     const coverageReader = buildControlCoverageReader;
 
     for (const { index, profileLabel } of shownTabs) {
@@ -516,6 +519,7 @@ export function createCapturedProgressionControl(
 
       const succeeded = sweepBuildControls(index);
       const afterDraw = measureCoverage();
+      if (afterDraw.kind === "unknown") resetBuildControlCoverageReader();
       if (succeeded && afterDraw.kind === "complete")
         discoveryAttempts.recordSuccess(attemptKey, "complete");
       else {

@@ -82,8 +82,8 @@ assert.equal(ownerOneAfter.observedNativeExpenditure, 25);
 assert.equal(ownerOneAfter.budgetRemaining, 45);
 assert.equal(ownerOneAfter.pendingReservations.length, 0);
 
-// A valid reservation still fails against the stale pre-spend observation after reconciliation.
-const staleSecondOwner = reserveSharedResourceSpend(
+// A stale observation id is rejected even when its quantity happens to match.
+const staleSecondOwnerId = reserveSharedResourceSpend(
   ownerOneAfter,
   {
     id: "construction",
@@ -94,8 +94,23 @@ const staleSecondOwner = reserveSharedResourceSpend(
   },
   { id: "stock-1", quantity: 100 },
 );
-assert.equal(staleSecondOwner.status, "invalidated");
-assert.equal(staleSecondOwner.budgetRemaining, 0);
+assert.equal(staleSecondOwnerId.status, "invalidated");
+assert.equal(staleSecondOwnerId.budgetRemaining, 0);
+
+// A changed quantity is rejected even when the observation id is still current.
+const staleSecondOwnerQuantity = reserveSharedResourceSpend(
+  ownerOneAfter,
+  {
+    id: "construction-quantity-check",
+    resourceId: "Mana",
+    poolId: "anywhere",
+    expectedDebit: 10,
+    stockObservationId: "stock-2",
+  },
+  { id: "stock-2", quantity: 74 },
+);
+assert.equal(staleSecondOwnerQuantity.status, "invalidated");
+assert.equal(staleSecondOwnerQuantity.budgetRemaining, 0);
 
 // Adopting the invalid result from an attempted concurrent reservation also means the
 // in-flight reservation can no longer be reconciled through that returned budget.
