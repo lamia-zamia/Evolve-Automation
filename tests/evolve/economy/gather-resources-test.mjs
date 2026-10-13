@@ -109,6 +109,135 @@ assert.deepEqual(
   ],
 );
 
+const claimBudget = (spendableStock) => ({
+  status: "current",
+  currentStock: 2,
+  currentStockReserved: 2 - spendableStock,
+  remainingAccumulation: 50 - (2 - spendableStock),
+  forecastProductionPerSecond: 4.94,
+  spendableStock,
+  claimIds: ["prestige:mad|research:tech-mad_science"],
+  reasons: [],
+});
+const sharedClaimBudget = planGatherResources(
+  makeInput({
+    materialConjuring: true,
+    clickLimit: 3,
+    resourceClaimLedger: claimBudget(1),
+    clickable: { ...makeInput().clickable, lumber: true, stone: true },
+    resources: {
+      ...makeInput().resources,
+      Mana: { currentQuantity: 2, maxQuantity: 100 },
+    },
+  }),
+);
+assert.deepEqual(
+  sharedClaimBudget.operations.map((operation) => operation.actionId),
+  ["lumber"],
+);
+assert.equal(sharedClaimBudget.operations[0].amount, 1);
+assert.deepEqual(sharedClaimBudget.operations[0].afterAction, [
+  { resourceId: "Mana", expectedQuantity: 2, quantity: 1 },
+  { resourceId: "Lumber", expectedQuantity: 0, quantity: 10 },
+]);
+
+const ordinaryAfterBudgetedSpend = planGatherResources(
+  makeInput({
+    materialConjuring: true,
+    clickLimit: 3,
+    resourceClaimLedger: claimBudget(1),
+    clickable: { ...makeInput().clickable, lumber: true, stone: true },
+    resources: {
+      ...makeInput().resources,
+      Mana: { currentQuantity: 1.5, maxQuantity: 100 },
+    },
+  }),
+);
+assert.deepEqual(
+  ordinaryAfterBudgetedSpend.operations.map(({ actionId, amount }) => [
+    actionId,
+    amount,
+  ]),
+  [
+    ["lumber", 3],
+    ["stone", 3],
+  ],
+);
+assert.equal(
+  ordinaryAfterBudgetedSpend.operations[0].afterAction[0].quantity,
+  0.5,
+);
+
+const foodSafetyPrecedence = planGatherResources(
+  makeInput({
+    foodConjuring: true,
+    materialConjuring: true,
+    clickLimit: 1,
+    resourceClaimLedger: claimBudget(0),
+    clickable: { ...makeInput().clickable, food: true, lumber: true },
+    resources: {
+      ...makeInput().resources,
+      Food: { currentQuantity: 0, maxQuantity: 100 },
+      Mana: { currentQuantity: 2, maxQuantity: 100 },
+    },
+  }),
+);
+assert.deepEqual(
+  foodSafetyPrecedence.operations.map(({ actionId }) => actionId),
+  ["food"],
+);
+assert.equal(foodSafetyPrecedence.operations[0].afterAction[0].quantity, 1);
+
+const positiveFoodRespectsClaim = planGatherResources(
+  makeInput({
+    foodConjuring: true,
+    clickLimit: 1,
+    resourceClaimLedger: claimBudget(0),
+    clickable: { ...makeInput().clickable, food: true },
+    resources: {
+      ...makeInput().resources,
+      Food: { currentQuantity: 1, maxQuantity: 100 },
+      Mana: { currentQuantity: 2, maxQuantity: 100 },
+    },
+  }),
+);
+assert.equal(positiveFoodRespectsClaim, null);
+
+const staleClaimDoesNotReopenBudgetAfterSafetyWork = planGatherResources(
+  makeInput({
+    foodConjuring: true,
+    materialConjuring: true,
+    clickLimit: 3,
+    resourceClaimLedger: {
+      ...claimBudget(0),
+      status: "stale",
+      currentStock: 10.8,
+      currentStockReserved: 0,
+    },
+    clickable: {
+      ...makeInput().clickable,
+      food: true,
+      lumber: true,
+      stone: true,
+    },
+    resources: {
+      ...makeInput().resources,
+      Food: { currentQuantity: 0, maxQuantity: 100 },
+      Mana: { currentQuantity: 10.8, maxQuantity: 100 },
+    },
+  }),
+);
+assert.deepEqual(
+  staleClaimDoesNotReopenBudgetAfterSafetyWork.operations.map(
+    ({ actionId }) => actionId,
+  ),
+  ["food"],
+);
+assert.equal(
+  staleClaimDoesNotReopenBudgetAfterSafetyWork.operations[0].amount,
+  1,
+);
+
 const capped = planGatherResources(foodWithMana(1, 5));
 assert.equal(capped.operations[0].amount, 1);
 assert.deepEqual(capped.operations[0].afterAction, [

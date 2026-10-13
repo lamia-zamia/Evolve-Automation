@@ -14,6 +14,12 @@ import type {
   GatherResourcesDecision,
   GatherResourcesInput,
 } from "../../../../domain/economy/resources/gather-resources.ts";
+import {
+  planResourceClaimLedger,
+  readAdmittedResourceClaim,
+  type ResourceClaimFreshness,
+  type ResourceClaimReservation,
+} from "../../../../domain/economy/resources/resource-claims.ts";
 import type { DecisionExecutor } from "../../../../ports/decision-executor.ts";
 import type { GatherResourcesReader } from "../../../../ports/gather-resources.ts";
 import type { GameControlRegistry } from "../../../../ports/game-control-registry.ts";
@@ -51,6 +57,11 @@ interface ResourceState {
 
 interface CapturedGatherSession {
   readonly root: unknown;
+  readonly resourceClaimLedger:
+    ReturnType<typeof planResourceClaimLedger> | undefined;
+  readonly foodConjuring: boolean;
+  readonly materialConjuring: boolean;
+  readonly manaQuantity: number;
 }
 
 export interface CapturedGatherResourcesDependencies {
@@ -81,7 +92,9 @@ function readResource(
 }
 
 function readTechLevel(root: unknown, id: string): number {
-  return numberValue(readProperty(readProperty(root, "tech"), id));
+  const level = numberValue(readProperty(readProperty(root, "tech"), id));
+  // DeadSpace omits unresearched technology keys; treat an absent grant as level zero.
+  return Number.isNaN(level) ? 0 : level;
 }
 
 function readStrongMultiplier(root: unknown): number {
@@ -150,6 +163,53 @@ function emptyInput(): GatherResourcesInput {
 
 function currentQuantity(root: unknown, resourceId: GatherResourceId): number {
   return readResource(root, resourceId).currentQuantity;
+}
+
+function readClaimFreshness(
+  value: unknown,
+): ResourceClaimFreshness | undefined {
+  const rootGeneration = readProperty(value, "rootGeneration");
+  const progressionGeneration = readProperty(value, "progressionGeneration");
+  const offerGeneration = readProperty(value, "offerGeneration");
+  return typeof rootGeneration === "number" &&
+    Number.isSafeInteger(rootGeneration) &&
+    typeof progressionGeneration === "string" &&
+    progressionGeneration.length > 0 &&
+    typeof offerGeneration === "number" &&
+    Number.isSafeInteger(offerGeneration)
+    ? Object.freeze({ rootGeneration, progressionGeneration, offerGeneration })
+    : undefined;
+}
+
+function readClaimReservations(
+  value: unknown,
+): readonly Readonly<ResourceClaimReservation>[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const reservations: ResourceClaimReservation[] = [];
+  for (const entry of value) {
+    const resourceId = readProperty(entry, "resourceId");
+    const poolId = readProperty(entry, "poolId");
+    const quantity = readProperty(entry, "quantity");
+    if (
+      typeof resourceId !== "string" ||
+      typeof poolId !== "string" ||
+      typeof quantity !== "number" ||
+      !Number.isFinite(quantity) ||
+      quantity < 0
+    )
+      return undefined;
+    reservations.push(Object.freeze({ resourceId, poolId, quantity }));
+  }
+  return Object.freeze(reservations);
+}
+
+function hasQueueEntriesOrUnavailable(
+  root: unknown,
+  queueId: "queue" | "r_queue",
+): boolean {
+  const queue = readProperty(root, queueId);
+  const entries = readProperty(queue, "queue");
+  return !Array.isArray(entries) || entries.length > 0;
 }
 
 function assignmentsMatch(
@@ -234,30 +294,91 @@ export function createCapturedGatherResourcesAdapter({
         chrysotile: readControl(controls, "chrysotile"),
         slaughter: readControl(controls, "slaughter"),
       });
-      const testManaConservation =
-        typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
-        __EA_TEST_SURFACE_ENABLED__ === true &&
-        readProperty(readTestIntervention?.(), "manaConservationExperiment") ===
-          true &&
-        resources.Mana.currentQuantity >= 1;
       const foodConjuring = readTechLevel(root, "conjuring") >= 1;
       const materialConjuring = readTechLevel(root, "conjuring") >= 2;
-      const foodCanSpendMana =
-        testManaConservation &&
-        foodConjuring &&
-        resources.Food.currentQuantity < resources.Food.maxQuantity;
-      const materialsCanSpendMana =
-        testManaConservation &&
-        materialConjuring &&
-        resources.Lumber.currentQuantity < resources.Lumber.maxQuantity;
-      const stoneCanSpendMana =
-        testManaConservation &&
-        materialConjuring &&
-        resources.Stone.currentQuantity < resources.Stone.maxQuantity;
-      const chrysotileCanSpendMana =
-        testManaConservation &&
-        materialConjuring &&
-        resources.Chrysotile.currentQuantity < resources.Chrysotile.maxQuantity;
+      let resourceClaimLedger:
+        ReturnType<typeof planResourceClaimLedger> | undefined;
+      if (
+        typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
+        __EA_TEST_SURFACE_ENABLED__ === true
+      ) {
+        const intervention = readTestIntervention?.();
+        const claim = readAdmittedResourceClaim(
+          readProperty(intervention, "resourceClaim"),
+        );
+        const freshness = readClaimFreshness(
+          readProperty(intervention, "resourceClaimFreshness"),
+        );
+        const reservations = readClaimReservations(
+          readProperty(intervention, "resourceClaimReservations"),
+        );
+        const claimStillRelevant =
+          claim !== undefined &&
+          settingsValue["prestigeType"] === "mad" &&
+          settingsValue["autoResearch"] === true &&
+          settingsValue["autoTrigger"] !== true &&
+          !hasQueueEntriesOrUnavailable(root, "queue") &&
+          !hasQueueEntriesOrUnavailable(root, "r_queue") &&
+          readTechLevel(root, claim.targetGrantTechnology) <
+            claim.targetGrantLevel;
+        if (claimStillRelevant && claim !== undefined) {
+          const currentClaim = readAdmittedResourceClaim({
+            ...claim,
+            observedStock: resources.Mana.currentQuantity,
+            observedCapacity: resources.Mana.maxQuantity,
+            nativeOfferCurrent: true,
+            nativeActionEligible: true,
+            researchPermission: true,
+            queueEvidence: "empty",
+            observationValid: true,
+          });
+          if (currentClaim !== undefined) {
+            const currentFreshness =
+              freshness ??
+              Object.freeze({
+                rootGeneration: -1,
+                progressionGeneration: "unavailable",
+                offerGeneration: -1,
+              });
+            resourceClaimLedger = planResourceClaimLedger({
+              claims: [currentClaim],
+              freshness: currentFreshness,
+              stock: resources.Mana.currentQuantity,
+              knownReservations: reservations,
+              forecastProductionPerSecond:
+                currentClaim.forecastProductionPerSecond,
+            });
+          }
+        }
+        const ledgerObserver = readProperty(
+          intervention,
+          "resourceClaimLedgerObserver",
+        );
+        if (typeof ledgerObserver === "function")
+          ledgerObserver(
+            resourceClaimLedger ??
+              Object.freeze({
+                status: "no-ledger",
+                claimParsed: claim !== undefined,
+                freshnessAvailable: freshness !== undefined,
+                researchSelected: settingsValue["prestigeType"] === "mad",
+                researchAllowed: settingsValue["autoResearch"] === true,
+                triggersDisabled: settingsValue["autoTrigger"] !== true,
+                constructionQueueActive: hasQueueEntriesOrUnavailable(
+                  root,
+                  "queue",
+                ),
+                researchQueueActive: hasQueueEntriesOrUnavailable(
+                  root,
+                  "r_queue",
+                ),
+                targetIncomplete:
+                  claim !== undefined &&
+                  readTechLevel(root, claim.targetGrantTechnology) <
+                    claim.targetGrantLevel,
+              }),
+          );
+      }
       const furs = readProperty(readProperty(root, "resource"), "Furs");
       const input = Object.freeze({
         stopped,
@@ -273,20 +394,24 @@ export function createCapturedGatherResourcesAdapter({
         primitive: readTechLevel(root, "primitive") >= 1,
         foodConjuring,
         materialConjuring,
+        ...(resourceClaimLedger === undefined ? {} : { resourceClaimLedger }),
         fursUnlocked: Boolean(readProperty(furs, "display")),
         clickable: Object.freeze({
-          food: controlsByAction.food !== undefined && !foodCanSpendMana,
-          lumber:
-            controlsByAction.lumber !== undefined && !materialsCanSpendMana,
-          stone: controlsByAction.stone !== undefined && !stoneCanSpendMana,
-          chrysotile:
-            controlsByAction.chrysotile !== undefined &&
-            !chrysotileCanSpendMana,
+          food: controlsByAction.food !== undefined,
+          lumber: controlsByAction.lumber !== undefined,
+          stone: controlsByAction.stone !== undefined,
+          chrysotile: controlsByAction.chrysotile !== undefined,
           slaughter: controlsByAction.slaughter !== undefined,
         }),
         resources,
       });
-      session = Object.freeze({ root });
+      session = Object.freeze({
+        root,
+        resourceClaimLedger,
+        foodConjuring,
+        materialConjuring,
+        manaQuantity: resources.Mana.currentQuantity,
+      });
       return input;
     },
   });
@@ -303,7 +428,39 @@ export function createCapturedGatherResourcesAdapter({
       if (rootState.readRoot() !== active.root) {
         return stale("gather-root-changed", "captured game root changed");
       }
+      if (
+        typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
+        __EA_TEST_SURFACE_ENABLED__ === true
+      ) {
+        const intervention = readTestIntervention?.();
+        const decisionObserver = readProperty(
+          intervention,
+          "resourceClaimDecisionObserver",
+        );
+        if (typeof decisionObserver === "function")
+          decisionObserver(
+            Object.freeze({
+              ledgerStatus: active.resourceClaimLedger?.status ?? "none",
+              spendableStock: active.resourceClaimLedger?.spendableStock,
+              observedMana: active.manaQuantity,
+              materialConjuring: active.materialConjuring,
+              conjuringLevel: readTechLevel(active.root, "conjuring"),
+              operations: Object.freeze(
+                decision.operations.map((operation) =>
+                  Object.freeze({
+                    actionId: operation.actionId,
+                    amount: operation.amount,
+                  }),
+                ),
+              ),
+            }),
+          );
+      }
       let previousIndex = -1;
+      let remainingClaimSpend =
+        active.resourceClaimLedger?.spendableStock ?? Infinity;
+      let foodSafetyManaAllowance =
+        active.resourceClaimLedger === undefined ? 0 : 1;
       for (const operation of decision.operations) {
         const actionIndex = ACTION_ORDER.indexOf(operation.actionId);
         if (
@@ -343,6 +500,37 @@ export function createCapturedGatherResourcesAdapter({
             );
           }
           for (let index = 0; index < operation.amount; index += 1) {
+            const beforeClickRoot = rootState.readRoot();
+            if (beforeClickRoot !== active.root) {
+              return stale(
+                "gather-root-changed",
+                `captured game root changed before ${operation.actionId}`,
+              );
+            }
+            const manaBefore = readResource(
+              beforeClickRoot,
+              "Mana",
+            ).currentQuantity;
+            const conjuring =
+              operation.actionId === "food"
+                ? active.foodConjuring
+                : active.materialConjuring;
+            const foodSafetyOverride =
+              operation.actionId === "food" &&
+              readResource(beforeClickRoot, "Food").currentQuantity <= 0;
+            const expectedManaSpend = conjuring && manaBefore >= 1;
+            if (
+              active.resourceClaimLedger !== undefined &&
+              expectedManaSpend &&
+              remainingClaimSpend +
+                (foodSafetyOverride ? foodSafetyManaAllowance : 0) <
+                1
+            ) {
+              return stale(
+                "gather-claim-budget-exhausted",
+                `Mana claim budget was exhausted before ${operation.actionId}`,
+              );
+            }
             const result = controls.invoke(handle, "action");
             if (!result.ok) {
               return result.reason === "stale-control"
@@ -351,6 +539,54 @@ export function createCapturedGatherResourcesAdapter({
                     "gather-click-failed",
                     result.detail ?? result.reason,
                   );
+            }
+            if (active.resourceClaimLedger !== undefined) {
+              const afterClickRoot = rootState.readRoot();
+              if (afterClickRoot !== active.root) {
+                return stale(
+                  "gather-root-changed",
+                  `captured game root changed after ${operation.actionId}`,
+                );
+              }
+              const manaAfter = readResource(
+                afterClickRoot,
+                "Mana",
+              ).currentQuantity;
+              const actualManaSpend = manaBefore - manaAfter;
+              if (
+                !Number.isFinite(manaAfter) ||
+                actualManaSpend < 0 ||
+                (expectedManaSpend && Math.abs(actualManaSpend - 1) > 1e-9) ||
+                (!expectedManaSpend && actualManaSpend > 1e-9)
+              ) {
+                return stale(
+                  "gather-mana-postcondition",
+                  `Mana changed unexpectedly after ${operation.actionId}`,
+                );
+              }
+              const claimBudgetBeforeClick = remainingClaimSpend;
+              const claimBudgetOverage = Math.max(
+                0,
+                actualManaSpend - claimBudgetBeforeClick,
+              );
+              const allowedSafetyOverage = foodSafetyOverride
+                ? foodSafetyManaAllowance
+                : 0;
+              if (claimBudgetOverage > allowedSafetyOverage + 1e-9) {
+                return stale(
+                  "gather-claim-budget-exceeded",
+                  `Mana claim budget was exceeded by ${operation.actionId}`,
+                );
+              }
+              if (foodSafetyOverride)
+                foodSafetyManaAllowance = Math.max(
+                  0,
+                  foodSafetyManaAllowance - claimBudgetOverage,
+                );
+              remainingClaimSpend = Math.max(
+                0,
+                claimBudgetBeforeClick - actualManaSpend,
+              );
             }
           }
         }

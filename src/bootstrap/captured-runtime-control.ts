@@ -50,6 +50,10 @@ import { runCapturedDiagnosticSafely } from "./captured-diagnostic.ts";
 import { planNativeResearchPrerequisites } from "../domain/progression/research-prerequisite-planning.ts";
 import type { NativeResearchPrerequisiteGraph } from "../domain/progression/research-prerequisite-planning.ts";
 import { evaluateResearchGoalCandidates } from "../domain/progression/research-goal-candidates.ts";
+import {
+  admitResourceClaim,
+  readAdmittedResourceClaim,
+} from "../domain/economy/resources/resource-claims.ts";
 import { decideResearchSpend } from "../domain/progression/research-spending-decision.ts";
 import type { GoalResourceStock } from "../domain/economy/goal-feasibility.ts";
 import { createCapturedTechPrerequisiteLevelReader } from "../adapters/evolve/progression/research/captured-tech-prerequisite-levels.ts";
@@ -1124,6 +1128,88 @@ export function startCapturedRuntime({
             generationsCurrent,
         });
       });
+      Reflect.set(hooks, "readCurrentResearchCatalog", (actionId: unknown) => {
+        const root = pageCapture.rootState.readRoot();
+        const rootGeneration = progression.readRootGeneration();
+        const progressionEpoch = progression.readProgressionEpoch();
+        const offers = progression.readOfferedTechs();
+        const definitions = progression.readResearchActionDefinitions();
+        const settings = settingsStore.readRaw();
+        const grantLevels =
+          root === undefined || definitions === undefined
+            ? undefined
+            : readResearchGrantLevels(root, definitions);
+        const applicability =
+          root === undefined || definitions === undefined
+            ? undefined
+            : readCapturedTechApplicability(root, definitions);
+        const mana = readProperty(readProperty(root, "resource"), "Mana");
+        const queueEvidence =
+          root === undefined
+            ? "unavailable"
+            : (["queue", "r_queue"] as const).reduce<
+                "empty" | "conflict" | "unavailable"
+              >((evidence, queueId) => {
+                if (evidence !== "empty") return evidence;
+                const entries = readProperty(
+                  readProperty(root, queueId),
+                  "queue",
+                );
+                return !Array.isArray(entries)
+                  ? "unavailable"
+                  : entries.length > 0
+                    ? "conflict"
+                    : evidence;
+              }, "empty");
+        const targetControl =
+          typeof actionId === "string"
+            ? pageCapture.controls.resolve(actionId)
+            : undefined;
+        const generationsCurrent =
+          offers !== undefined &&
+          offers.every(
+            (offer) =>
+              pageCapture.controls.resolve(offer.elementId)?.generation ===
+              offer.generation,
+          );
+        return Object.freeze({
+          current:
+            root !== undefined &&
+            root === pageCapture.rootState.readRoot() &&
+            rootGeneration === progression.readRootGeneration() &&
+            progressionEpoch === progression.readProgressionEpoch() &&
+            generationsCurrent,
+          source: "shared-current-cycle",
+          offers,
+          definitions,
+          grantLevels: grantLevels === undefined ? undefined : [...grantLevels],
+          applicability:
+            applicability === undefined ? undefined : [...applicability],
+          rootGeneration,
+          progressionEpoch,
+          selectedPrestige: readProperty(settings, "prestigeType"),
+          researchPermission: readProperty(settings, "autoResearch"),
+          triggersEnabled: readProperty(settings, "autoTrigger"),
+          queueEvidence,
+          targetControl:
+            targetControl === undefined
+              ? undefined
+              : Object.freeze({
+                  generation: targetControl.generation,
+                  methods: targetControl.methods,
+                }),
+          mana: Object.freeze({
+            amount: readProperty(mana, "amount"),
+            capacity: readProperty(mana, "max"),
+            productionPerSecond: readProperty(mana, "gen"),
+          }),
+          targetEligibility:
+            typeof actionId === "string"
+              ? progression.readResearchActionEligibility?.(actionId)
+              : "not-requested",
+          highTechLevel: readProperty(readProperty(root, "tech"), "high_tech"),
+        });
+      });
     }
   }
   researchOwnerSelectionObserver = (selection) => {
@@ -1528,14 +1614,278 @@ export function startCapturedRuntime({
     ...(typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
     __EA_TEST_SURFACE_ENABLED__ === true
       ? {
-          readTestIntervention: () =>
-            readProperty(
-              readProperty(settingsHostWindow, "__EA_TEST_HOOKS__"),
-              "gatherIntervention",
-            ),
+          readTestIntervention: () => {
+            const hooks = readProperty(settingsHostWindow, "__EA_TEST_HOOKS__");
+            if (isRecord(hooks)) {
+              const previousCount = Number(
+                readProperty(hooks, "resourceClaimGatherReadCount"),
+              );
+              Reflect.set(
+                hooks,
+                "resourceClaimGatherReadCount",
+                Number.isFinite(previousCount) ? previousCount + 1 : 1,
+              );
+            }
+            const gatherTestHooks = readProperty(hooks, "gatherIntervention");
+            const resourceClaim = readProperty(
+              gatherTestHooks,
+              "resourceClaim",
+            );
+            const nativeActionId = readProperty(
+              resourceClaim,
+              "nativeActionId",
+            );
+            const resourceClaimFreshness = Object.freeze({
+              rootGeneration: progression.readRootGeneration(),
+              progressionGeneration: progression.readProgressionEpoch(),
+              offerGeneration:
+                typeof nativeActionId === "string"
+                  ? (pageCapture.controls.resolve(nativeActionId)?.generation ??
+                    -1)
+                  : -1,
+            });
+            const resourceId = readProperty(resourceClaim, "resourceId");
+            if (
+              !isRecord(gatherTestHooks) ||
+              typeof nativeActionId !== "string" ||
+              typeof resourceId !== "string"
+            )
+              return gatherTestHooks;
+            const gatherSavingTarget = readDemand("pre-Gather").savingTarget;
+            const savingResourceCost = gatherSavingTarget?.cost[resourceId];
+            const resourceClaimReservations =
+              typeof savingResourceCost === "number" &&
+              Number.isFinite(savingResourceCost) &&
+              savingResourceCost > 0
+                ? Object.freeze([
+                    Object.freeze({
+                      resourceId,
+                      poolId: gatherSavingTarget?.pool ?? "anywhere",
+                      quantity: savingResourceCost,
+                    }),
+                  ])
+                : Object.freeze([]);
+            return Object.freeze({
+              ...gatherTestHooks,
+              resourceClaimLedgerObserver: (ledger: unknown) => {
+                const hooks = readProperty(
+                  settingsHostWindow,
+                  "__EA_TEST_HOOKS__",
+                );
+                if (isRecord(hooks))
+                  Reflect.set(
+                    hooks,
+                    "resourceClaimLedgerLast",
+                    ledger === undefined
+                      ? Object.freeze({ status: "no-ledger" })
+                      : ledger,
+                  );
+                if (isRecord(hooks))
+                  Reflect.set(
+                    hooks,
+                    "resourceClaimGenerationLast",
+                    Object.freeze({
+                      claimRootGeneration: readProperty(
+                        resourceClaim,
+                        "rootGeneration",
+                      ),
+                      claimProgressionGeneration: readProperty(
+                        resourceClaim,
+                        "progressionGeneration",
+                      ),
+                      claimOfferGeneration: readProperty(
+                        resourceClaim,
+                        "offerGeneration",
+                      ),
+                      freshness: resourceClaimFreshness,
+                    }),
+                  );
+              },
+              resourceClaimDecisionObserver: (decision: unknown) => {
+                const hooks = readProperty(
+                  settingsHostWindow,
+                  "__EA_TEST_HOOKS__",
+                );
+                if (isRecord(hooks))
+                  Reflect.set(hooks, "resourceClaimDecisionLast", decision);
+              },
+              resourceClaimFreshness,
+              resourceClaimReservations,
+            });
+          },
         }
       : {}),
   });
+  const refreshResourceClaim = () => {
+    if (
+      typeof __EA_TEST_SURFACE_ENABLED__ === "undefined" ||
+      __EA_TEST_SURFACE_ENABLED__ !== true
+    )
+      return;
+    const testHooks = readProperty(settingsHostWindow, "__EA_TEST_HOOKS__");
+    const intervention = readProperty(testHooks, "gatherIntervention");
+    if (isRecord(testHooks)) {
+      const previousCount = Number(
+        readProperty(testHooks, "resourceClaimRefreshCount"),
+      );
+      Reflect.set(
+        testHooks,
+        "resourceClaimRefreshCount",
+        Number.isFinite(previousCount) ? previousCount + 1 : 1,
+      );
+    }
+    const previousClaim = readAdmittedResourceClaim(
+      readProperty(intervention, "resourceClaim"),
+    );
+    if (
+      !isRecord(testHooks) ||
+      !isRecord(intervention) ||
+      previousClaim === undefined
+    )
+      return;
+    const setTestClaimStatus = (status: Readonly<Record<string, unknown>>) => {
+      Reflect.set(testHooks, "resourceClaimStatus", Object.freeze(status));
+    };
+    const root = pageCapture.rootState.readRoot();
+    const settings = settingsStore.readRaw();
+    const offers = progression.readOfferedTechs();
+    const definitions = progression.readResearchActionDefinitions();
+    if (
+      !isRecord(root) ||
+      !isRecord(settings) ||
+      settings["prestigeType"] !== "mad" ||
+      settings["autoResearch"] !== true ||
+      settings["autoTrigger"] === true ||
+      offers === undefined ||
+      definitions === undefined
+    ) {
+      setTestClaimStatus({ reason: "settings-or-catalog-unavailable" });
+      Reflect.set(testHooks, "gatherIntervention", {
+        ...intervention,
+        resourceClaim: undefined,
+      });
+      return;
+    }
+    const activeQueue = (["queue", "r_queue"] as const).some((queueId) => {
+      const queue = readProperty(root, queueId);
+      const entries = readProperty(queue, "queue");
+      return !Array.isArray(entries) || entries.length > 0;
+    });
+    if (activeQueue) {
+      setTestClaimStatus({ reason: "active-queue" });
+      Reflect.set(testHooks, "gatherIntervention", {
+        ...intervention,
+        resourceClaim: undefined,
+      });
+      return;
+    }
+    const progressionGeneration = progression.readProgressionEpoch();
+    const rootGeneration = progression.readRootGeneration();
+    const grantLevels = readResearchGrantLevels(root, definitions);
+    const targetActionId = previousClaim.nativeActionId;
+    const offer = offers.find((entry) => entry.elementId === targetActionId);
+    const currentControl = pageCapture.controls.resolve(targetActionId);
+    const manaPrice = offer?.cost[previousClaim.resourceId];
+    const manaResource = readProperty(
+      readProperty(root, "resource"),
+      previousClaim.resourceId,
+    );
+    const amount = Number(readProperty(manaResource, "amount"));
+    const capacity = Number(readProperty(manaResource, "max"));
+    // The prerequisite graph was verified when the test-only claim was
+    // admitted. Its declared edges are stable for this root; a replacement
+    // root invalidates the claim instead of rebuilding the graph each cycle.
+    const relationVerified =
+      previousClaim.prerequisiteRelation === "verified" &&
+      previousClaim.rootGeneration === rootGeneration;
+    const actionEligibility =
+      progression.readResearchActionEligibility?.(targetActionId);
+    const currentTargetGrant = grantLevels?.get(
+      previousClaim.targetGrantTechnology,
+    );
+    const claim =
+      offer !== undefined &&
+      currentControl !== undefined &&
+      currentControl.methods.includes("action") &&
+      Number.isFinite(manaPrice) &&
+      Number.isFinite(amount) &&
+      Number.isFinite(capacity) &&
+      currentTargetGrant !== undefined &&
+      currentTargetGrant < previousClaim.targetGrantLevel &&
+      actionEligibility === "eligible"
+        ? admitResourceClaim({
+            terminalGoalId: "prestige:mad",
+            immediateGoalId: `research:${targetActionId}`,
+            owner: "goal-planner",
+            provenance: "verified-native-prerequisite",
+            prerequisiteRelation: relationVerified ? "verified" : "unverified",
+            nativeActionId: targetActionId,
+            targetGrantTechnology: offer.grantTechnology,
+            targetGrantLevel: offer.grantLevel,
+            resourceId: previousClaim.resourceId,
+            poolId: "anywhere",
+            requiredQuantity: manaPrice as number,
+            observedStock: amount,
+            observedCapacity: capacity,
+            observedNativePrice: manaPrice as number,
+            nativeOfferCurrent: true,
+            nativeActionEligible: true,
+            researchPermission: true,
+            queueEvidence: "empty",
+            rootGeneration,
+            progressionGeneration,
+            offerGeneration: offer.generation,
+            observationValid:
+              pageCapture.rootState.readRoot() === root &&
+              progression.readRootGeneration() === rootGeneration &&
+              progression.readProgressionEpoch() === progressionGeneration &&
+              pageCapture.controls.resolve(targetActionId)?.generation ===
+                offer.generation,
+            precedence: previousClaim.precedence,
+            forecastProductionPerSecond:
+              previousClaim.forecastProductionPerSecond,
+            uncertaintyReasons: [],
+            unavailableReasons: [],
+          })
+        : undefined;
+    const savingTarget = readDemand("pre-Gather").savingTarget;
+    const savingMana = savingTarget?.cost[previousClaim.resourceId];
+    const resourceClaimReservations =
+      typeof savingMana === "number" &&
+      Number.isFinite(savingMana) &&
+      savingMana > 0
+        ? Object.freeze([
+            Object.freeze({
+              resourceId: previousClaim.resourceId,
+              poolId: savingTarget?.pool ?? "anywhere",
+              quantity: savingMana,
+            }),
+          ])
+        : Object.freeze([]);
+    setTestClaimStatus({
+      reason: claim === undefined ? "claim-refresh-rejected" : "current",
+      relationVerified,
+      targetGrant: currentTargetGrant,
+      targetGrantRequired: previousClaim.targetGrantLevel,
+      offerCurrent: offer !== undefined,
+      controlCurrent: currentControl !== undefined,
+      controlAction: currentControl?.methods.includes("action"),
+      manaPrice,
+      stock: amount,
+      capacity,
+      actionEligibility,
+      frontier: relationVerified,
+    });
+    Reflect.set(
+      testHooks,
+      "gatherIntervention",
+      Object.freeze({
+        ...intervention,
+        resourceClaim: claim,
+        resourceClaimReservations,
+      }),
+    );
+  };
   const tax = createCapturedTaxControl({
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,
@@ -4889,6 +5239,14 @@ export function startCapturedRuntime({
       logError(String(error));
     } finally {
       cycleMeasure.measure("tick.finalization", () => {
+        // Publish test-only claims after all progression-mutating phases. A claim
+        // refreshed immediately after Research could be stale by the next Gather
+        // pass if a later feature changed the progression epoch.
+        if (
+          typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
+          __EA_TEST_SURFACE_ENABLED__ === true
+        )
+          refreshResourceClaim();
         cycleMeasure.measure("planning-panel refresh", () =>
           refreshCapturedPlanningPanels(),
         );

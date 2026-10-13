@@ -66,6 +66,10 @@ export interface CapturedResearchControlDependencies {
 export interface CapturedResearchControl {
   /** Runs one research cycle. Safe to call before the game has created its state. */
   runCycle(): CommandExecutionOutcome;
+  /** Test-surface-only reader for exclusions on a current native offer. */
+  readCurrentOfferEligibility?(
+    actionId: string,
+  ): "eligible" | "excluded" | "unavailable" | "not-offered";
 }
 
 const NOT_CAPTURED: CommandExecutionOutcome = Object.freeze({
@@ -156,6 +160,25 @@ export function createCapturedResearchControl(
   };
 
   return Object.freeze({
+    ...(typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
+    __EA_TEST_SURFACE_ENABLED__ === true
+      ? {
+          readCurrentOfferEligibility(actionId: string) {
+            const currentOffers =
+              offeredThisCycle ?? sharedReadOfferedTechs?.();
+            const offer = currentOffers?.find(
+              (candidate) => candidate.elementId === actionId,
+            );
+            if (offer === undefined) return "not-offered" as const;
+            const decision = techConflicts.evaluate(offer);
+            return decision.status === "none"
+              ? ("eligible" as const)
+              : decision.status === "conflict"
+                ? ("excluded" as const)
+                : ("unavailable" as const);
+          },
+        }
+      : {}),
     runCycle(): CommandExecutionOutcome {
       const currentRoot = rootState.readRoot();
       if (currentRoot === undefined) return NOT_CAPTURED;

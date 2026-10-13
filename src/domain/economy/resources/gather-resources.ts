@@ -1,3 +1,5 @@
+import type { ResourceClaimLedger } from "./resource-claims.ts";
+
 export type GatherActionId =
   "food" | "lumber" | "stone" | "chrysotile" | "slaughter";
 
@@ -19,6 +21,8 @@ export interface GatherResourcesInput {
   readonly foodConjuring: boolean;
   readonly materialConjuring: boolean;
   readonly fursUnlocked: boolean;
+  /** Test-only callers may provide an admitted-claim budget; ordinary sessions omit it. */
+  readonly resourceClaimLedger?: Readonly<ResourceClaimLedger>;
   readonly clickable: Readonly<Record<GatherActionId, boolean>>;
   readonly resources: Readonly<Record<GatherResourceId, GatherResourceInput>>;
 }
@@ -62,6 +66,8 @@ export function planGatherResources(
     Mana: input.resources.Mana.currentQuantity,
   };
   const operations: GatherOperation[] = [];
+  let remainingClaimSpend =
+    input.resourceClaimLedger?.spendableStock ?? Infinity;
 
   for (const target of DIRECT_TARGETS) {
     if (!input.clickable[target.actionId]) continue;
@@ -73,6 +79,19 @@ export function planGatherResources(
       target.actionId === "food"
         ? input.foodConjuring
         : input.materialConjuring;
+    // Zero Food stock is the only verified emergency edge here; upstream also has
+    // production-aware foodApplied/shortagePools starvation checks that this reader lacks.
+    const foodSafetyOverride = target.actionId === "food" && current <= 0;
+    const spendingBlocked =
+      input.resourceClaimLedger !== undefined &&
+      !foodSafetyOverride &&
+      conjuring &&
+      quantities.Mana >= 1 &&
+      remainingClaimSpend < 1;
+    if (spendingBlocked) continue;
+    const paidManaLimit = foodSafetyOverride
+      ? Math.max(1, remainingClaimSpend)
+      : remainingClaimSpend;
     let amount: number;
     const beforeAction: GatherResourceAssignment[] = [];
     const afterAction: GatherResourceAssignment[] = [];
@@ -83,6 +102,7 @@ export function planGatherResources(
           (resource.maxQuantity - current) / (input.resourcesPerClick * 10),
         ),
         Math.floor(quantities.Mana),
+        Math.floor(paidManaLimit),
         input.clickLimit,
       );
       const manaQuantity = quantities.Mana - conjuredClicks;
@@ -131,7 +151,14 @@ export function planGatherResources(
           quantity: resourceQuantity,
         }),
       );
+      const plannedManaSpend = Math.max(0, quantities.Mana - manaQuantity);
       quantities.Mana = manaQuantity;
+      if (input.resourceClaimLedger !== undefined) {
+        remainingClaimSpend = Math.max(
+          0,
+          remainingClaimSpend - plannedManaSpend,
+        );
+      }
       quantities[target.resourceId] = resourceQuantity;
     } else {
       amount = Math.ceil(

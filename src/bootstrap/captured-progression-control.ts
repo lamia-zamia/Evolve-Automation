@@ -76,6 +76,8 @@ import type {
   TechCatalogSnapshot,
 } from "../ports/game-tech-catalog.ts";
 import type { TickDiagnostics } from "../ports/tick.ts";
+
+declare const __EA_TEST_SURFACE_ENABLED__: boolean;
 import type { ResearchOwnerSelectionObservation } from "../domain/progression/research/research.ts";
 import type { ResearchOwnerSelectionResult } from "../domain/progression/research/research.ts";
 import type { DiscoveryAttemptTracker } from "./discovery-attempts.ts";
@@ -167,6 +169,9 @@ export interface CapturedProgressionControl {
   readonly runConstructionCycle: () => CommandExecutionOutcome;
   readonly establishConstructionOrdering: () => boolean;
   readonly runResearchCycle: () => CommandExecutionOutcome;
+  readonly readResearchActionEligibility?: (
+    actionId: string,
+  ) => "eligible" | "excluded" | "unavailable" | "not-offered";
   /** The most recently captured offered-technology snapshot, if one exists. */
   readonly readOfferedTechs: () => readonly Readonly<OfferedTech>[] | undefined;
   /** Take or reuse the current offer snapshot, running a grant pass when one is required. */
@@ -1126,6 +1131,13 @@ export function createCapturedProgressionControl(
     },
     establishConstructionOrdering: construction.establishOrdering,
     runResearchCycle: () => research.runCycle(),
+    ...(typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
+    __EA_TEST_SURFACE_ENABLED__ === true &&
+    research.readCurrentOfferEligibility !== undefined
+      ? {
+          readResearchActionEligibility: research.readCurrentOfferEligibility,
+        }
+      : {}),
     readOfferedTechs: readCurrentOfferedTechs,
     sampleOfferedTechs,
     readGrantedTechs: () => lastGranted,
