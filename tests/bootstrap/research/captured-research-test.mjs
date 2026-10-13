@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 
-import { createCapturedResearchControl } from "../../../src/bootstrap/captured-research-control.ts";
+globalThis.__EA_TEST_SURFACE_ENABLED__ = true;
+const { createCapturedResearchControl } =
+  await import("../../../src/bootstrap/captured-research-control.ts");
 import { installVueCapture } from "../../../src/adapters/evolve/vue-capture.ts";
 import { withControlCaptureAuthority } from "../../support/fixtures/control-capture-fixture.mjs";
 
@@ -21,6 +23,7 @@ function makePage({
   diagnostics,
   onOwnerSelection,
   onOwnerSelectionResult,
+  readTestOnlyIntervention,
 }) {
   const vue = {
     reactive: (target) => target,
@@ -43,6 +46,7 @@ function makePage({
     queue: { display: queue.length > 0, queue: [...queue] },
     r_queue: { queue: [] },
   };
+  let rootReplacementListener;
   for (const [id, resource] of Object.entries(resources)) {
     root.resource[id] = { display: true, max: -1, diff: 0, ...resource };
   }
@@ -62,7 +66,12 @@ function makePage({
 
   /** Only the technologies the game still offers: a granted one leaves the panel. */
   function drawn() {
-    return offered.filter((entry) => root.tech[entry.grant] === undefined);
+    return offered.filter((entry) => {
+      const [grantId, grantLevel] = Array.isArray(entry.grant)
+        ? entry.grant
+        : [entry.grant, 1];
+      return (root.tech[grantId] ?? 0) < grantLevel;
+    });
   }
 
   for (const entry of offered) {
@@ -87,7 +96,10 @@ function makePage({
           for (const [res, amount] of Object.entries(entry.cost)) {
             root.resource[res].amount -= amount;
           }
-          root.tech[entry.grant] = 1;
+          const [grantId, grantLevel] = Array.isArray(entry.grant)
+            ? entry.grant
+            : [entry.grant, 1];
+          root.tech[grantId] = grantLevel;
           return true;
         },
       },
@@ -141,19 +153,23 @@ function makePage({
   const definitions = Object.freeze(
     [...new Map(offered.map((entry) => [entry.id, entry])).values()].map(
       (entry) =>
-        Object.freeze({
-          registryKey: entry.grant,
-          actionId: entry.id,
-          grantTechnology:
-            typeof entry.grant === "string" ? entry.grant : "fixture",
-          grantLevel: 1,
-          prerequisites: { kind: "declared", requirements: [] },
-          eligibility: {
-            hasNativeCondition: false,
-            routeRestrictions: undefined,
-            restrictions: [],
-          },
-        }),
+        (() => {
+          const [grantTechnology, grantLevel] = Array.isArray(entry.grant)
+            ? entry.grant
+            : [entry.grant, 1];
+          return Object.freeze({
+            registryKey: grantTechnology,
+            actionId: entry.id,
+            grantTechnology,
+            grantLevel,
+            prerequisites: { kind: "declared", requirements: [] },
+            eligibility: {
+              hasNativeCondition: false,
+              routeRestrictions: undefined,
+              restrictions: [],
+            },
+          });
+        })(),
     ),
   );
   const mechanics = Object.freeze({
@@ -188,7 +204,12 @@ function makePage({
       rootState: {
         readRoot: () => root,
         isReactivitySuppressed: () => false,
-        subscribeRootReplaced: () => () => {},
+        subscribeRootReplaced: (listener) => {
+          rootReplacementListener = listener;
+          return () => {
+            rootReplacementListener = undefined;
+          };
+        },
       },
       mechanics,
       controls: registry,
@@ -202,8 +223,10 @@ function makePage({
       diagnostics,
       onOwnerSelection,
       onOwnerSelectionResult,
+      readTestOnlyIntervention,
     }),
     activity,
+    emitRootReplacement: () => rootReplacementListener?.(),
   };
 }
 
@@ -1010,6 +1033,279 @@ for (const [label, offered, resources, settings] of [
     "tech-anthropology: research excluded " +
       "(unavailable: invalid-game-state (stats.achieve.madagascar_tree))",
   ]);
+}
+
+{
+  const outcomes = [];
+  const page = makePage({
+    offered: [
+      {
+        ...THEOLOGY,
+        id: "tech-foundry",
+        grant: ["foundry", 1],
+        cost: { Knowledge: 650 },
+      },
+      {
+        id: "tech-library",
+        title: "Library",
+        grant: ["science", 2],
+        cost: { Knowledge: 720 },
+        nativeAffordable: (root) => root.resource.Knowledge.amount >= 720,
+      },
+    ],
+    tech: { primitive: 3, mining: 2, science: 1, cement: 1 },
+    resources: { Knowledge: { amount: 686.6189513433039 } },
+    readTestOnlyIntervention: () => ({
+      deferActionId: "tech-foundry",
+      targetActionId: "tech-library",
+    }),
+    onOwnerSelectionResult: (result) => outcomes.push(result),
+  });
+
+  const deferred = page.control.runCycle();
+  assert.equal(deferred.status, "succeeded");
+  assert.deepEqual(
+    page.clicks,
+    [],
+    "Foundry is deferred while Library is unaffordable",
+  );
+  assert.equal(page.root.tech.foundry, undefined);
+
+  page.root.resource.Knowledge.amount = 720;
+  const libraryOutcome = page.control.runCycle();
+  assert.equal(
+    libraryOutcome.status,
+    "succeeded",
+    JSON.stringify(libraryOutcome),
+  );
+  assert.deepEqual(page.clicks, ["tech-library"]);
+  assert.equal(
+    page.root.tech.science,
+    2,
+    "the native Library grant is confirmed",
+  );
+  assert.deepEqual(
+    outcomes.map((result) => result.disposition),
+    ["experiment-deferred", "researched"],
+  );
+  assert.equal(page.root.tech.foundry, undefined);
+
+  page.root.resource.Knowledge.amount = 650;
+  const foundryOutcome = page.control.runCycle();
+  assert.equal(
+    foundryOutcome.status,
+    "succeeded",
+    JSON.stringify(foundryOutcome),
+  );
+  assert.deepEqual(page.clicks, ["tech-library", "tech-foundry"]);
+  assert.equal(
+    page.root.tech.foundry,
+    1,
+    "Foundry is eligible again after Library",
+  );
+}
+
+{
+  const page = makePage({
+    offered: [
+      {
+        ...THEOLOGY,
+        id: "tech-foundry",
+        grant: ["foundry", 1],
+        cost: { Knowledge: 650 },
+      },
+      {
+        id: "tech-library",
+        title: "Library",
+        grant: ["science", 2],
+        cost: { Knowledge: 720 },
+      },
+    ],
+    tech: { primitive: 3, mining: 2, science: 1, cement: 1 },
+    resources: { Knowledge: { amount: 1000 } },
+    settings: { researchIgnore: ["tech-library"] },
+    readTestOnlyIntervention: () => ({
+      deferActionId: "tech-foundry",
+      targetActionId: "tech-library",
+    }),
+  });
+
+  assert.equal(page.control.runCycle().status, "succeeded");
+  assert.deepEqual(
+    page.clicks,
+    [],
+    "the test intervention does not bypass a native Research exclusion",
+  );
+  assert.equal(page.root.tech.foundry, undefined);
+  assert.equal(page.root.tech.science, 1);
+}
+
+{
+  let page;
+  const ownerResults = [];
+  page = makePage({
+    offered: [
+      {
+        ...THEOLOGY,
+        id: "tech-foundry",
+        grant: ["foundry", 1],
+        cost: { Knowledge: 650 },
+      },
+      {
+        id: "tech-library",
+        title: "Library",
+        grant: ["science", 2],
+        cost: { Knowledge: 720 },
+      },
+    ],
+    tech: { primitive: 3, mining: 2, science: 1, cement: 1 },
+    resources: { Knowledge: { amount: 720 } },
+    diagnostics: {
+      readPerformanceEnabled: () => true,
+      nowMs: () => 0,
+      recordPerformance: () => {},
+      recordCount: () => {},
+      flushPerformance: () => {},
+    },
+    onOwnerSelection: () => {
+      page.controls.get("tech-library").generation += 1;
+    },
+    onOwnerSelectionResult: (result) => ownerResults.push(result),
+    readTestOnlyIntervention: () => ({
+      deferActionId: "tech-foundry",
+      targetActionId: "tech-library",
+    }),
+  });
+
+  page.control.runCycle();
+  assert.deepEqual(page.clicks, [], "a stale Library control is never invoked");
+  assert.notEqual(ownerResults[0]?.disposition, "researched");
+  page.root.resource.Knowledge.amount = 1000;
+  assert.equal(page.control.runCycle().status, "succeeded");
+  assert.deepEqual(
+    page.clicks,
+    ["tech-foundry"],
+    "the stale test intervention is disabled instead of retried",
+  );
+  assert.equal(page.root.tech.science, 1);
+  assert.equal(page.root.tech.foundry, 1);
+}
+
+{
+  const page = makePage({
+    offered: [
+      {
+        ...THEOLOGY,
+        id: "tech-foundry",
+        grant: ["foundry", 1],
+        cost: { Knowledge: 650 },
+      },
+      {
+        id: "tech-library",
+        title: "Library",
+        grant: ["science", 2],
+        cost: { Knowledge: 720 },
+      },
+    ],
+    tech: { primitive: 3, mining: 2, science: 1, cement: 1 },
+    resources: { Knowledge: { amount: 1300, max: 5000 } },
+    queue: [{ id: "city-library", label: "Library", type: "library" }],
+    readTestOnlyIntervention: () => ({
+      deferActionId: "tech-foundry",
+      targetActionId: "tech-library",
+    }),
+  });
+  page.controls.set("buildQueue", {
+    generation: 1,
+    methods: { setData: (index, prefix) => ({ [`${prefix}-Knowledge`]: 650 }) },
+  });
+
+  assert.equal(page.control.runCycle().status, "succeeded");
+  assert.deepEqual(
+    page.clicks,
+    [],
+    "the test intervention does not bypass the existing build-queue reservation",
+  );
+  assert.equal(page.root.tech.foundry, undefined);
+  assert.equal(page.root.tech.science, 1);
+}
+
+{
+  const outcomes = [];
+  const page = makePage({
+    offered: [
+      {
+        ...THEOLOGY,
+        id: "tech-foundry",
+        grant: ["foundry", 1],
+        cost: { Knowledge: 650 },
+      },
+      {
+        id: "tech-library",
+        title: "Library",
+        grant: ["science", 2],
+        cost: { Knowledge: 720 },
+      },
+    ],
+    tech: { primitive: 3, mining: 2, science: 1, cement: 1 },
+    resources: { Knowledge: { amount: 720 } },
+    actionModes: { "tech-library": "no-op" },
+    readTestOnlyIntervention: () => ({
+      deferActionId: "tech-foundry",
+      targetActionId: "tech-library",
+    }),
+    onOwnerSelectionResult: (result) => outcomes.push(result),
+  });
+
+  page.control.runCycle();
+  assert.deepEqual(page.clicks, ["tech-library"]);
+  assert.notEqual(outcomes[0]?.disposition, "researched");
+  page.root.resource.Knowledge.amount = 1300;
+  assert.equal(page.control.runCycle().status, "succeeded");
+  assert.deepEqual(
+    page.clicks,
+    ["tech-library", "tech-foundry"],
+    "an uncertain Library invocation is never retried",
+  );
+  assert.equal(page.root.tech.science, 1);
+  assert.equal(page.root.tech.foundry, 1);
+}
+
+{
+  const page = makePage({
+    offered: [
+      {
+        ...THEOLOGY,
+        id: "tech-foundry",
+        grant: ["foundry", 1],
+        cost: { Knowledge: 650 },
+      },
+      {
+        id: "tech-library",
+        title: "Library",
+        grant: ["science", 2],
+        cost: { Knowledge: 720 },
+      },
+    ],
+    tech: { primitive: 3, mining: 2, science: 1, cement: 1 },
+    resources: { Knowledge: { amount: 686.6189513433039 } },
+    readTestOnlyIntervention: () => ({
+      deferActionId: "tech-foundry",
+      targetActionId: "tech-library",
+    }),
+  });
+
+  assert.equal(page.control.runCycle().status, "succeeded");
+  assert.deepEqual(page.clicks, []);
+  page.emitRootReplacement();
+  page.root.resource.Knowledge.amount = 800;
+  assert.equal(page.control.runCycle().status, "succeeded");
+  assert.deepEqual(
+    page.clicks,
+    ["tech-foundry"],
+    "a root replacement disables the lingering test intervention",
+  );
+  assert.equal(page.root.tech.science, 1, "Library remains unresearched");
 }
 
 console.log("captured-research ok");

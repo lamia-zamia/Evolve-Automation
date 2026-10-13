@@ -38,6 +38,13 @@ export interface ResearchTechView {
  */
 export interface ResearchInput {
   readonly techs: readonly ResearchTechView[];
+  /** Explicit test-only stop/defer outcome; never represents native rejection. */
+  readonly interventionResult?: Readonly<{
+    readonly index: number;
+    readonly actionId: string;
+    readonly disposition: "experiment-deferred" | "experiment-stopped";
+    readonly reason: string;
+  }>;
 }
 
 export interface ResearchDecision {
@@ -54,7 +61,12 @@ export interface ResearchOwnerSelectionObservation {
 export interface ResearchOwnerSelectionResult {
   readonly decision: Readonly<ResearchDecision>;
   readonly disposition:
-    "researched" | "candidate-rejected" | "no-observed-research" | "stopped";
+    | "researched"
+    | "candidate-rejected"
+    | "no-observed-research"
+    | "stopped"
+    | "experiment-deferred"
+    | "experiment-stopped";
 }
 
 /**

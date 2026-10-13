@@ -194,6 +194,165 @@ const base = (overrides = {}) => ({
 }
 
 {
+  const result = decideResearchSpend(
+    base({
+      target: action(
+        "tech-library",
+        { Knowledge: 50 },
+        { nativeAffordable: true },
+      ),
+      additionalTargetNeeds: [
+        { resourceId: "Knowledge", poolId: "anywhere", amount: 20 },
+        { resourceId: "Knowledge", poolId: "anywhere", amount: 30 },
+      ],
+      stocks: [
+        {
+          resourceId: "Knowledge",
+          poolId: "anywhere",
+          amount: 50,
+          capacity: 200,
+          netRate: 10,
+          rateConfidence: "stable",
+          validityEpoch: epoch,
+        },
+      ],
+    }),
+  );
+  assert.equal(result.targetAffordability, "affordable");
+  const wait = result.comparison?.strategies.find((item) => item.id === "wait");
+  assert.equal(wait?.completionTime, 5);
+  assert.deepEqual(
+    wait?.feasibility.unmetRequirements.map((need) => [
+      need.resourceId,
+      need.poolId,
+      need.amount,
+    ]),
+    [["Knowledge", "anywhere", 100]],
+    "same-pool duplicate needs are summed with the purchase price",
+  );
+}
+
+{
+  const result = decideResearchSpend(
+    base({
+      target: action("tech-library", { Knowledge: 30 }),
+      additionalTargetNeeds: [
+        { resourceId: "Knowledge", poolId: "colony", amount: 20 },
+      ],
+      stocks: [
+        {
+          resourceId: "Knowledge",
+          poolId: "anywhere",
+          amount: 0,
+          capacity: 100,
+          netRate: 10,
+          rateConfidence: "stable",
+          validityEpoch: epoch,
+        },
+        {
+          resourceId: "Knowledge",
+          poolId: "colony",
+          amount: 0,
+          capacity: 100,
+          netRate: 2,
+          rateConfidence: "stable",
+          validityEpoch: epoch,
+        },
+      ],
+    }),
+  );
+  const wait = result.comparison?.strategies.find((item) => item.id === "wait");
+  assert.equal(wait?.completionTime, 10);
+  assert.deepEqual(
+    wait?.feasibility.unmetRequirements.map((need) => [
+      need.resourceId,
+      need.poolId,
+      need.amount,
+    ]),
+    [
+      ["Knowledge", "anywhere", 30],
+      ["Knowledge", "colony", 20],
+    ],
+    "the same resource in distinct pools remains separate and accumulates in parallel",
+  );
+}
+
+{
+  const result = decideResearchSpend(
+    base({
+      target: action(
+        "tech-library",
+        { Knowledge: 10 },
+        { nativeAffordable: true },
+      ),
+      additionalTargetNeeds: [
+        {
+          resourceId: "Knowledge",
+          poolId: "anywhere",
+          amount: Number.MAX_VALUE,
+        },
+        {
+          resourceId: "Knowledge",
+          poolId: "anywhere",
+          amount: Number.MAX_VALUE,
+        },
+      ],
+      stocks: [
+        {
+          resourceId: "Knowledge",
+          poolId: "anywhere",
+          amount: 10,
+          capacity: -1,
+          netRate: 10,
+          rateConfidence: "stable",
+          validityEpoch: epoch,
+        },
+      ],
+    }),
+  );
+  assert.equal(result.targetAffordability, "affordable");
+  assert.equal(result.decision, "unavailable");
+  assert.ok(
+    result.reasons.some((reason) =>
+      reason.includes("combined acquisition requirement is invalid"),
+    ),
+    "overflow in the complete requirement is rejected even when the target itself is affordable",
+  );
+}
+
+{
+  const result = decideResearchSpend(
+    base({
+      target: action(
+        "tech-library",
+        { Knowledge: 50 },
+        { nativeAffordable: true },
+      ),
+      additionalTargetNeeds: [
+        { resourceId: "Knowledge", poolId: "anywhere", amount: 200 },
+      ],
+      stocks: [
+        {
+          resourceId: "Knowledge",
+          poolId: "anywhere",
+          amount: 50,
+          capacity: 100,
+          netRate: 10,
+          rateConfidence: "stable",
+          validityEpoch: epoch,
+        },
+      ],
+    }),
+  );
+  assert.equal(result.targetAffordability, "affordable");
+  assert.equal(
+    result.comparison?.strategies[0]?.feasibility.status,
+    "infeasible",
+    "target purchase affordability is not confused with broader package feasibility",
+  );
+}
+
+{
   const capacityLimited = decideResearchSpend(
     base({
       target: action(
@@ -231,6 +390,16 @@ for (const stale of [
       "tech-high_tech",
       { Knowledge: 50 },
       { controlGeneration: 3 },
+    ),
+  }),
+  base({
+    target: action(
+      "tech-high_tech",
+      { Knowledge: 50 },
+      {
+        controlGeneration: undefined,
+        expectedControlGeneration: undefined,
+      },
     ),
   }),
   base({ goalId: "prestige:bioseed" }),

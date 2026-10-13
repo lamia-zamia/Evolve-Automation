@@ -1063,6 +1063,26 @@ export function startCapturedRuntime({
           ) => researchOwnerSelectionResultObserver(result),
         }
       : {}),
+    ...(typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
+    __EA_TEST_SURFACE_ENABLED__ === true
+      ? {
+          readResearchTestIntervention: () => {
+            const hooks = readProperty(settingsHostWindow, "__EA_TEST_HOOKS__");
+            const intervention = readProperty(
+              hooks,
+              "researchSpendingIntervention",
+            );
+            const deferActionId = readProperty(intervention, "deferActionId");
+            const targetActionId = readProperty(intervention, "targetActionId");
+            return typeof deferActionId === "string" &&
+              deferActionId.length > 0 &&
+              typeof targetActionId === "string" &&
+              targetActionId.length > 0
+              ? Object.freeze({ deferActionId, targetActionId })
+              : undefined;
+          },
+        }
+      : {}),
     onDiagnostic: reportDiagnostic,
     onActivity,
   });
@@ -1241,8 +1261,10 @@ export function startCapturedRuntime({
                         applicability: selected.pathApplicability,
                         offerGeneration: selectedOffer?.generation,
                         expectedOfferGeneration: selectedOffer?.generation,
-                        controlGeneration: selectedOffer?.generation,
-                        expectedControlGeneration: selectedOffer?.generation,
+                        // The offer snapshot does not independently establish current control
+                        // freshness; keep that part of the diagnostic unavailable.
+                        controlGeneration: undefined,
+                        expectedControlGeneration: undefined,
                       },
                 selectedByResearchOwner:
                   selection.decision.techId === selected?.actionId,
@@ -1269,8 +1291,9 @@ export function startCapturedRuntime({
                   applicability: savingTarget.pathApplicability,
                   offerGeneration: targetOffer?.generation,
                   expectedOfferGeneration: targetOffer?.generation,
-                  controlGeneration: targetOffer?.generation,
-                  expectedControlGeneration: targetOffer?.generation,
+                  // Offer generation is not an independent control observation.
+                  controlGeneration: undefined,
+                  expectedControlGeneration: undefined,
                 },
                 additionalTargetNeeds: [],
                 stocks,

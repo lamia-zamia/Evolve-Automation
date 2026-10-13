@@ -7,6 +7,7 @@
  */
 
 import { runResearchAutomation } from "../application/research.ts";
+import { planResearch } from "../domain/progression/research/research.ts";
 import type { CommandExecutionOutcome } from "../domain/commands.ts";
 import { createCapturedCostConflictReader } from "../adapters/evolve/captured-cost-conflict.ts";
 import { createCapturedQueueReservationSource } from "../adapters/evolve/captured-queue-reservations.ts";
@@ -28,6 +29,8 @@ import type { OfferedTech } from "../ports/game-tech-catalog.ts";
 import type { TickDiagnostics } from "../ports/tick.ts";
 import type { ResearchOwnerSelectionObservation } from "../domain/progression/research/research.ts";
 import type { ResearchOwnerSelectionResult } from "../domain/progression/research/research.ts";
+
+declare const __EA_TEST_SURFACE_ENABLED__: boolean;
 
 export interface CapturedResearchControlDependencies {
   readonly rootState: GameRootStateSource;
@@ -55,6 +58,9 @@ export interface CapturedResearchControlDependencies {
     | undefined;
   readonly onOwnerSelectionResult?:
     ((result: Readonly<ResearchOwnerSelectionResult>) => void) | undefined;
+  /** Reads only a test-sandbox intervention installed behind the compile-time test surface. */
+  readonly readTestOnlyIntervention?: () =>
+    Readonly<{ deferActionId: string; targetActionId: string }> | undefined;
 }
 
 export interface CapturedResearchControl {
@@ -138,6 +144,9 @@ export function createCapturedResearchControl(
   // do so for as long as the game keeps offering that technology, and a line per cycle would bury
   // everything else.
   const reportedRejections = new Set<string>();
+  let testInterventionRootObserved = false;
+  let testInterventionDisabled = false;
+  let testInterventionComplete = false;
   const onRejected = (techId: string, reason: string) => {
     if (onUnavailable === undefined) return;
     const message = `${techId}: research excluded (${reason})`;
@@ -148,7 +157,25 @@ export function createCapturedResearchControl(
 
   return Object.freeze({
     runCycle(): CommandExecutionOutcome {
-      if (rootState.readRoot() === undefined) return NOT_CAPTURED;
+      const currentRoot = rootState.readRoot();
+      if (currentRoot === undefined) return NOT_CAPTURED;
+      let testOnlyIntervention:
+        Readonly<{ deferActionId: string; targetActionId: string }> | undefined;
+      if (
+        typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
+        __EA_TEST_SURFACE_ENABLED__ === true
+      ) {
+        if (!testInterventionRootObserved) {
+          testInterventionRootObserved = true;
+          rootState.subscribeRootReplaced(() => {
+            testInterventionDisabled = true;
+          });
+        }
+        testOnlyIntervention =
+          testInterventionDisabled || testInterventionComplete
+            ? undefined
+            : dependencies.readTestOnlyIntervention?.();
+      }
       // One offered-technology snapshot per cycle: read, plan and execute all see the same list,
       // and it goes out of scope with the cycle rather than ageing into the next one.
       offeredThisCycle =
@@ -164,17 +191,107 @@ export function createCapturedResearchControl(
           techConflicts,
           controls,
           onRejected,
-          observeOwner: diagnostics?.readPerformanceEnabled() === true,
+          observeOwner:
+            diagnostics?.readPerformanceEnabled() === true ||
+            testOnlyIntervention !== undefined,
           ...(onActivity === undefined ? {} : { onActivity }),
         });
+        let researchReader = reader;
+        if (
+          typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
+          __EA_TEST_SURFACE_ENABLED__ === true &&
+          testOnlyIntervention !== undefined
+        ) {
+          researchReader = Object.freeze({
+            read(startIndex: number) {
+              const original = reader.read(startIndex);
+              const selected = planResearch(original);
+              if (selected?.techId !== testOnlyIntervention.deferActionId)
+                return original;
+
+              const observed = [...original.techs];
+              let target = observed.find(
+                (candidate) =>
+                  candidate.id === testOnlyIntervention.targetActionId,
+              );
+              let nextIndex =
+                Math.max(
+                  startIndex - 1,
+                  ...observed.map((candidate) => candidate.index),
+                ) + 1;
+              let scanCount = 0;
+              while (target === undefined && scanCount < 512) {
+                const next = reader.read(nextIndex);
+                if (next.techs.length === 0) break;
+                observed.push(...next.techs);
+                target = next.techs.find(
+                  (candidate) =>
+                    candidate.id === testOnlyIntervention.targetActionId,
+                );
+                nextIndex =
+                  Math.max(
+                    nextIndex,
+                    ...next.techs.map((candidate) => candidate.index),
+                  ) + 1;
+                scanCount += next.techs.length;
+              }
+
+              if (target === undefined)
+                return Object.freeze({
+                  techs: Object.freeze([]),
+                  interventionResult: Object.freeze({
+                    index: selected.index,
+                    actionId: selected.techId,
+                    disposition: "experiment-stopped" as const,
+                    reason: `native offer ${testOnlyIntervention.targetActionId} could not be verified`,
+                  }),
+                });
+
+              if (
+                target.nativeAffordable !== true ||
+                target.resourceAffordable !== true ||
+                target.hasCostConflict !== false ||
+                target.hasTechConflict !== false ||
+                target.costConflictEvidence !== "none" ||
+                target.exclusionEvidence !== "none"
+              )
+                return Object.freeze({
+                  techs: Object.freeze([]),
+                  interventionResult: Object.freeze({
+                    index: selected.index,
+                    actionId: selected.techId,
+                    disposition: "experiment-deferred" as const,
+                    reason: `${testOnlyIntervention.targetActionId} remains unaffordable, reserved, or excluded`,
+                  }),
+                });
+
+              return Object.freeze({ techs: Object.freeze([target]) });
+            },
+          });
+        }
         return runResearchAutomation({
-          reader,
+          reader: researchReader,
           executor,
           diagnostics,
           ...(diagnostics?.readPerformanceEnabled() === true
+            ? { onSelection: dependencies.onOwnerSelection }
+            : {}),
+          ...(diagnostics?.readPerformanceEnabled() === true ||
+          testOnlyIntervention !== undefined
             ? {
-                onSelection: dependencies.onOwnerSelection,
-                onSelectionResult: dependencies.onOwnerSelectionResult,
+                onSelectionResult: (
+                  result: Readonly<ResearchOwnerSelectionResult>,
+                ) => {
+                  if (
+                    result.decision.techId ===
+                    testOnlyIntervention?.targetActionId
+                  ) {
+                    if (result.disposition === "researched")
+                      testInterventionComplete = true;
+                    else testInterventionDisabled = true;
+                  }
+                  dependencies.onOwnerSelectionResult?.(result);
+                },
               }
             : {}),
         });

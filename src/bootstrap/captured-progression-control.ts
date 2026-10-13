@@ -153,6 +153,8 @@ export interface CapturedProgressionControlDependencies {
     | undefined;
   readonly onResearchOwnerSelectionResult?:
     ((result: Readonly<ResearchOwnerSelectionResult>) => void) | undefined;
+  readonly readResearchTestIntervention?: () =>
+    Readonly<{ deferActionId: string; targetActionId: string }> | undefined;
 }
 
 export interface CapturedProgressionControl {
@@ -967,6 +969,11 @@ export function createCapturedProgressionControl(
     mountSuppression,
     panels,
     readOfferedTechs: () => sampleOfferedTechs("auto-research"),
+    ...(dependencies.readResearchTestIntervention === undefined
+      ? {}
+      : {
+          readTestOnlyIntervention: dependencies.readResearchTestIntervention,
+        }),
     ...(onUnavailable === undefined ? {} : { onUnavailable }),
     ...(dependencies.onResearchOwnerSelection === undefined
       ? {}

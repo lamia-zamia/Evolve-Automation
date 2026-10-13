@@ -104,7 +104,7 @@ function resourceKey(resourceId: string, poolId: string): string {
   return `${poolId}\u0000${resourceId}`;
 }
 
-function combineGoalResourceNeeds(
+export function combineGoalResourceNeeds(
   needs: readonly GoalResourceNeed[],
 ): readonly GoalResourceNeed[] {
   const combined = new Map<string, GoalResourceNeed>();

@@ -8151,7 +8151,10 @@
         () => dependencies.executor.execute(decision)
       );
       if (dependencies.onSelectionResult?.(
-        Object.freeze({ decision, disposition: result.disposition })
+        Object.freeze({
+          decision,
+          disposition: result.disposition
+        })
       ), result.outcome.status !== "succeeded" || result.disposition !== "candidate-rejected")
         return result.outcome;
       startIndex = decision.index + 1;
@@ -9247,7 +9250,7 @@
       rootState,
       readSettings: dependencies.readSettings,
       resources
-    }), reportedRejections = /* @__PURE__ */ new Set(), onRejected = (techId, reason) => {
+    }), reportedRejections = /* @__PURE__ */ new Set(), testInterventionRootObserved = !1, testInterventionDisabled = !1, testInterventionComplete = !1, onRejected = (techId, reason) => {
       if (onUnavailable === void 0) return;
       let message = `${techId}: research excluded (${reason})`;
       reportedRejections.has(message) || (reportedRejections.add(message), onUnavailable(message));
@@ -9255,6 +9258,7 @@
     return Object.freeze({
       runCycle() {
         if (rootState.readRoot() === void 0) return NOT_CAPTURED2;
+        let testOnlyIntervention;
         offeredThisCycle = sharedReadOfferedTechs === void 0 ? catalog.read()?.offered : sharedReadOfferedTechs();
         try {
           let { reader, executor } = createCapturedResearchAdapter({
@@ -9265,16 +9269,18 @@
             techConflicts,
             controls: controls2,
             onRejected,
-            observeOwner: diagnostics?.readPerformanceEnabled() === !0,
+            observeOwner: diagnostics?.readPerformanceEnabled() === !0 || testOnlyIntervention !== void 0,
             ...onActivity === void 0 ? {} : { onActivity }
           });
           return runResearchAutomation({
             reader,
             executor,
             diagnostics,
-            ...diagnostics?.readPerformanceEnabled() === !0 ? {
-              onSelection: dependencies.onOwnerSelection,
-              onSelectionResult: dependencies.onOwnerSelectionResult
+            ...diagnostics?.readPerformanceEnabled() === !0 ? { onSelection: dependencies.onOwnerSelection } : {},
+            ...diagnostics?.readPerformanceEnabled() === !0 || testOnlyIntervention !== void 0 ? {
+              onSelectionResult: (result) => {
+                result.decision.techId === testOnlyIntervention?.targetActionId && (result.disposition === "researched" ? testInterventionComplete = !0 : testInterventionDisabled = !0), dependencies.onOwnerSelectionResult?.(result);
+              }
             } : {}
           });
         } finally {
@@ -12128,6 +12134,9 @@
       mountSuppression,
       panels,
       readOfferedTechs: () => sampleOfferedTechs("auto-research"),
+      ...dependencies.readResearchTestIntervention === void 0 ? {} : {
+        readTestOnlyIntervention: dependencies.readResearchTestIntervention
+      },
       ...onUnavailable === void 0 ? {} : { onUnavailable },
       ...dependencies.onResearchOwnerSelection === void 0 ? {} : { onOwnerSelection: dependencies.onResearchOwnerSelection },
       ...dependencies.onResearchOwnerSelectionResult === void 0 ? {} : {
@@ -18126,21 +18135,22 @@
   function evidenceIsFresh(action) {
     return action.currentNativeOffer === !0 && action.offerGeneration !== void 0 && action.offerGeneration === action.expectedOfferGeneration && action.controlGeneration !== void 0 && action.controlGeneration === action.expectedControlGeneration;
   }
+  function areResearchSpendNeedsValid(needs) {
+    return needs.every(
+      (need) => need.resourceId.length > 0 && need.poolId.length > 0 && Number.isFinite(need.amount) && need.amount >= 0
+    );
+  }
   function decideResearchSpend(input) {
     let reasons = [];
     input.goalId !== input.currentGoalId && reasons.push("selected terminal goal changed during the observation"), input.validityEpoch !== input.currentValidityEpoch && reasons.push("resource, price, control, or root observation is stale"), input.terminalGoalApplicability !== "eligible" && reasons.push(
       `terminal goal applicability is ${input.terminalGoalApplicability}`
     );
-    let targetNeeds = resourceNeeds(input.target.cost), extraNeeds = resourceNeeds(
-      Object.fromEntries(
-        input.additionalTargetNeeds.map((need) => [
-          need.resourceId,
-          need.amount + (input.target.cost[need.resourceId] ?? 0)
-        ])
-      )
-    );
-    (targetNeeds === void 0 || extraNeeds === void 0) && reasons.push(
-      "native target price or parallel acquisition requirement is invalid"
+    let targetNeeds = resourceNeeds(input.target.cost), combinedTargetNeeds = combineGoalResourceNeeds([
+      ...targetNeeds ?? [],
+      ...input.additionalTargetNeeds
+    ]), combinedNeedsValid = targetNeeds !== void 0 && areResearchSpendNeedsValid(input.additionalTargetNeeds) && areResearchSpendNeedsValid(combinedTargetNeeds);
+    combinedNeedsValid || reasons.push(
+      "native target price or combined acquisition requirement is invalid"
     );
     let targetFresh = evidenceIsFresh(input.target);
     targetFresh || reasons.push(
@@ -18162,7 +18172,7 @@
       "Research owner selection lacks fresh affordability, reservation, or exclusion evidence"
     ), currentSelectionUsable && input.selectedEffects === void 0 && reasons.push(
       "selected Research unlock, production and collateral effects are unknown; price-only projection assumes no rate or capacity change"
-    ), input.goalId !== input.currentGoalId || input.validityEpoch !== input.currentValidityEpoch || input.terminalGoalApplicability === "excluded" || targetNeeds === void 0 || !targetFresh || input.target.applicability !== "eligible")
+    ), input.goalId !== input.currentGoalId || input.validityEpoch !== input.currentValidityEpoch || input.terminalGoalApplicability === "excluded" || targetNeeds === void 0 || !combinedNeedsValid || !targetFresh || input.target.applicability !== "eligible")
       return Object.freeze({
         goalId: input.goalId,
         selectedActionId: input.selectedAction?.actionId,
@@ -18205,7 +18215,7 @@
     acceleratorEvidenceComplete || reasons.push("accelerator offer/effect scan is unavailable");
     let comparison = compareGoalStrategies(
       input.target.actionId,
-      [...targetNeeds ?? [], ...input.additionalTargetNeeds],
+      combinedTargetNeeds,
       input.stocks,
       input.commitments,
       candidates,
@@ -58595,8 +58605,10 @@ Only continue if you trust the source. Injected code:
               applicability: selected.pathApplicability,
               offerGeneration: selectedOffer?.generation,
               expectedOfferGeneration: selectedOffer?.generation,
-              controlGeneration: selectedOffer?.generation,
-              expectedControlGeneration: selectedOffer?.generation
+              // The offer snapshot does not independently establish current control
+              // freshness; keep that part of the diagnostic unavailable.
+              controlGeneration: void 0,
+              expectedControlGeneration: void 0
             },
             selectedByResearchOwner: selection.decision.techId === selected?.actionId,
             selectedResourceAffordable: selectedObservation?.resourceAffordable,
@@ -58611,8 +58623,9 @@ Only continue if you trust the source. Injected code:
               applicability: savingTarget.pathApplicability,
               offerGeneration: targetOffer?.generation,
               expectedOfferGeneration: targetOffer?.generation,
-              controlGeneration: targetOffer?.generation,
-              expectedControlGeneration: targetOffer?.generation
+              // Offer generation is not an independent control observation.
+              controlGeneration: void 0,
+              expectedControlGeneration: void 0
             },
             additionalTargetNeeds: [],
             stocks,

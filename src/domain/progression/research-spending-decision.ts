@@ -2,6 +2,7 @@
 
 import {
   compareGoalStrategies,
+  combineGoalResourceNeeds,
   type GoalResourceCommitment,
   type GoalResourceNeed,
   type GoalResourceStock,
@@ -92,6 +93,18 @@ function evidenceIsFresh(action: ResearchSpendActionEvidence): boolean {
   );
 }
 
+function areResearchSpendNeedsValid(
+  needs: readonly GoalResourceNeed[],
+): boolean {
+  return needs.every(
+    (need) =>
+      need.resourceId.length > 0 &&
+      need.poolId.length > 0 &&
+      Number.isFinite(need.amount) &&
+      need.amount >= 0,
+  );
+}
+
 /**
  * Compares the current Research owner's purchase against a wait projection for a goal blocker.
  * The shared feasibility owner handles all priced resources, parallel needs, commitments, rates,
@@ -111,17 +124,17 @@ export function decideResearchSpend(
       `terminal goal applicability is ${input.terminalGoalApplicability}`,
     );
   const targetNeeds = resourceNeeds(input.target.cost);
-  const extraNeeds = resourceNeeds(
-    Object.fromEntries(
-      input.additionalTargetNeeds.map((need) => [
-        need.resourceId,
-        need.amount + (input.target.cost[need.resourceId] ?? 0),
-      ]),
-    ),
-  );
-  if (targetNeeds === undefined || extraNeeds === undefined)
+  const combinedTargetNeeds = combineGoalResourceNeeds([
+    ...(targetNeeds ?? []),
+    ...input.additionalTargetNeeds,
+  ]);
+  const combinedNeedsValid =
+    targetNeeds !== undefined &&
+    areResearchSpendNeedsValid(input.additionalTargetNeeds) &&
+    areResearchSpendNeedsValid(combinedTargetNeeds);
+  if (!combinedNeedsValid)
     reasons.push(
-      "native target price or parallel acquisition requirement is invalid",
+      "native target price or combined acquisition requirement is invalid",
     );
   const targetFresh = evidenceIsFresh(input.target);
   if (!targetFresh)
@@ -179,6 +192,7 @@ export function decideResearchSpend(
     input.validityEpoch !== input.currentValidityEpoch ||
     input.terminalGoalApplicability === "excluded" ||
     targetNeeds === undefined ||
+    !combinedNeedsValid ||
     !targetFresh ||
     input.target.applicability !== "eligible"
   ) {
@@ -242,7 +256,7 @@ export function decideResearchSpend(
 
   const comparison = compareGoalStrategies(
     input.target.actionId,
-    [...(targetNeeds ?? []), ...input.additionalTargetNeeds],
+    combinedTargetNeeds,
     input.stocks,
     input.commitments,
     candidates,

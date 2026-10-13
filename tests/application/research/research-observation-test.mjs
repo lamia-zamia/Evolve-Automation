@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 
-import { runResearchAutomation } from "../../../src/application/research.ts";
+globalThis.__EA_TEST_SURFACE_ENABLED__ = true;
+const { runResearchAutomation } =
+  await import("../../../src/application/research.ts");
 
 const first = Object.freeze({
   index: 0,
@@ -99,4 +101,73 @@ assert.equal(
 assert.equal(stoppedResult.decision.techId, "tech-rejected");
 assert.equal(stoppedResult.disposition, "stopped");
 
+{
+  let invocations = 0;
+  let result;
+  const deferred = runResearchAutomation({
+    reader: {
+      read() {
+        return {
+          techs: [],
+          interventionResult: {
+            index: 3,
+            actionId: "tech-foundry",
+            disposition: "experiment-deferred",
+            reason: "Library remains natively unaffordable",
+          },
+        };
+      },
+    },
+    executor: {
+      execute() {
+        invocations += 1;
+        return {
+          outcome: { status: "succeeded" },
+          disposition: "researched",
+        };
+      },
+    },
+    onSelectionResult(value) {
+      result = value;
+    },
+  });
+  assert.equal(deferred.status, "succeeded");
+  assert.equal(
+    invocations,
+    0,
+    "an explicit deferral is not a candidate rejection",
+  );
+  assert.equal(result.decision.index, 3);
+  assert.equal(result.disposition, "experiment-deferred");
+}
+
+{
+  let invocations = 0;
+  const stopped = runResearchAutomation({
+    reader: {
+      read() {
+        return {
+          techs: [],
+          interventionResult: {
+            index: 3,
+            actionId: "tech-foundry",
+            disposition: "experiment-stopped",
+            reason: "The native Library offer disappeared",
+          },
+        };
+      },
+    },
+    executor: {
+      execute() {
+        invocations += 1;
+        return {
+          outcome: { status: "succeeded" },
+          disposition: "researched",
+        };
+      },
+    },
+  });
+  assert.equal(stopped.status, "rejected");
+  assert.equal(invocations, 0, "missing target authority fails closed");
+}
 console.log("Research owner observation tests passed");
