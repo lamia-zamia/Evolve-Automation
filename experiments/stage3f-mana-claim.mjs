@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -24,7 +25,11 @@ const settingsPath = path.join(
   "test-artifacts/benchmark/slice0/settings/stage2e-integrated-mad-no-triggers.json",
 );
 const gamePath = path.join(root, "test-artifacts/game/evolve-deadspace.js");
-const upstreamPath = "D:/work/Evolve-DeadSpace";
+const upstreamPath =
+  process.argv.find((value) => value.startsWith("--upstream="))?.slice(11) ??
+  process.env.EVOLVE_UPSTREAM_SOURCE;
+const pinnedUpstreamCommit =
+  "db38e2af831907d49aeb5348d678d8d8745d6c3f";
 const bundlePath = path.join(
   root,
   "test-artifacts/benchmark/tmp/stage3f-test.user.js",
@@ -528,6 +533,32 @@ try {
     saveText,
     effectiveSettings,
   );
+  assert.equal(
+    execFileSync(
+      "git",
+      [
+        "-C",
+        runner.inputs.upstream,
+        "rev-parse",
+        `${runner.inputs.gameSnapshot.commit}^{commit}`,
+      ],
+      { encoding: "utf8" },
+    ).trim(),
+    pinnedUpstreamCommit,
+    "experiment game snapshot must match the exact pinned upstream commit",
+  );
+  const madScienceGrant = seededB.diagnostics.researchInvocations?.find(
+    (event) => event.elementId === "tech-mad_science",
+  );
+  assert.ok(madScienceGrant, "B must natively purchase Mad Science");
+  assert.equal(madScienceGrant.highTechBefore, 0);
+  assert.equal(madScienceGrant.highTechAfter, 1);
+  assert.equal(madScienceGrant.manaBefore - madScienceGrant.manaAfter, 50);
+  assert.equal(derivedC.summary.selectedClaim?.status, "ambiguous");
+  assert.deepEqual(
+    derivedC.summary.selectedClaim?.candidates,
+    ["tech-black_powder", "tech-mad_science"],
+  );
   const report = {
     protocol: "Stage 3F goal-derived Mana claim experiment",
     runner: "tools/chromium-evolve-runner.mjs",
@@ -539,7 +570,8 @@ try {
         "A/A baseline, manually seeded Stage 3E B, then goal-derived C; each opens a fresh exact-runner session.",
       output: "experiments/stage3f-mana-claim-manifest.json (or --out=<path>)",
     },
-    upstreamCommit: runner.inputs.gameSnapshot.commit,
+    upstreamCommit: pinnedUpstreamCommit,
+    gameSnapshotCommit: runner.inputs.gameSnapshot.commit,
     periods: 200,
     seed: 42,
     epoch: "2026-09-21T00:00:00.000Z",
@@ -554,7 +586,8 @@ try {
       },
       settings: {
         path: "test-artifacts/benchmark/slice0/settings/stage2e-integrated-mad-no-triggers.json",
-        sha256: hash(effectiveSettingsText),
+        originalSha256: hash(await readFile(settingsPath)),
+        effectiveSha256: hash(effectiveSettingsText),
       },
       testBundle: {
         path: "test-artifacts/benchmark/tmp/stage3f-test.user.js",

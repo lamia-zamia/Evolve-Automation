@@ -7,7 +7,8 @@
     "variants": "A/A baseline, manually seeded Stage 3E B, then goal-derived C; each opens a fresh exact-runner session.",
     "output": "experiments/stage3f-mana-claim-manifest.json (or --out=<path>)"
   },
-  "upstreamCommit": "db38e2af",
+  "upstreamCommit": "db38e2af831907d49aeb5348d678d8d8745d6c3f",
+  "gameSnapshotCommit": "db38e2af",
   "periods": 200,
   "seed": 42,
   "epoch": "2026-09-21T00:00:00.000Z",
@@ -22,7 +23,8 @@
     },
     "settings": {
       "path": "test-artifacts/benchmark/slice0/settings/stage2e-integrated-mad-no-triggers.json",
-      "sha256": "fbf75da786f5aa841212eea5c5848a7a532a9a8afe8d7ccd14f5781895601131"
+      "originalSha256": "a9eacc9e041ebe2851038c0ec84f661f294b6041f820ebe50422e3b3830a7dd2",
+      "effectiveSha256": "fbf75da786f5aa841212eea5c5848a7a532a9a8afe8d7ccd14f5781895601131"
     },
     "testBundle": {
       "path": "test-artifacts/benchmark/tmp/stage3f-test.user.js",
@@ -108,7 +110,7 @@
         }
       },
       "workTicks": 25,
-      "tickPhaseMsBy25TickWindow": [85]
+      "tickPhaseMsBy25TickWindow": [49.63]
     },
     "B": {
       "periods": 200,
@@ -303,7 +305,7 @@
         }
       },
       "workTicks": 25,
-      "tickPhaseMsBy25TickWindow": [56.14]
+      "tickPhaseMsBy25TickWindow": [55.6]
     },
     "C": {
       "periods": 200,
@@ -469,7 +471,7 @@
         }
       },
       "workTicks": 25,
-      "tickPhaseMsBy25TickWindow": [51.44]
+      "tickPhaseMsBy25TickWindow": [53.7]
     }
   }
 }
