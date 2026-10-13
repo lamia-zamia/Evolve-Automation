@@ -51,6 +51,11 @@ import { planNativeResearchPrerequisites } from "../domain/progression/research-
 import type { NativeResearchPrerequisiteGraph } from "../domain/progression/research-prerequisite-planning.ts";
 import { evaluateResearchGoalCandidates } from "../domain/progression/research-goal-candidates.ts";
 import {
+  classifyMandatoryNativeResearchObligations,
+  classifyMandatoryResearchPrerequisiteObligations,
+  planIndependentResearchResourceClaims,
+} from "../domain/progression/research-prerequisite-obligations.ts";
+import {
   admitResourceClaim,
   readAdmittedResourceClaim,
   type ResourceClaimLifecycleState,
@@ -60,7 +65,10 @@ import { decideResearchSpend } from "../domain/progression/research-spending-dec
 import type { GoalResourceStock } from "../domain/economy/goal-feasibility.ts";
 import { canAfford } from "../domain/game-world.ts";
 import { createCapturedTechPrerequisiteLevelReader } from "../adapters/evolve/progression/research/captured-tech-prerequisite-levels.ts";
-import { readCapturedTechApplicability } from "../adapters/evolve/progression/research/captured-tech-applicability.ts";
+import {
+  readCapturedMadTargetCondition,
+  readCapturedTechApplicability,
+} from "../adapters/evolve/progression/research/captured-tech-applicability.ts";
 import type { CapturedTechDefinition } from "../ports/captured-game-mechanics.ts";
 import type { OfferedTech } from "../ports/game-tech-catalog.ts";
 import type { ResearchOwnerSelectionObservation } from "../domain/progression/research/research.ts";
@@ -1741,6 +1749,20 @@ export function startCapturedRuntime({
               gatherTestHooks,
               "resourceClaim",
             );
+            const rawResourceClaims = readProperty(
+              gatherTestHooks,
+              "resourceClaims",
+            );
+            const resourceClaims = Array.isArray(rawResourceClaims)
+              ? rawResourceClaims
+                  .map((value: unknown) => readAdmittedResourceClaim(value))
+                  .filter(
+                    (value): value is Readonly<ResourceClaim> =>
+                      value !== undefined,
+                  )
+              : readAdmittedResourceClaim(resourceClaim) === undefined
+                ? []
+                : [readAdmittedResourceClaim(resourceClaim)!];
             const nativeActionId = readProperty(
               resourceClaim,
               "nativeActionId",
@@ -1775,10 +1797,15 @@ export function startCapturedRuntime({
             const observationAvailable =
               statusState === "active" &&
               isRecord(resourceClaim) &&
-              statusOfferObservationId ===
-                readProperty(resourceClaim, "offerObservationId") &&
-              statusOfferSetIdentity ===
-                readProperty(resourceClaim, "offerSetIdentity") &&
+              resourceClaims.length > 0 &&
+              (!Array.isArray(rawResourceClaims) ||
+                resourceClaims.length === rawResourceClaims.length) &&
+              resourceClaims.every(
+                (currentClaim) =>
+                  statusOfferObservationId ===
+                    currentClaim.offerObservationId &&
+                  statusOfferSetIdentity === currentClaim.offerSetIdentity,
+              ) &&
               readProperty(claimStatus, "rootGeneration") ===
                 currentRootGeneration &&
               readProperty(claimStatus, "progressionGeneration") ===
@@ -2071,9 +2098,29 @@ export function startCapturedRuntime({
       setTestClaimStatus("invalidated", "selected-goal-changed");
       return;
     }
-    if (previousClaim === undefined) {
-      if (resourceClaimMode === "goal-derived") {
+    if (
+      previousClaim === undefined ||
+      resourceClaimMode === "goal-derived" ||
+      resourceClaimMode === "goal-derived-single" ||
+      resourceClaimMode === "goal-derived-conjunctive"
+    ) {
+      if (
+        resourceClaimMode === "goal-derived" ||
+        resourceClaimMode === "goal-derived-single" ||
+        resourceClaimMode === "goal-derived-conjunctive"
+      ) {
         if (ownerObservation === undefined) return;
+        const rawPriorClaims = readProperty(intervention, "resourceClaims");
+        const priorClaims = Array.isArray(rawPriorClaims)
+          ? rawPriorClaims
+              .map((value: unknown) => readAdmittedResourceClaim(value))
+              .filter(
+                (value): value is Readonly<ResourceClaim> =>
+                  value !== undefined,
+              )
+          : previousClaim === undefined
+            ? []
+            : [previousClaim];
         const root = pageCapture.rootState.readRoot();
         const settings = settingsStore.readRaw();
         const offers = ownerObservation.offers;
@@ -2102,6 +2149,19 @@ export function startCapturedRuntime({
           history.push(selection);
           Reflect.set(testHooks, "resourceClaimSelectionEvents", history);
         };
+        if (
+          priorClaims.length > 0 &&
+          priorClaims.some((claim) => claim.rootGeneration !== rootGeneration)
+        ) {
+          Reflect.set(testHooks, "gatherIntervention", {
+            ...intervention,
+            resourceClaim: undefined,
+            resourceClaims: [],
+          });
+          selectionRecord("unavailable", "claim root generation changed");
+          setTestClaimStatus("invalidated", "root-replaced");
+          return;
+        }
         if (
           !isRecord(root) ||
           !isRecord(settings) ||
@@ -2171,6 +2231,10 @@ export function startCapturedRuntime({
         const resourceSource = createCapturedResourceSource(
           pageCapture.rootState,
         );
+        const nonManaAffordableByAction = new Map<
+          string,
+          boolean | undefined
+        >();
         const evaluation = evaluateResearchGoalCandidates({
           goalId: "prestige:mad",
           targetActionId: CAPTURED_MAD_RESEARCH_TECH,
@@ -2182,6 +2246,15 @@ export function startCapturedRuntime({
           offers: offers.map((offer, index) => {
             const sample = resourceSource.readResources(
               Object.keys(offer.cost),
+            );
+            const nonManaCost = Object.fromEntries(
+              Object.entries(offer.cost).filter(
+                ([resourceId]) => resourceId !== "Mana",
+              ),
+            );
+            nonManaAffordableByAction.set(
+              offer.elementId,
+              sample === undefined ? undefined : canAfford(sample, nonManaCost),
             );
             const eligibility =
               progression.readResearchOwnerOfferEligibility?.(offer);
@@ -2217,6 +2290,50 @@ export function startCapturedRuntime({
           }),
           baselineSelectedActionId: undefined,
         });
+        const conjunctiveMode =
+          resourceClaimMode === "goal-derived-conjunctive";
+        const mandatoryPlan = conjunctiveMode
+          ? classifyMandatoryNativeResearchObligations(graph, {
+              targetCurrentlyEligible:
+                applicability?.get(CAPTURED_MAD_RESEARCH_TECH)?.status ===
+                  "eligible" &&
+                readCapturedMadTargetCondition(root).status === "eligible",
+              definitions: definitions.map((definition) => ({
+                actionId: definition.actionId,
+                grantTechnology: definition.grantTechnology,
+                grantLevel: definition.grantLevel,
+                prerequisites: definition.prerequisites,
+                hasNativeCondition: definition.eligibility.hasNativeCondition,
+                routeRestrictions: definition.eligibility.routeRestrictions,
+                restrictions: definition.eligibility.restrictions,
+              })),
+              grantLevels,
+              applicabilityByActionId: applicability,
+              offeredActionIds: new Set(offers.map((offer) => offer.elementId)),
+            })
+          : classifyMandatoryResearchPrerequisiteObligations(
+              graph,
+              applicability?.get(CAPTURED_MAD_RESEARCH_TECH)?.status ===
+                "eligible" &&
+                readCapturedMadTargetCondition(root).status === "eligible",
+            );
+        const mandatoryManaCandidates = evaluation.candidates.filter(
+          (candidate) => {
+            const offer = offers.find(
+              (entry) => entry.elementId === candidate.actionId,
+            );
+            return (
+              (!conjunctiveMode ||
+                (mandatoryPlan.status === "verified" &&
+                  mandatoryPlan.mandatoryActionIds.includes(
+                    candidate.actionId,
+                  ))) &&
+              offer !== undefined &&
+              typeof offer.cost.Mana === "number" &&
+              offer.cost.Mana > 0
+            );
+          },
+        );
         const eligibleCandidates = evaluation.candidates.filter((candidate) => {
           const offer = offers.find(
             (entry) => entry.elementId === candidate.actionId,
@@ -2226,20 +2343,30 @@ export function startCapturedRuntime({
             .readResources(["Mana"])
             ?.resources.get("Mana");
           return (
+            (!conjunctiveMode ||
+              (mandatoryPlan.status === "verified" &&
+                mandatoryPlan.mandatoryActionIds.includes(
+                  candidate.actionId,
+                ))) &&
             candidate.relevance === "verified-prerequisite" &&
             candidate.dependencyRelation === "declared-prerequisite" &&
             candidate.pathApplicability === "eligible" &&
             candidate.actionability === "current-native-offer" &&
             candidate.evidenceFresh &&
-            candidate.nativeAffordable === false &&
-            candidate.resourceAffordability === "insufficient" &&
+            (conjunctiveMode ||
+              nonManaAffordableByAction.get(candidate.actionId) === true) &&
             graph.actionableFrontier.includes(candidate.actionId) &&
             candidate.reservationEvidence === "none" &&
             candidate.explicitExclusionEvidence === "none" &&
             offer !== undefined &&
             offer.cost.Mana !== undefined &&
+            offer.cost.Mana > 0 &&
             mana !== undefined &&
-            mana.amount < offer.cost.Mana &&
+            (conjunctiveMode
+              ? candidate.nativeAffordable || mana.amount < offer.cost.Mana
+              : candidate.nativeAffordable === false &&
+                candidate.resourceAffordability === "insufficient" &&
+                mana.amount < offer.cost.Mana) &&
             mana.max >= offer.cost.Mana &&
             progression.readResearchOwnerOfferEligibility?.(offer) ===
               "eligible" &&
@@ -2249,19 +2376,79 @@ export function startCapturedRuntime({
             control.methods.includes("action")
           );
         });
-        if (eligibleCandidates.length !== 1) {
+        const allMandatoryManaCandidatesVerified =
+          mandatoryManaCandidates.length === eligibleCandidates.length &&
+          eligibleCandidates.every((candidate) =>
+            mandatoryManaCandidates.some(
+              (required) => required.actionId === candidate.actionId,
+            ),
+          );
+        const priorObligationStillMandatory = priorClaims.some(
+          (claim) =>
+            (grantLevels?.get(claim.targetGrantTechnology) ?? 0) <
+              claim.targetGrantLevel &&
+            mandatoryPlan.mandatoryActionIds.includes(claim.nativeActionId),
+        );
+        if (
+          conjunctiveMode &&
+          mandatoryPlan.status === "verified" &&
+          mandatoryManaCandidates.length === 0 &&
+          !priorObligationStillMandatory
+        ) {
+          Reflect.set(testHooks, "gatherIntervention", {
+            ...intervention,
+            resourceClaim: undefined,
+            resourceClaims: [],
+          });
+          setTestClaimStatus(
+            priorClaims.length > 0 &&
+              priorClaims.every(
+                (claim) =>
+                  (grantLevels?.get(claim.targetGrantTechnology) ?? 0) >=
+                  claim.targetGrantLevel,
+              )
+              ? "completed"
+              : "released",
+            "no-current-mandatory-Mana-obligations",
+            {
+              completedActionIds: priorClaims.map(
+                (claim) => claim.nativeActionId,
+              ),
+            },
+          );
+          selectionRecord(
+            "released",
+            "verified prerequisite paths no longer require a Mana claim",
+            mandatoryPlan.mandatoryActionIds,
+            {
+              mandatoryActionIds: mandatoryPlan.mandatoryActionIds,
+              alternativeGroups: mandatoryPlan.alternativeGroups,
+            },
+          );
+          return;
+        }
+        if (
+          (conjunctiveMode && mandatoryPlan.status !== "verified") ||
+          eligibleCandidates.length === 0 ||
+          (!conjunctiveMode && eligibleCandidates.length !== 1) ||
+          !allMandatoryManaCandidatesVerified
+        ) {
           const ids = eligibleCandidates.map((candidate) => candidate.actionId);
+          const legacyAmbiguous =
+            !conjunctiveMode && eligibleCandidates.length > 1;
           setTestClaimStatus(
             "suspended",
-            ids.length > 1
+            legacyAmbiguous
               ? "goal-prerequisite-selection-ambiguous"
               : "goal-prerequisite-selection-unavailable",
           );
           selectionRecord(
-            ids.length > 1 ? "ambiguous" : "unavailable",
-            ids.length > 1
+            legacyAmbiguous ? "ambiguous" : "unavailable",
+            legacyAmbiguous
               ? "multiple verified prerequisite offers require Mana"
-              : "no uniquely verified Mana-blocked prerequisite offer",
+              : mandatoryPlan.status === "verified" && conjunctiveMode
+                ? "no mandatory current Mana-blocked prerequisite offer"
+                : "native prerequisite graph cannot prove mandatory obligations",
             ids,
             {
               researchPermission: true,
@@ -2269,6 +2456,9 @@ export function startCapturedRuntime({
               nativeOfferCount: offers.length,
               offerObservationId: offers[0]?.offerObservationId,
               offerSetIdentity: offers[0]?.offerSetIdentity,
+              mandatoryActionIds: mandatoryPlan.mandatoryActionIds,
+              alternativeGroups: mandatoryPlan.alternativeGroups,
+              prerequisiteReasons: mandatoryPlan.reasons,
               rootGeneration,
               progressionGeneration,
               evaluatedCandidates: evaluation.candidates
@@ -2339,103 +2529,109 @@ export function startCapturedRuntime({
           );
           return;
         }
-        const selected = eligibleCandidates[0];
-        const offer = offers.find(
-          (entry) => entry.elementId === selected?.actionId,
-        );
+        const claimsEvidence = eligibleCandidates.flatMap((candidate) => {
+          const offer = offers.find(
+            (entry) => entry.elementId === candidate.actionId,
+          );
+          const control =
+            offer === undefined
+              ? undefined
+              : pageCapture.controls.resolve(offer.elementId);
+          const mana = resourceSource
+            .readResources(["Mana"])
+            ?.resources.get("Mana");
+          if (
+            offer === undefined ||
+            control === undefined ||
+            mana === undefined ||
+            typeof offer.offerObservationId !== "string" ||
+            offer.offerObservationId === "" ||
+            typeof offer.offerSetIdentity !== "string" ||
+            offer.offerSetIdentity === ""
+          )
+            return [];
+          return [
+            {
+              terminalGoalId: "prestige:mad",
+              immediateGoalId: `research:${offer.elementId}`,
+              owner: "goal-planner",
+              provenance: "verified-native-prerequisite" as const,
+              prerequisiteRelation: "verified" as const,
+              nativeActionId: offer.elementId,
+              targetGrantTechnology: offer.grantTechnology,
+              targetGrantLevel: offer.grantLevel,
+              resourceId: "Mana",
+              poolId: "anywhere",
+              requiredQuantity: offer.cost.Mana ?? Number.NaN,
+              observedStock: mana.amount,
+              observedCapacity: mana.max,
+              observedNativePrice: offer.cost.Mana ?? Number.NaN,
+              offerSetIdentity: offer.offerSetIdentity,
+              offerObservationId: offer.offerObservationId,
+              controlBinding: Object.freeze({
+                elementId: control.elementId,
+                generation: control.generation,
+              }),
+              offerBindingGeneration: offer.generation,
+              nativeOfferCurrent: true,
+              nativeActionEligible: true,
+              researchPermission: true,
+              queueEvidence: "empty" as const,
+              rootGeneration,
+              progressionGeneration,
+              observationValid:
+                pageCapture.rootState.readRoot() === root &&
+                progression.readRootGeneration() === rootGeneration &&
+                progression.readProgressionEpoch() === progressionGeneration &&
+                offers.every(
+                  (entry) =>
+                    pageCapture.controls.resolve(entry.elementId)
+                      ?.generation === entry.generation,
+                ) &&
+                pageCapture.controls.resolve(offer.elementId)?.generation ===
+                  control.generation,
+              precedence: "terminal-prerequisite" as const,
+              allocationAuthority: { kind: "independent" as const },
+              forecastProductionPerSecond: undefined,
+              uncertaintyReasons: [],
+              unavailableReasons: [],
+            },
+          ];
+        });
+        const claimPlan = planIndependentResearchResourceClaims(claimsEvidence);
+        const claims = claimPlan.claims;
+        const claim = claims[0];
+        const offer =
+          claim === undefined
+            ? undefined
+            : offers.find((entry) => entry.elementId === claim.nativeActionId);
         const control =
           offer === undefined
             ? undefined
             : pageCapture.controls.resolve(offer.elementId);
-        const mana = resourceSource
-          .readResources(["Mana"])
-          ?.resources.get("Mana");
         if (
-          selected === undefined ||
+          claimPlan.status !== "available" ||
+          claims.length !== eligibleCandidates.length ||
+          claim === undefined ||
           offer === undefined ||
-          control === undefined ||
-          mana === undefined ||
-          typeof offer.offerObservationId !== "string" ||
-          offer.offerObservationId === "" ||
-          typeof offer.offerSetIdentity !== "string" ||
-          offer.offerSetIdentity === ""
+          control === undefined
         ) {
           selectionRecord(
             "unavailable",
-            "selected native offer lacks current identity or Mana evidence",
+            "one or more independent native offer claims lack current evidence",
+            eligibleCandidates.map((candidate) => candidate.actionId),
+            { claimReasons: claimPlan.reasons },
           );
           setTestClaimStatus(
             "suspended",
-            "goal-prerequisite-offer-evidence-unavailable",
-          );
-          return;
-        }
-        const claim = admitResourceClaim({
-          terminalGoalId: "prestige:mad",
-          immediateGoalId: `research:${offer.elementId}`,
-          owner: "goal-planner",
-          provenance: "verified-native-prerequisite",
-          prerequisiteRelation: "verified",
-          nativeActionId: offer.elementId,
-          targetGrantTechnology: offer.grantTechnology,
-          targetGrantLevel: offer.grantLevel,
-          resourceId: "Mana",
-          poolId: "anywhere",
-          requiredQuantity: offer.cost.Mana ?? Number.NaN,
-          observedStock: mana.amount,
-          observedCapacity: mana.max,
-          observedNativePrice: offer.cost.Mana ?? Number.NaN,
-          offerSetIdentity: offer.offerSetIdentity,
-          offerObservationId: offer.offerObservationId,
-          controlBinding: Object.freeze({
-            elementId: control.elementId,
-            generation: control.generation,
-          }),
-          offerBindingGeneration: offer.generation,
-          nativeOfferCurrent: true,
-          nativeActionEligible: true,
-          researchPermission: true,
-          queueEvidence: "empty",
-          rootGeneration,
-          progressionGeneration,
-          observationValid:
-            pageCapture.rootState.readRoot() === root &&
-            progression.readRootGeneration() === rootGeneration &&
-            progression.readProgressionEpoch() === progressionGeneration &&
-            offers.every(
-              (entry) =>
-                pageCapture.controls.resolve(entry.elementId)?.generation ===
-                entry.generation,
-            ) &&
-            pageCapture.controls.resolve(offer.elementId)?.generation ===
-              control.generation,
-          precedence: "terminal-prerequisite",
-          allocationAuthority: {
-            kind: "selected-alternative",
-            groupId: "prestige:mad:research-frontier",
-            selectedActionId: offer.elementId,
-            authorityId: "unique-current-verified-native-frontier",
-          },
-          forecastProductionPerSecond: undefined,
-          uncertaintyReasons: [],
-          unavailableReasons: [],
-        });
-        if (claim === undefined) {
-          selectionRecord(
-            "unavailable",
-            "admitResourceClaim rejected the captured native evidence",
-            [offer.elementId],
-          );
-          setTestClaimStatus(
-            "suspended",
-            "goal-prerequisite-claim-admission-failed",
+            "goal-prerequisite-claim-evidence-unavailable",
           );
           return;
         }
         selectionRecord(
           "selected",
-          "unique current verified native prerequisite frontier",
-          [offer.elementId],
+          "independent current verified native prerequisite obligations",
+          claims.map((entry) => entry.nativeActionId),
           {
             researchPermission: true,
             playerQueues: "empty",
@@ -2443,32 +2639,32 @@ export function startCapturedRuntime({
             rootGeneration,
             progressionGeneration,
             terminalGoalId: "prestige:mad",
-            immediateGoalId: `research:${offer.elementId}`,
-            provenance: claim.provenance,
-            prerequisiteRelation: claim.prerequisiteRelation,
-            nativeActionId: claim.nativeActionId,
-            targetGrantTechnology: claim.targetGrantTechnology,
-            targetGrantLevel: claim.targetGrantLevel,
-            resourceId: claim.resourceId,
-            requiredQuantity: claim.requiredQuantity,
-            observedStock: claim.observedStock,
-            observedCapacity: claim.observedCapacity,
-            offerObservationId: claim.offerObservationId,
-            offerSetIdentity: claim.offerSetIdentity,
-            offerBindingGeneration: claim.offerBindingGeneration,
-            controlBinding: claim.controlBinding,
-            chainActionIds: selected.chainActionIds,
-            allocationAuthority: claim.allocationAuthority,
+            claims: claims.map((entry) => ({
+              immediateGoalId: entry.immediateGoalId,
+              nativeActionId: entry.nativeActionId,
+              targetGrantTechnology: entry.targetGrantTechnology,
+              targetGrantLevel: entry.targetGrantLevel,
+              requiredQuantity: entry.requiredQuantity,
+              observedStock: entry.observedStock,
+              offerObservationId: entry.offerObservationId,
+              offerBindingGeneration: entry.offerBindingGeneration,
+              allocationAuthority: entry.allocationAuthority,
+            })),
+            mandatoryActionIds: mandatoryPlan.mandatoryActionIds,
+            alternativeGroups: mandatoryPlan.alternativeGroups,
+            prerequisiteReasons: mandatoryPlan.reasons,
           },
         );
         Reflect.set(testHooks, "gatherIntervention", {
           ...intervention,
           resourceClaim: claim,
+          resourceClaims: claims,
         });
         setTestClaimStatus("active", "goal-derived-native-prerequisite", {
-          nativeActionId: offer.elementId,
-          offerBindingGeneration: offer.generation,
-          controlGeneration: control.generation,
+          nativeActionIds: claims.map((entry) => entry.nativeActionId),
+          offerBindingGenerations: claims.map(
+            (entry) => entry.offerBindingGeneration,
+          ),
           rootGeneration,
           progressionGeneration,
           offerObservationId: offer.offerObservationId,
@@ -4914,6 +5110,8 @@ export function startCapturedRuntime({
           const claimMode = readProperty(intervention, "resourceClaimMode");
           if (
             claimMode === "goal-derived" ||
+            claimMode === "goal-derived-single" ||
+            claimMode === "goal-derived-conjunctive" ||
             (claim !== undefined &&
               (claimMode === undefined || claimMode === "current"))
           ) {

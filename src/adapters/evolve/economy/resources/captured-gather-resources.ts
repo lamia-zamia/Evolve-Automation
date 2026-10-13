@@ -19,6 +19,7 @@ import {
   readAdmittedResourceClaim,
   type ResourceClaimFreshness,
   type ResourceClaimReservation,
+  type ResourceClaim,
 } from "../../../../domain/economy/resources/resource-claims.ts";
 import type { DecisionExecutor } from "../../../../ports/decision-executor.ts";
 import type { GatherResourcesReader } from "../../../../ports/gather-resources.ts";
@@ -317,6 +318,17 @@ export function createCapturedGatherResourcesAdapter({
         const claim = readAdmittedResourceClaim(
           readProperty(intervention, "resourceClaim"),
         );
+        const rawClaims = readProperty(intervention, "resourceClaims");
+        const claims = Array.isArray(rawClaims)
+          ? rawClaims
+              .map((value: unknown) => readAdmittedResourceClaim(value))
+              .filter(
+                (value): value is Readonly<ResourceClaim> =>
+                  value !== undefined,
+              )
+          : claim === undefined
+            ? []
+            : [claim];
         const freshness = readClaimFreshness(
           readProperty(intervention, "resourceClaimFreshness"),
         );
@@ -325,19 +337,23 @@ export function createCapturedGatherResourcesAdapter({
         );
         const observationAvailable =
           readProperty(intervention, "resourceClaimObservationAvailable") ===
-          true;
-        const currentClaimControl =
-          claim === undefined
-            ? undefined
-            : controls.resolve(claim.nativeActionId);
-        const currentControlBinding =
-          currentClaimControl === undefined
-            ? undefined
-            : Object.freeze({
-                elementId: currentClaimControl.elementId,
-                generation: currentClaimControl.generation,
-                actionCapable: currentClaimControl.methods.includes("action"),
-              });
+            true &&
+          (!Array.isArray(rawClaims) || claims.length === rawClaims.length);
+        const currentClaimControls = claims.map((currentClaim) =>
+          controls.resolve(currentClaim.nativeActionId),
+        );
+        const currentControlBindings = currentClaimControls.flatMap(
+          (currentControl) =>
+            currentControl === undefined
+              ? []
+              : [
+                  Object.freeze({
+                    elementId: currentControl.elementId,
+                    generation: currentControl.generation,
+                    actionCapable: currentControl.methods.includes("action"),
+                  }),
+                ],
+        );
         const queueState = (queueId: "queue" | "r_queue") => {
           const entries = readProperty(readProperty(root, queueId), "queue");
           return !Array.isArray(entries)
@@ -348,40 +364,42 @@ export function createCapturedGatherResourcesAdapter({
         };
         const queues = [queueState("queue"), queueState("r_queue")];
         const claimStillRelevant =
-          claim !== undefined &&
+          claims.length > 0 &&
           settingsValue["prestigeType"] === "mad" &&
           settingsValue["autoResearch"] === true &&
           settingsValue["autoTrigger"] !== true &&
           !queues.includes("active") &&
-          readTechLevel(root, claim.targetGrantTechnology) <
-            claim.targetGrantLevel;
-        if (claimStillRelevant && claim !== undefined) {
+          claims.some(
+            (currentClaim) =>
+              readTechLevel(root, currentClaim.targetGrantTechnology) <
+              currentClaim.targetGrantLevel,
+          );
+        if (claimStillRelevant && claims.length > 0) {
           resourceClaimLedger = planResourceClaimLedger({
-            claims: [claim],
+            claims,
             freshness,
             controlBindings:
-              currentClaimControl === undefined ||
-              currentControlBinding === undefined
-                ? undefined
-                : [currentControlBinding],
+              currentControlBindings.length === claims.length
+                ? currentControlBindings
+                : undefined,
             stock: resources.Mana.currentQuantity,
             knownReservations:
               observationAvailable && !queues.includes("unavailable")
                 ? reservations
                 : undefined,
-            forecastProductionPerSecond: claim.forecastProductionPerSecond,
+            forecastProductionPerSecond: claims[0]?.forecastProductionPerSecond,
           });
-        } else if (claim !== undefined && queues.includes("unavailable")) {
+        } else if (claims.length > 0 && queues.includes("unavailable")) {
           resourceClaimLedger = planResourceClaimLedger({
-            claims: [claim],
+            claims,
             freshness,
             controlBindings:
-              currentControlBinding === undefined
-                ? undefined
-                : [currentControlBinding],
+              currentControlBindings.length === claims.length
+                ? currentControlBindings
+                : undefined,
             stock: resources.Mana.currentQuantity,
             knownReservations: undefined,
-            forecastProductionPerSecond: claim.forecastProductionPerSecond,
+            forecastProductionPerSecond: claims[0]?.forecastProductionPerSecond,
           });
         }
         const ledgerObserver = readProperty(

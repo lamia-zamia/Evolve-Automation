@@ -206,6 +206,34 @@ assert.equal(claimInput.resourceClaimLedger.status, "current");
 assert.equal(claimInput.resourceClaimLedger.currentStockReserved, 1);
 assert.equal(claimInput.resourceClaimLedger.spendableStock, 0);
 assert.equal(claimInput.resourceClaimLedger.claimIds.length, 1);
+handles.set("tech-black_powder", {
+  elementId: "tech-black_powder",
+  generation: 1,
+  methods: ["action"],
+});
+const blackPowderClaim = admitResourceClaim({
+  ...manaClaim,
+  immediateGoalId: "research:tech-black_powder",
+  nativeActionId: "tech-black_powder",
+  targetGrantTechnology: "explosives",
+  requiredQuantity: 100,
+  observedNativePrice: 100,
+  controlBinding: { elementId: "tech-black_powder", generation: 1 },
+});
+assert.ok(blackPowderClaim);
+const multiClaimAdapter = createCapturedGatherResourcesAdapter({
+  rootState,
+  controls,
+  readSettings: () => settings,
+  readTestIntervention: () => ({
+    ...claimIntervention(),
+    resourceClaims: [manaClaim, blackPowderClaim],
+  }),
+});
+const multiClaimInput = multiClaimAdapter.reader.read();
+assert.equal(multiClaimInput.resourceClaimLedger.status, "current");
+assert.equal(multiClaimInput.resourceClaimLedger.currentStockReserved, 1);
+assert.equal(multiClaimInput.resourceClaimLedger.claimIds.length, 2);
 handles.set("tech-mad_science", {
   elementId: "tech-mad_science",
   generation: 2,

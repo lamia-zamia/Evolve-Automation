@@ -1,10 +1,10 @@
 {
-  "protocol": "Stage 3F goal-derived Mana claim experiment",
+  "protocol": "Stage 3G conjunctive prerequisite Mana claim experiment",
   "runner": "tools/chromium-evolve-runner.mjs",
   "execution": {
     "command": "node experiments/stage3f-mana-claim.mjs",
     "inputs": "Paths and SHA-256 hashes are recorded below; settings are loaded with autoResearch=true.",
-    "variants": "A/A baseline, manually seeded Stage 3E B, then goal-derived C; each opens a fresh exact-runner session.",
+    "variants": "A/A baseline, manually seeded Stage 3E B, Stage 3F single-selection regression C, then Stage 3G conjunctive goal-derived D; each opens a fresh exact-runner session.",
     "output": "experiments/stage3f-mana-claim-manifest.json (or --out=<path>)"
   },
   "upstreamCommit": "db38e2af831907d49aeb5348d678d8d8745d6c3f",
@@ -28,14 +28,15 @@
     },
     "testBundle": {
       "path": "test-artifacts/benchmark/tmp/stage3f-test.user.js",
-      "sha256": "1016b86584606d0c2b6fe2df613c4b020b5ae4ee06389d3892aa683c93b272a4"
+      "sha256": "70d72358b9a7de8f69f10ff83c2234e4bec129e8f3d917495e22461291406a6e"
     },
     "runner": "23383ea302dcbe5545ba83c8aa72e0d8f231a96135fd31b60d9bc95bd9102257"
   },
   "conditions": {
     "A": "no goal-directed Mana protection",
     "B": "Stage 3E current claim seeded from tech-mad_science native evidence",
-    "C": "test-only goal-derived mode; no target or admitted claim injected"
+    "C": "Stage 3F test-only single-selection mode; no target or admitted claim injected",
+    "D": "Stage 3G test-only independent claims; fail closed when a direct obligation has unresolved native alternatives"
   },
   "preservedSettings": {
     "autoResearch": true,
@@ -71,6 +72,7 @@
         "undefined-stone": { "clicks": 1250, "manaSpent": 0, "gathered": 2500 }
       },
       "firstNativeHighTechGrant": null,
+      "firstNativeExplosivesGrant": null,
       "firstGatherAfterGrant": null,
       "researchAttempts": [
         {
@@ -86,7 +88,20 @@
           "manaSpent": 0
         }
       ],
-      "nativeHighTechTrace": [],
+      "nativeResearchTrace": [
+        {
+          "cycle": 25,
+          "actionId": "tech-bessemer_process",
+          "grantTechnology": "smelting",
+          "grantLevel": 4,
+          "grantBefore": 3,
+          "grantAfter": 4,
+          "manaBefore": 0.0875469537689959,
+          "manaAfter": 0.0875469537689959,
+          "manaSpent": 0,
+          "disposition": "researched"
+        }
+      ],
       "researchDrawCounts": {
         "research.observation.samples": {
           "total": 26,
@@ -110,7 +125,7 @@
         }
       },
       "workTicks": 25,
-      "tickPhaseMsBy25TickWindow": [49.63]
+      "tickPhaseMsBy25TickWindow": [45.78]
     },
     "B": {
       "periods": 200,
@@ -191,6 +206,7 @@
         "manaBefore": 50.53565810078872,
         "manaAfter": 0.5356581007887229
       },
+      "firstNativeExplosivesGrant": null,
       "firstGatherAfterGrant": {
         "period": 72,
         "actionId": "city-lumber",
@@ -261,15 +277,66 @@
           "manaSpent": 0
         }
       ],
-      "nativeHighTechTrace": [
+      "nativeResearchTrace": [
         {
-          "period": 64,
+          "cycle": 3,
+          "actionId": "tech-rituals",
+          "grantTechnology": "magic",
+          "grantLevel": 3,
+          "grantBefore": 2,
+          "grantAfter": 3,
+          "manaBefore": 30.746513772557968,
+          "manaAfter": 5.746513772557968,
+          "manaSpent": 25,
+          "disposition": "researched"
+        },
+        {
+          "cycle": 8,
           "actionId": "tech-mad_science",
+          "grantTechnology": "high_tech",
+          "grantLevel": 1,
+          "grantBefore": 0,
+          "grantAfter": 1,
           "manaBefore": 50.53565810078872,
           "manaAfter": 0.5356581007887229,
           "manaSpent": 50,
-          "highTechBefore": 0,
-          "highTechAfter": 1
+          "disposition": "researched"
+        },
+        {
+          "cycle": 9,
+          "actionId": "tech-espionage",
+          "grantTechnology": "spy",
+          "grantLevel": 2,
+          "grantBefore": 1,
+          "grantAfter": 2,
+          "manaBefore": 0.49348696643487955,
+          "manaAfter": 0.49348696643487955,
+          "manaSpent": 0,
+          "disposition": "researched"
+        },
+        {
+          "cycle": 12,
+          "actionId": "tech-reinforced_crates",
+          "grantTechnology": "container",
+          "grantLevel": 2,
+          "grantBefore": 1,
+          "grantAfter": 2,
+          "manaBefore": 0.3669735633733495,
+          "manaAfter": 0.3669735633733495,
+          "manaSpent": 0,
+          "disposition": "researched"
+        },
+        {
+          "cycle": 25,
+          "actionId": "tech-magic",
+          "grantTechnology": "theatre",
+          "grantLevel": 3,
+          "grantBefore": 2,
+          "grantAfter": 3,
+          "manaBefore": 0.12524546868193553,
+          "manaAfter": 0.12524546868193553,
+          "manaSpent": 0,
+          "disposition": "researched"
         }
       ],
       "researchDrawCounts": {
@@ -305,7 +372,7 @@
         }
       },
       "workTicks": 25,
-      "tickPhaseMsBy25TickWindow": [55.6]
+      "tickPhaseMsBy25TickWindow": [51.3]
     },
     "C": {
       "periods": 200,
@@ -316,6 +383,128 @@
         "status": "ambiguous",
         "reason": "multiple verified prerequisite offers require Mana",
         "candidates": ["tech-black_powder", "tech-mad_science"],
+        "mandatoryActionIds": [],
+        "alternativeGroups": [],
+        "prerequisiteReasons": [
+          "native reqs is a function and was not evaluated",
+          "native queue precognition and game-specific requirement exceptions were not evaluated",
+          "missing native action gate tech-codex_infernium",
+          "research:hell_ruins:4 has a conditional or unavailable alternative",
+          "research:high_tech:16 has a conditional or unavailable alternative",
+          "research:high_tech:15 has a conditional or unavailable alternative",
+          "missing native action gate tech-frigate_ship",
+          "missing native action gate tech-cruiser_ship",
+          "missing native action gate tech-dreadnought",
+          "research:andromeda:3 has a conditional or unavailable alternative",
+          "research:science:22 has a conditional or unavailable alternative",
+          "missing native action gate tech-asphodel_stabilizer",
+          "missing native action gate tech-edenic_bunker",
+          "missing native action gate tech-bliss_den",
+          "missing native action gate tech-hallowed_housing",
+          "missing native action gate tech-corruptor",
+          "missing native action gate tech-seeping_corruption",
+          "missing native action gate tech-ultimate_corruption",
+          "research:asphodel:8 has a conditional or unavailable alternative",
+          "research:science:21 has a conditional or unavailable alternative",
+          "missing native action gate tech-research_station",
+          "missing native action gate tech-soul_engine",
+          "missing native action gate tech-asphodel_mech",
+          "missing native action gate tech-asphodel_storage",
+          "research:asphodel:3 has a conditional or unavailable alternative",
+          "research:science:20 has a conditional or unavailable alternative",
+          "missing native action gate tech-bribe_sphinx",
+          "research:sphinx_bribe:1 has a conditional or unavailable alternative",
+          "research:science:19 has a conditional or unavailable alternative",
+          "research:high_tech:18 has a conditional or unavailable alternative",
+          "research:science:18 has a conditional or unavailable alternative",
+          "research:high_tech:17 has a conditional or unavailable alternative",
+          "research:xeno:9 has a conditional or unavailable alternative",
+          "research:xeno:7 has a conditional or unavailable alternative",
+          "research:xeno:6 has a conditional or unavailable alternative",
+          "research:xeno:5 has a conditional or unavailable alternative",
+          "research:high_tech:14 has a conditional or unavailable alternative",
+          "research:science:16 has a conditional or unavailable alternative",
+          "research:science:15 has a conditional or unavailable alternative",
+          "missing native action gate tech-xeno_culture",
+          "research:xeno:4 has a conditional or unavailable alternative",
+          "missing native action gate tech-ship_dock",
+          "missing native action gate tech-gateway_depot",
+          "research:gateway:3 has a conditional or unavailable alternative",
+          "research:blackhole:4 has a conditional or unavailable alternative",
+          "research:blackhole:2 has a conditional or unavailable alternative",
+          "research:blackhole:3 has a conditional or unavailable alternative",
+          "research:high_tech:13 has a conditional or unavailable alternative",
+          "research:high_tech:12 has a conditional or unavailable alternative",
+          "research:high_tech:11 has a conditional or unavailable alternative",
+          "research:alpha:3 has a conditional or unavailable alternative",
+          "research:alpha:2 has a conditional or unavailable alternative",
+          "missing native action gate tech-war_drones",
+          "missing native action gate tech-demon_attractor",
+          "missing native action gate tech-combat_droids",
+          "missing native action gate tech-repair_droids",
+          "missing native action gate tech-advanced_predators",
+          "research:portal:3 has a conditional or unavailable alternative",
+          "research:infernite:4 has a conditional or unavailable alternative",
+          "research:infernite:3 has a conditional or unavailable alternative",
+          "research:infernite:2 has a conditional or unavailable alternative",
+          "research:infernite:1 has a conditional or unavailable alternative",
+          "missing native action gate tech-stanene",
+          "missing native action gate tech-stanene_tp",
+          "research:stanene:1 has a conditional or unavailable alternative",
+          "missing native action gate tech-graphene",
+          "missing native action gate tech-graphene_tp",
+          "research:graphene:1 has a conditional or unavailable alternative",
+          "research:high_tech:9 has a conditional or unavailable alternative",
+          "research:high_tech:7 has a conditional or unavailable alternative",
+          "research:high_tech:6 has a conditional or unavailable alternative",
+          "research:high_tech:5 has a conditional or unavailable alternative",
+          "research:high_tech:4 has a conditional or unavailable alternative",
+          "research:uranium:2 has a conditional or unavailable alternative",
+          "research:uranium:1 has a conditional or unavailable alternative",
+          "research:high_tech:1 has a conditional or unavailable alternative",
+          "native condition function was not evaluated",
+          "research:high_tech:2 has a conditional or unavailable alternative",
+          "native path excludes route standard",
+          "research:nanoweave:1 has a conditional or unavailable alternative",
+          "research:steel_container:6 has a conditional or unavailable alternative",
+          "research:steel_container:5 has a conditional or unavailable alternative",
+          "research:science:13 has a conditional or unavailable alternative",
+          "research:science:11 has a conditional or unavailable alternative",
+          "research:science:12 has a conditional or unavailable alternative",
+          "research:aerogel:1 has a conditional or unavailable alternative",
+          "research:steel_container:4 has a conditional or unavailable alternative",
+          "research:steel_container:2 has a conditional or unavailable alternative",
+          "research:particles:1 has a conditional or unavailable alternative",
+          "research:solar:4 has a conditional or unavailable alternative",
+          "research:asteroid:5 has a conditional or unavailable alternative",
+          "missing native action gate tech-elerium_tech",
+          "missing native action gate tech-elerium_reactor",
+          "research:elerium:1 has a conditional or unavailable alternative",
+          "research:asteroid:4 has a conditional or unavailable alternative",
+          "research:asteroid:3 has a conditional or unavailable alternative",
+          "research:solar:1 has a conditional or unavailable alternative",
+          "research:solar:2 has a conditional or unavailable alternative",
+          "research:solar:3 has a conditional or unavailable alternative",
+          "research:proxima:2 has a conditional or unavailable alternative",
+          "research:storage:5 has a conditional or unavailable alternative",
+          "research:storage:4 has a conditional or unavailable alternative",
+          "research:storage:3 has a conditional or unavailable alternative",
+          "research:high_tech:3 has a conditional or unavailable alternative",
+          "research:steel_container:1 has a conditional or unavailable alternative",
+          "research:titanium:1 has a conditional or unavailable alternative",
+          "could not prove every path for research:uranium:1",
+          "research:science:23 has a conditional or unavailable alternative",
+          "research:explosives:1 has a conditional or unavailable alternative",
+          "research:explosives:2 has a conditional or unavailable alternative",
+          "research:oil:5 has a conditional or unavailable alternative",
+          "research:oil:4 has a conditional or unavailable alternative",
+          "research:oil:3 has a conditional or unavailable alternative",
+          "research:oil:2 has a conditional or unavailable alternative",
+          "research:oil:1 has a conditional or unavailable alternative",
+          "research:explosives:3 has a conditional or unavailable alternative",
+          "could not prove every path for research:explosives:3",
+          "could not prove every path for research:high_tech:7"
+        ],
         "offerObservationId": "research-offers-25",
         "offerSetIdentitySha256": "1ac44d2f2fa13035476ec6369ada06fd32fbda6442d47fe2c92342c47afc22dc",
         "researchPermission": true,
@@ -427,6 +616,7 @@
         "undefined-stone": { "clicks": 1250, "manaSpent": 0, "gathered": 2500 }
       },
       "firstNativeHighTechGrant": null,
+      "firstNativeExplosivesGrant": null,
       "firstGatherAfterGrant": null,
       "researchAttempts": [
         {
@@ -442,7 +632,20 @@
           "manaSpent": 0
         }
       ],
-      "nativeHighTechTrace": [],
+      "nativeResearchTrace": [
+        {
+          "cycle": 25,
+          "actionId": "tech-bessemer_process",
+          "grantTechnology": "smelting",
+          "grantLevel": 4,
+          "grantBefore": 3,
+          "grantAfter": 4,
+          "manaBefore": 0.0875469537689959,
+          "manaAfter": 0.0875469537689959,
+          "manaSpent": 0,
+          "disposition": "researched"
+        }
+      ],
       "researchDrawCounts": {
         "research.observation.samples": {
           "total": 26,
@@ -471,7 +674,122 @@
         }
       },
       "workTicks": 25,
-      "tickPhaseMsBy25TickWindow": [53.7]
+      "tickPhaseMsBy25TickWindow": [46.98]
+    },
+    "D": {
+      "periods": 200,
+      "finalExportHash": "8b2d7639e7f7917ce7a06dec295510c83a839269180e8f8356b5af5816d9fd0f",
+      "highTechLevel": 0,
+      "selectedClaim": {
+        "cycle": 25,
+        "status": "unavailable",
+        "reason": "native prerequisite graph cannot prove mandatory obligations",
+        "candidates": [],
+        "mandatoryActionIds": [],
+        "alternativeGroups": [],
+        "prerequisiteReasons": [
+          "tech-mad_science cannot be proven mandatory for high_tech:7; unresolved native alternatives: tech-rocketry=unknown,tech-surface_breach=impossible,tech-robotics=impossible,tech-lasers=unknown,tech-artifical_intelligence=unknown,tech-quantum_computing=unknown,tech-virtual_reality=unknown,tech-plasma=impossible,tech-shields=impossible,tech-ai_core=impossible,tech-metaphysics=impossible,tech-orichalcum_analysis=impossible,tech-cybernetics=impossible,tech-divinity=impossible,tech-virtual_reality_tp=impossible"
+        ],
+        "offerObservationId": "research-offers-25",
+        "offerSetIdentitySha256": "1ac44d2f2fa13035476ec6369ada06fd32fbda6442d47fe2c92342c47afc22dc",
+        "researchPermission": true,
+        "playerQueues": "empty",
+        "nativeOfferCount": 13,
+        "rootGeneration": 0,
+        "progressionGeneration": "0|39:86|22:58|49|human|magic|178|0|anarchy|1|0|0|0",
+        "evaluatedCandidates": []
+      },
+      "selectionTimeline": [
+        {
+          "status": "unavailable",
+          "reason": "native prerequisite graph cannot prove mandatory obligations",
+          "candidates": [],
+          "firstCycle": 1,
+          "lastCycle": 25,
+          "occurrences": 25,
+          "firstOfferObservationId": "research-offers-1",
+          "lastOfferObservationId": "research-offers-25"
+        }
+      ],
+      "lifecycle": [
+        {
+          "state": "suspended",
+          "reason": "goal-prerequisite-selection-unavailable",
+          "firstCycle": 1,
+          "lastCycle": 25,
+          "occurrences": 25
+        }
+      ],
+      "claimLedger": { "statusCounts": { "no-ledger": 25 }, "sample": null },
+      "gatherClaimActions": {
+        "permitted": 2500,
+        "deferred": 0,
+        "actualManaSpent": 249
+      },
+      "gatherSummary": {
+        "city-lumber": { "clicks": 1250, "manaSpent": 249, "gathered": 6982 },
+        "undefined-stone": { "clicks": 1250, "manaSpent": 0, "gathered": 2500 }
+      },
+      "firstNativeHighTechGrant": null,
+      "firstNativeExplosivesGrant": null,
+      "firstGatherAfterGrant": null,
+      "researchAttempts": [
+        {
+          "cycle": 25,
+          "actionId": "tech-bessemer_process",
+          "grantTechnology": "smelting",
+          "grantLevel": 4,
+          "grantBefore": 3,
+          "grantAfter": 4,
+          "disposition": "researched",
+          "manaBefore": 0.0875469537689959,
+          "manaAfter": 0.0875469537689959,
+          "manaSpent": 0
+        }
+      ],
+      "nativeResearchTrace": [
+        {
+          "cycle": 25,
+          "actionId": "tech-bessemer_process",
+          "grantTechnology": "smelting",
+          "grantLevel": 4,
+          "grantBefore": 3,
+          "grantAfter": 4,
+          "manaBefore": 0.0875469537689959,
+          "manaAfter": 0.0875469537689959,
+          "manaSpent": 0,
+          "disposition": "researched"
+        }
+      ],
+      "researchDrawCounts": {
+        "research.observation.samples": {
+          "total": 26,
+          "perTick": 1.04,
+          "max": 1
+        },
+        "research.observation.sample-requester.resource-claim-before-gather": {
+          "total": 25,
+          "perTick": 1,
+          "max": 1
+        },
+        "research.observation.sample.offers-only": {
+          "total": 26,
+          "perTick": 1.04,
+          "max": 1
+        },
+        "research.catalog.observations": {
+          "total": 26,
+          "perTick": 1.04,
+          "max": 1
+        },
+        "research.observation.sample-requester.resource-demand": {
+          "total": 1,
+          "perTick": 0.04,
+          "max": 1
+        }
+      },
+      "workTicks": 25,
+      "tickPhaseMsBy25TickWindow": [48.5]
     }
   }
 }

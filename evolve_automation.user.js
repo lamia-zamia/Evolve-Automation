@@ -18360,6 +18360,355 @@
     });
   }
 
+  // src/domain/progression/research-prerequisite-obligations.ts
+  var emptyResearchPath = Object.freeze({
+    status: "known",
+    mandatoryActionIds: /* @__PURE__ */ new Set(),
+    reasons: Object.freeze([])
+  });
+  function intersectResearchActions(paths) {
+    let [first, ...rest] = paths;
+    return first === void 0 ? /* @__PURE__ */ new Set() : new Set(
+      [...first].filter((actionId) => rest.every((path) => path.has(actionId)))
+    );
+  }
+  function classifyMandatoryResearchPrerequisiteObligations(graph, targetCurrentlyEligible) {
+    let unavailable2 = (reasons2) => Object.freeze({
+      status: "unavailable",
+      mandatoryActionIds: Object.freeze([]),
+      alternativeGroups: Object.freeze([]),
+      reasons: Object.freeze([...new Set(reasons2)])
+    });
+    if (!targetCurrentlyEligible)
+      return unavailable2(["terminal Research action is not currently eligible"]);
+    if (graph.targetStatus === "satisfied" || graph.targetStatus === "unavailable")
+      return unavailable2(["terminal prerequisite graph is unavailable"]);
+    let actions = new Map(
+      graph.actions.map((action) => [action.actionId, action])
+    ), requirements = new Map(
+      graph.requirements.map((requirement) => [requirement.id, requirement])
+    ), visiting = /* @__PURE__ */ new Set(), requirementResults = /* @__PURE__ */ new Map(), actionResults = /* @__PURE__ */ new Map(), alternativeGroups = [], reasons = [], solveRequirement = (requirementId) => {
+      let cached = requirementResults.get(requirementId);
+      if (cached !== void 0) return cached;
+      let requirement = requirements.get(requirementId);
+      if (requirement === void 0)
+        return {
+          status: "unknown",
+          mandatoryActionIds: /* @__PURE__ */ new Set(),
+          reasons: [`missing native prerequisite gate ${requirementId}`]
+        };
+      if (requirement.status === "satisfied")
+        return requirementResults.set(requirementId, emptyResearchPath), emptyResearchPath;
+      if (requirement.candidateActionIds.length === 0)
+        return {
+          status: "no-path",
+          mandatoryActionIds: /* @__PURE__ */ new Set(),
+          reasons: requirement.reasons
+        };
+      let paths = [], uncertain = !1;
+      for (let actionId of requirement.candidateActionIds) {
+        let candidate = solveAction(actionId);
+        candidate.status === "unknown" ? (uncertain = !0, reasons.push(...candidate.reasons)) : candidate.status === "known" && paths.push(candidate.mandatoryActionIds);
+      }
+      if (uncertain) {
+        let result2 = {
+          status: "unknown",
+          mandatoryActionIds: /* @__PURE__ */ new Set(),
+          reasons: [
+            `${requirementId} has a conditional or unavailable alternative`
+          ]
+        };
+        return requirementResults.set(requirementId, result2), result2;
+      }
+      if (paths.length === 0)
+        return {
+          status: "no-path",
+          mandatoryActionIds: /* @__PURE__ */ new Set(),
+          reasons: requirement.reasons
+        };
+      paths.length > 1 && alternativeGroups.push({
+        requirementId,
+        actionIds: Object.freeze([...requirement.candidateActionIds])
+      });
+      let result = {
+        status: "known",
+        mandatoryActionIds: intersectResearchActions(paths),
+        reasons: []
+      };
+      return requirementResults.set(requirementId, result), result;
+    }, solveAction = (actionId) => {
+      let cached = actionResults.get(actionId);
+      if (cached !== void 0) return cached;
+      if (visiting.has(actionId))
+        return {
+          status: "no-path",
+          mandatoryActionIds: /* @__PURE__ */ new Set(),
+          reasons: []
+        };
+      let action = actions.get(actionId);
+      if (action === void 0)
+        return {
+          status: "unknown",
+          mandatoryActionIds: /* @__PURE__ */ new Set(),
+          reasons: [`missing native action gate ${actionId}`]
+        };
+      if (action.status === "excluded") {
+        let result2 = {
+          status: "no-path",
+          mandatoryActionIds: /* @__PURE__ */ new Set(),
+          reasons: action.reasons
+        };
+        return actionResults.set(actionId, result2), result2;
+      }
+      if (action.status === "frontier") {
+        let result2 = {
+          status: "known",
+          mandatoryActionIds: /* @__PURE__ */ new Set([actionId]),
+          reasons: []
+        };
+        return actionResults.set(actionId, result2), result2;
+      }
+      if (action.status === "unavailable") {
+        let result2 = {
+          status: "unknown",
+          mandatoryActionIds: /* @__PURE__ */ new Set(),
+          reasons: action.reasons
+        };
+        return actionResults.set(actionId, result2), result2;
+      }
+      if (action.prerequisiteIds.length === 0 && action.status !== "unsatisfied")
+        return {
+          status: "unknown",
+          mandatoryActionIds: /* @__PURE__ */ new Set(),
+          reasons: action.reasons
+        };
+      if (action.prerequisiteIds.length === 0)
+        return {
+          status: "unknown",
+          mandatoryActionIds: /* @__PURE__ */ new Set(),
+          reasons: [`${actionId} has no verified path to a current offer`]
+        };
+      visiting.add(actionId);
+      let requiredActions = /* @__PURE__ */ new Set([actionId]), pathStatus = "known";
+      for (let requirementId of action.prerequisiteIds) {
+        let prerequisite = solveRequirement(requirementId);
+        prerequisite.status === "unknown" ? pathStatus = "unknown" : prerequisite.status === "no-path" && pathStatus === "known" && (pathStatus = "no-path");
+        for (let requiredActionId of prerequisite.mandatoryActionIds)
+          requiredActions.add(requiredActionId);
+        reasons.push(...prerequisite.reasons);
+      }
+      visiting.delete(actionId);
+      let result = {
+        status: pathStatus,
+        mandatoryActionIds: requiredActions,
+        reasons: pathStatus === "known" ? [] : action.reasons
+      };
+      return actionResults.set(actionId, result), result;
+    }, target = actions.get(graph.targetActionId);
+    if (target === void 0 || target.prerequisiteIds.length === 0)
+      return unavailable2(["terminal action has no captured prerequisite gates"]);
+    let mandatory = /* @__PURE__ */ new Set();
+    for (let requirementId of target.prerequisiteIds) {
+      let requirement = solveRequirement(requirementId);
+      requirement.status !== "known" && reasons.push(
+        ...requirement.reasons,
+        `could not prove every path for ${requirementId}`
+      );
+      for (let actionId of requirement.mandatoryActionIds)
+        mandatory.add(actionId);
+    }
+    return reasons.length > 0 ? unavailable2(reasons) : Object.freeze({
+      status: "verified",
+      mandatoryActionIds: Object.freeze([...mandatory].sort()),
+      alternativeGroups: Object.freeze(
+        alternativeGroups.map((group) => Object.freeze(group))
+      ),
+      reasons: Object.freeze([...new Set(reasons)])
+    });
+  }
+  function planIndependentResearchResourceClaims(evidence) {
+    let claimsById = /* @__PURE__ */ new Map(), reasons = [];
+    for (let item of evidence) {
+      if (item.prerequisiteRelation !== "verified") {
+        reasons.push(
+          `${item.nativeActionId} lacks verified prerequisite authority`
+        );
+        continue;
+      }
+      let claim = admitResourceClaim(item);
+      if (claim === void 0) {
+        reasons.push(`${item.nativeActionId} claim evidence was rejected`);
+        continue;
+      }
+      let existing = claimsById.get(claim.claimId);
+      existing !== void 0 && JSON.stringify(existing) !== JSON.stringify(claim) ? reasons.push(
+        `${item.nativeActionId} duplicates an obligation with conflicting evidence`
+      ) : claimsById.set(claim.claimId, claim);
+    }
+    let claims = [...claimsById.values()], alternativeGroups = /* @__PURE__ */ new Map();
+    for (let claim of claims) {
+      if (claim.allocationAuthority.kind !== "selected-alternative") continue;
+      let group = alternativeGroups.get(claim.allocationAuthority.groupId);
+      alternativeGroups.set(
+        claim.allocationAuthority.groupId,
+        group === void 0 ? [claim] : [...group, claim]
+      );
+    }
+    let selectedAlternativeIds = /* @__PURE__ */ new Set();
+    for (let [groupId, group] of alternativeGroups) {
+      let firstAuthority = group[0]?.allocationAuthority;
+      if (firstAuthority?.kind !== "selected-alternative") continue;
+      let consistent = group.every(
+        (claim) => claim.allocationAuthority.kind === "selected-alternative" && claim.allocationAuthority.selectedActionId === firstAuthority.selectedActionId && claim.allocationAuthority.authorityId === firstAuthority.authorityId
+      ), selected = group.filter(
+        (claim) => claim.nativeActionId === firstAuthority.selectedActionId
+      );
+      if (!consistent || selected.length === 0) {
+        reasons.push(`${groupId} lacks one consistent selected-action authority`);
+        continue;
+      }
+      for (let claim of selected) selectedAlternativeIds.add(claim.claimId);
+    }
+    let admittedClaims = claims.filter(
+      (claim) => claim.allocationAuthority.kind === "independent" || selectedAlternativeIds.has(claim.claimId)
+    ), capacityByPool = /* @__PURE__ */ new Map();
+    for (let claim of admittedClaims) {
+      let poolKey = `${claim.resourceId}|${claim.poolId}`, pool = capacityByPool.get(poolKey);
+      pool === void 0 ? capacityByPool.set(poolKey, {
+        quantity: claim.requiredQuantity,
+        capacity: claim.observedCapacity
+      }) : (pool.quantity += claim.requiredQuantity, pool.capacity = Math.min(pool.capacity, claim.observedCapacity));
+    }
+    for (let [poolKey, pool] of capacityByPool)
+      pool.quantity > pool.capacity && reasons.push(
+        `${poolKey} aggregate prerequisite quantity exceeds current native capacity`
+      );
+    return reasons.length > 0 ? Object.freeze({
+      status: "unavailable",
+      claims: Object.freeze([]),
+      reasons: Object.freeze([...new Set(reasons)])
+    }) : Object.freeze({
+      status: "available",
+      claims: Object.freeze(admittedClaims),
+      reasons: Object.freeze([])
+    });
+  }
+  function classifyMandatoryNativeResearchObligations(graph, input) {
+    let unavailable2 = (reasons) => Object.freeze({
+      status: "unavailable",
+      mandatoryActionIds: Object.freeze([]),
+      alternativeGroups: Object.freeze([]),
+      reasons: Object.freeze([...new Set(reasons)])
+    });
+    if (!input.targetCurrentlyEligible)
+      return unavailable2([
+        "terminal Research condition or route is not eligible"
+      ]);
+    if (graph.targetStatus === "satisfied" || graph.targetStatus === "unavailable" || input.definitions === void 0 || input.grantLevels === void 0 || input.applicabilityByActionId === void 0 || input.offeredActionIds === void 0)
+      return unavailable2([
+        "current native Research prerequisite evidence is incomplete"
+      ]);
+    let definitions = new Map(
+      input.definitions.map((definition) => [definition.actionId, definition])
+    );
+    if (definitions.size !== input.definitions.length)
+      return unavailable2(["native action identities are duplicated"]);
+    let target = definitions.get(graph.targetActionId);
+    if (target?.prerequisites.kind !== "declared")
+      return unavailable2([
+        "terminal action has no complete static prerequisite declaration"
+      ]);
+    let currentLevels = input.grantLevels, applicability = input.applicabilityByActionId, offered = input.offeredActionIds, grants = /* @__PURE__ */ new Map();
+    for (let definition of input.definitions) {
+      let entries = grants.get(definition.grantTechnology) ?? [];
+      entries.push(definition), grants.set(definition.grantTechnology, entries);
+    }
+    let memo = /* @__PURE__ */ new Map(), activeActions = /* @__PURE__ */ new Set(), activeRequirements = /* @__PURE__ */ new Set(), alternativeGroups = [], uncertaintyReasons = [], unknownPathReasons = /* @__PURE__ */ new Map(), visits = 0, solveRequirement = (technologyId, requiredLevel, candidateActionId) => {
+      if ((currentLevels.get(technologyId) ?? 0) >= requiredLevel)
+        return "bypass";
+      let key = `requirement:${technologyId}:${requiredLevel}:${candidateActionId}`, cached = memo.get(key);
+      if (cached !== void 0) return cached;
+      if (activeRequirements.has(key)) return "impossible";
+      let candidates = (grants.get(technologyId) ?? []).filter(
+        (definition) => definition.grantLevel >= requiredLevel
+      );
+      if (candidates.length === 0) return "impossible";
+      activeRequirements.add(key);
+      let viable = [];
+      for (let definition of candidates) {
+        let result2 = solveAction(
+          definition,
+          candidateActionId,
+          technologyId,
+          requiredLevel
+        );
+        result2 !== "impossible" && viable.push(result2);
+      }
+      activeRequirements.delete(key), viable.includes("unknown") && unknownPathReasons.set(
+        key,
+        candidates.map(
+          (definition) => `${definition.actionId}=${solveAction(definition, candidateActionId, technologyId, requiredLevel)}`
+        ).join(",")
+      ), viable.length > 1 && alternativeGroups.push({
+        requirementId: `research:${technologyId}:${requiredLevel}`,
+        actionIds: Object.freeze(
+          candidates.map((definition) => definition.actionId)
+        )
+      });
+      let result = viable.length === 0 ? "impossible" : viable.includes("unknown") ? "unknown" : viable.includes("bypass") ? "bypass" : "mandatory";
+      return memo.set(key, result), result;
+    }, solveAction = (definition, candidateActionId, requiredTechnologyId, requiredLevel) => {
+      if (visits += 1, visits > 1e4)
+        return "unknown";
+      if (definition.actionId === candidateActionId)
+        return offered.has(definition.actionId) ? "mandatory" : "unknown";
+      if (offered.has(definition.actionId)) return "bypass";
+      let applicabilityState = applicability.get(definition.actionId);
+      if (applicabilityState?.status === "excluded") return "impossible";
+      if (definition.prerequisites.kind !== "declared") return "unknown";
+      let actionKey = `${definition.actionId}:${requiredTechnologyId}:${requiredLevel}:${candidateActionId}`, cached = memo.get(`action:${actionKey}`);
+      if (cached !== void 0) return cached;
+      if (activeActions.has(actionKey)) return "impossible";
+      activeActions.add(actionKey);
+      let dependencies = definition.prerequisites.requirements.filter(
+        (requirement) => requirement.technologyId === requiredTechnologyId
+      ).map(
+        (requirement) => requirement.applicabilityBoundary !== void 0 && (currentLevels.get(requirement.technologyId) ?? 0) < requirement.requiredLevel ? "unknown" : solveRequirement(
+          requirement.technologyId,
+          requirement.requiredLevel,
+          candidateActionId
+        )
+      );
+      activeActions.delete(actionKey);
+      let result;
+      return dependencies.includes("impossible") ? result = "impossible" : dependencies.includes("mandatory") ? result = "mandatory" : dependencies.includes("unknown") || applicabilityState?.status === "unknown" || definition.hasNativeCondition ? result = "unknown" : result = "bypass", memo.set(`action:${actionKey}`, result), result;
+    }, mandatoryActionIds = [];
+    for (let offeredActionId of graph.actionableFrontier) {
+      let candidate = definitions.get(offeredActionId);
+      if (candidate === void 0 || !offered.has(offeredActionId)) continue;
+      let directRequirement = target.prerequisites.requirements.find(
+        (requirement) => requirement.technologyId === candidate.grantTechnology
+      );
+      if (directRequirement === void 0) continue;
+      let outcome = solveRequirement(
+        directRequirement.technologyId,
+        directRequirement.requiredLevel,
+        offeredActionId
+      );
+      outcome === "unknown" && uncertaintyReasons.push(
+        `${offeredActionId} cannot be proven mandatory for ${directRequirement.technologyId}:${directRequirement.requiredLevel}; unresolved native alternatives: ${unknownPathReasons.get(`requirement:${directRequirement.technologyId}:${directRequirement.requiredLevel}:${offeredActionId}`) ?? "incomplete native evidence"}`
+      ), outcome === "mandatory" && mandatoryActionIds.push(offeredActionId);
+    }
+    return uncertaintyReasons.length > 0 ? unavailable2(uncertaintyReasons) : Object.freeze({
+      status: "verified",
+      mandatoryActionIds: Object.freeze([...new Set(mandatoryActionIds)].sort()),
+      alternativeGroups: Object.freeze(
+        alternativeGroups.map((group) => Object.freeze(group))
+      ),
+      reasons: Object.freeze([])
+    });
+  }
+
   // src/domain/progression/research-spending-decision.ts
   function resourceNeeds(costs) {
     let needs = [];
@@ -18544,6 +18893,27 @@
       );
     }
     return applicability;
+  }
+  function readCapturedMadTargetCondition(root) {
+    let race = readBag(root, "race"), tech = readBag(root, "tech");
+    if (race === void 0 || tech === void 0)
+      return Object.freeze({
+        status: "unknown",
+        reasons: Object.freeze(["MAD target condition state is unavailable"])
+      });
+    let sludge = capturedTruth(readProperty(race, "sludge")), ultraSludge = capturedTruth(readProperty(race, "ultra_sludge")), truepath = capturedTruth(readProperty(race, "truepath")), worldControl = capturedTruth(readProperty(tech, "world_control"));
+    return Object.freeze(sludge === void 0 || ultraSludge === void 0 || truepath === void 0 || worldControl === void 0 ? {
+      status: "unknown",
+      reasons: Object.freeze(["MAD target condition facts are incomplete"])
+    } : sludge || ultraSludge ? {
+      status: "excluded",
+      reasons: Object.freeze(["native MAD condition excludes sludge races"])
+    } : truepath && !worldControl ? {
+      status: "excluded",
+      reasons: Object.freeze([
+        "native MAD condition requires world control on Truepath"
+      ])
+    } : { status: "eligible" });
   }
 
   // src/adapters/evolve/economy/production/captured-factory-capacity.ts

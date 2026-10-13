@@ -88,3 +88,43 @@ export function readCapturedTechApplicability(
   }
   return applicability;
 }
+
+/** Mirrors the pinned `tech.js` `mad.condition`; it reads state without invoking native callbacks. */
+export function readCapturedMadTargetCondition(
+  root: unknown,
+): NativeResearchApplicability {
+  const race = readBag(root, "race");
+  const tech = readBag(root, "tech");
+  if (race === undefined || tech === undefined)
+    return Object.freeze({
+      status: "unknown",
+      reasons: Object.freeze(["MAD target condition state is unavailable"]),
+    });
+  const sludge = capturedTruth(readProperty(race, "sludge"));
+  const ultraSludge = capturedTruth(readProperty(race, "ultra_sludge"));
+  const truepath = capturedTruth(readProperty(race, "truepath"));
+  const worldControl = capturedTruth(readProperty(tech, "world_control"));
+  if (
+    sludge === undefined ||
+    ultraSludge === undefined ||
+    truepath === undefined ||
+    worldControl === undefined
+  )
+    return Object.freeze({
+      status: "unknown",
+      reasons: Object.freeze(["MAD target condition facts are incomplete"]),
+    });
+  if (sludge || ultraSludge)
+    return Object.freeze({
+      status: "excluded",
+      reasons: Object.freeze(["native MAD condition excludes sludge races"]),
+    });
+  if (truepath && !worldControl)
+    return Object.freeze({
+      status: "excluded",
+      reasons: Object.freeze([
+        "native MAD condition requires world control on Truepath",
+      ]),
+    });
+  return Object.freeze({ status: "eligible" });
+}

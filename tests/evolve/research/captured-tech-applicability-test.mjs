@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 
-import { readCapturedTechApplicability } from "../../../src/adapters/evolve/progression/research/captured-tech-applicability.ts";
+import {
+  readCapturedMadTargetCondition,
+  readCapturedTechApplicability,
+} from "../../../src/adapters/evolve/progression/research/captured-tech-applicability.ts";
 
 const definition = (actionId, eligibility) => ({ actionId, eligibility });
 const definitions = [
@@ -86,5 +89,30 @@ assert.equal(
   )?.get("tech-needs-gene")?.status,
   "unknown",
 );
+
+assert.equal(readCapturedMadTargetCondition(root).status, "eligible");
+assert.equal(
+  readCapturedMadTargetCondition({
+    ...root,
+    race: { ...root.race, sludge: true },
+  }).status,
+  "excluded",
+);
+assert.equal(
+  readCapturedMadTargetCondition({
+    ...root,
+    race: { ...root.race, truepath: true },
+  }).status,
+  "excluded",
+);
+assert.equal(
+  readCapturedMadTargetCondition({
+    ...root,
+    race: { ...root.race, truepath: true },
+    tech: { ...root.tech, world_control: 1 },
+  }).status,
+  "eligible",
+);
+assert.equal(readCapturedMadTargetCondition(null).status, "unknown");
 
 console.log("captured static Research applicability tests passed");

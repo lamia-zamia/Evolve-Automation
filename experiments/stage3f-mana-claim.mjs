@@ -28,8 +28,7 @@ const gamePath = path.join(root, "test-artifacts/game/evolve-deadspace.js");
 const upstreamPath =
   process.argv.find((value) => value.startsWith("--upstream="))?.slice(11) ??
   process.env.EVOLVE_UPSTREAM_SOURCE;
-const pinnedUpstreamCommit =
-  "db38e2af831907d49aeb5348d678d8d8745d6c3f";
+const pinnedUpstreamCommit = "db38e2af831907d49aeb5348d678d8d8745d6c3f";
 const bundlePath = path.join(
   root,
   "test-artifacts/benchmark/tmp/stage3f-test.user.js",
@@ -216,6 +215,12 @@ function summarize(run, seededClaim) {
     run.diagnostics.researchInvocations?.find(
       (event) => event.highTechAfter > event.highTechBefore,
     ) ?? null;
+  const firstExplosivesGrant =
+    events.research?.find(
+      (event) =>
+        event.grantTechnology === "explosives" &&
+        event.grantAfter > event.grantBefore,
+    ) ?? null;
   const highTechGrantSummary = firstHighTechGrant
     ? {
         period: firstHighTechGrant.period,
@@ -224,6 +229,16 @@ function summarize(run, seededClaim) {
         highTechAfter: firstHighTechGrant.highTechAfter,
         manaBefore: firstHighTechGrant.manaBefore,
         manaAfter: firstHighTechGrant.manaAfter,
+      }
+    : null;
+  const explosivesGrantSummary = firstExplosivesGrant
+    ? {
+        cycle: firstExplosivesGrant.cycle,
+        actionId: firstExplosivesGrant.actionId,
+        explosivesBefore: firstExplosivesGrant.grantBefore,
+        explosivesAfter: firstExplosivesGrant.grantAfter,
+        manaBefore: firstExplosivesGrant.manaBefore,
+        manaAfter: firstExplosivesGrant.manaAfter,
       }
     : null;
   const completion = events.lifecycle.find(
@@ -252,7 +267,12 @@ function summarize(run, seededClaim) {
           reason: event.reason,
           candidates: event.candidates,
           nativeActionId: event.nativeActionId,
+          nativeActionIds: event.nativeActionIds,
           provenance: event.provenance,
+          claims: event.claims,
+          mandatoryActionIds: event.mandatoryActionIds,
+          alternativeGroups: event.alternativeGroups,
+          prerequisiteReasons: event.prerequisiteReasons,
           resourceId: event.resourceId,
           requiredQuantity: event.requiredQuantity,
           observedStock: event.observedStock,
@@ -329,6 +349,10 @@ function summarize(run, seededClaim) {
       status: group[0].status,
       reason: group[0].reason,
       candidates: group[0].candidates,
+      remainingObligations: group[0].claims?.map((claim) => ({
+        actionId: claim.nativeActionId,
+        requiredQuantity: claim.requiredQuantity,
+      })),
       firstCycle: group[0].cycle,
       lastCycle: group.at(-1).cycle,
       occurrences: group.length,
@@ -387,6 +411,7 @@ function summarize(run, seededClaim) {
     },
     gatherSummary,
     firstNativeHighTechGrant: highTechGrantSummary,
+    firstNativeExplosivesGrant: explosivesGrantSummary,
     firstGatherAfterGrant: recoverySummary,
     researchAttempts: events.research.map((event) => ({
       cycle: event.cycle,
@@ -401,17 +426,18 @@ function summarize(run, seededClaim) {
       manaAfter: event.manaAfter,
       manaSpent: event.manaSpent,
     })),
-    nativeHighTechTrace: (run.diagnostics.researchInvocations ?? []).map(
-      (event) => ({
-        period: event.period,
-        actionId: event.elementId,
-        manaBefore: event.manaBefore,
-        manaAfter: event.manaAfter,
-        manaSpent: Math.max(0, event.manaBefore - event.manaAfter),
-        highTechBefore: event.highTechBefore,
-        highTechAfter: event.highTechAfter,
-      }),
-    ),
+    nativeResearchTrace: (events.research ?? []).map((event) => ({
+      cycle: event.cycle,
+      actionId: event.actionId,
+      grantTechnology: event.grantTechnology,
+      grantLevel: event.grantLevel,
+      grantBefore: event.grantBefore,
+      grantAfter: event.grantAfter,
+      manaBefore: event.manaBefore,
+      manaAfter: event.manaAfter,
+      manaSpent: Math.max(0, event.manaBefore - event.manaAfter),
+      disposition: event.disposition,
+    })),
     researchDrawCounts,
     workTicks: run.diagnostics.workTicks,
     tickPhaseMsBy25TickWindow: tickWindows.map((entry) => entry.perTickMs),
@@ -434,7 +460,13 @@ async function runVariant(runner, variant, bundlePath, save, settings) {
     if (variant === "C")
       await session.evaluate(() => {
         window.__EA_TEST_HOOKS__.gatherIntervention = {
-          resourceClaimMode: "goal-derived",
+          resourceClaimMode: "goal-derived-single",
+        };
+      });
+    if (variant === "D")
+      await session.evaluate(() => {
+        window.__EA_TEST_HOOKS__.gatherIntervention = {
+          resourceClaimMode: "goal-derived-conjunctive",
         };
       });
     let seededClaim;
@@ -533,6 +565,13 @@ try {
     saveText,
     effectiveSettings,
   );
+  const derivedD = await runVariant(
+    runner,
+    "D",
+    bundlePath,
+    saveText,
+    effectiveSettings,
+  );
   assert.equal(
     execFileSync(
       "git",
@@ -555,19 +594,24 @@ try {
   assert.equal(madScienceGrant.highTechAfter, 1);
   assert.equal(madScienceGrant.manaBefore - madScienceGrant.manaAfter, 50);
   assert.equal(derivedC.summary.selectedClaim?.status, "ambiguous");
-  assert.deepEqual(
-    derivedC.summary.selectedClaim?.candidates,
-    ["tech-black_powder", "tech-mad_science"],
+  assert.deepEqual(derivedC.summary.selectedClaim?.candidates, [
+    "tech-black_powder",
+    "tech-mad_science",
+  ]);
+  assert.equal(
+    derivedD.summary.selectedClaim?.status,
+    "unavailable",
+    "D must fail closed while a direct mandatory action has unresolved native alternatives",
   );
   const report = {
-    protocol: "Stage 3F goal-derived Mana claim experiment",
+    protocol: "Stage 3G conjunctive prerequisite Mana claim experiment",
     runner: "tools/chromium-evolve-runner.mjs",
     execution: {
       command: "node experiments/stage3f-mana-claim.mjs",
       inputs:
         "Paths and SHA-256 hashes are recorded below; settings are loaded with autoResearch=true.",
       variants:
-        "A/A baseline, manually seeded Stage 3E B, then goal-derived C; each opens a fresh exact-runner session.",
+        "A/A baseline, manually seeded Stage 3E B, Stage 3F single-selection regression C, then Stage 3G conjunctive goal-derived D; each opens a fresh exact-runner session.",
       output: "experiments/stage3f-mana-claim-manifest.json (or --out=<path>)",
     },
     upstreamCommit: pinnedUpstreamCommit,
@@ -598,7 +642,8 @@ try {
     conditions: {
       A: "no goal-directed Mana protection",
       B: "Stage 3E current claim seeded from tech-mad_science native evidence",
-      C: "test-only goal-derived mode; no target or admitted claim injected",
+      C: "Stage 3F test-only single-selection mode; no target or admitted claim injected",
+      D: "Stage 3G test-only independent claims; fail closed when a direct obligation has unresolved native alternatives",
     },
     preservedSettings: {
       autoResearch: effectiveSettings.autoResearch,
@@ -619,6 +664,7 @@ try {
       A: baselineA.summary,
       B: seededB.summary,
       C: derivedC.summary,
+      D: derivedD.summary,
     },
   };
   await mkdir(path.dirname(reportPath), { recursive: true });
@@ -653,6 +699,7 @@ try {
               },
               selectionTimeline: result.selectionTimeline,
               firstNativeHighTechGrant: result.firstNativeHighTechGrant,
+              firstNativeExplosivesGrant: result.firstNativeExplosivesGrant,
               researchDrawCounts: result.researchDrawCounts,
               gatherSummary: result.gatherSummary,
             },
