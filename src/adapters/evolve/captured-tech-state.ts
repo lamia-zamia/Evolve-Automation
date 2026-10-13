@@ -17,3 +17,17 @@ export function readCapturedTechState(root: unknown): string {
   }
   return parts.join(",");
 }
+
+/** Reads one native grant level with the same absent-key zero behavior as checkTechRequirements. */
+export function readCapturedTechnologyLevel(
+  root: unknown,
+  technologyId: string,
+): number | undefined {
+  const tech = readProperty(root, "tech");
+  if (!isRecord(tech)) return undefined;
+  const value = readProperty(tech, technologyId);
+  if (value === undefined || value === null) return 0;
+  return typeof value === "number" && Number.isFinite(value) && value >= 0
+    ? value
+    : undefined;
+}

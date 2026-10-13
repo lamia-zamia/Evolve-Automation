@@ -11,6 +11,8 @@ function decide({ nativeAffordable, knowledge, cost }) {
     offered: [
       {
         elementId: "tech-test",
+        grantTechnology: "test",
+        grantLevel: 1,
         generation: 1,
         nativeAffordable,
         cost,

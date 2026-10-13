@@ -70,6 +70,10 @@ function makePage({
         action() {
           clicks.push(entry.id);
           if (actionModes[entry.id] === "no-op") return undefined;
+          if (actionModes[entry.id] === "wrong-grant") {
+            root.tech.unrelated = 1;
+            return true;
+          }
           if (entry.nativeAffordable?.(root) === false) {
             root.r_queue.queue.push({ id: entry.id });
             return false;
@@ -140,6 +144,12 @@ function makePage({
           grantTechnology:
             typeof entry.grant === "string" ? entry.grant : "fixture",
           grantLevel: 1,
+          prerequisites: { kind: "declared", requirements: [] },
+          eligibility: {
+            hasNativeCondition: false,
+            routeRestrictions: undefined,
+            restrictions: [],
+          },
         }),
     ),
   );
@@ -248,6 +258,20 @@ const SMELTING = {
   // The player's tab is where it was.
   assert.equal(page.root.settings.civTabs, 4);
   assert.equal(page.root.settings.animated, true);
+}
+
+{
+  const page = makePage({
+    offered: [THEOLOGY, MINING],
+    resources: { Knowledge: { amount: 10_000 } },
+    actionModes: { "tech-theology": "wrong-grant" },
+  });
+  assert.equal(page.control.runCycle().status, "succeeded");
+  assert.deepEqual(page.clicks, ["tech-theology"]);
+  assert.equal(page.root.tech.unrelated, 1);
+  assert.equal(page.root.tech.theology, undefined);
+  assert.equal(page.root.tech.mining, undefined);
+  assert.deepEqual(page.activity, []);
 }
 
 {

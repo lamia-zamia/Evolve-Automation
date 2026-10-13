@@ -62,16 +62,20 @@ const graphByRequirement = (graph, id) =>
 
 {
   const graph = planNativeResearchPrerequisites(input());
-  assert.equal(graph.targetStatus, "unsatisfied");
+  assert.equal(
+    graph.targetStatus,
+    "conditional",
+    "queue precognition remains unresolved through the retained intermediate ancestry",
+  );
   assert.equal(graph.provenance, "retained-native-static-research-registry");
   assert.deepEqual(graph.actionableFrontier, ["tech-ore"]);
   assert.equal(
     graphByRequirement(graph, "research:power:2").status,
-    "unsatisfied",
+    "conditional",
   );
   assert.equal(
     graphByRequirement(graph, "research:fuel:1").status,
-    "unsatisfied",
+    "conditional",
   );
   assert.equal(
     graphByRequirement(graph, "research:ore:1").status,
@@ -380,6 +384,89 @@ const graphByRequirement = (graph, id) =>
     "unsatisfied",
     "native offer membership does not erase the declared observed level",
   );
+}
+
+{
+  const conditionalAncestry = planNativeResearchPrerequisites(
+    input({
+      definitions: [
+        definition("tech-terminal", "terminal", 1, [
+          { technologyId: "middle", requiredLevel: 1 },
+        ]),
+        definition(
+          "tech-middle",
+          "middle",
+          1,
+          [{ technologyId: "ore", requiredLevel: 1 }],
+          {
+            hasNativeCondition: true,
+            restrictions: [{ kind: "trait", values: ["psychic"] }],
+          },
+        ),
+        definition("tech-ore", "ore", 1),
+      ],
+      offeredActionIds: new Set(["tech-ore"]),
+      grantLevels: new Map([
+        ["terminal", 0],
+        ["middle", 0],
+        ["ore", 0],
+      ]),
+      offerGenerations: new Map([["tech-ore", 7]]),
+    }),
+  );
+  assert.equal(
+    graphByRequirement(conditionalAncestry, "research:ore:1").status,
+    "unsatisfied",
+    "declared ancestry remains visible below an unresolved middle action",
+  );
+  assert.ok(conditionalAncestry.actionableFrontier.includes("tech-ore"));
+  assert.ok(
+    conditionalAncestry.actions
+      .find((action) => action.actionId === "tech-middle")
+      ?.reasons.some((reason) => reason.includes("condition function")),
+  );
+}
+
+{
+  const staticallyExcluded = planNativeResearchPrerequisites(
+    input({
+      definitions: [
+        definition("tech-terminal", "terminal", 1, [
+          { technologyId: "shared", requiredLevel: 1 },
+        ]),
+        definition("tech-ice", "shared", 1, [], {
+          routeRestrictions: ["iceage"],
+        }),
+        definition("tech-standard", "shared", 1),
+      ],
+      grantLevels: new Map([
+        ["terminal", 0],
+        ["shared", 0],
+      ]),
+      offeredActionIds: new Set(["tech-standard"]),
+      offerGenerations: new Map([["tech-standard", 7]]),
+      applicabilityByActionId: new Map([
+        [
+          "tech-ice",
+          {
+            status: "excluded",
+            reasons: ["native path excludes route standard"],
+          },
+        ],
+        ["tech-standard", { status: "eligible" }],
+      ]),
+    }),
+  );
+  assert.equal(
+    graphByRequirement(staticallyExcluded, "research:shared:1").status,
+    "unsatisfied",
+  );
+  assert.equal(
+    staticallyExcluded.actions.find((action) => action.actionId === "tech-ice")
+      ?.status,
+    "excluded",
+  );
+  assert.ok(staticallyExcluded.actionableFrontier.includes("tech-standard"));
 }
 
 console.log("native Research prerequisite planner tests passed");

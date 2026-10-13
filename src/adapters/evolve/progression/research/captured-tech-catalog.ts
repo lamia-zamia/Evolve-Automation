@@ -375,6 +375,8 @@ export function createCapturedTechCatalog(
         matchedOffers.push(
           Object.freeze({
             elementId: definition.actionId,
+            grantTechnology: definition.grantTechnology,
+            grantLevel: definition.grantLevel,
             cost: Object.freeze({ ...row.cost }),
             nativeAffordable: row.nativeAffordable === true,
             generation: drawn.generations.get(definition.actionId) ?? 0,

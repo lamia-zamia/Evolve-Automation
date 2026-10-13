@@ -33,7 +33,7 @@ import type { OfferedTech } from "../../../../ports/game-tech-catalog.ts";
 import { rejected, stale, SUCCEEDED } from "../../../command-outcomes.ts";
 import type { CapturedCostConflictReader } from "../../captured-cost-conflict.ts";
 import type { CapturedTechConflictReader } from "./captured-tech-conflicts.ts";
-import { readCapturedTechState } from "../../captured-tech-state.ts";
+import { readCapturedTechnologyLevel } from "../../captured-tech-state.ts";
 import type { GameResourceSource } from "../../../../ports/game-world-state.ts";
 import { readCapturedControlLabel } from "../../captured-control-label.ts";
 
@@ -175,7 +175,20 @@ export function createCapturedResearchAdapter(
           "stopped",
         );
       }
-      const before = readCapturedTechState(rootState.readRoot());
+      const before = readCapturedTechnologyLevel(
+        rootState.readRoot(),
+        tech.grantTechnology,
+      );
+      if (before === undefined || !Number.isFinite(tech.grantLevel)) {
+        return executionResult(
+          stale(
+            "stale-research-grant",
+            `native grant evidence for ${decision.techId} is unavailable`,
+            { techId: decision.techId },
+          ),
+          "stopped",
+        );
+      }
       const result = controls.invoke(handle, "action");
       if (!result.ok) {
         return executionResult(
@@ -187,10 +200,16 @@ export function createCapturedResearchAdapter(
           "stopped",
         );
       }
-      // DeadSpace's action wrapper returns no useful result, but runAction/gainTech apply a grant
-      // synchronously before it returns. The immediate state it changed is therefore evidence for
-      // this invocation; no mutation is uncertainty, not permission to try another technology.
-      const researched = readCapturedTechState(rootState.readRoot()) !== before;
+      // DeadSpace's action wrapper returns no useful result; only its declared grant changing to
+      // the expected level confirms this invocation. Other technology mutations do not count.
+      const after = readCapturedTechnologyLevel(
+        rootState.readRoot(),
+        tech.grantTechnology,
+      );
+      const researched =
+        before < tech.grantLevel &&
+        after !== undefined &&
+        after >= tech.grantLevel;
       if (researched) {
         const label = readCapturedControlLabel(handle, decision.techId);
         reportActivity({

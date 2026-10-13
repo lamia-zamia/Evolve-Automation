@@ -48,7 +48,9 @@ import {
 import { runCapturedDiagnosticSafely } from "./captured-diagnostic.ts";
 import { planNativeResearchPrerequisites } from "../domain/progression/research-prerequisite-planning.ts";
 import type { NativeResearchPrerequisiteGraph } from "../domain/progression/research-prerequisite-planning.ts";
+import { evaluateResearchGoalCandidates } from "../domain/progression/research-goal-candidates.ts";
 import { createCapturedTechPrerequisiteLevelReader } from "../adapters/evolve/progression/research/captured-tech-prerequisite-levels.ts";
+import { readCapturedTechApplicability } from "../adapters/evolve/progression/research/captured-tech-applicability.ts";
 import type { CapturedTechDefinition } from "../ports/captured-game-mechanics.ts";
 import { createCapturedCraftsmenAutomation } from "../adapters/evolve/civic/captured-craftsmen.ts";
 import {
@@ -3926,6 +3928,10 @@ export function startCapturedRuntime({
               root,
               researchDefinitions,
             );
+            const researchApplicability = readCapturedTechApplicability(
+              root,
+              researchDefinitions,
+            );
             const researchOfferIdentity =
               offers?.map((offer) => offer.elementId).sort() ?? undefined;
             const researchOfferGenerations =
@@ -3944,6 +3950,10 @@ export function startCapturedRuntime({
                 researchGrantLevels === undefined
                   ? undefined
                   : [...researchGrantLevels],
+              applicability:
+                researchApplicability === undefined
+                  ? undefined
+                  : [...researchApplicability],
               offers: researchOfferIdentity,
             });
             let researchPrerequisiteGraph: NativeResearchPrerequisiteGraph;
@@ -3952,37 +3962,46 @@ export function startCapturedRuntime({
               lastResearchDefinitions !== researchDefinitions ||
               lastResearchGraphKey !== nextResearchGraphKey
             ) {
-              researchPrerequisiteGraph = planNativeResearchPrerequisites({
-                targetActionId: CAPTURED_MAD_RESEARCH_TECH,
-                definitions: researchDefinitions?.map((definition) => ({
-                  actionId: definition.actionId,
-                  grantTechnology: definition.grantTechnology,
-                  grantLevel: definition.grantLevel,
-                  prerequisites: definition.prerequisites,
-                  hasNativeCondition: definition.eligibility.hasNativeCondition,
-                  routeRestrictions: definition.eligibility.routeRestrictions,
-                  restrictions: definition.eligibility.restrictions,
-                })),
-                grantLevels: researchGrantLevels,
-                offeredActionIds:
-                  offers === undefined
-                    ? undefined
-                    : new Set(offers.map((offer) => offer.elementId)),
-                offerGenerations:
-                  offers === undefined
-                    ? undefined
-                    : new Map(
-                        offers.map((offer) => [
-                          offer.elementId,
-                          offer.generation,
-                        ]),
-                      ),
-                cycle: automationCycle,
-                progressionEpoch,
-                rootGeneration: researchRootGeneration,
-                maxDepth: 16,
-                maxActions: 256,
-              });
+              researchPrerequisiteGraph = activeRuntimeMeasure.measure(
+                "goal.mad.research-prerequisites",
+                () =>
+                  planNativeResearchPrerequisites({
+                    targetActionId: CAPTURED_MAD_RESEARCH_TECH,
+                    definitions: researchDefinitions?.map((definition) => ({
+                      actionId: definition.actionId,
+                      grantTechnology: definition.grantTechnology,
+                      grantLevel: definition.grantLevel,
+                      prerequisites: definition.prerequisites,
+                      hasNativeCondition:
+                        definition.eligibility.hasNativeCondition,
+                      routeRestrictions:
+                        definition.eligibility.routeRestrictions,
+                      restrictions: definition.eligibility.restrictions,
+                    })),
+                    grantLevels: researchGrantLevels,
+                    ...(researchApplicability === undefined
+                      ? {}
+                      : { applicabilityByActionId: researchApplicability }),
+                    offeredActionIds:
+                      offers === undefined
+                        ? undefined
+                        : new Set(offers.map((offer) => offer.elementId)),
+                    offerGenerations:
+                      offers === undefined
+                        ? undefined
+                        : new Map(
+                            offers.map((offer) => [
+                              offer.elementId,
+                              offer.generation,
+                            ]),
+                          ),
+                    cycle: automationCycle,
+                    progressionEpoch,
+                    rootGeneration: researchRootGeneration,
+                    maxDepth: 16,
+                    maxActions: 256,
+                  }),
+              );
               lastResearchDefinitions = researchDefinitions;
               lastResearchGraphKey = nextResearchGraphKey;
               lastResearchGraph = researchPrerequisiteGraph;
@@ -4065,6 +4084,34 @@ export function startCapturedRuntime({
               madControl !== undefined &&
                 madControl.methods.includes("arm") &&
                 madControl.methods.includes("launch"),
+            );
+            const researchCandidateEvaluation = activeRuntimeMeasure.measure(
+              "goal.mad.research-candidates",
+              () =>
+                evaluateResearchGoalCandidates({
+                  goalId: plan.selectedGoal.id,
+                  targetActionId: CAPTURED_MAD_RESEARCH_TECH,
+                  goalSatisfied:
+                    researchPrerequisiteGraph.targetStatus === "satisfied",
+                  graph: researchPrerequisiteGraph,
+                  cycle: automationCycle,
+                  progressionEpoch,
+                  rootGeneration: researchRootGeneration,
+                  offers:
+                    offers?.map((offer, index) => ({
+                      actionId: offer.elementId,
+                      grantTechnology: offer.grantTechnology,
+                      grantLevel: offer.grantLevel,
+                      index,
+                      generation: offer.generation,
+                      cost: offer.cost,
+                      nativeAffordable: offer.nativeAffordable,
+                      resourceAffordable: undefined,
+                      hasCostConflict: undefined,
+                      hasExplicitExclusion: undefined,
+                    })) ?? [],
+                  baselineSelectedActionId: undefined,
+                }),
             );
             const currentOffers = progression.readOfferedTechs();
             const currentTechMad = currentOffers?.find(
@@ -4263,6 +4310,33 @@ export function startCapturedRuntime({
                 );
                 reportDiagnostic(
                   `goal.mad research target=${researchPrerequisiteGraph.targetStatus} direct=${directResearchGates} chain=${highTechResearchChain || "?"} offered=${frontierResearchOffers} unknown=cond/route/trait-gene/queue/cement${researchPrerequisiteGraph.targetStatus === "unavailable" ? ` why=${unavailableResearchReason ?? "unspecified"}` : ""}`,
+                );
+                const candidateClasses = [
+                  "verified-prerequisite",
+                  "conditional-prerequisite",
+                  "optional-investment",
+                  "unrelated",
+                  "unavailable",
+                ] as const;
+                const candidateSummary = candidateClasses
+                  .map((relevance) => {
+                    const candidates =
+                      researchCandidateEvaluation.candidates.filter(
+                        (candidate) => candidate.relevance === relevance,
+                      );
+                    const actionIds =
+                      relevance === "verified-prerequisite" ||
+                      relevance === "conditional-prerequisite"
+                        ? candidates.map(
+                            (candidate) =>
+                              `${candidate.actionId}:${candidate.affordability}`,
+                          )
+                        : [];
+                    return `${relevance}=${actionIds.join("+") || candidates.length}`;
+                  })
+                  .join(";");
+                reportDiagnostic(
+                  `goal.mad research candidates goal=${researchCandidateEvaluation.goalId} preferred=${researchCandidateEvaluation.preferredActionId ?? "none"} baseline=${researchCandidateEvaluation.baselineSelectedActionId ?? "unobserved"} offers=${candidateSummary}`,
                 );
               }
             }

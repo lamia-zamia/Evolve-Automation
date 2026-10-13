@@ -18,6 +18,9 @@ import type { CapturedTechDefinition } from "./captured-game-mechanics.ts";
 export interface OfferedTech {
   /** The id the game renders the action under, e.g. `tech-mining`. */
   readonly elementId: string;
+  /** The exact grant declared by this retained native action definition. */
+  readonly grantTechnology: string;
+  readonly grantLevel: number;
   /** The game's own current price, keyed by its resource names. */
   readonly cost: Readonly<Record<string, number>>;
   /** The native `checkAffordable` verdict from this draw, including synthetic costs. */

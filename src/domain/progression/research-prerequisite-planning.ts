@@ -43,13 +43,23 @@ export interface NativeResearchPrerequisiteInput {
     readonly rootGeneration: number;
     readonly offerGenerations: ReadonlyMap<string, number>;
   }>;
+  readonly applicabilityByActionId?: ReadonlyMap<
+    string,
+    NativeResearchApplicability
+  >;
 }
+
+export type NativeResearchApplicability =
+  | { readonly status: "eligible" }
+  | { readonly status: "excluded"; readonly reasons: readonly string[] }
+  | { readonly status: "unknown"; readonly reasons: readonly string[] };
 
 export interface NativeResearchActionGate {
   readonly actionId: string;
   readonly grantTechnology: string;
   readonly grantLevel: number;
-  readonly status: "frontier" | "unsatisfied" | "conditional" | "unavailable";
+  readonly status:
+    "frontier" | "unsatisfied" | "conditional" | "unavailable" | "excluded";
   readonly prerequisiteIds: readonly string[];
   readonly reasons: readonly string[];
 }
@@ -210,28 +220,36 @@ export function planNativeResearchPrerequisites(
       path.pop();
       return gate;
     }
-    if (definition.hasNativeCondition)
-      reasons.push("native condition function was not evaluated");
-    if (definition.routeRestrictions !== undefined)
-      reasons.push("route restriction applicability was not evaluated");
-    if (definition.restrictions.length > 0)
-      reasons.push(
-        "trait, gene, or exclusion restriction applicability was not evaluated",
-      );
-    const hasEligibilityBoundary = reasons.length > 0;
-    if (hasEligibilityBoundary) {
+    const applicability = input.applicabilityByActionId?.get(actionId);
+    if (applicability?.status === "excluded") {
       const gate = Object.freeze({
         actionId,
         grantTechnology: definition.grantTechnology,
         grantLevel: definition.grantLevel,
-        status: "conditional" as const,
+        status: "excluded" as const,
         prerequisiteIds: Object.freeze([]),
-        reasons: Object.freeze(reasons),
+        reasons: Object.freeze([...applicability.reasons]),
       });
       actions.set(actionId, gate);
       path.pop();
       return gate;
     }
+    if (definition.hasNativeCondition)
+      reasons.push("native condition function was not evaluated");
+    if (
+      definition.routeRestrictions !== undefined &&
+      applicability?.status !== "eligible"
+    )
+      reasons.push("route restriction applicability was not evaluated");
+    if (
+      definition.restrictions.length > 0 &&
+      applicability?.status !== "eligible"
+    )
+      reasons.push(
+        "trait, gene, or exclusion restriction applicability was not evaluated",
+      );
+    if (applicability?.status === "unknown")
+      reasons.push(...applicability.reasons);
     // actions.js also supports queue precognition and requirement exceptions such as Flier's
     // cement skip. Those are not declared in an action's `reqs` record and remain unsupported.
     reasons.push(
@@ -247,7 +265,8 @@ export function planNativeResearchPrerequisites(
       (id) => requirements.get(id)?.status,
     );
     if (childStatuses.includes("unavailable")) status = "unavailable";
-    else if (childStatuses.includes("conditional")) status = "conditional";
+    else if (reasons.length > 0 || childStatuses.includes("conditional"))
+      status = "conditional";
     else if (childStatuses.every((child) => child === "satisfied")) {
       status = "conditional";
       reasons.push(
@@ -357,6 +376,7 @@ export function planNativeResearchPrerequisites(
     let hasKnownUnmetCandidate = false;
     let hasConditionalCandidate = false;
     let hasUnavailableCandidate = false;
+    let hasExcludedCandidate = false;
     for (const candidate of candidates) {
       candidateActionIds.push(candidate.actionId);
       const action = expandAction(candidate.actionId, depth);
@@ -370,7 +390,13 @@ export function planNativeResearchPrerequisites(
       } else if (action.status === "unavailable") {
         hasUnavailableCandidate = true;
         reasons.push(...action.reasons);
-      } else if (action.status === "unsatisfied") {
+      } else if (action.status === "excluded") {
+        hasExcludedCandidate = true;
+        reasons.push(...action.reasons);
+      } else if (
+        action.status === "unsatisfied" ||
+        action.status === "frontier"
+      ) {
         hasKnownUnmetCandidate = true;
       }
     }
@@ -379,7 +405,7 @@ export function planNativeResearchPrerequisites(
         ? "unsatisfied"
         : hasConditionalCandidate
           ? "conditional"
-          : hasUnavailableCandidate
+          : hasUnavailableCandidate || hasExcludedCandidate
             ? "unavailable"
             : "unsatisfied";
     const gate = Object.freeze({
