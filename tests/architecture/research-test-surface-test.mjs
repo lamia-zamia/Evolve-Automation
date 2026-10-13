@@ -26,6 +26,7 @@ const testSurfaceMarkers = [
   "resourceClaimActionEvents",
   "resourceClaimActionObserver",
   "resourceClaimLifecycleEvents",
+  "resource-claim-before-gather",
   "research-owner-observation-unavailable",
   "selected-goal-changed",
   "current-research-grant-completed",

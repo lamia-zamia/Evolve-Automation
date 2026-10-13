@@ -61,6 +61,7 @@ import type { GoalResourceStock } from "../domain/economy/goal-feasibility.ts";
 import { createCapturedTechPrerequisiteLevelReader } from "../adapters/evolve/progression/research/captured-tech-prerequisite-levels.ts";
 import { readCapturedTechApplicability } from "../adapters/evolve/progression/research/captured-tech-applicability.ts";
 import type { CapturedTechDefinition } from "../ports/captured-game-mechanics.ts";
+import type { OfferedTech } from "../ports/game-tech-catalog.ts";
 import type { ResearchOwnerSelectionObservation } from "../domain/progression/research/research.ts";
 import type { ResearchOwnerSelectionResult } from "../domain/progression/research/research.ts";
 import { createCapturedCraftsmenAutomation } from "../adapters/evolve/civic/captured-craftsmen.ts";
@@ -1890,7 +1891,11 @@ export function startCapturedRuntime({
         }
       : {}),
   });
-  const refreshResourceClaim = () => {
+  const refreshResourceClaim = (
+    ownerObservation?: Readonly<{
+      offers: readonly Readonly<OfferedTech>[] | undefined;
+    }>,
+  ) => {
     if (
       typeof __EA_TEST_SURFACE_ENABLED__ === "undefined" ||
       __EA_TEST_SURFACE_ENABLED__ !== true
@@ -2012,7 +2017,10 @@ export function startCapturedRuntime({
       setTestClaimStatus("invalidated", "root-replaced");
       return;
     }
-    const offers = progression.readLastResearchOwnerOffers?.();
+    const offers =
+      ownerObservation === undefined
+        ? progression.readLastResearchOwnerOffers?.()
+        : ownerObservation.offers;
     const definitions = progression.readResearchActionDefinitions();
     if (offers === undefined || definitions === undefined) {
       setTestClaimStatus("suspended", "research-owner-observation-unavailable");
@@ -4380,6 +4388,28 @@ export function startCapturedRuntime({
         isEnabled(settings, "autoBuild") ||
         isEnabled(settings, "buildingAlwaysClick");
       if (gatherEnabled && constructionDemandReady) {
+        if (
+          typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
+          __EA_TEST_SURFACE_ENABLED__ === true
+        ) {
+          const hooks = readProperty(settingsHostWindow, "__EA_TEST_HOOKS__");
+          const intervention = readProperty(hooks, "gatherIntervention");
+          const claim = readAdmittedResourceClaim(
+            readProperty(intervention, "resourceClaim"),
+          );
+          const claimMode = readProperty(intervention, "resourceClaimMode");
+          if (
+            claim !== undefined &&
+            (claimMode === undefined || claimMode === "current")
+          ) {
+            // Sample once before Gather so its claim uses the current native binding. AutoResearch
+            // reuses this same catalog later in the cycle; no second draw or executor is added.
+            const offers = progression.sampleOfferedTechs(
+              "resource-claim-before-gather",
+            );
+            refreshResourceClaim({ offers });
+          }
+        }
         const needsConstructionSaving =
           isEnabled(settings, "autoBuild") || isEnabled(settings, "autoARPA");
         const savingOrderReady =

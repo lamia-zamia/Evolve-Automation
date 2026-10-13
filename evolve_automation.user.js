@@ -58973,7 +58973,7 @@ Only continue if you trust the source. Injected code:
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
       readSettings: () => settingsStore.readRaw()
-    }), refreshResourceClaim = () => {
+    }), refreshResourceClaim = (ownerObservation) => {
     }, tax = createCapturedTaxControl({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
