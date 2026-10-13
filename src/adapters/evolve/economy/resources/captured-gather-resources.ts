@@ -86,7 +86,8 @@ function readTechLevel(root: unknown, id: string): number {
 
 function readStrongMultiplier(root: unknown): number {
   const rank = readProperty(readProperty(root, "race"), "strong");
-  const candidate = rank === true ? 1 : numberValue(rank);
+  if (rank !== true && (typeof rank !== "number" || rank === 0)) return 1;
+  const candidate = rank === true ? 1 : rank;
   const normalized = Math.max(
     0.1,
     Math.min(
@@ -260,9 +261,12 @@ export function createCapturedGatherResourcesAdapter({
       const furs = readProperty(readProperty(root, "resource"), "Furs");
       const input = Object.freeze({
         stopped,
-        resourcesPerClick:
-          readStrongMultiplier(root) *
-          (readProperty(readProperty(root, "genes"), "enhance") ? 2 : 1),
+        resourcesPerClick: Number(
+          (
+            readStrongMultiplier(root) *
+            (readProperty(readProperty(root, "genes"), "enhance") ? 2 : 1)
+          ).toFixed(1),
+        ),
         clickLimit,
         fasting: Boolean(readProperty(race, "fasting")),
         soulEater: Boolean(readProperty(race, "soul_eater")),

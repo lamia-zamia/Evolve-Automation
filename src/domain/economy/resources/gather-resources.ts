@@ -78,22 +78,25 @@ export function planGatherResources(
     const afterAction: GatherResourceAssignment[] = [];
     if (conjuring && quantities.Mana >= 1) {
       // Pinned actions.js gather val() spends one Mana and multiplies gain by ten while Mana >= 1.
-      const conjuredClicks = Math.floor(
-        Math.min(
+      const conjuredClicks = Math.min(
+        Math.ceil(
           (resource.maxQuantity - current) / (input.resourcesPerClick * 10),
-          quantities.Mana,
-          input.clickLimit,
         ),
+        Math.floor(quantities.Mana),
+        input.clickLimit,
       );
       const manaQuantity = quantities.Mana - conjuredClicks;
       amount = conjuredClicks;
       if (conjuredClicks > 0 && manaQuantity < 1) {
         amount += Math.ceil(
           Math.min(
-            (resource.maxQuantity -
-              current -
-              conjuredClicks * input.resourcesPerClick * 10) /
-              input.resourcesPerClick,
+            Math.max(
+              0,
+              (resource.maxQuantity -
+                current -
+                conjuredClicks * input.resourcesPerClick * 10) /
+                input.resourcesPerClick,
+            ),
             input.clickLimit - conjuredClicks,
           ),
         );

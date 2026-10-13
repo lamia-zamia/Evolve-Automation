@@ -55,7 +55,7 @@ assert.equal(input.stopped, false);
 assert.equal(input.clickable.food, true);
 assert.equal(input.clickable.lumber, false);
 assert.equal(input.resources.Food.currentQuantity, 2);
-assert.equal(input.resourcesPerClick, 4);
+assert.equal(input.resourcesPerClick, 1);
 const decision = {
   operations: [
     {
@@ -89,18 +89,33 @@ assert.deepEqual(adapter.executor.execute(incorrectNativeYield), {
 assert.equal(root.resource.Food.amount, 6);
 
 for (const [rank, expected] of [
-  [0.25, 2.333333],
-  [0.5, 2.888889],
-  [1.33, 4.99],
-  [1.67, 6.01],
+  [0.1, 2],
+  [0.25, 2.3],
+  [0.5, 2.9],
+  [0.75, 3.4],
+  [1, 4],
+  [1.33, 5],
+  [1.5, 5.5],
+  [1.67, 6],
   [2, 7],
+  [2.2, 7.3],
+  [2.4, 7.6],
 ]) {
   root.race.strong = rank;
   assert.equal(adapter.reader.read().resourcesPerClick, expected);
 }
+for (const rank of [undefined, false, 0]) {
+  if (rank === undefined) delete root.race.strong;
+  else root.race.strong = rank;
+  assert.equal(adapter.reader.read().resourcesPerClick, 1);
+}
+root.race.strong = true;
+assert.equal(adapter.reader.read().resourcesPerClick, 4);
 root.race.strong = 1;
 root.genes.enhance = true;
 assert.equal(adapter.reader.read().resourcesPerClick, 8);
+root.race.strong = 0.25;
+assert.equal(adapter.reader.read().resourcesPerClick, 4.7);
 root.genes.enhance = false;
 
 const unavailableAdapter = createCapturedGatherResourcesAdapter({

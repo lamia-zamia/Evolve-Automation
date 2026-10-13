@@ -42,6 +42,19 @@ const foodWithMana = (mana, max = 100, clickLimit = 3) =>
     },
   });
 
+const foodAtDeficit = (mana, deficit, clickLimit = 3, resourcesPerClick = 1) =>
+  makeInput({
+    foodConjuring: true,
+    clickLimit,
+    resourcesPerClick,
+    clickable: { ...makeInput().clickable, food: true },
+    resources: {
+      ...makeInput().resources,
+      Food: { currentQuantity: 100 - deficit, maxQuantity: 100 },
+      Mana: { currentQuantity: mana, maxQuantity: 100 },
+    },
+  });
+
 const belowOne = planGatherResources(foodWithMana(0.75));
 assert.equal(belowOne.operations[0].amount, 3);
 assert.deepEqual(belowOne.operations[0].afterAction, [
@@ -97,10 +110,36 @@ assert.deepEqual(
 );
 
 const capped = planGatherResources(foodWithMana(1, 5));
-assert.equal(capped.operations[0].amount, 0);
+assert.equal(capped.operations[0].amount, 1);
 assert.deepEqual(capped.operations[0].afterAction, [
-  { resourceId: "Mana", expectedQuantity: 1, quantity: 1 },
-  { resourceId: "Food", expectedQuantity: 0, quantity: 0 },
+  { resourceId: "Mana", expectedQuantity: 1, quantity: 0 },
+  { resourceId: "Food", expectedQuantity: 0, quantity: 5 },
+]);
+
+for (const [deficit, mana, expectedClicks, expectedFood] of [
+  [0.5, 1, 1, 100],
+  [10, 2, 1, 100],
+  [15, 2, 2, 100],
+  [25, 1, 3, 87],
+]) {
+  const partial = planGatherResources(foodAtDeficit(mana, deficit, 3))
+    .operations[0];
+  assert.equal(partial.amount, expectedClicks);
+  assert.equal(partial.afterAction[1].quantity, expectedFood);
+}
+
+const fractionalMana = planGatherResources(foodAtDeficit(1.5, 40, 3));
+assert.equal(fractionalMana.operations[0].amount, 3);
+assert.deepEqual(fractionalMana.operations[0].afterAction, [
+  { resourceId: "Mana", expectedQuantity: 1.5, quantity: 0.5 },
+  { resourceId: "Food", expectedQuantity: 60, quantity: 72 },
+]);
+
+const clickLimited = planGatherResources(foodAtDeficit(5, 20, 1));
+assert.equal(clickLimited.operations[0].amount, 1);
+assert.deepEqual(clickLimited.operations[0].afterAction, [
+  { resourceId: "Mana", expectedQuantity: 5, quantity: 4 },
+  { resourceId: "Food", expectedQuantity: 80, quantity: 90 },
 ]);
 
 const ordinary = planGatherResources(

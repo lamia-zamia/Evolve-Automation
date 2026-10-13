@@ -14847,7 +14847,9 @@
     return numberValue(readProperty(readProperty(root, "tech"), id));
   }
   function readStrongMultiplier(root) {
-    let rank = readProperty(readProperty(root, "race"), "strong"), candidate = rank === !0 ? 1 : numberValue(rank), normalized = Math.max(
+    let rank = readProperty(readProperty(root, "race"), "strong");
+    if (rank !== !0 && (typeof rank != "number" || rank === 0)) return 1;
+    let candidate = rank === !0 ? 1 : rank, normalized = Math.max(
       0.1,
       Math.min(
         Number.isFinite(candidate) && candidate !== 0 ? candidate : 1,
@@ -14941,7 +14943,9 @@
           slaughter: readControl(controls2, "slaughter")
         }), testManaConservation = !1, foodConjuring = readTechLevel(root, "conjuring") >= 1, materialConjuring = readTechLevel(root, "conjuring") >= 2, foodCanSpendMana = testManaConservation && foodConjuring && resources.Food.currentQuantity < resources.Food.maxQuantity, materialsCanSpendMana = testManaConservation && materialConjuring && resources.Lumber.currentQuantity < resources.Lumber.maxQuantity, stoneCanSpendMana = testManaConservation && materialConjuring && resources.Stone.currentQuantity < resources.Stone.maxQuantity, chrysotileCanSpendMana = testManaConservation && materialConjuring && resources.Chrysotile.currentQuantity < resources.Chrysotile.maxQuantity, furs = readProperty(readProperty(root, "resource"), "Furs"), input = Object.freeze({
           stopped,
-          resourcesPerClick: readStrongMultiplier(root) * (readProperty(readProperty(root, "genes"), "enhance") ? 2 : 1),
+          resourcesPerClick: Number(
+            (readStrongMultiplier(root) * (readProperty(readProperty(root, "genes"), "enhance") ? 2 : 1)).toFixed(1)
+          ),
           clickLimit,
           fasting: !!readProperty(race, "fasting"),
           soulEater: !!readProperty(race, "soul_eater"),
@@ -15038,16 +15042,19 @@
       if (!input.clickable[target.actionId] || target.actionId === "food" && input.fasting) continue;
       let resource = input.resources[target.resourceId], current = quantities[target.resourceId], conjuring = target.actionId === "food" ? input.foodConjuring : input.materialConjuring, amount, beforeAction = [], afterAction = [];
       if (conjuring && quantities.Mana >= 1) {
-        let conjuredClicks = Math.floor(
-          Math.min(
-            (resource.maxQuantity - current) / (input.resourcesPerClick * 10),
-            quantities.Mana,
-            input.clickLimit
-          )
+        let conjuredClicks = Math.min(
+          Math.ceil(
+            (resource.maxQuantity - current) / (input.resourcesPerClick * 10)
+          ),
+          Math.floor(quantities.Mana),
+          input.clickLimit
         ), manaQuantity = quantities.Mana - conjuredClicks;
         amount = conjuredClicks, conjuredClicks > 0 && manaQuantity < 1 && (amount += Math.ceil(
           Math.min(
-            (resource.maxQuantity - current - conjuredClicks * input.resourcesPerClick * 10) / input.resourcesPerClick,
+            Math.max(
+              0,
+              (resource.maxQuantity - current - conjuredClicks * input.resourcesPerClick * 10) / input.resourcesPerClick
+            ),
             input.clickLimit - conjuredClicks
           )
         ));
