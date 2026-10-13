@@ -17,6 +17,7 @@ function makeHarness({
   autoARPA = false,
   projectSettings = {},
   mutateAssignments = true,
+  nowMs = () => 1,
 } = {}) {
   const root = {
     settings: {},
@@ -140,7 +141,7 @@ function makeHarness({
       : { readOfferedTechs: () => offeredTechs }),
     ...(projects === undefined ? {} : { readProjects: () => projects }),
     onSkipped: (key, reason) => skipped.push([key, reason]),
-    nowMs: () => 1,
+    nowMs,
   });
   const automation = createStorageAllocationAutomation(ports);
   return {
@@ -152,6 +153,16 @@ function makeHarness({
     costLookups,
     readMutationReports: () => mutationReports,
   };
+}
+
+{
+  for (const nowMs of [() => 1234.75, () => Number.NaN]) {
+    const { ports } = makeHarness({ nowMs });
+    assert.doesNotThrow(
+      () => ports.expansion.expand(1),
+      "storage expansion normalizes an invalid external clock before metadata validation",
+    );
+  }
 }
 
 {

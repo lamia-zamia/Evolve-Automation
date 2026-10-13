@@ -192,6 +192,22 @@ for (const traitAutomation of [false, true]) {
 }
 
 {
+  // Civic discovery can succeed before a Foundry exists, then must be eligible again once its
+  // add/sub controls become part of the required capability.
+  const attempts = createDiscoveryAttempts({ readCycle: () => 0 });
+  attempts.recordSuccess("civic-controls", "foundry-unbuilt");
+  assert.equal(
+    attempts.shouldAttempt("civic-controls", "foundry-unbuilt"),
+    false,
+  );
+  assert.equal(
+    attempts.shouldAttempt("civic-controls", "foundry-available"),
+    true,
+    "the first Foundry changes which Civic controls discovery must capture",
+  );
+}
+
+{
   const userEpoch = capturedMechControlRequirementEpoch({ mechBuild: "user" });
   const randomEpoch = capturedMechControlRequirementEpoch({
     mechBuild: "random",

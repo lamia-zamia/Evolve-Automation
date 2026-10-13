@@ -12,6 +12,7 @@ import {
   runPreparedJobsAutomation,
 } from "../application/jobs.ts";
 import type { PreparedJobsExecution } from "../ports/jobs.ts";
+import type { JobsCycleInput } from "../domain/civic/jobs.ts";
 import { createCapturedPrestigeControl } from "./captured-prestige-control.ts";
 import { createCapturedGatherResourcesControl } from "./captured-gather-resources-control.ts";
 import { createCapturedTaxControl } from "./captured-tax-control.ts";
@@ -2268,14 +2269,40 @@ export function startCapturedRuntime({
   };
   const ensureCivicControls = () => {
     if (pageCapture.controls.resolve(MAIN_TAB_CONTROL) === undefined) return;
+    const cityFoundry = readProperty(
+      readProperty(pageCapture.rootState.readRoot(), "city"),
+      "foundry",
+    );
+    const foundryCount = readProperty(cityFoundry, "count");
+    const foundryUnlocked =
+      typeof foundryCount === "number" &&
+      Number.isFinite(foundryCount) &&
+      foundryCount > 0;
+    const civicEpoch = foundryUnlocked
+      ? "foundry-available"
+      : "foundry-unbuilt";
+    const civicControlsSatisfied = () => {
+      if (!foundryUnlocked) return true;
+      const foundry = pageCapture.controls.resolve("foundry");
+      return (
+        foundry?.methods.includes("add") === true &&
+        foundry.methods.includes("sub")
+      );
+    };
     if (
-      !finishDiscovery("civic-controls", "civic", undefined, undefined, [
-        Object.freeze({
-          setting: MAIN_TAB_SETTING,
-          control: MAIN_TAB_CONTROL,
-          index: MAIN_TAB_INDEX.civic,
-        }),
-      ])
+      !finishDiscovery(
+        "civic-controls",
+        "civic",
+        civicControlsSatisfied,
+        civicEpoch,
+        [
+          Object.freeze({
+            setting: MAIN_TAB_SETTING,
+            control: MAIN_TAB_CONTROL,
+            index: MAIN_TAB_INDEX.civic,
+          }),
+        ],
+      )
     ) {
       return;
     }
@@ -3351,7 +3378,9 @@ export function startCapturedRuntime({
   const runPreparedJobsPhase = (
     phase: string,
     prepared: Readonly<PreparedJobsExecution>,
+    input: Readonly<JobsCycleInput>,
   ) => {
+    const foundryControl = pageCapture.controls.resolve("foundry");
     const outcome = runPreparedJobsAutomation(prepared, publishSpaceMinerPlan);
     if (
       typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
@@ -3361,7 +3390,22 @@ export function startCapturedRuntime({
         readProperty(settingsHostWindow, "__EA_TEST_HOOKS__"),
         "observeJobsAutomation",
       );
-      if (typeof observer === "function") observer(phase, outcome);
+      if (typeof observer === "function")
+        observer(
+          phase,
+          outcome,
+          Object.freeze({
+            input,
+            decision: prepared.decision,
+            foundryControl:
+              foundryControl === undefined
+                ? undefined
+                : Object.freeze({
+                    generation: foundryControl.generation,
+                    methods: foundryControl.methods,
+                  }),
+          }),
+        );
     }
     if (outcome.status !== "succeeded")
       reportOnce(
@@ -3962,6 +4006,7 @@ export function startCapturedRuntime({
               runPreparedJobsPhase(
                 "autoJobs with autoCraftsmen",
                 prepared.execution,
+                prepared.input,
               );
             return true;
           },

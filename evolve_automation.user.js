@@ -35604,7 +35604,7 @@
     let steelAmount = finite(steel.amount), steelMax = finite(steel.max), plywoodAmount = finite(plywood.amount), steelStorageRequired = dependencies.readStorageRequired("Steel");
     if (steelAmount === void 0 || steelMax === void 0 || plywoodAmount === void 0 || !Number.isFinite(steelStorageRequired))
       return;
-    let capturedAtMs = dependencies.nowMs(), libraryCount = finite(
+    let clockValue = dependencies.nowMs(), wholeClockValue = Math.floor(clockValue), capturedAtMs = Number.isSafeInteger(wholeClockValue) && wholeClockValue >= 0 ? wholeClockValue : 0, libraryCount = finite(
       readProperty(
         readProperty(readProperty(root, "city"), "library"),
         "count"
@@ -59195,13 +59195,28 @@ Only continue if you trust the source. Injected code:
         path
       );
     }, ensureCivicControls = () => {
-      pageCapture2.controls.resolve(MAIN_TAB_CONTROL) !== void 0 && finishDiscovery("civic-controls", "civic", void 0, void 0, [
-        Object.freeze({
-          setting: MAIN_TAB_SETTING,
-          control: MAIN_TAB_CONTROL,
-          index: MAIN_TAB_INDEX.civic
-        })
-      ]) && (refreshDiscoveredSettings(), settingsPanel.refreshSettings());
+      if (pageCapture2.controls.resolve(MAIN_TAB_CONTROL) === void 0) return;
+      let cityFoundry = readProperty(
+        readProperty(pageCapture2.rootState.readRoot(), "city"),
+        "foundry"
+      ), foundryCount = readProperty(cityFoundry, "count"), foundryUnlocked = typeof foundryCount == "number" && Number.isFinite(foundryCount) && foundryCount > 0;
+      finishDiscovery(
+        "civic-controls",
+        "civic",
+        () => {
+          if (!foundryUnlocked) return !0;
+          let foundry = pageCapture2.controls.resolve("foundry");
+          return foundry?.methods.includes("add") === !0 && foundry.methods.includes("sub");
+        },
+        foundryUnlocked ? "foundry-available" : "foundry-unbuilt",
+        [
+          Object.freeze({
+            setting: MAIN_TAB_SETTING,
+            control: MAIN_TAB_CONTROL,
+            index: MAIN_TAB_INDEX.civic
+          })
+        ]
+      ) && (refreshDiscoveredSettings(), settingsPanel.refreshSettings());
     }, ensureGovernmentPanelControls = (purpose) => {
       let satisfied = () => governmentPanelControlEstablished(pageCapture2.controls, purpose);
       if (satisfied()) return;
@@ -59849,8 +59864,8 @@ Only continue if you trust the source. Injected code:
       return outcome.status !== "succeeded" && reportOnce(
         `${phase}: ${outcome.failure.code}: ${outcome.failure.message}`
       ), outcome;
-    }, runPreparedJobsPhase = (phase, prepared) => {
-      let outcome = runPreparedJobsAutomation(prepared, publishSpaceMinerPlan);
+    }, runPreparedJobsPhase = (phase, prepared, input) => {
+      let foundryControl = pageCapture2.controls.resolve("foundry"), outcome = runPreparedJobsAutomation(prepared, publishSpaceMinerPlan);
       return outcome.status !== "succeeded" && reportOnce(
         `${phase}: ${outcome.failure.code}: ${outcome.failure.message}`
       ), outcome;
@@ -60075,7 +60090,8 @@ Only continue if you trust the source. Injected code:
             let prepared = fullJobs.prepare();
             return combinedJobs = prepared.status === "ready", prepared.status === "ready" && runPreparedJobsPhase(
               "autoJobs with autoCraftsmen",
-              prepared.execution
+              prepared.execution,
+              prepared.input
             ), !0;
           }
         ) || (combinedJobs = !0)), autoJobs && !combinedJobs && runPriceSensitivePhase("autoJobs", () => {
