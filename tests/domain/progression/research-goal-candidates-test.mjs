@@ -2,6 +2,12 @@ import assert from "node:assert/strict";
 
 import { evaluateResearchGoalCandidates } from "../../../src/domain/progression/research-goal-candidates.ts";
 import { planNativeResearchPrerequisites } from "../../../src/domain/progression/research-prerequisite-planning.ts";
+import {
+  decodeResearchGoalCandidateResponse,
+  installResearchGoalCandidatesWorker,
+  researchGoalOfferIdentity,
+  RESEARCH_GOAL_CANDIDATES_TASK,
+} from "../../../src/adapters/browser/research-goal-candidates-worker.ts";
 
 const definition = (actionId, grantTechnology, requirements = []) => ({
   actionId,
@@ -337,6 +343,124 @@ const input = (overrides = {}) => ({
     undefined,
     "static dependency evidence does not authorize a recommendation through an unresolved MAD condition",
   );
+}
+
+{
+  let onRequest;
+  const sent = [];
+  installResearchGoalCandidatesWorker({
+    addEventListener: (_type, listener) => {
+      onRequest = listener;
+    },
+    postMessage: (message) => sent.push(message),
+  });
+  assert.deepEqual(sent.shift(), { kind: "worker-ready" });
+  const cases = [
+    input(),
+    input({ goalSatisfied: true }),
+    input({ cycle: 13 }),
+    input({
+      graph: { ...graph, targetStatus: "unavailable" },
+    }),
+    input({
+      offers: input().offers.map((offer) =>
+        offer.actionId === "tech-ore"
+          ? { ...offer, generation: offer.generation + 1 }
+          : offer,
+      ),
+    }),
+    input({
+      offers: input().offers.map((offer) =>
+        offer.actionId === "tech-ore"
+          ? { ...offer, hasCostConflict: true }
+          : offer,
+      ),
+    }),
+  ];
+  const conditionalGraph = planNativeResearchPrerequisites({
+    targetActionId: "tech-terminal",
+    definitions: [
+      {
+        ...definition("tech-terminal", "terminal"),
+        prerequisites: { kind: "conditional", reason: "game condition" },
+      },
+      definition("tech-ore", "ore"),
+      definition("tech-luxury", "luxury"),
+    ],
+    grantLevels: new Map([
+      ["terminal", 0],
+      ["ore", 0],
+      ["luxury", 0],
+    ]),
+    offeredActionIds: new Set(currentOffers.map((offer) => offer.actionId)),
+    offerGenerations: new Map(
+      currentOffers.map((offer) => [offer.actionId, offer.generation]),
+    ),
+    cycle: 12,
+    progressionEpoch: "run:5",
+    rootGeneration: 3,
+    maxDepth: 12,
+    maxActions: 40,
+  });
+  cases.push(input({ graph: conditionalGraph }));
+  const alternativeOffers = [
+    ...input().offers,
+    {
+      ...input().offers[0],
+      actionId: "tech-ore-alternative",
+      index: 2,
+      generation: 10,
+    },
+  ];
+  const alternativeGraph = planNativeResearchPrerequisites({
+    targetActionId: "tech-terminal",
+    definitions: [
+      definition("tech-terminal", "terminal", [
+        { technologyId: "ore", requiredLevel: 1 },
+      ]),
+      definition("tech-ore", "ore"),
+      definition("tech-ore-alternative", "ore"),
+      definition("tech-luxury", "luxury"),
+    ],
+    grantLevels: new Map([
+      ["terminal", 0],
+      ["ore", 0],
+      ["luxury", 0],
+    ]),
+    offeredActionIds: new Set(alternativeOffers.map((offer) => offer.actionId)),
+    offerGenerations: new Map(
+      alternativeOffers.map((offer) => [offer.actionId, offer.generation]),
+    ),
+    cycle: 12,
+    progressionEpoch: "run:5",
+    rootGeneration: 3,
+    maxDepth: 12,
+    maxActions: 40,
+  });
+  cases.push(input({ graph: alternativeGraph, offers: alternativeOffers }));
+  for (const [index, plannerInput] of cases.entries()) {
+    const identity = {
+      task: RESEARCH_GOAL_CANDIDATES_TASK,
+      rootGeneration: plannerInput.rootGeneration,
+      progressionEpoch: plannerInput.progressionEpoch,
+      offerIdentity: researchGoalOfferIdentity(plannerInput),
+      snapshotVersion: index + 1,
+    };
+    onRequest({
+      data: {
+        requestId: index + 1,
+        identity,
+        input: structuredClone(plannerInput),
+      },
+    });
+    const response = decodeResearchGoalCandidateResponse(sent.shift());
+    assert.equal(response.requestId, index + 1);
+    assert.deepEqual(
+      response.outcome.value,
+      evaluateResearchGoalCandidates(plannerInput),
+      "worker dispatch reuses the same pure planner and input semantics",
+    );
+  }
 }
 
 console.log("Research goal candidate evaluation tests passed");
