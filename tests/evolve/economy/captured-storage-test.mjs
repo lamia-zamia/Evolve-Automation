@@ -156,11 +156,26 @@ function makeHarness({
 }
 
 {
-  for (const nowMs of [() => 1234.75, () => Number.NaN]) {
-    const { ports } = makeHarness({ nowMs });
-    assert.doesNotThrow(
-      () => ports.expansion.expand(1),
-      "storage expansion normalizes an invalid external clock before metadata validation",
+  const fractionalClock = makeHarness({ nowMs: () => 1234.75 });
+  assert.doesNotThrow(
+    () => fractionalClock.ports.expansion.expand(1),
+    "fractional browser milliseconds are normalized to an integer timestamp",
+  );
+
+  for (const clockValue of [Number.NaN, Number.POSITIVE_INFINITY, -1]) {
+    const { ports, calls } = makeHarness({ nowMs: () => clockValue });
+    assert.doesNotThrow(() => {
+      assert.equal(ports.expansion.expand(1), false);
+      assert.equal(ports.expansion.expand(1), false);
+    }, "repeated invalid-clock observations remain unavailable");
+    assert.equal(
+      calls.some(
+        ([elementId, method]) =>
+          elementId === "createHead" &&
+          (method === "crate" || method === "container"),
+      ),
+      false,
+      "an invalid clock cannot authorize a storage construction command",
     );
   }
 }

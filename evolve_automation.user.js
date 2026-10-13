@@ -35604,7 +35604,10 @@
     let steelAmount = finite(steel.amount), steelMax = finite(steel.max), plywoodAmount = finite(plywood.amount), steelStorageRequired = dependencies.readStorageRequired("Steel");
     if (steelAmount === void 0 || steelMax === void 0 || plywoodAmount === void 0 || !Number.isFinite(steelStorageRequired))
       return;
-    let clockValue = dependencies.nowMs(), wholeClockValue = Math.floor(clockValue), capturedAtMs = Number.isSafeInteger(wholeClockValue) && wholeClockValue >= 0 ? wholeClockValue : 0, libraryCount = finite(
+    let clockValue = dependencies.nowMs(), wholeClockValue = Math.floor(clockValue);
+    if (!Number.isSafeInteger(wholeClockValue) || wholeClockValue < 0)
+      return;
+    let capturedAtMs = wholeClockValue, libraryCount = finite(
       readProperty(
         readProperty(readProperty(root, "city"), "library"),
         "count"

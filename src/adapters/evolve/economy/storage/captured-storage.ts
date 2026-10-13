@@ -711,14 +711,14 @@ function readExpansionSnapshot(
   ) {
     return undefined;
   }
-  // Snapshot metadata stores whole milliseconds. Normalize the browser clock here and use the
-  // neutral epoch only if the external clock is outside the metadata contract.
+  // Snapshot metadata stores whole milliseconds. Normalize fractional browser-clock values, but
+  // an invalid clock cannot establish snapshot freshness or identity.
   const clockValue = dependencies.nowMs();
   const wholeClockValue = Math.floor(clockValue);
-  const capturedAtMs =
-    Number.isSafeInteger(wholeClockValue) && wholeClockValue >= 0
-      ? wholeClockValue
-      : 0;
+  if (!Number.isSafeInteger(wholeClockValue) || wholeClockValue < 0) {
+    return undefined;
+  }
+  const capturedAtMs = wholeClockValue;
   const libraryCount =
     finite(
       readProperty(
