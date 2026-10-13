@@ -4999,7 +4999,7 @@
   ]);
   function createCapturedTechCatalog(dependencies) {
     let { rootState, discovery, drawnActions, bindings, controls: controls2, mechanics } = dependencies, reportUnavailable = dependencies.onUnavailable ?? (() => {
-    }), indexedTechDefinitions, indexedTechDefinitionsById;
+    }), indexedTechDefinitions, indexedTechDefinitionsById, observationSequence = 0;
     return Object.freeze({
       read(options) {
         let tally = createCountTally(dependencies.diagnostics), measure = createPhaseMeasure(dependencies.diagnostics);
@@ -9260,7 +9260,7 @@
       bindings,
       controls: controls2,
       ...onUnavailable === void 0 ? {} : { onUnavailable }
-    }), offeredThisCycle, reservations = createCapturedQueueReservationSource({
+    }), offeredThisCycle, lastOwnerOffers, reservations = createCapturedQueueReservationSource({
       rootState,
       readOfferedTechs: () => offeredThisCycle,
       costs,
@@ -9281,9 +9281,9 @@
     };
     return Object.freeze({
       runCycle() {
-        if (rootState.readRoot() === void 0) return NOT_CAPTURED2;
+        if (lastOwnerOffers = void 0, rootState.readRoot() === void 0) return NOT_CAPTURED2;
         let testOnlyIntervention;
-        offeredThisCycle = sharedReadOfferedTechs === void 0 ? catalog.read()?.offered : sharedReadOfferedTechs();
+        offeredThisCycle = sharedReadOfferedTechs === void 0 ? catalog.read()?.offered : sharedReadOfferedTechs(), lastOwnerOffers = offeredThisCycle;
         try {
           let { reader, executor } = createCapturedResearchAdapter({
             rootState,
@@ -14838,18 +14838,22 @@
       "targetGrantTechnology",
       "resourceId",
       "poolId",
-      "progressionGeneration"
+      "progressionGeneration",
+      "offerObservationId",
+      "offerSetIdentity"
     ].some((field) => typeof value[field] != "string") || [
       "requiredQuantity",
       "observedStock",
       "observedCapacity",
       "observedNativePrice",
       "targetGrantLevel",
-      "rootGeneration",
-      "offerGeneration"
+      "rootGeneration"
     ].some((field) => typeof value[field] != "number") || typeof value.nativeOfferCurrent != "boolean" || typeof value.nativeActionEligible != "boolean" || typeof value.researchPermission != "boolean" || typeof value.observationValid != "boolean" || !Array.isArray(value.uncertaintyReasons) || !value.uncertaintyReasons.every(
       (reason) => typeof reason == "string"
     ) || !Array.isArray(value.unavailableReasons) || !value.unavailableReasons.every((reason) => typeof reason == "string"))
+      return;
+    let controlBinding = value.controlBinding;
+    if (!isRecordValue(controlBinding) || controlBinding.elementId !== value.nativeActionId || typeof controlBinding.generation != "number" || !Number.isSafeInteger(controlBinding.generation))
       return;
     let precedence = value.precedence;
     if (precedence !== "safety" && precedence !== "player-commitment" && precedence !== "terminal-prerequisite")
@@ -14861,7 +14865,7 @@
     return forecastProductionPerSecond !== void 0 && typeof forecastProductionPerSecond != "number" ? void 0 : admitResourceClaim(value);
   }
   function admitResourceClaim(evidence) {
-    if (!evidence.terminalGoalId || !evidence.immediateGoalId || !evidence.owner || !evidence.nativeActionId || !evidence.targetGrantTechnology || !validNonNegative(evidence.targetGrantLevel) || !evidence.resourceId || !evidence.poolId || evidence.provenance !== "verified-native-prerequisite" || evidence.prerequisiteRelation !== "verified" || !validNonNegative(evidence.requiredQuantity) || !validNonNegative(evidence.observedStock) || !validNonNegative(evidence.observedCapacity) || evidence.observedStock > evidence.observedCapacity || evidence.requiredQuantity > evidence.observedCapacity || !validNonNegative(evidence.observedNativePrice) || evidence.forecastProductionPerSecond !== void 0 && !validNonNegative(evidence.forecastProductionPerSecond) || evidence.observedNativePrice !== evidence.requiredQuantity || !evidence.nativeOfferCurrent || !evidence.nativeActionEligible || !evidence.researchPermission || evidence.queueEvidence !== "empty" || !Number.isSafeInteger(evidence.rootGeneration) || !evidence.progressionGeneration || !Number.isSafeInteger(evidence.offerGeneration) || !evidence.observationValid || evidence.unavailableReasons.length > 0)
+    if (!evidence.terminalGoalId || !evidence.immediateGoalId || !evidence.owner || !evidence.nativeActionId || !evidence.targetGrantTechnology || !validNonNegative(evidence.targetGrantLevel) || !evidence.resourceId || !evidence.poolId || evidence.provenance !== "verified-native-prerequisite" || evidence.prerequisiteRelation !== "verified" || !validNonNegative(evidence.requiredQuantity) || !validNonNegative(evidence.observedStock) || !validNonNegative(evidence.observedCapacity) || evidence.observedStock > evidence.observedCapacity || evidence.requiredQuantity > evidence.observedCapacity || !validNonNegative(evidence.observedNativePrice) || evidence.forecastProductionPerSecond !== void 0 && !validNonNegative(evidence.forecastProductionPerSecond) || evidence.observedNativePrice !== evidence.requiredQuantity || !evidence.nativeOfferCurrent || !evidence.nativeActionEligible || !evidence.researchPermission || evidence.queueEvidence !== "empty" || !Number.isSafeInteger(evidence.rootGeneration) || !evidence.progressionGeneration || !evidence.offerObservationId || !evidence.offerSetIdentity || evidence.controlBinding.elementId !== evidence.nativeActionId || !Number.isSafeInteger(evidence.controlBinding.generation) || !evidence.observationValid || evidence.unavailableReasons.length > 0)
       return;
     let claimId = [
       evidence.terminalGoalId,
@@ -15000,7 +15004,7 @@
           stone: readControl(controls2, "stone"),
           chrysotile: readControl(controls2, "chrysotile"),
           slaughter: readControl(controls2, "slaughter")
-        }), foodConjuring = readTechLevel(root, "conjuring") >= 1, materialConjuring = readTechLevel(root, "conjuring") >= 2, resourceClaimLedger, furs = readProperty(readProperty(root, "resource"), "Furs"), input = Object.freeze({
+        }), foodConjuring = readTechLevel(root, "conjuring") >= 1, materialConjuring = readTechLevel(root, "conjuring") >= 2, resourceClaimLedger, testIntervention, furs = readProperty(readProperty(root, "resource"), "Furs"), input = Object.freeze({
           stopped,
           resourcesPerClick: Number(
             (readStrongMultiplier(root) * (readProperty(readProperty(root, "genes"), "enhance") ? 2 : 1)).toFixed(1)
@@ -15027,7 +15031,8 @@
           resourceClaimLedger,
           foodConjuring,
           materialConjuring,
-          manaQuantity: resources.Mana.currentQuantity
+          manaQuantity: resources.Mana.currentQuantity,
+          ...testIntervention === void 0 ? {} : { testIntervention }
         }), input;
       }
     }), executor = Object.freeze({
@@ -15040,7 +15045,7 @@
           );
         if (rootState.readRoot() !== active.root)
           return stale("gather-root-changed", "captured game root changed");
-        let previousIndex = -1, remainingClaimSpend = active.resourceClaimLedger?.spendableStock ?? 1 / 0, foodSafetyManaAllowance = active.resourceClaimLedger === void 0 ? 0 : 1;
+        let claimActionObserver = void 0, previousIndex = -1, remainingClaimSpend = active.resourceClaimLedger?.spendableStock ?? 1 / 0, foodSafetyManaAllowance = active.resourceClaimLedger === void 0 ? 0 : 1;
         for (let operation2 of decision.operations) {
           let actionIndex = ACTION_ORDER.indexOf(operation2.actionId);
           if (actionIndex <= previousIndex || !Number.isFinite(operation2.amount) || !Number.isSafeInteger(Math.ceil(operation2.amount)))
@@ -15076,15 +15081,42 @@
               let manaBefore = readResource(
                 beforeClickRoot,
                 "Mana"
-              ).currentQuantity, conjuring = operation2.actionId === "food" ? active.foodConjuring : active.materialConjuring, foodSafetyOverride = operation2.actionId === "food" && readResource(beforeClickRoot, "Food").currentQuantity <= 0, expectedManaSpend = conjuring && manaBefore >= 1;
+              ).currentQuantity, conjuring = operation2.actionId === "food" ? active.foodConjuring : active.materialConjuring, foodSafetyOverride = operation2.actionId === "food" && readResource(beforeClickRoot, "Food").currentQuantity <= 0, expectedManaSpend = conjuring && manaBefore >= 1, proposedManaSpend = expectedManaSpend ? 1 : 0;
               if (active.resourceClaimLedger !== void 0 && expectedManaSpend && remainingClaimSpend + (foodSafetyOverride ? foodSafetyManaAllowance : 0) < 1)
-                return stale(
+                return typeof claimActionObserver == "function" && claimActionObserver(
+                  Object.freeze({
+                    phase: "deferred",
+                    actionId: operation2.actionId,
+                    proposedManaSpend,
+                    currentMana: manaBefore,
+                    budgetRemaining: remainingClaimSpend,
+                    reason: "gather-claim-budget-exhausted"
+                  })
+                ), stale(
                   "gather-claim-budget-exhausted",
                   `Mana claim budget was exhausted before ${operation2.actionId}`
                 );
+              typeof claimActionObserver == "function" && claimActionObserver(
+                Object.freeze({
+                  phase: "before-action",
+                  actionId: operation2.actionId,
+                  proposedManaSpend,
+                  currentMana: manaBefore,
+                  budgetRemaining: remainingClaimSpend
+                })
+              );
               let result = controls2.invoke(handle, "action");
               if (!result.ok)
-                return result.reason === "stale-control" ? stale("gather-control-stale", result.detail ?? result.reason) : rejected(
+                return typeof claimActionObserver == "function" && claimActionObserver(
+                  Object.freeze({
+                    phase: "rejected",
+                    actionId: operation2.actionId,
+                    proposedManaSpend,
+                    currentMana: manaBefore,
+                    budgetRemaining: remainingClaimSpend,
+                    reason: result.detail ?? result.reason
+                  })
+                ), result.reason === "stale-control" ? stale("gather-control-stale", result.detail ?? result.reason) : rejected(
                   "gather-click-failed",
                   result.detail ?? result.reason
                 );
@@ -15119,6 +15151,29 @@
                 )), remainingClaimSpend = Math.max(
                   0,
                   claimBudgetBeforeClick - actualManaSpend
+                ), typeof claimActionObserver == "function" && claimActionObserver(
+                  Object.freeze({
+                    phase: "after-action",
+                    actionId: operation2.actionId,
+                    proposedManaSpend,
+                    actualManaSpend,
+                    manaBefore,
+                    manaAfter,
+                    budgetRemaining: remainingClaimSpend
+                  })
+                );
+              } else if (typeof claimActionObserver == "function") {
+                let afterClickRoot = rootState.readRoot(), manaAfter = afterClickRoot === active.root ? readResource(afterClickRoot, "Mana").currentQuantity : void 0;
+                claimActionObserver(
+                  Object.freeze({
+                    phase: "after-action",
+                    actionId: operation2.actionId,
+                    proposedManaSpend,
+                    actualManaSpend: typeof manaAfter == "number" ? manaBefore - manaAfter : void 0,
+                    manaBefore,
+                    manaAfter,
+                    budgetRemaining: void 0
+                  })
                 );
               }
             }

@@ -16,13 +16,18 @@ export interface ResourceClaimEvidence {
   readonly observedStock: number;
   readonly observedCapacity: number;
   readonly observedNativePrice: number;
+  readonly offerSetIdentity: string;
+  readonly offerObservationId: string;
+  readonly controlBinding: Readonly<{
+    elementId: string;
+    generation: number;
+  }>;
   readonly nativeOfferCurrent: boolean;
   readonly nativeActionEligible: boolean;
   readonly researchPermission: boolean;
   readonly queueEvidence: "empty" | "same-target" | "conflict" | "unavailable";
   readonly rootGeneration: number;
   readonly progressionGeneration: string;
-  readonly offerGeneration: number;
   readonly observationValid: boolean;
   readonly precedence: ResourceClaimPrecedence;
   readonly forecastProductionPerSecond: number | undefined;
@@ -38,7 +43,8 @@ export interface ResourceClaim extends ResourceClaimEvidence {
 export interface ResourceClaimFreshness {
   readonly rootGeneration: number;
   readonly progressionGeneration: string;
-  readonly offerGeneration: number;
+  readonly offerSetIdentity: string;
+  readonly offerObservationId: string;
 }
 
 export interface ResourceClaimReservation {
@@ -49,7 +55,14 @@ export interface ResourceClaimReservation {
 
 export interface ResourceClaimLedgerInput {
   readonly claims: readonly Readonly<ResourceClaim>[];
-  readonly freshness: Readonly<ResourceClaimFreshness>;
+  readonly freshness: Readonly<ResourceClaimFreshness> | undefined;
+  readonly controlBinding:
+    | Readonly<{
+        elementId: string;
+        generation: number;
+        actionCapable: boolean;
+      }>
+    | undefined;
   readonly stock: number;
   readonly knownReservations:
     readonly Readonly<ResourceClaimReservation>[] | undefined;
@@ -98,6 +111,8 @@ export function readAdmittedResourceClaim(
     "resourceId",
     "poolId",
     "progressionGeneration",
+    "offerObservationId",
+    "offerSetIdentity",
   ];
   if (stringFields.some((field) => typeof value[field] !== "string"))
     return undefined;
@@ -109,7 +124,6 @@ export function readAdmittedResourceClaim(
       "observedNativePrice",
       "targetGrantLevel",
       "rootGeneration",
-      "offerGeneration",
     ].some((field) => typeof value[field] !== "number") ||
     typeof value["nativeOfferCurrent"] !== "boolean" ||
     typeof value["nativeActionEligible"] !== "boolean" ||
@@ -121,6 +135,14 @@ export function readAdmittedResourceClaim(
     ) ||
     !Array.isArray(value["unavailableReasons"]) ||
     !value["unavailableReasons"].every((reason) => typeof reason === "string")
+  )
+    return undefined;
+  const controlBinding = value["controlBinding"];
+  if (
+    !isRecordValue(controlBinding) ||
+    controlBinding["elementId"] !== value["nativeActionId"] ||
+    typeof controlBinding["generation"] !== "number" ||
+    !Number.isSafeInteger(controlBinding["generation"])
   )
     return undefined;
   const precedence = value["precedence"];
@@ -178,7 +200,10 @@ export function admitResourceClaim(
     evidence.queueEvidence !== "empty" ||
     !Number.isSafeInteger(evidence.rootGeneration) ||
     !evidence.progressionGeneration ||
-    !Number.isSafeInteger(evidence.offerGeneration) ||
+    !evidence.offerObservationId ||
+    !evidence.offerSetIdentity ||
+    evidence.controlBinding.elementId !== evidence.nativeActionId ||
+    !Number.isSafeInteger(evidence.controlBinding.generation) ||
     !evidence.observationValid ||
     evidence.unavailableReasons.length > 0
   )
@@ -201,7 +226,8 @@ function matchesFreshness(
   return (
     claim.rootGeneration === freshness.rootGeneration &&
     claim.progressionGeneration === freshness.progressionGeneration &&
-    claim.offerGeneration === freshness.offerGeneration
+    claim.offerObservationId === freshness.offerObservationId &&
+    claim.offerSetIdentity === freshness.offerSetIdentity
   );
 }
 
@@ -252,7 +278,20 @@ export function planResourceClaimLedger(
       reasons: Object.freeze(["current stock observation is invalid"]),
     });
   }
-  if (claims.some((claim) => !matchesFreshness(claim, input.freshness))) {
+  const freshness = input.freshness;
+  if (freshness === undefined) {
+    return Object.freeze({
+      status: "unavailable",
+      currentStock: input.stock,
+      currentStockReserved: 0,
+      remainingAccumulation: 0,
+      forecastProductionPerSecond: input.forecastProductionPerSecond,
+      spendableStock: 0,
+      claimIds: Object.freeze(claims.map((claim) => claim.claimId)),
+      reasons: Object.freeze(["native offer observation is unavailable"]),
+    });
+  }
+  if (claims.some((claim) => !matchesFreshness(claim, freshness))) {
     return Object.freeze({
       status: "stale",
       currentStock: input.stock,
@@ -261,7 +300,31 @@ export function planResourceClaimLedger(
       forecastProductionPerSecond: input.forecastProductionPerSecond,
       spendableStock: 0,
       claimIds: Object.freeze(claims.map((claim) => claim.claimId)),
-      reasons: Object.freeze(["claim generations no longer match"]),
+      reasons: Object.freeze([
+        "claim root, progression, or native offer observation changed",
+      ]),
+    });
+  }
+
+  if (
+    input.controlBinding === undefined ||
+    !input.controlBinding.actionCapable ||
+    claims.some(
+      (claim) =>
+        claim.controlBinding.elementId !== input.controlBinding?.elementId,
+    )
+  ) {
+    return Object.freeze({
+      status: "unavailable",
+      currentStock: input.stock,
+      currentStockReserved: 0,
+      remainingAccumulation: 0,
+      forecastProductionPerSecond: input.forecastProductionPerSecond,
+      spendableStock: 0,
+      claimIds: Object.freeze(claims.map((claim) => claim.claimId)),
+      reasons: Object.freeze([
+        "current control binding does not resolve the claimed action",
+      ]),
     });
   }
 

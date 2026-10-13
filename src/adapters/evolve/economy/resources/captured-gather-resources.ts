@@ -62,6 +62,7 @@ interface CapturedGatherSession {
   readonly foodConjuring: boolean;
   readonly materialConjuring: boolean;
   readonly manaQuantity: number;
+  readonly testIntervention?: unknown;
 }
 
 export interface CapturedGatherResourcesDependencies {
@@ -170,14 +171,22 @@ function readClaimFreshness(
 ): ResourceClaimFreshness | undefined {
   const rootGeneration = readProperty(value, "rootGeneration");
   const progressionGeneration = readProperty(value, "progressionGeneration");
-  const offerGeneration = readProperty(value, "offerGeneration");
+  const offerSetIdentity = readProperty(value, "offerSetIdentity");
+  const offerObservationId = readProperty(value, "offerObservationId");
   return typeof rootGeneration === "number" &&
     Number.isSafeInteger(rootGeneration) &&
     typeof progressionGeneration === "string" &&
     progressionGeneration.length > 0 &&
-    typeof offerGeneration === "number" &&
-    Number.isSafeInteger(offerGeneration)
-    ? Object.freeze({ rootGeneration, progressionGeneration, offerGeneration })
+    typeof offerSetIdentity === "string" &&
+    offerSetIdentity.length > 0 &&
+    typeof offerObservationId === "string" &&
+    offerObservationId.length > 0
+    ? Object.freeze({
+        rootGeneration,
+        progressionGeneration,
+        offerSetIdentity,
+        offerObservationId,
+      })
     : undefined;
 }
 
@@ -298,11 +307,13 @@ export function createCapturedGatherResourcesAdapter({
       const materialConjuring = readTechLevel(root, "conjuring") >= 2;
       let resourceClaimLedger:
         ReturnType<typeof planResourceClaimLedger> | undefined;
+      let testIntervention: unknown;
       if (
         typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
         __EA_TEST_SURFACE_ENABLED__ === true
       ) {
         const intervention = readTestIntervention?.();
+        testIntervention = intervention;
         const claim = readAdmittedResourceClaim(
           readProperty(intervention, "resourceClaim"),
         );
@@ -312,43 +323,62 @@ export function createCapturedGatherResourcesAdapter({
         const reservations = readClaimReservations(
           readProperty(intervention, "resourceClaimReservations"),
         );
+        const observationAvailable =
+          readProperty(intervention, "resourceClaimObservationAvailable") ===
+          true;
+        const currentClaimControl =
+          claim === undefined
+            ? undefined
+            : controls.resolve(claim.nativeActionId);
+        const currentControlBinding =
+          currentClaimControl === undefined
+            ? undefined
+            : Object.freeze({
+                elementId: currentClaimControl.elementId,
+                generation: currentClaimControl.generation,
+                actionCapable: currentClaimControl.methods.includes("action"),
+              });
+        const queueState = (queueId: "queue" | "r_queue") => {
+          const entries = readProperty(readProperty(root, queueId), "queue");
+          return !Array.isArray(entries)
+            ? "unavailable"
+            : entries.length > 0
+              ? "active"
+              : "empty";
+        };
+        const queues = [queueState("queue"), queueState("r_queue")];
         const claimStillRelevant =
           claim !== undefined &&
           settingsValue["prestigeType"] === "mad" &&
           settingsValue["autoResearch"] === true &&
           settingsValue["autoTrigger"] !== true &&
-          !hasQueueEntriesOrUnavailable(root, "queue") &&
-          !hasQueueEntriesOrUnavailable(root, "r_queue") &&
+          !queues.includes("active") &&
           readTechLevel(root, claim.targetGrantTechnology) <
             claim.targetGrantLevel;
         if (claimStillRelevant && claim !== undefined) {
-          const currentClaim = readAdmittedResourceClaim({
-            ...claim,
-            observedStock: resources.Mana.currentQuantity,
-            observedCapacity: resources.Mana.maxQuantity,
-            nativeOfferCurrent: true,
-            nativeActionEligible: true,
-            researchPermission: true,
-            queueEvidence: "empty",
-            observationValid: true,
+          resourceClaimLedger = planResourceClaimLedger({
+            claims: [claim],
+            freshness,
+            controlBinding:
+              currentClaimControl === undefined
+                ? undefined
+                : currentControlBinding,
+            stock: resources.Mana.currentQuantity,
+            knownReservations:
+              observationAvailable && !queues.includes("unavailable")
+                ? reservations
+                : undefined,
+            forecastProductionPerSecond: claim.forecastProductionPerSecond,
           });
-          if (currentClaim !== undefined) {
-            const currentFreshness =
-              freshness ??
-              Object.freeze({
-                rootGeneration: -1,
-                progressionGeneration: "unavailable",
-                offerGeneration: -1,
-              });
-            resourceClaimLedger = planResourceClaimLedger({
-              claims: [currentClaim],
-              freshness: currentFreshness,
-              stock: resources.Mana.currentQuantity,
-              knownReservations: reservations,
-              forecastProductionPerSecond:
-                currentClaim.forecastProductionPerSecond,
-            });
-          }
+        } else if (claim !== undefined && queues.includes("unavailable")) {
+          resourceClaimLedger = planResourceClaimLedger({
+            claims: [claim],
+            freshness,
+            controlBinding: currentControlBinding,
+            stock: resources.Mana.currentQuantity,
+            knownReservations: undefined,
+            forecastProductionPerSecond: claim.forecastProductionPerSecond,
+          });
         }
         const ledgerObserver = readProperty(
           intervention,
@@ -411,6 +441,7 @@ export function createCapturedGatherResourcesAdapter({
         foodConjuring,
         materialConjuring,
         manaQuantity: resources.Mana.currentQuantity,
+        ...(testIntervention === undefined ? {} : { testIntervention }),
       });
       return input;
     },
@@ -456,6 +487,11 @@ export function createCapturedGatherResourcesAdapter({
             }),
           );
       }
+      const claimActionObserver =
+        typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
+        __EA_TEST_SURFACE_ENABLED__ === true
+          ? readProperty(active.testIntervention, "resourceClaimActionObserver")
+          : undefined;
       let previousIndex = -1;
       let remainingClaimSpend =
         active.resourceClaimLedger?.spendableStock ?? Infinity;
@@ -519,6 +555,7 @@ export function createCapturedGatherResourcesAdapter({
               operation.actionId === "food" &&
               readResource(beforeClickRoot, "Food").currentQuantity <= 0;
             const expectedManaSpend = conjuring && manaBefore >= 1;
+            const proposedManaSpend = expectedManaSpend ? 1 : 0;
             if (
               active.resourceClaimLedger !== undefined &&
               expectedManaSpend &&
@@ -526,13 +563,45 @@ export function createCapturedGatherResourcesAdapter({
                 (foodSafetyOverride ? foodSafetyManaAllowance : 0) <
                 1
             ) {
+              if (typeof claimActionObserver === "function")
+                claimActionObserver(
+                  Object.freeze({
+                    phase: "deferred",
+                    actionId: operation.actionId,
+                    proposedManaSpend,
+                    currentMana: manaBefore,
+                    budgetRemaining: remainingClaimSpend,
+                    reason: "gather-claim-budget-exhausted",
+                  }),
+                );
               return stale(
                 "gather-claim-budget-exhausted",
                 `Mana claim budget was exhausted before ${operation.actionId}`,
               );
             }
+            if (typeof claimActionObserver === "function")
+              claimActionObserver(
+                Object.freeze({
+                  phase: "before-action",
+                  actionId: operation.actionId,
+                  proposedManaSpend,
+                  currentMana: manaBefore,
+                  budgetRemaining: remainingClaimSpend,
+                }),
+              );
             const result = controls.invoke(handle, "action");
             if (!result.ok) {
+              if (typeof claimActionObserver === "function")
+                claimActionObserver(
+                  Object.freeze({
+                    phase: "rejected",
+                    actionId: operation.actionId,
+                    proposedManaSpend,
+                    currentMana: manaBefore,
+                    budgetRemaining: remainingClaimSpend,
+                    reason: result.detail ?? result.reason,
+                  }),
+                );
               return result.reason === "stale-control"
                 ? stale("gather-control-stale", result.detail ?? result.reason)
                 : rejected(
@@ -586,6 +655,38 @@ export function createCapturedGatherResourcesAdapter({
               remainingClaimSpend = Math.max(
                 0,
                 claimBudgetBeforeClick - actualManaSpend,
+              );
+              if (typeof claimActionObserver === "function")
+                claimActionObserver(
+                  Object.freeze({
+                    phase: "after-action",
+                    actionId: operation.actionId,
+                    proposedManaSpend,
+                    actualManaSpend,
+                    manaBefore,
+                    manaAfter,
+                    budgetRemaining: remainingClaimSpend,
+                  }),
+                );
+            } else if (typeof claimActionObserver === "function") {
+              const afterClickRoot = rootState.readRoot();
+              const manaAfter =
+                afterClickRoot === active.root
+                  ? readResource(afterClickRoot, "Mana").currentQuantity
+                  : undefined;
+              claimActionObserver(
+                Object.freeze({
+                  phase: "after-action",
+                  actionId: operation.actionId,
+                  proposedManaSpend,
+                  actualManaSpend:
+                    typeof manaAfter === "number"
+                      ? manaBefore - manaAfter
+                      : undefined,
+                  manaBefore,
+                  manaAfter,
+                  budgetRemaining: undefined,
+                }),
               );
             }
           }

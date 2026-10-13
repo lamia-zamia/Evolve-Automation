@@ -25,10 +25,13 @@ export interface OfferedTech {
   readonly cost: Readonly<Record<string, number>>;
   /** The native `checkAffordable` verdict from this draw, including synthetic costs. */
   readonly nativeAffordable: boolean;
+  /** Test-surface identity for this complete native offer set and its prices. */
+  readonly offerSetIdentity?: string;
+  /** Test-surface id for the exact catalog sample that produced this offer. */
+  readonly offerObservationId?: string;
   /**
-   * The captured-control generation this offer was read from, or 0 when the game drew the action
-   * without binding a control for it. Anything acting on the offer checks it against the current
-   * generation, because a superseded closure stays callable and looks correct.
+   * The action-control binding generation captured during the offer pass, or 0 when the game drew
+   * the action without binding a control. This identifies the callable closure, not offer freshness.
    */
   readonly generation: number;
 }

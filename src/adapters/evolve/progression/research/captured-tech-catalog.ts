@@ -40,6 +40,8 @@ import {
   MAIN_TAB_SETTING,
 } from "../../captured-tab-discovery.ts";
 
+declare const __EA_TEST_SURFACE_ENABLED__: boolean;
+
 /** Rows with the same-draw native price and affordability details. */
 const OFFERED_TECH_SELECTOR = "#tech .action";
 
@@ -105,6 +107,7 @@ export function createCapturedTechCatalog(
   let indexedTechDefinitions: readonly CapturedTechDefinition[] | undefined;
   let indexedTechDefinitionsById:
     ReadonlyMap<string, CapturedTechDefinition> | undefined;
+  let observationSequence = 0;
 
   return Object.freeze({
     read(
@@ -385,6 +388,33 @@ export function createCapturedTechCatalog(
         tally.count("research.offers.matched");
       }
       const frozenOffered = Object.freeze(matchedOffers);
+      if (
+        typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
+        __EA_TEST_SURFACE_ENABLED__ === true
+      ) {
+        observationSequence += 1;
+        const offerObservationId = `research-offers-${observationSequence}`;
+        const offerSetIdentity = JSON.stringify(
+          frozenOffered.map((offer) => [
+            offer.elementId,
+            Object.entries(offer.cost).sort(([left], [right]) =>
+              left.localeCompare(right),
+            ),
+          ]),
+        );
+        const observedOffers = Object.freeze(
+          frozenOffered.map((offer) =>
+            Object.freeze({ ...offer, offerObservationId, offerSetIdentity }),
+          ),
+        );
+        return drawn.grantedRows === undefined
+          ? Object.freeze({ offered: observedOffers, definitions })
+          : Object.freeze({
+              offered: observedOffers,
+              granted: Object.freeze(grantedIds) as ReadonlySet<string>,
+              definitions,
+            });
+      }
       return drawn.grantedRows === undefined
         ? Object.freeze({ offered: frozenOffered, definitions })
         : Object.freeze({

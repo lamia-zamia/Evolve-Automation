@@ -149,13 +149,15 @@ const manaClaim = admitResourceClaim({
   observedStock: 1,
   observedCapacity: 100,
   observedNativePrice: 50,
+  offerSetIdentity: "high-tech-1-native-offers",
+  offerObservationId: "research-offers-1",
+  controlBinding: { elementId: "tech-mad_science", generation: 1 },
   nativeOfferCurrent: true,
   nativeActionEligible: true,
   researchPermission: true,
   queueEvidence: "empty",
   rootGeneration: 0,
   progressionGeneration: "epoch-1",
-  offerGeneration: 1,
   observationValid: true,
   precedence: "terminal-prerequisite",
   forecastProductionPerSecond: 4.94,
@@ -173,13 +175,16 @@ handles.set("tech-mad_science", {
   generation: 1,
   methods: ["action"],
 });
+let researchOwnerObservationCurrent = true;
 const claimIntervention = () => ({
   resourceClaim: manaClaim,
   resourceClaimFreshness: {
     rootGeneration: 0,
     progressionGeneration: "epoch-1",
-    offerGeneration: 1,
+    offerSetIdentity: "high-tech-1-native-offers",
+    offerObservationId: "research-offers-1",
   },
+  resourceClaimObservationAvailable: researchOwnerObservationCurrent,
   resourceClaimReservations: [],
 });
 const claimedAdapter = createCapturedGatherResourcesAdapter({
@@ -198,6 +203,47 @@ assert.equal(claimInput.resourceClaimLedger.status, "current");
 assert.equal(claimInput.resourceClaimLedger.currentStockReserved, 1);
 assert.equal(claimInput.resourceClaimLedger.spendableStock, 0);
 assert.equal(claimInput.resourceClaimLedger.claimIds.length, 1);
+handles.set("tech-mad_science", {
+  elementId: "tech-mad_science",
+  generation: 2,
+  methods: ["action"],
+});
+researchOwnerObservationCurrent = false;
+const reboundBeforeOwnerObservation = claimedAdapter.reader.read();
+assert.equal(
+  reboundBeforeOwnerObservation.resourceClaimLedger.status,
+  "unavailable",
+);
+assert.equal(
+  reboundBeforeOwnerObservation.resourceClaimLedger.spendableStock,
+  0,
+);
+researchOwnerObservationCurrent = true;
+handles.set("tech-mad_science", {
+  elementId: "tech-mad_science",
+  generation: 2,
+  methods: [],
+});
+assert.equal(
+  claimedAdapter.reader.read().resourceClaimLedger.status,
+  "unavailable",
+);
+handles.set("tech-mad_science", {
+  elementId: "tech-mad_science",
+  generation: 1,
+  methods: ["action"],
+});
+const expiredObservation = createCapturedGatherResourcesAdapter({
+  rootState,
+  controls,
+  readSettings: () => settings,
+  readTestIntervention: () => ({
+    ...claimIntervention(),
+    resourceClaimObservationAvailable: false,
+  }),
+}).reader.read();
+assert.equal(expiredObservation.resourceClaimLedger.status, "unavailable");
+assert.equal(expiredObservation.resourceClaimLedger.spendableStock, 0);
 root.resource.Mana.amount = 0.5;
 assert.equal(
   claimedAdapter.reader.read().resourceClaimLedger.status,
@@ -209,7 +255,9 @@ root.resource.Lumber.amount = 0;
 let claimedGatherCalls = 0;
 const budgetedControls = {
   resolve: (elementId) =>
-    elementId === "undefined-food" || elementId === "city-lumber"
+    elementId === "undefined-food" ||
+    elementId === "city-lumber" ||
+    elementId === "tech-mad_science"
       ? { elementId, generation: 1, methods: ["action"] }
       : undefined,
   invoke(handle) {
@@ -334,7 +382,8 @@ const staleClaimInput = createCapturedGatherResourcesAdapter({
     resourceClaimFreshness: {
       rootGeneration: 1,
       progressionGeneration: "epoch-1",
-      offerGeneration: 1,
+      offerSetIdentity: "high-tech-1-native-offers",
+      offerObservationId: "research-offers-1",
     },
   }),
 }).reader.read();

@@ -70,6 +70,12 @@ export interface CapturedResearchControl {
   readCurrentOfferEligibility?(
     actionId: string,
   ): "eligible" | "excluded" | "unavailable" | "not-offered";
+  /** Test-surface-only exact offer list consumed by the most recent owner cycle. */
+  readLastOwnerOffers?(): readonly Readonly<OfferedTech>[] | undefined;
+  /** Test-surface-only exclusion result for one offer from that exact owner sample. */
+  readOwnerOfferEligibility?(
+    offer: Readonly<OfferedTech>,
+  ): "eligible" | "excluded" | "unavailable";
 }
 
 const NOT_CAPTURED: CommandExecutionOutcome = Object.freeze({
@@ -124,6 +130,7 @@ export function createCapturedResearchControl(
   // One catalog read per cycle serves the planner and the research queue's own reservations; the
   // cycle stores it here before either asks.
   let offeredThisCycle: readonly Readonly<OfferedTech>[] | undefined;
+  let lastOwnerOffers: readonly Readonly<OfferedTech>[] | undefined;
   const reservations = createCapturedQueueReservationSource({
     rootState,
     readOfferedTechs: () => offeredThisCycle,
@@ -163,6 +170,15 @@ export function createCapturedResearchControl(
     ...(typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
     __EA_TEST_SURFACE_ENABLED__ === true
       ? {
+          readLastOwnerOffers: () => lastOwnerOffers,
+          readOwnerOfferEligibility(offer: Readonly<OfferedTech>) {
+            const decision = techConflicts.evaluate(offer);
+            return decision.status === "none"
+              ? ("eligible" as const)
+              : decision.status === "conflict"
+                ? ("excluded" as const)
+                : ("unavailable" as const);
+          },
           readCurrentOfferEligibility(actionId: string) {
             const currentOffers =
               offeredThisCycle ?? sharedReadOfferedTechs?.();
@@ -180,6 +196,7 @@ export function createCapturedResearchControl(
         }
       : {}),
     runCycle(): CommandExecutionOutcome {
+      lastOwnerOffers = undefined;
       const currentRoot = rootState.readRoot();
       if (currentRoot === undefined) return NOT_CAPTURED;
       let testOnlyIntervention:
@@ -205,6 +222,7 @@ export function createCapturedResearchControl(
         sharedReadOfferedTechs === undefined
           ? catalog.read()?.offered
           : sharedReadOfferedTechs();
+      lastOwnerOffers = offeredThisCycle;
       try {
         const { reader, executor } = createCapturedResearchAdapter({
           rootState,

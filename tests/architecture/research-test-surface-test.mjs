@@ -19,6 +19,14 @@ const testSurfaceMarkers = [
   "resourceClaimRefreshCount",
   "resourceClaimGatherReadCount",
   "resourceClaimStatus",
+  "resourceClaimUnavailableCount",
+  "readLastResearchOwnerOffers",
+  "resourceClaimLedgerEvents",
+  "resourceClaimDecisionEvents",
+  "resourceClaimActionEvents",
+  "resourceClaimActionObserver",
+  "resourceClaimLifecycleEvents",
+  "stale-diagnostic",
   "test-control-hook",
 ];
 

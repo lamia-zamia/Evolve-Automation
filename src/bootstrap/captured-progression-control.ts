@@ -172,6 +172,12 @@ export interface CapturedProgressionControl {
   readonly readResearchActionEligibility?: (
     actionId: string,
   ) => "eligible" | "excluded" | "unavailable" | "not-offered";
+  /** Test-surface-only exact offer list consumed by the most recent Research owner cycle. */
+  readonly readLastResearchOwnerOffers?: () =>
+    readonly Readonly<OfferedTech>[] | undefined;
+  readonly readResearchOwnerOfferEligibility?: (
+    offer: Readonly<OfferedTech>,
+  ) => "eligible" | "excluded" | "unavailable";
   /** The most recently captured offered-technology snapshot, if one exists. */
   readonly readOfferedTechs: () => readonly Readonly<OfferedTech>[] | undefined;
   /** Take or reuse the current offer snapshot, running a grant pass when one is required. */
@@ -1136,6 +1142,8 @@ export function createCapturedProgressionControl(
     research.readCurrentOfferEligibility !== undefined
       ? {
           readResearchActionEligibility: research.readCurrentOfferEligibility,
+          readLastResearchOwnerOffers: research.readLastOwnerOffers,
+          readResearchOwnerOfferEligibility: research.readOwnerOfferEligibility,
         }
       : {}),
     readOfferedTechs: readCurrentOfferedTechs,
