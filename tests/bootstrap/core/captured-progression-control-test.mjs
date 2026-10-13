@@ -1131,22 +1131,22 @@ assert.equal(researchControl.readGrantedTechs(), undefined);
     nowMs: () => now,
   });
 
-  const ensureBuildControlsAndAssertOneRead = () => {
+  const ensureBuildControlsAndAssertReaderRefresh = (expectedReads = 0) => {
     const priorReads = mechanics.readStructureCallCount();
     buildControl.ensureBuildControls();
     assert.equal(
       mechanics.readStructureCallCount(),
-      priorReads + 1,
-      "one ensureBuildControls call reads and indexes one native structure snapshot",
+      priorReads + expectedReads,
+      "the native structure index is reused until shown tabs or the root changes",
     );
   };
 
-  ensureBuildControlsAndAssertOneRead();
+  ensureBuildControlsAndAssertReaderRefresh(1);
   assert.equal(draws, 0, "no native offered building needs a missing control");
   assert.equal(
     performancePhases.get("discovery.capability-snapshot build-controls"),
     1,
-    "one call-scoped structure snapshot has its own phase attribution",
+    "the cached native structure index has its own phase attribution",
   );
   for (const setting of [
     "showDeep",
@@ -1159,42 +1159,42 @@ assert.equal(researchControl.readGrantedTechs(), undefined);
     "showSurface",
   ])
     root.settings[setting] = true;
-  ensureBuildControlsAndAssertOneRead();
+  ensureBuildControlsAndAssertReaderRefresh(1);
   assert.equal(draws, 0, "a complete capability set stays retired");
   root.arpa.lhc.rank++;
-  ensureBuildControlsAndAssertOneRead();
+  ensureBuildControlsAndAssertReaderRefresh();
   assert.equal(draws, 0, "unrelated A.R.P.A. rank progress does not draw");
   root.tech.mining = 1;
-  ensureBuildControlsAndAssertOneRead();
+  ensureBuildControlsAndAssertReaderRefresh();
   assert.equal(draws, 0, "unrelated technology progress does not draw");
 
   root.tech.farming = 1;
-  ensureBuildControlsAndAssertOneRead();
+  ensureBuildControlsAndAssertReaderRefresh();
   assert.equal(draws, 1, "a newly offered city action gets one panel draw");
   assert.equal(ids.has("city-farm"), true);
-  ensureBuildControlsAndAssertOneRead();
+  ensureBuildControlsAndAssertReaderRefresh();
   assert.equal(draws, 1, "the captured action retires city discovery");
 
   root.space.titan_quarters.count = 1;
-  ensureBuildControlsAndAssertOneRead();
+  ensureBuildControlsAndAssertReaderRefresh();
   assert.equal(
     draws,
     2,
     "native count availability reopens the inner-space path",
   );
   assert.equal(ids.has("space-titan_mine"), true);
-  ensureBuildControlsAndAssertOneRead();
+  ensureBuildControlsAndAssertReaderRefresh();
   assert.equal(draws, 2, "the Titan Mine control retires its path");
 
   root.tech.bank = 1;
-  ensureBuildControlsAndAssertOneRead();
+  ensureBuildControlsAndAssertReaderRefresh();
   assert.equal(draws, 3, "a second newly offered city action gets one draw");
   assert.equal(
     ids.has("city-bank"),
     false,
     "the failed native capture stays absent",
   );
-  ensureBuildControlsAndAssertOneRead();
+  ensureBuildControlsAndAssertReaderRefresh();
   assert.equal(draws, 3, "a failed attempt respects same-cycle retry backoff");
   assert.equal(
     performanceCounts.get(
@@ -1205,7 +1205,7 @@ assert.equal(researchControl.readGrantedTechs(), undefined);
   );
   cycle += 1;
   failBankCapture = false;
-  ensureBuildControlsAndAssertOneRead();
+  ensureBuildControlsAndAssertReaderRefresh();
   assert.equal(
     draws,
     4,
@@ -1213,24 +1213,28 @@ assert.equal(researchControl.readGrantedTechs(), undefined);
   );
   assert.equal(ids.has("city-bank"), true);
 
-  ids.delete("city-farm");
-  attempts.invalidate();
-  for (const listener of listeners) listener();
-  ensureBuildControlsAndAssertOneRead();
+  ids.delete("city-bank");
+  ensureBuildControlsAndAssertReaderRefresh();
   assert.equal(
     draws,
     5,
+    "a live control rebind reopens discovery without reindexing",
+  );
+  assert.equal(ids.has("city-bank"), true);
+
+  ids.delete("city-farm");
+  includeCityMine = true;
+  attempts.invalidate();
+  for (const listener of listeners) listener();
+  ensureBuildControlsAndAssertReaderRefresh(1);
+  assert.equal(
+    draws,
+    6,
     "root replacement invalidates retired control authority",
   );
   assert.equal(ids.has("city-farm"), true);
-
-  includeCityMine = true;
-  ensureBuildControlsAndAssertOneRead();
-  assert.equal(
-    ids.has("city-mine"),
-    true,
-    "a changed native registry is read on the next ensure call",
-  );
+  ensureBuildControlsAndAssertReaderRefresh();
+  assert.equal(ids.has("city-mine"), true);
 }
 
 console.log("captured-progression-control ok");

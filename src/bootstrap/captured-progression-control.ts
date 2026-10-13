@@ -27,6 +27,7 @@ import {
   SUB_TAB_CONTROLS,
 } from "../adapters/evolve/captured-tab-discovery.ts";
 import { createIndexedCapturedBuildControlCoverageReader } from "../adapters/evolve/progression/build/captured-build-control-coverage.ts";
+import type { CapturedBuildControlCoverageReader } from "../adapters/evolve/progression/build/captured-build-control-coverage.ts";
 import {
   createScriptKnowledgeGateReader,
   createScriptStorageRequirementReader,
@@ -343,6 +344,15 @@ export function createCapturedProgressionControl(
     panels,
     diagnostics,
   });
+  // DeadSpace `industry.js::initStructureGrids` creates its native registry once at startup. The
+  // reader retains that index, but checks current roots, controls and action identity on every read.
+  let buildControlCoverageReader:
+    CapturedBuildControlCoverageReader | undefined;
+  let buildControlCoverageTabs: string | undefined;
+  const resetBuildControlCoverageReader = () => {
+    buildControlCoverageReader = undefined;
+    buildControlCoverageTabs = undefined;
+  };
   // Research and A.R.P.A. offer samples may be reused within their discovery scopes. Building
   // offers are read directly from retained native mechanics for each owning observation.
   const epoch = createProgressionEpochReader(rootState);
@@ -443,15 +453,23 @@ export function createCapturedProgressionControl(
 
     if (tally.enabled)
       tally.count("discovery.capability-snapshot build-controls");
-    const coverageReader = measure(
-      "discovery.capability-snapshot build-controls",
-      () =>
-        createIndexedCapturedBuildControlCoverageReader(
-          shownTabs.map(({ index }) => index),
-          controls,
-          mechanics,
-        ),
-    );
+    const coverageTabs = shownTabs.map(({ index }) => index).join(",");
+    if (
+      buildControlCoverageReader === undefined ||
+      buildControlCoverageTabs !== coverageTabs
+    ) {
+      buildControlCoverageReader = measure(
+        "discovery.capability-snapshot build-controls",
+        () =>
+          createIndexedCapturedBuildControlCoverageReader(
+            shownTabs.map(({ index }) => index),
+            controls,
+            mechanics,
+          ),
+      );
+      buildControlCoverageTabs = coverageTabs;
+    }
+    const coverageReader = buildControlCoverageReader;
 
     for (const { index, profileLabel } of shownTabs) {
       const readCoverage = () =>
@@ -465,6 +483,7 @@ export function createCapturedProgressionControl(
         );
       };
       const coverage = measureCoverage();
+      if (coverage.kind === "unknown") resetBuildControlCoverageReader();
       const attemptKey = `${BUILD_CONTROLS_SCOPE} ${index}`;
       if (coverage.kind === "complete") {
         if (discoveryAttempts.shouldAttempt(attemptKey, "complete"))
@@ -767,6 +786,7 @@ export function createCapturedProgressionControl(
     clearResearchSample();
     resetProjectSample();
     resetBuildingUnlockSample();
+    resetBuildControlCoverageReader();
   });
   const readBuildingUnlocks = (regions: ReadonlySet<string>) => {
     const key = buildingOfferScopeKey(regions);

@@ -11825,7 +11825,9 @@
       mountSuppression,
       panels,
       diagnostics
-    }), epoch = createProgressionEpochReader(rootState), buildCapacity = dependencies.keyboard === void 0 || dependencies.keyState === void 0 ? void 0 : createCapturedBuildCapacity({
+    }), buildControlCoverageReader, buildControlCoverageTabs, resetBuildControlCoverageReader = () => {
+      buildControlCoverageReader = void 0, buildControlCoverageTabs = void 0;
+    }, epoch = createProgressionEpochReader(rootState), buildCapacity = dependencies.keyboard === void 0 || dependencies.keyState === void 0 ? void 0 : createCapturedBuildCapacity({
       rootState,
       controls: controls2,
       panels,
@@ -11887,19 +11889,23 @@
       }
       if (shownTabs.length === 0) return;
       tally.enabled && tally.count("discovery.capability-snapshot build-controls");
-      let coverageReader = measure(
+      let coverageTabs = shownTabs.map(({ index }) => index).join(",");
+      (buildControlCoverageReader === void 0 || buildControlCoverageTabs !== coverageTabs) && (buildControlCoverageReader = measure(
         "discovery.capability-snapshot build-controls",
         () => createIndexedCapturedBuildControlCoverageReader(
           shownTabs.map(({ index }) => index),
           controls2,
           mechanics
         )
-      );
+      ), buildControlCoverageTabs = coverageTabs);
+      let coverageReader = buildControlCoverageReader;
       for (let { index, profileLabel } of shownTabs) {
         let readCoverage = () => coverageReader.read(rootState.readRoot(), index), measureCoverage = () => profileLabel === void 0 ? readCoverage() : (tally.count(`discovery.capability-check ${profileLabel}`), measure(
           `discovery.capability-check ${profileLabel}`,
           readCoverage
-        )), coverage = measureCoverage(), attemptKey = `${BUILD_CONTROLS_SCOPE} ${index}`;
+        )), coverage = measureCoverage();
+        coverage.kind === "unknown" && resetBuildControlCoverageReader();
+        let attemptKey = `${BUILD_CONTROLS_SCOPE} ${index}`;
         if (coverage.kind === "complete") {
           discoveryAttempts.shouldAttempt(attemptKey, "complete") && discoveryAttempts.recordSuccess(attemptKey, "complete"), profileLabel !== void 0 && tally.count(
             `discovery.capability-satisfied-without-draw ${profileLabel}`
@@ -12032,7 +12038,7 @@
     rootState.subscribeRootReplaced(() => {
       scopes.invalidateAll(), discoveryAttempts.invalidate(), createCountTally(diagnostics).count(
         "research.observation.invalidated.root-replacement"
-      ), clearResearchSample(), resetProjectSample(), resetBuildingUnlockSample();
+      ), clearResearchSample(), resetProjectSample(), resetBuildingUnlockSample(), resetBuildControlCoverageReader();
     });
     let readBuildingUnlocks = (regions) => {
       let key = buildingOfferScopeKey(regions), catalog = buildingUnlocks.read(regions);
