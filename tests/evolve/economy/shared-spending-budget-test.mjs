@@ -92,7 +92,7 @@ const staleSecondOwnerId = reserveSharedResourceSpend(
     expectedDebit: 10,
     stockObservationId: "stock-1",
   },
-  { id: "stock-1", quantity: 100 },
+  { id: "stock-1", quantity: 75 },
 );
 assert.equal(staleSecondOwnerId.status, "invalidated");
 assert.equal(staleSecondOwnerId.budgetRemaining, 0);
