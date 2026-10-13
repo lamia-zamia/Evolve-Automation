@@ -2154,6 +2154,23 @@ function validTechRegistry() {
 }
 
 {
+  const fixture = techRegistryPage(validTechRegistry());
+  fixture.installed.mechanics.captureTechDefinitionsDuring(() =>
+    fixture.page.Object.keys(fixture.registry),
+  );
+  assert.ok(fixture.installed.mechanics.readTechDefinitions());
+  const alpha = fixture.registry.alpha;
+  delete fixture.registry.alpha;
+  fixture.registry.alpha = alpha;
+  assert.equal(
+    fixture.installed.mechanics.readTechDefinitions(),
+    undefined,
+    "reordering native registry keys invalidates retained authority",
+  );
+  fixture.installed.uninstall();
+}
+
+{
   let reqsCalls = 0;
   const registry = {
     static: {

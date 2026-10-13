@@ -1018,6 +1018,7 @@ export function startCapturedRuntime({
     keyState: pageCapture.keyState,
     drawnActions: createGameDrawnActionsReader({
       getDocument: () => document,
+      diagnostics: phaseDiagnostics,
     }),
     arpa,
     costs: buildCosts,

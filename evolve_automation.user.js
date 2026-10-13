@@ -3162,11 +3162,15 @@
         try {
           let rawKeys = Reflect.apply(originalObjectKeys, objectConstructor, [
             retained.registry
-          ]), current = readNativeTechRegistrySnapshot(
-            retained.registry,
-            rawKeys
-          );
-          return current !== void 0 && sameNativeTechRegistrySnapshot(retained, current) ? retained : void 0;
+          ]);
+          if (!Array.isArray(rawKeys) || rawKeys.length !== retained.keys.length)
+            return;
+          for (let index = 0; index < retained.keys.length; index++) {
+            let key = retained.keys[index], definition = retained.definitions[index];
+            if (key === void 0 || definition === void 0 || rawKeys[index] !== key || readMechanicsDataProperty(retained.registry, key) !== definition.action)
+              return;
+          }
+          return retained;
         } catch {
           return;
         }
@@ -38910,16 +38914,29 @@
     return { cost, complete };
   }
   function createGameDrawnActionsReader({
-    getDocument
+    getDocument,
+    diagnostics
   }) {
     return Object.freeze({
       read(selector) {
-        let elements = getDocument().querySelectorAll(selector), actions = [];
+        let measure = createPhaseMeasure(diagnostics), elements = measure(
+          "drawn-actions.query",
+          () => getDocument().querySelectorAll(selector)
+        ), actions = [];
         for (let index = 0; index < elements.length; index++) {
-          let element = elements[index], id = element?.id;
+          let element = elements[index], id = measure("drawn-actions.identity", () => element?.id);
           if (element === void 0 || typeof id != "string" || id.length === 0)
             continue;
-          let state = readSwitchState(element), nativeAffordable = readNativeAffordability(element), price = readCost3(element);
+          let state = measure(
+            "drawn-actions.switch-state",
+            () => readSwitchState(element)
+          ), nativeAffordable = measure(
+            "drawn-actions.native-affordability",
+            () => readNativeAffordability(element)
+          ), price = measure(
+            "drawn-actions.native-price",
+            () => readCost3(element)
+          );
           actions.push(
             Object.freeze({
               id,
@@ -58686,7 +58703,8 @@ Only continue if you trust the source. Injected code:
       ...keyboard === void 0 ? {} : { keyboard },
       keyState: pageCapture2.keyState,
       drawnActions: createGameDrawnActionsReader({
-        getDocument: () => document
+        getDocument: () => document,
+        diagnostics: phaseDiagnostics
       }),
       arpa,
       costs: buildCosts,

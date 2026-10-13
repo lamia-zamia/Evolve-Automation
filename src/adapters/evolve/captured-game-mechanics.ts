@@ -1969,14 +1969,23 @@ export function installCapturedGameMechanics(
       const rawKeys = Reflect.apply(originalObjectKeys, objectConstructor, [
         retained.registry,
       ]);
-      const current = readNativeTechRegistrySnapshot(
-        retained.registry,
-        rawKeys,
-      );
-      return current !== undefined &&
-        sameNativeTechRegistrySnapshot(retained, current)
-        ? retained
-        : undefined;
+      if (!Array.isArray(rawKeys) || rawKeys.length !== retained.keys.length)
+        return undefined;
+      for (let index = 0; index < retained.keys.length; index++) {
+        const key = retained.keys[index];
+        const definition = retained.definitions[index];
+        if (
+          key === undefined ||
+          definition === undefined ||
+          rawKeys[index] !== key ||
+          readMechanicsDataProperty(retained.registry, key) !==
+            definition.action
+        )
+          return undefined;
+      }
+      // Upstream actions.js declares actions.tech once and never mutates its action metadata.
+      // Prices and eligibility remain dynamic and are read from each native draw's rows.
+      return retained;
     } catch {
       return undefined;
     }

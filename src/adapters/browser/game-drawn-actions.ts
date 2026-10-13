@@ -31,6 +31,10 @@ import type {
   DrawnActionState,
   GameDrawnActionsReader,
 } from "../../ports/game-drawn-actions.ts";
+import {
+  createPhaseMeasure,
+  type PhaseTimingSink,
+} from "../../utils/performance.ts";
 
 /** The subset of a page element this adapter touches. */
 interface DrawnElement {
@@ -50,6 +54,7 @@ interface DrawnActionsDocument {
 
 export interface GameDrawnActionsDependencies {
   readonly getDocument: () => DrawnActionsDocument;
+  readonly diagnostics?: PhaseTimingSink | undefined;
 }
 
 const DATA_PREFIX = "data-";
@@ -170,14 +175,18 @@ function readCost(element: DrawnElement): {
 
 export function createGameDrawnActionsReader({
   getDocument,
+  diagnostics,
 }: GameDrawnActionsDependencies): GameDrawnActionsReader {
   return Object.freeze({
     read(selector: string): readonly Readonly<DrawnAction>[] {
-      const elements = getDocument().querySelectorAll(selector);
+      const measure = createPhaseMeasure(diagnostics);
+      const elements = measure("drawn-actions.query", () =>
+        getDocument().querySelectorAll(selector),
+      );
       const actions: DrawnAction[] = [];
       for (let index = 0; index < elements.length; index++) {
         const element = elements[index];
-        const id = element?.id;
+        const id = measure("drawn-actions.identity", () => element?.id);
         // An element the game drew without an id names nothing a caller could act on.
         if (
           element === undefined ||
@@ -186,9 +195,16 @@ export function createGameDrawnActionsReader({
         ) {
           continue;
         }
-        const state = readSwitchState(element);
-        const nativeAffordable = readNativeAffordability(element);
-        const price = readCost(element);
+        const state = measure("drawn-actions.switch-state", () =>
+          readSwitchState(element),
+        );
+        const nativeAffordable = measure(
+          "drawn-actions.native-affordability",
+          () => readNativeAffordability(element),
+        );
+        const price = measure("drawn-actions.native-price", () =>
+          readCost(element),
+        );
         actions.push(
           Object.freeze({
             id,
