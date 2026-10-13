@@ -50,6 +50,8 @@ export interface CapturedResearchDependencies {
   readonly onRejected?: (techId: string, reason: string) => void;
   /** Reports a successful research after the captured technology state changed. */
   readonly onActivity?: GameActivitySink;
+  /** Retain component affordability/exclusion evidence only for the opt-in owner diagnostic. */
+  readonly observeOwner?: boolean;
 }
 
 export interface CapturedResearchAdapter {
@@ -80,21 +82,16 @@ export function createCapturedResearchAdapter(
    * Whether a research exclusion rejects this candidate. An exclusion the reader could not decide
    * rejects too: a fact it cannot establish is never permission to click.
    */
-  function hasTechConflict(tech: Readonly<OfferedTech>): boolean {
+  function readTechConflict(tech: Readonly<OfferedTech>) {
     const decision = techConflicts.evaluate(tech);
-    if (decision.status === "none") return false;
+    if (decision.status === "none") return decision;
     reportRejected(
       tech.elementId,
       decision.status === "conflict"
         ? decision.conflict.code
         : `unavailable: ${decision.reason}${decision.field === undefined ? "" : ` (${decision.field})`}`,
     );
-    return true;
-  }
-
-  function isAffordable(cost: Readonly<Record<string, number>>): boolean {
-    const sample = resources.readResources(Object.keys(cost));
-    return sample !== undefined && canAfford(sample, cost);
+    return decision;
   }
 
   const reader: ResearchReader = Object.freeze({
@@ -112,18 +109,99 @@ export function createCapturedResearchAdapter(
       for (let index = startIndex; index < offered.length; index++) {
         const tech = offered[index];
         if (tech === undefined) continue;
-        const affordable = tech.nativeAffordable && isAffordable(tech.cost);
+        const resourceSample = tech.nativeAffordable
+          ? resources.readResources(Object.keys(tech.cost))
+          : undefined;
+        const resourceAffordable =
+          resourceSample === undefined
+            ? undefined
+            : canAfford(resourceSample, tech.cost);
+        const affordable = tech.nativeAffordable && resourceAffordable === true;
+        let costConflictEvidence:
+          "none" | "conflict" | "unavailable" | "not-evaluated" =
+          "not-evaluated";
+        let costConflictRejected = false;
+        let exclusionEvidence:
+          "none" | "excluded" | "unavailable" | "not-evaluated" =
+          "not-evaluated";
+        let reservationReason: string | undefined;
+        let exclusionReason: string | undefined;
+        if (affordable) {
+          const conflict = conflicts.evaluate(tech.cost);
+          costConflictRejected = conflict.status !== "none";
+          costConflictEvidence =
+            conflict.status === "none" &&
+            "evidence" in conflict &&
+            conflict.evidence === "unavailable"
+              ? "unavailable"
+              : conflict.status;
+          reservationReason =
+            conflict.status === "conflict"
+              ? `${conflict.conflict.targetCause}:${conflict.conflict.targetName}`
+              : conflict.status === "unavailable" ||
+                  ("evidence" in conflict &&
+                    conflict.evidence === "unavailable")
+                ? "reservation or holdings evidence unavailable"
+                : undefined;
+        }
+        let techConflict = false;
+        if (affordable) {
+          const decision = readTechConflict(tech);
+          exclusionEvidence =
+            decision.status === "none"
+              ? "none"
+              : decision.status === "conflict"
+                ? "excluded"
+                : "unavailable";
+          exclusionReason =
+            decision.status === "conflict"
+              ? decision.conflict.code
+              : decision.status === "unavailable"
+                ? `unavailable:${decision.reason}${decision.field === undefined ? "" : `:${decision.field}`}`
+                : undefined;
+          techConflict = decision.status !== "none";
+        }
         const view = Object.freeze({
           index,
           id: tech.elementId,
           affordable,
           // Match the legacy gate: what a reservation is saving for only matters for something
           // that could otherwise be bought right now.
-          hasCostConflict:
-            affordable && conflicts.evaluate(tech.cost).status !== "none",
+          hasCostConflict: affordable && costConflictRejected,
           // The same applies to exclusions: an unaffordable technology is not a decision yet, and
           // sampling guard and achievement facts for it would be work the cycle cannot use.
-          hasTechConflict: affordable && hasTechConflict(tech),
+          hasTechConflict: affordable && techConflict,
+          ...(dependencies.observeOwner === true
+            ? {
+                nativeAffordable: tech.nativeAffordable,
+                resourceAffordable,
+                ...(resourceSample === undefined
+                  ? {}
+                  : {
+                      observedResources: Object.freeze(
+                        Object.fromEntries(
+                          Array.from(
+                            resourceSample.resources.entries(),
+                            ([id, resource]) => [
+                              id,
+                              Object.freeze({
+                                amount: resource.amount,
+                                max: resource.max,
+                                rateOfChange: resource.rateOfChange,
+                              }),
+                            ],
+                          ),
+                        ),
+                      ),
+                    }),
+                costConflictEvidence,
+                exclusionEvidence,
+                ...(reservationReason === undefined
+                  ? {}
+                  : { reservationReason }),
+                ...(exclusionReason === undefined ? {} : { exclusionReason }),
+              }
+            : {}),
         });
         techs.push(view);
         if (view.affordable && !view.hasCostConflict && !view.hasTechConflict) {

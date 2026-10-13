@@ -3,7 +3,13 @@ import assert from "node:assert/strict";
 import { planResearch } from "../../../src/domain/progression/research/research.ts";
 import { createCapturedResearchAdapter } from "../../../src/adapters/evolve/progression/research/captured-research.ts";
 
-function decide({ nativeAffordable, knowledge, cost }) {
+function decide({
+  nativeAffordable,
+  knowledge,
+  cost,
+  conflicts = { evaluate: () => ({ status: "none" }) },
+  observeOwner = false,
+}) {
   const root = { tech: {} };
   const invocations = [];
   const adapter = createCapturedResearchAdapter({
@@ -35,7 +41,8 @@ function decide({ nativeAffordable, knowledge, cost }) {
         ),
       }),
     },
-    conflicts: { evaluate: () => ({ status: "none" }) },
+    conflicts,
+    observeOwner,
     techConflicts: { evaluate: () => ({ status: "none" }) },
     controls: {
       resolve: () => ({
@@ -96,6 +103,26 @@ const boolOpens = decide({
 });
 assert.deepEqual(boolOpens.decision, { index: 0, techId: "tech-test" });
 assert.deepEqual(boolOpens.invocations, ["tech-test.action"]);
+
+const unknownReservationEvidence = decide({
+  nativeAffordable: true,
+  knowledge: 10,
+  cost: { Knowledge: 5 },
+  observeOwner: true,
+  conflicts: {
+    evaluate: () => ({ status: "none", evidence: "unavailable" }),
+  },
+});
+assert.deepEqual(
+  unknownReservationEvidence.decision,
+  { index: 0, techId: "tech-test" },
+  "diagnostic reservation detail must not change the established owner decision",
+);
+assert.equal(unknownReservationEvidence.input.techs[0]?.hasCostConflict, false);
+assert.equal(
+  unknownReservationEvidence.input.techs[0]?.costConflictEvidence,
+  "unavailable",
+);
 
 console.log(
   "research freshness decisions and native action invocations passed",

@@ -1,5 +1,9 @@
 import type { CommandExecutionOutcome } from "../domain/commands.ts";
-import { planResearch } from "../domain/progression/research/research.ts";
+import {
+  planResearch,
+  type ResearchOwnerSelectionObservation,
+  type ResearchOwnerSelectionResult,
+} from "../domain/progression/research/research.ts";
 import type {
   ResearchCommandExecutor,
   ResearchReader,
@@ -11,6 +15,11 @@ export interface ResearchAutomationDependencies {
   readonly reader: ResearchReader;
   readonly executor: ResearchCommandExecutor;
   readonly diagnostics?: TickDiagnostics | undefined;
+  readonly onSelection?:
+    | ((selection: Readonly<ResearchOwnerSelectionObservation>) => void)
+    | undefined;
+  readonly onSelectionResult?:
+    ((result: Readonly<ResearchOwnerSelectionResult>) => void) | undefined;
 }
 
 const SUCCEEDED: CommandExecutionOutcome = Object.freeze({
@@ -37,8 +46,15 @@ export function runResearchAutomation(
       return SUCCEEDED;
     }
 
+    dependencies.onSelection?.(
+      Object.freeze({ decision, observed: observation.techs }),
+    );
+
     const result = measure("autoResearch.execute", () =>
       dependencies.executor.execute(decision),
+    );
+    dependencies.onSelectionResult?.(
+      Object.freeze({ decision, disposition: result.disposition }),
     );
     if (
       result.outcome.status !== "succeeded" ||

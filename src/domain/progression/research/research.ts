@@ -9,6 +9,26 @@ export interface ResearchTechView {
    * prestige fork the run is not taking, or a conflict fact the reader could not establish.
    */
   readonly hasTechConflict: boolean;
+  /** Component facts retained for observation; unknown remains distinct from a rejection. */
+  readonly nativeAffordable?: boolean;
+  readonly resourceAffordable?: boolean | undefined;
+  readonly costConflictEvidence?:
+    "none" | "conflict" | "unavailable" | "not-evaluated";
+  readonly exclusionEvidence?:
+    "none" | "excluded" | "unavailable" | "not-evaluated";
+  readonly reservationReason?: string;
+  readonly exclusionReason?: string;
+  /** Resource amounts/rates from the same sample used by the owner affordability check. */
+  readonly observedResources?: Readonly<
+    Record<
+      string,
+      Readonly<{
+        amount: number;
+        max: number;
+        rateOfChange: number;
+      }>
+    >
+  >;
 }
 
 /**
@@ -23,6 +43,18 @@ export interface ResearchInput {
 export interface ResearchDecision {
   readonly index: number;
   readonly techId: string;
+}
+
+export interface ResearchOwnerSelectionObservation {
+  readonly decision: Readonly<ResearchDecision>;
+  /** Exact prefix observed by the existing sequential reader before the selected invocation. */
+  readonly observed: readonly Readonly<ResearchTechView>[];
+}
+
+export interface ResearchOwnerSelectionResult {
+  readonly decision: Readonly<ResearchDecision>;
+  readonly disposition:
+    "researched" | "candidate-rejected" | "no-observed-research" | "stopped";
 }
 
 /**

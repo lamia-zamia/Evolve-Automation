@@ -6286,7 +6286,8 @@
           wanted,
           pool === void 0 ? void 0 : { pool }
         );
-        if (held === void 0) return NONE;
+        if (held === void 0)
+          return Object.freeze({ status: "none", evidence: "unavailable" });
         let holdings = {};
         for (let id of wanted)
           holdings[id] = Object.freeze({
@@ -8142,11 +8143,16 @@
       );
       if (decision === null)
         return SUCCEEDED3;
+      dependencies.onSelection?.(
+        Object.freeze({ decision, observed: observation.techs })
+      );
       let result = measure(
         "autoResearch.execute",
         () => dependencies.executor.execute(decision)
       );
-      if (result.outcome.status !== "succeeded" || result.disposition !== "candidate-rejected")
+      if (dependencies.onSelectionResult?.(
+        Object.freeze({ decision, disposition: result.disposition })
+      ), result.outcome.status !== "succeeded" || result.disposition !== "candidate-rejected")
         return result.outcome;
       startIndex = decision.index + 1;
     }
@@ -8179,16 +8185,12 @@
     let { rootState, offered, resources, conflicts, techConflicts, controls: controls2 } = dependencies, reportActivity = dependencies.onActivity ?? (() => {
     }), reportRejected = dependencies.onRejected ?? (() => {
     });
-    function hasTechConflict(tech) {
+    function readTechConflict(tech) {
       let decision = techConflicts.evaluate(tech);
-      return decision.status === "none" ? !1 : (reportRejected(
+      return decision.status === "none" || reportRejected(
         tech.elementId,
         decision.status === "conflict" ? decision.conflict.code : `unavailable: ${decision.reason}${decision.field === void 0 ? "" : ` (${decision.field})`}`
-      ), !0);
-    }
-    function isAffordable(cost) {
-      let sample = resources.readResources(Object.keys(cost));
-      return sample !== void 0 && canAfford(sample, cost);
+      ), decision;
     }
     let reader = Object.freeze({
       read(startIndex) {
@@ -8201,16 +8203,51 @@
         for (let index = startIndex; index < offered.length; index++) {
           let tech = offered[index];
           if (tech === void 0) continue;
-          let affordable = tech.nativeAffordable && isAffordable(tech.cost), view = Object.freeze({
+          let resourceSample = tech.nativeAffordable ? resources.readResources(Object.keys(tech.cost)) : void 0, resourceAffordable = resourceSample === void 0 ? void 0 : canAfford(resourceSample, tech.cost), affordable = tech.nativeAffordable && resourceAffordable === !0, costConflictEvidence = "not-evaluated", costConflictRejected = !1, exclusionEvidence = "not-evaluated", reservationReason, exclusionReason;
+          if (affordable) {
+            let conflict = conflicts.evaluate(tech.cost);
+            costConflictRejected = conflict.status !== "none", costConflictEvidence = conflict.status === "none" && "evidence" in conflict && conflict.evidence === "unavailable" ? "unavailable" : conflict.status, reservationReason = conflict.status === "conflict" ? `${conflict.conflict.targetCause}:${conflict.conflict.targetName}` : conflict.status === "unavailable" || "evidence" in conflict && conflict.evidence === "unavailable" ? "reservation or holdings evidence unavailable" : void 0;
+          }
+          let techConflict = !1;
+          if (affordable) {
+            let decision = readTechConflict(tech);
+            exclusionEvidence = decision.status === "none" ? "none" : decision.status === "conflict" ? "excluded" : "unavailable", exclusionReason = decision.status === "conflict" ? decision.conflict.code : decision.status === "unavailable" ? `unavailable:${decision.reason}${decision.field === void 0 ? "" : `:${decision.field}`}` : void 0, techConflict = decision.status !== "none";
+          }
+          let view = Object.freeze({
             index,
             id: tech.elementId,
             affordable,
             // Match the legacy gate: what a reservation is saving for only matters for something
             // that could otherwise be bought right now.
-            hasCostConflict: affordable && conflicts.evaluate(tech.cost).status !== "none",
+            hasCostConflict: affordable && costConflictRejected,
             // The same applies to exclusions: an unaffordable technology is not a decision yet, and
             // sampling guard and achievement facts for it would be work the cycle cannot use.
-            hasTechConflict: affordable && hasTechConflict(tech)
+            hasTechConflict: affordable && techConflict,
+            ...dependencies.observeOwner === !0 ? {
+              nativeAffordable: tech.nativeAffordable,
+              resourceAffordable,
+              ...resourceSample === void 0 ? {} : {
+                observedResources: Object.freeze(
+                  Object.fromEntries(
+                    Array.from(
+                      resourceSample.resources.entries(),
+                      ([id, resource]) => [
+                        id,
+                        Object.freeze({
+                          amount: resource.amount,
+                          max: resource.max,
+                          rateOfChange: resource.rateOfChange
+                        })
+                      ]
+                    )
+                  )
+                )
+              },
+              costConflictEvidence,
+              exclusionEvidence,
+              ...reservationReason === void 0 ? {} : { reservationReason },
+              ...exclusionReason === void 0 ? {} : { exclusionReason }
+            } : {}
           });
           if (techs.push(view), view.affordable && !view.hasCostConflict && !view.hasTechConflict)
             break;
@@ -9228,9 +9265,18 @@
             techConflicts,
             controls: controls2,
             onRejected,
+            observeOwner: diagnostics?.readPerformanceEnabled() === !0,
             ...onActivity === void 0 ? {} : { onActivity }
           });
-          return runResearchAutomation({ reader, executor, diagnostics });
+          return runResearchAutomation({
+            reader,
+            executor,
+            diagnostics,
+            ...diagnostics?.readPerformanceEnabled() === !0 ? {
+              onSelection: dependencies.onOwnerSelection,
+              onSelectionResult: dependencies.onOwnerSelectionResult
+            } : {}
+          });
         } finally {
           offeredThisCycle = void 0;
         }
@@ -12083,6 +12129,10 @@
       panels,
       readOfferedTechs: () => sampleOfferedTechs("auto-research"),
       ...onUnavailable === void 0 ? {} : { onUnavailable },
+      ...dependencies.onResearchOwnerSelection === void 0 ? {} : { onOwnerSelection: dependencies.onResearchOwnerSelection },
+      ...dependencies.onResearchOwnerSelectionResult === void 0 ? {} : {
+        onOwnerSelectionResult: dependencies.onResearchOwnerSelectionResult
+      },
       ...onActivity === void 0 ? {} : { onActivity },
       diagnostics
     });
@@ -17767,8 +17817,14 @@
     }, expandRequirement = (prerequisite, depth) => {
       let id = `research:${prerequisite.technologyId}:${prerequisite.requiredLevel}`, existing = requirements.get(id);
       if (existing !== void 0) return existing;
-      let observedLevel = input.grantLevels?.get(prerequisite.technologyId);
+      let candidates = (byGrant.get(prerequisite.technologyId) ?? []).filter(
+        (candidate) => candidate.grantLevel >= prerequisite.requiredLevel
+      ), candidateActionIds = candidates.map(
+        (candidate) => candidate.actionId
+      ), observedLevel = input.grantLevels?.get(prerequisite.technologyId);
       if (!validResearchLevel(observedLevel)) {
+        for (let candidate of candidates)
+          expandAction(candidate.actionId, depth);
         let reason = observedLevel === void 0 ? `current grant level for ${prerequisite.technologyId} is unavailable` : `current grant level for ${prerequisite.technologyId} is invalid`, gate2 = Object.freeze({
           id,
           technologyId: prerequisite.technologyId,
@@ -17776,7 +17832,7 @@
           observedLevel: void 0,
           declaredStatus: "unavailable",
           status: "unavailable",
-          candidateActionIds: Object.freeze([]),
+          candidateActionIds: Object.freeze(candidateActionIds),
           reasons: Object.freeze([reason])
         });
         return requirements.set(id, gate2), gate2;
@@ -17795,6 +17851,8 @@
         return requirements.set(id, gate2), gate2;
       }
       if (prerequisite.applicabilityBoundary !== void 0) {
+        for (let candidate of candidates)
+          expandAction(candidate.actionId, depth);
         let gate2 = Object.freeze({
           id,
           technologyId: prerequisite.technologyId,
@@ -17802,14 +17860,12 @@
           observedLevel,
           declaredStatus: "unsatisfied",
           status: "conditional",
-          candidateActionIds: Object.freeze([]),
+          candidateActionIds: Object.freeze(candidateActionIds),
           reasons: Object.freeze([prerequisite.applicabilityBoundary])
         });
         return requirements.set(id, gate2), gate2;
       }
-      let candidates = (byGrant.get(prerequisite.technologyId) ?? []).filter(
-        (candidate) => candidate.grantLevel >= prerequisite.requiredLevel
-      ), candidateActionIds = [], reasons = [];
+      let reasons = [];
       if ((!registryValid || input.offeredActionIds === void 0) && reasons.push(
         "native action mapping or offer membership is not authoritative"
       ), candidates.length === 0) {
@@ -17830,7 +17886,6 @@
       }
       let hasKnownUnmetCandidate = !1, hasConditionalCandidate = !1, hasUnavailableCandidate = !1, hasExcludedCandidate = !1;
       for (let candidate of candidates) {
-        candidateActionIds.push(candidate.actionId);
         let action = expandAction(candidate.actionId, depth);
         action === void 0 ? limits.length > 0 || cycles.length > 0 ? hasConditionalCandidate = !0 : hasUnavailableCandidate = !0 : action.status === "conditional" ? (hasConditionalCandidate = !0, reasons.push(...action.reasons)) : action.status === "unavailable" ? (hasUnavailableCandidate = !0, reasons.push(...action.reasons)) : action.status === "excluded" ? (hasExcludedCandidate = !0, reasons.push(...action.reasons)) : (action.status === "unsatisfied" || action.status === "frontier") && (hasKnownUnmetCandidate = !0);
       }
@@ -17865,9 +17920,13 @@
     } else if (input.offeredActionIds === void 0)
       targetStatus = "unavailable";
     else if (input.offeredActionIds?.has(input.targetActionId)) {
-      if (frontier.add(input.targetActionId), target.prerequisites.kind === "declared")
-        for (let prerequisite of target.prerequisites.requirements)
-          expandRequirement(prerequisite, 1);
+      frontier.add(input.targetActionId);
+      let targetPrerequisiteIds = [];
+      if (target.prerequisites.kind === "declared")
+        for (let prerequisite of target.prerequisites.requirements) {
+          let gate = expandRequirement(prerequisite, 1);
+          gate !== void 0 && targetPrerequisiteIds.push(gate.id);
+        }
       actions.set(
         input.targetActionId,
         Object.freeze({
@@ -17875,7 +17934,7 @@
           grantTechnology: target.grantTechnology,
           grantLevel: target.grantLevel,
           status: "frontier",
-          prerequisiteIds: Object.freeze([]),
+          prerequisiteIds: Object.freeze(targetPrerequisiteIds),
           reasons: Object.freeze([])
         })
       ), targetStatus = "unsatisfied";
@@ -17915,6 +17974,9 @@
     return Object.freeze({
       targetActionId: input.targetActionId,
       targetStatus,
+      dependencyEvidence: input.definitions === void 0 || !registryValid || target === void 0 ? "unavailable" : target.prerequisites.kind !== "declared" || limits.length > 0 || cycles.length > 0 || [...actions.keys()].some(
+        (actionId) => byActionId.get(actionId)?.prerequisites.kind !== "declared"
+      ) ? "partial" : "complete",
       actions: Object.freeze([...actions.values()]),
       requirements: Object.freeze([...requirements.values()]),
       actionableFrontier: Object.freeze([...frontier]),
@@ -17954,7 +18016,8 @@
     ), paths = /* @__PURE__ */ new Map(), visited = /* @__PURE__ */ new Set(), queue = [], target = actions.get(graph.targetActionId);
     for (target !== void 0 && queue.push({
       actionId: target.actionId,
-      conditional: target.status === "conditional" || target.status === "unavailable" || target.status === "excluded",
+      // Eligibility of the terminal action does not change its declared dependency edges.
+      conditional: !1,
       chain: [target.actionId]
     }); queue.length > 0; ) {
       let current = queue.shift();
@@ -17965,21 +18028,20 @@
       let path = paths.get(current.actionId) ?? {};
       current.conditional ? path.conditional ??= current.chain : path.verified ??= current.chain, paths.set(current.actionId, path);
       let action = actions.get(current.actionId);
-      if (action === void 0) continue;
-      let actionIsConditional = current.conditional || action.status === "conditional" || action.status === "unavailable" || action.status === "excluded";
-      for (let requirementId of action.prerequisiteIds) {
-        let gate = requirements.get(requirementId), requirementIsConditional = actionIsConditional || gate?.status === "conditional" || gate?.status === "unavailable";
-        for (let candidateId of gate?.candidateActionIds ?? []) {
-          let candidate = actions.get(candidateId);
-          if (candidate?.status === "excluded") continue;
-          let conditional = requirementIsConditional || candidate?.status === "conditional" || candidate?.status === "unavailable";
-          queue.push({
-            actionId: candidateId,
-            conditional,
-            chain: [...current.chain, candidateId]
-          });
+      if (action !== void 0)
+        for (let requirementId of action.prerequisiteIds) {
+          let gate = requirements.get(requirementId), requirementIsConditional = gate?.status === "conditional" || gate?.status === "unavailable";
+          for (let candidateId of gate?.candidateActionIds ?? []) {
+            let candidate = actions.get(candidateId);
+            if (candidate?.status === "excluded") continue;
+            let conditional = requirementIsConditional || candidate?.status === "conditional" || candidate?.status === "unavailable";
+            queue.push({
+              actionId: candidateId,
+              conditional,
+              chain: [...current.chain, candidateId]
+            });
+          }
         }
-      }
     }
     return new Map(
       [...paths].map(([actionId, path]) => [
@@ -17992,25 +18054,29 @@
     );
   }
   function evaluateResearchGoalCandidates(input) {
-    let fresh = matchingResearchOffers(input.graph, input), objectiveMatches = input.graph.targetActionId === input.targetActionId, relevant = readRelevantResearchActions(input.graph), verifiedFrontier = new Set(input.graph.actionableFrontier), graphIncomplete = input.graph.targetStatus === "conditional" || input.graph.requirements.some(
-      (requirement) => requirement.status === "conditional" || requirement.status === "unavailable"
-    ) || input.graph.unavailableFacts.length > 0 || input.graph.limits.length > 0 || input.graph.cycles.length > 0, candidates = input.offers.map((offer) => {
+    let fresh = matchingResearchOffers(input.graph, input), objectiveMatches = input.graph.targetActionId === input.targetActionId, relevant = readRelevantResearchActions(input.graph), verifiedFrontier = new Set(input.graph.actionableFrontier), graphIncomplete = input.graph.dependencyEvidence !== "complete", candidates = input.offers.map((offer) => {
       let paths = relevant.get(offer.actionId), chain = paths?.verified ?? paths?.conditional ?? [], gate = input.graph.actions.find(
         (action) => action.actionId === offer.actionId
       ), chainReasons = chain.flatMap(
         (actionId) => input.graph.actions.find((action) => action.actionId === actionId)?.reasons ?? []
-      ), reasons = [], relevance;
+      ), reasons = [], relevance, dependencyRelation = paths?.verified !== void 0 || paths?.conditional !== void 0 ? "declared-prerequisite" : graphIncomplete ? "unknown" : "none", pathApplicability = input.graph.actions.find(
+        (action) => action.actionId === input.targetActionId
+      )?.status === "excluded" || gate?.status === "excluded" ? "excluded" : paths?.conditional !== void 0 || gate?.status === "conditional" || gate?.status === "unavailable" ? "conditional" : "eligible";
       return !fresh || !objectiveMatches || input.graph.targetStatus === "unavailable" ? (relevance = "unavailable", reasons.push(
         objectiveMatches ? "prerequisite graph or offer evidence is unavailable or stale" : "prerequisite graph targets a different selected objective"
-      )) : input.goalSatisfied || input.graph.targetStatus === "satisfied" ? (relevance = "unrelated", reasons.push("selected terminal goal is already satisfied")) : verifiedFrontier.has(offer.actionId) && paths?.verified !== void 0 ? (relevance = "verified-prerequisite", reasons.push(
-        "native offered action lies on a declared prerequisite path"
-      ), reasons.push(...chainReasons), chain.length > 0 && reasons.push(`chain ${chain.join(" -> ")}`)) : paths?.conditional !== void 0 || chain.length > 0 || gate?.status === "conditional" || gate?.status === "unavailable" || gate?.status === "excluded" ? (relevance = "conditional-prerequisite", reasons.push(...chainReasons, ...gate?.reasons ?? []), chain.length > 0 && reasons.push(`conditional chain ${chain.join(" -> ")}`)) : graphIncomplete ? (relevance = "unavailable", reasons.push(
+      )) : input.goalSatisfied || input.graph.targetStatus === "satisfied" ? (relevance = "unrelated", reasons.push("selected terminal goal is already satisfied")) : paths?.verified !== void 0 ? (relevance = "verified-prerequisite", reasons.push(
+        "action lies on a statically declared prerequisite path; terminal applicability is separate"
+      ), verifiedFrontier.has(offer.actionId) || reasons.push("candidate is not independently confirmed as actionable"), reasons.push(...chainReasons), chain.length > 0 && reasons.push(`chain ${chain.join(" -> ")}`)) : paths?.conditional !== void 0 || chain.length > 0 || gate?.status === "conditional" || gate?.status === "unavailable" || gate?.status === "excluded" ? (relevance = "conditional-prerequisite", reasons.push(...chainReasons, ...gate?.reasons ?? []), chain.length > 0 && reasons.push(`conditional chain ${chain.join(" -> ")}`)) : graphIncomplete ? (relevance = "unavailable", reasons.push(
         "graph incompleteness prevents ruling out a prerequisite path"
       )) : offer.optionalInvestmentEffectKnown === !0 ? (relevance = "optional-investment", reasons.push(
         "supported economic effect exists without a hard prerequisite edge"
       )) : (relevance = "unrelated", reasons.push(
         "no hard prerequisite relationship appears in the complete known graph"
-      )), offer.nativeAffordable || reasons.push("native affordability verdict is false"), offer.resourceAffordable === !1 && reasons.push("captured resources are insufficient for this price"), offer.resourceAffordable === void 0 && reasons.push("captured resource sufficiency is unavailable"), offer.hasCostConflict && reasons.push("cost is reserved by a higher-priority commitment"), offer.hasCostConflict === void 0 && reasons.push("cost reservation evidence is unavailable"), offer.hasExplicitExclusion && reasons.push("explicit Research exclusion applies"), offer.hasExplicitExclusion === void 0 && reasons.push("explicit Research exclusion evidence is unavailable"), Object.freeze({
+      )), offer.nativeAffordable || reasons.push("native affordability verdict is false"), offer.resourceAffordable === !1 && reasons.push("captured resources are insufficient for this price"), offer.resourceAffordable === void 0 && reasons.push("captured resource sufficiency is unavailable"), offer.hasCostConflict && reasons.push("cost is reserved by a higher-priority commitment"), offer.hasCostConflict === void 0 && reasons.push(
+        offer.reservationEvidence === "not-evaluated" ? "Research owner skipped reservation checks because native/resource affordability was denied" : "cost reservation evidence is unavailable"
+      ), offer.hasExplicitExclusion && reasons.push("explicit Research exclusion applies"), offer.hasExplicitExclusion === void 0 && reasons.push(
+        offer.explicitExclusionEvidence === "not-evaluated" ? "Research owner skipped exclusion checks because native/resource affordability was denied" : "explicit Research exclusion evidence is unavailable"
+      ), Object.freeze({
         goalId: input.goalId,
         targetActionId: input.targetActionId,
         actionId: offer.actionId,
@@ -18018,6 +18084,9 @@
         grantLevel: offer.grantLevel,
         index: offer.index,
         relevance,
+        dependencyRelation,
+        pathApplicability,
+        actionability: fresh ? "current-native-offer" : "unknown",
         chainActionIds: Object.freeze(chain),
         cost: offer.cost,
         nativeAffordable: offer.nativeAffordable,
@@ -18025,20 +18094,134 @@
         resourceAffordability: offer.resourceAffordable === void 0 ? "unknown" : offer.resourceAffordable ? "affordable" : "insufficient",
         reservationConflict: offer.hasCostConflict,
         explicitlyExcluded: offer.hasExplicitExclusion,
+        reservationEvidence: offer.reservationEvidence ?? (offer.hasCostConflict === void 0 ? "not-observed" : offer.hasCostConflict ? "conflict" : "none"),
+        explicitExclusionEvidence: offer.explicitExclusionEvidence ?? (offer.hasExplicitExclusion === void 0 ? "not-observed" : offer.hasExplicitExclusion ? "excluded" : "none"),
+        reservationReason: offer.reservationReason,
+        exclusionReason: offer.exclusionReason,
         evidenceFresh: fresh && objectiveMatches,
         downstreamCosts: "unknown",
         reasons: Object.freeze([...new Set(reasons)])
       });
-    }), rankable = candidates.filter(
-      (candidate) => candidate.relevance === "verified-prerequisite" && candidate.affordability === "native-affordable" && candidate.resourceAffordability === "affordable" && candidate.reservationConflict === !1 && candidate.explicitlyExcluded === !1
-    ), preferred = rankable.length === 1 ? rankable[0] : void 0;
+    });
     return Object.freeze({
       goalId: input.goalId,
       targetActionId: input.targetActionId,
       baselineSelectedActionId: input.baselineSelectedActionId,
-      preferredActionId: preferred?.actionId,
-      preference: preferred === void 0 ? "none" : "supported-unique-prerequisite",
+      baselineSelectedDisposition: input.baselineSelectedDisposition,
+      preferredActionId: void 0,
+      preference: "not-evaluated",
       candidates: Object.freeze(candidates)
+    });
+  }
+
+  // src/domain/progression/research-spending-decision.ts
+  function resourceNeeds(costs) {
+    let needs = [];
+    for (let [resourceId, amount] of Object.entries(costs)) {
+      if (!Number.isFinite(amount) || amount < 0) return;
+      needs.push(Object.freeze({ resourceId, poolId: "anywhere", amount }));
+    }
+    return Object.freeze(needs);
+  }
+  function evidenceIsFresh(action) {
+    return action.currentNativeOffer === !0 && action.offerGeneration !== void 0 && action.offerGeneration === action.expectedOfferGeneration && action.controlGeneration !== void 0 && action.controlGeneration === action.expectedControlGeneration;
+  }
+  function decideResearchSpend(input) {
+    let reasons = [];
+    input.goalId !== input.currentGoalId && reasons.push("selected terminal goal changed during the observation"), input.validityEpoch !== input.currentValidityEpoch && reasons.push("resource, price, control, or root observation is stale"), input.terminalGoalApplicability !== "eligible" && reasons.push(
+      `terminal goal applicability is ${input.terminalGoalApplicability}`
+    );
+    let targetNeeds = resourceNeeds(input.target.cost), extraNeeds = resourceNeeds(
+      Object.fromEntries(
+        input.additionalTargetNeeds.map((need) => [
+          need.resourceId,
+          need.amount + (input.target.cost[need.resourceId] ?? 0)
+        ])
+      )
+    );
+    (targetNeeds === void 0 || extraNeeds === void 0) && reasons.push(
+      "native target price or parallel acquisition requirement is invalid"
+    );
+    let targetFresh = evidenceIsFresh(input.target);
+    targetFresh || reasons.push(
+      "goal-relevant target offer or captured control is unavailable or stale"
+    ), input.target.applicability !== "eligible" && reasons.push(`target applicability is ${input.target.applicability}`), input.commitmentsKnown || reasons.push("external commitments or reservations are unavailable");
+    let targetAffordable = targetFresh && targetNeeds !== void 0 ? (() => {
+      let wait = compareGoalStrategies(
+        input.target.actionId,
+        targetNeeds,
+        input.stocks,
+        input.commitments,
+        [],
+        input.validityEpoch,
+        input.commitmentsKnown
+      ).strategies[0];
+      return wait?.completionTime === 0 ? input.target.nativeAffordable ? "affordable" : "native-denied" : wait?.feasibility.status === "infeasible" ? "insufficient" : wait?.feasibility.estimatedTime === void 0 ? "unknown" : "insufficient";
+    })() : "unknown", currentSelectionUsable = input.selectedAction !== void 0 && input.selectedByResearchOwner && evidenceIsFresh(input.selectedAction) && input.selectedAction.nativeAffordable && input.selectedResourceAffordable === !0 && input.selectedReservationConflict === !1 && input.selectedExplicitExclusion === !1;
+    if (input.selectedAction !== void 0 && !currentSelectionUsable && reasons.push(
+      "Research owner selection lacks fresh affordability, reservation, or exclusion evidence"
+    ), currentSelectionUsable && input.selectedEffects === void 0 && reasons.push(
+      "selected Research unlock, production and collateral effects are unknown; price-only projection assumes no rate or capacity change"
+    ), input.goalId !== input.currentGoalId || input.validityEpoch !== input.currentValidityEpoch || input.terminalGoalApplicability === "excluded" || targetNeeds === void 0 || !targetFresh || input.target.applicability !== "eligible")
+      return Object.freeze({
+        goalId: input.goalId,
+        selectedActionId: input.selectedAction?.actionId,
+        targetActionId: input.target.actionId,
+        comparison: void 0,
+        targetAffordability: targetAffordable,
+        decision: "unavailable",
+        reasons: Object.freeze([...new Set(reasons)])
+      });
+    let candidates = [];
+    if (currentSelectionUsable && input.selectedAction !== void 0) {
+      let selectedNeeds = resourceNeeds(input.selectedAction.cost), effects = input.selectedEffects;
+      candidates.push(
+        Object.freeze({
+          id: `buy-selected:${input.selectedAction.actionId}`,
+          goalId: input.target.actionId,
+          preconditions: Object.freeze({
+            satisfied: selectedNeeds !== void 0,
+            reasons: selectedNeeds === void 0 ? ["selected purchase price is invalid"] : []
+          }),
+          acquisitionCosts: selectedNeeds ?? [],
+          // Keep a price-only counterfactual visible when the actual unlock effect is unknown.
+          // The incomplete flag and unavailable reason prevent it from authorizing a winner.
+          productionChanges: effects?.productionChanges ?? [],
+          effectsComplete: effects?.effectsComplete ?? !1,
+          effectAuthority: effects?.effectAuthority ?? "provisional",
+          validityEpoch: input.validityEpoch,
+          unavailableReasons: effects?.unavailableReasons ?? []
+        })
+      );
+    } else
+      reasons.push(
+        "buy-selected scenario is not currently owner-selected and safe"
+      );
+    let acceleratorEvidenceComplete = input.acceleratorScan === "complete";
+    for (let accelerator of input.accelerators)
+      (accelerator.validityEpoch !== input.validityEpoch || !accelerator.effectsComplete || accelerator.productionChanges === void 0) && (acceleratorEvidenceComplete = !1, reasons.push(
+        `accelerator ${accelerator.id} lacks current complete effect evidence`
+      )), candidates.push(accelerator);
+    acceleratorEvidenceComplete || reasons.push("accelerator offer/effect scan is unavailable");
+    let comparison = compareGoalStrategies(
+      input.target.actionId,
+      [...targetNeeds ?? [], ...input.additionalTargetNeeds],
+      input.stocks,
+      input.commitments,
+      candidates,
+      input.validityEpoch,
+      input.commitmentsKnown
+    ), complete = currentSelectionUsable && input.terminalGoalApplicability === "eligible" && input.selectedEffects !== void 0 && input.selectedEffects.effectsComplete && input.selectedEffects.effectAuthority === "validated" && acceleratorEvidenceComplete && input.commitmentsKnown && comparison.provisionalWinner !== void 0, reportedComparison = complete ? comparison : Object.freeze({ ...comparison, winner: void 0 }), winnerId = reportedComparison.winner ?? (complete ? comparison.provisionalWinner : void 0), decision = winnerId === "wait" ? "save-for-target" : winnerId?.startsWith("buy-selected:") ? "buy-selected" : winnerId !== void 0 ? "buy-accelerator" : "provisional";
+    return complete || reasons.push(
+      "expected terminal-goal time is provisional while strategy effects or option coverage remain unknown"
+    ), Object.freeze({
+      goalId: input.goalId,
+      selectedActionId: input.selectedAction?.actionId,
+      targetActionId: input.target.actionId,
+      comparison: reportedComparison,
+      targetAffordability: targetAffordable,
+      decision,
+      reasons: Object.freeze([...new Set(reasons)])
     });
   }
 
@@ -58249,7 +58432,9 @@ Only continue if you trust the source. Injected code:
       pageWindow: settingsHostWindow2,
       bindings: pageCapture2.bindings,
       ...diagnostics === void 0 ? {} : { onDiagnostic: (message) => reportDiagnostic(message) }
-    }), constructionMutationObserved = !1, storageMutationObserved = !1, progression = createCapturedProgressionControl({
+    }), constructionMutationObserved = !1, storageMutationObserved = !1, researchOwnerSelectionObserver = (_selection) => {
+    }, pendingResearchOwnerSelectionSummary, pendingResearchOwnerSelectionDetails = [], pendingResearchOwnerSelectionDiagnosticMs = 0, researchOwnerSelectionResultObserver = (_result) => {
+    }, progression = createCapturedProgressionControl({
       readMechPowerSupplyHold: mechSupplyReservation.readPowerSupplyHold,
       rootState: pageCapture2.rootState,
       mechanics: pageCapture2.mechanics,
@@ -58295,10 +58480,206 @@ Only continue if you trust the source. Injected code:
       onUnavailable: (reason) => reportOnce(`progression unavailable: ${reason}`),
       nowMs: () => Date.now(),
       diagnostics: phaseDiagnostics,
+      ...phaseDiagnostics?.readPerformanceEnabled() === !0 ? {
+        onResearchOwnerSelection: (selection) => researchOwnerSelectionObserver(selection),
+        onResearchOwnerSelectionResult: (result) => researchOwnerSelectionResultObserver(result)
+      } : {},
       onDiagnostic: reportDiagnostic,
       onActivity
     });
-    readArpaReadinessEpoch = progression.readProgressionEpoch;
+    researchOwnerSelectionObserver = (selection) => {
+      let diagnosticClock = phaseDiagnostics;
+      if (settingsStore.readRaw().prestigeType !== "mad" || diagnosticClock === void 0 || diagnosticClock.readPerformanceEnabled() !== !0)
+        return;
+      let diagnosticStartedAtMs = diagnosticClock.nowMs();
+      runCapturedDiagnosticSafely(
+        () => {
+          let root = pageCapture2.rootState.readRoot(), progressionEpoch = progression.readProgressionEpoch(), rootGeneration = progression.readRootGeneration(), offers = progression.readOfferedTechs(), definitions = progression.readResearchActionDefinitions();
+          if (root === void 0 || offers === void 0 || definitions === void 0) {
+            reportDiagnostic(
+              `goal.mad research owner selected=${selection.decision.techId} evidence=unavailable catalog-or-root`
+            );
+            return;
+          }
+          let grantLevels = readResearchGrantLevels(root, definitions), applicability = readCapturedTechApplicability(root, definitions), generations = new Map(
+            offers.map((offer) => [offer.elementId, offer.generation])
+          ), graph = activeRuntimeMeasure.measure(
+            "goal.mad.research-owner-prerequisites",
+            () => planNativeResearchPrerequisites({
+              targetActionId: CAPTURED_MAD_RESEARCH_TECH,
+              definitions: definitions.map((definition) => ({
+                actionId: definition.actionId,
+                grantTechnology: definition.grantTechnology,
+                grantLevel: definition.grantLevel,
+                prerequisites: definition.prerequisites,
+                hasNativeCondition: definition.eligibility.hasNativeCondition,
+                routeRestrictions: definition.eligibility.routeRestrictions,
+                restrictions: definition.eligibility.restrictions
+              })),
+              grantLevels,
+              ...applicability === void 0 ? {} : { applicabilityByActionId: applicability },
+              offeredActionIds: new Set(offers.map((offer) => offer.elementId)),
+              offerGenerations: generations,
+              cycle: automationCycle,
+              progressionEpoch,
+              rootGeneration,
+              maxDepth: 16,
+              maxActions: 256
+            })
+          ), observedById = new Map(
+            selection.observed.map((candidate) => [candidate.id, candidate])
+          ), evaluation = activeRuntimeMeasure.measure(
+            "goal.mad.research-owner-candidates",
+            () => evaluateResearchGoalCandidates({
+              goalId: "prestige:mad",
+              targetActionId: CAPTURED_MAD_RESEARCH_TECH,
+              goalSatisfied: graph.targetStatus === "satisfied",
+              graph,
+              cycle: automationCycle,
+              progressionEpoch,
+              rootGeneration,
+              offers: offers.map((offer, index) => {
+                let observed2 = observedById.get(offer.elementId);
+                return {
+                  actionId: offer.elementId,
+                  grantTechnology: offer.grantTechnology,
+                  grantLevel: offer.grantLevel,
+                  index,
+                  generation: offer.generation,
+                  cost: offer.cost,
+                  nativeAffordable: offer.nativeAffordable,
+                  resourceAffordable: observed2?.resourceAffordable,
+                  hasCostConflict: observed2?.costConflictEvidence === "none" ? !1 : observed2?.costConflictEvidence === "conflict" ? !0 : void 0,
+                  reservationEvidence: observed2?.costConflictEvidence ?? "not-observed",
+                  ...observed2 === void 0 ? {
+                    reservationReason: "offer was outside the Research owner's sequential read prefix"
+                  } : observed2.reservationReason === void 0 ? {} : { reservationReason: observed2.reservationReason },
+                  hasExplicitExclusion: observed2?.exclusionEvidence === "none" ? !1 : observed2?.exclusionEvidence === "excluded" ? !0 : void 0,
+                  explicitExclusionEvidence: observed2?.exclusionEvidence ?? "not-observed",
+                  ...observed2 === void 0 ? {
+                    exclusionReason: "offer was outside the Research owner's sequential read prefix"
+                  } : observed2.exclusionReason === void 0 ? {} : { exclusionReason: observed2.exclusionReason }
+                };
+              }),
+              baselineSelectedActionId: selection.decision.techId
+            })
+          ), selected = evaluation.candidates.find(
+            (candidate) => candidate.actionId === selection.decision.techId
+          ), savingTarget = evaluation.candidates.find(
+            (candidate) => candidate.dependencyRelation === "declared-prerequisite" && candidate.actionability === "current-native-offer" && candidate.pathApplicability === "eligible" && !candidate.nativeAffordable
+          ), selectedObservation = observedById.get(selection.decision.techId), selectedOffer = offers.find(
+            (offer) => offer.elementId === selection.decision.techId
+          ), targetOffer = offers.find(
+            (offer) => offer.elementId === savingTarget?.actionId
+          ), observedResources = selectedObservation?.observedResources, validityEpoch = `${progressionEpoch}|root:${rootGeneration ?? "unknown"}|cycle:${automationCycle}`, stocks = Object.entries(
+            observedResources ?? {}
+          ).map(([resourceId, resource]) => ({
+            resourceId,
+            poolId: "anywhere",
+            amount: resource.amount,
+            capacity: resource.max,
+            netRate: resource.rateOfChange,
+            rateConfidence: "observed",
+            validityEpoch
+          })), spend = savingTarget === void 0 ? void 0 : decideResearchSpend({
+            goalId: "prestige:mad",
+            currentGoalId: "prestige:mad",
+            terminalGoalApplicability: applicability?.get(CAPTURED_MAD_RESEARCH_TECH)?.status === "excluded" ? "excluded" : "conditional",
+            validityEpoch,
+            currentValidityEpoch: validityEpoch,
+            selectedAction: selected === void 0 ? void 0 : {
+              actionId: selected.actionId,
+              cost: selected.cost,
+              currentNativeOffer: selected.actionability === "current-native-offer",
+              nativeAffordable: selected.nativeAffordable,
+              applicability: selected.pathApplicability,
+              offerGeneration: selectedOffer?.generation,
+              expectedOfferGeneration: selectedOffer?.generation,
+              controlGeneration: selectedOffer?.generation,
+              expectedControlGeneration: selectedOffer?.generation
+            },
+            selectedByResearchOwner: selection.decision.techId === selected?.actionId,
+            selectedResourceAffordable: selectedObservation?.resourceAffordable,
+            selectedReservationConflict: selectedObservation?.costConflictEvidence === "none" ? !1 : selectedObservation?.costConflictEvidence === "conflict" ? !0 : void 0,
+            selectedExplicitExclusion: selectedObservation?.exclusionEvidence === "none" ? !1 : selectedObservation?.exclusionEvidence === "excluded" ? !0 : void 0,
+            selectedEffects: void 0,
+            target: {
+              actionId: savingTarget.actionId,
+              cost: savingTarget.cost,
+              currentNativeOffer: !0,
+              nativeAffordable: savingTarget.nativeAffordable,
+              applicability: savingTarget.pathApplicability,
+              offerGeneration: targetOffer?.generation,
+              expectedOfferGeneration: targetOffer?.generation,
+              controlGeneration: targetOffer?.generation,
+              expectedControlGeneration: targetOffer?.generation
+            },
+            additionalTargetNeeds: [],
+            stocks,
+            commitments: [],
+            commitmentsKnown: !1,
+            acceleratorScan: "unavailable",
+            accelerators: []
+          }), goalOfferDetails = evaluation.candidates.filter(
+            (candidate) => candidate.dependencyRelation === "declared-prerequisite"
+          ).map((candidate) => {
+            let observed2 = observedById.get(candidate.actionId), overlap = Object.keys(selected?.cost ?? {}).filter(
+              (resourceId) => candidate.cost[resourceId] !== void 0
+            ), cost = Object.entries(candidate.cost).map(([resourceId, amount]) => `${resourceId}:${amount}`).join(",");
+            return `goal.mad frontier cycle=${automationCycle} action=${candidate.actionId} relation=${candidate.dependencyRelation} path=${candidate.pathApplicability} cost=${cost} shared=${overlap.join(",") || "none"} native=${candidate.nativeAffordable ? "yes" : "no"} resources=${candidate.resourceAffordability} ownerRead=${observed2 === void 0 ? "no" : "yes"} reservation=${candidate.reservationEvidence} exclusion=${candidate.explicitExclusionEvidence}`;
+          }), affordableOtherOffers = evaluation.candidates.filter(
+            (candidate) => candidate.dependencyRelation === "none" && candidate.resourceAffordability === "affordable" && candidate.nativeAffordable
+          ).map((candidate) => candidate.actionId).join("+"), affordableUnknownRelation = evaluation.candidates.filter(
+            (candidate) => candidate.dependencyRelation === "unknown" && candidate.nativeAffordable && candidate.resourceAffordability === "affordable"
+          ).map((candidate) => candidate.actionId).join("+");
+          if ((affordableOtherOffers || affordableUnknownRelation) && goalOfferDetails.push(
+            `goal.mad other offers cycle=${automationCycle} nonPrerequisite=${affordableOtherOffers || "none"} relationUnknown=${affordableUnknownRelation || "none"}`
+          ), spend !== void 0 && savingTarget !== void 0) {
+            let waitProjection = spend.comparison?.strategies.find(
+              (strategy) => strategy.id === "wait"
+            ), buyProjection = spend.comparison?.strategies.find(
+              (strategy) => strategy.id.startsWith("buy-selected:")
+            ), stockFacts = Object.entries(observedResources ?? {}).filter(
+              ([resourceId]) => savingTarget.cost[resourceId] !== void 0
+            ).map(
+              ([resourceId, resource]) => `${resourceId}:${resource.amount.toFixed(1)}/${resource.max}@${resource.rateOfChange.toFixed(2)}/s`
+            ).join(",") || "unobserved", projectedSeconds = (value) => value === void 0 ? "?" : value.toFixed(1), buySeconds = buyProjection === void 0 || buyProjection.status === "unavailable" ? "unknown" : projectedSeconds(
+              buyProjection.feasibility.diagnosticEstimatedTime
+            );
+            goalOfferDetails.push(
+              `goal.mad spend cycle=${automationCycle} target=${spend.targetActionId} cost=${Object.entries(
+                savingTarget.cost
+              ).map(([resourceId, amount]) => `${resourceId}:${amount}`).join(
+                ","
+              )} stock=${stockFacts} waitSec=${projectedSeconds(waitProjection?.feasibility.diagnosticEstimatedTime)} buySec=${buySeconds} commitments=unknown effects=unknown accelerators=unscanned`
+            );
+          }
+          pendingResearchOwnerSelectionDetails = Object.freeze(goalOfferDetails);
+          let selectedCost = Object.entries(selected?.cost ?? {}).map(([resourceId, amount]) => `${resourceId}:${amount}`).join(","), spendReasons = (spend?.reasons ?? []).map(
+            (reason) => reason.includes("terminal goal applicability") ? "goal-condition" : reason.includes("commitments or reservations") ? "target-resv" : reason.includes("unlock, production and collateral") ? "selected-effects" : reason.includes("accelerator offer/effect") ? "accelerator-scan" : reason.includes("expected terminal-goal time") ? "provisional" : reason.includes("safe") ? "owner-evidence" : reason.includes("stale") ? "stale-evidence" : reason
+          ).join("+");
+          pendingResearchOwnerSelectionSummary = `goal.mad owner c=${automationCycle} tech=${selection.decision.techId} ${selectedCost.replace("Knowledge:", "K")} resources=${selected?.resourceAffordability ?? "unknown"} reservation=${selected?.reservationEvidence ?? "unknown"} exclusion=${selected?.explicitExclusionEvidence ?? "unknown"} frontier=${spend?.targetActionId ?? "none"} target=${spend?.targetAffordability ?? "unavailable"} decision=${spend?.decision ?? "unavailable"} blockers=${spendReasons || "no-frontier"}`;
+        },
+        (error) => reportOnce(
+          `goal.mad research owner observation failed: ${error instanceof Error ? error.message : String(error)}`
+        )
+      ), pendingResearchOwnerSelectionDiagnosticMs = Math.max(
+        0,
+        diagnosticClock.nowMs() - diagnosticStartedAtMs
+      );
+    }, researchOwnerSelectionResultObserver = (result) => {
+      if (result.disposition === "candidate-rejected") {
+        pendingResearchOwnerSelectionSummary = void 0, pendingResearchOwnerSelectionDetails = [], pendingResearchOwnerSelectionDiagnosticMs = 0;
+        return;
+      }
+      let summary = pendingResearchOwnerSelectionSummary, details = pendingResearchOwnerSelectionDetails, diagnosticMs = pendingResearchOwnerSelectionDiagnosticMs;
+      if (pendingResearchOwnerSelectionSummary = void 0, pendingResearchOwnerSelectionDetails = [], pendingResearchOwnerSelectionDiagnosticMs = 0, summary !== void 0) {
+        reportDiagnostic(
+          `${summary} observerMs=${diagnosticMs.toFixed(2)} execution=${result.disposition}`
+        );
+        for (let detail of details) reportDiagnostic(detail);
+      }
+    }, readArpaReadinessEpoch = progression.readProgressionEpoch;
     let savingTargetThisCycle, constructionRunning = !1, constructionSuppressedThisCycle = !1, cycleConstructionObservations = Object.freeze({
       ...progression.observations,
       readSavingTarget() {
@@ -60056,7 +60437,7 @@ Only continue if you trust the source. Injected code:
                   return `${relevance}=${actionIds.join("+") || candidates.length}`;
                 }).join(";");
                 reportDiagnostic(
-                  `goal.mad research candidates goal=${researchCandidateEvaluation.goalId} preferred=${researchCandidateEvaluation.preferredActionId ?? "none"} baseline=${researchCandidateEvaluation.baselineSelectedActionId ?? "unobserved"} offers=${candidateSummary}`
+                  `goal.mad research candidates goal=${researchCandidateEvaluation.goalId} economicPreference=${researchCandidateEvaluation.preference} baseline=${researchCandidateEvaluation.baselineSelectedActionId ?? "unobserved"}:${researchCandidateEvaluation.baselineSelectedDisposition ?? "unavailable"} offers=${candidateSummary}`
                 );
               }
             }

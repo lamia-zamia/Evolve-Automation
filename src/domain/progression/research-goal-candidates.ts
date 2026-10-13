@@ -18,6 +18,12 @@ export interface ResearchGoalCandidateEvidence {
   readonly resourceAffordable: boolean | undefined;
   readonly hasCostConflict: boolean | undefined;
   readonly hasExplicitExclusion: boolean | undefined;
+  readonly reservationEvidence?:
+    "none" | "conflict" | "unavailable" | "not-evaluated" | "not-observed";
+  readonly explicitExclusionEvidence?:
+    "none" | "excluded" | "unavailable" | "not-evaluated" | "not-observed";
+  readonly reservationReason?: string;
+  readonly exclusionReason?: string;
   readonly optionalInvestmentEffectKnown?: boolean;
 }
 
@@ -31,6 +37,8 @@ export interface ResearchGoalCandidateInput {
   readonly rootGeneration: number | undefined;
   readonly offers: readonly ResearchGoalCandidateEvidence[];
   readonly baselineSelectedActionId: string | undefined;
+  readonly baselineSelectedDisposition?:
+    "researched" | "no-observed-research" | "stopped" | undefined;
 }
 
 export interface ResearchGoalCandidate {
@@ -41,6 +49,13 @@ export interface ResearchGoalCandidate {
   readonly grantLevel: number;
   readonly index: number;
   readonly relevance: ResearchGoalRelevance;
+  /** Declared graph relation; this is not permission to execute an action. */
+  readonly dependencyRelation: "declared-prerequisite" | "none" | "unknown";
+  /** Applicability of the complete route to the terminal action. */
+  readonly pathApplicability:
+    "eligible" | "conditional" | "excluded" | "unavailable";
+  /** Current native offer membership is observed separately from the dependency graph. */
+  readonly actionability: "current-native-offer" | "unknown";
   readonly chainActionIds: readonly string[];
   readonly cost: Readonly<Record<string, number>>;
   readonly nativeAffordable: boolean;
@@ -48,6 +63,12 @@ export interface ResearchGoalCandidate {
   readonly resourceAffordability: "affordable" | "insufficient" | "unknown";
   readonly reservationConflict: boolean | undefined;
   readonly explicitlyExcluded: boolean | undefined;
+  readonly reservationEvidence:
+    "none" | "conflict" | "unavailable" | "not-evaluated" | "not-observed";
+  readonly explicitExclusionEvidence:
+    "none" | "excluded" | "unavailable" | "not-evaluated" | "not-observed";
+  readonly reservationReason: string | undefined;
+  readonly exclusionReason: string | undefined;
   readonly evidenceFresh: boolean;
   readonly downstreamCosts: "unknown";
   readonly reasons: readonly string[];
@@ -57,8 +78,11 @@ export interface ResearchGoalCandidateEvaluation {
   readonly goalId: string;
   readonly targetActionId: string;
   readonly baselineSelectedActionId: string | undefined;
+  readonly baselineSelectedDisposition:
+    "researched" | "no-observed-research" | "stopped" | undefined;
+  /** Static relevance and affordability do not establish expected time-to-go value. */
   readonly preferredActionId: string | undefined;
-  readonly preference: "supported-unique-prerequisite" | "none";
+  readonly preference: "not-evaluated";
   readonly candidates: readonly Readonly<ResearchGoalCandidate>[];
 }
 
@@ -112,10 +136,8 @@ function readRelevantResearchActions(
   if (target !== undefined)
     queue.push({
       actionId: target.actionId,
-      conditional:
-        target.status === "conditional" ||
-        target.status === "unavailable" ||
-        target.status === "excluded",
+      // Eligibility of the terminal action does not change its declared dependency edges.
+      conditional: false,
       chain: [target.actionId],
     });
   while (queue.length > 0) {
@@ -131,17 +153,10 @@ function readRelevantResearchActions(
 
     const action = actions.get(current.actionId);
     if (action === undefined) continue;
-    const actionIsConditional =
-      current.conditional ||
-      action.status === "conditional" ||
-      action.status === "unavailable" ||
-      action.status === "excluded";
     for (const requirementId of action.prerequisiteIds) {
       const gate = requirements.get(requirementId);
       const requirementIsConditional =
-        actionIsConditional ||
-        gate?.status === "conditional" ||
-        gate?.status === "unavailable";
+        gate?.status === "conditional" || gate?.status === "unavailable";
       for (const candidateId of gate?.candidateActionIds ?? []) {
         const candidate = actions.get(candidateId);
         if (candidate?.status === "excluded") continue;
@@ -176,16 +191,7 @@ export function evaluateResearchGoalCandidates(
   const objectiveMatches = input.graph.targetActionId === input.targetActionId;
   const relevant = readRelevantResearchActions(input.graph);
   const verifiedFrontier = new Set(input.graph.actionableFrontier);
-  const graphIncomplete =
-    input.graph.targetStatus === "conditional" ||
-    input.graph.requirements.some(
-      (requirement) =>
-        requirement.status === "conditional" ||
-        requirement.status === "unavailable",
-    ) ||
-    input.graph.unavailableFacts.length > 0 ||
-    input.graph.limits.length > 0 ||
-    input.graph.cycles.length > 0;
+  const graphIncomplete = input.graph.dependencyEvidence !== "complete";
   const candidates = input.offers.map((offer) => {
     const paths = relevant.get(offer.actionId);
     const chain = paths?.verified ?? paths?.conditional ?? [];
@@ -199,6 +205,23 @@ export function evaluateResearchGoalCandidates(
     );
     const reasons: string[] = [];
     let relevance: ResearchGoalRelevance;
+    const dependencyRelation =
+      paths?.verified !== undefined || paths?.conditional !== undefined
+        ? "declared-prerequisite"
+        : graphIncomplete
+          ? "unknown"
+          : "none";
+    const targetGate = input.graph.actions.find(
+      (action) => action.actionId === input.targetActionId,
+    );
+    const pathApplicability =
+      targetGate?.status === "excluded" || gate?.status === "excluded"
+        ? "excluded"
+        : paths?.conditional !== undefined ||
+            gate?.status === "conditional" ||
+            gate?.status === "unavailable"
+          ? "conditional"
+          : "eligible";
     if (
       !fresh ||
       !objectiveMatches ||
@@ -216,14 +239,13 @@ export function evaluateResearchGoalCandidates(
     ) {
       relevance = "unrelated";
       reasons.push("selected terminal goal is already satisfied");
-    } else if (
-      verifiedFrontier.has(offer.actionId) &&
-      paths?.verified !== undefined
-    ) {
+    } else if (paths?.verified !== undefined) {
       relevance = "verified-prerequisite";
       reasons.push(
-        "native offered action lies on a declared prerequisite path",
+        "action lies on a statically declared prerequisite path; terminal applicability is separate",
       );
+      if (!verifiedFrontier.has(offer.actionId))
+        reasons.push("candidate is not independently confirmed as actionable");
       reasons.push(...chainReasons);
       if (chain.length > 0) reasons.push(`chain ${chain.join(" -> ")}`);
     } else if (
@@ -262,11 +284,19 @@ export function evaluateResearchGoalCandidates(
     if (offer.hasCostConflict)
       reasons.push("cost is reserved by a higher-priority commitment");
     if (offer.hasCostConflict === undefined)
-      reasons.push("cost reservation evidence is unavailable");
+      reasons.push(
+        offer.reservationEvidence === "not-evaluated"
+          ? "Research owner skipped reservation checks because native/resource affordability was denied"
+          : "cost reservation evidence is unavailable",
+      );
     if (offer.hasExplicitExclusion)
       reasons.push("explicit Research exclusion applies");
     if (offer.hasExplicitExclusion === undefined)
-      reasons.push("explicit Research exclusion evidence is unavailable");
+      reasons.push(
+        offer.explicitExclusionEvidence === "not-evaluated"
+          ? "Research owner skipped exclusion checks because native/resource affordability was denied"
+          : "explicit Research exclusion evidence is unavailable",
+      );
     return Object.freeze({
       goalId: input.goalId,
       targetActionId: input.targetActionId,
@@ -275,6 +305,9 @@ export function evaluateResearchGoalCandidates(
       grantLevel: offer.grantLevel,
       index: offer.index,
       relevance,
+      dependencyRelation,
+      pathApplicability,
+      actionability: fresh ? "current-native-offer" : "unknown",
       chainActionIds: Object.freeze(chain),
       cost: offer.cost,
       nativeAffordable: offer.nativeAffordable,
@@ -289,28 +322,35 @@ export function evaluateResearchGoalCandidates(
             : ("insufficient" as const),
       reservationConflict: offer.hasCostConflict,
       explicitlyExcluded: offer.hasExplicitExclusion,
+      reservationEvidence:
+        offer.reservationEvidence ??
+        (offer.hasCostConflict === undefined
+          ? "not-observed"
+          : offer.hasCostConflict
+            ? "conflict"
+            : "none"),
+      explicitExclusionEvidence:
+        offer.explicitExclusionEvidence ??
+        (offer.hasExplicitExclusion === undefined
+          ? "not-observed"
+          : offer.hasExplicitExclusion
+            ? "excluded"
+            : "none"),
+      reservationReason: offer.reservationReason,
+      exclusionReason: offer.exclusionReason,
       evidenceFresh: fresh && objectiveMatches,
       downstreamCosts: "unknown" as const,
       reasons: Object.freeze([...new Set(reasons)]),
     });
   });
 
-  const rankable = candidates.filter(
-    (candidate) =>
-      candidate.relevance === "verified-prerequisite" &&
-      candidate.affordability === "native-affordable" &&
-      candidate.resourceAffordability === "affordable" &&
-      candidate.reservationConflict === false &&
-      candidate.explicitlyExcluded === false,
-  );
-  const preferred = rankable.length === 1 ? rankable[0] : undefined;
   return Object.freeze({
     goalId: input.goalId,
     targetActionId: input.targetActionId,
     baselineSelectedActionId: input.baselineSelectedActionId,
-    preferredActionId: preferred?.actionId,
-    preference:
-      preferred === undefined ? "none" : "supported-unique-prerequisite",
+    baselineSelectedDisposition: input.baselineSelectedDisposition,
+    preferredActionId: undefined,
+    preference: "not-evaluated",
     candidates: Object.freeze(candidates),
   });
 }

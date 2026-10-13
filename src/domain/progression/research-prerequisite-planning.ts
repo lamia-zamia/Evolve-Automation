@@ -79,6 +79,8 @@ export interface NativeResearchPrerequisiteGraph {
   readonly targetActionId: string;
   readonly targetStatus:
     "satisfied" | "unsatisfied" | "conditional" | "unavailable";
+  /** Completeness of static dependency declarations, independent of eligibility predicates. */
+  readonly dependencyEvidence: "complete" | "partial" | "unavailable";
   readonly actions: readonly Readonly<NativeResearchActionGate>[];
   readonly requirements: readonly Readonly<NativeResearchRequirementGate>[];
   readonly actionableFrontier: readonly string[];
@@ -299,8 +301,16 @@ export function planNativeResearchPrerequisites(
     const id = `research:${prerequisite.technologyId}:${prerequisite.requiredLevel}`;
     const existing = requirements.get(id);
     if (existing !== undefined) return existing;
+    const candidates = (byGrant.get(prerequisite.technologyId) ?? []).filter(
+      (candidate) => candidate.grantLevel >= prerequisite.requiredLevel,
+    );
+    const candidateActionIds = candidates.map(
+      (candidate) => candidate.actionId,
+    );
     const observedLevel = input.grantLevels?.get(prerequisite.technologyId);
     if (!validResearchLevel(observedLevel)) {
+      for (const candidate of candidates)
+        expandAction(candidate.actionId, depth);
       const reason =
         observedLevel === undefined
           ? `current grant level for ${prerequisite.technologyId} is unavailable`
@@ -312,7 +322,7 @@ export function planNativeResearchPrerequisites(
         observedLevel: undefined,
         declaredStatus: "unavailable" as const,
         status: "unavailable" as const,
-        candidateActionIds: Object.freeze([]),
+        candidateActionIds: Object.freeze(candidateActionIds),
         reasons: Object.freeze([reason]),
       });
       requirements.set(id, gate);
@@ -333,6 +343,8 @@ export function planNativeResearchPrerequisites(
       return gate;
     }
     if (prerequisite.applicabilityBoundary !== undefined) {
+      for (const candidate of candidates)
+        expandAction(candidate.actionId, depth);
       const gate = Object.freeze({
         id,
         technologyId: prerequisite.technologyId,
@@ -340,16 +352,12 @@ export function planNativeResearchPrerequisites(
         observedLevel,
         declaredStatus: "unsatisfied" as const,
         status: "conditional" as const,
-        candidateActionIds: Object.freeze([]),
+        candidateActionIds: Object.freeze(candidateActionIds),
         reasons: Object.freeze([prerequisite.applicabilityBoundary]),
       });
       requirements.set(id, gate);
       return gate;
     }
-    const candidates = (byGrant.get(prerequisite.technologyId) ?? []).filter(
-      (candidate) => candidate.grantLevel >= prerequisite.requiredLevel,
-    );
-    const candidateActionIds: string[] = [];
     const reasons: string[] = [];
     if (!registryValid || input.offeredActionIds === undefined) {
       reasons.push(
@@ -378,7 +386,6 @@ export function planNativeResearchPrerequisites(
     let hasUnavailableCandidate = false;
     let hasExcludedCandidate = false;
     for (const candidate of candidates) {
-      candidateActionIds.push(candidate.actionId);
       const action = expandAction(candidate.actionId, depth);
       if (action === undefined) {
         if (limits.length > 0 || cycles.length > 0)
@@ -450,9 +457,12 @@ export function planNativeResearchPrerequisites(
     targetStatus = "unavailable";
   } else if (input.offeredActionIds?.has(input.targetActionId)) {
     frontier.add(input.targetActionId);
+    const targetPrerequisiteIds: string[] = [];
     if (target.prerequisites.kind === "declared")
-      for (const prerequisite of target.prerequisites.requirements)
-        expandRequirement(prerequisite, 1);
+      for (const prerequisite of target.prerequisites.requirements) {
+        const gate = expandRequirement(prerequisite, 1);
+        if (gate !== undefined) targetPrerequisiteIds.push(gate.id);
+      }
     actions.set(
       input.targetActionId,
       Object.freeze({
@@ -460,7 +470,7 @@ export function planNativeResearchPrerequisites(
         grantTechnology: target.grantTechnology,
         grantLevel: target.grantLevel,
         status: "frontier",
-        prerequisiteIds: Object.freeze([]),
+        prerequisiteIds: Object.freeze(targetPrerequisiteIds),
         reasons: Object.freeze([]),
       }),
     );
@@ -536,6 +546,18 @@ export function planNativeResearchPrerequisites(
   return Object.freeze({
     targetActionId: input.targetActionId,
     targetStatus,
+    dependencyEvidence:
+      input.definitions === undefined || !registryValid || target === undefined
+        ? "unavailable"
+        : target.prerequisites.kind !== "declared" ||
+            limits.length > 0 ||
+            cycles.length > 0 ||
+            [...actions.keys()].some(
+              (actionId) =>
+                byActionId.get(actionId)?.prerequisites.kind !== "declared",
+            )
+          ? "partial"
+          : "complete",
     actions: Object.freeze([...actions.values()]),
     requirements: Object.freeze([...requirements.values()]),
     actionableFrontier: Object.freeze([...frontier]),

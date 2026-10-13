@@ -87,7 +87,8 @@ const input = (overrides = {}) => ({
 {
   const evaluation = evaluateResearchGoalCandidates(input());
   assert.equal(evaluation.baselineSelectedActionId, "tech-luxury");
-  assert.equal(evaluation.preferredActionId, "tech-ore");
+  assert.equal(evaluation.preferredActionId, undefined);
+  assert.equal(evaluation.preference, "not-evaluated");
   assert.equal(evaluation.candidates[0]?.relevance, "verified-prerequisite");
   assert.equal(evaluation.candidates[0]?.index, 0);
   assert.equal(evaluation.candidates[0]?.grantTechnology, "ore");
@@ -216,7 +217,7 @@ const input = (overrides = {}) => ({
     }),
   );
   assert.equal(investment.candidates[1]?.relevance, "optional-investment");
-  assert.equal(investment.preferredActionId, "tech-ore");
+  assert.equal(investment.preferredActionId, undefined);
 }
 
 {
@@ -255,10 +256,87 @@ const input = (overrides = {}) => ({
   );
   assert.equal(
     evaluation.candidates[0]?.relevance,
-    "conditional-prerequisite",
-    "an offered frontier below an unresolved ancestor remains conditional",
+    "verified-prerequisite",
+    "a declared dependency stays visible even when the terminal action's eligibility is unresolved",
   );
-  assert.equal(evaluation.preferredActionId, undefined);
+  assert.equal(
+    evaluation.candidates[0]?.dependencyRelation,
+    "declared-prerequisite",
+  );
+  assert.equal(
+    evaluation.candidates[0]?.pathApplicability,
+    "eligible",
+    "an unresolved terminal condition does not change a currently offered prerequisite's applicability",
+  );
+  assert.equal(evaluation.candidates[0]?.actionability, "current-native-offer");
+  assert.equal(
+    evaluation.preferredActionId,
+    undefined,
+    "current native offer membership establishes actionability, not economic desirability",
+  );
+}
+
+{
+  const madGraph = planNativeResearchPrerequisites({
+    targetActionId: "tech-mad",
+    definitions: [
+      {
+        ...definition("tech-mad", "mad", [
+          { technologyId: "high_tech", requiredLevel: 7 },
+        ]),
+        hasNativeCondition: true,
+      },
+      { ...definition("tech-high_tech", "high_tech"), grantLevel: 7 },
+    ],
+    grantLevels: new Map([
+      ["mad", 0],
+      ["high_tech", 0],
+    ]),
+    offeredActionIds: new Set(["tech-high_tech"]),
+    offerGenerations: new Map([["tech-high_tech", 11]]),
+    cycle: 12,
+    progressionEpoch: "run:5",
+    rootGeneration: 3,
+    maxDepth: 12,
+    maxActions: 40,
+  });
+  const evaluation = evaluateResearchGoalCandidates(
+    input({
+      targetActionId: "tech-mad",
+      graph: madGraph,
+      offers: [
+        {
+          actionId: "tech-high_tech",
+          grantTechnology: "high_tech",
+          grantLevel: 7,
+          index: 0,
+          generation: 11,
+          cost: Object.freeze({ Knowledge: 30_000 }),
+          nativeAffordable: false,
+          resourceAffordable: undefined,
+          hasCostConflict: undefined,
+          hasExplicitExclusion: undefined,
+        },
+      ],
+      baselineSelectedActionId: undefined,
+    }),
+  );
+  assert.equal(
+    evaluation.candidates[0]?.dependencyRelation,
+    "declared-prerequisite",
+  );
+  assert.equal(evaluation.candidates[0]?.relevance, "verified-prerequisite");
+  assert.equal(
+    evaluation.candidates[0]?.pathApplicability,
+    "eligible",
+    "the native MAD condition remains separate from High Tech 7 actionability",
+  );
+  assert.equal(evaluation.candidates[0]?.actionability, "current-native-offer");
+  assert.equal(
+    evaluation.preferredActionId,
+    undefined,
+    "static dependency evidence does not authorize a recommendation through an unresolved MAD condition",
+  );
 }
 
 console.log("Research goal candidate evaluation tests passed");

@@ -76,6 +76,8 @@ import type {
   TechCatalogSnapshot,
 } from "../ports/game-tech-catalog.ts";
 import type { TickDiagnostics } from "../ports/tick.ts";
+import type { ResearchOwnerSelectionObservation } from "../domain/progression/research/research.ts";
+import type { ResearchOwnerSelectionResult } from "../domain/progression/research/research.ts";
 import type { DiscoveryAttemptTracker } from "./discovery-attempts.ts";
 import { createDiscoveryAttempts } from "./discovery-attempts.ts";
 import type { BuildResourceScope } from "../domain/progression/build/build.ts";
@@ -146,6 +148,11 @@ export interface CapturedProgressionControlDependencies {
   readonly onActivity?: GameActivitySink;
   readonly onSkipped?: (key: string, reason: string) => void;
   readonly onUnavailable?: (reason: string) => void;
+  readonly onResearchOwnerSelection?:
+    | ((selection: Readonly<ResearchOwnerSelectionObservation>) => void)
+    | undefined;
+  readonly onResearchOwnerSelectionResult?:
+    ((result: Readonly<ResearchOwnerSelectionResult>) => void) | undefined;
 }
 
 export interface CapturedProgressionControl {
@@ -961,6 +968,14 @@ export function createCapturedProgressionControl(
     panels,
     readOfferedTechs: () => sampleOfferedTechs("auto-research"),
     ...(onUnavailable === undefined ? {} : { onUnavailable }),
+    ...(dependencies.onResearchOwnerSelection === undefined
+      ? {}
+      : { onOwnerSelection: dependencies.onResearchOwnerSelection }),
+    ...(dependencies.onResearchOwnerSelectionResult === undefined
+      ? {}
+      : {
+          onOwnerSelectionResult: dependencies.onResearchOwnerSelectionResult,
+        }),
     ...(onActivity === undefined ? {} : { onActivity }),
     diagnostics,
   });

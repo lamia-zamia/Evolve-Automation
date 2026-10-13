@@ -75,6 +75,26 @@ assert.deepEqual(unavailableReader.evaluate({ Money: 20 }), {
   status: "unavailable",
 });
 
+const unreadableHoldingsReader = createCapturedCostConflictReader({
+  resources: { readResources: () => undefined },
+  reservations: {
+    readReservations: () => ({
+      targets: Object.freeze([
+        Object.freeze({
+          name: "Queued progression",
+          cause: "Queue",
+          cost: Object.freeze({ Money: 100 }),
+        }),
+      ]),
+      unavailable: false,
+    }),
+  },
+});
+assert.deepEqual(unreadableHoldingsReader.evaluate({ Money: 20 }), {
+  status: "none",
+  evidence: "unavailable",
+});
+
 // Regional commitments only contend with the action's pool. The holdings sample must use that
 // same ledger; the civilization-wide total would incorrectly let Home spend against its own queue
 // merely because Moon has enough money.

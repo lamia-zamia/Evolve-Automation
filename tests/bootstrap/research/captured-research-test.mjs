@@ -18,6 +18,9 @@ function makePage({
   settings = {},
   race = {},
   stats = {},
+  diagnostics,
+  onOwnerSelection,
+  onOwnerSelectionResult,
 }) {
   const vue = {
     reactive: (target) => target,
@@ -196,6 +199,9 @@ function makePage({
       readSettings: () => ({ ...DEFAULT_CONFLICT_SETTINGS, ...settings }),
       onUnavailable: (reason) => unavailable.push(reason),
       onActivity: (activityEntry) => activity.push(activityEntry.message),
+      diagnostics,
+      onOwnerSelection,
+      onOwnerSelectionResult,
     }),
     activity,
   };
@@ -242,6 +248,48 @@ const SMELTING = {
   grant: "smelting",
   cost: { Knowledge: 9000, Iron: 500 },
 };
+
+{
+  let selected;
+  let selectionResult;
+  const page = makePage({
+    offered: [MINING, THEOLOGY],
+    resources: { Knowledge: { amount: 1000 } },
+    diagnostics: {
+      readPerformanceEnabled: () => true,
+      nowMs: () => 0,
+      recordPerformance: () => {},
+      recordCount: () => {},
+      flushPerformance: () => {},
+    },
+    onOwnerSelection: (value) => {
+      selected = value;
+    },
+    onOwnerSelectionResult: (value) => {
+      selectionResult = value;
+    },
+  });
+  assert.equal(page.control.runCycle().status, "succeeded");
+  assert.deepEqual(page.clicks, ["tech-theology"]);
+  assert.equal(selected.decision.techId, "tech-theology");
+  assert.deepEqual(
+    selected.observed.map((candidate) => candidate.id),
+    ["tech-mining", "tech-theology"],
+  );
+  assert.equal(selected.observed[0].nativeAffordable, true);
+  assert.equal(selected.observed[0].resourceAffordable, false);
+  assert.equal(selected.observed[0].costConflictEvidence, "not-evaluated");
+  assert.equal(selected.observed[1].resourceAffordable, true);
+  assert.deepEqual(selected.observed[1].observedResources.Knowledge, {
+    amount: 1000,
+    max: -1,
+    rateOfChange: 0,
+  });
+  assert.equal(selected.observed[1].costConflictEvidence, "none");
+  assert.equal(selected.observed[1].exclusionEvidence, "none");
+  assert.equal(selectionResult.decision.techId, "tech-theology");
+  assert.equal(selectionResult.disposition, "researched");
+}
 
 // --- a real research, with the Research tab never rendered by the player ----
 

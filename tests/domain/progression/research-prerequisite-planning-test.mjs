@@ -108,6 +108,84 @@ const graphByRequirement = (graph, id) =>
 }
 
 {
+  const mad = planNativeResearchPrerequisites(
+    input({
+      targetActionId: "tech-mad",
+      definitions: [
+        definition(
+          "tech-mad",
+          "mad",
+          1,
+          [
+            { technologyId: "uranium", requiredLevel: 1 },
+            { technologyId: "explosives", requiredLevel: 3 },
+            { technologyId: "high_tech", requiredLevel: 7 },
+          ],
+          {
+            hasNativeCondition: true,
+            routeRestrictions: ["standard", "truepath"],
+            restrictions: [
+              {
+                kind: "not_trait",
+                values: ["cataclysm", "lone_survivor", "warlord"],
+              },
+            ],
+          },
+        ),
+        definition("tech-uranium", "uranium", 1),
+        definition("tech-explosives", "explosives", 3),
+        definition("tech-high_tech", "high_tech", 7),
+      ],
+      grantLevels: new Map([
+        ["mad", 0],
+        ["uranium", 0],
+        ["explosives", 0],
+        ["high_tech", 0],
+      ]),
+      offeredActionIds: new Set(["tech-high_tech"]),
+      offerGenerations: new Map([["tech-high_tech", 11]]),
+    }),
+  );
+  assert.equal(mad.targetStatus, "conditional");
+  assert.equal(mad.dependencyEvidence, "complete");
+  assert.equal(
+    graphByRequirement(mad, "research:high_tech:7")?.declaredStatus,
+    "unsatisfied",
+    "the native MAD condition does not erase its static High Tech 7 requirement",
+  );
+  assert.deepEqual(mad.actionableFrontier, ["tech-high_tech"]);
+
+  const noOffer = planNativeResearchPrerequisites(
+    input({
+      targetActionId: "tech-mad",
+      definitions: [
+        definition(
+          "tech-mad",
+          "mad",
+          1,
+          [{ technologyId: "high_tech", requiredLevel: 7 }],
+          { hasNativeCondition: true },
+        ),
+        definition("tech-high_tech", "high_tech", 7),
+      ],
+      grantLevels: new Map([
+        ["mad", 0],
+        ["high_tech", 0],
+      ]),
+      offeredActionIds: new Set(),
+      offerGenerations: new Map(),
+    }),
+  );
+  assert.equal(noOffer.dependencyEvidence, "complete");
+  assert.deepEqual(noOffer.actionableFrontier, []);
+  assert.notEqual(
+    noOffer.actions.find((action) => action.actionId === "tech-high_tech")
+      ?.status,
+    "frontier",
+  );
+}
+
+{
   const skipped = planNativeResearchPrerequisites(
     input({
       grantLevels: new Map(

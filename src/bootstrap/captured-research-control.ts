@@ -26,6 +26,8 @@ import type { CapturedGameMechanics } from "../ports/captured-game-mechanics.ts"
 import type { VueBindingObserver } from "../adapters/evolve/vue-capture.ts";
 import type { OfferedTech } from "../ports/game-tech-catalog.ts";
 import type { TickDiagnostics } from "../ports/tick.ts";
+import type { ResearchOwnerSelectionObservation } from "../domain/progression/research/research.ts";
+import type { ResearchOwnerSelectionResult } from "../domain/progression/research/research.ts";
 
 export interface CapturedResearchControlDependencies {
   readonly rootState: GameRootStateSource;
@@ -48,6 +50,11 @@ export interface CapturedResearchControlDependencies {
   readonly onActivity?: GameActivitySink;
   /** Reports a catalog or price the capture could not supply. */
   readonly onUnavailable?: (reason: string) => void;
+  readonly onOwnerSelection?:
+    | ((selection: Readonly<ResearchOwnerSelectionObservation>) => void)
+    | undefined;
+  readonly onOwnerSelectionResult?:
+    ((result: Readonly<ResearchOwnerSelectionResult>) => void) | undefined;
 }
 
 export interface CapturedResearchControl {
@@ -157,9 +164,20 @@ export function createCapturedResearchControl(
           techConflicts,
           controls,
           onRejected,
+          observeOwner: diagnostics?.readPerformanceEnabled() === true,
           ...(onActivity === undefined ? {} : { onActivity }),
         });
-        return runResearchAutomation({ reader, executor, diagnostics });
+        return runResearchAutomation({
+          reader,
+          executor,
+          diagnostics,
+          ...(diagnostics?.readPerformanceEnabled() === true
+            ? {
+                onSelection: dependencies.onOwnerSelection,
+                onSelectionResult: dependencies.onOwnerSelectionResult,
+              }
+            : {}),
+        });
       } finally {
         offeredThisCycle = undefined;
       }

@@ -49,9 +49,13 @@ import { runCapturedDiagnosticSafely } from "./captured-diagnostic.ts";
 import { planNativeResearchPrerequisites } from "../domain/progression/research-prerequisite-planning.ts";
 import type { NativeResearchPrerequisiteGraph } from "../domain/progression/research-prerequisite-planning.ts";
 import { evaluateResearchGoalCandidates } from "../domain/progression/research-goal-candidates.ts";
+import { decideResearchSpend } from "../domain/progression/research-spending-decision.ts";
+import type { GoalResourceStock } from "../domain/economy/goal-feasibility.ts";
 import { createCapturedTechPrerequisiteLevelReader } from "../adapters/evolve/progression/research/captured-tech-prerequisite-levels.ts";
 import { readCapturedTechApplicability } from "../adapters/evolve/progression/research/captured-tech-applicability.ts";
 import type { CapturedTechDefinition } from "../ports/captured-game-mechanics.ts";
+import type { ResearchOwnerSelectionObservation } from "../domain/progression/research/research.ts";
+import type { ResearchOwnerSelectionResult } from "../domain/progression/research/research.ts";
 import { createCapturedCraftsmenAutomation } from "../adapters/evolve/civic/captured-craftsmen.ts";
 import {
   createCapturedFullJobsAutomation,
@@ -985,6 +989,15 @@ export function startCapturedRuntime({
   });
   let constructionMutationObserved = false;
   let storageMutationObserved = false;
+  let researchOwnerSelectionObserver = (
+    _selection: Readonly<ResearchOwnerSelectionObservation>,
+  ) => {};
+  let pendingResearchOwnerSelectionSummary: string | undefined;
+  let pendingResearchOwnerSelectionDetails: readonly string[] = [];
+  let pendingResearchOwnerSelectionDiagnosticMs = 0;
+  let researchOwnerSelectionResultObserver = (
+    _result: Readonly<ResearchOwnerSelectionResult>,
+  ) => {};
   const progression = createCapturedProgressionControl({
     readMechPowerSupplyHold: mechSupplyReservation.readPowerSupplyHold,
     rootState: pageCapture.rootState,
@@ -1040,9 +1053,360 @@ export function startCapturedRuntime({
     onUnavailable: (reason) => reportOnce(`progression unavailable: ${reason}`),
     nowMs: () => Date.now(),
     diagnostics: phaseDiagnostics,
+    ...(phaseDiagnostics?.readPerformanceEnabled() === true
+      ? {
+          onResearchOwnerSelection: (
+            selection: Readonly<ResearchOwnerSelectionObservation>,
+          ) => researchOwnerSelectionObserver(selection),
+          onResearchOwnerSelectionResult: (
+            result: Readonly<ResearchOwnerSelectionResult>,
+          ) => researchOwnerSelectionResultObserver(result),
+        }
+      : {}),
     onDiagnostic: reportDiagnostic,
     onActivity,
   });
+  researchOwnerSelectionObserver = (selection) => {
+    const diagnosticClock = phaseDiagnostics;
+    if (
+      settingsStore.readRaw()["prestigeType"] !== "mad" ||
+      diagnosticClock === undefined ||
+      diagnosticClock.readPerformanceEnabled() !== true
+    )
+      return;
+    const diagnosticStartedAtMs = diagnosticClock.nowMs();
+    runCapturedDiagnosticSafely(
+      () => {
+        const root = pageCapture.rootState.readRoot();
+        const progressionEpoch = progression.readProgressionEpoch();
+        const rootGeneration = progression.readRootGeneration();
+        const offers = progression.readOfferedTechs();
+        const definitions = progression.readResearchActionDefinitions();
+        if (
+          root === undefined ||
+          offers === undefined ||
+          definitions === undefined
+        ) {
+          reportDiagnostic(
+            `goal.mad research owner selected=${selection.decision.techId} evidence=unavailable catalog-or-root`,
+          );
+          return;
+        }
+        const grantLevels = readResearchGrantLevels(root, definitions);
+        const applicability = readCapturedTechApplicability(root, definitions);
+        const generations = new Map(
+          offers.map((offer) => [offer.elementId, offer.generation]),
+        );
+        const graph = activeRuntimeMeasure.measure(
+          "goal.mad.research-owner-prerequisites",
+          () =>
+            planNativeResearchPrerequisites({
+              targetActionId: CAPTURED_MAD_RESEARCH_TECH,
+              definitions: definitions.map((definition) => ({
+                actionId: definition.actionId,
+                grantTechnology: definition.grantTechnology,
+                grantLevel: definition.grantLevel,
+                prerequisites: definition.prerequisites,
+                hasNativeCondition: definition.eligibility.hasNativeCondition,
+                routeRestrictions: definition.eligibility.routeRestrictions,
+                restrictions: definition.eligibility.restrictions,
+              })),
+              grantLevels,
+              ...(applicability === undefined
+                ? {}
+                : { applicabilityByActionId: applicability }),
+              offeredActionIds: new Set(offers.map((offer) => offer.elementId)),
+              offerGenerations: generations,
+              cycle: automationCycle,
+              progressionEpoch,
+              rootGeneration,
+              maxDepth: 16,
+              maxActions: 256,
+            }),
+        );
+        const observedById = new Map(
+          selection.observed.map((candidate) => [candidate.id, candidate]),
+        );
+        const evaluation = activeRuntimeMeasure.measure(
+          "goal.mad.research-owner-candidates",
+          () =>
+            evaluateResearchGoalCandidates({
+              goalId: "prestige:mad",
+              targetActionId: CAPTURED_MAD_RESEARCH_TECH,
+              goalSatisfied: graph.targetStatus === "satisfied",
+              graph,
+              cycle: automationCycle,
+              progressionEpoch,
+              rootGeneration,
+              offers: offers.map((offer, index) => {
+                const observed = observedById.get(offer.elementId);
+                return {
+                  actionId: offer.elementId,
+                  grantTechnology: offer.grantTechnology,
+                  grantLevel: offer.grantLevel,
+                  index,
+                  generation: offer.generation,
+                  cost: offer.cost,
+                  nativeAffordable: offer.nativeAffordable,
+                  resourceAffordable: observed?.resourceAffordable,
+                  hasCostConflict:
+                    observed?.costConflictEvidence === "none"
+                      ? false
+                      : observed?.costConflictEvidence === "conflict"
+                        ? true
+                        : undefined,
+                  reservationEvidence:
+                    observed?.costConflictEvidence ?? "not-observed",
+                  ...(observed === undefined
+                    ? {
+                        reservationReason:
+                          "offer was outside the Research owner's sequential read prefix",
+                      }
+                    : observed.reservationReason === undefined
+                      ? {}
+                      : { reservationReason: observed.reservationReason }),
+                  hasExplicitExclusion:
+                    observed?.exclusionEvidence === "none"
+                      ? false
+                      : observed?.exclusionEvidence === "excluded"
+                        ? true
+                        : undefined,
+                  explicitExclusionEvidence:
+                    observed?.exclusionEvidence ?? "not-observed",
+                  ...(observed === undefined
+                    ? {
+                        exclusionReason:
+                          "offer was outside the Research owner's sequential read prefix",
+                      }
+                    : observed.exclusionReason === undefined
+                      ? {}
+                      : { exclusionReason: observed.exclusionReason }),
+                };
+              }),
+              baselineSelectedActionId: selection.decision.techId,
+            }),
+        );
+        const selected = evaluation.candidates.find(
+          (candidate) => candidate.actionId === selection.decision.techId,
+        );
+        const savingTarget = evaluation.candidates.find(
+          (candidate) =>
+            candidate.dependencyRelation === "declared-prerequisite" &&
+            candidate.actionability === "current-native-offer" &&
+            candidate.pathApplicability === "eligible" &&
+            !candidate.nativeAffordable,
+        );
+        const selectedObservation = observedById.get(selection.decision.techId);
+        const selectedOffer = offers.find(
+          (offer) => offer.elementId === selection.decision.techId,
+        );
+        const targetOffer = offers.find(
+          (offer) => offer.elementId === savingTarget?.actionId,
+        );
+        const observedResources = selectedObservation?.observedResources;
+        const validityEpoch = `${progressionEpoch}|root:${rootGeneration ?? "unknown"}|cycle:${automationCycle}`;
+        const stocks: GoalResourceStock[] = Object.entries(
+          observedResources ?? {},
+        ).map(([resourceId, resource]) => ({
+          resourceId,
+          poolId: "anywhere",
+          amount: resource.amount,
+          capacity: resource.max,
+          netRate: resource.rateOfChange,
+          rateConfidence: "observed",
+          validityEpoch,
+        }));
+        const spend =
+          savingTarget === undefined
+            ? undefined
+            : decideResearchSpend({
+                goalId: "prestige:mad",
+                currentGoalId: "prestige:mad",
+                terminalGoalApplicability:
+                  applicability?.get(CAPTURED_MAD_RESEARCH_TECH)?.status ===
+                  "excluded"
+                    ? "excluded"
+                    : "conditional",
+                validityEpoch,
+                currentValidityEpoch: validityEpoch,
+                selectedAction:
+                  selected === undefined
+                    ? undefined
+                    : {
+                        actionId: selected.actionId,
+                        cost: selected.cost,
+                        currentNativeOffer:
+                          selected.actionability === "current-native-offer",
+                        nativeAffordable: selected.nativeAffordable,
+                        applicability: selected.pathApplicability,
+                        offerGeneration: selectedOffer?.generation,
+                        expectedOfferGeneration: selectedOffer?.generation,
+                        controlGeneration: selectedOffer?.generation,
+                        expectedControlGeneration: selectedOffer?.generation,
+                      },
+                selectedByResearchOwner:
+                  selection.decision.techId === selected?.actionId,
+                selectedResourceAffordable:
+                  selectedObservation?.resourceAffordable,
+                selectedReservationConflict:
+                  selectedObservation?.costConflictEvidence === "none"
+                    ? false
+                    : selectedObservation?.costConflictEvidence === "conflict"
+                      ? true
+                      : undefined,
+                selectedExplicitExclusion:
+                  selectedObservation?.exclusionEvidence === "none"
+                    ? false
+                    : selectedObservation?.exclusionEvidence === "excluded"
+                      ? true
+                      : undefined,
+                selectedEffects: undefined,
+                target: {
+                  actionId: savingTarget.actionId,
+                  cost: savingTarget.cost,
+                  currentNativeOffer: true,
+                  nativeAffordable: savingTarget.nativeAffordable,
+                  applicability: savingTarget.pathApplicability,
+                  offerGeneration: targetOffer?.generation,
+                  expectedOfferGeneration: targetOffer?.generation,
+                  controlGeneration: targetOffer?.generation,
+                  expectedControlGeneration: targetOffer?.generation,
+                },
+                additionalTargetNeeds: [],
+                stocks,
+                commitments: [],
+                commitmentsKnown: false,
+                acceleratorScan: "unavailable",
+                accelerators: [],
+              });
+        const goalOfferDetails = evaluation.candidates
+          .filter(
+            (candidate) =>
+              candidate.dependencyRelation === "declared-prerequisite",
+          )
+          .map((candidate) => {
+            const observed = observedById.get(candidate.actionId);
+            const overlap = Object.keys(selected?.cost ?? {}).filter(
+              (resourceId) => candidate.cost[resourceId] !== undefined,
+            );
+            const cost = Object.entries(candidate.cost)
+              .map(([resourceId, amount]) => `${resourceId}:${amount}`)
+              .join(",");
+            return `goal.mad frontier cycle=${automationCycle} action=${candidate.actionId} relation=${candidate.dependencyRelation} path=${candidate.pathApplicability} cost=${cost} shared=${overlap.join(",") || "none"} native=${candidate.nativeAffordable ? "yes" : "no"} resources=${candidate.resourceAffordability} ownerRead=${observed === undefined ? "no" : "yes"} reservation=${candidate.reservationEvidence} exclusion=${candidate.explicitExclusionEvidence}`;
+          });
+        const affordableOtherOffers = evaluation.candidates
+          .filter(
+            (candidate) =>
+              candidate.dependencyRelation === "none" &&
+              candidate.resourceAffordability === "affordable" &&
+              candidate.nativeAffordable,
+          )
+          .map((candidate) => candidate.actionId)
+          .join("+");
+        const affordableUnknownRelation = evaluation.candidates
+          .filter(
+            (candidate) =>
+              candidate.dependencyRelation === "unknown" &&
+              candidate.nativeAffordable &&
+              candidate.resourceAffordability === "affordable",
+          )
+          .map((candidate) => candidate.actionId)
+          .join("+");
+        if (affordableOtherOffers || affordableUnknownRelation)
+          goalOfferDetails.push(
+            `goal.mad other offers cycle=${automationCycle} nonPrerequisite=${affordableOtherOffers || "none"} relationUnknown=${affordableUnknownRelation || "none"}`,
+          );
+        if (spend !== undefined && savingTarget !== undefined) {
+          const waitProjection = spend.comparison?.strategies.find(
+            (strategy) => strategy.id === "wait",
+          );
+          const buyProjection = spend.comparison?.strategies.find((strategy) =>
+            strategy.id.startsWith("buy-selected:"),
+          );
+          const stockFacts =
+            Object.entries(observedResources ?? {})
+              .filter(
+                ([resourceId]) => savingTarget.cost[resourceId] !== undefined,
+              )
+              .map(
+                ([resourceId, resource]) =>
+                  `${resourceId}:${resource.amount.toFixed(1)}/${resource.max}@${resource.rateOfChange.toFixed(2)}/s`,
+              )
+              .join(",") || "unobserved";
+          const projectedSeconds = (value: number | undefined) =>
+            value === undefined ? "?" : value.toFixed(1);
+          const buySeconds =
+            buyProjection === undefined ||
+            buyProjection.status === "unavailable"
+              ? "unknown"
+              : projectedSeconds(
+                  buyProjection.feasibility.diagnosticEstimatedTime,
+                );
+          goalOfferDetails.push(
+            `goal.mad spend cycle=${automationCycle} target=${spend.targetActionId} cost=${Object.entries(
+              savingTarget.cost,
+            )
+              .map(([resourceId, amount]) => `${resourceId}:${amount}`)
+              .join(
+                ",",
+              )} stock=${stockFacts} waitSec=${projectedSeconds(waitProjection?.feasibility.diagnosticEstimatedTime)} buySec=${buySeconds} commitments=unknown effects=unknown accelerators=unscanned`,
+          );
+        }
+        pendingResearchOwnerSelectionDetails = Object.freeze(goalOfferDetails);
+        const selectedCost = Object.entries(selected?.cost ?? {})
+          .map(([resourceId, amount]) => `${resourceId}:${amount}`)
+          .join(",");
+        const spendReasons = (spend?.reasons ?? [])
+          .map((reason) =>
+            reason.includes("terminal goal applicability")
+              ? "goal-condition"
+              : reason.includes("commitments or reservations")
+                ? "target-resv"
+                : reason.includes("unlock, production and collateral")
+                  ? "selected-effects"
+                  : reason.includes("accelerator offer/effect")
+                    ? "accelerator-scan"
+                    : reason.includes("expected terminal-goal time")
+                      ? "provisional"
+                      : reason.includes("safe")
+                        ? "owner-evidence"
+                        : reason.includes("stale")
+                          ? "stale-evidence"
+                          : reason,
+          )
+          .join("+");
+        pendingResearchOwnerSelectionSummary = `goal.mad owner c=${automationCycle} tech=${selection.decision.techId} ${selectedCost.replace("Knowledge:", "K")} resources=${selected?.resourceAffordability ?? "unknown"} reservation=${selected?.reservationEvidence ?? "unknown"} exclusion=${selected?.explicitExclusionEvidence ?? "unknown"} frontier=${spend?.targetActionId ?? "none"} target=${spend?.targetAffordability ?? "unavailable"} decision=${spend?.decision ?? "unavailable"} blockers=${spendReasons || "no-frontier"}`;
+      },
+      (error) =>
+        reportOnce(
+          `goal.mad research owner observation failed: ${error instanceof Error ? error.message : String(error)}`,
+        ),
+    );
+    pendingResearchOwnerSelectionDiagnosticMs = Math.max(
+      0,
+      diagnosticClock.nowMs() - diagnosticStartedAtMs,
+    );
+  };
+  researchOwnerSelectionResultObserver = (result) => {
+    if (result.disposition === "candidate-rejected") {
+      pendingResearchOwnerSelectionSummary = undefined;
+      pendingResearchOwnerSelectionDetails = [];
+      pendingResearchOwnerSelectionDiagnosticMs = 0;
+      return;
+    }
+    const summary = pendingResearchOwnerSelectionSummary;
+    const details = pendingResearchOwnerSelectionDetails;
+    const diagnosticMs = pendingResearchOwnerSelectionDiagnosticMs;
+    pendingResearchOwnerSelectionSummary = undefined;
+    pendingResearchOwnerSelectionDetails = [];
+    pendingResearchOwnerSelectionDiagnosticMs = 0;
+    if (summary !== undefined) {
+      reportDiagnostic(
+        `${summary} observerMs=${diagnosticMs.toFixed(2)} execution=${result.disposition}`,
+      );
+      for (const detail of details) reportDiagnostic(detail);
+    }
+  };
   readArpaReadinessEpoch = progression.readProgressionEpoch;
   let savingTargetThisCycle: SavingTarget | null | undefined;
   let constructionRunning = false;
@@ -4087,8 +4451,8 @@ export function startCapturedRuntime({
             );
             const researchCandidateEvaluation = activeRuntimeMeasure.measure(
               "goal.mad.research-candidates",
-              () =>
-                evaluateResearchGoalCandidates({
+              () => {
+                return evaluateResearchGoalCandidates({
                   goalId: plan.selectedGoal.id,
                   targetActionId: CAPTURED_MAD_RESEARCH_TECH,
                   goalSatisfied:
@@ -4098,20 +4462,23 @@ export function startCapturedRuntime({
                   progressionEpoch,
                   rootGeneration: researchRootGeneration,
                   offers:
-                    offers?.map((offer, index) => ({
-                      actionId: offer.elementId,
-                      grantTechnology: offer.grantTechnology,
-                      grantLevel: offer.grantLevel,
-                      index,
-                      generation: offer.generation,
-                      cost: offer.cost,
-                      nativeAffordable: offer.nativeAffordable,
-                      resourceAffordable: undefined,
-                      hasCostConflict: undefined,
-                      hasExplicitExclusion: undefined,
-                    })) ?? [],
+                    offers?.map((offer, index) => {
+                      return {
+                        actionId: offer.elementId,
+                        grantTechnology: offer.grantTechnology,
+                        grantLevel: offer.grantLevel,
+                        index,
+                        generation: offer.generation,
+                        cost: offer.cost,
+                        nativeAffordable: offer.nativeAffordable,
+                        resourceAffordable: undefined,
+                        hasCostConflict: undefined,
+                        hasExplicitExclusion: undefined,
+                      };
+                    }) ?? [],
                   baselineSelectedActionId: undefined,
-                }),
+                });
+              },
             );
             const currentOffers = progression.readOfferedTechs();
             const currentTechMad = currentOffers?.find(
@@ -4336,7 +4703,7 @@ export function startCapturedRuntime({
                   })
                   .join(";");
                 reportDiagnostic(
-                  `goal.mad research candidates goal=${researchCandidateEvaluation.goalId} preferred=${researchCandidateEvaluation.preferredActionId ?? "none"} baseline=${researchCandidateEvaluation.baselineSelectedActionId ?? "unobserved"} offers=${candidateSummary}`,
+                  `goal.mad research candidates goal=${researchCandidateEvaluation.goalId} economicPreference=${researchCandidateEvaluation.preference} baseline=${researchCandidateEvaluation.baselineSelectedActionId ?? "unobserved"}:${researchCandidateEvaluation.baselineSelectedDisposition ?? "unavailable"} offers=${candidateSummary}`,
                 );
               }
             }
