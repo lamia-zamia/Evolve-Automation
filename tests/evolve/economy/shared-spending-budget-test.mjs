@@ -32,7 +32,9 @@ assert.equal(initial.status, "current");
 assert.equal(initial.budgetRemaining, 70);
 const ownerOneReservation = {
   id: "research-purchase",
-  quantity: 25,
+  resourceId: "Mana",
+  poolId: "anywhere",
+  expectedDebit: 25,
   stockObservationId: "stock-1",
 };
 const ownerOneAuthorized = reserveSharedResourceSpend(
@@ -42,6 +44,21 @@ const ownerOneAuthorized = reserveSharedResourceSpend(
 );
 assert.equal(ownerOneAuthorized.budgetRemaining, 45);
 assert.equal(ownerOneAuthorized.pendingReservations.length, 1);
+assert.equal(
+  reserveSharedResourceSpend(
+    ownerOneAuthorized,
+    {
+      id: "construction",
+      resourceId: "Mana",
+      poolId: "anywhere",
+      expectedDebit: 10,
+      stockObservationId: "stock-1",
+    },
+    { id: "stock-1", quantity: 100 },
+  ).status,
+  "invalidated",
+  "only one native spend may be in flight per observation",
+);
 assert.equal(
   reserveSharedResourceSpend(ownerOneAuthorized, ownerOneReservation, {
     id: "stock-1",
@@ -81,7 +98,9 @@ const refreshedForOwnerTwo = planSharedResourceBudget(
 );
 const ownerTwoReservation = {
   id: "construction",
-  quantity: 40,
+  resourceId: "Mana",
+  poolId: "anywhere",
+  expectedDebit: 40,
   stockObservationId: "stock-2",
 };
 const ownerTwoAuthorized = reserveSharedResourceSpend(
@@ -103,7 +122,13 @@ assert.equal(ownerTwoAfter.budgetRemaining, 5);
 
 const changedBeforeInvocation = reserveSharedResourceSpend(
   initial,
-  { id: "late-action", quantity: 5, stockObservationId: "stock-1" },
+  {
+    id: "late-action",
+    resourceId: "Mana",
+    poolId: "anywhere",
+    expectedDebit: 5,
+    stockObservationId: "stock-1",
+  },
   { id: "stock-changed", quantity: 95 },
 );
 assert.equal(changedBeforeInvocation.status, "invalidated");
@@ -120,7 +145,18 @@ const failedNativeAction = reconcileSharedResourceSpend(
 assert.equal(failedNativeAction.status, "invalidated");
 assert.equal(failedNativeAction.budgetRemaining, 0);
 
-const unexpectedDebit = reconcileSharedResourceSpend(
+const partialDebit = reconcileSharedResourceSpend(
+  ownerOneAuthorized,
+  ownerOneReservation,
+  {
+    outcome: "succeeded",
+    observedStockAfter: { id: "stock-2", quantity: 80 },
+  },
+);
+assert.equal(partialDebit.status, "invalidated");
+assert.equal(partialDebit.budgetRemaining, 0);
+
+const excessiveDebit = reconcileSharedResourceSpend(
   ownerOneAuthorized,
   ownerOneReservation,
   {
@@ -128,7 +164,32 @@ const unexpectedDebit = reconcileSharedResourceSpend(
     observedStockAfter: { id: "stock-2", quantity: 60 },
   },
 );
-assert.equal(unexpectedDebit.status, "invalidated");
-assert.equal(unexpectedDebit.budgetRemaining, 0);
+assert.equal(excessiveDebit.status, "invalidated");
+assert.equal(excessiveDebit.budgetRemaining, 0);
+
+const uncertainNativeAction = reconcileSharedResourceSpend(
+  ownerOneAuthorized,
+  ownerOneReservation,
+  {
+    outcome: "uncertain",
+    observedStockAfter: { id: "stock-2", quantity: 75 },
+  },
+);
+assert.equal(uncertainNativeAction.status, "invalidated");
+
+for (const otherIdentity of [
+  { resourceId: "Knowledge", poolId: "anywhere" },
+  { resourceId: "Mana", poolId: "local" },
+]) {
+  const otherBudget = planSharedResourceBudget(input({ ...otherIdentity }));
+  assert.equal(
+    reserveSharedResourceSpend(otherBudget, ownerOneReservation, {
+      id: "stock-1",
+      quantity: 100,
+    }).status,
+    "invalidated",
+    "reservation identity is scoped to its resource and pool",
+  );
+}
 
 console.log("shared per-resource spending budget coordination ok");

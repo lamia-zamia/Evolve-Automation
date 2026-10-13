@@ -35,7 +35,10 @@ export interface SharedResourceBudget {
 
 export interface SharedSpendReservation {
   readonly id: string;
-  readonly quantity: number;
+  readonly resourceId: string;
+  readonly poolId: string;
+  /** Exact native debit expected from this reservation, not a maximum. */
+  readonly expectedDebit: number;
   readonly stockObservationId: string;
 }
 
@@ -104,7 +107,7 @@ export function planSharedResourceBudget(
   });
 }
 
-/** Reserves a single synchronous spend against the current per-resource budget. */
+/** Reserves one synchronous, exact-debit spend against the current resource/pool budget. */
 export function reserveSharedResourceSpend(
   budget: Readonly<SharedResourceBudget>,
   reservation: Readonly<SharedSpendReservation>,
@@ -112,6 +115,9 @@ export function reserveSharedResourceSpend(
 ): Readonly<SharedResourceBudget> {
   if (
     budget.status !== "current" ||
+    budget.pendingReservations.length !== 0 ||
+    reservation.resourceId !== budget.resourceId ||
+    reservation.poolId !== budget.poolId ||
     budget.stockObservation?.id !== reservation.stockObservationId ||
     stockAtInvocation.id !== reservation.stockObservationId ||
     stockAtInvocation.quantity !== budget.observedStock ||
@@ -119,8 +125,8 @@ export function reserveSharedResourceSpend(
     budget.pendingReservations.some(
       (pending) => pending.id === reservation.id,
     ) ||
-    !validBudgetAmount(reservation.quantity) ||
-    reservation.quantity > budget.budgetRemaining
+    !validBudgetAmount(reservation.expectedDebit) ||
+    reservation.expectedDebit > budget.budgetRemaining
   ) {
     return Object.freeze({
       ...budget,
@@ -132,12 +138,12 @@ export function reserveSharedResourceSpend(
   return Object.freeze({
     ...budget,
     reservedDiscretionarySpending:
-      budget.reservedDiscretionarySpending + reservation.quantity,
+      budget.reservedDiscretionarySpending + reservation.expectedDebit,
     pendingReservations: Object.freeze([
       ...budget.pendingReservations,
       Object.freeze({ ...reservation }),
     ]),
-    budgetRemaining: budget.budgetRemaining - reservation.quantity,
+    budgetRemaining: budget.budgetRemaining - reservation.expectedDebit,
   });
 }
 
@@ -153,15 +159,19 @@ export function reconcileSharedResourceSpend(
   const knownReservation = budget.pendingReservations.some(
     (pending) =>
       pending.id === reservation.id &&
-      pending.quantity === reservation.quantity &&
+      pending.resourceId === reservation.resourceId &&
+      pending.poolId === reservation.poolId &&
+      pending.expectedDebit === reservation.expectedDebit &&
       pending.stockObservationId === reservation.stockObservationId,
   );
   const expectedObservation =
+    budget.resourceId === reservation.resourceId &&
+    budget.poolId === reservation.poolId &&
     budget.stockObservation?.id === reservation.stockObservationId;
   const validDelta =
     Number.isFinite(spent) &&
     spent >= 0 &&
-    spent <= reservation.quantity &&
+    spent === reservation.expectedDebit &&
     reconciliation.observedStockAfter.id !== "" &&
     reconciliation.observedStockAfter.id !== reservation.stockObservationId &&
     validBudgetAmount(after);
@@ -197,7 +207,7 @@ export function reconcileSharedResourceSpend(
     permittedDiscretionarySpending: remainingAllowance,
     observedNativeExpenditure: budget.observedNativeExpenditure + spent,
     reservedDiscretionarySpending:
-      budget.reservedDiscretionarySpending - reservation.quantity,
+      budget.reservedDiscretionarySpending - reservation.expectedDebit,
     pendingReservations: Object.freeze(
       budget.pendingReservations.filter(
         (pending) => pending.id !== reservation.id,
