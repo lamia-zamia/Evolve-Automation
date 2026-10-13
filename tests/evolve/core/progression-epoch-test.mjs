@@ -41,6 +41,7 @@ function freshRoot() {
   const { source } = rootSourceOf(root);
   const epoch = createProgressionEpochReader(source);
   const before = epoch.read();
+  assert.equal(epoch.readRootGeneration(), 0);
   assert.equal(epoch.read(), before, "an unchanged root reads the same epoch");
 
   const moves = [
@@ -97,6 +98,7 @@ function freshRoot() {
   const before = epoch.read();
   const buildControlsBefore = epoch.readBuildControls();
   replaceRoot();
+  assert.equal(epoch.readRootGeneration(), 1);
   assert.notEqual(
     epoch.read(),
     before,

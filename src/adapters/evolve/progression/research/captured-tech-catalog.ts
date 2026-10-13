@@ -384,10 +384,11 @@ export function createCapturedTechCatalog(
       }
       const frozenOffered = Object.freeze(matchedOffers);
       return drawn.grantedRows === undefined
-        ? Object.freeze({ offered: frozenOffered })
+        ? Object.freeze({ offered: frozenOffered, definitions })
         : Object.freeze({
             offered: frozenOffered,
             granted: Object.freeze(grantedIds) as ReadonlySet<string>,
+            definitions,
           });
     },
     restate(
@@ -410,8 +411,19 @@ export function createCapturedTechCatalog(
         );
         return Object.freeze(
           snapshot.granted === undefined
-            ? { offered }
-            : { offered, granted: snapshot.granted },
+            ? {
+                offered,
+                ...(snapshot.definitions === undefined
+                  ? {}
+                  : { definitions: snapshot.definitions }),
+              }
+            : {
+                offered,
+                granted: snapshot.granted,
+                ...(snapshot.definitions === undefined
+                  ? {}
+                  : { definitions: snapshot.definitions }),
+              },
         );
       });
     },

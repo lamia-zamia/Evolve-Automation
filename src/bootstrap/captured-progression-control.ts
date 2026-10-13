@@ -49,6 +49,7 @@ import type { GameActionCostReader } from "../ports/game-action-costs.ts";
 import type { ConstructionObservations } from "../ports/game-construction-observations.ts";
 import type { InterfaceSettingsState } from "../domain/interface-settings.ts";
 import type { GameControlRegistry } from "../ports/game-control-registry.ts";
+import type { CapturedTechDefinition } from "../ports/captured-game-mechanics.ts";
 import type { GameActivitySink } from "../ports/game-message-log.ts";
 import type { GameBuildTarget } from "../ports/game-build-targets.ts";
 import type { GameDrawnActionsReader } from "../ports/game-drawn-actions.ts";
@@ -150,6 +151,8 @@ export interface CapturedProgressionControlDependencies {
 export interface CapturedProgressionControl {
   /** Current progression epoch, for retrying conditional discoveries after a game-state change. */
   readonly readProgressionEpoch: () => string;
+  /** Incremented by the root-state source whenever Evolve replaces its root. */
+  readonly readRootGeneration: () => number;
   /** Clears prior offer observations and discovery scopes for one processed cycle. */
   readonly beginProcessedCycle: () => void;
   readonly runConstructionCycle: () => CommandExecutionOutcome;
@@ -166,6 +169,9 @@ export interface CapturedProgressionControl {
    * keep it. Absent is "not read", never "nothing granted".
    */
   readonly readGrantedTechs: () => ReadonlySet<string> | undefined;
+  /** Static native Research declarations retained by the same offer pass; never triggers a draw. */
+  readonly readResearchActionDefinitions: () =>
+    readonly CapturedTechDefinition[] | undefined;
   /** A fresh captured A.R.P.A. project snapshot, if it can be read. */
   readonly readProjects: () => readonly Readonly<OfferedProject>[] | undefined;
   /** Reads current fields and prices from the established native catalog without redrawing a panel. */
@@ -493,6 +499,7 @@ export function createCapturedProgressionControl(
   // The catalog a discovery pass already paid for, shared with the Knowledge gate so it never buys
   // one of its own. It is cleared at the start of every processed cycle.
   let lastOffered: readonly Readonly<OfferedTech>[] | undefined;
+  let lastTechDefinitions: readonly CapturedTechDefinition[] | undefined;
   // The already-granted half is only drawn when a configured trigger needs it, so this stays
   // undefined — "not read" — for every player who has not configured one.
   let lastGranted: ReadonlySet<string> | undefined;
@@ -503,6 +510,7 @@ export function createCapturedProgressionControl(
   let heldOfferControlRevision: number | undefined;
   const clearResearchSample = () => {
     lastOffered = undefined;
+    lastTechDefinitions = undefined;
     lastGranted = undefined;
     offeredSampleAttempted = false;
     grantedSampleAttempted = false;
@@ -599,6 +607,7 @@ export function createCapturedProgressionControl(
       heldOfferControlRevision = controls.readRevision?.();
       lastOffered = value.offered;
       lastGranted = value.granted;
+      lastTechDefinitions = value.definitions;
       return value.offered;
     }
     // A failed current sample must not let the previous pass answer a context-dependent condition.
@@ -606,6 +615,7 @@ export function createCapturedProgressionControl(
     heldOfferControlRevision = undefined;
     lastOffered = undefined;
     lastGranted = undefined;
+    lastTechDefinitions = undefined;
     return undefined;
   };
   const offered = createCapturedTechCatalog({
@@ -1083,6 +1093,7 @@ export function createCapturedProgressionControl(
 
   return Object.freeze({
     readProgressionEpoch: epoch.read,
+    readRootGeneration: epoch.readRootGeneration,
     beginProcessedCycle,
     runConstructionCycle: () => {
       try {
@@ -1096,6 +1107,7 @@ export function createCapturedProgressionControl(
     readOfferedTechs: readCurrentOfferedTechs,
     sampleOfferedTechs,
     readGrantedTechs: () => lastGranted,
+    readResearchActionDefinitions: () => lastTechDefinitions,
     readProjects,
     readEstablishedProjects,
     resetProjectSample,

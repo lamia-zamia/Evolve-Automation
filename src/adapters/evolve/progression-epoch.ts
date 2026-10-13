@@ -30,6 +30,8 @@ import { isRecord, readProperty } from "../validation.ts";
 /** A value that is equal across two reads exactly when no sampled panel's offers can have moved. */
 export interface ProgressionEpochReader {
   read(): string;
+  /** Native root replacement counter for freshness checks that need a concrete generation. */
+  readRootGeneration(): number;
   /** Changes when a Civilization draw could offer a different set of building controls. */
   readBuildControls(): string;
   /** Releases the root-replacement subscription. */
@@ -125,6 +127,9 @@ export function createProgressionEpochReader(
   return Object.freeze({
     read(): string {
       return readEpoch(true);
+    },
+    readRootGeneration(): number {
+      return rootReplacements;
     },
     readBuildControls(): string {
       return readEpoch(false);

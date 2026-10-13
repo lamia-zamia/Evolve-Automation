@@ -2096,6 +2096,132 @@
 
   // src/adapters/evolve/captured-game-mechanics.ts
   var structureMapCaptureThreshold = 3;
+  function readCapturedTechPrerequisites(action) {
+    let descriptor;
+    try {
+      descriptor = Object.getOwnPropertyDescriptor(action, "reqs");
+    } catch {
+      return {
+        kind: "unavailable",
+        reason: "native reqs metadata could not be read"
+      };
+    }
+    if (descriptor === void 0)
+      return { kind: "declared", requirements: Object.freeze([]) };
+    if (!("value" in descriptor))
+      return {
+        kind: "unavailable",
+        reason: "native reqs metadata is an accessor"
+      };
+    let raw = descriptor.value;
+    if (!raw) return { kind: "declared", requirements: Object.freeze([]) };
+    if (typeof raw == "function")
+      return {
+        kind: "conditional",
+        reason: "native reqs is a function and was not evaluated"
+      };
+    if (!isNonArrayRecord(raw))
+      return {
+        kind: "unavailable",
+        reason: "native reqs is not a static record"
+      };
+    try {
+      let requirements = [];
+      for (let technologyId of Object.getOwnPropertyNames(raw)) {
+        let requirementDescriptor = Object.getOwnPropertyDescriptor(
+          raw,
+          technologyId
+        );
+        if (requirementDescriptor?.enumerable !== !0) continue;
+        let value = requirementDescriptor !== void 0 && "value" in requirementDescriptor ? requirementDescriptor.value : void 0;
+        if (technologyId.length === 0 || typeof value != "number" || !Number.isFinite(value) || value <= 0)
+          return {
+            kind: "unavailable",
+            reason: "native reqs contains an invalid technology level"
+          };
+        requirements.push(
+          Object.freeze({
+            technologyId,
+            requiredLevel: value,
+            ...technologyId === "cement" ? {
+              applicabilityBoundary: "actions.js skipRequirement skips cement for Flier; current route applicability is not evaluated"
+            } : {}
+          })
+        );
+      }
+      return { kind: "declared", requirements: Object.freeze(requirements) };
+    } catch {
+      return {
+        kind: "unavailable",
+        reason: "native reqs record could not be enumerated"
+      };
+    }
+  }
+  function sameCapturedTechPrerequisiteMetadata(first, second) {
+    if (first.prerequisites.kind !== second.prerequisites.kind || first.eligibility.hasNativeCondition !== second.eligibility.hasNativeCondition)
+      return !1;
+    if (first.prerequisites.kind === "declared") {
+      if (second.prerequisites.kind !== "declared") return !1;
+      let firstRequirements = first.prerequisites.requirements, secondRequirements = second.prerequisites.requirements;
+      if (firstRequirements.length !== secondRequirements.length || !firstRequirements.every((requirement, index) => {
+        let other = secondRequirements[index];
+        return other !== void 0 && requirement.technologyId === other.technologyId && requirement.requiredLevel === other.requiredLevel && requirement.applicabilityBoundary === other.applicabilityBoundary;
+      }))
+        return !1;
+    } else if (second.prerequisites.kind === "declared" || first.prerequisites.reason !== second.prerequisites.reason)
+      return !1;
+    let firstRoute = first.eligibility.routeRestrictions, secondRoute = second.eligibility.routeRestrictions;
+    return !(firstRoute === void 0 != (secondRoute === void 0) || firstRoute !== void 0 && secondRoute !== void 0 && (firstRoute.length !== secondRoute.length || !firstRoute.every((route, index) => route === secondRoute[index])) || first.eligibility.restrictions.length !== second.eligibility.restrictions.length || !first.eligibility.restrictions.every((restriction, index) => {
+      let other = second.eligibility.restrictions[index];
+      return other !== void 0 && restriction.kind === other.kind && restriction.values.length === other.values.length && restriction.values.every(
+        (value, valueIndex) => value === other.values[valueIndex]
+      );
+    }));
+  }
+  function readCapturedTechEligibility(action) {
+    let readStringList = (key) => {
+      let descriptor;
+      try {
+        if (descriptor = Object.getOwnPropertyDescriptor(action, key), descriptor === void 0) return;
+        if (!("value" in descriptor) || !Array.isArray(descriptor.value))
+          return !1;
+        let values = [];
+        for (let value of descriptor.value) {
+          if (typeof value != "string" || value.length === 0) return !1;
+          values.push(value);
+        }
+        return Object.freeze(values);
+      } catch {
+        return !1;
+      }
+    }, conditionDescriptor;
+    try {
+      conditionDescriptor = Object.getOwnPropertyDescriptor(action, "condition");
+    } catch {
+      return;
+    }
+    if (conditionDescriptor !== void 0 && (!("value" in conditionDescriptor) || conditionDescriptor.value !== void 0 && typeof conditionDescriptor.value != "function"))
+      return;
+    let routeRestrictions = readStringList("path");
+    if (routeRestrictions === !1) return;
+    let restrictions = [];
+    for (let kind of [
+      "trait",
+      "not_trait",
+      "gene",
+      "not_gene",
+      "not_tech"
+    ]) {
+      let values = readStringList(kind);
+      if (values === !1) return;
+      values !== void 0 && restrictions.push(Object.freeze({ kind, values }));
+    }
+    return Object.freeze({
+      hasNativeCondition: conditionDescriptor !== void 0 && typeof conditionDescriptor.value == "function",
+      routeRestrictions,
+      restrictions: Object.freeze(restrictions)
+    });
+  }
   function readNativeTechRegistrySnapshot(registry, rawKeys, retainActionIndex = !1) {
     if (!isNonArrayRecord(registry) || !Array.isArray(rawKeys) || rawKeys.length === 0)
       return;
@@ -2111,12 +2237,16 @@
       let grantTechnology = readMechanicsDataProperty(grant, "0"), grantLevel = readMechanicsDataProperty(grant, "1");
       if (typeof grantTechnology != "string" || grantTechnology.trim().length === 0 || typeof grantLevel != "number" || !Number.isFinite(grantLevel) || grantLevel < 0)
         return;
+      let prerequisites = readCapturedTechPrerequisites(action), eligibility = readCapturedTechEligibility(action);
+      if (eligibility === void 0) return;
       keys.push(rawKey), seenActionIds.add(actionId);
       let definition = Object.freeze({
         registryKey: rawKey,
         actionId,
         grantTechnology,
         grantLevel,
+        prerequisites,
+        eligibility,
         action
       });
       definitions.push(definition), definitionsByActionId?.set(actionId, definition);
@@ -2132,7 +2262,9 @@
             registryKey: definition.registryKey,
             actionId: definition.actionId,
             grantTechnology: definition.grantTechnology,
-            grantLevel: definition.grantLevel
+            grantLevel: definition.grantLevel,
+            prerequisites: definition.prerequisites,
+            eligibility: definition.eligibility
           })
         )
       )
@@ -2141,7 +2273,7 @@
   function sameNativeTechRegistrySnapshot(first, second) {
     return first.registry === second.registry && first.keys.length === second.keys.length && first.keys.every((key, index) => key === second.keys[index]) && first.definitions.length === second.definitions.length && first.definitions.every((definition, index) => {
       let other = second.definitions[index];
-      return other !== void 0 && definition.action === other.action && definition.actionId === other.actionId && definition.grantTechnology === other.grantTechnology && definition.grantLevel === other.grantLevel;
+      return other !== void 0 && definition.action === other.action && definition.actionId === other.actionId && definition.grantTechnology === other.grantTechnology && definition.grantLevel === other.grantLevel && sameCapturedTechPrerequisiteMetadata(definition, other);
     });
   }
   function readMechanicsProperty(owner, key) {
@@ -4496,6 +4628,9 @@
       read() {
         return readEpoch(!0);
       },
+      readRootGeneration() {
+        return rootReplacements;
+      },
       readBuildControls() {
         return readEpoch(!1);
       },
@@ -5046,9 +5181,10 @@
           ), tally.count("research.offers.matched");
         }
         let frozenOffered = Object.freeze(matchedOffers);
-        return drawn.grantedRows === void 0 ? Object.freeze({ offered: frozenOffered }) : Object.freeze({
+        return drawn.grantedRows === void 0 ? Object.freeze({ offered: frozenOffered, definitions }) : Object.freeze({
           offered: frozenOffered,
-          granted: Object.freeze(grantedIds)
+          granted: Object.freeze(grantedIds),
+          definitions
         });
       },
       restate(snapshot2) {
@@ -5064,7 +5200,14 @@
             )
           );
           return Object.freeze(
-            snapshot2.granted === void 0 ? { offered } : { offered, granted: snapshot2.granted }
+            snapshot2.granted === void 0 ? {
+              offered,
+              ...snapshot2.definitions === void 0 ? {} : { definitions: snapshot2.definitions }
+            } : {
+              offered,
+              granted: snapshot2.granted,
+              ...snapshot2.definitions === void 0 ? {} : { definitions: snapshot2.definitions }
+            }
           );
         });
       }
@@ -11688,8 +11831,8 @@
           discoveryAttempts.recordFailure(attemptKey, attemptEpoch);
         }
       }
-    }, lastOffered, lastGranted, offeredSampleAttempted = !1, grantedSampleAttempted = !1, offeredSampleEpoch, heldOfferedSnapshot, heldOfferControlRevision, clearResearchSample = () => {
-      lastOffered = void 0, lastGranted = void 0, offeredSampleAttempted = !1, grantedSampleAttempted = !1, offeredSampleEpoch = void 0, heldOfferedSnapshot = void 0, heldOfferControlRevision = void 0;
+    }, lastOffered, lastTechDefinitions, lastGranted, offeredSampleAttempted = !1, grantedSampleAttempted = !1, offeredSampleEpoch, heldOfferedSnapshot, heldOfferControlRevision, clearResearchSample = () => {
+      lastOffered = void 0, lastTechDefinitions = void 0, lastGranted = void 0, offeredSampleAttempted = !1, grantedSampleAttempted = !1, offeredSampleEpoch = void 0, heldOfferedSnapshot = void 0, heldOfferControlRevision = void 0;
     }, heldOfferBindingsAreCurrent = (snapshot2) => snapshot2.offered.every(
       (offer) => controls2.isCurrent?.(offer.elementId, offer.generation) ?? (controls2.resolve(offer.elementId)?.generation ?? 0) === offer.generation
     ), invalidateStaleCapturedResearchObservation = (currentEpoch) => {
@@ -11722,9 +11865,9 @@
       );
       if (offeredSampleAttempted = !0, offeredSampleEpoch = currentEpoch, includeGranted && (grantedSampleAttempted = !0), held !== void 0) {
         let value = offered.restate(held);
-        return heldOfferedSnapshot = held, heldOfferControlRevision = controls2.readRevision?.(), lastOffered = value.offered, lastGranted = value.granted, value.offered;
+        return heldOfferedSnapshot = held, heldOfferControlRevision = controls2.readRevision?.(), lastOffered = value.offered, lastGranted = value.granted, lastTechDefinitions = value.definitions, value.offered;
       }
-      heldOfferedSnapshot = void 0, heldOfferControlRevision = void 0, lastOffered = void 0, lastGranted = void 0;
+      heldOfferedSnapshot = void 0, heldOfferControlRevision = void 0, lastOffered = void 0, lastGranted = void 0, lastTechDefinitions = void 0;
     }, offered = createCapturedTechCatalog({
       rootState,
       discovery,
@@ -11994,6 +12137,7 @@
     }
     return Object.freeze({
       readProgressionEpoch: epoch.read,
+      readRootGeneration: epoch.readRootGeneration,
       beginProcessedCycle,
       runConstructionCycle: () => {
         try {
@@ -12007,6 +12151,7 @@
       readOfferedTechs: readCurrentOfferedTechs,
       sampleOfferedTechs,
       readGrantedTechs: () => lastGranted,
+      readResearchActionDefinitions: () => lastTechDefinitions,
       readProjects: readProjects2,
       readEstablishedProjects,
       resetProjectSample,
@@ -17479,6 +17624,317 @@
       } catch {
       }
     }
+  }
+
+  // src/domain/progression/research-prerequisite-planning.ts
+  function validResearchLevel(value) {
+    return typeof value == "number" && Number.isFinite(value) && value >= 0;
+  }
+  function planNativeResearchPrerequisites(input) {
+    let actions = /* @__PURE__ */ new Map(), requirements = /* @__PURE__ */ new Map(), frontier = /* @__PURE__ */ new Set(), cycles = [], limits = [], unavailableFacts = [], byActionId = /* @__PURE__ */ new Map(), byGrant = /* @__PURE__ */ new Map(), path = [], registryValid = input.definitions !== void 0;
+    if (input.definitions !== void 0)
+      for (let definition of input.definitions) {
+        if (byActionId.has(definition.actionId)) {
+          registryValid = !1, unavailableFacts.push(
+            `duplicate native action identity ${definition.actionId}`
+          );
+          continue;
+        }
+        byActionId.set(definition.actionId, definition);
+        let grantGroup = byGrant.get(definition.grantTechnology) ?? [];
+        grantGroup.push(definition), byGrant.set(definition.grantTechnology, grantGroup);
+      }
+    else
+      unavailableFacts.push("retained native Research registry is unavailable");
+    input.grantLevels === void 0 && unavailableFacts.push("current technology levels are unavailable"), input.offeredActionIds === void 0 && unavailableFacts.push(
+      "current native Research offer catalog is unavailable"
+    );
+    let offersMatch = input.expectedFreshness === void 0 || input.offerGenerations !== void 0 && input.expectedFreshness.offerGenerations.size === input.offerGenerations.size && [...input.expectedFreshness.offerGenerations].every(
+      ([actionId, generation]) => input.offerGenerations?.get(actionId) === generation
+    ), freshnessMatches = !(input.expectedFreshness !== void 0 && (input.expectedFreshness.cycle !== input.cycle || input.expectedFreshness.progressionEpoch !== input.progressionEpoch || input.expectedFreshness.rootGeneration !== input.rootGeneration || !offersMatch));
+    freshnessMatches || unavailableFacts.push(
+      "research prerequisite observations are stale for the current root, cycle, or progression epoch"
+    );
+    let actionLimit = Math.max(1, Math.floor(input.maxActions)), depthLimit = Math.max(0, Math.floor(input.maxDepth)), expandAction = (actionId, depth) => {
+      let cycleAt = path.indexOf(actionId);
+      if (cycleAt >= 0) {
+        cycles.push([...path.slice(cycleAt), actionId]);
+        return;
+      }
+      let existing = actions.get(actionId);
+      if (existing !== void 0) return existing;
+      if (actions.size >= actionLimit) {
+        limits.push(`actions:${actionId}`);
+        return;
+      }
+      if (depth > depthLimit) {
+        limits.push(`depth:${actionId}`);
+        return;
+      }
+      let definition = byActionId.get(actionId);
+      if (definition === void 0) {
+        unavailableFacts.push(`native action mapping is missing for ${actionId}`);
+        return;
+      }
+      if (input.offeredActionIds?.has(actionId)) {
+        let gate = Object.freeze({
+          actionId,
+          grantTechnology: definition.grantTechnology,
+          grantLevel: definition.grantLevel,
+          status: "frontier",
+          prerequisiteIds: Object.freeze([]),
+          reasons: Object.freeze([])
+        });
+        return actions.set(actionId, gate), frontier.add(actionId), gate;
+      }
+      path.push(actionId);
+      let prerequisiteIds = [], reasons = [];
+      if (definition.prerequisites.kind !== "declared") {
+        reasons.push(definition.prerequisites.reason);
+        let gate = Object.freeze({
+          actionId,
+          grantTechnology: definition.grantTechnology,
+          grantLevel: definition.grantLevel,
+          status: definition.prerequisites.kind === "conditional" ? "conditional" : "unavailable",
+          prerequisiteIds: Object.freeze([]),
+          reasons: Object.freeze(reasons)
+        });
+        return actions.set(actionId, gate), path.pop(), gate;
+      }
+      if (definition.hasNativeCondition && reasons.push("native condition function was not evaluated"), definition.routeRestrictions !== void 0 && reasons.push("route restriction applicability was not evaluated"), definition.restrictions.length > 0 && reasons.push(
+        "trait, gene, or exclusion restriction applicability was not evaluated"
+      ), reasons.length > 0) {
+        let gate = Object.freeze({
+          actionId,
+          grantTechnology: definition.grantTechnology,
+          grantLevel: definition.grantLevel,
+          status: "conditional",
+          prerequisiteIds: Object.freeze([]),
+          reasons: Object.freeze(reasons)
+        });
+        return actions.set(actionId, gate), path.pop(), gate;
+      }
+      reasons.push(
+        "native queue precognition and game-specific requirement exceptions were not evaluated"
+      );
+      let status2 = "unsatisfied";
+      for (let prerequisite of definition.prerequisites.requirements) {
+        let gate = expandRequirement(prerequisite, depth + 1);
+        gate !== void 0 && prerequisiteIds.push(gate.id);
+      }
+      let childStatuses = prerequisiteIds.map(
+        (id) => requirements.get(id)?.status
+      );
+      childStatuses.includes("unavailable") ? status2 = "unavailable" : childStatuses.includes("conditional") ? status2 = "conditional" : childStatuses.every((child) => child === "satisfied") && (status2 = "conditional", reasons.push(
+        "native offer is absent although captured declared prerequisites are satisfied"
+      )), definition.prerequisites.requirements.length === 0 && (status2 = "conditional", reasons.push(
+        "action is not offered and no declared prerequisite explains its absence"
+      ));
+      let result = Object.freeze({
+        actionId,
+        grantTechnology: definition.grantTechnology,
+        grantLevel: definition.grantLevel,
+        status: status2,
+        prerequisiteIds: Object.freeze(prerequisiteIds),
+        reasons: Object.freeze(reasons)
+      });
+      return actions.set(actionId, result), path.pop(), result;
+    }, expandRequirement = (prerequisite, depth) => {
+      let id = `research:${prerequisite.technologyId}:${prerequisite.requiredLevel}`, existing = requirements.get(id);
+      if (existing !== void 0) return existing;
+      let observedLevel = input.grantLevels?.get(prerequisite.technologyId);
+      if (!validResearchLevel(observedLevel)) {
+        let reason = observedLevel === void 0 ? `current grant level for ${prerequisite.technologyId} is unavailable` : `current grant level for ${prerequisite.technologyId} is invalid`, gate2 = Object.freeze({
+          id,
+          technologyId: prerequisite.technologyId,
+          requiredLevel: prerequisite.requiredLevel,
+          observedLevel: void 0,
+          declaredStatus: "unavailable",
+          status: "unavailable",
+          candidateActionIds: Object.freeze([]),
+          reasons: Object.freeze([reason])
+        });
+        return requirements.set(id, gate2), gate2;
+      }
+      if (observedLevel >= prerequisite.requiredLevel) {
+        let gate2 = Object.freeze({
+          id,
+          technologyId: prerequisite.technologyId,
+          requiredLevel: prerequisite.requiredLevel,
+          observedLevel,
+          declaredStatus: "satisfied",
+          status: "satisfied",
+          candidateActionIds: Object.freeze([]),
+          reasons: Object.freeze([])
+        });
+        return requirements.set(id, gate2), gate2;
+      }
+      if (prerequisite.applicabilityBoundary !== void 0) {
+        let gate2 = Object.freeze({
+          id,
+          technologyId: prerequisite.technologyId,
+          requiredLevel: prerequisite.requiredLevel,
+          observedLevel,
+          declaredStatus: "unsatisfied",
+          status: "conditional",
+          candidateActionIds: Object.freeze([]),
+          reasons: Object.freeze([prerequisite.applicabilityBoundary])
+        });
+        return requirements.set(id, gate2), gate2;
+      }
+      let candidates = (byGrant.get(prerequisite.technologyId) ?? []).filter(
+        (candidate) => candidate.grantLevel >= prerequisite.requiredLevel
+      ), candidateActionIds = [], reasons = [];
+      if ((!registryValid || input.offeredActionIds === void 0) && reasons.push(
+        "native action mapping or offer membership is not authoritative"
+      ), candidates.length === 0) {
+        let gate2 = Object.freeze({
+          id,
+          technologyId: prerequisite.technologyId,
+          requiredLevel: prerequisite.requiredLevel,
+          observedLevel,
+          declaredStatus: "unsatisfied",
+          status: "unavailable",
+          candidateActionIds: Object.freeze([]),
+          reasons: Object.freeze([
+            ...reasons,
+            `no retained native action grants ${prerequisite.technologyId} level ${prerequisite.requiredLevel}`
+          ])
+        });
+        return requirements.set(id, gate2), gate2;
+      }
+      let hasKnownUnmetCandidate = !1, hasConditionalCandidate = !1, hasUnavailableCandidate = !1;
+      for (let candidate of candidates) {
+        candidateActionIds.push(candidate.actionId);
+        let action = expandAction(candidate.actionId, depth);
+        action === void 0 ? limits.length > 0 || cycles.length > 0 ? hasConditionalCandidate = !0 : hasUnavailableCandidate = !0 : action.status === "conditional" ? (hasConditionalCandidate = !0, reasons.push(...action.reasons)) : action.status === "unavailable" ? (hasUnavailableCandidate = !0, reasons.push(...action.reasons)) : action.status === "unsatisfied" && (hasKnownUnmetCandidate = !0);
+      }
+      let status2 = hasKnownUnmetCandidate ? "unsatisfied" : hasConditionalCandidate ? "conditional" : hasUnavailableCandidate ? "unavailable" : "unsatisfied", gate = Object.freeze({
+        id,
+        technologyId: prerequisite.technologyId,
+        requiredLevel: prerequisite.requiredLevel,
+        observedLevel,
+        declaredStatus: "unsatisfied",
+        status: status2,
+        candidateActionIds: Object.freeze(candidateActionIds),
+        reasons: Object.freeze([...new Set(reasons)])
+      });
+      return requirements.set(id, gate), gate;
+    }, target = byActionId.get(input.targetActionId), targetStatus = "unavailable";
+    if (!freshnessMatches)
+      targetStatus = "unavailable";
+    else if (!registryValid)
+      unavailableFacts.push("native Research action identities are ambiguous");
+    else if (target === void 0)
+      unavailableFacts.push(
+        `target action ${input.targetActionId} is not in the retained native registry`
+      );
+    else if (!validResearchLevel(input.grantLevels?.get(target.grantTechnology)))
+      unavailableFacts.push(
+        `current grant level for ${target.grantTechnology} is unavailable`
+      );
+    else if ((input.grantLevels.get(target.grantTechnology) ?? 0) >= target.grantLevel) {
+      if (targetStatus = "satisfied", target.prerequisites.kind === "declared")
+        for (let prerequisite of target.prerequisites.requirements)
+          expandRequirement(prerequisite, 1);
+    } else if (input.offeredActionIds === void 0)
+      targetStatus = "unavailable";
+    else if (input.offeredActionIds?.has(input.targetActionId)) {
+      if (frontier.add(input.targetActionId), target.prerequisites.kind === "declared")
+        for (let prerequisite of target.prerequisites.requirements)
+          expandRequirement(prerequisite, 1);
+      actions.set(
+        input.targetActionId,
+        Object.freeze({
+          actionId: target.actionId,
+          grantTechnology: target.grantTechnology,
+          grantLevel: target.grantLevel,
+          status: "frontier",
+          prerequisiteIds: Object.freeze([]),
+          reasons: Object.freeze([])
+        })
+      ), targetStatus = "unsatisfied";
+    } else if (target.prerequisites.kind !== "declared")
+      targetStatus = target.prerequisites.kind, unavailableFacts.push(target.prerequisites.reason);
+    else {
+      let gateStatuses = [], targetPrerequisiteIds = [];
+      for (let prerequisite of target.prerequisites.requirements) {
+        let gate = expandRequirement(prerequisite, 1);
+        gate !== void 0 && (gateStatuses.push(gate.status), targetPrerequisiteIds.push(gate.id));
+      }
+      gateStatuses.includes("unavailable") ? targetStatus = "unavailable" : gateStatuses.includes("conditional") ? targetStatus = "conditional" : targetStatus = gateStatuses.length === 0 ? "conditional" : "unsatisfied", target.hasNativeCondition && unavailableFacts.push(
+        "target has a native condition function whose context was not evaluated"
+      ), target.routeRestrictions !== void 0 && unavailableFacts.push(
+        "target route restrictions were retained but not evaluated"
+      ), target.restrictions.length > 0 && unavailableFacts.push(
+        "target trait, gene, or exclusion restrictions were retained but not evaluated"
+      ), (gateStatuses.length === 0 || gateStatuses.every((status2) => status2 === "satisfied")) && (targetStatus = "conditional"), (target.hasNativeCondition || target.routeRestrictions !== void 0 || target.restrictions.length > 0) && (targetStatus = "conditional"), actions.set(
+        input.targetActionId,
+        Object.freeze({
+          actionId: target.actionId,
+          grantTechnology: target.grantTechnology,
+          grantLevel: target.grantLevel,
+          status: targetStatus === "unavailable" || targetStatus === "conditional" ? targetStatus : "unsatisfied",
+          prerequisiteIds: Object.freeze(targetPrerequisiteIds),
+          reasons: Object.freeze([
+            "native queue precognition and game-specific requirement exceptions were not evaluated",
+            ...target.hasNativeCondition ? ["native condition function was not evaluated"] : [],
+            ...target.routeRestrictions !== void 0 ? ["route restriction applicability was not evaluated"] : [],
+            ...target.restrictions.length > 0 ? [
+              "trait, gene, or exclusion restriction applicability was not evaluated"
+            ] : []
+          ])
+        })
+      );
+    }
+    return Object.freeze({
+      targetActionId: input.targetActionId,
+      targetStatus,
+      actions: Object.freeze([...actions.values()]),
+      requirements: Object.freeze([...requirements.values()]),
+      actionableFrontier: Object.freeze([...frontier]),
+      cycles: Object.freeze(cycles.map((cycle) => Object.freeze(cycle))),
+      limits: Object.freeze(limits),
+      unavailableFacts: Object.freeze([...new Set(unavailableFacts)]),
+      provenance: "retained-native-static-research-registry",
+      freshness: Object.freeze({
+        cycle: input.cycle,
+        progressionEpoch: input.progressionEpoch,
+        rootGeneration: input.rootGeneration,
+        offerGenerations: input.offerGenerations === void 0 ? void 0 : Object.freeze(
+          [...input.offerGenerations].map(
+            ([actionId, generation]) => Object.freeze([actionId, generation])
+          )
+        )
+      })
+    });
+  }
+
+  // src/adapters/evolve/progression/research/captured-tech-prerequisite-levels.ts
+  function createCapturedTechPrerequisiteLevelReader() {
+    let indexedDefinitions, technologyIds;
+    return (root, definitions) => {
+      if (definitions === void 0) return;
+      if (definitions !== indexedDefinitions) {
+        let nextTechnologyIds = /* @__PURE__ */ new Set();
+        for (let definition of definitions)
+          if (nextTechnologyIds.add(definition.grantTechnology), definition.prerequisites.kind === "declared")
+            for (let prerequisite of definition.prerequisites.requirements)
+              nextTechnologyIds.add(prerequisite.technologyId);
+        indexedDefinitions = definitions, technologyIds = nextTechnologyIds;
+      }
+      let tech = readProperty(root, "tech");
+      if (!isNonArrayRecord(tech) || technologyIds === void 0)
+        return;
+      let levels = /* @__PURE__ */ new Map();
+      for (let technologyId of technologyIds) {
+        let rawLevel = readProperty(tech, technologyId), level = rawLevel ?? 0;
+        if (typeof level != "number" || !Number.isFinite(level) || level < 0)
+          return;
+        levels.set(technologyId, level);
+      }
+      return levels;
+    };
   }
 
   // src/adapters/evolve/economy/production/captured-factory-capacity.ts
@@ -57569,7 +58025,7 @@ Only continue if you trust the source. Injected code:
       keyState: pageCapture2.keyState,
       readSettings: () => settingsStore.readRaw(),
       onActivity
-    }), capturedPrestigeGoal = "Standard", capturedResetCommittedThisCycle = !1, lastMadGoalDiagnostic = "", capturedMechCycleHasPendingWork = !1, capturedMercenary = createCapturedMercenary({
+    }), capturedPrestigeGoal = "Standard", capturedResetCommittedThisCycle = !1, lastMadGoalDiagnostic = "", lastResearchDefinitions, lastResearchGraphKey = "", lastResearchGraph, researchRegistryRevision = 0, readResearchGrantLevels = createCapturedTechPrerequisiteLevelReader(), capturedMechCycleHasPendingWork = !1, capturedMercenary = createCapturedMercenary({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
       readSettings: () => settingsStore.readRaw(),
@@ -59182,7 +59638,91 @@ Only continue if you trust the source. Injected code:
           prestige.run();
         }), settings.prestigeType === "mad" && diagnostics?.readPerformanceEnabled() === !0 && runCapturedDiagnosticSafely(
           () => {
-            let root = pageCapture2.rootState.readRoot(), progressionEpoch = progression.readProgressionEpoch(), offers = progression.readOfferedTechs(), madControl = pageCapture2.controls.resolve(CAPTURED_MAD_CONTROL), plan = observeCapturedMadGoal(
+            let root = pageCapture2.rootState.readRoot(), progressionEpoch = progression.readProgressionEpoch(), researchRootGeneration = progression.readRootGeneration(), offers = progression.readOfferedTechs(), researchDefinitions = progression.readResearchActionDefinitions();
+            lastResearchDefinitions !== researchDefinitions && (researchRegistryRevision += 1);
+            let researchGrantLevels = readResearchGrantLevels(
+              root,
+              researchDefinitions
+            ), researchOfferIdentity = offers?.map((offer) => offer.elementId).sort() ?? void 0, researchOfferGenerations = offers?.map((offer) => [
+              offer.elementId,
+              offer.generation
+            ]).sort(([first], [second]) => first.localeCompare(second)) ?? void 0, nextResearchGraphKey = JSON.stringify({
+              registryRevision: researchRegistryRevision,
+              progressionEpoch,
+              rootGeneration: researchRootGeneration,
+              levels: researchGrantLevels === void 0 ? void 0 : [...researchGrantLevels],
+              offers: researchOfferIdentity
+            }), researchPrerequisiteGraph;
+            lastResearchGraph === void 0 || lastResearchDefinitions !== researchDefinitions || lastResearchGraphKey !== nextResearchGraphKey ? (researchPrerequisiteGraph = planNativeResearchPrerequisites({
+              targetActionId: CAPTURED_MAD_RESEARCH_TECH,
+              definitions: researchDefinitions?.map((definition) => ({
+                actionId: definition.actionId,
+                grantTechnology: definition.grantTechnology,
+                grantLevel: definition.grantLevel,
+                prerequisites: definition.prerequisites,
+                hasNativeCondition: definition.eligibility.hasNativeCondition,
+                routeRestrictions: definition.eligibility.routeRestrictions,
+                restrictions: definition.eligibility.restrictions
+              })),
+              grantLevels: researchGrantLevels,
+              offeredActionIds: offers === void 0 ? void 0 : new Set(offers.map((offer) => offer.elementId)),
+              offerGenerations: offers === void 0 ? void 0 : new Map(
+                offers.map((offer) => [
+                  offer.elementId,
+                  offer.generation
+                ])
+              ),
+              cycle: automationCycle,
+              progressionEpoch,
+              rootGeneration: researchRootGeneration,
+              maxDepth: 16,
+              maxActions: 256
+            }), lastResearchDefinitions = researchDefinitions, lastResearchGraphKey = nextResearchGraphKey, lastResearchGraph = researchPrerequisiteGraph) : researchPrerequisiteGraph = Object.freeze({
+              ...lastResearchGraph,
+              freshness: Object.freeze({
+                ...lastResearchGraph.freshness,
+                cycle: automationCycle,
+                offerGenerations: researchOfferGenerations === void 0 ? void 0 : Object.freeze(
+                  researchOfferGenerations.map(
+                    ([actionId, generation]) => Object.freeze([actionId, generation])
+                  )
+                )
+              })
+            });
+            let researchRequirementById = new Map(
+              researchPrerequisiteGraph.requirements.map((gate) => [
+                gate.id,
+                gate
+              ])
+            ), researchTargetDefinition = researchDefinitions?.find(
+              (definition) => definition.actionId === researchPrerequisiteGraph.targetActionId
+            ), researchDirectGates = (researchTargetDefinition?.prerequisites.kind === "declared" ? researchTargetDefinition.prerequisites.requirements : []).flatMap(
+              (prerequisite) => {
+                let gate = researchRequirementById.get(
+                  `research:${prerequisite.technologyId}:${prerequisite.requiredLevel}`
+                );
+                return gate === void 0 ? [] : [
+                  {
+                    technology: gate.technologyId,
+                    required: gate.requiredLevel,
+                    observed: gate.observedLevel,
+                    declaredStatus: gate.declaredStatus,
+                    status: gate.status
+                  }
+                ];
+              }
+            ), researchFrontier = researchPrerequisiteGraph.actionableFrontier.map((actionId) => {
+              let offer = offers?.find(
+                (candidate) => candidate.elementId === actionId
+              );
+              return {
+                actionId,
+                ...offer === void 0 ? {} : {
+                  observedCost: offer.cost,
+                  nativeAffordable: offer.nativeAffordable
+                }
+              };
+            }), researchSignature = nextResearchGraphKey, madControl = pageCapture2.controls.resolve(CAPTURED_MAD_CONTROL), plan = observeCapturedMadGoal(
               root,
               settings,
               offers,
@@ -59190,12 +59730,22 @@ Only continue if you trust the source. Injected code:
               automationCycle,
               progressionEpoch,
               madControl !== void 0 && madControl.methods.includes("arm") && madControl.methods.includes("launch")
-            ), currentTechMad = progression.readOfferedTechs()?.find(
+            ), currentOffers = progression.readOfferedTechs(), currentTechMad = currentOffers?.find(
               (offer) => offer.elementId === CAPTURED_MAD_RESEARCH_TECH
             ), currentTechMadControl = pageCapture2.controls.resolve(
               CAPTURED_MAD_RESEARCH_TECH
-            ), rootIsCurrent = pageCapture2.rootState.readRoot() === root, progressionIsCurrent = progression.readProgressionEpoch() === progressionEpoch, madBindingIsCurrent = pageCapture2.controls.resolve(CAPTURED_MAD_CONTROL)?.generation === madControl?.generation, researchBindingIsCurrent = currentTechMad === void 0 || currentTechMadControl?.generation === currentTechMad.generation;
-            if (!rootIsCurrent || !progressionIsCurrent || !madBindingIsCurrent || !researchBindingIsCurrent)
+            ), rootIsCurrent = pageCapture2.rootState.readRoot() === root, progressionIsCurrent = progression.readProgressionEpoch() === progressionEpoch, researchRootGenerationIsCurrent = progression.readRootGeneration() === researchRootGeneration, madBindingIsCurrent = pageCapture2.controls.resolve(CAPTURED_MAD_CONTROL)?.generation === madControl?.generation, currentResearchOfferGenerations = currentOffers?.map((offer) => [
+              offer.elementId,
+              offer.generation
+            ]).sort(([first], [second]) => first.localeCompare(second)) ?? void 0, researchBindingIsCurrent = JSON.stringify(currentResearchOfferGenerations) === JSON.stringify(researchOfferGenerations) && researchFrontier.every((frontierOffer) => {
+              let currentOffer = currentOffers?.find(
+                (offer) => offer.elementId === frontierOffer.actionId
+              );
+              return currentOffer !== void 0 && currentOffer.generation === offers?.find(
+                (offer) => offer.elementId === frontierOffer.actionId
+              )?.generation && JSON.stringify(currentOffer.cost) === JSON.stringify(frontierOffer.observedCost) && currentOffer.nativeAffordable === frontierOffer.nativeAffordable;
+            }) && (currentTechMad === void 0 || currentTechMadControl?.generation === currentTechMad.generation);
+            if (!rootIsCurrent || !progressionIsCurrent || !researchRootGenerationIsCurrent || !madBindingIsCurrent || !researchBindingIsCurrent)
               reportOnce(
                 "goal.mad unavailable=observation crossed a root, progression, or binding generation"
               );
@@ -59208,6 +59758,12 @@ Only continue if you trust the source. Injected code:
                 blockers: plan.blockers,
                 unavailableFacts: plan.unavailableFacts,
                 affordability: plan.affordability,
+                researchFrontierEconomics: researchFrontier.map((offer) => ({
+                  actionId: offer.actionId,
+                  cost: offer.observedCost,
+                  nativeAffordable: offer.nativeAffordable
+                })),
+                researchSignature,
                 strategyComparison: plan.strategyComparison === void 0 ? void 0 : {
                   goalId: plan.strategyComparison.goalId,
                   winner: plan.strategyComparison.winner,
@@ -59239,7 +59795,18 @@ Only continue if you trust the source. Injected code:
                 lastMadGoalDiagnostic = signature;
                 let goalQuantityDisplay = (value) => value === void 0 ? "?" : String(Math.round(value)), goalCapacityDisplay = (value) => value !== void 0 && value < 0 ? "unlimited" : goalQuantityDisplay(value), goalEtaDisplay = (value) => value === void 0 ? "?" : `${value.toFixed(2)}s`, requirements = plan.quantitativeRequirements.map(
                   (requirement) => `${requirement.resourceId}:${goalQuantityDisplay(requirement.held)}/${goalQuantityDisplay(requirement.amount)}@${goalCapacityDisplay(requirement.capacity)}#${goalQuantityDisplay(requirement.netRate)}`
-                ).join(";");
+                ).join(";"), directResearchGates = researchDirectGates.map(
+                  (gate) => `${gate.technology}@${gate.required}=${gate.observed ?? "?"}:${gate.declaredStatus === "satisfied" ? "ok" : gate.declaredStatus === "unsatisfied" ? "miss" : "?"}/${gate.status === "satisfied" ? "ok" : gate.status === "unsatisfied" ? "miss" : gate.status === "conditional" ? "cond" : "?"}`
+                ).join(","), highTechResearchChain = researchPrerequisiteGraph.requirements.filter(
+                  (gate) => gate.technologyId === "high_tech" && gate.requiredLevel < 7
+                ).sort(
+                  (left, right) => left.requiredLevel - right.requiredLevel
+                ).map(
+                  (gate) => `H${gate.requiredLevel}=${gate.observedLevel ?? "?"}:${gate.declaredStatus === "satisfied" ? "ok" : gate.declaredStatus === "unsatisfied" ? "miss" : "?"}/${gate.status === "satisfied" ? "ok" : gate.status === "unsatisfied" ? "miss" : gate.status === "conditional" ? "cond" : "?"}`
+                ).join(">"), frontierResearchOffers = researchFrontier.slice(0, 1).map((offer) => {
+                  let cost = offer.observedCost?.Knowledge;
+                  return `${offer.actionId}:K${cost ?? "?"}:${offer.nativeAffordable === !0 ? "ok" : "blocked"}`;
+                }).join(","), unavailableResearchReason = researchPrerequisiteGraph.unavailableFacts[0]?.slice(0, 72);
                 if (reportDiagnostic(
                   `goal.mad status=${plan.status} selected=${plan.selectedGoal.id} subgoal=${plan.currentSubgoal ?? "none"} frontier=${plan.frontierTrace.join(">")} blockers=${plan.blockers.join(",")}`
                 ), reportDiagnostic(
@@ -59260,6 +59827,8 @@ Only continue if you trust the source. Injected code:
                 }
                 reportDiagnostic(
                   `goal.mad unavailable=${plan.unavailableFacts.join(";")} freshness=cycle:${plan.freshness.cycle},offer:${plan.freshness.offerGeneration ?? "none"}`
+                ), reportDiagnostic(
+                  `goal.mad research target=${researchPrerequisiteGraph.targetStatus} direct=${directResearchGates} chain=${highTechResearchChain || "?"} offered=${frontierResearchOffers} unknown=cond/route/trait-gene/queue/cement${researchPrerequisiteGraph.targetStatus === "unavailable" ? ` why=${unavailableResearchReason ?? "unspecified"}` : ""}`
                 );
               }
             }

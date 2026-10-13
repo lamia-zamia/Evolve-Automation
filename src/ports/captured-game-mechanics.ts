@@ -85,6 +85,31 @@ export interface CapturedTechDefinition {
   readonly actionId: string;
   readonly grantTechnology: string;
   readonly grantLevel: number;
+  /** Literal `reqs` metadata only; function-valued requirements are deliberately not invoked. */
+  readonly prerequisites:
+    | {
+        readonly kind: "declared";
+        readonly requirements: readonly CapturedTechPrerequisite[];
+      }
+    | { readonly kind: "conditional"; readonly reason: string }
+    | { readonly kind: "unavailable"; readonly reason: string };
+  /** Static eligibility metadata that remains outside the prerequisite predicate. */
+  readonly eligibility: Readonly<{
+    readonly hasNativeCondition: boolean;
+    readonly routeRestrictions: readonly string[] | undefined;
+    readonly restrictions: readonly CapturedTechRestriction[];
+  }>;
+}
+
+export interface CapturedTechPrerequisite {
+  readonly technologyId: string;
+  readonly requiredLevel: number;
+  readonly applicabilityBoundary?: string;
+}
+
+export interface CapturedTechRestriction {
+  readonly kind: "trait" | "not_trait" | "gene" | "not_gene" | "not_tech";
+  readonly values: readonly string[];
 }
 
 export interface CapturedNativeSupportGrid {

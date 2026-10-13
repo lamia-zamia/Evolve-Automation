@@ -2127,6 +2127,10 @@ function validTechRegistry() {
       ["beta", "tech-beta", "beta", 2],
     ],
   );
+  assert.deepEqual(retainedTechDefinitions?.[0]?.prerequisites, {
+    kind: "declared",
+    requirements: [],
+  });
   assert.equal(
     fixture.installed.mechanics.readTechDefinitions(),
     retainedTechDefinitions,
@@ -2146,6 +2150,64 @@ function validTechRegistry() {
     undefined,
     "replacing a native action object invalidates retained authority",
   );
+  fixture.installed.uninstall();
+}
+
+{
+  let reqsCalls = 0;
+  const registry = {
+    static: {
+      id: "tech-static",
+      grant: ["static", 2],
+      reqs: { primitive: 2, storage: 1, cement: 1 },
+      path: ["standard", "truepath"],
+      not_trait: ["flier"],
+    },
+    dynamic: {
+      id: "tech-dynamic",
+      grant: ["dynamic", 1],
+      reqs() {
+        reqsCalls += 1;
+        return { hidden: 1 };
+      },
+      condition() {
+        throw new Error("captured metadata must not call native conditions");
+      },
+      trait: ["psychic"],
+    },
+  };
+  const fixture = techRegistryPage(registry);
+  fixture.installed.mechanics.captureTechDefinitionsDuring(() =>
+    fixture.page.Object.keys(registry),
+  );
+  const definitions = fixture.installed.mechanics.readTechDefinitions();
+  assert.deepEqual(definitions?.[0]?.prerequisites, {
+    kind: "declared",
+    requirements: [
+      { technologyId: "primitive", requiredLevel: 2 },
+      { technologyId: "storage", requiredLevel: 1 },
+      {
+        technologyId: "cement",
+        requiredLevel: 1,
+        applicabilityBoundary:
+          "actions.js skipRequirement skips cement for Flier; current route applicability is not evaluated",
+      },
+    ],
+  });
+  assert.deepEqual(definitions?.[0]?.eligibility, {
+    hasNativeCondition: false,
+    routeRestrictions: ["standard", "truepath"],
+    restrictions: [{ kind: "not_trait", values: ["flier"] }],
+  });
+  assert.deepEqual(definitions?.[1]?.prerequisites, {
+    kind: "conditional",
+    reason: "native reqs is a function and was not evaluated",
+  });
+  assert.equal(definitions?.[1]?.eligibility.hasNativeCondition, true);
+  assert.deepEqual(definitions?.[1]?.eligibility.restrictions, [
+    { kind: "trait", values: ["psychic"] },
+  ]);
+  assert.equal(reqsCalls, 0);
   fixture.installed.uninstall();
 }
 

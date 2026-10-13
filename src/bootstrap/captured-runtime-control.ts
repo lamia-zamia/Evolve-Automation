@@ -46,6 +46,10 @@ import {
   observeCapturedMadGoal,
 } from "../adapters/evolve/progression/prestige/captured-mad.ts";
 import { runCapturedDiagnosticSafely } from "./captured-diagnostic.ts";
+import { planNativeResearchPrerequisites } from "../domain/progression/research-prerequisite-planning.ts";
+import type { NativeResearchPrerequisiteGraph } from "../domain/progression/research-prerequisite-planning.ts";
+import { createCapturedTechPrerequisiteLevelReader } from "../adapters/evolve/progression/research/captured-tech-prerequisite-levels.ts";
+import type { CapturedTechDefinition } from "../ports/captured-game-mechanics.ts";
 import { createCapturedCraftsmenAutomation } from "../adapters/evolve/civic/captured-craftsmen.ts";
 import {
   createCapturedFullJobsAutomation,
@@ -861,6 +865,11 @@ export function startCapturedRuntime({
   let capturedPrestigeGoal = "Standard";
   let capturedResetCommittedThisCycle = false;
   let lastMadGoalDiagnostic = "";
+  let lastResearchDefinitions: readonly CapturedTechDefinition[] | undefined;
+  let lastResearchGraphKey = "";
+  let lastResearchGraph: NativeResearchPrerequisiteGraph | undefined;
+  let researchRegistryRevision = 0;
+  const readResearchGrantLevels = createCapturedTechPrerequisiteLevelReader();
   let capturedMechCycleHasPendingWork = false;
   const capturedMercenary = createCapturedMercenary({
     rootState: pageCapture.rootState,
@@ -3907,7 +3916,143 @@ export function startCapturedRuntime({
           () => {
             const root = pageCapture.rootState.readRoot();
             const progressionEpoch = progression.readProgressionEpoch();
+            const researchRootGeneration = progression.readRootGeneration();
             const offers = progression.readOfferedTechs();
+            const researchDefinitions =
+              progression.readResearchActionDefinitions();
+            if (lastResearchDefinitions !== researchDefinitions)
+              researchRegistryRevision += 1;
+            const researchGrantLevels = readResearchGrantLevels(
+              root,
+              researchDefinitions,
+            );
+            const researchOfferIdentity =
+              offers?.map((offer) => offer.elementId).sort() ?? undefined;
+            const researchOfferGenerations =
+              offers
+                ?.map((offer): readonly [string, number] => [
+                  offer.elementId,
+                  offer.generation,
+                ])
+                .sort(([first], [second]) => first.localeCompare(second)) ??
+              undefined;
+            const nextResearchGraphKey = JSON.stringify({
+              registryRevision: researchRegistryRevision,
+              progressionEpoch,
+              rootGeneration: researchRootGeneration,
+              levels:
+                researchGrantLevels === undefined
+                  ? undefined
+                  : [...researchGrantLevels],
+              offers: researchOfferIdentity,
+            });
+            let researchPrerequisiteGraph: NativeResearchPrerequisiteGraph;
+            if (
+              lastResearchGraph === undefined ||
+              lastResearchDefinitions !== researchDefinitions ||
+              lastResearchGraphKey !== nextResearchGraphKey
+            ) {
+              researchPrerequisiteGraph = planNativeResearchPrerequisites({
+                targetActionId: CAPTURED_MAD_RESEARCH_TECH,
+                definitions: researchDefinitions?.map((definition) => ({
+                  actionId: definition.actionId,
+                  grantTechnology: definition.grantTechnology,
+                  grantLevel: definition.grantLevel,
+                  prerequisites: definition.prerequisites,
+                  hasNativeCondition: definition.eligibility.hasNativeCondition,
+                  routeRestrictions: definition.eligibility.routeRestrictions,
+                  restrictions: definition.eligibility.restrictions,
+                })),
+                grantLevels: researchGrantLevels,
+                offeredActionIds:
+                  offers === undefined
+                    ? undefined
+                    : new Set(offers.map((offer) => offer.elementId)),
+                offerGenerations:
+                  offers === undefined
+                    ? undefined
+                    : new Map(
+                        offers.map((offer) => [
+                          offer.elementId,
+                          offer.generation,
+                        ]),
+                      ),
+                cycle: automationCycle,
+                progressionEpoch,
+                rootGeneration: researchRootGeneration,
+                maxDepth: 16,
+                maxActions: 256,
+              });
+              lastResearchDefinitions = researchDefinitions;
+              lastResearchGraphKey = nextResearchGraphKey;
+              lastResearchGraph = researchPrerequisiteGraph;
+            } else {
+              researchPrerequisiteGraph = Object.freeze({
+                ...lastResearchGraph,
+                freshness: Object.freeze({
+                  ...lastResearchGraph.freshness,
+                  cycle: automationCycle,
+                  offerGenerations:
+                    researchOfferGenerations === undefined
+                      ? undefined
+                      : Object.freeze(
+                          researchOfferGenerations.map(
+                            ([actionId, generation]) =>
+                              Object.freeze([actionId, generation] as const),
+                          ),
+                        ),
+                }),
+              });
+            }
+            const researchRequirementById = new Map(
+              researchPrerequisiteGraph.requirements.map((gate) => [
+                gate.id,
+                gate,
+              ]),
+            );
+            const researchTargetDefinition = researchDefinitions?.find(
+              (definition) =>
+                definition.actionId ===
+                researchPrerequisiteGraph.targetActionId,
+            );
+            const researchDirectRequirements =
+              researchTargetDefinition?.prerequisites.kind === "declared"
+                ? researchTargetDefinition.prerequisites.requirements
+                : [];
+            const researchDirectGates = researchDirectRequirements.flatMap(
+              (prerequisite) => {
+                const gate = researchRequirementById.get(
+                  `research:${prerequisite.technologyId}:${prerequisite.requiredLevel}`,
+                );
+                return gate === undefined
+                  ? []
+                  : [
+                      {
+                        technology: gate.technologyId,
+                        required: gate.requiredLevel,
+                        observed: gate.observedLevel,
+                        declaredStatus: gate.declaredStatus,
+                        status: gate.status,
+                      },
+                    ];
+              },
+            );
+            const researchFrontier =
+              researchPrerequisiteGraph.actionableFrontier.map((actionId) => {
+                const offer = offers?.find(
+                  (candidate) => candidate.elementId === actionId,
+                );
+                return {
+                  actionId,
+                  ...(offer === undefined
+                    ? {}
+                    : {
+                        observedCost: offer.cost,
+                        nativeAffordable: offer.nativeAffordable,
+                      }),
+                };
+              });
+            const researchSignature = nextResearchGraphKey;
             const madControl =
               pageCapture.controls.resolve(CAPTURED_MAD_CONTROL);
             const plan = observeCapturedMadGoal(
@@ -3931,15 +4076,47 @@ export function startCapturedRuntime({
             const rootIsCurrent = pageCapture.rootState.readRoot() === root;
             const progressionIsCurrent =
               progression.readProgressionEpoch() === progressionEpoch;
+            const researchRootGenerationIsCurrent =
+              progression.readRootGeneration() === researchRootGeneration;
             const madBindingIsCurrent =
               pageCapture.controls.resolve(CAPTURED_MAD_CONTROL)?.generation ===
               madControl?.generation;
+            const currentResearchOfferGenerations =
+              currentOffers
+                ?.map((offer): readonly [string, number] => [
+                  offer.elementId,
+                  offer.generation,
+                ])
+                .sort(([first], [second]) => first.localeCompare(second)) ??
+              undefined;
+            const researchOfferSampleIsCurrent =
+              JSON.stringify(currentResearchOfferGenerations) ===
+                JSON.stringify(researchOfferGenerations) &&
+              researchFrontier.every((frontierOffer) => {
+                const currentOffer = currentOffers?.find(
+                  (offer) => offer.elementId === frontierOffer.actionId,
+                );
+                return (
+                  currentOffer !== undefined &&
+                  currentOffer.generation ===
+                    offers?.find(
+                      (offer) => offer.elementId === frontierOffer.actionId,
+                    )?.generation &&
+                  JSON.stringify(currentOffer.cost) ===
+                    JSON.stringify(frontierOffer.observedCost) &&
+                  currentOffer.nativeAffordable ===
+                    frontierOffer.nativeAffordable
+                );
+              });
             const researchBindingIsCurrent =
-              currentTechMad === undefined ||
-              currentTechMadControl?.generation === currentTechMad.generation;
+              researchOfferSampleIsCurrent &&
+              (currentTechMad === undefined ||
+                currentTechMadControl?.generation ===
+                  currentTechMad.generation);
             if (
               !rootIsCurrent ||
               !progressionIsCurrent ||
+              !researchRootGenerationIsCurrent ||
               !madBindingIsCurrent ||
               !researchBindingIsCurrent
             ) {
@@ -3955,6 +4132,12 @@ export function startCapturedRuntime({
                 blockers: plan.blockers,
                 unavailableFacts: plan.unavailableFacts,
                 affordability: plan.affordability,
+                researchFrontierEconomics: researchFrontier.map((offer) => ({
+                  actionId: offer.actionId,
+                  cost: offer.observedCost,
+                  nativeAffordable: offer.nativeAffordable,
+                })),
+                researchSignature,
                 strategyComparison:
                   plan.strategyComparison === undefined
                     ? undefined
@@ -4022,6 +4205,36 @@ export function startCapturedRuntime({
                       `${requirement.resourceId}:${goalQuantityDisplay(requirement.held)}/${goalQuantityDisplay(requirement.amount)}@${goalCapacityDisplay(requirement.capacity)}#${goalQuantityDisplay(requirement.netRate)}`,
                   )
                   .join(";");
+                const directResearchGates = researchDirectGates
+                  .map(
+                    (gate) =>
+                      `${gate.technology}@${gate.required}=${gate.observed ?? "?"}:${gate.declaredStatus === "satisfied" ? "ok" : gate.declaredStatus === "unsatisfied" ? "miss" : "?"}/${gate.status === "satisfied" ? "ok" : gate.status === "unsatisfied" ? "miss" : gate.status === "conditional" ? "cond" : "?"}`,
+                  )
+                  .join(",");
+                const highTechResearchChain =
+                  researchPrerequisiteGraph.requirements
+                    .filter(
+                      (gate) =>
+                        gate.technologyId === "high_tech" &&
+                        gate.requiredLevel < 7,
+                    )
+                    .sort(
+                      (left, right) => left.requiredLevel - right.requiredLevel,
+                    )
+                    .map(
+                      (gate) =>
+                        `H${gate.requiredLevel}=${gate.observedLevel ?? "?"}:${gate.declaredStatus === "satisfied" ? "ok" : gate.declaredStatus === "unsatisfied" ? "miss" : "?"}/${gate.status === "satisfied" ? "ok" : gate.status === "unsatisfied" ? "miss" : gate.status === "conditional" ? "cond" : "?"}`,
+                    )
+                    .join(">");
+                const frontierResearchOffers = researchFrontier
+                  .slice(0, 1)
+                  .map((offer) => {
+                    const cost = offer.observedCost?.["Knowledge"];
+                    return `${offer.actionId}:K${cost ?? "?"}:${offer.nativeAffordable === true ? "ok" : "blocked"}`;
+                  })
+                  .join(",");
+                const unavailableResearchReason =
+                  researchPrerequisiteGraph.unavailableFacts[0]?.slice(0, 72);
                 reportDiagnostic(
                   `goal.mad status=${plan.status} selected=${plan.selectedGoal.id} subgoal=${plan.currentSubgoal ?? "none"} frontier=${plan.frontierTrace.join(">")} blockers=${plan.blockers.join(",")}`,
                 );
@@ -4047,6 +4260,9 @@ export function startCapturedRuntime({
                 }
                 reportDiagnostic(
                   `goal.mad unavailable=${plan.unavailableFacts.join(";")} freshness=cycle:${plan.freshness.cycle},offer:${plan.freshness.offerGeneration ?? "none"}`,
+                );
+                reportDiagnostic(
+                  `goal.mad research target=${researchPrerequisiteGraph.targetStatus} direct=${directResearchGates} chain=${highTechResearchChain || "?"} offered=${frontierResearchOffers} unknown=cond/route/trait-gene/queue/cement${researchPrerequisiteGraph.targetStatus === "unavailable" ? ` why=${unavailableResearchReason ?? "unspecified"}` : ""}`,
                 );
               }
             }

@@ -11,6 +11,8 @@ import type {
   CapturedGameMechanics,
   CapturedGameRead,
   CapturedTechDefinition,
+  CapturedTechPrerequisite,
+  CapturedTechRestriction,
   CapturedGameStructureIdentity,
   CapturedGameStructureDefinition,
   CapturedSupportAnchorResolver,
@@ -40,6 +42,199 @@ const structureMapCaptureThreshold = 3;
 
 interface CapturedNativeTechDefinitionIdentity extends CapturedTechDefinition {
   readonly action: Record<string, unknown>;
+}
+
+function readCapturedTechPrerequisites(
+  action: Record<string, unknown>,
+): CapturedTechDefinition["prerequisites"] {
+  let descriptor: PropertyDescriptor | undefined;
+  try {
+    descriptor = Object.getOwnPropertyDescriptor(action, "reqs");
+  } catch {
+    return {
+      kind: "unavailable",
+      reason: "native reqs metadata could not be read",
+    };
+  }
+  if (descriptor === undefined)
+    return { kind: "declared", requirements: Object.freeze([]) };
+  if (!("value" in descriptor))
+    return {
+      kind: "unavailable",
+      reason: "native reqs metadata is an accessor",
+    };
+  const raw = descriptor.value;
+  if (!raw) return { kind: "declared", requirements: Object.freeze([]) };
+  if (typeof raw === "function")
+    return {
+      kind: "conditional",
+      reason: "native reqs is a function and was not evaluated",
+    };
+  if (!isNonArrayRecord(raw))
+    return {
+      kind: "unavailable",
+      reason: "native reqs is not a static record",
+    };
+  try {
+    const requirements: CapturedTechPrerequisite[] = [];
+    for (const technologyId of Object.getOwnPropertyNames(raw)) {
+      const requirementDescriptor = Object.getOwnPropertyDescriptor(
+        raw,
+        technologyId,
+      );
+      if (requirementDescriptor?.enumerable !== true) continue;
+      const value =
+        requirementDescriptor !== undefined && "value" in requirementDescriptor
+          ? requirementDescriptor.value
+          : undefined;
+      if (
+        technologyId.length === 0 ||
+        typeof value !== "number" ||
+        !Number.isFinite(value) ||
+        value <= 0
+      )
+        return {
+          kind: "unavailable",
+          reason: "native reqs contains an invalid technology level",
+        };
+      requirements.push(
+        Object.freeze({
+          technologyId,
+          requiredLevel: value,
+          ...(technologyId === "cement"
+            ? {
+                applicabilityBoundary:
+                  "actions.js skipRequirement skips cement for Flier; current route applicability is not evaluated",
+              }
+            : {}),
+        }),
+      );
+    }
+    return { kind: "declared", requirements: Object.freeze(requirements) };
+  } catch {
+    return {
+      kind: "unavailable",
+      reason: "native reqs record could not be enumerated",
+    };
+  }
+}
+
+function sameCapturedTechPrerequisiteMetadata(
+  first: CapturedTechDefinition,
+  second: CapturedTechDefinition,
+): boolean {
+  if (
+    first.prerequisites.kind !== second.prerequisites.kind ||
+    first.eligibility.hasNativeCondition !==
+      second.eligibility.hasNativeCondition
+  )
+    return false;
+  if (first.prerequisites.kind === "declared") {
+    if (second.prerequisites.kind !== "declared") return false;
+    const firstRequirements = first.prerequisites.requirements;
+    const secondRequirements = second.prerequisites.requirements;
+    if (
+      firstRequirements.length !== secondRequirements.length ||
+      !firstRequirements.every((requirement, index) => {
+        const other = secondRequirements[index];
+        return (
+          other !== undefined &&
+          requirement.technologyId === other.technologyId &&
+          requirement.requiredLevel === other.requiredLevel &&
+          requirement.applicabilityBoundary === other.applicabilityBoundary
+        );
+      })
+    )
+      return false;
+  } else if (
+    second.prerequisites.kind === "declared" ||
+    first.prerequisites.reason !== second.prerequisites.reason
+  )
+    return false;
+  const firstRoute = first.eligibility.routeRestrictions;
+  const secondRoute = second.eligibility.routeRestrictions;
+  if (
+    (firstRoute === undefined) !== (secondRoute === undefined) ||
+    (firstRoute !== undefined &&
+      secondRoute !== undefined &&
+      (firstRoute.length !== secondRoute.length ||
+        !firstRoute.every((route, index) => route === secondRoute[index]))) ||
+    first.eligibility.restrictions.length !==
+      second.eligibility.restrictions.length ||
+    !first.eligibility.restrictions.every((restriction, index) => {
+      const other = second.eligibility.restrictions[index];
+      return (
+        other !== undefined &&
+        restriction.kind === other.kind &&
+        restriction.values.length === other.values.length &&
+        restriction.values.every(
+          (value, valueIndex) => value === other.values[valueIndex],
+        )
+      );
+    })
+  )
+    return false;
+  return true;
+}
+
+function readCapturedTechEligibility(
+  action: Record<string, unknown>,
+): CapturedTechDefinition["eligibility"] | undefined {
+  const readStringList = (
+    key: string,
+  ): readonly string[] | undefined | false => {
+    let descriptor: PropertyDescriptor | undefined;
+    try {
+      descriptor = Object.getOwnPropertyDescriptor(action, key);
+      if (descriptor === undefined) return undefined;
+      if (!("value" in descriptor) || !Array.isArray(descriptor.value))
+        return false;
+      const values: string[] = [];
+      for (const value of descriptor.value) {
+        if (typeof value !== "string" || value.length === 0) return false;
+        values.push(value);
+      }
+      return Object.freeze(values);
+    } catch {
+      return false;
+    }
+  };
+
+  let conditionDescriptor: PropertyDescriptor | undefined;
+  try {
+    conditionDescriptor = Object.getOwnPropertyDescriptor(action, "condition");
+  } catch {
+    return undefined;
+  }
+  if (
+    conditionDescriptor !== undefined &&
+    (!("value" in conditionDescriptor) ||
+      (conditionDescriptor.value !== undefined &&
+        typeof conditionDescriptor.value !== "function"))
+  )
+    return undefined;
+  const routeRestrictions = readStringList("path");
+  if (routeRestrictions === false) return undefined;
+  const restrictions: CapturedTechRestriction[] = [];
+  for (const kind of [
+    "trait",
+    "not_trait",
+    "gene",
+    "not_gene",
+    "not_tech",
+  ] as const) {
+    const values = readStringList(kind);
+    if (values === false) return undefined;
+    if (values !== undefined)
+      restrictions.push(Object.freeze({ kind, values }));
+  }
+  return Object.freeze({
+    hasNativeCondition:
+      conditionDescriptor !== undefined &&
+      typeof conditionDescriptor.value === "function",
+    routeRestrictions,
+    restrictions: Object.freeze(restrictions),
+  });
 }
 
 interface CapturedNativeTechRegistrySnapshot {
@@ -107,6 +302,10 @@ function readNativeTechRegistrySnapshot(
       return undefined;
     }
 
+    const prerequisites = readCapturedTechPrerequisites(action);
+    const eligibility = readCapturedTechEligibility(action);
+    if (eligibility === undefined) return undefined;
+
     keys.push(rawKey);
     seenActionIds.add(actionId);
     const definition = Object.freeze({
@@ -114,6 +313,8 @@ function readNativeTechRegistrySnapshot(
       actionId,
       grantTechnology,
       grantLevel,
+      prerequisites,
+      eligibility,
       action,
     });
     definitions.push(definition);
@@ -132,6 +333,8 @@ function readNativeTechRegistrySnapshot(
           actionId: definition.actionId,
           grantTechnology: definition.grantTechnology,
           grantLevel: definition.grantLevel,
+          prerequisites: definition.prerequisites,
+          eligibility: definition.eligibility,
         }),
       ),
     ),
@@ -154,7 +357,8 @@ function sameNativeTechRegistrySnapshot(
         definition.action === other.action &&
         definition.actionId === other.actionId &&
         definition.grantTechnology === other.grantTechnology &&
-        definition.grantLevel === other.grantLevel
+        definition.grantLevel === other.grantLevel &&
+        sameCapturedTechPrerequisiteMetadata(definition, other)
       );
     })
   );
