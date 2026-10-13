@@ -8,6 +8,7 @@ export interface CapturedGatherResourcesControlDependencies {
   readonly controls: GameControlRegistry;
   readonly readSettings: () => unknown;
   readonly onSkipped?: (key: string, reason: string) => void;
+  readonly readTestIntervention?: () => unknown;
 }
 
 export function createCapturedGatherResourcesControl(

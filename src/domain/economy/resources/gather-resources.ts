@@ -75,31 +75,60 @@ export function planGatherResources(
         : input.materialConjuring;
     let amount: number;
     const beforeAction: GatherResourceAssignment[] = [];
-    if (conjuring) {
-      amount = Math.floor(
+    const afterAction: GatherResourceAssignment[] = [];
+    if (conjuring && quantities.Mana >= 1) {
+      // Pinned actions.js gather val() spends one Mana and multiplies gain by ten while Mana >= 1.
+      const conjuredClicks = Math.floor(
         Math.min(
           (resource.maxQuantity - current) / (input.resourcesPerClick * 10),
           quantities.Mana,
           input.clickLimit,
         ),
       );
-      const manaQuantity = quantities.Mana - amount;
+      const manaQuantity = quantities.Mana - conjuredClicks;
+      amount = conjuredClicks;
+      if (conjuredClicks > 0 && manaQuantity < 1) {
+        amount += Math.ceil(
+          Math.min(
+            (resource.maxQuantity -
+              current -
+              conjuredClicks * input.resourcesPerClick * 10) /
+              input.resourcesPerClick,
+            input.clickLimit - conjuredClicks,
+          ),
+        );
+      }
+      const resourceQuantity = Math.min(
+        current +
+          conjuredClicks * input.resourcesPerClick * 10 +
+          (amount - conjuredClicks) * input.resourcesPerClick,
+        resource.maxQuantity,
+      );
       beforeAction.push(
+        Object.freeze({
+          resourceId: "Mana",
+          expectedQuantity: quantities.Mana,
+          quantity: quantities.Mana,
+        }),
+        Object.freeze({
+          resourceId: target.resourceId,
+          expectedQuantity: current,
+          quantity: current,
+        }),
+      );
+      afterAction.push(
         Object.freeze({
           resourceId: "Mana",
           expectedQuantity: quantities.Mana,
           quantity: manaQuantity,
         }),
-      );
-      quantities.Mana = manaQuantity;
-      const resourceQuantity = current + amount * input.resourcesPerClick;
-      beforeAction.push(
         Object.freeze({
           resourceId: target.resourceId,
           expectedQuantity: current,
           quantity: resourceQuantity,
         }),
       );
+      quantities.Mana = manaQuantity;
       quantities[target.resourceId] = resourceQuantity;
     } else {
       amount = Math.ceil(
@@ -116,6 +145,13 @@ export function planGatherResources(
         Object.freeze({
           resourceId: target.resourceId,
           expectedQuantity: current,
+          quantity: current,
+        }),
+      );
+      afterAction.push(
+        Object.freeze({
+          resourceId: target.resourceId,
+          expectedQuantity: current,
           quantity: resourceQuantity,
         }),
       );
@@ -126,7 +162,7 @@ export function planGatherResources(
         actionId: target.actionId,
         amount,
         beforeAction: Object.freeze(beforeAction),
-        afterAction: Object.freeze([]),
+        afterAction: Object.freeze(afterAction),
       }),
     );
   }

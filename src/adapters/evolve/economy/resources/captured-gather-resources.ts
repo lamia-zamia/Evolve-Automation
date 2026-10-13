@@ -21,6 +21,8 @@ import type { GameRootStateSource } from "../../../../ports/game-root-state.ts";
 import { rejected, stale, SUCCEEDED } from "../../../command-outcomes.ts";
 import { isRecord, readProperty } from "../../../validation.ts";
 
+declare const __EA_TEST_SURFACE_ENABLED__: boolean;
+
 const ACTION_ORDER: readonly GatherActionId[] = Object.freeze([
   "food",
   "lumber",
@@ -57,6 +59,8 @@ export interface CapturedGatherResourcesDependencies {
   /** Script settings have already crossed storage as unknown and are validated here. */
   readonly readSettings: () => unknown;
   readonly onSkipped?: (key: string, reason: string) => void;
+  /** Test-surface-only intervention read by the existing Gather owner. */
+  readonly readTestIntervention?: () => unknown;
 }
 
 function numberValue(value: unknown): number {
@@ -82,25 +86,25 @@ function readTechLevel(root: unknown, id: string): number {
 
 function readStrongMultiplier(root: unknown): number {
   const rank = readProperty(readProperty(root, "race"), "strong");
-  const normalized = rank === true ? 1 : numberValue(rank);
-  switch (normalized) {
-    case 0.1:
-      return 2;
-    case 0.25:
-      return 2;
-    case 0.5:
-      return 3;
-    case 1:
-      return 4;
-    case 2:
-      return 5;
-    case 3:
-      return 6;
-    case 4:
-      return 7;
-    default:
-      return 1;
-  }
+  const candidate = rank === true ? 1 : numberValue(rank);
+  const normalized = Math.max(
+    0.1,
+    Math.min(
+      Number.isFinite(candidate) && candidate !== 0 ? candidate : 1,
+      2.4,
+    ),
+  );
+  const lowRank = normalized < 1;
+  const fraction = lowRank
+    ? (normalized - 0.1) / 0.9
+    : normalized <= 2
+      ? normalized - 1
+      : 1 + (normalized - 2) / 2;
+  const lower = lowRank ? 2 : 4;
+  const upper = lowRank ? 4 : 7;
+
+  // Mirrors pinned races.js traitScale()/traits.strong.vars()[0] for manual gathering.
+  return Number((lower + (upper - lower) * fraction).toFixed(6));
 }
 
 function readControl(
@@ -182,6 +186,7 @@ export function createCapturedGatherResourcesAdapter({
   controls,
   readSettings,
   onSkipped,
+  readTestIntervention,
 }: CapturedGatherResourcesDependencies): {
   readonly reader: GatherResourcesReader;
   readonly executor: DecisionExecutor<GatherResourcesDecision>;
@@ -228,6 +233,30 @@ export function createCapturedGatherResourcesAdapter({
         chrysotile: readControl(controls, "chrysotile"),
         slaughter: readControl(controls, "slaughter"),
       });
+      const testManaConservation =
+        typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
+        __EA_TEST_SURFACE_ENABLED__ === true &&
+        readProperty(readTestIntervention?.(), "manaConservationExperiment") ===
+          true &&
+        resources.Mana.currentQuantity >= 1;
+      const foodConjuring = readTechLevel(root, "conjuring") >= 1;
+      const materialConjuring = readTechLevel(root, "conjuring") >= 2;
+      const foodCanSpendMana =
+        testManaConservation &&
+        foodConjuring &&
+        resources.Food.currentQuantity < resources.Food.maxQuantity;
+      const materialsCanSpendMana =
+        testManaConservation &&
+        materialConjuring &&
+        resources.Lumber.currentQuantity < resources.Lumber.maxQuantity;
+      const stoneCanSpendMana =
+        testManaConservation &&
+        materialConjuring &&
+        resources.Stone.currentQuantity < resources.Stone.maxQuantity;
+      const chrysotileCanSpendMana =
+        testManaConservation &&
+        materialConjuring &&
+        resources.Chrysotile.currentQuantity < resources.Chrysotile.maxQuantity;
       const furs = readProperty(readProperty(root, "resource"), "Furs");
       const input = Object.freeze({
         stopped,
@@ -238,14 +267,17 @@ export function createCapturedGatherResourcesAdapter({
         fasting: Boolean(readProperty(race, "fasting")),
         soulEater: Boolean(readProperty(race, "soul_eater")),
         primitive: readTechLevel(root, "primitive") >= 1,
-        foodConjuring: readTechLevel(root, "conjuring") >= 1,
-        materialConjuring: readTechLevel(root, "conjuring") >= 2,
+        foodConjuring,
+        materialConjuring,
         fursUnlocked: Boolean(readProperty(furs, "display")),
         clickable: Object.freeze({
-          food: controlsByAction.food !== undefined,
-          lumber: controlsByAction.lumber !== undefined,
-          stone: controlsByAction.stone !== undefined,
-          chrysotile: controlsByAction.chrysotile !== undefined,
+          food: controlsByAction.food !== undefined && !foodCanSpendMana,
+          lumber:
+            controlsByAction.lumber !== undefined && !materialsCanSpendMana,
+          stone: controlsByAction.stone !== undefined && !stoneCanSpendMana,
+          chrysotile:
+            controlsByAction.chrysotile !== undefined &&
+            !chrysotileCanSpendMana,
           slaughter: controlsByAction.slaughter !== undefined,
         }),
         resources,

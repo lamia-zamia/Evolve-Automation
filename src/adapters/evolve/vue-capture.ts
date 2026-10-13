@@ -41,6 +41,8 @@ import type {
 } from "../../ports/game-mount-suppression.ts";
 import { isRecord, readProperty } from "../validation.ts";
 
+declare const __EA_TEST_SURFACE_ENABLED__: boolean;
+
 type AnyFunction = (this: unknown, ...args: unknown[]) => unknown;
 
 const CAPTURE_MARKER = Symbol.for("evolve-automation.vue-capture");
@@ -254,6 +256,7 @@ export function installVueCapture(
   const captureOrder: string[] = [];
   let controlRevision = 0;
   const usage = new Map<string, GameControlUsage>();
+  let testInvocationId = 0;
   const bindingListeners = new Set<VueBindingListener>();
 
   let createAppHooked = false;
@@ -267,6 +270,24 @@ export function installVueCapture(
 
   let restoreVue: (() => void) | undefined;
   let vueWatch: AnyFunction | undefined;
+
+  function reportTestInvocation(
+    entry: Readonly<Record<string, unknown>>,
+  ): void {
+    if (
+      typeof __EA_TEST_SURFACE_ENABLED__ === "undefined" ||
+      __EA_TEST_SURFACE_ENABLED__ !== true
+    )
+      return;
+    const hooks = readProperty(pageWindow, "__EA_TEST_HOOKS__");
+    const hook = readProperty(hooks, "onControlInvocation");
+    if (typeof hook !== "function") return;
+    try {
+      Reflect.apply(hook, hooks, [entry]);
+    } catch (error) {
+      reportError("test-control-hook", String(error));
+    }
+  }
 
   function notifyRootReplaced(): void {
     for (const listener of [...rootListeners]) {
@@ -486,6 +507,23 @@ export function installVueCapture(
       });
       usage.set(usageKey, next);
     };
+    const invocationId =
+      typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
+      __EA_TEST_SURFACE_ENABLED__ === true
+        ? ++testInvocationId
+        : undefined;
+    if (invocationId !== undefined) {
+      reportTestInvocation(
+        Object.freeze({
+          phase: "before",
+          invocationId,
+          elementId: handle.elementId,
+          method,
+          generation: handle.generation,
+          args: Object.freeze([...args]),
+        }),
+      );
+    }
     try {
       const value = Reflect.apply(
         target,
@@ -493,9 +531,33 @@ export function installVueCapture(
         [...args],
       );
       record("returned");
+      if (invocationId !== undefined) {
+        reportTestInvocation(
+          Object.freeze({
+            phase: "after",
+            invocationId,
+            elementId: handle.elementId,
+            method,
+            generation: handle.generation,
+            value,
+          }),
+        );
+      }
       return { ok: true, value };
     } catch (error) {
       record("threw");
+      if (invocationId !== undefined) {
+        reportTestInvocation(
+          Object.freeze({
+            phase: "after",
+            invocationId,
+            elementId: handle.elementId,
+            method,
+            generation: handle.generation,
+            threw: String(error),
+          }),
+        );
+      }
       return {
         ok: false,
         reason: "threw",

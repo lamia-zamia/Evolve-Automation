@@ -6,6 +6,11 @@ const testSurfaceMarkers = [
   "experiment-deferred",
   "experiment-stopped",
   "research-experiment-target-unavailable",
+  "sampleResearchCatalog",
+  "test-controlled-discovery",
+  "gatherIntervention",
+  "manaConservationExperiment",
+  "test-control-hook",
 ];
 
 async function bundle(testSurfaceEnabled) {

@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
-import { createCapturedGatherResourcesAdapter } from "../../../src/adapters/evolve/economy/resources/captured-gather-resources.ts";
+
+globalThis.__EA_TEST_SURFACE_ENABLED__ = true;
+const { createCapturedGatherResourcesAdapter } =
+  await import("../../../src/adapters/evolve/economy/resources/captured-gather-resources.ts");
 
 let root = {
   resource: {
@@ -28,7 +31,7 @@ const controls = {
     assert.equal(method, "action");
     assert.equal(handle.elementId, "undefined-food");
     root.resource.Food.amount += 1;
-    return { ok: true, value: undefined };
+    return { ok: true, value: false };
   },
   capturedElementIds: () => [...handles.keys()],
 };
@@ -52,6 +55,7 @@ assert.equal(input.stopped, false);
 assert.equal(input.clickable.food, true);
 assert.equal(input.clickable.lumber, false);
 assert.equal(input.resources.Food.currentQuantity, 2);
+assert.equal(input.resourcesPerClick, 4);
 const decision = {
   operations: [
     {
@@ -64,6 +68,63 @@ const decision = {
 };
 assert.deepEqual(adapter.executor.execute(decision), { status: "succeeded" });
 assert.equal(root.resource.Food.amount, 5);
+
+const incorrectNativeYield = {
+  operations: [
+    {
+      actionId: "food",
+      amount: 1,
+      beforeAction: [{ resourceId: "Food", expectedQuantity: 5, quantity: 5 }],
+      afterAction: [{ resourceId: "Food", expectedQuantity: 5, quantity: 15 }],
+    },
+  ],
+};
+assert.deepEqual(adapter.executor.execute(incorrectNativeYield), {
+  status: "stale",
+  failure: {
+    code: "gather-result-changed",
+    message: "gather result differed for food",
+  },
+});
+assert.equal(root.resource.Food.amount, 6);
+
+for (const [rank, expected] of [
+  [0.25, 2.333333],
+  [0.5, 2.888889],
+  [1.33, 4.99],
+  [1.67, 6.01],
+  [2, 7],
+]) {
+  root.race.strong = rank;
+  assert.equal(adapter.reader.read().resourcesPerClick, expected);
+}
+root.race.strong = 1;
+root.genes.enhance = true;
+assert.equal(adapter.reader.read().resourcesPerClick, 8);
+root.genes.enhance = false;
+
+const unavailableAdapter = createCapturedGatherResourcesAdapter({
+  rootState,
+  controls: { ...controls, resolve: () => undefined },
+  readSettings: () => settings,
+});
+assert.equal(
+  Object.values(unavailableAdapter.reader.read().clickable).some(Boolean),
+  false,
+);
+
+const suppressedAdapter = createCapturedGatherResourcesAdapter({
+  rootState,
+  controls,
+  readSettings: () => settings,
+  readTestIntervention: () => ({ manaConservationExperiment: true }),
+});
+root.tech.conjuring = 2;
+root.resource.Mana.amount = 1;
+assert.equal(suppressedAdapter.reader.read().clickable.food, false);
+assert.equal(suppressedAdapter.reader.read().clickable.lumber, false);
+root.resource.Mana.amount = 0.5;
+assert.equal(suppressedAdapter.reader.read().clickable.food, true);
 
 root.resource.Population.amount = 20;
 root.city.rock_quarry.count = 1;

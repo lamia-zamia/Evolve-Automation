@@ -1087,6 +1087,45 @@ export function startCapturedRuntime({
     onDiagnostic: reportDiagnostic,
     onActivity,
   });
+  if (
+    typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
+    __EA_TEST_SURFACE_ENABLED__ === true
+  ) {
+    const hooks = readProperty(settingsHostWindow, "__EA_TEST_HOOKS__");
+    if (isRecord(hooks)) {
+      Reflect.set(hooks, "sampleResearchCatalog", () => {
+        const offers = progression.sampleOfferedTechs(
+          "test-controlled-discovery",
+        );
+        const definitions = progression.readResearchActionDefinitions();
+        const root = pageCapture.rootState.readRoot();
+        const progressionEpoch = progression.readProgressionEpoch();
+        const rootGeneration = progression.readRootGeneration();
+        const currentOffers = progression.readOfferedTechs();
+        const generationsCurrent =
+          offers !== undefined &&
+          currentOffers !== undefined &&
+          offers.length === currentOffers.length &&
+          offers.every(
+            (offer, index) =>
+              offer.elementId === currentOffers[index]?.elementId &&
+              offer.generation === currentOffers[index]?.generation,
+          );
+        return Object.freeze({
+          offers,
+          definitions,
+          rootCaptured: root !== undefined,
+          progressionEpoch,
+          rootGeneration,
+          current:
+            root === pageCapture.rootState.readRoot() &&
+            progressionEpoch === progression.readProgressionEpoch() &&
+            rootGeneration === progression.readRootGeneration() &&
+            generationsCurrent,
+        });
+      });
+    }
+  }
   researchOwnerSelectionObserver = (selection) => {
     const diagnosticClock = phaseDiagnostics;
     if (
@@ -1486,6 +1525,16 @@ export function startCapturedRuntime({
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,
     readSettings: () => settingsStore.readRaw(),
+    ...(typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
+    __EA_TEST_SURFACE_ENABLED__ === true
+      ? {
+          readTestIntervention: () =>
+            readProperty(
+              readProperty(settingsHostWindow, "__EA_TEST_HOOKS__"),
+              "gatherIntervention",
+            ),
+        }
+      : {}),
   });
   const tax = createCapturedTaxControl({
     rootState: pageCapture.rootState,

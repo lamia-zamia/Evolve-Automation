@@ -3669,7 +3669,9 @@
     let isRootCandidate = options.isRootCandidate ?? isGameRootShape, reportError = options.onCaptureError ?? (() => {
     }), existingDescriptor = Object.getOwnPropertyDescriptor(pageWindow, "Vue"), existingMarker = readMarker(readProperty(readProperty(pageWindow, "Vue"), "reactive")) ?? readMarker(existingDescriptor?.get);
     if (existingMarker?.capture !== void 0) return existingMarker.capture;
-    let marker = { capture: void 0 }, root, rootRaw, suppressed = !1, stopped = !1, rootListeners = /* @__PURE__ */ new Set(), controls2 = /* @__PURE__ */ new Map(), controlCheckpoints = /* @__PURE__ */ new WeakMap(), captureOrder = [], controlRevision = 0, usage = /* @__PURE__ */ new Map(), bindingListeners = /* @__PURE__ */ new Set(), createAppHooked = !1, mountingEnabled = 0, suppressionScopes = [], mountedInScope = [], restoreVue, vueWatch;
+    let marker = { capture: void 0 }, root, rootRaw, suppressed = !1, stopped = !1, rootListeners = /* @__PURE__ */ new Set(), controls2 = /* @__PURE__ */ new Map(), controlCheckpoints = /* @__PURE__ */ new WeakMap(), captureOrder = [], controlRevision = 0, usage = /* @__PURE__ */ new Map(), testInvocationId = 0, bindingListeners = /* @__PURE__ */ new Set(), createAppHooked = !1, mountingEnabled = 0, suppressionScopes = [], mountedInScope = [], restoreVue, vueWatch;
+    function reportTestInvocation(entry) {
+    }
     function notifyRootReplaced() {
       for (let listener of [...rootListeners])
         try {
@@ -3806,16 +3808,38 @@
           threw: (previous?.threw ?? 0) + (outcome === "threw" ? 1 : 0)
         });
         usage.set(usageKey, next);
-      };
+      }, invocationId = void 0;
+      invocationId !== void 0 && (Object.freeze({
+        phase: "before",
+        invocationId,
+        elementId: handle.elementId,
+        method,
+        generation: handle.generation,
+        args: Object.freeze([...args])
+      }), void 0);
       try {
         let value = Reflect.apply(
           target,
           syntheticReceiver(control, receiver),
           [...args]
         );
-        return record("returned"), { ok: !0, value };
+        return record("returned"), invocationId !== void 0 && (Object.freeze({
+          phase: "after",
+          invocationId,
+          elementId: handle.elementId,
+          method,
+          generation: handle.generation,
+          value
+        }), void 0), { ok: !0, value };
       } catch (error) {
-        return record("threw"), {
+        return record("threw"), invocationId !== void 0 && (Object.freeze({
+          phase: "after",
+          invocationId,
+          elementId: handle.elementId,
+          method,
+          generation: handle.generation,
+          threw: String(error)
+        }), void 0), {
           ok: !1,
           reason: "threw",
           detail: `${handle.elementId}.${method}: ${String(error)}`
@@ -14823,25 +14847,14 @@
     return numberValue(readProperty(readProperty(root, "tech"), id));
   }
   function readStrongMultiplier(root) {
-    let rank = readProperty(readProperty(root, "race"), "strong");
-    switch (rank === !0 ? 1 : numberValue(rank)) {
-      case 0.1:
-        return 2;
-      case 0.25:
-        return 2;
-      case 0.5:
-        return 3;
-      case 1:
-        return 4;
-      case 2:
-        return 5;
-      case 3:
-        return 6;
-      case 4:
-        return 7;
-      default:
-        return 1;
-    }
+    let rank = readProperty(readProperty(root, "race"), "strong"), candidate = rank === !0 ? 1 : numberValue(rank), normalized = Math.max(
+      0.1,
+      Math.min(
+        Number.isFinite(candidate) && candidate !== 0 ? candidate : 1,
+        2.4
+      )
+    ), lowRank = normalized < 1, fraction = lowRank ? (normalized - 0.1) / 0.9 : normalized <= 2 ? normalized - 1 : 1 + (normalized - 2) / 2, lower = lowRank ? 2 : 4;
+    return Number((lower + ((lowRank ? 4 : 7) - lower) * fraction).toFixed(6));
   }
   function readControl(controls2, actionId) {
     return CONTROL_IDS[actionId].find((elementId) => {
@@ -14901,7 +14914,8 @@
     rootState,
     controls: controls2,
     readSettings,
-    onSkipped
+    onSkipped,
+    readTestIntervention
   }) {
     let reportSkipped = onSkipped ?? (() => {
     }), session, reader = Object.freeze({
@@ -14925,21 +14939,21 @@
           stone: readControl(controls2, "stone"),
           chrysotile: readControl(controls2, "chrysotile"),
           slaughter: readControl(controls2, "slaughter")
-        }), furs = readProperty(readProperty(root, "resource"), "Furs"), input = Object.freeze({
+        }), testManaConservation = !1, foodConjuring = readTechLevel(root, "conjuring") >= 1, materialConjuring = readTechLevel(root, "conjuring") >= 2, foodCanSpendMana = testManaConservation && foodConjuring && resources.Food.currentQuantity < resources.Food.maxQuantity, materialsCanSpendMana = testManaConservation && materialConjuring && resources.Lumber.currentQuantity < resources.Lumber.maxQuantity, stoneCanSpendMana = testManaConservation && materialConjuring && resources.Stone.currentQuantity < resources.Stone.maxQuantity, chrysotileCanSpendMana = testManaConservation && materialConjuring && resources.Chrysotile.currentQuantity < resources.Chrysotile.maxQuantity, furs = readProperty(readProperty(root, "resource"), "Furs"), input = Object.freeze({
           stopped,
           resourcesPerClick: readStrongMultiplier(root) * (readProperty(readProperty(root, "genes"), "enhance") ? 2 : 1),
           clickLimit,
           fasting: !!readProperty(race, "fasting"),
           soulEater: !!readProperty(race, "soul_eater"),
           primitive: readTechLevel(root, "primitive") >= 1,
-          foodConjuring: readTechLevel(root, "conjuring") >= 1,
-          materialConjuring: readTechLevel(root, "conjuring") >= 2,
+          foodConjuring,
+          materialConjuring,
           fursUnlocked: !!readProperty(furs, "display"),
           clickable: Object.freeze({
-            food: controlsByAction.food !== void 0,
-            lumber: controlsByAction.lumber !== void 0,
-            stone: controlsByAction.stone !== void 0,
-            chrysotile: controlsByAction.chrysotile !== void 0,
+            food: controlsByAction.food !== void 0 && !foodCanSpendMana,
+            lumber: controlsByAction.lumber !== void 0 && !materialsCanSpendMana,
+            stone: controlsByAction.stone !== void 0 && !stoneCanSpendMana,
+            chrysotile: controlsByAction.chrysotile !== void 0 && !chrysotileCanSpendMana,
             slaughter: controlsByAction.slaughter !== void 0
           }),
           resources
@@ -15022,31 +15036,48 @@
     }, operations = [];
     for (let target of DIRECT_TARGETS) {
       if (!input.clickable[target.actionId] || target.actionId === "food" && input.fasting) continue;
-      let resource = input.resources[target.resourceId], current = quantities[target.resourceId], conjuring = target.actionId === "food" ? input.foodConjuring : input.materialConjuring, amount, beforeAction = [];
-      if (conjuring) {
-        amount = Math.floor(
+      let resource = input.resources[target.resourceId], current = quantities[target.resourceId], conjuring = target.actionId === "food" ? input.foodConjuring : input.materialConjuring, amount, beforeAction = [], afterAction = [];
+      if (conjuring && quantities.Mana >= 1) {
+        let conjuredClicks = Math.floor(
           Math.min(
             (resource.maxQuantity - current) / (input.resourcesPerClick * 10),
             quantities.Mana,
             input.clickLimit
           )
+        ), manaQuantity = quantities.Mana - conjuredClicks;
+        amount = conjuredClicks, conjuredClicks > 0 && manaQuantity < 1 && (amount += Math.ceil(
+          Math.min(
+            (resource.maxQuantity - current - conjuredClicks * input.resourcesPerClick * 10) / input.resourcesPerClick,
+            input.clickLimit - conjuredClicks
+          )
+        ));
+        let resourceQuantity = Math.min(
+          current + conjuredClicks * input.resourcesPerClick * 10 + (amount - conjuredClicks) * input.resourcesPerClick,
+          resource.maxQuantity
         );
-        let manaQuantity = quantities.Mana - amount;
         beforeAction.push(
           Object.freeze({
             resourceId: "Mana",
             expectedQuantity: quantities.Mana,
-            quantity: manaQuantity
+            quantity: quantities.Mana
+          }),
+          Object.freeze({
+            resourceId: target.resourceId,
+            expectedQuantity: current,
+            quantity: current
           })
-        ), quantities.Mana = manaQuantity;
-        let resourceQuantity = current + amount * input.resourcesPerClick;
-        beforeAction.push(
+        ), afterAction.push(
+          Object.freeze({
+            resourceId: "Mana",
+            expectedQuantity: quantities.Mana,
+            quantity: manaQuantity
+          }),
           Object.freeze({
             resourceId: target.resourceId,
             expectedQuantity: current,
             quantity: resourceQuantity
           })
-        ), quantities[target.resourceId] = resourceQuantity;
+        ), quantities.Mana = manaQuantity, quantities[target.resourceId] = resourceQuantity;
       } else {
         amount = Math.ceil(
           Math.min(
@@ -15062,6 +15093,12 @@
           Object.freeze({
             resourceId: target.resourceId,
             expectedQuantity: current,
+            quantity: current
+          })
+        ), afterAction.push(
+          Object.freeze({
+            resourceId: target.resourceId,
+            expectedQuantity: current,
             quantity: resourceQuantity
           })
         ), quantities[target.resourceId] = resourceQuantity;
@@ -15071,7 +15108,7 @@
           actionId: target.actionId,
           amount,
           beforeAction: Object.freeze(beforeAction),
-          afterAction: Object.freeze([])
+          afterAction: Object.freeze(afterAction)
         })
       );
     }
