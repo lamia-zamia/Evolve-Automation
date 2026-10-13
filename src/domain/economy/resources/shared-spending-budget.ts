@@ -107,7 +107,11 @@ export function planSharedResourceBudget(
   });
 }
 
-/** Reserves one synchronous, exact-debit spend against the current resource/pool budget. */
+/**
+ * Reserves one synchronous, exact-debit spend against the current resource/pool budget.
+ * A rejected attempt returns an invalidated budget; callers must not adopt it when they still need
+ * to reconcile an earlier in-flight reservation held by the original budget value.
+ */
 export function reserveSharedResourceSpend(
   budget: Readonly<SharedResourceBudget>,
   reservation: Readonly<SharedSpendReservation>,

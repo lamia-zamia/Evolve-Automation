@@ -44,18 +44,19 @@ const ownerOneAuthorized = reserveSharedResourceSpend(
 );
 assert.equal(ownerOneAuthorized.budgetRemaining, 45);
 assert.equal(ownerOneAuthorized.pendingReservations.length, 1);
+const secondReservationAttempt = reserveSharedResourceSpend(
+  ownerOneAuthorized,
+  {
+    id: "construction",
+    resourceId: "Mana",
+    poolId: "anywhere",
+    expectedDebit: 10,
+    stockObservationId: "stock-1",
+  },
+  { id: "stock-1", quantity: 100 },
+);
 assert.equal(
-  reserveSharedResourceSpend(
-    ownerOneAuthorized,
-    {
-      id: "construction",
-      resourceId: "Mana",
-      poolId: "anywhere",
-      expectedDebit: 10,
-      stockObservationId: "stock-1",
-    },
-    { id: "stock-1", quantity: 100 },
-  ).status,
+  secondReservationAttempt.status,
   "invalidated",
   "only one native spend may be in flight per observation",
 );
@@ -81,13 +82,30 @@ assert.equal(ownerOneAfter.observedNativeExpenditure, 25);
 assert.equal(ownerOneAfter.budgetRemaining, 45);
 assert.equal(ownerOneAfter.pendingReservations.length, 0);
 
+// A valid reservation still fails against the stale pre-spend observation after reconciliation.
 const staleSecondOwner = reserveSharedResourceSpend(
   ownerOneAfter,
-  { id: "construction", quantity: 1, stockObservationId: "stock-1" },
-  { id: "stock-1", quantity: 75 },
+  {
+    id: "construction",
+    resourceId: "Mana",
+    poolId: "anywhere",
+    expectedDebit: 10,
+    stockObservationId: "stock-1",
+  },
+  { id: "stock-1", quantity: 100 },
 );
 assert.equal(staleSecondOwner.status, "invalidated");
 assert.equal(staleSecondOwner.budgetRemaining, 0);
+
+// Adopting the invalid result from an attempted concurrent reservation also means the
+// in-flight reservation can no longer be reconciled through that returned budget.
+assert.equal(
+  reconcileSharedResourceSpend(secondReservationAttempt, ownerOneReservation, {
+    outcome: "succeeded",
+    observedStockAfter: { id: "stock-2", quantity: 75 },
+  }).status,
+  "invalidated",
+);
 
 const refreshedForOwnerTwo = planSharedResourceBudget(
   input({
