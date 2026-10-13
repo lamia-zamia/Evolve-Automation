@@ -83,6 +83,22 @@ export interface ResourceClaimLedgerInput {
   readonly forecastProductionPerSecond: number | undefined;
 }
 
+export interface ResourceClaimResourceAccount {
+  readonly resourceId: string;
+  readonly poolId: string;
+  readonly stock: number;
+  readonly knownReservations:
+    readonly Readonly<ResourceClaimReservation>[] | undefined;
+}
+
+export interface ResourceClaimLedgersInput {
+  readonly claims: readonly Readonly<ResourceClaim>[];
+  readonly freshness: Readonly<ResourceClaimFreshness> | undefined;
+  readonly controlBindings: ResourceClaimLedgerInput["controlBindings"];
+  readonly resourceAccounts: readonly Readonly<ResourceClaimResourceAccount>[];
+  readonly forecastProductionPerSecond: number | undefined;
+}
+
 export interface ResourceClaimLedger {
   readonly status: "none" | "current" | "stale" | "unavailable";
   readonly currentStock: number;
@@ -275,16 +291,44 @@ function sameClaimObligation(
   right: Readonly<ResourceClaim>,
 ): boolean {
   return (
+    left.terminalGoalId === right.terminalGoalId &&
+    left.immediateGoalId === right.immediateGoalId &&
+    left.owner === right.owner &&
+    left.provenance === right.provenance &&
+    left.prerequisiteRelation === right.prerequisiteRelation &&
+    left.nativeActionId === right.nativeActionId &&
     left.requiredQuantity === right.requiredQuantity &&
     left.observedNativePrice === right.observedNativePrice &&
     left.targetGrantTechnology === right.targetGrantTechnology &&
     left.targetGrantLevel === right.targetGrantLevel &&
+    left.resourceId === right.resourceId &&
+    left.poolId === right.poolId &&
     left.offerSetIdentity === right.offerSetIdentity &&
     left.offerObservationId === right.offerObservationId &&
+    left.controlBinding.elementId === right.controlBinding.elementId &&
     left.controlBinding.generation === right.controlBinding.generation &&
     left.offerBindingGeneration === right.offerBindingGeneration &&
-    JSON.stringify(left.allocationAuthority) ===
-      JSON.stringify(right.allocationAuthority)
+    left.nativeOfferCurrent === right.nativeOfferCurrent &&
+    left.nativeActionEligible === right.nativeActionEligible &&
+    left.researchPermission === right.researchPermission &&
+    left.queueEvidence === right.queueEvidence &&
+    left.rootGeneration === right.rootGeneration &&
+    left.progressionGeneration === right.progressionGeneration &&
+    left.observationValid === right.observationValid &&
+    left.precedence === right.precedence &&
+    JSON.stringify(left.uncertaintyReasons) ===
+      JSON.stringify(right.uncertaintyReasons) &&
+    JSON.stringify(left.unavailableReasons) ===
+      JSON.stringify(right.unavailableReasons) &&
+    left.allocationAuthority.kind === right.allocationAuthority.kind &&
+    (left.allocationAuthority.kind === "independent" ||
+      (right.allocationAuthority.kind === "selected-alternative" &&
+        left.allocationAuthority.groupId ===
+          right.allocationAuthority.groupId &&
+        left.allocationAuthority.selectedActionId ===
+          right.allocationAuthority.selectedActionId &&
+        left.allocationAuthority.authorityId ===
+          right.allocationAuthority.authorityId))
   );
 }
 
@@ -464,7 +508,7 @@ export function planResourceClaimLedger(
     const selected = group.filter(
       (claim) => claim.nativeActionId === firstAuthority.selectedActionId,
     );
-    if (!consistent || selected.length !== 1) {
+    if (!consistent || selected.length === 0) {
       return Object.freeze({
         status: "unavailable",
         currentStock: input.stock,
@@ -478,8 +522,9 @@ export function planResourceClaimLedger(
         ]),
       });
     }
-    const chosen = selected[0];
-    if (chosen !== undefined) selectedAlternativeIds.add(chosen.claimId);
+    for (const chosen of selected) {
+      selectedAlternativeIds.add(chosen.claimId);
+    }
   }
   const allocatedClaims = claims.filter(
     (claim) =>
@@ -551,4 +596,171 @@ export function planResourceClaimLedger(
       ...new Set(allocatedClaims.flatMap((claim) => claim.uncertaintyReasons)),
     ]),
   });
+}
+
+/** Selects alternative actions once, then accounts each stock pool independently. */
+export function planResourceClaimLedgers(
+  input: Readonly<ResourceClaimLedgersInput>,
+): Readonly<
+  {
+    readonly resourceId: string;
+    readonly poolId: string;
+    readonly ledger: Readonly<ResourceClaimLedger>;
+  }[]
+> {
+  const claimsById = new Map<string, Readonly<ResourceClaim>>();
+  for (const claim of input.claims) {
+    const existing = claimsById.get(claim.claimId);
+    if (existing !== undefined && !sameClaimObligation(existing, claim)) {
+      return Object.freeze(
+        input.resourceAccounts.map((account) => ({
+          resourceId: account.resourceId,
+          poolId: account.poolId,
+          ledger: Object.freeze({
+            status: "unavailable" as const,
+            currentStock: validNonNegative(account.stock) ? account.stock : 0,
+            currentStockReserved: 0,
+            remainingAccumulation: 0,
+            forecastProductionPerSecond: input.forecastProductionPerSecond,
+            spendableStock: 0,
+            claimIds: Object.freeze([claim.claimId]),
+            reasons: Object.freeze([
+              "duplicate claim ID has conflicting evidence",
+            ]),
+          }),
+        })),
+      );
+    }
+    if (existing === undefined) claimsById.set(claim.claimId, claim);
+  }
+
+  const uniqueClaims = [...claimsById.values()];
+  const resourceAccountKeys = input.resourceAccounts.map(
+    (account) => `${account.resourceId}\u0000${account.poolId}`,
+  );
+  if (new Set(resourceAccountKeys).size !== resourceAccountKeys.length) {
+    return Object.freeze(
+      input.resourceAccounts.map((account) => ({
+        resourceId: account.resourceId,
+        poolId: account.poolId,
+        ledger: Object.freeze({
+          status: "unavailable" as const,
+          currentStock: validNonNegative(account.stock) ? account.stock : 0,
+          currentStockReserved: 0,
+          remainingAccumulation: 0,
+          forecastProductionPerSecond: input.forecastProductionPerSecond,
+          spendableStock: 0,
+          claimIds: Object.freeze([]),
+          reasons: Object.freeze([
+            "resource pool has multiple stock observations",
+          ]),
+        }),
+      })),
+    );
+  }
+  const claimsByAuthorityGroup = new Map<
+    string,
+    readonly Readonly<ResourceClaim>[]
+  >();
+  for (const claim of uniqueClaims) {
+    if (claim.allocationAuthority.kind !== "selected-alternative") continue;
+    const group = claimsByAuthorityGroup.get(claim.allocationAuthority.groupId);
+    claimsByAuthorityGroup.set(
+      claim.allocationAuthority.groupId,
+      group === undefined ? [claim] : [...group, claim],
+    );
+  }
+
+  const selectedActionByGroup = new Map<string, string>();
+  for (const [groupId, groupClaims] of claimsByAuthorityGroup) {
+    const firstAuthority = groupClaims[0]?.allocationAuthority;
+    if (firstAuthority?.kind !== "selected-alternative") continue;
+    const consistent = groupClaims.every(
+      (claim) =>
+        claim.allocationAuthority.kind === "selected-alternative" &&
+        claim.allocationAuthority.selectedActionId ===
+          firstAuthority.selectedActionId &&
+        claim.allocationAuthority.authorityId === firstAuthority.authorityId,
+    );
+    if (
+      !consistent ||
+      !groupClaims.some(
+        (claim) => claim.nativeActionId === firstAuthority.selectedActionId,
+      )
+    ) {
+      return Object.freeze(
+        input.resourceAccounts.map((account) => ({
+          resourceId: account.resourceId,
+          poolId: account.poolId,
+          ledger: Object.freeze({
+            status: "unavailable" as const,
+            currentStock: validNonNegative(account.stock) ? account.stock : 0,
+            currentStockReserved: 0,
+            remainingAccumulation: 0,
+            forecastProductionPerSecond: input.forecastProductionPerSecond,
+            spendableStock: 0,
+            claimIds: Object.freeze(groupClaims.map((claim) => claim.claimId)),
+            reasons: Object.freeze([
+              "alternative claims lack one verified selected path",
+            ]),
+          }),
+        })),
+      );
+    }
+    selectedActionByGroup.set(groupId, firstAuthority.selectedActionId);
+  }
+
+  const selectedClaims = uniqueClaims.filter((claim) => {
+    if (claim.allocationAuthority.kind === "independent") return true;
+    return (
+      selectedActionByGroup.get(claim.allocationAuthority.groupId) ===
+      claim.nativeActionId
+    );
+  });
+  const plannedLedgers = input.resourceAccounts.map((account) => ({
+    resourceId: account.resourceId,
+    poolId: account.poolId,
+    ledger: planResourceClaimLedger({
+      claims: selectedClaims.filter(
+        (claim) =>
+          claim.resourceId === account.resourceId &&
+          claim.poolId === account.poolId,
+      ),
+      freshness: input.freshness,
+      controlBindings: input.controlBindings,
+      stock: account.stock,
+      knownReservations: account.knownReservations,
+      forecastProductionPerSecond: input.forecastProductionPerSecond,
+    }),
+  }));
+  const missingScopes = new Map<string, Readonly<ResourceClaim>[]>();
+  for (const claim of selectedClaims) {
+    const scopeKey = `${claim.resourceId}\u0000${claim.poolId}`;
+    if (resourceAccountKeys.includes(scopeKey)) continue;
+    const missing = missingScopes.get(scopeKey);
+    if (missing === undefined) missingScopes.set(scopeKey, [claim]);
+    else missing.push(claim);
+  }
+  return Object.freeze([
+    ...plannedLedgers,
+    ...[...missingScopes.entries()].map(([scopeKey, missingClaims]) => {
+      const separator = scopeKey.indexOf("\u0000");
+      return {
+        resourceId: scopeKey.slice(0, separator),
+        poolId: scopeKey.slice(separator + 1),
+        ledger: Object.freeze({
+          status: "unavailable" as const,
+          currentStock: 0,
+          currentStockReserved: 0,
+          remainingAccumulation: 0,
+          forecastProductionPerSecond: input.forecastProductionPerSecond,
+          spendableStock: 0,
+          claimIds: Object.freeze(missingClaims.map((claim) => claim.claimId)),
+          reasons: Object.freeze([
+            "resource pool stock observation is unavailable",
+          ]),
+        }),
+      };
+    }),
+  ]);
 }

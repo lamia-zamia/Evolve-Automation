@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   admitResourceClaim,
   planResourceClaimLedger,
+  planResourceClaimLedgers,
 } from "../../../src/domain/economy/resources/resource-claims.ts";
 
 const evidence = (overrides = {}) => ({
@@ -144,6 +145,35 @@ const duplicateClaim = planResourceClaimLedger({
 });
 assert.equal(duplicateClaim.currentStockReserved, 50);
 assert.equal(duplicateClaim.spendableStock, 10);
+for (const conflictingEvidence of [
+  evidence({ precedence: "safety" }),
+  evidence({ owner: "native-research" }),
+  evidence({ rootGeneration: 5 }),
+  evidence({
+    allocationAuthority: {
+      kind: "selected-alternative",
+      groupId: "research-frontier",
+      selectedActionId: "tech-mad_science",
+      authorityId: "research-owner-cycle-9",
+    },
+  }),
+]) {
+  const conflictingClaim = admitResourceClaim(conflictingEvidence);
+  assert.ok(conflictingClaim);
+  assert.equal(conflictingClaim.claimId, claim.claimId);
+  assert.equal(
+    planResourceClaimLedger({
+      claims: [claim, conflictingClaim],
+      freshness,
+      controlBindings: [{ ...claim.controlBinding, actionCapable: true }],
+      stock: 60,
+      knownReservations: [],
+      forecastProductionPerSecond: undefined,
+    }).status,
+    "unavailable",
+    "duplicate claim IDs with conflicting authority evidence fail closed",
+  );
+}
 const conflictingDuplicate = admitResourceClaim(
   evidence({ requiredQuantity: 51, observedNativePrice: 51 }),
 );
@@ -400,6 +430,178 @@ assert.equal(selectedAlternative.remainingAccumulation, 0);
 assert.equal(selectedAlternative.spendableStock, 30);
 assert.deepEqual(selectedAlternative.claimIds, [researchB.claimId]);
 
+const researchKnowledge = admitResourceClaim(
+  evidence({
+    immediateGoalId: "research:tech-b",
+    nativeActionId: "tech-b",
+    targetGrantTechnology: "tech_b",
+    resourceId: "Knowledge",
+    requiredQuantity: 6750,
+    observedNativePrice: 6750,
+    observedStock: 9000,
+    observedCapacity: 12000,
+    offerSetIdentity: "research-alternatives-v1",
+    controlBinding: { elementId: "tech-b", generation: 4 },
+    allocationAuthority: {
+      kind: "selected-alternative",
+      groupId: "research-frontier",
+      selectedActionId: "tech-b",
+      authorityId: "research-owner-cycle-7",
+    },
+  }),
+);
+const researchAlternativeKnowledge = admitResourceClaim(
+  evidence({
+    immediateGoalId: "research:tech-a",
+    nativeActionId: "tech-a",
+    targetGrantTechnology: "tech_a",
+    resourceId: "Knowledge",
+    requiredQuantity: 8000,
+    observedNativePrice: 8000,
+    observedStock: 9000,
+    observedCapacity: 12000,
+    offerSetIdentity: "research-alternatives-v1",
+    controlBinding: { elementId: "tech-a", generation: 9 },
+    allocationAuthority: {
+      kind: "selected-alternative",
+      groupId: "research-frontier",
+      selectedActionId: "tech-b",
+      authorityId: "research-owner-cycle-7",
+    },
+  }),
+);
+assert.ok(researchKnowledge);
+assert.ok(researchAlternativeKnowledge);
+const selectedKnowledgeAlternative = planResourceClaimLedger({
+  claims: [researchKnowledge, researchAlternativeKnowledge],
+  freshness: {
+    ...freshness,
+    offerSetIdentity: "research-alternatives-v1",
+  },
+  controlBindings: [
+    { ...researchKnowledge.controlBinding, actionCapable: true },
+    { ...researchAlternativeKnowledge.controlBinding, actionCapable: true },
+  ],
+  stock: 9000,
+  knownReservations: [],
+  forecastProductionPerSecond: undefined,
+});
+assert.equal(
+  selectedKnowledgeAlternative.status,
+  "current",
+  "a selected Research action may have a separate Knowledge claim",
+);
+assert.equal(selectedKnowledgeAlternative.currentStockReserved, 6750);
+assert.deepEqual(selectedKnowledgeAlternative.claimIds, [
+  researchKnowledge.claimId,
+]);
+const multiResourceSelection = planResourceClaimLedgers({
+  claims: [
+    researchA,
+    researchB,
+    researchKnowledge,
+    researchAlternativeKnowledge,
+  ],
+  freshness: {
+    ...freshness,
+    offerSetIdentity: "research-alternatives-v1",
+  },
+  controlBindings: [
+    { elementId: "tech-a", generation: 9, actionCapable: true },
+    { elementId: "tech-b", generation: 4, actionCapable: true },
+  ],
+  resourceAccounts: [
+    {
+      resourceId: "Mana",
+      poolId: "anywhere",
+      stock: 60,
+      knownReservations: [
+        { resourceId: "Mana", poolId: "anywhere", quantity: 10 },
+      ],
+    },
+    {
+      resourceId: "Knowledge",
+      poolId: "anywhere",
+      stock: 9000,
+      knownReservations: [],
+    },
+  ],
+  forecastProductionPerSecond: undefined,
+});
+assert.deepEqual(
+  multiResourceSelection.map(({ resourceId, ledger }) => ({
+    resourceId,
+    status: ledger.status,
+    claimIds: ledger.claimIds,
+  })),
+  [
+    { resourceId: "Mana", status: "current", claimIds: [researchB.claimId] },
+    {
+      resourceId: "Knowledge",
+      status: "current",
+      claimIds: [researchKnowledge.claimId],
+    },
+  ],
+  "selected action authority spans multiple resource records while stock pools remain separate",
+);
+const missingKnowledgeAccount = planResourceClaimLedgers({
+  claims: [
+    researchA,
+    researchB,
+    researchKnowledge,
+    researchAlternativeKnowledge,
+  ],
+  freshness: {
+    ...freshness,
+    offerSetIdentity: "research-alternatives-v1",
+  },
+  controlBindings: [
+    { elementId: "tech-a", generation: 9, actionCapable: true },
+    { elementId: "tech-b", generation: 4, actionCapable: true },
+  ],
+  resourceAccounts: [
+    {
+      resourceId: "Mana",
+      poolId: "anywhere",
+      stock: 60,
+      knownReservations: [],
+    },
+  ],
+  forecastProductionPerSecond: undefined,
+});
+assert.equal(missingKnowledgeAccount[1]?.resourceId, "Knowledge");
+assert.equal(missingKnowledgeAccount[1]?.ledger.status, "unavailable");
+const duplicateResourceAccount = planResourceClaimLedgers({
+  claims: [researchB],
+  freshness: {
+    ...freshness,
+    offerSetIdentity: "research-alternatives-v1",
+  },
+  controlBindings: [
+    { elementId: "tech-b", generation: 4, actionCapable: true },
+  ],
+  resourceAccounts: [
+    {
+      resourceId: "Mana",
+      poolId: "anywhere",
+      stock: 60,
+      knownReservations: [],
+    },
+    {
+      resourceId: "Mana",
+      poolId: "anywhere",
+      stock: 70,
+      knownReservations: [],
+    },
+  ],
+  forecastProductionPerSecond: undefined,
+});
+assert.ok(
+  duplicateResourceAccount.every(
+    ({ ledger }) => ledger.status === "unavailable",
+  ),
+);
+
 const ambiguousAlternatives = planResourceClaimLedger({
   claims: [researchA],
   freshness: {
@@ -492,6 +694,16 @@ const stale = planResourceClaimLedger({
 });
 assert.equal(stale.status, "stale");
 assert.equal(stale.spendableStock, 0);
+const progressionChanged = planResourceClaimLedger({
+  claims: [claim],
+  freshness: { ...freshness, progressionGeneration: "epoch-18" },
+  controlBindings: [{ ...claim.controlBinding, actionCapable: true }],
+  stock: 60,
+  knownReservations: [],
+  forecastProductionPerSecond: undefined,
+});
+assert.equal(progressionChanged.status, "stale");
+assert.equal(progressionChanged.spendableStock, 0);
 
 const separatedPool = admitResourceClaim(evidence({ poolId: "city" }));
 assert.ok(separatedPool);
