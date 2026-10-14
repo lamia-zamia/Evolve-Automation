@@ -48,6 +48,11 @@ assert.equal(
 assert.equal(decision({ grant: "complete" }).retainClaim, false);
 assert.equal(decision({ grant: "complete" }).state, "completed");
 assert.equal(decision({ grant: "complete" }).reason, "grant-completed");
+assert.equal(
+  decision({ grant: "complete", price: "changed", binding: "changed" }).state,
+  "completed",
+  "a verified completed grant removes its own claim despite stale purchase observations",
+);
 assert.equal(decision({ grant: "incomplete" }).state, "active");
 assert.equal(
   decision({ grant: "complete", nonMana: "insufficient" }).state,
@@ -99,8 +104,28 @@ assert.equal(
 );
 assert.equal(
   decision({ price: "changed", nonMana: "insufficient" }).state,
+  "suspended",
+  "a changed price must be reconciled before releasing protected Mana",
+);
+assert.equal(
+  decision({ binding: "changed", nonMana: "insufficient" }).state,
+  "suspended",
+  "a changed native binding must be reconciled before releasing protected Mana",
+);
+assert.equal(
+  decision({ progression: "changed", nonMana: "insufficient" }).state,
+  "suspended",
+  "a changed progression epoch must be reconciled before releasing protected Mana",
+);
+assert.equal(
+  decision({ offer: "current", nonMana: "insufficient" }).state,
   "released",
-  "a changed current Mana price does not hide a verified current non-Mana blocker",
+  "fully current evidence permits release for a verified non-Mana shortage",
+);
+assert.equal(
+  decision({ root: "replaced", nonMana: "insufficient" }).state,
+  "invalidated",
+  "root replacement invalidates claims before shortage evidence is considered",
 );
 
 console.log("resource-claim-lifecycle ok");

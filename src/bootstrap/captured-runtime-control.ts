@@ -2615,7 +2615,6 @@ export function startCapturedRuntime({
             reconciledPriorClaims.length === 0 &&
             (releasedPriorClaims.length > 0 ||
               completedPriorClaimIds.length > 0);
-          replaceTestClaims(reconciledPriorClaims);
           if (verifiedReleaseOnly) {
             const blockedActionIds = releasedPriorClaims
               .filter((entry) => entry.reason === "verified-non-mana-shortage")

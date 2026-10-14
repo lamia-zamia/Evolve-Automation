@@ -77,12 +77,6 @@ export function decideResourceClaimLifecycle(
       reason: "verified-offer-absent",
       retainClaim: false,
     });
-  if (evidence.offer === "current" && evidence.nonMana === "insufficient")
-    return Object.freeze({
-      state: "released",
-      reason: "verified-non-mana-shortage",
-      retainClaim: false,
-    });
   const unresolved = Object.values(evidence).some((value) =>
     ["unknown", "changed"].includes(value),
   );
@@ -95,6 +89,12 @@ export function decideResourceClaimLifecycle(
       state: "suspended",
       reason: "evidence-unavailable",
       retainClaim: true,
+    });
+  if (evidence.nonMana === "insufficient")
+    return Object.freeze({
+      state: "released",
+      reason: "verified-non-mana-shortage",
+      retainClaim: false,
     });
   return Object.freeze({
     state: "active",
