@@ -14,6 +14,8 @@ import type { GameRootStateSource } from "../../../../ports/game-root-state.ts";
 import { rejected, stale, SUCCEEDED } from "../../../command-outcomes.ts";
 import { finite, isRecord, readProperty } from "../../../validation.ts";
 
+declare const __EA_TEST_SURFACE_ENABLED__: boolean;
+
 export const SMELTER_CONTROL = "iSmelter";
 
 export interface CapturedSmelterDependencies {
@@ -21,6 +23,11 @@ export interface CapturedSmelterDependencies {
   readonly controls: GameControlRegistry;
   readonly readSettings: () => unknown;
   readonly readDemand?: () => CapturedDemandSample;
+  /** Test-surface-only policy seam; the native planner still owns the resulting decision. */
+  readonly prepareInputForTest?: (
+    input: Readonly<SmelterInput>,
+    demand: CapturedDemandSample,
+  ) => Readonly<SmelterInput>;
   readonly observePlanForDiagnostics?: (
     input: Readonly<SmelterInput>,
     decision: ReturnType<typeof planSmelter>,
@@ -422,8 +429,16 @@ export function createCapturedSmelterAutomation(
     },
     run(): CommandExecutionOutcome {
       const session = readInput(dependencies);
-      const decision = planSmelter(session.input);
-      dependencies.observePlanForDiagnostics?.(session.input, decision, {
+      const input =
+        typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
+        __EA_TEST_SURFACE_ENABLED__ === true
+          ? (dependencies.prepareInputForTest?.(
+              session.input,
+              session.demand,
+            ) ?? session.input)
+          : session.input;
+      const decision = planSmelter(input);
+      dependencies.observePlanForDiagnostics?.(input, decision, {
         requestedSteel: session.demand.requestedQuantity("Steel"),
         isSteelDemanded: session.demand.isDemanded("Steel"),
         savingTarget: session.demand.savingTarget,

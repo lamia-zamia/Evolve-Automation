@@ -5165,6 +5165,40 @@ export function startCapturedRuntime({
     ...(typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
     __EA_TEST_SURFACE_ENABLED__ === true
       ? {
+          prepareInputForTest: (input, _sample) => {
+            const settings = settingsStore.readRaw();
+            const hooks = readProperty(settingsHostWindow, "__EA_TEST_HOOKS__");
+            const prepare = readProperty(
+              hooks,
+              "prepareSmelterGoalDemandForTest",
+            );
+            if (
+              !isRecord(settings) ||
+              settings["autoSmelter"] !== true ||
+              typeof prepare !== "function"
+            )
+              return input;
+            const exact = demand.sampleExact();
+            const report = readProperty(
+              hooks,
+              "observeSmelterGoalDemandEvidenceForTest",
+            );
+            if (typeof report === "function")
+              report(
+                Object.freeze({
+                  status: exact.status,
+                  reason:
+                    exact.status === "unavailable"
+                      ? exact.reason.code
+                      : undefined,
+                }),
+              );
+            if (exact.status !== "ready") return input;
+            return prepare(input, exact.sample) === true &&
+              input.steelDemanded !== true
+              ? Object.freeze({ ...input, steelDemanded: true })
+              : input;
+          },
           observePlanForDiagnostics: (input, decision, demand) => {
             const observer = readProperty(
               readProperty(settingsHostWindow, "__EA_TEST_HOOKS__"),

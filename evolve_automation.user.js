@@ -35131,8 +35131,8 @@
         });
       },
       run() {
-        let session = readInput7(dependencies), decision = planSmelter(session.input);
-        if (dependencies.observePlanForDiagnostics?.(session.input, decision, {
+        let session = readInput7(dependencies), input = session.input, decision = planSmelter(input);
+        if (dependencies.observePlanForDiagnostics?.(input, decision, {
           requestedSteel: session.demand.requestedQuantity("Steel"),
           isSteelDemanded: session.demand.isDemanded("Steel"),
           savingTarget: session.demand.savingTarget

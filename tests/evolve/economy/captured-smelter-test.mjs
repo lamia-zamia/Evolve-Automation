@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 
 import { createCapturedSmelterAutomation } from "../../../src/adapters/evolve/economy/production/captured-smelter.ts";
 
+globalThis.__EA_TEST_SURFACE_ENABLED__ = true;
+
 const root = {
   race: {},
   tech: { smelting: 2, titanium: 1 },
@@ -111,6 +113,32 @@ assert.deepEqual(calls, [
 ]);
 assert.equal(root.city.smelter.Iron, 1);
 assert.equal(root.city.smelter.Steel, 1);
+
+root.city.smelter.Iron = 2;
+root.city.smelter.Steel = 0;
+calls.length = 0;
+let preparedInput;
+const testSurfaceAutomation = createCapturedSmelterAutomation({
+  rootState: { readRoot: () => root },
+  controls,
+  readSettings: () => ({ autoSmelter: true, productionSmelting: "required" }),
+  readDemand: () => ({
+    requestedQuantity: () => 0,
+    isDemanded: () => false,
+    storageRequired: () => 1,
+  }),
+  prepareInputForTest: (input) =>
+    Object.freeze({ ...input, steelDemanded: true }),
+  observePlanForDiagnostics: (input) => {
+    preparedInput = input;
+  },
+});
+assert.equal(testSurfaceAutomation.run().status, "succeeded");
+assert.equal(preparedInput?.steelDemanded, true);
+assert.ok(
+  calls.some(([method, id]) => method === "addMetal" && id === "Steel"),
+  "the test preparation hook changes input before the native planner and owner execute",
+);
 
 const unavailable = createCapturedSmelterAutomation({
   rootState: { readRoot: () => root },

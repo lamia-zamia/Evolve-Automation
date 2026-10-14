@@ -236,6 +236,70 @@ const nativeDefinition = (
 }
 
 {
+  const definitions = [
+    nativeDefinition("tech-industrialization", "high_tech", 3, [
+      { technologyId: "steel_container", requiredLevel: 1 },
+    ]),
+    nativeDefinition("tech-steel_containers", "steel_container", 1),
+    nativeDefinition("tech-gantry_crane", "steel_container", 2, [
+      { technologyId: "steel_container", requiredLevel: 1 },
+      { technologyId: "high_tech", requiredLevel: 2 },
+    ]),
+    nativeDefinition("tech-alloy_containers", "steel_container", 3, [
+      { technologyId: "steel_container", requiredLevel: 2 },
+    ]),
+    nativeDefinition("tech-mythril_containers", "steel_container", 4, [
+      { technologyId: "steel_container", requiredLevel: 1 },
+      { technologyId: "space", requiredLevel: 3 },
+    ]),
+    nativeDefinition("tech-adamantite_containers", "steel_container", 5, [
+      { technologyId: "steel_container", requiredLevel: 4 },
+    ]),
+  ];
+  const frontier = ["tech-steel_containers"];
+  const input = {
+    targetCurrentlyEligible: true,
+    definitions,
+    grantLevels: new Map(),
+    applicabilityByActionId: new Map(
+      definitions.map(({ actionId }) => [actionId, { status: "eligible" }]),
+    ),
+    offeredActionIds: new Set(frontier),
+  };
+  const currentGraph = {
+    ...graph([], [requirement("research:terminal", "prestige", [])]),
+    targetActionId: "tech-industrialization",
+    actionableFrontier: frontier,
+  };
+  const dominatedAlternatives = classifyMandatoryNativeResearchObligations(
+    currentGraph,
+    input,
+  );
+  assert.equal(dominatedAlternatives.status, "verified");
+  assert.deepEqual(dominatedAlternatives.mandatoryActionIds, frontier);
+
+  const genuineBypass = nativeDefinition(
+    "tech-alternate_container_route",
+    "steel_container",
+    1,
+  );
+  const withBypass = classifyMandatoryNativeResearchObligations(currentGraph, {
+    ...input,
+    definitions: [...definitions, genuineBypass],
+    applicabilityByActionId: new Map([
+      ...input.applicabilityByActionId,
+      [genuineBypass.actionId, { status: "eligible" }],
+    ]),
+  });
+  assert.equal(withBypass.status, "verified");
+  assert.deepEqual(
+    withBypass.mandatoryActionIds,
+    [],
+    "a valid alternative grant with no Steel Containers prerequisite bypasses the level-1 action",
+  );
+}
+
+{
   const result = classifyMandatoryResearchPrerequisiteObligations(
     graph(
       [action("tech-a", "frontier"), action("tech-b", "frontier")],

@@ -14,7 +14,7 @@ const samePrice = (left, right) => {
   return JSON.stringify(canonical(left)) === JSON.stringify(canonical(right));
 };
 
-export function applyVerifiedGoalIntentToSmelter({
+export function applySelectedGoalResourceIntentToSmelter({
   input,
   intent,
   currentFreshness,
@@ -31,10 +31,15 @@ export function applyVerifiedGoalIntentToSmelter({
       "producer-unavailable",
       "native Smelter input is unavailable",
     );
-  if (intent === null || intent === undefined || intent.actionable !== true)
+  if (
+    intent === null ||
+    intent === undefined ||
+    intent.actionable !== true ||
+    (intent.selection !== "mandatory" && intent.selection !== "candidate")
+  )
     return unchanged(
       "no-verified-intent",
-      "no locally verified mandatory shortfall is actionable",
+      "no current mandatory fact or selected strategic candidate is actionable",
     );
   if (!Number.isFinite(intent.shortfall) || intent.shortfall <= 0)
     return unchanged(
@@ -80,13 +85,33 @@ export function applyVerifiedGoalIntentToSmelter({
       : intent.resourceId === "Steel"
         ? "steelDemanded"
         : undefined;
+  const resourceDemand = competingDemand.resources.find(
+    ({ resourceId }) => resourceId === intent.resourceId,
+  );
   if (
-    competingDemand.resources.includes(intent.resourceId) ||
-    (currentDemandField !== undefined && input[currentDemandField] === true)
+    resourceDemand === undefined ||
+    !Number.isFinite(resourceDemand.requestedQuantity) ||
+    !Number.isFinite(resourceDemand.currentQuantity) ||
+    resourceDemand.requestedQuantity < 0 ||
+    resourceDemand.currentQuantity < 0
   )
     return unchanged(
+      "demand-unknown",
+      "the exact current demand quantity or holding is unavailable",
+    );
+  const uncoveredDemand = Math.max(
+    0,
+    resourceDemand.requestedQuantity - resourceDemand.currentQuantity,
+  );
+  if (uncoveredDemand >= intent.shortfall)
+    return unchanged(
       "already-demanded",
-      "an existing build, queue, player, or native demand already covers this resource",
+      "current competing demand quantitatively covers the goal shortfall",
+    );
+  if (currentDemandField !== undefined && input[currentDemandField] === true)
+    return unchanged(
+      "demand-insufficient",
+      "the owner already sees demand, but its native boolean input cannot express a larger quantity",
     );
 
   // Native resource identifiers match Smelter production fields. The existing planner retains
@@ -105,6 +130,7 @@ export function applyVerifiedGoalIntentToSmelter({
   return Object.freeze({
     input: Object.freeze({ ...input, [demandField]: true }),
     status: "intent-applied",
+    selection: intent.selection,
     reason: null,
     allocationChangeCost:
       "must be measured by comparing native planner decisions",

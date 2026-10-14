@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { performance } from "node:perf_hooks";
 import { fileURLToPath } from "node:url";
 import * as esbuild from "esbuild";
 import {
@@ -8,7 +9,6 @@ import {
   parseSave,
 } from "../tools/chromium-evolve-runner.mjs";
 import { planGoalResourceIntents } from "../src/domain/economy/production/goal-resource-intent.ts";
-import { applyVerifiedGoalIntentToSmelter } from "./stage3s-smelter-intent.mjs";
 import { planNativeResearchPrerequisites } from "../src/domain/progression/research-prerequisite-planning.ts";
 import { classifyMandatoryNativeResearchObligations } from "../src/domain/progression/research-prerequisite-obligations.ts";
 
@@ -54,7 +54,7 @@ const built = await esbuild.build({
   bundle: true,
   write: false,
   banner: {
-    js: `${metadata}\n\n// Stage 3S isolated experiment surface.\nwindow.__EA_TEST_HOOKS__ = { ...(window.__EA_TEST_HOOKS__ ?? {}) };`,
+    js: `${metadata}\n\n// Stage 3T isolated experiment surface.\nwindow.__EA_TEST_HOOKS__ = { ...(window.__EA_TEST_HOOKS__ ?? {}) };\nwindow.__EA_TEST_HOOKS__.selectGoalResourceCandidate = (${selectGoalResourceCandidate.toString()});`,
   },
   platform: "browser",
   target: ["esnext"],
@@ -81,7 +81,7 @@ const scenarios = [
     settings: { ...settings, autoSmelter: true, productionSmelting: "steel" },
   },
   {
-    id: "D-enabled-required-goal-intent-shadow",
+    id: "D-enabled-required-goal-candidate-execution",
     scenario: "D",
     settings: { ...settings, autoSmelter: true },
   },
@@ -99,6 +99,7 @@ const results = [];
 let liveBridge;
 try {
   for (const scenario of selectedScenarios) {
+    const scenarioStarted = performance.now();
     const session = await runner.openSession({
       bundle: bundlePath,
       save: parseSave(saveText),
@@ -111,17 +112,44 @@ try {
       manaTrace: true,
     });
     try {
-      await session.evaluate(() => {
-        const hooks = window.__EA_TEST_HOOKS__;
-        hooks.gatherIntervention = {
-          resourceClaimMode: "goal-derived-conjunctive",
-        };
-        hooks.researchOwnerSelectionEvents = [];
-        hooks.smelterObservations = [];
-        hooks.observeSmelterPlanForTest = (input, decision, demand) => {
-          hooks.smelterObservations.push({ input, decision, demand });
-        };
-      });
+      await session.evaluate(
+        ({ scenarioId, scenarioSettings }) => {
+          const hooks = window.__EA_TEST_HOOKS__;
+          hooks.gatherIntervention = {
+            resourceClaimMode: "goal-derived-conjunctive",
+          };
+          hooks.researchOwnerSelectionEvents = [];
+          hooks.smelterObservations = [];
+          hooks.strategyApplications = [];
+          hooks.strategyEvidence = [];
+          hooks.observeSmelterGoalDemandEvidenceForTest = (entry) => {
+            hooks.strategyEvidence.push(entry);
+          };
+          hooks.observeSmelterPlanForTest = (input, decision, demand) => {
+            hooks.smelterObservations.push({ input, decision, demand });
+          };
+          if (scenarioId === "D")
+            hooks.prepareSmelterGoalDemandForTest = (input, demand) => {
+              const result = hooks.selectGoalResourceCandidate({
+                hooks,
+                input,
+                demand,
+                settings: scenarioSettings,
+                goalActionId: "tech-industrialization",
+              });
+              hooks.strategyApplications.push(result);
+              return result.apply === true;
+            };
+          hooks.strategySetup = {
+            scenarioId,
+            candidateSelector: typeof hooks.selectGoalResourceCandidate,
+            preparationHook: typeof hooks.prepareSmelterGoalDemandForTest,
+            autoSmelter: scenarioSettings.autoSmelter,
+          };
+          return hooks.strategySetup;
+        },
+        { scenarioId: scenario.scenario, scenarioSettings: scenario.settings },
+      );
       let elapsed = 0;
       let firstSteelAllocation = null;
       let firstSteelContainers = null;
@@ -142,6 +170,10 @@ try {
                 "tech-industrialization",
               ),
               smelter: hooks.smelterObservations?.slice(-30) ?? [],
+              strategyApplications:
+                hooks.strategyApplications?.slice(-30) ?? [],
+              strategyEvidence: hooks.strategyEvidence?.slice(-30) ?? [],
+              strategySetup: hooks.strategySetup,
               selection: hooks.researchOwnerSelectionEvents ?? [],
             };
           }),
@@ -178,36 +210,8 @@ try {
             smelterObservations: capture.smelter,
             settings: scenario.settings,
           });
-          if (scenario.scenario === "D") {
-            const observation =
-              capture.smelter.findLast(
-                (entry) => entry.demand?.isSteelDemanded,
-              ) ?? capture.smelter.at(-1);
-            liveBridge.shadowApplication =
-              observation === undefined
-                ? {
-                    status: "demand-unknown",
-                    reason: "no captured Smelter decision sample",
-                  }
-                : applyVerifiedGoalIntentToSmelter({
-                    input: observation.input,
-                    intent: liveBridge.steelIntent,
-                    currentFreshness: liveBridge.steelIntent?.freshness,
-                    automationEnabled: scenario.settings.autoSmelter === true,
-                    competingDemand:
-                      observation.demand === undefined
-                        ? { evidence: "incomplete", resources: [] }
-                        : {
-                            evidence: "complete",
-                            resources: observation.demand.isSteelDemanded
-                              ? ["Steel"]
-                              : [],
-                          },
-                    supportedResources: observation.input.initialised
-                      ? ["Iron", "Steel"]
-                      : [],
-                  });
-          }
+          if (scenario.scenario === "D")
+            liveBridge.executingCandidateEvents = capture.strategyApplications;
         }
         if (
           period % 1000 === 0 ||
@@ -245,6 +249,16 @@ try {
             },
             workTicks: diagnostics.workTicks,
             errors: diagnostics.errors ?? [],
+            ...(period === 1000
+              ? {
+                  steelContainerGrantEvidence: capture.catalog
+                    ? readSteelContainerGrantEvidence(capture.catalog)
+                    : { status: "unavailable" },
+                  executingCandidateEvents: capture.strategyApplications,
+                  strategyDemandEvidence: capture.strategyEvidence,
+                  strategySetup: capture.strategySetup,
+                }
+              : {}),
           });
         }
       }
@@ -279,11 +293,18 @@ try {
           smelter: finalState.city?.smelter,
           researchInvocations: (finalDiagnostics.nativeInvocations ?? [])
             .filter((entry) => entry.elementId.startsWith("tech-"))
-            .map((entry) => entry.elementId),
+            .map((entry) => ({ ...entry })),
+          strategyApplications: await session.evaluate(
+            () => window.__EA_TEST_HOOKS__.strategyApplications ?? [],
+          ),
           workTicks: finalDiagnostics.workTicks,
           errors: finalDiagnostics.errors ?? [],
           pageErrors: finalDiagnostics.pageErrors ?? [],
-          rendererTaskMs: finalDiagnostics.rendererTaskMs,
+          strategyDemandEvidenceCount: await session.evaluate(
+            () => window.__EA_TEST_HOOKS__.strategyEvidence?.length ?? 0,
+          ),
+          runnerTimings: session.timings,
+          elapsedWallMs: performance.now() - scenarioStarted,
         },
         samples,
       });
@@ -342,6 +363,257 @@ console.log(
   ),
 );
 
+function readSteelContainerGrantEvidence(catalog) {
+  const definitions = catalog.definitions ?? [];
+  const applicability = new Map(catalog.applicability ?? []);
+  const levels = new Map(catalog.grantLevels ?? []);
+  const actions = definitions
+    .filter((definition) => definition.grantTechnology === "steel_container")
+    .map((definition) => {
+      const computed = (definition.computedRequirements ?? []).find(
+        (observation) =>
+          observation.status === "observed" &&
+          observation.complete === true &&
+          observation.validation === "valid" &&
+          observation.rootGeneration === catalog.rootGeneration &&
+          observation.progressionEpoch === catalog.progressionEpoch,
+      );
+      const prerequisites =
+        computed?.requirements !== undefined
+          ? { kind: "declared", requirements: computed.requirements }
+          : definition.prerequisites;
+      const selfRequirement =
+        prerequisites.kind === "declared"
+          ? prerequisites.requirements.find(
+              ({ technologyId }) => technologyId === "steel_container",
+            )
+          : undefined;
+      const offered = catalog.offers?.find(
+        (offer) => offer.elementId === definition.actionId,
+      );
+      const route = applicability.get(definition.actionId)?.status ?? "unknown";
+      const independent =
+        offered !== undefined
+          ? "yes-current-native-offer"
+          : prerequisites.kind !== "declared" || route === "unknown"
+            ? "unknown"
+            : route === "excluded"
+              ? "no-route-excluded"
+              : selfRequirement !== undefined &&
+                  selfRequirement.requiredLevel >= 1
+                ? "no-self-prerequisite"
+                : definition.eligibility.hasNativeCondition
+                  ? "unknown-native-condition"
+                  : "potential-independent-route";
+      return {
+        actionId: definition.actionId,
+        grantLevel: definition.grantLevel,
+        declaredPrerequisites: definition.prerequisites,
+        computedRequirements: definition.computedRequirements ?? [],
+        effectivePrerequisites: prerequisites,
+        computedStatus: computed?.status ?? "not-observed-fresh-and-complete",
+        routeApplicability: route,
+        nativeCondition: definition.eligibility.hasNativeCondition
+          ? offered === undefined
+            ? "unknown-not-offered"
+            : "passed-by-current-offer"
+          : "none",
+        currentlyOffered: offered !== undefined,
+        currentSteelContainerLevel: levels.get("steel_container"),
+        selfDependencyLevel: selfRequirement?.requiredLevel ?? null,
+        couldGrantMissingLevelWithoutIt: independent,
+      };
+    })
+    .sort((left, right) => left.grantLevel - right.grantLevel);
+  const forklift = definitions.find(
+    (definition) => definition.actionId === "tech-forklift",
+  );
+  return {
+    status: catalog.current === true ? "current-catalog" : "stale-catalog",
+    steelContainerLevel: levels.get("steel_container"),
+    grantActions: actions,
+    nonGrantMetadataAction: forklift
+      ? {
+          actionId: forklift.actionId,
+          declaredGrant: [forklift.grantTechnology, forklift.grantLevel],
+          prerequisites: forklift.prerequisites,
+          computedRequirements: forklift.computedRequirements ?? [],
+          routeApplicability:
+            applicability.get(forklift.actionId)?.status ?? "unknown",
+          sourceAuditedSideEffect:
+            "pinned tech.js action body assigns steel_container = 2",
+          independentFromLevelZero: "no; declared prerequisite is level 1",
+        }
+      : "not-in-retained-native-registry",
+  };
+}
+
+function selectGoalResourceCandidate({
+  hooks,
+  input,
+  demand,
+  settings: currentSettings,
+  goalActionId,
+}) {
+  const unavailable = (reason) => ({ apply: false, status: "unknown", reason });
+  if (currentSettings.autoSmelter !== true || input.initialised !== true)
+    return {
+      ...unavailable("explicit Smelter permission or producer is absent"),
+      status: "permission-disabled",
+    };
+  const catalog = hooks.readCurrentResearchCatalog?.(goalActionId);
+  if (
+    catalog?.current !== true ||
+    catalog.source !== "shared-current-cycle" ||
+    !Array.isArray(catalog.offers) ||
+    !Array.isArray(catalog.definitions) ||
+    !Array.isArray(catalog.grantLevels) ||
+    !Array.isArray(catalog.applicability)
+  )
+    return unavailable("current native goal/offer evidence is incomplete");
+  const goal = catalog.definitions.find(
+    (definition) => definition.actionId === goalActionId,
+  );
+  const goalApplicability = new Map(catalog.applicability).get(goalActionId);
+  if (
+    goal?.prerequisites?.kind !== "declared" ||
+    goalApplicability?.status !== "eligible" ||
+    goal.eligibility.hasNativeCondition
+  )
+    return unavailable("the selected goal route is not fully established");
+  const levels = new Map(catalog.grantLevels);
+  const missingRequirements = goal.prerequisites.requirements.filter(
+    ({ technologyId, requiredLevel }) =>
+      (levels.get(technologyId) ?? 0) < requiredLevel,
+  );
+  const candidate = missingRequirements
+    .flatMap((requirement) =>
+      catalog.offers
+        .filter(
+          (offer) =>
+            offer.grantTechnology === requirement.technologyId &&
+            offer.grantLevel >= requirement.requiredLevel,
+        )
+        .map((offer) => ({ requirement, offer })),
+    )
+    .find(({ offer }) =>
+      ["Iron", "Steel"].some((resourceId) =>
+        Object.hasOwn(offer.cost, resourceId),
+      ),
+    );
+  if (candidate === undefined)
+    return unavailable(
+      "no current offered action advances a missing goal requirement",
+    );
+  const resourceId = Object.hasOwn(candidate.offer.cost, "Steel")
+    ? "Steel"
+    : "Iron";
+  const currentQuantity =
+    input[resourceId === "Steel" ? "steelCount" : "ironCount"];
+  const requestedQuantity = demand.requestedQuantity(resourceId);
+  const price = candidate.offer.cost[resourceId];
+  const shortfall = Math.max(0, price - currentQuantity);
+  if (
+    !Number.isFinite(currentQuantity) ||
+    !Number.isFinite(requestedQuantity) ||
+    !Number.isFinite(price) ||
+    shortfall <= 0
+  )
+    return unavailable("candidate price, holding, or shortfall is unavailable");
+  const freshness = {
+    rootGeneration: catalog.rootGeneration,
+    progressionEpoch: catalog.progressionEpoch,
+    offerIdentity: `${candidate.offer.elementId}:${candidate.offer.generation}`,
+    offerGeneration: candidate.offer.generation,
+    price: Object.entries(candidate.offer.cost).map(([id, amount]) => ({
+      resourceId: id,
+      amount,
+    })),
+    settingsFingerprint: JSON.stringify({
+      autoSmelter: currentSettings.autoSmelter,
+      productionSmelting: currentSettings.productionSmelting,
+    }),
+    productionFingerprint: JSON.stringify(input),
+  };
+  if (
+    catalog.current !== true ||
+    catalog.rootGeneration !== freshness.rootGeneration ||
+    catalog.progressionEpoch !== freshness.progressionEpoch ||
+    candidate.offer.generation !== freshness.offerGeneration ||
+    candidate.offer.cost[resourceId] !== price ||
+    JSON.stringify(input) !== freshness.productionFingerprint ||
+    JSON.stringify({
+      autoSmelter: currentSettings.autoSmelter,
+      productionSmelting: currentSettings.productionSmelting,
+    }) !== freshness.settingsFingerprint
+  )
+    return unavailable(
+      "candidate failed same-call root, offer, price, settings, or production revalidation",
+    );
+  const uncoveredDemand = Math.max(0, requestedQuantity - currentQuantity);
+  if (uncoveredDemand >= shortfall)
+    return {
+      apply: false,
+      selection: "candidate",
+      mandatory: false,
+      status: "already-demanded",
+      reason: "exact competing demand covers the goal shortfall",
+      route: `${goalActionId} -> ${candidate.requirement.technologyId}:${candidate.requirement.requiredLevel}`,
+      actionId: candidate.offer.elementId,
+      resourceId,
+      shortfall,
+      requestedQuantity,
+      currentQuantity,
+    };
+  const alreadyDemanded =
+    input[resourceId === "Steel" ? "steelDemanded" : "ironDemanded"];
+  if (alreadyDemanded)
+    return {
+      apply: false,
+      selection: "candidate",
+      mandatory: false,
+      status: "demand-insufficient",
+      reason:
+        "the native Smelter input already sees demand and cannot express a larger quantity",
+      route: `${goalActionId} -> ${candidate.requirement.technologyId}:${candidate.requirement.requiredLevel}`,
+      actionId: candidate.offer.elementId,
+      resourceId,
+      shortfall,
+      requestedQuantity,
+      currentQuantity,
+    };
+  return {
+    apply: true,
+    selection: "candidate",
+    mandatory: false,
+    status: "intent-applied",
+    reason: null,
+    route: `${goalActionId} -> ${candidate.requirement.technologyId}:${candidate.requirement.requiredLevel}`,
+    actionId: candidate.offer.elementId,
+    resourceId,
+    shortfall,
+    requestedQuantity,
+    currentQuantity,
+    freshness,
+    boundedRisk:
+      "one native demand bit; no reservation, allocation, stock, or technology mutation",
+  };
+}
+
+function effectiveCurrentPrerequisites(definition, catalog) {
+  const observation = (definition.computedRequirements ?? []).find(
+    (entry) =>
+      entry.status === "observed" &&
+      entry.complete === true &&
+      entry.validation === "valid" &&
+      entry.rootGeneration === catalog.rootGeneration &&
+      entry.progressionEpoch === catalog.progressionEpoch,
+  );
+  return observation?.requirements === undefined
+    ? definition.prerequisites
+    : { kind: "declared", requirements: observation.requirements };
+}
+
 function deriveLiveIntent({
   catalog,
   state,
@@ -364,7 +636,7 @@ function deriveLiveIntent({
     actionId: definition.actionId,
     grantTechnology: definition.grantTechnology,
     grantLevel: definition.grantLevel,
-    prerequisites: definition.prerequisites,
+    prerequisites: effectiveCurrentPrerequisites(definition, catalog),
     hasNativeCondition: definition.eligibility.hasNativeCondition,
     routeRestrictions: definition.eligibility.routeRestrictions,
     restrictions: definition.eligibility.restrictions,
@@ -582,8 +854,12 @@ function deriveLiveIntent({
 }
 
 function compareBaselineD(scenarios) {
-  const baseline = scenarios.find((scenario) => scenario.scenario === "B");
-  const candidate = scenarios.find((scenario) => scenario.scenario === "D");
+  const baseline = scenarios.find((scenario) =>
+    scenario.scenario.startsWith("B-"),
+  );
+  const candidate = scenarios.find((scenario) =>
+    scenario.scenario.startsWith("D-"),
+  );
   if (baseline === undefined || candidate === undefined)
     return { available: false, reason: "both B and D timelines are required" };
   const comparable = (scenario) => ({
@@ -591,7 +867,11 @@ function compareBaselineD(scenarios) {
     firstSteelIncrease: scenario.firstSteelIncrease,
     firstSteelContainers: scenario.firstSteelContainers,
     firstIndustrialization: scenario.firstIndustrialization,
-    final: scenario.final,
+    final: {
+      tech: scenario.final.tech,
+      resources: scenario.final.resources,
+      smelter: scenario.final.smelter,
+    },
   });
   const baselineValue = comparable(baseline);
   const candidateValue = comparable(candidate);
@@ -603,7 +883,12 @@ function compareBaselineD(scenarios) {
       JSON.stringify(baseline.final.researchInvocations) ===
       JSON.stringify(candidate.final.researchInvocations),
     sameWorkTicks: baseline.final.workTicks === candidate.final.workTicks,
+    executingCandidateApplications: candidate.final.strategyApplications.filter(
+      (event) => event.apply,
+    ).length,
+    candidateOutcomeDiffers:
+      JSON.stringify(baselineValue) !== JSON.stringify(candidateValue),
     explanation:
-      "D is a test-surface shadow. It did not change the native planner input because the live prerequisite proof was unavailable; the captured native Build demand already requested Steel at the same allocation decision.",
+      "D lets a current native goal candidate set the Smelter demand input before planSmelter; planSmelter and iSmelter remain the executor, with exact current demand and owner constraints retained.",
   };
 }

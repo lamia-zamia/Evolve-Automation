@@ -1,11 +1,13 @@
 import assert from "node:assert/strict";
-import { applyVerifiedGoalIntentToSmelter } from "../../../experiments/stage3s-smelter-intent.mjs";
+import { applySelectedGoalResourceIntentToSmelter } from "../../../experiments/stage3s-smelter-intent.mjs";
 import { planSmelter } from "../../../src/domain/economy/production/smelter.ts";
 
 const input = Object.freeze({
   initialised: true,
   steelDemanded: false,
   ironDemanded: true,
+  steelCount: 10,
+  ironCount: 0,
   totalSmelters: 4,
   fuels: Object.freeze([
     { id: "Wood", unlocked: true, currentFuelCount: 4, cost: [] },
@@ -24,15 +26,22 @@ const intent = Object.freeze({
   resourceId: "Steel",
   shortfall: 240,
   actionable: true,
+  selection: "candidate",
   freshness,
 });
 const apply = (overrides = {}) =>
-  applyVerifiedGoalIntentToSmelter({
+  applySelectedGoalResourceIntentToSmelter({
     input,
     intent,
     currentFreshness: freshness,
     automationEnabled: true,
-    competingDemand: { evidence: "complete", resources: [] },
+    competingDemand: {
+      evidence: "complete",
+      resources: [
+        { resourceId: "Steel", requestedQuantity: 0, currentQuantity: 10 },
+        { resourceId: "Iron", requestedQuantity: 0, currentQuantity: 0 },
+      ],
+    },
     supportedResources: ["Iron", "Steel"],
     ...overrides,
   });
@@ -66,9 +75,29 @@ assert.equal(
   "demand-unknown",
 );
 assert.equal(
-  apply({ competingDemand: { evidence: "complete", resources: ["Steel"] } })
-    .status,
+  apply({
+    competingDemand: {
+      evidence: "complete",
+      resources: [
+        { resourceId: "Steel", requestedQuantity: 300, currentQuantity: 10 },
+      ],
+    },
+  }).status,
   "already-demanded",
+);
+assert.equal(
+  apply({
+    input: { ...input, steelDemanded: true },
+    competingDemand: {
+      evidence: "complete",
+      resources: [
+        { resourceId: "Steel", requestedQuantity: 100, currentQuantity: 10 },
+        { resourceId: "Iron", requestedQuantity: 0, currentQuantity: 0 },
+      ],
+    },
+  }).status,
+  "demand-insufficient",
+  "a demand flag alone does not establish that the goal shortfall is covered",
 );
 assert.equal(
   apply({ supportedResources: ["Iron"] }).status,
@@ -95,7 +124,15 @@ for (const changed of [
 }
 
 const ironIntent = { ...intent, resourceId: "Iron" };
-const ironResult = apply({ intent: ironIntent });
+const ironResult = apply({
+  intent: ironIntent,
+  competingDemand: {
+    evidence: "complete",
+    resources: [
+      { resourceId: "Iron", requestedQuantity: 500, currentQuantity: 0 },
+    ],
+  },
+});
 assert.equal(
   ironResult.status,
   "already-demanded",
@@ -145,12 +182,17 @@ const fuelConstrainedInput = {
   titaniumStorageRatio: 1,
   haveTitaniumTech: false,
 };
-const fuelIntent = applyVerifiedGoalIntentToSmelter({
+const fuelIntent = applySelectedGoalResourceIntentToSmelter({
   input: fuelConstrainedInput,
   intent,
   currentFreshness: freshness,
   automationEnabled: true,
-  competingDemand: { evidence: "complete", resources: [] },
+  competingDemand: {
+    evidence: "complete",
+    resources: [
+      { resourceId: "Steel", requestedQuantity: 0, currentQuantity: 0 },
+    ],
+  },
   supportedResources: ["Steel"],
 });
 assert.equal(fuelIntent.status, "intent-applied");
