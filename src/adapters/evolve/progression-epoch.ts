@@ -78,6 +78,22 @@ function scalarToken(value: unknown): string {
         : "-";
 }
 
+/** Route context used to rebind a fresh native offer observation to the current save. */
+export function readEvolveRouteIdentity(root: unknown): string | undefined {
+  const race = readProperty(root, "race");
+  const universe = readProperty(race, "universe");
+  const truepath = readProperty(race, "truepath");
+  const iceage = readProperty(race, "iceage");
+  // DeadSpace leaves these route flags absent until activated; absent means the route is off.
+  if (
+    typeof universe !== "string" ||
+    (typeof truepath !== "boolean" && truepath !== undefined) ||
+    (typeof iceage !== "boolean" && iceage !== undefined)
+  )
+    return undefined;
+  return JSON.stringify([universe, truepath === true, iceage === true]);
+}
+
 export function createProgressionEpochReader(
   rootState: GameRootStateSource,
 ): ProgressionEpochReader {

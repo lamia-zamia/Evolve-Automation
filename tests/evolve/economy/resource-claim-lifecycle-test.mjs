@@ -16,6 +16,29 @@ const current = {
     observationId: "research-observation-current",
     previousObservationId: "research-observation-prior",
   },
+  currentContext: {
+    rootGeneration: 1,
+    progressionGeneration: "current-epoch",
+    routeIdentity: '["magic",false,false]',
+  },
+  previousContext: {
+    rootGeneration: 1,
+    progressionGeneration: "current-epoch",
+  },
+  currentObservation: {
+    status: "validated",
+    rootGeneration: 1,
+    progressionGeneration: "current-epoch",
+    routeIdentity: '["magic",false,false]',
+    offerSetIdentity: "research-offers-current",
+    observationId: "research-observation-current",
+    actionId: "tech-black_powder",
+    manaPrice: 100,
+    offerGeneration: 11,
+    controlGeneration: 11,
+    resources: "complete",
+  },
+  nativeActionId: "tech-black_powder",
   offer: "current",
   price: "current",
   binding: "current",
@@ -24,6 +47,43 @@ const current = {
 
 const decision = (overrides = {}) =>
   decideResourceClaimLifecycle({ ...current, ...overrides });
+const afterProgressionChange = (overrides = {}) => {
+  const input = {
+    ...overrides,
+    progression: "changed",
+    currentContext: {
+      ...current.currentContext,
+      ...overrides.currentContext,
+      progressionGeneration: "post-mad-science-epoch",
+    },
+    currentObservation: {
+      ...current.currentObservation,
+      ...overrides.currentObservation,
+      progressionGeneration:
+        overrides.currentObservation?.progressionGeneration ===
+        current.currentObservation.progressionGeneration
+          ? "post-mad-science-epoch"
+          : (overrides.currentObservation?.progressionGeneration ??
+            "post-mad-science-epoch"),
+    },
+  };
+  const result = decision(input);
+  return result;
+};
+const absentOffer = (overrides = {}) =>
+  decision({
+    offer: "absent",
+    ...overrides,
+    currentObservation: {
+      ...current.currentObservation,
+      actionId: undefined,
+      manaPrice: undefined,
+      offerGeneration: undefined,
+      controlGeneration: undefined,
+      resources: "unknown",
+      ...overrides.currentObservation,
+    },
+  });
 
 assert.deepEqual(
   [
@@ -70,9 +130,9 @@ assert.equal(
   "verified-non-mana-shortage",
   "known non-Mana insufficiency releases only the claim budget, not the graph obligation",
 );
-assert.equal(decision({ offer: "absent" }).retainClaim, false);
+assert.equal(absentOffer().retainClaim, false);
 assert.equal(
-  decision({ offer: "absent" }).state,
+  absentOffer().state,
   "released",
   "a fresh offer set that omits an obligation releases only its current claim",
 );
@@ -109,15 +169,13 @@ assert.equal(
   "missing offer evidence cannot turn a previous resource shortage into verified release",
 );
 assert.equal(
-  decision({ offer: "absent", price: "changed", nonMana: "insufficient" })
-    .state,
+  absentOffer({ price: "changed", nonMana: "insufficient" }).state,
   "released",
   "a complete fresh offer-set identity proves absence without a nonexistent row price",
 );
 for (const status of ["failed", "incomplete", "stale", "unknown"]) {
   assert.equal(
-    decision({
-      offer: "absent",
+    absentOffer({
       offerSet: { ...current.offerSet, status },
     }).state,
     "suspended",
@@ -125,13 +183,12 @@ for (const status of ["failed", "incomplete", "stale", "unknown"]) {
   );
 }
 assert.equal(
-  decision({ offer: "absent", binding: "changed" }).state,
+  absentOffer({ binding: "changed" }).state,
   "released",
   "the complete offer-set identity proves absence without a current control binding",
 );
 assert.equal(
-  decision({
-    offer: "absent",
+  absentOffer({
     grant: "complete",
     offerSet: { ...current.offerSet, status: "failed" },
   }).state,
@@ -139,8 +196,7 @@ assert.equal(
   "a verified completed grant is independent of current offer availability",
 );
 assert.equal(
-  decision({
-    offer: "absent",
+  absentOffer({
     offerSet: {
       ...current.offerSet,
       observationId: current.offerSet.previousObservationId,
@@ -150,24 +206,101 @@ assert.equal(
   "a stale offer-set identity cannot prove current absence",
 );
 assert.equal(
-  decision({ offer: "absent", progression: "changed" }).state,
-  "suspended",
-  "a route or progression change makes the old claim epoch insufficient for absence release",
+  afterProgressionChange({
+    offer: "absent",
+    currentObservation: {
+      ...current.currentObservation,
+      actionId: undefined,
+      manaPrice: undefined,
+      offerGeneration: undefined,
+      controlGeneration: undefined,
+    },
+  }).state,
+  "released",
+  "a complete current-context offer set reconciles an older progression epoch",
 );
 assert.equal(
   decision({ price: "changed", nonMana: "insufficient" }).state,
-  "suspended",
-  "a changed price must be reconciled before releasing protected Mana",
+  "released",
+  "a changed price is reconciled from the fresh bound offer before release",
 );
 assert.equal(
   decision({ binding: "changed", nonMana: "insufficient" }).state,
-  "suspended",
-  "a changed native binding must be reconciled before releasing protected Mana",
+  "released",
+  "a changed binding is reconciled only when the current offer and control generations agree",
 );
 assert.equal(
-  decision({ progression: "changed", nonMana: "insufficient" }).state,
+  afterProgressionChange({ nonMana: "insufficient" }).state,
+  "released",
+  "a changed prior epoch is reconciled only by the independently validated current observation",
+);
+assert.equal(
+  afterProgressionChange({
+    price: "changed",
+    binding: "changed",
+    nonMana: "insufficient",
+    currentObservation: {
+      ...current.currentObservation,
+      progressionGeneration: "old-epoch",
+      manaPrice: 125,
+      offerGeneration: 12,
+      controlGeneration: 12,
+    },
+  }).state,
   "suspended",
-  "a changed progression epoch must be reconciled before releasing protected Mana",
+  "conflicting current epoch evidence cannot release the old reservation",
+);
+assert.equal(
+  afterProgressionChange({
+    nonMana: "insufficient",
+    currentObservation: {
+      ...current.currentObservation,
+      routeIdentity: '["truepath",true,false]',
+    },
+  }).state,
+  "suspended",
+  "a route mismatch cannot be reconciled as current evidence",
+);
+assert.equal(
+  afterProgressionChange({
+    price: "changed",
+    binding: "changed",
+    nonMana: "insufficient",
+    currentObservation: {
+      ...current.currentObservation,
+      controlGeneration: 10,
+    },
+  }).state,
+  "suspended",
+  "a changed offer binding must be rebound to the current control generation",
+);
+assert.equal(
+  afterProgressionChange({
+    price: "changed",
+    binding: "changed",
+    nonMana: "insufficient",
+    offerSet: { ...current.offerSet, status: "incomplete" },
+  }).state,
+  "suspended",
+  "partial offer catalogs cannot reconcile changed claim evidence",
+);
+assert.deepEqual(
+  [
+    decision({
+      nativeActionId: "tech-mad_science",
+      grant: "complete",
+      progression: "changed",
+      currentObservation: { ...current.currentObservation, status: "stale" },
+    }).state,
+    afterProgressionChange({
+      nativeActionId: "tech-black_powder",
+      price: "changed",
+      binding: "changed",
+      nonMana: "insufficient",
+    }).state,
+  ],
+  ["completed", "released"],
+  "the Stage 3I-to-3K transition completes Mad Science's own grant while independently reconciling Black Powder",
 );
 assert.equal(
   decision({ offer: "current", nonMana: "insufficient" }).state,

@@ -4825,6 +4825,11 @@
   function scalarToken(value) {
     return typeof value == "string" || typeof value == "number" ? String(value) : value === !0 ? "1" : value === !1 ? "0" : "-";
   }
+  function readEvolveRouteIdentity(root) {
+    let race = readProperty(root, "race"), universe = readProperty(race, "universe"), truepath = readProperty(race, "truepath"), iceage = readProperty(race, "iceage");
+    if (!(typeof universe != "string" || typeof truepath != "boolean" && truepath !== void 0 || typeof iceage != "boolean" && iceage !== void 0))
+      return JSON.stringify([universe, truepath === !0, iceage === !0]);
+  }
   function createProgressionEpochReader(rootState) {
     let rootReplacements = 0, unsubscribe = rootState.subscribeRootReplaced(() => {
       rootReplacements += 1;

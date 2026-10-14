@@ -1,6 +1,24 @@
 import assert from "node:assert/strict";
 
-import { createProgressionEpochReader } from "../../../src/adapters/evolve/progression-epoch.ts";
+import {
+  createProgressionEpochReader,
+  readEvolveRouteIdentity,
+} from "../../../src/adapters/evolve/progression-epoch.ts";
+
+assert.equal(
+  readEvolveRouteIdentity({ race: { universe: "magic" } }),
+  JSON.stringify(["magic", false, false]),
+  "uninitialized DeadSpace route flags mean their routes are inactive",
+);
+assert.equal(
+  readEvolveRouteIdentity({ race: { universe: "magic", truepath: true } }),
+  JSON.stringify(["magic", true, false]),
+);
+assert.equal(
+  readEvolveRouteIdentity({ race: { universe: "magic", iceage: "invalid" } }),
+  undefined,
+  "malformed route flags do not establish a context identity",
+);
 
 /** A captured root whose object the test mutates in place, as the game mutates its own. */
 function rootSourceOf(root) {

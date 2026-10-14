@@ -1,4 +1,5 @@
 export type ResourceClaimLifecycleEvidence = Readonly<{
+  nativeActionId: string;
   goal: "active" | "cancelled" | "unknown";
   permission: "enabled" | "disabled" | "unknown";
   queues: "empty" | "player-committed" | "unknown";
@@ -11,6 +12,28 @@ export type ResourceClaimLifecycleEvidence = Readonly<{
     identity: string | undefined;
     observationId: string | undefined;
     previousObservationId: string;
+  }>;
+  previousContext: Readonly<{
+    rootGeneration: number;
+    progressionGeneration: string;
+  }>;
+  currentContext: Readonly<{
+    rootGeneration: number | undefined;
+    progressionGeneration: string | undefined;
+    routeIdentity: string | undefined;
+  }>;
+  currentObservation: Readonly<{
+    status: "validated" | "failed" | "incomplete" | "stale" | "unknown";
+    rootGeneration: number | undefined;
+    progressionGeneration: string | undefined;
+    routeIdentity: string | undefined;
+    offerSetIdentity: string | undefined;
+    observationId: string | undefined;
+    actionId: string | undefined;
+    manaPrice: number | undefined;
+    offerGeneration: number | undefined;
+    controlGeneration: number | undefined;
+    resources: "complete" | "unknown";
   }>;
   offer: "current" | "absent" | "unknown";
   price: "current" | "changed" | "unknown";
@@ -56,7 +79,6 @@ export function decideResourceClaimLifecycle(
     evidence.permission === "unknown" ||
     evidence.queues === "unknown" ||
     evidence.root === "unknown" ||
-    evidence.progression === "unknown" ||
     evidence.obligation === "unknown" ||
     evidence.grant === "unknown"
   )
@@ -71,22 +93,55 @@ export function decideResourceClaimLifecycle(
       reason: "grant-completed",
       retainClaim: false,
     });
+  if (evidence.progression === "unknown")
+    return Object.freeze({
+      state: "suspended",
+      reason: "evidence-unavailable",
+      retainClaim: true,
+    });
   if (evidence.obligation === "not-mandatory")
     return Object.freeze({
       state: "invalidated",
       reason: "obligation-ended",
       retainClaim: false,
     });
+  const observation = evidence.currentObservation;
+  const progressionEvidenceMatches =
+    evidence.progression ===
+    (evidence.previousContext.progressionGeneration ===
+    evidence.currentContext.progressionGeneration
+      ? "current"
+      : "changed");
+  const currentContextMatches =
+    observation.status === "validated" &&
+    Number.isSafeInteger(evidence.currentContext.rootGeneration) &&
+    Number.isSafeInteger(evidence.previousContext.rootGeneration) &&
+    evidence.previousContext.rootGeneration ===
+      evidence.currentContext.rootGeneration &&
+    progressionEvidenceMatches &&
+    observation.rootGeneration === evidence.currentContext.rootGeneration &&
+    evidence.currentContext.progressionGeneration !== undefined &&
+    evidence.currentContext.progressionGeneration !== "" &&
+    observation.progressionGeneration ===
+      evidence.currentContext.progressionGeneration &&
+    evidence.currentContext.routeIdentity !== undefined &&
+    evidence.currentContext.routeIdentity !== "" &&
+    observation.routeIdentity === evidence.currentContext.routeIdentity &&
+    evidence.offerSet.identity !== undefined &&
+    evidence.offerSet.identity !== "" &&
+    evidence.offerSet.observationId !== undefined &&
+    evidence.offerSet.observationId !== "" &&
+    observation.offerSetIdentity === evidence.offerSet.identity &&
+    observation.observationId === evidence.offerSet.observationId &&
+    observation.observationId !== evidence.offerSet.previousObservationId &&
+    evidence.offerSet.status === "complete-fresh";
   if (evidence.offer === "absent") {
     if (
-      evidence.offerSet.status !== "complete-fresh" ||
-      evidence.offerSet.identity === undefined ||
-      evidence.offerSet.identity === "" ||
-      evidence.offerSet.observationId === undefined ||
-      evidence.offerSet.observationId === "" ||
-      evidence.offerSet.observationId ===
-        evidence.offerSet.previousObservationId ||
-      evidence.progression !== "current"
+      !currentContextMatches ||
+      observation.actionId !== undefined ||
+      observation.manaPrice !== undefined ||
+      observation.offerGeneration !== undefined ||
+      observation.controlGeneration !== undefined
     )
       return Object.freeze({
         state: "suspended",
@@ -99,21 +154,27 @@ export function decideResourceClaimLifecycle(
       retainClaim: false,
     });
   }
+  const reconciledCurrentOffer =
+    currentContextMatches &&
+    observation.actionId === evidence.nativeActionId &&
+    typeof observation.manaPrice === "number" &&
+    Number.isFinite(observation.manaPrice) &&
+    observation.manaPrice >= 0 &&
+    Number.isSafeInteger(observation.offerGeneration) &&
+    observation.offerGeneration === observation.controlGeneration &&
+    observation.resources === "complete";
   const unresolved = Object.entries(evidence).some(
     ([key, value]) =>
       key !== "offerSet" &&
+      key !== "currentContext" &&
+      key !== "currentObservation" &&
+      key !== "nativeActionId" &&
       typeof value === "string" &&
-      ["unknown", "changed"].includes(value),
+      value === "unknown",
   );
   if (
+    !reconciledCurrentOffer ||
     unresolved ||
-    evidence.offerSet.status !== "complete-fresh" ||
-    evidence.offerSet.identity === undefined ||
-    evidence.offerSet.identity === "" ||
-    evidence.offerSet.observationId === undefined ||
-    evidence.offerSet.observationId === "" ||
-    evidence.offerSet.observationId ===
-      evidence.offerSet.previousObservationId ||
     evidence.goal !== "active" ||
     evidence.permission !== "enabled"
   )
@@ -127,6 +188,26 @@ export function decideResourceClaimLifecycle(
       state: "released",
       reason: "verified-non-mana-shortage",
       retainClaim: false,
+    });
+  const changedEvidence = Object.entries(evidence).some(
+    ([key, value]) =>
+      key !== "offerSet" &&
+      key !== "currentContext" &&
+      key !== "currentObservation" &&
+      key !== "nativeActionId" &&
+      value === "changed",
+  );
+  if (changedEvidence)
+    return Object.freeze({
+      state: "suspended",
+      reason: "evidence-unavailable",
+      retainClaim: true,
+    });
+  if (unresolved)
+    return Object.freeze({
+      state: "suspended",
+      reason: "evidence-unavailable",
+      retainClaim: true,
     });
   return Object.freeze({
     state: "active",

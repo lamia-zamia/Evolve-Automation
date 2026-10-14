@@ -69,6 +69,7 @@ import { decideResearchSpend } from "../domain/progression/research-spending-dec
 import type { GoalResourceStock } from "../domain/economy/goal-feasibility.ts";
 import { canAfford } from "../domain/game-world.ts";
 import { createCapturedTechPrerequisiteLevelReader } from "../adapters/evolve/progression/research/captured-tech-prerequisite-levels.ts";
+import { readEvolveRouteIdentity } from "../adapters/evolve/progression-epoch.ts";
 import {
   readCapturedMadTargetCondition,
   readCapturedTechApplicability,
@@ -2097,6 +2098,10 @@ export function startCapturedRuntime({
   const refreshResourceClaim = (
     ownerObservation?: Readonly<{
       offers: readonly Readonly<OfferedTech>[] | undefined;
+      rootGeneration: number;
+      progressionGeneration: string;
+      routeIdentity: string | undefined;
+      contextStable: boolean;
     }>,
   ) => {
     if (
@@ -2210,6 +2215,29 @@ export function startCapturedRuntime({
         const definitions = progression.readResearchActionDefinitions();
         const rootGeneration = progression.readRootGeneration();
         const progressionGeneration = progression.readProgressionEpoch();
+        const routeIdentity = readEvolveRouteIdentity(root);
+        const currentOfferSetIdentity =
+          offers?.[0]?.offerSetIdentity ??
+          (offers?.length === 0 ? JSON.stringify([]) : undefined);
+        const currentOfferObservationId =
+          offers?.[0]?.offerObservationId ??
+          (offers?.length === 0
+            ? `research-owner-${automationCycle}`
+            : undefined);
+        const coherentOfferSet =
+          ownerObservation.contextStable &&
+          ownerObservation.rootGeneration === rootGeneration &&
+          ownerObservation.progressionGeneration === progressionGeneration &&
+          ownerObservation.routeIdentity !== undefined &&
+          ownerObservation.routeIdentity === routeIdentity &&
+          currentOfferSetIdentity !== undefined &&
+          currentOfferObservationId !== undefined &&
+          offers !== undefined &&
+          offers.every(
+            (entry) =>
+              entry.offerSetIdentity === currentOfferSetIdentity &&
+              entry.offerObservationId === currentOfferObservationId,
+          );
         const selectionRecord = (
           status: string,
           reason: string,
@@ -2512,21 +2540,46 @@ export function startCapturedRuntime({
                       ? "complete"
                       : "incomplete",
                 offerSet: {
-                  status: offers === undefined ? "failed" : "complete-fresh",
-                  identity:
-                    offers === undefined
-                      ? undefined
-                      : (offers[0]?.offerSetIdentity ??
-                        (offers.length === 0 ? JSON.stringify([]) : undefined)),
-                  observationId:
-                    offers === undefined
-                      ? undefined
-                      : (offers[0]?.offerObservationId ??
-                        (offers.length === 0
-                          ? `research-owner-${automationCycle}`
-                          : undefined)),
+                  status: coherentOfferSet ? "complete-fresh" : "incomplete",
+                  identity: currentOfferSetIdentity,
+                  observationId: currentOfferObservationId,
                   previousObservationId: priorClaim.offerObservationId,
                 },
+                previousContext: {
+                  rootGeneration: priorClaim.rootGeneration,
+                  progressionGeneration: priorClaim.progressionGeneration,
+                },
+                currentContext: {
+                  rootGeneration,
+                  progressionGeneration,
+                  routeIdentity,
+                },
+                currentObservation: {
+                  status: coherentOfferSet ? "validated" : "incomplete",
+                  rootGeneration: ownerObservation.rootGeneration,
+                  progressionGeneration: ownerObservation.progressionGeneration,
+                  routeIdentity: ownerObservation.routeIdentity,
+                  offerSetIdentity: currentOfferSetIdentity,
+                  observationId: currentOfferObservationId,
+                  actionId: currentOffer?.elementId,
+                  manaPrice: currentOffer?.cost.Mana,
+                  offerGeneration: currentOffer?.generation,
+                  controlGeneration: currentControl?.generation,
+                  resources:
+                    currentOffer !== undefined &&
+                    nonManaSample !== undefined &&
+                    nonManaCost !== undefined &&
+                    Object.entries(nonManaCost).every(
+                      ([resourceId, cost]) =>
+                        Number.isFinite(cost) &&
+                        Number.isFinite(
+                          nonManaSample.resources.get(resourceId)?.amount,
+                        ),
+                    )
+                      ? "complete"
+                      : "unknown",
+                },
+                nativeActionId: priorClaim.nativeActionId,
                 offer: currentOffer === undefined ? "absent" : "current",
                 price:
                   currentOffer === undefined
@@ -2549,6 +2602,85 @@ export function startCapturedRuntime({
                       ? "affordable"
                       : "insufficient",
               });
+            if (
+              __EA_TEST_SURFACE_ENABLED__ === true &&
+              lifecycle !== undefined
+            ) {
+              const hooks = readProperty(
+                settingsHostWindow,
+                "__EA_TEST_HOOKS__",
+              );
+              if (isRecord(hooks)) {
+                const priorEvents = readProperty(
+                  hooks,
+                  "resourceClaimLifecycleEvidenceEvents",
+                );
+                const events = Array.isArray(priorEvents) ? priorEvents : [];
+                events.push({
+                  cycle: automationCycle,
+                  actionId: priorClaim.nativeActionId,
+                  state: lifecycle.state,
+                  reason: lifecycle.reason,
+                  previousRootGeneration: priorClaim.rootGeneration,
+                  currentRootGeneration: rootGeneration,
+                  previousProgressionGeneration:
+                    priorClaim.progressionGeneration,
+                  currentProgressionGeneration: progressionGeneration,
+                  progression:
+                    priorClaim.progressionGeneration === progressionGeneration
+                      ? "current"
+                      : "changed",
+                  previousOfferSetIdentity: priorClaim.offerSetIdentity,
+                  previousOfferObservationId: priorClaim.offerObservationId,
+                  currentOfferSetIdentity,
+                  offerObservationId: currentOfferObservationId,
+                  routeIdentity,
+                  currentOfferActionId: currentOffer?.elementId,
+                  currentOfferCost: currentOffer?.cost,
+                  offerGeneration: currentOffer?.generation,
+                  controlGeneration: currentControl?.generation,
+                  priorEvidenceCurrent:
+                    priorClaim.rootGeneration === rootGeneration &&
+                    priorClaim.progressionGeneration ===
+                      progressionGeneration &&
+                    priorClaim.offerSetIdentity === currentOfferSetIdentity &&
+                    priorClaim.offerObservationId ===
+                      currentOfferObservationId &&
+                    priorClaim.controlBinding.generation ===
+                      currentControl?.generation,
+                  nonManaResources:
+                    currentOffer === undefined ||
+                    nonManaSample === undefined ||
+                    nonManaCost === undefined
+                      ? undefined
+                      : Object.fromEntries(
+                          Object.entries(nonManaCost).map(
+                            ([resourceId, required]) => [
+                              resourceId,
+                              {
+                                available:
+                                  nonManaSample.resources.get(resourceId)
+                                    ?.amount,
+                                required,
+                              },
+                            ],
+                          ),
+                        ),
+                  nonMana:
+                    nonManaSample === undefined || nonManaCost === undefined
+                      ? "unknown"
+                      : canAfford(nonManaSample, nonManaCost)
+                        ? "affordable"
+                        : "insufficient",
+                  currentContextStable: coherentOfferSet,
+                });
+                Reflect.set(
+                  hooks,
+                  "resourceClaimLifecycleEvidenceEvents",
+                  events,
+                );
+              }
+            }
             if (lifecycle === undefined) {
               reconciledPriorClaims.push(priorClaim);
               continue;
@@ -5454,7 +5586,19 @@ export function startCapturedRuntime({
             const offers = progression.sampleOfferedTechs(
               "resource-claim-before-gather",
             );
-            refreshResourceClaim({ offers });
+            const sampleRoot = pageCapture.rootState.readRoot();
+            const sampleRootGeneration = progression.readRootGeneration();
+            const sampleProgressionGeneration =
+              progression.readProgressionEpoch();
+            const sampleRouteIdentity = readEvolveRouteIdentity(sampleRoot);
+            refreshResourceClaim({
+              offers,
+              rootGeneration: sampleRootGeneration,
+              progressionGeneration: sampleProgressionGeneration,
+              routeIdentity: sampleRouteIdentity,
+              contextStable:
+                sampleRoot !== undefined && sampleRouteIdentity !== undefined,
+            });
           }
         }
         const needsConstructionSaving =
