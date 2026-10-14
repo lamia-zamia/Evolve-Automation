@@ -169,36 +169,38 @@ async function run(runner, scenario, enabled, repeat) {
     }
     let priorPeriod = 0;
     let priorMetrics = await session.metrics();
-    let warmupMetrics;
     const periodScriptMs = [];
+    const measuredWindows = [];
     while (priorPeriod < targetPeriods) {
       await new Promise((resolve) => setTimeout(resolve, sampleMs));
       const currentPeriod = await session.periods();
       const currentMetrics = await session.metrics();
       const deltaPeriods = currentPeriod - priorPeriod;
-      if (currentPeriod >= warmup && warmupMetrics === undefined)
-        warmupMetrics = priorMetrics;
-      if (deltaPeriods > 0 && currentPeriod > warmup) {
-        const countedPeriods = Math.min(
-          deltaPeriods,
-          currentPeriod - Math.max(priorPeriod, warmup),
-        );
-        if (countedPeriods > 0) {
-          periodScriptMs.push(
-            ((currentMetrics.ScriptDuration - priorMetrics.ScriptDuration) *
-              1000) /
-              countedPeriods,
-          );
-        }
+      if (
+        deltaPeriods > 0 &&
+        priorPeriod >= warmup &&
+        currentPeriod <= targetPeriods
+      ) {
+        const windowScriptDurationMs =
+          (currentMetrics.ScriptDuration - priorMetrics.ScriptDuration) * 1000;
+        measuredWindows.push({
+          fromPeriod: priorPeriod,
+          toPeriod: currentPeriod,
+          periods: deltaPeriods,
+          scriptDurationMs: windowScriptDurationMs,
+          taskDurationMs:
+            (currentMetrics.TaskDuration - priorMetrics.TaskDuration) * 1000,
+        });
+        periodScriptMs.push(windowScriptDurationMs / deltaPeriods);
       }
       priorPeriod = currentPeriod;
       priorMetrics = currentMetrics;
     }
-    const [state, diagnostics, finalMetrics] = await Promise.all([
+    const [state, diagnostics] = await Promise.all([
       session.readState(),
       session.diagnostics(),
-      session.metrics(),
     ]);
+    const finalMetrics = await session.metrics();
     return {
       scenario: scenario.name,
       instrumentation: enabled ? "enabled" : "disabled",
@@ -207,18 +209,21 @@ async function run(runner, scenario, enabled, repeat) {
       workTicks: diagnostics.workTicks,
       prestigeCount: state.stats?.reset,
       controlUsage: diagnostics.controlUsage,
-      periodScriptMs: summarize(periodScriptMs),
-      scriptDurationMs: Number(
-        (
-          (finalMetrics.ScriptDuration - (warmupMetrics?.ScriptDuration ?? 0)) *
-          1000
-        ).toFixed(3),
+      windowScriptMsPerPeriod: summarize(periodScriptMs),
+      totalJavaScriptDurationMs: Number(
+        measuredWindows
+          .reduce((total, sample) => total + sample.scriptDurationMs, 0)
+          .toFixed(3),
       ),
+      periodsCoveredByWindows: measuredWindows.reduce(
+        (total, sample) => total + sample.periods,
+        0,
+      ),
+      measurementWindows: measuredWindows.length,
       taskDurationMs: Number(
-        (
-          (finalMetrics.TaskDuration - (warmupMetrics?.TaskDuration ?? 0)) *
-          1000
-        ).toFixed(3),
+        measuredWindows
+          .reduce((total, sample) => total + sample.taskDurationMs, 0)
+          .toFixed(3),
       ),
       jsHeapBytes: finalMetrics.JSHeapUsedSize,
       domNodes: finalMetrics.Nodes,
@@ -332,7 +337,7 @@ try {
         sampleIntervalMs: sampleMs,
         epoch,
         methodology:
-          "Diagnostics-off/enabled alternating native-timer Chromium runs. ScriptDuration is total renderer JS including upstream game; adjacent CDP metrics are sampled every 100 ms and divided by the periods delivered, so a sample may span more than one period. The same sampling is used in both instrumentation conditions. Phase summaries are attribution only. Epoch is numeric milliseconds because the runner bridge applies Number(epoch). Stage 3M D is the existing test-surface intervention with shadow disabled.",
+          "Diagnostics-off/enabled alternating native-timer Chromium runs. ScriptDuration is total renderer JS including upstream game. Adjacent CDP samples form polling windows; windows crossing either the warm-up or measured-run boundary are excluded because their ScriptDuration cannot be apportioned. The report gives the summed JavaScript duration and period-normalized window samples separately. Window quantiles are not per-period callback latency. Phase summaries are attribution only. Epoch is numeric milliseconds because the runner bridge applies Number(epoch). Stage 3M D is the existing test-surface intervention with shadow disabled.",
         results,
       };
       await mkdir(path.dirname(outputPath), { recursive: true });
