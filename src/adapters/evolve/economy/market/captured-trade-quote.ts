@@ -53,6 +53,29 @@ function tradeRoundingPair(
   return [first!, last!];
 }
 
+/** Pinned resources.js aBuy rounds tradeVolumeBonus, tradeBuyPrice, then its display price. */
+function nativeBuyRoundingPair(
+  values: readonly CapturedRoundedValue[],
+): readonly [CapturedRoundedValue, CapturedRoundedValue] | undefined {
+  if (values.length < 3) return undefined;
+  const innerPrice = values.at(-2);
+  const displayedPrice = values.at(-1);
+  if (
+    roundedTradeValue(innerPrice, 1) === undefined ||
+    roundedTradeValue(displayedPrice, 2) === undefined
+  )
+    return undefined;
+  const volumeValues = values
+    .slice(0, -2)
+    .filter((value) => roundedTradeValue(value, 3) !== undefined);
+  if (volumeValues.length !== 1) return undefined;
+  for (let index = 0; index < values.length - 3; index += 1) {
+    if (values[index]?.digits === 1 && values[index + 1]?.digits === 2)
+      return undefined;
+  }
+  return [volumeValues[0]!, displayedPrice!];
+}
+
 function observeTradeRounding(
   root: unknown,
   resourceId: string,
@@ -97,10 +120,12 @@ function observeTradeRounding(
       ? [value!]
       : undefined;
   }
-  return tradeRoundingPair(scan.value, firstDigits, lastDigits);
+  return method === "aBuy"
+    ? nativeBuyRoundingPair(scan.value)
+    : tradeRoundingPair(scan.value, firstDigits, lastDigits);
 }
 
-/** Pinned resources.js: aSell ends in price(1), quantity(3); aBuy in volume(3), price(1). */
+/** Pinned resources.js: aSell ends in price(1), quantity(3); aBuy ends in price(1), display(2). */
 export function readCapturedTradeQuote(
   root: unknown,
   resourceId: string,

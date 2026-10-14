@@ -199,7 +199,10 @@ import {
 } from "../adapters/evolve/economy/market/captured-galaxy-market.ts";
 import { createCapturedMarketPorts } from "../adapters/evolve/economy/market/captured-market.ts";
 import { createCapturedMarketBoard } from "../adapters/evolve/economy/market/captured-market-board.ts";
-import { createCapturedTradeRoutes } from "../adapters/evolve/economy/market/captured-trade-routes.ts";
+import {
+  createCapturedTradeRoutes,
+  createCapturedTradeRoutesTestControl,
+} from "../adapters/evolve/economy/market/captured-trade-routes.ts";
 import { runGalaxyMarketAutomation } from "../application/galaxy-market.ts";
 import { runFleetAutomation } from "../application/fleet.ts";
 import {
@@ -3925,7 +3928,7 @@ export function startCapturedRuntime({
     onUnavailable: (resourceId, reason) =>
       reportOnce(`market skipped ${resourceId}: ${reason}`),
   });
-  const tradeRoutes = createCapturedTradeRoutes({
+  const tradeRouteDependencies = {
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,
     board: marketBoard,
@@ -3935,7 +3938,52 @@ export function startCapturedRuntime({
     readDemand: readDemandFor("Market"),
     onUnavailable: (reason) =>
       reportOnce(`trade routes unavailable: ${reason}`),
-  });
+    ...(typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
+    __EA_TEST_SURFACE_ENABLED__ === true
+      ? {
+          testSurface: {
+            resolveOperations: (input, planned, context) => {
+              const hooks = readProperty(
+                settingsHostWindow,
+                "__EA_TEST_HOOKS__",
+              );
+              const resolve = readProperty(
+                hooks,
+                "resolveTradeRouteOperationsForTest",
+              );
+              return typeof resolve === "function"
+                ? Reflect.apply(resolve, hooks, [input, planned, context])
+                : undefined;
+            },
+            onTrace: (event) => {
+              const hooks = readProperty(
+                settingsHostWindow,
+                "__EA_TEST_HOOKS__",
+              );
+              const record = readProperty(
+                hooks,
+                "recordTradeRouteTraceForTest",
+              );
+              if (typeof record === "function")
+                Reflect.apply(record, hooks, [event]);
+            },
+          },
+        }
+      : {}),
+  } satisfies Parameters<typeof createCapturedTradeRoutes>[0];
+  const tradeRoutes = createCapturedTradeRoutes(tradeRouteDependencies);
+  if (
+    typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
+    __EA_TEST_SURFACE_ENABLED__ === true
+  ) {
+    const hooks = readProperty(settingsHostWindow, "__EA_TEST_HOOKS__");
+    if (isRecord(hooks))
+      Reflect.set(
+        hooks,
+        "capturedTradeRouteControlForTest",
+        createCapturedTradeRoutesTestControl(tradeRouteDependencies),
+      );
+  }
   const marketAutomation = Object.freeze({
     run: (bulkSell = false, ignoreSellRatio = false) =>
       runMarketAutomation(

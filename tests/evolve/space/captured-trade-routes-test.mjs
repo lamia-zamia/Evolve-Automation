@@ -66,7 +66,11 @@ const registry = {
       return { ok: true, value: "localized" };
     }
     if (method === "aBuy") {
-      rounded = [observation(2.3456, 3), observation(12, 1)];
+      rounded = [
+        observation(2.3456, 3),
+        observation(12, 1),
+        observation(12, 2),
+      ];
       return { ok: true, value: "localized" };
     }
     const id = args[0];
@@ -411,7 +415,11 @@ function oracleFixture() {
     methods: ["aSell", "aBuy", "volume"],
   };
   let sell = [observation(7.36, 1), observation(1.23456, 3)];
-  let buy = [observation(2.34567, 3), observation(12.36, 1)];
+  let buy = [
+    observation(2.34567, 3),
+    observation(12.36, 1),
+    observation(12.4, 2),
+  ];
   let volume = [observation(10.4567, 2)];
   let behavior = "ok";
   const rootState = { readRoot: () => currentRoot };
@@ -497,7 +505,9 @@ native.setSell([
 assert.equal(native.quote()?.sellPrice, 7.4); // An unrelated nested rounding is harmless.
 native.setBuy([
   observation(2.34567, 3),
-  observation(12.36, 1),
+  observation(10, 1),
+  observation(11.1, 2),
+  observation(12.3, 1),
   observation(77, 2),
 ]);
 assert.equal(native.quote(), undefined);
@@ -508,7 +518,11 @@ native.setBuy([
   { receiver: 12.36, digits: 1, text: "bad" },
 ]);
 assert.equal(native.quote(), undefined);
-native.setBuy([observation(2.34567, 3), observation(12.36, 1)]);
+native.setBuy([
+  observation(2.34567, 3),
+  observation(12.36, 1),
+  observation(12.4, 2),
+]);
 assert.equal(native.regional(), 10.4567);
 native.setVolume([]);
 assert.equal(native.regional(), undefined);
@@ -541,7 +555,7 @@ registry.invoke = (_handle, method, args = []) => {
     return { ok: true };
   }
   if (method === "aBuy") {
-    rounded = [observation(2, 3), observation(12, 1)];
+    rounded = [observation(2, 3), observation(12, 1), observation(12, 2)];
     return { ok: true };
   }
   const resource = root.resource[args[0]];
@@ -563,7 +577,7 @@ registry.invoke = (_handle, method, args = []) => {
     return { ok: true };
   }
   if (method === "aBuy") {
-    rounded = [observation(2, 3), observation(12, 1)];
+    rounded = [observation(2, 3), observation(12, 1), observation(12, 2)];
     return { ok: true };
   }
   calls.push([method, args[0]]);

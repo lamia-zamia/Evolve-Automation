@@ -37611,6 +37611,19 @@
       return [first, last];
     }
   }
+  function nativeBuyRoundingPair(values) {
+    if (values.length < 3) return;
+    let innerPrice = values.at(-2), displayedPrice = values.at(-1);
+    if (roundedTradeValue(innerPrice, 1) === void 0 || roundedTradeValue(displayedPrice, 2) === void 0)
+      return;
+    let volumeValues = values.slice(0, -2).filter((value) => roundedTradeValue(value, 3) !== void 0);
+    if (volumeValues.length === 1) {
+      for (let index = 0; index < values.length - 3; index += 1)
+        if (values[index]?.digits === 1 && values[index + 1]?.digits === 2)
+          return;
+      return [volumeValues[0], displayedPrice];
+    }
+  }
   function observeTradeRounding(root, resourceId, control, method, firstDigits, lastDigits, rootState, controls2, mechanics, isBoardCurrent) {
     if (!isBoardCurrent() || rootState.readRoot() !== root || controls2.resolve(control.elementId)?.generation !== control.generation || !control.methods.includes(method))
       return;
@@ -37626,7 +37639,7 @@
         let value = scan.value.at(-1);
         return roundedTradeValue(value, firstDigits) !== void 0 && scan.value.slice(0, -1).every((entry) => entry.digits !== firstDigits) ? [value] : void 0;
       }
-      return tradeRoundingPair(scan.value, firstDigits, lastDigits);
+      return method === "aBuy" ? nativeBuyRoundingPair(scan.value) : tradeRoundingPair(scan.value, firstDigits, lastDigits);
     }
   }
   function readCapturedTradeQuote(root, resourceId, control, rootState, controls2, mechanics, isBoardCurrent) {
@@ -37689,6 +37702,33 @@
   }
 
   // src/adapters/evolve/economy/market/captured-trade-routes.ts
+  function normalizeCapturedTradeRouteOverride(value, input, context) {
+    if (!Array.isArray(value)) return;
+    let operations = [], addedByResource = /* @__PURE__ */ new Map(), totalAdded = 0;
+    for (let entry of value) {
+      if (!isRecord(entry) || typeof entry.resourceId != "string")
+        return;
+      let resource = input.priorityList.find(
+        ({ id }) => id === entry.resourceId
+      );
+      if (resource === void 0) return;
+      if (entry.kind === "zero") {
+        operations.push({ kind: "zero", resourceId: resource.id });
+        continue;
+      }
+      if (entry.kind !== "add" && entry.kind !== "remove" || typeof entry.count != "number" || !Number.isSafeInteger(entry.count) || entry.count < 1 || entry.kind === "add" && (!context.ownerEnabled || !resource.autoTradeBuyEnabled || !resource.isDemanded || resource.usefulRatio >= 1 || resource.tradeRoutes < 0 || resource.tradeRoutes + (addedByResource.get(resource.id) ?? 0) + entry.count > input.importRouteCap || context.routeCount + totalAdded + entry.count > context.maximumRoutes))
+        return;
+      entry.kind === "add" && (totalAdded += entry.count, addedByResource.set(
+        resource.id,
+        (addedByResource.get(resource.id) ?? 0) + entry.count
+      )), operations.push({
+        kind: entry.kind,
+        resourceId: resource.id,
+        count: entry.count
+      });
+    }
+    return Object.freeze(operations.map((operation2) => Object.freeze(operation2)));
+  }
   var REGIONAL_PRIORITY = Object.freeze([
     "Food",
     "Oil",
@@ -37728,41 +37768,47 @@
     let race = readProperty(root, "race"), tech = readProperty(root, "tech");
     return resourceId === "Food" && (readProperty(race, "artifical") || readProperty(race, "fasting")) || resourceId === "Lumber" && readProperty(race, "iceage") ? !1 : resourceId === "Food" && readProperty(race, "banana") ? !0 : readProperty(tech, "trade") ? !readProperty(race, "terrifying") : !1;
   }
-  function readRouteInput(dependencies, board) {
-    let root = dependencies.rootState.readRoot();
+  function readRouteInput(dependencies, board, onUnavailable) {
+    let unavailable2 = (reason) => {
+      onUnavailable?.(reason);
+    }, root = dependencies.rootState.readRoot();
     if (root === void 0 || board.mode !== "global" || board.root !== root || !dependencies.board.isCurrent(board))
-      return;
+      return unavailable2("root-or-board-stale");
     let cityMarket = readProperty(readProperty(root, "city"), "market"), resources = readProperty(root, "resource"), tech = readProperty(root, "tech"), currency = finite(readProperty(tech, "currency")) ?? 0, money = readProperty(resources, "Money");
     if (!isRecord(cityMarket) || !isRecord(resources) || !isRecord(money))
-      return;
+      return unavailable2("market-resource-or-money-record-missing");
     let maximum = finite(cityMarket.mtrade), used = finite(cityMarket.trade), moneyRate = finite(money.diff), moneyMaximum = finite(money.max), moneyCurrent = finite(money.amount);
     if (maximum === void 0 || used === void 0 || moneyRate === void 0 || moneyMaximum === void 0 || moneyCurrent === void 0 || !Number.isSafeInteger(maximum) || !Number.isSafeInteger(used) || maximum < 0 || used < 0)
-      return;
+      return unavailable2("invalid-market-route-or-money-sample");
     let settings = routeSettingsSnapshot(dependencies.readSettings(), board), demand = dependencies.readDemand?.() ?? {
       isDemanded: () => !1,
       storageRequired: () => 1
     }, routeCounts = /* @__PURE__ */ new Map(), routeControls = /* @__PURE__ */ new Map(), priority = [];
     for (let [index, row] of board.rows.entries()) {
       let resourceId = row.elementId.slice(7), resource = readProperty(resources, resourceId);
-      if (!isRecord(resource)) return;
+      if (!isRecord(resource))
+        return unavailable2(`resource-record-missing:${resourceId}`);
       if (!routeUnlocked(root, resourceId, resource)) continue;
       let trade = finite(resource.trade);
-      if (trade === void 0 || !Number.isSafeInteger(trade)) return;
+      if (trade === void 0 || !Number.isSafeInteger(trade))
+        return unavailable2(`invalid-route-count:${resourceId}`);
       let control = dependencies.controls.resolve(row.elementId);
       if (control === void 0 || control.generation !== row.generation || !control.methods.includes("autoBuy") || !control.methods.includes("autoSell") || !control.methods.includes("zero") || !control.methods.includes("aSell") || !control.methods.includes("aBuy"))
-        return;
+        return unavailable2(`invalid-control:${resourceId}`);
       let marketPriority = finite(settings[`res_buy_p_${resourceId}`]) ?? Number.MAX_SAFE_INTEGER;
       priority.push({ id: resourceId, index, value: marketPriority }), routeCounts.set(resourceId, trade), routeControls.set(resourceId, control);
     }
     priority.sort(
       (left, right) => left.value - right.value || left.index - right.index
     );
-    let views = [], unmanaged = 0;
+    let views = [], observations = [], unmanaged = 0;
     for (let entry of priority) {
       let resource = readProperty(resources, entry.id);
-      if (!isRecord(resource)) return;
+      if (!isRecord(resource))
+        return unavailable2(`resource-record-missing:${entry.id}`);
       let amount = finite(resource.amount), maximumResource = finite(resource.max), diff = finite(resource.diff), control = routeControls.get(entry.id);
-      if (control === void 0) return;
+      if (control === void 0)
+        return unavailable2(`control-missing:${entry.id}`);
       let quote = readCapturedTradeQuote(
         root,
         entry.id,
@@ -37772,12 +37818,32 @@
         dependencies.mechanics,
         () => dependencies.board.isCurrent(board)
       );
-      if (!dependencies.board.isCurrent(board)) return;
+      if (!dependencies.board.isCurrent(board))
+        return unavailable2(`board-stale-after-quote:${entry.id}`);
       let required = finite(demand.storageRequired(entry.id));
       if (amount === void 0 || maximumResource === void 0 || diff === void 0 || required === void 0 || quote === void 0 || maximumResource < 0 || required <= 0)
-        return;
+        return unavailable2(
+          amount === void 0 ? `amount-missing:${entry.id}` : maximumResource === void 0 ? `capacity-missing:${entry.id}` : diff === void 0 ? `rate-missing:${entry.id}` : required === void 0 || required <= 0 ? `demand-storage-missing:${entry.id}` : quote === void 0 ? `native-quote-unavailable:${entry.id}` : `invalid-resource-observation:${entry.id}`
+        );
       let storageRatio2 = maximumResource > 0 ? amount / maximumResource : 1, usefulRatio = maximumResource > 0 ? amount / Math.min(maximumResource, required) : 1, buyEnabled = settings[`res_trade_buy_${entry.id}`] === !0, sellEnabled = settings[`res_trade_sell_${entry.id}`] === !0;
-      !buyEnabled && !sellEnabled && (unmanaged += routeCounts.get(entry.id) ?? 0), views.push(
+      observations.push(
+        Object.freeze({
+          resourceId: entry.id,
+          holding: amount,
+          capacity: maximumResource,
+          netRatePerPeriod: diff,
+          demandedQuantity: required,
+          currentRoutes: routeCounts.get(entry.id) ?? 0,
+          maximumRoutes: currency >= 6 ? 1e6 : currency >= 4 ? 100 : 25,
+          importPricePerPeriod: quote.buyPrice,
+          importQuantityPerPeriod: quote.buyVolume,
+          importsEnabled: buyEnabled,
+          exportsEnabled: sellEnabled,
+          demanded: demand.isDemanded(entry.id),
+          controlElementId: control.elementId,
+          controlGeneration: control.generation
+        })
+      ), !buyEnabled && !sellEnabled && (unmanaged += routeCounts.get(entry.id) ?? 0), views.push(
         Object.freeze({
           id: entry.id,
           tradeRoutes: routeCounts.get(entry.id) ?? 0,
@@ -37819,6 +37885,7 @@
     });
     return Object.freeze({
       input,
+      observations: Object.freeze(observations),
       session: Object.freeze({
         root,
         board,
@@ -37978,38 +38045,118 @@
   function createCapturedTradeRoutes(dependencies) {
     return Object.freeze({
       adjust() {
-        let board = dependencies.board.current();
-        if (board === void 0) return;
+        let board = dependencies.board.current(), testSurface = void 0;
+        if (board === void 0) {
+          testSurface?.onTrace?.({
+            kind: "skipped",
+            reason: "board-unavailable"
+          });
+          return;
+        }
         if (board.mode === "regional") {
           let regional = readRegionalRouteInput(dependencies, board);
           applyRegionalTradeRoutes(dependencies, regional);
           return;
         }
-        let captured = readRouteInput(dependencies, board);
-        if (captured === void 0) return;
-        let result = planTradeRoutes(captured.input);
-        if (dependencies.rootState.readRoot() !== captured.session.root || !dependencies.board.isCurrent(board))
+        let captured = readRouteInput(
+          dependencies,
+          board,
+          (reason) => testSurface?.onTrace?.({ kind: "capture-unavailable", reason })
+        );
+        if (captured === void 0) {
+          testSurface?.onTrace?.({
+            kind: "skipped",
+            reason: "capture-unavailable"
+          });
           return;
+        }
+        let result = planTradeRoutes(captured.input), controls2 = [...captured.session.controls.values()].map(
+          ({ elementId, generation }) => Object.freeze({ elementId, generation })
+        ), testContext = Object.freeze({
+          rootCurrent: dependencies.rootState.readRoot() === captured.session.root,
+          boardCurrent: dependencies.board.isCurrent(board),
+          controls: Object.freeze(controls2),
+          routeCount: captured.session.marketRouteCount,
+          maximumRoutes: captured.input.maxTradeRoutes,
+          ownerEnabled: testSurface !== void 0 && settingsRecord3(dependencies.readSettings()).autoMarket === !0,
+          resources: captured.observations
+        }), testOperations = testContext.ownerEnabled && testContext.rootCurrent && testContext.boardCurrent ? testSurface?.resolveOperations?.(
+          captured.input,
+          result,
+          testContext
+        ) : void 0, normalizedTestOperations = testSurface === void 0 ? void 0 : normalizeCapturedTradeRouteOverride(
+          testOperations,
+          captured.input,
+          testContext
+        ), operations = normalizedTestOperations ?? result.operations;
+        if (testSurface?.onTrace?.({
+          kind: "plan",
+          rootCurrent: dependencies.rootState.readRoot() === captured.session.root,
+          boardCurrent: dependencies.board.isCurrent(board),
+          desiredOperations: normalizedTestOperations ?? result.operations,
+          baselineOperations: result.operations,
+          routeCount: captured.session.marketRouteCount,
+          maximumRoutes: captured.input.maxTradeRoutes,
+          moneyRate: captured.input.money.rateOfChange,
+          moneyHolding: captured.input.money.currentQuantity,
+          resources: captured.observations,
+          resourceRoutes: controls2.map(({ elementId, generation }) => ({
+            elementId,
+            generation,
+            routes: captured.session.routeCounts.get(
+              elementId.slice(7)
+            )
+          }))
+        }), dependencies.rootState.readRoot() !== captured.session.root || !dependencies.board.isCurrent(board)) {
+          testSurface?.onTrace?.({
+            kind: "skipped",
+            reason: "root-or-board-stale"
+          });
+          return;
+        }
         let current = readProperty(
           readProperty(captured.session.root, "city"),
           "market"
         );
-        if (!isRecord(current) || current !== captured.session.market || finite(current.trade) !== captured.session.marketRouteCount)
+        if (!isRecord(current) || current !== captured.session.market || finite(current.trade) !== captured.session.marketRouteCount) {
+          testSurface?.onTrace?.({
+            kind: "skipped",
+            reason: "market-route-count-stale"
+          });
           return;
+        }
         for (let [resourceId, routes] of captured.session.routeCounts) {
           let resource = readProperty(
             readProperty(captured.session.root, "resource"),
             resourceId
           );
-          if (!isRecord(resource) || finite(resource.trade) !== routes) return;
-          let control = captured.session.controls.get(resourceId);
-          if (control === void 0 || dependencies.controls.resolve(control.elementId)?.generation !== control.generation || !control.methods.includes("aSell") || !control.methods.includes("aBuy"))
+          if (!isRecord(resource) || finite(resource.trade) !== routes) {
+            testSurface?.onTrace?.({
+              kind: "skipped",
+              reason: "resource-route-count-stale"
+            });
             return;
+          }
+          let control = captured.session.controls.get(resourceId);
+          if (control === void 0 || dependencies.controls.resolve(control.elementId)?.generation !== control.generation || !control.methods.includes("aSell") || !control.methods.includes("aBuy")) {
+            testSurface?.onTrace?.({
+              kind: "skipped",
+              reason: "route-control-stale"
+            });
+            return;
+          }
         }
         let expected = new Map(captured.session.routeCounts), expectedTotal = captured.session.marketRouteCount;
-        for (let operation2 of result.operations) {
+        for (let operation2 of operations) {
           let control = captured.session.controls.get(operation2.resourceId);
-          if (control === void 0) return;
+          if (control === void 0) {
+            testSurface?.onTrace?.({
+              kind: "skipped",
+              reason: "operation-control-missing",
+              operation: operation2
+            });
+            return;
+          }
           let method = operation2.kind === "zero" ? "zero" : operation2.kind === "add" ? "autoBuy" : "autoSell", count2 = operation2.kind === "zero" ? 1 : operation2.count;
           for (let index = 0; index < count2; index += 1) {
             let resource = readProperty(
@@ -38019,10 +38166,26 @@
             if (dependencies.rootState.readRoot() !== captured.session.root || !dependencies.board.isCurrent(board) || readProperty(
               readProperty(captured.session.root, "city"),
               "market"
-            ) !== captured.session.market || !isRecord(resource) || before === void 0 || finite(resource.trade) !== before || finite(captured.session.market.trade) !== expectedTotal || dependencies.controls.resolve(control.elementId)?.generation !== control.generation || !dependencies.controls.invoke(control, method, [
+            ) !== captured.session.market || !isRecord(resource) || before === void 0 || finite(resource.trade) !== before || finite(captured.session.market.trade) !== expectedTotal || dependencies.controls.resolve(control.elementId)?.generation !== control.generation) {
+              testSurface?.onTrace?.({
+                kind: "skipped",
+                reason: "operation-fence-stale",
+                operation: operation2
+              });
+              return;
+            }
+            let invoked = dependencies.controls.invoke(control, method, [
               operation2.resourceId,
               1
-            ]).ok) return;
+            ]);
+            if (!invoked.ok) {
+              testSurface?.onTrace?.({
+                kind: "refused",
+                reason: invoked.reason,
+                operation: operation2
+              });
+              return;
+            }
             let after = operation2.kind === "zero" ? 0 : before + (operation2.kind === "add" ? 1 : -1), totalAfter = operation2.kind === "zero" ? expectedTotal - Math.abs(before) : expectedTotal + (Math.abs(after) - Math.abs(before));
             if (dependencies.rootState.readRoot() !== captured.session.root || !dependencies.board.isCurrent(board) || readProperty(
               readProperty(captured.session.root, "city"),
@@ -38030,11 +38193,27 @@
             ) !== captured.session.market || readProperty(
               readProperty(captured.session.root, "resource"),
               operation2.resourceId
-            ) !== resource || finite(resource.trade) !== after || finite(captured.session.market.trade) !== totalAfter)
+            ) !== resource || finite(resource.trade) !== after || finite(captured.session.market.trade) !== totalAfter) {
+              testSurface?.onTrace?.({
+                kind: "skipped",
+                reason: "native-result-mismatch",
+                operation: operation2
+              });
               return;
-            expected.set(operation2.resourceId, after), expectedTotal = totalAfter;
+            }
+            expected.set(operation2.resourceId, after), expectedTotal = totalAfter, testSurface?.onTrace?.({
+              kind: "applied",
+              operation: operation2,
+              control: Object.freeze({
+                elementId: control.elementId,
+                generation: control.generation,
+                method
+              }),
+              routeCount: expectedTotal
+            });
           }
         }
+        testSurface?.onTrace?.({ kind: "complete", operations });
       }
     });
   }
@@ -59968,7 +60147,7 @@ Only continue if you trust the source. Injected code:
       readSettings: () => settingsStore.readRaw(),
       readDemand: readDemandFor("Market"),
       onUnavailable: (resourceId, reason) => reportOnce(`market skipped ${resourceId}: ${reason}`)
-    }), tradeRoutes = createCapturedTradeRoutes({
+    }), tradeRouteDependencies = {
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
       board: marketBoard,
@@ -59977,7 +60156,7 @@ Only continue if you trust the source. Injected code:
       readSettings: () => settingsStore.readRaw(),
       readDemand: readDemandFor("Market"),
       onUnavailable: (reason) => reportOnce(`trade routes unavailable: ${reason}`)
-    }), marketAutomation = Object.freeze({
+    }, tradeRoutes = createCapturedTradeRoutes(tradeRouteDependencies), marketAutomation = Object.freeze({
       run: (bulkSell = !1, ignoreSellRatio = !1) => runMarketAutomation(
         {
           reader: marketPorts.reader,
