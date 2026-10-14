@@ -6,6 +6,12 @@ export type ResourceClaimLifecycleEvidence = Readonly<{
   progression: "current" | "changed" | "unknown";
   obligation: "mandatory" | "not-mandatory" | "unknown";
   grant: "incomplete" | "complete" | "unknown";
+  offerSet: Readonly<{
+    status: "complete-fresh" | "failed" | "incomplete" | "stale" | "unknown";
+    identity: string | undefined;
+    observationId: string | undefined;
+    previousObservationId: string;
+  }>;
   offer: "current" | "absent" | "unknown";
   price: "current" | "changed" | "unknown";
   binding: "current" | "changed" | "unknown";
@@ -71,11 +77,43 @@ export function decideResourceClaimLifecycle(
       reason: "obligation-ended",
       retainClaim: false,
     });
-  const unresolved = Object.values(evidence).some((value) =>
-    ["unknown", "changed"].includes(value),
+  if (evidence.offer === "absent") {
+    if (
+      evidence.offerSet.status !== "complete-fresh" ||
+      evidence.offerSet.identity === undefined ||
+      evidence.offerSet.identity === "" ||
+      evidence.offerSet.observationId === undefined ||
+      evidence.offerSet.observationId === "" ||
+      evidence.offerSet.observationId ===
+        evidence.offerSet.previousObservationId ||
+      evidence.progression !== "current"
+    )
+      return Object.freeze({
+        state: "suspended",
+        reason: "evidence-unavailable",
+        retainClaim: true,
+      });
+    return Object.freeze({
+      state: "released",
+      reason: "verified-offer-absent",
+      retainClaim: false,
+    });
+  }
+  const unresolved = Object.entries(evidence).some(
+    ([key, value]) =>
+      key !== "offerSet" &&
+      typeof value === "string" &&
+      ["unknown", "changed"].includes(value),
   );
   if (
     unresolved ||
+    evidence.offerSet.status !== "complete-fresh" ||
+    evidence.offerSet.identity === undefined ||
+    evidence.offerSet.identity === "" ||
+    evidence.offerSet.observationId === undefined ||
+    evidence.offerSet.observationId === "" ||
+    evidence.offerSet.observationId ===
+      evidence.offerSet.previousObservationId ||
     evidence.goal !== "active" ||
     evidence.permission !== "enabled"
   )
@@ -83,12 +121,6 @@ export function decideResourceClaimLifecycle(
       state: "suspended",
       reason: "evidence-unavailable",
       retainClaim: true,
-    });
-  if (evidence.offer === "absent")
-    return Object.freeze({
-      state: "released",
-      reason: "verified-offer-absent",
-      retainClaim: false,
     });
   if (evidence.nonMana === "insufficient")
     return Object.freeze({

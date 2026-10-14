@@ -2450,6 +2450,22 @@ export function startCapturedRuntime({
                     : grant >= priorClaim.targetGrantLevel
                       ? "complete"
                       : "incomplete",
+                offerSet: {
+                  status: offers === undefined ? "failed" : "complete-fresh",
+                  identity:
+                    offers === undefined
+                      ? undefined
+                      : (offers[0]?.offerSetIdentity ??
+                        (offers.length === 0 ? JSON.stringify([]) : undefined)),
+                  observationId:
+                    offers === undefined
+                      ? undefined
+                      : (offers[0]?.offerObservationId ??
+                        (offers.length === 0
+                          ? `research-owner-${automationCycle}`
+                          : undefined)),
+                  previousObservationId: priorClaim.offerObservationId,
+                },
                 offer: currentOffer === undefined ? "absent" : "current",
                 price:
                   currentOffer === undefined
@@ -2950,6 +2966,13 @@ export function startCapturedRuntime({
       ownerObservation === undefined
         ? progression.readLastResearchOwnerOffers?.()
         : ownerObservation.offers;
+    const completeFreshOfferSet =
+      ownerObservation !== undefined &&
+      ownerObservation.offers !== undefined &&
+      (ownerObservation.offers[0]?.offerSetIdentity !== undefined ||
+        ownerObservation.offers.length === 0) &&
+      (ownerObservation.offers[0]?.offerObservationId !== undefined ||
+        ownerObservation.offers.length === 0);
     const definitions = progression.readResearchActionDefinitions();
     if (offers === undefined || definitions === undefined) {
       setTestClaimStatus("suspended", "research-owner-observation-unavailable");
@@ -2970,10 +2993,33 @@ export function startCapturedRuntime({
       setTestClaimStatus("completed", "current-research-grant-completed");
       return;
     }
+    if (previousClaim.progressionGeneration !== progressionGeneration) {
+      setTestClaimStatus(
+        "suspended",
+        "progression-changed-before-offer-reconciliation",
+      );
+      return;
+    }
     const offer = offers.find((entry) => entry.elementId === targetActionId);
     if (offer === undefined) {
-      replaceTestClaim(undefined);
-      setTestClaimStatus("released", "native-offer-disappeared");
+      if (completeFreshOfferSet) {
+        replaceTestClaim(undefined);
+        setTestClaimStatus(
+          "released",
+          "native-offer-absent-from-complete-fresh-set",
+          {
+            offerSetIdentity: offers[0]?.offerSetIdentity ?? JSON.stringify([]),
+            offerSetObservationId:
+              offers[0]?.offerObservationId ??
+              `research-owner-${automationCycle}`,
+          },
+        );
+      } else {
+        setTestClaimStatus(
+          "suspended",
+          "offer-absence-lacks-a-complete-fresh-native-set",
+        );
+      }
       return;
     }
     if (

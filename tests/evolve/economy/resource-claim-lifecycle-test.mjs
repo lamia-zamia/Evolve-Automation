@@ -10,6 +10,12 @@ const current = {
   progression: "current",
   obligation: "mandatory",
   grant: "incomplete",
+  offerSet: {
+    status: "complete-fresh",
+    identity: "research-offers-current",
+    observationId: "research-observation-current",
+    previousObservationId: "research-observation-prior",
+  },
   offer: "current",
   price: "current",
   binding: "current",
@@ -105,8 +111,48 @@ assert.equal(
 assert.equal(
   decision({ offer: "absent", price: "changed", nonMana: "insufficient" })
     .state,
+  "released",
+  "a complete fresh offer-set identity proves absence without a nonexistent row price",
+);
+for (const status of ["failed", "incomplete", "stale", "unknown"]) {
+  assert.equal(
+    decision({
+      offer: "absent",
+      offerSet: { ...current.offerSet, status },
+    }).state,
+    "suspended",
+    `${status} catalog evidence cannot prove that an action is absent`,
+  );
+}
+assert.equal(
+  decision({ offer: "absent", binding: "changed" }).state,
+  "released",
+  "the complete offer-set identity proves absence without a current control binding",
+);
+assert.equal(
+  decision({
+    offer: "absent",
+    grant: "complete",
+    offerSet: { ...current.offerSet, status: "failed" },
+  }).state,
+  "completed",
+  "a verified completed grant is independent of current offer availability",
+);
+assert.equal(
+  decision({
+    offer: "absent",
+    offerSet: {
+      ...current.offerSet,
+      observationId: current.offerSet.previousObservationId,
+    },
+  }).state,
   "suspended",
-  "changed price evidence must be reconciled before a missing offer releases protection",
+  "a stale offer-set identity cannot prove current absence",
+);
+assert.equal(
+  decision({ offer: "absent", progression: "changed" }).state,
+  "suspended",
+  "a route or progression change makes the old claim epoch insufficient for absence release",
 );
 assert.equal(
   decision({ price: "changed", nonMana: "insufficient" }).state,
