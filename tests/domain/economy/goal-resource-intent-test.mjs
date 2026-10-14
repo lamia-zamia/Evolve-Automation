@@ -5,6 +5,7 @@ const base = {
   selectedGoal: "goal",
   frontier: {
     evidence: "complete",
+    mandatoryEvidence: "complete",
     mandatoryActionIds: ["mandatory-action"],
     alternatives: [],
     reasons: [],
@@ -31,6 +32,7 @@ const base = {
 const intent = planGoalResourceIntents(base).mandatory[0];
 assert.equal(intent?.shortfall, 240);
 assert.equal(intent?.status, "intent");
+assert.equal(intent?.actionable, true);
 
 const withCommitment = planGoalResourceIntents({
   ...base,
@@ -89,6 +91,7 @@ const alternatives = planGoalResourceIntents({
   ...base,
   frontier: {
     evidence: "complete",
+    mandatoryEvidence: "complete",
     mandatoryActionIds: [],
     alternatives: [{ groupId: "same-grant", actionIds: ["path-a", "path-b"] }],
     reasons: [],
@@ -108,6 +111,21 @@ assert.deepEqual(
     ["path-b", 70],
   ],
 );
+assert.equal(alternatives?.options[0]?.intents[0]?.actionable, false);
+assert.equal(alternatives?.options[0]?.intents[0]?.status, "not-selected");
+
+const unselectedMissingPrice = planGoalResourceIntents({
+  ...base,
+  frontier: {
+    ...base.frontier,
+    alternatives: [
+      { groupId: "unselected-route", actionIds: ["unselected-action"] },
+    ],
+  },
+  offers: [...base.offers, { actionId: "unselected-action", price: null }],
+});
+assert.equal(unselectedMissingPrice.status, "available");
+assert.deepEqual(unselectedMissingPrice.unavailableActionIds, []);
 
 // These are model inputs, not claims about route prices. The native adapter supplies the live
 // price and capability for Standard, True Path, Ice Age, race, and challenge state alike.
@@ -144,11 +162,24 @@ const incomplete = planGoalResourceIntents({
   frontier: {
     ...base.frontier,
     evidence: "partial",
+    mandatoryEvidence: "partial",
     reasons: ["dynamic gate"],
   },
 });
 assert.equal(incomplete.status, "unavailable");
 assert.equal(incomplete.mandatory.length, 0);
+
+const partialGlobalGraph = planGoalResourceIntents({
+  ...base,
+  frontier: {
+    ...base.frontier,
+    evidence: "partial",
+    reasons: ["unrelated branch has unavailable native evidence"],
+  },
+});
+assert.equal(partialGlobalGraph.status, "partial");
+assert.equal(partialGlobalGraph.frontierEvidence, "partial");
+assert.equal(partialGlobalGraph.actionable, true);
 
 const missingPrice = planGoalResourceIntents({
   ...base,
@@ -156,5 +187,98 @@ const missingPrice = planGoalResourceIntents({
 });
 assert.deepEqual(missingPrice.unavailableActionIds, ["mandatory-action"]);
 assert.equal(missingPrice.status, "partial");
+assert.equal(missingPrice.actionable, false);
+
+for (const invalid of [Number.NaN, Number.POSITIVE_INFINITY, -1]) {
+  for (const invalidInput of [
+    {
+      ...base,
+      offers: [
+        {
+          actionId: "mandatory-action",
+          price: [{ resourceId: "Metal", amount: invalid }],
+        },
+      ],
+    },
+    {
+      ...base,
+      holdings: [{ resourceId: "Metal", amount: invalid, capacity: 500 }],
+    },
+    {
+      ...base,
+      holdings: [{ resourceId: "Metal", amount: 10, capacity: invalid }],
+    },
+    { ...base, commitments: [{ resourceId: "Metal", amount: invalid }] },
+  ]) {
+    assert.equal(planGoalResourceIntents(invalidInput).status, "unavailable");
+  }
+}
+
+for (const invalidResourceId of ["", "not a resource", "Metal/"]) {
+  assert.equal(
+    planGoalResourceIntents({
+      ...base,
+      offers: [
+        {
+          actionId: "mandatory-action",
+          price: [{ resourceId: invalidResourceId, amount: 2 }],
+        },
+      ],
+    }).status,
+    "unavailable",
+  );
+}
+
+for (const duplicateInput of [
+  { ...base, offers: [...base.offers, base.offers[0]] },
+  { ...base, holdings: [...base.holdings, base.holdings[0]] },
+  { ...base, production: [...base.production, base.production[0]] },
+]) {
+  assert.equal(planGoalResourceIntents(duplicateInput).actionable, false);
+}
+
+assert.equal(
+  planGoalResourceIntents({
+    ...base,
+    production: [{ ...base.production[0], available: true, ownerId: null }],
+  }).status,
+  "unavailable",
+  "an available producer must identify its owner",
+);
+
+const sharedMandatoryResource = planGoalResourceIntents({
+  ...base,
+  frontier: {
+    ...base.frontier,
+    mandatoryActionIds: ["mandatory-action", "second-action"],
+  },
+  offers: [
+    ...base.offers,
+    {
+      actionId: "second-action",
+      price: [{ resourceId: "Metal", amount: 100 }],
+    },
+  ],
+});
+assert.equal(sharedMandatoryResource.actionable, false);
+assert.ok(
+  sharedMandatoryResource.mandatory.every((entry) => !entry.actionable),
+);
+assert.match(sharedMandatoryResource.mandatory[0]?.reason ?? "", /compete/);
+
+const overflowedCommitments = planGoalResourceIntents({
+  ...base,
+  commitments: [{ resourceId: "Metal", amount: Number.MAX_VALUE }],
+  offers: [
+    {
+      actionId: "mandatory-action",
+      price: [{ resourceId: "Metal", amount: Number.MAX_VALUE }],
+    },
+  ],
+});
+assert.equal(overflowedCommitments.actionable, false);
+assert.deepEqual(overflowedCommitments.unavailableActionIds, [
+  "mandatory-action",
+]);
 
 console.log("Goal resource intent tests passed");
