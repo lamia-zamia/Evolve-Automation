@@ -49,7 +49,10 @@ import {
 import { runCapturedDiagnosticSafely } from "./captured-diagnostic.ts";
 import { planNativeResearchPrerequisites } from "../domain/progression/research-prerequisite-planning.ts";
 import type { NativeResearchPrerequisiteGraph } from "../domain/progression/research-prerequisite-planning.ts";
-import { evaluateResearchGoalCandidates } from "../domain/progression/research-goal-candidates.ts";
+import {
+  evaluateResearchGoalCandidates,
+  hasVerifiedNonManaAffordabilityForManaOffer,
+} from "../domain/progression/research-goal-candidates.ts";
 import {
   classifyMandatoryNativeResearchObligations,
   classifyMandatoryResearchPrerequisiteObligations,
@@ -2353,8 +2356,10 @@ export function startCapturedRuntime({
             candidate.pathApplicability === "eligible" &&
             candidate.actionability === "current-native-offer" &&
             candidate.evidenceFresh &&
-            (conjunctiveMode ||
-              nonManaAffordableByAction.get(candidate.actionId) === true) &&
+            hasVerifiedNonManaAffordabilityForManaOffer(
+              candidate.cost,
+              nonManaAffordableByAction.get(candidate.actionId),
+            ) &&
             graph.actionableFrontier.includes(candidate.actionId) &&
             candidate.reservationEvidence === "none" &&
             candidate.explicitExclusionEvidence === "none" &&

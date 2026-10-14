@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 
-import { evaluateResearchGoalCandidates } from "../../../src/domain/progression/research-goal-candidates.ts";
+import {
+  evaluateResearchGoalCandidates,
+  hasVerifiedNonManaAffordabilityForManaOffer,
+} from "../../../src/domain/progression/research-goal-candidates.ts";
 import { planNativeResearchPrerequisites } from "../../../src/domain/progression/research-prerequisite-planning.ts";
 import {
   decodeResearchGoalCandidateResponse,
@@ -137,6 +140,18 @@ const input = (overrides = {}) => ({
   assert.equal(
     unknownResources.candidates[0]?.resourceAffordability,
     "unknown",
+  );
+}
+
+{
+  assert.equal(
+    hasVerifiedNonManaAffordabilityForManaOffer({ Mana: 100, Iron: 20 }, false),
+    false,
+    "a mandatory Mana offer with an unavailable non-Mana resource is rejected",
+  );
+  assert.equal(
+    hasVerifiedNonManaAffordabilityForManaOffer({ Mana: 100 }, undefined),
+    false,
   );
 }
 

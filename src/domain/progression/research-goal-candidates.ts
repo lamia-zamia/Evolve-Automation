@@ -86,6 +86,13 @@ export interface ResearchGoalCandidateEvaluation {
   readonly candidates: readonly Readonly<ResearchGoalCandidate>[];
 }
 
+export function hasVerifiedNonManaAffordabilityForManaOffer(
+  cost: Readonly<Record<string, number>>,
+  nonManaAffordable: boolean | undefined,
+): boolean {
+  return (cost.Mana ?? 0) <= 0 || nonManaAffordable === true;
+}
+
 function matchingResearchOffers(
   graph: NativeResearchPrerequisiteGraph,
   input: Readonly<ResearchGoalCandidateInput>,

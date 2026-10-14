@@ -18244,6 +18244,9 @@
   }
 
   // src/domain/progression/research-goal-candidates.ts
+  function hasVerifiedNonManaAffordabilityForManaOffer(cost, nonManaAffordable) {
+    return (cost.Mana ?? 0) <= 0 || nonManaAffordable === !0;
+  }
   function matchingResearchOffers(graph, input) {
     let observed2 = graph.freshness.offerGenerations;
     if (observed2 === void 0 || input.rootGeneration === void 0 || graph.freshness.cycle !== input.cycle || graph.freshness.progressionEpoch !== input.progressionEpoch || graph.freshness.rootGeneration !== input.rootGeneration || observed2.length !== input.offers.length)
