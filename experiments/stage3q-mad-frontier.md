@@ -2,7 +2,7 @@
 
 ## Result
 
-There is no demonstrated Research defect. The first actual obstruction is Steel production under the supplied settings: at period 1,000 the native `tech-steel_containers` offer is present but cannot be paid, and all smelter slots are assigned to Iron. The fixture omits `autoSmelter`; its default is false. The Steel stock remains 10 through period 4,000, while capacity is 33,516. No production automation change is justified for this replay.
+There is no demonstrated Research defect. The first actual obstruction is Steel production under the supplied settings: at period 1,000 the native `tech-steel_containers` offer is present but cannot be paid, and all smelter slots are assigned to Iron. The fixture explicitly sets `autoSmelter: false`. The Steel stock remains 10 through period 4,000, while capacity is 33,516. No production automation change is justified for this replay.
 
 The required upstream gate is Steel Containers 1. Native `tech-industrialization` grants High Tech 3 and requires High Tech 2, Cement 2, and Steel Containers 1. The save already has Cement 3 and High Tech 2. At period 1,000 the Steel Containers offer costs 9,000 Knowledge and 250 Steel; stock is 4,572.66 Knowledge and 10 Steel. By period 4,000 Knowledge has accumulated to 25,975, but Steel is still 10, so the native offer remains unaffordable. No storage cap blocks Steel or Knowledge at period 1,000.
 
@@ -125,7 +125,7 @@ The last successful Research-owner selection was `tech-zealotry` at period 2,848
 
 At period 1,000, the next High Tech action `tech-industrialization` is not natively offered because Steel Containers 1 is unmet. Its own declared prerequisites already have High Tech 2 and Cement 2. The missing Steel Containers research is currently offered and its native cost is captured as 9,000 Knowledge plus 250 Steel. The existing stock covers neither payment at period 1,000. By period 4,000 the Knowledge requirement is covered, but Steel remains below the native price.
 
-The game has 14 smelters at period 1,000, all allocated to Iron (`smelter.Iron=14`, `smelter.Steel=0`); at period 4,000 it has 17 allocated to Iron and zero to Steel. This is not a missing-building or storage-cap problem. `autoSmelter` is absent from the imported settings profile, and the code's default is false; the runtime runs the captured smelter owner only when `autoSmelter` is enabled. `autoBuild`, `autoJobs`, and `autoResearch` are enabled, but they do not enable the separate smelter production owner. No setting was changed for this experiment.
+The game has 14 smelters at period 1,000, all allocated to Iron (`smelter.Iron=14`, `smelter.Steel=0`); at period 4,000 it has 17 allocated to Iron and zero to Steel. This is not a missing-building or storage-cap problem. The fixture explicitly sets `autoSmelter: false`; the code default is also false. The runtime runs the captured smelter owner only when `autoSmelter` is enabled. `autoBuild`, `autoJobs`, and `autoResearch` are enabled, but they do not enable the separate smelter production owner. No setting was changed for this experiment.
 
 Classification at the first frontier:
 
