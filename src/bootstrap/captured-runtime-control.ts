@@ -5162,7 +5162,58 @@ export function startCapturedRuntime({
     controls: pageCapture.controls,
     readSettings: () => settingsStore.readRaw(),
     readDemand: readDemandFor("Smelter"),
+    ...(typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
+    __EA_TEST_SURFACE_ENABLED__ === true
+      ? {
+          observePlanForDiagnostics: (input, decision, demand) => {
+            const observer = readProperty(
+              readProperty(settingsHostWindow, "__EA_TEST_HOOKS__"),
+              "observeSmelterPlanForTest",
+            );
+            if (typeof observer === "function")
+              observer(input, decision, demand);
+          },
+        }
+      : {}),
   });
+  if (
+    typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
+    __EA_TEST_SURFACE_ENABLED__ === true
+  ) {
+    const hooks = readProperty(settingsHostWindow, "__EA_TEST_HOOKS__");
+    if (isRecord(hooks)) {
+      Reflect.set(hooks, "readSmelterPlanForTest", () =>
+        smelter.readPlanForDiagnostics(),
+      );
+      Reflect.set(hooks, "readSmelterDemandForTest", () => {
+        const demand = readDemand("Smelter");
+        const resources = readProperty(
+          pageCapture.rootState.readRoot(),
+          "resource",
+        );
+        return Object.freeze({
+          requestedIron: demand.requestedQuantity("Iron"),
+          requestedSteel: demand.requestedQuantity("Steel"),
+          isIronDemanded: demand.isDemanded("Iron"),
+          isSteelDemanded: demand.isDemanded("Steel"),
+          savingTarget: demand.savingTarget,
+          resourceRates: Object.freeze(
+            Object.fromEntries(
+              ["Iron", "Steel", "Coal", "Titanium"].map((id) => {
+                const rate = readProperty(readProperty(resources, id), "diff");
+                return [
+                  id,
+                  typeof rate === "number" && Number.isFinite(rate)
+                    ? rate
+                    : null,
+                ];
+              }),
+            ),
+          ),
+        });
+      });
+    }
+  }
   const nanite = createCapturedNaniteAutomation({
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,

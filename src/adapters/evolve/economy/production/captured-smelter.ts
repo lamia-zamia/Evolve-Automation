@@ -21,6 +21,15 @@ export interface CapturedSmelterDependencies {
   readonly controls: GameControlRegistry;
   readonly readSettings: () => unknown;
   readonly readDemand?: () => CapturedDemandSample;
+  readonly observePlanForDiagnostics?: (
+    input: Readonly<SmelterInput>,
+    decision: ReturnType<typeof planSmelter>,
+    demand: Readonly<{
+      requestedSteel: number;
+      isSteelDemanded: boolean;
+      savingTarget: CapturedDemandSample["savingTarget"];
+    }>,
+  ) => void;
 }
 
 interface ResourceView {
@@ -34,6 +43,7 @@ interface ResourceView {
 interface SmelterSession {
   readonly root: unknown;
   readonly input: Readonly<SmelterInput>;
+  readonly demand: CapturedDemandSample;
 }
 
 const FUEL_IDS = Object.freeze([
@@ -267,7 +277,7 @@ function readInput(dependencies: CapturedSmelterDependencies): SmelterSession {
     Boolean(race["steelen"]) ||
     dependencies.controls.resolve(SMELTER_CONTROL) === undefined
   ) {
-    return Object.freeze({ root, input: emptyInput() });
+    return Object.freeze({ root, input: emptyInput(), demand });
   }
   const cap = readCount(smelter["cap"]);
   const star = readCount(smelter["Star"]);
@@ -282,7 +292,7 @@ function readInput(dependencies: CapturedSmelterDependencies): SmelterSession {
     iridiumCount === undefined ||
     star > cap
   ) {
-    return Object.freeze({ root, input: emptyInput() });
+    return Object.freeze({ root, input: emptyInput(), demand });
   }
   const iron = readResource(resources, "Iron");
   const steel = readResource(resources, "Steel");
@@ -294,13 +304,13 @@ function readInput(dependencies: CapturedSmelterDependencies): SmelterSession {
     coal === undefined ||
     titanium === undefined
   ) {
-    return Object.freeze({ root, input: emptyInput() });
+    return Object.freeze({ root, input: emptyInput(), demand });
   }
   const fuels = FUEL_IDS.map((id) =>
     readFuel(id, resources, race, tech, settings, demand),
   );
   if (fuels.some((fuel) => fuel === undefined)) {
-    return Object.freeze({ root, input: emptyInput() });
+    return Object.freeze({ root, input: emptyInput(), demand });
   }
   const orderedFuels = [...fuels]
     .filter((fuel): fuel is SmelterFuelView => fuel !== undefined)
@@ -329,7 +339,7 @@ function readInput(dependencies: CapturedSmelterDependencies): SmelterSession {
   const productionSmeltingIridium =
     finite(settings["productionSmeltingIridium"]) ?? 0.5;
   if (productionSmeltingIridium < 0) {
-    return Object.freeze({ root, input: emptyInput() });
+    return Object.freeze({ root, input: emptyInput(), demand });
   }
   const miner = readProperty(readProperty(root, "civic"), "miner");
   const ironShip = readProperty(readProperty(root, "space"), "iron_ship");
@@ -375,7 +385,7 @@ function readInput(dependencies: CapturedSmelterDependencies): SmelterSession {
     titaniumStorageRatio: titaniumRatio,
     haveTitaniumTech: (finite(tech["titanium"]) ?? 0) > 0,
   });
-  return Object.freeze({ root, input });
+  return Object.freeze({ root, input, demand });
 }
 
 function currentValue(root: unknown, id: string): number | undefined {
@@ -390,11 +400,34 @@ function methodFor(kind: "fuel" | "metal", delta: number): string {
 
 export function createCapturedSmelterAutomation(
   dependencies: CapturedSmelterDependencies,
-): { readonly run: () => CommandExecutionOutcome } {
+): {
+  readonly readPlanForDiagnostics: () => Readonly<{
+    input: Readonly<SmelterInput>;
+    decision: ReturnType<typeof planSmelter>;
+    controlAvailable: boolean;
+    controlMethods: readonly string[];
+  }>;
+  readonly run: () => CommandExecutionOutcome;
+} {
   return Object.freeze({
+    readPlanForDiagnostics() {
+      const session = readInput(dependencies);
+      const control = dependencies.controls.resolve(SMELTER_CONTROL);
+      return Object.freeze({
+        input: session.input,
+        decision: planSmelter(session.input),
+        controlAvailable: control !== undefined,
+        controlMethods: Object.freeze([...(control?.methods ?? [])]),
+      });
+    },
     run(): CommandExecutionOutcome {
       const session = readInput(dependencies);
       const decision = planSmelter(session.input);
+      dependencies.observePlanForDiagnostics?.(session.input, decision, {
+        requestedSteel: session.demand.requestedQuantity("Steel"),
+        isSteelDemanded: session.demand.isDemanded("Steel"),
+        savingTarget: session.demand.savingTarget,
+      });
       if (!session.input.initialised) return SUCCEEDED;
       const adjustments = [
         ...decision.fuelAdjustments.map((adjustment) => ({

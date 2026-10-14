@@ -35051,18 +35051,18 @@
       storageRequired: () => 1
     };
     if (!isRecord(smelter) || !isRecord(resources) || !isRecord(race) || !isRecord(tech) || race.steelen || dependencies.controls.resolve(SMELTER_CONTROL) === void 0)
-      return Object.freeze({ root, input: emptyInput9() });
+      return Object.freeze({ root, input: emptyInput9(), demand });
     let cap = readCount(smelter.cap), star = readCount(smelter.Star), ironCount = readCount(smelter.Iron), steelCount = readCount(smelter.Steel), iridiumCount = readCount(smelter.Iridium);
     if (cap === void 0 || star === void 0 || ironCount === void 0 || steelCount === void 0 || iridiumCount === void 0 || star > cap)
-      return Object.freeze({ root, input: emptyInput9() });
+      return Object.freeze({ root, input: emptyInput9(), demand });
     let iron = readResource2(resources, "Iron"), steel = readResource2(resources, "Steel"), coal = readResource2(resources, "Coal"), titanium = readResource2(resources, "Titanium");
     if (iron === void 0 || steel === void 0 || coal === void 0 || titanium === void 0)
-      return Object.freeze({ root, input: emptyInput9() });
+      return Object.freeze({ root, input: emptyInput9(), demand });
     let fuels = FUEL_IDS.map(
       (id) => readFuel(id, resources, race, tech, settings, demand)
     );
     if (fuels.some((fuel) => fuel === void 0))
-      return Object.freeze({ root, input: emptyInput9() });
+      return Object.freeze({ root, input: emptyInput9(), demand });
     let withSmelterCounts = [...fuels].filter((fuel) => fuel !== void 0).sort(
       (left, right) => (finite(settings[`smelter_fuel_p_${left.id}`]) ?? FUEL_IDS.indexOf(left.id)) - (finite(settings[`smelter_fuel_p_${right.id}`]) ?? FUEL_IDS.indexOf(right.id))
     ).map(
@@ -35077,7 +35077,7 @@
       })
     ), requestedIron = demand.requestedQuantity("Iron"), requestedSteel = demand.requestedQuantity("Steel"), productionSmeltingIridium = finite(settings.productionSmeltingIridium) ?? 0.5;
     if (productionSmeltingIridium < 0)
-      return Object.freeze({ root, input: emptyInput9() });
+      return Object.freeze({ root, input: emptyInput9(), demand });
     let miner = readProperty(readProperty(root, "civic"), "miner"), ironShip = readProperty(readProperty(root, "space"), "iron_ship"), titaniumRatio = titanium.maximum > 0 ? titanium.amount / titanium.maximum : 1, input = Object.freeze({
       initialised: !0,
       hasForge: !!race.forge,
@@ -35110,7 +35110,7 @@
       titaniumStorageRatio: titaniumRatio,
       haveTitaniumTech: (finite(tech.titanium) ?? 0) > 0
     });
-    return Object.freeze({ root, input });
+    return Object.freeze({ root, input, demand });
   }
   function currentValue(root, id) {
     let smelter = readProperty(readProperty(root, "city"), "smelter");
@@ -35121,9 +35121,22 @@
   }
   function createCapturedSmelterAutomation(dependencies) {
     return Object.freeze({
+      readPlanForDiagnostics() {
+        let session = readInput7(dependencies), control = dependencies.controls.resolve(SMELTER_CONTROL);
+        return Object.freeze({
+          input: session.input,
+          decision: planSmelter(session.input),
+          controlAvailable: control !== void 0,
+          controlMethods: Object.freeze([...control?.methods ?? []])
+        });
+      },
       run() {
         let session = readInput7(dependencies), decision = planSmelter(session.input);
-        if (!session.input.initialised) return SUCCEEDED;
+        if (dependencies.observePlanForDiagnostics?.(session.input, decision, {
+          requestedSteel: session.demand.requestedQuantity("Steel"),
+          isSteelDemanded: session.demand.isDemanded("Steel"),
+          savingTarget: session.demand.savingTarget
+        }), !session.input.initialised) return SUCCEEDED;
         let adjustments = [
           ...decision.fuelAdjustments.map((adjustment) => ({
             kind: "fuel",
