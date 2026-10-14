@@ -103,6 +103,12 @@ assert.equal(
   "missing offer evidence cannot turn a previous resource shortage into verified release",
 );
 assert.equal(
+  decision({ offer: "absent", price: "changed", nonMana: "insufficient" })
+    .state,
+  "suspended",
+  "changed price evidence must be reconciled before a missing offer releases protection",
+);
+assert.equal(
   decision({ price: "changed", nonMana: "insufficient" }).state,
   "suspended",
   "a changed price must be reconciled before releasing protected Mana",

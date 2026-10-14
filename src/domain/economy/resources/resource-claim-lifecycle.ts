@@ -71,12 +71,6 @@ export function decideResourceClaimLifecycle(
       reason: "obligation-ended",
       retainClaim: false,
     });
-  if (evidence.offer === "absent")
-    return Object.freeze({
-      state: "released",
-      reason: "verified-offer-absent",
-      retainClaim: false,
-    });
   const unresolved = Object.values(evidence).some((value) =>
     ["unknown", "changed"].includes(value),
   );
@@ -89,6 +83,12 @@ export function decideResourceClaimLifecycle(
       state: "suspended",
       reason: "evidence-unavailable",
       retainClaim: true,
+    });
+  if (evidence.offer === "absent")
+    return Object.freeze({
+      state: "released",
+      reason: "verified-offer-absent",
+      retainClaim: false,
     });
   if (evidence.nonMana === "insufficient")
     return Object.freeze({
