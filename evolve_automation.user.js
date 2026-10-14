@@ -8451,31 +8451,7 @@
   function createCapturedResearchAdapter(dependencies) {
     let { rootState, offered, resources, conflicts, techConflicts, controls: controls2 } = dependencies, reportActivity = dependencies.onActivity ?? (() => {
     }), reportRejected = dependencies.onRejected ?? (() => {
-    }), testShadowObserver = dependencies.testShadowObserver, readShadowManaStock = () => {
-      try {
-        return resources.readResources(["Mana"])?.resources.get("Mana")?.amount;
-      } catch {
-        return;
-      }
-    }, reportShadowObservation = (tech, actionId, manaStockBefore, expectedGrantOccurred, invocation) => {
-      if (testShadowObserver !== void 0)
-        try {
-          testShadowObserver(
-            Object.freeze({
-              actionId,
-              offerGeneration: tech.generation,
-              offerSetIdentity: tech.offerSetIdentity,
-              offerObservationId: tech.offerObservationId,
-              displayedManaPrice: typeof tech.cost.Mana == "number" ? tech.cost.Mana : void 0,
-              manaStockBefore,
-              manaStockAfter: readShadowManaStock(),
-              expectedGrantOccurred,
-              invocation
-            })
-          );
-        } catch {
-        }
-    };
+    }), testShadowObserver, readShadowManaStock, reportShadowObservation;
     function readTechConflict(tech) {
       let decision = techConflicts.evaluate(tech);
       return decision.status === "none" || reportRejected(
@@ -8592,39 +8568,19 @@
             ),
             "stopped"
           );
-        let manaStockBefore = testShadowObserver === void 0 ? void 0 : readShadowManaStock(), result = controls2.invoke(handle, "action");
-        if (!result.ok) {
-          if (testShadowObserver !== void 0) {
-            let afterFailure = readCapturedTechnologyLevel(
-              rootState.readRoot(),
-              tech.grantTechnology
-            );
-            reportShadowObservation(
-              tech,
-              decision.techId,
-              manaStockBefore,
-              before < tech.grantLevel && afterFailure !== void 0 && afterFailure >= tech.grantLevel,
-              "failed"
-            );
-          }
+        let manaStockBefore, result = controls2.invoke(handle, "action");
+        if (!result.ok)
           return executionResult(
             result.reason === "stale-control" ? stale("stale-research-control", result.detail ?? result.reason, {
               techId: decision.techId
             }) : rejected("research-click-failed", result.detail ?? result.reason),
             "stopped"
           );
-        }
         let after = readCapturedTechnologyLevel(
           rootState.readRoot(),
           tech.grantTechnology
         ), researched = before < tech.grantLevel && after !== void 0 && after >= tech.grantLevel;
-        if (reportShadowObservation(
-          tech,
-          decision.techId,
-          manaStockBefore,
-          researched,
-          "returned"
-        ), researched) {
+        if (researched) {
           let label = readCapturedControlLabel(handle, decision.techId);
           reportActivity({
             message: `Researched ${label}`,
