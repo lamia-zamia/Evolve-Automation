@@ -18,11 +18,13 @@ export interface ResearchSpendingAuthorizationInput {
     generation: number;
   }>;
   readonly offer: Readonly<{
+    nativeActionId: string;
     status: "current" | "changed" | "unknown";
     setIdentity: string;
     observationId: string;
     bindingGeneration: number;
     displayedManaPrice: number | undefined;
+    manaPriceCompleteness: "complete" | "incomplete";
   }>;
   readonly expectedManaDebit:
     | Readonly<{ kind: "verified"; quantity: number }>
@@ -47,13 +49,14 @@ export interface ResearchSpendingAuthorization {
 
 function researchEvidenceUnavailable(
   reason: string,
+  remainingClaimIds: readonly string[] = [],
 ): Readonly<ResearchSpendingAuthorization> {
   return Object.freeze({
     classification: "conflicting-or-incomplete-evidence",
     authorized: false,
     expectedManaDebit: undefined,
     fulfilledClaimId: undefined,
-    remainingClaimIds: Object.freeze([]),
+    remainingClaimIds: Object.freeze(remainingClaimIds.slice()),
     reason,
   });
 }
@@ -67,11 +70,16 @@ export function authorizeResearchManaSpend(
   input: Readonly<ResearchSpendingAuthorizationInput>,
 ): Readonly<ResearchSpendingAuthorization> {
   const budget = input.discretionaryBudget;
+  const claimIds = input.claims.map((claim) => claim.claimId).sort();
+  const unavailable = (reason: string) =>
+    researchEvidenceUnavailable(reason, claimIds);
   if (
     input.selectedActionId === "" ||
+    input.selectedControlBinding.elementId !== input.selectedActionId ||
     input.selectedControlBinding.elementId === "" ||
     !Number.isSafeInteger(input.selectedControlBinding.generation) ||
     input.offer.status !== "current" ||
+    input.offer.nativeActionId !== input.selectedActionId ||
     input.offer.setIdentity === "" ||
     input.offer.observationId === "" ||
     input.offer.bindingGeneration !== input.selectedControlBinding.generation ||
@@ -86,19 +94,24 @@ export function authorizeResearchManaSpend(
     budget.resourceId !== "Mana" ||
     budget.stockObservation?.id !== input.stock.id ||
     budget.observedStock !== input.stock.quantity ||
+    input.claimLedger.stock !== input.stock.quantity ||
     budget.pendingReservations.length > 0
   )
-    return researchEvidenceUnavailable(
+    return unavailable(
       "current offer, control, stock, queue, commitment, or reservation evidence is incomplete",
     );
   if (input.expectedManaDebit.kind !== "verified")
-    return researchEvidenceUnavailable(input.expectedManaDebit.reason);
+    return unavailable(input.expectedManaDebit.reason);
   const debit = input.expectedManaDebit.quantity;
   if (!Number.isFinite(debit) || debit < 0)
-    return researchEvidenceUnavailable("expected Mana debit is invalid");
+    return unavailable("expected Mana debit is invalid");
   if (input.offer.displayedManaPrice !== debit)
-    return researchEvidenceUnavailable(
+    return unavailable(
       "current displayed Mana price conflicts with the verified expected debit",
+    );
+  if (debit === 0 && input.offer.manaPriceCompleteness !== "complete")
+    return unavailable(
+      "zero-Mana spending requires a complete native price observation",
     );
 
   const selectedClaims = input.claims.filter(
@@ -111,6 +124,40 @@ export function authorizeResearchManaSpend(
   const poolClaims = input.claims.filter(
     (claim) => claim.resourceId === "Mana" && claim.poolId === budget.poolId,
   );
+  if (
+    new Set(claimIds).size !== claimIds.length ||
+    new Set(input.claims.map((claim) => claim.nativeActionId)).size !==
+      input.claims.length ||
+    poolClaims.length !== input.claims.length
+  )
+    return unavailable(
+      "duplicate, overlapping, or foreign-pool claims cannot be reconciled",
+    );
+  const claimTotal = poolClaims.reduce(
+    (total, claim) => total + claim.requiredQuantity,
+    0,
+  );
+  const knownReservations = input.claimLedger.knownReservations;
+  if (knownReservations === undefined)
+    return unavailable("claim-ledger reservations are unavailable");
+  const reservationTotal = knownReservations.reduce((total, reservation) => {
+    if (
+      reservation.resourceId !== "Mana" ||
+      reservation.poolId !== budget.poolId ||
+      !Number.isFinite(reservation.quantity) ||
+      reservation.quantity < 0
+    )
+      return Number.NaN;
+    return total + reservation.quantity;
+  }, 0);
+  if (
+    !Number.isFinite(claimTotal) ||
+    budget.admittedGoalClaims !== claimTotal ||
+    budget.existingCommitments !== reservationTotal
+  )
+    return unavailable(
+      "shared budget claims or commitments conflict with the claim ledger",
+    );
 
   const beforeLedger = planResourceClaimLedger({
     ...input.claimLedger,
@@ -118,8 +165,16 @@ export function authorizeResearchManaSpend(
     stock: input.stock.quantity,
   });
   if (beforeLedger.status !== "current" && beforeLedger.status !== "none")
-    return researchEvidenceUnavailable(
+    return unavailable(
       "active claim ledger is not current for the selected stock",
+    );
+  if (
+    beforeLedger.currentStock !== input.stock.quantity ||
+    beforeLedger.currentStockReserved + beforeLedger.remainingAccumulation !==
+      claimTotal
+  )
+    return unavailable(
+      "claim-ledger allocation does not reconcile with admitted obligations",
     );
 
   const claim = selectedClaims[0];
@@ -207,10 +262,7 @@ export function authorizeResearchManaSpend(
     });
   }
 
-  if (
-    (debit === 0 && input.offer.displayedManaPrice === 0) ||
-    debit <= budget.budgetRemaining
-  )
+  if (debit === 0 || debit <= budget.budgetRemaining)
     return Object.freeze({
       classification: "verified-discretionary-purchase",
       authorized: true,

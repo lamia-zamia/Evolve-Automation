@@ -94,11 +94,13 @@ const decide = (overrides = {}) => {
       generation: 9,
     },
     offer: {
+      nativeActionId: selectedActionId,
       status: "current",
       setIdentity: offerSetIdentity,
       observationId: offerObservationId,
       bindingGeneration: 9,
       displayedManaPrice: debit.kind === "verified" ? debit.quantity : 50,
+      manaPriceCompleteness: "complete",
     },
     expectedManaDebit: debit,
     stock,
@@ -213,6 +215,11 @@ assert.equal(
   1,
   "a failed authorization does not mutate an already outstanding reservation",
 );
+assert.deepEqual(
+  decide({ discretionaryBudget: pendingBudget }).remainingClaimIds,
+  [madScience.claimId],
+  "a failed attempt preserves the current protected claim set",
+);
 
 for (const staleOffer of [
   {
@@ -271,6 +278,59 @@ const duplicateSelectedClaim = decide({
 });
 assert.equal(duplicateSelectedClaim.authorized, false);
 
+assert.equal(
+  decide({
+    selectedControlBinding: { elementId: "tech-rituals", generation: 9 },
+  }).authorized,
+  false,
+  "the native control identity must match the selected action",
+);
+
+assert.equal(
+  decide({
+    offer: {
+      nativeActionId: "tech-rituals",
+      status: "current",
+      setIdentity: offerSetIdentity,
+      observationId: offerObservationId,
+      bindingGeneration: 9,
+      displayedManaPrice: 50,
+      manaPriceCompleteness: "complete",
+    },
+  }).authorized,
+  false,
+  "the current offer must identify the selected native action",
+);
+
+const conflictingClaimsBudget = planSharedResourceBudget({
+  resourceId: "Mana",
+  poolId: "anywhere",
+  stock: { id: "mana-42", quantity: 150 },
+  commitments: { kind: "known", quantity: 0 },
+  admittedGoalClaims: 49,
+  permittedDiscretionarySpending: 150,
+  observedNativeExpenditure: 0,
+});
+assert.equal(
+  decide({ discretionaryBudget: conflictingClaimsBudget }).authorized,
+  false,
+  "individually valid budget evidence must reconcile with current claims",
+);
+
+const foreignPoolClaim = claimFor("tech-mad_science", 50, "high_tech", {
+  immediateGoalId: "foreign-pool",
+  poolId: "regional-elsewhere",
+});
+assert.equal(decide({ claims: [foreignPoolClaim] }).authorized, false);
+
+const overlappingClaim = claimFor("tech-mad_science", 25, "another_grant", {
+  immediateGoalId: "overlapping-action",
+});
+assert.equal(
+  decide({ claims: [madScience, overlappingClaim] }).authorized,
+  false,
+);
+
 const zeroManaResearch = decide({
   claims: [],
   expectedManaDebit: { kind: "verified", quantity: 0 },
@@ -281,5 +341,24 @@ assert.equal(
   "verified-discretionary-purchase",
 );
 assert.equal(zeroManaResearch.authorized, true);
+
+assert.equal(
+  decide({
+    claims: [],
+    expectedManaDebit: { kind: "verified", quantity: 0 },
+    stock: { id: "mana-42", quantity: 100 },
+    offer: {
+      nativeActionId: "tech-mad_science",
+      status: "current",
+      setIdentity: offerSetIdentity,
+      observationId: offerObservationId,
+      bindingGeneration: 9,
+      displayedManaPrice: 0,
+      manaPriceCompleteness: "incomplete",
+    },
+  }).authorized,
+  false,
+  "an incomplete native price cannot establish a zero-Mana debit",
+);
 
 console.log("research spending authorization contract ok");
