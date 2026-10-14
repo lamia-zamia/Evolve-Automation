@@ -12262,8 +12262,9 @@
       }
       return projectSampled || (projectSampled = !0, establishedProjectEpoch = epoch.read()), lastProjects = currentProjects, currentProjects;
     }, readProjects2 = () => {
-      if (!projectSampled) {
-        projectSampled = !0, establishedProjectEpoch = epoch.read();
+      let currentEpoch = epoch.read();
+      if (projectSampled && establishedProjectEpoch !== currentEpoch && resetProjectSample(), !projectSampled) {
+        projectSampled = !0, establishedProjectEpoch = currentEpoch;
         let sampled3 = scopes.read(
           ARPA_SCOPE,
           () => projectCatalog.readProjects(),

@@ -76,6 +76,7 @@ assert.equal(control.readEstablishedProjects(), undefined);
   const projectRoot = {
     settings: { civTabs: 5 },
     race: {},
+    civic: { govern: { type: "democracy" } },
     tech: {},
     resource: { Money: {} },
     arpa: { lhc: { rank: 2, complete: 35 } },
@@ -223,6 +224,24 @@ assert.equal(control.readEstablishedProjects(), undefined);
   assert.equal(projectControl.readEstablishedProjects(), undefined);
   assert.equal(projectControl.readProjects()[0].rank, 3);
   assert.equal(projectReads, establishedReads + 3);
+  const readsBeforeGovernmentChange = projectReads;
+  projectRoot.civic.govern.type = "technocracy";
+  assert.equal(
+    projectControl.readEstablishedProjects(),
+    undefined,
+    "a government progression change expires the established catalog",
+  );
+  assert.equal(
+    projectControl.readProjects()[0].rank,
+    3,
+    "the owning read refreshes a same-root catalog after a progression change",
+  );
+  assert.equal(
+    projectReads,
+    readsBeforeGovernmentChange + 1,
+    "a progression epoch change takes one fresh native offer sample",
+  );
+  assert.equal(projectControl.readEstablishedProjects()[0].projectId, "lhc");
 }
 
 let root = {

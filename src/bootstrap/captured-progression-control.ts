@@ -767,9 +767,12 @@ export function createCapturedProgressionControl(
     return currentProjects;
   };
   const readProjects = () => {
+    const currentEpoch = epoch.read();
+    if (projectSampled && establishedProjectEpoch !== currentEpoch)
+      resetProjectSample();
     if (!projectSampled) {
       projectSampled = true;
-      establishedProjectEpoch = epoch.read();
+      establishedProjectEpoch = currentEpoch;
       const sampled = scopes.read(
         ARPA_SCOPE,
         () => projectCatalog.readProjects(),
