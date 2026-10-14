@@ -259,6 +259,7 @@ function summarize(run, seededClaim) {
         gatheredResourceDelta: recovery.gatheredResourceDelta,
       }
     : null;
+  const computedRequirementObservations = run.hooks.computedRequirements ?? [];
   const summarizeSelection = (event) =>
     event
       ? {
@@ -328,10 +329,44 @@ function summarize(run, seededClaim) {
   const tickWindows = perfSummaries.flatMap(([, phases]) =>
     phases.tick?.count ? [phases.tick] : [],
   );
+  const computedRequirementCaptureWindows = perfSummaries.flatMap(
+    ([, phases]) =>
+      phases["research.computed-requirements.capture-and-draw"]?.count
+        ? [phases["research.computed-requirements.capture-and-draw"]]
+        : [],
+  );
   return {
     periods: run.periods,
     finalExportHash: hash(JSON.stringify(run.state)),
     highTechLevel: run.state.tech?.high_tech ?? 0,
+    explosivesLevel: run.state.tech?.explosives ?? 0,
+    postMadScienceClaimEvaluation: (() => {
+      const event = (events.selectionEvents ?? []).find(
+        (entry) => entry.cycle === 9,
+      );
+      return event
+        ? {
+            status: event.status,
+            reason: event.reason,
+            mandatoryActionIds: event.mandatoryActionIds,
+            alternativeGroups: event.alternativeGroups,
+            prerequisiteReasons: event.prerequisiteReasons,
+            evaluatedCandidates: (event.evaluatedCandidates ?? []).map(
+              (candidate) => ({
+                actionId: candidate.actionId,
+                dependencyRelation: candidate.dependencyRelation,
+                pathApplicability: candidate.pathApplicability,
+                actionability: candidate.actionability,
+                resourceAffordability: candidate.resourceAffordability,
+                cost: candidate.cost,
+                manaRequired: candidate.manaRequired,
+                nonManaAffordable: candidate.nonManaAffordable,
+                reasons: candidate.reasons,
+              }),
+            ),
+          }
+        : null;
+    })(),
     selectedClaim:
       summarizeSelection(
         events.selectionEvents.find((event) => event.status === "selected") ??
@@ -439,15 +474,41 @@ function summarize(run, seededClaim) {
       disposition: event.disposition,
     })),
     researchDrawCounts,
+    computedRequirementCounts: Object.fromEntries(
+      Object.entries(
+        Object.groupBy(
+          computedRequirementObservations,
+          (entry) => entry.status,
+        ),
+      ).map(([status, entries]) => [status, entries.length]),
+    ),
+    computedRequirements: computedRequirementObservations,
+    computedRequirementOfferStatus:
+      run.hooks.computedRequirementOfferStatus ?? [],
+    computedRequirementCaptureAndDrawMsByWindow:
+      computedRequirementCaptureWindows.map((entry) => ({
+        count: entry.count,
+        totalMs: entry.totalMs,
+        perTickMs: entry.perTickMs,
+        maxMs: entry.maxMs,
+      })),
     workTicks: run.diagnostics.workTicks,
     tickPhaseMsBy25TickWindow: tickWindows.map((entry) => entry.perTickMs),
   };
 }
 
-async function runVariant(runner, variant, bundlePath, save, settings) {
+async function runVariant(
+  runner,
+  variant,
+  bundlePath,
+  save,
+  settings,
+  periodLimit = 200,
+) {
+  const parsedSave = typeof save === "string" ? parseSave(save) : save;
   const session = await runner.openSession({
     bundle: bundlePath,
-    save: parseSave(save),
+    save: parsedSave,
     settings,
     seed: 42,
     epoch: "2026-09-21T00:00:00.000Z",
@@ -463,7 +524,7 @@ async function runVariant(runner, variant, bundlePath, save, settings) {
           resourceClaimMode: "goal-derived-single",
         };
       });
-    if (variant === "D")
+    if (variant === "D" || variant.startsWith("D-"))
       await session.evaluate(() => {
         window.__EA_TEST_HOOKS__.gatherIntervention = {
           resourceClaimMode: "goal-derived-conjunctive",
@@ -471,7 +532,10 @@ async function runVariant(runner, variant, bundlePath, save, settings) {
       });
     let seededClaim;
     if (variant === "B") {
-      while ((await session.periods()) < 200 && seededClaim === undefined) {
+      while (
+        (await session.periods()) < periodLimit &&
+        seededClaim === undefined
+      ) {
         await session.advance(1);
         const catalog = await session.evaluate(() =>
           window.__EA_TEST_HOOKS__.readCurrentResearchCatalog(
@@ -486,20 +550,50 @@ async function runVariant(runner, variant, bundlePath, save, settings) {
       }
       assert.ok(seededClaim, "manual Stage 3E offer never appeared");
     }
-    await session.advance(200 - (await session.periods()));
+    await session.advance(periodLimit - (await session.periods()));
     const state = await session.readState();
     const diagnostics = await session.diagnostics();
-    const hooks = await session.evaluate(() => ({
-      selection: window.__EA_TEST_HOOKS__.resourceClaimSelection,
-      selectionEvents:
-        window.__EA_TEST_HOOKS__.resourceClaimSelectionEvents ?? [],
-      lifecycle: window.__EA_TEST_HOOKS__.resourceClaimLifecycleEvents ?? [],
-      ledgers: window.__EA_TEST_HOOKS__.resourceClaimLedgerEvents ?? [],
-      decisions: window.__EA_TEST_HOOKS__.resourceClaimDecisionEvents ?? [],
-      actions: window.__EA_TEST_HOOKS__.resourceClaimActionEvents ?? [],
-      research: window.__EA_TEST_HOOKS__.researchOwnerSelectionEvents ?? [],
-      status: window.__EA_TEST_HOOKS__.resourceClaimStatus,
-    }));
+    const hooks = await session.evaluate(() => {
+      const testHooks = window.__EA_TEST_HOOKS__;
+      const catalog = testHooks.readCurrentResearchCatalog("tech-mad");
+      const computedRequirements =
+        catalog?.definitions?.flatMap(
+          (definition) => definition.computedRequirements ?? [],
+        ) ?? [];
+      const offeredActionIds = new Set(
+        catalog?.offers?.map((offer) => offer.elementId) ?? [],
+      );
+      return {
+        selection: testHooks.resourceClaimSelection,
+        selectionEvents: testHooks.resourceClaimSelectionEvents ?? [],
+        lifecycle: testHooks.resourceClaimLifecycleEvents ?? [],
+        ledgers: testHooks.resourceClaimLedgerEvents ?? [],
+        decisions: testHooks.resourceClaimDecisionEvents ?? [],
+        actions: testHooks.resourceClaimActionEvents ?? [],
+        research: testHooks.researchOwnerSelectionEvents ?? [],
+        status: testHooks.resourceClaimStatus,
+        computedRequirements,
+        computedRequirementOfferStatus: computedRequirements.map((entry) => ({
+          actionId: entry.actionId,
+          captureGeneration: entry.captureGeneration,
+          offered: offeredActionIds.has(entry.actionId),
+        })),
+        prerequisiteDeclarations:
+          catalog?.definitions
+            ?.filter((definition) =>
+              [
+                "tech-robotics",
+                "tech-lasers",
+                "tech-quantum_computing",
+              ].includes(definition.actionId),
+            )
+            .map((definition) => ({
+              actionId: definition.actionId,
+              registryKey: definition.registryKey,
+              prerequisites: definition.prerequisites,
+            })) ?? [],
+      };
+    });
     return {
       variant,
       periods: await session.periods(),
@@ -572,6 +666,26 @@ try {
     saveText,
     effectiveSettings,
   );
+  const iceAgeSave = parseSave(saveText);
+  iceAgeSave.race.iceage = true;
+  const iceAgeContextRun = await runVariant(
+    runner,
+    "D-iceage",
+    bundlePath,
+    iceAgeSave,
+    effectiveSettings,
+    40,
+  );
+  const truepathSave = parseSave(saveText);
+  truepathSave.race.truepath = true;
+  const truepathContextRun = await runVariant(
+    runner,
+    "D-truepath",
+    bundlePath,
+    truepathSave,
+    effectiveSettings,
+    40,
+  );
   assert.equal(
     execFileSync(
       "git",
@@ -593,18 +707,156 @@ try {
   assert.equal(madScienceGrant.highTechBefore, 0);
   assert.equal(madScienceGrant.highTechAfter, 1);
   assert.equal(madScienceGrant.manaBefore - madScienceGrant.manaAfter, 50);
+  assert.equal(
+    baselineA.summary.finalExportHash,
+    "8b2d7639e7f7917ce7a06dec295510c83a839269180e8f8356b5af5816d9fd0f",
+    "A must preserve the committed Stage 3G baseline export",
+  );
+  assert.equal(
+    seededB.summary.finalExportHash,
+    "591f0dcbc3c1f98e8639977b1885c7a6cefa1d5db193f2fc3dae2b19d328ac3a",
+    "B must preserve the committed Stage 3G seeded-claim export",
+  );
+  assert.equal(
+    derivedC.summary.finalExportHash,
+    baselineA.summary.finalExportHash,
+    "C must retain its prior no-claim behavior",
+  );
   assert.equal(derivedC.summary.selectedClaim?.status, "ambiguous");
   assert.deepEqual(derivedC.summary.selectedClaim?.candidates, [
     "tech-black_powder",
     "tech-mad_science",
   ]);
-  assert.equal(
-    derivedD.summary.selectedClaim?.status,
-    "unavailable",
-    "D must fail closed while a direct mandatory action has unresolved native alternatives",
+  const standardComputedRequirements = new Map(
+    derivedD.summary.computedRequirements.map((entry) => [
+      entry.actionId,
+      entry,
+    ]),
   );
+  assert.deepEqual(
+    standardComputedRequirements.get("tech-lasers")?.requirements,
+    [
+      { technologyId: "high_tech", requiredLevel: 8 },
+      { technologyId: "supercollider", requiredLevel: 1 },
+      { technologyId: "space", requiredLevel: 3 },
+      { technologyId: "elerium", requiredLevel: 1 },
+    ],
+    "standard/Truepath draw must capture pinned native Lasers requirements",
+  );
+  assert.deepEqual(
+    standardComputedRequirements.get("tech-quantum_computing")?.requirements,
+    [
+      { technologyId: "high_tech", requiredLevel: 10 },
+      { technologyId: "nano", requiredLevel: 1 },
+    ],
+    "standard/Truepath draw must capture pinned native Quantum Computing requirements",
+  );
+  assert.deepEqual(
+    derivedD.summary.computedRequirementOfferStatus
+      .filter((entry) =>
+        ["tech-lasers", "tech-quantum_computing"].includes(entry.actionId),
+      )
+      .map((entry) => [entry.actionId, entry.offered]),
+    [
+      ["tech-lasers", false],
+      ["tech-quantum_computing", false],
+    ],
+    "the native draw must capture the unoffered higher High Tech alternatives",
+  );
+  assert.equal(
+    standardComputedRequirements.get("tech-sequence_ecosystem")?.status,
+    "observed",
+    "valid camel-case technology identifiers are retained from native output",
+  );
+  const iceAgeObservedByAction = new Map(
+    iceAgeContextRun.summary.computedRequirements.map((entry) => [
+      entry.actionId,
+      entry,
+    ]),
+  );
+  assert.deepEqual(
+    iceAgeObservedByAction.get("tech-lasers")?.requirements,
+    [
+      { technologyId: "high_tech", requiredLevel: 8 },
+      { technologyId: "supercollider", requiredLevel: 1 },
+      { technologyId: "surface_uranium", requiredLevel: 1 },
+    ],
+    "Ice Age draw must capture pinned native Lasers requirements",
+  );
+  assert.deepEqual(
+    iceAgeObservedByAction.get("tech-quantum_computing")?.requirements,
+    [{ technologyId: "high_tech", requiredLevel: 10 }],
+    "Ice Age draw must capture pinned native Quantum Computing requirements",
+  );
+  for (const actionId of ["tech-lasers", "tech-quantum_computing"]) {
+    assert.deepEqual(
+      truepathContextRun.summary.computedRequirements.find(
+        (entry) => entry.actionId === actionId,
+      )?.requirements,
+      standardComputedRequirements.get(actionId)?.requirements,
+      `Truepath draw must match pinned non-Ice Age ${actionId} requirements`,
+    );
+  }
+  const sameResearchDrawCountsAsC =
+    JSON.stringify(derivedD.summary.researchDrawCounts) ===
+    JSON.stringify(derivedC.summary.researchDrawCounts);
+  assert.equal(
+    derivedD.hooks.prerequisiteDeclarations.find(
+      (entry) => entry.actionId === "tech-lasers",
+    )?.prerequisites.kind,
+    "conditional",
+    "the computed result must not overwrite the retained static declaration",
+  );
+  assert.deepEqual(
+    derivedD.summary.selectedClaim?.claims?.map((claim) => [
+      claim.nativeActionId,
+      claim.requiredQuantity,
+      claim.allocationAuthority.kind,
+    ]),
+    [
+      ["tech-black_powder", 100, "independent"],
+      ["tech-mad_science", 50, "independent"],
+    ],
+    "both independently mandatory current Mana obligations must be admitted",
+  );
+  const derivedMadScienceGrant = derivedD.summary.nativeResearchTrace.find(
+    (event) => event.actionId === "tech-mad_science",
+  );
+  assert.ok(
+    derivedMadScienceGrant,
+    "D must let native AutoResearch buy Mad Science",
+  );
+  assert.equal(derivedMadScienceGrant.grantBefore, 0);
+  assert.equal(derivedMadScienceGrant.grantAfter, 1);
+  assert.equal(derivedMadScienceGrant.manaSpent, 50);
+  assert.equal(
+    derivedD.summary.nativeResearchTrace.some(
+      (event) => event.actionId === "tech-black_powder",
+    ),
+    false,
+    "native AutoResearch did not buy Black Powder in the 200-period replay",
+  );
+  assert.equal(derivedD.summary.highTechLevel, 1);
+  assert.equal(derivedD.summary.explosivesLevel, 0);
+  assert.deepEqual(
+    derivedD.summary.postMadScienceClaimEvaluation?.mandatoryActionIds,
+    ["tech-black_powder", "tech-electricity"],
+    "the next native MAD frontier remains Black Powder and Electricity after Mad Science",
+  );
+  const postGrantBlackPowder =
+    derivedD.summary.postMadScienceClaimEvaluation?.evaluatedCandidates.find(
+      (candidate) => candidate.actionId === "tech-black_powder",
+    );
+  const postGrantElectricity =
+    derivedD.summary.postMadScienceClaimEvaluation?.evaluatedCandidates.find(
+      (candidate) => candidate.actionId === "tech-electricity",
+    );
+  assert.equal(postGrantBlackPowder?.nonManaAffordable, false);
+  assert.equal(postGrantElectricity?.nonManaAffordable, true);
+  assert.equal(postGrantElectricity?.cost.Mana, undefined);
   const report = {
-    protocol: "Stage 3G conjunctive prerequisite Mana claim experiment",
+    protocol:
+      "Stage 3G replay with Stage 3H native computed-requirement evidence",
     runner: "tools/chromium-evolve-runner.mjs",
     execution: {
       command: "node experiments/stage3f-mana-claim.mjs",
@@ -643,7 +895,9 @@ try {
       A: "no goal-directed Mana protection",
       B: "Stage 3E current claim seeded from tech-mad_science native evidence",
       C: "Stage 3F test-only single-selection mode; no target or admitted claim injected",
-      D: "Stage 3G test-only independent claims; fail closed when a direct obligation has unresolved native alternatives",
+      D: "Stage 3H test-only independent claims; fail closed when a direct obligation has unresolved native alternatives",
+      computedRequirementContexts:
+        "Additional 40-period exact-runner contracts use the same pinned save with only race.iceage or race.truepath set to exercise the native action's route-dependent era selection.",
     },
     preservedSettings: {
       autoResearch: effectiveSettings.autoResearch,
@@ -665,6 +919,28 @@ try {
       B: seededB.summary,
       C: derivedC.summary,
       D: derivedD.summary,
+      computedRequirementsIceAge: iceAgeContextRun.summary,
+      computedRequirementsTruepath: truepathContextRun.summary,
+    },
+    nativeComputedRequirementAudit: {
+      source:
+        "Scoped observation of native actionReqs calls made by drawTech; callback results compared against the pinned game's exact-runner execution.",
+      productionEnabled: false,
+      ordinaryResearchDrawCount: derivedD.summary.researchDrawCounts,
+      sameDrawCountAsPreviousC: sameResearchDrawCountsAsC,
+      observedRequirements: derivedD.summary.computedRequirements,
+      capturedStaticDeclarations: derivedD.hooks.prerequisiteDeclarations,
+      iceAgeRequirements: iceAgeContextRun.summary.computedRequirements.filter(
+        (entry) =>
+          entry.actionId === "tech-lasers" ||
+          entry.actionId === "tech-quantum_computing",
+      ),
+      truepathRequirements:
+        truepathContextRun.summary.computedRequirements.filter(
+          (entry) =>
+            entry.actionId === "tech-lasers" ||
+            entry.actionId === "tech-quantum_computing",
+        ),
     },
   };
   await mkdir(path.dirname(reportPath), { recursive: true });

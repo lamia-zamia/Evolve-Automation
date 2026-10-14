@@ -26,6 +26,7 @@ import type { GameRootStateSource } from "../../../../ports/game-root-state.ts";
 import type { GameTabDiscovery } from "../../../../ports/game-tab-discovery.ts";
 import type {
   CapturedGameMechanics,
+  CapturedComputedTechRequirementsContext,
   CapturedTechDefinition,
 } from "../../../../ports/captured-game-mechanics.ts";
 import type { VueBindingObserver } from "../../vue-capture.ts";
@@ -85,8 +86,12 @@ export interface CapturedTechCatalogDependencies {
   /** Retained native identity behind every Research row the game renders. */
   readonly mechanics: Pick<
     CapturedGameMechanics,
-    "captureTechDefinitionsDuring" | "readTechDefinitions"
+    | "captureTechDefinitionsDuring"
+    | "readTechDefinitions"
+    | "readComputedTechRequirements"
   >;
+  readonly readComputedRequirementsContext?: () =>
+    CapturedComputedTechRequirementsContext | undefined;
   readonly diagnostics?: PhaseTimingSink | undefined;
   /** Reports a pass that could not produce a catalog. The caller gets `undefined`, never stale. */
   readonly onUnavailable?: (reason: string) => void;
@@ -127,6 +132,9 @@ export function createCapturedTechCatalog(
       const observedBindingIds: string[] = [];
       let collecting = true;
       let stopObserving = () => {};
+      const computedRequirementsContext =
+        options?.computedRequirementsContext ??
+        dependencies.readComputedRequirementsContext?.();
       try {
         stopObserving = bindings((elementId) => {
           if (!collecting) return;
@@ -137,60 +145,70 @@ export function createCapturedTechCatalog(
             );
           } else observedBindingIds.push(elementId);
         });
-        result = mechanics.captureTechDefinitionsDuring(() =>
-          discovery.discover(RESEARCH_TAB_PATH, {
-            purpose: "research-catalog",
-            // A current DOM cannot establish a fresh binding stream, even if Research is selected.
-            // The panel workspace preserves that view while this scratch draw runs.
-            forceDraw: true,
-            ...(includeGranted ? {} : { discard: UNREAD_RESEARCH_CONTENT }),
-            whileDrawn: () => {
-              try {
-                const offeredRows = measure(
-                  "research.dom.capture.offered",
-                  () => drawnActions.read(OFFERED_TECH_SELECTOR),
-                );
-                if (
-                  drawnActions.count(OFFERED_TECH_SELECTOR) !==
-                  offeredRows.length
-                )
-                  throw new Error(
-                    "a rendered Research offer row has no readable id",
-                  );
-                const grantedRows = includeGranted
-                  ? measure("research.dom.capture.granted", () =>
-                      drawnActions.read(GRANTED_TECH_SELECTOR),
-                    )
-                  : undefined;
-                if (
-                  grantedRows !== undefined &&
-                  drawnActions.count(GRANTED_TECH_SELECTOR) !==
-                    grantedRows.length
-                )
-                  throw new Error(
-                    "a rendered granted Research row has no readable id",
-                  );
-                const generations = new Map<string, number>();
-                measure("research.binding.generation-capture", () => {
-                  for (const elementId of observedBindingIds)
-                    generations.set(
-                      elementId,
-                      controls.resolve(elementId)?.generation ?? 0,
+        const captureNativeDraw = () =>
+          mechanics.captureTechDefinitionsDuring(
+            () =>
+              discovery.discover(RESEARCH_TAB_PATH, {
+                purpose: "research-catalog",
+                // A current DOM cannot establish a fresh binding stream, even if Research is selected.
+                // The panel workspace preserves that view while this scratch draw runs.
+                forceDraw: true,
+                ...(includeGranted ? {} : { discard: UNREAD_RESEARCH_CONTENT }),
+                whileDrawn: () => {
+                  try {
+                    const offeredRows = measure(
+                      "research.dom.capture.offered",
+                      () => drawnActions.read(OFFERED_TECH_SELECTOR),
                     );
-                });
-                drawn = Object.freeze({
-                  offeredRows,
-                  ...(grantedRows === undefined ? {} : { grantedRows }),
-                  generations,
-                });
-                return true;
-              } finally {
-                // Exclude any player-view restoration after the controlled target draw.
-                collecting = false;
-              }
-            },
-          }),
-        );
+                    if (
+                      drawnActions.count(OFFERED_TECH_SELECTOR) !==
+                      offeredRows.length
+                    )
+                      throw new Error(
+                        "a rendered Research offer row has no readable id",
+                      );
+                    const grantedRows = includeGranted
+                      ? measure("research.dom.capture.granted", () =>
+                          drawnActions.read(GRANTED_TECH_SELECTOR),
+                        )
+                      : undefined;
+                    if (
+                      grantedRows !== undefined &&
+                      drawnActions.count(GRANTED_TECH_SELECTOR) !==
+                        grantedRows.length
+                    )
+                      throw new Error(
+                        "a rendered granted Research row has no readable id",
+                      );
+                    const generations = new Map<string, number>();
+                    measure("research.binding.generation-capture", () => {
+                      for (const elementId of observedBindingIds)
+                        generations.set(
+                          elementId,
+                          controls.resolve(elementId)?.generation ?? 0,
+                        );
+                    });
+                    drawn = Object.freeze({
+                      offeredRows,
+                      ...(grantedRows === undefined ? {} : { grantedRows }),
+                      generations,
+                    });
+                    return true;
+                  } finally {
+                    // Exclude any player-view restoration after the controlled target draw.
+                    collecting = false;
+                  }
+                },
+              }),
+            computedRequirementsContext,
+          );
+        result =
+          computedRequirementsContext === undefined
+            ? captureNativeDraw()
+            : measure(
+                "research.computed-requirements.capture-and-draw",
+                captureNativeDraw,
+              );
       } catch (error) {
         reportUnavailable(`research offer discovery failed: ${String(error)}`);
         return undefined;
@@ -223,17 +241,53 @@ export function createCapturedTechCatalog(
         return undefined;
       }
 
-      const definitions = measure("research.catalog.registry-read", () =>
+      const baseDefinitions = measure("research.catalog.registry-read", () =>
         mechanics.readTechDefinitions(),
       );
-      if (definitions !== undefined)
+      if (baseDefinitions !== undefined)
         tally.count("research.registry.validations");
-      if (definitions === undefined) {
+      if (baseDefinitions === undefined) {
         reportUnavailable(
           "the native technology registry was not captured or is no longer valid",
         );
         return undefined;
       }
+      const computedRequirements =
+        computedRequirementsContext === undefined
+          ? undefined
+          : measure("research.computed-requirements.read", () =>
+              mechanics.readComputedTechRequirements(),
+            );
+      for (const observation of computedRequirements ?? []) {
+        tally.count("research.computed-requirements.observations");
+        tally.count(`research.computed-requirements.${observation.status}`);
+        tally.count(
+          "research.computed-requirements.native-calls",
+          observation.nativeCallCount,
+        );
+      }
+      const computedByRegistryKey = new Map(
+        (computedRequirements ?? []).map((observation) => [
+          observation.registryKey,
+          observation,
+        ]),
+      );
+      const definitions =
+        computedByRegistryKey.size === 0
+          ? baseDefinitions
+          : Object.freeze(
+              baseDefinitions.map((definition) => {
+                const observation = computedByRegistryKey.get(
+                  definition.registryKey,
+                );
+                return observation === undefined
+                  ? definition
+                  : Object.freeze({
+                      ...definition,
+                      computedRequirements: Object.freeze([observation]),
+                    });
+              }),
+            );
       let definitionsById =
         definitions === indexedTechDefinitions
           ? indexedTechDefinitionsById

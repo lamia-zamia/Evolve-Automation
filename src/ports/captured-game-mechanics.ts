@@ -93,12 +93,44 @@ export interface CapturedTechDefinition {
       }
     | { readonly kind: "conditional"; readonly reason: string }
     | { readonly kind: "unavailable"; readonly reason: string };
+  /** Actual function-valued reqs returns seen during the opted-in native Research draw. */
+  readonly computedRequirements?: readonly CapturedComputedTechRequirements[];
   /** Static eligibility metadata that remains outside the prerequisite predicate. */
   readonly eligibility: Readonly<{
     readonly hasNativeCondition: boolean;
     readonly routeRestrictions: readonly string[] | undefined;
     readonly restrictions: readonly CapturedTechRestriction[];
   }>;
+}
+
+export interface CapturedComputedTechRequirements {
+  readonly actionId: string;
+  readonly registryKey: string;
+  readonly actionIdentity: number;
+  readonly reqsIdentity: number;
+  readonly source: "native-actionReqs-during-drawTech";
+  readonly effectiveEra: string | undefined;
+  readonly arguments:
+    | Readonly<{
+        readonly era: string | undefined;
+        readonly wiki: boolean;
+        readonly offset: number | undefined;
+      }>
+    | undefined;
+  readonly rootGeneration: number;
+  readonly progressionEpoch: string;
+  readonly captureGeneration: number;
+  readonly requirements: readonly CapturedTechPrerequisite[] | undefined;
+  readonly nativeCallCount: number;
+  readonly status:
+    "observed" | "missing" | "absent" | "invalid" | "threw" | "inconsistent";
+  readonly complete: boolean;
+  readonly validation: "valid" | "incomplete" | "invalid";
+}
+
+export interface CapturedComputedTechRequirementsContext {
+  readonly rootGeneration: number;
+  readonly progressionEpoch: string;
 }
 
 export interface CapturedTechPrerequisite {
@@ -210,9 +242,15 @@ export interface CapturedGameMechanics {
    * Temporarily observes page-realm `Object.keys` during one controlled Research draw until the
    * native registry is captured. The callback remains synchronous and its result is untouched.
    */
-  captureTechDefinitionsDuring<T>(draw: () => T): T;
+  captureTechDefinitionsDuring<T>(
+    draw: () => T,
+    computedRequirementsContext?: CapturedComputedTechRequirementsContext,
+  ): T;
   /** `undefined` means the retained private technology registry is absent or no longer valid. */
   readTechDefinitions(): readonly CapturedTechDefinition[] | undefined;
+  /** Current opt-in native-draw observations; absent means no such draw was observed. */
+  readComputedTechRequirements():
+    readonly CapturedComputedTechRequirements[] | undefined;
   /** Exact target switch using the action's cap and the game's deferred postPower queue. */
   adjustPower(
     root: unknown,

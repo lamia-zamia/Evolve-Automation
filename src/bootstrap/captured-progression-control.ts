@@ -65,6 +65,7 @@ import type { GameMountSuppression } from "../ports/game-mount-suppression.ts";
 import type { GamePanelWorkspace } from "../ports/game-panel-workspace.ts";
 import type { GameRootStateSource } from "../ports/game-root-state.ts";
 import type { CapturedGameMechanics } from "../ports/captured-game-mechanics.ts";
+import type { CapturedComputedTechRequirementsContext } from "../ports/captured-game-mechanics.ts";
 import type { VueBindingObserver } from "../adapters/evolve/vue-capture.ts";
 import type { GameKeyboardHandlersPort } from "../ports/game-keyboard-handlers.ts";
 import type { GameKeyStateReader } from "../ports/game-key-state.ts";
@@ -158,6 +159,7 @@ export interface CapturedProgressionControlDependencies {
     ((result: Readonly<ResearchOwnerSelectionResult>) => void) | undefined;
   readonly readResearchTestIntervention?: () =>
     Readonly<{ deferActionId: string; targetActionId: string }> | undefined;
+  readonly readComputedResearchRequirementsEnabled?: () => boolean;
 }
 
 export interface CapturedProgressionControl {
@@ -614,6 +616,13 @@ export function createCapturedProgressionControl(
     const needsGrantedSample = includeGranted && !grantedSampleAttempted;
     if (offeredSampleAttempted && !needsGrantedSample) {
       tally.count("research.observation.cache-hits");
+      if (
+        dependencies.readComputedResearchRequirementsEnabled?.() === true &&
+        lastTechDefinitions?.some(
+          (definition) => definition.computedRequirements !== undefined,
+        )
+      )
+        tally.count("research.computed-requirements.reused");
       if (heldOfferedSnapshot === undefined) {
         lastOffered = undefined;
         lastGranted = undefined;
@@ -633,9 +642,22 @@ export function createCapturedProgressionControl(
     );
     // The granted half is a different sample, so it is a different scope: a pass that dropped it
     // must never answer the caller that asked for it.
+    const computedRequirementsContext =
+      dependencies.readComputedResearchRequirementsEnabled?.() === true
+        ? (Object.freeze({
+            rootGeneration: epoch.readRootGeneration(),
+            progressionEpoch: currentEpoch,
+          }) satisfies CapturedComputedTechRequirementsContext)
+        : undefined;
     const held = scopes.read(
       includeGranted ? RESEARCH_GRANTED_SCOPE : RESEARCH_SCOPE,
-      () => offered.read(includeGranted ? { includeGranted } : undefined),
+      () =>
+        offered.read({
+          ...(includeGranted ? { includeGranted } : {}),
+          ...(computedRequirementsContext === undefined
+            ? {}
+            : { computedRequirementsContext }),
+        }),
       (previous, next) => sameOfferPrices(previous.offered, next.offered),
     );
     offeredSampleAttempted = true;
@@ -668,6 +690,17 @@ export function createCapturedProgressionControl(
     bindings,
     controls,
     mechanics,
+    ...(dependencies.readComputedResearchRequirementsEnabled === undefined
+      ? {}
+      : {
+          readComputedRequirementsContext: () =>
+            dependencies.readComputedResearchRequirementsEnabled?.() === true
+              ? Object.freeze({
+                  rootGeneration: epoch.readRootGeneration(),
+                  progressionEpoch: epoch.read(),
+                })
+              : undefined,
+        }),
     diagnostics,
     ...(onUnavailable === undefined ? {} : { onUnavailable }),
   });
@@ -1173,7 +1206,10 @@ export function createCapturedProgressionControl(
     readOfferedTechs: readCurrentOfferedTechs,
     sampleOfferedTechs,
     readGrantedTechs: () => lastGranted,
-    readResearchActionDefinitions: () => lastTechDefinitions,
+    readResearchActionDefinitions: () =>
+      mechanics.readTechDefinitions() === undefined
+        ? undefined
+        : lastTechDefinitions,
     readProjects,
     readEstablishedProjects,
     resetProjectSample,

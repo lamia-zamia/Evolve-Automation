@@ -71,6 +71,7 @@ import { createCapturedTechPrerequisiteLevelReader } from "../adapters/evolve/pr
 import {
   readCapturedMadTargetCondition,
   readCapturedTechApplicability,
+  readFreshCapturedComputedTechRequirements,
 } from "../adapters/evolve/progression/research/captured-tech-applicability.ts";
 import type { CapturedTechDefinition } from "../ports/captured-game-mechanics.ts";
 import type { OfferedTech } from "../ports/game-tech-catalog.ts";
@@ -1087,6 +1088,14 @@ export function startCapturedRuntime({
     ...(typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
     __EA_TEST_SURFACE_ENABLED__ === true
       ? {
+          readComputedResearchRequirementsEnabled: () => {
+            const hooks = readProperty(settingsHostWindow, "__EA_TEST_HOOKS__");
+            const intervention = readProperty(hooks, "gatherIntervention");
+            return (
+              readProperty(intervention, "resourceClaimMode") ===
+              "goal-derived-conjunctive"
+            );
+          },
           readResearchTestIntervention: () => {
             const hooks = readProperty(settingsHostWindow, "__EA_TEST_HOOKS__");
             const intervention = readProperty(
@@ -2208,17 +2217,25 @@ export function startCapturedRuntime({
         );
         const grantLevels = readResearchGrantLevels(root, definitions);
         const applicability = readCapturedTechApplicability(root, definitions);
-        const graph = planNativeResearchPrerequisites({
-          targetActionId: CAPTURED_MAD_RESEARCH_TECH,
-          definitions: definitions.map((definition) => ({
+        const prerequisiteDefinitions = definitions.map((definition) => {
+          const computedPrerequisites =
+            readFreshCapturedComputedTechRequirements(definition, {
+              rootGeneration,
+              progressionEpoch: progressionGeneration,
+            });
+          return {
             actionId: definition.actionId,
             grantTechnology: definition.grantTechnology,
             grantLevel: definition.grantLevel,
-            prerequisites: definition.prerequisites,
+            prerequisites: computedPrerequisites ?? definition.prerequisites,
             hasNativeCondition: definition.eligibility.hasNativeCondition,
             routeRestrictions: definition.eligibility.routeRestrictions,
             restrictions: definition.eligibility.restrictions,
-          })),
+          };
+        });
+        const graph = planNativeResearchPrerequisites({
+          targetActionId: CAPTURED_MAD_RESEARCH_TECH,
+          definitions: prerequisiteDefinitions,
           grantLevels,
           ...(applicability === undefined
             ? {}
@@ -2301,15 +2318,7 @@ export function startCapturedRuntime({
                 applicability?.get(CAPTURED_MAD_RESEARCH_TECH)?.status ===
                   "eligible" &&
                 readCapturedMadTargetCondition(root).status === "eligible",
-              definitions: definitions.map((definition) => ({
-                actionId: definition.actionId,
-                grantTechnology: definition.grantTechnology,
-                grantLevel: definition.grantLevel,
-                prerequisites: definition.prerequisites,
-                hasNativeCondition: definition.eligibility.hasNativeCondition,
-                routeRestrictions: definition.eligibility.routeRestrictions,
-                restrictions: definition.eligibility.restrictions,
-              })),
+              definitions: prerequisiteDefinitions,
               grantLevels,
               applicabilityByActionId: applicability,
               offeredActionIds: new Set(offers.map((offer) => offer.elementId)),

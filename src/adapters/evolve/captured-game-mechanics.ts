@@ -11,6 +11,8 @@ import type {
   CapturedGameMechanics,
   CapturedGameRead,
   CapturedTechDefinition,
+  CapturedComputedTechRequirements,
+  CapturedComputedTechRequirementsContext,
   CapturedTechPrerequisite,
   CapturedTechRestriction,
   CapturedGameStructureIdentity,
@@ -42,6 +44,77 @@ const structureMapCaptureThreshold = 3;
 
 interface CapturedNativeTechDefinitionIdentity extends CapturedTechDefinition {
   readonly action: Record<string, unknown>;
+  readonly reqsFunction: CapturedGameCall | undefined;
+}
+
+interface CapturedNativeTechRequirementCall {
+  readonly definition: CapturedNativeTechDefinitionIdentity;
+  readonly args: readonly unknown[];
+  readonly result?: unknown;
+  readonly threw: boolean;
+}
+
+function validateCapturedNativeTechRequirements(
+  value: unknown,
+): readonly CapturedTechPrerequisite[] | undefined {
+  try {
+    if (
+      typeof value !== "object" ||
+      value === null ||
+      Array.isArray(value) ||
+      Object.getPrototypeOf(value) !== Object.prototype
+    )
+      return undefined;
+    const ownKeys = Reflect.ownKeys(value);
+    if (ownKeys.some((key) => typeof key !== "string")) return undefined;
+    const requirements: CapturedTechPrerequisite[] = [];
+    for (const technologyId of ownKeys as string[]) {
+      const descriptor = Object.getOwnPropertyDescriptor(value, technologyId);
+      if (
+        descriptor === undefined ||
+        !("value" in descriptor) ||
+        !descriptor.enumerable
+      )
+        return undefined;
+      const level = descriptor.value;
+      if (
+        !/^[A-Za-z][A-Za-z0-9_]*$/u.test(technologyId) ||
+        typeof level !== "number" ||
+        !Number.isFinite(level) ||
+        level <= 0
+      )
+        return undefined;
+      requirements.push(Object.freeze({ technologyId, requiredLevel: level }));
+    }
+    return Object.freeze(requirements);
+  } catch {
+    return undefined;
+  }
+}
+
+function isNativeActionArgsRecord(
+  value: unknown,
+): value is { era?: unknown; wiki?: unknown; offset?: unknown } {
+  try {
+    if (
+      typeof value !== "object" ||
+      value === null ||
+      Array.isArray(value) ||
+      Object.getPrototypeOf(value) !== Object.prototype
+    )
+      return false;
+    const keys = Reflect.ownKeys(value);
+    return (
+      keys.length === 3 &&
+      keys.every((key) => typeof key === "string") &&
+      ["era", "wiki", "offset"].every((key) => {
+        const descriptor = Object.getOwnPropertyDescriptor(value, key);
+        return descriptor !== undefined && "value" in descriptor;
+      })
+    );
+  } catch {
+    return false;
+  }
 }
 
 function readCapturedTechPrerequisites(
@@ -302,6 +375,21 @@ function readNativeTechRegistrySnapshot(
       return undefined;
     }
 
+    let reqsDescriptor: PropertyDescriptor | undefined;
+    try {
+      reqsDescriptor = Object.getOwnPropertyDescriptor(action, "reqs");
+    } catch {
+      return undefined;
+    }
+    const reqsValue =
+      reqsDescriptor !== undefined && "value" in reqsDescriptor
+        ? reqsDescriptor.value
+        : undefined;
+    const reqsFunction =
+      typeof reqsValue === "function"
+        ? (reqsValue as CapturedGameCall)
+        : undefined;
+
     const prerequisites = readCapturedTechPrerequisites(action);
     const eligibility = readCapturedTechEligibility(action);
     if (eligibility === undefined) return undefined;
@@ -316,6 +404,7 @@ function readNativeTechRegistrySnapshot(
       prerequisites,
       eligibility,
       action,
+      reqsFunction,
     });
     definitions.push(definition);
     definitionsByActionId?.set(actionId, definition);
@@ -355,6 +444,7 @@ function sameNativeTechRegistrySnapshot(
       return (
         other !== undefined &&
         definition.action === other.action &&
+        definition.reqsFunction === other.reqsFunction &&
         definition.actionId === other.actionId &&
         definition.grantTechnology === other.grantTechnology &&
         definition.grantLevel === other.grantLevel &&
@@ -1354,6 +1444,7 @@ function emptyGameMechanics(): CapturedGameMechanics {
     adjustPower: () => ({ kind: "invalid" as const }),
     captureTechDefinitionsDuring: <T>(draw: () => T): T => draw(),
     readTechDefinitions: () => undefined,
+    readComputedTechRequirements: () => undefined,
     readStructures: () => undefined,
     readStructureIdentities: () => undefined,
     readPowerOrder: () => ({ kind: "invalid" as const }),
@@ -1727,6 +1818,22 @@ export function installCapturedGameMechanics(
   let capturedTechRegistry: CapturedNativeTechRegistrySnapshot | undefined;
   let capturedTechRegistryObjectKeys: CapturedGameCall | undefined;
   let capturedTechAuthorityInvalid = false;
+  let computedTechRequirementCaptureGeneration = 0;
+  let computedTechRequirementObservations:
+    readonly CapturedComputedTechRequirements[] | undefined;
+  const computedTechActionIdentity = new WeakMap<object, number>();
+  const computedTechReqsIdentity = new WeakMap<CapturedGameCall, number>();
+  let nextComputedTechIdentity = 1;
+  const computedTechIdentity = (
+    registry: WeakMap<object, number>,
+    key: object,
+  ) => {
+    const current = registry.get(key);
+    if (current !== undefined) return current;
+    const identity = nextComputedTechIdentity++;
+    registry.set(key, identity);
+    return identity;
+  };
   let mapHook: CapturedGameCall | undefined;
   let consumeSetter: ((this: unknown, value: unknown) => void) | undefined;
   let powerOnSetter: ((this: unknown, value: unknown) => void) | undefined;
@@ -1971,6 +2078,15 @@ export function installCapturedGameMechanics(
       ]);
       if (!Array.isArray(rawKeys) || rawKeys.length !== retained.keys.length)
         return undefined;
+      const currentSnapshot = readNativeTechRegistrySnapshot(
+        retained.registry,
+        rawKeys,
+      );
+      if (
+        currentSnapshot === undefined ||
+        !sameNativeTechRegistrySnapshot(retained, currentSnapshot)
+      )
+        return undefined;
       for (let index = 0; index < retained.keys.length; index++) {
         const key = retained.keys[index];
         const definition = retained.definitions[index];
@@ -1992,11 +2108,23 @@ export function installCapturedGameMechanics(
   }
 
   const mechanics: CapturedGameMechanics = Object.freeze({
-    captureTechDefinitionsDuring<T>(draw: () => T): T {
+    captureTechDefinitionsDuring<T>(
+      draw: () => T,
+      computedRequirementsContext?: CapturedComputedTechRequirementsContext,
+    ): T {
+      computedTechRequirementObservations = undefined;
       if (
         stopped ||
         capturedTechAuthorityInvalid ||
-        capturedTechRegistry !== undefined
+        (capturedTechRegistry !== undefined &&
+          computedRequirementsContext === undefined)
+      )
+        return draw();
+      if (
+        computedRequirementsContext !== undefined &&
+        (!Number.isSafeInteger(computedRequirementsContext.rootGeneration) ||
+          computedRequirementsContext.rootGeneration < 0 ||
+          computedRequirementsContext.progressionEpoch.length === 0)
       )
         return draw();
       if (
@@ -2029,7 +2157,112 @@ export function installCapturedGameMechanics(
         Record<string, unknown>,
         CapturedNativeTechRegistrySnapshot
       >();
+      const requirementCalls: CapturedNativeTechRequirementCall[] = [];
+      const restores: (() => boolean)[] = [];
+      let instrumentedRegistry: CapturedNativeTechRegistrySnapshot | undefined;
+      let instrumentationInvalid = false;
+      let callbackIdentityChanged = false;
       let candidateChanged = false;
+      const instrumentComputedRequirements = (
+        snapshot: CapturedNativeTechRegistrySnapshot,
+      ) => {
+        if (
+          computedRequirementsContext === undefined ||
+          instrumentedRegistry !== undefined ||
+          (capturedTechRegistry !== undefined &&
+            snapshot.registry !== capturedTechRegistry.registry)
+        )
+          return;
+        instrumentedRegistry = snapshot;
+        const pending: {
+          definition: CapturedNativeTechDefinitionIdentity;
+          descriptor: PropertyDescriptor;
+          wrapper: CapturedGameCall;
+        }[] = [];
+        for (const definition of snapshot.definitions) {
+          if (definition.reqsFunction === undefined) continue;
+          let descriptor: PropertyDescriptor | undefined;
+          try {
+            if (Object.getPrototypeOf(definition.action) !== Object.prototype) {
+              instrumentationInvalid = true;
+              return;
+            }
+            descriptor = Object.getOwnPropertyDescriptor(
+              definition.action,
+              "reqs",
+            );
+          } catch {
+            instrumentationInvalid = true;
+            return;
+          }
+          if (
+            descriptor === undefined ||
+            !("value" in descriptor) ||
+            descriptor.value !== definition.reqsFunction ||
+            descriptor.configurable !== true ||
+            descriptor.writable !== true
+          ) {
+            instrumentationInvalid = true;
+            return;
+          }
+          const wrapper: CapturedGameCall = function (
+            this: unknown,
+            ...args: unknown[]
+          ): unknown {
+            try {
+              const result = Reflect.apply(
+                definition.reqsFunction as CapturedGameCall,
+                this,
+                args,
+              );
+              requirementCalls.push({
+                definition,
+                args: Object.freeze([...args]),
+                result,
+                threw: false,
+              });
+              return result;
+            } catch (error) {
+              requirementCalls.push({
+                definition,
+                args: Object.freeze([...args]),
+                threw: true,
+              });
+              throw error;
+            }
+          };
+          pending.push({ definition, descriptor, wrapper });
+        }
+        for (const { definition, descriptor, wrapper } of pending) {
+          if (
+            !Reflect.defineProperty(definition.action, "reqs", {
+              ...descriptor,
+              value: wrapper,
+            })
+          ) {
+            instrumentationInvalid = true;
+            for (const restore of restores) restore();
+            restores.length = 0;
+            return;
+          }
+          restores.push(() => {
+            const current = Object.getOwnPropertyDescriptor(
+              definition.action,
+              "reqs",
+            );
+            if (current?.value !== wrapper) {
+              callbackIdentityChanged = true;
+              return false;
+            }
+            return Reflect.defineProperty(
+              definition.action,
+              "reqs",
+              descriptor,
+            );
+          });
+        }
+        instrumentedRegistry = snapshot;
+      };
       const scopedObjectKeys: CapturedGameCall = function (
         this: unknown,
         ...args: unknown[]
@@ -2049,6 +2282,7 @@ export function installCapturedGameMechanics(
           } else if (!sameNativeTechRegistrySnapshot(previous, candidate)) {
             candidateChanged = true;
           }
+          instrumentComputedRequirements(candidate);
         }
         return keys;
       };
@@ -2071,11 +2305,142 @@ export function installCapturedGameMechanics(
       try {
         result = draw();
       } finally {
+        for (const restore of restores) {
+          try {
+            if (!restore()) callbackIdentityChanged = true;
+          } catch {
+            callbackIdentityChanged = true;
+          }
+        }
         Reflect.apply(
           objectDefineProperty as CapturedGameCall,
           objectConstructor,
           [objectConstructor, "keys", originalDescriptor],
         );
+        if (computedRequirementsContext !== undefined) {
+          computedTechRequirementCaptureGeneration += 1;
+          const snapshot =
+            instrumentedRegistry ??
+            (capturedTechRegistry !== undefined && candidates.size === 0
+              ? capturedTechRegistry
+              : undefined);
+          computedTechRequirementObservations =
+            snapshot === undefined
+              ? undefined
+              : Object.freeze(
+                  snapshot.definitions.flatMap((definition) => {
+                    if (definition.reqsFunction === undefined) return [];
+                    const calls = requirementCalls.filter(
+                      (call) => call.definition.action === definition.action,
+                    );
+                    const firstCall = calls[0];
+                    const rawArgs = firstCall?.args[0];
+                    const argsAreNative =
+                      firstCall !== undefined &&
+                      firstCall.args.length === 1 &&
+                      isNativeActionArgsRecord(rawArgs);
+                    const era = argsAreNative ? rawArgs.era : undefined;
+                    const wiki = argsAreNative ? rawArgs.wiki : undefined;
+                    const offset = argsAreNative ? rawArgs.offset : undefined;
+                    const argumentsValid =
+                      argsAreNative &&
+                      (era === undefined || typeof era === "string") &&
+                      typeof wiki === "boolean" &&
+                      (offset === undefined || typeof offset === "number");
+                    const normalizedArguments = argumentsValid
+                      ? Object.freeze({
+                          era: era as string | undefined,
+                          wiki: wiki as boolean,
+                          offset: offset as number | undefined,
+                        })
+                      : undefined;
+                    const firstRequirements =
+                      firstCall === undefined || firstCall.threw
+                        ? undefined
+                        : validateCapturedNativeTechRequirements(
+                            firstCall.result,
+                          );
+                    const firstIsAbsent =
+                      firstCall !== undefined &&
+                      !firstCall.threw &&
+                      !firstCall.result;
+                    const repeatedAnswersAgree =
+                      calls.length <= 1 ||
+                      calls.every((call) => {
+                        if (
+                          call.threw !== firstCall?.threw ||
+                          call.args.length !== firstCall?.args.length
+                        )
+                          return false;
+                        if (call.threw) return true;
+                        if (!call.result || !firstCall?.result)
+                          return Object.is(call.result, firstCall?.result);
+                        const requirements =
+                          validateCapturedNativeTechRequirements(call.result);
+                        return (
+                          requirements !== undefined &&
+                          JSON.stringify(requirements) ===
+                            JSON.stringify(firstRequirements) &&
+                          JSON.stringify(call.args) ===
+                            JSON.stringify(firstCall?.args)
+                        );
+                      });
+                    const status: CapturedComputedTechRequirements["status"] =
+                      instrumentationInvalid ||
+                      callbackIdentityChanged ||
+                      candidateChanged ||
+                      candidates.size > 1
+                        ? "inconsistent"
+                        : calls.length === 0
+                          ? "missing"
+                          : calls.some((call) => call.threw)
+                            ? "threw"
+                            : !argumentsValid
+                              ? "invalid"
+                              : !repeatedAnswersAgree
+                                ? "inconsistent"
+                                : firstIsAbsent
+                                  ? "absent"
+                                  : firstRequirements === undefined
+                                    ? "invalid"
+                                    : "observed";
+                    return [
+                      Object.freeze({
+                        actionId: definition.actionId,
+                        registryKey: definition.registryKey,
+                        actionIdentity: computedTechIdentity(
+                          computedTechActionIdentity,
+                          definition.action,
+                        ),
+                        reqsIdentity: computedTechIdentity(
+                          computedTechReqsIdentity,
+                          definition.reqsFunction,
+                        ),
+                        source: "native-actionReqs-during-drawTech" as const,
+                        effectiveEra: typeof era === "string" ? era : undefined,
+                        arguments: normalizedArguments,
+                        rootGeneration:
+                          computedRequirementsContext.rootGeneration,
+                        progressionEpoch:
+                          computedRequirementsContext.progressionEpoch,
+                        captureGeneration:
+                          computedTechRequirementCaptureGeneration,
+                        requirements:
+                          status === "observed" ? firstRequirements : undefined,
+                        nativeCallCount: calls.length,
+                        status,
+                        complete: status === "observed",
+                        validation:
+                          status === "observed"
+                            ? ("valid" as const)
+                            : status === "missing"
+                              ? ("incomplete" as const)
+                              : ("invalid" as const),
+                      }),
+                    ];
+                  }),
+                );
+        }
       }
 
       if (!candidateChanged && candidates.size === 1) {
@@ -2107,6 +2472,39 @@ export function installCapturedGameMechanics(
     },
     readTechDefinitions(): readonly CapturedTechDefinition[] | undefined {
       return readRetainedNativeTechRegistry()?.publicDefinitions;
+    },
+    readComputedTechRequirements() {
+      const observations = computedTechRequirementObservations;
+      const retained = readRetainedNativeTechRegistry();
+      if (observations === undefined || retained === undefined) {
+        computedTechRequirementObservations = undefined;
+        return undefined;
+      }
+      const definitionsByRegistryKey = new Map(
+        retained.definitions.map((definition) => [
+          definition.registryKey,
+          definition,
+        ]),
+      );
+      const current = observations.every((observation) => {
+        const definition = definitionsByRegistryKey.get(
+          observation.registryKey,
+        );
+        return (
+          definition !== undefined &&
+          definition.actionId === observation.actionId &&
+          computedTechActionIdentity.get(definition.action) ===
+            observation.actionIdentity &&
+          definition.reqsFunction !== undefined &&
+          computedTechReqsIdentity.get(definition.reqsFunction) ===
+            observation.reqsIdentity
+        );
+      });
+      if (!current) {
+        computedTechRequirementObservations = undefined;
+        return undefined;
+      }
+      return observations;
     },
     adjustPower(
       root: unknown,

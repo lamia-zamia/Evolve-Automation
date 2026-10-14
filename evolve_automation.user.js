@@ -2096,6 +2096,40 @@
 
   // src/adapters/evolve/captured-game-mechanics.ts
   var structureMapCaptureThreshold = 3;
+  function validateCapturedNativeTechRequirements(value) {
+    try {
+      if (typeof value != "object" || value === null || Array.isArray(value) || Object.getPrototypeOf(value) !== Object.prototype)
+        return;
+      let ownKeys = Reflect.ownKeys(value);
+      if (ownKeys.some((key) => typeof key != "string")) return;
+      let requirements = [];
+      for (let technologyId of ownKeys) {
+        let descriptor = Object.getOwnPropertyDescriptor(value, technologyId);
+        if (descriptor === void 0 || !("value" in descriptor) || !descriptor.enumerable)
+          return;
+        let level = descriptor.value;
+        if (!/^[A-Za-z][A-Za-z0-9_]*$/u.test(technologyId) || typeof level != "number" || !Number.isFinite(level) || level <= 0)
+          return;
+        requirements.push(Object.freeze({ technologyId, requiredLevel: level }));
+      }
+      return Object.freeze(requirements);
+    } catch {
+      return;
+    }
+  }
+  function isNativeActionArgsRecord(value) {
+    try {
+      if (typeof value != "object" || value === null || Array.isArray(value) || Object.getPrototypeOf(value) !== Object.prototype)
+        return !1;
+      let keys = Reflect.ownKeys(value);
+      return keys.length === 3 && keys.every((key) => typeof key == "string") && ["era", "wiki", "offset"].every((key) => {
+        let descriptor = Object.getOwnPropertyDescriptor(value, key);
+        return descriptor !== void 0 && "value" in descriptor;
+      });
+    } catch {
+      return !1;
+    }
+  }
   function readCapturedTechPrerequisites(action) {
     let descriptor;
     try {
@@ -2237,7 +2271,13 @@
       let grantTechnology = readMechanicsDataProperty(grant, "0"), grantLevel = readMechanicsDataProperty(grant, "1");
       if (typeof grantTechnology != "string" || grantTechnology.trim().length === 0 || typeof grantLevel != "number" || !Number.isFinite(grantLevel) || grantLevel < 0)
         return;
-      let prerequisites = readCapturedTechPrerequisites(action), eligibility = readCapturedTechEligibility(action);
+      let reqsDescriptor;
+      try {
+        reqsDescriptor = Object.getOwnPropertyDescriptor(action, "reqs");
+      } catch {
+        return;
+      }
+      let reqsValue = reqsDescriptor !== void 0 && "value" in reqsDescriptor ? reqsDescriptor.value : void 0, reqsFunction = typeof reqsValue == "function" ? reqsValue : void 0, prerequisites = readCapturedTechPrerequisites(action), eligibility = readCapturedTechEligibility(action);
       if (eligibility === void 0) return;
       keys.push(rawKey), seenActionIds.add(actionId);
       let definition = Object.freeze({
@@ -2247,7 +2287,8 @@
         grantLevel,
         prerequisites,
         eligibility,
-        action
+        action,
+        reqsFunction
       });
       definitions.push(definition), definitionsByActionId?.set(actionId, definition);
     }
@@ -2273,7 +2314,7 @@
   function sameNativeTechRegistrySnapshot(first, second) {
     return first.registry === second.registry && first.keys.length === second.keys.length && first.keys.every((key, index) => key === second.keys[index]) && first.definitions.length === second.definitions.length && first.definitions.every((definition, index) => {
       let other = second.definitions[index];
-      return other !== void 0 && definition.action === other.action && definition.actionId === other.actionId && definition.grantTechnology === other.grantTechnology && definition.grantLevel === other.grantLevel && sameCapturedTechPrerequisiteMetadata(definition, other);
+      return other !== void 0 && definition.action === other.action && definition.reqsFunction === other.reqsFunction && definition.actionId === other.actionId && definition.grantTechnology === other.grantTechnology && definition.grantLevel === other.grantLevel && sameCapturedTechPrerequisiteMetadata(definition, other);
     });
   }
   function readMechanicsProperty(owner, key) {
@@ -2887,6 +2928,8 @@
       captureTechDefinitionsDuring: (draw) => draw(),
       readTechDefinitions: () => {
       },
+      readComputedTechRequirements: () => {
+      },
       readStructures: () => {
       },
       readStructureIdentities: () => {
@@ -3061,7 +3104,12 @@
           }
         }
     }
-    let stopped = !1, capturedTechRegistry, capturedTechRegistryObjectKeys, capturedTechAuthorityInvalid = !1, mapHook, consumeSetter, powerOnSetter, originalPowerOnProbeDescriptor = isNonArrayRecord(objectPrototype) ? Object.getOwnPropertyDescriptor(objectPrototype, "coal_power") : void 0;
+    let stopped = !1, capturedTechRegistry, capturedTechRegistryObjectKeys, capturedTechAuthorityInvalid = !1, computedTechRequirementCaptureGeneration = 0, computedTechRequirementObservations, computedTechActionIdentity = /* @__PURE__ */ new WeakMap(), computedTechReqsIdentity = /* @__PURE__ */ new WeakMap(), nextComputedTechIdentity = 1, computedTechIdentity = (registry, key) => {
+      let current = registry.get(key);
+      if (current !== void 0) return current;
+      let identity = nextComputedTechIdentity++;
+      return registry.set(key, identity), identity;
+    }, mapHook, consumeSetter, powerOnSetter, originalPowerOnProbeDescriptor = isNonArrayRecord(objectPrototype) ? Object.getOwnPropertyDescriptor(objectPrototype, "coal_power") : void 0;
     function restorePowerOnProbe() {
       powerOnSetter !== void 0 && isNonArrayRecord(objectPrototype) && Object.getOwnPropertyDescriptor(objectPrototype, "coal_power")?.set === powerOnSetter && (originalPowerOnProbeDescriptor === void 0 ? delete objectPrototype.coal_power : Object.defineProperty(
         objectPrototype,
@@ -3165,6 +3213,12 @@
           ]);
           if (!Array.isArray(rawKeys) || rawKeys.length !== retained.keys.length)
             return;
+          let currentSnapshot = readNativeTechRegistrySnapshot(
+            retained.registry,
+            rawKeys
+          );
+          if (currentSnapshot === void 0 || !sameNativeTechRegistrySnapshot(retained, currentSnapshot))
+            return;
           for (let index = 0; index < retained.keys.length; index++) {
             let key = retained.keys[index], definition = retained.definitions[index];
             if (key === void 0 || definition === void 0 || rawKeys[index] !== key || readMechanicsDataProperty(retained.registry, key) !== definition.action)
@@ -3176,8 +3230,8 @@
         }
     }
     let mechanics = Object.freeze({
-      captureTechDefinitionsDuring(draw) {
-        if (stopped || capturedTechAuthorityInvalid || capturedTechRegistry !== void 0 || typeof objectConstructor != "function" || typeof objectDefineProperty != "function")
+      captureTechDefinitionsDuring(draw, computedRequirementsContext) {
+        if (computedTechRequirementObservations = void 0, stopped || capturedTechAuthorityInvalid || capturedTechRegistry !== void 0 && computedRequirementsContext === void 0 || computedRequirementsContext !== void 0 && (!Number.isSafeInteger(computedRequirementsContext.rootGeneration) || computedRequirementsContext.rootGeneration < 0 || computedRequirementsContext.progressionEpoch.length === 0) || typeof objectConstructor != "function" || typeof objectDefineProperty != "function")
           return draw();
         let originalDescriptor;
         try {
@@ -3190,7 +3244,75 @@
         }
         if (originalDescriptor === void 0 || !("value" in originalDescriptor) || typeof originalDescriptor.value != "function" || originalDescriptor.configurable !== !0)
           return draw();
-        let originalObjectKeys = originalDescriptor.value, candidates = /* @__PURE__ */ new Map(), candidateChanged = !1, scopedObjectKeys = function(...args) {
+        let originalObjectKeys = originalDescriptor.value, candidates = /* @__PURE__ */ new Map(), requirementCalls = [], restores = [], instrumentedRegistry, instrumentationInvalid = !1, callbackIdentityChanged = !1, candidateChanged = !1, instrumentComputedRequirements = (snapshot2) => {
+          if (computedRequirementsContext === void 0 || instrumentedRegistry !== void 0 || capturedTechRegistry !== void 0 && snapshot2.registry !== capturedTechRegistry.registry)
+            return;
+          instrumentedRegistry = snapshot2;
+          let pending = [];
+          for (let definition of snapshot2.definitions) {
+            if (definition.reqsFunction === void 0) continue;
+            let descriptor;
+            try {
+              if (Object.getPrototypeOf(definition.action) !== Object.prototype) {
+                instrumentationInvalid = !0;
+                return;
+              }
+              descriptor = Object.getOwnPropertyDescriptor(
+                definition.action,
+                "reqs"
+              );
+            } catch {
+              instrumentationInvalid = !0;
+              return;
+            }
+            if (descriptor === void 0 || !("value" in descriptor) || descriptor.value !== definition.reqsFunction || descriptor.configurable !== !0 || descriptor.writable !== !0) {
+              instrumentationInvalid = !0;
+              return;
+            }
+            let wrapper = function(...args) {
+              try {
+                let result2 = Reflect.apply(
+                  definition.reqsFunction,
+                  this,
+                  args
+                );
+                return requirementCalls.push({
+                  definition,
+                  args: Object.freeze([...args]),
+                  result: result2,
+                  threw: !1
+                }), result2;
+              } catch (error) {
+                throw requirementCalls.push({
+                  definition,
+                  args: Object.freeze([...args]),
+                  threw: !0
+                }), error;
+              }
+            };
+            pending.push({ definition, descriptor, wrapper });
+          }
+          for (let { definition, descriptor, wrapper } of pending) {
+            if (!Reflect.defineProperty(definition.action, "reqs", {
+              ...descriptor,
+              value: wrapper
+            })) {
+              instrumentationInvalid = !0;
+              for (let restore2 of restores) restore2();
+              restores.length = 0;
+              return;
+            }
+            restores.push(() => Object.getOwnPropertyDescriptor(
+              definition.action,
+              "reqs"
+            )?.value !== wrapper ? (callbackIdentityChanged = !0, !1) : Reflect.defineProperty(
+              definition.action,
+              "reqs",
+              descriptor
+            ));
+          }
+          instrumentedRegistry = snapshot2;
+        }, scopedObjectKeys = function(...args) {
           let keys = Reflect.apply(originalObjectKeys, this, args), candidate;
           try {
             candidate = readNativeTechRegistrySnapshot(args[0], keys, !0);
@@ -3199,7 +3321,7 @@
           }
           if (candidate !== void 0) {
             let previous = candidates.get(candidate.registry);
-            previous === void 0 ? candidates.set(candidate.registry, candidate) : sameNativeTechRegistrySnapshot(previous, candidate) || (candidateChanged = !0);
+            previous === void 0 ? candidates.set(candidate.registry, candidate) : sameNativeTechRegistrySnapshot(previous, candidate) || (candidateChanged = !0), instrumentComputedRequirements(candidate);
           }
           return keys;
         };
@@ -3220,11 +3342,67 @@
         try {
           result = draw();
         } finally {
-          Reflect.apply(
+          for (let restore2 of restores)
+            try {
+              restore2() || (callbackIdentityChanged = !0);
+            } catch {
+              callbackIdentityChanged = !0;
+            }
+          if (Reflect.apply(
             objectDefineProperty,
             objectConstructor,
             [objectConstructor, "keys", originalDescriptor]
-          );
+          ), computedRequirementsContext !== void 0) {
+            computedTechRequirementCaptureGeneration += 1;
+            let snapshot2 = instrumentedRegistry ?? (capturedTechRegistry !== void 0 && candidates.size === 0 ? capturedTechRegistry : void 0);
+            computedTechRequirementObservations = snapshot2 === void 0 ? void 0 : Object.freeze(
+              snapshot2.definitions.flatMap((definition) => {
+                if (definition.reqsFunction === void 0) return [];
+                let calls = requirementCalls.filter(
+                  (call2) => call2.definition.action === definition.action
+                ), firstCall = calls[0], rawArgs = firstCall?.args[0], argsAreNative = firstCall !== void 0 && firstCall.args.length === 1 && isNativeActionArgsRecord(rawArgs), era = argsAreNative ? rawArgs.era : void 0, wiki = argsAreNative ? rawArgs.wiki : void 0, offset = argsAreNative ? rawArgs.offset : void 0, argumentsValid = argsAreNative && (era === void 0 || typeof era == "string") && typeof wiki == "boolean" && (offset === void 0 || typeof offset == "number"), normalizedArguments = argumentsValid ? Object.freeze({
+                  era,
+                  wiki,
+                  offset
+                }) : void 0, firstRequirements = firstCall === void 0 || firstCall.threw ? void 0 : validateCapturedNativeTechRequirements(
+                  firstCall.result
+                ), firstIsAbsent = firstCall !== void 0 && !firstCall.threw && !firstCall.result, repeatedAnswersAgree = calls.length <= 1 || calls.every((call2) => {
+                  if (call2.threw !== firstCall?.threw || call2.args.length !== firstCall?.args.length)
+                    return !1;
+                  if (call2.threw) return !0;
+                  if (!call2.result || !firstCall?.result)
+                    return Object.is(call2.result, firstCall?.result);
+                  let requirements = validateCapturedNativeTechRequirements(call2.result);
+                  return requirements !== void 0 && JSON.stringify(requirements) === JSON.stringify(firstRequirements) && JSON.stringify(call2.args) === JSON.stringify(firstCall?.args);
+                }), status2 = instrumentationInvalid || callbackIdentityChanged || candidateChanged || candidates.size > 1 ? "inconsistent" : calls.length === 0 ? "missing" : calls.some((call2) => call2.threw) ? "threw" : argumentsValid ? repeatedAnswersAgree ? firstIsAbsent ? "absent" : firstRequirements === void 0 ? "invalid" : "observed" : "inconsistent" : "invalid";
+                return [
+                  Object.freeze({
+                    actionId: definition.actionId,
+                    registryKey: definition.registryKey,
+                    actionIdentity: computedTechIdentity(
+                      computedTechActionIdentity,
+                      definition.action
+                    ),
+                    reqsIdentity: computedTechIdentity(
+                      computedTechReqsIdentity,
+                      definition.reqsFunction
+                    ),
+                    source: "native-actionReqs-during-drawTech",
+                    effectiveEra: typeof era == "string" ? era : void 0,
+                    arguments: normalizedArguments,
+                    rootGeneration: computedRequirementsContext.rootGeneration,
+                    progressionEpoch: computedRequirementsContext.progressionEpoch,
+                    captureGeneration: computedTechRequirementCaptureGeneration,
+                    requirements: status2 === "observed" ? firstRequirements : void 0,
+                    nativeCallCount: calls.length,
+                    status: status2,
+                    complete: status2 === "observed",
+                    validation: status2 === "observed" ? "valid" : status2 === "missing" ? "incomplete" : "invalid"
+                  })
+                ];
+              })
+            );
+          }
         }
         if (!candidateChanged && candidates.size === 1) {
           let candidate = candidates.values().next().value;
@@ -3246,6 +3424,29 @@
       },
       readTechDefinitions() {
         return readRetainedNativeTechRegistry()?.publicDefinitions;
+      },
+      readComputedTechRequirements() {
+        let observations = computedTechRequirementObservations, retained = readRetainedNativeTechRegistry();
+        if (observations === void 0 || retained === void 0) {
+          computedTechRequirementObservations = void 0;
+          return;
+        }
+        let definitionsByRegistryKey = new Map(
+          retained.definitions.map((definition) => [
+            definition.registryKey,
+            definition
+          ])
+        );
+        if (!observations.every((observation) => {
+          let definition = definitionsByRegistryKey.get(
+            observation.registryKey
+          );
+          return definition !== void 0 && definition.actionId === observation.actionId && computedTechActionIdentity.get(definition.action) === observation.actionIdentity && definition.reqsFunction !== void 0 && computedTechReqsIdentity.get(definition.reqsFunction) === observation.reqsIdentity;
+        })) {
+          computedTechRequirementObservations = void 0;
+          return;
+        }
+        return observations;
       },
       adjustPower(root, entryKey, expectedStateOn, targetStateOn, isCurrent = () => !0, preflightOnly = !1, expectedStructure) {
         let entries = structureEntries, entry = entries === void 0 ? void 0 : readMechanicsEntry(entryKey, entries.get(entryKey));
@@ -5012,14 +5213,15 @@
           return;
         }
         let includeGranted = options?.includeGranted === !0, drawn, result, observedBindingIds = [], collecting = !0, stopObserving = () => {
-        };
+        }, computedRequirementsContext = options?.computedRequirementsContext ?? dependencies.readComputedRequirementsContext?.();
         try {
           stopObserving = bindings((elementId) => {
             collecting && (tally.enabled ? (tally.count("research.binding.capture.events"), measure(
               "research.binding.capture",
               () => observedBindingIds.push(elementId)
             )) : observedBindingIds.push(elementId));
-          }), result = mechanics.captureTechDefinitionsDuring(
+          });
+          let captureNativeDraw = () => mechanics.captureTechDefinitionsDuring(
             () => discovery.discover(RESEARCH_TAB_PATH, {
               purpose: "research-catalog",
               // A current DOM cannot establish a fresh binding stream, even if Research is selected.
@@ -5060,7 +5262,12 @@
                   collecting = !1;
                 }
               }
-            })
+            }),
+            computedRequirementsContext
+          );
+          result = computedRequirementsContext === void 0 ? captureNativeDraw() : measure(
+            "research.computed-requirements.capture-and-draw",
+            captureNativeDraw
           );
         } catch (error) {
           reportUnavailable(`research offer discovery failed: ${String(error)}`);
@@ -5080,17 +5287,41 @@
           );
           return;
         }
-        let definitions = measure(
+        let baseDefinitions = measure(
           "research.catalog.registry-read",
           () => mechanics.readTechDefinitions()
         );
-        if (definitions !== void 0 && tally.count("research.registry.validations"), definitions === void 0) {
+        if (baseDefinitions !== void 0 && tally.count("research.registry.validations"), baseDefinitions === void 0) {
           reportUnavailable(
             "the native technology registry was not captured or is no longer valid"
           );
           return;
         }
-        let definitionsById = definitions === indexedTechDefinitions ? indexedTechDefinitionsById : void 0;
+        let computedRequirements = computedRequirementsContext === void 0 ? void 0 : measure(
+          "research.computed-requirements.read",
+          () => mechanics.readComputedTechRequirements()
+        );
+        for (let observation of computedRequirements ?? [])
+          tally.count("research.computed-requirements.observations"), tally.count(`research.computed-requirements.${observation.status}`), tally.count(
+            "research.computed-requirements.native-calls",
+            observation.nativeCallCount
+          );
+        let computedByRegistryKey = new Map(
+          (computedRequirements ?? []).map((observation) => [
+            observation.registryKey,
+            observation
+          ])
+        ), definitions = computedByRegistryKey.size === 0 ? baseDefinitions : Object.freeze(
+          baseDefinitions.map((definition) => {
+            let observation = computedByRegistryKey.get(
+              definition.registryKey
+            );
+            return observation === void 0 ? definition : Object.freeze({
+              ...definition,
+              computedRequirements: Object.freeze([observation])
+            });
+          })
+        ), definitionsById = definitions === indexedTechDefinitions ? indexedTechDefinitionsById : void 0;
         if (definitionsById === void 0) {
           let nextDefinitionsById = /* @__PURE__ */ new Map();
           for (let definition of definitions) {
@@ -9248,6 +9479,9 @@
     } = dependencies, onUnavailable = dependencies.onUnavailable, onActivity = dependencies.onActivity, sharedReadOfferedTechs = dependencies.readOfferedTechs, resources = createCapturedResourceSource(rootState), costs = createCapturedActionCostReader({
       rootState,
       controls: controls2,
+      ...dependencies.readComputedRequirementsContext === void 0 ? {} : {
+        readComputedRequirementsContext: dependencies.readComputedRequirementsContext
+      },
       ...onUnavailable === void 0 ? {} : {
         onUnavailable: (id, reason) => onUnavailable(`${id}: ${reason}`)
       }
@@ -11959,7 +12193,9 @@
       tally.count("research.observation.requests"), tally.count(`research.observation.requester.${requester}`);
       let includeGranted = dependencies.needGrantedTechs?.() === !0, currentEpoch = epoch.read();
       if (invalidateStaleCapturedResearchObservation(currentEpoch), offeredSampleEpoch === void 0 && (offeredSampleEpoch = currentEpoch), offeredSampleAttempted && !(includeGranted && !grantedSampleAttempted)) {
-        if (tally.count("research.observation.cache-hits"), heldOfferedSnapshot === void 0) {
+        if (tally.count("research.observation.cache-hits"), dependencies.readComputedResearchRequirementsEnabled?.() === !0 && lastTechDefinitions?.some(
+          (definition) => definition.computedRequirements !== void 0
+        ) && tally.count("research.computed-requirements.reused"), heldOfferedSnapshot === void 0) {
           lastOffered = void 0, lastGranted = void 0;
           return;
         }
@@ -11968,9 +12204,15 @@
       tally.count("research.observation.samples"), tally.count(`research.observation.sample-requester.${requester}`), tally.count(
         includeGranted ? "research.observation.sample.with-granted" : "research.observation.sample.offers-only"
       );
-      let held = scopes.read(
+      let computedRequirementsContext = dependencies.readComputedResearchRequirementsEnabled?.() === !0 ? Object.freeze({
+        rootGeneration: epoch.readRootGeneration(),
+        progressionEpoch: currentEpoch
+      }) : void 0, held = scopes.read(
         includeGranted ? RESEARCH_GRANTED_SCOPE : RESEARCH_SCOPE,
-        () => offered.read(includeGranted ? { includeGranted } : void 0),
+        () => offered.read({
+          ...includeGranted ? { includeGranted } : {},
+          ...computedRequirementsContext === void 0 ? {} : { computedRequirementsContext }
+        }),
         (previous, next) => sameOfferPrices(previous.offered, next.offered)
       );
       if (offeredSampleAttempted = !0, offeredSampleEpoch = currentEpoch, includeGranted && (grantedSampleAttempted = !0), held !== void 0) {
@@ -11985,6 +12227,12 @@
       bindings,
       controls: controls2,
       mechanics,
+      ...dependencies.readComputedResearchRequirementsEnabled === void 0 ? {} : {
+        readComputedRequirementsContext: () => dependencies.readComputedResearchRequirementsEnabled?.() === !0 ? Object.freeze({
+          rootGeneration: epoch.readRootGeneration(),
+          progressionEpoch: epoch.read()
+        }) : void 0
+      },
       diagnostics,
       ...onUnavailable === void 0 ? {} : { onUnavailable }
     }), projectCatalog = createCapturedProjectCatalog({
@@ -12268,7 +12516,7 @@
       readOfferedTechs: readCurrentOfferedTechs,
       sampleOfferedTechs,
       readGrantedTechs: () => lastGranted,
-      readResearchActionDefinitions: () => lastTechDefinitions,
+      readResearchActionDefinitions: () => mechanics.readTechDefinitions() === void 0 ? void 0 : lastTechDefinitions,
       readProjects: readProjects2,
       readEstablishedProjects,
       resetProjectSample,
@@ -18852,6 +19100,15 @@
   }
 
   // src/adapters/evolve/progression/research/captured-tech-applicability.ts
+  function readFreshCapturedComputedTechRequirements(definition, context) {
+    let observation = definition.computedRequirements?.find(
+      (candidate) => candidate.status === "observed" && candidate.complete && candidate.validation === "valid" && candidate.requirements !== void 0 && candidate.rootGeneration === context.rootGeneration && candidate.progressionEpoch === context.progressionEpoch
+    );
+    return observation?.requirements === void 0 ? void 0 : Object.freeze({
+      kind: "declared",
+      requirements: observation.requirements
+    });
+  }
   function capturedTruth(value) {
     if (value == null) return !1;
     if (typeof value == "boolean") return value;

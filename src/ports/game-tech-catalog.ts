@@ -13,7 +13,10 @@
  * when a caller asks, and callers that do not ask must not treat its absence as "nothing granted".
  */
 
-import type { CapturedTechDefinition } from "./captured-game-mechanics.ts";
+import type {
+  CapturedComputedTechRequirementsContext,
+  CapturedTechDefinition,
+} from "./captured-game-mechanics.ts";
 
 export interface OfferedTech {
   /** The id the game renders the action under, e.g. `tech-mining`. */
@@ -42,6 +45,8 @@ export interface TechCatalogReadOptions {
    * false leaves `granted` absent rather than empty.
    */
   readonly includeGranted?: boolean;
+  /** Test-experiment-only opt-in to retain callbacks seen during this same native draw. */
+  readonly computedRequirementsContext?: CapturedComputedTechRequirementsContext;
 }
 
 export interface TechCatalogSnapshot {

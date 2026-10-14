@@ -24,6 +24,7 @@ import type { GameMountSuppression } from "../ports/game-mount-suppression.ts";
 import type { GamePanelWorkspace } from "../ports/game-panel-workspace.ts";
 import type { GameRootStateSource } from "../ports/game-root-state.ts";
 import type { CapturedGameMechanics } from "../ports/captured-game-mechanics.ts";
+import type { CapturedComputedTechRequirementsContext } from "../ports/captured-game-mechanics.ts";
 import type { VueBindingObserver } from "../adapters/evolve/vue-capture.ts";
 import type { OfferedTech } from "../ports/game-tech-catalog.ts";
 import type { TickDiagnostics } from "../ports/tick.ts";
@@ -36,7 +37,9 @@ export interface CapturedResearchControlDependencies {
   readonly rootState: GameRootStateSource;
   readonly mechanics: Pick<
     CapturedGameMechanics,
-    "captureTechDefinitionsDuring" | "readTechDefinitions"
+    | "captureTechDefinitionsDuring"
+    | "readTechDefinitions"
+    | "readComputedTechRequirements"
   >;
   readonly controls: GameControlRegistry;
   readonly bindings: VueBindingObserver;
@@ -61,6 +64,8 @@ export interface CapturedResearchControlDependencies {
   /** Reads only a test-sandbox intervention installed behind the compile-time test surface. */
   readonly readTestOnlyIntervention?: () =>
     Readonly<{ deferActionId: string; targetActionId: string }> | undefined;
+  readonly readComputedRequirementsContext?: () =>
+    CapturedComputedTechRequirementsContext | undefined;
 }
 
 export interface CapturedResearchControl {
@@ -106,6 +111,12 @@ export function createCapturedResearchControl(
   const costs = createCapturedActionCostReader({
     rootState,
     controls,
+    ...(dependencies.readComputedRequirementsContext === undefined
+      ? {}
+      : {
+          readComputedRequirementsContext:
+            dependencies.readComputedRequirementsContext,
+        }),
     ...(onUnavailable === undefined
       ? {}
       : {

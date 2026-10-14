@@ -1,8 +1,33 @@
-import type { CapturedTechDefinition } from "../../../../ports/captured-game-mechanics.ts";
+import type {
+  CapturedComputedTechRequirementsContext,
+  CapturedTechDefinition,
+} from "../../../../ports/captured-game-mechanics.ts";
 import type { NativeResearchApplicability } from "../../../../domain/progression/research-prerequisite-planning.ts";
 import { isNonArrayRecord, readProperty } from "../../../validation.ts";
 
 type CapturedTechEligibility = CapturedTechDefinition["eligibility"];
+
+/** A computed prerequisite can participate only in the root and progression sample that observed it. */
+export function readFreshCapturedComputedTechRequirements(
+  definition: CapturedTechDefinition,
+  context: CapturedComputedTechRequirementsContext,
+): CapturedTechDefinition["prerequisites"] | undefined {
+  const observation = definition.computedRequirements?.find(
+    (candidate) =>
+      candidate.status === "observed" &&
+      candidate.complete &&
+      candidate.validation === "valid" &&
+      candidate.requirements !== undefined &&
+      candidate.rootGeneration === context.rootGeneration &&
+      candidate.progressionEpoch === context.progressionEpoch,
+  );
+  return observation?.requirements === undefined
+    ? undefined
+    : Object.freeze({
+        kind: "declared",
+        requirements: observation.requirements,
+      });
+}
 
 function capturedTruth(value: unknown): boolean | undefined {
   if (value === undefined || value === null) return false;

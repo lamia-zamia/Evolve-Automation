@@ -3,6 +3,7 @@ import { runInNewContext } from "node:vm";
 
 import { installPageCapture } from "../../../src/adapters/evolve/page-capture.ts";
 import { installCapturedGameMechanics } from "../../../src/adapters/evolve/captured-game-mechanics.ts";
+import { readFreshCapturedComputedTechRequirements } from "../../../src/adapters/evolve/progression/research/captured-tech-applicability.ts";
 
 class FakeWorker {
   constructor(url) {
@@ -2225,6 +2226,280 @@ function validTechRegistry() {
     { kind: "trait", values: ["psychic"] },
   ]);
   assert.equal(reqsCalls, 0);
+  fixture.installed.uninstall();
+}
+
+{
+  let callbackThis;
+  let callbackArguments;
+  let nativeDraws = 0;
+  const dynamicReqs = function (args) {
+    callbackThis = this;
+    callbackArguments = args;
+    return args.era !== "glacial"
+      ? { high_tech: 8, supercollider: 1, space: 3, elerium: 1 }
+      : { high_tech: 8, supercollider: 1, surface_uranium: 1 };
+  };
+  const registry = {
+    lasers: {
+      id: "tech-lasers",
+      grant: ["high_tech", 9],
+      era: ["deep_space", "glacial"],
+      era_a() {
+        return "deep_space";
+      },
+      reqs: dynamicReqs,
+    },
+    static: {
+      id: "tech-static",
+      grant: ["high_tech", 8],
+      reqs: { high_tech: 7 },
+    },
+  };
+  const fixture = techRegistryPage(registry);
+  const originalDescriptor = Object.getOwnPropertyDescriptor(
+    registry.lasers,
+    "reqs",
+  );
+  const rootBefore = JSON.stringify(fixture.root);
+  const nativeArgs = { era: "deep_space", wiki: false, offset: undefined };
+  const returned = fixture.installed.mechanics.captureTechDefinitionsDuring(
+    () => {
+      nativeDraws += 1;
+      fixture.page.Object.keys(registry);
+      return registry.lasers.reqs(nativeArgs);
+    },
+    { rootGeneration: 3, progressionEpoch: "run:1" },
+  );
+  const observed = fixture.installed.mechanics
+    .readComputedTechRequirements()
+    ?.find((entry) => entry.actionId === "tech-lasers");
+  assert.equal(nativeDraws, 1, "observation does not issue another draw");
+  assert.equal(callbackThis, registry.lasers, "native receiver is preserved");
+  assert.equal(
+    callbackArguments,
+    nativeArgs,
+    "native argument object is preserved",
+  );
+  assert.deepEqual(returned, {
+    high_tech: 8,
+    supercollider: 1,
+    space: 3,
+    elerium: 1,
+  });
+  assert.equal(observed?.status, "observed");
+  assert.equal(observed?.complete, true);
+  assert.equal(observed?.source, "native-actionReqs-during-drawTech");
+  assert.equal(observed?.effectiveEra, "deep_space");
+  assert.equal(observed?.rootGeneration, 3);
+  assert.equal(observed?.progressionEpoch, "run:1");
+  assert.deepEqual(
+    observed?.requirements?.map(({ technologyId, requiredLevel }) => [
+      technologyId,
+      requiredLevel,
+    ]),
+    [
+      ["high_tech", 8],
+      ["supercollider", 1],
+      ["space", 3],
+      ["elerium", 1],
+    ],
+  );
+  assert.deepEqual(
+    Object.getOwnPropertyDescriptor(registry.lasers, "reqs"),
+    originalDescriptor,
+    "the native callback descriptor and identity are restored after the draw",
+  );
+  assert.equal(JSON.stringify(fixture.root), rootBefore);
+  const baseDefinition = fixture.installed.mechanics.readTechDefinitions()?.[0];
+  const definition =
+    baseDefinition === undefined || observed === undefined
+      ? undefined
+      : { ...baseDefinition, computedRequirements: [observed] };
+  assert.deepEqual(
+    readFreshCapturedComputedTechRequirements(definition, {
+      rootGeneration: 3,
+      progressionEpoch: "run:1",
+    }),
+    { kind: "declared", requirements: observed?.requirements },
+  );
+  assert.equal(
+    readFreshCapturedComputedTechRequirements(definition, {
+      rootGeneration: 4,
+      progressionEpoch: "run:1",
+    }),
+    undefined,
+    "an observation from a replaced root cannot establish a prerequisite",
+  );
+  assert.equal(
+    readFreshCapturedComputedTechRequirements(definition, {
+      rootGeneration: 3,
+      progressionEpoch: "run:2",
+    }),
+    undefined,
+    "an observation from another progression epoch cannot establish a prerequisite",
+  );
+  assert.deepEqual(
+    definition?.prerequisites,
+    {
+      kind: "conditional",
+      reason: "native reqs is a function and was not evaluated",
+    },
+    "computed evidence does not rewrite the retained static declaration",
+  );
+  fixture.installed.uninstall();
+}
+
+const nativeCallbackFailure = new Error("native callback failure");
+for (const [callback, expectedStatus] of [
+  [() => ({ high_tech: 0 }), "invalid"],
+  [
+    () => ({
+      get high_tech() {
+        return 8;
+      },
+    }),
+    "invalid",
+  ],
+  [
+    () =>
+      Object.defineProperty({ high_tech: 8 }, "hidden", {
+        configurable: true,
+        value: 1,
+      }),
+    "invalid",
+  ],
+  [() => ({ "High Tech": 8 }), "invalid"],
+  [
+    () => {
+      throw nativeCallbackFailure;
+    },
+    "threw",
+  ],
+]) {
+  const registry = {
+    sample: {
+      id: "tech-sample",
+      grant: ["high_tech", 9],
+      reqs: callback,
+    },
+  };
+  const fixture = techRegistryPage(registry);
+  const originalDescriptor = Object.getOwnPropertyDescriptor(
+    registry.sample,
+    "reqs",
+  );
+  const draw = () => {
+    fixture.page.Object.keys(registry);
+    return registry.sample.reqs({
+      era: "deep_space",
+      wiki: false,
+      offset: undefined,
+    });
+  };
+  if (expectedStatus === "threw")
+    assert.throws(
+      () =>
+        fixture.installed.mechanics.captureTechDefinitionsDuring(draw, {
+          rootGeneration: 1,
+          progressionEpoch: "run:1",
+        }),
+      (error) => error === nativeCallbackFailure,
+      "the native exception object is propagated unchanged",
+    );
+  else
+    fixture.installed.mechanics.captureTechDefinitionsDuring(draw, {
+      rootGeneration: 1,
+      progressionEpoch: "run:1",
+    });
+  if (expectedStatus === "threw")
+    assert.equal(
+      fixture.installed.mechanics.readComputedTechRequirements(),
+      undefined,
+      "a throwing draw cannot publish partial computed-requirement evidence",
+    );
+  else
+    assert.equal(
+      fixture.installed.mechanics.readComputedTechRequirements()?.[0]?.status,
+      expectedStatus,
+    );
+  assert.deepEqual(
+    Object.getOwnPropertyDescriptor(registry.sample, "reqs"),
+    originalDescriptor,
+    "native callback descriptors are restored after normal and throwing calls",
+  );
+  fixture.installed.uninstall();
+}
+
+{
+  let answer = 7;
+  const registry = {
+    sample: {
+      id: "tech-sample",
+      grant: ["high_tech", 9],
+      reqs() {
+        return { high_tech: answer };
+      },
+    },
+  };
+  const fixture = techRegistryPage(registry);
+  fixture.installed.mechanics.captureTechDefinitionsDuring(
+    () => {
+      fixture.page.Object.keys(registry);
+      registry.sample.reqs({
+        era: "deep_space",
+        wiki: false,
+        offset: undefined,
+      });
+      answer = 8;
+      registry.sample.reqs({
+        era: "deep_space",
+        wiki: false,
+        offset: undefined,
+      });
+    },
+    { rootGeneration: 1, progressionEpoch: "run:1" },
+  );
+  const observation =
+    fixture.installed.mechanics.readComputedTechRequirements()?.[0];
+  assert.equal(observation?.status, "inconsistent");
+  assert.equal(observation?.complete, false);
+  assert.equal(observation?.requirements, undefined);
+  fixture.installed.uninstall();
+}
+
+{
+  const registry = {
+    sample: {
+      id: "tech-sample",
+      grant: ["high_tech", 9],
+      reqs() {
+        return { high_tech: 8 };
+      },
+    },
+  };
+  const fixture = techRegistryPage(registry);
+  fixture.installed.mechanics.captureTechDefinitionsDuring(
+    () => fixture.page.Object.keys(registry),
+    { rootGeneration: 1, progressionEpoch: "run:1" },
+  );
+  assert.equal(
+    fixture.installed.mechanics.readComputedTechRequirements()?.[0]?.status,
+    "missing",
+    "an uncalled native requirement stays missing instead of becoming empty",
+  );
+  const prior = registry.sample.reqs;
+  registry.sample.reqs = () => ({ high_tech: 9 });
+  assert.equal(
+    fixture.installed.mechanics.readTechDefinitions(),
+    undefined,
+    "callback identity changes invalidate retained native authority",
+  );
+  assert.equal(
+    fixture.installed.mechanics.readComputedTechRequirements(),
+    undefined,
+  );
+  registry.sample.reqs = prior;
   fixture.installed.uninstall();
 }
 
