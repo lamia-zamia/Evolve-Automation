@@ -221,7 +221,7 @@ try {
     assert.equal(
       event.manaStockBefore - event.manaStockAfter,
       event.displayedManaPrice,
-      `${event.actionId} source-proved debit disagrees with stock delta`,
+      `${event.actionId} displayed price disagrees with observed stock delta`,
     );
   }
 
@@ -257,11 +257,12 @@ try {
       manaStockAfter: event.manaStockAfter,
       observedNetManaChange:
         stockDecrease === undefined ? undefined : -stockDecrease,
-      actualNativeDebit: stableMagicManaAction
+      sourceInferredDebit: stableMagicManaAction
         ? event.displayedManaPrice
         : "unavailable; native internal cost calls are not exposed",
+      liveCallbackIdentity: "unavailable at the userscript adapter boundary",
       debitEvidence: stableMagicManaAction
-        ? "source-inferred exact debit for pinned stable callback class; pre/post stock agrees"
+        ? "source-reviewed action ID; displayed price equals observed net stock decrease; live callback identity is unverified"
         : "pre/post stock only; debit attribution incomplete",
       internalCostEvaluations: event.internalCostEvaluations,
       grantCompleted: event.expectedGrantOccurred,
@@ -271,7 +272,7 @@ try {
         event.couldHaveConsumedStockProtectedForAnotherObligation,
       category,
       evidenceCompleteness: stableMagicManaAction
-        ? "source-reviewed callback class plus pre/post stock and grant"
+        ? "source-reviewed action ID plus matching pre/post stock and grant; live callback identity unavailable"
         : "pre/post stock and grant observed; internal debit attribution incomplete",
     };
   });
