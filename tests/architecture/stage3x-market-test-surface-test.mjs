@@ -23,6 +23,8 @@ const markers = [
   "capturedTradeRouteControlForTest",
   "resolveTradeRouteOperationsForTest",
   "recordTradeRouteTraceForTest",
+  "createCapturedTradeRoutesTestControl",
+  "normalizeCapturedTradeRouteOverride",
 ];
 const production = await bundle(false);
 for (const marker of markers)

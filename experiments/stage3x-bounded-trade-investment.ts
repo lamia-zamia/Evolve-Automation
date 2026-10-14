@@ -6,7 +6,8 @@ export interface BoundedTradeInvestmentInput {
     holding: number;
     capacity: number;
     productionLowerBoundPerPeriod: number | undefined;
-    existingImportQuantity: number;
+    existingImportQuantityPerPeriod: number;
+    acquisitionHorizonPeriods: number | undefined;
     importPriceUpperBoundPerPeriod: number | undefined;
     importQuantityLowerBoundPerPeriod: number | undefined;
     routeAssignments: number;
@@ -181,7 +182,48 @@ export function evaluateBoundedTradeInvestment(
       { shortfall, missingEvidence: ["current native route capacity"] },
     );
 
-  if (input.resource.existingImportQuantity >= shortfall)
+  if (
+    !Number.isFinite(input.resource.existingImportQuantityPerPeriod) ||
+    input.resource.existingImportQuantityPerPeriod < 0
+  )
+    return investmentDecision(
+      "unknown-economics",
+      "Existing import rate must be finite and non-negative",
+      {
+        shortfall,
+        missingEvidence: ["a finite, non-negative existing import rate"],
+      },
+    );
+
+  let existingImportQuantity = 0;
+  if (input.resource.existingImportQuantityPerPeriod > 0) {
+    if (
+      input.resource.acquisitionHorizonPeriods === undefined ||
+      !Number.isFinite(input.resource.acquisitionHorizonPeriods) ||
+      input.resource.acquisitionHorizonPeriods <= 0
+    )
+      return investmentDecision(
+        "unknown-economics",
+        "Existing imports need a finite acquisition horizon",
+        {
+          shortfall,
+          missingEvidence: ["existing import acquisition horizon"],
+        },
+      );
+    existingImportQuantity =
+      input.resource.existingImportQuantityPerPeriod *
+      input.resource.acquisitionHorizonPeriods;
+    if (!Number.isFinite(existingImportQuantity))
+      return investmentDecision(
+        "unknown-economics",
+        "Cumulative existing imports are invalid for the acquisition horizon",
+        {
+          shortfall,
+          missingEvidence: ["finite cumulative existing import quantity"],
+        },
+      );
+  }
+  if (existingImportQuantity >= shortfall)
     return investmentDecision(
       "existing-import-sufficient",
       "Existing imports already cover the current shortfall",
@@ -201,11 +243,6 @@ export function evaluateBoundedTradeInvestment(
     );
 
   const unknown: string[] = [];
-  if (
-    !Number.isFinite(input.resource.existingImportQuantity) ||
-    input.resource.existingImportQuantity < 0
-  )
-    unknown.push("a non-negative existing import commitment");
   if (input.resource.productionLowerBoundPerPeriod === undefined)
     unknown.push("a conservative production lower bound");
   if (input.resource.importPriceUpperBoundPerPeriod === undefined)
@@ -275,7 +312,10 @@ export function evaluateBoundedTradeInvestment(
     );
 
   const acquisitionPeriods = Math.ceil(
-    shortfall / (importQuantity + production),
+    shortfall /
+      (importQuantity +
+        production +
+        input.resource.existingImportQuantityPerPeriod),
   );
   const immediateNativeAffordability =
     availableCash >= importPrice ? "affordable" : "insufficient";
@@ -283,7 +323,11 @@ export function evaluateBoundedTradeInvestment(
     importPrice + input.money.outflowPerPeriod! + obligations;
   const totalCommitment = acquisitionPeriods * spendPerPeriod;
   const maximumPeriods = Math.floor(availableCash / spendPerPeriod);
-  const expectedAcquisition = maximumPeriods * (importQuantity + production);
+  const expectedAcquisition =
+    maximumPeriods *
+    (importQuantity +
+      production +
+      input.resource.existingImportQuantityPerPeriod);
   if (immediateNativeAffordability === "insufficient")
     return investmentDecision(
       "insufficient-cash",

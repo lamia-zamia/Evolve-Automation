@@ -37702,33 +37702,6 @@
   }
 
   // src/adapters/evolve/economy/market/captured-trade-routes.ts
-  function normalizeCapturedTradeRouteOverride(value, input, context) {
-    if (!Array.isArray(value)) return;
-    let operations = [], addedByResource = /* @__PURE__ */ new Map(), totalAdded = 0;
-    for (let entry of value) {
-      if (!isRecord(entry) || typeof entry.resourceId != "string")
-        return;
-      let resource = input.priorityList.find(
-        ({ id }) => id === entry.resourceId
-      );
-      if (resource === void 0) return;
-      if (entry.kind === "zero") {
-        operations.push({ kind: "zero", resourceId: resource.id });
-        continue;
-      }
-      if (entry.kind !== "add" && entry.kind !== "remove" || typeof entry.count != "number" || !Number.isSafeInteger(entry.count) || entry.count < 1 || entry.kind === "add" && (!context.ownerEnabled || !resource.autoTradeBuyEnabled || !resource.isDemanded || resource.usefulRatio >= 1 || resource.tradeRoutes < 0 || resource.tradeRoutes + (addedByResource.get(resource.id) ?? 0) + entry.count > input.importRouteCap || context.routeCount + totalAdded + entry.count > context.maximumRoutes))
-        return;
-      entry.kind === "add" && (totalAdded += entry.count, addedByResource.set(
-        resource.id,
-        (addedByResource.get(resource.id) ?? 0) + entry.count
-      )), operations.push({
-        kind: entry.kind,
-        resourceId: resource.id,
-        count: entry.count
-      });
-    }
-    return Object.freeze(operations.map((operation2) => Object.freeze(operation2)));
-  }
   var REGIONAL_PRIORITY = Object.freeze([
     "Food",
     "Oil",
@@ -37826,24 +37799,7 @@
           amount === void 0 ? `amount-missing:${entry.id}` : maximumResource === void 0 ? `capacity-missing:${entry.id}` : diff === void 0 ? `rate-missing:${entry.id}` : required === void 0 || required <= 0 ? `demand-storage-missing:${entry.id}` : quote === void 0 ? `native-quote-unavailable:${entry.id}` : `invalid-resource-observation:${entry.id}`
         );
       let storageRatio2 = maximumResource > 0 ? amount / maximumResource : 1, usefulRatio = maximumResource > 0 ? amount / Math.min(maximumResource, required) : 1, buyEnabled = settings[`res_trade_buy_${entry.id}`] === !0, sellEnabled = settings[`res_trade_sell_${entry.id}`] === !0;
-      observations.push(
-        Object.freeze({
-          resourceId: entry.id,
-          holding: amount,
-          capacity: maximumResource,
-          netRatePerPeriod: diff,
-          demandedQuantity: required,
-          currentRoutes: routeCounts.get(entry.id) ?? 0,
-          maximumRoutes: currency >= 6 ? 1e6 : currency >= 4 ? 100 : 25,
-          importPricePerPeriod: quote.buyPrice,
-          importQuantityPerPeriod: quote.buyVolume,
-          importsEnabled: buyEnabled,
-          exportsEnabled: sellEnabled,
-          demanded: demand.isDemanded(entry.id),
-          controlElementId: control.elementId,
-          controlGeneration: control.generation
-        })
-      ), !buyEnabled && !sellEnabled && (unmanaged += routeCounts.get(entry.id) ?? 0), views.push(
+      !buyEnabled && !sellEnabled && (unmanaged += routeCounts.get(entry.id) ?? 0), views.push(
         Object.freeze({
           id: entry.id,
           tradeRoutes: routeCounts.get(entry.id) ?? 0,
@@ -38072,28 +38028,12 @@
         }
         let result = planTradeRoutes(captured.input), controls2 = [...captured.session.controls.values()].map(
           ({ elementId, generation }) => Object.freeze({ elementId, generation })
-        ), testContext = Object.freeze({
-          rootCurrent: dependencies.rootState.readRoot() === captured.session.root,
-          boardCurrent: dependencies.board.isCurrent(board),
-          controls: Object.freeze(controls2),
-          routeCount: captured.session.marketRouteCount,
-          maximumRoutes: captured.input.maxTradeRoutes,
-          ownerEnabled: testSurface !== void 0 && settingsRecord3(dependencies.readSettings()).autoMarket === !0,
-          resources: captured.observations
-        }), testOperations = testContext.ownerEnabled && testContext.rootCurrent && testContext.boardCurrent ? testSurface?.resolveOperations?.(
-          captured.input,
-          result,
-          testContext
-        ) : void 0, normalizedTestOperations = testSurface === void 0 ? void 0 : normalizeCapturedTradeRouteOverride(
-          testOperations,
-          captured.input,
-          testContext
-        ), operations = normalizedTestOperations ?? result.operations;
+        ), operations = result.operations;
         if (testSurface?.onTrace?.({
           kind: "plan",
           rootCurrent: dependencies.rootState.readRoot() === captured.session.root,
           boardCurrent: dependencies.board.isCurrent(board),
-          desiredOperations: normalizedTestOperations ?? result.operations,
+          desiredOperations: operations,
           baselineOperations: result.operations,
           routeCount: captured.session.marketRouteCount,
           maximumRoutes: captured.input.maxTradeRoutes,

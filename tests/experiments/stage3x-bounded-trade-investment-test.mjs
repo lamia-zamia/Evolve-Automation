@@ -8,7 +8,8 @@ const base = {
     holding: 0,
     capacity: 500,
     productionLowerBoundPerPeriod: 0,
-    existingImportQuantity: 0,
+    existingImportQuantityPerPeriod: 0,
+    acquisitionHorizonPeriods: 10,
     importPriceUpperBoundPerPeriod: 2,
     importQuantityLowerBoundPerPeriod: 10,
     routeAssignments: 0,
@@ -84,9 +85,80 @@ assert.equal(
 assert.equal(
   evaluateBoundedTradeInvestment({
     ...base,
-    resource: { ...base.resource, existingImportQuantity: 100 },
+    resource: {
+      ...base.resource,
+      existingImportQuantityPerPeriod: 10,
+      acquisitionHorizonPeriods: 10,
+    },
   }).status,
   "existing-import-sufficient",
+);
+assert.equal(
+  evaluateBoundedTradeInvestment({
+    ...base,
+    resource: {
+      ...base.resource,
+      existingImportQuantityPerPeriod: 5,
+      acquisitionHorizonPeriods: 10,
+    },
+  }).requiredDurationPeriods,
+  7,
+);
+assert.equal(
+  evaluateBoundedTradeInvestment({
+    ...base,
+    resource: {
+      ...base.resource,
+      existingImportQuantityPerPeriod: Number.MAX_VALUE,
+      acquisitionHorizonPeriods: 10,
+    },
+  }).status,
+  "unknown-economics",
+  "overflowing cumulative imports are not treated as sufficient",
+);
+assert.equal(
+  evaluateBoundedTradeInvestment({
+    ...base,
+    resource: { ...base.resource, existingImportQuantityPerPeriod: 5 },
+  }).status,
+  "candidate-investment",
+  "the active import rate shortens the projected acquisition duration",
+);
+assert.equal(
+  evaluateBoundedTradeInvestment({
+    ...base,
+    resource: {
+      ...base.resource,
+      existingImportQuantityPerPeriod: 5,
+      acquisitionHorizonPeriods: 10,
+    },
+  }).status,
+  "candidate-investment",
+  "a per-period route rate below the stock shortfall is not cumulative coverage",
+);
+assert.equal(
+  evaluateBoundedTradeInvestment({
+    ...base,
+    resource: {
+      ...base.resource,
+      existingImportQuantityPerPeriod: 5,
+      acquisitionHorizonPeriods: undefined,
+    },
+  }).status,
+  "unknown-economics",
+  "existing route flow cannot be compared to a stock target without a horizon",
+);
+assert.equal(
+  evaluateBoundedTradeInvestment({
+    ...base,
+    resource: {
+      ...base.resource,
+      existingImportQuantityPerPeriod: 0,
+      acquisitionHorizonPeriods: undefined,
+    },
+  }).status,
+  "candidate-investment",
+  "zero existing imports do not need an acquisition horizon",
 );
 assert.equal(
   evaluateBoundedTradeInvestment({

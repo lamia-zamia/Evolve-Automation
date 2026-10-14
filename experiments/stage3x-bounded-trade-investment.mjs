@@ -212,26 +212,23 @@ function installScenarioHooks(scenarioId) {
       hooks.marketInvestmentEvaluations += 1;
       const candidates = context.resources.filter(
         (resource) =>
-          resource.demanded && resource.holding < resource.demandedQuantity,
+          resource.demanded &&
+          resource.holding < resource.storageRequiredQuantity,
       );
       const selected = candidates.length === 1 ? candidates[0] : undefined;
       const decision = window.Stage3XPolicy.evaluateBoundedTradeInvestment({
-        goal:
-          selected === undefined
-            ? undefined
-            : {
-                resourceId: selected.resourceId,
-                targetQuantity: selected.demandedQuantity,
-              },
+        // Storage thresholds and Market demand are not selected progression goals.
+        goal: undefined,
         resource: {
           id: selected?.resourceId ?? "",
           holding: selected?.holding ?? 0,
           capacity: selected?.capacity ?? 0,
           productionLowerBoundPerPeriod: undefined,
-          existingImportQuantity:
+          existingImportQuantityPerPeriod:
             selected === undefined || selected.currentRoutes <= 0
               ? 0
               : selected.currentRoutes * selected.importQuantityPerPeriod,
+          acquisitionHorizonPeriods: undefined,
           importPriceUpperBoundPerPeriod: undefined,
           importQuantityLowerBoundPerPeriod: undefined,
           routeAssignments: selected?.currentRoutes ?? 0,
@@ -403,7 +400,7 @@ function installScenarioHooks(scenarioId) {
         currentRoutes: titanium.currentRoutes,
         holding: titanium.holding,
         capacity: titanium.capacity,
-        demandedQuantity: titanium.demandedQuantity,
+        storageRequiredQuantity: titanium.storageRequiredQuantity,
         demanded: titanium.demanded,
         importEnabled: titanium.importsEnabled,
         importPrice: titanium.importPricePerPeriod,

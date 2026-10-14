@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 
-import { createCapturedTradeRoutes } from "../../../src/adapters/evolve/economy/market/captured-trade-routes.ts";
+globalThis.__EA_TEST_SURFACE_ENABLED__ = true;
+const { createCapturedTradeRoutes, createCapturedTradeRoutesTestControl } =
+  await import("../../../src/adapters/evolve/economy/market/captured-trade-routes.ts");
+delete globalThis.__EA_TEST_SURFACE_ENABLED__;
 import {
   readCapturedTradeQuote,
   readCapturedRegionalVolume,
@@ -635,5 +638,112 @@ routes.adjust();
 assert.equal(routeMutations, 2, "a no-op middle route step stops the batch");
 assert.equal(root.resource.Iron.trade, -1);
 assert.equal(root.city.market.trade, 1);
+
+const swapRoot = {
+  race: { governor: { g: { bg: "none" } } },
+  tech: { trade: 1, currency: 4 },
+  city: { market: { mtrade: 3, trade: 3 } },
+  resource: {
+    Money: { amount: 1000, max: 10000, diff: 100 },
+    Source: { display: true, trade: 1, amount: 0, max: 100, diff: 0 },
+    Target: { display: true, trade: 0, amount: 0, max: 100, diff: 0 },
+    Locked: { display: true, trade: 1, amount: 0, max: 100, diff: 0 },
+    Surplus: { display: true, trade: -1, amount: 1000, max: 1000, diff: 0 },
+  },
+};
+const swapSettings = {
+  autoMarket: true,
+  res_trade_buy_Source: true,
+  res_trade_sell_Source: false,
+  res_trade_buy_Target: true,
+  res_trade_sell_Target: false,
+  res_trade_buy_Locked: false,
+  res_trade_sell_Locked: false,
+  res_trade_buy_Surplus: false,
+  res_trade_sell_Surplus: true,
+};
+const swapControls = new Map(
+  ["Source", "Target", "Locked", "Surplus"].map((id) => [
+    `market-${id}`,
+    {
+      elementId: `market-${id}`,
+      generation: 1,
+      methods: ["autoBuy", "autoSell", "zero", "aSell", "aBuy"],
+    },
+  ]),
+);
+const swapRegistry = {
+  resolve: (id) => swapControls.get(id),
+  capturedElementIds: () => [...swapControls.keys()],
+  invoke(handle, method, args = []) {
+    const id = args[0];
+    if (method === "aSell") {
+      rounded = [observation(10, 1), observation(1, 3)];
+      return { ok: true, value: "sell quote" };
+    }
+    if (method === "aBuy") {
+      rounded = [observation(1, 3), observation(10, 1), observation(10, 2)];
+      return { ok: true, value: "buy quote" };
+    }
+    if (method === "autoSell" && swapRoot.resource[id].trade > 0) {
+      swapRoot.resource[id].trade -= 1;
+      swapRoot.city.market.trade -= 1;
+    } else if (method === "autoBuy" && swapRoot.resource[id].trade < 0) {
+      swapRoot.resource[id].trade += 1;
+      swapRoot.city.market.trade -= 1;
+    } else if (
+      method === "autoBuy" &&
+      swapRoot.city.market.trade < swapRoot.city.market.mtrade
+    ) {
+      swapRoot.resource[id].trade += 1;
+      swapRoot.city.market.trade += 1;
+    }
+    return { ok: true, value: undefined };
+  },
+};
+const swapBoard = boardSource(swapRoot, swapRegistry, "global");
+const swapTrace = [];
+const swapControl = createCapturedTradeRoutesTestControl({
+  rootState: { readRoot: () => swapRoot },
+  controls: swapRegistry,
+  board: swapBoard,
+  mechanics,
+  keyState: neutralKeyState,
+  readSettings: () => swapSettings,
+  readDemand: () => ({ isDemanded: () => false, storageRequired: () => 10 }),
+  testSurface: { onTrace: (event) => swapTrace.push(event) },
+});
+globalThis.__EA_TEST_SURFACE_ENABLED__ = true;
+assert.equal(
+  swapControl.inspect("Source").status,
+  "captured",
+  JSON.stringify(swapTrace),
+);
+assert.equal(
+  swapControl.inspect("Source").resource.storageRequiredQuantity,
+  10,
+);
+assert.equal(swapControl.inspect("Source").resource.demanded, false);
+const removedRoute = swapControl.removeOne("Source");
+assert.equal(removedRoute.status, "applied");
+assert.equal(swapRoot.city.market.trade, 2);
+assert.equal(swapRoot.resource.Source.trade, 0);
+assert.equal(
+  swapControl.addOne("Target", { requireDemand: false }).status,
+  "applied",
+);
+assert.equal(swapRoot.city.market.trade, 3, "one route is conserved by swap");
+assert.equal(swapRoot.resource.Target.trade, 1);
+assert.equal(
+  swapRoot.resource.Locked.trade,
+  1,
+  "unmanaged routes are preserved",
+);
+assert.equal(swapControl.removeOne("Locked").status, "permission-disabled");
+assert.equal(swapRoot.city.market.trade, 3);
+assert.equal(swapControl.removeOne("Surplus").status, "applied");
+assert.equal(swapRoot.resource.Surplus.trade, 0);
+assert.equal(swapRoot.city.market.trade, 2);
+delete globalThis.__EA_TEST_SURFACE_ENABLED__;
 
 console.log("captured trade routes tests passed");

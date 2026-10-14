@@ -138,7 +138,7 @@ interface CapturedTradeRouteObservation {
   readonly holding: number;
   readonly capacity: number;
   readonly netRatePerPeriod: number;
-  readonly demandedQuantity: number;
+  readonly storageRequiredQuantity: number;
   readonly currentRoutes: number;
   readonly maximumRoutes: number;
   readonly importPricePerPeriod: number;
@@ -371,24 +371,28 @@ function readRouteInput(
       maximumResource > 0 ? amount / Math.min(maximumResource, required) : 1;
     const buyEnabled = settings[`res_trade_buy_${entry.id}`] === true;
     const sellEnabled = settings[`res_trade_sell_${entry.id}`] === true;
-    observations.push(
-      Object.freeze({
-        resourceId: entry.id,
-        holding: amount,
-        capacity: maximumResource,
-        netRatePerPeriod: diff,
-        demandedQuantity: required,
-        currentRoutes: routeCounts.get(entry.id) ?? 0,
-        maximumRoutes: currency >= 6 ? 1_000_000 : currency >= 4 ? 100 : 25,
-        importPricePerPeriod: quote.buyPrice,
-        importQuantityPerPeriod: quote.buyVolume,
-        importsEnabled: buyEnabled,
-        exportsEnabled: sellEnabled,
-        demanded: demand.isDemanded(entry.id),
-        controlElementId: control.elementId,
-        controlGeneration: control.generation,
-      }),
-    );
+    if (
+      typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
+      __EA_TEST_SURFACE_ENABLED__ === true
+    )
+      observations.push(
+        Object.freeze({
+          resourceId: entry.id,
+          holding: amount,
+          capacity: maximumResource,
+          netRatePerPeriod: diff,
+          storageRequiredQuantity: required,
+          currentRoutes: routeCounts.get(entry.id) ?? 0,
+          maximumRoutes: currency >= 6 ? 1_000_000 : currency >= 4 ? 100 : 25,
+          importPricePerPeriod: quote.buyPrice,
+          importQuantityPerPeriod: quote.buyVolume,
+          importsEnabled: buyEnabled,
+          exportsEnabled: sellEnabled,
+          demanded: demand.isDemanded(entry.id),
+          controlElementId: control.elementId,
+          controlGeneration: control.generation,
+        }),
+      );
     if (!buyEnabled && !sellEnabled)
       unmanaged += routeCounts.get(entry.id) ?? 0;
     views.push(
@@ -759,43 +763,45 @@ export function createCapturedTradeRoutes(
       const controls = [...captured.session.controls.values()].map(
         ({ elementId, generation }) => Object.freeze({ elementId, generation }),
       );
-      const testContext = Object.freeze({
-        rootCurrent:
-          dependencies.rootState.readRoot() === captured.session.root,
-        boardCurrent: dependencies.board.isCurrent(board),
-        controls: Object.freeze(controls),
-        routeCount: captured.session.marketRouteCount,
-        maximumRoutes: captured.input.maxTradeRoutes,
-        ownerEnabled:
-          testSurface !== undefined &&
-          settingsRecord(dependencies.readSettings())["autoMarket"] === true,
-        resources: captured.observations,
-      });
-      const testOperations =
-        testContext.ownerEnabled &&
-        testContext.rootCurrent &&
-        testContext.boardCurrent
-          ? testSurface?.resolveOperations?.(
-              captured.input,
-              result,
-              testContext,
-            )
-          : undefined;
-      const normalizedTestOperations =
-        testSurface === undefined
-          ? undefined
-          : normalizeCapturedTradeRouteOverride(
-              testOperations,
-              captured.input,
-              testContext,
-            );
-      const operations = normalizedTestOperations ?? result.operations;
+      let operations = result.operations;
+      if (
+        typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
+        __EA_TEST_SURFACE_ENABLED__ === true
+      ) {
+        const testContext = Object.freeze({
+          rootCurrent:
+            dependencies.rootState.readRoot() === captured.session.root,
+          boardCurrent: dependencies.board.isCurrent(board),
+          controls: Object.freeze(controls),
+          routeCount: captured.session.marketRouteCount,
+          maximumRoutes: captured.input.maxTradeRoutes,
+          ownerEnabled:
+            settingsRecord(dependencies.readSettings())["autoMarket"] === true,
+          resources: captured.observations,
+        });
+        const testOperations =
+          testContext.ownerEnabled &&
+          testContext.rootCurrent &&
+          testContext.boardCurrent
+            ? testSurface?.resolveOperations?.(
+                captured.input,
+                result,
+                testContext,
+              )
+            : undefined;
+        operations =
+          normalizeCapturedTradeRouteOverride(
+            testOperations,
+            captured.input,
+            testContext,
+          ) ?? result.operations;
+      }
       testSurface?.onTrace?.({
         kind: "plan",
         rootCurrent:
           dependencies.rootState.readRoot() === captured.session.root,
         boardCurrent: dependencies.board.isCurrent(board),
-        desiredOperations: normalizedTestOperations ?? result.operations,
+        desiredOperations: operations,
         baselineOperations: result.operations,
         routeCount: captured.session.marketRouteCount,
         maximumRoutes: captured.input.maxTradeRoutes,
@@ -975,6 +981,7 @@ export function createCapturedTradeRoutesTestControl(
   dependencies: CapturedTradeRoutesDependencies,
 ): Readonly<{
   inspect(resourceId: string): Readonly<Record<string, unknown>> | undefined;
+  removeOne(resourceId: string): Readonly<Record<string, unknown>>;
   addOne(
     resourceId: string,
     options?: Readonly<{ requireDemand?: boolean }>,
@@ -1057,6 +1064,73 @@ export function createCapturedTradeRoutesTestControl(
         money: current.captured.input.money,
       });
     },
+    removeOne(resourceId: string) {
+      const current = capture(resourceId);
+      if (current === undefined)
+        return Object.freeze({ status: "unknown-control" });
+      const { board, captured, observation, control } = current;
+      const settings = settingsRecord(dependencies.readSettings());
+      const method = observation.currentRoutes > 0 ? "autoSell" : "autoBuy";
+      const assignmentEnabled =
+        observation.currentRoutes > 0
+          ? settings[`res_trade_buy_${resourceId}`] === true
+          : settings[`res_trade_sell_${resourceId}`] === true;
+      if (settings["autoMarket"] !== true || !assignmentEnabled)
+        return Object.freeze({ status: "permission-disabled" });
+      if (
+        dependencies.rootState.readRoot() !== captured.session.root ||
+        !dependencies.board.isCurrent(board) ||
+        dependencies.controls.resolve(control.elementId)?.generation !==
+          control.generation
+      )
+        return Object.freeze({ status: "stale-control" });
+      if (observation.currentRoutes === 0)
+        return Object.freeze({ status: "not-eligible" });
+      const beforeMarketCount = finite(captured.session.market["trade"]);
+      const resource = readProperty(
+        readProperty(captured.session.root, "resource"),
+        resourceId,
+      );
+      const beforeRouteCount = finite(readProperty(resource, "trade"));
+      if (
+        beforeMarketCount !== captured.session.marketRouteCount ||
+        beforeRouteCount !== observation.currentRoutes
+      )
+        return Object.freeze({ status: "stale-observation" });
+      const invoked = dependencies.controls.invoke(control, method, [
+        resourceId,
+        1,
+      ]);
+      if (!invoked.ok) return Object.freeze({ status: invoked.reason });
+      const afterRouteCount = finite(readProperty(resource, "trade"));
+      const afterMarketCount = finite(captured.session.market["trade"]);
+      const stillCurrent =
+        dependencies.rootState.readRoot() === captured.session.root &&
+        dependencies.board.isCurrent(board) &&
+        dependencies.controls.resolve(control.elementId)?.generation ===
+          control.generation;
+      return Object.freeze({
+        status:
+          stillCurrent &&
+          afterRouteCount ===
+            beforeRouteCount + (beforeRouteCount > 0 ? -1 : 1) &&
+          afterMarketCount === beforeMarketCount - 1
+            ? "applied"
+            : "native-result-mismatch",
+        resourceId,
+        control: Object.freeze({
+          elementId: control.elementId,
+          generation: control.generation,
+          method,
+        }),
+        beforeRouteCount,
+        afterRouteCount,
+        beforeMarketCount,
+        afterMarketCount,
+        rootCurrent: stillCurrent,
+        boardCurrent: dependencies.board.isCurrent(board),
+      });
+    },
     addOne(
       resourceId: string,
       options: Readonly<{ requireDemand?: boolean }> = {},
@@ -1081,7 +1155,7 @@ export function createCapturedTradeRoutesTestControl(
       if (
         (options.requireDemand !== false &&
           (!observation.demanded ||
-            observation.holding >= observation.demandedQuantity)) ||
+            observation.holding >= observation.storageRequiredQuantity)) ||
         observation.holding >= observation.capacity ||
         observation.currentRoutes < 0 ||
         observation.currentRoutes >= captured.input.importRouteCap ||
@@ -1091,7 +1165,7 @@ export function createCapturedTradeRoutesTestControl(
           status: "not-eligible",
           demandObserved: observation.demanded,
           holding: observation.holding,
-          demandedQuantity: observation.demandedQuantity,
+          storageRequiredQuantity: observation.storageRequiredQuantity,
           capacity: observation.capacity,
           currentRoutes: observation.currentRoutes,
           maximumResourceRoutes: captured.input.importRouteCap,
@@ -1129,7 +1203,7 @@ export function createCapturedTradeRoutesTestControl(
             ? "applied"
             : "native-result-mismatch",
         demandObserved: observation.demanded,
-        demandedQuantity: observation.demandedQuantity,
+        storageRequiredQuantity: observation.storageRequiredQuantity,
         control: Object.freeze({
           elementId: control.elementId,
           generation: control.generation,
