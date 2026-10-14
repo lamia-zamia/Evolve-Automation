@@ -40,6 +40,7 @@ import {
 } from "./progression/build/captured-building-availability.ts";
 
 type CapturedGameCall = (this: unknown, ...args: unknown[]) => unknown;
+declare const __EA_TEST_SURFACE_ENABLED__: boolean;
 const structureMapCaptureThreshold = 3;
 
 interface CapturedNativeTechDefinitionIdentity extends CapturedTechDefinition {
@@ -2470,6 +2471,197 @@ export function installCapturedGameMechanics(
       }
       return result;
     },
+    ...(typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
+    __EA_TEST_SURFACE_ENABLED__ === true
+      ? {
+          readNativeTechManaCallbackIdentityForTest(
+            actionId: string,
+            context: Readonly<{
+              rootGeneration: number;
+              progressionEpoch: string;
+              routeIdentity: string;
+              nativeResearchObservationGeneration: number;
+            }>,
+          ) {
+            const reasons: string[] = [];
+            const retained = readRetainedNativeTechRegistry();
+            const definition = retained?.definitionsByActionId?.get(actionId);
+            let rootIdentity: number | undefined;
+            let actionIdentity: number | undefined;
+            let costIdentity: number | undefined;
+            let callbackIdentity: number | undefined;
+            let callbackSource: string | undefined;
+            let costDescriptorEvidence:
+              | Readonly<{
+                  enumerable: boolean;
+                  configurable: boolean;
+                  writable: boolean;
+                }>
+              | undefined;
+            let manaDescriptorEvidence:
+              | Readonly<{
+                  enumerable: boolean;
+                  configurable: boolean;
+                  writable: boolean;
+                }>
+              | undefined;
+            if (
+              !Number.isSafeInteger(context.rootGeneration) ||
+              context.rootGeneration < 0 ||
+              context.progressionEpoch.length === 0 ||
+              context.routeIdentity.length === 0 ||
+              !Number.isSafeInteger(
+                context.nativeResearchObservationGeneration,
+              ) ||
+              context.nativeResearchObservationGeneration < 0
+            )
+              reasons.push("runtime context is invalid");
+            if (retained === undefined)
+              reasons.push(
+                "retained native Research registry is unavailable or stale",
+              );
+            if (definition === undefined)
+              reasons.push(
+                "native action ID is absent from the validated registry",
+              );
+            try {
+              const root = rootState?.readRoot();
+              if (
+                (typeof root === "object" && root !== null) ||
+                typeof root === "function"
+              ) {
+                rootIdentity = computedTechIdentity(
+                  computedTechActionIdentity,
+                  root as object,
+                );
+              } else {
+                reasons.push("current game root identity is unavailable");
+              }
+            } catch {
+              reasons.push("current game root identity could not be read");
+            }
+            if (definition !== undefined) {
+              actionIdentity = computedTechIdentity(
+                computedTechActionIdentity,
+                definition.action,
+              );
+              try {
+                const costDescriptor = Object.getOwnPropertyDescriptor(
+                  definition.action,
+                  "cost",
+                );
+                if (
+                  costDescriptor === undefined ||
+                  !("value" in costDescriptor)
+                ) {
+                  reasons.push(
+                    "native action cost is absent or is an accessor",
+                  );
+                } else if (!isNonArrayRecord(costDescriptor.value)) {
+                  reasons.push(
+                    "native action cost is not a supported data object",
+                  );
+                } else {
+                  costDescriptorEvidence = Object.freeze({
+                    enumerable: costDescriptor.enumerable === true,
+                    configurable: costDescriptor.configurable === true,
+                    writable: costDescriptor.writable === true,
+                  });
+                  costIdentity = computedTechIdentity(
+                    computedTechActionIdentity,
+                    costDescriptor.value,
+                  );
+                  const manaDescriptor = Object.getOwnPropertyDescriptor(
+                    costDescriptor.value,
+                    "Mana",
+                  );
+                  if (
+                    manaDescriptor === undefined ||
+                    !("value" in manaDescriptor)
+                  ) {
+                    reasons.push(
+                      "native Mana cost is absent or is an accessor",
+                    );
+                  } else if (typeof manaDescriptor.value !== "function") {
+                    reasons.push("native Mana cost is not a callback");
+                  } else {
+                    manaDescriptorEvidence = Object.freeze({
+                      enumerable: manaDescriptor.enumerable === true,
+                      configurable: manaDescriptor.configurable === true,
+                      writable: manaDescriptor.writable === true,
+                    });
+                    const callback = manaDescriptor.value as CapturedGameCall;
+                    callbackIdentity = computedTechIdentity(
+                      computedTechReqsIdentity,
+                      callback,
+                    );
+                    const functionConstructor = readMechanicsProperty(
+                      pageWindow,
+                      "Function",
+                    );
+                    const functionPrototype = readMechanicsProperty(
+                      functionConstructor,
+                      "prototype",
+                    );
+                    const toStringDescriptor = Object.getOwnPropertyDescriptor(
+                      functionPrototype,
+                      "toString",
+                    );
+                    if (
+                      toStringDescriptor !== undefined &&
+                      "value" in toStringDescriptor &&
+                      typeof toStringDescriptor.value === "function"
+                    ) {
+                      const result = Reflect.apply(
+                        toStringDescriptor.value,
+                        callback,
+                        [],
+                      );
+                      if (typeof result === "string") callbackSource = result;
+                    }
+                  }
+                }
+              } catch {
+                reasons.push(
+                  "native Mana callback descriptors could not be read safely",
+                );
+              }
+            }
+            const identityStatus =
+              rootIdentity === undefined ||
+              actionIdentity === undefined ||
+              costIdentity === undefined ||
+              callbackIdentity === undefined ||
+              reasons.length > 0
+                ? "unavailable"
+                : "observed";
+            return Object.freeze({
+              ...(definition === undefined
+                ? {}
+                : { registryKey: definition.registryKey }),
+              actionId,
+              ...(rootIdentity === undefined ? {} : { rootIdentity }),
+              ...(actionIdentity === undefined ? {} : { actionIdentity }),
+              ...(costIdentity === undefined ? {} : { costIdentity }),
+              ...(callbackIdentity === undefined ? {} : { callbackIdentity }),
+              ...(callbackSource === undefined ? {} : { callbackSource }),
+              ...(costDescriptorEvidence === undefined
+                ? {}
+                : { costDescriptor: costDescriptorEvidence }),
+              ...(manaDescriptorEvidence === undefined
+                ? {}
+                : { manaDescriptor: manaDescriptorEvidence }),
+              identityStatus,
+              reasons: Object.freeze(reasons),
+              rootGeneration: context.rootGeneration,
+              progressionEpoch: context.progressionEpoch,
+              routeIdentity: context.routeIdentity,
+              nativeResearchObservationGeneration:
+                context.nativeResearchObservationGeneration,
+            });
+          },
+        }
+      : {}),
     readTechDefinitions(): readonly CapturedTechDefinition[] | undefined {
       return readRetainedNativeTechRegistry()?.publicDefinitions;
     },

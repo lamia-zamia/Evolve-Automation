@@ -1,9 +1,13 @@
 import assert from "node:assert/strict";
 import { runInNewContext } from "node:vm";
 
-import { installPageCapture } from "../../../src/adapters/evolve/page-capture.ts";
-import { installCapturedGameMechanics } from "../../../src/adapters/evolve/captured-game-mechanics.ts";
-import { readFreshCapturedComputedTechRequirements } from "../../../src/adapters/evolve/progression/research/captured-tech-applicability.ts";
+globalThis.__EA_TEST_SURFACE_ENABLED__ = true;
+const { installPageCapture } =
+  await import("../../../src/adapters/evolve/page-capture.ts");
+const { installCapturedGameMechanics } =
+  await import("../../../src/adapters/evolve/captured-game-mechanics.ts");
+const { readFreshCapturedComputedTechRequirements } =
+  await import("../../../src/adapters/evolve/progression/research/captured-tech-applicability.ts");
 
 class FakeWorker {
   constructor(url) {
@@ -2056,13 +2060,23 @@ cleanupCapture.uninstall();
 // A controlled Research draw is the only place the private native registry can be identified.
 function techRegistryPage(registry) {
   const techPage = makePage();
-  const root = { settings: { civTabs: 4 } };
+  let root = { settings: { civTabs: 4 } };
   const installed = installCapturedGameMechanics(
     techPage,
     { subscribe: () => () => {} },
     { readRoot: () => root },
   );
-  return { page: techPage, root, registry, installed };
+  return {
+    page: techPage,
+    get root() {
+      return root;
+    },
+    replaceRoot: (nextRoot) => {
+      root = nextRoot;
+    },
+    registry,
+    installed,
+  };
 }
 
 function validTechRegistry() {
@@ -2167,6 +2181,233 @@ function validTechRegistry() {
     fixture.installed.mechanics.readTechDefinitions(),
     undefined,
     "reordering native registry keys invalidates retained authority",
+  );
+  fixture.installed.uninstall();
+}
+
+{
+  const mana = () => {
+    assert.fail(
+      "native Mana callback identity inspection must not invoke cost",
+    );
+  };
+  const registry = {
+    magic: { id: "tech-magic", grant: ["magic", 1], cost: { Mana: mana } },
+  };
+  const fixture = techRegistryPage(registry);
+  fixture.installed.mechanics.captureTechDefinitionsDuring(() =>
+    fixture.page.Object.keys(registry),
+  );
+  const context = {
+    rootGeneration: 2,
+    progressionEpoch: "magic-run:2",
+    routeIdentity: '["magic",false,false]',
+    nativeResearchObservationGeneration: 11,
+  };
+  const inspect = () =>
+    fixture.installed.mechanics.readNativeTechManaCallbackIdentityForTest?.(
+      "tech-magic",
+      context,
+    );
+  const first = inspect();
+  fixture.installed.mechanics.captureTechDefinitionsDuring(() =>
+    fixture.page.Object.keys(registry),
+  );
+  const second = inspect();
+  assert.equal(first?.identityStatus, "observed");
+  assert.equal(second?.identityStatus, "observed");
+  assert.equal(first?.registryKey, "magic");
+  assert.equal(first?.actionIdentity, second?.actionIdentity);
+  assert.equal(first?.costIdentity, second?.costIdentity);
+  assert.equal(first?.callbackIdentity, second?.callbackIdentity);
+  assert.equal(first?.callbackSource, second?.callbackSource);
+  assert.match(
+    first?.callbackSource ?? "",
+    /native Mana callback identity inspection/,
+  );
+  assert.deepEqual(first?.costDescriptor, {
+    enumerable: true,
+    configurable: true,
+    writable: true,
+  });
+  assert.deepEqual(first?.manaDescriptor, {
+    enumerable: true,
+    configurable: true,
+    writable: true,
+  });
+  assert.equal(first?.rootGeneration, 2);
+  assert.equal(first?.progressionEpoch, "magic-run:2");
+  assert.equal(first?.routeIdentity, '["magic",false,false]');
+  assert.equal(first?.nativeResearchObservationGeneration, 11);
+
+  registry.magic.cost = { Mana: mana };
+  const replacedCost = inspect();
+  assert.equal(replacedCost?.identityStatus, "observed");
+  assert.notEqual(replacedCost?.costIdentity, second?.costIdentity);
+  assert.equal(replacedCost?.callbackIdentity, second?.callbackIdentity);
+  registry.magic.cost.Mana = () => 1;
+  const replacedCallback = inspect();
+  assert.equal(replacedCallback?.identityStatus, "observed");
+  assert.equal(replacedCallback?.costIdentity, replacedCost?.costIdentity);
+  assert.notEqual(
+    replacedCallback?.callbackIdentity,
+    replacedCost?.callbackIdentity,
+  );
+  const changedContext =
+    fixture.installed.mechanics.readNativeTechManaCallbackIdentityForTest?.(
+      "tech-magic",
+      {
+        ...context,
+        rootGeneration: 3,
+        progressionEpoch: "magic-run:3",
+        routeIdentity: '["magic",true,false]',
+        nativeResearchObservationGeneration: 12,
+      },
+    );
+  assert.deepEqual(
+    [
+      changedContext?.rootGeneration,
+      changedContext?.progressionEpoch,
+      changedContext?.routeIdentity,
+      changedContext?.nativeResearchObservationGeneration,
+    ],
+    [3, "magic-run:3", '["magic",true,false]', 12],
+  );
+  assert.equal(changedContext?.identityStatus, "observed");
+  fixture.replaceRoot({ settings: { civTabs: 4 }, replacement: true });
+  assert.notEqual(
+    fixture.installed.mechanics.readNativeTechManaCallbackIdentityForTest?.(
+      "tech-magic",
+      {
+        ...context,
+        rootGeneration: 3,
+        progressionEpoch: "magic-run:3",
+        routeIdentity: '["magic",true,false]',
+        nativeResearchObservationGeneration: 13,
+      },
+    )?.rootIdentity,
+    changedContext?.rootIdentity,
+    "the root replacement changes the root identity token",
+  );
+  assert.equal(
+    fixture.installed.mechanics.readNativeTechManaCallbackIdentityForTest?.(
+      "tech-magic",
+      {
+        ...context,
+        rootGeneration: 3,
+        progressionEpoch: "magic-run:3",
+        routeIdentity: '["magic",true,false]',
+        nativeResearchObservationGeneration: 13,
+      },
+    )?.identityStatus,
+    "observed",
+    "the root replacement is reflected by the current callback observation",
+  );
+  registry.magic = {
+    id: "tech-magic",
+    grant: ["magic", 1],
+    cost: { Mana: () => 1 },
+  };
+  assert.equal(
+    inspect()?.identityStatus,
+    "unavailable",
+    "replacing the retained action invalidates the registry identity",
+  );
+  fixture.installed.uninstall();
+}
+
+for (const [name, action, expectedReason] of [
+  [
+    "cost accessor",
+    {
+      id: "tech-magic",
+      grant: ["magic", 1],
+      get cost() {
+        return { Mana: () => 1 };
+      },
+    },
+    /cost is absent or is an accessor/,
+  ],
+  [
+    "Mana accessor",
+    {
+      id: "tech-magic",
+      grant: ["magic", 1],
+      cost: {
+        get Mana() {
+          return () => 1;
+        },
+      },
+    },
+    /Mana cost is absent or is an accessor/,
+  ],
+  [
+    "missing Mana",
+    {
+      id: "tech-magic",
+      grant: ["magic", 1],
+      cost: {},
+    },
+    /Mana cost is absent or is an accessor/,
+  ],
+  [
+    "descriptor trap",
+    {
+      id: "tech-magic",
+      grant: ["magic", 1],
+      cost: new Proxy(
+        {},
+        {
+          getOwnPropertyDescriptor() {
+            throw new Error("unsupported native cost proxy");
+          },
+        },
+      ),
+    },
+    /descriptors could not be read safely/,
+  ],
+]) {
+  const registry = { magic: action };
+  const fixture = techRegistryPage(registry);
+  fixture.installed.mechanics.captureTechDefinitionsDuring(() =>
+    fixture.page.Object.keys(registry),
+  );
+  const result =
+    fixture.installed.mechanics.readNativeTechManaCallbackIdentityForTest?.(
+      "tech-magic",
+      {
+        rootGeneration: 1,
+        progressionEpoch: "epoch",
+        routeIdentity: "magic",
+        nativeResearchObservationGeneration: 1,
+      },
+    );
+  assert.equal(result?.identityStatus, "unavailable", name);
+  assert.match(result?.reasons.join(" ") ?? "", expectedReason, name);
+  fixture.installed.uninstall();
+}
+
+{
+  const registry = {
+    one: { id: "tech-duplicate", grant: ["one", 1], cost: { Mana: () => 1 } },
+    two: { id: "tech-duplicate", grant: ["two", 1], cost: { Mana: () => 1 } },
+  };
+  const fixture = techRegistryPage(registry);
+  fixture.installed.mechanics.captureTechDefinitionsDuring(() =>
+    fixture.page.Object.keys(registry),
+  );
+  assert.equal(
+    fixture.installed.mechanics.readNativeTechManaCallbackIdentityForTest?.(
+      "tech-duplicate",
+      {
+        rootGeneration: 1,
+        progressionEpoch: "epoch",
+        routeIdentity: "magic",
+        nativeResearchObservationGeneration: 1,
+      },
+    )?.identityStatus,
+    "unavailable",
+    "duplicate native IDs invalidate the whole candidate registry",
   );
   fixture.installed.uninstall();
 }

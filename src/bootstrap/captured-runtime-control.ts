@@ -1122,6 +1122,25 @@ export function startCapturedRuntime({
               return undefined;
             const testHooks = hooks;
             return (observation) => {
+              const root = pageCapture.rootState.readRoot();
+              const race = readProperty(root, "race");
+              const universe = readProperty(race, "universe");
+              const routeIdentity = JSON.stringify([
+                typeof universe === "string" ? universe : null,
+                readProperty(race, "truepath") === true,
+                readProperty(race, "iceage") === true,
+              ]);
+              const nativeManaCallback =
+                pageCapture.mechanics.readNativeTechManaCallbackIdentityForTest?.(
+                  observation.actionId,
+                  {
+                    rootGeneration: progression.readRootGeneration(),
+                    progressionEpoch: progression.readProgressionEpoch(),
+                    routeIdentity,
+                    nativeResearchObservationGeneration:
+                      observation.offerGeneration,
+                  },
+                );
               const intervention = readProperty(
                 testHooks,
                 "gatherIntervention",
@@ -1150,6 +1169,7 @@ export function startCapturedRuntime({
                   : observation.manaStockBefore - observation.manaStockAfter;
               const event = Object.freeze({
                 ...observation,
+                nativeManaCallback,
                 claimState: Object.freeze(
                   activeClaims.map((claim) =>
                     Object.freeze({

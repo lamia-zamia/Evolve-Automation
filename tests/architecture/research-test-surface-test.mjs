@@ -36,6 +36,8 @@ const testSurfaceMarkers = [
   "selected-goal-changed",
   "current-research-grant-completed",
   "test-control-hook",
+  "readNativeTechManaCallbackIdentityForTest",
+  "nativeResearchObservationGeneration",
 ];
 
 async function bundle(testSurfaceEnabled) {

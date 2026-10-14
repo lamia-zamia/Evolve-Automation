@@ -251,6 +251,40 @@ export interface CapturedGameMechanics {
   /** Current opt-in native-draw observations; absent means no such draw was observed. */
   readComputedTechRequirements():
     readonly CapturedComputedTechRequirements[] | undefined;
+  /** Test-bundle only. Reports descriptor-backed callback identity without invoking native costs. */
+  readNativeTechManaCallbackIdentityForTest?(
+    actionId: string,
+    context: Readonly<{
+      rootGeneration: number;
+      progressionEpoch: string;
+      routeIdentity: string;
+      nativeResearchObservationGeneration: number;
+    }>,
+  ): Readonly<{
+    registryKey?: string;
+    actionId: string;
+    rootIdentity?: number;
+    actionIdentity?: number;
+    costIdentity?: number;
+    callbackIdentity?: number;
+    costDescriptor?: Readonly<{
+      enumerable: boolean;
+      configurable: boolean;
+      writable: boolean;
+    }>;
+    manaDescriptor?: Readonly<{
+      enumerable: boolean;
+      configurable: boolean;
+      writable: boolean;
+    }>;
+    callbackSource?: string;
+    identityStatus: "observed" | "unavailable";
+    reasons: readonly string[];
+    rootGeneration: number;
+    progressionEpoch: string;
+    routeIdentity: string;
+    nativeResearchObservationGeneration: number;
+  }>;
   /** Exact target switch using the action's cap and the game's deferred postPower queue. */
   adjustPower(
     root: unknown,
