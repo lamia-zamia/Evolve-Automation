@@ -201,6 +201,14 @@ async function run(runner, scenario, enabled, repeat) {
       session.diagnostics(),
     ]);
     const finalMetrics = await session.metrics();
+    const totalJavaScriptDurationMs = measuredWindows.reduce(
+      (total, sample) => total + sample.scriptDurationMs,
+      0,
+    );
+    const periodsCoveredByWindows = measuredWindows.reduce(
+      (total, sample) => total + sample.periods,
+      0,
+    );
     return {
       scenario: scenario.name,
       instrumentation: enabled ? "enabled" : "disabled",
@@ -209,16 +217,17 @@ async function run(runner, scenario, enabled, repeat) {
       workTicks: diagnostics.workTicks,
       prestigeCount: state.stats?.reset,
       controlUsage: diagnostics.controlUsage,
+      stateSha256: hash(JSON.stringify(state)),
+      controlUsageSha256: hash(JSON.stringify(diagnostics.controlUsage)),
       windowScriptMsPerPeriod: summarize(periodScriptMs),
-      totalJavaScriptDurationMs: Number(
-        measuredWindows
-          .reduce((total, sample) => total + sample.scriptDurationMs, 0)
-          .toFixed(3),
-      ),
-      periodsCoveredByWindows: measuredWindows.reduce(
-        (total, sample) => total + sample.periods,
-        0,
-      ),
+      totalJavaScriptDurationMs: Number(totalJavaScriptDurationMs.toFixed(3)),
+      periodsCoveredByWindows,
+      meanScriptMsPerCoveredPeriod:
+        periodsCoveredByWindows === 0
+          ? null
+          : Number(
+              (totalJavaScriptDurationMs / periodsCoveredByWindows).toFixed(3),
+            ),
       measurementWindows: measuredWindows.length,
       taskDurationMs: Number(
         measuredWindows
@@ -337,7 +346,7 @@ try {
         sampleIntervalMs: sampleMs,
         epoch,
         methodology:
-          "Diagnostics-off/enabled alternating native-timer Chromium runs. ScriptDuration is total renderer JS including upstream game. Adjacent CDP samples form polling windows; windows crossing either the warm-up or measured-run boundary are excluded because their ScriptDuration cannot be apportioned. The report gives the summed JavaScript duration and period-normalized window samples separately. Window quantiles are not per-period callback latency. Phase summaries are attribution only. Epoch is numeric milliseconds because the runner bridge applies Number(epoch). Stage 3M D is the existing test-surface intervention with shadow disabled.",
+          "Diagnostics-off/enabled alternating native-timer Chromium runs. ScriptDuration is total renderer JS including upstream game. Adjacent CDP samples form polling windows; windows crossing either the warm-up or measured-run boundary are excluded because their ScriptDuration cannot be apportioned. The report gives summed JavaScript duration, its mean per period covered by accepted windows, and per-window period-normalized samples. Window median/p95/maximum are polling-window statistics, not per-period callback latency. Diagnostics-enabled runs include instrumentation overhead and are attribution runs, not runtime performance estimates. State and control-usage hashes identify workload changes; changed workloads must not be presented as a pure speed comparison. Phase summaries are attribution only. Epoch is numeric milliseconds because the runner bridge applies Number(epoch). Stage 3M D is the existing test-surface intervention with shadow disabled.",
         results,
       };
       await mkdir(path.dirname(outputPath), { recursive: true });

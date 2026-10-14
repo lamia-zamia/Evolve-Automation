@@ -12,6 +12,8 @@ import {
   element,
 } from "../../support/fixtures/dom-fixture.mjs";
 
+globalThis.__EA_TEST_SURFACE_ENABLED__ = true;
+
 assert.equal(arpaProjectIdFromElementId("arpaSequence"), "Sequence");
 assert.equal(isBuildableArpaProjectId("Sequence"), false);
 
@@ -122,6 +124,7 @@ function makeScenario({
   rank = 0,
   additionalProjectIds = [],
   gameTechHighTech = 7,
+  knowledge = 100000,
   mainTabReady = true,
   ambiguousRegistryObservation = false,
   afterNativeBuild,
@@ -142,6 +145,7 @@ function makeScenario({
   extraNativeResources = [],
   nativeActualSteps,
   nativeResourceDeductions,
+  observePowerDemandPhase,
 } = {}) {
   const pageBody = element("div", { id: "page" });
   const mainColumn = element("div", { id: "mainColumn" });
@@ -202,7 +206,7 @@ function makeScenario({
         value: 1,
       },
       Knowledge: {
-        amount: 100000,
+        amount: knowledge,
         max: 1000000,
         display: true,
         diff: 100,
@@ -307,6 +311,13 @@ function makeScenario({
     document,
     location: { href: "https://evolvebeta.github.io/Evolve/" },
     navigator: { userAgent: "captured-arpa-test" },
+    ...(typeof observePowerDemandPhase === "function"
+      ? {
+          __EA_TEST_HOOKS__: {
+            observePowerDemandPhase,
+          },
+        }
+      : {}),
   };
   const pageCapture = installPageCapture(page);
   const vue = makeVue();
@@ -1063,9 +1074,11 @@ withScenario(
     scenario.tick();
     assert.equal(readCurrentNativePrice(), 10.24);
     const drawsAfterCapture = scenario.draws.length;
+    const sameRoot = scenario.gameRoot;
 
     scenario.gameRoot.civic.govern = { type: "technocracy" };
     scenario.tick();
+    assert.equal(scenario.gameRoot, sameRoot);
     assert.equal(readCurrentNativePrice(), 9.42);
     assert.equal(scenario.draws.length, drawsAfterCapture);
 
@@ -1081,6 +1094,79 @@ withScenario(
     assert.deepEqual(scenario.hoverEvents, []);
   },
 );
+
+// Power's demand owner refreshes an A.R.P.A. sample after a same-cycle government mutation.
+{
+  let governmentChanged = false;
+  const powerReports = [];
+  withScenario(
+    {
+      progress: 20,
+      nativePerPercentCost: { Knowledge: 10.24 },
+      nativeCostAdjustment(costs, root) {
+        if (root.civic.govern?.type !== "technocracy") return costs;
+        return Object.fromEntries(
+          Object.entries(costs).map(([resourceId, calculate]) => [
+            resourceId,
+            () =>
+              resourceId === "Knowledge"
+                ? Math.round(calculate() * 0.92)
+                : calculate(),
+          ]),
+        );
+      },
+      afterNativeBuild(root) {
+        if (governmentChanged) return;
+        governmentChanged = true;
+        root.civic.govern = { type: "technocracy" };
+      },
+      scriptSettings: {
+        autoBuild: false,
+        autoARPA: true,
+        autoPower: true,
+        prestigeMADIgnoreArpa: true,
+        arpa_lhc: true,
+        arpa_p_lhc: 0,
+        arpa_m_lhc: -1,
+        arpa_w_lhc: 2,
+      },
+      observePowerDemandPhase(stage, demand, outcome, prerequisites) {
+        if (stage === "power-ready")
+          powerReports.push({
+            demandAvailable: demand !== undefined,
+            projectKnowledgeStorage: demand?.storageRequired?.("Knowledge"),
+            prerequisites,
+          });
+        if (stage === "power-complete") powerReports.push({ outcome });
+      },
+    },
+    (scenario) => {
+      const root = scenario.gameRoot;
+      scenario.tick();
+      assert.equal(governmentChanged, true);
+      assert.equal(scenario.gameRoot, root);
+      assert.equal(root.civic.govern.type, "technocracy");
+      assert.equal(scenario.draws.length, 1);
+      assert.equal(powerReports.length, 2);
+      assert.equal(powerReports[0].demandAvailable, true);
+      assert.ok(powerReports[0].projectKnowledgeStorage > 0);
+      assert.equal(
+        scenario.nativeCostReads.at(-1).perPercentCosts.Knowledge,
+        9.42,
+        "the Power demand owner sees the government's current native project price",
+      );
+      assert.deepEqual(powerReports[0].prerequisites, {
+        spy: "not-needed",
+        ai: "not-needed",
+      });
+      assert.equal(
+        powerReports[1].outcome?.status,
+        "stale",
+        "fresh project demand alone cannot authorize Power without current native Power authority",
+      );
+    },
+  );
+}
 
 // An unreadable live project value invalidates the offer sample. Repairing it restores the same
 // retained authority, with no panel redraw.
@@ -1121,6 +1207,44 @@ withScenario(
       scenario.calls,
       [["lhc", 5]],
       "an unaffordable fresh native price is not bought",
+    );
+  },
+);
+
+// An enabled native offer with an unreadable cost invalidates the whole project sample.
+let unreadablePowerDemandAvailable;
+let unreadablePowerOutcome;
+withScenario(
+  {
+    progress: 20,
+    nativePerPercentCost: { Knowledge: Number.NaN },
+    scriptSettings: {
+      autoPower: true,
+      prestigeMADIgnoreArpa: true,
+      arpa_lhc: true,
+      arpa_p_lhc: 0,
+      arpa_m_lhc: -1,
+      arpa_w_lhc: 2,
+    },
+    observePowerDemandPhase(stage, demand, outcome) {
+      if (stage === "power-ready")
+        unreadablePowerDemandAvailable = demand !== undefined;
+      if (stage === "power-complete") unreadablePowerOutcome = outcome;
+    },
+  },
+  (scenario) => {
+    scenario.tick();
+    assert.deepEqual(scenario.calls, []);
+    assert.equal(unreadablePowerDemandAvailable, false);
+    assert.notEqual(unreadablePowerOutcome?.status, "succeeded");
+    assert.ok(
+      scenario.errors.some((message) =>
+        message.includes("offered project catalog is unreadable"),
+      ) ||
+        scenario.logs.some((message) =>
+          message.includes("offered project catalog is unreadable"),
+        ),
+      JSON.stringify({ errors: scenario.errors, logs: scenario.logs }),
     );
   },
 );

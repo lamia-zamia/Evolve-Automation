@@ -242,6 +242,18 @@ assert.equal(control.readEstablishedProjects(), undefined);
     "a progression epoch change takes one fresh native offer sample",
   );
   assert.equal(projectControl.readEstablishedProjects()[0].projectId, "lhc");
+  projectRoot.civic.govern.type = "democracy";
+  projectOfferSampleAvailable = false;
+  assert.equal(
+    projectControl.readEstablishedProjects(),
+    undefined,
+    "a government epoch change cannot reuse offers when current observation fails",
+  );
+  assert.equal(
+    projectControl.readProjects(),
+    undefined,
+    "an unavailable fresh sample stays unavailable instead of restoring stale offers",
+  );
 }
 
 let root = {
