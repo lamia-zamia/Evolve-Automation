@@ -24,6 +24,7 @@ function makePage({
   onOwnerSelection,
   onOwnerSelectionResult,
   readTestOnlyIntervention,
+  readTestShadowObserver,
 }) {
   const vue = {
     reactive: (target) => target,
@@ -81,6 +82,8 @@ function makePage({
       methods: {
         action() {
           clicks.push(entry.id);
+          if (actionModes[entry.id] === "throw")
+            throw new Error("injected native action error");
           if (actionModes[entry.id] === "no-op") return undefined;
           if (actionModes[entry.id] === "wrong-grant") {
             root.tech.unrelated = 1;
@@ -224,6 +227,7 @@ function makePage({
       onOwnerSelection,
       onOwnerSelectionResult,
       readTestOnlyIntervention,
+      readTestShadowObserver,
     }),
     activity,
     emitRootReplacement: () => rootReplacementListener?.(),
@@ -271,6 +275,76 @@ const SMELTING = {
   grant: "smelting",
   cost: { Knowledge: 9000, Iron: 500 },
 };
+
+const MANA_RESEARCH = {
+  id: "tech-shadow_mana",
+  title: "Shadow Mana Research",
+  grant: "shadow_mana",
+  cost: { Mana: 25 },
+};
+
+{
+  const observations = [];
+  const page = makePage({
+    offered: [MANA_RESEARCH],
+    resources: { Mana: { amount: 100 } },
+    readTestShadowObserver: () => (observation) =>
+      observations.push(observation),
+  });
+  const actionFunction = page.controls.get(MANA_RESEARCH.id).methods.action;
+  assert.equal(page.control.runCycle().status, "succeeded");
+  assert.equal(page.root.resource.Mana.amount, 75);
+  assert.equal(page.root.tech.shadow_mana, 1);
+  assert.equal(observations.length, 1);
+  assert.deepEqual(observations[0], {
+    actionId: MANA_RESEARCH.id,
+    offerGeneration: observations[0].offerGeneration,
+    offerSetIdentity: observations[0].offerSetIdentity,
+    offerObservationId: observations[0].offerObservationId,
+    displayedManaPrice: 25,
+    manaStockBefore: 100,
+    manaStockAfter: 75,
+    expectedGrantOccurred: true,
+    invocation: "returned",
+  });
+  assert.equal(typeof observations[0].offerSetIdentity, "string");
+  assert.equal(typeof observations[0].offerObservationId, "string");
+  assert.equal(
+    page.controls.get(MANA_RESEARCH.id).methods.action,
+    actionFunction,
+    "passive observation does not replace or restore the native callback",
+  );
+}
+
+{
+  const observations = [];
+  const page = makePage({
+    offered: [MANA_RESEARCH],
+    resources: { Mana: { amount: 100 } },
+    actionModes: { [MANA_RESEARCH.id]: "throw" },
+    readTestShadowObserver: () => (observation) =>
+      observations.push(observation),
+  });
+  const actionMethods = page.controls.get(MANA_RESEARCH.id).methods;
+  const actionFunction = actionMethods.action;
+  const actionDescriptor = Object.getOwnPropertyDescriptor(
+    actionMethods,
+    "action",
+  );
+  assert.equal(page.control.runCycle().status, "rejected");
+  assert.equal(page.clicks.length, 1);
+  assert.equal(page.root.resource.Mana.amount, 100);
+  assert.equal(observations.length, 1);
+  assert.equal(observations[0].invocation, "failed");
+  assert.equal(observations[0].expectedGrantOccurred, false);
+  assert.equal(observations[0].manaStockAfter, 100);
+  assert.equal(actionMethods.action, actionFunction);
+  assert.deepEqual(
+    Object.getOwnPropertyDescriptor(actionMethods, "action"),
+    actionDescriptor,
+    "a thrown native action leaves its function descriptor unchanged",
+  );
+}
 
 {
   let selected;

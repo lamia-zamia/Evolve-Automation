@@ -43,6 +43,7 @@ import {
 import { createCapturedKnowledgeReader } from "../adapters/evolve/progression/build/captured-knowledge-gate.ts";
 import { createCapturedConstructionControl } from "./captured-construction-control.ts";
 import { createCapturedResearchControl } from "./captured-research-control.ts";
+import type { ResearchShadowObservation } from "../adapters/evolve/progression/research/captured-research.ts";
 import { SAVING_CONFLICT_CAUSE } from "../domain/progression/build/build.ts";
 import type { CommandExecutionOutcome } from "../domain/commands.ts";
 import type { CostReservationSource } from "../ports/game-cost-reservations.ts";
@@ -159,6 +160,8 @@ export interface CapturedProgressionControlDependencies {
     ((result: Readonly<ResearchOwnerSelectionResult>) => void) | undefined;
   readonly readResearchTestIntervention?: () =>
     Readonly<{ deferActionId: string; targetActionId: string }> | undefined;
+  readonly readResearchShadowObserver?: () =>
+    ((observation: Readonly<ResearchShadowObservation>) => void) | undefined;
   readonly readComputedResearchRequirementsEnabled?: () => boolean;
 }
 
@@ -1042,6 +1045,13 @@ export function createCapturedProgressionControl(
       : {
           readTestOnlyIntervention: dependencies.readResearchTestIntervention,
         }),
+    ...(typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
+    __EA_TEST_SURFACE_ENABLED__ === true &&
+    dependencies.readResearchShadowObserver !== undefined
+      ? {
+          readTestShadowObserver: dependencies.readResearchShadowObserver,
+        }
+      : {}),
     ...(onUnavailable === undefined ? {} : { onUnavailable }),
     ...(dependencies.onResearchOwnerSelection === undefined
       ? {}

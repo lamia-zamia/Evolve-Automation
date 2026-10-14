@@ -16,6 +16,7 @@ import { createCapturedTabDiscovery } from "../adapters/evolve/captured-tab-disc
 import { createCapturedActionCostReader } from "../adapters/evolve/captured-action-costs.ts";
 import { createCapturedTechCatalog } from "../adapters/evolve/progression/research/captured-tech-catalog.ts";
 import { createCapturedResearchAdapter } from "../adapters/evolve/progression/research/captured-research.ts";
+import type { ResearchShadowObservation } from "../adapters/evolve/progression/research/captured-research.ts";
 import { createCapturedTechConflictReader } from "../adapters/evolve/progression/research/captured-tech-conflicts.ts";
 import type { GameControlRegistry } from "../ports/game-control-registry.ts";
 import type { GameActivitySink } from "../ports/game-message-log.ts";
@@ -64,6 +65,8 @@ export interface CapturedResearchControlDependencies {
   /** Reads only a test-sandbox intervention installed behind the compile-time test surface. */
   readonly readTestOnlyIntervention?: () =>
     Readonly<{ deferActionId: string; targetActionId: string }> | undefined;
+  readonly readTestShadowObserver?: () =>
+    ((observation: Readonly<ResearchShadowObservation>) => void) | undefined;
   readonly readComputedRequirementsContext?: () =>
     CapturedComputedTechRequirementsContext | undefined;
 }
@@ -246,6 +249,12 @@ export function createCapturedResearchControl(
           observeOwner:
             diagnostics?.readPerformanceEnabled() === true ||
             testOnlyIntervention !== undefined,
+          ...(typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
+          __EA_TEST_SURFACE_ENABLED__ === true
+            ? {
+                testShadowObserver: dependencies.readTestShadowObserver?.(),
+              }
+            : {}),
           ...(onActivity === undefined ? {} : { onActivity }),
         });
         let researchReader = reader;

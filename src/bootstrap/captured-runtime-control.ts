@@ -1112,6 +1112,67 @@ export function startCapturedRuntime({
               ? Object.freeze({ deferActionId, targetActionId })
               : undefined;
           },
+          readResearchShadowObserver: () => {
+            const hooks = readProperty(settingsHostWindow, "__EA_TEST_HOOKS__");
+            if (
+              !isRecord(hooks) ||
+              readProperty(hooks, "researchShadowEnabled") !== true
+            )
+              return undefined;
+            const testHooks = hooks;
+            return (observation) => {
+              const intervention = readProperty(
+                testHooks,
+                "gatherIntervention",
+              );
+              const claimValues = readProperty(intervention, "resourceClaims");
+              const activeClaims = Array.isArray(claimValues)
+                ? claimValues
+                    .map((value: unknown) => readAdmittedResourceClaim(value))
+                    .filter(
+                      (claim): claim is Readonly<ResourceClaim> =>
+                        claim !== undefined,
+                    )
+                : [];
+              const fulfilledClaim = observation.expectedGrantOccurred
+                ? activeClaims.find(
+                    (claim) => claim.nativeActionId === observation.actionId,
+                  )
+                : undefined;
+              const remainingClaims = activeClaims.filter(
+                (claim) => claim.claimId !== fulfilledClaim?.claimId,
+              );
+              const stockDecrease =
+                observation.manaStockBefore === undefined ||
+                observation.manaStockAfter === undefined
+                  ? undefined
+                  : observation.manaStockBefore - observation.manaStockAfter;
+              const event = Object.freeze({
+                ...observation,
+                claimState: Object.freeze(
+                  activeClaims.map((claim) =>
+                    Object.freeze({
+                      claimId: claim.claimId,
+                      actionId: claim.nativeActionId,
+                      protectedMana: claim.requiredQuantity,
+                    }),
+                  ),
+                ),
+                fulfilledClaimId: fulfilledClaim?.claimId,
+                couldHaveConsumedStockProtectedForAnotherObligation:
+                  remainingClaims.length === 0
+                    ? false
+                    : stockDecrease === undefined
+                      ? undefined
+                      : stockDecrease > 0,
+                internalCostEvaluations: "unobserved",
+              });
+              const previous = readProperty(testHooks, "researchShadowEvents");
+              const events = Array.isArray(previous) ? previous : [];
+              events.push(event);
+              Reflect.set(testHooks, "researchShadowEvents", events);
+            };
+          },
         }
       : {}),
     onDiagnostic: reportDiagnostic,

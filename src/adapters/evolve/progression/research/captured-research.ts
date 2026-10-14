@@ -52,6 +52,20 @@ export interface CapturedResearchDependencies {
   readonly onActivity?: GameActivitySink;
   /** Retain component affordability/exclusion evidence only for the opt-in owner diagnostic. */
   readonly observeOwner?: boolean;
+  readonly testShadowObserver?:
+    ((observation: Readonly<ResearchShadowObservation>) => void) | undefined;
+}
+
+export interface ResearchShadowObservation {
+  readonly actionId: string;
+  readonly offerGeneration: number;
+  readonly offerSetIdentity: string | undefined;
+  readonly offerObservationId: string | undefined;
+  readonly displayedManaPrice: number | undefined;
+  readonly manaStockBefore: number | undefined;
+  readonly manaStockAfter: number | undefined;
+  readonly expectedGrantOccurred: boolean;
+  readonly invocation: "returned" | "failed";
 }
 
 export interface CapturedResearchAdapter {
@@ -77,6 +91,41 @@ export function createCapturedResearchAdapter(
     dependencies;
   const reportActivity = dependencies.onActivity ?? (() => {});
   const reportRejected = dependencies.onRejected ?? (() => {});
+  const testShadowObserver = dependencies.testShadowObserver;
+  const readShadowManaStock = () => {
+    try {
+      return resources.readResources(["Mana"])?.resources.get("Mana")?.amount;
+    } catch {
+      return undefined;
+    }
+  };
+  const reportShadowObservation = (
+    tech: Readonly<OfferedTech>,
+    actionId: string,
+    manaStockBefore: number | undefined,
+    expectedGrantOccurred: boolean,
+    invocation: ResearchShadowObservation["invocation"],
+  ) => {
+    if (testShadowObserver === undefined) return;
+    try {
+      testShadowObserver(
+        Object.freeze({
+          actionId,
+          offerGeneration: tech.generation,
+          offerSetIdentity: tech.offerSetIdentity,
+          offerObservationId: tech.offerObservationId,
+          displayedManaPrice:
+            typeof tech.cost.Mana === "number" ? tech.cost.Mana : undefined,
+          manaStockBefore,
+          manaStockAfter: readShadowManaStock(),
+          expectedGrantOccurred,
+          invocation,
+        } satisfies ResearchShadowObservation),
+      );
+    } catch {
+      // Shadow diagnostics must not change the native action's result.
+    }
+  };
 
   /**
    * Whether a research exclusion rejects this candidate. An exclusion the reader could not decide
@@ -267,8 +316,25 @@ export function createCapturedResearchAdapter(
           "stopped",
         );
       }
+      const manaStockBefore =
+        testShadowObserver === undefined ? undefined : readShadowManaStock();
       const result = controls.invoke(handle, "action");
       if (!result.ok) {
+        if (testShadowObserver !== undefined) {
+          const afterFailure = readCapturedTechnologyLevel(
+            rootState.readRoot(),
+            tech.grantTechnology,
+          );
+          reportShadowObservation(
+            tech,
+            decision.techId,
+            manaStockBefore,
+            before < tech.grantLevel &&
+              afterFailure !== undefined &&
+              afterFailure >= tech.grantLevel,
+            "failed",
+          );
+        }
         return executionResult(
           result.reason === "stale-control"
             ? stale("stale-research-control", result.detail ?? result.reason, {
@@ -288,6 +354,13 @@ export function createCapturedResearchAdapter(
         before < tech.grantLevel &&
         after !== undefined &&
         after >= tech.grantLevel;
+      reportShadowObservation(
+        tech,
+        decision.techId,
+        manaStockBefore,
+        researched,
+        "returned",
+      );
       if (researched) {
         const label = readCapturedControlLabel(handle, decision.techId);
         reportActivity({

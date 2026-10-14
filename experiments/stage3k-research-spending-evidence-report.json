@@ -1,0 +1,401 @@
+{
+  "stage": "3K",
+  "upstreamCommit": "db38e2af831907d49aeb5348d678d8d8745d6c3f",
+  "gameSnapshot": "test-artifacts/game/evolve-deadspace.js",
+  "inputs": {
+    "save": "test-artifacts\\benchmark\\slice0\\saves\\stage2f-fixed-progression-export.json",
+    "saveSha256": "b1f22205b78d043a98f914924d965a1ab04af791f1f3d7ce6e0179849892662e",
+    "settings": "test-artifacts\\benchmark\\slice0\\settings\\stage2e-integrated-mad-no-triggers.json",
+    "settingsSha256": "fbf75da786f5aa841212eea5c5848a7a532a9a8afe8d7ccd14f5781895601131",
+    "seed": 42,
+    "epoch": "2026-09-21T00:00:00.000Z"
+  },
+  "parity": {
+    "200": {
+      "finalExportHash": "9b4a3e7364571db6c6fc858e743ee3610dde162a921132641f1d17c155e7ec67",
+      "researchActions": [
+        "tech-rituals",
+        "tech-mad_science",
+        "tech-espionage",
+        "tech-reinforced_crates",
+        "tech-clerics"
+      ],
+      "gatherClicks": 0,
+      "gatherManaExpenditure": 0,
+      "lifecycleEventCount": 50,
+      "lifecycleSha256": "d91dd305a1d7ec61386d8f029e3b22063b2d8ca5293c18d96ba3395e87f2392e",
+      "researchDrawCounts": {
+        "research.observation.samples": {
+          "total": 30,
+          "perTick": 1.2,
+          "max": 1
+        },
+        "research.observation.sample-requester.resource-claim-before-gather": {
+          "total": 25,
+          "perTick": 1,
+          "max": 1
+        },
+        "research.observation.sample.offers-only": {
+          "total": 30,
+          "perTick": 1.2,
+          "max": 1
+        },
+        "research.catalog.observations": {
+          "total": 30,
+          "perTick": 1.2,
+          "max": 1
+        },
+        "research.observation.sample-requester.resource-demand": {
+          "total": 5,
+          "perTick": 0.2,
+          "max": 1
+        }
+      }
+    },
+    "1000": {
+      "finalExportHash": "261a9beb7d77c01efac9554c9f12d143f79febd6e890504dbcf2f46c4e3033b0",
+      "researchActions": [
+        "tech-rituals",
+        "tech-mad_science",
+        "tech-espionage",
+        "tech-reinforced_crates",
+        "tech-clerics",
+        "tech-magic",
+        "tech-black_powder",
+        "tech-dynamite",
+        "tech-boot_camp",
+        "tech-slave_market",
+        "tech-spy_training",
+        "tech-electricity",
+        "tech-spy_gadgets"
+      ],
+      "gatherClicks": 8900,
+      "gatherManaExpenditure": 1369,
+      "lifecycleEventCount": 250,
+      "lifecycleSha256": "2ffc114354cb64d402cb489d4370434d2881170a2adc67653929ccc6b6d7ad1f",
+      "researchDrawCounts": {
+        "research.observation.samples": {
+          "total": 26,
+          "perTick": 1.04,
+          "max": 1
+        },
+        "research.observation.sample-requester.resource-claim-before-gather": {
+          "total": 25,
+          "perTick": 1,
+          "max": 1
+        },
+        "research.observation.sample.offers-only": {
+          "total": 26,
+          "perTick": 1.04,
+          "max": 1
+        },
+        "research.catalog.observations": {
+          "total": 26,
+          "perTick": 1.04,
+          "max": 1
+        },
+        "research.observation.sample-requester.resource-demand": {
+          "total": 1,
+          "perTick": 0.04,
+          "max": 1
+        }
+      }
+    },
+    "periods": [200, 1000],
+    "equal": true
+  },
+  "shadowObservationsAt1000": [
+    {
+      "actionId": "tech-rituals",
+      "offerGeneration": 3,
+      "offerObservationId": "research-offers-3",
+      "offerSetIdentitySha256": "1ac44d2f2fa13035476ec6369ada06fd32fbda6442d47fe2c92342c47afc22dc",
+      "displayedManaPrice": 25,
+      "manaStockBefore": 30.746513772557968,
+      "manaStockAfter": 5.746513772557968,
+      "observedNetManaChange": -25,
+      "actualNativeDebit": 25,
+      "debitEvidence": "source-inferred exact debit for pinned stable callback class; pre/post stock agrees",
+      "internalCostEvaluations": "unobserved",
+      "grantCompleted": true,
+      "activeClaims": [
+        {
+          "claimId": "prestige:mad|research:tech-black_powder|tech-black_powder|explosives|1|Mana|anywhere",
+          "actionId": "tech-black_powder",
+          "protectedMana": 100
+        },
+        {
+          "claimId": "prestige:mad|research:tech-mad_science|tech-mad_science|high_tech|1|Mana|anywhere",
+          "actionId": "tech-mad_science",
+          "protectedMana": 50
+        }
+      ],
+      "couldHaveConsumedStockProtectedForAnotherObligation": true,
+      "category": "displayed price equals source-inferred debit",
+      "evidenceCompleteness": "source-reviewed callback class plus pre/post stock and grant"
+    },
+    {
+      "actionId": "tech-mad_science",
+      "offerGeneration": 9,
+      "offerObservationId": "research-offers-9",
+      "offerSetIdentitySha256": "9b95895d9951f537905da190c3e30ac59756f556c93c1285252aec7800bbd13e",
+      "displayedManaPrice": 50,
+      "manaStockBefore": 55.53565810078872,
+      "manaStockAfter": 5.535658100788723,
+      "observedNetManaChange": -50,
+      "actualNativeDebit": 50,
+      "debitEvidence": "source-inferred exact debit for pinned stable callback class; pre/post stock agrees",
+      "internalCostEvaluations": "unobserved",
+      "grantCompleted": true,
+      "activeClaims": [
+        {
+          "claimId": "prestige:mad|research:tech-black_powder|tech-black_powder|explosives|1|Mana|anywhere",
+          "actionId": "tech-black_powder",
+          "protectedMana": 100
+        },
+        {
+          "claimId": "prestige:mad|research:tech-mad_science|tech-mad_science|high_tech|1|Mana|anywhere",
+          "actionId": "tech-mad_science",
+          "protectedMana": 50
+        }
+      ],
+      "fulfilledClaimId": "prestige:mad|research:tech-mad_science|tech-mad_science|high_tech|1|Mana|anywhere",
+      "couldHaveConsumedStockProtectedForAnotherObligation": true,
+      "category": "displayed price equals source-inferred debit",
+      "evidenceCompleteness": "source-reviewed callback class plus pre/post stock and grant"
+    },
+    {
+      "actionId": "tech-espionage",
+      "offerGeneration": 2,
+      "offerObservationId": "research-offers-11",
+      "offerSetIdentitySha256": "c2b9cf83b1637c8c01bc73b268443620e7e5d6518a13891feae35ff3bdad4725",
+      "manaStockBefore": 15.493486966434876,
+      "manaStockAfter": 15.493486966434876,
+      "observedNetManaChange": 0,
+      "actualNativeDebit": "unavailable; native internal cost calls are not exposed",
+      "debitEvidence": "pre/post stock only; debit attribution incomplete",
+      "internalCostEvaluations": "unobserved",
+      "grantCompleted": true,
+      "activeClaims": [
+        {
+          "claimId": "prestige:mad|research:tech-black_powder|tech-black_powder|explosives|1|Mana|anywhere",
+          "actionId": "tech-black_powder",
+          "protectedMana": 100
+        }
+      ],
+      "couldHaveConsumedStockProtectedForAnotherObligation": false,
+      "category": "no net Mana debit observed",
+      "evidenceCompleteness": "pre/post stock and grant observed; internal debit attribution incomplete"
+    },
+    {
+      "actionId": "tech-reinforced_crates",
+      "offerGeneration": 15,
+      "offerObservationId": "research-offers-15",
+      "offerSetIdentitySha256": "64a13851ed3e14417f013435f8fb6a93d75f9275640749acbf35c713fcd09a18",
+      "manaStockBefore": 45.36697356337333,
+      "manaStockAfter": 45.36697356337333,
+      "observedNetManaChange": 0,
+      "actualNativeDebit": "unavailable; native internal cost calls are not exposed",
+      "debitEvidence": "pre/post stock only; debit attribution incomplete",
+      "internalCostEvaluations": "unobserved",
+      "grantCompleted": true,
+      "activeClaims": [
+        {
+          "claimId": "prestige:mad|research:tech-black_powder|tech-black_powder|explosives|1|Mana|anywhere",
+          "actionId": "tech-black_powder",
+          "protectedMana": 100
+        }
+      ],
+      "couldHaveConsumedStockProtectedForAnotherObligation": false,
+      "category": "no net Mana debit observed",
+      "evidenceCompleteness": "pre/post stock and grant observed; internal debit attribution incomplete"
+    },
+    {
+      "actionId": "tech-clerics",
+      "offerGeneration": 19,
+      "offerObservationId": "research-offers-22",
+      "offerSetIdentitySha256": "19ecd609d08c8649b6501ac4c1a16352462689ce49163b020c780716502f31fb",
+      "displayedManaPrice": 100,
+      "manaStockBefore": 106.08812811561972,
+      "manaStockAfter": 6.088128115619725,
+      "observedNetManaChange": -100,
+      "actualNativeDebit": 100,
+      "debitEvidence": "source-inferred exact debit for pinned stable callback class; pre/post stock agrees",
+      "internalCostEvaluations": "unobserved",
+      "grantCompleted": true,
+      "activeClaims": [
+        {
+          "claimId": "prestige:mad|research:tech-black_powder|tech-black_powder|explosives|1|Mana|anywhere",
+          "actionId": "tech-black_powder",
+          "protectedMana": 100
+        }
+      ],
+      "couldHaveConsumedStockProtectedForAnotherObligation": true,
+      "category": "displayed price equals source-inferred debit",
+      "evidenceCompleteness": "source-reviewed callback class plus pre/post stock and grant"
+    },
+    {
+      "actionId": "tech-magic",
+      "offerGeneration": 26,
+      "offerObservationId": "research-offers-35",
+      "offerSetIdentitySha256": "ef7742b06e7a2741e277c77c107ea6c756e2a6eda6fce7301485c7a447aff526",
+      "manaStockBefore": 163.18204013905805,
+      "manaStockAfter": 163.18204013905805,
+      "observedNetManaChange": 0,
+      "actualNativeDebit": "unavailable; native internal cost calls are not exposed",
+      "debitEvidence": "pre/post stock only; debit attribution incomplete",
+      "internalCostEvaluations": "unobserved",
+      "grantCompleted": true,
+      "activeClaims": [
+        {
+          "claimId": "prestige:mad|research:tech-black_powder|tech-black_powder|explosives|1|Mana|anywhere",
+          "actionId": "tech-black_powder",
+          "protectedMana": 100
+        }
+      ],
+      "couldHaveConsumedStockProtectedForAnotherObligation": false,
+      "category": "no net Mana debit observed",
+      "evidenceCompleteness": "pre/post stock and grant observed; internal debit attribution incomplete"
+    },
+    {
+      "actionId": "tech-black_powder",
+      "offerGeneration": 43,
+      "offerObservationId": "research-offers-43",
+      "offerSetIdentitySha256": "54964094f3d26bbd7111e2bfe7cd12173c282888aa8a09fea51176091d4d2f88",
+      "displayedManaPrice": 100,
+      "manaStockBefore": 159.16683854356523,
+      "manaStockAfter": 59.166838543565234,
+      "observedNetManaChange": -100,
+      "actualNativeDebit": 100,
+      "debitEvidence": "source-inferred exact debit for pinned stable callback class; pre/post stock agrees",
+      "internalCostEvaluations": "unobserved",
+      "grantCompleted": true,
+      "activeClaims": [
+        {
+          "claimId": "prestige:mad|research:tech-black_powder|tech-black_powder|explosives|1|Mana|anywhere",
+          "actionId": "tech-black_powder",
+          "protectedMana": 100
+        }
+      ],
+      "fulfilledClaimId": "prestige:mad|research:tech-black_powder|tech-black_powder|explosives|1|Mana|anywhere",
+      "couldHaveConsumedStockProtectedForAnotherObligation": false,
+      "category": "displayed price equals source-inferred debit",
+      "evidenceCompleteness": "source-reviewed callback class plus pre/post stock and grant"
+    },
+    {
+      "actionId": "tech-dynamite",
+      "offerGeneration": 8,
+      "offerObservationId": "research-offers-51",
+      "offerSetIdentitySha256": "65f9b0689f3b55db5325b675c2cbd9c46a6205a4cdeb2ea49e621d50b4890a37",
+      "manaStockBefore": 0.07952651974501457,
+      "manaStockAfter": 0.07952651974501457,
+      "observedNetManaChange": 0,
+      "actualNativeDebit": "unavailable; native internal cost calls are not exposed",
+      "debitEvidence": "pre/post stock only; debit attribution incomplete",
+      "internalCostEvaluations": "unobserved",
+      "grantCompleted": true,
+      "activeClaims": [],
+      "couldHaveConsumedStockProtectedForAnotherObligation": false,
+      "category": "no net Mana debit observed",
+      "evidenceCompleteness": "pre/post stock and grant observed; internal debit attribution incomplete"
+    },
+    {
+      "actionId": "tech-boot_camp",
+      "offerGeneration": 55,
+      "offerObservationId": "research-offers-64",
+      "offerSetIdentitySha256": "914192d5803dbb4c69e769b3b93d622a162ed2b3f8bd09e3386a776e47bd86a7",
+      "manaStockBefore": 0.6003003869325187,
+      "manaStockAfter": 0.6003003869325187,
+      "observedNetManaChange": 0,
+      "actualNativeDebit": "unavailable; native internal cost calls are not exposed",
+      "debitEvidence": "pre/post stock only; debit attribution incomplete",
+      "internalCostEvaluations": "unobserved",
+      "grantCompleted": true,
+      "activeClaims": [],
+      "couldHaveConsumedStockProtectedForAnotherObligation": false,
+      "category": "no net Mana debit observed",
+      "evidenceCompleteness": "pre/post stock and grant observed; internal debit attribution incomplete"
+    },
+    {
+      "actionId": "tech-slave_market",
+      "offerGeneration": 67,
+      "offerObservationId": "research-offers-76",
+      "offerSetIdentitySha256": "07bd98b30a361ffd4b7cfa83aa122803c74c0700e0babab12ca5b7509d41481b",
+      "manaStockBefore": 0.6958936305199774,
+      "manaStockAfter": 0.6958936305199774,
+      "observedNetManaChange": 0,
+      "actualNativeDebit": "unavailable; native internal cost calls are not exposed",
+      "debitEvidence": "pre/post stock only; debit attribution incomplete",
+      "internalCostEvaluations": "unobserved",
+      "grantCompleted": true,
+      "activeClaims": [],
+      "couldHaveConsumedStockProtectedForAnotherObligation": false,
+      "category": "no net Mana debit observed",
+      "evidenceCompleteness": "pre/post stock and grant observed; internal debit attribution incomplete"
+    },
+    {
+      "actionId": "tech-spy_training",
+      "offerGeneration": 27,
+      "offerObservationId": "research-offers-91",
+      "offerSetIdentitySha256": "309fbe61c979faa09e73a088e1aa09d92ad1ab83c16486023e8f9cd6c27307ee",
+      "manaStockBefore": 0.018543688646420975,
+      "manaStockAfter": 0.018543688646420975,
+      "observedNetManaChange": 0,
+      "actualNativeDebit": "unavailable; native internal cost calls are not exposed",
+      "debitEvidence": "pre/post stock only; debit attribution incomplete",
+      "internalCostEvaluations": "unobserved",
+      "grantCompleted": true,
+      "activeClaims": [],
+      "couldHaveConsumedStockProtectedForAnotherObligation": false,
+      "category": "no net Mana debit observed",
+      "evidenceCompleteness": "pre/post stock and grant observed; internal debit attribution incomplete"
+    },
+    {
+      "actionId": "tech-electricity",
+      "offerGeneration": 102,
+      "offerObservationId": "research-offers-111",
+      "offerSetIdentitySha256": "5123552fde7af3a00a11d46600ec6b43f22c7b7e0f3444536906a5573c83c3c3",
+      "manaStockBefore": 0.3849973389608792,
+      "manaStockAfter": 0.3849973389608792,
+      "observedNetManaChange": 0,
+      "actualNativeDebit": "unavailable; native internal cost calls are not exposed",
+      "debitEvidence": "pre/post stock only; debit attribution incomplete",
+      "internalCostEvaluations": "unobserved",
+      "grantCompleted": true,
+      "activeClaims": [],
+      "couldHaveConsumedStockProtectedForAnotherObligation": false,
+      "category": "no net Mana debit observed",
+      "evidenceCompleteness": "pre/post stock and grant observed; internal debit attribution incomplete"
+    },
+    {
+      "actionId": "tech-spy_gadgets",
+      "offerGeneration": 21,
+      "offerObservationId": "research-offers-132",
+      "offerSetIdentitySha256": "6e80d306ff0b288764b87e1915f9ded30e2f5bf33c2953017175eaf60521cd79",
+      "manaStockBefore": 0.9452548031879235,
+      "manaStockAfter": 0.9452548031879235,
+      "observedNetManaChange": 0,
+      "actualNativeDebit": "unavailable; native internal cost calls are not exposed",
+      "debitEvidence": "pre/post stock only; debit attribution incomplete",
+      "internalCostEvaluations": "unobserved",
+      "grantCompleted": true,
+      "activeClaims": [],
+      "couldHaveConsumedStockProtectedForAnotherObligation": false,
+      "category": "no net Mana debit observed",
+      "evidenceCompleteness": "pre/post stock and grant observed; internal debit attribution incomplete"
+    }
+  ],
+  "evidenceCategoryCounts": {
+    "displayedPriceEqualsObservedDebit": 4,
+    "displayedPriceDiffersFromObservedDebit": 0,
+    "nativeDebitAttributionUncertain": 0,
+    "rejectedOrGrantMissing": 0,
+    "noNetManaDebitObserved": 9
+  },
+  "instrumentation": {
+    "extraNativeResearchDraws": 0,
+    "extraNativeCostCallbackEvaluations": 0,
+    "callbackDescriptorReplacement": false,
+    "callbackRestorationFailures": 0
+  }
+}
