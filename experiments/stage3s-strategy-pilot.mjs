@@ -9,6 +9,7 @@ import {
   parseSave,
 } from "../tools/chromium-evolve-runner.mjs";
 import { planGoalResourceIntents } from "../src/domain/economy/production/goal-resource-intent.ts";
+import { readFreshGoalResourceStock } from "./stage3s-smelter-intent.mjs";
 import { planNativeResearchPrerequisites } from "../src/domain/progression/research-prerequisite-planning.ts";
 import { classifyMandatoryNativeResearchObligations } from "../src/domain/progression/research-prerequisite-obligations.ts";
 
@@ -129,16 +130,22 @@ try {
             hooks.smelterObservations.push({ input, decision, demand });
           };
           if (scenarioId === "D")
-            hooks.prepareSmelterGoalDemandForTest = (input, demand) => {
+            hooks.prepareSmelterGoalDemandForTest = (
+              input,
+              demand,
+              { root, rootGeneration },
+            ) => {
               const result = hooks.selectGoalResourceCandidate({
                 hooks,
                 input,
                 demand,
                 settings: scenarioSettings,
                 goalActionId: "tech-industrialization",
+                currentGame: root,
+                currentRootGeneration: rootGeneration,
               });
               hooks.strategyApplications.push(result);
-              return result.apply === true;
+              return result;
             };
           hooks.strategySetup = {
             scenarioId,
@@ -454,6 +461,8 @@ function selectGoalResourceCandidate({
   demand,
   settings: currentSettings,
   goalActionId,
+  currentGame,
+  currentRootGeneration,
 }) {
   const unavailable = (reason) => ({ apply: false, status: "unknown", reason });
   if (currentSettings.autoSmelter !== true || input.initialised !== true)
@@ -508,8 +517,7 @@ function selectGoalResourceCandidate({
   const resourceId = Object.hasOwn(candidate.offer.cost, "Steel")
     ? "Steel"
     : "Iron";
-  const currentQuantity =
-    input[resourceId === "Steel" ? "steelCount" : "ironCount"];
+  const currentQuantity = readFreshGoalResourceStock(currentGame, resourceId);
   const requestedQuantity = demand.requestedQuantity(resourceId);
   const price = candidate.offer.cost[resourceId];
   const shortfall = Math.max(0, price - currentQuantity);
@@ -534,12 +542,16 @@ function selectGoalResourceCandidate({
       productionSmelting: currentSettings.productionSmelting,
     }),
     productionFingerprint: JSON.stringify(input),
+    stockResourceId: resourceId,
+    stockAmount: currentQuantity,
+    stockRootGeneration: currentRootGeneration,
   };
   if (
     catalog.current !== true ||
     catalog.rootGeneration !== freshness.rootGeneration ||
     catalog.progressionEpoch !== freshness.progressionEpoch ||
     candidate.offer.generation !== freshness.offerGeneration ||
+    currentRootGeneration !== catalog.rootGeneration ||
     candidate.offer.cost[resourceId] !== price ||
     JSON.stringify(input) !== freshness.productionFingerprint ||
     JSON.stringify({
@@ -595,6 +607,11 @@ function selectGoalResourceCandidate({
     requestedQuantity,
     currentQuantity,
     freshness,
+    stock: Object.freeze({
+      resourceId,
+      amount: currentQuantity,
+      rootGeneration: currentRootGeneration,
+    }),
     boundedRisk:
       "one native demand bit; no reservation, allocation, stock, or technology mutation",
   };

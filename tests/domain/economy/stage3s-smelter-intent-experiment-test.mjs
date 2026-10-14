@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
-import { applySelectedGoalResourceIntentToSmelter } from "../../../experiments/stage3s-smelter-intent.mjs";
+import {
+  applySelectedGoalResourceIntentToSmelter,
+  readFreshGoalResourceStock,
+} from "../../../experiments/stage3s-smelter-intent.mjs";
 import { planSmelter } from "../../../src/domain/economy/production/smelter.ts";
 
 const input = Object.freeze({
@@ -16,7 +19,7 @@ const input = Object.freeze({
 const freshness = Object.freeze({
   rootGeneration: 4,
   progressionEpoch: "epoch-7",
-  offerIdentity: "offer-set-3",
+  offerIdentity: "tech-steel_containers:9",
   offerGeneration: 9,
   price: [{ resourceId: "Steel", amount: 250 }],
   settingsFingerprint: "settings-a",
@@ -24,6 +27,7 @@ const freshness = Object.freeze({
 });
 const intent = Object.freeze({
   resourceId: "Steel",
+  actionId: "tech-steel_containers",
   shortfall: 240,
   actionable: true,
   selection: "candidate",
@@ -54,6 +58,33 @@ assert.equal(
   true,
   "existing Iron demand remains in force",
 );
+
+assert.equal(
+  readFreshGoalResourceStock({ resource: { Iron: { amount: 42 } } }, "Iron"),
+  42,
+);
+for (const badStock of [
+  undefined,
+  { resource: {} },
+  { resource: { Steel: {} } },
+  { resource: { Steel: { amount: Number.NaN } } },
+  { resource: { Steel: { amount: -1 } } },
+  Object.defineProperty({}, "resource", {
+    get() {
+      throw new Error("stale root accessor");
+    },
+  }),
+])
+  assert.equal(
+    readFreshGoalResourceStock(badStock, "Steel"),
+    undefined,
+    "missing, non-finite, or negative live stock must not fall back to allocation counts",
+  );
+assert.equal(
+  readFreshGoalResourceStock({ resource: { Steel: { amount: 250 } } }, "Steel"),
+  250,
+  "Smelter allocation counts are not inventory",
+);
 assert.equal(
   applied.input.totalSmelters,
   input.totalSmelters,
@@ -70,6 +101,19 @@ assert.equal(
 );
 
 assert.equal(apply({ automationEnabled: false }).status, "permission-disabled");
+assert.equal(
+  apply({ intent: { ...intent, actionId: undefined } }).status,
+  "no-verified-intent",
+);
+assert.equal(
+  apply({
+    intent: {
+      ...intent,
+      freshness: { ...freshness, offerIdentity: "different-action:9" },
+    },
+  }).status,
+  "no-verified-intent",
+);
 assert.equal(
   apply({ competingDemand: { evidence: "incomplete", resources: [] } }).status,
   "demand-unknown",
@@ -138,6 +182,32 @@ assert.equal(
   "already-demanded",
   "a player's existing Iron demand takes precedence",
 );
+const ironApplied = apply({
+  input: { ...input, ironDemanded: false },
+  intent: {
+    ...ironIntent,
+    actionId: "tech-iron_test",
+    freshness: {
+      ...freshness,
+      offerIdentity: "tech-iron_test:9",
+      price: [{ resourceId: "Iron", amount: 250 }],
+    },
+  },
+  currentFreshness: {
+    ...freshness,
+    offerIdentity: "tech-iron_test:9",
+    price: [{ resourceId: "Iron", amount: 250 }],
+  },
+  competingDemand: {
+    evidence: "complete",
+    resources: [
+      { resourceId: "Iron", requestedQuantity: 0, currentQuantity: 0 },
+    ],
+  },
+});
+assert.equal(ironApplied.status, "intent-applied");
+assert.equal(ironApplied.input.ironDemanded, true);
+assert.equal(ironApplied.input.steelDemanded, false);
 
 const fuelConstrainedInput = {
   initialised: true,

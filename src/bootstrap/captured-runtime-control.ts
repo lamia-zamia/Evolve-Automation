@@ -169,6 +169,7 @@ import {
 } from "../domain/economy/production/power.ts";
 import { CONSUMPTION_BALANCE_MIN } from "../config.ts";
 import {
+  applyCapturedSmelterTestCandidate,
   createCapturedSmelterAutomation,
   SMELTER_CONTROL,
 } from "../adapters/evolve/economy/production/captured-smelter.ts";
@@ -5194,10 +5195,20 @@ export function startCapturedRuntime({
                 }),
               );
             if (exact.status !== "ready") return input;
-            return prepare(input, exact.sample) === true &&
-              input.steelDemanded !== true
-              ? Object.freeze({ ...input, steelDemanded: true })
-              : input;
+            const candidateRoot = pageCapture.rootState.readRoot();
+            const candidateRootGeneration = progression.readRootGeneration();
+            const selected = prepare(input, exact.sample, {
+              root: candidateRoot,
+              rootGeneration: candidateRootGeneration,
+            });
+            return applyCapturedSmelterTestCandidate(
+              input,
+              selected,
+              candidateRoot,
+              pageCapture.rootState.readRoot(),
+              candidateRootGeneration,
+              progression.readRootGeneration(),
+            );
           },
           observePlanForDiagnostics: (input, decision, demand) => {
             const observer = readProperty(

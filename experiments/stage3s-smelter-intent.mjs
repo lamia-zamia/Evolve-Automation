@@ -14,6 +14,19 @@ const samePrice = (left, right) => {
   return JSON.stringify(canonical(left)) === JSON.stringify(canonical(right));
 };
 
+export function readFreshGoalResourceStock(root, resourceId) {
+  if (resourceId !== "Iron" && resourceId !== "Steel") return undefined;
+  try {
+    const resource = root?.resource?.[resourceId];
+    const amount = resource?.amount;
+    return typeof amount === "number" && Number.isFinite(amount) && amount >= 0
+      ? amount
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export function applySelectedGoalResourceIntentToSmelter({
   input,
   intent,
@@ -40,6 +53,17 @@ export function applySelectedGoalResourceIntentToSmelter({
     return unchanged(
       "no-verified-intent",
       "no current mandatory fact or selected strategic candidate is actionable",
+    );
+  if (
+    intent.selection === "candidate" &&
+    (typeof intent.actionId !== "string" ||
+      intent.actionId.length === 0 ||
+      intent.freshness?.offerIdentity !==
+        `${intent.actionId}:${intent.freshness?.offerGeneration}`)
+  )
+    return unchanged(
+      "no-verified-intent",
+      "the selected native candidate identity is unavailable or inconsistent",
     );
   if (!Number.isFinite(intent.shortfall) || intent.shortfall <= 0)
     return unchanged(

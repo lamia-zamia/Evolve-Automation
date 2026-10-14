@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 
-import { createCapturedSmelterAutomation } from "../../../src/adapters/evolve/economy/production/captured-smelter.ts";
+import {
+  applyCapturedSmelterTestCandidate,
+  createCapturedSmelterAutomation,
+} from "../../../src/adapters/evolve/economy/production/captured-smelter.ts";
 
 globalThis.__EA_TEST_SURFACE_ENABLED__ = true;
 
@@ -139,6 +142,90 @@ assert.ok(
   calls.some(([method, id]) => method === "addMetal" && id === "Steel"),
   "the test preparation hook changes input before the native planner and owner execute",
 );
+
+const candidateBaseInput = Object.freeze({
+  ...preparedInput,
+  ironDemanded: false,
+  steelDemanded: false,
+});
+const applyTestCandidate = (
+  resourceId,
+  amount = root.resource[resourceId].amount,
+) =>
+  applyCapturedSmelterTestCandidate(
+    candidateBaseInput,
+    {
+      apply: true,
+      actionId: "tech-selected-native-offer",
+      resourceId,
+      stock: { resourceId, amount, rootGeneration: 3 },
+    },
+    root,
+    root,
+    3,
+    3,
+  );
+const ironSelectedInput = applyTestCandidate("Iron");
+assert.equal(ironSelectedInput.ironDemanded, true);
+assert.equal(ironSelectedInput.steelDemanded, false);
+const steelSelectedInput = applyTestCandidate("Steel");
+assert.equal(steelSelectedInput.ironDemanded, false);
+assert.equal(steelSelectedInput.steelDemanded, true);
+for (const refusal of [
+  applyCapturedSmelterTestCandidate(
+    candidateBaseInput,
+    { apply: true, actionId: "", resourceId: "Iron", stock: {} },
+    root,
+    root,
+    3,
+    3,
+  ),
+  applyTestCandidate("Iron", -1),
+  applyCapturedSmelterTestCandidate(
+    candidateBaseInput,
+    {
+      apply: true,
+      actionId: "tech-selected-native-offer",
+      resourceId: "Iron",
+      stock: { resourceId: "Steel", amount: 50, rootGeneration: 3 },
+    },
+    root,
+    root,
+    3,
+    3,
+  ),
+  applyCapturedSmelterTestCandidate(
+    candidateBaseInput,
+    {
+      apply: true,
+      actionId: "tech-selected-native-offer",
+      resourceId: "Iron",
+      stock: { resourceId: "Iron", amount: 50, rootGeneration: 3 },
+    },
+    root,
+    {},
+    3,
+    3,
+  ),
+  applyCapturedSmelterTestCandidate(
+    candidateBaseInput,
+    {
+      apply: true,
+      actionId: "tech-selected-native-offer",
+      resourceId: "Gold",
+      stock: { resourceId: "Gold", amount: 1, rootGeneration: 3 },
+    },
+    root,
+    root,
+    3,
+    3,
+  ),
+])
+  assert.equal(
+    refusal,
+    candidateBaseInput,
+    "invalid candidate or stale stock is refused",
+  );
 
 const unavailable = createCapturedSmelterAutomation({
   rootState: { readRoot: () => root },

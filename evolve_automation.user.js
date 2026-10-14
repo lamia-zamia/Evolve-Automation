@@ -34935,7 +34935,8 @@
   }
 
   // src/adapters/evolve/economy/production/captured-smelter.ts
-  var SMELTER_CONTROL = "iSmelter", FUEL_IDS = Object.freeze([
+  var SMELTER_CONTROL = "iSmelter";
+  var FUEL_IDS = Object.freeze([
     "Oil",
     "Coal",
     "Wood",

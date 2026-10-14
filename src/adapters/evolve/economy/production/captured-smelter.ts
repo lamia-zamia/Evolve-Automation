@@ -18,6 +18,48 @@ declare const __EA_TEST_SURFACE_ENABLED__: boolean;
 
 export const SMELTER_CONTROL = "iSmelter";
 
+/** Applies one validated test-surface strategy choice to its matching native planner input. */
+export function applyCapturedSmelterTestCandidate(
+  input: Readonly<SmelterInput>,
+  selected: unknown,
+  sampledRoot: unknown,
+  currentRoot: unknown,
+  sampledRootGeneration: number | undefined,
+  currentRootGeneration: number | undefined,
+): Readonly<SmelterInput> {
+  if (
+    !isRecord(selected) ||
+    selected["apply"] !== true ||
+    (selected["resourceId"] !== "Iron" && selected["resourceId"] !== "Steel") ||
+    typeof selected["actionId"] !== "string" ||
+    selected["actionId"].length === 0 ||
+    !isRecord(selected["stock"]) ||
+    selected["stock"]["resourceId"] !== selected["resourceId"] ||
+    sampledRootGeneration === undefined ||
+    sampledRootGeneration !== currentRootGeneration ||
+    selected["stock"]["rootGeneration"] !== sampledRootGeneration ||
+    sampledRoot !== currentRoot
+  )
+    return input;
+  const resourceId = selected["resourceId"];
+  const amount = finite(
+    readProperty(
+      readProperty(readProperty(sampledRoot, "resource"), resourceId),
+      "amount",
+    ),
+  );
+  if (
+    amount === undefined ||
+    amount < 0 ||
+    amount !== selected["stock"]["amount"]
+  )
+    return input;
+  const demandField = resourceId === "Iron" ? "ironDemanded" : "steelDemanded";
+  return input[demandField] === true
+    ? input
+    : Object.freeze({ ...input, [demandField]: true });
+}
+
 export interface CapturedSmelterDependencies {
   readonly rootState: GameRootStateSource;
   readonly controls: GameControlRegistry;
