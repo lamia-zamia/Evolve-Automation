@@ -9,6 +9,7 @@ import {
   createChromiumRunner,
   parseSave,
 } from "../tools/chromium-evolve-runner.mjs";
+import { attestResearchManaDebit } from "../src/domain/progression/research-mana-attestation.ts";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const savePath = path.join(
@@ -32,6 +33,38 @@ const upstreamPath =
   process.argv.find((value) => value.startsWith("--upstream="))?.slice(11) ??
   process.env.EVOLVE_UPSTREAM_SOURCE;
 const hash = (value) => createHash("sha256").update(value).digest("hex");
+function nativeManaMethod(source, actionId) {
+  const actionOffset = source.indexOf(actionId);
+  if (actionOffset < 0) return undefined;
+  const methodOffset = source.indexOf("Mana()", actionOffset);
+  const bodyStart = source.indexOf("{", methodOffset);
+  if (methodOffset < 0 || bodyStart < 0) return undefined;
+  let depth = 0;
+  for (let index = bodyStart; index < source.length; index += 1) {
+    if (source[index] === "{") depth += 1;
+    if (source[index] === "}") {
+      depth -= 1;
+      if (depth === 0) return source.slice(methodOffset, index + 1);
+    }
+  }
+  return undefined;
+}
+const normalizeFunctionText = (value) =>
+  value
+    ?.replaceAll('"', "'")
+    .replaceAll(/\s+/gu, " ")
+    .replaceAll(/\s*([{}])\s*/gu, "$1")
+    .trim();
+const magicModifierSnapshot = (state) => ({
+  universe: state?.race?.universe,
+  truePath: Boolean(state?.race?.truepath),
+  loneSurvivor: Boolean(state?.race?.lone_survivor),
+  kindlingKindred: Boolean(state?.race?.kindling_kindred),
+  ironWood: Boolean(state?.race?.iron_wood),
+  governance: state?.civic?.govern?.type,
+  nexus: state?.tech?.nexus ?? 0,
+  rogueMagic: state?.tech?.roguemagic ?? 0,
+});
 const STAGE3K_STABLE_MAGIC_MANA_ACTIONS = new Set([
   "tech-rituals",
   "tech-mad_science",
@@ -175,6 +208,19 @@ try {
   assert.deepEqual(e200.selection, d200.selection);
   assert.deepEqual(e200.researchDrawCounts, d200.researchDrawCounts);
   assert.equal(e200.shadow.length, e200.researchAttempts.length);
+  assert.equal(
+    d200.exportHash,
+    "d683be0bf2a4ce69e407117388efdaa77ba3ca8bfafbf1f28cfbe13a8ee742cf",
+  );
+  assert.equal(d200.gather.length, 1700);
+  assert.equal(
+    d200.gather.reduce(
+      (total, event) => total + Math.max(0, -event.manaDelta),
+      0,
+    ),
+    183,
+  );
+  assert.equal(d200.gather[0]?.period, 72);
 
   const d1000 = await runCondition(runner, saveText, settings, 1000, false);
   const e1000 = await runCondition(runner, saveText, settings, 1000, true);
@@ -190,6 +236,27 @@ try {
   assert.deepEqual(e1000.selection, d1000.selection);
   assert.deepEqual(e1000.researchDrawCounts, d1000.researchDrawCounts);
   assert.equal(e1000.shadow.length, e1000.researchAttempts.length);
+  assert.equal(d1000.gather.length, 8512);
+  assert.equal(
+    d1000.gather.reduce(
+      (total, event) => total + Math.max(0, -event.manaDelta),
+      0,
+    ),
+    1270,
+  );
+  assert.equal(d1000.state.tech?.high_tech, 2);
+  assert.equal(d1000.state.tech?.explosives, 2);
+  assert.deepEqual(
+    d1000.researchAttempts
+      .filter((event) =>
+        ["tech-black_powder", "tech-dynamite"].includes(event.actionId),
+      )
+      .map(({ cycle, actionId }) => [cycle, actionId]),
+    [
+      [79, "tech-black_powder"],
+      [80, "tech-dynamite"],
+    ],
+  );
 
   for (const event of e1000.shadow) {
     if (!STAGE3K_STABLE_MAGIC_MANA_ACTIONS.has(event.actionId)) continue;
@@ -223,6 +290,19 @@ try {
       event.displayedManaPrice,
       `${event.actionId} displayed price disagrees with observed stock delta`,
     );
+    const callback = event.nativeManaCallback;
+    assert.ok(
+      ["observed", "stable"].includes(callback?.identityStatus),
+      `${event.actionId} callback unavailable`,
+    );
+    assert.equal(callback?.actionId, event.actionId);
+    assert.equal(
+      callback?.nativeResearchObservationGeneration,
+      event.offerGeneration,
+    );
+    assert.ok(callback?.actionIdentity !== undefined);
+    assert.ok(callback?.costIdentity !== undefined);
+    assert.ok(callback?.callbackIdentity !== undefined);
   }
 
   const observations = e1000.shadow.map((event) => {
@@ -245,6 +325,70 @@ try {
               : stockDecrease === event.displayedManaPrice
                 ? "displayed price equals source-inferred debit"
                 : "displayed price differs from source-inferred debit";
+    const callback = event.nativeManaCallback;
+    const debitAttestation = attestResearchManaDebit([
+      {
+        requirement: "upstream-runtime-identity",
+        status: "unavailable",
+        reason:
+          "the unmodified page exposes no authoritative upstream commit identity",
+      },
+      {
+        requirement: "native-action-binding",
+        status:
+          callback?.registryKey !== undefined &&
+          callback.actionId === event.actionId
+            ? "observed"
+            : "unavailable",
+        reason:
+          "registry key and action ID are recorded, but the selected control object is not exposed",
+      },
+      {
+        requirement: "offer-control-binding",
+        status: "unavailable",
+        reason:
+          "offer and control generations do not prove object identity with the retained registry action",
+      },
+      {
+        requirement: "mana-callback-identity",
+        status:
+          callback?.identityStatus === "observed" ? "observed" : "unavailable",
+        reason:
+          callback?.identityStatus === "observed"
+            ? "descriptor-backed live callback identity observed; upstream module identity remains unbound"
+            : callback?.reasons?.join("; ") ||
+              "live callback identity unavailable",
+      },
+      {
+        requirement: "cost-adjustment-chain",
+        status: "unavailable",
+        reason:
+          "native modifier gates and captured multipliers are not atomically bound to the offer and debit",
+      },
+      {
+        requirement: "debit-evaluation-stability",
+        status: "unavailable",
+        reason:
+          "upstream reevaluates cost callbacks for quote, affordability, and debit",
+      },
+      {
+        requirement: "current-route-and-progression",
+        status:
+          callback?.rootGeneration !== undefined && callback.progressionEpoch
+            ? "observed"
+            : "unavailable",
+        reason:
+          "root generation, progression epoch, and route are captured as context only",
+      },
+      {
+        requirement: "observed-debit",
+        status: stockDecrease === undefined ? "unavailable" : "observed",
+        reason:
+          stockDecrease === undefined
+            ? "pre/post Mana stock delta is unavailable"
+            : "pre/post Mana stock delta is observational and does not identify the internal debit",
+      },
+    ]);
     return {
       actionId: event.actionId,
       offerGeneration: event.offerGeneration,
@@ -260,7 +404,12 @@ try {
       sourceInferredDebit: stableMagicManaAction
         ? event.displayedManaPrice
         : "unavailable; native internal cost calls are not exposed",
-      liveCallbackIdentity: "unavailable at the userscript adapter boundary",
+      nativeManaCallback: callback,
+      callbackSourceSha256: callback?.callbackSource
+        ? hash(callback.callbackSource)
+        : undefined,
+      liveCallbackIdentity: callback?.identityStatus ?? "unavailable",
+      debitAttestation,
       debitEvidence: stableMagicManaAction
         ? "source-reviewed action ID; displayed price equals observed net stock decrease; live callback identity is unverified"
         : "pre/post stock only; debit attribution incomplete",
@@ -276,6 +425,99 @@ try {
         : "pre/post stock and grant observed; internal debit attribution incomplete",
     };
   });
+  const pinnedSourceRoot = upstreamPath ?? "D:/work/Evolve-DeadSpace";
+  const [pinnedSource, pinnedSnapshot] = await Promise.all([
+    readFile(path.join(pinnedSourceRoot, "src/tech.js"), "utf8"),
+    readFile(gamePath, "utf8"),
+  ]);
+  const callbackSourceComparisons = observations
+    .filter((event) => STAGE3K_STABLE_MAGIC_MANA_ACTIONS.has(event.actionId))
+    .map((event) => {
+      const sourceMethod = nativeManaMethod(pinnedSource, event.actionId);
+      const snapshotMethod = nativeManaMethod(pinnedSnapshot, event.actionId);
+      const runtimeMethod = event.nativeManaCallback?.callbackSource;
+      const normalizedSource = normalizeFunctionText(sourceMethod);
+      const normalizedSnapshot = normalizeFunctionText(snapshotMethod);
+      const normalizedRuntime = normalizeFunctionText(runtimeMethod);
+      return {
+        actionId: event.actionId,
+        sourceSha256: sourceMethod ? hash(sourceMethod) : undefined,
+        snapshotSha256: snapshotMethod ? hash(snapshotMethod) : undefined,
+        runtimeSha256: runtimeMethod ? hash(runtimeMethod) : undefined,
+        normalizedSourceMatchesSnapshot:
+          normalizedSource !== undefined &&
+          normalizedSource === normalizedSnapshot,
+        normalizedRuntimeMatchesSource:
+          normalizedRuntime !== undefined &&
+          normalizedRuntime === normalizedSource,
+        normalizedRuntimeMatchesSnapshot:
+          normalizedRuntime !== undefined &&
+          normalizedRuntime === normalizedSnapshot,
+      };
+    });
+  const sourceAdjustmentAudit = [
+    {
+      stage: "truthAdjust",
+      canChangeMana: true,
+      decision:
+        "reads True Path during adjustCosts; multiplier is captured by the wrapper, base callback runs later",
+      fixtureEvidence:
+        "Magic route context reports True Path false; no atomic quote-to-debit binding",
+    },
+    {
+      stage: "loneAdjust",
+      canChangeMana: true,
+      decision:
+        "reads Lone Survivor during adjustCosts; 0.28 multiplier is captured by the wrapper",
+      fixtureEvidence:
+        "save race is human with no Lone Survivor marker; live modifier state is not bound at debit",
+    },
+    {
+      stage: "technoAdjust",
+      canChangeMana: true,
+      decision:
+        "reads governance and calls technocracy effect during adjustCosts; rate depends on High Tech and is captured by the wrapper",
+      fixtureEvidence:
+        "save starts with anarchy; later quote/check/debit state is not atomically attested",
+    },
+    {
+      stage: "nexusAdjust",
+      canChangeMana: true,
+      decision:
+        "Nexus, Witch Hunter, and Rogue Magic gates and Nexus multiplier are read during adjustCosts; wrapped base callback runs later",
+      fixtureEvidence:
+        "save starts without Nexus/Rogue Magic levels; later callback and modifier inputs are not atomically attested",
+    },
+    {
+      stage: "kindlingAdjust",
+      canChangeMana: "conditional",
+      decision:
+        "only adjusts costs when the action has Lumber or Plywood and Kindling Kindred or Iron Wood is active",
+      fixtureEvidence:
+        "all four pinned action definitions have no Lumber or Plywood cost; excluded by source shape",
+    },
+    {
+      stage: "quote-affordability-debit",
+      canChangeMana: true,
+      decision:
+        "quote and affordability use adjusted callbacks; payCosts constructs them again, then checkCosts and debit evaluate the callback separately",
+      fixtureEvidence:
+        "the exact fixture observes quote and stock delta only; it does not bind callback results across these phases",
+    },
+    {
+      stage:
+        "bloatAdjust, inflationAdjust, extravagantAdjust, scienceAdjust, smolderAdjust, flierAdjust, pykreteAdjust, craftAdjust, dictatorAdjust, lMatAdjust, undergroundTradeAdjust, razedAdjust, rebarAdjust, heavyAdjust",
+      canChangeMana: false,
+      decision:
+        "pinned source preserves Mana or transforms only other resource keys for these actions",
+      fixtureEvidence: "source review only; not inferred from displayed prices",
+    },
+  ];
+  assert.equal(
+    new Set(callbackSourceComparisons.map((entry) => entry.actionId)).size,
+    STAGE3K_STABLE_MAGIC_MANA_ACTIONS.size,
+    "all four source-reviewed Mana callbacks must be observed",
+  );
   const evidenceCategoryCounts = {
     displayedPriceEqualsObservedDebit: observations.filter(
       (event) =>
@@ -296,7 +538,7 @@ try {
     ).length,
   };
   const report = {
-    stage: "3K",
+    stage: "3M",
     upstreamCommit: "db38e2af831907d49aeb5348d678d8d8745d6c3f",
     gameSnapshot: "test-artifacts/game/evolve-deadspace.js",
     inputs: {
@@ -336,6 +578,25 @@ try {
       equal: true,
     },
     shadowObservationsAt1000: observations,
+    callbackSourceComparisons,
+    sourceAdjustmentAudit,
+    fixtureModifierSnapshots: {
+      initial: magicModifierSnapshot(parseSave(saveText)),
+      200: magicModifierSnapshot(d200.state),
+      1000: magicModifierSnapshot(d1000.state),
+    },
+    callbackFingerprintLimits: [
+      "Function text does not identify the upstream module or commit.",
+      "Function text omits closure-captured values and imported dependencies.",
+      "Function text does not bind adjustCosts wrappers or their captured multipliers.",
+      "The quote, affordability check, and debit reevaluate callbacks at separate times.",
+      "Only the pinned source and generated snapshot are available here; no alternate minified or deployed supported build is compared.",
+    ],
+    attestationDecision: {
+      status: "unavailable",
+      reason:
+        "callback identity and source text are observed, but upstream identity, offer/control object binding, adjustment state, and quote-to-debit evaluation stability are not authoritative",
+    },
     evidenceCategoryCounts,
     instrumentation: {
       extraNativeResearchDraws: 0,

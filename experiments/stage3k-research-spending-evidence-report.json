@@ -1,5 +1,5 @@
 {
-  "stage": "3K",
+  "stage": "3M",
   "upstreamCommit": "db38e2af831907d49aeb5348d678d8d8745d6c3f",
   "gameSnapshot": "test-artifacts/game/evolve-deadspace.js",
   "inputs": {
@@ -115,7 +115,46 @@
       "manaStockAfter": 5.746513772557968,
       "observedNetManaChange": -25,
       "sourceInferredDebit": 25,
-      "liveCallbackIdentity": "unavailable at the userscript adapter boundary",
+      "nativeManaCallback": {
+        "registryKey": "rituals",
+        "actionId": "tech-rituals",
+        "rootIdentity": 47,
+        "actionIdentity": 48,
+        "costIdentity": 49,
+        "callbackIdentity": 50,
+        "callbackSource": "Mana() {\n          return 25;\n        }",
+        "costDescriptor": {
+          "enumerable": true,
+          "configurable": true,
+          "writable": true
+        },
+        "manaDescriptor": {
+          "enumerable": true,
+          "configurable": true,
+          "writable": true
+        },
+        "identityStatus": "observed",
+        "reasons": [],
+        "rootGeneration": 0,
+        "progressionEpoch": "0|39:87|22:58|50|human|magic|178|0|anarchy|1|0|0|0",
+        "routeIdentity": "[\"magic\",false,false]",
+        "nativeResearchObservationGeneration": 3
+      },
+      "callbackSourceSha256": "dd72af7f608c81605048681dc4a5e4b53479b9e5ecf45c899b52904069f3476e",
+      "liveCallbackIdentity": "observed",
+      "debitAttestation": {
+        "status": "unavailable",
+        "reasons": [
+          "upstream-runtime-identity: the unmodified page exposes no authoritative upstream commit identity",
+          "native-action-binding: registry key and action ID are recorded, but the selected control object is not exposed",
+          "offer-control-binding: offer and control generations do not prove object identity with the retained registry action",
+          "mana-callback-identity: descriptor-backed live callback identity observed; upstream module identity remains unbound",
+          "cost-adjustment-chain: native modifier gates and captured multipliers are not atomically bound to the offer and debit",
+          "debit-evaluation-stability: upstream reevaluates cost callbacks for quote, affordability, and debit",
+          "current-route-and-progression: root generation, progression epoch, and route are captured as context only",
+          "observed-debit: pre/post Mana stock delta is observational and does not identify the internal debit"
+        ]
+      },
       "debitEvidence": "source-reviewed action ID; displayed price equals observed net stock decrease; live callback identity is unverified",
       "internalCostEvaluations": "unobserved",
       "grantCompleted": true,
@@ -145,7 +184,46 @@
       "manaStockAfter": 5.535658100788723,
       "observedNetManaChange": -50,
       "sourceInferredDebit": 50,
-      "liveCallbackIdentity": "unavailable at the userscript adapter boundary",
+      "nativeManaCallback": {
+        "registryKey": "mad_science",
+        "actionId": "tech-mad_science",
+        "rootIdentity": 47,
+        "actionIdentity": 51,
+        "costIdentity": 52,
+        "callbackIdentity": 53,
+        "callbackSource": "Mana() {\n          return global.race.universe === \"magic\" ? 50 : 0;\n        }",
+        "costDescriptor": {
+          "enumerable": true,
+          "configurable": true,
+          "writable": true
+        },
+        "manaDescriptor": {
+          "enumerable": true,
+          "configurable": true,
+          "writable": true
+        },
+        "identityStatus": "observed",
+        "reasons": [],
+        "rootGeneration": 0,
+        "progressionEpoch": "0|40:88|22:58|50|human|magic|178|0|anarchy|1|0|0|0",
+        "routeIdentity": "[\"magic\",false,false]",
+        "nativeResearchObservationGeneration": 9
+      },
+      "callbackSourceSha256": "eae65bd2c143bbcb202f99ceec42660e1e238f2b8345a468d7523b6ba173c74a",
+      "liveCallbackIdentity": "observed",
+      "debitAttestation": {
+        "status": "unavailable",
+        "reasons": [
+          "upstream-runtime-identity: the unmodified page exposes no authoritative upstream commit identity",
+          "native-action-binding: registry key and action ID are recorded, but the selected control object is not exposed",
+          "offer-control-binding: offer and control generations do not prove object identity with the retained registry action",
+          "mana-callback-identity: descriptor-backed live callback identity observed; upstream module identity remains unbound",
+          "cost-adjustment-chain: native modifier gates and captured multipliers are not atomically bound to the offer and debit",
+          "debit-evaluation-stability: upstream reevaluates cost callbacks for quote, affordability, and debit",
+          "current-route-and-progression: root generation, progression epoch, and route are captured as context only",
+          "observed-debit: pre/post Mana stock delta is observational and does not identify the internal debit"
+        ]
+      },
       "debitEvidence": "source-reviewed action ID; displayed price equals observed net stock decrease; live callback identity is unverified",
       "internalCostEvaluations": "unobserved",
       "grantCompleted": true,
@@ -175,7 +253,38 @@
       "manaStockAfter": 0.493486966434876,
       "observedNetManaChange": 0,
       "sourceInferredDebit": "unavailable; native internal cost calls are not exposed",
-      "liveCallbackIdentity": "unavailable at the userscript adapter boundary",
+      "nativeManaCallback": {
+        "registryKey": "espionage",
+        "actionId": "tech-espionage",
+        "rootIdentity": 47,
+        "actionIdentity": 54,
+        "costIdentity": 55,
+        "costDescriptor": {
+          "enumerable": true,
+          "configurable": true,
+          "writable": true
+        },
+        "identityStatus": "unavailable",
+        "reasons": ["native Mana cost is absent or is an accessor"],
+        "rootGeneration": 0,
+        "progressionEpoch": "0|40:89|22:58|50|human|magic|178|0|anarchy|1|0|0|0",
+        "routeIdentity": "[\"magic\",false,false]",
+        "nativeResearchObservationGeneration": 2
+      },
+      "liveCallbackIdentity": "unavailable",
+      "debitAttestation": {
+        "status": "unavailable",
+        "reasons": [
+          "upstream-runtime-identity: the unmodified page exposes no authoritative upstream commit identity",
+          "native-action-binding: registry key and action ID are recorded, but the selected control object is not exposed",
+          "offer-control-binding: offer and control generations do not prove object identity with the retained registry action",
+          "mana-callback-identity: native Mana cost is absent or is an accessor",
+          "cost-adjustment-chain: native modifier gates and captured multipliers are not atomically bound to the offer and debit",
+          "debit-evaluation-stability: upstream reevaluates cost callbacks for quote, affordability, and debit",
+          "current-route-and-progression: root generation, progression epoch, and route are captured as context only",
+          "observed-debit: pre/post Mana stock delta is observational and does not identify the internal debit"
+        ]
+      },
       "debitEvidence": "pre/post stock only; debit attribution incomplete",
       "internalCostEvaluations": "unobserved",
       "grantCompleted": true,
@@ -193,7 +302,38 @@
       "manaStockAfter": 0.36697356337334597,
       "observedNetManaChange": 0,
       "sourceInferredDebit": "unavailable; native internal cost calls are not exposed",
-      "liveCallbackIdentity": "unavailable at the userscript adapter boundary",
+      "nativeManaCallback": {
+        "registryKey": "reinforced_crates",
+        "actionId": "tech-reinforced_crates",
+        "rootIdentity": 47,
+        "actionIdentity": 56,
+        "costIdentity": 57,
+        "costDescriptor": {
+          "enumerable": true,
+          "configurable": true,
+          "writable": true
+        },
+        "identityStatus": "unavailable",
+        "reasons": ["native Mana cost is absent or is an accessor"],
+        "rootGeneration": 0,
+        "progressionEpoch": "0|40:90|22:58|50|human|magic|178|0|anarchy|1|0|0|0",
+        "routeIdentity": "[\"magic\",false,false]",
+        "nativeResearchObservationGeneration": 15
+      },
+      "liveCallbackIdentity": "unavailable",
+      "debitAttestation": {
+        "status": "unavailable",
+        "reasons": [
+          "upstream-runtime-identity: the unmodified page exposes no authoritative upstream commit identity",
+          "native-action-binding: registry key and action ID are recorded, but the selected control object is not exposed",
+          "offer-control-binding: offer and control generations do not prove object identity with the retained registry action",
+          "mana-callback-identity: native Mana cost is absent or is an accessor",
+          "cost-adjustment-chain: native modifier gates and captured multipliers are not atomically bound to the offer and debit",
+          "debit-evaluation-stability: upstream reevaluates cost callbacks for quote, affordability, and debit",
+          "current-route-and-progression: root generation, progression epoch, and route are captured as context only",
+          "observed-debit: pre/post Mana stock delta is observational and does not identify the internal debit"
+        ]
+      },
       "debitEvidence": "pre/post stock only; debit attribution incomplete",
       "internalCostEvaluations": "unobserved",
       "grantCompleted": true,
@@ -211,7 +351,38 @@
       "manaStockAfter": 0.12524546868193198,
       "observedNetManaChange": 0,
       "sourceInferredDebit": "unavailable; native internal cost calls are not exposed",
-      "liveCallbackIdentity": "unavailable at the userscript adapter boundary",
+      "nativeManaCallback": {
+        "registryKey": "magic",
+        "actionId": "tech-magic",
+        "rootIdentity": 47,
+        "actionIdentity": 58,
+        "costIdentity": 59,
+        "costDescriptor": {
+          "enumerable": true,
+          "configurable": true,
+          "writable": true
+        },
+        "identityStatus": "unavailable",
+        "reasons": ["native Mana cost is absent or is an accessor"],
+        "rootGeneration": 0,
+        "progressionEpoch": "0|40:91|22:58|50|human|magic|178|0|anarchy|1|0|0|0",
+        "routeIdentity": "[\"magic\",false,false]",
+        "nativeResearchObservationGeneration": 20
+      },
+      "liveCallbackIdentity": "unavailable",
+      "debitAttestation": {
+        "status": "unavailable",
+        "reasons": [
+          "upstream-runtime-identity: the unmodified page exposes no authoritative upstream commit identity",
+          "native-action-binding: registry key and action ID are recorded, but the selected control object is not exposed",
+          "offer-control-binding: offer and control generations do not prove object identity with the retained registry action",
+          "mana-callback-identity: native Mana cost is absent or is an accessor",
+          "cost-adjustment-chain: native modifier gates and captured multipliers are not atomically bound to the offer and debit",
+          "debit-evaluation-stability: upstream reevaluates cost callbacks for quote, affordability, and debit",
+          "current-route-and-progression: root generation, progression epoch, and route are captured as context only",
+          "observed-debit: pre/post Mana stock delta is observational and does not identify the internal debit"
+        ]
+      },
       "debitEvidence": "pre/post stock only; debit attribution incomplete",
       "internalCostEvaluations": "unobserved",
       "grantCompleted": true,
@@ -229,7 +400,38 @@
       "manaStockAfter": 69.9624039653303,
       "observedNetManaChange": 0,
       "sourceInferredDebit": "unavailable; native internal cost calls are not exposed",
-      "liveCallbackIdentity": "unavailable at the userscript adapter boundary",
+      "nativeManaCallback": {
+        "registryKey": "boot_camp",
+        "actionId": "tech-boot_camp",
+        "rootIdentity": 47,
+        "actionIdentity": 60,
+        "costIdentity": 61,
+        "costDescriptor": {
+          "enumerable": true,
+          "configurable": true,
+          "writable": true
+        },
+        "identityStatus": "unavailable",
+        "reasons": ["native Mana cost is absent or is an accessor"],
+        "rootGeneration": 0,
+        "progressionEpoch": "0|41:92|22:58|50|human|magic|178|0|anarchy|1|0|0|0",
+        "routeIdentity": "[\"magic\",false,false]",
+        "nativeResearchObservationGeneration": 33
+      },
+      "liveCallbackIdentity": "unavailable",
+      "debitAttestation": {
+        "status": "unavailable",
+        "reasons": [
+          "upstream-runtime-identity: the unmodified page exposes no authoritative upstream commit identity",
+          "native-action-binding: registry key and action ID are recorded, but the selected control object is not exposed",
+          "offer-control-binding: offer and control generations do not prove object identity with the retained registry action",
+          "mana-callback-identity: native Mana cost is absent or is an accessor",
+          "cost-adjustment-chain: native modifier gates and captured multipliers are not atomically bound to the offer and debit",
+          "debit-evaluation-stability: upstream reevaluates cost callbacks for quote, affordability, and debit",
+          "current-route-and-progression: root generation, progression epoch, and route are captured as context only",
+          "observed-debit: pre/post Mana stock delta is observational and does not identify the internal debit"
+        ]
+      },
       "debitEvidence": "pre/post stock only; debit attribution incomplete",
       "internalCostEvaluations": "unobserved",
       "grantCompleted": true,
@@ -253,7 +455,38 @@
       "manaStockAfter": 69.10691381369043,
       "observedNetManaChange": 0,
       "sourceInferredDebit": "unavailable; native internal cost calls are not exposed",
-      "liveCallbackIdentity": "unavailable at the userscript adapter boundary",
+      "nativeManaCallback": {
+        "registryKey": "slave_market",
+        "actionId": "tech-slave_market",
+        "rootIdentity": 47,
+        "actionIdentity": 62,
+        "costIdentity": 63,
+        "costDescriptor": {
+          "enumerable": true,
+          "configurable": true,
+          "writable": true
+        },
+        "identityStatus": "unavailable",
+        "reasons": ["native Mana cost is absent or is an accessor"],
+        "rootGeneration": 0,
+        "progressionEpoch": "0|41:93|22:58|49|human|magic|178|0|anarchy|1|0|0|0",
+        "routeIdentity": "[\"magic\",false,false]",
+        "nativeResearchObservationGeneration": 45
+      },
+      "liveCallbackIdentity": "unavailable",
+      "debitAttestation": {
+        "status": "unavailable",
+        "reasons": [
+          "upstream-runtime-identity: the unmodified page exposes no authoritative upstream commit identity",
+          "native-action-binding: registry key and action ID are recorded, but the selected control object is not exposed",
+          "offer-control-binding: offer and control generations do not prove object identity with the retained registry action",
+          "mana-callback-identity: native Mana cost is absent or is an accessor",
+          "cost-adjustment-chain: native modifier gates and captured multipliers are not atomically bound to the offer and debit",
+          "debit-evaluation-stability: upstream reevaluates cost callbacks for quote, affordability, and debit",
+          "current-route-and-progression: root generation, progression epoch, and route are captured as context only",
+          "observed-debit: pre/post Mana stock delta is observational and does not identify the internal debit"
+        ]
+      },
       "debitEvidence": "pre/post stock only; debit attribution incomplete",
       "internalCostEvaluations": "unobserved",
       "grantCompleted": true,
@@ -278,7 +511,46 @@
       "manaStockAfter": 0.3687188527345171,
       "observedNetManaChange": -100,
       "sourceInferredDebit": 100,
-      "liveCallbackIdentity": "unavailable at the userscript adapter boundary",
+      "nativeManaCallback": {
+        "registryKey": "clerics",
+        "actionId": "tech-clerics",
+        "rootIdentity": 47,
+        "actionIdentity": 64,
+        "costIdentity": 65,
+        "callbackIdentity": 66,
+        "callbackSource": "Mana() {\n          return 100;\n        }",
+        "costDescriptor": {
+          "enumerable": true,
+          "configurable": true,
+          "writable": true
+        },
+        "manaDescriptor": {
+          "enumerable": true,
+          "configurable": true,
+          "writable": true
+        },
+        "identityStatus": "observed",
+        "reasons": [],
+        "rootGeneration": 0,
+        "progressionEpoch": "0|42:94|22:58|49|human|magic|178|0|anarchy|1|0|0|0",
+        "routeIdentity": "[\"magic\",false,false]",
+        "nativeResearchObservationGeneration": 67
+      },
+      "callbackSourceSha256": "3cb49df55c1a6caecf9a2d14cdf6c8f4f963e7814e8644da7bbddd50c4be2a2c",
+      "liveCallbackIdentity": "observed",
+      "debitAttestation": {
+        "status": "unavailable",
+        "reasons": [
+          "upstream-runtime-identity: the unmodified page exposes no authoritative upstream commit identity",
+          "native-action-binding: registry key and action ID are recorded, but the selected control object is not exposed",
+          "offer-control-binding: offer and control generations do not prove object identity with the retained registry action",
+          "mana-callback-identity: descriptor-backed live callback identity observed; upstream module identity remains unbound",
+          "cost-adjustment-chain: native modifier gates and captured multipliers are not atomically bound to the offer and debit",
+          "debit-evaluation-stability: upstream reevaluates cost callbacks for quote, affordability, and debit",
+          "current-route-and-progression: root generation, progression epoch, and route are captured as context only",
+          "observed-debit: pre/post Mana stock delta is observational and does not identify the internal debit"
+        ]
+      },
       "debitEvidence": "source-reviewed action ID; displayed price equals observed net stock decrease; live callback identity is unverified",
       "internalCostEvaluations": "unobserved",
       "grantCompleted": true,
@@ -302,7 +574,38 @@
       "manaStockAfter": 41.19442001362765,
       "observedNetManaChange": 0,
       "sourceInferredDebit": "unavailable; native internal cost calls are not exposed",
-      "liveCallbackIdentity": "unavailable at the userscript adapter boundary",
+      "nativeManaCallback": {
+        "registryKey": "spy_training",
+        "actionId": "tech-spy_training",
+        "rootIdentity": 47,
+        "actionIdentity": 67,
+        "costIdentity": 68,
+        "costDescriptor": {
+          "enumerable": true,
+          "configurable": true,
+          "writable": true
+        },
+        "identityStatus": "unavailable",
+        "reasons": ["native Mana cost is absent or is an accessor"],
+        "rootGeneration": 0,
+        "progressionEpoch": "0|42:95|22:58|49|human|magic|178|0|anarchy|1|0|0|0",
+        "routeIdentity": "[\"magic\",false,false]",
+        "nativeResearchObservationGeneration": 32
+      },
+      "liveCallbackIdentity": "unavailable",
+      "debitAttestation": {
+        "status": "unavailable",
+        "reasons": [
+          "upstream-runtime-identity: the unmodified page exposes no authoritative upstream commit identity",
+          "native-action-binding: registry key and action ID are recorded, but the selected control object is not exposed",
+          "offer-control-binding: offer and control generations do not prove object identity with the retained registry action",
+          "mana-callback-identity: native Mana cost is absent or is an accessor",
+          "cost-adjustment-chain: native modifier gates and captured multipliers are not atomically bound to the offer and debit",
+          "debit-evaluation-stability: upstream reevaluates cost callbacks for quote, affordability, and debit",
+          "current-route-and-progression: root generation, progression epoch, and route are captured as context only",
+          "observed-debit: pre/post Mana stock delta is observational and does not identify the internal debit"
+        ]
+      },
       "debitEvidence": "pre/post stock only; debit attribution incomplete",
       "internalCostEvaluations": "unobserved",
       "grantCompleted": true,
@@ -327,7 +630,46 @@
       "manaStockAfter": 0.10579171083132621,
       "observedNetManaChange": -100,
       "sourceInferredDebit": 100,
-      "liveCallbackIdentity": "unavailable at the userscript adapter boundary",
+      "nativeManaCallback": {
+        "registryKey": "black_powder",
+        "actionId": "tech-black_powder",
+        "rootIdentity": 47,
+        "actionIdentity": 69,
+        "costIdentity": 70,
+        "callbackIdentity": 71,
+        "callbackSource": "Mana() {\n          return global.race.universe === \"magic\" ? 100 : 0;\n        }",
+        "costDescriptor": {
+          "enumerable": true,
+          "configurable": true,
+          "writable": true
+        },
+        "manaDescriptor": {
+          "enumerable": true,
+          "configurable": true,
+          "writable": true
+        },
+        "identityStatus": "observed",
+        "reasons": [],
+        "rootGeneration": 0,
+        "progressionEpoch": "0|43:96|22:58|49|human|magic|178|0|anarchy|1|0|0|0",
+        "routeIdentity": "[\"magic\",false,false]",
+        "nativeResearchObservationGeneration": 88
+      },
+      "callbackSourceSha256": "ec9fda0cc53adee837e1ea51eacc2ed0b214e61d4a5a24d98c2fd7901b0a8583",
+      "liveCallbackIdentity": "observed",
+      "debitAttestation": {
+        "status": "unavailable",
+        "reasons": [
+          "upstream-runtime-identity: the unmodified page exposes no authoritative upstream commit identity",
+          "native-action-binding: registry key and action ID are recorded, but the selected control object is not exposed",
+          "offer-control-binding: offer and control generations do not prove object identity with the retained registry action",
+          "mana-callback-identity: descriptor-backed live callback identity observed; upstream module identity remains unbound",
+          "cost-adjustment-chain: native modifier gates and captured multipliers are not atomically bound to the offer and debit",
+          "debit-evaluation-stability: upstream reevaluates cost callbacks for quote, affordability, and debit",
+          "current-route-and-progression: root generation, progression epoch, and route are captured as context only",
+          "observed-debit: pre/post Mana stock delta is observational and does not identify the internal debit"
+        ]
+      },
       "debitEvidence": "source-reviewed action ID; displayed price equals observed net stock decrease; live callback identity is unverified",
       "internalCostEvaluations": "unobserved",
       "grantCompleted": true,
@@ -352,7 +694,38 @@
       "manaStockAfter": 0.7143587644623857,
       "observedNetManaChange": 0,
       "sourceInferredDebit": "unavailable; native internal cost calls are not exposed",
-      "liveCallbackIdentity": "unavailable at the userscript adapter boundary",
+      "nativeManaCallback": {
+        "registryKey": "dynamite",
+        "actionId": "tech-dynamite",
+        "rootIdentity": 47,
+        "actionIdentity": 72,
+        "costIdentity": 73,
+        "costDescriptor": {
+          "enumerable": true,
+          "configurable": true,
+          "writable": true
+        },
+        "identityStatus": "unavailable",
+        "reasons": ["native Mana cost is absent or is an accessor"],
+        "rootGeneration": 0,
+        "progressionEpoch": "0|43:97|22:58|49|human|magic|178|0|anarchy|1|0|0|0",
+        "routeIdentity": "[\"magic\",false,false]",
+        "nativeResearchObservationGeneration": 2
+      },
+      "liveCallbackIdentity": "unavailable",
+      "debitAttestation": {
+        "status": "unavailable",
+        "reasons": [
+          "upstream-runtime-identity: the unmodified page exposes no authoritative upstream commit identity",
+          "native-action-binding: registry key and action ID are recorded, but the selected control object is not exposed",
+          "offer-control-binding: offer and control generations do not prove object identity with the retained registry action",
+          "mana-callback-identity: native Mana cost is absent or is an accessor",
+          "cost-adjustment-chain: native modifier gates and captured multipliers are not atomically bound to the offer and debit",
+          "debit-evaluation-stability: upstream reevaluates cost callbacks for quote, affordability, and debit",
+          "current-route-and-progression: root generation, progression epoch, and route are captured as context only",
+          "observed-debit: pre/post Mana stock delta is observational and does not identify the internal debit"
+        ]
+      },
       "debitEvidence": "pre/post stock only; debit attribution incomplete",
       "internalCostEvaluations": "unobserved",
       "grantCompleted": true,
@@ -370,7 +743,38 @@
       "manaStockAfter": 0.671470701919608,
       "observedNetManaChange": 0,
       "sourceInferredDebit": "unavailable; native internal cost calls are not exposed",
-      "liveCallbackIdentity": "unavailable at the userscript adapter boundary",
+      "nativeManaCallback": {
+        "registryKey": "electricity",
+        "actionId": "tech-electricity",
+        "rootIdentity": 47,
+        "actionIdentity": 74,
+        "costIdentity": 75,
+        "costDescriptor": {
+          "enumerable": true,
+          "configurable": true,
+          "writable": true
+        },
+        "identityStatus": "unavailable",
+        "reasons": ["native Mana cost is absent or is an accessor"],
+        "rootGeneration": 0,
+        "progressionEpoch": "0|43:98|22:58|49|human|magic|178|0|anarchy|1|0|0|0",
+        "routeIdentity": "[\"magic\",false,false]",
+        "nativeResearchObservationGeneration": 100
+      },
+      "liveCallbackIdentity": "unavailable",
+      "debitAttestation": {
+        "status": "unavailable",
+        "reasons": [
+          "upstream-runtime-identity: the unmodified page exposes no authoritative upstream commit identity",
+          "native-action-binding: registry key and action ID are recorded, but the selected control object is not exposed",
+          "offer-control-binding: offer and control generations do not prove object identity with the retained registry action",
+          "mana-callback-identity: native Mana cost is absent or is an accessor",
+          "cost-adjustment-chain: native modifier gates and captured multipliers are not atomically bound to the offer and debit",
+          "debit-evaluation-stability: upstream reevaluates cost callbacks for quote, affordability, and debit",
+          "current-route-and-progression: root generation, progression epoch, and route are captured as context only",
+          "observed-debit: pre/post Mana stock delta is observational and does not identify the internal debit"
+        ]
+      },
       "debitEvidence": "pre/post stock only; debit attribution incomplete",
       "internalCostEvaluations": "unobserved",
       "grantCompleted": true,
@@ -388,7 +792,38 @@
       "manaStockAfter": 0.8248050273823946,
       "observedNetManaChange": 0,
       "sourceInferredDebit": "unavailable; native internal cost calls are not exposed",
-      "liveCallbackIdentity": "unavailable at the userscript adapter boundary",
+      "nativeManaCallback": {
+        "registryKey": "spy_gadgets",
+        "actionId": "tech-spy_gadgets",
+        "rootIdentity": 47,
+        "actionIdentity": 76,
+        "costIdentity": 77,
+        "costDescriptor": {
+          "enumerable": true,
+          "configurable": true,
+          "writable": true
+        },
+        "identityStatus": "unavailable",
+        "reasons": ["native Mana cost is absent or is an accessor"],
+        "rootGeneration": 0,
+        "progressionEpoch": "0|43:99|22:58|49|human|magic|178|0|anarchy|1|0|0|0",
+        "routeIdentity": "[\"magic\",false,false]",
+        "nativeResearchObservationGeneration": 22
+      },
+      "liveCallbackIdentity": "unavailable",
+      "debitAttestation": {
+        "status": "unavailable",
+        "reasons": [
+          "upstream-runtime-identity: the unmodified page exposes no authoritative upstream commit identity",
+          "native-action-binding: registry key and action ID are recorded, but the selected control object is not exposed",
+          "offer-control-binding: offer and control generations do not prove object identity with the retained registry action",
+          "mana-callback-identity: native Mana cost is absent or is an accessor",
+          "cost-adjustment-chain: native modifier gates and captured multipliers are not atomically bound to the offer and debit",
+          "debit-evaluation-stability: upstream reevaluates cost callbacks for quote, affordability, and debit",
+          "current-route-and-progression: root generation, progression epoch, and route are captured as context only",
+          "observed-debit: pre/post Mana stock delta is observational and does not identify the internal debit"
+        ]
+      },
       "debitEvidence": "pre/post stock only; debit attribution incomplete",
       "internalCostEvaluations": "unobserved",
       "grantCompleted": true,
@@ -398,6 +833,131 @@
       "evidenceCompleteness": "pre/post stock and grant observed; internal debit attribution incomplete"
     }
   ],
+  "callbackSourceComparisons": [
+    {
+      "actionId": "tech-rituals",
+      "sourceSha256": "49a51e7a3f9a1208a6a26acc28808595ef8761cc52f2bfd9af8893b7e3b4dbc3",
+      "snapshotSha256": "dd72af7f608c81605048681dc4a5e4b53479b9e5ecf45c899b52904069f3476e",
+      "runtimeSha256": "dd72af7f608c81605048681dc4a5e4b53479b9e5ecf45c899b52904069f3476e",
+      "normalizedSourceMatchesSnapshot": true,
+      "normalizedRuntimeMatchesSource": true,
+      "normalizedRuntimeMatchesSnapshot": true
+    },
+    {
+      "actionId": "tech-mad_science",
+      "sourceSha256": "9816900d7deeb193b8237ee29f41c86c4e3106820c208bed32ba5153083184f5",
+      "snapshotSha256": "eae65bd2c143bbcb202f99ceec42660e1e238f2b8345a468d7523b6ba173c74a",
+      "runtimeSha256": "eae65bd2c143bbcb202f99ceec42660e1e238f2b8345a468d7523b6ba173c74a",
+      "normalizedSourceMatchesSnapshot": true,
+      "normalizedRuntimeMatchesSource": true,
+      "normalizedRuntimeMatchesSnapshot": true
+    },
+    {
+      "actionId": "tech-clerics",
+      "sourceSha256": "ccbc53d46d5d2b3b0d85fb97f1d27f680eb80a235d284f747c499728ab6e7a08",
+      "snapshotSha256": "3cb49df55c1a6caecf9a2d14cdf6c8f4f963e7814e8644da7bbddd50c4be2a2c",
+      "runtimeSha256": "3cb49df55c1a6caecf9a2d14cdf6c8f4f963e7814e8644da7bbddd50c4be2a2c",
+      "normalizedSourceMatchesSnapshot": true,
+      "normalizedRuntimeMatchesSource": true,
+      "normalizedRuntimeMatchesSnapshot": true
+    },
+    {
+      "actionId": "tech-black_powder",
+      "sourceSha256": "48b9ee8930dc272b78283f1225f7ba60e3668edd230adc785e5c8b0c9f73e7e2",
+      "snapshotSha256": "ec9fda0cc53adee837e1ea51eacc2ed0b214e61d4a5a24d98c2fd7901b0a8583",
+      "runtimeSha256": "ec9fda0cc53adee837e1ea51eacc2ed0b214e61d4a5a24d98c2fd7901b0a8583",
+      "normalizedSourceMatchesSnapshot": true,
+      "normalizedRuntimeMatchesSource": true,
+      "normalizedRuntimeMatchesSnapshot": true
+    }
+  ],
+  "sourceAdjustmentAudit": [
+    {
+      "stage": "truthAdjust",
+      "canChangeMana": true,
+      "decision": "reads True Path during adjustCosts; multiplier is captured by the wrapper, base callback runs later",
+      "fixtureEvidence": "Magic route context reports True Path false; no atomic quote-to-debit binding"
+    },
+    {
+      "stage": "loneAdjust",
+      "canChangeMana": true,
+      "decision": "reads Lone Survivor during adjustCosts; 0.28 multiplier is captured by the wrapper",
+      "fixtureEvidence": "save race is human with no Lone Survivor marker; live modifier state is not bound at debit"
+    },
+    {
+      "stage": "technoAdjust",
+      "canChangeMana": true,
+      "decision": "reads governance and calls technocracy effect during adjustCosts; rate depends on High Tech and is captured by the wrapper",
+      "fixtureEvidence": "save starts with anarchy; later quote/check/debit state is not atomically attested"
+    },
+    {
+      "stage": "nexusAdjust",
+      "canChangeMana": true,
+      "decision": "Nexus, Witch Hunter, and Rogue Magic gates and Nexus multiplier are read during adjustCosts; wrapped base callback runs later",
+      "fixtureEvidence": "save starts without Nexus/Rogue Magic levels; later callback and modifier inputs are not atomically attested"
+    },
+    {
+      "stage": "kindlingAdjust",
+      "canChangeMana": "conditional",
+      "decision": "only adjusts costs when the action has Lumber or Plywood and Kindling Kindred or Iron Wood is active",
+      "fixtureEvidence": "all four pinned action definitions have no Lumber or Plywood cost; excluded by source shape"
+    },
+    {
+      "stage": "quote-affordability-debit",
+      "canChangeMana": true,
+      "decision": "quote and affordability use adjusted callbacks; payCosts constructs them again, then checkCosts and debit evaluate the callback separately",
+      "fixtureEvidence": "the exact fixture observes quote and stock delta only; it does not bind callback results across these phases"
+    },
+    {
+      "stage": "bloatAdjust, inflationAdjust, extravagantAdjust, scienceAdjust, smolderAdjust, flierAdjust, pykreteAdjust, craftAdjust, dictatorAdjust, lMatAdjust, undergroundTradeAdjust, razedAdjust, rebarAdjust, heavyAdjust",
+      "canChangeMana": false,
+      "decision": "pinned source preserves Mana or transforms only other resource keys for these actions",
+      "fixtureEvidence": "source review only; not inferred from displayed prices"
+    }
+  ],
+  "fixtureModifierSnapshots": {
+    "200": {
+      "universe": "magic",
+      "truePath": false,
+      "loneSurvivor": false,
+      "kindlingKindred": false,
+      "ironWood": false,
+      "governance": "anarchy",
+      "nexus": 0,
+      "rogueMagic": 0
+    },
+    "1000": {
+      "universe": "magic",
+      "truePath": false,
+      "loneSurvivor": false,
+      "kindlingKindred": false,
+      "ironWood": false,
+      "governance": "anarchy",
+      "nexus": 0,
+      "rogueMagic": 0
+    },
+    "initial": {
+      "universe": "magic",
+      "truePath": false,
+      "loneSurvivor": false,
+      "kindlingKindred": false,
+      "ironWood": false,
+      "governance": "anarchy",
+      "nexus": 0,
+      "rogueMagic": 0
+    }
+  },
+  "callbackFingerprintLimits": [
+    "Function text does not identify the upstream module or commit.",
+    "Function text omits closure-captured values and imported dependencies.",
+    "Function text does not bind adjustCosts wrappers or their captured multipliers.",
+    "The quote, affordability check, and debit reevaluate callbacks at separate times.",
+    "Only the pinned source and generated snapshot are available here; no alternate minified or deployed supported build is compared."
+  ],
+  "attestationDecision": {
+    "status": "unavailable",
+    "reason": "callback identity and source text are observed, but upstream identity, offer/control object binding, adjustment state, and quote-to-debit evaluation stability are not authoritative"
+  },
   "evidenceCategoryCounts": {
     "displayedPriceEqualsObservedDebit": 4,
     "displayedPriceDiffersFromObservedDebit": 0,
