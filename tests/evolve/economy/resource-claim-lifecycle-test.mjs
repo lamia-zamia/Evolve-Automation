@@ -12,9 +12,9 @@ const current = {
   grant: "incomplete",
   offerSet: {
     status: "complete-fresh",
-    identity: "research-offers-current",
-    observationId: "research-observation-current",
-    previousObservationId: "research-observation-prior",
+    identity: "research-offers-11",
+    observationId: "research-observation-11",
+    previousObservationId: "research-observation-9",
   },
   currentContext: {
     rootGeneration: 1,
@@ -30,13 +30,20 @@ const current = {
     rootGeneration: 1,
     progressionGeneration: "current-epoch",
     routeIdentity: '["magic",false,false]',
-    offerSetIdentity: "research-offers-current",
-    observationId: "research-observation-current",
+    offerSetIdentity: "research-offers-11",
+    observationId: "research-observation-11",
     actionId: "tech-black_powder",
     manaPrice: 100,
     offerGeneration: 11,
     controlGeneration: 11,
     resources: "complete",
+    nonManaCosts: { Knowledge: 4500, Crystal: 250, Coal: 300 },
+    nonManaStocks: {
+      Knowledge: 13526.1582,
+      Crystal: 182.0556,
+      Coal: 22757.3657,
+    },
+    limitingResource: "Crystal",
   },
   nativeActionId: "tech-black_powder",
   offer: "current",
@@ -130,6 +137,53 @@ assert.equal(
   "verified-non-mana-shortage",
   "known non-Mana insufficiency releases only the claim budget, not the graph obligation",
 );
+{
+  const madScience = decision({
+    nativeActionId: "tech-mad_science",
+    grant: "complete",
+  });
+  const blackPowder = decision({
+    nativeActionId: "tech-black_powder",
+    grant: "incomplete",
+    nonMana: "insufficient",
+  });
+  assert.deepEqual(
+    [madScience.state, madScience.reason],
+    ["completed", "grant-completed"],
+    "the accepted cycle-9 grant completes Mad Science's own claim",
+  );
+  assert.deepEqual(
+    [blackPowder.state, blackPowder.reason, blackPowder.retainClaim],
+    ["released", "verified-non-mana-shortage", false],
+    "fresh cycle-9 Black Powder evidence releases Mana protection only for the Crystal shortage",
+  );
+  assert.deepEqual(
+    [
+      current.currentContext.routeIdentity,
+      current.offerSet.identity,
+      current.currentObservation.offerGeneration,
+      current.currentObservation.controlGeneration,
+    ],
+    ['["magic",false,false]', "research-offers-11", 11, 11],
+    "the lifecycle decision is bound to the current Magic route, offer set, and control generation",
+  );
+  assert.deepEqual(
+    [
+      current.currentObservation.limitingResource,
+      current.currentObservation.nonManaCosts.Crystal,
+      current.currentObservation.nonManaStocks.Crystal,
+    ],
+    ["Crystal", 250, 182.0556],
+    "the cycle-9 release is supported by the measured current Crystal shortage",
+  );
+  assert.deepEqual(
+    [madScience, blackPowder]
+      .filter((result) => result.retainClaim)
+      .map((result) => result.state),
+    [],
+    "the recovered cycle-9 claims leave no stale active protection",
+  );
+}
 assert.equal(absentOffer().retainClaim, false);
 assert.equal(
   absentOffer().state,
