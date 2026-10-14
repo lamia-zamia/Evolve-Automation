@@ -1,10 +1,10 @@
 {
-  "protocol": "Stage 3G replay with Stage 3H native computed-requirement evidence",
+  "protocol": "Stage 3I claim lifecycle replay with Stage 3H native computed-requirement evidence",
   "runner": "tools/chromium-evolve-runner.mjs",
   "execution": {
     "command": "node experiments/stage3f-mana-claim.mjs",
     "inputs": "Paths and SHA-256 hashes are recorded below; settings are loaded with autoResearch=true.",
-    "variants": "A/A baseline, manually seeded Stage 3E B, Stage 3F single-selection regression C, then Stage 3G conjunctive goal-derived D; each opens a fresh exact-runner session.",
+    "variants": "A/A baseline, manually seeded Stage 3E B, Stage 3F single-selection regression C, then Stage 3H conjunctive goal-derived D with Stage 3I lifecycle correction; each opens a fresh exact-runner session.",
     "output": "experiments/stage3f-mana-claim-manifest.json (or --out=<path>)"
   },
   "upstreamCommit": "db38e2af831907d49aeb5348d678d8d8745d6c3f",
@@ -28,7 +28,7 @@
     },
     "testBundle": {
       "path": "test-artifacts/benchmark/tmp/stage3f-test.user.js",
-      "sha256": "9743a12e96953632fe5f58804c5bd819113363a6b0c46cc11dfcddc116efbe4d"
+      "sha256": "94589db734c48326e8ad4a33c3d7f3d15f519d50674e6331ce036552aeca9b3b"
     },
     "runner": "23383ea302dcbe5545ba83c8aa72e0d8f231a96135fd31b60d9bc95bd9102257"
   },
@@ -36,7 +36,7 @@
     "A": "no goal-directed Mana protection",
     "B": "Stage 3E current claim seeded from tech-mad_science native evidence",
     "C": "Stage 3F test-only single-selection mode; no target or admitted claim injected",
-    "D": "Stage 3H test-only independent claims; fail closed when a direct obligation has unresolved native alternatives",
+    "D": "Stage 3I test-only conjunctive claims; release stock protection only for verified non-Mana blockage or completed obligations, and fail closed on missing evidence",
     "computedRequirementContexts": "Additional 40-period exact-runner contracts use the same pinned save with only race.iceage or race.truepath set to exercise the native action's route-dependent era selection."
   },
   "preservedSettings": {
@@ -64,6 +64,37 @@
       "selectedClaim": null,
       "selectionTimeline": [],
       "lifecycle": [],
+      "claimLifecycleEvidence": [],
+      "finalClaimSet": {},
+      "finalSelection": null,
+      "finalResources": {
+        "Mana": 0.0875469537689959,
+        "Knowledge": 250,
+        "Crystal": 1176.3884082368663,
+        "Coal": 18112.777862305826,
+        "Lumber": 16032.287671183198,
+        "Stone": 30465.02626673029
+      },
+      "finalTechLevels": {
+        "high_tech": 0,
+        "explosives": 0,
+        "uranium": 0,
+        "oil": 0
+      },
+      "finalResearchOffers": [
+        {
+          "actionId": "tech-black_powder",
+          "grantTechnology": "explosives",
+          "grantLevel": 1,
+          "cost": {
+            "Knowledge": 4500,
+            "Mana": 100,
+            "Crystal": 250,
+            "Coal": 300
+          },
+          "nativeAffordable": false
+        }
+      ],
       "claimLedger": { "statusCounts": { "no-ledger": 25 }, "sample": null },
       "gatherClaimActions": {
         "permitted": 2500,
@@ -132,7 +163,7 @@
       "computedRequirementOfferStatus": [],
       "computedRequirementCaptureAndDrawMsByWindow": [],
       "workTicks": 25,
-      "tickPhaseMsBy25TickWindow": [51.08]
+      "tickPhaseMsBy25TickWindow": [52.56]
     },
     "B": {
       "periods": 200,
@@ -177,6 +208,50 @@
           "firstCycle": 8,
           "lastCycle": 8,
           "occurrences": 1
+        }
+      ],
+      "claimLifecycleEvidence": [
+        {
+          "cycle": 8,
+          "state": "completed",
+          "reason": "current-research-grant-completed"
+        }
+      ],
+      "finalClaimSet": { "actionIds": [] },
+      "finalSelection": null,
+      "finalResources": {
+        "Mana": 0.12524546868193553,
+        "Knowledge": 590.0411877277784,
+        "Crystal": 244.62156657118481,
+        "Coal": 23111.10921484117,
+        "Lumber": 11007.902404313345,
+        "Stone": 80498.16292345342
+      },
+      "finalTechLevels": {
+        "high_tech": 1,
+        "explosives": 0,
+        "uranium": 0,
+        "oil": 0
+      },
+      "finalResearchOffers": [
+        {
+          "actionId": "tech-black_powder",
+          "grantTechnology": "explosives",
+          "grantLevel": 1,
+          "cost": {
+            "Knowledge": 4500,
+            "Mana": 100,
+            "Crystal": 250,
+            "Coal": 300
+          },
+          "nativeAffordable": false
+        },
+        {
+          "actionId": "tech-electricity",
+          "grantTechnology": "high_tech",
+          "grantLevel": 2,
+          "cost": { "Knowledge": 13500, "Copper": 1000 },
+          "nativeAffordable": false
         }
       ],
       "claimLedger": {
@@ -385,7 +460,7 @@
       "computedRequirementOfferStatus": [],
       "computedRequirementCaptureAndDrawMsByWindow": [],
       "workTicks": 25,
-      "tickPhaseMsBy25TickWindow": [62.18]
+      "tickPhaseMsBy25TickWindow": [58.19]
     },
     "C": {
       "periods": 200,
@@ -961,6 +1036,153 @@
           "firstCycle": 1,
           "lastCycle": 25,
           "occurrences": 25
+        },
+        {
+          "state": "suspended",
+          "reason": "research-owner-observation-unavailable",
+          "firstCycle": 1,
+          "lastCycle": 25,
+          "occurrences": 25
+        }
+      ],
+      "claimLifecycleEvidence": [],
+      "finalClaimSet": { "actionIds": [] },
+      "finalSelection": {
+        "cycle": 25,
+        "status": "ambiguous",
+        "reason": "multiple verified prerequisite offers require Mana",
+        "mandatoryActionIds": [],
+        "evaluatedCandidates": [
+          {
+            "actionId": "tech-rituals",
+            "cost": { "Mana": 25, "Knowledge": 750, "Crystal": 50 },
+            "nonManaAffordable": true,
+            "frontier": false,
+            "ownerEligibility": "eligible"
+          },
+          {
+            "actionId": "tech-black_powder",
+            "cost": {
+              "Knowledge": 4500,
+              "Mana": 100,
+              "Crystal": 250,
+              "Coal": 300
+            },
+            "nonManaAffordable": true,
+            "frontier": true,
+            "ownerEligibility": "eligible"
+          },
+          {
+            "actionId": "tech-steel_vault",
+            "cost": { "Money": 30000, "Knowledge": 6750, "Steel": 3000 },
+            "nonManaAffordable": false,
+            "frontier": false,
+            "ownerEligibility": "eligible"
+          },
+          {
+            "actionId": "tech-reinforced_crates",
+            "cost": { "Knowledge": 6750, "Sheet_Metal": 100 },
+            "nonManaAffordable": false,
+            "frontier": false,
+            "ownerEligibility": "eligible"
+          },
+          {
+            "actionId": "tech-mad_science",
+            "cost": {
+              "Money": 10000,
+              "Mana": 50,
+              "Knowledge": 6750,
+              "Crystal": 1000,
+              "Aluminium": 750
+            },
+            "nonManaAffordable": true,
+            "frontier": true,
+            "ownerEligibility": "eligible"
+          },
+          {
+            "actionId": "tech-steel_containers",
+            "cost": { "Knowledge": 9000, "Steel": 250 },
+            "nonManaAffordable": false,
+            "frontier": true,
+            "ownerEligibility": "eligible"
+          },
+          {
+            "actionId": "tech-steel_saw",
+            "cost": { "Knowledge": 10800, "Steel": 400 },
+            "nonManaAffordable": false,
+            "frontier": false,
+            "ownerEligibility": "eligible"
+          },
+          {
+            "actionId": "tech-steel_beams",
+            "cost": { "Knowledge": 11250, "Steel": 2500 },
+            "nonManaAffordable": false,
+            "frontier": false,
+            "ownerEligibility": "eligible"
+          },
+          {
+            "actionId": "tech-steel_hoe",
+            "cost": { "Knowledge": 12600, "Steel": 500 },
+            "nonManaAffordable": false,
+            "frontier": false,
+            "ownerEligibility": "eligible"
+          },
+          {
+            "actionId": "tech-barns",
+            "cost": { "Knowledge": 15750, "Aluminium": 3000, "Steel": 3000 },
+            "nonManaAffordable": false,
+            "frontier": true,
+            "ownerEligibility": "eligible"
+          },
+          {
+            "actionId": "tech-bessemer_process",
+            "cost": { "Knowledge": 19800, "Coal": 5000 },
+            "nonManaAffordable": true,
+            "frontier": false,
+            "ownerEligibility": "eligible"
+          },
+          {
+            "actionId": "tech-merchandising",
+            "cost": { "Knowledge": 25000 },
+            "nonManaAffordable": false,
+            "frontier": false,
+            "ownerEligibility": "eligible"
+          },
+          {
+            "actionId": "tech-zealotry",
+            "cost": { "Knowledge": 25000 },
+            "nonManaAffordable": false,
+            "frontier": false,
+            "ownerEligibility": "eligible"
+          }
+        ]
+      },
+      "finalResources": {
+        "Mana": 0.0875469537689959,
+        "Knowledge": 250,
+        "Crystal": 1176.3884082368663,
+        "Coal": 18112.777862305826,
+        "Lumber": 16032.287671183198,
+        "Stone": 30465.02626673029
+      },
+      "finalTechLevels": {
+        "high_tech": 0,
+        "explosives": 0,
+        "uranium": 0,
+        "oil": 0
+      },
+      "finalResearchOffers": [
+        {
+          "actionId": "tech-black_powder",
+          "grantTechnology": "explosives",
+          "grantLevel": 1,
+          "cost": {
+            "Knowledge": 4500,
+            "Mana": 100,
+            "Crystal": 250,
+            "Coal": 300
+          },
+          "nativeAffordable": false
         }
       ],
       "claimLedger": { "statusCounts": { "no-ledger": 25 }, "sample": null },
@@ -1036,35 +1258,18 @@
       "computedRequirementOfferStatus": [],
       "computedRequirementCaptureAndDrawMsByWindow": [],
       "workTicks": 25,
-      "tickPhaseMsBy25TickWindow": [54.95]
+      "tickPhaseMsBy25TickWindow": [54.84]
     },
     "D": {
       "periods": 200,
-      "finalExportHash": "9b4a3e7364571db6c6fc858e743ee3610dde162a921132641f1d17c155e7ec67",
+      "finalExportHash": "d683be0bf2a4ce69e407117388efdaa77ba3ca8bfafbf1f28cfbe13a8ee742cf",
       "highTechLevel": 1,
       "explosivesLevel": 0,
       "postMadScienceClaimEvaluation": {
-        "status": "unavailable",
-        "reason": "no mandatory current Mana-blocked prerequisite offer",
+        "status": "released",
+        "reason": "mandatory obligation retained; Mana protection released for verified non-Mana shortage",
         "mandatoryActionIds": ["tech-black_powder", "tech-electricity"],
-        "alternativeGroups": [],
-        "prerequisiteReasons": [],
         "evaluatedCandidates": [
-          {
-            "actionId": "tech-clerics",
-            "dependencyRelation": "unknown",
-            "pathApplicability": "eligible",
-            "actionability": "current-native-offer",
-            "resourceAffordability": "insufficient",
-            "cost": { "Mana": 100, "Knowledge": 2000, "Crystal": 100 },
-            "manaRequired": 100,
-            "nonManaAffordable": true,
-            "reasons": [
-              "graph incompleteness prevents ruling out a prerequisite path",
-              "native affordability verdict is false",
-              "captured resources are insufficient for this price"
-            ]
-          },
           {
             "actionId": "tech-black_powder",
             "dependencyRelation": "declared-prerequisite",
@@ -1078,169 +1283,7 @@
               "Coal": 300
             },
             "manaRequired": 100,
-            "nonManaAffordable": false,
-            "reasons": [
-              "action lies on a statically declared prerequisite path; terminal applicability is separate",
-              "native queue precognition and game-specific requirement exceptions were not evaluated",
-              "native condition function was not evaluated",
-              "route restriction applicability was not evaluated",
-              "trait, gene, or exclusion restriction applicability was not evaluated",
-              "chain tech-mad -> tech-anfo -> tech-dynamite -> tech-black_powder",
-              "native affordability verdict is false",
-              "captured resources are insufficient for this price"
-            ]
-          },
-          {
-            "actionId": "tech-steel_vault",
-            "dependencyRelation": "unknown",
-            "pathApplicability": "eligible",
-            "actionability": "current-native-offer",
-            "resourceAffordability": "insufficient",
-            "cost": { "Money": 30000, "Knowledge": 6750, "Steel": 3000 },
-            "nonManaAffordable": false,
-            "reasons": [
-              "graph incompleteness prevents ruling out a prerequisite path",
-              "native affordability verdict is false",
-              "captured resources are insufficient for this price"
-            ]
-          },
-          {
-            "actionId": "tech-reinforced_crates",
-            "dependencyRelation": "unknown",
-            "pathApplicability": "eligible",
-            "actionability": "current-native-offer",
-            "resourceAffordability": "insufficient",
-            "cost": { "Knowledge": 6750, "Sheet_Metal": 100 },
-            "nonManaAffordable": false,
-            "reasons": [
-              "graph incompleteness prevents ruling out a prerequisite path",
-              "native affordability verdict is false",
-              "captured resources are insufficient for this price"
-            ]
-          },
-          {
-            "actionId": "tech-espionage",
-            "dependencyRelation": "unknown",
-            "pathApplicability": "eligible",
-            "actionability": "current-native-offer",
-            "resourceAffordability": "affordable",
-            "cost": { "Knowledge": 7500 },
-            "nonManaAffordable": true,
-            "reasons": [
-              "graph incompleteness prevents ruling out a prerequisite path"
-            ]
-          },
-          {
-            "actionId": "tech-magic",
-            "dependencyRelation": "unknown",
-            "pathApplicability": "eligible",
-            "actionability": "current-native-offer",
-            "resourceAffordability": "affordable",
-            "cost": { "Knowledge": 7920 },
-            "nonManaAffordable": true,
-            "reasons": [
-              "graph incompleteness prevents ruling out a prerequisite path"
-            ]
-          },
-          {
-            "actionId": "tech-boot_camp",
-            "dependencyRelation": "unknown",
-            "pathApplicability": "eligible",
-            "actionability": "current-native-offer",
-            "resourceAffordability": "affordable",
-            "cost": { "Knowledge": 8000 },
-            "nonManaAffordable": true,
-            "reasons": [
-              "graph incompleteness prevents ruling out a prerequisite path"
-            ]
-          },
-          {
-            "actionId": "tech-slave_market",
-            "dependencyRelation": "unknown",
-            "pathApplicability": "eligible",
-            "actionability": "current-native-offer",
-            "resourceAffordability": "affordable",
-            "cost": { "Knowledge": 8000 },
-            "nonManaAffordable": true,
-            "reasons": [
-              "graph incompleteness prevents ruling out a prerequisite path"
-            ]
-          },
-          {
-            "actionId": "tech-steel_containers",
-            "dependencyRelation": "declared-prerequisite",
-            "pathApplicability": "eligible",
-            "actionability": "current-native-offer",
-            "resourceAffordability": "insufficient",
-            "cost": { "Knowledge": 9000, "Steel": 250 },
-            "nonManaAffordable": false,
-            "reasons": [
-              "action lies on a statically declared prerequisite path; terminal applicability is separate",
-              "native queue precognition and game-specific requirement exceptions were not evaluated",
-              "native condition function was not evaluated",
-              "route restriction applicability was not evaluated",
-              "trait, gene, or exclusion restriction applicability was not evaluated",
-              "chain tech-mad -> tech-uranium -> tech-electronics -> tech-industrialization -> tech-steel_containers",
-              "native affordability verdict is false",
-              "captured resources are insufficient for this price"
-            ]
-          },
-          {
-            "actionId": "tech-alchemy",
-            "dependencyRelation": "unknown",
-            "pathApplicability": "eligible",
-            "actionability": "current-native-offer",
-            "resourceAffordability": "insufficient",
-            "cost": { "Mana": 100, "Knowledge": 10000, "Crystal": 250 },
-            "manaRequired": 100,
-            "nonManaAffordable": false,
-            "reasons": [
-              "graph incompleteness prevents ruling out a prerequisite path",
-              "native affordability verdict is false",
-              "captured resources are insufficient for this price"
-            ]
-          },
-          {
-            "actionId": "tech-steel_saw",
-            "dependencyRelation": "unknown",
-            "pathApplicability": "eligible",
-            "actionability": "current-native-offer",
-            "resourceAffordability": "insufficient",
-            "cost": { "Knowledge": 10800, "Steel": 400 },
-            "nonManaAffordable": false,
-            "reasons": [
-              "graph incompleteness prevents ruling out a prerequisite path",
-              "native affordability verdict is false",
-              "captured resources are insufficient for this price"
-            ]
-          },
-          {
-            "actionId": "tech-steel_beams",
-            "dependencyRelation": "unknown",
-            "pathApplicability": "eligible",
-            "actionability": "current-native-offer",
-            "resourceAffordability": "insufficient",
-            "cost": { "Knowledge": 11250, "Steel": 2500 },
-            "nonManaAffordable": false,
-            "reasons": [
-              "graph incompleteness prevents ruling out a prerequisite path",
-              "native affordability verdict is false",
-              "captured resources are insufficient for this price"
-            ]
-          },
-          {
-            "actionId": "tech-steel_hoe",
-            "dependencyRelation": "unknown",
-            "pathApplicability": "eligible",
-            "actionability": "current-native-offer",
-            "resourceAffordability": "insufficient",
-            "cost": { "Knowledge": 12600, "Steel": 500 },
-            "nonManaAffordable": false,
-            "reasons": [
-              "graph incompleteness prevents ruling out a prerequisite path",
-              "native affordability verdict is false",
-              "captured resources are insufficient for this price"
-            ]
+            "nonManaAffordable": false
           },
           {
             "actionId": "tech-electricity",
@@ -1249,119 +1292,7 @@
             "actionability": "current-native-offer",
             "resourceAffordability": "affordable",
             "cost": { "Knowledge": 13500, "Copper": 1000 },
-            "nonManaAffordable": true,
-            "reasons": [
-              "action lies on a statically declared prerequisite path; terminal applicability is separate",
-              "native queue precognition and game-specific requirement exceptions were not evaluated",
-              "native condition function was not evaluated",
-              "route restriction applicability was not evaluated",
-              "trait, gene, or exclusion restriction applicability was not evaluated",
-              "chain tech-mad -> tech-uranium -> tech-electronics -> tech-industrialization -> tech-electricity"
-            ]
-          },
-          {
-            "actionId": "tech-crafting_ritual",
-            "dependencyRelation": "unknown",
-            "pathApplicability": "eligible",
-            "actionability": "current-native-offer",
-            "resourceAffordability": "insufficient",
-            "cost": { "Mana": 100, "Knowledge": 15000, "Crystal": 2500 },
-            "manaRequired": 100,
-            "nonManaAffordable": false,
-            "reasons": [
-              "graph incompleteness prevents ruling out a prerequisite path",
-              "native affordability verdict is false",
-              "captured resources are insufficient for this price"
-            ]
-          },
-          {
-            "actionId": "tech-barns",
-            "dependencyRelation": "declared-prerequisite",
-            "pathApplicability": "eligible",
-            "actionability": "current-native-offer",
-            "resourceAffordability": "insufficient",
-            "cost": { "Knowledge": 15750, "Aluminium": 3000, "Steel": 3000 },
-            "nonManaAffordable": false,
-            "reasons": [
-              "action lies on a statically declared prerequisite path; terminal applicability is separate",
-              "native queue precognition and game-specific requirement exceptions were not evaluated",
-              "native condition function was not evaluated",
-              "route restriction applicability was not evaluated",
-              "trait, gene, or exclusion restriction applicability was not evaluated",
-              "chain tech-mad -> tech-uranium -> tech-electronics -> tech-industrialization -> tech-alloy_containers -> tech-warehouse -> tech-barns",
-              "native affordability verdict is false",
-              "captured resources are insufficient for this price"
-            ]
-          },
-          {
-            "actionId": "tech-diplomacy",
-            "dependencyRelation": "unknown",
-            "pathApplicability": "eligible",
-            "actionability": "current-native-offer",
-            "resourceAffordability": "insufficient",
-            "cost": { "Knowledge": 16200 },
-            "nonManaAffordable": false,
-            "reasons": [
-              "graph incompleteness prevents ruling out a prerequisite path",
-              "native affordability verdict is false",
-              "captured resources are insufficient for this price"
-            ]
-          },
-          {
-            "actionId": "tech-windmill",
-            "dependencyRelation": "unknown",
-            "pathApplicability": "eligible",
-            "actionability": "current-native-offer",
-            "resourceAffordability": "insufficient",
-            "cost": { "Knowledge": 16200 },
-            "nonManaAffordable": false,
-            "reasons": [
-              "graph incompleteness prevents ruling out a prerequisite path",
-              "native affordability verdict is false",
-              "captured resources are insufficient for this price"
-            ]
-          },
-          {
-            "actionId": "tech-bessemer_process",
-            "dependencyRelation": "unknown",
-            "pathApplicability": "eligible",
-            "actionability": "current-native-offer",
-            "resourceAffordability": "insufficient",
-            "cost": { "Knowledge": 19800, "Coal": 5000 },
-            "nonManaAffordable": false,
-            "reasons": [
-              "graph incompleteness prevents ruling out a prerequisite path",
-              "native affordability verdict is false",
-              "captured resources are insufficient for this price"
-            ]
-          },
-          {
-            "actionId": "tech-merchandising",
-            "dependencyRelation": "unknown",
-            "pathApplicability": "eligible",
-            "actionability": "current-native-offer",
-            "resourceAffordability": "insufficient",
-            "cost": { "Knowledge": 25000 },
-            "nonManaAffordable": false,
-            "reasons": [
-              "graph incompleteness prevents ruling out a prerequisite path",
-              "native affordability verdict is false",
-              "captured resources are insufficient for this price"
-            ]
-          },
-          {
-            "actionId": "tech-zealotry",
-            "dependencyRelation": "unknown",
-            "pathApplicability": "eligible",
-            "actionability": "current-native-offer",
-            "resourceAffordability": "insufficient",
-            "cost": { "Knowledge": 25000 },
-            "nonManaAffordable": false,
-            "reasons": [
-              "graph incompleteness prevents ruling out a prerequisite path",
-              "native affordability verdict is false",
-              "captured resources are insufficient for this price"
-            ]
+            "nonManaAffordable": true
           }
         ]
       },
@@ -1418,14 +1349,24 @@
           "occurrences": 8
         },
         {
+          "status": "released",
+          "reason": "mandatory obligation retained; Mana protection released for verified non-Mana shortage",
+          "candidates": ["tech-black_powder", "tech-electricity"],
+          "firstCycle": 9,
+          "lastCycle": 9,
+          "occurrences": 1,
+          "firstOfferObservationId": "research-offers-11",
+          "lastOfferObservationId": "research-offers-11"
+        },
+        {
           "status": "unavailable",
           "reason": "no mandatory current Mana-blocked prerequisite offer",
           "candidates": [],
-          "firstCycle": 9,
+          "firstCycle": 10,
           "lastCycle": 25,
-          "occurrences": 17,
-          "firstOfferObservationId": "research-offers-11",
-          "lastOfferObservationId": "research-offers-30"
+          "occurrences": 16,
+          "firstOfferObservationId": "research-offers-13",
+          "lastOfferObservationId": "research-offers-29"
         }
       ],
       "lifecycle": [
@@ -1438,14 +1379,221 @@
         },
         {
           "state": "suspended",
-          "reason": "goal-prerequisite-selection-unavailable",
-          "firstCycle": 9,
+          "reason": "research-owner-observation-unavailable",
+          "firstCycle": 1,
           "lastCycle": 25,
-          "occurrences": 17
+          "occurrences": 25
+        },
+        {
+          "state": "released",
+          "reason": "verified-non-mana-shortage",
+          "firstCycle": 9,
+          "lastCycle": 9,
+          "occurrences": 1
+        },
+        {
+          "state": "suspended",
+          "reason": "goal-prerequisite-selection-unavailable",
+          "firstCycle": 10,
+          "lastCycle": 25,
+          "occurrences": 16
+        }
+      ],
+      "claimLifecycleEvidence": [
+        {
+          "cycle": 9,
+          "state": "released",
+          "reason": "verified-non-mana-shortage",
+          "completedActionIds": ["tech-mad_science"],
+          "releasedActionIds": ["tech-black_powder"],
+          "blockedActionIds": ["tech-black_powder"],
+          "mandatoryActionIds": ["tech-black_powder", "tech-electricity"]
+        }
+      ],
+      "finalClaimSet": { "actionIds": [] },
+      "finalSelection": {
+        "cycle": 25,
+        "status": "unavailable",
+        "reason": "no mandatory current Mana-blocked prerequisite offer",
+        "mandatoryActionIds": ["tech-black_powder", "tech-electricity"],
+        "evaluatedCandidates": [
+          {
+            "actionId": "tech-clerics",
+            "cost": { "Mana": 100, "Knowledge": 2000, "Crystal": 100 },
+            "nonManaAffordable": true,
+            "frontier": false,
+            "ownerEligibility": "eligible"
+          },
+          {
+            "actionId": "tech-black_powder",
+            "cost": {
+              "Knowledge": 4500,
+              "Mana": 100,
+              "Crystal": 250,
+              "Coal": 300
+            },
+            "nonManaAffordable": false,
+            "frontier": true,
+            "ownerEligibility": "eligible"
+          },
+          {
+            "actionId": "tech-steel_vault",
+            "cost": { "Money": 30000, "Knowledge": 6750, "Steel": 3000 },
+            "nonManaAffordable": false,
+            "frontier": false,
+            "ownerEligibility": "eligible"
+          },
+          {
+            "actionId": "tech-magic",
+            "cost": { "Knowledge": 7920 },
+            "nonManaAffordable": true,
+            "frontier": false,
+            "ownerEligibility": "eligible"
+          },
+          {
+            "actionId": "tech-boot_camp",
+            "cost": { "Knowledge": 8000 },
+            "nonManaAffordable": true,
+            "frontier": false,
+            "ownerEligibility": "eligible"
+          },
+          {
+            "actionId": "tech-slave_market",
+            "cost": { "Knowledge": 8000 },
+            "nonManaAffordable": true,
+            "frontier": false,
+            "ownerEligibility": "eligible"
+          },
+          {
+            "actionId": "tech-steel_containers",
+            "cost": { "Knowledge": 9000, "Steel": 250 },
+            "nonManaAffordable": false,
+            "frontier": true,
+            "ownerEligibility": "eligible"
+          },
+          {
+            "actionId": "tech-alchemy",
+            "cost": { "Mana": 100, "Knowledge": 10000, "Crystal": 250 },
+            "nonManaAffordable": false,
+            "frontier": false,
+            "ownerEligibility": "eligible"
+          },
+          {
+            "actionId": "tech-steel_saw",
+            "cost": { "Knowledge": 10800, "Steel": 400 },
+            "nonManaAffordable": false,
+            "frontier": false,
+            "ownerEligibility": "eligible"
+          },
+          {
+            "actionId": "tech-steel_beams",
+            "cost": { "Knowledge": 11250, "Steel": 2500 },
+            "nonManaAffordable": false,
+            "frontier": false,
+            "ownerEligibility": "eligible"
+          },
+          {
+            "actionId": "tech-steel_hoe",
+            "cost": { "Knowledge": 12600, "Steel": 500 },
+            "nonManaAffordable": false,
+            "frontier": false,
+            "ownerEligibility": "eligible"
+          },
+          {
+            "actionId": "tech-electricity",
+            "cost": { "Knowledge": 13500, "Copper": 1000 },
+            "nonManaAffordable": false,
+            "frontier": true,
+            "ownerEligibility": "eligible"
+          },
+          {
+            "actionId": "tech-crafting_ritual",
+            "cost": { "Mana": 100, "Knowledge": 15000, "Crystal": 2500 },
+            "nonManaAffordable": false,
+            "frontier": false,
+            "ownerEligibility": "eligible"
+          },
+          {
+            "actionId": "tech-barns",
+            "cost": { "Knowledge": 15750, "Aluminium": 3000, "Steel": 3000 },
+            "nonManaAffordable": false,
+            "frontier": true,
+            "ownerEligibility": "eligible"
+          },
+          {
+            "actionId": "tech-diplomacy",
+            "cost": { "Knowledge": 16200 },
+            "nonManaAffordable": false,
+            "frontier": false,
+            "ownerEligibility": "eligible"
+          },
+          {
+            "actionId": "tech-windmill",
+            "cost": { "Knowledge": 16200 },
+            "nonManaAffordable": false,
+            "frontier": false,
+            "ownerEligibility": "eligible"
+          },
+          {
+            "actionId": "tech-bessemer_process",
+            "cost": { "Knowledge": 19800, "Coal": 5000 },
+            "nonManaAffordable": false,
+            "frontier": false,
+            "ownerEligibility": "eligible"
+          },
+          {
+            "actionId": "tech-merchandising",
+            "cost": { "Knowledge": 25000 },
+            "nonManaAffordable": false,
+            "frontier": false,
+            "ownerEligibility": "eligible"
+          },
+          {
+            "actionId": "tech-zealotry",
+            "cost": { "Knowledge": 25000 },
+            "nonManaAffordable": false,
+            "frontier": false,
+            "ownerEligibility": "eligible"
+          }
+        ]
+      },
+      "finalResources": {
+        "Mana": 0.12524546868193198,
+        "Knowledge": 590.0411877277784,
+        "Crystal": 244.62156657118481,
+        "Coal": 23111.10921484117,
+        "Lumber": 10997.902404313345,
+        "Stone": 80498.16292345342
+      },
+      "finalTechLevels": {
+        "high_tech": 1,
+        "explosives": 0,
+        "uranium": 0,
+        "oil": 0
+      },
+      "finalResearchOffers": [
+        {
+          "actionId": "tech-black_powder",
+          "grantTechnology": "explosives",
+          "grantLevel": 1,
+          "cost": {
+            "Knowledge": 4500,
+            "Mana": 100,
+            "Crystal": 250,
+            "Coal": 300
+          },
+          "nativeAffordable": false
+        },
+        {
+          "actionId": "tech-electricity",
+          "grantTechnology": "high_tech",
+          "grantLevel": 2,
+          "cost": { "Knowledge": 13500, "Copper": 1000 },
+          "nativeAffordable": false
         }
       ],
       "claimLedger": {
-        "statusCounts": { "current": 8, "unavailable": 17 },
+        "statusCounts": { "current": 8, "no-ledger": 17 },
         "sample": {
           "currentMana": 10.830856041265669,
           "reservedCurrentStock": 10.830856041265669,
@@ -1464,11 +1612,14 @@
         }
       },
       "gatherClaimActions": {
-        "permitted": 0,
+        "permitted": 1700,
         "deferred": 0,
-        "actualManaSpent": 0
+        "actualManaSpent": 183
       },
-      "gatherSummary": {},
+      "gatherSummary": {
+        "city-lumber": { "clicks": 850, "manaSpent": 183, "gathered": 4994 },
+        "undefined-stone": { "clicks": 850, "manaSpent": 0, "gathered": 1700 }
+      },
       "firstNativeHighTechGrant": {
         "period": 64,
         "actionId": "tech-mad_science",
@@ -1478,7 +1629,14 @@
         "manaAfter": 5.535658100788723
       },
       "firstNativeExplosivesGrant": null,
-      "firstGatherAfterGrant": null,
+      "firstGatherAfterGrant": {
+        "period": 72,
+        "actionId": "city-lumber",
+        "manaBefore": 15.493486966434876,
+        "manaAfter": 14.493486966434876,
+        "manaSpent": 1,
+        "gatheredResourceDelta": 20
+      },
       "researchAttempts": [
         {
           "cycle": 3,
@@ -1512,8 +1670,8 @@
           "grantBefore": 1,
           "grantAfter": 2,
           "disposition": "researched",
-          "manaBefore": 15.493486966434876,
-          "manaAfter": 15.493486966434876,
+          "manaBefore": 0.493486966434876,
+          "manaAfter": 0.493486966434876,
           "manaSpent": 0
         },
         {
@@ -1524,21 +1682,21 @@
           "grantBefore": 1,
           "grantAfter": 2,
           "disposition": "researched",
-          "manaBefore": 45.36697356337333,
-          "manaAfter": 45.36697356337333,
+          "manaBefore": 0.36697356337334597,
+          "manaAfter": 0.36697356337334597,
           "manaSpent": 0
         },
         {
-          "cycle": 18,
-          "actionId": "tech-clerics",
-          "grantTechnology": "cleric",
-          "grantLevel": 1,
-          "grantBefore": 0,
-          "grantAfter": 1,
+          "cycle": 25,
+          "actionId": "tech-magic",
+          "grantTechnology": "theatre",
+          "grantLevel": 3,
+          "grantBefore": 2,
+          "grantAfter": 3,
           "disposition": "researched",
-          "manaBefore": 106.08812811561972,
-          "manaAfter": 6.088128115619725,
-          "manaSpent": 100
+          "manaBefore": 0.12524546868193198,
+          "manaAfter": 0.12524546868193198,
+          "manaSpent": 0
         }
       ],
       "nativeResearchTrace": [
@@ -1573,8 +1731,8 @@
           "grantLevel": 2,
           "grantBefore": 1,
           "grantAfter": 2,
-          "manaBefore": 15.493486966434876,
-          "manaAfter": 15.493486966434876,
+          "manaBefore": 0.493486966434876,
+          "manaAfter": 0.493486966434876,
           "manaSpent": 0,
           "disposition": "researched"
         },
@@ -1585,21 +1743,21 @@
           "grantLevel": 2,
           "grantBefore": 1,
           "grantAfter": 2,
-          "manaBefore": 45.36697356337333,
-          "manaAfter": 45.36697356337333,
+          "manaBefore": 0.36697356337334597,
+          "manaAfter": 0.36697356337334597,
           "manaSpent": 0,
           "disposition": "researched"
         },
         {
-          "cycle": 18,
-          "actionId": "tech-clerics",
-          "grantTechnology": "cleric",
-          "grantLevel": 1,
-          "grantBefore": 0,
-          "grantAfter": 1,
-          "manaBefore": 106.08812811561972,
-          "manaAfter": 6.088128115619725,
-          "manaSpent": 100,
+          "cycle": 25,
+          "actionId": "tech-magic",
+          "grantTechnology": "theatre",
+          "grantLevel": 3,
+          "grantBefore": 2,
+          "grantAfter": 3,
+          "manaBefore": 0.12524546868193198,
+          "manaAfter": 0.12524546868193198,
+          "manaSpent": 0,
           "disposition": "researched"
         }
       ],
@@ -1641,7 +1799,7 @@
           "effectiveEra": "early_space",
           "arguments": { "era": "early_space", "wiki": false },
           "rootGeneration": 0,
-          "progressionEpoch": "0|41:91|22:58|50|human|magic|178|0|anarchy|1|0|0|0",
+          "progressionEpoch": "0|40:91|22:58|50|human|magic|178|0|anarchy|1|0|0|0",
           "captureGeneration": 30,
           "requirements": [
             { "technologyId": "gambling", "requiredLevel": 2 },
@@ -1661,7 +1819,7 @@
           "effectiveEra": "early_space",
           "arguments": { "era": "early_space", "wiki": false },
           "rootGeneration": 0,
-          "progressionEpoch": "0|41:91|22:58|50|human|magic|178|0|anarchy|1|0|0|0",
+          "progressionEpoch": "0|40:91|22:58|50|human|magic|178|0|anarchy|1|0|0|0",
           "captureGeneration": 30,
           "requirements": [
             { "technologyId": "container", "requiredLevel": 4 },
@@ -1681,7 +1839,7 @@
           "effectiveEra": "early_space",
           "arguments": { "era": "early_space", "wiki": false },
           "rootGeneration": 0,
-          "progressionEpoch": "0|41:91|22:58|50|human|magic|178|0|anarchy|1|0|0|0",
+          "progressionEpoch": "0|40:91|22:58|50|human|magic|178|0|anarchy|1|0|0|0",
           "captureGeneration": 30,
           "requirements": [
             { "technologyId": "steel_container", "requiredLevel": 1 },
@@ -1701,7 +1859,7 @@
           "effectiveEra": "early_space",
           "arguments": { "era": "early_space", "wiki": false },
           "rootGeneration": 0,
-          "progressionEpoch": "0|41:91|22:58|50|human|magic|178|0|anarchy|1|0|0|0",
+          "progressionEpoch": "0|40:91|22:58|50|human|magic|178|0|anarchy|1|0|0|0",
           "captureGeneration": 30,
           "requirements": [
             { "technologyId": "banking", "requiredLevel": 5 },
@@ -1721,7 +1879,7 @@
           "effectiveEra": "early_space",
           "arguments": { "era": "early_space", "wiki": false },
           "rootGeneration": 0,
-          "progressionEpoch": "0|41:91|22:58|50|human|magic|178|0|anarchy|1|0|0|0",
+          "progressionEpoch": "0|40:91|22:58|50|human|magic|178|0|anarchy|1|0|0|0",
           "captureGeneration": 30,
           "requirements": [
             { "technologyId": "home_safe", "requiredLevel": 1 },
@@ -1739,7 +1897,7 @@
           "reqsIdentity": 12,
           "source": "native-actionReqs-during-drawTech",
           "rootGeneration": 0,
-          "progressionEpoch": "0|41:91|22:58|50|human|magic|178|0|anarchy|1|0|0|0",
+          "progressionEpoch": "0|40:91|22:58|50|human|magic|178|0|anarchy|1|0|0|0",
           "captureGeneration": 30,
           "nativeCallCount": 0,
           "status": "missing",
@@ -1755,7 +1913,7 @@
           "effectiveEra": "globalized",
           "arguments": { "era": "globalized", "wiki": false },
           "rootGeneration": 0,
-          "progressionEpoch": "0|41:91|22:58|50|human|magic|178|0|anarchy|1|0|0|0",
+          "progressionEpoch": "0|40:91|22:58|50|human|magic|178|0|anarchy|1|0|0|0",
           "captureGeneration": 30,
           "requirements": [
             { "technologyId": "genetics", "requiredLevel": 4 },
@@ -1775,7 +1933,7 @@
           "effectiveEra": "deep_space",
           "arguments": { "era": "deep_space", "wiki": false },
           "rootGeneration": 0,
-          "progressionEpoch": "0|41:91|22:58|50|human|magic|178|0|anarchy|1|0|0|0",
+          "progressionEpoch": "0|40:91|22:58|50|human|magic|178|0|anarchy|1|0|0|0",
           "captureGeneration": 30,
           "requirements": [
             { "technologyId": "high_tech", "requiredLevel": 8 },
@@ -1797,7 +1955,7 @@
           "effectiveEra": "deep_space",
           "arguments": { "era": "deep_space", "wiki": false },
           "rootGeneration": 0,
-          "progressionEpoch": "0|41:91|22:58|50|human|magic|178|0|anarchy|1|0|0|0",
+          "progressionEpoch": "0|40:91|22:58|50|human|magic|178|0|anarchy|1|0|0|0",
           "captureGeneration": 30,
           "requirements": [
             { "technologyId": "high_tech", "requiredLevel": 10 },
@@ -1817,7 +1975,7 @@
           "effectiveEra": "globalized",
           "arguments": { "era": "globalized", "wiki": false },
           "rootGeneration": 0,
-          "progressionEpoch": "0|41:91|22:58|50|human|magic|178|0|anarchy|1|0|0|0",
+          "progressionEpoch": "0|40:91|22:58|50|human|magic|178|0|anarchy|1|0|0|0",
           "captureGeneration": 30,
           "requirements": [{ "technologyId": "uranium", "requiredLevel": 1 }],
           "nativeCallCount": 1,
@@ -1834,7 +1992,7 @@
           "effectiveEra": "early_space",
           "arguments": { "era": "early_space", "wiki": false },
           "rootGeneration": 0,
-          "progressionEpoch": "0|41:91|22:58|50|human|magic|178|0|anarchy|1|0|0|0",
+          "progressionEpoch": "0|40:91|22:58|50|human|magic|178|0|anarchy|1|0|0|0",
           "captureGeneration": 30,
           "requirements": [
             { "technologyId": "oil", "requiredLevel": 6 },
@@ -1854,7 +2012,7 @@
           "effectiveEra": "early_space",
           "arguments": { "era": "early_space", "wiki": false },
           "rootGeneration": 0,
-          "progressionEpoch": "0|41:91|22:58|50|human|magic|178|0|anarchy|1|0|0|0",
+          "progressionEpoch": "0|40:91|22:58|50|human|magic|178|0|anarchy|1|0|0|0",
           "captureGeneration": 30,
           "requirements": [
             { "technologyId": "military", "requiredLevel": 5 },
@@ -1874,7 +2032,7 @@
           "effectiveEra": "early_space",
           "arguments": { "era": "early_space", "wiki": false },
           "rootGeneration": 0,
-          "progressionEpoch": "0|41:91|22:58|50|human|magic|178|0|anarchy|1|0|0|0",
+          "progressionEpoch": "0|40:91|22:58|50|human|magic|178|0|anarchy|1|0|0|0",
           "captureGeneration": 30,
           "requirements": [{ "technologyId": "mars", "requiredLevel": 2 }],
           "nativeCallCount": 1,
@@ -1889,7 +2047,7 @@
           "reqsIdentity": 28,
           "source": "native-actionReqs-during-drawTech",
           "rootGeneration": 0,
-          "progressionEpoch": "0|41:91|22:58|50|human|magic|178|0|anarchy|1|0|0|0",
+          "progressionEpoch": "0|40:91|22:58|50|human|magic|178|0|anarchy|1|0|0|0",
           "captureGeneration": 30,
           "nativeCallCount": 0,
           "status": "missing",
@@ -1903,7 +2061,7 @@
           "reqsIdentity": 30,
           "source": "native-actionReqs-during-drawTech",
           "rootGeneration": 0,
-          "progressionEpoch": "0|41:91|22:58|50|human|magic|178|0|anarchy|1|0|0|0",
+          "progressionEpoch": "0|40:91|22:58|50|human|magic|178|0|anarchy|1|0|0|0",
           "captureGeneration": 30,
           "nativeCallCount": 0,
           "status": "missing",
@@ -1917,7 +2075,7 @@
           "reqsIdentity": 32,
           "source": "native-actionReqs-during-drawTech",
           "rootGeneration": 0,
-          "progressionEpoch": "0|41:91|22:58|50|human|magic|178|0|anarchy|1|0|0|0",
+          "progressionEpoch": "0|40:91|22:58|50|human|magic|178|0|anarchy|1|0|0|0",
           "captureGeneration": 30,
           "nativeCallCount": 0,
           "status": "missing",
@@ -1931,7 +2089,7 @@
           "reqsIdentity": 34,
           "source": "native-actionReqs-during-drawTech",
           "rootGeneration": 0,
-          "progressionEpoch": "0|41:91|22:58|50|human|magic|178|0|anarchy|1|0|0|0",
+          "progressionEpoch": "0|40:91|22:58|50|human|magic|178|0|anarchy|1|0|0|0",
           "captureGeneration": 30,
           "nativeCallCount": 0,
           "status": "missing",
@@ -1945,7 +2103,7 @@
           "reqsIdentity": 36,
           "source": "native-actionReqs-during-drawTech",
           "rootGeneration": 0,
-          "progressionEpoch": "0|41:91|22:58|50|human|magic|178|0|anarchy|1|0|0|0",
+          "progressionEpoch": "0|40:91|22:58|50|human|magic|178|0|anarchy|1|0|0|0",
           "captureGeneration": 30,
           "nativeCallCount": 0,
           "status": "missing",
@@ -1959,7 +2117,7 @@
           "reqsIdentity": 38,
           "source": "native-actionReqs-during-drawTech",
           "rootGeneration": 0,
-          "progressionEpoch": "0|41:91|22:58|50|human|magic|178|0|anarchy|1|0|0|0",
+          "progressionEpoch": "0|40:91|22:58|50|human|magic|178|0|anarchy|1|0|0|0",
           "captureGeneration": 30,
           "nativeCallCount": 0,
           "status": "missing",
@@ -1973,7 +2131,7 @@
           "reqsIdentity": 40,
           "source": "native-actionReqs-during-drawTech",
           "rootGeneration": 0,
-          "progressionEpoch": "0|41:91|22:58|50|human|magic|178|0|anarchy|1|0|0|0",
+          "progressionEpoch": "0|40:91|22:58|50|human|magic|178|0|anarchy|1|0|0|0",
           "captureGeneration": 30,
           "nativeCallCount": 0,
           "status": "missing",
@@ -1987,7 +2145,7 @@
           "reqsIdentity": 42,
           "source": "native-actionReqs-during-drawTech",
           "rootGeneration": 0,
-          "progressionEpoch": "0|41:91|22:58|50|human|magic|178|0|anarchy|1|0|0|0",
+          "progressionEpoch": "0|40:91|22:58|50|human|magic|178|0|anarchy|1|0|0|0",
           "captureGeneration": 30,
           "nativeCallCount": 0,
           "status": "missing",
@@ -2001,7 +2159,7 @@
           "reqsIdentity": 44,
           "source": "native-actionReqs-during-drawTech",
           "rootGeneration": 0,
-          "progressionEpoch": "0|41:91|22:58|50|human|magic|178|0|anarchy|1|0|0|0",
+          "progressionEpoch": "0|40:91|22:58|50|human|magic|178|0|anarchy|1|0|0|0",
           "captureGeneration": 30,
           "nativeCallCount": 0,
           "status": "missing",
@@ -2015,7 +2173,7 @@
           "reqsIdentity": 46,
           "source": "native-actionReqs-during-drawTech",
           "rootGeneration": 0,
-          "progressionEpoch": "0|41:91|22:58|50|human|magic|178|0|anarchy|1|0|0|0",
+          "progressionEpoch": "0|40:91|22:58|50|human|magic|178|0|anarchy|1|0|0|0",
           "captureGeneration": 30,
           "nativeCallCount": 0,
           "status": "missing",
@@ -2141,10 +2299,10 @@
         }
       ],
       "computedRequirementCaptureAndDrawMsByWindow": [
-        { "count": 30, "totalMs": 66, "perTickMs": 2.64, "maxMs": 4.5 }
+        { "count": 30, "totalMs": 59.1, "perTickMs": 2.36, "maxMs": 3.1 }
       ],
       "workTicks": 25,
-      "tickPhaseMsBy25TickWindow": [70.4]
+      "tickPhaseMsBy25TickWindow": [68.38]
     },
     "computedRequirementsIceAge": {
       "periods": 40,
@@ -2190,6 +2348,160 @@
           "firstCycle": 1,
           "lastCycle": 5,
           "occurrences": 5
+        },
+        {
+          "state": "suspended",
+          "reason": "research-owner-observation-unavailable",
+          "firstCycle": 1,
+          "lastCycle": 5,
+          "occurrences": 5
+        }
+      ],
+      "claimLifecycleEvidence": [],
+      "finalClaimSet": { "actionIds": [] },
+      "finalSelection": {
+        "cycle": 5,
+        "status": "unavailable",
+        "reason": "native prerequisite graph cannot prove mandatory obligations",
+        "mandatoryActionIds": [],
+        "evaluatedCandidates": [
+          {
+            "actionId": "tech-rituals",
+            "cost": { "Mana": 25, "Knowledge": 750, "Crystal": 50 },
+            "nonManaAffordable": true,
+            "frontier": false,
+            "ownerEligibility": "eligible"
+          },
+          {
+            "actionId": "tech-black_powder",
+            "cost": {
+              "Knowledge": 4500,
+              "Mana": 100,
+              "Crystal": 250,
+              "Coal": 300
+            },
+            "nonManaAffordable": true,
+            "frontier": true,
+            "ownerEligibility": "eligible"
+          },
+          {
+            "actionId": "tech-steel_vault",
+            "cost": { "Money": 30000, "Knowledge": 6750, "Steel": 3000 },
+            "nonManaAffordable": false,
+            "frontier": false,
+            "ownerEligibility": "eligible"
+          },
+          {
+            "actionId": "tech-reinforced_crates",
+            "cost": { "Knowledge": 6750, "Sheet_Metal": 100 },
+            "nonManaAffordable": true,
+            "frontier": false,
+            "ownerEligibility": "eligible"
+          },
+          {
+            "actionId": "tech-coal_lanterns",
+            "cost": { "Knowledge": 7800, "Steel": 5000, "Coal": 6000 },
+            "nonManaAffordable": false,
+            "frontier": false,
+            "ownerEligibility": "eligible"
+          },
+          {
+            "actionId": "tech-steel_support_beams",
+            "cost": { "Knowledge": 8400, "Steel": 6500 },
+            "nonManaAffordable": false,
+            "frontier": false,
+            "ownerEligibility": "eligible"
+          },
+          {
+            "actionId": "tech-steel_casks",
+            "cost": { "Knowledge": 8800, "Steel": 4400 },
+            "nonManaAffordable": false,
+            "frontier": false,
+            "ownerEligibility": "eligible"
+          },
+          {
+            "actionId": "tech-stone_breakthrough",
+            "cost": { "Knowledge": 12000 },
+            "nonManaAffordable": true,
+            "frontier": false,
+            "ownerEligibility": "eligible"
+          },
+          {
+            "actionId": "tech-mad_science",
+            "cost": {
+              "Money": 10000,
+              "Mana": 50,
+              "Knowledge": 6750,
+              "Crystal": 1000,
+              "Aluminium": 750
+            },
+            "nonManaAffordable": true,
+            "frontier": true,
+            "ownerEligibility": "eligible"
+          },
+          {
+            "actionId": "tech-steel_containers",
+            "cost": { "Knowledge": 9000, "Steel": 250 },
+            "nonManaAffordable": false,
+            "frontier": true,
+            "ownerEligibility": "eligible"
+          },
+          {
+            "actionId": "tech-steel_hoe",
+            "cost": { "Knowledge": 12600, "Steel": 500 },
+            "nonManaAffordable": false,
+            "frontier": false,
+            "ownerEligibility": "eligible"
+          },
+          {
+            "actionId": "tech-bessemer_process",
+            "cost": { "Knowledge": 19800, "Coal": 5000 },
+            "nonManaAffordable": false,
+            "frontier": false,
+            "ownerEligibility": "eligible"
+          },
+          {
+            "actionId": "tech-merchandising",
+            "cost": { "Knowledge": 25000 },
+            "nonManaAffordable": false,
+            "frontier": false,
+            "ownerEligibility": "eligible"
+          },
+          {
+            "actionId": "tech-zealotry",
+            "cost": { "Knowledge": 25000 },
+            "nonManaAffordable": false,
+            "frontier": false,
+            "ownerEligibility": "eligible"
+          }
+        ]
+      },
+      "finalResources": {
+        "Mana": 15.051097147419297,
+        "Knowledge": 6763.717336225396,
+        "Crystal": 1152.0331454596621,
+        "Coal": 22581.971545806184,
+        "Lumber": 9096.92501187419,
+        "Stone": 65755.58580514436
+      },
+      "finalTechLevels": {
+        "high_tech": 0,
+        "explosives": 0,
+        "uranium": 0,
+        "oil": 0
+      },
+      "finalResearchOffers": [
+        {
+          "actionId": "tech-black_powder",
+          "grantTechnology": "explosives",
+          "grantLevel": 1,
+          "cost": {
+            "Knowledge": 4500,
+            "Mana": 100,
+            "Crystal": 250,
+            "Coal": 300
+          },
+          "nativeAffordable": false
         }
       ],
       "claimLedger": { "statusCounts": { "no-ledger": 5 }, "sample": null },
@@ -2885,6 +3197,153 @@
           "firstCycle": 1,
           "lastCycle": 3,
           "occurrences": 3
+        },
+        {
+          "state": "suspended",
+          "reason": "research-owner-observation-unavailable",
+          "firstCycle": 1,
+          "lastCycle": 3,
+          "occurrences": 3
+        }
+      ],
+      "claimLifecycleEvidence": [],
+      "finalClaimSet": { "actionIds": [] },
+      "finalSelection": {
+        "cycle": 3,
+        "status": "unavailable",
+        "reason": "native prerequisite graph cannot prove mandatory obligations",
+        "mandatoryActionIds": [],
+        "evaluatedCandidates": [
+          {
+            "actionId": "tech-rituals",
+            "cost": { "Mana": 50, "Knowledge": 750, "Crystal": 100 },
+            "nonManaAffordable": true,
+            "frontier": false,
+            "ownerEligibility": "eligible"
+          },
+          {
+            "actionId": "tech-black_powder",
+            "cost": {
+              "Knowledge": 4500,
+              "Mana": 200,
+              "Crystal": 500,
+              "Coal": 600
+            },
+            "nonManaAffordable": true,
+            "frontier": true,
+            "ownerEligibility": "eligible"
+          },
+          {
+            "actionId": "tech-steel_vault",
+            "cost": { "Money": 90000, "Knowledge": 6750, "Steel": 6000 },
+            "nonManaAffordable": false,
+            "frontier": false,
+            "ownerEligibility": "eligible"
+          },
+          {
+            "actionId": "tech-reinforced_crates",
+            "cost": { "Knowledge": 6750, "Sheet_Metal": 200 },
+            "nonManaAffordable": false,
+            "frontier": false,
+            "ownerEligibility": "eligible"
+          },
+          {
+            "actionId": "tech-mad_science",
+            "cost": {
+              "Money": 30000,
+              "Mana": 100,
+              "Knowledge": 6750,
+              "Crystal": 2000,
+              "Aluminium": 1500
+            },
+            "nonManaAffordable": false,
+            "frontier": true,
+            "ownerEligibility": "eligible"
+          },
+          {
+            "actionId": "tech-steel_containers",
+            "cost": { "Knowledge": 9000, "Steel": 500 },
+            "nonManaAffordable": false,
+            "frontier": true,
+            "ownerEligibility": "eligible"
+          },
+          {
+            "actionId": "tech-steel_saw",
+            "cost": { "Knowledge": 10800, "Steel": 400 },
+            "nonManaAffordable": false,
+            "frontier": false,
+            "ownerEligibility": "eligible"
+          },
+          {
+            "actionId": "tech-steel_beams",
+            "cost": { "Knowledge": 11250, "Steel": 2500 },
+            "nonManaAffordable": false,
+            "frontier": false,
+            "ownerEligibility": "eligible"
+          },
+          {
+            "actionId": "tech-steel_hoe",
+            "cost": { "Knowledge": 12600, "Steel": 1000 },
+            "nonManaAffordable": false,
+            "frontier": false,
+            "ownerEligibility": "eligible"
+          },
+          {
+            "actionId": "tech-barns",
+            "cost": { "Knowledge": 15750, "Aluminium": 3000, "Steel": 3000 },
+            "nonManaAffordable": false,
+            "frontier": true,
+            "ownerEligibility": "eligible"
+          },
+          {
+            "actionId": "tech-bessemer_process",
+            "cost": { "Knowledge": 19800, "Coal": 10000 },
+            "nonManaAffordable": false,
+            "frontier": false,
+            "ownerEligibility": "eligible"
+          },
+          {
+            "actionId": "tech-merchandising",
+            "cost": { "Knowledge": 25000 },
+            "nonManaAffordable": false,
+            "frontier": false,
+            "ownerEligibility": "eligible"
+          },
+          {
+            "actionId": "tech-zealotry",
+            "cost": { "Knowledge": 25000 },
+            "nonManaAffordable": false,
+            "frontier": false,
+            "ownerEligibility": "eligible"
+          }
+        ]
+      },
+      "finalResources": {
+        "Mana": 11.662171503850288,
+        "Knowledge": 19638,
+        "Crystal": 1191.0341252747498,
+        "Coal": 22668.102942580197,
+        "Lumber": 13401.255593155967,
+        "Stone": 68172.96128129684
+      },
+      "finalTechLevels": {
+        "high_tech": 0,
+        "explosives": 0,
+        "uranium": 0,
+        "oil": 0
+      },
+      "finalResearchOffers": [
+        {
+          "actionId": "tech-black_powder",
+          "grantTechnology": "explosives",
+          "grantLevel": 1,
+          "cost": {
+            "Knowledge": 4500,
+            "Mana": 200,
+            "Crystal": 500,
+            "Coal": 600
+          },
+          "nativeAffordable": false
         }
       ],
       "claimLedger": { "statusCounts": { "no-ledger": 3 }, "sample": null },
@@ -3481,6 +3940,1160 @@
       "computedRequirementCaptureAndDrawMsByWindow": [],
       "workTicks": 0,
       "tickPhaseMsBy25TickWindow": []
+    },
+    "continuationA": {
+      "periods": 1000,
+      "finalExportHash": "ceb3eeaf8c9f66774ee928e7e65e0ed2ac4eac54b29d912e47cabb240fa78afc",
+      "highTechLevel": 0,
+      "explosivesLevel": 0,
+      "postMadScienceClaimEvaluation": null,
+      "selectedClaim": null,
+      "selectionTimeline": [],
+      "lifecycle": [],
+      "claimLifecycleEvidence": [],
+      "finalClaimSet": {},
+      "finalSelection": null,
+      "finalResources": {
+        "Mana": 0.3861976900427493,
+        "Knowledge": 20225,
+        "Crystal": 2177.739133393481,
+        "Coal": 20291.717040246407,
+        "Lumber": 5369.458599822057,
+        "Stone": 87513.88722977326
+      },
+      "finalTechLevels": {
+        "high_tech": 0,
+        "explosives": 0,
+        "uranium": 0,
+        "oil": 0
+      },
+      "finalResearchOffers": [
+        {
+          "actionId": "tech-black_powder",
+          "grantTechnology": "explosives",
+          "grantLevel": 1,
+          "cost": {
+            "Knowledge": 4500,
+            "Mana": 100,
+            "Crystal": 250,
+            "Coal": 300
+          },
+          "nativeAffordable": false
+        }
+      ],
+      "claimLedger": { "statusCounts": { "no-ledger": 125 }, "sample": null },
+      "gatherClaimActions": {
+        "permitted": 12500,
+        "deferred": 0,
+        "actualManaSpent": 1221
+      },
+      "gatherSummary": {
+        "city-lumber": { "clicks": 6250, "manaSpent": 1221, "gathered": 34478 },
+        "undefined-stone": { "clicks": 6250, "manaSpent": 0, "gathered": 12500 }
+      },
+      "firstNativeHighTechGrant": null,
+      "firstNativeExplosivesGrant": null,
+      "firstGatherAfterGrant": null,
+      "researchAttempts": [
+        {
+          "cycle": 25,
+          "actionId": "tech-bessemer_process",
+          "grantTechnology": "smelting",
+          "grantLevel": 4,
+          "grantBefore": 3,
+          "grantAfter": 4,
+          "disposition": "researched",
+          "manaBefore": 0.0875469537689959,
+          "manaAfter": 0.0875469537689959,
+          "manaSpent": 0
+        }
+      ],
+      "nativeResearchTrace": [
+        {
+          "cycle": 25,
+          "actionId": "tech-bessemer_process",
+          "grantTechnology": "smelting",
+          "grantLevel": 4,
+          "grantBefore": 3,
+          "grantAfter": 4,
+          "manaBefore": 0.0875469537689959,
+          "manaAfter": 0.0875469537689959,
+          "manaSpent": 0,
+          "disposition": "researched"
+        }
+      ],
+      "researchDrawCounts": {
+        "research.observation.samples": { "total": 25, "perTick": 1, "max": 1 },
+        "research.observation.sample-requester.resource-demand": {
+          "total": 25,
+          "perTick": 1,
+          "max": 1
+        },
+        "research.observation.sample.offers-only": {
+          "total": 25,
+          "perTick": 1,
+          "max": 1
+        },
+        "research.catalog.observations": { "total": 25, "perTick": 1, "max": 1 }
+      },
+      "computedRequirementCounts": {},
+      "computedRequirements": [],
+      "computedRequirementOfferStatus": [],
+      "computedRequirementCaptureAndDrawMsByWindow": [],
+      "workTicks": 125,
+      "tickPhaseMsBy25TickWindow": [47.55, 56.64, 54.24, 57.99, 57.13]
+    },
+    "continuationD": {
+      "periods": 1000,
+      "finalExportHash": "acd51350fbc0bb8a3f03138a801660bd8f6007ca8bd762f918a662d061c59def",
+      "highTechLevel": 2,
+      "explosivesLevel": 2,
+      "postMadScienceClaimEvaluation": {
+        "status": "released",
+        "reason": "mandatory obligation retained; Mana protection released for verified non-Mana shortage",
+        "mandatoryActionIds": ["tech-black_powder", "tech-electricity"],
+        "evaluatedCandidates": [
+          {
+            "actionId": "tech-black_powder",
+            "dependencyRelation": "declared-prerequisite",
+            "pathApplicability": "eligible",
+            "actionability": "current-native-offer",
+            "resourceAffordability": "insufficient",
+            "cost": {
+              "Knowledge": 4500,
+              "Mana": 100,
+              "Crystal": 250,
+              "Coal": 300
+            },
+            "manaRequired": 100,
+            "nonManaAffordable": false
+          },
+          {
+            "actionId": "tech-electricity",
+            "dependencyRelation": "declared-prerequisite",
+            "pathApplicability": "eligible",
+            "actionability": "current-native-offer",
+            "resourceAffordability": "affordable",
+            "cost": { "Knowledge": 13500, "Copper": 1000 },
+            "nonManaAffordable": true
+          }
+        ]
+      },
+      "selectedClaim": {
+        "cycle": 1,
+        "status": "selected",
+        "reason": "independent current verified native prerequisite obligations",
+        "candidates": ["tech-black_powder", "tech-mad_science"],
+        "claims": [
+          {
+            "immediateGoalId": "research:tech-black_powder",
+            "nativeActionId": "tech-black_powder",
+            "targetGrantTechnology": "explosives",
+            "targetGrantLevel": 1,
+            "requiredQuantity": 100,
+            "observedStock": 10.830856041265669,
+            "offerObservationId": "research-offers-1",
+            "offerBindingGeneration": 1,
+            "allocationAuthority": { "kind": "independent" }
+          },
+          {
+            "immediateGoalId": "research:tech-mad_science",
+            "nativeActionId": "tech-mad_science",
+            "targetGrantTechnology": "high_tech",
+            "targetGrantLevel": 1,
+            "requiredQuantity": 50,
+            "observedStock": 10.830856041265669,
+            "offerObservationId": "research-offers-1",
+            "offerBindingGeneration": 1,
+            "allocationAuthority": { "kind": "independent" }
+          }
+        ],
+        "mandatoryActionIds": ["tech-black_powder", "tech-mad_science"],
+        "alternativeGroups": [],
+        "prerequisiteReasons": [],
+        "researchPermission": true,
+        "playerQueues": "empty",
+        "nativeOfferCount": 13,
+        "rootGeneration": 0,
+        "progressionGeneration": "0|39:86|22:58|49|human|magic|178|0|anarchy|1|0|0|0",
+        "evaluatedCandidates": []
+      },
+      "selectionTimeline": [
+        {
+          "status": "selected",
+          "reason": "independent current verified native prerequisite obligations",
+          "candidates": ["tech-black_powder", "tech-mad_science"],
+          "remainingObligations": [
+            { "actionId": "tech-black_powder", "requiredQuantity": 100 },
+            { "actionId": "tech-mad_science", "requiredQuantity": 50 }
+          ],
+          "firstCycle": 1,
+          "lastCycle": 8,
+          "occurrences": 8
+        },
+        {
+          "status": "released",
+          "reason": "mandatory obligation retained; Mana protection released for verified non-Mana shortage",
+          "candidates": ["tech-black_powder", "tech-electricity"],
+          "firstCycle": 9,
+          "lastCycle": 67,
+          "occurrences": 4,
+          "firstOfferObservationId": "research-offers-11",
+          "lastOfferObservationId": "research-offers-76"
+        },
+        {
+          "status": "unavailable",
+          "reason": "no mandatory current Mana-blocked prerequisite offer",
+          "candidates": [],
+          "firstCycle": 10,
+          "lastCycle": 71,
+          "occurrences": 35,
+          "firstOfferObservationId": "research-offers-13",
+          "lastOfferObservationId": "research-offers-80"
+        },
+        {
+          "status": "selected",
+          "reason": "independent current verified native prerequisite obligations",
+          "candidates": ["tech-black_powder"],
+          "remainingObligations": [
+            { "actionId": "tech-black_powder", "requiredQuantity": 100 }
+          ],
+          "firstCycle": 32,
+          "lastCycle": 79,
+          "occurrences": 32
+        },
+        {
+          "status": "released",
+          "reason": "verified prerequisite paths no longer require a Mana claim",
+          "candidates": ["tech-dynamite", "tech-electricity"],
+          "firstCycle": 80,
+          "lastCycle": 80,
+          "occurrences": 1
+        },
+        {
+          "status": "released",
+          "reason": "verified prerequisite paths no longer require a Mana claim",
+          "candidates": ["tech-electricity"],
+          "firstCycle": 81,
+          "lastCycle": 98,
+          "occurrences": 18
+        },
+        {
+          "status": "released",
+          "reason": "verified prerequisite paths no longer require a Mana claim",
+          "candidates": [],
+          "firstCycle": 99,
+          "lastCycle": 125,
+          "occurrences": 27
+        }
+      ],
+      "lifecycle": [
+        {
+          "state": "active",
+          "reason": "goal-derived-native-prerequisite",
+          "firstCycle": 1,
+          "lastCycle": 79,
+          "occurrences": 40
+        },
+        {
+          "state": "suspended",
+          "reason": "research-owner-observation-unavailable",
+          "firstCycle": 1,
+          "lastCycle": 125,
+          "occurrences": 125
+        },
+        {
+          "state": "released",
+          "reason": "verified-non-mana-shortage",
+          "firstCycle": 9,
+          "lastCycle": 67,
+          "occurrences": 4
+        },
+        {
+          "state": "suspended",
+          "reason": "goal-prerequisite-selection-unavailable",
+          "firstCycle": 10,
+          "lastCycle": 71,
+          "occurrences": 35
+        },
+        {
+          "state": "completed",
+          "reason": "no-current-mandatory-Mana-obligations",
+          "firstCycle": 80,
+          "lastCycle": 80,
+          "occurrences": 1
+        },
+        {
+          "state": "released",
+          "reason": "no-current-mandatory-Mana-obligations",
+          "firstCycle": 81,
+          "lastCycle": 125,
+          "occurrences": 45
+        }
+      ],
+      "claimLifecycleEvidence": [
+        {
+          "cycle": 9,
+          "state": "released",
+          "reason": "verified-non-mana-shortage",
+          "completedActionIds": ["tech-mad_science"],
+          "releasedActionIds": ["tech-black_powder"],
+          "blockedActionIds": ["tech-black_powder"],
+          "mandatoryActionIds": ["tech-black_powder", "tech-electricity"]
+        },
+        {
+          "cycle": 38,
+          "state": "released",
+          "reason": "verified-non-mana-shortage",
+          "completedActionIds": [],
+          "releasedActionIds": ["tech-black_powder"],
+          "blockedActionIds": ["tech-black_powder"],
+          "mandatoryActionIds": ["tech-black_powder", "tech-electricity"]
+        },
+        {
+          "cycle": 49,
+          "state": "released",
+          "reason": "verified-non-mana-shortage",
+          "completedActionIds": [],
+          "releasedActionIds": ["tech-black_powder"],
+          "blockedActionIds": ["tech-black_powder"],
+          "mandatoryActionIds": ["tech-black_powder", "tech-electricity"]
+        },
+        {
+          "cycle": 67,
+          "state": "released",
+          "reason": "verified-non-mana-shortage",
+          "completedActionIds": [],
+          "releasedActionIds": ["tech-black_powder"],
+          "blockedActionIds": ["tech-black_powder"],
+          "mandatoryActionIds": ["tech-black_powder", "tech-electricity"]
+        },
+        {
+          "cycle": 80,
+          "state": "completed",
+          "reason": "no-current-mandatory-Mana-obligations",
+          "completedActionIds": ["tech-black_powder"]
+        },
+        {
+          "cycle": 81,
+          "state": "released",
+          "reason": "no-current-mandatory-Mana-obligations",
+          "completedActionIds": []
+        },
+        {
+          "cycle": 82,
+          "state": "released",
+          "reason": "no-current-mandatory-Mana-obligations",
+          "completedActionIds": []
+        },
+        {
+          "cycle": 83,
+          "state": "released",
+          "reason": "no-current-mandatory-Mana-obligations",
+          "completedActionIds": []
+        },
+        {
+          "cycle": 84,
+          "state": "released",
+          "reason": "no-current-mandatory-Mana-obligations",
+          "completedActionIds": []
+        },
+        {
+          "cycle": 85,
+          "state": "released",
+          "reason": "no-current-mandatory-Mana-obligations",
+          "completedActionIds": []
+        },
+        {
+          "cycle": 86,
+          "state": "released",
+          "reason": "no-current-mandatory-Mana-obligations",
+          "completedActionIds": []
+        },
+        {
+          "cycle": 87,
+          "state": "released",
+          "reason": "no-current-mandatory-Mana-obligations",
+          "completedActionIds": []
+        },
+        {
+          "cycle": 88,
+          "state": "released",
+          "reason": "no-current-mandatory-Mana-obligations",
+          "completedActionIds": []
+        },
+        {
+          "cycle": 89,
+          "state": "released",
+          "reason": "no-current-mandatory-Mana-obligations",
+          "completedActionIds": []
+        },
+        {
+          "cycle": 90,
+          "state": "released",
+          "reason": "no-current-mandatory-Mana-obligations",
+          "completedActionIds": []
+        },
+        {
+          "cycle": 91,
+          "state": "released",
+          "reason": "no-current-mandatory-Mana-obligations",
+          "completedActionIds": []
+        },
+        {
+          "cycle": 92,
+          "state": "released",
+          "reason": "no-current-mandatory-Mana-obligations",
+          "completedActionIds": []
+        },
+        {
+          "cycle": 93,
+          "state": "released",
+          "reason": "no-current-mandatory-Mana-obligations",
+          "completedActionIds": []
+        },
+        {
+          "cycle": 94,
+          "state": "released",
+          "reason": "no-current-mandatory-Mana-obligations",
+          "completedActionIds": []
+        },
+        {
+          "cycle": 95,
+          "state": "released",
+          "reason": "no-current-mandatory-Mana-obligations",
+          "completedActionIds": []
+        },
+        {
+          "cycle": 96,
+          "state": "released",
+          "reason": "no-current-mandatory-Mana-obligations",
+          "completedActionIds": []
+        },
+        {
+          "cycle": 97,
+          "state": "released",
+          "reason": "no-current-mandatory-Mana-obligations",
+          "completedActionIds": []
+        },
+        {
+          "cycle": 98,
+          "state": "released",
+          "reason": "no-current-mandatory-Mana-obligations",
+          "completedActionIds": []
+        },
+        {
+          "cycle": 99,
+          "state": "released",
+          "reason": "no-current-mandatory-Mana-obligations",
+          "completedActionIds": []
+        },
+        {
+          "cycle": 100,
+          "state": "released",
+          "reason": "no-current-mandatory-Mana-obligations",
+          "completedActionIds": []
+        },
+        {
+          "cycle": 101,
+          "state": "released",
+          "reason": "no-current-mandatory-Mana-obligations",
+          "completedActionIds": []
+        },
+        {
+          "cycle": 102,
+          "state": "released",
+          "reason": "no-current-mandatory-Mana-obligations",
+          "completedActionIds": []
+        },
+        {
+          "cycle": 103,
+          "state": "released",
+          "reason": "no-current-mandatory-Mana-obligations",
+          "completedActionIds": []
+        },
+        {
+          "cycle": 104,
+          "state": "released",
+          "reason": "no-current-mandatory-Mana-obligations",
+          "completedActionIds": []
+        },
+        {
+          "cycle": 105,
+          "state": "released",
+          "reason": "no-current-mandatory-Mana-obligations",
+          "completedActionIds": []
+        },
+        {
+          "cycle": 106,
+          "state": "released",
+          "reason": "no-current-mandatory-Mana-obligations",
+          "completedActionIds": []
+        },
+        {
+          "cycle": 107,
+          "state": "released",
+          "reason": "no-current-mandatory-Mana-obligations",
+          "completedActionIds": []
+        },
+        {
+          "cycle": 108,
+          "state": "released",
+          "reason": "no-current-mandatory-Mana-obligations",
+          "completedActionIds": []
+        },
+        {
+          "cycle": 109,
+          "state": "released",
+          "reason": "no-current-mandatory-Mana-obligations",
+          "completedActionIds": []
+        },
+        {
+          "cycle": 110,
+          "state": "released",
+          "reason": "no-current-mandatory-Mana-obligations",
+          "completedActionIds": []
+        },
+        {
+          "cycle": 111,
+          "state": "released",
+          "reason": "no-current-mandatory-Mana-obligations",
+          "completedActionIds": []
+        },
+        {
+          "cycle": 112,
+          "state": "released",
+          "reason": "no-current-mandatory-Mana-obligations",
+          "completedActionIds": []
+        },
+        {
+          "cycle": 113,
+          "state": "released",
+          "reason": "no-current-mandatory-Mana-obligations",
+          "completedActionIds": []
+        },
+        {
+          "cycle": 114,
+          "state": "released",
+          "reason": "no-current-mandatory-Mana-obligations",
+          "completedActionIds": []
+        },
+        {
+          "cycle": 115,
+          "state": "released",
+          "reason": "no-current-mandatory-Mana-obligations",
+          "completedActionIds": []
+        },
+        {
+          "cycle": 116,
+          "state": "released",
+          "reason": "no-current-mandatory-Mana-obligations",
+          "completedActionIds": []
+        },
+        {
+          "cycle": 117,
+          "state": "released",
+          "reason": "no-current-mandatory-Mana-obligations",
+          "completedActionIds": []
+        },
+        {
+          "cycle": 118,
+          "state": "released",
+          "reason": "no-current-mandatory-Mana-obligations",
+          "completedActionIds": []
+        },
+        {
+          "cycle": 119,
+          "state": "released",
+          "reason": "no-current-mandatory-Mana-obligations",
+          "completedActionIds": []
+        },
+        {
+          "cycle": 120,
+          "state": "released",
+          "reason": "no-current-mandatory-Mana-obligations",
+          "completedActionIds": []
+        },
+        {
+          "cycle": 121,
+          "state": "released",
+          "reason": "no-current-mandatory-Mana-obligations",
+          "completedActionIds": []
+        },
+        {
+          "cycle": 122,
+          "state": "released",
+          "reason": "no-current-mandatory-Mana-obligations",
+          "completedActionIds": []
+        },
+        {
+          "cycle": 123,
+          "state": "released",
+          "reason": "no-current-mandatory-Mana-obligations",
+          "completedActionIds": []
+        },
+        {
+          "cycle": 124,
+          "state": "released",
+          "reason": "no-current-mandatory-Mana-obligations",
+          "completedActionIds": []
+        },
+        {
+          "cycle": 125,
+          "state": "released",
+          "reason": "no-current-mandatory-Mana-obligations",
+          "completedActionIds": []
+        }
+      ],
+      "finalClaimSet": { "actionIds": [] },
+      "finalSelection": {
+        "cycle": 125,
+        "status": "released",
+        "reason": "verified prerequisite paths no longer require a Mana claim",
+        "mandatoryActionIds": []
+      },
+      "finalResources": {
+        "Mana": 0.6773693380080132,
+        "Knowledge": 4572.656740051059,
+        "Crystal": 949.3453473333484,
+        "Coal": 24616.298356108993,
+        "Lumber": 13882.430483741075,
+        "Stone": 108071.73537399776
+      },
+      "finalTechLevels": {
+        "high_tech": 2,
+        "explosives": 2,
+        "uranium": 0,
+        "oil": 0
+      },
+      "finalResearchOffers": [],
+      "claimLedger": {
+        "statusCounts": { "current": 40, "no-ledger": 85 },
+        "sample": {
+          "currentMana": 10.830856041265669,
+          "reservedCurrentStock": 10.830856041265669,
+          "remainingAccumulation": 139.16914395873434,
+          "spendableStock": 0,
+          "status": "current",
+          "claimControlBinding": {
+            "elementId": "tech-black_powder",
+            "generation": 1
+          },
+          "currentControlBinding": {
+            "elementId": "tech-black_powder",
+            "generation": 1,
+            "actionCapable": true
+          }
+        }
+      },
+      "gatherClaimActions": {
+        "permitted": 8512,
+        "deferred": 0,
+        "actualManaSpent": 1270
+      },
+      "gatherSummary": {
+        "city-lumber": {
+          "clicks": 4262,
+          "manaSpent": 1205,
+          "gathered": 30214.000000000004
+        },
+        "undefined-stone": { "clicks": 4250, "manaSpent": 65, "gathered": 9670 }
+      },
+      "firstNativeHighTechGrant": {
+        "period": 64,
+        "actionId": "tech-mad_science",
+        "highTechBefore": 0,
+        "highTechAfter": 1,
+        "manaBefore": 55.53565810078872,
+        "manaAfter": 5.535658100788723
+      },
+      "firstNativeExplosivesGrant": {
+        "cycle": 79,
+        "actionId": "tech-black_powder",
+        "explosivesBefore": 0,
+        "explosivesAfter": 1,
+        "manaBefore": 100.10579171083133,
+        "manaAfter": 0.10579171083132621
+      },
+      "firstGatherAfterGrant": {
+        "period": 72,
+        "actionId": "city-lumber",
+        "manaBefore": 15.493486966434876,
+        "manaAfter": 14.493486966434876,
+        "manaSpent": 1,
+        "gatheredResourceDelta": 20
+      },
+      "researchAttempts": [
+        {
+          "cycle": 3,
+          "actionId": "tech-rituals",
+          "grantTechnology": "magic",
+          "grantLevel": 3,
+          "grantBefore": 2,
+          "grantAfter": 3,
+          "disposition": "researched",
+          "manaBefore": 30.746513772557968,
+          "manaAfter": 5.746513772557968,
+          "manaSpent": 25
+        },
+        {
+          "cycle": 8,
+          "actionId": "tech-mad_science",
+          "grantTechnology": "high_tech",
+          "grantLevel": 1,
+          "grantBefore": 0,
+          "grantAfter": 1,
+          "disposition": "researched",
+          "manaBefore": 55.53565810078872,
+          "manaAfter": 5.535658100788723,
+          "manaSpent": 50
+        },
+        {
+          "cycle": 9,
+          "actionId": "tech-espionage",
+          "grantTechnology": "spy",
+          "grantLevel": 2,
+          "grantBefore": 1,
+          "grantAfter": 2,
+          "disposition": "researched",
+          "manaBefore": 0.493486966434876,
+          "manaAfter": 0.493486966434876,
+          "manaSpent": 0
+        },
+        {
+          "cycle": 12,
+          "actionId": "tech-reinforced_crates",
+          "grantTechnology": "container",
+          "grantLevel": 2,
+          "grantBefore": 1,
+          "grantAfter": 2,
+          "disposition": "researched",
+          "manaBefore": 0.36697356337334597,
+          "manaAfter": 0.36697356337334597,
+          "manaSpent": 0
+        },
+        {
+          "cycle": 25,
+          "actionId": "tech-magic",
+          "grantTechnology": "theatre",
+          "grantLevel": 3,
+          "grantBefore": 2,
+          "grantAfter": 3,
+          "disposition": "researched",
+          "manaBefore": 0.12524546868193198,
+          "manaAfter": 0.12524546868193198,
+          "manaSpent": 0
+        },
+        {
+          "cycle": 37,
+          "actionId": "tech-boot_camp",
+          "grantTechnology": "boot_camp",
+          "grantLevel": 1,
+          "grantBefore": 0,
+          "grantAfter": 1,
+          "disposition": "researched",
+          "manaBefore": 69.9624039653303,
+          "manaAfter": 69.9624039653303,
+          "manaSpent": 0
+        },
+        {
+          "cycle": 48,
+          "actionId": "tech-slave_market",
+          "grantTechnology": "slaves",
+          "grantLevel": 2,
+          "grantBefore": 1,
+          "grantAfter": 2,
+          "disposition": "researched",
+          "manaBefore": 69.10691381369043,
+          "manaAfter": 69.10691381369043,
+          "manaSpent": 0
+        },
+        {
+          "cycle": 63,
+          "actionId": "tech-clerics",
+          "grantTechnology": "cleric",
+          "grantLevel": 1,
+          "grantBefore": 0,
+          "grantAfter": 1,
+          "disposition": "researched",
+          "manaBefore": 100.36871885273452,
+          "manaAfter": 0.3687188527345171,
+          "manaSpent": 100
+        },
+        {
+          "cycle": 66,
+          "actionId": "tech-spy_training",
+          "grantTechnology": "spy",
+          "grantLevel": 3,
+          "grantBefore": 2,
+          "grantAfter": 3,
+          "disposition": "researched",
+          "manaBefore": 41.19442001362765,
+          "manaAfter": 41.19442001362765,
+          "manaSpent": 0
+        },
+        {
+          "cycle": 79,
+          "actionId": "tech-black_powder",
+          "grantTechnology": "explosives",
+          "grantLevel": 1,
+          "grantBefore": 0,
+          "grantAfter": 1,
+          "disposition": "researched",
+          "manaBefore": 100.10579171083133,
+          "manaAfter": 0.10579171083132621,
+          "manaSpent": 100
+        },
+        {
+          "cycle": 80,
+          "actionId": "tech-dynamite",
+          "grantTechnology": "explosives",
+          "grantLevel": 2,
+          "grantBefore": 1,
+          "grantAfter": 2,
+          "disposition": "researched",
+          "manaBefore": 0.7143587644623857,
+          "manaAfter": 0.7143587644623857,
+          "manaSpent": 0
+        },
+        {
+          "cycle": 98,
+          "actionId": "tech-electricity",
+          "grantTechnology": "high_tech",
+          "grantLevel": 2,
+          "grantBefore": 1,
+          "grantAfter": 2,
+          "disposition": "researched",
+          "manaBefore": 0.671470701919608,
+          "manaAfter": 0.671470701919608,
+          "manaSpent": 0
+        },
+        {
+          "cycle": 119,
+          "actionId": "tech-spy_gadgets",
+          "grantTechnology": "spy",
+          "grantLevel": 4,
+          "grantBefore": 3,
+          "grantAfter": 4,
+          "disposition": "researched",
+          "manaBefore": 0.8248050273823946,
+          "manaAfter": 0.8248050273823946,
+          "manaSpent": 0
+        }
+      ],
+      "nativeResearchTrace": [
+        {
+          "cycle": 3,
+          "actionId": "tech-rituals",
+          "grantTechnology": "magic",
+          "grantLevel": 3,
+          "grantBefore": 2,
+          "grantAfter": 3,
+          "manaBefore": 30.746513772557968,
+          "manaAfter": 5.746513772557968,
+          "manaSpent": 25,
+          "disposition": "researched"
+        },
+        {
+          "cycle": 8,
+          "actionId": "tech-mad_science",
+          "grantTechnology": "high_tech",
+          "grantLevel": 1,
+          "grantBefore": 0,
+          "grantAfter": 1,
+          "manaBefore": 55.53565810078872,
+          "manaAfter": 5.535658100788723,
+          "manaSpent": 50,
+          "disposition": "researched"
+        },
+        {
+          "cycle": 9,
+          "actionId": "tech-espionage",
+          "grantTechnology": "spy",
+          "grantLevel": 2,
+          "grantBefore": 1,
+          "grantAfter": 2,
+          "manaBefore": 0.493486966434876,
+          "manaAfter": 0.493486966434876,
+          "manaSpent": 0,
+          "disposition": "researched"
+        },
+        {
+          "cycle": 12,
+          "actionId": "tech-reinforced_crates",
+          "grantTechnology": "container",
+          "grantLevel": 2,
+          "grantBefore": 1,
+          "grantAfter": 2,
+          "manaBefore": 0.36697356337334597,
+          "manaAfter": 0.36697356337334597,
+          "manaSpent": 0,
+          "disposition": "researched"
+        },
+        {
+          "cycle": 25,
+          "actionId": "tech-magic",
+          "grantTechnology": "theatre",
+          "grantLevel": 3,
+          "grantBefore": 2,
+          "grantAfter": 3,
+          "manaBefore": 0.12524546868193198,
+          "manaAfter": 0.12524546868193198,
+          "manaSpent": 0,
+          "disposition": "researched"
+        },
+        {
+          "cycle": 37,
+          "actionId": "tech-boot_camp",
+          "grantTechnology": "boot_camp",
+          "grantLevel": 1,
+          "grantBefore": 0,
+          "grantAfter": 1,
+          "manaBefore": 69.9624039653303,
+          "manaAfter": 69.9624039653303,
+          "manaSpent": 0,
+          "disposition": "researched"
+        },
+        {
+          "cycle": 48,
+          "actionId": "tech-slave_market",
+          "grantTechnology": "slaves",
+          "grantLevel": 2,
+          "grantBefore": 1,
+          "grantAfter": 2,
+          "manaBefore": 69.10691381369043,
+          "manaAfter": 69.10691381369043,
+          "manaSpent": 0,
+          "disposition": "researched"
+        },
+        {
+          "cycle": 63,
+          "actionId": "tech-clerics",
+          "grantTechnology": "cleric",
+          "grantLevel": 1,
+          "grantBefore": 0,
+          "grantAfter": 1,
+          "manaBefore": 100.36871885273452,
+          "manaAfter": 0.3687188527345171,
+          "manaSpent": 100,
+          "disposition": "researched"
+        },
+        {
+          "cycle": 66,
+          "actionId": "tech-spy_training",
+          "grantTechnology": "spy",
+          "grantLevel": 3,
+          "grantBefore": 2,
+          "grantAfter": 3,
+          "manaBefore": 41.19442001362765,
+          "manaAfter": 41.19442001362765,
+          "manaSpent": 0,
+          "disposition": "researched"
+        },
+        {
+          "cycle": 79,
+          "actionId": "tech-black_powder",
+          "grantTechnology": "explosives",
+          "grantLevel": 1,
+          "grantBefore": 0,
+          "grantAfter": 1,
+          "manaBefore": 100.10579171083133,
+          "manaAfter": 0.10579171083132621,
+          "manaSpent": 100,
+          "disposition": "researched"
+        },
+        {
+          "cycle": 80,
+          "actionId": "tech-dynamite",
+          "grantTechnology": "explosives",
+          "grantLevel": 2,
+          "grantBefore": 1,
+          "grantAfter": 2,
+          "manaBefore": 0.7143587644623857,
+          "manaAfter": 0.7143587644623857,
+          "manaSpent": 0,
+          "disposition": "researched"
+        },
+        {
+          "cycle": 98,
+          "actionId": "tech-electricity",
+          "grantTechnology": "high_tech",
+          "grantLevel": 2,
+          "grantBefore": 1,
+          "grantAfter": 2,
+          "manaBefore": 0.671470701919608,
+          "manaAfter": 0.671470701919608,
+          "manaSpent": 0,
+          "disposition": "researched"
+        },
+        {
+          "cycle": 119,
+          "actionId": "tech-spy_gadgets",
+          "grantTechnology": "spy",
+          "grantLevel": 4,
+          "grantBefore": 3,
+          "grantAfter": 4,
+          "manaBefore": 0.8248050273823946,
+          "manaAfter": 0.8248050273823946,
+          "manaSpent": 0,
+          "disposition": "researched"
+        }
+      ],
+      "researchDrawCounts": {
+        "research.observation.samples": {
+          "total": 26,
+          "perTick": 1.04,
+          "max": 1
+        },
+        "research.observation.sample-requester.resource-claim-before-gather": {
+          "total": 25,
+          "perTick": 1,
+          "max": 1
+        },
+        "research.observation.sample.offers-only": {
+          "total": 26,
+          "perTick": 1.04,
+          "max": 1
+        },
+        "research.catalog.observations": {
+          "total": 26,
+          "perTick": 1.04,
+          "max": 1
+        },
+        "research.observation.sample-requester.resource-demand": {
+          "total": 1,
+          "perTick": 0.04,
+          "max": 1
+        }
+      },
+      "computedRequirementCounts": {},
+      "computedRequirements": [],
+      "computedRequirementOfferStatus": [
+        {
+          "actionId": "tech-casino_vault",
+          "captureGeneration": 138,
+          "offered": false
+        },
+        {
+          "actionId": "tech-mythril_crates",
+          "captureGeneration": 138,
+          "offered": false
+        },
+        {
+          "actionId": "tech-mythril_containers",
+          "captureGeneration": 138,
+          "offered": false
+        },
+        {
+          "actionId": "tech-mythril_vault",
+          "captureGeneration": 138,
+          "offered": false
+        },
+        {
+          "actionId": "tech-fire_proof_safe",
+          "captureGeneration": 138,
+          "offered": false
+        },
+        {
+          "actionId": "tech-lab_assistants",
+          "captureGeneration": 138,
+          "offered": false
+        },
+        {
+          "actionId": "tech-sequence_ecosystem",
+          "captureGeneration": 138,
+          "offered": false
+        },
+        {
+          "actionId": "tech-lasers",
+          "captureGeneration": 138,
+          "offered": false
+        },
+        {
+          "actionId": "tech-quantum_computing",
+          "captureGeneration": 138,
+          "offered": false
+        },
+        {
+          "actionId": "tech-uranium_storage",
+          "captureGeneration": 138,
+          "offered": false
+        },
+        {
+          "actionId": "tech-mythril_drills",
+          "captureGeneration": 138,
+          "offered": false
+        },
+        {
+          "actionId": "tech-rail_guns",
+          "captureGeneration": 138,
+          "offered": false
+        },
+        {
+          "actionId": "tech-unification",
+          "captureGeneration": 138,
+          "offered": false
+        },
+        {
+          "actionId": "tech-aerographene",
+          "captureGeneration": 138,
+          "offered": false
+        },
+        {
+          "actionId": "tech-ship_gauss",
+          "captureGeneration": 138,
+          "offered": false
+        },
+        {
+          "actionId": "tech-ship_capacitor",
+          "captureGeneration": 138,
+          "offered": false
+        },
+        {
+          "actionId": "tech-drive_optimizations",
+          "captureGeneration": 138,
+          "offered": false
+        },
+        {
+          "actionId": "tech-ship_antimatter",
+          "captureGeneration": 138,
+          "offered": false
+        },
+        {
+          "actionId": "tech-fleet_command",
+          "captureGeneration": 138,
+          "offered": false
+        },
+        {
+          "actionId": "tech-womling_energy",
+          "captureGeneration": 138,
+          "offered": false
+        },
+        {
+          "actionId": "tech-womling_land_use_planning",
+          "captureGeneration": 138,
+          "offered": false
+        },
+        {
+          "actionId": "tech-womling_artisans",
+          "captureGeneration": 138,
+          "offered": false
+        },
+        {
+          "actionId": "tech-womling_market",
+          "captureGeneration": 138,
+          "offered": false
+        }
+      ],
+      "computedRequirementCaptureAndDrawMsByWindow": [
+        { "count": 30, "totalMs": 105.8, "perTickMs": 4.23, "maxMs": 6.1 },
+        { "count": 27, "totalMs": 74.9, "perTickMs": 3, "maxMs": 6 },
+        { "count": 27, "totalMs": 79.3, "perTickMs": 3.17, "maxMs": 9.2 },
+        { "count": 28, "totalMs": 71, "perTickMs": 2.84, "maxMs": 3.2 },
+        { "count": 26, "totalMs": 71.4, "perTickMs": 2.86, "maxMs": 4.4 }
+      ],
+      "workTicks": 125,
+      "tickPhaseMsBy25TickWindow": [113.8, 77.07, 71.87, 79.31, 76.51]
     }
   },
   "nativeComputedRequirementAudit": {
@@ -3520,7 +5133,7 @@
         "effectiveEra": "early_space",
         "arguments": { "era": "early_space", "wiki": false },
         "rootGeneration": 0,
-        "progressionEpoch": "0|41:91|22:58|50|human|magic|178|0|anarchy|1|0|0|0",
+        "progressionEpoch": "0|40:91|22:58|50|human|magic|178|0|anarchy|1|0|0|0",
         "captureGeneration": 30,
         "requirements": [
           { "technologyId": "gambling", "requiredLevel": 2 },
@@ -3540,7 +5153,7 @@
         "effectiveEra": "early_space",
         "arguments": { "era": "early_space", "wiki": false },
         "rootGeneration": 0,
-        "progressionEpoch": "0|41:91|22:58|50|human|magic|178|0|anarchy|1|0|0|0",
+        "progressionEpoch": "0|40:91|22:58|50|human|magic|178|0|anarchy|1|0|0|0",
         "captureGeneration": 30,
         "requirements": [
           { "technologyId": "container", "requiredLevel": 4 },
@@ -3560,7 +5173,7 @@
         "effectiveEra": "early_space",
         "arguments": { "era": "early_space", "wiki": false },
         "rootGeneration": 0,
-        "progressionEpoch": "0|41:91|22:58|50|human|magic|178|0|anarchy|1|0|0|0",
+        "progressionEpoch": "0|40:91|22:58|50|human|magic|178|0|anarchy|1|0|0|0",
         "captureGeneration": 30,
         "requirements": [
           { "technologyId": "steel_container", "requiredLevel": 1 },
@@ -3580,7 +5193,7 @@
         "effectiveEra": "early_space",
         "arguments": { "era": "early_space", "wiki": false },
         "rootGeneration": 0,
-        "progressionEpoch": "0|41:91|22:58|50|human|magic|178|0|anarchy|1|0|0|0",
+        "progressionEpoch": "0|40:91|22:58|50|human|magic|178|0|anarchy|1|0|0|0",
         "captureGeneration": 30,
         "requirements": [
           { "technologyId": "banking", "requiredLevel": 5 },
@@ -3600,7 +5213,7 @@
         "effectiveEra": "early_space",
         "arguments": { "era": "early_space", "wiki": false },
         "rootGeneration": 0,
-        "progressionEpoch": "0|41:91|22:58|50|human|magic|178|0|anarchy|1|0|0|0",
+        "progressionEpoch": "0|40:91|22:58|50|human|magic|178|0|anarchy|1|0|0|0",
         "captureGeneration": 30,
         "requirements": [
           { "technologyId": "home_safe", "requiredLevel": 1 },
@@ -3618,7 +5231,7 @@
         "reqsIdentity": 12,
         "source": "native-actionReqs-during-drawTech",
         "rootGeneration": 0,
-        "progressionEpoch": "0|41:91|22:58|50|human|magic|178|0|anarchy|1|0|0|0",
+        "progressionEpoch": "0|40:91|22:58|50|human|magic|178|0|anarchy|1|0|0|0",
         "captureGeneration": 30,
         "nativeCallCount": 0,
         "status": "missing",
@@ -3634,7 +5247,7 @@
         "effectiveEra": "globalized",
         "arguments": { "era": "globalized", "wiki": false },
         "rootGeneration": 0,
-        "progressionEpoch": "0|41:91|22:58|50|human|magic|178|0|anarchy|1|0|0|0",
+        "progressionEpoch": "0|40:91|22:58|50|human|magic|178|0|anarchy|1|0|0|0",
         "captureGeneration": 30,
         "requirements": [
           { "technologyId": "genetics", "requiredLevel": 4 },
@@ -3654,7 +5267,7 @@
         "effectiveEra": "deep_space",
         "arguments": { "era": "deep_space", "wiki": false },
         "rootGeneration": 0,
-        "progressionEpoch": "0|41:91|22:58|50|human|magic|178|0|anarchy|1|0|0|0",
+        "progressionEpoch": "0|40:91|22:58|50|human|magic|178|0|anarchy|1|0|0|0",
         "captureGeneration": 30,
         "requirements": [
           { "technologyId": "high_tech", "requiredLevel": 8 },
@@ -3676,7 +5289,7 @@
         "effectiveEra": "deep_space",
         "arguments": { "era": "deep_space", "wiki": false },
         "rootGeneration": 0,
-        "progressionEpoch": "0|41:91|22:58|50|human|magic|178|0|anarchy|1|0|0|0",
+        "progressionEpoch": "0|40:91|22:58|50|human|magic|178|0|anarchy|1|0|0|0",
         "captureGeneration": 30,
         "requirements": [
           { "technologyId": "high_tech", "requiredLevel": 10 },
@@ -3696,7 +5309,7 @@
         "effectiveEra": "globalized",
         "arguments": { "era": "globalized", "wiki": false },
         "rootGeneration": 0,
-        "progressionEpoch": "0|41:91|22:58|50|human|magic|178|0|anarchy|1|0|0|0",
+        "progressionEpoch": "0|40:91|22:58|50|human|magic|178|0|anarchy|1|0|0|0",
         "captureGeneration": 30,
         "requirements": [{ "technologyId": "uranium", "requiredLevel": 1 }],
         "nativeCallCount": 1,
@@ -3713,7 +5326,7 @@
         "effectiveEra": "early_space",
         "arguments": { "era": "early_space", "wiki": false },
         "rootGeneration": 0,
-        "progressionEpoch": "0|41:91|22:58|50|human|magic|178|0|anarchy|1|0|0|0",
+        "progressionEpoch": "0|40:91|22:58|50|human|magic|178|0|anarchy|1|0|0|0",
         "captureGeneration": 30,
         "requirements": [
           { "technologyId": "oil", "requiredLevel": 6 },
@@ -3733,7 +5346,7 @@
         "effectiveEra": "early_space",
         "arguments": { "era": "early_space", "wiki": false },
         "rootGeneration": 0,
-        "progressionEpoch": "0|41:91|22:58|50|human|magic|178|0|anarchy|1|0|0|0",
+        "progressionEpoch": "0|40:91|22:58|50|human|magic|178|0|anarchy|1|0|0|0",
         "captureGeneration": 30,
         "requirements": [
           { "technologyId": "military", "requiredLevel": 5 },
@@ -3753,7 +5366,7 @@
         "effectiveEra": "early_space",
         "arguments": { "era": "early_space", "wiki": false },
         "rootGeneration": 0,
-        "progressionEpoch": "0|41:91|22:58|50|human|magic|178|0|anarchy|1|0|0|0",
+        "progressionEpoch": "0|40:91|22:58|50|human|magic|178|0|anarchy|1|0|0|0",
         "captureGeneration": 30,
         "requirements": [{ "technologyId": "mars", "requiredLevel": 2 }],
         "nativeCallCount": 1,
@@ -3768,7 +5381,7 @@
         "reqsIdentity": 28,
         "source": "native-actionReqs-during-drawTech",
         "rootGeneration": 0,
-        "progressionEpoch": "0|41:91|22:58|50|human|magic|178|0|anarchy|1|0|0|0",
+        "progressionEpoch": "0|40:91|22:58|50|human|magic|178|0|anarchy|1|0|0|0",
         "captureGeneration": 30,
         "nativeCallCount": 0,
         "status": "missing",
@@ -3782,7 +5395,7 @@
         "reqsIdentity": 30,
         "source": "native-actionReqs-during-drawTech",
         "rootGeneration": 0,
-        "progressionEpoch": "0|41:91|22:58|50|human|magic|178|0|anarchy|1|0|0|0",
+        "progressionEpoch": "0|40:91|22:58|50|human|magic|178|0|anarchy|1|0|0|0",
         "captureGeneration": 30,
         "nativeCallCount": 0,
         "status": "missing",
@@ -3796,7 +5409,7 @@
         "reqsIdentity": 32,
         "source": "native-actionReqs-during-drawTech",
         "rootGeneration": 0,
-        "progressionEpoch": "0|41:91|22:58|50|human|magic|178|0|anarchy|1|0|0|0",
+        "progressionEpoch": "0|40:91|22:58|50|human|magic|178|0|anarchy|1|0|0|0",
         "captureGeneration": 30,
         "nativeCallCount": 0,
         "status": "missing",
@@ -3810,7 +5423,7 @@
         "reqsIdentity": 34,
         "source": "native-actionReqs-during-drawTech",
         "rootGeneration": 0,
-        "progressionEpoch": "0|41:91|22:58|50|human|magic|178|0|anarchy|1|0|0|0",
+        "progressionEpoch": "0|40:91|22:58|50|human|magic|178|0|anarchy|1|0|0|0",
         "captureGeneration": 30,
         "nativeCallCount": 0,
         "status": "missing",
@@ -3824,7 +5437,7 @@
         "reqsIdentity": 36,
         "source": "native-actionReqs-during-drawTech",
         "rootGeneration": 0,
-        "progressionEpoch": "0|41:91|22:58|50|human|magic|178|0|anarchy|1|0|0|0",
+        "progressionEpoch": "0|40:91|22:58|50|human|magic|178|0|anarchy|1|0|0|0",
         "captureGeneration": 30,
         "nativeCallCount": 0,
         "status": "missing",
@@ -3838,7 +5451,7 @@
         "reqsIdentity": 38,
         "source": "native-actionReqs-during-drawTech",
         "rootGeneration": 0,
-        "progressionEpoch": "0|41:91|22:58|50|human|magic|178|0|anarchy|1|0|0|0",
+        "progressionEpoch": "0|40:91|22:58|50|human|magic|178|0|anarchy|1|0|0|0",
         "captureGeneration": 30,
         "nativeCallCount": 0,
         "status": "missing",
@@ -3852,7 +5465,7 @@
         "reqsIdentity": 40,
         "source": "native-actionReqs-during-drawTech",
         "rootGeneration": 0,
-        "progressionEpoch": "0|41:91|22:58|50|human|magic|178|0|anarchy|1|0|0|0",
+        "progressionEpoch": "0|40:91|22:58|50|human|magic|178|0|anarchy|1|0|0|0",
         "captureGeneration": 30,
         "nativeCallCount": 0,
         "status": "missing",
@@ -3866,7 +5479,7 @@
         "reqsIdentity": 42,
         "source": "native-actionReqs-during-drawTech",
         "rootGeneration": 0,
-        "progressionEpoch": "0|41:91|22:58|50|human|magic|178|0|anarchy|1|0|0|0",
+        "progressionEpoch": "0|40:91|22:58|50|human|magic|178|0|anarchy|1|0|0|0",
         "captureGeneration": 30,
         "nativeCallCount": 0,
         "status": "missing",
@@ -3880,7 +5493,7 @@
         "reqsIdentity": 44,
         "source": "native-actionReqs-during-drawTech",
         "rootGeneration": 0,
-        "progressionEpoch": "0|41:91|22:58|50|human|magic|178|0|anarchy|1|0|0|0",
+        "progressionEpoch": "0|40:91|22:58|50|human|magic|178|0|anarchy|1|0|0|0",
         "captureGeneration": 30,
         "nativeCallCount": 0,
         "status": "missing",
@@ -3894,7 +5507,7 @@
         "reqsIdentity": 46,
         "source": "native-actionReqs-during-drawTech",
         "rootGeneration": 0,
-        "progressionEpoch": "0|41:91|22:58|50|human|magic|178|0|anarchy|1|0|0|0",
+        "progressionEpoch": "0|40:91|22:58|50|human|magic|178|0|anarchy|1|0|0|0",
         "captureGeneration": 30,
         "nativeCallCount": 0,
         "status": "missing",
@@ -4012,5 +5625,96 @@
         "validation": "valid"
       }
     ]
+  },
+  "nativeResearchSpendingAuthorityAudit": {
+    "selectionOwner": "src/domain/progression/research/research.ts::planResearch selects the first affordable, non-conflicting offer; src/adapters/evolve/progression/research/captured-research.ts samples and invokes that owner decision.",
+    "reservationContract": "src/domain/economy/resources/shared-spending-budget.ts is pure/test-only. It can account for an exact synchronous debit with fresh current stock, known commitments, same-observation invocation, and post-action reconciliation; the native Research owner is not integrated with it.",
+    "stage3HPreCorrectionTrace": [
+      {
+        "cycle": 3,
+        "actionId": "tech-rituals",
+        "manaSpent": 25,
+        "authority": "selected by the existing Research owner; MAD obligation status and goal value were not established by the capture; spent while Gather claims were active but outside their fenced owner and without shared debit reconciliation"
+      },
+      {
+        "cycle": 8,
+        "actionId": "tech-mad_science",
+        "manaSpent": 50,
+        "authority": "verified mandatory prerequisite completion; exact native debit is still outside Stage 3D's Gather-only enforcement"
+      },
+      {
+        "cycle": 9,
+        "actionId": "tech-espionage",
+        "manaSpent": 0,
+        "authority": "selected by the existing Research owner; no Mana debit"
+      },
+      {
+        "cycle": 12,
+        "actionId": "tech-reinforced_crates",
+        "manaSpent": 0,
+        "authority": "selected by the existing Research owner; no Mana debit"
+      },
+      {
+        "cycle": 18,
+        "actionId": "tech-clerics",
+        "manaSpent": 100,
+        "authority": "selected by the existing Research owner; MAD dependency relation remained unknown; Stage 3H claims were suspended, and no cross-owner debit reconciliation ran"
+      }
+    ],
+    "actions": [
+      {
+        "cycle": 3,
+        "actionId": "tech-rituals",
+        "manaSpent": 25,
+        "authority": "existing Research owner purchase; MAD obligation status and goal value are not established by this capture"
+      },
+      {
+        "cycle": 8,
+        "actionId": "tech-mad_science",
+        "manaSpent": 50,
+        "authority": "verified mandatory prerequisite completion"
+      },
+      {
+        "cycle": 9,
+        "actionId": "tech-espionage",
+        "manaSpent": 0,
+        "authority": "existing Research owner purchase; no Mana debit to reconcile"
+      },
+      {
+        "cycle": 12,
+        "actionId": "tech-reinforced_crates",
+        "manaSpent": 0,
+        "authority": "existing Research owner purchase; no Mana debit to reconcile"
+      },
+      {
+        "cycle": 25,
+        "actionId": "tech-magic",
+        "manaSpent": 0,
+        "authority": "existing Research owner purchase; no Mana debit to reconcile"
+      }
+    ],
+    "uncoveredPaths": "The pure Stage 3D contract could represent a known Research debit if the owner supplied an exact synchronous transaction with fresh current stock, complete known commitments, same-observation invocation, and native post-action reconciliation. None of those Research calls are integrated; native Research, passive production, Alchemy, queued/player commitments, and other actions can alter Mana outside Gather. Their debit path and action authority therefore remain unaccounted for here. Since the Stage 3I claims fence Gather only, these Research actions are not violations of an implemented Research-side allowance, but Rituals demonstrates the unresolved cross-owner gap while claims are active."
+  },
+  "continuationTargetAudit": {
+    "targetActionId": "tech-mad",
+    "nativeSource": "D:/work/Evolve-DeadSpace/src/tech.js, actions.tech.mad: reqs { uranium: 1, explosives: 3, high_tech: 7 } at pinned commit db38e2af831907d49aeb5348d678d8d8745d6c3f.",
+    "baselineTechLevels": {
+      "high_tech": 0,
+      "explosives": 0,
+      "uranium": 0,
+      "oil": 0
+    },
+    "candidateTechLevels": {
+      "high_tech": 2,
+      "explosives": 2,
+      "uranium": 0,
+      "oil": 0
+    },
+    "remainingNativeRequirements": [
+      { "technologyId": "high_tech", "requiredLevel": 7, "currentLevel": 2 },
+      { "technologyId": "explosives", "requiredLevel": 3, "currentLevel": 2 },
+      { "technologyId": "uranium", "requiredLevel": 1, "currentLevel": 0 }
+    ],
+    "result": "The bounded candidate reaches High Tech 2 and Explosives 2 by period 1,000, but does not satisfy the native MAD target. No next Research target is injected."
   }
 }

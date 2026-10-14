@@ -259,7 +259,8 @@ function summarize(run, seededClaim) {
         gatheredResourceDelta: recovery.gatheredResourceDelta,
       }
     : null;
-  const computedRequirementObservations = run.hooks.computedRequirements ?? [];
+  const computedRequirementObservations =
+    run.periods > 200 ? [] : (run.hooks.computedRequirements ?? []);
   const summarizeSelection = (event) =>
     event
       ? {
@@ -410,6 +411,55 @@ function summarize(run, seededClaim) {
       lastCycle: group.at(-1).cycle,
       occurrences: group.length,
     })),
+    claimLifecycleEvidence: events.lifecycle
+      .filter(
+        (event) =>
+          event.state === "released" ||
+          event.state === "completed" ||
+          event.state === "invalidated" ||
+          event.completedActionIds?.length > 0 ||
+          event.releasedActionIds?.length > 0,
+      )
+      .map((event) => ({
+        cycle: event.cycle,
+        state: event.state,
+        reason: event.reason,
+        completedActionIds: event.completedActionIds,
+        releasedActionIds: event.releasedActionIds,
+        blockedActionIds: event.blockedActionIds,
+        mandatoryActionIds: event.mandatoryActionIds,
+      })),
+    finalClaimSet: run.hooks.claimSet,
+    finalSelection: run.hooks.selection
+      ? {
+          cycle: run.hooks.selection.cycle,
+          status: run.hooks.selection.status,
+          reason: run.hooks.selection.reason,
+          mandatoryActionIds: run.hooks.selection.mandatoryActionIds,
+          blockedActionIds: run.hooks.selection.blockedActionIds,
+          evaluatedCandidates: run.hooks.selection.evaluatedCandidates?.map(
+            (candidate) => ({
+              actionId: candidate.actionId,
+              cost: candidate.cost,
+              nonManaAffordable: candidate.nonManaAffordable,
+              frontier: candidate.frontier,
+              ownerEligibility: candidate.ownerEligibility,
+            }),
+          ),
+        }
+      : null,
+    finalResources: Object.fromEntries(
+      ["Mana", "Knowledge", "Crystal", "Coal", "Lumber", "Stone"].map(
+        (resourceId) => [resourceId, run.state.resource?.[resourceId]?.amount],
+      ),
+    ),
+    finalTechLevels: Object.fromEntries(
+      ["high_tech", "explosives", "uranium", "oil"].map((technologyId) => [
+        technologyId,
+        run.state.tech?.[technologyId] ?? 0,
+      ]),
+    ),
+    finalResearchOffers: run.hooks.currentResearchOffers,
     claimLedger: {
       statusCounts: Object.fromEntries(
         Object.entries(
@@ -572,6 +622,32 @@ async function runVariant(
         actions: testHooks.resourceClaimActionEvents ?? [],
         research: testHooks.researchOwnerSelectionEvents ?? [],
         status: testHooks.resourceClaimStatus,
+        claimSet: {
+          singularActionId:
+            testHooks.gatherIntervention?.resourceClaim?.nativeActionId,
+          actionIds: Array.isArray(testHooks.gatherIntervention?.resourceClaims)
+            ? testHooks.gatherIntervention.resourceClaims.map(
+                (claim) => claim?.nativeActionId,
+              )
+            : undefined,
+        },
+        currentResearchOffers: (catalog?.offers ?? [])
+          .filter((offer) =>
+            [
+              "tech-anfo",
+              "tech-mad",
+              "tech-black_powder",
+              "tech-dynamite",
+              "tech-electricity",
+            ].includes(offer.elementId),
+          )
+          .map((offer) => ({
+            actionId: offer.elementId,
+            grantTechnology: offer.grantTechnology,
+            grantLevel: offer.grantLevel,
+            cost: offer.cost,
+            nativeAffordable: offer.nativeAffordable,
+          })),
         computedRequirements,
         computedRequirementOfferStatus: computedRequirements.map((entry) => ({
           actionId: entry.actionId,
@@ -685,6 +761,23 @@ try {
     truepathSave,
     effectiveSettings,
     40,
+  );
+  const continuationPeriods = 1000;
+  const baselineContinuation = await runVariant(
+    runner,
+    "A-later",
+    bundlePath,
+    saveText,
+    effectiveSettings,
+    continuationPeriods,
+  );
+  const derivedContinuation = await runVariant(
+    runner,
+    "D-later",
+    bundlePath,
+    saveText,
+    effectiveSettings,
+    continuationPeriods,
   );
   assert.equal(
     execFileSync(
@@ -854,16 +947,59 @@ try {
   assert.equal(postGrantBlackPowder?.nonManaAffordable, false);
   assert.equal(postGrantElectricity?.nonManaAffordable, true);
   assert.equal(postGrantElectricity?.cost.Mana, undefined);
+  const postGrantLifecycle = derivedD.summary.claimLifecycleEvidence.find(
+    (event) => event.cycle === 9,
+  );
+  assert.deepEqual(postGrantLifecycle?.completedActionIds, [
+    "tech-mad_science",
+  ]);
+  assert.deepEqual(postGrantLifecycle?.blockedActionIds, ["tech-black_powder"]);
+  assert.deepEqual(postGrantLifecycle?.mandatoryActionIds, [
+    "tech-black_powder",
+    "tech-electricity",
+  ]);
+  assert.equal(derivedD.summary.finalClaimSet.singularActionId, undefined);
+  assert.deepEqual(derivedD.summary.finalClaimSet.actionIds, []);
+  assert.ok(
+    (derivedD.diagnostics.nativeInvocations ?? []).some(
+      (event) => event.period > 64 && event.elementId === "city-lumber",
+    ),
+    "D must execute real native Gather clicks after releasing the blocked protection",
+  );
+  assert.equal(
+    derivedD.summary.gatherClaimActions.permitted > 0,
+    true,
+    "released claims must not leave Gather unavailable",
+  );
+  assert.equal(
+    derivedD.summary.gatherClaimActions.deferred,
+    0,
+    "no stale claim may defer the recovered Gather budget",
+  );
+  assert.equal(baselineContinuation.summary.highTechLevel, 0);
+  assert.ok(derivedContinuation.summary.highTechLevel >= 2);
+  assert.ok(derivedContinuation.summary.explosivesLevel >= 1);
+  for (const actionId of [
+    "tech-black_powder",
+    "tech-dynamite",
+    "tech-electricity",
+  ])
+    assert.ok(
+      derivedContinuation.summary.nativeResearchTrace.some(
+        (event) => event.actionId === actionId,
+      ),
+      `D continuation must record native purchase of ${actionId}`,
+    );
   const report = {
     protocol:
-      "Stage 3G replay with Stage 3H native computed-requirement evidence",
+      "Stage 3I claim lifecycle replay with Stage 3H native computed-requirement evidence",
     runner: "tools/chromium-evolve-runner.mjs",
     execution: {
       command: "node experiments/stage3f-mana-claim.mjs",
       inputs:
         "Paths and SHA-256 hashes are recorded below; settings are loaded with autoResearch=true.",
       variants:
-        "A/A baseline, manually seeded Stage 3E B, Stage 3F single-selection regression C, then Stage 3G conjunctive goal-derived D; each opens a fresh exact-runner session.",
+        "A/A baseline, manually seeded Stage 3E B, Stage 3F single-selection regression C, then Stage 3H conjunctive goal-derived D with Stage 3I lifecycle correction; each opens a fresh exact-runner session.",
       output: "experiments/stage3f-mana-claim-manifest.json (or --out=<path>)",
     },
     upstreamCommit: pinnedUpstreamCommit,
@@ -895,7 +1031,7 @@ try {
       A: "no goal-directed Mana protection",
       B: "Stage 3E current claim seeded from tech-mad_science native evidence",
       C: "Stage 3F test-only single-selection mode; no target or admitted claim injected",
-      D: "Stage 3H test-only independent claims; fail closed when a direct obligation has unresolved native alternatives",
+      D: "Stage 3I test-only conjunctive claims; release stock protection only for verified non-Mana blockage or completed obligations, and fail closed on missing evidence",
       computedRequirementContexts:
         "Additional 40-period exact-runner contracts use the same pinned save with only race.iceage or race.truepath set to exercise the native action's route-dependent era selection.",
     },
@@ -921,6 +1057,8 @@ try {
       D: derivedD.summary,
       computedRequirementsIceAge: iceAgeContextRun.summary,
       computedRequirementsTruepath: truepathContextRun.summary,
+      continuationA: baselineContinuation.summary,
+      continuationD: derivedContinuation.summary,
     },
     nativeComputedRequirementAudit: {
       source:
@@ -941,6 +1079,92 @@ try {
             entry.actionId === "tech-lasers" ||
             entry.actionId === "tech-quantum_computing",
         ),
+    },
+    nativeResearchSpendingAuthorityAudit: {
+      selectionOwner:
+        "src/domain/progression/research/research.ts::planResearch selects the first affordable, non-conflicting offer; src/adapters/evolve/progression/research/captured-research.ts samples and invokes that owner decision.",
+      reservationContract:
+        "src/domain/economy/resources/shared-spending-budget.ts is pure/test-only. It can account for an exact synchronous debit with fresh current stock, known commitments, same-observation invocation, and post-action reconciliation; the native Research owner is not integrated with it.",
+      stage3HPreCorrectionTrace: [
+        {
+          cycle: 3,
+          actionId: "tech-rituals",
+          manaSpent: 25,
+          authority:
+            "selected by the existing Research owner; MAD obligation status and goal value were not established by the capture; spent while Gather claims were active but outside their fenced owner and without shared debit reconciliation",
+        },
+        {
+          cycle: 8,
+          actionId: "tech-mad_science",
+          manaSpent: 50,
+          authority:
+            "verified mandatory prerequisite completion; exact native debit is still outside Stage 3D's Gather-only enforcement",
+        },
+        {
+          cycle: 9,
+          actionId: "tech-espionage",
+          manaSpent: 0,
+          authority: "selected by the existing Research owner; no Mana debit",
+        },
+        {
+          cycle: 12,
+          actionId: "tech-reinforced_crates",
+          manaSpent: 0,
+          authority: "selected by the existing Research owner; no Mana debit",
+        },
+        {
+          cycle: 18,
+          actionId: "tech-clerics",
+          manaSpent: 100,
+          authority:
+            "selected by the existing Research owner; MAD dependency relation remained unknown; Stage 3H claims were suspended, and no cross-owner debit reconciliation ran",
+        },
+      ],
+      actions: derivedD.summary.nativeResearchTrace.map((event) => ({
+        cycle: event.cycle,
+        actionId: event.actionId,
+        manaSpent: event.manaSpent,
+        authority:
+          event.actionId === "tech-mad_science"
+            ? "verified mandatory prerequisite completion"
+            : event.manaSpent === 0
+              ? "existing Research owner purchase; no Mana debit to reconcile"
+              : event.actionId === "tech-rituals"
+                ? "existing Research owner purchase; MAD obligation status and goal value are not established by this capture"
+                : event.actionId === "tech-clerics"
+                  ? "existing Research owner purchase; MAD dependency relation remains unknown"
+                  : "existing Research owner purchase; goal value is not established by this capture",
+      })),
+      uncoveredPaths:
+        "The pure Stage 3D contract could represent a known Research debit if the owner supplied an exact synchronous transaction with fresh current stock, complete known commitments, same-observation invocation, and native post-action reconciliation. None of those Research calls are integrated; native Research, passive production, Alchemy, queued/player commitments, and other actions can alter Mana outside Gather. Their debit path and action authority therefore remain unaccounted for here. Since the Stage 3I claims fence Gather only, these Research actions are not violations of an implemented Research-side allowance, but Rituals demonstrates the unresolved cross-owner gap while claims are active.",
+    },
+    continuationTargetAudit: {
+      targetActionId: "tech-mad",
+      nativeSource:
+        "D:/work/Evolve-DeadSpace/src/tech.js, actions.tech.mad: reqs { uranium: 1, explosives: 3, high_tech: 7 } at pinned commit db38e2af831907d49aeb5348d678d8d8745d6c3f.",
+      baselineTechLevels: baselineContinuation.summary.finalTechLevels,
+      candidateTechLevels: derivedContinuation.summary.finalTechLevels,
+      remainingNativeRequirements: [
+        {
+          technologyId: "high_tech",
+          requiredLevel: 7,
+          currentLevel: derivedContinuation.summary.finalTechLevels.high_tech,
+        },
+        {
+          technologyId: "explosives",
+          requiredLevel: 3,
+          currentLevel: derivedContinuation.summary.finalTechLevels.explosives,
+        },
+        {
+          technologyId: "uranium",
+          requiredLevel: 1,
+          currentLevel: derivedContinuation.summary.finalTechLevels.uranium,
+        },
+      ].filter(
+        (requirement) => requirement.currentLevel < requirement.requiredLevel,
+      ),
+      result:
+        "The bounded candidate reaches High Tech 2 and Explosives 2 by period 1,000, but does not satisfy the native MAD target. No next Research target is injected.",
     },
   };
   await mkdir(path.dirname(reportPath), { recursive: true });
