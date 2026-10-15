@@ -56,6 +56,19 @@ const disableAutoMad = process.argv.includes("--disable-auto-mad");
 const sampleMissedOpportunities = process.argv.includes(
   "--sample-missed-opportunities",
 );
+const stage4fProbeArgument = process.argv.find((argument) =>
+  argument.startsWith("--stage4f-probe="),
+);
+const stage4fProbe = stage4fProbeArgument?.slice("--stage4f-probe=".length);
+if (
+  stage4fProbe !== undefined &&
+  ![
+    "research-before-fresh",
+    "research-after-fresh",
+    "market-route-count",
+  ].includes(stage4fProbe)
+)
+  throw new Error("unsupported Stage 4F probe");
 const activeCheckpoints = shortProbe
   ? checkpoints
   : debugMode
@@ -131,7 +144,7 @@ const built = await esbuild.build({
 await mkdir(path.dirname(bundlePath), { recursive: true });
 await writeFile(bundlePath, built.outputFiles[0].contents);
 
-function installObservers(scenario, diagnosticSamplingEnabled) {
+function installObservers(scenario, diagnosticSamplingEnabled, stage4fProbe) {
   const hooks = window.__EA_TEST_HOOKS__;
   hooks.gatherIntervention = { resourceClaimMode: "goal-derived-conjunctive" };
   hooks.readPeriodForTest = () => window.__EA_RUNNER__.periods();
@@ -157,6 +170,9 @@ function installObservers(scenario, diagnosticSamplingEnabled) {
   hooks.stage4aControlEvents = [];
   hooks.stage4aLastDecisionKey = "";
   hooks.stage4aLastPlanKey = "";
+  hooks.stage4fProbe = stage4fProbe;
+  hooks.stage4fEvents = [];
+  hooks.stage4fFreshSignal = undefined;
   hooks.stage4dPreflight = {
     noGoalCandidate: 0,
     noImportableShortfall: 0,
@@ -271,6 +287,34 @@ function installObservers(scenario, diagnosticSamplingEnabled) {
           category = "candidate-could-change-market-plan";
           requestedConditionalFresh = true;
           preflight.freshRequested += 1;
+          if (
+            stage4fProbe === "research-before-fresh" &&
+            hooks.stage4fEvents.length === 0
+          ) {
+            const offer = catalog?.offers?.find(
+              (candidate) => candidate.elementId === hintedActionId,
+            );
+            const invoked = offer
+              ? hooks.invokeResearchActionForTest?.(offer.elementId)
+              : undefined;
+            hooks.stage4fEvents.push({
+              probe: stage4fProbe,
+              point: "after-preliminary-selection-before-protected-draw",
+              preliminary: {
+                selectedActionId: hintedActionId,
+                selectedOfferGeneration: decision.selectedOfferGeneration,
+                resourceId: hintedResourceId,
+                targetQuantity: decision.targetQuantity,
+                shortfall: decision.shortfall,
+              },
+              nativeActionId: offer?.elementId,
+              injectionSurface: invoked?.ok
+                ? "captured native Research action control"
+                : (invoked?.reason ?? "none"),
+              invokeResult: invoked,
+              queueEvidenceBefore: catalog?.queueEvidence,
+            });
+          }
           const freshStarted = now();
           const freshCatalog = hooks.readCurrentResearchCatalog?.(
             undefined,
@@ -330,6 +374,32 @@ function installObservers(scenario, diagnosticSamplingEnabled) {
               preflight.freshAccepted += 1;
               category = "fresh-candidate-accepted";
               decision = validation;
+              if (stage4fProbe === "research-before-fresh") {
+                hooks.stage4fEvents[0] = {
+                  ...hooks.stage4fEvents[0],
+                  queueEvidenceAfter: freshCatalog.queueEvidence,
+                  validation: {
+                    status: validation.status,
+                    selectedActionId: validation.selectedActionId,
+                    selectedOfferGeneration: validation.selectedOfferGeneration,
+                    resourceId: validation.resourceId,
+                    targetQuantity: validation.targetQuantity,
+                    shortfall: validation.shortfall,
+                  },
+                };
+              }
+              hooks.stage4fFreshSignal = {
+                selectedActionId: validation.selectedActionId,
+                selectedOfferGeneration: validation.selectedOfferGeneration,
+                resourceId: validation.resourceId,
+                targetQuantity: validation.targetQuantity,
+                shortfall: validation.shortfall,
+                researchPermission: freshCatalog.researchPermission,
+                selectedPrestige: freshCatalog.selectedPrestige,
+                grantLevels: freshCatalog.grantLevels,
+                offers: freshCatalog.offers,
+                queueEvidence: freshCatalog.queueEvidence,
+              };
             } else {
               preflight.freshRejectedOrChanged += 1;
               category =
@@ -413,6 +483,75 @@ function installObservers(scenario, diagnosticSamplingEnabled) {
       });
     }
     return decision;
+  };
+  hooks.resolveTradeRouteOperationsForTest = (input, planned, context) => {
+    const signal = hooks.stage4fFreshSignal;
+    const probe = hooks.stage4fProbe;
+    if (signal === undefined || probe === undefined) return undefined;
+    hooks.stage4fFreshSignal = undefined;
+    if (probe === "market-route-count") {
+      const resourceId = input.priorityList.find(
+        (resource) => resource.tradeRoutes > 0,
+      )?.id;
+      const before = resourceId
+        ? hooks.capturedTradeRouteControlForTest?.inspect(resourceId)
+        : undefined;
+      const injected = resourceId
+        ? hooks.capturedTradeRouteControlForTest?.removeOne(resourceId)
+        : undefined;
+      const after = resourceId
+        ? hooks.capturedTradeRouteControlForTest?.inspect(resourceId)
+        : undefined;
+      hooks.stage4fEvents.push({
+        probe,
+        acceptedFreshSignal: signal,
+        injectedResourceId: resourceId,
+        before,
+        injected,
+        after,
+        plannedOperations: planned.operations,
+      });
+      return undefined;
+    }
+    if (probe === "research-after-fresh") {
+      const offer = signal.offers?.find(
+        (candidate) => candidate.elementId === signal.selectedActionId,
+      );
+      const beforeOffers = signal.offers?.map(
+        (candidate) => candidate.elementId,
+      );
+      const invoked = offer
+        ? hooks.invokeResearchActionForTest?.(offer.elementId)
+        : undefined;
+      const changed = invoked?.ok
+        ? hooks.readCurrentResearchCatalog?.(undefined, true)
+        : undefined;
+      const postMutationDecision = changed
+        ? window.EAStage4a.evaluateGoalAwareAcquisition(changed, input, context)
+        : undefined;
+      hooks.stage4fEvents.push({
+        probe,
+        acceptedFreshSignal: signal,
+        injectedActionId: offer?.elementId,
+        injectedGrantTechnology: offer?.grantTechnology,
+        injectionSurface: invoked?.ok
+          ? "captured native Research action control"
+          : (invoked?.reason ?? "none"),
+        invokeResult: invoked,
+        grantLevelsBefore: signal.grantLevels,
+        grantLevelsAfter: changed?.grantLevels,
+        offersBefore: beforeOffers,
+        offersAfter: changed?.offers?.map((candidate) => candidate.elementId),
+        currentSelectedOffer: changed?.offers?.find(
+          (candidate) => candidate.elementId === signal.selectedActionId,
+        ),
+        permissionAfter: changed?.researchPermission,
+        queueEvidenceAfter: changed?.queueEvidence,
+        postMutationDecision,
+        plannedOperations: planned.operations,
+      });
+    }
+    return undefined;
   };
   hooks.recordTradeRouteTraceForTest = (event) => {
     const period = window.__EA_RUNNER__.periods();
@@ -580,6 +719,7 @@ try {
         installObservers,
         scenario,
         sampleMissedOpportunities,
+        scenario === "J" ? stage4fProbe : undefined,
       );
       console.log(`${scenario}: opened exact Chromium session`);
       let period = 0;
@@ -605,6 +745,7 @@ try {
             selectorFailures:
               window.__EA_TEST_HOOKS__.stage4aSelectorFailures ?? [],
             stage4dPreflight: window.__EA_TEST_HOOKS__.stage4dPreflight ?? {},
+            stage4fEvents: window.__EA_TEST_HOOKS__.stage4fEvents ?? [],
             researchEvents:
               window.__EA_TEST_HOOKS__.researchOwnerSelectionEvents ?? [],
             lastResearch: window.__EA_TEST_HOOKS__.researchOwnerSelectionLast,
@@ -776,6 +917,9 @@ try {
         ),
         stage4dPreflight: await session.evaluate(
           () => window.__EA_TEST_HOOKS__.stage4dPreflight ?? {},
+        ),
+        stage4fEvents: await session.evaluate(
+          () => window.__EA_TEST_HOOKS__.stage4fEvents ?? [],
         ),
         researchSequence,
         diagnostics: {

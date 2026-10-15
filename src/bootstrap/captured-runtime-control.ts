@@ -1366,6 +1366,14 @@ export function startCapturedRuntime({
         "readCurrentResearchCatalog",
         readCurrentResearchCatalog,
       );
+      Reflect.set(hooks, "invokeResearchActionForTest", (actionId: unknown) => {
+        if (typeof actionId !== "string")
+          return Object.freeze({ status: "invalid-action-id" });
+        const control = pageCapture.controls.resolve(actionId);
+        if (control === undefined || !control.methods.includes("action"))
+          return Object.freeze({ status: "native-action-unavailable" });
+        return pageCapture.controls.invoke(control, "action", []);
+      });
     }
   }
   researchOwnerSelectionObserver = (selection) => {

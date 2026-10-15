@@ -8,6 +8,7 @@ const testSurfaceMarkers = [
   "research-experiment-target-unavailable",
   "sampleResearchCatalog",
   "readCurrentResearchCatalog",
+  "invokeResearchActionForTest",
   "readFreshResearchCatalogForTest",
   "protected-fresh-draw",
   "resourceSamples",
