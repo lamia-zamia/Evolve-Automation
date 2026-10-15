@@ -514,7 +514,9 @@ Savings are per work tick, from the measurements cited; they are ceilings, not p
 
 **High-confidence** savings are #1 and #3. Of the rest, #4, #7 and #9 are plausible but unmeasured in isolation, and
 #2, #5, #6, #8 and #10 are speculative. The largest _raw_ cost (#2) is not the largest _credible_ one: it needs the
-membership argument the headless-research experiment could not supply.
+membership argument the headless-research experiment could not supply, and an earlier (2026-10-11) Research
+cache-freshness prototype fell back to a redraw on every reuse because native affordability (`cna`) cannot be read
+from off-panel rows without the game's debug exposure.
 
 ## G. Next experiment — per-cycle native price owner
 
