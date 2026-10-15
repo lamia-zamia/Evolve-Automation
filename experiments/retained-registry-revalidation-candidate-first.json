@@ -1,0 +1,163 @@
+{
+  "baseRef": "deadspace",
+  "order": "candidate-first",
+  "calls": 3000,
+  "warmupPeriods": 400,
+  "batches": [
+    {
+      "repeat": 0,
+      "arm": "candidate",
+      "bundleSha256": "1fa61f6f588a8b8428cf82dabb3ee519b24d6a311858f0058b6bf8e8c15a3b63",
+      "rendererCpuSec": 0.33,
+      "taskDurationSec": 0.2856,
+      "inPage": {
+        "count": 3000,
+        "elapsedMs": 277.69999999552965,
+        "definitions": 834,
+        "unavailable": 0,
+        "changedReference": 0
+      }
+    },
+    {
+      "repeat": 0,
+      "arm": "base",
+      "bundleSha256": "bdc2ff45f878b7276f2891107a7923738dc924f4b2508de50eafa088ea902d21",
+      "rendererCpuSec": 8.08,
+      "taskDurationSec": 6.0781,
+      "inPage": {
+        "count": 3000,
+        "elapsedMs": 6073.10000000149,
+        "definitions": 834,
+        "unavailable": 0,
+        "changedReference": 0
+      }
+    },
+    {
+      "repeat": 1,
+      "arm": "candidate",
+      "bundleSha256": "1fa61f6f588a8b8428cf82dabb3ee519b24d6a311858f0058b6bf8e8c15a3b63",
+      "rendererCpuSec": 0.25,
+      "taskDurationSec": 0.2456,
+      "inPage": {
+        "count": 3000,
+        "elapsedMs": 245.20000000298023,
+        "definitions": 834,
+        "unavailable": 0,
+        "changedReference": 0
+      }
+    },
+    {
+      "repeat": 1,
+      "arm": "base",
+      "bundleSha256": "bdc2ff45f878b7276f2891107a7923738dc924f4b2508de50eafa088ea902d21",
+      "rendererCpuSec": 7.71,
+      "taskDurationSec": 5.9973,
+      "inPage": {
+        "count": 3000,
+        "elapsedMs": 5988.60000000149,
+        "definitions": 834,
+        "unavailable": 0,
+        "changedReference": 0
+      }
+    },
+    {
+      "repeat": 2,
+      "arm": "candidate",
+      "bundleSha256": "1fa61f6f588a8b8428cf82dabb3ee519b24d6a311858f0058b6bf8e8c15a3b63",
+      "rendererCpuSec": 0.26,
+      "taskDurationSec": 0.2535,
+      "inPage": {
+        "count": 3000,
+        "elapsedMs": 253,
+        "definitions": 834,
+        "unavailable": 0,
+        "changedReference": 0
+      }
+    },
+    {
+      "repeat": 2,
+      "arm": "base",
+      "bundleSha256": "bdc2ff45f878b7276f2891107a7923738dc924f4b2508de50eafa088ea902d21",
+      "rendererCpuSec": 6.02,
+      "taskDurationSec": 4.5261,
+      "inPage": {
+        "count": 3000,
+        "elapsedMs": 4519.39999999851,
+        "definitions": 834,
+        "unavailable": 0,
+        "changedReference": 0
+      }
+    }
+  ],
+  "functional": {
+    "candidate": {
+      "rendererCpuSec": 17.36,
+      "taskDurationSec": 14.8161,
+      "inPage": {
+        "periods": 1000,
+        "reloads": 0
+      },
+      "gameSnapshot": {
+        "path": "D:\\work\\Evolve-Automation\\test-artifacts\\game\\evolve-deadspace.js",
+        "sha256": "29e22dbe9bc80d44997ee6ab87bb1143fc35129d1d89d6241997eec0f79a54f4",
+        "commit": "db38e2af",
+        "builtAt": "2026-10-15T20:22:42.828Z"
+      },
+      "workTicks": 125,
+      "errors": 2,
+      "errorTexts": [
+        "progression skipped arpa: native A.R.P.A. capture failed: the native project registry was not observed on the Physics draw",
+        "progression skipped arpa: native A.R.P.A. capture failed: the native A.R.P.A. capture already failed for this root"
+      ]
+    },
+    "base": {
+      "rendererCpuSec": 21.77,
+      "taskDurationSec": 18.7268,
+      "inPage": {
+        "periods": 1000,
+        "reloads": 0
+      },
+      "gameSnapshot": {
+        "path": "D:\\work\\Evolve-Automation\\test-artifacts\\game\\evolve-deadspace.js",
+        "sha256": "29e22dbe9bc80d44997ee6ab87bb1143fc35129d1d89d6241997eec0f79a54f4",
+        "commit": "db38e2af",
+        "builtAt": "2026-10-15T20:22:42.828Z"
+      },
+      "workTicks": 125,
+      "errors": 2,
+      "errorTexts": [
+        "progression skipped arpa: native A.R.P.A. capture failed: the native project registry was not observed on the Physics draw",
+        "progression skipped arpa: native A.R.P.A. capture failed: the native A.R.P.A. capture already failed for this root"
+      ]
+    }
+  },
+  "perTick": {
+    "periods": 1000,
+    "registryReads": 266,
+    "workTicks": 125
+  },
+  "runner": {
+    "inputs": {
+      "gameSnapshot": {
+        "path": "D:\\work\\Evolve-Automation\\test-artifacts\\game\\evolve-deadspace.js",
+        "sha256": "29e22dbe9bc80d44997ee6ab87bb1143fc35129d1d89d6241997eec0f79a54f4",
+        "commit": "db38e2af",
+        "builtAt": "2026-10-15T20:22:42.828Z"
+      },
+      "upstream": "D:\\work\\Evolve-DeadSpace",
+      "libraries": {
+        "vue": "3.5.22",
+        "buefy": "3.0.10",
+        "@popperjs/core": "2.9.2",
+        "sortablejs": "1.10.2",
+        "chart.js": "3.8.2"
+      },
+      "runner": "b974ffb964929cfe7304fa487c1edea0caedd43824fdde5095ab44fcc3e0cb7d"
+    },
+    "browser": "HeadlessChrome/151.0.7922.71"
+  },
+  "functionalEqual": {
+    "tech": true,
+    "resources": true
+  }
+}

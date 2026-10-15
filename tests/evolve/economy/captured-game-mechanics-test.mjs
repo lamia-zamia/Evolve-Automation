@@ -2185,6 +2185,54 @@ function validTechRegistry() {
   fixture.installed.uninstall();
 }
 
+for (const [label, mutate] of [
+  [
+    "adding a native registry key",
+    (registry) => {
+      registry.gamma = { id: "tech-gamma", grant: ["gamma", 1] };
+    },
+  ],
+  [
+    "removing a native registry key",
+    (registry) => {
+      delete registry.beta;
+    },
+  ],
+  [
+    "replacing a static reqs record",
+    (registry) => {
+      registry.beta.reqs = { alpha: 1 };
+    },
+  ],
+  [
+    "replacing reqs with an accessor",
+    (registry) => {
+      const reqs = registry.beta.reqs;
+      Object.defineProperty(registry.beta, "reqs", { get: () => reqs });
+    },
+  ],
+]) {
+  const registry = validTechRegistry();
+  registry.beta.reqs = { alpha: 1 };
+  const fixture = techRegistryPage(registry);
+  fixture.installed.mechanics.captureTechDefinitionsDuring(() =>
+    fixture.page.Object.keys(fixture.registry),
+  );
+  const retained = fixture.installed.mechanics.readTechDefinitions();
+  assert.deepEqual(retained?.[1]?.prerequisites, {
+    kind: "declared",
+    requirements: [{ technologyId: "alpha", requiredLevel: 1 }],
+  });
+  assert.equal(fixture.installed.mechanics.readTechDefinitions(), retained);
+  mutate(fixture.registry);
+  assert.equal(
+    fixture.installed.mechanics.readTechDefinitions(),
+    undefined,
+    `${label} invalidates retained authority`,
+  );
+  fixture.installed.uninstall();
+}
+
 {
   const mana = () => {
     assert.fail(

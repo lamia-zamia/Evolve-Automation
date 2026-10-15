@@ -2096,6 +2096,10 @@
 
   // src/adapters/evolve/captured-game-mechanics.ts
   var structureMapCaptureThreshold = 3;
+  function nativeReqsIdentity(descriptor) {
+    if (descriptor !== void 0)
+      return "value" in descriptor ? descriptor.value : descriptor.get;
+  }
   function validateCapturedNativeTechRequirements(value) {
     try {
       if (typeof value != "object" || value === null || Array.isArray(value) || Object.getPrototypeOf(value) !== Object.prototype)
@@ -2288,7 +2292,8 @@
         prerequisites,
         eligibility,
         action,
-        reqsFunction
+        reqsFunction,
+        reqsIdentity: nativeReqsIdentity(reqsDescriptor)
       });
       definitions.push(definition), definitionsByActionId?.set(actionId, definition);
     }
@@ -3213,15 +3218,14 @@
           ]);
           if (!Array.isArray(rawKeys) || rawKeys.length !== retained.keys.length)
             return;
-          let currentSnapshot = readNativeTechRegistrySnapshot(
-            retained.registry,
-            rawKeys
-          );
-          if (currentSnapshot === void 0 || !sameNativeTechRegistrySnapshot(retained, currentSnapshot))
-            return;
           for (let index = 0; index < retained.keys.length; index++) {
             let key = retained.keys[index], definition = retained.definitions[index];
-            if (key === void 0 || definition === void 0 || rawKeys[index] !== key || readMechanicsDataProperty(retained.registry, key) !== definition.action)
+            if (key === void 0 || definition === void 0 || rawKeys[index] !== key)
+              return;
+            let action = readMechanicsDataProperty(retained.registry, key);
+            if (action !== definition.action || nativeReqsIdentity(
+              Object.getOwnPropertyDescriptor(action, "reqs")
+            ) !== definition.reqsIdentity)
               return;
           }
           return retained;

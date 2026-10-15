@@ -46,6 +46,15 @@ const structureMapCaptureThreshold = 3;
 interface CapturedNativeTechDefinitionIdentity extends CapturedTechDefinition {
   readonly action: Record<string, unknown>;
   readonly reqsFunction: CapturedGameCall | undefined;
+  readonly reqsIdentity: unknown;
+}
+
+// The reference retained revalidation pins: the reqs value, or its getter when reqs is an accessor.
+function nativeReqsIdentity(
+  descriptor: PropertyDescriptor | undefined,
+): unknown {
+  if (descriptor === undefined) return undefined;
+  return "value" in descriptor ? descriptor.value : descriptor.get;
 }
 
 interface CapturedNativeTechRequirementCall {
@@ -406,6 +415,7 @@ function readNativeTechRegistrySnapshot(
       eligibility,
       action,
       reqsFunction,
+      reqsIdentity: nativeReqsIdentity(reqsDescriptor),
     });
     definitions.push(definition);
     definitionsByActionId?.set(actionId, definition);
@@ -2079,29 +2089,28 @@ export function installCapturedGameMechanics(
       ]);
       if (!Array.isArray(rawKeys) || rawKeys.length !== retained.keys.length)
         return undefined;
-      const currentSnapshot = readNativeTechRegistrySnapshot(
-        retained.registry,
-        rawKeys,
-      );
-      if (
-        currentSnapshot === undefined ||
-        !sameNativeTechRegistrySnapshot(retained, currentSnapshot)
-      )
-        return undefined;
+      // Upstream actions.js declares actions.tech once and never mutates its action metadata, so
+      // the static metadata validated at capture stays valid while key order, each action object
+      // and its reqs reference are unchanged. Prices and eligibility remain dynamic and are read
+      // from each native draw's rows.
       for (let index = 0; index < retained.keys.length; index++) {
         const key = retained.keys[index];
         const definition = retained.definitions[index];
         if (
           key === undefined ||
           definition === undefined ||
-          rawKeys[index] !== key ||
-          readMechanicsDataProperty(retained.registry, key) !==
-            definition.action
+          rawKeys[index] !== key
+        )
+          return undefined;
+        const action = readMechanicsDataProperty(retained.registry, key);
+        if (
+          action !== definition.action ||
+          nativeReqsIdentity(
+            Object.getOwnPropertyDescriptor(action, "reqs"),
+          ) !== definition.reqsIdentity
         )
           return undefined;
       }
-      // Upstream actions.js declares actions.tech once and never mutates its action metadata.
-      // Prices and eligibility remain dynamic and are read from each native draw's rows.
       return retained;
     } catch {
       return undefined;
