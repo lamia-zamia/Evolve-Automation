@@ -53,6 +53,7 @@ const scenarioNames = (scenariosArgument?.slice("--scenarios=".length) ?? "B,F")
 if (scenarioNames.some((scenario) => !["B", "F", "G", "J"].includes(scenario)))
   throw new Error("--scenarios accepts only B,F,G,J");
 const debugMode = process.argv.includes("--debug");
+const phaseInstrumentation = !process.argv.includes("--disable-perf");
 const disableAutoMad = process.argv.includes("--disable-auto-mad");
 const sampleMissedOpportunities = process.argv.includes(
   "--sample-missed-opportunities",
@@ -73,7 +74,9 @@ if (
 const activeCheckpoints = shortProbe
   ? checkpoints
   : debugMode
-    ? [8_000, 8_001, 8_008]
+    ? stage4fProbe === "market-route-count"
+      ? [8_000, 8_001, 8_008, 8_016]
+      : [8_000, 8_001, 8_008]
     : checkpoints;
 const snapshotPeriods = [
   ...new Set([
@@ -100,7 +103,6 @@ execFileSync("git", ["merge-base", "--is-ancestor", startCommit, "HEAD"], {
   cwd: root,
   stdio: "ignore",
 });
-
 const [saveText, settingsText, metadata] = await Promise.all([
   readFile(savePath, "utf8"),
   readFile(settingsPath, "utf8"),
@@ -152,9 +154,12 @@ function installObservers(scenario, diagnosticSamplingEnabled, stage4fProbe) {
   hooks.researchOwnerSelectionEvents = [];
   hooks.stage4aScenario = scenario;
   hooks.preserveGoalDemandMoneyFloorForTest = ["G", "J"].includes(scenario);
+  hooks.allowHistoricalGoalComparisonForTest = ["F", "G"].includes(scenario);
   hooks.stage4aActive = false;
   hooks.stage4aRecordFromNow = false;
   hooks.stage4aDecisions = [];
+  hooks.stage4aProposedSignals = [];
+  hooks.stage4aAcceptedSignals = [];
   hooks.stage4aTraceCounts = {};
   hooks.stage4aCaptureFailures = [];
   hooks.stage4aSelectionCalls = 0;
@@ -174,6 +179,7 @@ function installObservers(scenario, diagnosticSamplingEnabled, stage4fProbe) {
   hooks.stage4fProbe = stage4fProbe;
   hooks.stage4fEvents = [];
   hooks.stage4fFenceEvents = [];
+  hooks.stage4fFenceMeasurements = [];
   hooks.stage4fFreshSignal = undefined;
   hooks.stage4dPreflight = {
     noGoalCandidate: 0,
@@ -252,6 +258,16 @@ function installObservers(scenario, diagnosticSamplingEnabled, stage4fProbe) {
     ) {
       hooks.stage4aDecisions.push({ period, ...decision });
       hooks.stage4aLastDecisionKey = key;
+    }
+    if (decision.status === "signal") {
+      hooks.stage4aProposedSignals.push({
+        period,
+        selectedActionId: decision.selectedActionId,
+        selectedOfferGeneration: decision.selectedOfferGeneration,
+        resourceId: decision.resourceId,
+        targetQuantity: decision.targetQuantity,
+        shortfall: decision.shortfall,
+      });
     }
     if (scenario === "J") {
       const preflight = hooks.stage4dPreflight;
@@ -546,6 +562,8 @@ function installObservers(scenario, diagnosticSamplingEnabled, stage4fProbe) {
     if (signal === undefined || probe === undefined) return undefined;
     hooks.stage4fFreshSignal = undefined;
     if (probe === "market-route-count") {
+      if (hooks.stage4fEvents.some((event) => event.probe === probe))
+        return undefined;
       const resourceId = input.priorityList.find(
         (resource) => resource.tradeRoutes > 0,
       )?.id;
@@ -560,7 +578,9 @@ function installObservers(scenario, diagnosticSamplingEnabled, stage4fProbe) {
         : undefined;
       hooks.stage4fEvents.push({
         probe,
+        period: window.__EA_RUNNER__.periods(),
         acceptedFreshSignal: signal,
+        appliedCountAtInjection: hooks.stage4aApplied.length,
         injectedResourceId: resourceId,
         before,
         injected,
@@ -619,16 +639,20 @@ function installObservers(scenario, diagnosticSamplingEnabled, stage4fProbe) {
     const period = window.__EA_RUNNER__.periods();
     hooks.stage4aTraceCounts[event.kind] =
       (hooks.stage4aTraceCounts[event.kind] ?? 0) + 1;
+    if (event.kind === "research-final-fence")
+      hooks.stage4fFenceMeasurements.push({ period, ...event });
     if (
       event.kind === "capture-unavailable" &&
       !hooks.stage4aCaptureFailures.includes(event.reason)
     )
       hooks.stage4aCaptureFailures.push(event.reason);
     if (
-      hooks.stage4fProbe === "research-after-fresh" &&
       event.kind === "skipped" &&
       typeof event.reason === "string" &&
-      event.reason.startsWith("research-")
+      ((hooks.stage4fProbe === "research-after-fresh" &&
+        event.reason.startsWith("research-")) ||
+        (hooks.stage4fProbe === "market-route-count" &&
+          event.reason === "market-route-count-stale"))
     )
       hooks.stage4fFenceEvents.push({
         period,
@@ -636,6 +660,18 @@ function installObservers(scenario, diagnosticSamplingEnabled, stage4fProbe) {
         ...event,
       });
     if (event.kind === "plan" && hooks.stage4aRecordFromNow) {
+      if (typeof event.testDemandResourceId === "string") {
+        hooks.stage4aAcceptedSignals.push({
+          period,
+          resourceId: event.testDemandResourceId,
+          moneyFloorPolicy: event.testDemandMoneyFloorPolicy,
+          plannerChanged:
+            JSON.stringify(event.plannerOperations) !==
+            JSON.stringify(event.baselineOperations),
+          plannedOperations: event.plannerOperations,
+          desiredOperations: event.desiredOperations,
+        });
+      }
       const key = JSON.stringify([
         event.testDemandResourceId,
         event.desiredOperations,
@@ -762,6 +798,7 @@ const result = {
     missedOpportunitySampling: sampleMissedOpportunities
       ? "enabled every 32 no-hint calls"
       : "disabled",
+    phaseInstrumentation,
     activeAfterPeriod: activePeriod,
     checkpoints: activeCheckpoints,
     snapshotPeriods,
@@ -782,8 +819,8 @@ try {
       settings,
       seed: 42,
       epoch: Date.parse(result.inputs.epoch),
-      perf: true,
-      forwardPerfSummary: true,
+      perf: phaseInstrumentation,
+      forwardPerfSummary: phaseInstrumentation,
       snapshotAt: snapshotPeriods,
     });
     try {
@@ -967,6 +1004,12 @@ try {
         demandDecisions: await session.evaluate(
           () => window.__EA_TEST_HOOKS__.stage4aDecisions ?? [],
         ),
+        proposedGoalDemandSignals: await session.evaluate(
+          () => window.__EA_TEST_HOOKS__.stage4aProposedSignals ?? [],
+        ),
+        acceptedGoalDemandSignals: await session.evaluate(
+          () => window.__EA_TEST_HOOKS__.stage4aAcceptedSignals ?? [],
+        ),
         appliedRouteOperations: await session.evaluate(
           () => window.__EA_TEST_HOOKS__.stage4aApplied ?? [],
         ),
@@ -997,6 +1040,9 @@ try {
         stage4fFenceEvents: await session.evaluate(
           () => window.__EA_TEST_HOOKS__.stage4fFenceEvents ?? [],
         ),
+        stage4fFenceMeasurements: await session.evaluate(
+          () => window.__EA_TEST_HOOKS__.stage4fFenceMeasurements ?? [],
+        ),
         researchSequence,
         diagnostics: {
           wallMs,
@@ -1023,6 +1069,38 @@ try {
 }
 
 await writeFile(outputPath, `${JSON.stringify(result, null, 2)}\n`);
+for (const scenario of result.scenarios) {
+  if (["F", "G"].includes(scenario.scenario) && !shortProbe && !debugMode) {
+    assert.ok(
+      scenario.proposedGoalDemandSignals.length > 0,
+      `${scenario.scenario} must propose historical goal-demand signals`,
+    );
+    assert.ok(
+      scenario.acceptedGoalDemandSignals.length > 0,
+      `${scenario.scenario} historical signals must reach the Market planner`,
+    );
+  }
+  if (scenario.scenario === "G" && !shortProbe && !debugMode) {
+    const distinctAcceptedPlans = scenario.routePlans.filter(
+      (plan) => typeof plan.testDemandResourceId === "string",
+    );
+    const distinctChangedPlans = distinctAcceptedPlans.filter(
+      (plan) =>
+        JSON.stringify(plan.plannerOperations) !==
+        JSON.stringify(plan.baselineOperations),
+    );
+    assert.equal(
+      distinctAcceptedPlans.length,
+      109,
+      "G must match Stage 4B's 109 distinct accepted Market plan records",
+    );
+    assert.equal(
+      distinctChangedPlans.length,
+      109,
+      "all 109 Stage 4B G plan records must differ from ordinary Market planning",
+    );
+  }
+}
 if (stage4fProbe === "research-after-fresh") {
   const scenario = result.scenarios.find((entry) => entry.scenario === "J");
   const injection = scenario?.stage4fEvents.find(
@@ -1033,11 +1111,43 @@ if (stage4fProbe === "research-after-fresh") {
   );
   assert.equal(injection?.acceptedGeneration, 351);
   assert.equal(injection?.currentSelectedGeneration, 352);
+  assert.ok(
+    injection?.plannedOperations.some(
+      (operation) => operation.resourceId === "Oil",
+    ),
+    "the stale batch must contain its intended Oil route operations",
+  );
   assert.ok(fence, "final Research authority fence must reject generation 352");
   assert.equal(
     fence?.appliedCount,
     injection?.appliedCountAtInjection,
     "no Market route operation may run during the stale strategy batch",
+  );
+} else if (stage4fProbe === "market-route-count") {
+  const scenario = result.scenarios.find((entry) => entry.scenario === "J");
+  const injection = scenario?.stage4fEvents.find(
+    (entry) => entry.probe === "market-route-count",
+  );
+  const fence = scenario?.stage4fFenceEvents.find(
+    (entry) => entry.reason === "market-route-count-stale",
+  );
+  assert.equal(injection?.before?.routeCount, 93);
+  assert.equal(injection?.after?.routeCount, 92);
+  assert.ok(
+    injection?.plannedOperations.length > 0,
+    "the stale route-count probe must reject a non-empty planned batch",
+  );
+  assert.ok(fence, "Market route count change must refuse the planned batch");
+  assert.equal(
+    fence?.appliedCount,
+    injection?.appliedCountAtInjection,
+    "no operation from the stale route-count batch may execute",
+  );
+  assert.ok(
+    scenario?.appliedRouteOperations.some(
+      (operation) => operation.period > (injection?.period ?? Infinity),
+    ),
+    "the ordinary Market owner must apply a later current plan after the stale-batch refusal",
   );
 }
 console.log(
@@ -1064,6 +1174,28 @@ console.log(
         wallMs: scenario.diagnostics.wallMs,
         rendererTaskSeconds: scenario.diagnostics.rendererTaskSeconds,
         rendererScriptSeconds: scenario.diagnostics.rendererScriptSeconds,
+        goalDemand: {
+          proposedSignals: scenario.proposedGoalDemandSignals.length,
+          acceptedSignals: scenario.acceptedGoalDemandSignals.length,
+          changedPlannerRecords: scenario.acceptedGoalDemandSignals.filter(
+            (signal) => signal.plannerChanged,
+          ).length,
+          distinctAcceptedPlanRecords: scenario.routePlans.filter(
+            (plan) => typeof plan.testDemandResourceId === "string",
+          ).length,
+          distinctChangedPlanRecords: scenario.routePlans.filter(
+            (plan) =>
+              typeof plan.testDemandResourceId === "string" &&
+              JSON.stringify(plan.plannerOperations) !==
+                JSON.stringify(plan.baselineOperations),
+          ).length,
+          nativeRouteOperations: scenario.appliedRouteOperations.length,
+          finalFenceRecaptures: scenario.stage4fFenceMeasurements.length,
+          finalFenceMs: scenario.stage4fFenceMeasurements.reduce(
+            (total, entry) => total + (entry.durationMs ?? 0),
+            0,
+          ),
+        },
       })),
     },
     null,

@@ -4005,6 +4005,16 @@ export function startCapturedRuntime({
     __EA_TEST_SURFACE_ENABLED__ === true
       ? {
           testSurface: {
+            allowHistoricalSignalForComparisonTest: () => {
+              const hooks = readProperty(
+                settingsHostWindow,
+                "__EA_TEST_HOOKS__",
+              );
+              return (
+                readProperty(hooks, "allowHistoricalGoalComparisonForTest") ===
+                true
+              );
+            },
             demandForTest: (input, context) => {
               const hooks = readProperty(
                 settingsHostWindow,
@@ -4027,6 +4037,26 @@ export function startCapturedRuntime({
                 readProperty(hooks, "preserveGoalDemandMoneyFloorForTest") ===
                 true
               );
+            },
+            nowForTest: () => {
+              const now = readProperty(settingsHostWindow, "eaDiagnosticsNow");
+              if (typeof now === "function")
+                return Reflect.apply(now, settingsHostWindow, []);
+              const capturedMarketFenceClock = readProperty(
+                settingsHostWindow,
+                "performance",
+              );
+              const capturedMarketFenceNow = readProperty(
+                capturedMarketFenceClock,
+                "now",
+              );
+              return typeof capturedMarketFenceNow === "function"
+                ? Reflect.apply(
+                    capturedMarketFenceNow,
+                    capturedMarketFenceClock,
+                    [],
+                  )
+                : 0;
             },
             resolveOperations: (input, planned, context) => {
               const hooks = readProperty(

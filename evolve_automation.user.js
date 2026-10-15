@@ -38039,7 +38039,7 @@
           maximumRoutes: captured.input.maxTradeRoutes,
           ownerEnabled: captured.session.ownerEnabled,
           resources: captured.observations
-        }), requestedTestDemand, testDemandResource = requestedTestDemand !== void 0 ? captured.input.priorityList.find(
+        }), requestedTestDemand, authoritativeTestDemand, testDemandResource = requestedTestDemand !== void 0 ? captured.input.priorityList.find(
           (resource) => resource.id === requestedTestDemand.resourceId
         ) : void 0, testDemandObservation = requestedTestDemand !== void 0 ? captured.observations.find(
           (resource) => resource.resourceId === requestedTestDemand.resourceId

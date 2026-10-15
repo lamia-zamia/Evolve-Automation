@@ -807,6 +807,74 @@ swapSettings.autoMarket = true;
 swapSettings.prestigeType = "mad";
 swapSettings.autoResearch = true;
 swapSettings.autoTrigger = false;
+const historicalGoalTrace = [];
+const historicalGoalSignal = Object.freeze({
+  status: "signal",
+  rootGeneration: 4,
+  progressionEpoch: "save:historical-goal-test",
+  goalId: "prestige:mad",
+  goalActionId: "tech-endgame",
+  selectedActionId: "tech-metalwork",
+  selectedOfferGeneration: 7,
+  resourceId: "Source",
+  targetQuantity: 20,
+  shortfall: 20,
+});
+const historicalGoalRoutes = createCapturedTradeRoutes({
+  rootState: { readRoot: () => swapRoot },
+  controls: swapRegistry,
+  board: boardSource(swapRoot, swapRegistry, "global"),
+  mechanics,
+  keyState: neutralKeyState,
+  readSettings: () => swapSettings,
+  readRootGeneration: () => 4,
+  readProgressionEpoch: () => "save:historical-goal-test",
+  readDemand: () => ({ isDemanded: () => false, storageRequired: () => 10 }),
+  testSurface: {
+    allowHistoricalSignalForComparisonTest: () => true,
+    demandForTest: () => historicalGoalSignal,
+    onTrace: (event) => historicalGoalTrace.push(event),
+  },
+});
+historicalGoalRoutes.adjust();
+const historicalGoalPlan = historicalGoalTrace.find(
+  (event) => event.kind === "plan",
+);
+assert.ok(historicalGoalPlan);
+assert.equal(
+  historicalGoalPlan.testDemandResourceId,
+  "Source",
+  "the explicit historical comparison path must pass its legacy signal to the planner",
+);
+assert.equal(
+  historicalGoalPlan.testDemandMoneyFloorPolicy,
+  "demand-can-relax-floor",
+  "the historical F policy retains its Money-floor exception",
+);
+const jLegacyTrace = [];
+const jLegacyRoutes = createCapturedTradeRoutes({
+  rootState: { readRoot: () => swapRoot },
+  controls: swapRegistry,
+  board: boardSource(swapRoot, swapRegistry, "global"),
+  mechanics,
+  keyState: neutralKeyState,
+  readSettings: () => swapSettings,
+  readRootGeneration: () => 4,
+  readProgressionEpoch: () => "save:historical-goal-test",
+  readDemand: () => ({ isDemanded: () => false, storageRequired: () => 10 }),
+  testSurface: {
+    allowHistoricalSignalForComparisonTest: () => false,
+    demandForTest: () => historicalGoalSignal,
+    onTrace: (event) => jLegacyTrace.push(event),
+  },
+});
+jLegacyRoutes.adjust();
+assert.equal(
+  jLegacyTrace.find((event) => event.kind === "plan")?.testDemandResourceId,
+  undefined,
+  "the J-shaped path must reject a legacy signal without the authoritative Research evidence",
+);
+
 const finalFenceTrace = [];
 const finalFenceSettings = { ...swapSettings };
 let finalFenceRootGeneration = 4;

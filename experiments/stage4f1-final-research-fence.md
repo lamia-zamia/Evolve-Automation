@@ -1,6 +1,6 @@
 # Stage 4F.1 — Final Research Authority Fence
 
-## Decision: A — stale binding is fenced; recommend an opt-in implementation review
+## Decision: D — the stale-binding fence is verified; the G/J comparison is superseded by Stage 4F.2
 
 The experimental Market operation batch now retains immutable evidence from the protected Research draw and checks
 its observable authority immediately before the first native Market operation. A native Research action changed the
@@ -12,9 +12,12 @@ was added, and the fence is absent from the release bundle.
 The authority conclusion uses both the regression and the pinned synchronous call graph. Binding generation alone
 does not prove current price or eligibility. The pinned execution interval has no Research writer in its current
 native Market call path: the Research action adversary redraws and changes the selected binding generation, while
-the Market route methods only mutate route assignments and UI classes. This supports an opt-in implementation
-review for the current pinned source. Revisit that review if any callback is added between the protected draw and
-the first route invocation.
+the Market route methods only mutate route assignments and UI classes. This supports the fence conclusion for the
+current pinned source. Revisit that conclusion if any callback is added between the protected draw and the first
+route invocation. Stage 4F.2 identified that the F1 G/J comparison did not exercise the historical G Market strategy:
+G returned the old Stage 4A signal shape, which the enlarged F1 Research envelope validator rejected. The
+performance and p8008 strategy comparison below are not G/J baseline evidence and are superseded by the matched
+Stage 4F.2 replay.
 
 ## Evidence retained and final fence
 
@@ -88,8 +91,9 @@ draws; the final fence itself makes no Research catalog draw. The intentional `r
 performs a native action and a follow-up observation only in that debug probe.
 
 The clean J replay retained its existing single `native-result-mismatch` Market refusal and had no runner errors.
-G and J use different planned resource assignments at p8008 because J applies the accepted goal-demand strategy;
-this G/J comparison checks the renderer budget and makes no state-parity claim.
+G and J used different planned resource assignments at p8008. This was initially attributed to J applying goal
+demand, but G's goal signals were rejected before the Market planner. This pair did not compare the historical G
+strategy against J and cannot establish either parity or a strategy improvement.
 
 ## Verification
 

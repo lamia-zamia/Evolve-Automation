@@ -31,6 +31,7 @@ import { isCapturedRouteMultiplierNeutral } from "./captured-route-multiplier.ts
 declare const __EA_TEST_SURFACE_ENABLED__: boolean;
 
 interface CapturedTradeRoutesTestSurface {
+  readonly allowHistoricalSignalForComparisonTest?: () => boolean;
   readonly demandForTest?: (
     input: Readonly<TradeRoutesInput>,
     context: Readonly<{
@@ -50,6 +51,7 @@ interface CapturedTradeRoutesTestSurface {
     }>,
   ) => unknown;
   readonly preserveMoneyFloorForDemandTest?: () => boolean;
+  readonly nowForTest?: () => number;
   readonly resolveOperations?: (
     input: Readonly<TradeRoutesInput>,
     planned: Readonly<TradeRoutesResult>,
@@ -201,6 +203,19 @@ interface CapturedGoalDemandSignalForTest {
   readonly shortfall: number;
 }
 
+interface CapturedHistoricalGoalDemandSignalForTest {
+  readonly status: "signal";
+  readonly rootGeneration: number;
+  readonly progressionEpoch: string;
+  readonly goalId: string;
+  readonly goalActionId: string;
+  readonly selectedActionId: string;
+  readonly selectedOfferGeneration: number;
+  readonly resourceId: string;
+  readonly targetQuantity: number;
+  readonly shortfall: number;
+}
+
 function isCapturedGoalDemandSignalForTest(
   value: unknown,
   rootGeneration: number,
@@ -238,6 +253,33 @@ function isCapturedGoalDemandSignalForTest(
     typeof value["shortfall"] === "number" &&
     Number.isFinite(value["shortfall"]) &&
     value["shortfall"] > 0
+  );
+}
+
+function isCapturedHistoricalGoalDemandSignalForComparisonTest(
+  value: unknown,
+  rootGeneration: number,
+  progressionEpoch: string,
+): value is CapturedHistoricalGoalDemandSignalForTest {
+  // Stage 4A/4B used this smaller test signal; retain it only for F/G controls.
+  return (
+    isRecord(value) &&
+    value["status"] === "signal" &&
+    value["rootGeneration"] === rootGeneration &&
+    value["progressionEpoch"] === progressionEpoch &&
+    typeof value["goalId"] === "string" &&
+    value["goalId"].length > 0 &&
+    typeof value["goalActionId"] === "string" &&
+    typeof value["selectedActionId"] === "string" &&
+    Number.isSafeInteger(value["selectedOfferGeneration"]) &&
+    typeof value["resourceId"] === "string" &&
+    typeof value["targetQuantity"] === "number" &&
+    Number.isFinite(value["targetQuantity"]) &&
+    value["targetQuantity"] > 0 &&
+    typeof value["shortfall"] === "number" &&
+    Number.isFinite(value["shortfall"]) &&
+    value["shortfall"] > 0 &&
+    value["shortfall"] <= value["targetQuantity"]
   );
 }
 
@@ -869,7 +911,11 @@ export function createCapturedTradeRoutes(
         ownerEnabled: captured.session.ownerEnabled,
         resources: captured.observations,
       });
-      let requestedTestDemand: CapturedGoalDemandSignalForTest | undefined;
+      let requestedTestDemand:
+        | CapturedGoalDemandSignalForTest
+        | CapturedHistoricalGoalDemandSignalForTest
+        | undefined;
+      let authoritativeTestDemand: CapturedGoalDemandSignalForTest | undefined;
       if (
         typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
         __EA_TEST_SURFACE_ENABLED__ === true &&
@@ -888,15 +934,24 @@ export function createCapturedTradeRoutes(
         )
           ? proposedTestDemand
           : undefined;
+        const historicalComparisonEnabled =
+          testSurface?.allowHistoricalSignalForComparisonTest?.() === true;
+        const validatedHistoricalDemand =
+          validatedTestDemand === undefined && historicalComparisonEnabled
+            ? isCapturedHistoricalGoalDemandSignalForComparisonTest(
+                proposedTestDemand,
+                testContext.rootGeneration,
+                testContext.progressionEpoch,
+              )
+              ? proposedTestDemand
+              : undefined
+            : undefined;
+        const acceptedDemand = validatedTestDemand ?? validatedHistoricalDemand;
+        authoritativeTestDemand = validatedTestDemand;
         requestedTestDemand =
-          validatedTestDemand === undefined
+          acceptedDemand === undefined
             ? undefined
-            : Object.freeze({
-                ...validatedTestDemand,
-                researchPrice: Object.freeze({
-                  ...validatedTestDemand.researchPrice,
-                }),
-              });
+            : Object.freeze({ ...acceptedDemand });
       }
       const testDemandResource =
         requestedTestDemand !== undefined
@@ -1096,9 +1151,10 @@ export function createCapturedTradeRoutes(
         typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
         __EA_TEST_SURFACE_ENABLED__ === true &&
         testDemandAccepted &&
-        requestedTestDemand !== undefined
+        authoritativeTestDemand !== undefined
       ) {
-        const evidence = requestedTestDemand;
+        const researchFenceStartedAt = testSurface?.nowForTest?.();
+        const evidence = authoritativeTestDemand;
         const currentSettings = settingsRecord(dependencies.readSettings());
         const currentBoard = dependencies.board.current();
         const currentResearch = dependencies.controls.resolve(
@@ -1180,8 +1236,26 @@ export function createCapturedTradeRoutes(
               resourceId: evidence.resourceId,
             }),
           });
+          const endedAt = testSurface?.nowForTest?.();
+          testSurface?.onTrace?.({
+            kind: "research-final-fence",
+            outcome: "rejected",
+            durationMs:
+              researchFenceStartedAt !== undefined && endedAt !== undefined
+                ? endedAt - researchFenceStartedAt
+                : undefined,
+          });
           return;
         }
+        const endedAt = testSurface?.nowForTest?.();
+        testSurface?.onTrace?.({
+          kind: "research-final-fence",
+          outcome: "accepted",
+          durationMs:
+            researchFenceStartedAt !== undefined && endedAt !== undefined
+              ? endedAt - researchFenceStartedAt
+              : undefined,
+        });
       }
 
       const expected = new Map(captured.session.routeCounts);
