@@ -37421,7 +37421,7 @@
   }
 
   // src/domain/economy/market/trade-routes.ts
-  function planTradeRoutes(input) {
+  function planTradeRoutes(input, policy) {
     let { settings } = input, money = input.money, operations = [], sellWeight = settings.tradeRouteSellExcess ? (resource) => resource.usefulRatio >= 1 ? resource.tradeSellPrice * 1e3 : resource.usefulRatio : (resource) => resource.storageRatio >= 0.99 ? resource.tradeSellPrice * 1e3 : resource.usefulRatio, tradableResources = input.priorityList.filter(
       (r) => r.isRoutesUnlocked && (r.autoTradeBuyEnabled || r.autoTradeSellEnabled)
     ).sort((a, b) => sellWeight(b) - sellWeight(a)), requiredTradeRoutes = /* @__PURE__ */ new Map(), viewsById = /* @__PURE__ */ new Map();
@@ -37462,7 +37462,7 @@
         continue;
       let priority = resource.autoTradePriority;
       if (resource.isDemanded)
-        priority = Math.max(priority, 100), money.isDemanded || (minimumAllowedMoneyPerSecond = 0);
+        priority = Math.max(priority, 100), !money.isDemanded && policy?.preserveMoneyFloorForDemandedResources !== !0 && (minimumAllowedMoneyPerSecond = 0);
       else if (priority < 100 && priority !== -1 && money.isDemanded)
         continue;
       if (priority !== 0) {
@@ -38059,7 +38059,10 @@
               (resource) => resource.id === requestedTestDemand?.resourceId ? Object.freeze({ ...resource, isDemanded: !0 }) : resource
             )
           )
-        }) : captured.input, baselineResult = testDemandAccepted ? planTradeRoutes(captured.input) : void 0, result = testDemandAccepted ? planTradeRoutes(plannerInput) : planTradeRoutes(captured.input), operations = result.operations;
+        }) : captured.input, baselineResult = testDemandAccepted ? planTradeRoutes(captured.input) : void 0, preserveMoneyFloorForDemand = testDemandAccepted === !0 && !0 && !1, result = testDemandAccepted ? planTradeRoutes(
+          plannerInput,
+          preserveMoneyFloorForDemand ? { preserveMoneyFloorForDemandedResources: !0 } : void 0
+        ) : planTradeRoutes(captured.input), operations = result.operations;
         if (testSurface?.onTrace?.({
           kind: "plan",
           rootCurrent: dependencies.rootState.readRoot() === captured.session.root,
@@ -38068,6 +38071,7 @@
           baselineOperations: baselineResult?.operations ?? result.operations,
           plannerOperations: result.operations,
           testDemandResourceId: testDemandAccepted ? requestedTestDemand?.resourceId : void 0,
+          testDemandMoneyFloorPolicy: testDemandAccepted ? preserveMoneyFloorForDemand ? "preserve-configured-floor" : "demand-can-relax-floor" : "ordinary-market",
           routeCount: captured.session.marketRouteCount,
           maximumRoutes: captured.input.maxTradeRoutes,
           moneyRate: captured.input.money.rateOfChange,

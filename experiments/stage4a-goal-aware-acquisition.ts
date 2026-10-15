@@ -47,6 +47,8 @@ interface Stage4aCatalog {
   readonly current: boolean;
   readonly source: string;
   readonly selectedPrestige: string;
+  readonly researchPermission: unknown;
+  readonly triggersEnabled: unknown;
   readonly rootGeneration: number;
   readonly progressionEpoch: string;
   readonly offers: readonly Readonly<{
@@ -242,6 +244,10 @@ export function evaluateGoalAwareAcquisition(
   )
     return unavailable(
       "native Research catalog is stale or has no selected goal",
+    );
+  if (catalog.researchPermission !== true || catalog.triggersEnabled === true)
+    return unavailable(
+      "Research owner permission is disabled or delegated to triggers",
     );
   const definitions = catalog.definitions.flatMap((definition) => {
     const normalized = normalizeStage4aResearchDefinition(definition);

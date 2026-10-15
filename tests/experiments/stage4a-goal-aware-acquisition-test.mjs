@@ -14,6 +14,8 @@ const catalog = (overrides = {}) => {
     current: true,
     source: "shared-current-cycle",
     selectedPrestige: "endgame",
+    researchPermission: true,
+    triggersEnabled: false,
     rootGeneration: 9,
     progressionEpoch: "save:4",
     offers: [offer],
@@ -301,16 +303,29 @@ const decide = (
   const repriced = catalog({
     offers: catalog().offers.map((offer) => ({
       ...offer,
-      generation: 33,
       cost: { Iron: 250, Knowledge: 9000 },
     })),
   });
   const changedPrice = decide(repriced);
-  assert.equal(changedPrice.selectedOfferGeneration, 33);
+  assert.equal(
+    changedPrice.selectedOfferGeneration,
+    catalog().offers[0]?.generation,
+    "an unchanged binding generation does not prove an unchanged native price",
+  );
   assert.equal(changedPrice.shortfall, 210);
 }
 
 {
+  assert.equal(
+    decide(catalog({ researchPermission: false })).status,
+    "unavailable",
+    "goal demand requires current Research owner permission",
+  );
+  assert.equal(
+    decide(catalog({ triggersEnabled: true })).status,
+    "unavailable",
+    "goal demand abstains while Research is delegated to triggers",
+  );
   assert.equal(
     decide(catalog({ current: false })).status,
     "unavailable",

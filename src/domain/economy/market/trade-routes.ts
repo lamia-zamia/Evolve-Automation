@@ -73,8 +73,14 @@ export interface TradeRoutesResult {
   readonly moneyRate: number;
 }
 
+export interface TradeRoutesPolicy {
+  /** Keep the configured Money floor when a demanded resource receives priority 100. */
+  readonly preserveMoneyFloorForDemandedResources?: boolean;
+}
+
 export function planTradeRoutes(
   input: Readonly<TradeRoutesInput>,
+  policy?: Readonly<TradeRoutesPolicy>,
 ): TradeRoutesResult {
   const { settings } = input;
   const money = input.money;
@@ -189,7 +195,10 @@ export function planTradeRoutes(
     let priority = resource.autoTradePriority;
     if (resource.isDemanded) {
       priority = Math.max(priority, 100);
-      if (!money.isDemanded) {
+      if (
+        !money.isDemanded &&
+        policy?.preserveMoneyFloorForDemandedResources !== true
+      ) {
         // Resource demanded, money not demanded - ignore min money, and spend as much as possible
         minimumAllowedMoneyPerSecond = 0;
       }

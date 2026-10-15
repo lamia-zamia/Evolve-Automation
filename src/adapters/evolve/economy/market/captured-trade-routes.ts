@@ -49,6 +49,7 @@ interface CapturedTradeRoutesTestSurface {
       readonly resources: readonly CapturedTradeRouteObservation[];
     }>,
   ) => unknown;
+  readonly preserveMoneyFloorForDemandTest?: () => boolean;
   readonly resolveOperations?: (
     input: Readonly<TradeRoutesInput>,
     planned: Readonly<TradeRoutesResult>,
@@ -915,8 +916,18 @@ export function createCapturedTradeRoutes(
       const baselineResult = testDemandAccepted
         ? planTradeRoutes(captured.input)
         : undefined;
+      const preserveMoneyFloorForDemand =
+        testDemandAccepted === true &&
+        typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
+        __EA_TEST_SURFACE_ENABLED__ === true &&
+        testSurface?.preserveMoneyFloorForDemandTest?.() === true;
       const result = testDemandAccepted
-        ? planTradeRoutes(plannerInput)
+        ? planTradeRoutes(
+            plannerInput,
+            preserveMoneyFloorForDemand
+              ? { preserveMoneyFloorForDemandedResources: true }
+              : undefined,
+          )
         : planTradeRoutes(captured.input);
       let operations = result.operations;
       if (
@@ -951,6 +962,11 @@ export function createCapturedTradeRoutes(
         testDemandResourceId: testDemandAccepted
           ? requestedTestDemand?.["resourceId"]
           : undefined,
+        testDemandMoneyFloorPolicy: testDemandAccepted
+          ? preserveMoneyFloorForDemand
+            ? "preserve-configured-floor"
+            : "demand-can-relax-floor"
+          : "ordinary-market",
         routeCount: captured.session.marketRouteCount,
         maximumRoutes: captured.input.maxTradeRoutes,
         moneyRate: captured.input.money.rateOfChange,

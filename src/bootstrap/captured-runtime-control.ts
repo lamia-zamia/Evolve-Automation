@@ -3989,6 +3989,16 @@ export function startCapturedRuntime({
                 ? Reflect.apply(select, hooks, [input, context])
                 : undefined;
             },
+            preserveMoneyFloorForDemandTest: () => {
+              const hooks = readProperty(
+                settingsHostWindow,
+                "__EA_TEST_HOOKS__",
+              );
+              return (
+                readProperty(hooks, "preserveGoalDemandMoneyFloorForTest") ===
+                true
+              );
+            },
             resolveOperations: (input, planned, context) => {
               const hooks = readProperty(
                 settingsHostWindow,

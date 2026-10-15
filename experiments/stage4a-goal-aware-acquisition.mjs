@@ -12,9 +12,13 @@ import {
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const gamePath = path.join(root, "test-artifacts/game/evolve-deadspace.js");
-const savePath = path.join(
+const saveArgument = process.argv.find((argument) =>
+  argument.startsWith("--save="),
+);
+const savePath = path.resolve(
   root,
-  "test-artifacts/benchmark/slice0/saves/stage2f-fixed-progression-export.json",
+  saveArgument?.slice("--save=".length) ??
+    "test-artifacts/benchmark/slice0/saves/stage2f-fixed-progression-export.json",
 );
 const settingsPath = path.join(
   root,
@@ -34,25 +38,36 @@ const outputPath = path.resolve(
 );
 const upstreamCommit = "db38e2af831907d49aeb5348d678d8d8745d6c3f";
 const startCommit = "978619241a35cf9854e1eb3ddd7f29c57911dd46";
-const checkpoints = [
-  8_000, 8_001, 8_008, 9_000, 10_000, 12_000, 16_000, 20_000,
-];
+const shortProbe = process.argv.includes("--short-probe");
+const activePeriod = shortProbe ? 1 : 8_000;
+const checkpoints = shortProbe
+  ? [1, 100]
+  : [8_000, 8_001, 8_008, 9_000, 10_000, 12_000, 16_000, 20_000];
 const scenariosArgument = process.argv.find((argument) =>
   argument.startsWith("--scenarios="),
 );
 const scenarioNames = (scenariosArgument?.slice("--scenarios=".length) ?? "B,F")
   .split(",")
   .filter(Boolean);
-if (scenarioNames.some((scenario) => !["B", "F"].includes(scenario)))
-  throw new Error("--scenarios accepts only B,F");
+if (scenarioNames.some((scenario) => !["B", "F", "G"].includes(scenario)))
+  throw new Error("--scenarios accepts only B,F,G");
 const debugMode = process.argv.includes("--debug");
-const activeCheckpoints = debugMode ? [8_000, 8_001, 8_008] : checkpoints;
+const disableAutoMad = process.argv.includes("--disable-auto-mad");
+const activeCheckpoints = shortProbe
+  ? checkpoints
+  : debugMode
+    ? [8_000, 8_001, 8_008]
+    : checkpoints;
 const snapshotPeriods = [
   ...new Set([
-    8_000,
-    8_001,
-    ...Array.from({ length: 121 }, (_, index) => 8_000 + index * 100),
-    20_000,
+    ...(shortProbe
+      ? [1, 100]
+      : [
+          8_000,
+          8_001,
+          ...Array.from({ length: 121 }, (_, index) => 8_000 + index * 100),
+          20_000,
+        ]),
   ]),
 ];
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
@@ -76,6 +91,7 @@ const [saveText, settingsText, metadata] = await Promise.all([
 ]);
 const settings = Object.freeze({
   ...JSON.parse(settingsText),
+  ...(disableAutoMad ? { autoPrestige: false } : {}),
   autoSmelter: true,
   autoMarket: true,
   buyTitanium: true,
@@ -118,12 +134,20 @@ function installObservers(scenario) {
   hooks.readPeriodForTest = () => window.__EA_RUNNER__.periods();
   hooks.researchOwnerSelectionEvents = [];
   hooks.stage4aScenario = scenario;
+  hooks.preserveGoalDemandMoneyFloorForTest = scenario === "G";
   hooks.stage4aActive = false;
   hooks.stage4aRecordFromNow = false;
   hooks.stage4aDecisions = [];
   hooks.stage4aTraceCounts = {};
   hooks.stage4aCaptureFailures = [];
   hooks.stage4aSelectionCalls = 0;
+  hooks.stage4aSelectorProfile = {
+    calls: 0,
+    catalogCaptureTotalMs: 0,
+    selectorTotalMs: 0,
+    catalogCaptureMaxMs: 0,
+    selectorMaxMs: 0,
+  };
   hooks.stage4aSelectorFailures = [];
   hooks.stage4aPlans = [];
   hooks.stage4aApplied = [];
@@ -133,8 +157,13 @@ function installObservers(scenario) {
   hooks.selectGoalAwareMarketDemandForTest = (input, context) => {
     const period = window.__EA_RUNNER__.periods();
     hooks.stage4aSelectionCalls += 1;
-    if (scenario !== "F" || !hooks.stage4aActive) return undefined;
+    if (!["F", "G"].includes(scenario) || !hooks.stage4aActive)
+      return undefined;
+    const now = () => window.eaDiagnosticsNow?.() ?? performance.now();
+    const catalogStarted = now();
     const catalog = hooks.readCurrentResearchCatalog?.();
+    const catalogCaptureMs = now() - catalogStarted;
+    const selectorStarted = now();
     let decision;
     try {
       decision = window.EAStage4a.evaluateGoalAwareAcquisition(
@@ -152,6 +181,16 @@ function installObservers(scenario) {
         candidates: [],
       };
     }
+    const selectorMs = now() - selectorStarted;
+    const profile = hooks.stage4aSelectorProfile;
+    profile.calls += 1;
+    profile.catalogCaptureTotalMs += catalogCaptureMs;
+    profile.selectorTotalMs += selectorMs;
+    profile.catalogCaptureMaxMs = Math.max(
+      profile.catalogCaptureMaxMs,
+      catalogCaptureMs,
+    );
+    profile.selectorMaxMs = Math.max(profile.selectorMaxMs, selectorMs);
     const key = JSON.stringify([
       decision.status,
       decision.selectedActionId,
@@ -297,6 +336,7 @@ const result = {
     settingsSha256: sha256(settingsText),
     effectiveSettingsSha256: sha256(JSON.stringify(settings)),
     effectiveOverrides: {
+      ...(disableAutoMad ? { autoPrestige: false } : {}),
       autoMarket: true,
       autoSmelter: true,
       buyTitanium: settings.res_trade_buy_Titanium,
@@ -304,7 +344,7 @@ const result = {
     seed: 42,
     epoch: "2026-09-21T00:00:00.000Z",
     gatherIntervention: "goal-derived-conjunctive",
-    activeAfterPeriod: 8_000,
+    activeAfterPeriod: activePeriod,
     checkpoints: activeCheckpoints,
     snapshotPeriods,
     extensionRule:
@@ -404,7 +444,7 @@ try {
         period = targetPeriod;
         outputCheckpoints.push(await sample(period));
         console.log(`${scenario}: captured p${period}`);
-        if (period === 8_000) {
+        if (period === activePeriod) {
           await session.evaluate(() => {
             window.__EA_TEST_HOOKS__.stage4aRecordFromNow = true;
             window.__EA_TEST_HOOKS__.stage4aActive = true;
@@ -515,6 +555,9 @@ try {
         ),
         selectionCalls: await session.evaluate(
           () => window.__EA_TEST_HOOKS__.stage4aSelectionCalls ?? 0,
+        ),
+        selectorProfile: await session.evaluate(
+          () => window.__EA_TEST_HOOKS__.stage4aSelectorProfile,
         ),
         selectorFailures: await session.evaluate(
           () => window.__EA_TEST_HOOKS__.stage4aSelectorFailures ?? [],

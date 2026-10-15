@@ -57,4 +57,28 @@ assert.deepEqual(positiveProjection.operations, [
 ]);
 assert.equal(positiveProjection.moneyRate, 10);
 
+const preservedFloor = planTradeRoutes(
+  {
+    ...base,
+    money: { ...base.money, rateOfChange: 20 },
+  },
+  { preserveMoneyFloorForDemandedResources: true },
+);
+assert.deepEqual(
+  preservedFloor.operations,
+  [],
+  "priority demand keeps its priority but cannot bypass the ordinary Money floor",
+);
+const abovePreservedFloor = planTradeRoutes(
+  {
+    ...base,
+    money: { ...base.money, rateOfChange: 520 },
+  },
+  { preserveMoneyFloorForDemandedResources: true },
+);
+assert.deepEqual(abovePreservedFloor.operations, [
+  { kind: "add", resourceId: "Titanium", count: 1 },
+]);
+assert.equal(abovePreservedFloor.moneyRate, 510);
+
 console.log("trade route Money-flow guard tests passed");
