@@ -53,6 +53,9 @@ if (scenarioNames.some((scenario) => !["B", "F", "G", "J"].includes(scenario)))
   throw new Error("--scenarios accepts only B,F,G,J");
 const debugMode = process.argv.includes("--debug");
 const disableAutoMad = process.argv.includes("--disable-auto-mad");
+const sampleMissedOpportunities = process.argv.includes(
+  "--sample-missed-opportunities",
+);
 const activeCheckpoints = shortProbe
   ? checkpoints
   : debugMode
@@ -128,7 +131,7 @@ const built = await esbuild.build({
 await mkdir(path.dirname(bundlePath), { recursive: true });
 await writeFile(bundlePath, built.outputFiles[0].contents);
 
-function installObservers(scenario) {
+function installObservers(scenario, diagnosticSamplingEnabled) {
   const hooks = window.__EA_TEST_HOOKS__;
   hooks.gatherIntervention = { resourceClaimMode: "goal-derived-conjunctive" };
   hooks.readPeriodForTest = () => window.__EA_RUNNER__.periods();
@@ -173,6 +176,7 @@ function installObservers(scenario) {
     diagnosticObservations: [],
     categories: [],
     diagnosticEveryNoHintCalls: 32,
+    diagnosticSamplingEnabled,
     noHintCalls: 0,
   };
   hooks.selectGoalAwareMarketDemandForTest = (input, context) => {
@@ -345,8 +349,8 @@ function installObservers(scenario) {
       if (!requestedConditionalFresh) {
         preflight.noHintCalls += 1;
         if (
-          preflight.noHintCalls % preflight.diagnosticEveryNoHintCalls ===
-          0
+          preflight.diagnosticSamplingEnabled &&
+          preflight.noHintCalls % preflight.diagnosticEveryNoHintCalls === 0
         ) {
           preflight.diagnosticFreshDraws += 1;
           const diagnosticCatalog = hooks.readCurrentResearchCatalog?.(
@@ -543,6 +547,9 @@ const result = {
     seed: 42,
     epoch: "2026-09-21T00:00:00.000Z",
     gatherIntervention: "goal-derived-conjunctive",
+    missedOpportunitySampling: sampleMissedOpportunities
+      ? "enabled every 32 no-hint calls"
+      : "disabled",
     activeAfterPeriod: activePeriod,
     checkpoints: activeCheckpoints,
     snapshotPeriods,
@@ -569,7 +576,11 @@ try {
     });
     try {
       const metricsBefore = await session.metrics();
-      await session.evaluate(installObservers, scenario);
+      await session.evaluate(
+        installObservers,
+        scenario,
+        sampleMissedOpportunities,
+      );
       console.log(`${scenario}: opened exact Chromium session`);
       let period = 0;
       const outputCheckpoints = [];
@@ -656,6 +667,7 @@ try {
         .map(([at, snapshot]) => ({
           period: Number(at),
           amount: parseSave(snapshot.exportSave).resource?.Money?.amount,
+          randomCalls: snapshot.randomCalls,
         }))
         .filter((entry) => Number.isFinite(entry.amount));
       const sampledMoneyMinimum = moneySamples.reduce(
