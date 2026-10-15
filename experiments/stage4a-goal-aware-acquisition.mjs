@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -172,6 +173,7 @@ function installObservers(scenario, diagnosticSamplingEnabled, stage4fProbe) {
   hooks.stage4aLastPlanKey = "";
   hooks.stage4fProbe = stage4fProbe;
   hooks.stage4fEvents = [];
+  hooks.stage4fFenceEvents = [];
   hooks.stage4fFreshSignal = undefined;
   hooks.stage4dPreflight = {
     noGoalCandidate: 0,
@@ -197,6 +199,7 @@ function installObservers(scenario, diagnosticSamplingEnabled, stage4fProbe) {
   };
   hooks.selectGoalAwareMarketDemandForTest = (input, context) => {
     const period = window.__EA_RUNNER__.periods();
+    let acceptedAuthoritySignal;
     hooks.stage4aSelectionCalls += 1;
     if (!["F", "G", "J"].includes(scenario) || !hooks.stage4aActive)
       return undefined;
@@ -374,32 +377,85 @@ function installObservers(scenario, diagnosticSamplingEnabled, stage4fProbe) {
               preflight.freshAccepted += 1;
               category = "fresh-candidate-accepted";
               decision = validation;
-              if (stage4fProbe === "research-before-fresh") {
-                hooks.stage4fEvents[0] = {
-                  ...hooks.stage4fEvents[0],
-                  queueEvidenceAfter: freshCatalog.queueEvidence,
-                  validation: {
-                    status: validation.status,
-                    selectedActionId: validation.selectedActionId,
-                    selectedOfferGeneration: validation.selectedOfferGeneration,
-                    resourceId: validation.resourceId,
-                    targetQuantity: validation.targetQuantity,
-                    shortfall: validation.shortfall,
-                  },
+              const selectedOffer = freshCatalog.offers.find(
+                (offer) => offer.elementId === validation.selectedActionId,
+              );
+              const selectedGrantLevel =
+                selectedOffer === undefined
+                  ? undefined
+                  : (freshCatalog.grantLevels.find(
+                      ([technology]) =>
+                        technology === selectedOffer.grantTechnology,
+                    )?.[1] ?? 0);
+              const selectedApplicability = freshCatalog.applicability.find(
+                ([actionId]) => actionId === validation.selectedActionId,
+              )?.[1];
+              const selectedGoalCandidate = validation.candidates.find(
+                (candidate) =>
+                  candidate.actionId === validation.selectedActionId,
+              );
+              if (
+                selectedOffer === undefined ||
+                typeof selectedOffer.offerObservationId !== "string" ||
+                typeof selectedOffer.offerSetIdentity !== "string" ||
+                selectedGrantLevel === undefined ||
+                selectedApplicability === undefined ||
+                selectedGoalCandidate === undefined
+              ) {
+                preflight.freshRejectedOrChanged += 1;
+                category = "fresh-authority-evidence-incomplete";
+                decision = {
+                  status: "unavailable",
+                  reason: category,
+                  candidates: validation.candidates,
                 };
+              } else {
+                if (stage4fProbe === "research-before-fresh") {
+                  hooks.stage4fEvents[0] = {
+                    ...hooks.stage4fEvents[0],
+                    queueEvidenceAfter: freshCatalog.queueEvidence,
+                    validation: {
+                      status: validation.status,
+                      selectedActionId: validation.selectedActionId,
+                      selectedOfferGeneration:
+                        validation.selectedOfferGeneration,
+                      resourceId: validation.resourceId,
+                      targetQuantity: validation.targetQuantity,
+                      shortfall: validation.shortfall,
+                    },
+                  };
+                }
+                acceptedAuthoritySignal = Object.freeze({
+                  ...validation,
+                  goalId: validation.goalId,
+                  goalActionId: validation.goalActionId,
+                  rootGeneration: validation.rootGeneration,
+                  progressionEpoch: validation.progressionEpoch,
+                  selectedActionId: validation.selectedActionId,
+                  selectedOfferGeneration: validation.selectedOfferGeneration,
+                  resourceId: validation.resourceId,
+                  targetQuantity: validation.targetQuantity,
+                  shortfall: validation.shortfall,
+                  researchPermission: freshCatalog.researchPermission,
+                  selectedPrestige: freshCatalog.selectedPrestige,
+                  triggersEnabled: freshCatalog.triggersEnabled,
+                  offerObservationId: selectedOffer.offerObservationId,
+                  offerSetIdentity: selectedOffer.offerSetIdentity,
+                  grantTechnology: selectedOffer.grantTechnology,
+                  grantLevel: selectedOffer.grantLevel,
+                  grantLevelBefore: selectedGrantLevel,
+                  researchPrice: selectedOffer.cost,
+                  nativeAffordable: selectedOffer.nativeAffordable,
+                  selectedApplicabilityStatus: selectedApplicability.status,
+                  goalRelationship: `${selectedGoalCandidate.relevance}:${selectedGoalCandidate.pathApplicability}`,
+                  goalChainIdentity:
+                    selectedGoalCandidate.chainActionIds.join(">"),
+                  grantLevels: freshCatalog.grantLevels,
+                  offers: freshCatalog.offers,
+                  queueEvidence: freshCatalog.queueEvidence,
+                });
+                hooks.stage4fFreshSignal = acceptedAuthoritySignal;
               }
-              hooks.stage4fFreshSignal = {
-                selectedActionId: validation.selectedActionId,
-                selectedOfferGeneration: validation.selectedOfferGeneration,
-                resourceId: validation.resourceId,
-                targetQuantity: validation.targetQuantity,
-                shortfall: validation.shortfall,
-                researchPermission: freshCatalog.researchPermission,
-                selectedPrestige: freshCatalog.selectedPrestige,
-                grantLevels: freshCatalog.grantLevels,
-                offers: freshCatalog.offers,
-                queueEvidence: freshCatalog.queueEvidence,
-              };
             } else {
               preflight.freshRejectedOrChanged += 1;
               category =
@@ -482,7 +538,7 @@ function installObservers(scenario, diagnosticSamplingEnabled, stage4fProbe) {
         status: decision.status,
       });
     }
-    return decision;
+    return acceptedAuthoritySignal ?? decision;
   };
   hooks.resolveTradeRouteOperationsForTest = (input, planned, context) => {
     const signal = hooks.stage4fFreshSignal;
@@ -531,7 +587,10 @@ function installObservers(scenario, diagnosticSamplingEnabled, stage4fProbe) {
         : undefined;
       hooks.stage4fEvents.push({
         probe,
+        period: window.__EA_RUNNER__.periods(),
         acceptedFreshSignal: signal,
+        acceptedGeneration: signal.selectedOfferGeneration,
+        appliedCountAtInjection: hooks.stage4aApplied.length,
         injectedActionId: offer?.elementId,
         injectedGrantTechnology: offer?.grantTechnology,
         injectionSurface: invoked?.ok
@@ -545,6 +604,9 @@ function installObservers(scenario, diagnosticSamplingEnabled, stage4fProbe) {
         currentSelectedOffer: changed?.offers?.find(
           (candidate) => candidate.elementId === signal.selectedActionId,
         ),
+        currentSelectedGeneration: changed?.offers?.find(
+          (candidate) => candidate.elementId === signal.selectedActionId,
+        )?.generation,
         permissionAfter: changed?.researchPermission,
         queueEvidenceAfter: changed?.queueEvidence,
         postMutationDecision,
@@ -562,6 +624,17 @@ function installObservers(scenario, diagnosticSamplingEnabled, stage4fProbe) {
       !hooks.stage4aCaptureFailures.includes(event.reason)
     )
       hooks.stage4aCaptureFailures.push(event.reason);
+    if (
+      hooks.stage4fProbe === "research-after-fresh" &&
+      event.kind === "skipped" &&
+      typeof event.reason === "string" &&
+      event.reason.startsWith("research-")
+    )
+      hooks.stage4fFenceEvents.push({
+        period,
+        appliedCount: hooks.stage4aApplied.length,
+        ...event,
+      });
     if (event.kind === "plan" && hooks.stage4aRecordFromNow) {
       const key = JSON.stringify([
         event.testDemandResourceId,
@@ -921,6 +994,9 @@ try {
         stage4fEvents: await session.evaluate(
           () => window.__EA_TEST_HOOKS__.stage4fEvents ?? [],
         ),
+        stage4fFenceEvents: await session.evaluate(
+          () => window.__EA_TEST_HOOKS__.stage4fFenceEvents ?? [],
+        ),
         researchSequence,
         diagnostics: {
           wallMs,
@@ -947,6 +1023,23 @@ try {
 }
 
 await writeFile(outputPath, `${JSON.stringify(result, null, 2)}\n`);
+if (stage4fProbe === "research-after-fresh") {
+  const scenario = result.scenarios.find((entry) => entry.scenario === "J");
+  const injection = scenario?.stage4fEvents.find(
+    (entry) => entry.probe === "research-after-fresh",
+  );
+  const fence = scenario?.stage4fFenceEvents.find(
+    (entry) => entry.reason === "research-binding-generation-stale",
+  );
+  assert.equal(injection?.acceptedGeneration, 351);
+  assert.equal(injection?.currentSelectedGeneration, 352);
+  assert.ok(fence, "final Research authority fence must reject generation 352");
+  assert.equal(
+    fence?.appliedCount,
+    injection?.appliedCountAtInjection,
+    "no Market route operation may run during the stale strategy batch",
+  );
+}
 console.log(
   JSON.stringify(
     {

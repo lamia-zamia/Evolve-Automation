@@ -766,9 +766,22 @@ const staleOfferRoutes = createCapturedTradeRoutes({
       status: "signal",
       rootGeneration: 4,
       progressionEpoch: "save:stale-offer-test",
+      goalId: "prestige:mad",
       goalActionId: "tech-endgame",
       selectedActionId: "tech-metalwork",
       selectedOfferGeneration: 6,
+      selectedPrestige: "mad",
+      researchPermission: true,
+      triggersEnabled: false,
+      offerObservationId: "offer-observation-stale-test",
+      offerSetIdentity: "offer-set-stale-test",
+      grantTechnology: "metalworking",
+      grantLevel: 1,
+      grantLevelBefore: 0,
+      researchPrice: Object.freeze({ Iron: 100 }),
+      selectedApplicabilityStatus: "eligible",
+      goalRelationship: "verified-prerequisite:eligible",
+      goalChainIdentity: "tech-metalwork>tech-endgame",
       resourceId: "Source",
       targetQuantity: 20,
       shortfall: 20,
@@ -788,6 +801,200 @@ assert.deepEqual(
   staleOfferPlan.plannerOperations,
   staleOfferPlan.baselineOperations,
   "a stale Research offer leaves the ordinary Market plan untouched",
+);
+
+swapSettings.autoMarket = true;
+swapSettings.prestigeType = "mad";
+swapSettings.autoResearch = true;
+swapSettings.autoTrigger = false;
+const finalFenceTrace = [];
+const finalFenceSettings = { ...swapSettings };
+let finalFenceRootGeneration = 4;
+let finalFenceEpoch = "save:final-fence-test";
+const finalFenceRoutes = createCapturedTradeRoutes({
+  rootState: { readRoot: () => swapRoot },
+  controls: swapRegistry,
+  board: boardSource(swapRoot, swapRegistry, "global"),
+  mechanics,
+  keyState: neutralKeyState,
+  readSettings: () => finalFenceSettings,
+  readRootGeneration: () => finalFenceRootGeneration,
+  readProgressionEpoch: () => finalFenceEpoch,
+  readDemand: () => ({ isDemanded: () => false, storageRequired: () => 10 }),
+  testSurface: {
+    demandForTest: () => ({
+      status: "signal",
+      rootGeneration: finalFenceRootGeneration,
+      progressionEpoch: finalFenceEpoch,
+      goalId: "prestige:mad",
+      goalActionId: "tech-endgame",
+      selectedActionId: "tech-metalwork",
+      selectedOfferGeneration: 7,
+      selectedPrestige: "mad",
+      researchPermission: true,
+      triggersEnabled: false,
+      offerObservationId: "offer-observation-final-fence",
+      offerSetIdentity: "offer-set-final-fence",
+      grantTechnology: "metalworking",
+      grantLevel: 1,
+      grantLevelBefore: 0,
+      researchPrice: Object.freeze({ Iron: 100 }),
+      selectedApplicabilityStatus: "eligible",
+      goalRelationship: "verified-prerequisite:eligible",
+      goalChainIdentity: "tech-metalwork>tech-endgame",
+      resourceId: "Source",
+      targetQuantity: 20,
+      shortfall: 20,
+    }),
+    resolveOperations: () => {
+      // Synthetic adapter test: model a permission change after planning.
+      finalFenceSettings.autoMarket = false;
+      return undefined;
+    },
+    onTrace: (event) => finalFenceTrace.push(event),
+  },
+});
+const routesBeforeFinalFence = Object.fromEntries(
+  Object.entries(swapRoot.resource).map(([id, resource]) => [
+    id,
+    resource.trade,
+  ]),
+);
+finalFenceRoutes.adjust();
+assert.ok(
+  finalFenceTrace.some(
+    (event) =>
+      event.kind === "skipped" && event.reason === "market-authority-stale",
+  ),
+  "a permission change after planning rejects the whole strategy batch",
+);
+assert.deepEqual(
+  Object.fromEntries(
+    Object.entries(swapRoot.resource).map(([id, resource]) => [
+      id,
+      resource.trade,
+    ]),
+  ),
+  routesBeforeFinalFence,
+  "a failed final fence does not execute a partial strategy batch",
+);
+
+function assertSyntheticResearchFenceCase(expectedReason, mutate) {
+  finalFenceSettings.autoMarket = true;
+  finalFenceSettings.autoResearch = true;
+  finalFenceSettings.autoTrigger = false;
+  finalFenceSettings.prestigeType = "mad";
+  finalFenceSettings.res_trade_buy_Source = true;
+  finalFenceRootGeneration = 4;
+  finalFenceEpoch = "save:final-fence-test";
+  const events = [];
+  const routeControl = createCapturedTradeRoutes({
+    rootState: { readRoot: () => swapRoot },
+    controls: swapRegistry,
+    board: boardSource(swapRoot, swapRegistry, "global"),
+    mechanics,
+    keyState: neutralKeyState,
+    readSettings: () => finalFenceSettings,
+    readRootGeneration: () => finalFenceRootGeneration,
+    readProgressionEpoch: () => finalFenceEpoch,
+    readDemand: () => ({ isDemanded: () => false, storageRequired: () => 10 }),
+    testSurface: {
+      demandForTest: () => ({
+        status: "signal",
+        rootGeneration: finalFenceRootGeneration,
+        progressionEpoch: finalFenceEpoch,
+        goalId: "prestige:mad",
+        goalActionId: "tech-endgame",
+        selectedActionId: "tech-metalwork",
+        selectedOfferGeneration: 7,
+        selectedPrestige: "mad",
+        researchPermission: true,
+        triggersEnabled: false,
+        offerObservationId: "offer-observation-synthetic-fence",
+        offerSetIdentity: "offer-set-synthetic-fence",
+        grantTechnology: "metalworking",
+        grantLevel: 1,
+        grantLevelBefore: 0,
+        researchPrice: Object.freeze({ Iron: 100 }),
+        selectedApplicabilityStatus: "eligible",
+        goalRelationship: "verified-prerequisite:eligible",
+        goalChainIdentity: "tech-metalwork>tech-endgame",
+        resourceId: "Source",
+        targetQuantity: 20,
+        shortfall: 20,
+      }),
+      resolveOperations: () => {
+        // Synthetic state injection exercises the final executor boundary.
+        mutate();
+        return undefined;
+      },
+      onTrace: (event) => events.push(event),
+    },
+  });
+  routeControl.adjust();
+  assert.ok(
+    events.some(
+      (event) => event.kind === "skipped" && event.reason === expectedReason,
+    ),
+    `synthetic fence mutation must fail closed: ${expectedReason}`,
+  );
+}
+
+assertSyntheticResearchFenceCase(
+  "research-permission-or-prestige-stale",
+  () => {
+    finalFenceSettings.autoResearch = false;
+  },
+);
+assertSyntheticResearchFenceCase(
+  "research-permission-or-prestige-stale",
+  () => {
+    finalFenceSettings.autoTrigger = true;
+  },
+);
+assertSyntheticResearchFenceCase(
+  "research-permission-or-prestige-stale",
+  () => {
+    finalFenceSettings.prestigeType = "bioseed";
+  },
+);
+assertSyntheticResearchFenceCase("research-root-or-progression-stale", () => {
+  finalFenceRootGeneration += 1;
+});
+assertSyntheticResearchFenceCase("research-root-or-progression-stale", () => {
+  finalFenceEpoch = "save:changed-progression-test";
+});
+assertSyntheticResearchFenceCase("market-authority-stale", () => {
+  finalFenceSettings.res_trade_buy_Source = false;
+});
+const originalSourceHolding = swapRoot.resource.Source.amount;
+assertSyntheticResearchFenceCase("market-resource-or-quote-stale", () => {
+  swapRoot.resource.Source.amount = originalSourceHolding + 1;
+});
+swapRoot.resource.Source.amount = originalSourceHolding;
+finalFenceSettings.autoMarket = true;
+finalFenceSettings.res_trade_buy_Source = true;
+const baseSwapInvoke = swapRegistry.invoke;
+let ordinaryMarketInvocations = 0;
+swapRegistry.invoke = (handle, method, args) => {
+  if (["autoBuy", "autoSell", "zero"].includes(method))
+    ordinaryMarketInvocations += 1;
+  return baseSwapInvoke(handle, method, args);
+};
+const ordinaryAfterFence = createCapturedTradeRoutes({
+  rootState: { readRoot: () => swapRoot },
+  controls: swapRegistry,
+  board: boardSource(swapRoot, swapRegistry, "global"),
+  mechanics,
+  keyState: neutralKeyState,
+  readSettings: () => finalFenceSettings,
+  readDemand: () => ({ isDemanded: () => false, storageRequired: () => 10 }),
+});
+const ordinaryInvocationsBefore = ordinaryMarketInvocations;
+ordinaryAfterFence.adjust();
+assert.ok(
+  ordinaryMarketInvocations > ordinaryInvocationsBefore,
+  "ordinary Market remains usable after the strategy batch is refused",
 );
 delete globalThis.__EA_TEST_SURFACE_ENABLED__;
 

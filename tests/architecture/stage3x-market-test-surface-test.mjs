@@ -27,6 +27,7 @@ const markers = [
   "selectGoalAwareMarketDemandForTest",
   "createCapturedTradeRoutesTestControl",
   "normalizeCapturedTradeRouteOverride",
+  "research-binding-generation-stale",
 ];
 const production = await bundle(false);
 for (const marker of markers)

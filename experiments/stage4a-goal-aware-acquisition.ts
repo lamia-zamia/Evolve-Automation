@@ -59,6 +59,8 @@ interface Stage4aCatalog {
     generation: number;
     cost: Readonly<Record<string, number>>;
     nativeAffordable: boolean;
+    offerSetIdentity?: string;
+    offerObservationId?: string;
   }>[];
   readonly definitions: readonly unknown[];
   readonly grantLevels: readonly (readonly [string, number])[];

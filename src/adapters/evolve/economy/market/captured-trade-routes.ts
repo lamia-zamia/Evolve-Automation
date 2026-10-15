@@ -180,9 +180,22 @@ interface CapturedGoalDemandSignalForTest {
   readonly status: "signal";
   readonly rootGeneration: number;
   readonly progressionEpoch: string;
+  readonly goalId: string;
   readonly goalActionId: string;
   readonly selectedActionId: string;
   readonly selectedOfferGeneration: number;
+  readonly selectedPrestige: string;
+  readonly researchPermission: true;
+  readonly triggersEnabled: false;
+  readonly offerObservationId: string;
+  readonly offerSetIdentity: string;
+  readonly grantTechnology: string;
+  readonly grantLevel: number;
+  readonly grantLevelBefore: number;
+  readonly researchPrice: Readonly<Record<string, number>>;
+  readonly selectedApplicabilityStatus: string;
+  readonly goalRelationship: string;
+  readonly goalChainIdentity: string;
   readonly resourceId: string;
   readonly targetQuantity: number;
   readonly shortfall: number;
@@ -198,9 +211,26 @@ function isCapturedGoalDemandSignalForTest(
     value["status"] === "signal" &&
     value["rootGeneration"] === rootGeneration &&
     value["progressionEpoch"] === progressionEpoch &&
+    typeof value["goalId"] === "string" &&
     typeof value["goalActionId"] === "string" &&
     typeof value["selectedActionId"] === "string" &&
     Number.isSafeInteger(value["selectedOfferGeneration"]) &&
+    typeof value["selectedPrestige"] === "string" &&
+    value["goalId"] === `prestige:${value["selectedPrestige"]}` &&
+    value["researchPermission"] === true &&
+    value["triggersEnabled"] === false &&
+    typeof value["offerObservationId"] === "string" &&
+    typeof value["offerSetIdentity"] === "string" &&
+    typeof value["grantTechnology"] === "string" &&
+    Number.isSafeInteger(value["grantLevel"]) &&
+    Number.isSafeInteger(value["grantLevelBefore"]) &&
+    isRecord(value["researchPrice"]) &&
+    Object.values(value["researchPrice"]).every(
+      (amount) => typeof amount === "number" && Number.isFinite(amount),
+    ) &&
+    typeof value["selectedApplicabilityStatus"] === "string" &&
+    typeof value["goalRelationship"] === "string" &&
+    typeof value["goalChainIdentity"] === "string" &&
     typeof value["resourceId"] === "string" &&
     typeof value["targetQuantity"] === "number" &&
     Number.isFinite(value["targetQuantity"]) &&
@@ -839,21 +869,35 @@ export function createCapturedTradeRoutes(
         ownerEnabled: captured.session.ownerEnabled,
         resources: captured.observations,
       });
-      const proposedTestDemand =
+      let requestedTestDemand: CapturedGoalDemandSignalForTest | undefined;
+      if (
         typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
         __EA_TEST_SURFACE_ENABLED__ === true &&
         testContext.ownerEnabled &&
         testContext.rootCurrent &&
         testContext.boardCurrent
-          ? testSurface?.demandForTest?.(captured.input, testContext)
+      ) {
+        const proposedTestDemand = testSurface?.demandForTest?.(
+          captured.input,
+          testContext,
+        );
+        const validatedTestDemand = isCapturedGoalDemandSignalForTest(
+          proposedTestDemand,
+          testContext.rootGeneration,
+          testContext.progressionEpoch,
+        )
+          ? proposedTestDemand
           : undefined;
-      const requestedTestDemand = isCapturedGoalDemandSignalForTest(
-        proposedTestDemand,
-        testContext.rootGeneration,
-        testContext.progressionEpoch,
-      )
-        ? proposedTestDemand
-        : undefined;
+        requestedTestDemand =
+          validatedTestDemand === undefined
+            ? undefined
+            : Object.freeze({
+                ...validatedTestDemand,
+                researchPrice: Object.freeze({
+                  ...validatedTestDemand.researchPrice,
+                }),
+              });
+      }
       const testDemandResource =
         requestedTestDemand !== undefined
           ? captured.input.priorityList.find(
@@ -1043,6 +1087,98 @@ export function createCapturedTradeRoutes(
           testSurface?.onTrace?.({
             kind: "skipped",
             reason: "route-control-stale",
+          });
+          return;
+        }
+      }
+
+      if (
+        typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
+        __EA_TEST_SURFACE_ENABLED__ === true &&
+        testDemandAccepted &&
+        requestedTestDemand !== undefined
+      ) {
+        const evidence = requestedTestDemand;
+        const currentSettings = settingsRecord(dependencies.readSettings());
+        const currentBoard = dependencies.board.current();
+        const currentResearch = dependencies.controls.resolve(
+          evidence.selectedActionId,
+        );
+        const currentCapture =
+          currentBoard === undefined
+            ? undefined
+            : readRouteInput(dependencies, currentBoard);
+        const currentObservation = currentCapture?.observations.find(
+          (entry) => entry.resourceId === evidence.resourceId,
+        );
+        const priorObservation = captured.observations.find(
+          (entry) => entry.resourceId === evidence.resourceId,
+        );
+        let staleReason: string | undefined;
+        if (
+          dependencies.rootState.readRoot() !== captured.session.root ||
+          (dependencies.readRootGeneration?.() ?? -1) !==
+            evidence.rootGeneration ||
+          (dependencies.readProgressionEpoch?.() ?? "") !==
+            evidence.progressionEpoch
+        ) {
+          staleReason = "research-root-or-progression-stale";
+        } else if (
+          currentResearch?.generation !== evidence.selectedOfferGeneration
+        ) {
+          staleReason = "research-binding-generation-stale";
+        } else if (
+          currentSettings["prestigeType"] !== evidence.selectedPrestige ||
+          currentSettings["autoResearch"] !== evidence.researchPermission ||
+          currentSettings["autoTrigger"] !== evidence.triggersEnabled
+        ) {
+          staleReason = "research-permission-or-prestige-stale";
+        } else if (
+          currentBoard !== board ||
+          currentCapture === undefined ||
+          currentCapture.session.root !== captured.session.root ||
+          currentCapture.session.market !== captured.session.market ||
+          !currentCapture.session.ownerEnabled ||
+          currentCapture.session.marketRouteCount !==
+            captured.session.marketRouteCount ||
+          currentCapture.input.maxTradeRoutes !==
+            captured.input.maxTradeRoutes ||
+          currentObservation === undefined ||
+          priorObservation === undefined ||
+          !currentObservation.importsEnabled ||
+          currentCapture.input.priorityList.find(
+            (resource) => resource.id === evidence.resourceId,
+          )?.autoTradeBuyEnabled !== true
+        ) {
+          staleReason = "market-authority-stale";
+        } else if (
+          currentObservation.holding !== priorObservation.holding ||
+          currentObservation.capacity !== priorObservation.capacity ||
+          currentObservation.currentRoutes !== priorObservation.currentRoutes ||
+          currentObservation.importPricePerPeriod !==
+            priorObservation.importPricePerPeriod ||
+          currentObservation.importQuantityPerPeriod !==
+            priorObservation.importQuantityPerPeriod ||
+          currentObservation.controlGeneration !==
+            priorObservation.controlGeneration ||
+          [...captured.session.routeCounts].some(
+            ([resourceId, routes]) =>
+              currentCapture.session.routeCounts.get(resourceId) !== routes,
+          )
+        ) {
+          staleReason = "market-resource-or-quote-stale";
+        }
+        if (staleReason !== undefined) {
+          testSurface?.onTrace?.({
+            kind: "skipped",
+            reason: staleReason,
+            evidence: Object.freeze({
+              goalId: evidence.goalId,
+              goalActionId: evidence.goalActionId,
+              selectedActionId: evidence.selectedActionId,
+              selectedOfferGeneration: evidence.selectedOfferGeneration,
+              resourceId: evidence.resourceId,
+            }),
           });
           return;
         }

@@ -37702,9 +37702,6 @@
   }
 
   // src/adapters/evolve/economy/market/captured-trade-routes.ts
-  function isCapturedGoalDemandSignalForTest(value, rootGeneration, progressionEpoch) {
-    return isRecord(value) && value.status === "signal" && value.rootGeneration === rootGeneration && value.progressionEpoch === progressionEpoch && typeof value.goalActionId == "string" && typeof value.selectedActionId == "string" && Number.isSafeInteger(value.selectedOfferGeneration) && typeof value.resourceId == "string" && typeof value.targetQuantity == "number" && Number.isFinite(value.targetQuantity) && value.targetQuantity >= 0 && typeof value.shortfall == "number" && Number.isFinite(value.shortfall) && value.shortfall > 0;
-  }
   var REGIONAL_PRIORITY = Object.freeze([
     "Food",
     "Oil",
@@ -38042,11 +38039,7 @@
           maximumRoutes: captured.input.maxTradeRoutes,
           ownerEnabled: captured.session.ownerEnabled,
           resources: captured.observations
-        }), proposedTestDemand = void 0, requestedTestDemand = isCapturedGoalDemandSignalForTest(
-          proposedTestDemand,
-          testContext.rootGeneration,
-          testContext.progressionEpoch
-        ) ? proposedTestDemand : void 0, testDemandResource = requestedTestDemand !== void 0 ? captured.input.priorityList.find(
+        }), requestedTestDemand, testDemandResource = requestedTestDemand !== void 0 ? captured.input.priorityList.find(
           (resource) => resource.id === requestedTestDemand.resourceId
         ) : void 0, testDemandObservation = requestedTestDemand !== void 0 ? captured.observations.find(
           (resource) => resource.resourceId === requestedTestDemand.resourceId
