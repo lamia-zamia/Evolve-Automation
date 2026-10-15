@@ -744,6 +744,51 @@ assert.equal(swapRoot.city.market.trade, 3);
 assert.equal(swapControl.removeOne("Surplus").status, "applied");
 assert.equal(swapRoot.resource.Surplus.trade, 0);
 assert.equal(swapRoot.city.market.trade, 2);
+
+swapControls.set("tech-metalwork", {
+  elementId: "tech-metalwork",
+  generation: 7,
+  methods: ["research"],
+});
+const staleOfferTrace = [];
+const staleOfferRoutes = createCapturedTradeRoutes({
+  rootState: { readRoot: () => swapRoot },
+  controls: swapRegistry,
+  board: boardSource(swapRoot, swapRegistry, "global"),
+  mechanics,
+  keyState: neutralKeyState,
+  readSettings: () => swapSettings,
+  readRootGeneration: () => 4,
+  readProgressionEpoch: () => "save:stale-offer-test",
+  readDemand: () => ({ isDemanded: () => false, storageRequired: () => 10 }),
+  testSurface: {
+    demandForTest: () => ({
+      status: "signal",
+      rootGeneration: 4,
+      progressionEpoch: "save:stale-offer-test",
+      goalActionId: "tech-endgame",
+      selectedActionId: "tech-metalwork",
+      selectedOfferGeneration: 6,
+      resourceId: "Source",
+      targetQuantity: 20,
+      shortfall: 20,
+    }),
+    onTrace: (event) => staleOfferTrace.push(event),
+  },
+});
+staleOfferRoutes.adjust();
+const staleOfferPlan = staleOfferTrace.find((event) => event.kind === "plan");
+assert.ok(staleOfferPlan);
+assert.equal(
+  staleOfferPlan.testDemandResourceId,
+  undefined,
+  "a signal from an older native Research offer generation is rejected",
+);
+assert.deepEqual(
+  staleOfferPlan.plannerOperations,
+  staleOfferPlan.baselineOperations,
+  "a stale Research offer leaves the ordinary Market plan untouched",
+);
 delete globalThis.__EA_TEST_SURFACE_ENABLED__;
 
 console.log("captured trade routes tests passed");

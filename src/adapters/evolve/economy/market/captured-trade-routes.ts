@@ -31,11 +31,31 @@ import { isCapturedRouteMultiplierNeutral } from "./captured-route-multiplier.ts
 declare const __EA_TEST_SURFACE_ENABLED__: boolean;
 
 interface CapturedTradeRoutesTestSurface {
+  readonly demandForTest?: (
+    input: Readonly<TradeRoutesInput>,
+    context: Readonly<{
+      readonly rootCurrent: boolean;
+      readonly rootGeneration: number;
+      readonly progressionEpoch: string;
+      readonly boardCurrent: boolean;
+      readonly controls: readonly Readonly<{
+        readonly elementId: string;
+        readonly generation: number;
+        readonly methods: readonly string[];
+      }>[];
+      readonly routeCount: number;
+      readonly maximumRoutes: number;
+      readonly ownerEnabled: boolean;
+      readonly resources: readonly CapturedTradeRouteObservation[];
+    }>,
+  ) => unknown;
   readonly resolveOperations?: (
     input: Readonly<TradeRoutesInput>,
     planned: Readonly<TradeRoutesResult>,
     context: Readonly<{
       readonly rootCurrent: boolean;
+      readonly rootGeneration: number;
+      readonly progressionEpoch: string;
       readonly boardCurrent: boolean;
       readonly controls: readonly Readonly<{
         readonly elementId: string;
@@ -57,9 +77,12 @@ interface CapturedTradeRoutesDependencies {
   readonly mechanics: CapturedGameMechanics;
   readonly keyState: GameKeyboardState;
   readonly readSettings: () => unknown;
+  readonly readRootGeneration?: () => number;
+  readonly readProgressionEpoch?: () => string;
   readonly readDemand?: () => {
     readonly isDemanded: (resourceId: string) => boolean;
     readonly storageRequired: (resourceId: string) => number;
+    readonly requestedQuantity?: (resourceId: string) => number;
   };
   readonly onUnavailable?: (reason: string) => void;
   readonly testSurface?: CapturedTradeRoutesTestSurface;
@@ -128,6 +151,7 @@ interface RouteSession {
   readonly root: unknown;
   readonly board: MarketBoard;
   readonly market: Record<PropertyKey, unknown>;
+  readonly ownerEnabled: boolean;
   readonly routeCounts: ReadonlyMap<string, number>;
   readonly controls: ReadonlyMap<string, GameControlHandle>;
   readonly marketRouteCount: number;
@@ -146,8 +170,44 @@ interface CapturedTradeRouteObservation {
   readonly importsEnabled: boolean;
   readonly exportsEnabled: boolean;
   readonly demanded: boolean;
+  readonly requestedQuantity: number | undefined;
   readonly controlElementId: string;
   readonly controlGeneration: number;
+}
+
+interface CapturedGoalDemandSignalForTest {
+  readonly status: "signal";
+  readonly rootGeneration: number;
+  readonly progressionEpoch: string;
+  readonly goalActionId: string;
+  readonly selectedActionId: string;
+  readonly selectedOfferGeneration: number;
+  readonly resourceId: string;
+  readonly targetQuantity: number;
+  readonly shortfall: number;
+}
+
+function isCapturedGoalDemandSignalForTest(
+  value: unknown,
+  rootGeneration: number,
+  progressionEpoch: string,
+): value is CapturedGoalDemandSignalForTest {
+  return (
+    isRecord(value) &&
+    value["status"] === "signal" &&
+    value["rootGeneration"] === rootGeneration &&
+    value["progressionEpoch"] === progressionEpoch &&
+    typeof value["goalActionId"] === "string" &&
+    typeof value["selectedActionId"] === "string" &&
+    Number.isSafeInteger(value["selectedOfferGeneration"]) &&
+    typeof value["resourceId"] === "string" &&
+    typeof value["targetQuantity"] === "number" &&
+    Number.isFinite(value["targetQuantity"]) &&
+    value["targetQuantity"] >= 0 &&
+    typeof value["shortfall"] === "number" &&
+    Number.isFinite(value["shortfall"]) &&
+    value["shortfall"] > 0
+  );
 }
 
 interface RegionalRouteSession {
@@ -275,7 +335,8 @@ function readRouteInput(
     return unavailable("invalid-market-route-or-money-sample");
   }
 
-  const settings = routeSettingsSnapshot(dependencies.readSettings(), board);
+  const currentSettings = settingsRecord(dependencies.readSettings());
+  const settings = routeSettingsSnapshot(currentSettings, board);
   const demand = dependencies.readDemand?.() ?? {
     isDemanded: () => false,
     storageRequired: () => 1,
@@ -389,6 +450,7 @@ function readRouteInput(
           importsEnabled: buyEnabled,
           exportsEnabled: sellEnabled,
           demanded: demand.isDemanded(entry.id),
+          requestedQuantity: demand.requestedQuantity?.(entry.id),
           controlElementId: control.elementId,
           controlGeneration: control.generation,
         }),
@@ -457,6 +519,7 @@ function readRouteInput(
       root,
       board,
       market: cityMarket,
+      ownerEnabled: currentSettings["autoMarket"] === true,
       routeCounts,
       controls: routeControls,
       marketRouteCount: used,
@@ -759,32 +822,113 @@ export function createCapturedTradeRoutes(
         });
         return;
       }
-      const result = planTradeRoutes(captured.input);
       const controls = [...captured.session.controls.values()].map(
-        ({ elementId, generation }) => Object.freeze({ elementId, generation }),
+        ({ elementId, generation, methods }) =>
+          Object.freeze({ elementId, generation, methods }),
       );
+      const testContext = Object.freeze({
+        rootCurrent:
+          dependencies.rootState.readRoot() === captured.session.root,
+        rootGeneration: dependencies.readRootGeneration?.() ?? -1,
+        progressionEpoch: dependencies.readProgressionEpoch?.() ?? "",
+        boardCurrent: dependencies.board.isCurrent(board),
+        controls: Object.freeze(controls),
+        routeCount: captured.session.marketRouteCount,
+        maximumRoutes: captured.input.maxTradeRoutes,
+        ownerEnabled: captured.session.ownerEnabled,
+        resources: captured.observations,
+      });
+      const proposedTestDemand =
+        typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
+        __EA_TEST_SURFACE_ENABLED__ === true &&
+        testContext.ownerEnabled &&
+        testContext.rootCurrent &&
+        testContext.boardCurrent
+          ? testSurface?.demandForTest?.(captured.input, testContext)
+          : undefined;
+      const requestedTestDemand = isCapturedGoalDemandSignalForTest(
+        proposedTestDemand,
+        testContext.rootGeneration,
+        testContext.progressionEpoch,
+      )
+        ? proposedTestDemand
+        : undefined;
+      const testDemandResource =
+        requestedTestDemand !== undefined
+          ? captured.input.priorityList.find(
+              (resource) => resource.id === requestedTestDemand["resourceId"],
+            )
+          : undefined;
+      const testDemandObservation =
+        requestedTestDemand !== undefined
+          ? captured.observations.find(
+              (resource) =>
+                resource.resourceId === requestedTestDemand["resourceId"],
+            )
+          : undefined;
+      const testDemandControl =
+        requestedTestDemand !== undefined &&
+        typeof requestedTestDemand["resourceId"] === "string"
+          ? captured.session.controls.get(requestedTestDemand["resourceId"])
+          : undefined;
+      const researchControl =
+        requestedTestDemand === undefined
+          ? undefined
+          : dependencies.controls.resolve(
+              requestedTestDemand["selectedActionId"],
+            );
+      const testDemandAccepted =
+        requestedTestDemand !== undefined &&
+        testDemandResource !== undefined &&
+        testDemandObservation !== undefined &&
+        testDemandControl !== undefined &&
+        researchControl?.generation ===
+          requestedTestDemand["selectedOfferGeneration"] &&
+        testDemandObservation.holding < requestedTestDemand["targetQuantity"] &&
+        testDemandObservation.capacity >=
+          requestedTestDemand["targetQuantity"] &&
+        requestedTestDemand["shortfall"] ===
+          requestedTestDemand["targetQuantity"] -
+            testDemandObservation.holding &&
+        (testDemandObservation.requestedQuantity === undefined ||
+          testDemandObservation.requestedQuantity <
+            requestedTestDemand["targetQuantity"]) &&
+        testDemandObservation.importPricePerPeriod > 0 &&
+        testDemandObservation.importQuantityPerPeriod > 0 &&
+        testDemandResource.autoTradeBuyEnabled &&
+        !testDemandResource.isDemanded &&
+        testDemandControl.generation ===
+          testDemandObservation.controlGeneration &&
+        testDemandControl.methods.includes("autoBuy");
+      const plannerInput = testDemandAccepted
+        ? Object.freeze({
+            ...captured.input,
+            priorityList: Object.freeze(
+              captured.input.priorityList.map((resource) =>
+                resource.id === requestedTestDemand?.["resourceId"]
+                  ? Object.freeze({ ...resource, isDemanded: true })
+                  : resource,
+              ),
+            ),
+          })
+        : captured.input;
+      const baselineResult = testDemandAccepted
+        ? planTradeRoutes(captured.input)
+        : undefined;
+      const result = testDemandAccepted
+        ? planTradeRoutes(plannerInput)
+        : planTradeRoutes(captured.input);
       let operations = result.operations;
       if (
         typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
         __EA_TEST_SURFACE_ENABLED__ === true
       ) {
-        const testContext = Object.freeze({
-          rootCurrent:
-            dependencies.rootState.readRoot() === captured.session.root,
-          boardCurrent: dependencies.board.isCurrent(board),
-          controls: Object.freeze(controls),
-          routeCount: captured.session.marketRouteCount,
-          maximumRoutes: captured.input.maxTradeRoutes,
-          ownerEnabled:
-            settingsRecord(dependencies.readSettings())["autoMarket"] === true,
-          resources: captured.observations,
-        });
         const testOperations =
           testContext.ownerEnabled &&
           testContext.rootCurrent &&
           testContext.boardCurrent
             ? testSurface?.resolveOperations?.(
-                captured.input,
+                plannerInput,
                 result,
                 testContext,
               )
@@ -792,7 +936,7 @@ export function createCapturedTradeRoutes(
         operations =
           normalizeCapturedTradeRouteOverride(
             testOperations,
-            captured.input,
+            plannerInput,
             testContext,
           ) ?? result.operations;
       }
@@ -802,11 +946,30 @@ export function createCapturedTradeRoutes(
           dependencies.rootState.readRoot() === captured.session.root,
         boardCurrent: dependencies.board.isCurrent(board),
         desiredOperations: operations,
-        baselineOperations: result.operations,
+        baselineOperations: baselineResult?.operations ?? result.operations,
+        plannerOperations: result.operations,
+        testDemandResourceId: testDemandAccepted
+          ? requestedTestDemand?.["resourceId"]
+          : undefined,
         routeCount: captured.session.marketRouteCount,
         maximumRoutes: captured.input.maxTradeRoutes,
         moneyRate: captured.input.money.rateOfChange,
         moneyHolding: captured.input.money.currentQuantity,
+        moneyFloor: plannerInput.settings,
+        pricesAndPriorities: plannerInput.priorityList.map((resource) => ({
+          resourceId: resource.id,
+          routes: resource.tradeRoutes,
+          importEnabled: resource.autoTradeBuyEnabled,
+          exportEnabled: resource.autoTradeSellEnabled,
+          demanded: resource.isDemanded,
+          storageRatio: resource.storageRatio,
+          usefulRatio: resource.usefulRatio,
+          importPrice: resource.tradeBuyPrice,
+          importQuantity: resource.tradeRouteQuantity,
+          exportPrice: resource.tradeSellPrice,
+          priority: resource.autoTradePriority,
+          weighting: resource.autoTradeWeighting,
+        })),
         resources: captured.observations,
         resourceRoutes: controls.map(({ elementId, generation }) => ({
           elementId,

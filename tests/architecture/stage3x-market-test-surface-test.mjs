@@ -23,6 +23,8 @@ const markers = [
   "capturedTradeRouteControlForTest",
   "resolveTradeRouteOperationsForTest",
   "recordTradeRouteTraceForTest",
+  "demandForTest",
+  "selectGoalAwareMarketDemandForTest",
   "createCapturedTradeRoutesTestControl",
   "normalizeCapturedTradeRouteOverride",
 ];

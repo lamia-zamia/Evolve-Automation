@@ -37702,6 +37702,9 @@
   }
 
   // src/adapters/evolve/economy/market/captured-trade-routes.ts
+  function isCapturedGoalDemandSignalForTest(value, rootGeneration, progressionEpoch) {
+    return isRecord(value) && value.status === "signal" && value.rootGeneration === rootGeneration && value.progressionEpoch === progressionEpoch && typeof value.goalActionId == "string" && typeof value.selectedActionId == "string" && Number.isSafeInteger(value.selectedOfferGeneration) && typeof value.resourceId == "string" && typeof value.targetQuantity == "number" && Number.isFinite(value.targetQuantity) && value.targetQuantity >= 0 && typeof value.shortfall == "number" && Number.isFinite(value.shortfall) && value.shortfall > 0;
+  }
   var REGIONAL_PRIORITY = Object.freeze([
     "Food",
     "Oil",
@@ -37753,7 +37756,7 @@
     let maximum = finite(cityMarket.mtrade), used = finite(cityMarket.trade), moneyRate = finite(money.diff), moneyMaximum = finite(money.max), moneyCurrent = finite(money.amount);
     if (maximum === void 0 || used === void 0 || moneyRate === void 0 || moneyMaximum === void 0 || moneyCurrent === void 0 || !Number.isSafeInteger(maximum) || !Number.isSafeInteger(used) || maximum < 0 || used < 0)
       return unavailable2("invalid-market-route-or-money-sample");
-    let settings = routeSettingsSnapshot(dependencies.readSettings(), board), demand = dependencies.readDemand?.() ?? {
+    let currentSettings = settingsRecord3(dependencies.readSettings()), settings = routeSettingsSnapshot(currentSettings, board), demand = dependencies.readDemand?.() ?? {
       isDemanded: () => !1,
       storageRequired: () => 1
     }, routeCounts = /* @__PURE__ */ new Map(), routeControls = /* @__PURE__ */ new Map(), priority = [];
@@ -37846,6 +37849,7 @@
         root,
         board,
         market: cityMarket,
+        ownerEnabled: currentSettings.autoMarket === !0,
         routeCounts,
         controls: routeControls,
         marketRouteCount: used
@@ -38026,19 +38030,63 @@
           });
           return;
         }
-        let result = planTradeRoutes(captured.input), controls2 = [...captured.session.controls.values()].map(
-          ({ elementId, generation }) => Object.freeze({ elementId, generation })
-        ), operations = result.operations;
+        let controls2 = [...captured.session.controls.values()].map(
+          ({ elementId, generation, methods }) => Object.freeze({ elementId, generation, methods })
+        ), testContext = Object.freeze({
+          rootCurrent: dependencies.rootState.readRoot() === captured.session.root,
+          rootGeneration: dependencies.readRootGeneration?.() ?? -1,
+          progressionEpoch: dependencies.readProgressionEpoch?.() ?? "",
+          boardCurrent: dependencies.board.isCurrent(board),
+          controls: Object.freeze(controls2),
+          routeCount: captured.session.marketRouteCount,
+          maximumRoutes: captured.input.maxTradeRoutes,
+          ownerEnabled: captured.session.ownerEnabled,
+          resources: captured.observations
+        }), proposedTestDemand = void 0, requestedTestDemand = isCapturedGoalDemandSignalForTest(
+          proposedTestDemand,
+          testContext.rootGeneration,
+          testContext.progressionEpoch
+        ) ? proposedTestDemand : void 0, testDemandResource = requestedTestDemand !== void 0 ? captured.input.priorityList.find(
+          (resource) => resource.id === requestedTestDemand.resourceId
+        ) : void 0, testDemandObservation = requestedTestDemand !== void 0 ? captured.observations.find(
+          (resource) => resource.resourceId === requestedTestDemand.resourceId
+        ) : void 0, testDemandControl = requestedTestDemand !== void 0 && typeof requestedTestDemand.resourceId == "string" ? captured.session.controls.get(requestedTestDemand.resourceId) : void 0, researchControl = requestedTestDemand === void 0 ? void 0 : dependencies.controls.resolve(
+          requestedTestDemand.selectedActionId
+        ), testDemandAccepted = requestedTestDemand !== void 0 && testDemandResource !== void 0 && testDemandObservation !== void 0 && testDemandControl !== void 0 && researchControl?.generation === requestedTestDemand.selectedOfferGeneration && testDemandObservation.holding < requestedTestDemand.targetQuantity && testDemandObservation.capacity >= requestedTestDemand.targetQuantity && requestedTestDemand.shortfall === requestedTestDemand.targetQuantity - testDemandObservation.holding && (testDemandObservation.requestedQuantity === void 0 || testDemandObservation.requestedQuantity < requestedTestDemand.targetQuantity) && testDemandObservation.importPricePerPeriod > 0 && testDemandObservation.importQuantityPerPeriod > 0 && testDemandResource.autoTradeBuyEnabled && !testDemandResource.isDemanded && testDemandControl.generation === testDemandObservation.controlGeneration && testDemandControl.methods.includes("autoBuy"), plannerInput = testDemandAccepted ? Object.freeze({
+          ...captured.input,
+          priorityList: Object.freeze(
+            captured.input.priorityList.map(
+              (resource) => resource.id === requestedTestDemand?.resourceId ? Object.freeze({ ...resource, isDemanded: !0 }) : resource
+            )
+          )
+        }) : captured.input, baselineResult = testDemandAccepted ? planTradeRoutes(captured.input) : void 0, result = testDemandAccepted ? planTradeRoutes(plannerInput) : planTradeRoutes(captured.input), operations = result.operations;
         if (testSurface?.onTrace?.({
           kind: "plan",
           rootCurrent: dependencies.rootState.readRoot() === captured.session.root,
           boardCurrent: dependencies.board.isCurrent(board),
           desiredOperations: operations,
-          baselineOperations: result.operations,
+          baselineOperations: baselineResult?.operations ?? result.operations,
+          plannerOperations: result.operations,
+          testDemandResourceId: testDemandAccepted ? requestedTestDemand?.resourceId : void 0,
           routeCount: captured.session.marketRouteCount,
           maximumRoutes: captured.input.maxTradeRoutes,
           moneyRate: captured.input.money.rateOfChange,
           moneyHolding: captured.input.money.currentQuantity,
+          moneyFloor: plannerInput.settings,
+          pricesAndPriorities: plannerInput.priorityList.map((resource) => ({
+            resourceId: resource.id,
+            routes: resource.tradeRoutes,
+            importEnabled: resource.autoTradeBuyEnabled,
+            exportEnabled: resource.autoTradeSellEnabled,
+            demanded: resource.isDemanded,
+            storageRatio: resource.storageRatio,
+            usefulRatio: resource.usefulRatio,
+            importPrice: resource.tradeBuyPrice,
+            importQuantity: resource.tradeRouteQuantity,
+            exportPrice: resource.tradeSellPrice,
+            priority: resource.autoTradePriority,
+            weighting: resource.autoTradeWeighting
+          })),
           resources: captured.observations,
           resourceRoutes: controls2.map(({ elementId, generation }) => ({
             elementId,
@@ -60094,6 +60142,8 @@ Only continue if you trust the source. Injected code:
       mechanics: pageCapture2.mechanics,
       keyState: pageCapture2.keyState,
       readSettings: () => settingsStore.readRaw(),
+      readRootGeneration: progression.readRootGeneration,
+      readProgressionEpoch: progression.readProgressionEpoch,
       readDemand: readDemandFor("Market"),
       onUnavailable: (reason) => reportOnce(`trade routes unavailable: ${reason}`)
     }, tradeRoutes = createCapturedTradeRoutes(tradeRouteDependencies), marketAutomation = Object.freeze({

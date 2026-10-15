@@ -1277,6 +1277,28 @@ export function startCapturedRuntime({
           typeof actionId === "string"
             ? pageCapture.controls.resolve(actionId)
             : undefined;
+        const costResourceIds = new Set(
+          (offers ?? []).flatMap((offer) => Object.keys(offer.cost)),
+        );
+        const resourceSamples = [...costResourceIds].map((resourceId) => {
+          const resource = readProperty(
+            readProperty(root, "resource"),
+            resourceId,
+          );
+          const holding = readProperty(resource, "amount");
+          const capacity = readProperty(resource, "max");
+          return Object.freeze({
+            resourceId,
+            holding:
+              typeof holding === "number" && Number.isFinite(holding)
+                ? holding
+                : undefined,
+            capacity:
+              typeof capacity === "number" && Number.isFinite(capacity)
+                ? capacity
+                : undefined,
+          });
+        });
         const generationsCurrent =
           offers !== undefined &&
           offers.every(
@@ -1294,6 +1316,7 @@ export function startCapturedRuntime({
           source: "shared-current-cycle",
           offers,
           definitions,
+          resourceSamples: Object.freeze(resourceSamples),
           grantLevels: grantLevels === undefined ? undefined : [...grantLevels],
           applicability:
             applicability === undefined ? undefined : [...applicability],
@@ -1728,6 +1751,11 @@ export function startCapturedRuntime({
         ? manaAfterValue
         : undefined;
       const manaBefore = Number(readProperty(prior, "manaBefore"));
+      const readPeriod = readProperty(hooks, "readPeriodForTest");
+      const period =
+        typeof readPeriod === "function"
+          ? Reflect.apply(readPeriod, hooks, [])
+          : undefined;
       if (isRecord(hooks)) {
         const events = readProperty(hooks, "researchOwnerSelectionEvents");
         const history = Array.isArray(events) ? events : [];
@@ -1735,6 +1763,10 @@ export function startCapturedRuntime({
           Object.freeze({
             ...(isRecord(prior) ? prior : {}),
             cycle: automationCycle,
+            period:
+              typeof period === "number" && Number.isSafeInteger(period)
+                ? period
+                : undefined,
             actionId: result.decision.techId,
             disposition: result.disposition,
             grantAfter,
@@ -3935,6 +3967,8 @@ export function startCapturedRuntime({
     mechanics: pageCapture.mechanics,
     keyState: pageCapture.keyState,
     readSettings: () => settingsStore.readRaw(),
+    readRootGeneration: progression.readRootGeneration,
+    readProgressionEpoch: progression.readProgressionEpoch,
     readDemand: readDemandFor("Market"),
     onUnavailable: (reason) =>
       reportOnce(`trade routes unavailable: ${reason}`),
@@ -3942,6 +3976,19 @@ export function startCapturedRuntime({
     __EA_TEST_SURFACE_ENABLED__ === true
       ? {
           testSurface: {
+            demandForTest: (input, context) => {
+              const hooks = readProperty(
+                settingsHostWindow,
+                "__EA_TEST_HOOKS__",
+              );
+              const select = readProperty(
+                hooks,
+                "selectGoalAwareMarketDemandForTest",
+              );
+              return typeof select === "function"
+                ? Reflect.apply(select, hooks, [input, context])
+                : undefined;
+            },
             resolveOperations: (input, planned, context) => {
               const hooks = readProperty(
                 settingsHostWindow,
