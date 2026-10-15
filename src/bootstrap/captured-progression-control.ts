@@ -190,6 +190,9 @@ export interface CapturedProgressionControl {
   readonly sampleOfferedTechs: (
     requester?: string,
   ) => readonly Readonly<OfferedTech>[] | undefined;
+  /** Forces the existing protected Research draw for test-sandbox boundary experiments only. */
+  readonly readFreshResearchCatalogForTest?: () =>
+    Readonly<TechCatalogSnapshot> | undefined;
   /**
    * The granted-technology set from the last catalog pass, or `undefined` when that pass did not
    * keep it. Absent is "not read", never "nothing granted".
@@ -1218,6 +1221,17 @@ export function createCapturedProgressionControl(
       : {}),
     readOfferedTechs: readCurrentOfferedTechs,
     sampleOfferedTechs,
+    ...(typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
+    __EA_TEST_SURFACE_ENABLED__ === true
+      ? {
+          readFreshResearchCatalogForTest: () => {
+            const snapshot = offered.read();
+            return snapshot === undefined
+              ? undefined
+              : offered.restate(snapshot);
+          },
+        }
+      : {}),
     readGrantedTechs: () => lastGranted,
     readResearchActionDefinitions: () =>
       mechanics.readTechDefinitions() === undefined

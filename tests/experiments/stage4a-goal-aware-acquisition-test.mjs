@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
-import { evaluateGoalAwareAcquisition } from "../../experiments/stage4a-goal-aware-acquisition.ts";
+import {
+  evaluateGoalAwareAcquisition,
+  stage4dWouldDemandChangeMarketPlan,
+} from "../../experiments/stage4a-goal-aware-acquisition.ts";
 
 const catalog = (overrides = {}) => {
   const offer = {
@@ -412,5 +415,34 @@ const decide = (
     "already-demanded",
   );
 }
+
+assert.equal(
+  stage4dWouldDemandChangeMarketPlan(
+    routeInput({
+      maxTradeRoutes: 1,
+      priorityList: [
+        ...routeInput().priorityList,
+        {
+          ...routeInput().priorityList[0],
+          id: "Steel",
+          autoTradePriority: 8,
+        },
+      ],
+    }),
+    "Iron",
+  ),
+  true,
+  "a useful goal candidate can change the ordinary Market plan",
+);
+assert.equal(
+  stage4dWouldDemandChangeMarketPlan(routeInput({ maxTradeRoutes: 0 }), "Iron"),
+  false,
+  "a full route restriction can make hypothetical goal priority a no-op",
+);
+assert.equal(
+  stage4dWouldDemandChangeMarketPlan(routeInput(), "Missing"),
+  undefined,
+  "incomplete Market plan evidence must not request a fresh draw",
+);
 
 console.log("stage 4A goal-aware acquisition contracts passed");

@@ -49,8 +49,8 @@ const scenariosArgument = process.argv.find((argument) =>
 const scenarioNames = (scenariosArgument?.slice("--scenarios=".length) ?? "B,F")
   .split(",")
   .filter(Boolean);
-if (scenarioNames.some((scenario) => !["B", "F", "G"].includes(scenario)))
-  throw new Error("--scenarios accepts only B,F,G");
+if (scenarioNames.some((scenario) => !["B", "F", "G", "J"].includes(scenario)))
+  throw new Error("--scenarios accepts only B,F,G,J");
 const debugMode = process.argv.includes("--debug");
 const disableAutoMad = process.argv.includes("--disable-auto-mad");
 const activeCheckpoints = shortProbe
@@ -134,7 +134,7 @@ function installObservers(scenario) {
   hooks.readPeriodForTest = () => window.__EA_RUNNER__.periods();
   hooks.researchOwnerSelectionEvents = [];
   hooks.stage4aScenario = scenario;
-  hooks.preserveGoalDemandMoneyFloorForTest = scenario === "G";
+  hooks.preserveGoalDemandMoneyFloorForTest = ["G", "J"].includes(scenario);
   hooks.stage4aActive = false;
   hooks.stage4aRecordFromNow = false;
   hooks.stage4aDecisions = [];
@@ -154,10 +154,31 @@ function installObservers(scenario) {
   hooks.stage4aControlEvents = [];
   hooks.stage4aLastDecisionKey = "";
   hooks.stage4aLastPlanKey = "";
+  hooks.stage4dPreflight = {
+    noGoalCandidate: 0,
+    noImportableShortfall: 0,
+    alreadyAdequatelyDemanded: 0,
+    candidatePlanUnchanged: 0,
+    candidateCouldChangePlan: 0,
+    incompleteEvidence: 0,
+    freshRequested: 0,
+    freshAccepted: 0,
+    freshRejectedOrChanged: 0,
+    freshCatalogUnavailable: 0,
+    diagnosticFreshDraws: 0,
+    diagnosticGoalCandidates: 0,
+    diagnosticPlanChangingCandidates: 0,
+    diagnosticMissedOpportunities: 0,
+    diagnosticUnresolved: 0,
+    diagnosticObservations: [],
+    categories: [],
+    diagnosticEveryNoHintCalls: 32,
+    noHintCalls: 0,
+  };
   hooks.selectGoalAwareMarketDemandForTest = (input, context) => {
     const period = window.__EA_RUNNER__.periods();
     hooks.stage4aSelectionCalls += 1;
-    if (!["F", "G"].includes(scenario) || !hooks.stage4aActive)
+    if (!["F", "G", "J"].includes(scenario) || !hooks.stage4aActive)
       return undefined;
     const now = () => window.eaDiagnosticsNow?.() ?? performance.now();
     const catalogStarted = now();
@@ -208,6 +229,184 @@ function installObservers(scenario) {
     ) {
       hooks.stage4aDecisions.push({ period, ...decision });
       hooks.stage4aLastDecisionKey = key;
+    }
+    if (scenario === "J") {
+      const preflight = hooks.stage4dPreflight;
+      const hintedActionId = decision.selectedActionId;
+      const hintedResourceId = decision.resourceId;
+      let category;
+      let requestedConditionalFresh = false;
+      if (decision.status === "unavailable") {
+        preflight.incompleteEvidence += 1;
+        category = "incomplete-preliminary-evidence";
+      } else if (decision.candidates.length === 0) {
+        preflight.noGoalCandidate += 1;
+        category = "no-goal-candidate";
+      } else if (
+        decision.status === "candidate-not-marketable" ||
+        decision.status === "candidate-affordable"
+      ) {
+        preflight.noImportableShortfall += 1;
+        category = "no-importable-shortfall";
+      } else if (decision.status === "already-demanded") {
+        preflight.alreadyAdequatelyDemanded += 1;
+        category = "already-adequately-demanded";
+      } else if (decision.status === "signal") {
+        const changesPlan = window.EAStage4a.stage4dWouldDemandChangeMarketPlan(
+          input,
+          decision.resourceId,
+        );
+        if (changesPlan === undefined) {
+          preflight.incompleteEvidence += 1;
+          category = "incomplete-market-plan-evidence";
+        } else if (!changesPlan) {
+          preflight.candidatePlanUnchanged += 1;
+          category = "candidate-does-not-change-market-plan";
+        } else {
+          preflight.candidateCouldChangePlan += 1;
+          category = "candidate-could-change-market-plan";
+          requestedConditionalFresh = true;
+          preflight.freshRequested += 1;
+          const freshStarted = now();
+          const freshCatalog = hooks.readCurrentResearchCatalog?.(
+            undefined,
+            true,
+          );
+          const freshCaptureMs = now() - freshStarted;
+          profile.catalogCaptureTotalMs += freshCaptureMs;
+          profile.catalogCaptureMaxMs = Math.max(
+            profile.catalogCaptureMaxMs,
+            freshCaptureMs,
+          );
+          if (
+            freshCatalog?.current !== true ||
+            freshCatalog.source !== "protected-fresh-draw"
+          ) {
+            preflight.freshCatalogUnavailable += 1;
+            decision = {
+              status: "unavailable",
+              reason: "protected fresh Research catalog unavailable",
+              candidates: decision.candidates,
+            };
+            category = "fresh-catalog-unavailable";
+          } else {
+            const validationStarted = now();
+            const validation = window.EAStage4a.evaluateGoalAwareAcquisition(
+              freshCatalog,
+              input,
+              context,
+            );
+            const freshHolding = freshCatalog.resourceSamples?.find(
+              (sample) => sample.resourceId === decision.resourceId,
+            );
+            const currentMarketResource = context.resources?.find(
+              (resource) => resource.resourceId === decision.resourceId,
+            );
+            const validationMs = now() - validationStarted;
+            profile.selectorTotalMs += validationMs;
+            profile.selectorMaxMs = Math.max(
+              profile.selectorMaxMs,
+              validationMs,
+            );
+            const freshPlanStillChanges =
+              validation.status === "signal"
+                ? window.EAStage4a.stage4dWouldDemandChangeMarketPlan(
+                    input,
+                    validation.resourceId,
+                  )
+                : false;
+            if (
+              validation.status === "signal" &&
+              validation.selectedActionId === decision.selectedActionId &&
+              validation.resourceId === decision.resourceId &&
+              freshHolding?.holding === currentMarketResource?.holding &&
+              freshHolding?.capacity === currentMarketResource?.capacity &&
+              freshPlanStillChanges === true
+            ) {
+              preflight.freshAccepted += 1;
+              category = "fresh-candidate-accepted";
+              decision = validation;
+            } else {
+              preflight.freshRejectedOrChanged += 1;
+              category =
+                freshHolding?.holding !== currentMarketResource?.holding ||
+                freshHolding?.capacity !== currentMarketResource?.capacity
+                  ? "fresh-resource-evidence-changed"
+                  : "fresh-candidate-rejected-or-changed";
+              decision = {
+                status: "unavailable",
+                reason: `fresh validation changed candidate: ${validation.status}`,
+                candidates: validation.candidates,
+              };
+            }
+          }
+        }
+      }
+      if (!requestedConditionalFresh) {
+        preflight.noHintCalls += 1;
+        if (
+          preflight.noHintCalls % preflight.diagnosticEveryNoHintCalls ===
+          0
+        ) {
+          preflight.diagnosticFreshDraws += 1;
+          const diagnosticCatalog = hooks.readCurrentResearchCatalog?.(
+            undefined,
+            true,
+          );
+          if (
+            diagnosticCatalog?.current !== true ||
+            diagnosticCatalog.source !== "protected-fresh-draw"
+          ) {
+            preflight.diagnosticUnresolved += 1;
+            preflight.diagnosticObservations.push({
+              period,
+              outcome: "fresh-catalog-unresolved",
+              preflightCategory: category,
+            });
+          } else {
+            const freshOpportunity =
+              window.EAStage4a.evaluateGoalAwareAcquisition(
+                diagnosticCatalog,
+                input,
+                context,
+              );
+            const planChanges =
+              freshOpportunity.status === "signal"
+                ? window.EAStage4a.stage4dWouldDemandChangeMarketPlan(
+                    input,
+                    freshOpportunity.resourceId,
+                  )
+                : false;
+            const hasFreshGoalCandidate =
+              freshOpportunity.candidates.length > 0;
+            if (hasFreshGoalCandidate) preflight.diagnosticGoalCandidates += 1;
+            if (planChanges === true) {
+              preflight.diagnosticPlanChangingCandidates += 1;
+              preflight.diagnosticMissedOpportunities += 1;
+            }
+            preflight.diagnosticObservations.push({
+              period,
+              outcome:
+                planChanges === true
+                  ? "missed-plan-changing-opportunity"
+                  : hasFreshGoalCandidate
+                    ? "fresh-candidate-no-importable-shortfall-or-plan-change"
+                    : "no-fresh-goal-candidate",
+              preflightCategory: category,
+              freshStatus: freshOpportunity.status,
+              freshActionId: freshOpportunity.selectedActionId,
+              freshResourceId: freshOpportunity.resourceId,
+            });
+          }
+        }
+      }
+      preflight.categories.push({
+        period,
+        category,
+        hintedActionId,
+        hintedResourceId,
+        status: decision.status,
+      });
     }
     return decision;
   };
@@ -394,6 +593,7 @@ try {
             selectionCalls: window.__EA_TEST_HOOKS__.stage4aSelectionCalls ?? 0,
             selectorFailures:
               window.__EA_TEST_HOOKS__.stage4aSelectorFailures ?? [],
+            stage4dPreflight: window.__EA_TEST_HOOKS__.stage4dPreflight ?? {},
             researchEvents:
               window.__EA_TEST_HOOKS__.researchOwnerSelectionEvents ?? [],
             lastResearch: window.__EA_TEST_HOOKS__.researchOwnerSelectionLast,
@@ -561,6 +761,9 @@ try {
         ),
         selectorFailures: await session.evaluate(
           () => window.__EA_TEST_HOOKS__.stage4aSelectorFailures ?? [],
+        ),
+        stage4dPreflight: await session.evaluate(
+          () => window.__EA_TEST_HOOKS__.stage4dPreflight ?? {},
         ),
         researchSequence,
         diagnostics: {

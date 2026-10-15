@@ -9,6 +9,7 @@ import type {
   NativeResearchActionDefinition,
 } from "../src/domain/progression/research-prerequisite-planning.ts";
 import type { TradeRoutesInput } from "../src/domain/economy/market/trade-routes.ts";
+import { planTradeRoutes } from "../src/domain/economy/market/trade-routes.ts";
 
 interface Stage4aResourceSample {
   readonly resourceId: string;
@@ -107,6 +108,32 @@ export interface GoalAwareAcquisitionDecision {
   readonly targetQuantity?: number;
   readonly shortfall?: number;
   readonly requestedQuantity?: number;
+}
+
+/** Test-only preflight: determine whether this hint could change the ordinary Market plan. */
+export function stage4dWouldDemandChangeMarketPlan(
+  input: Readonly<TradeRoutesInput>,
+  resourceId: string,
+): boolean | undefined {
+  if (!input.priorityList.some((resource) => resource.id === resourceId))
+    return undefined;
+  const ordinary = planTradeRoutes(input);
+  const hypothetical = planTradeRoutes(
+    {
+      ...input,
+      priorityList: input.priorityList.map((resource) =>
+        resource.id === resourceId
+          ? Object.freeze({ ...resource, isDemanded: true })
+          : resource,
+      ),
+    },
+    { preserveMoneyFloorForDemandedResources: true },
+  );
+  return (
+    ordinary.moneyRate !== hypothetical.moneyRate ||
+    JSON.stringify(ordinary.operations) !==
+      JSON.stringify(hypothetical.operations)
+  );
 }
 
 function isStage4aRecord(value: unknown): value is Record<string, unknown> {
@@ -237,7 +264,9 @@ export function evaluateGoalAwareAcquisition(
   const catalog = catalogValue as unknown as Stage4aCatalog;
   if (
     catalog.current !== true ||
-    catalog.source !== "shared-current-cycle" ||
+    !["shared-current-cycle", "protected-fresh-draw"].includes(
+      catalog.source,
+    ) ||
     !Number.isSafeInteger(catalog.rootGeneration) ||
     typeof catalog.progressionEpoch !== "string" ||
     typeof catalog.selectedPrestige !== "string"

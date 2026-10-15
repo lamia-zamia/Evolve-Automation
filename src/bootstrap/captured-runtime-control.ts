@@ -1240,12 +1240,25 @@ export function startCapturedRuntime({
             generationsCurrent,
         });
       });
-      Reflect.set(hooks, "readCurrentResearchCatalog", (actionId: unknown) => {
+      const readCurrentResearchCatalog = (
+        actionId: unknown,
+        forceFresh: unknown,
+      ) => {
+        const freshSnapshot =
+          forceFresh === true
+            ? progression.readFreshResearchCatalogForTest?.()
+            : undefined;
         const root = pageCapture.rootState.readRoot();
         const rootGeneration = progression.readRootGeneration();
         const progressionEpoch = progression.readProgressionEpoch();
-        const offers = progression.readOfferedTechs();
-        const definitions = progression.readResearchActionDefinitions();
+        const offers =
+          forceFresh === true
+            ? freshSnapshot?.offered
+            : progression.readOfferedTechs();
+        const definitions =
+          forceFresh === true
+            ? freshSnapshot?.definitions
+            : progression.readResearchActionDefinitions();
         const settings = settingsStore.readRaw();
         const grantLevels =
           root === undefined || definitions === undefined
@@ -1313,7 +1326,10 @@ export function startCapturedRuntime({
             rootGeneration === progression.readRootGeneration() &&
             progressionEpoch === progression.readProgressionEpoch() &&
             generationsCurrent,
-          source: "shared-current-cycle",
+          source:
+            forceFresh === true
+              ? "protected-fresh-draw"
+              : "shared-current-cycle",
           offers,
           definitions,
           resourceSamples: Object.freeze(resourceSamples),
@@ -1344,7 +1360,12 @@ export function startCapturedRuntime({
               : "not-requested",
           highTechLevel: readProperty(readProperty(root, "tech"), "high_tech"),
         });
-      });
+      };
+      Reflect.set(
+        hooks,
+        "readCurrentResearchCatalog",
+        readCurrentResearchCatalog,
+      );
     }
   }
   researchOwnerSelectionObserver = (selection) => {
