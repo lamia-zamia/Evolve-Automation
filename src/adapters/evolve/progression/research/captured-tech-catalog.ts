@@ -42,6 +42,7 @@ import {
 } from "../../captured-tab-discovery.ts";
 
 declare const __EA_TEST_SURFACE_ENABLED__: boolean;
+declare const __EA_RESEARCH_CONDITION_GATE_ENABLED__: boolean;
 
 /** Rows with the same-draw native price and affordability details. */
 const OFFERED_TECH_SELECTOR = "#tech .action";
@@ -87,6 +88,7 @@ export interface CapturedTechCatalogDependencies {
   readonly mechanics: Pick<
     CapturedGameMechanics,
     | "captureTechDefinitionsDuring"
+    | "captureCompletedTechConditionsDuring"
     | "readTechDefinitions"
     | "readComputedTechRequirements"
   >;
@@ -145,63 +147,72 @@ export function createCapturedTechCatalog(
             );
           } else observedBindingIds.push(elementId);
         });
-        const captureNativeDraw = () =>
-          mechanics.captureTechDefinitionsDuring(
-            () =>
-              discovery.discover(RESEARCH_TAB_PATH, {
-                purpose: "research-catalog",
-                // A current DOM cannot establish a fresh binding stream, even if Research is selected.
-                // The panel workspace preserves that view while this scratch draw runs.
-                forceDraw: true,
-                ...(includeGranted ? {} : { discard: UNREAD_RESEARCH_CONTENT }),
-                whileDrawn: () => {
-                  try {
-                    const offeredRows = measure(
-                      "research.dom.capture.offered",
-                      () => drawnActions.read(OFFERED_TECH_SELECTOR),
+        const captureNativeDiscoveryDraw = () =>
+          discovery.discover(RESEARCH_TAB_PATH, {
+            purpose: "research-catalog",
+            // A current DOM cannot establish a fresh binding stream, even if Research is selected.
+            // The panel workspace preserves that view while this scratch draw runs.
+            forceDraw: true,
+            ...(includeGranted ? {} : { discard: UNREAD_RESEARCH_CONTENT }),
+            whileDrawn: () => {
+              try {
+                const offeredRows = measure(
+                  "research.dom.capture.offered",
+                  () => drawnActions.read(OFFERED_TECH_SELECTOR),
+                );
+                if (
+                  drawnActions.count(OFFERED_TECH_SELECTOR) !==
+                  offeredRows.length
+                )
+                  throw new Error(
+                    "a rendered Research offer row has no readable id",
+                  );
+                const grantedRows = includeGranted
+                  ? measure("research.dom.capture.granted", () =>
+                      drawnActions.read(GRANTED_TECH_SELECTOR),
+                    )
+                  : undefined;
+                if (
+                  grantedRows !== undefined &&
+                  drawnActions.count(GRANTED_TECH_SELECTOR) !==
+                    grantedRows.length
+                )
+                  throw new Error(
+                    "a rendered granted Research row has no readable id",
+                  );
+                const generations = new Map<string, number>();
+                measure("research.binding.generation-capture", () => {
+                  for (const elementId of observedBindingIds)
+                    generations.set(
+                      elementId,
+                      controls.resolve(elementId)?.generation ?? 0,
                     );
-                    if (
-                      drawnActions.count(OFFERED_TECH_SELECTOR) !==
-                      offeredRows.length
-                    )
-                      throw new Error(
-                        "a rendered Research offer row has no readable id",
-                      );
-                    const grantedRows = includeGranted
-                      ? measure("research.dom.capture.granted", () =>
-                          drawnActions.read(GRANTED_TECH_SELECTOR),
-                        )
-                      : undefined;
-                    if (
-                      grantedRows !== undefined &&
-                      drawnActions.count(GRANTED_TECH_SELECTOR) !==
-                        grantedRows.length
-                    )
-                      throw new Error(
-                        "a rendered granted Research row has no readable id",
-                      );
-                    const generations = new Map<string, number>();
-                    measure("research.binding.generation-capture", () => {
-                      for (const elementId of observedBindingIds)
-                        generations.set(
-                          elementId,
-                          controls.resolve(elementId)?.generation ?? 0,
-                        );
-                    });
-                    drawn = Object.freeze({
-                      offeredRows,
-                      ...(grantedRows === undefined ? {} : { grantedRows }),
-                      generations,
-                    });
-                    return true;
-                  } finally {
-                    // Exclude any player-view restoration after the controlled target draw.
-                    collecting = false;
-                  }
-                },
-              }),
-            computedRequirementsContext,
-          );
+                });
+                drawn = Object.freeze({
+                  offeredRows,
+                  ...(grantedRows === undefined ? {} : { grantedRows }),
+                  generations,
+                });
+                return true;
+              } finally {
+                // Exclude any player-view restoration after the controlled target draw.
+                collecting = false;
+              }
+            },
+          });
+        const captureNativeDraw = () =>
+          mechanics.captureTechDefinitionsDuring(() => {
+            if (
+              !includeGranted &&
+              typeof __EA_RESEARCH_CONDITION_GATE_ENABLED__ !== "undefined" &&
+              __EA_RESEARCH_CONDITION_GATE_ENABLED__ === true &&
+              mechanics.captureCompletedTechConditionsDuring !== undefined
+            )
+              return mechanics.captureCompletedTechConditionsDuring(
+                captureNativeDiscoveryDraw,
+              );
+            return captureNativeDiscoveryDraw();
+          }, computedRequirementsContext);
         result =
           computedRequirementsContext === undefined
             ? captureNativeDraw()

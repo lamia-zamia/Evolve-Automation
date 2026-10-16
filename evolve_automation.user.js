@@ -5230,50 +5230,47 @@
               () => observedBindingIds.push(elementId)
             )) : observedBindingIds.push(elementId));
           });
-          let captureNativeDraw = () => mechanics.captureTechDefinitionsDuring(
-            () => discovery.discover(RESEARCH_TAB_PATH, {
-              purpose: "research-catalog",
-              // A current DOM cannot establish a fresh binding stream, even if Research is selected.
-              // The panel workspace preserves that view while this scratch draw runs.
-              forceDraw: !0,
-              ...includeGranted ? {} : { discard: UNREAD_RESEARCH_CONTENT },
-              whileDrawn: () => {
-                try {
-                  let offeredRows = measure(
-                    "research.dom.capture.offered",
-                    () => drawnActions.read(OFFERED_TECH_SELECTOR)
+          let captureNativeDiscoveryDraw = () => discovery.discover(RESEARCH_TAB_PATH, {
+            purpose: "research-catalog",
+            // A current DOM cannot establish a fresh binding stream, even if Research is selected.
+            // The panel workspace preserves that view while this scratch draw runs.
+            forceDraw: !0,
+            ...includeGranted ? {} : { discard: UNREAD_RESEARCH_CONTENT },
+            whileDrawn: () => {
+              try {
+                let offeredRows = measure(
+                  "research.dom.capture.offered",
+                  () => drawnActions.read(OFFERED_TECH_SELECTOR)
+                );
+                if (drawnActions.count(OFFERED_TECH_SELECTOR) !== offeredRows.length)
+                  throw new Error(
+                    "a rendered Research offer row has no readable id"
                   );
-                  if (drawnActions.count(OFFERED_TECH_SELECTOR) !== offeredRows.length)
-                    throw new Error(
-                      "a rendered Research offer row has no readable id"
+                let grantedRows = includeGranted ? measure(
+                  "research.dom.capture.granted",
+                  () => drawnActions.read(GRANTED_TECH_SELECTOR)
+                ) : void 0;
+                if (grantedRows !== void 0 && drawnActions.count(GRANTED_TECH_SELECTOR) !== grantedRows.length)
+                  throw new Error(
+                    "a rendered granted Research row has no readable id"
+                  );
+                let generations = /* @__PURE__ */ new Map();
+                return measure("research.binding.generation-capture", () => {
+                  for (let elementId of observedBindingIds)
+                    generations.set(
+                      elementId,
+                      controls2.resolve(elementId)?.generation ?? 0
                     );
-                  let grantedRows = includeGranted ? measure(
-                    "research.dom.capture.granted",
-                    () => drawnActions.read(GRANTED_TECH_SELECTOR)
-                  ) : void 0;
-                  if (grantedRows !== void 0 && drawnActions.count(GRANTED_TECH_SELECTOR) !== grantedRows.length)
-                    throw new Error(
-                      "a rendered granted Research row has no readable id"
-                    );
-                  let generations = /* @__PURE__ */ new Map();
-                  return measure("research.binding.generation-capture", () => {
-                    for (let elementId of observedBindingIds)
-                      generations.set(
-                        elementId,
-                        controls2.resolve(elementId)?.generation ?? 0
-                      );
-                  }), drawn = Object.freeze({
-                    offeredRows,
-                    ...grantedRows === void 0 ? {} : { grantedRows },
-                    generations
-                  }), !0;
-                } finally {
-                  collecting = !1;
-                }
+                }), drawn = Object.freeze({
+                  offeredRows,
+                  ...grantedRows === void 0 ? {} : { grantedRows },
+                  generations
+                }), !0;
+              } finally {
+                collecting = !1;
               }
-            }),
-            computedRequirementsContext
-          );
+            }
+          }), captureNativeDraw = () => mechanics.captureTechDefinitionsDuring(() => captureNativeDiscoveryDraw(), computedRequirementsContext);
           result = computedRequirementsContext === void 0 ? captureNativeDraw() : measure(
             "research.computed-requirements.capture-and-draw",
             captureNativeDraw

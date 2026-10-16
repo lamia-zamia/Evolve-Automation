@@ -32,6 +32,11 @@ const variants = [
     bundle: input("baseline-bundle"),
   },
   {
+    name: "condition-gate",
+    game: input("baseline-game"),
+    bundle: input("condition-gate-bundle"),
+  },
+  {
     name: "skip-completed",
     game: input("experimental-game"),
     bundle: input("experimental-bundle"),

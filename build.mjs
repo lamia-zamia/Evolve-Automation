@@ -20,6 +20,9 @@ const userscriptOutputPath = path.join(
   local ? "evolve_automation.local.user.js" : "evolve_automation.user.js",
 );
 const watch = process.argv.includes("--watch");
+const researchConditionGate = process.argv.includes(
+  "--research-condition-gate",
+);
 
 // The released metadata block carries one @match per supported host. The local
 // build serves a single origin, so every @match collapses into the localhost one.
@@ -77,6 +80,7 @@ const buildOptions = {
   define: {
     "globalThis.__EA_TEST_SURFACE_ENABLED__": "false",
     __EA_TEST_SURFACE_ENABLED__: "false",
+    __EA_RESEARCH_CONDITION_GATE_ENABLED__: String(researchConditionGate),
   },
   minifySyntax: true,
   treeShaking: true,
@@ -88,6 +92,18 @@ if (watch) {
   await context.watch();
   console.log("Watching src/**/*.{js,ts}; press Ctrl+C to stop.");
 } else {
-  await esbuild.build(buildOptions);
+  const candidateOptions = researchConditionGate
+    ? {
+        ...buildOptions,
+        outfile: path.join(
+          root,
+          "test-artifacts",
+          "research-condition-gate",
+          "evolve_automation.user.js",
+        ),
+      }
+    : buildOptions;
+  await mkdir(path.dirname(candidateOptions.outfile), { recursive: true });
+  await esbuild.build(candidateOptions);
   await writeFile(metadataOutputPath, `${metadata}\n`, "utf8");
 }
