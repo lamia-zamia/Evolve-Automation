@@ -321,6 +321,28 @@ function makePage({
 }
 
 {
+  globalThis.__EA_RESEARCH_CONDITION_GATE_ENABLED__ = true;
+  const page = makePage({
+    offered: [[element("tech-alpha", { Knowledge: 10 })]],
+    mechanics: {
+      captureTechDefinitionsDuring: (draw) => draw(),
+      researchConditionGateActive: () => true,
+      researchConditionGateCompromised: () => false,
+      readTechDefinitions: () => [],
+    },
+  });
+  assert.equal(page.catalog.read(), undefined);
+  assert.equal(page.catalog.read({ includeGranted: true }), undefined);
+  assert.equal(
+    page.passes.length,
+    0,
+    "nested ordinary and granted Research catalog draws are refused",
+  );
+  assert.match(page.reasons[0], /nested Research draw refused/);
+  delete globalThis.__EA_RESEARCH_CONDITION_GATE_ENABLED__;
+}
+
+{
   const page = makePage({
     offered: [
       [

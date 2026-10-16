@@ -1850,7 +1850,10 @@ export function installCapturedGameMechanics(
   }
 
   let stopped = false;
+  let researchConditionGateActive = false;
   let capturedTechRegistry: CapturedNativeTechRegistrySnapshot | undefined;
+  let latestObservedNativeTechRegistryObject:
+    Record<string, unknown> | undefined;
   let capturedTechRegistryObjectKeys: CapturedGameCall | undefined;
   let capturedTechAuthorityInvalid = false;
   let computedTechRequirementCaptureGeneration = 0;
@@ -2192,7 +2195,8 @@ export function installCapturedGameMechanics(
         stopped ||
         capturedTechAuthorityInvalid ||
         (capturedTechRegistry !== undefined &&
-          computedRequirementsContext === undefined)
+          computedRequirementsContext === undefined &&
+          !researchConditionGateActive)
       )
         return draw();
       if (
@@ -2343,6 +2347,25 @@ export function installCapturedGameMechanics(
         ...args: unknown[]
       ): unknown {
         const keys = Reflect.apply(originalObjectKeys, this, args);
+        const retained = capturedTechRegistry;
+        if (
+          retained !== undefined &&
+          isNonArrayRecord(args[0]) &&
+          Array.isArray(keys) &&
+          keys.length === retained.keys.length &&
+          keys.every((key, index) => {
+            const definition = retained.definitions[index];
+            return (
+              key === retained.keys[index] &&
+              definition !== undefined &&
+              readMechanicsDataProperty(
+                readMechanicsDataProperty(args[0], key),
+                "id",
+              ) === definition.actionId
+            );
+          })
+        )
+          latestObservedNativeTechRegistryObject = args[0];
         let candidate: CapturedNativeTechRegistrySnapshot | undefined;
         try {
           candidate = readNativeTechRegistrySnapshot(args[0], keys, true);
@@ -2739,7 +2762,6 @@ export function installCapturedGameMechanics(
     ...(typeof __EA_RESEARCH_CONDITION_GATE_ENABLED__ !== "undefined" &&
     __EA_RESEARCH_CONDITION_GATE_ENABLED__ === true
       ? (() => {
-          let active = false;
           let gateCompromised = false;
           let observationInvalidated = false;
           class ResearchConditionGateUnavailableError extends Error {
@@ -2748,6 +2770,27 @@ export function installCapturedGameMechanics(
               this.name = "ResearchConditionGateUnavailableError";
             }
           }
+          const reportResearchGateFallback = () => {
+            if (
+              typeof __EA_TEST_SURFACE_ENABLED__ === "undefined" ||
+              __EA_TEST_SURFACE_ENABLED__ !== true
+            )
+              return;
+            try {
+              const hooks = readMechanicsProperty(
+                pageWindow,
+                "__EA_TEST_HOOKS__",
+              );
+              const recordFallback = readMechanicsProperty(
+                hooks,
+                "researchConditionGateFallback",
+              );
+              if (typeof recordFallback === "function")
+                Reflect.apply(recordFallback as CapturedGameCall, hooks, []);
+            } catch {
+              /* Test-only fallback counting cannot affect native drawing. */
+            }
+          };
           const reportFatalRestoration = (error: Error) => {
             try {
               const consoleValue = readMechanicsProperty(pageWindow, "console");
@@ -2760,7 +2803,7 @@ export function installCapturedGameMechanics(
           };
           return {
             captureCompletedTechConditionsDuring<T>(draw: () => T): T {
-              if (active) {
+              if (researchConditionGateActive) {
                 observationInvalidated = true;
                 throw new ResearchConditionGateUnavailableError(
                   "nested draw during active scratch capture",
@@ -2770,13 +2813,18 @@ export function installCapturedGameMechanics(
                 throw new ResearchConditionGateUnavailableError(
                   "native callback descriptors require a clean reload",
                 );
-              if (stopped || capturedTechAuthorityInvalid) return draw();
+              if (stopped || capturedTechAuthorityInvalid) {
+                reportResearchGateFallback();
+                return draw();
+              }
               observationInvalidated = false;
               const retained = readRetainedNativeTechRegistry();
+              latestObservedNativeTechRegistryObject = retained?.registry;
               let root: unknown;
               try {
                 root = rootState?.readRoot();
               } catch {
+                reportResearchGateFallback();
                 return draw();
               }
               const technologies = readMechanicsProperty(root, "tech");
@@ -2784,8 +2832,10 @@ export function installCapturedGameMechanics(
                 retained === undefined ||
                 !isNonArrayRecord(root) ||
                 !isNonArrayRecord(technologies)
-              )
+              ) {
+                reportResearchGateFallback();
                 return draw();
+              }
               let invoked = 0;
 
               const readTechLevel = (key: string): unknown => {
@@ -2807,38 +2857,55 @@ export function installCapturedGameMechanics(
               let accessorDescriptors = 0;
               let nonConfigurableWritableDescriptors = 0;
               const completed: CapturedNativeTechDefinitionIdentity[] = [];
-              const suppressedDefinitions =
-                new Set<CapturedNativeTechDefinitionIdentity>();
-              for (const definition of retained.definitions) {
+              const classifiedDefinitions: {
+                readonly definition: CapturedNativeTechDefinitionIdentity;
+                readonly completed: boolean;
+              }[] = [];
+              const isDefinitionCompleted = (
+                definition: CapturedNativeTechDefinitionIdentity,
+              ): boolean | undefined => {
                 const grantLevel = readTechLevel(definition.grantTechnology);
-                if (grantLevel === completedTechGateReadFailure) return draw();
-                if (!grantLevel) continue;
+                if (grantLevel === completedTechGateReadFailure)
+                  return undefined;
+                if (!grantLevel) return false;
                 let grantThresholdReached: boolean;
                 try {
                   // Preserve checkOldTech's JavaScript >= coercion for live game levels.
                   grantThresholdReached =
                     (grantLevel as number) >= definition.grantLevel;
                 } catch {
-                  return draw();
+                  return undefined;
                 }
-                if (!grantThresholdReached) continue;
+                if (!grantThresholdReached) return false;
                 const legacyKey =
                   completedTechGateLegacyKeys[definition.registryKey];
-                if (legacyKey === undefined) {
-                  completed.push(definition);
-                  continue;
-                }
+                if (legacyKey === undefined) return true;
                 const legacyLevel = readTechLevel(legacyKey);
-                if (legacyLevel === completedTechGateReadFailure) return draw();
-                if (legacyLevel) completed.push(definition);
+                if (legacyLevel === completedTechGateReadFailure)
+                  return undefined;
+                return Boolean(legacyLevel);
+              };
+              for (const definition of retained.definitions) {
+                const definitionCompleted = isDefinitionCompleted(definition);
+                if (definitionCompleted === undefined) {
+                  reportResearchGateFallback();
+                  return draw();
+                }
+                classifiedDefinitions.push({
+                  definition,
+                  completed: definitionCompleted,
+                });
+                if (definitionCompleted) completed.push(definition);
               }
               for (const definition of completed) {
                 try {
                   if (
                     Object.getPrototypeOf(definition.action) !==
                     Object.prototype
-                  )
+                  ) {
+                    reportResearchGateFallback();
                     return draw();
+                  }
                   const original = Object.getOwnPropertyDescriptor(
                     definition.action,
                     "condition",
@@ -2851,15 +2918,21 @@ export function installCapturedGameMechanics(
                           prototype,
                           "condition",
                         ) !== undefined
-                      )
+                      ) {
+                        reportResearchGateFallback();
                         return draw();
+                      }
                       prototype = Object.getPrototypeOf(prototype);
                     }
-                    if (!Object.isExtensible(definition.action)) return draw();
+                    if (!Object.isExtensible(definition.action)) {
+                      reportResearchGateFallback();
+                      return draw();
+                    }
                   } else if (
                     original.configurable !== true &&
                     (!("value" in original) || original.writable !== true)
                   ) {
+                    reportResearchGateFallback();
                     return draw();
                   }
                   if (original === undefined) absentDescriptors += 1;
@@ -2932,7 +3005,6 @@ export function installCapturedGameMechanics(
                           )
                         : originalCondition === undefined;
                     }
-                    suppressedDefinitions.add(definition);
                     return false;
                   };
                   const replacement: PropertyDescriptor =
@@ -2959,6 +3031,7 @@ export function installCapturedGameMechanics(
                     installed: false,
                   });
                 } catch {
+                  reportResearchGateFallback();
                   return draw();
                 }
               }
@@ -2970,13 +3043,17 @@ export function installCapturedGameMechanics(
                 if (
                   rootState?.readRoot() !== root ||
                   capturedTechRegistry !== retained
-                )
+                ) {
+                  reportResearchGateFallback();
                   return draw();
+                }
               } catch {
+                reportResearchGateFallback();
                 return draw();
               }
 
               let restored = 0;
+              let replacementRestored = 0;
               let restorationFailures = 0;
               let registryKeys: string[] = [];
               const originalDescriptorCounts = {
@@ -3002,6 +3079,7 @@ export function installCapturedGameMechanics(
                         installed: registryKeys.length,
                         invoked,
                         restored,
+                        replacementRestored,
                         restorationFailures,
                         registryKeys: Object.freeze([...registryKeys]),
                         originalDescriptorCounts,
@@ -3014,6 +3092,32 @@ export function installCapturedGameMechanics(
 
               const restore = (entry: (typeof pending)[number]): boolean => {
                 const { definition, original, condition } = entry;
+                let replacementRestoredSuccessfully = true;
+                const replacementAction = readMechanicsDataProperty(
+                  latestObservedNativeTechRegistryObject,
+                  definition.registryKey,
+                );
+                if (
+                  isNonArrayRecord(replacementAction) &&
+                  replacementAction !== definition.action &&
+                  Object.getOwnPropertyDescriptor(
+                    replacementAction,
+                    "condition",
+                  )?.value === condition
+                ) {
+                  const didRestoreReplacement =
+                    original === undefined
+                      ? Reflect.deleteProperty(replacementAction, "condition")
+                      : Reflect.defineProperty(
+                          replacementAction,
+                          "condition",
+                          original,
+                        );
+                  if (!didRestoreReplacement) {
+                    restorationFailures += 1;
+                    replacementRestoredSuccessfully = false;
+                  } else replacementRestored += 1;
+                }
                 if (
                   Object.getOwnPropertyDescriptor(
                     definition.action,
@@ -3033,12 +3137,12 @@ export function installCapturedGameMechanics(
                       );
                 if (didRestore) restored += 1;
                 else restorationFailures += 1;
-                return didRestore;
+                return didRestore && replacementRestoredSuccessfully;
               };
 
               // Lock before the first descriptor write so injected/native reentrancy cannot
               // enter another scratch capture while installation is only partly complete.
-              active = true;
+              researchConditionGateActive = true;
               for (const entry of pending) {
                 try {
                   if (
@@ -3063,7 +3167,7 @@ export function installCapturedGameMechanics(
                     }
                   }
                   registryKeys = [];
-                  active = false;
+                  researchConditionGateActive = false;
                   if (restorationFailures > 0) {
                     gateCompromised = true;
                     capturedTechAuthorityInvalid = true;
@@ -3079,6 +3183,7 @@ export function installCapturedGameMechanics(
                     throw new ResearchConditionGateUnavailableError(
                       "nested draw invalidated descriptor installation",
                     );
+                  reportResearchGateFallback();
                   return draw();
                 }
               }
@@ -3098,7 +3203,7 @@ export function installCapturedGameMechanics(
                   }
                 }
                 if (restorationFailures > 0) {
-                  active = false;
+                  researchConditionGateActive = false;
                   gateCompromised = true;
                   capturedTechAuthorityInvalid = true;
                   report();
@@ -3108,7 +3213,7 @@ export function installCapturedGameMechanics(
                   reportFatalRestoration(failure);
                   throw failure;
                 }
-                active = false;
+                researchConditionGateActive = false;
                 report();
                 throw new ResearchConditionGateUnavailableError(
                   "game authority changed during descriptor installation",
@@ -3132,7 +3237,7 @@ export function installCapturedGameMechanics(
                     restorationFailures += 1;
                   }
                 }
-                active = false;
+                researchConditionGateActive = false;
                 report();
               }
               if (restorationFailures > 0) {
@@ -3145,30 +3250,18 @@ export function installCapturedGameMechanics(
                 throw failure;
               }
               if (drawThrew) throw drawFailure;
-              for (const definition of suppressedDefinitions) {
-                let stillCompleted: boolean;
-                try {
-                  const currentGrant = readTechLevel(
-                    definition.grantTechnology,
+              if (!observationInvalidated) {
+                for (const classification of classifiedDefinitions) {
+                  const currentlyCompleted = isDefinitionCompleted(
+                    classification.definition,
                   );
-                  stillCompleted =
-                    currentGrant !== completedTechGateReadFailure &&
-                    Boolean(currentGrant) &&
-                    (currentGrant as number) >= definition.grantLevel;
-                  const legacyKey =
-                    completedTechGateLegacyKeys[definition.registryKey];
-                  if (stillCompleted && legacyKey !== undefined) {
-                    const currentLegacy = readTechLevel(legacyKey);
-                    stillCompleted =
-                      currentLegacy !== completedTechGateReadFailure &&
-                      Boolean(currentLegacy);
+                  if (
+                    currentlyCompleted === undefined ||
+                    currentlyCompleted !== classification.completed
+                  ) {
+                    observationInvalidated = true;
+                    break;
                   }
-                } catch {
-                  stillCompleted = false;
-                }
-                if (!stillCompleted) {
-                  observationInvalidated = true;
-                  break;
                 }
               }
               if (
@@ -3183,6 +3276,7 @@ export function installCapturedGameMechanics(
               return result;
             },
             researchConditionGateCompromised: () => gateCompromised,
+            researchConditionGateActive: () => researchConditionGateActive,
           };
         })()
       : {}),

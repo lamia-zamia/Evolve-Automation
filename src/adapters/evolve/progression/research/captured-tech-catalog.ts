@@ -90,6 +90,7 @@ export interface CapturedTechCatalogDependencies {
     | "captureTechDefinitionsDuring"
     | "captureCompletedTechConditionsDuring"
     | "researchConditionGateCompromised"
+    | "researchConditionGateActive"
     | "readTechDefinitions"
     | "readComputedTechRequirements"
   >;
@@ -124,6 +125,16 @@ export function createCapturedTechCatalog(
       const tally = createCountTally(dependencies.diagnostics);
       const measure = createPhaseMeasure(dependencies.diagnostics);
       tally.count("research.catalog.observations");
+      if (
+        typeof __EA_RESEARCH_CONDITION_GATE_ENABLED__ !== "undefined" &&
+        __EA_RESEARCH_CONDITION_GATE_ENABLED__ === true &&
+        mechanics?.researchConditionGateActive?.()
+      ) {
+        reportUnavailable(
+          "nested Research draw refused during an active scratch capture",
+        );
+        return undefined;
+      }
       if (
         typeof __EA_RESEARCH_CONDITION_GATE_ENABLED__ !== "undefined" &&
         __EA_RESEARCH_CONDITION_GATE_ENABLED__ === true &&

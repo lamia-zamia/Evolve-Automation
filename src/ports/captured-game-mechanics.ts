@@ -250,6 +250,7 @@ export interface CapturedGameMechanics {
   captureCompletedTechConditionsDuring?<T>(draw: () => T): T;
   /** True after the experimental gate failed to restore native callback state. */
   researchConditionGateCompromised?(): boolean;
+  researchConditionGateActive?(): boolean;
   /** `undefined` means the retained private technology registry is absent or no longer valid. */
   readTechDefinitions(): readonly CapturedTechDefinition[] | undefined;
   /** Current opt-in native-draw observations; absent means no such draw was observed. */
