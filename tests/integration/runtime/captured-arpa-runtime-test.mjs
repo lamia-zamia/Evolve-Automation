@@ -137,6 +137,7 @@ function makeScenario({
   uninitializedMoneyMaximum = false,
   queue = [],
   bindControl = true,
+  panelAvailable = true,
   marketStorage = false,
   manualCraftLumber,
   nativePerPercentCost,
@@ -278,7 +279,9 @@ function makeScenario({
     stats: { days: 100, reset: 1, resets: 1 },
     tech: {
       mad: 1,
-      high_tech: gameTechHighTech,
+      ...(gameTechHighTech === undefined
+        ? {}
+        : { high_tech: gameTechHighTech }),
       genetics: 2,
       ...(marketStorage ? { trade: true } : {}),
     },
@@ -367,7 +370,7 @@ function makeScenario({
   const draws = [];
   const hoverEvents = [];
   const nativeCostReads = [];
-  let panelAvailable = true;
+  let panelIsAvailable = panelAvailable;
 
   if (manualCraftLumber !== undefined) {
     vue.createApp({
@@ -458,7 +461,7 @@ function makeScenario({
   };
 
   const drawArpaPanel = () => {
-    if (!panelAvailable) {
+    if (!panelIsAvailable) {
       draws.push("panel-disabled");
       return;
     }
@@ -470,11 +473,13 @@ function makeScenario({
     parent.replaceChildren();
     const physics = element("div", { id: "arpaPhysics" });
     parent.appendChild(physics);
-    for (const drawnProjectId of page.Object.keys(nativeProjectDefinitions)) {
-      const eligible =
-        drawnProjectId !== "surface_elevator" ||
-        (gameRoot.tech.high_tech >= 7 && gameRoot.race.iceage === true);
-      if (eligible) physics.appendChild(bindProject(drawnProjectId));
+    if (gameRoot.tech.high_tech >= 6) {
+      for (const drawnProjectId of page.Object.keys(nativeProjectDefinitions)) {
+        const eligible =
+          drawnProjectId !== "surface_elevator" ||
+          (gameRoot.tech.high_tech >= 7 && gameRoot.race.iceage === true);
+        if (eligible) physics.appendChild(bindProject(drawnProjectId));
+      }
     }
     if (gameRoot.tech.genetics > 1) {
       vue.createApp({ el: "#arpaSequence", methods: { toggle() {} } });
@@ -622,7 +627,7 @@ function makeScenario({
     document,
     readSettings: () => JSON.parse(savedSettings),
     setPanelAvailable(value) {
-      panelAvailable = value;
+      panelIsAvailable = value;
     },
     bindMainTab,
     redrawProject({ displayCost, perPercentCost, bindControl: bind }) {
@@ -800,6 +805,119 @@ withScenario(
 
 // This is the reported blocker in its production composition: the actual game starts with an
 // empty portal record before Mech Bay is built. Mech-first demand must not suppress the LHC build.
+let lockedPowerDemandAvailable;
+withScenario(
+  {
+    gameTechHighTech: 5,
+    scriptSettings: {
+      autoBuild: true,
+      autoARPA: true,
+      autoStorage: true,
+      autoPower: true,
+      autoJobs: true,
+      autoCraftsmen: true,
+      autoMech: true,
+      autoCraft: true,
+      prestigeMADIgnoreArpa: true,
+      arpa_lhc: true,
+      arpa_p_lhc: 0,
+      arpa_m_lhc: -1,
+      arpa_w_lhc: 2,
+      craftPlywood: true,
+      mechBuild: "random",
+      buildingMechsFirst: true,
+    },
+    observePowerDemandPhase(stage, demand) {
+      if (stage === "power-ready")
+        lockedPowerDemandAvailable = demand !== undefined;
+    },
+  },
+  (scenario) => {
+    scenario.tick();
+    assert.deepEqual(scenario.draws, [], "locked Physics is never drawn");
+    assert.deepEqual(scenario.calls, []);
+    assert.ok(
+      scenario.phases.includes("autoBuild.beginCycle"),
+      JSON.stringify({
+        phases: scenario.phases,
+        errors: scenario.errors,
+        logs: scenario.logs,
+      }),
+    );
+    assert.ok(
+      scenario.logs.includes("autoBuild.candidates 0"),
+      JSON.stringify({
+        phases: scenario.phases,
+        errors: scenario.errors,
+        logs: scenario.logs,
+      }),
+    );
+    assert.equal(lockedPowerDemandAvailable, true);
+    assert.ok(
+      scenario.errors.every(
+        (message) =>
+          !message.includes("construction saving order is not established") &&
+          !message.includes("enabled project-storage catalog unavailable"),
+      ),
+      JSON.stringify({ errors: scenario.errors, logs: scenario.logs }),
+    );
+    assert.ok(
+      scenario.logs.every(
+        (message) => !message.includes("native A.R.P.A. capture failed"),
+      ),
+      JSON.stringify(scenario.logs),
+    );
+
+    scenario.gameRoot.tech.high_tech = 6;
+    scenario.tick();
+    assert.ok(
+      scenario.draws.length > 0,
+      "Physics capture starts at High Tech 6",
+    );
+    assert.ok(scenario.draws.at(-1).rows > 0);
+    assert.ok(scenario.nativeCostReads.length > 0);
+    assert.ok(
+      scenario.calls.some(([projectId]) => projectId === "lhc"),
+      JSON.stringify({ calls: scenario.calls, errors: scenario.errors }),
+    );
+  },
+);
+
+// An unlocked failed native capture remains unavailable and blocks incomplete construction
+// decisions instead of being mistaken for a complete empty project catalog.
+withScenario(
+  {
+    gameTechHighTech: 7,
+    panelAvailable: false,
+    scriptSettings: {
+      autoBuild: true,
+      autoARPA: true,
+      prestigeMADIgnoreArpa: true,
+      arpa_lhc: true,
+      arpa_p_lhc: 0,
+      arpa_m_lhc: -1,
+      arpa_w_lhc: 2,
+    },
+  },
+  (scenario) => {
+    scenario.tick();
+    assert.deepEqual(scenario.draws, ["panel-disabled"]);
+    assert.deepEqual(scenario.calls, []);
+    assert.ok(
+      [...scenario.errors, ...scenario.logs].some((message) =>
+        message.includes("native A.R.P.A. capture failed"),
+      ),
+      JSON.stringify({ errors: scenario.errors, logs: scenario.logs }),
+    );
+    assert.ok(
+      [...scenario.errors, ...scenario.logs].some((message) =>
+        message.includes("construction saving authority unavailable"),
+      ),
+      JSON.stringify({ errors: scenario.errors, logs: scenario.logs }),
+    );
+  },
+);
+
 withScenario(
   {
     progress: 20,

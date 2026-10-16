@@ -9,10 +9,12 @@ function makeCatalogPage({
   capture = { kind: "captured" },
   offerReadAvailable = true,
   rootAvailable = true,
+  gameTechHighTech = 7,
+  omitHighTech = false,
 } = {}) {
   const root = {
     race: {},
-    tech: {},
+    tech: omitHighTech ? {} : { high_tech: gameTechHighTech },
     city: { mine: { count: 0 }, apartment: { count: 0 } },
     resource: { Money: { amount: 500000, max: 1000000, display: true } },
     arpa: Object.fromEntries(
@@ -26,8 +28,9 @@ function makeCatalogPage({
   const reasons = [];
   const diagnostics = [];
   const calls = { capture: 0, offers: 0 };
+  let currentRoot = root;
   const catalog = createCapturedProjectCatalog({
-    rootState: { readRoot: () => (rootAvailable ? root : undefined) },
+    rootState: { readRoot: () => (rootAvailable ? currentRoot : undefined) },
     mechanics: {
       ensureCaptured() {
         calls.capture++;
@@ -35,7 +38,7 @@ function makeCatalogPage({
       },
       readOffers(sample) {
         calls.offers++;
-        if (sample !== root || !offerReadAvailable) return undefined;
+        if (sample !== currentRoot || !offerReadAvailable) return undefined;
         return currentOffers;
       },
       buildPercent() {
@@ -53,6 +56,9 @@ function makeCatalogPage({
     diagnostics,
     setOffers(value) {
       currentOffers = value;
+    },
+    setRoot(value) {
+      currentRoot = value;
     },
   };
 }
@@ -100,6 +106,82 @@ function makeCatalogPage({
     [],
     "an empty offer list is authoritative",
   );
+}
+
+for (const highTech of [0, 5]) {
+  const page = makeCatalogPage({
+    gameTechHighTech: highTech,
+    capture: {
+      kind: "unavailable",
+      reason: "must not be attempted while locked",
+    },
+  });
+  const projects = page.catalog.readProjects();
+  assert.deepEqual(projects, [], `High Tech ${highTech} is locked`);
+  assert.ok(Object.isFrozen(projects));
+  assert.deepEqual(page.calls, { capture: 0, offers: 0 });
+  assert.deepEqual(page.reasons, []);
+}
+
+{
+  const page = makeCatalogPage({ omitHighTech: true });
+  const projects = page.catalog.readProjects();
+  assert.deepEqual(projects, [], "missing High Tech is definitely locked");
+  assert.ok(Object.isFrozen(projects));
+  assert.deepEqual(page.calls, { capture: 0, offers: 0 });
+}
+
+for (const highTech of [6, 7]) {
+  const page = makeCatalogPage({
+    gameTechHighTech: highTech,
+    offers: [
+      {
+        projectId: "lhc",
+        rank: 1,
+        progress: 15,
+        percentCosts: { Money: 12 },
+      },
+    ],
+  });
+  assert.deepEqual(
+    page.catalog.readProjects().map((project) => project.projectId),
+    ["lhc"],
+  );
+  assert.deepEqual(page.calls, { capture: 1, offers: 1 });
+}
+
+for (const malformed of ["5", NaN, Infinity, null]) {
+  const page = makeCatalogPage({ gameTechHighTech: malformed });
+  assert.equal(page.catalog.readProjects(), undefined);
+  assert.deepEqual(page.calls, { capture: 0, offers: 0 });
+  assert.deepEqual(page.reasons, ["the native High Tech level is malformed"]);
+}
+
+{
+  const page = makeCatalogPage({ gameTechHighTech: 5 });
+  assert.deepEqual(page.catalog.readProjects(), []);
+  const replacement = { ...page.root, tech: { high_tech: 6 } };
+  page.setRoot(replacement);
+  assert.deepEqual(page.catalog.readProjects(), []);
+  assert.deepEqual(page.calls, { capture: 1, offers: 1 });
+}
+
+{
+  const page = makeCatalogPage({ gameTechHighTech: 5 });
+  assert.deepEqual(page.catalog.readProjects(), []);
+  page.root.tech.high_tech = 6;
+  assert.deepEqual(page.catalog.readProjects(), []);
+  assert.deepEqual(page.calls, { capture: 1, offers: 1 });
+}
+
+{
+  const page = makeCatalogPage({ gameTechHighTech: 6 });
+  page.root.tech = null;
+  assert.equal(page.catalog.readProjects(), undefined);
+  assert.deepEqual(page.calls, { capture: 0, offers: 0 });
+  assert.deepEqual(page.reasons, [
+    "the native technology state is unavailable",
+  ]);
 }
 
 {
