@@ -77,7 +77,8 @@ assert.equal(control.readEstablishedProjects(), undefined);
     settings: { civTabs: 5 },
     race: {},
     civic: { govern: { type: "democracy" } },
-    tech: {},
+    // This scenario exercises native offered projects, which only exist from High Tech 6 onward.
+    tech: { high_tech: 6 },
     resource: { Money: {} },
     arpa: { lhc: { rank: 2, complete: 35 } },
   };

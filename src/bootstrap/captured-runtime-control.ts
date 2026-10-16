@@ -301,6 +301,7 @@ import {
 import type { PageCapture } from "../adapters/evolve/page-capture.ts";
 
 declare const __EA_TEST_SURFACE_ENABLED__: boolean;
+declare const __EA_RESEARCH_CONDITION_GATE_ENABLED__: boolean;
 import { createGameKeyboardHandlers } from "../adapters/browser/game-keyboard-handlers.ts";
 import { createGameCustomRaceLab } from "../adapters/browser/game-custom-race-lab.ts";
 import { createGameTerraformLab } from "../adapters/browser/game-terraform-lab.ts";
@@ -955,6 +956,16 @@ export function startCapturedRuntime({
    * phase depends on it.
    */
   const runPhase = <T>(name: string, body: () => T): T | undefined => {
+    if (
+      typeof __EA_RESEARCH_CONDITION_GATE_ENABLED__ !== "undefined" &&
+      __EA_RESEARCH_CONDITION_GATE_ENABLED__ === true &&
+      pageCapture.mechanics.researchConditionGateCompromised?.()
+    ) {
+      reportOnce(
+        "automation paused because Research callback restoration failed; reload the game to recover",
+      );
+      return undefined;
+    }
     try {
       return activeRuntimeMeasure.measure(name, body);
     } catch (error) {

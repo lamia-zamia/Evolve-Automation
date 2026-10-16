@@ -5503,14 +5503,27 @@
     });
     return Object.freeze({
       readProjects() {
+        let root = rootState.readRoot();
+        if (!isNonArrayRecord(root)) {
+          reportUnavailable("the game root has not been captured yet");
+          return;
+        }
+        let tech = readProperty(root, "tech");
+        if (!isNonArrayRecord(tech)) {
+          reportUnavailable("the native technology state is unavailable");
+          return;
+        }
+        let highTechValue = readProperty(tech, "high_tech");
+        if (highTechValue === void 0) return Object.freeze([]);
+        let highTech = finite(highTechValue);
+        if (highTech === void 0) {
+          reportUnavailable("the native High Tech level is malformed");
+          return;
+        }
+        if (highTech < 6) return Object.freeze([]);
         let capture = mechanics.ensureCaptured();
         if (capture.kind !== "captured") {
           reportUnavailable(`native A.R.P.A. capture failed: ${capture.reason}`);
-          return;
-        }
-        let root = rootState.readRoot();
-        if (root === void 0) {
-          reportUnavailable("the game root has not been captured yet");
           return;
         }
         let offers = mechanics.readOffers(root);

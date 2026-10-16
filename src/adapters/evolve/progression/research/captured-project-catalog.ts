@@ -14,6 +14,7 @@ import type {
 } from "../../../../ports/game-project-catalog.ts";
 import type { GameRootStateSource } from "../../../../ports/game-root-state.ts";
 import { arpaProjectElementId } from "./arpa-project-identity.ts";
+import { finite, isNonArrayRecord, readProperty } from "../../../validation.ts";
 
 export interface CapturedProjectCatalogDependencies {
   readonly rootState: GameRootStateSource;
@@ -31,17 +32,33 @@ export function createCapturedProjectCatalog(
 
   return Object.freeze({
     readProjects(): readonly Readonly<OfferedProject>[] | undefined {
+      const root = rootState.readRoot();
+      if (!isNonArrayRecord(root)) {
+        reportUnavailable("the game root has not been captured yet");
+        return undefined;
+      }
+      const tech = readProperty(root, "tech");
+      if (!isNonArrayRecord(tech)) {
+        reportUnavailable("the native technology state is unavailable");
+        return undefined;
+      }
+      const highTechValue = readProperty(tech, "high_tech");
+      if (highTechValue === undefined) return Object.freeze([]);
+      const highTech = finite(highTechValue);
+      if (highTech === undefined) {
+        reportUnavailable("the native High Tech level is malformed");
+        return undefined;
+      }
+      // Pinned Evolve only enumerates arpaProjects inside physics() at High Tech 6. Before that
+      // gate, an empty catalog is complete and authoritative; do not try to draw Physics here.
+      if (highTech < 6) return Object.freeze([]);
+
       // The lexical bridge is the only A.R.P.A. authority there is, and it is captured once. This is
       // the single controlled Physics draw in the feature's life, and it happens here rather than
       // per sample: afterwards nothing in the catalog needs a panel.
       const capture = mechanics.ensureCaptured();
       if (capture.kind !== "captured") {
         reportUnavailable(`native A.R.P.A. capture failed: ${capture.reason}`);
-        return undefined;
-      }
-      const root = rootState.readRoot();
-      if (root === undefined) {
-        reportUnavailable("the game root has not been captured yet");
         return undefined;
       }
       const offers = mechanics.readOffers(root);
