@@ -11,6 +11,11 @@ const local = process.argv.includes("--local");
 const researchConditionGate = process.argv.includes(
   "--research-condition-gate",
 );
+if (local && researchConditionGate) {
+  throw new Error(
+    "--local cannot be combined with --research-condition-gate; the pilot build targets the production game hosts",
+  );
+}
 const outputDirectory = local
   ? path.join(root, "test-artifacts", "local")
   : researchConditionGate

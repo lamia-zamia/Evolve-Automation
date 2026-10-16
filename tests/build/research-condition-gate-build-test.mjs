@@ -4,6 +4,17 @@ import { spawnSync } from "node:child_process";
 import { resolve } from "node:path";
 
 const root = resolve(import.meta.dirname, "../..");
+const combinedBuild = spawnSync(
+  process.execPath,
+  ["build.mjs", "--local", "--research-condition-gate"],
+  { cwd: root, encoding: "utf8" },
+);
+assert.notEqual(combinedBuild.status, 0, "combined local pilot build fails");
+assert.match(
+  `${combinedBuild.stdout}\n${combinedBuild.stderr}`,
+  /--local cannot be combined with --research-condition-gate/,
+);
+
 const optInBuild = spawnSync(
   process.execPath,
   ["build.mjs", "--research-condition-gate"],
