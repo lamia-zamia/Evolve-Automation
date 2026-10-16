@@ -21,6 +21,26 @@ const input = (name) => {
 
 const game = input("game");
 const bundle = input("bundle");
+const injectDrawError = process.argv.includes("--inject-draw-error");
+let selectedBundle = bundle;
+if (injectDrawError) {
+  const source = await readFile(bundle, "utf8");
+  const originalDraw =
+    "mechanics.captureCompletedTechConditionsDuring(\n            captureNativeDiscoveryDraw\n          )";
+  if (source.split(originalDraw).length !== 2)
+    throw new Error("native Research draw callback was not unique");
+  selectedBundle = resolve(
+    dirname(input("out")),
+    "b2-draw-exception-injected.user.js",
+  );
+  await writeFile(
+    selectedBundle,
+    source.replace(
+      originalDraw,
+      "mechanics.captureCompletedTechConditionsDuring(() => { if (globalThis.__EA_INJECT_DRAW_ERROR__ === true) throw new Error('intentional native Research draw failure'); return captureNativeDiscoveryDraw(); })",
+    ),
+  );
+}
 const save = parseSave(await readFile(input("save"), "utf8"));
 const settings = await readFile(input("settings"), "utf8");
 const argValue = (name, fallback) => {
@@ -29,7 +49,12 @@ const argValue = (name, fallback) => {
 };
 const warmup = argValue("warmup", 400);
 const periods = argValue("periods", 800);
-const injectDrawError = process.argv.includes("--inject-draw-error");
+const injectRestorationFailure = process.argv.includes(
+  "--inject-restoration-failure",
+);
+const mutatePersistentWrapper = process.argv.includes(
+  "--mutate-persistent-wrapper",
+);
 const removeTechDom = process.argv.includes("--remove-tech-dom");
 const replaceRootDuringDraw = process.argv.includes(
   "--replace-root-during-draw",
@@ -40,7 +65,12 @@ const runner = await createChromiumRunner({
 });
 let session;
 try {
-  session = await runner.openSession({ bundle, save, settings, seed: 42 });
+  session = await runner.openSession({
+    bundle: selectedBundle,
+    save,
+    settings,
+    seed: 42,
+  });
   await session.evaluate(() => {
     window.__EA_RESEARCH_GATE_EVENTS__ = [];
     window.__EA_TEST_HOOKS__ = {
@@ -50,21 +80,92 @@ try {
       },
     };
   });
+  if (injectRestorationFailure || mutatePersistentWrapper)
+    await session.evaluate(
+      (mode) => {
+        const original = Reflect.defineProperty;
+        const originalDelete = Reflect.deleteProperty;
+        const installedConditions = new WeakMap();
+        let conditionWrites = 0;
+        window.__EA_ORIGINAL_REFLECT_DEFINE_PROPERTY__ = original;
+        window.__EA_ORIGINAL_REFLECT_DELETE_PROPERTY__ = originalDelete;
+        window.__EA_GATE_CONDITION_WRITES__ = 0;
+        window.__EA_GATE_INJECTION_ACTIVE__ = mode === "mutate";
+        Reflect.defineProperty = function (target, property, descriptor) {
+          if (
+            window.__EA_GATE_INJECTION_ACTIVE__ === true &&
+            property === "condition"
+          ) {
+            conditionWrites += 1;
+            window.__EA_GATE_CONDITION_WRITES__ = conditionWrites;
+            const installedWrapper = installedConditions.get(target);
+            const current = Reflect.getOwnPropertyDescriptor(target, property);
+            if (
+              mode === "restore" &&
+              installedWrapper !== undefined &&
+              current?.value === installedWrapper
+            ) {
+              window.__EA_GATE_INJECTION_ACTIVE__ = false;
+              return false;
+            }
+            const result = Reflect.apply(original, this, [
+              target,
+              property,
+              descriptor,
+            ]);
+            if (result && !installedConditions.has(target))
+              installedConditions.set(target, descriptor.value);
+            if (mode === "mutate" && conditionWrites === 1) {
+              Reflect.apply(original, this, [
+                target,
+                property,
+                {
+                  ...descriptor,
+                  value() {
+                    return true;
+                  },
+                },
+              ]);
+            }
+            return result;
+          }
+          return Reflect.apply(original, this, [target, property, descriptor]);
+        };
+        Reflect.deleteProperty = function (target, property) {
+          if (
+            mode === "restore" &&
+            window.__EA_GATE_INJECTION_ACTIVE__ === true &&
+            property === "condition" &&
+            installedConditions.get(target) ===
+              Reflect.getOwnPropertyDescriptor(target, property)?.value
+          ) {
+            window.__EA_GATE_INJECTION_ACTIVE__ = false;
+            return false;
+          }
+          return Reflect.apply(originalDelete, this, [target, property]);
+        };
+      },
+      injectRestorationFailure ? "restore" : "mutate",
+    );
   await session.advance(warmup);
   const initialState = await session.readState();
   if (injectDrawError)
     await session.evaluate(() => {
-      const original = Document.prototype.querySelectorAll;
-      let injected = false;
-      Document.prototype.querySelectorAll = function (selector) {
-        if (!injected && selector === "#tech") {
-          injected = true;
-          Document.prototype.querySelectorAll = original;
-          throw new Error("intentional Research draw failure");
-        }
-        return Reflect.apply(original, this, [selector]);
-      };
+      window.__EA_INJECT_DRAW_ERROR__ = true;
     });
+  if (injectRestorationFailure)
+    await session.evaluate(() => {
+      window.__EA_GATE_INJECTION_ACTIVE__ = true;
+    });
+  await session.evaluate(() => {
+    window.__EA_RESEARCH_GATE_EVENTS__ = [];
+    window.__EA_TEST_HOOKS__ = {
+      ...(window.__EA_TEST_HOOKS__ ?? {}),
+      researchConditionGate(event) {
+        window.__EA_RESEARCH_GATE_EVENTS__.push(event);
+      },
+    };
+  });
   if (removeTechDom)
     await session.evaluate(() => {
       const original = Document.prototype.getElementById;
@@ -107,6 +208,16 @@ try {
       };
     });
   await session.advance(periods);
+  if (injectDrawError)
+    await session.evaluate(() => {
+      window.__EA_INJECT_DRAW_ERROR__ = false;
+    });
+  if (injectRestorationFailure || mutatePersistentWrapper)
+    await session.evaluate(() => {
+      window.__EA_GATE_INJECTION_ACTIVE__ = false;
+      Reflect.defineProperty = window.__EA_ORIGINAL_REFLECT_DEFINE_PROPERTY__;
+      Reflect.deleteProperty = window.__EA_ORIGINAL_REFLECT_DELETE_PROPERTY__;
+    });
   if (removeTechDom)
     await session.evaluate(() => {
       Document.prototype.getElementById =
@@ -120,7 +231,8 @@ try {
       delete window.__EA_REPLACE_ROOT__;
     });
   const normalResearchRender = await session.evaluate(() => {
-    const before = window.__EA_RESEARCH_GATE_EVENTS__.length;
+    const events = window.__EA_RESEARCH_GATE_EVENTS__ ?? [];
+    const before = events.length;
     const researchTab = Array.from(
       document.querySelectorAll("#mainTabs .tabs li"),
     ).find((tab) => /research/i.test(tab.textContent ?? ""));
@@ -130,11 +242,11 @@ try {
       gateEventsBefore: before,
       offeredRows: document.querySelectorAll("#tech .action").length,
       grantedRows: document.querySelectorAll("#oldTech .action").length,
-      gateEventsAfter: window.__EA_RESEARCH_GATE_EVENTS__.length,
+      gateEventsAfter: (window.__EA_RESEARCH_GATE_EVENTS__ ?? []).length,
     };
   });
   const result = await session.evaluate(() => {
-    const events = window.__EA_RESEARCH_GATE_EVENTS__;
+    const events = window.__EA_RESEARCH_GATE_EVENTS__ ?? [];
     return {
       events: {
         count: events.length,
@@ -147,12 +259,20 @@ try {
           (sum, event) => sum + event.restorationFailures,
           0,
         ),
+        phaseTimings: events.reduce((total, event) => {
+          for (const [phase, milliseconds] of Object.entries(
+            event.phaseTimings ?? {},
+          ))
+            total[phase] = (total[phase] ?? 0) + milliseconds;
+          return total;
+        }, {}),
         uniqueCompletedKeys: [
           ...new Set(events.flatMap((event) => event.registryKeys)),
         ].sort(),
       },
       rootReplacementTriggered: window.__EA_ROOT_REPLACED__ === true,
       missingDomInterceptions: window.__EA_MISSING_DOM_INTERCEPTS__ ?? 0,
+      injectedConditionWrites: window.__EA_GATE_CONDITION_WRITES__ ?? 0,
       researchTabLabels: Array.from(
         document.querySelectorAll("#mainTabs .tabs li"),
         (tab) => tab.textContent?.trim(),
@@ -200,6 +320,7 @@ try {
           counts: diagnostics.counts,
           controlUsage: diagnostics.controlUsage,
           randomCalls: diagnostics.randomCalls,
+          events: diagnostics.events,
         },
       },
       null,

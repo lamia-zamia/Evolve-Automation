@@ -43,6 +43,29 @@ type CapturedGameCall = (this: unknown, ...args: unknown[]) => unknown;
 declare const __EA_TEST_SURFACE_ENABLED__: boolean;
 declare const __EA_RESEARCH_CONDITION_GATE_ENABLED__: boolean;
 const structureMapCaptureThreshold = 3;
+const completedTechGateLegacyKeys: Readonly<Record<string, string>> =
+  Object.freeze({
+    fanaticism: "fanaticism",
+    anthropology: "anthropology",
+    deify: "ancient_deify",
+    study: "ancient_study",
+    isolation_protocol: "isolation",
+    focus_cure: "focus_cure",
+    vax_strat1: "vax_p",
+    vax_strat2: "vax_f",
+    vax_strat3: "vax_s",
+    vax_strat4: "vax_c",
+  });
+const completedTechGateReadFailure = Symbol("completed-tech-gate-read-failure");
+
+class CompletedTechGateRestorationError extends Error {
+  constructor(failures: number) {
+    super(
+      `Research condition gate could not restore ${failures} native callback descriptor(s)`,
+    );
+    this.name = "CompletedTechGateRestorationError";
+  }
+}
 
 interface CapturedNativeTechDefinitionIdentity extends CapturedTechDefinition {
   readonly action: Record<string, unknown>;
@@ -2676,9 +2699,25 @@ export function installCapturedGameMechanics(
     __EA_RESEARCH_CONDITION_GATE_ENABLED__ === true
       ? (() => {
           let active = false;
+          let gateCompromised = false;
+          const reportFatalRestoration = (error: Error) => {
+            try {
+              const consoleValue = readMechanicsProperty(pageWindow, "console");
+              const errorMethod = readMechanicsProperty(consoleValue, "error");
+              if (typeof errorMethod === "function")
+                Reflect.apply(errorMethod, consoleValue, [error.message]);
+            } catch {
+              // The thrown restoration error remains the authoritative failure signal.
+            }
+          };
           return {
             captureCompletedTechConditionsDuring<T>(draw: () => T): T {
-              if (active || stopped || capturedTechAuthorityInvalid)
+              if (
+                active ||
+                gateCompromised ||
+                stopped ||
+                capturedTechAuthorityInvalid
+              )
                 return draw();
               const retained = readRetainedNativeTechRegistry();
               let root: unknown;
@@ -2696,30 +2735,28 @@ export function installCapturedGameMechanics(
                 return draw();
               let invoked = 0;
 
-              const legacyTechKeys: Readonly<Record<string, string>> = {
-                fanaticism: "fanaticism",
-                anthropology: "anthropology",
-                deify: "ancient_deify",
-                study: "ancient_study",
-                isolation_protocol: "isolation",
-                focus_cure: "focus_cure",
-                vax_strat1: "vax_p",
-                vax_strat2: "vax_f",
-                vax_strat3: "vax_s",
-                vax_strat4: "vax_c",
-              };
               const readTechLevel = (key: string): unknown => {
                 try {
                   return Reflect.get(technologies, key);
                 } catch {
-                  return gateReadFailure;
+                  return completedTechGateReadFailure;
                 }
               };
-              const gateReadFailure = Symbol("gate-read-failure");
+              const pending: {
+                readonly definition: CapturedNativeTechDefinitionIdentity;
+                readonly original: PropertyDescriptor | undefined;
+                readonly replacement: PropertyDescriptor;
+                readonly condition: CapturedGameCall;
+                installed: boolean;
+              }[] = [];
+              let absentDescriptors = 0;
+              let dataDescriptors = 0;
+              let accessorDescriptors = 0;
+              let nonConfigurableWritableDescriptors = 0;
               const completed: CapturedNativeTechDefinitionIdentity[] = [];
               for (const definition of retained.definitions) {
                 const grantLevel = readTechLevel(definition.grantTechnology);
-                if (grantLevel === gateReadFailure) return draw();
+                if (grantLevel === completedTechGateReadFailure) return draw();
                 if (!grantLevel) continue;
                 let grantThresholdReached: boolean;
                 try {
@@ -2730,22 +2767,16 @@ export function installCapturedGameMechanics(
                   return draw();
                 }
                 if (!grantThresholdReached) continue;
-                const legacyKey = legacyTechKeys[definition.registryKey];
+                const legacyKey =
+                  completedTechGateLegacyKeys[definition.registryKey];
                 if (legacyKey === undefined) {
                   completed.push(definition);
                   continue;
                 }
                 const legacyLevel = readTechLevel(legacyKey);
-                if (legacyLevel === gateReadFailure) return draw();
+                if (legacyLevel === completedTechGateReadFailure) return draw();
                 if (legacyLevel) completed.push(definition);
               }
-
-              const pending: {
-                readonly definition: CapturedNativeTechDefinitionIdentity;
-                readonly original: PropertyDescriptor | undefined;
-                readonly replacement: PropertyDescriptor;
-                readonly condition: CapturedGameCall;
-              }[] = [];
               for (const definition of completed) {
                 try {
                   if (
@@ -2776,6 +2807,15 @@ export function installCapturedGameMechanics(
                   ) {
                     return draw();
                   }
+                  if (original === undefined) absentDescriptors += 1;
+                  else if ("value" in original) dataDescriptors += 1;
+                  else accessorDescriptors += 1;
+                  if (
+                    original?.configurable === false &&
+                    "value" in (original ?? {}) &&
+                    original?.writable === true
+                  )
+                    nonConfigurableWritableDescriptors += 1;
                   const condition: CapturedGameCall = () => {
                     invoked += 1;
                     return false;
@@ -2801,6 +2841,7 @@ export function installCapturedGameMechanics(
                     original,
                     replacement,
                     condition,
+                    installed: false,
                   });
                 } catch {
                   return draw();
@@ -2808,37 +2849,26 @@ export function installCapturedGameMechanics(
               }
 
               try {
+                // Full ordered-key/action/reqs validation already ran at entry. The only code
+                // executed since then was trusted current-level reads from the game root; avoid
+                // rebuilding a second full key snapshot immediately before descriptor installs.
                 if (
                   rootState?.readRoot() !== root ||
-                  readRetainedNativeTechRegistry() !== retained
+                  capturedTechRegistry !== retained
                 )
                   return draw();
               } catch {
                 return draw();
               }
 
-              const restores: (() => boolean)[] = [];
               let restored = 0;
               let restorationFailures = 0;
               let registryKeys: string[] = [];
               const originalDescriptorCounts = {
-                absent: pending.filter((entry) => entry.original === undefined)
-                  .length,
-                data: pending.filter(
-                  (entry) =>
-                    entry.original !== undefined && "value" in entry.original,
-                ).length,
-                accessor: pending.filter(
-                  (entry) =>
-                    entry.original !== undefined &&
-                    !("value" in entry.original),
-                ).length,
-                nonConfigurableWritable: pending.filter(
-                  (entry) =>
-                    entry.original?.configurable === false &&
-                    "value" in (entry.original ?? {}) &&
-                    entry.original?.writable === true,
-                ).length,
+                absent: absentDescriptors,
+                data: dataDescriptors,
+                accessor: accessorDescriptors,
+                nonConfigurableWritable: nonConfigurableWritableDescriptors,
               };
               const report = () => {
                 try {
@@ -2867,66 +2897,83 @@ export function installCapturedGameMechanics(
                 }
               };
 
-              for (const {
-                definition,
-                original,
-                replacement,
-                condition,
-              } of pending) {
+              const restore = (entry: (typeof pending)[number]): boolean => {
+                const { definition, original, condition } = entry;
+                if (
+                  Object.getOwnPropertyDescriptor(
+                    definition.action,
+                    "condition",
+                  )?.value !== condition
+                ) {
+                  restorationFailures += 1;
+                  return false;
+                }
+                const didRestore =
+                  original === undefined
+                    ? Reflect.deleteProperty(definition.action, "condition")
+                    : Reflect.defineProperty(
+                        definition.action,
+                        "condition",
+                        original,
+                      );
+                if (didRestore) restored += 1;
+                else restorationFailures += 1;
+                return didRestore;
+              };
+
+              for (const entry of pending) {
                 try {
                   if (
                     !Reflect.defineProperty(
-                      definition.action,
+                      entry.definition.action,
                       "condition",
-                      replacement,
+                      entry.replacement,
                     )
                   )
                     throw new Error("condition descriptor could not be gated");
-                  registryKeys.push(definition.registryKey);
-                  restores.push(() => {
-                    if (
-                      Object.getOwnPropertyDescriptor(
-                        definition.action,
-                        "condition",
-                      )?.value !== condition
-                    ) {
-                      restorationFailures += 1;
-                      return false;
-                    }
-                    const result =
-                      original === undefined
-                        ? Reflect.deleteProperty(definition.action, "condition")
-                        : Reflect.defineProperty(
-                            definition.action,
-                            "condition",
-                            original,
-                          );
-                    if (result) restored += 1;
-                    else restorationFailures += 1;
-                    return result;
-                  });
+                  entry.installed = true;
+                  registryKeys.push(entry.definition.registryKey);
                 } catch {
-                  for (const restore of restores.reverse()) {
+                  for (let index = pending.length - 1; index >= 0; index -= 1) {
+                    const installed = pending[index];
+                    if (installed === undefined || !installed.installed)
+                      continue;
                     try {
-                      if (!restore()) restorationFailures += 1;
+                      restore(installed);
                     } catch {
                       restorationFailures += 1;
                     }
                   }
                   registryKeys = [];
+                  if (restorationFailures > 0) {
+                    gateCompromised = true;
+                    capturedTechAuthorityInvalid = true;
+                    report();
+                    const failure = new CompletedTechGateRestorationError(
+                      restorationFailures,
+                    );
+                    reportFatalRestoration(failure);
+                    throw failure;
+                  }
                   report();
                   return draw();
                 }
               }
-
               active = true;
-              let result: T;
+              let result!: T;
+              let drawFailure: unknown;
+              let drawThrew = false;
               try {
                 result = draw();
+              } catch (error) {
+                drawThrew = true;
+                drawFailure = error;
               } finally {
-                for (const restore of restores) {
+                for (let index = pending.length - 1; index >= 0; index -= 1) {
+                  const entry = pending[index];
+                  if (entry === undefined || !entry.installed) continue;
                   try {
-                    if (!restore()) restorationFailures += 1;
+                    restore(entry);
                   } catch {
                     restorationFailures += 1;
                   }
@@ -2934,8 +2981,19 @@ export function installCapturedGameMechanics(
                 active = false;
                 report();
               }
+              if (restorationFailures > 0) {
+                gateCompromised = true;
+                capturedTechAuthorityInvalid = true;
+                const failure = new CompletedTechGateRestorationError(
+                  restorationFailures,
+                );
+                reportFatalRestoration(failure);
+                throw failure;
+              }
+              if (drawThrew) throw drawFailure;
               return result;
             },
+            researchConditionGateCompromised: () => gateCompromised,
           };
         })()
       : {}),
