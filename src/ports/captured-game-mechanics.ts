@@ -246,6 +246,12 @@ export interface CapturedGameMechanics {
     draw: () => T,
     computedRequirementsContext?: CapturedComputedTechRequirementsContext,
   ): T;
+  /** Candidate-only scoped Research callback gate; absent from production builds. */
+  captureCompletedTechConditionsDuring?<T>(draw: () => T): T;
+  /** True after the experimental gate failed to restore native callback state. */
+  researchConditionGateCompromised?(): boolean;
+  researchConditionGateActive?(): boolean;
+  researchConditionGateObserveRegistry?(registry: unknown, keys: unknown): void;
   /** `undefined` means the retained private technology registry is absent or no longer valid. */
   readTechDefinitions(): readonly CapturedTechDefinition[] | undefined;
   /** Current opt-in native-draw observations; absent means no such draw was observed. */

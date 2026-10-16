@@ -8,9 +8,14 @@ import * as esbuild from "esbuild";
 const root = path.dirname(fileURLToPath(import.meta.url));
 const metadataPath = path.join(root, "src", "userscript.meta.js");
 const local = process.argv.includes("--local");
+const researchConditionGate = process.argv.includes(
+  "--research-condition-gate",
+);
 const outputDirectory = local
   ? path.join(root, "test-artifacts", "local")
-  : root;
+  : researchConditionGate
+    ? path.join(root, "test-artifacts", "research-condition-gate")
+    : root;
 const metadataOutputPath = path.join(
   outputDirectory,
   local ? "evolve_automation.local.meta.js" : "evolve_automation.meta.js",
@@ -35,20 +40,32 @@ function replaceFirstMatchWithLocalhost() {
 }
 
 const sourceMetadata = (await readFile(metadataPath, "utf8")).trimEnd();
-const metadata = local
+const metadata = researchConditionGate
   ? sourceMetadata
       .replace(
         /^\/\/ @name\s+.*$/m,
-        "// @name         Evolve Automation (DeadSpace local)",
+        "// @name         Evolve Automation (Research Gate Pilot)",
       )
       .replace(
         /^\/\/ @namespace\s+.*$/m,
-        "// @namespace    http://localhost/evolve-automation",
+        "// @namespace    https://evolve-automation.local/research-gate-pilot",
       )
       .replace(/^\/\/ @downloadURL.*\r?\n/m, "")
       .replace(/^\/\/ @updateURL.*\r?\n/m, "")
-      .replace(/^\/\/ @match.*\r?\n/gm, replaceFirstMatchWithLocalhost())
-  : sourceMetadata;
+  : local
+    ? sourceMetadata
+        .replace(
+          /^\/\/ @name\s+.*$/m,
+          "// @name         Evolve Automation (DeadSpace local)",
+        )
+        .replace(
+          /^\/\/ @namespace\s+.*$/m,
+          "// @namespace    http://localhost/evolve-automation",
+        )
+        .replace(/^\/\/ @downloadURL.*\r?\n/m, "")
+        .replace(/^\/\/ @updateURL.*\r?\n/m, "")
+        .replace(/^\/\/ @match.*\r?\n/gm, replaceFirstMatchWithLocalhost())
+    : sourceMetadata;
 if (
   !metadata.startsWith("// ==UserScript==") ||
   !metadata.endsWith("// ==/UserScript==")
@@ -77,6 +94,7 @@ const buildOptions = {
   define: {
     "globalThis.__EA_TEST_SURFACE_ENABLED__": "false",
     __EA_TEST_SURFACE_ENABLED__: "false",
+    __EA_RESEARCH_CONDITION_GATE_ENABLED__: String(researchConditionGate),
   },
   minifySyntax: true,
   treeShaking: true,

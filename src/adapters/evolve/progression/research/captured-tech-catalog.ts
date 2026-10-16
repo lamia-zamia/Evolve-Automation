@@ -42,6 +42,7 @@ import {
 } from "../../captured-tab-discovery.ts";
 
 declare const __EA_TEST_SURFACE_ENABLED__: boolean;
+declare const __EA_RESEARCH_CONDITION_GATE_ENABLED__: boolean;
 
 /** Rows with the same-draw native price and affordability details. */
 const OFFERED_TECH_SELECTOR = "#tech .action";
@@ -87,6 +88,9 @@ export interface CapturedTechCatalogDependencies {
   readonly mechanics: Pick<
     CapturedGameMechanics,
     | "captureTechDefinitionsDuring"
+    | "captureCompletedTechConditionsDuring"
+    | "researchConditionGateCompromised"
+    | "researchConditionGateActive"
     | "readTechDefinitions"
     | "readComputedTechRequirements"
   >;
@@ -121,6 +125,26 @@ export function createCapturedTechCatalog(
       const tally = createCountTally(dependencies.diagnostics);
       const measure = createPhaseMeasure(dependencies.diagnostics);
       tally.count("research.catalog.observations");
+      if (
+        typeof __EA_RESEARCH_CONDITION_GATE_ENABLED__ !== "undefined" &&
+        __EA_RESEARCH_CONDITION_GATE_ENABLED__ === true &&
+        mechanics?.researchConditionGateActive?.()
+      ) {
+        reportUnavailable(
+          "nested Research draw refused during an active scratch capture",
+        );
+        return undefined;
+      }
+      if (
+        typeof __EA_RESEARCH_CONDITION_GATE_ENABLED__ !== "undefined" &&
+        __EA_RESEARCH_CONDITION_GATE_ENABLED__ === true &&
+        mechanics?.researchConditionGateCompromised?.()
+      ) {
+        reportUnavailable(
+          "Research callback restoration failed; reload the game to recover",
+        );
+        return undefined;
+      }
       if (rootState.readRoot() === undefined) {
         reportUnavailable("the game root has not been captured yet");
         return undefined;
@@ -145,8 +169,55 @@ export function createCapturedTechCatalog(
             );
           } else observedBindingIds.push(elementId);
         });
-        const captureNativeDraw = () =>
-          mechanics.captureTechDefinitionsDuring(
+        const captureNativeDraw = () => {
+          if (
+            !includeGranted &&
+            typeof __EA_RESEARCH_CONDITION_GATE_ENABLED__ !== "undefined" &&
+            __EA_RESEARCH_CONDITION_GATE_ENABLED__ === true &&
+            mechanics.captureCompletedTechConditionsDuring !== undefined
+          )
+            return mechanics.captureTechDefinitionsDuring(
+              () =>
+                mechanics.captureCompletedTechConditionsDuring!(() =>
+                  discovery.discover(RESEARCH_TAB_PATH, {
+                    purpose: "research-catalog",
+                    forceDraw: true,
+                    discard: UNREAD_RESEARCH_CONTENT,
+                    whileDrawn: () => {
+                      try {
+                        const offeredRows = measure(
+                          "research.dom.capture.offered",
+                          () => drawnActions.read(OFFERED_TECH_SELECTOR),
+                        );
+                        if (
+                          drawnActions.count(OFFERED_TECH_SELECTOR) !==
+                          offeredRows.length
+                        )
+                          throw new Error(
+                            "a rendered Research offer row has no readable id",
+                          );
+                        const generations = new Map<string, number>();
+                        measure("research.binding.generation-capture", () => {
+                          for (const elementId of observedBindingIds)
+                            generations.set(
+                              elementId,
+                              controls.resolve(elementId)?.generation ?? 0,
+                            );
+                        });
+                        drawn = Object.freeze({
+                          offeredRows,
+                          generations,
+                        });
+                        return true;
+                      } finally {
+                        collecting = false;
+                      }
+                    },
+                  }),
+                ),
+              computedRequirementsContext,
+            );
+          return mechanics.captureTechDefinitionsDuring(
             () =>
               discovery.discover(RESEARCH_TAB_PATH, {
                 purpose: "research-catalog",
@@ -202,6 +273,7 @@ export function createCapturedTechCatalog(
               }),
             computedRequirementsContext,
           );
+        };
         result =
           computedRequirementsContext === undefined
             ? captureNativeDraw()
