@@ -27,6 +27,8 @@ import {
   type PhaseTimingSink,
 } from "../../utils/performance.ts";
 
+declare const __EA_TEST_SURFACE_ENABLED__: boolean;
+
 const QUEUE_ELEMENT_ID = "buildQueue";
 /**
  * `data`, not the `res` this used to pass, because the game adds the paying supply pool to the
@@ -41,9 +43,20 @@ const POOL_KEY = "data-pool";
 export interface CapturedActionCostsDependencies {
   readonly rootState: GameRootStateSource;
   readonly controls: GameControlRegistry;
+  readonly onNativePriceProbe?: (event: NativePriceProbeEvent) => void;
   /** Reports a probe that could not run. Costs are simply unavailable for that call. */
   readonly onUnavailable?: (actionId: string, reason: string) => void;
   readonly diagnostics?: PhaseTimingSink | undefined;
+}
+
+export interface NativePriceProbeEvent {
+  readonly actionId: string;
+  readonly root: unknown;
+  readonly queue: readonly unknown[];
+  readonly queueState: readonly unknown[];
+  readonly price: GameActionPrice | undefined;
+  readonly failure: string | undefined;
+  readonly caller: string | undefined;
 }
 
 function readQueueArray(rootState: GameRootStateSource): unknown[] | undefined {
@@ -101,7 +114,49 @@ function probePrice(
   index: number,
   actionId: string,
   reportUnavailable: (actionId: string, reason: string) => void,
+  trace?: (event: NativePriceProbeEvent) => void,
+  root?: unknown,
+  entries?: unknown[],
 ): GameActionPrice | undefined {
+  if (
+    typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
+    __EA_TEST_SURFACE_ENABLED__ === true &&
+    trace !== undefined
+  ) {
+    let tracedPrice: GameActionPrice | undefined;
+    let failure: string | undefined;
+    try {
+      const result = controls.invoke(handle, "setData", [index, COST_PREFIX]);
+      if (!result.ok) {
+        failure = `${result.reason}: ${result.detail ?? ""}`;
+        reportUnavailable(actionId, failure);
+        return undefined;
+      }
+      tracedPrice = parsePrice(result.value);
+      if (tracedPrice === undefined) {
+        failure = "cost result was not a record";
+        reportUnavailable(actionId, failure);
+      }
+      return tracedPrice;
+    } catch (error) {
+      failure = `native probe threw: ${String(error)}`;
+      throw error;
+    } finally {
+      try {
+        trace({
+          actionId,
+          root,
+          queue: entries ?? [],
+          queueState: entries?.slice(0, index) ?? [],
+          price: tracedPrice,
+          failure,
+          caller: new Error().stack,
+        });
+      } catch {
+        // Diagnostics must not change native pricing or queue restoration.
+      }
+    }
+  }
   const result = controls.invoke(handle, "setData", [index, COST_PREFIX]);
   if (!result.ok) {
     reportUnavailable(actionId, `${result.reason}: ${result.detail ?? ""}`);
@@ -118,6 +173,11 @@ export function createCapturedActionCostReader(
 ): GameActionCostReader {
   const { rootState, controls } = dependencies;
   const reportUnavailable = dependencies.onUnavailable ?? (() => {});
+  const trace =
+    typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
+    __EA_TEST_SURFACE_ENABLED__ === true
+      ? dependencies.onNativePriceProbe
+      : undefined;
 
   return Object.freeze({
     readCost(actionId: string): GameActionPrice | undefined {
@@ -131,6 +191,8 @@ export function createCapturedActionCostReader(
         reportUnavailable(actionId, "game queue unavailable");
         return undefined;
       }
+      // The extra root read exists only in the test-surface build, for identity attribution.
+      const root = trace === undefined ? undefined : rootState.readRoot();
       const index = entries.length;
       entries.push(probeEntry(actionId));
       let price: GameActionPrice | undefined;
@@ -141,6 +203,9 @@ export function createCapturedActionCostReader(
           index,
           actionId,
           reportUnavailable,
+          trace,
+          root,
+          entries,
         );
       } finally {
         // Remove by identity rather than by index: a defensive splice of the wrong slot would
@@ -171,6 +236,7 @@ export function createCapturedActionCostReader(
           reportUnavailable(actionIds[0] ?? "", "game queue unavailable");
           return undefined;
         }
+        const root = trace === undefined ? undefined : rootState.readRoot();
         const start = entries.length;
         const results: (GameActionPrice | undefined)[] = Array(
           actionIds.length,
@@ -186,6 +252,9 @@ export function createCapturedActionCostReader(
               start + offset,
               actionId,
               reportUnavailable,
+              trace,
+              root,
+              entries,
             );
             results[offset] = price;
             if (price === undefined) break;

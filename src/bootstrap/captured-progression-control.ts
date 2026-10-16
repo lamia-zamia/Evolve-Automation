@@ -48,6 +48,7 @@ import { SAVING_CONFLICT_CAUSE } from "../domain/progression/build/build.ts";
 import type { CommandExecutionOutcome } from "../domain/commands.ts";
 import type { CostReservationSource } from "../ports/game-cost-reservations.ts";
 import type { GameActionCostReader } from "../ports/game-action-costs.ts";
+import type { NativePriceProbeEvent } from "../adapters/evolve/captured-action-costs.ts";
 import type { ConstructionObservations } from "../ports/game-construction-observations.ts";
 import type { InterfaceSettingsState } from "../domain/interface-settings.ts";
 import type { GameControlRegistry } from "../ports/game-control-registry.ts";
@@ -112,6 +113,7 @@ export interface CapturedProgressionControlDependencies {
   readonly arpa: CapturedArpaMechanics;
   /** Prices captured mission controls for the build weighting adapter. */
   readonly costs?: GameActionCostReader;
+  readonly onNativePriceProbe?: (event: NativePriceProbeEvent) => void;
   /** Persisted script settings. Required: without them nothing is managed and nothing is built. */
   readonly readSettings: () => unknown;
   /** Optional shared authority for construction presentation; omitted callers use readSettings. */
@@ -1012,6 +1014,9 @@ export function createCapturedProgressionControl(
   const construction = createCapturedConstructionControl({
     rootState,
     controls,
+    ...(dependencies.onNativePriceProbe === undefined
+      ? {}
+      : { onNativePriceProbe: dependencies.onNativePriceProbe }),
     projectCatalog: Object.freeze({ readProjects }),
     arpa,
     readPolicy,

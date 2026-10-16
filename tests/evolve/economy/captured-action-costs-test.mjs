@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 
-import { createCapturedActionCostReader } from "../../../src/adapters/evolve/captured-action-costs.ts";
+globalThis.__EA_TEST_SURFACE_ENABLED__ = true;
+const { createCapturedActionCostReader } =
+  await import("../../../src/adapters/evolve/captured-action-costs.ts");
 
 /** A registry that answers `setData` from the entry the caller queued, like the game's does. */
 function makeRegistry(queueMethods, { generation = 1 } = {}) {
@@ -82,9 +84,11 @@ const registry = makeRegistry({
 });
 
 const unavailable = [];
+const priceRequests = [];
 const costs = createCapturedActionCostReader({
   rootState: rootSource(root),
   controls: registry,
+  onNativePriceProbe: (event) => priceRequests.push(event),
   onUnavailable: (id, reason) => unavailable.push([id, reason]),
 });
 
@@ -101,6 +105,18 @@ assert.deepEqual(seen.at(-1), {
   type: "basic_housing",
   action: "city",
 });
+assert.equal(priceRequests[0].actionId, "city-basic_housing");
+assert.equal(priceRequests[0].root, root);
+assert.equal(priceRequests[0].queue, root.queue.queue);
+assert.deepEqual(priceRequests[0].queueState, [
+  { id: "city-farm", label: "player's own queued item" },
+]);
+assert.deepEqual(priceRequests[0].price, {
+  cost: { Money: 119, Lumber: 109 },
+  pool: undefined,
+});
+assert.equal(priceRequests[0].failure, undefined);
+assert.match(priceRequests[0].caller, /probePrice/u);
 // The paying pool rides along in the same invocation, and is not mistaken for a cost.
 assert.deepEqual(costs.readCost("space-spaceport"), {
   cost: { Money: 47500, Iridium: 1750 },
@@ -144,6 +160,9 @@ assert.deepEqual(
 );
 assert.equal(unavailable.at(-1)[0], "tech-foundry");
 assert.match(unavailable.at(-1)[1], /threw/);
+assert.equal(priceRequests.at(-1).actionId, "tech-foundry");
+assert.equal(priceRequests.at(-1).price, undefined);
+assert.match(priceRequests.at(-1).failure, /threw/u);
 assert.deepEqual(
   costs.readCosts(["city-basic_housing", "tech-foundry", "space-spaceport"]),
   [
