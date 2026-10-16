@@ -6355,7 +6355,7 @@
       pool: typeof pool == "string" && pool.length > 0 ? pool : void 0
     });
   }
-  function probePrice(controls2, handle, index, actionId, reportUnavailable, trace, root, entries) {
+  function probePrice(controls2, handle, index, actionId, reportUnavailable) {
     let result = controls2.invoke(handle, "setData", [index, COST_PREFIX]);
     if (!result.ok) {
       reportUnavailable(actionId, `${result.reason}: ${result.detail ?? ""}`);
@@ -6366,7 +6366,7 @@
   }
   function createCapturedActionCostReader(dependencies) {
     let { rootState, controls: controls2 } = dependencies, reportUnavailable = dependencies.onUnavailable ?? (() => {
-    }), trace = void 0;
+    });
     return Object.freeze({
       readCost(actionId) {
         let handle = controls2.resolve(QUEUE_ELEMENT_ID);
@@ -6379,7 +6379,7 @@
           reportUnavailable(actionId, "game queue unavailable");
           return;
         }
-        let root = trace === void 0 ? void 0 : rootState.readRoot(), index = entries.length;
+        let index = entries.length;
         entries.push(probeEntry(actionId));
         let price;
         try {
@@ -6388,10 +6388,7 @@
             handle,
             index,
             actionId,
-            reportUnavailable,
-            trace,
-            root,
-            entries
+            reportUnavailable
           );
         } finally {
           entries.length > index && entries.splice(index, entries.length - index);
@@ -6415,7 +6412,7 @@
             reportUnavailable(actionIds[0] ?? "", "game queue unavailable");
             return;
           }
-          let root = trace === void 0 ? void 0 : rootState.readRoot(), start = entries.length, results = Array(
+          let start = entries.length, results = Array(
             actionIds.length
           ).fill(void 0);
           try {
@@ -6428,10 +6425,7 @@
                 handle,
                 start + offset,
                 actionId,
-                reportUnavailable,
-                trace,
-                root,
-                entries
+                reportUnavailable
               );
               if (results[offset] = price, price === void 0) break;
             }
@@ -8294,7 +8288,6 @@
     } = dependencies, onSkipped = dependencies.onSkipped, readOfferedTechs = dependencies.readOfferedTechs, scriptReservations = dependencies.scriptReservations, readKnowledgeGate = dependencies.readKnowledgeGate, readStorageRequired = dependencies.readStorageRequired, onDiagnostic = dependencies.onDiagnostic, onActivity = dependencies.onActivity, onMutation = dependencies.onMutation, offeredThisCycle, readOfferedTechsOnce = () => (offeredThisCycle ??= { value: readOfferedTechs?.() }, offeredThisCycle.value), resources = createCapturedResourceSource(rootState), costs = createCapturedActionCostReader({
       rootState,
       controls: controls2,
-      ...dependencies.onNativePriceProbe === void 0 ? {} : { onNativePriceProbe: dependencies.onNativePriceProbe },
       ...onSkipped === void 0 ? {} : { onUnavailable: onSkipped }
     }), reservations = createCapturedQueueReservationSource({
       rootState,
@@ -12405,7 +12398,6 @@
     }), readStorageRequired = getResources === void 0 ? dependencies.readCapturedStorageRequired : createScriptStorageRequirementReader({ getResources }), construction = createCapturedConstructionControl({
       rootState,
       controls: controls2,
-      ...dependencies.onNativePriceProbe === void 0 ? {} : { onNativePriceProbe: dependencies.onNativePriceProbe },
       projectCatalog: Object.freeze({ readProjects: readProjects2 }),
       arpa,
       readPolicy,
@@ -59297,10 +59289,9 @@ Only continue if you trust the source. Injected code:
       readRaw: settingsLifecycle.readEffective,
       replaceRaw: settingsStorage.replaceRaw,
       persist: settingsStorage.persist
-    }), currentPricePhase = "runtime-setup", actionCostEpoch = 0, onNativePriceProbe = void 0, buildCosts = createCapturedActionCostReader({
+    }), buildCosts = createCapturedActionCostReader({
       rootState: pageCapture2.rootState,
       controls: pageCapture2.controls,
-      ...onNativePriceProbe === void 0 ? {} : { onNativePriceProbe },
       diagnostics: phaseDiagnostics
     }), ensureCapturedBuildingControls = () => {
     }, reportDiagnostic = (message) => {
@@ -59502,15 +59493,11 @@ Only continue if you trust the source. Injected code:
     let reported = /* @__PURE__ */ new Set(), reportOnce = (message) => {
       reported.has(message) || (reported.add(message), logError(message));
     }, measurePhase = (name, body) => activeRuntimeMeasure.measure(name, body), runPhase = (name, body) => {
-      let previousPricePhase = currentPricePhase;
-      currentPricePhase = name;
       try {
         return activeRuntimeMeasure.measure(name, body);
       } catch (error) {
         reportOnce(`${name} stopped: ${String(error)}`);
         return;
-      } finally {
-        currentPricePhase = previousPricePhase;
       }
     }, readDemand = () => EMPTY_DEMAND_SAMPLE, readDemandFor = (owner) => () => readDemand(owner), demandPrerequisitesThisCycle, readDemandPrerequisites = () => demandPrerequisitesThisCycle, mechSupplyReservation = createMechSupplyReservation(), readArpaReadinessEpoch = () => "progression-not-ready", arpa = createCapturedArpaMechanics({
       rootState: pageCapture2.rootState,
@@ -59545,7 +59532,6 @@ Only continue if you trust the source. Injected code:
       }),
       arpa,
       costs: buildCosts,
-      ...onNativePriceProbe === void 0 ? {} : { onNativePriceProbe },
       readSettings: () => settingsStore.readRaw(),
       readInterfacePresentationSettings: readEffectiveInterfacePresentation,
       readStateLogPlannerDetailsDue: () => stateLogPlannerDetailsDue,
@@ -59888,8 +59874,7 @@ Only continue if you trust the source. Injected code:
       readOfferedTechs: progression.readOfferedTechs,
       costs: createCapturedActionCostReader({
         rootState: pageCapture2.rootState,
-        controls: pageCapture2.controls,
-        ...onNativePriceProbe === void 0 ? {} : { onNativePriceProbe }
+        controls: pageCapture2.controls
       })
     }), fleetDemand = createCapturedFleetDemand({
       rootState: pageCapture2.rootState,
@@ -59997,7 +59982,7 @@ Only continue if you trust the source. Injected code:
         );
       }
     };
-    let demandThisCycle, exactDemandUnavailableReason, demandEpoch = 0, demandSampleEpoch = -1, invalidateDemandSample = (actionCostsMayChange = !0) => {
+    let demandThisCycle, exactDemandUnavailableReason, demandEpoch = 0, actionCostEpoch = 0, demandSampleEpoch = -1, invalidateDemandSample = (actionCostsMayChange = !0) => {
       demandEpoch += 1, actionCostsMayChange && (actionCostEpoch += 1), demandSampleEpoch = -1, demandThisCycle = void 0, exactDemandUnavailableReason = void 0;
     };
     invalidateDemandSettings = () => {

@@ -7,10 +7,7 @@
  * complete; callers that cannot provide that capture reject before touching game-facing readers.
  */
 
-import {
-  createCapturedActionCostReader,
-  type NativePriceProbeEvent,
-} from "../adapters/evolve/captured-action-costs.ts";
+import { createCapturedActionCostReader } from "../adapters/evolve/captured-action-costs.ts";
 import { createCapturedAchievementSource } from "../adapters/evolve/captured-achievement-state.ts";
 import { createCapturedCostConflictReader } from "../adapters/evolve/captured-cost-conflict.ts";
 import { createCapturedQueueReservationSource } from "../adapters/evolve/captured-queue-reservations.ts";
@@ -53,7 +50,6 @@ export interface CapturedConstructionPolicy extends ConstructionCycleOptions {
 export interface CapturedConstructionControlDependencies {
   readonly rootState: GameRootStateSource;
   readonly controls: GameControlRegistry;
-  readonly onNativePriceProbe?: (event: NativePriceProbeEvent) => void;
   /** The running bundle's own A.R.P.A. project mechanics, captured once by the project catalog. */
   readonly arpa: CapturedArpaMechanics;
   /**
@@ -152,9 +148,6 @@ export function createCapturedConstructionControl(
   const costs = createCapturedActionCostReader({
     rootState,
     controls,
-    ...(dependencies.onNativePriceProbe === undefined
-      ? {}
-      : { onNativePriceProbe: dependencies.onNativePriceProbe }),
     ...(onSkipped === undefined ? {} : { onUnavailable: onSkipped }),
   });
   const reservations = createCapturedQueueReservationSource({

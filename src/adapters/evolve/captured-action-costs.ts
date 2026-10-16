@@ -40,10 +40,22 @@ const COST_PREFIX = "data";
 /** The game's own key for the paying pool inside that result, alongside the `data-<Resource>` prices. */
 const POOL_KEY = "data-pool";
 
+/** The exact runner exposes a native clock only in measurement sessions. */
+function nativePriceProbeNowMs(): number {
+  const runner = readProperty(globalThis, "__EA_RUNNER__");
+  const readNativeNow = readProperty(runner, "nativeNow");
+  if (typeof readNativeNow === "function")
+    return Reflect.apply(readNativeNow, runner, []) as number;
+  const pagePerformance = readProperty(globalThis, "performance");
+  const pageNow = readProperty(pagePerformance, "now");
+  return typeof pageNow === "function"
+    ? (Reflect.apply(pageNow, pagePerformance, []) as number)
+    : Date.now();
+}
+
 export interface CapturedActionCostsDependencies {
   readonly rootState: GameRootStateSource;
   readonly controls: GameControlRegistry;
-  readonly onNativePriceProbe?: (event: NativePriceProbeEvent) => void;
   /** Reports a probe that could not run. Costs are simply unavailable for that call. */
   readonly onUnavailable?: (actionId: string, reason: string) => void;
   readonly diagnostics?: PhaseTimingSink | undefined;
@@ -53,10 +65,14 @@ export interface NativePriceProbeEvent {
   readonly actionId: string;
   readonly root: unknown;
   readonly queue: readonly unknown[];
-  readonly queueState: readonly unknown[];
+  /** Player-owned rows captured before any temporary probe rows were appended. */
+  readonly playerQueueState: readonly unknown[];
+  /** Rows before this probe as observed by native setData; a batch can include earlier probes. */
+  readonly effectiveQueuePrefix: readonly unknown[];
   readonly price: GameActionPrice | undefined;
   readonly failure: string | undefined;
   readonly caller: string | undefined;
+  readonly nativeDurationMs: number | undefined;
 }
 
 function readQueueArray(rootState: GameRootStateSource): unknown[] | undefined {
@@ -114,49 +130,7 @@ function probePrice(
   index: number,
   actionId: string,
   reportUnavailable: (actionId: string, reason: string) => void,
-  trace?: (event: NativePriceProbeEvent) => void,
-  root?: unknown,
-  entries?: unknown[],
 ): GameActionPrice | undefined {
-  if (
-    typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
-    __EA_TEST_SURFACE_ENABLED__ === true &&
-    trace !== undefined
-  ) {
-    let tracedPrice: GameActionPrice | undefined;
-    let failure: string | undefined;
-    try {
-      const result = controls.invoke(handle, "setData", [index, COST_PREFIX]);
-      if (!result.ok) {
-        failure = `${result.reason}: ${result.detail ?? ""}`;
-        reportUnavailable(actionId, failure);
-        return undefined;
-      }
-      tracedPrice = parsePrice(result.value);
-      if (tracedPrice === undefined) {
-        failure = "cost result was not a record";
-        reportUnavailable(actionId, failure);
-      }
-      return tracedPrice;
-    } catch (error) {
-      failure = `native probe threw: ${String(error)}`;
-      throw error;
-    } finally {
-      try {
-        trace({
-          actionId,
-          root,
-          queue: entries ?? [],
-          queueState: entries?.slice(0, index) ?? [],
-          price: tracedPrice,
-          failure,
-          caller: new Error().stack,
-        });
-      } catch {
-        // Diagnostics must not change native pricing or queue restoration.
-      }
-    }
-  }
   const result = controls.invoke(handle, "setData", [index, COST_PREFIX]);
   if (!result.ok) {
     reportUnavailable(actionId, `${result.reason}: ${result.detail ?? ""}`);
@@ -168,16 +142,67 @@ function probePrice(
   return price;
 }
 
+function probePriceWithTrace(
+  controls: GameControlRegistry,
+  handle: NonNullable<ReturnType<GameControlRegistry["resolve"]>>,
+  index: number,
+  actionId: string,
+  reportUnavailable: (actionId: string, reason: string) => void,
+  root: unknown,
+  entries: unknown[],
+  playerQueueState: readonly unknown[],
+  trace: (event: NativePriceProbeEvent) => void,
+): GameActionPrice | undefined {
+  let price: GameActionPrice | undefined;
+  let failure: string | undefined;
+  let nativeDurationMs: number | undefined;
+  try {
+    const startedAt = nativePriceProbeNowMs();
+    try {
+      const result = controls.invoke(handle, "setData", [index, COST_PREFIX]);
+      nativeDurationMs = nativePriceProbeNowMs() - startedAt;
+      if (!result.ok) {
+        failure = `${result.reason}: ${result.detail ?? ""}`;
+        reportUnavailable(actionId, failure);
+        return undefined;
+      }
+      price = parsePrice(result.value);
+      if (price === undefined) {
+        failure = "cost result was not a record";
+        reportUnavailable(actionId, failure);
+      }
+      return price;
+    } catch (error) {
+      nativeDurationMs = nativePriceProbeNowMs() - startedAt;
+      throw error;
+    }
+  } catch (error) {
+    failure = `native probe threw: ${String(error)}`;
+    throw error;
+  } finally {
+    try {
+      trace({
+        actionId,
+        root,
+        queue: entries,
+        playerQueueState,
+        effectiveQueuePrefix: entries.slice(0, index),
+        price,
+        failure,
+        caller: new Error().stack,
+        nativeDurationMs,
+      });
+    } catch {
+      // Diagnostics must not change native pricing or queue restoration.
+    }
+  }
+}
+
 export function createCapturedActionCostReader(
   dependencies: CapturedActionCostsDependencies,
 ): GameActionCostReader {
   const { rootState, controls } = dependencies;
   const reportUnavailable = dependencies.onUnavailable ?? (() => {});
-  const trace =
-    typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
-    __EA_TEST_SURFACE_ENABLED__ === true
-      ? dependencies.onNativePriceProbe
-      : undefined;
 
   return Object.freeze({
     readCost(actionId: string): GameActionPrice | undefined {
@@ -191,22 +216,61 @@ export function createCapturedActionCostReader(
         reportUnavailable(actionId, "game queue unavailable");
         return undefined;
       }
-      // The extra root read exists only in the test-surface build, for identity attribution.
-      const root = trace === undefined ? undefined : rootState.readRoot();
       const index = entries.length;
+      if (
+        typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
+        __EA_TEST_SURFACE_ENABLED__ === true
+      ) {
+        const hooks = readProperty(globalThis, "__EA_TEST_HOOKS__");
+        const capture = readProperty(hooks, "captureNativePriceQueue");
+        if (typeof capture === "function")
+          Reflect.apply(capture, hooks, [entries, entries.slice()]);
+      }
       entries.push(probeEntry(actionId));
       let price: GameActionPrice | undefined;
       try {
-        price = probePrice(
-          controls,
-          handle,
-          index,
-          actionId,
-          reportUnavailable,
-          trace,
-          root,
-          entries,
-        );
+        if (
+          typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
+          __EA_TEST_SURFACE_ENABLED__ === true
+        ) {
+          const hooks = readProperty(globalThis, "__EA_TEST_HOOKS__");
+          const readQueue = readProperty(hooks, "readNativePriceQueue");
+          const playerQueueState =
+            typeof readQueue === "function"
+              ? Reflect.apply(readQueue, hooks, [entries])
+              : [];
+          const record = readProperty(hooks, "recordNativePriceRequest");
+          if (typeof record === "function") {
+            const root = rootState.readRoot();
+            price = probePriceWithTrace(
+              controls,
+              handle,
+              index,
+              actionId,
+              reportUnavailable,
+              root,
+              entries,
+              playerQueueState,
+              (event) => Reflect.apply(record, hooks, [event]),
+            );
+          } else {
+            price = probePrice(
+              controls,
+              handle,
+              index,
+              actionId,
+              reportUnavailable,
+            );
+          }
+        } else {
+          price = probePrice(
+            controls,
+            handle,
+            index,
+            actionId,
+            reportUnavailable,
+          );
+        }
       } finally {
         // Remove by identity rather than by index: a defensive splice of the wrong slot would
         // delete a player's queued item.
@@ -236,28 +300,80 @@ export function createCapturedActionCostReader(
           reportUnavailable(actionIds[0] ?? "", "game queue unavailable");
           return undefined;
         }
-        const root = trace === undefined ? undefined : rootState.readRoot();
         const start = entries.length;
+        if (
+          typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
+          __EA_TEST_SURFACE_ENABLED__ === true
+        ) {
+          const hooks = readProperty(globalThis, "__EA_TEST_HOOKS__");
+          const capture = readProperty(hooks, "captureNativePriceQueue");
+          if (typeof capture === "function")
+            Reflect.apply(capture, hooks, [entries, entries.slice()]);
+        }
         const results: (GameActionPrice | undefined)[] = Array(
           actionIds.length,
         ).fill(undefined);
         try {
           entries.push(...actionIds.map(probeEntry));
-          for (let offset = 0; offset < actionIds.length; offset += 1) {
-            const actionId = actionIds[offset];
-            if (actionId === undefined) break;
-            const price = probePrice(
-              controls,
-              handle,
-              start + offset,
-              actionId,
-              reportUnavailable,
-              trace,
-              root,
-              entries,
-            );
-            results[offset] = price;
-            if (price === undefined) break;
+          if (
+            typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
+            __EA_TEST_SURFACE_ENABLED__ === true
+          ) {
+            const hooks = readProperty(globalThis, "__EA_TEST_HOOKS__");
+            const readQueue = readProperty(hooks, "readNativePriceQueue");
+            const playerQueueState =
+              typeof readQueue === "function"
+                ? Reflect.apply(readQueue, hooks, [entries])
+                : [];
+            const record = readProperty(hooks, "recordNativePriceRequest");
+            if (typeof record === "function") {
+              const root = rootState.readRoot();
+              for (let offset = 0; offset < actionIds.length; offset += 1) {
+                const actionId = actionIds[offset];
+                if (actionId === undefined) break;
+                const price = probePriceWithTrace(
+                  controls,
+                  handle,
+                  start + offset,
+                  actionId,
+                  reportUnavailable,
+                  root,
+                  entries,
+                  playerQueueState,
+                  (event) => Reflect.apply(record, hooks, [event]),
+                );
+                results[offset] = price;
+                if (price === undefined) break;
+              }
+            } else {
+              for (let offset = 0; offset < actionIds.length; offset += 1) {
+                const actionId = actionIds[offset];
+                if (actionId === undefined) break;
+                const price = probePrice(
+                  controls,
+                  handle,
+                  start + offset,
+                  actionId,
+                  reportUnavailable,
+                );
+                results[offset] = price;
+                if (price === undefined) break;
+              }
+            }
+          } else {
+            for (let offset = 0; offset < actionIds.length; offset += 1) {
+              const actionId = actionIds[offset];
+              if (actionId === undefined) break;
+              const price = probePrice(
+                controls,
+                handle,
+                start + offset,
+                actionId,
+                reportUnavailable,
+              );
+              results[offset] = price;
+              if (price === undefined) break;
+            }
           }
         } finally {
           // The native `setData` only reads its queue row; discard this contiguous probe suffix once.

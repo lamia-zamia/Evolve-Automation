@@ -142,10 +142,7 @@ import { createCapturedFleetDemand } from "../adapters/evolve/combat/captured-fl
 import { createCapturedFleetAutomation } from "../adapters/evolve/combat/captured-fleet.ts";
 import { createCapturedOuterFleetControl } from "./captured-fleet-outer-control.ts";
 import { readCapturedAuthorityMarginal } from "../adapters/evolve/civic/authority.ts";
-import {
-  createCapturedActionCostReader,
-  type NativePriceProbeEvent,
-} from "../adapters/evolve/captured-action-costs.ts";
+import { createCapturedActionCostReader } from "../adapters/evolve/captured-action-costs.ts";
 import {
   createCapturedTriggers,
   triggersNeedDemandSample,
@@ -658,29 +655,9 @@ export function startCapturedRuntime({
     replaceRaw: settingsStorage.replaceRaw,
     persist: settingsStorage.persist,
   });
-  let currentPricePhase = "runtime-setup";
-  let actionCostEpoch = 0;
-  const onNativePriceProbe =
-    typeof __EA_TEST_SURFACE_ENABLED__ !== "undefined" &&
-    __EA_TEST_SURFACE_ENABLED__ === true
-      ? (event: NativePriceProbeEvent) => {
-          const hooks = readProperty(settingsHostWindow, "__EA_TEST_HOOKS__");
-          const record = readProperty(hooks, "recordNativePriceRequest");
-          if (typeof record !== "function") return;
-          Reflect.apply(record, hooks, [
-            {
-              ...event,
-              cycle: automationCycle,
-              phase: currentPricePhase,
-              actionCostEpoch,
-            },
-          ]);
-        }
-      : undefined;
   const buildCosts = createCapturedActionCostReader({
     rootState: pageCapture.rootState,
     controls: pageCapture.controls,
-    ...(onNativePriceProbe === undefined ? {} : { onNativePriceProbe }),
     diagnostics: phaseDiagnostics,
   });
   let ensureCapturedBuildingControls: () => void = () => {};
@@ -978,15 +955,11 @@ export function startCapturedRuntime({
    * phase depends on it.
    */
   const runPhase = <T>(name: string, body: () => T): T | undefined => {
-    const previousPricePhase = currentPricePhase;
-    currentPricePhase = name;
     try {
       return activeRuntimeMeasure.measure(name, body);
     } catch (error) {
       reportOnce(`${name} stopped: ${String(error)}`);
       return undefined;
-    } finally {
-      currentPricePhase = previousPricePhase;
     }
   };
   // The demand sample both reads the construction cycle's observations and answers its storage
@@ -1069,7 +1042,6 @@ export function startCapturedRuntime({
     }),
     arpa,
     costs: buildCosts,
-    ...(onNativePriceProbe === undefined ? {} : { onNativePriceProbe }),
     readSettings: () => settingsStore.readRaw(),
     readInterfacePresentationSettings: readEffectiveInterfacePresentation,
     readStateLogPlannerDetailsDue: () => stateLogPlannerDetailsDue,
@@ -3562,7 +3534,6 @@ export function startCapturedRuntime({
     costs: createCapturedActionCostReader({
       rootState: pageCapture.rootState,
       controls: pageCapture.controls,
-      ...(onNativePriceProbe === undefined ? {} : { onNativePriceProbe }),
     }),
   });
   // The yard's own cost row serves both demand plans below instead of each drawing the panel's cost
@@ -3752,6 +3723,7 @@ export function startCapturedRuntime({
   let demandThisCycle: CapturedDemandSample | undefined;
   let exactDemandUnavailableReason: string | undefined;
   let demandEpoch = 0;
+  let actionCostEpoch = 0;
   let demandSampleEpoch = -1;
   const invalidateDemandSample = (actionCostsMayChange = true) => {
     demandEpoch += 1;

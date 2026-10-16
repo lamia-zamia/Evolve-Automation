@@ -56,6 +56,7 @@ const prices = {
 // The game adds `data-pool` to the result for exactly the `data` prefix, from its own `actionPool`.
 const pools = { "space-spaceport": "spc_home" };
 const seen = [];
+const capturedPlayerQueues = new WeakMap();
 const root = makeRoot([{ id: "city-farm", label: "player's own queued item" }]);
 const registry = makeRegistry({
   setData(index, prefix) {
@@ -85,10 +86,15 @@ const registry = makeRegistry({
 
 const unavailable = [];
 const priceRequests = [];
+globalThis.__EA_TEST_HOOKS__ = {
+  captureNativePriceQueue: (queue, snapshot) =>
+    capturedPlayerQueues.set(queue, snapshot),
+  readNativePriceQueue: (queue) => capturedPlayerQueues.get(queue) ?? [],
+  recordNativePriceRequest: (event) => priceRequests.push(event),
+};
 const costs = createCapturedActionCostReader({
   rootState: rootSource(root),
   controls: registry,
-  onNativePriceProbe: (event) => priceRequests.push(event),
   onUnavailable: (id, reason) => unavailable.push([id, reason]),
 });
 
@@ -108,9 +114,13 @@ assert.deepEqual(seen.at(-1), {
 assert.equal(priceRequests[0].actionId, "city-basic_housing");
 assert.equal(priceRequests[0].root, root);
 assert.equal(priceRequests[0].queue, root.queue.queue);
-assert.deepEqual(priceRequests[0].queueState, [
+assert.deepEqual(priceRequests[0].playerQueueState, [
   { id: "city-farm", label: "player's own queued item" },
 ]);
+assert.deepEqual(priceRequests[0].effectiveQueuePrefix, [
+  { id: "city-farm", label: "player's own queued item" },
+]);
+assert.equal(typeof priceRequests[0].nativeDurationMs, "number");
 assert.deepEqual(priceRequests[0].price, {
   cost: { Money: 119, Lumber: 109 },
   pool: undefined,
@@ -130,6 +140,28 @@ assert.deepEqual(
   seen.slice(-2).map(({ index }) => index),
   [1, 2],
 );
+assert.deepEqual(
+  priceRequests.slice(-2).map(({ playerQueueState }) => playerQueueState),
+  [
+    [{ id: "city-farm", label: "player's own queued item" }],
+    [{ id: "city-farm", label: "player's own queued item" }],
+  ],
+);
+assert.deepEqual(priceRequests.at(-1).effectiveQueuePrefix, [
+  { id: "city-farm", label: "player's own queued item" },
+  {
+    id: "city-basic_housing",
+    action: "city",
+    type: "basic_housing",
+    label: "city-basic_housing",
+    cna: false,
+    time: 0,
+    t_max: 0,
+    q: 1,
+    qs: 1,
+    bres: false,
+  },
+]);
 assert.equal(root.queue.queue.length, 1, "the batch removes its probe suffix");
 
 // An id with no dash stands in for both halves, so the probe still runs.
