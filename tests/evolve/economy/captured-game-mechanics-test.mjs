@@ -2061,10 +2061,19 @@ cleanupCapture.uninstall();
 function techRegistryPage(registry) {
   const techPage = makePage();
   let root = { settings: { civTabs: 4 } };
+  let rootReplacementListener;
   const installed = installCapturedGameMechanics(
     techPage,
     { subscribe: () => () => {} },
-    { readRoot: () => root },
+    {
+      readRoot: () => root,
+      subscribeRootReplaced: (listener) => {
+        rootReplacementListener = listener;
+        return () => {
+          rootReplacementListener = undefined;
+        };
+      },
+    },
   );
   return {
     page: techPage,
@@ -2073,6 +2082,7 @@ function techRegistryPage(registry) {
     },
     replaceRoot: (nextRoot) => {
       root = nextRoot;
+      rootReplacementListener?.();
     },
     registry,
     installed,
@@ -2085,6 +2095,481 @@ function validTechRegistry() {
     beta: { id: "tech-beta", grant: ["beta", 2] },
   };
 }
+
+globalThis.__EA_RESEARCH_CONDITION_GATE_ENABLED__ = true;
+
+function prepareResearchGateFixture(registry, tech) {
+  const fixture = techRegistryPage(registry);
+  fixture.root.tech = tech;
+  fixture.installed.mechanics.captureTechDefinitionsDuring(() =>
+    fixture.page.Object.keys(registry),
+  );
+  return fixture;
+}
+
+for (const nestedKind of ["offers-only", "granted-tech", "player-render"]) {
+  let nestedDraws = 0;
+  const registry = {
+    alpha: {
+      id: "tech-alpha",
+      grant: ["alpha", 1],
+      condition() {
+        return true;
+      },
+    },
+  };
+  const fixture = prepareResearchGateFixture(registry, { alpha: 1 });
+  assert.throws(
+    () =>
+      fixture.installed.mechanics.captureCompletedTechConditionsDuring(() => {
+        assert.throws(
+          () =>
+            fixture.installed.mechanics.captureCompletedTechConditionsDuring(
+              () => {
+                nestedDraws += 1;
+              },
+            ),
+          /nested draw during active scratch capture/,
+        );
+      }),
+    /game authority changed during native draw/,
+    `${nestedKind} reentrancy invalidates the outer observation`,
+  );
+  assert.equal(nestedDraws, 0, "nested native draw is refused");
+  assert.equal(
+    registry.alpha.condition(),
+    true,
+    "original native condition is restored after nested refusal",
+  );
+  fixture.installed.uninstall();
+}
+
+{
+  const registry = {
+    alpha: { id: "tech-alpha", grant: ["alpha", 1] },
+    beta: { id: "tech-beta", grant: ["beta", 1] },
+  };
+  const fixture = prepareResearchGateFixture(registry, { alpha: 1, beta: 1 });
+  const nativeDefineProperty = Reflect.defineProperty;
+  let nativeDraws = 0;
+  Reflect.defineProperty = function (target, key, descriptor) {
+    if (target === registry.beta && key === "condition") return false;
+    return nativeDefineProperty(target, key, descriptor);
+  };
+  try {
+    assert.equal(
+      fixture.installed.mechanics.captureCompletedTechConditionsDuring(() => {
+        nativeDraws += 1;
+        return "native fallback";
+      }),
+      "native fallback",
+      "partial descriptor installation falls back to the native draw",
+    );
+  } finally {
+    Reflect.defineProperty = nativeDefineProperty;
+  }
+  assert.equal(nativeDraws, 1);
+  assert.equal(Object.hasOwn(registry.alpha, "condition"), false);
+  assert.equal(Object.hasOwn(registry.beta, "condition"), false);
+  assert.equal(
+    fixture.installed.mechanics.researchConditionGateCompromised?.(),
+    false,
+    "a successfully rolled-back partial install remains recoverable",
+  );
+  fixture.installed.uninstall();
+}
+
+{
+  const registry = {
+    alpha: {
+      id: "tech-alpha",
+      grant: ["alpha", 1],
+      condition() {
+        return true;
+      },
+    },
+  };
+  const fixture = prepareResearchGateFixture(registry, { alpha: 1 });
+  assert.throws(
+    () =>
+      fixture.installed.mechanics.captureCompletedTechConditionsDuring(() => {
+        fixture.replaceRoot({ tech: { alpha: 1 }, settings: { civTabs: 4 } });
+        registry.alpha.condition();
+      }),
+    /game authority changed during native draw/,
+    "root replacement during the draw invalidates the scratch observation",
+  );
+  assert.equal(registry.alpha.condition(), true);
+  fixture.installed.uninstall();
+}
+
+{
+  const nativeCondition = () => true;
+  const registry = {
+    alpha: { id: "tech-alpha", grant: ["alpha", 1] },
+  };
+  Object.defineProperty(registry.alpha, "condition", {
+    configurable: false,
+    enumerable: false,
+    writable: true,
+    value: nativeCondition,
+  });
+  const originalDescriptor = Object.getOwnPropertyDescriptor(
+    registry.alpha,
+    "condition",
+  );
+  const fixture = prepareResearchGateFixture(registry, { alpha: 1 });
+  const gateEvents = [];
+  fixture.page.__EA_TEST_HOOKS__ = {
+    researchConditionGate: (event) => gateEvents.push(event),
+  };
+  const drawError = new Error("Research drawing failed");
+  assert.throws(
+    () =>
+      fixture.installed.mechanics.captureCompletedTechConditionsDuring(() => {
+        registry.alpha.condition();
+        throw drawError;
+      }),
+    (error) => error === drawError,
+  );
+  assert.deepEqual(
+    Object.getOwnPropertyDescriptor(registry.alpha, "condition"),
+    originalDescriptor,
+    "a failed native draw restores the exact accessor descriptor",
+  );
+  assert.equal(registry.alpha.condition(), true);
+  assert.equal(gateEvents[0]?.installed, 1);
+  assert.equal(gateEvents[0]?.restored, 1);
+  fixture.installed.uninstall();
+}
+
+{
+  const registry = {
+    alpha: { id: "tech-alpha", grant: ["alpha", 1] },
+  };
+  const fixture = prepareResearchGateFixture(registry, { alpha: 1 });
+  const nativeDefineProperty = Reflect.defineProperty;
+  let nestedDraws = 0;
+  let nestedRejected = false;
+  Reflect.defineProperty = function (target, key, descriptor) {
+    if (target === registry.alpha && key === "condition" && !nestedRejected) {
+      nestedRejected = true;
+      assert.throws(
+        () =>
+          fixture.installed.mechanics.captureCompletedTechConditionsDuring(
+            () => {
+              nestedDraws += 1;
+            },
+          ),
+        /nested draw during active scratch capture/,
+      );
+    }
+    return nativeDefineProperty(target, key, descriptor);
+  };
+  try {
+    assert.throws(
+      () =>
+        fixture.installed.mechanics.captureCompletedTechConditionsDuring(() => {
+          throw new Error("installation reentrancy must refuse before draw");
+        }),
+      /game authority changed during descriptor installation/,
+    );
+  } finally {
+    Reflect.defineProperty = nativeDefineProperty;
+  }
+  assert.equal(nestedDraws, 0);
+  assert.equal(Object.hasOwn(registry.alpha, "condition"), false);
+  fixture.installed.uninstall();
+}
+
+{
+  const originalAction = {
+    id: "tech-alpha",
+    grant: ["alpha", 1],
+  };
+  const registry = { alpha: originalAction };
+  const fixture = prepareResearchGateFixture(registry, { alpha: 1 });
+  const replacementAction = { id: "tech-alpha", grant: ["alpha", 1] };
+  assert.throws(
+    () =>
+      fixture.installed.mechanics.captureCompletedTechConditionsDuring(() => {
+        registry.alpha = replacementAction;
+      }),
+    /game authority changed during native draw/,
+  );
+  assert.equal(Object.hasOwn(originalAction, "condition"), false);
+  assert.equal(Object.hasOwn(replacementAction, "condition"), false);
+  fixture.replaceRoot({ ...fixture.root, tech: { alpha: 1 } });
+  assert.equal(fixture.installed.mechanics.readTechDefinitions(), undefined);
+  fixture.installed.mechanics.captureTechDefinitionsDuring(() =>
+    fixture.page.Object.keys(registry),
+  );
+  assert.equal(
+    fixture.installed.mechanics.readTechDefinitions()?.[0]?.actionId,
+    "tech-alpha",
+    "a fresh validated registry capture recovers",
+  );
+  fixture.installed.uninstall();
+}
+
+{
+  const originalAction = { id: "tech-alpha", grant: ["alpha", 1] };
+  const registry = { alpha: originalAction };
+  const fixture = prepareResearchGateFixture(registry, { alpha: 1 });
+  const gateEvents = [];
+  fixture.page.__EA_TEST_HOOKS__ = {
+    researchConditionGate: (event) => gateEvents.push(event),
+  };
+  let replacementAction;
+  assert.throws(
+    () =>
+      fixture.installed.mechanics.captureCompletedTechConditionsDuring(() => {
+        replacementAction = { ...originalAction };
+        registry.alpha = replacementAction;
+        fixture.installed.mechanics.captureTechDefinitionsDuring(() =>
+          fixture.page.Object.keys(registry),
+        );
+        replacementAction.condition();
+      }),
+    /game authority changed during native draw/,
+    "a shallow native action replacement invalidates the active observation",
+  );
+  assert.equal(Object.hasOwn(originalAction, "condition"), false);
+  assert.equal(gateEvents[0]?.replacementRestored, 1);
+  assert.equal(
+    Object.hasOwn(replacementAction, "condition"),
+    false,
+    "the temporary condition wrapper is removed from the replacement action",
+  );
+  assert.equal(
+    fixture.installed.mechanics.readTechDefinitions()?.[0]?.actionId,
+    "tech-alpha",
+    "the replacement registry action supports a fresh capture",
+  );
+  fixture.installed.uninstall();
+}
+
+{
+  const originalAction = { id: "tech-alpha", grant: ["alpha", 1] };
+  const originalRegistry = { alpha: originalAction };
+  const fixture = prepareResearchGateFixture(originalRegistry, { alpha: 1 });
+  const gateEvents = [];
+  fixture.page.__EA_TEST_HOOKS__ = {
+    researchConditionGate: (event) => gateEvents.push(event),
+  };
+  let replacementAction;
+  let replacementRegistry;
+  assert.throws(
+    () =>
+      fixture.installed.mechanics.captureCompletedTechConditionsDuring(() => {
+        replacementAction = { ...originalAction };
+        replacementRegistry = { alpha: replacementAction };
+        fixture.installed.mechanics.captureTechDefinitionsDuring(() =>
+          fixture.page.Object.keys(replacementRegistry),
+        );
+        replacementAction.condition();
+      }),
+    /game authority changed during native draw/,
+    "a native registry replacement invalidates the scratch observation",
+  );
+  assert.equal(Object.hasOwn(originalAction, "condition"), false);
+  assert.equal(gateEvents[0]?.replacementRestored, 1);
+  assert.equal(
+    Object.hasOwn(replacementAction, "condition"),
+    false,
+    "a registry replacement cannot retain the temporary callback wrapper",
+  );
+  fixture.installed.mechanics.captureTechDefinitionsDuring(() =>
+    fixture.page.Object.keys(replacementRegistry),
+  );
+  assert.equal(
+    fixture.installed.mechanics.readTechDefinitions()?.[0]?.actionId,
+    "tech-alpha",
+    "a fresh capture recovers the replacement registry authority",
+  );
+  fixture.installed.uninstall();
+}
+
+{
+  const registry = {
+    alpha: { id: "tech-alpha", grant: ["alpha", 1] },
+  };
+  const fixture = prepareResearchGateFixture(registry, { alpha: 1 });
+  const nativeDeleteProperty = Reflect.deleteProperty;
+  let restorationRejected = false;
+  Reflect.deleteProperty = function (target, key) {
+    if (
+      target === registry.alpha &&
+      key === "condition" &&
+      !restorationRejected
+    ) {
+      restorationRejected = true;
+      return false;
+    }
+    return nativeDeleteProperty(target, key);
+  };
+  try {
+    assert.throws(
+      () =>
+        fixture.installed.mechanics.captureCompletedTechConditionsDuring(
+          () => true,
+        ),
+      /could not restore 1 native callback descriptor/,
+    );
+  } finally {
+    Reflect.deleteProperty = nativeDeleteProperty;
+  }
+  assert.equal(
+    fixture.installed.mechanics.researchConditionGateCompromised?.(),
+    true,
+  );
+  let laterDraws = 0;
+  assert.throws(
+    () =>
+      fixture.installed.mechanics.captureCompletedTechConditionsDuring(() => {
+        laterDraws += 1;
+      }),
+    /clean reload/,
+  );
+  assert.equal(laterDraws, 0, "compromised state refuses all later draws");
+  fixture.installed.uninstall();
+}
+
+for (const [registryKey, legacyKey] of [
+  ["fanaticism", "fanaticism"],
+  ["anthropology", "anthropology"],
+  ["deify", "ancient_deify"],
+  ["study", "ancient_study"],
+  ["isolation_protocol", "isolation"],
+  ["focus_cure", "focus_cure"],
+  ["vax_strat1", "vax_p"],
+  ["vax_strat2", "vax_f"],
+  ["vax_strat3", "vax_s"],
+  ["vax_strat4", "vax_c"],
+]) {
+  let conditionCalls = 0;
+  const grantTechnology = `grant-${registryKey}`;
+  const registry = {
+    [registryKey]: {
+      id: `tech-${registryKey}`,
+      grant: [grantTechnology, 1],
+      condition() {
+        conditionCalls += 1;
+        return true;
+      },
+    },
+  };
+  const fixture = prepareResearchGateFixture(registry, {
+    [grantTechnology]: 1,
+    [legacyKey]: 1,
+  });
+  assert.throws(
+    () =>
+      fixture.installed.mechanics.captureCompletedTechConditionsDuring(() => {
+        fixture.root.tech[legacyKey] = 0;
+        assert.equal(registry[registryKey].condition(), true);
+      }),
+    /game authority changed during native draw/,
+    `${registryKey} preserves checkOldTech completion semantics`,
+  );
+  assert.equal(conditionCalls, 1);
+  assert.equal(registry[registryKey].condition(), true);
+  fixture.installed.uninstall();
+}
+
+{
+  let conditionCalls = 0;
+  const registry = {
+    alpha: {
+      id: "tech-alpha",
+      grant: ["alpha", 1],
+      condition() {
+        conditionCalls += 1;
+        return true;
+      },
+    },
+  };
+  const fixture = prepareResearchGateFixture(registry, { alpha: 1 });
+  assert.throws(
+    () =>
+      fixture.installed.mechanics.captureCompletedTechConditionsDuring(() => {
+        fixture.root.tech.alpha = 0;
+        assert.equal(registry.alpha.condition(), true);
+      }),
+    /game authority changed during native draw/,
+    "a completed technology becoming eligible again discards the draw",
+  );
+  assert.equal(conditionCalls, 1, "the native condition remains authoritative");
+  assert.equal(registry.alpha.condition(), true, "descriptor is restored");
+  fixture.installed.uninstall();
+}
+
+{
+  let conditionCalls = 0;
+  const registry = {
+    deify: {
+      id: "tech-deify",
+      grant: ["deify", 1],
+      condition() {
+        conditionCalls += 1;
+        return true;
+      },
+    },
+  };
+  const fixture = prepareResearchGateFixture(registry, {
+    deify: 1,
+    ancient_deify: 1,
+  });
+  assert.throws(
+    () =>
+      fixture.installed.mechanics.captureCompletedTechConditionsDuring(() => {
+        fixture.root.tech.ancient_deify = 0;
+        assert.equal(registry.deify.condition(), true);
+      }),
+    /game authority changed during native draw/,
+    "checkOldTech becoming false discards the draw",
+  );
+  assert.equal(conditionCalls, 1);
+  assert.equal(registry.deify.condition(), true);
+  fixture.installed.uninstall();
+}
+
+{
+  let conditionCalls = 0;
+  const registry = {
+    alpha: {
+      id: "tech-alpha",
+      grant: ["alpha", 1],
+      condition() {
+        conditionCalls += 1;
+        return true;
+      },
+    },
+  };
+  const fixture = prepareResearchGateFixture(registry, { alpha: 0 });
+  assert.throws(
+    () =>
+      fixture.installed.mechanics.captureCompletedTechConditionsDuring(() => {
+        fixture.root.tech.alpha = 1;
+        return registry.alpha.condition();
+      }),
+    /game authority changed during native draw/,
+    "a newly completed technology invalidates the stale scratch observation",
+  );
+  assert.equal(conditionCalls, 1);
+  assert.equal(registry.alpha.condition(), true);
+  assert.equal(
+    fixture.installed.mechanics.captureCompletedTechConditionsDuring(() =>
+      registry.alpha.condition(),
+    ),
+    false,
+    "a later fresh scratch draw can suppress the now-completed technology",
+  );
+  assert.equal(registry.alpha.condition(), true, "the descriptor is restored");
+  fixture.installed.uninstall();
+}
+
+delete globalThis.__EA_RESEARCH_CONDITION_GATE_ENABLED__;
 
 {
   const fixture = techRegistryPage(validTechRegistry());
