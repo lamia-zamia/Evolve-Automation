@@ -59,6 +59,9 @@ const removeTechDom = process.argv.includes("--remove-tech-dom");
 const replaceRootDuringDraw = process.argv.includes(
   "--replace-root-during-draw",
 );
+const testCatalogAfterFailure = process.argv.includes(
+  "--test-catalog-after-failure",
+);
 const runner = await createChromiumRunner({
   game,
   upstream: "D:/work/Evolve-DeadSpace",
@@ -148,6 +151,10 @@ try {
       injectRestorationFailure ? "restore" : "mutate",
     );
   await session.advance(warmup);
+  if (testCatalogAfterFailure)
+    await session.evaluate(() => {
+      window.__EA_RESEARCH_DRAW_TRACE__ = { draws: 0 };
+    });
   const initialState = await session.readState();
   if (injectDrawError)
     await session.evaluate(() => {
@@ -181,6 +188,8 @@ try {
     });
   if (replaceRootDuringDraw)
     await session.evaluate(() => {
+      const capture = window[Symbol.for("evolve-automation.page-capture")];
+      window.__EA_ROOT_AUTHORITY_BEFORE__ = capture?.rootState.readRoot();
       window.__EA_REPLACE_ROOT__ = true;
       const original = Node.prototype.appendChild;
       window.__EA_ORIGINAL_APPEND_CHILD__ = original;
@@ -245,6 +254,23 @@ try {
       gateEventsAfter: (window.__EA_RESEARCH_GATE_EVENTS__ ?? []).length,
     };
   });
+  const laterCatalogRequest = testCatalogAfterFailure
+    ? await session.evaluate(() => {
+        const trace = window.__EA_RESEARCH_DRAW_TRACE__;
+        const drawsBefore = trace?.draws ?? 0;
+        const catalog = window.__EA_TEST_HOOKS__?.readCurrentResearchCatalog?.(
+          "tech-mad_science",
+          true,
+        );
+        return {
+          drawsBefore,
+          drawsAfter: trace?.draws ?? 0,
+          current: catalog?.current,
+          source: catalog?.source,
+          offerCount: catalog?.offers?.length ?? 0,
+        };
+      })
+    : undefined;
   const result = await session.evaluate(() => {
     const events = window.__EA_RESEARCH_GATE_EVENTS__ ?? [];
     return {
@@ -271,6 +297,11 @@ try {
         ].sort(),
       },
       rootReplacementTriggered: window.__EA_ROOT_REPLACED__ === true,
+      rootAuthorityChanged:
+        window.__EA_ROOT_AUTHORITY_BEFORE__ !== undefined &&
+        window[
+          Symbol.for("evolve-automation.page-capture")
+        ]?.rootState.readRoot() !== window.__EA_ROOT_AUTHORITY_BEFORE__,
       missingDomInterceptions: window.__EA_MISSING_DOM_INTERCEPTS__ ?? 0,
       injectedConditionWrites: window.__EA_GATE_CONDITION_WRITES__ ?? 0,
       researchTabLabels: Array.from(
@@ -306,6 +337,7 @@ try {
         result,
         warmup,
         normalResearchRender,
+        ...(laterCatalogRequest === undefined ? {} : { laterCatalogRequest }),
         progression: {
           initialDay: initialState.stats?.days,
           finalDay: finalState.stats?.days,

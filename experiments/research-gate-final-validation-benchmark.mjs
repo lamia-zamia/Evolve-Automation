@@ -27,11 +27,20 @@ if (pass !== "cpu" && pass !== "latency")
 const game = required("game");
 const settings = await readFile(required("settings"), "utf8");
 const tickRate = JSON.parse(settings).tickRate ?? 8;
-const scenarios = [
+const availableScenarios = [
   ["early", required("early")],
   ["mid", required("mid")],
   ["late", required("late")],
 ];
+const selectedScenarios = args.has("--scenarios")
+  ? args
+      .get("--scenarios")
+      .split(",")
+      .map((name) => availableScenarios.find(([scenario]) => scenario === name))
+  : availableScenarios;
+if (selectedScenarios.some((scenario) => scenario === undefined))
+  throw new Error("--scenarios must be selected from early,mid,late");
+const scenarios = selectedScenarios;
 const arms = [
   ["A", required("a-bundle")],
   ["B2", required("b2-bundle")],
@@ -61,15 +70,38 @@ for (const [scenario, savePath] of scenarios) {
           seed: 42,
           ...(pass === "latency" ? { callbackProfile: true } : {}),
         });
+        const initialState = await session.readState();
+        const initialDay = initialState.stats?.days;
+        const initialReset = initialState.stats?.reset;
         await session.advance(warmup);
+        const warmedState = await session.readState();
+        if (
+          scenario === "late" &&
+          (typeof warmedState.stats?.days !== "number" ||
+            warmedState.stats.days < 100_000 ||
+            warmedState.stats.reset !== initialReset)
+        )
+          throw new Error(
+            `late save left its measured era during warmup: day ${warmedState.stats?.days}, reset ${warmedState.stats?.reset}`,
+          );
         const before = pass === "cpu" ? await session.metrics() : undefined;
         const cpuBefore =
           pass === "cpu" ? await runner.processCpu() : undefined;
         await session.advance(periods);
+        const after = pass === "cpu" ? await session.metrics() : undefined;
+        const cpuAfter = pass === "cpu" ? await runner.processCpu() : undefined;
+        const finalState = await session.readState();
+        if (
+          scenario === "late" &&
+          (typeof finalState.stats?.days !== "number" ||
+            finalState.stats.days < 100_000 ||
+            finalState.stats.reset !== initialReset)
+        )
+          throw new Error(
+            `late save left its measured era during sampling: day ${finalState.stats?.days}, reset ${finalState.stats?.reset}`,
+          );
         const diagnostics = await session.diagnostics();
         if (pass === "cpu") {
-          const after = await session.metrics();
-          const cpuAfter = await runner.processCpu();
           const rendererCpuSec = cpuAfter
             .filter((entry) => entry.type === "renderer")
             .reduce(
@@ -86,10 +118,15 @@ for (const [scenario, savePath] of scenarios) {
             pair: repetition + 1,
             arm,
             workTicks: periods / tickRate,
+            startDay: initialDay,
+            warmupEndDay: warmedState.stats?.days,
+            endDay: finalState.stats?.days,
+            startReset: initialReset,
+            endReset: finalState.stats?.reset,
             rendererCpuMsPerTick:
               (rendererCpuSec * 1000) / (periods / tickRate),
             taskDurationMs:
-              ((after.TaskDuration ?? 0) - (before?.TaskDuration ?? 0)) * 1000,
+              ((after?.TaskDuration ?? 0) - (before?.TaskDuration ?? 0)) * 1000,
             // Native draw counts require the separate instrumented trace pass.
             researchDrawCount: null,
             gateInvocationCount: null,
@@ -120,6 +157,11 @@ for (const [scenario, savePath] of scenarios) {
             pair: repetition + 1,
             arm,
             workTicks: cycleSamples.length,
+            startDay: initialDay,
+            warmupEndDay: warmedState.stats?.days,
+            endDay: finalState.stats?.days,
+            startReset: initialReset,
+            endReset: finalState.stats?.reset,
             p50Ms: percentile(0.5),
             p95Ms: percentile(0.95),
             p99Ms: percentile(0.99),
