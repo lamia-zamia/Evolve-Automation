@@ -364,6 +364,25 @@ function readCapturedResetCount(
   );
 }
 
+/** DeadSpace `vars.js::clearStates` empties both records, resets the current day and then calls
+ * `window.location.reload()` from `soft_reset`. Check this synchronous native postcondition after
+ * the MAD launch binding returns so the current automation cycle stops before reading invalidated
+ * resources. */
+function madResetCommittedInRoot(root: unknown): boolean {
+  const race = readProperty(root, "race");
+  const stats = readProperty(root, "stats");
+  const resources = readProperty(root, "resource");
+  const evolution = readProperty(root, "evolution");
+  return (
+    readProperty(race, "species") === "protoplasm" &&
+    finite(readProperty(stats, "days")) === 0 &&
+    isNonArrayRecord(resources) &&
+    Object.keys(resources).length === 0 &&
+    isNonArrayRecord(evolution) &&
+    Object.keys(evolution).length === 0
+  );
+}
+
 function readCapturedWitchResetStat(root: unknown): CapturedResetStat {
   return finite(readProperty(readProperty(root, "tech"), "forbidden")) === 5
     ? "descend"
@@ -1449,7 +1468,8 @@ export function createCapturedMadPrestige(
           );
           if (
             command.kind === "launch-mad" &&
-            dependencies.rootState.readRoot() !== sampledRoot
+            (dependencies.rootState.readRoot() !== sampledRoot ||
+              madResetCommittedInRoot(dependencies.rootState.readRoot()))
           ) {
             notifyConfirmedReset();
           }

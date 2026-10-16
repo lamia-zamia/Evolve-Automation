@@ -142,7 +142,10 @@ function makeRuntime({ mutateTech = true } = {}) {
     genus: "giant",
     actionId: "gigantism",
   });
-  assert.equal(runtime.executor.clickEvolution(choice.actionId), true);
+  assert.deepEqual(runtime.executor.clickEvolution(choice.actionId), {
+    status: "invoked",
+    stateChanged: true,
+  });
   assert.deepEqual(invoked, ["evolution-gigantism"]);
   assert.equal(
     runtime.reader.sampleEvolutionGenusSelection("beholder").selectedGenus,
@@ -157,7 +160,10 @@ function makeRuntime({ mutateTech = true } = {}) {
   const choice = planEvolutionGenusSelection(
     runtime.reader.sampleEvolutionGenusSelection("beholder"),
   );
-  assert.equal(runtime.executor.clickEvolution(choice.actionId), true);
+  assert.deepEqual(runtime.executor.clickEvolution(choice.actionId), {
+    status: "invoked",
+    stateChanged: false,
+  });
   assert.deepEqual(invoked, ["evolution-gigantism"]);
   assert.equal(
     runtime.reader.sampleEvolutionGenusSelection("beholder").selectedGenus,

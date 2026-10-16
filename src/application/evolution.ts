@@ -21,6 +21,28 @@ export interface EvolutionCycleDependencies {
   readonly challengeGroups: readonly ChallengeGroup[];
 }
 
+function actionUnavailable(
+  outcome: boolean | import("../ports/evolution.ts").EvolutionActionOutcome,
+): boolean {
+  return (
+    typeof outcome !== "boolean" &&
+    (outcome.status === "unavailable" ||
+      outcome.status === "failed" ||
+      outcome.status === "root-replaced")
+  );
+}
+
+function actionChanged(
+  outcome: boolean | import("../ports/evolution.ts").EvolutionActionOutcome,
+): boolean {
+  return (
+    outcome === true ||
+    (typeof outcome !== "boolean" &&
+      outcome.status === "invoked" &&
+      outcome.stateChanged)
+  );
+}
+
 /**
  * Runs one autoEvolution cycle. The phases mirror the legacy factory exactly:
  * species gate, universe/planet sub-compositions, landing gate, target
@@ -47,6 +69,7 @@ export function runEvolution(dependencies: EvolutionCycleDependencies): void {
   if (!hasLandedSomewhere(reader.sampleLandingGate())) {
     return;
   }
+  if (reader.evolutionActionsReady?.() === false) return;
 
   if (!reader.hasStoredTarget()) {
     executor.loadQueuedSettings();
@@ -67,7 +90,8 @@ export function runEvolution(dependencies: EvolutionCycleDependencies): void {
   )) {
     if (reader.sampleRaceTrait(candidate.trait) !== 1) {
       const clicked = executor.clickEvolution(candidate.id);
-      if (clicked && candidate.cycleEnding) {
+      if (actionUnavailable(clicked)) return;
+      if (actionChanged(clicked) && candidate.cycleEnding) {
         return;
       }
     }
@@ -80,7 +104,11 @@ export function runEvolution(dependencies: EvolutionCycleDependencies): void {
   if (finalMenuImitation.evoFinalMenu) {
     const imitation = planImitation(finalMenuImitation);
     if (imitation.kind === "click") {
-      if (!executor.clickImitation(imitation.imitateRace)) {
+      const outcome = executor.clickImitation(imitation.imitateRace);
+      if (
+        outcome === false ||
+        (typeof outcome !== "boolean" && outcome.status === "failed")
+      ) {
         executor.logImitationUnavailable(imitation.imitateRace);
       }
     } else if (imitation.kind === "log-no-race") {
@@ -95,7 +123,7 @@ export function runEvolution(dependencies: EvolutionCycleDependencies): void {
   }
 
   const costs = reader.sampleCosts(targetId);
-  executor.accumulateResources(
+  const accumulation = executor.accumulateResources(
     planResourceAccumulation(costs.maxRna, costs.maxDna, {
       rnaCurrent: costs.rnaCurrent,
       rnaMax: costs.rnaMax,
@@ -103,6 +131,7 @@ export function runEvolution(dependencies: EvolutionCycleDependencies): void {
       dnaMax: costs.dnaMax,
     }),
   );
+  if (accumulation !== undefined && accumulation !== "complete") return;
 
   const genusPlan = planEvolutionGenusSelection(
     reader.sampleEvolutionGenusSelection(targetId),
@@ -110,12 +139,12 @@ export function runEvolution(dependencies: EvolutionCycleDependencies): void {
   if (genusPlan.kind === "click") {
     // A genus action changes the game-owned tech selection. Require that exact postcondition before
     // the next action phase; a stale/redrawn control is never permission to try another genus.
-    if (!executor.clickEvolution(genusPlan.actionId)) {
-      return;
-    }
+    const outcome = executor.clickEvolution(genusPlan.actionId);
     if (
+      !actionChanged(outcome) ||
+      actionUnavailable(outcome) ||
       reader.sampleEvolutionGenusSelection(targetId).selectedGenus !==
-      genusPlan.genus
+        genusPlan.genus
     ) {
       return;
     }
@@ -124,7 +153,8 @@ export function runEvolution(dependencies: EvolutionCycleDependencies): void {
 
   const treePlan = planEvolutionTreeClick(reader.sampleEvolutionTree(targetId));
   if (treePlan.kind === "click") {
-    if (executor.clickEvolution(treePlan.id)) {
+    const outcome = executor.clickEvolution(treePlan.id);
+    if (actionUnavailable(outcome) || actionChanged(outcome)) {
       return;
     }
   }
@@ -135,12 +165,17 @@ export function runEvolution(dependencies: EvolutionCycleDependencies): void {
     costs.maxDna,
   );
   for (const id of cellClicks) {
-    executor.clickEvolution(id);
+    const outcome = executor.clickEvolution(id);
+    if (!actionChanged(outcome) && typeof outcome !== "boolean") return;
   }
 
   const imitation = planImitation(reader.sampleImitation());
   if (imitation.kind === "click") {
-    if (!executor.clickImitation(imitation.imitateRace)) {
+    const outcome = executor.clickImitation(imitation.imitateRace);
+    if (
+      outcome === false ||
+      (typeof outcome !== "boolean" && outcome.status === "failed")
+    ) {
       executor.logImitationUnavailable(imitation.imitateRace);
     }
   } else if (imitation.kind === "log-no-race") {

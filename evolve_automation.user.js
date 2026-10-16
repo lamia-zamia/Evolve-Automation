@@ -14290,6 +14290,10 @@
       )
     );
   }
+  function madResetCommittedInRoot(root) {
+    let race = readProperty(root, "race"), stats = readProperty(root, "stats"), resources = readProperty(root, "resource"), evolution = readProperty(root, "evolution");
+    return readProperty(race, "species") === "protoplasm" && finite(readProperty(stats, "days")) === 0 && isNonArrayRecord(resources) && Object.keys(resources).length === 0 && isNonArrayRecord(evolution) && Object.keys(evolution).length === 0;
+  }
   function readCapturedWitchResetStat(root) {
     return finite(readProperty(readProperty(root, "tech"), "forbidden")) === 5 ? "descend" : "ascension";
   }
@@ -14830,7 +14834,7 @@
             invokeMadControl(
               dependencies.controls,
               command.kind === "arm-mad" ? "arm" : "launch"
-            ), command.kind === "launch-mad" && dependencies.rootState.readRoot() !== sampledRoot && notifyConfirmedReset();
+            ), command.kind === "launch-mad" && (dependencies.rootState.readRoot() !== sampledRoot || madResetCommittedInRoot(dependencies.rootState.readRoot())) && notifyConfirmedReset();
             return;
           case "reset-modifier-keys":
             return;
@@ -42641,22 +42645,30 @@
   function nestedRecord(owner, key) {
     return capturedEvolutionRecord3(readProperty(owner, key));
   }
-  function capturedEvolutionMutationFingerprint(rootState) {
-    let root = rootRecord(rootState);
-    if (root !== void 0)
-      try {
-        return JSON.stringify({
-          race: readProperty(root, "race"),
-          resource: readProperty(root, "resource"),
-          evolution: readProperty(root, "evolution"),
-          tech: readProperty(root, "tech"),
-          genes: readProperty(root, "genes"),
-          queue: readProperty(root, "queue"),
-          researchQueue: readProperty(root, "r_queue")
-        });
-      } catch {
-        return;
-      }
+  function capturedEvolutionActionState(root, id, challengeTrait) {
+    if (id === "rna" || id === "dna")
+      return readProperty(
+        readProperty(readProperty(root, "resource"), id.toUpperCase()),
+        "amount"
+      );
+    if (id.startsWith("s-"))
+      return readProperty(readProperty(root, "race"), "imitation");
+    if (challengeTrait !== void 0)
+      return readProperty(readProperty(root, "race"), challengeTrait);
+    let genus = CAPTURED_EVOLUTION_GENERA.find(
+      (candidate) => candidate.actionId === id
+    ), genusTech = genus === void 0 ? void 0 : readProperty(readProperty(root, "tech"), `evo_${genus.id}`);
+    if (genusTech !== void 0) return genusTech;
+    let actionState = readProperty(readProperty(root, "evolution"), id), count2 = readProperty(actionState, "count");
+    return count2 === void 0 ? actionState : count2;
+  }
+  function capturedEvolutionResource(root, id) {
+    let resource = nestedRecord(nestedRecord(root, "resource"), id), amount = Number(readProperty(resource, "amount")), max = Number(readProperty(resource, "max"));
+    return Number.isFinite(amount) && Number.isFinite(max) ? Object.freeze({ amount, max }) : void 0;
+  }
+  function capturedEvolutionRootInvalidated(root) {
+    let record = capturedEvolutionRecord3(root), resources = nestedRecord(record, "resource"), evolution = nestedRecord(record, "evolution");
+    return readProperty(readProperty(record, "race"), "species") === "protoplasm" && Number(readProperty(readProperty(record, "stats"), "days")) === 0 && resources !== void 0 && Object.keys(resources).length === 0 && evolution !== void 0 && Object.keys(evolution).length === 0;
   }
   function readRace(rootState) {
     return nestedRecord(rootRecord(rootState), "race");
@@ -42694,8 +42706,15 @@
     for (let group of dependencies.challengeGroups)
       for (let member of group.members)
         challengeIds.add(member.id), challengeTraitById.set(member.id, member.trait);
-    let storedTarget, lastSpecies, reportActivity = dependencies.onActivity ?? (() => {
-    }), reader = Object.freeze({
+    let storedTarget, lastSpecies, reportedEvolutionFailures = /* @__PURE__ */ new Set(), reportActivity = dependencies.onActivity ?? (() => {
+    }), reportEvolutionFailure = (id, detail) => {
+      let key = `${id}:${detail}`;
+      reportedEvolutionFailures.has(key) || (reportedEvolutionFailures.add(key), reportActivity({
+        message: `Evolution action ${id} failed: ${detail}`,
+        color: "danger",
+        tags: Object.freeze(["progress"])
+      }));
+    }, reader = Object.freeze({
       sampleSpecies() {
         let species = readProperty(readRace(dependencies.rootState), "species"), value = typeof species == "string" ? species : "";
         return lastSpecies === "protoplasm" && value !== "protoplasm" && (storedTarget = void 0), lastSpecies = value, value;
@@ -42707,6 +42726,20 @@
           seeded: !!readProperty(race, "seeded"),
           chose: !!readProperty(race, "chose")
         });
+      },
+      evolutionActionsReady() {
+        let root = dependencies.rootState.readRoot();
+        if (capturedEvolutionResource(root, "RNA") === void 0 || capturedEvolutionResource(root, "DNA") === void 0)
+          return !1;
+        let rows = new Set(
+          readActionRows(dependencies.drawnActions).map((row) => row.id)
+        );
+        for (let id of ["rna", "dna"]) {
+          let elementId = `${EVOLUTION_ACTION_PREFIX}${id}`, handle = dependencies.controls.resolve(elementId);
+          if (!rows.has(elementId) || handle === void 0 || !Number.isSafeInteger(handle.generation) || handle.generation < 1 || !handle.methods.includes("action"))
+            return !1;
+        }
+        return !0;
       },
       hasStoredTarget() {
         return storedTarget !== void 0;
@@ -42833,18 +42866,58 @@
         return Object.freeze(enabled);
       }
     }), invokeAction = (id) => {
+      let rootBefore = dependencies.rootState.readRoot();
+      if (rootRecord(dependencies.rootState) === void 0)
+        return Object.freeze({ status: "unavailable" });
       let handle = dependencies.controls.resolve(
         `${EVOLUTION_ACTION_PREFIX}${id}`
       );
-      if (handle === void 0) return !1;
-      let before = capturedEvolutionMutationFingerprint(dependencies.rootState);
-      if (!dependencies.controls.invoke(handle, "action").ok) return !1;
-      let after = capturedEvolutionMutationFingerprint(dependencies.rootState);
-      return before !== void 0 && after !== void 0 && before !== after;
+      if (handle === void 0 || !handle.methods.includes("action"))
+        return Object.freeze({ status: "unavailable" });
+      let before = capturedEvolutionActionState(
+        rootBefore,
+        id,
+        challengeTraitById.get(id)
+      ), result = dependencies.controls.invoke(handle, "action");
+      if (!result.ok)
+        return result.reason === "stale-control" || result.reason === "unknown-control" ? Object.freeze({ status: "unavailable" }) : (reportEvolutionFailure(id, result.detail ?? result.reason), Object.freeze({
+          status: "failed",
+          detail: result.detail ?? result.reason
+        }));
+      let rootAfter = dependencies.rootState.readRoot();
+      if (rootAfter !== rootBefore)
+        return Object.freeze({ status: "root-replaced" });
+      if (capturedEvolutionRootInvalidated(rootAfter))
+        return Object.freeze({ status: "root-replaced" });
+      let after = capturedEvolutionActionState(
+        rootAfter,
+        id,
+        challengeTraitById.get(id)
+      );
+      return Object.freeze({
+        status: "invoked",
+        stateChanged: !Object.is(before, after)
+      });
     }, invokeRepeated = (id, count2) => {
-      for (let index = 0; index < count2; index++)
-        if (!invokeAction(id))
-          throw new TypeError(`captured evolution control unavailable: ${id}`);
+      for (let index = 0; index < count2; index++) {
+        let resource = capturedEvolutionResource(
+          dependencies.rootState.readRoot(),
+          id.toUpperCase()
+        );
+        if (resource === void 0) return "deferred";
+        if (resource.amount >= resource.max) return "complete";
+        let outcome = invokeAction(id);
+        if (outcome.status === "failed") return "failed";
+        if (outcome.status !== "invoked" || !outcome.stateChanged)
+          return "deferred";
+        let after = capturedEvolutionResource(
+          dependencies.rootState.readRoot(),
+          id.toUpperCase()
+        );
+        if (after === void 0 || after.amount <= resource.amount)
+          return "deferred";
+      }
+      return "complete";
     }, executor = Object.freeze({
       loadQueuedSettings() {
         dependencies.loadQueuedSettings();
@@ -42860,7 +42933,10 @@
         return invokeAction(id);
       },
       accumulateResources(command) {
-        invokeRepeated("rna", command.rnaForDna), invokeRepeated("dna", command.dnaForEvolution), invokeRepeated("rna", command.rnaForEvolution);
+        let rnaForDna = invokeRepeated("rna", command.rnaForDna);
+        if (rnaForDna !== "complete") return rnaForDna;
+        let dna = invokeRepeated("dna", command.dnaForEvolution);
+        return dna !== "complete" ? dna : invokeRepeated("rna", command.rnaForEvolution);
       },
       clickImitation(imitateRace) {
         return invokeAction(`s-${imitateRace}`);
@@ -54717,6 +54793,12 @@ Only continue if you trust the source. Injected code:
   }
 
   // src/application/evolution.ts
+  function actionUnavailable(outcome) {
+    return typeof outcome != "boolean" && (outcome.status === "unavailable" || outcome.status === "failed" || outcome.status === "root-replaced");
+  }
+  function actionChanged(outcome) {
+    return outcome === !0 || typeof outcome != "boolean" && outcome.status === "invoked" && outcome.stateChanged;
+  }
   function runEvolution(dependencies) {
     let {
       reader,
@@ -54725,8 +54807,7 @@ Only continue if you trust the source. Injected code:
       runPlanetSelection,
       challengeGroups
     } = dependencies;
-    if (!shouldEvolve(reader.sampleSpecies()) || (runUniverseSelection(), runPlanetSelection(), !hasLandedSomewhere(reader.sampleLandingGate())))
-      return;
+    if (!shouldEvolve(reader.sampleSpecies()) || (runUniverseSelection(), runPlanetSelection(), !hasLandedSomewhere(reader.sampleLandingGate())) || reader.evolutionActionsReady?.() === !1) return;
     if (!reader.hasStoredTarget()) {
       executor.loadQueuedSettings();
       let decision = planEvolutionTarget(reader.sampleTargetSelection());
@@ -54739,19 +54820,24 @@ Only continue if you trust the source. Injected code:
       challengeGroups,
       enabled
     ))
-      if (reader.sampleRaceTrait(candidate.trait) !== 1 && executor.clickEvolution(candidate.id) && candidate.cycleEnding)
-        return;
+      if (reader.sampleRaceTrait(candidate.trait) !== 1) {
+        let clicked = executor.clickEvolution(candidate.id);
+        if (actionUnavailable(clicked) || actionChanged(clicked) && candidate.cycleEnding)
+          return;
+      }
     let finalMenuImitation = reader.sampleImitation();
     if (finalMenuImitation.evoFinalMenu) {
       let imitation2 = planImitation(finalMenuImitation);
-      imitation2.kind === "click" ? executor.clickImitation(imitation2.imitateRace) || executor.logImitationUnavailable(imitation2.imitateRace) : imitation2.kind === "log-no-race" && executor.logImitationNoRace();
+      if (imitation2.kind === "click") {
+        let outcome = executor.clickImitation(imitation2.imitateRace);
+        (outcome === !1 || typeof outcome != "boolean" && outcome.status === "failed") && executor.logImitationUnavailable(imitation2.imitateRace);
+      } else imitation2.kind === "log-no-race" && executor.logImitationNoRace();
       return;
     }
     let targetId = reader.storedTargetId();
     if (targetId === null)
       throw new TypeError("evolution target missing after selection phase");
-    let costs = reader.sampleCosts(targetId);
-    executor.accumulateResources(
+    let costs = reader.sampleCosts(targetId), accumulation = executor.accumulateResources(
       planResourceAccumulation(costs.maxRna, costs.maxDna, {
         rnaCurrent: costs.rnaCurrent,
         rnaMax: costs.rnaMax,
@@ -54759,23 +54845,34 @@ Only continue if you trust the source. Injected code:
         dnaMax: costs.dnaMax
       })
     );
+    if (accumulation !== void 0 && accumulation !== "complete") return;
     let genusPlan = planEvolutionGenusSelection(
       reader.sampleEvolutionGenusSelection(targetId)
     );
-    if (genusPlan.kind === "click")
-      return !executor.clickEvolution(genusPlan.actionId) || reader.sampleEvolutionGenusSelection(targetId).selectedGenus !== genusPlan.genus, void 0;
+    if (genusPlan.kind === "click") {
+      let outcome = executor.clickEvolution(genusPlan.actionId);
+      return !actionChanged(outcome) || actionUnavailable(outcome) || reader.sampleEvolutionGenusSelection(targetId).selectedGenus !== genusPlan.genus, void 0;
+    }
     let treePlan = planEvolutionTreeClick(reader.sampleEvolutionTree(targetId));
-    if (treePlan.kind === "click" && executor.clickEvolution(treePlan.id))
-      return;
+    if (treePlan.kind === "click") {
+      let outcome = executor.clickEvolution(treePlan.id);
+      if (actionUnavailable(outcome) || actionChanged(outcome))
+        return;
+    }
     let cellClicks = planEvolutionCells(
       reader.sampleCells(),
       costs.maxRna,
       costs.maxDna
     );
-    for (let id of cellClicks)
-      executor.clickEvolution(id);
+    for (let id of cellClicks) {
+      let outcome = executor.clickEvolution(id);
+      if (!actionChanged(outcome) && typeof outcome != "boolean") return;
+    }
     let imitation = planImitation(reader.sampleImitation());
-    imitation.kind === "click" ? executor.clickImitation(imitation.imitateRace) || executor.logImitationUnavailable(imitation.imitateRace) : imitation.kind === "log-no-race" && executor.logImitationNoRace();
+    if (imitation.kind === "click") {
+      let outcome = executor.clickImitation(imitation.imitateRace);
+      (outcome === !1 || typeof outcome != "boolean" && outcome.status === "failed") && executor.logImitationUnavailable(imitation.imitateRace);
+    } else imitation.kind === "log-no-race" && executor.logImitationNoRace();
   }
 
   // src/application/captured-planet-selection.ts

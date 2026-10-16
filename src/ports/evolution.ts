@@ -29,6 +29,8 @@ export interface EvolutionCostsSample {
 export interface EvolutionReader {
   sampleSpecies(): string;
   sampleLandingGate(): EvolutionLandingGate;
+  /** False until the native RNA/DNA state and the rendered resource controls are current. */
+  evolutionActionsReady?(): boolean;
   hasStoredTarget(): boolean;
   storedTargetId(): string | null;
   /** Sampled after loadQueuedSettings has reloaded the effective settings. */
@@ -61,9 +63,19 @@ export interface EvolutionExecutor {
   /** Store the chosen target and log the attempt. */
   commitTarget(id: string, name: string): void;
   /** Click an evolution action (challenge, tree node, or cell); returns success. */
-  clickEvolution(id: string): boolean;
-  accumulateResources(command: Readonly<ResourceAccumulationCommand>): void;
-  clickImitation(imitateRace: string): boolean;
+  clickEvolution(id: string): boolean | EvolutionActionOutcome;
+  accumulateResources(
+    command: Readonly<ResourceAccumulationCommand>,
+  ): void | ResourceAccumulationOutcome;
+  clickImitation(imitateRace: string): boolean | EvolutionActionOutcome;
   logImitationUnavailable(imitateRace: string): void;
   logImitationNoRace(): void;
 }
+
+export type EvolutionActionOutcome =
+  | { readonly status: "unavailable" }
+  | { readonly status: "failed"; readonly detail: string }
+  | { readonly status: "root-replaced" }
+  | { readonly status: "invoked"; readonly stateChanged: boolean };
+
+export type ResourceAccumulationOutcome = "complete" | "deferred" | "failed";

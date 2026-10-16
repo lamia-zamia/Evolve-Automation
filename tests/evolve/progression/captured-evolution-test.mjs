@@ -4,7 +4,7 @@ import { runEvolution } from "../../../src/application/evolution.ts";
 import { planEvolutionTarget } from "../../../src/domain/progression/evolution/evolution.ts";
 import { createCapturedEvolution } from "../../../src/adapters/evolve/progression/evolution/captured-evolution.ts";
 
-const root = {
+let root = {
   race: {
     species: "protoplasm",
     universe: "standard",
@@ -22,6 +22,7 @@ const root = {
     eukaryotic_cell: { count: 0 },
     nucleus: { count: 0 },
     organelles: { count: 0 },
+    membrane: { count: 0 },
   },
 };
 
@@ -40,6 +41,7 @@ const settings = {
 const trace = [];
 const actionRows = [
   { id: "evolution-rna", cost: { RNA: 1 } },
+  { id: "evolution-dna", cost: { DNA: 1 } },
   { id: "evolution-plasmid", cost: { DNA: 99 } },
   { id: "evolution-bunker", cost: { DNA: 10 } },
   { id: "evolution-membrane", cost: { RNA: 2 } },
@@ -66,6 +68,10 @@ const controls = {
     trace.push(["invoke", handle.elementId]);
     if (handle.elementId === "evolution-bunker" && mutateBunker) {
       root.evolution.bunker = 1;
+    }
+    const cellId = handle.elementId.slice("evolution-".length);
+    if (cellId in root.evolution && cellId !== "bunker") {
+      root.evolution[cellId].count += 1;
     }
     if (handle.elementId === "evolution-s-human") {
       root.race.imitation = "human";
@@ -105,6 +111,30 @@ const evolution = createCapturedEvolution({
   challengeGroups: [{ members: [{ id: "plasmid", trait: "no_plasmid" }] }],
   onActivity: (activity) => trace.push(["activity", activity.message]),
 });
+
+// Missing or not-yet-rendered native RNA/DNA rows defer the whole evolution pass. A later draw
+// supplies current generation-bound controls and the next work cycle can proceed normally.
+assert.equal(evolution.reader.evolutionActionsReady(), true);
+const rnaRow = actionRows.shift();
+assert.equal(evolution.reader.evolutionActionsReady(), false);
+trace.length = 0;
+runEvolution({
+  reader: evolution.reader,
+  executor: evolution.executor,
+  runUniverseSelection: evolution.runUniverseSelection,
+  runPlanetSelection: () => {},
+  challengeGroups: [],
+});
+assert.deepEqual(trace, []);
+actionRows.unshift(rnaRow);
+handles.delete("evolution-rna");
+assert.equal(evolution.reader.evolutionActionsReady(), false);
+handles.set("evolution-rna", {
+  elementId: "evolution-rna",
+  generation: 2,
+  methods: ["action"],
+});
+assert.equal(evolution.reader.evolutionActionsReady(), true);
 
 // Universe selection uses the game-drawn control, then the root itself proves the landing gate.
 root.race.universe = "bigbang";
@@ -212,10 +242,13 @@ const expectedAutoTarget = planEvolutionTarget(
 );
 assert.equal(expectedAutoTarget.kind, "target");
 const expectedActionId = `evolution-${expectedAutoTarget.id}`;
-actionRows.splice(0, actionRows.length, {
-  id: expectedActionId,
-  cost: { DNA: 1 },
-});
+actionRows.splice(
+  0,
+  actionRows.length,
+  { id: "evolution-rna", cost: { RNA: 1 } },
+  { id: "evolution-dna", cost: { DNA: 1 } },
+  { id: expectedActionId, cost: { DNA: 1 } },
+);
 handles.set(expectedActionId, {
   elementId: expectedActionId,
   generation: 1,
@@ -246,5 +279,60 @@ assert.deepEqual(trace, [
 root.race.species = "human";
 evolution.reader.sampleSpecies();
 assert.equal(evolution.reader.storedTargetId(), null);
+
+// Native soft reset clears both resource records before reload. That in-place invalidation makes
+// the old bindings unready; a newly initialized root plus rebound generations is ready again.
+root = {
+  ...root,
+  race: { ...root.race, species: "protoplasm" },
+  resource: {},
+  evolution: {},
+};
+assert.equal(evolution.reader.evolutionActionsReady(), false);
+root = {
+  ...root,
+  resource: {
+    RNA: { amount: 0, max: 2 },
+    DNA: { amount: 0, max: 2 },
+  },
+};
+handles.set("evolution-rna", {
+  elementId: "evolution-rna",
+  generation: 3,
+  methods: ["action"],
+});
+handles.set("evolution-dna", {
+  elementId: "evolution-dna",
+  generation: 2,
+  methods: ["action"],
+});
+assert.equal(evolution.reader.evolutionActionsReady(), true);
+
+// An invoked RNA action that leaves RNA unchanged is a valid native no-op, not a missing control
+// exception. It defers DNA and later evolution actions until a subsequent work cycle.
+controls.invoke = () => ({ ok: true, value: undefined });
+const noOpAccumulation = evolution.executor.accumulateResources({
+  rnaForDna: 1,
+  dnaForEvolution: 1,
+  rnaForEvolution: 0,
+  newRna: 0,
+  newDna: 0,
+});
+assert.equal(noOpAccumulation, "deferred");
+
+controls.invoke = (handle) => {
+  if (handle.elementId === "evolution-rna") root.resource.RNA.amount += 1;
+  return { ok: true, value: undefined };
+};
+assert.equal(
+  evolution.executor.accumulateResources({
+    rnaForDna: 1,
+    dnaForEvolution: 0,
+    rnaForEvolution: 0,
+    newRna: 1,
+    newDna: 0,
+  }),
+  "complete",
+);
 
 console.log("captured evolution checks passed");
