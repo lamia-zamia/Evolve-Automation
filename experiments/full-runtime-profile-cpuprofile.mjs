@@ -20,7 +20,7 @@ async function moduleIndex(path, pattern) {
   });
   return { lines, starts };
 }
-const indexes = {
+const loadSourceIndexes = async () => ({
   automation: await moduleIndex(
     `${root}evolve_automation.user.js`,
     /^ {2}\/\/ (src\/\S+)$/u,
@@ -29,8 +29,8 @@ const indexes = {
     `${root}test-artifacts/game/evolve-deadspace.js`,
     /^ {2}\/\/ \S*?(?:source\/)?((?:src|node_modules)\/\S+)$/u,
   ),
-};
-const moduleAt = (owner, line) => {
+});
+const moduleAt = (indexes, owner, line) => {
   const index = indexes[owner];
   if (!index) return undefined;
   let lo = 0;
@@ -46,7 +46,7 @@ const moduleAt = (owner, line) => {
   return found;
 };
 /** Best-effort declared name at a location, read from the served source text. */
-const declaredName = (owner, line, column) => {
+const declaredName = (indexes, owner, line, column) => {
   const text = indexes[owner]?.lines[line];
   if (text === undefined) return undefined;
   const before = text.slice(0, column + 1);
@@ -86,7 +86,8 @@ const isPassthrough = (frame) =>
   frame.module === "src/adapters/evolve/worker-capture.ts" &&
   (frame.name === "wrapper" || frame.name === "messageListener");
 
-export async function analyzeProfiles(paths, { top = 30 } = {}) {
+export async function analyzeProfiles(paths, { top = 30, sourceIndexes } = {}) {
+  const indexes = sourceIndexes ?? (await loadSourceIndexes());
   const fn = new Map(); // key -> {owner, module, name, selfUs, inclUs, names:Set}
   const owners = new Map();
   const causal = new Map();
@@ -112,11 +113,11 @@ export async function analyzeProfiles(paths, { top = 30 } = {}) {
           : `${owner}:${functionName}`;
       const module =
         owner === "automation" || owner === "game"
-          ? moduleAt(owner, lineNumber)
+          ? moduleAt(indexes, owner, lineNumber)
           : undefined;
       const name =
         functionName ||
-        declaredName(owner, lineNumber, columnNumber) ||
+        declaredName(indexes, owner, lineNumber, columnNumber) ||
         `(anonymous ${lineNumber + 1}:${columnNumber + 1})`;
       info.set(node.id, { key, owner, module, name, line: lineNumber + 1 });
     }
@@ -131,7 +132,7 @@ export async function analyzeProfiles(paths, { top = 30 } = {}) {
     };
     const { samples, timeDeltas } = profile;
     for (let index = 0; index < samples.length; index++) {
-      const us = timeDeltas[index + 1] ?? 0;
+      const us = timeDeltas[index] ?? 0;
       if (us <= 0) continue;
       totalUs += us;
       const stack = stackOf(samples[index]);
