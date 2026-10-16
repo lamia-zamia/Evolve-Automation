@@ -197,6 +197,16 @@ const claimedAdapter = createCapturedGatherResourcesAdapter({
   readTestIntervention: claimIntervention,
 });
 root.tech.conjuring = 2;
+handles.set("city-lumber", {
+  elementId: "city-lumber",
+  generation: 1,
+  methods: ["action"],
+});
+handles.set("city-stone", {
+  elementId: "city-stone",
+  generation: 1,
+  methods: ["action"],
+});
 delete root.tech.high_tech;
 root.resource.Mana.amount = 1;
 const claimInput = claimedAdapter.reader.read();
@@ -456,9 +466,110 @@ assert.equal(claimedAdapter.reader.read().resourceClaimLedger, undefined);
 root.r_queue.queue = [];
 root.r_queue.pause = false;
 
-root.resource.Population.amount = 20;
-root.city.rock_quarry.count = 1;
 settings.buildingAlwaysClick = false;
+root.race.universe = "magic";
+root.race.sappy = false;
+root.race.fasting = false;
+root.tech.conjuring = 2;
+root.resource.Mana.amount = 1;
+root.resource.Food.amount = 2;
+root.resource.Lumber.amount = 0;
+root.resource.Stone.amount = 0;
+root.resource.Lumber.max = 10;
+root.resource.Stone.max = 10;
+root.resource.Population.amount = 20;
+const earlyMagicInput = adapter.reader.read();
+assert.equal(
+  earlyMagicInput.stopped,
+  false,
+  "bootstrap gathers with the toggle off",
+);
+const earlyMagicPlan = planGatherResources(earlyMagicInput);
+assert.ok(
+  earlyMagicPlan?.operations.some(
+    (operation) => operation.actionId === "lumber",
+  ),
+);
+assert.equal(
+  earlyMagicPlan?.operations
+    .find((operation) => operation.actionId === "food")
+    ?.afterAction.find((assignment) => assignment.resourceId === "Mana")
+    ?.quantity,
+  0,
+  "native Conjuring consumes Mana during early bootstrap gathering",
+);
+
+root.tech.primitive = 1;
+root.resource.Population.amount = 4;
+assert.equal(
+  adapter.reader.read().stopped,
+  true,
+  "population decline cannot undo monotonic bootstrap",
+);
+assert.equal(
+  planGatherResources(adapter.reader.read())?.operations.some(
+    (operation) => operation.actionId === "lumber",
+  ) ?? false,
+  false,
+  "mature routine material gathering stops without a Rock Quarry",
+);
+settings.buildingAlwaysClick = true;
+assert.equal(
+  adapter.reader.read().stopped,
+  false,
+  "Always Autoclick overrides the mature cutoff",
+);
+assert.ok(
+  planGatherResources(adapter.reader.read())?.operations.some(
+    (operation) => operation.actionId === "lumber",
+  ),
+  "Always Autoclick restores ongoing material gathering",
+);
+settings.buildingAlwaysClick = false;
+assert.equal(
+  adapter.reader.read().stopped,
+  true,
+  "disabling the setting takes effect on the next read",
+);
+root.resource.Mana.amount = 1;
+assert.equal(
+  planGatherResources(adapter.reader.read())?.operations.some(
+    (operation) => operation.actionId === "lumber",
+  ) ?? false,
+  false,
+  "mature Magic runs do not spend Mana on routine materials",
+);
+root.resource.Food.amount = 0;
+root.race.fasting = true;
+assert.equal(
+  planGatherResources(adapter.reader.read())?.operations.some(
+    (operation) => operation.actionId === "food",
+  ) ?? false,
+  false,
+  "fasting races retain the native no-Food-gather rule",
+);
+root.race.fasting = false;
+assert.ok(
+  planGatherResources(adapter.reader.read())?.operations.some(
+    (operation) => operation.actionId === "food",
+  ),
+  "zero Food remains an immediate starvation recovery condition",
+);
+delete root.tech.primitive;
+root.resource.Food.amount = 2;
+assert.equal(
+  adapter.reader.read().stopped,
+  false,
+  "a new MAD run returns to bootstrap policy",
+);
+root.tech.primitive = 1;
+root.race.sappy = true;
+assert.equal(
+  adapter.reader.read().stopped,
+  true,
+  "Sappy does not bypass mature cutoff",
+);
+root.race.sappy = false;
 assert.equal(adapter.reader.read().stopped, true);
 
 const changedRoot = { ...root, resource: { ...root.resource } };

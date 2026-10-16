@@ -38,6 +38,8 @@ const ACTION_ORDER: readonly GatherActionId[] = Object.freeze([
   "slaughter",
 ]);
 
+const GATHER_BOOTSTRAP_TECHNOLOGY = "primitive";
+
 const CONTROL_IDS: Readonly<Record<GatherActionId, readonly string[]>> =
   Object.freeze({
     // DeadSpace's two buildTemplate call sites still declare these ids with an undefined region.
@@ -288,15 +290,9 @@ export function createCapturedGatherResourcesAdapter({
         Mana: readResource(root, "Mana"),
       });
       const race = readProperty(root, "race");
-      const city = readProperty(root, "city");
-      const populationResource = readResource(root, "Population");
-      const quarry = readProperty(city, "rock_quarry");
       const alwaysClick = settingsValue["buildingAlwaysClick"] === true;
       const stopped =
-        !alwaysClick &&
-        populationResource.currentQuantity > 15 &&
-        (numberValue(readProperty(quarry, "count")) > 0 ||
-          Boolean(readProperty(race, "sappy")));
+        !alwaysClick && readTechLevel(root, GATHER_BOOTSTRAP_TECHNOLOGY) >= 1;
       const controlsByAction = Object.freeze({
         food: readControl(controls, "food"),
         lumber: readControl(controls, "lumber"),

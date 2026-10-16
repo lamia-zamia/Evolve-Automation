@@ -15174,7 +15174,7 @@
     "stone",
     "chrysotile",
     "slaughter"
-  ]), CONTROL_IDS = Object.freeze({
+  ]), GATHER_BOOTSTRAP_TECHNOLOGY = "primitive", CONTROL_IDS = Object.freeze({
     // DeadSpace's two buildTemplate call sites still declare these ids with an undefined region.
     // The action's own selector is authoritative, so accept both upstream shapes.
     food: Object.freeze(["city-food", "undefined-food"]),
@@ -15288,7 +15288,7 @@
           Chrysotile: readResource(root, "Chrysotile"),
           Furs: readResource(root, "Furs"),
           Mana: readResource(root, "Mana")
-        }), race = readProperty(root, "race"), city = readProperty(root, "city"), populationResource = readResource(root, "Population"), quarry = readProperty(city, "rock_quarry"), stopped = !(settingsValue.buildingAlwaysClick === !0) && populationResource.currentQuantity > 15 && (numberValue(readProperty(quarry, "count")) > 0 || !!readProperty(race, "sappy")), controlsByAction = Object.freeze({
+        }), race = readProperty(root, "race"), stopped = !(settingsValue.buildingAlwaysClick === !0) && readTechLevel(root, GATHER_BOOTSTRAP_TECHNOLOGY) >= 1, controlsByAction = Object.freeze({
           food: readControl(controls2, "food"),
           lumber: readControl(controls2, "lumber"),
           stone: readControl(controls2, "stone"),
@@ -15485,7 +15485,6 @@
     Object.freeze({ actionId: "chrysotile", resourceId: "Chrysotile" })
   ]);
   function planGatherResources(input) {
-    if (input.stopped) return null;
     let quantities = {
       Food: input.resources.Food.currentQuantity,
       Lumber: input.resources.Lumber.currentQuantity,
@@ -15495,7 +15494,7 @@
       Mana: input.resources.Mana.currentQuantity
     }, operations = [], remainingClaimSpend = input.resourceClaimLedger?.spendableStock ?? 1 / 0;
     for (let target of DIRECT_TARGETS) {
-      if (!input.clickable[target.actionId] || target.actionId === "food" && input.fasting) continue;
+      if (!input.clickable[target.actionId] || input.stopped && (target.actionId !== "food" || input.resources.Food.currentQuantity > 0) || target.actionId === "food" && input.fasting) continue;
       let resource = input.resources[target.resourceId], current = quantities[target.resourceId], conjuring = target.actionId === "food" ? input.foodConjuring : input.materialConjuring, foodSafetyOverride = target.actionId === "food" && current <= 0;
       if (input.resourceClaimLedger !== void 0 && !foodSafetyOverride && conjuring && quantities.Mana >= 1 && remainingClaimSpend < 1) continue;
       let paidManaLimit = foodSafetyOverride ? Math.max(1, remainingClaimSpend) : remainingClaimSpend, amount, beforeAction = [], afterAction = [];
@@ -15583,7 +15582,7 @@
         })
       );
     }
-    if (input.clickable.slaughter) {
+    if (!input.stopped && input.clickable.slaughter) {
       let amount = Math.min(
         Math.max(
           input.resources.Lumber.maxQuantity - quantities.Lumber,
