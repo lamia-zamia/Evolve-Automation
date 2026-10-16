@@ -301,6 +301,26 @@ function makePage({
 }
 
 {
+  globalThis.__EA_RESEARCH_CONDITION_GATE_ENABLED__ = true;
+  const page = makePage({
+    offered: [[element("tech-alpha", { Knowledge: 10 })]],
+    mechanics: {
+      captureTechDefinitionsDuring: (draw) => draw(),
+      researchConditionGateCompromised: () => true,
+      readTechDefinitions: () => [],
+    },
+  });
+  assert.equal(page.catalog.read(), undefined);
+  assert.equal(
+    page.passes.length,
+    0,
+    "a compromised gate refuses later ordinary and offers-only catalog draws",
+  );
+  assert.match(page.reasons[0], /reload the game/);
+  delete globalThis.__EA_RESEARCH_CONDITION_GATE_ENABLED__;
+}
+
+{
   const page = makePage({
     offered: [
       [

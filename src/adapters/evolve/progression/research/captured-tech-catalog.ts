@@ -89,6 +89,7 @@ export interface CapturedTechCatalogDependencies {
     CapturedGameMechanics,
     | "captureTechDefinitionsDuring"
     | "captureCompletedTechConditionsDuring"
+    | "researchConditionGateCompromised"
     | "readTechDefinitions"
     | "readComputedTechRequirements"
   >;
@@ -123,6 +124,16 @@ export function createCapturedTechCatalog(
       const tally = createCountTally(dependencies.diagnostics);
       const measure = createPhaseMeasure(dependencies.diagnostics);
       tally.count("research.catalog.observations");
+      if (
+        typeof __EA_RESEARCH_CONDITION_GATE_ENABLED__ !== "undefined" &&
+        __EA_RESEARCH_CONDITION_GATE_ENABLED__ === true &&
+        mechanics?.researchConditionGateCompromised?.()
+      ) {
+        reportUnavailable(
+          "Research callback restoration failed; reload the game to recover",
+        );
+        return undefined;
+      }
       if (rootState.readRoot() === undefined) {
         reportUnavailable("the game root has not been captured yet");
         return undefined;

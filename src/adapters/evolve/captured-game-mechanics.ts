@@ -2100,19 +2100,34 @@ export function installCapturedGameMechanics(
     CapturedNativeTechRegistrySnapshot | undefined {
     const retained = capturedTechRegistry;
     const originalObjectKeys = capturedTechRegistryObjectKeys;
-    if (
-      stopped ||
-      capturedTechAuthorityInvalid ||
-      retained === undefined ||
-      originalObjectKeys === undefined
-    )
+    if (stopped || capturedTechAuthorityInvalid || retained === undefined)
       return undefined;
+    if (originalObjectKeys === undefined) {
+      if (
+        typeof __EA_RESEARCH_CONDITION_GATE_ENABLED__ !== "undefined" &&
+        __EA_RESEARCH_CONDITION_GATE_ENABLED__ === true &&
+        capturedTechRegistry === retained
+      ) {
+        capturedTechRegistry = undefined;
+        capturedTechRegistryObjectKeys = undefined;
+      }
+      return undefined;
+    }
     try {
       const rawKeys = Reflect.apply(originalObjectKeys, objectConstructor, [
         retained.registry,
       ]);
-      if (!Array.isArray(rawKeys) || rawKeys.length !== retained.keys.length)
+      if (!Array.isArray(rawKeys) || rawKeys.length !== retained.keys.length) {
+        if (
+          typeof __EA_RESEARCH_CONDITION_GATE_ENABLED__ !== "undefined" &&
+          __EA_RESEARCH_CONDITION_GATE_ENABLED__ === true &&
+          capturedTechRegistry === retained
+        ) {
+          capturedTechRegistry = undefined;
+          capturedTechRegistryObjectKeys = undefined;
+        }
         return undefined;
+      }
       // Upstream actions.js declares actions.tech once and never mutates its action metadata, so
       // the static metadata validated at capture stays valid while key order, each action object
       // and its reqs reference are unchanged. Prices and eligibility remain dynamic and are read
@@ -2124,19 +2139,45 @@ export function installCapturedGameMechanics(
           key === undefined ||
           definition === undefined ||
           rawKeys[index] !== key
-        )
+        ) {
+          if (
+            typeof __EA_RESEARCH_CONDITION_GATE_ENABLED__ !== "undefined" &&
+            __EA_RESEARCH_CONDITION_GATE_ENABLED__ === true &&
+            capturedTechRegistry === retained
+          ) {
+            capturedTechRegistry = undefined;
+            capturedTechRegistryObjectKeys = undefined;
+          }
           return undefined;
+        }
         const action = readMechanicsDataProperty(retained.registry, key);
         if (
           action !== definition.action ||
           nativeReqsIdentity(
             Object.getOwnPropertyDescriptor(action, "reqs"),
           ) !== definition.reqsIdentity
-        )
+        ) {
+          if (
+            typeof __EA_RESEARCH_CONDITION_GATE_ENABLED__ !== "undefined" &&
+            __EA_RESEARCH_CONDITION_GATE_ENABLED__ === true &&
+            capturedTechRegistry === retained
+          ) {
+            capturedTechRegistry = undefined;
+            capturedTechRegistryObjectKeys = undefined;
+          }
           return undefined;
+        }
       }
       return retained;
     } catch {
+      if (
+        typeof __EA_RESEARCH_CONDITION_GATE_ENABLED__ !== "undefined" &&
+        __EA_RESEARCH_CONDITION_GATE_ENABLED__ === true &&
+        capturedTechRegistry === retained
+      ) {
+        capturedTechRegistry = undefined;
+        capturedTechRegistryObjectKeys = undefined;
+      }
       return undefined;
     }
   }
@@ -2700,6 +2741,13 @@ export function installCapturedGameMechanics(
       ? (() => {
           let active = false;
           let gateCompromised = false;
+          let observationInvalidated = false;
+          class ResearchConditionGateUnavailableError extends Error {
+            constructor(reason: string) {
+              super(`Research condition gate refused capture: ${reason}`);
+              this.name = "ResearchConditionGateUnavailableError";
+            }
+          }
           const reportFatalRestoration = (error: Error) => {
             try {
               const consoleValue = readMechanicsProperty(pageWindow, "console");
@@ -2712,13 +2760,18 @@ export function installCapturedGameMechanics(
           };
           return {
             captureCompletedTechConditionsDuring<T>(draw: () => T): T {
-              if (
-                active ||
-                gateCompromised ||
-                stopped ||
-                capturedTechAuthorityInvalid
-              )
-                return draw();
+              if (active) {
+                observationInvalidated = true;
+                throw new ResearchConditionGateUnavailableError(
+                  "nested draw during active scratch capture",
+                );
+              }
+              if (gateCompromised)
+                throw new ResearchConditionGateUnavailableError(
+                  "native callback descriptors require a clean reload",
+                );
+              if (stopped || capturedTechAuthorityInvalid) return draw();
+              observationInvalidated = false;
               const retained = readRetainedNativeTechRegistry();
               let root: unknown;
               try {
@@ -2754,6 +2807,8 @@ export function installCapturedGameMechanics(
               let accessorDescriptors = 0;
               let nonConfigurableWritableDescriptors = 0;
               const completed: CapturedNativeTechDefinitionIdentity[] = [];
+              const suppressedDefinitions =
+                new Set<CapturedNativeTechDefinitionIdentity>();
               for (const definition of retained.definitions) {
                 const grantLevel = readTechLevel(definition.grantTechnology);
                 if (grantLevel === completedTechGateReadFailure) return draw();
@@ -2818,6 +2873,66 @@ export function installCapturedGameMechanics(
                     nonConfigurableWritableDescriptors += 1;
                   const condition: CapturedGameCall = () => {
                     invoked += 1;
+                    let stillCompleted: boolean;
+                    try {
+                      if (
+                        rootState?.readRoot() !== root ||
+                        readMechanicsProperty(root, "tech") !== technologies ||
+                        capturedTechRegistry !== retained
+                      ) {
+                        observationInvalidated = true;
+                        throw new ResearchConditionGateUnavailableError(
+                          "game authority changed during native draw",
+                        );
+                      }
+                      const currentGrant = readTechLevel(
+                        definition.grantTechnology,
+                      );
+                      if (currentGrant === completedTechGateReadFailure)
+                        throw new ResearchConditionGateUnavailableError(
+                          "technology state became unreadable during native draw",
+                        );
+                      stillCompleted = Boolean(currentGrant);
+                      if (stillCompleted)
+                        stillCompleted =
+                          (currentGrant as number) >= definition.grantLevel;
+                      const legacyKey =
+                        completedTechGateLegacyKeys[definition.registryKey];
+                      if (stillCompleted && legacyKey !== undefined) {
+                        const currentLegacy = readTechLevel(legacyKey);
+                        if (currentLegacy === completedTechGateReadFailure)
+                          throw new ResearchConditionGateUnavailableError(
+                            "legacy technology state became unreadable during native draw",
+                          );
+                        stillCompleted = Boolean(currentLegacy);
+                      }
+                    } catch (error) {
+                      observationInvalidated = true;
+                      throw error;
+                    }
+                    if (!stillCompleted) {
+                      observationInvalidated = true;
+                      const originalCondition =
+                        original === undefined
+                          ? undefined
+                          : "value" in original
+                            ? original.value
+                            : original.get === undefined
+                              ? undefined
+                              : Reflect.apply(
+                                  original.get,
+                                  definition.action,
+                                  [],
+                                );
+                      return typeof originalCondition === "function"
+                        ? Reflect.apply(
+                            originalCondition,
+                            definition.action,
+                            [],
+                          )
+                        : originalCondition === undefined;
+                    }
+                    suppressedDefinitions.add(definition);
                     return false;
                   };
                   const replacement: PropertyDescriptor =
@@ -2921,6 +3036,9 @@ export function installCapturedGameMechanics(
                 return didRestore;
               };
 
+              // Lock before the first descriptor write so injected/native reentrancy cannot
+              // enter another scratch capture while installation is only partly complete.
+              active = true;
               for (const entry of pending) {
                 try {
                   if (
@@ -2945,6 +3063,7 @@ export function installCapturedGameMechanics(
                     }
                   }
                   registryKeys = [];
+                  active = false;
                   if (restorationFailures > 0) {
                     gateCompromised = true;
                     capturedTechAuthorityInvalid = true;
@@ -2956,10 +3075,45 @@ export function installCapturedGameMechanics(
                     throw failure;
                   }
                   report();
+                  if (observationInvalidated)
+                    throw new ResearchConditionGateUnavailableError(
+                      "nested draw invalidated descriptor installation",
+                    );
                   return draw();
                 }
               }
-              active = true;
+              if (
+                observationInvalidated ||
+                rootState?.readRoot() !== root ||
+                readMechanicsProperty(root, "tech") !== technologies ||
+                readRetainedNativeTechRegistry() !== retained
+              ) {
+                for (let index = pending.length - 1; index >= 0; index -= 1) {
+                  const entry = pending[index];
+                  if (entry === undefined || !entry.installed) continue;
+                  try {
+                    restore(entry);
+                  } catch {
+                    restorationFailures += 1;
+                  }
+                }
+                if (restorationFailures > 0) {
+                  active = false;
+                  gateCompromised = true;
+                  capturedTechAuthorityInvalid = true;
+                  report();
+                  const failure = new CompletedTechGateRestorationError(
+                    restorationFailures,
+                  );
+                  reportFatalRestoration(failure);
+                  throw failure;
+                }
+                active = false;
+                report();
+                throw new ResearchConditionGateUnavailableError(
+                  "game authority changed during descriptor installation",
+                );
+              }
               let result!: T;
               let drawFailure: unknown;
               let drawThrew = false;
@@ -2991,6 +3145,41 @@ export function installCapturedGameMechanics(
                 throw failure;
               }
               if (drawThrew) throw drawFailure;
+              for (const definition of suppressedDefinitions) {
+                let stillCompleted: boolean;
+                try {
+                  const currentGrant = readTechLevel(
+                    definition.grantTechnology,
+                  );
+                  stillCompleted =
+                    currentGrant !== completedTechGateReadFailure &&
+                    Boolean(currentGrant) &&
+                    (currentGrant as number) >= definition.grantLevel;
+                  const legacyKey =
+                    completedTechGateLegacyKeys[definition.registryKey];
+                  if (stillCompleted && legacyKey !== undefined) {
+                    const currentLegacy = readTechLevel(legacyKey);
+                    stillCompleted =
+                      currentLegacy !== completedTechGateReadFailure &&
+                      Boolean(currentLegacy);
+                  }
+                } catch {
+                  stillCompleted = false;
+                }
+                if (!stillCompleted) {
+                  observationInvalidated = true;
+                  break;
+                }
+              }
+              if (
+                observationInvalidated ||
+                rootState?.readRoot() !== root ||
+                readMechanicsProperty(root, "tech") !== technologies ||
+                readRetainedNativeTechRegistry() !== retained
+              )
+                throw new ResearchConditionGateUnavailableError(
+                  "game authority changed during native draw",
+                );
               return result;
             },
             researchConditionGateCompromised: () => gateCompromised,
