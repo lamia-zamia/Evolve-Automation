@@ -11,6 +11,13 @@ import {
 } from "../tools/chromium-evolve-runner.mjs";
 
 const root = resolve(fileURLToPath(new URL("..", import.meta.url)));
+const args = new Set(process.argv.slice(2));
+assert.deepEqual(
+  [...args].filter((arg) => arg !== "--no-input"),
+  [],
+);
+const noInput = args.has("--no-input");
+const inputMode = noInput ? "no-input" : "pointer-driven";
 const bundle = resolve(root, "evolve_automation.user.js");
 const bundleBytes = await readFile(bundle);
 const bundleText = bundleBytes.toString("utf8");
@@ -62,6 +69,9 @@ const installJobsTrace = () => {
     nativeInvocations: 0,
     successfulPostconditions: 0,
     changedAssignments: 0,
+    assignmentMilestones: {},
+    successfulPhaseSamples: {},
+    initialReset: null,
     lastPeriod: -1,
     workTick: 0,
     nextRootId: 1,
@@ -104,6 +114,12 @@ const installJobsTrace = () => {
     } catch {
       // The bounded test trace must not affect game behavior if storage is unavailable.
     }
+  };
+  window.__EA_JOBS_TRACE_CONTROL__ = {
+    setInitialReset(reset) {
+      trace.initialReset = reset;
+      persist();
+    },
   };
   const hooks = (window.__EA_TEST_HOOKS__ ??= {});
   hooks.observeJobsAutomation = (phase, outcome) => {
@@ -162,6 +178,75 @@ const installJobsTrace = () => {
         : (multiplierLatches.x10 ? 10 : 1) *
           (multiplierLatches.x25 ? 25 : 1) *
           (multiplierLatches.x100 ? 100 : 1);
+    const reset = event.root?.stats?.reset ?? null;
+    const species = event.root?.race?.species ?? null;
+    const changedAssignments = event.actual?.changedAssignments ?? [];
+    if (code === "jobs-assignment-postcondition-succeeded") {
+      const phaseKey = `${species}:${reset}`;
+      trace.successfulPhaseSamples[phaseKey] ??= {
+        workTick: trace.workTick,
+        period,
+        gameDay: event.root?.stats?.days ?? null,
+        species,
+        reset,
+        changedAssignments,
+        latches: multiplierLatches,
+      };
+    }
+    const milestone =
+      code !== "jobs-assignment-postcondition-succeeded"
+        ? null
+        : reset === trace.initialReset
+          ? "beforeMad"
+          : species === "human" && reset > trace.initialReset
+            ? "afterHuman"
+            : null;
+    if (
+      milestone !== null &&
+      trace.assignmentMilestones[milestone] === undefined &&
+      changedAssignments.some(
+        (assignment) =>
+          assignment.workerDelta !== 0 || assignment.servantDelta !== 0,
+      )
+    ) {
+      const actualRoot = event.currentRoot ?? event.root;
+      const civic = actualRoot?.civic;
+      const servantPool = actualRoot?.race?.servants;
+      trace.assignmentMilestones[milestone] = {
+        workTick: trace.workTick,
+        period,
+        gameDay: event.root?.stats?.days ?? null,
+        species,
+        reset,
+        postconditionPassed: true,
+        changedAssignments,
+        nativeAssignment: {
+          defaultJobId: civic?.d_job ?? null,
+          jobs: Object.entries(civic ?? {})
+            .filter(
+              ([id, job]) => job && typeof job === "object" && job.job === id,
+            )
+            .map(([id, job]) => ({
+              id,
+              workers: job.workers,
+              assigned: job.assigned,
+            })),
+          servantPool: servantPool
+            ? {
+                maximum: servantPool.max ?? null,
+                used: servantPool.used ?? null,
+                jobs: { ...servantPool.jobs },
+              }
+            : null,
+          craftsmen: civic?.craftsman?.workers ?? null,
+        },
+        multiplier: {
+          enabled: multiplierEnabled,
+          keyMap: event.root?.settings?.keyMap ?? null,
+          latches: multiplierLatches,
+        },
+      };
+    }
     const occurrences = (trace.occurrences[code] ??= []);
     if (occurrences.length < 32) occurrences.push(occurrence);
     const traceKey =
@@ -213,6 +298,12 @@ const rawSettings = JSON.parse(
     "utf8",
   ),
 );
+assert.equal(rawSettings.autoJobs, true, "scenario enables Auto Jobs");
+assert.equal(
+  rawSettings.autoCraftsmen,
+  true,
+  "scenario enables Auto Craftsmen",
+);
 const settings = JSON.stringify({
   ...rawSettings,
   autoPrestige: true,
@@ -252,6 +343,12 @@ function currentNativeState() {
     species: state?.race?.species ?? null,
     reset: state?.stats?.reset ?? null,
     day: state?.stats?.days ?? null,
+    settings: {
+      mKeys: state?.settings?.mKeys ?? null,
+      keyMap: state?.settings?.keyMap ?? null,
+      autoJobs: state?.settings?.autoJobs ?? null,
+      autoCraftsmen: state?.settings?.autoCraftsmen ?? null,
+    },
     multiplierLatch: {
       x10: capture?.keyState?.readMultiplierLatch?.("x10") ?? null,
       x25: capture?.keyState?.readMultiplierLatch?.("x25") ?? null,
@@ -297,15 +394,18 @@ for (const game of games) {
       perf: true,
       snapshotAt: [43, 51],
     });
-    await session.page.mouse.move(1, 1);
+    if (!noInput) await session.page.mouse.move(1, 1);
     const initial = await session.evaluate(currentNativeState);
+    await session.evaluate((reset) => {
+      window.__EA_JOBS_TRACE_CONTROL__?.setInitialReset(reset);
+    }, initial.reset);
     await session.advance(43);
-    await session.page.mouse.move(2, 2);
+    if (!noInput) await session.page.mouse.move(2, 2);
     await session.advance(8);
-    await session.page.mouse.move(3, 3);
+    if (!noInput) await session.page.mouse.move(3, 3);
     for (let completed = 51; completed < 6000; completed += 100) {
       await session.advance(Math.min(100, 6000 - completed));
-      await session.page.mouse.move(3 + (completed % 90), 4);
+      if (!noInput) await session.page.mouse.move(3 + (completed % 90), 4);
     }
     const final = await session.evaluate(currentNativeState);
     const snapshots = await session.snapshots();
@@ -326,6 +426,8 @@ for (const game of games) {
         nativeInvocations: trace?.nativeInvocations ?? 0,
         successfulPostconditions: trace?.successfulPostconditions ?? 0,
         changedAssignments: trace?.changedAssignments ?? 0,
+        assignmentMilestones: trace?.assignmentMilestones ?? {},
+        successfulPhaseSamples: trace?.successfulPhaseSamples ?? {},
         occurrences: Object.fromEntries(
           Object.entries(trace?.occurrences ?? {}).map(([code, ticks]) => [
             code,
@@ -334,6 +436,17 @@ for (const game of games) {
         ),
       };
     });
+    jobsTrace.postHumanWorkerServantEvent = jobsTrace.events.find(
+      (event) =>
+        event.failureCode === "jobs-assignment-postcondition-succeeded" &&
+        event.species === "human" &&
+        event.reset > initial.reset &&
+        event.actual?.changedAssignments?.some(
+          (assignment) =>
+            assignment.beforeWorkers !== assignment.workers &&
+            assignment.beforeServants !== assignment.servants,
+        ),
+    );
     const count = (counts, key) => counts?.[key]?.returned ?? 0;
     const madCalls = {
       arm: count(usage, "mad.arm"),
@@ -355,6 +468,7 @@ for (const game of games) {
     const report = {
       game: { label: game.label, commit: game.commit, path: game.path },
       bundle: { path: bundle, sha256: bundleIdentity },
+      inputMode,
       initial,
       snapshots: {
         protoplasm: {
@@ -401,10 +515,80 @@ for (const game of games) {
           Object.keys(constructionCallsAfterHuman).length > 0,
         automationContinuedAfterEvolution:
           Object.keys(constructionCallsAfterHuman).length > 0,
+        jobsAssignmentBeforeMadPassed:
+          jobsTrace.assignmentMilestones.beforeMad?.postconditionPassed ===
+            true &&
+          jobsTrace.assignmentMilestones.beforeMad.species === "human" &&
+          jobsTrace.assignmentMilestones.beforeMad.reset === initial.reset &&
+          jobsTrace.assignmentMilestones.beforeMad.changedAssignments.some(
+            (assignment) =>
+              assignment.workerDelta !== 0 || assignment.servantDelta !== 0,
+          ),
+        jobsAssignmentAfterHumanPassed:
+          jobsTrace.assignmentMilestones.afterHuman?.postconditionPassed ===
+            true &&
+          jobsTrace.assignmentMilestones.afterHuman.species === "human" &&
+          jobsTrace.assignmentMilestones.afterHuman.reset > initial.reset &&
+          jobsTrace.assignmentMilestones.afterHuman.changedAssignments.some(
+            (assignment) =>
+              assignment.workerDelta !== 0 || assignment.servantDelta !== 0,
+          ),
+        capturedJobsPostconditionsPassed:
+          jobsTrace.successfulPostconditions > 0 &&
+          (jobsTrace.counts["ordinary-jobs-postcondition-failed"] ?? 0) === 0 &&
+          (jobsTrace.counts["full-jobs-postcondition-failed"] ?? 0) === 0,
+        noDuplicateJobsPhases: jobsTrace.duplicateJobsPeriods.length === 0,
+        nativeMultiplierDefaultsVerified: ["beforeMad", "afterHuman"].every(
+          (milestone) => {
+            const observed =
+              jobsTrace.assignmentMilestones[milestone]?.multiplier;
+            return (
+              observed?.enabled === true &&
+              observed.keyMap?.x10 === "Control" &&
+              observed.keyMap?.x25 === "Shift" &&
+              observed.keyMap?.x100 === "Alt"
+            );
+          },
+        ),
+        autoJobsAndCraftsmenEnabled:
+          rawSettings.autoJobs === true &&
+          rawSettings.autoCraftsmen === true &&
+          jobsTrace.phaseCounts.autoJobs > 0 &&
+          jobsTrace.phaseCounts["autoJobs with autoCraftsmen"] > 0,
+        noInputLatchesClear:
+          !noInput ||
+          (["beforeMad", "afterHuman"].every((milestone) => {
+            const latches =
+              jobsTrace.assignmentMilestones[milestone]?.multiplier?.latches;
+            return (
+              latches?.x10 === false &&
+              latches?.x25 === false &&
+              latches?.x100 === false
+            );
+          }) &&
+            jobsTrace.postHumanWorkerServantEvent?.multiplierLatches?.x10 ===
+              false &&
+            jobsTrace.postHumanWorkerServantEvent?.multiplierLatches?.x25 ===
+              false &&
+            jobsTrace.postHumanWorkerServantEvent?.multiplierLatches?.x100 ===
+              false),
+        postHumanWorkerAndServantStateChanged:
+          jobsTrace.postHumanWorkerServantEvent?.actual?.changedAssignments?.some(
+            (assignment) =>
+              assignment.id === "farmer" &&
+              assignment.beforeWorkers === 1 &&
+              assignment.workers === 0 &&
+              assignment.beforeServants === 0 &&
+              assignment.servants === 1,
+          ) === true,
       },
     };
     for (const [name, passed] of Object.entries(report.assertions)) {
-      assert.equal(passed, true, `${game.label}: ${name}`);
+      const detail =
+        name === "jobsAssignmentAfterHumanPassed"
+          ? `; ${JSON.stringify({ initialReset: initial.reset, finalReset: final.reset, finalSpecies: final.species, successfulPhaseSamples: jobsTrace.successfulPhaseSamples, assignmentMilestones: jobsTrace.assignmentMilestones })}`
+          : "";
+      assert.equal(passed, true, `${game.label}: ${name}${detail}`);
     }
     assert.equal(madCalls.arm, 1, `${game.label}: MAD arm called once`);
     assert.equal(madCalls.launch, 1, `${game.label}: MAD launch called once`);
@@ -417,12 +601,12 @@ for (const game of games) {
 
 const traceReportPath = resolve(
   root,
-  "test-artifacts/local/jobs-post-evolution-trace-report.json",
+  `test-artifacts/local/jobs-post-evolution-trace-${inputMode}-report.json`,
 );
 await writeFile(
   traceReportPath,
   JSON.stringify(
-    { bundle: { path: bundle, sha256: bundleIdentity }, reports },
+    { inputMode, bundle: { path: bundle, sha256: bundleIdentity }, reports },
     null,
     2,
   ),
@@ -432,6 +616,7 @@ console.log(
   JSON.stringify(
     {
       traceReportPath,
+      inputMode,
       reports: reports.map(({ game, jobsTrace, workTicks, assertions }) => ({
         game,
         workTicks,
