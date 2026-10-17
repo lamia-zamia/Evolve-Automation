@@ -37,9 +37,11 @@ The original trace replay moved the pointer to establish upstream multiplier sta
 
 ## Unattended multiplier-latch startup
 
-- Replayed the exact pinned DeadSpace page with native `mKeys=true`, default native mappings, Auto Jobs and Auto Craftsmen enabled, and a plan requiring an actual assignment. The harness sent no mouse movement or keyboard input. Across the normal startup and the later MAD → page reload → Human evolution, Jobs progressed before any user input.
-- The 6,000-period test-surface replay completed 725 workticks with one MAD reset and one reload. It recorded 374 successful assignment postconditions, 1,230 changed worker/servant assignments, 7,759 native Jobs/Craftsmen calls, and 31 safe readiness deferrals while native controls were not yet bound. There were no original failure codes, no page errors, and no worktick with duplicate ordinary and combined Jobs execution.
-- The first successful native Jobs work occurred at period 16 before MAD, and Jobs succeeded again at period 643 after reload. Both observations had `x10`, `x25`, and `x100` latches clear. Root worker and servant counts changed and matched the successful assignment postconditions.
+- Replayed pinned DeadSpace with `--no-input`. The harness generated no mouse moves or keyboard input before startup, during the 6,000-period run, or after the MAD reload. Native settings were `mKeys=true`, with default `x10=Control`, `x25=Shift`, and `x100=Alt`; the fixture enabled Auto Jobs and Auto Craftsmen, and both corresponding phases ran.
+- The actual native Jobs assignment before MAD passed its strict postcondition at period 16 / reset 848. The captured native default was `quarry_worker`; native worker assignments changed (including professor 32→23 and scientist 18→6). All three multiplier latches were false.
+- After Human evolution, a native Jobs assignment passed its postcondition at period 115 / reset 849, changing Farmer 3→2 workers and Crystal Miner 0→1. At period 643 / worktick 78, after the missing native controls were bound, another successful assignment changed Farmer from 1 worker / 0 servants to 0 workers / 1 servant. The trace records actual native values and all three latches remained false.
+- The no-input run completed 725 workticks, one MAD reset and one document reload. It recorded 374 successful assignment postconditions, 1,230 changed assignments, 7,759 native Jobs/Craftsmen calls, 31 safe readiness deferrals, zero original failure codes, zero page errors, and no worktick with duplicate ordinary and combined Jobs execution. All 15 assertions passed.
+- The original pointer-driven replay remains the default (`node experiments/jobs-post-evolution-trace.mjs`) for comparison. It also completed the pinned 6,000-period scenario with all original assertions passing. Reports are written separately as `jobs-post-evolution-trace-no-input-report.json` and `jobs-post-evolution-trace-pointer-driven-report.json` under `test-artifacts/local/`.
 - Initialization is safe only when the capture observes Vue absent at document-start, before the game synchronously loads Vue and before `vars.js` initializes its private latches to `false`; the first captured root then establishes that initial state if no input has been observed. A capture installed after Vue, any input before the first root, or a later root replacement leaves the latch unknown and Jobs fail-closed until upstream events establish it. Held keys and mapping changes continue to follow upstream's event-by-event latch semantics; no synthetic input is generated.
 
 ## Bounded production performance comparison
@@ -55,9 +57,21 @@ The medians were about 0.8% lower for the corrected bundle, and the run ranges o
 
 ## Verification
 
+Reproduce from the repository root with dependencies and the exact-runner fixtures available:
+
+```text
+node tools/build-game-snapshot.mjs --ref db38e2af831907d49aeb5348d678d8d8745d6c3f
+npm run build
+npm test -- captured-ordinary-jobs captured-job-controls game-key-state page-capture
+npm run build -- --research-condition-gate
+npm run check
+node experiments/jobs-post-evolution-trace.mjs --no-input
+node experiments/jobs-post-evolution-trace.mjs
+```
+
 - Focused `game-key-state`, `captured-ordinary-jobs`, `captured-job-controls`, and `page-capture` tests passed.
 - `npm run check` passed all 347 test files, type checks, architecture checks, lint, formatting, and bundle syntax.
-- `npm run build`, `npm run build:local`, and `npm run build -- --research-condition-gate` passed. Research Gate markers are absent from the ordinary bundle and retained in the separate pilot artifact.
+- The ordinary `npm run build` and opt-in `npm run build -- --research-condition-gate` passed. The emitted ordinary JavaScript was inspected directly: neither trace-only deferred code nor either preflight lookup operation remains. Native preflights and strict postconditions remain, as confirmed by the replay and focused tests.
 - Chromium runner contracts passed. Because the `tools/` junction resolves the contract script's `repoRoot` from its sibling checkout, the unchanged contract script and required local modules ran from a temporary in-worktree shadow directory with `EVOLVE_SOURCE=D:/work/Evolve-DeadSpace`.
 - The final ordinary production replay used bundle SHA-256 `380855439a7e3451dbcc0b190ad59b5b6072e54c92e36dc53381c1f5af8b6ae5`. It recorded one MAD reset, one document reload, native Humanoid and Human evolution, 5,379 native Jobs calls after Human, continued civilization construction, changed worker/servant root counts, and zero errors.
 - `git diff --check` passed. The rebuilt production artifact was inspected directly for removed trace summarization, payload, and invocation-recording work.
